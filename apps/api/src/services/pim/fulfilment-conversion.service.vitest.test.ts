@@ -8,10 +8,13 @@
  *   - the preview refuses by name (FBA units on hand / reserved / inbound, an active FBA offer, an Amazon-only code, a
  *     draft, every market Inactive, a change already on its way) and tells (markets, skipped markets, the quantity, the
  *     EU single quantity, FBA out of stock until units arrive, Amazon's report);
- *   - FBA → FBM: the exact patch per open market, records SENT, Nexus FBM only on the markets Amazon accepted, the
- *     quantity stored, the product's FBA mark moved (an untyped listing that leaned on it set FBA explicitly first);
- *     Amazon refusing one market names it; refusing all changes nothing; a gated server sends nothing;
- *   - FBM → FBA: Nexus FBA and the waiting quantity pushes cancelled BEFORE the patch; Amazon refusing all puts it back;
+ *   - every refusal a person can fix is said at once, in one line (a Sync Control pause says what to do);
+ *   - FBA → FBM: the exact patch per open market (add DEFAULT + quantity, delete AMAZON_EU — Amazon's documented channel
+ *     switch, 2026-10-08), records SENT holding that patch, Nexus FBM only on the markets Amazon accepted, the quantity
+ *     stored, the product's FBA mark moved (an untyped listing that leaned on it set FBA explicitly first); Amazon
+ *     refusing one market names it; refusing all changes nothing; a gated server sends nothing;
+ *   - FBM → FBA: Nexus FBA and the waiting quantity pushes cancelled BEFORE the patch (add AMAZON_EU, delete DEFAULT);
+ *     once SENT the push layer sends that SKU no merchant quantity; Amazon refusing all puts it back;
  *   - a direct cell write is refused; eBay MCF stays Nexus-only and says so;
  *   - the Matrix's Fulfilment cell shows the newest run; the confirmation job reads the report and confirms, says still
  *     old or not in the report, and rewrites the reported copy; the drift detector's question.
@@ -41,6 +44,7 @@ import { runMatrixVerb, writeMatrixCells, revertMatrixOperation, type VerbCommit
 import { getMatrixRead } from './matrix.service.js'
 import { confirmFulfilmentConversions, operatorFbmConversions } from './fulfilment-conversion.service.js'
 import { reportedFulfilment } from './matrix-cells.js'
+import { amazonSendQuantity } from '../amazon/send-quantity.js'
 
 const business = { workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }
 const inside = <T>(work: () => Promise<T>) => withWorkspace(business, work)
@@ -49,9 +53,10 @@ const q = async (sql: string, params: unknown[] = []) => (await state.db.db.quer
 type Json = Record<string, any>
 
 const IT = 'APJ6JRA9NG5V4', DE = 'A1PA6795UKMFR9'
+const FA = '/attributes/fulfillment_availability'
 const ids: Record<string, string> = {}
 const accepted = (o: { sku: string }) => ({ success: true, sku: o.sku, status: 'ACCEPTED', rawResponse: { status: 'ACCEPTED', submissionId: `sub-${o.sku}`, issues: [] } })
-const sent = () => state.submit.mock.calls.map(([o]: [any]) => ({ sku: o.sku, marketplaceId: o.marketplaceId, sellerId: o.sellerId, value: o.payload.patches[0].value, conversionId: o.conversionId }))
+const sent = () => state.submit.mock.calls.map(([o]: [any]) => ({ sku: o.sku, marketplaceId: o.marketplaceId, sellerId: o.sellerId, patches: o.payload.patches, conversionId: o.conversionId }))
 
 const ctx = (productId: string) => ({ productId, actor: 'person-1', can: () => true })
 const preview = async (rowId: string, coordinateKey: string, method: 'FBA' | 'FBM') =>
@@ -137,6 +142,30 @@ describe('the preview refuses by name and tells what is sent', () => {
     expect(p.refusals).toEqual([expect.objectContaining({ coordinateKey: 'AMAZON:UK', reason: expect.stringContaining(reason) })])
   })
 
+  it('every refusal a person can fix is said at once, in one line; a Sync Control pause says what to do', async () => {
+    // On hand: 4 FBA units (onHand). Add 3 inbound and a pause on Amazon UK: three things to fix, one line.
+    await inside(async () => {
+      await db().syncChannelPolicy.create({ data: { channel: 'AMAZON', marketplace: 'UK', pushesPaused: true } })
+      await db().fbaInventoryDetail.create({ data: { productId: ids.onHand, sku: 'TEST-SKU-FC-HAND', marketplaceId: 'A1F83G8C2ARO7P', fulfillmentCenterId: 'LTN1', condition: 'INBOUND', quantity: 3 } })
+    })
+    try {
+      const p = await preview(ids.onHand, 'AMAZON:UK', 'FBM')
+      expect(p.changes).toEqual([])
+      expect(p.refusals).toEqual([expect.objectContaining({ coordinateKey: 'AMAZON:UK', kind: 'guard', reason: 'Refused — 3 things to fix: '
+        + '1) Pushes to Amazon UK are paused — release them in Sync Control, or set UK Inactive in the product sheet if you do not sell there '
+        + '2) 4 units of FBA stock on hand keep the guard closed; Amazon must hold no FBA units of this SKU before its offer is converted to FBM '
+        + '3) 3 FBA units inbound to Amazon keep the guard closed' })])
+      // The pause alone (FBM → FBA of C, open on IT DE): its one line, as is.
+      await inside(() => db().syncChannelPolicy.create({ data: { channel: 'AMAZON', marketplace: 'DE', pushesPaused: true } }))
+      const de = await preview(ids.c, 'AMAZON:IT', 'FBA')
+      expect(de.refusals).toEqual([expect.objectContaining({ reason: 'Pushes to Amazon DE are paused — release them in Sync Control, or set DE Inactive in the product sheet if you do not sell there' })])
+      expect(state.submit).not.toHaveBeenCalled()
+    } finally {
+      await q(`DELETE FROM "SyncChannelPolicy" WHERE channel = 'AMAZON'`)
+      await q(`DELETE FROM "FbaInventoryDetail" WHERE sku = 'TEST-SKU-FC-HAND'`)
+    }
+  })
+
   it('the parent, and every market Inactive, are refused', async () => {
     const parent = await preview(ids.parent, 'AMAZON:UK', 'FBM')
     expect(parent.refusals).toEqual([expect.objectContaining({ reason: 'The parent row has no listing of its own' })])
@@ -167,13 +196,22 @@ describe('FBA → FBM', () => {
     const p = await preview(ids.a, 'AMAZON:IT', 'FBM')
     const out = await commit(p)
     expect(out.results).toEqual([expect.objectContaining({ coordinateKey: 'AMAZON:EU', cell: 'fulfilment', outcome: 'applied' })])
+    // ONE patch per open market: add the merchant record with the EU quantity, delete Amazon's record.
+    const itPatch = [
+      { op: 'add', path: FA, value: [{ fulfillment_channel_code: 'DEFAULT', quantity: 6, lead_time_to_ship_max_days: 2 }] },
+      { op: 'delete', path: FA, value: [{ fulfillment_channel_code: 'AMAZON_EU' }] },
+    ]
     expect(sent()).toEqual([
-      { sku: 'TEST-SKU-FC-A', marketplaceId: IT, sellerId: 'SELLER-FC', value: [{ fulfillment_channel_code: 'DEFAULT', quantity: 6, lead_time_to_ship_max_days: 2 }], conversionId: expect.any(String) },
-      { sku: 'TEST-SKU-FC-A', marketplaceId: DE, sellerId: 'SELLER-FC', value: [{ fulfillment_channel_code: 'DEFAULT', quantity: 6 }], conversionId: expect.any(String) },
+      { sku: 'TEST-SKU-FC-A', marketplaceId: IT, sellerId: 'SELLER-FC', patches: itPatch, conversionId: expect.any(String) },
+      { sku: 'TEST-SKU-FC-A', marketplaceId: DE, sellerId: 'SELLER-FC', patches: [
+        { op: 'add', path: FA, value: [{ fulfillment_channel_code: 'DEFAULT', quantity: 6 }] },
+        { op: 'delete', path: FA, value: [{ fulfillment_channel_code: 'AMAZON_EU' }] },
+      ], conversionId: expect.any(String) },
     ])
     // FR (Inactive) is never sent; UK is not in the EU group.
     expect((await runs([ids.aIt, ids.aDe, ids.aFr])).map((r) => [r.marketplace, r.toMethod, r.quantity, r.status, r.operatorConfirmed])).toEqual([['IT', 'FBM', 6, 'SENT', true], ['DE', 'FBM', 6, 'SENT', true]])
-    expect((await runs([ids.aIt]))[0].payload).toEqual([{ fulfillment_channel_code: 'DEFAULT', quantity: 6, lead_time_to_ship_max_days: 2 }])
+    // The record holds exactly the patch sent (the FBA guard lets through nothing else).
+    expect((await runs([ids.aIt]))[0].payload).toEqual(itPatch)
     const [it, de, fr, uk] = await Promise.all([listing(ids.aIt), listing(ids.aDe), listing(ids.aFr), listing(ids.aUk)])
     expect([it.fulfillmentMethod, de.fulfillmentMethod, fr.fulfillmentMethod, uk.fulfillmentMethod]).toEqual(['FBM', 'FBM', 'FBA', 'FBA'])
     expect([it.quantity, de.quantity]).toEqual([6, 6])
@@ -244,8 +282,26 @@ describe('FBM → FBA', () => {
     const out = await commit(await preview(ids.c, 'AMAZON:IT', 'FBA'))
     expect(out.results[0]).toMatchObject({ outcome: 'applied' })
     expect(atSend).toEqual([{ market: IT, listing: 'FBA', waiting: 0 }, { market: DE, listing: 'FBA', waiting: 0 }])
-    expect(sent().map((x: Json) => x.value)).toEqual([[{ fulfillment_channel_code: 'AMAZON_EU' }], [{ fulfillment_channel_code: 'AMAZON_EU' }]])
+    // Amazon's documented FBM → FBA switch, per market: add AMAZON_EU (no quantity), delete DEFAULT (the last merchant
+    // quantity leaves Amazon, so it cannot oversell after the switch).
+    const toFba = [
+      { op: 'add', path: FA, value: [{ fulfillment_channel_code: 'AMAZON_EU' }] },
+      { op: 'delete', path: FA, value: [{ fulfillment_channel_code: 'DEFAULT' }] },
+    ]
+    expect(sent().map((x: Json) => [x.marketplaceId, x.patches])).toEqual([[IT, toFba], [DE, toFba]])
     expect(await mark(ids.c)).toBe('FBA')
+    expect((await runs([ids.cIt])).at(-1)).toMatchObject({ status: 'SENT', toMethod: 'FBA', quantity: null })
+
+    // Once SENT, the push layer sends this SKU no merchant quantity on either market (step 1 of the one send rule).
+    for (const id of [ids.cIt, ids.cDe]) {
+      const row = (await q(`SELECT cl.marketplace, cl.quantity, cl."followMasterQuantity", cl."stockBuffer", cl."sourceLocationCodes", cl."fulfillmentMethod", cl."platformAttributes", cl."offerClosedAt", p.id AS "productId", p."fulfillmentMethod" AS "productMethod"
+        FROM "ChannelListing" cl JOIN "Product" p ON p.id = cl."productId" WHERE cl.id = $1`, [id]))[0]
+      const verdict = amazonSendQuantity({
+        sku: 'TEST-SKU-FC-C', listing: row, product: { id: row.productId, fulfillmentMethod: row.productMethod }, ledger: undefined,
+        evidence: { fbaStockQty: 0, hasActiveFbaOffer: false }, requested: 6, euRows: [], switches: { orderingV2: true, oversellClamp: false, euGuard: false },
+      })
+      expect(verdict).toMatchObject({ quantity: null, fba: true })
+    }
   })
 
   it('Amazon refuses every market: Nexus is put back to FBM through the same door, the mark too', async () => {

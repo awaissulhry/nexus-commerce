@@ -65,6 +65,18 @@ describe('equals the stock job', () => {
     for (const c of cases) expect(amazonSendQuantity(input(c))).toMatchObject({ quantity: null, fba: true, refusal: null })
   })
 
+  it('after an FBM → FBA conversion is SENT: no merchant quantity for that SKU, on the converted market or a refused one', () => {
+    // The conversion writes Nexus FBA BEFORE the patch (fulfilmentAttributes: typed FBA, own entry AMAZON_EU); Amazon's
+    // reported copy still says DEFAULT with the old merchant quantity until its report catches up.
+    const converted = listing({ fulfillmentMethod: 'FBA', followMasterQuantity: true, quantity: 6, platformAttributes: {
+      fulfillmentChannel: 'AFN', fulfillment_availability: [{ fulfillment_channel_code: 'AMAZON_EU' }],
+      attributes: { fulfillment_availability: [{ fulfillment_channel_code: 'DEFAULT', quantity: 6 }] },
+    } })
+    expect(amazonSendQuantity(input({ listing: converted as never, requested: 6, product: { id: 'p1', fulfillmentMethod: 'FBA' } }))).toMatchObject({ quantity: null, fba: true })
+    // A market Amazon refused is put back to FBM, but the product's FBA mark stays while another market is FBA: none either.
+    expect(amazonSendQuantity(input({ requested: 6, product: { id: 'p1', fulfillmentMethod: 'FBA' } }))).toMatchObject({ quantity: null, fba: true })
+  })
+
   it('EU shared-quantity conflict → refused with the job\'s sentence; agreeing markets → sent', () => {
     const conflict = amazonSendQuantity(input({ euRows: [
       { marketplace: 'IT', followMasterQuantity: true, quantityOverride: null, quantity: 10 },

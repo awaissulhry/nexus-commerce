@@ -567,12 +567,15 @@ async function amazonFulfilmentFacts(read: MatrixRead, req: MatrixVerbRequest & 
     keys.set(`${t.rowId}|${key}`, { rowId: t.rowId, key })
   }
   const facts = new Map<string, AmazonFulfilmentFacts | null>()
+  // The method asked for (a fresh request names it; a carried preview's change holds it): every fixable refusal at once.
+  const asked = 'method' in req.params ? req.params.method : req.preview?.changes.find((c) => c.cell === 'fulfilment')?.to
+  const to = asked === 'FBA' || asked === 'FBM' ? asked : undefined
   for (const [k, { rowId, key }] of keys) {
     const hit = locate(read, rowId, key)
     if (!hit?.cells.listingId || hit.row.role === 'parent') continue
     try {
       const landed = await targetsOf(read, hit, hit.cells.version)
-      facts.set(k, 'conflict' in landed ? null : (await loadConversionPlan({ primaryListingId: hit.cells.listingId, targetIds: landed.targets.map((t) => t.id) }))?.facts ?? null)
+      facts.set(k, 'conflict' in landed ? null : (await loadConversionPlan({ primaryListingId: hit.cells.listingId, targetIds: landed.targets.map((t) => t.id), to }))?.facts ?? null)
     } catch (err) {
       logger.warn('matrix: Amazon fulfilment facts not read — the target is refused', { rowId, key, error: err instanceof Error ? err.message : String(err) })
       facts.set(k, null)

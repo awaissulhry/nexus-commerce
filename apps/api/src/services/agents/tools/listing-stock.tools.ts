@@ -59,10 +59,11 @@ export const HOLD_HOLDS_PRICES = 'Holding the stock sync also holds price and sa
 /** Retry sends a push again; once it reached the channel it cannot be called back (the Matrix keeps nothing to put back). */
 export const RETRY_SENDS_AGAIN = 'Retry sends the failed push to the channel again; what reaches the channel cannot be called back.'
 
-/** Amazon fulfilment conversion (2026-10-07): set-fulfilment on Amazon is SENT to Amazon and confirmed from its report. */
-export const FULFILMENT_SENT = 'This change is sent to Amazon: each market\'s offer is converted with a Listings Items patch (FBM: DEFAULT '
-  + 'with the merchant quantity; FBA: AMAZON_EU, no quantity), then checked against Amazon\'s merchant listings report within minutes — '
-  + 'the Matrix\'s Fulfilment cell shows when Amazon confirms it. Its revert is the opposite conversion, with fresh checks.'
+/** Amazon fulfilment conversion (2026-10-07; add + delete since 2026-10-08): SENT to Amazon, confirmed from its report. */
+export const FULFILMENT_SENT = 'This change is sent to Amazon: each open market gets ONE Listings Items patch that adds the new fulfilment '
+  + 'record and deletes the old one (FBM: add DEFAULT with the merchant quantity, delete AMAZON_EU; FBA: add AMAZON_EU with no quantity, '
+  + 'delete DEFAULT). Amazon accepts a patch first and applies it later: the Matrix\'s Fulfilment cell says Confirmed only when Amazon\'s '
+  + 'merchant listings report shows the new method (read every 15 minutes for 24 hours). Its revert is the opposite conversion, with fresh checks.'
 
 /**
  * N4 — the Matrix preview in words for the Approvals card (which reads `summary` and `warning`, not a list of cells):

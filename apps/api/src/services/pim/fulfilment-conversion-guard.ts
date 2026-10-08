@@ -3,10 +3,12 @@
  * `clients/amazon-sp-api.client.ts`) makes, kept in its own small module so the client imports nothing else.
  *
  * A merchant `fulfillment_availability: [{ DEFAULT, quantity }]` for an FBA SKU is exactly what converts its Amazon offer
- * to FBM. The guard strips it in every case but one: a call that carries a `conversionId` whose `FulfilmentConversion`
- * row says an operator-confirmed run is converting THIS seller SKU on THIS marketplace to FBM with THIS quantity, right
- * now (`SENDING`, created less than 10 minutes ago), while Nexus mirrors no FBA units of the product — read again here,
- * at the moment of the send. Anything else, and any failed read, strips as before (fail closed).
+ * to FBM, and a `delete [{ AMAZON_EU }]` is what takes the offer off FBA. The guard strips both in every case but one: a
+ * call that carries a `conversionId` whose `FulfilmentConversion` row says an operator-confirmed run is converting THIS
+ * seller SKU on THIS marketplace to FBM with THIS quantity, right now (`SENDING`, created less than 10 minutes ago), with
+ * EXACTLY the fulfilment patch the call carries (the row's `payload`, written before the send), while Nexus mirrors no FBA
+ * units of the product — read again here, at the moment of the send. Anything else, and any failed read, strips (fail
+ * closed).
  */
 import prisma from '../../db.js'
 
@@ -23,6 +25,8 @@ export interface ConversionGuardRecord {
   quantity: number | null
   operatorConfirmed: boolean
   createdAt: Date
+  /** The fulfilment patches the run recorded before the send (`conversionPatches`). */
+  payload: unknown
 }
 
 export interface ConversionGuardAsk {
@@ -30,6 +34,8 @@ export interface ConversionGuardAsk {
   marketplaceId: string
   /** Every merchant quantity the patch carries (DEFAULT entries). */
   quantities: readonly number[]
+  /** Every `/attributes/fulfillment_availability` patch the call carries, as sent. */
+  patches: readonly unknown[]
   /** FBA units Nexus mirrors for the product NOW: on hand + reserved + inbound. */
   fbaUnits: number
   now: Date
@@ -47,10 +53,21 @@ export function conversionGuardVerdict(record: ConversionGuardRecord | null, ask
   if (ask.quantities.length === 0 || record.quantity == null || ask.quantities.some((q) => q !== record.quantity)) {
     return no(`the patch carries quantity ${ask.quantities.join(',') || '—'}, the conversion ${record.quantity ?? '—'}`)
   }
+  if (!samePatches(record.payload, ask.patches)) return no('the patch is not the one this conversion recorded')
   const age = ask.now.getTime() - record.createdAt.getTime()
   if (!(age >= 0 && age < CONVERSION_SEND_WINDOW_MS)) return no('the conversion is older than 10 minutes')
   if (ask.fbaUnits > 0) return no(`${ask.fbaUnits} FBA units are mirrored for the product now`)
-  return { pass: true, reason: 'an operator-confirmed FBM conversion of this SKU and marketplace, sending now, no FBA units' }
+  return { pass: true, reason: 'the operator-confirmed FBM conversion of this SKU and marketplace, its own patch, sending now, no FBA units' }
+}
+
+/** JSON with every object's keys sorted: the stored payload comes back from JSONB with its keys reordered. */
+const canonical = (v: unknown): string => JSON.stringify(v, (_k, x) => (x && typeof x === 'object' && !Array.isArray(x)
+  ? Object.fromEntries(Object.keys(x as Record<string, unknown>).sort().map((k) => [k, (x as Record<string, unknown>)[k]]))
+  : x))
+
+/** PURE — are the call's fulfilment patches exactly the recorded ones (same ops, same order, same records)? */
+export function samePatches(recorded: unknown, sent: readonly unknown[]): boolean {
+  return Array.isArray(recorded) && recorded.length > 0 && canonical(recorded) === canonical(sent)
 }
 
 /** FBA units Nexus mirrors for a product: on hand at the FBA location (the guard's number) + reserved + inbound at Amazon. */
@@ -86,7 +103,7 @@ export async function conversionLetsThrough(conversionId: string, ask: Omit<Conv
   try {
     const record = await prisma.fulfilmentConversion.findUnique({
       where: { id: conversionId },
-      select: { status: true, toMethod: true, sku: true, marketplaceId: true, quantity: true, operatorConfirmed: true, createdAt: true, productId: true },
+      select: { status: true, toMethod: true, sku: true, marketplaceId: true, quantity: true, operatorConfirmed: true, createdAt: true, productId: true, payload: true },
     })
     if (!record) return conversionGuardVerdict(null, { ...ask, fbaUnits: 0, now: new Date() })
     const units = (await readFbaUnits([record.productId], [record.sku])).get(record.productId) ?? { onHand: 0, reserved: 0, inbound: 0 }

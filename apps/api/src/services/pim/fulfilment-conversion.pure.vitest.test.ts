@@ -1,8 +1,9 @@
 /**
  * Amazon fulfilment conversion (2026-10-07) — the pure rules: when a set-fulfilment is a no-change, a refusal or a send
- * (`amazonConversionRefusal`, shared with the page), the change's note, how a run reads in the Fulfilment cell
- * (`conversionStatusOf`), what one report read does to a record (`confirmVerdict`), and the reported copy a confirmation
- * leaves (`withConfirmedReport`).
+ * (`amazonConversionRefusal`, shared with the page), every fixable refusal at once (`conversionRefusals`,
+ * `allRefusalsLine`), the patch sent per market (`conversionPatches`), the change's note, how a run reads in the
+ * Fulfilment cell (`conversionStatusOf`), what one report read does to a record (`confirmVerdict`), and the reported copy
+ * a confirmation leaves (`withConfirmedReport`).
  */
 import { describe, expect, it, vi } from 'vitest'
 
@@ -14,7 +15,7 @@ vi.mock('../../clients/amazon-sp-api.client.js', () => ({ amazonSpApiClient: {} 
 
 import { amazonConversionNote, amazonConversionRefusal, type AmazonFulfilmentFacts } from '@nexus/shared/matrix-preview'
 import { MATRIX_COPY } from '@nexus/shared/matrix-contract'
-import { confirmVerdict, conversionStatusOf, reportMethod, withConfirmedReport, type ConversionRecordFacts } from './fulfilment-conversion.service.js'
+import { allRefusalsLine, confirmVerdict, conversionPatches, conversionRefusals, conversionStatusOf, policyPausedSentence, reportMethod, withConfirmedReport, type ConversionRecordFacts } from './fulfilment-conversion.service.js'
 import { reportedFulfilment } from './matrix-cells.js'
 
 const facts = (over: Partial<AmazonFulfilmentFacts> = {}): AmazonFulfilmentFacts => ({
@@ -63,25 +64,92 @@ describe('amazonConversionRefusal', () => {
   })
 })
 
+describe('conversionPatches — the ONE patch per marketplace (Amazon\'s documented switch: add the new record, delete the old)', () => {
+  const FA = '/attributes/fulfillment_availability'
+  it('FBA → FBM: add DEFAULT with the quantity (and the handling time when known), then delete the Amazon record', () => {
+    expect(conversionPatches('FBM', { quantity: 2, leadTime: 3 }, 'AMAZON_EU')).toEqual([
+      { op: 'add', path: FA, value: [{ fulfillment_channel_code: 'DEFAULT', quantity: 2, lead_time_to_ship_max_days: 3 }] },
+      { op: 'delete', path: FA, value: [{ fulfillment_channel_code: 'AMAZON_EU' }] },
+    ])
+    expect(conversionPatches('FBM', { quantity: 0, leadTime: null }, 'AMAZON_EU')[0]!.value).toEqual([{ fulfillment_channel_code: 'DEFAULT', quantity: 0 }])
+  })
+  it('FBM → FBA: add the Amazon record with no quantity, then delete DEFAULT (the last merchant quantity leaves Amazon)', () => {
+    for (const code of ['AMAZON_EU', 'AMAZON_NA']) {
+      expect(conversionPatches('FBA', { quantity: 7, leadTime: 2 }, code)).toEqual([
+        { op: 'add', path: FA, value: [{ fulfillment_channel_code: code }] },
+        { op: 'delete', path: FA, value: [{ fulfillment_channel_code: 'DEFAULT' }] },
+      ])
+    }
+  })
+})
+
+describe('every refusal at once (`conversionRefusals` + `allRefusalsLine`)', () => {
+  const pause = policyPausedSentence('DE FR')
+  it('the pause says what to do in one line, for every market it holds', () => {
+    expect(pause).toBe('Pushes to Amazon DE FR are paused — release them in Sync Control, or set DE FR Inactive in the product sheet if you do not sell there')
+  })
+  it('FBM: the locks, every FBA-units fact, an active FBA offer and the quantity — in the shared rule\'s own words', () => {
+    const f = facts({ fbaUnits: { onHand: 4, reserved: 1, inbound: 0 }, activeFbaOffer: true, quantity: null, quantityRefusal: 'no stock location is routed to Amazon IT for this SKU' })
+    expect(conversionRefusals(f, [pause], 'FBM')).toEqual([
+      pause,
+      'Refused — 4 units of FBA stock on hand keep the guard closed; Amazon must hold no FBA units of this SKU before its offer is converted to FBM',
+      'Refused — 1 FBA units reserved at Amazon keep the guard closed; Amazon must hold no FBA units of this SKU before its offer is converted to FBM',
+      'Refused — an active FBA offer keeps the guard closed; convert the offer in Seller Central first',
+      'Refused — no stock location is routed to Amazon IT for this SKU; an FBM offer needs one',
+    ])
+    // FBA: FBA units and the merchant quantity do not hold it (they are what FBA sells); the locks still do.
+    expect(conversionRefusals(f, [pause], 'FBA')).toEqual([pause])
+    // The method unknown: the locks only.
+    expect(conversionRefusals(f, [pause], null)).toEqual([pause])
+  })
+  it('one line, each thing once: the lead and a repeated clause are said once; one refusal = the shared sentence', () => {
+    const f = facts({ fbaUnits: { onHand: 4, reserved: 0, inbound: 3 } })
+    expect(allRefusalsLine(conversionRefusals(f, [pause], 'FBM'))).toBe('Refused — 3 things to fix: '
+      + `1) ${pause} `
+      + '2) 4 units of FBA stock on hand keep the guard closed; Amazon must hold no FBA units of this SKU before its offer is converted to FBM '
+      + '3) 3 FBA units inbound to Amazon keep the guard closed')
+    expect(allRefusalsLine([pause])).toBeNull()
+    expect(allRefusalsLine([])).toBeNull()
+  })
+  it('the combined line reaches the person through the shared rule (as `locked`), after the refusals that leave nothing to fix', () => {
+    const line = allRefusalsLine([pause, 'Refused — an active FBA offer keeps the guard closed; convert the offer in Seller Central first'])!
+    const fba = { ...cell, method: 'FBA' as const, guard: 'FBA' as const }
+    expect(amazonConversionRefusal(facts({ locked: line, activeFbaOffer: true }), 'FBM', fba)).toEqual({ kind: 'guard', reason: line })
+    expect(amazonConversionRefusal(facts({ locked: line, notListed: true }), 'FBM', fba)).toMatchObject({ kind: 'no-listing' })
+  })
+})
+
 describe('conversionStatusOf — the newest run, as the Fulfilment cell reads it', () => {
   const t = (m: number) => new Date(Date.UTC(2026, 9, 7, 10, m))
   const r = (over: Partial<ConversionRecordFacts>): ConversionRecordFacts => ({
     runId: 'run-2', channelListingId: 'l', marketplace: 'IT', toMethod: 'FBM', status: 'SENT', message: null,
     createdAt: t(0), sentAt: t(1), confirmedAt: null, lastReportAt: null, updatedAt: t(1), ...over,
   })
+  const now = t(30)
   it('folds the newest run over its markets; an older run is ignored', () => {
-    expect(conversionStatusOf([])).toBeNull()
+    expect(conversionStatusOf([], now)).toBeNull()
     const older = r({ runId: 'run-1', createdAt: new Date(Date.UTC(2026, 9, 6)), status: 'STILL_OLD' })
-    expect(conversionStatusOf([older, r({ marketplace: 'IT', status: 'CONFIRMED', confirmedAt: t(19) }), r({ marketplace: 'DE', status: 'CONFIRMED', confirmedAt: t(17) })]))
+    expect(conversionStatusOf([older, r({ marketplace: 'IT', status: 'CONFIRMED', confirmedAt: t(19) }), r({ marketplace: 'DE', status: 'CONFIRMED', confirmedAt: t(17) })], now))
       .toEqual({ status: 'CONFIRMED', to: 'FBM', at: t(19).toISOString(), markets: ['IT', 'DE'], message: null })
-    expect(conversionStatusOf([r({ marketplace: 'IT', status: 'CONFIRMED', confirmedAt: t(19) }), r({ marketplace: 'DE' })])).toMatchObject({ status: 'SENT', markets: ['IT', 'DE'] })
-    expect(conversionStatusOf([r({ marketplace: 'IT' }), r({ marketplace: 'DE', status: 'REFUSED', message: 'Amazon refused it: 8541' })]))
+    expect(conversionStatusOf([r({ marketplace: 'IT', status: 'CONFIRMED', confirmedAt: t(19) }), r({ marketplace: 'DE' })], now)).toMatchObject({ status: 'SENT', markets: ['IT', 'DE'] })
+    expect(conversionStatusOf([r({ marketplace: 'IT' }), r({ marketplace: 'DE', status: 'REFUSED', message: 'Amazon refused it: 8541' })], now))
       .toMatchObject({ status: 'SENT', markets: ['IT'], message: 'Amazon DE refused: Amazon refused it: 8541' })
-    expect(conversionStatusOf([r({ marketplace: 'IT', status: 'REFUSED', message: 'gated' }), r({ marketplace: 'DE', status: 'REFUSED', message: 'gated' })]))
+    expect(conversionStatusOf([r({ marketplace: 'IT', status: 'REFUSED', message: 'gated' }), r({ marketplace: 'DE', status: 'REFUSED', message: 'gated' })], now))
       .toMatchObject({ status: 'REFUSED', markets: ['IT', 'DE'], message: 'gated' })
-    expect(conversionStatusOf([r({ status: 'STILL_OLD', message: 'Amazon still reports FBA (AMAZON_EU) — check Seller Central → Manage Inventory' }), r({ marketplace: 'DE', status: 'CONFIRMED' })]))
+    expect(conversionStatusOf([r({ status: 'STILL_OLD', message: 'Amazon still reports FBA (AMAZON_EU) — check Seller Central → Manage Inventory' }), r({ marketplace: 'DE', status: 'CONFIRMED' })], now))
       .toMatchObject({ status: 'STILL_OLD' })
   })
+  it('a send never confirmed within 24 h is no longer on its way: it reads STILL_OLD, and the same change can be sent again', () => {
+    const late = new Date(t(0).getTime() + 24 * 3_600_000 + 60_000)
+    const sent = [r({ marketplace: 'IT' }), r({ marketplace: 'DE', status: 'SENDING' })]
+    expect(conversionStatusOf(sent, now)).toMatchObject({ status: 'SENDING' })
+    const stale = conversionStatusOf(sent, late)!
+    expect(stale).toMatchObject({ status: 'STILL_OLD', markets: ['IT', 'DE'], message: "Amazon's report did not confirm it within 24 h — check Seller Central → Manage Inventory" })
+    const fba = { ...cell, method: 'FBA' as const, guard: 'FBA' as const }
+    expect(amazonConversionRefusal(facts({ latest: conversionStatusOf(sent, now) }), 'FBM', fba)).toMatchObject({ reason: expect.stringContaining('Already sent to Amazon') })
+    expect(amazonConversionRefusal(facts({ latest: stale }), 'FBM', fba)).toBeNull()
+  })
+
   it('reads in one line', () => {
     const at = t(4).toISOString()
     const hhmm = new Date(at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
