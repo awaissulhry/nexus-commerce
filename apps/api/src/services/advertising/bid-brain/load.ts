@@ -312,11 +312,17 @@ async function loadPlaybookFacts(m: MarketRows, campaignIds: readonly string[], 
   return out
 }
 
-/** For each keyword the brain last lowered by an override: that override and the bid of its last decision before it. */
-async function loadLowered(previous: ReadonlyMap<string, PreviousDecision>): Promise<Map<string, { layer: DecisionLayer; heldCents: number; beforeCents: number | null }>> {
-  const out = new Map<string, { layer: DecisionLayer; heldCents: number; beforeCents: number | null }>()
+/**
+ * For each keyword the brain last lowered by an override: that override and the bid of its last decision before it.
+ * BB-7 review — a give-back that WROTE is a candidate too (heldCents = the floor it left): refused at the gate, the bid
+ * still sits at the floor and the next run gives it back again. `wrote`: the brain itself wrote a floor on this keyword
+ * since its last decision no override lowered — its saved bid (`suppressedFromBidCents`) is then the brain's own record
+ * (facts.ts), never a stop of someone else's.
+ */
+async function loadLowered(previous: ReadonlyMap<string, PreviousDecision>): Promise<Map<string, { layer: DecisionLayer; heldCents: number; beforeCents: number | null; wrote: boolean }>> {
+  const out = new Map<string, { layer: DecisionLayer; heldCents: number; beforeCents: number | null; wrote: boolean }>()
   // A give-back that found no bid to go back to (a restore hold) still waits for one: it stays a candidate.
-  const ids = [...previous].filter(([, p]) => (LOWERING_LAYERS as readonly string[]).includes(p.layer) || (p.layer === 'restore' && p.action === 'hold')).map(([id]) => id)
+  const ids = [...previous].filter(([, p]) => (LOWERING_LAYERS as readonly string[]).includes(p.layer) || p.layer === 'restore').map(([id]) => id)
   if (!ids.length) return out
   // The bid before: a decision no override lowered (a give-back that wrote counts; one that held at the floor does not).
   const kept = ['goal', 'band', 'limit', 'no_goal', 'pin', 'freeze']
@@ -325,9 +331,21 @@ async function loadLowered(previous: ReadonlyMap<string, PreviousDecision>): Pro
      WHERE d."targetId" = ANY(${ids}::text[]) AND (d.layer = ANY(${kept}::text[]) OR (d.layer = 'restore' AND d.action = 'write'))
      ORDER BY d."targetId", d."createdAt" DESC`)
   const before = new Map(rows.map((r) => [r.targetId, r.decidedCents]))
+  // Did the brain write a floor since the last decision no override lowered (a give-back that wrote counts as one)?
+  const lowering = [...LOWERING_LAYERS] as string[]
+  const wrote = new Set((await prisma.$queryRaw<Array<{ targetId: string }>>(Prisma.sql`
+    SELECT d."targetId" FROM "BidBrainDecision" d
+      LEFT JOIN (SELECT k."targetId", max(k."createdAt") AS at FROM "BidBrainDecision" k
+                  WHERE k."targetId" = ANY(${ids}::text[]) AND k.layer = ANY(${kept}::text[])
+                  GROUP BY k."targetId") last ON last."targetId" = d."targetId"
+     WHERE d."targetId" = ANY(${ids}::text[]) AND d.action = 'write' AND (d.layer = ANY(${lowering}::text[]) OR d.layer = 'restore')
+       AND (last.at IS NULL OR d."createdAt" > last.at)
+     GROUP BY d."targetId"`)).map((r) => r.targetId))
   for (const id of ids) {
     const p = previous.get(id)!
-    out.set(id, { layer: p.layer as DecisionLayer, heldCents: p.decidedCents, beforeCents: before.get(id) ?? null })
+    // A give-back that wrote left the keyword at `currentCents` (its floor) if the gate refused it.
+    const held = p.layer === 'restore' && p.action === 'write' ? p.currentCents : p.decidedCents
+    out.set(id, { layer: p.layer as DecisionLayer, heldCents: held, beforeCents: before.get(id) ?? null, wrote: wrote.has(id) })
   }
   return out
 }
@@ -451,6 +469,7 @@ export async function loadRun(m: MarketRows & { newestReportAt: Date | null }, n
       planHours,
       minBidEntries,
       spendGuard,
+      owned: new Set(ownedHere),
     },
     lastWrites,
     previous,

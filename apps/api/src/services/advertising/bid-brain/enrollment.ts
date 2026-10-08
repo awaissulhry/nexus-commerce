@@ -259,9 +259,10 @@ export async function releaseHold(args: { campaignIds: readonly string[]; by: st
 
 /**
  * BB-7 review — the keywords the brain holds at a floor (its newest decision lowered them by a stop, stock, the phase or a
- * Min-bid hour, and the bid still sits there) with no memory of their bid before (`AdTarget.suppressedFromBidCents`).
- * Handed back like this, no engine would give them back: `op: shadow` refuses until they have one (shadow.ts
- * rememberFloors keeps it for every floor the brain writes) — give-back puts back the snapshot instead.
+ * Min-bid hour, and the bid still sits there) that no engine would give back after a hand-back: no memory of their bid
+ * before (`AdTarget.suppressedFromBidCents`), or a memory no owner's mark points at (neither the campaign nor the ad
+ * group is marked floored — a stock or phase floor the brain read from its source sets none). `op: shadow` refuses
+ * while any is left; give-back puts back the snapshot instead.
  */
 export async function floorsWithoutMemory(campaignId: string): Promise<number> {
   const rows = await prisma.$queryRaw<Array<{ n: number }>>(Prisma.sql`
@@ -271,7 +272,10 @@ export async function floorsWithoutMemory(campaignId: string): Promise<number> {
        WHERE d."campaignId" = ${campaignId}
        ORDER BY d."targetId", d."createdAt" DESC) last
       JOIN "AdTarget" t ON t.id = last."targetId"
+      JOIN "AdGroup" g ON g.id = t."adGroupId"
+      JOIN "Campaign" c ON c.id = g."campaignId"
      WHERE last.layer IN ('stop', 'stock', 'phase', 'min_bid_hour')
-       AND t."bidCents" <= last."decidedCents" AND t."suppressedFromBidCents" IS NULL AND t."retiredAt" IS NULL`)
+       AND t."bidCents" <= last."decidedCents" AND t."retiredAt" IS NULL
+       AND (t."suppressedFromBidCents" IS NULL OR (c."bidsSuppressedAt" IS NULL AND g."bidsSuppressedAt" IS NULL))`)
   return rows[0]?.n ?? 0
 }

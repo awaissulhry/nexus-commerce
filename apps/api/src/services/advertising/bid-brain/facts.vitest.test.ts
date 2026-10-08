@@ -132,3 +132,31 @@ describe('overrides and brakes', () => {
     expect(buildFacts(paused, run({ marketBrakes: ['halted: test'] }))[0].brakes).toEqual(['halted: test', 'campaign paused'])
   })
 })
+
+describe('BB-7 review — whose saved bid, and whose floor mark', () => {
+  const remembered = market({ targets: [target('t1', 'g1', 'race jacket', 2, 45)] })
+  it('a bid the brain saved for its own floor (stock, then back in stock) is its record: no stop, so the give-back runs', () => {
+    const f = buildFacts(remembered, run({ lowered: new Map([['t1', { layer: 'stock', heldCents: 2, beforeCents: 45, wrote: true }]]) }))[0]
+    expect(f.overrides?.stop).toBeUndefined()
+    expect(f.restore).toMatchObject({ layer: 'stock', beforeCents: 45 })
+  })
+  it('after a refused give-back the keyword still sits at the floor: still the brain\'s record, the give-back runs again', () => {
+    const f = buildFacts(remembered, run({ lowered: new Map([['t1', { layer: 'restore', heldCents: 2, beforeCents: 45, wrote: true }]]) }))[0]
+    expect(f.overrides?.stop).toBeUndefined()
+  })
+  it('a floor someone else wrote (the brain only ever held it) keeps its stop', () => {
+    const f = buildFacts(remembered, run({ lowered: new Map([['t1', { layer: 'stop', heldCents: 2, beforeCents: null, wrote: false }]]) }))[0]
+    expect(f.overrides?.stop).toEqual({ bidCents: 2, by: 'a stop (its 45¢ bid remembered)' })
+    expect(buildFacts(remembered, run())[0].overrides?.stop?.bidCents).toBe(2)
+  })
+  it('a plan\'s floor mark on an owned campaign is the brain\'s record, plan hour or not (a plan switched off gives back)', () => {
+    const marked = market({ campaigns: new Map([['c1', campaign('c1', { bidsSuppressedAt: new Date('2026-10-08T01:00:00Z'), bidsSuppressedFloorCents: 3, bidsSuppressedBy: 'automation:rank-defend-s1' })]]) })
+    expect(buildFacts(marked, run())[0].overrides?.minBidHour).toEqual({ floorCents: 3 })
+    expect(buildFacts(marked, run({ owned: new Set(['c1']) }))[0].overrides?.minBidHour).toBeUndefined()
+  })
+  it('the plan\'s day ceiling binds the keyword bid in an hour with no target too', () => {
+    const f = buildFacts(market(), run({ owned: new Set(['c1']), planHours: new Map([['c1', { scheduleId: 's1', name: 'P', key: null, spec: null, event: null, dayMaxCpcCents: 45 }]]) }))[0]
+    expect(f.lanes).toBeUndefined()
+    expect(f.limits.planCeilingCents).toBe(45)
+  })
+})
