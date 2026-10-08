@@ -48,7 +48,7 @@ const bidBrain: AgentTool = {
     + 'goal (goal bid × hour factor, then placements, inside the limits, unless a stop, a pin or stock says otherwise). It '
     + 'runs in SHADOW now: every 6 hours it decides the keywords of the allowlisted campaigns in IT and DE and logs what it '
     + 'would set next to what today\'s writers set; it writes nothing. view why (default): each keyword\'s newest decision — '
-    + 'write, hold or brake, the deciding layer (brake, stop, pin, stock, freeze, phase, min_bid_hour, goal, band, limit, '
+    + 'write, hold or brake, the deciding layer (brake, stop, pin, stock, freeze, phase, min_bid_hour, restore — the bids going back after a stop lifted —, goal, band, limit, '
     + 'no_goal), today\'s bid and the brain\'s, the goal bid, the aim and band, the expected ACoS at today\'s bid, how much '
     + 'of the estimate rests on data — and a one-line why. view what-if: the same keywords decided again now with '
     + 'targetAcosPct (and bandLoPct / bandHiPct): what the brain would set, not stored and not sent (set-ads-strategy '

@@ -10,7 +10,7 @@
  *   brakes     the market's brakes, a paused campaign or ad group
  */
 import { describe, expect, it } from 'vitest'
-import { buildFacts, floorOverride, goalTarget, type AdGroupRow, type CampaignRow, type MarketRows, type RunRows, type TargetRow } from './facts.js'
+import { buildFacts, floorOverride, goalTarget, mergeFloors, type AdGroupRow, type CampaignRow, type MarketRows, type RunRows, type TargetRow } from './facts.js'
 
 const campaign = (id: string, extra: Partial<CampaignRow> = {}): CampaignRow => ({
   id, status: 'ENABLED', pinBids: false, pinnedBy: null, bidsSuppressedAt: null, bidsSuppressedFloorCents: null, bidsSuppressedBy: null,
@@ -88,6 +88,20 @@ describe('overrides and brakes', () => {
     // A keyword floored on its own, its bid remembered: the stop holds it.
     const floored = market({ targets: [target('t1', 'g1', 'race jacket', 2, 50)] })
     expect(buildFacts(floored, run())[0].overrides?.stop).toEqual({ bidCents: 2, by: 'a stop (its 50¢ bid remembered)' })
+  })
+
+  it('BB-8 — a campaign floor and its ad group floor of the same kind: the lower wins; different kinds both stay', () => {
+    const at = new Date()
+    const capOnCampaign = floorOverride('automation:budget-enforce', 5, at)
+    const productCapOnGroup = floorOverride('automation:budget-enforce-product', 3, at)
+    expect(mergeFloors(capOnCampaign, productCapOnGroup).stop).toEqual({ bidCents: 3, by: 'automation:budget-enforce-product' })
+    expect(mergeFloors(productCapOnGroup, capOnCampaign).stop).toEqual({ bidCents: 3, by: 'automation:budget-enforce-product' })
+    expect(mergeFloors(capOnCampaign, floorOverride('automation:retail-guard', 2, at))).toEqual({
+      stop: { bidCents: 5, by: 'automation:budget-enforce' },
+      stock: { notBuyable: true, stopBidCents: 2, by: 'automation:retail-guard' },
+    })
+    expect(mergeFloors(null, null)).toEqual({})
+    expect(mergeFloors(capOnCampaign, null)).toEqual(capOnCampaign)
   })
 
   it('pins pinned bids, a hold and a person’s bid; freezes a HELD enrollment; brakes a paused campaign', () => {

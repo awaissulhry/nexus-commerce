@@ -475,7 +475,7 @@ const A4: AutomationAdapter = {
   // Owner targets only — the rule in AUTO_BID_SCOPE_WORDS' words (ads-auto-bid.service.ts).
   what: 'Moves target bids toward a target ACoS, at most −50 % / +25 % per pass, never below 5¢. It moves only bids where you set a target ACoS (campaign, ads strategy or account default), in running campaigns on the live-write allowlist, and leaves bids an hourly plan, a goal plan, a person or a pin holds.',
   area: 'amazon-ads', writesTo: ['amazon'], view: FEATURES.adsView, claude: 'switch-tune', preview: 'saved',
-  previewNote: 'The bids it would set now, chosen as a run chooses them (with what it leaves alone, and why), computed and not written.',
+  previewNote: 'The bids it would set now, chosen as a run chooses them (with what it leaves alone and what waits for a newer data day, and why), computed and not written.',
   crons: ['ads-auto-bid'], schedule: process.env.NEXUS_ADS_AUTO_BID_SCHEDULE ?? '20 */6 * * *',
   env: () => amazonAds(),
   async state() {
@@ -489,14 +489,17 @@ const A4: AutomationAdapter = {
   async runPreview(): Promise<PreviewOutcome> {
     // W0 — with the run's own options. Owner targets only — and the run's own choice (planAutoBid): the bids toward a
     // target the Owner set that nobody else holds, so the preview is the run; what it leaves alone is counted per reason.
-    const { planAutoBid, leftAloneTotal, leftAloneWords, AUTO_BID_SCOPE_WORDS } = await import('./ads-auto-bid.service.js')
-    const { preview: out, moves, leftAlone } = await planAutoBid()
+    // Review follow-up — and the moves that wait for a newer data day, counted per kind with a sample, as a run counts them.
+    const { planAutoBid, leftAloneTotal, leftAloneWords, waitingCounts, waitingWords, AUTO_BID_SCOPE_WORDS } = await import('./ads-auto-bid.service.js')
+    const { preview: out, moves, leftAlone, waiting } = await planAutoBid()
     const alone = leftAloneTotal(leftAlone)
     return {
       kind: 'saved', subject: null,
       result: {
         targetAcos: out.targetAcos, profitMode: out.profitMode, bayesian: out.bayesian, proposals: moves.slice(0, 100), total: moves.length,
         leftAlone, leftAloneNote: alone ? `${alone} left alone (${leftAloneWords(leftAlone)}): ${AUTO_BID_SCOPE_WORDS}.` : `Nothing left alone: ${AUTO_BID_SCOPE_WORDS}.`,
+        waiting: waitingCounts(waiting), waitingSample: waiting.slice(0, 20),
+        waitingNote: waiting.length ? `${waiting.length} waiting for a newer data day (${waitingWords(waitingCounts(waiting))}): one move per data day, and no reversal of its own move for 3 data days.` : 'Nothing waiting for a newer data day.',
       },
     }
   },
