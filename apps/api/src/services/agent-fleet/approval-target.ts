@@ -270,6 +270,8 @@ const EBAY_AD_TOOLS = new Set(['set-ebay-ad-rates', 'promote-ebay-listings', 'se
 const AMAZON_AD_TOOLS = new Set([
   'set-target-bid', 'create-negative-keyword', 'graduate-keyword', 'set-campaign-budget', 'set-placement-multipliers',
   'bulk-ad-bid-change', 'suppress-campaign', 'restore-campaign', 'set-campaign-live-writes', 'create-ad-campaign', 'undo-ad-change',
+  // BB-6 — a campaign's place in the bid brain.
+  'set-bid-brain-enrollment',
   'set-campaign-target-acos', 'pause-ads', 'enable-ads', 'archive-ads', 'lower-ad-bids-for-stock', 'restore-ad-bids-after-stock', 'apply-ads-playbook',
   'replicate-ad-structure',
   'create-ai-goal-campaigns',
@@ -862,6 +864,12 @@ const READERS: Record<string, Reader> = {
     const live = rec(p.liveWrites) ?? {}
     const word = (on: unknown) => (on ? 'On the live-write allowlist' : 'Off the allowlist')
     return { ...adCampaign(p, tool), changes: [{ label: 'Live writes', from: word(live.from), to: word(live.to) }] }
+  },
+  // BB-6 — who writes the campaign's bids: the bid brain (LIVE), the brain without raises (HELD), or today's engines.
+  'set-bid-brain-enrollment': (p, _a, _ctx, tool) => {
+    const e = rec(p.enrollment) ?? {}
+    const word = (mode: unknown) => (mode === 'LIVE' ? 'The bid brain' : mode === 'HELD' ? 'The bid brain, no raises' : "Shadow: today's engines")
+    return { ...adCampaign(p, tool), changes: [{ label: 'Bid writer', from: word(e.from), to: word(e.to) }] }
   },
   'create-ad-campaign': (p) => {
     const plan = rec(p.plan) ?? {}

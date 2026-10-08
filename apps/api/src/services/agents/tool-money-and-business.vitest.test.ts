@@ -154,6 +154,7 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'relist-listing': 'a Relist needs an Ended eBay or Shopify listing on its account (listing-lifecycle.tools test)',
   'delete-listing': 'a Delete needs a listing on its account and the channel\'s gate (listing-lifecycle.tools test)',
   'add-photo-from-url': 'it fetches a web link and stores the file (Cloudinary), neither of which this suite has (photos-link.tools test)',
+  'set-bid-brain-enrollment': 'a campaign goes LIVE under the bid brain only from the live-write allowlist, which the seeded campaign is not on (bid-brain/live-postgres test)',
 }
 
 /**
@@ -287,6 +288,7 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'restore-campaign': (ids) => ({ campaignId: ids.campaignId }),
   // A12 — the live-write allowlist (no money in it).
   'set-campaign-live-writes': (ids) => ({ campaignId: ids.campaignId, enabled: true }),
+  'set-bid-brain-enrollment': (ids) => ({ campaignId: ids.campaignId, op: 'live' }),
   // AA-W2-12 — a real pause and an enable name the budgets that stop or start spending (they need money).
   'pause-ads': (ids) => ({ campaignIds: [ids.campaignId] }),
   'enable-ads': (ids) => ({ campaignIds: [ids.campaignId] }),

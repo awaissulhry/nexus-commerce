@@ -6,7 +6,8 @@
  * Keyword bids move at most once per new settled data day, so four runs a day see every new day and every writer's
  * change of the day; a faster cadence would only add database reads (Neon cost).
  *
- * Switch: NEXUS_BID_BRAIN_MODE = off | shadow (default) | live (= shadow until BB-6 ships the writer).
+ * Switch: NEXUS_BID_BRAIN_MODE = off | shadow (default) | live (BB-6: the campaigns enrolled LIVE are written; the rest
+ * stay shadow).
  * Cluster-safe through lib/cron/clustered.ts (hard rule 7); with business profiles on it runs once per business.
  */
 import cron from '../lib/cron/clustered.js'

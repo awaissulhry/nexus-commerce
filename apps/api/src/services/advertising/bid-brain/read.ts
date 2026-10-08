@@ -1,5 +1,7 @@
 /**
- * BID BRAIN BB-4 — what the shadow brain says, for the `bid-brain` read tool. Nothing here writes.
+ * BID BRAIN BB-4 — what the brain says, for the `bid-brain` read tool. Nothing here writes.
+ * BB-6 — a decision on a campaign the brain owns is LIVE (it was sent: `sent` says what became of it); the rest are
+ * SHADOW. `owned` lists the campaigns the brain owns now; the diff counts the brain's own bid writes per day.
  *
  *   why      each keyword's newest decision with its one-line why (a keyword, a campaign, a product or a market)
  *   what-if  the same keywords decided again NOW with another target ACoS (and band): what the brain would set — not
@@ -15,6 +17,7 @@ import { strategyMarket } from '../ads-strategy/bids.js'
 import { decide, type Decision } from './decide.js'
 import { buildFacts } from './facts.js'
 import { loadMarket, loadRun, SHADOW_MARKETS } from './load.js'
+import { BRAIN_ACTOR, brainOwnedCampaignIds } from './live.js'
 import { bidBrainMode } from './shadow.js'
 
 export const BRAIN_VIEWS = ['why', 'what-if', 'diff'] as const
@@ -78,7 +81,8 @@ async function whyView(args: BrainReadArgs) {
   const rows = scope.ids && !scope.ids.length ? [] : await prisma.$queryRaw<Array<Record<string, unknown>>>(Prisma.sql`
     SELECT * FROM (
       SELECT DISTINCT ON (d."targetId") d."targetId", d."campaignId", d.marketplace, d.action, d.layer, d."currentCents", d."decidedCents",
-             d."goalBidCents", d.aim, d."bandLo", d."bandHi", d."expectedAcos", d.confidence, d."dataDay", d."createdAt", d."lastWriter", d.why
+             d."goalBidCents", d.aim, d."bandLo", d."bandHi", d."expectedAcos", d.confidence, d."dataDay", d."createdAt", d."lastWriter", d.why,
+             d.mode, d.evidence -> 'sent' AS sent
         FROM "BidBrainDecision" d
        WHERE d."createdAt" >= ${since} ${idFilter} ${marketFilter}
        ORDER BY d."targetId", d."createdAt" DESC) latest
@@ -91,13 +95,18 @@ async function whyView(args: BrainReadArgs) {
     aimPct: pct(r.aim), bandLoPct: pct(r.bandLo), bandHiPct: pct(r.bandHi), expectedAcosPct: pct(r.expectedAcos),
     confidence: r.confidence == null ? null : Number(r.confidence), dataDay: (r.dataDay as Date).toISOString().slice(0, 10),
     decidedAt: (r.createdAt as Date).toISOString(), lastWriter: r.lastWriter, why: r.why,
+    mode: r.mode, ...(r.sent ? { sent: r.sent } : {}),
   }))
+  const owned = await ownedNow()
+  const live = decisions.some((d) => d.mode === 'LIVE')
   return {
     data: {
-      view: 'why', mode: bidBrainMode(), markets: scope.markets, decisions,
-      note: decisions.length
-        ? 'Shadow decisions: what the bid brain WOULD set, next to the bid today\'s writers set (currentCents). Nothing was sent.'
-        : `No shadow decision for this scope yet: ${SCHEDULE_WORDS}.`,
+      view: 'why', mode: bidBrainMode(), markets: scope.markets, owned, decisions,
+      note: !decisions.length
+        ? `No decision for this scope yet: ${SCHEDULE_WORDS}.`
+        : live
+          ? 'LIVE decisions were sent through the bid write path (sent says what became of each: queued, refused, deferred by the caps, would-apply under SUGGEST); SHADOW decisions are what the brain WOULD set, next to the bid today\'s writers set (currentCents).'
+          : 'Shadow decisions: what the bid brain WOULD set, next to the bid today\'s writers set (currentCents). Nothing was sent.',
     },
   }
 }
@@ -166,6 +175,22 @@ export function writeStats(writes: ReadonlyArray<{ entityId: string; userId: str
   }))
 }
 
+/** BB-6 — the brain's own bid writes per UTC day (actor automation:bid-brain). Pure. */
+export function brainWritesByDay(writes: ReadonlyArray<{ userId: string | null; createdAt: Date }>): Map<string, number> {
+  const out = new Map<string, number>()
+  for (const w of writes) {
+    if (w.userId !== BRAIN_ACTOR) continue
+    const day = w.createdAt.toISOString().slice(0, 10)
+    out.set(day, (out.get(day) ?? 0) + 1)
+  }
+  return out
+}
+
+/** BB-6 — the campaigns the brain owns now (none under a non-live ceiling). */
+async function ownedNow(): Promise<string[]> {
+  return [...(await brainOwnedCampaignIds())].sort()
+}
+
 /** One decision against today's bid: agree (the brain leaves it), higher, lower, held by an override, braked. */
 export function compareWord(d: { action: string; layer: string; currentCents: number; decidedCents: number }): 'agree' | 'higher' | 'lower' | 'hold' | 'brake' {
   if (d.action === 'brake') return 'brake'
@@ -200,13 +225,15 @@ async function diffView(args: BrainReadArgs) {
     byDay.set(r.day, e)
   }
   const dayList = [...new Set([...byDay.keys(), ...[...stats.keys()].filter((d) => d >= since.toISOString().slice(0, 10))])].sort().reverse()
-  const rows = dayList.map((day) => ({ day, ...(byDay.get(day) ?? { decided: 0, agree: 0, higher: 0, lower: 0, hold: 0, brake: 0 }), ...(stats.get(day) ?? { conflicts: 0, writes: 0, targetsWritten: 0, maxWritesPerTarget: 0 }) }))
+  const brain = brainWritesByDay(writes)
+  const rows = dayList.map((day) => ({ day, ...(byDay.get(day) ?? { decided: 0, agree: 0, higher: 0, lower: 0, hold: 0, brake: 0 }), ...(stats.get(day) ?? { conflicts: 0, writes: 0, targetsWritten: 0, maxWritesPerTarget: 0 }), brainWrites: brain.get(day) ?? 0 }))
+  const owned = await ownedNow()
   return {
     data: {
-      view: 'diff', mode: bidBrainMode(), markets: scope.markets, days: rows,
+      view: 'diff', mode: bidBrainMode(), markets: scope.markets, owned, days: rows,
       note: rows.length
-        ? 'Per UTC day, each keyword\'s last shadow decision against the bid today\'s writers set: agree (the brain leaves it), higher / lower (the brain would move it), hold (a stop, pin, stock or other override decides), brake. conflicts: keywords two different automatic writers changed within 24 hours (the goal is 0); writes and maxWritesPerTarget: bid writes that day (churn). The brain itself wrote nothing.'
-        : `No shadow decision in the last ${days} days: ${SCHEDULE_WORDS}.`,
+        ? `Per UTC day, each keyword's last decision against the bid today's writers set: agree (the brain leaves it), higher / lower (the brain would move it), hold (a stop, pin, stock or other override decides), brake. conflicts: keywords two different automatic writers changed within 24 hours (the goal is 0); writes and maxWritesPerTarget: bid writes that day (churn); brainWrites: the brain's own (only on the campaigns it owns — ${owned.length ? `${owned.length} now` : 'none now, so it wrote nothing'}).`
+        : `No decision in the last ${days} days: ${SCHEDULE_WORDS}.`,
     },
   }
 }

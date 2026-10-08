@@ -17,6 +17,7 @@ import { ACTION_HANDLERS, type ActionResult } from '../automation-rule.service.j
 import { logger } from '../../utils/logger.js'
 import { nothingHeld, type EngineGuard } from './ads-engine-guard.js'
 import { settledWhere } from './ads-settled-window.js'
+import { brainOwnedCampaignIds } from './bid-brain/live.js'
 
 const TOP_REPORT_PLACEMENT = 'Top of Search on-Amazon'
 const TOP_BID_KEY = 'PLACEMENT_TOP'
@@ -157,7 +158,10 @@ export async function applyTopOfSearch(campaignId: string, percentage: number, o
 export async function applyTopOfSearchRecommendations(opts: { windowDays?: number; marketplace?: string; targetAcos?: number } = {}): Promise<{ applied: number; rows: TosRow[] }> {
   const { rows } = await analyzeTopOfSearch(opts)
   let applied = 0
+  // BB-6 — never on a campaign the bid brain owns (one writer per campaign).
+  const brainOwned = await brainOwnedCampaignIds(rows.map((r) => r.campaignId))
   for (const r of rows) {
+    if (brainOwned.has(r.campaignId)) continue
     if (r.action !== 'keep' && r.recommendedPct !== r.currentPct) {
       await applyTopOfSearch(r.campaignId, r.recommendedPct, { actor: 'automation:tos-optimizer', reason: r.reason })
       applied += 1
@@ -201,6 +205,8 @@ export interface DefendTosResult {
   skippedRankOwned: number
   /** 4m — the same, in plain words; absent when none was left alone. */
   rankOwnedNote?: string
+  /** BB-6 — moves left alone because the bid brain owns the campaign (one writer per campaign). */
+  skippedBrainOwned?: number
   dryRun: boolean
   sample: Array<{ campaign: string; fromPct: number; toPct: number; action: string; reason: string }>
 }
@@ -226,13 +232,17 @@ export async function defendTopOfSearch(opts: {
   const { rankOwnedCampaignIds } = await import('./rank-release.service.js')
   const rankOwned = await rankOwnedCampaignIds()
   const candidate = rows.filter((r) => r.action !== 'keep' && r.recommendedPct !== r.currentPct)
-  const free = candidate.filter((r) => !rankOwned.has(r.campaignId))
-  const skippedRankOwned = candidate.length - free.length
+  // BID BRAIN BB-6 — a campaign the brain owns has one writer, the brain: its placements are left to it too.
+  const brainOwned = await brainOwnedCampaignIds(candidate.map((r) => r.campaignId))
+  const notBrain = candidate.filter((r) => !brainOwned.has(r.campaignId))
+  const skippedBrainOwned = candidate.length - notBrain.length
+  const free = notBrain.filter((r) => !rankOwned.has(r.campaignId))
+  const skippedRankOwned = notBrain.length - free.length
   const rankOwnedNote = skippedRankOwned > 0 ? rankOwnedWhy('Top of Search placement', skippedRankOwned) : undefined
   const skippedPaused = free.filter((r) => r.action === 'raise' && r.status === 'PAUSED').length
   const actionable = free.filter((r) => !(r.action === 'raise' && r.status === 'PAUSED'))
   const sample = actionable.slice(0, 8).map((r) => ({ campaign: r.name, fromPct: r.currentPct, toPct: r.recommendedPct, action: r.action, reason: r.reason }))
-  const held = { skippedRankOwned, ...(rankOwnedNote ? { rankOwnedNote } : {}) }
+  const held = { skippedRankOwned, ...(rankOwnedNote ? { rankOwnedNote } : {}), ...(skippedBrainOwned ? { skippedBrainOwned } : {}) }
   if (opts.dryRun) {
     return { evaluated: rows.length, changed: actionable.length, applied: 0, skippedNotAllowlisted: 0, skippedPaused, ...held, dryRun: true, sample }
   }

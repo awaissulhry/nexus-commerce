@@ -39,6 +39,8 @@ export const CODE_RULE = {
   'set-ads-playbook: adds spend': true,
   'set-ads-strategy: a raise': true,
   'enable-ads: includePeoplesPauses': true,
+  // BID BRAIN BB-6 — a campaign under the bid brain: a new bid writer going live.
+  'set-bid-brain-enrollment: live': true,
   // ── Day-to-day: listed in raises, warned, a normal approval ──
   'set-hourly-bid-plan': false,
   'set-portfolio': false,

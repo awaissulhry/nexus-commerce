@@ -36,6 +36,7 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { allowChange, engineGuardNote, nothingHeld, openEngineGuard, type EngineGuardReport } from './ads-engine-guard.js'
+import { brainOwnedCampaignIds } from './bid-brain/live.js'
 
 export type CoverageEngineMode = 'off' | 'observe' | 'auto'
 
@@ -170,11 +171,13 @@ export interface EngineRunSummary {
   blocked: number
   /** 1d — auto mode only: the dial posture and the caps this run ran under, and what they held back. */
   guard?: EngineGuardReport
+  /** BB-6 — campaigns of its sets the bid brain owns, left to the brain (one writer per campaign). */
+  brainOwned?: number
 }
 
 /** 1d — the cron's summary line: the counts, plus what the dial or the caps held back (nothing extra on a normal run). */
 export function coverageEngineSummaryLine(r: EngineRunSummary): string {
-  return `mode=${r.mode} sets=${r.setsEnabled} terms=${r.termsEvaluated} up=${r.ups} down=${r.downs} hold=${r.holds} applied=${r.applied} blocked=${r.blocked}${engineGuardNote(r.guard, {
+  return `mode=${r.mode} sets=${r.setsEnabled} terms=${r.termsEvaluated} up=${r.ups} down=${r.downs} hold=${r.holds} applied=${r.applied} blocked=${r.blocked}${r.brainOwned ? ` brain-owned=${r.brainOwned} (the bid brain runs them)` : ''}${engineGuardNote(r.guard, {
     suggest: 'nothing is written; the bids it would set are logged, as in observe mode',
     stopped: 'nothing is written; the bids it would set are logged, as in observe mode',
   })}`
@@ -208,10 +211,14 @@ export async function runCoverageEngineOnce(opts: { previewSetId?: string } = {}
 
   for (const set of sets) {
     // Family membership + campaigns, by the same rule the cockpit uses.
-    const campaigns = await prisma.campaign.findMany({
+    const members = await prisma.campaign.findMany({
       where: { portfolioId: set.portfolioId, status: 'ENABLED' },
       select: { id: true, name: true, externalCampaignId: true },
     })
+    // BID BRAIN BB-6 — a campaign the brain owns has one bid writer, the brain: the coverage engine leaves it.
+    const brainOwned = await brainOwnedCampaignIds(members.map((c) => c.id))
+    if (brainOwned.size) summary.brainOwned = (summary.brainOwned ?? 0) + brainOwned.size
+    const campaigns = members.filter((c) => !brainOwned.has(c.id))
     if (campaigns.length === 0) continue
     const campaignIds = campaigns.map((c) => c.id)
     const nameByCampaign = new Map(campaigns.map((c) => [c.id, c.name]))

@@ -143,7 +143,7 @@ describe('auto-bid moves only bids that can reach Amazon, and asks the gate befo
     expect(r.notSentReasons).toHaveLength(1)
     expect(r.notSentReasons![0]).toMatch(/^Not sent to Amazon: /)
     // Left alone, per reason: two not running (a paused campaign, a paused ad group), one off the allowlist, one pinned.
-    expect(r.leftAlone).toEqual({ noTargetSetByYou: 0, notRunning: 2, notOnAllowlist: 1, hourlyPlan: 0, goalPlan: 0, person: 0, pinned: 1 })
+    expect(r.leftAlone).toEqual({ noTargetSetByYou: 0, notRunning: 2, notOnAllowlist: 1, hourlyPlan: 0, goalPlan: 0, person: 0, pinned: 1, bidBrain: 0 })
 
     // Nothing written, queued or logged for what was left alone or refused: the stored bid is what Amazon has.
     for (const [id, was] of [['t-off', before.off], ['t-paused', before.paused], ['t-pg', before.pg], ['t-uk', before.uk]] as const) {
