@@ -68,9 +68,11 @@ export interface WriteReport {
   byTarget: Map<string, WriteOutcome>
 }
 
-const FLOOR_LAYERS = new Set(['stop', 'stock', 'phase', 'min_bid_hour'])
+// Batch 2 fix — the money brake's step down is a lowering too: taken exactly, and it passes the dial's SUGGEST as a floor
+// does (lowering spend never waits); it is not a floor the brain remembers to give back (shadow.ts FLOORING_LAYERS).
+const FLOOR_LAYERS = new Set(['stop', 'stock', 'phase', 'min_bid_hour', 'money'])
 
-/** A floor: a lowering decided by a stop, stock, the phase or a Min-bid hour. Every other write is a forward move. */
+/** A floor: a lowering decided by a stop, stock, the phase, a Min-bid hour or the money brake. Every other write is a forward move. */
 export function isFloorWrite(d: Pick<Decision, 'layer' | 'bidCents' | 'currentCents'>): boolean {
   return FLOOR_LAYERS.has(d.layer) && d.bidCents < d.currentCents
 }

@@ -8,13 +8,14 @@
  *               write gate first: any refusal and neither is written; the sources are negated only once the keyword
  *               stands; a negative that still fails leaves the pair half done, named, and the brain sends it again.
  *               At PROPOSE the brain asks for it itself; Claude may ask for one too (a shadow harvest the Owner wants).
- *   op undo     puts a harvest back: the keyword paused (it stays at Amazon) and every source negative it made retired,
- *               so the term runs where it ran before. The brain asks for it when its judgement after the attribution
- *               window + 72 h calls the harvest worse.
+ *   op undo     puts a harvest back as a pair: every source negative it made retired, so the term runs where it ran
+ *               before, then the keyword paused (it stays at Amazon) — both halves asked of the gate first, and the keyword
+ *               never paused while a source still blocks the term. The brain asks for it when its judgement after the
+ *               attribution window + 72 h calls the harvest worse.
  *
  * Always a person — never by rule (ceiling ask): what runs alone is the brain itself at AUTO, inside its caps, once the
  * Owner turned the lever up. Refused, and not queued, when the harvest is not waiting for this, the destination cannot
- * take it now, the term found a home elsewhere meanwhile (a winner is never moved), or Amazon's write gate would refuse
+ * take it now, the term found an exact home elsewhere meanwhile (one owner per term), or Amazon's write gate would refuse
  * either half. Its writes carry the approval as their change set; undo-change of a harvest asks for op undo.
  */
 import { z } from 'zod'
@@ -147,11 +148,11 @@ const applyBrainHarvest: AgentTool = {
     + 'and the negative exact of the term in every ad group of the product where it ran, so those stop paying for it. '
     + 'Both halves are asked of Amazon\'s write gate first: any refusal and neither is written; the sources are negated '
     + 'only once the keyword stands; a negative that still fails leaves the pair half done and the brain sends it again. '
-    + 'op undo puts a harvest back: its keyword paused (it stays at Amazon) and its source negatives retired. Nothing '
+    + 'op undo puts a harvest back as a pair: its source negatives retired, then its keyword paused (it stays at Amazon). Nothing '
     + 'changes until a person approves it in Nexus; it never runs by rule (the brain itself writes at AUTO, inside its '
     + 'caps). A new keyword adds spend: listed in raises, a day-to-day change with no authenticator code. Refused, and not '
     + 'queued, when the harvest is not waiting for this, the destination does not serve now, the term found a home in '
-    + 'another ad group of the product meanwhile (a winner is never moved), or the write gate would refuse either half.',
+    + 'another ad group of the product meanwhile (one owner per term), or the write gate would refuse either half.',
   async handler(args) {
     return preview(args)
   },

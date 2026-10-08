@@ -271,7 +271,8 @@ describe('levels and the Owner', () => {
 
   it('a resume at PROPOSE of the brain\'s own AUTO pause is asked with the lift of an automation\'s pause', () => {
     const d = decideState(facts({ ...brainPaused(30), lever: { effective: 'PROPOSE', why: 'PROPOSE' } }), CTX)
-    expect(d).toMatchObject({ action: 'resume', outcome: 'ask', liftsAutomationPause: true, why: expect.stringMatching(/only with the approver's authenticator code/) })
+    // Batch 2 fix — the brain's own resume is Nexus's own request: a person's normal approval lifts it (ads-status.tools.ts).
+    expect(d).toMatchObject({ action: 'resume', outcome: 'ask', liftsAutomationPause: true, why: expect.stringMatching(/the brain paused it alone: its own resume, a person's normal approval lifts it/) })
   })
 
   it('a pause the brain made, its lever no longer PROPOSE or AUTO: a person is told it will not be resumed', () => {

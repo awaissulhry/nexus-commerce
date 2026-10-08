@@ -6,9 +6,11 @@
  *   from         the term ledger's HARVEST_CANDIDATEs (brain/terms.ts): a term that converts and has no home, which no
  *                sibling product leads. A term with a home (TARGETED) is never harvested: a winner stays where it wins.
  *   ladder       a term climbs once, from where it ran (auto, broad, phrase, or another keyword's close variant) straight to
- *                the top rung — an EXACT keyword (an ASIN: a product target) — so a winner moves at most once (the
- *                Owner's rule: winners are never reshuffled; Teikametrics and Scale Insights graduate to exact the same
- *                way, IND §2.6). Never down, never sideways; a harvested term is never harvested again.
+ *                the top rung — an EXACT keyword (an ASIN: a product target) — with a negative exact in its sources, so the
+ *                exact keyword is the term's one owner (Owner 10-08 ~19:20 UTC: harvest follows industry best practice —
+ *                Teikametrics and Scale Insights graduate to exact the same way, IND §2.6 — with the safety net below).
+ *                Never down, never sideways; a harvested term is never harvested again. (The manual harvest-search-term
+ *                tool keeps its own rules: this is the brain's harvest.)
  *   destination  the first that applies, each only where it can take it now (a manual ad group of the product's own
  *                campaigns with the right role, serving — campaign and ad group enabled, bids not suppressed — and the
  *                Owner's campaign settings allow it: not excluded, the harvest lever not off or locked, the term not locked):
@@ -46,11 +48,12 @@
  *                `skcMax` harvest campaigns per product; one graduation per term per GRADUATION_COOLDOWN_DAYS (a term a person
  *                declined, or one put back, waits as long; one the gate refused or Amazon failed, which never graduated,
  *                is decided again the next day).
- *   judge        after the attribution window (7 days SP) + 72 hours for keyword changes to take full effect [TEC-6] — never
- *                the next day: the keyword's own record since it landed against the evidence it was harvested on. WORSE: 0
- *                orders in the clicks that make "it stopped converting" a 95 % call at its harvest-time CR̂, or an ACoS above
- *                the band top and clearly worse than before. Then an undo is proposed (pause the keyword, retire the source
- *                negatives); auto-undo of a harvest comes with AB-15 — the evidence is recorded now.
+ *   judge        the safety net: after the attribution window (7 days SP) + 72 hours for keyword changes to take full
+ *                effect [TEC-6] — never the next day: the keyword's own record since it landed against the evidence it was
+ *                harvested on. WORSE: 0 orders in the clicks that make "it stopped converting" a 95 % call at its
+ *                harvest-time CR̂, or an ACoS above the band top and clearly worse than before. Then the undo — the pair put
+ *                back as a pair (harvest-write.ts undoHarvest: the source negatives retired, then the keyword paused) — is
+ *                proposed to a person here; auto-undo (AB-15, brain/harvest-undo.ts) puts it back alone at its AUTO.
  *   words        no money and no ACoS figure in a `why` (the read tool strips the numbers by key, so the words never carry one).
  */
 import { crLowerBound80, DEFAULT_CPC_RATIO } from '../bid-brain/estimator.js'
@@ -66,7 +69,7 @@ export const HARVEST_STATUSES = [
 export type HarvestStatus = (typeof HARVEST_STATUSES)[number]
 export const isHarvestStatus = (v: unknown): v is HarvestStatus => typeof v === 'string' && (HARVEST_STATUSES as readonly string[]).includes(v)
 
-/** A harvest in flight or placed for good: the term is never decided again (it is never moved twice). */
+/** A harvest in flight or placed for good: the term is never decided again (one owner per term; it climbs once). */
 export const STANDING_STATUSES: readonly HarvestStatus[] = ['PROPOSED', 'CAMPAIGN_PROPOSED', 'CAMPAIGN_BUILT', 'WRITING', 'DONE', 'HALF_DONE', 'UNDO_PROPOSED']
 /** A harvest that ended without a keyword that stands: the term may be decided again after the cooldown. */
 export const ENDED_STATUSES: readonly HarvestStatus[] = ['REFUSED', 'FAILED', 'DECLINED', 'UNDONE']
@@ -562,7 +565,7 @@ export function judgeHarvest(j: JudgeInput): Judgement {
   if (j.post.orders > 0 && postAcos != null && j.bandTop != null && postAcos > j.bandTop && (preAcos == null || postAcos > preAcos * WORSE_ACOS_FACTOR) && j.post.clicks >= MIN_JUDGE_CLICKS) {
     return { verdict: 'WORSE', final: true, why: `${record}: it converts, but its ACoS is above the band top and clearly worse than the evidence it was harvested on — an undo is proposed (pause the keyword, retire the source negatives)`, numbers }
   }
-  if (j.post.orders > 0) return { verdict: 'KEPT', final: true, why: `${record}: it converts in its exact home at an ACoS within the band top or no worse than before — kept for good (a winner is never moved again)`, numbers }
+  if (j.post.orders > 0) return { verdict: 'KEPT', final: true, why: `${record}: it converts in its exact home at an ACoS within the band top or no worse than before — kept for good (its exact keyword stays the term's one owner)`, numbers }
   if (days >= JUDGE_HORIZON_DAYS) return { verdict: 'KEPT', final: true, why: `${record}: too little data in ${JUDGE_HORIZON_DAYS} days to call it worse (${need} clicks would) — kept`, numbers }
   return { verdict: 'WAITING', final: false, why: `${record}: too little data yet — ${need} clicks without an order, or ${MIN_JUDGE_CLICKS} with orders, would decide it`, numbers }
 }

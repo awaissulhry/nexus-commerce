@@ -115,6 +115,29 @@ describe('pooling product → category → market', () => {
   })
 })
 
+describe('batch 2 fix — capped grain days', () => {
+  const dense = { clicks: () => 30, cr: (_d: number, h: number) => (h >= 8 && h < 12 ? 0.08 : 0.01) }
+  it('capped days read from the campaign grain: said in the confidence words, the label kept', () => {
+    const f = factsOf({ days: FOUR_WEEKS, product: dense, market: marketShape })
+    const r = researchHours({ ...f, sources: { ...f.sources, cappedDays: ['2026-09-20'], cappedGrainHours: 12, cappedUnfilledHours: 0 } })
+    expect(r.confidence.label).toBe('high')
+    expect(r.confidence.words).toMatch(/1 day of the window \(2026-09-20, UTC\) the ad group grain was incomplete \(its ingest refused records at its ceiling\): every hour of it is read from the campaign grain\.$/)
+    expect(r.sources).toMatchObject({ cappedDays: ['2026-09-20'], cappedGrainHours: 12, cappedUnfilledHours: 0 })
+  })
+
+  it('capped hours neither source holds: one step less sure (high → medium, medium → low), and said', () => {
+    const f = factsOf({ days: FOUR_WEEKS, product: dense, market: marketShape })
+    const r = researchHours({ ...f, sources: { ...f.sources, cappedDays: ['2026-09-20', '2026-09-21'], cappedGrainHours: 30, cappedUnfilledHours: 6 } })
+    expect(r.confidence.label).toBe('medium')
+    expect(r.confidence.words).toMatch(/^Medium confidence: .*2 days of the window \(2026-09-20, 2026-09-21, UTC\) .* and 6 hours the grain held are in neither source — one step less sure\.$/)
+    const medium = factsOf({ days: FOUR_WEEKS, product: { clicks: () => 1, cr: () => 0.03 }, market: marketShape })
+    expect(researchHours(medium).confidence.label).toBe('medium')
+    expect(researchHours({ ...medium, sources: { ...medium.sources, cappedDays: ['2026-09-20'], cappedUnfilledHours: 1 } }).confidence.label).toBe('low')
+    // Nothing capped: as before.
+    expect(researchHours(f).confidence.words).not.toMatch(/incomplete/)
+  })
+})
+
 describe('the market\'s dynamics', () => {
   it('weekend against weekdays: clicks a day and conversion', () => {
     const product = { clicks: (d: number) => (d === 0 || d === 6 ? 20 : 10), cr: (d: number) => (d === 0 || d === 6 ? 0.01 : 0.02) }

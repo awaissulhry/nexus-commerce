@@ -53,7 +53,7 @@ export async function harvestRequestFacts(harvestId: string, op: 'harvest' | 'un
   if (String(dest.campaign.status) !== 'ENABLED' || String(dest.status) !== 'ENABLED' || dest.campaign.bidsSuppressedAt) {
     return { error: `Not queued: ${placeWords(dest)} does not serve now (paused, or its bids suppressed): a harvest there would block the source for a keyword that does not show.` }
   }
-  // A winner is never moved: a term that found a home in another of the product's ad groups meanwhile is not harvested.
+  // One owner per term: a term that found an exact home in another of the product's ad groups meanwhile is not harvested.
   if (!record.keywordTargetId) {
     const owned = await productCampaigns(record.productId, record.marketplace)
     const groupIds = owned ? (await prisma.adGroup.findMany({ where: { campaignId: { in: owned.owned.map((o) => o.campaignId) } }, select: { id: true } })).map((g) => g.id).filter((id) => id !== dest.id) : []
@@ -61,7 +61,7 @@ export async function harvestRequestFacts(harvestId: string, op: 'harvest' | 'un
       where: { adGroupId: { in: groupIds }, isNegative: false, status: { not: 'ARCHIVED' }, kind: record.isAsin ? 'PRODUCT' : 'KEYWORD', ...(record.isAsin ? {} : { expressionType: { in: ['EXACT', '_EXACT'] } }), expressionValue: { equals: record.term, mode: 'insensitive' } },
       select: { adGroup: { select: { name: true, campaign: { select: { name: true } } } } },
     }) : null
-    if (home) return { error: `Not queued: "${record.term}" has a home now in ${placeWords(home.adGroup)}: a winner is never moved, so it is not harvested again.` }
+    if (home) return { error: `Not queued: "${record.term}" has an exact home now in ${placeWords(home.adGroup)}: one owner per term, so it is not harvested again.` }
   }
   const owed = sourcesOf(record.sources).filter((s) => s.action === 'negate' && s.result !== 'landed')
   const groups = new Map((owed.length ? await prisma.adGroup.findMany({ where: { id: { in: owed.map((s) => s.adGroupId) } }, select: place }) : []).map((g) => [g.id, g]))
@@ -70,12 +70,18 @@ export async function harvestRequestFacts(harvestId: string, op: 'harvest' | 'un
   return { op, record, dest, owed: owed.map((s) => ({ ...s, place: groups.get(s.adGroupId)! })) }
 }
 
-/** An approved undo ran: the harvest is put back (the brain decides the term again after its cooldown). */
-export async function markUndone(harvestId: string, args: { approvalId: string; paused: boolean; retired: number; problems: string[]; now: Date }) {
-  const done = [args.paused ? 'the keyword paused' : '', args.retired ? `${args.retired} source negative${args.retired === 1 ? '' : 's'} retired` : ''].filter(Boolean).join(', ')
+/**
+ * An undo ran (an approved request, or auto-undo at AUTO — `approvalId` null, `by` its words): the harvest is put back (the
+ * brain decides the term again after its cooldown). What did not land is kept in lastError.
+ */
+export async function markUndone(harvestId: string, args: { approvalId: string | null; by?: string; paused: boolean; retired: number; problems: string[]; now: Date }) {
+  const done = [args.retired ? `${args.retired} source negative${args.retired === 1 ? '' : 's'} retired` : '', args.paused ? 'the keyword paused' : ''].filter(Boolean).join(', ')
   await prisma.adsBrainHarvest.update({
     where: { id: harvestId },
-    data: { status: 'UNDONE', undoApprovalId: args.approvalId, why: `put back by approved request ${args.approvalId}: ${done}`, lastError: args.problems.length ? args.problems.join('; ') : null, changedAt: args.now },
+    data: {
+      status: 'UNDONE', ...(args.approvalId ? { undoApprovalId: args.approvalId } : {}),
+      why: `put back by ${args.by ?? `approved request ${args.approvalId}`}: ${done}`, lastError: args.problems.length ? args.problems.join('; ') : null, changedAt: args.now,
+    },
   })
 }
 

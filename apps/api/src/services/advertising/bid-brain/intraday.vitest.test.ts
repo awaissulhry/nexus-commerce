@@ -256,6 +256,17 @@ describe('the brakes in a decision', () => {
     expect(decide(applyIntraday(example(3, { restore: { layer: 'stop', heldCents: 3, beforeCents: 33 } }), spend('cut'), NO_LANES))).toMatchObject({ action: 'write', layer: 'restore', bidCents: 25 })
   })
 
+  it('with the money step or a freeze named first, the intraday bid keeps its layer: the next run reads its memory (no cut after cut)', () => {
+    const money = { money: { stepPct: 10, by: 'the money brain\'s brake' } }
+    // The month's step (19 → 17¢) and the spend cut (19 → 17¢) tie: the intraday brake's, under its own layer.
+    expect(decide(applyIntraday(example(19, { overrides: money }), spend('cut'), NO_LANES))).toMatchObject({ action: 'write', layer: 'intraday', bidCents: 17 })
+    expect(decide(applyIntraday(example(17, { overrides: money, restore: { layer: 'intraday', heldCents: 17, beforeCents: 19 } }), spend('cut'), NO_LANES))).toMatchObject({ action: 'hold', layer: 'intraday', bidCents: 17 })
+    // Auto-undo's freeze (no raise) named first, the cut lower: the cut's layer, then a hold.
+    const freeze = { freeze: { by: 'auto-undo' } }
+    expect(decide(applyIntraday(example(14, { overrides: freeze }), spend('cut'), NO_LANES))).toMatchObject({ action: 'write', layer: 'intraday', bidCents: 12 })
+    expect(decide(applyIntraday(example(12, { overrides: freeze, restore: { layer: 'intraday', heldCents: 12, beforeCents: 14 } }), spend('cut'), NO_LANES))).toMatchObject({ action: 'hold', layer: 'intraday', bidCents: 12 })
+  })
+
   it('a CPC spike caps the bid lane-aware: the lane\'s own % and dynamic bidding count where the brain does not set it', () => {
     const spike: CampaignBrakes = { spend: null, cpc: [{ lane: 'TOP_OF_SEARCH', readingCents: 70, clicks: 12, medianCents: 20, days: 14, ceilingCents: 40, why: 'intraday CPC spike: top' }], budget: null, gaps: [] }
     // Top of search at +100 % on "down only": 40¢ ÷ 2 → 20¢; at 22¢ (in band, the goal holds) the bid comes down.

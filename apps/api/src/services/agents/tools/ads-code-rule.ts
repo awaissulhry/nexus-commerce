@@ -9,7 +9,7 @@
  *   the strategy raised          set-ads-strategy (a raise), set-ads-playbook (what adds spend), an apply-ads-playbook
  *                                phase switch that raises
  *   someone else's pause lifted  enable-ads with includePeoplesPauses (a person, Seller Central, an unknown writer, a
- *                                rule now off)
+ *                                rule now off), set-ads-brain op leave resuming the brain's own pauses (the brain going off)
  *
  * Every other request that can add spend is DAY-TO-DAY: it lists itself in the preview's `raises`, says so in its effect
  * (no silent raise), the card warns where it goes past the business's own limits (`reach.pastOwnLimits`, where a write
@@ -43,6 +43,8 @@ export const CODE_RULE = {
   'set-bid-brain-enrollment: live': true,
   // ONE BRAIN — set-ads-brain: a lever of a product's brain to AUTO (or a campaign under the bid brain), whichever op does it.
   'set-ads-brain: a lever to AUTO': true,
+  // Batch 2 fix — set-ads-brain op leave lifting the brain's own pauses: an automation's pause lifted (the brain going off).
+  'set-ads-brain: leave lifts the brain\'s pauses': true,
   // ── Day-to-day: listed in raises, warned, a normal approval ──
   'set-hourly-bid-plan': false,
   'set-portfolio': false,

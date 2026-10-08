@@ -267,7 +267,7 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-15 — auto-undo per lever and the
     expect(await inW(() => endBrainKill({ lever: 'state', market: 'IT', by: OWNER }))).toMatchObject({ ok: false, refusal: expect.stringMatching(/nothing to end/) })
   })
 
-  it('harvest: AB-11\'s WORSE judgement of a pair is put back as a pair at AUTO (the keyword paused, the source negative retired) and the term waits AB-11\'s cooldown', async () => {
+  it('harvest: AB-11\'s WORSE judgement of a pair is put back as a pair at AUTO (the source negative retired, then the keyword paused), AB-11\'s own waiting undo request withdrawn, and the term waits AB-11\'s cooldown', async () => {
     // Today's undos so far moved to yesterday: the daily cap is not what this step measures.
     await database.pool.query('UPDATE "AdsAutoUndoJudgement" SET "actionAt" = "actionAt" - interval \'2 days\' WHERE "workspaceId" = $1', [W])
     await inW(async () => {
@@ -283,15 +283,21 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-15 — auto-undo per lever and the
           digest: 'test', runId: 'test', decidedAt: new Date(NOW.getTime() - 13 * DAY), checkedAt: NOW, changedAt: NOW,
         } as never,
       })
+      // AB-11's own undo request for this harvest, still waiting for a person (batch 2 fix: auto-undo withdraws it).
+      const run = await db.agentRun.create({ data: { agentKey: 'ads-brain-harvest', trigger: 'schedule', status: 'done' } })
+      await db.agentApproval.create({ data: { id: id('ab11-undo'), agentRunId: run.id, toolName: 'apply-brain-harvest', riskTier: 'high', args: { op: 'undo', harvestId: id('harvest') }, status: 'pending' } })
     })
     fresh()
     const out = await undo()
     const h = out.brain!.items.find((i) => i.lever === 'harvest')!
     expect(h).toMatchObject({ kind: 'harvest', entity: { type: 'HARVEST', id: id('harvest'), label: 'harvest of "test harvest term"' }, verdict: 'worse', action: 'undone', why: 'test: it stopped converting where it landed' })
     const record = (await rows<Data>('SELECT status, why FROM "AdsBrainHarvest" WHERE id = $1', [id('harvest')]))[0]
-    expect(record).toMatchObject({ status: 'UNDONE', why: 'put back by auto-undo: the keyword paused, 1 source negative retired' })
+    expect(record).toMatchObject({ status: 'UNDONE', why: 'put back by auto-undo: 1 source negative retired, the keyword paused' })
+    // The pair order: the source runs the term again first, then the keyword pauses (never a term without a home).
     const writes = (await queued()).filter((q) => q.entityId === id('h-kw') || q.entityId === id('h-neg'))
-    expect(writes.map((w) => [w.entityId, w.actor])).toEqual([[id('h-kw'), 'automation:auto-undo'], [id('h-neg'), 'automation:auto-undo']])
+    expect(writes.map((w) => [w.entityId, w.actor])).toEqual([[id('h-neg'), 'automation:auto-undo'], [id('h-kw'), 'automation:auto-undo']])
+    // AB-11's own waiting undo request is withdrawn: one undo, not two.
+    expect(await rows('SELECT status, reason FROM "AgentApproval" WHERE id = $1', [id('ab11-undo')])).toEqual([{ status: 'rejected', reason: 'withdrawn: auto-undo put the harvest back first' }])
     expect((await judgements()).find((j) => j.lever === 'harvest')).toMatchObject({ origin: 'brain', actionLogId: `harvest:${id('harvest')}`, action: 'undone', final: true })
     // A rerun: the pair is not put back twice.
     const again = await undo()
