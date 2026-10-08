@@ -32,6 +32,8 @@ import { ARTIFACT_COMPILERS, compileArtifacts, type ArtifactCompiler, type Artif
 import type { BuildPlan } from './build-preview.js'
 import type { TemplateDoc } from './doc.js'
 import { recordPlaybookApply, type PlaybookApplyWriter } from './write.js'
+import { productLeverSkip } from '../brain/engine-skips.js'
+import type { BrainLever } from '../brain/levers.js'
 
 export { planBuild, type BuildPlan } from './build-preview.js'
 
@@ -220,11 +222,19 @@ export async function inFlightRefusal(market: string, productToken: string, play
  */
 export async function startPlaybookBuild(input: {
   plan: BuildPlan; actor: AdsActor; requester: AdsActor; changeSetId: string; writer: PlaybookApplyWriter
+  /** A person approved it (approvedRun's `manual`): the write gate's rule — a person's request passes a lever a brain holds. */
+  manual?: boolean
   /** Tests: the artifact compilers (default ARTIFACT_COMPILERS). */
   compilers?: readonly ArtifactCompiler[]
-}): Promise<{ applicationId: string; alreadyRunning?: boolean } | { refusal: string }> {
+}): Promise<{ applicationId: string; alreadyRunning?: boolean } | { refusal: string; brainLever?: BrainLever }> {
   const { plan } = input
   if (!plan.playbook || !plan.applyPlan || !plan.doc || !plan.nameToken) return { refusal: 'the build has no compiled plan' }
+  // ONE BRAIN AB-6 — new campaigns of a product are its brain's structure lever (design §3: "AI goals, playbook build
+  // (unless the brain asks it)"). No campaign of the build exists yet, so the product's own settings answer
+  // (brain/engine-skips.ts productLeverSkip): a build the business's rule runs on a product whose brain owns its
+  // structure, or whose structure the Owner locked, is not started; a person's approval passes, as at the gate.
+  const held = await productLeverSkip(plan.product.productId, plan.market, 'structure', { actor: input.actor, ...(input.manual ? { manual: true } : {}) }, 'playbook build')
+  if (held) return { refusal: `not built: ${held.reason} (one owner per lever)`, brainLever: 'structure' }
   // A build that stopped is settled first (it holds nothing); the claim itself is below, under a lock.
   await settleStoppedBuilds({ market: plan.market, productToken: plan.nameToken, playbookId: plan.playbook.id })
   const options: BuildRunOptions = {

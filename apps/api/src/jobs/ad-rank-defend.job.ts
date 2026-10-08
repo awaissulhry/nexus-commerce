@@ -42,6 +42,15 @@ import { engineActorWhere, type EngineKey } from '../services/advertising/ads-en
 import { MAX_MIN_BID_ENTRIES_PER_DAY, noWrites, type RankWriteCounts } from '../services/advertising/rank-write-projection.js'
 import { NO_LIMITS, clampToStrategy, holdNote, limitWords, newHoldLog, strategyBidReader, strategyWords, type BidHoldLog } from '../services/advertising/ads-strategy/bids.js'
 import { brainOwnedCampaignIds } from '../services/advertising/bid-brain/live.js'
+import { leverSkipNote, readLeverHolds, type LeverSkipCounts } from '../services/advertising/brain/engine-skips.js'
+import type { BrainLever } from '../services/advertising/brain/levers.js'
+
+/**
+ * ONE BRAIN AB-6 — the product-brain levers this engine's hour writes besides the keyword bids: the placement lanes and
+ * the ad groups' default bids (the base bid). It writes them together with its floors, so a campaign whose either lever a
+ * product's brain owns, or the Owner holds at his own value, is left whole — as a bid brain campaign is (BB-6).
+ */
+export const RANK_BRAIN_LEVERS: readonly BrainLever[] = ['placements', 'adGroupBids']
 
 // Clock source for time-of-day window resolution: the DATABASE clock, not the container's process
 // clock. Railway cron containers have exhibited multi-hour clock skew (the process clock ran ~2h
@@ -180,7 +189,9 @@ export type RankReleaseSummary = Omit<ReleaseReport, 'campaigns'> & { swept: num
 // `keptServing`: campaigns the anti-flap kept serving through a Min-bid hour.
 // W1-5 — `holds`: the bids a limit held this run (the ads strategy band on a base bid; a bound on a give-back), for the run line.
 // BB-6 — `brainOwned`: campaigns of its plans and schedules the bid brain owns, left to the brain (one writer per campaign).
-export interface RankDefendSummary { evaluated: number; applied: number; decisions: RankDefendDecision[]; plans?: RankPlanRunSummary[]; guard?: EngineGuardReport; skipped?: string; release?: RankReleaseSummary; writes?: RankWriteCounts; keptServing?: number; holds?: BidHoldLog; brainOwned?: number }
+// ONE BRAIN AB-6 — `leverHeld`: campaigns left because a product's brain owns (or the Owner holds) their placements or
+// ad-group default bids, per lever; `leverHoldsUnread`: who holds them could not be read (the write gate decided).
+export interface RankDefendSummary { evaluated: number; applied: number; decisions: RankDefendDecision[]; plans?: RankPlanRunSummary[]; guard?: EngineGuardReport; skipped?: string; release?: RankReleaseSummary; writes?: RankWriteCounts; keptServing?: number; holds?: BidHoldLog; brainOwned?: number; leverHeld?: LeverSkipCounts; leverHoldsUnread?: boolean }
 
 interface CampRow { id: string; name: string; status: string; dynamicBidding: unknown; biddingStrategy?: string | null; bidsSuppressedAt?: Date | null; bidsSuppressedFloorCents?: number | null; bidsSuppressedBy?: string | null; deliveryReasons?: string[]; marketplace?: string | null }
 interface RankCampaignResult { decision: RankDefendDecision; applied: number; held: HeldBack; writes: RankWriteCounts; keptServing: boolean }
@@ -729,6 +740,18 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
   // leave it too; the plans skip it below.
   const brainOwned = await brainOwnedCampaignIds(unionIds)
   for (const id of brainOwned) governed.add(id)
+  // ONE BRAIN AB-6 — and a campaign whose placements or ad-group default bids a product's brain owns, or the Owner holds
+  // (RANK_BRAIN_LEVERS): left whole the same way — governed, never written, nothing given back. Read once per run.
+  const leftAlone = new Set<string>(brainOwned)
+  const leverHolds = await readLeverHolds(unionIds.filter((id) => !brainOwned.has(id)), { actor: 'automation:rank-defend' }, 'rank-defend')
+  for (const id of unionIds) {
+    if (leftAlone.has(id)) continue
+    const held = RANK_BRAIN_LEVERS.map((lever) => leverHolds.skip(id, lever)).filter((h) => h != null)
+    if (!held.length) continue
+    leftAlone.add(id)
+    governed.add(id)
+    logger.info('[rank-defend] campaign left alone — one owner per lever', { campaignId: id, why: held.map((h) => h!.reason) })
+  }
   const campaigns = await prisma.campaign.findMany({ where: { id: { in: unionIds } }, select: { id: true, name: true, marketplace: true, status: true, externalCampaignId: true, dynamicBidding: true, biddingStrategy: true, acos: true, spend: true, bidsSuppressedAt: true, bidsSuppressedFloorCents: true, bidsSuppressedBy: true, deliveryReasons: true } })
   const campById = new Map(campaigns.map((c) => [c.id, c]))
   // RTC — per-campaign (campaign-scope) target overrides for every campaign in play.
@@ -784,7 +807,7 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
     const write = !dryRun && PLAN_ALLOW_APPLY && (!plan.manualOnly || !!opts.force)
     if (write && (!key || !targetByKey.get(key))) {
       const why = key ? `its plan names "${key}", which no longer exists` : 'its plan holds nothing at this hour'
-      for (const fc of famCamps) if (!brainOwned.has(fc.id)) idle.push({ campaignId: fc.id, actor: `automation:rank-plan-${plan.id}`, why })
+      for (const fc of famCamps) if (!leftAlone.has(fc.id)) idle.push({ campaignId: fc.id, actor: `automation:rank-plan-${plan.id}`, why })
     }
     if (key) {
       const target = targetByKey.get(key)
@@ -800,7 +823,7 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
         planConflicts = sc.conflicts
         const baselineTarget = plan.defaultTargetKey ? targetByKey.get(plan.defaultTargetKey) : undefined
         for (const fc of famCamps) {
-          if (brainOwned.has(fc.id)) continue
+          if (leftAlone.has(fc.id)) continue
           const camp = campById.get(fc.id); if (!camp) continue
           const oos = readinessByCamp.get(fc.id) === 'pause'
           const demote = sc.demoted.has(fc.id) && !!baselineTarget && plan.defaultTargetKey !== key
@@ -919,7 +942,7 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
   }
 
   if (release) writes.restore += release.writes
-  return { evaluated: decisions.length, applied, decisions, plans: planSummaries, ...(guard ? { guard: guard.report(), writes, keptServing } : {}), ...(release ? { release } : {}), ...(holds.holds.length ? { holds } : {}), ...(brainOwned.size ? { brainOwned: brainOwned.size } : {}) }
+  return { evaluated: decisions.length, applied, decisions, plans: planSummaries, ...(guard ? { guard: guard.report(), writes, keptServing } : {}), ...(release ? { release } : {}), ...(holds.holds.length ? { holds } : {}), ...(brainOwned.size ? { brainOwned: brainOwned.size } : {}), ...(leverHolds.total() ? { leverHeld: leverHolds.counts() } : {}), ...(leverHolds.unread ? { leverHoldsUnread: true } : {}) }
 }
 
 interface IdleCampaign { campaignId: string; actor: AdsActor; why: string }
@@ -967,7 +990,7 @@ export function rankWritesNote(r: Pick<RankDefendSummary, 'writes' | 'keptServin
 /** 1c — the run's summary line: the counts, plus what the dial or the caps held back (nothing extra on a normal run). */
 export function rankDefendSummaryLine(r: RankDefendSummary): string {
   if (r.skipped) return `skipped: ${r.skipped}`
-  return `evaluated=${r.evaluated} applied=${r.applied}${rankWritesNote(r)}${engineGuardNote(r.guard)}${rankReleaseNote(r.release)}${holdNote(r.holds)}${r.brainOwned ? ` brain-owned=${r.brainOwned} (the bid brain runs them)` : ''}`
+  return `evaluated=${r.evaluated} applied=${r.applied}${rankWritesNote(r)}${engineGuardNote(r.guard)}${rankReleaseNote(r.release)}${holdNote(r.holds)}${r.brainOwned ? ` brain-owned=${r.brainOwned} (the bid brain runs them)` : ''}${leverSkipNote(r.leverHeld, r.leverHoldsUnread)}`
 }
 
 export async function runRankDefendCron(): Promise<void> {

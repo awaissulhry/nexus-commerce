@@ -1,0 +1,71 @@
+/**
+ * ONE BRAIN AB-6 — a playbook's isolation negatives leave a campaign whose negatives a product's brain owns (or the Owner
+ * holds), in a dry run too (so no card offers them), and the run says so (`leftToBrain`, `brainSkips`). The rest is
+ * planned and written exactly as before; nothing enrolled: exactly as before.
+ */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { PlannedNegative } from './isolation.js'
+
+const h = vi.hoisted(() => ({ load: vi.fn(), plan: vi.fn(), write: vi.fn(), campaignLeverOwners: vi.fn(), anyBrainEnrolled: vi.fn() }))
+vi.mock('../../../db.js', () => ({
+  default: {
+    adsPlaybookLink: { findFirst: vi.fn(async (args: { where: { refId: string } }) => ({ playbookId: 'pb-1', adGroupId: `g-${args.where.refId}` })) },
+    adTarget: { findUnique: vi.fn(async () => ({ isNegative: false, status: 'ENABLED', externalTargetId: 'EXT-own', adGroup: { campaign: { status: 'ENABLED' } } })) },
+  },
+}))
+vi.mock('./isolation-load.js', () => ({ loadIsolation: h.load }))
+vi.mock('./isolation.js', async (importOriginal) => ({ ...(await importOriginal<object>()), planIsolation: h.plan }))
+vi.mock('../ads-negative-kw.service.js', () => ({ writeNegativeKeyword: h.write }))
+vi.mock('../ads-winner-lock.js', () => ({ familyOnly: vi.fn(async () => ({ excluded: [] })) }))
+vi.mock('../brain/lever-owners.js', () => ({
+  campaignLeverOwners: (...a: unknown[]) => h.campaignLeverOwners(...a),
+  anyBrainEnrolled: (...a: unknown[]) => h.anyBrainEnrolled(...a),
+}))
+
+const { isolateProduct } = await import('./isolation-run.js')
+
+const add = (campaignId: string, text: string): PlannedNegative => ({
+  kind: 'exactIntoResearch' as PlannedNegative['kind'], text, match: 'EXACT', adGroupId: `g-${campaignId}`, campaignId, slot: 'research',
+  owner: { adTargetId: 't-own', adGroupId: 'g-exact', slot: 'exact', text }, why: 'sent home to its exact keyword',
+})
+const ACTION = { playbookId: 'pb-1' } as never
+const OWNED = { kind: 'owned', productId: 'gale', market: 'IT', why: 'AUTO by the Owner\'s product override' }
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  vi.stubEnv('NEXUS_BID_BRAIN_MODE', 'live')
+  h.load.mockResolvedValue({ inputs: { scope: [{ adGroupId: 'g-c-research' }], excluded: [], family: {}, positives: new Map(), winners: new Map(), standing: [], protections: [], waiting: new Set() } })
+  h.plan.mockReturnValue({ adds: [add('c-research', 'gale jacket'), add('c-auto', 'gale jacket')], leftAlone: [], alreadyStanding: 0 })
+  h.write.mockResolvedValue({ outcome: 'created', reachedAmazon: true, adTargetId: 'n1' })
+  h.anyBrainEnrolled.mockResolvedValue(true)
+  h.campaignLeverOwners.mockResolvedValue(new Map())
+})
+afterEach(() => vi.unstubAllEnvs())
+
+describe('AB-6 — isolation leaves a campaign whose negatives a product\'s brain holds', () => {
+  it('a dry run plans without it, and names it', async () => {
+    h.campaignLeverOwners.mockResolvedValue(new Map([['c-auto', { campaignId: 'c-auto', name: 'GALE auto', market: 'IT', levers: { negatives: OWNED } }]]))
+    const run = await isolateProduct({ action: ACTION, actor: 'automation:rule-iso', dryRun: true })
+    if ('refused' in run) throw new Error(run.refused)
+    expect(run.chosen.map((a) => a.campaignId)).toEqual(['c-research'])
+    expect(run.leftToBrain).toEqual([expect.objectContaining({ lever: 'negatives', campaignId: 'c-auto' })])
+  })
+
+  it('a live run writes only the other', async () => {
+    h.campaignLeverOwners.mockResolvedValue(new Map([['c-auto', { campaignId: 'c-auto', name: 'GALE auto', market: 'IT', levers: { negatives: OWNED } }]]))
+    const run = await isolateProduct({ action: ACTION, actor: 'automation:rule-iso', dryRun: false })
+    if ('refused' in run) throw new Error(run.refused)
+    expect(h.write).toHaveBeenCalledTimes(1)
+    expect(h.write.mock.calls[0][0]).toMatchObject({ adGroupId: 'g-c-research' })
+    expect(run.written).toMatchObject({ added: 1 })
+  })
+
+  it('nothing enrolled: both, as before', async () => {
+    h.anyBrainEnrolled.mockResolvedValue(false)
+    const run = await isolateProduct({ action: ACTION, actor: 'automation:rule-iso', dryRun: false })
+    if ('refused' in run) throw new Error(run.refused)
+    expect(h.write).toHaveBeenCalledTimes(2)
+    expect(run.leftToBrain).toEqual([])
+    expect(run).not.toHaveProperty('holdsUnread')
+  })
+})

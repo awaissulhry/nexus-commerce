@@ -66,6 +66,21 @@ import { bidExtraSpend, placementExtraSpend } from './ads-spend-estimate.js'
 const BID_FLOOR_CENTS = 5 // €0.05
 const RULE_ACTOR = (ruleId: string): AdsActor => `automation:${ruleId}`
 
+/**
+ * ONE BRAIN AB-6 — who holds the levers of the campaigns a rule action writes, for the rule's own actor, read once per
+ * action (brain/engine-skips.ts). An action that writes several campaigns leaves each campaign whose lever a product's
+ * brain owns, or the Owner holds at his own value, and says so in `brainSkips` (brainSkipsOutput). Nothing is read and
+ * nothing skipped unless the brain's ceiling is live and a product is enrolled.
+ */
+async function ruleLeverHolds(meta: Pick<HandlerMeta, 'ruleId'>, campaignIds: Iterable<string | null | undefined>) {
+  const { readLeverHolds } = await import('./brain/engine-skips.js')
+  return readLeverHolds(campaignIds, { actor: RULE_ACTOR(meta.ruleId) }, `rule ${meta.ruleId}`)
+}
+async function ruleAdGroupLeverHolds(meta: Pick<HandlerMeta, 'ruleId'>, adGroups: Parameters<typeof import('./brain/engine-skips.js')['readAdGroupLeverHolds']>[0]) {
+  const { readAdGroupLeverHolds } = await import('./brain/engine-skips.js')
+  return readAdGroupLeverHolds(adGroups, { actor: RULE_ACTOR(meta.ruleId) }, `rule ${meta.ruleId}`)
+}
+
 type HandlerMeta = Parameters<ActionHandler>[2]
 
 /**
@@ -690,6 +705,8 @@ ACTION_HANDLERS.reroute_marketplace_budget = async (action, _context, meta): Pro
           ? { applied: outcome.applied.applied, failed: outcome.applied.failed }
           : { dryRun: true },
         warnings: outcome.warnings,
+        // ONE BRAIN AB-6 — the campaigns the rebalance left to a product's brain (or the Owner's lock).
+        ...(outcome.leverHeld ? { brainSkips: { counts: outcome.leverHeld.counts, ...(outcome.leverHeld.unread ? { unread: true } : {}) } } : {}),
       },
     }
   }
@@ -746,6 +763,8 @@ ACTION_HANDLERS.liquidate_aged_stock = async (action, context, meta): Promise<Ac
     }
   }
 
+  // ONE BRAIN AB-6 — the boost's skips, where the rule's counters read them.
+  const brainSkips = (outcome.subActions.find((s) => s.step === 'boost_aged_product_ads')?.output as { brainSkips?: unknown } | undefined)?.brainSkips
   return {
     type: action.type,
     ok: outcome.ok,
@@ -756,6 +775,7 @@ ACTION_HANDLERS.liquidate_aged_stock = async (action, context, meta): Promise<Ac
       pausedCampaignIds: outcome.pausedCampaignIds,
       boostedCampaignIds: outcome.boostedCampaignIds,
       actionLogIds: outcome.actionLogIds,
+      ...(brainSkips ? { brainSkips } : {}),
     },
   }
 }
@@ -973,6 +993,24 @@ ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<Act
     productNegatives = take('productNegative', productNegatives); productGraduations = take('productGraduation', productGraduations)
   }
 
+  // ONE BRAIN AB-6 — a term whose source campaign's negatives (the negate half) or harvest (the harvest half) a product's
+  // brain owns, or the Owner holds, is left to it — in a dry run too, so no card offers it. Its term ledger decides there.
+  const { holds: leverHolds, campaignOf: sourceCampaignOf } = await ruleAdGroupLeverHolds(meta, {
+    external: [...negatives, ...graduations, ...productNegatives, ...productGraduations].map((c) => c.externalAdGroupId),
+  })
+  const leftToBrain: import('./brain/engine-skips.js').LeverSkip[] = []
+  const leaveHeld = (lever: 'negatives' | 'harvest') => (c: { externalAdGroupId: string }) => {
+    const skip = leverHolds.skip(sourceCampaignOf.get(c.externalAdGroupId), lever)
+    if (skip) leftToBrain.push(skip)
+    return !skip
+  }
+  negatives = negatives.filter(leaveHeld('negatives'))
+  productNegatives = productNegatives.filter(leaveHeld('negatives'))
+  graduations = graduations.filter(leaveHeld('harvest'))
+  productGraduations = productGraduations.filter(leaveHeld('harvest'))
+  const { brainSkipsOutput } = await import('./brain/engine-skips.js')
+  const brainSkips = brainSkipsOutput(leverHolds.counts(), leftToBrain, leverHolds.unread)
+
   if (meta.dryRun) {
     const planned = await planRuleHarvest({ negatives, graduations, productNegatives, productGraduations, plan, destinations, rule })
     const steps = (step: string, kinds: string[]) => planned.items.filter((i) => i.step === step && kinds.includes(i.kind)).length
@@ -1007,13 +1045,16 @@ ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<Act
         ...(planned.alreadyStanding ? { alreadyStanding: planned.alreadyStanding } : {}),
         ...criteria,
         ...protectedOut,
+        ...brainSkips,
       },
     }
   }
   if (items && !negatives.length && !graduations.length && !productNegatives.length && !productGraduations.length) {
     return {
       type: action.type, ok: true,
-      output: { skipped: 'no-longer-due', why: `none of the card's ${items.length} term${items.length === 1 ? '' : 's'} can be applied as proposed on today's data, so nothing was written`, ...listed('notApplied', notApplied), ...criteria },
+      output: leftToBrain.length && !notApplied.length
+        ? { skipped: 'brain-lever', why: `every term of the card is left alone: ${leftToBrain[0].reason} (one owner per lever)`, ...brainSkips, ...criteria }
+        : { skipped: 'no-longer-due', why: `none of the card's ${items.length} term${items.length === 1 ? '' : 's'} can be applied as proposed on today's data, so nothing was written`, ...listed('notApplied', notApplied), ...criteria, ...brainSkips },
     }
   }
   const bid = typeof action.graduationBidEur === 'number' ? { bidEur: action.graduationBidEur } : {}
@@ -1052,6 +1093,7 @@ ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<Act
       errors: result.errors.slice(0, 5),
       ...criteria,
       ...protectedOut,
+      ...brainSkips,
     },
   }
 }
@@ -1247,7 +1289,16 @@ const makeAddNegativeHandler = (matchType: 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE')
       let confirmed = 0
       let failedWrites = 0
       const campaignsDone = new Set<string>() // one campaign-level write per campaign, however many destinations share it
+      // ONE BRAIN AB-6 — a destination whose campaign's negatives a product's brain owns (or the Owner holds) gets none.
+      const { holds: leverHolds, campaignOf: campaignOfGroup } = await ruleAdGroupLeverHolds(meta, { local: targets.map((t) => t.adGroupId) })
+      const leftToBrain: import('./brain/engine-skips.js').LeverSkip[] = []
       for (const target of targets) {
+        const held = leverHolds.skip(campaignOfGroup.get(target.adGroupId), 'negatives')
+        if (held) {
+          leftToBrain.push(held)
+          outcomes.push({ adGroupId: target.adGroupId, skipped: 'brain-lever', why: `${held.reason} (one owner per lever)` })
+          continue
+        }
         const dst = await prisma.adGroup.findFirst({
           where: { id: target.adGroupId },
           select: { id: true, externalAdGroupId: true, campaignId: true, campaign: { select: { externalCampaignId: true } } },
@@ -1337,7 +1388,7 @@ const makeAddNegativeHandler = (matchType: 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE')
         // Skips are policy working; a write that did not land is a failure. All-skips is a clean run.
         ok: failedWrites === 0,
         error: failedWrites > 0 ? `${failedWrites} negation${failedWrites === 1 ? '' : 's'} did not reach Amazon — see outcomes` : undefined,
-        output: { keyword, sourceAdGroupId: src.id, dryRun: meta.dryRun || undefined, confirmed, failedWrites, outcomes },
+        output: { keyword, sourceAdGroupId: src.id, dryRun: meta.dryRun || undefined, confirmed, failedWrites, outcomes, ...(await import('./brain/engine-skips.js')).brainSkipsOutput(leverHolds.counts(), leftToBrain, leverHolds.unread) },
       }
     }
 
@@ -1626,7 +1677,18 @@ ACTION_HANDLERS.promote_to_exact = async (action, context, meta): Promise<Action
   const productScope = await familyAdGroups(await productFamilyOf([src.id]), src.campaign?.marketplace ?? null)
   const positives = [...(await positivesIn([...productScope, src.id, ...targets.map((t) => t.adGroupId)])).values()].flat()
   const homes: Array<{ adGroupId: string }> = []
+  // ONE BRAIN AB-6 — a destination whose campaign's harvest a product's brain owns (or the Owner holds) gets nothing, and
+  // the source's isolation negative is left when its campaign's negatives are held (the source's own harvest lever was
+  // asked before the handler ran: brain/rule-skips.ts). In a dry run too, so no card offers either.
+  const { holds: leverHolds, campaignOf: campaignOfGroup } = await ruleAdGroupLeverHolds(meta, { local: [src.id, ...targets.map((t) => t.adGroupId)] })
+  const leftToBrain: import('./brain/engine-skips.js').LeverSkip[] = []
   for (const target of targets) {
+    const held = leverHolds.skip(campaignOfGroup.get(target.adGroupId), 'harvest')
+    if (held) {
+      leftToBrain.push(held)
+      outcomes.push({ adGroupId: target.adGroupId, skipped: 'brain-lever', why: `${held.reason} (one owner per lever)` })
+      continue
+    }
     const agDefault = bidMode === 'adGroupDefault'
       ? await prisma.adGroup.findUnique({ where: { id: target.adGroupId }, select: { defaultBidCents: true } }).then((g) => (g?.defaultBidCents != null ? g.defaultBidCents / 100 : null))
       : null
@@ -1685,7 +1747,11 @@ ACTION_HANDLERS.promote_to_exact = async (action, context, meta): Promise<Action
   // running where it converts until then.
   let isolation: Record<string, unknown> | null = null
   let isolationFailed = false
-  if (action.negateInSource === true) {
+  const sourceHeld = action.negateInSource === true ? leverHolds.skip(src.campaignId, 'negatives') : null
+  if (sourceHeld) {
+    leftToBrain.push(sourceHeld)
+    isolation = { adGroupId: src.id, attempted: false, skipped: 'brain-lever', reason: `${sourceHeld.reason} (one owner per lever)` }
+  } else if (action.negateInSource === true) {
     const away = homes.filter((h) => h.adGroupId !== src.id)
     const { homeWinners, winnerKey } = await import('./ads-harvest.service.js')
     const winners = away.length ? await homeWinners(away.map((h) => ({ term: query, adGroupId: h.adGroupId })), { defaults: { ...HARVEST_DEFAULTS } }) : new Set<string>()
@@ -1708,7 +1774,7 @@ ACTION_HANDLERS.promote_to_exact = async (action, context, meta): Promise<Action
     // Skips are policy working; a write that did not land is a failure. All-skips is a clean run.
     ok: errors.length === 0,
     error: errors.length ? errors.join('; ') : undefined,
-    output: { query, sourceAdGroupId: src.id, dryRun: meta.dryRun || undefined, confirmed, failedWrites, outcomes, ...(isolation ? { isolation } : {}) },
+    output: { query, sourceAdGroupId: src.id, dryRun: meta.dryRun || undefined, confirmed, failedWrites, outcomes, ...(isolation ? { isolation } : {}), ...(await import('./brain/engine-skips.js')).brainSkipsOutput(leverHolds.counts(), leftToBrain, leverHolds.unread) },
   }
 }
 
@@ -1723,13 +1789,26 @@ ACTION_HANDLERS.sync_negatives_across_campaigns = async (action, context, meta):
   if (isAsin(keyword)) return { type: action.type, ok: false, error: asinCampaignRefusal(keyword), output: { keyword, marketplace } }
   // ACR.7b — a drag-bound rule negates only inside its binding, not across the marketplace.
   const sweep = await resolveRuleSweepScope(meta.ruleId)
-  const campaigns = await prisma.campaign.findMany({
+  const allCampaigns = await prisma.campaign.findMany({
     where: {
       marketplace, status: 'ENABLED', externalCampaignId: { not: null },
       ...(sweep.scoped ? { id: { in: sweep.campaignIds } } : {}),
     },
     select: { id: true, externalCampaignId: true },
   })
+  // ONE BRAIN AB-6 — a campaign whose negatives a product's brain owns (or the Owner holds) is left, in a dry run too.
+  const holds = await ruleLeverHolds(meta, allCampaigns.map((c) => c.id))
+  const { brainSkipsOutput } = await import('./brain/engine-skips.js')
+  const leftToBrain: import('./brain/engine-skips.js').LeverSkip[] = []
+  const campaigns = allCampaigns.filter((c) => {
+    const skip = holds.skip(c.id, 'negatives')
+    if (skip) leftToBrain.push(skip)
+    return !skip
+  })
+  const brainSkips = brainSkipsOutput(holds.counts(), leftToBrain, holds.unread)
+  if (!campaigns.length && leftToBrain.length) {
+    return { type: action.type, ok: true, output: { skipped: 'brain-lever', keyword, marketplace, why: `every campaign it would negate in is held: ${leftToBrain[0].reason} (one owner per lever)`, ...brainSkips } }
+  }
   // NEG.0(a) — extended to this handler beyond the two the fix pack named, deliberately: this is
   // the widest blast radius in the section (74 campaign-level negatives per execution on IT), it
   // negates ONE term everywhere at once, and "a term that converted" is exactly the term for which
@@ -1742,7 +1821,7 @@ ACTION_HANDLERS.sync_negatives_across_campaigns = async (action, context, meta):
     return { type: action.type, ok: false, error: decision.reason, output: { refusedBy: 'protectConverting', evidence: decision.evidence, keyword, marketplace, wouldHaveNegatedIn: campaigns.length } }
   }
 
-  if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, keyword, wouldNegateIn: campaigns.length, ruleScoped: sweep.scoped } }
+  if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, keyword, wouldNegateIn: campaigns.length, ruleScoped: sweep.scoped, ...brainSkips } }
   const conn = await (await import('./ads-profile-resolver.js')).adsClientContextFor(marketplace) // CM-29 — the gate's resolver
   const { createNegative } = await import('./ads-negative-kw.service.js')
   let added = 0; let denied = 0; const errors: string[] = []
@@ -1758,7 +1837,7 @@ ACTION_HANDLERS.sync_negatives_across_campaigns = async (action, context, meta):
     }
     catch (e) { errors.push((e as Error).message) }
   }
-  return { type: action.type, ok: added > 0, output: { keyword, marketplace, added, denied, attempted: campaigns.length, errors: errors.slice(0, 5) } }
+  return { type: action.type, ok: added > 0, output: { keyword, marketplace, added, denied, attempted: campaigns.length, errors: errors.slice(0, 5), ...brainSkips } }
 }
 
 // ── set_campaign_target_acos ──────────────────────────────────────────
@@ -2573,8 +2652,23 @@ ACTION_HANDLERS.dayparting_apply = async (action, context, meta): Promise<Action
   const actor = RULE_ACTOR(meta.ruleId)
   const floor = active.adj === 'pause'
   // pause → every campaign not floored yet; enable → only the campaigns this rule floored.
-  const toChange = camps.filter((c) => floor ? !c.bidsSuppressedAt : !!c.bidsSuppressedAt && c.bidsSuppressedBy === actor)
-  if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, tz, dow, hour, action: active.adj, wouldChange: toChange.length, sample: toChange.slice(0, 6).map((c) => c.name) } }
+  const due = camps.filter((c) => floor ? !c.bidsSuppressedAt : !!c.bidsSuppressedAt && c.bidsSuppressedBy === actor)
+  // ONE BRAIN AB-6 — a campaign the bid brain owns (its bids, BB-6), or whose ad-group default bids a product's brain owns
+  // or the Owner holds, is left whole: its floor and its give-back move both (brain/engine-skips.ts). This action names
+  // no one campaign, so BB-9's input path never reaches it. Read once; nothing unless the brain's ceiling is live.
+  const { brainOwnedCampaignIds } = await import('./bid-brain/live.js')
+  const bidBrain = await brainOwnedCampaignIds(due.map((c) => c.id))
+  const holds = await ruleLeverHolds(meta, due.filter((c) => !bidBrain.has(c.id)).map((c) => c.id))
+  const leftToBrain: import('./brain/engine-skips.js').LeverSkip[] = []
+  const toChange = due.filter((c) => {
+    if (bidBrain.has(c.id)) { holds.count('bids'); return false }
+    const skip = holds.skip(c.id, 'adGroupBids')
+    if (skip) leftToBrain.push(skip)
+    return !skip
+  })
+  const { brainSkipsOutput } = await import('./brain/engine-skips.js')
+  const brainSkips = brainSkipsOutput(holds.counts(), leftToBrain, holds.unread)
+  if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, tz, dow, hour, action: active.adj, wouldChange: toChange.length, sample: toChange.slice(0, 6).map((c) => c.name), ...brainSkips } }
   let changed = 0, bidsMoved = 0; const errors: string[] = []
   for (const c of toChange) {
     try {
@@ -2584,7 +2678,7 @@ ACTION_HANDLERS.dayparting_apply = async (action, context, meta): Promise<Action
       changed++
     } catch (e) { errors.push((e as Error).message) }
   }
-  return { type: action.type, ok: true, output: { tz, dow, hour, action: active.adj, changed, bidsMoved, errors: errors.slice(0, 5) } }
+  return { type: action.type, ok: true, output: { tz, dow, hour, action: active.adj, changed, bidsMoved, errors: errors.slice(0, 5), ...brainSkips } }
 }
 
 logger.debug('[advertising] action handlers registered', {

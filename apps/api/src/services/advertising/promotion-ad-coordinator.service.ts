@@ -247,7 +247,7 @@ async function boostAgedProductAds(
   input: LiquidateInput,
   agedProductId: string,
 ): Promise<LiquidateSubAction & { boostedCampaignIds: string[]; actionLogIds: string[] }> {
-  const candidates = await prisma.campaign.findMany({
+  const found = await prisma.campaign.findMany({
     where: {
       marketplace: input.marketplace,
       status: 'ENABLED',
@@ -257,6 +257,17 @@ async function boostAgedProductAds(
     },
     select: { id: true, name: true, dailyBudget: true },
   })
+  // ONE BRAIN AB-6 — a campaign whose daily budget a product's brain owns (or the Owner holds) is not boosted, in a dry
+  // run too: it is named in `brainSkips` (brain/engine-skips.ts; nothing read unless a product is enrolled).
+  const { brainSkipsOutput, readLeverHolds } = await import('./brain/engine-skips.js')
+  const holds = await readLeverHolds(found.map((c) => c.id), { actor: input.actor }, 'liquidate_aged_stock')
+  const leftToBrain: import('./brain/engine-skips.js').LeverSkip[] = []
+  const candidates = found.filter((c) => {
+    const skip = holds.skip(c.id, 'budgets')
+    if (skip) leftToBrain.push(skip)
+    return !skip
+  })
+  const brainSkips = brainSkipsOutput(holds.counts(), leftToBrain, holds.unread)
 
   if (input.dryRun) {
     return {
@@ -271,6 +282,7 @@ async function boostAgedProductAds(
         })),
         count: candidates.length,
         percent: input.boostPercent,
+        ...brainSkips,
       },
       estimatedValueCentsEur: candidates.reduce(
         (acc, c) => acc + Math.round(Number(c.dailyBudget) * 100 * (input.boostPercent / 100)),
@@ -306,7 +318,7 @@ async function boostAgedProductAds(
   return {
     step: 'boost_aged_product_ads',
     ok: !anyError,
-    output: { boostedCampaignIds: boosted, incrementCents: totalIncrementCents },
+    output: { boostedCampaignIds: boosted, incrementCents: totalIncrementCents, ...brainSkips },
     estimatedValueCentsEur: totalIncrementCents,
     boostedCampaignIds: boosted,
     actionLogIds,

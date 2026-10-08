@@ -20,6 +20,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  */
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
+import type { BrainLever } from './advertising/brain/levers.js'
 
 /** UTC calendar day, matching the cap counter's own `setUTCHours(0,0,0,0)` bucket exactly. */
 export function refusalDayUtc(d: Date = new Date()): string {
@@ -37,6 +38,9 @@ export type RefusalReason =
    *  with a NULL errorMessage, which is how `Reduce bids on ACOS spike` logged 1,029 refusals as
    *  failures in eight days and looked catastrophically broken instead of switched off. */
   | 'VALUE_CAP_EXCEEDED'
+  /** ONE BRAIN AB-6 — the rule left a write on a lever a product's brain owns, or the Owner holds at his own value
+   *  (brain/rule-skips.ts), one reason per lever. Not a failure and not a cap: the lever has another owner. */
+  | `LEVER_HELD:${BrainLever}`
 
 export interface RecordRefusalArgs {
   actorKind?: 'rule' | 'engine'
@@ -47,6 +51,8 @@ export interface RecordRefusalArgs {
   entityType?: string | null
   entityId?: string | null
   at?: Date
+  /** How many refusals this one record counts (default 1): a run that left several writes for one reason. */
+  count?: number
 }
 
 /**
@@ -61,6 +67,7 @@ export async function recordAutomationRefusal(args: RecordRefusalArgs): Promise<
   const at = args.at ?? new Date()
   const actorKind = args.actorKind ?? 'rule'
   const dayUtc = refusalDayUtc(at)
+  const count = Math.max(1, Math.round(args.count ?? 1))
   try {
     await prisma.automationRefusalDaily.upsert({
       where: {
@@ -71,14 +78,14 @@ export async function recordAutomationRefusal(args: RecordRefusalArgs): Promise<
         actorId: args.actorId,
         dayUtc,
         reason: args.reason,
-        count: 1,
+        count,
         lastAt: at,
         lastReason: args.detail,
         lastEntityType: args.entityType ?? null,
         lastEntityId: args.entityId ?? null,
       },
       update: {
-        count: { increment: 1 },
+        count: { increment: count },
         lastAt: at,
         lastReason: args.detail,
         lastEntityType: args.entityType ?? null,

@@ -22,6 +22,7 @@
 
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
+import { readLeverHolds, type EngineWriter, type LeverSkip, type LeverSkipCounts } from './brain/engine-skips.js'
 
 const HARD_FLOOR_CENTS = 100 // €1 minimum per campaign
 
@@ -30,6 +31,13 @@ export interface RebalanceInput {
   triggeredBy: string // 'cron' | `rule:${id}` | `user:${id}`
   /** When true, ignore the cooldown gate. Use sparingly. */
   ignoreCoolDown?: boolean
+  /**
+   * ONE BRAIN AB-6 — who will write the budgets (the actor, and whether a person approved). Given (every run that may
+   * write: rebalanceAndAudit), a campaign whose daily budget a product's brain owns, or the Owner holds at his own value,
+   * is left out of the rebalance (brain/engine-skips.ts: exactly what the write gate would refuse this writer): it keeps
+   * its budget, and the pool's total less that budget is shared among the others. Absent (a preview): as before.
+   */
+  writer?: EngineWriter
 }
 
 export interface ProposedAllocation {
@@ -40,6 +48,8 @@ export interface ProposedAllocation {
   proposedBudgetCents: number
   shiftCents: number // signed (negative = decrease)
   clampedReason?: 'floor' | 'ceiling' | 'hard_floor' | 'max_shift_pct'
+  /** ONE BRAIN AB-6 — left out of the rebalance (its budget kept): who holds it, in words. */
+  heldBy?: string
 }
 
 export interface RebalanceOutcome {
@@ -52,6 +62,8 @@ export interface RebalanceOutcome {
   warnings: string[]
   skipped?: 'cooldown' | 'disabled' | 'pool_not_found' | 'no_allocations'
   inputs: Record<string, unknown>
+  /** ONE BRAIN AB-6 — the campaigns left to a product's brain or the Owner's lock, per lever; `unread`: holders not read. */
+  leverHeld?: { counts: LeverSkipCounts; unread?: true }
 }
 
 interface InternalAllocation {
@@ -122,24 +134,58 @@ export async function computeRebalance(input: RebalanceInput): Promise<Rebalance
     oldBudgetCents: a.campaignId ? currentByCampaign.get(a.campaignId) ?? 0 : 0,
   }))
 
+  // ONE BRAIN AB-6 — a campaign whose daily budget a product's brain owns (or the Owner holds) is left out: it keeps its
+  // budget, and the pool's total less that budget is shared among the others. Read once per rebalance, only for a run that
+  // may write; nothing is read or held unless the brain's ceiling is live and a product is enrolled.
+  const heldBy = new Map<string, LeverSkip>()
+  let leverHeld: RebalanceOutcome['leverHeld']
+  if (input.writer) {
+    const holds = await readLeverHolds(campaignIds, input.writer, `budget pool ${pool.name}`)
+    for (const a of allocs) {
+      const skip = a.campaignId ? holds.skip(a.campaignId, 'budgets') : null
+      if (skip) heldBy.set(a.id, skip)
+    }
+    if (heldBy.size || holds.unread) leverHeld = { counts: holds.counts(), ...(holds.unread ? { unread: true as const } : {}) }
+  }
+  const heldRow = (a: InternalAllocation): ProposedAllocation => ({
+    allocationId: a.id, campaignId: a.campaignId, marketplace: a.marketplace, oldBudgetCents: a.oldBudgetCents,
+    proposedBudgetCents: a.oldBudgetCents, shiftCents: 0, heldBy: heldBy.get(a.id)!.reason,
+  })
+  /** Every allocation in the pool's order: the rebalanced ones as proposed, the held ones kept. */
+  const inOrder = (proposed: ProposedAllocation[]): ProposedAllocation[] => {
+    if (!heldBy.size) return proposed
+    const byId = new Map(proposed.map((p) => [p.allocationId, p]))
+    return allocs.map((a) => (heldBy.has(a.id) ? heldRow(a) : byId.get(a.id)!))
+  }
+  const heldTotalCents = allocs.filter((a) => heldBy.has(a.id)).reduce((n, a) => n + a.oldBudgetCents, 0)
+  const totalCents = Math.max(0, pool.totalDailyBudgetCents - heldTotalCents)
+  if (heldBy.size && heldBy.size === allocs.length) {
+    return {
+      ok: true, poolId: pool.id, poolName: pool.name, strategy: pool.strategy, proposed: inOrder([]), totalShiftCents: 0,
+      warnings: [`every campaign of the pool is held — ${[...heldBy.values()][0].reason} — so nothing is moved`],
+      inputs: { strategy: pool.strategy, allocations: allocs.length, heldByLever: heldBy.size }, ...(leverHeld ? { leverHeld } : {}),
+    }
+  }
+  const free = heldBy.size ? allocs.filter((a) => !heldBy.has(a.id)) : allocs
+
   // Compute raw weights per strategy.
   let weights: Map<string, number>
   let inputs: Record<string, unknown> = {}
   if (pool.strategy === 'STATIC') {
-    weights = new Map(allocs.map((a) => [a.id, a.targetSharePct]))
+    weights = new Map(free.map((a) => [a.id, a.targetSharePct]))
     // If targetSharePct sums to 0 (operator forgot to set them), fall
     // back to equal weighting so we always produce a sane proposal.
     const sum = Array.from(weights.values()).reduce((a, b) => a + b, 0)
     if (sum === 0) {
-      weights = new Map(allocs.map((a) => [a.id, 1]))
+      weights = new Map(free.map((a) => [a.id, 1]))
     }
     inputs.strategy = 'STATIC'
   } else if (pool.strategy === 'PROFIT_WEIGHTED') {
-    const result = await computeProfitWeights(allocs)
+    const result = await computeProfitWeights(free)
     weights = result.weights
     inputs = { strategy: 'PROFIT_WEIGHTED', ...result.inputs }
   } else if (pool.strategy === 'URGENCY_WEIGHTED') {
-    const result = await computeUrgencyWeights(allocs)
+    const result = await computeUrgencyWeights(free)
     weights = result.weights
     inputs = { strategy: 'URGENCY_WEIGHTED', ...result.inputs }
   } else {
@@ -152,6 +198,7 @@ export async function computeRebalance(input: RebalanceInput): Promise<Rebalance
       totalShiftCents: 0,
       warnings: [`unknown strategy ${pool.strategy} — falling back to no-op`],
       inputs,
+      ...(leverHeld ? { leverHeld } : {}),
     }
   }
 
@@ -163,25 +210,26 @@ export async function computeRebalance(input: RebalanceInput): Promise<Rebalance
       poolId: pool.id,
       poolName: pool.name,
       strategy: pool.strategy,
-      proposed: allocs.map((a) => ({
+      proposed: inOrder(free.map((a) => ({
         allocationId: a.id,
         campaignId: a.campaignId,
         marketplace: a.marketplace,
         oldBudgetCents: a.oldBudgetCents,
         proposedBudgetCents: a.oldBudgetCents,
         shiftCents: 0,
-      })),
+      }))),
       totalShiftCents: 0,
       warnings: ['weight sum is 0 — no rebalance possible, keeping current budgets'],
       inputs,
+      ...(leverHeld ? { leverHeld } : {}),
     }
   }
 
-  // Initial proposal: pool total × normalized weight per allocation.
+  // Initial proposal: pool total × normalized weight per allocation (AB-6: the total less the held campaigns' budgets).
   const proposed: ProposedAllocation[] = []
-  for (const a of allocs) {
+  for (const a of free) {
     const w = weights.get(a.id) ?? 0
-    let target = Math.round(pool.totalDailyBudgetCents * (w / weightSum))
+    let target = Math.round(totalCents * (w / weightSum))
     let clampedReason: ProposedAllocation['clampedReason']
     // Apply per-allocation floor + ceiling.
     if (target < a.minDailyBudgetCents) {
@@ -228,12 +276,14 @@ export async function computeRebalance(input: RebalanceInput): Promise<Rebalance
     )
   }
 
+  if (heldBy.size) warnings.push(`${heldBy.size} campaign${heldBy.size === 1 ? '' : 's'} kept at ${heldBy.size === 1 ? 'its' : 'their'} budget — ${[...heldBy.values()][0].reason}${heldBy.size > 1 ? ' (and others)' : ''}; the rest share the pool's total less ${heldBy.size === 1 ? 'that budget' : 'those budgets'}`)
+
   return {
     ok: true,
     poolId: pool.id,
     poolName: pool.name,
     strategy: pool.strategy,
-    proposed,
+    proposed: inOrder(proposed),
     totalShiftCents,
     warnings,
     inputs: {
@@ -242,7 +292,9 @@ export async function computeRebalance(input: RebalanceInput): Promise<Rebalance
       maxShiftPerRebalancePct: pool.maxShiftPerRebalancePct,
       coolDownMinutes: pool.coolDownMinutes,
       allocations: allocs.length,
+      ...(heldBy.size ? { heldByLever: heldBy.size, sharedTotalCents: totalCents } : {}),
     },
+    ...(leverHeld ? { leverHeld } : {}),
   }
 }
 
@@ -506,6 +558,8 @@ export async function rebalanceAndAudit(args: {
     poolId: args.poolId,
     triggeredBy: args.triggeredBy,
     ignoreCoolDown: args.ignoreCoolDown,
+    // AB-6 — the writer this run's budget writes carry: a held campaign is left out before anything is asked.
+    writer: { actor: args.actor, ...(args.manual ? { manual: true } : {}) },
   })
   if (!outcome.ok || outcome.skipped) {
     return { ...outcome, auditId: null }

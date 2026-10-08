@@ -34,6 +34,7 @@
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
+import { addLeverSkipCounts, leverSkipNote, type LeverSkipCounts } from '../services/advertising/brain/engine-skips.js'
 import { evaluateAllRulesForTrigger } from '../services/automation-rule.service.js'
 import { contextIdentity, ruleMatchesScope } from '../services/automation-rule-scope.js'
 import { microsToCents } from '../services/ads-core/metrics-math.js'
@@ -473,7 +474,7 @@ export async function applyMarketplaceScope<C extends { marketplace: string | nu
    * without the filter, a 30-day rule would also run against the default 14-day contexts.
    */
   ruleFilter?: (r: { id: string; actions: unknown }) => boolean,
-): Promise<{ evaluations: number; matches: number; capped: number; failed: number }> {
+): Promise<{ evaluations: number; matches: number; capped: number; failed: number; leverHeld?: LeverSkipCounts }> {
   let evaluations = 0
   let matches = 0
   // ADX.1 — outcome counts, not just volume. The engine ran with a 96% failure
@@ -596,6 +597,12 @@ export async function applyMarketplaceScope<C extends { marketplace: string | nu
     }
   }
 
+  // ONE BRAIN AB-6 — who holds the levers of every campaign these contexts name, read once for the pass (each rule's own
+  // check then reads nothing more); nothing at all unless the brain's ceiling is live and a product is enrolled.
+  const { warmRuleLeverOwners, ruleResultLeverSkips } = await import('../services/advertising/brain/rule-skips.js')
+  await warmRuleLeverOwners(contexts)
+  const leverHeld: LeverSkipCounts = {}
+
   for (const ctx of contexts) {
     const identity = contextIdentity(ctx, extToLocal, localToPortfolio, productsByAdGroup, productsByCampaign)
     // Each rule is matched with its OWN expanded product set — a per-rule value, so it cannot be
@@ -618,8 +625,9 @@ export async function applyMarketplaceScope<C extends { marketplace: string | nu
     matches += results.filter((r) => r.matched).length
     capped += results.filter((r) => r.status === 'CAP_EXCEEDED').length
     failed += results.filter((r) => r.status === 'FAILED').length
+    for (const r of results) for (const a of r.actionResults ?? []) addLeverSkipCounts(leverHeld, ruleResultLeverSkips(a))
   }
-  return { evaluations, matches, capped, failed }
+  return { evaluations, matches, capped, failed, ...(Object.keys(leverHeld).length ? { leverHeld } : {}) }
 }
 
 // ADX — nine queries in this file read `entityType: 'KEYWORD'` from
@@ -1826,6 +1834,8 @@ export async function runAdvertisingRuleEvaluatorOnce(opts: { onLine?: (line: st
   let totalMatches = 0
   let totalCapped = 0
   let totalFailed = 0
+  // ONE BRAIN AB-6 — the writes the rules left to a product's brain (or the Owner's lock) this tick, per lever.
+  const totalLeverHeld: LeverSkipCounts = {}
 
   // BP.P4 — Bid rules that chose their own lookback get their own pass (`bidRuleWindow`, above).
   const bidWindowRules = await prisma.automationRule.findMany({
@@ -1886,6 +1896,7 @@ export async function runAdvertisingRuleEvaluatorOnce(opts: { onLine?: (line: st
     totalMatches += r.matches
     totalCapped += r.capped
     totalFailed += r.failed
+    addLeverSkipCounts(totalLeverHeld, r.leverHeld)
   }
 
   // SG.0 — the suggestion lifecycle sweep rides the tick (no separate cron): AFTER the passes,
@@ -1912,7 +1923,7 @@ export async function runAdvertisingRuleEvaluatorOnce(opts: { onLine?: (line: st
     durationMs: Date.now() - startedAt,
   }
   lastRunAt = new Date()
-  lastSummary = `fba=${fbaAge.length} prof=${profitability.length} cac=${cacSpike.length} under=${underperform.length} schedule=${scheduleContexts.length} evals=${totalEvaluations} matches=${totalMatches} capped=${totalCapped} failed=${totalFailed} durationMs=${summary.durationMs}`
+  lastSummary = `fba=${fbaAge.length} prof=${profitability.length} cac=${cacSpike.length} under=${underperform.length} schedule=${scheduleContexts.length} evals=${totalEvaluations} matches=${totalMatches} capped=${totalCapped} failed=${totalFailed}${leverSkipNote(totalLeverHeld)} durationMs=${summary.durationMs}`
   opts.onLine?.(lastSummary)
   return summary
 }

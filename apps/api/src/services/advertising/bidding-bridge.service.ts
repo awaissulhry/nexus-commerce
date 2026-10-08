@@ -21,7 +21,7 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { adsMode } from './ads-api-client.js'
-import { brainOwnedCampaignIds } from './bid-brain/live.js'
+import { brainLiveCeiling, brainOwnedCampaignIds } from './bid-brain/live.js'
 
 /** The wire shape services/bidding-engine consumes. Do not reshape casually. */
 export interface BidContext {
@@ -141,7 +141,25 @@ export async function getBidContexts(
     },
   })
   // BID BRAIN BB-6 — a campaign the brain owns has one bid writer, the brain: the external engine never sees its keywords.
-  const brainOwned = await brainOwnedCampaignIds([...new Set(targets.map((t) => t.adGroup?.campaignId).filter((id): id is string => !!id))])
+  // ONE BRAIN AB-6 — the engine writes to Amazon itself (it bypasses the write gate, list-automations A18), so this is its
+  // only check, and it fails closed: when the owner cannot be read under a live ceiling, no keyword is handed out this
+  // cycle (the engine's next cycle asks again) — never one that may be the brain's. The keywords left out are counted.
+  const campaignIds = [...new Set(targets.map((t) => t.adGroup?.campaignId).filter((id): id is string => !!id))]
+  let brainOwned: Set<string>
+  try {
+    brainOwned = await brainOwnedCampaignIds(campaignIds)
+  } catch (error) {
+    logger.warn('bidding bridge: could not read which campaigns the bid brain owns — no keyword is handed out this cycle (the external engine bypasses the write gate)', {
+      keywords: targets.length, campaigns: campaignIds.length, error: error instanceof Error ? error.message : String(error),
+    })
+    return []
+  }
+  const leftToBrain = brainOwned.size ? targets.filter((t) => t.adGroup?.campaignId && brainOwned.has(t.adGroup.campaignId)).length : 0
+  if (leftToBrain) {
+    logger.info('bidding bridge: keywords of bid brain campaigns left out — the bid brain runs their bids (one owner per lever)', {
+      lever: 'bids', keywords: leftToBrain, campaigns: brainOwned.size,
+    })
+  }
 
   // Resolve the advertising profile per marketplace once, not per target.
   const connections = await prisma.amazonAdsConnection.findMany({
@@ -184,6 +202,21 @@ function responseStatus(status: string | undefined): string {
  * of vanishing into `.catch(() => {})`. The response contract is untouched.
  */
 export async function recordAppliedBid(input: AppliedBid): Promise<void> {
+  // ONE BRAIN AB-6 — the engine wrote to Amazon around the gate. A keyword handed out before the bid brain took its campaign
+  // can land after: Nexus still records the bid Amazon has (its copy must match Amazon), and says loudly that the brain's
+  // keyword was moved by the external engine. Read only under a live ceiling; a failed read never fails the report (the
+  // engine must not retry a write that already happened).
+  if (input.status === 'applied' && brainLiveCeiling()) {
+    try {
+      const t = await prisma.adTarget.findUnique({ where: { id: input.bridgeId }, select: { adGroup: { select: { campaignId: true } } } })
+      const campaignId = t?.adGroup?.campaignId
+      if (campaignId && (await brainOwnedCampaignIds([campaignId])).has(campaignId)) {
+        logger.warn('bidding bridge: the external engine moved a keyword of a bid brain campaign — it was handed out before the brain took the campaign', {
+          lever: 'bids', bridgeId: input.bridgeId, campaignId, bidMinor: input.bidMinor, prevBidMinor: input.prevBidMinor ?? null,
+        })
+      }
+    } catch { /* the record below never waits on this check */ }
+  }
   if (input.status === 'applied') {
     await prisma.adTarget
       .update({ where: { id: input.bridgeId }, data: { bidCents: input.bidMinor } })

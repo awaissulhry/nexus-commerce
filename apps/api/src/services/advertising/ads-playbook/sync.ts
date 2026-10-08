@@ -33,6 +33,8 @@ import { loadDrift, type LoadedDrift } from './drift-load.js'
 import { SPEND_PARTS, SYNC_PARTS, type DriftItem, type SyncPart } from './drift.js'
 import { plannedSyncBids, waitingSyncedTargets } from './load.js'
 import { recordPlaybookApply, type PlaybookApplyWriter } from './write.js'
+import { readLeverHolds, type LeverSkipCounts } from '../brain/engine-skips.js'
+import type { BrainLever } from '../brain/levers.js'
 
 export interface SyncArgs {
   market: string
@@ -214,8 +216,10 @@ export interface SyncResult {
   negatives: { added: number; local: number; alreadyStanding: number; refused: Outcome[]; failed: Outcome[]; leftAlone: Outcome[]; ids: string[] }
   positives: { added: number; local: number; existed: number; refused: Outcome[]; failed: Outcome[]; leftAlone: Outcome[]; ids: string[]; planned: Array<{ adTargetId: string; startBidCents: number }> }
   productAds: { added: number; local: number; failed: Outcome[]; leftAlone: Outcome[]; ids: string[] }
-  build: { applicationId: string; alreadyRunning?: boolean } | { refusal: string } | null
+  build: { applicationId: string; alreadyRunning?: boolean } | { refusal: string; brainLever?: BrainLever } | null
   artifacts: { resaved: string[]; errors: string[] }
+  /** ONE BRAIN AB-6 — the writes left because a product's brain owns the lever (or the Owner holds it), per lever. */
+  leverHeld?: LeverSkipCounts
 }
 
 /** Where an item's write lands: a misplaced keyword's right slot, else the item's own ad group. */
@@ -254,11 +258,20 @@ export async function runSync(plan: SyncPlan, w: SyncWriter, opts: { compilers?:
     return null
   }
   const evidence = (i: DriftItem) => ({ targetKey: `playbook-sync:${i.kind}`, note: i.says.slice(0, 300) })
+  // ONE BRAIN AB-6 — a negative, keyword or product ad on a lever a product's brain owns, or the Owner holds at his own
+  // value, is left alone, said item by item — exactly what the write gate would refuse this sync's writer (a person's
+  // approval passes it; a sync the business's rule ran does not). Read once for every campaign the sync writes.
+  const writer = { actor: w.actor, ...(w.manual ? { manual: true } : {}) }
+  const leverHolds = await readLeverHolds(writes.map((i) => placeOf(i).campaignId), writer, 'playbook sync')
+  const heldWhy = (i: DriftItem, lever: BrainLever): string | null => {
+    const skip = leverHolds.skip(placeOf(i).campaignId, lever)
+    return skip ? `Not written: ${skip.reason} (one owner per lever).` : null
+  }
 
   // 1 — negatives (lower spend). A keyword a sync added at the floor, not given its bid yet, is no home.
   const waiting = plan.parts.negatives.some((i) => i.negative?.ownerTargetId) ? await waitingSyncedTargets(d.playbook.id, floor) : new Set<string>()
   for (const i of plan.parts.negatives) {
-    const gone = goneWhy(i)
+    const gone = goneWhy(i) ?? heldWhy(i, 'negatives')
     if (gone) { res.negatives.leftAlone.push({ key: i.key, why: gone }); continue }
     if (i.negative?.ownerTargetId) {
       const owner = await prisma.adTarget.findUnique({ where: { id: i.negative.ownerTargetId }, select: { isNegative: true, status: true, externalTargetId: true } })
@@ -286,7 +299,7 @@ export async function runSync(plan: SyncPlan, w: SyncWriter, opts: { compilers?:
 
   // 2 — positives: born at the floor, the planned bid remembered (adds spend).
   for (const i of plan.parts.positives) {
-    const gone = goneWhy(i)
+    const gone = goneWhy(i) ?? heldWhy(i, 'harvest')
     if (gone) { res.positives.leftAlone.push({ key: i.key, why: gone }); continue }
     const at = placeOf(i)
     const planned = i.startBidCents ?? 0
@@ -317,7 +330,7 @@ export async function runSync(plan: SyncPlan, w: SyncWriter, opts: { compilers?:
 
   // 3 — product ads (adds spend).
   for (const i of plan.parts.productAds) {
-    const gone = goneWhy(i, true)
+    const gone = goneWhy(i, true) ?? heldWhy(i, 'structure')
     if (gone) { res.productAds.leftAlone.push({ key: i.key, why: gone }); continue }
     try {
       const a = await createProductAdLocal({ adGroupId: placeOf(i).adGroupId, asin: i.asin, ...(i.sku ? { sku: i.sku } : {}), ...(i.productId ? { productId: i.productId } : {}), userId: w.actor, manual: w.manual, confirmOwnLimits: w.confirmOwnLimits, changeSetId: w.changeSetId })
@@ -367,7 +380,10 @@ export async function runSync(plan: SyncPlan, w: SyncWriter, opts: { compilers?:
   if (plan.build) {
     const { startPlaybookBuild } = await import('./build.js')
     const build = recorded ? { ...plan.build, playbook: { ...plan.build.playbook!, version: recorded.version } } : plan.build
-    res.build = await startPlaybookBuild({ plan: build, actor: w.actor, requester: w.requester, changeSetId: w.changeSetId, writer: w.writer, ...(opts.compilers ? { compilers: opts.compilers } : {}) })
+    res.build = await startPlaybookBuild({ plan: build, actor: w.actor, requester: w.requester, changeSetId: w.changeSetId, writer: w.writer, manual: w.manual, ...(opts.compilers ? { compilers: opts.compilers } : {}) })
+    // AB-6 — the missing slots are new campaigns of the product: its brain's structure lever, asked by the build itself.
+    if ('refusal' in res.build && res.build.brainLever) leverHolds.count(res.build.brainLever)
   }
+  if (leverHolds.total()) res.leverHeld = leverHolds.counts()
   return res
 }

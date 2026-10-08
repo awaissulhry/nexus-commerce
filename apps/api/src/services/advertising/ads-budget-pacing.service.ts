@@ -67,10 +67,20 @@ ACTION_HANDLERS.pace_budget = async (action, _context, meta): Promise<ActionResu
   const targetRoas = typeof action.targetRoas === 'number' ? (action.targetRoas as number) : 3
   const { proposals } = await previewPacing({ targetRoas })
   // Rule pacing only raises out-of-budget winners (never auto-cuts).
-  const raises = proposals.filter((p) => p.outOfBudget && p.proposedBudgetCents > p.currentBudgetCents)
-  if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, wouldRaise: raises.length, sample: raises.slice(0, 5) } }
+  const wanted = proposals.filter((p) => p.outOfBudget && p.proposedBudgetCents > p.currentBudgetCents)
+  // ONE BRAIN AB-6 — a campaign whose daily budget a product's brain owns (or the Owner holds) is left, in a dry run too.
+  const { brainSkipsOutput, readLeverHolds } = await import('./brain/engine-skips.js')
+  const holds = await readLeverHolds(wanted.map((p) => p.campaignId), { actor: `automation:${meta.ruleId}` }, `rule ${meta.ruleId} (pace_budget)`)
+  const leftToBrain: import('./brain/engine-skips.js').LeverSkip[] = []
+  const raises = wanted.filter((p) => {
+    const skip = holds.skip(p.campaignId, 'budgets')
+    if (skip) leftToBrain.push(skip)
+    return !skip
+  })
+  const brainSkips = brainSkipsOutput(holds.counts(), leftToBrain, holds.unread)
+  if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, wouldRaise: raises.length, sample: raises.slice(0, 5), ...(!raises.length && leftToBrain.length ? { noChange: true } : {}), ...brainSkips } }
   const r = await applyPacing({ changes: raises.map((p) => ({ campaignId: p.campaignId, proposedBudgetCents: p.proposedBudgetCents })), actor: `automation:${meta.ruleId}` })
-  return { type: action.type, ok: true, estimatedValueCentsEur: raises.reduce((a, p) => a + (p.proposedBudgetCents - p.currentBudgetCents), 0), output: { raised: r.applied } }
+  return { type: action.type, ok: true, estimatedValueCentsEur: raises.reduce((a, p) => a + (p.proposedBudgetCents - p.currentBudgetCents), 0), output: { raised: r.applied, ...brainSkips } }
 }
 
 logger.debug('[AX.10] pace_budget handler registered')
