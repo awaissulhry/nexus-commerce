@@ -213,7 +213,7 @@ export const LEVER_DECIDES: Record<BrainLever, string> = {
   portfolioCap: 'the Amazon portfolio cap, monthly, never below this month\'s spend',
   negatives: 'where and what to negate (waste, the product set, isolation) inside each campaign\'s negative budget, and revives',
   harvest: 'converting search terms graduated to exact keywords, each with its source negatives',
-  structure: 'new campaigns, built as proposals',
+  structure: 'single-keyword campaigns for key terms, splits of shared campaigns and moves into the product\'s one portfolio, each a proposal a person approves',
   biddingStrategy: 'each campaign\'s Amazon bidding strategy',
   offAmazon: 'the off-Amazon setting',
 }
@@ -288,6 +288,8 @@ export const SPEND_RATINGS: Partial<Record<BrainSetting, Rating>> = {
   newCampaignsPerWeek: { when: 'up', words: 'more new campaigns a week, each with its own budget' },
   skcMax: { when: 'up', words: 'more single-keyword campaigns, each with its own budget' },
   firstBudgetPctOfEnvelope: { when: 'up', words: 'a new campaign starts with a larger budget' },
+  skcOrderSharePct: { when: 'down', words: 'more terms qualify for a single-keyword campaign of their own, each with its own budget' },
+  skcHourCurvePct: { when: 'down', words: 'more terms qualify for a single-keyword campaign of their own, each with its own budget' },
   minBidEntriesPerDay: { when: 'down', words: 'fewer Min-bid hours a day: campaigns bid normally in more hours' },
   hourCellMovePct: { when: 'up', words: 'a painted hour may move further, raises included' },
   hourProposalsPerWeek: { when: 'never', words: 'how often the brain asks; each plan still waits for a person' },

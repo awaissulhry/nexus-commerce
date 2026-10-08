@@ -164,7 +164,7 @@ export type StrategyColumn =
   | 'maxChangePct' | 'maxActionsPerRun' | 'protect' | 'harvestMinOrders' | 'harvestMinClicks' | 'harvestMaxAcosPct'
   | 'harvestWindowDays' | 'negateMinClicks' | 'negateMinSpendCents' | 'negateMaxOrders' | 'negateWindowDays'
   | 'stopMethod' | 'stopBidCents' | 'claudeAutonomy' | 'reviewEveryDays'
-  | 'claudeMaxChangesPerDay' | 'claudeMaxRaisesPerDay' | 'claudeMaxBudgetIncreasePerDayCents'
+  | 'claudeMaxChangesPerDay' | 'claudeMaxRaisesPerDay' | 'claudeMaxBudgetIncreasePerDayCents' | 'exploreBudgetCents'
 
 /** How one stored value is checked when it is read: anything else is ignored and named in a warning. */
 export type ColumnCheck =
@@ -205,6 +205,8 @@ export const COLUMN_CHECKS: Readonly<Record<StrategyColumn, ColumnCheck>> = {
   claudeMaxChangesPerDay: { kind: 'int', min: 0, max: 10_000 },
   claudeMaxRaisesPerDay: { kind: 'int', min: 0, max: 10_000 },
   claudeMaxBudgetIncreasePerDayCents: { kind: 'int', min: 0 },
+  // BB-20 — the bid brain's explore budget a day, in cents (0 = off; at most 1,000 units of the currency a day).
+  exploreBudgetCents: { kind: 'int', min: 0, max: 100_000 },
 }
 
 export type SaferRule =
@@ -228,11 +230,12 @@ export type RaiseRule =
   | 'count'      // a limit where empty is 0 (Claude's daily limits): up loosens; down, or cleared, tightens
   | 'any'        // any change (no clear direction)
   | 'never'      // free to change
+  | 'explore'    // BB-20 — the explore budget: empty is the market's default (not "none"), so up from what is in force loosens
 
 export type StrategyFieldKey =
   | 'goal' | 'goalNote' | 'target' | 'targetAcosPct' | 'monthlySpendCapCents' | 'minBidCents' | 'maxBidCents'
   | 'maxChangePct' | 'maxActionsPerRun' | 'protect' | 'harvest' | 'negate' | 'stop' | 'claudeAutonomy' | 'reviewEveryDays'
-  | 'claudeMaxChangesPerDay' | 'claudeMaxRaisesPerDay' | 'claudeMaxBudgetIncreasePerDayCents'
+  | 'claudeMaxChangesPerDay' | 'claudeMaxRaisesPerDay' | 'claudeMaxBudgetIncreasePerDayCents' | 'exploreBudgetCents'
 
 export interface StrategyField {
   key: StrategyFieldKey
@@ -268,6 +271,8 @@ export const READERS = {
   claudeByRule: "Claude's door, for an ad change that may run by the business's rule in this market (an ad tool set to run by rule, where its code allows it)",
   // BB-5 — the bid brain reads the target as written: ACoS or TACoS, and its band.
   bidBrain: 'the bid brain, in shadow (decides each keyword bid of an allowlisted IT or DE campaign from the target, its band and a TACoS target turned into an ACoS aim, and logs it; it writes nothing yet)',
+  // BB-20 — the bid brain's exploration and revive (bid-brain/explore.ts).
+  bidBrainExplore: "the bid brain's exploration (shadow unless NEXUS_BID_BRAIN_EXPLORE is on): the most its seeded test bids on thin keywords and its revive re-tests may add in expected spend in this market a day; empty = 200 cents in IT, 100 in DE, none elsewhere (the Owner's pick); 0 = off",
 } as const
 const TARGET_READERS = [READERS.optimiser, READERS.bidRules, READERS.autopilot]
 const BAND_READERS = [READERS.gate, READERS.optimiser, READERS.bidRules, READERS.hourly, READERS.restores, READERS.autopilot]
@@ -375,6 +380,11 @@ export const STRATEGY_FIELDS: readonly StrategyField[] = [
     key: 'claudeMaxBudgetIncreasePerDayCents', label: 'Most budget increase Claude may run by rule a day', columns: ['claudeMaxBudgetIncreasePerDayCents'], levels: ['MARKET'], resolve: 'inherit', safer: 'lower', raise: 'count', money: true,
     readBy: [`${READERS.claudeByRule}: the daily budget added by rule there in the last 24 hours plus this change's must fit, or a person decides; empty is 0 — no budget increase runs by rule`],
   },
+  // BB-20 — the market's explore budget a day (U3-D1). Empty is NOT 0 here: it is the Owner's default; 0 switches it off.
+  {
+    key: 'exploreBudgetCents', label: 'Explore budget a day', columns: ['exploreBudgetCents'], levels: ['MARKET'], resolve: 'inherit', safer: 'lower', raise: 'explore', money: true,
+    readBy: [READERS.bidBrainExplore],
+  },
 ]
 
 /** AA-W2-2b — Claude's daily limits per market: empty is 0 (nothing that adds to one runs by rule). */
@@ -403,6 +413,8 @@ export const STRATEGY_MONEY: Readonly<Record<string, string>> = Object.fromEntri
     // W1-6b — spend of ads Nexus cannot tie to a product (counted on no category or product cap).
     'unattributedCents',
     // AA-W2-2b — the most daily budget Claude's changes may add by rule in a day.
-    'claudeMaxBudgetIncreasePerDayCents']
+    'claudeMaxBudgetIncreasePerDayCents',
+    // BB-20 — the bid brain's explore budget a day.
+    'exploreBudgetCents']
     .map((key) => [key, FIELDS.financialsAdspendView]),
 )

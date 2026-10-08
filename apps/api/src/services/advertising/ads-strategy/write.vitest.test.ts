@@ -118,7 +118,18 @@ describe('judging a change (design §3.3)', () => {
       maxChangePct: 'up', maxActionsPerRun: 'up', protect: 'unprotect', harvest: 'loosen', negate: 'loosen', stop: 'pause',
       claudeAutonomy: 'autonomy', reviewEveryDays: 'up',
       claudeMaxChangesPerDay: 'count', claudeMaxRaisesPerDay: 'count', claudeMaxBudgetIncreasePerDayCents: 'count',
+      exploreBudgetCents: 'explore',
     })
+  })
+
+  it('BB-20 — the explore budget is judged on the budget in force: empty is the market\'s default, not "none"', () => {
+    const explore = (before: unknown, after: unknown) => judgeChange('explore', 'exploreBudgetCents', before, after, { fallbackTargetPct: 30, exploreDefaultCents: 200 })
+    expect(explore(null, 300)).toBe('raise')
+    expect(explore(null, 150)).toBe('lower')
+    expect(explore(null, 200)).toBe('same')
+    expect(explore(300, null)).toBe('lower')
+    expect(explore(100, null)).toBe('raise')
+    expect(explore(100, 0)).toBe('lower')
   })
 
   it.each([
@@ -487,6 +498,41 @@ describe("AA-W2-2b — Claude's daily limits of what runs by rule (the market ro
       const hiddenEntry = (hidden.markets[0].fields as Json[]).find((f) => f.field === 'claudeMaxBudgetIncreasePerDayCents')!
       expect('claudeMaxBudgetIncreasePerDayCents' in hiddenEntry).toBe(false)
       expect((hidden.markets[0].fields as Json[]).find((f) => f.field === 'claudeMaxChangesPerDay')!.claudeMaxChangesPerDay).toBe(10)
+    })
+  })
+})
+
+describe("BB-20 — the bid brain's explore budget a day (the market row only; empty is the Owner's default, 0 is off)", () => {
+  it('set on the market row: a raise that needs the code; 0 switches it off and needs none', async () => {
+    await inA(async () => {
+      // Empty is IT's default of 200 cents: 300 is a raise, 150 a lowering.
+      expect((await planned(it_({ level: 'market', values: { exploreBudgetCents: 150 } }))).changes.map((c) => [c.field, c.from, c.to, c.direction])).toEqual([['exploreBudgetCents', null, 150, 'lower']])
+      const up = await planned(it_({ level: 'market', values: { exploreBudgetCents: 300 } }))
+      expect(up.changes.map((c) => [c.field, c.from, c.to, c.direction])).toEqual([['exploreBudgetCents', null, 300, 'raise']])
+      expect(up.preview).toMatchObject({ direction: 'raise', raises: ['Explore budget a day (cents)'] })
+      await expect(applyStrategyPlan(up, SCREEN)).rejects.toThrow(/authenticator code/)
+      expect(await applyStrategyPlan(up, CODED)).toMatchObject({ ok: true, direction: 'raise' })
+      expect(await rowOf('MARKET')).toMatchObject({ exploreBudgetCents: 300 })
+      const off = await planned(it_({ level: 'market', values: { exploreBudgetCents: 0 } }))
+      expect(off.changes.map((c) => [c.field, c.from, c.to, c.direction])).toEqual([['exploreBudgetCents', 300, 0, 'lower']])
+      expect(await applyStrategyPlan(off, SCREEN)).toMatchObject({ ok: true, direction: 'lower' })
+      expect(await rowOf('MARKET')).toMatchObject({ exploreBudgetCents: 0 })
+    })
+  })
+
+  it('never on a category or product row, whole cents 0–100,000, and hidden from a person without ad-spend money', async () => {
+    await inA(async () => {
+      expect((await refusal(it_({ level: 'category', categoryId: ids.cat, values: { exploreBudgetCents: 100 } }))).error).toBe('exploreBudgetCents cannot be set on a category row (only on a market row).')
+      expect((await refusal(it_({ level: 'product', productId: ids.q, values: { exploreBudgetCents: 100 } }))).error).toBe('exploreBudgetCents cannot be set on a product row (only on a market row).')
+      expect((await refusal(it_({ level: 'market', values: { exploreBudgetCents: 100_001 } }))).status).toBe(400)
+      expect((await refusal(it_({ level: 'market', values: { exploreBudgetCents: -1 } }))).status).toBe(400)
+      const read = await readStrategy({ market: 'IT' })
+      if ('error' in read) throw new Error(read.error)
+      const entry = ((read.data.markets as Json[])[0].fields as Json[]).find((f) => f.field === 'exploreBudgetCents')!
+      expect(entry).toMatchObject({ exploreBudgetCents: 0, source: { level: 'market' } })
+      expect(entry.readBy[0]).toMatch(/^the bid brain's exploration/)
+      const hidden = financialPayloadCopy(read.data, { isOwner: false, permissions: new Set() }, STRATEGY_MONEY) as Json
+      expect('exploreBudgetCents' in (hidden.markets[0].fields as Json[]).find((f) => f.field === 'exploreBudgetCents')!).toBe(false)
     })
   })
 })

@@ -12,6 +12,9 @@
  *   negatives  brain/negatives-run.ts runNegativesOnce for the product (its negatives lever OBSERVE+).
  *   harvest    brain/harvest-run.ts runHarvestOnce for the product (its harvest lever OBSERVE+), after its negatives; a pair
  *              the module left half done is a clash in the report.
+ *   structure  brain/structure-run.ts runStructureOnce for the product (its structure lever OBSERVE, PROPOSE or locked): every
+ *              day what its earlier requests became (built, its go-live asked, live); its new proposals on the weekly day
+ *              (Monday in the market's time zone). Never acts on the day's facts: each request waits for a person (AB-16).
  *   money      brain/budget-shadow.ts runMoneyShadowOnce for the product (its budgets lever OBSERVE+). Where the budgets lever
  *              acts, the brake that holds raises (and stronger) holds every own campaign's bid raises, and a campaign whose
  *              budget steps down holds its own: budget before bid, a raise never fights a cut. In shadow the same holds are
@@ -65,6 +68,7 @@ export interface CycleRunners {
   terms: TermsRunner
   negatives: StepRunner
   harvest: StepRunner
+  structure: StepRunner
   money: StepRunner
   bids: StepRunner
   hours: StepRunner
@@ -222,6 +226,68 @@ export const harvestStep: StepRunner = async (ctx) => {
   return harvestStepOf(runHarvestOnce, halfDoneOf)(ctx)
 }
 
+// ── structure (weekly, AB-16) ────────────────────────────────────────────────────────────────────────────────────
+
+/** The part of AB-16's run summary (brain/structure-run.ts StructureRunSummary) the cycle reads. */
+export interface StructureRunLike {
+  ran: boolean
+  why: string
+  runId?: string
+  decided: { skc: number; split: number; portfolio: number; held: number }
+  acted: { logged: number; proposed: number }
+  pending: { built: number; liveAsked: number; live: number; retireAsked: number; done: number; declined: number; failed: number }
+  notDue: number
+  skipped: Array<{ productId: string; market: string; why: string }>
+  failed: Array<{ productId: string; market: string; error: string }>
+}
+
+/**
+ * The structure step from AB-16's run, for the product alone: what its requests became every day, its proposals on the
+ * weekly day. `waitingOf` names the requests that wait for a person (the build or move, the go-live, a split's low bids).
+ */
+export function structureStepOf(
+  due: (productId: string, market: string) => Promise<{ due: boolean; why: string; products: unknown[] }>,
+  run: (opts: { now: Date; due: { due: boolean; why: string; products: unknown[] } }) => Promise<StructureRunLike>,
+  waitingOf: (productId: string, market: string) => Promise<Waiting[]> = async () => [],
+): StepRunner {
+  return async (ctx) => {
+    const d = await due(ctx.productId, ctx.market)
+    if (!d.due) return { status: 'off', why: 'the structure lever is OFF or excluded for the product: no structure decided' }
+    const s = await run({ now: ctx.tick.now, due: d })
+    const failed = s.failed.find((x) => x.productId === ctx.productId)
+    if (failed) return { status: 'failed', why: `the structure run failed: ${failed.error}`, runId: s.runId ?? null }
+    const skipped = s.skipped.find((x) => x.productId === ctx.productId)
+    if (skipped) return { status: 'skipped', why: skipped.why, runId: s.runId ?? null }
+    const counts = { skc: s.decided.skc, split: s.decided.split, portfolio: s.decided.portfolio, held: s.decided.held, logged: s.acted.logged, proposed: s.acted.proposed, built: s.pending.built, liveAsked: s.pending.liveAsked, live: s.pending.live, done: s.pending.done, declined: s.pending.declined }
+    const waiting = await waitingOf(ctx.productId, ctx.market)
+    const weekly = s.notDue ? 'not the weekly day (Monday in the market\'s time zone): no new proposal; what earlier requests became, synced' : `decided: ${countsLine(counts) || 'nothing to propose'}`
+    return {
+      status: 'done', why: weekly, runId: s.runId ?? null, waiting,
+      did: { lines: [`structure: ${weekly}${s.acted.logged && !s.acted.proposed ? ' (shadow: nothing asked, nothing at Amazon)' : ''}`], counts },
+    }
+  }
+}
+
+/** The structure requests of a product that wait for a person. */
+async function structureWaiting(productId: string, market: string): Promise<Waiting[]> {
+  const rows = await prisma.adsBrainStructure.findMany({ where: { productId, marketplace: market, status: { in: ['PROPOSED', 'LIVE_PROPOSED', 'LIVE'] } }, select: { kind: true, key: true, term: true, status: true, approvalId: true, liveApprovalId: true, retireApprovalId: true } })
+  const what = (r: (typeof rows)[number]) => (r.kind === 'SKC' ? `the single-keyword campaign for "${r.term}"` : r.kind === 'SPLIT' ? 'the split of a shared campaign' : 'the move into the product\'s portfolio')
+  return rows.flatMap((r) => r.status === 'PROPOSED' ? [{ what: `build ${what(r)}`, approvalId: r.approvalId }]
+    : r.status === 'LIVE_PROPOSED' ? [{ what: `go-live of ${what(r)}`, approvalId: r.liveApprovalId }]
+      : r.retireApprovalId ? [{ what: 'the shared campaign\'s low bids (the split\'s last step)', approvalId: r.retireApprovalId }] : [])
+}
+
+/** structure: AB-16's module (brain/structure-run.ts), loaded at the step. */
+export const structureStep: StepRunner = async (ctx) => {
+  const { structureDue } = await import('./structure-load.js')
+  const { runStructureOnce } = await import('./structure-run.js')
+  return structureStepOf(
+    (productId, market) => structureDue({ productId, market }),
+    (opts) => runStructureOnce(opts as Parameters<typeof runStructureOnce>[0]),
+    structureWaiting,
+  )(ctx)
+}
+
 // ── ⑤ money ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
 const HOLDING_BRAKES: readonly string[] = ['hold_raises', 'cut_bids', 'stop_weakest']
@@ -348,7 +414,7 @@ export const biddingStep: StepRunner = async (ctx) => {
   }
 }
 
-export const CYCLE_RUNNERS: CycleRunners = { state: stateStep, terms: termsStep, negatives: negativesStep, harvest: harvestStep, money: moneyStep, bids: bidsStep, hours: hoursStep, bidding: biddingStep }
+export const CYCLE_RUNNERS: CycleRunners = { state: stateStep, terms: termsStep, negatives: negativesStep, harvest: harvestStep, structure: structureStep, money: moneyStep, bids: bidsStep, hours: hoursStep, bidding: biddingStep }
 
 // ── The report's money ───────────────────────────────────────────────────────────────────────────────────────────
 

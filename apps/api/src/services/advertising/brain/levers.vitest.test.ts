@@ -36,7 +36,11 @@ describe('levels', () => {
     expect(levelRefusal('hours', 'PROPOSE')).toBeNull()
     expect(levelRefusal('hours', 'OFF')).toBeNull()
     expect(levelRefusal('hours', 'AUTO')).toMatch(/takes OFF or OBSERVE or PROPOSE today, not AUTO: .*never AUTO/)
-    for (const lever of BRAIN_LEVERS.filter((l) => l !== 'bids' && l !== 'budgets' && l !== 'portfolioCap' && l !== 'state' && l !== 'hours' && l !== 'negatives' && l !== 'harvest' && l !== 'biddingStrategy')) {
+    // AB-16 — the structure lever asks (each build, go-live and move waits for a person): PROPOSE yes, AUTO never.
+    expect(levelRefusal('structure', 'PROPOSE')).toBeNull()
+    expect(levelRefusal('structure', 'OFF')).toBeNull()
+    expect(levelRefusal('structure', 'AUTO')).toMatch(/takes OFF or OBSERVE or PROPOSE today, not AUTO: AB-16: .*never AUTO: the brain never creates, splits or moves a campaign without a person's approval/)
+    for (const lever of BRAIN_LEVERS.filter((l) => l !== 'bids' && l !== 'budgets' && l !== 'portfolioCap' && l !== 'state' && l !== 'hours' && l !== 'negatives' && l !== 'harvest' && l !== 'structure' && l !== 'biddingStrategy')) {
       expect(levelRefusal(lever, 'OFF')).toBeNull()
       expect(levelRefusal(lever, 'OBSERVE')).toBeNull()
       expect(levelRefusal(lever, 'AUTO')).toMatch(/takes OFF or OBSERVE today, not AUTO: .*AB-\d+/)

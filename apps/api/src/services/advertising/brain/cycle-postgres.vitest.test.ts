@@ -204,7 +204,7 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-14 — the product cycle (real Pos
     expect((await counts()).queued).toBe(0)
     // The report.
     expect(row.report).toMatchObject({ v: 1, productId: P, name: 'Jacket', market: 'IT', dataDay: day, status: 'DONE', changeSetId: changeSetIdOf(P, 'IT', day) })
-    expect(row.report.levers.map((l: Data) => l.step)).toEqual(['state', 'terms', 'negatives', 'harvest', 'money', 'bids', 'hours', 'bidding'])
+    expect(row.report.levers.map((l: Data) => l.step)).toEqual(['state', 'terms', 'negatives', 'harvest', 'structure', 'money', 'bids', 'hours', 'bidding'])
     // AB-17 — the bidding strategy in shadow (the state step's pauses are shadow too, so they hold nothing): c-it is floored
     // by a stop (a keyword's remembered bid) and held; c-two already runs down only, the thin product's choice. Nothing at Amazon.
     expect((await rows('SELECT "campaignId", action, outcome FROM "AdsBrainStrategyDecision" WHERE "workspaceId" = $1 ORDER BY "campaignId"', [W])).map((x) => [x.campaignId, x.action, x.outcome])).toEqual([['c-it', 'hold', 'held'], ['c-two', 'keep', 'none']])

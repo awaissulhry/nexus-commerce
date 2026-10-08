@@ -68,8 +68,8 @@ describe('the registry', () => {
     expect(Object.keys(COLUMN_CHECKS).sort()).toEqual([...settingColumns].sort())
   })
 
-  it('is honest: the bid fields (W1-5), the monthly cap, the stop bid and the actions per run (W1-6), the search-term thresholds and protection (W1-7), what Claude may do alone (W1-8) and what may run by rule a day (AA-W2-2b) have readers; every other field is stored and shown only', () => {
-    const read = ['target', 'targetAcosPct', 'monthlySpendCapCents', 'minBidCents', 'maxBidCents', 'maxChangePct', 'maxActionsPerRun', 'protect', 'harvest', 'negate', 'stop', 'claudeAutonomy', ...CLAUDE_DAILY_FIELDS]
+  it('is honest: the bid fields (W1-5), the monthly cap, the stop bid and the actions per run (W1-6), the search-term thresholds and protection (W1-7), what Claude may do alone (W1-8), what may run by rule a day (AA-W2-2b) and the explore budget (BB-20) have readers; every other field is stored and shown only', () => {
+    const read = ['target', 'targetAcosPct', 'monthlySpendCapCents', 'minBidCents', 'maxBidCents', 'maxChangePct', 'maxActionsPerRun', 'protect', 'harvest', 'negate', 'stop', 'claudeAutonomy', ...CLAUDE_DAILY_FIELDS, 'exploreBudgetCents']
     expect(STRATEGY_FIELDS.filter((f) => f.readBy.length).map((f) => f.key)).toEqual(read)
     expect(notReadYet()).toEqual(STRATEGY_FIELDS.map((f) => f.key).filter((key) => !read.includes(key)))
     expect(notReadYet()).toEqual(['goal', 'goalNote', 'reviewEveryDays'])
@@ -122,6 +122,13 @@ describe('the registry', () => {
     expect(STRATEGY_MONEY.claudeMaxBudgetIncreasePerDayCents).toBe(FIELDS.financialsAdspendView)
     expect(FIELD_BY_KEY.get('claudeMaxChangesPerDay')!.money).toBe(false)
     expect(FIELD_BY_KEY.get('claudeMaxRaisesPerDay')!.money).toBe(false)
+  })
+
+  it('BB-20 — the explore budget sits on the market row only, the lower one is safer, up from the budget in force (empty = the default) is a raise, it is money, and the bid brain reads it', () => {
+    expect(FIELD_BY_KEY.get('exploreBudgetCents')).toMatchObject({ columns: ['exploreBudgetCents'], levels: ['MARKET'], resolve: 'inherit', safer: 'lower', raise: 'explore', money: true, readBy: [READERS.bidBrainExplore] })
+    expect(COLUMN_CHECKS.exploreBudgetCents).toEqual({ kind: 'int', min: 0, max: 100_000 })
+    expect(STRATEGY_MONEY.exploreBudgetCents).toBe(FIELDS.financialsAdspendView)
+    expect(READERS.bidBrainExplore).toMatch(/empty = 200 cents in IT, 100 in DE, none elsewhere \(the Owner's pick\); 0 = off$/)
   })
 
   it('a group names the columns that make it set; a single field is its own column', () => {

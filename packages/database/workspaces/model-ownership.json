@@ -474,6 +474,7 @@
     "AdsBrainStateDecision",
     "AdsBrainNegative",
     "AdsBrainCycle",
+    "AdsBrainStructure",
     "AdsBrainStrategyDecision",
     "AdsBrainStrategyTest",
     "AdsBrainLeverClock",

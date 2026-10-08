@@ -6314,6 +6314,16 @@
     },
     "relations": []
   },
+  "AdsBrainStructure": {
+    "scalar": {},
+    "compound": {
+      "market_key": [
+        "marketplace",
+        "key"
+      ]
+    },
+    "relations": []
+  },
   "AdsBrainNegative": {
     "scalar": {},
     "compound": {

@@ -114,7 +114,8 @@ export interface TargetFacts {
   restore?: { layer: DecisionLayer; heldCents: number; beforeCents: number | null; retryDataDay?: string | null; foundCents?: number | null } | null
 }
 
-export type DecisionLayer = 'brake' | 'stop' | 'pin' | 'stock' | 'freeze' | 'phase' | 'min_bid_hour' | 'money' | 'restore' | 'goal' | 'band' | 'limit' | 'no_goal'
+/** BB-20 — `explore` / `revive`: an explore plan's pick replacing the goal's decision (explore.ts; NEXUS_BID_BRAIN_EXPLORE=on only). */
+export type DecisionLayer = 'brake' | 'stop' | 'pin' | 'stock' | 'freeze' | 'phase' | 'min_bid_hour' | 'money' | 'restore' | 'goal' | 'band' | 'limit' | 'no_goal' | 'explore' | 'revive'
 
 /** BB-9 — a share floor (share of voice, rank, coverage) may reach the bid of this × the band top (design §2). */
 export const SHARE_FLOOR_HI_FACTOR = 1.25

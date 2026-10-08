@@ -6911,6 +6911,10 @@
       "fields": []
     },
     {
+      "name": "AdsBrainStructure",
+      "fields": []
+    },
+    {
       "name": "AdsBrainStrategyDecision",
       "fields": []
     },
