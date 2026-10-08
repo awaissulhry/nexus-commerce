@@ -9783,6 +9783,32 @@ CREATE TABLE "AdsBrainNegative" (
 );
 
 -- CreateTable
+CREATE TABLE "AdsBrainStateDecision" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "runId" TEXT NOT NULL,
+    "mode" TEXT NOT NULL,
+    "kind" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "campaignId" TEXT NOT NULL,
+    "level" TEXT NOT NULL,
+    "action" TEXT NOT NULL,
+    "outcome" TEXT NOT NULL,
+    "cause" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "expectedEndAt" TIMESTAMP(3),
+    "horizonHours" INTEGER,
+    "approvalId" TEXT,
+    "decisionHash" TEXT NOT NULL,
+    "decision" JSONB NOT NULL,
+    "why" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "AdsBrainStateDecision_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AdWriteRefusal" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -15645,6 +15671,24 @@ CREATE INDEX "AdsBrainNegative_workspaceId_idx" ON "AdsBrainNegative"("workspace
 
 -- CreateIndex
 CREATE UNIQUE INDEX "AdsBrainNegative_workspaceId_productId_marketplace_key_key" ON "AdsBrainNegative"("workspaceId", "productId", "marketplace", "key");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainStateDecision_campaignId_createdAt_idx" ON "AdsBrainStateDecision"("campaignId", "createdAt" DESC);
+
+-- CreateIndex
+CREATE INDEX "AdsBrainStateDecision_productId_marketplace_createdAt_idx" ON "AdsBrainStateDecision"("productId", "marketplace", "createdAt" DESC);
+
+-- CreateIndex
+CREATE INDEX "AdsBrainStateDecision_marketplace_createdAt_idx" ON "AdsBrainStateDecision"("marketplace", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainStateDecision_runId_idx" ON "AdsBrainStateDecision"("runId");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainStateDecision_createdAt_idx" ON "AdsBrainStateDecision"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainStateDecision_workspaceId_idx" ON "AdsBrainStateDecision"("workspaceId");
 
 -- CreateIndex
 CREATE INDEX "AdWriteRefusal_deniedAt_createdAt_idx" ON "AdWriteRefusal"("deniedAt", "createdAt");
