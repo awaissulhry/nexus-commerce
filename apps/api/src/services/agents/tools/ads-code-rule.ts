@@ -9,7 +9,7 @@
  *   the strategy raised          set-ads-strategy (a raise), set-ads-playbook (what adds spend), an apply-ads-playbook
  *                                phase switch that raises
  *   someone else's pause lifted  enable-ads with includePeoplesPauses (a person, Seller Central, an unknown writer, a
- *                                rule now off)
+ *                                rule now off), set-ads-brain op leave resuming the brain's own pauses (the brain going off)
  *
  * ONE BRAIN AB-16 (D1 = B, Owner 2026-10-08) — one exception to "a new structure going live": a campaign the ads brain
  * built for an enrolled product (its own approved build, brain/structure-golive.ts), going live INSIDE its caps (its first
@@ -49,6 +49,8 @@ export const CODE_RULE = {
   'set-bid-brain-enrollment: live': true,
   // ONE BRAIN — set-ads-brain: a lever of a product's brain to AUTO (or a campaign under the bid brain), whichever op does it.
   'set-ads-brain: a lever to AUTO': true,
+  // Batch 2 fix — set-ads-brain op leave lifting the brain's own pauses: an automation's pause lifted (the brain going off).
+  'set-ads-brain: leave lifts the brain\'s pauses': true,
   // ── Day-to-day: listed in raises, warned, a normal approval ──
   // ONE BRAIN AB-16 (D1 = B) — a brain-built campaign of an enrolled product going live inside its caps (goLiveDoor).
   'brain structure go-live: inside an enrolled product, inside caps': false,

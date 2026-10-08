@@ -23,7 +23,12 @@
  *   leave      the product out of the brain: the enrollment goes, its levels and values end (every lever back to OFF:
  *              today's engines run it), the Owner's locks and exclusions stay. Its own campaigns the bid brain runs LIVE or
  *              HELD are given back (default: their bids and placements as they were when they went LIVE — the bid brain's
- *              own give-back), taken back to shadow with their bids where they are, or kept running one by one.
+ *              own give-back), taken back to shadow with their bids where they are, or kept running one by one. Batch 2
+ *              fix — what the brain still holds goes with it: every request it asked for that still waits for a person
+ *              (its budgets, cap, pauses, negatives, harvests, painted hourly plans) is withdrawn in the same transaction (an
+ *              approved one would run as the approver after the product left), and each campaign its own pause holds is
+ *              resumed after the commit, as the approver (`pauses`: resume, the default — lifting an automation's pause is a
+ *              big door under code rule A, so the approver's code; or keep: they stay paused, each named, a normal approval).
  *
  *   big door   code rule A: a change that takes any lever to AUTO — on the product or one of its own campaigns, by a level,
  *              an unlock, an include, a reset or an enrollment (an adopted AUTO included) — or that puts a campaign under
@@ -60,7 +65,7 @@ import {
   describeProvenance, EXCLUDE_KEY, overrideIdentity, resolveBrainSettings, type BrainSettings, type LeverSettings, type OverrideInput, type OverrideKind,
   type OverrideRow, type Provenance,
 } from './settings.js'
-import { newestStateDecisions } from './state-load.js'
+import { brainPausesInForce } from './state-load.js'
 
 export const CONTROL_TOOL = 'set-ads-brain'
 export const CONTROL_OPS = ['enroll', 'set-level', 'lock', 'unlock', 'exclude', 'include', 'set-value', 'leave'] as const
@@ -68,6 +73,11 @@ export type ControlOp = (typeof CONTROL_OPS)[number]
 /** op leave — what happens to the product's own campaigns the bid brain runs LIVE or HELD. */
 export const LEAVE_BIDS = ['give-back', 'shadow', 'keep'] as const
 export type LeaveBids = (typeof LEAVE_BIDS)[number]
+/** op leave — what happens to the campaigns the brain's own pause holds: resumed as the approver, or kept paused. */
+export const LEAVE_PAUSES = ['resume', 'keep'] as const
+export type LeavePauses = (typeof LEAVE_PAUSES)[number]
+/** The reason a request the brain asked for carries when leaving withdraws it (approval.tools.ts reads `withdrawn:`). */
+export const LEAVE_WITHDRAWN = 'withdrawn: the product left the ads brain (set-ads-brain op leave)'
 /** MCP.12 — the words every tool uses for a product that is deleted or not in this business. */
 export const PRODUCT_NOT_FOUND = 'Product not found'
 
@@ -85,6 +95,8 @@ export interface ControlInput {
   value?: unknown
   reset?: boolean | null
   bids?: LeaveBids | null
+  /** leave: the campaigns the brain's own pause holds — resumed (default) or kept paused. */
+  pauses?: LeavePauses | null
 }
 
 type Effective = LeverSettings['effective']
@@ -143,7 +155,11 @@ export interface ControlPreview {
     giveBack: Array<{ campaignId: string; name: string; keywordBids: number; adGroupBids: number; placements: boolean; raises: number }>
     toShadow: Array<{ campaignId: string; name: string; stopMemory: string | null }>
     keepLive: Array<{ campaignId: string; name: string; mode: string }>
-    brainPauses: Array<{ campaignId: string; name: string; since: string | null }>
+    /** The campaigns the brain's own pause holds now, each resumed (`pauses: resume`) or kept paused, with the pause's causes. */
+    pauses: LeavePauses
+    brainPauses: Array<{ campaignId: string; name: string; since: string | null; causes: string[]; expectedEnd: string | null; resumes: boolean }>
+    /** The requests the brain asked for that still wait for a person: withdrawn by leaving. */
+    withdraws: Array<{ approvalId: string; tool: string; lever: string; requestedAt: string }>
   }
 }
 
@@ -157,7 +173,12 @@ interface Exec {
   after?: { open: boolean; value: unknown }
   enrollLevels?: Array<{ lever: BrainLever; level: BrainLevel }>
   enrollEnds?: string[]
-  leave?: { ends: string[]; moves: Array<{ campaignId: string; op: 'shadow' | 'give-back' }>; productLevels: Partial<Record<BrainLever, BrainLevel>> }
+  leave?: {
+    ends: string[]; moves: Array<{ campaignId: string; op: 'shadow' | 'give-back' }>; productLevels: Partial<Record<BrainLever, BrainLevel>>
+    /** Batch 2 fix — the brain's waiting requests withdrawn in the transaction, and the pauses resumed after the commit. */
+    withdraws: string[]
+    resumes: Array<{ campaignId: string; statusBefore: string }>
+  }
 }
 
 export type ControlOutcome = { ok: true; preview: ControlPreview; exec: Exec } | { ok: false; refusal: string }
@@ -255,7 +276,7 @@ const AUTO_RAISES: Partial<Record<BrainLever, string>> = {
  * (false → true), a value change of an enum, or never. Every setting is rated (a test holds it); one a later PR adds and
  * forgets is said as not rated, never as safe.
  */
-type Rating = { when: 'up' | 'down' | 'off' | 'never' | 'cleared-or-earlier' | { from: string; to: string }; words: string }
+type Rating = { when: 'up' | 'up-or-cleared' | 'down' | 'off' | 'never' | 'cleared-or-earlier' | { from: string; to: string }; words: string }
 export const SPEND_RATINGS: Partial<Record<BrainSetting, Rating>> = {
   negativesPerDay: { when: 'down', words: 'fewer new negatives a day: wasted clicks may run longer' },
   negativesPerEntityWarn: { when: 'never', words: 'a warning level only' },
@@ -279,6 +300,8 @@ export const SPEND_RATINGS: Partial<Record<BrainSetting, Rating>> = {
   portfolioCapOn: { when: 'off', words: 'the Amazon portfolio cap — the only hard limit Amazon enforces — is no longer set by the brain' },
   portfolioCapPct: { when: 'up', words: 'a higher Amazon portfolio cap (the hard backstop)' },
   portfolioCapCents: { when: 'up', words: 'a higher Amazon portfolio cap (the hard backstop)' },
+  // Empty means the server's limit, which may be higher than the value it replaces: a reset is said as a possible raise too.
+  portfolioCapLimitCents: { when: 'up-or-cleared', words: 'a higher limit for this product\'s Amazon portfolio caps: a larger cap may be asked for, written by the brain or set by a person (empty = the server\'s limit, which may be higher)' },
   ownPortfolio: { when: 'never', words: 'where the brain proposes to put the product\'s campaigns' },
   strategySwitchMode: { when: { from: 'ALWAYS_PROPOSE', to: 'PROPOSE_THEN_AUTO' }, words: 'bidding-strategy switches may run alone after 30 days (up and down lets Amazon raise a bid up to +100 %)' },
   pauseMinDays: { when: 'never', words: 'a shorter stop stays on low bids instead of a pause' },
@@ -295,6 +318,7 @@ export function settingRaise(key: string, from: SettingValue, to: SettingValue):
   const num = (v: SettingValue) => (typeof v === 'number' ? v : null)
   let raises = false
   if (r.when === 'up') raises = num(from) == null || num(to) == null ? from !== to && to !== null : num(to)! > num(from)!
+  else if (r.when === 'up-or-cleared') raises = from !== to && (num(from) == null || num(to) == null || num(to)! > num(from)!)
   else if (r.when === 'down') raises = num(from) != null && num(to) != null && num(to)! < num(from)!
   else if (r.when === 'off') raises = from === true && to === false
   else if (r.when === 'cleared-or-earlier') raises = typeof from === 'string' && (to === null || (typeof to === 'string' && to < from))
@@ -366,6 +390,7 @@ export function shapeRefusal(input: ControlInput): string | null {
   if ((op === 'enroll' || op === 'leave') && has(input.campaignId)) return `${op} is for the whole product in the market: name no campaignId (exclude keeps one campaign out of the brain; set-level, lock and set-value take one campaign)`
   if (op !== 'enroll' && input.levels && Object.keys(input.levels).length) return 'levels are the starting levels of op enroll; set-level sets one lever'
   if (op !== 'leave' && has(input.bids)) return 'bids says what op leave does with the campaigns the bid brain runs; it is not an argument of this op'
+  if (op !== 'leave' && has(input.pauses)) return 'pauses says what op leave does with the campaigns the brain\'s own pause holds; it is not an argument of this op'
   if (op !== 'set-level' && op !== 'set-value' && input.reset) return `reset ends a level (set-level) or a value (set-value); ${op === 'lock' ? 'unlock ends a lock' : op === 'exclude' ? 'include ends an exclusion' : `op ${op} takes no reset`}`
   switch (op) {
     case 'set-level':
@@ -763,7 +788,7 @@ async function previewEnroll(ctx: Ctx): Promise<ControlOutcome> {
       campaigns, notReached: campaigns.filter((c) => !c.reached).map((c) => ({ campaignId: c.campaignId, name: c.name, why: c.why })),
       turnsAuto, starts, raises, warnings, needsCode, bigDoor, ceiling: ctx.ceiling, basis, version: null,
       reachNote: 'Nexus only: enrolling moves no campaign and sends nothing to Amazon; the brain acts in its own runs, at each lever\'s level.',
-      undoNote: 'undo-change asks set-ads-brain op leave keeping the bid brain\'s campaigns as they are (bids: keep): the product leaves the brain again; what the brain did meanwhile stays.',
+      undoNote: 'undo-change asks set-ads-brain op leave keeping the bid brain\'s campaigns and the brain\'s pauses as they are (bids: keep, pauses: keep): the product leaves the brain again; what the brain did meanwhile stays.',
       enroll: { adoptedBids: adopted, adoptedLive: adoptedLive.map((c) => c.campaignId), keptInShadow: keptInShadow.map((c) => c.campaignId), levels: Object.fromEntries(toSet.map((x) => [x.lever, x.level])), ends: [...leftoverIds] },
     },
   }
@@ -772,6 +797,31 @@ async function previewEnroll(ctx: Ctx): Promise<ControlOutcome> {
 const refusalList = (r: readonly string[]) => (r.length === 1 ? `Not queued: ${r[0]}` : `Not queued — ${r.length} refusals: ${r.map((x, i) => `(${i + 1}) ${x}`).join(' ')}`)
 
 // ── leave ──────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Batch 2 fix — the requests the product's brain asked for in this market that still wait for a person: its money asks
+ * (budgets, cap), its state, negatives and harvest requests (a harvest's undo too) and its painted hourly plans. Read from
+ * each lever's own log (they hold the approval ids), then the approvals still pending.
+ */
+export async function brainRequestsWaiting(productId: string, market: string): Promise<Array<{ approvalId: string; tool: string; lever: string; requestedAt: string }>> {
+  const where = { productId, marketplace: market }
+  const [asks, negatives, states, harvests, hours] = await Promise.all([
+    prisma.adsBrainAsk.findMany({ where: { ...where, approvalId: { not: null } }, select: { approvalId: true, kind: true } }),
+    prisma.adsBrainNegative.findMany({ where: { ...where, approvalId: { not: null } }, select: { approvalId: true } }),
+    prisma.adsBrainStateDecision.findMany({ where: { ...where, approvalId: { not: null } }, select: { approvalId: true } }),
+    prisma.adsBrainHarvest.findMany({ where: { ...where, OR: [{ approvalId: { not: null } }, { undoApprovalId: { not: null } }] }, select: { approvalId: true, undoApprovalId: true } }),
+    prisma.adsBrainHourProposal.findMany({ where: { ...where, approvalId: { not: null } }, select: { approvalId: true } }),
+  ])
+  const lever = new Map<string, string>()
+  for (const a of asks) lever.set(a.approvalId!, a.kind === 'portfolioCap' ? 'portfolioCap' : 'budgets')
+  for (const n of negatives) lever.set(n.approvalId!, 'negatives')
+  for (const s of states) lever.set(s.approvalId!, 'state')
+  for (const h of harvests) for (const id of [h.approvalId, h.undoApprovalId]) if (id) lever.set(id, 'harvest')
+  for (const h of hours) lever.set(h.approvalId!, 'hours')
+  if (!lever.size) return []
+  const pending = await prisma.agentApproval.findMany({ where: { id: { in: [...lever.keys()] }, status: 'pending' }, select: { id: true, toolName: true, requestedAt: true }, orderBy: { requestedAt: 'asc' } })
+  return pending.map((a) => ({ approvalId: a.id, tool: a.toolName, lever: lever.get(a.id)!, requestedAt: a.requestedAt.toISOString() }))
+}
 
 async function previewLeave(ctx: Ctx): Promise<ControlOutcome> {
   const { root, market, input } = ctx
@@ -812,11 +862,16 @@ async function previewLeave(ctx: Ctx): Promise<ControlOutcome> {
   const own = ctx.own.map((c) => ({ campaignId: c.campaignId, name: c.name }))
   const released = releasedLevers(b, a, [{ campaignId: null, name: 'the product' }, ...own])
 
-  // What the brain still holds that leaving does not give back: its pauses in force, and its requests waiting.
-  const newest = await newestStateDecisions(ctx.own.map((c) => c.campaignId))
-  const brainPauses = [...newest.values()].filter((r) => !!r.decision.memory).map((r) => ({ campaignId: r.campaignId, name: ctx.own.find((c) => c.campaignId === r.campaignId)?.name ?? r.campaignId, since: r.decision.memory?.pausedAt ? String(r.decision.memory.pausedAt) : null }))
-  const waitingState = [...newest.values()].filter((r) => r.outcome === 'asked' || r.outcome === 'waiting')
-  const waitingPlans = await prisma.adsBrainHourProposal.count({ where: { productId: root, marketplace: market, status: 'PROPOSED' } })
+  // Batch 2 fix — what the brain still holds goes with it: its pauses in force (resumed, or kept with their names), and
+  // every request it asked for that still waits for a person (withdrawn: approved later, it would run without the brain).
+  const pauses: LeavePauses = input.pauses ?? 'resume'
+  const inForce = await brainPausesInForce(ctx.own.map((c) => c.campaignId))
+  const brainPauses = inForce.map((p) => ({
+    campaignId: p.campaignId, name: p.name, since: p.memory.pausedAt ? String(p.memory.pausedAt) : null,
+    causes: [...(p.memory.causes ?? [])].map(String), expectedEnd: p.memory.expectedEndAt ?? null, resumes: pauses === 'resume',
+  }))
+  const resumes = pauses === 'resume' ? inForce.map((p) => ({ campaignId: p.campaignId, statusBefore: p.memory.statusBefore ?? 'ENABLED' })) : []
+  const withdraws = await brainRequestsWaiting(root, market)
 
   const raises: string[] = []
   const gbRaises = giveBack.reduce((n, g) => n + g.raises, 0)
@@ -829,9 +884,13 @@ async function previewLeave(ctx: Ctx): Promise<ControlOutcome> {
   if (running.length && bids !== 'keep') warnings.push(`${names(running)} ${running.length === 1 ? 'leaves' : 'leave'} the bid brain (${bids === 'give-back' ? 'bids and placements back as they were when each went LIVE' : 'bids stay where they are'}): today's engines (auto-bid, rules) may move ${running.length === 1 ? 'its' : 'their'} keyword bids again.`)
   const sharedLive = ctx.shared.filter((c) => isOwnedMode(c.mode))
   if (sharedLive.length) warnings.push(`${names(sharedLive)} ${sharedLive.length === 1 ? 'is a shared campaign' : 'are shared campaigns'} the bid brain runs by a per-campaign enrollment: leaving does not move ${sharedLive.length === 1 ? 'it' : 'them'} (set-bid-brain-enrollment does).`)
-  if (brainPauses.length) warnings.push(`${names(brainPauses)} ${brainPauses.length === 1 ? 'stays' : 'stay'} paused: the brain paused ${brainPauses.length === 1 ? 'it' : 'them'} for a long stop and no longer resumes ${brainPauses.length === 1 ? 'it' : 'them'} once the product leaves — enable-ads switches ${brainPauses.length === 1 ? 'it' : 'them'} on (an automation's pause: includePeoplesPauses, with the approver's code).`)
-  if (waitingState.length) warnings.push(`${plural(waitingState.length, 'request')} the brain asked for still ${waitingState.length === 1 ? 'waits' : 'wait'} in the Approvals page (${waitingState.map((r) => r.approvalId).filter(Boolean).join(', ')}): ${waitingState.length === 1 ? 'it runs' : 'each runs'} only if a person approves it.`)
-  if (waitingPlans) warnings.push(`${plural(waitingPlans, 'painted hourly plan')} waiting for approval no longer ${waitingPlans === 1 ? 'applies' : 'apply'}: apply-brain-hourly-plan refuses ${waitingPlans === 1 ? 'it' : 'them'} once the hours lever is off.`)
+  const pauseCauses = (p: (typeof brainPauses)[number]) => `${p.name}: paused${p.since ? ` since ${p.since.slice(0, 10)}` : ''} for ${p.causes.length ? p.causes.join(', ') : 'a stop'}${p.expectedEnd ? `, expected to end ${p.expectedEnd.slice(0, 10)}` : ''}`
+  if (brainPauses.length && pauses === 'resume') {
+    raises.push(`the brain's own ${brainPauses.length === 1 ? 'pause' : 'pauses'} lifted on ${names(brainPauses)} (spend restarts), as the person who approves it`)
+    warnings.push(`${names(brainPauses)} ${brainPauses.length === 1 ? 'is' : 'are'} resumed after the product leaves (${brainPauses.map(pauseCauses).join('; ')}): the brain would no longer resume ${brainPauses.length === 1 ? 'it' : 'them'}. If a stop still holds (stock, a long stop), leave with pauses: "keep" — today's engines (the retail guard) then decide.`)
+  }
+  if (brainPauses.length && pauses === 'keep') warnings.push(`${names(brainPauses)} ${brainPauses.length === 1 ? 'stays' : 'stay'} paused (${brainPauses.map(pauseCauses).join('; ')}): the brain paused ${brainPauses.length === 1 ? 'it' : 'them'} for a stop and no longer resumes ${brainPauses.length === 1 ? 'it' : 'them'} once the product leaves — a person enables ${brainPauses.length === 1 ? 'it' : 'them'} in the campaign manager, or leaves with pauses: "resume".`)
+  if (withdraws.length) warnings.push(`${plural(withdraws.length, 'request')} the brain asked for still ${withdraws.length === 1 ? 'waits' : 'wait'} for a person (${withdraws.map((w) => `${w.tool} ${w.approvalId}`).join(', ')}): withdrawn as the product leaves — approved later, ${withdraws.length === 1 ? 'it' : 'each'} would run as the approver without the brain.`)
   if (keeps.length) warnings.push(`The Owner's ${plural(keeps.length, 'lock or exclusion', 'locks and exclusions')} stay${keeps.length === 1 ? 's' : ''} (${keeps.map((o) => `${o.kind === 'EXCLUDE' ? 'exclusion' : `lock of ${o.key}${o.ref ? ` (${o.ref})` : ''}`}${o.campaignId ? ` on campaign ${o.campaignId}` : ''}`).join(', ')}): they still keep the bid brain and the stop recipe off what they hold, and apply again if the product is enrolled later; unlock and include end them.`)
 
   const changes: Record<string, { from: unknown; to: unknown }> = {}
@@ -839,33 +898,41 @@ async function previewLeave(ctx: Ctx): Promise<ControlOutcome> {
   for (const l of BRAIN_LEVERS) groups.set(pb.levers[l].effective, [...(groups.get(pb.levers[l].effective) ?? []), l])
   for (const [e, ls] of groups) changes[ls.length === BRAIN_LEVERS.length ? 'every lever' : ls.join(', ')] = { from: effectiveWord(e as Effective), to: effectiveWord('NOT_ENROLLED') }
   if (moves.length) changes['bid brain'] = { from: `${plural(running.length, 'campaign')} LIVE or HELD`, to: bids === 'give-back' ? 'shadow, bids given back' : 'shadow, bids where they are' }
+  if (withdraws.length) changes['brain requests waiting'] = { from: plural(withdraws.length, 'request'), to: 'withdrawn' }
+  if (resumes.length) changes['brain pauses'] = { from: `${plural(resumes.length, 'campaign')} PAUSED by the brain`, to: 'ENABLED (resumed as the approver)' }
   const campaigns: CampaignReach[] = [...ctx.own, ...ctx.shared].map((c) => {
     const changes = leverMoves(BRAIN_LEVERS, b(c.campaignId), a(c.campaignId))
     const m = moves.find((x) => x.campaignId === c.campaignId)
     if (m) changes.push({ what: 'bid brain', from: c.mode ?? 'SHADOW', to: m.op === 'give-back' ? 'SHADOW (bids given back)' : 'SHADOW (bids stay)' })
     if (c.owner === 'own' && isOwnedMode(c.mode) && bids === 'keep') changes.push({ what: 'bid brain', from: c.mode!, to: `${c.mode} (kept, one by one)` })
+    const r = resumes.find((x) => x.campaignId === c.campaignId)
+    if (r) changes.push({ what: 'state', from: 'PAUSED (the brain\'s pause)', to: `${r.statusBefore} (resumed)` })
     return { campaignId: c.campaignId, name: c.name, owner: c.owner, status: c.status, changes, reached: c.owner === 'own', why: c.owner === 'shared' ? 'a shared campaign: no product\'s brain owned its levers' : 'its own campaign' }
   })
-  const summary = `Takes ${ctx.name} (${ctx.sku}) out of the brain for ${market}: every lever back to OFF (today's engines run it), ${plural(ends.length, 'level or value', 'levels and values')} of its brain ended${keeps.length ? `, the Owner's ${plural(keeps.length, 'lock or exclusion', 'locks and exclusions')} kept` : ''}.${running.length ? ` ${bids === 'keep' ? `The bid brain keeps running ${plural(running.length, 'campaign')} one by one.` : `${plural(running.length, 'campaign')} the bid brain runs ${running.length === 1 ? 'goes' : 'go'} back to shadow${bids === 'give-back' ? ', bids and placements given back as they were when each went LIVE' : ', bids where they are'}.`}` : ''}`
-  const basis = hash(['leave', ctx.enrollment.version, ends.map((o) => o.id), keeps.map((o) => o.id), running.map((c) => [c.campaignId, c.mode]), moves, bids])
+  const summary = `Takes ${ctx.name} (${ctx.sku}) out of the brain for ${market}: every lever back to OFF (today's engines run it), ${plural(ends.length, 'level or value', 'levels and values')} of its brain ended${keeps.length ? `, the Owner's ${plural(keeps.length, 'lock or exclusion', 'locks and exclusions')} kept` : ''}.${running.length ? ` ${bids === 'keep' ? `The bid brain keeps running ${plural(running.length, 'campaign')} one by one.` : `${plural(running.length, 'campaign')} the bid brain runs ${running.length === 1 ? 'goes' : 'go'} back to shadow${bids === 'give-back' ? ', bids and placements given back as they were when each went LIVE' : ', bids where they are'}.`}` : ''}${withdraws.length ? ` ${plural(withdraws.length, 'request')} the brain asked for ${withdraws.length === 1 ? 'is' : 'are'} withdrawn.` : ''}${brainPauses.length ? ` ${plural(brainPauses.length, 'campaign')} the brain paused ${pauses === 'resume' ? `${brainPauses.length === 1 ? 'is' : 'are'} resumed` : `${brainPauses.length === 1 ? 'stays' : 'stay'} paused`}.` : ''}`
+  // The pauses it resumes are part of what is approved (spend restarts); the requests it withdraws are whichever still wait.
+  const basis = hash(['leave', ctx.enrollment.version, ends.map((o) => o.id), keeps.map((o) => o.id), running.map((c) => [c.campaignId, c.mode]), moves, bids, resumes])
+  // Code rule A — lifting a pause an automation made (the brain is one, now going off) is a big door: the approver's code.
+  const bigDoor = resumes.length ? [`lifts the brain's own ${resumes.length === 1 ? 'pause' : 'pauses'} on ${names(brainPauses)} (an automation's pause, the brain leaving)`] : []
   return {
     ok: true,
-    exec: { root, market, leave: { ends: ends.map((o) => o.id), moves, productLevels } },
+    exec: { root, market, leave: { ends: ends.map((o) => o.id), moves, productLevels, withdraws: withdraws.map((w) => w.approvalId), resumes } },
     preview: {
       action: CONTROL_TOOL, op: 'leave', summary, product: ctx.name, sku: ctx.sku,
       brain: { productId: root, market, enrolled: true, version: ctx.enrollment.version }, scope: { level: 'product' },
-      changes, totals: { campaigns: campaigns.length, endsChoices: ends.length, keepsChoices: keeps.length, givenBack: giveBack.length, toShadow: toShadow.length, keptLive: bids === 'keep' ? running.length : 0 },
+      changes, totals: { campaigns: campaigns.length, endsChoices: ends.length, keepsChoices: keeps.length, givenBack: giveBack.length, toShadow: toShadow.length, keptLive: bids === 'keep' ? running.length : 0, withdrawn: withdraws.length, resumed: resumes.length },
       campaigns, notReached: campaigns.filter((c) => !c.reached).map((c) => ({ campaignId: c.campaignId, name: c.name, why: c.why })),
       turnsAuto: [], starts: [`every lever: ${effectiveWord('NOT_ENROLLED')} — the brain leaves the product; nothing of it decides, logs, asks or writes, and today's engines run every lever`],
-      raises, warnings, needsCode: false, bigDoor: [], ceiling: ctx.ceiling, basis, version: ctx.enrollment.version,
-      reachNote: moves.length
-        ? `It records the change in Nexus, then ${bids === 'give-back' ? 'puts back each campaign\'s bids and placements at Amazon' : 'gives back at Amazon what a stop saved'}, as the approver (the write gate judges each write).`
-        : 'Nexus only: nothing is sent to Amazon by this change.',
-      undoNote: `undo-change asks set-ads-brain op enroll again with the product's earlier lever levels (the bids lever as its campaigns hold it then): a request of its own, a big door if any lever is AUTO; what was given back at Amazon stays.`,
+      raises, warnings, needsCode: bigDoor.length > 0, bigDoor, ceiling: ctx.ceiling, basis, version: ctx.enrollment.version,
+      reachNote: moves.length || resumes.length
+        ? `It records the change in Nexus${withdraws.length ? ' and withdraws the brain\'s waiting requests' : ''}, then ${[moves.length ? (bids === 'give-back' ? 'puts back each campaign\'s bids and placements at Amazon' : 'gives back at Amazon what a stop saved') : '', resumes.length ? `resumes ${plural(resumes.length, 'campaign')} the brain paused` : ''].filter(Boolean).join(' and ')}, as the approver (the write gate judges each write).`
+        : `Nexus only: nothing is sent to Amazon by this change${withdraws.length ? ' (the brain\'s waiting requests are withdrawn in Nexus)' : ''}.`,
+      undoNote: `undo-change asks set-ads-brain op enroll again with the product's earlier lever levels (the bids lever as its campaigns hold it then): a request of its own, a big door if any lever is AUTO; what was given back at Amazon stays, resumed campaigns stay on and withdrawn requests stay withdrawn.`,
       leave: {
         bids, ends: ends.map((o) => ({ id: o.id, scope: o.scope, campaignId: o.campaignId, kind: o.kind, key: o.key, value: o.value })),
         keeps: keeps.map((o) => ({ id: o.id, scope: o.scope, campaignId: o.campaignId, kind: o.kind, key: o.key, ref: o.ref })),
-        giveBack, toShadow, keepLive: bids === 'keep' ? running.map((c) => ({ campaignId: c.campaignId, name: c.name, mode: c.mode! })) : [], brainPauses,
+        giveBack, toShadow, keepLive: bids === 'keep' ? running.map((c) => ({ campaignId: c.campaignId, name: c.name, mode: c.mode! })) : [],
+        pauses, brainPauses, withdraws,
       },
     },
   }
@@ -892,6 +959,9 @@ export type ControlRunResult =
     /** op leave: the campaigns whose bids and placements the tool gives back, and those whose stop memory it gives back. */
     giveBack: string[]
     toShadow: string[]
+    /** op leave (batch 2 fix): the campaigns the brain paused that the tool resumes after the commit, and the requests withdrawn. */
+    resumes?: Array<{ campaignId: string; statusBefore: string }>
+    withdrawn?: string[]
   }
 
 /** Run one approved op on the basis it was approved on. All or nothing (one Serializable transaction). */
@@ -953,6 +1023,7 @@ export async function runControl(input: ControlInput, args: ControlRunArgs): Pro
   }
   // leave
   const leave = exec.leave!
+  let withdrawn = 0
   try {
     await inDatabaseTransaction(prisma, async () => {
       const row = await prisma.adsBrainEnrollment.findFirst({ where: { productId: exec.root, marketplace: exec.market }, select: { id: true, version: true } })
@@ -966,17 +1037,24 @@ export async function runControl(input: ControlInput, args: ControlRunArgs): Pro
       for (const m of leave.moves) {
         await setEnrollment({ campaignId: m.campaignId, marketplace: exec.market, op: m.op, by: args.by, reason: `the product left the brain — ${args.reason ?? 'set-ads-brain op leave'}`, now })
       }
+      // Batch 2 fix — the brain's requests that still wait are withdrawn with it (one a person decided meanwhile is his).
+      if (leave.withdraws.length) {
+        const out = await prisma.agentApproval.updateMany({ where: { id: { in: leave.withdraws }, status: 'pending' }, data: { status: 'rejected', reason: LEAVE_WITHDRAWN, decidedAt: now } })
+        withdrawn = out.count
+      }
     }, { isolationLevel: 'Serializable' })
   } catch (e) {
     if (e instanceof BrainRefusal) return { ok: false, refusal: e.message }
     throw e
   }
   forgetLeverOwners()
-  logger.info('[ads-brain] product left the brain', { productId: exec.root, market: exec.market, by: args.by, ended: leave.ends.length, moved: leave.moves.length })
+  logger.info('[ads-brain] product left the brain', { productId: exec.root, market: exec.market, by: args.by, ended: leave.ends.length, moved: leave.moves.length, withdrawn, resumes: leave.resumes.length })
   return {
     ok: true, preview, version: null,
     giveBack: leave.moves.filter((m) => m.op === 'give-back').map((m) => m.campaignId),
     toShadow: leave.moves.filter((m) => m.op === 'shadow').map((m) => m.campaignId),
+    resumes: leave.resumes,
+    withdrawn: withdrawn ? leave.withdraws : [],
     before: { ...identity, enrolled: true, version: preview.version, levels: leave.productLevels, ended: leave.ends },
     after: { ...identity, enrolled: false },
   }
@@ -1011,7 +1089,7 @@ export function controlUndoRequest(before: Record<string, unknown>): { args: Rec
   const op = String(before.op ?? '')
   const base = { productId: String(before.productId ?? ''), market: String(before.market ?? ''), why: 'undo of an earlier set-ads-brain change' }
   if (!base.productId || !base.market) return { refusal: 'This change does not record the product and market it changed.' }
-  if (op === 'enroll') return { args: { ...base, op: 'leave', bids: 'keep' } }
+  if (op === 'enroll') return { args: { ...base, op: 'leave', bids: 'keep', pauses: 'keep' } }
   if (op === 'leave') {
     const levels = Object.fromEntries(Object.entries((before.levels ?? {}) as Record<string, unknown>).filter(([l, v]) => l !== 'bids' && isLever(l) && isLevel(v)))
     return { args: { ...base, op: 'enroll', ...(Object.keys(levels).length ? { levels } : {}) } }

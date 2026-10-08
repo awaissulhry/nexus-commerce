@@ -170,6 +170,15 @@ describe('AB-11 — the sources: negative exact in the same change set; the Owne
     expect(plans[0].why).toMatch(/negateAtSource off/)
   })
 
+  it('batch 2 fix — the best-practice pairing never overrides the Owner: his negateAtSource off wins in the whole decision (the keyword alone, every source kept, said); on, the source is negated exact', () => {
+    const off = decideHarvests([{ ...TOURING(), stored: { adGroupId: 'g-exact', negateAtSource: false, grain: 'market', own: true } }], productFacts(), NOW, 60)[0]
+    expect(off).toMatchObject({ outcome: 'pair', destination: expect.objectContaining({ adGroupId: 'g-exact', how: 'stored' }) })
+    expect(off.sources.map((x) => x.action)).toEqual(['kept', 'kept'])
+    expect(off.sources.every((x) => /negateAtSource off/.test(x.why))).toBe(true)
+    const on = decideHarvests([{ ...TOURING(), stored: { adGroupId: 'g-exact', negateAtSource: true, grain: 'market', own: true } }], productFacts(), NOW, 60)[0]
+    expect(on.sources.map((x) => [x.adGroupId, x.action])).toEqual([['g-auto', 'negate'], ['g-phrase', 'negate']])
+  })
+
   it('a protected term can never be negated anywhere: the pair could never be whole — held, with the manual route', () => {
     const protectedTerm = candidate('acme touring jacket', ev(150, 5, 3000, 40_000))
     expect(protectedTerm.decision.state).toBe('HARVEST_CANDIDATE')
