@@ -71,7 +71,7 @@ Research notes (private, with file paths and line numbers): `~/nexus-archive/202
 - Build plan: `~/nexus-archive/2026-10-07-matrix-inventory/research/8-step3-build-plan.md`. Owner answers: a size change
   with sealed cases in stock shows the cases and opens them on a 2nd click; goods received arrive as loose units (the
   Owner sets sealed cases); prep / label owner stays "not set" until Send to FBA asks once.
-- Built: `ProductPackage` + `StockCaseCount` (migration `20261007c_case_packs`), the shared rule
+- Built: `ProductPackage` + `StockCaseCount` (migration `20261008v_case_packs`), the shared rule
   `packages/shared/stock-cases.ts`, the keeper `stock-cases.service.ts` on every movement / import / pool settle,
   `POST /api/stock/adjust-locations` + `cases`, `PUT /api/stock/case-packs`, the Matrix Case column + pop-up, the
   stock editor's Cases column ("4 + 3").
@@ -87,7 +87,7 @@ Research notes (private, with file paths and line numbers): `~/nexus-archive/202
 - Build plan: `~/nexus-archive/2026-10-07-matrix-inventory/research/11-step4-build-plan.md`. Owner answers: loose units
   go in mixed boxes; units are held at Create plan (cancel releases them); placement is confirmed with ONE click that
   shows Amazon's fees; the first real plan is a real small send after release, stopped at the placement choice.
-- Built: migration `20261007d_fba_send`, `packages/shared/fba-send.ts` (box rules), the fixed v2024-03-20 client, a
+- Built: migration `20261008w_fba_send`, `packages/shared/fba-send.ts` (box rules), the fixed v2024-03-20 client, a
   background runner + resume job (never confirms on its own), `/api/fba/inbound/*` routes, holds + FBA_TRANSFER_OUT on
   Mark shipped, Amazon's inbound units kept (FbaInventoryDetail INBOUND rows), the Matrix toolbar action + dialog +
   plans drawer, "+N" on the FBA cell. Full browser flow passed against the fake Amazon.

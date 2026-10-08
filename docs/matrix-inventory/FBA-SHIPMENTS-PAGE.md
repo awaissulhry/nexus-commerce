@@ -34,7 +34,7 @@ release after his approval.
 - **API:** status DRAFT (never claimed by the runner; "open"; its own actions: edit, delete, send). Routes: add to the
   open draft, edit a draft, delete a draft, send a draft (today's create path), list plans with a status filter and
   paging. Draft lines keep only the SKU, cases per size and loose units; the Amazon SKU and owners are read again at
-  Send (migration 20261007d is unreleased: make `msku`, `prepOwner`, `labelOwner` nullable in place). Matrix read: the
+  Send (migration 20261008w is unreleased: make `msku`, `prepOwner`, `labelOwner` nullable in place). Matrix read: the
   family's draft. Claude's tool → draft. Tests incl. a real-Postgres race: a double "Send to Amazon" makes one plan.
 - **Web:** the page + menu entry + command palette; the dialog's SKU table and the plan view become ONE shared
   component each (the dialog, the page draft and the page plan view use them); the Matrix footer link; the Matrix drawer
@@ -60,5 +60,5 @@ release after his approval.
 `FbaDraftUpdateRequest`, `FbaDraftSendRequest`, `FBA_PLAN_VIEWS` / `fbaPlanViewOf`, `FbaPlanListAnswer`,
 `FbaPlanLineView.msku / prepOwner / labelOwner` nullable, words (`addToDraft`, `sendToAmazon`, `deleteDraft`, `newDraft`,
 `addSkus`, `removeSku`, `draftExists`, `pageTitle`, `views`, `openPage`, `draftLink`, `shipmentLink`, `status.DRAFT`).
-Migration 20261007d (unreleased) rewritten in place: FbaInboundPlanLine `msku`, `prepOwner`, `labelOwner` nullable
+Migration 20261008w (unreleased) rewritten in place: FbaInboundPlanLine `msku`, `prepOwner`, `labelOwner` nullable
 (private DBs altered by hand + checksum).
