@@ -128,7 +128,7 @@ describe.skipIf(!concurrentDatabaseUrl())('BB-10 — the bid brain\'s auto-undo 
     expect(row).toMatchObject({ mode: 'HELD', heldBy: 'user:u-approver' })
     expect(Math.round((row.heldUntil!.getTime() - Date.now()) / DAY)).toBe(BRAIN_HOLD_AFTER_UNDO_DAYS)
     // Review — and the keyword it put back is pinned for 7 days, with the judgement as its reason.
-    const pins = await inside(() => database.client.bidHold.findMany({ where: { targetId: 't-it', kind: 'PIN', endedAt: null }, select: { by: true, reason: true } }))
+    const pins = await inside(() => database.client.bidHold.findMany({ where: { targetId: 't-it', kind: 'UNDO_PIN', endedAt: null }, select: { by: true, reason: true } }))
     expect(pins).toEqual([{ by: 'user:u-approver', reason: expect.stringContaining(`judgement ${judgement.id}`) }])
   })
 

@@ -75,7 +75,7 @@ export const JUDGED_ENGINES: ReadonlySet<EngineKey> = new Set<EngineKey>(['auto-
 
 /**
  * BID BRAIN BB-10 — a bid brain change auto-undo puts back (itself at AUTO, or a person's approved request) is kept for
- * this many days: the keyword it put back is PINNED (a BidHold kind PIN, by auto-undo, the judgement as its reason — a cut
+ * this many days: the keyword it put back is PINNED (a BidHold kind UNDO_PIN, by auto-undo, the judgement as its reason — a cut
  * and a raise alike), so the brain does not write the same change again on the next tick; and the campaign is HELD (the
  * brain raises nothing there). Auto-undo decides; the brain never undoes itself. Both end by themselves.
  */
@@ -101,7 +101,8 @@ export async function holdBrainAfterUndo(args: {
     if (!campaignId) return
     const until = new Date(now.getTime() + BRAIN_HOLD_AFTER_UNDO_DAYS * DAY_MS)
     const reason = `auto-undo put back a bid brain change: ${args.why}`.slice(0, 500)
-    if (args.entityType === 'AD_TARGET') await prisma.bidHold.create({ data: { campaignId, targetId: args.entityId, kind: 'PIN', until, by: args.by, reason } })
+    // Its own kind (UNDO_PIN): a floor and the give-back after one still win over it; a person's pin keeps its rank.
+    if (args.entityType === 'AD_TARGET') await prisma.bidHold.create({ data: { campaignId, targetId: args.entityId, kind: 'UNDO_PIN', until, by: args.by, reason } })
     const { holdCampaigns } = await import('./bid-brain/enrollment.js')
     await holdCampaigns({ campaignIds: [campaignId], until, by: args.by, reason, now })
   } catch (error) {

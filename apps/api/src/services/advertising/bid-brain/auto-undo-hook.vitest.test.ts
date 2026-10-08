@@ -105,3 +105,39 @@ describe('auto-undo', () => {
     expect(JUDGED_ENGINES.has('bid-brain')).toBe(true)
   })
 })
+
+describe('re-review 5 — auto-undo\'s pin yields to a floor and to the give-back after one; a person\'s pin keeps its rank', () => {
+  const undoPin = { by: 'auto-undo pin by automation:auto-undo', until: '2026-10-15', soft: true as const }
+  it('a Min-bid hour floors a keyword auto-undo pinned; a stop does too', () => {
+    expect(decide(facts({ currentCents: 40, overrides: { pin: undoPin, minBidHour: { floorCents: 3 } } }))).toMatchObject({ action: 'write', layer: 'min_bid_hour', bidCents: 3 })
+    expect(decide(facts({ currentCents: 40, overrides: { pin: undoPin, stock: { notBuyable: true, stopBidCents: 2, by: 'out of stock' } } }))).toMatchObject({ layer: 'stock', bidCents: 2 })
+    expect(decide(facts({ currentCents: 40, overrides: { pin: undoPin } }))).toMatchObject({ action: 'hold', layer: 'pin', bidCents: 40 })
+  })
+  it('after the Min-bid hour the give-back lands on the pinned bid exactly (no goal step)', () => {
+    const back = decide(facts({ currentCents: 3, overrides: { pin: undoPin }, restore: { layer: 'min_bid_hour', heldCents: 3, beforeCents: 40 } }))
+    expect(back).toMatchObject({ action: 'write', layer: 'restore', bidCents: 40 })
+  })
+  it('a person\'s pin keeps its rank: it holds through a Min-bid hour', () => {
+    expect(decide(facts({ currentCents: 40, overrides: { pin: { by: 'person hold by user:owner' }, minBidHour: { floorCents: 3 } } }))).toMatchObject({ action: 'hold', layer: 'pin', bidCents: 40 })
+  })
+})
+
+describe('re-review 6 — under HELD no layer raises; only the give-back after the brain\'s floor', () => {
+  const held = 'the campaign is held by automation:auto-undo'
+  it('a low-stock factor, a limit and a rule\'s floor: each raise waits', () => {
+    // A low-stock factor on a goal far above today's bid: 20¢ would go up.
+    const stockUp = facts({ currentCents: 20, overrides: { stock: { coverFactor: 0.95, by: 'low stock' } } })
+    expect(decide(stockUp)).toMatchObject({ action: 'write', layer: 'stock' })
+    expect(decide({ ...stockUp, raiseCap: held })).toMatchObject({ action: 'hold', layer: 'stock', bidCents: 20, why: expect.stringMatching(/^stock: raise held — the campaign is held/) })
+    // A bid under the strategy's lowest bid: the limit raises it — not under HELD.
+    const under = facts({ currentCents: 10, limits: { maxChangePct: 25, minBidCents: 25 } })
+    expect(decide(under)).toMatchObject({ action: 'write', layer: 'limit', bidCents: 25 })
+    expect(decide({ ...under, raiseCap: held })).toMatchObject({ action: 'hold', layer: 'limit', bidCents: 10 })
+    // A rule's floor above today's bid (a directive inside the goal path).
+    const floor = facts({ currentCents: 200, servingCents: 30, directives: [{ kind: 'FLOOR', cents: 260, source: 'rule:raise for rank' }] })
+    expect(decide({ ...floor, raiseCap: held }).bidCents).toBeLessThanOrEqual(200)
+  })
+  it('the give-back after the brain\'s own floor still goes', () => {
+    expect(decide(facts({ currentCents: 3, raiseCap: held, restore: { layer: 'min_bid_hour', heldCents: 3, beforeCents: 40 } }))).toMatchObject({ action: 'write', layer: 'restore' })
+  })
+})

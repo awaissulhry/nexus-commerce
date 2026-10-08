@@ -241,6 +241,9 @@ export function cpcRatioOf(targets: readonly TargetRow[], ev: (id: string) => Ev
   return clicks >= 10 && bidClicks > 0 ? cost / bidClicks : null
 }
 
+/** BB-10 re-review — the BidHold kind auto-undo pins a keyword with after it put back a bid brain change. */
+export const UNDO_PIN_KIND = 'UNDO_PIN'
+
 /** BB-7 review — a floor mark an hourly plan's Min-bid hour set (rank-defend's own prefixes, which the brain writes too). */
 export const isPlanFloorMark = (by: string | null | undefined): boolean => !!by && /^automation:(rank-defend|rank-plan|dayparting)-/.test(by)
 
@@ -373,10 +376,11 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
     }
     const holds = run.holds.filter((h) => h.campaignId === campaign.id && (h.targetId == null || h.targetId === t.id))
     // BB-8 — an auto-undo hold freezes (lowering still allowed); every other hold pins.
-    const hold = holds.find((h) => h.kind !== 'AUTO_UNDO')
+    // BB-10 re-review — a person's (or Claude's) hold before auto-undo's own pin: a floor may override that one (decide.ts).
+    const hold = holds.find((h) => h.kind !== 'AUTO_UNDO' && h.kind !== UNDO_PIN_KIND) ?? holds.find((h) => h.kind === UNDO_PIN_KIND)
     const undoHold = holds.find((h) => h.kind === 'AUTO_UNDO')
     if (campaign.pinBids) overrides.pin = { by: campaign.pinnedBy ? `bids pinned by ${campaign.pinnedBy}` : 'pinned bids' }
-    else if (hold) overrides.pin = { by: `${hold.kind.toLowerCase()} hold by ${hold.by}`, until: day(hold.until) }
+    else if (hold) overrides.pin = { by: `${hold.kind === UNDO_PIN_KIND ? 'auto-undo pin' : `${hold.kind.toLowerCase()} hold`} by ${hold.by}`, until: day(hold.until), ...(hold.kind === UNDO_PIN_KIND ? { soft: true as const } : {}) }
     else if (run.personHeld.has(t.id)) overrides.pin = { by: 'a person (their bid of the last 60 days)' }
     const enrollment = run.enrollments.get(campaign.id)
     // BB-10 review — a HELD campaign raises nothing (decide's raise cap, inside the goal path: the band, the minimum change

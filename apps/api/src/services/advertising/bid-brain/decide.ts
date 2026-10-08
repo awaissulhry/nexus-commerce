@@ -44,7 +44,11 @@ export interface Overrides {
   /** suppress-campaign, a monthly cap reached, a playbook STOP: the stop bid. */
   stop?: { bidCents: number; by: string } | null
   /** pinBids, a person's own bid, a Claude request a person approved: left alone until `until`. */
-  pin?: { by: string; until?: string | null } | null
+  /**
+   * BB-10 re-review — `soft`: auto-undo's 7-day pin after it put back a brain change. A floor (stop, stock, phase, Min-bid
+   * hour) wins over it, and so does the give-back after one; a person's pin keeps its rank (it holds against all but a stop).
+   */
+  pin?: { by: string; until?: string | null; soft?: true } | null
   /** Not buyable → the stop bid; low cover → the goal bid × a factor 0.5–1. */
   stock?: { notBuyable: true; stopBidCents: number; by: string } | { coverFactor: number; by: string } | null
   /** Auto-undo restored this campaign: its values are kept, lowering is still allowed. */
@@ -205,7 +209,18 @@ function goalBid(f: TargetFacts, opts: { noStep?: boolean } = {}): GoalBid | { r
   return { cents: clamped.cents, goal, est, ratio, anchor, parts, clash: dir.clash, limitHeld: clamped.held, range, floorCaps: { floor: topBid, share: shareTop } }
 }
 
+/**
+ * BB-10 — the raise cap (a HELD campaign; this hour's spend above 1.5 × its same-hour average): no move above today's bid
+ * from any layer — the goal, a limit, a rule's floor, a low-stock factor — except the give-back after the brain's own
+ * floor (`restore`). Cuts, stops and floors still go. The decision says what waited and why.
+ */
 export function decide(f: TargetFacts): Decision {
+  const d = decideBid(f)
+  if (!f.raiseCap || d.action !== 'write' || d.bidCents <= f.currentCents || d.layer === 'restore') return d
+  return { ...d, action: 'hold', bidCents: f.currentCents, step: null, why: `${d.layer.replace('_', '-')}: raise held — ${f.raiseCap}; ${f.currentCents}¢ → ${d.bidCents}¢ waits (${d.why})` }
+}
+
+function decideBid(f: TargetFacts): Decision {
   const base = {
     targetId: f.targetId,
     currentCents: f.currentCents,
@@ -234,7 +249,13 @@ export function decide(f: TargetFacts): Decision {
 
   // ── Overrides: the first that applies decides; the lower bid wins, except a pin. ──
   const o = f.overrides ?? {}
-  const applying = OVERRIDE_ORDER.filter((k) => o[k] != null)
+  // BB-10 re-review — auto-undo's own pin yields to a floor, and to the give-back after the brain's floor (which lands on
+  // the bid before it exactly: the pinned one).
+  const floorApplies = (['stop', 'stock', 'phase', 'minBidHour'] as const).some((k) => o[k] != null)
+  const r0 = f.restore
+  const givingBack = !!r0 && ((LOWERING_LAYERS as readonly string[]).includes(r0.layer) || r0.layer === 'restore') && f.currentCents <= r0.heldCents
+  const softPinYields = !!o.pin?.soft && (floorApplies || givingBack)
+  const applying = OVERRIDE_ORDER.filter((k) => o[k] != null && !(k === 'pin' && softPinYields))
   if (applying.length) {
     const first = applying[0]
     if (first === 'pin') {
@@ -278,7 +299,8 @@ export function decide(f: TargetFacts): Decision {
       const asIf = decide({ ...f, currentCents: r.beforeCents, lastStep: keep, restore: null, overrides: {}, brakes: [] })
       // BB-7 review — held inside today's limits (the strategy's highest bid, the campaign's bounds, the plan's day ceiling):
       // a between-slots tick has no goal, and the bid before may sit above a limit set since.
-      const cents = clampToRange(asIf.bidCents, limitRange(f.limits, f.lanes)).cents
+      // Under auto-undo's pin, the bid before the floor is the pinned one: back to it exactly, no goal step.
+      const cents = clampToRange(o.pin?.soft ? r.beforeCents : asIf.bidCents, limitRange(f.limits, f.lanes)).cents
       const why = `${lifted} → back to ${cents}¢ from the ${f.currentCents}¢ it held (the bid before it: ${r.beforeCents}¢; ${asIf.why})`
       return {
         ...base, ...known, action: cents !== f.currentCents ? 'write' : 'hold', layer: 'restore', bidCents: cents,
@@ -325,10 +347,6 @@ export function decide(f: TargetFacts): Decision {
     const already = !!f.lastStep && f.lastStep.dataDay >= f.dataDay && f.lastStep.toCents === f.currentCents
     const why = already ? `goal: already moved for data day ${f.dataDay} — waits for a new day (${recipe})` : `goal: ${recipe}; ${f.currentCents}¢ → ${ok.cents}¢ is too small a change`
     return { ...base, ...known, action: 'hold', layer: 'goal', bidCents: f.currentCents, placements: placements(f.currentCents), why }
-  }
-  // BB-10 — this hour's spend heads above 1.5 × its same-hour average: a goal raise waits (a cut still goes).
-  if (f.raiseCap && ok.cents > f.currentCents) {
-    return { ...base, ...known, action: 'hold', layer: 'goal', bidCents: f.currentCents, placements: placements(f.currentCents), why: `goal: raise held — ${f.raiseCap}; ${f.currentCents}¢ → ${ok.cents}¢ waits (${recipe})` }
   }
   return {
     ...base,
