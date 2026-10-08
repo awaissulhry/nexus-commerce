@@ -6250,6 +6250,11 @@
     },
     "relations": []
   },
+  "AdsBrainBudgetDecision": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
   "AdWriteRefusal": {
     "scalar": {},
     "compound": {},

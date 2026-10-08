@@ -13,6 +13,11 @@
  *
  * Switch: NEXUS_BID_BRAIN_MODE = off | shadow (default) | live (BB-6: the campaigns enrolled LIVE are written; the rest
  * stay shadow).
+ *
+ * ONE BRAIN AB-7 — at the same full slots the money shadow plans the money of every product whose `budgets` lever is
+ * OBSERVE or higher (brain/budget-shadow.ts) and logs it; it writes nothing else. Its own lever levels decide, not the
+ * bid switch, so it runs with the bid brain off too. With no such product (production today) it reads one table, prunes
+ * the plans older than 30 days and records no run. A failure there never touches the bid run.
  * Cluster-safe through lib/cron/clustered.ts (hard rule 7); with business profiles on it runs once per business.
  */
 import cron from '../lib/cron/clustered.js'
@@ -25,6 +30,8 @@ export const BID_BRAIN_CRON = '*/15 * * * *'
 export const BID_BRAIN_JOB = 'ads-bid-brain-shadow'
 /** BB-7 — the between-slots ticks for the campaigns the brain owns (recorded only when one is enrolled LIVE). */
 export const BID_BRAIN_LIVE_JOB = 'ads-bid-brain-live'
+/** AB-7 — the money shadow's run (recorded only when a product's budgets lever is OBSERVE or higher). */
+export const BRAIN_MONEY_JOB = 'ads-brain-money-shadow'
 
 /** BB-7 — the full run's tick: :45 of 00, 06, 12 and 18 UTC. */
 export function isFullSlot(at: Date): boolean {
@@ -32,15 +39,36 @@ export function isFullSlot(at: Date): boolean {
 }
 
 export async function runBidBrainCron(at: Date = new Date()): Promise<void> {
+  const full = isFullSlot(at)
+  await runBidLever(full)
+  if (full) await runMoneyShadowTick()
+}
+
+async function runBidLever(full: boolean): Promise<void> {
   const mode = bidBrainMode()
   if (mode === 'off') return
-  const full = isFullSlot(at)
   try {
     if (!full && (mode !== 'live' || !(await brainOwnedCampaignIds()).size)) return
     const { dbNow } = await import('./ad-rank-defend.job.js')
     const clockNow = await dbNow()
     await recordCronRun(full ? BID_BRAIN_JOB : BID_BRAIN_LIVE_JOB, async () => shadowSummaryLine(await runShadowOnce({ onlyOwned: !full, clockNow })))
   } catch (err) { logger.error('ads-bid-brain cron failure', { error: err instanceof Error ? err.message : String(err) }) }
+}
+
+/**
+ * AB-7 — the money shadow at a full slot: no product watching → nothing recorded; a failure is logged, never thrown. The
+ * budget day and hour are read on the database clock (rank-defend's dbNow: a container clock once ran two hours late).
+ */
+export async function runMoneyShadowTick(at?: Date): Promise<void> {
+  try {
+    // Loaded at the tick, not when the scheduler boots (runtime/module-load-order.vitest.test.ts).
+    const { moneyShadowProducts, moneySummaryLine, pruneMoneyDecisions, runMoneyShadowOnce } = await import('../services/advertising/brain/budget-shadow.js')
+    const now = at ?? await (await import('./ad-rank-defend.job.js')).dbNow()
+    const products = await moneyShadowProducts()
+    // Nothing watched: the old plans still go after 30 days (a product that left the brain leaves none behind).
+    if (!products.length) { await pruneMoneyDecisions(now); return }
+    await recordCronRun(BRAIN_MONEY_JOB, async () => moneySummaryLine(await runMoneyShadowOnce({ now, products })))
+  } catch (err) { logger.error('ads-brain money shadow failure', { error: err instanceof Error ? err.message : String(err) }) }
 }
 
 let task: ReturnType<typeof cron.schedule> | null = null

@@ -20111,6 +20111,61 @@ model AdsNativeRuleSnapshot {
   @@index([workspaceId])
 }
 
+/// ONE BRAIN AB-7 — the money plan of one product's brain in one market, decided in SHADOW (one-brain DESIGN.md §2.5,
+/// §2.6, §4, §5; services/advertising/brain/budget-*.ts): the month's envelope, the pace and its brake, the Amazon
+/// portfolio-cap plan and each campaign's daily budget with the intraday ladder, every part with its "why". Nothing here is
+/// written to Amazon (AB-8 writes). Only for a product whose budgets lever is OBSERVE or higher. A row is stored when the
+/// plan's decisions differ from the product's last one (`planHash`), plus the budget day's first as a snapshot; rows older
+/// than 30 days are deleted (Neon cost), as BidBrainDecision. No foreign key: the history outlives a removed product.
+model AdsBrainBudgetDecision {
+  // Business ownership comes from verified database context.
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String @id @default(cuid())
+
+  /// One run of the money shadow (every product of a run shares it).
+  runId       String
+  /// SHADOW (AB-7). LIVE comes with AB-8.
+  mode        String
+  /// change (the decisions differ from the product's last plan) | snapshot (the budget day's first)
+  kind        String
+  /// Product.id of the family root.
+  productId   String
+  /// Short market code ('IT', 'DE').
+  marketplace String
+  /// The budget day (00:00–24:00 UTC, @nexus/shared/ads-budget-day) and its month (YYYY-MM).
+  day         DateTime @db.Date
+  month       String
+  /// The budgets lever's level when decided (OBSERVE, PROPOSE, AUTO).
+  level       String
+
+  /// The month's envelope (null: none) and where it came from (own | playbook | share | none).
+  envelopeCents     Int?
+  envelopeSource    String
+  /// Spend so far and the projected month-end spend; the pace = projected ÷ envelope, percent (null: no envelope).
+  spentCents        Int
+  projectedCents    Int
+  pacePct           Decimal? @db.Decimal(10, 2)
+  /// none | hold_raises | cut_bids | stop_weakest
+  brake             String
+  /// The planned Amazon portfolio cap, in all (null: none planned).
+  portfolioCapCents Int?
+
+  /// The fingerprint of the plan's decisions (budget-plan.ts moneyPlanHash).
+  planHash String
+  /// The whole plan (budget-plan.ts ProductMoneyPlan): envelope, market split, pace curve, brake, portfolio caps,
+  /// campaigns — each with its why.
+  plan     Json
+  /// One line.
+  why      String @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([productId, marketplace, createdAt(sort: Desc)])
+  @@index([runId])
+  @@index([createdAt])
+  @@index([workspaceId])
+}
+
 /// AUTO.A7 / substrate S5 — the durable record of a write-gate refusal.
 ///
 /// Until now `logGateDeny` wrote to the application log and NOWHERE ELSE, so no surface could

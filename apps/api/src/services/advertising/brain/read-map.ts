@@ -35,7 +35,8 @@ import {
   type CampaignNativeRules,
 } from './native-rules.js'
 
-export const BRAIN_MAP_VIEWS = ['map', 'clashes', 'setup'] as const
+/** AB-7 — `money` is brain/budget-read.ts: the product's money plan in shadow (the tool routes it). */
+export const BRAIN_MAP_VIEWS = ['map', 'clashes', 'setup', 'money'] as const
 export type BrainMapView = (typeof BRAIN_MAP_VIEWS)[number]
 
 /** The days of action-log evidence a view reads by default, and at most. */
