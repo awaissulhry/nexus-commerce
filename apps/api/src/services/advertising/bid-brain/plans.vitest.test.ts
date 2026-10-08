@@ -206,3 +206,14 @@ describe('review 5 — the placement ceiling against the bid Amazon may still ho
     expect(placementPlan(w)!.adjustments).toEqual([{ placement: 'PLACEMENT_TOP', percentage: 50 }])
   })
 })
+
+describe('review 4 — a give-back is held inside today\'s limits', () => {
+  it('to the strategy\'s highest bid and the plan\'s day ceiling, on a full run and on a tick with no goal', () => {
+    const back = (over: Partial<TargetFacts>) => decide(facts({ currentCents: 3, overrides: {}, restore: { layer: 'min_bid_hour', heldCents: 3, beforeCents: 80 }, ...over }))
+    expect(back({ limits: { maxChangePct: 25, maxBidCents: 60 } })).toMatchObject({ layer: 'restore', bidCents: 60 })
+    expect(back({ limits: { maxChangePct: 25, planCeilingCents: 50 } })).toMatchObject({ layer: 'restore', bidCents: 50 })
+    // A between-slots tick (no evidence, no goal): the bid before, clamped the same way.
+    expect(back({ chain: [], limits: { planCeilingCents: 50 } })).toMatchObject({ layer: 'restore', bidCents: 50 })
+    expect(back({ chain: [] })).toMatchObject({ layer: 'restore', bidCents: 80 })
+  })
+})

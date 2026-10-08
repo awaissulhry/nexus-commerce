@@ -45,6 +45,13 @@ vi.mock('../ads-api-client.js', async (importOriginal) => {
   }
 })
 
+/** The stock judge (ads-stock-risk.service.ts), stood in for: which ad groups are out of stock. */
+const stock = vi.hoisted(() => ({ out: new Set<string>() }))
+vi.mock('../ads-stock-risk.service.js', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  readStockAdGroups: async () => ({ adGroups: [...stock.out].map((id) => ({ id, risk: 'out-of-stock', products: [{ units: 0, daysOfCover: 0, lowBelowDays: 7, hasBuyBox: true }] })) }),
+}))
+
 const { runShadowOnce } = await import('./shadow.js')
 const { setEnrollment } = await import('./enrollment.js')
 const { BRAIN_ACTOR } = await import('./live.js')
@@ -185,9 +192,56 @@ describe.skipIf(!concurrentDatabaseUrl())('BB-7 — an owned campaign\'s hourly 
     const tool = ADS_BID_BRAIN_ENROLLMENT_TOOLS[0]
     await database.pool.query('UPDATE "AdTarget" SET "bidCents" = 3, "suppressedFromBidCents" = NULL WHERE id = \'t-low\'')
     const refused = await inside(() => tool.handler({ campaignId: 'c-it', op: 'shadow' }, {} as never))
-    expect(refused).toMatchObject({ ok: false, error: expect.stringMatching(/cannot go back to shadow now: 1 keyword sits at a floor the bid brain set with no memory of the bid before.*Use op give-back/) })
+    expect(refused).toMatchObject({ ok: false, error: expect.stringMatching(/cannot go back to shadow now: 1 keyword sits at a floor the bid brain set that no engine would give back after it.*Use op give-back/) })
+    // A memory no owner's mark points at is no better: still refused.
     await database.pool.query('UPDATE "AdTarget" SET "suppressedFromBidCents" = 5 WHERE id = \'t-low\'')
+    expect(await inside(() => tool.handler({ campaignId: 'c-it', op: 'shadow' }, {} as never))).toMatchObject({ ok: false })
+    // The memory and the plan's floor mark, as the brain's Min-bid floor leaves them: rank-defend gives it back — allowed.
+    const [schedule] = await rows<{ id: string }>('SELECT id FROM "AdSchedule" WHERE "campaignId" = \'c-it\'')
+    await database.pool.query('UPDATE "Campaign" SET "bidsSuppressedAt" = now(), "bidsSuppressedFloorCents" = 3, "bidsSuppressedBy" = $1 WHERE id = \'c-it\'', [`automation:rank-defend-${schedule.id}`])
     expect(await inside(() => tool.handler({ campaignId: 'c-it', op: 'shadow' }, {} as never))).toMatchObject({ ok: true })
+    await database.pool.query('UPDATE "Campaign" SET "bidsSuppressedAt" = NULL, "bidsSuppressedFloorCents" = NULL, "bidsSuppressedBy" = NULL WHERE id = \'c-it\'')
+    await database.pool.query('UPDATE "AdTarget" SET "bidCents" = 5, "suppressedFromBidCents" = NULL WHERE id = \'t-low\'')
+  })
+
+  it('review B1 — out of stock, then back in stock: the brain\'s own stock floor gives the bid back (never a stop)', async () => {
+    const before = await bidOf('t-it')
+    stock.out.add('g-c-it')
+    await inside(() => runShadowOnce({ now: at(NOW, 20), mode: 'live', onlyOwned: true, clockNow: at(NOON, 120) }))
+    const floor = await bidOf('t-it')
+    expect(floor).toBeLessThan(before)
+    expect(await rows('SELECT "suppressedFromBidCents" AS m FROM "AdTarget" WHERE id = \'t-it\'')).toEqual([{ m: before }])
+    stock.out.clear()
+    await inside(() => runShadowOnce({ now: at(NOW, 21), mode: 'live', onlyOwned: true, clockNow: at(NOON, 135) }))
+    expect(await bidOf('t-it')).toBe(before)
+    const [last] = await rows<{ layer: string }>('SELECT layer FROM "BidBrainDecision" WHERE "targetId" = \'t-it\' ORDER BY "createdAt" DESC LIMIT 1')
+    expect(last.layer).toBe('restore')
+  })
+
+  it('review B1 — a give-back the gate refused (the worker put the floor back): the next tick gives it back again', async () => {
+    const before = await bidOf('t-it')
+    stock.out.add('g-c-it')
+    await inside(() => runShadowOnce({ now: at(NOW, 22), mode: 'live', onlyOwned: true, clockNow: at(NOON, 150) }))
+    const floor = await bidOf('t-it')
+    stock.out.clear()
+    await inside(() => runShadowOnce({ now: at(NOW, 23), mode: 'live', onlyOwned: true, clockNow: at(NOON, 165) }))
+    expect(await bidOf('t-it')).toBe(before)
+    // Refused at dispatch: the worker puts the floor back.
+    await database.pool.query('UPDATE "AdTarget" SET "bidCents" = $1 WHERE id = \'t-it\'', [floor])
+    await inside(() => runShadowOnce({ now: at(NOW, 24), mode: 'live', onlyOwned: true, clockNow: at(NOON, 180) }))
+    expect(await bidOf('t-it')).toBe(before)
+  })
+
+  it('review B2 — the plan switched off during its Min-bid floor: the next tick gives the bids back and clears its mark', async () => {
+    const before = await bidOf('t-it')
+    // Tomorrow's night (a new UTC day: the anti-flap count starts again).
+    const tomorrowNight = new Date(NIGHT.getTime() + DAY)
+    await inside(() => runShadowOnce({ now: at(NOW, 30), mode: 'live', onlyOwned: true, clockNow: tomorrowNight }))
+    expect(await bidOf('t-it')).toBe(3)
+    await database.pool.query('UPDATE "AdSchedule" SET enabled = false WHERE "campaignId" = \'c-it\'')
+    await inside(() => runShadowOnce({ now: at(NOW, 31), mode: 'live', onlyOwned: true, clockNow: at(tomorrowNight, 15) }))
+    expect(await bidOf('t-it')).toBe(before)
+    expect(await rows('SELECT "bidsSuppressedAt" AS at FROM "Campaign" WHERE id = \'c-it\'')).toEqual([{ at: null }])
   })
 
   it('review 7 — a between-slots tick reads the owned campaigns only, no evidence, and stores no goal-less rows', async () => {

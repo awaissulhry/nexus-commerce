@@ -274,7 +274,9 @@ export function decide(f: TargetFacts): Decision {
       // a second Min-bid exit on the same data day lands where the first did and takes no new step (C3's slide).
       const keep = f.lastStep && f.lastStep.dataDay >= f.dataDay ? f.lastStep : null
       const asIf = decide({ ...f, currentCents: r.beforeCents, lastStep: keep, restore: null, overrides: {}, brakes: [] })
-      const cents = asIf.bidCents
+      // BB-7 review — held inside today's limits (the strategy's highest bid, the campaign's bounds, the plan's day ceiling):
+      // a between-slots tick has no goal, and the bid before may sit above a limit set since.
+      const cents = clampToRange(asIf.bidCents, limitRange(f.limits, f.lanes)).cents
       const why = `${lifted} → back to ${cents}¢ from the ${f.currentCents}¢ it held (the bid before it: ${r.beforeCents}¢; ${asIf.why})`
       return {
         ...base, ...known, action: cents !== f.currentCents ? 'write' : 'hold', layer: 'restore', bidCents: cents,

@@ -36,6 +36,11 @@ export interface BidLimits {
   /** The campaign's own bounds (Campaign.minBidCents / maxBidCents). */
   campaignMinCents?: number | null
   campaignMaxCents?: number | null
+  /**
+   * BB-7 review — the hourly plan's day ceiling for the keyword bid (the lowest CPC ceiling of today's serving hours, ÷
+   * Amazon's top-of-search dynamic bidding): it binds in every hour, one with no target or a kept-serving Min-bid hour too.
+   */
+  planCeilingCents?: number | null
 }
 
 /**
@@ -147,6 +152,7 @@ export function limitRange(limits: BidLimits, lanes: readonly Lane[] = []): { lo
   const uppers: Array<[number | null | undefined, string]> = [
     [limits.maxBidCents, 'the strategy highest bid'],
     [limits.campaignMaxCents, "the campaign's highest bid"],
+    [limits.planCeilingCents, "the hourly plan's lowest CPC ceiling today"],
     // BB-18 — at 0 % placement Amazon can still add its dynamic bidding: the base bid × that stays within the ceiling.
     ...lanes.map((l): [number | null | undefined, string] => {
       const cap = l.baseCeilingCents ?? l.maxCpcCents

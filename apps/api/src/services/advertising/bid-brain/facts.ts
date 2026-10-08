@@ -138,7 +138,9 @@ export interface RunRows {
   /** BB-8 — per campaign: what a playbook holds on it. */
   playbook?: ReadonlyMap<string, PlaybookFact>
   /** BB-8 — per keyword: the brain's last decision lowered it by an override; the bid of its last decision before. */
-  lowered?: ReadonlyMap<string, { layer: DecisionLayer; heldCents: number; beforeCents: number | null }>
+  lowered?: ReadonlyMap<string, { layer: DecisionLayer; heldCents: number; beforeCents: number | null; wrote?: boolean }>
+  /** BB-7 review — the campaigns the brain owns this run: a plan's floor mark on one is the brain's record. */
+  owned?: ReadonlySet<string>
   /** BB-8 — per ad group: the revenue-weighted break-even ACoS of its products with usable profit data (a fraction). */
   breakEven?: ReadonlyMap<string, number>
   /** BB-9 — per campaign: the rules' active inputs (BidDirective rows, rule-directives.ts). */
@@ -342,16 +344,18 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
     }
 
     // Overrides.
-    // BB-7 review — on a campaign the brain runs with its hourly plan, a Min-bid floor mark is the brain's own record of
-    // the plan's floor (shadow.ts rememberFloors: kept for rank-defend to give back after a hand-back), and so is the
-    // keywords' remembered bid under it: the plan's hour decides, never the mark.
+    // BB-7 review — on a campaign the brain owns, a plan's Min-bid floor mark is the brain's own record of that floor
+    // (shadow.ts rememberFloors: kept for rank-defend to give back after a hand-back) — with or without a plan hour now,
+    // so a plan switched off during its floor gives the bids back: the plan's hour (or none) decides, never the mark.
     const hour = run.planHours?.get(campaign.id)
-    const planFloor = !!hour && !!campaign.bidsSuppressedAt && isPlanFloorMark(campaign.bidsSuppressedBy)
+    const planFloor = !!run.owned?.has(campaign.id) && !!campaign.bidsSuppressedAt && isPlanFloorMark(campaign.bidsSuppressedBy)
     const overrides: Overrides = mergeFloors(planFloor ? null : floorOverride(campaign.bidsSuppressedBy, campaign.bidsSuppressedFloorCents, campaign.bidsSuppressedAt), floorOverride(group.bidsSuppressedBy, group.bidsSuppressedFloorCents, group.bidsSuppressedAt))
-    // A keyword a stop floored on its own keeps its remembered bid: the stop decides until it lifts. The memory the plan's
-    // floor wrote (the brain's last decision floored this keyword for a Min-bid hour) is the brain's record, not a stop.
-    const planMemory = planFloor && run.lowered?.get(t.id)?.layer === 'min_bid_hour'
-    if (!planMemory && !overrides.stop && !overrides.stock && !overrides.minBidHour && t.suppressedFromBidCents != null) {
+    // A keyword a stop floored on its own keeps its remembered bid: the stop decides until it lifts. BB-7 review — a bid the
+    // brain saved itself is its record, not a stop: the keyword's newest decision is a give-back, or a floor the brain
+    // wrote (Min-bid, stop, stock, phase) since its last unlowered decision. A floor someone else wrote keeps its stop.
+    const low = run.lowered?.get(t.id)
+    const brainMemory = !!low && (low.layer === 'restore' || low.wrote === true)
+    if (!brainMemory && !overrides.stop && !overrides.stock && !overrides.minBidHour && t.suppressedFromBidCents != null) {
       overrides.stop = { bidCents: t.bidCents, by: `a stop (its ${t.suppressedFromBidCents}¢ bid remembered)` }
     }
     // BB-8 — stock from its source (an ad group's products), unless a retail-guard floor already says so.
@@ -405,6 +409,8 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
         maxChangePct: s?.maxChangePct ?? null,
         campaignMinCents: campaign.minBidCents,
         campaignMaxCents: campaign.maxBidCents,
+        // BB-7 review — the plan's day ceiling binds in every hour of an owned campaign with a plan.
+        ...(hour?.dayMaxCpcCents != null ? { planCeilingCents: Math.floor(hour.dayMaxCpcCents / laneHeadroom(campaign.biddingStrategy, 'PLACEMENT_TOP')) } : {}),
       },
       dataDay: m.dataDay,
       lastStep: run.lastSteps.get(t.id) ?? null,
