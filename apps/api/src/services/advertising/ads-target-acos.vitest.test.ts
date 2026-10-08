@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { breakevenAcos, targetFromBreakeven, profitShareFor } from './ads-target-acos.service.js'
+import { breakevenAcos, targetFromBreakeven, profitShareFor, profitDataUsable } from './ads-target-acos.service.js'
 
 describe('breakevenAcos', () => {
   it('computes contribution-before-ads / revenue', () => {
@@ -91,5 +91,21 @@ describe('ACR.0.5 — a zero COGS is a missing cost, not a free product', () => 
     const honest = targetFromBreakeven(0.35, share)
     const inflated = targetFromBreakeven(0.75, share)
     expect(inflated).toBeGreaterThan(honest as number)
+  })
+})
+
+describe('profitDataUsable (BB-8: one rule for the per-product read and the bid brain’s batch read)', () => {
+  const w = (extra: Partial<Parameters<typeof profitDataUsable>[0]> = {}) => ({ dataPoints: 30, grossRevenueCents: 10_000, cogsCents: 4_000, rowsWithEstimate: 0, ...extra })
+  it('rows with revenue and a real cost price may set a target', () => {
+    expect(profitDataUsable(w())).toBe(true)
+  })
+  it('no rows, no revenue, no cost price (ACR.0.5) or only estimated costs (ACR.4) may not', () => {
+    expect(profitDataUsable(w({ dataPoints: 0 }))).toBe(false)
+    expect(profitDataUsable(w({ grossRevenueCents: 0 }))).toBe(false)
+    expect(profitDataUsable(w({ cogsCents: 0 }))).toBe(false)
+    expect(profitDataUsable(w({ rowsWithEstimate: 30 }))).toBe(false)
+  })
+  it('some estimated rows among real ones still may', () => {
+    expect(profitDataUsable(w({ rowsWithEstimate: 5 }))).toBe(true)
   })
 })

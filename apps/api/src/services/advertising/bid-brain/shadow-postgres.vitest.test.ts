@@ -11,6 +11,8 @@
  *              day stores one snapshot each; rows older than 30 days are pruned
  *   brakes     a halt, and report data older than 48 hours, brake every decision
  *   business   another business's run sees none of these rows
+ *   BB-8       the overrides read from their sources (an out-of-stock product, a playbook not started) and the bids
+ *              going back once the stock is back
  *
  * Values are made up (public repo).
  */
@@ -151,7 +153,8 @@ describe.skipIf(!concurrentDatabaseUrl())('BB-3 — the shadow bid brain (real P
       await db.adGroup.create({ data: { id: 'g-c-de', campaignId: 'c-de', name: 'group c-de', externalAdGroupId: 'EXT-g-c-de' } })
       await db.adTarget.create({ data: { id: 't-de', adGroupId: 'g-c-de', kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'motorradjacke', bidCents: 40, externalTargetId: 'EXT-t-de' } })
       const parent = await db.product.create({ data: { sku: 'BB5-PARENT', name: 'BB5 parent', basePrice: '90.00', isParent: true } })
-      const child = await db.product.create({ data: { sku: 'BB5-V1', name: 'BB5 v1', basePrice: '90.00', parentId: parent.id } })
+      // In stock (BB-8: a product with no unit would stop its keywords before the goal is read).
+      const child = await db.product.create({ data: { sku: 'BB5-V1', name: 'BB5 v1', basePrice: '90.00', parentId: parent.id, totalStock: 25 } })
       await db.adProductAd.create({ data: { adGroupId: 'g-c-de', productId: child.id, asin: 'B0FXBB5V01', sku: 'BB5-V1' } })
       await db.amazonAdsDailyPerformance.createMany({ data: Array.from({ length: 37 }, (_, k) => ({
         profileId: 'P-DE-TEST', marketplace: 'DE', adProduct: 'SPONSORED_PRODUCTS', date: new Date(NOW.getTime() - (k + 1) * DAY), entityType: 'AD_TARGET',
@@ -166,6 +169,38 @@ describe.skipIf(!concurrentDatabaseUrl())('BB-3 — the shadow bid brain (real P
     const [d] = await rows<{ why: string; aim: string; bandLo: string; bandHi: string }>('SELECT why, aim::text, "bandLo"::text, "bandHi"::text FROM "BidBrainDecision" WHERE "targetId" = \'t-de\'')
     expect(d.why).toMatch(/aim 25% \(band 20%–35%\); TACoS 10% × sales ratio 2\.5/)
     expect([Number(d.aim), Number(d.bandLo), Number(d.bandHi)]).toEqual([0.25, 0.2, 0.35])
+  })
+
+  it('BB-8 — overrides from their sources: out of stock → STOCK; a playbook not started → PHASE; stock back → the bids go back', async () => {
+    await inside(async () => {
+      const db = database.client
+      for (const id of ['c-oos', 'c-pb']) {
+        await db.campaign.create({ data: { id, name: `Italy ${id}`, type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'IT', externalCampaignId: `EXT-${id}`, dailyBudget: '20.00', startDate: new Date('2026-01-01T00:00:00Z'), liveBidWritesEnabled: true } })
+        await db.adGroup.create({ data: { id: `g-${id}`, campaignId: id, name: `group ${id}`, externalAdGroupId: `EXT-g-${id}` } })
+        await db.adTarget.create({ data: { id: `t-${id}`, adGroupId: `g-${id}`, kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: `giacca ${id}`, bidCents: 40, externalTargetId: `EXT-t-${id}` } })
+      }
+      const sold = await db.product.create({ data: { sku: 'BB8-OUT', name: 'BB8 sold out', basePrice: '80.00', totalStock: 0 } })
+      await db.adProductAd.create({ data: { adGroupId: 'g-c-oos', productId: sold.id, asin: 'B0FXBB8001', sku: 'BB8-OUT' } })
+      const book = await db.adsPlaybook.create({ data: { market: 'IT', level: 'PRODUCT', scopeId: 'bb8-product', label: 'BB8 playbook', state: 'BUILT', updatedBy: 'user:test' } })
+      await db.adsPlaybookLink.create({ data: { playbookId: book.id, kind: 'slot', key: 'exact', refId: 'c-pb', origin: 'built', compiledVersion: 1, updatedBy: 'user:test' } })
+    })
+    await inside(() => runShadowOnce({ now: NOW, mode: 'shadow' }))
+    const first = await rows<{ targetId: string; layer: string; decidedCents: number; why: string }>('SELECT "targetId", layer, "decidedCents", why FROM "BidBrainDecision" WHERE "targetId" IN ($1, $2) ORDER BY "targetId"', ['t-c-oos', 't-c-pb'])
+    expect(first.map((d) => [d.targetId, d.layer, d.decidedCents])).toEqual([['t-c-oos', 'stock', 2], ['t-c-pb', 'phase', 2]])
+    expect(first[0].why).toBe('stock: not buyable (out of stock (1 product)) → 2¢')
+    expect(first[1].why).toBe('phase: the playbook BB8 playbook has not started → 2¢')
+
+    // Live, the brain would have floored it; the stock is back the next day: the bids go back (the goal bid: no bid
+    // before the stop was decided).
+    await inside(async () => {
+      await database.client.adTarget.update({ where: { id: 't-c-oos' }, data: { bidCents: 2 } })
+      await database.client.product.updateMany({ where: { sku: 'BB8-OUT' }, data: { totalStock: 30 } })
+    })
+    await inside(() => runShadowOnce({ now: new Date(NOW.getTime() + DAY), mode: 'shadow' }))
+    const [back] = await rows<{ layer: string; action: string; decidedCents: number; why: string }>('SELECT layer, action, "decidedCents", why FROM "BidBrainDecision" WHERE "targetId" = \'t-c-oos\' ORDER BY "createdAt" DESC LIMIT 1')
+    expect([back.layer, back.action]).toEqual(['restore', 'write'])
+    expect(back.decidedCents).toBeGreaterThan(2)
+    expect(back.why).toMatch(/^restore: the stock layer no longer applies → the goal bid \d+¢ \(no bid before it is known; aim 20%/)
   })
 
   it('does nothing with the switch off', async () => {
