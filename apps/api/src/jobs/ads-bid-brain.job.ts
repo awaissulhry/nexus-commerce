@@ -18,6 +18,9 @@
  * OBSERVE or higher (brain/budget-shadow.ts) and logs it; it writes nothing else. Its own lever levels decide, not the
  * bid switch, so it runs with the bid brain off too. With no such product (production today) it reads one table, prunes
  * the plans older than 30 days and records no run. A failure there never touches the bid run.
+ * AB-8 — at PROPOSE and AUTO, under a live switch, the same run asks or writes (brain/budget-live.ts); and the ticks in
+ * between (every 15 minutes) carry the products whose budgets lever is AUTO — the intraday ladder and the next day's
+ * give-back land on time. No such product (production today): one enrollment read, nothing recorded.
  * Cluster-safe through lib/cron/clustered.ts (hard rule 7); with business profiles on it runs once per business.
  */
 import cron from '../lib/cron/clustered.js'
@@ -32,6 +35,8 @@ export const BID_BRAIN_JOB = 'ads-bid-brain-shadow'
 export const BID_BRAIN_LIVE_JOB = 'ads-bid-brain-live'
 /** AB-7 — the money shadow's run (recorded only when a product's budgets lever is OBSERVE or higher). */
 export const BRAIN_MONEY_JOB = 'ads-brain-money-shadow'
+/** AB-8 — the between-slots ticks of the money writer (recorded only when a product's budgets lever is AUTO, switch live). */
+export const BRAIN_MONEY_LIVE_JOB = 'ads-brain-money-live'
 
 /** BB-7 — the full run's tick: :45 of 00, 06, 12 and 18 UTC. */
 export function isFullSlot(at: Date): boolean {
@@ -42,6 +47,7 @@ export async function runBidBrainCron(at: Date = new Date()): Promise<void> {
   const full = isFullSlot(at)
   await runBidLever(full)
   if (full) await runMoneyShadowTick()
+  else await runMoneyLiveTick()
 }
 
 async function runBidLever(full: boolean): Promise<void> {
@@ -69,6 +75,20 @@ export async function runMoneyShadowTick(at?: Date): Promise<void> {
     if (!products.length) { await pruneMoneyDecisions(now); return }
     await recordCronRun(BRAIN_MONEY_JOB, async () => moneySummaryLine(await runMoneyShadowOnce({ now, products })))
   } catch (err) { logger.error('ads-brain money shadow failure', { error: err instanceof Error ? err.message : String(err) }) }
+}
+
+/**
+ * AB-8 — a tick between the full slots: the products whose budgets lever is AUTO under a live switch get their money run
+ * (the ladder's rungs and the give-back); none → nothing read beyond the enrollment, nothing recorded. Never throws.
+ */
+export async function runMoneyLiveTick(at?: Date): Promise<void> {
+  try {
+    const { moneyLiveProducts, moneySummaryLine, runMoneyShadowOnce } = await import('../services/advertising/brain/budget-shadow.js')
+    const products = await moneyLiveProducts()
+    if (!products.length) return
+    const now = at ?? await (await import('./ad-rank-defend.job.js')).dbNow()
+    await recordCronRun(BRAIN_MONEY_LIVE_JOB, async () => moneySummaryLine(await runMoneyShadowOnce({ now, products, between: true })))
+  } catch (err) { logger.error('ads-brain money live tick failure', { error: err instanceof Error ? err.message : String(err) }) }
 }
 
 let task: ReturnType<typeof cron.schedule> | null = null

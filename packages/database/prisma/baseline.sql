@@ -1707,6 +1707,25 @@ CREATE TABLE "AdsDailyVintage" (
 );
 
 -- CreateTable
+CREATE TABLE "AdsLagCurve" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "adProduct" TEXT NOT NULL DEFAULT 'SPONSORED_PRODUCTS',
+    "scopeId" TEXT NOT NULL DEFAULT '*',
+    "source" TEXT NOT NULL,
+    "shares" JSONB NOT NULL,
+    "usable" BOOLEAN NOT NULL DEFAULT false,
+    "basis" JSONB NOT NULL,
+    "calibration" JSONB,
+    "fittedAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "AdsLagCurve_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AmazonAdsHourlyPerformance" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -1730,6 +1749,60 @@ CREATE TABLE "AmazonAdsHourlyPerformance" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "AmazonAdsHourlyPerformance_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AmazonAdsHourlyPlacement" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "profileId" TEXT,
+    "marketplace" TEXT,
+    "campaignId" TEXT NOT NULL,
+    "adGroupId" TEXT NOT NULL,
+    "placement" TEXT NOT NULL,
+    "date" DATE NOT NULL,
+    "hour" INTEGER NOT NULL,
+    "currencyCode" TEXT,
+    "impressions" INTEGER NOT NULL DEFAULT 0,
+    "clicks" INTEGER NOT NULL DEFAULT 0,
+    "costMicros" BIGINT NOT NULL DEFAULT 0,
+    "orders1d" INTEGER NOT NULL DEFAULT 0,
+    "orders7d" INTEGER NOT NULL DEFAULT 0,
+    "units1d" INTEGER NOT NULL DEFAULT 0,
+    "units7d" INTEGER NOT NULL DEFAULT 0,
+    "sales1dCents" INTEGER NOT NULL DEFAULT 0,
+    "sales7dCents" INTEGER NOT NULL DEFAULT 0,
+    "appliedKeys" BIGINT[] DEFAULT ARRAY[]::BIGINT[],
+    "lateStart" BOOLEAN NOT NULL DEFAULT false,
+    "firstArrivalAt" TIMESTAMP(3) NOT NULL,
+    "lastArrivalAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "AmazonAdsHourlyPlacement_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AmazonAdsHourlyArrival" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "grainId" TEXT NOT NULL,
+    "date" DATE NOT NULL,
+    "kind" TEXT NOT NULL,
+    "ageHours" INTEGER NOT NULL,
+    "records" INTEGER NOT NULL DEFAULT 0,
+    "impressions" INTEGER NOT NULL DEFAULT 0,
+    "clicks" INTEGER NOT NULL DEFAULT 0,
+    "costMicros" BIGINT NOT NULL DEFAULT 0,
+    "orders1d" INTEGER NOT NULL DEFAULT 0,
+    "orders7d" INTEGER NOT NULL DEFAULT 0,
+    "units1d" INTEGER NOT NULL DEFAULT 0,
+    "units7d" INTEGER NOT NULL DEFAULT 0,
+    "sales1dCents" INTEGER NOT NULL DEFAULT 0,
+    "sales7dCents" INTEGER NOT NULL DEFAULT 0,
+    "firstAt" TIMESTAMP(3) NOT NULL,
+    "lastAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "AmazonAdsHourlyArrival_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -9607,6 +9680,67 @@ CREATE TABLE "AdsBrainBudgetDecision" (
 );
 
 -- CreateTable
+CREATE TABLE "AdsBrainTerm" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "term" TEXT NOT NULL,
+    "isAsin" BOOLEAN NOT NULL DEFAULT false,
+    "state" TEXT NOT NULL,
+    "previousState" TEXT,
+    "stateSince" TIMESTAMP(3) NOT NULL,
+    "protection" TEXT,
+    "leadProductId" TEXT,
+    "heldBy" TEXT,
+    "capped" BOOLEAN NOT NULL DEFAULT false,
+    "askFirst" BOOLEAN NOT NULL DEFAULT false,
+    "clashCount" INTEGER NOT NULL DEFAULT 0,
+    "impressions" INTEGER NOT NULL DEFAULT 0,
+    "clicks" INTEGER NOT NULL DEFAULT 0,
+    "orders" INTEGER NOT NULL DEFAULT 0,
+    "spendCents" INTEGER NOT NULL DEFAULT 0,
+    "salesCents" INTEGER NOT NULL DEFAULT 0,
+    "windowDays" INTEGER NOT NULL,
+    "dataDay" DATE NOT NULL,
+    "why" TEXT NOT NULL,
+    "evidence" JSONB NOT NULL,
+    "digest" TEXT NOT NULL,
+    "runId" TEXT NOT NULL,
+    "checkedAt" TIMESTAMP(3) NOT NULL,
+    "changedAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "AdsBrainTerm_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AdsBrainTermLead" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "term" TEXT NOT NULL,
+    "leadProductId" TEXT NOT NULL,
+    "previousLeadProductId" TEXT,
+    "leadSince" TIMESTAMP(3) NOT NULL,
+    "rule" TEXT NOT NULL,
+    "leadBidCents" INTEGER,
+    "maxBidCents" INTEGER,
+    "contenders" JSONB NOT NULL,
+    "wouldLower" JSONB NOT NULL,
+    "why" TEXT NOT NULL,
+    "digest" TEXT NOT NULL,
+    "runId" TEXT NOT NULL,
+    "checkedAt" TIMESTAMP(3) NOT NULL,
+    "changedAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "AdsBrainTermLead_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AdWriteRefusal" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -11274,6 +11408,12 @@ CREATE INDEX "AdsDailyVintage_workspaceId_idx" ON "AdsDailyVintage"("workspaceId
 CREATE UNIQUE INDEX "AdsDailyVintage_pull_key" ON "AdsDailyVintage"("workspaceId", "profileId", "adProduct", "entityType", "entityId", "date", "pulledAt");
 
 -- CreateIndex
+CREATE INDEX "AdsLagCurve_workspaceId_idx" ON "AdsLagCurve"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AdsLagCurve_scope_key" ON "AdsLagCurve"("workspaceId", "marketplace", "adProduct", "scopeId");
+
+-- CreateIndex
 CREATE INDEX "AmazonAdsHourlyPerformance_localEntityId_date_idx" ON "AmazonAdsHourlyPerformance"("localEntityId", "date");
 
 -- CreateIndex
@@ -11284,6 +11424,18 @@ CREATE INDEX "AmazonAdsHourlyPerformance_workspaceId_idx" ON "AmazonAdsHourlyPer
 
 -- CreateIndex
 CREATE UNIQUE INDEX "AmazonAdsHourlyPerformance_entity_date_hour_key" ON "AmazonAdsHourlyPerformance"("workspaceId", "profileId", "adProduct", "entityType", "entityId", "date", "hour");
+
+-- CreateIndex
+CREATE INDEX "AmazonAdsHourlyPlacement_workspaceId_date_idx" ON "AmazonAdsHourlyPlacement"("workspaceId", "date");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AmazonAdsHourlyPlacement_grain_key" ON "AmazonAdsHourlyPlacement"("workspaceId", "campaignId", "adGroupId", "placement", "date", "hour");
+
+-- CreateIndex
+CREATE INDEX "AmazonAdsHourlyArrival_workspaceId_date_idx" ON "AmazonAdsHourlyArrival"("workspaceId", "date");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AmazonAdsHourlyArrival_bucket_key" ON "AmazonAdsHourlyArrival"("workspaceId", "grainId", "kind", "ageHours");
 
 -- CreateIndex
 CREATE INDEX "AdBudgetUsageSample_campaign_reading_idx" ON "AdBudgetUsageSample"("campaignId", "usageUpdatedAt");
@@ -15406,6 +15558,33 @@ CREATE INDEX "AdsBrainBudgetDecision_createdAt_idx" ON "AdsBrainBudgetDecision"(
 
 -- CreateIndex
 CREATE INDEX "AdsBrainBudgetDecision_workspaceId_idx" ON "AdsBrainBudgetDecision"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainTerm_marketplace_term_idx" ON "AdsBrainTerm"("marketplace", "term");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainTerm_productId_marketplace_state_idx" ON "AdsBrainTerm"("productId", "marketplace", "state");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainTerm_checkedAt_idx" ON "AdsBrainTerm"("checkedAt");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainTerm_workspaceId_idx" ON "AdsBrainTerm"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AdsBrainTerm_workspaceId_productId_marketplace_term_key" ON "AdsBrainTerm"("workspaceId", "productId", "marketplace", "term");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainTermLead_leadProductId_idx" ON "AdsBrainTermLead"("leadProductId");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainTermLead_checkedAt_idx" ON "AdsBrainTermLead"("checkedAt");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainTermLead_workspaceId_idx" ON "AdsBrainTermLead"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AdsBrainTermLead_workspaceId_marketplace_term_key" ON "AdsBrainTermLead"("workspaceId", "marketplace", "term");
 
 -- CreateIndex
 CREATE INDEX "AdWriteRefusal_deniedAt_createdAt_idx" ON "AdWriteRefusal"("deniedAt", "createdAt");

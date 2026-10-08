@@ -4023,6 +4023,41 @@ model AdsDailyVintage {
   @@index([workspaceId])
 }
 
+/// BID BRAIN BB-15 (2026-10-08, design BRAIN-UPGRADES-DESIGN.md U1b) — the attribution lag curve L(a) of one market, or of
+/// one product in it with enough orders of its own: the expected share of a day's final 7-day orders and sales that a copy
+/// pulled at age a days holds (a = 0..14). Fitted each night from the AdsDailyVintage copies, seeded from the settled 1-day
+/// ÷ 7-day ratio (bid-brain/lag-curve.ts); replaced by each fit, no history. Read by the bid brain's nowcast and by the
+/// `bid-brain` read tool (view calibration). Nothing else writes it.
+model AdsLagCurve {
+  // Business ownership comes from verified database context.
+  workspaceId String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String   @id @default(cuid())
+
+  /// Short market code ('IT', 'DE').
+  marketplace String
+  /// SPONSORED_PRODUCTS (the bid brain's ad product).
+  adProduct   String   @default("SPONSORED_PRODUCTS")
+  /// '*' for the market; a product family (Product.parentId ?? Product.id) with its own curve.
+  scopeId     String   @default("*")
+  /// prior | seed | vintages — what the curve rests on.
+  source      String
+  /// The shares by age 0..14: { "orders": number[15], "sales": number[15] }, each non-decreasing in (0, 1].
+  shares      Json
+  /// The brain may nowcast with it: it rests on a 1d/7d seed or on 14 days of vintages (design U1 guardrails).
+  usable      Boolean  @default(false)
+  /// What it rests on: vintage days, campaign-days and their final orders; the seed's first-day shares; the prior.
+  basis       Json
+  /// How a curve fitted without the newest settled days nowcast them (per age: mean absolute error, against no nowcast).
+  calibration Json?
+  fittedAt    DateTime
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([workspaceId, marketplace, adProduct, scopeId], name: "lag_curve_scope", map: "AdsLagCurve_scope_key")
+  @@index([workspaceId])
+}
+
 // CD.11 — hourly grain (Amazon Marketing Stream). Mirrors the daily table but
 // keyed additionally by `hour` (0-23, UTC) so dayparting (which hour×weekday
 // converts) and hourly share-of-voice become possible — the genuine edge over
@@ -4058,6 +4093,91 @@ model AmazonAdsHourlyPerformance {
   @@index([localEntityId, date], map: "AmazonAdsHourlyPerformance_localEntityId_date_idx")
   @@index([marketplace, date, hour, adProduct], map: "AmazonAdsHourlyPerformance_mkt_date_hour_idx")
   @@index([workspaceId])
+}
+
+/// BID BRAIN BB-16 (2026-10-08, design BRAIN-UPGRADES-DESIGN.md U1c / F2, one-brain DESIGN.md §2.3 and §2.6) — the
+/// Marketing Stream's Sponsored Products hours at AD GROUP × PLACEMENT grain, with the real 1-day AND 7-day attributed
+/// conversions. AmazonAdsHourlyPerformance (campaign grain, 1-day conversions in its 7d-named columns) is unchanged and
+/// keeps its readers; this table sits beside it, written by the same ingest from the same records.
+///   one row   = Σ of every sp-traffic and sp-conversion delta Amazon sent for (campaign, ad group, placement, UTC hour).
+///               Amazon sends restatements as deltas, negative ones included (invalid clicks, returns); the sums are
+///               exact and never clamped here (a reader clamps a transient negative cell at 0 and says so).
+///   appliedKeys the dataset idempotency keys already summed into the row (8-byte hashes of dataset + idempotency_id):
+///               a redelivery adds nothing. The check sits in the row-locked update, so two deliveries at once cannot both add.
+///   lateStart the row's first delta arrived more than 12 hours after its hour ended: earlier deltas may be missing (an
+///               hour before the grain began, or a feed gap). Readers count these cells.
+///   placement PLACEMENT_TOP | PLACEMENT_PRODUCT_PAGE | PLACEMENT_REST_OF_SEARCH | OFF_AMAZON | UNKNOWN | OTHER:<label>.
+/// Rows are bounded (a row-count guard refuses new rows above NEXUS_AMS_GRAIN_MAX_ROWS_PER_DAY a data day) and kept 90 days.
+model AmazonAdsHourlyPlacement {
+  // Business ownership comes from verified database context.
+  workspaceId    String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id             String    @id @default(cuid())
+  /// The record's advertiser / profile id, as the stream named it (null when it named none).
+  profileId      String?
+  /// Short market code ('IT'), null when the record named no marketplace.
+  marketplace    String?
+  /// Amazon's campaign id.
+  campaignId     String
+  /// Amazon's ad group id.
+  adGroupId      String
+  placement      String
+  date           DateTime  @db.Date
+  /// 0-23, UTC.
+  hour           Int
+  currencyCode   String?
+
+  impressions    Int       @default(0)
+  clicks         Int       @default(0)
+  costMicros     BigInt    @default(0)
+  orders1d       Int       @default(0)
+  orders7d       Int       @default(0)
+  units1d        Int       @default(0)
+  units7d        Int       @default(0)
+  sales1dCents   Int       @default(0)
+  sales7dCents   Int       @default(0)
+
+  appliedKeys    BigInt[]  @default([])
+  lateStart      Boolean   @default(false)
+  firstArrivalAt DateTime
+  lastArrivalAt  DateTime
+  createdAt      DateTime  @default(now())
+
+  @@unique([workspaceId, campaignId, adGroupId, placement, date, hour], name: "grain", map: "AmazonAdsHourlyPlacement_grain_key")
+  @@index([workspaceId, date])
+}
+
+/// BID BRAIN BB-16 — when each hour's deltas arrived (the delta-arrival log), so later steps can learn how an hour fills:
+/// the attribution curve (conversions arriving days after the click hour) and click validation (traffic restated within
+/// 72 hours). One row per AmazonAdsHourlyPlacement row × kind × age bucket, holding the Σ of the deltas that arrived in it.
+///   kind      traffic | conversion
+///   ageHours  whole hours from the END of the row's hour to the arrival, bucketed: exact below 48 h, whole days below
+///             14 days, whole weeks after (Amazon restates conversions for up to 60 days)
+/// grainId is AmazonAdsHourlyPlacement.id; `date` is that row's date (both are pruned together, 90 days).
+model AmazonAdsHourlyArrival {
+  // Business ownership comes from verified database context.
+  workspaceId  String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id           String   @id @default(cuid())
+  grainId      String
+  date         DateTime @db.Date
+  kind         String
+  ageHours     Int
+  records      Int      @default(0)
+
+  impressions  Int      @default(0)
+  clicks       Int      @default(0)
+  costMicros   BigInt   @default(0)
+  orders1d     Int      @default(0)
+  orders7d     Int      @default(0)
+  units1d      Int      @default(0)
+  units7d      Int      @default(0)
+  sales1dCents Int      @default(0)
+  sales7dCents Int      @default(0)
+
+  firstAt      DateTime
+  lastAt       DateTime
+
+  @@unique([workspaceId, grainId, kind, ageHours], name: "bucket", map: "AmazonAdsHourlyArrival_bucket_key")
+  @@index([workspaceId, date])
 }
 
 // ADM-P6 — Amazon's OWN per-campaign budget-usage reading, sampled.
@@ -20163,6 +20283,111 @@ model AdsBrainBudgetDecision {
   @@index([productId, marketplace, createdAt(sort: Desc)])
   @@index([runId])
   @@index([createdAt])
+  @@index([workspaceId])
+}
+
+/// ONE BRAIN AB-9 — the term ledger: ONE decision per term of one product in one market (one-brain DESIGN.md §1, §2.7,
+/// §2.8, §4). Every customer search term the product's own campaigns saw in the window and every keyword or ASIN they
+/// target or negate, normalised (lower case, single spaces). The unique key makes a second decision on one term
+/// impossible: a term is never harvested and negated at once. SHADOW (services/advertising/brain/terms-shadow.ts): the
+/// daily run decides and logs; nothing here writes to Amazon. A changed decision rewrites its row (the state before and
+/// since when are kept); an unchanged one is only stamped with the run; a term that left the window is removed; rows no
+/// run checked for 30 days are deleted. No foreign key: the product id is the family root, as AdsBrainEnrollment's.
+model AdsBrainTerm {
+  // Business ownership comes from verified database context.
+  workspaceId   String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id            String    @id @default(cuid())
+
+  /// Product.id of the family root; short market code ('IT').
+  productId     String
+  marketplace   String
+  /// The term, normalised (an ASIN in lower case).
+  term          String
+  isAsin        Boolean   @default(false)
+  /// TARGETED | HARVEST_CANDIDATE | OWNED_BY_SIBLING | PROTECTED | NEGATED | NEGATE_CANDIDATE | WATCH (brain/terms.ts)
+  state         String
+  previousState String?
+  /// Since when the term holds this state.
+  stateSince    DateTime
+  /// protected-term | brand | winner — why no negative may touch it; null: none.
+  protection    String?
+  /// The market arbiter's lead when sibling products meet on the term (AdsBrainTermLead); null: not contested.
+  leadProductId String?
+  /// Why the brain would not act on it even once the lever writes (lever off or locked, the Owner's lock, past the cap).
+  heldBy        String?
+  capped        Boolean   @default(false)
+  /// A negative candidate a person decides (it has an order in the window: §2.7 PROPOSE).
+  askFirst      Boolean   @default(false)
+  /// How many clashes this decision removes (evidence.clashes).
+  clashCount    Int       @default(0)
+
+  /// The product's own campaigns over the window (`windowDays`, settled days ending at `dataDay`).
+  impressions   Int       @default(0)
+  clicks        Int       @default(0)
+  orders        Int       @default(0)
+  spendCents    Int       @default(0)
+  salesCents    Int       @default(0)
+  windowDays    Int
+  dataDay       DateTime  @db.Date
+
+  /// One line: the deciding rule with its numbers (no money).
+  why           String    @db.Text
+  /// { targets, negatives, destination, lead, wouldLower, clashes, tests } — what the read tool shows.
+  evidence      Json
+  /// Hash of the decision: an unchanged decision is not rewritten.
+  digest        String
+  /// The last run that decided it, when it was checked, and when its decision last changed.
+  runId         String
+  checkedAt     DateTime
+  changedAt     DateTime
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([workspaceId, productId, marketplace, term], name: "product_market_term", map: "AdsBrainTerm_workspaceId_productId_marketplace_term_key")
+  @@index([marketplace, term])
+  @@index([productId, marketplace, state])
+  @@index([checkedAt])
+  @@index([workspaceId])
+}
+
+/// ONE BRAIN AB-9 — the market arbiter's lead on one term sibling products meet on in one market (one-brain DESIGN.md §1:
+/// pinned, else the brand word, else the highest pooled profit per click, then orders, clicks, id). The others never
+/// harvest it and bid at most 0.8 × the lead's bid on it. SHADOW: decided and logged daily for the terms a due product
+/// holds; nothing here writes to Amazon. Rows no run checked for 30 days are deleted.
+model AdsBrainTermLead {
+  // Business ownership comes from verified database context.
+  workspaceId           String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                    String   @id @default(cuid())
+
+  /// Short market code ('IT'); the term, normalised.
+  marketplace           String
+  term                  String
+  /// Product.id of the lead's family root.
+  leadProductId         String
+  previousLeadProductId String?
+  leadSince             DateTime
+  /// pinned | brand | profit | orders | clicks | id
+  rule                  String
+  /// The lead's bid on the term and the most a sibling may bid (0.8 ×); null while the lead has no keyword on it.
+  leadBidCents          Int?
+  maxBidCents           Int?
+  /// [{ productId, lead, targets, wants, orders, clicks, profitPerClickCents, bidCents, brandWord }]
+  contenders            Json
+  /// Sibling keywords above the most they may bid: [{ productId, targetId, campaignId, adGroupId, bidCents, toBidCents }]
+  wouldLower            Json
+  why                   String   @db.Text
+  digest                String
+  runId                 String
+  checkedAt             DateTime
+  changedAt             DateTime
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([workspaceId, marketplace, term], name: "market_term", map: "AdsBrainTermLead_workspaceId_marketplace_term_key")
+  @@index([leadProductId])
+  @@index([checkedAt])
   @@index([workspaceId])
 }
 

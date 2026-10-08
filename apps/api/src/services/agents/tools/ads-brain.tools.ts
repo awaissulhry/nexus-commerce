@@ -12,11 +12,17 @@
  *   money    AB-7 — a product's money plan in shadow (brain/budget-read.ts): its envelope, pace and brake, the portfolio-cap
  *            plan, each campaign's budget target against today's and the intraday ladder, each with its why — decided now
  *            (a dry run, any product) beside the newest plan the shadow logged; with market alone, the market's split
+ *   terms    AB-9 — a product's term ledger in shadow (brain/terms-read.ts): one decision per search term or keyword
+ *            (targeted, harvest candidate, owned by a sibling, protected, negated, negate candidate, watch) with its why,
+ *            the market arbiter's leads on the terms sibling products meet on, the clashes the ledger removes; stored by
+ *            the daily shadow, else decided now (a dry run); with market alone, the market's ledgers
  */
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import { BRAIN_MAP_VIEWS, brainClashes, brainMap, brainSetup, DEFAULT_EVIDENCE_DAYS, MAX_EVIDENCE_DAYS } from '../../advertising/brain/read-map.js'
 import { brainMoney } from '../../advertising/brain/budget-read.js'
+import { brainTerms, DEFAULT_TERMS_LIMIT, MAX_TERMS_LIMIT } from '../../advertising/brain/terms-read.js'
+import { TERM_STATES } from '../../advertising/brain/terms.js'
 import type { AgentTool, FieldPermission } from '../tool-types.js'
 
 const ID = z.string().trim().min(1).max(64)
@@ -24,6 +30,8 @@ const ID = z.string().trim().min(1).max(64)
 /**
  * The portfolio cap amount (a setting) and the money an Owner's lock may hold are ad-spend money. AB-7 — the money view
  * puts every amount, percent of spend and sentence naming one under a `money` key: hidden whole without the permission.
+ * AB-9 — the terms view puts every amount (spend, sales, CPC, order value, profit per click, bids, the spend gate, the
+ * ACoS bound) under `money` keys too.
  */
 const BRAIN_MAP_MONEY: Readonly<Record<string, FieldPermission>> = Object.fromEntries(
   ['portfolioCapCents', 'dailyBudgetCents', 'amountCents', 'money'].map((key) => [key, FIELDS.financialsAdspendView]),
@@ -39,13 +47,16 @@ const adsBrain: AgentTool = {
   restrictedFields: BRAIN_MAP_MONEY,
   input: z.object({
     view: z.enum(BRAIN_MAP_VIEWS).default('map')
-      .describe('map (default): who owns each lever of each campaign today; clashes: two automatic writers on one campaign\'s lever, and the known gaps; setup: what is not set up or held off, with the fix; money: a product\'s money plan in shadow — envelope, pace, brake, portfolio cap, campaign budgets — or a market\'s split'),
+      .describe('map (default): who owns each lever of each campaign today; clashes: two automatic writers on one campaign\'s lever, and the known gaps; setup: what is not set up or held off, with the fix; money: a product\'s money plan in shadow — envelope, pace, brake, portfolio cap, campaign budgets — or a market\'s split; terms: a product\'s term ledger in shadow — one decision per search term, the market arbiter\'s leads, the clashes it removes — or a market\'s ledgers'),
     market: z.string().trim().toUpperCase().min(2).max(20).optional()
-      .describe('one Amazon market code (business-overview). map: with productId; alone, or omitted, the products the brain knows there (or in every market); clashes and money: required'),
-    productId: ID.optional().describe('map / clashes / money: one product (a variation names its parent), its Nexus id'),
+      .describe('one Amazon market code (business-overview). map: with productId; alone, or omitted, the products the brain knows there (or in every market); clashes, money and terms: required'),
+    productId: ID.optional().describe('map / clashes / money / terms: one product (a variation names its parent), its Nexus id'),
     campaignId: ID.optional().describe('map: one Amazon campaign, its Nexus id (ad-campaigns)'),
     days: z.coerce.number().int().min(1).max(MAX_EVIDENCE_DAYS).default(DEFAULT_EVIDENCE_DAYS)
       .describe(`map / clashes: how many days of the action log count as evidence of who wrote (default ${DEFAULT_EVIDENCE_DAYS}, max ${MAX_EVIDENCE_DAYS})`),
+    state: z.enum(TERM_STATES).optional().describe('terms: only the terms in this state'),
+    limit: z.coerce.number().int().min(1).max(MAX_TERMS_LIMIT).default(DEFAULT_TERMS_LIMIT)
+      .describe(`terms: how many terms to list (default ${DEFAULT_TERMS_LIMIT}, max ${MAX_TERMS_LIMIT}); the counts per state cover every term`),
   }),
   description:
     'Read the ads brain\'s map for Amazon Sponsored Products: one brain per product and market will run every lever (bids, '
@@ -73,14 +84,29 @@ const adsBrain: AgentTool = {
     + 'down 10 % a day, above 105 % the stop recipe on the weakest campaigns), the Amazon portfolio-cap plan (115 % of '
     + 'the envelope, the only hard cap; a portfolio holding another product\'s campaigns is "move first"), each '
     + 'campaign\'s budget target (expected spend at the goal bids ÷ 70 %, inside the pace and the day-move bound) against '
-    + 'today\'s, and the intraday ladder — each with its why; with market alone, the market\'s split. The portfolio cap '
+    + 'today\'s, and the intraday ladder — each with its why; a logged plan also says what the money writer did with it '
+    + '(AB-8: at PROPOSE the requests it asked a person for, at AUTO the budgets and caps it wrote, each hold with its '
+    + 'reason); with market alone, the market\'s split. view terms (market, '
+    + 'optionally productId and state; SHADOW — nothing is written): with productId, the product\'s term ledger — one '
+    + 'decision per search term its own campaigns saw in 60 settled days and per keyword or ASIN they target or negate: '
+    + 'TARGETED (it has an exact home), HARVEST_CANDIDATE (it converts: graduate it to exact, its source negated exact), '
+    + 'OWNED_BY_SIBLING (a sibling product leads it in the market), PROTECTED (a protected term, the product\'s brand word or '
+    + 'a winner: never negated), NEGATED, NEGATE_CANDIDATE (0 orders after the pooled test — n ≈ 3 ÷ the product\'s pooled '
+    + 'conversion rate — and spend past 1.5 target CPAs) or WATCH — each with its why, since when, what holds it (the lever '
+    + 'off, the Owner\'s lock, the day\'s cap of 20 negatives and 10 keywords); one state per term, so a term is never '
+    + 'harvested and negated at once; the market arbiter\'s leads on the terms sibling products meet on (the Owner\'s pin, '
+    + 'else the brand word, else the highest pooled profit per click, then orders; the others never harvest it and bid at '
+    + 'most 0.8 × the lead\'s bid); the clashes it removes; harvest candidates with no destination yet. Stored by the daily '
+    + 'shadow for an enrolled product whose negatives or harvest lever is OBSERVE or higher, else decided now (a dry run, '
+    + 'never stored). With market alone, the products with a ledger there. The portfolio cap '
     + 'amount and everything under a money key are ad-spend money. Nexus only: it reads what Nexus stored and asks Amazon nothing.',
   handler: async (args) => {
-    const a = args as { view?: string; market?: string; productId?: string; campaignId?: string; days?: number }
+    const a = args as { view?: string; market?: string; productId?: string; campaignId?: string; days?: number; state?: string; limit?: number }
     const out = a.view === 'clashes' ? await brainClashes(a)
       : a.view === 'setup' ? await brainSetup(a)
         : a.view === 'money' ? await brainMoney(a)
-          : await brainMap(a)
+          : a.view === 'terms' ? await brainTerms(a)
+            : await brainMap(a)
     return 'error' in out ? { ok: false, error: out.error } : { ok: true, data: out.data }
   },
 }

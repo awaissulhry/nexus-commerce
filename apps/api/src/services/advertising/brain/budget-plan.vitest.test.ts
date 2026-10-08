@@ -156,3 +156,51 @@ function settingsOf(overrides: OverrideRow[] = []) {
   const s = resolveBrainSettings({ productId: PRODUCT, market: 'IT', enrolled: true, overrides })
   return { on: s.values.portfolioCapOn, pct: s.values.portfolioCapPct, amountCents: s.values.portfolioCapCents, ownPortfolio: s.values.ownPortfolio, lock: s.levers.portfolioCap.lock }
 }
+
+describe('AB-8 — Amazon\'s usage of the portfolio caps in the plan', () => {
+  const capped = (amountCents: number, fraction: number, over: Partial<PortfolioFacts> = {}, state: 'live' | 'stale' = 'live'): PortfolioFacts => ({
+    ...PF, today: { policy: 'MONTHLY_RECURRING', amountCents, inBudget: true, setBy: 'brain' }, usage: { state, fraction, budgetCents: amountCents, asOf: '2026-10-08T11:00:00Z', why: 'Amazon\'s reading' }, ...over,
+  })
+
+  it('Amazon\'s count of the month\'s spend, ahead of the reports, enters the pace', () => {
+    // Amazon reads €92.00 spent of the €368.00 cap; the reports and the stream say €75.00: €17.00 more.
+    const p = planProductMoney(productA({ portfolios: [capped(36_800, 0.25)] }), budgetDayMoveBounds)
+    expect(p.pace).toMatchObject({ amazonAheadCents: 1_700, spentNowCents: 9_200, projectedCents: 32_700 })
+    expect(p.pace.why).toContain('€17.00 of it Amazon\'s own count of the portfolio caps, ahead of the reports')
+    expect(p.brake.level).toBe('cut_bids')
+    expect(p.portfolioCap.portfolios[0]).toMatchObject({ todaySetBy: 'brain', usagePct: 25 })
+  })
+
+  it('a reading behind the reports, an earlier month\'s, or of a portfolio shared with another product adds nothing', () => {
+    for (const pf of [capped(36_800, 0.1), capped(36_800, 0.25, {}, 'stale'), capped(36_800, 0.25, { otherCampaigns: 1 })]) {
+      const p = planProductMoney(productA({ portfolios: [pf] }), budgetDayMoveBounds)
+      expect(p.pace.amazonAheadCents).toBeUndefined()
+      expect(p.pace.projectedCents).toBe(31_000)
+    }
+  })
+
+  it('with no envelope, a cap Amazon is about to reach brakes all the same: ≥ 95 % projected no raises, ≥ 100 % bids step down', () => {
+    const none = { productId: PRODUCT, cents: null, source: 'none' as const, why: 'no monthly budget' }
+    // €80.00 spent by Amazon's count + €10.00 a day × 23.5 days = €315.00 by month end.
+    const hold = planProductMoney(productA({ envelope: none, portfolios: [capped(32_000, 0.25)] }), budgetDayMoveBounds)
+    expect(hold.brake).toMatchObject({ level: 'hold_raises', abovePct: null })
+    expect(hold.brake.why).toBe('Amazon reads portfolio "Portfolio X" at 25 % of its cap €320.00; with the run rate it would reach 98.4 % by month end — no raises, so it never reaches the cap')
+    const cut = planProductMoney(productA({ envelope: none, portfolios: [capped(30_000, 0.25)] }), budgetDayMoveBounds)
+    expect(cut.brake).toMatchObject({ level: 'cut_bids', bidStepPct: -10 })
+    expect(planProductMoney(productA({ envelope: none, portfolios: [capped(40_000, 0.25)] }), budgetDayMoveBounds).brake.level).toBe('none')
+    // No reading (a dry run reads no Amazon): no cap brake.
+    expect(planProductMoney(productA({ envelope: none, portfolios: [{ ...capped(30_000, 0.25), usage: undefined }] }), budgetDayMoveBounds).brake.level).toBe('none')
+  })
+})
+
+describe('AB-8 — the fingerprint once the writes have landed', () => {
+  it('a lowering that landed is the same decision (a keep at the same step); a rung in force today stays in it', () => {
+    const before = planProductMoney(productA(), budgetDayMoveBounds)
+    expect(before.campaigns.map((c) => c.action)).toEqual(['lower', 'lower', 'lower', 'lower'])
+    // The next run: each budget is at the step the day's first plan decided (the brain wrote it).
+    const landed = productA({ campaigns: before.campaigns.map((c, i) => camp(`c${i + 1}`, { avgDailySpendCents: SPEND[i], todayCents: c.stepCents, openingCents: i < 2 ? 1_500 : 1_000, stepToday: c.stepCents, bidRatio: i === 0 ? 0.9 : i === 1 ? 1.1 : null })) })
+    const after = planProductMoney(landed, budgetDayMoveBounds)
+    expect(after.campaigns.map((c) => c.action)).toEqual(['keep', 'keep', 'keep', 'keep'])
+    expect(moneyPlanHash(after)).toBe(moneyPlanHash(before))
+  })
+})

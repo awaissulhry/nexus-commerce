@@ -17,6 +17,7 @@ import { verifiedChannelWorkspace, withIngressWorkspace } from '../../lib/worksp
 import { amsRecordAdvertiser, routeRecords } from '../ads-core/ams-dataset.js'
 import { flushAdsCache } from './ads-cache.js'
 import { ingestMarketingStream, type AmsIngestResult } from './ads-marketing-stream.service.js'
+import type { GrainIngestResult } from './ams-grain.service.js'
 import { ingestBudgetUsage, ingestEntityChanges, type BudgetIngestResult, type ChangeIngestResult } from './ads-stream-change.service.js'
 
 type AmsRecord = Record<string, unknown>
@@ -28,6 +29,8 @@ export interface AmsBatchResult {
   routed: { performance: number; change: number; budget: number; unknownDataset: number }
   change?: ChangeIngestResult
   budget?: BudgetIngestResult
+  /** BB-16 — the Sponsored Products records at ad group × placement grain (summed over the profiles written). */
+  grain?: GrainIngestResult
   /** Records whose Amazon Ads account no active business profile owns (or that name no account). */
   unrouted: number
 }
@@ -69,6 +72,7 @@ export async function ingestAmsBatch(records: AmsRecord[]): Promise<AmsBatchResu
     result.upserted += group.perf?.upserted ?? 0
     result.skipped += group.perf?.skipped ?? 0
     if (group.change) result.change = addCounts(result.change, group.change)
+    if (group.perf?.grain) result.grain = addCounts(result.grain, group.perf.grain)
     if (group.budget) result.budget = addCounts(result.budget, group.budget)
   }
 

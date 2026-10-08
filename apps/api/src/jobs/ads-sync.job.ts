@@ -559,12 +559,15 @@ export function startReportIngestCron(): void {
 }
 
 // Weekly Sunday 04:00 UTC — prune search-term rows older than 90 days
+// BB-16 — and the Marketing Stream's ad group × placement hours with their arrival log (90 days).
 export async function runSearchTermCleanupCron(): Promise<void> {
   await recordCronRun('ads-search-term-cleanup', async () => {
     const result = await cleanupOldSearchTerms(90)
     const hourly = await cleanupOldHourlyPerformance(90)
     const vintages = await cleanupOldVintages()
-    return `searchTerms=${result.deletedSearchTerms} hourly=${hourly.deletedHourlyRows} vintages=${vintages.deletedVintages} cutoff=${result.cutoffDate}`
+    const { cleanupOldPlacementHours } = await import('../services/advertising/ams-grain.service.js')
+    const grain = await cleanupOldPlacementHours()
+    return `searchTerms=${result.deletedSearchTerms} hourly=${hourly.deletedHourlyRows} vintages=${vintages.deletedVintages} placementHours=${grain.deletedRows} arrivals=${grain.deletedArrivals} cutoff=${result.cutoffDate}`
   }).catch((err) => logger.error('ads-search-term-cleanup cron: failure', { error: String(err) }))
 }
 

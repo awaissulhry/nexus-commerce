@@ -6115,6 +6115,17 @@
     },
     "relations": []
   },
+  "AdsLagCurve": {
+    "scalar": {},
+    "compound": {
+      "lag_curve_scope": [
+        "marketplace",
+        "adProduct",
+        "scopeId"
+      ]
+    },
+    "relations": []
+  },
   "AdSpendCeiling": {
     "scalar": {},
     "compound": {
@@ -6253,6 +6264,51 @@
   "AdsBrainBudgetDecision": {
     "scalar": {},
     "compound": {},
+    "relations": []
+  },
+  "AdsBrainTerm": {
+    "scalar": {},
+    "compound": {
+      "product_market_term": [
+        "productId",
+        "marketplace",
+        "term"
+      ]
+    },
+    "relations": []
+  },
+  "AdsBrainTermLead": {
+    "scalar": {},
+    "compound": {
+      "market_term": [
+        "marketplace",
+        "term"
+      ]
+    },
+    "relations": []
+  },
+  "AmazonAdsHourlyPlacement": {
+    "scalar": {},
+    "compound": {
+      "grain": [
+        "campaignId",
+        "adGroupId",
+        "placement",
+        "date",
+        "hour"
+      ]
+    },
+    "relations": []
+  },
+  "AmazonAdsHourlyArrival": {
+    "scalar": {},
+    "compound": {
+      "bucket": [
+        "grainId",
+        "kind",
+        "ageHours"
+      ]
+    },
     "relations": []
   },
   "AdWriteRefusal": {

@@ -12,6 +12,8 @@
  *
  * Evidence is settled days only, up to 90 of them, each weighted with a 30-day half-life (`weigh`). Zero orders is no
  * cliff: the estimate falls smoothly as K·m/(K+c) (at 0.87 %, K ≈ 230: −8 % after 20 clicks, −33 % after 115).
+ * BB-15 — with the nowcast switched on (nowcast.ts), the window ends yesterday and each day also counts with its copy's
+ * maturity (`matureSum`, lag-curve.ts); without it, exactly as above.
  *
  * Pure: no database, no clock. The loaders (BB-3) build the chain; `decide.ts` turns the estimate into a bid.
  */
@@ -29,7 +31,22 @@ export const NO_EVIDENCE: Evidence = Object.freeze({ clicks: 0, orders: 0, sales
 /** One settled day of one node; `daysAgo` counts back from the newest settled day (0). */
 export interface DayEvidence extends Evidence {
   daysAgo: number
+  /** BB-15 — the age its copy was pulled at (days after the day ended; lag-curve.ts). Absent: read as settled. */
+  pullAge?: number | null
+  /** BB-15 — newer than the settled window: one of the young days the young-day cap holds. */
+  young?: boolean
 }
+
+/** BB-15 — a copy's maturity: the expected share of its final orders and of its final sales it already holds. */
+export interface Maturity {
+  orders: number
+  sales: number
+}
+/** BB-15 — the maturity of a copy pulled at an age (lag-curve.ts maturityOf); null: too young to use. */
+export type MaturityOf = (pullAge: number) => Maturity | null
+
+/** BB-15 — young days may carry at most this share of a keyword's matured clicks (design U1 guardrails). */
+export const YOUNG_SHARE_MAX = 0.3
 
 export const HALF_LIFE_DAYS = 30
 export const MAX_WINDOW_DAYS = 90
@@ -54,8 +71,21 @@ export function decayWeight(daysAgo: number, halfLifeDays = HALF_LIFE_DAYS): num
   return Math.pow(0.5, Math.max(0, daysAgo) / halfLifeDays)
 }
 
-/** The days of a window as one decayed sum. Days at or beyond `windowDays` are left out. */
-export function weigh(days: readonly DayEvidence[], opts: { windowDays?: number; halfLifeDays?: number } = {}): Evidence {
+/**
+ * The days of a window as one decayed sum. Days at or beyond `windowDays` are left out.
+ * BB-15 — with `maturity` each day is also weighted by its copy's maturity (`matureSum`); without it, exactly as before.
+ */
+export function weigh(days: readonly DayEvidence[], opts: { windowDays?: number; halfLifeDays?: number; maturity?: MaturityOf | null; youngShareMax?: number } = {}): Evidence {
+  if (opts.maturity) {
+    const decayed = days
+      .filter((d) => d.daysAgo >= 0 && d.daysAgo < (opts.windowDays ?? MAX_WINDOW_DAYS))
+      .map((d) => {
+        const w = decayWeight(d.daysAgo, opts.halfLifeDays)
+        return { clicks: d.clicks * w, orders: d.orders * w, salesCents: d.salesCents * w, costCents: d.costCents * w, pullAge: d.pullAge ?? null, young: !!d.young }
+      })
+    const { clicks, orders, salesCents, costCents } = matureSum(decayed, opts.maturity, { youngShareMax: opts.youngShareMax })
+    return { clicks, orders, salesCents, costCents }
+  }
   const windowDays = opts.windowDays ?? MAX_WINDOW_DAYS
   const out = { clicks: 0, orders: 0, salesCents: 0, costCents: 0 }
   for (const d of days) {
@@ -67,6 +97,63 @@ export function weigh(days: readonly DayEvidence[], opts: { windowDays?: number;
     out.costCents += d.costCents * w
   }
   return out
+}
+
+/** BB-15 — a matured sum, with what the young days carry and what was left out. */
+export interface MaturedEvidence extends Evidence {
+  /** The young days' share of the matured clicks, after the cap (0 … YOUNG_SHARE_MAX). */
+  youngShare: number
+  /** Matured clicks the young-day cap took away. */
+  youngCapped: number
+  /** Clicks of copies too young to use (maturity below the floor), left out. */
+  tooYoung: number
+}
+
+/**
+ * BB-15 (design U1b) — maturity-weighted evidence. A copy holding the expected share m of its final orders (m_s of its
+ * final sales) counts with weight m: its clicks and cost × m, its orders as observed (the nowcast o ÷ m, weighed by m),
+ * its sales nowcast and weighed the same way (s ÷ m_s × m). So, per keyword,
+ *
+ *   CR̂ = Σ orders_observed ÷ Σ (clicks × m)        (E[orders_observed] = clicks × CR × m: unbiased)
+ *   AOV and paid CPC per click keep their meaning (sales ÷ orders, cost ÷ clicks are both weighed alike)
+ *
+ * and the confidence penalty comes by itself: a young day is worth only m of its clicks, so the Beta posterior stays
+ * wider and the step (confidence × maxChangePct) smaller. A zero-order day 1 day old barely moves the estimate.
+ * Caps: a copy whose maturity is null (below lag-curve.ts MIN_MATURITY: its numbers would be multiplied by more than 2.5)
+ * is left out; the young days (`young`, newer than the settled window) may carry at most `youngShareMax` of the
+ * keyword's matured clicks — scaled down together when they would carry more, dropped when the keyword has no older
+ * clicks at all (it then pools from its parents, as before BB-15). A copy without a pull age counts as settled (m = 1).
+ */
+export function matureSum(
+  items: ReadonlyArray<Evidence & { pullAge?: number | null; young?: boolean }>,
+  maturity: MaturityOf,
+  opts: { youngShareMax?: number } = {},
+): MaturedEvidence {
+  const old = { clicks: 0, orders: 0, salesCents: 0, costCents: 0 }
+  const young = { clicks: 0, orders: 0, salesCents: 0, costCents: 0 }
+  let tooYoung = 0
+  for (const d of items) {
+    const m = d.pullAge == null ? { orders: 1, sales: 1 } : maturity(d.pullAge)
+    if (!m) { tooYoung += d.clicks; continue }
+    const into = d.young ? young : old
+    into.clicks += d.clicks * m.orders
+    into.costCents += d.costCents * m.orders
+    into.orders += d.orders
+    into.salesCents += (d.salesCents / m.sales) * m.orders
+  }
+  const max = Math.min(1, Math.max(0, opts.youngShareMax ?? YOUNG_SHARE_MAX))
+  const room = max >= 1 ? Number.POSITIVE_INFINITY : (max / (1 - max)) * old.clicks
+  const scale = old.clicks <= 0 ? 0 : young.clicks > room ? room / young.clicks : 1
+  const total = old.clicks + young.clicks * scale
+  return {
+    clicks: total,
+    orders: old.orders + young.orders * scale,
+    salesCents: old.salesCents + young.salesCents * scale,
+    costCents: old.costCents + young.costCents * scale,
+    youngShare: total > 0 ? (young.clicks * scale) / total : 0,
+    youngCapped: young.clicks * (1 - scale),
+    tooYoung,
+  }
 }
 
 /** The window to read: 14 days while the season index moves (demand ±15 %), else 90. */

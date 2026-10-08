@@ -171,6 +171,11 @@ export interface PaceFacts {
   stream: { gapCents: number; todayCents: number } | null
   /** The average of the last RUN_RATE_DAYS reported days; null: no reported day. */
   runRateCents: number | null
+  /**
+   * AB-8 — how far Amazon's own count of this month's spend (its portfolio-cap usage) is ahead of the spend above: Amazon
+   * counts in real time, the daily report two days late. Added to the spend so far (budget-portfolio.ts amazonAheadCents).
+   */
+  amazonAheadCents?: number
 }
 
 export interface Pace {
@@ -201,7 +206,8 @@ export function paceOf(f: PaceFacts, words: (c: number) => string = (c) => money
   const shareGone = dayShareGone(f.hourWeights, c.hour, c.hourFraction)
   const gapDays = Math.max(0, c.dayOfMonth - 1 - Math.max(0, Math.min(f.reportedThroughDay, c.dayOfMonth - 1)))
   const runRate = f.runRateCents ?? 0
-  const spentNow = f.spentCents + (f.stream ? f.stream.gapCents + f.stream.todayCents : runRate * (gapDays + shareGone))
+  const ahead = Math.max(0, f.amazonAheadCents ?? 0)
+  const spentNow = f.spentCents + (f.stream ? f.stream.gapCents + f.stream.todayCents : runRate * (gapDays + shareGone)) + ahead
   const daysAhead = (1 - shareGone) + c.daysAfterToday
   const projected = Math.round(spentNow + runRate * daysAhead)
   const projection: Pace['projection'] = f.runRateCents == null ? 'month to date only' : f.stream ? 'stream and run rate' : 'run rate'
@@ -227,8 +233,9 @@ export function paceOf(f: PaceFacts, words: (c: number) => string = (c) => money
   const vsCurvePct = expectedThrough != null && expectedThrough > 0 ? round2((f.spentCents / expectedThrough) * 100) : null
   const allowance = aimCents != null && daysAhead > 0 ? Math.max(0, Math.round((aimCents - spentNow) / daysAhead)) : null
   const brake = brakeOf(projected, f.envelopeCents, words)
-  const how = projection === 'month to date only' ? 'no reported day to take a run rate from: month to date only'
-    : `${words(Math.round(spentNow))} so far + run rate ${words(runRate)} a day × ${round2(daysAhead)} days${f.stream ? '' : ' (no Marketing Stream hours: the run rate stands in for the days the report does not cover yet)'}`
+  const aheadWords = ahead > 0 ? `; ${words(ahead)} of it Amazon's own count of the portfolio caps, ahead of the reports` : ''
+  const how = projection === 'month to date only' ? `no reported day to take a run rate from: month to date only${aheadWords}`
+    : `${words(Math.round(spentNow))} so far + run rate ${words(runRate)} a day × ${round2(daysAhead)} days${f.stream ? '' : ' (no Marketing Stream hours: the run rate stands in for the days the report does not cover yet)'}${aheadWords}`
   const why = f.envelopeCents == null
     ? `no envelope: projected ${words(projected)} by month end (${how}); nothing to pace`
     : `projected ${words(projected)} = ${pacePct ?? '—'} % of the envelope ${words(f.envelopeCents)} (${how}); the aim is ${f.aimPct} % (${words(aimCents!)}), ${allowance != null ? `${words(allowance)} a day from here` : 'no day left'}; ${brake.why}`

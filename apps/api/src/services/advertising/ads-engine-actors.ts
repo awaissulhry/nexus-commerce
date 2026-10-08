@@ -23,6 +23,7 @@
  *   write reconcile   `automation:reconcile` (bids), `automation:ads-write-reconcile` (placements)
  *                                                                                          ads-write-reconcile.service.ts
  *   bid brain         `automation:bid-brain`                                                bid-brain/live-writer.ts
+ *   brain money       `automation:ads-brain-budgets`, `automation:ads-brain-portfolio`      brain/budget-live.ts
  *
  * Rules are not here: a rule writes as `automation:<ruleId>` and keeps its own brakes (its caps and the
  * breaker's rule-action signal).
@@ -34,6 +35,8 @@ export type EngineKey =
   | 'auto-bid' | 'tos-defense' | 'coverage-engine' | 'autopilot' | 'write-reconcile'
   // BID BRAIN BB-6 — the one writer of the campaigns enrolled LIVE (bid-brain/live.ts).
   | 'bid-brain'
+  // ONE BRAIN AB-8 — the brain's money writer: campaign budgets and Amazon portfolio caps of the levers it owns at AUTO.
+  | 'brain-money'
 
 /** The breaker's buckets: every engine, plus writes no engine or rule claims. */
 export type BreakerBucket = EngineKey | 'unknown'
@@ -67,6 +70,7 @@ export const ENGINE_ACTORS: readonly EngineActorDef[] = [
   { key: 'autopilot', label: 'Autopilot', actors: ['automation:autopilot'], prefixes: ['automation:autopilot-'] },
   { key: 'write-reconcile', label: 'Retry of failed changes', actors: ['automation:reconcile', 'automation:ads-write-reconcile'] },
   { key: 'bid-brain', label: 'Bid brain', actors: ['automation:bid-brain'] },
+  { key: 'brain-money', label: 'Brain budgets', actors: ['automation:ads-brain-budgets', 'automation:ads-brain-portfolio'] },
 ]
 
 /**
@@ -200,6 +204,9 @@ const DEFAULT_ENGINE_CAPS: Readonly<Record<BreakerBucket, Readonly<EngineCaps>>>
   // BB-6 — the bid brain moves a keyword at most once per new data day, plus the hour's placements and Min-bid floors of
   // its campaigns (BB-7): auto-bid's caps for its bids, and room for the hourly placement writes.
   'bid-brain': { perTick: 300, perDay: 1_500, breakerPerHour: 600 },
+  // AB-8 — the brain's money writer: one base move a campaign a day, at most four ladder rungs and the next day's
+  // give-back (design §5), and a portfolio cap now and then — a budget schedule's caps hold it.
+  'brain-money': { perTick: 100, perDay: 400, breakerPerHour: 200 },
   unknown: { perTick: null, perDay: null, breakerPerHour: 300 },
 }
 

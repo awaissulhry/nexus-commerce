@@ -1749,7 +1749,19 @@
       "fields": []
     },
     {
+      "name": "AdsLagCurve",
+      "fields": []
+    },
+    {
       "name": "AmazonAdsHourlyPerformance",
+      "fields": []
+    },
+    {
+      "name": "AmazonAdsHourlyPlacement",
+      "fields": []
+    },
+    {
+      "name": "AmazonAdsHourlyArrival",
       "fields": []
     },
     {
@@ -6860,6 +6872,14 @@
     },
     {
       "name": "AdsBrainBudgetDecision",
+      "fields": []
+    },
+    {
+      "name": "AdsBrainTerm",
+      "fields": []
+    },
+    {
+      "name": "AdsBrainTermLead",
       "fields": []
     },
     {
