@@ -1439,6 +1439,14 @@ export async function updateCampaignWithSync(args: {
     outboundQueueId,
   })
 
+  // ONE BRAIN AB-2 — a person's own bidding strategy (or a request a person approved) on a campaign the bid brain owns
+  // becomes its STRATEGY hold: the stop recipe leaves it alone until the hold ends. Inert unless the brain owns the
+  // campaign; never fails this write.
+  if (person && changes.some((c) => c.field === 'biddingStrategy')) {
+    const { recordStrategyHold } = await import('./bid-brain/brain-holds.js')
+    await recordStrategyHold({ campaignId: args.campaignId, actor: args.actor, manual: person, reason: args.reason ?? null })
+  }
+
   await enqueueBullMQJob(outboundQueueId, syncType)
 
   return { ok: true, outboundQueueId, bidHistoryIds, actionLogId, error: null }

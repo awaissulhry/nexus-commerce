@@ -3217,6 +3217,14 @@ model Campaign {
   // were in exactly that state when this was found. null means "suppressed before this
   // column existed, owner unknown", which every engine must read as NOT MINE.
   bidsSuppressedBy         String?
+  /// ONE BRAIN AB-2 — the stop recipe's memory on a campaign the bid brain owns, beside the keywords'
+  /// `suppressedFromBidCents`: the placement % live (Campaign.dynamicBidding.placementBidding) when a stop or a Min-bid
+  /// hour set every lane to 0 %, and what the lanes come back to when it ends (the hourly plan's own lanes over it).
+  /// Null: no stop holds the lanes. An empty list: no lane was set.
+  suppressedFromPlacements      Json?
+  /// AB-2 — the bidding strategy a stop switched from (AUTO_FOR_SALES, "up and down", is LEGACY_FOR_SALES, "down
+  /// only", while a stop or a Min-bid hour lasts), given back when it ends. Null: the stop switched nothing.
+  suppressedFromBiddingStrategy BiddingStrategy?
   /// AX2.2 — WRITE truth: when we last pushed to Amazon and how it went.
   /// Stamped by ads-sync.worker. Never stamped by a read, so a successful
   /// settings read can't mask a failed bid write.

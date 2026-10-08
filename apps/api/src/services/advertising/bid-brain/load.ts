@@ -34,6 +34,7 @@ import { STOP_FLOOR_KIND } from '../ads-playbook/held.js'
 import { loadPlanHours } from './plans.js'
 import { loadServingBids } from './serving.js'
 import { loadSpendGuard } from './spend-guard.js'
+import { readSavedLanes } from './stop-recipe.js'
 
 /** The markets the shadow decides for (Owner, 2026-10-07: shadow on IT and DE first). */
 export const SHADOW_MARKETS = ['IT', 'DE'] as const
@@ -64,21 +65,24 @@ export async function loadMarket(market: string, opts: { now?: Date; campaignIds
   const all = await prisma.campaign.findMany({
     where: { adProduct: 'SPONSORED_PRODUCTS', marketplace: { not: null }, ...(opts.campaignIds ? { id: { in: [...opts.campaignIds] } } : {}) },
     select: {
-      id: true, marketplace: true, status: true, liveBidWritesEnabled: true, pinBids: true, pinnedBy: true, bidsSuppressedAt: true,
+      id: true, marketplace: true, status: true, liveBidWritesEnabled: true, pinBids: true, pinPlacement: true, pinnedBy: true, bidsSuppressedAt: true,
       bidsSuppressedFloorCents: true, bidsSuppressedBy: true, minBidCents: true, maxBidCents: true, dynamicBidding: true,
-      biddingStrategy: true,
+      biddingStrategy: true, suppressedFromPlacements: true, suppressedFromBiddingStrategy: true,
     },
   })
   const campaigns = new Map<string, CampaignRow>()
   for (const c of all) {
     if (strategyMarket(c.marketplace) !== market) continue
     campaigns.set(c.id, {
-      id: c.id, status: String(c.status), pinBids: c.pinBids, pinnedBy: c.pinnedBy, bidsSuppressedAt: c.bidsSuppressedAt,
+      id: c.id, status: String(c.status), pinBids: c.pinBids, pinPlacement: c.pinPlacement, pinnedBy: c.pinnedBy, bidsSuppressedAt: c.bidsSuppressedAt,
       bidsSuppressedFloorCents: c.bidsSuppressedFloorCents, bidsSuppressedBy: c.bidsSuppressedBy, minBidCents: c.minBidCents,
       maxBidCents: c.maxBidCents, ownTargetAcos: (c.dynamicBidding as { targetAcos?: unknown } | null)?.targetAcos, allowlisted: c.liveBidWritesEnabled,
       // BB-18 — how Amazon may lift the bid: its bidding strategy and the placement % in force.
       biddingStrategy: c.biddingStrategy ?? null,
       placements: placementsOf(c.dynamicBidding),
+      // AB-2 — the stop recipe's memory: what a stop saved before it set the lanes to 0 % and switched the strategy.
+      savedPlacements: readSavedLanes(c.suppressedFromPlacements),
+      savedStrategy: c.suppressedFromBiddingStrategy ?? null,
     })
   }
   const empty = { market, dataDay, campaigns, adGroups: new Map(), targets: [], evidence: new Map(), adSales30: new Map(), prices: new Map(), newestReportAt: null }

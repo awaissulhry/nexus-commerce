@@ -1333,6 +1333,8 @@ CREATE TABLE "Campaign" (
     "bidsSuppressedAt" TIMESTAMP(3),
     "bidsSuppressedFloorCents" INTEGER,
     "bidsSuppressedBy" TEXT,
+    "suppressedFromPlacements" JSONB,
+    "suppressedFromBiddingStrategy" "BiddingStrategy",
     "lastSyncedAt" TIMESTAMP(3),
     "lastSyncStatus" "AdSyncStatus",
     "lastSyncError" TEXT,

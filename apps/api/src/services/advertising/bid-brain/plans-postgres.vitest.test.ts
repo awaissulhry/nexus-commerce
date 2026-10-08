@@ -8,11 +8,19 @@
  *   Min-bid hour   every serving keyword floored to the plan's 3¢ as the brain, and ONE entry recorded for the anti-flap;
  *                  a rerun in the same hour writes nothing and records no second entry
  *   after it       the next serving hour gives the bids back in one write each (not 25 % at a time from 3¢)
+ *   AB-2           a monthly-cap stop on an "up and down" campaign at 900 % top of search: the same tick sets every lane to
+ *                  0 % and switches to down only (the campaign write, the gate asked) — 60¢ → 3¢; the lift gives the bids,
+ *                  the lanes and the strategy back exactly; another engine may not touch the strategy; a campaign the brain
+ *                  does not own and a shadow ceiling get nothing; a second stop the same UTC day keeps down only until the
+ *                  next day; C: a person's own strategy during a stop is a hold the brain leaves until it ends; B4: with
+ *                  the switch off, the stop owner's restore (or a person's Restore) gives the lanes and the strategy back;
+ *                  B1/B2: op shadow, approved, puts them back and clears them; B3: op live is refused while one is owed
  *
  * Values are made up (public repo).
  */
 import { randomBytes } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { FEATURES, FIELDS } from '@nexus/shared/permissions'
 import { concurrentDatabase, concurrentDatabaseUrl } from '../../../test-support/concurrent-database.js'
 import { seedAdsFixture } from '../../../test-support/ads-fixtures.js'
 import { withWorkspace } from '../../../lib/workspace-context.js'
@@ -61,12 +69,19 @@ const { restoreCampaignBids, suppressCampaignBids } = await import('../ads-bid-s
 const { applyRetailGuard } = await import('../ads-retail-readiness.service.js')
 const { ADS_BID_BRAIN_ENROLLMENT_TOOLS } = await import('../../agents/tools/ads-bid-brain-enrollment.tools.js')
 const { loadMarket } = await import('./load.js')
+const { updateCampaignWithSync } = await import('../ads-mutation.service.js')
+const { stackMaxCents } = await import('./stop-recipe.js')
+const { decideApproval, runOrQueueTool } = await import('../../agents/approval-gate.service.js')
 
 const W = `bb7_plans_${randomBytes(4).toString('hex')}`
 const business = { workspaceId: W, actorUserId: null, membershipId: null, roleKeys: [] }
 const inside = <T>(work: () => Promise<T>) => withWorkspace(business, work)
 const rows = async <T,>(sql: string, params: unknown[] = []) => (await database.pool.query(sql, params)).rows as T[]
 const bidOf = async (id: string) => (await rows<{ b: number }>('SELECT "bidCents" b FROM "AdTarget" WHERE id = $1', [id]))[0].b
+const person = (userId: string, via: 'claude' | 'app') => ({
+  kind: 'user' as const, userId, label: `Person ${userId}`, via, workspace: business,
+  permissions: { isOwner: false, permissions: new Set<string>([...Object.values(FEATURES), ...Object.values(FIELDS)]) },
+})
 const NOW = new Date()
 const DAY = 86_400_000
 // The plan's clock (Europe/Rome, CEST in October): 12:00 serves the all-out target, 03:00 is a Min-bid hour.
@@ -349,5 +364,203 @@ describe.skipIf(!concurrentDatabaseUrl())('BB-7 — an owned campaign\'s hourly 
     expect(plan.placements?.to).toEqual([{ placement: 'PLACEMENT_TOP', percentage: 150 }, { placement: 'PLACEMENT_PRODUCT_PAGE', percentage: 50 }])
     expect(plan.placements?.from.every((p) => p.percentage === 0)).toBe(true)
     expect(plan.raises).toBeGreaterThan(0)
+  })
+
+  it('AB-2 — a monthly-cap stop on an up-and-down campaign at 900 % top of search: lanes 0 % and down only with the 3¢ floors; the lift gives everything back exactly', async () => {
+    const BUDGET = 'automation:budget-manager-cron'
+    type P = { placement: string; percentage: number }
+    // No plan here: a stop needs no hour. Settle first: the Min-bid floor and the lanes the test before left come back.
+    await database.pool.query('UPDATE "AdSchedule" SET enabled = false WHERE "campaignId" = \'c-it\'')
+    await inside(() => runShadowOnce({ now: at(NOW, 50), mode: 'live', onlyOwned: true, clockNow: at(NOW, 50) }))
+    const memory = async () => (await rows<{ p: unknown; s: string | null; b: string }>('SELECT "suppressedFromPlacements" p, "suppressedFromBiddingStrategy" s, "biddingStrategy" b FROM "Campaign" WHERE id = \'c-it\''))[0]
+    expect(await memory()).toMatchObject({ p: null, s: null })
+    const LIVE: P[] = [{ placement: 'PLACEMENT_TOP', percentage: 900 }, { placement: 'PLACEMENT_PRODUCT_PAGE', percentage: 50 }]
+    amz.placements = LIVE
+    await database.pool.query('UPDATE "Campaign" SET "biddingStrategy" = \'AUTO_FOR_SALES\', "dynamicBidding" = $1::jsonb WHERE id IN (\'c-it\', \'c-pin\')', [JSON.stringify({ placementBidding: LIVE })])
+    // c-pin: allowlisted, never enrolled, held at a stop by the cap too — the brain decides it in shadow only.
+    await database.pool.query('UPDATE "Campaign" SET "bidsSuppressedAt" = now(), "bidsSuppressedFloorCents" = 3, "bidsSuppressedBy" = $1 WHERE id = \'c-pin\'', [BUDGET])
+    const before = await bidOf('t-it')
+    expect(before).toBeGreaterThan(3)
+    expect(stackMaxCents(3, LIVE, 'AUTO_FOR_SALES')).toBe(60)
+    const switches = () => rows<{ before: string; after: string; layer: string; queued: boolean }>('SELECT "payloadBefore" ->> \'biddingStrategy\' AS before, "payloadAfter" ->> \'biddingStrategy\' AS after, evidence -> \'brain\' ->> \'layer\' AS layer, "outboundQueueId" IS NOT NULL AS queued FROM "AdvertisingActionLog" WHERE "entityId" = \'c-it\' AND "actionType" = \'AD_BIDDING_STRATEGY_UPDATE\' AND "userId" = $1 ORDER BY "createdAt"', [BRAIN_ACTOR])
+
+    await inside(() => suppressCampaignBids('c-it', { actor: BUDGET as never, floorCents: 3, reason: 'monthly cap reached' }))
+    // The server switch in shadow: the brain owns nothing, so nothing of the recipe happens.
+    vi.stubEnv('NEXUS_BID_BRAIN_MODE', 'shadow')
+    const puts = amz.puts.length
+    let shadowRun = ''
+    try {
+      shadowRun = (await inside(() => runShadowOnce({ now: at(NOW, 51), mode: 'shadow', clockNow: at(NOW, 51) }))).runId
+    } finally {
+      vi.stubEnv('NEXUS_BID_BRAIN_MODE', 'live')
+    }
+    expect(amz.puts.length).toBe(puts)
+    expect(await memory()).toEqual({ p: null, s: null, b: 'AUTO_FOR_SALES' })
+    expect(await switches()).toEqual([])
+    // (The shadow run's rows hold the same decisions: dropped, so the live run's rows — with the recipe's why — are stored.)
+    await database.pool.query('DELETE FROM "BidBrainDecision" WHERE "runId" = $1', [shadowRun])
+
+    // Live: one full run (c-pin decided in shadow beside it). The keywords at 3¢, every lane at 0 %, down only.
+    await inside(() => runShadowOnce({ now: at(NOW, 52), mode: 'live', clockNow: at(NOW, 52) }))
+    expect(await bidOf('t-it')).toBe(3)
+    expect(amz.puts.length).toBe(puts + 1)
+    expect(amz.puts.at(-1)!.externalId).toBe('EXT-c-it')
+    expect((amz.puts.at(-1)!.patch.placementBidding as P[]).every((p) => p.percentage === 0)).toBe(true)
+    expect(await memory()).toEqual({ p: LIVE, s: 'AUTO_FOR_SALES', b: 'LEGACY_FOR_SALES' })
+    expect(await switches()).toEqual([{ before: 'AUTO_FOR_SALES', after: 'LEGACY_FOR_SALES', layer: 'stop', queued: true }])
+    const bids = (await rows<{ b: number }>('SELECT "bidCents" b FROM "AdTarget" a JOIN "AdGroup" g ON g.id = a."adGroupId" WHERE g."campaignId" = \'c-it\' AND NOT a."isNegative"')).map((x) => x.b)
+    expect(stackMaxCents(Math.max(...bids), amz.placements, (await memory()).b)).toBe(3)
+    const [last] = await rows<{ why: string }>('SELECT why FROM "BidBrainDecision" WHERE "targetId" = \'t-it\' ORDER BY "createdAt" DESC LIMIT 1')
+    expect(last.why).toMatch(/stop recipe: every placement at 0 %; bidding strategy up and down → down only while the stop lasts/)
+    // Not owned: c-pin keeps its lanes and its strategy, and holds no memory.
+    expect(amz.puts.some((x) => x.externalId === 'EXT-c-pin')).toBe(false)
+    expect(await rows('SELECT "biddingStrategy" b, "suppressedFromPlacements" p, "suppressedFromBiddingStrategy" s FROM "Campaign" WHERE id = \'c-pin\'')).toEqual([{ b: 'AUTO_FOR_SALES', p: null, s: null }])
+    // A rerun in the stop writes nothing more.
+    await inside(() => runShadowOnce({ now: at(NOW, 53), mode: 'live', onlyOwned: true, clockNow: at(NOW, 53) }))
+    expect(amz.puts.length).toBe(puts + 1)
+    expect(await switches()).toHaveLength(1)
+
+    // One owner per lever: another automatic writer may not set the strategy back; nothing changes.
+    const other = await inside(() => updateCampaignWithSync({ campaignId: 'c-it', patch: { biddingStrategy: 'AUTO_FOR_SALES' }, actor: 'automation:retail-guard', reason: 'test', askGate: true }))
+    expect(other).toMatchObject({ ok: false, error: expect.stringMatching(/one writer per lever\): automation:retail-guard may not change its bidding strategy/) })
+    expect((await memory()).b).toBe('LEGACY_FOR_SALES')
+
+    // The cap lifts: the bids, the lanes and the strategy come back in the same tick, exactly as before the stop.
+    await inside(() => restoreCampaignBids('c-it', { actor: BUDGET as never, reason: 'back under cap' }))
+    await inside(() => runShadowOnce({ now: at(NOW, 54), mode: 'live', onlyOwned: true, clockNow: at(NOW, 54) }))
+    expect(await bidOf('t-it')).toBe(before)
+    expect(amz.puts.length).toBe(puts + 2)
+    expect(amz.puts.at(-1)!.patch.placementBidding).toEqual(LIVE)
+    expect(await memory()).toEqual({ p: null, s: null, b: 'AUTO_FOR_SALES' })
+    expect(await switches()).toEqual([
+      { before: 'AUTO_FOR_SALES', after: 'LEGACY_FOR_SALES', layer: 'stop', queued: true },
+      { before: 'LEGACY_FOR_SALES', after: 'AUTO_FOR_SALES', layer: 'restore', queued: true },
+    ])
+    await database.pool.query('UPDATE "Campaign" SET "bidsSuppressedAt" = NULL, "bidsSuppressedFloorCents" = NULL, "bidsSuppressedBy" = NULL WHERE id = \'c-pin\'')
+  })
+
+  it('AB-2 — the anti-flap: a second stop the same UTC day switches down again; its end keeps down only until the next UTC day, and says why', async () => {
+    const BUDGET = 'automation:budget-manager-cron'
+    const strategy = async () => (await rows<{ b: string; s: string | null }>('SELECT "biddingStrategy" b, "suppressedFromBiddingStrategy" s FROM "Campaign" WHERE id = \'c-it\''))[0]
+    const before = await bidOf('t-it')
+    await inside(() => suppressCampaignBids('c-it', { actor: BUDGET as never, floorCents: 3, reason: 'monthly cap reached again' }))
+    await inside(() => runShadowOnce({ now: at(NOW, 55), mode: 'live', onlyOwned: true, clockNow: at(NOW, 55) }))
+    // The third switch today: the switch down is the stop's brake, never held back.
+    expect(await strategy()).toEqual({ b: 'LEGACY_FOR_SALES', s: 'AUTO_FOR_SALES' })
+    expect(await bidOf('t-it')).toBe(3)
+    await inside(() => restoreCampaignBids('c-it', { actor: BUDGET as never, reason: 'back under cap' }))
+    const r = await inside(() => runShadowOnce({ now: at(NOW, 56), mode: 'live', onlyOwned: true, clockNow: at(NOW, 56) }))
+    expect(await bidOf('t-it')).toBe(before)
+    expect(await strategy()).toEqual({ b: 'LEGACY_FOR_SALES', s: 'AUTO_FOR_SALES' })
+    const it = r.markets.find((m) => m.market === 'IT')!
+    expect(it.strategies?.byCampaign.get('c-it')).toMatchObject({ sent: 'held', why: expect.stringMatching(/kept down only until tomorrow \(UTC\): it switched 3 times today, at most 2 a day/) })
+    // The lanes do not wait for the strategy: they are back.
+    expect(amz.placements).toEqual([{ placement: 'PLACEMENT_TOP', percentage: 900 }, { placement: 'PLACEMENT_PRODUCT_PAGE', percentage: 50 }])
+    // The next UTC day: the count starts again, and up and down comes back.
+    await inside(() => runShadowOnce({ now: at(NOW, 57), mode: 'live', onlyOwned: true, clockNow: new Date(NOW.getTime() + DAY) }))
+    expect(await strategy()).toEqual({ b: 'AUTO_FOR_SALES', s: null })
+  })
+
+  it('AB-2 C — a person\'s own strategy during a stop is a hold: the brain leaves it until it ends, then the stop switches again', async () => {
+    const BUDGET = 'automation:budget-manager-cron'
+    const clock = (m: number) => new Date(NOW.getTime() + 3 * DAY + m * 60_000)
+    const strategyNow = async () => (await rows<{ b: string; s: string | null }>('SELECT "biddingStrategy" b, "suppressedFromBiddingStrategy" s FROM "Campaign" WHERE id = \'c-it\''))[0]
+    await inside(() => suppressCampaignBids('c-it', { actor: BUDGET as never, floorCents: 3, reason: 'monthly cap reached' }))
+    await inside(() => runShadowOnce({ now: at(NOW, 60), mode: 'live', onlyOwned: true, clockNow: clock(0) }))
+    expect(await strategyNow()).toEqual({ b: 'LEGACY_FOR_SALES', s: 'AUTO_FOR_SALES' })
+    // The Owner sets up and down himself during the stop: his own strategy, held 60 days like his bid.
+    const own = await inside(() => updateCampaignWithSync({ campaignId: 'c-it', patch: { biddingStrategy: 'AUTO_FOR_SALES' }, actor: 'user:u-owner', reason: 'my own strategy', manual: true, askGate: true }))
+    expect(own).toMatchObject({ ok: true })
+    expect(await rows('SELECT kind, by, round(extract(epoch from (until - "createdAt")) / 86400)::int AS days FROM "BidHold" WHERE "campaignId" = \'c-it\' AND kind = \'STRATEGY\' AND "endedAt" IS NULL')).toEqual([{ kind: 'STRATEGY', by: 'user:u-owner', days: 60 }])
+    const r = await inside(() => runShadowOnce({ now: at(NOW, 61), mode: 'live', onlyOwned: true, clockNow: clock(15) }))
+    expect((await strategyNow()).b).toBe('AUTO_FOR_SALES')
+    expect(r.markets.find((m) => m.market === 'IT')!.strategies?.byCampaign.get('c-it')).toMatchObject({ sent: 'held', why: expect.stringMatching(/a person's own \(held by user:u-owner until \d{4}-\d{2}-\d{2}\): kept up and down/) })
+    // His hold holds the strategy, never the bids: the stop keeps them at 3¢.
+    expect(await bidOf('t-it')).toBe(3)
+    // The hold ends with the stop still running: down only again.
+    await database.pool.query('UPDATE "BidHold" SET "endedAt" = now(), "endedBy" = \'test\' WHERE "campaignId" = \'c-it\' AND kind = \'STRATEGY\'')
+    await inside(() => runShadowOnce({ now: at(NOW, 62), mode: 'live', onlyOwned: true, clockNow: clock(30) }))
+    expect((await strategyNow()).b).toBe('LEGACY_FOR_SALES')
+  })
+
+  it('AB-2 B4 — the server switch off in a stop: the stop owner\'s restore gives back the lanes and the strategy the brain saved; with no stop left, a person\'s Restore does', async () => {
+    const BUDGET = 'automation:budget-manager-cron'
+    type P = { placement: string; percentage: number }
+    const LIVE: P[] = [{ placement: 'PLACEMENT_TOP', percentage: 900 }, { placement: 'PLACEMENT_PRODUCT_PAGE', percentage: 50 }]
+    const memory = async () => (await rows<{ b: string; p: unknown; s: string | null }>('SELECT "biddingStrategy" b, "suppressedFromPlacements" p, "suppressedFromBiddingStrategy" s FROM "Campaign" WHERE id = \'c-it\''))[0]
+    // As the last test left it: in the cap's stop, every lane at 0 %, down only, both saved.
+    expect(await memory()).toEqual({ b: 'LEGACY_FOR_SALES', p: LIVE, s: 'AUTO_FOR_SALES' })
+    expect(amz.placements.every((p) => p.percentage === 0)).toBe(true)
+    vi.stubEnv('NEXUS_BID_BRAIN_MODE', 'shadow')
+    try {
+      // The cap's owner lifts its stop on a campaign the brain no longer runs: bids, lanes and strategy come back.
+      await inside(() => restoreCampaignBids('c-it', { actor: BUDGET as never, reason: 'back under cap' }))
+      expect(await bidOf('t-it')).toBeGreaterThan(3)
+      expect(amz.puts.at(-1)!.patch.placementBidding).toEqual(LIVE)
+      expect(await memory()).toEqual({ b: 'AUTO_FOR_SALES', p: null, s: null })
+      // Leftovers with no stop in force (a switch back the anti-flap held when the switch went off): a person's Restore.
+      amz.placements = [{ placement: 'PLACEMENT_TOP', percentage: 0 }, { placement: 'PLACEMENT_PRODUCT_PAGE', percentage: 0 }]
+      await database.pool.query('UPDATE "Campaign" SET "biddingStrategy" = \'LEGACY_FOR_SALES\', "dynamicBidding" = $1::jsonb, "suppressedFromPlacements" = $2::jsonb, "suppressedFromBiddingStrategy" = \'AUTO_FOR_SALES\' WHERE id = \'c-it\'', [JSON.stringify({ placementBidding: amz.placements }), JSON.stringify(LIVE)])
+      await inside(() => restoreCampaignBids('c-it', { actor: 'user:u-owner' as never, reason: 'control plane: restore', manual: true }))
+      expect(amz.puts.at(-1)!.patch.placementBidding).toEqual(LIVE)
+      expect(await memory()).toEqual({ b: 'AUTO_FOR_SALES', p: null, s: null })
+      // A campaign that never had the recipe: its restore is exactly as before (no memory, nothing more written).
+      const puts = amz.puts.length
+      expect(await inside(() => restoreCampaignBids('c-pin', { actor: 'user:u-owner' as never, manual: true }))).toBe(0)
+      expect(amz.puts.length).toBe(puts)
+    } finally {
+      vi.stubEnv('NEXUS_BID_BRAIN_MODE', 'live')
+    }
+  })
+
+  it('AB-2 B1/B2 — a hand-back in a stop: give-back plans the strategy back; op shadow, approved, puts the lanes and the strategy back and clears them', async () => {
+    const BUDGET = 'automation:budget-manager-cron'
+    const LIVE = [{ placement: 'PLACEMENT_TOP', percentage: 900 }, { placement: 'PLACEMENT_PRODUCT_PAGE', percentage: 50 }]
+    const tool = ADS_BID_BRAIN_ENROLLMENT_TOOLS[0]
+    await inside(() => suppressCampaignBids('c-it', { actor: BUDGET as never, floorCents: 3, reason: 'monthly cap reached' }))
+    await inside(() => runShadowOnce({ now: at(NOW, 63), mode: 'live', onlyOwned: true, clockNow: new Date(NOW.getTime() + 4 * DAY) }))
+    expect(await rows('SELECT "biddingStrategy" b, "suppressedFromPlacements" p, "suppressedFromBiddingStrategy" s FROM "Campaign" WHERE id = \'c-it\'')).toEqual([{ b: 'LEGACY_FOR_SALES', p: LIVE, s: 'AUTO_FOR_SALES' }])
+    // The give-back's card: the LIVE-time bids and placements, and the strategy the stop switched.
+    const [row] = await rows<{ snapshot: unknown }>('SELECT snapshot FROM "BidBrainEnrollment" WHERE "campaignId" = \'c-it\'')
+    expect((await inside(() => giveBackPlan('c-it', readSnapshot(row.snapshot)!))).biddingStrategy).toEqual({ from: 'LEGACY_FOR_SALES', to: 'AUTO_FOR_SALES' })
+    const back = await inside(() => tool.handler({ campaignId: 'c-it', op: 'give-back' }, {} as never)) as { ok: boolean; preview: { effect: string; reachNote: string } }
+    expect(back.preview.effect).toMatch(/and the bidding strategy a stop switched to down only back to up and down, as the person who approves it/)
+    expect(back.preview.reachNote).toMatch(/placements and the bidding strategy at Amazon/)
+    // Op shadow: its card says what goes back first; approved, the lanes and the strategy are back and the memory is gone.
+    const card = await inside(() => tool.handler({ campaignId: 'c-it', op: 'shadow' }, {} as never)) as { ok: boolean; preview: { effect: string; reachNote: string; raises: string[] } }
+    expect(card.preview.effect).toMatch(/First it puts back what a stop saved, as the person who approves it: the placements it set to 0 % and the bidding strategy, up and down \(it is down only now\)/)
+    expect(card.preview.reachNote).toMatch(/It writes the placements and the bidding strategy a stop saved at Amazon/)
+    expect(card.preview.raises).toEqual(expect.arrayContaining([expect.stringMatching(/placements a stop set to 0 %/), expect.stringMatching(/up and down/)]))
+    const done = await inside(async () => {
+      const run = await database.client.agentRun.create({ data: { agentKey: 'mcp', trigger: 'manual', status: 'done', via: 'claude', userId: 'u-asker' } })
+      const asked = await runOrQueueTool('set-bid-brain-enrollment', { campaignId: 'c-it', op: 'shadow', why: 'test hand-back' }, person('u-asker', 'claude'), run.id)
+      expect(asked).toMatchObject({ ok: true, mode: 'queued' })
+      return decideApproval(asked.approvalId!, 'approve', person('u-approver', 'app'))
+    })
+    expect(done).toMatchObject({ ok: true, status: 'executed' })
+    expect(await rows('SELECT mode FROM "BidBrainEnrollment" WHERE "campaignId" = \'c-it\'')).toEqual([{ mode: 'SHADOW' }])
+    expect(amz.puts.at(-1)!.patch.placementBidding).toEqual(LIVE)
+    expect(await rows('SELECT "biddingStrategy" b, "suppressedFromPlacements" p, "suppressedFromBiddingStrategy" s FROM "Campaign" WHERE id = \'c-it\'')).toEqual([{ b: 'AUTO_FOR_SALES', p: null, s: null }])
+    expect(await rows('SELECT "userId" FROM "AdvertisingActionLog" WHERE "entityId" = \'c-it\' AND "actionType" = \'AD_BIDDING_STRATEGY_UPDATE\' ORDER BY "createdAt" DESC LIMIT 1')).toEqual([{ userId: 'user:u-approver' }])
+    // The cap's owner lifts later: the bids come back (nothing of the recipe is left to give).
+    await inside(() => restoreCampaignBids('c-it', { actor: BUDGET as never, reason: 'back under cap' }))
+    expect(await bidOf('t-it')).toBeGreaterThan(3)
+  })
+
+  it('AB-2 B3 — op live never drops a memory that is still owed: LIVE is refused until it is given back; a settled one is dropped', async () => {
+    const tool = ADS_BID_BRAIN_ENROLLMENT_TOOLS[0]
+    // Leftovers on the campaign in shadow: down only, up and down saved (a stop that ended while nobody gave it back).
+    await database.pool.query('UPDATE "Campaign" SET "biddingStrategy" = \'LEGACY_FOR_SALES\', "suppressedFromBiddingStrategy" = \'AUTO_FOR_SALES\' WHERE id = \'c-it\'')
+    await expect(inside(() => setEnrollment({ campaignId: 'c-it', marketplace: 'IT', op: 'live', by: 'user:test', now: NOW }))).rejects.toThrow(/cannot go LIVE yet: a stop's saved settings are still owed: the bidding strategy it switched to down only \(up and down saved\)/)
+    expect(await rows('SELECT mode FROM "BidBrainEnrollment" WHERE "campaignId" = \'c-it\'')).toEqual([{ mode: 'SHADOW' }])
+    expect(await rows('SELECT "suppressedFromBiddingStrategy" s FROM "Campaign" WHERE id = \'c-it\'')).toEqual([{ s: 'AUTO_FOR_SALES' }])
+    // The tool's op live gives it back first, as the approver: its card says so.
+    const card = await inside(() => tool.handler({ campaignId: 'c-it', op: 'live' }, {} as never)) as { ok: boolean; preview: { effect: string; raises: string[] } }
+    expect(card.ok).toBe(true)
+    expect(card.preview.effect).toMatch(/First it puts back what a stop saved, as the person who approves it: the bidding strategy, up and down \(it is down only now\)/)
+    // Settled (someone set the strategy back since): nothing owed — LIVE drops the old memory.
+    await database.pool.query('UPDATE "Campaign" SET "biddingStrategy" = \'AUTO_FOR_SALES\' WHERE id = \'c-it\'')
+    await inside(() => setEnrollment({ campaignId: 'c-it', marketplace: 'IT', op: 'live', by: 'user:test', now: NOW }))
+    expect(await rows('SELECT "suppressedFromBiddingStrategy" s, "suppressedFromPlacements" p FROM "Campaign" WHERE id = \'c-it\'')).toEqual([{ s: null, p: null }])
   })
 })

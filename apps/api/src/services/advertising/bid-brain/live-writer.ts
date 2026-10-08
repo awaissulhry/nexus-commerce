@@ -22,16 +22,26 @@
  *            so that its highest base bid × (1 + p) × Amazon's dynamic bidding stays within the lane's CPC ceiling)
  *            differs from what is live — through updatePlacementBidding as the brain (the gate judges it, Amazon's
  *            current array is read and merged first)
+ *   AB-2     the stop recipe (stop-recipe.ts): a stop or a Min-bid hour holding the whole campaign sets every lane to 0 %
+ *            (the lanes live before it saved first, stop-memory.ts), and switches "up and down" to "down only"; when it
+ *            ends the lanes come back in one write (the plan's own lanes over the saved ones) and so does the strategy —
+ *            through the campaign write every bidding-strategy change takes (updateCampaignWithSync with askGate: the
+ *            gate before Nexus's copy, the 5-minute queue, the gate at dispatch, the channel gateway). A stop lowers past
+ *            the Owner's lock (AB-1), as it beats a pinned bid; its give-back puts his value back. The campaign's own pins
+ *            hold every write; unreadable locks hold the give-back a tick — each said in the report, no memory dropped
  */
 import type { AdWriteEvidence } from '../ads-evidence.js'
 import { allowChange, nothingHeld, type ChangeKind, type EngineGuard } from '../ads-engine-guard.js'
-import { updateAdTargetWithSync } from '../ads-mutation.service.js'
+import { updateAdTargetWithSync, updateCampaignWithSync } from '../ads-mutation.service.js'
 import { buildBlendedAdjustments, MANAGED_PLACEMENTS } from '../ads-placement-math.js'
 import { logger } from '../../../utils/logger.js'
+import type { LeverLocks } from '../brain/owner-brakes.js'
 import type { Decision } from './decide.js'
 import { BRAIN_ACTOR } from './live.js'
 import { laneOf, placementOf } from './plan-hour.js'
 import { laneWords, placementsFor, type Lane } from './recipe.js'
+import { forgetLanes, forgetStrategy, rememberLanes, rememberStrategy } from './stop-memory.js'
+import type { StrategyStep } from './stop-recipe.js'
 
 export interface BrainWrite {
   campaignId: string
@@ -173,57 +183,135 @@ export interface PlacementWrite {
   dataDay: string
   /** BB-10 — why raises wait this hour (spend-guard.ts): a lane only comes down, never up. */
   raiseCap?: string | null
+  /**
+   * AB-2 — the stop recipe: `stop` sets every lane to 0 % (the lanes live now saved first); `restore` gives back the lanes
+   * saved when the stop began (`base`), the hour's own lanes over them. Absent: the hourly plan's hour.
+   */
+  recipe?: 'stop' | 'restore'
+  /** AB-2 restore — the lanes saved when the stop began, every managed lane listed (stop-recipe.ts fullLanes). */
+  base?: ReadonlyArray<{ placement: string; percentage: number }>
+  /** AB-2 restore — the lanes the Owner locked (LaneName): back to `base`, whatever the hour's plan sets around them. */
+  fixedLanes?: readonly string[]
+  /**
+   * AB-2 — the hour's plan only: the Owner's locks (brain/owner-brakes.ts): a placements lever he locked is not written, a
+   * locked lane keeps its %. (A stop passes them; its give-back carries his value in `base`.)
+   */
+  locks?: LeverLocks | null
+  /** AB-2 — the campaign's placements pin, in words: no lane is written (the gate would refuse it); a memory is kept. */
+  pinned?: string | null
+  /** AB-2 — why this write waits this tick (the Owner's locks could not be read): nothing written, nothing dropped. */
+  wait?: string | null
+  /** AB-2 — the stop recipe's words for the why of the campaign's decisions (shadow.ts recipeWords). */
+  recipeWhy?: string
 }
 
 /**
  * What one campaign's placements become, and which lanes change; null when nothing changes. Pure. Live fix 10-08 — `kept`:
- * a single-placement hour sets its own lane only; the other lanes as they stay (at 0 % after a Min-bid hour), for the why.
+ * a single-placement hour sets its own lane only; the other lanes as they stay, for the why (none after a stop: they come
+ * back from its memory, `base`).
+ * AB-2 — `base`: what the lanes the hour does not set go back to (the lanes saved when a stop began; else the live ones),
+ * and what the raise cap measures a raise from (a give-back is no raise); `locks`: a lane the Owner locked keeps its %.
  */
-export function placementPlan(w: Pick<PlacementWrite, 'lanes' | 'current' | 'maxBidCents' | 'raiseCap'>): { adjustments: Array<{ placement: string; percentage: number }>; changes: Array<{ lane: string; from: number; to: number; held: string | null }>; kept: Array<{ lane: string; pct: number }> } | null {
-  if (!w.lanes.length) return null
+export function placementPlan(w: Pick<PlacementWrite, 'lanes' | 'current' | 'maxBidCents' | 'raiseCap'> & Partial<Pick<PlacementWrite, 'base' | 'locks' | 'fixedLanes'>>): { adjustments: Array<{ placement: string; percentage: number }>; changes: Array<{ lane: string; from: number; to: number; held: string | null }>; kept: Array<{ lane: string; pct: number }>; locked: Array<{ lane: string; pct: number; by: string }> } | null {
+  const base = w.base ?? w.current
+  if (!w.lanes.length && !w.base) return null
   // The CR cap of placementsFor waits for the placement report (crRatio null): only the CPC ceilings hold here.
   const decided = placementsFor(w.maxBidCents, w.lanes, { aim: 1, hi: 1 })
-  const liveOf = (p: string) => w.current.find((x) => x.placement === p)?.percentage ?? 0
-  // BB-10 — under the raise cap a lane may come down, never go up: it keeps what it has.
+  const valueOf = (list: ReadonlyArray<{ placement: string; percentage: number }>, p: string) => list.find((x) => x.placement === p)?.percentage ?? 0
+  // BB-10 — under the raise cap a lane may come down, never go up: it keeps what it had (AB-2: before the stop).
   const requested = decided.map((d) => {
     const placement = placementOf(d.lane)
-    return { placement, percentage: w.raiseCap && d.pct > liveOf(placement) ? liveOf(placement) : d.pct }
+    return { placement, percentage: w.raiseCap && d.pct > valueOf(base, placement) ? valueOf(base, placement) : d.pct }
   })
   const blended = w.lanes.length > 1
-  const adjustments = blended
-    ? buildBlendedAdjustments([...w.current], requested)
-    : [...w.current.filter((c) => !requested.some((r) => r.placement === c.placement)), ...requested]
-  const valueOf = (list: ReadonlyArray<{ placement: string; percentage: number }>, p: string) => list.find((x) => x.placement === p)?.percentage ?? 0
+  let adjustments = blended
+    ? buildBlendedAdjustments([...base], requested)
+    : [...base.filter((c) => !requested.some((r) => r.placement === c.placement)), ...requested]
+  // AB-2 — after a stop, a lane the Owner locked goes back to its value before it (`base`), whatever the hour's plan sets.
+  for (const p of MANAGED_PLACEMENTS) {
+    if (!w.fixedLanes?.includes(laneOf(p))) continue
+    const back = valueOf(base, p)
+    adjustments = adjustments.some((a) => a.placement === p)
+      ? adjustments.map((a) => (a.placement === p ? { placement: p, percentage: back } : a))
+      : back > 0 ? [...adjustments, { placement: p, percentage: back }] : adjustments
+  }
+  // AB-2 — on the hour's plan, a lane the Owner locked keeps the % it has now.
+  const locked: Array<{ lane: string; pct: number; by: string }> = []
+  for (const p of MANAGED_PLACEMENTS) {
+    const by = w.locks?.lanes.get(laneOf(p))
+    if (!by) continue
+    const now = valueOf(w.current, p)
+    adjustments = adjustments.some((a) => a.placement === p)
+      ? adjustments.map((a) => (a.placement === p ? { placement: p, percentage: now } : a))
+      : now > 0 ? [...adjustments, { placement: p, percentage: now }] : adjustments
+    locked.push({ lane: laneWords(laneOf(p)), pct: now, by })
+  }
   const changes = MANAGED_PLACEMENTS.flatMap((p) => {
     const from = valueOf(w.current, p)
     const to = valueOf(adjustments, p)
     if (from === to) return []
     const d = decided.find((x) => placementOf(x.lane) === p)
-    return [{ lane: laneWords(d?.lane ?? 'REST_OF_SEARCH'), from, to, held: d?.held ?? null }]
+    return [{ lane: laneWords(d?.lane ?? laneOf(p)), from, to, held: d?.held ?? null }]
   })
-  const kept = blended ? [] : MANAGED_PLACEMENTS.filter((p) => !requested.some((r) => r.placement === p)).map((p) => ({ lane: laneWords(laneOf(p)), pct: valueOf(adjustments, p) }))
-  return changes.length ? { adjustments, changes, kept } : null
+  const isLocked = (p: string) => !!w.locks?.lanes.get(laneOf(p))
+  const kept = blended || w.base ? [] : MANAGED_PLACEMENTS.filter((p) => !requested.some((r) => r.placement === p) && !isLocked(p)).map((p) => ({ lane: laneWords(laneOf(p)), pct: valueOf(adjustments, p) }))
+  return changes.length ? { adjustments, changes, kept, locked } : null
 }
 
 export interface PlacementReport {
   written: number
   refused: number
   deferred: number
+  /** AB-2 — campaigns whose placements are held (the placements pin; the Owner's lock on the hour's plan): nothing written. */
+  locked: number
+  /** AB-2 — writes that wait this tick (the Owner's locks could not be read): nothing written, nothing dropped. */
+  waiting: number
   reasons: string[]
-  byCampaign: Map<string, { sent: 'written' | 'refused' | 'deferred' | 'would-apply'; changes: Array<{ lane: string; from: number; to: number; held: string | null }>; reason?: string }>
+  byCampaign: Map<string, { sent: 'written' | 'refused' | 'deferred' | 'would-apply' | 'locked' | 'waiting'; changes: Array<{ lane: string; from: number; to: number; held: string | null }>; reason?: string }>
 }
 
-/** Write each owned campaign's hour placements, inside the dial and the brain's caps (one change per campaign). */
+const valueIn = (list: ReadonlyArray<{ placement: string; percentage: number }> | undefined, p: string): number => list?.find((x) => x.placement === p)?.percentage ?? 0
+const noteReason = (out: { reasons: string[] }, reason: string) => { if (out.reasons.length < 3 && !out.reasons.includes(reason)) out.reasons.push(reason) }
+
+/**
+ * Write each owned campaign's hour placements, inside the dial and the brain's caps (one change per campaign). AB-2 — the
+ * stop recipe's lanes too: a stop's zeroing saves the lanes live first (no zeroing without that memory) and is a floor;
+ * the give-back after it is a restore (no cap holds it; it lands under SUGGEST), or a forward move where the hour's own
+ * lanes go above the saved ones (a lane the Owner locked goes back to his value: shadow.ts puts it in `base`); once it is
+ * written — or nothing is left to give back — the memory goes. The placements pin holds every write, and the Owner's lock
+ * the hour's own plan; locks that cannot be read hold the write for a tick. None of these drops a memory.
+ */
 export async function writeOwnedPlacements(list: readonly PlacementWrite[], ctx: { runId: string; guard: EngineGuard }): Promise<PlacementReport> {
-  const out: PlacementReport = { written: 0, refused: 0, deferred: 0, reasons: [], byCampaign: new Map() }
+  const out: PlacementReport = { written: 0, refused: 0, deferred: 0, locked: 0, waiting: 0, reasons: [], byCampaign: new Map() }
   const { updatePlacementBidding } = await import('../ads-create.service.js')
+  const forget = async (campaignId: string) => {
+    try { await forgetLanes(campaignId) } catch (err) { logger.warn('[bid-brain] could not drop the stop\'s saved placements — the next tick tries again', { campaignId, error: err instanceof Error ? err.message : String(err) }) }
+  }
   for (const w of list) {
+    // AB-2 — held, never dropped: the pin (the gate would refuse), and the Owner's lock on the hour's own plan.
+    const holder = w.pinned ?? (!w.recipe && w.locks?.placements ? w.locks.placements.words : null)
+    if (holder) {
+      out.locked++
+      out.byCampaign.set(w.campaignId, { sent: 'locked', changes: [], reason: `placements ${holder}: not written` })
+      continue
+    }
+    // AB-2 — the Owner's locks could not be read: this tick writes nothing and drops nothing; the next tick tries again.
+    if (w.wait) {
+      out.waiting++
+      out.byCampaign.set(w.campaignId, { sent: 'waiting', changes: [], reason: w.wait })
+      continue
+    }
     const plan = placementPlan(w)
-    if (!plan) continue
+    if (!plan) {
+      if (w.recipe === 'restore') await forget(w.campaignId)
+      continue
+    }
     const permit = ctx.guard.permit({ market: w.market })
     const held = nothingHeld()
     const raises = plan.changes.some((c) => c.to > c.from)
-    if (!allowChange(true, permit, held, raises ? 'forward' : 'floor')) {
+    const giveBack = w.recipe === 'restore' && plan.adjustments.every((a) => a.percentage <= valueIn(w.base, a.placement))
+    const kind: ChangeKind = giveBack ? 'restore' : raises ? 'forward' : 'floor'
+    if (!allowChange(true, permit, held, kind)) {
       const sent = ctx.guard.posture === 'suggest' ? 'would-apply' as const : 'deferred' as const
       if (sent === 'deferred') out.deferred++
       out.byCampaign.set(w.campaignId, { sent, changes: plan.changes })
@@ -232,6 +320,20 @@ export async function writeOwnedPlacements(list: readonly PlacementWrite[], ctx:
     }
     const words = plan.changes.map((c) => `${c.lane} ${c.from}% → ${c.to}%${c.held ? ` (held by ${c.held})` : ''}`).join(', ')
       + (plan.kept.length ? `; the hour sets one placement: ${plan.kept.map((k) => `${k.lane} stays at ${k.pct}%`).join(', ')}` : '')
+      + (plan.locked.length ? `; ${plan.locked.map((k) => `${k.lane} ${k.by}: left at ${k.pct}%`).join(', ')}` : '')
+    // AB-2 — the stop's memory first: the lanes live before it (an older memory is kept). None kept, none zeroed.
+    if (w.recipe === 'stop') {
+      try {
+        await rememberLanes(w.campaignId, w.current)
+      } catch (err) {
+        const reason = `the placements before the stop could not be kept (${err instanceof Error ? err.message : String(err)}): nothing zeroed, the next tick tries again`
+        out.refused++
+        noteReason(out, reason)
+        out.byCampaign.set(w.campaignId, { sent: 'refused', changes: plan.changes, reason })
+        ctx.guard.settle(permit, 0, held)
+        continue
+      }
+    }
     try {
       const r = await updatePlacementBidding({
         campaignId: w.campaignId,
@@ -239,23 +341,24 @@ export async function writeOwnedPlacements(list: readonly PlacementWrite[], ctx:
         actor: BRAIN_ACTOR,
         reason: `bid brain — ${w.note}: ${words}`.slice(0, 480),
         targetKey: w.key,
-        evidence: { metric: 'placementBidding', note: `${w.note}: ${words}`.slice(0, 1_000), source: { kind: 'bid-brain', id: ctx.runId }, brain: { runId: ctx.runId, layer: 'plan', dataDay: w.dataDay, goalBidCents: null } },
+        evidence: { metric: 'placementBidding', note: `${w.note}: ${words}`.slice(0, 1_000), source: { kind: 'bid-brain', id: ctx.runId }, brain: { runId: ctx.runId, layer: w.recipe ?? 'plan', dataDay: w.dataDay, goalBidCents: null } },
       }) as { ok?: boolean; mode?: string; reason?: string }
       if (r.mode === 'blocked' || r.ok === false) {
         const reason = r.reason ?? 'placement write refused'
         out.refused++
-        if (out.reasons.length < 3 && !out.reasons.includes(reason)) out.reasons.push(reason)
+        noteReason(out, reason)
         out.byCampaign.set(w.campaignId, { sent: 'refused', changes: plan.changes, reason })
         ctx.guard.settle(permit, 0, held)
       } else {
         out.written++
         out.byCampaign.set(w.campaignId, { sent: 'written', changes: plan.changes })
         ctx.guard.settle(permit, 1, held)
+        if (w.recipe === 'restore') await forget(w.campaignId)
       }
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err)
       out.refused++
-      if (out.reasons.length < 3 && !out.reasons.includes(reason)) out.reasons.push(reason)
+      noteReason(out, reason)
       out.byCampaign.set(w.campaignId, { sent: 'refused', changes: plan.changes, reason })
       ctx.guard.settle(permit, 0, held)
       logger.warn('[bid-brain] a placement write failed', { campaignId: w.campaignId, error: reason })
@@ -271,5 +374,118 @@ export function placementReportWords(r: PlacementReport | null | undefined): str
     r.written ? `placements=${r.written}` : '',
     r.deferred ? `placements-deferred=${r.deferred}` : '',
     r.refused ? `placements-refused=${r.refused} (${r.reasons.join('; ')})` : '',
+    r.locked ? `placements-locked=${r.locked}` : '',
+    r.waiting ? `placements-waiting=${r.waiting} (${[...r.byCampaign.values()].find((b) => b.sent === 'waiting')?.reason ?? ''})` : '',
+  ].filter(Boolean).join(' ')
+}
+
+/** AB-2 — one owned campaign's bidding-strategy step this tick (stop-recipe.ts strategyStep). */
+export interface StrategyWrite {
+  campaignId: string
+  market: string
+  /** Campaign.biddingStrategy now. */
+  from: string | null
+  step: StrategyStep
+  /** The layer the write is recorded under: the stop (or the Min-bid hour) that switches it, or the give-back after it. */
+  layer: 'stop' | 'stock' | 'min_bid_hour' | 'restore'
+  dataDay: string
+}
+
+export interface StrategyReport {
+  switched: number
+  refused: number
+  deferred: number
+  /** Steps that wrote nothing on purpose (a lock during a stop, the anti-flap), each with its why. */
+  held: number
+  reasons: string[]
+  byCampaign: Map<string, { sent: 'switched' | 'unchanged' | 'refused' | 'deferred' | 'would-apply' | 'held' | 'forgotten'; from: string | null; to: string | null; why: string; reason?: string }>
+}
+
+/**
+ * AB-2 — each owned campaign's bidding-strategy step, inside the dial and the brain's caps: a switch to down only for a
+ * stop is a floor (the strategy it had saved first: no switch without that memory); the switch back after it is a restore
+ * (no cap holds it; it lands under SUGGEST). Through the campaign write every strategy change takes (updateCampaignWithSync,
+ * the gate asked first, then the queue, the gate at dispatch and the channel gateway), as automation:bid-brain with its
+ * why. Once the switch back is queued — or nothing was left to switch — the memory goes; a `forget` step drops it alone.
+ */
+export async function writeOwnedStrategies(list: readonly StrategyWrite[], ctx: { runId: string; guard: EngineGuard }): Promise<StrategyReport> {
+  const out: StrategyReport = { switched: 0, refused: 0, deferred: 0, held: 0, reasons: [], byCampaign: new Map() }
+  const forget = async (campaignId: string) => {
+    try { await forgetStrategy(campaignId) } catch (err) { logger.warn('[bid-brain] could not drop the stop\'s saved bidding strategy — the next tick tries again', { campaignId, error: err instanceof Error ? err.message : String(err) }) }
+  }
+  const refuse = (w: StrategyWrite, to: string, reason: string) => {
+    out.refused++
+    noteReason(out, reason)
+    out.byCampaign.set(w.campaignId, { sent: 'refused', from: w.from, to, why: w.step.why, reason })
+  }
+  for (const w of list) {
+    const s = w.step
+    if (s.do === 'hold') {
+      out.held++
+      out.byCampaign.set(w.campaignId, { sent: 'held', from: w.from, to: null, why: s.why })
+      continue
+    }
+    if (s.do === 'forget') {
+      await forget(w.campaignId)
+      out.byCampaign.set(w.campaignId, { sent: 'forgotten', from: w.from, to: null, why: s.why })
+      continue
+    }
+    const permit = ctx.guard.permit({ market: w.market })
+    const held = nothingHeld()
+    if (!allowChange(true, permit, held, s.kind)) {
+      const sent = ctx.guard.posture === 'suggest' ? 'would-apply' as const : 'deferred' as const
+      if (sent === 'deferred') out.deferred++
+      out.byCampaign.set(w.campaignId, { sent, from: w.from, to: s.to, why: s.why })
+      ctx.guard.settle(permit, 0, held)
+      continue
+    }
+    try {
+      if (s.remember) await rememberStrategy(w.campaignId, s.remember)
+    } catch (err) {
+      refuse(w, s.to, `the bidding strategy before the stop could not be kept (${err instanceof Error ? err.message : String(err)}): not switched, the next tick tries again`)
+      ctx.guard.settle(permit, 0, held)
+      continue
+    }
+    try {
+      const r = await updateCampaignWithSync({
+        campaignId: w.campaignId,
+        patch: { biddingStrategy: s.to as 'LEGACY_FOR_SALES' | 'AUTO_FOR_SALES' | 'MANUAL' },
+        actor: BRAIN_ACTOR,
+        reason: `bid brain — ${s.why}`.slice(0, 480),
+        evidence: { metric: 'biddingStrategy', note: s.why.slice(0, 1_000), source: { kind: 'bid-brain', id: ctx.runId }, brain: { runId: ctx.runId, layer: w.layer, dataDay: w.dataDay, goalBidCents: null } },
+        askGate: true,
+      })
+      if (r.ok && r.outboundQueueId) {
+        out.switched++
+        out.byCampaign.set(w.campaignId, { sent: 'switched', from: w.from, to: s.to, why: s.why })
+        ctx.guard.settle(permit, 1, held)
+        if (s.kind === 'restore') await forget(w.campaignId)
+      } else if (r.ok) {
+        out.byCampaign.set(w.campaignId, { sent: 'unchanged', from: w.from, to: s.to, why: s.why })
+        ctx.guard.settle(permit, 0, held)
+        if (s.kind === 'restore') await forget(w.campaignId)
+      } else {
+        refuse(w, s.to, r.error ?? 'bidding-strategy write refused')
+        ctx.guard.settle(permit, 0, held)
+      }
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err)
+      refuse(w, s.to, reason)
+      ctx.guard.settle(permit, 0, held)
+      logger.warn('[bid-brain] a bidding-strategy write failed', { campaignId: w.campaignId, error: reason })
+    }
+  }
+  return out
+}
+
+/** "strategy=1 strategy-held=1 (…)" — the run line's bidding-strategy part; '' when nothing was asked. */
+export function strategyReportWords(r: StrategyReport | null | undefined): string {
+  if (!r) return ''
+  const held = [...r.byCampaign.values()].filter((b) => b.sent === 'held').map((b) => b.why)
+  return [
+    r.switched ? `strategy=${r.switched}` : '',
+    r.deferred ? `strategy-deferred=${r.deferred}` : '',
+    r.refused ? `strategy-refused=${r.refused} (${r.reasons.join('; ')})` : '',
+    r.held ? `strategy-held=${r.held} (${[...new Set(held)].slice(0, 3).join('; ')})` : '',
   ].filter(Boolean).join(' ')
 }

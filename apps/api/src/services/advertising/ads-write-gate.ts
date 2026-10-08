@@ -283,21 +283,36 @@ export function brainYieldsTo(ctx: Pick<GateContext, 'actor' | 'manual' | 'isSup
   return BRAIN_SAFETY_ACTOR_PREFIXES.some((p) => actor === p || actor.startsWith(`${p}-`))
 }
 
+/**
+ * ONE BRAIN AB-2 — the bidding strategy of a campaign the brain owns has one automatic writer: the brain (its stop recipe
+ * switches "up and down" to "down only" for a stop and back after it). Besides it only a person (`manual`: his own edit or
+ * a request he approved) and the repairs that resend Nexus's own value pass; the safety owners floor bids and never write a
+ * strategy, and a strategy change is never a lowering (isSuppressionWrite). Pure.
+ */
+export const BRAIN_STRATEGY_REPAIR_PREFIXES: readonly string[] = ['automation:reconcile', 'automation:ads-write-reconcile', 'automation:resync-bids']
+export function brainYieldsStrategyTo(ctx: Pick<GateContext, 'actor' | 'manual'>): boolean {
+  const actor = ctx.actor ?? ''
+  if (actor === BRAIN_ACTOR || ctx.manual === true) return true
+  return BRAIN_STRATEGY_REPAIR_PREFIXES.some((p) => actor === p || actor.startsWith(`${p}-`))
+}
+
 /** BB-6 — the refusal for an automatic change to a campaign the brain owns; null when the brain does not own it. */
-async function brainOwnedRefusal(campaignId: string, actor: string | null): Promise<Extract<GateDecision, { allowed: false }> | null> {
+async function brainOwnedRefusal(campaignId: string, actor: string | null, what = 'its bids or placements'): Promise<Extract<GateDecision, { allowed: false }> | null> {
   let owned: Set<string>
   try {
     owned = await brainOwnedCampaignIds([campaignId])
   } catch (err) {
     // Fail closed: under a live ceiling, an automatic change to a campaign whose owner cannot be read waits.
     logger.warn('[ads-write-gate] could not read the bid brain enrollment — automatic change refused', { campaignId, error: String(err) })
-    return { allowed: false, deniedAt: 'brain_owned', reason: `could not read whether the bid brain owns campaign ${campaignId} — an automatic change to its bids or placements waits (one writer per campaign)` }
+    return { allowed: false, deniedAt: 'brain_owned', reason: `could not read whether the bid brain owns campaign ${campaignId} — an automatic change to ${what} waits (one writer per campaign)` }
   }
   if (!owned.has(campaignId)) return null
   return {
     allowed: false,
     deniedAt: 'brain_owned',
-    reason: `campaign ${campaignId} is run by the bid brain (one writer per campaign): ${actor || 'an unnamed automatic writer'} may not change its bids or placements — the brain decides them. A person's edit, a request a person approved, a stop that lowers bids and the safety checks still pass; set-bid-brain-enrollment gives the campaign back.`,
+    reason: what === 'its bids or placements'
+      ? `campaign ${campaignId} is run by the bid brain (one writer per campaign): ${actor || 'an unnamed automatic writer'} may not change its bids or placements — the brain decides them. A person's edit, a request a person approved, a stop that lowers bids and the safety checks still pass; set-bid-brain-enrollment gives the campaign back.`
+      : `campaign ${campaignId} is run by the bid brain (one writer per lever): ${actor || 'an unnamed automatic writer'} may not change ${what} — the brain's stop recipe sets it. A person's edit and a request a person approved still pass; set-bid-brain-enrollment gives the campaign back.`,
   }
 }
 
@@ -543,6 +558,12 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
     // it yields to (brainYieldsTo). Judged for a CHANGE, which every change path names the actor of (the worker, the
     // mutation layer's own ask, the placement write); a create — a new keyword's first bid — and a tool's preview name
     // none and are not judged here. Read only under a live ceiling, so it costs nothing while the brain is in shadow.
+    // ONE BRAIN AB-2 — one owner per lever: the bidding strategy of a campaign the brain owns passes only from the brain, a
+    // person and the repairs (brainYieldsStrategyTo) — not from the safety owners the bids check below lets through.
+    if (ctx.actor !== undefined && brainLiveCeiling() && (ctx.fields?.length ? ctx.fields : [ctx.field]).includes('biddingStrategy') && !brainYieldsStrategyTo(ctx)) {
+      const refusal = await brainOwnedRefusal(ctx.campaignId, ctx.actor, 'its bidding strategy')
+      if (refusal) return refusal
+    }
     if (ctx.actor !== undefined && brainLiveCeiling() && (dimensions.includes('bids') || dimensions.includes('placement')) && !brainYieldsTo(ctx)) {
       const refusal = await brainOwnedRefusal(ctx.campaignId, ctx.actor)
       if (refusal) return refusal
