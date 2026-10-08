@@ -19861,8 +19861,9 @@ model AdsBrainEnrollment {
 }
 
 /// ONE BRAIN AB-1 — one choice of the Owner over a brain default (one-brain DESIGN.md §10, Owner 10-08: "I should be
-/// able to control it individually as well"). Precedence: a CAMPAIGN override > a PRODUCT override > the brain default
-/// (brain/settings.ts resolveBrainSettings); an exclusion wins over every lever. Each row keeps who, when and why, so
+/// able to control it individually as well"). Precedence (brain/settings.ts resolveBrainSettings): an exclusion wins over
+/// every lever; a lock of the whole lever (the campaign's, else the product's) beats every level; then a CAMPAIGN override
+/// > a PRODUCT override > the brain default. Each row keeps who, when and why, so
 /// every resolved value names its source. Rows are never deleted: a new choice ends the one it replaces (`endedAt`),
 /// and ending a choice falls back to the next level. At most one open row per (scope, campaign, kind, key, ref) — the
 /// writer ends the old one in the same transaction.

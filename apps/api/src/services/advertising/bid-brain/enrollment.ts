@@ -125,7 +125,7 @@ export async function flooredNow(campaignId: string): Promise<string | null> {
 }
 
 /** Everything the enrollment tool shows and checks; null when the campaign is not in this business. */
-export async function enrollmentFacts(campaignId: string, opts: { plansJoin?: boolean; skipOwnerBrake?: boolean } = {}): Promise<EnrollmentFacts | null> {
+export async function enrollmentFacts(campaignId: string, opts: { plansJoin?: boolean; checkOwnerBrake?: boolean } = {}): Promise<EnrollmentFacts | null> {
   const c = await prisma.campaign.findFirst({
     where: { id: campaignId },
     select: { id: true, name: true, marketplace: true, status: true, adProduct: true, liveBidWritesEnabled: true, pinBids: true },
@@ -140,8 +140,9 @@ export async function enrollmentFacts(campaignId: string, opts: { plansJoin?: bo
     blockers: await brainBlockers(c.id, opts),
     floored: await flooredNow(c.id),
     floorsWithoutMemory: row && row.mode !== 'SHADOW' ? await floorsWithoutMemory(c.id) : 0,
-    // AB-1 review — the product's brain resolves the Owner's overrides itself (skipOwnerBrake): it plans on the state after its change.
-    ownerBrake: opts.skipOwnerBrake ? null : (await ownerBrakes([c.id])).get(c.id) ?? null,
+    // AB-1 review — read only for op live and release (checkOwnerBrake): nothing about the brain's overrides may stand in the
+    // way of the way back out (shadow, give-back, hold). The product's brain resolves them itself, on the state after its change.
+    ownerBrake: opts.checkOwnerBrake ? (await ownerBrakes([c.id])).get(c.id) ?? null : null,
   }
 }
 

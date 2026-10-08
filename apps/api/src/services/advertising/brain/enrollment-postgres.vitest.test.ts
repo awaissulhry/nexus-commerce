@@ -24,7 +24,14 @@
  *   one writer two changes made on one version: exactly one wins, the other is refused, nothing half-written
  *   refusals   a level levers.ts does not offer, a stale version, a campaign not advertising the product, a change run
  *              inside a weaker outer transaction: nothing changes
- *   OBSERVE    the product's bids lever back to OBSERVE takes every own campaign back to shadow, a HELD one included
+ *   brakes win a product LOCK holds a campaign set to AUTO by hand (back to shadow, named); ending it puts it LIVE (a big
+ *              door). A product EXCLUDE on a campaign at a floor only the brain would lift is saved: that campaign waits,
+ *              HELD, and goes to shadow when the exclusion is set again after the floor lifted
+ *   OBSERVE    the product's bids lever back to OBSERVE takes every own campaign back to shadow, a HELD one included; a
+ *              campaign's own AUTO stays, and the plan names every campaign it does not reach
+ *   rollback   once a product is enrolled, give-back ALWAYS runs: an archived campaign, a campaign whose product's
+ *              family root was deleted (its record fails: a warning, in the result and the change record), and a
+ *              plain one (recorded as the Owner's campaign choice): the mode flips and the snapshot comes back
  *   rows map   today's LIVE rows by product (a read)
  *
  * Values are made up (public repo).
@@ -355,12 +362,55 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-1 — a product\'s brain: enrollme
     expect(await modes()).toEqual(before)
   })
 
+  it('brakes win: a product LOCK holds a campaign set to AUTO by hand, and ending it is a big door', async () => {
+    const lockInput = { scope: 'PRODUCT' as const, kind: 'LOCK' as const, key: 'bids' }
+    const lock = await inW(() => setOverride({ productId: P, market: 'IT', override: lockInput, by: 'user:owner', now: NOW }))
+    expect(lock.ok && lock.plan.steps?.filter((s) => s.op === 'shadow').map((s) => s.campaignId).sort()).toEqual(['a-live', 'b-asin'].map(C).sort())
+    expect(lock.ok && lock.plan.notReached.map((n) => n.campaignId)).toEqual([C('c-fba')])
+    expect(await modes()).toMatchObject({ [C('a-live')]: 'SHADOW', [C('b-asin')]: 'SHADOW' })
+    expect((await inW(() => brainSettings(P, 'IT', C('a-live'))))?.levers.bids).toMatchObject({ level: { value: 'AUTO', source: 'campaign' }, lock: { source: 'product' }, effective: 'LOCKED' })
+    const back = await inW(() => endOverride({ productId: P, market: 'IT', override: lockInput, by: 'user:owner', now: NOW }))
+    expect(back).toMatchObject({ ok: true, plan: { needsCode: true } })
+    expect(back.ok && [...back.plan.goesLive].sort()).toEqual(['a-live', 'b-asin'].map(C).sort())
+    expect(await modes()).toMatchObject({ [C('a-live')]: 'LIVE', [C('b-asin')]: 'LIVE' })
+    expect(await amazonRows()).toBe(0)
+  })
+
+  it('a product EXCLUDE on a campaign at a floor only the brain would lift is saved: that campaign waits, HELD, then leaves when set again', async () => {
+    // b-asin's keyword sits at a floor the brain wrote (a stop) with no memory of its bid: no engine would give it back.
+    await database.pool.query('UPDATE "AdTarget" SET "bidCents" = 3 WHERE id = $1', [`t-${C('b-asin')}`])
+    await database.pool.query(`INSERT INTO "BidBrainDecision" ("workspaceId", id, "runId", mode, kind, marketplace, "campaignId", "adGroupId", "targetId", action, layer, "currentCents", "decidedCents", "dataDay", why)
+      VALUES ($1, $2, 'run-floor', 'LIVE', 'change', 'IT', $3, $4, $5, 'write', 'stop', 40, 3, '2026-10-07', 'stop: test floor')`, [W, `d-${hex}`, C('b-asin'), `g-${C('b-asin')}`, `t-${C('b-asin')}`])
+    const exclude = { scope: 'PRODUCT' as const, kind: 'EXCLUDE' as const, key: '*' }
+    const out = await inW(() => setOverride({ productId: P, market: 'IT', override: exclude, by: 'user:owner', reason: 'not now', now: NOW }))
+    expect(out.ok).toBe(true)
+    if (!out.ok) return
+    expect(out.plan.steps?.find((s) => s.campaignId === C('a-live'))).toMatchObject({ op: 'shadow' })
+    expect(out.plan.steps?.find((s) => s.campaignId === C('b-asin'))).toMatchObject({ op: 'wait', hold: true, why: expect.stringContaining('cannot go back to shadow now') })
+    expect(await modes()).toMatchObject({ [C('a-live')]: 'SHADOW', [C('b-asin')]: 'HELD' })
+    expect((await rows<{ n: number }>('SELECT count(*)::int n FROM "AdsBrainOverride" WHERE "workspaceId" = $1 AND kind = \'EXCLUDE\' AND scope = \'PRODUCT\' AND "endedAt" IS NULL', [W]))[0].n).toBe(1)
+    expect((await inW(() => brainView(P, 'IT')))!.drift).toContainEqual(expect.stringContaining('LIVE although the Owner keeps the bid brain off (b-asin)'))
+    // The floor lifted (the keyword serves again): the same exclusion, set again, takes it to shadow.
+    await database.pool.query('UPDATE "AdTarget" SET "bidCents" = 40 WHERE id = $1', [`t-${C('b-asin')}`])
+    const again = await inW(() => setOverride({ productId: P, market: 'IT', override: exclude, by: 'user:owner', now: NOW }))
+    expect(again).toMatchObject({ ok: true, plan: { set: null, steps: expect.arrayContaining([{ campaignId: C('b-asin'), name: 'b-asin', op: 'shadow', why: expect.stringContaining('excluded') }]) } })
+    expect((await modes())[C('b-asin')]).toBe('SHADOW')
+    // Ending the exclusion: a-live (its own AUTO) and b-asin (the product's AUTO) go LIVE again — a big door.
+    const end = await inW(() => endOverride({ productId: P, market: 'IT', override: exclude, by: 'user:owner', now: NOW }))
+    expect(end.ok && [...end.plan.goesLive].sort()).toEqual(['a-live', 'b-asin'].map(C).sort())
+    expect(await modes()).toMatchObject({ [C('a-live')]: 'LIVE', [C('b-asin')]: 'LIVE' })
+    expect(await amazonRows()).toBe(0)
+  })
+
   it('the product\'s bids lever back to OBSERVE takes every own campaign back to shadow, a HELD one included; a campaign\'s own AUTO stays', async () => {
     expect(await inW(() => holdCampaigns({ campaignIds: [C('b-asin')], until: new Date(Date.now() + 7 * 86_400_000), by: 'auto-undo', reason: 'test hold' }))).toEqual([C('b-asin')])
     expect((await modes())[C('b-asin')]).toBe('HELD')
     const r = await inW(() => setLever({ productId: P, market: 'IT', lever: 'bids', level: 'OBSERVE', by: 'user:owner', now: NOW }))
     expect(r.ok && r.plan.steps?.filter((s) => s.op === 'shadow').map((s) => s.campaignId)).toEqual([C('b-asin')])
     expect(r.ok && r.plan.needsCode).toBe(false)
+    // The plan names every campaign it does not reach: a-live keeps its own AUTO, c-fba its lock, d-off its own OBSERVE.
+    expect(r.ok && r.plan.notReached.map((n) => n.campaignId).sort()).toEqual(['a-live', 'c-fba', 'd-off'].map(C).sort())
+    expect(r.ok && r.plan.notReached.find((n) => n.campaignId === C('a-live'))?.why).toMatch(/AUTO by the Owner's campaign override/)
     // a-live keeps its own AUTO (a campaign choice beats the product's level).
     expect(await modes()).toEqual({ [C('a-live')]: 'LIVE', [C('b-asin')]: 'SHADOW', [C('c-fba')]: 'SHADOW', [C('e-shared')]: 'SHADOW' })
     expect((await rows<{ heldUntil: Date | null; heldBy: string | null }>('SELECT "heldUntil", "heldBy" FROM "BidBrainEnrollment" WHERE "campaignId" = $1', [C('b-asin')]))[0]).toEqual({ heldUntil: null, heldBy: null })
@@ -369,5 +419,55 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-1 — a product\'s brain: enrollme
     // The adopted AUTO is history now, ended by this change.
     expect((await rows<{ n: number }>('SELECT count(*)::int n FROM "AdsBrainOverride" WHERE "workspaceId" = $1 AND kind = \'LEVEL\' AND key = \'bids\' AND scope = \'PRODUCT\' AND "productId" = $2 AND "endedAt" IS NOT NULL', [W, P]))[0].n).toBe(1)
     expect(await amazonRows()).toBe(0)
+  })
+
+  it('rollback: once a product is enrolled, give-back always runs — an archived campaign, a deleted family root, a plain one', async () => {
+    const R = id('r'), R1 = id('r1'), S = id('s'), S1 = id('s1')
+    await inW(async () => {
+      const db = database.client
+      await db.product.create({ data: { id: R, sku: `AB1-BOOT-${hex}`, name: 'boot', basePrice: '99.00', totalStock: 5, isParent: true } })
+      await db.product.create({ data: { id: R1, sku: `AB1-BOOT-42-${hex}`, name: 'boot 42', basePrice: '99.00', totalStock: 5, parentId: R, amazonAsin: `B0AB1BT4${H}` } })
+      await db.product.create({ data: { id: S, sku: `AB1-GLOVE2-${hex}`, name: 'glove', basePrice: '49.00', totalStock: 5, isParent: true } })
+      await db.product.create({ data: { id: S1, sku: `AB1-GLOVE2-M-${hex}`, name: 'glove M', basePrice: '49.00', totalStock: 5, parentId: S, amazonAsin: `B0AB1GV2${H}` } })
+      const live = async (key: string, productId: string, asin: string, snapshotBid: number, extra: Record<string, unknown> = {}) => {
+        await db.campaign.create({ data: { id: C(key), name: key, type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'IT', externalCampaignId: `EXT-${C(key)}`, dailyBudget: '20.00', startDate: new Date('2026-01-01T00:00:00Z'), liveBidWritesEnabled: true, ...extra } })
+        await db.adGroup.create({ data: { id: `g-${C(key)}`, campaignId: C(key), name: `group ${key}`, externalAdGroupId: `EXT-g-${C(key)}` } })
+        await db.adTarget.create({ data: { id: `t-${C(key)}`, adGroupId: `g-${C(key)}`, kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: `boot ${key}`, bidCents: 40, externalTargetId: `EXT-t-${C(key)}` } })
+        await db.adProductAd.create({ data: { adGroupId: `g-${C(key)}`, productId, asin } })
+        await db.bidBrainEnrollment.create({ data: { campaignId: C(key), marketplace: 'IT', mode: 'LIVE', enrolledBy: 'user:owner-1008', snapshot: { takenAt: '2026-10-08T10:56:00.000Z', adGroups: [], targets: [{ id: `t-${C(key)}`, bidCents: snapshotBid }], placements: [] } } })
+      }
+      await live('r-live', R1, `B0AB1BT4${H}`, 55)
+      await live('r-archived', R1, `B0AB1BT4${H}`, 66, { status: 'ARCHIVED' })
+      await live('s-live', S1, `B0AB1GV2${H}`, 77)
+    })
+    expect(await inW(() => enrollProduct({ productId: R, market: 'IT', by: 'user:owner' }))).toMatchObject({ ok: true, bids: 'AUTO', adoptedLive: [C('r-live')] })
+    expect(await inW(() => enrollProduct({ productId: S, market: 'IT', by: 'user:owner' }))).toMatchObject({ ok: true, bids: 'AUTO', adoptedLive: [C('s-live')] })
+    const giveBack = (campaignId: string) => inW(async () => {
+      const run = await database.client.agentRun.create({ data: { agentKey: 'mcp', trigger: 'manual', status: 'done', via: 'claude', userId: 'u-asker' } })
+      const asked = await runOrQueueTool('set-bid-brain-enrollment', { campaignId, op: 'give-back', why: 'rollback test' }, person('u-asker', 'claude'), run.id)
+      expect(asked).toMatchObject({ ok: true, mode: 'queued' })
+      return { approvalId: asked.approvalId!, decided: await decideApproval(asked.approvalId!, 'approve', person('u-approver', 'app')) }
+    })
+    const bid = async (key: string) => (await rows<{ b: number }>('SELECT "bidCents" b FROM "AdTarget" WHERE id = $1', [`t-${C(key)}`]))[0].b
+    // An archived campaign: the product's lever never moves it, so nothing is recorded, and the snapshot comes back.
+    const arch = await giveBack(C('r-archived'))
+    expect(arch.decided).toMatchObject({ ok: true, status: 'executed' })
+    expect((arch.decided as { result?: { warnings?: unknown } }).result?.warnings).toBeUndefined()
+    expect((await modes())[C('r-archived')]).toBe('SHADOW')
+    expect(await bid('r-archived')).toBe(66)
+    // A plain own campaign of the enrolled product: back, and kept as the Owner's campaign choice (the nested change).
+    const plain = await giveBack(C('r-live'))
+    expect(plain.decided).toMatchObject({ ok: true, status: 'executed' })
+    expect((await modes())[C('r-live')]).toBe('SHADOW')
+    expect(await bid('r-live')).toBe(55)
+    expect((await inW(() => brainSettings(R, 'IT', C('r-live'))))?.levers.bids).toMatchObject({ level: { value: 'OBSERVE', source: 'campaign', reason: expect.stringContaining('set-bid-brain-enrollment op give-back') }, effective: 'OBSERVE' })
+    // The product's family root was deleted: its record fails, and the way back out still runs, with a warning.
+    await database.pool.query('UPDATE "Product" SET "deletedAt" = now() WHERE id = $1', [S])
+    const broken = await giveBack(C('s-live'))
+    expect(broken.decided).toMatchObject({ ok: true, status: 'executed', result: { warnings: [expect.stringContaining('could not record it as the Owner\'s campaign choice')] } })
+    expect((await modes())[C('s-live')]).toBe('SHADOW')
+    expect(await bid('s-live')).toBe(77)
+    const [change] = await rows<{ after: { warnings?: string[] } }>('SELECT after FROM "AgentChange" WHERE "approvalId" = $1', [broken.approvalId])
+    expect(change.after.warnings?.[0]).toMatch(/could not record/)
   })
 })

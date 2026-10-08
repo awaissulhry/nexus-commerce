@@ -10,6 +10,8 @@
  *   snapshot  what the lever kept when it put campaigns LIVE: put LIVE now, LIVE already, skipped with the reason
  *   basis     the approval basis changes when a campaign's step does (a skip that became a live step), not otherwise
  *   big door  any live step makes a plan a big door; a shared campaign only leaves when excluded or bids-locked
+ *   wait      an Owner's brake on a campaign at a floor only the brain would lift is saved: the campaign waits, HELD
+ *   reach     a product's choice names every campaign it does not reach (excluded, locked, a level of its own)
  *
  * Values are made up (public repo).
  */
@@ -17,7 +19,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../../db.js', () => ({ default: {} }))
 
-const { adoptedBidsLevel, bidsSnapshotOf, bidsWant, goesLive, needsCheck, planBasis, planBids, planMoves, sharedLeaves, touchesBids } = await import('./enrollment.js')
+const { adoptedBidsLevel, bidsSnapshotOf, bidsWant, goesLive, needsCheck, notReachedBy, ownerKeepsOff, planBasis, planBids, planMoves, touchesBids } = await import('./enrollment.js')
 const { resolveBrainSettings } = await import('./settings.js')
 
 const c = (campaignId: string, mode: 'SHADOW' | 'LIVE' | 'HELD' | null, want: 'AUTO' | 'NOT', extra: Record<string, string | null> = {}) => ({ campaignId, name: `Campaign ${campaignId}`, status: 'ENABLED', mode, want, ...extra })
@@ -111,7 +113,7 @@ describe('bidsSnapshotOf', () => {
   })
 })
 
-describe('planBasis, goesLive and sharedLeaves (AB-1 review)', () => {
+describe('planBasis, goesLive and ownerKeepsOff (AB-1 review)', () => {
   const set = { scope: 'PRODUCT', campaignId: null, kind: 'LEVEL' as const, key: 'bids', ref: '', value: 'AUTO' }
   const skip = { campaignId: 'a', name: 'A', op: 'skip' as const, why: 'not on the live-write allowlist' }
   const live = { campaignId: 'a', name: 'A', op: 'live' as const }
@@ -133,10 +135,42 @@ describe('planBasis, goesLive and sharedLeaves (AB-1 review)', () => {
     const o = (kind: string, key: string, value: unknown = null, scope = 'CAMPAIGN') =>
       ({ id: `${kind}-${key}-${scope}`, productId: 'p-1', marketplace: 'IT', scope, campaignId: scope === 'CAMPAIGN' ? 'c-1' : null, kind, key, ref: '', value, by: 'user:owner', reason: null, createdAt: new Date('2026-10-08T10:00:00Z'), endedAt: null })
     const bids = (overrides: ReturnType<typeof o>[]) => resolveBrainSettings({ productId: 'p-1', market: 'IT', campaignId: 'c-1', enrolled: true, overrides }).levers.bids
-    expect(sharedLeaves(bids([o('EXCLUDE', '*')]))).toBe(true)
-    expect(sharedLeaves(bids([o('EXCLUDE', '*', null, 'PRODUCT')]))).toBe(true)
-    expect(sharedLeaves(bids([o('LOCK', 'bids')]))).toBe(true)
-    expect(sharedLeaves(bids([o('LEVEL', 'bids', 'OBSERVE', 'PRODUCT')]))).toBe(false)
-    expect(sharedLeaves(bids([]))).toBe(false)
+    expect(ownerKeepsOff(bids([o('EXCLUDE', '*')]))).toBe(true)
+    expect(ownerKeepsOff(bids([o('EXCLUDE', '*', null, 'PRODUCT')]))).toBe(true)
+    expect(ownerKeepsOff(bids([o('LOCK', 'bids')]))).toBe(true)
+    expect(ownerKeepsOff(bids([o('LEVEL', 'bids', 'OBSERVE', 'PRODUCT')]))).toBe(false)
+    expect(ownerKeepsOff(bids([]))).toBe(false)
+  })
+})
+
+describe('an Owner\'s brake waits at a floor, and what a product\'s choice does not reach (AB-1 rollback review)', () => {
+  const floor = 'Campaign x cannot go back to shadow now: 2 keywords sit at a floor the bid brain set.'
+  it('a brake on a campaign at a floor is saved: the campaign waits, held unless it is held already; a level change still refuses', () => {
+    expect(planBids([
+      { ...c('live', 'LIVE', 'NOT', { shadowRefusal: floor, wantWhy: 'excluded by the Owner\'s product override' }), brake: true },
+      { ...c('held', 'HELD', 'NOT', { shadowRefusal: floor }), brake: true },
+      c('free', 'LIVE', 'NOT'),
+    ])).toEqual({ steps: [
+      { campaignId: 'live', name: 'Campaign live', op: 'wait', hold: true, why: expect.stringContaining('excluded by the Owner\'s product override, but it waits: Campaign x cannot go back to shadow now') },
+      { campaignId: 'held', name: 'Campaign held', op: 'wait', hold: false, why: expect.stringContaining('HELD') },
+      { campaignId: 'free', name: 'Campaign free', op: 'shadow', why: 'the bids lever does not run it' },
+    ] })
+    expect(planMoves([{ campaignId: 'h', name: 'H', op: 'wait', hold: false, why: '' }])).toBe(false)
+    expect(planMoves([{ campaignId: 'h', name: 'H', op: 'wait', hold: true, why: '' }])).toBe(true)
+    expect(planBids([c('lvl', 'LIVE', 'NOT', { shadowRefusal: floor })])).toEqual({ refusal: `the bid brain cannot leave these campaigns now: ${floor}` })
+  })
+
+  it('names the campaigns a product\'s level or lock does not reach, and why', () => {
+    const o = (kind: string, key: string, value: unknown, scope: string, campaignId: string | null = null) =>
+      ({ id: `${kind}-${key}-${scope}-${campaignId}`, productId: 'p-1', marketplace: 'IT', scope, campaignId, kind, key, ref: '', value, by: 'user:owner', reason: null, createdAt: new Date('2026-10-08T10:00:00Z'), endedAt: null })
+    const rows = [o('LEVEL', 'bids', 'OBSERVE', 'PRODUCT'), o('LEVEL', 'bids', 'AUTO', 'CAMPAIGN', 'own'), o('EXCLUDE', '*', null, 'CAMPAIGN', 'out'), o('LOCK', 'bids', null, 'CAMPAIGN', 'locked')]
+    const camp = (campaignId: string) => ({ campaignId, name: campaignId, settings: resolveBrainSettings({ productId: 'p-1', market: 'IT', campaignId, enrolled: true, overrides: rows }) })
+    const all = ['plain', 'own', 'out', 'locked'].map(camp)
+    expect(notReachedBy('LEVEL', 'bids', all).map((x) => [x.campaignId, x.why])).toEqual([
+      ['own', expect.stringContaining('AUTO by the Owner\'s campaign override')],
+      ['out', expect.stringContaining('excluded by')],
+      ['locked', expect.stringContaining('locked at the Owner\'s own value')],
+    ])
+    expect(notReachedBy('LOCK', 'bids', all).map((x) => x.campaignId)).toEqual(['out', 'locked'])
   })
 })

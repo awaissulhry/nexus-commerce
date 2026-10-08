@@ -5,7 +5,8 @@
  *   defaults    no override: every lever OBSERVE and every setting its default, source "default"
  *   precedence  campaign override > product override > default, for a level and for a setting; each value names its
  *               source, who and when
- *   lever       the most specific scope that says anything about a lever decides; inside it a lock beats a level
+ *   lever       the Owner's brakes first: a lock (the campaign's, else the product's) beats every level, a campaign's
+ *               own included; then a campaign level beats the product's
  *   exclusion   a campaign or product exclusion wins over every lever (EXCLUDED, nothing owned)
  *   lock        a locked lever writes nothing (LOCKED); a lock of one thing inside a lever is listed, the level stays
  *   scope       only this product × market's product overrides and this campaign's overrides count; ended rows never
@@ -52,16 +53,24 @@ describe('resolveBrainSettings', () => {
     expect(resolve([capP, capC], 'c-2').values.negativesPerEntityMax.value).toBe(900)
   })
 
-  it('per lever the most specific scope decides, and a lock beats a level inside it', () => {
+  it('per lever a lock beats every level — a product lock holds a campaign set to AUTO by hand; a campaign lock\'s value beats the product\'s', () => {
     const productAuto = row({ scope: 'PRODUCT', kind: 'LEVEL', key: 'bids', value: 'AUTO' })
     const campaignLock = row({ scope: 'CAMPAIGN', campaignId: 'c-1', kind: 'LOCK', key: 'bids' })
     expect(resolve([productAuto, campaignLock]).levers.bids).toMatchObject({ level: { value: 'AUTO', source: 'product' }, lock: { value: null, source: 'campaign' }, effective: 'LOCKED', owned: false })
     expect(resolve([productAuto, campaignLock]).levers.bids.why).toMatch(/locked at the Owner's own value .*only recommends/)
-    // A product-wide lock holds every campaign, unless a campaign says its own level.
-    const productLock = row({ scope: 'PRODUCT', kind: 'LOCK', key: 'budgets', value: null })
+    // A product-wide lock (an Owner brake) holds every campaign, a campaign with a level of its own included.
+    const productLock = row({ scope: 'PRODUCT', kind: 'LOCK', key: 'budgets', value: { dailyBudgetCents: 2000 } })
     const campaignBudgetLevel = row({ scope: 'CAMPAIGN', campaignId: 'c-1', kind: 'LEVEL', key: 'budgets', value: 'OBSERVE' })
     expect(resolve([productLock], 'c-2').levers.budgets.effective).toBe('LOCKED')
-    expect(resolve([productLock, campaignBudgetLevel]).levers.budgets).toMatchObject({ lock: null, effective: 'OBSERVE' })
+    expect(resolve([productLock, campaignBudgetLevel]).levers.budgets).toMatchObject({ level: { value: 'OBSERVE', source: 'campaign' }, lock: { source: 'product' }, effective: 'LOCKED' })
+    const campaignAuto = row({ scope: 'CAMPAIGN', campaignId: 'c-1', kind: 'LEVEL', key: 'bids', value: 'AUTO' })
+    const productBidsLock = row({ scope: 'PRODUCT', kind: 'LOCK', key: 'bids' })
+    expect(resolve([campaignAuto, productBidsLock]).levers.bids).toMatchObject({ effective: 'LOCKED', owned: false })
+    // A campaign lock's value beats the product's.
+    const campaignBudgetLock = row({ scope: 'CAMPAIGN', campaignId: 'c-1', kind: 'LOCK', key: 'budgets', value: { dailyBudgetCents: 3500 } })
+    expect(resolve([productLock, campaignBudgetLock]).levers.budgets.lock).toMatchObject({ value: { dailyBudgetCents: 3500 }, source: 'campaign' })
+    // A campaign level beats the product's level (its own AUTO stays when the product goes to OBSERVE).
+    expect(resolve([campaignAuto, row({ scope: 'PRODUCT', kind: 'LEVEL', key: 'bids', value: 'OBSERVE' })]).levers.bids).toMatchObject({ effective: 'AUTO', level: { source: 'campaign' } })
     // The Owner's own value travels with the lock.
     const strategy = row({ scope: 'CAMPAIGN', campaignId: 'c-1', kind: 'LOCK', key: 'biddingStrategy', value: 'LEGACY_FOR_SALES' })
     expect(resolve([strategy]).levers.biddingStrategy.lock?.value).toBe('LEGACY_FOR_SALES')
@@ -152,8 +161,8 @@ describe('ownerBrakeOf and settingsPairRefusal (AB-1 review)', () => {
     expect(ownerBrakeOf(resolve([out]))).toBe('it is excluded from the brain by the Owner\'s campaign override (user:owner, 2026-10-08): "my own campaign"')
     const lock = row({ scope: 'PRODUCT', kind: 'LOCK', key: 'bids', by: 'user:owner-2', createdAt: new Date('2026-10-07T09:00:00Z') })
     expect(ownerBrakeOf(resolve([lock]))).toBe('its bids are locked at the Owner\'s own value by the Owner\'s product override (user:owner-2, 2026-10-07)')
-    // A campaign level of its own lifts a product-wide lock; a lock of one keyword is no brake on the campaign.
-    expect(ownerBrakeOf(resolve([lock, row({ scope: 'CAMPAIGN', campaignId: 'c-1', kind: 'LEVEL', key: 'bids', value: 'AUTO' })]))).toBeNull()
+    // A campaign level of its own does not lift a product-wide lock; a lock of one keyword is no brake on the campaign.
+    expect(ownerBrakeOf(resolve([lock, row({ scope: 'CAMPAIGN', campaignId: 'c-1', kind: 'LEVEL', key: 'bids', value: 'AUTO' })]))).toMatch(/its bids are locked/)
     expect(ownerBrakeOf(resolve([row({ scope: 'CAMPAIGN', campaignId: 'c-1', kind: 'LOCK', key: 'bids', ref: 'target:t-1' })]))).toBeNull()
     expect(ownerBrakeOf(resolve([]))).toBeNull()
     expect(describeProvenance(resolve([]).levers.bids.level)).toBe('the brain\'s default')
