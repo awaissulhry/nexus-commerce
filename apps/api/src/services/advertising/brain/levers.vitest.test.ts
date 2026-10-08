@@ -2,7 +2,8 @@
  * ONE BRAIN AB-1 — levers, levels, settings and lock vocabularies (brain/levers.ts).
  *
  *   levels    the brain owns a lever at PROPOSE and AUTO; every lever starts OBSERVE
- *   now       the bids lever takes OBSERVE and AUTO; every other lever OFF or OBSERVE until its PR, with the reason
+ *   now       the bids lever takes OBSERVE and AUTO; the hours lever OFF, OBSERVE and PROPOSE (AB-13: a painted plan always
+ *             asks, never AUTO); every other lever OFF or OBSERVE until its PR, with the reason
  *   settings  each setting's default is the design's and sits inside its bounds; a value outside, of the wrong type,
  *             or at a scope the setting does not take is refused with the reason
  *   locks     a ref in its lever's vocabulary (hour cell, lane, term normalised); a whole-lever lock takes the Owner's
@@ -26,12 +27,15 @@ describe('levels', () => {
     expect(levelRefusal('bids', 'OBSERVE')).toBeNull()
     expect(levelRefusal('bids', 'PROPOSE')).toMatch(/no proposal path/)
     expect(levelRefusal('bids', 'OFF')).toMatch(/decides every allowlisted campaign in shadow/)
-    // AB-8 — the money levers have their writer; AB-12 — the state lever too; AB-11 — the harvest lever too (shadow, a
-    // person's approval, the brain's own writes): every level.
-    for (const lever of ['budgets', 'portfolioCap', 'state', 'harvest'] as const) {
+    // AB-8 — the money levers have their writer; AB-12 — the state lever too; AB-10 — the negatives lever too: every level.
+    for (const lever of ['budgets', 'portfolioCap', 'state', 'negatives', 'harvest'] as const) {
       for (const level of ['OFF', 'OBSERVE', 'PROPOSE', 'AUTO'] as const) expect(levelRefusal(lever, level), `${lever} ${level}`).toBeNull()
     }
-    for (const lever of BRAIN_LEVERS.filter((l) => l !== 'bids' && l !== 'budgets' && l !== 'portfolioCap' && l !== 'state' && l !== 'harvest')) {
+    // AB-13 — the hours lever paints and asks (D3 = B+): PROPOSE yes, AUTO never.
+    expect(levelRefusal('hours', 'PROPOSE')).toBeNull()
+    expect(levelRefusal('hours', 'OFF')).toBeNull()
+    expect(levelRefusal('hours', 'AUTO')).toMatch(/takes OFF or OBSERVE or PROPOSE today, not AUTO: .*never AUTO/)
+    for (const lever of BRAIN_LEVERS.filter((l) => l !== 'bids' && l !== 'budgets' && l !== 'portfolioCap' && l !== 'state' && l !== 'hours' && l !== 'negatives' && l !== 'harvest')) {
       expect(levelRefusal(lever, 'OFF')).toBeNull()
       expect(levelRefusal(lever, 'OBSERVE')).toBeNull()
       expect(levelRefusal(lever, 'AUTO')).toMatch(/takes OFF or OBSERVE today, not AUTO: .*AB-\d+/)
@@ -43,8 +47,10 @@ describe('levels', () => {
 describe('settings', () => {
   it('defaults are the design\'s, each inside its bounds', () => {
     expect(settingDefaults()).toMatchObject({
-      negativesPerDay: 20, harvestPerDay: 10, negativesPerEntityMax: 950, paceTargetPct: 90,
+      negativesPerDay: 20, harvestPerDay: 10, negativesPerEntityMax: 950, negativesShadowDays: 14, paceTargetPct: 90,
       portfolioCapOn: true, portfolioCapPct: 115, portfolioCapCents: null, ownPortfolio: true, strategySwitchMode: 'PROPOSE_THEN_AUTO',
+      // AB-13 — four weeks of hours researched; the Owner's own plan is a limit only when he says so.
+      hourResearchWeeks: 4, hourPlanAsLimits: false, hourCellMovePct: 30, hourProposalsPerWeek: 1,
     })
     for (const [key, spec] of Object.entries(BRAIN_SETTINGS)) {
       if (spec.type === 'int') expect(spec.default >= spec.min && spec.default <= spec.max, key).toBe(true)
@@ -62,6 +68,8 @@ describe('settings', () => {
     expect(settingRefusal('strategySwitchMode', 'SOMETIMES', 'PRODUCT')).toMatch(/PROPOSE_THEN_AUTO or ALWAYS_PROPOSE/)
     expect(settingRefusal('paceTargetPct', 80, 'CAMPAIGN')).toMatch(/set per product, not per campaign/)
     expect(settingRefusal('mystery', 1, 'PRODUCT')).toMatch(/not a setting/)
+    expect(settingRefusal('hourResearchWeeks', 9, 'PRODUCT')).toMatch(/from 2 to 8, not 9/)
+    expect(settingRefusal('hourPlanAsLimits', true, 'CAMPAIGN')).toMatch(/set per product, not per campaign/)
   })
 
   it('AB-12 — the state lever\'s settings: 3 days at the least for a pause, weeks before an archive proposal, the Owner\'s long stop as a day', () => {

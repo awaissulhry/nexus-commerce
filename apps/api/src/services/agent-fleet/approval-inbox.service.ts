@@ -847,6 +847,9 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'undo-ad-change': ['source', 'rows', 'negatives', 'reach'],
   /* ADS AUTONOMY — auto-undo's one undo: the judgement it carries out, what goes back (from → to) and where it lands. */
   'undo-worse-ad-change': ['judgement', 'restore', 'reach'],
+  /* One brain AB-13 — the brain's painting of one hourly plan: which painting, the plan and week it stands on (basis), and
+     where the engine's writes land. */
+  'apply-brain-hourly-plan': ['proposalId', 'basis', 'reach', 'gateRefused'],
   /* ONE BRAIN AB-11 — the ads brain's harvest: the term, its destination, the start bid, the sources still owed (or what
      an undo puts back), and where it lands. */
   'apply-brain-harvest': ['basis', 'reach'],

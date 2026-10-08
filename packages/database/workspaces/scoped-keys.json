@@ -6252,6 +6252,11 @@
     "compound": {},
     "relations": []
   },
+  "AdsBrainHourProposal": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
   "AdsNativeRuleSnapshot": {
     "scalar": {},
     "compound": {
@@ -6294,6 +6299,17 @@
         "productId",
         "marketplace",
         "term"
+      ]
+    },
+    "relations": []
+  },
+  "AdsBrainNegative": {
+    "scalar": {},
+    "compound": {
+      "product_market_key": [
+        "productId",
+        "marketplace",
+        "key"
       ]
     },
     "relations": []

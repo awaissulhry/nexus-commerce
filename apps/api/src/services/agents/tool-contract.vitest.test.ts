@@ -467,6 +467,11 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { op: 'update-windows', planId: 'rg1', name: 'Test plan', enabled: true, windows: [{ days: [1], startHour: 0, endHour: 6, targetKey: 'test-floor' }], defaultTargetKey: 'test-top', members: ['c1'], overrides: {} },
         after: { op: 'update-windows', planId: 'rg1', name: 'Test plan', enabled: true, windows: [], defaultTargetKey: 'test-top', members: ['c1'], overrides: {}, versionId: 'v2' },
       },
+      // AB-13 — the brain's painted week is put back by set-hourly-bid-plan painting the week it replaced.
+      'apply-brain-hourly-plan': {
+        before: { op: 'update-windows', planId: 'rg1', name: 'Test plan', enabled: true, windows: [{ days: [1], startHour: 0, endHour: 6, targetKey: 'test-floor' }], defaultTargetKey: 'test-top', members: ['c1'], overrides: {} },
+        after: { op: 'update-windows', planId: 'rg1', name: 'Test plan', enabled: true, windows: [{ days: [1], startHour: 0, endHour: 4, targetKey: 'test-floor' }], defaultTargetKey: 'test-top', members: ['c1'], overrides: {}, versionId: 'v3', proposalId: 'hp1' },
+      },
       // B-2 — an AI goal is put back (in part) by archiving every campaign it made at Amazon.
       'create-ai-goal-campaigns': { before: { goalId: null, campaignIds: [] }, after: { goalId: 'g1', planId: 'pl1', market: 'IT', name: 'Test goal', campaignIds: ['c1', 'c2'], notAtAmazon: [] } },
       // W3-3 — a stock lowering is undone by a give-back (even while stock is short), a give-back by a lowering.

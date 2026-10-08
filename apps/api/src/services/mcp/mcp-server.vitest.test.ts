@@ -134,7 +134,7 @@ describe('C3 — the server and every change tool name the business', () => {
       'bid-brain (read only; the bid', 'writes only for a campaign set-bid-brain-enrollment put LIVE',
       "needs the approver's authenticator code; its diff view",
       // AB-3 — the brain's map, read only.
-      'ads-brain (read only; views map, clashes, setup, money, terms, state, harvest)',
+      'ads-brain (read only; views map, clashes, setup, money, terms, state, negatives, harvest)',
       // AB-11 — the brain's harvest request, a person's decision.
       'person for is apply-brain-harvest (the keyword and its source negatives in one change set',
       // PB-11 — where the playbook lives, and that a start needs the approver's code.

@@ -20,6 +20,14 @@
  *            stop of 3 days or more, resume when it ends, propose to archive a campaign dead for weeks, keep — each with its
  *            cause, horizon and why) beside the newest decision the brain logged; its pauses in force, requests waiting,
  *            the day's pause cap; with market alone, the market's
+ *   hours    AB-13 — one product's hourly research and painted plan (brain/hours-proposal.ts brainHours): the market's
+ *            hourly dynamics pooled product → category → market with its confidence, the before / after grid, the
+ *            expected effect and the status of its approval; decided now (stored nowhere) when nothing is stored yet
+ *   negatives AB-10 — a product's negatives (brain/negatives-read.ts): the day decided now — adds (the product's set, waste,
+ *            n-gram phrases, isolation, consolidation), retirements of duplicates, revives — each with where, its level
+ *            and what became of it (logged, asked, written, refused, rejected); every campaign and ad group against the
+ *            negatives limit; the campaigns the brain leaves; the shadow and the cap; the log of 30 days. With market
+ *            alone, the market's logs
  *   harvest  AB-11 — a product's harvests (brain/harvest-read.ts): each harvest candidate's destination and how it was
  *            chosen, its sources and their negatives, its start bid, the request a person decides, the pair's state and
  *            the judgement after the attribution window + 72 h; the caps used; the gaps; with market alone, the market's
@@ -30,7 +38,9 @@ import { BRAIN_MAP_VIEWS, brainClashes, brainMap, brainSetup, DEFAULT_EVIDENCE_D
 import { brainMoney } from '../../advertising/brain/budget-read.js'
 import { brainTerms, DEFAULT_TERMS_LIMIT, MAX_TERMS_LIMIT } from '../../advertising/brain/terms-read.js'
 import { TERM_STATES } from '../../advertising/brain/terms.js'
+import { brainNegatives, DEFAULT_NEGATIVES_LIMIT, MAX_NEGATIVES_LIMIT } from '../../advertising/brain/negatives-read.js'
 import { brainState } from '../../advertising/brain/state-read.js'
+import { brainHours } from '../../advertising/brain/hours-proposal.js'
 import { brainHarvest, DEFAULT_HARVEST_LIMIT, MAX_HARVEST_LIMIT } from '../../advertising/brain/harvest-read.js'
 import { HARVEST_STATUSES } from '../../advertising/brain/harvest.js'
 import type { AgentTool, FieldPermission } from '../tool-types.js'
@@ -41,8 +51,8 @@ const ID = z.string().trim().min(1).max(64)
  * The portfolio cap amount (a setting) and the money an Owner's lock may hold are ad-spend money. AB-7 — the money view
  * puts every amount, percent of spend and sentence naming one under a `money` key: hidden whole without the permission.
  * AB-9 — the terms view puts every amount (spend, sales, CPC, order value, profit per click, bids, the spend gate, the
- * ACoS bound) under `money` keys too. AB-11 — the harvest view's start bids, candidate money, first budgets and judged
- * ACoS too.
+ * ACoS bound) under `money` keys too. AB-13 — so does the hours view (amounts, ACoS and the sentences naming them). AB-10 — the negatives view puts every amount (spend, sales, the spend gate) under `money`. AB-11 — the harvest view's start bids,
+ * candidate money, first budgets and judged ACoS too.
  */
 const BRAIN_MAP_MONEY: Readonly<Record<string, FieldPermission>> = Object.fromEntries(
   ['portfolioCapCents', 'dailyBudgetCents', 'amountCents', 'money'].map((key) => [key, FIELDS.financialsAdspendView]),
@@ -58,17 +68,17 @@ const adsBrain: AgentTool = {
   restrictedFields: BRAIN_MAP_MONEY,
   input: z.object({
     view: z.enum(BRAIN_MAP_VIEWS).default('map')
-      .describe('map (default): who owns each lever of each campaign today; clashes: two automatic writers on one campaign\'s lever, and the known gaps; setup: what is not set up or held off, with the fix; money: a product\'s money plan in shadow — envelope, pace, brake, portfolio cap, campaign budgets — or a market\'s split; terms: a product\'s term ledger in shadow — one decision per search term, the market arbiter\'s leads, the clashes it removes — or a market\'s ledgers; state: each campaign\'s pause, resume or archive proposal decided now, with its cause and horizon, beside what the brain logged; harvest: a product\'s harvests — destination, sources and their negatives, start bid, the request a person decides, the judgement after the attribution window + 72 h — or a market\'s'),
+      .describe('map (default): who owns each lever of each campaign today; clashes: two automatic writers on one campaign\'s lever, and the known gaps; setup: what is not set up or held off, with the fix; money: a product\'s money plan in shadow — envelope, pace, brake, portfolio cap, campaign budgets — or a market\'s split; terms: a product\'s term ledger in shadow — one decision per search term, the market arbiter\'s leads, the clashes it removes — or a market\'s ledgers; state: each campaign\'s pause, resume or archive proposal decided now, with its cause and horizon, beside what the brain logged; hours: one product\'s hourly research and painted plan with its approval (market and productId); negatives: a product\'s negatives — the day\'s adds, retirements and revives with their level and outcome, every campaign and ad group against the limit — or a market\'s logs; harvest: a product\'s harvests — destination, sources and their negatives, start bid, the request a person decides, the judgement after the attribution window + 72 h — or a market\'s'),
     market: z.string().trim().toUpperCase().min(2).max(20).optional()
-      .describe('one Amazon market code (business-overview). map: with productId; alone, or omitted, the products the brain knows there (or in every market); clashes, money, terms, state and harvest: required'),
-    productId: ID.optional().describe('map / clashes / money / terms / state / harvest: one product (a variation names its parent), its Nexus id'),
+      .describe('one Amazon market code (business-overview). map: with productId; alone, or omitted, the products the brain knows there (or in every market); clashes, money, terms, state, hours, negatives and harvest: required'),
+    productId: ID.optional().describe('map / clashes / money / terms / state / hours / negatives / harvest: one product (a variation names its parent), its Nexus id'),
     campaignId: ID.optional().describe('map: one Amazon campaign, its Nexus id (ad-campaigns)'),
     days: z.coerce.number().int().min(1).max(MAX_EVIDENCE_DAYS).default(DEFAULT_EVIDENCE_DAYS)
       .describe(`map / clashes: how many days of the action log count as evidence of who wrote (default ${DEFAULT_EVIDENCE_DAYS}, max ${MAX_EVIDENCE_DAYS})`),
     state: z.enum(TERM_STATES).optional().describe('terms: only the terms in this term state (view state takes no filter)'),
     status: z.enum(HARVEST_STATUSES).optional().describe('harvest: only the harvests in this status'),
-    limit: z.coerce.number().int().min(1).max(MAX_TERMS_LIMIT).default(DEFAULT_TERMS_LIMIT)
-      .describe(`terms / harvest: how many to list (default ${DEFAULT_TERMS_LIMIT} terms, ${DEFAULT_HARVEST_LIMIT} harvests; max ${MAX_TERMS_LIMIT} / ${MAX_HARVEST_LIMIT}); the counts cover every one`),
+    limit: z.coerce.number().int().min(1).max(Math.max(MAX_TERMS_LIMIT, MAX_NEGATIVES_LIMIT, MAX_HARVEST_LIMIT)).default(DEFAULT_TERMS_LIMIT)
+      .describe(`terms: how many terms to list (default ${DEFAULT_TERMS_LIMIT}, max ${MAX_TERMS_LIMIT}); the counts per state cover every term. negatives: how many of each list (default ${DEFAULT_NEGATIVES_LIMIT}, max ${MAX_NEGATIVES_LIMIT}). harvest: how many harvests (default ${DEFAULT_HARVEST_LIMIT}, max ${MAX_HARVEST_LIMIT})`),
   }),
   description:
     'Read the ads brain\'s map for Amazon Sponsored Products: one brain per product and market will run every lever (bids, '
@@ -119,7 +129,29 @@ const adsBrain: AgentTool = {
     + 'archive a campaign without an impression for weeks (only ever a proposal), or keep it — a short stop stays on low '
     + 'bids; each with its cause, horizon, any hold (a person\'s status change holds 60 days) and why — beside the '
     + 'newest decision the brain logged; the day\'s pause cap (3 a market) used and left; with market alone, the products '
-    + 'watched, the brain\'s pauses in force, its requests waiting and what needs a person. '
+    + 'watched, the brain\'s pauses in force, its requests waiting and what needs a person. view hours (market and '
+    + 'productId): the brain\'s research of the market\'s hourly dynamics for that product — traffic, cost per click and '
+    + 'conversion by hour of the week, pooled product → category → market with how sure it is, weekday against weekend, '
+    + 'the trend, the lanes — and the hourly plan it painted from it: the before / after grid (Monday first, a letter per '
+    + 'hour; changed and locked hours marked), each hour that moves, the expected effect with its range, and the status '
+    + '(shadow, proposed and waiting for a person as apply-brain-hourly-plan, applied as a new plan version, rejected, '
+    + 'expired, held and why); with nothing stored yet, decided now and stored nowhere; its amounts, ACoS and the '
+    + 'sentences naming them sit under money keys. '
+    + 'view negatives (market, optionally productId): '
+    + 'with productId, the product\'s negatives for the day decided now (a dry run, stored nowhere — the daily run decides the '
+    + 'same way, logs it and acts at each campaign\'s level of the negatives lever: OBSERVE logs, PROPOSE asks a person once a '
+    + 'day in one change plan, AUTO writes as the brain through the one negative write service and the retire queue, after '
+    + 'the shadow days and only under the live server switch): the adds — the product\'s own negative set from its playbook, '
+    + 'waste negatives (0 orders after the pooled test and the spend gate) where the term still served, n-gram phrases (a word '
+    + 'that wastes across terms, never one in a term that converts, is targeted, led, protected or the brand), isolation '
+    + '(a term with a live exact home negated exact in the product\'s other ad groups; where it converts only once its home '
+    + 'converts too) and consolidation near the limit — each with its place (campaign or ad group), match, level, status and '
+    + 'why; the retirements of duplicates near the limit; the revives (a negative over the product\'s own keyword, a '
+    + 'protected term, a term it now leads, or one that converted where it is blocked; a person\'s negative only on a '
+    + 'person\'s yes); every campaign and ad group with its negatives against the warning (800), the maximum (950) and '
+    + 'Amazon\'s 1,000; the campaigns the brain leaves (excluded, locked, lever off, not running); the shadow days and the '
+    + 'day\'s cap (20 new negatives); the log of 30 days. A product not enrolled is decided as if at the default level. With '
+    + 'market alone, the products with a log there. '
     + 'view harvest (market, optionally productId and '
     + 'status): with productId, the product\'s harvests — for each harvest candidate of its ledger, where it goes (the Owner\'s '
     + 'stored harvest destination, the product\'s playbook exact slot, its exact ad group, or a new campaign through '
@@ -137,8 +169,10 @@ const adsBrain: AgentTool = {
         : a.view === 'money' ? await brainMoney(a)
           : a.view === 'terms' ? await brainTerms(a)
             : a.view === 'state' ? await brainState(a)
-              : a.view === 'harvest' ? await brainHarvest(a)
-                : await brainMap(a)
+              : a.view === 'negatives' ? await brainNegatives(a)
+                : a.view === 'hours' ? await brainHours(a)
+                  : a.view === 'harvest' ? await brainHarvest(a)
+                    : await brainMap(a)
     return 'error' in out ? { ok: false, error: out.error } : { ok: true, data: out.data }
   },
 }

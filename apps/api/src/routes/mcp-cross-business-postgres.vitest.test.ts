@@ -1167,6 +1167,8 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
   'replicate-ad-structure': { get sourceMarket() { return seeded.b.market }, portfolioId: undefined },
   // Ads autonomy W4-1 — ONE hourly plan, by its id (`planId` is the FBA plan's for the loop): B's plan, read and renamed.
   'ad-hourly-plans': { get planId() { return seeded.b.hourlyPlanId }, campaignId: undefined, market: undefined },
+  // AB-13 — the brain's painting of B's hourly plan, by its id.
+  'apply-brain-hourly-plan': { get planId() { return seeded.b.hourlyPlanId } },
   'set-hourly-bid-plan': {
     op: 'rename', get planId() { return seeded.b.hourlyPlanId }, name: 'MCP8 probe plan', market: undefined, campaignIds: undefined, add: undefined,
     remove: undefined, move: undefined, windows: undefined, days: undefined, defaultTargetKey: undefined, timezone: undefined, on: undefined, values: undefined,
@@ -1203,6 +1205,9 @@ const REACHED_BY_REFUSAL: Record<string, RegExp> = {
   'confirm-change': /may not confirm changes|Only the person who asked/,
   // Step 4 — the Send to FBA rule judges a plan only once its products were read (from A: "Product not found" first).
   'plan-fba-shipment': /Add units to send|Choose one of your active warehouses as From/,
+  // AB-13 — the brain's painting of an hourly plan names the plan only once it was found in the caller's business (from A:
+  // "was not found" first); B's seeded plan holds no painting.
+  'apply-brain-hourly-plan': /has painted no proposal for the hourly plan "/,
 }
 
 /**
