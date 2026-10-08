@@ -1,0 +1,50 @@
+{
+  "//": "AB-4 — Amazon's answer to GET /sp/campaigns/{campaignId}/budgetRules in the published spec's shape (SPListAssociatedBudgetRulesResponse). Values are made up (public repo).",
+  "associatedRules": [
+    {
+      "ruleId": "0b9c1f2e-0000-4000-8000-000000000001",
+      "ruleState": "ACTIVE",
+      "ruleStatus": "ACTIVE",
+      "createdDate": 1759900000000,
+      "lastUpdatedDate": 1759900000000,
+      "ruleDetails": {
+        "name": "Weekend boost",
+        "ruleType": "SCHEDULE",
+        "budgetIncreaseBy": { "type": "PERCENT", "value": 25 },
+        "duration": { "dateRangeTypeRuleDuration": { "startDate": "20261001", "endDate": "20261231" } },
+        "recurrence": { "type": "DAILY", "daysOfWeek": ["SATURDAY", "SUNDAY"] }
+      }
+    },
+    {
+      "ruleId": "0b9c1f2e-0000-4000-8000-000000000002",
+      "ruleState": "ACTIVE",
+      "ruleDetails": {
+        "name": "ROAS above 4",
+        "ruleType": "PERFORMANCE",
+        "budgetIncreaseBy": { "type": "PERCENT", "value": 20 },
+        "duration": { "dateRangeTypeRuleDuration": { "startDate": "20260901" } },
+        "performanceMeasureCondition": { "metricName": "ROAS", "comparisonOperator": "GREATER_THAN", "threshold": 4 }
+      }
+    },
+    {
+      "ruleId": "0b9c1f2e-0000-4000-8000-000000000003",
+      "ruleState": "PAUSED",
+      "ruleDetails": {
+        "name": "Event push",
+        "ruleType": "SCHEDULE",
+        "budgetIncreaseBy": { "type": "PERCENT", "value": 50 },
+        "duration": { "eventTypeRuleDuration": { "eventId": "evt-0001", "eventName": "Autumn event", "startDate": "20261020", "endDate": "20261022" } }
+      }
+    },
+    {
+      "ruleId": "0b9c1f2e-0000-4000-8000-000000000004",
+      "ruleState": "ACTIVE",
+      "ruleDetails": {
+        "name": "Summer sale",
+        "ruleType": "SCHEDULE",
+        "budgetIncreaseBy": { "type": "PERCENT", "value": 30 },
+        "duration": { "dateRangeTypeRuleDuration": { "startDate": "20260601", "endDate": "20260831" } }
+      }
+    }
+  ]
+}

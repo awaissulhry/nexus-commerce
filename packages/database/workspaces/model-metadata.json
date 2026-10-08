@@ -6855,6 +6855,10 @@
       "fields": []
     },
     {
+      "name": "AdsNativeRuleSnapshot",
+      "fields": []
+    },
+    {
       "name": "AdWriteRefusal",
       "fields": []
     },

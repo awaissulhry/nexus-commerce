@@ -6,7 +6,8 @@
  *   map      who owns each of the 12 levers of each campaign today (the brain live or in shadow, a named engine, a rule,
  *            the Owner, or nobody), the brain's resolved settings with their source, excluded and shared campaigns, drift
  *   clashes  where two automatic writers can act on one campaign's lever, from what is set up and from the action log, and
- *            the known gaps (harvest vs negate, a harvest with no destination, sibling products on one keyword)
+ *            the known gaps (harvest vs negate, a harvest with no destination, sibling products on one keyword, and —
+ *            AB-4 — Amazon's own rules on brain campaigns, from the daily read: brain/native-rules.ts)
  *   setup    the tools that are not set up or are held off, with what starts them, and the brain's own setup
  */
 import { z } from 'zod'
@@ -51,11 +52,13 @@ const adsBrain: AgentTool = {
     + 'the last days; with campaignId, one campaign; with market alone (or nothing), the products the brain knows there (or in every market). view clashes '
     + '(market, optionally productId): every campaign lever two automatic writers can act on (set up at Auto, or wrote), '
     + 'and the known gaps — a keyword targeted and blocked in one place, a harvest rule with no stored destination (it '
-    + 'never negates its source), keywords two products bid on; Amazon\'s own rules are not read yet ("could not '
-    + 'measure"). Safety owners (retail guard, budget enforcement, auto-undo, the write reconcile) always pass and are '
+    + 'never negates its source), keywords two products bid on, and Amazon\'s own rules on brain campaigns: each budget '
+    + 'rule (read from Amazon once a day) or Amazon-run bidding strategy that acts on one is a clash, and an enrolled '
+    + 'product\'s brain refuses to take that lever to AUTO while it is attached; optimization rules and schedule bid rules are "could not read" '
+    + '(no API read Nexus could verify). Safety owners (retail guard, budget enforcement, auto-undo, the write reconcile) always pass and are '
     + 'never a clash. view setup: the engines that are not set up or are held off, with what starts them, and the '
     + 'brain\'s own setup (its server switch, products LIVE one campaign at a time but not enrolled). The portfolio cap '
-    + 'amount is ad-spend money. Nexus only; reads nothing from Amazon.',
+    + 'amount is ad-spend money. Nexus only: it reads what Nexus stored and asks Amazon nothing.',
   handler: async (args) => {
     const a = args as { view?: string; market?: string; productId?: string; campaignId?: string; days?: number }
     const out = a.view === 'clashes' ? await brainClashes(a)

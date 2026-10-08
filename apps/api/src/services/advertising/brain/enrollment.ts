@@ -36,6 +36,12 @@
  *   by hand        set-bid-brain-enrollment op live / shadow / give-back is recorded as a campaign override
  *                  (recordCampaignBidsChoice), and op live / release is refused on a campaign the Owner keeps off
  *                  the bid brain (brain/owner-brakes.ts).
+ *   Amazon's rules AB-4 (design §2.12) — a change that takes a lever to AUTO on one of the product's own campaigns, or
+ *                  puts one LIVE under the bid brain, is refused while one of Amazon's own rules acts on that lever there
+ *                  (an Amazon budget rule on budgets, a bidding strategy Amazon runs on bids): two brains on one lever.
+ *                  Read from the daily snapshot and the synced strategy (brain/native-rules.ts); a kind Nexus could not
+ *                  read refuses nothing. Enrolling refuses nothing either: it adopts what already runs, and the map shows
+ *                  the clash.
  *   reads          brainSettings (resolved, with provenance), brainView (settings, campaigns, drift),
  *                  bidBrainRowsByProduct (today's LIVE / HELD rows by product; it changes nothing).
  *
@@ -53,7 +59,8 @@ import { strategyMarket } from '../ads-strategy/bids.js'
 import { enrollmentFacts, enrollRefusal, PLANS_JOIN_THE_BRAIN, setEnrollment, type EnrollMode } from '../bid-brain/enrollment.js'
 import { giveBackStopMemory } from '../bid-brain/stop-memory.js'
 import type { AdsActor } from '../ads-mutation.service.js'
-import { readSnapshots, type BrainLever, type BrainLevel, type LeverSnapshot } from './levers.js'
+import { BRAIN_LEVERS, readSnapshots, type BrainLever, type BrainLevel, type LeverSnapshot } from './levers.js'
+import { loadNativeRules, nativeAutoRefusal } from './native-rules.js'
 import { productCampaigns, productFamily, resolveCampaignOwnership } from './ownership.js'
 import {
   EXCLUDE_KEY, overrideIdentity, resolveBrainSettings, settingsPairRefusal, validateIdentity, validateOverride, type BrainSettings, type LeverSettings,
@@ -527,6 +534,12 @@ async function changePlan(root: string, market: string, change: Change): Promise
   }
   const ends = set || change.op === 'end' ? open?.id ?? null : null
   const resolved = (campaignId: string | null) => resolveBrainSettings({ productId: root, market, campaignId, enrolled: true, overrides: after })
+  // AB-4 — the levers this change takes to AUTO on the product's own campaigns (a shared campaign is no brain's, D2).
+  const turnsAuto = camps.own.flatMap((c) => {
+    const before = resolveBrainSettings({ productId: root, market, campaignId: c.campaignId, enrolled: true, overrides })
+    const now = resolved(c.campaignId)
+    return BRAIN_LEVERS.filter((l) => now.levers[l].effective === 'AUTO' && before.levers[l].effective !== 'AUTO').map((lever) => ({ campaignId: c.campaignId, name: c.name, lever }))
+  })
   // AB-1 review — two settings checked against each other, for the product and every campaign with its own value.
   if (identity.kind === 'VALUE' && PAIRED.has(identity.key)) {
     const own = [...new Set(after.filter((o) => o.scope === 'CAMPAIGN' && o.kind === 'VALUE' && PAIRED.has(o.key) && o.campaignId).map((o) => o.campaignId!))]
@@ -538,12 +551,21 @@ async function changePlan(root: string, market: string, change: Change): Promise
   const notReached = identity.scope === 'PRODUCT' && (identity.kind === 'LEVEL' || (identity.kind === 'LOCK' && !identity.ref))
     ? notReachedBy(identity.kind, identity.key as BrainLever, all.map((c) => ({ campaignId: c.campaignId, name: c.name, settings: resolved(c.campaignId) })))
     : []
+  // AB-4 — refused while one of Amazon's own rules acts on such a lever there (brain/native-rules.ts): two brains on one lever.
+  const refuseOverAmazonRules = async (asks: ReadonlyArray<{ campaignId: string; name: string; lever: BrainLever }>) => {
+    if (!asks.length) return
+    const refusal = nativeAutoRefusal(asks, await loadNativeRules(asks.map((a) => a.campaignId)))
+    if (refusal) throw new BrainRefusal(refusal)
+  }
   const done = (steps?: BidsStep[]): OverridePlan => {
     const live = goesLive(steps)
     const plan = { productId: root, market, set, ends, ...(steps ? { steps } : {}), notReached, goesLive: live, needsCode: live.length > 0, unchanged: !set && !ends && !(steps && planMoves(steps)) }
     return { ...plan, basis: planBasis(plan) }
   }
-  if (!touchesBids(identity)) return done()
+  if (!touchesBids(identity)) {
+    await refuseOverAmazonRules(turnsAuto)
+    return done()
+  }
   // The bids lever, after the change, on each campaign the choice reaches: an own campaign follows what it resolves to;
   // a shared one only leaves (back to shadow) when the Owner keeps the bid brain off it — it never goes LIVE from here.
   const reach = identity.scope === 'CAMPAIGN' ? all.filter((c) => c.campaignId === identity.campaignId) : all
@@ -560,6 +582,9 @@ async function changePlan(root: string, market: string, change: Change): Promise
   }
   const planned = planBids(await withChecks(wanted))
   if ('refusal' in planned) throw new BrainRefusal(planned.refusal)
+  // Every campaign this puts LIVE under the bid brain takes its bids to AUTO, a re-apply's newly added campaign included.
+  const nameOf = new Map(all.map((c) => [c.campaignId, c.name]))
+  await refuseOverAmazonRules([...turnsAuto, ...goesLive(planned.steps).map((campaignId) => ({ campaignId, name: nameOf.get(campaignId) ?? campaignId, lever: 'bids' as const }))])
   return done(planned.steps)
 }
 

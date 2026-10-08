@@ -460,6 +460,7 @@
     "BidDirective",
     "AdsBrainEnrollment",
     "AdsBrainOverride",
+    "AdsNativeRuleSnapshot",
     "AdWriteRefusal",
     "AutomationRefusalDaily",
     "KeywordBidProposal",

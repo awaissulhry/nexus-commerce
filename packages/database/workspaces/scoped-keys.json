@@ -6241,6 +6241,15 @@
     "compound": {},
     "relations": []
   },
+  "AdsNativeRuleSnapshot": {
+    "scalar": {},
+    "compound": {
+      "campaign": [
+        "campaignId"
+      ]
+    },
+    "relations": []
+  },
   "AdWriteRefusal": {
     "scalar": {},
     "compound": {},
