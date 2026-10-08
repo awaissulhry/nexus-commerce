@@ -65,7 +65,7 @@ export function verbSentence(preview: Pick<VerbPreview, 'verb' | 'changes'>, app
       // An Amazon coordinate is a real conversion (sent per market, confirmed from Amazon's report); eBay's is Nexus only.
       const amazon = preview.changes.length > 0 && preview.changes.every((c) => c.coordinateKey.startsWith('AMAZON:'))
       const some = preview.changes.some((c) => c.coordinateKey.startsWith('AMAZON:'))
-      if (amazon) return `${listings} sent to Amazon as ${to ?? 'the new method'}${s}. Amazon's report confirms it within about 15 minutes — the Fulfilment cell shows it.`
+      if (amazon) return `${listings} sent to Amazon as ${to ?? 'the new method'}${s}. The Fulfilment cell says Confirmed when Amazon's report shows it (read every 15 min, up to 24 h).`
       if (some) return `${listings} set to ${to ?? 'the new method'}${s}. The Amazon ones are sent to Amazon and confirmed from its report; eBay's is set in Nexus.`
       return `${listings} set to ${to ?? 'the new method'} in Nexus${s}.`
     }

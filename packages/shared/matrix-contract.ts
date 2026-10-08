@@ -565,7 +565,7 @@ export const MATRIX_COPY = {
   /** The Fulfilment cell's one tooltip line for the newest conversion Nexus sent Amazon (2026-10-07). */
   conversion: (c: FulfilmentConversionStatus) => conversionLine(c),
   /** Set fulfilment on Amazon: what the run does, said once above the table. */
-  fulfilmentSent: (markets: readonly string[]) => `Sent to Amazon on ${markets.join(' ')}: each market's offer is converted, then checked against Amazon's merchant listings report within minutes — the Fulfilment cell shows when Amazon confirms it`,
+  fulfilmentSent: (markets: readonly string[]) => `Sent to Amazon on ${markets.join(' ')}: Amazon accepts first and applies later — the Fulfilment cell says Confirmed when Amazon's report shows it (read every 15 min, up to 24 h)`,
   fulfilmentEuQuantity: 'Amazon EU keeps ONE merchant quantity per SKU: the FBM quantity sent sells on every open EU market',
   fulfilmentFbaOutOfStock: 'After the switch to FBA the offer shows out of stock on Amazon until Amazon receives units at its fulfilment centres',
   fulfilmentNexusOnly: 'Nexus only — nothing is sent to the channel; the quantity pushes follow the new method',

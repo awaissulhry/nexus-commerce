@@ -102,14 +102,14 @@ describe('set-listing-stock set-fulfilment', () => {
     const preview = await dryRun(args)
     expect(preview.ok, preview.error).toBe(true)
     expect(preview.preview).toMatchObject({ verb: 'set-fulfilment', changes: [{ coordinateKey: 'AMAZON:EU', cell: 'fulfilment', from: 'FBM', to: 'FBA',
-      note: 'Sends Amazon FBA (AMAZON_EU) on IT DE, no quantity — out of stock until Amazon receives units' }] })
+      note: 'Sends Amazon FBA (adds AMAZON_EU, no quantity; removes DEFAULT) on IT DE — out of stock until Amazon receives units' }] })
     expect(preview.preview.summary).toBe('TEST-SKU-T2: set-fulfilment — 1 change on AMAZON:EU.')
     const warning = preview.preview.warning as string
     expect(warning).toContain('Amazon EU: this covers')
     expect(warning).toContain(FULFILMENT_SENT)
     expect(warning).toContain('Sent to Amazon on IT DE')
     expect(warning).toContain('shows out of stock on Amazon until Amazon receives units')
-    expect(warning).toContain('TEST-SKU-T2-M on AMAZON:EU: Sends Amazon FBA (AMAZON_EU) on IT DE')
+    expect(warning).toContain('TEST-SKU-T2-M on AMAZON:EU: Sends Amazon FBA (adds AMAZON_EU, no quantity; removes DEFAULT) on IT DE')
     // The dry run sent nothing and changed nothing.
     expect(state.submit).not.toHaveBeenCalled()
     expect((await listingRow(ids.fbmIt)).fulfillmentMethod).toBe('FBM')
@@ -161,8 +161,8 @@ describe('set-listing-stock set-fulfilment', () => {
     await inside(() => db().offer.update({ where: { id: ids.offerRow }, data: { isActive: false } }))
     const preview = await dryRun(args)
     expect(preview.ok, preview.error).toBe(true)
-    expect(preview.preview.changes).toEqual([expect.objectContaining({ coordinateKey: 'AMAZON:UK', from: 'FBA', to: 'FBM', note: 'Sends Amazon FBM (DEFAULT) with quantity 7 on UK' })])
-    expect(preview.preview.warning).toContain('TEST-SKU-T2-S on AMAZON:UK: Sends Amazon FBM (DEFAULT) with quantity 7 on UK. Once Amazon accepts, Nexus manages the merchant quantity from then on.')
+    expect(preview.preview.changes).toEqual([expect.objectContaining({ coordinateKey: 'AMAZON:UK', from: 'FBA', to: 'FBM', note: 'Sends Amazon FBM (adds DEFAULT, quantity 7; removes AMAZON_EU) on UK' })])
+    expect(preview.preview.warning).toContain('TEST-SKU-T2-S on AMAZON:UK: Sends Amazon FBM (adds DEFAULT, quantity 7; removes AMAZON_EU) on UK. Once Amazon accepts, Nexus manages the merchant quantity from then on.')
 
     // The offer comes back before the person's yes runs: refused whole, nothing sent or written.
     await inside(() => db().offer.update({ where: { id: ids.offerRow }, data: { isActive: true } }))
@@ -215,8 +215,8 @@ describe('set-listing-stock retry-sync', () => {
 
 describe('fulfilmentWords', () => {
   it('FBM: what is sent, then Nexus manages the merchant quantity', () => {
-    expect(fulfilmentWords({ sku: 'S1', coordinateKey: 'AMAZON:EU', method: 'FBM', note: 'Sends Amazon FBM (DEFAULT) with quantity 4 on IT DE — skips FR (Inactive)' }))
-      .toBe('S1 on AMAZON:EU: Sends Amazon FBM (DEFAULT) with quantity 4 on IT DE — skips FR (Inactive). Once Amazon accepts, Nexus manages the merchant quantity from then on.')
+    expect(fulfilmentWords({ sku: 'S1', coordinateKey: 'AMAZON:EU', method: 'FBM', note: 'Sends Amazon FBM (adds DEFAULT, quantity 4; removes AMAZON_EU) on IT DE — skips FR (Inactive)' }))
+      .toBe('S1 on AMAZON:EU: Sends Amazon FBM (adds DEFAULT, quantity 4; removes AMAZON_EU) on IT DE — skips FR (Inactive). Once Amazon accepts, Nexus manages the merchant quantity from then on.')
   })
 
   it('FBA: no quantity from then on, out of stock until Amazon receives units', () => {

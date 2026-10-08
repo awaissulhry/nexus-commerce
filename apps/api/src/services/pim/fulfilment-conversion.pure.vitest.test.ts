@@ -59,8 +59,8 @@ describe('amazonConversionRefusal', () => {
   })
 
   it('the note says what is sent, where, and what Amazon reports now', () => {
-    expect(amazonConversionNote(facts({ skipped: [{ market: 'FR', why: 'inactive' }] }), 'FBM', 'AFN')).toBe('Amazon reports AFN. Sends Amazon FBM (DEFAULT) with quantity 5 on IT DE — skips FR (Inactive)')
-    expect(amazonConversionNote(facts(), 'FBA', null)).toBe('Sends Amazon FBA (AMAZON_EU) on IT DE, no quantity — out of stock until Amazon receives units')
+    expect(amazonConversionNote(facts({ skipped: [{ market: 'FR', why: 'inactive' }] }), 'FBM', 'AFN')).toBe('Amazon reports AFN. Sends Amazon FBM (adds DEFAULT, quantity 5; removes AMAZON_EU) on IT DE — skips FR (Inactive)')
+    expect(amazonConversionNote(facts(), 'FBA', null)).toBe('Sends Amazon FBA (adds AMAZON_EU, no quantity; removes DEFAULT) on IT DE — out of stock until Amazon receives units')
   })
 })
 

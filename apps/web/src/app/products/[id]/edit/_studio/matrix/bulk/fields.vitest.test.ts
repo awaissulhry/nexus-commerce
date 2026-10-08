@@ -143,7 +143,7 @@ describe('verbs', () => {
     expect(verbNotices({ verb: 'pause-sync', notices: [] })).toEqual([BULK_HOLD_NOTICE])
   })
   it('says the result in words, counting what the server applied', () => {
-    expect(verbSentence({ verb: 'set-fulfilment', changes: [{ toLabel: 'FBM', coordinateKey: 'AMAZON:EU' } as never] }, 10, 2)).toBe('10 listings sent to Amazon as FBM · 2 skipped. Amazon\'s report confirms it within about 15 minutes — the Fulfilment cell shows it.')
+    expect(verbSentence({ verb: 'set-fulfilment', changes: [{ toLabel: 'FBM', coordinateKey: 'AMAZON:EU' } as never] }, 10, 2)).toBe('10 listings sent to Amazon as FBM · 2 skipped. The Fulfilment cell says Confirmed when Amazon\'s report shows it (read every 15 min, up to 24 h).')
     expect(verbSentence({ verb: 'set-fulfilment', changes: [{ toLabel: 'MCF', coordinateKey: 'EBAY:IT' } as never] }, 1, 0)).toBe('1 listing set to MCF in Nexus.')
     expect(verbSentence({ verb: 'set-price', changes: [] }, 1, 0)).toBe('1 price changed. Nexus sends it in about 30 seconds.')
     expect(verbSentence({ verb: 'set-source', changes: [{ to: ['MI-3PL', 'IT-MAIN'] } as never] }, 3, 1)).toBe('3 listings sell from MI-3PL + IT-MAIN · 1 skipped.')

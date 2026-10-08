@@ -129,8 +129,8 @@ export function amazonConversionNote(facts: AmazonFulfilmentFacts, method: 'FBA'
   const where = facts.markets.join(' ')
   const skips = facts.skipped.length ? ` — skips ${skippedWords(facts.skipped)}` : ''
   return method === 'FBM'
-    ? `${lead}Sends Amazon FBM (DEFAULT) with quantity ${facts.quantity ?? '—'} on ${where}${skips}`
-    : `${lead}Sends Amazon FBA (AMAZON_EU) on ${where}, no quantity — out of stock until Amazon receives units${skips}`
+    ? `${lead}Sends Amazon FBM (adds DEFAULT, quantity ${facts.quantity ?? '—'}; removes AMAZON_EU) on ${where}${skips}`
+    : `${lead}Sends Amazon FBA (adds AMAZON_EU, no quantity; removes DEFAULT) on ${where} — out of stock until Amazon receives units${skips}`
 }
 
 export const EBAY_ZERO_REFUSAL = 'Refused — eBay ends a listing pinned at 0 unless the account\'s out-of-stock option is ON, and it is OFF '

@@ -124,7 +124,7 @@ describe('the preview refuses by name and tells what is sent', () => {
   it('FBA → FBM on the Amazon EU group: the open markets, the Inactive one skipped, the quantity, ONE EU quantity, Amazon\'s report; type the method', async () => {
     const p = await preview(ids.a, 'AMAZON:IT', 'FBM')
     expect(p.refusals).toEqual([])
-    expect(p.changes).toEqual([expect.objectContaining({ coordinateKey: 'AMAZON:EU', cell: 'fulfilment', from: 'FBA', to: 'FBM', note: 'Sends Amazon FBM (DEFAULT) with quantity 6 on IT DE — skips FR (Inactive)' })])
+    expect(p.changes).toEqual([expect.objectContaining({ coordinateKey: 'AMAZON:EU', cell: 'fulfilment', from: 'FBA', to: 'FBM', note: 'Sends Amazon FBM (adds DEFAULT, quantity 6; removes AMAZON_EU) on IT DE — skips FR (Inactive)' })])
     expect(p.notices).toEqual(expect.arrayContaining([MATRIX_COPY.fulfilmentSent(['IT', 'DE']), MATRIX_COPY.fulfilmentEuQuantity]))
     expect(p).toMatchObject({ confirm: 'type-to-confirm', confirmWord: 'FBM' })
     expect(state.submit).not.toHaveBeenCalled()
