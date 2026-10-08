@@ -25,6 +25,7 @@
  *   bid brain         `automation:bid-brain`                                                bid-brain/live-writer.ts
  *   brain money       `automation:ads-brain-budgets`, `automation:ads-brain-portfolio`      brain/budget-live.ts
  *   brain state       `automation:ads-brain-state`                                          brain/state-run.ts
+ *   brain strategy    `automation:ads-brain-strategy`                                       brain/bidding-mode-run.ts
  *
  * Rules are not here: a rule writes as `automation:<ruleId>` and keeps its own brakes (its caps and the
  * breaker's rule-action signal).
@@ -40,6 +41,9 @@ export type EngineKey =
   | 'brain-money'
   // ONE BRAIN AB-12 — the brain's state writer: a campaign's pause for a stop of several days and its resume (state lever at AUTO).
   | 'brain-state'
+  // ONE BRAIN AB-17 — the brain's bidding-strategy writer: a campaign's switch between fixed, down only and up and down, and
+  // the switch back after its test (biddingStrategy lever at AUTO, after the N4 approval days).
+  | 'brain-strategy'
 
 /** The breaker's buckets: every engine, plus writes no engine or rule claims. */
 export type BreakerBucket = EngineKey | 'unknown'
@@ -75,6 +79,7 @@ export const ENGINE_ACTORS: readonly EngineActorDef[] = [
   { key: 'bid-brain', label: 'Bid brain', actors: ['automation:bid-brain'] },
   { key: 'brain-money', label: 'Brain budgets', actors: ['automation:ads-brain-budgets', 'automation:ads-brain-portfolio'] },
   { key: 'brain-state', label: 'Brain pauses', actors: ['automation:ads-brain-state'] },
+  { key: 'brain-strategy', label: 'Brain bidding strategy', actors: ['automation:ads-brain-strategy'] },
 ]
 
 /**
@@ -214,6 +219,9 @@ const DEFAULT_ENGINE_CAPS: Readonly<Record<BreakerBucket, Readonly<EngineCaps>>>
   // AB-12 — the brain's state writer: at most 3 pauses a market a UTC day (design §5), their resumes, one write per
   // campaign per run; generous for a few markets, and far below the unknown bucket's 300 an hour, so a runaway trips it.
   'brain-state': { perTick: 50, perDay: 100, breakerPerHour: 50 },
+  // AB-17 — the brain's bidding-strategy writer: at most one switch per campaign per 14 days, decided weekly, plus the switch
+  // back after a test — a handful a week; far below the unknown bucket, so a runaway trips it at once.
+  'brain-strategy': { perTick: 50, perDay: 50, breakerPerHour: 20 },
   unknown: { perTick: null, perDay: null, breakerPerHour: 300 },
 }
 

@@ -248,6 +248,7 @@ const AUTO_RAISES: Partial<Record<BrainLever, string>> = {
   budgets: 'the brain may raise campaign budgets inside the pace and the day\'s move limit, and add the intraday ladder',
   state: 'the brain may resume campaigns it paused once their stop ends (spend restarts)',
   harvest: 'the brain may add new exact keywords from converting search terms, each starting to spend',
+  biddingStrategy: 'after the approval days (N4) the brain may switch a campaign to up and down, where top of search converts well and the CPC ceiling holds it: Amazon may then raise each bid up to +100 %',
 }
 
 /**
@@ -279,6 +280,7 @@ export const SPEND_RATINGS: Partial<Record<BrainSetting, Rating>> = {
   portfolioCapCents: { when: 'up', words: 'a higher Amazon portfolio cap (the hard backstop)' },
   ownPortfolio: { when: 'never', words: 'where the brain proposes to put the product\'s campaigns' },
   strategySwitchMode: { when: { from: 'ALWAYS_PROPOSE', to: 'PROPOSE_THEN_AUTO' }, words: 'bidding-strategy switches may run alone after 30 days (up and down lets Amazon raise a bid up to +100 %)' },
+  strategyApprovalDays: { when: 'down', words: 'bidding-strategy switches may run alone sooner (up and down lets Amazon raise a bid up to +100 %)' },
   pauseMinDays: { when: 'never', words: 'a shorter stop stays on low bids instead of a pause' },
   archiveDeadWeeks: { when: 'never', words: 'an archive is only ever a proposal' },
   longStopUntil: { when: 'cleared-or-earlier', words: 'the Owner\'s long stop ends sooner: the brain resumes the campaigns sooner' },

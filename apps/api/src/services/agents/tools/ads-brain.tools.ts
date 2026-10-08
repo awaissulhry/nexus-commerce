@@ -35,6 +35,10 @@
  *            would do in shadow, and why, in the cycle's order; ad sales against spend; what waits for the Owner; clashes;
  *            what his locks hold; the change set every write of the cycle carries. With market alone, each product's
  *            newest report in one line
+ *   bidding  AB-17 — the bidding-strategy lever (brain/bidding-mode-read.ts): each campaign's Amazon bidding strategy decided
+ *            now (fixed, down only, up and down — the rule and its evidence, the stack against the CPC ceiling, what holds
+ *            it), beside the newest decision logged; the switchback tests and their verdicts; the N4 clock (until when a
+ *            switch asks a person) and the spacing; with market alone, the tests running and the requests waiting
  */
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
@@ -48,6 +52,7 @@ import { brainHours } from '../../advertising/brain/hours-proposal.js'
 import { brainHarvest, DEFAULT_HARVEST_LIMIT, MAX_HARVEST_LIMIT } from '../../advertising/brain/harvest-read.js'
 import { HARVEST_STATUSES } from '../../advertising/brain/harvest.js'
 import { brainReport } from '../../advertising/brain/cycle-read.js'
+import { brainBidding } from '../../advertising/brain/bidding-mode-read.js'
 import type { AgentTool, FieldPermission } from '../tool-types.js'
 
 const ID = z.string().trim().min(1).max(64)
@@ -57,7 +62,7 @@ const ID = z.string().trim().min(1).max(64)
  * puts every amount, percent of spend and sentence naming one under a `money` key: hidden whole without the permission.
  * AB-9 — the terms view puts every amount (spend, sales, CPC, order value, profit per click, bids, the spend gate, the
  * ACoS bound) under `money` keys too. AB-13 — so does the hours view (amounts, ACoS and the sentences naming them). AB-10 — the negatives view puts every amount (spend, sales, the spend gate) under `money`. AB-11 — the harvest view's start bids,
- * candidate money, first budgets and judged ACoS too.
+ * candidate money, first budgets and judged ACoS too. AB-17 — the bidding view's stack cents and its tests' figures too.
  */
 const BRAIN_MAP_MONEY: Readonly<Record<string, FieldPermission>> = Object.fromEntries(
   ['portfolioCapCents', 'dailyBudgetCents', 'amountCents', 'money'].map((key) => [key, FIELDS.financialsAdspendView]),
@@ -73,10 +78,10 @@ const adsBrain: AgentTool = {
   restrictedFields: BRAIN_MAP_MONEY,
   input: z.object({
     view: z.enum(BRAIN_MAP_VIEWS).default('map')
-      .describe('map (default): who owns each lever of each campaign today; clashes: two automatic writers on one campaign\'s lever, and the known gaps; setup: what is not set up or held off, with the fix; money: a product\'s money plan in shadow — envelope, pace, brake, portfolio cap, campaign budgets — or a market\'s split; terms: a product\'s term ledger in shadow — one decision per search term, the market arbiter\'s leads, the clashes it removes — or a market\'s ledgers; state: each campaign\'s pause, resume or archive proposal decided now, with its cause and horizon, beside what the brain logged; hours: one product\'s hourly research and painted plan with its approval (market and productId); negatives: a product\'s negatives — the day\'s adds, retirements and revives with their level and outcome, every campaign and ad group against the limit — or a market\'s logs; harvest: a product\'s harvests — destination, sources and their negatives, start bid, the request a person decides, the judgement after the attribution window + 72 h — or a market\'s; report: the day\'s product report the product cycle stored — what each lever did or would do in shadow, ad sales against spend, what waits for the Owner, clashes, his locks — or a market\'s newest reports'),
+      .describe('map (default): who owns each lever of each campaign today; clashes: two automatic writers on one campaign\'s lever, and the known gaps; setup: what is not set up or held off, with the fix; money: a product\'s money plan in shadow — envelope, pace, brake, portfolio cap, campaign budgets — or a market\'s split; terms: a product\'s term ledger in shadow — one decision per search term, the market arbiter\'s leads, the clashes it removes — or a market\'s ledgers; state: each campaign\'s pause, resume or archive proposal decided now, with its cause and horizon, beside what the brain logged; hours: one product\'s hourly research and painted plan with its approval (market and productId); negatives: a product\'s negatives — the day\'s adds, retirements and revives with their level and outcome, every campaign and ad group against the limit — or a market\'s logs; harvest: a product\'s harvests — destination, sources and their negatives, start bid, the request a person decides, the judgement after the attribution window + 72 h — or a market\'s; report: the day\'s product report the product cycle stored — what each lever did or would do in shadow, ad sales against spend, what waits for the Owner, clashes, his locks — or a market\'s newest reports; bidding: each campaign\'s Amazon bidding strategy decided now (fixed, down only, up and down) with its rule, its switchback test and the approval clock (N4), or a market\'s tests and requests'),
     market: z.string().trim().toUpperCase().min(2).max(20).optional()
-      .describe('one Amazon market code (business-overview). map: with productId; alone, or omitted, the products the brain knows there (or in every market); clashes, money, terms, state, hours, negatives, harvest and report: required'),
-    productId: ID.optional().describe('map / clashes / money / terms / state / hours / negatives / harvest / report: one product (a variation names its parent), its Nexus id'),
+      .describe('one Amazon market code (business-overview). map: with productId; alone, or omitted, the products the brain knows there (or in every market); clashes, money, terms, state, hours, negatives, harvest, report and bidding: required'),
+    productId: ID.optional().describe('map / clashes / money / terms / state / hours / negatives / harvest / report / bidding: one product (a variation names its parent), its Nexus id'),
     day: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('report: the data day (YYYY-MM-DD) of the cycle to read; omitted, the newest'),
     campaignId: ID.optional().describe('map: one Amazon campaign, its Nexus id (ad-campaigns)'),
     days: z.coerce.number().int().min(1).max(MAX_EVIDENCE_DAYS).default(DEFAULT_EVIDENCE_DAYS)
@@ -178,6 +183,17 @@ const adsBrain: AgentTool = {
     + 'sales against spend for the data day, its week and the month\'s pace, under money keys — with the plain-words '
     + 'summary (no amounts) and the earlier days. With market alone, each product\'s newest report in one line. Nothing is '
     + 'decided now: a report exists only for a cycle that ran. '
+    + 'view bidding (market, optionally productId; read only — nothing asked or sent): with productId, each of the product\'s '
+    + 'campaigns decided now (a dry run) at the level of its biddingStrategy lever — which of Amazon\'s strategies it should run: '
+    + 'fixed where its hourly plan sets its placement % and the brain writes them, down only by default (new, LAUNCH, thin), '
+    + 'up and down only where top of search converts at least 1.3× the campaign\'s average over 30 top-of-search orders and '
+    + 'the bid stack with Amazon\'s raise (×2 at the top of search) stays inside the lane CPC ceiling — with the rule, its '
+    + 'evidence and what holds it (a stop: the stop recipe owns the strategy; a person\'s own strategy for 60 days; the Owner\'s '
+    + 'lock; the bids pin; Amazon\'s own strategy; the kill switch), beside the newest decision logged; the switchback tests '
+    + '(each switch runs whole weeks, then the same days after against as many before: kept or switched back) and their '
+    + 'verdicts; the spacing (one switch per 14 days); the N4 clock — for 30 days after the lever became the brain\'s every '
+    + 'switch asks a person, at AUTO too; with market alone, the tests running and the requests waiting. The stack cents and '
+    + 'the tests\' figures sit under money keys. '
     + 'Nexus only: it reads what Nexus stored and asks Amazon nothing.',
   handler: async (args) => {
     const a = args as { view?: string; market?: string; productId?: string; campaignId?: string; days?: number; state?: string; status?: string; limit?: number; day?: string }
@@ -190,6 +206,7 @@ const adsBrain: AgentTool = {
                 : a.view === 'hours' ? await brainHours(a)
                   : a.view === 'harvest' ? await brainHarvest(a)
                     : a.view === 'report' ? await brainReport(a)
+                      : a.view === 'bidding' ? await brainBidding(a)
                       : await brainMap(a)
     return 'error' in out ? { ok: false, error: out.error } : { ok: true, data: out.data }
   },

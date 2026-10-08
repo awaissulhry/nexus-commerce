@@ -15,6 +15,7 @@
  *             AB-11: the harvest lever every level; every other lever OFF or OBSERVE until its own PR. OBSERVE on a lever whose
  *             shadow is not built yet records the intent: it starts watching when its shadow lands; nothing is written.
  *             AB-12: the state lever takes every level (brain/state*.ts); it still starts OBSERVE like every lever.
+ *             AB-17: the biddingStrategy lever takes every level (brain/bidding-mode*.ts), starting OBSERVE.
  *   settings  the caps of §5 and the N1–N4 settings of §9 (Owner yes 10-08), each with the design's default and safety
  *             bounds (Amazon's own where it has one); the Owner may set any value inside them, per product, and per
  *             campaign where the setting means something for one campaign.
@@ -66,7 +67,8 @@ export const LEVER_LEVELS_NOW: Record<BrainLever, { levels: readonly BrainLevel[
   // AB-11 — the harvest module: OBSERVE logs each harvest, PROPOSE asks a person for the pair, AUTO writes it.
   harvest: { levels: BRAIN_LEVELS, others: 'AB-11: OBSERVE logs each harvest in shadow, PROPOSE asks a person for the keyword and its source negatives as one change set, AUTO writes it (under NEXUS_ADS_BRAIN_HARVEST_MODE=live); a new campaign is always a request a person approves (ads-brain view harvest)' },
   structure: { levels: OFF_OBSERVE, others: 'new campaigns wait for AB-16' },
-  biddingStrategy: { levels: OFF_OBSERVE, others: 'the bidding-strategy lever waits for AB-17' },
+  // AB-17 — every level: OBSERVE logs, PROPOSE asks a person for each switch, AUTO switches alone after the N4 approval days.
+  biddingStrategy: { levels: BRAIN_LEVELS, others: 'AB-17: each campaign\'s Amazon bidding strategy (fixed where the brain\'s hourly plan steers the placements, down only by default, up and down only where top of search converts at least 1.3× the average over 30 orders and the CPC ceiling holds Amazon\'s raise), decided weekly, at most one switch per 14 days, each switch tested (switchback) and kept or switched back; OBSERVE logs it, PROPOSE asks a person, AUTO asks for the first strategyApprovalDays (30, N4) and then switches alone — never during a stop (ads-brain view bidding)' },
   offAmazon: { levels: OFF_OBSERVE, others: 'the off-Amazon lane waits for AB-18' },
 }
 
@@ -121,6 +123,8 @@ export const BRAIN_SETTINGS = {
   portfolioCapCents: { type: 'intOrNull', default: null, min: 100, max: 100_000_000, scopes: PRODUCT, what: 'N1: the portfolio cap as an amount in cents (it replaces the %); empty = portfolioCapPct × the monthly budget' },
   ownPortfolio: { type: 'boolean', default: true, scopes: PRODUCT, what: 'N2: the brain proposes one portfolio per product and market' },
   strategySwitchMode: { type: 'enum', default: 'PROPOSE_THEN_AUTO', values: ['PROPOSE_THEN_AUTO', 'ALWAYS_PROPOSE'], scopes: BOTH, what: 'N4: a bidding-strategy switch waits for approval for 30 days, then runs alone (PROPOSE_THEN_AUTO), or always waits (ALWAYS_PROPOSE)' },
+  // AB-17 — N4's 30 days as the Owner's own number (0: AUTO switches alone at once).
+  strategyApprovalDays: { type: 'int', default: 30, min: 0, max: 365, scopes: PRODUCT, what: 'N4: the days after the bidding-strategy lever became the brain\'s on the product during which every switch at AUTO waits for approval (0: at once alone)' },
   // AB-12 — the state lever (§2.4, D4 = A)
   pauseMinDays: { type: 'int', default: 3, min: 3, max: 60, scopes: BOTH, what: 'a stop expected to last at least this many days is a pause; a shorter one stays on low bids, never a pause (§2.4, D4)' },
   archiveDeadWeeks: { type: 'int', default: 4, min: 2, max: 52, scopes: BOTH, what: 'weeks without an impression before the brain proposes to archive a campaign — only ever a proposal (§2.4)' },

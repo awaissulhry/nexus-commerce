@@ -45,7 +45,7 @@ import {
  * `harvest` is brain/harvest-read.ts: the product's harvests, their destinations, sources, requests and judgements. AB-14 —
  * `report` is brain/cycle-read.ts: the day's product report the product cycle stored (the tool routes it).
  */
-export const BRAIN_MAP_VIEWS = ['map', 'clashes', 'setup', 'money', 'terms', 'state', 'hours', 'negatives', 'harvest', 'report'] as const
+export const BRAIN_MAP_VIEWS = ['map', 'clashes', 'setup', 'money', 'terms', 'state', 'hours', 'negatives', 'harvest', 'report', 'bidding'] as const
 export type BrainMapView = (typeof BRAIN_MAP_VIEWS)[number]
 
 /** The days of action-log evidence a view reads by default, and at most. */
@@ -328,8 +328,8 @@ const isSafetyActor = (actor: string) => BRAIN_SAFETY_ACTOR_PREFIXES.some((p) =>
 export function writerOfActor(userId: string | null, ruleNames: ReadonlyMap<string, string>): Omit<Writer, 'basis'> {
   if (userId && isSafetyActor(userId)) return { who: `safety: ${userId.replace(/^automation:/, '')}`, kind: 'safety', state: 'acts', why: 'a safety owner (always passes)' }
   const c = classifyActor(userId)
-  if (c.kind === 'engine') return c.engine === 'bid-brain' || c.engine === 'brain-money' || c.engine === 'brain-state'
-    ? { who: 'the brain', kind: 'brain', state: 'acts', why: c.engine === 'bid-brain' ? 'the bid brain wrote' : c.engine === 'brain-money' ? 'the brain\'s money writer wrote (AB-8)' : 'the brain\'s state writer paused or resumed it (AB-12)' }
+  if (c.kind === 'engine') return c.engine === 'bid-brain' || c.engine === 'brain-money' || c.engine === 'brain-state' || c.engine === 'brain-strategy'
+    ? { who: 'the brain', kind: 'brain', state: 'acts', why: c.engine === 'bid-brain' ? 'the bid brain wrote' : c.engine === 'brain-money' ? 'the brain\'s money writer wrote (AB-8)' : c.engine === 'brain-strategy' ? 'the brain\'s bidding-strategy writer switched it (AB-17)' : 'the brain\'s state writer paused or resumed it (AB-12)' }
     : { who: engineLabel(c.engine), kind: 'engine', state: 'acts', why: `${engineLabel(c.engine)} wrote` }
   if (c.kind === 'rule-candidate') {
     const name = ruleNames.get(c.ruleId)

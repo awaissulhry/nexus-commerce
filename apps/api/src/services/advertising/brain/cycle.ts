@@ -8,7 +8,8 @@
  *               facts for the lower ones): ① stops and state → ② the term ledger → ③ negatives → ④ harvest (negatives
  *               first: a term is never harvested and negated at once) → ⑤ money: budgets and the portfolio cap (budget
  *               before bid: a bid raise never fights a budget cut) → ⑥ bids (the bid brain on the product's own
- *               campaigns) → ⑦ hours (the painted hourly plan; weekly, the hours module says when it is due). Structure
+ *               campaigns) → ⑦ hours (the painted hourly plan; weekly, the hours module says when it is due) → ⑧ the
+ *               bidding strategy (AB-17: new switches on the weekly run, a switchback test's verdict any day). Structure
  *               (§4 ⑤, weekly) waits for AB-16.
  *   sees        each step gets what the steps before it decided: a pause the state step makes and a budget the money step
  *               cuts (or its brake) hold the bid raises on those campaigns (`holds` → the bid brain's raise cap); the
@@ -28,7 +29,7 @@
  */
 import type { BrainLever } from './levers.js'
 
-export const CYCLE_STEPS = ['state', 'terms', 'negatives', 'harvest', 'money', 'bids', 'hours'] as const
+export const CYCLE_STEPS = ['state', 'terms', 'negatives', 'harvest', 'money', 'bids', 'hours', 'bidding'] as const
 export type CycleStep = (typeof CYCLE_STEPS)[number]
 export const isCycleStep = (v: unknown): v is CycleStep => typeof v === 'string' && (CYCLE_STEPS as readonly string[]).includes(v)
 
@@ -41,16 +42,20 @@ export const STEP_WORDS: Record<CycleStep, string> = {
   money: 'money (campaign budgets and the portfolio cap)',
   bids: 'bids',
   hours: 'the hourly plan',
+  bidding: 'the bidding strategy',
 }
 
 /** The levers whose level says whether a step acts (owns the lever: PROPOSE or AUTO). The term ledger never acts. */
 export const STEP_LEVERS: Record<CycleStep, readonly BrainLever[]> = {
   state: ['state'], terms: [], negatives: ['negatives'], harvest: ['harvest'], money: ['budgets', 'portfolioCap'], bids: ['bids'], hours: ['hours'],
+  bidding: ['biddingStrategy'],
 }
 
 /** What a step reads from an earlier one: it never runs without it, at any level. */
 export const STEP_READS: Record<CycleStep, readonly CycleStep[]> = {
   state: [], terms: [], negatives: ['terms'], harvest: ['terms', 'negatives'], money: [], bids: [], hours: [],
+  // AB-17 — the pauses the state step makes are stops: the bidding strategy never switches under one.
+  bidding: ['state'],
 }
 
 /** A data day's cycle runs at most this many times (the first and two retries of what failed). */

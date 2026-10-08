@@ -77,7 +77,8 @@ export type GateDeniedAt =
   // ONE BRAIN AB-8 — the brain's money writer (brain/budget-ladder.ts MONEY_ACTORS) on a lever the brain does not own: a
   // server switch not live, a product not enrolled, a lever at OFF or OBSERVE, a campaign excluded or shared. AB-12 — and the
   // brain's own pause or resume (BRAIN_STATE_ACTOR) on a campaign whose state lever it does not own, the same way. AB-10 —
-  // and its negatives writer (BRAIN_NEGATIVES_ACTOR) on a campaign whose negatives lever it does not own.
+  // and its negatives writer (BRAIN_NEGATIVES_ACTOR) on a campaign whose negatives lever it does not own. AB-17 — and its
+  // bidding-strategy writer (BRAIN_STRATEGY_ACTOR) on a campaign whose biddingStrategy lever it does not own.
   | 'brain_not_owner'
   // ONE BRAIN AB-15 — the Owner's kill switch stopped this lever of the brain (brain/kill-switch.ts): the brain's own actor on
   // it is refused, a lowering included; every other writer is judged as before.
@@ -316,7 +317,9 @@ export function brainYieldsTo(ctx: Pick<GateContext, 'actor' | 'manual' | 'isSup
 export const BRAIN_STRATEGY_REPAIR_PREFIXES: readonly string[] = ['automation:reconcile', 'automation:ads-write-reconcile', 'automation:resync-bids']
 export function brainYieldsStrategyTo(ctx: Pick<GateContext, 'actor' | 'manual'>): boolean {
   const actor = ctx.actor ?? ''
-  if (actor === BRAIN_ACTOR || ctx.manual === true) return true
+  // ONE BRAIN AB-17 — the bidding-strategy lever's own writer is the brain too; brainWriterRefusal holds it to a campaign
+  // whose biddingStrategy lever a product's brain owns, and never while a stop holds the campaign.
+  if (actor === BRAIN_ACTOR || actor === BRAIN_STRATEGY_ACTOR || ctx.manual === true) return true
   return BRAIN_STRATEGY_REPAIR_PREFIXES.some((p) => actor === p || actor.startsWith(`${p}-`))
 }
 
@@ -376,6 +379,13 @@ export const BRAIN_NEGATIVES_ACTOR = `${PRODUCT_BRAIN_ACTOR}-negatives` as const
  * top of that it lands only where a product's brain OWNS the campaign's state lever (brainStateNotOwnedRefusal).
  */
 export const BRAIN_STATE_ACTOR = `${PRODUCT_BRAIN_ACTOR}-state` as const
+/**
+ * ONE BRAIN AB-17 — the brain's bidding-strategy writer (brain/bidding-mode-run.ts: a switch between fixed, down only and up
+ * and down outside a stop, tested and kept or switched back). A writer of PRODUCT_BRAIN_ACTOR's family; it lands only where
+ * a product's brain OWNS the campaign's biddingStrategy lever, and never while a stop holds the campaign
+ * (brainWriterRefusal, and the stop check after it).
+ */
+export const BRAIN_STRATEGY_ACTOR = `${PRODUCT_BRAIN_ACTOR}-strategy` as const
 const BID_BRAIN_LEVERS: ReadonlySet<BrainLever> = new Set<BrainLever>(['bids', 'adGroupBids', 'placements', 'biddingStrategy'])
 const BRAIN_OBEYS_LOCKS_ITSELF: ReadonlySet<BrainLever> = new Set<BrainLever>(['placements', 'biddingStrategy'])
 
@@ -683,6 +693,8 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
           minBudgetCents: true, maxBudgetCents: true,
           // 6a — the ad product, refused below before the allowlist. W4-11 — how an SB/SD campaign pays, and its budget object.
           adProduct: true, type: true, name: true, costType: true, budgetJson: true,
+          // AB-17 — same read: a stop's floor and the stop recipe's saved strategy (the brain's strategy writer waits).
+          bidsSuppressedAt: true, suppressedFromBiddingStrategy: true,
         },
       })
     : null
@@ -822,6 +834,19 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
     if (ctx.actor === BRAIN_STATE_ACTOR) {
       const refusal = await brainStateNotOwnedRefusal({ campaignId: ctx.campaignId, name: campaign.name })
       if (refusal) return refusal
+    }
+    // ONE BRAIN AB-17 — the brain's bidding-strategy writer writes the strategy and nothing else (a budget, a status or a bid
+    // under its name is refused whatever lever holds it), and never while a stop holds the campaign: the stop recipe owns
+    // its strategy then (down only, given back after it — AB-2), whatever waited in the queue.
+    if (ctx.actor === BRAIN_STRATEGY_ACTOR && fieldList.some((f) => f !== 'biddingStrategy')) {
+      return { allowed: false, deniedAt: 'brain_not_owner', reason: `${BRAIN_STRATEGY_ACTOR} writes a campaign's bidding strategy only, not ${fieldList.filter((f) => f !== 'biddingStrategy').join(', ')}. Nothing was changed.` }
+    }
+    if (ctx.actor === BRAIN_STRATEGY_ACTOR && (campaign.suppressedFromBiddingStrategy || campaign.bidsSuppressedAt)) {
+      return {
+        allowed: false,
+        deniedAt: 'brain_owned',
+        reason: `a stop holds campaign "${campaign.name}" (${ctx.campaignId}): its bidding strategy is the stop recipe's until the stop ends (down only, given back after it), so ${BRAIN_STRATEGY_ACTOR} may not change it now. Nothing was changed.`,
+      }
     }
 
     // ADX A1 / BID.S5 / BUD.2 — the entity's own bid and budget bounds (entityBoundsDenial below). 4k — the
@@ -1457,14 +1482,17 @@ async function brainBudgetDayMoveDenial(
  * OWNS: the campaign's budgets lever, or the portfolio cap of a portfolio every campaign of which is the brain's. Under a
  * non-live server switch the brain owns nothing, so they are refused; a lever nobody holds, or one the Owner locked, is
  * refused too (the lock in the Owner's words, by the AB-5 check before this one). AB-10 — the negatives writer's actor
- * (BRAIN_NEGATIVES_ACTOR) holds the same rule on the campaign's negatives lever. It holds only these actors: every other
+ * (BRAIN_NEGATIVES_ACTOR) holds the same rule on the campaign's negatives lever, AB-17's bidding-strategy writer
+ * (BRAIN_STRATEGY_ACTOR) on its biddingStrategy lever. It holds only these actors: every other
  * writer, the brain's other actors included, is judged as before. A failed read of the holders goes out of the gate as an
  * error (try again later), as productBrainRefusal's does.
  */
 async function brainWriterRefusal(target: { campaignId: string; name?: string | null } | { portfolioId: string }, ctx: GateContext): Promise<Extract<GateDecision, { allowed: false }> | null> {
   const negatives = ctx.actor === BRAIN_NEGATIVES_ACTOR && 'campaignId' in target
-  if ((!isMoneyActor(ctx.actor) && !negatives) || ctx.manual === true) return null
-  const lever: BrainLever = negatives ? 'negatives' : 'campaignId' in target ? 'budgets' : 'portfolioCap'
+  // AB-17 — the bidding-strategy writer on the campaign's biddingStrategy lever, the same rule.
+  const strategy = ctx.actor === BRAIN_STRATEGY_ACTOR && 'campaignId' in target
+  if ((!isMoneyActor(ctx.actor) && !negatives && !strategy) || ctx.manual === true) return null
+  const lever: BrainLever = negatives ? 'negatives' : strategy ? 'biddingStrategy' : 'campaignId' in target ? 'budgets' : 'portfolioCap'
   const where = 'campaignId' in target ? `campaign ${target.name ? `"${target.name}" (${target.campaignId})` : target.campaignId}` : `portfolio ${target.portfolioId}`
   const refuse = (why: string): Extract<GateDecision, { allowed: false }> => ({
     allowed: false,
