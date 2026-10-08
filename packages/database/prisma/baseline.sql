@@ -9565,6 +9565,21 @@ CREATE TABLE "AdsBrainOverride" (
 );
 
 -- CreateTable
+CREATE TABLE "AdsNativeRuleSnapshot" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "campaignId" TEXT NOT NULL,
+    "externalCampaignId" TEXT NOT NULL,
+    "marketplace" TEXT,
+    "fetchedAt" TIMESTAMP(3) NOT NULL,
+    "readings" JSONB NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "AdsNativeRuleSnapshot_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AdWriteRefusal" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -15346,6 +15361,12 @@ CREATE INDEX "AdsBrainOverride_campaignId_endedAt_idx" ON "AdsBrainOverride"("ca
 
 -- CreateIndex
 CREATE INDEX "AdsBrainOverride_workspaceId_idx" ON "AdsBrainOverride"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "AdsNativeRuleSnapshot_workspaceId_idx" ON "AdsNativeRuleSnapshot"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AdsNativeRuleSnapshot_workspaceId_campaignId_key" ON "AdsNativeRuleSnapshot"("workspaceId", "campaignId");
 
 -- CreateIndex
 CREATE INDEX "AdWriteRefusal_deniedAt_createdAt_idx" ON "AdWriteRefusal"("deniedAt", "createdAt");

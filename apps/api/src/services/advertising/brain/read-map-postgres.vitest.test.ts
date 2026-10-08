@@ -9,7 +9,8 @@
  *            on the LIVE campaigns' bids (a clash), auto-bid's own writes as evidence, a person's budget change, an old
  *            write outside the window left out; one campaign alone; the market's products
  *   clashes  the campaigns where two automatic writers act, and the gaps: a keyword blocked where it is targeted, a
- *            harvest rule with no destination, a keyword two products bid on, Amazon's rules not read
+ *            harvest rule with no destination, a keyword two products bid on, Amazon's rules not read yet ("could not
+ *            read": no daily read has run here; AB-4's own suite reads them, native-rules-postgres.vitest.test.ts)
  *   setup    the engines held off with their fix, the other product LIVE one campaign at a time but not enrolled
  *
  * Values are made up (public repo).
@@ -169,7 +170,10 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-3 — ads-brain: map, clashes, set
     expect(d.gaps.harvestWithoutDestination).toEqual([expect.objectContaining({ rule: 'Harvest winners', meaning: expect.stringContaining('never negated') })])
     expect(d.gaps.harvestWithoutDestination[0].campaigns.length).toBe(14)
     expect(d.gaps.siblingKeywords).toEqual([expect.objectContaining({ text: 'moto jacket', products: [GALE, MISANO].sort() })])
-    expect(d.gaps.amazonRules).toMatch(/^could not measure/)
+    // AB-4 — no daily read has run: no Amazon rule is invented; what could not be read is said, per brain campaign too.
+    expect(d.gaps.amazonRules.clashes).toEqual([])
+    expect(d.gaps.amazonRules.couldNotRead.map((c: Data) => c.kind)).toEqual(expect.arrayContaining(['optimizationRules', 'scheduleBidRules', 'budgetRules']))
+    expect(d.gaps.amazonRules.couldNotRead).toContainEqual(expect.objectContaining({ campaignId: C('g1'), kind: 'budgetRules', why: expect.stringMatching(/^not read yet/) }))
     // One product's campaigns only.
     const gale = await tool({ view: 'clashes', market: 'IT', productId: GALE })
     expect(gale.data!.campaignsRead).toBe(13)
@@ -183,6 +187,6 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-3 — ads-brain: map, clashes, set
     if (Array.isArray(d.tools)) for (const t of d.tools) expect(t).toMatchObject({ tool: expect.any(String), mode: expect.any(String), fix: expect.any(String) })
     expect(d.brain).toContainEqual(expect.objectContaining({ item: `product ${MISANO} (IT)`, fix: expect.stringContaining('enroll the product') }))
     expect(d.brain.some((b: Data) => b.item === 'bid brain server switch')).toBe(false)
-    expect(d.brain).toContainEqual(expect.objectContaining({ item: 'Amazon\'s own rules', state: expect.stringMatching(/^could not measure/) }))
+    expect(d.brain).toContainEqual(expect.objectContaining({ item: 'Amazon\'s own rules', state: expect.stringMatching(/^budget rules not read yet: the daily read \(04:35 UTC\).*could not read: optimization rules and schedule bid rules/) }))
   })
 })

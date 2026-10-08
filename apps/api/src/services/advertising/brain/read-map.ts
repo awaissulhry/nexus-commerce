@@ -10,11 +10,13 @@
  *   clashes  every campaign × lever where two automatic writers can act (configured to act, or wrote in N days), and
  *            the known gaps: a term both targeted and negated in one place (harvest vs negate), a harvest rule with no
  *            stored destination (it never negates its source), sibling products bidding on the same keyword, and
- *            Amazon's own rules (not read: "could not measure").
+ *            Amazon's own rules on brain campaigns (AB-4, brain/native-rules.ts): each one that acts is a clash; the
+ *            kinds Nexus cannot read, and the campaigns whose read failed, are said as "could not read".
  *   setup    the tools that are not set up or are held off, with what starts them — the Control Room's own reading
  *            (getEngineLevers, the data ads-overview's engineGroups shows) — plus the brain's own setup.
  *
- * Who counts as an automatic writer: the bid brain when it owns the campaign, an engine at Auto, a rule at Auto. A rule
+ * Who counts as an automatic writer: the bid brain when it owns the campaign, an engine at Auto, a rule at Auto, and
+ * (AB-4) an Amazon rule read on the campaign — a budget rule, or a bidding strategy Amazon runs. A rule
  * or engine at Propose asks (a person approves), one at Observe watches; a person's change is the Owner's. The safety
  * owners (retail guard, budget enforcement, auto-undo, the write reconcile, resync — the write gate's own list) always
  * pass and are never a clash. Batched: a fixed number of queries per view, whatever the number of campaigns.
@@ -28,6 +30,10 @@ import { BRAIN_LEVERS, LEVER_LEVELS_NOW, type BrainLever } from './levers.js'
 import { productCampaigns, resolveCampaignOwnership, type CampaignOwnership } from './ownership.js'
 import { brainView, bidBrainRowsByProduct } from './enrollment.js'
 import { resolveBrainSettings, type BrainSettings, type OverrideRow } from './settings.js'
+import {
+  actingRules, campaignNativeView, DAILY_READ_AT, loadNativeRules, NATIVE_RULE_CAPABILITY, nativeReadStatus, nativeRuleWriters, notReadableKinds,
+  type CampaignNativeRules,
+} from './native-rules.js'
 
 export const BRAIN_MAP_VIEWS = ['map', 'clashes', 'setup'] as const
 export type BrainMapView = (typeof BRAIN_MAP_VIEWS)[number]
@@ -38,7 +44,8 @@ export const MAX_EVIDENCE_DAYS = 60
 
 // ── Writers (pure) ───────────────────────────────────────────────────────────────────────────────────────────────
 
-export type WriterKind = 'brain' | 'engine' | 'rule' | 'owner' | 'person' | 'safety' | 'unknown'
+/** amazon (AB-4): one of Amazon's own rules on the campaign (brain/native-rules.ts). */
+export type WriterKind = 'brain' | 'engine' | 'rule' | 'owner' | 'person' | 'safety' | 'unknown' | 'amazon'
 /** acts: changes Amazon by itself · asks: a person approves each change · watches: decides, writes nothing · off · holds: the Owner's own value */
 export type WriterState = 'acts' | 'asks' | 'watches' | 'off' | 'holds'
 
@@ -100,7 +107,7 @@ export function ruleState(rule: { enabled: boolean; autonomyLevel: string; dryRu
 }
 
 /** An automatic writer that counts for a clash: it changes Amazon by itself (configured to act, or it wrote). */
-const automatic = (w: Writer) => (w.kind === 'brain' || w.kind === 'engine' || w.kind === 'rule' || w.kind === 'unknown') && (w.basis === 'wrote' || w.state === 'acts')
+const automatic = (w: Writer) => (w.kind === 'brain' || w.kind === 'engine' || w.kind === 'rule' || w.kind === 'unknown' || w.kind === 'amazon') && (w.basis === 'wrote' || w.state === 'acts')
 
 /** Two automatic writers or more on one lever of one campaign: the writers, else null. */
 export function clashOf(writers: readonly Writer[]): string[] | null {
@@ -413,11 +420,12 @@ const campaignsById = async (ids: readonly string[]) => (ids.length ? (await pri
 
 /** Per campaign: who owns each lever today, with every writer (configured and in the evidence window). */
 async function campaignLevers(campaigns: readonly CampaignRow[], owners: ReadonlyMap<string, CampaignOwnership>, days: number) {
-  const cfg = await loadConfig(campaigns, owners)
+  const [cfg, native] = await Promise.all([loadConfig(campaigns, owners), loadNativeRules(campaigns.map((c) => c.id))])
   const ruleNames = new Map(cfg.rules.map((r) => [r.id, r.name]))
   const evidence = await loadEvidence(campaigns.map((c) => c.id), days, ruleNames)
   return {
     cfg,
+    native,
     rows: campaigns.map((c) => {
       const o = owners.get(c.id)
       const market = strategyMarket(c.marketplace)
@@ -426,8 +434,14 @@ async function campaignLevers(campaigns: readonly CampaignRow[], owners: Readonl
       const enrolled = !!productId && !!market && cfg.enrolled.has(`${productId}\u0000${market}`)
       const settings = productId && market ? resolveBrainSettings({ productId, market, campaignId: c.id, enrolled, overrides: cfg.overrides }) : null
       const configured = configuredWriters({ ...c, market, productIds: o?.productIds ?? [], brainCanOwn: o?.owner.kind === 'product' }, cfg, settings)
+      // AB-4 — Amazon's own rules that act on the campaign write its levers too (a second brain inside Amazon).
+      const amazon = nativeRuleWriters(native.get(c.id))
       const levers = Object.fromEntries(BRAIN_LEVERS.map((lever) => {
-        const writers = [...configured[lever], ...(evidence.get(c.id)?.get(lever) ?? [])]
+        const writers = [
+          ...configured[lever],
+          ...amazon.filter((a) => a.lever === lever).map((a): Writer => ({ who: a.who, kind: 'amazon', state: 'acts', basis: 'configured', why: a.why })),
+          ...(evidence.get(c.id)?.get(lever) ?? []),
+        ]
         return [lever, {
           // Nexus does not model the off-Amazon lane (its setting and its report): nobody can say who runs it.
           owner: lever === 'offAmazon' ? 'could not measure: Nexus does not model the off-Amazon lane yet (AB-18)' : leverOwner(writers, { excluded: !!settings?.excluded.value, brainNote: brainNoteOf(writers) }),
@@ -443,8 +457,11 @@ async function campaignLevers(campaigns: readonly CampaignRow[], owners: Readonl
         ownedBy: !o ? 'could not measure' : o.owner.kind === 'product' ? 'one product' : o.owner.kind === 'shared' ? 'shared' : 'no product',
         productIds: o?.productIds ?? [], ...(o?.unresolved.length ? { unresolvedAds: o.unresolved } : {}),
         bidBrain: cfg.brainMode.get(c.id) ?? 'none',
+        // AB-4 — a brain campaign: the bid brain runs it LIVE or HELD, or its product is enrolled.
+        brainCampaign: ['LIVE', 'HELD'].includes(cfg.brainMode.get(c.id) ?? '') || (!!market && (o?.productIds ?? []).some((p) => cfg.enrolled.has(`${p}\u0000${market}`))),
         excluded: settings?.excluded.value ? { by: settings.excluded.by, at: settings.excluded.at, source: settings.excluded.source, reason: settings.excluded.reason } : null,
         levers,
+        amazonRules: campaignNativeView(native.get(c.id)),
       }
     }),
   }
@@ -462,7 +479,7 @@ export async function brainMap(args: MapArgs): Promise<{ data: unknown } | { err
     if (!c) return { error: `campaign ${args.campaignId} not found` }
     const owners = await resolveCampaignOwnership([c.id])
     const { rows } = await campaignLevers([c], owners, days)
-    return { data: { view: 'map', scope: { campaignId: c.id }, evidenceDays: days, campaigns: rows, ceiling: (await import('../bid-brain/shadow.js')).bidBrainMode() } }
+    return { data: { view: 'map', scope: { campaignId: c.id }, evidenceDays: days, campaigns: rows, amazonRulesNotRead: notReadableKinds(), ceiling: (await import('../bid-brain/shadow.js')).bidBrainMode() } }
   }
   // MCP.12 — a product named by id is checked first: a deleted or unknown one is not found, before anything else is asked.
   if (args.productId) {
@@ -517,7 +534,56 @@ export async function brainMap(args: MapArgs): Promise<{ data: unknown } | { err
       notReached: view.notReached,
       drift: view.drift,
       campaigns: rows,
+      amazonRulesNotRead: notReadableKinds(),
     },
+  }
+}
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
+
+/**
+ * AB-4 — Amazon's own rules in the clashes view. Each one that acts on a brain campaign is a clash (two brains on its
+ * levers, whoever else writes them); one on a campaign no brain runs is listed apart (no brain there, so no clash). What
+ * could not be read is said: the kinds Nexus cannot read anywhere, and each brain campaign whose read failed or is missing.
+ */
+export function amazonRulesGap(rows: ReadonlyArray<{ campaignId: string; name: string; brainCampaign: boolean }>, native: ReadonlyMap<string, CampaignNativeRules>) {
+  const clashes: Array<Record<string, unknown>> = []
+  const elsewhere: Array<Record<string, unknown>> = []
+  const failed: Array<Record<string, unknown>> = []
+  for (const r of rows) {
+    const c = native.get(r.campaignId)
+    for (const rule of actingRules(c)) {
+      const entry = { campaignId: r.campaignId, name: r.name, kind: rule.kind, rule: rule.name, levers: rule.levers, detail: rule.detail, seenAt: rule.seenAt, ...(rule.stale ? { lastSeenOnly: true } : {}) }
+      if (!r.brainCampaign) { elsewhere.push(entry); continue }
+      const what = rule.levers.join(' and ')
+      clashes.push({
+        ...entry,
+        meaning: `${NATIVE_RULE_CAPABILITY[rule.kind].label} "${rule.name}" acts on this brain campaign's ${what}: a second brain inside Amazon. While it is attached, the product's brain refuses to take ${rule.levers.length === 1 ? 'that lever' : 'those levers'} to AUTO; detach it in Amazon's Campaign Manager (Nexus never edits Amazon's rules)`,
+      })
+    }
+    if (r.brainCampaign) for (const k of campaignNativeView(c).couldNotRead) failed.push({ campaignId: r.campaignId, name: r.name, kind: k.kind, why: k.why, ...(k.at ? { at: k.at } : {}) })
+  }
+  return {
+    clashes,
+    ...(elsewhere.length ? { notBrainCampaigns: elsewhere } : {}),
+    couldNotRead: [...notReadableKinds().map((k) => ({ kind: k.kind, levers: k.levers, why: k.why })), ...failed],
+    read: { budgetRules: NATIVE_RULE_CAPABILITY.budgetRules.how, ruleBasedBidding: NATIVE_RULE_CAPABILITY.ruleBasedBidding.how },
+  }
+}
+
+/** AB-4 — the setup view's line on Amazon's own rules: what the daily read holds, and what Nexus cannot read. */
+async function amazonRulesSetup(market: string | null): Promise<{ item: string; state: string; fix: string }> {
+  const s = await nativeReadStatus(market)
+  const notRead = notReadableKinds().map((k) => `${k.label.replace(/^Amazon /, '')}s`).join(' and ')
+  const budget = s.campaigns
+    ? `budget rules: the daily read covers ${plural(s.campaigns, 'brain campaign')}, last at ${s.lastAt}${s.couldNotRead ? `; ${s.couldNotRead} could not be read (the clashes view says why)` : ''}; ${s.acting ? `${plural(s.acting, 'rule acts', 'rules act')} on a brain campaign (the clashes view lists them)` : 'none acts on a brain campaign'}`
+    : `budget rules not read yet: the daily read (${DAILY_READ_AT}) asks Amazon for them on every brain campaign while the bid brain is live or a product is enrolled`
+  return {
+    item: 'Amazon\'s own rules',
+    state: `${budget}; the bidding strategy comes from the settings sync (a strategy Amazon runs counts as a rule); could not read: ${notRead} — Amazon's API has no read of them that Nexus could verify`,
+    fix: s.acting
+      ? 'detach each rule on a brain campaign in Amazon\'s Campaign Manager (Nexus never edits Amazon\'s rules): until then an enrolled product\'s brain refuses to take the levers it moves to AUTO; check optimization and schedule bid rules there by hand'
+      : 'check optimization and schedule bid rules in Amazon\'s Campaign Manager by hand: Nexus cannot read them',
   }
 }
 
@@ -540,7 +606,7 @@ export async function brainClashes(args: { market?: string; productId?: string; 
       .filter((c) => strategyMarket(c.marketplace) === market).map((c) => c.id)
   }
   const [campaigns, owners] = await Promise.all([campaignsById(ids), resolveCampaignOwnership(ids)])
-  const { rows, cfg } = await campaignLevers(campaigns, owners, days)
+  const { rows, cfg, native } = await campaignLevers(campaigns, owners, days)
   const clashes = rows.flatMap((r) => BRAIN_LEVERS.flatMap((lever) => {
     const l = r.levers[lever]
     return l.clash ? [{ campaignId: r.campaignId, name: r.name, lever, writers: l.writers.filter(automatic).map((w) => ({ who: w.who, basis: w.basis, state: w.state, why: w.why, ...(w.changes ? { changes: w.changes, last: w.last } : {}) })) }] : []
@@ -578,7 +644,7 @@ export async function brainClashes(args: { market?: string; productId?: string; 
         harvestWithoutDestination: noDestination.map((n) => ({ ...n, meaning: `rule "${n.rule}" can harvest in ${n.campaigns.length} campaign${n.campaigns.length === 1 ? '' : 's'} with no stored destination: the keyword goes back into the ad group that found it and that source is never negated (set-harvest-destination fixes it)` })),
         ...(destinations.some((d) => d.scopeGrain === 'line') ? { caveat: 'product-line destinations exist and are not resolved here: a campaign named under harvestWithoutDestination may be covered by one' } : {}),
         siblingKeywords: siblings.map((s) => ({ ...s, meaning: `${s.products.length} products bid on "${s.text}" in ${market}: the market arbiter (AB-9) will name a lead; today they compete` })),
-        amazonRules: 'could not measure: Nexus does not read Amazon\'s own budget, schedule or optimization rules yet (AB-4)',
+        amazonRules: amazonRulesGap(rows, native),
       },
       ...(cfg.engines ? {} : { notMeasured: ['the engines\' modes could not be read: every engine counts as configured to act'] }),
     },
@@ -611,6 +677,6 @@ export async function brainSetup(args: { market?: string }): Promise<{ data: unk
   }
   if (rows.shared.length) brain.push({ item: 'shared campaigns LIVE', state: `${rows.shared.length} shared campaign${rows.shared.length === 1 ? ' is' : 's are'} LIVE by a per-campaign enrollment: no product's lever moves ${rows.shared.length === 1 ? 'it' : 'them'}`, fix: 'split each into one campaign per product (D2), or take it back to shadow' })
   brain.push({ item: 'levers with no writer yet', state: BRAIN_LEVERS.filter((l) => !LEVER_LEVELS_NOW[l].levels.includes('AUTO')).map((l) => `${l}: ${LEVER_LEVELS_NOW[l].others}`).join('; '), fix: 'nothing to set: each lever\'s own PR brings its writer (design §8)' })
-  brain.push({ item: 'Amazon\'s own rules', state: 'could not measure: Nexus does not read Amazon\'s budget, schedule or optimization rules yet', fix: 'AB-4 reads them; until then check Amazon\'s console for rules on brain campaigns' })
+  brain.push(await amazonRulesSetup(market))
   return { data: { view: 'setup', scope: market ? { market } : {}, tools: tools ?? 'could not measure: the engines\' settings could not be read', brain } }
 }

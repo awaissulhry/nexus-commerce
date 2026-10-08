@@ -852,6 +852,8 @@ export async function startScheduler(): Promise<void> {
     const { startAutopilotCron } = await import('../jobs/ad-autopilot.job.js');
     // BID BRAIN BB-3 — the shadow bid brain: decides and logs IT/DE bids, writes nothing (NEXUS_BID_BRAIN_MODE=off stops it).
     const { startBidBrainCron } = await import('../jobs/ads-bid-brain.job.js');
+    // ONE BRAIN AB-4 — the daily read of Amazon's own rules on brain campaigns (only while the brain is live or a product is enrolled).
+    const { startNativeRulesCron } = await import('../jobs/ads-native-rules.job.js');
     // RS.5 — rank-defend loop (self-gated on NEXUS_ENABLE_RANK_DEFEND=1).
     const { startAdsRetentionCron } = await import('../jobs/ads-retention.job.js');
     const { startRankDefendCron } = await import('../jobs/ad-rank-defend.job.js');
@@ -897,6 +899,7 @@ export async function startScheduler(): Promise<void> {
     startBudgetScheduleCron();
     startAutopilotCron();
     startBidBrainCron();
+    startNativeRulesCron();
     startRankDefendCron();
     // HX.11 — prunes the ads history tables. OFF unless NEXUS_ENABLE_ADS_RETENTION=1, because it deletes.
     startAdsRetentionCron();

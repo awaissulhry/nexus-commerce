@@ -20083,6 +20083,34 @@ model AdsBrainOverride {
   @@index([workspaceId])
 }
 
+/// ONE BRAIN AB-4 — what Amazon's own rules do on one brain campaign, read once a day through the channel gateway (one-brain
+/// DESIGN.md §2.12: a second brain inside Amazon). One row per campaign, replaced by each read (no history): the campaigns
+/// of an enrolled product and the ones the bid brain runs LIVE or HELD. Read only — nothing here writes to Amazon.
+/// `readings` holds each kind Nexus asks Amazon for, as brain/native-rules.ts stores it: { "budgetRules": { state: "read",
+/// rules: [...] } | { state: "could_not_read", why } }. Kinds Amazon's API has no read of (optimization rules, schedule bid
+/// rules) are never stored: the code says "could not read" for them; the bidding strategy comes from Campaign.dynamicBidding.
+model AdsNativeRuleSnapshot {
+  // Business ownership comes from verified database context.
+  workspaceId        String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                 String   @id @default(cuid())
+
+  /// Campaign.id
+  campaignId         String
+  /// Amazon's campaign id the read asked for.
+  externalCampaignId String
+  /// Short market code ('IT', 'DE').
+  marketplace        String?
+  /// When Amazon was asked (or the read was tried and could not be made).
+  fetchedAt          DateTime
+  readings           Json
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([workspaceId, campaignId], name: "campaign", map: "AdsNativeRuleSnapshot_workspaceId_campaignId_key")
+  @@index([workspaceId])
+}
+
 /// AUTO.A7 / substrate S5 — the durable record of a write-gate refusal.
 ///
 /// Until now `logGateDeny` wrote to the application log and NOWHERE ELSE, so no surface could

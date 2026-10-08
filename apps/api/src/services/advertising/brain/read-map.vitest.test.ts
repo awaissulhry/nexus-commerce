@@ -12,6 +12,8 @@
  *             never count
  *   terms     a keyword blocked where it is targeted; a keyword two products bid on
  *   actors    an action-log actor in the map's words (engine label, rule name, safety owner, person)
+ *   amazon    AB-4 — Amazon's own rules: each one that acts on a brain campaign is a clash; one elsewhere is listed apart;
+ *             an Amazon rule counts as an automatic writer of its lever; what could not be read is said
  *
  * Values are made up (public repo).
  */
@@ -20,9 +22,10 @@ import { describe, expect, it, vi } from 'vitest'
 vi.mock('../../../db.js', () => ({ default: {} }))
 
 const {
-  brainNoteOf, clashOf, configuredWriters, engineState, leverOfAction, leverOwner, leversOfRuleAction, ruleState, selfBlocking, serverVariables, siblingTerms, writerOfActor,
+  amazonRulesGap, brainNoteOf, clashOf, configuredWriters, engineState, leverOfAction, leverOwner, leversOfRuleAction, ruleState, selfBlocking, serverVariables, siblingTerms, writerOfActor,
 } = await import('./read-map.js')
 const { resolveBrainSettings } = await import('./settings.js')
+const { campaignNativeRules } = await import('./native-rules.js')
 
 const DIAL = { stopped: false, suggest: false }
 const GALE = 'p-gale'
@@ -205,5 +208,55 @@ describe('writerOfActor', () => {
     expect(writerOfActor('user:owner', names)).toMatchObject({ who: 'a person', kind: 'person' })
     expect(writerOfActor('automation:gone-rule', names)).toMatchObject({ kind: 'unknown' })
     expect(writerOfActor(null, names)).toMatchObject({ who: 'no known author', kind: 'unknown' })
+  })
+})
+
+describe('AB-4 amazonRulesGap — Amazon\'s own rules in the clashes view', () => {
+  const NOW = new Date('2026-10-08T06:00:00Z')
+  const budgetRule = { ruleId: 'r-1', name: 'Weekend boost', ruleType: 'SCHEDULE', ruleState: 'ACTIVE', ruleStatus: null, increasePct: 25, startDate: '20261001', endDate: null, eventName: null, recurrence: 'DAILY', daysOfWeek: [], metric: null, comparison: null, threshold: null }
+  const native = new Map([
+    ['c-budget', campaignNativeRules({ campaignId: 'c-budget', snapshot: { fetchedAt: NOW, readings: { budgetRules: { state: 'read', rules: [budgetRule] } } }, strategy: 'LEGACY_FOR_SALES', strategyAt: NOW }, NOW)],
+    ['c-rule', campaignNativeRules({ campaignId: 'c-rule', snapshot: { fetchedAt: NOW, readings: { budgetRules: { state: 'read', rules: [] } } }, strategy: 'RULE_BASED', strategyAt: NOW }, NOW)],
+    ['c-failed', campaignNativeRules({ campaignId: 'c-failed', snapshot: { fetchedAt: NOW, readings: { budgetRules: { state: 'could_not_read', why: 'the read failed: Amazon answered 500: x' } } }, strategy: 'MANUAL', strategyAt: NOW }, NOW)],
+    ['c-other', campaignNativeRules({ campaignId: 'c-other', snapshot: null, strategy: 'RULE_BASED', strategyAt: NOW }, NOW)],
+  ])
+  const rows = [
+    { campaignId: 'c-budget', name: 'IT_Exact_Gale', brainCampaign: true },
+    { campaignId: 'c-rule', name: 'IT_Auto_Gale', brainCampaign: true },
+    { campaignId: 'c-failed', name: 'IT_Phrase_Gale', brainCampaign: true },
+    { campaignId: 'c-unread', name: 'IT_New_Gale', brainCampaign: true },
+    { campaignId: 'c-other', name: 'IT_Misano', brainCampaign: false },
+  ]
+
+  it('each rule that acts on a brain campaign is a clash, with its levers and what to do; one on another campaign is listed apart', () => {
+    const gap = amazonRulesGap(rows, native)
+    expect(gap.clashes.map((c) => [c.campaignId, c.kind, c.rule, c.levers])).toEqual([
+      ['c-budget', 'budgetRules', 'Weekend boost', ['budgets']],
+      ['c-rule', 'ruleBasedBidding', 'RULE_BASED', ['bids', 'biddingStrategy']],
+    ])
+    expect(gap.clashes[0].meaning).toMatch(/^Amazon budget rule "Weekend boost" acts on this brain campaign's budgets: a second brain inside Amazon\. While it is attached, the product's brain refuses to take that lever to AUTO; detach it in Amazon's Campaign Manager \(Nexus never edits Amazon's rules\)$/)
+    expect(gap.notBrainCampaigns).toEqual([expect.objectContaining({ campaignId: 'c-other', kind: 'ruleBasedBidding' })])
+  })
+
+  it('"could not read" is said: the kinds Nexus cannot read anywhere, and each brain campaign whose read failed or is missing', () => {
+    const gap = amazonRulesGap(rows, native)
+    expect(gap.couldNotRead.map((c) => [c.kind, c.campaignId ?? null])).toEqual([
+      ['optimizationRules', null], ['scheduleBidRules', null], ['budgetRules', 'c-failed'], ['budgetRules', 'c-unread'],
+    ])
+    expect(gap.couldNotRead[2]).toMatchObject({ why: 'the read failed: Amazon answered 500: x', at: NOW.toISOString() })
+    expect(gap.couldNotRead[3]).toMatchObject({ why: expect.stringMatching(/^not read yet/) })
+    expect(gap.read.budgetRules).toContain('GET /sp/campaigns/{campaignId}/budgetRules')
+  })
+
+  it('nothing read, nothing invented: no clash', () => {
+    expect(amazonRulesGap([{ campaignId: 'x', name: 'x', brainCampaign: true }], new Map()).clashes).toEqual([])
+  })
+
+  it('an Amazon rule is an automatic writer: with the brain on the same lever it is a clash; alone it owns the line', () => {
+    const amazon = { who: 'Amazon-run bidding strategy "RULE_BASED"', kind: 'amazon' as const, state: 'acts' as const, basis: 'configured' as const, why: 'Amazon\'s own rule' }
+    const brain = { who: 'the brain', kind: 'brain' as const, state: 'acts' as const, basis: 'configured' as const, why: 'the bid brain owns it (LIVE)' }
+    expect(clashOf([brain, amazon])).toEqual(['Amazon-run bidding strategy "RULE_BASED"', 'the brain'])
+    expect(leverOwner([brain, amazon], { excluded: false, brainNote: null })).toBe('two or more writers: Amazon-run bidding strategy "RULE_BASED", the brain')
+    expect(leverOwner([amazon], { excluded: false, brainNote: null })).toBe('Amazon-run bidding strategy "RULE_BASED"')
   })
 })
