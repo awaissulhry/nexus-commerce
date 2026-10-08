@@ -34,6 +34,8 @@ export interface CampaignRow {
   id: string
   status: string
   pinBids: boolean
+  /** AB-2 — "hands off the placements" (Campaign.pinPlacement): the brain writes no lane there. Absent: false. */
+  pinPlacement?: boolean
   pinnedBy: string | null
   bidsSuppressedAt: Date | null
   bidsSuppressedFloorCents: number | null
@@ -48,6 +50,10 @@ export interface CampaignRow {
   biddingStrategy?: string | null
   /** BB-18 — the campaign's placement % now (Campaign.dynamicBidding.placementBidding), the bidding-API placements. */
   placements?: ReadonlyArray<{ placement: string; percentage: number }>
+  /** AB-2 — the lanes a stop saved when it set them to 0 % (Campaign.suppressedFromPlacements); null: no stop holds them. */
+  savedPlacements?: ReadonlyArray<{ placement: string; percentage: number }> | null
+  /** AB-2 — the bidding strategy a stop switched from (Campaign.suppressedFromBiddingStrategy); null: none. */
+  savedStrategy?: string | null
 }
 
 export interface AdGroupRow {
@@ -246,6 +252,11 @@ export const UNDO_PIN_KIND = 'UNDO_PIN'
 /** Pre-go-live — a campaign-wide stop declared over another owner's stop (ads-bid-suppression.service.ts). */
 export const STOP_HOLD_KIND = 'STOP'
 /**
+ * ONE BRAIN AB-2 — a person's own bidding strategy on a campaign the brain owns (brain-holds.ts recordStrategyHold): a
+ * campaign-wide hold of the strategy lever, not of the bids — the stop recipe leaves the strategy alone until it ends.
+ */
+export const STRATEGY_HOLD_KIND = 'STRATEGY'
+/**
  * #513 follow-up — the floor a STOP hold's owner declared: its own column (`BidHold.floorCents`), else — a STOP written
  * before that column — the head of its reason ("<n>¢ floor: …", as #513 wrote it). Null: neither.
  */
@@ -386,7 +397,8 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
       if (o.stop) overrides.stop = mergeFloors({ stop: overrides.stop }, { stop: o.stop }).stop
       if (o.phase) overrides.phase = o.phase
     }
-    const holds = run.holds.filter((h) => h.campaignId === campaign.id && (h.targetId == null || h.targetId === t.id))
+    // AB-2 — a STRATEGY hold holds the bidding strategy, not the bids (shadow.ts strategyHolds reads it).
+    const holds = run.holds.filter((h) => h.campaignId === campaign.id && h.kind !== STRATEGY_HOLD_KIND && (h.targetId == null || h.targetId === t.id))
     // BB-8 — an auto-undo hold freezes (lowering still allowed); every other hold pins.
     // BB-10 re-review — a person's (or Claude's) hold before auto-undo's own pin: a floor may override that one (decide.ts).
     const hold = holds.find((h) => h.kind !== 'AUTO_UNDO' && h.kind !== UNDO_PIN_KIND && h.kind !== STOP_HOLD_KIND) ?? holds.find((h) => h.kind === UNDO_PIN_KIND)
@@ -408,12 +420,16 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
     const heldWhy = enrollment?.mode === 'HELD' ? `the campaign is held by ${enrollment.heldBy ?? 'a hold'}${enrollment.heldUntil ? ` until ${day(enrollment.heldUntil)}` : ''}` : null
     if (undoHold) overrides.freeze = { by: `${undoHold.by}${undoHold.until ? ` until ${day(undoHold.until)}` : ''}` }
 
+    // AB-2 — the stop recipe's memory stands for the campaign as it serves: a stop (or a Min-bid hour) holds its lanes at
+    // 0 % and its strategy at down only only while it lasts, and the tick that ends it puts both back. So the bid stack —
+    // the limits, the plan's lanes, the give-back — is measured as if no stop had happened (stop-recipe.ts).
+    const strategy = { biddingStrategy: campaign.savedStrategy ?? campaign.biddingStrategy ?? null }
     // BB-7 — the campaign's hourly plan, where the brain owns it: its lanes, a Min-bid floor (the lower floor wins), the why.
-    const plan = hour ? planFacts(hour, campaign, { entriesToday: run.minBidEntries?.get(campaign.id) ?? 0, inMinBid: inMinBid.has(campaign.id), maxEntries: MAX_MIN_BID_ENTRIES_PER_DAY }) : null
+    const plan = hour ? planFacts(hour, strategy, { entriesToday: run.minBidEntries?.get(campaign.id) ?? 0, inMinBid: inMinBid.has(campaign.id), maxEntries: MAX_MIN_BID_ENTRIES_PER_DAY }) : null
     if (plan?.minBidHour && (!overrides.minBidHour || plan.minBidHour.floorCents < overrides.minBidHour.floorCents)) overrides.minBidHour = plan.minBidHour
     // BB-18 — the most a click can cost against the base bid: the placements that served and those the plan sets.
-    const served = (campaign.placements ?? []).map((p) => ({ planPct: p.percentage, dynamic: laneHeadroom(campaign.biddingStrategy, p.placement), lane: laneOf(p.placement) }))
-    const ratioCeiling = stackCeiling([...served, ...(plan?.lanes ?? []), { planPct: 0, dynamic: laneHeadroom(campaign.biddingStrategy, 'PLACEMENT_TOP') }])
+    const served = (campaign.savedPlacements ?? campaign.placements ?? []).map((p) => ({ planPct: p.percentage, dynamic: laneHeadroom(strategy.biddingStrategy, p.placement), lane: laneOf(p.placement) }))
+    const ratioCeiling = stackCeiling([...served, ...(plan?.lanes ?? []), { planPct: 0, dynamic: laneHeadroom(strategy.biddingStrategy, 'PLACEMENT_TOP') }])
 
     const brakes = [...run.marketBrakes]
     if (campaign.status !== 'ENABLED') brakes.push(`campaign ${campaign.status.toLowerCase()}`)
@@ -440,7 +456,7 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
         campaignMinCents: campaign.minBidCents,
         campaignMaxCents: campaign.maxBidCents,
         // BB-7 review — the plan's day ceiling binds in every hour of an owned campaign with a plan.
-        ...(hour?.dayMaxCpcCents != null ? { planCeilingCents: Math.floor(hour.dayMaxCpcCents / laneHeadroom(campaign.biddingStrategy, 'PLACEMENT_TOP')) } : {}),
+        ...(hour?.dayMaxCpcCents != null ? { planCeilingCents: Math.floor(hour.dayMaxCpcCents / laneHeadroom(strategy.biddingStrategy, 'PLACEMENT_TOP')) } : {}),
       },
       dataDay: m.dataDay,
       lastStep: run.lastSteps.get(t.id) ?? null,

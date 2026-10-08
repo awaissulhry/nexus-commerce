@@ -16,6 +16,10 @@
  * its hours sets the ad groups' base bid (the brain sets the bids from the goal). And it must be serving: a campaign a
  * Min-bid hour, a stop or the stock check holds at its floor right now waits until its bids are given back (the
  * snapshot is then the serving bids, and no floor is left that only its old owner would lift).
+ * AB-2 — the stop recipe's memory (the lanes and the bidding strategy a stop saved, stop-memory.ts) is read only while the
+ * brain owns the campaign, so every way out gives it back and clears it (the tool, as the approver): op shadow puts the
+ * saved lanes and strategy back; give-back puts the LIVE-time placements and the saved strategy back; op live gives an
+ * old memory back first — setEnrollment refuses LIVE while one is still owed, and drops only a settled one.
  */
 import { createHash } from 'node:crypto'
 import { Prisma } from '@prisma/client'
@@ -26,6 +30,8 @@ import { ownerBrakes } from '../brain/owner-brakes.js'
 import { STOP_HOLD_KIND } from './facts.js'
 import { brainLiveCeiling } from './live.js'
 import { bidBrainMode } from './shadow.js'
+import { DOWN_ONLY, readSavedLanes, stopMemoryOwed, UP_AND_DOWN } from './stop-recipe.js'
+import { owedWords } from './stop-memory.js'
 
 export const ENROLL_OPS = ['live', 'shadow', 'give-back', 'hold', 'release'] as const
 export type EnrollOp = (typeof ENROLL_OPS)[number]
@@ -55,6 +61,8 @@ export interface EnrollmentFacts {
   floorsWithoutMemory?: number
   /** AB-1 review — the Owner keeps the bid brain off it (an exclusion, or its whole bids lever locked): refuses op live and release. */
   ownerBrake?: string | null
+  /** AB-2 — what a stop's memory still owes the campaign (stop-recipe.ts stopMemoryOwed), in words; null: nothing owed. */
+  stopMemory?: { lanes: boolean; strategy: boolean; savedStrategy: string | null; words: string } | null
 }
 
 const placementsOf = (dynamicBidding: unknown): Array<{ placement: string; percentage: number }> =>
@@ -128,7 +136,7 @@ export async function flooredNow(campaignId: string): Promise<string | null> {
 export async function enrollmentFacts(campaignId: string, opts: { plansJoin?: boolean; checkOwnerBrake?: boolean } = {}): Promise<EnrollmentFacts | null> {
   const c = await prisma.campaign.findFirst({
     where: { id: campaignId },
-    select: { id: true, name: true, marketplace: true, status: true, adProduct: true, liveBidWritesEnabled: true, pinBids: true },
+    select: { id: true, name: true, marketplace: true, status: true, adProduct: true, liveBidWritesEnabled: true, pinBids: true, dynamicBidding: true, biddingStrategy: true, suppressedFromPlacements: true, suppressedFromBiddingStrategy: true },
   })
   if (!c) return null
   const row = await prisma.bidBrainEnrollment.findFirst({ where: { campaignId }, select: { mode: true, heldUntil: true, heldBy: true, snapshot: true, updatedAt: true } })
@@ -143,7 +151,16 @@ export async function enrollmentFacts(campaignId: string, opts: { plansJoin?: bo
     // AB-1 review — read only for op live and release (checkOwnerBrake): nothing about the brain's overrides may stand in the
     // way of the way back out (shadow, give-back, hold). The product's brain resolves them itself, on the state after its change.
     ownerBrake: opts.checkOwnerBrake ? (await ownerBrakes([c.id])).get(c.id) ?? null : null,
+    stopMemory: stopMemoryOf(c),
   }
+}
+
+/** AB-2 — what a campaign's stop memory still owes it, in words; null when nothing is owed (none, or settled). */
+export function stopMemoryOf(c: { dynamicBidding: unknown; biddingStrategy: unknown; suppressedFromPlacements: unknown; suppressedFromBiddingStrategy: unknown }): EnrollmentFacts['stopMemory'] {
+  const savedStrategy = c.suppressedFromBiddingStrategy ? String(c.suppressedFromBiddingStrategy) : null
+  const owed = stopMemoryOwed({ placements: placementsOf(c.dynamicBidding), biddingStrategy: c.biddingStrategy ? String(c.biddingStrategy) : null, savedPlacements: readSavedLanes(c.suppressedFromPlacements), savedStrategy })
+  const words = owedWords(owed, savedStrategy)
+  return words ? { ...owed, savedStrategy, words } : null
 }
 
 /** BB-7 — an hourly plan joins as the brain's input instead of blocking LIVE (bid-brain/plan-hour.ts). */
@@ -194,14 +211,23 @@ export async function takeSnapshot(campaignId: string, now = new Date()): Promis
   return { takenAt: now.toISOString(), adGroups: groups, targets, placements: placementsOf(campaign?.dynamicBidding) }
 }
 
-/** What a give-back would put back now: the bids that differ from the snapshot, and how many of them rise. */
+/**
+ * What a give-back would put back now: the bids that differ from the snapshot, and how many of them rise. AB-2 — and the
+ * bidding strategy a stop switched from, while the strategy is still the stop's down only (up and down counts as a raise:
+ * Amazon may then lift a bid up to +100 %).
+ */
 export async function giveBackPlan(campaignId: string, snapshot: EnrollmentSnapshot): Promise<{
   targets: Array<{ id: string; fromCents: number; toCents: number }>
   adGroups: Array<{ id: string; fromCents: number; toCents: number }>
   placements: { from: Array<{ placement: string; percentage: number }>; to: Array<{ placement: string; percentage: number }> } | null
+  biddingStrategy?: { from: string; to: string } | null
   raises: number
 }> {
   const now = await takeSnapshot(campaignId)
+  const strategy = await prisma.campaign.findFirst({ where: { id: campaignId }, select: { biddingStrategy: true, suppressedFromBiddingStrategy: true } })
+  const biddingStrategy = strategy?.suppressedFromBiddingStrategy && String(strategy.biddingStrategy) === DOWN_ONLY && strategy.suppressedFromBiddingStrategy !== strategy.biddingStrategy
+    ? { from: String(strategy.biddingStrategy), to: String(strategy.suppressedFromBiddingStrategy) }
+    : null
   const nowTargets = new Map(now.targets.map((t) => [t.id, t.bidCents]))
   const nowGroups = new Map(now.adGroups.map((g) => [g.id, g.defaultBidCents]))
   const targets = snapshot.targets.flatMap((t) => (nowTargets.has(t.id) && nowTargets.get(t.id) !== t.bidCents ? [{ id: t.id, fromCents: nowTargets.get(t.id)!, toCents: t.bidCents }] : []))
@@ -210,7 +236,8 @@ export async function giveBackPlan(campaignId: string, snapshot: EnrollmentSnaps
   const placements = key(now.placements) !== key(snapshot.placements) ? { from: now.placements, to: snapshot.placements } : null
   const raises = targets.filter((t) => t.toCents > t.fromCents).length + adGroups.filter((g) => g.toCents > g.fromCents).length
     + (placements && placements.to.some((p) => p.percentage > (placements.from.find((f) => f.placement === p.placement)?.percentage ?? 0)) ? 1 : 0)
-  return { targets, adGroups, placements, raises }
+    + (biddingStrategy?.to === UP_AND_DOWN ? 1 : 0)
+  return { targets, adGroups, placements, biddingStrategy, raises }
 }
 
 /** A short fingerprint of the enrollment row: an approval made on another state of it does not run. */
@@ -234,6 +261,17 @@ export async function setEnrollment(args: {
   const from = (row?.mode as EnrollMode | undefined) ?? null
   const next = nextMode(args.op, from)
   if ('refusal' in next) throw new Error(`the campaign ${next.refusal}`)
+  // AB-2 — going LIVE over a stop recipe's memory from an earlier time: refused while it still owes the campaign something
+  // (it still runs on the stop's down only, or its lanes at the stop's 0 %) — never dropped unseen; the tool gives it back
+  // first. A settled memory owes nothing and is dropped: the snapshot is the campaign now.
+  if (args.op === 'live') {
+    const c = await prisma.campaign.findFirst({ where: { id: args.campaignId }, select: { dynamicBidding: true, biddingStrategy: true, suppressedFromPlacements: true, suppressedFromBiddingStrategy: true } })
+    const owed = c ? stopMemoryOf(c) : null
+    if (owed) throw new Error(`the campaign cannot go LIVE yet: ${owed.words} — give them back first (set-bid-brain-enrollment op live does, as the approver)`)
+    if (c && (c.suppressedFromPlacements != null || c.suppressedFromBiddingStrategy != null)) {
+      await prisma.campaign.updateMany({ where: { id: args.campaignId }, data: { suppressedFromPlacements: Prisma.DbNull, suppressedFromBiddingStrategy: null } })
+    }
+  }
   const snapshot = args.op === 'live' ? await takeSnapshot(args.campaignId, now) : null
   const data = {
     mode: next.to,

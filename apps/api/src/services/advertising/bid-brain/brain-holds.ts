@@ -12,6 +12,7 @@
 import prisma from '../../../db.js'
 import { logger } from '../../../utils/logger.js'
 import { brainOwnedCampaignIds } from './live.js'
+import { STRATEGY_HOLD_KIND } from './facts.js'
 
 /** Days a person's bid holds — the same 60 as bid-grid.service.ts PERSON_BID_HOLD_DAYS (a test keeps them equal). */
 export const BRAIN_HOLD_DAYS = 60
@@ -52,6 +53,32 @@ export async function recordBrainHold(args: {
     return 'held'
   } catch (err) {
     logger.warn('[bid-brain] could not record a person\'s hold — the 60-day person bid still holds it', { campaignId: args.campaignId, targetId: args.targetId, error: err instanceof Error ? err.message : String(err) })
+    return null
+  }
+}
+
+/**
+ * ONE BRAIN AB-2 — a person's own bidding strategy on a campaign the brain owns (his edit, or a Claude request he approved:
+ * `manual`) becomes a STRATEGY hold for BRAIN_HOLD_DAYS, as his bid does (design §2.10): the stop recipe leaves the
+ * strategy alone — no switch to down only — until it ends (stop-recipe.ts). A newer one replaces the open one. Only on a
+ * campaign the brain owns now; it never fails the write that called it.
+ */
+export async function recordStrategyHold(args: { campaignId: string; actor: string; manual: boolean; reason?: string | null; now?: Date }): Promise<BrainHoldOutcome> {
+  if (!args.manual) return null
+  try {
+    const owned = await brainOwnedCampaignIds([args.campaignId])
+    if (!owned.has(args.campaignId)) return null
+    const now = args.now ?? new Date()
+    await prisma.bidHold.updateMany({ where: { campaignId: args.campaignId, targetId: null, kind: STRATEGY_HOLD_KIND, endedAt: null }, data: { endedAt: now, endedBy: args.actor } })
+    await prisma.bidHold.create({
+      data: {
+        campaignId: args.campaignId, targetId: null, kind: STRATEGY_HOLD_KIND, until: new Date(now.getTime() + BRAIN_HOLD_DAYS * 86_400_000), by: args.actor,
+        reason: args.reason?.trim() ? args.reason.trim().slice(0, 500) : 'a person\'s own bidding strategy',
+      },
+    })
+    return 'held'
+  } catch (err) {
+    logger.warn('[bid-brain] could not record a person\'s bidding-strategy hold', { campaignId: args.campaignId, error: err instanceof Error ? err.message : String(err) })
     return null
   }
 }

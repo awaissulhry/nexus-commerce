@@ -160,3 +160,18 @@ describe('BB-7 review — whose saved bid, and whose floor mark', () => {
     expect(f.limits.planCeilingCents).toBe(45)
   })
 })
+
+describe('AB-2 — the bid stack as if no stop had happened', () => {
+  it('a stop\'s memory (up and down, 300 % top of search) stands for the down only and the 0 % lanes it holds: the plan\'s ceiling ÷2, the ratio ceiling ×8', () => {
+    const hour = { scheduleId: 's1', name: 'P', key: 'k', spec: null, event: null, dayMaxCpcCents: 120 }
+    const stopped = campaign('c1', { biddingStrategy: 'LEGACY_FOR_SALES', placements: [{ placement: 'PLACEMENT_TOP', percentage: 0 }], savedStrategy: 'AUTO_FOR_SALES', savedPlacements: [{ placement: 'PLACEMENT_TOP', percentage: 300 }] })
+    const [f] = buildFacts(market({ campaigns: new Map([['c1', stopped]]) }), run({ planHours: new Map([['c1', hour]]) }))
+    expect(f.limits.planCeilingCents).toBe(60)
+    expect(f.ratioCeiling).toBe(8)
+    // No memory (every campaign the recipe never touched): read as it is, exactly as before.
+    const plain = campaign('c1', { biddingStrategy: 'LEGACY_FOR_SALES', placements: [{ placement: 'PLACEMENT_TOP', percentage: 0 }] })
+    const [g] = buildFacts(market({ campaigns: new Map([['c1', plain]]) }), run({ planHours: new Map([['c1', hour]]) }))
+    expect(g.limits.planCeilingCents).toBe(120)
+    expect(g.ratioCeiling).toBe(1)
+  })
+})

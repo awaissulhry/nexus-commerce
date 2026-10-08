@@ -362,8 +362,18 @@ export async function restoreCampaignBids(
     planned?: { floorCents: number; left: Array<{ kind: 'adGroup' | 'target'; id: string; bidCents: number; rememberedCents: number }> }
   },
 ): Promise<number> {
-  const camp = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { id: true, bidsSuppressedAt: true, bidsSuppressedBy: true } })
+  const camp = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { id: true, bidsSuppressedAt: true, bidsSuppressedBy: true, suppressedFromPlacements: true, suppressedFromBiddingStrategy: true } })
   if (!camp) return 0
+  // ONE BRAIN AB-2 — the rollback: on a campaign the brain no longer runs (the server switch off, op shadow, a product that
+  // left the brain), what its stop recipe saved — the lanes it set to 0 %, the strategy it switched to down only — goes back
+  // with the bids, as the one who lifts the stop, and the memory is cleared (a refused write keeps it for the next restore).
+  // A campaign that never had the recipe holds no memory: nothing changes for it.
+  const stopMemory = camp.suppressedFromPlacements != null || camp.suppressedFromBiddingStrategy != null
+  const giveBackRecipe = async () => {
+    const { giveBackStopMemory } = await import('./bid-brain/stop-memory.js')
+    await giveBackStopMemory(campaignId, { actor: opts.actor, reason: opts.reason ?? 'no-pause: restored prior bids on resume', changeSetId: opts.changeSetId ?? null, manual: opts.manual })
+      .catch((e) => logger.warn('[no-pause] could not give back the stop recipe\'s saved settings — the next restore tries again', { campaignId, error: (e as Error).message }))
+  }
   // BB-8 — the bid brain owns it: the stop is lifted by clearing its marks; the brain gives the bids back. A memory left
   // from before the campaign joined the brain is dropped (an ad group floored on its own keeps its floor and memory).
   // Pre-go-live — an owner lifts its own stop only: its STOP hold ends (declareOwnedStop), and the mark clears when it is
@@ -385,7 +395,10 @@ export async function restoreCampaignBids(
     logger.info('[no-pause] stop lifted on a campaign the bid brain owns — the brain gives its bids back', { campaignId, by: opts.actor })
     return 0
   }
-  if (!camp.bidsSuppressedAt) return 0 // not suppressed → no-op
+  if (!camp.bidsSuppressedAt) { // not suppressed → no-op for the bids (AB-2: a recipe's memory still goes back)
+    if (stopMemory) await giveBackRecipe()
+    return 0
+  }
   // #513 review — a campaign that left the brain with a stop still declared as a STOP hold (enrollment.ts keeps it): the
   // lift ends this owner's own (a person's: every one), and another still declared takes the mark — the bids stay floored
   // with their memory, for that owner's lift. A campaign never owned has none: one update and one read, nothing changes.
@@ -444,8 +457,10 @@ export async function restoreCampaignBids(
 
   // MB.1 — the floor stamp is cleared with the flag it belongs to. Leaving it set would
   // make the next suppression look like it was already at that floor and skip the re-floor.
-  if (failed === 0) await prisma.campaign.update({ where: { id: campaignId }, data: { bidsSuppressedAt: null, bidsSuppressedFloorCents: null, bidsSuppressedBy: null } })
-  else logger.warn('[no-pause] restore incomplete — bidsSuppressedAt kept set; next serving tick retries', { campaignId, failed, touched })
+  if (failed === 0) {
+    await prisma.campaign.update({ where: { id: campaignId }, data: { bidsSuppressedAt: null, bidsSuppressedFloorCents: null, bidsSuppressedBy: null } })
+    if (stopMemory) await giveBackRecipe()
+  } else logger.warn('[no-pause] restore incomplete — bidsSuppressedAt kept set; next serving tick retries', { campaignId, failed, touched })
   logger.info('[no-pause] restored campaign bids', { campaignId, groups: groups.length, targets: targets.length, touched, failed })
   return touched
 }
