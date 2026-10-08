@@ -193,8 +193,8 @@ describe.skipIf(!concurrentDatabaseUrl())('BB-3 — the shadow bid brain (real P
     expect(first[0].why).toBe('stock: not buyable (out of stock (1 product)) → 2¢')
     expect(first[1].why).toBe('phase: the playbook BB8 playbook has not started → 2¢')
 
-    // Live, the brain would have floored it; the stock is back the next day: the bids go back (the goal bid: no bid
-    // before the stop was decided).
+    // Live, the brain would have floored it; the stock is back the next day: the bids go back. Pre-go-live — no decision
+    // before the stop is kept, so the give-back starts from the bid the floor found (40¢), as if the stop never happened.
     await inside(async () => {
       await database.client.adTarget.update({ where: { id: 't-c-oos' }, data: { bidCents: 2 } })
       await database.client.product.updateMany({ where: { sku: 'BB8-OUT' }, data: { totalStock: 30 } })
@@ -203,7 +203,7 @@ describe.skipIf(!concurrentDatabaseUrl())('BB-3 — the shadow bid brain (real P
     const [back] = await rows<{ layer: string; action: string; decidedCents: number; why: string }>('SELECT layer, action, "decidedCents", why FROM "BidBrainDecision" WHERE "targetId" = \'t-c-oos\' ORDER BY "createdAt" DESC LIMIT 1')
     expect([back.layer, back.action]).toEqual(['restore', 'write'])
     expect(back.decidedCents).toBeGreaterThan(2)
-    expect(back.why).toMatch(/^restore: the stock layer no longer applies → the goal bid \d+¢ \(no bid before it is known; aim 20%/)
+    expect(back.why).toMatch(/^restore: the stock layer no longer applies → back to \d+¢ from the 2¢ it held \(the bid before it: 40¢; goal: aim 20%/)
   })
 
   it('BB-9 — a rule on a campaign the brain owns becomes its input, and the next decision obeys it, named', async () => {

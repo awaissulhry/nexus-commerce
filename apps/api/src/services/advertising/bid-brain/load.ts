@@ -319,8 +319,8 @@ async function loadPlaybookFacts(m: MarketRows, campaignIds: readonly string[], 
  * since its last decision no override lowered — its saved bid (`suppressedFromBidCents`) is then the brain's own record
  * (facts.ts), never a stop of someone else's.
  */
-async function loadLowered(previous: ReadonlyMap<string, PreviousDecision>): Promise<Map<string, { layer: DecisionLayer; heldCents: number; beforeCents: number | null; wrote: boolean }>> {
-  const out = new Map<string, { layer: DecisionLayer; heldCents: number; beforeCents: number | null; wrote: boolean }>()
+async function loadLowered(previous: ReadonlyMap<string, PreviousDecision>): Promise<Map<string, { layer: DecisionLayer; heldCents: number; beforeCents: number | null; wrote: boolean; retryDataDay: string | null; foundCents: number | null }>> {
+  const out = new Map<string, { layer: DecisionLayer; heldCents: number; beforeCents: number | null; wrote: boolean; retryDataDay: string | null; foundCents: number | null }>()
   // A give-back that found no bid to go back to (a restore hold) still waits for one: it stays a candidate.
   const ids = [...previous].filter(([, p]) => (LOWERING_LAYERS as readonly string[]).includes(p.layer) || p.layer === 'restore').map(([id]) => id)
   if (!ids.length) return out
@@ -333,19 +333,26 @@ async function loadLowered(previous: ReadonlyMap<string, PreviousDecision>): Pro
   const before = new Map(rows.map((r) => [r.targetId, r.decidedCents]))
   // Did the brain write a floor since the last decision no override lowered (a give-back that wrote counts as one)?
   const lowering = [...LOWERING_LAYERS] as string[]
-  const wrote = new Set((await prisma.$queryRaw<Array<{ targetId: string }>>(Prisma.sql`
-    SELECT d."targetId" FROM "BidBrainDecision" d
+  // Pre-go-live — and the bid its first floor found (that floor decision's currentCents): under auto-undo's pin the give-back
+  // goes no higher than it.
+  const wroteRows = await prisma.$queryRaw<Array<{ targetId: string; found: number | null }>>(Prisma.sql`
+    SELECT d."targetId", (array_agg(d."currentCents" ORDER BY d."createdAt") FILTER (WHERE d.layer = ANY(${lowering}::text[])))[1] AS found
+      FROM "BidBrainDecision" d
       LEFT JOIN (SELECT k."targetId", max(k."createdAt") AS at FROM "BidBrainDecision" k
                   WHERE k."targetId" = ANY(${ids}::text[]) AND k.layer = ANY(${kept}::text[])
                   GROUP BY k."targetId") last ON last."targetId" = d."targetId"
      WHERE d."targetId" = ANY(${ids}::text[]) AND d.action = 'write' AND (d.layer = ANY(${lowering}::text[]) OR d.layer = 'restore')
        AND (last.at IS NULL OR d."createdAt" > last.at)
-     GROUP BY d."targetId"`)).map((r) => r.targetId))
+     GROUP BY d."targetId"`)
+  const wrote = new Set(wroteRows.map((r) => r.targetId))
+  const found = new Map(wroteRows.filter((r) => r.found != null).map((r) => [r.targetId, Number(r.found)]))
   for (const id of ids) {
     const p = previous.get(id)!
     // A give-back that wrote left the keyword at `currentCents` (its floor) if the gate refused it.
     const held = p.layer === 'restore' && p.action === 'write' ? p.currentCents : p.decidedCents
-    out.set(id, { layer: p.layer as DecisionLayer, heldCents: held, beforeCents: before.get(id) ?? null, wrote: wrote.has(id) })
+    // Pre-go-live — a give-back the gate refused: the data day it was refused on (its retry that day is not logged again).
+    const retryDataDay = p.layer === 'restore' && p.action === 'write' && p.sent === 'refused' ? p.dataDay ?? null : null
+    out.set(id, { layer: p.layer as DecisionLayer, heldCents: held, beforeCents: before.get(id) ?? null, wrote: wrote.has(id), retryDataDay, foundCents: found.get(id) ?? null })
   }
   return out
 }
@@ -380,6 +387,9 @@ export interface PreviousDecision {
   decidedCents: number
   createdAt: Date
   lastStep: { dataDay: string; fromCents: number; toCents: number } | null
+  /** Pre-go-live — the data day it decided on, and what became of its write (`evidence.sent.sent`: queued, refused, …). */
+  dataDay?: string
+  sent?: string | null
 }
 
 /** Each keyword's newest bid write in the last 30 days (who and when). */
@@ -396,15 +406,16 @@ export async function lastBidWrites(targetIds: readonly string[], now: Date): Pr
 /** Each keyword's newest decision of the brain in the last 30 days. */
 export async function previousDecisions(targetIds: readonly string[], now: Date): Promise<Map<string, PreviousDecision>> {
   if (!targetIds.length) return new Map()
-  const rows = await prisma.$queryRaw<Array<{ targetId: string; action: string; layer: string; currentCents: number; decidedCents: number; createdAt: Date; lastStep: unknown }>>(Prisma.sql`
-    SELECT DISTINCT ON (d."targetId") d."targetId", d.action, d.layer, d."currentCents", d."decidedCents", d."createdAt", d.evidence -> 'lastStep' AS "lastStep"
+  const rows = await prisma.$queryRaw<Array<{ targetId: string; action: string; layer: string; currentCents: number; decidedCents: number; createdAt: Date; lastStep: unknown; dataDay: string; sent: string | null }>>(Prisma.sql`
+    SELECT DISTINCT ON (d."targetId") d."targetId", d.action, d.layer, d."currentCents", d."decidedCents", d."createdAt", d.evidence -> 'lastStep' AS "lastStep",
+           to_char(d."dataDay", 'YYYY-MM-DD') AS "dataDay", d.evidence -> 'sent' ->> 'sent' AS sent
       FROM "BidBrainDecision" d
      WHERE d."targetId" = ANY(${[...targetIds]}::text[]) AND d."createdAt" >= ${new Date(now.getTime() - 30 * 86_400_000)}
      ORDER BY d."targetId", d."createdAt" DESC`)
   return new Map(rows.map((r) => {
     const s = r.lastStep as { dataDay?: unknown; fromCents?: unknown; toCents?: unknown } | null
     const lastStep = s && typeof s.dataDay === 'string' && typeof s.fromCents === 'number' && typeof s.toCents === 'number' ? { dataDay: s.dataDay, fromCents: s.fromCents, toCents: s.toCents } : null
-    return [r.targetId, { action: r.action, layer: r.layer, currentCents: r.currentCents, decidedCents: r.decidedCents, createdAt: r.createdAt, lastStep }]
+    return [r.targetId, { action: r.action, layer: r.layer, currentCents: r.currentCents, decidedCents: r.decidedCents, createdAt: r.createdAt, lastStep, dataDay: r.dataDay, sent: r.sent }]
   }))
 }
 

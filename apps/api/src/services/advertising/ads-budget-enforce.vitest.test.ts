@@ -158,6 +158,20 @@ describe('the preview — what the engine would do now', () => {
     expect(r.totals).toMatchObject({ suppressing: 2, restoring: 1 })
   })
 
+  it('BID BRAIN pre-go-live — on a campaign the brain owns, its own Min-bid mark is no stop: over the cap the stop is declared', async () => {
+    vi.stubEnv('NEXUS_BID_BRAIN_MODE', 'live')
+    try {
+      await inA(() => db().bidBrainEnrollment.create({ data: { campaignId: ids.cRank, marketplace: 'IT', mode: 'LIVE', enrolledBy: 'user:test' } }))
+      const it_ = market(await inA(() => computeBudgetEnforcement({ month })), 'IT')
+      expect(campaign(it_, ids.cRank)).toMatchObject({ suppress: true, restore: false, currentlySuppressed: false })
+    } finally {
+      vi.stubEnv('NEXUS_BID_BRAIN_MODE', '')
+      await inA(() => db().bidBrainEnrollment.deleteMany({ where: { campaignId: ids.cRank } }))
+    }
+    // Not owned: rank's own floor is left as it is, as before.
+    expect(campaign(market(await inA(() => computeBudgetEnforcement({ month })), 'IT'), ids.cRank)).toMatchObject({ suppress: false, currentlySuppressed: true })
+  })
+
   it('a market whose cap is gone still gets this engine\'s floors back — never another engine\'s', async () => {
     const de = market(await inA(() => computeBudgetEnforcement({ month })), 'DE')
     expect(de).toMatchObject({ stopCapCents: null, stopBy: null, strategyCap: null, planCapCents: null, stopOverSpend: false, capReached: false })

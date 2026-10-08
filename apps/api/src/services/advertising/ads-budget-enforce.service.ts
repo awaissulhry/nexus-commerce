@@ -300,6 +300,11 @@ export async function computeBudgetEnforcement(opts: { month?: string } = {}): P
     // CM-30 — each campaign's own Min/Max Budget (the columns the grid and the Budget Manager both write, and the write
     // gate enforces), not the per-month copy the plan used to keep: a target outside them was refused at the gate anyway.
     const camps = await prisma.campaign.findMany({ where: { marketplace, status: 'ENABLED' }, select: { id: true, name: true, dailyBudget: true, bidsSuppressedAt: true, bidsSuppressedBy: true, minBudgetCents: true, maxBudgetCents: true } })
+    // BID BRAIN pre-go-live — the brain's own Min-bid floor mark on a campaign it owns is no stop: over the cap, the stop
+    // is declared over it (suppressCampaignBids lands it), never skipped as "already floored" and lost at the hour's end.
+    const { brainOwnedCampaignIds } = await import('./bid-brain/live.js')
+    const { isPlanFloorMark } = await import('./bid-brain/facts.js')
+    const brainOwned = await brainOwnedCampaignIds(camps.filter((c) => c.bidsSuppressedAt && isPlanFloorMark(c.bidsSuppressedBy)).map((c) => c.id))
     const curById = new Map(camps.map((c) => [c.id, Math.round(Number(c.dailyBudget ?? 0) * 100)]))
     const curTotal = camps.reduce((s, c) => s + (curById.get(c.id) ?? 0), 0)
     const spendTotal = camps.reduce((s, c) => s + (mtdByCamp.get(c.id) ?? 0), 0)
@@ -324,7 +329,7 @@ export async function computeBudgetEnforcement(opts: { month?: string } = {}): P
         if (t < FLOOR_CENTS) { t = FLOOR_CENTS; clamp = 'floor' }
         target = t
       }
-      const currentlySuppressed = !!c.bidsSuppressedAt
+      const currentlySuppressed = !!c.bidsSuppressedAt && !brainOwned.has(c.id)
       // Only this engine's own suppressions may be restored. `bidsSuppressedAt` is shared
       // state — the rank engine's Min-bid windows, dayparting and the retail guard all set
       // it — so "suppressed and under cap" is not evidence that budget enforcement did it.

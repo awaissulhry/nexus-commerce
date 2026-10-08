@@ -88,6 +88,8 @@ export interface TargetFacts {
   servingCents?: number | null
   /** BB-18 — the most a click can cost against the base bid (recipe.ts stackCeiling); absent: 1. */
   ratioCeiling?: number | null
+  /** Pre-go-live — the keyword's saved bid (AdTarget.suppressedFromBidCents): the bid a floor found. */
+  savedCents?: number | null
   /** BB-10 — the brain's own raise cap (spend-guard.ts): why a goal raise waits this run; absent: none. */
   raiseCap?: string | null
   /** The newest settled day in the evidence, 'YYYY-MM-DD'. */
@@ -102,7 +104,7 @@ export interface TargetFacts {
    * found no bid to go back to (`restore`); `beforeCents` is the bid of its last decision no override lowered (null: none
    * in the decisions kept). Read only when no override applies.
    */
-  restore?: { layer: DecisionLayer; heldCents: number; beforeCents: number | null } | null
+  restore?: { layer: DecisionLayer; heldCents: number; beforeCents: number | null; retryDataDay?: string | null; foundCents?: number | null } | null
 }
 
 export type DecisionLayer = 'brake' | 'stop' | 'pin' | 'stock' | 'freeze' | 'phase' | 'min_bid_hour' | 'restore' | 'goal' | 'band' | 'limit' | 'no_goal'
@@ -134,6 +136,8 @@ export interface Decision {
   clash: string | null
   /** One line: the deciding layer, the aim, CR̂ with n, the factor and the clamp. */
   why: string
+  /** Pre-go-live — a give-back retried on the data day it was refused: the write goes again, its refusal is not logged again. */
+  quietRefusal?: boolean
 }
 
 const OVERRIDE_ORDER = ['stop', 'pin', 'stock', 'freeze', 'phase', 'minBidHour'] as const
@@ -291,27 +295,37 @@ function decideBid(f: TargetFacts): Decision {
   if (r && ((LOWERING_LAYERS as readonly string[]).includes(r.layer) || r.layer === 'restore') && f.currentCents <= r.heldCents) {
     // `restore`: an earlier give-back found no bid to go back to; it is tried again on every run until it does.
     const lifted = r.layer === 'restore' ? 'restore: the stop that lowered it no longer applies' : `restore: the ${r.layer.replace('_', '-')} layer no longer applies`
-    if (r.beforeCents != null) {
+    // Pre-go-live — a give-back already refused on this data day is sent again, without logging the refusal again.
+    const quiet = r.layer === 'restore' && !!r.retryDataDay && r.retryDataDay >= f.dataDay ? { quietRefusal: true } : {}
+    // Pre-go-live — the bid before: the newest decision no override lowered; with none kept (every decision since lowered
+    // it), the bid the brain's first floor found, else the bid the floor saved — never "no bid to give back" while one is known.
+    const beforeCents = r.beforeCents ?? [r.foundCents, f.savedCents].find((c): c is number => c != null && c > 0) ?? null
+    if (beforeCents != null) {
       // As if the stop never happened: today's decision taken from the bid before it. BB-7 review — with the day's step
       // anchor kept when it is for this data day or a newer one (ads-bid-window.ts movedThisDataDay reads `>=` too), so
       // a second Min-bid exit on the same data day lands where the first did and takes no new step (C3's slide).
       const keep = f.lastStep && f.lastStep.dataDay >= f.dataDay ? f.lastStep : null
-      const asIf = decide({ ...f, currentCents: r.beforeCents, lastStep: keep, restore: null, overrides: {}, brakes: [] })
+      const asIf = decide({ ...f, currentCents: beforeCents, lastStep: keep, restore: null, overrides: {}, brakes: [] })
       // BB-7 review — held inside today's limits (the strategy's highest bid, the campaign's bounds, the plan's day ceiling):
       // a between-slots tick has no goal, and the bid before may sit above a limit set since.
-      // Under auto-undo's pin, the bid before the floor is the pinned one: back to it exactly, no goal step.
-      const cents = clampToRange(o.pin?.soft ? r.beforeCents : asIf.bidCents, limitRange(f.limits, f.lanes)).cents
-      const why = `${lifted} → back to ${cents}¢ from the ${f.currentCents}¢ it held (the bid before it: ${r.beforeCents}¢; ${asIf.why})`
+      // Under auto-undo's pin: back to the bid the floor found — the pinned one — exactly, no goal step. Pre-go-live — not
+      // the bid before: the newest decision no override lowered may be the very change auto-undo put back (an undone raise
+      // would be raised again, an undone cut cut again). The bid the brain's first floor found (that floor decision's
+      // currentCents), else the bid the floor saved (AdTarget.suppressedFromBidCents; a stop's owner clears it on its lift).
+      const found = [r.foundCents, f.savedCents].find((c): c is number => c != null && c > 0)
+      const pinned = found ?? beforeCents
+      const cents = clampToRange(o.pin?.soft ? pinned : asIf.bidCents, limitRange(f.limits, f.lanes)).cents
+      const why = `${lifted} → back to ${cents}¢ from the ${f.currentCents}¢ it held (the bid before it: ${beforeCents}¢; ${asIf.why})`
       return {
-        ...base, ...known, action: cents !== f.currentCents ? 'write' : 'hold', layer: 'restore', bidCents: cents,
-        step: asIf.step ?? keep ?? { dataDay: f.dataDay, fromCents: r.beforeCents, toCents: cents }, placements: placements(cents), why,
+        ...base, ...known, ...quiet, action: cents !== f.currentCents ? 'write' : 'hold', layer: 'restore', bidCents: cents,
+        step: asIf.step ?? keep ?? { dataDay: f.dataDay, fromCents: beforeCents, toCents: cents }, placements: placements(cents), why,
       }
     }
     const g0 = ok ? goalBid(f, { noStep: true }) : null
     if (g0 && 'cents' in g0) {
       const cents = g0.cents
       return {
-        ...base, ...known, action: cents !== f.currentCents ? 'write' : 'hold', layer: 'restore', bidCents: cents,
+        ...base, ...known, ...quiet, action: cents !== f.currentCents ? 'write' : 'hold', layer: 'restore', bidCents: cents,
         step: { dataDay: f.dataDay, fromCents: cents, toCents: cents }, placements: placements(cents),
         why: `${lifted} → the goal bid ${cents}¢ (no bid before it is known; ${g0.parts.join('; ')})`,
       }

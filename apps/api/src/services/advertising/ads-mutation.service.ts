@@ -368,6 +368,8 @@ export function writeValueCents(fieldChanges: FieldChange[]): number {
  */
 async function gateRefusedNow(args: {
   askGate?: boolean
+  /** BID BRAIN pre-go-live — a retry already refused (and logged) on this data day: refused the same, not logged again. */
+  quietRefusal?: boolean
   actor: AdsActor
   entity: AdEntityType
   entityId: string
@@ -417,7 +419,7 @@ async function gateRefusedNow(args: {
   }
   // 3A — his own limits: nothing written, his "Send anyway" decides.
   if (gate.deniedAt === 'needs_confirmation') return needsConfirmationOutcome(gate.ownLimits ?? [])
-  logGateDeny(
+  if (!args.quietRefusal) logGateDeny(
     {
       queueId: null, marketplace: args.marketplace ?? null, payloadValueCents: writeValueCents(args.changes),
       campaignId: args.campaignId ?? null, entityType: args.entity, entityId: args.entityId,
@@ -1739,6 +1741,8 @@ export async function updateAdTargetWithSync(args: {
   reversal?: boolean
   /** CM-10 — a person's edit from a screen: ask the write gate before writing (gateRefusedNow). */
   askGate?: boolean
+  /** BID BRAIN pre-go-live — with askGate: a retry already refused today is refused the same, without a second refusal record. */
+  quietRefusal?: boolean
   /** 3A — the person's "Send anyway" past his own limits (honoured only for a person's own write). */
   confirmOwnLimits?: boolean
   /** AA-W2-12 — a deliberate pause or archive (pause-ads, archive-ads): the halt does not hold it (isLetGoWrite). Unlike `force`, nothing else is skipped. */
@@ -1907,7 +1911,7 @@ export async function updateAdTargetWithSync(args: {
     if (refused) return refused
   }
   const atDispatch = await gateRefusedNow({
-    askGate: args.askGate, actor: args.actor, entity: 'AD_TARGET', entityId: args.adTargetId,
+    askGate: args.askGate, quietRefusal: args.quietRefusal, actor: args.actor, entity: 'AD_TARGET', entityId: args.adTargetId,
     campaignId: existing.adGroup?.campaign?.id, marketplace: existing.adGroup?.campaign?.marketplace, changes, force: forcedLowering,
     manual: args.manual, confirmOwnLimits, past, adGroupId: existing.adGroup?.id ?? null, write: sbSdWrite,
   })

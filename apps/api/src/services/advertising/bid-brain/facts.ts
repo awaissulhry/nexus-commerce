@@ -140,7 +140,7 @@ export interface RunRows {
   /** BB-8 — per campaign: what a playbook holds on it. */
   playbook?: ReadonlyMap<string, PlaybookFact>
   /** BB-8 — per keyword: the brain's last decision lowered it by an override; the bid of its last decision before. */
-  lowered?: ReadonlyMap<string, { layer: DecisionLayer; heldCents: number; beforeCents: number | null; wrote?: boolean }>
+  lowered?: ReadonlyMap<string, { layer: DecisionLayer; heldCents: number; beforeCents: number | null; wrote?: boolean; retryDataDay?: string | null; foundCents?: number | null }>
   /** BB-7 review — the campaigns the brain owns this run: a plan's floor mark on one is the brain's record. */
   owned?: ReadonlySet<string>
   /** BB-8 — per ad group: the revenue-weighted break-even ACoS of its products with usable profit data (a fraction). */
@@ -243,6 +243,8 @@ export function cpcRatioOf(targets: readonly TargetRow[], ev: (id: string) => Ev
 
 /** BB-10 re-review — the BidHold kind auto-undo pins a keyword with after it put back a bid brain change. */
 export const UNDO_PIN_KIND = 'UNDO_PIN'
+/** Pre-go-live — a campaign-wide stop declared over another owner's stop (ads-bid-suppression.service.ts). */
+export const STOP_HOLD_KIND = 'STOP'
 
 /** BB-7 review — a floor mark an hourly plan's Min-bid hour set (rank-defend's own prefixes, which the brain writes too). */
 export const isPlanFloorMark = (by: string | null | undefined): boolean => !!by && /^automation:(rank-defend|rank-plan|dayparting)-/.test(by)
@@ -356,10 +358,11 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
     const planFloor = !!run.owned?.has(campaign.id) && !!campaign.bidsSuppressedAt && isPlanFloorMark(campaign.bidsSuppressedBy)
     const overrides: Overrides = mergeFloors(planFloor ? null : floorOverride(campaign.bidsSuppressedBy, campaign.bidsSuppressedFloorCents, campaign.bidsSuppressedAt), floorOverride(group.bidsSuppressedBy, group.bidsSuppressedFloorCents, group.bidsSuppressedAt))
     // A keyword a stop floored on its own keeps its remembered bid: the stop decides until it lifts. BB-7 review — a bid the
-    // brain saved itself is its record, not a stop: the keyword's newest decision is a give-back, or a floor the brain
-    // wrote (Min-bid, stop, stock, phase) since its last unlowered decision. A floor someone else wrote keeps its stop.
+    // brain saved itself is its record, not a stop: since its last unlowered decision the brain WROTE a floor (Min-bid,
+    // stop, stock, phase) or a give-back on it (a refused one included). Pre-go-live — a give-back that only held does
+    // not count: a floor someone else wrote, which the brain only ever held, keeps its stop.
     const low = run.lowered?.get(t.id)
-    const brainMemory = !!low && (low.layer === 'restore' || low.wrote === true)
+    const brainMemory = low?.wrote === true
     if (!brainMemory && !overrides.stop && !overrides.stock && !overrides.minBidHour && t.suppressedFromBidCents != null) {
       overrides.stop = { bidCents: t.bidCents, by: `a stop (its ${t.suppressedFromBidCents}¢ bid remembered)` }
     }
@@ -377,7 +380,14 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
     const holds = run.holds.filter((h) => h.campaignId === campaign.id && (h.targetId == null || h.targetId === t.id))
     // BB-8 — an auto-undo hold freezes (lowering still allowed); every other hold pins.
     // BB-10 re-review — a person's (or Claude's) hold before auto-undo's own pin: a floor may override that one (decide.ts).
-    const hold = holds.find((h) => h.kind !== 'AUTO_UNDO' && h.kind !== UNDO_PIN_KIND) ?? holds.find((h) => h.kind === UNDO_PIN_KIND)
+    const hold = holds.find((h) => h.kind !== 'AUTO_UNDO' && h.kind !== UNDO_PIN_KIND && h.kind !== STOP_HOLD_KIND) ?? holds.find((h) => h.kind === UNDO_PIN_KIND)
+    // Pre-go-live — a stop declared while another owner's stop held the mark (ads-bid-suppression.service.ts
+    // declareOwnedStop): a STOP too, at the strategy's stop bid; with two stops the lower floor wins (decide.ts).
+    const stopHold = holds.find((h) => h.kind === STOP_HOLD_KIND && h.targetId == null)
+    if (stopHold) {
+      const cents = s?.stopBidCents ?? 2
+      if (!overrides.stop || cents < overrides.stop.bidCents) overrides.stop = { bidCents: cents, by: `a stop by ${stopHold.by}` }
+    }
     const undoHold = holds.find((h) => h.kind === 'AUTO_UNDO')
     if (campaign.pinBids) overrides.pin = { by: campaign.pinnedBy ? `bids pinned by ${campaign.pinnedBy}` : 'pinned bids' }
     else if (hold) overrides.pin = { by: `${hold.kind === UNDO_PIN_KIND ? 'auto-undo pin' : `${hold.kind.toLowerCase()} hold`} by ${hold.by}`, until: day(hold.until), ...(hold.kind === UNDO_PIN_KIND ? { soft: true as const } : {}) }
@@ -406,6 +416,7 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
       chain: m.light ? [] : chain,
       parentCpcRatio: cpcRatioOf(byGroup.get(group.id) ?? [], ev, run.servingBids),
       servingCents: run.servingBids?.get(t.id) ?? null,
+      savedCents: t.suppressedFromBidCents,
       ratioCeiling,
       ...(plan?.lanes.length ? { lanes: plan.lanes } : {}),
       ...(plan ? { planNote: plan.note } : {}),

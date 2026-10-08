@@ -259,23 +259,41 @@ export async function releaseHold(args: { campaignIds: readonly string[]; by: st
 
 /**
  * BB-7 review — the keywords the brain holds at a floor (its newest decision lowered them by a stop, stock, the phase or a
- * Min-bid hour, and the bid still sits there) that no engine would give back after a hand-back: no memory of their bid
+ * Min-bid hour, and the bid still sits there) — floors it wrote itself — that no engine would give back after a hand-back: no memory of their bid
  * before (`AdTarget.suppressedFromBidCents`), or a memory no owner's mark points at (neither the campaign nor the ad
- * group is marked floored — a stock or phase floor the brain read from its source sets none). `op: shadow` refuses
- * while any is left; give-back puts back the snapshot instead.
+ * group is marked floored — a stock or phase floor the brain read from its source sets none). A give-back still waiting
+ * (its newest decision a `restore`, the bid still at the floor it left — refused at the gate) counts too. `op: shadow`
+ * refuses while any is left; give-back puts back the snapshot instead.
  */
 export async function floorsWithoutMemory(campaignId: string): Promise<number> {
+  // Only floors the brain wrote itself (a floor or give-back write since the keyword's last decision no override lowered):
+  // a stop someone else wrote, which the brain only held, is that owner's to give back, and a hand-back changes nothing.
+  const kept = ['goal', 'band', 'limit', 'no_goal', 'pin', 'freeze']
   const rows = await prisma.$queryRaw<Array<{ n: number }>>(Prisma.sql`
-    SELECT count(*)::int AS n FROM (
-      SELECT DISTINCT ON (d."targetId") d."targetId", d.layer, d."decidedCents"
+    WITH last AS (
+      SELECT DISTINCT ON (d."targetId") d."targetId", d.layer, d."decidedCents", d."currentCents"
         FROM "BidBrainDecision" d
        WHERE d."campaignId" = ${campaignId}
-       ORDER BY d."targetId", d."createdAt" DESC) last
+       ORDER BY d."targetId", d."createdAt" DESC),
+    unlowered AS (
+      SELECT d."targetId", max(d."createdAt") AS at FROM "BidBrainDecision" d
+       WHERE d."campaignId" = ${campaignId} AND d.layer = ANY(${kept}::text[])
+       GROUP BY d."targetId"),
+    wrote AS (
+      SELECT DISTINCT d."targetId" FROM "BidBrainDecision" d
+        LEFT JOIN unlowered u ON u."targetId" = d."targetId"
+       WHERE d."campaignId" = ${campaignId} AND d.action = 'write'
+         AND d.layer IN ('stop', 'stock', 'phase', 'min_bid_hour', 'restore')
+         AND (u.at IS NULL OR d."createdAt" > u.at))
+    SELECT count(*)::int AS n FROM last
+      JOIN wrote w ON w."targetId" = last."targetId"
       JOIN "AdTarget" t ON t.id = last."targetId"
       JOIN "AdGroup" g ON g.id = t."adGroupId"
       JOIN "Campaign" c ON c.id = g."campaignId"
-     WHERE last.layer IN ('stop', 'stock', 'phase', 'min_bid_hour')
-       AND t."bidCents" <= last."decidedCents" AND t."retiredAt" IS NULL
+     WHERE ((last.layer IN ('stop', 'stock', 'phase', 'min_bid_hour') AND t."bidCents" <= last."decidedCents")
+            -- a give-back still waiting (refused at the gate): the keyword sits at the floor it left
+            OR (last.layer = 'restore' AND t."bidCents" <= last."currentCents"))
+       AND t."retiredAt" IS NULL
        AND (t."suppressedFromBidCents" IS NULL OR (c."bidsSuppressedAt" IS NULL AND g."bidsSuppressedAt" IS NULL))`)
   return rows[0]?.n ?? 0
 }
