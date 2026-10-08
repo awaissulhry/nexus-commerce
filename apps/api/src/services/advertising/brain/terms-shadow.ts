@@ -37,6 +37,7 @@ import { readOwnerTargets } from '../ads-target-acos-resolver.js'
 import { breakevenByProduct } from '../ads-target-acos.service.js'
 import { HV_DEST_GRAINS, roleOf } from '../harvest-destination.service.js'
 import { resolveCampaignOwnership } from './ownership.js'
+import { CYCLE_RUNS_IT, cycleKey, withoutOrchestrated } from './cycle-switch.js'
 import { resolveBrainSettings, type BrainSettings, type OverrideRow } from './settings.js'
 import { arbitrate, type Claim, type LeadDecision } from './arbiter.js'
 import {
@@ -56,10 +57,17 @@ export interface TermsDue { due: boolean; why: string; products: DueProduct[] }
 
 const OVERRIDE_SELECT = { id: true, productId: true, marketplace: true, scope: true, campaignId: true, kind: true, key: true, ref: true, value: true, by: true, reason: true, createdAt: true, endedAt: true } as const
 
-/** The products whose negatives or harvest lever is OBSERVE or higher (product level). Nothing enrolled: one read. */
-export async function termsDue(): Promise<TermsDue> {
-  const enrollments = await prisma.adsBrainEnrollment.findMany({ select: { productId: true, marketplace: true }, orderBy: [{ marketplace: 'asc' }, { productId: 'asc' }] })
-  if (!enrollments.length) return { due: false, why: 'no product is enrolled in the brain: no term to decide', products: [] }
+/**
+ * The products whose negatives or harvest lever is OBSERVE or higher (product level). Nothing enrolled: one read.
+ * AB-14 — what the crons run: a product the product cycle runs (brain/cycle-switch.ts, NEXUS_ADS_BRAIN_CYCLE=on) is left
+ * out, so the term ledger's and the negatives' crons never run it twice; the cycle asks with `includeOrchestrated`.
+ */
+export async function termsDue(opts: { includeOrchestrated?: boolean } = {}): Promise<TermsDue> {
+  const all = await prisma.adsBrainEnrollment.findMany({ select: { productId: true, marketplace: true }, orderBy: [{ marketplace: 'asc' }, { productId: 'asc' }] })
+  if (!all.length) return { due: false, why: 'no product is enrolled in the brain: no term to decide', products: [] }
+  const left = opts.includeOrchestrated ? { kept: all, skipped: [] } : await withoutOrchestrated(all.map((e) => ({ ...e, market: e.marketplace })), new Set(all.map((e) => cycleKey(e.productId, e.marketplace))))
+  if (!left.kept.length) return { due: false, why: `${left.skipped.length} enrolled product${left.skipped.length === 1 ? '' : 's'}: ${CYCLE_RUNS_IT}`, products: [] }
+  const enrollments = left.kept
   const overrides = await prisma.adsBrainOverride.findMany({
     where: { endedAt: null, scope: 'PRODUCT', productId: { in: [...new Set(enrollments.map((e) => e.productId))] } },
     select: OVERRIDE_SELECT,

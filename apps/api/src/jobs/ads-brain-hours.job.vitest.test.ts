@@ -62,4 +62,12 @@ describe('AB-13 — the brain\'s hourly research (cron)', () => {
     h.run.mockRejectedValueOnce(new Error('database away'))
     expect(await runBrainHoursTick()).toBeNull()
   })
+
+  it('AB-14 — the product cycle on: it runs every enrolled product\'s hours step, so this tick runs none and records nothing', async () => {
+    h.enrolled = true
+    vi.stubEnv('NEXUS_ADS_BRAIN_CYCLE', 'on')
+    expect(await runBrainHoursTick(new Date('2026-10-12T04:50:00Z'))).toMatchObject({ ran: false, why: expect.stringMatching(/the product cycle runs it/) })
+    expect(h.run).not.toHaveBeenCalled()
+    expect(h.recorded).toEqual([])
+  })
 })

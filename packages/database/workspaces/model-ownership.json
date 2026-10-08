@@ -470,6 +470,7 @@
     "AdsBrainTermLead",
     "AdsBrainStateDecision",
     "AdsBrainNegative",
+    "AdsBrainCycle",
     "AdWriteRefusal",
     "AutomationRefusalDaily",
     "KeywordBidProposal",

@@ -9,6 +9,8 @@
  * without that approval. NEXUS_ADS_BRAIN_HOURS_SCHEDULE moves it, as the other ads crons; NEXUS_ADS_BRAIN_HOURS=0 stops it.
  *
  * With no product enrolled in the brain the tick reads nothing more than that, writes nothing and records no run.
+ * AB-14 — while the product cycle is on (NEXUS_ADS_BRAIN_CYCLE=on) the cycle runs every enrolled product's hours step, so
+ * this tick runs none (brain/cycle-switch.ts). Off (the default): as before.
  * Cluster-safe through lib/cron/clustered.ts (hard rule 7); with business profiles on it runs once per business, inside
  * that business.
  */
@@ -29,6 +31,9 @@ export async function runBrainHoursTick(now: Date = new Date()): Promise<HoursRu
     // Loaded at the tick, not when the scheduler boots (runtime/module-load-order.vitest.test.ts).
     const { runHoursOnce, hoursSummaryLine, anyProductEnrolled, NOTHING_ENROLLED } = await import('../services/advertising/brain/hours-proposal.js')
     if (!(await anyProductEnrolled())) return NOTHING_ENROLLED
+    // AB-14 — while the product cycle is on it runs every enrolled product (its hours step, after the bids): left here.
+    const { cycleOn, CYCLE_RUNS_IT } = await import('../services/advertising/brain/cycle-switch.js')
+    if (cycleOn()) return { ...NOTHING_ENROLLED, why: `every enrolled product: ${CYCLE_RUNS_IT}` }
     let summary: HoursRunSummary | null = null
     await recordCronRun(BRAIN_HOURS_JOB, async () => {
       summary = await runHoursOnce({ now })
