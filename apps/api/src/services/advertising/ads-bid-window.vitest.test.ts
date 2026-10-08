@@ -3,7 +3,7 @@
  * Made-up values only.
  */
 import { describe, expect, it } from 'vitest'
-import { dataDaysBetween, isServingMove, movedThisDataDay, reversalWait, REVERSAL_WAIT_DATA_DAYS, servingBidOn, windowBidCents, type AutoMove, type BidMove } from './ads-bid-window.js'
+import { dataDaysBetween, isSafetyCut, isServingMove, movedThisDataDay, reversalWait, REVERSAL_WAIT_DATA_DAYS, SAFETY_CUT_ACOS_MULTIPLE, servingBidOn, windowBidCents, type AutoMove, type BidMove } from './ads-bid-window.js'
 
 const day = (iso: string) => new Date(`${iso}T00:00:00Z`)
 const at = (iso: string) => new Date(iso)
@@ -94,5 +94,17 @@ describe('the waits', () => {
     // The newest serving move is the cut 12 → 10¢: a further cut is the same direction, a raise reverses it.
     expect(reversalWait('2026-10-01', 10, 8, moves)).toBeNull()
     expect(reversalWait('2026-10-01', 10, 12, moves)).toMatch(/^would reverse its own cut 12 → 10¢ of data day 2026-09-30/)
+  })
+})
+
+describe('a safety cut (review follow-up)', () => {
+  it(`a cut while the bid now runs over ${SAFETY_CUT_ACOS_MULTIPLE} × the target; not at or under it, not a raise, not without an expected ACoS`, () => {
+    // Target 35 %: the line is 52.5 %.
+    expect(isSafetyCut(50, 28, 0.625, 0.35)).toBe(true)
+    expect(isSafetyCut(50, 35, 0.5, 0.35)).toBe(false)
+    expect(isSafetyCut(50, 35, 0.75, 0.5)).toBe(false) // at the line (target 50 %: 75 %): not over it
+    expect(isSafetyCut(50, 60, 0.9, 0.35)).toBe(false) // a raise is never a safety cut
+    expect(isSafetyCut(50, 25, null, 0.35)).toBe(false) // the zero-sales cut: no expected ACoS
+    expect(isSafetyCut(50, 25, 0.9, 0)).toBe(false) // no target: nothing to measure against
   })
 })

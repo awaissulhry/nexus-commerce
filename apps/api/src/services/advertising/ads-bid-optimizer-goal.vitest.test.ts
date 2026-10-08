@@ -121,7 +121,7 @@ describe('the flat path — the same evidence moves the bid to one goal and stop
     await keyword('k-slide', 33, { clicks: 100, spendCents: 3000, salesCents: 6000, ordersCount: 2 })
     const out = await runUntilQuiet('k-slide', { targetAcos: 0.2 })
     expect(out.bids).toEqual([17, 13])
-    expect(out.reasons[1]).toBe('ACOS 50% > target 20% (the target asked for) — lower toward 13¢ (20% of €0.60 sales a click ÷ r̂ 0.91 (paid CPC ÷ bid: its own, 100 clicks, bids weighted by time — no daily clicks))')
+    expect(out.reasons[1]).toBe('exp.ACOS 26% at 17¢ (window ACOS 50%) > target 20% (the target asked for) — lower toward 13¢ (20% of €0.60 sales a click ÷ r̂ 0.91 (paid CPC ÷ bid: its own, 100 clicks, bids weighted by time — no daily clicks))')
     // The same evidence once more: nothing (the old ratio would have cut 13 → 5¢).
     expect(await proposalFor('k-slide', { targetAcos: 0.2 })).toBeUndefined()
     expect(await bidOf('k-slide')).toBe(13)
@@ -133,7 +133,7 @@ describe('the flat path — the same evidence moves the bid to one goal and stop
     const out = await runUntilQuiet('k-raise', { targetAcos: 0.2 })
     expect(out.bids).toEqual([8, 10, 12])
     // It paid 30¢ a click at a 6¢ bid (dynamic bidding, placements): r̂ is held to 1.0, never above the bid.
-    expect(out.reasons[0]).toBe('ACOS 50% > target 20% (the target asked for) — raise toward 12¢ (20% of €0.60 sales a click ÷ r̂ 1.00 (paid CPC ÷ bid: its own, 100 clicks))')
+    expect(out.reasons[0]).toBe('exp.ACOS 10% at 6¢ (window ACOS 50%) < target 20% (the target asked for) — raise toward 12¢ (20% of €0.60 sales a click ÷ r̂ 1.00 (paid CPC ÷ bid: its own, 100 clicks))')
   })
 
   it('ACoS under target: raised toward its goal and no further (before: +25 % every run, up to the highest bid)', async () => {

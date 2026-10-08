@@ -66,7 +66,7 @@ vi.mock('../services/advertising/ads-api-client.js', () => {
 const optimiser = vi.hoisted(() => ({ proposals: [] as Array<{ targetId: string; currentBidCents: number; proposedBidCents: number; deltaCents: number; targetSource?: string }> }))
 vi.mock('../services/advertising/ads-bid-optimizer.service.js', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  previewBidOptimization: async () => ({ targetAcos: 0.3, profitMode: true, bayesian: true, proposals: optimiser.proposals }),
+  previewBidOptimization: async () => ({ targetAcos: 0.3, profitMode: true, bayesian: true, proposals: optimiser.proposals, held: [], waiting: [] }),
 }))
 const conductor = vi.hoisted(() => ({ actions: [] as Array<Record<string, unknown>> }))
 vi.mock('../services/advertising/autopilot/conductor.js', async (importOriginal) => ({
