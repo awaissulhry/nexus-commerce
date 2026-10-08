@@ -22,7 +22,7 @@ const plan = planProductMoney({
   envelope: { productId: 'gale', cents: 40_000, source: 'own', why: 'its own monthly budget (ads strategy: GALE (IT) v2)' },
   split: { budgetCents: 60_000, budgetFrom: 'the Budget Manager\'s 2026-10 plan', fixedCents: 40_000, sharedCents: 14_545, reserveCents: 5_455, totalCents: 54_545, why: 'IT monthly budget €600.00', warnings: [] },
   pace: { dayWeights: null, hourWeights: null, spentCents: 8_988, reportedThroughDay: 7, stream: { gapCents: 0, todayCents: 468 }, runRateCents: 1_284, dayWeightsFrom: 'even', hourCurveFrom: 'even', dataThrough: '2026-10-07' },
-  portfolios: [{ portfolioId: 'pf-gale', name: 'Xavia GALE IT', campaignIds: ['c1', 'c2'], otherCampaigns: 0, lastMonthSpendCents: 38_510, monthSpendCents: 9_456, today: { policy: 'NO_CAP', amountCents: null, inBudget: true } }],
+  portfolios: [{ portfolioId: 'pf-gale', name: 'Xavia GALE IT', campaignIds: ['c1', 'c2'], otherCampaigns: 0, lastMonthSpendCents: 38_500, monthSpendCents: 9_456, today: { policy: 'NO_CAP', amountCents: null, inBudget: true } }],
   campaigns: [camp('c1', { avgDailySpendCents: 310, usage: 0.82 }), camp('c2', { avgDailySpendCents: 240, owner: 'shared' })],
   band: GALE_BAND, limits: { minCents: 100, maxCents: 100_000_000 }, warnings: ['no Marketing Stream hours since yesterday'],
 }, budgetDayMoveBounds)

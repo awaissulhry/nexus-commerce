@@ -1,9 +1,9 @@
 /**
  * ONE BRAIN AB-7 — one product's money plan in the design's order (budget-plan.ts + budget-portfolio.ts): GALE IT on
- * 2026-10-08 at 10:45 Rome with a €400 envelope (the Owner's monthly budget; 30 days €385.10 spend → €12.84 a day):
+ * 2026-10-08 at 10:45 Rome with a €400 envelope (the Owner's monthly budget; 30 days of about €385 spend → €12.84 a day):
  * projected 99.5 % → no raises; the portfolio cap 115 % = €460 on "Xavia GALE IT"; ten €20 budgets stepping down to the
  * pace. The Owner's overrides win (pacing limit, portfolio cap off / amount / lock, N2); a zero-spend product; the plan's
- * fingerprint ignores the clock. Values otherwise made up.
+ * fingerprint ignores the clock. Values made up after the design (public repo).
  */
 import { describe, expect, it } from 'vitest'
 import { budgetDayMoveBounds } from '../ads-write-gate.js'
@@ -15,7 +15,7 @@ import { camp, GALE_BAND, ov } from './__fixtures__/budget-facts.js'
 
 const NOW = new Date('2026-10-08T08:45:00Z')
 const SPEND = [310, 240, 190, 150, 120, 94, 80, 50, 30, 20]
-const PF: PortfolioFacts = { portfolioId: 'pf-gale', name: 'Xavia GALE IT', campaignIds: SPEND.map((_, i) => `c${i + 1}`), otherCampaigns: 0, lastMonthSpendCents: 38_510, monthSpendCents: 9_456, today: { policy: 'NO_CAP', amountCents: null, inBudget: true } }
+const PF: PortfolioFacts = { portfolioId: 'pf-gale', name: 'Xavia GALE IT', campaignIds: SPEND.map((_, i) => `c${i + 1}`), otherCampaigns: 0, lastMonthSpendCents: 38_500, monthSpendCents: 9_456, today: { policy: 'NO_CAP', amountCents: null, inBudget: true } }
 
 function gale(over: Partial<ProductMoneyFacts> = {}, overrides: OverrideRow[] = [], now = NOW): ProductMoneyFacts {
   const s = resolveBrainSettings({ productId: 'gale', market: 'IT', enrolled: true, overrides })
@@ -110,7 +110,7 @@ describe('the Owner\'s own values win', () => {
   it('N2: a portfolio holding another product\'s campaign, or campaigns in no portfolio, move first; with N2 off they get none', () => {
     const mixed: PortfolioFacts[] = [PF, { ...PF, portfolioId: 'pf-mix', name: 'Auto_FBM_Gale_Misano_Moss', campaignIds: ['c-shared-own'], otherCampaigns: 1, lastMonthSpendCents: 12_000 }, { ...PF, portfolioId: null, name: null, campaignIds: ['c-loose'], lastMonthSpendCents: 0 }]
     const p = planPortfolioCaps({ envelopeCents: 40_000, settings: settingsOf(), portfolios: mixed, runRateCents: 1_284 })
-    expect(p.portfolios.map((x) => [x.portfolioId, x.action, x.capCents])).toEqual([['pf-gale', 'set', 35_071], ['pf-mix', 'move-first', 10_929], [null, 'move-first', 0]])
+    expect(p.portfolios.map((x) => [x.portfolioId, x.action, x.capCents])).toEqual([['pf-gale', 'set', 35_069], ['pf-mix', 'move-first', 10_931], [null, 'move-first', 0]])
     expect(p.totalCents).toBe(46_000)
     const off = planPortfolioCaps({ envelopeCents: 40_000, settings: settingsOf([ov('VALUE', 'ownPortfolio', false)]), portfolios: mixed, runRateCents: 1_284 })
     expect(off.portfolios.map((x) => x.action)).toEqual(['set', 'none', 'none'])

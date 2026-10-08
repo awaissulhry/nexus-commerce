@@ -2,7 +2,7 @@
  * ONE BRAIN AB-7 — the month's envelope per product in one market (budget-envelope.ts): the Owner's own product budget
  * wins, a playbook budget × the days next, then a share of the market budget by spend, the reserve for campaigns no
  * product's brain owns, Σ never above the market budget, a zero-spend product without a share, a category cap bounding.
- * GALE IT figures from the design (30 days €385.10 spend); values otherwise made up.
+ * GALE IT figures after the design, rounded (30 days of about €385 spend); values made up (public repo).
  */
 import { describe, expect, it } from 'vitest'
 import { apportion, marketBudget, splitEnvelopes, type EnvelopeInput, type EnvelopeProduct } from './budget-envelope.js'
@@ -16,8 +16,8 @@ const sum = (xs: number[]) => xs.reduce((n, x) => n + x, 0)
 describe('apportion — parts that add up to the whole', () => {
   it('splits by weight with the largest remainder, to the cent', () => {
     expect(apportion(100, [1, 1, 1])).toEqual([34, 33, 33])
-    expect(apportion(60_000, [38_510, 12_000, 4_500])).toEqual([42_003, 13_089, 4_908])
-    expect(sum(apportion(60_000, [38_510, 12_000, 4_500]))).toBe(60_000)
+    expect(apportion(60_000, [38_500, 12_000, 4_500])).toEqual([42_000, 13_091, 4_909])
+    expect(sum(apportion(60_000, [38_499, 12_003, 4_501]))).toBe(60_000)
   })
   it('a zero or negative weight gets nothing; no weight at all, nothing for anyone', () => {
     expect(apportion(1000, [0, 3, -2, 1])).toEqual([0, 750, 0, 250])
@@ -39,7 +39,7 @@ describe('AB-7 — each product\'s envelope', () => {
     const split = splitEnvelopes(input({
       budget: { strategy: null, plan: { cents: 60_000, from: 'the Budget Manager\'s 2026-10 plan' } },
       products: [
-        product('gale', { own: { cents: 40_000, from: 'ads strategy: GALE (IT) v2' }, trailingSpendCents: 38_510 }),
+        product('gale', { own: { cents: 40_000, from: 'ads strategy: GALE (IT) v2' }, trailingSpendCents: 38_500 }),
         product('misano', { trailingSpendCents: 12_000 }),
         product('moss', { trailingSpendCents: 3_000 }),
       ],
@@ -55,7 +55,7 @@ describe('AB-7 — each product\'s envelope', () => {
   })
 
   it('a playbook daily budget × the days of the month, when the product has no budget of its own', () => {
-    const split = splitEnvelopes(input({ products: [product('gale', { playbookDaily: { cents: 1_290, from: 'playbook: GALE (IT) v3' }, trailingSpendCents: 38_510 })] }))
+    const split = splitEnvelopes(input({ products: [product('gale', { playbookDaily: { cents: 1_290, from: 'playbook: GALE (IT) v3' }, trailingSpendCents: 38_500 })] }))
     expect(split.envelopes.get('gale')).toMatchObject({ cents: 39_990, source: 'playbook', why: 'its playbook\'s daily budget €12.90 × 31 days (playbook: GALE (IT) v3)' })
     // Its own budget beats its playbook.
     const own = splitEnvelopes(input({ products: [product('gale', { own: { cents: 40_000, from: 'ads strategy: GALE (IT) v2' }, playbookDaily: { cents: 1_290, from: 'p' } })] }))
@@ -63,7 +63,7 @@ describe('AB-7 — each product\'s envelope', () => {
   })
 
   it('no market budget: a product with nothing of its own has no envelope (no pace, no brake, no cap), said', () => {
-    const split = splitEnvelopes(input({ products: [product('gale', { trailingSpendCents: 38_510 }), product('misano', { own: { cents: 20_000, from: 's' } })] }))
+    const split = splitEnvelopes(input({ products: [product('gale', { trailingSpendCents: 38_500 }), product('misano', { own: { cents: 20_000, from: 's' } })] }))
     expect(split.envelopes.get('gale')).toMatchObject({ cents: null, source: 'none' })
     expect(split.envelopes.get('gale')!.why).toMatch(/^no envelope: the Owner set no monthly budget for IT/)
     expect(split).toMatchObject({ budgetCents: null, totalCents: 20_000 })

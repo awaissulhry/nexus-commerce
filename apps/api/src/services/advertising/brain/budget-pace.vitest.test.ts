@@ -2,7 +2,7 @@
  * ONE BRAIN AB-7 — the pace of an envelope and its brakes (budget-pace.ts): the money clock (budget day 00:00–24:00 UTC,
  * the ladder on the market's clock — Europe/Rome for IT, summer and winter, across the month's end), the expected spend by
  * day and hour, the month-end projection (stream and run rate), the brakes at 95 / 100 / 105 %, the allowance. GALE IT
- * figures from the design (30 days €385.10 spend → €12.84 a day); values otherwise made up.
+ * figures after the design, rounded (30 days of about €385 spend → €12.84 a day); values made up (public repo).
  */
 import { describe, expect, it } from 'vitest'
 import { atLeast, averageDaily, brakeOf, dayShareGone, dayWeights, hourCurve, MONEY_BRAKES, moneyClock, paceOf, type PaceFacts } from './budget-pace.js'
