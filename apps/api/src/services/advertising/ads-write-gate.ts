@@ -4,7 +4,9 @@
  * Live writes require ALL of:
  *   1. NEXUS_AMAZON_ADS_MODE=live (deploy-wide env flag)
  *   2. AmazonAdsConnection.mode === 'production' AND writesEnabledAt != null
- *   3. payload value ≤ NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS (default 50000 = €500)
+ *   3. payload value ≤ NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS (default 50000 = €500) — except a portfolio's own write
+ *      (its monthly cap), judged against its own limit: NEXUS_AMAZON_ADS_MAX_PORTFOLIO_CAP_CENTS (default 200000 = €2,000)
+ *      or the Owner's per product (Owner decision 2A, brain/portfolio-cap-limit.ts)
  *   4. a checked Amazon limits row for the market, and a bid/budget inside it (6b, @nexus/shared/ads-market-limits)
  *
  * Failure flips the mutation to dry-run mode (worker logs the deny +
@@ -24,6 +26,7 @@ import { adsMode } from './ads-api-client.js'
 import { dimensionsForWrite, leverDimensionsForWrite, pinDenial, type AuthorityDimension } from './ads-authority-pins.js'
 import { BRAIN_ACTOR, brainLiveCeiling, brainOwnedCampaignIds } from './bid-brain/live.js'
 import { campaignLeverOwners, portfolioCapHold, type LeverHold } from './brain/lever-owners.js'
+import { portfolioCapLimitOf, raiseLimitWords, serverPortfolioCapLimitCents } from './brain/portfolio-cap-limit.js'
 import { brainDayMoveVerdict, brainDayOpeningCents, isMoneyActor, ladderBaseCents, LADDER_GATE_MAX_PCT, MONEY_BUDGETS_ACTOR, moneyLogStepOf } from './brain/budget-ladder.js'
 import type { BrainLever } from './brain/levers.js'
 import { protectedNegativeRefusal } from './ads-negation-policy.js'
@@ -39,6 +42,8 @@ export type GateDeniedAt =
   | 'connection'
   | 'connection_writes'
   | 'value_cap'
+  // OWNER DECISION 2A — a portfolio's own write (its monthly cap) above the portfolio cap limit (portfolioCapLimitOf).
+  | 'portfolio_cap_limit'
   | 'campaign_allowlist'
   | 'daily_cap'
   // ADX A1 — bounds live on the entity (Campaign.minBidCents/maxBidCents) rather
@@ -89,13 +94,14 @@ export type GateDeniedAt =
  * W1-7 — `product_protected`: a negative on the ASIN of a product his ads strategy protects. His own setting, so the same
  * rule: his add is warned, an engine's is refused. (A protected TERM still refuses everyone: unchanged.)
  */
-export type OwnLimitKind = 'entity_bounds' | 'spend_ceiling' | 'budget_day_move' | 'value_cap' | 'cpc_ceiling' | 'product_protected'
+export type OwnLimitKind = 'entity_bounds' | 'spend_ceiling' | 'budget_day_move' | 'value_cap' | 'portfolio_cap_limit' | 'cpc_ceiling' | 'product_protected'
 export interface OwnLimit { limit: OwnLimitKind; reason: string }
 export const OWN_LIMIT_LABEL: Record<OwnLimitKind, string> = {
   entity_bounds: 'your bid or budget limit',
   spend_ceiling: 'your spend ceiling',
   budget_day_move: 'the daily budget-move limit',
   value_cap: 'the per-change value cap',
+  portfolio_cap_limit: 'the portfolio cap limit',
   cpc_ceiling: 'your CPC ceiling',
   product_protected: 'a product your ads strategy protects',
 }
@@ -256,6 +262,22 @@ export function maxWriteValueCents(): number {
   const v = Number(process.env.NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS)
   if (Number.isFinite(v) && v > 0) return v
   return 50_000 // €500 default
+}
+
+/**
+ * OWNER DECISION 2A — the server's limit of an Amazon portfolio's monthly cap (€2,000 unless
+ * NEXUS_AMAZON_ADS_MAX_PORTFOLIO_CAP_CENTS says otherwise); the Owner's own per product replaces it for that product's
+ * portfolios (brain/portfolio-cap-limit.ts portfolioCapLimitOf, which the gate asks).
+ */
+export const maxPortfolioCapCents = serverPortfolioCapLimitCents
+
+/**
+ * OWNER DECISION 2A — a portfolio's own write, whose value is the portfolio's cap: no campaign, and the portfolio named (a
+ * queued portfolio write, the Portfolios page's push, the brain's cap) or the portfolio lever named (a cap set with a new
+ * portfolio). A campaign moved into a portfolio names its campaign: it is not one. Pure.
+ */
+export function isPortfolioOwnWrite(ctx: Pick<GateContext, 'campaignId' | 'portfolioId' | 'dimension'>): boolean {
+  return ctx.campaignId === undefined && (!!ctx.portfolioId || ctx.dimension === 'portfolio')
 }
 
 /** UTC calendar day as 'YYYY-MM-DD' — the bucket key for the daily-write cap. */
@@ -872,14 +894,28 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
   // Value cap: blast-radius limit per write. Composite actions are
   // chunked into individual OutboundSyncQueue rows so each pass
   // through the gate sees only its slice.
-  const cap = maxWriteValueCents()
-  if (ctx.payloadValueCents > cap) {
-    const overCap: Extract<GateDecision, { allowed: false }> = {
-      allowed: false,
-      reason: `payload value ${ctx.payloadValueCents}¢ exceeds cap ${cap}¢ (NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS)`,
-      deniedAt: 'value_cap',
+  // OWNER DECISION 2A — a portfolio's own write is its monthly cap: judged against the portfolio cap limit (the server's,
+  // or the Owner's for the one product the portfolio holds) instead of the per-write cap, which stays for every other write.
+  if (isPortfolioOwnWrite(ctx)) {
+    const limit = ctx.payloadValueCents > 0 ? await portfolioCapLimitOf(ctx.portfolioId ?? null) : null
+    if (limit && ctx.payloadValueCents > limit.cents) {
+      const overLimit: Extract<GateDecision, { allowed: false }> = {
+        allowed: false,
+        reason: `portfolio cap ${ctx.payloadValueCents}¢ exceeds ${limit.words}, ${limit.cents}¢ a month — nothing was changed; ${raiseLimitWords(limit)}`,
+        deniedAt: 'portfolio_cap_limit',
+      }
+      if (ownOrRefuse(overLimit)) return overLimit
     }
-    if (ownOrRefuse(overCap)) return overCap
+  } else {
+    const cap = maxWriteValueCents()
+    if (ctx.payloadValueCents > cap) {
+      const overCap: Extract<GateDecision, { allowed: false }> = {
+        allowed: false,
+        reason: `payload value ${ctx.payloadValueCents}¢ exceeds cap ${cap}¢ (NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS)`,
+        deniedAt: 'value_cap',
+      }
+      if (ownOrRefuse(overCap)) return overCap
+    }
   }
 
   // 3A — a person's own write past his own limits: refused until he confirms; once he has, it goes, and says so.

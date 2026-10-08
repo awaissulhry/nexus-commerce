@@ -255,7 +255,7 @@ const AUTO_RAISES: Partial<Record<BrainLever, string>> = {
  * (false → true), a value change of an enum, or never. Every setting is rated (a test holds it); one a later PR adds and
  * forgets is said as not rated, never as safe.
  */
-type Rating = { when: 'up' | 'down' | 'off' | 'never' | 'cleared-or-earlier' | { from: string; to: string }; words: string }
+type Rating = { when: 'up' | 'up-or-cleared' | 'down' | 'off' | 'never' | 'cleared-or-earlier' | { from: string; to: string }; words: string }
 export const SPEND_RATINGS: Partial<Record<BrainSetting, Rating>> = {
   negativesPerDay: { when: 'down', words: 'fewer new negatives a day: wasted clicks may run longer' },
   negativesPerEntityWarn: { when: 'never', words: 'a warning level only' },
@@ -277,6 +277,8 @@ export const SPEND_RATINGS: Partial<Record<BrainSetting, Rating>> = {
   portfolioCapOn: { when: 'off', words: 'the Amazon portfolio cap — the only hard limit Amazon enforces — is no longer set by the brain' },
   portfolioCapPct: { when: 'up', words: 'a higher Amazon portfolio cap (the hard backstop)' },
   portfolioCapCents: { when: 'up', words: 'a higher Amazon portfolio cap (the hard backstop)' },
+  // Empty means the server's limit, which may be higher than the value it replaces: a reset is said as a possible raise too.
+  portfolioCapLimitCents: { when: 'up-or-cleared', words: 'a higher limit for this product\'s Amazon portfolio caps: a larger cap may be asked for, written by the brain or set by a person (empty = the server\'s limit, which may be higher)' },
   ownPortfolio: { when: 'never', words: 'where the brain proposes to put the product\'s campaigns' },
   strategySwitchMode: { when: { from: 'ALWAYS_PROPOSE', to: 'PROPOSE_THEN_AUTO' }, words: 'bidding-strategy switches may run alone after 30 days (up and down lets Amazon raise a bid up to +100 %)' },
   pauseMinDays: { when: 'never', words: 'a shorter stop stays on low bids instead of a pause' },
@@ -293,6 +295,7 @@ export function settingRaise(key: string, from: SettingValue, to: SettingValue):
   const num = (v: SettingValue) => (typeof v === 'number' ? v : null)
   let raises = false
   if (r.when === 'up') raises = num(from) == null || num(to) == null ? from !== to && to !== null : num(to)! > num(from)!
+  else if (r.when === 'up-or-cleared') raises = from !== to && (num(from) == null || num(to) == null || num(to)! > num(from)!)
   else if (r.when === 'down') raises = num(from) != null && num(to) != null && num(to)! < num(from)!
   else if (r.when === 'off') raises = from === true && to === false
   else if (r.when === 'cleared-or-earlier') raises = typeof from === 'string' && (to === null || (typeof to === 'string' && to < from))

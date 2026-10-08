@@ -11,8 +11,9 @@
  *             the mutation layer with the gate asked first; a refused base takes no rung; SUGGEST writes nothing new and
  *             only gives back an earlier day's ladder; the brain's caps defer the rest; PROPOSE asks once per product a
  *             day (a rerun asks nothing); a cap through the portfolio path as the brain; OBSERVE touches nothing.
- *   follow-up the per-write value cap is checked before anything is asked or written (a cap above it: said once a month,
- *             never asked — nobody in Nexus could set it); a key the gate or a person refused is not asked again that day
+ *   follow-up the per-write value cap is checked before a budget is asked or written; a cap meets its own monthly limit
+ *             instead (Owner decision 2A: the Owner's own for the product, else NEXUS_AMAZON_ADS_MAX_PORTFOLIO_CAP_CENTS, default
+ *             €2,000) — a cap above it: said once a month, never asked, nobody in Nexus could set it; a key the gate or a person refused is not asked again that day
  *             (the answer says when it asks again); a cap once per amount a month and never while one waits; a failure
  *             while asking gives the key back. The claims (AdsBrainAsk) are an in-memory stand-in here; the real unique
  *             key and the race are budget-live-postgres's.
@@ -83,6 +84,7 @@ const { moneyClock } = await import('./budget-pace.js')
 const { planProductMoney } = await import('./budget-plan.js')
 const { moneyModeOf, moneyStepsOf, runMoneyActions, moneyActionsWords } = await import('./budget-live.js')
 const { MONEY_BUDGETS_ACTOR, MONEY_PORTFOLIO_ACTOR } = await import('./budget-ladder.js')
+const { serverPortfolioCapLimit } = await import('./portfolio-cap-limit.js')
 const { BAND, camp, ov, PRODUCT } = await import('./__fixtures__/budget-facts.js')
 type Facts = import('./budget-plan.js').ProductMoneyFacts
 type OverrideRow = import('./settings.js').OverrideRow
@@ -245,8 +247,8 @@ describe('AB-8 — the writes', () => {
   })
 
   it('SUGGEST writes nothing new and gives back an earlier day\'s ladder alone; the brain\'s caps defer the rest to the next run', async () => {
-    // This product's cap (115 % of a large envelope) is above the default per-write value cap: a value cap above it here.
-    vi.stubEnv('NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS', '500000')
+    // This product's cap (115 % of a large envelope) is above the €500 per-write value cap: it meets its own monthly limit
+    // (€2,000 by default, Owner decision 2A), so it is planned as usual.
     const f = ladderFacts(AUTO, { todayCents: 3_000, openingCents: 1_500, ladderNow: { baseCents: 1_500, fromDay: 'before' }, avgDailySpendCents: 500, usage: null })
     const out = await runMoneyActions(planOf(f), f, { runId: 'bm-4', live: true, guard: async () => auto('suggest') })
     expect(h.budgetWrites).toEqual([expect.objectContaining({ patch: { dailyBudget: 15 }, evidence: expect.objectContaining({ brain: expect.objectContaining({ layer: 'base' }) }) })])
@@ -287,17 +289,17 @@ describe('AB-8 — the writes', () => {
   })
 })
 
-describe('AB-8 follow-up — the per-write value cap, checked before anything is asked or written', () => {
-  it('a cap above it: never written, never asked (nobody in Nexus could set it) — said once a month, held each run', async () => {
-    vi.stubEnv('NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS', '30000')
+describe('Owner decision 2A — a portfolio cap meets its own monthly limit, not the per-write value cap', () => {
+  it('a cap above the server\'s limit: never written, never asked (nobody in Nexus could set it) — said once a month, held each run', async () => {
+    vi.stubEnv('NEXUS_AMAZON_ADS_MAX_PORTFOLIO_CAP_CENTS', '30000')
     for (const levels of [AUTO, PROPOSE]) {
       h.claims.clear()
       const f = facts(levels)
-      expect(moneyStepsOf(planOf(f), f, { live: true, valueCapCents: 30_000 }).portfolios).toEqual([expect.objectContaining({ do: 'over-value', toCents: 36_800 })])
+      expect(moneyStepsOf(planOf(f), f, { live: true, capLimit: serverPortfolioCapLimit() }).portfolios).toEqual([expect.objectContaining({ do: 'over-value', toCents: 36_800 })])
       const out = await runMoneyActions(planOf(f), f, { runId: 'bm-v', live: true, guard: async () => auto() })
       expect(h.capWrites).toEqual([])
       expect(h.asks.filter((a) => a.tool === 'set-portfolio')).toEqual([])
-      expect(out.portfolios).toEqual([expect.objectContaining({ sent: 'held', toCents: 36_800, why: expect.stringMatching(/above the per-write value cap .* the gate refuses it for every writer — the brain, an approved set-portfolio and the Portfolios page alike/) })])
+      expect(out.portfolios).toEqual([expect.objectContaining({ sent: 'held', toCents: 36_800, why: expect.stringMatching(/above the server's portfolio cap limit \(NEXUS_AMAZON_ADS_MAX_PORTFOLIO_CAP_CENTS, default 200000¢ a month\), €300\.00 a month: the gate refuses it for every writer — the brain, an approved set-portfolio and the Portfolios page alike .*; raise NEXUS_AMAZON_ADS_MAX_PORTFOLIO_CAP_CENTS/) })])
       expect(out.proposals.find((p) => p.kind === 'portfolioCap')).toMatchObject({ key: `cap-over:${PRODUCT}:IT:pf-x:2026-10`, status: 'blocked', approvalId: null, fresh: true })
       // Rerun: held again, nothing new said (once a month).
       const again = await runMoneyActions(planOf(f), f, { runId: 'bm-v2', live: true, guard: async () => auto() })
@@ -308,6 +310,33 @@ describe('AB-8 follow-up — the per-write value cap, checked before anything is
     expect(h.capWrites).toEqual([])
   })
 
+  it('a cap above the per-write value cap but inside the limit: written at AUTO, asked at PROPOSE — the per-write cap never judges a cap', async () => {
+    vi.stubEnv('NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS', '30000')
+    const f = facts(AUTO)
+    const out = await runMoneyActions(planOf(f), f, { runId: 'bm-l1', live: true, guard: async () => auto() })
+    expect(h.capWrites).toEqual([expect.objectContaining({ portfolioId: 'pf-x', budget: { amount: 368, currencyCode: 'EUR', policy: 'monthlyRecurring' }, actor: MONEY_PORTFOLIO_ACTOR })])
+    expect(out.portfolios[0]).toMatchObject({ sent: 'written', toCents: 36_800 })
+    const p = facts(PROPOSE)
+    await runMoneyActions(planOf(p), p, { runId: 'bm-l2', live: true, guard: async () => auto() })
+    expect(h.asks.filter((a) => a.tool === 'set-portfolio').map((a) => a.args.cap)).toEqual([{ amountCents: 36_800, policy: 'monthly' }])
+  })
+
+  it('the Owner\'s own limit for the product wins over the server\'s, lower or higher, and is named', async () => {
+    // His lower limit: held, in his words.
+    const low = facts([...AUTO, ov('VALUE', 'portfolioCapLimitCents', 30_000)])
+    const held = await runMoneyActions(planOf(low), low, { runId: 'bm-o1', live: true, guard: async () => auto() })
+    expect(h.capWrites).toEqual([])
+    expect(held.portfolios[0]).toMatchObject({ sent: 'held', why: expect.stringMatching(new RegExp(`above the Owner's portfolio cap limit for product ${PRODUCT} in IT \\(set-ads-brain portfolioCapLimitCents\\), €300\\.00 a month: .*raise the product's portfolioCapLimitCents`)) })
+    // His higher limit over a lower server one: written.
+    vi.stubEnv('NEXUS_AMAZON_ADS_MAX_PORTFOLIO_CAP_CENTS', '30000')
+    h.claims.clear()
+    const high = facts([...AUTO, ov('VALUE', 'portfolioCapLimitCents', 50_000)])
+    const written = await runMoneyActions(planOf(high), high, { runId: 'bm-o2', live: true, guard: async () => auto() })
+    expect(written.portfolios[0]).toMatchObject({ sent: 'written', toCents: 36_800 })
+  })
+})
+
+describe('the per-write value cap still binds every campaign budget, checked before anything is asked or written', () => {
   it('a budget above it at AUTO: held before the write (the gate would refuse the brain); below it: written', async () => {
     vi.stubEnv('NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS', '1000')
     const f = facts(AUTO)

@@ -59,7 +59,7 @@ export const LEVER_LEVELS_NOW: Record<BrainLever, { levels: readonly BrainLevel[
   state: { levels: BRAIN_LEVELS, others: 'each pause, resume and archive proposal it would make is logged in shadow (ads-brain view state); PROPOSE asks a person, AUTO pauses and resumes alone inside the caps — an archive is only ever a proposal (AB-12)' },
   // AB-8 — the money writer: OBSERVE plans and logs (AB-7), PROPOSE asks a person for each change, AUTO writes inside the pace.
   budgets: { levels: BRAIN_LEVELS, others: 'campaign budgets: OBSERVE plans and logs them (ads-brain view money), PROPOSE asks a person for the day\'s moves, AUTO writes them and the intraday ladder (AB-8, under a live NEXUS_BID_BRAIN_MODE)' },
-  portfolioCap: { levels: BRAIN_LEVELS, others: 'the Amazon portfolio cap: OBSERVE plans it, PROPOSE asks a person, AUTO writes it — monthly, never below this month\'s spend, never a cap removed (AB-8, under a live NEXUS_BID_BRAIN_MODE)' },
+  portfolioCap: { levels: BRAIN_LEVELS, others: 'the Amazon portfolio cap: OBSERVE plans it, PROPOSE asks a person, AUTO writes it — monthly, never below this month\'s spend, never a cap removed, never above the portfolio cap limit (portfolioCapLimitCents, else NEXUS_AMAZON_ADS_MAX_PORTFOLIO_CAP_CENTS) (AB-8, under a live NEXUS_BID_BRAIN_MODE)' },
   // AB-10 — the negatives module: OBSERVE logs the day's negatives, PROPOSE asks a person once a day, AUTO writes them as the
   // brain (inside the caps, after the shadow days of negativesShadowDays, under the live server switch).
   negatives: { levels: BRAIN_LEVELS, others: 'the negatives module (AB-10, ads-brain view negatives) takes every level' },
@@ -119,6 +119,8 @@ export const BRAIN_SETTINGS = {
   portfolioCapOn: { type: 'boolean', default: true, scopes: PRODUCT, what: 'N1: the Amazon portfolio cap is set as the hard backstop' },
   portfolioCapPct: { type: 'int', default: 115, min: 100, max: 300, scopes: PRODUCT, what: 'N1: the portfolio cap, % of the monthly budget (envelope)' },
   portfolioCapCents: { type: 'intOrNull', default: null, min: 100, max: 100_000_000, scopes: PRODUCT, what: 'N1: the portfolio cap as an amount in cents (it replaces the %); empty = portfolioCapPct × the monthly budget' },
+  // Owner decision 2A (10-08 ~19:20 UTC) — a portfolio cap has a monthly limit of its own; the €500 per-write cap stays for every other write.
+  portfolioCapLimitCents: { type: 'intOrNull', default: null, min: 100, max: 100_000_000, scopes: PRODUCT, what: 'the limit of this product\'s Amazon portfolio caps a month, in cents, for every writer (the brain, set-portfolio, the Portfolios page): it replaces the server\'s NEXUS_AMAZON_ADS_MAX_PORTFOLIO_CAP_CENTS (default 200,000 = €2,000) for a portfolio that holds only this product\'s campaigns; empty = the server\'s' },
   ownPortfolio: { type: 'boolean', default: true, scopes: PRODUCT, what: 'N2: the brain proposes one portfolio per product and market' },
   strategySwitchMode: { type: 'enum', default: 'PROPOSE_THEN_AUTO', values: ['PROPOSE_THEN_AUTO', 'ALWAYS_PROPOSE'], scopes: BOTH, what: 'N4: a bidding-strategy switch waits for approval for 30 days, then runs alone (PROPOSE_THEN_AUTO), or always waits (ALWAYS_PROPOSE)' },
   // AB-12 — the state lever (§2.4, D4 = A)

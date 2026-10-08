@@ -25,6 +25,8 @@ vi.mock('../../db.js', () => ({
     adProductAd: { findMany: vi.fn(async () => []) },
     adWriteRefusal: { create: vi.fn(async () => ({})) },
     adsStrategy: { findFirst: vi.fn(async () => null), findMany: vi.fn(async () => []) },
+    // Owner decision 2A — a portfolio's cap meets its own limit: no product holds an own limit here (the server's applies).
+    adsBrainOverride: { findFirst: vi.fn(async () => null) },
   },
 }))
 vi.mock('./ads-api-client.js', () => ({ adsMode: () => 'live' }))
