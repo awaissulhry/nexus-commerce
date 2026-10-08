@@ -6919,6 +6919,18 @@
       "fields": []
     },
     {
+      "name": "AdsBrainStrategyDecision",
+      "fields": []
+    },
+    {
+      "name": "AdsBrainStrategyTest",
+      "fields": []
+    },
+    {
+      "name": "AdsBrainLeverClock",
+      "fields": []
+    },
+    {
       "name": "AdWriteRefusal",
       "fields": []
     },

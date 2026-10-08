@@ -16,6 +16,7 @@
  *             shadow is not built yet records the intent: it starts watching when its shadow lands; nothing is written.
  *             AB-12: the state lever takes every level (brain/state*.ts); it still starts OBSERVE like every lever.
  *             AB-16: the structure lever OFF, OBSERVE and PROPOSE (never AUTO: every build, go-live and move asks a person).
+ *             AB-17: the biddingStrategy lever takes every level (brain/bidding-mode*.ts), starting OBSERVE.
  *   settings  the caps of §5 and the N1–N4 settings of §9 (Owner yes 10-08), each with the design's default and safety
  *             bounds (Amazon's own where it has one); the Owner may set any value inside them, per product, and per
  *             campaign where the setting means something for one campaign.
@@ -69,7 +70,8 @@ export const LEVER_LEVELS_NOW: Record<BrainLever, { levels: readonly BrainLevel[
   // AB-16 — structure: OBSERVE logs each proposal in shadow, PROPOSE asks a person for each build, go-live and move. Never
   // AUTO: the brain never creates, splits or moves a campaign without a person's approval (D1 = B, D2 = A).
   structure: { levels: ['OFF', 'OBSERVE', 'PROPOSE'], others: 'AB-16: single-keyword campaigns for key terms, the split of a shared campaign into one per product and the move of the product\'s campaigns into its one portfolio — OBSERVE logs each proposal in shadow (ads-brain view structure), PROPOSE asks a person for each build, its go-live (a normal approval inside the caps, D1 = B) and each move; never AUTO: the brain never creates, splits or moves a campaign without a person\'s approval' },
-  biddingStrategy: { levels: OFF_OBSERVE, others: 'the bidding-strategy lever waits for AB-17' },
+  // AB-17 — every level: OBSERVE logs, PROPOSE asks a person for each switch, AUTO switches alone after the N4 approval days.
+  biddingStrategy: { levels: BRAIN_LEVELS, others: 'AB-17: each campaign\'s Amazon bidding strategy (fixed where the brain\'s hourly plan steers the placements, down only by default, up and down only where top of search converts at least 1.3× the average over 30 orders and the CPC ceiling holds Amazon\'s raise), decided weekly, at most one switch per 14 days, each switch tested (switchback) and kept or switched back; OBSERVE logs it, PROPOSE asks a person, AUTO asks for the first strategyApprovalDays (30, N4) and then switches alone — never during a stop (ads-brain view bidding)' },
   offAmazon: { levels: OFF_OBSERVE, others: 'the off-Amazon lane waits for AB-18' },
 }
 
@@ -136,6 +138,8 @@ export const BRAIN_SETTINGS = {
   portfolioCapLimitCents: { type: 'intOrNull', default: null, min: 100, max: 100_000_000, scopes: PRODUCT, what: 'the limit of this product\'s Amazon portfolio caps a month, in cents, for every writer (the brain, set-portfolio, the Portfolios page): it replaces the server\'s NEXUS_AMAZON_ADS_MAX_PORTFOLIO_CAP_CENTS (default 200,000 = €2,000) for a portfolio that holds only this product\'s campaigns; empty = the server\'s' },
   ownPortfolio: { type: 'boolean', default: true, scopes: PRODUCT, what: 'N2: the brain proposes one portfolio per product and market' },
   strategySwitchMode: { type: 'enum', default: 'PROPOSE_THEN_AUTO', values: ['PROPOSE_THEN_AUTO', 'ALWAYS_PROPOSE'], scopes: BOTH, what: 'N4: a bidding-strategy switch waits for approval for 30 days, then runs alone (PROPOSE_THEN_AUTO), or always waits (ALWAYS_PROPOSE)' },
+  // AB-17 — N4's 30 days as the Owner's own number (0: AUTO switches alone at once).
+  strategyApprovalDays: { type: 'int', default: 30, min: 0, max: 365, scopes: PRODUCT, what: 'N4: the days after the bidding-strategy lever became the brain\'s on the product during which every switch at AUTO waits for approval (0: at once alone)' },
   // AB-12 — the state lever (§2.4, D4 = A)
   pauseMinDays: { type: 'int', default: 3, min: 3, max: 60, scopes: BOTH, what: 'a stop expected to last at least this many days is a pause; a shorter one stays on low bids, never a pause (§2.4, D4)' },
   archiveDeadWeeks: { type: 'int', default: 4, min: 2, max: 52, scopes: BOTH, what: 'weeks without an impression before the brain proposes to archive a campaign — only ever a proposal (§2.4)' },
