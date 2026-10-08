@@ -574,6 +574,49 @@ describe('W4-2 — enable-ads lifts a pause no Claude request made only when ask
  * The fixed rule (agent-results/5 §12): a pause passes a halt — it lets go — and an enable does not. A request a person
  * approved passes as his own click either way (4A); this is the request the business's rule approved.
  */
+describe('batch 2 fix — the ads brain\'s own pause: its own resume passes with a normal approval; anyone else lifting it follows code rule A', () => {
+  /** The brain's state writer paused it alone (its state lever at AUTO). */
+  const brainPause = (campaignId: string) => inside(async () => {
+    await database.client.campaign.update({ where: { id: campaignId }, data: { status: 'PAUSED' } })
+    await database.client.advertisingActionLog.create({ data: { userId: 'automation:ads-brain-state', actionType: 'AD_CAMPAIGN_UPDATE', entityType: 'CAMPAIGN', entityId: campaignId, payloadBefore: { status: 'ENABLED' }, payloadAfter: { status: 'PAUSED' }, amazonResponseStatus: 'SUCCESS' } })
+  })
+  beforeAll(async () => {
+    await inside(async () => { for (const id of ['c-b1', 'c-b2']) await campaign(id) })
+    await brainPause('c-b1')
+    await brainPause('c-b2')
+  }, 60_000)
+
+  it('the brain\'s resume at PROPOSE (Nexus\'s own request, as state-run asks it): no code — a person\'s normal approval switches it back on', async () => {
+    const { systemPrincipal } = await import('../call-tool.js')
+    const asked = await inside(async () => {
+      const run = await database.client.agentRun.create({ data: { agentKey: 'ads-brain-state', trigger: 'schedule', status: 'running' } })
+      return runOrQueueTool('enable-ads', { campaignIds: ['c-b1'], why: 'The ads brain: the stop has ended', includePeoplesPauses: true }, systemPrincipal('Nexus ads brain'), run.id, { forceAsk: true })
+    })
+    expect(asked, JSON.stringify(asked)).toMatchObject({ ok: true, mode: 'queued' })
+    const stored = (await approvalRow(asked.approvalId!)).preview as Row
+    expect(stored.stepUp).toBeUndefined()
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { enabled: 1, failed: 0 } })
+    expect(await statusOf('Campaign', 'c-b1')).toBe('ENABLED')
+    const [queued] = await sql<{ payload: Row }>(`SELECT payload FROM "OutboundSyncQueue" WHERE payload->>'entityId' = $1 ORDER BY "createdAt" DESC LIMIT 1`, ['c-b1'])
+    expect(queued.payload).toMatchObject({ actor: 'user:u-approver', fieldChanges: [{ field: 'status', oldValue: 'PAUSED', newValue: 'ENABLED' }] })
+  })
+
+  it('Claude (anyone but Nexus itself) lifting the brain\'s pause: refused unless asked with includePeoplesPauses, then the approver\'s code (a big door)', async () => {
+    const plain = await preview('enable-ads', { campaignIds: ['c-b2'] })
+    expect(plain.error).toMatch(/^Not queued: enable-ads switches back on only what a Claude request paused \(pause-ads\), unless asked with includePeoplesPauses: true\. campaign "Test c-b2": the ads brain paused it alone \(its state lever, .*\): lifting the brain's pause is someone else's pause lifted\./)
+    const asked = await ask('enable-ads', { campaignIds: ['c-b2'], includePeoplesPauses: true })
+    expect(asked.approvalId).toBeTruthy()
+    expect(((await approvalRow(asked.approvalId!)).preview as Row).stepUp).toMatchObject({ raises: ['Spend'] })
+    const refused = await approve(asked.approvalId!) as Row
+    expect(refused).toMatchObject({ ok: false, status: 'pending' })
+    expect(refused.error).toMatch(/authenticator code/)
+    expect(await statusOf('Campaign', 'c-b2')).toBe('PAUSED')
+    await withCode(asked.approvalId!)
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { enabled: 1 } })
+    expect(await statusOf('Campaign', 'c-b2')).toBe('ENABLED')
+  })
+})
+
 describe('a halt: a pause by rule lets go, an enable by rule waits', () => {
   afterAll(async () => { await halt(false) })
 
