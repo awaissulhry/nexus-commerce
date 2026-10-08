@@ -9,7 +9,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PlannedNegative } from './isolation.js'
 
-const h = vi.hoisted(() => ({ load: vi.fn(), plan: vi.fn(), write: vi.fn(), campaignLeverOwners: vi.fn(), anyBrainEnrolled: vi.fn() }))
+const h = vi.hoisted(() => ({
+  load: vi.fn(), plan: vi.fn(), write: vi.fn(), campaignLeverOwners: vi.fn(), anyBrainEnrolled: vi.fn(),
+  mode: 'live' as 'live' | 'sandbox',
+  state: { autonomy: 'AUTO', halted: false, haltReason: null as string | null, effectivelyStopped: false, degraded: false },
+}))
+vi.mock('../ads-api-client.js', () => ({ adsMode: () => h.mode }))
+vi.mock('../ads-automation-state.service.js', () => ({ getAutomationState: vi.fn(async () => h.state) }))
 vi.mock('../../../db.js', () => ({
   default: {
     adsPlaybookLink: { findFirst: vi.fn(async (args: { where: { refId: string } }) => ({ playbookId: 'pb-1', adGroupId: `g-${args.where.refId}` })) },
@@ -42,6 +48,8 @@ beforeEach(() => {
   h.write.mockResolvedValue({ outcome: 'created', reachedAmazon: true, adTargetId: 'n1' })
   h.anyBrainEnrolled.mockResolvedValue(true)
   h.campaignLeverOwners.mockResolvedValue(new Map())
+  h.mode = 'live'
+  h.state = { autonomy: 'AUTO', halted: false, haltReason: null, effectivelyStopped: false, degraded: false }
 })
 afterEach(() => vi.unstubAllEnvs())
 
@@ -103,5 +111,45 @@ describe('AB-6 follow-up — the isolation rule\'s own run leaves the negatives 
     const run = await isolateProduct({ action: ACTION, actor: 'user:owner', dryRun: true })
     if ('refused' in run) throw new Error(run.refused)
     expect(run.leftToBrainItems).toEqual([{ text: 'gale jacket', adGroupId: 'g-c-auto', why: 'left alone: a product\'s brain runs the negatives of campaign "GALE auto" (c-auto) — product gale in IT (one owner per lever)' }])
+  })
+})
+
+describe('batch 2 fix — AME.16 cross-match: a person\'s click carries his mark; the halt still holds it as before', () => {
+  const ownedAuto = () => h.campaignLeverOwners.mockResolvedValue(new Map([['c-auto', { campaignId: 'c-auto', name: 'GALE auto', market: 'IT', levers: { negatives: OWNED } }]]))
+
+  it('his mark reaches the lever holds and every write: a campaign whose negatives a product\'s brain runs is not left for him (a person passes)', async () => {
+    ownedAuto()
+    const run = await isolateProduct({ action: ACTION, actor: 'user:owner', dryRun: false, manual: true })
+    if ('refused' in run) throw new Error(run.refused)
+    expect(run.leftToBrain).toEqual([])
+    expect(h.write).toHaveBeenCalledTimes(2)
+    for (const [args] of h.write.mock.calls) expect(args).toMatchObject({ userId: 'user:owner', manual: true })
+    // Without the mark (a rule's run, and the route before this fix) the brain's campaign is left, and no write is a person's.
+    vi.clearAllMocks(); ownedAuto(); h.anyBrainEnrolled.mockResolvedValue(true); h.write.mockResolvedValue({ outcome: 'created', reachedAmazon: true, adTargetId: 'n1' })
+    h.load.mockResolvedValue({ inputs: { scope: [{ adGroupId: 'g-c-research' }], excluded: [], family: {}, positives: new Map(), winners: new Map(), standing: [], protections: [], waiting: new Set() } })
+    h.plan.mockReturnValue({ adds: [add('c-research', 'gale jacket'), add('c-auto', 'gale jacket')], leftAlone: [], alreadyStanding: 0 })
+    const rule = await isolateProduct({ action: ACTION, actor: 'automation:rule-iso', dryRun: false })
+    if ('refused' in rule) throw new Error(rule.refused)
+    expect(rule.leftToBrain).toHaveLength(1)
+    expect(h.write.mock.calls.map(([a]) => (a as { manual?: boolean }).manual)).toEqual([undefined])
+  })
+
+  it('the account halted: his apply writes nothing, each negative refused in the gate\'s own words — as before it carried the mark', async () => {
+    h.state = { autonomy: 'AUTO', halted: true, haltReason: 'test breaker', effectivelyStopped: true, degraded: false }
+    const run = await isolateProduct({ action: ACTION, actor: 'user:owner', dryRun: false, manual: true })
+    if ('refused' in run) throw new Error(run.refused)
+    expect(h.write).not.toHaveBeenCalled()
+    expect(run.written).toMatchObject({ added: 0, local: 0 })
+    expect(run.written!.refused).toEqual([
+      { text: 'gale jacket', adGroupId: 'g-c-research', deniedAt: 'automation_halted', reason: 'ads automation is stopped (halted: test breaker) — resume in the Control Room to allow writes' },
+      { text: 'gale jacket', adGroupId: 'g-c-auto', deniedAt: 'automation_halted', reason: 'ads automation is stopped (halted: test breaker) — resume in the Control Room to allow writes' },
+    ])
+    // A dry run still plans (it writes nothing either way), and the sandbox is not held (the gate returns before its halt).
+    const dry = await isolateProduct({ action: ACTION, actor: 'user:owner', dryRun: true, manual: true })
+    if ('refused' in dry) throw new Error(dry.refused)
+    expect(dry.chosen).toHaveLength(2)
+    h.mode = 'sandbox'
+    await isolateProduct({ action: ACTION, actor: 'user:owner', dryRun: false, manual: true })
+    expect(h.write).toHaveBeenCalledTimes(2)
   })
 })

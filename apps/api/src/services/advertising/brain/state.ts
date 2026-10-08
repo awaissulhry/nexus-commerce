@@ -307,7 +307,10 @@ export interface StateDecision {
   memory: PauseMemory | null
   /** A pause decided here: the memory it starts once it lands (written at AUTO; carried on the request at PROPOSE). */
   startsMemory: PauseMemory | null
-  /** A resume of the brain's own AUTO pause asked through enable-ads, which lifts an automation's pause only with the approver's code. */
+  /**
+   * A resume of the brain's own AUTO pause asked through enable-ads: Nexus's own request (the system door) lifts the brain's
+   * pause with a person's normal approval (batch 2 fix, ads-status.tools.ts); anyone else's request needs the approver's code.
+   */
   liftsAutomationPause?: boolean
   /** The request this decision waits for (a waiting one, or the one it would ask about again). */
   approvalId: string | null
@@ -483,7 +486,7 @@ export function decideState(f: StateFacts, ctx: StateContext): StateDecision {
     if (a?.state === 'declined' && hoursBetween(a.at, now) < DECLINE_DAYS[action] * 24) {
       return { ...decided, outcome: 'held', approvalId: a.approvalId, why: `a person declined the request to ${action} it on ${day(a.at)}: asked again after ${plural(DECLINE_DAYS[action], 'day')} — ${core.why}` }
     }
-    const lift = core.liftsAutomationPause ? ' (the brain paused it alone: enable-ads lifts an automation\'s pause only with the approver\'s authenticator code)' : ''
+    const lift = core.liftsAutomationPause ? ' (the brain paused it alone: its own resume, a person\'s normal approval lifts it)' : ''
     return { ...decided, outcome: 'ask', why: `${level === 'AUTO' ? 'AUTO, but an archive is only ever a proposal' : 'PROPOSE'}: asks a person to ${action} it${lift} — ${core.why}` }
   }
   if (ctx.posture.posture !== 'auto') return { ...decided, outcome: 'held', why: `AUTO, but the account's ads automation is not running (${ctx.posture.why}): nothing written now — would ${core.wouldDo}: ${core.why}` }

@@ -137,6 +137,7 @@ const UNBLOCK: Record<string, string> = {
   spend_ceiling: 'A spend ceiling refuses a raise this large today.',
   budget_day_move: 'The budget has already moved as far as allowed today.',
   value_cap: 'The value is above the cap for one write.',
+  portfolio_cap_limit: 'The portfolio cap is above the monthly limit for portfolio caps: the Owner raises it (NEXUS_AMAZON_ADS_MAX_PORTFOLIO_CAP_CENTS, or the product brain\'s portfolioCapLimitCents), or the cap is set in Seller Central.',
 }
 
 /** A refused request, said plainly: not queued, why, and what would unblock it. */

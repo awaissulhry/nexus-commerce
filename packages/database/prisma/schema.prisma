@@ -20705,8 +20705,9 @@ model AdsBrainCycle {
 /// builder, by approval), and adds the keyword there AND the negative exact in every source in ONE change set (both or
 /// neither; a negative that fails leaves the pair HALF_DONE and is retried). After the attribution window + 72 h it judges
 /// the keyword against the evidence it was harvested on. OBSERVE logs it (SHADOW), PROPOSE asks a person, AUTO writes as
-/// the brain under the harvest ceiling. The unique key keeps one harvest per term: a term is placed once and never moved
-/// again (the Owner's rule: winners are never reshuffled). No foreign key: the product id is the family root.
+/// the brain under the harvest ceiling. The unique key keeps one harvest per term: a term climbs once to its exact home, its
+/// one owner (Owner 10-08: industry best practice, with the judgement as the safety net — a worse harvest is put back as a
+/// pair). No foreign key: the product id is the family root.
 model AdsBrainHarvest {
   // Business ownership comes from verified database context.
   workspaceId     String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))

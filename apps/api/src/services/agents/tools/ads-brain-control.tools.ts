@@ -15,14 +15,16 @@
  * Approved, it runs as the person who approved it, on the basis it was approved on (the brain's version and the plan's
  * basis): anything moved since refuses it. op leave gives back, after the commit, the bids and placements of each own
  * campaign the bid brain ran (set-bid-brain-enrollment's putBack, the write gate judging each write), or what a stop saved
- * on those taken back to shadow. undo-change asks this tool for the op that puts the choice back.
+ * on those taken back to shadow; withdraws (in the commit) every request the brain asked for that still waits; and
+ * resumes each campaign the brain's own pause holds (pauses: resume — a big door, the approver's code), as the approver.
+ * undo-change asks this tool for the op that puts the choice back.
  */
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import prisma from '../../../db.js'
 import { logger } from '../../../utils/logger.js'
 import {
-  CONTROL_OPS, CONTROL_TOOL, controlStateNow, controlUndoRequest, LEAVE_BIDS, PRODUCT_NOT_FOUND, previewControl, runControl, type ControlInput, type ControlPreview,
+  CONTROL_OPS, CONTROL_TOOL, controlStateNow, controlUndoRequest, LEAVE_BIDS, LEAVE_PAUSES, PRODUCT_NOT_FOUND, previewControl, runControl, type ControlInput, type ControlPreview,
 } from '../../advertising/brain/control.js'
 import { BRAIN_LEVELS, BRAIN_LEVERS, BRAIN_SETTING_KEYS, type BrainSetting } from '../../advertising/brain/levers.js'
 import { giveBackPlan, readSnapshot } from '../../advertising/bid-brain/enrollment.js'
@@ -31,6 +33,7 @@ import { STEP_UP_NEEDS, type StepUp } from '../step-up-approval.js'
 import { approvedRun, notRun } from './ads-change-kit.js'
 import { ADDS_NO_SPEND, addsSpendWords, codeGate, DAY_TO_DAY_NO_CODE, needsCode } from './ads-code-rule.js'
 import { putBack } from './ads-bid-brain-enrollment.tools.js'
+import { updateCampaignWithSync } from '../../advertising/ads-mutation.service.js'
 import type { AgentTool, PlanEntities, ToolContext, ToolResult } from '../tool-types.js'
 
 const BIG_DOOR_HOW = 'A person with settings.security.manage approves it in Nexus with their authenticator code.'
@@ -52,6 +55,7 @@ function inputOf(args: Record<string, unknown>): ControlInput {
     value: args.value,
     reset: args.reset === true,
     bids: (args.bids as ControlInput['bids']) ?? null,
+    pauses: (args.pauses as ControlInput['pauses']) ?? null,
   }
 }
 
@@ -60,14 +64,18 @@ async function decide(args: Record<string, unknown>): Promise<ToolResult> {
   const out = await previewControl(inputOf(args))
   if ('refusal' in out) return { ok: false, error: out.refusal === PRODUCT_NOT_FOUND || out.refusal.startsWith('Not queued') ? out.refusal : `Not queued: ${out.refusal}` }
   const p = out.preview
-  const coded = p.needsCode && needsCode('set-ads-brain: a lever to AUTO')
+  // Code rule A — two doors: a lever to AUTO (or a campaign under the bid brain), and op leave lifting the brain's own pauses.
+  const door = p.op === 'leave' ? 'set-ads-brain: leave lifts the brain\'s pauses' as const : 'set-ads-brain: a lever to AUTO' as const
+  const coded = p.needsCode && needsCode(door)
   const stepUp: StepUp | null = coded
-    ? { what: `takes the ads brain to AUTO (${p.bigDoor.join('; ')})`, raises: ['Brain level'], needs: STEP_UP_NEEDS, how: BIG_DOOR_HOW }
+    ? p.op === 'leave'
+      ? { what: `takes the product out of the ads brain and ${p.bigDoor.join('; ')}`, raises: ['Campaign state'], needs: STEP_UP_NEEDS, how: BIG_DOOR_HOW }
+      : { what: `takes the ads brain to AUTO (${p.bigDoor.join('; ')})`, raises: ['Brain level'], needs: STEP_UP_NEEDS, how: BIG_DOOR_HOW }
     : null
   const effect = [
     p.summary,
     ...p.starts.map((s) => `${s[0].toUpperCase()}${s.slice(1)}.`),
-  ].join(' ') + addsSpendWords(p.raises, coded) + (coded ? ' A lever going to AUTO is a big door: approving it needs the approver\'s authenticator code.' : '') + ` ${p.reachNote}`
+  ].join(' ') + addsSpendWords(p.raises, coded) + (coded ? (p.op === 'leave' ? ' Lifting the brain\'s own pauses is a big door: approving it needs the approver\'s authenticator code (leave with pauses: "keep" needs none).' : ' A lever going to AUTO is a big door: approving it needs the approver\'s authenticator code.') : '') + ` ${p.reachNote}`
   return {
     ok: true,
     preview: {
@@ -96,7 +104,10 @@ const describeOps =
   + 'mode and the rest; reset: true goes back to the product\'s value or the default. op leave: the product out of the '
   + 'brain — every lever back to OFF, its levels and values ended, the Owner\'s locks and exclusions kept; bids says what '
   + 'happens to its own campaigns the bid brain runs: give-back (default: bids and placements back as they were when each '
-  + 'went LIVE), shadow (bids stay where they are) or keep (the bid brain keeps running them one by one).'
+  + 'went LIVE), shadow (bids stay where they are) or keep (the bid brain keeps running them one by one); every request the '
+  + 'brain asked for that still waits for a person is withdrawn; pauses says what happens to the campaigns the brain\'s own '
+  + 'pause holds: resume (default: switched back on as the approver — lifting an automation\'s pause needs the approver\'s '
+  + 'authenticator code) or keep (they stay paused, each named).'
 
 const setAdsBrain: AgentTool = {
   name: CONTROL_TOOL,
@@ -127,6 +138,7 @@ const setAdsBrain: AgentTool = {
       .describe('set-value: the setting\'s value (a whole number, true/false, a mode, a day YYYY-MM-DD, or null = empty where it takes one); lock: the Owner\'s own value of the whole lever ({ dailyBudgetCents }, { amountCents }, { TOP_OF_SEARCH: 50 }, a bidding strategy, ENABLED / PAUSED), or empty = as it is now'),
     reset: z.boolean().optional().describe('set-level / set-value: true ends the level or value set at this scope instead (the next one applies)'),
     bids: z.enum(LEAVE_BIDS).optional().describe('leave: give-back (default) puts each LIVE campaign\'s bids and placements back as they were when it went LIVE; shadow leaves them where they are; keep lets the bid brain keep running them one by one'),
+    pauses: z.enum(LEAVE_PAUSES).optional().describe('leave: resume (default) switches each campaign the brain\'s own pause holds back on as the approver (a big door: the approver\'s code); keep leaves them paused'),
     why: z.string().trim().max(300).optional().describe('why, in a sentence: shown to the approver and kept with the Owner\'s choice'),
   }),
   // The brain decides money (budgets, the portfolio cap): who controls it must see ad-spend money.
@@ -192,6 +204,21 @@ const setAdsBrain: AgentTool = {
         warnings.push(`campaign ${campaignId} is back in shadow, but its give-back failed (${err instanceof Error ? err.message : String(err)}): run set-bid-brain-enrollment op give-back on it.`)
       }
     }
+    // Batch 2 fix — the campaigns the brain's own pause held: back on as the approver (the write gate judges each write).
+    const resumed: Array<{ campaignId: string; queued: boolean; refused?: string }> = []
+    for (const r of done.resumes ?? []) {
+      try {
+        const out = await updateCampaignWithSync({
+          campaignId: r.campaignId, patch: { status: r.statusBefore as 'ENABLED' }, actor: run.actor, reason: `the product left the ads brain: its pause lifted — ${run.reason}`.slice(0, 480),
+          changeSetId: run.changeSetId, manual: run.manual, confirmOwnLimits: run.confirmOwnLimits, askGate: true,
+        })
+        if (out.ok) resumed.push({ campaignId: r.campaignId, queued: !!out.outboundQueueId })
+        else { resumed.push({ campaignId: r.campaignId, queued: false, refused: out.error ?? 'refused' }); warnings.push(`campaign ${r.campaignId} stays paused: its resume was refused (${out.error ?? 'refused'}) — a person enables it in the campaign manager.`) }
+      } catch (err) {
+        logger.warn('[ads-brain] a pause of the brain could not be lifted after leaving the brain', { campaignId: r.campaignId, error: err instanceof Error ? err.message : String(err) })
+        warnings.push(`campaign ${r.campaignId} stays paused: its resume failed (${err instanceof Error ? err.message : String(err)}) — a person enables it in the campaign manager.`)
+      }
+    }
     for (const campaignId of done.toShadow) {
       try {
         const back = await giveBackStopMemory(campaignId, { actor: run.actor, reason: `the product left the brain — ${run.reason}`, changeSetId: run.changeSetId, manual: run.manual, confirmOwnLimits: run.confirmOwnLimits })
@@ -205,7 +232,7 @@ const setAdsBrain: AgentTool = {
       ok: true,
       data: {
         op: p.op, productId: p.brain.productId, market: p.brain.market, version: done.version, summary: p.summary, changeSetId: run.changeSetId,
-        ...(gaveBack.length ? { gaveBack } : {}), ...(warnings.length ? { warnings } : {}),
+        ...(gaveBack.length ? { gaveBack } : {}), ...(resumed.length ? { resumed } : {}), ...(done.withdrawn?.length ? { withdrawn: done.withdrawn } : {}), ...(warnings.length ? { warnings } : {}),
         note: 'ads-brain view map shows the product\'s brain with every setting and where it comes from.',
       },
       change: { before: done.before, after: done.after },

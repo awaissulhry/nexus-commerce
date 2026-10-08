@@ -107,7 +107,18 @@ export interface ResearchFacts {
   campaigns: { product: number; category: number; market: number }
   /** True when the product has no campaign of its own and its shared ones were read. */
   productFromShared?: boolean
-  sources: { placementGrainHours: number; campaignGrainHours: number; lateStartCells: number; negativeCells: number; newestArrivalAt: string | null }
+  sources: {
+    placementGrainHours: number; campaignGrainHours: number; lateStartCells: number; negativeCells: number; newestArrivalAt: string | null
+    /**
+     * Batch 2 fix — the UTC data days in the window on which the ad group × placement grain's ingest refused records at its
+     * ceiling (loadPlacementHours `cappedDays`, kind `rows`: the day's grain is incomplete). Every hour of them is read from
+     * the campaign grain instead; `cappedGrainHours` grain hours were left out for it, `cappedUnfilledHours` of them had no
+     * campaign-grain hour either (missing data: the confidence is lowered one step). Absent: none (an older caller).
+     */
+    cappedDays?: string[]
+    cappedGrainHours?: number
+    cappedUnfilledHours?: number
+  }
 }
 
 const ZERO: Totals = Object.freeze({ impressions: 0, clicks: 0, spendCents: 0, orders: 0, salesCents: 0 })
@@ -402,13 +413,20 @@ export function researchHours(f: ResearchFacts): HoursResearch {
   // Confidence: the product's orders a 30 days, and how much of the curve each pool carries.
   const ordersPer30d = days > 0 ? (lp.orders * 30) / days : 0
   const thin = ordersPer30d < THIN_ORDERS_PER_30D
-  const label: HoursResearch['confidence']['label'] = ordersPer30d >= SOLID_ORDERS_PER_30D ? 'high' : thin ? 'low' : 'medium'
   const weight = (c: PoolCurves) => { const e = c.total.orders; return e / (e + PRIOR_ORDERS * PARTS) }
   const wP = weight(product), wC = category ? weight(category) : 0, wM = weight(market)
   const leansOn = { product: r2(wP), category: r2((1 - wP) * wC), market: r2((1 - wP) * (1 - wC) * wM), flat: 0 }
   leansOn.flat = r2(Math.max(0, 1 - leansOn.product - leansOn.category - leansOn.market))
   const leanWords = [`the product's own data ${pct(leansOn.product)}`, ...(category ? [`its category ${pct(leansOn.category)}`] : []), `the market ${pct(leansOn.market)}`, ...(leansOn.flat >= 0.05 ? [`a flat curve ${pct(leansOn.flat)}`] : [])]
-  const confidenceWords = `${label === 'high' ? 'High' : label === 'medium' ? 'Medium' : 'Low'} confidence: ${plural(lp.orders, 'order')} from ${plural(lp.clicks, 'click')} in ${plural(days, 'day')} (about ${Math.round(ordersPer30d * 10) / 10} a 30 days${thin ? ', thin' : ''}); the hour curve leans on ${leanWords.join(', ')}.`
+  // Batch 2 fix — hours of a capped grain day that neither source holds are missing data: one step less sure, and said.
+  const capped = f.sources.cappedDays ?? []
+  const unfilled = f.sources.cappedUnfilledHours ?? 0
+  const orderLabel: HoursResearch['confidence']['label'] = ordersPer30d >= SOLID_ORDERS_PER_30D ? 'high' : thin ? 'low' : 'medium'
+  const label: HoursResearch['confidence']['label'] = unfilled > 0 ? (orderLabel === 'high' ? 'medium' : 'low') : orderLabel
+  const cappedWords = capped.length
+    ? ` ${plural(capped.length, 'day')} of the window (${capped.join(', ')}, UTC) the ad group grain was incomplete (its ingest refused records at its ceiling): every hour of ${capped.length === 1 ? 'it' : 'them'} is read from the campaign grain${unfilled ? `, and ${plural(unfilled, 'hour')} the grain held are in neither source — one step less sure` : ''}.`
+    : ''
+  const confidenceWords = `${label === 'high' ? 'High' : label === 'medium' ? 'Medium' : 'Low'} confidence: ${plural(lp.orders, 'order')} from ${plural(lp.clicks, 'click')} in ${plural(days, 'day')} (about ${Math.round(ordersPer30d * 10) / 10} a 30 days${thin ? ', thin' : ''}); the hour curve leans on ${leanWords.join(', ')}.${cappedWords}`
 
   const blocks: BlockResearch[] = Array.from({ length: 7 * PARTS }, (_, k) => ({
     d: Math.floor(k / PARTS), part: k % PARTS, own: product.block.own[k],
@@ -598,15 +616,30 @@ async function categoryCampaigns(rootId: string, market: CampaignRef[]): Promise
 
 type GrainRow = { entityId: string; date: Date; hour: number; impressions: bigint; clicks: bigint; costMicros: bigint; orders: bigint; sales: bigint }
 
+/** The UTC date of one local hour (a local day spans two UTC dates). */
+export function utcDayOfLocalHour(day: string, hour: number, timeZone: string): string {
+  const hh = String(hour).padStart(2, '0')
+  const guess = Date.parse(`${day}T${hh}:00:00Z`)
+  const seen = localDayHour(new Date(guess), timeZone)
+  const offsetMs = Date.parse(`${seen.day}T${String(seen.hour).padStart(2, '0')}:00:00Z`) - guess
+  return new Date(guess - offsetMs).toISOString().slice(0, 10)
+}
+
 /**
  * The hourly cells of every campaign named, per campaign × local day × hour: the ad group × placement grain where it holds
- * that hour (summed over its placements), else the campaign grain. 1-day conversions from both.
+ * that hour (summed over its placements), else the campaign grain. 1-day conversions from both. Batch 2 fix — a UTC data
+ * day the grain's ingest capped (`cappedDays`, kind `rows`: records refused, the day's grain incomplete) is read from the
+ * campaign grain only: its grain hours are left out (an incomplete hour would read low) and counted; those the campaign
+ * grain does not hold either are counted as unfilled (missing data).
  */
-export async function loadCampaignHours(campaigns: readonly CampaignRef[], days: readonly string[], now: Date, timeZone: string): Promise<{ cells: Map<string, Map<string, HourCell>>; placementGrainHours: number; campaignGrainHours: number; lateStartCells: number; negativeCells: number; newestArrivalAt: Date | null }> {
+export async function loadCampaignHours(campaigns: readonly CampaignRef[], days: readonly string[], now: Date, timeZone: string): Promise<{
+  cells: Map<string, Map<string, HourCell>>; placementGrainHours: number; campaignGrainHours: number; lateStartCells: number; negativeCells: number; newestArrivalAt: Date | null
+  cappedDays: string[]; cappedGrainHours: number; cappedUnfilledHours: number
+}> {
   const out = new Map<string, Map<string, HourCell>>()
   const inWindow = new Set(days)
   const ids = campaigns.map((c) => c.id)
-  const empty = { cells: out, placementGrainHours: 0, campaignGrainHours: 0, lateStartCells: 0, negativeCells: 0, newestArrivalAt: null }
+  const empty = { cells: out, placementGrainHours: 0, campaignGrainHours: 0, lateStartCells: 0, negativeCells: 0, newestArrivalAt: null, cappedDays: [], cappedGrainHours: 0, cappedUnfilledHours: 0 }
   if (!ids.length || !days.length) return empty
   const today = isoDayIn(now, timeZone)
   const pastDays = Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${days[0]}T00:00:00Z`)) / DAY_MS)
@@ -618,10 +651,22 @@ export async function loadCampaignHours(campaigns: readonly CampaignRef[], days:
     m.set(k, { day, hour, ...add(c, t) })
     out.set(campaignId, m)
   }
+  const cappedRows = new Set((grain.cappedDays ?? []).filter((d) => d.kind === 'rows').map((d) => d.date))
+  const cappedSeen = new Set<string>()
+  const dropped = new Set<string>()
   for (const c of grain.cells) {
     if (!inWindow.has(c.day)) continue
+    if (cappedRows.size) {
+      const utcDay = utcDayOfLocalHour(c.day, c.hour, timeZone)
+      if (cappedRows.has(utcDay)) { cappedSeen.add(utcDay); dropped.add(`${c.campaignId}|${c.day}|${c.hour}`); continue }
+    }
     put(c.campaignId, c.day, c.hour, { impressions: c.impressions, clicks: c.clicks, spendCents: c.spendCents, orders: c.orders1d, salesCents: c.sales1dCents })
   }
+  // A capped day of the window counts even when none of these campaigns' grain hours landed on it: its refused records may
+  // be theirs. Its hours come from the campaign grain below.
+  const firstUtc = shiftDay(days[0], -1), lastUtc = shiftDay(days[days.length - 1], 1)
+  for (const d of cappedRows) if (d >= firstUtc && d <= lastUtc && days.some((day) => [0, 23].some((h) => utcDayOfLocalHour(day, h, timeZone) === d))) cappedSeen.add(d)
+  const cappedGrainHours = dropped.size
   const fromGrain = new Set([...out].flatMap(([id, m]) => [...m.keys()].map((k) => `${id}|${k}`)))
   // The campaign grain, for every campaign hour the placement grain does not hold.
   const byExternal = new Map<string, string[]>()
@@ -643,12 +688,16 @@ export async function loadCampaignHours(campaigns: readonly CampaignRef[], days:
       for (const campaignId of byExternal.get(r.entityId) ?? []) {
         if (fromGrain.has(`${campaignId}|${day}|${hour}`)) continue
         campaignGrainHours++
+        dropped.delete(`${campaignId}|${day}|${hour}`)
         // The campaign grain's 7d-named columns hold Amazon's 1-day conversions (design F2).
         put(campaignId, day, hour, { impressions: Number(r.impressions), clicks: Number(r.clicks), spendCents: Number(r.costMicros) / 10_000, orders: Number(r.orders), salesCents: Number(r.sales) })
       }
     }
   }
-  return { cells: out, placementGrainHours: fromGrain.size, campaignGrainHours, lateStartCells: grain.lateStartCells, negativeCells: grain.negativeCells, newestArrivalAt: grain.lastArrivalAt }
+  return {
+    cells: out, placementGrainHours: fromGrain.size, campaignGrainHours, lateStartCells: grain.lateStartCells, negativeCells: grain.negativeCells, newestArrivalAt: grain.lastArrivalAt,
+    cappedDays: [...cappedSeen].sort(), cappedGrainHours, cappedUnfilledHours: dropped.size,
+  }
 }
 
 /** The cells of a set of campaigns summed per local day × hour (negative sums read as 0). */
@@ -757,6 +806,7 @@ export async function loadResearchFacts(input: { productId: string; market: stri
     sources: {
       placementGrainHours: hours.placementGrainHours, campaignGrainHours: hours.campaignGrainHours, lateStartCells: hours.lateStartCells,
       negativeCells: hours.negativeCells, newestArrivalAt: hours.newestArrivalAt?.toISOString() ?? null,
+      cappedDays: hours.cappedDays, cappedGrainHours: hours.cappedGrainHours, cappedUnfilledHours: hours.cappedUnfilledHours,
     },
   }
 }

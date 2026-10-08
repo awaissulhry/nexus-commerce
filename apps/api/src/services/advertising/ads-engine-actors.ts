@@ -25,6 +25,12 @@
  *   bid brain         `automation:bid-brain`                                                bid-brain/live-writer.ts
  *   brain money       `automation:ads-brain-budgets`, `automation:ads-brain-portfolio`      brain/budget-live.ts
  *   brain state       `automation:ads-brain-state`                                          brain/state-run.ts
+ *   brain negatives   `automation:ads-brain-negatives`                                      brain/negatives-run.ts
+ *   brain harvest     `automation:ads-brain-harvest`                                        brain/harvest-write.ts
+ *
+ * Every writer of the product brain's family (`automation:ads-brain-<what>`) has an engine here, so the anomaly breaker
+ * never counts the brain's own writes as changes with no known author (a test reads the brain's sources for every such
+ * actor and fails on one that is not classified).
  *
  * Rules are not here: a rule writes as `automation:<ruleId>` and keeps its own brakes (its caps and the
  * breaker's rule-action signal).
@@ -40,6 +46,10 @@ export type EngineKey =
   | 'brain-money'
   // ONE BRAIN AB-12 — the brain's state writer: a campaign's pause for a stop of several days and its resume (state lever at AUTO).
   | 'brain-state'
+  // ONE BRAIN AB-10 — the brain's negatives writer: waste, the product's own set and isolation negatives (negatives lever at AUTO).
+  | 'brain-negatives'
+  // ONE BRAIN AB-11 — the brain's harvest writer: a converting term's exact keyword and its source negatives as one pair (AUTO).
+  | 'brain-harvest'
 
 /** The breaker's buckets: every engine, plus writes no engine or rule claims. */
 export type BreakerBucket = EngineKey | 'unknown'
@@ -75,6 +85,8 @@ export const ENGINE_ACTORS: readonly EngineActorDef[] = [
   { key: 'bid-brain', label: 'Bid brain', actors: ['automation:bid-brain'] },
   { key: 'brain-money', label: 'Brain budgets', actors: ['automation:ads-brain-budgets', 'automation:ads-brain-portfolio'] },
   { key: 'brain-state', label: 'Brain pauses', actors: ['automation:ads-brain-state'] },
+  { key: 'brain-negatives', label: 'Brain negatives', actors: ['automation:ads-brain-negatives'] },
+  { key: 'brain-harvest', label: 'Brain harvest', actors: ['automation:ads-brain-harvest'] },
 ]
 
 /**
@@ -214,6 +226,12 @@ const DEFAULT_ENGINE_CAPS: Readonly<Record<BreakerBucket, Readonly<EngineCaps>>>
   // AB-12 — the brain's state writer: at most 3 pauses a market a UTC day (design §5), their resumes, one write per
   // campaign per run; generous for a few markets, and far below the unknown bucket's 300 an hour, so a runaway trips it.
   'brain-state': { perTick: 50, perDay: 100, breakerPerHour: 50 },
+  // AB-10 — the brain's negatives writer: at most negativesPerDay (default 20, at most 200) new negatives per product a day,
+  // in one run a day; room for a few products, and the hourly limit trips a runaway. Its own caps are the product's.
+  'brain-negatives': { perTick: 200, perDay: 400, breakerPerHour: 200 },
+  // AB-11 — the brain's harvest writer: at most harvestPerDay (default 10) keywords per product a day, each with a negative
+  // exact in its sources (a few each), plus the next runs' retries of a source negative that failed.
+  'brain-harvest': { perTick: 100, perDay: 300, breakerPerHour: 150 },
   unknown: { perTick: null, perDay: null, breakerPerHour: 300 },
 }
 

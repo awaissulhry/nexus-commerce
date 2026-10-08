@@ -15,7 +15,7 @@
  *               new campaign: a create-ad-campaign request a person approves, at PROPOSE and AUTO alike (D1 = B). Held:
  *               stored as HELD with why.
  *   store       one row per product × market × term (AdsBrainHarvest): an unchanged shadow or held decision is only
- *               stamped; a term in flight or placed is never decided again (one harvest per term — a winner is never moved).
+ *               stamped; a term in flight or placed is never decided again (one harvest per term — one owner per term).
  *   kept        shadow and held rows no run checked for 30 days, and ended ones (declined, refused, failed, undone) older
  *               than 90 days, are deleted; placed harvests stay (the term's history and its cooldown).
  */
