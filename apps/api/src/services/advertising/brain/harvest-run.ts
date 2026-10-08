@@ -27,6 +27,7 @@ import { logger } from '../../../utils/logger.js'
 import { settledEnd } from '../ads-settled-window.js'
 import { termKey } from './terms.js'
 import { harvestDue, loadHarvestMarket, type HarvestDue } from './harvest-load.js'
+import { leverKillWhy } from './kill-switch.js'
 import { decideHarvests, GRADUATION_COOLDOWN_DAYS, judgeHarvest, type HarvestDecision, type HarvestEvidence, type HarvestProductFacts, type HarvestStatus } from './harvest.js'
 import { brainWho, claimHarvest, executeClaimedPair, proposeCampaign, proposePair, proposeUndo, sourcesOf, WRITING_LEASE_MS, HARVEST_TOOL } from './harvest-write.js'
 
@@ -289,8 +290,12 @@ export async function runHarvestOnce(opts: { now?: Date; due?: HarvestDue } = {}
     for (const k of m.skipped) skipped.push({ ...k, market })
     // The market's weekly cap of new campaigns is shared: what one product takes in this run counts for the next.
     let marketTaken = 0
-    for (const [productId, p] of m.products) {
+    for (const [productId, loaded] of m.products) {
       products++
+      // AB-15 — the Owner's kill switch on the harvest lever: the run only logs what it would do (as under a shadow
+      // ceiling), saying why; nothing is asked or written (brain/kill-switch.ts). The gate refuses the brain's actor too.
+      const killed = await leverKillWhy('harvest', productId, market)
+      const p = killed ? { ...loaded, facts: { ...loaded.facts, ceiling: { live: false, why: `the harvest lever is ${killed}` } } } : loaded
       await pendingWork(productId, market, p.facts, now, s)
       const facts = { ...p.facts, used: { ...p.facts.used, marketCampaignsThisWeek: p.facts.used.marketCampaignsThisWeek + marketTaken } }
       const decisions = decideHarvests(p.candidates, facts, now, m.terms.windowDays)

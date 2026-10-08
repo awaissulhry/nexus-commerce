@@ -7,7 +7,7 @@
  *   which writes  AdvertisingActionLog rows of the last BRAIN_UNDO_LOOKBACK_DAYS that reached Amazon and were not undone,
  *                 written by the product brain's actors (the money writer's budgets and caps, the state brain's pauses and
  *                 resumes, the negatives run's adds) and the bid brain's campaign writes (a strategy switch outside a stop).
- *                 A harvest pair is AB-11's record: its judgements reach here through registerHarvestUndo when AB-11 lands.
+ *                 A harvest pair is AB-11's record (AdsBrainHarvest): its WORSE judgements reach here through brain/harvest-undo.ts.
  *   superseded    a later write of the same field on the entity, or a value that moved since (a negative no longer
  *                 standing): never undone, the judgement closed.
  *   facts         a fixed number of reads per run: the campaigns, their family roots (brain/ownership.ts), the daily
@@ -100,9 +100,10 @@ export interface HarvestUndoProvider {
   isUndone(id: string): Promise<boolean>
 }
 
-let harvestProvider: HarvestUndoProvider | null = null
-/** AB-11 registers its side here (runtime registrations); null unregisters (tests). */
-export function registerHarvestUndo(p: HarvestUndoProvider | null): void { harvestProvider = p }
+let harvestOverride: HarvestUndoProvider | null = null
+/** Tests: stand another side of the harvest in (null: AB-11's own, brain/harvest-undo.ts). */
+export function registerHarvestUndo(p: HarvestUndoProvider | null): void { harvestOverride = p }
+const harvestSide = async (): Promise<HarvestUndoProvider> => harvestOverride ?? (await import('./harvest-undo.js')).harvestUndo
 
 // ── The run ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -207,9 +208,7 @@ export async function runBrainLeverUndo(opts: { now: Date; dryRun: boolean; leve
     const item = await judgeAndAct(f, L, { now, dryRun, level, today, prior: storedOf.get(f.row.id) ?? null }, run)
     if (item) items.push(item)
   }
-  if (harvestProvider) {
-    for (const item of await harvestPass({ now, dryRun, level, today }, run)) items.push(item)
-  } else run.notes.push('Harvest: auto-undo acts on AB-11\'s judgements of the brain\'s harvests once AB-11 registers them here (registerHarvestUndo); until then a harvest is judged by AB-11 alone.')
+  for (const item of await harvestPass({ now, dryRun, level, today }, run)) items.push(item)
   if (run.counts.superseded) run.notes.push(`${run.counts.superseded} brain ${run.counts.superseded === 1 ? 'change was' : 'changes were'} superseded by a later change (or its value moved since): never undone.`)
   const order: Record<BrainAction, number> = { undone: 0, proposed: 1, would_undo: 2, held: 3, none: 4 }
   items.sort((a, b) => order[a.action] - order[b.action] || (a.verdict === 'worse' ? 0 : 1) - (b.verdict === 'worse' ? 0 : 1) || b.at.localeCompare(a.at))
@@ -629,7 +628,7 @@ async function valueIsBack(j: { lever: string; entityId: string; fromValue: numb
   if (j.lever === 'state') { const c = await prisma.campaign.findUnique({ where: { id: j.entityId }, select: { status: true } }); return !!c && c.status === str(e.from) }
   if (j.lever === 'biddingStrategy') { const c = await prisma.campaign.findUnique({ where: { id: j.entityId }, select: { biddingStrategy: true } }); return !!c && String(c.biddingStrategy ?? '') === str(e.from) }
   if (j.lever === 'negatives') { const n = await prisma.adTarget.findUnique({ where: { id: j.entityId }, select: { status: true } }); return !n || n.status === 'ARCHIVED' }
-  if (j.lever === 'harvest') return harvestProvider ? harvestProvider.isUndone(j.entityId) : false
+  if (j.lever === 'harvest') return (await harvestSide()).isUndone(j.entityId)
   return false
 }
 
@@ -658,7 +657,7 @@ async function followRequests(now: Date): Promise<number> {
 
 /** The harvest's judgements (AB-11) through its provider: the same levels, cap and record. */
 async function harvestPass(ctx: PassCtx, run: BrainUndoRun): Promise<BrainUndoItem[]> {
-  const p = harvestProvider!
+  const p = await harvestSide()
   const items: BrainUndoItem[] = []
   const facts = await p.judged(new Date(ctx.now.getTime() - ruleOf('harvest', 'harvest').lookbackDays * DAY_MS))
   const keys = facts.map((h) => `harvest:${h.id}`)

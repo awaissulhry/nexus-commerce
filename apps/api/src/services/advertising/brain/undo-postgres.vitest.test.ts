@@ -19,6 +19,8 @@
  *              refuses the money writer on A2's budget (brain_killed), a person's own edit passes, another engine is refused as
  *              before, and the brain's state writer on A2 (another lever) still passes; the map shows the kill
  *   all        a kill of the state lever for every product in IT stops the state writer on A1; ending it frees the lever
+ *   harvest    AB-11's WORSE judgement of a harvest pair: at AUTO the pair is put back (keyword paused, source negative
+ *              retired, both as auto-undo) and the harvest is UNDONE (AB-11's cooldown is the hold); a rerun does nothing
  *   business   another business: no brain pass, no kill
  *
  * Every value is made up (public repo).
@@ -263,6 +265,37 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-15 — auto-undo per lever and the
     expect((await rows<Data>('SELECT "endedBy", reason FROM "AdsBrainOverride" WHERE "workspaceId" = $1 AND kind = \'KILL\' AND key = \'state\'', [W]))).toEqual([{ endedBy: OWNER, reason: 'test stop of every pause' }])
     // Ending one that is not there says so.
     expect(await inW(() => endBrainKill({ lever: 'state', market: 'IT', by: OWNER }))).toMatchObject({ ok: false, refusal: expect.stringMatching(/nothing to end/) })
+  })
+
+  it('harvest: AB-11\'s WORSE judgement of a pair is put back as a pair at AUTO (the keyword paused, the source negative retired) and the term waits AB-11\'s cooldown', async () => {
+    // Today's undos so far moved to yesterday: the daily cap is not what this step measures.
+    await database.pool.query('UPDATE "AdsAutoUndoJudgement" SET "actionAt" = "actionAt" - interval \'2 days\' WHERE "workspaceId" = $1', [W])
+    await inW(async () => {
+      const db = database.client
+      await db.adTarget.create({ data: { id: id('h-kw'), adGroupId: `g-${C('a1')}`, kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'test harvest term', bidCents: 40, externalTargetId: `EXT-${id('h-kw')}` } })
+      await db.adTarget.create({ data: { id: id('h-neg'), adGroupId: `g-${C('a2')}`, kind: 'KEYWORD', expressionType: 'NEGATIVE_EXACT', expressionValue: 'test harvest term', isNegative: true, negativeLevel: 'AD_GROUP', externalTargetId: `EXT-${id('h-neg')}` } as never })
+      await db.adsBrainHarvest.create({
+        data: {
+          id: id('harvest'), productId: A, marketplace: 'IT', term: 'test harvest term', isAsin: false, status: 'DONE', level: 'AUTO', destinationKind: 'EXISTING',
+          destCampaignId: C('a1'), destAdGroupId: `g-${C('a1')}`, bidCents: 40, keywordTargetId: id('h-kw'), landedAt: new Date(NOW.getTime() - 12 * DAY),
+          sources: [{ adGroupId: `g-${C('a2')}`, action: 'negate', negativeTargetId: id('h-neg'), result: 'landed' }], why: 'test harvest', evidence: {},
+          judgeAfter: new Date(NOW.getTime() - 2 * DAY), judgedAt: new Date(NOW.getTime() - DAY), verdict: 'WORSE', judgement: { why: 'test: it stopped converting where it landed', final: true },
+          digest: 'test', runId: 'test', decidedAt: new Date(NOW.getTime() - 13 * DAY), checkedAt: NOW, changedAt: NOW,
+        } as never,
+      })
+    })
+    fresh()
+    const out = await undo()
+    const h = out.brain!.items.find((i) => i.lever === 'harvest')!
+    expect(h).toMatchObject({ kind: 'harvest', entity: { type: 'HARVEST', id: id('harvest'), label: 'harvest of "test harvest term"' }, verdict: 'worse', action: 'undone', why: 'test: it stopped converting where it landed' })
+    const record = (await rows<Data>('SELECT status, why FROM "AdsBrainHarvest" WHERE id = $1', [id('harvest')]))[0]
+    expect(record).toMatchObject({ status: 'UNDONE', why: 'put back by auto-undo: the keyword paused, 1 source negative retired' })
+    const writes = (await queued()).filter((q) => q.entityId === id('h-kw') || q.entityId === id('h-neg'))
+    expect(writes.map((w) => [w.entityId, w.actor])).toEqual([[id('h-kw'), 'automation:auto-undo'], [id('h-neg'), 'automation:auto-undo']])
+    expect((await judgements()).find((j) => j.lever === 'harvest')).toMatchObject({ origin: 'brain', actionLogId: `harvest:${id('harvest')}`, action: 'undone', final: true })
+    // A rerun: the pair is not put back twice.
+    const again = await undo()
+    expect(again.brain!.items.find((i) => i.lever === 'harvest')).toBeUndefined()
   })
 
   it('another business: no brain pass and no kill', async () => {

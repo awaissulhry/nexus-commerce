@@ -23,7 +23,7 @@
  *                   (AB-10)                         products' campaigns of the market since,     retired (archived)         term not
  *                                                   at an ACoS inside the product's band top                                negated again
  *   harvest         the brain's harvest pair        AB-11's own judgement (window + 72 hours)     the pair back together:    AB-11's
- *                   (AB-11)                         says WORSE                                    keyword paused, source     cooldown (30
+ *                   (AB-11, brain/harvest-undo.ts)  says WORSE                                    keyword paused, source     cooldown (30
  *                                                                                                 negatives retired          days)
  *   biddingStrategy a switch outside a stop         ACoS up > acosPointsUp points and sales not  the strategy back         14 days: no
  *                   (AB-17; a stop's switch and its up; or to up-and-down with spend up >     (set-campaign-settings) —  switch of it

@@ -7,9 +7,9 @@
  *   the brain     stops writing that lever: each lever's own run reads the kill before it writes or asks and holds,
  *                 naming it — the bid brain's keyword bids, placements and bidding strategy (bid-brain/shadow.ts), the money
  *                 writer's budgets and portfolio caps (budget-live.ts), the state brain's pauses and resumes (state-run.ts),
- *                 the negatives run (negatives-run.ts) and the hours painter (hours-proposal.ts). It may still decide and
- *                 log in shadow. The harvest lever (AB-11) and the bidding-strategy lever (AB-17) read it with leverKillWhy
- *                 when they land; until then the gate stops them.
+ *                 the negatives run (negatives-run.ts), the harvest run (harvest-run.ts: it only logs, as under a shadow
+ *                 ceiling) and the hours painter (hours-proposal.ts). It may still decide and log in shadow. The
+ *                 bidding-strategy lever (AB-17) reads it with leverKillWhy when it lands; until then the gate stops it.
  *   the gate      refuses the brain's own actors on that lever whatever they ask (ads-write-gate.ts brainKillRefusal, the last
  *                 line): automation:bid-brain on keyword bids, ad group bids, placements and bidding strategy, and every
  *                 automation:ads-brain… writer (money, state, negatives, harvest) on its lever — a lowering by the brain too
