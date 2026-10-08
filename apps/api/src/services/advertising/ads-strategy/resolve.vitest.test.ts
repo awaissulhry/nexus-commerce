@@ -32,6 +32,7 @@ const COLUMNS = [
   'maxActionsPerRun', 'protect', 'harvestMinOrders', 'harvestMinClicks', 'harvestMaxAcosPct', 'harvestWindowDays',
   'negateMinClicks', 'negateMinSpendCents', 'negateMaxOrders', 'negateWindowDays', 'stopMethod', 'stopBidCents',
   'claudeAutonomy', 'reviewEveryDays', 'claudeMaxChangesPerDay', 'claudeMaxRaisesPerDay', 'claudeMaxBudgetIncreasePerDayCents',
+  'exploreBudgetCents',
 ] as const
 
 let n = 0
