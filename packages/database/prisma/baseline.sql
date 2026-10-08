@@ -9406,6 +9406,7 @@ CREATE TABLE "AdsStrategy" (
     "claudeMaxChangesPerDay" INTEGER,
     "claudeMaxRaisesPerDay" INTEGER,
     "claudeMaxBudgetIncreasePerDayCents" INTEGER,
+    "exploreBudgetCents" INTEGER,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "updatedBy" TEXT NOT NULL,

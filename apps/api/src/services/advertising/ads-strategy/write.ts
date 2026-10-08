@@ -39,6 +39,7 @@ import { patchDynamicBiddingIn } from '../dynamic-bidding-write.js'
 import { normaliseTerm } from '../ads-negation-policy.js'
 import { STEP_UP_NEEDS } from '../../agents/step-up-approval.js'
 import type { RaiseWords } from '../../agents/claude-trust.service.js'
+import { exploreBudgetOf } from '../bid-brain/explore.js'
 import { accountDefaultFraction, readOwnerTargets, targetFraction } from '../ads-target-acos-resolver.js'
 import { BAND_ABOVE, BAND_BELOW } from '../bid-brain/goal.js'
 import {
@@ -156,6 +157,9 @@ export const STRATEGY_VALUES_INPUT = z.object({
     .describe('market only: the most of those that add spend (a higher bid, budget, placement or target, a restart, a new keyword); empty or 0 = no raise runs by rule'),
   claudeMaxBudgetIncreasePerDayCents: int('claudeMaxBudgetIncreasePerDayCents').nullable().optional()
     .describe("market only: the most daily budget those may add in 24 hours, in cents of the market's currency; empty or 0 = no budget increase runs by rule"),
+  // BB-20 — the bid brain's explore budget a day (the Owner's pick U3-D1 when empty).
+  exploreBudgetCents: int('exploreBudgetCents').nullable().optional()
+    .describe("market only: the most the bid brain's exploration (test bids on thin keywords, revive re-tests) may add in expected spend here a day, in cents of the market's currency; empty = the default (200 in IT, 100 in DE, none elsewhere), 0 = off"),
 }).strict()
 
 export type StrategyValuesInput = z.infer<typeof STRATEGY_VALUES_INPUT>
@@ -220,7 +224,7 @@ const RANK: Record<string, number> = { off: 0, ask: 1, confirm: 2, watch: 3, aut
  * at this scope. `fallbackTargetPct`: the ACoS the bid optimiser aims at without any target (the account default, else
  * 30 %), against which a target that appears or goes is judged.
  */
-export function judgeChange(rule: RaiseRule, key: StrategyFieldKey, before: unknown, after: unknown, opts: { fallbackTargetPct: number }): Direction {
+export function judgeChange(rule: RaiseRule, key: StrategyFieldKey, before: unknown, after: unknown, opts: { fallbackTargetPct: number; exploreDefaultCents?: number }): Direction {
   if (canonical(before) === canonical(after)) return 'same'
   const b = before as Group | number | boolean | string | null
   const a = after as Group | number | boolean | string | null
@@ -277,6 +281,12 @@ export function judgeChange(rule: RaiseRule, key: StrategyFieldKey, before: unkn
       const bid = (s: unknown) => numberOr((s as Group | null)?.stopBidCents, DEFAULT_STOP_BID_CENTS)
       if (method(b) !== method(a)) return method(a) === 'PAUSE' ? 'raise' : 'lower'
       return bid(a) > bid(b) ? 'raise' : bid(a) < bid(b) ? 'lower' : 'same'
+    }
+    case 'explore': {
+      // BB-20 — empty is the market's default explore budget (bid-brain/explore.ts), not "none": judged on the budget in force.
+      const from = numberOr(b, opts.exploreDefaultCents ?? 0)
+      const to = numberOr(a, opts.exploreDefaultCents ?? 0)
+      return to > from ? 'raise' : to < from ? 'lower' : 'same'
     }
     case 'count': {
       // AA-W2-2b — empty is 0 (nothing runs by rule): up loosens, down or cleared tightens; empty ↔ 0 is the same.
@@ -453,7 +463,7 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 /** The unit a field's number is in, for its label (labels carry no amount). */
 const UNIT: Partial<Record<StrategyFieldKey, string>> = {
   monthlySpendCapCents: 'cents', minBidCents: 'cents', maxBidCents: 'cents', maxChangePct: '%', maxActionsPerRun: 'actions', reviewEveryDays: 'days',
-  claudeMaxBudgetIncreasePerDayCents: 'cents',
+  claudeMaxBudgetIncreasePerDayCents: 'cents', exploreBudgetCents: 'cents',
 }
 const labelOf = (field: StrategyField) => `${field.label}${UNIT[field.key] ? ` (${UNIT[field.key]})` : ''}`
 const levelWord = (level: StrategyLevel) => level.toLowerCase()
@@ -630,7 +640,7 @@ export async function planStrategyChange(raw: unknown, opts: PlanOptions = {}): 
     if (canonical(from) === canonical(to)) continue
     const effectiveFrom = effectiveOf(field, resolvedBefore, own)
     const effectiveTo = effectiveOf(field, resolvedAfter, after)
-    changes.push({ field: field.key, label: labelOf(field), from, to, effectiveFrom, effectiveTo, direction: judgeChange(field.raise, field.key, effectiveFrom, effectiveTo, { fallbackTargetPct }) })
+    changes.push({ field: field.key, label: labelOf(field), from, to, effectiveFrom, effectiveTo, direction: judgeChange(field.raise, field.key, effectiveFrom, effectiveTo, { fallbackTargetPct, exploreDefaultCents: exploreBudgetOf(market, null).cents }) })
   }
   // PB-9 — a phase switch: the goal takes the direction of the numbers that move with it.
   if (opts.goalByEffect) {
