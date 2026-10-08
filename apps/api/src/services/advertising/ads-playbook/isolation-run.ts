@@ -34,7 +34,7 @@ import { loadIsolation, type Excluded } from './isolation-load.js'
 import { loadPlaybookIndex, PLAYBOOK_ROW_SELECT, playbookLinks } from './load.js'
 import { resolveProduct } from './resolve.js'
 import { ensureCompiledRule } from './rules.js'
-import { brainSkipsOutput, readLeverHolds, type LeverSkip, type LeverSkipCounts } from '../brain/engine-skips.js'
+import { brainSkipsOutput, leverHeldOf, readLeverHolds, type LeverSkip } from '../brain/engine-skips.js'
 
 export interface IsolationItem { kind: PlannedNegative['kind']; text: string; match: 'EXACT' | 'PHRASE'; adGroupId: string; slot: string; owner: string }
 
@@ -173,8 +173,7 @@ export async function runIsolation(args: { action: Record<string, unknown>; rule
   if ('refused' in run) return args.dryRun ? { type, ok: true, output: { noChange: true, why: run.refused } } : { type, ok: false, error: run.refused }
   const scope = { adGroups: run.scope.adGroups, excluded: run.scope.excluded.slice(0, 20), ...(run.scope.excluded.length > 20 ? { excludedMore: run.scope.excluded.length - 20 } : {}) }
   const leftAlone = top('leftAlone', run.plan.leftAlone)
-  const counts: LeverSkipCounts = run.leftToBrain.length ? { negatives: run.leftToBrain.length } : {}
-  const brainSkips = brainSkipsOutput(counts, run.leftToBrain, run.holdsUnread === true)
+  const brainSkips = brainSkipsOutput(leverHeldOf(run.leftToBrain), run.leftToBrain, run.holdsUnread === true)
   if (args.dryRun) {
     return {
       type,

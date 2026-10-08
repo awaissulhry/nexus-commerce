@@ -1,7 +1,8 @@
 /**
  * ONE BRAIN AB-6 — an ads rule's action on a lever a product's brain owns is left before the rule asks (evaluateRule).
  *   owned      the action is a named skip in the execution row, its handler never runs, and the rule's refusal record
- *              counts LEVER_HELD:<lever> (automation-activity); a dry run records it once a day; the run is not a failure
+ *              counts BRAIN_OWNED:<lever> (automation-activity) — each holder named as what it is; a dry run records it
+ *              once a day; the run is not a failure
  *   not owned  the handler runs exactly as before and nothing is recorded
  *   handlers   an action that writes several campaigns reports its own per-lever counts, recorded the same way
  */
@@ -63,18 +64,18 @@ const run = (rule: Record<string, unknown> = {}) => {
 }
 
 describe('AB-6 — a rule leaves a lever a product\'s brain owns', () => {
-  it('owned: a named skip, the handler never runs, LEVER_HELD:budgets counted, the run is no failure', async () => {
+  it('owned: a named skip, the handler never runs, BRAIN_OWNED:budgets counted, the run is no failure', async () => {
     campaignLeverOwners.mockResolvedValue(owned({ budgets: OWNED }))
     const r = await run()
     expect(handler).not.toHaveBeenCalled()
     expect(r.status).toBe('SUCCESS')
     expect(r.actionResults).toEqual([expect.objectContaining({
       type: 'adjust_ad_budget', ok: true,
-      output: expect.objectContaining({ skipped: 'brain-lever', brainSkip: expect.objectContaining({ lever: 'budgets', kind: 'owned', campaignId: 'c-gale' }) }),
+      output: expect.objectContaining({ skipped: 'brain-lever', brainSkip: expect.objectContaining({ lever: 'budgets', holder: 'productBrain', campaignId: 'c-gale' }) }),
     })])
     expect(refusalUpsert).toHaveBeenCalledTimes(1)
     const call = refusalUpsert.mock.calls[0][0] as { create: { reason: string; count: number; lastReason: string; actorId: string } }
-    expect(call.create).toMatchObject({ actorId: 'rule-b', reason: 'LEVER_HELD:budgets', count: 1 })
+    expect(call.create).toMatchObject({ actorId: 'rule-b', reason: 'BRAIN_OWNED:budgets', count: 1 })
     expect(call.create.lastReason).toBe('Raise budgets of winners left 1 write on its budgets lever alone — a product\'s brain runs the daily budget of campaign "GALE exact" (c-gale) — product gale in IT (one owner per lever).')
   })
 
@@ -121,22 +122,34 @@ describe('AB-6 — a rule leaves a lever a product\'s brain owns', () => {
     // e.g. a pool's rebalance or pace_budget: the campaign the context names is not held, three others are.
     handler.mockResolvedValueOnce({
       type: 'adjust_ad_budget', ok: true,
-      output: { raised: 2, brainSkips: { counts: { budgets: 3 }, sample: [{ lever: 'budgets', campaignId: 'c-x', why: 'a product\'s brain runs the daily budget of campaign c-x' }] } },
+      output: { raised: 2, brainSkips: { counts: { productBrain: { budgets: 3 } }, sample: [{ lever: 'budgets', holder: 'productBrain', campaignId: 'c-x', why: 'a product\'s brain runs the daily budget of campaign c-x' }] } },
     } as never)
     const r = await run()
     expect(r.status).toBe('SUCCESS')
     expect(refusalUpsert).toHaveBeenCalledTimes(1)
     expect((refusalUpsert.mock.calls[0][0] as { create: { reason: string; count: number; lastReason: string } }).create).toMatchObject({
-      reason: 'LEVER_HELD:budgets', count: 3, lastReason: expect.stringContaining('campaign c-x'),
+      reason: 'BRAIN_OWNED:budgets', count: 3, lastReason: expect.stringContaining('campaign c-x'),
     })
+  })
+
+  it('a bid brain campaign\'s keyword bids are recorded as the bid brain\'s (BID_BRAIN:bids), in its own words', async () => {
+    handler.mockResolvedValueOnce({
+      type: 'adjust_ad_budget', ok: true,
+      output: { changed: 0, brainSkips: { counts: { bidBrain: { bids: 1 } }, sample: [{ lever: 'bids', holder: 'bidBrain', campaignId: 'c-bb', why: 'the bid brain runs the keyword bids of campaign "bid brain" (c-bb)' }] } },
+    } as never)
+    await run()
+    const create = (refusalUpsert.mock.calls[0][0] as { create: { reason: string; count: number; lastReason: string } }).create
+    expect(create).toMatchObject({ reason: 'BID_BRAIN:bids', count: 1 })
+    expect(create.lastReason).toBe('Raise budgets of winners left 1 write on its bids lever alone — the bid brain runs the keyword bids of campaign "bid brain" (c-bb) (one owner per lever).')
+    expect(create.lastReason).not.toMatch(/product's brain|Owner/)
   })
 
   it('the same handler counts in a dry run: once a day', async () => {
     ACTION_HANDLERS.sync_negatives_across_campaigns = vi.fn(async (action: { type: string }) => ({
-      type: action.type, ok: true, output: { dryRun: true, wouldNegateIn: 4, brainSkips: { counts: { negatives: 3 } } },
+      type: action.type, ok: true, output: { dryRun: true, wouldNegateIn: 4, brainSkips: { counts: { ownerLock: { negatives: 3 } } } },
     })) as never
     const r = await run({ actions: [{ type: 'sync_negatives_across_campaigns', keyword: 'cheap' }], dryRun: true, autonomyLevel: 'PROPOSE' })
     expect(r.status).toBe('DRY_RUN')
-    expect((refusalUpsert.mock.calls[0][0] as { create: { reason: string; count: number } }).create).toMatchObject({ reason: 'LEVER_HELD:negatives', count: 1 })
+    expect((refusalUpsert.mock.calls[0][0] as { create: { reason: string; count: number } }).create).toMatchObject({ reason: 'OWNER_LOCKED:negatives', count: 1, lastReason: expect.stringContaining('the Owner holds that lever at his own value') })
   })
 })

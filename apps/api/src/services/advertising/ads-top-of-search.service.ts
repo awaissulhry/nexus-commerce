@@ -18,7 +18,7 @@ import { logger } from '../../utils/logger.js'
 import { nothingHeld, type EngineGuard } from './ads-engine-guard.js'
 import { settledWhere } from './ads-settled-window.js'
 import { brainOwnedCampaignIds } from './bid-brain/live.js'
-import { brainSkipsOutput, readLeverHolds, type LeverSkip, type LeverSkipCounts } from './brain/engine-skips.js'
+import { brainSkipsOutput, readLeverHolds, type LeverSkip, type LeverHeld } from './brain/engine-skips.js'
 
 const TOP_REPORT_PLACEMENT = 'Top of Search on-Amazon'
 const TOP_BID_KEY = 'PLACEMENT_TOP'
@@ -212,7 +212,7 @@ export interface DefendTosResult {
   /** BB-6 — moves left alone because the bid brain owns the campaign (one writer per campaign). */
   skippedBrainOwned?: number
   /** ONE BRAIN AB-6 — moves left alone because a product's brain owns (or the Owner holds) the campaign's placements. */
-  brainSkips?: { counts: LeverSkipCounts; sample?: unknown[]; unread?: string }
+  brainSkips?: { counts: LeverHeld; sample?: unknown[]; unread?: string }
   dryRun: boolean
   sample: Array<{ campaign: string; fromPct: number; toPct: number; action: string; reason: string }>
 }

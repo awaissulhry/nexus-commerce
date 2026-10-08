@@ -57,14 +57,14 @@ describe('defendTopOfSearch', () => {
     const r = await defendTopOfSearch({ dryRun: false })
     expect(h.updatePlacementBidding).toHaveBeenCalledTimes(1)
     expect((h.updatePlacementBidding.mock.calls[0][0] as { campaignId: string }).campaignId).toBe('c-misano')
-    expect(r).toMatchObject({ changed: 1, applied: 1, brainSkips: { counts: { placements: 1 }, sample: [{ lever: 'placements', campaignId: 'c-gale' }] } })
+    expect(r).toMatchObject({ changed: 1, applied: 1, brainSkips: { counts: { ownerLock: { placements: 1 } }, sample: [{ lever: 'placements', holder: 'ownerLock', campaignId: 'c-gale' }] } })
   })
 
   it('a dry run never offers it either', async () => {
     holdGale()
     const r = await defendTopOfSearch({ dryRun: true })
     expect(r.sample.map((s) => s.campaign)).toEqual(['MISANO'])
-    expect(r.brainSkips).toMatchObject({ counts: { placements: 1 } })
+    expect(r.brainSkips).toMatchObject({ counts: { ownerLock: { placements: 1 } } })
   })
 
   it('nothing enrolled: both, as before, no brainSkips', async () => {

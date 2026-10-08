@@ -33,7 +33,7 @@ import { loadDrift, type LoadedDrift } from './drift-load.js'
 import { SPEND_PARTS, SYNC_PARTS, type DriftItem, type SyncPart } from './drift.js'
 import { plannedSyncBids, waitingSyncedTargets } from './load.js'
 import { recordPlaybookApply, type PlaybookApplyWriter } from './write.js'
-import { readLeverHolds, type LeverSkipCounts } from '../brain/engine-skips.js'
+import { readLeverHolds, type LeverHeld, type LeverHolder } from '../brain/engine-skips.js'
 import type { BrainLever } from '../brain/levers.js'
 
 export interface SyncArgs {
@@ -216,10 +216,10 @@ export interface SyncResult {
   negatives: { added: number; local: number; alreadyStanding: number; refused: Outcome[]; failed: Outcome[]; leftAlone: Outcome[]; ids: string[] }
   positives: { added: number; local: number; existed: number; refused: Outcome[]; failed: Outcome[]; leftAlone: Outcome[]; ids: string[]; planned: Array<{ adTargetId: string; startBidCents: number }> }
   productAds: { added: number; local: number; failed: Outcome[]; leftAlone: Outcome[]; ids: string[] }
-  build: { applicationId: string; alreadyRunning?: boolean } | { refusal: string; brainLever?: BrainLever } | null
+  build: { applicationId: string; alreadyRunning?: boolean } | { refusal: string; brainLever?: BrainLever; brainHolder?: LeverHolder } | null
   artifacts: { resaved: string[]; errors: string[] }
   /** ONE BRAIN AB-6 — the writes left because a product's brain owns the lever (or the Owner holds it), per lever. */
-  leverHeld?: LeverSkipCounts
+  leverHeld?: LeverHeld
 }
 
 /** Where an item's write lands: a misplaced keyword's right slot, else the item's own ad group. */
@@ -382,7 +382,7 @@ export async function runSync(plan: SyncPlan, w: SyncWriter, opts: { compilers?:
     const build = recorded ? { ...plan.build, playbook: { ...plan.build.playbook!, version: recorded.version } } : plan.build
     res.build = await startPlaybookBuild({ plan: build, actor: w.actor, requester: w.requester, changeSetId: w.changeSetId, writer: w.writer, manual: w.manual, ...(opts.compilers ? { compilers: opts.compilers } : {}) })
     // AB-6 — the missing slots are new campaigns of the product: its brain's structure lever, asked by the build itself.
-    if ('refusal' in res.build && res.build.brainLever) leverHolds.count(res.build.brainLever)
+    if ('refusal' in res.build && res.build.brainLever && res.build.brainHolder) leverHolds.count(res.build.brainHolder, res.build.brainLever)
   }
   if (leverHolds.total()) res.leverHeld = leverHolds.counts()
   return res

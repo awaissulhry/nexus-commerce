@@ -24,8 +24,8 @@ const warn = vi.fn()
 vi.mock('../../../utils/logger.js', () => ({ logger: { warn: (...a: unknown[]) => warn(...a), info: vi.fn(), debug: vi.fn(), error: vi.fn() } }))
 
 const {
-  readLeverHolds, readAdGroupLeverHolds, productLeverSkip, leverSkipOf, leverSkipNote, leverSkipReason, addLeverSkipCounts,
-  brainSkipsOutput, noLeverHolds,
+  readLeverHolds, readAdGroupLeverHolds, productLeverSkip, leverSkipOf, leverHeldNote, leverSkipReason, addLeverHeld,
+  brainSkipsOutput, noLeverHolds, bidBrainSkip, leverHeldOf, leverHeldTotal,
 } = await import('./engine-skips.js')
 const { PRODUCT_BRAIN_ACTOR } = await import('../ads-write-gate.js')
 
@@ -48,7 +48,7 @@ describe('leverSkipOf — the gate\'s own answer (pure)', () => {
   const c1 = owners('c1', { budgets: OWNED, state: LOCKED })
   it('another automatic writer leaves an owned lever and a locked one, with why', () => {
     expect(leverSkipOf(c1, 'budgets', ENGINE)).toEqual({
-      lever: 'budgets', kind: 'owned', campaignId: 'c1', campaignName: 'GALE c1', productId: 'gale', market: 'IT',
+      lever: 'budgets', holder: 'productBrain', campaignId: 'c1', campaignName: 'GALE c1', productId: 'gale', market: 'IT',
       reason: 'a product\'s brain runs the daily budget of campaign "GALE c1" (c1) — product gale in IT',
     })
     expect(leverSkipOf(c1, 'state', ENGINE)?.reason).toBe('the Owner holds the state (pause, enable, archive) of campaign "GALE c1" (c1) at his own value — product gale in IT')
@@ -66,7 +66,7 @@ describe('leverSkipOf — the gate\'s own answer (pure)', () => {
   })
   it('the brain passes a lever it owns, not one the Owner locked', () => {
     expect(leverSkipOf(c1, 'budgets', { actor: PRODUCT_BRAIN_ACTOR })).toBeNull()
-    expect(leverSkipOf(c1, 'state', { actor: PRODUCT_BRAIN_ACTOR })?.kind).toBe('locked')
+    expect(leverSkipOf(c1, 'state', { actor: PRODUCT_BRAIN_ACTOR })?.holder).toBe('ownerLock')
   })
 })
 
@@ -93,15 +93,24 @@ describe('readLeverHolds', () => {
   it('owned and locked levers are skips, counted per lever once per write left', async () => {
     campaignLeverOwners.mockResolvedValue(new Map([['c1', owners('c1', { budgets: OWNED, negatives: LOCKED })]]))
     const holds = await readLeverHolds(['c1', 'c2'], ENGINE, 'test')
-    expect(holds.skip('c1', 'budgets')?.kind).toBe('owned')
+    expect(holds.skip('c1', 'budgets')?.holder).toBe('productBrain')
     expect(holds.skip('c1', 'budgets')).not.toBeNull()
-    expect(holds.skip('c1', 'negatives')?.kind).toBe('locked')
+    expect(holds.skip('c1', 'negatives')?.holder).toBe('ownerLock')
     expect(holds.peek('c1', 'budgets')).not.toBeNull() // a look is not counted
     expect(holds.skip('c2', 'budgets')).toBeNull()
     expect(holds.skip('c1', 'state')).toBeNull()
-    expect(holds.counts()).toEqual({ budgets: 2, negatives: 1 })
+    expect(holds.counts()).toEqual({ productBrain: { budgets: 2 }, ownerLock: { negatives: 1 } })
     expect(holds.total()).toBe(3)
-    expect(holds.note()).toBe(' brain-levers=budgets:2,negatives:1 (left to a product\'s brain or the Owner\'s lock)')
+    expect(holds.note()).toBe(' brain-levers=a product\'s brain: budgets 2; the Owner\'s lock: negatives 1 (one owner per lever)')
+  })
+
+  it('a bid brain campaign\'s keyword bids are counted as the bid brain\'s, in its own words; a build\'s refusal under its holder', async () => {
+    campaignLeverOwners.mockResolvedValue(new Map())
+    const holds = await readLeverHolds(['c1'], ENGINE, 'test')
+    expect(holds.skipBidBrain('c1', 'GALE c1')).toMatchObject({ holder: 'bidBrain', lever: 'bids', reason: 'the bid brain runs the keyword bids of campaign "GALE c1" (c1)' })
+    holds.count('ownerLock', 'structure')
+    expect(holds.counts()).toEqual({ bidBrain: { bids: 1 }, ownerLock: { structure: 1 } })
+    expect(holds.note()).toBe(' brain-levers=the Owner\'s lock: structure 1; the bid brain: bids 1 (one owner per lever)')
   })
 
   it('a failed read skips nothing on a guess, says so once, and the note says the holders were unread', async () => {
@@ -153,9 +162,9 @@ describe('productLeverSkip — a product\'s own lever (a build of new campaigns)
   const settings = (structure: Record<string, unknown>) => ({ productId: 'gale', market: 'IT', levers: { structure } })
   it('owned at PROPOSE or AUTO, or locked by the Owner: a skip with why', async () => {
     brainSettings.mockResolvedValue(settings({ owned: true, effective: 'AUTO', why: 'AUTO by the Owner\'s product override' }))
-    expect(await productLeverSkip('gale-m', 'IT', 'structure', { actor: 'user:asker' }, 'test')).toMatchObject({ kind: 'owned', productId: 'gale', reason: expect.stringContaining('a product\'s brain runs the structure (new ad groups and product ads) of product gale in IT') })
+    expect(await productLeverSkip('gale-m', 'IT', 'structure', { actor: 'user:asker' }, 'test')).toMatchObject({ holder: 'productBrain', productId: 'gale', reason: expect.stringContaining('a product\'s brain runs the structure (new ad groups and product ads) of product gale in IT') })
     brainSettings.mockResolvedValue(settings({ owned: false, effective: 'LOCKED', why: 'locked at the Owner\'s own value' }))
-    expect(await productLeverSkip('gale', 'IT', 'structure', { actor: 'user:asker' }, 'test')).toMatchObject({ kind: 'locked' })
+    expect(await productLeverSkip('gale', 'IT', 'structure', { actor: 'user:asker' }, 'test')).toMatchObject({ holder: 'ownerLock' })
   })
   it('shadow, off, not enrolled: no skip', async () => {
     brainSettings.mockResolvedValue(settings({ owned: false, effective: 'OBSERVE', why: 'OBSERVE by default' }))
@@ -183,15 +192,23 @@ describe('productLeverSkip — a product\'s own lever (a build of new campaigns)
 })
 
 describe('the words (pure)', () => {
-  it('leverSkipNote, addLeverSkipCounts, brainSkipsOutput', () => {
-    expect(leverSkipNote(undefined)).toBe('')
-    expect(leverSkipNote({ budgets: 0 })).toBe('')
-    expect(leverSkipNote({ placements: 1, adGroupBids: 2 })).toBe(' brain-levers=placements:1,adGroupBids:2 (left to a product\'s brain or the Owner\'s lock)')
-    expect(addLeverSkipCounts({ budgets: 1 }, { budgets: 2, state: 1 })).toEqual({ budgets: 3, state: 1 })
+  it('leverHeldNote names each holder as what it is; addLeverHeld, leverHeldOf, leverHeldTotal, brainSkipsOutput', () => {
+    expect(leverHeldNote(undefined)).toBe('')
+    expect(leverHeldNote({ productBrain: { budgets: 0 } })).toBe('')
+    expect(leverHeldNote({ ownerLock: { placements: 1 }, bidBrain: { bids: 2 }, productBrain: { adGroupBids: 2, state: 1 } }))
+      .toBe(' brain-levers=a product\'s brain: adGroupBids 2, state 1; the Owner\'s lock: placements 1; the bid brain: bids 2 (one owner per lever)')
+    // Never one holder's words for another's skip.
+    expect(leverHeldNote({ bidBrain: { bids: 1 } })).toBe(' brain-levers=the bid brain: bids 1 (one owner per lever)')
+    expect(leverHeldNote({ bidBrain: { bids: 1 } })).not.toMatch(/product's brain|Owner's lock/)
+    expect(addLeverHeld({ productBrain: { budgets: 1 } }, { productBrain: { budgets: 2, state: 1 }, bidBrain: { bids: 1 } })).toEqual({ productBrain: { budgets: 3, state: 1 }, bidBrain: { bids: 1 } })
     expect(brainSkipsOutput({}, [])).toEqual({})
-    const skip = { lever: 'negatives' as const, kind: 'owned' as const, campaignId: 'c1', campaignName: null, productId: 'gale', market: 'IT', reason: leverSkipReason('negatives', OWNED, 'c1') }
+    const skip = { lever: 'negatives' as const, holder: 'productBrain' as const, campaignId: 'c1', campaignName: null, productId: 'gale', market: 'IT', reason: leverSkipReason('negatives', OWNED, 'c1') }
     expect(skip.reason).toBe('a product\'s brain runs the negatives of campaign c1 — product gale in IT')
-    expect(brainSkipsOutput({ negatives: 1 }, [skip])).toEqual({ brainSkips: { counts: { negatives: 1 }, sample: [{ lever: 'negatives', campaignId: 'c1', why: skip.reason }] } })
+    const bid = bidBrainSkip('c2', 'GALE exact')
+    expect(bid).toEqual({ lever: 'bids', holder: 'bidBrain', campaignId: 'c2', campaignName: 'GALE exact', productId: null, market: null, reason: 'the bid brain runs the keyword bids of campaign "GALE exact" (c2)' })
+    expect(leverHeldOf([skip, bid, skip])).toEqual({ productBrain: { negatives: 2 }, bidBrain: { bids: 1 } })
+    expect(leverHeldTotal({ productBrain: { negatives: 2 }, bidBrain: { bids: 1 } })).toBe(3)
+    expect(brainSkipsOutput({ productBrain: { negatives: 1 } }, [skip])).toEqual({ brainSkips: { counts: { productBrain: { negatives: 1 } }, sample: [{ lever: 'negatives', holder: 'productBrain', campaignId: 'c1', why: skip.reason }] } })
     expect(brainSkipsOutput({}, [], true)).toMatchObject({ brainSkips: { counts: {}, unread: expect.stringContaining('could not be read') } })
     expect(noLeverHolds(ENGINE).skip('c1', 'budgets')).toBeNull()
   })

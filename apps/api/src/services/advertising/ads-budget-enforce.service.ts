@@ -54,7 +54,7 @@ import { DEFAULT_STOP_BID_CENTS } from './ads-strategy/fields.js'
 import { capMarkets } from './ads-strategy/load.js'
 import { openStrategy, stopBidsIn, strategySourceWords, type StrategyView } from './ads-strategy/effective.js'
 import { adGroupFloorDecisions, scopeCapsThisMonth, type ScopeCap } from './ads-strategy/spend.js'
-import { readLeverHolds, type LeverSkipCounts } from './brain/engine-skips.js'
+import { readLeverHolds, type LeverHeld } from './brain/engine-skips.js'
 
 const FLOOR_CENTS = 100 // €1/day — Amazon's minimum campaign budget
 /** Actor prefix this engine stamps on Campaign.bidsSuppressedBy when it suppresses. */
@@ -402,7 +402,7 @@ export async function computeBudgetEnforcement(opts: { month?: string } = {}): P
  *            would show the restored bids while Amazon stays at 2¢. Not calling them keeps `bidsSuppressedAt` set, so
  *            the first run after Resume restores.
  */
-export async function applyBudgetEnforcement(opts: { month?: string; actor?: AdsActor; dryRun?: boolean } = {}): Promise<{ dryRun: boolean; budgetApplied: number; suppressed: number; restored: number; failed: number; adGroupsSuppressed: number; adGroupsRestored: number; result: EnforcementResult; guard?: EngineGuardReport; leverHeld?: LeverSkipCounts; leverHoldsUnread?: boolean }> {
+export async function applyBudgetEnforcement(opts: { month?: string; actor?: AdsActor; dryRun?: boolean } = {}): Promise<{ dryRun: boolean; budgetApplied: number; suppressed: number; restored: number; failed: number; adGroupsSuppressed: number; adGroupsRestored: number; result: EnforcementResult; guard?: EngineGuardReport; leverHeld?: LeverHeld; leverHoldsUnread?: boolean }> {
   const result = await computeBudgetEnforcement({ month: opts.month })
   const dryRun = opts.dryRun ?? true
   const actor: AdsActor = opts.actor ?? 'automation:budget-manager'

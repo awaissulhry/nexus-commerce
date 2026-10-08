@@ -105,8 +105,8 @@ describe('AB-6 — rank-defend leaves a campaign whose placements or ad-group bi
     const r = await inside(() => runRankDefendOnce())
     expect(rec.placements).toEqual(['rk-misano'])
     expect(r.decisions.map((d) => d.campaignId)).not.toContain('rk-gale')
-    expect(r.leverHeld).toEqual({ placements: 1 })
-    expect(rankDefendSummaryLine(r)).toContain('brain-levers=placements:1')
+    expect(r.leverHeld).toEqual({ ownerLock: { placements: 1 } })
+    expect(rankDefendSummaryLine(r)).toContain('brain-levers=the Owner\'s lock: placements 1 (one owner per lever)')
     expect(h.campaignLeverOwners).toHaveBeenCalledTimes(1)
   })
 
@@ -114,6 +114,6 @@ describe('AB-6 — rank-defend leaves a campaign whose placements or ad-group bi
     h.campaignLeverOwners.mockImplementation(async (ids: string[]) => new Map(ids.filter((id) => id === 'rk-misano').map((id) => [id, { campaignId: id, name: id, market: 'IT', levers: { adGroupBids: LOCKED } }])))
     const r = await inside(() => runRankDefendOnce())
     expect(rec.placements).toEqual(['rk-gale'])
-    expect(r.leverHeld).toEqual({ adGroupBids: 1 })
+    expect(r.leverHeld).toEqual({ ownerLock: { adGroupBids: 1 } })
   })
 })

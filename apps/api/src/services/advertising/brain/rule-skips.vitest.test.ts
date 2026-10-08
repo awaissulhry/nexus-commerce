@@ -1,10 +1,12 @@
 /**
  * ONE BRAIN AB-6 — an ads rule leaves a lever a product's brain owns (or the Owner locked) before it asks (brain/rule-skips.ts).
  *   map       the lever each one-campaign action writes; a mapped negative and the bid actions BB-9 takes are not here
- *   hook      owned → a named skip with why and the lever; not owned, not live, another campaign of the picker, no
- *             campaign, a failed read → null (the rule runs as before, the write gate decides)
- *   counts    both shapes read back (one skip, a handler's per-lever counts)
- *   warm      one read for every campaign of a pass, Amazon's ids resolved in one query; inert when nothing is enrolled
+ *   campaign  the bid brain's order (campaign, ad group, keyword), then a search term's ad group or campaign by Amazon's id
+ *   hook      owned → a named skip with why, the lever and its holder; not owned, not live, nothing enrolled, another
+ *             campaign of the picker, no campaign, a failed read → null (the rule runs as before, the write gate decides)
+ *   counts    both shapes read back, per holder and lever (one skip, a handler's tally)
+ *   one pass  withRulePass (follow-up of #527): the campaigns and their holders read ONCE for the pass and kept for all of it,
+ *             however many rules and actions ask, and past the 15 s memory of lever-owners; inert when nothing is enrolled
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CampaignLeverOwners } from './lever-owners.js'
@@ -15,33 +17,33 @@ vi.mock('./lever-owners.js', () => ({
   campaignLeverOwners: (...a: unknown[]) => campaignLeverOwners(...a),
   anyBrainEnrolled: (...a: unknown[]) => anyBrainEnrolled(...a),
 }))
-const adGroupFindFirst = vi.fn()
-const campaignFindFirst = vi.fn()
-const campaignFindMany = vi.fn()
+const db = {
+  adGroupFindFirst: vi.fn(), adGroupFindUnique: vi.fn(), adGroupFindMany: vi.fn(),
+  adTargetFindUnique: vi.fn(), adTargetFindMany: vi.fn(), campaignFindFirst: vi.fn(), campaignFindMany: vi.fn(),
+}
 vi.mock('../../../db.js', () => ({
   default: {
-    adGroup: { get findFirst() { return adGroupFindFirst } },
-    campaign: { get findFirst() { return campaignFindFirst }, get findMany() { return campaignFindMany } },
+    adGroup: { get findFirst() { return db.adGroupFindFirst }, get findUnique() { return db.adGroupFindUnique }, get findMany() { return db.adGroupFindMany } },
+    adTarget: { get findUnique() { return db.adTargetFindUnique }, get findMany() { return db.adTargetFindMany } },
+    campaign: { get findFirst() { return db.campaignFindFirst }, get findMany() { return db.campaignFindMany } },
   },
 }))
-// The bid brain's resolver: the action's or the context's campaign (its own tests cover the ad group and keyword lookups).
-vi.mock('../bid-brain/rule-directives.js', () => ({
-  directiveCampaignId: async (action: Record<string, unknown>, context: { campaign?: { id?: string } } | null) => (action.campaignId as string | undefined) ?? context?.campaign?.id ?? null,
-}))
 
-const { ruleActionLever, ruleLeverSkip, ruleResultLeverSkips, warmRuleLeverOwners, ruleActionCampaignId } = await import('./rule-skips.js')
+const { ruleActionLever, ruleLeverSkip, ruleResultLeverSkips, withRulePass, ruleActionCampaignId } = await import('./rule-skips.js')
 
 const held = (campaignId: string, levers: CampaignLeverOwners['levers']): Map<string, CampaignLeverOwners> =>
   new Map([[campaignId, { campaignId, name: 'GALE exact', market: 'IT', levers }]])
 const OWNED = { kind: 'owned' as const, productId: 'gale', market: 'IT', why: 'AUTO by the Owner\'s product override' }
+const queries = () => Object.values(db).reduce((n, f) => n + f.mock.calls.length, 0)
 
 beforeEach(() => {
   vi.stubEnv('NEXUS_BID_BRAIN_MODE', 'live')
   campaignLeverOwners.mockReset().mockResolvedValue(new Map())
   anyBrainEnrolled.mockReset().mockResolvedValue(true)
-  adGroupFindFirst.mockReset()
-  campaignFindFirst.mockReset()
-  campaignFindMany.mockReset()
+  for (const f of Object.values(db)) f.mockReset().mockResolvedValue(null)
+  db.adGroupFindMany.mockResolvedValue([])
+  db.adTargetFindMany.mockResolvedValue([])
+  db.campaignFindMany.mockResolvedValue([])
 })
 afterEach(() => vi.unstubAllEnvs())
 
@@ -62,17 +64,28 @@ describe('ruleActionLever (pure)', () => {
   })
   it('a mapped negative asks per destination inside its handler; sweeps, alerts and the refused pauses are not here', () => {
     expect(ruleActionLever({ type: 'add_negative_exact', negative: { blocks: [] } })).toBeNull()
-    for (const type of ['sync_negatives_across_campaigns', 'harvest_and_negate', 'notify', 'pause_campaign', 'retail_guard', 'pace_budget']) expect(ruleActionLever({ type })).toBeNull()
+    for (const type of ['sync_negatives_across_campaigns', 'harvest_and_negate', 'notify', 'pause_campaign', 'retail_guard', 'pace_budget', 'dayparting_apply']) expect(ruleActionLever({ type })).toBeNull()
   })
 })
 
-describe('ruleActionCampaignId', () => {
+describe('ruleActionCampaignId — the bid brain\'s order, then the search term\'s', () => {
+  it('a campaign named directly reads nothing', async () => {
+    expect(await ruleActionCampaignId({ type: 'adjust_ad_budget' }, { campaign: { id: 'c1' } })).toBe('c1')
+    expect(await ruleActionCampaignId({ type: 'pause_target' }, { adTarget: { id: 't1', campaignId: 'c2' } })).toBe('c2')
+    expect(queries()).toBe(0)
+  })
+  it('an ad group, else a keyword, by Nexus\'s id', async () => {
+    db.adGroupFindUnique.mockResolvedValue({ campaignId: 'c-ag' })
+    expect(await ruleActionCampaignId({ type: 'bid_down', target: 'ad_group', adGroupId: 'g1' }, {})).toBe('c-ag')
+    db.adTargetFindUnique.mockResolvedValue({ adGroup: { campaignId: 'c-t' } })
+    expect(await ruleActionCampaignId({ type: 'pause_target' }, { adTarget: { id: 't9' } })).toBe('c-t')
+  })
   it('a search term\'s action: its ad group\'s campaign, else its campaign by Amazon\'s id', async () => {
-    adGroupFindFirst.mockResolvedValue({ campaignId: 'c-src' })
+    db.adGroupFindFirst.mockResolvedValue({ campaignId: 'c-src' })
     expect(await ruleActionCampaignId({ type: 'promote_to_exact', adGroupId: 'EXT-g' }, {})).toBe('c-src')
-    expect(adGroupFindFirst).toHaveBeenCalledWith({ where: { externalAdGroupId: 'EXT-g' }, select: { campaignId: true } })
-    adGroupFindFirst.mockResolvedValue(null)
-    campaignFindFirst.mockResolvedValue({ id: 'c-ext' })
+    expect(db.adGroupFindFirst).toHaveBeenCalledWith({ where: { externalAdGroupId: 'EXT-g' }, select: { campaignId: true } })
+    db.adGroupFindFirst.mockResolvedValue(null)
+    db.campaignFindFirst.mockResolvedValue({ id: 'c-ext' })
     expect(await ruleActionCampaignId({ type: 'add_negative_exact' }, { searchTerm: { externalCampaignId: 'EXT-c' } })).toBe('c-ext')
   })
 })
@@ -81,7 +94,7 @@ describe('ruleLeverSkip', () => {
   const budget = { type: 'adjust_ad_budget', percent: 20 }
   const ctx = { campaign: { id: 'c1' } }
 
-  it('owned: a named skip in place of the write, with the lever and why', async () => {
+  it('owned: a named skip in place of the write, with the lever, its holder and why', async () => {
     campaignLeverOwners.mockResolvedValue(held('c1', { budgets: OWNED }))
     const r = await ruleLeverSkip(budget, ctx, { ruleId: 'r1' })
     expect(r).toEqual({
@@ -89,10 +102,18 @@ describe('ruleLeverSkip', () => {
       output: {
         skipped: 'brain-lever', campaignId: 'c1',
         why: 'left alone: a product\'s brain runs the daily budget of campaign "GALE exact" (c1) — product gale in IT (one owner per lever); a person\'s own edit still passes',
-        brainSkip: { lever: 'budgets', kind: 'owned', campaignId: 'c1', productId: 'gale', market: 'IT', reason: 'a product\'s brain runs the daily budget of campaign "GALE exact" (c1) — product gale in IT' },
+        brainSkip: { lever: 'budgets', holder: 'productBrain', campaignId: 'c1', productId: 'gale', market: 'IT', reason: 'a product\'s brain runs the daily budget of campaign "GALE exact" (c1) — product gale in IT' },
       },
     })
     expect(campaignLeverOwners).toHaveBeenCalledWith(['c1'])
+  })
+
+  it('the Owner\'s lock is said as his lock, never as a brain', async () => {
+    campaignLeverOwners.mockResolvedValue(held('c1', { budgets: { ...OWNED, kind: 'locked' } }))
+    const r = await ruleLeverSkip(budget, ctx, { ruleId: 'r1' })
+    expect(r?.output).toMatchObject({ brainSkip: { holder: 'ownerLock' } })
+    expect(String(r?.output.why)).toContain('the Owner holds the daily budget of campaign "GALE exact" (c1) at his own value')
+    expect(String(r?.output.why)).not.toContain('product\'s brain runs')
   })
 
   it('not owned, another lever owned: the rule runs as before', async () => {
@@ -104,7 +125,7 @@ describe('ruleLeverSkip', () => {
   it('nothing enrolled (production today): one remembered answer, the campaign never even looked up', async () => {
     anyBrainEnrolled.mockResolvedValue(false)
     expect(await ruleLeverSkip({ type: 'promote_to_exact', adGroupId: 'EXT-g' }, {}, { ruleId: 'r1' })).toBeNull()
-    expect(adGroupFindFirst).not.toHaveBeenCalled()
+    expect(queries()).toBe(0)
     expect(campaignLeverOwners).not.toHaveBeenCalled()
   })
 
@@ -126,37 +147,101 @@ describe('ruleLeverSkip', () => {
   it('a failed read is no skip: the rule runs and the write gate decides (it sends the write again when it cannot read either)', async () => {
     campaignLeverOwners.mockRejectedValue(new Error('db blip'))
     expect(await ruleLeverSkip(budget, ctx, { ruleId: 'r1' })).toBeNull()
-    adGroupFindFirst.mockRejectedValue(new Error('db blip'))
+    db.adGroupFindFirst.mockRejectedValue(new Error('db blip'))
     expect(await ruleLeverSkip({ type: 'promote_to_exact', adGroupId: 'EXT-g' }, {}, { ruleId: 'r1' })).toBeNull()
   })
 })
 
-describe('ruleResultLeverSkips (pure)', () => {
-  it('reads a one-campaign skip and a handler\'s per-lever counts; ignores anything else', () => {
-    expect(ruleResultLeverSkips({ output: { brainSkip: { lever: 'state' } } })).toEqual({ state: 1 })
-    expect(ruleResultLeverSkips({ output: { brainSkips: { counts: { negatives: 3, harvest: 1, nonsense: 2 } } } })).toEqual({ negatives: 3, harvest: 1 })
-    expect(ruleResultLeverSkips({ output: { dryRun: true } })).toEqual({})
-    expect(ruleResultLeverSkips(null)).toEqual({})
+describe('withRulePass — the campaigns and their holders read once for the whole pass', () => {
+  const contexts = [
+    { campaign: { id: 'c1' } },
+    { searchTerm: { externalAdGroupId: 'EXT-g2', externalCampaignId: 'EXT-c2', query: 'x' } },
+    { adTarget: { id: 't3' } },
+  ]
+  beforeEach(() => {
+    db.adGroupFindMany.mockResolvedValue([{ id: 'g2', externalAdGroupId: 'EXT-g2', campaignId: 'c2' }])
+    db.adTargetFindMany.mockResolvedValue([{ id: 't3', adGroup: { campaignId: 'c3' } }])
+    db.campaignFindMany.mockResolvedValue([{ id: 'c2', externalCampaignId: 'EXT-c2' }])
+    campaignLeverOwners.mockResolvedValue(new Map([...held('c1', { budgets: OWNED }), ...held('c2', { negatives: OWNED }), ...held('c3', { state: OWNED })]))
+  })
+
+  it('one query per kind of id and one holders read, then every rule and action reads nothing', async () => {
+    const skips = await withRulePass(contexts, async () => {
+      const out = []
+      for (let rule = 0; rule < 3; rule++) {
+        out.push(await ruleLeverSkip({ type: 'adjust_ad_budget' }, contexts[0], { ruleId: `r${rule}` }))
+        out.push(await ruleLeverSkip({ type: 'add_negative_exact' }, contexts[1], { ruleId: `r${rule}` }))
+        out.push(await ruleLeverSkip({ type: 'promote_to_exact' }, contexts[1], { ruleId: `r${rule}` }))
+        out.push(await ruleLeverSkip({ type: 'pause_target' }, contexts[2], { ruleId: `r${rule}` }))
+      }
+      return out
+    })
+    expect(campaignLeverOwners).toHaveBeenCalledTimes(1)
+    expect(new Set(campaignLeverOwners.mock.calls[0][0] as string[])).toEqual(new Set(['c1', 'c2', 'c3']))
+    expect(db.adGroupFindMany).toHaveBeenCalledTimes(1)
+    expect(db.adTargetFindMany).toHaveBeenCalledTimes(1)
+    expect(db.campaignFindMany).toHaveBeenCalledTimes(1)
+    expect(db.adGroupFindFirst).not.toHaveBeenCalled()
+    expect(db.adTargetFindUnique).not.toHaveBeenCalled()
+    expect(db.campaignFindFirst).not.toHaveBeenCalled()
+    // budgets of c1, negatives of c2 and state of c3 are held; c2's harvest is not
+    expect(skips.map((s) => (s?.output as { brainSkip?: { lever: string } } | undefined)?.brainSkip?.lever ?? null))
+      .toEqual(Array.from({ length: 3 }, () => ['budgets', 'negatives', null, 'state']).flat())
+  })
+
+  it('the answer is kept for the whole pass, past the 15 s memory of lever-owners: it is never read again inside the pass', async () => {
+    vi.useFakeTimers()
+    try {
+      await withRulePass(contexts, async () => {
+        await ruleLeverSkip({ type: 'adjust_ad_budget' }, contexts[0], { ruleId: 'r1' })
+        vi.advanceTimersByTime(60_000)
+        campaignLeverOwners.mockResolvedValue(new Map())
+        expect(await ruleLeverSkip({ type: 'adjust_ad_budget' }, contexts[0], { ruleId: 'r2' })).not.toBeNull()
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(campaignLeverOwners).toHaveBeenCalledTimes(1)
+  })
+
+  it('a campaign no context named is read once, then kept', async () => {
+    campaignLeverOwners.mockImplementation(async (ids: string[]) => new Map(ids.includes('c9') ? held('c9', { budgets: OWNED }) : []))
+    const skips = await withRulePass([{ campaign: { id: 'c1' } }], async () => {
+      const out = []
+      for (let i = 0; i < 3; i++) out.push(await ruleLeverSkip({ type: 'adjust_ad_budget', campaignId: 'c9' }, {}, { ruleId: 'r1' }))
+      return out
+    })
+    expect(skips.every((s) => s !== null)).toBe(true)
+    expect(campaignLeverOwners.mock.calls.filter((c) => (c[0] as string[]).includes('c9'))).toHaveLength(1)
+  })
+
+  it('nothing enrolled or not live: the pass is inert — nothing looked up at all', async () => {
+    anyBrainEnrolled.mockResolvedValue(false)
+    await withRulePass(contexts, async () => {
+      expect(await ruleLeverSkip({ type: 'add_negative_exact' }, contexts[1], { ruleId: 'r1' })).toBeNull()
+    })
+    expect(queries()).toBe(0)
+    expect(campaignLeverOwners).not.toHaveBeenCalled()
+    vi.stubEnv('NEXUS_BID_BRAIN_MODE', '')
+    anyBrainEnrolled.mockClear()
+    await withRulePass(contexts, async () => undefined)
+    expect(anyBrainEnrolled).not.toHaveBeenCalled()
+  })
+
+  it('a failed read before the pass never throws: each rule then reads for itself', async () => {
+    db.adGroupFindMany.mockRejectedValue(new Error('db blip'))
+    const r = await withRulePass(contexts, async () => ruleLeverSkip({ type: 'adjust_ad_budget' }, contexts[0], { ruleId: 'r1' }))
+    expect(r).not.toBeNull()
   })
 })
 
-describe('warmRuleLeverOwners', () => {
-  it('one read for every campaign a pass names; Amazon\'s campaign ids in one query', async () => {
-    campaignFindMany.mockResolvedValue([{ id: 'c3' }])
-    await warmRuleLeverOwners([{ campaign: { id: 'c1' } }, { adTarget: { campaignId: 'c2' } }, { searchTerm: { externalCampaignId: 'EXT-c3' } }, { campaign: { id: 'c1' } }])
-    expect(campaignFindMany).toHaveBeenCalledTimes(1)
-    expect(campaignLeverOwners).toHaveBeenCalledTimes(1)
-    expect(new Set(campaignLeverOwners.mock.calls[0][0] as string[])).toEqual(new Set(['c1', 'c2', 'c3']))
-  })
-  it('nothing enrolled or not live: nothing more read; a failure never throws', async () => {
-    anyBrainEnrolled.mockResolvedValue(false)
-    await warmRuleLeverOwners([{ campaign: { id: 'c1' } }])
-    expect(campaignLeverOwners).not.toHaveBeenCalled()
-    anyBrainEnrolled.mockRejectedValue(new Error('db blip'))
-    await expect(warmRuleLeverOwners([{ campaign: { id: 'c1' } }])).resolves.toBeUndefined()
-    vi.stubEnv('NEXUS_BID_BRAIN_MODE', '')
-    anyBrainEnrolled.mockReset()
-    await warmRuleLeverOwners([{ campaign: { id: 'c1' } }])
-    expect(anyBrainEnrolled).not.toHaveBeenCalled()
+describe('ruleResultLeverSkips (pure)', () => {
+  it('reads a one-campaign skip and a handler\'s tally per holder and lever; ignores anything else', () => {
+    expect(ruleResultLeverSkips({ output: { brainSkip: { lever: 'state', holder: 'ownerLock' } } })).toEqual({ ownerLock: { state: 1 } })
+    expect(ruleResultLeverSkips({ output: { brainSkips: { counts: { productBrain: { negatives: 3, nonsense: 2 }, bidBrain: { bids: 1 }, stranger: { budgets: 4 } } } } }))
+      .toEqual({ productBrain: { negatives: 3 }, bidBrain: { bids: 1 } })
+    expect(ruleResultLeverSkips({ output: { brainSkip: { lever: 'state' } } })).toEqual({}) // no holder: not counted as anyone's
+    expect(ruleResultLeverSkips({ output: { dryRun: true } })).toEqual({})
+    expect(ruleResultLeverSkips(null)).toEqual({})
   })
 })

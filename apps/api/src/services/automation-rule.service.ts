@@ -44,6 +44,7 @@ import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { notCapRefusal } from './automation-cap-predicate.js'
 import { recordAutomationRefusal, refusalRecordedToday, type RefusalReason } from './automation-refusals.service.js'
+import type { LeverHolder } from './advertising/brain/engine-skips.js'
 
 // ─── Conditions DSL ───────────────────────────────────────────────
 
@@ -543,38 +544,57 @@ function refusalEntityOf(ctx: unknown): { entityType?: string | null; entityId?:
   return {}
 }
 
+/** ONE BRAIN AB-6 — the refusal reason of each lever holder (follow-up of #527: each named as what it is). */
+const HELD_REASON: Record<LeverHolder, string> = { productBrain: 'BRAIN_OWNED', ownerLock: 'OWNER_LOCKED', bidBrain: 'BID_BRAIN' }
+/** The words of a held-lever reason when no skip said its own. */
+const HELD_WORDS: Record<string, string> = {
+  BRAIN_OWNED: 'a product\'s brain owns that lever',
+  OWNER_LOCKED: 'the Owner holds that lever at his own value',
+  BID_BRAIN: 'the bid brain runs those keyword bids',
+}
+
 /**
- * ONE BRAIN AB-6 — record, per lever, the writes this run left to a product's brain or to the Owner's lock
- * (`LEVER_HELD:<lever>`, the refusal record automation-activity reads). A skip is not a failure: the rule matched and its
- * lever has another owner. A rule that does not write (a dry run) is counted once a day per lever (BB-9's rule for its
- * cap); a writing rule counts each write it left. Never throws.
+ * ONE BRAIN AB-6 — record, per holder and lever, the writes this run left to their lever's holder, each named as what it
+ * is (follow-up of #527): `BRAIN_OWNED:<lever>` a product's brain owns it, `OWNER_LOCKED:<lever>` the Owner holds it at
+ * his own value, `BID_BRAIN:bids` the bid brain runs the campaign's keyword bids — the refusal record automation-activity
+ * reads. A skip is not a failure: the rule matched and its lever has another owner. A rule that does not write (a dry run)
+ * is counted once a day per reason (BB-9's rule for its cap); a writing rule counts each write it left. Never throws.
  */
 async function recordLeverHeld(rule: { id: string; name: string }, actionResults: ActionResult[], dryRun: boolean, context: unknown): Promise<void> {
   try {
     const { ruleResultLeverSkips } = await import('./advertising/brain/rule-skips.js')
     const held = new Map<string, { n: number; why: string | null }>()
     for (const r of actionResults) {
-      const out = r.output as { brainSkip?: { reason?: unknown }; brainSkips?: { sample?: Array<{ why?: unknown }> } } | undefined
-      const said = out?.brainSkip?.reason ?? out?.brainSkips?.sample?.[0]?.why
-      for (const [lever, n] of Object.entries(ruleResultLeverSkips(r))) {
-        const cur = held.get(lever) ?? { n: 0, why: null }
-        held.set(lever, { n: cur.n + (n ?? 0), why: cur.why ?? (typeof said === 'string' ? said : null) })
+      const out = r.output as { brainSkip?: { holder?: unknown; lever?: unknown; reason?: unknown }; brainSkips?: { sample?: Array<{ holder?: unknown; lever?: unknown; why?: unknown }> } } | undefined
+      const said = (holder: string, lever: string): string | null => {
+        const own = out?.brainSkip
+        if (own?.holder === holder && own.lever === lever && typeof own.reason === 'string') return own.reason
+        const hit = out?.brainSkips?.sample?.find((x) => x.holder === holder && x.lever === lever && typeof x.why === 'string')
+        return hit ? (hit.why as string) : null
+      }
+      for (const [holder, byLever] of Object.entries(ruleResultLeverSkips(r)) as Array<[LeverHolder, Record<string, number>]>) {
+        for (const [lever, n] of Object.entries(byLever ?? {})) {
+          const key = `${HELD_REASON[holder]}:${lever}`
+          const cur = held.get(key) ?? { n: 0, why: null }
+          held.set(key, { n: cur.n + (n ?? 0), why: cur.why ?? said(holder, lever) })
+        }
       }
     }
-    for (const [lever, { n, why }] of held) {
+    for (const [key, { n, why }] of held) {
       if (n <= 0) continue
-      const reason = `LEVER_HELD:${lever}` as RefusalReason
+      const reason = key as RefusalReason
+      const lever = key.slice(key.indexOf(':') + 1)
       if (dryRun && await refusalRecordedToday(rule.id, reason)) continue
       await recordAutomationRefusal({
         actorId: rule.id,
         reason,
         count: dryRun ? 1 : n,
-        detail: `${rule.name} left ${n} write${n === 1 ? '' : 's'} on its ${lever} lever alone — ${why ?? 'a product\'s brain owns that lever, or the Owner holds it at his own value'} (one owner per lever).${dryRun ? ' It proposes and does not write, so it is counted once a day.' : ''}`,
+        detail: `${rule.name} left ${n} write${n === 1 ? '' : 's'} on its ${lever} lever alone — ${why ?? HELD_WORDS[key.slice(0, key.indexOf(':'))] ?? 'its lever has another owner'} (one owner per lever).${dryRun ? ' It proposes and does not write, so it is counted once a day.' : ''}`,
         ...refusalEntityOf(context),
       })
     }
   } catch (err) {
-    logger.warn('[automation-rule] could not record the writes left to a product\'s brain', { ruleId: rule.id, error: err instanceof Error ? err.message : String(err) })
+    logger.warn('[automation-rule] could not record the writes left to their lever\'s holder', { ruleId: rule.id, error: err instanceof Error ? err.message : String(err) })
   }
 }
 
@@ -1076,7 +1096,7 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
     }
   }
 
-  // ONE BRAIN AB-6 — the writes this run left to a product's brain (or the Owner's lock), per lever, in the rule's refusal
+  // ONE BRAIN AB-6 — the writes this run left to their lever's holder, per holder and lever, in the rule's refusal
   // record (automation-activity). A rule that does not write is counted once a day per lever, as its cap refusal is (BB-9).
   if (rule.domain === 'advertising' && !args.noPersist) {
     await recordLeverHeld(rule, actionResults, dryRun, args.context)

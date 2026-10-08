@@ -41,7 +41,7 @@ export async function runTosDefenseOnce(): Promise<string> {
 }
 
 async function tosDefenseTick(): Promise<string> {
-  const { leverSkipNote } = await import('../services/advertising/brain/engine-skips.js')
+  const { leverHeldNote } = await import('../services/advertising/brain/engine-skips.js')
   const { defendTopOfSearch } = await import('../services/advertising/ads-top-of-search.service.js')
   const targetAcos = Number(process.env.NEXUS_TOS_TARGET_ACOS)
   const targetIS = Number(process.env.NEXUS_TOS_TARGET_IS) // 0–1; when set, the loop holds this top-of-search impression share (ACOS-bounded)
@@ -61,7 +61,7 @@ async function tosDefenseTick(): Promise<string> {
   return `evaluated=${r.evaluated} changed=${r.changed} applied=${r.applied} skipped=${r.skippedNotAllowlisted}${rankOwned}${engineGuardNote(guard.report(), {
     suggest: 'nothing is written',
     stopped: 'nothing is written; placement moves wait for Resume',
-  })}${leverSkipNote(r.brainSkips?.counts, !!r.brainSkips?.unread)}`
+  })}${leverHeldNote(r.brainSkips?.counts, !!r.brainSkips?.unread)}`
 }
 
 export async function runTosDefenseCron(): Promise<void> {
