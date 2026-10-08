@@ -703,6 +703,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'report-ads-run': { before: { runId: 'r1', status: 'running', withdrawn: false }, after: { runId: 'r1', status: 'done', withdrawn: false } },
       // W4-2 — the expected report time it replaced, set again.
       'set-ads-report-time': { before: { expected: { time: '08:00', timeZone: 'Europe/Rome' } }, after: { expected: { time: '08:30', timeZone: 'Europe/Rome' } } },
+      // AB-11 — an ads brain harvest put back by its own op undo (the keyword paused, the source negatives retired).
+      'apply-brain-harvest': { before: { changeSetId: 'ap1', op: 'harvest', harvestId: 'h1', keyword: null, negatives: [] }, after: { op: 'harvest', harvestId: 'h1', keywordTargetId: 't1', negatives: ['n1'] } },
       // BB-6 — a campaign's place in the bid brain put back (LIVE → the op that returns it).
       'set-bid-brain-enrollment': { before: { campaignId: 'c1', mode: 'SHADOW' }, after: { campaignId: 'c1', mode: 'LIVE' } },
       // W4-8 — a rule's campaigns put back (replace); a coverage term's values put back through the same tool.

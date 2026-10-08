@@ -464,6 +464,7 @@
     "AdsBrainBudgetDecision",
     "AdsBrainTerm",
     "AdsBrainTermLead",
+    "AdsBrainHarvest",
     "AdWriteRefusal",
     "AutomationRefusalDaily",
     "KeywordBidProposal",

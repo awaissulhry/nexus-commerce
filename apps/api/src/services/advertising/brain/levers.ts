@@ -11,7 +11,8 @@
  *             OWNS a lever at PROPOSE or AUTO (design §3 point 3: the gate then refuses every other engine).
  *   default   every lever starts OBSERVE (design §0.13), per product and per campaign, until the Owner overrides it.
  *   now       a level is offered only once code runs it (LEVER_LEVELS_NOW). AB-1: the bids lever takes OBSERVE and AUTO
- *             (the live bid brain, BB-6); every other lever OFF or OBSERVE until its own PR. OBSERVE on a lever whose
+ *             (the live bid brain, BB-6); AB-11: the harvest lever every level; every other lever OFF or OBSERVE until its
+ *             own PR. OBSERVE on a lever whose
  *             shadow is not built yet records the intent: it starts watching when its shadow lands; nothing is written.
  *   settings  the caps of §5 and the N1–N4 settings of §9 (Owner yes 10-08), each with the design's default and safety
  *             bounds (Amazon's own where it has one); the Owner may set any value inside them, per product, and per
@@ -56,7 +57,7 @@ export const LEVER_LEVELS_NOW: Record<BrainLever, { levels: readonly BrainLevel[
   budgets: { levels: OFF_OBSERVE, others: 'campaign budgets are planned in shadow (AB-7: OBSERVE logs the money plan, ads-brain view money); writing them waits for AB-8' },
   portfolioCap: { levels: OFF_OBSERVE, others: 'the Amazon portfolio cap is planned in shadow (AB-7, ads-brain view money); writing it waits for AB-8' },
   negatives: { levels: OFF_OBSERVE, others: 'the term ledger decides negatives in shadow (AB-9: OBSERVE logs one decision per term, ads-brain view terms); writing them waits for AB-10' },
-  harvest: { levels: OFF_OBSERVE, others: 'the term ledger decides harvests in shadow (AB-9: OBSERVE logs one decision per term, ads-brain view terms); writing them waits for AB-11' },
+  harvest: { levels: ['OFF', 'OBSERVE', 'PROPOSE', 'AUTO'], others: 'AB-11: OBSERVE logs each harvest in shadow, PROPOSE asks a person for the keyword and its source negatives as one change set, AUTO writes it (under NEXUS_ADS_BRAIN_HARVEST_MODE=live); a new campaign is always a request a person approves (ads-brain view harvest)' },
   structure: { levels: OFF_OBSERVE, others: 'new campaigns wait for AB-16' },
   biddingStrategy: { levels: OFF_OBSERVE, others: 'the bidding-strategy lever waits for AB-17' },
   offAmazon: { levels: OFF_OBSERVE, others: 'the off-Amazon lane waits for AB-18' },

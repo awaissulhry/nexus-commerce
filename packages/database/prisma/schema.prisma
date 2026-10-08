@@ -20271,6 +20271,78 @@ model AdsBrainTermLead {
   @@index([workspaceId])
 }
 
+/// ONE BRAIN AB-11 — one harvest of one term of one product in one market (one-brain DESIGN.md §2.8, §2.9, §4 step 4, §5,
+/// §8 row AB-11). The term ledger (AdsBrainTerm) names a HARVEST_CANDIDATE; the harvest module (services/advertising/brain/
+/// harvest.ts) chooses where it goes (an existing exact ad group of the product, or a new campaign built through a Nexus
+/// builder, by approval), and adds the keyword there AND the negative exact in every source in ONE change set (both or
+/// neither; a negative that fails leaves the pair HALF_DONE and is retried). After the attribution window + 72 h it judges
+/// the keyword against the evidence it was harvested on. OBSERVE logs it (SHADOW), PROPOSE asks a person, AUTO writes as
+/// the brain under the harvest ceiling. The unique key keeps one harvest per term: a term is placed once and never moved
+/// again (the Owner's rule: winners are never reshuffled). No foreign key: the product id is the family root.
+model AdsBrainHarvest {
+  // Business ownership comes from verified database context.
+  workspaceId     String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id              String    @id @default(cuid())
+
+  /// Product.id of the family root; short market code ('IT'); the term, normalised (an ASIN in lower case).
+  productId       String
+  marketplace     String
+  term            String
+  isAsin          Boolean   @default(false)
+  /// SHADOW | HELD | PROPOSED | CAMPAIGN_PROPOSED | CAMPAIGN_BUILT | WRITING | DONE | HALF_DONE | REFUSED | FAILED |
+  /// DECLINED | UNDO_PROPOSED | UNDONE (brain/harvest.ts HARVEST_STATUSES)
+  status          String
+  /// The harvest lever's level the change set was decided at: OBSERVE | PROPOSE | AUTO.
+  level           String
+  /// EXISTING (an ad group of the product's own) | NEW_CAMPAIGN (a builder's campaign, by approval) | NONE
+  destinationKind String
+  /// stored (the Owner's harvest destination) | playbook (the product's exact slot) | own (its one exact ad group) |
+  /// ranked (the best of several) | new (a new campaign)
+  destHow         String?
+  destCampaignId  String?
+  destAdGroupId   String?
+  /// The start bid (the bid brain's goal maths inside the limits); money.
+  bidCents        Int?
+  /// The keyword (or product target) the harvest made, and when it began to serve (the judging clock starts there).
+  keywordTargetId String?
+  landedAt        DateTime?
+  /// Every place the term ran: [{ adGroupId, campaignId, clicks, action: negate | standing | skipped | kept, why,
+  /// negativeTargetId?, result?: landed | failed | refused, error? }]
+  sources         Json
+  /// The request a person decides (the pair, or the builder's campaign), and the undo request after a worse judgement.
+  approvalId      String?
+  undoApprovalId  String?
+  attempts        Int       @default(0)
+  lastError       String?   @db.Text
+  /// Why the brain did not act (the lever, the ceiling, a cap, the Owner's lock or choice); null: nothing held it.
+  heldBy          String?   @db.Text
+  /// One line (no money).
+  why             String    @db.Text
+  /// What the harvest stands on: the candidate's window (clicks, orders, spend, sales, CR̂, AOV̂), the harvest test, the
+  /// destination's size and the start bid's why. Money under its own keys (the read tool hides them).
+  evidence        Json
+  /// The judgement after the attribution window + 72 h: WAITING | KEPT | WORSE, with its evidence.
+  judgeAfter      DateTime?
+  judgedAt        DateTime?
+  verdict         String?
+  judgement       Json?
+  /// Hash of the decision: an unchanged shadow decision is only stamped.
+  digest          String
+  runId           String
+  decidedAt       DateTime
+  checkedAt       DateTime
+  changedAt       DateTime
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([workspaceId, productId, marketplace, term], name: "product_market_term", map: "AdsBrainHarvest_workspaceId_productId_marketplace_term_key")
+  @@index([marketplace, status])
+  @@index([status, judgeAfter])
+  @@index([checkedAt])
+  @@index([workspaceId])
+}
+
 /// AUTO.A7 / substrate S5 — the durable record of a write-gate refusal.
 ///
 /// Until now `logGateDeny` wrote to the application log and NOWHERE ELSE, so no surface could

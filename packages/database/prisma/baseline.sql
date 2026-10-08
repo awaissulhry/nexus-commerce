@@ -9668,6 +9668,46 @@ CREATE TABLE "AdsBrainTermLead" (
 );
 
 -- CreateTable
+CREATE TABLE "AdsBrainHarvest" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "term" TEXT NOT NULL,
+    "isAsin" BOOLEAN NOT NULL DEFAULT false,
+    "status" TEXT NOT NULL,
+    "level" TEXT NOT NULL,
+    "destinationKind" TEXT NOT NULL,
+    "destHow" TEXT,
+    "destCampaignId" TEXT,
+    "destAdGroupId" TEXT,
+    "bidCents" INTEGER,
+    "keywordTargetId" TEXT,
+    "landedAt" TIMESTAMP(3),
+    "sources" JSONB NOT NULL,
+    "approvalId" TEXT,
+    "undoApprovalId" TEXT,
+    "attempts" INTEGER NOT NULL DEFAULT 0,
+    "lastError" TEXT,
+    "heldBy" TEXT,
+    "why" TEXT NOT NULL,
+    "evidence" JSONB NOT NULL,
+    "judgeAfter" TIMESTAMP(3),
+    "judgedAt" TIMESTAMP(3),
+    "verdict" TEXT,
+    "judgement" JSONB,
+    "digest" TEXT NOT NULL,
+    "runId" TEXT NOT NULL,
+    "decidedAt" TIMESTAMP(3) NOT NULL,
+    "checkedAt" TIMESTAMP(3) NOT NULL,
+    "changedAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "AdsBrainHarvest_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AdWriteRefusal" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -15494,6 +15534,21 @@ CREATE INDEX "AdsBrainTermLead_workspaceId_idx" ON "AdsBrainTermLead"("workspace
 
 -- CreateIndex
 CREATE UNIQUE INDEX "AdsBrainTermLead_workspaceId_marketplace_term_key" ON "AdsBrainTermLead"("workspaceId", "marketplace", "term");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainHarvest_marketplace_status_idx" ON "AdsBrainHarvest"("marketplace", "status");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainHarvest_status_judgeAfter_idx" ON "AdsBrainHarvest"("status", "judgeAfter");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainHarvest_checkedAt_idx" ON "AdsBrainHarvest"("checkedAt");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainHarvest_workspaceId_idx" ON "AdsBrainHarvest"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AdsBrainHarvest_workspaceId_productId_marketplace_term_key" ON "AdsBrainHarvest"("workspaceId", "productId", "marketplace", "term");
 
 -- CreateIndex
 CREATE INDEX "AdWriteRefusal_deniedAt_createdAt_idx" ON "AdWriteRefusal"("deniedAt", "createdAt");

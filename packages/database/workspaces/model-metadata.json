@@ -6871,6 +6871,10 @@
       "fields": []
     },
     {
+      "name": "AdsBrainHarvest",
+      "fields": []
+    },
+    {
       "name": "AdWriteRefusal",
       "fields": []
     },

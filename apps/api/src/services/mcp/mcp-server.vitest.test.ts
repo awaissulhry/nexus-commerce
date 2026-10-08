@@ -35,7 +35,7 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 
 const OPEN_WORLD = [
   'add-ad-targets', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'advance-purchase-order',
-  'apply-ad-recommendations', 'apply-ads-playbook', 'archive-ads', 'build-sp-wizard-campaigns', 'bulk-ad-bid-change',
+  'apply-ad-recommendations', 'apply-ads-playbook', 'apply-brain-harvest', 'archive-ads', 'build-sp-wizard-campaigns', 'bulk-ad-bid-change',
   'bulk-listing-price-change', 'bulk-listing-stock', 'bulk-price-change', 'buy-shipping-label', 'cancel-order',
   'channel-identity-check', 'close-listing', 'confirm-shipment', 'create-ad-campaign', 'create-ad-group',
   'create-ai-goal-campaigns',
@@ -134,7 +134,9 @@ describe('C3 — the server and every change tool name the business', () => {
       'bid-brain (read only; the bid', 'writes only for a campaign set-bid-brain-enrollment put LIVE',
       "needs the approver's authenticator code; its diff view",
       // AB-3 — the brain's map, read only.
-      'ads-brain (read only; views map, clashes, setup, money, terms)',
+      'ads-brain (read only; views map, clashes, setup, money, terms, harvest)',
+      // AB-11 — the brain's harvest request, a person's decision.
+      'is apply-brain-harvest (the keyword and its source negatives in one change set',
       // PB-11 — where the playbook lives, and that a start needs the approver's code.
       'read it with ads-playbook, change it with', 'start, stop or sync its campaigns, switch its phase',
       "a start needs the approver's authenticator code",

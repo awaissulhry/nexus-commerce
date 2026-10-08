@@ -26,7 +26,9 @@ describe('levels', () => {
     expect(levelRefusal('bids', 'OBSERVE')).toBeNull()
     expect(levelRefusal('bids', 'PROPOSE')).toMatch(/no proposal path/)
     expect(levelRefusal('bids', 'OFF')).toMatch(/decides every allowlisted campaign in shadow/)
-    for (const lever of BRAIN_LEVERS.filter((l) => l !== 'bids')) {
+    // AB-11 — the harvest lever takes every level (shadow, a person's approval, the brain's own writes).
+    for (const level of ['OFF', 'OBSERVE', 'PROPOSE', 'AUTO'] as const) expect(levelRefusal('harvest', level)).toBeNull()
+    for (const lever of BRAIN_LEVERS.filter((l) => l !== 'bids' && l !== 'harvest')) {
       expect(levelRefusal(lever, 'OFF')).toBeNull()
       expect(levelRefusal(lever, 'OBSERVE')).toBeNull()
       expect(levelRefusal(lever, 'AUTO')).toMatch(/takes OFF or OBSERVE today, not AUTO: .*AB-\d+/)
