@@ -59,13 +59,6 @@ const unresolved = (r: { source: string; shortlist: unknown[]; refusal?: string 
     // Batch 2 review fix — the only candidate does not serve (its campaign or ad group is not ENABLED).
     ? `No destination is set for this match type. ${r.refusal ?? 'The only ad group that could take it does not serve.'} Nothing was created.`
     : `No destination is set for this match type and no manual ${gm === 'PRODUCT' ? 'product-target' : gm.toLowerCase()} ad group advertises this product here, so nothing was created — never back into the ad group that found it, whose source negative could then never fire.`
-/**
- * Batch 2 review fix — the Owner's stored destination is his choice whole (as accountWideLanding and the brain's harvest
- * hold it): one that no longer exists, or that lies in another market than the term, refuses the harvest by name — it never
- * falls back to the resolver's own pick.
- */
-const STORED_GONE = (grain: string) => `The harvest destination stored for this match type (at the ${grain} grain) no longer exists, so nothing was created. Choose a destination again with set-harvest-destination (or on the Keyword Harvest tab).`
-const STORED_ELSEWHERE = (grain: string, name: string, theirs: string, ours: string) => `The harvest destination stored for this match type (at the ${grain} grain), “${name}”, is in ${theirs}, but this search term is from ${ours}, so nothing was created. Store a destination for ${ours} with set-harvest-destination.`
 /** PB-6a — a source whose own plan names no destination for a match type (the wizard could not tell its theme). */
 const UNROUTED = 'Two or more of this rule\'s campaigns take this match type, and which one fits this source (brand, competitor or category) could not be told, so no destination was chosen for it. Nothing was created; set the destination on the rule.'
 /** PB-6b — a stored destination no ad group can be read from (a router missing one of its ad groups, or an ASIN sent to it). */
@@ -448,6 +441,12 @@ interface Lock {
   winners: Set<string>
   /** AB-11 — the destination resolved for a graduation that names none (resolvedKey), or why none was. */
   resolved: Map<string, { adGroupId: string; keepSource: boolean } | { deniedAt: string; why: string }>
+  /**
+   * Batch 2 re-review fix — the graduations (resolvedKey) whose Owner's stored destination says negateAtSource off. His
+   * choice wins over every source negative of the term — at the landing AND at a later handover (a home that meets the
+   * harvest bar), whether or not his destination could be used now.
+   */
+  keeps: Set<string>
 }
 
 /** AB-11 — the key of a resolved destination: the source ad group, the match type and the term. */
@@ -505,12 +504,14 @@ async function resolveUnnamed(lock: Lock, items: ReadonlyArray<{ query: string; 
     }
   }
   if (!asks.length) return
-  const { loadDestinationGraph, resolveStoredDestinations, resolveDestination } = await import('./harvest-destination.service.js')
+  const { loadDestinationGraph, resolveStoredDestinations, resolveDestination, sourceLines, storedDestinationRefusal } = await import('./harvest-destination.service.js')
+  // Batch 2 re-review fix — the product line too (the page's and the brain's `line` grain): the whole chain is read.
+  const lines = await sourceLines([...new Set(asks.map((a) => a.src.id))])
   const storedBy = new Map<string, Awaited<ReturnType<typeof resolveStoredDestinations>>>()
   for (const { src } of asks) {
     if (storedBy.has(src.id)) continue
     storedBy.set(src.id, await resolveStoredDestinations({
-      market: src.campaign?.marketplace ?? 'all', portfolio: src.campaign?.portfolioId ?? null, campaign: src.campaignId ?? null, adGroup: src.id,
+      market: src.campaign?.marketplace ?? 'all', line: lines.get(src.id) ?? null, portfolio: src.campaign?.portfolioId ?? null, campaign: src.campaignId ?? null, adGroup: src.id,
     }))
   }
   const graph = await loadDestinationGraph({
@@ -523,10 +524,10 @@ async function resolveUnnamed(lock: Lock, items: ReadonlyArray<{ query: string; 
     const r = resolveDestination({ graph, stored, sourceAdGroupId: a.src.id, sourceAdGroupName: '', term: a.query, kind: createType === 'PRODUCT' ? 'product' : 'keyword', createType })
     const key = resolvedKey(a.src.id, a.gm, a.query)
     const st = stored.get(createType)
-    if (st && r.source !== 'stored') { lock.resolved.set(key, { deniedAt: 'no_destination', why: STORED_GONE(st.grain) }); continue }
-    const at = r.chosen ? graph.adGroups.get(r.chosen.adGroupId)?.marketplace ?? null : null
-    const ours = a.src.campaign?.marketplace ?? null
-    if (r.source === 'stored' && r.chosen && at && ours && strategyMarketOf(at) !== strategyMarketOf(ours)) { lock.resolved.set(key, { deniedAt: 'no_destination', why: STORED_ELSEWHERE(st!.grain, r.chosen.adGroupName, at, ours) }); continue }
+    if (st?.negateAtSource === false) lock.keeps.add(key)
+    // The Owner's stored destination, his choice whole: gone or in another market refuses by name (never the resolver's pick).
+    const storedNo = storedDestinationRefusal({ stored, createType, resolved: r, graph, sourceMarket: a.src.campaign?.marketplace ?? null })
+    if (storedNo) { lock.resolved.set(key, { deniedAt: 'no_destination', why: storedNo }); continue }
     if (!r.chosen) { lock.resolved.set(key, { deniedAt: 'no_destination', why: unresolved(r, a.gm) }); continue }
     // The Owner's stored destination may be the source itself, or keep the source: his choice, kept.
     lock.resolved.set(key, { adGroupId: r.chosen.adGroupId, keepSource: r.chosen.adGroupId === a.src.id || st?.negateAtSource === false })
@@ -539,16 +540,25 @@ const homePositives = (lock: Lock, src: SourceRow | null, destId: string | null)
 
 const homeMatch = (gm: string) => (gm === 'PHRASE' || gm === 'BROAD' ? gm : 'EXACT') as 'EXACT' | 'PHRASE' | 'BROAD'
 
-type GradStep = { kind: 'home'; home: Positive } | { kind: 'create'; adGroupId: string; intent?: Intent; keepSource?: boolean } | { kind: 'refused'; deniedAt: string; why: string }
+/** `keepSource`: the Owner's stored destination keeps this term's source (negateAtSource off) — on every kind of step. */
+type GradStep = { kind: 'home'; home: Positive; keepSource?: boolean } | { kind: 'create'; adGroupId: string; intent?: Intent; keepSource?: boolean } | { kind: 'refused'; deniedAt: string; why: string; keepSource?: boolean }
 
-/** PB-6a — one graduation's step under the lock (L2 first: a term at home stays there, wherever it would land). */
+/**
+ * PB-6a — one graduation's step under the lock (L2 first: a term at home stays there, wherever it would land). Batch 2
+ * re-review fix — a step at home or refused carries the Owner's negateAtSource off too (lock.keeps), so a later handover
+ * never negates the source he keeps.
+ */
 function gradStep(lock: Lock, rule: boolean, query: string, gm: string, src: SourceRow | null, row: HarvestPlanRow | undefined, destinations: Record<string, string> | undefined): GradStep {
   const landing = landingOf(gm, query, src, row, destinations, lock.resolved)
+  const ownerKeeps = !!src && lock.keeps.has(resolvedKey(src.id, gm, query))
+  const keep = ownerKeeps ? { keepSource: true } : {}
   if (rule) {
     const home = homeOf(query, homePositives(lock, src, 'adGroupId' in landing ? landing.adGroupId : null), homeMatch(gm))
-    if (home) return { kind: 'home', home }
+    if (home) return { kind: 'home', home, ...keep }
   }
-  return 'adGroupId' in landing ? { kind: 'create', adGroupId: landing.adGroupId, ...(landing.intent ? { intent: landing.intent } : {}), ...(landing.keepSource ? { keepSource: true } : {}) } : { kind: 'refused', ...landing }
+  return 'adGroupId' in landing
+    ? { kind: 'create', adGroupId: landing.adGroupId, ...(landing.intent ? { intent: landing.intent } : {}), ...(landing.keepSource || ownerKeeps ? { keepSource: true } : {}) }
+    : { kind: 'refused', ...landing, ...keep }
 }
 
 /** PB-6b — the source row that is never closed for a graduated term (its edge says not to negate the source). */
@@ -628,7 +638,7 @@ async function readLock(args: {
   const rows = exts.length ? await prisma.adGroup.findMany({ where: { externalAdGroupId: { in: exts } }, select: SOURCE_SELECT }) : []
   const sources = new Map<string, SourceRow>()
   for (const r of rows) if (r.externalAdGroupId && !sources.has(r.externalAdGroupId)) sources.set(r.externalAdGroupId, r)
-  const lock: Lock = { sources, positives: new Map(), scopes: new Map(), winners: new Set(), resolved: new Map() }
+  const lock: Lock = { sources, positives: new Map(), scopes: new Map(), winners: new Set(), resolved: new Map(), keeps: new Set() }
   // AB-11 — the graduations that name no destination get one resolved (never back into their source).
   await resolveUnnamed(lock, args.graduating.map(({ c, product }) => ({ query: c.query, externalAdGroupId: c.externalAdGroupId, matches: product || isAsinQuery(c.query) ? ['PRODUCT'] : planList(args.plan?.[c.externalAdGroupId], 'graduate') })), args.plan, args.destinations)
   if (!args.rule) return lock
@@ -772,12 +782,14 @@ export async function planRuleHarvest(args: {
       }
       if (creates) { into.push(c); item(kind, c, 'create', undefined, creates.intent); continue }
       const homes = steps.flatMap((s) => (s.kind === 'home' ? [s.home] : []))
-      const proven = provenHome(lock, c.query, src, homes, row?.negateOnLanding === true, keepsSource(row))
+      // Batch 2 re-review fix — the Owner's negateAtSource off keeps the source here too: no handover is proposed.
+      const keep = keepsSource(row) || steps.some((s) => s.keepSource === true)
+      const proven = provenHome(lock, c.query, src, homes, row?.negateOnLanding === true, keep)
       if (proven) {
         const { write } = toWrite(c, product ? ['PRODUCT'] : negMatches(c))
         if (write.length) { into.push(c); item(kind, c, 'handover'); continue }
       }
-      if (homes.length) { out.keptHome.push({ query: c.query, externalAdGroupId: c.externalAdGroupId, why: homeWords(homes[0], src, false, keepsSource(row)) }); continue }
+      if (homes.length) { out.keptHome.push({ query: c.query, externalAdGroupId: c.externalAdGroupId, why: homeWords(homes[0], src, false, keep) }); continue }
       if (refused) item(kind, c, 'refused', refused.why)
     }
   }
@@ -978,11 +990,13 @@ export async function applyHarvest(args: {
         // campaign), not back into the source. Fall back to the source ad group when no destination
         // of that kind exists (back-compat / standalone template) — 5d: only when the source can take it.
         const step = gradStep(lock, !!args.rule, g.query, gm, srcAg, row, args.destinations)
+        // Batch 2 re-review fix — the Owner's negateAtSource off is read on every step (a term at home included): it keeps
+        // the source at a later handover too, never only at the landing.
+        if (step.keepSource) ownerKeeps = true
         if (step.kind === 'home') { homes.push(step.home); continue }
         if (step.kind === 'refused') { refusal ??= step; result.errors.push(`grad "${g.query}" (${gm}): ${step.why}`); continue }
         // PB-6a — an accepted handover never creates: today's data asks a create, so it waits for the next card.
         if (g.step === 'handover') { refusal ??= { deniedAt: 'step_changed', why: STEP_CHANGED }; continue }
-        if (step.keepSource) ownerKeeps = true
         const bid = await startBid(bands, g, row, step.adGroupId, !!args.rule)
         if ('why' in bid) { refusal ??= bid; result.errors.push(`grad "${g.query}" (${gm}): ${bid.why}`); continue }
         const k = asin
@@ -1114,7 +1128,8 @@ export async function applyHarvest(args: {
       }
       // H.3-analog — isolate: negate the ASIN in its source, 5d: only once it LANDED in a different ad group; PB-6a (L4):
       // on a rule's harvest only once its home there meets the harvest bar (never for an accepted create).
-      const keep = keepsSource(row) || (step.kind === 'create' && step.keepSource === true)
+      // Batch 2 re-review fix — the Owner's negateAtSource off keeps the source on every step, a home's handover included.
+      const keep = keepsSource(row) || step.keepSource === true
       const negateOnLanding = !keep && (row?.negateOnLanding ?? !args.rule)
       const proven = step.kind === 'home' && pg.step !== 'create' ? provenHome(lock, pg.query, srcAg, [step.home], negateOnLanding, keep) : null
       if ((landedElsewhere && negateOnLanding) || proven) {

@@ -44,7 +44,7 @@ import { writeNegativeKeyword } from '../../advertising/ads-negative-kw.service.
 import { createKeywordLocal } from '../../advertising/ads-create.service.js'
 import { adsProfileFor } from '../../advertising/ads-profile-resolver.js'
 import { adGroupCampaigns, adGroupExternalIds, adGroupsByExternalId } from '../../advertising/ads-entity-lookup.service.js'
-import { loadDestinationGraph, resolveDestination, resolveStoredDestinations } from '../../advertising/harvest-destination.service.js'
+import { loadDestinationGraph, resolveDestination, resolveStoredDestinations, sourceLines, storedDestinationRefusal } from '../../advertising/harvest-destination.service.js'
 import { clampBidsByCeiling } from '../../advertising/ads-cpc-ceiling.js'
 import { amountLabel, campaignCurrency, checkLiveReach, suppressionOf } from './ads-tool-guards.js'
 import { afterwardsArg, afterwardsNote, afterwardsOf, alsoChangedBy, approvedRun, bidStepOf, handBackEvidence, handBackRefusal, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, adWriteRefusalOf, bidWriteOf, stepClampWords, storedReach, withStepPast, type BidAfterwards, type StoredReach } from './ads-change-kit.js'
@@ -485,12 +485,16 @@ async function destinationAdGroup(args: Record<string, unknown>, query: string, 
   if (!sourceGroupExt) return { refusal: 'Name the ad group to add the keyword to (destExternalAdGroupId), or the ad group it converted in (sourceExternalAdGroupId) so the harvest destination can be resolved.' }
   const sourceGroup = await adGroupInCampaign(sourceGroupExt, source.id)
   if (!sourceGroup) return { refusal: `ad group ${sourceGroupExt} not found in ${source.name}` }
+  // Batch 2 review fixes — the whole chain, the portfolio and the product line included (where the Owner stores his
+  // destinations); his stored one gone or in another market refuses by name, never the resolver's pick.
+  const line = (await sourceLines([sourceGroup.id])).get(sourceGroup.id) ?? null
   const [graph, stored] = await Promise.all([
     loadDestinationGraph(),
-    // Batch 2 review fix — the whole chain, the portfolio grain included (where the Owner stores his destinations).
-    resolveStoredDestinations({ market: source.marketplace ?? 'all', portfolio: source.portfolioId ?? null, campaign: source.id, adGroup: sourceGroup.id }),
+    resolveStoredDestinations({ market: source.marketplace ?? 'all', line, portfolio: source.portfolioId ?? null, campaign: source.id, adGroup: sourceGroup.id }),
   ])
   const resolved = resolveDestination({ graph, stored, sourceAdGroupId: sourceGroup.id, sourceAdGroupName: sourceGroup.name, term: query, kind: 'keyword', createType: 'EXACT' })
+  const storedNo = storedDestinationRefusal({ stored, createType: 'EXACT', resolved, graph, sourceMarket: source.marketplace ?? null })
+  if (storedNo) return { refusal: `${storedNo} Or name one: destExternalAdGroupId.` }
   if (!resolved.chosen) {
     return { refusal: `No destination ad group is decided for this term (${resolved.source === 'resolved-ambiguous' ? `${resolved.shortlist.length} could take it` : resolved.source === 'resolved-paused' ? `the only one that could take it does not serve: ${resolved.refusal}` : 'none fits'}). Name one: destExternalAdGroupId.` }
   }

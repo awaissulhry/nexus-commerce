@@ -8,6 +8,9 @@
  *   portfolio   a jacket whose two exact ad groups both could take the term (the resolver alone: ambiguous, refused); the
  *               Owner's EXACT destination stored for the jacket's PORTFOLIO, negateAtSource off: a rule's harvest lands the
  *               keyword there and the source is never negated
+ *   handover    (re-review) the jacket's keyword there meets the harvest bar: a later run of the rule, which would hand the term
+ *               over and negate its source, still adds no source negative and its card proposes no handover — his
+ *               negateAtSource off wins; with it on, the same run hands it over (the bar is met)
  *   keep        a glove with one exact ad group (the resolver alone: that one, and the source negated on landing); the
  *               Owner's portfolio destination says negateAtSource off: a recommendation's accept lands it there and the
  *               source stays; turned back on, the next one is negated — the flag is read from his portfolio row
@@ -15,6 +18,8 @@
  *               own pick, nothing created
  *   paused      a boot whose only exact ad group does not serve (its campaign paused, or the ad group itself): refused with
  *               the reason, nothing created; enabled again, it lands
+ *   line        (re-review) a destination stored for the boot's product line (the page's and the brain's `line` grain) is
+ *               read: its negateAtSource off keeps the source
  *   scope       the graph one harvest reads: the sources' products in their markets and the stored destinations only — not
  *               the jacket's other market, the other products or the rest of the business
  *   business    another business's destination stored for the same portfolio id is never read
@@ -58,7 +63,7 @@ vi.mock('./ads-api-client.js', async (original) => ({
   listNegativeKeywords: vi.fn(async () => []),
 }))
 
-const { applyHarvest } = await import('./ads-harvest.service.js')
+const { applyHarvest, planRuleHarvest } = await import('./ads-harvest.service.js')
 const { loadDestinationGraph, resolveStoredDestinations } = await import('./harvest-destination.service.js')
 const { setAutonomy } = await import('./ads-automation-state.service.js')
 
@@ -149,6 +154,35 @@ describe.skipIf(!concurrentDatabaseUrl())('batch 2 review fix — a harvest with
     expect(amz.negatives).toEqual([])
   })
 
+  it('handover: once the keyword in his destination meets the harvest bar, a later run of the rule still negates no source (negateAtSource off wins); with it on, it hands over', async () => {
+    // The keyword the first run created in Exact A now sells there: it meets the rule's harvest bar.
+    await inW(() => database.client.amazonAdsSearchTerm.create({
+      data: {
+        profileId: 'P-IT-TEST', marketplace: 'IT', adProduct: 'SPONSORED_PRODUCTS', date: new Date(new Date(Date.now() - 3 * 86_400_000).toISOString().slice(0, 10)),
+        campaignId: `EXT-${C('jk-exact-a')}`, adGroupId: `EXT-${G('jk-exact-a')}`, query: 'touring jacket', impressions: 400, clicks: 20, costMicros: 4_000_000n, currencyCode: 'EUR', sales7dCents: 16_000, orders7d: 2,
+      },
+    }))
+    const rule = { criteria: { minOrders: 1, windowDays: 30 } }
+    const graduation = term('jk-auto', 'touring jacket')
+    // The card: at home, kept with his words — no handover proposed.
+    const card = await inW(() => planRuleHarvest({ negatives: [], graduations: [graduation], productNegatives: [], productGraduations: [], rule }))
+    expect(card.items).toEqual([])
+    expect(card.keptHome).toEqual([expect.objectContaining({ query: 'touring jacket', why: expect.stringMatching(/never negated for a term that graduated from it/) })])
+    // The run: nothing created again, and no source negative.
+    reset()
+    const kept = await inW(() => applyHarvest({ graduations: [graduation], userId: 'automation:b2rf-rule', rule }))
+    expect(kept.outcomes[0]).toMatchObject({ outcome: 'refused', refusal: { deniedAt: 'already_home', reason: expect.stringMatching(/never negated for a term that graduated from it/) }, negative: null })
+    expect([amz.keywords, amz.negatives]).toEqual([[], []])
+    // The control: with his row saying negate-at-source on, the same run hands the term over and negates the source.
+    await store('portfolio', PF_JACKET, G('jk-exact-a'), true)
+    try {
+      expect((await inW(() => planRuleHarvest({ negatives: [], graduations: [graduation], productNegatives: [], productGraduations: [], rule }))).items).toEqual([expect.objectContaining({ step: 'handover' })])
+      const handed = await inW(() => applyHarvest({ graduations: [graduation], userId: 'automation:b2rf-rule', rule }))
+      expect(handed.outcomes[0]).toMatchObject({ outcome: 'acted', negative: { attempted: true, reachedAmazon: true } })
+      expect(amz.negatives.map((n) => [n.externalAdGroupId, n.keywordText])).toEqual([[`EXT-${G('jk-auto')}`, 'touring jacket']])
+    } finally { await store('portfolio', PF_JACKET, G('jk-exact-a'), false) }
+  })
+
   it('keep: a recommendation\'s accept lands in the portfolio destination and keeps the source (negateAtSource off); turned on, the next is negated', async () => {
     reset()
     const kept = await inW(() => applyHarvest({ graduations: [term('gl-auto', 'winter glove')], userId: 'user:b2rf-person' }))
@@ -191,6 +225,18 @@ describe.skipIf(!concurrentDatabaseUrl())('batch 2 review fix — a harvest with
     await inW(() => database.client.adGroup.update({ where: { id: G('bt-exact') }, data: { status: 'ENABLED' } }))
     const lands = await inW(() => applyHarvest({ graduations: [term('bt-auto', 'hiking boot')], userId: 'user:b2rf-person' }))
     expect(lands.outcomes[0]).toMatchObject({ outcome: 'acted', destinationAdGroupId: G('bt-exact'), negative: { reachedAmazon: true } })
+  })
+
+  it('line: a destination stored for the product line is read — its negateAtSource off keeps the source', async () => {
+    // The boot (no portfolio): its line is its parent product, as the Keyword Harvest page reads a line.
+    await store('line', BOOT, G('bt-exact'), false)
+    try {
+      reset()
+      const r = await inW(() => applyHarvest({ graduations: [term('bt-auto', 'trail boot')], userId: 'user:b2rf-person' }))
+      expect(r.outcomes[0]).toMatchObject({ outcome: 'acted', destinationAdGroupId: G('bt-exact'), negative: null })
+      expect(r.outcomes[0].negateReason).toMatch(/never negated for a term that graduated from it/)
+      expect(amz.negatives).toEqual([])
+    } finally { await inW(() => database.client.adsHarvestDestination.deleteMany({ where: { scopeGrain: 'line' } })) }
   })
 
   it('scope: one harvest\'s graph holds its sources\' products in their markets and the stored destinations — nothing else of the business', async () => {

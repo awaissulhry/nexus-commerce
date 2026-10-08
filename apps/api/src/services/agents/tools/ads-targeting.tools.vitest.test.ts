@@ -528,6 +528,23 @@ describe('harvest-search-term', () => {
     expect((await preview('harvest-search-term', { query: 'red jacket', sourceAdGroupId: 'g-a1', destAdGroupId: 'g-a1' })).error).toMatch(/lands in ad group "group g-a1" .*the ad group the term ran in: a negative there would block it/)
   })
 
+  it('no destination named: the Owner\'s destination stored for the product line is taken, with his negate-at-source; one in another market or gone is refused by name (batch 2 re-review fixes)', async () => {
+    const line = (await inside(() => database.client.product.findFirstOrThrow({ where: { sku: 'TEST-W45-ONE' } }))).id
+    // Without it, the resolver's only exact ad group of product one (g-a2, by its keyword) would be taken.
+    await inside(() => database.client.adsHarvestDestination.create({ data: { scopeGrain: 'line', scopeId: line, matchType: 'EXACT', adGroupId: 'g-a3', negateAtSource: false, updatedBy: 'test' } }))
+    try {
+      const r = await preview('harvest-search-term', { query: 'blue jacket', sourceAdGroupId: 'g-a1' })
+      expect(r.ok, r.error).toBe(true)
+      expect(r.preview).toMatchObject({ negateSource: 'none', changes: [{ label: 'exact keyword "blue jacket" · ad group "group g-a3" (campaign "Test c-a")' }] })
+      await inside(() => database.client.adsHarvestDestination.updateMany({ where: { scopeGrain: 'line' }, data: { adGroupId: 'g-c-uk' } }))
+      expect((await preview('harvest-search-term', { query: 'blue jacket', sourceAdGroupId: 'g-a1' })).error)
+        .toMatch(/^Not queued: The harvest destination stored for this match type \(at the line grain\), “group c-uk”, is in UK, but this search term is from IT, so nothing was created\..* Or name one \(destAdGroupId\)\.$/)
+      await inside(() => database.client.adsHarvestDestination.updateMany({ where: { scopeGrain: 'line' }, data: { adGroupId: 'g-no-such-group' } }))
+      expect((await preview('harvest-search-term', { query: 'blue jacket', sourceAdGroupId: 'g-a1' })).error)
+        .toMatch(/^Not queued: The harvest destination stored for this match type \(at the line grain\) no longer exists, so nothing was created/)
+    } finally { await inside(() => database.client.adsHarvestDestination.deleteMany({ where: { scopeGrain: 'line' } })) }
+  })
+
   it('one step: the keyword, then the source negative, both on the change set; like graduate-keyword it needs no code; undo puts both back', async () => {
     const r = await preview('harvest-search-term', { query: 'wool jacket', sourceAdGroupId: 'g-a1', destAdGroupId: 'g-a3' })
     expect(r.preview).toMatchObject({ negateSource: 'add', bidCents: 120, raises: ['exact keyword "wool jacket" at EUR 1.20'], limitFacts: { action: 'harvest', this: { items: 2, raises: 1, cuts: 1 } } })

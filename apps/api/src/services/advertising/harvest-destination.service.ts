@@ -53,6 +53,7 @@ import prisma from '../../db.js'
 // change) rather than copied, so this page and the funnel can never disagree about which ad groups
 // advertise a product.
 import { gatherProductAdGroups } from './ads-keyword-funnel.service.js'
+import { normalizeMarketplaceCode } from '../../utils/marketplace-code.js'
 
 export type HvMatchRole = 'AUTO' | 'BROAD' | 'PHRASE' | 'EXACT'
 /** The target types a harvest can CREATE — also the keys of `applyHarvest`'s `destinations` map. */
@@ -346,6 +347,54 @@ export async function resolveStoredDestinations(scope: DestScopeRequest): Promis
     }
   }
   return out
+}
+
+/**
+ * Batch 2 re-review fix — the product line a source ad group advertises (the Keyword Harvest page's line: the product's
+ * parent, else itself), for the `line` grain of the stored-destination chain; null when it advertises none, or products of
+ * more than one line (no single line is its own). One read for every ad group asked.
+ */
+export async function sourceLines(adGroupIds: readonly string[]): Promise<Map<string, string | null>> {
+  const ids = [...new Set(adGroupIds.filter(Boolean))]
+  const out = new Map<string, string | null>(ids.map((id) => [id, null]))
+  if (!ids.length) return out
+  const ads = await prisma.adProductAd.findMany({ where: { adGroupId: { in: ids }, productId: { not: null } }, select: { adGroupId: true, productId: true, product: { select: { parentId: true } } } })
+  const lines = new Map<string, Set<string>>()
+  for (const a of ads) {
+    if (!a.productId) continue
+    const set = lines.get(a.adGroupId) ?? new Set<string>()
+    set.add(a.product?.parentId ?? a.productId)
+    lines.set(a.adGroupId, set)
+  }
+  for (const [id, set] of lines) out.set(id, set.size === 1 ? [...set][0] : null)
+  return out
+}
+
+/**
+ * Batch 2 re-review fix — the Owner's stored destination is his choice whole, for every caller that lands a harvest with
+ * none named (applyHarvest, harvest-search-term, graduate-keyword; accountWideLanding and the brain's harvest hold the same
+ * rule): one that no longer exists, or lies in another market than the term, refuses by name — never the resolver's own
+ * pick. The refusal's words, or null when nothing is stored for the match type or the stored one is usable. Pure.
+ */
+export function storedDestinationRefusal(args: {
+  stored: Map<HvCreateType, StoredDestination>
+  createType: HvCreateType
+  resolved: Pick<ResolvedDestination, 'source' | 'chosen'>
+  graph: Pick<DestinationGraph, 'adGroups'>
+  sourceMarket: string | null
+}): string | null {
+  const st = args.stored.get(args.createType)
+  if (!st) return null
+  if (args.resolved.source !== 'stored' || !args.resolved.chosen) {
+    return `The harvest destination stored for this match type (at the ${st.grain} grain) no longer exists, so nothing was created. Choose a destination again with set-harvest-destination (or on the Keyword Harvest tab).`
+  }
+  const market = (m: string | null | undefined) => normalizeMarketplaceCode(m, '') || null
+  const theirs = market(args.graph.adGroups.get(args.resolved.chosen.adGroupId)?.marketplace)
+  const ours = market(args.sourceMarket)
+  if (theirs && ours && theirs !== ours) {
+    return `The harvest destination stored for this match type (at the ${st.grain} grain), “${args.resolved.chosen.adGroupName}”, is in ${theirs}, but this search term is from ${ours}, so nothing was created. Store a destination for ${ours} with set-harvest-destination.`
+  }
+  return null
 }
 
 // ── the resolver ──────────────────────────────────────────────────────────────────────────────

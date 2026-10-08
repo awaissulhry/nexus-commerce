@@ -48,10 +48,13 @@ vi.mock('../../utils/logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn()
 // AB-11 — a graduation with no destination named gets the harvest destination the Keyword Harvest page's resolver gives.
 let resolved: { chosen: { adGroupId: string } | null; source: string; shortlist: unknown[] } = { chosen: null, source: 'none', shortlist: [] }
 let storedDest = new Map<string, { adGroupId: string; negateAtSource: boolean }>()
-vi.mock('./harvest-destination.service.js', () => ({
+vi.mock('./harvest-destination.service.js', async (importOriginal) => ({
   loadDestinationGraph: vi.fn(async () => ({ adGroups: new Map(), productsOfAdGroup: new Map(), holdersOfTerm: new Map() })),
   resolveStoredDestinations: vi.fn(async () => storedDest),
   resolveDestination: vi.fn(() => resolved),
+  sourceLines: vi.fn(async (ids: string[]) => new Map(ids.map((id) => [id, null]))),
+  // Batch 2 re-review fix — the real rule: a stored destination gone or in another market refuses by name.
+  storedDestinationRefusal: (await importOriginal<typeof import('./harvest-destination.service.js')>()).storedDestinationRefusal,
 }))
 // PB-6a — the lock reads the batch's source ad groups (by Amazon's id) and the positives near them once.
 const findTargets = vi.fn(async (..._a: unknown[]) => [] as unknown[])
