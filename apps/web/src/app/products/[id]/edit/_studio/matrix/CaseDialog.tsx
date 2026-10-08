@@ -34,6 +34,8 @@ import {
   type CaseDraft, type CaseMember, type CaseOwnerField, type CasePut, type CaseSizeField, type CaseWrite, type SealedCases, type SizeDraft,
 } from './casePack'
 import styles from './CaseDialog.module.css'
+import dialogs from './dialogs.module.css'
+import { useFocusOffClose } from './dialogFocus'
 
 export interface CaseTarget {
   rowId: string
@@ -76,6 +78,7 @@ export function CaseDialog(p: CaseDialogProps) {
   const [error, setError] = useState<string | null>(null)
   const [confirm, setConfirm] = useState<Confirm | null>(null)
   const [autofocus] = useState(() => !isPhone())
+  useFocusOffClose()
   /* What this opening already saved (a parent's writes can land in parts): the toast and its Undo name it. */
   const applied = useRef<{ writes: CaseWrite[]; opened: number }>({ writes: [], opened: 0 })
 
@@ -218,7 +221,7 @@ export function CaseDialog(p: CaseDialogProps) {
   )
 
   return (
-    <Modal open onClose={close} size="md" anchor={target.anchor} title={`Case · ${target.label}`} subtitle={target.subtitle} footer={footer}>
+    <Modal open onClose={close} size="md" className={dialogs.box} anchor={target.anchor} title={`Case · ${target.label}`} subtitle={target.subtitle} footer={footer}>
       <div className={styles.body} onKeyDown={onKeyDown}>
         {draft.sizes ? sizeRows : (
           <div className={styles.mixed}>
@@ -227,10 +230,10 @@ export function CaseDialog(p: CaseDialogProps) {
           </div>
         )}
         <Field label="Prep by">
-          <SegmentedControl ariaLabel="Prep by" size="sm" value={draft.fbaPrepOwner} onChange={(v) => setOwner('fbaPrepOwner', v)} options={OWNERS} disabled={busy} />
+          <SegmentedControl ariaLabel="Prep by" size="sm" className={dialogs.seg} value={draft.fbaPrepOwner} onChange={(v) => setOwner('fbaPrepOwner', v)} options={OWNERS} disabled={busy} />
         </Field>
         <Field label="Labels by">
-          <SegmentedControl ariaLabel="Labels by" size="sm" value={draft.fbaLabelOwner} onChange={(v) => setOwner('fbaLabelOwner', v)} options={OWNERS} disabled={busy} />
+          <SegmentedControl ariaLabel="Labels by" size="sm" className={dialogs.seg} value={draft.fbaLabelOwner} onChange={(v) => setOwner('fbaLabelOwner', v)} options={OWNERS} disabled={busy} />
         </Field>
         {boxWarning && <Banner tone="warning">{boxWarning}</Banner>}
         {confirm && <Banner tone="warning">{confirm.sentence}</Banner>}

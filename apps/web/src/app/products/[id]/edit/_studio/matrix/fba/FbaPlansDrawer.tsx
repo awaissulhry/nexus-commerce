@@ -166,12 +166,14 @@ export function FbaPlansDrawer({ open, onClose, productId, planId, onPlanChanged
     <Drawer
       open={open}
       onClose={onClose}
-      title={FBA_SEND_COPY.drawerTitle}
+      // The drawer opens on its heading (the DS drawer looks for `data-drawer-heading`), not on the whole panel, which
+      // drew a ring round the drawer (Matrix polish, Owner 2026-10-08).
+      title={<span className={styles.heading} tabIndex={-1} data-drawer-heading>{FBA_SEND_COPY.drawerTitle}</span>}
       subtitle={shown ? planName(shown) : undefined}
       footer={parts.footer}
       overlay={parts.overlay}
       width={FBA_PLANS_DRAWER_WIDTH}
-      closeLabel="Close FBA plans"
+      closeLabel={`Close ${FBA_SEND_COPY.drawerTitle}`}
     >
       <div className={styles.body}>
         <p className="nds-vh" role="status" aria-live="polite">{announcement}</p>

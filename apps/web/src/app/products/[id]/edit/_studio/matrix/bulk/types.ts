@@ -160,7 +160,7 @@ export interface BulkInitial {
 
 /** Everything the page supplies to the dialog for ONE opening (one set of rows). */
 export interface BulkEditSource {
-  /** `Edit 12 rows` · `Edit GALE-JACKET-BLACK-MEN-XS` */
+  /** `Edit · 12 rows` · `Edit · GALE-JACKET-BLACK-MEN-XS` */
   title: string
   /** `GALE-JACKET · 12 of 20 variants` */
   subtitle: string

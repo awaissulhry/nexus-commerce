@@ -12,7 +12,7 @@
  * Cases (Step 3): a typed sealed count (one per case size) sits in `pendingCases` and travels in
  * the SAME change as that cell's on-hand, so the server writes and checks them in one transaction.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Redo2, Search, Undo2 } from 'lucide-react'
 
 import { Modal, Combobox, Listbox, MultiSelect } from '@/design-system/components'
@@ -37,7 +37,17 @@ const readHidden = (): OptionalColumnKind[] => {
   } catch { return [] }
 }
 
-export function InventoryEditorModal({ row, density, onClose }: { row: InventoryEditorTarget | null; density: DensityMode; onClose: () => void }) {
+export interface InventoryEditorModalProps {
+  row: InventoryEditorTarget | null
+  density: DensityMode
+  onClose: () => void
+  /** The dialog's title; absent = the product's name (the Products page). The Matrix passes "Stock · <SKU>". */
+  title?: string
+  /** The line under the title; absent = SKU · variations · locations. The Matrix passes the product's name. */
+  subtitle?: ReactNode
+}
+
+export function InventoryEditorModal({ row, density, onClose, title, subtitle: subtitleProp }: InventoryEditorModalProps) {
   const open = row != null
   const single = row ? editorModeForRow(row) === 'list' : true
   const { loading, error, model, reload, applyBatch } = useInventoryEditor(row)
@@ -73,6 +83,29 @@ export function InventoryEditorModal({ row, density, onClose }: { row: Inventory
   }, [row?.id])
 
   const editableLocations = useMemo(() => (model?.columns ?? []).filter((c) => c.editable), [model])
+
+  /*
+   * Focus (Matrix polish, Owner 2026-10-08): the editor opens on its first FIELD — the first row's first editable On hand
+   * cell, so a keyboard open can type at once — never on the ✕. The DS Modal focuses its first focusable (the ✕) on
+   * open, before the grid has loaded: the box itself holds focus meanwhile (it draws no ring), then the cell takes it.
+   * Only while nothing inside was chosen yet (a click in the meantime wins).
+   */
+  const focusedFirst = useRef(false)
+  useEffect(() => {
+    focusedFirst.current = false
+    if (!open) return
+    const active = document.activeElement
+    if (active instanceof HTMLElement && active.matches('.nds-modal-x')) active.closest<HTMLElement>('[role="dialog"]')?.focus()
+  }, [open, row?.id])
+  useEffect(() => {
+    if (!gridApi || !model || focusedFirst.current) return
+    const first = editableLocations[0]
+    const active = document.activeElement
+    const untouched = active instanceof HTMLElement && (active.matches('[role="dialog"]') || active.matches('.nds-modal-x'))
+    if (!first || !untouched || (model.rows.length ?? 0) === 0) return
+    focusedFirst.current = true
+    gridApi.setFocusedCell(0, `onhand:${first.locationId}`)
+  }, [gridApi, model, editableLocations])
   useEffect(() => {
     if (!setLocation || !editableLocations.some((c) => c.locationId === setLocation)) setSetLocation(editableLocations[0]?.locationId ?? '')
   }, [editableLocations, setLocation])
@@ -150,7 +183,9 @@ export function InventoryEditorModal({ row, density, onClose }: { row: Inventory
   }, [pendingCount, confirmDiscard, onClose])
 
   const rowCount = model?.rows.length ?? 0
-  const subtitle = row
+  // A passed name (the Matrix) can be long: two lines at most, the whole name on hover.
+  const subtitle = typeof subtitleProp === 'string' ? <span className={styles.ieSubtitle} title={subtitleProp}>{subtitleProp}</span>
+    : subtitleProp !== undefined ? subtitleProp : row
     ? [row.sku, single ? null : `${rowCount} ${rowCount === 1 ? 'variation' : 'variations'}`, model ? `${model.columns.length} ${model.columns.length === 1 ? 'location' : 'locations'}` : null].filter(Boolean).join(' · ')
     : undefined
 
@@ -168,7 +203,7 @@ export function InventoryEditorModal({ row, density, onClose }: { row: Inventory
         <>
           <span className={styles.ieSetLabel}>Reason</span>
           <Combobox options={[...REASON_OPTIONS]} value={reason} onChange={setReason} placeholder="Select reason" className={styles.ieReason} />
-          <Input fieldClassName={styles.ieNotes} placeholder="Notes (optional) — stored on every movement in this batch" value={notes} onChange={(e) => setNotes(e.target.value)} aria-label="Adjustment notes" />
+          <Input fieldClassName={styles.ieNotes} placeholder="Notes (optional)" title="Stored on every movement in this batch" value={notes} onChange={(e) => setNotes(e.target.value)} aria-label="Adjustment notes" />
           <GridFooterSpacer />
           {message && <span className={message.tone === 'danger' ? styles.ieMsgDanger : styles.ieMsgSuccess} role="status">{message.text}</span>}
           <Button size="sm" variant="secondary" onClick={requestClose}>{pendingCount ? 'Cancel' : 'Close'}</Button>
@@ -181,7 +216,7 @@ export function InventoryEditorModal({ row, density, onClose }: { row: Inventory
   )
 
   return (
-    <Modal open={open} onClose={requestClose} size="xxl" className={styles.ieModal} title={row ? row.name : 'Inventory'} subtitle={subtitle}>
+    <Modal open={open} onClose={requestClose} size="xxl" className={styles.ieModal} title={title ?? (row ? row.name : 'Inventory')} subtitle={subtitle}>
       {loading && <div className={styles.invState}>Loading inventory…</div>}
 
       {!loading && error && (

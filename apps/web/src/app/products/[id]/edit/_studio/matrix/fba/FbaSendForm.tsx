@@ -31,6 +31,7 @@ import {
   summaryLine, unitsMax, withCases, type SendForm,
 } from './sendToFba'
 import styles from './fba.module.css'
+import dialogs from '../dialogs.module.css'
 
 type Side = 'lengthCm' | 'widthCm' | 'heightCm'
 const SIDES: ReadonlyArray<[Side, string]> = [['lengthCm', 'Length'], ['widthCm', 'Width'], ['heightCm', 'Height']]
@@ -180,7 +181,7 @@ export function FbaSendForm(p: FbaSendFormProps) {
           {(['prepOwner', 'labelOwner'] as const).map((key) => (
             <div key={key} className="nds-field-w">
               <span className="nds-field-lbl" aria-hidden="true">{key === 'prepOwner' ? FBA_SEND_COPY.prepBy : FBA_SEND_COPY.labelsBy}</span>
-              <SegmentedControl ariaLabel={key === 'prepOwner' ? FBA_SEND_COPY.prepBy : FBA_SEND_COPY.labelsBy} size="sm" value={form.owners[key]}
+              <SegmentedControl ariaLabel={key === 'prepOwner' ? FBA_SEND_COPY.prepBy : FBA_SEND_COPY.labelsBy} size="sm" className={dialogs.seg} value={form.owners[key]}
                 disabled={disabled} options={OWNER_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
                 onChange={(v) => p.onForm((f) => ({ ...f, owners: { ...f.owners, [key]: v as CaseOwner } }))} />
             </div>
@@ -190,7 +191,7 @@ export function FbaSendForm(p: FbaSendFormProps) {
       )}
       {p.tableActions}
       <div ref={tableRef} className={styles.table} aria-busy={p.reading || undefined}>
-        <DataGrid ariaLabel="SKUs to send" size="sm" keyboardScroll maxHeight={p.maxHeight ?? 320} columns={columns} rows={draft.skus} rowKey={(s) => s.productId}
+        <DataGrid ariaLabel="SKUs to send" size="sm" keyboardScroll headerMenus={false} maxHeight={p.maxHeight ?? 320} columns={columns} rows={draft.skus} rowKey={(s) => s.productId}
           emptyState={p.emptyState ?? <EmptyState title="No SKU to send" description="None of the ticked rows is a SKU this business sells." />} />
       </div>
       {summary && summary.looseUnits > 0 && (

@@ -24,9 +24,11 @@ export interface SellsFromPickerProps {
   /** This SKU's available units at a warehouse; absent = not shown (the bulk Edit: many SKUs). */
   unitsOf?: (code: string) => number
   disabled?: boolean
+  /** The pop-up opens on the first warehouse (a keyboard open can tick at once), not on the ✕. */
+  autoFocusFirst?: boolean
 }
 
-export function SellsFromPicker({ label, locations, value, onChange, unitsOf, disabled = false }: SellsFromPickerProps) {
+export function SellsFromPicker({ label, locations, value, onChange, unitsOf, disabled = false, autoFocusFirst = false }: SellsFromPickerProps) {
   const order = pickerOrder(locations, value)
   const names = new Map(activeWarehouses(locations).map((l) => [l.code, l.name]))
   if (order.length === 0) return <p className={styles.hint}>No active warehouse. Add one in Locations.</p>
@@ -43,7 +45,8 @@ export function SellsFromPicker({ label, locations, value, onChange, unitsOf, di
         const name = names.get(code)
         return (
           <span className={`${styles.item}${on ? '' : ` ${styles.off}`}`}>
-            <Checkbox checked={on} disabled={disabled} onChange={() => onChange(toggleCode(value, code))} label={<span className={styles.code}>{code}</span>} />
+            <Checkbox checked={on} disabled={disabled} onChange={() => onChange(toggleCode(value, code))} label={<span className={styles.code}>{code}</span>}
+              data-autofocus={autoFocusFirst && code === order[0] ? true : undefined} />
             <span className={styles.name}>{name && name !== code ? name : ''}</span>
             {unitsOf && <span className={styles.units}>{unitsOf(code)} avail.</span>}
           </span>

@@ -2,9 +2,10 @@
 
 /**
  * "Sells from" — the From cell's pop-up (Step 2, Owner 2026-10-07: "super simple", like the Products page's Available
- * pop-up). One small DS Modal anchored on the cell:
+ * pop-up). One DS Modal anchored on the cell, the Case pop-up's size (Matrix polish, Owner 2026-10-08: one width and
+ * one placement for the cell pop-ups; "<Thing> · <SKU>" titles; focus on the first warehouse, not the ✕):
  *
- *     Sells from · Amazon EU                      SKU
+ *     Sells from · SKU                            Amazon EU
  *     [ This product | Every product ]
  *     ⠿ [x] IT-MAIN  Main warehouse       12 avail.
  *     ⠿ [ ] MI-3PL   Milan 3PL             4 avail.
@@ -30,6 +31,8 @@ import {
 import { SellsFromPicker } from './SellsFromPicker'
 import { listBefore, postMarketSources, type MarketSourcesAnswer, type MarketSourcesRequest } from './source'
 import styles from './SellsFrom.module.css'
+import dialogs from './dialogs.module.css'
+import { useFocusOffClose } from './dialogFocus'
 
 export interface SellsFromTarget {
   rowId: string
@@ -74,6 +77,7 @@ export function SellsFromDialog(p: SellsFromDialogProps) {
   const [dry, setDry] = useState<DryRun | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  useFocusOffClose()
 
   /* Every product: what the save would change — once per opening (it counts the market's listings, whatever the list). */
   useEffect(() => {
@@ -150,11 +154,11 @@ export function SellsFromDialog(p: SellsFromDialogProps) {
   )
 
   return (
-    <Modal open onClose={p.onClose} size="sm" anchor={target.anchor} title={`Sells from · ${where}`} subtitle={target.sku} footer={footer}>
+    <Modal open onClose={p.onClose} size="md" className={dialogs.box} anchor={target.anchor} title={`Sells from · ${target.sku}`} subtitle={where} footer={footer}>
       <div className={styles.body}>
-        <SegmentedControl ariaLabel="Applies to" size="sm" value={scope} onChange={(v) => { setScope(v as SellsFromScope); setError(null) }} options={SCOPES} />
+        <SegmentedControl ariaLabel="Applies to" size="sm" className={dialogs.seg} value={scope} onChange={(v) => { setScope(v as SellsFromScope); setError(null) }} options={SCOPES} />
         {error && <Banner tone="danger">{error}</Banner>}
-        <SellsFromPicker label={`Sells from · ${where}, in sale order`} locations={locations} value={draft} onChange={setDraft} unitsOf={unitsOf} disabled={busy} />
+        <SellsFromPicker label={`Sells from · ${where}, in sale order`} locations={locations} value={draft} onChange={setDraft} unitsOf={unitsOf} disabled={busy} autoFocusFirst />
         <p className={styles.hint}>Ticked warehouses sell, the top one first. Listings show the sum.</p>
         {link && <div><Button size="sm" variant="link" inline onClick={() => setDraft([...src.marketDefault])}>{link}</Button></div>}
         {scope === 'market' && (

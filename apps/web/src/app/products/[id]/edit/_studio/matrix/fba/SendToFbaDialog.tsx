@@ -26,6 +26,8 @@ import {
   type CreateOutcome, type DraftQuery, type SendForm,
 } from './sendToFba'
 import styles from './fba.module.css'
+import dialogs from '../dialogs.module.css'
+import { useFocusOffClose } from '../dialogFocus'
 
 export interface SendToFbaTarget {
   /** The SKUs to send (variations; a ticked parent = every variation). */
@@ -76,6 +78,7 @@ export function SendToFbaDialog(p: SendToFbaDialogProps) {
   const [adding, setAdding] = useState(false)
   const [failure, setFailure] = useState<{ message: string; problems: FbaSendProblem[] } | null>(null)
   const focused = useRef(false)
+  useFocusOffClose()
 
   /* The draft: on opening, and again when From or To changes (what was typed stays for the SKUs still there). */
   useEffect(() => {
@@ -185,8 +188,10 @@ export function SendToFbaDialog(p: SendToFbaDialogProps) {
   )
 
   const skus = draft?.skus.length ?? p.target.productIds.length
+  // "<Thing> · <SKU>" like the other Matrix pop-ups (Matrix polish, Owner 2026-10-08); several SKUs say how many.
+  const title = draft?.skus.length === 1 ? `${FBA_SEND_COPY.open.replace(/…$/, '')} · ${draft.skus[0]!.sku}` : FBA_SEND_COPY.title(skus)
   return (
-    <Modal open onClose={close} size="xl" title={FBA_SEND_COPY.title(skus)} subtitle={p.target.subtitle} footer={footer}>
+    <Modal open onClose={close} size="xl" className={dialogs.box} title={title} subtitle={p.target.subtitle} footer={footer}>
       <div ref={bodyRef} className={styles.body}>{body}</div>
     </Modal>
   )

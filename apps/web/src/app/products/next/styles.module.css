@@ -344,6 +344,20 @@
 /* The card's footer strip — the page's `.pager` row: same padding, same rule, small controls. */
 .ieReason { width: 180px; }
 .ieNotes { width: 300px; }
+
+/* The box holds focus for a moment on open, until the grid's first cell takes it (InventoryEditorModal): it is not a
+   control, so it draws no ring (Matrix polish, Owner 2026-10-08). */
+:global(.nds-modal).ieModal:focus { outline: none; }
+/* A long product name under "Stock · <SKU>": two lines at most. */
+.ieSubtitle { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+
+/* A phone (Matrix polish): the toolbar wraps instead of cutting "Columns" off (the footer strip wraps by itself, DS
+   grid.css); the notes take their own line and the buttons stay at the right. */
+@media (max-width: 599px) {
+  .ieModal :global(.nds-toolbar) { flex-wrap: wrap; row-gap: var(--nds-space-8); }
+  .ieReason { width: auto; flex: 1 1 140px; min-width: 0; }
+  .ieNotes { width: 100%; flex: 1 1 100%; }
+}
 .ieDiscard { font-size: 13px; font-weight: 600; color: var(--nds-danger-text); }
 .ieMsgSuccess { font-size: 12.5px; color: var(--nds-success); max-width: 300px; }
 .ieMsgDanger { font-size: 12.5px; color: var(--nds-danger-text); max-width: 300px; }

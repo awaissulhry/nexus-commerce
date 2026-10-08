@@ -159,6 +159,11 @@ describe('buildColDefs — structure only, the legacy classes on the cells', () 
     const sortable = buildColDefs({ ...base, visible: [col('x', { sortable: true })] })[0]
     expect(sortable.sortable).toBe(true)
   })
+  it('header menus by default; `headerMenus: false` takes the ⋮ button and the right-click menu off every column', () => {
+    expect(buildColDefs(base).every((d) => d.suppressHeaderMenuButton !== true)).toBe(true)
+    const off = buildColDefs({ ...base, headerMenus: false })
+    expect(off.every((d) => d.suppressHeaderMenuButton === true && d.suppressHeaderContextMenu === true)).toBe(true)
+  })
   it('a string label is the header name; a JSX label renders inside the engine\'s header through innerHeaderComponent', () => {
     const by = new Map(buildColDefs(base).map((d) => [d.colId, d]))
     expect(by.get('status')!.headerName).toBe('STATUS')

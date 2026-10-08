@@ -1,0 +1,17 @@
+/* The Matrix dialogs' shared layout (Matrix polish, Owner 2026-10-08: one look in every dialog). Layout only; every
+   control is the design system's. */
+
+/* A segmented control keeps the design system's own look — a compact track the size of its choices — in every
+   dialog: a Field (a flex column) would stretch the track across the dialog with the choices packed to the left (Case,
+   Sells from, Send to FBA), and the DS `wrap` look stretches the choices instead (bulk Edit). On a narrow screen the
+   choices wrap inside the track rather than run past the dialog's edge. */
+.seg {
+  align-self: flex-start;
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+
+/* The dialog box when it holds the opening focus (`useFocusOffClose`): not a control, so no ring. */
+.box:focus {
+  outline: none;
+}
