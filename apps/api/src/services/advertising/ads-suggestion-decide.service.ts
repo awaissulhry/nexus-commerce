@@ -164,7 +164,13 @@ export async function applySuggestion(id: string, ov: ApplyOverride = {}, decide
   // 4e — `operatorApproved`: a person approved this change, so a placement lane the rank engine holds is written, not skipped.
   // AA-W2-10 — the Suggestions page is always a person; an approval says who decided it (ApplyAs).
   const approval = as.approval ? { ...as.approval, negatives: [] as string[] } : undefined
-  const result = await handler(action as never, triggerData, { dryRun: false, ruleId: sug.ruleId, operatorApproved: as.operatorApproved ?? true, ...(approval ? { approval } : {}) })
+  // BB-9 — on a campaign the bid brain owns, the approved change is stored as the brain's input (a BidDirective from this
+  // rule), not written: the brain is the campaign's one bid writer. Every other campaign is applied as before.
+  const { ruleBrainInput } = await import('./bid-brain/rule-directives.js')
+  const meta = { dryRun: false, ruleId: sug.ruleId, operatorApproved: as.operatorApproved ?? true, ...(approval ? { approval } : {}) }
+  const trigger = typeof (triggerData as { trigger?: unknown } | null)?.trigger === 'string' ? (triggerData as { trigger: string }).trigger : null
+  const result = await ruleBrainInput(action as never, triggerData, { ruleId: sug.ruleId, trigger, dryRun: false }, (a) => handler(a as never, triggerData, { ...meta, dryRun: true }))
+    ?? await handler(action as never, triggerData, meta)
   /**
    * 🔴 SG.0 — a refused apply STAYS PENDING.
    *

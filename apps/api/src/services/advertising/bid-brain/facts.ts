@@ -22,6 +22,7 @@
  *              override, the bid before it (decide.ts `restore`)
  */
 import type { TargetFacts, Overrides, DecisionLayer } from './decide.js'
+import type { Directive, LaneDirective, LaneName } from './recipe.js'
 import { NO_EVIDENCE, type Evidence, type PoolNode } from './estimator.js'
 import { BRAIN_PHASES, type BrainPhase, type GoalInputs } from './goal.js'
 
@@ -124,6 +125,47 @@ export interface RunRows {
   lowered?: ReadonlyMap<string, { layer: DecisionLayer; heldCents: number; beforeCents: number | null }>
   /** BB-8 — per ad group: the revenue-weighted break-even ACoS of its products with usable profit data (a fraction). */
   breakEven?: ReadonlyMap<string, number>
+  /** BB-9 — per campaign: the rules' active inputs (BidDirective rows, rule-directives.ts). */
+  directives?: ReadonlyMap<string, readonly DirectiveRow[]>
+}
+
+/** BB-9 — one active BidDirective as the brain reads it; `label` names who asked ('rule "GALE IT — share of voice"'). */
+export interface DirectiveRow {
+  targetId: string | null
+  lane: string | null
+  kind: string
+  valueCents: number | null
+  valuePct: number | null
+  label: string
+}
+
+const LANES: readonly string[] = ['TOP_OF_SEARCH', 'PRODUCT_PAGE', 'REST_OF_SEARCH']
+
+/**
+ * BB-9 — a keyword's inputs from its campaign's directives: the bid ceilings and floors that name it or the whole campaign,
+ * the lane caps and floors, and the goal a rule set (the keyword's own before the campaign's; among several the lowest,
+ * as for two ceilings — it spends less). A goal equal to the one in force is no input (design §2).
+ */
+export function directiveInputs(rows: readonly DirectiveRow[] | undefined, targetId: string, goalPct: number | null): {
+  directives: Directive[]
+  laneDirectives: LaneDirective[]
+  goal: { pct: number; by: string } | null
+} {
+  const mine = (rows ?? []).filter((r) => r.targetId == null || r.targetId === targetId)
+  const directives: Directive[] = []
+  const laneDirectives: LaneDirective[] = []
+  for (const r of mine) {
+    if (r.lane != null) {
+      if (LANES.includes(r.lane) && (r.kind === 'CEILING' || r.kind === 'FLOOR') && r.valueCents != null) laneDirectives.push({ lane: r.lane as LaneName, kind: r.kind, pct: r.valueCents, source: r.label })
+    } else if ((r.kind === 'CEILING' || r.kind === 'FLOOR' || r.kind === 'SHARE_FLOOR') && r.valueCents != null && r.valueCents > 0) {
+      directives.push({ kind: r.kind, cents: r.valueCents, source: r.label })
+    }
+  }
+  const goals = (scope: 'own' | 'campaign') => mine.filter((r) => r.kind === 'GOAL' && r.lane == null && r.valuePct != null && r.valuePct > 0 && (scope === 'own' ? r.targetId === targetId : r.targetId == null))
+  const pick = goals('own').length ? goals('own') : goals('campaign')
+  const lowest = pick.length ? pick.reduce((a, b) => (b.valuePct! < a.valuePct! ? b : a)) : null
+  const goal = lowest && lowest.valuePct !== goalPct ? { pct: lowest.valuePct!, by: lowest.label } : null
+  return { directives, laneDirectives, goal }
 }
 
 /** Every product of an ad group out of stock (or without the Buy Box) → not buyable; every product short → its cover. */
@@ -257,6 +299,13 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
       ...(phase === 'LAUNCH' ? { launchDay: s?.launchDay ?? null } : {}),
       breakEvenAcos: run.breakEven?.get(group.id) ?? null,
     }
+    // BB-9 — a rule's inputs: its goal replaces the one in force for its scope (with the default band around it).
+    const inputs = directiveInputs(run.directives?.get(campaign.id), t.id, goal.target?.kind === 'ACOS' ? goal.target.pct : null)
+    if (inputs.goal) {
+      goal.target = { kind: 'ACOS', pct: inputs.goal.pct }
+      goal.acosFallbackPct = null
+      goal.band = null
+    }
     // BB-5 — a TACoS target: the family's total sales against its ad sales over 30 days (goal.ts converts the aim).
     if (goal.target?.kind === 'TACOS' && fam) {
       const totalCents = group.families.reduce((n, f) => n + (run.familySales?.get(f) ?? 0), 0)
@@ -314,6 +363,9 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
       brakes,
       overrides,
       restore: run.lowered?.get(t.id) ?? null,
+      ...(inputs.directives.length ? { directives: inputs.directives } : {}),
+      ...(inputs.laneDirectives.length ? { laneDirectives: inputs.laneDirectives } : {}),
+      ...(inputs.goal ? { goalBy: inputs.goal.by } : {}),
     })
   }
   return out

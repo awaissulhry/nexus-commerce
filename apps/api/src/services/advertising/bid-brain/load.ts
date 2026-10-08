@@ -12,6 +12,8 @@
  *   BB-8        the overrides' sources (loadOverrideSources): each ad group's stock (ads-stock-risk.service.ts), what a
  *               playbook holds on each campaign, the break-even ACoS of the products advertised, a LAUNCH row's day,
  *               and for a keyword the brain last lowered by an override, the bid of its last decision before it
+ *   BB-9        the rules' active inputs per campaign (loadDirectives: BidDirective rows not past `until`), each named by
+ *               its rule
  */
 import { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
@@ -22,7 +24,7 @@ import { readOwnerTargets } from '../ads-target-acos-resolver.js'
 import { strategyMarket } from '../ads-strategy/bids.js'
 import { openStrategy } from '../ads-strategy/effective.js'
 import { MAX_WINDOW_DAYS, type Evidence } from './estimator.js'
-import { stockFactOf, type AdGroupRow, type CampaignRow, type MarketRows, type PlaybookFact, type RunRows, type StockFact, type StrategyRead, type TargetRow } from './facts.js'
+import { stockFactOf, type DirectiveRow, type AdGroupRow, type CampaignRow, type MarketRows, type PlaybookFact, type RunRows, type StockFact, type StrategyRead, type TargetRow } from './facts.js'
 import { LOWERING_LAYERS, type DecisionLayer } from './decide.js'
 import { readStockAdGroups } from '../ads-stock-risk.service.js'
 import { breakevenByProduct } from '../ads-target-acos.service.js'
@@ -394,9 +396,11 @@ export async function loadRun(m: MarketRows & { newestReportAt: Date | null }, n
   const lastSteps = new Map([...previous].flatMap(([id, p]) => (p.lastStep ? [[id, p.lastStep] as const] : [])))
   // Profit rows carry the market's code ('IT'), as the roll-up writes them.
   const sources = await loadOverrideSources(m, { campaignIds, groupIds, strategy, previous, marketplaces: [m.market] })
+  const directives = await loadDirectives(campaignIds, now)
   return {
     run: {
       ...sources,
+      directives,
       marketBrakes: brakes,
       strategy,
       accountDefaultPct,
@@ -410,3 +414,24 @@ export async function loadRun(m: MarketRows & { newestReportAt: Date | null }, n
     previous,
   }
 }
+
+/** BB-9 — the rules' active inputs per campaign, each named by who asked (a rule by its name). */
+export async function loadDirectives(campaignIds: readonly string[], now: Date = new Date()): Promise<Map<string, DirectiveRow[]>> {
+  const out = new Map<string, DirectiveRow[]>()
+  if (!campaignIds.length) return out
+  const rows = await prisma.bidDirective.findMany({
+    where: { campaignId: { in: [...campaignIds] }, OR: [{ until: null }, { until: { gt: now } }] },
+    select: { campaignId: true, targetId: true, lane: true, kind: true, valueCents: true, valuePct: true, source: true },
+    orderBy: { createdAt: 'asc' },
+  })
+  if (!rows.length) return out
+  const ruleIds = [...new Set(rows.flatMap((r) => (r.source.startsWith('rule:') ? [r.source.slice(5)] : [])))]
+  const names = new Map(ruleIds.length ? (await prisma.automationRule.findMany({ where: { id: { in: ruleIds } }, select: { id: true, name: true } })).map((r) => [r.id, r.name]) : [])
+  for (const r of rows) {
+    const rule = r.source.startsWith('rule:') ? r.source.slice(5) : null
+    const label = rule ? `rule "${names.get(rule) ?? rule}"` : r.source
+    out.set(r.campaignId, [...(out.get(r.campaignId) ?? []), { targetId: r.targetId, lane: r.lane, kind: r.kind, valueCents: r.valueCents, valuePct: r.valuePct, label }])
+  }
+  return out
+}
+
