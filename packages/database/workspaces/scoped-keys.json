@@ -6250,6 +6250,30 @@
     },
     "relations": []
   },
+  "AmazonAdsHourlyPlacement": {
+    "scalar": {},
+    "compound": {
+      "grain": [
+        "campaignId",
+        "adGroupId",
+        "placement",
+        "date",
+        "hour"
+      ]
+    },
+    "relations": []
+  },
+  "AmazonAdsHourlyArrival": {
+    "scalar": {},
+    "compound": {
+      "bucket": [
+        "grainId",
+        "kind",
+        "ageHours"
+      ]
+    },
+    "relations": []
+  },
   "AdWriteRefusal": {
     "scalar": {},
     "compound": {},
