@@ -9866,6 +9866,27 @@ CREATE TABLE "AdsBrainStateDecision" (
 );
 
 -- CreateTable
+CREATE TABLE "AdsBrainCycle" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "dataDay" DATE NOT NULL,
+    "changeSetId" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "attempts" INTEGER NOT NULL DEFAULT 0,
+    "leaseUntil" TIMESTAMP(3),
+    "steps" JSONB NOT NULL,
+    "report" JSONB,
+    "summary" TEXT,
+    "finishedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "AdsBrainCycle_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AdsBrainHarvest" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -15813,6 +15834,21 @@ CREATE INDEX "AdsBrainStateDecision_createdAt_idx" ON "AdsBrainStateDecision"("c
 
 -- CreateIndex
 CREATE INDEX "AdsBrainStateDecision_workspaceId_idx" ON "AdsBrainStateDecision"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainCycle_productId_marketplace_dataDay_idx" ON "AdsBrainCycle"("productId", "marketplace", "dataDay" DESC);
+
+-- CreateIndex
+CREATE INDEX "AdsBrainCycle_marketplace_dataDay_idx" ON "AdsBrainCycle"("marketplace", "dataDay" DESC);
+
+-- CreateIndex
+CREATE INDEX "AdsBrainCycle_createdAt_idx" ON "AdsBrainCycle"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainCycle_workspaceId_idx" ON "AdsBrainCycle"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AdsBrainCycle_workspaceId_productId_marketplace_dataDay_key" ON "AdsBrainCycle"("workspaceId", "productId", "marketplace", "dataDay");
 
 -- CreateIndex
 CREATE INDEX "AdsBrainHarvest_marketplace_status_idx" ON "AdsBrainHarvest"("marketplace", "status");

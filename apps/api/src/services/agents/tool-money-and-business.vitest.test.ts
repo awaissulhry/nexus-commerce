@@ -266,6 +266,8 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'undo-ad-change': () => ({ changeSetId: 'none' }),
   'undo-worse-ad-change': () => ({ judgementId: 'none' }),
   'apply-brain-harvest': () => ({ harvestId: 'none' }),
+  // AB-15 — the kill switch of one lever of the seeded product (Nexus only; nothing seeded is money).
+  'set-brain-kill-switch': (ids) => ({ op: 'kill', lever: 'budgets', productId: ids.productId, market: 'IT', why: 'test stop' }),
   // A6 — campaign budget and placements (they need money: refused for a person without it).
   'set-campaign-budget': (ids) => ({ campaignId: ids.campaignId, dailyBudgetCents: 2500 }),
   'set-placement-multipliers': (ids) => ({ campaignId: ids.campaignId, topOfSearchPct: 30 }),

@@ -17,6 +17,9 @@
  *             campaign, every lane at 0 % and "up and down" switched to "down only"; when it ends, both back from the
  *             stop's memory in the same tick as the bids. The Owner's locks are read first (unreadable: the lanes and the
  *             strategy wait, the bids still go); the recipe's words join the why of the campaign's decisions
+ *   AB-14     a step of the product cycle (brain/cycle-steps.ts): `scope` decides one product's own campaigns in its market
+ *             (or, for the full run, leaves them), `raiseCaps` holds the raises the cycle's earlier steps hold (a pause, a
+ *             budget cut, the money brake) beside the spend guard; the run counts its moves by direction (`moves`)
  *   BB-15     NEXUS_BID_BRAIN_NOWCAST=shadow (the default): each full run also decides the same keywords from the window
  *             that ends yesterday, maturity-weighted (nowcast.ts); the decisions and every write stay the settled ones,
  *             and where the two differ the stored why gains " · nowcast to …: would …" and the run's line counts them.
@@ -41,6 +44,7 @@ import {
 import { laneOf, minBidLanes, type PlanHour } from './plan-hour.js'
 import { stampPlanReceipts } from './plans.js'
 import { ownerLeverLocks, type LeverLocks } from '../brain/owner-brakes.js'
+import { campaignKills, killWords } from '../brain/kill-switch.js'
 import { campaignStopOf, fullLanes, strategyStep, type CampaignStop } from './stop-recipe.js'
 import { strategySwitchesToday } from './stop-memory.js'
 import { loadMarket, loadNowcastEvidence, loadRun, SHADOW_MARKETS, type LastWrite, type LoadedMarket, type PreviousDecision } from './load.js'
@@ -53,6 +57,20 @@ export interface BrainWriteRecord { campaignId: string; actionLogId: string | nu
 /** Decisions are kept this many days. */
 export const DECISION_DAYS_KEPT = 30
 
+/**
+ * ONE BRAIN AB-14 — which campaigns one run decides. `campaignIds` + `market`: only these, in that market (a product cycle's
+ * own campaigns); `skipCampaignIds`: all but these (the full run, while a product cycle runs them). Absent: every
+ * allowlisted one. The market is read whole either way, so every pooled estimate stays the full run's.
+ */
+export interface BrainRunScope { campaignIds?: ReadonlySet<string>; skipCampaignIds?: ReadonlySet<string>; market?: string }
+
+/** AB-14 — a campaign's raise cap: the spend guard's why and the cycle's, joined (either alone when the other is absent). Pure. */
+export function mergeRaiseCaps(guard: ReadonlyMap<string, string> | undefined, caps: ReadonlyMap<string, string>): Map<string, string> {
+  const out = new Map(guard ?? [])
+  for (const [campaignId, why] of caps) out.set(campaignId, out.has(campaignId) ? `${out.get(campaignId)}; ${why}` : why)
+  return out
+}
+
 /** The env ceiling. Anything unrecognised is shadow (never live by accident). */
 export function bidBrainMode(env: string | undefined = process.env.NEXUS_BID_BRAIN_MODE): BrainMode {
   const v = (env ?? '').trim().toLowerCase()
@@ -63,7 +81,7 @@ export interface ShadowRun {
   runId: string
   mode: BrainMode
   /** BB-6 — `owned`: the market's campaigns the brain owns this run; `writes`: what became of their write decisions. */
-  markets: Array<{ market: string; decided: number; stored: number; byAction: Record<string, number>; byLayer: Record<string, number>; brakes: string[]; owned?: number; writes?: WriteReport | null; placements?: PlacementReport; strategies?: StrategyReport; brainWrites?: BrainWriteRecord[]; nowcast?: NowcastShadowSummary; nowcastOn?: { dataDay: string; curve: string; youngPct: number } }>
+  markets: Array<{ market: string; decided: number; stored: number; byAction: Record<string, number>; byLayer: Record<string, number>; brakes: string[]; /** AB-14 — the market's run failed (its words; also in brakes). */ error?: string; /** AB-14 — a product cycle's run: which way its write decisions go. */ moves?: { raise: number; lower: number; raisedBy: Record<string, number> }; owned?: number; writes?: WriteReport | null; placements?: PlacementReport; strategies?: StrategyReport; brainWrites?: BrainWriteRecord[]; nowcast?: NowcastShadowSummary; nowcastOn?: { dataDay: string; curve: string; youngPct: number } }>
   pruned: number
   /** BB-6 — the dial and the caps the live writes ran under (absent: nothing owned had to move). */
   guard?: EngineGuardReport
@@ -98,26 +116,33 @@ const dec = (x: number | null | undefined, places = 4) => (x == null || !Number.
  * plan's hour too: its placement % (one write per campaign), its Min-bid floors (an entry recorded for the anti-flap),
  * and the plan's receipt. `onlyOwned`: a between-slots tick decides only the campaigns the brain owns.
  */
-export async function shadowMarket(market: string, ctx: { runId: string; mode: BrainMode; now: Date; clockNow?: Date; onlyOwned?: boolean; guard?: () => Promise<EngineGuard> }): Promise<ShadowRun['markets'][number]> {
+export async function shadowMarket(market: string, ctx: { runId: string; mode: BrainMode; now: Date; clockNow?: Date; onlyOwned?: boolean; guard?: () => Promise<EngineGuard>; scope?: BrainRunScope; raiseCaps?: ReadonlyMap<string, string> }): Promise<ShadowRun['markets'][number]> {
+  // AB-14 — a product cycle decides its product's own campaigns; the full run leaves the ones a cycle runs. The market is
+  // read whole either way, so every pooled estimate is the one the full run makes.
+  const inScope = (campaignId: string) => (!ctx.scope?.campaignIds || ctx.scope.campaignIds.has(campaignId)) && !ctx.scope?.skipCampaignIds?.has(campaignId)
   // BB-7 review — a between-slots tick reads the campaigns the brain owns only, and no evidence (load.ts loadMarket).
   const ownedAll = ctx.onlyOwned ? await brainOwnedCampaignIds() : null
   if (ownedAll && !ownedAll.size) return { market, decided: 0, stored: 0, byAction: {}, byLayer: {}, brakes: [] }
   const rows = await loadMarket(market, { now: ctx.now, ...(ownedAll ? { campaignIds: ownedAll, light: true } : {}) })
   if (!rows.targets.length) return { market, decided: 0, stored: 0, byAction: {}, byLayer: {}, brakes: [] }
   // BB-6 — the campaigns the brain owns write their decisions; every other campaign stays shadow, whatever the env says.
-  const allowlisted = [...rows.campaigns.values()].filter((c) => c.allowlisted).map((c) => c.id)
+  const allowlisted = [...rows.campaigns.values()].filter((c) => c.allowlisted && inScope(c.id)).map((c) => c.id)
+  if (ctx.scope?.campaignIds && !allowlisted.length) return { market, decided: 0, stored: 0, byAction: {}, byLayer: {}, brakes: [] }
   const owned = ctx.mode === 'live' && allowlisted.length ? await brainOwnedCampaignIds(allowlisted) : new Set<string>()
   if (ctx.onlyOwned && !owned.size) return { market, decided: 0, stored: 0, byAction: {}, byLayer: {}, brakes: [] }
   const loaded = await loadRun(rows, ctx.now, { owned, clockNow: ctx.clockNow })
   const { lastWrites, previous } = loaded
   // BB-15 follow-up — read with the nowcast on, the step anchors are re-keyed to its data day (no second step that day).
-  const run = runForRows(rows, loaded.run)
+  const anchored = runForRows(rows, loaded.run)
+  // AB-14 — the raises an earlier step of the product cycle holds (a pause it makes, a budget it cuts, the money brake),
+  // beside the brain's own spend guard: decide.ts lets no goal raise through, and no placement % rises.
+  const run = ctx.raiseCaps?.size ? { ...anchored, spendGuard: mergeRaiseCaps(anchored.spendGuard, ctx.raiseCaps) } : anchored
   const groupOf = new Map(rows.targets.map((t) => [t.id, t.adGroupId]))
   const campaignOf = (targetId: string): string => {
     const adGroupId = groupOf.get(targetId)
     return adGroupId ? rows.adGroups.get(adGroupId)?.campaignId ?? '' : ''
   }
-  const facts = buildFacts(rows, run).filter((f) => !ctx.onlyOwned || owned.has(campaignOf(f.targetId)))
+  const facts = buildFacts(rows, run).filter((f) => inScope(campaignOf(f.targetId)) && (!ctx.onlyOwned || owned.has(campaignOf(f.targetId))))
   const decisions = facts.map((f) => decide(f))
   // BB-15 — the nowcast in shadow (full runs only): words for the stored why; the decisions above are the ones that count.
   // Switched on (the rows were read with it): the why of a decision resting on young days says how much they carry.
@@ -128,17 +153,21 @@ export async function shadowMarket(market: string, ctx: { runId: string; mode: B
     ? decisions.filter((d) => d.action === 'write' && owned.has(campaignOf(d.targetId))).map((decision) => ({ campaignId: campaignOf(decision.targetId), market, decision }))
     : []
   const guard = owned.size && ctx.guard ? await ctx.guard() : null
-  const sent = toWrite.length && guard ? await writeOwnedDecisions(toWrite, { runId: ctx.runId, guard }) : null
+  // ONE BRAIN AB-15 — the Owner's kill switch: a lever he stopped gets no write from the bid brain (each decision deferred,
+  // the kill in its words); the gate refuses it as well. Nothing stopped in the business: one remembered query, no change.
+  const killed = guard ? await readBidBrainKills([...owned]) : NO_KILLS
+  const sent = toWrite.length && guard ? await writeOwnedDecisions(killed.size ? toWrite.filter((w) => !killed.get(w.campaignId)?.bids) : toWrite, { runId: ctx.runId, guard }) : null
+  if (sent && killed.size) deferKilled(sent, toWrite, killed)
   // AB-2 — the stop recipe of each owned campaign: which stop holds it whole, and the Owner's locks on its lanes and strategy.
   const recipeOn = !!guard && !run.marketBrakes.length
   const states = recipeOn ? campaignStates(facts, decisions, owned, campaignOf, run.planHours) : new Map<string, CampaignState>()
   const locks = recipeOn ? await readLeverLocks([...states.keys()]) : new Map<string, LeverLocks>()
   // BB-7 — the plan's hour of each owned campaign: its placements (none while braked or paused; all at 0 % in a Min-bid hour
   // or a stop, AB-2; given back from the stop's memory when it ends) …
-  const placementList = recipeOn ? placementWrites(rows, facts, decisions, owned, campaignOf, run.planHours, { locks, states }) : []
+  const placementList = recipeOn ? notKilled(placementWrites(rows, facts, decisions, owned, campaignOf, run.planHours, { locks, states }), killed, 'placements') : []
   const placed = recipeOn ? await writeOwnedPlacements(placementList, { runId: ctx.runId, guard: guard! }) : null
   // … AB-2: the bidding strategy, down only for the stop and back after it (the anti-flap counts today's switches) …
-  const strategyList = recipeOn ? strategyWrites(rows, states, locks, await strategySwitchesToday(restoreCandidates(rows, states), ctx.clockNow ?? ctx.now), strategyHolds(run.holds)) : []
+  const strategyList = recipeOn ? notKilled(strategyWrites(rows, states, locks, await strategySwitchesToday(restoreCandidates(rows, states), ctx.clockNow ?? ctx.now), strategyHolds(run.holds)), killed, 'biddingStrategy') : []
   const switched = strategyList.length ? await writeOwnedStrategies(strategyList, { runId: ctx.runId, guard: guard! }) : null
   const recipe = recipeWords(placementList, strategyList)
   // … a new Min-bid entry for each campaign the brain floored this run (rank-defend's anti-flap, its count shared) …
@@ -170,11 +199,26 @@ export async function shadowMarket(market: string, ctx: { runId: string; mode: B
   if (data.length) await prisma.bidBrainDecision.createMany({ data })
   return {
     market, decided: decisions.length, stored: data.length, byAction: count(decisions, 'action'), byLayer: count(decisions, 'layer'), brakes: run.marketBrakes as string[],
+    ...(ctx.scope?.campaignIds ? { moves: movesOf(decisions, campaignOf) } : {}),
     ...(owned.size ? { owned: owned.size, writes: sent, ...(placed && (placed.written || placed.refused || placed.deferred || placed.locked || placed.waiting) ? { placements: placed } : {}), ...(switched && switched.byCampaign.size ? { strategies: switched } : {}) } : {}),
     ...(owned.size ? { brainWrites: brainWriteRecords(decisions, sent, placed, campaignOf) } : {}),
     ...(nowcast?.summary ? { nowcast: nowcast.summary } : {}),
     ...(rows.nowcast ? { nowcastOn: { dataDay: rows.dataDay, curve: rows.nowcast.curve, youngPct: youngPctOf(rows.nowcast.totals) } } : {}),
   }
+}
+
+/** AB-14 — which way the run's write decisions go (stored or not), and how many raises per campaign. Pure. */
+export function movesOf(decisions: readonly Decision[], campaignOf: (targetId: string) => string): { raise: number; lower: number; raisedBy: Record<string, number> } {
+  const out = { raise: 0, lower: 0, raisedBy: {} as Record<string, number> }
+  for (const d of decisions) {
+    if (d.action !== 'write') continue
+    if (d.bidCents > d.currentCents) {
+      out.raise++
+      const c = campaignOf(d.targetId)
+      out.raisedBy[c] = (out.raisedBy[c] ?? 0) + 1
+    } else if (d.bidCents < d.currentCents) out.lower++
+  }
+  return out
 }
 
 /** BB-15 — a stored why with the nowcast's words after it (none: the why unchanged). */
@@ -345,6 +389,45 @@ let locksUnreadableSaid = false
  * AB-2 — the Owner's locks of the owned campaigns' lanes and strategies. Unreadable: every campaign is marked so — its
  * give-back and its plan's placements wait, nothing is dropped, a stop still lowers — logged once until a read succeeds.
  */
+/** AB-15 — per owned campaign, the levers of the bid brain the Owner's kill switch stopped, each with the kill in words. */
+export type BidBrainKills = Map<string, Partial<Record<'bids' | 'placements' | 'biddingStrategy', string>>>
+const NO_KILLS: BidBrainKills = new Map()
+let killsUnreadableSaid = false
+
+/**
+ * AB-15 — the kill switches on the bid brain's levers of its owned campaigns. A failed read holds every write of these
+ * campaigns this tick (as the gate would: it cannot tell either) — tried again next tick, nothing dropped.
+ */
+export async function readBidBrainKills(campaignIds: readonly string[]): Promise<BidBrainKills> {
+  if (!campaignIds.length) return NO_KILLS
+  try {
+    const kills = await campaignKills(campaignIds, ['bids', 'placements', 'biddingStrategy'])
+    killsUnreadableSaid = false
+    if (!kills.size) return NO_KILLS
+    return new Map([...kills].map(([id, k]) => [id, Object.fromEntries(Object.entries(k).map(([lever, kill]) => [lever, killWords(kill!)]))]))
+  } catch (err) {
+    if (!killsUnreadableSaid) logger.warn('[bid-brain] could not read the kill switches — the owned campaigns\' writes wait this tick (nothing dropped)', { error: err instanceof Error ? err.message : String(err) })
+    killsUnreadableSaid = true
+    const why = 'the kill switches could not be read: the write waits for the next tick'
+    return new Map(campaignIds.map((id) => [id, { bids: why, placements: why, biddingStrategy: why }]))
+  }
+}
+
+/** AB-15 — the writes of a list whose campaign's lever is not stopped. Pure. */
+export function notKilled<T extends { campaignId: string }>(list: T[], killed: BidBrainKills, lever: 'placements' | 'biddingStrategy'): T[] {
+  return killed.size ? list.filter((w) => !killed.get(w.campaignId)?.[lever]) : list
+}
+
+/** AB-15 — each keyword write of a stopped campaign recorded as deferred, with the kill as its why. */
+export function deferKilled(sent: WriteReport, writes: ReadonlyArray<{ campaignId: string; decision: Decision }>, killed: BidBrainKills): void {
+  for (const w of writes) {
+    const why = killed.get(w.campaignId)?.bids
+    if (!why || w.decision.action !== 'write' || w.decision.bidCents === w.decision.currentCents) continue
+    sent.deferred++
+    sent.byTarget.set(w.decision.targetId, { sent: 'deferred', why })
+  }
+}
+
 export async function readLeverLocks(campaignIds: readonly string[]): Promise<Map<string, LeverLocks>> {
   if (!campaignIds.length) return new Map()
   try {
@@ -483,7 +566,7 @@ export async function brainMarkets(opts: { onlyOwned?: boolean } = {}): Promise<
  * ads-bid-brain.job.ts) that decides only the campaigns the brain owns, so their hourly plan's hours are carried out on
  * time; it prunes nothing. `clockNow`: the database clock a plan's hour is read on.
  */
-export async function runShadowOnce(opts: { now?: Date; mode?: BrainMode; onlyOwned?: boolean; clockNow?: Date } = {}): Promise<ShadowRun> {
+export async function runShadowOnce(opts: { now?: Date; mode?: BrainMode; onlyOwned?: boolean; clockNow?: Date; /** AB-14 */ scope?: BrainRunScope; /** AB-14 — per campaign: why its raises wait (a product cycle's earlier steps). */ raiseCaps?: ReadonlyMap<string, string> } = {}): Promise<ShadowRun> {
   const now = opts.now ?? new Date()
   const mode = opts.mode ?? bidBrainMode()
   const runId = `bb-${now.toISOString().slice(0, 16)}-${randomUUID().slice(0, 8)}`
@@ -494,16 +577,21 @@ export async function runShadowOnce(opts: { now?: Date; mode?: BrainMode; onlyOw
   const openGuard = async (): Promise<EngineGuard> => (guard ??= await openEngineGuard('bid-brain', { now }))
   const onlyOwned = opts.onlyOwned === true
   if (onlyOwned && mode !== 'live') return out
-  const markets = mode === 'live' ? await brainMarkets({ onlyOwned }) : [...SHADOW_MARKETS]
+  // AB-14 — a product cycle's run reads its own market only, and only when the brain decides there today.
+  const markets = (mode === 'live' ? await brainMarkets({ onlyOwned }) : [...SHADOW_MARKETS]).filter((m) => !opts.scope?.market || m === opts.scope.market)
+  const scoped = opts.scope?.campaignIds || opts.scope?.skipCampaignIds ? { scope: opts.scope } : {}
+  const capped = opts.raiseCaps?.size ? { raiseCaps: opts.raiseCaps } : {}
   for (const market of markets) {
     try {
-      out.markets.push(await shadowMarket(market, { runId, mode, now, clockNow: opts.clockNow, onlyOwned, guard: openGuard }))
+      out.markets.push(await shadowMarket(market, { runId, mode, now, clockNow: opts.clockNow, onlyOwned, guard: openGuard, ...scoped, ...capped }))
     } catch (err) {
-      logger.error('[bid-brain] market run failed', { market, error: err instanceof Error ? err.message : String(err) })
-      out.markets.push({ market, decided: 0, stored: 0, byAction: {}, byLayer: {}, brakes: [`failed: ${err instanceof Error ? err.message : String(err)}`] })
+      const error = err instanceof Error ? err.message : String(err)
+      logger.error('[bid-brain] market run failed', { market, error })
+      out.markets.push({ market, decided: 0, stored: 0, byAction: {}, byLayer: {}, brakes: [`failed: ${error}`], error })
     }
   }
-  if (!onlyOwned) {
+  // The 30-day prune belongs to the full run (a product cycle's run of a few campaigns leaves it).
+  if (!onlyOwned && !opts.scope?.campaignIds) {
     const pruned = await prisma.bidBrainDecision.deleteMany({ where: { createdAt: { lt: new Date(now.getTime() - DECISION_DAYS_KEPT * 86_400_000) } } })
     out.pruned = pruned.count
   }

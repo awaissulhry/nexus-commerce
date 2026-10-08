@@ -51,10 +51,10 @@ const OFF_OBSERVE: readonly BrainLevel[] = ['OFF', 'OBSERVE']
  */
 export const LEVER_LEVELS_NOW: Record<BrainLever, { levels: readonly BrainLevel[]; others: string }> = {
   bids: { levels: ['OBSERVE', 'AUTO'], others: 'the bid brain decides every allowlisted campaign in shadow (no OFF) and has no proposal path (no PROPOSE)' },
-  adGroupBids: { levels: OFF_OBSERVE, others: 'ad group default bids wait for the product cycle (design §2.2, AB-14)' },
+  adGroupBids: { levels: OFF_OBSERVE, others: 'ad group default bids have no writer of the brain yet: the product cycle (AB-14) runs each lever that has one in order, and this one waits for its own step (design §2.2)' },
   // AB-13 (D3 = B+) — the brain researches the market's hours, paints the plan and asks: a plan change is PROPOSE always.
   hours: { levels: ['OFF', 'OBSERVE', 'PROPOSE'], others: 'the brain researches the market\'s hours weekly and paints the hourly plan; OBSERVE keeps the painting in shadow, PROPOSE asks a person to approve each painted plan, and no plan changes alone (D3: never AUTO; ads-brain view hours)' },
-  placements: { levels: OFF_OBSERVE, others: 'placement % per hour come with the painted hourly plan\'s targets (the hours lever, AB-13), which keeps every lane the Owner locked; a placements writer of its own waits for the product cycle (AB-14)' },
+  placements: { levels: OFF_OBSERVE, others: 'placement % per hour come with the painted hourly plan\'s targets (the hours lever, AB-13), which keeps every lane the Owner locked; a placements writer of its own waits for its own step in the product cycle (AB-14 runs the levers that have one)' },
   // AB-12 — every level: OBSERVE logs, PROPOSE asks a person, AUTO pauses and resumes alone (D4 = A, brain/state*.ts).
   state: { levels: BRAIN_LEVELS, others: 'each pause, resume and archive proposal it would make is logged in shadow (ads-brain view state); PROPOSE asks a person, AUTO pauses and resumes alone inside the caps — an archive is only ever a proposal (AB-12)' },
   // AB-8 — the money writer: OBSERVE plans and logs (AB-7), PROPOSE asks a person for each change, AUTO writes inside the pace.

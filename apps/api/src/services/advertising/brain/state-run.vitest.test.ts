@@ -16,6 +16,8 @@ const h = vi.hoisted(() => ({
   pruned: 0,
   loaded: new Map<string, unknown>(),
   posture: { posture: 'auto', why: 'the account ads dial is AUTO' },
+  // AB-15 — the kill switch and the holds after an auto-undo (brain/lever-holds.ts), stood in.
+  holds: { kill: null as string | null, campaigns: new Map<string, { why: string; blocks: 'pause' | 'resume' | null; until: string }>() },
 }))
 vi.mock('../../../db.js', () => ({
   default: {
@@ -28,6 +30,10 @@ vi.mock('../../../db.js', () => ({
 }))
 vi.mock('../ads-engine-guard.js', () => ({ readEnginePosture: vi.fn(async () => h.posture) }))
 vi.mock('../../../utils/logger.js', () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }))
+vi.mock('./lever-holds.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./lever-holds.js')>()),
+  leverHolds: vi.fn(async () => ({ kill: h.holds.kill, campaigns: h.holds.campaigns, terms: new Map(), portfolios: new Map() })),
+}))
 vi.mock('./state-load.js', () => ({
   stateWatchProducts: vi.fn(async () => []),
   loadProductStateFacts: vi.fn(async (productId: string) => {
@@ -64,6 +70,7 @@ const run = (products = [P('jacket')], now = NOW) => runStateBrainOnce({ now, pr
 beforeEach(() => {
   h.created = []; h.todays = []; h.pruned = 0; h.loaded = new Map()
   h.posture = { posture: 'auto', why: 'the account ads dial is AUTO' }
+  h.holds = { kill: null, campaigns: new Map() }
   ask.mockClear(); write.mockClear()
   vi.stubEnv('NEXUS_BID_BRAIN_MODE', 'live')
 })
@@ -208,5 +215,29 @@ describe('AB-12 — the state brain\'s run', () => {
     await run()
     expect(h.created[0]).toMatchObject({ mode: 'LIVE', outcome: 'held' })
     expect(write).not.toHaveBeenCalled()
+  })
+  it('AB-15 — the Owner\'s kill switch on the state lever: nothing written or asked, the decision kept as held in the kill\'s words', async () => {
+    h.holds.kill = 'stopped by the Owner\'s kill switch (user:owner, 2026-10-08, product jacket in IT): "test stop"'
+    load('jacket', [facts('c1', 'AUTO'), facts('c2', 'AUTO', { causes: [], impressions: 0, ageDays: 90 })])
+    const r = await run()
+    expect(write).not.toHaveBeenCalled()
+    expect(ask).not.toHaveBeenCalled()
+    expect(h.created.find((x) => x.campaignId === 'c1')).toMatchObject({ action: 'pause', outcome: 'held', why: expect.stringContaining('not done: stopped by the Owner\'s kill switch') })
+    expect(h.created.find((x) => x.campaignId === 'c2')).toMatchObject({ action: 'archive', outcome: 'held' })
+    expect(r.campaigns.map((c) => c.outcome)).toEqual(['held', 'held'])
+  })
+
+  it('AB-15 — the hold after auto-undo put a pause back blocks the next pause of that campaign only; a resume and other campaigns go on', async () => {
+    h.holds.campaigns.set('c1', { why: 'auto-undo put back a brain change here on 2026-10-07 (judgement j1): the brain pauses that campaign again only after 7 days — held until 2026-10-14', blocks: 'pause', until: '2026-10-14T00:00:00.000Z' })
+    load('jacket', [facts('c1', 'AUTO'), facts('c3', 'AUTO')])
+    await run()
+    expect(write.mock.calls.map((c) => c.slice(0, 2))).toEqual([['c3', 'PAUSED']])
+    expect(h.created.find((x) => x.campaignId === 'c1')).toMatchObject({ action: 'pause', outcome: 'held', why: expect.stringContaining('held until 2026-10-14') })
+    // A hold that blocks a resume does not hold a pause.
+    h.holds.campaigns.set('c1', { why: 'held', blocks: 'resume', until: '2026-10-14T00:00:00.000Z' })
+    h.created = []; write.mockClear()
+    load('jacket', [facts('c1', 'AUTO')])
+    await run()
+    expect(write.mock.calls.map((c) => c.slice(0, 2))).toEqual([['c1', 'PAUSED']])
   })
 })

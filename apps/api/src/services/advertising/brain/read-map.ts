@@ -30,6 +30,7 @@ import { BRAIN_LEVERS, LEVER_LEVELS_NOW, type BrainLever } from './levers.js'
 import { productCampaigns, resolveCampaignOwnership, type CampaignOwnership } from './ownership.js'
 import { brainView, bidBrainRowsByProduct } from './enrollment.js'
 import { resolveBrainSettings, type BrainSettings, type OverrideRow, type Provenance } from './settings.js'
+import { killWords, openKills, productKills, type BrainKill } from './kill-switch.js'
 import {
   actingRules, campaignNativeView, DAILY_READ_AT, loadNativeRules, NATIVE_RULE_CAPABILITY, nativeReadStatus, nativeRuleWriters, notReadableKinds,
   type CampaignNativeRules,
@@ -41,9 +42,10 @@ import {
  * `state` is brain/state-read.ts: the state lever's pauses, resumes and archive proposals (the tool routes it). AB-13 —
  * `hours` is brain/hours-proposal.ts brainHours: the product's hour research and painted plan (the tool routes it). AB-10 —
  * `negatives` is brain/negatives-read.ts: the product's day of negatives, every entity against the limit, its log. AB-11 —
- * `harvest` is brain/harvest-read.ts: the product's harvests, their destinations, sources, requests and judgements.
+ * `harvest` is brain/harvest-read.ts: the product's harvests, their destinations, sources, requests and judgements. AB-14 —
+ * `report` is brain/cycle-read.ts: the day's product report the product cycle stored (the tool routes it).
  */
-export const BRAIN_MAP_VIEWS = ['map', 'clashes', 'setup', 'money', 'terms', 'state', 'hours', 'negatives', 'harvest'] as const
+export const BRAIN_MAP_VIEWS = ['map', 'clashes', 'setup', 'money', 'terms', 'state', 'hours', 'negatives', 'harvest', 'report'] as const
 export type BrainMapView = (typeof BRAIN_MAP_VIEWS)[number]
 
 /** The days of action-log evidence a view reads by default, and at most. */
@@ -550,6 +552,8 @@ export async function brainMap(args: MapArgs): Promise<{ data: unknown } | { err
           liveCampaigns: rows.products.find((p) => p.productId === k.productId && p.market === k.market)?.campaignIds ?? [],
         })),
         sharedLive: rows.shared, unownedLive: rows.none,
+        // AB-15 — every kill switch in force here: one product's lever, or a lever of every product.
+        kills: (await openKills()).filter((k) => !market || !k.market || k.market === market).map(killOut),
         next: 'Read one product with productId and its market: every lever of its campaigns, who owns each, and the brain\'s settings.',
       },
     }
@@ -561,6 +565,7 @@ export async function brainMap(args: MapArgs): Promise<{ data: unknown } | { err
   const [campaigns, owners] = await Promise.all([campaignsById(ids), resolveCampaignOwnership(ids)])
   const { rows } = await campaignLevers(campaigns, owners, days)
   const settings = view.settings
+  const kills = await productKills(view.productId, market)
   return {
     data: {
       view: 'map', scope: { productId: view.productId, market }, evidenceDays: days,
@@ -572,7 +577,10 @@ export async function brainMap(args: MapArgs): Promise<{ data: unknown } | { err
           at: settings.levers[l].level.at, ...(settings.levers[l].level.reason ? { reason: settings.levers[l].level.reason } : {}), why: settings.levers[l].why,
           ...(settings.levers[l].lock ? { lock: lockView(settings.levers[l].lock!) } : {}),
           ...(settings.levers[l].locks.length ? { lockedThings: settings.levers[l].locks.map((t) => ({ ref: t.ref, ...provenanceView(t) })) } : {}),
+          killed: kills[l] ? killOut(kills[l]!) : null,
         }])),
+        // AB-15 — the Owner's kill switches on this product's levers (its own, or every product's): the brain writes none of them.
+        kills: Object.values(kills).map((k) => killOut(k!)),
         settings: Object.fromEntries(Object.entries(settings.values).map(([k, v]) => [k, { [k]: v.value, source: v.source, by: v.by, at: v.at, ...(v.reason ? { reason: v.reason } : {}) }])),
         ...(settings.ignored.length ? { ignoredOverrides: settings.ignored } : {}),
       },
@@ -586,6 +594,11 @@ export async function brainMap(args: MapArgs): Promise<{ data: unknown } | { err
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
+
+/** AB-15 — one kill switch as the map shows it: the lever, whose, who stopped it, when and why. */
+export function killOut(k: BrainKill) {
+  return { lever: k.lever, products: k.productId ? 'one' : 'every', productId: k.productId, market: k.market ?? 'every market', by: k.by, at: k.at, reason: k.reason, words: killWords(k) }
+}
 
 /**
  * AB-4 — Amazon's own rules in the clashes view. Each one that acts on a brain campaign is a clash (two brains on its

@@ -40,6 +40,7 @@ import { targetValuesOf, weekRaise, raiseWords, type TargetValues } from '../hou
 import { campaignHolders, planOwners, productPlanCampaigns, readPlanStates, type PlanState } from '../rank-schedule-group.service.js'
 import { LANES, type BrainLevel } from './levers.js'
 import { productCampaigns } from './ownership.js'
+import { leverKillWhy } from './kill-switch.js'
 import { describeProvenance, resolveBrainSettings, type BrainSettings, type OverrideRow } from './settings.js'
 import { loadResearchFacts, localDayHour, researchDays, researchHours, type HoursResearch } from './hours-research.js'
 import { gridLines, paintPlan, weekOf, type Goal, type PaintTarget, type PaintedPlan } from './hours-paint.js'
@@ -310,6 +311,9 @@ export async function decideHours(productId: string, market: string, now: Date, 
   const changed = paint.changes.length
   if (productOff) return { ...base, status: 'OFF', why: `${settings.why}: the brain would paint ${plural(changed, 'hour')} of "${choice.plan.name}" (decided now, nothing stored or asked).`, planBasis, research, paint }
   if (settings.level === 'LOCKED') return { ...base, status: 'HELD', why: `A recommendation only: ${settings.why}. ${changed ? `The brain would paint ${plural(changed, 'hour')}.` : 'The brain would paint nothing.'}`, planBasis, research, paint }
+  // AB-15 — the Owner's kill switch on the hours lever: the painting stays a recommendation, nothing is asked.
+  const killed = await leverKillWhy('hours', found.root, m)
+  if (killed) return { ...base, status: 'HELD', why: `A recommendation only: the hours lever is ${killed}. ${changed ? `The brain would paint ${plural(changed, 'hour')}.` : 'The brain would paint nothing.'}`, planBasis, research, paint }
   if (paint.held) return { ...base, status: settings.level === 'OBSERVE' ? 'SHADOW' : 'HELD', why: paint.held, planBasis, research, paint }
   if (settings.level === 'OBSERVE') return { ...base, status: 'SHADOW', why: `Shadow (the hours lever is OBSERVE): the brain would paint ${plural(changed, 'hour')} of "${choice.plan.name}"; nothing is asked or written.`, planBasis, research, paint }
   if (!changed) return { ...base, status: 'NO_CHANGE', why: `"${choice.plan.name}" stays as it is: ${paint.summary[0]}`, planBasis, research, paint }

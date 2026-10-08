@@ -7,7 +7,7 @@
  * AB-8 — between the slots the products whose budgets lever is AUTO (switch live) get their money run, recorded apart;
  * none → nothing recorded.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const h = vi.hoisted(() => ({
   mode: 'shadow' as 'off' | 'shadow' | 'live',
@@ -33,6 +33,12 @@ vi.mock('../utils/cron-observability.js', () => ({
   recordCronRun: vi.fn(async (job: string, run: () => Promise<unknown>) => { const summary = await run(); h.recorded.push({ job, summary }); return summary }),
 }))
 vi.mock('../lib/cron/clustered.js', () => ({ default: { schedule: vi.fn(() => ({ stop: vi.fn() })) } }))
+// AB-14 — what the product cycle's switch reads (only while it is on): the enrollments and each product's own campaigns.
+const cyc = vi.hoisted(() => ({ rows: [] as Array<{ productId: string; marketplace: string }>, owned: new Map<string, string[]>(), reads: 0 }))
+vi.mock('../db.js', () => ({ default: { adsBrainEnrollment: { findMany: vi.fn(async () => { cyc.reads++; return cyc.rows }) } } }))
+vi.mock('../services/advertising/brain/ownership.js', () => ({
+  productCampaigns: vi.fn(async (productId: string, market: string) => ({ root: productId, owned: (cyc.owned.get(`${market}|${productId}`) ?? []).map((campaignId) => ({ campaignId })), shared: [] })),
+}))
 
 import { BID_BRAIN_JOB, BRAIN_MONEY_JOB, BRAIN_MONEY_LIVE_JOB, runBidBrainCron, runMoneyShadowTick } from './ads-bid-brain.job.js'
 
@@ -40,7 +46,8 @@ const FULL = new Date('2026-10-08T06:45:00Z')
 const BETWEEN = new Date('2026-10-08T07:00:00Z')
 const PRODUCT = { productId: 'product-a', market: 'IT', level: 'OBSERVE' }
 
-beforeEach(() => { h.recorded = []; h.money.mockClear(); h.bid.mockClear(); h.prune.mockClear(); h.mode = 'shadow'; h.products = []; h.live = [] })
+beforeEach(() => { h.recorded = []; h.money.mockClear(); h.bid.mockClear(); h.prune.mockClear(); h.mode = 'shadow'; h.products = []; h.live = []; cyc.rows = []; cyc.owned = new Map(); cyc.reads = 0 })
+afterEach(() => { vi.unstubAllEnvs() })
 
 describe('AB-7 — the money shadow in the bid brain\'s cron', () => {
   it('a full slot: the bid run, then the money run on the database clock, each recorded', async () => {
@@ -91,5 +98,31 @@ describe('AB-7 — the money shadow in the bid brain\'s cron', () => {
     const at = new Date('2026-10-08T12:45:00Z')
     await runMoneyShadowTick(at)
     expect(h.money).toHaveBeenLastCalledWith({ now: at, products: [PRODUCT] })
+  })
+
+  it('AB-14 — off (the default): the full run and the 15-minute tick are asked exactly as before, and nothing is read for the cycle', async () => {
+    h.products = [PRODUCT]
+    cyc.rows = [{ productId: 'product-a', marketplace: 'IT' }]
+    await runBidBrainCron(FULL)
+    expect(h.bid).toHaveBeenCalledWith({ onlyOwned: false, clockNow: h.dbNow })
+    expect(h.money).toHaveBeenCalledWith({ now: h.dbNow, products: [PRODUCT] })
+    expect(cyc.reads).toBe(0)
+  })
+
+  it('AB-14 — the product cycle on: the full run leaves the own campaigns of the products it runs, and their money; the 15-minute tick skips nothing', async () => {
+    vi.stubEnv('NEXUS_ADS_BRAIN_CYCLE', 'on')
+    const other = { productId: 'product-b', market: 'IT', level: 'OBSERVE' }
+    h.products = [PRODUCT, other]
+    cyc.rows = [{ productId: 'product-a', marketplace: 'IT' }]
+    cyc.owned = new Map([['IT|product-a', ['c-a1', 'c-a2']]])
+    await runBidBrainCron(FULL)
+    expect(h.bid).toHaveBeenCalledWith({ onlyOwned: false, clockNow: h.dbNow, scope: { skipCampaignIds: new Set(['c-a1', 'c-a2']) } })
+    expect(h.money).toHaveBeenCalledWith({ now: h.dbNow, products: [other] })
+    h.mode = 'live'
+    h.bid.mockClear()
+    const { brainOwnedCampaignIds } = await import('../services/advertising/bid-brain/live.js')
+    vi.mocked(brainOwnedCampaignIds).mockResolvedValueOnce(new Set(['c-a1']))
+    await runBidBrainCron(BETWEEN)
+    expect(h.bid).toHaveBeenCalledWith({ onlyOwned: true, clockNow: h.dbNow })
   })
 })

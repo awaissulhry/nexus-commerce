@@ -18137,6 +18137,10 @@ model AutomationSwitch {
 /// watch-week outcome (`outcome`), the numbers it stands on (`evidence`) and what auto-undo did: nothing, would undo
 /// (OBSERVE), asked a person (PROPOSE, `undoApprovalId`), undid it (AUTO, `undoActionLogId`) or held it (and why).
 /// No foreign key to the action log: the log keeps its own retention.
+/// ONE BRAIN AB-15 — also one row per change of a brain lever (origin `brain`; services/advertising/brain/undo-run.ts): lever
+/// budgets | portfolioCap | state | negatives | harvest | biddingStrategy, direction = the change's kind (raise | pause |
+/// resume | add | harvest | switch), actionLogId the change's action-log row (a harvest: "harvest:<its record>"). An `undone`
+/// one is also the hold that keeps the brain from redoing it for the lever's days (brain/lever-holds.ts).
 model AdsAutoUndoJudgement {
   // Business ownership comes from verified database context.
   workspaceId     String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
@@ -20194,6 +20198,11 @@ model AdsBrainEnrollment {
 ///            never writes it and only recommends
 ///   EXCLUDE  out of the brain completely (key "*"): a campaign stays with today's engines; a product leaves the brain
 ///   VALUE    a setting (key = a cap or an N1–N4 setting such as "portfolioCapOn", "paceTargetPct"; value = its value)
+///   KILL     AB-15 — the Owner's kill switch of one lever (scope KILL, key = the lever; productId = the family root or "*" for
+///            every product, marketplace = the market or "*" for every market): the brain writes nothing on that lever and
+///            the write gate refuses its actor there, until ended. No resolver reads it (brain/settings.ts applies PRODUCT and
+///            CAMPAIGN rows only): brain/kill-switch.ts layers it over the resolved settings, so the lever's level and locks
+///            stay as they were.
 model AdsBrainOverride {
   // Business ownership comes from verified database context.
   workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
@@ -20202,11 +20211,11 @@ model AdsBrainOverride {
   /// The enrollment it was set under (Product.id of the family root, short market code).
   productId   String
   marketplace String
-  /// PRODUCT | CAMPAIGN
+  /// PRODUCT | CAMPAIGN | KILL (AB-15)
   scope       String
   /// Campaign.id for a CAMPAIGN override (it applies to that campaign); null for a PRODUCT one.
   campaignId  String?
-  /// LEVEL | LOCK | EXCLUDE | VALUE
+  /// LEVEL | LOCK | EXCLUDE | VALUE | KILL (AB-15)
   kind        String
   /// The lever (LEVEL, LOCK), the setting (VALUE), "*" (EXCLUDE).
   key         String
@@ -20632,6 +20641,55 @@ model AdsBrainStateDecision {
   @@index([productId, marketplace, createdAt(sort: Desc)])
   @@index([marketplace, createdAt])
   @@index([runId])
+  @@index([createdAt])
+  @@index([workspaceId])
+}
+
+/// ONE BRAIN AB-14 — one product cycle (one-brain DESIGN.md §4, §5, §6, §8 row AB-14; services/advertising/brain/cycle*.ts):
+/// a product × market on one settled data day, its levers run in the design's order — stops and state, the term ledger,
+/// negatives, harvest, money (budgets and caps), bids, hours — each step seeing what the steps before it decided. One
+/// cycle is one change set: `changeSetId` rides in the evidence of every write the cycle makes (AdWriteEvidence.cycle).
+/// Idempotent: one row per product × market × data day, and a step that ended is never run again that day, so a rerun
+/// writes nothing. The day's product report rides on the row.
+///   status  RUNNING (a run holds it until leaseUntil) · DONE (every step ended: done, off or skipped) · PARTIAL (a step
+///           failed, or waited for one that failed: tried again on a later tick, at most 3 runs a data day)
+///   steps   per step (brain/cycle.ts StepRecord): done · off · skipped · blocked · failed, why, whether its lever acts,
+///           the module's run id, what it did in words, the raises it holds for the bids, when
+/// Rows older than 90 days are deleted by the cycle's tick. No foreign key: the history outlives a removed product.
+model AdsBrainCycle {
+  // Business ownership comes from verified database context.
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String @id @default(cuid())
+
+  /// Product.id of the family root.
+  productId   String
+  /// Short market code ('IT', 'DE').
+  marketplace String
+  /// The newest settled Sponsored Products day the cycle decided on (UTC).
+  dataDay     DateTime @db.Date
+  /// The change set every write of the cycle carries in its evidence: cyc-<market>-<data day>-<product>.
+  changeSetId String
+  /// RUNNING | DONE | PARTIAL
+  status      String
+  /// Runs of this cycle so far (a PARTIAL one is tried again while below 3).
+  attempts    Int       @default(0)
+  /// A run holds the cycle until then; a run that died frees it when the time passes.
+  leaseUntil  DateTime?
+  /// Per step: brain/cycle.ts StepRecord.
+  steps       Json
+  /// The day's product report (brain/cycle.ts ProductReport): what each lever did, or would do in shadow, and why; ad
+  /// sales against spend; what waits for the Owner; clashes; what his locks hold. Null until a run ends.
+  report      Json?
+  /// The report in plain words, without amounts.
+  summary     String?   @db.Text
+  finishedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workspaceId, productId, marketplace, dataDay], name: "product_market_day", map: "AdsBrainCycle_workspaceId_productId_marketplace_dataDay_key")
+  @@index([productId, marketplace, dataDay(sort: Desc)])
+  @@index([marketplace, dataDay(sort: Desc)])
   @@index([createdAt])
   @@index([workspaceId])
 }

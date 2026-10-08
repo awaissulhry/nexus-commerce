@@ -717,6 +717,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-ads-report-time': { before: { expected: { time: '08:00', timeZone: 'Europe/Rome' } }, after: { expected: { time: '08:30', timeZone: 'Europe/Rome' } } },
       // AB-11 — an ads brain harvest put back by its own op undo (the keyword paused, the source negatives retired).
       'apply-brain-harvest': { before: { changeSetId: 'ap1', op: 'harvest', harvestId: 'h1', keyword: null, negatives: [] }, after: { op: 'harvest', harvestId: 'h1', keywordTargetId: 't1', negatives: ['n1'] } },
+      // AB-15 — a kill switch is ended by its undo, and an ended one set again.
+      'set-brain-kill-switch': { before: { op: 'kill', lever: 'budgets', productId: 'p1', market: 'IT', killed: false, reason: null }, after: { op: 'kill', lever: 'budgets', productId: 'p1', market: 'IT', killed: true, reason: 'test stop' } },
       // BB-6 — a campaign's place in the bid brain put back (LIVE → the op that returns it).
       'set-bid-brain-enrollment': { before: { campaignId: 'c1', mode: 'SHADOW' }, after: { campaignId: 'c1', mode: 'LIVE' } },
       // One brain — the Owner's choice put back through the same tool (here: the product's budgets level ended again).

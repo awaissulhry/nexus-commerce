@@ -29,6 +29,8 @@ vi.mock('../../db.js', () => ({
     adsStrategy: { findFirst: vi.fn(async () => null), findMany: vi.fn(async () => []) },
     // ONE BRAIN AB-5 — no product is enrolled in this business (production today): the gate's lever check reads this once.
     adsBrainEnrollment: { get findFirst() { return brainEnrollmentFindFirst } },
+    // ONE BRAIN AB-15 — the kill switches the gate reads for the brain's own actors: none open here.
+    adsBrainOverride: { findMany: vi.fn(async () => []) },
   },
 }))
 vi.mock('./ads-api-client.js', () => ({ adsMode: () => 'live' }))

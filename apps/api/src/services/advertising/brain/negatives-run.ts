@@ -39,6 +39,7 @@ import { positivesIn } from '../ads-winner-lock.js'
 import type { AdWriteEvidence } from '../ads-evidence.js'
 import { brainLiveCeiling } from '../bid-brain/live.js'
 import { resolveBrainSettings, type OverrideRow } from './settings.js'
+import { holdNegatives, leverHolds } from './lever-holds.js'
 import { decideMarket, loadTermsMarket, termsDue, type DueProduct, type MarketDecisions, type MarketFacts } from './terms-shadow.js'
 import { addEvidence, LEDGER_WINDOW_DAYS, NO_TERM_EVIDENCE, productEstimate, termKey, type LeverEffective, type TermEvidence } from './terms.js'
 import {
@@ -441,7 +442,9 @@ export async function pruneNegatives(now: Date): Promise<number> {
 async function runProduct(m: MarketFacts, decided: MarketDecisions, due: DueProduct, runId: string, now: Date): Promise<{ items: Planned[]; stored: StoreCounts; approvalId: string | null } | null> {
   const facts = await loadNegativesFacts(m, decided, due, now)
   if (!facts) return null
-  const plan = decideNegatives(facts.input)
+  // AB-15 — the Owner's kill switch on the negatives lever holds every item; the hold after an auto-undo revive keeps the
+  // term from being negated again for its days (brain/lever-holds.ts).
+  const plan = holdNegatives(decideNegatives(facts.input), await leverHolds('negatives', due.productId, m.market, now))
   const items: Planned[] = reconciledPlan(plan, facts, now)
   const stored = await storeNegatives({ productId: due.productId, market: m.market, items, previous: facts.previous, runId, dataDay: m.dataDay, now })
   // AUTO, one at a time through the write paths (the day's cap keeps it small).

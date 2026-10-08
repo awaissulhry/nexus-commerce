@@ -33,6 +33,9 @@ const h = vi.hoisted(() => ({
   claims: new Map<string, Claim>(),
   approvals: new Map<string, { status: string; decidedBy: string | null }>(),
   native: new Map<string, string[]>(),
+  // AB-15 — the kill switch and the holds after an auto-undo, stood in (brain/lever-holds.ts moneyHolds).
+  budgetHeld: new Map<string, string>(),
+  capHeld: new Map<string, string>(),
 }))
 vi.mock('../../../db.js', () => ({
   default: {
@@ -76,6 +79,9 @@ vi.mock('../../agents/approval-gate.service.js', () => ({
 }))
 vi.mock('../../agents/call-tool.js', () => ({ systemPrincipal: (label: string) => ({ kind: 'system', label, userId: null }) }))
 vi.mock('./native-rules.js', () => ({ loadNativeRules: vi.fn(async () => new Map()), nativeRuleLines: (_r: unknown, _l: string) => [] as string[] }))
+vi.mock('./lever-holds.js', () => ({
+  moneyHolds: vi.fn(async () => ({ budget: (id: string) => h.budgetHeld.get(id) ?? null, cap: (id: string) => h.capHeld.get(id) ?? null })),
+}))
 
 const { budgetDayMoveBounds } = await import('../ads-write-gate.js')
 const { makeEngineGuard } = await import('../ads-engine-guard.js')
@@ -123,6 +129,7 @@ const auto = (posture: 'auto' | 'suggest' | 'stopped' = 'auto', perTick: number 
 beforeEach(() => {
   h.budgetWrites = []; h.capWrites = []; h.asks = []; h.askOutcome = null
   h.claims.clear(); h.approvals.clear()
+  h.budgetHeld = new Map(); h.capHeld = new Map()
   h.budgetOutcome = () => ({ ok: true, outboundQueueId: 'q', actionLogId: 'l', bidHistoryIds: [], error: null })
   vi.unstubAllEnvs()
 })
@@ -410,5 +417,27 @@ describe('AB-8 — AUTO under a switch that is not live', () => {
     expect(out).toMatchObject({ mode: 'SHADOW', counts: { held: 5 } })
     expect(out.campaigns.every((c) => c.sent === 'held' && /NEXUS_BID_BRAIN_MODE is not live/.test(c.why))).toBe(true)
     expect(moneyActionsWords(out)).toBe('')
+  })
+})
+
+describe('AB-15 — the kill switch and the hold after an auto-undo', () => {
+  it('a held campaign budget and a held cap are steps that hold, in the words given; the rest is written as before (pure)', () => {
+    const f = facts(AUTO)
+    const held = moneyStepsOf(planOf(f), f, { live: true, holds: { budget: (id) => (id === 'c2' ? 'auto-undo put back a brain change here (judgement j1): held until 2026-10-15' : null), cap: () => 'stopped by the Owner\'s kill switch (user:owner, 2026-10-08, every product in IT): "test stop"' } })
+    expect(held.campaigns.map((s) => [s.campaignId, s.do])).toEqual([['c1', 'write'], ['c2', 'hold'], ['c3', 'write'], ['c4', 'write']])
+    expect(held.campaigns[1]).toMatchObject({ why: 'auto-undo put back a brain change here (judgement j1): held until 2026-10-15: not written' })
+    expect(held.portfolios).toEqual([expect.objectContaining({ portfolioId: 'pf-x', do: 'hold', why: expect.stringMatching(/kill switch .*: not written$/) })])
+    // Without holds: exactly the steps of before.
+    expect(moneyStepsOf(planOf(f), f, { live: true, holds: { budget: () => null, cap: () => null } })).toEqual(steps(f))
+  })
+
+  it('runMoneyActions reads the holds: a killed budgets lever writes no budget, the cap still goes', async () => {
+    for (const id of ['c1', 'c2', 'c3', 'c4']) h.budgetHeld.set(id, 'stopped by the Owner\'s kill switch (user:owner, 2026-10-08, product A in IT): "test stop"')
+    const f = facts(AUTO)
+    const out = await runMoneyActions(planOf(f), f, { runId: 'bm-k', live: true, guard: async () => auto() })
+    expect(h.budgetWrites).toEqual([])
+    expect(h.capWrites).toHaveLength(1)
+    expect(out.campaigns.every((c) => c.sent === 'held' && /kill switch/.test(c.why))).toBe(true)
+    expect(out.counts).toMatchObject({ queued: 0, written: 1, held: 4 })
   })
 })

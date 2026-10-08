@@ -856,6 +856,8 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   /* ONE BRAIN AB-11 — the ads brain's harvest: the term, its destination, the start bid, the sources still owed (or what
      an undo puts back), and where it lands. */
   'apply-brain-harvest': ['basis', 'reach'],
+  /* ONE BRAIN AB-15 — the kill switch of one lever: which op, which lever and whose, and the kill it stands on (basis). */
+  'set-brain-kill-switch': ['op', 'kill', 'basis'],
   // W4-5 — every target or negative with its place and bids (a harvest: its term, source, destination, bid and negative
   // plan, a bid it worked out itself frozen in the approval; a retire: every negative with who made it), where it lands;
   // for negatives also the other products' places and the proven handovers they would close (never the numbers, which

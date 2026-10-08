@@ -6252,6 +6252,17 @@
     "compound": {},
     "relations": []
   },
+  "AdsBrainCycle": {
+    "scalar": {},
+    "compound": {
+      "product_market_day": [
+        "productId",
+        "marketplace",
+        "dataDay"
+      ]
+    },
+    "relations": []
+  },
   "AdsBrainHourProposal": {
     "scalar": {},
     "compound": {},

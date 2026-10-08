@@ -21,6 +21,9 @@
  * AB-8 — at PROPOSE and AUTO, under a live switch, the same run asks or writes (brain/budget-live.ts); and the ticks in
  * between (every 15 minutes) carry the products whose budgets lever is AUTO — the intraday ladder and the next day's
  * give-back land on time. No such product (production today): one enrollment read, nothing recorded.
+ * AB-14 — while the product cycle is on (NEXUS_ADS_BRAIN_CYCLE=on) the full slots leave the products it runs: their money
+ * step and the bids of their own campaigns run in the cycle, in order, once per data day (brain/cycle-switch.ts). The
+ * 15-minute ticks (the owned campaigns' hours, the AUTO ladder) are the intraday layer and run as before. Off: as before.
  * Cluster-safe through lib/cron/clustered.ts (hard rule 7); with business profiles on it runs once per business.
  */
 import cron from '../lib/cron/clustered.js'
@@ -57,7 +60,11 @@ async function runBidLever(full: boolean): Promise<void> {
     if (!full && (mode !== 'live' || !(await brainOwnedCampaignIds()).size)) return
     const { dbNow } = await import('./ad-rank-defend.job.js')
     const clockNow = await dbNow()
-    await recordCronRun(full ? BID_BRAIN_JOB : BID_BRAIN_LIVE_JOB, async () => shadowSummaryLine(await runShadowOnce({ onlyOwned: !full, clockNow })))
+    // AB-14 — the full run leaves the own campaigns of the products the product cycle runs (their bids step runs there, in
+    // order, once per data day); the 15-minute ticks carry every owned campaign's hours as before. Off: nothing skipped.
+    const { orchestratedCampaignIds } = await import('../services/advertising/brain/cycle-switch.js')
+    const skip = full ? await orchestratedCampaignIds() : new Set<string>()
+    await recordCronRun(full ? BID_BRAIN_JOB : BID_BRAIN_LIVE_JOB, async () => shadowSummaryLine(await runShadowOnce({ onlyOwned: !full, clockNow, ...(skip.size ? { scope: { skipCampaignIds: skip } } : {}) })))
   } catch (err) { logger.error('ads-bid-brain cron failure', { error: err instanceof Error ? err.message : String(err) }) }
 }
 
@@ -69,8 +76,10 @@ export async function runMoneyShadowTick(at?: Date): Promise<void> {
   try {
     // Loaded at the tick, not when the scheduler boots (runtime/module-load-order.vitest.test.ts).
     const { moneyShadowProducts, moneySummaryLine, pruneMoneyDecisions, runMoneyShadowOnce } = await import('../services/advertising/brain/budget-shadow.js')
+    const { withoutOrchestrated } = await import('../services/advertising/brain/cycle-switch.js')
     const now = at ?? await (await import('./ad-rank-defend.job.js')).dbNow()
-    const products = await moneyShadowProducts()
+    // AB-14 — a product the product cycle runs gets its money step there (before its bids): left here.
+    const products = (await withoutOrchestrated(await moneyShadowProducts())).kept
     // Nothing watched: the old plans still go after 30 days (a product that left the brain leaves none behind).
     if (!products.length) { await pruneMoneyDecisions(now); return }
     await recordCronRun(BRAIN_MONEY_JOB, async () => moneySummaryLine(await runMoneyShadowOnce({ now, products })))
