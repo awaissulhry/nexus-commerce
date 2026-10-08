@@ -6252,6 +6252,11 @@
     "compound": {},
     "relations": []
   },
+  "AdsBrainHourProposal": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
   "AdsNativeRuleSnapshot": {
     "scalar": {},
     "compound": {
@@ -6283,6 +6288,17 @@
       "market_term": [
         "marketplace",
         "term"
+      ]
+    },
+    "relations": []
+  },
+  "AdsBrainNegative": {
+    "scalar": {},
+    "compound": {
+      "product_market_key": [
+        "productId",
+        "marketplace",
+        "key"
       ]
     },
     "relations": []
@@ -6328,6 +6344,11 @@
         "key"
       ]
     },
+    "relations": []
+  },
+  "AdsBrainStateDecision": {
+    "scalar": {},
+    "compound": {},
     "relations": []
   },
   "AdWriteRefusal": {

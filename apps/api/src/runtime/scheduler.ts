@@ -858,6 +858,12 @@ export async function startScheduler(): Promise<void> {
     const { startLagCurveCron } = await import('../jobs/ads-lag-curve.job.js');
     // ONE BRAIN AB-9 — the term ledger and the market arbiter in shadow (only for products whose negatives or harvest lever is OBSERVE+).
     const { startBrainTermsCron } = await import('../jobs/ads-brain-terms.job.js');
+    // ONE BRAIN AB-10 — the day's negatives (only for products whose negatives lever is OBSERVE+; each campaign at its level).
+    const { startBrainNegativesCron } = await import('../jobs/ads-brain-negatives.job.js');
+    // ONE BRAIN AB-12 — the state lever: pauses for multi-day stops, resumes, archive proposals (only products whose state lever is OBSERVE or higher).
+    const { startBrainStateCron } = await import('../jobs/ads-brain-state.job.js');
+    // ONE BRAIN AB-13 — the brain's hourly research and painted plan (only while a product is enrolled; asks a person).
+    const { startBrainHoursCron } = await import('../jobs/ads-brain-hours.job.js');
     // RS.5 — rank-defend loop (self-gated on NEXUS_ENABLE_RANK_DEFEND=1).
     const { startAdsRetentionCron } = await import('../jobs/ads-retention.job.js');
     const { startRankDefendCron } = await import('../jobs/ad-rank-defend.job.js');
@@ -906,6 +912,9 @@ export async function startScheduler(): Promise<void> {
     startNativeRulesCron();
     startLagCurveCron();
     startBrainTermsCron();
+    startBrainNegativesCron();
+    startBrainStateCron();
+    startBrainHoursCron();
     startRankDefendCron();
     // HX.11 — prunes the ads history tables. OFF unless NEXUS_ENABLE_ADS_RETENTION=1, because it deletes.
     startAdsRetentionCron();

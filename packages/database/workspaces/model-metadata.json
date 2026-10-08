@@ -6871,6 +6871,10 @@
       "fields": []
     },
     {
+      "name": "AdsBrainHourProposal",
+      "fields": []
+    },
+    {
       "name": "AdsNativeRuleSnapshot",
       "fields": []
     },
@@ -6888,6 +6892,14 @@
     },
     {
       "name": "AdsBrainTermLead",
+      "fields": []
+    },
+    {
+      "name": "AdsBrainNegative",
+      "fields": []
+    },
+    {
+      "name": "AdsBrainStateDecision",
       "fields": []
     },
     {

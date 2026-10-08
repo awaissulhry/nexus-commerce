@@ -20228,6 +20228,62 @@ model AdsBrainOverride {
   @@index([workspaceId])
 }
 
+/// ONE BRAIN AB-13 — the brain's research of a market's hourly dynamics for one product, and the hourly plan it painted
+/// from it (one-brain DESIGN.md §2.3, D3 = B+: "the brain paints the hourly plan … research it, and then paint it. Maybe
+/// get my approval, show it to me"; services/advertising/brain/hours-*.ts). At most hourProposalsPerWeek rows per
+/// product × market a week (default one). Nothing here writes a plan: a PROPOSED row carries an approval request
+/// (AgentApproval, tool apply-brain-hourly-plan) and only that approval, run as the person who approved it, saves the
+/// painted week as a new version of the plan (RankScheduleVersion) through the Hourly Bids page's own save. A rejected
+/// or expired request leaves the plan as it is.
+///   status  SHADOW (the hours lever at OBSERVE: researched and painted, nothing asked) · PROPOSED (an approval waits;
+///           its own status says approved, rejected or expired) · NO_CHANGE (nothing to paint) · HELD (the brain may not
+///           paint this plan — the why says what holds it; a locked lever gets the painting as a recommendation) ·
+///           APPLIED (approved and saved: versionId, decidedBy) · REJECTED / EXPIRED (a person said no, or nobody
+///           decided in time: the plan stays as it is) · NOT_RUN (the request could not be stored).
+/// Rows other than PROPOSED and APPLIED older than 90 days are deleted by the daily tick. No foreign key: the history
+/// outlives a removed product or plan.
+model AdsBrainHourProposal {
+  // Business ownership comes from verified database context.
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String @id @default(cuid())
+
+  /// Product.id of the family root.
+  productId   String
+  /// Short market code ('IT', 'DE').
+  marketplace String
+  /// RankScheduleGroup.id the brain painted; null when it found no plan it may paint (research only).
+  planId      String?
+  /// The hours lever's level when decided: OBSERVE | PROPOSE (LOCKED: a recommendation only).
+  level       String
+  /// SHADOW | PROPOSED | NO_CHANGE | HELD | APPLIED | REJECTED | EXPIRED | NOT_RUN
+  status      String
+  /// One line: what the brain did, or what holds it.
+  why         String   @db.Text
+  /// PROPOSED: the approval request (AgentApproval.id).
+  approvalId  String?
+  /// The plan's week as it stood when painted (a hash of its windows, baseline, members, on/off and time zone): the
+  /// approval runs only on that plan.
+  planBasis   String?
+  /// brain/hours-research.ts HoursResearch: per hour and 4-hour block of the week, weekday and weekend, trend, lanes,
+  /// confidence, and the findings in plain words.
+  research    Json
+  /// brain/hours-paint.ts PaintedPlan: the week before and after (7 × 24), the changed and locked hours, each block's
+  /// decision, the windows to save and the expected effect with its range; null when nothing could be painted.
+  paint       Json?
+  /// APPLIED: the RankScheduleVersion it wrote, who approved it ('user:<id>') and when.
+  versionId   String?
+  decidedBy   String?
+  decidedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId, marketplace, createdAt(sort: Desc)])
+  @@index([planId, createdAt(sort: Desc)])
+  @@index([approvalId])
+  @@index([workspaceId])
+}
+
 /// ONE BRAIN AB-4 — what Amazon's own rules do on one brain campaign, read once a day through the channel gateway (one-brain
 /// DESIGN.md §2.12: a second brain inside Amazon). One row per campaign, replaced by each read (no history): the campaigns
 /// of an enrolled product and the ones the bid brain runs LIVE or HELD. Read only — nothing here writes to Amazon.
@@ -20449,6 +20505,134 @@ model AdsBrainTermLead {
   @@unique([workspaceId, marketplace, term], name: "market_term", map: "AdsBrainTermLead_workspaceId_marketplace_term_key")
   @@index([leadProductId])
   @@index([checkedAt])
+  @@index([workspaceId])
+}
+
+/// ONE BRAIN AB-10 — the negatives a product's brain decided in one market (one-brain DESIGN.md §2.7, §4, §5, §8 row AB-10;
+/// services/advertising/brain/negatives*.ts): one row per negative it would add or retire — where, why, at which level —
+/// and what became of it: SHADOW (logged only), HELD (named why), PLANNED, PROPOSED (one change plan a day; a person
+/// decides), REJECTED, WRITTEN / QUEUED (AUTO, through the one negative write service and the retire queue, as
+/// automation:ads-brain-negatives), REFUSED, FAILED. Only for a product whose negatives lever is OBSERVE or higher.
+/// Rows no run checked for 30 days are deleted (Neon cost). No foreign key: the log outlives a removed product.
+model AdsBrainNegative {
+  // Business ownership comes from verified database context.
+  workspaceId     String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id              String    @id @default(cuid())
+
+  /// Product.id of the family root; short market code ('IT').
+  productId       String
+  marketplace     String
+  /// ADD|<level>|<campaign or ad group id>|<match>|<text>, or RETIRE|<AdTarget.id>: one row per negative.
+  key             String
+  /// ADD | RETIRE
+  action          String
+  /// The first reason (productSet | waste | ngram | isolation | consolidate | duplicate | revive…) and all of them.
+  reason          String
+  reasons         String[]
+  /// KEYWORD | PRODUCT; EXACT | PHRASE | PRODUCT; the text (an ASIN upper-cased); CAMPAIGN | AD_GROUP.
+  kind            String
+  match           String
+  text            String
+  level           String
+  campaignId      String
+  adGroupId       String?
+  /// RETIRE: the standing negative (AdTarget.id), who made it (brain | automation | person | unknown), its cover.
+  negativeId      String?
+  origin          String?
+  coverId         String?
+  /// OBSERVE | PROPOSE | AUTO — what the lever's level (and the shadow, the switch, ask-first) made of it.
+  mode            String
+  /// SHADOW | HELD | PLANNED | PROPOSED | REJECTED | WRITTEN | QUEUED | REFUSED | FAILED
+  status          String
+  askFirst        Boolean   @default(false)
+  heldBy          String?   @db.Text
+  /// One line: the deciding rule with its numbers (no money).
+  why             String    @db.Text
+  /// { clicks, orders, placeClicks, placeOrders, terms, termCount, clicksNeeded, money: { … } } — money under `money`.
+  evidence        Json
+  /// PROPOSED: the change plan (AgentApproval.id). WRITTEN: the negative (AdTarget.id). QUEUED: the outbound row.
+  approvalId      String?
+  adTargetId      String?
+  outboundQueueId String?
+  /// What the write service, the retire queue or the plan said (a refusal in its own words).
+  result          String?   @db.Text
+  /// Hash of the decision: an unchanged one is only stamped.
+  digest          String
+  runId           String
+  dataDay         DateTime  @db.Date
+  firstSeenAt     DateTime
+  checkedAt       DateTime
+  changedAt       DateTime
+  /// When it was asked for or written (the day's cap counts these).
+  actedAt         DateTime?
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([workspaceId, productId, marketplace, key], name: "product_market_key", map: "AdsBrainNegative_workspaceId_productId_marketplace_key_key")
+  @@index([productId, marketplace, runId])
+  @@index([productId, marketplace, actedAt])
+  @@index([approvalId])
+  @@index([checkedAt])
+  @@index([workspaceId])
+}
+
+/// ONE BRAIN AB-12 — what one product's brain decided about the state of one of its campaigns (one-brain DESIGN.md §2.4,
+/// §2.10, §5, D4 = A; services/advertising/brain/state*.ts): pause for a stop expected to last 3 days or more, resume
+/// when its cause ends, propose to archive a campaign dead for weeks — or keep it as it is, each with its "why". The
+/// state lever's level decides what happens: OBSERVE logs only (SHADOW), PROPOSE asks a person (an approval request),
+/// AUTO writes the status through the normal path (queue → write gate → gateway). An archive is only ever a proposal.
+/// A row is stored when a campaign's decision differs from its last one (`decisionHash`), plus the UTC day's first for a
+/// campaign the brain paused or has a request waiting for (the brain's memory of its own pause rides on the newest row);
+/// rows older than 30 days are deleted (Neon cost). No foreign key: the history outlives a removed campaign or product.
+model AdsBrainStateDecision {
+  // Business ownership comes from verified database context.
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String @id @default(cuid())
+
+  /// One run of the state brain (every campaign of a run shares it).
+  runId       String
+  /// SHADOW (decided and logged) | PROPOSE (asked a person) | LIVE (written as the brain).
+  mode        String
+  /// change (the decision differs from the campaign's last one) | snapshot (the UTC day's first, for a pause or a request)
+  kind        String
+  /// Product.id of the family root.
+  productId   String
+  /// Short market code ('IT', 'DE').
+  marketplace String
+  /// Campaign.id.
+  campaignId  String
+  /// The state lever's effective level on the campaign when decided (OBSERVE, PROPOSE, AUTO, LOCKED, EXCLUDED, OFF).
+  level       String
+  /// pause | resume | archive | keep | hold | skip
+  action      String
+  /// What happened: shadow | queued | asked | waiting | capped | refused | held | none
+  outcome     String
+  /// The stop's cause: stock | monthly_cap | playbook | declared | dead | none
+  cause       String
+  /// The campaign's status when decided.
+  status      String
+  /// When the stop is expected to end (null: open-ended or no stop), and the hours from the decision to it.
+  expectedEndAt DateTime?
+  horizonHours  Int?
+  /// The approval request a PROPOSE (or an archive) asked for, when one was asked or is waiting.
+  approvalId  String?
+
+  /// The fingerprint of the decision (state.ts stateDecisionHash).
+  decisionHash String
+  /// The whole decision (state.ts StateDecision): the causes with their horizons, the hold, the caps, the brain's memory of
+  /// its own pause (statusBefore, the stop recipe's memory at the pause) — each with its why.
+  decision     Json
+  /// One line.
+  why          String @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([campaignId, createdAt(sort: Desc)])
+  @@index([productId, marketplace, createdAt(sort: Desc)])
+  @@index([marketplace, createdAt])
+  @@index([runId])
+  @@index([createdAt])
   @@index([workspaceId])
 }
 

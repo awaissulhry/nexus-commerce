@@ -40,6 +40,8 @@ import { ADS_NEGATIVE_TOOLS } from './tools/ads-negatives.tools.js'
 import { ADS_AD_GROUP_TOOLS } from './tools/ads-ad-groups.tools.js'
 import { ADS_QUEUED_WRITE_TOOLS } from './tools/ads-queued-write.tools.js'
 import { ADS_AUTO_UNDO_TOOLS } from './tools/ads-auto-undo.tools.js'
+// One brain AB-13 — the brain's painted hourly plan, applied only after a person's approval.
+import { ADS_BRAIN_HOURS_TOOLS } from './tools/ads-brain-hours.tools.js'
 import { EBAY_AD_TOOLS } from './tools/ebay-ads.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 import { CHANNEL_TOOLS } from './tools/channel.tools.js'
@@ -171,6 +173,8 @@ const ALL: AgentTool[] = [
   ...ADS_QUEUED_WRITE_TOOLS,
   // ADS AUTONOMY — auto-undo (A19): one undo of an automatic change it judged clearly worse, a person decides it.
   ...ADS_AUTO_UNDO_TOOLS,
+  // One brain AB-13 — the week the brain painted for one hourly plan, saved as a new version once a person approves it.
+  ...ADS_BRAIN_HOURS_TOOLS,
   ...EBAY_AD_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).
   ...APPROVAL_TOOLS,

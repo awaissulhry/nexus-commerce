@@ -128,10 +128,10 @@ describe('resolveBrainSettings', () => {
   })
 
   it('a stored row that no longer validates is ignored and listed (the next level applies)', () => {
-    const bad = row({ scope: 'PRODUCT', kind: 'LEVEL', key: 'negatives', value: 'AUTO' })
+    const bad = row({ scope: 'PRODUCT', kind: 'LEVEL', key: 'structure', value: 'AUTO' })
     const worse = row({ scope: 'CAMPAIGN', campaignId: 'c-1', kind: 'VALUE', key: 'paceTargetPct', value: 80 })
     const s = resolve([bad, worse])
-    expect(s.levers.negatives.effective).toBe('OBSERVE')
+    expect(s.levers.structure.effective).toBe('OBSERVE')
     expect(s.values.paceTargetPct.value).toBe(90)
     expect(s.ignored.map((i) => i.overrideId)).toEqual([bad.id, worse.id])
   })
@@ -141,7 +141,9 @@ describe('validateOverride', () => {
   it('checks the identity and the value of each kind', () => {
     expect(validateOverride({ scope: 'PRODUCT', kind: 'LEVEL', key: 'bids', value: 'AUTO' })).toEqual({ override: { scope: 'PRODUCT', campaignId: null, kind: 'LEVEL', key: 'bids', ref: '', value: 'AUTO' } })
     expect(validateOverride({ scope: 'PRODUCT', kind: 'LEVEL', key: 'bids', value: 'ON' })).toEqual({ refusal: expect.stringContaining('OFF, OBSERVE, PROPOSE or AUTO') })
-    expect(validateOverride({ scope: 'CAMPAIGN', kind: 'LEVEL', key: 'negatives', value: 'AUTO', campaignId: 'c-1' })).toEqual({ refusal: expect.stringContaining('AB-10') })
+    expect(validateOverride({ scope: 'CAMPAIGN', kind: 'LEVEL', key: 'structure', value: 'AUTO', campaignId: 'c-1' })).toEqual({ refusal: expect.stringContaining('AB-16') })
+    // AB-10 — the negatives lever takes every level.
+    expect(validateOverride({ scope: 'CAMPAIGN', kind: 'LEVEL', key: 'negatives', value: 'AUTO', campaignId: 'c-1' })).toMatchObject({ override: { key: 'negatives', value: 'AUTO' } })
     // AB-8 — the money levers take every level.
     expect(validateOverride({ scope: 'CAMPAIGN', kind: 'LEVEL', key: 'budgets', value: 'AUTO', campaignId: 'c-1' })).toMatchObject({ override: { key: 'budgets', value: 'AUTO' } })
     expect(validateOverride({ scope: 'CAMPAIGN', kind: 'EXCLUDE', key: '*' })).toEqual({ refusal: 'a campaign override names its campaign (campaignId)' })

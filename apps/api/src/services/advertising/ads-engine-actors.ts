@@ -24,6 +24,7 @@
  *                                                                                          ads-write-reconcile.service.ts
  *   bid brain         `automation:bid-brain`                                                bid-brain/live-writer.ts
  *   brain money       `automation:ads-brain-budgets`, `automation:ads-brain-portfolio`      brain/budget-live.ts
+ *   brain state       `automation:ads-brain-state`                                          brain/state-run.ts
  *
  * Rules are not here: a rule writes as `automation:<ruleId>` and keeps its own brakes (its caps and the
  * breaker's rule-action signal).
@@ -37,6 +38,8 @@ export type EngineKey =
   | 'bid-brain'
   // ONE BRAIN AB-8 — the brain's money writer: campaign budgets and Amazon portfolio caps of the levers it owns at AUTO.
   | 'brain-money'
+  // ONE BRAIN AB-12 — the brain's state writer: a campaign's pause for a stop of several days and its resume (state lever at AUTO).
+  | 'brain-state'
 
 /** The breaker's buckets: every engine, plus writes no engine or rule claims. */
 export type BreakerBucket = EngineKey | 'unknown'
@@ -71,6 +74,7 @@ export const ENGINE_ACTORS: readonly EngineActorDef[] = [
   { key: 'write-reconcile', label: 'Retry of failed changes', actors: ['automation:reconcile', 'automation:ads-write-reconcile'] },
   { key: 'bid-brain', label: 'Bid brain', actors: ['automation:bid-brain'] },
   { key: 'brain-money', label: 'Brain budgets', actors: ['automation:ads-brain-budgets', 'automation:ads-brain-portfolio'] },
+  { key: 'brain-state', label: 'Brain pauses', actors: ['automation:ads-brain-state'] },
 ]
 
 /**
@@ -207,6 +211,9 @@ const DEFAULT_ENGINE_CAPS: Readonly<Record<BreakerBucket, Readonly<EngineCaps>>>
   // AB-8 — the brain's money writer: one base move a campaign a day, at most four ladder rungs and the next day's
   // give-back (design §5), and a portfolio cap now and then — a budget schedule's caps hold it.
   'brain-money': { perTick: 100, perDay: 400, breakerPerHour: 200 },
+  // AB-12 — the brain's state writer: at most 3 pauses a market a UTC day (design §5), their resumes, one write per
+  // campaign per run; generous for a few markets, and far below the unknown bucket's 300 an hour, so a runaway trips it.
+  'brain-state': { perTick: 50, perDay: 100, breakerPerHour: 50 },
   unknown: { perTick: null, perDay: null, breakerPerHour: 300 },
 }
 
