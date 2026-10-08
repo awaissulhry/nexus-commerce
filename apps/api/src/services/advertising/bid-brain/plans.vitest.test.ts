@@ -56,9 +56,24 @@ describe('BB-7 — the plan hour as the brain\'s input', () => {
   })
 
   it('a Min-bid hour floors every keyword (its own floor, else 2¢); base bid "suppress" is a Min-bid hour too', () => {
-    expect(planFacts(hour(spec({ key: 'min', pause: true, floorBidCents: 3 })), { biddingStrategy: null }, flap)).toMatchObject({ lanes: [], minBidHour: { floorCents: 3 } })
+    expect(planFacts(hour(spec({ key: 'min', pause: true, floorBidCents: 3 })), { biddingStrategy: null }, flap)).toMatchObject({ minBidHour: { floorCents: 3 } })
     expect(planFacts(hour(spec({ key: 'min', pause: true })), { biddingStrategy: null }, flap)?.minBidHour).toEqual({ floorCents: 2 })
     expect(planFacts(hour(spec({ key: 'sup', bidMode: 'suppress' })), { biddingStrategy: null }, flap)?.minBidHour).toEqual({ floorCents: 2 })
+  })
+
+  it('live fix 10-08 — a Min-bid hour sets every placement lane to 0 %; under "up and down" the why says Amazon may still add +100 % at the top', () => {
+    const f = planFacts(hour(spec({ key: 'min', pause: true, floorBidCents: 3 })), { biddingStrategy: 'AUTO_FOR_SALES' }, flap)!
+    expect(f.lanes).toEqual([
+      { lane: 'TOP_OF_SEARCH', planPct: 0, maxCpcCents: null, baseCeilingCents: null, dynamic: 2 },
+      { lane: 'REST_OF_SEARCH', planPct: 0, maxCpcCents: null, baseCeilingCents: null, dynamic: 1.5 },
+      { lane: 'PRODUCT_PAGE', planPct: 0, maxCpcCents: null, baseCeilingCents: null, dynamic: 1.5 },
+    ])
+    expect(f.note).toBe('hourly plan IT GALE JACKET: min — every placement at 0 % — dynamic bidding "up and down" may still add up to +100 % at top of search over the floor (the bidding strategy is not changed here)')
+    const legacy = planFacts(hour(spec({ key: 'min', pause: true })), { biddingStrategy: 'LEGACY_FOR_SALES' }, flap)!
+    expect(legacy.lanes.map((l) => l.planPct)).toEqual([0, 0, 0])
+    expect(legacy.note).toBe('hourly plan IT GALE JACKET: min — every placement at 0 %')
+    // The anti-flap's "kept serving" hour zeroes nothing.
+    expect(planFacts(hour(spec({ key: 'min', pause: true })), { biddingStrategy: null }, { entriesToday: 2, inMinBid: false, maxEntries: 2 })!.lanes).toEqual([])
   })
 
   it('the anti-flap: a third Min-bid entry in a UTC day keeps the campaign serving; an hour already in Min bid stays floored', () => {
@@ -204,6 +219,60 @@ describe('review 5 — the placement ceiling against the bid Amazon may still ho
     const [w] = placementWrites({ market: 'IT', campaigns: new Map([['c1', { id: 'c1', status: 'ENABLED', placements: [] } as never]]) }, [f], [cut], new Set(['c1']), () => 'c1', new Map([['c1', { scheduleId: 's1', name: 'P', key: 'all-out', spec: null, event: null }]]))
     expect(w.maxBidCents).toBe(40)
     expect(placementPlan(w)!.adjustments).toEqual([{ placement: 'PLACEMENT_TOP', percentage: 50 }])
+  })
+})
+
+describe('live fix 10-08 — a Min-bid hour zeroes the placements in the same tick as the keyword floors', () => {
+  const campaigns = new Map([['c1', { id: 'c1', status: 'ENABLED', biddingStrategy: 'AUTO_FOR_SALES', placements: [{ placement: 'PLACEMENT_TOP', percentage: 300 }, { placement: 'PLACEMENT_PRODUCT_PAGE', percentage: 75 }] } as never]])
+  const plan = (s: RankTargetSpec) => new Map([['c1', hour(s)]])
+  const tick = (s: RankTargetSpec, current: number, entries = flap) => {
+    const p = planFacts(hour(s), { biddingStrategy: 'AUTO_FOR_SALES' }, entries)!
+    const f = { ...facts({ targetId: 't1', currentCents: current, overrides: p.minBidHour ? { minBidHour: p.minBidHour } : {} }), ...(p.lanes.length ? { lanes: p.lanes } : {}), planNote: p.note }
+    const d = decide(f)
+    return { d, writes: placementWrites({ market: 'IT', campaigns }, [f], [d], new Set(['c1']), () => 'c1', plan(s)) }
+  }
+
+  it('the keyword to its 3¢ floor and every placement to 0 % in one tick; the why names "up and down"', () => {
+    const { d, writes } = tick(spec({ key: 'min', pause: true, floorBidCents: 3 }), 40)
+    expect(d).toMatchObject({ action: 'write', layer: 'min_bid_hour', bidCents: 3 })
+    expect(writes).toHaveLength(1)
+    const p = placementPlan(writes[0])!
+    expect(p.adjustments).toEqual([
+      { placement: 'PLACEMENT_TOP', percentage: 0 },
+      { placement: 'PLACEMENT_REST_OF_SEARCH', percentage: 0 },
+      { placement: 'PLACEMENT_PRODUCT_PAGE', percentage: 0 },
+    ])
+    expect(p.changes).toEqual([
+      { lane: 'top-of-search', from: 300, to: 0, held: null },
+      { lane: 'product-page', from: 75, to: 0, held: null },
+    ])
+    expect(writes[0].note).toMatch(/every placement at 0 % — dynamic bidding "up and down" may still add up to \+100 %/)
+  })
+
+  it('the "kept serving" hour of the anti-flap writes no placement zero', () => {
+    const { d, writes } = tick(spec({ key: 'min', pause: true, floorBidCents: 3 }), 40, { entriesToday: 2, inMinBid: false, maxEntries: 2 })
+    expect(d.layer).not.toBe('min_bid_hour')
+    expect(writes).toEqual([])
+  })
+
+  it('the serving hour after: a blended target sets all three lanes again; a single-placement one its own lane, the others staying at 0 % (said)', () => {
+    const zeroed = new Map([['c1', { id: 'c1', status: 'ENABLED', biddingStrategy: 'LEGACY_FOR_SALES', placements: [{ placement: 'PLACEMENT_TOP', percentage: 0 }, { placement: 'PLACEMENT_REST_OF_SEARCH', percentage: 0 }, { placement: 'PLACEMENT_PRODUCT_PAGE', percentage: 0 }] } as never]])
+    const serve = (s: RankTargetSpec) => {
+      const p = planFacts(hour(s), { biddingStrategy: 'LEGACY_FOR_SALES' }, flap)!
+      const f = { ...facts({ targetId: 't1', currentCents: 30 }), lanes: p.lanes, planNote: p.note }
+      const [w] = placementWrites({ market: 'IT', campaigns: zeroed }, [f], [decide(f)], new Set(['c1']), () => 'c1', new Map([['c1', hour(s)]]))
+      return placementPlan(w)!
+    }
+    const blended = serve(spec({ maxCpcCents: 200, lanes: [{ placement: 'PLACEMENT_TOP', biasPct: 150 }, { placement: 'PLACEMENT_PRODUCT_PAGE', biasPct: 50 }] }))
+    expect(blended.adjustments).toEqual([
+      { placement: 'PLACEMENT_TOP', percentage: 150 },
+      { placement: 'PLACEMENT_REST_OF_SEARCH', percentage: 0 },
+      { placement: 'PLACEMENT_PRODUCT_PAGE', percentage: 50 },
+    ])
+    expect(blended.kept).toEqual([])
+    const single = serve(spec({ maxCpcCents: 200, placement: 'PLACEMENT_TOP', biasPct: 120 }))
+    expect(single.changes).toEqual([{ lane: 'top-of-search', from: 0, to: 120, held: null }])
+    expect(single.kept).toEqual([{ lane: 'rest-of-search', pct: 0 }, { lane: 'product-page', pct: 0 }])
   })
 })
 

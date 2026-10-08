@@ -26,7 +26,7 @@ import { applyLaneDirectives } from './recipe.js'
 import { buildFacts, isPlanFloorMark, type CampaignRow } from './facts.js'
 import { BRAIN_ACTOR, brainOwnedCampaignIds } from './live.js'
 import { placementReportWords, writeOwnedDecisions, writeOwnedPlacements, writeReportWords, type PlacementReport, type PlacementWrite, type WriteReport } from './live-writer.js'
-import type { PlanHour } from './plan-hour.js'
+import { minBidLanes, type PlanHour } from './plan-hour.js'
 import { stampPlanReceipts } from './plans.js'
 import { loadMarket, loadRun, SHADOW_MARKETS, type LastWrite, type PreviousDecision } from './load.js'
 
@@ -101,7 +101,7 @@ export async function shadowMarket(market: string, ctx: { runId: string; mode: B
     : []
   const guard = owned.size && ctx.guard ? await ctx.guard() : null
   const sent = toWrite.length && guard ? await writeOwnedDecisions(toWrite, { runId: ctx.runId, guard }) : null
-  // BB-7 — the plan's hour of each owned campaign: its placements (none while braked, paused or in a Min-bid hour) …
+  // BB-7 — the plan's hour of each owned campaign: its placements (none while braked or paused; all at 0 % in a Min-bid hour) …
   const placed = guard && !run.marketBrakes.length ? await writeOwnedPlacements(placementWrites(rows, facts, decisions, owned, campaignOf, run.planHours), { runId: ctx.runId, guard }) : null
   // … a new Min-bid entry for each campaign the brain floored this run (rank-defend's anti-flap, its count shared) …
   if (sent) await recordMinBidEntries(rows, decisions, sent, run, campaignOf)
@@ -178,9 +178,17 @@ export function placementWrites(rows: { market: string; campaigns: ReadonlyMap<s
   for (const [campaignId, e] of byCampaign) {
     const hour = hours?.get(campaignId)
     const c = rows.campaigns.get(campaignId)
+    // Live fix 10-08 — the plan's Min-bid hour: every placement lane to 0 % in the same tick as the keyword floors (the
+    // previous hour's % stayed and lifted the floor: 3¢ × (1 + 300 %) = 12¢ at top of search). No placement rule raises
+    // a lane here. A floor with no plan hour (a mark) still writes none.
+    if (e.floored) {
+      if (!hour?.key || e.braked || !c || c.status !== 'ENABLED') continue
+      out.push({ campaignId, market: rows.market, lanes: minBidLanes(c.biddingStrategy), current: c.placements ?? [], maxBidCents: e.maxBid, key: hour.key, note: e.f.planNote ?? `hourly plan ${hour.name} — every placement at 0 %`, dataDay: e.f.dataDay, raiseCap: e.f.raiseCap ?? null })
+      continue
+    }
     // BB-9's placement rules shape the plan's lanes first (as decide does); a rule's floor may add a lane on its own.
     const lanes = applyLaneDirectives(e.f.lanes ?? [], e.f.laneDirectives)
-    if ((!hour?.key && !e.f.laneDirectives?.length) || !lanes.length || e.floored || e.braked || !c || c.status !== 'ENABLED') continue
+    if ((!hour?.key && !e.f.laneDirectives?.length) || !lanes.length || e.braked || !c || c.status !== 'ENABLED') continue
     out.push({ campaignId, market: rows.market, lanes, current: c.placements ?? [], maxBidCents: e.maxBid, key: hour?.key ?? 'placement-rules', note: e.f.planNote ?? (hour ? `hourly plan ${hour.name}` : 'placement rules'), dataDay: e.f.dataDay, raiseCap: e.f.raiseCap ?? null })
   }
   return out
