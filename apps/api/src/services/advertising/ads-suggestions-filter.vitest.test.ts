@@ -150,3 +150,23 @@ describe('5d — search-term cards', () => {
     expect(upsert).not.toHaveBeenCalled()
   })
 })
+
+describe('review 2026-10-08 — a target-ACoS bid card the rule no longer asks expires on its next run', () => {
+  const card = { type: 'bid_apply', op: 'targetAcos', value: 35, adTargetId: 'k1' }
+  it('it waits a data day, or asks no change: the pending card expires now (not in 3 days), nothing is written', async () => {
+    await run([card], [{ type: 'bid_apply', ok: true, output: { skipped: 'waits_for_evidence', why: 'already moved on data day …' } }])
+    await run([{ ...card, op: 'curBidTargetAcos' }], [{ type: 'bid_apply', ok: true, output: { dryRun: true, wouldChange: '44¢ → 44¢', noChange: true } }])
+    expect(upsert).not.toHaveBeenCalled()
+    expect(updateMany.mock.calls.map((c) => c[0])).toEqual([
+      { where: { ruleId: 'r1', entityId: 'camp-1', proposedKey: 'bid_apply:targetAcos:35', status: 'pending' }, data: { status: 'expired', decidedAt: expect.any(Date), decidedBy: 'system:stale' } },
+      { where: { ruleId: 'r1', entityId: 'camp-1', proposedKey: 'bid_apply:curBidTargetAcos:35', status: 'pending' }, data: { status: 'expired', decidedAt: expect.any(Date), decidedBy: 'system:stale' } },
+    ])
+  })
+
+  it('a card the rule still asks is refreshed with its new numbers; other ops are left to the 3-day sweep', async () => {
+    await run([card], [{ type: 'bid_apply', ok: true, output: { dryRun: true, wouldChange: '44¢ → 55¢' } }])
+    expect((upsert.mock.calls[0][0] as { update: { proposedAction: { wouldChange: string } } }).update.proposedAction.wouldChange).toBe('44¢ → 55¢')
+    await run([{ type: 'bid_apply', op: 'decPct', value: 10 }], [{ type: 'bid_apply', ok: true, output: { noChange: true } }])
+    expect(updateMany).not.toHaveBeenCalled()
+  })
+})
