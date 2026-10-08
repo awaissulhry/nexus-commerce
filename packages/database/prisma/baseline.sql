@@ -9580,6 +9580,33 @@ CREATE TABLE "AdsNativeRuleSnapshot" (
 );
 
 -- CreateTable
+CREATE TABLE "AdsBrainBudgetDecision" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "runId" TEXT NOT NULL,
+    "mode" TEXT NOT NULL,
+    "kind" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "day" DATE NOT NULL,
+    "month" TEXT NOT NULL,
+    "level" TEXT NOT NULL,
+    "envelopeCents" INTEGER,
+    "envelopeSource" TEXT NOT NULL,
+    "spentCents" INTEGER NOT NULL,
+    "projectedCents" INTEGER NOT NULL,
+    "pacePct" DECIMAL(10,2),
+    "brake" TEXT NOT NULL,
+    "portfolioCapCents" INTEGER,
+    "planHash" TEXT NOT NULL,
+    "plan" JSONB NOT NULL,
+    "why" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "AdsBrainBudgetDecision_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AdWriteRefusal" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -15367,6 +15394,18 @@ CREATE INDEX "AdsNativeRuleSnapshot_workspaceId_idx" ON "AdsNativeRuleSnapshot"(
 
 -- CreateIndex
 CREATE UNIQUE INDEX "AdsNativeRuleSnapshot_workspaceId_campaignId_key" ON "AdsNativeRuleSnapshot"("workspaceId", "campaignId");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainBudgetDecision_productId_marketplace_createdAt_idx" ON "AdsBrainBudgetDecision"("productId", "marketplace", "createdAt" DESC);
+
+-- CreateIndex
+CREATE INDEX "AdsBrainBudgetDecision_runId_idx" ON "AdsBrainBudgetDecision"("runId");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainBudgetDecision_createdAt_idx" ON "AdsBrainBudgetDecision"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainBudgetDecision_workspaceId_idx" ON "AdsBrainBudgetDecision"("workspaceId");
 
 -- CreateIndex
 CREATE INDEX "AdWriteRefusal_deniedAt_createdAt_idx" ON "AdWriteRefusal"("deniedAt", "createdAt");
