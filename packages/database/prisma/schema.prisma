@@ -22674,3 +22674,30 @@ model PlatformHealthCheck {
   @@index([measuredAt])
   @@index([workspaceId])
 }
+
+/// Amazon Best Sellers Rank, as the Catalog Items API (searchCatalogItems, includedData=salesRanks) reports it: one row
+/// per ASIN, market and read whose ranks changed (or a daily heartbeat). Written every 3 hours by the sales-rank feed
+/// (apps/api/src/services/amazon/sales-rank.service.ts) for every live Amazon listing; read by the `sales-rank` tool.
+model AmazonSalesRank {
+  workspaceId         String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                  String   @id @default(cuid())
+  /// The market code (IT, DE, …) and the ASIN read there.
+  marketplace         String
+  asin                String
+  /// The product the business's Amazon listing of this ASIN sells (null when no live listing names one any more).
+  productId           String?
+  /// [{ id, title, rank }]: the browse-node ranks (a sub-category, e.g. a "jackets" node), best first.
+  classificationRanks Json
+  /// [{ group, title, rank }]: the top-level ranks (a whole department).
+  displayGroupRanks   Json
+  /// The lowest (best) classification rank of this read, for sorting; null when Amazon reported none.
+  bestRank            Int?
+  /// One feed run: every row it wrote shares this id.
+  runId               String
+  capturedAt          DateTime @default(now())
+
+  @@index([productId, marketplace, capturedAt(sort: Desc)])
+  @@index([asin, marketplace, capturedAt(sort: Desc)])
+  @@index([capturedAt])
+  @@index([workspaceId])
+}

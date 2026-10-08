@@ -514,6 +514,7 @@
     "BuyerMessage",
     "ChannelHeldId",
     "ChannelHeldSweep",
-    "PlatformHealthCheck"
+    "PlatformHealthCheck",
+    "AmazonSalesRank"
   ]
 }

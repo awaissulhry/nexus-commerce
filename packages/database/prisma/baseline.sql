@@ -10937,6 +10937,22 @@ CREATE TABLE "PlatformHealthCheck" (
     CONSTRAINT "PlatformHealthCheck_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "AmazonSalesRank" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "asin" TEXT NOT NULL,
+    "productId" TEXT,
+    "classificationRanks" JSONB NOT NULL,
+    "displayGroupRanks" JSONB NOT NULL,
+    "bestRank" INTEGER,
+    "runId" TEXT NOT NULL,
+    "capturedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "AmazonSalesRank_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE INDEX "Product_gtin_idx" ON "Product"("gtin");
 
@@ -16522,6 +16538,18 @@ CREATE INDEX "PlatformHealthCheck_measuredAt_idx" ON "PlatformHealthCheck"("meas
 
 -- CreateIndex
 CREATE INDEX "PlatformHealthCheck_workspaceId_idx" ON "PlatformHealthCheck"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "AmazonSalesRank_productId_marketplace_capturedAt_idx" ON "AmazonSalesRank"("productId", "marketplace", "capturedAt" DESC);
+
+-- CreateIndex
+CREATE INDEX "AmazonSalesRank_asin_marketplace_capturedAt_idx" ON "AmazonSalesRank"("asin", "marketplace", "capturedAt" DESC);
+
+-- CreateIndex
+CREATE INDEX "AmazonSalesRank_capturedAt_idx" ON "AmazonSalesRank"("capturedAt");
+
+-- CreateIndex
+CREATE INDEX "AmazonSalesRank_workspaceId_idx" ON "AmazonSalesRank"("workspaceId");
 
 -- AddForeignKey
 ALTER TABLE "Product" ADD CONSTRAINT "Product_familyId_fkey" FOREIGN KEY ("familyId") REFERENCES "ProductFamily"("id") ON DELETE SET NULL ON UPDATE CASCADE;

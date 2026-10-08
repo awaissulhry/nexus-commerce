@@ -7836,6 +7836,10 @@
     {
       "name": "PlatformHealthCheck",
       "fields": []
+    },
+    {
+      "name": "AmazonSalesRank",
+      "fields": []
     }
   ]
 }
