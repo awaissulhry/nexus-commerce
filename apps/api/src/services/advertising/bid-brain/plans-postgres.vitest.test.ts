@@ -294,10 +294,14 @@ describe.skipIf(!concurrentDatabaseUrl())('BB-7 — an owned campaign\'s hourly 
       await inside(() => restoreCampaignBids('c-it', { actor: BUDGET as never, reason: 'back under cap' }))
       expect(await rows('SELECT "bidsSuppressedBy", "bidsSuppressedFloorCents" FROM "Campaign" WHERE id = \'c-it\'')).toEqual([{ bidsSuppressedBy: RETAIL, bidsSuppressedFloorCents: 2 }])
       expect(await rows('SELECT count(*)::int AS n FROM "BidHold" WHERE "campaignId" = \'c-it\' AND kind = \'STOP\' AND "endedAt" IS NULL')).toEqual([{ n: 0 }])
+      expect(await rows('SELECT "floorCents", reason FROM "BidHold" WHERE "campaignId" = \'c-it\' AND kind = \'STOP\' AND by = $1 ORDER BY "createdAt" DESC LIMIT 1', [RETAIL])).toEqual([{ floorCents: 2, reason: 'unsellable' }])
       expect(await rows('SELECT "suppressedFromBidCents" AS m FROM "AdTarget" WHERE id = \'t-it\'')).toEqual([{ m: before }])
       await inside(() => runShadowOnce({ now: at(NOW, 34), mode: 'live', onlyOwned: true, clockNow: at(noon, 30) }))
       expect(await bidOf('t-it')).toBe(2)
-      // The guard no longer flags it: its run lifts its own stop, and the brain gives the bid back.
+      // The guard no longer flags it, minutes after its stop: too young to lift (#513 follow-up: 2-hour damping).
+      expect(await inside(() => applyRetailGuard({ campaignIds: [], sellable: ['c-it'], actor: 'retail-guard' }))).toMatchObject({ lifted: [], waiting: ['c-it'] })
+      // Two hours on: its run lifts its own stop, and the brain gives the bid back.
+      await database.pool.query('UPDATE "Campaign" SET "bidsSuppressedAt" = "bidsSuppressedAt" - interval \'2 hours\' WHERE id = \'c-it\'')
       expect(await inside(() => applyRetailGuard({ campaignIds: [], sellable: ['c-it'], actor: 'retail-guard' }))).toMatchObject({ lifted: ['c-it'] })
       expect(await rows('SELECT "bidsSuppressedAt" AS at FROM "Campaign" WHERE id = \'c-it\'')).toEqual([{ at: null }])
       await inside(() => runShadowOnce({ now: at(NOW, 35), mode: 'live', onlyOwned: true, clockNow: at(noon, 45) }))

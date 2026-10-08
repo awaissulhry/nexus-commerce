@@ -9410,6 +9410,7 @@ CREATE TABLE "BidHold" (
     "until" TIMESTAMP(3),
     "by" TEXT NOT NULL,
     "reason" TEXT,
+    "floorCents" INTEGER,
     "endedAt" TIMESTAMP(3),
     "endedBy" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
