@@ -9,8 +9,8 @@
  * each delta from a fresh read and answers per change; a refused cell stays pending and marked,
  * a confirmed one clears. Nothing here writes a number the server has not confirmed.
  *
- * Cases (Step 3): a typed sealed count sits in `pendingCases` and travels in the SAME change as
- * that cell's on-hand, so the server writes and checks both in one transaction.
+ * Cases (Step 3): a typed sealed count (one per case size) sits in `pendingCases` and travels in
+ * the SAME change as that cell's on-hand, so the server writes and checks them in one transaction.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Redo2, Search, Undo2 } from 'lucide-react'
@@ -23,7 +23,7 @@ import { useInventoryEditor, type InventoryEditorTarget } from './useInventoryEd
 import type { DensityMode } from './density'
 import { InventoryGrid, OPTIONAL_COLUMN_KINDS, OPTIONAL_COLUMN_LABELS, optionalKindsOf, type OptionalColumnKind } from './InventoryGrid'
 import {
-  casesFailKey, changesOf, DEFAULT_REASON, editorModeForRow, pendingCellCount, pendingKey, REASON_OPTIONS, refusedColumn, withCasesEdit, withEdit,
+  casesFailKey, changesOf, DEFAULT_REASON, editorModeForRow, keepCasesOf, pendingCellCount, pendingKey, REASON_OPTIONS, refusedColumn, withCasesEdit, withEdit,
   type MatrixRow,
 } from './inventoryEditor.logic'
 import styles from './styles.module.css'
@@ -79,9 +79,10 @@ export function InventoryEditorModal({ row, density, onClose }: { row: Inventory
 
   /** Every edit path — keystroke, fill, paste, undo, "Set selected" — lands here, On hand or Cases. */
   const pendingRef = useRef(pending); pendingRef.current = pending
-  const onEdit = useCallback((r: MatrixRow, locationId: string, value: unknown, kind: 'onhand' | 'cases' = 'onhand') => {
-    if (kind === 'cases') setPendingCases((prev) => withCasesEdit(prev, r, locationId, value, pendingRef.current))
-    else setPending((prev) => withEdit(prev, r, locationId, value))
+  const onEdit = useCallback((r: MatrixRow, locationId: string, value: unknown, kind: 'onhand' | 'cases' = 'onhand', unitsPerCase?: number) => {
+    if (kind === 'cases') {
+      if (unitsPerCase !== undefined) setPendingCases((prev) => withCasesEdit(prev, r, locationId, unitsPerCase, value, pendingRef.current))
+    } else setPending((prev) => withEdit(prev, r, locationId, value))
     // The cell's change is a new one: the last Apply's refusal of it no longer stands (a count that still
     // does not fit the units stays red from the live check).
     setFailed((prev) => {
@@ -127,13 +128,12 @@ export function InventoryEditorModal({ row, density, onClose }: { row: Inventory
       const change = changes.find((c) => c.productId === r.productId && c.locationId === r.locationId)
       refused.set(refusedColumn(change, r.code) === 'cases' ? casesFailKey(r.productId, r.locationId) : key, r.error ?? 'Refused')
     }
-    const keep = (prev: Map<string, number>) => {
+    setPending((prev) => {
       const next = new Map<string, number>()
       for (const [k, v] of prev) if (refusedCells.has(k)) next.set(k, v)
       return next
-    }
-    setPending(keep)
-    setPendingCases(keep)
+    })
+    setPendingCases((prev) => keepCasesOf(prev, refusedCells))
     setFailed(refused)
     setHistory({ undo: 0, redo: 0 })
     setMessage(

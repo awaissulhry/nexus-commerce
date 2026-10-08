@@ -7,7 +7,9 @@
  * locations, each a group of three: On hand (the number you edit), Reserved (held by open
  * orders), Available (the difference — what the products grid shows). A warehouse adds Cases
  * right after On hand when some row has a case size: sealed cases + loose units ("4 + 3"), the
- * sealed count edited like On hand (Tab walks On hand → Cases). Pending edits live in the
+ * sealed count edited like On hand (Tab walks On hand → Cases). Several case sizes in the family
+ * (Owner 2026-10-08) give one column per size, biggest first ("12 / case", "6 / case"); a row's
+ * loose units sit in its smallest own size column. Pending edits live in the
  * modal (`pending`) and sit over the server's numbers through the value getters here; the grid
  * itself holds no stock figure it did not get from one or the other.
  *
@@ -22,23 +24,23 @@ import type { ColGroupDef, IRowNode, ValueGetterParams, ValueSetterParams } from
 
 import { Pill } from '@/design-system/primitives'
 import { DeltaChip, GridDensityProvider, IdentityCell, LockGlyph, NexusGrid, SkuTag, composeCellTooltip, numericColumn, type ColDef, type GridApi, type GridReadyEvent, type ICellRendererParams } from '@/design-system/grid'
-import { CASE_COPY } from '@nexus/shared/stock-cases'
+import { CASE_COPY, type CaseCount } from '@nexus/shared/stock-cases'
 
 import styles from './styles.module.css'
 import { gridDensity, gridGeometry } from '@/design-system/tokens/grid'
 import type { DensityMode } from './density'
 import {
-  availableOf, casesFailKey, casesOf, CASES_EDITOR_COPY, countsCases, deltaOf, hasCaseColumns, onHandOf, pendingKey, rowSyncStatus,
-  rowTotalAvailable, sharedCaseSize, stockLevelOf, totalsOf,
+  availableOf, casesFailKey, casesOf, CASES_EDITOR_COPY, countsCases, deltaOf, familyCaseSizes, hasCaseColumns, onHandOf, pendingKey, rowSyncStatus,
+  rowTotalAvailable, stockLevelOf, totalsOf,
   type LevelCell, type MatrixModel, type MatrixRow, type PendingCases, type PendingEdits,
 } from './inventoryEditor.logic'
 
 /** The pinned totals row. Same `cells` shape as a product row so one value getter serves both. */
 interface TotalsRow {
-  __total: true; productId: '__total'; sku: string; name: ''; thumbnailUrl: null; lowStockThreshold: number; unitsPerCase: null
+  __total: true; productId: '__total'; sku: string; name: ''; thumbnailUrl: null; lowStockThreshold: number; caseSizes: number[]
   cells: Record<string, LevelCell>; totalAvailable: number
-  /** Σ sealed + Σ loose per warehouse ("12 + 9"). */
-  cases: Record<string, { sealed: number; loose: number } | null>
+  /** Σ sealed per size + Σ loose per warehouse ("12 + 9"). */
+  cases: Record<string, { sealed: CaseCount[]; loose: number } | null>
 }
 type GridRow = MatrixRow | TotalsRow
 const isTotals = (d: GridRow | undefined): d is TotalsRow => !!d && (d as TotalsRow).__total === true
@@ -78,11 +80,12 @@ export interface InventoryGridProps {
   /** Column kinds the operator has hidden (see OPTIONAL_COLUMN_KINDS). */
   hiddenKinds: readonly OptionalColumnKind[]
   pending: PendingEdits
-  /** Typed sealed counts (Cases), keyed like `pending`. */
+  /** Typed sealed counts (Cases), keyed by `casesKey` (product, location, case size). */
   pendingCases: PendingCases
   /** Cells the server refused on the last Apply, with its reason: On hand by `pendingKey`, Cases by `casesFailKey`. */
   failed: ReadonlyMap<string, string>
-  onEdit: (row: MatrixRow, locationId: string, value: unknown, kind: 'onhand' | 'cases') => void
+  /** `unitsPerCase` = the Cases column's case size (kind 'cases'). */
+  onEdit: (row: MatrixRow, locationId: string, value: unknown, kind: 'onhand' | 'cases', unitsPerCase?: number) => void
   onSelectionChanged: (productIds: string[]) => void
   onReady: (api: GridApi<GridRow>) => void
   onHistoryChanged: (h: { undo: number; redo: number }) => void
@@ -121,11 +124,12 @@ export function InventoryGrid({ model, density, hiddenKinds, pending, pendingCas
     const otherPinned = e.api.getDisplayedLeftColumns().filter((c) => c.getColId() !== 'product').reduce((n, c) => n + c.getActualWidth(), 0)
     setIdentityRoom(e.clientWidth - otherPinned)
   }, [])
-  const caseSize = sharedCaseSize(model)
+  const caseSizes = familyCaseSizes(model)
+  const caseSizesKey = caseSizes.join(',')
 
   const totals = useMemo<TotalsRow>(() => {
     const t = totalsOf(model, pending, pendingCases)
-    return { __total: true, productId: '__total', sku: single ? 'Total' : 'Family total', name: '', thumbnailUrl: null, lowStockThreshold: 0, unitsPerCase: null, cells: t.cells, totalAvailable: t.totalAvailable, cases: t.cases }
+    return { __total: true, productId: '__total', sku: single ? 'Total' : 'Family total', name: '', thumbnailUrl: null, lowStockThreshold: 0, caseSizes: [], cells: t.cells, totalAvailable: t.totalAvailable, cases: t.cases }
   }, [model, pending, pendingCases, single])
 
   useEffect(() => {
@@ -135,7 +139,7 @@ export function InventoryGrid({ model, density, hiddenKinds, pending, pendingCas
     api.refreshCells({ force: true })
   }, [pending, pendingCases, failed, totals])
 
-  /** Hidden kinds → column visibility, by colId prefix (`cases:<loc>`, `reserved:<loc>`, `totalAvailable`, `sync`). */
+  /** Hidden kinds → column visibility, by colId prefix (`cases:<loc>:<size>`, `reserved:<loc>`, `totalAvailable`, `sync`). */
   const applyHidden = useCallback((api: GridApi<GridRow>) => {
     const state = api.getColumnState().map((s) => {
       const kind = s.colId.split(':')[0] as OptionalColumnKind
@@ -200,61 +204,73 @@ export function InventoryGrid({ model, density, hiddenKinds, pending, pendingCas
         ...numericColumn,
         sortable: false,
       }
-      // Cases — a warehouse only (FBA and Shopify stay units). Sealed + loose, the sealed count editable.
-      const cases: ColDef<GridRow> | null = withCases && countsCases(loc) ? {
-        colId: `cases:${loc.locationId}`,
-        headerName: CASES_EDITOR_COPY.header,
-        headerTooltip: CASES_EDITOR_COPY.headerTooltip(caseSize),
-        width: 92,
-        editable: (p) => !p.node.rowPinned && !!p.data && !isTotals(p.data) && p.data.unitsPerCase !== null,
-        cellEditor: 'agNumberCellEditor',
-        cellEditorParams: { min: 0, precision: 0, step: 1, showStepperButtons: false },
-        valueGetter: (p: ValueGetterParams<GridRow>) => {
-          if (!p.data) return null
-          if (isTotals(p.data)) return p.data.cases[loc.locationId]?.sealed ?? null
-          return p.data.unitsPerCase === null ? null : casesOf(p.data, loc.locationId, pendingRef.current, pendingCasesRef.current).sealed
-        },
-        valueSetter: (p: ValueSetterParams<GridRow>) => {
-          if (!p.data || isTotals(p.data) || p.data.unitsPerCase === null) return false
-          const n = Number(String(p.newValue ?? '').trim())
-          const valid = Number.isFinite(n) && Number.isInteger(n) && n >= 0
-          if (valid) onEdit(p.data, loc.locationId, n, 'cases')
-          return valid
-        },
-        cellRenderer: (p: ICellRendererParams<GridRow>) => {
-          if (!p.data) return null
-          if (isTotals(p.data)) {
-            const t = p.data.cases[loc.locationId]
-            return t ? <span className={styles.ieOnHand}>{t.sealed}<span className={styles.ieLoose}>+ {t.loose}</span></span> : null
-          }
-          if (p.data.unitsPerCase === null) return <span className={styles.ieOnHand}>—</span>
-          const v = casesOf(p.data, loc.locationId, pendingRef.current, pendingCasesRef.current)
-          return (
-            <span className={styles.ieOnHand}>
-              {v.sealed}
-              {v.loose !== null && <span className={styles.ieLoose}>+ {v.loose}</span>}
-              <DeltaChip delta={v.delta} />
-            </span>
-          )
-        },
-        // One tooltip: the refusal first, then a case the pending On hand opens, then the case size.
-        tooltipValueGetter: (p) => {
-          if (!p.data || isTotals(p.data)) return undefined
-          if (p.data.unitsPerCase === null) return CASE_COPY.noSize
-          const v = casesOf(p.data, loc.locationId, pendingRef.current, pendingCasesRef.current)
-          const reason = failedRef.current.get(casesFailKey(p.data.productId, loc.locationId)) ?? v.problem
-          return composeCellTooltip(reason, v.opens > 0 ? CASES_EDITOR_COPY.opens(v.opens) : null, CASE_COPY.perCase(p.data.unitsPerCase))
-        },
-        cellClassRules: {
-          'nds-cell-is-pending': (p) => !!p.data && !isTotals(p.data) && casesOf(p.data, loc.locationId, pendingRef.current, pendingCasesRef.current).typed,
-          'nds-cell-is-refused': (p) => !!p.data && !isTotals(p.data) && (failedRef.current.has(casesFailKey(p.data.productId, loc.locationId))
-            || casesOf(p.data, loc.locationId, pendingRef.current, pendingCasesRef.current).problem !== null),
-          'nds-cell-is-locked': (p) => !!p.data && !isTotals(p.data) && p.data.unitsPerCase === null,
-          'nds-cell-is-editable': (p) => !p.node.rowPinned && !!p.data && !isTotals(p.data) && p.data.unitsPerCase !== null,
-        },
-        ...numericColumn,
-        sortable: false,
-      } : null
+      // Cases — a warehouse only (FBA and Shopify stay units). One column per case size of the family, biggest first:
+      // the sealed count of that size, editable where the row has the size; the row's loose units after its smallest.
+      const lastSize = caseSizes[caseSizes.length - 1]
+      const cases: ColDef<GridRow>[] = withCases && countsCases(loc) ? caseSizes.map((units): ColDef<GridRow> => {
+        const view = (row: MatrixRow) => casesOf(row, loc.locationId, units, pendingRef.current, pendingCasesRef.current)
+        const has = (d: GridRow | undefined): d is MatrixRow => !!d && !isTotals(d) && d.caseSizes.includes(units)
+        return {
+          colId: `cases:${loc.locationId}:${units}`,
+          headerName: CASES_EDITOR_COPY.header(caseSizes, units),
+          headerTooltip: CASES_EDITOR_COPY.headerTooltip(caseSizes),
+          width: caseSizes.length > 1 ? 88 : 92,
+          editable: (p) => !p.node.rowPinned && has(p.data),
+          cellEditor: 'agNumberCellEditor',
+          cellEditorParams: { min: 0, precision: 0, step: 1, showStepperButtons: false },
+          valueGetter: (p: ValueGetterParams<GridRow>) => {
+            if (!p.data) return null
+            if (isTotals(p.data)) return p.data.cases[loc.locationId]?.sealed.find((c) => c.unitsPerCase === units)?.cases ?? null
+            return has(p.data) ? view(p.data).sealed : null
+          },
+          valueSetter: (p: ValueSetterParams<GridRow>) => {
+            if (!has(p.data)) return false
+            const n = Number(String(p.newValue ?? '').trim())
+            const valid = Number.isFinite(n) && Number.isInteger(n) && n >= 0
+            if (valid) onEdit(p.data, loc.locationId, n, 'cases', units)
+            return valid
+          },
+          cellRenderer: (p: ICellRendererParams<GridRow>) => {
+            if (!p.data) return null
+            if (isTotals(p.data)) {
+              const t = p.data.cases[loc.locationId]
+              const sealed = t?.sealed.find((c) => c.unitsPerCase === units)?.cases
+              if (!t || sealed === undefined) return null
+              return <span className={styles.ieOnHand}>{sealed}{units === lastSize && <span className={styles.ieLoose}>+ {t.loose}</span>}</span>
+            }
+            if (!has(p.data)) return <span className={styles.ieOnHand}>—</span>
+            const v = view(p.data)
+            return (
+              <span className={styles.ieOnHand}>
+                {v.sealed}
+                {v.loose !== null && <span className={styles.ieLoose}>+ {v.loose}</span>}
+                <DeltaChip delta={v.delta} />
+              </span>
+            )
+          },
+          // One tooltip: the refusal first, then a case the pending On hand opens, then the case size (and the loose units).
+          tooltipValueGetter: (p) => {
+            if (!p.data || isTotals(p.data)) return undefined
+            if (!p.data.caseSizes.includes(units)) return p.data.caseSizes.length ? CASE_COPY.noSizeOf(units) : CASE_COPY.noSize
+            const v = view(p.data)
+            const refused = v.typed ? failedRef.current.get(casesFailKey(p.data.productId, loc.locationId)) : undefined
+            const size = v.loose !== null && caseSizes.length > 1 ? `${CASE_COPY.perCase(units)} · ${CASES_EDITOR_COPY.loose(v.loose)}` : CASE_COPY.perCase(units)
+            return composeCellTooltip(refused ?? v.problem, v.opens > 0 ? CASES_EDITOR_COPY.opens(v.opens) : null, size)
+          },
+          cellClassRules: {
+            'nds-cell-is-pending': (p) => has(p.data) && view(p.data).typed,
+            'nds-cell-is-refused': (p) => {
+              if (!has(p.data)) return false
+              const v = view(p.data)
+              return v.typed && (failedRef.current.has(casesFailKey(p.data.productId, loc.locationId)) || v.problem !== null)
+            },
+            'nds-cell-is-locked': (p) => !!p.data && !isTotals(p.data) && !p.data.caseSizes.includes(units),
+            'nds-cell-is-editable': (p) => !p.node.rowPinned && has(p.data),
+          },
+          ...numericColumn,
+          sortable: false,
+        }
+      }) : []
       const reserved: ColDef<GridRow> = {
         colId: `reserved:${loc.locationId}`,
         headerName: 'Reserved',
@@ -283,7 +299,7 @@ export function InventoryGrid({ model, density, hiddenKinds, pending, pendingCas
         headerName: loc.editable ? loc.locationCode : `${loc.locationCode} · locked`,
         headerClass: loc.editable ? undefined : styles.ieGroupLocked,
         marryChildren: true,
-        children: cases ? [onHand, cases, reserved, available] : [onHand, reserved, available],
+        children: [onHand, ...cases, reserved, available],
       }
     })
     const totalAvailable: ColDef<GridRow> = {
@@ -300,7 +316,7 @@ export function InventoryGrid({ model, density, hiddenKinds, pending, pendingCas
     return [identity, ...groups, totalAvailable, sync]
     // `onEdit` is stable (the modal memoises it); the columns depend on the locations, density and case sizes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model.columns, single, density, withCases, caseSize, identityW])
+  }, [model.columns, single, density, withCases, caseSizesKey, identityW])
   // After the columns are (re)built — a child's effect, so AG already holds them — hide what the operator hid.
   useEffect(() => {
     const api = apiRef.current

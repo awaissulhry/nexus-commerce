@@ -1,5 +1,5 @@
-/* The Case pop-up (Step 3 part D) — layout only; every control is the design system's (Modal, Field, Input,
-   SegmentedControl, Banner, Button). */
+/* The Case pop-up (Step 3 part D; several case sizes, Owner 2026-10-08) — layout only; every control is the design
+   system's (Modal, Field, Input, SegmentedControl, Banner, Button, ToolbarButton, Tooltip). */
 .body {
   display: flex;
   flex-direction: column;
@@ -7,16 +7,41 @@
   font-size: var(--nds-font-size-base);
 }
 
-/* Units per case and Case weight side by side; one under the other on a phone. */
-.pair {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--nds-space-12);
+/* The case sizes: a heading row, then one row per size — Units · L × W × H · Weight · remove. */
+.sizes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
 }
 
-@media (max-width: 480px) {
-  .pair { grid-template-columns: 1fr; }
+.sizeHead,
+.sizeRow {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr) 6rem 28px;
+  grid-template-areas: "units sides weight remove";
+  column-gap: var(--nds-space-8);
+  row-gap: var(--nds-space-4);
+  align-items: center;
 }
+
+.sizeRow {
+  grid-template-areas:
+    "units sides weight remove"
+    "error error error error";
+}
+
+/* The heading reads like a Field label (the design system's label colour and weight). */
+.sizeHead {
+  font-size: var(--nds-font-size-sm-plus);
+  font-weight: var(--nds-font-weight-semibold);
+  line-height: 1.25;
+  color: var(--nds-text-strong);
+}
+
+.headUnits, .units { grid-area: units; min-width: 0; }
+.headSides, .sides { grid-area: sides; min-width: 0; }
+.headWeight, .weight { grid-area: weight; min-width: 0; }
+.remove { grid-area: remove; }
 
 /* L × W × H on one line: three equal fields with the × between them. */
 .sides {
@@ -37,7 +62,64 @@
   min-width: 0;
 }
 
+/* Every number field fills its grid cell (the design system's field is inline and sized by its content). */
+.fill {
+  width: 100%;
+  min-width: 0;
+}
+
+.fill > input {
+  min-width: 0;
+  width: 100%;
+}
+
 .times {
   flex: none;
   color: var(--nds-text-2);
+}
+
+/* A row's first problem, under it — the Field error's colour and size. */
+.rowError {
+  grid-area: error;
+  font-size: var(--nds-font-size-xs-plus);
+  font-weight: var(--nds-font-weight-medium);
+  line-height: 1.4;
+  color: var(--nds-danger-text);
+}
+
+.add {
+  display: flex;
+}
+
+/* The parent whose variants' sizes differ: one line and the button that replaces them for all. */
+.mixed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.mixedText {
+  flex: 1 1 12rem;
+  color: var(--nds-text-2);
+}
+
+/* A phone: Units, Weight and remove on one line, the case size under them; more room between sizes. */
+@media (max-width: 480px) {
+  .sizes { gap: var(--nds-space-12); }
+
+  .sizeHead,
+  .sizeRow {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 28px;
+    grid-template-areas:
+      "units weight remove"
+      "sides sides sides";
+  }
+
+  .sizeRow {
+    grid-template-areas:
+      "units weight remove"
+      "sides sides sides"
+      "error error error";
+  }
 }

@@ -136,10 +136,14 @@ export function parseMatrixRead(body: unknown, productId: string): { read: Matri
     if (!p || typeof p !== 'object') return undefined
     const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v)) ? Number(v) : null)
     const owner = (v: unknown): 'AMAZON' | 'SELLER' | null => (v === 'AMAZON' || v === 'SELLER' ? v : null)
-    return {
-      unitsPerCase: num(p.unitsPerCase), caseLengthCm: num(p.caseLengthCm), caseWidthCm: num(p.caseWidthCm), caseHeightCm: num(p.caseHeightCm),
-      caseWeightKg: num(p.caseWeightKg), fbaPrepOwner: owner(p.fbaPrepOwner), fbaLabelOwner: owner(p.fbaLabelOwner),
-    }
+    // Several case sizes per SKU (Owner 2026-10-08): a size without whole units per case is dropped; biggest first.
+    const sizes = (Array.isArray(p.sizes) ? p.sizes as Array<Record<string, unknown>> : []).flatMap((z) => {
+      const units = num(z?.unitsPerCase)
+      return units !== null && Number.isInteger(units) && units >= 1
+        ? [{ unitsPerCase: units, caseLengthCm: num(z.caseLengthCm), caseWidthCm: num(z.caseWidthCm), caseHeightCm: num(z.caseHeightCm), caseWeightKg: num(z.caseWeightKg) }]
+        : []
+    }).sort((x, y) => y.unitsPerCase - x.unitsPerCase)
+    return { sizes, fbaPrepOwner: owner(p.fbaPrepOwner), fbaLabelOwner: owner(p.fbaLabelOwner) }
   }
   const rows: MatrixRowRead[] = []
   for (const raw of b.rows) {

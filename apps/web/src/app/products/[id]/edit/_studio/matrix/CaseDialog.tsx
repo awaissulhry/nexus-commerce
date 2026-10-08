@@ -1,30 +1,37 @@
 'use client'
 
 /**
- * The Case pop-up (Step 3 part D, Owner 2026-10-07: "super simple") — the Case cell's door. One small DS Modal anchored
- * on the cell:
+ * The Case pop-up (Step 3 part D, Owner 2026-10-07: "super simple"; several case sizes per SKU, Owner 2026-10-08) — the
+ * Case cell's door. One small DS Modal anchored on the cell:
  *
- *     Case · GALE-M                                      ✕
- *     Units per case [ 12 ]     Case weight [ 14.5 kg ]
- *     Case size (L × W × H)  [ 60 cm ] × [ 40 cm ] × [ 35 cm ]
+ *     Case · GALE-M                                                  ✕
+ *     Case sizes
+ *     Units per case   Case size (L × W × H)            Weight
+ *     [ 12 ]           [ 60 cm ] × [ 40 cm ] × [ 35 cm ]  [ 14.5 kg ]  ✕
+ *     [ 6 ]            [ 40 cm ] × [ 30 cm ] × [ 35 cm ]  [ 7.5 kg ]   ✕
+ *     + Add case size
  *     Prep by    [ Amazon | Seller | Not set ]
  *     Labels by  [ Amazon | Seller | Not set ]
  *     ⚠ Amazon EU takes boxes up to 63.5 cm a side and 23 kg.      ← a warning, never a refusal
  *                                              [Cancel] [Save]
  *
- * On the parent the title is "Case · All N variants" and one Save writes every variant; a field the variants differ on
- * starts as "Mixed" and, left so, keeps each variant's own value. A change of units per case while sealed cases are in
- * stock answers 409: the pop-up says how many open, and Save becomes "Save · open N cases" (the second click confirms).
- * The rules are `casePack.ts`.
+ * On the parent the title is "Case · All N variants" and one Save writes every variant. When the variants' sizes differ
+ * the sizes read "Variants differ. Each keeps its own." with "Replace for all variants" (it starts from the first
+ * variant's list); an owner the variants differ on starts as "Mixed". Left so, each variant keeps its own. Removing a
+ * size that has sealed cases in stock answers 409: the pop-up says how many open, and Save becomes "Save · open N cases"
+ * (the second click confirms). The rules are `casePack.ts`.
  */
-import { useId, useRef, useState, type KeyboardEvent } from 'react'
+import { useRef, useState, type KeyboardEvent } from 'react'
+import { Plus, X } from 'lucide-react'
 
 import { Banner, Field, Modal } from '@/design-system/components'
-import { Button, Input, SegmentedControl } from '@/design-system/primitives'
+import { Button, Input, SegmentedControl, ToolbarButton, Tooltip } from '@/design-system/primitives'
+import { MAX_CASE_SIZES } from '@nexus/shared/stock-cases'
 
 import {
-  CASE_KEEP, caseBoxWarning, caseFieldProblem, caseSaveHeld, caseSavedSentence, caseStart, caseWrites, putCasePacks, saveLabel, sealedSummary, undoWrites,
-  type CaseDraft, type CaseField, type CaseMember, type CaseNumberField, type CasePut, type CaseWrite, type SealedCases,
+  blankSize, CASE_DIALOG_COPY, CASE_SIZE_FIELDS, caseBoxWarning, caseSaveHeld, caseSavedSentence, caseStart, caseWrites, parseSizes, putCasePacks, saveLabel,
+  sealedSummary, undoWrites,
+  type CaseDraft, type CaseMember, type CaseOwnerField, type CasePut, type CaseSizeField, type CaseWrite, type SealedCases, type SizeDraft,
 } from './casePack'
 import styles from './CaseDialog.module.css'
 
@@ -52,31 +59,40 @@ export interface CaseDialogProps {
 }
 
 const OWNERS = [{ value: 'AMAZON', label: 'Amazon' }, { value: 'SELLER', label: 'Seller' }, { value: '', label: 'Not set' }]
-const SIDES: ReadonlyArray<[CaseNumberField, string]> = [['caseLengthCm', 'Length'], ['caseWidthCm', 'Width'], ['caseHeightCm', 'Height']]
+const SIDES: ReadonlyArray<[CaseSizeField, string]> = [['caseLengthCm', 'Length'], ['caseWidthCm', 'Width'], ['caseHeightCm', 'Height']]
+
+/** A phone: the first field is not focused on open (the keyboard would cover the pop-up). */
+const isPhone = (): boolean => typeof window !== 'undefined' && !!window.matchMedia?.('(max-width: 599px)').matches
 
 interface Confirm { writes: CaseWrite[]; cases: number; sentence: string }
 
 export function CaseDialog(p: CaseDialogProps) {
   const { target } = p
   const put: CasePut = p.put ?? ((write, open) => putCasePacks(write, open))
-  const sizeId = useId()
   /* The values as they were when the pop-up opened: the fields start from them, and Save compares against them. */
   const [start] = useState(() => caseStart(target.members))
-  const [draft, setDraft] = useState<CaseDraft>(() => ({ ...start.draft }))
+  const [draft, setDraft] = useState<CaseDraft>(() => ({ ...start.draft, sizes: start.draft.sizes?.map((s) => ({ ...s })) ?? null }))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirm, setConfirm] = useState<Confirm | null>(null)
+  const [autofocus] = useState(() => !isPhone())
   /* What this opening already saved (a parent's writes can land in parts): the toast and its Undo name it. */
   const applied = useRef<{ writes: CaseWrite[]; opened: number }>({ writes: [], opened: 0 })
 
-  const set = (field: CaseField, value: string) => {
-    // A field the variants differ on, emptied again, goes back to "keep each variant's own".
-    setDraft((d) => ({ ...d, [field]: value === '' && start.mixed.has(field) && field !== 'fbaPrepOwner' && field !== 'fbaLabelOwner' ? CASE_KEEP : value }))
-    setConfirm(null); setError(null)
-  }
-  const problemOf = (field: CaseField): string | null => (draft[field] === start.draft[field] ? null : caseFieldProblem(field, draft[field]))
+  const edit = (next: (d: CaseDraft) => CaseDraft) => { setDraft(next); setConfirm(null); setError(null) }
+  const setOwner = (field: CaseOwnerField, value: string) => edit((d) => ({ ...d, [field]: value }))
+  const setSize = (key: string, field: CaseSizeField, value: string) =>
+    edit((d) => ({ ...d, sizes: d.sizes?.map((s) => (s.key === key ? { ...s, [field]: value } : s)) ?? null }))
+  const addSize = () => edit((d) => ({ ...d, sizes: [...(d.sizes ?? []), blankSize()] }))
+  const removeSize = (key: string) => edit((d) => ({ ...d, sizes: (d.sizes ?? []).filter((s) => s.key !== key) }))
+  const replaceAll = () => edit((d) => ({ ...d, sizes: start.firstSizes.map((s) => ({ ...s })) }))
+
+  const parsed = draft.sizes ? parseSizes(draft.sizes) : null
+  const problemOf = (row: SizeDraft, field: CaseSizeField): string | null => parsed?.problems.get(`${row.key}:${field}`) ?? null
   const held = busy ? 'Saving…' : confirm ? null : caseSaveHeld(target.members, draft, start)
-  const boxWarning = caseBoxWarning(target.members, draft, start)
+  const boxWarning = caseBoxWarning(target.members, draft)
+  const sizeCount = draft.sizes?.length ?? 0
+  const atMax = sizeCount >= MAX_CASE_SIZES
 
   const finish = () => {
     const { writes, opened } = applied.current
@@ -136,20 +152,60 @@ export function CaseDialog(p: CaseDialogProps) {
     if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.target instanceof HTMLInputElement) { e.preventDefault(); void save() }
   }
 
-  const numberInput = (field: CaseNumberField, extra: { suffix?: string; ariaLabel?: string; id?: string; decimal?: boolean }) => {
-    const keep = draft[field] === CASE_KEEP
-    return (
-      <Input
-        id={extra.id} size="sm" inputMode={extra.decimal ? 'decimal' : 'numeric'} autoComplete="off"
-        // The pop-up opens on Units per case (not the ✕), so a keyboard open can type at once.
-        data-autofocus={field === 'unitsPerCase' ? true : undefined}
-        value={keep ? '' : draft[field]} placeholder={keep ? 'Mixed' : undefined} suffix={extra.suffix}
-        aria-label={extra.ariaLabel} aria-invalid={problemOf(field) ? true : undefined}
-        disabled={busy} onChange={(e) => set(field, e.target.value)}
-      />
-    )
-  }
-  const sideProblem = SIDES.map(([f]) => problemOf(f)).find(Boolean) ?? null
+  const numberInput = (row: SizeDraft, field: CaseSizeField, extra: { suffix?: string; ariaLabel: string; decimal?: boolean; first?: boolean }) => (
+    <Input
+      size="sm" fieldClassName={styles.fill} inputMode={extra.decimal ? 'decimal' : 'numeric'} autoComplete="off"
+      // The pop-up opens on the first Units per case (not the ✕), so a keyboard open can type at once.
+      data-autofocus={extra.first && autofocus ? true : undefined}
+      value={row[field]} suffix={extra.suffix}
+      aria-label={extra.ariaLabel} aria-invalid={problemOf(row, field) ? true : undefined}
+      disabled={busy} onChange={(e) => setSize(row.key, field, e.target.value)}
+    />
+  )
+
+  const sizeRows = draft.sizes && (
+    <div className={styles.sizes} role="group" aria-label={CASE_DIALOG_COPY.sizes}>
+      <div className={styles.sizeHead} aria-hidden>
+        <span className={styles.headUnits}>{CASE_DIALOG_COPY.units}</span>
+        <span className={styles.headSides}>{CASE_DIALOG_COPY.size}</span>
+        <span className={styles.headWeight}>{CASE_DIALOG_COPY.weight}</span>
+      </div>
+      {draft.sizes.map((row, i) => {
+        const rowProblem = CASE_SIZE_FIELDS.map((f) => problemOf(row, f)).find(Boolean) ?? null
+        return (
+          <div key={row.key} className={styles.sizeRow}>
+            <span className={styles.units}>{numberInput(row, 'unitsPerCase', { ariaLabel: `${CASE_DIALOG_COPY.units}, size ${i + 1}`, first: i === 0 })}</span>
+            <span className={styles.sides}>
+              {SIDES.map(([f, word], k) => (
+                <span key={f} className={styles.side}>
+                  {k > 0 && <span className={styles.times} aria-hidden>×</span>}
+                  {numberInput(row, f, { suffix: 'cm', ariaLabel: `${word} (cm), size ${i + 1}`, decimal: true })}
+                </span>
+              ))}
+            </span>
+            <span className={styles.weight}>{numberInput(row, 'caseWeightKg', { suffix: 'kg', ariaLabel: `Case weight (kg), size ${i + 1}`, decimal: true })}</span>
+            <span className={styles.remove}>
+              <ToolbarButton label={CASE_DIALOG_COPY.remove} icon={<X size={14} />} tooltipAlign="end" onClick={() => removeSize(row.key)} disabled={busy} />
+            </span>
+            {rowProblem && <span className={styles.rowError} role="alert">{rowProblem}</span>}
+          </div>
+        )
+      })}
+      <span className={styles.add}>
+        {atMax ? (
+          <Tooltip label={CASE_DIALOG_COPY.max}>
+            <Button size="sm" variant="quiet" aria-disabled>
+              <Plus size={14} aria-hidden /> {CASE_DIALOG_COPY.add}
+            </Button>
+          </Tooltip>
+        ) : (
+          <Button size="sm" variant="quiet" onClick={addSize} disabled={busy}>
+            <Plus size={14} aria-hidden /> {CASE_DIALOG_COPY.add}
+          </Button>
+        )}
+      </span>
+    </div>
+  )
 
   const footer = (
     <>
@@ -162,27 +218,19 @@ export function CaseDialog(p: CaseDialogProps) {
   )
 
   return (
-    <Modal open onClose={close} size="sm" anchor={target.anchor} title={`Case · ${target.label}`} subtitle={target.subtitle} footer={footer}>
+    <Modal open onClose={close} size="md" anchor={target.anchor} title={`Case · ${target.label}`} subtitle={target.subtitle} footer={footer}>
       <div className={styles.body} onKeyDown={onKeyDown}>
-        <div className={styles.pair}>
-          <Field label="Units per case" error={problemOf('unitsPerCase')}>{numberInput('unitsPerCase', {})}</Field>
-          <Field label="Case weight" error={problemOf('caseWeightKg')}>{numberInput('caseWeightKg', { suffix: 'kg', decimal: true })}</Field>
-        </div>
-        <Field label="Case size (L × W × H)" htmlFor={sizeId} error={sideProblem}>
-          <div className={styles.sides}>
-            {SIDES.map(([f, word], i) => (
-              <span key={f} className={styles.side}>
-                {i > 0 && <span className={styles.times} aria-hidden>×</span>}
-                {numberInput(f, { suffix: 'cm', ariaLabel: `${word} (cm)`, id: i === 0 ? sizeId : undefined, decimal: true })}
-              </span>
-            ))}
+        {draft.sizes ? sizeRows : (
+          <div className={styles.mixed}>
+            <span className={styles.mixedText}>{CASE_DIALOG_COPY.sizes}: {CASE_DIALOG_COPY.mixed}</span>
+            <Button size="sm" variant="secondary" onClick={replaceAll} disabled={busy}>{CASE_DIALOG_COPY.replace}</Button>
           </div>
-        </Field>
+        )}
         <Field label="Prep by">
-          <SegmentedControl ariaLabel="Prep by" size="sm" value={draft.fbaPrepOwner} onChange={(v) => set('fbaPrepOwner', v)} options={OWNERS} disabled={busy} />
+          <SegmentedControl ariaLabel="Prep by" size="sm" value={draft.fbaPrepOwner} onChange={(v) => setOwner('fbaPrepOwner', v)} options={OWNERS} disabled={busy} />
         </Field>
         <Field label="Labels by">
-          <SegmentedControl ariaLabel="Labels by" size="sm" value={draft.fbaLabelOwner} onChange={(v) => set('fbaLabelOwner', v)} options={OWNERS} disabled={busy} />
+          <SegmentedControl ariaLabel="Labels by" size="sm" value={draft.fbaLabelOwner} onChange={(v) => setOwner('fbaLabelOwner', v)} options={OWNERS} disabled={busy} />
         </Field>
         {boxWarning && <Banner tone="warning">{boxWarning}</Banner>}
         {confirm && <Banner tone="warning">{confirm.sentence}</Banner>}

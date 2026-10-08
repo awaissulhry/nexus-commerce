@@ -4,11 +4,12 @@
 // PENDING edits sits over the server's numbers, and what the totals row says. Everything the
 // grid and the modal compute is here, so it is tested rather than trusted.
 //
-// Cases (Step 3): a SKU with a case size shows, per warehouse, its sealed cases and loose units
-// ("4 + 3"). The sealed count is edited like on-hand and travels in the SAME change of that cell,
-// so one Apply writes both in one transaction. The rule is the shared one (`@nexus/shared/stock-cases`):
-// a lower on-hand previews the case it opens; a count the units cannot hold is refused.
-import { CASE_COPY, caseCountProblem, sealedCases } from '@nexus/shared/stock-cases'
+// Cases (Step 3; several case sizes per SKU, Owner 2026-10-08): a SKU with case sizes shows, per
+// warehouse, its sealed cases per size and its loose units ("4 + 3", or "2 | 1 + 3" across two size
+// columns). Each sealed count is edited like on-hand and travels in the SAME change of that cell, so
+// one Apply writes them all in one transaction. The rule is the shared one (`@nexus/shared/stock-cases`):
+// a lower on-hand previews the case it opens (the smallest first); counts the units cannot hold are refused.
+import { CASE_COPY, caseCountProblem, countsFor, isCaseSize, sealedCases, sealedUnits, withCounts, type CaseCount } from '@nexus/shared/stock-cases'
 
 /** Location types whose stock we never let the operator edit from the grid. */
 export const READONLY_LOCATION_TYPES = new Set(['AMAZON_FBA', 'SHOPIFY_LOCATION'])
@@ -49,8 +50,8 @@ export interface LevelCell {
   reserved: number
   available: number
   syncStatus?: SyncStatus | null
-  /** Sealed cases the server holds here (already clamped by the units); absent = none. */
-  cases?: number
+  /** Sealed cases per size the server holds here (already clamped by the units); absent = none. */
+  cases?: CaseCount[]
 }
 
 export interface RawLocation {
@@ -66,7 +67,7 @@ export interface RawListLevel {
   reserved: number
   available: number
   syncStatus?: string | null
-  cases?: number
+  cases?: CaseCount[]
 }
 
 export interface RawFamilyChildLevel {
@@ -77,7 +78,7 @@ export interface RawFamilyChildLevel {
   reserved: number
   available: number
   syncStatus?: string | null
-  cases?: number
+  cases?: CaseCount[]
 }
 export interface RawFamilyChild {
   id: string
@@ -85,8 +86,8 @@ export interface RawFamilyChild {
   name: string
   thumbnailUrl: string | null
   lowStockThreshold?: number | null
-  /** Units in one sealed case; null/absent = no case size. */
-  unitsPerCase?: number | null
+  /** The SKU's case sizes (units per case, biggest first); absent/[] = no case size. */
+  caseSizes?: number[]
   stockLevels: RawFamilyChildLevel[]
 }
 
@@ -103,8 +104,8 @@ export interface MatrixRow {
   name: string
   thumbnailUrl: string | null
   lowStockThreshold: number
-  /** Units in one sealed case; null = no case size (the Cases cell has nothing to edit). */
-  unitsPerCase: number | null
+  /** The SKU's case sizes (units per case, biggest first); [] = no case size (no Cases cell to edit). */
+  caseSizes: number[]
   cells: Record<string, LevelCell>
 }
 /** ONE shape for both cases: a family's variations, or a single product as a one-row family. */
@@ -116,13 +117,25 @@ export interface MatrixModel {
 const asSync = (s: string | null | undefined): SyncStatus | null =>
   s === 'SYNCED' || s === 'PENDING' || s === 'FAILED' ? s : null
 
-/** A case size the rule can use (a whole number ≥ 1), else null. */
-const asCaseSize = (n: number | null | undefined): number | null => (typeof n === 'number' && Number.isInteger(n) && n >= 1 ? n : null)
+/** The case sizes the rule can use (whole numbers ≥ 1), each once, biggest first. */
+export function asCaseSizes(raw: unknown): number[] {
+  if (!Array.isArray(raw)) return []
+  return [...new Set(raw.filter(isCaseSize))].sort((a, b) => b - a)
+}
 
-const levelCell = (l: { quantity: number; reserved: number; available: number; syncStatus?: string | null; cases?: number }): LevelCell => ({
-  quantity: l.quantity, reserved: l.reserved, available: l.available, syncStatus: asSync(l.syncStatus),
-  ...(typeof l.cases === 'number' && l.cases > 0 ? { cases: l.cases } : {}),
-})
+/** The sealed counts a level carries on the wire: `{ unitsPerCase, cases }` with whole numbers > 0. */
+function asCounts(raw: unknown): CaseCount[] {
+  if (!Array.isArray(raw)) return []
+  return raw.flatMap((c): CaseCount[] => {
+    const o = c as Partial<CaseCount> | null
+    return o && isCaseSize(o.unitsPerCase) && typeof o.cases === 'number' && Number.isInteger(o.cases) && o.cases > 0 ? [{ unitsPerCase: o.unitsPerCase, cases: o.cases }] : []
+  })
+}
+
+const levelCell = (l: { quantity: number; reserved: number; available: number; syncStatus?: string | null; cases?: unknown }): LevelCell => {
+  const cases = asCounts(l.cases)
+  return { quantity: l.quantity, reserved: l.reserved, available: l.available, syncStatus: asSync(l.syncStatus), ...(cases.length ? { cases } : {}) }
+}
 
 const column = (loc: RawLocation): MatrixColumn => ({
   locationId: loc.id,
@@ -138,7 +151,7 @@ export function buildMatrixModel(locations: RawLocation[], children: RawFamilyCh
   const rows = children.map((c) => {
     const cells: MatrixRow['cells'] = {}
     for (const sl of c.stockLevels) cells[sl.locationId] = levelCell(sl)
-    return { productId: c.id, sku: c.sku, name: c.name, thumbnailUrl: c.thumbnailUrl, lowStockThreshold: c.lowStockThreshold ?? DEFAULT_LOW_STOCK_THRESHOLD, unitsPerCase: asCaseSize(c.unitsPerCase), cells }
+    return { productId: c.id, sku: c.sku, name: c.name, thumbnailUrl: c.thumbnailUrl, lowStockThreshold: c.lowStockThreshold ?? DEFAULT_LOW_STOCK_THRESHOLD, caseSizes: asCaseSizes(c.caseSizes), cells }
   })
   return { columns, rows }
 }
@@ -148,7 +161,7 @@ export function buildMatrixModel(locations: RawLocation[], children: RawFamilyCh
  * without a level appear as 0 (the "add at location" affordance the list mode used to carry).
  */
 export function buildSingleModel(
-  product: { id: string; sku: string; name: string; thumbnailUrl: string | null; lowStockThreshold?: number | null; unitsPerCase?: number | null },
+  product: { id: string; sku: string; name: string; thumbnailUrl: string | null; lowStockThreshold?: number | null; caseSizes?: number[] | null },
   levels: RawListLevel[],
   activeLocations: RawLocation[],
 ): MatrixModel {
@@ -157,7 +170,7 @@ export function buildSingleModel(
   for (const lv of levels) cells[lv.location.id] = levelCell(lv)
   return {
     columns,
-    rows: [{ productId: product.id, sku: product.sku, name: product.name, thumbnailUrl: product.thumbnailUrl, lowStockThreshold: product.lowStockThreshold ?? DEFAULT_LOW_STOCK_THRESHOLD, unitsPerCase: asCaseSize(product.unitsPerCase), cells }],
+    rows: [{ productId: product.id, sku: product.sku, name: product.name, thumbnailUrl: product.thumbnailUrl, lowStockThreshold: product.lowStockThreshold ?? DEFAULT_LOW_STOCK_THRESHOLD, caseSizes: asCaseSizes(product.caseSizes), cells }],
   }
 }
 
@@ -205,110 +218,177 @@ export function withEdit(pending: PendingEdits, row: MatrixRow, locationId: stri
   return next
 }
 
-/** One changed cell as the server receives it: an absolute on-hand, an absolute sealed count, or both. */
-export interface CellChange { productId: string; locationId: string; value?: number; cases?: number }
+/**
+ * One changed cell as the server receives it: an absolute on-hand, absolute sealed counts of the
+ * sizes typed there (the other sizes keep theirs), or both.
+ */
+export interface CellChange { productId: string; locationId: string; value?: number; cases?: CaseCount[] }
 
 const splitKey = (key: string) => {
   const i = key.indexOf(':')
   return { productId: key.slice(0, i), locationId: key.slice(i + 1) }
 }
 
+/** The typed sealed counts of one cell, biggest size first. */
+function typedAt(pendingCases: PendingCases, cellKey: string): CaseCount[] {
+  const out: CaseCount[] = []
+  for (const [key, cases] of pendingCases) {
+    const at = splitCasesKey(key)
+    if (at.cellKey === cellKey) out.push({ unitsPerCase: at.unitsPerCase, cases })
+  }
+  return out.sort((a, b) => b.unitsPerCase - a.unitsPerCase)
+}
+
+/** The cells (`pendingKey`) that carry a typed sealed count. */
+export function casesCells(pendingCases: PendingCases): Set<string> {
+  return new Set([...pendingCases.keys()].map((k) => splitCasesKey(k).cellKey))
+}
+
 /**
- * The batch the server receives: ONE change per cell, carrying its on-hand and its sealed count
- * when either is pending — so the server writes both in one transaction and checks the count
- * against the NEW units.
+ * The batch the server receives: ONE change per cell, carrying its on-hand and its typed sealed
+ * counts when either is pending — so the server writes them in one transaction and checks the
+ * counts against the NEW units.
  */
 export function changesOf(pending: PendingEdits, pendingCases: PendingCases = new Map()): CellChange[] {
+  const caseCells = casesCells(pendingCases)
   const out: CellChange[] = [...pending.entries()].map(([key, value]) => {
-    const cases = pendingCases.get(key)
-    return { ...splitKey(key), value, ...(cases !== undefined ? { cases } : {}) }
+    const cases = caseCells.has(key) ? typedAt(pendingCases, key) : null
+    return { ...splitKey(key), value, ...(cases ? { cases } : {}) }
   })
-  for (const [key, cases] of pendingCases) if (!pending.has(key)) out.push({ ...splitKey(key), cases })
+  for (const key of caseCells) if (!pending.has(key)) out.push({ ...splitKey(key), cases: typedAt(pendingCases, key) })
   return out
 }
 
-/** How many cells carry a pending change (on-hand, sealed count, or both) — what Apply counts. */
+/** How many cells carry a pending change (on-hand, sealed counts, or both) — what Apply counts. */
 export function pendingCellCount(pending: PendingEdits, pendingCases: PendingCases): number {
   let n = pending.size
-  for (const key of pendingCases.keys()) if (!pending.has(key)) n += 1
+  for (const key of casesCells(pendingCases)) if (!pending.has(key)) n += 1
   return n
 }
 
-// ── cases: sealed + loose per warehouse ────────────────────────────────────────────────────
+/** The typed sealed counts kept after an Apply: those of the cells the server refused. */
+export function keepCasesOf(pendingCases: PendingCases, refusedCells: ReadonlySet<string>): Map<string, number> {
+  const next = new Map<string, number>()
+  for (const [k, v] of pendingCases) if (refusedCells.has(splitCasesKey(k).cellKey)) next.set(k, v)
+  return next
+}
+
+// ── cases: sealed per size + loose per warehouse ───────────────────────────────────────────
 
 /** Sealed cases are counted at the business's own warehouses only (FBA and Shopify stay units). */
 export const countsCases = (col: Pick<MatrixColumn, 'locationType'>): boolean => col.locationType === 'WAREHOUSE'
 
-/** The Cases column shows only when some row has a case size and some location is a warehouse. */
+/** The Cases columns show only when some row has a case size and some location is a warehouse. */
 export function hasCaseColumns(model: MatrixModel): boolean {
-  return model.rows.some((r) => r.unitsPerCase !== null) && model.columns.some(countsCases)
+  return model.rows.some((r) => r.caseSizes.length > 0) && model.columns.some(countsCases)
 }
 
-/** The case size every sized row shares (for the header); null when none or mixed. */
-export function sharedCaseSize(model: MatrixModel): number | null {
-  const sizes = new Set(model.rows.map((r) => r.unitsPerCase).filter((n): n is number => n !== null))
-  return sizes.size === 1 ? [...sizes][0] : null
+/** Every case size of the family (units per case), each once, biggest first — one Cases column per size. */
+export function familyCaseSizes(model: MatrixModel): number[] {
+  return asCaseSizes(model.rows.flatMap((r) => r.caseSizes))
 }
 
+/** Typed sealed counts, one per (product, location, case size): `casesKey`. */
 export type PendingCases = ReadonlyMap<string, number>
 
-/** What one Cases cell shows. */
-export interface CasesView {
-  /** Units in one case; null = no case size, nothing to edit. */
-  size: number | null
-  /** The sealed count shown: the typed one, else the server's clamped by the on-hand shown. */
-  sealed: number
-  /** Loose units (on hand − sealed × size); null while a typed count does not fit the units. */
+/** One key per (product, location, case size) — a typed sealed count. */
+export const casesKey = (productId: string, locationId: string, unitsPerCase: number) => `${pendingKey(productId, locationId)}:${unitsPerCase}`
+function splitCasesKey(key: string): { cellKey: string; unitsPerCase: number } {
+  const i = key.lastIndexOf(':')
+  return { cellKey: key.slice(0, i), unitsPerCase: Number(key.slice(i + 1)) }
+}
+
+/** What a level shows: the sealed count per size (the typed ones, else the server's clamped by the on-hand shown). */
+export interface LevelCasesView {
+  /** The row's sizes, biggest first, with the count shown. */
+  sealed: CaseCount[]
+  /** The server's count per size (as a reader shows it). */
+  before: CaseCount[]
+  /** The sizes typed at this level. */
+  typed: ReadonlySet<number>
+  /** Loose units (on hand − Σ sealed × size); null while typed counts do not fit the units. */
   loose: number | null
-  /** Shown sealed − the server's sealed: the chip. */
-  delta: number
-  /** A typed count is pending here. */
-  typed: boolean
-  /** Sealed cases a pending on-hand change opens (no typed count); 0 otherwise. */
-  opens: number
-  /** Why the typed count cannot be applied, or null. */
+  /** Why the typed counts cannot be applied, or null. */
   problem: string | null
 }
 
-/** The server's sealed count at a cell, as a reader shows it (never more than the units allow). */
-function serverSealed(row: MatrixRow, locationId: string): number {
+/** The server's sealed counts at a cell, as a reader shows them (never more than the units allow), biggest first. */
+function serverSealed(row: MatrixRow, locationId: string): CaseCount[] {
   const cell = row.cells[locationId]
-  return sealedCases(cell?.cases ?? 0, cell?.quantity ?? 0, row.unitsPerCase)
+  return sealedCases(countsFor(row.caseSizes, cell?.cases ?? []), cell?.quantity ?? 0)
 }
 
 /**
- * The live preview: a typed count shows as typed (refused when the shown on-hand cannot hold
- * it); without one, the server's count clamped by the shown on-hand — lowering On hand shows the
- * case a sale would open (loose units first, then a case).
+ * The live preview of one level: a typed count shows as typed (refused, with the reason, when the
+ * shown on-hand cannot hold the counts together); a size not typed shows the server's count clamped
+ * by the shown on-hand — lowering On hand shows the case a sale would open (loose units first, then
+ * the smallest case).
  */
-export function casesOf(row: MatrixRow, locationId: string, pending: PendingEdits, pendingCases: PendingCases): CasesView {
-  const size = row.unitsPerCase
-  const onHand = onHandOf(row, locationId, pending)
+export function levelCasesOf(row: MatrixRow, locationId: string, pending: PendingEdits, pendingCases: PendingCases): LevelCasesView {
   const before = serverSealed(row, locationId)
-  if (size === null) return { size: null, sealed: 0, loose: null, delta: 0, typed: false, opens: 0, problem: null }
-  const typed = pendingCases.get(pendingKey(row.productId, locationId))
-  if (typed === undefined) {
-    const sealed = sealedCases(before, onHand, size)
-    return { size, sealed, loose: onHand - sealed * size, delta: sealed - before, typed: false, opens: before - sealed, problem: null }
+  const onHand = onHandOf(row, locationId, pending)
+  const preview = sealedCases(before, onHand)
+  const typedCounts = row.caseSizes.length ? typedAt(pendingCases, pendingKey(row.productId, locationId)).filter((c) => row.caseSizes.includes(c.unitsPerCase)) : []
+  const typed = new Set(typedCounts.map((c) => c.unitsPerCase))
+  if (typed.size === 0) return { sealed: preview, before, typed, loose: onHand - sealedUnits(preview), problem: null }
+  const sealed = withCounts(preview, typedCounts)
+  const problem = caseCountProblem({ cases: sealed, quantity: onHand, sizes: row.caseSizes, locationType: 'WAREHOUSE' })?.message ?? null
+  return { sealed, before, typed, loose: problem ? null : onHand - sealedUnits(sealed), problem }
+}
+
+/** What one Cases cell (a row × a warehouse × a case size) shows. */
+export interface CasesView {
+  /** Units in one case of this column; null = the row has no case of this size, nothing to edit. */
+  size: number | null
+  /** The sealed count shown: the typed one, else the server's clamped by the on-hand shown. */
+  sealed: number
+  /** The row's loose units — set only in the row's smallest own size column; null elsewhere, or while typed counts do not fit. */
+  loose: number | null
+  /** Shown sealed − the server's sealed: the chip. */
+  delta: number
+  /** A typed count of this size is pending here. */
+  typed: boolean
+  /** Sealed cases of this size a pending on-hand change opens (no typed count here); 0 otherwise. */
+  opens: number
+  /** Why the typed counts of this level cannot be applied (on a typed cell only), or null. */
+  problem: string | null
+}
+
+const NO_CASE: CasesView = { size: null, sealed: 0, loose: null, delta: 0, typed: false, opens: 0, problem: null }
+
+/** One Cases cell, from the level's preview. `unitsPerCase` = the column's case size. */
+export function casesOf(row: MatrixRow, locationId: string, unitsPerCase: number, pending: PendingEdits, pendingCases: PendingCases): CasesView {
+  if (!row.caseSizes.includes(unitsPerCase)) return NO_CASE
+  const level = levelCasesOf(row, locationId, pending, pendingCases)
+  const shown = level.sealed.find((c) => c.unitsPerCase === unitsPerCase)?.cases ?? 0
+  const server = level.before.find((c) => c.unitsPerCase === unitsPerCase)?.cases ?? 0
+  const typed = level.typed.has(unitsPerCase)
+  const smallest = row.caseSizes[row.caseSizes.length - 1]
+  return {
+    size: unitsPerCase,
+    sealed: shown,
+    loose: unitsPerCase === smallest ? level.loose : null,
+    delta: shown - server,
+    typed,
+    opens: typed ? 0 : Math.max(0, server - shown),
+    problem: typed ? level.problem : null,
   }
-  const problem = caseCountProblem({ cases: typed, quantity: onHand, unitsPerCase: size, locationType: 'WAREHOUSE' })?.message ?? null
-  return { size, sealed: typed, loose: problem ? null : onHand - typed * size, delta: typed - before, typed: true, opens: 0, problem }
 }
 
 /**
- * Record a typed sealed count. A count equal to what the cell shows without one (the server's,
- * clamped by the pending on-hand) is NOT a change — "change and change back", and an undo that
- * restores the preview, leave nothing to apply. Not a whole number ≥ 0, or no case size: refused,
- * the map is returned untouched. A count too high for the units IS kept: the cell shows it red
- * with the reason (`casesOf(...).problem`), as the server would answer.
+ * Record a typed sealed count of one size. A count equal to what the cell shows without one (the
+ * server's, clamped by the pending on-hand) is NOT a change — "change and change back", and an
+ * undo that restores the preview, leave nothing to apply. Not a whole number ≥ 0, or a size the
+ * row does not have: refused, the map is returned untouched. A count too high for the units IS
+ * kept: the cell shows it red with the reason (`casesOf(...).problem`), as the server would answer.
  */
-export function withCasesEdit(pendingCases: PendingCases, row: MatrixRow, locationId: string, value: unknown, pending: PendingEdits): Map<string, number> {
+export function withCasesEdit(pendingCases: PendingCases, row: MatrixRow, locationId: string, unitsPerCase: number, value: unknown, pending: PendingEdits): Map<string, number> {
   const next = new Map(pendingCases)
-  if (row.unitsPerCase === null) return next
+  if (!row.caseSizes.includes(unitsPerCase)) return next
   const n = typeof value === 'number' ? value : Number(String(value ?? '').trim())
   if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) return next
-  const key = pendingKey(row.productId, locationId)
-  const implied = sealedCases(serverSealed(row, locationId), onHandOf(row, locationId, pending), row.unitsPerCase)
+  const key = casesKey(row.productId, locationId, unitsPerCase)
+  const implied = sealedCases(serverSealed(row, locationId), onHandOf(row, locationId, pending)).find((c) => c.unitsPerCase === unitsPerCase)?.cases ?? 0
   if (n === implied) next.delete(key)
   else next.set(key, n)
   return next
@@ -327,24 +407,27 @@ export function refusedColumn(change: CellChange | undefined, code: string | und
 /** The `failed` key of a refused Cases cell (an On hand cell uses `pendingKey`). */
 export const casesFailKey = (productId: string, locationId: string) => `cases:${pendingKey(productId, locationId)}`
 
-/** The words of the Cases column. */
+/** The words of the Cases columns. */
 export const CASES_EDITOR_COPY = {
-  header: 'Cases',
-  headerTooltip: (size: number | null) =>
-    `Sealed cases + loose units${size ? ` (${CASE_COPY.perCase(size)})` : ''}. A sale takes loose units first, then opens a case.`,
+  /** One case size in the family: "Cases"; several: one column per size, "12 / case". */
+  header: (sizes: readonly number[], unitsPerCase: number) => (sizes.length > 1 ? CASE_COPY.perCase(unitsPerCase) : 'Cases'),
+  headerTooltip: (sizes: readonly number[]) =>
+    `Sealed cases + loose units${sizes.length === 1 ? ` (${CASE_COPY.perCase(sizes[0])})` : ''}. A sale takes loose units first, then opens the smallest case.`,
   opens: (n: number) => `${n} sealed ${n === 1 ? 'case opens' : 'cases open'}`,
+  loose: (n: number) => `${n} loose`,
 } as const
 
 /** Totals per location and overall, over the numbers the grid is SHOWING (pending included). */
 export function totalsOf(model: MatrixModel, pending: PendingEdits, pendingCases: PendingCases = new Map()): {
   cells: Record<string, LevelCell>
   totalAvailable: number
-  /** Σ sealed + Σ loose of the rows with a case size, per warehouse; null where none counts cases. */
-  cases: Record<string, { sealed: number; loose: number } | null>
+  /** Σ sealed per family size (biggest first) + Σ loose of the rows with case sizes, per warehouse; null where none counts cases. */
+  cases: Record<string, { sealed: CaseCount[]; loose: number } | null>
 } {
   const cells: Record<string, LevelCell> = {}
-  const cases: Record<string, { sealed: number; loose: number } | null> = {}
-  const sized = model.rows.filter((r) => r.unitsPerCase !== null)
+  const cases: Record<string, { sealed: CaseCount[]; loose: number } | null> = {}
+  const sized = model.rows.filter((r) => r.caseSizes.length > 0)
+  const sizes = familyCaseSizes(model)
   let totalAvailable = 0
   for (const col of model.columns) {
     let quantity = 0, reserved = 0, available = 0
@@ -356,16 +439,16 @@ export function totalsOf(model: MatrixModel, pending: PendingEdits, pendingCases
     cells[col.locationId] = { quantity, reserved, available }
     totalAvailable += available
     if (!countsCases(col) || sized.length === 0) { cases[col.locationId] = null; continue }
-    let sealed = 0, loose = 0
+    const sealed = new Map(sizes.map((u) => [u, 0]))
+    let loose = 0
     for (const row of sized) {
-      const size = row.unitsPerCase as number
       const onHand = onHandOf(row, col.locationId, pending)
-      // A typed count the units cannot hold is not added as typed: the totals never show more cases than units.
-      const s = Math.min(casesOf(row, col.locationId, pending, pendingCases).sealed, Math.floor(onHand / size))
-      sealed += s
-      loose += onHand - s * size
+      // Typed counts the units cannot hold are not added as typed: the totals never show more cases than units.
+      const counted = sealedCases(levelCasesOf(row, col.locationId, pending, pendingCases).sealed, onHand)
+      for (const c of counted) sealed.set(c.unitsPerCase, (sealed.get(c.unitsPerCase) ?? 0) + c.cases)
+      loose += onHand - sealedUnits(counted)
     }
-    cases[col.locationId] = { sealed, loose }
+    cases[col.locationId] = { sealed: sizes.map((u) => ({ unitsPerCase: u, cases: sealed.get(u) ?? 0 })), loose }
   }
   return { cells, totalAvailable, cases }
 }
