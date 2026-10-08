@@ -55,7 +55,9 @@ export const LEVER_LEVELS_NOW: Record<BrainLever, { levels: readonly BrainLevel[
   state: { levels: OFF_OBSERVE, others: 'pause and resume wait for AB-12' },
   budgets: { levels: OFF_OBSERVE, others: 'campaign budgets are planned in shadow (AB-7: OBSERVE logs the money plan, ads-brain view money); writing them waits for AB-8' },
   portfolioCap: { levels: OFF_OBSERVE, others: 'the Amazon portfolio cap is planned in shadow (AB-7, ads-brain view money); writing it waits for AB-8' },
-  negatives: { levels: OFF_OBSERVE, others: 'the term ledger decides negatives in shadow (AB-9: OBSERVE logs one decision per term, ads-brain view terms); writing them waits for AB-10' },
+  // AB-10 — the negatives module: OBSERVE logs the day's negatives, PROPOSE asks a person once a day, AUTO writes them as the
+  // brain (inside the caps, after the shadow days of negativesShadowDays, under the live server switch).
+  negatives: { levels: BRAIN_LEVELS, others: 'the negatives module (AB-10, ads-brain view negatives) takes every level' },
   harvest: { levels: OFF_OBSERVE, others: 'the term ledger decides harvests in shadow (AB-9: OBSERVE logs one decision per term, ads-brain view terms); writing them waits for AB-11' },
   structure: { levels: OFF_OBSERVE, others: 'new campaigns wait for AB-16' },
   biddingStrategy: { levels: OFF_OBSERVE, others: 'the bidding-strategy lever waits for AB-17' },
@@ -89,6 +91,8 @@ export const BRAIN_SETTINGS = {
   negativesPerDay: { type: 'int', default: 20, min: 0, max: 200, scopes: PRODUCT, what: 'new negatives per product per day (§2.7)' },
   negativesPerEntityWarn: { type: 'int', default: 800, min: 100, max: 950, scopes: BOTH, what: 'negatives in one campaign or ad group before a warning (§2.7)' },
   negativesPerEntityMax: { type: 'int', default: 950, min: 100, max: 950, scopes: BOTH, what: 'negatives in one campaign or ad group, never more — Amazon allows 1,000 (§2.7)' },
+  // AB-10 — §10: a lever runs in shadow before it acts (14 days for negatives); the Owner's own number wins (0: at once).
+  negativesShadowDays: { type: 'int', default: 14, min: 0, max: 90, scopes: PRODUCT, what: 'days the negatives lever runs in shadow before PROPOSE or AUTO act (§10)' },
   harvestPerDay: { type: 'int', default: 10, min: 0, max: 100, scopes: PRODUCT, what: 'new keywords per product per day (§2.8)' },
   newCampaignsPerWeek: { type: 'int', default: 2, min: 0, max: 20, scopes: PRODUCT, what: 'new campaigns per product per week (§2.9)' },
   skcMax: { type: 'int', default: 20, min: 0, max: 200, scopes: PRODUCT, what: 'single-keyword campaigns per product (§2.9)' },

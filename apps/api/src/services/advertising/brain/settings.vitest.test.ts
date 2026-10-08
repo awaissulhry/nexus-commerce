@@ -128,10 +128,10 @@ describe('resolveBrainSettings', () => {
   })
 
   it('a stored row that no longer validates is ignored and listed (the next level applies)', () => {
-    const bad = row({ scope: 'PRODUCT', kind: 'LEVEL', key: 'negatives', value: 'AUTO' })
+    const bad = row({ scope: 'PRODUCT', kind: 'LEVEL', key: 'structure', value: 'AUTO' })
     const worse = row({ scope: 'CAMPAIGN', campaignId: 'c-1', kind: 'VALUE', key: 'paceTargetPct', value: 80 })
     const s = resolve([bad, worse])
-    expect(s.levers.negatives.effective).toBe('OBSERVE')
+    expect(s.levers.structure.effective).toBe('OBSERVE')
     expect(s.values.paceTargetPct.value).toBe(90)
     expect(s.ignored.map((i) => i.overrideId)).toEqual([bad.id, worse.id])
   })

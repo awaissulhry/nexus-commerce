@@ -20271,6 +20271,75 @@ model AdsBrainTermLead {
   @@index([workspaceId])
 }
 
+/// ONE BRAIN AB-10 — the negatives a product's brain decided in one market (one-brain DESIGN.md §2.7, §4, §5, §8 row AB-10;
+/// services/advertising/brain/negatives*.ts): one row per negative it would add or retire — where, why, at which level —
+/// and what became of it: SHADOW (logged only), HELD (named why), PLANNED, PROPOSED (one change plan a day; a person
+/// decides), REJECTED, WRITTEN / QUEUED (AUTO, through the one negative write service and the retire queue, as
+/// automation:ads-brain-negatives), REFUSED, FAILED. Only for a product whose negatives lever is OBSERVE or higher.
+/// Rows no run checked for 30 days are deleted (Neon cost). No foreign key: the log outlives a removed product.
+model AdsBrainNegative {
+  // Business ownership comes from verified database context.
+  workspaceId     String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id              String    @id @default(cuid())
+
+  /// Product.id of the family root; short market code ('IT').
+  productId       String
+  marketplace     String
+  /// ADD|<level>|<campaign or ad group id>|<match>|<text>, or RETIRE|<AdTarget.id>: one row per negative.
+  key             String
+  /// ADD | RETIRE
+  action          String
+  /// The first reason (productSet | waste | ngram | isolation | consolidate | duplicate | revive…) and all of them.
+  reason          String
+  reasons         String[]
+  /// KEYWORD | PRODUCT; EXACT | PHRASE | PRODUCT; the text (an ASIN upper-cased); CAMPAIGN | AD_GROUP.
+  kind            String
+  match           String
+  text            String
+  level           String
+  campaignId      String
+  adGroupId       String?
+  /// RETIRE: the standing negative (AdTarget.id), who made it (brain | automation | person | unknown), its cover.
+  negativeId      String?
+  origin          String?
+  coverId         String?
+  /// OBSERVE | PROPOSE | AUTO — what the lever's level (and the shadow, the switch, ask-first) made of it.
+  mode            String
+  /// SHADOW | HELD | PLANNED | PROPOSED | REJECTED | WRITTEN | QUEUED | REFUSED | FAILED
+  status          String
+  askFirst        Boolean   @default(false)
+  heldBy          String?   @db.Text
+  /// One line: the deciding rule with its numbers (no money).
+  why             String    @db.Text
+  /// { clicks, orders, placeClicks, placeOrders, terms, termCount, clicksNeeded, money: { … } } — money under `money`.
+  evidence        Json
+  /// PROPOSED: the change plan (AgentApproval.id). WRITTEN: the negative (AdTarget.id). QUEUED: the outbound row.
+  approvalId      String?
+  adTargetId      String?
+  outboundQueueId String?
+  /// What the write service, the retire queue or the plan said (a refusal in its own words).
+  result          String?   @db.Text
+  /// Hash of the decision: an unchanged one is only stamped.
+  digest          String
+  runId           String
+  dataDay         DateTime  @db.Date
+  firstSeenAt     DateTime
+  checkedAt       DateTime
+  changedAt       DateTime
+  /// When it was asked for or written (the day's cap counts these).
+  actedAt         DateTime?
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([workspaceId, productId, marketplace, key], name: "product_market_key", map: "AdsBrainNegative_workspaceId_productId_marketplace_key_key")
+  @@index([productId, marketplace, runId])
+  @@index([productId, marketplace, actedAt])
+  @@index([approvalId])
+  @@index([checkedAt])
+  @@index([workspaceId])
+}
+
 /// AUTO.A7 / substrate S5 — the durable record of a write-gate refusal.
 ///
 /// Until now `logGateDeny` wrote to the application log and NOWHERE ELSE, so no surface could

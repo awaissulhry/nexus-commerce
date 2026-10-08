@@ -9668,6 +9668,48 @@ CREATE TABLE "AdsBrainTermLead" (
 );
 
 -- CreateTable
+CREATE TABLE "AdsBrainNegative" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "key" TEXT NOT NULL,
+    "action" TEXT NOT NULL,
+    "reason" TEXT NOT NULL,
+    "reasons" TEXT[],
+    "kind" TEXT NOT NULL,
+    "match" TEXT NOT NULL,
+    "text" TEXT NOT NULL,
+    "level" TEXT NOT NULL,
+    "campaignId" TEXT NOT NULL,
+    "adGroupId" TEXT,
+    "negativeId" TEXT,
+    "origin" TEXT,
+    "coverId" TEXT,
+    "mode" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "askFirst" BOOLEAN NOT NULL DEFAULT false,
+    "heldBy" TEXT,
+    "why" TEXT NOT NULL,
+    "evidence" JSONB NOT NULL,
+    "approvalId" TEXT,
+    "adTargetId" TEXT,
+    "outboundQueueId" TEXT,
+    "result" TEXT,
+    "digest" TEXT NOT NULL,
+    "runId" TEXT NOT NULL,
+    "dataDay" DATE NOT NULL,
+    "firstSeenAt" TIMESTAMP(3) NOT NULL,
+    "checkedAt" TIMESTAMP(3) NOT NULL,
+    "changedAt" TIMESTAMP(3) NOT NULL,
+    "actedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "AdsBrainNegative_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AdWriteRefusal" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -15494,6 +15536,24 @@ CREATE INDEX "AdsBrainTermLead_workspaceId_idx" ON "AdsBrainTermLead"("workspace
 
 -- CreateIndex
 CREATE UNIQUE INDEX "AdsBrainTermLead_workspaceId_marketplace_term_key" ON "AdsBrainTermLead"("workspaceId", "marketplace", "term");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainNegative_productId_marketplace_runId_idx" ON "AdsBrainNegative"("productId", "marketplace", "runId");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainNegative_productId_marketplace_actedAt_idx" ON "AdsBrainNegative"("productId", "marketplace", "actedAt");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainNegative_approvalId_idx" ON "AdsBrainNegative"("approvalId");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainNegative_checkedAt_idx" ON "AdsBrainNegative"("checkedAt");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainNegative_workspaceId_idx" ON "AdsBrainNegative"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AdsBrainNegative_workspaceId_productId_marketplace_key_key" ON "AdsBrainNegative"("workspaceId", "productId", "marketplace", "key");
 
 -- CreateIndex
 CREATE INDEX "AdWriteRefusal_deniedAt_createdAt_idx" ON "AdWriteRefusal"("deniedAt", "createdAt");

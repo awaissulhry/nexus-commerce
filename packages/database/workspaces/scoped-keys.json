@@ -6276,6 +6276,17 @@
     },
     "relations": []
   },
+  "AdsBrainNegative": {
+    "scalar": {},
+    "compound": {
+      "product_market_key": [
+        "productId",
+        "marketplace",
+        "key"
+      ]
+    },
+    "relations": []
+  },
   "AdWriteRefusal": {
     "scalar": {},
     "compound": {},

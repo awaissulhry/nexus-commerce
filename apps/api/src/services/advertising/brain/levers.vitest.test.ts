@@ -26,7 +26,9 @@ describe('levels', () => {
     expect(levelRefusal('bids', 'OBSERVE')).toBeNull()
     expect(levelRefusal('bids', 'PROPOSE')).toMatch(/no proposal path/)
     expect(levelRefusal('bids', 'OFF')).toMatch(/decides every allowlisted campaign in shadow/)
-    for (const lever of BRAIN_LEVERS.filter((l) => l !== 'bids')) {
+    // AB-10 — the negatives lever takes every level (its module writes them).
+    for (const level of ['OFF', 'OBSERVE', 'PROPOSE', 'AUTO'] as const) expect(levelRefusal('negatives', level)).toBeNull()
+    for (const lever of BRAIN_LEVERS.filter((l) => l !== 'bids' && l !== 'negatives')) {
       expect(levelRefusal(lever, 'OFF')).toBeNull()
       expect(levelRefusal(lever, 'OBSERVE')).toBeNull()
       expect(levelRefusal(lever, 'AUTO')).toMatch(/takes OFF or OBSERVE today, not AUTO: .*AB-\d+/)
@@ -38,7 +40,7 @@ describe('levels', () => {
 describe('settings', () => {
   it('defaults are the design\'s, each inside its bounds', () => {
     expect(settingDefaults()).toMatchObject({
-      negativesPerDay: 20, harvestPerDay: 10, negativesPerEntityMax: 950, paceTargetPct: 90,
+      negativesPerDay: 20, harvestPerDay: 10, negativesPerEntityMax: 950, negativesShadowDays: 14, paceTargetPct: 90,
       portfolioCapOn: true, portfolioCapPct: 115, portfolioCapCents: null, ownPortfolio: true, strategySwitchMode: 'PROPOSE_THEN_AUTO',
     })
     for (const [key, spec] of Object.entries(BRAIN_SETTINGS)) {
