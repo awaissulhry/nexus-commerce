@@ -6,11 +6,16 @@
  * ONE BRAIN AB-2 — its bidding strategy is one lever with one automatic owner: the brain (the stop recipe's down-only
  * switch and the switch back), a person and the repairs pass; every other automatic writer, the safety owners included,
  * is refused; a campaign the brain does not own and a shadow ceiling are judged as before.
+ * Review of #523 — an enrollment that cannot be read is not a refusal: the error goes out of the gate (the ads worker then
+ * leaves the row to be reclaimed and sent again), where it used to be a `brain_owned` refusal settled SKIPPED.
+ * ONE BRAIN AB-5 — the gate's lever check with the REAL lever-owners (brain/lever-owners.ts): nothing enrolled refuses
+ * nothing; a failed read with no answer known goes out of the gate; a stale answer stands.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const campaignFindUnique = vi.fn()
 const enrollmentFindMany = vi.fn()
+const brainEnrollmentFindFirst = vi.fn()
 vi.mock('../../db.js', () => ({
   default: {
     campaign: { get findUnique() { return campaignFindUnique }, findMany: vi.fn(async () => []) },
@@ -23,7 +28,7 @@ vi.mock('../../db.js', () => ({
     adWriteRefusal: { create: vi.fn(async () => ({})) },
     adsStrategy: { findFirst: vi.fn(async () => null), findMany: vi.fn(async () => []) },
     // ONE BRAIN AB-5 — no product is enrolled in this business (production today): the gate's lever check reads this once.
-    adsBrainEnrollment: { findFirst: vi.fn(async () => null) },
+    adsBrainEnrollment: { get findFirst() { return brainEnrollmentFindFirst } },
   },
 }))
 vi.mock('./ads-api-client.js', () => ({ adsMode: () => 'live' }))
@@ -32,6 +37,7 @@ vi.mock('../../utils/logger.js', () => ({ logger: { warn: vi.fn(), info: vi.fn()
 vi.mock('./ads-automation-state.service.js', () => ({ getAutomationState: vi.fn(async () => ({ autonomy: 'AUTO', halted: false, haltReason: null, effectivelyStopped: false, degraded: false })) }))
 
 const { checkAdsWriteGate, brainYieldsTo, brainYieldsStrategyTo, BRAIN_SAFETY_ACTOR_PREFIXES, BRAIN_STRATEGY_REPAIR_PREFIXES } = await import('./ads-write-gate.js')
+const { forgetLeverOwners, ENROLLED_TTL_MS } = await import('./brain/lever-owners.js')
 
 const ROW = {
   liveBidWritesEnabled: true, dynamicBidding: null, liveBidWritesToday: 0, liveBidWritesDay: null,
@@ -46,8 +52,10 @@ beforeEach(() => {
   vi.stubEnv('NEXUS_BID_BRAIN_MODE', 'live')
   campaignFindUnique.mockReset().mockResolvedValue(ROW)
   enrollmentFindMany.mockReset().mockResolvedValue([{ campaignId: 'c1' }])
+  brainEnrollmentFindFirst.mockReset().mockResolvedValue(null)
+  forgetLeverOwners()
 })
-afterEach(() => vi.unstubAllEnvs())
+afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks() })
 
 describe('BB-6 — the gate on a campaign the brain owns', () => {
   it('refuses another engine\'s bid change, naming the writer and the way back', async () => {
@@ -93,11 +101,13 @@ describe('BB-6 — the gate on a campaign the brain owns', () => {
     expect(enrollmentFindMany).not.toHaveBeenCalled()
   })
 
-  it('fails closed when the enrollment cannot be read', async () => {
+  it('fails closed as "try again": an unreadable enrollment goes out of the gate, never a refusal the worker would settle SKIPPED', async () => {
     enrollmentFindMany.mockRejectedValue(new Error('db down'))
-    const r = await bid('automation:auto-bid')
-    expect(r).toMatchObject({ allowed: false, deniedAt: 'brain_owned' })
-    expect((r as { reason: string }).reason).toMatch(/could not read whether the bid brain owns campaign c1/)
+    await expect(bid('automation:auto-bid')).rejects.toThrow('db down')
+    // A person, a forced lowering and a safety owner read nothing and pass.
+    expect(await bid('user:owner', { manual: true })).toMatchObject({ allowed: true })
+    expect(await bid('automation:rank-defend-s1', { isSuppression: true })).toMatchObject({ allowed: true })
+    expect(await bid('automation:retail-guard')).toMatchObject({ allowed: true })
   })
 })
 
@@ -135,11 +145,10 @@ describe('AB-2 — the bidding strategy of a campaign the brain owns: one owner 
     expect(enrollmentFindMany).not.toHaveBeenCalled()
   })
 
-  it('fails closed when the enrollment cannot be read', async () => {
+  it('fails closed as "try again": an unreadable enrollment goes out of the gate, never a refusal', async () => {
     enrollmentFindMany.mockRejectedValue(new Error('db down'))
-    const r = await strategy('automation:retail-guard')
-    expect(r).toMatchObject({ allowed: false, deniedAt: 'brain_owned' })
-    expect((r as { reason: string }).reason).toMatch(/an automatic change to its bidding strategy waits/)
+    await expect(strategy('automation:retail-guard')).rejects.toThrow('db down')
+    expect(await strategy('user:owner', { manual: true })).toMatchObject({ allowed: true })
   })
 
   it('brainYieldsStrategyTo (pure): the brain, a person, a repair exactly or with its suffix — never a safety owner', () => {
@@ -160,5 +169,33 @@ describe('brainYieldsTo (pure)', () => {
     expect(brainYieldsTo({ actor: 'user:owner' })).toBe(false)
     expect(brainYieldsTo({ actor: 'user:owner', manual: true })).toBe(true)
     expect(BRAIN_SAFETY_ACTOR_PREFIXES.every((p) => p.startsWith('automation:'))).toBe(true)
+  })
+})
+
+describe('AB-5 — the lever check with the real lever-owners: nothing enrolled, a failed read, a stale answer', () => {
+  // A rule's budget raise on c1: the budgets lever (BB-6 says nothing about a budget).
+  const budget = (actor: string, extra: Record<string, unknown> = {}) =>
+    checkAdsWriteGate({ marketplace: 'IT', payloadValueCents: 600, campaignId: 'c1', field: 'dailyBudget', fields: ['dailyBudget'], intendedValueCents: 600, previousValueCents: 500, actor, ...extra })
+
+  it('nothing enrolled in the business: one remembered read, every write as before', async () => {
+    expect(await budget('automation:budget-schedule-s1')).toMatchObject({ allowed: true, mode: 'live' })
+    expect(await budget('automation:rule-abc')).toMatchObject({ allowed: true })
+    expect(brainEnrollmentFindFirst).toHaveBeenCalledTimes(1)
+  })
+
+  it('a failed read with no answer known goes out of the gate (the write is tried again) — never a refusal; a person passes without it', async () => {
+    brainEnrollmentFindFirst.mockRejectedValue(new Error('db blip'))
+    await expect(budget('automation:budget-schedule-s1')).rejects.toThrow('db blip')
+    expect(await budget('user:owner', { manual: true })).toMatchObject({ allowed: true })
+    expect(await budget('automation:budget-manager-cron')).toMatchObject({ allowed: true })
+  })
+
+  it('a stale answer stands when the read fails: the last "nothing enrolled" keeps every write as before', async () => {
+    const t0 = Date.now()
+    expect(await budget('automation:budget-schedule-s1')).toMatchObject({ allowed: true })
+    vi.spyOn(Date, 'now').mockReturnValue(t0 + ENROLLED_TTL_MS + 60_000)
+    brainEnrollmentFindFirst.mockRejectedValue(new Error('db blip'))
+    expect(await budget('automation:budget-schedule-s1')).toMatchObject({ allowed: true })
+    expect(brainEnrollmentFindFirst).toHaveBeenCalledTimes(2)
   })
 })

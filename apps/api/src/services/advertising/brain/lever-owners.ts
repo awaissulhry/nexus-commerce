@@ -22,10 +22,14 @@
  *             dispatch batch of writes on the same campaigns resolves each campaign once. A change of the brain in this
  *             process forgets everything at once (forgetLeverOwners, brain/enrollment.ts); another process sees it within
  *             the TTL.
- *   errors    a read that fails throws: the gate fails closed (an automatic write waits; a person's passes).
+ *   errors    an infrastructure error is never a refusal (review of #523): a read that fails answers the last answer
+ *             this process knew for that business, campaign or portfolio, whatever its age (logged), and throws only when
+ *             it never had one. The gate lets that error out exactly as any other failed read in it: the ads worker leaves
+ *             the row to be reclaimed and sent again, a pre-ask's caller sees the error — never a SKIPPED write.
  */
 import prisma from '../../../db.js'
 import { LEGACY_WORKSPACE_ID, workspaceContext } from '../../../lib/workspace-context.js'
+import { logger } from '../../../utils/logger.js'
 import type { BrainLever } from './levers.js'
 import { resolveCampaignOwnership, type CampaignOwnership } from './ownership.js'
 import { describeProvenance, resolveBrainSettings, type BrainSettings, type OverrideRow, type Provenance } from './settings.js'
@@ -93,42 +97,81 @@ export const ENROLLED_TTL_MS = 30_000
 export const OWNERS_TTL_MS = 15_000
 const MAX_REMEMBERED = 5_000
 
+/** Answers per business, campaign and portfolio. A stale one is kept: it is what a failed read answers. */
 const memory = new Map<string, { at: number; value: unknown }>()
+/** "Is anything enrolled?" per business, apart: never dropped by the size bound, so a failed read always has it. */
+const enrolledMemory = new Map<string, { at: number; value: boolean }>()
 const business = (): string => workspaceContext()?.workspaceId ?? LEGACY_WORKSPACE_ID
 
-function recall<T>(key: string, ttlMs: number): { value: T } | null {
-  const hit = memory.get(key)
-  if (!hit) return null
-  if (Date.now() - hit.at > ttlMs) { memory.delete(key); return null }
+/** The answer remembered for `key` if it is younger than `ttlMs` (Infinity: any age, the fallback of a failed read). */
+function recall<T>(key: string, ttlMs: number, from: Map<string, { at: number; value: unknown }> = memory): { value: T } | null {
+  const hit = from.get(key)
+  if (!hit || Date.now() - hit.at > ttlMs) return null
   return { value: hit.value as T }
 }
 
 function remember(key: string, value: unknown): void {
-  if (memory.size >= MAX_REMEMBERED) memory.clear()
+  if (memory.size >= MAX_REMEMBERED && !memory.has(key)) memory.clear()
   memory.set(key, { at: Date.now(), value })
 }
 
-/** Forget every remembered answer (a change of a brain in this process, and tests). */
+/** Forget every remembered answer, stale ones included (a change of a brain in this process, and tests). */
 export function forgetLeverOwners(): void {
   memory.clear()
+  enrolledMemory.clear()
 }
 
-/** Is any product enrolled in this business? One query, remembered ENROLLED_TTL_MS. */
+const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err))
+
+/**
+ * Is any product enrolled in this business? One query, remembered ENROLLED_TTL_MS. A failed read answers the last answer
+ * known (any age); with none it throws.
+ */
 export async function anyBrainEnrolled(): Promise<boolean> {
-  const key = `${business()}\u0000enrolled`
-  const hit = recall<boolean>(key, ENROLLED_TTL_MS)
+  const key = business()
+  const hit = recall<boolean>(key, ENROLLED_TTL_MS, enrolledMemory)
   if (hit) return hit.value
-  const row = await prisma.adsBrainEnrollment.findFirst({ select: { id: true } })
-  remember(key, !!row)
-  return !!row
+  try {
+    const row = await prisma.adsBrainEnrollment.findFirst({ select: { id: true } })
+    enrolledMemory.set(key, { at: Date.now(), value: !!row })
+    return !!row
+  } catch (err) {
+    const last = recall<boolean>(key, Infinity, enrolledMemory)
+    if (!last) throw err
+    logger.warn('[ads-brain] could not read whether a product is enrolled — the last answer known stands', { workspaceId: key, enrolled: last.value, error: errorText(err) })
+    return last.value
+  }
 }
 
 const OVERRIDE_SELECT = { id: true, productId: true, marketplace: true, scope: true, campaignId: true, kind: true, key: true, ref: true, value: true, by: true, reason: true, createdAt: true, endedAt: true } as const
 
+/** The reads behind campaignLeverOwners: the owners (≤ 4 queries), the enrollments and the deciding overrides (1 each). */
+async function readCampaigns(ids: readonly string[]): Promise<{ owners: Map<string, CampaignOwnership>; enrolled: Set<string>; overrides: OverrideRow[] }> {
+  const owners = await resolveCampaignOwnership(ids)
+  const products = [...new Set([...owners.values()].flatMap((o) => (o.owner.kind === 'none' ? [] : o.productIds)))]
+  const enrollments = products.length
+    ? await prisma.adsBrainEnrollment.findMany({ where: { productId: { in: products } }, select: { productId: true, marketplace: true } })
+    : []
+  const enrolled = new Set(enrollments.map((e) => enrollmentKey(e.productId, e.marketplace)))
+  const enrolledProducts = [...new Set(enrollments.map((e) => e.productId))]
+  // The choices that decide a lever: its level, a lock, an exclusion (a setting's value decides none here).
+  const overrides: OverrideRow[] = enrolledProducts.length
+    ? await prisma.adsBrainOverride.findMany({
+      where: {
+        endedAt: null,
+        kind: { in: ['LEVEL', 'LOCK', 'EXCLUDE'] },
+        OR: [{ scope: 'PRODUCT', productId: { in: enrolledProducts } }, { scope: 'CAMPAIGN', campaignId: { in: [...ids] } }],
+      },
+      select: OVERRIDE_SELECT,
+    })
+    : []
+  return { owners, enrolled, overrides }
+}
+
 /**
  * Who holds the levers of these campaigns (only the campaigns someone holds a lever of are in the map). Nothing enrolled
  * in the business: one remembered query and an empty map. Otherwise a fixed number of queries for the campaigns not
- * remembered. Throws when a read fails.
+ * remembered. A failed read answers the last answers known; it throws when a campaign never had one.
  */
 export async function campaignLeverOwners(campaignIds: readonly string[]): Promise<Map<string, CampaignLeverOwners>> {
   const out = new Map<string, CampaignLeverOwners>()
@@ -142,24 +185,18 @@ export async function campaignLeverOwners(campaignIds: readonly string[]): Promi
     else if (hit.value) out.set(id, hit.value)
   }
   if (!missing.length) return out
-  const owners = await resolveCampaignOwnership(missing)
-  const products = [...new Set([...owners.values()].flatMap((o) => (o.owner.kind === 'none' ? [] : o.productIds)))]
-  const enrollments = products.length
-    ? await prisma.adsBrainEnrollment.findMany({ where: { productId: { in: products } }, select: { productId: true, marketplace: true } })
-    : []
-  const enrolled = new Set(enrollments.map((e) => enrollmentKey(e.productId, e.marketplace)))
-  const enrolledProducts = [...new Set(enrollments.map((e) => e.productId))]
-  // The choices that decide a lever: its level, a lock, an exclusion (a setting's value decides none here).
-  const overrides: OverrideRow[] = enrolledProducts.length
-    ? await prisma.adsBrainOverride.findMany({
-      where: {
-        endedAt: null,
-        kind: { in: ['LEVEL', 'LOCK', 'EXCLUDE'] },
-        OR: [{ scope: 'PRODUCT', productId: { in: enrolledProducts } }, { scope: 'CAMPAIGN', campaignId: { in: missing } }],
-      },
-      select: OVERRIDE_SELECT,
-    })
-    : []
+  let read: { owners: Map<string, CampaignOwnership>; enrolled: Set<string>; overrides: OverrideRow[] }
+  try {
+    read = await readCampaigns(missing)
+  } catch (err) {
+    // A failed read: the last answer known for each campaign (any age); one never answered → the error goes on.
+    const last = missing.map((id) => [id, recall<CampaignLeverOwners | null>(`${ws}\u0000c\u0000${id}`, Infinity)] as const)
+    if (last.some(([, hit]) => !hit)) throw err
+    logger.warn('[ads-brain] could not read who holds these campaigns\' levers — the last answers known stand', { campaignIds: missing, error: errorText(err) })
+    for (const [id, hit] of last) if (hit?.value) out.set(id, hit.value)
+    return out
+  }
+  const { owners, enrolled, overrides } = read
   for (const id of missing) {
     const o = owners.get(id)
     const levers = o ? leverHoldsOf(o, enrolled, overrides) : {}
@@ -173,16 +210,27 @@ export async function campaignLeverOwners(campaignIds: readonly string[]): Promi
 /**
  * Who holds a portfolio's cap: the product brain that owns the portfolioCap lever of EVERY campaign in it (one product,
  * all of them), or the Owner's lock of that lever on any campaign in it. `portfolioId` is Nexus's portfolio row id or
- * Amazon's portfolio id (Campaign.portfolioId holds Amazon's). Null: nobody holds it (an empty portfolio included).
+ * Amazon's portfolio id (Campaign.portfolioId holds Amazon's). Null: nobody holds it (an empty portfolio included). A
+ * failed read answers the last answer known for the portfolio; it throws when there was none.
  */
 export async function portfolioCapHold(portfolioId: string): Promise<LeverHold | null> {
   if (!portfolioId || !(await anyBrainEnrolled())) return null
   const key = `${business()}\u0000p\u0000${portfolioId}`
   const hit = recall<LeverHold | null>(key, OWNERS_TTL_MS)
   if (hit) return hit.value
-  const row = await prisma.amazonAdsPortfolio.findFirst({ where: { OR: [{ id: portfolioId }, { externalPortfolioId: portfolioId }] }, select: { externalPortfolioId: true } })
-  const campaigns = await prisma.campaign.findMany({ where: { portfolioId: row?.externalPortfolioId ?? portfolioId, status: { not: 'ARCHIVED' } }, select: { id: true } })
-  const holders = await campaignLeverOwners(campaigns.map((c) => c.id))
+  let campaigns: Array<{ id: string }>
+  let holders: Map<string, CampaignLeverOwners>
+  try {
+    const row = await prisma.amazonAdsPortfolio.findFirst({ where: { OR: [{ id: portfolioId }, { externalPortfolioId: portfolioId }] }, select: { externalPortfolioId: true } })
+    campaigns = await prisma.campaign.findMany({ where: { portfolioId: row?.externalPortfolioId ?? portfolioId, status: { not: 'ARCHIVED' } }, select: { id: true } })
+    holders = await campaignLeverOwners(campaigns.map((c) => c.id))
+  } catch (err) {
+    // A failed read: the last answer known for this portfolio (any age); never answered → the error goes on.
+    const last = recall<LeverHold | null>(key, Infinity)
+    if (!last) throw err
+    logger.warn('[ads-brain] could not read who holds this portfolio\'s cap — the last answer known stands', { portfolioId, error: errorText(err) })
+    return last.value
+  }
   const holds = campaigns.map((c) => holders.get(c.id)?.levers.portfolioCap ?? null)
   const locked = holds.find((h) => h?.kind === 'locked') ?? null
   const owner = holds[0]?.kind === 'owned' ? holds[0] : null

@@ -5,7 +5,8 @@
  * owners, and refuses every other automatic writer naming the lever and the product's brain. On a lever the Owner locked,
  * the brain is refused too (placements and the bidding strategy excepted: the brain's own writers obey those locks). A
  * lever nobody holds, the keyword bids (BidBrainEnrollment, BB-6), a shadow ceiling and a write that names no actor are
- * judged exactly as before. When the holders cannot be read, an automatic write waits and a person's passes.
+ * judged exactly as before. When the holders cannot be read, an automatic write's gate fails with the read's error (the
+ * ads worker then sends the row again later — never a refusal it would settle SKIPPED); a person's write passes.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { BrainLever } from './brain/levers.js'
@@ -234,15 +235,13 @@ describe('AB-5 — the Owner\'s lock: his value stands', () => {
   })
 })
 
-describe('AB-5 — fail closed', () => {
+describe('AB-5 — fail closed as "try again": an unreadable holder is never a refusal', () => {
   beforeEach(() => { campaignLeverOwners.mockRejectedValue(new Error('db down')) })
 
-  it('an automatic write waits when the holders cannot be read, the brain\'s own included', async () => {
+  it('an automatic write\'s gate fails with the read\'s own error (the ads worker then retries the row), the brain\'s own included', async () => {
     for (const lever of LEVERS) {
       for (const actor of ['automation:rule-abc', null, ...(lever === 'placements' || lever === 'biddingStrategy' ? [] : [BRAIN])]) {
-        const r = await write(lever, actor)
-        expect(r, `${lever} ${actor}`).toMatchObject({ allowed: false, deniedAt: 'brain_owned' })
-        expect((r as { reason: string }).reason).toMatch(/^could not read whether a product's brain owns the .* of campaign "GALE exact" \(c1\) — an automatic change waits/)
+        await expect(write(lever, actor), `${lever} ${actor}`).rejects.toThrow('db down')
       }
     }
   })
@@ -280,7 +279,7 @@ describe('AB-5 — a portfolio\'s own write (its cap)', () => {
     portfolioCapHold.mockResolvedValue(null)
     expect(await cap('automation:rule-abc')).toMatchObject({ allowed: true })
     portfolioCapHold.mockRejectedValue(new Error('db down'))
-    expect(await cap('automation:rule-abc')).toMatchObject({ allowed: false, deniedAt: 'brain_owned' })
+    await expect(cap('automation:rule-abc')).rejects.toThrow('db down')
     vi.stubEnv('NEXUS_BID_BRAIN_MODE', 'shadow')
     expect(await cap('automation:rule-abc')).toMatchObject({ allowed: true })
   })

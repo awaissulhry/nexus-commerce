@@ -157,6 +157,28 @@ export function leverDimensionsForWrite(input: {
   return [...out]
 }
 
+/** The cap fields a queued portfolio write can carry (updatePortfolioWithSync; the ads worker sends them as the cap). */
+export const PORTFOLIO_CAP_FIELDS: readonly string[] = ['budgetAmount', 'budgetCurrencyCode', 'budgetPolicy', 'startDate', 'endDate']
+
+/**
+ * ONE BRAIN AB-5 — what a queued write tells the gate about its lever beyond its fields, built the same way by the ads
+ * worker at dispatch and by the mutation layer's pre-ask (gateRefusedNow), so the two give the same answer: a negative's
+ * status is the `negatives` lever (its retire); a portfolio's own write names its portfolio (`portfolioId`, judged on the
+ * portfolio's campaigns, with no campaign) and, when it changes the cap or its dates, the `portfolio` lever. Pure.
+ */
+export function queuedWriteLever(w: {
+  entityType: string
+  entityId: string
+  fields: ReadonlyArray<string | null | undefined>
+  /** The written AD_TARGET is a negative. */
+  negative?: boolean
+}): { dimension?: AuthorityDimension; portfolioId?: string } {
+  if (w.entityType === 'PORTFOLIO') {
+    return { portfolioId: w.entityId, ...(w.fields.some((f) => !!f && PORTFOLIO_CAP_FIELDS.includes(f)) ? { dimension: 'portfolio' as const } : {}) }
+  }
+  return w.entityType === 'AD_TARGET' && w.negative === true ? { dimension: 'negatives' } : {}
+}
+
 export interface PinDenial {
   dimension: PinDimension
   reason: string

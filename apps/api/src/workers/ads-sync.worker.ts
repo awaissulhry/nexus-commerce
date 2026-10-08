@@ -55,6 +55,7 @@ import {
   recordSuccessfulWrite,
   recordCampaignLiveWrite,
 } from '../services/advertising/ads-write-gate.js'
+import { PORTFOLIO_CAP_FIELDS, queuedWriteLever } from '../services/advertising/ads-authority-pins.js'
 
 interface AdsJobData {
   queueId: string
@@ -329,8 +330,8 @@ export function sbSdWriteOf(payload: AdMutationPayload, route: SbSdRoute): AdWri
   }
 }
 
-/** The cap fields a queued portfolio write can carry (updatePortfolioWithSync, ads-mutation.service.ts). */
-const PORTFOLIO_CAP_FIELDS: readonly string[] = ['budgetAmount', 'budgetCurrencyCode', 'budgetPolicy', 'startDate', 'endDate']
+// The cap fields a queued portfolio write can carry (updatePortfolioWithSync): PORTFOLIO_CAP_FIELDS, ads-authority-pins.ts
+// (AB-5 — one list for this dispatch and the gate's portfolio lever).
 
 /** A portfolio's budget cap as Amazon's v3 PUT /portfolios takes it (amount null only with NO_CAP). */
 interface PortfolioCap { amount: number | null; currencyCode: string; policy: string; startDate?: string; endDate?: string }
@@ -737,12 +738,10 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
     // judged against whichever one `field` happened to surface, so a budget pin would hold
     // on single-field payloads and silently miss the combined one.
     fields: payload.fieldChanges.map((c) => c.field),
-    // ONE BRAIN AB-5 — the lever a field does not name: a negative's status is the negatives lever (its retire), and a
-    // portfolio's own write (its cap, its dates) the portfolio lever, judged on the portfolio's campaigns.
-    ...(negative ? { dimension: 'negatives' as const } : {}),
-    ...(payload.entityType === 'PORTFOLIO'
-      ? { portfolioId: payload.entityId, ...(payload.fieldChanges.some((c) => PORTFOLIO_CAP_FIELDS.includes(c.field)) ? { dimension: 'portfolio' as const } : {}) }
-      : {}),
+    // ONE BRAIN AB-5 — the lever a field does not name (queuedWriteLever, the same as the mutation layer's pre-ask): a
+    // negative's status is the negatives lever (its retire), and a portfolio's own write names its portfolio and, for its
+    // cap or dates, the portfolio lever — judged on the portfolio's campaigns.
+    ...queuedWriteLever({ entityType: payload.entityType, entityId: payload.entityId, fields: payload.fieldChanges.map((c) => c.field), negative }),
     intendedValueCents: Number.isFinite(intendedBidCents ?? NaN) ? intendedBidCents : intendedBudgetCents,
     // ADX G1 — suppression drives bids to ~2¢ under the no-pause rule; a halt, a min bound
     // or a bids pin must not block it. 2.2 — `force` is read off the queue row's JSON, its

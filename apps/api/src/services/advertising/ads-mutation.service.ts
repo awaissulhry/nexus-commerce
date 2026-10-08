@@ -35,7 +35,7 @@ import { SPONSORED_BRANDS, SPONSORED_DISPLAY, SPONSORED_PRODUCTS, adProductOf, a
 import { bidCostType, marketLimitsOf, marketLimitsRefusal } from '@nexus/shared/ads-market-limits'
 import { normalizeMarketplaceCode } from '../../utils/marketplace-code.js'
 import { checkAdsWriteGate, entityBoundsDenial, logGateDeny, ownLimitsSentence, sentPastSentence, type EntityBoundsCampaign, type OwnLimit, type OwnLimitKind } from './ads-write-gate.js'
-import type { AuthorityDimension } from './ads-authority-pins.js'
+import { queuedWriteLever } from './ads-authority-pins.js'
 import { NO_LIMITS, bidLimitsFor, limitSources, strategyWords, stepClamp, type StrategyBidLimits, type WriteSources } from './ads-strategy/bids.js'
 
 // Conservative grace window. Operators have 5 min to cancel before
@@ -387,8 +387,10 @@ async function gateRefusedNow(args: {
   adGroupId?: string | null
   /** W4-11 — what the write is, as the worker hands it to the gate (an SB/SD write a caller may send). */
   write?: AdWrite | null
-  /** ONE BRAIN AB-5 — the lever no field names, as the worker hands it to the gate (a negative's retire: `negatives`). */
-  dimension?: AuthorityDimension | null
+  /** AA-W2-12 — a deliberate pause or archive (`letsGo`): the gate treats it as letting go, as the worker does (isLetGoWrite). */
+  letsGo?: boolean
+  /** ONE BRAIN AB-5 — the written AD_TARGET is a negative: its status is its retire (the negatives lever), as at dispatch. */
+  negative?: boolean
 }): Promise<MutationOutcome | null> {
   if (!args.askGate) return null
   const cents = (v: string | null | undefined, euros = false): number | null => {
@@ -401,12 +403,14 @@ async function gateRefusedNow(args: {
   const gate = await checkAdsWriteGate({
     marketplace: args.marketplace ?? null,
     payloadValueCents: writeValueCents(args.changes),
-    campaignId: args.campaignId ?? null,
+    // 1a (CM-23) — a portfolio is not a campaign: no campaign named, as at dispatch (null would read "unattributable").
+    campaignId: args.entity === 'PORTFOLIO' ? undefined : args.campaignId ?? null,
     adGroupId: args.adGroupId ?? null,
     field: bid?.field ?? budget?.field ?? args.changes[0]?.field ?? null,
     fields: args.changes.map((c) => c.field),
     intendedValueCents: bid ? cents(bid.newValue) : budget ? cents(budget.newValue, true) : null,
-    isSuppression: isSuppressionWrite(args.force === true, args.changes),
+    // AA-W2-12 — a deliberate pause lets go of spend as a suppression does: the worker's own test, so the answers agree.
+    isSuppression: isSuppressionWrite(args.force === true, args.changes) || isLetGoWrite(args.letsGo === true, args.changes),
     actor: args.actor,
     previousValueCents: budget ? cents(budget.oldValue, true) : null,
     queueId: null,
@@ -414,7 +418,8 @@ async function gateRefusedNow(args: {
     manual: isPersonEdit(args.manual, args.actor),
     confirmOwnLimits: args.confirmOwnLimits === true,
     ...(args.write ? { write: args.write } : {}),
-    ...(args.dimension ? { dimension: args.dimension } : {}),
+    // ONE BRAIN AB-5 — the lever no field names (a negative's retire, a portfolio's own write), built as the worker builds it.
+    ...queuedWriteLever({ entityType: args.entity, entityId: args.entityId, fields: args.changes.map((c) => c.field), negative: args.negative }),
   })
   if (gate.allowed !== false) {
     const past = (gate as { pastOwnLimits?: OwnLimit[] }).pastOwnLimits
@@ -1370,7 +1375,7 @@ export async function updateCampaignWithSync(args: {
   const atDispatch = await gateRefusedNow({
     askGate: args.askGate, actor: args.actor, entity: 'CAMPAIGN', entityId: args.campaignId,
     campaignId: existing.id, marketplace: existing.marketplace, changes,
-    manual: args.manual, confirmOwnLimits, past, write: sbSdWrite,
+    manual: args.manual, confirmOwnLimits, past, write: sbSdWrite, letsGo: args.letsGo,
   })
   if (atDispatch) return atDispatch
 
@@ -1584,7 +1589,7 @@ export async function updateAdGroupWithSync(args: {
   const atDispatch = await gateRefusedNow({
     askGate: args.askGate, actor: args.actor, entity: 'AD_GROUP', entityId: args.adGroupId,
     campaignId: existing.campaign?.id, marketplace: existing.campaign?.marketplace, changes, force: args.force,
-    manual: args.manual, confirmOwnLimits, past, adGroupId: args.adGroupId,
+    manual: args.manual, confirmOwnLimits, past, adGroupId: args.adGroupId, letsGo: args.letsGo,
   })
   if (atDispatch) return atDispatch
 
@@ -1686,7 +1691,7 @@ export async function updateProductAdWithSync(args: {
   const atDispatch = await gateRefusedNow({
     askGate: args.askGate, actor: args.actor, entity: 'PRODUCT_AD', entityId: args.productAdId,
     campaignId: existing.adGroup?.campaign?.id, marketplace: existing.adGroup?.campaign?.marketplace, changes,
-    manual: args.manual,
+    manual: args.manual, letsGo: args.letsGo,
   })
   if (atDispatch) return atDispatch
   await prisma.adProductAd.update({ where: { id: args.productAdId }, data: { status: args.status } })
@@ -1925,9 +1930,9 @@ export async function updateAdTargetWithSync(args: {
   const atDispatch = await gateRefusedNow({
     askGate: args.askGate, quietRefusal: args.quietRefusal, actor: args.actor, entity: 'AD_TARGET', entityId: args.adTargetId,
     campaignId: existing.adGroup?.campaign?.id, marketplace: existing.adGroup?.campaign?.marketplace, changes, force: forcedLowering,
-    manual: args.manual, confirmOwnLimits, past, adGroupId: existing.adGroup?.id ?? null, write: sbSdWrite,
+    manual: args.manual, confirmOwnLimits, past, adGroupId: existing.adGroup?.id ?? null, write: sbSdWrite, letsGo: args.letsGo,
     // AB-5 — a negative's status is its retire (the negatives lever), as the worker tells the gate at dispatch.
-    ...(existing.isNegative ? { dimension: 'negatives' as const } : {}),
+    negative: existing.isNegative === true,
   })
   if (atDispatch) return atDispatch
 
@@ -2110,6 +2115,11 @@ export async function updatePortfolioWithSync(args: {
   reason?: string | null
   applyImmediately?: boolean
   changeSetId?: string | null
+  /**
+   * ONE BRAIN AB-5 — ask the write gate before Nexus writes its copy (gateRefusedNow), with the portfolio named as the
+   * worker names it at dispatch. Off unless a caller asks (none does yet): the bulk sheet keeps queue-then-dispatch.
+   */
+  askGate?: boolean
 }): Promise<MutationOutcome> {
   const existing = await prisma.amazonAdsPortfolio.findUnique({ where: { id: args.portfolioId } })
   if (!existing) return { ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'portfolio_not_found' }
@@ -2150,6 +2160,17 @@ export async function updatePortfolioWithSync(args: {
     endDate: existing.endDate,
   }
 
+  // The portfolio model carries profileId, not marketplace, and the worker
+  // resolves the write gate + profile from marketplace. Look it up rather
+  // than leaving it null, or the write is refused as unattributable.
+  const marketplace = (await prisma.amazonAdsConnection.findFirst({
+    where: { profileId: existing.profileId }, select: { marketplace: true },
+  }))?.marketplace ?? null
+  const atDispatch = await gateRefusedNow({
+    askGate: args.askGate, actor: args.actor, entity: 'PORTFOLIO', entityId: existing.id, campaignId: undefined, marketplace, changes,
+  })
+  if (atDispatch) return atDispatch
+
   await prisma.amazonAdsPortfolio.update({ where: { id: existing.id }, data })
 
   const outboundQueueId = await enqueueOutbound({
@@ -2157,12 +2178,7 @@ export async function updatePortfolioWithSync(args: {
     entityId: existing.id,
     externalId: existing.externalPortfolioId ?? null,
     syncType: 'AD_PORTFOLIO_UPDATE',
-    // The portfolio model carries profileId, not marketplace, and the worker
-    // resolves the write gate + profile from marketplace. Look it up rather
-    // than leaving it null, or the write is refused as unattributable.
-    marketplace: (await prisma.amazonAdsConnection.findFirst({
-      where: { profileId: existing.profileId }, select: { marketplace: true },
-    }))?.marketplace ?? null,
+    marketplace,
     fieldChanges: changes,
     actor: args.actor,
     reason: args.reason ?? null,

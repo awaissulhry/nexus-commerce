@@ -67,7 +67,8 @@ export type GateDeniedAt =
   | 'needs_confirmation'
   // BID BRAIN BB-6 — the campaign's bids and placements are the bid brain's (one writer per campaign): another
   // automatic writer's change is refused (brainYieldsTo).
-  // ONE BRAIN AB-5 — and every other lever a product's brain owns (leverWriterOf); also when its owner cannot be read.
+  // ONE BRAIN AB-5 — and every other lever a product's brain owns (leverWriterOf). An owner that cannot be read is never
+  // this refusal (review of #523): the read's error goes out of the gate, so the write is tried again later.
   | 'brain_owned'
   // ONE BRAIN AB-5 — the Owner locked the whole lever at his own value: every automatic writer is refused, the brain too.
   | 'owner_locked'
@@ -309,16 +310,15 @@ export function brainYieldsStrategyTo(ctx: Pick<GateContext, 'actor' | 'manual'>
   return BRAIN_STRATEGY_REPAIR_PREFIXES.some((p) => actor === p || actor.startsWith(`${p}-`))
 }
 
-/** BB-6 — the refusal for an automatic change to a campaign the brain owns; null when the brain does not own it. */
+/**
+ * BB-6 — the refusal for an automatic change to a campaign the brain owns; null when the brain does not own it.
+ * Fail closed, as "wait and try again" (review of #523): a failed read of the enrollment is an infrastructure error, not a
+ * decision, so it goes out of the gate as every other failed read in it does — the ads worker leaves the row to be
+ * reclaimed and sent again (its answer is then the real one), a pre-ask's caller sees the error. Before, it was answered
+ * as a `brain_owned` refusal, which the worker settles SKIPPED and puts back: the write was dropped for good.
+ */
 async function brainOwnedRefusal(campaignId: string, actor: string | null, what = 'its bids or placements'): Promise<Extract<GateDecision, { allowed: false }> | null> {
-  let owned: Set<string>
-  try {
-    owned = await brainOwnedCampaignIds([campaignId])
-  } catch (err) {
-    // Fail closed: under a live ceiling, an automatic change to a campaign whose owner cannot be read waits.
-    logger.warn('[ads-write-gate] could not read the bid brain enrollment — automatic change refused', { campaignId, error: String(err) })
-    return { allowed: false, deniedAt: 'brain_owned', reason: `could not read whether the bid brain owns campaign ${campaignId} — an automatic change to ${what} waits (one writer per campaign)` }
-  }
+  const owned = await brainOwnedCampaignIds([campaignId])
   if (!owned.has(campaignId)) return null
   return {
     allowed: false,
@@ -351,6 +351,8 @@ async function brainOwnedRefusal(campaignId: string, actor: string | null, what 
  *                repairs (BRAIN_STRATEGY_REPAIR_PREFIXES), never a "lowering".
  *   bids         the keyword-bids lever is not judged here: it stays the bid brain's BidBrainEnrollment (BB-6 above),
  *                exactly as the 10 GALE IT campaigns run today.
+ *   unread       holders that cannot be read (and were never read in this process) are not a refusal: the error goes out
+ *                of the gate, so the write is tried again later (productBrainRefusal). A person never needs the read.
  */
 export const PRODUCT_BRAIN_ACTOR = 'automation:ads-brain'
 const BID_BRAIN_LEVERS: ReadonlySet<BrainLever> = new Set<BrainLever>(['bids', 'adGroupBids', 'placements', 'biddingStrategy'])
@@ -428,26 +430,19 @@ export function leverHoldRefusal(lever: BrainLever, hold: LeverHold, writer: Lev
 /**
  * AB-5 — the refusal for an automatic change to a lever a product's brain owns or the Owner locked, on one campaign or one
  * portfolio's cap; null when nothing holds it. Reads only for the writers that do not always pass (a person, the safety
- * owners and a forced lowering read nothing). Fail closed: when the holders cannot be read, an automatic change waits.
+ * owners and a forced lowering read nothing). Fail closed as "wait and try again": a failed read answers the last
+ * answer known (brain/lever-owners.ts), and with none the error goes out of the gate like any other failed read in it —
+ * the ads worker leaves the row to be reclaimed and sent again; it is never a refusal, which would settle it SKIPPED.
  */
 async function productBrainRefusal(target: { campaignId: string; name?: string | null } | { portfolioId: string }, levers: readonly BrainLever[], ctx: GateContext): Promise<Extract<GateDecision, { allowed: false }> | null> {
   const judged = levers.filter((l) => l !== 'bids' && leverWriterOf(l, ctx) !== 'passes')
   if (!judged.length) return null
   const where = 'campaignId' in target ? `campaign ${target.name ? `"${target.name}" (${target.campaignId})` : target.campaignId}` : `portfolio ${target.portfolioId}`
   let holds: Partial<Record<BrainLever, LeverHold>>
-  try {
-    if ('campaignId' in target) holds = (await campaignLeverOwners([target.campaignId])).get(target.campaignId)?.levers ?? {}
-    else {
-      const hold = await portfolioCapHold(target.portfolioId)
-      holds = hold ? { portfolioCap: hold } : {}
-    }
-  } catch (err) {
-    logger.warn('[ads-write-gate] could not read which product brain holds this lever — automatic change refused', { ...target, levers: judged, error: String(err) })
-    return {
-      allowed: false,
-      deniedAt: 'brain_owned',
-      reason: `could not read whether a product's brain owns the ${judged.map((l) => LEVER_WORDS[l]).join(' and ')} of ${where} — an automatic change waits (one owner per lever). A person's edit still passes.`,
-    }
+  if ('campaignId' in target) holds = (await campaignLeverOwners([target.campaignId])).get(target.campaignId)?.levers ?? {}
+  else {
+    const hold = await portfolioCapHold(target.portfolioId)
+    holds = hold ? { portfolioCap: hold } : {}
   }
   for (const lever of judged) {
     const hold = holds[lever]

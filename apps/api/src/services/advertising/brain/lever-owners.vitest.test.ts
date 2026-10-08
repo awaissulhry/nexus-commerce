@@ -6,12 +6,13 @@
  *             by nobody but one enrolled product's lock holds it and one product's exclusion keeps it out; the keyword bids
  *             are never here (BidBrainEnrollment, BB-6)
  *   reads     nothing enrolled: one query, remembered per business; a fixed number of queries for any number of
- *             campaigns; each campaign's answer remembered (an empty one too); forgetLeverOwners; a failed read throws
+ *             campaigns; each campaign's answer remembered (an empty one too); forgetLeverOwners; a failed read answers
+ *             the last answer known (any age) and throws only when there was none (review of #523)
  *   portfolio the brain that owns the cap lever of every campaign in it, or any campaign's lock
  * The levels a lever takes today are widened here (each lever's own PR widens LEVER_LEVELS_NOW): the gate must already
  * hold every lever correctly when it does.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { OverrideRow } from './settings.js'
 import type { CampaignOwnership } from './ownership.js'
 
@@ -32,7 +33,7 @@ const resolveCampaignOwnership = vi.fn()
 vi.mock('./ownership.js', () => ({ resolveCampaignOwnership: (...a: unknown[]) => resolveCampaignOwnership(...a) }))
 vi.mock('./levers.js', async (importOriginal) => ({ ...(await importOriginal<typeof import('./levers.js')>()), levelRefusal: () => null }))
 
-const { leverHoldsOf, campaignLeverOwners, portfolioCapHold, forgetLeverOwners, GATE_LEVERS } = await import('./lever-owners.js')
+const { leverHoldsOf, campaignLeverOwners, portfolioCapHold, forgetLeverOwners, anyBrainEnrolled, GATE_LEVERS, ENROLLED_TTL_MS, OWNERS_TTL_MS } = await import('./lever-owners.js')
 const { withWorkspace } = await import('../../../lib/workspace-context.js')
 
 const AT = new Date('2026-10-08T12:00:00Z')
@@ -173,13 +174,56 @@ describe('campaignLeverOwners and portfolioCapHold (reads)', () => {
     expect(enrollmentFindFirst).toHaveBeenCalledTimes(2)
   })
 
-  it('a failed read throws (the gate fails closed), and nothing is remembered from it', async () => {
+  it('a failed read with no answer known throws (the gate lets it out: retry later), and nothing is remembered from it', async () => {
     overrideFindMany.mockRejectedValueOnce(new Error('db down'))
     await expect(campaignLeverOwners(['c1'])).rejects.toThrow('db down')
     expect((await campaignLeverOwners(['c1'])).get('c1')?.levers.budgets?.kind).toBe('owned')
     forgetLeverOwners()
     enrollmentFindFirst.mockRejectedValueOnce(new Error('db down'))
     await expect(campaignLeverOwners(['c1'])).rejects.toThrow('db down')
+    expect((await campaignLeverOwners(['c1'])).get('c1')?.levers.budgets?.kind).toBe('owned') // the next read works again
+  })
+
+  describe('a failed read answers the last answer known, whatever its age', () => {
+    afterEach(() => { vi.restoreAllMocks() })
+    const later = (ms: number) => vi.spyOn(Date, 'now').mockReturnValue(T0 + ms)
+    let T0 = 0
+    beforeEach(() => { T0 = Date.now() })
+
+    it('"is anything enrolled?": the last answer, even long after its 30 s', async () => {
+      enrollmentFindFirst.mockResolvedValueOnce(null)
+      expect(await campaignLeverOwners(['c1'])).toEqual(new Map())
+      later(ENROLLED_TTL_MS + 3_600_000)
+      enrollmentFindFirst.mockRejectedValue(new Error('db blip'))
+      expect(await campaignLeverOwners(['c1'])).toEqual(new Map())
+      expect(await anyBrainEnrolled()).toBe(false)
+      expect(enrollmentFindFirst).toHaveBeenCalledTimes(3)
+      // Forgotten (a change of a brain in this process): no answer known, the error goes on.
+      forgetLeverOwners()
+      await expect(anyBrainEnrolled()).rejects.toThrow('db blip')
+    })
+
+    it('a campaign: its last answer; one never answered in the same read → the error goes on', async () => {
+      expect((await campaignLeverOwners(['c1', 'c3'])).get('c1')?.levers.budgets?.kind).toBe('owned')
+      later(OWNERS_TTL_MS + 60_000)
+      enrollmentFindFirst.mockResolvedValue({ id: 'e1' })
+      overrideFindMany.mockRejectedValue(new Error('db blip'))
+      const stale = await campaignLeverOwners(['c1', 'c3'])
+      expect([...stale.keys()]).toEqual(['c1'])
+      expect(stale.get('c1')?.levers.budgets?.kind).toBe('owned')
+      await expect(campaignLeverOwners(['c1', 'c2'])).rejects.toThrow('db blip')
+    })
+
+    it('a portfolio: its last answer', async () => {
+      portfolioFindFirst.mockResolvedValue({ externalPortfolioId: 'AMZ-PF-1' })
+      campaignFindMany.mockResolvedValue([{ id: 'c1' }])
+      overrideFindMany.mockResolvedValue([level('portfolioCap', 'AUTO')])
+      expect(await portfolioCapHold('pf-1')).toMatchObject({ kind: 'owned' })
+      later(OWNERS_TTL_MS + 60_000)
+      campaignFindMany.mockRejectedValue(new Error('db blip'))
+      expect(await portfolioCapHold('pf-1')).toMatchObject({ kind: 'owned' })
+      await expect(portfolioCapHold('pf-2')).rejects.toThrow('db blip')
+    })
   })
 
   it('a portfolio\'s cap: owned when one product\'s brain owns it on every campaign in it; any campaign\'s lock holds it', async () => {
