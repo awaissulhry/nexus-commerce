@@ -177,7 +177,13 @@ export async function shadowMarket(market: string, ctx: { runId: string; mode: B
   // BB-17 — the intraday brakes: switched on they are in the facts already (the decisions carry them, in their why); in
   // shadow the decisions stay without them, and where one would change the stored why says so. Both count in the line.
   // Compared on decide's own decisions (before BB-20's explore picks, which never take a braked keyword when on).
-  const intraday = run.intraday ? intradayEffects(rows, run, facts, decided, campaignOf) : null
+  // Words only: a throw here must never stop the run's writes (batch 3 review).
+  let intraday: ReturnType<typeof intradayEffects> | null = null
+  try {
+    if (run.intraday) intraday = intradayEffects(rows, run, facts, decided, campaignOf)
+  } catch (error) {
+    logger.warn('[bid-brain] the intraday words could not be built: the run goes on without them', { market, error: error instanceof Error ? error.message : String(error) })
+  }
   const toWrite = owned.size
     ? decisions.filter((d) => d.action === 'write' && owned.has(campaignOf(d.targetId))).map((decision) => ({ campaignId: campaignOf(decision.targetId), market, decision }))
     : []

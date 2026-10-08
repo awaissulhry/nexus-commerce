@@ -70,7 +70,8 @@ describe('AB-19 — the daily run supervises the ads brain', () => {
   it('"owned" is PROPOSE or AUTO, exactly as the brain\'s code says; OBSERVE and OFF are run as before', () => {
     expect(BRAIN_LEVELS.filter(ownsLever)).toEqual(['PROPOSE', 'AUTO'])
     expect(DAILY).toMatch(/that lever's `brain` in the map is `PROPOSE` or `AUTO`/)
-    expect(DAILY).toMatch(/A lever in shadow \(`OBSERVE`\) or `OFF`, and a shared campaign \(`SHARED`\), are run as before\./)
+    expect(DAILY).toMatch(/A lever in shadow \(`OBSERVE`\) or `OFF`, a campaign the brain does not run \(`NOT_ENROLLED`\) or the Owner excluded \(`EXCLUDED`\), and a shared campaign \(`SHARED`\), are run as before, unless that lever's `owner` is the brain/)
+    expect(DAILY).toMatch(/it never steers a lever the brain owns\. Every other lever is decided as before\./)
     for (const level of BRAIN_LEVELS) expect(SECTION_10).toContain(`\`${level}\``)
   })
 
@@ -86,10 +87,12 @@ describe('AB-19 — the daily run supervises the ads brain', () => {
     expect(DAILY).toMatch(/Never its approval ids in `waiting`: they are the brain's, not this run's\./)
   })
 
-  it('reports the brain\'s clashes and tool gaps as problems', () => {
+  it('a clash on a lever the brain owns is a problem; setup items and the rest are a weekly markets line, never a daily danger notice', () => {
     expect(SECTION_10).toMatch(/\*\*Clashes and tool gaps\.\*\* `view: "clashes"` per market/)
     expect(SECTION_10).toMatch(/`view: "setup"`: tools not set up or held off/)
-    expect(DAILY).toMatch(/and the ads brain's clashes and tool gaps \(10\), one line each/)
+    expect(DAILY).toMatch(/and a clash on a lever the ads brain owns \(10, 4\), one line each/)
+    expect(DAILY).toMatch(/is a `problems` line the first run it appears and again on the weekly day/)
+    expect(DAILY).toMatch(/is not a problem: one line in `markets` on the weekly day only\./)
   })
 
   it('raises the Owner\'s decisions instead of acting: the brain\'s own change tools are never asked or decided', () => {

@@ -311,7 +311,14 @@ export async function upgradesShadow(
   const probes = probeMode()
   if ((response === 'off' && explore === 'off' && probes === 'off') || !input.facts.length) return null
   const own = new Set(input.facts.map((f) => f.targetId))
-  const all = input.marketFacts ? input.marketFacts() : null
+  // Batch 3 review — the market's facts are only for the shadow layers: a throw means no upgrades this run, never a failed run.
+  let all: TargetFacts[] | null = null
+  try {
+    all = input.marketFacts ? input.marketFacts() : null
+  } catch (error) {
+    logger.warn('[bid-brain] the market facts for the upgrades could not be built: no upgrades this run', { market: m.market, error: error instanceof Error ? error.message : String(error) })
+    return null
+  }
   const facts = all ?? input.facts
   const decisions = all ? all.map((f) => decide(f)) : input.decisions
   const notes = new Map<string, string>()

@@ -363,7 +363,8 @@ export async function releaseHold(args: { campaignIds: readonly string[]; by: st
 export async function floorsWithoutMemory(campaignId: string): Promise<number> {
   // Only floors the brain wrote itself (a floor or give-back write since the keyword's last decision no override lowered):
   // a stop someone else wrote, which the brain only held, is that owner's to give back, and a hand-back changes nothing.
-  const kept = ['goal', 'band', 'limit', 'no_goal', 'pin', 'freeze']
+  // Batch 3 review — the forward layers of BB-20/21 count as unlowered too, and an intraday brake (BB-17) is a floor.
+  const kept = ['goal', 'band', 'limit', 'no_goal', 'pin', 'freeze', 'probe', 'explore', 'revive']
   const rows = await prisma.$queryRaw<Array<{ n: number }>>(Prisma.sql`
     WITH last AS (
       SELECT DISTINCT ON (d."targetId") d."targetId", d.layer, d."decidedCents", d."currentCents"
@@ -378,14 +379,14 @@ export async function floorsWithoutMemory(campaignId: string): Promise<number> {
       SELECT DISTINCT d."targetId" FROM "BidBrainDecision" d
         LEFT JOIN unlowered u ON u."targetId" = d."targetId"
        WHERE d."campaignId" = ${campaignId} AND d.action = 'write'
-         AND d.layer IN ('stop', 'stock', 'phase', 'min_bid_hour', 'restore')
+         AND d.layer IN ('stop', 'stock', 'phase', 'min_bid_hour', 'intraday', 'restore')
          AND (u.at IS NULL OR d."createdAt" > u.at))
     SELECT count(*)::int AS n FROM last
       JOIN wrote w ON w."targetId" = last."targetId"
       JOIN "AdTarget" t ON t.id = last."targetId"
       JOIN "AdGroup" g ON g.id = t."adGroupId"
       JOIN "Campaign" c ON c.id = g."campaignId"
-     WHERE ((last.layer IN ('stop', 'stock', 'phase', 'min_bid_hour') AND t."bidCents" <= last."decidedCents")
+     WHERE ((last.layer IN ('stop', 'stock', 'phase', 'min_bid_hour', 'intraday') AND t."bidCents" <= last."decidedCents")
             -- a give-back still waiting (refused at the gate): the keyword sits at the floor it left
             OR (last.layer = 'restore' AND t."bidCents" <= last."currentCents"))
        AND t."retiredAt" IS NULL
