@@ -83,6 +83,8 @@ export function mcpInstructions(business: McpBusiness): string {
     'sibling products), the state of its campaigns (a pause for a stop of 3 days or more, its resume, an archive only',
     'ever proposed) and its negatives (the day\'s adds, retirements and revives, every campaign and ad group against the',
     'limit): ads-brain (read only; views map, clashes, setup, money, terms, state, negatives).',
+    'One lever of the brain is stopped at once, for one product or every product, with set-brain-kill-switch (op kill, or',
+    'op end; the brain\'s other levers go on; a person approves it), and the map shows each kill with who, when and why.',
     'How a product\'s Amazon ads are built and run is its playbook: read it with ads-playbook, change it with',
     'set-ads-playbook, and build, adopt, start, stop or sync its campaigns, switch its phase or give a declining term a',
     'campaign of its own with apply-ads-playbook (built through the SP Super Wizard\'s own launch, at the floor and off the',

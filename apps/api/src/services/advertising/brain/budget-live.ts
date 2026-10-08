@@ -127,7 +127,12 @@ const NOT_LIVE = 'the server switch NEXUS_BID_BRAIN_MODE is not live: the brain 
  * Each campaign's and each portfolio's step this run, from the plan and its facts. `native`: per campaign, the lines of
  * Amazon's own budget rules acting on it (brain/native-rules.ts nativeRuleLines). Pure.
  */
-export function moneyStepsOf(plan: ProductMoneyPlan, facts: Pick<ProductMoneyFacts, 'campaigns' | 'today' | 'currency'>, ctx: { live: boolean; native?: ReadonlyMap<string, readonly string[]> }): { campaigns: CampaignStep[]; portfolios: CapStep[] } {
+export function moneyStepsOf(plan: ProductMoneyPlan, facts: Pick<ProductMoneyFacts, 'campaigns' | 'today' | 'currency'>, ctx: {
+  live: boolean
+  native?: ReadonlyMap<string, readonly string[]>
+  /** AB-15 — the Owner's kill switch, or the hold after an auto-undo, on a campaign's budget or a portfolio's cap: in words. */
+  holds?: { budget: (campaignId: string) => string | null; cap: (portfolioId: string) => string | null }
+}): { campaigns: CampaignStep[]; portfolios: CapStep[] } {
   const w = (c: number) => money(c, facts.currency)
   const byId = new Map(facts.campaigns.map((c) => [c.campaignId, c]))
   const campaigns: CampaignStep[] = []
@@ -143,6 +148,8 @@ export function moneyStepsOf(plan: ProductMoneyPlan, facts: Pick<ProductMoneyFac
     if (c.owner !== 'product') { hold('a shared campaign: no product\'s brain owns its budget (D2 — the brain proposes a split first); not written'); continue }
     if (!isOwnedLevel(level)) { hold(`${level}: the brain plans it in shadow, writes nothing`); continue }
     if (!ctx.live) { hold(NOT_LIVE); continue }
+    const held = ctx.holds?.budget(c.campaignId)
+    if (held) { hold(`${held}: not written`); continue }
     const t: CampaignTodayFacts = facts.today?.[c.campaignId] ?? { baseAsked: false, ladderAskedCents: null, others: [] }
     if (t.others.length) { hold(`another writer moved this budget today (${t.others.join(', ')}): the brain leaves it until the next budget day`); continue }
     const rules = ctx.native?.get(c.campaignId) ?? []
@@ -181,6 +188,8 @@ export function moneyStepsOf(plan: ProductMoneyPlan, facts: Pick<ProductMoneyFac
     if (!e.portfolioId) { hold('in no portfolio: Amazon caps only portfolios'); continue }
     if (!isOwnedLevel(level)) { hold(`${level}: the brain plans the cap in shadow, writes nothing`); continue }
     if (!ctx.live) { hold(NOT_LIVE); continue }
+    const capHeld = ctx.holds?.cap(e.portfolioId)
+    if (capHeld) { hold(`${capHeld}: not written`); continue }
     if (e.belowSpend) { hold(`a cap of ${w(e.capCents)} is not above this month's spend in it plus one day: it would stop every campaign in it at once — not written; the pace brakes act first`); continue }
     const owner = plan.portfolioCap.source === 'owner-amount'
     if (e.todaySetBy === 'other' && !owner) {
@@ -260,7 +269,9 @@ export async function runMoneyActions(plan: ProductMoneyPlan, facts: ProductMone
     const readings = await loadNativeRules(candidates)
     native = new Map(candidates.map((id) => [id, nativeRuleLines(readings.get(id), 'budgets')]))
   }
-  const steps = moneyStepsOf(plan, facts, { live: ctx.live, native })
+  // AB-15 — the kill switch and the holds after auto-undo's undos (brain/lever-holds.ts): a held campaign or cap is not written.
+  const { moneyHolds } = await import('./lever-holds.js')
+  const steps = moneyStepsOf(plan, facts, { live: ctx.live, native, holds: await moneyHolds(plan.productId, plan.market) })
   const byCampaign = new Map<string, CampaignStep[]>()
   for (const s of steps.campaigns) byCampaign.set(s.campaignId, [...(byCampaign.get(s.campaignId) ?? []), s])
   const decision = new Map(plan.campaigns.map((c) => [c.campaignId, c]))

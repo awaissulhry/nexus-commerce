@@ -39,6 +39,7 @@ import {
 import { laneOf, minBidLanes, type PlanHour } from './plan-hour.js'
 import { stampPlanReceipts } from './plans.js'
 import { ownerLeverLocks, type LeverLocks } from '../brain/owner-brakes.js'
+import { campaignKills, killWords } from '../brain/kill-switch.js'
 import { campaignStopOf, fullLanes, strategyStep, type CampaignStop } from './stop-recipe.js'
 import { strategySwitchesToday } from './stop-memory.js'
 import { loadMarket, loadNowcastEvidence, loadRun, SHADOW_MARKETS, type LastWrite, type LoadedMarket, type PreviousDecision } from './load.js'
@@ -119,17 +120,21 @@ export async function shadowMarket(market: string, ctx: { runId: string; mode: B
     ? decisions.filter((d) => d.action === 'write' && owned.has(campaignOf(d.targetId))).map((decision) => ({ campaignId: campaignOf(decision.targetId), market, decision }))
     : []
   const guard = owned.size && ctx.guard ? await ctx.guard() : null
-  const sent = toWrite.length && guard ? await writeOwnedDecisions(toWrite, { runId: ctx.runId, guard }) : null
+  // ONE BRAIN AB-15 — the Owner's kill switch: a lever he stopped gets no write from the bid brain (each decision deferred,
+  // the kill in its words); the gate refuses it as well. Nothing stopped in the business: one remembered query, no change.
+  const killed = guard ? await readBidBrainKills([...owned]) : NO_KILLS
+  const sent = toWrite.length && guard ? await writeOwnedDecisions(killed.size ? toWrite.filter((w) => !killed.get(w.campaignId)?.bids) : toWrite, { runId: ctx.runId, guard }) : null
+  if (sent && killed.size) deferKilled(sent, toWrite, killed)
   // AB-2 — the stop recipe of each owned campaign: which stop holds it whole, and the Owner's locks on its lanes and strategy.
   const recipeOn = !!guard && !run.marketBrakes.length
   const states = recipeOn ? campaignStates(facts, decisions, owned, campaignOf, run.planHours) : new Map<string, CampaignState>()
   const locks = recipeOn ? await readLeverLocks([...states.keys()]) : new Map<string, LeverLocks>()
   // BB-7 — the plan's hour of each owned campaign: its placements (none while braked or paused; all at 0 % in a Min-bid hour
   // or a stop, AB-2; given back from the stop's memory when it ends) …
-  const placementList = recipeOn ? placementWrites(rows, facts, decisions, owned, campaignOf, run.planHours, { locks, states }) : []
+  const placementList = recipeOn ? notKilled(placementWrites(rows, facts, decisions, owned, campaignOf, run.planHours, { locks, states }), killed, 'placements') : []
   const placed = recipeOn ? await writeOwnedPlacements(placementList, { runId: ctx.runId, guard: guard! }) : null
   // … AB-2: the bidding strategy, down only for the stop and back after it (the anti-flap counts today's switches) …
-  const strategyList = recipeOn ? strategyWrites(rows, states, locks, await strategySwitchesToday(restoreCandidates(rows, states), ctx.clockNow ?? ctx.now), strategyHolds(run.holds)) : []
+  const strategyList = recipeOn ? notKilled(strategyWrites(rows, states, locks, await strategySwitchesToday(restoreCandidates(rows, states), ctx.clockNow ?? ctx.now), strategyHolds(run.holds)), killed, 'biddingStrategy') : []
   const switched = strategyList.length ? await writeOwnedStrategies(strategyList, { runId: ctx.runId, guard: guard! }) : null
   const recipe = recipeWords(placementList, strategyList)
   // … a new Min-bid entry for each campaign the brain floored this run (rank-defend's anti-flap, its count shared) …
@@ -333,6 +338,45 @@ let locksUnreadableSaid = false
  * AB-2 — the Owner's locks of the owned campaigns' lanes and strategies. Unreadable: every campaign is marked so — its
  * give-back and its plan's placements wait, nothing is dropped, a stop still lowers — logged once until a read succeeds.
  */
+/** AB-15 — per owned campaign, the levers of the bid brain the Owner's kill switch stopped, each with the kill in words. */
+export type BidBrainKills = Map<string, Partial<Record<'bids' | 'placements' | 'biddingStrategy', string>>>
+const NO_KILLS: BidBrainKills = new Map()
+let killsUnreadableSaid = false
+
+/**
+ * AB-15 — the kill switches on the bid brain's levers of its owned campaigns. A failed read holds every write of these
+ * campaigns this tick (as the gate would: it cannot tell either) — tried again next tick, nothing dropped.
+ */
+export async function readBidBrainKills(campaignIds: readonly string[]): Promise<BidBrainKills> {
+  if (!campaignIds.length) return NO_KILLS
+  try {
+    const kills = await campaignKills(campaignIds, ['bids', 'placements', 'biddingStrategy'])
+    killsUnreadableSaid = false
+    if (!kills.size) return NO_KILLS
+    return new Map([...kills].map(([id, k]) => [id, Object.fromEntries(Object.entries(k).map(([lever, kill]) => [lever, killWords(kill!)]))]))
+  } catch (err) {
+    if (!killsUnreadableSaid) logger.warn('[bid-brain] could not read the kill switches — the owned campaigns\' writes wait this tick (nothing dropped)', { error: err instanceof Error ? err.message : String(err) })
+    killsUnreadableSaid = true
+    const why = 'the kill switches could not be read: the write waits for the next tick'
+    return new Map(campaignIds.map((id) => [id, { bids: why, placements: why, biddingStrategy: why }]))
+  }
+}
+
+/** AB-15 — the writes of a list whose campaign's lever is not stopped. Pure. */
+export function notKilled<T extends { campaignId: string }>(list: T[], killed: BidBrainKills, lever: 'placements' | 'biddingStrategy'): T[] {
+  return killed.size ? list.filter((w) => !killed.get(w.campaignId)?.[lever]) : list
+}
+
+/** AB-15 — each keyword write of a stopped campaign recorded as deferred, with the kill as its why. */
+export function deferKilled(sent: WriteReport, writes: ReadonlyArray<{ campaignId: string; decision: Decision }>, killed: BidBrainKills): void {
+  for (const w of writes) {
+    const why = killed.get(w.campaignId)?.bids
+    if (!why || w.decision.action !== 'write' || w.decision.bidCents === w.decision.currentCents) continue
+    sent.deferred++
+    sent.byTarget.set(w.decision.targetId, { sent: 'deferred', why })
+  }
+}
+
 export async function readLeverLocks(campaignIds: readonly string[]): Promise<Map<string, LeverLocks>> {
   if (!campaignIds.length) return new Map()
   try {

@@ -708,6 +708,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'report-ads-run': { before: { runId: 'r1', status: 'running', withdrawn: false }, after: { runId: 'r1', status: 'done', withdrawn: false } },
       // W4-2 — the expected report time it replaced, set again.
       'set-ads-report-time': { before: { expected: { time: '08:00', timeZone: 'Europe/Rome' } }, after: { expected: { time: '08:30', timeZone: 'Europe/Rome' } } },
+      // AB-15 — a kill switch is ended by its undo, and an ended one set again.
+      'set-brain-kill-switch': { before: { op: 'kill', lever: 'budgets', productId: 'p1', market: 'IT', killed: false, reason: null }, after: { op: 'kill', lever: 'budgets', productId: 'p1', market: 'IT', killed: true, reason: 'test stop' } },
       // BB-6 — a campaign's place in the bid brain put back (LIVE → the op that returns it).
       'set-bid-brain-enrollment': { before: { campaignId: 'c1', mode: 'SHADOW' }, after: { campaignId: 'c1', mode: 'LIVE' } },
       // W4-8 — a rule's campaigns put back (replace); a coverage term's values put back through the same tool.

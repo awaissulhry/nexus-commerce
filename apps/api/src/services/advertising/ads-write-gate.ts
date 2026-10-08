@@ -24,6 +24,7 @@ import { adsMode } from './ads-api-client.js'
 import { dimensionsForWrite, leverDimensionsForWrite, pinDenial, type AuthorityDimension } from './ads-authority-pins.js'
 import { BRAIN_ACTOR, brainLiveCeiling, brainOwnedCampaignIds } from './bid-brain/live.js'
 import { campaignLeverOwners, portfolioCapHold, type LeverHold } from './brain/lever-owners.js'
+import { campaignKills, killWords, openKills, type BrainKill } from './brain/kill-switch.js'
 import { brainDayMoveVerdict, brainDayOpeningCents, isMoneyActor, ladderBaseCents, LADDER_GATE_MAX_PCT, MONEY_BUDGETS_ACTOR, moneyLogStepOf } from './brain/budget-ladder.js'
 import type { BrainLever } from './brain/levers.js'
 import { protectedNegativeRefusal } from './ads-negation-policy.js'
@@ -78,6 +79,9 @@ export type GateDeniedAt =
   // brain's own pause or resume (BRAIN_STATE_ACTOR) on a campaign whose state lever it does not own, the same way. AB-10 —
   // and its negatives writer (BRAIN_NEGATIVES_ACTOR) on a campaign whose negatives lever it does not own.
   | 'brain_not_owner'
+  // ONE BRAIN AB-15 — the Owner's kill switch stopped this lever of the brain (brain/kill-switch.ts): the brain's own actor on
+  // it is refused, a lowering included; every other writer is judged as before.
+  | 'brain_killed'
 
 /**
  * 3A (Owner decided 2026-10-06) — the limits that are HIS: his campaign's bid and budget bounds and his bid policies
@@ -492,6 +496,53 @@ export async function brainStateNotOwnedRefusal(target: { campaignId: string; na
   }
 }
 
+/**
+ * ONE BRAIN AB-15 — the levers of a write the brain's OWN actor writes, which the Owner's kill switch can stop: the bid brain
+ * (BRAIN_ACTOR) on the levers it writes (keyword bids, ad group bids, placements, bidding strategy), every writer of the
+ * product brain's family (PRODUCT_BRAIN_ACTOR, exactly or `-<what>`: money, state, negatives, harvest) on every lever it
+ * names. A person (`manual`) and every other actor — the safety owners, auto-undo, the repairs, the other engines — write
+ * none here. Pure.
+ */
+export function brainKillLevers(levers: readonly BrainLever[], ctx: Pick<GateContext, 'actor' | 'manual'>): BrainLever[] {
+  const actor = ctx.actor ?? ''
+  if (!actor || ctx.manual === true) return []
+  if (actor === BRAIN_ACTOR) return levers.filter((l) => BID_BRAIN_LEVERS.has(l))
+  return actorMatches(actor, [PRODUCT_BRAIN_ACTOR]) ? [...levers] : []
+}
+
+/** AB-15 — the refusal of the brain's own actor on a lever the kill switch stopped at `where`. Pure. */
+export function brainKillDecision(lever: BrainLever, kill: BrainKill, where: string, actor: string | null | undefined): Extract<GateDecision, { allowed: false }> {
+  return {
+    allowed: false,
+    deniedAt: 'brain_killed',
+    reason: `the ${LEVER_WORDS[lever]} of ${where} is ${killWords(kill)}: ${actor || 'the brain'} may not change it — the brain writes that lever again only once the kill ends (set-brain-kill-switch). A person's edit, a request a person approved and the safety checks still pass; the brain's other levers are not affected. Nothing was changed.`,
+  }
+}
+
+/**
+ * AB-15 — the refusal for the brain's own actor on a lever the Owner's kill switch stopped, on one campaign or on one
+ * portfolio's cap (stopped when a kill stops the portfolioCap lever of a product one of its campaigns advertises); null:
+ * nothing stopped there, or a writer the kill does not hold. Reads only for the brain's own actors (brainKillLevers); no
+ * open kill in the business is one remembered query (brain/kill-switch.ts). A failed read goes out of the gate as an error
+ * (the write waits and is sent again), as every failed read in it does.
+ */
+async function brainKillRefusal(target: { campaignId: string; name?: string | null } | { portfolioId: string }, levers: readonly BrainLever[], ctx: GateContext): Promise<Extract<GateDecision, { allowed: false }> | null> {
+  const judged = brainKillLevers(levers, ctx)
+  if (!judged.length) return null
+  if ('campaignId' in target) {
+    const kills = (await campaignKills([target.campaignId], judged)).get(target.campaignId)
+    const lever = judged.find((l) => kills?.[l])
+    return lever ? brainKillDecision(lever, kills![lever]!, `campaign ${target.name ? `"${target.name}" (${target.campaignId})` : target.campaignId}`, ctx.actor) : null
+  }
+  // Nothing stops a portfolio cap in the business: one remembered query, no read of the portfolio.
+  if (!judged.includes('portfolioCap') || !(await openKills()).some((k) => k.lever === 'portfolioCap')) return null
+  const row = await prisma.amazonAdsPortfolio.findFirst({ where: { OR: [{ id: target.portfolioId }, { externalPortfolioId: target.portfolioId }] }, select: { externalPortfolioId: true } })
+  const campaigns = await prisma.campaign.findMany({ where: { portfolioId: row?.externalPortfolioId ?? target.portfolioId, status: { not: 'ARCHIVED' } }, select: { id: true } })
+  const kills = await campaignKills(campaigns.map((c) => c.id), ['portfolioCap'])
+  const kill = [...kills.values()].map((k) => k.portfolioCap).find((k): k is BrainKill => !!k)
+  return kill ? brainKillDecision('portfolioCap', kill, `portfolio ${target.portfolioId}`, ctx.actor) : null
+}
+
 export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision> {
   // 6a — Sponsored Products only (Owner decision S8; review G.1). Before the sandbox return: an SB/SD write would go to
   // a Sponsored Products endpoint in either mode, and suppression is not exempt — its bid would land there too.
@@ -757,6 +808,12 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
       const refusal = await productBrainRefusal({ campaignId: ctx.campaignId, name: campaign.name }, brainLeversOfWrite(levers, fieldList), ctx)
       if (refusal) return refusal
     }
+    // ONE BRAIN AB-15 — the Owner's kill switch: the brain's own actor on a lever he stopped, whatever the switch says.
+    // Nothing stopped in the business: one remembered query, no refusal.
+    if (ctx.actor !== undefined) {
+      const refusal = await brainKillRefusal({ campaignId: ctx.campaignId, name: campaign.name }, brainLeversOfWrite(levers, fieldList), ctx)
+      if (refusal) return refusal
+    }
     // ONE BRAIN AB-8 — the money writer's actor writes only a budgets lever the brain owns (whatever the switch says).
     const notOwner = await brainWriterRefusal({ campaignId: ctx.campaignId, name: campaign.name }, ctx)
     if (notOwner) return notOwner
@@ -861,6 +918,13 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
       const refusal = await productBrainRefusal({ portfolioId: ctx.portfolioId }, ['portfolioCap'], ctx)
       if (refusal) return refusal
     }
+  }
+  // ONE BRAIN AB-15 — the Owner's kill switch on a portfolio's cap: the brain's own actor on a portfolio of a product (or every
+  // product) whose portfolioCap lever he stopped.
+  if (ctx.campaignId === undefined && ctx.portfolioId && ctx.actor !== undefined) {
+    const fieldList = ctx.fields?.length ? ctx.fields : [ctx.field]
+    const refusal = await brainKillRefusal({ portfolioId: ctx.portfolioId }, brainLeversOfWrite(leverDimensionsForWrite({ fields: fieldList, dimension: ctx.dimension ?? null }), fieldList), ctx)
+    if (refusal) return refusal
   }
   // ONE BRAIN AB-8 — the money writer's actor on a portfolio: only the cap of a portfolio the brain owns; it makes none.
   if (ctx.campaignId === undefined && isMoneyActor(ctx.actor) && ctx.manual !== true) {

@@ -18112,6 +18112,10 @@ model AutomationSwitch {
 /// watch-week outcome (`outcome`), the numbers it stands on (`evidence`) and what auto-undo did: nothing, would undo
 /// (OBSERVE), asked a person (PROPOSE, `undoApprovalId`), undid it (AUTO, `undoActionLogId`) or held it (and why).
 /// No foreign key to the action log: the log keeps its own retention.
+/// ONE BRAIN AB-15 — also one row per change of a brain lever (origin `brain`; services/advertising/brain/undo-run.ts): lever
+/// budgets | portfolioCap | state | negatives | harvest | biddingStrategy, direction = the change's kind (raise | pause |
+/// resume | add | harvest | switch), actionLogId the change's action-log row (a harvest: "harvest:<its record>"). An `undone`
+/// one is also the hold that keeps the brain from redoing it for the lever's days (brain/lever-holds.ts).
 model AdsAutoUndoJudgement {
   // Business ownership comes from verified database context.
   workspaceId     String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
@@ -20169,6 +20173,11 @@ model AdsBrainEnrollment {
 ///            never writes it and only recommends
 ///   EXCLUDE  out of the brain completely (key "*"): a campaign stays with today's engines; a product leaves the brain
 ///   VALUE    a setting (key = a cap or an N1–N4 setting such as "portfolioCapOn", "paceTargetPct"; value = its value)
+///   KILL     AB-15 — the Owner's kill switch of one lever (scope KILL, key = the lever; productId = the family root or "*" for
+///            every product, marketplace = the market or "*" for every market): the brain writes nothing on that lever and
+///            the write gate refuses its actor there, until ended. No resolver reads it (brain/settings.ts applies PRODUCT and
+///            CAMPAIGN rows only): brain/kill-switch.ts layers it over the resolved settings, so the lever's level and locks
+///            stay as they were.
 model AdsBrainOverride {
   // Business ownership comes from verified database context.
   workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
@@ -20177,11 +20186,11 @@ model AdsBrainOverride {
   /// The enrollment it was set under (Product.id of the family root, short market code).
   productId   String
   marketplace String
-  /// PRODUCT | CAMPAIGN
+  /// PRODUCT | CAMPAIGN | KILL (AB-15)
   scope       String
   /// Campaign.id for a CAMPAIGN override (it applies to that campaign); null for a PRODUCT one.
   campaignId  String?
-  /// LEVEL | LOCK | EXCLUDE | VALUE
+  /// LEVEL | LOCK | EXCLUDE | VALUE | KILL (AB-15)
   kind        String
   /// The lever (LEVEL, LOCK), the setting (VALUE), "*" (EXCLUDE).
   key         String

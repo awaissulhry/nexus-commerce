@@ -88,6 +88,9 @@ const CREATE_OR_EDIT = new Set([
   // W4-5 — negatives' product (`product`, optional: by default the one product every place advertises): given one, the
   // negatives are about that product. A change, not a list.
   'add-negative-targets',
+  // One brain AB-15 — the kill switch of one lever: without a product it stops every product; given one, it is about that
+  // product. A change, not a list.
+  'set-brain-kill-switch',
 ])
 /** The tools whose input names a product, and how (`product`: one product by Nexus id or SKU). */
 function productTools(): ProductTool[] {

@@ -29,6 +29,7 @@ import { readEnginePosture } from '../ads-engine-guard.js'
 import { BRAIN_STATE_ACTOR } from '../ads-write-gate.js'
 import { brainLiveCeiling } from '../bid-brain/live.js'
 import { loadProductStateFacts, stateWatchProducts, type AskedRecord, type StateWatched } from './state-load.js'
+import { campaignHoldWhy, leverHolds } from './lever-holds.js'
 import {
   DECLINE_DAYS, decideState, MAX_PAUSES_PER_MARKET_DAY, STATE_DECISION_DAYS_KEPT, stateDecisionHash, stateRowKind, type StateContext, type StateDecision,
 } from './state.js'
@@ -142,16 +143,23 @@ export async function runStateBrainOnce(opts: { now?: Date; products?: readonly 
         const loaded = await loadProductStateFacts(p.productId, market, { now })
         if (!loaded) throw new Error(`product ${p.productId} has no family root in ${market}`)
         const ctx = (): StateContext => ({ now, ceilingLive, posture, pausesLeft })
+        // AB-15 — the Owner's kill switch on the state lever, and the hold after an auto-undo (a pause or a resume it put back
+        // is not made again for days): what it would do is kept, nothing is asked or written (brain/lever-holds.ts).
+        const holds = await leverHolds('state', p.productId, market, now)
+        const heldNow = new Map<string, string>()
         // Decide one campaign at a time: a pause takes one of the market's day's pauses before the next is decided.
         const decisions: StateDecision[] = []
         for (const f of loaded.facts) {
           const d = decideState(f, ctx())
+          const held = d.outcome === 'ask' || d.outcome === 'write' ? campaignHoldWhy(holds, d.campaignId, d.action) : null
+          if (held) { heldNow.set(d.campaignId, held); decisions.push(d); continue }
           if (d.action === 'pause' && (d.outcome === 'ask' || d.outcome === 'write')) pausesLeft.acting--
           if (d.action === 'pause' && d.outcome === 'shadow' && !f.shadowPaused) pausesLeft.shadow--
           decisions.push(d)
         }
         // A write or request refused today is tried again tomorrow (UTC), not every run: its refusal stands meanwhile.
         const final = new Map<string, { outcome: StateOutcome; approvalId: string | null; error: string | null }>()
+        for (const [campaignId, why] of heldNow) final.set(campaignId, { outcome: 'held', approvalId: null, error: why })
         for (const d of decisions) {
           const prev = loaded.previous.get(d.campaignId)
           if ((d.outcome === 'ask' || d.outcome === 'write') && prev?.action === d.action && prev.outcome === 'refused' && utcDay(prev.createdAt) === utcDay(now)) {

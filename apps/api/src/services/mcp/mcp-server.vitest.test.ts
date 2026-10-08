@@ -135,6 +135,8 @@ describe('C3 — the server and every change tool name the business', () => {
       "needs the approver's authenticator code; its diff view",
       // AB-3 — the brain's map, read only.
       'ads-brain (read only; views map, clashes, setup, money, terms, state, negatives)',
+      // AB-15 — the kill switch per lever, a person's decision.
+      'One lever of the brain is stopped at once, for one product or every product, with set-brain-kill-switch',
       // PB-11 — where the playbook lives, and that a start needs the approver's code.
       'read it with ads-playbook, change it with', 'start, stop or sync its campaigns, switch its phase',
       "a start needs the approver's authenticator code",
