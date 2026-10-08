@@ -33,7 +33,7 @@ const adsBrain: AgentTool = {
     view: z.enum(BRAIN_MAP_VIEWS).default('map')
       .describe('map (default): who owns each lever of each campaign today; clashes: two automatic writers on one campaign\'s lever, and the known gaps; setup: what is not set up or held off, with the fix'),
     market: z.string().trim().toUpperCase().min(2).max(20).optional()
-      .describe('one Amazon market code (business-overview). map: with productId, or alone for the products the brain knows there; clashes: required'),
+      .describe('one Amazon market code (business-overview). map: with productId; alone, or omitted, the products the brain knows there (or in every market); clashes: required'),
     productId: ID.optional().describe('map / clashes: one product (a variation names its parent), its Nexus id'),
     campaignId: ID.optional().describe('map: one Amazon campaign, its Nexus id (ad-campaigns)'),
     days: z.coerce.number().int().min(1).max(MAX_EVIDENCE_DAYS).default(DEFAULT_EVIDENCE_DAYS)
@@ -48,7 +48,7 @@ const adsBrain: AgentTool = {
     + 'every lever\'s owner today: the brain (live, or watching in shadow), a named engine (Hourly bid plans, classic '
     + 'dayparting, the bid optimiser, Top-of-Search defense, coverage, autopilot, budget schedules or pools), a rule by '
     + 'name, the Owner (a lock, pinned bids, held keywords) or nobody, with every writer set up and every one that wrote in '
-    + 'the last days; with campaignId, one campaign; with market alone, the products the brain knows there. view clashes '
+    + 'the last days; with campaignId, one campaign; with market alone (or nothing), the products the brain knows there (or in every market). view clashes '
     + '(market, optionally productId): every campaign lever two automatic writers can act on (set up at Auto, or wrote), '
     + 'and the known gaps — a keyword targeted and blocked in one place, a harvest rule with no stored destination (it '
     + 'never negates its source), keywords two products bid on; Amazon\'s own rules are not read yet ("could not '

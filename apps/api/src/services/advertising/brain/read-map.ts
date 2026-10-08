@@ -400,6 +400,14 @@ export function configuredWriters(c: CampaignRow & { market: string | null; prod
 
 export interface MapArgs { productId?: string; campaignId?: string; market?: string; days?: number }
 
+/** MCP.12 — the words every tool uses for a product that is deleted (Product.deletedAt) or not in this business. */
+export const PRODUCT_NOT_FOUND = 'Product not found'
+
+/** Null when the product exists here and is not deleted; else the refusal. */
+async function productRefusal(productId: string): Promise<string | null> {
+  return (await prisma.product.count({ where: { id: productId, deletedAt: null } })) > 0 ? null : PRODUCT_NOT_FOUND
+}
+
 const daysOf = (d?: number) => Math.max(1, Math.min(MAX_EVIDENCE_DAYS, Math.round(d ?? DEFAULT_EVIDENCE_DAYS)))
 const campaignsById = async (ids: readonly string[]) => (ids.length ? (await prisma.campaign.findMany({ where: { id: { in: [...ids] } }, select: CAMPAIGN_SELECT })).map((c) => ({ ...c, status: String(c.status) })) as CampaignRow[] : [])
 
@@ -456,27 +464,41 @@ export async function brainMap(args: MapArgs): Promise<{ data: unknown } | { err
     const { rows } = await campaignLevers([c], owners, days)
     return { data: { view: 'map', scope: { campaignId: c.id }, evidenceDays: days, campaigns: rows, ceiling: (await import('../bid-brain/shadow.js')).bidBrainMode() } }
   }
+  // MCP.12 — a product named by id is checked first: a deleted or unknown one is not found, before anything else is asked.
+  if (args.productId) {
+    const refusal = await productRefusal(args.productId)
+    if (refusal) return { error: refusal }
+  }
   const market = args.market ? strategyMarket(args.market) : null
-  if (!market) return { error: 'name a market (productId + market, or market alone), or a campaignId' }
+  if (args.market && !market) return { error: `${args.market} is not a market code` }
   if (!args.productId) {
-    const [rows, enrollments] = await Promise.all([bidBrainRowsByProduct(market), prisma.adsBrainEnrollment.findMany({ where: { marketplace: market }, select: { productId: true, updatedAt: true } })])
-    const ids = [...new Set([...rows.products.map((p) => p.productId), ...enrollments.map((e) => e.productId)])]
-    const names = new Map((ids.length ? await prisma.product.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, sku: true } }) : []).map((p) => [p.id, p]))
+    // The products the brain knows (enrolled, or LIVE one campaign at a time): in one market, or in every market. A
+    // deleted product never shows: the resolver ties no ad to it, and an enrollment of one is left out.
+    const [rows, enrollments] = await Promise.all([
+      bidBrainRowsByProduct(market ?? undefined),
+      prisma.adsBrainEnrollment.findMany({ where: market ? { marketplace: market } : {}, select: { productId: true, marketplace: true } }),
+    ])
+    const keys = new Map<string, { productId: string; market: string }>()
+    for (const p of rows.products) keys.set(`${p.productId}\u0000${p.market}`, { productId: p.productId, market: p.market })
+    for (const e of enrollments) keys.set(`${e.productId}\u0000${e.marketplace}`, { productId: e.productId, market: e.marketplace })
+    const ids = [...new Set([...keys.values()].map((k) => k.productId))]
+    const live = new Map((ids.length ? await prisma.product.findMany({ where: { id: { in: ids }, deletedAt: null }, select: { id: true, name: true, sku: true } }) : []).map((p) => [p.id, p]))
     return {
       data: {
-        view: 'map', scope: { market },
-        products: ids.map((id) => ({
-          productId: id, name: names.get(id)?.name ?? null, sku: names.get(id)?.sku ?? null,
-          enrolled: enrollments.some((e) => e.productId === id),
-          liveCampaigns: rows.products.find((p) => p.productId === id)?.campaignIds ?? [],
+        view: 'map', scope: market ? { market } : { market: 'every market' },
+        products: [...keys.values()].filter((k) => live.has(k.productId)).sort((a, b) => a.market.localeCompare(b.market) || a.productId.localeCompare(b.productId)).map((k) => ({
+          productId: k.productId, market: k.market, name: live.get(k.productId)!.name, sku: live.get(k.productId)!.sku,
+          enrolled: enrollments.some((e) => e.productId === k.productId && e.marketplace === k.market),
+          liveCampaigns: rows.products.find((p) => p.productId === k.productId && p.market === k.market)?.campaignIds ?? [],
         })),
         sharedLive: rows.shared, unownedLive: rows.none,
-        next: 'Read one product with productId (and this market): every lever of its campaigns, who owns each, and the brain\'s settings.',
+        next: 'Read one product with productId and its market: every lever of its campaigns, who owns each, and the brain\'s settings.',
       },
     }
   }
+  if (!market) return { error: 'name the market for this product (market), or read one campaign (campaignId)' }
   const view = await brainView(args.productId, market)
-  if (!view) return { error: `product ${args.productId} not found (or it has no single family)` }
+  if (!view) return { error: `product ${args.productId} has no single family (a parentless product whose ASIN variations of several families carry): fix its family first` }
   const ids = view.campaigns.map((c) => c.campaignId)
   const [campaigns, owners] = await Promise.all([campaignsById(ids), resolveCampaignOwnership(ids)])
   const { rows } = await campaignLevers(campaigns, owners, days)
@@ -503,11 +525,15 @@ export async function brainMap(args: MapArgs): Promise<{ data: unknown } | { err
 export async function brainClashes(args: { market?: string; productId?: string; days?: number }): Promise<{ data: unknown } | { error: string }> {
   const days = daysOf(args.days)
   const market = args.market ? strategyMarket(args.market) : null
+  if (args.productId) {
+    const refusal = await productRefusal(args.productId)
+    if (refusal) return { error: refusal }
+  }
   if (!market) return { error: 'name a market (and optionally a productId)' }
   let ids: string[]
   if (args.productId) {
     const found = await productCampaigns(args.productId, market)
-    if (!found) return { error: `product ${args.productId} not found (or it has no single family)` }
+    if (!found) return { error: `product ${args.productId} has no single family (a parentless product whose ASIN variations of several families carry): fix its family first` }
     ids = [...found.owned, ...found.shared].map((c) => c.campaignId)
   } else {
     ids = (await prisma.campaign.findMany({ where: { adProduct: 'SPONSORED_PRODUCTS', status: { not: 'ARCHIVED' } }, select: { id: true, marketplace: true } }))

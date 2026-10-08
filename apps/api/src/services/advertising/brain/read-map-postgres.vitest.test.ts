@@ -149,8 +149,13 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-3 — ads-brain: map, clashes, set
       expect.objectContaining({ productId: GALE, enrolled: true, liveCampaigns: LIVE.map(C).sort() }),
       expect.objectContaining({ productId: MISANO, enrolled: false, liveCampaigns: [C('misano-1')] }),
     ]))
+    // With nothing named: every market's products; a product named with no market is asked for its market.
+    const all = await tool({})
+    expect(all.data!.products).toEqual(expect.arrayContaining([expect.objectContaining({ productId: GALE, market: 'IT', enrolled: true })]))
+    expect(await tool({ view: 'map', productId: GALE })).toEqual({ ok: false, error: expect.stringContaining('name the market') })
     expect(await tool({ view: 'map', campaignId: 'not-in-this-business' })).toEqual({ ok: false, error: 'campaign not-in-this-business not found' })
-    expect(await tool({ view: 'map', productId: 'no-such-product', market: 'IT' })).toMatchObject({ ok: false, error: expect.stringContaining('not found') })
+    expect(await tool({ view: 'map', productId: 'no-such-product', market: 'IT' })).toEqual({ ok: false, error: 'Product not found' })
+    expect(await tool({ view: 'clashes', productId: 'no-such-product', market: 'IT' })).toEqual({ ok: false, error: 'Product not found' })
   })
 
   it('clashes: two automatic writers per campaign lever, and the known gaps', async () => {
