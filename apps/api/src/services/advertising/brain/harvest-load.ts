@@ -15,7 +15,8 @@
  *   stored     the Owner's harvest destinations (AdsHarvestDestination, EXACT and PRODUCT) with negateAtSource, the first
  *              grain that covers the term's main source (adGroup → campaign → portfolio → line → market → account).
  *   limits     the ads strategy's lowest and highest bid per own ad group and for the market (a new campaign).
- *   records    the product's harvests (AdsBrainHarvest) and what was used today and this week (the caps).
+ *   records    the product's harvests (AdsBrainHarvest) and what was used today and this week (the caps) — AB-16: the
+ *              structure lever's new campaigns count too (structure-load.ts structureCampaignsUsed), one cap for both.
  *   new        what a new campaign is built from: the SKUs its own campaigns advertise, the first budget (a share of the
  *              day's envelope the money shadow last planned, AB-7; else Amazon's minimum), the names taken in the market.
  *   ceiling    NEXUS_ADS_BRAIN_HARVEST_MODE=live (and the brain's own ceiling NEXUS_BID_BRAIN_MODE=live) lets PROPOSE ask
@@ -34,6 +35,7 @@ import {
   type HarvestStatus, type SlotFact, type StoredDestinationFact,
 } from './harvest.js'
 import type { LeverEffective, TermDecision } from './terms.js'
+import { structureCampaignsUsed } from './structure-load.js'
 
 const ACTS: readonly string[] = ['OBSERVE', 'PROPOSE', 'AUTO']
 const OVERRIDE_SELECT = { id: true, productId: true, marketplace: true, scope: true, campaignId: true, kind: true, key: true, ref: true, value: true, by: true, reason: true, createdAt: true, endedAt: true } as const
@@ -118,6 +120,8 @@ export async function loadHarvestMarket(market: string, due: readonly DueProduct
     bidLimitsFor({ marketplace: market }),
     groupIds.length ? strategyBidReader().forAdGroups(groupIds.map((id) => ({ adGroupId: id, marketplace: market }))) : Promise.resolve(new Map()),
   ])
+  // AB-16 — the structure lever's new campaigns this week and its standing single-keyword campaigns: the same caps.
+  const structureUsed = await structureCampaignsUsed(market, roots, weekAgo)
   const links = playbooks.length
     ? await prisma.adsPlaybookLink.findMany({ where: { playbookId: { in: playbooks.map((p) => p.id) }, kind: 'slot' }, select: { playbookId: true, key: true, refId: true, adGroupId: true } })
     : []
@@ -186,9 +190,9 @@ export async function loadHarvestMarket(market: string, due: readonly DueProduct
     const today = startOfUtcDay(now)
     const used = {
       keywordsToday: mine.filter((r) => r.decidedAt >= today && (TOOK as readonly string[]).includes(r.status)).length,
-      campaignsThisWeek: mine.filter((r) => r.destinationKind === 'NEW_CAMPAIGN' && r.decidedAt >= weekAgo && (TOOK as readonly string[]).includes(r.status)).length,
-      marketCampaignsThisWeek: marketCampaigns,
-      skcs: mine.filter((r) => r.destinationKind === 'NEW_CAMPAIGN' && (CAMPAIGN_STANDING as readonly string[]).includes(r.status)).length,
+      campaignsThisWeek: mine.filter((r) => r.destinationKind === 'NEW_CAMPAIGN' && r.decidedAt >= weekAgo && (TOOK as readonly string[]).includes(r.status)).length + (structureUsed.byProduct.get(root)?.week ?? 0),
+      marketCampaignsThisWeek: marketCampaigns + structureUsed.market,
+      skcs: mine.filter((r) => r.destinationKind === 'NEW_CAMPAIGN' && (CAMPAIGN_STANDING as readonly string[]).includes(r.status)).length + (structureUsed.byProduct.get(root)?.skcs ?? 0),
     }
     const decisions = decided.byProduct.get(root) ?? []
     const candidates: HarvestCandidateFacts[] = decisions.filter((x) => x.state === 'HARVEST_CANDIDATE').map((decision) => {

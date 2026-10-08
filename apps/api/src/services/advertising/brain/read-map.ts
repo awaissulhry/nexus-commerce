@@ -45,7 +45,7 @@ import {
  * `harvest` is brain/harvest-read.ts: the product's harvests, their destinations, sources, requests and judgements. AB-14 —
  * `report` is brain/cycle-read.ts: the day's product report the product cycle stored (the tool routes it).
  */
-export const BRAIN_MAP_VIEWS = ['map', 'clashes', 'setup', 'money', 'terms', 'state', 'hours', 'negatives', 'harvest', 'report'] as const
+export const BRAIN_MAP_VIEWS = ['map', 'clashes', 'setup', 'money', 'terms', 'state', 'hours', 'negatives', 'harvest', 'report', 'structure'] as const
 export type BrainMapView = (typeof BRAIN_MAP_VIEWS)[number]
 
 /** The days of action-log evidence a view reads by default, and at most. */

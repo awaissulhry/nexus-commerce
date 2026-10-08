@@ -149,7 +149,7 @@ describe.skipIf(!concurrentDatabaseUrl())('set-ads-brain — the Owner\'s contro
     const refused = await preview({ op: 'enroll', productId: P1, market: 'IT', levels: { structure: 'AUTO', hours: 'AUTO', bids: 'OBSERVE' } })
     expect(refused.ok).toBe(false)
     expect(refused.error).toMatch(/^Not queued — 3 refusals: \(1\)/)
-    expect(refused.error).toMatch(/the structure lever takes OFF or OBSERVE today, not AUTO: new campaigns wait for AB-16/)
+    expect(refused.error).toMatch(/the structure lever takes OFF or OBSERVE or PROPOSE today, not AUTO: AB-16: .*never AUTO: the brain never creates, splits or moves a campaign without a person's approval/)
     expect(refused.error).toMatch(/the hours lever takes OFF or OBSERVE or PROPOSE today, not AUTO/)
     expect(refused.error).toMatch(/bids: enrolling adopts the bids lever as its campaigns hold it — AUTO, because the bid brain already runs Jacket a-live LIVE/)
     expect(await rows('SELECT id FROM "AgentApproval" WHERE "workspaceId" = $1', [W])).toEqual([])

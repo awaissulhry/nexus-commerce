@@ -352,7 +352,7 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-1 — a product\'s brain: enrollme
   it('refusals change nothing: a level not offered, a stale version, a campaign that does not advertise the product', async () => {
     const v = await version()
     const before = await modes()
-    expect(await inW(() => setLever({ productId: P, market: 'IT', lever: 'structure', level: 'AUTO', by: 'user:owner' }))).toEqual({ ok: false, refusal: expect.stringContaining('takes OFF or OBSERVE today') })
+    expect(await inW(() => setLever({ productId: P, market: 'IT', lever: 'structure', level: 'AUTO', by: 'user:owner' }))).toEqual({ ok: false, refusal: expect.stringContaining('takes OFF or OBSERVE or PROPOSE today, not AUTO') })
     expect(await inW(() => setLever({ productId: P, market: 'IT', lever: 'bids', level: 'PROPOSE', by: 'user:owner' }))).toEqual({ ok: false, refusal: expect.stringContaining('no proposal path') })
     expect(await inW(() => setLever({ productId: P, market: 'IT', lever: 'bids', level: 'OBSERVE', by: 'user:owner', expectVersion: v - 1 }))).toEqual({ ok: false, refusal: expect.stringContaining('changed since it was read') })
     expect(await inW(() => setOverride({ productId: P, market: 'IT', override: { scope: 'CAMPAIGN', campaignId: C('g-none'), kind: 'EXCLUDE', key: '*' }, by: 'user:owner' }))).toEqual({ ok: false, refusal: expect.stringContaining('does not advertise this product') })

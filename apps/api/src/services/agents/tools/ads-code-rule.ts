@@ -11,6 +11,12 @@
  *   someone else's pause lifted  enable-ads with includePeoplesPauses (a person, Seller Central, an unknown writer, a
  *                                rule now off)
  *
+ * ONE BRAIN AB-16 (D1 = B, Owner 2026-10-08) — one exception to "a new structure going live": a campaign the ads brain
+ * built for an enrolled product (its own approved build, brain/structure-golive.ts), going live INSIDE its caps (its first
+ * budget, the single-keyword campaigns, the money brake), at any of the three go-live doors (set-campaign-live-writes on,
+ * restore-campaign of a campaign born at the floor, apply-ads-playbook start). `goLiveDoor` picks the line: the brain's
+ * when every campaign at the door is inside, else the door's own (the code, as before).
+ *
  * Every other request that can add spend is DAY-TO-DAY: it lists itself in the preview's `raises`, says so in its effect
  * (no silent raise), the card warns where it goes past the business's own limits (`reach.pastOwnLimits`, where a write
  * is judged by the gate), and a person's normal approval sends it. Its limits still judge a run by the business's rule.
@@ -44,6 +50,8 @@ export const CODE_RULE = {
   // ONE BRAIN — set-ads-brain: a lever of a product's brain to AUTO (or a campaign under the bid brain), whichever op does it.
   'set-ads-brain: a lever to AUTO': true,
   // ── Day-to-day: listed in raises, warned, a normal approval ──
+  // ONE BRAIN AB-16 (D1 = B) — a brain-built campaign of an enrolled product going live inside its caps (goLiveDoor).
+  'brain structure go-live: inside an enrolled product, inside caps': false,
   'set-hourly-bid-plan': false,
   'set-portfolio': false,
   'set-campaign-settings': false,
@@ -79,6 +87,17 @@ export const __codeRuleTest = {
 export const DAY_TO_DAY_NO_CODE = 'It can add spend (listed in raises), as a day-to-day change: a person\'s approval sends it, with no '
   + 'authenticator code (the Owner\'s code rule keeps the code for new structures going live, new product ads, a strategy or '
   + 'playbook raise and lifting someone else\'s pause). Where it goes past the business\'s own limits, the card warns.'
+
+/** AB-16 (D1 = B) — the brain's go-live line. */
+export const BRAIN_GO_LIVE: CodeDoor = 'brain structure go-live: inside an enrolled product, inside caps'
+
+/**
+ * AB-16 (D1 = B) — the door a go-live is judged by: the brain's line when every campaign at the door is a campaign the ads
+ * brain built and it goes live inside its caps (brain/structure-golive.ts structureGoLive), else the door's own line.
+ */
+export function goLiveDoor(own: CodeDoor, brain: { inside: boolean } | null | undefined): CodeDoor {
+  return brain?.inside ? BRAIN_GO_LIVE : own
+}
 
 /** What a preview says (`noCode`) when it adds no spend. */
 export const ADDS_NO_SPEND = 'It adds no spend: it needs no authenticator code.'

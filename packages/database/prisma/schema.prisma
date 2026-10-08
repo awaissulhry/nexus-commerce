@@ -20766,6 +20766,77 @@ model AdsBrainHarvest {
   @@index([workspaceId])
 }
 
+/// ONE BRAIN AB-16 — one structure proposal of the brain in one market (one-brain DESIGN.md §2.9, §2.6 N2, §4 step 3, §5, §8
+/// row AB-16, §10 D1 = B and D2 = A; services/advertising/brain/structure*.ts). Three kinds:
+///   SKC        a term that carries ≥ 15 % of the product's ad orders, has an hour curve of its own, or whose next step in the
+///              playbook's winners view is a campaign of its own → ONE campaign with ONE exact keyword, built through a Nexus
+///              builder (create-ad-campaign, or the playbook's hero) born at the 2-cent floor and off the live-write allowlist
+///   SPLIT      a campaign shared by several products → one campaign per product (replicate-ad-structure: the same targets,
+///              each product's own ads), with its migration plan; the shared one goes to low bids once every copy is live
+///   PORTFOLIO  the product's own campaigns outside its one portfolio → moved into it (set-campaign-settings; N2)
+/// OBSERVE logs it (SHADOW); PROPOSE asks a person — the build, then the go-live, each a request a person approves (D1 = B:
+/// a normal approval inside the caps; outside them the approver's code as before). AUTO is never offered: the brain never
+/// creates, splits or moves a campaign without a person's approval. One row per market × key; no foreign key (the history
+/// outlives a removed campaign or product).
+model AdsBrainStructure {
+  // Business ownership comes from verified database context.
+  workspaceId      String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id               String   @id @default(cuid())
+
+  /// Product.id of the family root the proposal is for (a split: the enrolled product whose run decided it first).
+  productId        String
+  /// Short market code ('IT').
+  marketplace      String
+  /// SKC | SPLIT | PORTFOLIO
+  kind             String
+  /// skc:<productId>:<term> | split:<campaignId> | portfolio:<productId>
+  key              String
+  /// SHADOW | HELD | PROPOSED | BUILT | LIVE_PROPOSED | LIVE | DONE | DECLINED | FAILED (brain/structure.ts STRUCTURE_STATUSES)
+  status           String
+  /// The structure lever's level the proposal was decided at: OBSERVE | PROPOSE.
+  level            String
+  /// The Nexus builder or tool it goes through: create-ad-campaign | apply-ads-playbook | replicate-ad-structure |
+  /// set-campaign-settings (null when held before one was chosen).
+  builder          String?
+  /// SKC: the term (normalised).
+  term             String?
+  /// SPLIT: the shared campaign; SKC and PORTFOLIO: null.
+  campaignId       String?
+  /// The campaigns the build made (SKC: one; SPLIT: one per product), once a person approved it: the go-live's code rule
+  /// (D1 = B) finds a brain-built campaign here.
+  builtCampaignIds String[] @default([])
+  /// The decision (brain/structure.ts StructureDecision): reasons, the request's tool and args, the migration plan of a
+  /// split, the owners the template declares for each lever of the new campaign, the caps. Money under `money` keys.
+  plan             Json
+  /// What it stands on (orders, shares, the hour-curve distance); money under `money` keys.
+  evidence         Json
+  /// The build (or move) request a person decides, the go-live request, and a split's last step (the shared campaign to low bids).
+  approvalId       String?
+  liveApprovalId   String?
+  retireApprovalId String?
+  /// Why the brain did not act (the lever, the ceiling, a cap, the Owner's choice, a builder's refusal); null: nothing held it.
+  heldBy           String?  @db.Text
+  /// One line (no money).
+  why              String   @db.Text
+  /// Hash of the decision: an unchanged shadow or held decision is only stamped.
+  digest           String
+  runId            String
+  decidedAt        DateTime
+  checkedAt        DateTime
+  changedAt        DateTime
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([workspaceId, marketplace, key], name: "market_key", map: "AdsBrainStructure_workspaceId_marketplace_key_key")
+  @@index([productId, marketplace, status])
+  @@index([marketplace, kind, decidedAt])
+  @@index([approvalId])
+  @@index([liveApprovalId])
+  @@index([checkedAt])
+  @@index([workspaceId])
+}
+
 /// AUTO.A7 / substrate S5 — the durable record of a write-gate refusal.
 ///
 /// Until now `logGateDeny` wrote to the application log and NOWHERE ELSE, so no surface could

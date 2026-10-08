@@ -135,7 +135,7 @@ describe('C3 — the server and every change tool name the business', () => {
       'bid-brain (read only; the bid', 'writes only for a campaign set-bid-brain-enrollment put LIVE',
       "needs the approver's authenticator code; its diff view",
       // AB-3 — the brain's map, read only; every view it has (AB-7 money, AB-9 terms, AB-12 state, AB-13 hours, AB-10 negatives, AB-11 harvest, AB-14 report).
-      'ads-brain (read only; views map, clashes, setup, money, terms, state, hours, negatives, harvest, report)',
+      'ads-brain (read only; views map, clashes, setup, money, terms, state, hours, negatives, harvest, report, structure)',
       // AB-11 — the brain's harvest request, a person's decision.
       'person for is apply-brain-harvest (the keyword and its source negatives in one change set',
       // One brain — the Owner's control tool; a lever to AUTO is a big door.
@@ -157,7 +157,7 @@ describe('C3 — the server and every change tool name the business', () => {
 
   it('the instructions name every view of ads-brain, in the tool\'s own order (a new view cannot be left out)', () => {
     expect(mcpInstructions(business)).toContain(`ads-brain (read only; views ${BRAIN_MAP_VIEWS.join(', ')}).`)
-    expect([...BRAIN_MAP_VIEWS]).toEqual(['map', 'clashes', 'setup', 'money', 'terms', 'state', 'hours', 'negatives', 'harvest', 'report'])
+    expect([...BRAIN_MAP_VIEWS]).toEqual(['map', 'clashes', 'setup', 'money', 'terms', 'state', 'hours', 'negatives', 'harvest', 'report', 'structure'])
   })
 
   it('W4-14 — the instructions name every Wave 4 Amazon ads tool, and each is a registered tool', () => {

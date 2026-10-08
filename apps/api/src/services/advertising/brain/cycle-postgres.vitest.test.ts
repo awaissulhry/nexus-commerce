@@ -204,7 +204,7 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-14 — the product cycle (real Pos
     expect((await counts()).queued).toBe(0)
     // The report.
     expect(row.report).toMatchObject({ v: 1, productId: P, name: 'Jacket', market: 'IT', dataDay: day, status: 'DONE', changeSetId: changeSetIdOf(P, 'IT', day) })
-    expect(row.report.levers.map((l: Data) => l.step)).toEqual(['state', 'terms', 'negatives', 'harvest', 'money', 'bids', 'hours'])
+    expect(row.report.levers.map((l: Data) => l.step)).toEqual(['state', 'terms', 'negatives', 'harvest', 'structure', 'money', 'bids', 'hours'])
     expect(row.report.money.inOut.week).toMatchObject({ spendCents: expect.any(Number), salesCents: expect.any(Number) })
     expect(row.summary).toMatch(/^Jacket in IT, data day /)
     expect(row.summary).not.toMatch(/€/)
