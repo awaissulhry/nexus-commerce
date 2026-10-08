@@ -12,6 +12,9 @@
  *
  * Money: every amount, percent of spend and sentence that names one sits under a `money` key, which the tool hides from a
  * person without the ad-spend permission (ads-brain.tools.ts restrictedFields); what stays visible names no amount.
+ *
+ * AB-8 — a logged plan carries what the money writer did with it (`actions`: written, asked, held — each with its why);
+ * who set each portfolio's cap and Amazon's usage of it (a run reads it; a dry run reads no Amazon, and says so).
  */
 import prisma from '../../../db.js'
 import { strategyMarket } from '../ads-strategy/bids.js'
@@ -53,8 +56,8 @@ export function moneyView(p: ProductMoneyPlan) {
     portfolioCap: {
       on: p.portfolioCap.on, source: p.portfolioCap.source, pct: p.portfolioCap.pct,
       portfolios: p.portfolioCap.portfolios.map((x) => ({
-        portfolioId: x.portfolioId, name: x.name, campaigns: x.campaigns, action: x.action,
-        money: { capCents: x.capCents, todayPolicy: x.todayPolicy, todayCapCents: x.todayCapCents, sharePct: x.sharePct, ...(x.belowSpend ? { belowSpend: true } : {}), why: x.why },
+        portfolioId: x.portfolioId, name: x.name, campaigns: x.campaigns, action: x.action, ...(x.todaySetBy !== undefined ? { todaySetBy: x.todaySetBy } : {}),
+        money: { capCents: x.capCents, todayPolicy: x.todayPolicy, todayCapCents: x.todayCapCents, sharePct: x.sharePct, ...(x.belowSpend ? { belowSpend: true } : {}), ...(x.usagePct !== undefined ? { usagePct: x.usagePct } : {}), why: x.why },
       })),
       money: { totalCents: p.portfolioCap.totalCents, why: p.portfolioCap.why },
     },
@@ -67,6 +70,15 @@ export function moneyView(p: ProductMoneyPlan) {
       },
     })),
     counts: p.counts,
+    ...(p.actions ? {
+      actions: {
+        mode: p.actions.mode, counts: p.actions.counts,
+        campaigns: p.actions.campaigns.map((a) => ({ campaignId: a.campaignId, name: a.name, level: a.level, layer: a.layer, sent: a.sent, money: { fromCents: a.fromCents, toCents: a.toCents, why: a.why, ...(a.reason ? { reason: a.reason } : {}) } })),
+        portfolios: p.actions.portfolios.map((a) => ({ portfolioId: a.portfolioId, name: a.name, level: a.level, sent: a.sent, money: { fromCents: a.fromCents, toCents: a.toCents, why: a.why, ...(a.reason ? { reason: a.reason } : {}) } })),
+        proposals: p.actions.proposals.map((x) => ({ kind: x.kind, approvalId: x.approvalId, status: x.status, fresh: x.fresh, money: { why: x.why } })),
+        money: { why: p.actions.why },
+      },
+    } : {}),
     why: `${label} (${p.market}) ${p.month} day ${Number(p.day.slice(8, 10))}: envelope from ${p.envelope.source === 'own' ? 'its own monthly budget' : p.envelope.source === 'playbook' ? 'its playbook' : p.envelope.source === 'share' ? 'its share of the market budget' : 'nowhere (none)'} · ${p.brake.level === 'none' ? 'no brake' : `brake ${p.brake.level}: ${p.brake.does}`} · portfolio cap ${p.portfolioCap.source} · ${p.campaigns.length} campaigns: ${p.counts.lower} lower, ${p.counts.raise} raise, ${p.counts.keep} keep, ${p.counts.hold} hold${p.counts.skip ? `, ${p.counts.skip} not the brain's` : ''}`,
     money: { fit: p.fit, warnings: p.warnings, why: p.why },
   }
@@ -98,7 +110,7 @@ export async function brainMoney(args: { productId?: string; market?: string; no
     return {
       data: {
         view: 'money', scope: { productId: family.root, market }, dryRun: true,
-        note: 'decided now from what Nexus holds — not stored and nothing sent; the shadow logs a plan only for a product whose budgets lever is OBSERVE or higher (AB-8 writes)',
+        note: 'decided now from what Nexus holds — not stored and nothing sent, and Amazon\'s usage of the portfolio caps is not read in a dry run; the run logs a plan for a product whose budgets lever is OBSERVE or higher, and at PROPOSE / AUTO (server switch live) asks or writes it (AB-8)',
         plan: moneyView(plan),
         logged: last ? { at: last.createdAt.toISOString(), kind: last.kind, mode: last.mode, runId: last.runId, rowsKept: kept, keptDays: MONEY_DECISION_DAYS_KEPT, plan: moneyView(last.plan) } : null,
       },

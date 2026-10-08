@@ -1,7 +1,8 @@
 /**
  * ONE BRAIN AB-7 — the money hierarchy, step 4: each campaign's daily budget, the intraday ladder and the day-move
- * "intraday" exception (design 2026-10-08-ads-one-brain/DESIGN.md §2.5, §2.6, §4 step 6, §5). Pure. SHADOW: decided and
- * logged; AB-8 writes it. Budget follows the bid, never the other way: the bid is the throttle.
+ * "intraday" exception (design 2026-10-08-ads-one-brain/DESIGN.md §2.5, §2.6, §4 step 6, §5). Pure. Decided and logged;
+ * the money writer (brain/budget-live.ts, AB-8) asks for it at PROPOSE and writes it at AUTO. Budget follows the bid,
+ * never the other way: the bid is the throttle.
  *
  *   target    the campaign's expected daily spend at the goal bids ÷ budgetUsePct (70 %: Perpetua's ~70 % use, so the
  *             budget never throttles before the bid does). Expected spend = its average daily spend over the last 14
@@ -26,7 +27,11 @@
  *             own with ≥ 3 orders in the settled window, else the product's (pooled: §1, thin products).
  *   exception the ladder may pass the day-move ceiling: an "intraday give-back" — the brain's own ladder, at most
  *             intradayLadderMaxPct of the base, given back to the base at 00:00 UTC (the next day opens at the base). It
- *             is exempt from the day-move bound only; every other gate check stands. AB-8 teaches the gate the exception.
+ *             is exempt from the day-move bound only; every other gate check stands. AB-8 teaches the gate the exception
+ *             (brain/budget-ladder.ts): a rung the gate would refuse is planned with `allowed: false` and never written.
+ *   AB-8      a budget that stands on the brain's ladder (`ladderNow`, read from the budget log) is measured from its
+ *             base: today's rungs are on top of today's base (no base move undoes them), and a ladder of an earlier day
+ *             is given back — "kept" means back at its base, and the day's base move starts there.
  */
 import type { Brake } from './budget-pace.js'
 import { atLeast } from './budget-pace.js'
@@ -73,6 +78,11 @@ export interface CampaignMoneyFacts {
   spikeWhy: string | null
   /** The highest ladder rung the plan gave it earlier today (%), 0: none. */
   ladderedTodayPct: number
+  /**
+   * AB-8 — the budget now stands on the brain's ladder (brain/budget-ladder.ts ladderNowOf): today's rungs on top of
+   * `baseCents`, or an earlier day's ladder whose give-back is owed (`before`). Absent or null: no ladder under it.
+   */
+  ladderNow?: { baseCents: number; fromDay: 'today' | 'before' } | null
   /** The brain's settings resolved on this campaign: its exclusion, the budgets lever, budgetUsePct, intradayLadderMaxPct. */
   excluded: boolean
   budgets: Pick<LeverSettings, 'effective' | 'lock' | 'why'>
@@ -94,6 +104,8 @@ export interface LadderStep {
   cents: number
   /** Above the day-move ceiling: it needs the intraday give-back exception. */
   exception: boolean
+  /** AB-8 — the day-move check lets it through (inside the bound, or as the exception); false: never written. */
+  allowed: boolean
   why: string
 }
 
@@ -116,6 +128,8 @@ export interface CampaignBudgetDecision {
   usagePct: number | null
   ladder: LadderStep | null
   ladderWhy: string
+  /** AB-8 — the highest rung in force today (this plan's, or one given earlier today), % of the base; 0: none. */
+  ladderTodayPct?: number
   dayMove: { floorCents: number; ceilCents: number; bounded: boolean }
   why: string
 }
@@ -226,8 +240,11 @@ export function planCampaignBudgets(input: CampaignPlanInput): { campaigns: Camp
     parts.push(`÷ ${usePct} % use${c.budgetUsePct.source === 'default' ? '' : ' (the Owner\'s setting)'} = ${w(target)}`)
     if (target === lo && sizedCents < lo) parts.push(`held at the lowest budget ${w(lo)}${c.minCents != null && c.minCents >= input.limits.minCents ? ' (the Owner\'s minimum)' : ' (Amazon\'s minimum)'}`)
     if (Number.isFinite(hi) && sizedCents > hi) parts.push(`held at the highest budget ${w(hi)}${c.maxCents != null && c.maxCents <= input.limits.maxCents ? ' (the Owner\'s maximum)' : ' (Amazon\'s maximum)'}`)
-    if (c.owner === 'shared' && target > c.todayCents) { target = c.todayCents; parts.push('a shared campaign (D2): the brain may lower it, never raise it') }
-    if (brakeHolds && target > c.todayCents) { target = c.todayCents; parts.push(`the pace brake holds raises (${input.brake.level})`) }
+    // AB-8 — the budget under the brain's ladder: its base (today's rungs on top of it, or an earlier day's to give back).
+    const baseNow = c.ladderNow?.baseCents ?? c.todayCents
+    if (c.ladderNow?.fromDay === 'before') parts.push(`it still stands on the brain's ladder of an earlier day (${w(c.todayCents)}): given back to its base ${w(baseNow)} first`)
+    if (c.owner === 'shared' && target > baseNow) { target = baseNow; parts.push('a shared campaign (D2): the brain may lower it, never raise it') }
+    if (brakeHolds && target > baseNow) { target = baseNow; parts.push(`the pace brake holds raises (${input.brake.level})`) }
 
     // Today's step: one base move a day, from the day's opening, inside the day-move bound; a small difference is kept.
     let step: number
@@ -237,14 +254,17 @@ export function planCampaignBudgets(input: CampaignPlanInput): { campaigns: Camp
       step = c.stepToday
       if (step !== target) parts.push(`today ${w(step)}, as the day's first plan decided it: one base move a day`)
     } else {
-      // Near today's budget: kept as it is (no churn, and no undoing a move another writer made today).
-      const near = Math.abs(target - c.todayCents) <= Math.round((c.todayCents * BUDGET_KEEP_PCT) / 100)
-      step = clamp(near ? c.todayCents : clamp(target, bounds.floorCents, bounds.ceilCents), lo, Math.max(lo, hi))
+      // Near today's budget: kept as it is (no churn, and no undoing a move another writer made today). AB-8 — near its
+      // base when it stands on the brain's ladder: kept at the base (an earlier day's ladder given back).
+      const near = Math.abs(target - baseNow) <= Math.round((baseNow * BUDGET_KEEP_PCT) / 100)
+      step = clamp(near ? baseNow : clamp(target, bounds.floorCents, bounds.ceilCents), lo, Math.max(lo, hi))
       bounded = !near && step !== target
-      if (near && target !== c.todayCents) parts.push(`within ${BUDGET_KEEP_PCT} % of today's ${w(c.todayCents)}: kept`)
+      if (near && target !== baseNow) parts.push(`within ${BUDGET_KEEP_PCT} % of today's ${w(baseNow)}: kept`)
       if (bounded) parts.push(`today ${w(step)}: the day-move bound (${w(bounds.floorCents)}–${w(bounds.ceilCents)} around the day's opening ${w(c.openingCents)}) lets it move that far today`)
     }
-    const action: CampaignAction = step > c.todayCents ? 'raise' : step < c.todayCents ? 'lower' : 'keep'
+    // AB-8 — today's rungs are not the base: the base move is measured against the base under them.
+    const against = c.ladderNow?.fromDay === 'today' ? baseNow : c.todayCents
+    const action: CampaignAction = step > against ? 'raise' : step < against ? 'lower' : 'keep'
 
     // The intraday ladder, on top of today's base.
     let ladder: LadderStep | null = null
@@ -271,12 +291,12 @@ export function planCampaignBudgets(input: CampaignPlanInput): { campaigns: Camp
         if (cents <= 0) ladderWhy = 'no ladder: the budget is at its highest already'
         else {
           const check = dayMoveCheck({ openingCents: c.openingCents, intendedCents: step + cents, bounds, ladder: { baseCents: step, pct, maxPct } })
-          ladder = { pct, cents, exception: check.exception === 'intraday-give-back', why: `${pctOf(c.usage)} % used, ${band.why}: +${pct} % of today's ${w(step)} = ${w(step + cents)} (the ${rung === pct ? `rung before ${LADDER_RUNGS.find((r) => r.pct === rung)?.before}:00` : `Owner's largest raise ${maxPct} %`}); ${check.why}` }
+          ladder = { pct, cents, exception: check.exception === 'intraday-give-back', allowed: check.allowed, why: `${pctOf(c.usage)} % used, ${band.why}: +${pct} % of today's ${w(step)} = ${w(step + cents)} (the ${rung === pct ? `rung before ${LADDER_RUNGS.find((r) => r.pct === rung)?.before}:00` : `Owner's largest raise ${maxPct} %`}); ${check.why}` }
           ladderWhy = ladder.why
         }
       }
     }
-    return { ...base, action, targetCents: target, stepCents: step, expectedSpendCents: exp, ladder, ladderWhy, dayMove: { ...base.dayMove, bounded }, why: parts.join('; ') }
+    return { ...base, action, targetCents: target, stepCents: step, expectedSpendCents: exp, ladder, ladderWhy, ladderTodayPct: Math.max(ladder?.pct ?? 0, c.ladderedTodayPct), dayMove: { ...base.dayMove, bounded }, why: parts.join('; ') }
   })
   return { campaigns: decisions, scale, fitWhy }
 }

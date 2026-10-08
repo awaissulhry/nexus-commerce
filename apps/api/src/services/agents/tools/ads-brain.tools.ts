@@ -73,7 +73,9 @@ const adsBrain: AgentTool = {
     + 'down 10 % a day, above 105 % the stop recipe on the weakest campaigns), the Amazon portfolio-cap plan (115 % of '
     + 'the envelope, the only hard cap; a portfolio holding another product\'s campaigns is "move first"), each '
     + 'campaign\'s budget target (expected spend at the goal bids ÷ 70 %, inside the pace and the day-move bound) against '
-    + 'today\'s, and the intraday ladder — each with its why; with market alone, the market\'s split. The portfolio cap '
+    + 'today\'s, and the intraday ladder — each with its why; a logged plan also says what the money writer did with it '
+    + '(AB-8: at PROPOSE the requests it asked a person for, at AUTO the budgets and caps it wrote, each hold with its '
+    + 'reason); with market alone, the market\'s split. The portfolio cap '
     + 'amount and everything under a money key are ad-spend money. Nexus only: it reads what Nexus stored and asks Amazon nothing.',
   handler: async (args) => {
     const a = args as { view?: string; market?: string; productId?: string; campaignId?: string; days?: number }
