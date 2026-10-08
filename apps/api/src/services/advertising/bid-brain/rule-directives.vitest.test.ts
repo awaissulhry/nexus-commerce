@@ -25,7 +25,7 @@ const db = {
 }
 vi.mock('../../../db.js', () => ({ default: db }))
 
-const { directivesFor, parseWouldChange, ruleBrainInput, DIRECTIVE_DAYS } = await import('./rule-directives.js')
+const { directivesFor, parseWouldChange, ruleBrainInput, DIRECTIVE_DAYS, resetGoalsMemoForTests, writeDirectives } = await import('./rule-directives.js')
 const { decide } = await import('./decide.js')
 const { directiveInputs } = await import('./facts.js')
 const { applyDirectives, applyLaneDirectives } = await import('./recipe.js')
@@ -161,6 +161,7 @@ describe('ruleBrainInput — only a campaign the brain owns turns an action into
     db.adTarget.findUnique.mockResolvedValue({ id: 'k1', bidCents: 60, adGroupId: 'g-1' })
     strategy.mockResolvedValue(new Map())
     owner.accountDefaultPct = 30
+    resetGoalsMemoForTests()
   })
 
   it('under a ceiling other than live: null, and nothing is read', async () => {
@@ -177,13 +178,32 @@ describe('ruleBrainInput — only a campaign the brain owns turns an action into
     expect(db.$transaction).not.toHaveBeenCalled()
   })
 
-  it('bid_down on an owned campaign stores one ceiling for 7 days in place of the write, replacing its own row', async () => {
+  it('bid_down on an owned campaign stores one ceiling for 7 days in place of the write, replacing its own bid row of any kind and the expired rows', async () => {
     const r = await ruleBrainInput({ type: 'bid_down', percent: 20 }, ctx, meta, dryRun)
     expect(r).toMatchObject({ ok: true, output: { campaignId: 'c-owned', bidBrain: { directives: 1, stored: 'a ceiling 48¢ on 1 keyword (bid_down −20%), for 7 days — the brain reads it on its next run' } } })
-    expect(db.bidDirective.deleteMany).toHaveBeenCalledWith({ where: { campaignId: 'c-owned', source: 'rule:rule-1', OR: [{ targetId: 'k1', lane: null, kind: 'CEILING' }] } })
+    const del = (db.bidDirective.deleteMany.mock.calls[0][0] as { where: { campaignId: string; OR: Array<Record<string, unknown>> } }).where
+    expect(del.campaignId).toBe('c-owned')
+    expect(del.OR[0]).toEqual({ until: { lt: expect.any(Date) } })
+    // Yesterday's floor from this rule goes: a cut today replaces a raise.
+    expect(del.OR[1]).toEqual({ source: 'rule:rule-1', OR: [{ targetId: 'k1', lane: null, kind: { in: ['CEILING', 'FLOOR', 'SHARE_FLOOR'] } }] })
     const created = (db.bidDirective.createMany.mock.calls[0][0] as { data: Array<Record<string, unknown>> }).data[0]
     expect(created).toMatchObject({ campaignId: 'c-owned', targetId: 'k1', kind: 'CEILING', valueCents: 48, source: 'rule:rule-1', reason: 'bid_down −20%' })
     expect((created.until as Date).getTime() - Date.now()).toBeGreaterThan(6.9 * 86_400_000)
+  })
+
+  it("a goal replaces only the rule's goal row for its scope", async () => {
+    await writeDirectives({ campaignId: 'c-owned', source: 'rule:rule-2', drafts: [{ targetId: null, lane: null, kind: 'GOAL', valueCents: null, valuePct: 20, reason: 'r' }] })
+    const del = (db.bidDirective.deleteMany.mock.calls[0][0] as { where: { OR: Array<{ OR?: unknown }> } }).where
+    expect(del.OR[1].OR).toEqual([{ targetId: null, lane: null, kind: 'GOAL' }])
+  })
+
+  it("a rule scoped to other campaigns (its campaign picker) asks nothing of this one, a goal least of all", async () => {
+    expect(await ruleBrainInput({ type: 'bid_to_target_acos', campaignId: 'c-owned', campaignIds: ['c-x', 'c-y'], targetAcos: 0.2 }, {}, meta, dryRun))
+      .toEqual({ type: 'bid_to_target_acos', ok: true, output: { skipped: 'campaign-not-selected', campaignId: 'c-owned' } })
+    expect(await ruleBrainInput({ type: 'bid_apply', op: 'targetAcos', value: 20, campaignIds: ['c-x'] }, ctx, meta, dryRun)).toMatchObject({ output: { skipped: 'campaign-not-selected' } })
+    expect(db.$transaction).not.toHaveBeenCalled()
+    // In the picker, or no picker (every campaign): it asks.
+    expect(await ruleBrainInput({ type: 'bid_to_target_acos', campaignId: 'c-owned', campaignIds: ['c-owned'], targetAcos: 0.2 }, {}, meta, dryRun)).toMatchObject({ ok: true, output: { bidBrain: { directives: 1 } } })
   })
 
   it('a dry run (PROPOSE, a preview) writes nothing and says what it would ask', async () => {

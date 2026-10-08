@@ -14,13 +14,17 @@
  *   dayparting_apply, scale_bids_for_price_change                 → nothing: the hour factor and the order value the
  *                                                                    brain bids from already carry them
  *
- * The same rule saying it again replaces its own row (one per rule, campaign, keyword, lane and kind), so a rule that
- * matches every 15 minutes keeps one row, and its 7 days start again. A dry run (PROPOSE, a preview) writes nothing and
- * says what it would ask; the person's approval of that suggestion asks it (ads-suggestion-decide.service.ts).
+ * The same rule saying it again replaces its own row — one bid row (ceiling, floor or share floor: the newest ask wins,
+ * a cut today replaces yesterday's raise) and one goal per rule, campaign, keyword and lane — so a rule that matches
+ * every 15 minutes keeps one row, and its 7 days start again. Each write also drops the campaign's expired rows. A rule
+ * scoped to some campaigns (its campaign picker, `campaignIds`) never asks anything of another campaign. A dry run
+ * (PROPOSE, a preview) writes nothing and says what it would ask; the person's approval of that suggestion asks it
+ * (ads-suggestion-decide.service.ts).
  * Harvest, negatives, budget and alert actions are untouched, and so is every campaign the brain does not own: there
  * `ruleBrainInput` answers null and the rule runs exactly as before — without a read while the ceiling is not live.
  */
 import prisma from '../../../db.js'
+import { parseWouldChange } from '../ads-suggestions.service.js'
 import { strategyMarket } from '../ads-strategy/bids.js'
 import { readOwnerTargets } from '../ads-target-acos-resolver.js'
 import { goalTarget, type CampaignRow } from './facts.js'
@@ -189,15 +193,34 @@ async function scopeTargets(action: Record<string, unknown>, context: unknown, c
   return t ? [t] : []
 }
 
-/** "120¢ → 96¢", "120→96 cents", "40% → 60%": the from and to a handler's dry run states. */
-export function parseWouldChange(v: unknown): { from: number; to: number } | null {
-  if (typeof v !== 'string') return null
-  const m = /(-?\d+(?:\.\d+)?)\s*(?:¢|%|cents)?\s*→\s*(-?\d+(?:\.\d+)?)/.exec(v)
-  return m ? { from: Number(m[1]), to: Number(m[2]) } : null
-}
+export { parseWouldChange }
+
+/**
+ * A short memory of goalsInForce, per campaign and ad groups: a rule run asks it once per keyword, and every keyword of a
+ * campaign would otherwise open the market's strategy again. A minute old at most; a goal it misses is still ignored by
+ * the brain when it equals the goal in force (facts.ts directiveInputs), so a stale answer stores a row, never a wrong bid.
+ */
+const GOALS_TTL_MS = 60_000
+const goalsMemo = new Map<string, { at: number; goals: Promise<Set<number>> }>()
 
 /** The ACoS targets (integer %) the brain steers these ad groups of a campaign to now, as goalTarget reads them. */
-async function goalsInForce(campaignId: string, adGroupIds: readonly string[]): Promise<Set<number>> {
+function goalsInForce(campaignId: string, adGroupIds: readonly string[], now = Date.now()): Promise<Set<number>> {
+  const key = `${campaignId}|${[...adGroupIds].sort().join(',')}`
+  const hit = goalsMemo.get(key)
+  if (hit && now - hit.at < GOALS_TTL_MS) return hit.goals
+  if (goalsMemo.size > 500) goalsMemo.clear()
+  const goals = readGoalsInForce(campaignId, adGroupIds)
+  goalsMemo.set(key, { at: now, goals })
+  goals.catch(() => goalsMemo.delete(key))
+  return goals
+}
+
+/** Tests only: forget the memo. */
+export function resetGoalsMemoForTests(): void {
+  goalsMemo.clear()
+}
+
+async function readGoalsInForce(campaignId: string, adGroupIds: readonly string[]): Promise<Set<number>> {
   const camp = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { marketplace: true, dynamicBidding: true } })
   const market = strategyMarket(camp?.marketplace)
   const groups = adGroupIds.length ? adGroupIds : (await prisma.adGroup.findMany({ where: { campaignId }, select: { id: true } })).map((g) => g.id)
@@ -212,14 +235,31 @@ async function goalsInForce(campaignId: string, adGroupIds: readonly string[]): 
   return out
 }
 
-/** Store a rule's drafts: each replaces the rule's own row for the same campaign, keyword, lane and kind. */
+/** The bid kinds a rule's newest ask replaces one another in (a goal is its own row). */
+const BID_KINDS: readonly DirectiveKind[] = ['CEILING', 'FLOOR', 'SHARE_FLOOR']
+
+/**
+ * Store a rule's drafts. Each replaces the rule's own row for the same campaign, keyword and lane — any bid kind for a
+ * bid draft (the newest ask wins: a cut today replaces yesterday's raise), the goal for a goal draft — and the campaign's
+ * expired rows go in the same write (no cleanup job needed: a campaign no rule speaks to any more has none the brain
+ * reads, as the loader skips rows past `until`).
+ */
 export async function writeDirectives(args: { campaignId: string; source: string; drafts: readonly DirectiveDraft[]; now?: Date }): Promise<{ until: Date; rows: number }> {
   const now = args.now ?? new Date()
   const until = new Date(now.getTime() + DIRECTIVE_DAYS * 86_400_000)
   if (!args.drafts.length) return { until, rows: 0 }
   await prisma.$transaction([
     prisma.bidDirective.deleteMany({
-      where: { campaignId: args.campaignId, source: args.source, OR: args.drafts.map((d) => ({ targetId: d.targetId, lane: d.lane, kind: d.kind })) },
+      where: {
+        campaignId: args.campaignId,
+        OR: [
+          { until: { lt: now } },
+          {
+            source: args.source,
+            OR: args.drafts.map((d) => ({ targetId: d.targetId, lane: d.lane, kind: d.kind === 'GOAL' ? 'GOAL' : { in: [...BID_KINDS] } })),
+          },
+        ],
+      },
     }),
     prisma.bidDirective.createMany({
       data: args.drafts.map((d) => ({
@@ -256,6 +296,9 @@ export async function ruleBrainInput(
   const campaignId = await directiveCampaignId(action, context)
   if (!campaignId) return null
   if (!(await brainOwnedCampaignIds([campaignId])).has(campaignId)) return null
+  // The rule's campaign picker (EA4: empty = every campaign): a rule scoped to other campaigns asks nothing of this one.
+  const picker = Array.isArray(action.campaignIds) ? (action.campaignIds as unknown[]).filter((v): v is string => typeof v === 'string') : []
+  if (picker.length && !picker.includes(campaignId)) return { type: action.type, ok: true, output: { skipped: 'campaign-not-selected', campaignId } }
   const left = (words: string) => `left to the bid brain: ${words} (it runs campaign ${campaignId}; one writer per campaign)`
   if (carried) return { type: action.type, ok: true, output: { skipped: left(carried), campaignId } }
 

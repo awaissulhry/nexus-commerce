@@ -403,17 +403,49 @@ describe('bid_apply target-ACoS ops buy their goal CPC (review 2026-10-08, A and
     const today = await run({ adTargetId: ids['t-waits'], op: 'targetAcos', value: 20, windowDays: 30 })
     expect(today).toMatchObject({ ok: true, output: { skipped: 'waits_for_evidence', bidCents: 50 } })
     expect((today.output as { why: string }).why).toMatch(/^already moved on data day .* \(44 → 50¢ by automation:auto-bid\) — one move per data day$/)
-    // The same raise stamped with an earlier data day (auto-bid's own writes carry it): a cut back is a reversal and waits.
+    // The same raise stamped with an earlier data day (auto-bid's own writes carry it): a cut back is a reversal and waits
+    // (22 %: not a safety cut, see the next test).
     const { currentDataDay } = await import('../ads-bid-optimizer.service.js')
     const earlier = new Date(`${currentDataDay()}T00:00:00Z`)
     earlier.setUTCDate(earlier.getUTCDate() - 1)
     await inA(() => db().advertisingActionLog.updateMany({ where: { entityId: ids['t-waits'], userId: 'automation:auto-bid' }, data: { evidence: { dataDay: earlier.toISOString().slice(0, 10) } } }))
-    const next = await run({ adTargetId: ids['t-waits'], op: 'targetAcos', value: 20, windowDays: 30 })
+    const next = await run({ adTargetId: ids['t-waits'], op: 'targetAcos', value: 22, windowDays: 30 })
     expect((next.output as { why: string }).why).toMatch(/^would reverse its own raise 44 → 50¢ of data day .* — a reversal waits 3 data days \(2 to go\)$/)
     // A person who approves the cut decides it: not held back (4e).
     expect(await inA(() => ACTION_HANDLERS.bid_apply!({ type: 'bid_apply', adTargetId: ids['t-waits'], op: 'targetAcos', value: 20, windowDays: 30 } as never, {}, { dryRun: true, ruleId: 'rule-test-paid', operatorApproved: true } as never))).toMatchObject({ ok: true, output: { wouldChange: expect.stringMatching(/^50¢ → \d+¢$/) } })
     // A raise with it still goes: only a move against auto-bid's waits.
     expect(await run({ adTargetId: ids['t-waits'], op: 'targetAcos', value: 35, windowDays: 30 })).toMatchObject({ ok: true, output: { wouldChange: expect.stringMatching(/^50¢ → \d+¢$/) } })
+  })
+
+  it("a safety cut is not held as a reversal of auto-bid's raise: over 1.5 × the target at the bid it has now (#508), not at 1.5 × or under", async () => {
+    // At 50¢ the ACoS now is 50 × 0.62 ÷ 97.28¢ a click ≈ 31.9 %. Target 21 % → 1.52 × (a safety cut, goes now);
+    // target 22 % → 1.45 × (a reversal: waits). Auto-bid's raise is stamped with yesterday's data day (test above).
+    const cut = await run({ adTargetId: ids['t-waits'], op: 'targetAcos', value: 21, windowDays: 30 })
+    expect(cut).toMatchObject({ ok: true, output: { wouldChange: expect.stringMatching(/^50¢ → \d+¢$/), goal: { nowAcosPct: 31.9, targetAcosPct: 21 } } })
+    expect((cut.output as { safetyCut: string }).safetyCut).toBe("a safety cut: not held as a reversal of auto-bid's raise, the bid now runs at 31.9% ACoS, over 1.5 × the 21% target")
+    const held = await run({ adTargetId: ids['t-waits'], op: 'targetAcos', value: 22, windowDays: 30 })
+    expect(held).toMatchObject({ ok: true, output: { skipped: 'waits_for_evidence', bidCents: 50 } })
+    expect((held.output as { why: string }).why).toMatch(/^would reverse its own raise 44 → 50¢/)
+  })
+
+  it('an old card (44¢ → 34¢: the CPC as the bid) is refused at approval now that the rule asks 55¢ — nothing written, it stays waiting; a current card goes', async () => {
+    const { applySuggestion } = await import('../ads-suggestion-decide.service.js')
+    const rule = await inA(() => db().automationRule.create({ data: { name: 'Test bids to 35%', trigger: 'KEYWORD_HIGH_ACOS', domain: 'advertising', enabled: true, dryRun: true } }))
+    const card = (wouldChange: string) => inA(() => db().adsRuleSuggestion.create({ data: {
+      ruleId: rule.id, ruleName: rule.name, trigger: 'KEYWORD_HIGH_ACOS', entityType: 'AD_TARGET', entityId: ids['t-subst'], proposedKey: `bid_apply:targetAcos:35:${wouldChange}`,
+      proposedAction: { type: 'bid_apply', adTargetId: ids['t-subst'], op: 'targetAcos', value: 35, windowDays: 30, wouldChange },
+    } }))
+    const bid = async () => (await inA(() => db().adTarget.findUniqueOrThrow({ where: { id: ids['t-subst'] }, select: { bidCents: true } }))).bidCents
+    const old = await card('44¢ → 34¢')
+    const r = await inA(() => applySuggestion(old.id))
+    expect(r).toMatchObject({ ok: false, refused: true })
+    expect(r.error).toBe("The bid this card shows is out of date: it shows 44¢ → 34¢, and the rule now asks 44¢ → 55¢ — refresh. Nothing was written; the card stays waiting, and the rule's next run refreshes or expires it.")
+    expect(await bid()).toBe(44)
+    expect(await inA(() => db().adsRuleSuggestion.findUniqueOrThrow({ where: { id: old.id }, select: { status: true } }))).toEqual({ status: 'pending' })
+    // Within 2¢ / 10 % of what the card shows, the same way: it goes, and the bid written is the one the rule asks.
+    const fresh = await card('44¢ → 54¢')
+    expect(await inA(() => applySuggestion(fresh.id))).toMatchObject({ ok: true })
+    expect(await bid()).toBe(55)
   })
 })
 

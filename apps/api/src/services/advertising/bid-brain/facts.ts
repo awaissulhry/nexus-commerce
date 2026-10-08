@@ -322,11 +322,12 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
     // BB-8 — stock from its source (an ad group's products), unless a retail-guard floor already says so.
     const stock = run.stock?.get(group.id)
     if (stock && !overrides.stock) overrides.stock = stockOverride(stock)
-    // BB-8 — what a playbook holds: a STOP where none is in force yet, its PHASE floor otherwise.
+    // BB-8 — what a playbook holds: a STOP (the lower floor when another stop is in force), its PHASE floor otherwise.
     const pb = run.playbook?.get(campaign.id)
     if (pb) {
       const o = playbookOverride(pb)
-      if (o.stop && !overrides.stop) overrides.stop = o.stop
+      // A stop already in force and a playbook STOP: the lower floor wins (mergeFloors), as for any two stops.
+      if (o.stop) overrides.stop = mergeFloors({ stop: overrides.stop }, { stop: o.stop }).stop
       if (o.phase) overrides.phase = o.phase
     }
     const holds = run.holds.filter((h) => h.campaignId === campaign.id && (h.targetId == null || h.targetId === t.id))
