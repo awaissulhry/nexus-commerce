@@ -662,8 +662,7 @@ export const FBA_SEND_COPY = {
   undo: 'Undo',
   doneButton: 'Done',
   undoHint: 'Free until you confirm with Amazon',
-  plansButton: (open: number) => `FBA plans · ${open}`,
-  drawerTitle: 'FBA plans',
+  drawerTitle: 'FBA shipments',
   status: {
     DRAFT: 'Draft', QUEUED: 'Queued', CREATING: 'Creating at Amazon', PACKING: 'Packing', BOXES: 'Sending boxes', PLACING: 'Getting placement',
     QUOTING: 'Getting carriers', WAITING_FOR_CHOICE: 'Pick where it goes', CONFIRMING: 'Confirming', LABELS: 'Getting labels',
@@ -698,7 +697,7 @@ export const FBA_SEND_COPY = {
   shippedConfirm: (units: number, from: string) => `${plural(units, 'unit leaves', 'units leave')} ${from}`,
   shippedLine: (time: string) => `Shipped ${time} · tracking sent`,
   held: {
-    writesOff: 'Amazon writes for FBA plans are off on this server',
+    writesOff: 'Amazon writes for FBA shipments are off on this server',
     signIn: 'The Amazon account needs a new sign-in (Settings › Channels)',
     rate: 'Amazon asked Nexus to slow down; it tries again by itself',
   },

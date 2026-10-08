@@ -120,7 +120,7 @@ export async function inboundFakeActive(env: NodeJS.ProcessEnv = process.env): P
 export class InboundWritesOff extends Error {
   readonly code = 'WRITES_OFF'
   constructor(readonly operation: string) {
-    super(`Amazon writes for FBA plans are off on this server (${FBA_WRITES_ENV} is not 1): ${operation} was not sent`)
+    super(`Amazon writes for FBA shipments are off on this server (${FBA_WRITES_ENV} is not 1): ${operation} was not sent`)
     this.name = 'InboundWritesOff'
   }
 }
