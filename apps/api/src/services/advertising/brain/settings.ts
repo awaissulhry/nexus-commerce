@@ -3,10 +3,11 @@
  * defaults (brain/levers.ts) with the Owner's overrides (AdsBrainOverride) over them. Owner 10-08: "I should be able to
  * control it individually as well". Pure: the database part reads the rows (brain/enrollment.ts brainSettings).
  *
- *   precedence  per setting: a CAMPAIGN override > a PRODUCT override > the brain default. Per lever, the most specific
- *               scope that says anything about the lever (its level or a lock of the whole lever) decides; inside one
- *               scope a lock beats a level. So a campaign set to AUTO runs under a product-wide lock, and a campaign
- *               lock holds under a product at AUTO.
+ *   precedence  per setting: a CAMPAIGN override > a PRODUCT override > the brain default. Per lever, the Owner's brakes
+ *               come first (AB-1 review): a lock of the whole lever — the campaign's, else the product's — beats every
+ *               level, so a product-wide lock holds a campaign set to AUTO by hand too; then a CAMPAIGN level > a
+ *               PRODUCT level > the default (a campaign's own AUTO stays when the product goes to OBSERVE — the plan
+ *               and the view name it). A campaign lock's value beats a product lock's.
  *   exclusion   an EXCLUDE (of the product, or of the campaign) wins over every lever: the brain leaves it completely
  *               and today's engines run it ("excluded by the Owner").
  *   effective   per lever: NOT ENROLLED, EXCLUDED and LOCKED write nothing (a locked lever only gets a recommendation);
@@ -171,8 +172,8 @@ export function resolveBrainSettings(input: { productId: string; market: string;
     const productLock = find('PRODUCT', 'LOCK', lever)
     const levelRow = campaignLevel ?? productLevel
     const level: Resolved<BrainLevel> = levelRow ? { value: levelRow.value as BrainLevel, ...provenanceOf(levelRow) } : { value: DEFAULT_LEVEL, ...DEFAULT }
-    // The most specific scope that says anything about the lever decides; inside it, a lock beats a level.
-    const lockRow = campaignLock ?? (campaignLevel ? undefined : productLock)
+    // The Owner's brakes first: a lock (the campaign's, else the product's) beats every level, a campaign level included.
+    const lockRow = campaignLock ?? productLock
     const lock = lockRow ? { value: lockRow.value ?? null, ...provenanceOf(lockRow) } : null
     const locks = [...live.values()]
       .filter((o) => o.kind === 'LOCK' && o.key === lever && o.ref)

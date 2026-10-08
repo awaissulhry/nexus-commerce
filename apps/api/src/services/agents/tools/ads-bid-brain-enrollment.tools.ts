@@ -12,6 +12,7 @@ import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
 import prisma from '../../../db.js'
 import { inDatabaseTransaction } from '../../../lib/database-context.js'
+import { logger } from '../../../utils/logger.js'
 import { updateAdGroupWithSync, updateAdTargetWithSync } from '../../advertising/ads-mutation.service.js'
 import { updatePlacementBidding } from '../../advertising/ads-create.service.js'
 import { recordCampaignBidsChoice } from '../../advertising/brain/enrollment.js'
@@ -40,7 +41,7 @@ function stepUpFor(op: EnrollOp, name: string): { stepUp?: StepUp } {
 async function preview(args: Record<string, unknown>): Promise<ToolResult> {
   const campaignId = String(args.campaignId ?? '')
   const op = (ENROLL_OPS as readonly string[]).includes(String(args.op)) ? (args.op as EnrollOp) : 'live'
-  const f = await enrollmentFacts(campaignId, { plansJoin: PLANS_JOIN_THE_BRAIN })
+  const f = await enrollmentFacts(campaignId, { plansJoin: PLANS_JOIN_THE_BRAIN, checkOwnerBrake: op === 'live' || op === 'release' })
   if (!f) return { ok: false, error: `campaign ${campaignId} not found` }
   const refusal = refusalOf(f, op)
   if (refusal) return { ok: false, error: refusal }
@@ -169,17 +170,36 @@ const setBidBrainEnrollment: AgentTool = {
     if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
     const campaign = await prisma.campaign.findFirst({ where: { id: p.campaign.id }, select: { marketplace: true } })
     // AB-1 review — a campaign moved by hand is recorded in its product's brain (a campaign override of the bids lever),
-    // in the same transaction, so a product re-apply or the cycle never undoes it. Hold and release change no level.
-    const level = p.op === 'live' ? 'AUTO' : p.op === 'shadow' || p.op === 'give-back' ? 'OBSERVE' : null
+    // so a product re-apply or the cycle never undoes it. Hold and release change no level.
+    //   live              the move and its record go together, in one transaction, or not at all
+    //   shadow, give-back the Owner's way back out ALWAYS runs: the mode flips and the bids come back whatever the record
+    //                     does; a record that fails is logged and named in the result, never a reason to keep it LIVE
+    const marketplace = p.campaign.market ?? campaign?.marketplace ?? ''
+    const move = () => setEnrollment({ campaignId: p.campaign.id, marketplace, op: p.op, by: run.actor, holdDays: p.holdDays ?? null, reason: run.reason })
+    const record = (level: 'AUTO' | 'OBSERVE') => recordCampaignBidsChoice({ campaignId: p.campaign.id, level, by: run.actor, reason: `set-bid-brain-enrollment op ${p.op}: ${run.reason}` })
+    const warnings: string[] = []
     let set: Awaited<ReturnType<typeof setEnrollment>>
-    try {
-      set = await inDatabaseTransaction(prisma, async () => {
-        const moved = await setEnrollment({ campaignId: p.campaign.id, marketplace: p.campaign.market ?? campaign?.marketplace ?? '', op: p.op, by: run.actor, holdDays: p.holdDays ?? null, reason: run.reason })
-        if (level) await recordCampaignBidsChoice({ campaignId: p.campaign.id, level, by: run.actor, reason: `set-bid-brain-enrollment op ${p.op}: ${run.reason}` })
-        return moved
-      }, { isolationLevel: 'Serializable' })
-    } catch (e) {
-      return notRun(`Not run: ${(e as Error).message}. Nothing changed.`)
+    if (p.op === 'live') {
+      try {
+        set = await inDatabaseTransaction(prisma, async () => {
+          const moved = await move()
+          await record('AUTO')
+          return moved
+        }, { isolationLevel: 'Serializable' })
+      } catch (e) {
+        return notRun(`Not run: ${(e as Error).message}. Nothing changed.`)
+      }
+    } else {
+      set = await move()
+      if (p.op === 'shadow' || p.op === 'give-back') {
+        try {
+          await inDatabaseTransaction(prisma, () => record('OBSERVE'), { isolationLevel: 'Serializable' })
+        } catch (e) {
+          const message = (e as Error).message
+          logger.warn('[bid-brain] op ran; its record in the product\'s brain failed', { campaignId: p.campaign.id, op: p.op, error: message })
+          warnings.push(`${p.campaign.name} is back in shadow, but its product's brain could not record it as the Owner's campaign choice (${message}): a later change of the product's bids lever may put it LIVE again — record it by hand with a campaign override of the bids lever.`)
+        }
+      }
     }
     let gaveBack: { sent: number; refused: string[] } | null = null
     if (p.op === 'give-back') {
@@ -189,8 +209,8 @@ const setBidBrainEnrollment: AgentTool = {
     }
     return {
       ok: true,
-      data: { campaignId: p.campaign.id, mode: set.to, from: set.from, changeSetId: run.changeSetId, ...(gaveBack ? { gaveBack } : {}) },
-      change: { before: { campaignId: p.campaign.id, mode: set.from }, after: { campaignId: p.campaign.id, mode: set.to } },
+      data: { campaignId: p.campaign.id, mode: set.to, from: set.from, changeSetId: run.changeSetId, ...(gaveBack ? { gaveBack } : {}), ...(warnings.length ? { warnings } : {}) },
+      change: { before: { campaignId: p.campaign.id, mode: set.from }, after: { campaignId: p.campaign.id, mode: set.to, ...(warnings.length ? { warnings } : {}) } },
     }
   },
 }

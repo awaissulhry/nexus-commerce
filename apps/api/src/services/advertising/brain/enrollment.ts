@@ -73,6 +73,8 @@ export interface BidsCampaignState {
   /** What the bids lever resolves to on it (brain/settings.ts): AUTO, or why not (OBSERVE, excluded, locked …). */
   want: 'AUTO' | 'NOT'
   wantWhy?: string
+  /** The NOT is an Owner's brake (an exclusion, a lock of the whole bids lever): it is saved even when the campaign must wait. */
+  brake?: boolean
   /** Why it cannot go LIVE now (it wants AUTO and is in shadow); null = it can, or not asked. */
   liveRefusal?: string | null
   /** Why it cannot go back to shadow now (it does not want AUTO and is LIVE or HELD); null = it can, or not asked. */
@@ -84,6 +86,11 @@ export type BidsStep =
   | { campaignId: string; name: string; op: 'shadow'; why: string }
   | { campaignId: string; name: string; op: 'keep'; mode: EnrollMode | null }
   | { campaignId: string; name: string; op: 'skip'; why: string }
+  /** AB-1 review — an Owner's brake on a campaign that sits at a floor only the bid brain would lift: HELD meanwhile. */
+  | { campaignId: string; name: string; op: 'wait'; why: string; hold: boolean }
+
+/** How long a campaign waiting for its floor is held (the longest hold set-bid-brain-enrollment takes). */
+export const WAIT_HOLD_DAYS = 60
 
 /** The bids lever's level as the campaigns hold it: AUTO when the bid brain runs one of them, else OBSERVE. */
 export function adoptedBidsLevel(own: ReadonlyArray<Pick<BidsCampaignState, 'mode'>>): 'AUTO' | 'OBSERVE' {
@@ -98,7 +105,12 @@ export function needsCheck(want: 'AUTO' | 'NOT', mode: EnrollMode | null): 'live
 
 /**
  * What the bids lever does to each campaign it reaches. Wanting AUTO: a campaign in shadow goes LIVE, or stays with its
- * reason; LIVE and HELD stay. Not wanting it: LIVE and HELD go back to shadow; one that cannot refuses the whole change.
+ * reason; LIVE and HELD stay. Not wanting it: LIVE and HELD go back to shadow. One that cannot (keywords at a floor the
+ * bid brain set that no engine would give back) refuses a level change; under an Owner's brake (exclusion, bids lock)
+ * the brake is saved anyway and that campaign WAITS: HELD (the brain raises nothing, and still lifts its own floor),
+ * named, until the choice is set again once the floor has lifted. AB-1 review, the safer of the two: a give-back
+ * instead would write a weeks-old snapshot to Amazon from a Nexus-only change; waiting writes nothing and never strands
+ * keywords at a floor no one lifts.
  */
 export function planBids(campaigns: readonly BidsCampaignState[]): { steps: BidsStep[] } | { refusal: string } {
   const steps: BidsStep[] = []
@@ -107,7 +119,9 @@ export function planBids(campaigns: readonly BidsCampaignState[]): { steps: Bids
     const check = needsCheck(c.want, c.mode)
     if (!check) steps.push({ campaignId: c.campaignId, name: c.name, op: 'keep', mode: c.mode })
     else if (check === 'live') steps.push(c.liveRefusal ? { campaignId: c.campaignId, name: c.name, op: 'skip', why: c.liveRefusal } : { campaignId: c.campaignId, name: c.name, op: 'live' })
-    else if (c.shadowRefusal) stuck.push(c.shadowRefusal)
+    else if (c.shadowRefusal && c.brake) {
+      steps.push({ campaignId: c.campaignId, name: c.name, op: 'wait', hold: c.mode !== 'HELD', why: `${c.wantWhy ?? 'the Owner keeps the bid brain off it'}, but it waits: ${c.shadowRefusal} Until then it is HELD (the bid brain raises nothing and still lifts its own floor); set the choice again to take it to shadow.` })
+    } else if (c.shadowRefusal) stuck.push(c.shadowRefusal)
     else steps.push({ campaignId: c.campaignId, name: c.name, op: 'shadow', why: c.wantWhy ?? 'the bids lever does not run it' })
   }
   if (stuck.length) return { refusal: `the bid brain cannot leave these campaigns now: ${stuck.join(' ')}` }
@@ -115,7 +129,7 @@ export function planBids(campaigns: readonly BidsCampaignState[]): { steps: Bids
 }
 
 /** True when a plan moves at least one campaign. */
-export const planMoves = (steps: readonly BidsStep[]): boolean => steps.some((s) => s.op === 'live' || s.op === 'shadow')
+export const planMoves = (steps: readonly BidsStep[]): boolean => steps.some((s) => s.op === 'live' || s.op === 'shadow' || (s.op === 'wait' && s.hold))
 
 /** What the bids lever's snapshot keeps when it puts campaigns LIVE: the ones it put LIVE, the ones LIVE already, the skipped. */
 export interface BidsLeverSnapshot {
@@ -144,8 +158,22 @@ export function planBasis(plan: Pick<OverridePlan, 'set' | 'ends' | 'steps'>): s
 /** The campaigns a plan puts under the bid brain. Any one makes the change a big door (the approver's code). */
 export const goesLive = (steps: readonly BidsStep[] | undefined): string[] => (steps ?? []).filter((s) => s.op === 'live').map((s) => s.campaignId)
 
-/** A shared campaign moves only one way: back to shadow when the Owner keeps the bid brain off it (excluded, bids locked). */
-export const sharedLeaves = (bids: LeverSettings): boolean => bids.effective === 'EXCLUDED' || bids.effective === 'LOCKED'
+/** The Owner keeps the bid brain off (excluded, bids locked): a brake. A shared campaign moves only this way, back to shadow. */
+export const ownerKeepsOff = (bids: LeverSettings): boolean => bids.effective === 'EXCLUDED' || bids.effective === 'LOCKED'
+
+/**
+ * AB-1 review — the campaigns a product's choice of one lever does not reach, and why: excluded, held by a lock (its
+ * own, or the product's when the choice is a level), or with a level of its own. The plan and the view name each one.
+ */
+export function notReachedBy(kind: 'LEVEL' | 'LOCK', lever: BrainLever, campaigns: ReadonlyArray<{ campaignId: string; name: string; settings: Pick<BrainSettings, 'excluded' | 'levers'> }>): Array<{ campaignId: string; name: string; why: string }> {
+  return campaigns.flatMap((c) => {
+    const l = c.settings.levers[lever]
+    const own = c.settings.excluded.value
+      || (kind === 'LEVEL' && (!!l.lock || l.level.source === 'campaign'))
+      || (kind === 'LOCK' && l.lock?.source === 'campaign')
+    return own ? [{ campaignId: c.campaignId, name: c.name, why: l.why }] : []
+  })
+}
 
 /** Does this choice change what the bids lever resolves to? (its level, a lock of the whole bids lever, an exclusion) */
 export const touchesBids = (o: { kind: string; key: string; ref?: string | null }): boolean =>
@@ -194,8 +222,8 @@ async function withChecks(campaigns: readonly BidsCampaignState[]): Promise<Bids
   for (const c of campaigns) {
     const op = needsCheck(c.want, c.mode)
     if (!op) { out.push(c); continue }
-    // The plan already resolved the Owner's overrides as they will be after the change (skipOwnerBrake).
-    const facts = await enrollmentFacts(c.campaignId, { plansJoin: PLANS_JOIN_THE_BRAIN, skipOwnerBrake: true })
+    // The plan already resolved the Owner's overrides as they will be after the change (no checkOwnerBrake).
+    const facts = await enrollmentFacts(c.campaignId, { plansJoin: PLANS_JOIN_THE_BRAIN })
     const refusal = facts ? enrollRefusal(facts, op) : `${c.name} is no longer in this business`
     out.push(op === 'live' ? { ...c, liveRefusal: refusal } : { ...c, shadowRefusal: refusal })
   }
@@ -244,6 +272,8 @@ export interface BrainView {
   campaigns: BrainCampaignView[]
   /** The bids lever as the campaigns hold it (adoptedBidsLevel over the own campaigns). */
   bidsAsCampaigns: 'AUTO' | 'OBSERVE'
+  /** The campaigns the product's bids choice does not reach (excluded, locked, or a level of their own), and why. */
+  notReached: Array<{ campaignId: string; name: string; why: string }>
   /** Where BidBrainEnrollment differs from what the settings resolve to, and overrides on campaigns that left the product. */
   drift: string[]
 }
@@ -279,16 +309,18 @@ export async function brainView(productId: string, market: string): Promise<Brai
     const stray = campaigns.filter((c) => c.owner === 'product' && c.bids.effective !== 'AUTO' && isOwnedMode(c.mode))
     if (stray.length) drift.push(`${count(stray.length, 'own campaign is', 'own campaigns are')} LIVE although bids resolve to ${[...new Set(stray.map((c) => c.bids.effective))].join(' / ')} (${names(stray)}): put LIVE one by one`)
   }
-  const sharedLive = campaigns.filter((c) => c.owner === 'shared' && isOwnedMode(c.mode) && !sharedLeaves(c.bids))
+  const sharedLive = campaigns.filter((c) => c.owner === 'shared' && isOwnedMode(c.mode) && !ownerKeepsOff(c.bids))
   if (sharedLive.length) drift.push(`${count(sharedLive.length, 'shared campaign is', 'shared campaigns are')} LIVE by a per-campaign enrollment (${names(sharedLive)}): no product's lever moves ${sharedLive.length === 1 ? 'it' : 'them'}`)
-  const keptOff = campaigns.filter((c) => isOwnedMode(c.mode) && sharedLeaves(c.bids))
+  const keptOff = campaigns.filter((c) => isOwnedMode(c.mode) && ownerKeepsOff(c.bids))
   if (keptOff.length) drift.push(`${count(keptOff.length, 'campaign is', 'campaigns are')} LIVE although the Owner keeps the bid brain off (${names(keptOff)}): set that choice again to take ${keptOff.length === 1 ? 'it' : 'them'} back to shadow`)
   const left = [...new Set(strayRows.map((r) => r.campaignId).filter((id): id is string => !!id))]
   if (left.length) drift.push(`the Owner's overrides on ${count(left.length, 'campaign')} that no longer ${left.length === 1 ? 'advertises' : 'advertise'} this product here (${left.join(', ')}): they still apply to ${left.length === 1 ? 'that campaign' : 'those campaigns'}`)
   return {
     productId: camps.root, market: m, enrolled, version: row?.version ?? null, enrolledBy: row?.enrolledBy ?? null,
     updatedBy: row?.updatedBy ?? null, updatedAt: row?.updatedAt.toISOString() ?? null, snapshots: readSnapshots(row?.snapshots),
-    settings: resolve(null), campaigns, bidsAsCampaigns: adoptedBidsLevel(camps.own), drift,
+    settings: resolve(null), campaigns, bidsAsCampaigns: adoptedBidsLevel(camps.own),
+    notReached: notReachedBy('LEVEL', 'bids', campaigns.map((c) => ({ campaignId: c.campaignId, name: c.name, settings: { excluded: c.excluded, levers: { bids: c.bids } as BrainSettings['levers'] } }))),
+    drift,
   }
 }
 
@@ -441,6 +473,8 @@ export interface OverridePlan {
   ends: string | null
   /** Bids lever only: what happens to each campaign the choice reaches. A shared one only ever goes back to shadow. */
   steps?: BidsStep[]
+  /** A product's choice of a lever: the campaigns it does not reach (excluded, locked, or a level of their own), and why. */
+  notReached: Array<{ campaignId: string; name: string; why: string }>
   /** The campaigns it puts under the bid brain. */
   goesLive: string[]
   /** A big door: it puts a campaign under the bid brain (whatever kind of change does it), so the approver's code. */
@@ -496,9 +530,12 @@ async function changePlan(root: string, market: string, change: Change): Promise
       if (refusal) throw new BrainRefusal(refusal)
     }
   }
+  const notReached = identity.scope === 'PRODUCT' && (identity.kind === 'LEVEL' || (identity.kind === 'LOCK' && !identity.ref))
+    ? notReachedBy(identity.kind, identity.key as BrainLever, all.map((c) => ({ campaignId: c.campaignId, name: c.name, settings: resolved(c.campaignId) })))
+    : []
   const done = (steps?: BidsStep[]): OverridePlan => {
     const live = goesLive(steps)
-    const plan = { productId: root, market, set, ends, ...(steps ? { steps } : {}), goesLive: live, needsCode: live.length > 0, unchanged: !set && !ends && !(steps && planMoves(steps)) }
+    const plan = { productId: root, market, set, ends, ...(steps ? { steps } : {}), notReached, goesLive: live, needsCode: live.length > 0, unchanged: !set && !ends && !(steps && planMoves(steps)) }
     return { ...plan, basis: planBasis(plan) }
   }
   if (!touchesBids(identity)) return done()
@@ -511,9 +548,9 @@ async function changePlan(root: string, market: string, change: Change): Promise
     const bids = resolved(c.campaignId).levers.bids
     if (ownIds.has(c.campaignId)) {
       const w = bidsWant(bids)
-      wanted.push({ campaignId: c.campaignId, name: c.name, status: c.status, mode: c.mode, want: w.want, wantWhy: w.why })
-    } else if (sharedLeaves(bids) && isOwnedMode(c.mode)) {
-      wanted.push({ campaignId: c.campaignId, name: c.name, status: c.status, mode: c.mode, want: 'NOT', wantWhy: `${bids.why} (a shared campaign)` })
+      wanted.push({ campaignId: c.campaignId, name: c.name, status: c.status, mode: c.mode, want: w.want, wantWhy: w.why, brake: ownerKeepsOff(bids) })
+    } else if (ownerKeepsOff(bids) && isOwnedMode(c.mode)) {
+      wanted.push({ campaignId: c.campaignId, name: c.name, status: c.status, mode: c.mode, want: 'NOT', wantWhy: `${bids.why} (a shared campaign)`, brake: true })
     }
   }
   const planned = planBids(await withChecks(wanted))
@@ -545,6 +582,7 @@ async function runChange(args: ChangeArgs, change: Change): Promise<Result<{ pla
     for (const s of plan.steps ?? []) {
       if (s.op === 'live') await setEnrollment({ campaignId: s.campaignId, marketplace: market, op: 'live', by: args.by, reason: args.reason ?? 'the product\'s bids lever resolves to AUTO', now })
       if (s.op === 'shadow') await setEnrollment({ campaignId: s.campaignId, marketplace: market, op: 'shadow', by: args.by, reason: args.reason ?? s.why, now })
+      if (s.op === 'wait' && s.hold) await setEnrollment({ campaignId: s.campaignId, marketplace: market, op: 'hold', holdDays: WAIT_HOLD_DAYS, by: args.by, reason: `the Owner keeps the bid brain off it; it waits for its floor to lift — ${args.reason ?? 'no raises meanwhile'}`, now })
     }
     // The bids lever's snapshot: taken whenever it puts a campaign LIVE.
     const snapshot = plan.steps?.some((s) => s.op === 'live') ? { takenAt: now.toISOString(), by: args.by, data: bidsSnapshotOf(plan.steps) } : null
@@ -596,7 +634,8 @@ export async function setLever(args: ChangeArgs & { lever: BrainLever; level: Br
  */
 export async function recordCampaignBidsChoice(args: { campaignId: string; level: 'AUTO' | 'OBSERVE'; by: string; reason?: string | null; now?: Date }): Promise<{ productId: string; market: string } | null> {
   const owner = (await resolveCampaignOwnership([args.campaignId])).get(args.campaignId)
-  if (!owner || owner.owner.kind !== 'product' || !owner.market || owner.adProduct !== 'SPONSORED_PRODUCTS') return null
+  // An archived campaign is nothing the product's lever moves (productCampaigns leaves it out): nothing to record.
+  if (!owner || owner.owner.kind !== 'product' || !owner.market || owner.adProduct !== 'SPONSORED_PRODUCTS' || owner.status === 'ARCHIVED') return null
   const productId = owner.owner.productId
   const enrolled = await prisma.adsBrainEnrollment.findFirst({ where: { productId, marketplace: owner.market }, select: { id: true } })
   if (!enrolled) return null
