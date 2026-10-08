@@ -17,6 +17,7 @@ import { ADS_TARGET_ACOS_TOOLS } from './tools/ads-target-acos.tools.js'
 import { ADS_STRATEGY_TOOLS } from './tools/ads-strategy.tools.js'
 import { ADS_BID_BRAIN_TOOLS } from './tools/ads-bid-brain.tools.js'
 import { ADS_BID_BRAIN_ENROLLMENT_TOOLS } from './tools/ads-bid-brain-enrollment.tools.js'
+import { ADS_BRAIN_TOOLS } from './tools/ads-brain.tools.js'
 import { ADS_PLAYBOOK_TOOLS } from './tools/ads-playbook.tools.js'
 import { ADS_MANAGER_TOOLS } from './tools/ads-manager.tools.js'
 import { ADS_CREATE_TOOLS } from './tools/ads-create.tools.js'
@@ -132,6 +133,8 @@ const ALL: AgentTool[] = [
   ...ADS_BID_BRAIN_TOOLS,
   // BB-6 — a campaign under the bid brain (LIVE with the approver's code), held, released, back to shadow or given back.
   ...ADS_BID_BRAIN_ENROLLMENT_TOOLS,
+  // One brain AB-3 — the brain's map: who owns each lever of each campaign, the clashes and what is not set up, read.
+  ...ADS_BRAIN_TOOLS,
   // Ads playbook PB-2 — how a product's ads are built and run (templates, rows per market, category and product), read.
   ...ADS_PLAYBOOK_TOOLS,
   // Ads autonomy W4-1 — the daily Claude ads run reports itself (bell + one e-mail a day), and its history.
