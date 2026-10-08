@@ -30,7 +30,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { Banner, useToast, type MenuItemDef } from '@/design-system/components'
-import { Button } from '@/design-system/primitives'
+import { Button, InfoTip } from '@/design-system/primitives'
 import { PreferencesModal, type PreferencesColumnSpec, type PreferencesValue } from '@/design-system/patterns'
 import {
   ALL_VIEW_ID,
@@ -76,6 +76,7 @@ import { SHEET_STATE_OVERLAYS, sheetEmptyState } from '../sheet/sheetGridStates'
 import { SheetLoadError } from '../sheet/SheetLoadError'
 import { useMasterSheet } from '../sheet/master/useMasterSheet'
 import { useReferenceNames } from '../sheet/useReferenceNames'
+import { useUnpinOnNarrowSheet } from '../sheet/useNarrowSheet'
 import type { PublishActionCell } from '@nexus/shared/publish-actions'
 import { usePublishActions } from '../sheet/usePublishActions'
 import type { PublishActionsDestination } from '../sheet/publishActionsApi'
@@ -89,7 +90,7 @@ import { familyAxes, familyAxisValues, familyReadScope } from '../sheet/familyOr
 import { useFamilyProjections } from '../variants/family/useFamilyProjections'
 
 import { matrixChip, matrixChips } from './chips'
-import { absentHint, BASE_PRICE_COL, buildMatrixColumns, CASE_COL, caseViewOf, drawnCells, FBA_COL, fbaUnitsOf, hasMatrixStatus, IDENTITY_COL, IDENTITY_COL_W, identityWidthFor, isMatrixStatusColId, matrixColId, matrixGroupKeyOf, matrixStatusColId, notListedLine, parseMatrixColId, STOCK_COL } from './columns'
+import { absentHint, absentLine, BASE_PRICE_COL, buildMatrixColumns, CASE_COL, caseViewOf, channelTone, drawnCells, FBA_COL, fbaUnitsOf, hasMatrixStatus, IDENTITY_COL, isMatrixStatusColId, matrixColId, matrixGroupKeyOf, matrixStatusColId, MATRIX_GROUP_TONES, notListedLine, parseMatrixColId, STOCK_COL } from './columns'
 import { SCOPE_PROGRESS_COLUMN } from '../sheet/progressColumns'
 import { MATRIX_CELL_LABELS, MATRIX_COPY, type CoordinateKey, type FulfilmentMethod, type MatrixCellKind, type MatrixCoordinate, type MatrixWriteOutcome } from './contract'
 import { filterCoordinates, filterNote, visibleCoordinateKeys } from './filters'
@@ -233,17 +234,23 @@ export function MatrixSurface({ productId }: { productId: string }) {
   const refusalReason = refusedMarks.find((mark) => mark.reason)?.reason ?? refusalExample
 
   const [search, setSearch] = useState('')
+  /* The parent's chevron (the Information page's tree control): the variants fold away under it and come back. */
+  const [variantsCollapsed, setVariantsCollapsed] = useState(false)
+  const variantsCollapsedRef = useRef(false)
+  variantsCollapsedRef.current = variantsCollapsed
+  const onToggleVariants = useCallback(() => setVariantsCollapsed((v) => !v), [])
   const visibleRows = useMemo(() => {
     const chipRows = chipBar.active?.cells.byRow
     const needle = search.trim().toLowerCase()
     return ordered.filter((row) => {
+      if (variantsCollapsed && !row.isParent) return false
       if (showRefusedOnly && refusedIds.size > 0 && !refusedIds.has(row.id)) return false
       if (chipRows && !(row.id in chipRows)) return false
       if (!needle) return true
       const line = axesRef.current.map((a) => String(row.axisValues?.[a.key] ?? '')).join(' ')
       return `${row.sku} ${row.name ?? ''} ${line}`.toLowerCase().includes(needle)
     })
-  }, [ordered, chipBar.active, search, showRefusedOnly, refusedIds])
+  }, [ordered, chipBar.active, search, showRefusedOnly, refusedIds, variantsCollapsed])
 
   /* ── the bulk Edit: one dialog for every change (Owner 2026-10-07) ─────────────────────────── */
 
@@ -422,14 +429,19 @@ export function MatrixSurface({ productId }: { productId: string }) {
     openBulkRef.current([row], { field: 'fulfilment', mode: 'method', input: { choice: method }, coordinateKeys: [coord.key] })
   }, [read])
 
-  /* A phone: the pinned identity gives way so a coordinate column can be on screen (`identityWidthFor`). The room it
-     shares is the grid's width less the OTHER pinned columns (the selection checkbox). Changes only when the grid
-     crosses a width that changes the answer, so a desktop resize rebuilds nothing. */
-  const [identityWidth, setIdentityWidth] = useState(IDENTITY_COL_W)
-  const onGridSizeChanged = useCallback((e: { clientWidth: number; api: GridApi<StudioRow> }) => {
-    const otherPinned = e.api.getDisplayedLeftColumns().filter((c) => c.getColId() !== IDENTITY_COL).reduce((n, c) => n + c.getActualWidth(), 0)
-    const next = identityWidthFor(e.clientWidth - otherPinned)
-    setIdentityWidth((prev) => (prev === next ? prev : next))
+  /* A phone: the Product column is unpinned, as on the Information page (its own hook), so it scrolls away with the row
+     and keeps its whole SKU. */
+  const [gridReady, setGridReady] = useState(0)
+  useUnpinOnNarrowSheet(getGridApi, gridReady)
+  /* The parent's chevron reads the fold at paint time: redraw the Product cells when it turns. */
+  useEffect(() => {
+    const api = getGridApi()
+    if (api && !api.isDestroyed()) api.refreshCells({ columns: [IDENTITY_COL], force: true })
+  }, [variantsCollapsed, getGridApi])
+  /* The group colours' start edge follows the columns on screen (a hidden first column hands its edge to the next one):
+     AG keeps a header cell's classes until the header is redrawn. */
+  const onDisplayedColumnsChanged = useCallback((e: { api: GridApi<StudioRow> }) => {
+    setTimeout(() => { if (!e.api.isDestroyed()) e.api.refreshHeader() }, 0)
   }, [])
   /* ── Status per market (Owner 2026-10-07): the Information page's Status column itself, once per market ──────────────
      The values are the publish actions' — ONE read of every market, each exactly as that market's own sheet reads it
@@ -616,7 +628,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
     const family = sheet?.family.sku ?? ''
     const total = rowsRef.current.filter((r) => !r.isParent).length
     const base = createBulkSource(bulkDoors(rows), {
-      title: rows.length === 1 ? `Edit ${rows[0]!.sku}` : `Edit ${rows.length} rows`,
+      title: rows.length === 1 ? `Edit · ${rows[0]!.sku}` : `Edit · ${rows.length} rows`,
       subtitle: [family, rows.length === 1 && rows[0]!.isParent ? 'the parent row' : `${variantsTicked} of ${total} ${total === 1 ? 'variant' : 'variants'}`].filter(Boolean).join(' · '),
     })
     bulkUndo.current = null
@@ -673,10 +685,10 @@ export function MatrixSurface({ productId }: { productId: string }) {
     () => buildMatrixColumns({
       coordinates: visibleCoordinates, cellsOf: matrix.cellsOf, rowOf: matrix.rowOf, tracker,
       sheetColumns: sheet?.columns ?? [], locale: localeOrFirst, market: marketOrFirst,
-      axesRef, rowMenuRef, onPickFulfilment, rowsRef, identityWidth,
+      axesRef, rowMenuRef, onPickFulfilment, rowsRef, variantsCollapsedRef, onToggleVariants,
       statusColumnOf, onOpenStock: stockDoor, onOpenFrom: fromDoor, onOpenCase: caseDoor, fbaPlansOf,
     }),
-    [visibleCoordinates, matrix.cellsOf, matrix.rowOf, tracker, sheet?.columns, localeOrFirst, marketOrFirst, onPickFulfilment, identityWidth, statusColumnOf, stockDoor, fromDoor, caseDoor, fbaPlansOf],
+    [visibleCoordinates, matrix.cellsOf, matrix.rowOf, tracker, sheet?.columns, localeOrFirst, marketOrFirst, onPickFulfilment, onToggleVariants, statusColumnOf, stockDoor, fromDoor, caseDoor, fbaPlansOf],
   )
   const defaultColDef = useMemo<ColDef<StudioRow>>(() => ({ sortable: true, resizable: true }), [])
   const rowSelection = useMemo(() => gridSelection<StudioRow>(), [])
@@ -811,7 +823,8 @@ export function MatrixSurface({ productId }: { productId: string }) {
   const presets = useMemo<GridViewPreset[]>(() => {
     const byKind = (kinds: readonly MatrixCellKind[], shared: readonly string[]) => [IDENTITY_COL, ...shared, ...allColIds.filter((id) => { const p = parseMatrixColId(id); return !!p && kinds.includes(p.kind) })]
     return [
-      { id: ALL_VIEW_ID, label: 'Everything', description: 'Every listed coordinate, every cell', columns: listedColIds },
+      /* "All columns" and its count, as the Information page's Columns menu says it (audit 2026-10-08). */
+      { id: ALL_VIEW_ID, label: 'All columns', description: 'Every listed coordinate, every cell', columns: listedColIds },
       { id: 'inventory', label: 'Inventory', description: 'Stock, Case, FBA qty and the inventory lane: Fulfilment · From · Mode · Qty · Buffer', columns: [...byKind(INVENTORY_KINDS, [STOCK_COL, CASE_COL, FBA_COL]), ...allColIds.filter(isMatrixFromColId)] },
       { id: 'pricing', label: 'Pricing', description: 'Base price and every coordinate\'s Price and Sale', columns: byKind(PRICING_KINDS, [BASE_PRICE_COL]) },
       { id: 'listings', label: 'Listings', description: 'Every market\'s Listing state and selling Status', columns: [...byKind(['listing'], []), ...allColIds.filter(isMatrixStatusColId)] },
@@ -861,7 +874,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
     views.markActive(id)
     return id
   }, [views, visibleColIds, chipBar.activeId])
-  /* A default saved COLUMNS view lands once the grid is up; the ground state stays Everything. */
+  /* A default saved COLUMNS view lands once the grid is up; the ground state stays All columns. */
   const landedDefault = useRef<string | null>(null)
   useEffect(() => {
     const v = views.defaultView
@@ -876,25 +889,27 @@ export function MatrixSurface({ productId }: { productId: string }) {
   const preferenceColumns = useMemo<PreferencesColumnSpec[]>(() => {
     const out: PreferencesColumnSpec[] = [
       { key: IDENTITY_COL, label: 'Product', locked: true, group: 'Product' },
-      { key: SCOPE_PROGRESS_COLUMN, label: 'Shared product (progress)', group: 'Product' },
-      { key: BASE_PRICE_COL, label: 'Base price', group: 'Shared' },
-      { key: STOCK_COL, label: 'Stock', group: 'Shared' },
-      { key: CASE_COL, label: 'Case', group: 'Shared' },
-      { key: FBA_COL, label: 'FBA qty', group: 'Shared' },
+      /* The groups as the grid draws them, in their colours (Owner 2026-10-08: Progress is its own group there). */
+      { key: SCOPE_PROGRESS_COLUMN, label: 'Shared product (progress)', group: 'Progress', groupTone: MATRIX_GROUP_TONES.progress },
+      { key: BASE_PRICE_COL, label: 'Base price', group: 'Shared', groupTone: MATRIX_GROUP_TONES.shared },
+      { key: STOCK_COL, label: 'Stock', group: 'Shared', groupTone: MATRIX_GROUP_TONES.shared },
+      { key: CASE_COL, label: 'Case', group: 'Shared', groupTone: MATRIX_GROUP_TONES.shared },
+      { key: FBA_COL, label: 'FBA qty', group: 'Shared', groupTone: MATRIX_GROUP_TONES.shared },
     ]
     for (const c of visibleCoordinates) {
-      if (!c.connected || c.cells.length === 0) { out.push({ key: matrixColId(c.key, 'notListed'), label: MATRIX_COPY.notListed, group: c.label }); continue }
+      const at = { group: c.label, groupTone: channelTone(c.channel) }
+      if (!c.connected || c.cells.length === 0) { out.push({ key: matrixColId(c.key, 'notListed'), label: MATRIX_COPY.notListed, ...at }); continue }
       for (const k of drawnCells(c)) {
-        if (k === fromBefore(c)) out.push({ key: matrixFromColId(c.key), label: FROM_LABEL, group: c.label })
-        out.push({ key: matrixColId(c.key, k), label: MATRIX_CELL_LABELS[k], group: c.label })
-        if (k === 'listing' && statusColIds.includes(matrixStatusColId(c.key))) out.push({ key: matrixStatusColId(c.key), label: STATUS_COLUMN_LABEL, group: c.label })
+        if (k === fromBefore(c)) out.push({ key: matrixFromColId(c.key), label: FROM_LABEL, ...at })
+        out.push({ key: matrixColId(c.key, k), label: MATRIX_CELL_LABELS[k], ...at })
+        if (k === 'listing' && statusColIds.includes(matrixStatusColId(c.key))) out.push({ key: matrixStatusColId(c.key), label: STATUS_COLUMN_LABEL, ...at })
       }
     }
     return out
   }, [visibleCoordinates, statusColIds])
   /* The kinds a coordinate has NO store for, with their sentences — in the dialog's hint, since the DS list has no per-row
      "absent" slot (honest absence: §3.1 rule 6). Grouped by cell (Owner 2026-10-08), not one line per coordinate. */
-  const absent = useMemo(() => absentHint(visibleCoordinates), [visibleCoordinates])
+  const absent = useMemo(() => { const line = absentLine(visibleCoordinates); return line ? { line, why: absentHint(visibleCoordinates) ?? line } : null }, [visibleCoordinates])
   /* The ground state: every column but the `Not listed` ones (Customise shows them). */
   const defaultVisible = useMemo(() => preferenceColumns.map((c) => c.key).filter((k) => !k.endsWith('.notListed')), [preferenceColumns])
   const defaultPrefs = useMemo<PreferencesValue>(() => ({ visibleColumns: defaultVisible, lockedColumns: [], stickyFirstColumn: true, stickyLastColumn: false, pageSize: 0, sortBy: '', sortDir: 'asc' }), [defaultVisible])
@@ -955,7 +970,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
 
   /* ── lifecycle ───────────────────────────────────────────────────────────────────────────── */
 
-  const onGridReady = useCallback((e: GridReadyEvent<StudioRow>) => { bindGridApi(e.api); bindGrid(e.api); views.bind(e.api as unknown as GridApi) }, [bindGridApi, bindGrid, views])
+  const onGridReady = useCallback((e: GridReadyEvent<StudioRow>) => { bindGridApi(e.api); bindGrid(e.api); views.bind(e.api as unknown as GridApi); setGridReady((n) => n + 1) }, [bindGridApi, bindGrid, views])
   const onGridPreDestroyed = useCallback((e: { api: GridApi<StudioRow> }) => { releaseGrid(e); bindGrid(null) }, [releaseGrid, bindGrid])
   const onReload = useCallback(() => { matrix.reload(); reload(); projectionsQuery.reload() }, [matrix, reload, projectionsQuery])
   onReloadRef.current = onReload
@@ -1027,7 +1042,8 @@ export function MatrixSurface({ productId }: { productId: string }) {
     reloadSoonAgain()
   }, [toast, undoStockSource, reloadSoonAgain])
 
-  const viewsEmptyLabel = `Custom (${visibleColIds().length})`
+  const shownColumns = visibleColIds().length
+  const viewsEmptyLabel = `Custom (${shownColumns})`
 
   return (
     <div className={styles.surface} data-matrix-surface data-matrix-source={read ? 'live' : matrix.status}>
@@ -1040,7 +1056,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
             search={search} onSearch={setSearch}
             chips={chipBar.chips} activeChipId={chipBar.activeId} onChipToggle={chipBar.setActive}
             views={views} presets={presets} activePresetId={activePresetId} onApplyPreset={applyPreset}
-            onSaveCurrentView={saveCurrentView} onUpdateCurrentView={updateCurrentView} viewsEmptyLabel={viewsEmptyLabel}
+            onSaveCurrentView={saveCurrentView} onUpdateCurrentView={updateCurrentView} viewsEmptyLabel={viewsEmptyLabel} activeCount={shownColumns}
             onCustomise={openCustomise} onExport={onExport} exportDisabled={!read || busy} onReload={onReload}
             /* Selection in the TOOLBAR, as on the sheet and the Variants tab (Owner, 2026-09-26). */
             selectionActions={<MatrixSelectionActions onEdit={() => openBulk(selectedRows)} editHeld={!read || busy ? 'The Matrix is still loading' : null} stockSource={stockSource} sendToFba={sendToFba} />}
@@ -1063,10 +1079,8 @@ export function MatrixSurface({ productId }: { productId: string }) {
                     />
                   </span>
                 )}
-                <span className={styles.footerDetails}>
-                  <span className="nds-cell-muted">{variants} {variants === 1 ? 'variant' : 'variants'}</span>
-                  {notListed && <span className="nds-cell-muted">{notListed}</span>}
-                </span>
+                {/* The variants are counted once, on the toolbar ("21 rows · 1 parent · 20 variants"). */}
+                {notListed && <span className={styles.footerDetails}><span className="nds-cell-muted">{notListed}</span></span>}
                 {scopeNote && <span className="nds-cell-muted" title={scopeNote}>{scopeNote.split(' — ')[0]}</span>}
                 {/* Send to FBA: the family's draft and its plans under way, one click to the FBA shipments page (the FBA qty
                     cell opens the plans drawer). */}
@@ -1110,7 +1124,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
               rowSelection={rowSelection}
               onSelectionChanged={onSelectionChanged}
               onGridReady={onGridReady}
-              onGridSizeChanged={onGridSizeChanged}
+              onDisplayedColumnsChanged={onDisplayedColumnsChanged}
               onGridPreDestroyed={onGridPreDestroyed}
               onCellValueChanged={onCellValueChanged}
               {...statusOperationProps}
@@ -1133,7 +1147,8 @@ export function MatrixSurface({ productId }: { productId: string }) {
         onSwitched={onStockSourceSwitched}
       />
 
-      <InventoryEditorModal row={stockRow} density={DEFAULT_DENSITY} onClose={() => setStockRow(null)} />
+      <InventoryEditorModal row={stockRow} density={DEFAULT_DENSITY} onClose={() => setStockRow(null)}
+        title={stockRow ? `Stock · ${stockRow.sku}` : undefined} subtitle={stockRow?.name} />
 
       {fromTarget && (
         <SellsFromDialog
@@ -1177,7 +1192,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
         groupToggles
         inViewCount
         title="Customise columns"
-        listHint={absent ?? 'Choose the coordinates and cells on screen. Save the arrangement as a view to keep it.'}
+        listHint={absent ? <span className={styles.hintLine}>{absent.line}<InfoTip tip={absent.why} /></span> : 'Choose the coordinates and cells on screen. Save the arrangement as a view to keep it.'}
         viewSave={viewSave}
       />
     </div>

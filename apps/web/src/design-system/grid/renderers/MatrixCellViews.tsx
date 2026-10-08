@@ -61,6 +61,7 @@ import {
   matrixReportedDiffers,
   matrixSaleText,
 } from './matrixCells'
+import { EmptyValue, PauseGlyphIcon, WarnGlyph } from './cells'
 import { ProjectionCell, type ProjectionCellParams, type ProjectionFacts } from './ProjectionCell'
 import { ProvenanceMark } from './provenanceMark'
 
@@ -103,8 +104,9 @@ function Value({ children, muted, marks, className, version }: { children: React
   )
 }
 
+/* An outline icon, not the text "⚠" a phone may draw as a colour emoji (Matrix audit 2026-10-08). */
 const Warn = ({ title }: { title?: string }) => (
-  <span className="nds-cell-prov nds-matrix-warn" aria-hidden title={title}>⚠</span>
+  <span className="nds-cell-prov nds-matrix-warn" aria-hidden title={title}><WarnGlyph /></span>
 )
 /**
  * 2026-10-08 — the ✗ of a cell whose newest push of its lane failed (`pushFailed`). No title of its own: the cell's AG
@@ -118,7 +120,7 @@ const Reported = ({ title }: { title: string }) => (
 )
 /** The ⏸ carries the LEVER on its title: at the contract's 96px a `· paused (listing)` suffix truncated the word (measured). */
 const PauseGlyph = ({ via }: { via: 'POLICY' | 'LISTING' | null }) => (
-  <span className="nds-matrix-pause" aria-hidden title={via === 'POLICY' ? 'Stock sync held by the channel policy' : 'Stock sync held by this listing'}>⏸</span>
+  <span className="nds-matrix-pause" aria-hidden title={via === 'POLICY' ? 'Stock sync held by the channel policy' : 'Stock sync held by this listing'}><PauseGlyphIcon /></span>
 )
 
 /* ── Listing ────────────────────────────────────────────────────────────────────────────── */
@@ -139,6 +141,9 @@ const listingFacts = (params: ICellRendererParams): ProjectionFacts | null => {
 }
 
 export const ListingStateCell = memo(function ListingStateCell(p: MatrixCellProps) {
+  /* A row with no listing here draws the grid's empty cell (the Matrix: the muted dash; an editing sheet: nothing), like
+     every other kind — never a bare blank beside dashes (Matrix audit 2026-10-08). */
+  if (!p.facts(p)?.listing) return <EmptyValue />
   /* `value: null` is what makes the tick ABSENT (see the file header). */
   const host: ListingHostParams = { ...p, value: null, facts: listingFacts, matrixFacts: p.facts }
   return <ProjectionCell {...host} />
@@ -149,7 +154,7 @@ export const ListingStateCell = memo(function ListingStateCell(p: MatrixCellProp
 export const FulfilmentCell = memo(function FulfilmentCell(p: MatrixCellProps) {
   const copy = p.copy ?? MATRIX_CELL_COPY
   const cells = p.facts(p)
-  if (!cells) return null
+  if (!cells) return <EmptyValue />
   const f = cells.fulfilment
   if (!f || f.method == null) return <Value muted>{MATRIX_DASH}</Value>
   /* Both marks are read from the two predicates rather than from the one-word state, which has a precedence. With two
@@ -179,7 +184,7 @@ export const FulfilmentCell = memo(function FulfilmentCell(p: MatrixCellProps) {
 
 export const SyncModeCell = memo(function SyncModeCell(p: MatrixCellProps) {
   const cells = p.facts(p)
-  if (!cells) return null
+  if (!cells) return <EmptyValue />
   const s = cells.sync
   if (!s) return <Value muted>{MATRIX_DASH}</Value>
   const state = matrixCellState('syncMode', cells)
@@ -206,7 +211,7 @@ export const SyncModeCell = memo(function SyncModeCell(p: MatrixCellProps) {
 export const SyncQtyCell = memo(function SyncQtyCell(p: MatrixCellProps) {
   const copy = p.copy ?? MATRIX_CELL_COPY
   const cells = p.facts(p)
-  if (!cells) return null
+  if (!cells) return <EmptyValue />
   const s = cells.sync
   if (!s) return <Value muted>{MATRIX_DASH}</Value>
   const state = matrixCellState('syncQty', cells)
@@ -243,7 +248,7 @@ export const SyncQtyCell = memo(function SyncQtyCell(p: MatrixCellProps) {
 
 export const SyncBufferCell = memo(function SyncBufferCell(p: MatrixCellProps) {
   const cells = p.facts(p)
-  if (!cells) return null
+  if (!cells) return <EmptyValue />
   const s = cells.sync
   /* `—` on Pinned / FBA / closed (§3.4) — the pure text rule decides, this only mutes the dash. */
   const text = !s || s.kind === 'FBA_EXCLUDED' || s.kind === 'CLOSED' || s.mode === 'PINNED' ? MATRIX_DASH : String(s.buffer)
@@ -257,7 +262,7 @@ export const SyncStateCell = memo(function SyncStateCell(p: MatrixCellProps) {
   /* Hook before any early return — the rules of hooks, and this cell has two returns below. */
   const onClick = useCallback(() => jump?.(p), [jump, p])
   const cells = p.facts(p)
-  if (!cells) return null
+  if (!cells) return <EmptyValue />
   const q = cells.queue
   if (!q) return <Value muted>{MATRIX_DASH}</Value>
   const now = p.now?.() ?? Date.now()
@@ -290,7 +295,7 @@ export const SyncStateCell = memo(function SyncStateCell(p: MatrixCellProps) {
 export const PriceCell = memo(function PriceCell(p: MatrixCellProps) {
   const copy = p.copy ?? MATRIX_CELL_COPY
   const cells = p.facts(p)
-  if (!cells) return null
+  if (!cells) return <EmptyValue />
   const price = cells.price
   if (!price) return <Value muted>{MATRIX_DASH}</Value>
   const text = matrixMoney(price.value, price.currency || p.coordinate.currency)
@@ -315,7 +320,7 @@ export const PriceCell = memo(function PriceCell(p: MatrixCellProps) {
 
 export const SaleCell = memo(function SaleCell(p: MatrixCellProps) {
   const cells = p.facts(p)
-  if (!cells) return null
+  if (!cells) return <EmptyValue />
   const text = matrixSaleText(cells.sale, cells.price?.currency ?? p.coordinate.currency)
   return <Value muted={text === MATRIX_DASH}>{text}</Value>
 })

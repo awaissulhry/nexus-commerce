@@ -25,7 +25,7 @@ export const isProgressColumn = (colId: string): boolean => colId.startsWith(PRO
 /** The "Shared product" column's header tip — one sentence for the sheet, the Variants tab and the Matrix. */
 export const SHARED_PROGRESS_TIP = 'Progress of the shared product: filled ÷ every field that applies here, required and optional. Red — a required field is empty. Yellow — only optional fields are empty. Green — nothing is empty. Hover or click a bar to see what is missing. Completeness, not publish readiness.'
 /** Wide enough for a 56px bar and "100%" beside it, with the cell's padding. */
-export const PROGRESS_COLUMN_WIDTH = 132
+export const PROGRESS_COLUMN_WIDTH = 152
 
 /* ── values ───────────────────────────────────────────────────────────────────────────────── */
 

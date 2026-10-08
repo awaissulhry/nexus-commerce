@@ -250,7 +250,7 @@ export interface MatrixCoordinate {
   channel: string
   /** A market code, a region code for `region-inventory`, or `GLOBAL`. */
   market: string
-  /** Strip label — Appendix A: `Amazon · IT`, `Amazon EU · Inventory · IT DE FR ES`, `eBay · IT ①`. */
+  /** Strip label — Appendix A: `Amazon · IT`, `Amazon · EU inventory · IT DE FR ES` (Owner 2026-10-08: one wording, channel first), `eBay · IT ①`. */
   label: string
   region: string | null
   alias: { id: string; label: string; position: number } | null

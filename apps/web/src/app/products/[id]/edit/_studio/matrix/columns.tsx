@@ -26,15 +26,15 @@ import { CellAction, type MenuItemDef } from '@/design-system/components'
 import { Pill, Tag } from '@/design-system/primitives'
 import { poolSourceSentence } from '@/app/_shared/stock-pool/PoolSourceTag'
 import {
-  formatGridValue, LockGlyph, lockedColumn, matrixColumnDef, numericColumn, type CellSaveTracker, type ColDef, type ColGroupDef, type ICellRendererParams,
-  type LockedCellParams, type MatrixColumnOptions,
+  EmptyValue, ExpandButton, ExpandSlot, formatGridValue, groupToneClasses, IdentityBand, ProvenanceMark, groupToneHeaderClasses, LockGlyph, lockedColumn, matrixColumnDef, numericColumn, withGroupHeaderClass,
+  WarnGlyph, type CellSaveTracker, type ColDef, type ColGroupDef, type HeaderGroupTone, type ICellRendererParams, type LockedCellParams, type MatrixColumnOptions,
 } from '@/design-system/grid'
 import { FBA_SEND_COPY, fbaInboundShown } from '@nexus/shared/fba-send'
 
 import { when } from '../drawer/format'
 import { buildMasterColumns } from '../sheet/master/columns'
 import type { SheetColumn, StudioRow } from '../sheet/master/types'
-import { VariantIdentity as SharedVariantIdentity } from '../variants/VariantIdentity'
+import { ProductRoleChip } from '../sheet/ProductRoleChip'
 import { sharedProgressColumn } from '../sheet/progressColumns'
 import type { AxisSummary } from '../variants/family/coverage'
 
@@ -52,22 +52,12 @@ import styles from './matrix.module.css'
  */
 export const IDENTITY_COL = 'identity'
 /** §3.3: the identity column FIXED at 380 (the same reasoning as the Variants page: a fixed slot set). */
-export const IDENTITY_COL_W = 380
 /**
- * 2026-09-30 — a phone. At 390px the grid is ~322px wide, and a 380px PINNED column covered all of it: no coordinate
- * column was ever on screen, and scrolling the grid moved nothing you could see. So the pinned band gives way on a
- * narrow grid, leaving at least `IDENTITY_MIN_SCROLL_W` for the coordinate columns to scroll in, and never goes below
- * `IDENTITY_MIN_W`: the DS identity band keeps its role chip, picture and `⋯` whole and truncates the SKU (the full
- * key stays on hover — `IdentityBand`, `.nds-identity-band-sku`). A wide grid keeps exactly 380.
+ * The Product column: 380 wide at every screen width. On a phone it is not pinned (the Information page's own rule,
+ * `sheet/useNarrowSheet.ts`, 2026-10-08): it scrolls away with the row, so the coordinate columns can be reached and the
+ * SKU is never cut to "GAL…" (the 2026-09-30 shrink-to-160 did that).
  */
-export const IDENTITY_MIN_W = 160
-export const IDENTITY_MIN_SCROLL_W = 160
-
-/** The identity column's width, given the grid width it shares (the grid's client width less any other pinned column, px). Unknown → the desktop 380. */
-export function identityWidthFor(gridWidth: number): number {
-  if (!Number.isFinite(gridWidth) || gridWidth <= 0) return IDENTITY_COL_W
-  return Math.max(IDENTITY_MIN_W, Math.min(IDENTITY_COL_W, Math.floor(gridWidth - IDENTITY_MIN_SCROLL_W)))
-}
+export const IDENTITY_COL_W = 380
 export const BASE_PRICE_COL = 'basePrice'
 /**
  * MX.F item 2, measured on the live page at 1440/1728: at 100px the header's 10/10 padding and the 16px menu button left a
@@ -81,7 +71,13 @@ export const CASE_COL = 'shared.case'
 export const CASE_COL_W = 104
 /** The FBA qty column (Owner 2026-10-06): Amazon's FBA units, shown and LOCKED — nothing on this page can write it. */
 export const FBA_COL = 'shared.fba'
-export const FBA_COL_W = 96
+/* 112 (2026-10-08): every Matrix header now carries the ⋮ menu, which cut "FBA qty" to "FBA …" at 96. */
+export const FBA_COL_W = 112
+/**
+ * The Matrix's own minimum per cell kind where the header's ⋮ menu (on every column since the audit, 2026-10-08) left
+ * too little room for its name: "Buffer" read "B…" at the engine's 76. Wider kinds keep the engine's width.
+ */
+const MATRIX_MENU_WIDTHS: Partial<Record<MatrixCellKind, number>> = { syncBuffer: 100 }
 export const NOT_LISTED_W = 120
 
 export const matrixColId = (key: CoordinateKey, kind: MatrixCellKind | 'notListed'): string => `${key}.${kind}`
@@ -123,23 +119,59 @@ export function parseMatrixColId(colId: string | undefined | null): { key: Coord
   return kinds.includes(kind) ? { key, kind: kind as MatrixCellKind } : null
 }
 
+/* ── the group colours ────────────────────────────────────────────────────────────────────── */
+
+/**
+ * The Owner, 2026-10-08: the Matrix's groups wear colours "just like the product information page" — the same tones
+ * (`tokens/groupTones.ts`) through the same DS helper (`grid/columns/groupTone.ts`), ONE colour per channel, the same in
+ * every family and in Customise. Product: none (the Information page leaves its identity column plain). Progress: slate
+ * (its group on the Information page). Shared: emerald (price and stock are "Offer" there). Red and yellow stay free:
+ * they mean danger and warning.
+ */
+const CHANNEL_TONES: Readonly<Record<string, string>> = { AMAZON: 'orange', EBAY: 'blue', SHOPIFY: 'purple', ETSY: 'pink', WOOCOMMERCE: 'violet' }
+export const MATRIX_GROUP_TONES = { progress: 'slate', shared: 'emerald' } as const
+/** A channel's colour; any channel without its own: cyan. */
+export const channelTone = (channel: string | null | undefined): string => CHANNEL_TONES[(channel ?? '').toUpperCase()] ?? 'cyan'
+
 /* ── the identity cell ────────────────────────────────────────────────────────────────────── */
 
 interface IdentityParams {
   axesRef: MutableRefObject<AxisSummary[]>
   rowMenuRef: MutableRefObject<(row: StudioRow) => MenuItemDef[]>
+  /** The parent's chevron: are the variants folded away (read at paint time), and the toggle. */
+  variantsCollapsedRef: MutableRefObject<boolean>
+  onToggleVariants: () => void
 }
 
+/**
+ * The Product cell, composed EXACTLY as the Information page's (`sheet/master/useMasterSheetAdapter.tsx` `ProductCell`,
+ * Matrix audit 2026-10-08): the tree control (the parent's chevron folds its variants; a variant keeps the empty slot so
+ * every SKU starts on one x), the role chip, the picture with its "inherited" mark, the SKU, and the axis values as the
+ * second line — none on the parent (the toolbar counts the variants once).
+ */
 function MatrixIdentity(p: ICellRendererParams<StudioRow> & Partial<IdentityParams>) {
   const d = p.data
   if (!d) return null
+  const expanded = !(p.variantsCollapsedRef?.current ?? false)
+  const expand = d.isParent && d.childCount > 0
+    ? <ExpandButton expanded={expanded} onToggle={() => p.onToggleVariants?.()} labels={['Show the variants', 'Fold the variants away']} />
+    : <ExpandSlot />
+  const axes = d.isParent ? '' : (p.axesRef?.current ?? []).map((axis) => d.axisValues?.[axis.key] ?? '—').join(' · ')
+  const suspect = (d as StudioRow & { axisValuesSuspect?: Array<{ reason: string }> }).axisValuesSuspect ?? []
+  const secondary = axes || suspect.length
+    ? <>{axes}{suspect.length > 0 && <span className="nds-cell-warning" role="img" aria-label="Shared axis values need review"> <WarnGlyph /></span>}</>
+    : undefined
   return (
-    <SharedVariantIdentity
-      sku={d.sku} isParent={d.isParent} parentId={d.parentId} childCount={d.childCount}
-      image={d.imageUrl} inherited={d.imageInherited}
-      axes={(p.axesRef?.current ?? []).map((axis) => d.axisValues?.[axis.key] ?? '—')}
-      suspect={(d as StudioRow & { axisValuesSuspect?: Array<{ reason: string }> }).axisValuesSuspect}
+    <IdentityBand
+      expand={expand}
+      role={<ProductRoleChip product={{ isParent: d.isParent, parentId: d.parentId ?? null, childCount: d.childCount }} />}
+      image={d.imageUrl} noImage={!d.imageUrl}
+      imageMark={d.imageInherited ? <ProvenanceMark provenance="inherited" tooltip="Inherited from the family's picture — this variation has none of its own" /> : null}
+      sku={d.sku}
+      secondary={secondary}
+      secondaryTitle={suspect.map((entry) => entry.reason).join(' ') || axes || undefined}
       menuItems={p.rowMenuRef?.current(d)}
+      menuLabel={`Actions for ${d.sku}`}
     />
   )
 }
@@ -193,6 +225,16 @@ export function notListedLine(coords: readonly MatrixCoordinate[]): string | nul
  * per coordinate and cell. Inside a cell, the places that share a reason are said once; cells whose places and reasons
  * are the same (B2B price and Tiers) are one group. The server's own sentences are kept whole. Null when nothing is absent.
  */
+/**
+ * Customise's ONE short line (Owner 2026-10-08, audit: the grouped paragraph filled a quarter of the dialog at 390 px):
+ * the cells some channels do not offer — `Not on every channel: B2B price, Tiers, Sale`. The reasons, word for word,
+ * are its info tip (`absentHint`). Null when nothing is absent.
+ */
+export function absentLine(coords: readonly MatrixCoordinate[]): string | null {
+  const cells = [...new Set(coords.flatMap((c) => c.absent.map((a) => a.cell)))]
+  return cells.length ? `Not on every channel: ${cells.map((cell) => MATRIX_ABSENT_CELL_LABELS[cell]).join(', ')}` : null
+}
+
 export function absentHint(coords: readonly MatrixCoordinate[]): string | null {
   const byCell = new Map<MatrixAbsentCellKind, Map<string, MatrixCoordinate[]>>()
   for (const c of coords) for (const a of c.absent) {
@@ -254,7 +296,7 @@ function StockCell(p: ICellRendererParams<StudioRow> & { rowOf?: (id: string) =>
     ? <CellAction label={STOCK_EDIT_COPY.label} description={STOCK_EDIT_COPY.detail} onActivate={() => p.onOpenStock?.(d.id)}
         onFocusCell={() => { const col = p.column?.getColId(); if (p.node.rowIndex != null && col) p.api.setFocusedCell(p.node.rowIndex, col) }} />
     : null
-  if (s.uncounted) return <span className={styles.stockShared}>{open}<span className="nds-cell-value nds-cell-stock-out"><span className="nds-cell-value-text">⚠ {MATRIX_COPY.uncounted}</span></span></span>
+  if (s.uncounted) return <span className={styles.stockShared}>{open}<span className="nds-cell-value nds-cell-stock-out"><span className="nds-cell-value-text"><WarnGlyph /> {MATRIX_COPY.uncounted}</span></span></span>
   const number = <span className="nds-cell-value nds-cell-num"><span className="nds-cell-value-text">{s.available ?? '—'}</span></span>
   // Shared stock by SKU: a SKU that sells from another business's stock says so; the tooltip names the business.
   if (s.source) return <span className={styles.stockShared}>{open}{number}<Pill tone="info">Shared</Pill></span>
@@ -296,7 +338,10 @@ function CaseCell(p: ICellRendererParams<StudioRow> & { viewOf?: (rowId: string)
     ? <CellAction label={CASE_EDIT_COPY.label} description={CASE_EDIT_COPY.detail} onActivate={(anchor) => p.onOpenCase?.(d.id, anchor)}
         onFocusCell={() => { const col = p.column?.getColId(); if (p.node.rowIndex != null && col) p.api.setFocusedCell(p.node.rowIndex, col) }} />
     : null
-  const text = <span className={`nds-cell-value${v.look === 'mixed' ? ' nds-cell-muted' : ''}`}><span className="nds-cell-value-text">{v.text}</span></span>
+  // No case size: the grid's empty cell (the muted dash every empty Matrix cell draws); the pencil still opens the pop-up.
+  const text = v.look === 'none'
+    ? <EmptyValue />
+    : <span className={`nds-cell-value${v.look === 'mixed' ? ' nds-cell-muted' : ''}`}><span className="nds-cell-value-text">{v.text}</span></span>
   return open ? <span className={styles.stockShared}>{open}{text}</span> : text
 }
 
@@ -380,7 +425,8 @@ function FromCell(p: ICellRendererParams<StudioRow> & Partial<FromCellParams>) {
   if (!d || !p.coordinate || !p.rowOf || !p.cellsOf) return null
   const coord = p.coordinate
   const v = fromCellView(p.rowOf(d.id), p.cellsOf(d.id, coord.key), coord)
-  if (v.look === 'none') return null
+  // Nothing to say here (a parent, a row with no source): the grid's empty cell, the same dash as every other column.
+  if (v.look === 'none') return <EmptyValue />
   if (v.look === 'shared') return <span className="nds-cell-value"><Pill tone="info">{v.text}</Pill></span>
   const open = v.door && p.onOpenFrom
     ? <CellAction label={FROM_EDIT_COPY.label} description={FROM_EDIT_COPY.detail} onActivate={(anchor) => p.onOpenFrom?.(d.id, coord.key, anchor)}
@@ -412,8 +458,9 @@ export interface BuildMatrixColumnsOptions {
   /** The fulfilment select's CHOICE — the engine's setter routes it here and writes nothing (§3.4). */
   onPickFulfilment: (method: FulfilmentMethod, params: ICellRendererParams) => void
   rowsRef: MutableRefObject<StudioRow[]>
-  /** The identity column's width (`identityWidthFor`); the desktop 380 when not given. */
-  identityWidth?: number
+  /** The parent's chevron (`MatrixIdentity`): are the variants folded away, and the toggle. */
+  variantsCollapsedRef?: MutableRefObject<boolean>
+  onToggleVariants?: () => void
   /** A market's Status column (the page builds it with `statusColumn`), placed right after its Listing; null = none. */
   statusColumnOf?: (coord: MatrixCoordinate) => ColDef<StudioRow> | null
   /** The Stock cell opens the stock per location for a row (absent = no door: no right to adjust stock). */
@@ -430,7 +477,7 @@ const rowId = (r: StudioRow) => r.id
 
 export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<StudioRow> | ColGroupDef<StudioRow>)[] {
   const { coordinates, cellsOf, rowOf, tracker, sheetColumns, locale, market, axesRef, rowMenuRef, onPickFulfilment, rowsRef } = opts
-  const identityWidth = opts.identityWidth ?? IDENTITY_COL_W
+  const identityWidth = IDENTITY_COL_W
 
   const identity: ColDef<StudioRow> = {
     colId: IDENTITY_COL,
@@ -441,7 +488,7 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
     suppressMovable: true, suppressHeaderMenuButton: true, sortable: false,
     cellClass: 'nds-ag-cell',
     cellRenderer: MatrixIdentity,
-    cellRendererParams: { axesRef, rowMenuRef },
+    cellRendererParams: { axesRef, rowMenuRef, variantsCollapsedRef: opts.variantsCollapsedRef, onToggleVariants: opts.onToggleVariants },
     headerTooltip: 'The parent and its variants',
     getQuickFilterText: (p) => `${p.data?.sku ?? ''} ${p.data?.name ?? ''}`,
   }
@@ -463,7 +510,7 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
     headerName: 'Stock',
     headerTooltip: 'The routed WAREHOUSE pool this SKU follows — the number Follow rows derive from. "Shared": the stock another business lends. Parent = the family total. Enter or the pencil opens the stock per location.',
     width: 112, minWidth: 96,
-    editable: false, suppressMovable: true, suppressHeaderMenuButton: true, sortable: true, resizable: true,
+    editable: false, suppressMovable: true, sortable: true, resizable: true,
     /* A number column: right-aligned with tabular figures, as FBA qty and every market's Qty and Price beside it. */
     type: numericColumn.type, cellClass: [...numericColumn.cellClass, 'nds-reveal-row'], headerClass: numericColumn.headerClass,
     valueGetter: (p) => (p.data ? stockOf(rowOf(p.data.id))?.available ?? null : null),
@@ -486,7 +533,7 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
     headerName: CASE_LABEL,
     headerTooltip: CASE_HEADER_TIP,
     width: CASE_COL_W, minWidth: 96,
-    editable: false, suppressMovable: true, suppressHeaderMenuButton: true, suppressFillHandle: true, suppressPaste: true, sortable: true, resizable: true,
+    editable: false, suppressMovable: true, suppressFillHandle: true, suppressPaste: true, sortable: true, resizable: true,
     type: numericColumn.type, cellClass: [...numericColumn.cellClass, 'nds-reveal-row'], headerClass: numericColumn.headerClass,
     valueGetter: (p) => caseView(p.data)?.value ?? null,
     cellRenderer: CaseCell,
@@ -508,7 +555,7 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
     headerName: 'FBA qty',
     headerTooltip: `Units Amazon holds at its FBA warehouses for this SKU; "+N" = on its way to Amazon. ${MATRIX_COPY.fbaLocked}. Parent = the family total.`,
     width: FBA_COL_W, minWidth: FBA_COL_W,
-    suppressHeaderMenuButton: true, suppressFillHandle: true, suppressPaste: true, sortable: true, resizable: true,
+    suppressFillHandle: true, suppressPaste: true, sortable: true, resizable: true,
     cellRenderer: FbaQtyCell,
     cellRendererParams: { kind: 'integer', reason: MATRIX_COPY.fbaLocked, rowOf },
     cellClassRules: { 'nds-cell-is-locked': () => true },
@@ -518,12 +565,19 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
     getQuickFilterText: (p) => { const n = p.data ? fbaUnitsOf(rowOf(p.data.id)) : null; return n == null ? '' : `${n} fba` },
   }
 
-  const groups: (ColDef<StudioRow> | ColGroupDef<StudioRow>)[] = [
-    { groupId: 'grp-product', headerName: 'Product', children: [identity] },
+  /* Every group's label sits at its start edge, in one header (`MatrixGroupHeader`), and wears its colour; each column
+     NAME under it wears the same colour (`toneOf`, below). */
+  const toneOf = new Map<string, HeaderGroupTone>()
+  const group = (groupId: string, headerName: string, tone: string | null, children: ColDef<StudioRow>[], coordinate?: MatrixCoordinate): ColGroupDef<StudioRow> => {
+    for (const child of children) if (child.colId) toneOf.set(child.colId, { group: groupId, ...(tone ? { tone } : {}) })
+    return { groupId, headerName, headerGroupComponent: MatrixGroupHeader, headerGroupComponentParams: { coordinate }, headerClass: groupToneClasses(tone), children }
+  }
+  const groups: ColGroupDef<StudioRow>[] = [
+    group('grp-product', 'Product', null, [identity]),
     /* The progress column has its OWN header group. Inside the Product group it split that group across the pinned
        boundary (Product is pinned, progress is not) and AG drew "PRODUCT" twice — measured on production 2026-09-27. */
-    { groupId: 'grp-progress', headerName: 'Progress', children: [sharedProgressColumn<StudioRow>({ market: opts.market, locale: opts.locale })] },
-    { groupId: 'grp-shared', headerName: 'Shared', children: [{ ...basePrice, headerName: 'Base price', width: BASE_PRICE_COL_W, minWidth: BASE_PRICE_COL_W }, stock, caseCol, fba] },
+    group('grp-progress', 'Progress', MATRIX_GROUP_TONES.progress, [sharedProgressColumn<StudioRow>({ market: opts.market, locale: opts.locale })]),
+    group('grp-shared', 'Shared', MATRIX_GROUP_TONES.shared, [{ ...basePrice, headerName: 'Base price', width: BASE_PRICE_COL_W, minWidth: BASE_PRICE_COL_W }, stock, caseCol, fba]),
   ]
 
   /* A market group's From column ("Sells from", Step 2): read-only here — the pop-up is its only writer. */
@@ -535,7 +589,7 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
       headerName: FROM_LABEL,
       headerTooltip: FROM_HEADER_TIP,
       width: FROM_COL_W, minWidth: 96,
-      editable: false, suppressMovable: true, suppressHeaderMenuButton: true, suppressFillHandle: true, suppressPaste: true, sortable: false, resizable: true,
+      editable: false, suppressMovable: true, suppressFillHandle: true, suppressPaste: true, sortable: false, resizable: true,
       cellClass: ['nds-ag-cell', 'nds-reveal-row'],
       valueGetter: (p) => (p.data ? fromCellText(rowOf(p.data.id), cellsOf(p.data.id, coord.key), coord) : null),
       cellRenderer: FromCell,
@@ -562,7 +616,7 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
         headerTooltip: notListedTitle(coord),
         initialHide: true,
         width: NOT_LISTED_W, minWidth: NOT_LISTED_W,
-        editable: false, sortable: false, suppressMovable: true, suppressHeaderMenuButton: true, suppressFillHandle: true,
+        editable: false, sortable: false, suppressMovable: true, suppressFillHandle: true,
         cellClass: 'nds-ag-cell nds-cell-muted',
         valueGetter: () => null,
         cellRenderer: NotListedCell,
@@ -590,6 +644,10 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
         /* A refused cell's hover leads with WHY (`refusals.ts`); the footer note is the view, this elaborates. */
         children.push({
           ...def,
+          /* Every Matrix column but the identity carries the header ⋮ menu, as every column of the Information page does
+             (audit 2026-10-08: only the three columns borrowed from the sheet had it) — with room for its name. */
+          suppressHeaderMenuButton: false,
+          ...(MATRIX_MENU_WIDTHS[kind] ? { width: MATRIX_MENU_WIDTHS[kind], minWidth: MATRIX_MENU_WIDTHS[kind] } : {}),
           ...(marksShared ? { cellClassRules: { ...(def.cellClassRules as Record<string, unknown>), [SHARED_STOCK_CELL]: (p: { data?: StudioRow }) => !!sharedFrom(p.data) } as ColDef<StudioRow>['cellClassRules'] } : {}),
           tooltipValueGetter: (p) => {
             const mark = p.data ? tracker.get(rowId(p.data), colId) : undefined
@@ -605,13 +663,8 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
         }
       }
     }
-    groups.push({
-      groupId: `grp-${coord.key}`,
-      headerName: coord.label,
-      headerGroupComponent: MatrixGroupHeader,
-      headerGroupComponentParams: { coordinate: coord },
-      children,
-    })
+    groups.push(group(`grp-${coord.key}`, coord.label, channelTone(coord.channel), children, coord))
   }
-  return groups
+  /* Each column NAME wears its group's colour too, the first of a group its edge — as on the Information page. */
+  return withGroupHeaderClass(groups, (params) => groupToneHeaderClasses(params, (colId) => toneOf.get(colId)))
 }

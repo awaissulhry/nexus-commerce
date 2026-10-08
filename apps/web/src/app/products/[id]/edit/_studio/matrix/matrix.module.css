@@ -72,3 +72,11 @@
   align-items: center;
   gap: var(--nds-space-4);
 }
+
+/* Customise's one-line hint and its info tip on ONE line (the tip's icon is a block svg on its own). */
+.hintLine {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+}

@@ -10,6 +10,8 @@ export {
   BadgeCell,
   LockedCell,
   LockGlyph,
+  WarnGlyph,
+  PauseGlyphIcon,
   LinkCell,
   StockCell,
   stockLevel,

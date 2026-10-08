@@ -186,7 +186,7 @@ describe('matrixColumnDef — one ColDef per kind, every piece from the engine t
     expect(qRules['nds-cell-is-refused']!({ data: r, colDef: { colId: 'AMAZON:IT.syncQty' } })).toBe(false)
     tracker.set('r1', 'AMAZON:IT.syncQty', 'refused', 'no')
     expect(qRules['nds-cell-is-refused']!({ data: r, colDef: { colId: 'AMAZON:IT.syncQty' } })).toBe(true)
-    expect(qRules['nds-cell-is-inherited']!({ data: r, colDef: { colId: 'AMAZON:IT.syncQty' } })).toBe(true)
+    expect(qRules['nds-cell-is-following']!({ data: r, colDef: { colId: 'AMAZON:IT.syncQty' } })).toBe(true)
   })
 
   it('the validation tint reads the Matrix rule: a negative quantity is invalid, a good one is not', () => {
@@ -201,7 +201,8 @@ describe('matrixColumnDef — one ColDef per kind, every piece from the engine t
     const r = row()
     expect(call(def('syncQty').cellClass, { data: r })).toBe('nds-ag-cell nds-ag-num nds-cell-is-editable')
     expect(call(def('price').cellClass, { data: r })).toBe('nds-ag-cell nds-ag-num nds-cell-is-editable')
-    expect(call(def('listing').cellClass, { data: r })).toBe('nds-ag-cell')
+    // The Listing cell names itself so its id always leads (`grid.css`, Matrix audit 2026-10-08).
+    expect(call(def('listing').cellClass, { data: r })).toBe('nds-ag-cell nds-matrix-listing')
     expect(def('price').headerClass).toBe('nds-ag-head-num')
     expect(def('syncMode').headerClass).toBeUndefined()
     /* `nds-cell-is-locked` is never in cellClass — it is a rule, so it cannot be added-then-removed. */

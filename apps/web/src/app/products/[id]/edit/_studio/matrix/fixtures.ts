@@ -75,7 +75,7 @@ export function previewCoordinates(inputs: readonly PreviewCoordinateInput[]): M
   if (amazonEu.length > 0) {
     out.push({
       key: 'AMAZON:EU', kind: 'region-inventory', channel: 'AMAZON', market: 'EU',
-      label: `Amazon EU · Inventory · ${amazonEu.join(' ')}`, region: 'EU', alias: null,
+      label: `Amazon · EU inventory · ${amazonEu.join(' ')}`, region: 'EU', alias: null,
       accountId: inputs.find(c => c.channel === 'AMAZON' && c.accountId)?.accountId ?? null,
       currency: 'EUR', connected: true, listed: null, draft: null,
       cells: INVENTORY_CELL_KINDS, absent: [], sharedInventoryWith: amazonEu, inventoryOn: null,

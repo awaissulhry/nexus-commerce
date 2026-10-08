@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { previewCoordinates } from './fixtures'
-import { absentHint, drawnCells, notListedLine, placesText, stripTag, stripTitle } from './columns'
+import { absentHint, absentLine, buildMatrixColumns, channelTone, drawnCells, MATRIX_GROUP_TONES, notListedLine, placesText, stripTag, stripTitle } from './columns'
 import type { MatrixCoordinate } from './contract'
 
 /**
@@ -64,5 +64,49 @@ describe('the simplified chrome (2026-10-08)', () => {
       + ' · Fulfilment — Etsy: Etsy has no fulfilment method; Shopify: Shopify has no fulfilment method',
     )
     expect(absentHint([c('EBAY:IT', 'eBay · IT')])).toBeNull()
+  })
+})
+
+/* Owner 2026-10-08 — the groups wear colours "just like the product information page", one per channel; Customise's
+   hint is one short line with the reasons on its info tip. */
+describe('the group colours', () => {
+  const flat = (list: readonly unknown[]): Array<Record<string, unknown>> => list.flatMap((d) => { const r = d as Record<string, unknown>; return Array.isArray(r.children) ? flat(r.children) : [r] })
+  const headerOf = (def: Record<string, unknown>, before: string | null) => {
+    const fn = def.headerClass as (p: unknown) => string[]
+    return fn({ column: { getColId: () => def.colId }, api: { getDisplayedColBefore: () => (before ? { getColId: () => before } : null) } })
+  }
+  it('one colour per channel, the same everywhere; any other channel is cyan', () => {
+    expect([channelTone('AMAZON'), channelTone('ebay'), channelTone('SHOPIFY'), channelTone('ETSY'), channelTone('WOOCOMMERCE'), channelTone('OTTO'), channelTone(null)])
+      .toEqual(['orange', 'blue', 'purple', 'pink', 'violet', 'cyan', 'cyan'])
+    expect(MATRIX_GROUP_TONES).toEqual({ progress: 'slate', shared: 'emerald' })
+  })
+  it('each group header and each column name under it wear the group\'s tone; the first column draws the edge', () => {
+    const coords = previewCoordinates([
+      { channel: 'AMAZON', market: 'IT', label: 'Amazon · IT', connected: true, accountId: 'a' },
+      { channel: 'EBAY', market: 'IT', label: 'eBay · IT', connected: true, accountId: 'e' },
+    ])
+    const defs = buildMatrixColumns({ coordinates: coords, cellsOf: () => null, rowOf: () => null, tracker: { get: () => undefined, subscribe: () => () => undefined }, sheetColumns: [], locale: 'it', market: 'IT',
+      axesRef: { current: [] }, rowMenuRef: { current: () => [] }, onPickFulfilment: () => undefined, rowsRef: { current: [] } } as never) as Array<Record<string, unknown>>
+    const byGroup = new Map(defs.map((g) => [g.groupId as string, g]))
+    expect(byGroup.get('grp-product')!.headerClass).toEqual([])
+    expect(byGroup.get('grp-progress')!.headerClass).toEqual(['nds-ag-head-tone', 'nds-ag-head-tone--slate', 'nds-ag-head-tone--start'])
+    expect(byGroup.get('grp-shared')!.headerClass).toEqual(['nds-ag-head-tone', 'nds-ag-head-tone--emerald', 'nds-ag-head-tone--start'])
+    expect(byGroup.get('grp-AMAZON:IT')!.headerClass).toContain('nds-ag-head-tone--orange')
+    expect(byGroup.get('grp-EBAY:IT')!.headerClass).toContain('nds-ag-head-tone--blue')
+    // Every group's label sits at its start edge, in the one Matrix header.
+    for (const g of defs) expect(g.headerGroupComponent).toBeTruthy()
+    const ebay = flat([byGroup.get('grp-EBAY:IT')!])
+    expect(headerOf(ebay[0], 'AMAZON:IT.salePrice')).toEqual(['nds-ag-head-tone', 'nds-ag-head-tone--blue', 'nds-ag-head-tone--start'])
+    expect(headerOf(ebay[1], ebay[0].colId as string)).toEqual(['nds-ag-head-tone', 'nds-ag-head-tone--blue'])
+    const identity = flat([byGroup.get('grp-product')!])[0]
+    expect(headerOf(identity, null)).toEqual([])
+  })
+  it('Customise: one short line naming the cells some channels do not offer; null when none', () => {
+    const coords = [
+      c('AMAZON:IT', 'Amazon · IT', { absent: [{ cell: 'businessPrice', reason: 'x' }, { cell: 'businessTiers', reason: 'x' }] }),
+      c('EBAY:IT', 'eBay · IT', { absent: [{ cell: 'salePrice', reason: 'y' }] }),
+    ]
+    expect(absentLine(coords)).toBe('Not on every channel: B2B price, Tiers, Sale')
+    expect(absentLine([c('EBAY:IT', 'eBay · IT')])).toBeNull()
   })
 })

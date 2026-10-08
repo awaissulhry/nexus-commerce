@@ -86,6 +86,9 @@ export const GridSheet = memo(function GridSheet({ toolbar, children, footer, de
  */
 export const SHEET_GRID_OPTIONS = {
   suppressCellFocus: false,
+  /** A cell's tooltip after 300 ms on every editing grid (the Information page, the Matrix, the stock editor) — AG's
+   *  own 2 s read as "no tooltip" (Matrix audit 2026-10-08). */
+  tooltipShowDelay: 300,
   /**
    * 🔴 AG.1 (hub ruling #185, layout spec §7.3) — `false`, and the pair is deliberate.
    *

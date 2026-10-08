@@ -570,12 +570,15 @@ export function matrixCellClasses(
      follows the pool and a price that follows the base price. `fulfilment`'s `derived`/`set` carries
      its MARK (🔗 / ✎) and no tint — §3.4's tint rules name the paused row and the FBA row and
      nothing else, and tinting every fulfilment cell in the grid would drown both. */
+  /* 2026-10-08 (Matrix audit, Owner "no inconsistency at all"): a FOLLOWED value and an OWN value looked alike — two
+     near-identical blue tints (info 6 %, primary 7 %) meaning opposite things. Now only the own value is tinted; a
+     followed value is plain ground with muted text (`nds-cell-is-following`), and its 🔗 mark says what it follows. */
   if (kind === 'syncQty' || kind === 'syncMode') {
-    if (state === 'follow') return ['nds-cell-is-inherited']
+    if (state === 'follow') return ['nds-cell-is-following']
     if (state === 'pinned') return ['nds-cell-is-pinned']
   }
   if (kind === 'price') {
-    if (state === 'price-master') return ['nds-cell-is-inherited']
+    if (state === 'price-master') return ['nds-cell-is-following']
     if (state === 'price-override' || state === 'price-formula') return ['nds-cell-is-pinned']
   }
   return []
@@ -583,7 +586,7 @@ export function matrixCellClasses(
 
 /** Every class `matrixCellClasses` can emit — the set a column builds its `cellClassRules` from. */
 export const MATRIX_CELL_CLASSES: readonly string[] = [
-  'nds-cell-is-inherited',
+  'nds-cell-is-following',
   'nds-cell-is-pinned',
   'nds-cell-is-locked',
   'nds-cell-is-paused',

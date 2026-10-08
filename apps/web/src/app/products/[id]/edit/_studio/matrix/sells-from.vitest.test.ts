@@ -107,7 +107,9 @@ describe('the From column', () => {
     const d = fromDef(groups(() => undefined))
     expect(render(d, 'v1').match(/data-nds-cell-action/g)?.length).toBe(1)
     expect(render(d, 'v1')).toContain(`aria-label="${FROM_EDIT_COPY.label}"`)
-    expect(render(d, 'p')).toBe('')
+    // The parent: nothing to say — the grid's empty cell, the same dash as every empty Matrix cell, and no pencil.
+    expect(render(d, 'p')).toContain('nds-cell-empty')
+    expect(render(d, 'p')).not.toContain('data-nds-cell-action')
     expect(render(d, 'pooled')).toContain('Shared')
     expect(render(d, 'pooled')).not.toContain('data-nds-cell-action')
     // No door (preview, or no right to adjust stock): the words alone.
@@ -226,5 +228,19 @@ describe('saved views', () => {
     expect(savedBeforeMatrixFrom(new Date(MATRIX_FROM_SINCE - 1).toISOString())).toBe(true)
     expect(savedBeforeMatrixFrom(new Date(MATRIX_FROM_SINCE + 1).toISOString())).toBe(false)
     expect(savedBeforeMatrixFrom(undefined)).toBe(false)
+  })
+})
+
+describe('the pop-up opens on its first warehouse (Matrix polish, Owner 2026-10-08)', () => {
+  it('autoFocusFirst marks only the first warehouse in the list; without it no box is marked (the bulk Edit)', async () => {
+    const { SellsFromPicker } = await import('./SellsFromPicker')
+    const draw = (autoFocusFirst: boolean) => renderToStaticMarkup(createElement(SellsFromPicker, {
+      label: 'Sells from', locations: LOCATIONS, value: ['IT-MAIN'], onChange: () => undefined, autoFocusFirst,
+    }))
+    const on = draw(true)
+    expect(on.match(/data-autofocus/g)?.length).toBe(1)
+    // The ticked warehouse leads the list, so it is the one the pop-up opens on.
+    expect(on.indexOf('data-autofocus')).toBeLessThan(on.indexOf('MI-3PL'))
+    expect(draw(false)).not.toContain('data-autofocus')
   })
 })

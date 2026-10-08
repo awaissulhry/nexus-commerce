@@ -72,15 +72,16 @@ export function summariseFamily(family: FamilyResponse | null): FamilySummary {
 
   if (family.role === 'parent') {
     const n = family.children.length
-    if (n === 0) return { role: 'Parent', detail: `No children yet · ${axisText}`, childless: true }
-    return { role: 'Parent', detail: `${n} ${n === 1 ? 'child' : 'children'} · ${axisText}`, childless: false }
+    // "Variants", the Matrix's word for the same rows (Owner 2026-10-08: one name per thing).
+    if (n === 0) return { role: 'Parent', detail: `No variants yet · ${axisText}`, childless: true }
+    return { role: 'Parent', detail: `${n} ${n === 1 ? 'variant' : 'variants'} · ${axisText}`, childless: false }
   }
   if (family.role === 'child') {
     const n = family.siblings.length
     const parentSku = family.parent?.sku ?? 'its parent'
     return {
-      role: 'Child',
-      detail: n > 0 ? `of ${parentSku} · ${n} sibling${n === 1 ? '' : 's'}` : `of ${parentSku} · the only child`,
+      role: 'Variant',
+      detail: n > 0 ? `of ${parentSku} · ${n} other ${n === 1 ? 'variant' : 'variants'}` : `of ${parentSku} · the only variant`,
       childless: false,
     }
   }

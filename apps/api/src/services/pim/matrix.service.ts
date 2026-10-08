@@ -469,7 +469,7 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
   for (const rows of amazonEuRows.values()) rows.sort((a, b) => compareMarkets(a.marketplace, b.marketplace))
   const region: Coord | null = euMarkets.length > 0 ? {
     key: 'AMAZON:EU', kind: 'region-inventory', channel: 'AMAZON', market: 'EU',
-    label: `Amazon EU · Inventory · ${euMarkets.join(' ')}`, region: 'EU', alias: null,
+    label: `Amazon · EU inventory · ${euMarkets.join(' ')}`, region: 'EU', alias: null,
     accountId: listed.find((c) => c.channel === 'AMAZON' && c.inventoryOn === 'AMAZON:EU')?.accountId ?? null,
     currency: euCandidates[0]?.currency ?? 'EUR', connected: true, listed: null, draft: null,
     cells: [...INVENTORY_CELL_KINDS], absent: [], sharedInventoryWith: euMarkets, inventoryOn: null,

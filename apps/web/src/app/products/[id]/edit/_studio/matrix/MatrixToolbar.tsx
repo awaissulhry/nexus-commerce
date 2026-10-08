@@ -5,7 +5,7 @@
  * this page's count, presets and one stated absence.
  *
  *   count      `21 rows · 1 parent · 20 variants` (§3.9, verbatim)
- *   views      the ONE views menu — presets `Everything · Inventory · Pricing · Listings` and the
+ *   views      the ONE views menu — presets `All columns · Inventory · Pricing · Listings` and the
  *              operator's saved views on surface `product-edit:views:matrix`
  *   chips      the six Matrix chips, registered by the surface through `useRegisterViewChip`
  *   Customise  the ONE `PreferencesModal`, opened by the surface
@@ -49,6 +49,8 @@ export interface MatrixToolbarProps {
   onSaveCurrentView: (name: string) => Promise<unknown>
   onUpdateCurrentView: (view: SavedGridView<MatrixPageState>) => Promise<unknown>
   viewsEmptyLabel: string
+  /** The columns on screen — the count beside the Columns menu, as on the Information page. */
+  activeCount?: number | null
   onCustomise: () => void
   onExport: () => void
   exportDisabled: boolean
@@ -78,6 +80,7 @@ export function MatrixToolbar(p: MatrixToolbarProps) {
       onSaveCurrentView={p.onSaveCurrentView}
       onUpdateCurrentView={p.onUpdateCurrentView}
       viewsEmptyLabel={p.viewsEmptyLabel}
+      activeCount={p.activeCount}
       chips={p.chips}
       activeChipId={p.activeChipId}
       onChipToggle={p.onChipToggle}

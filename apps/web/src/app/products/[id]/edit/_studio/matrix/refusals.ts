@@ -35,7 +35,7 @@ export interface RefusedMark {
   reason: string | null | undefined
 }
 
-/** The footer note's ONE example, already phrased: `Amazon EU · Inventory · IT DE · Qty — Amazon-managed`. */
+/** The footer note's ONE example, already phrased: `Amazon · EU inventory · IT DE · Qty — Amazon-managed`. */
 export function refusalLead(marks: readonly RefusedMark[]): string | undefined {
   const first = marks.find((m) => m.reason) ?? marks[0]
   if (!first) return undefined

@@ -70,11 +70,11 @@ describe('familySize', () => {
 
 describe('summariseFamily', () => {
   it('names the axes a parent varies by', () => {
-    expect(summariseFamily(parentOf(20))).toMatchObject({ role: 'Parent', detail: '20 children · Colore × Taglia', childless: false })
+    expect(summariseFamily(parentOf(20))).toMatchObject({ role: 'Parent', detail: '20 variants · Colore × Taglia', childless: false })
   })
 
   it('says "variation" in the singular when there is one', () => {
-    expect(summariseFamily(parentOf(1)).detail).toBe('1 child · Colore × Taglia')
+    expect(summariseFamily(parentOf(1)).detail).toBe('1 variant · Colore × Taglia')
   })
 
   /**
@@ -84,19 +84,19 @@ describe('summariseFamily', () => {
    */
   it('a childless parent SAYS so rather than reading as a loading failure', () => {
     const s = summariseFamily(parentOf(0))
-    expect(s.detail).toContain('No children yet')
+    expect(s.detail).toContain('No variants yet')
     expect(s.childless).toBe(true)
   })
 
   it('a parent with no axes set says that too, rather than showing a dangling separator', () => {
     const f = parentOf(3)
-    expect(summariseFamily({ ...f, self: { ...f.self, variationAxes: [] } }).detail).toBe('3 children · no variation axes set')
+    expect(summariseFamily({ ...f, self: { ...f.self, variationAxes: [] } }).detail).toBe('3 variants · no variation axes set')
   })
 
   it('a variation names its parent and its siblings', () => {
-    expect(summariseFamily(childOf(19))).toMatchObject({ role: 'Child', detail: 'of GALE-JACKET · 19 siblings' })
-    expect(summariseFamily(childOf(1)).detail).toBe('of GALE-JACKET · 1 sibling')
-    expect(summariseFamily(childOf(0)).detail).toBe('of GALE-JACKET · the only child')
+    expect(summariseFamily(childOf(19))).toMatchObject({ role: 'Variant', detail: 'of GALE-JACKET · 19 other variants' })
+    expect(summariseFamily(childOf(1)).detail).toBe('of GALE-JACKET · 1 other variant')
+    expect(summariseFamily(childOf(0)).detail).toBe('of GALE-JACKET · the only variant')
   })
 
   it('a standalone says what it is', () => {

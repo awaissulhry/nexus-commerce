@@ -282,12 +282,12 @@ describe('matrixCellClasses — one tint per cell, in §3.4 precedence', () => {
     }
     expect(matrixCellClasses('syncState', STATE_FIXTURES['queue-paused'].c, COORD)).toEqual(['nds-cell-is-paused'])
   })
-  it('FBA and closed rows are locked; a follow is inherited; a pin / override / formula is pinned', () => {
+  it('FBA and closed rows are locked; a follow is following (no tint, muted text); a pin / override / formula is pinned', () => {
     expect(matrixCellClasses('syncQty', STATE_FIXTURES['amazon-managed'].c, COORD)).toEqual(['nds-cell-is-locked'])
     expect(matrixCellClasses('syncMode', STATE_FIXTURES['offer-closed'].c, COORD)).toEqual(['nds-cell-is-locked'])
-    expect(matrixCellClasses('syncQty', STATE_FIXTURES.follow.c, COORD)).toEqual(['nds-cell-is-inherited'])
+    expect(matrixCellClasses('syncQty', STATE_FIXTURES.follow.c, COORD)).toEqual(['nds-cell-is-following'])
     expect(matrixCellClasses('syncMode', STATE_FIXTURES.pinned.c, COORD)).toEqual(['nds-cell-is-pinned'])
-    expect(matrixCellClasses('price', STATE_FIXTURES['price-master'].c, COORD)).toEqual(['nds-cell-is-inherited'])
+    expect(matrixCellClasses('price', STATE_FIXTURES['price-master'].c, COORD)).toEqual(['nds-cell-is-following'])
     expect(matrixCellClasses('price', STATE_FIXTURES['price-override'].c, COORD)).toEqual(['nds-cell-is-pinned'])
     /* A formula-owned price is `writable: false` on the wire → locked beats the pinned tint. */
     expect(matrixCellClasses('price', STATE_FIXTURES['price-formula'].c, COORD)).toEqual(['nds-cell-is-locked'])
@@ -296,13 +296,13 @@ describe('matrixCellClasses — one tint per cell, in §3.4 precedence', () => {
   it('a failed or dead queue paints refused on the Sync cell only', () => {
     expect(matrixCellClasses('syncState', STATE_FIXTURES['queue-failed'].c, COORD)).toEqual(['nds-cell-is-refused'])
     expect(matrixCellClasses('syncState', STATE_FIXTURES['queue-dead'].c, COORD)).toEqual(['nds-cell-is-refused'])
-    expect(matrixCellClasses('syncQty', STATE_FIXTURES['queue-dead'].c, COORD)).toEqual(['nds-cell-is-inherited'])
+    expect(matrixCellClasses('syncQty', STATE_FIXTURES['queue-dead'].c, COORD)).toEqual(['nds-cell-is-following'])
   })
   it('a non-writable cell is locked, except the two fact columns and an absent cell', () => {
     const parent = cells({ writable: { syncQty: false }, writeBlockedReason: { syncQty: 'Set on the variants' } })
     expect(matrixCellClasses('syncQty', parent, COORD)).toEqual(['nds-cell-is-locked'])
-    /* Positive control: the same cell with the flag back on is inherited, not locked. */
-    expect(matrixCellClasses('syncQty', cells({ writable: { syncQty: true } }), COORD)).toEqual(['nds-cell-is-inherited'])
+    /* Positive control: the same cell with the flag back on is following, not locked. */
+    expect(matrixCellClasses('syncQty', cells({ writable: { syncQty: true } }), COORD)).toEqual(['nds-cell-is-following'])
     expect(matrixCellClasses('listing', cells({ writable: {} }), COORD)).toEqual([])
     expect(matrixCellClasses('syncState', cells({ writable: {} }), COORD)).toEqual([])
     expect(matrixCellClasses('syncQty', null, COORD)).toEqual(['nds-cell-is-locked'])
@@ -441,7 +441,7 @@ describe('editability, the fill-safe value and the default mutation', () => {
     expect(c.sync!.intended).toBe(10)
     expect(c.sync!.mode).toBe('FOLLOW')
     expect(c.sync!.kind).toBe('FOLLOW')
-    expect(matrixCellClasses('syncQty', c, COORD)).toEqual(['nds-cell-is-inherited'])
+    expect(matrixCellClasses('syncQty', c, COORD)).toEqual(['nds-cell-is-following'])
     expect(matrixApplyValue(c, 'syncBuffer', '3')).toBe(true)
     expect(c.sync!.buffer).toBe(3)
     expect(matrixApplyValue(c, 'syncMode', 'PINNED')).toBe(true)
@@ -491,7 +491,8 @@ describe('the eight renderers draw what the rules decided', () => {
     expect(h).toContain('B0FXD0620C')
     expect(h).not.toContain('type="checkbox"')
     expect(html('listing', STATE_FIXTURES.excluded.c)).toContain('muted')
-    expect(html('listing', cells({ listing: null }))).toBe('')
+    // No listing here: the grid's empty cell (the dash in a default grid), never a bare blank beside dashes.
+    expect(html('listing', cells({ listing: null }))).toContain('nds-cell-empty')
   })
   it('Fulfilment: the method, 🔗/✎ by source, ⚠ on the guard, ⇄ on the report, a chevron when writable', () => {
     expect(html('fulfilment', STATE_FIXTURES['fulfilment-set'].c)).toMatch(/>FBM<.*nds-cell-prov-pinned.*nds-ag-chev/s)
@@ -541,7 +542,8 @@ describe('the eight renderers draw what the rules decided', () => {
     expect(qty).toMatch(/>403<.*nds-matrix-failed.*✗/s)
     /* No title of its own: the AG tooltip leads with the reason. */
     expect(qty).not.toMatch(/nds-matrix-failed"[^>]*title=/)
-    expect(html('syncQty', cells({ sync: { euConflict: 'EU shared-quantity conflict: …' } }))).toMatch(/nds-matrix-warn[^>]*>⚠/)
+    // The outline warning icon (`WarnGlyph`), never the text ⚠ a phone may draw as a colour emoji.
+    expect(html('syncQty', cells({ sync: { euConflict: 'EU shared-quantity conflict: …' } }))).toMatch(/nds-matrix-warn[^>]*><svg/)
     expect(html('price', cells({ price: { pushFailed: failed } }))).toMatch(/>€105\.00<.*nds-matrix-failed/s)
     /* Success, and a failed folded queue the server did not turn into a lane failure, show nothing. */
     expect(html('syncQty', cells())).not.toContain('nds-matrix-failed')
@@ -589,9 +591,16 @@ describe('the eight renderers draw what the rules decided', () => {
     expect(html('salePrice', STATE_FIXTURES['sale-set'].c)).toContain('€89.00 · 12 Sep → 30 Sep')
     expect(html('salePrice', STATE_FIXTURES['sale-none'].c)).toMatch(/nds-cell-muted.*—/s)
   })
-  it('every renderer renders NOTHING for an absent cell (the honest-absence rule)', () => {
+  /* The honest-absence rule, one look (Matrix audit 2026-10-08): an absent cell invents no state — it draws the GRID's
+     empty cell (`EmptyValue`: the muted dash in a default grid, nothing in an editing grid's `emptyCells="blank"`), the same
+     as every other empty cell beside it. */
+  it('every renderer draws the grid\'s empty cell for an absent cell, and no state', () => {
     let arms = 0
-    for (const kind of MATRIX_CELL_KINDS) { expect(html(kind, null)).toBe(''); arms++ }
+    for (const kind of MATRIX_CELL_KINDS) {
+      const h = html(kind, null)
+      expect(h).toMatch(/^<span class="nds-cell-empty"[^>]*>—<\/span>$/)
+      arms++
+    }
     expect(arms).toBe(8)
   })
 })
