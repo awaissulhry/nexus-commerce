@@ -153,7 +153,7 @@ describe('C3 — the server and every change tool name the business', () => {
 
   it('the instructions name every view of ads-brain, in the tool\'s own order (a new view cannot be left out)', () => {
     expect(mcpInstructions(business)).toContain(`ads-brain (read only; views ${BRAIN_MAP_VIEWS.join(', ')}).`)
-    expect([...BRAIN_MAP_VIEWS]).toEqual(['map', 'clashes', 'setup', 'money', 'terms', 'state', 'hours', 'negatives'])
+    expect([...BRAIN_MAP_VIEWS]).toEqual(['map', 'clashes', 'setup', 'money', 'terms', 'state', 'hours', 'negatives', 'harvest'])
   })
 
   it('W4-14 — the instructions name every Wave 4 Amazon ads tool, and each is a registered tool', () => {
