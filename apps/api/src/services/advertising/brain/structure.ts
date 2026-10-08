@@ -555,6 +555,10 @@ export interface GoLiveFacts {
   skcMax: number
   /** The product's money brake (AB-7), or null without a plan. */
   brake: string | null
+  /** The structure's kill switch for this product in this market, in words; null: not stopped. */
+  killed: string | null
+  /** The structure's env ceiling (NEXUS_BID_BRAIN_MODE and NEXUS_ADS_BRAIN_STRUCTURE_MODE both live). */
+  ceiling: { live: boolean; why: string }
 }
 
 /** Brakes of the money plan that hold every raise: a go-live adds spend, so it is outside the caps while one holds. */
@@ -568,7 +572,9 @@ export function goLiveVerdict(g: GoLiveFacts): { inside: boolean; why: string } 
   const outside: string[] = []
   if (g.status !== 'BUILT' && g.status !== 'LIVE_PROPOSED') outside.push(`the brain's record of it is ${g.status}, not built and waiting to go live`)
   if (!g.enrolled) outside.push('its product is not enrolled in the brain in this market')
-  else if (g.structure !== 'OBSERVE' && g.structure !== 'PROPOSE') outside.push(`its product's structure lever is ${g.structure} (${g.structureWhy})`)
+  else if (g.structure !== 'PROPOSE') outside.push(`its product's structure lever is ${g.structure}, not PROPOSE (${g.structureWhy})`)
+  if (g.killed) outside.push(`the structure's kill switch is on (${g.killed})`)
+  if (!g.ceiling.live) outside.push(g.ceiling.why)
   if (g.budgetCents == null) outside.push('Nexus does not know its daily budget')
   else if (g.budgetCents > g.budgetCapCents) outside.push('its daily budget is above the first-budget cap (firstBudgetPctOfEnvelope of the day\'s envelope)')
   if (g.kind === 'SKC' && g.liveSkcs >= g.skcMax) outside.push(`the product already runs ${plural(g.liveSkcs, 'single-keyword campaign')} of the brain (skcMax ${g.skcMax})`)

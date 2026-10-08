@@ -8,7 +8,8 @@
  *                BUILT or LIVE_PROPOSED): a single-keyword campaign, or a split's copy. Anything else — a campaign a person or
  *                Claude built, one of a proposal that went live already — is answered null: the door's own line, as before.
  *   inside caps  brain/structure.ts goLiveVerdict on the facts read now: the campaign's product is enrolled in the market and
- *                its structure lever still OBSERVE or PROPOSE (the Owner did not take it back), the campaign's daily budget is
+ *                its structure lever still PROPOSE (the Owner did not take it back), no kill switch stops it, the env ceiling
+ *                is live, the campaign's daily budget is
  *                inside the first-budget cap, the product's live single-keyword campaigns are below skcMax, and its money
  *                brake holds no raise. Several campaigns at one door: inside only when every one is.
  *
@@ -17,6 +18,8 @@
 import prisma from '../../../db.js'
 import { logger } from '../../../utils/logger.js'
 import { resolveBrainSettings, type OverrideRow } from './settings.js'
+import { leverKillWhy } from './kill-switch.js'
+import { structureCeiling } from './structure-load.js'
 import { firstBudgetCap, goLiveVerdict, type StructureKind } from './structure.js'
 import type { LeverEffective } from './terms.js'
 
@@ -66,6 +69,12 @@ export async function structureGoLive(campaignIds: readonly string[]): Promise<S
       prisma.adsBrainBudgetDecision.findMany({ where: { productId: { in: products }, marketplace: { in: markets } }, orderBy: { createdAt: 'desc' }, select: { productId: true, marketplace: true, envelopeCents: true, month: true, brake: true }, take: 200 }),
       prisma.adsBrainStructure.groupBy({ by: ['productId', 'marketplace'], where: { kind: 'SKC', status: 'LIVE', productId: { in: products } }, _count: { _all: true } }),
     ])
+    const ceiling = structureCeiling()
+    const kills = new Map<string, string | null>()
+    for (const p of pairs) {
+      const k = `${p.productId}\u0000${p.row.marketplace}`
+      if (!kills.has(k)) kills.set(k, await leverKillWhy('structure', p.productId, p.row.marketplace))
+    }
     const out = pairs.map(({ campaignId, row, productId }) => {
       const market = row.marketplace
       const enrolled = enrollments.some((e) => e.productId === productId && e.marketplace === market)
@@ -80,6 +89,7 @@ export async function structureGoLive(campaignIds: readonly string[]): Promise<S
         budgetCents: c?.dailyBudget != null ? Math.round(Number(c.dailyBudget) * 100) : null, budgetCapCents: cap.cents,
         liveSkcs: liveSkcs.find((l) => l.productId === productId && l.marketplace === market)?._count._all ?? 0, skcMax: Number(s.values.skcMax.value),
         brake: plan?.brake ?? null,
+        killed: kills.get(`${productId}\u0000${market}`) ?? null, ceiling,
       })
       return { campaignId, key: row.key, productId, inside: v.inside, why: v.why }
     })

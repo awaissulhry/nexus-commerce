@@ -274,6 +274,10 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-16 — the structure lever (real P
     await inW(() => db.campaign.update({ where: { id: C('skc') }, data: { dailyBudget: '10.00' } }))
     expect(await inW(() => structureGoLive([C('skc')]))).toMatchObject({ inside: false, why: expect.stringMatching(/above the first-budget cap/) })
     await inW(() => db.campaign.update({ where: { id: C('skc') }, data: { dailyBudget: '1.00' } }))
+    // The structure's env ceiling back to shadow: outside, the code again.
+    vi.stubEnv('NEXUS_ADS_BRAIN_STRUCTURE_MODE', 'shadow')
+    expect(await inW(() => structureGoLive([C('skc')]))).toMatchObject({ inside: false, why: expect.stringMatching(/NEXUS_ADS_BRAIN_STRUCTURE_MODE is shadow/) })
+    vi.stubEnv('NEXUS_ADS_BRAIN_STRUCTURE_MODE', 'live')
     // Live (as the approved plan leaves it): LIVE — its bids are the bid brain's from here.
     await inW(() => db.campaign.update({ where: { id: C('skc') }, data: { liveBidWritesEnabled: true, bidsSuppressedAt: null } }))
     expect((await inW(() => runStructureOnce({ now: TUESDAY }))).pending.live).toBe(1)

@@ -278,10 +278,10 @@ describe('AB-16 — the hour-curve distance', () => {
 })
 
 describe('AB-16 — going live (D1 = B)', () => {
-  const g = (extra: Partial<GoLiveFacts> = {}): GoLiveFacts => ({ kind: 'SKC', status: 'BUILT', enrolled: true, structure: 'PROPOSE', structureWhy: 'PROPOSE', budgetCents: 500, budgetCapCents: 500, liveSkcs: 0, skcMax: 20, brake: 'none', ...extra })
+  const g = (extra: Partial<GoLiveFacts> = {}): GoLiveFacts => ({ kind: 'SKC', status: 'BUILT', enrolled: true, structure: 'PROPOSE', structureWhy: 'PROPOSE', budgetCents: 500, budgetCapCents: 500, liveSkcs: 0, skcMax: 20, brake: 'none', killed: null, ceiling: { live: true, why: 'live' }, ...extra })
   it('inside the caps: a normal approval', () => {
     expect(goLiveVerdict(g())).toEqual({ inside: true, why: expect.stringMatching(/a person's normal approval sends it \(D1 = B\)/) })
-    expect(goLiveVerdict(g({ status: 'LIVE_PROPOSED', structure: 'OBSERVE' })).inside).toBe(true)
+    expect(goLiveVerdict(g({ status: 'LIVE_PROPOSED' })).inside).toBe(true)
   })
   it('outside: each reason named — the approver\'s code, as before', () => {
     const out = (extra: Partial<GoLiveFacts>) => goLiveVerdict(g(extra))
@@ -294,6 +294,9 @@ describe('AB-16 — going live (D1 = B)', () => {
     expect(out({ brake: 'hold_raises' }).why).toMatch(/money brake holds every raise/)
     expect(out({ status: 'LIVE' }).why).toMatch(/not built and waiting to go live/)
     expect(out({ brake: 'cut_bids' }).why).toMatch(/authenticator code/)
+    expect(out({ structure: 'OBSERVE', structureWhy: 'back to shadow' }).why).toMatch(/structure lever is OBSERVE, not PROPOSE/)
+    expect(out({ killed: 'stopped by the Owner' }).why).toMatch(/kill switch is on \(stopped by the Owner\)/)
+    expect(out({ ceiling: { live: false, why: 'the structure\'s env ceiling NEXUS_ADS_BRAIN_STRUCTURE_MODE is shadow' } }).why).toMatch(/NEXUS_ADS_BRAIN_STRUCTURE_MODE is shadow/)
   })
   it('the first-budget cap: the day\'s share of the envelope, at least Amazon\'s lowest', () => {
     expect(firstBudgetCap(300_000, '2026-10', 10)).toMatchObject({ cents: 967 })
