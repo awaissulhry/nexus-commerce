@@ -12659,8 +12659,8 @@ model FbaInboundPlanLine {
   plan            FbaInboundPlanV2 @relation(fields: [planRowId], references: [id], onDelete: Cascade)
   productId       String
   product         Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
-  /// The Amazon seller SKU sent (the listing's SKU in the plan's market).
-  msku            String
+  /// The Amazon seller SKU sent (the listing's SKU in the plan's market); null in a DRAFT (read again at Send).
+  msku            String?
   /// Units in total: Σ cases × unitsPerCase + looseUnits.
   quantity        Int
   /// Sealed cases sent, per case size: [{ unitsPerCase, cases }] (`CaseCount[]`, biggest case first); [] = none.
@@ -12668,9 +12668,9 @@ model FbaInboundPlanLine {
   caseCounts      Json             @default("[]")
   /// Units packed in mixed boxes.
   looseUnits      Int              @default(0)
-  /// AMAZON | SELLER (Amazon's ItemInput prepOwner / labelOwner).
-  prepOwner       String
-  labelOwner      String
+  /// AMAZON | SELLER (Amazon's ItemInput prepOwner / labelOwner); null in a DRAFT (read again at Send).
+  prepOwner       String?
+  labelOwner      String?
   /// The hold at the From warehouse (StockReservation.id); null = none (released, or not held yet).
   reservationId   String?
   /// Units marked Shipped so far (across the plan's shipments).

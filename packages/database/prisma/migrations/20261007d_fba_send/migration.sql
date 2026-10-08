@@ -9,7 +9,8 @@
 --   poll reads these rows unchanged. No new FK.
 -- FbaInboundPlanLine (new, business-owned): one SKU of a plan — msku, units (Σ cases × unitsPerCase + loose), the sealed
 --   cases per case size (caseCounts), prep/label owner, the hold at the From warehouse (reservationId) and the units
---   shipped so far.
+--   shipped so far. In a DRAFT (Owner 2026-10-08: built on the FBA shipments page, nothing at Amazon yet) msku and the
+--   owners are null; "Send to Amazon" reads them again.
 -- Additive only: no existing column changes, no NOT NULL on an existing table; production has 0 plans, and with no new
 -- rows every current screen, push and job behaves exactly as before.
 --
@@ -49,12 +50,12 @@ CREATE TABLE "FbaInboundPlanLine" (
     "id" TEXT NOT NULL,
     "planRowId" TEXT NOT NULL,
     "productId" TEXT NOT NULL,
-    "msku" TEXT NOT NULL,
+    "msku" TEXT,
     "quantity" INTEGER NOT NULL,
     "caseCounts" JSONB NOT NULL DEFAULT '[]',
     "looseUnits" INTEGER NOT NULL DEFAULT 0,
-    "prepOwner" TEXT NOT NULL,
-    "labelOwner" TEXT NOT NULL,
+    "prepOwner" TEXT,
+    "labelOwner" TEXT,
     "reservationId" TEXT,
     "shippedQuantity" INTEGER NOT NULL DEFAULT 0,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   FBA_CANCELLABLE_STATUSES, FBA_CLAIMABLE_STATUSES, FBA_CLOSED_STATUSES, FBA_JOB_STATUSES, FBA_PERSON_STATUSES,
   FBA_AMAZON_STATUSES, FBA_PLAN_STATUSES, FBA_PLAN_STEPS, FBA_SEND_COPY, FBA_STEP_STATUS, MIXED_BOX_DEFAULT, MIXED_BOX_FILL,
-  addressMissing, effectiveOwners, fbaAmazonPlanName, fbaInboundShown, fbaPlanCan, isFbaPlanOpen, isFbaPlanStatus, lengthCm, lineCases, lineUnits,
+  addressMissing, effectiveOwners, fbaAmazonPlanName, fbaInboundShown, fbaPlanCan, fbaPlanViewOf, isFbaPlanOpen, isFbaPlanUnderWay, isFbaPlanStatus, lengthCm, lineCases, lineUnits,
   mixedBoxProblem, nextWorkingDay, planBoxes, sendProblems, sendSummary, unitWeightKg,
   type FbaBoxSku, type FbaSendDraft, type FbaSendSku, type FbaSendChoice,
 } from './fba-send.js'
@@ -400,15 +400,36 @@ describe('states, steps and what a person may do', () => {
   it('fbaPlanCan: choose until the options expire, then get new ones; retry on FAILED; cancel until a shipment is shipped', () => {
     const now = '2026-10-07T10:00:00Z'
     expect(fbaPlanCan({ status: 'WAITING_FOR_CHOICE', shippedShipments: 0, optionsExpireAt: '2026-10-07T11:00:00Z', now }))
-      .toEqual({ choose: true, newOptions: false, retry: false, cancel: true })
+      .toEqual({ edit: false, send: false, discard: false, choose: true, newOptions: false, retry: false, cancel: true })
     expect(fbaPlanCan({ status: 'WAITING_FOR_CHOICE', shippedShipments: 0, optionsExpireAt: '2026-10-07T09:00:00Z', now }))
-      .toEqual({ choose: false, newOptions: true, retry: false, cancel: true })
-    expect(fbaPlanCan({ status: 'FAILED', shippedShipments: 0, now })).toEqual({ choose: false, newOptions: false, retry: true, cancel: true })
+      .toEqual({ edit: false, send: false, discard: false, choose: false, newOptions: true, retry: false, cancel: true })
+    expect(fbaPlanCan({ status: 'FAILED', shippedShipments: 0, now })).toEqual({ edit: false, send: false, discard: false, choose: false, newOptions: false, retry: true, cancel: true })
     expect(fbaPlanCan({ status: 'READY_TO_SHIP', shippedShipments: 1, now }).cancel).toBe(false)
     for (const status of ['SHIPPED', 'AT_AMAZON', 'CLOSED', 'CANCELLING', 'CANCELLED']) {
       expect(fbaPlanCan({ status, shippedShipments: 0, now }).cancel).toBe(false)
     }
     expect(FBA_CANCELLABLE_STATUSES).toContain('HELD')
+  })
+
+  it('a DRAFT: edit, send and delete only; open but not under way; its own tab; never claimed by the job', () => {
+    const now = '2026-10-07T10:00:00Z'
+    expect(fbaPlanCan({ status: 'DRAFT', shippedShipments: 0, now }))
+      .toEqual({ edit: true, send: true, discard: true, choose: false, newOptions: false, retry: false, cancel: false })
+    expect(isFbaPlanOpen('DRAFT')).toBe(true)
+    expect(isFbaPlanUnderWay('DRAFT')).toBe(false)
+    expect(isFbaPlanUnderWay('READY_TO_SHIP')).toBe(true)
+    expect(isFbaPlanUnderWay('CANCELLED')).toBe(false)
+    expect(fbaPlanViewOf('DRAFT')).toBe('drafts')
+    expect(fbaPlanViewOf('WAITING_FOR_CHOICE')).toBe('active')
+    expect(fbaPlanViewOf('CLOSED')).toBe('done')
+    expect(FBA_CLAIMABLE_STATUSES).not.toContain('DRAFT')
+    expect(FBA_CANCELLABLE_STATUSES).not.toContain('DRAFT')
+    expect(FBA_SEND_COPY.status.DRAFT).toBe('Draft')
+    expect(FBA_SEND_COPY.addToDraft(18)).toBe('Add to draft · 18 units')
+    expect(FBA_SEND_COPY.sendToAmazon(1)).toBe('Send to Amazon · 1 unit')
+    expect(FBA_SEND_COPY.draftLink(18)).toBe('FBA draft · 18 units')
+    expect(FBA_SEND_COPY.shipmentLink(1, 'Ready to ship')).toBe('FBA shipment · Ready to ship')
+    expect(FBA_SEND_COPY.shipmentLink(3, 'Ready to ship')).toBe('FBA shipments · 3')
   })
 })
 

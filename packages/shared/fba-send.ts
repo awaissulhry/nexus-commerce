@@ -12,7 +12,11 @@
  *  - Confirming the placement (final at Amazon) is ONE person's click that shows Amazon's fees.
  *  - Prep / label owner is asked once in the dialog when "not set" and remembered for those SKUs.
  *
- * The plan's states: QUEUED → CREATING → PACKING → BOXES → PLACING → QUOTING → WAITING_FOR_CHOICE (a person) →
+ * DRAFT (Owner 2026-10-08): the Matrix "Send to FBA" and Claude's tool fill ONE open draft per From + To; it lives only in
+ * Nexus (no Amazon call, no hold) until a person clicks "Send to Amazon" on the FBA shipments page (Outbound). A draft
+ * row always has a `source` (old wizard rows that default to 'DRAFT' have none, and every reader filters on it).
+ *
+ * The plan's states: DRAFT → QUEUED → CREATING → PACKING → BOXES → PLACING → QUOTING → WAITING_FOR_CHOICE (a person) →
  * CONFIRMING → LABELS → READY_TO_SHIP (a person packs, prints, marks each shipment Shipped) → SHIPPED → AT_AMAZON →
  * CLOSED. Side states: FAILED (a step failed; "Try again" re-runs it), HELD (writes switched off / sign-in / rate wait —
  * resumes by itself), CANCELLING → CANCELLED.
@@ -22,7 +26,7 @@ import { AMAZON_EU_BOX, CASE_COPY, isCaseOwner, type CaseCount, type CaseOwner }
 /* ── states and steps ─────────────────────────────────────────────────────────────────────────── */
 
 export const FBA_PLAN_STATUSES = [
-  'QUEUED', 'CREATING', 'PACKING', 'BOXES', 'PLACING', 'QUOTING', 'WAITING_FOR_CHOICE', 'CONFIRMING', 'LABELS',
+  'DRAFT', 'QUEUED', 'CREATING', 'PACKING', 'BOXES', 'PLACING', 'QUOTING', 'WAITING_FOR_CHOICE', 'CONFIRMING', 'LABELS',
   'READY_TO_SHIP', 'SHIPPED', 'AT_AMAZON', 'CLOSED', 'FAILED', 'HELD', 'CANCELLING', 'CANCELLED',
 ] as const
 export type FbaPlanStatus = (typeof FBA_PLAN_STATUSES)[number]
@@ -31,8 +35,8 @@ export type FbaPlanStatus = (typeof FBA_PLAN_STATUSES)[number]
 export const FBA_JOB_STATUSES = [
   'QUEUED', 'CREATING', 'PACKING', 'BOXES', 'PLACING', 'QUOTING', 'CONFIRMING', 'LABELS', 'HELD', 'CANCELLING',
 ] as const satisfies readonly FbaPlanStatus[]
-/** A person acts next: pick the option, pack and mark Shipped, or "Try again" / "Cancel plan". */
-export const FBA_PERSON_STATUSES = ['WAITING_FOR_CHOICE', 'READY_TO_SHIP', 'FAILED'] as const satisfies readonly FbaPlanStatus[]
+/** A person acts next: send the draft, pick the option, pack and mark Shipped, or "Try again" / "Cancel plan". */
+export const FBA_PERSON_STATUSES = ['DRAFT', 'WAITING_FOR_CHOICE', 'READY_TO_SHIP', 'FAILED'] as const satisfies readonly FbaPlanStatus[]
 /** Amazon moves these (the existing 15-min status poll, `jobs/fba-status-poll.job.ts`). */
 export const FBA_AMAZON_STATUSES = ['SHIPPED', 'AT_AMAZON'] as const satisfies readonly FbaPlanStatus[]
 /** Final: nothing moves any more and no hold remains. */
@@ -77,9 +81,13 @@ export function isFbaPlanStatus(value: unknown): value is FbaPlanStatus {
 export function isFbaPlanStep(value: unknown): value is FbaPlanStep {
   return typeof value === 'string' && (FBA_PLAN_STEPS as readonly string[]).includes(value)
 }
-/** Open = not CLOSED / CANCELLED: the drawer shows it, its unshipped units count as "planned", its holds stand. */
+/** Open = not CLOSED / CANCELLED: the drawer and the page's Drafts / In progress tabs show it. */
 export function isFbaPlanOpen(status: string): boolean {
   return isFbaPlanStatus(status) && !(FBA_CLOSED_STATUSES as readonly string[]).includes(status)
+}
+/** Under way = open and sent (not a DRAFT): its unshipped units count as "planned", its holds stand. */
+export function isFbaPlanUnderWay(status: string): boolean {
+  return isFbaPlanOpen(status) && status !== 'DRAFT'
 }
 
 /**
@@ -220,6 +228,10 @@ export interface FbaSendDraft {
   /** MIXED_BOX_DEFAULT unless the business set another. */
   mixedBox: FbaMixedBox
   skus: FbaSendSku[]
+  /** The open DRAFT for this From + To (`planId`), or null. With `?planId=` the draft's own From, To, day and box. */
+  draftId: string | null
+  /** That draft's lines for these SKUs (the dialog starts from them); [] when none. */
+  lines: FbaSendLine[]
 }
 
 /** One SKU the person sends: sealed cases per case size (identical case boxes per size) and loose units (mixed boxes). */
@@ -252,6 +264,59 @@ export interface FbaCreateRequest {
 }
 export interface FbaCreateAnswer {
   planId: string
+}
+
+/**
+ * POST /api/fba/inbound/drafts — "Add to draft" (the Matrix dialog, Claude's tool): these lines go into the ONE open
+ * draft for this From + To (made when none). A SKU already in it takes the new numbers; a line with 0 units takes the SKU
+ * out. No Amazon call, no hold. → 200 FbaCreateAnswer (the draft's planId).
+ */
+export interface FbaDraftAddRequest {
+  from: string
+  market: string
+  lines: FbaSendLine[]
+  readyToShipOn?: string | null
+  mixedBox?: FbaMixedBox | null
+  owners?: FbaSendOwners | null
+}
+/**
+ * PATCH /api/fba/inbound/plans/:id — edit a DRAFT on the page. Each field absent = keep. `lines` replaces every line
+ * (0-unit lines dropped). A From + To that already has another open draft → 409 DRAFT_EXISTS. → 200 FbaPlanView.
+ */
+export interface FbaDraftUpdateRequest {
+  from?: string
+  market?: string
+  readyToShipOn?: string
+  mixedBox?: FbaMixedBox | null
+  lines?: FbaSendLine[]
+  owners?: FbaSendOwners | null
+}
+/**
+ * POST /api/fba/inbound/plans/:id/send (Idempotency-Key) — "Send to Amazon": today's Create plan on the draft's lines
+ * (the checks, the holds, the Amazon SKU and owners read again, QUEUED, the job). A second send of the same draft
+ * answers the same planId. DELETE /api/fba/inbound/plans/:id deletes a DRAFT (nothing at Amazon, no hold).
+ */
+export interface FbaDraftSendRequest {
+  readyToShipOn?: string
+  mixedBox?: FbaMixedBox | null
+  owners?: FbaSendOwners | null
+}
+/** The FBA shipments page's tabs: DRAFT · open and sent · CLOSED / CANCELLED. */
+export const FBA_PLAN_VIEWS = ['drafts', 'active', 'done'] as const
+export type FbaPlanListView = (typeof FBA_PLAN_VIEWS)[number]
+/** Which tab a status belongs to. */
+export function fbaPlanViewOf(status: string): FbaPlanListView {
+  if (status === 'DRAFT') return 'drafts'
+  return isFbaPlanOpen(status) ? 'active' : 'done'
+}
+/**
+ * GET /api/fba/inbound/plans?view=drafts|active|done&productId=&cursor=&limit= (newest first; `open=1` = drafts + active,
+ * the Matrix drawer) → this. `next` = the cursor of the next page, null at the end. `counts` = every tab's count.
+ */
+export interface FbaPlanListAnswer {
+  plans: FbaPlanView[]
+  next: string | null
+  counts: Record<FbaPlanListView, number>
 }
 
 /** POST /api/fba/inbound/plans/:id/choice — the Owner's pick (stored as `plan.choice`). */
@@ -451,13 +516,15 @@ export interface FbaShipmentTracking {
 export interface FbaPlanLineView {
   productId: string
   sku: string
-  msku: string
+  /** null in a DRAFT until it is sent (read again at "Send to Amazon"). */
+  msku: string | null
   quantity: number
   /** Sealed cases sent per case size (`FbaInboundPlanLine.caseCounts`). */
   cases: CaseCount[]
   looseUnits: number
-  prepOwner: string
-  labelOwner: string
+  /** null in a DRAFT until it is sent. */
+  prepOwner: string | null
+  labelOwner: string | null
   shippedQuantity: number
   /** A hold stands for the units not shipped yet. */
   held: boolean
@@ -481,6 +548,10 @@ export interface FbaShipmentView {
 }
 /** What a person may do on the plan now (`fbaPlanCan`). */
 export interface FbaPlanCan {
+  /** DRAFT: change its SKUs, From, To, ready day, box; "Send to Amazon"; "Delete draft". */
+  edit: boolean
+  send: boolean
+  discard: boolean
   choose: boolean
   newOptions: boolean
   retry: boolean
@@ -526,7 +597,11 @@ export interface FbaPlanView {
 export function fbaPlanCan(i: { status: string; shippedShipments: number; optionsExpireAt?: string | null; now: string }): FbaPlanCan {
   const expired = !!i.optionsExpireAt && Date.parse(i.optionsExpireAt) <= Date.parse(i.now)
   const waiting = i.status === 'WAITING_FOR_CHOICE'
+  const draft = i.status === 'DRAFT'
   return {
+    edit: draft,
+    send: draft,
+    discard: draft,
     choose: waiting && !expired,
     newOptions: waiting && expired,
     retry: i.status === 'FAILED',
@@ -563,6 +638,23 @@ export const FBA_SEND_COPY = {
   metrics: { skus: 'SKUs', units: 'Units', boxes: 'Boxes', weight: 'Weight' },
   weight: (kg: number) => `${kg.toFixed(1)} kg`,
   primary: (units: number) => `Create plan · ${plural(units, 'unit', 'units')}`,
+  /** The Matrix dialog's button (Owner 2026-10-08): the SKUs go into the open draft. */
+  addToDraft: (units: number) => `Add to draft · ${plural(units, 'unit', 'units')}`,
+  addedToDraft: 'Added to draft',
+  /** The page's draft button: today's Create plan. */
+  sendToAmazon: (units: number) => `Send to Amazon · ${plural(units, 'unit', 'units')}`,
+  deleteDraft: 'Delete draft',
+  newDraft: 'New draft',
+  addSkus: 'Add SKUs',
+  removeSku: (sku: string) => `Remove ${sku}`,
+  draftExists: (from: string, market: string) => `There is already a draft from ${from} to Amazon ${market}`,
+  /** The FBA shipments page (Fulfillment › Outbound). */
+  pageTitle: 'FBA shipments',
+  views: { drafts: 'Drafts', active: 'In progress', done: 'Done' } as Record<FbaPlanListView, string>,
+  openPage: 'Open in FBA shipments',
+  /** The Matrix footer link: a draft holds this family's SKUs / shipments under way. */
+  draftLink: (units: number) => `FBA draft · ${plural(units, 'unit', 'units')}`,
+  shipmentLink: (count: number, status: string) => (count === 1 ? `FBA shipment · ${status}` : `FBA shipments · ${count}`),
   done: 'Plan sent to Amazon. Next: pick where it goes — about 2–5 minutes.',
   follow: 'Follow it',
   undo: 'Undo',
@@ -571,7 +663,7 @@ export const FBA_SEND_COPY = {
   plansButton: (open: number) => `FBA plans · ${open}`,
   drawerTitle: 'FBA plans',
   status: {
-    QUEUED: 'Queued', CREATING: 'Creating at Amazon', PACKING: 'Packing', BOXES: 'Sending boxes', PLACING: 'Getting placement',
+    DRAFT: 'Draft', QUEUED: 'Queued', CREATING: 'Creating at Amazon', PACKING: 'Packing', BOXES: 'Sending boxes', PLACING: 'Getting placement',
     QUOTING: 'Getting carriers', WAITING_FOR_CHOICE: 'Pick where it goes', CONFIRMING: 'Confirming', LABELS: 'Getting labels',
     READY_TO_SHIP: 'Ready to ship', SHIPPED: 'Shipped', AT_AMAZON: 'At Amazon', CLOSED: 'Closed', FAILED: 'Failed',
     HELD: 'On hold', CANCELLING: 'Cancelling', CANCELLED: 'Cancelled',
