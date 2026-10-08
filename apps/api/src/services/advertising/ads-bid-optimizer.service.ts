@@ -27,6 +27,12 @@
  * B: a target moves at most once per settled data day (whichever automatic writer moved it first), a move against this
  * optimiser's own last move waits 3 data days, and the dead zone is 10 % or 2¢ (ads-bid-window.ts, ads-bid-goal.ts).
  * The account-wide Beta prior stays as it is: the bid brain's pooled estimate replaces it when a campaign goes live.
+ *
+ * Review follow-up 2026-10-08 — a reason compares the target with the ACoS the bid it has NOW is expected to give
+ * (bid × r̂ ÷ value per click, bid-brain/recipe.ts expectedAcos), the number that decides the direction: the window's
+ * ACoS was paid at the bids that served it, so after a cut it could read "above target" next to a raise. The window's
+ * figure follows in brackets when it differs. And a cut that reverses this optimiser's own raise does not wait when that
+ * expected ACoS is over SAFETY_CUT_ACOS_MULTIPLE × the target (ads-bid-window.ts isSafetyCut).
  */
 
 import prisma from '../../db.js'
@@ -43,9 +49,9 @@ import { ACTION_WINDOW } from '@nexus/shared/ads-rule-window'
 import { settledBounds, settledWhere } from './ads-settled-window.js'
 import { protectedAdGroups, protectedStopWhy } from './ads-strategy/terms.js'
 import { stepTowardGoal } from './ads-bid-goal.js'
-import { bidForAcos } from './bid-brain/recipe.js'
+import { bidForAcos, expectedAcos } from './bid-brain/recipe.js'
 import { CPC_RATIO_MIN_CLICKS, cpcRatio } from './bid-brain/estimator.js'
-import { dayKey, isServingMove, movedThisDataDay, reversalWait, REVERSAL_WAIT_DATA_DAYS, windowBidCents, type AutoMove, type BidMove, type ClickDay, type WindowBidBasis } from './ads-bid-window.js'
+import { dayKey, isSafetyCut, isServingMove, movedThisDataDay, reversalWait, REVERSAL_WAIT_DATA_DAYS, SAFETY_CUT_ACOS_MULTIPLE, windowBidCents, type AutoMove, type BidMove, type ClickDay, type WindowBidBasis } from './ads-bid-window.js'
 import type { StrategySource } from './ads-strategy/resolve.js'
 
 const FLOOR_CENTS = 5
@@ -103,6 +109,13 @@ export function resolveSource(explicit?: BidMetricSource): BidMetricSource {
  * 2026-10-08 (B) — also a move that waits for a newer data day (`waiting`); `why` says which.
  */
 export interface HeldCut { targetId: string; expression: string; currentBidCents: number; wouldBeCents: number; why: string }
+
+/**
+ * Review follow-up 2026-10-08 — a move that waits, with which wait holds it (`movedToday`: an automatic writer already
+ * moved the bid on this data day; `reversal`: it would undo this optimiser's own move of the last REVERSAL_WAIT_DATA_DAYS
+ * data days) and whose target it moves toward, so auto-bid counts the waits it would otherwise move (planAutoBid).
+ */
+export interface WaitingMove extends HeldCut { wait: 'movedToday' | 'reversal'; targetSource: TargetAcosSource }
 
 export interface BidProposal {
   targetId: string; expression: string; matchType: string
@@ -288,6 +301,15 @@ function paidRatios<T extends { id: string; adGroupId: string; bidCents: number;
 const eur = (cents: number) => `€${(cents / 100).toFixed(2)}`
 
 /**
+ * Review follow-up — the window's figure beside the ACoS at the bid it has now, when the two read differently (whole
+ * percent): " (window ACOS 50%)". The window's clicks were bought at the bids that served them, at its own r̂.
+ */
+function windowNote(label: string, windowAcos: number, nowAcos: number): string {
+  const w = (windowAcos * 100).toFixed(0)
+  return w === (nowAcos * 100).toFixed(0) ? '' : ` (${label} ${w}%)`
+}
+
+/**
  * W1-5 — a proposal a caller clamped again (a rule's or a plan's own Min/Max bid) held back inside the ads strategy's band
  * of its ad group: every limit binds and the stricter wins, and where they cross the highest bid wins (it spends less).
  * One that then equals the current bid is dropped.
@@ -321,7 +343,7 @@ export async function previewBidOptimization(
 ): Promise<{
   targetAcos: number; profitMode: boolean; bayesian: boolean; proposals: BidProposal[]; held: HeldCut[]
   /** Review 2026-10-08 (B) — moves that wait: another automatic move on this data day, or a quick reversal of its own. */
-  waiting: HeldCut[]
+  waiting: WaitingMove[]
 }> {
   const flatTargetAcos = opts.fallbackTargetAcos ?? 0.3 // 30% default fallback
   const explicit = targetFraction(opts.targetAcos)
@@ -471,7 +493,7 @@ export async function previewBidOptimization(
   const decidable = targets.filter((t) => t.clicks >= clickFloor)
   const autoMoves = await recentAutoMoves(decidable.map((t) => t.id))
   const ratios = paidRatios(decidable, await windowBids(decidable, dailyMetrics != null))
-  const waiting: HeldCut[] = []
+  const waiting: WaitingMove[] = []
 
   const proposals: BidProposal[] = []
   for (const t of targets) {
@@ -487,6 +509,8 @@ export async function previewBidOptimization(
     let proposed = t.bidCents
     let reason = ''
     let targetBasis: BidProposal['targetBasis'] = resolved.source
+    // Review follow-up — the ACoS the bid it has now is expected to give; null on the zero-sales cut (no value a click).
+    let nowAcos: number | null = null
 
     if (bayesian && prior) {
       // Shrink CR toward the pool and derive an EXPECTED ACOS. Works even at 0 observed sales (the prior gives a
@@ -505,8 +529,9 @@ export async function previewBidOptimization(
       proposed = next
       const conf = dataConfidence(t.clicks, prior)
       targetBasis = 'bayesian'
+      nowAcos = expectedAcos(t.bidCents, crS, aovCents, paid.ratio)!
       const tag = `Bayesian CR ${(crS * 100).toFixed(1)}% · ${(conf * 100).toFixed(0)}% data-confidence · ${paid.words}`
-      reason = `exp.ACOS ${pct(expAcos)}% ${cmp(expAcos, targetAcos)} target ${pct(targetAcos)}%${whose} — ${next < t.bidCents ? 'lower' : 'raise'} toward ${Math.round(goal)}¢ (${tag})`
+      reason = `exp.ACOS ${pct(nowAcos)}% at ${t.bidCents}¢${windowNote('window exp.ACOS', expAcos, nowAcos)} ${cmp(nowAcos, targetAcos)} target ${pct(targetAcos)}%${whose} — ${next < t.bidCents ? 'lower' : 'raise'} toward ${Math.round(goal)}¢ (${tag})`
     } else if (t.salesCents === 0) {
       // Spending with no sales → cut hard toward the floor. There is no goal (a click here earned nothing), so C3: once
       // the bid moved inside the window, the cut needs the click floor of clicks at the bid it has now — no second cut
@@ -523,17 +548,22 @@ export async function previewBidOptimization(
       const next = stepTowardGoal(t.bidCents, goal, step, FLOOR_CENTS)
       if (next == null || (next > t.bidCents && t.ordersCount < 1)) continue
       proposed = next
-      reason = `ACOS ${pct(observedAcos)}% ${cmp(observedAcos, targetAcos)} target ${pct(targetAcos)}%${whose} — ${next < t.bidCents ? 'lower' : 'raise'} toward ${Math.round(goal)}¢ (${pct(targetAcos)}% of ${eur(t.salesCents / t.clicks)} sales a click ÷ ${paid.words})`
+      nowAcos = expectedAcos(t.bidCents, 1, t.salesCents / t.clicks, paid.ratio)!
+      reason = `exp.ACOS ${pct(nowAcos)}% at ${t.bidCents}¢${windowNote('window ACOS', observedAcos, nowAcos)} ${cmp(nowAcos, targetAcos)} target ${pct(targetAcos)}%${whose} — ${next < t.bidCents ? 'lower' : 'raise'} toward ${Math.round(goal)}¢ (${pct(targetAcos)}% of ${eur(t.salesCents / t.clicks)} sales a click ÷ ${paid.words})`
     } else continue
     const acos = observedAcos
     if (proposed === t.bidCents) continue
-    // B — once a data day, and no quick reversal of its own move: the move waits, and is said rather than dropped.
+    // B — once a data day, and no quick reversal of its own move: the move waits, and is said rather than dropped. A safety
+    // cut (isSafetyCut) does not wait as a reversal; it still waits for the next data day after another automatic move.
     const moves = autoMoves.get(t.id) ?? []
-    const wait = movedThisDataDay(dataDay, moves) ?? reversalWait(dataDay, t.bidCents, proposed, moves)
-    if (wait) {
-      waiting.push({ targetId: t.id, expression: t.expressionValue, currentBidCents: t.bidCents, wouldBeCents: proposed, why: wait })
+    const today = movedThisDataDay(dataDay, moves)
+    const reversal = today ? null : reversalWait(dataDay, t.bidCents, proposed, moves)
+    const safety = reversal != null && isSafetyCut(t.bidCents, proposed, nowAcos, targetAcos)
+    if (today || (reversal && !safety)) {
+      waiting.push({ targetId: t.id, expression: t.expressionValue, currentBidCents: t.bidCents, wouldBeCents: proposed, why: (today ?? reversal)!, wait: today ? 'movedToday' : 'reversal', targetSource: resolved.source })
       continue
     }
+    if (safety) reason = `${reason} — a safety cut: not held as a reversal of its own raise, the bid now runs over ${SAFETY_CUT_ACOS_MULTIPLE} × the target`
     // W1-7 — a protected product's zero-sales cut is not proposed (no optimiser stops it).
     const protection = proposed < t.bidCents && t.salesCents === 0 ? protectedGroups.get(t.adGroupId) : undefined
     if (protection) {

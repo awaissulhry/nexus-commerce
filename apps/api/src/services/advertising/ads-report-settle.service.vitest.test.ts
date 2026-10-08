@@ -162,6 +162,11 @@ describe('the gap read', () => {
     expect(measureGap([v({ source: 'stored', sales7dCents: 4000, orders7d: 1 })], through)).toMatchObject({ salesGapPct: 0, ordersGapPct: 0 })
   })
 
+  it('a day older than the newest settled day but never re-read is not measured', () => {
+    const rows = [v({ sales7dCents: 8000, orders7d: 1 }), v({ pulledAt: new Date('2026-09-28T01:15:00Z'), ageDays: 7, sales7dCents: 16100, orders7d: 2 })]
+    expect(measureGap(rows, through, new Set(['p-it|SPONSORED_PRODUCTS|2026-09-20']))).toBeNull()
+  })
+
   it('no settled day yet: nothing measured', () => {
     expect(measureGap([v({})], new Map())).toBeNull()
   })
@@ -172,6 +177,7 @@ describe('the gap read', () => {
       startDate: d('2026-09-30'), endDate: d('2026-10-07'), createdAt: new Date('2026-10-08T01:15:00Z'), ingestedAt: new Date('2026-10-08T02:07:00Z'),
     }])
     const out = await dataVintageByMarket(['IT'], '2026-09-01', '2026-10-07')
-    expect(out.get('IT')).toMatchObject({ market: 'IT', settledThrough: '2026-09-30', stillFillingFrom: '2026-10-01', measured: null })
+    // 09-01..09-29 have no settling pull (not re-read yet); 10-01..10-07 are still filling.
+    expect(out.get('IT')).toMatchObject({ market: 'IT', settledThrough: '2026-09-30', stillFillingFrom: '2026-10-01', unsettled: { stillFilling: 7, notReread: 29 }, measured: null })
   })
 })

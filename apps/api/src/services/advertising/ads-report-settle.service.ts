@@ -209,6 +209,12 @@ export interface MarketVintage {
   settledThrough: string | null
   /** Days after this one are still filling: Amazon may still add sales to them. */
   stillFillingFrom: string | null
+  /**
+   * The window's Sponsored Products days with no settled copy in some account of the market, counted honestly: newer
+   * than `settledThrough` (still filling), and older (not re-read yet: the catch-up is still running, its pull failed, or
+   * the day is older than the 60 days the re-read reaches). The newest settled day says nothing about older days.
+   */
+  unsettled: { stillFilling: number; notReread: number }
   /** Campaign days in the window with a first copy (asked within a day) and a settled copy: what the gap is measured on. */
   measured: { campaignDays: number; days: number; firstCopy: CopyTotals; settled: CopyTotals; salesGapPct: number | null; ordersGapPct: number | null } | null
 }
@@ -243,7 +249,12 @@ const pctMore = (settled: number, first: number): number | null => (first > 0 ? 
  * settled day per `${profileId}|${adProduct}`). The first copy is the oldest vintage asked within a day; the settled copy
  * is the newest vintage (a re-read that changed nothing keeps no row, so the newest row holds the settled numbers).
  */
-export function measureGap(rows: readonly VintageRow[], settledByKey: ReadonlyMap<string, Date>): MarketVintage['measured'] {
+export function measureGap(
+  rows: readonly VintageRow[],
+  settledByKey: ReadonlyMap<string, Date>,
+  /** `${profileId}|${adProduct}|${YYYY-MM-DD}` of days with no settled copy: never measured, whatever their age. */
+  unsettled: ReadonlySet<string> = new Set(),
+): MarketVintage['measured'] {
   const byDay = new Map<string, VintageRow[]>()
   for (const r of rows) {
     const k = `${r.profileId}|${r.adProduct}|${r.entityId}|${isoDay(r.date)}`
@@ -259,6 +270,7 @@ export function measureGap(rows: readonly VintageRow[], settledByKey: ReadonlyMa
     const last = sorted[sorted.length - 1]
     const through = settledByKey.get(`${head.profileId}|${head.adProduct}`)
     if (!through || utcDay(head.date).getTime() > through.getTime()) continue
+    if (unsettled.has(`${head.profileId}|${head.adProduct}|${isoDay(head.date)}`)) continue
     if (head.ageDays > 1) continue
     const a = attributed(head)
     const b = attributed(last)
@@ -316,11 +328,27 @@ export async function dataVintageByMarket(markets: readonly string[], from: stri
     }
     const sp = mine.map((c) => settledByKey.get(`${c.profileId}|SPONSORED_PRODUCTS`)).filter((d): d is Date => !!d)
     const newest = sp.length ? new Date(Math.max(...sp.map((d) => d.getTime()))) : null
+    // Day by day, never inferred from the newest settled day: `jobs` holds only ingested pulls, so a day without an
+    // ingested settling pull (in flight, failed, not asked yet) counts as unsettled.
+    const unsettled = new Set<string>()
+    const spDays = new Set<string>()
+    for (const c of mine) {
+      for (const adProduct of Object.keys(CAMPAIGN_REPORT_TYPE_ID) as AdProduct[]) {
+        const key = { profileId: c.profileId, adProduct, reportTypeId: CAMPAIGN_REPORT_TYPE_ID[adProduct] }
+        for (const day of unsettledDays(jobs, key, since, until).days) {
+          unsettled.add(`${c.profileId}|${adProduct}|${day}`)
+          if (adProduct === 'SPONSORED_PRODUCTS') spDays.add(day)
+        }
+      }
+    }
+    const newestDay = newest ? isoDay(newest) : null
+    const stillFilling = [...spDays].filter((d) => newestDay == null || d > newestDay).length
     out.set(market, {
       market,
-      settledThrough: newest ? isoDay(newest) : null,
+      settledThrough: newestDay,
       stillFillingFrom: newest ? isoDay(new Date(newest.getTime() + DAY)) : null,
-      measured: measureGap(rows.filter((r) => r.marketplace === market), settledByKey),
+      unsettled: { stillFilling, notReread: spDays.size - stillFilling },
+      measured: measureGap(rows.filter((r) => r.marketplace === market), settledByKey, unsettled),
     })
   }
   return out

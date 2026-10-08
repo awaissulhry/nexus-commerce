@@ -53,6 +53,53 @@ export function breakevenAcos(c: ProfitComponents): number | null {
   return contributionBeforeAds / c.grossRevenueCents
 }
 
+/**
+ * Whether a product's profit rows over a window may set a bid target (computeProductTargetAcos): rows exist, it sold
+ * something, its cost price is loaded (ACR.0.5) and not only estimated (ACR.4). Pure — one rule, every reader.
+ */
+export function profitDataUsable(w: { dataPoints: number; grossRevenueCents: number; cogsCents: number; rowsWithEstimate: number }): boolean {
+  if (w.dataPoints === 0 || w.grossRevenueCents <= 0) return false
+  if (!costIsKnown({ grossRevenueCents: w.grossRevenueCents, cogsCents: w.cogsCents })) return false
+  return !(w.rowsWithEstimate > 0 && w.rowsWithEstimate >= w.dataPoints)
+}
+
+/**
+ * BID BRAIN BB-8 — break-even ACoS of many products at once (two grouped reads instead of two per product), by the same
+ * rule as computeProductTargetAcos: null for a product whose profit rows may not set a target (profitDataUsable).
+ * `marketplaces`: the values the market's rows may carry (its code and its campaigns' own spelling).
+ */
+export async function breakevenByProduct(productIds: readonly string[], marketplaces: readonly string[], windowDays = 30): Promise<Map<string, { breakevenAcos: number; grossRevenueCents: number }>> {
+  const ids = [...new Set(productIds)]
+  const out = new Map<string, { breakevenAcos: number; grossRevenueCents: number }>()
+  if (!ids.length || !marketplaces.length) return out
+  const since = new Date()
+  since.setUTCDate(since.getUTCDate() - Math.max(1, Math.min(180, windowDays)))
+  since.setUTCHours(0, 0, 0, 0)
+  const where = { productId: { in: ids }, marketplace: { in: [...new Set(marketplaces)] }, date: { gte: since } }
+  const [sums, estimated] = await Promise.all([
+    prisma.productProfitDaily.groupBy({
+      by: ['productId'],
+      where,
+      _sum: { grossRevenueCents: true, cogsCents: true, referralFeesCents: true, fbaFulfillmentFeesCents: true, fbaStorageFeesCents: true, returnsRefundsCents: true, otherFeesCents: true },
+      _count: { _all: true },
+    }),
+    prisma.productProfitDaily.groupBy({ by: ['productId'], where: { ...where, coverage: { path: ['costEstimated'], equals: true } }, _count: { _all: true } })
+      .catch((): Array<{ productId: string; _count: { _all: number } }> => []),
+  ])
+  const estimatedOf = new Map<string, number>(estimated.map((e): [string, number] => [e.productId, e._count._all]))
+  for (const r of sums) {
+    const c: ProfitComponents = {
+      grossRevenueCents: r._sum.grossRevenueCents ?? 0, cogsCents: r._sum.cogsCents ?? 0, referralFeesCents: r._sum.referralFeesCents ?? 0,
+      fbaFulfillmentFeesCents: r._sum.fbaFulfillmentFeesCents ?? 0, fbaStorageFeesCents: r._sum.fbaStorageFeesCents ?? 0,
+      returnsRefundsCents: r._sum.returnsRefundsCents ?? 0, otherFeesCents: r._sum.otherFeesCents ?? 0,
+    }
+    if (!profitDataUsable({ dataPoints: r._count._all, grossRevenueCents: c.grossRevenueCents, cogsCents: c.cogsCents, rowsWithEstimate: estimatedOf.get(r.productId) ?? 0 })) continue
+    const be = breakevenAcos(c)
+    if (be != null) out.set(r.productId, { breakevenAcos: be, grossRevenueCents: c.grossRevenueCents })
+  }
+  return out
+}
+
 /** Default profit share kept back, per lifecycle mode. */
 export function profitShareFor(mode: AcosMode): number {
   return mode === 'profit' ? 0.35 : mode === 'balanced' ? 0.2 : 0.05 // growth spends almost the whole margin
@@ -161,7 +208,7 @@ export async function computeProductTargetAcos(opts: {
   }).catch(() => 0)
   const costIsEstimate = rowsWithEstimate > 0 && rowsWithEstimate >= dataPoints
 
-  if (dataPoints === 0 || gross <= 0 || costMissing || costIsEstimate) {
+  if (!profitDataUsable({ dataPoints, grossRevenueCents: gross, cogsCents: s.cogsCents ?? 0, rowsWithEstimate })) {
     return {
       productId: opts.productId, marketplace: opts.marketplace ?? null, windowDays, dataPoints,
       basis: costIsEstimate && !costMissing ? 'estimated-cost' : 'fallback',

@@ -6,6 +6,9 @@
  *   overrides  the first that applies decides, in this fixed order:
  *                STOP ▸ PIN/HOLD ▸ STOCK/RETAIL ▸ AUTO-UNDO FREEZE ▸ PHASE ▸ MIN-BID HOUR
  *              when several apply the lower bid wins, except a pin (left alone, unless a stop comes first)
+ *   restore    BB-8 — no override applies any more, but the last decision was one that lowered the bid (a stop, stock, a
+ *              phase floor, a Min-bid hour) and the bid still sits there: the bids go back as if the stop never happened —
+ *              the goal decided from the bid before the stop (one step from it), else that bid, else the goal itself
  *   goal       otherwise the recipe (recipe.ts) from the pooled estimate (estimator.ts) and the goal (goal.ts); it writes
  *              only when the expected ACoS at today's bid is outside the band and the bid moves by ≥ 2¢ and ≥ 5 %, and a
  *              bid outside a hard limit is always brought back inside it
@@ -44,8 +47,11 @@ export interface Overrides {
   stock?: { notBuyable: true; stopBidCents: number; by: string } | { coverFactor: number; by: string } | null
   /** Auto-undo restored this campaign: its values are kept, lowering is still allowed. */
   freeze?: { by: string } | null
-  /** The playbook phase: not started → the floor. (A LAUNCH ramp is the goal's, goal.ts.) */
-  phase?: { notStarted: true; floorCents: number } | null
+  /**
+   * The playbook phase: a campaign a playbook built and has not started, or a slot the phase floors → the floor; `by`
+   * says which (BB-8). (A LAUNCH ramp is the goal's, goal.ts.)
+   */
+  phase?: { notStarted?: true; floorCents: number; by?: string } | null
   /** The hourly plan's Min-bid hour → its floor. */
   minBidHour?: { floorCents: number } | null
 }
@@ -72,9 +78,18 @@ export interface TargetFacts {
   /** Brakes in force, in words ("campaign paused"). Any brake: nothing is decided. */
   brakes?: readonly string[]
   overrides?: Overrides
+  /**
+   * BB-8 — the brain's last decision lowered this bid by an override (`layer`, to `heldCents`), or was a give-back that
+   * found no bid to go back to (`restore`); `beforeCents` is the bid of its last decision no override lowered (null: none
+   * in the decisions kept). Read only when no override applies.
+   */
+  restore?: { layer: DecisionLayer; heldCents: number; beforeCents: number | null } | null
 }
 
-export type DecisionLayer = 'brake' | 'stop' | 'pin' | 'stock' | 'freeze' | 'phase' | 'min_bid_hour' | 'goal' | 'band' | 'limit' | 'no_goal'
+export type DecisionLayer = 'brake' | 'stop' | 'pin' | 'stock' | 'freeze' | 'phase' | 'min_bid_hour' | 'restore' | 'goal' | 'band' | 'limit' | 'no_goal'
+
+/** BB-8 — the override layers that lower a bid and whose end gives the bids back (`restore`). */
+export const LOWERING_LAYERS: readonly DecisionLayer[] = ['stop', 'stock', 'phase', 'min_bid_hour']
 export type DecisionAction = 'write' | 'hold' | 'brake'
 
 export interface Decision {
@@ -122,8 +137,8 @@ interface GoalBid {
   range: ReturnType<typeof limitRange>
 }
 
-/** The recipe for one target, or why there is none. */
-function goalBid(f: TargetFacts): GoalBid | { reason: string } {
+/** The recipe for one target, or why there is none. `noStep`: the goal bid itself, inside the limits (a give-back with no bid to start from). */
+function goalBid(f: TargetFacts, opts: { noStep?: boolean } = {}): GoalBid | { reason: string } {
   const resolved = resolveGoal(f.goal)
   if (!isGoal(resolved)) return { reason: (resolved as GoalRefusal).reason }
   const goal = resolved
@@ -158,7 +173,7 @@ function goalBid(f: TargetFacts): GoalBid | { reason: string } {
   const sameDay = f.lastStep && f.lastStep.dataDay === f.dataDay && f.lastStep.toCents === f.currentCents
   const anchor = sameDay ? f.lastStep!.fromCents : f.currentCents
   const maxPct = f.limits.maxChangePct ?? DEFAULT_MAX_CHANGE_PCT
-  const stepped = stepFrom(anchor, want, maxPct, est.confidence)
+  const stepped = opts.noStep ? { cents: want, held: false } : stepFrom(anchor, want, maxPct, est.confidence)
   if (stepped.held) parts.push(`step ≤${Math.round(maxPct * est.confidence)}% from ${anchor}¢`)
   const clamped = clampToRange(Math.round(stepped.cents), range)
   if (clamped.held) parts.push(`held to ${clamped.held}`)
@@ -210,7 +225,7 @@ export function decide(f: TargetFacts): Decision {
           bids.push({ key: k, cents: Math.max(ok.range.lower, Math.round(ok.cents * factor)), words: `low stock cover (${s.by}) → goal bid ×${factor}` })
         }
       } else if (k === 'freeze') bids.push({ key: k, cents: ok ? Math.min(ok.cents, f.currentCents) : f.currentCents, words: `auto-undo freeze (${o.freeze!.by}): no raise` })
-      else if (k === 'phase') bids.push({ key: k, cents: o.phase!.floorCents, words: `phase not started → ${o.phase!.floorCents}¢` })
+      else if (k === 'phase') bids.push({ key: k, cents: o.phase!.floorCents, words: `${o.phase!.by ?? 'phase not started'} → ${o.phase!.floorCents}¢` })
       else if (k === 'minBidHour') bids.push({ key: k, cents: o.minBidHour!.floorCents, words: `Min-bid hour → ${o.minBidHour!.floorCents}¢` })
     }
     if (bids.length) {
@@ -220,6 +235,36 @@ export function decide(f: TargetFacts): Decision {
       const why = `${layer.replace('_', '-')}: ${lowest.words}${others.length ? ` (also: ${others.join('; ')})` : ''}`
       const action: DecisionAction = lowest.cents !== f.currentCents ? 'write' : 'hold'
       return { ...base, ...known, action, layer, bidCents: lowest.cents, placements: placements(lowest.cents), why }
+    }
+  }
+
+  // ── BB-8: a stop that lifted gives the bids back. ──
+  const r = f.restore
+  if (r && ((LOWERING_LAYERS as readonly string[]).includes(r.layer) || r.layer === 'restore') && f.currentCents <= r.heldCents) {
+    // `restore`: an earlier give-back found no bid to go back to; it is tried again on every run until it does.
+    const lifted = r.layer === 'restore' ? 'restore: the stop that lowered it no longer applies' : `restore: the ${r.layer.replace('_', '-')} layer no longer applies`
+    if (r.beforeCents != null) {
+      // As if the stop never happened: today's decision taken from the bid before it.
+      const asIf = decide({ ...f, currentCents: r.beforeCents, lastStep: null, restore: null, overrides: {}, brakes: [] })
+      const cents = asIf.bidCents
+      const why = `${lifted} → back to ${cents}¢ from the ${f.currentCents}¢ it held (the bid before it: ${r.beforeCents}¢; ${asIf.why})`
+      return {
+        ...base, ...known, action: cents !== f.currentCents ? 'write' : 'hold', layer: 'restore', bidCents: cents,
+        step: { dataDay: f.dataDay, fromCents: r.beforeCents, toCents: cents }, placements: placements(cents), why,
+      }
+    }
+    const g0 = ok ? goalBid(f, { noStep: true }) : null
+    if (g0 && 'cents' in g0) {
+      const cents = g0.cents
+      return {
+        ...base, ...known, action: cents !== f.currentCents ? 'write' : 'hold', layer: 'restore', bidCents: cents,
+        step: { dataDay: f.dataDay, fromCents: cents, toCents: cents }, placements: placements(cents),
+        why: `${lifted} → the goal bid ${cents}¢ (no bid before it is known; ${g0.parts.join('; ')})`,
+      }
+    }
+    return {
+      ...base, ...known, action: 'hold', layer: 'restore', bidCents: f.currentCents,
+      why: `${lifted}, but there is no bid to give back (no bid before it is known, and no goal: ${'reason' in g ? g.reason : 'none'}) — it stays at ${f.currentCents}¢ until a target or a bid is set`,
     }
   }
 
