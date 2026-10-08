@@ -1,7 +1,9 @@
 /**
- * BID BRAIN BB-19 — the response beside a run's decisions (response.ts): what it reads, and the words, evidence and run
- * line it adds. Nothing here changes a decision: the stored why gains " · profit-best …", `evidence.response` keeps the
- * numbers, the run's line counts them. A failure is logged and changes nothing — the goal's decisions stand.
+ * BID BRAIN BB-19 / BB-20 — the response (response.ts) and exploration (explore.ts) beside a run's decisions: what they
+ * read, and the words, evidence and run line they add. The response changes no decision: the stored why gains
+ * " · profit-best …", `evidence.response` keeps the numbers, the run's line counts them. Exploration plans the day's
+ * explore and revive bids in the same way, and only with NEXUS_BID_BRAIN_EXPLORE=on are the picked decisions replaced.
+ * A failure is logged and changes nothing — the goal's decisions stand.
  *
  *   moves      CampaignBidHistory of the market's keywords over the settled window: serving moves (both sides ≥ the 5¢
  *              engine floor) of ≥ 10 % with no other move of the keyword within 3 days either side — found in SQL with
@@ -10,13 +12,20 @@
  *   signals    per decided campaign: the top-of-search impression share of the last 14 settled days (the placement
  *              report's TOP rows — the copy on the daily rows was abandoned on 2026-08-19 — weighted by impressions) and
  *              the days of the last 7 settled whose spend reached 95 % of that day's budget (campaign rows)
+ *   activity   BB-20, per keyword, in one grouped read: impressions and clicks of the last 14 days and impressions of the
+ *              last 90 to yesterday (they need no attribution wait), orders of the 90 settled days; its newest revive
+ *              memory (evidence.revive of the decisions kept, 30 days); its last bid write (the run's); the shortest
+ *              stock cover of its ad group's products (ads-stock-risk.service.ts, read for the candidates only, with a
+ *              14-day line); the market's explore budget (the strategy's market row, else the Owner's default)
+ *   plan       made over the WHOLE market's keywords (a product cycle's run and the full run make the same one), applied
+ *              to the run's own: the picks of all runs of a day never add up past the budget
  *
  * Called inside a business (the run's): row-level security keeps each to its own rows.
  */
 import { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
 import { logger } from '../../../utils/logger.js'
-import type { Decision, TargetFacts } from './decide.js'
+import { decide, type Decision, type TargetFacts } from './decide.js'
 import { MAX_WINDOW_DAYS } from './estimator.js'
 import type { AdGroupRow, TargetRow } from './facts.js'
 import { ENGINE_FLOOR_CENTS } from './recipe.js'
@@ -25,6 +34,12 @@ import {
   moveEventsOf, moveReading, productEps, responseFor, responseMode, summarizeResponse,
   type CampaignSignal, type EpsPosterior, type MoveEvent, type ResponseNote, type ResponseSummary,
 } from './response.js'
+import {
+  DEFAULT_EPS, MIN_COVER_DAYS, REVIVE_QUIET_DAYS, applyExplore, exploreBudgetOf, exploreExclusion, exploreMode, exploreOption,
+  exploreWords, planExplore, summarizeExplore, type ExploreSummary, type ReviveMemory, type TargetActivity,
+} from './explore.js'
+import { readStockAdGroups } from '../ads-stock-risk.service.js'
+import { openStrategy } from '../ads-strategy/effective.js'
 
 const DAY_MS = 86_400_000
 const isoDay = (d: Date) => d.toISOString().slice(0, 10)
@@ -150,10 +165,110 @@ export async function responseShadow(
   return { notes, summary: summarizeResponse([...notes.values()], events.filter((e) => moveReading(e)).length), eps }
 }
 
-/** What BB-19 adds to one market's run. */
-export interface UpgradesSummary { response?: ResponseSummary }
+// ── BB-20 — exploration and revive ────────────────────────────────────────────────────────────────
+
+/** Per keyword: impressions and clicks to yesterday, orders of the settled window (explore.ts TargetActivity). */
+export async function loadActivity(targetIds: readonly string[], opts: { now: Date; dataDay: string }): Promise<Map<string, TargetActivity>> {
+  const out = new Map<string, TargetActivity>()
+  if (!targetIds.length) return out
+  const yesterday = isoDay(new Date(Date.UTC(opts.now.getUTCFullYear(), opts.now.getUTCMonth(), opts.now.getUTCDate()) - DAY_MS))
+  const since = shift(opts.dataDay, -(MAX_WINDOW_DAYS - 1))
+  const from = [since, shift(yesterday, -89)].sort()[0]
+  const rows = await prisma.$queryRaw<Array<{ id: string; imp14: number; imp90: number; clicks14: number; orders90: number }>>(Prisma.sql`
+    SELECT p."localEntityId" AS id,
+           SUM(CASE WHEN p.date > ${shift(yesterday, -REVIVE_QUIET_DAYS)}::date AND p.date <= ${yesterday}::date THEN p.impressions ELSE 0 END)::float8 AS imp14,
+           SUM(CASE WHEN p.date > ${shift(yesterday, -90)}::date AND p.date <= ${yesterday}::date THEN p.impressions ELSE 0 END)::float8 AS imp90,
+           SUM(CASE WHEN p.date > ${shift(yesterday, -REVIVE_QUIET_DAYS)}::date AND p.date <= ${yesterday}::date THEN p.clicks ELSE 0 END)::float8 AS clicks14,
+           SUM(CASE WHEN p.date BETWEEN ${since}::date AND ${opts.dataDay}::date THEN COALESCE(p."orders7d", 0) ELSE 0 END)::float8 AS orders90
+      FROM "AmazonAdsDailyPerformance" p
+     WHERE p."entityType" = 'AD_TARGET' AND p."adProduct" = 'SPONSORED_PRODUCTS' AND p."localEntityId" = ANY(${[...targetIds]}::text[])
+       AND p.date BETWEEN ${from}::date AND ${yesterday}::date
+     GROUP BY p."localEntityId"`)
+  for (const r of rows) out.set(r.id, { impressions14: Number(r.imp14), impressions90: Number(r.imp90), clicks14: Number(r.clicks14), orders90: Number(r.orders90) })
+  return out
+}
+
+/** A stored `evidence.revive` read back, or null when it is not one. */
+export function reviveMemoryOf(raw: unknown): ReviveMemory | null {
+  const r = raw as Partial<ReviveMemory> | null
+  const day = /^\d{4}-\d{2}-\d{2}$/
+  if (!r || typeof r !== 'object' || typeof r.start !== 'string' || !day.test(r.start) || typeof r.dataDay !== 'string' || !day.test(r.dataDay)) return null
+  if (typeof r.fromCents !== 'number' || !Number.isFinite(r.fromCents) || typeof r.step !== 'number' || (r.state !== 'step' && r.state !== 'silent')) return null
+  return { start: r.start, fromCents: r.fromCents, step: r.step, state: r.state, dataDay: r.dataDay }
+}
+
+/** Each keyword's newest revive memory among the decisions kept (30 days). */
+export async function loadReviveMemory(targetIds: readonly string[], now: Date): Promise<Map<string, ReviveMemory>> {
+  const out = new Map<string, ReviveMemory>()
+  if (!targetIds.length) return out
+  const rows = await prisma.$queryRaw<Array<{ id: string; revive: unknown }>>(Prisma.sql`
+    SELECT DISTINCT ON (d."targetId") d."targetId" AS id, d.evidence -> 'revive' AS revive
+      FROM "BidBrainDecision" d
+     WHERE d."targetId" = ANY(${[...targetIds]}::text[]) AND (d.evidence -> 'revive') IS NOT NULL
+       AND d."createdAt" >= ${new Date(now.getTime() - 30 * DAY_MS)}
+     ORDER BY d."targetId", d."createdAt" DESC`)
+  for (const r of rows) {
+    const memory = reviveMemoryOf(r.revive)
+    if (memory) out.set(r.id, memory)
+  }
+  return out
+}
+
+/** Per ad group: the shortest stock cover in days of its products (judged on a 14-day line); absent: not known. */
+export async function loadCover(adGroupIds: readonly string[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>()
+  if (!adGroupIds.length) return out
+  const { adGroups } = await readStockAdGroups({ adGroupIds: [...adGroupIds], lowBelowDays: MIN_COVER_DAYS })
+  for (const g of adGroups) {
+    const covers = g.products.map((p) => p.daysOfCover).filter((d): d is number => d != null && Number.isFinite(d))
+    if (covers.length) out.set(g.id, Math.min(...covers))
+  }
+  return out
+}
+
+/** The market's explore budget a day: the strategy's market row, else the Owner's default (explore.ts). */
+export async function loadExploreBudget(market: string): Promise<{ cents: number; from: 'strategy' | 'default' }> {
+  const view = await openStrategy(market)
+  const value = view.empty ? null : view.forMarket().resolved.fields.get('exploreBudgetCents')?.value
+  return exploreBudgetOf(market, typeof value === 'number' ? value : null)
+}
+
+/**
+ * BB-20 — the day's explore plan over the market's keywords (`facts` / `decisions`, the whole market), with each keyword's
+ * ε (the response's; DEFAULT_EPS without it). Only the keywords that could be picked are read further.
+ */
+export async function exploreShadow(
+  m: { market: string; dataDay: string; targets: readonly TargetRow[] },
+  facts: readonly TargetFacts[], decisions: readonly Decision[],
+  ctx: { now: Date; eps: ReadonlyMap<string, number>; lastWrites?: ReadonlyMap<string, { at: Date }> },
+) {
+  const budget = await loadExploreBudget(m.market)
+  const open = facts.flatMap((f, i) => (exploreExclusion(f, decisions[i], undefined) ? [] : [i]))
+  const ids = open.map((i) => facts[i].targetId)
+  const groupOf = new Map(m.targets.map((t) => [t.id, t.adGroupId]))
+  const [activity, memory, cover] = await Promise.all([
+    loadActivity(ids, { now: ctx.now, dataDay: m.dataDay }),
+    loadReviveMemory(ids, ctx.now),
+    loadCover([...new Set(ids.map((id) => groupOf.get(id)).filter((g): g is string => !!g))]),
+  ])
+  const options = open.map((i) => {
+    const f = facts[i]
+    const write = ctx.lastWrites?.get(f.targetId)
+    const a: TargetActivity = {
+      ...(activity.get(f.targetId) ?? { impressions14: 0, impressions90: 0, clicks14: 0, orders90: 0 }),
+      coverDays: cover.get(groupOf.get(f.targetId) ?? '') ?? null,
+      daysSinceWrite: write ? Math.floor((ctx.now.getTime() - write.at.getTime()) / DAY_MS) : null,
+      revive: memory.get(f.targetId) ?? null,
+    }
+    return exploreOption(f, decisions[i], a, ctx.eps.get(f.targetId) ?? DEFAULT_EPS)
+  })
+  return { plan: planExplore(options, budget), options }
+}
+
+/** What BB-19 and BB-20 add to one market's run. */
+export interface UpgradesSummary { response?: ResponseSummary; explore?: ExploreSummary }
 export interface Upgrades {
-  /** The decisions to act on: always the goal's here (BB-19 is shadow only). */
+  /** The decisions to act on: the goal's, except the explore and revive picks under NEXUS_BID_BRAIN_EXPLORE=on. */
   decisions: Decision[]
   /** Per keyword: the words its stored why gains. */
   notes: Map<string, string>
@@ -162,27 +277,62 @@ export interface Upgrades {
   summary: UpgradesSummary | null
 }
 
+const errorWords = (err: unknown) => (err instanceof Error ? err.message : String(err))
+
 /**
- * The run's hook (shadow.ts): with NEXUS_BID_BRAIN_RESPONSE off, nothing is read (null); in shadow, the notes. Never
+ * The run's hook (shadow.ts). With NEXUS_BID_BRAIN_RESPONSE and NEXUS_BID_BRAIN_EXPLORE both off nothing is read (null).
+ * `marketFacts`: the whole market's keywords when the run decides only some (a product cycle, or the full run leaving the
+ * cycle's campaigns) — the plan and every ε are made over them, the words and the picks kept for the run's own. Never
  * fails the run: an error is logged and the goal's decisions stand.
  */
 export async function upgradesShadow(
   m: { market: string; dataDay: string; targets: readonly TargetRow[]; adGroups: ReadonlyMap<string, AdGroupRow> },
-  input: { facts: readonly TargetFacts[]; decisions: readonly Decision[]; campaignOf: (targetId: string) => string },
+  input: {
+    facts: readonly TargetFacts[]; decisions: readonly Decision[]; campaignOf: (targetId: string) => string
+    now: Date; lastWrites?: ReadonlyMap<string, { at: Date }>; marketFacts?: () => TargetFacts[]
+  },
 ): Promise<Upgrades | null> {
-  if (responseMode() === 'off' || !input.facts.length) return null
-  try {
-    const r = await responseShadow(m, input.facts, input.decisions, input.campaignOf)
-    const notes = new Map<string, string>()
-    const evidence = new Map<string, Record<string, unknown>>()
-    for (const [id, n] of r.notes) {
-      notes.set(id, n.words)
-      const { words: _words, ...numbers } = n
-      evidence.set(id, { response: numbers })
-    }
-    return { decisions: input.decisions as Decision[], notes, evidence, summary: { response: r.summary } }
-  } catch (err) {
-    logger.warn('[bid-brain] the response shadow failed — the goal\'s decisions stand, nothing changes', { market: m.market, error: err instanceof Error ? err.message : String(err) })
-    return null
+  const response = responseMode()
+  const explore = exploreMode()
+  if ((response === 'off' && explore === 'off') || !input.facts.length) return null
+  const own = new Set(input.facts.map((f) => f.targetId))
+  const all = input.marketFacts ? input.marketFacts() : null
+  const facts = all ?? input.facts
+  const decisions = all ? all.map((f) => decide(f)) : input.decisions
+  const notes = new Map<string, string>()
+  const evidence = new Map<string, Record<string, unknown>>()
+  const add = (id: string, words: string | undefined, more: Record<string, unknown> | undefined) => {
+    if (!own.has(id)) return
+    if (words) notes.set(id, notes.has(id) ? `${notes.get(id)} · ${words}` : words)
+    if (more) evidence.set(id, { ...evidence.get(id), ...more })
   }
+  const summary: UpgradesSummary = {}
+  let eps: ReadonlyMap<string, number> = new Map()
+  if (response !== 'off') {
+    try {
+      const r = await responseShadow(m, facts, decisions, input.campaignOf)
+      for (const [id, n] of r.notes) {
+        const { words, ...numbers } = n
+        add(id, words, { response: numbers })
+      }
+      summary.response = all ? summarizeResponse([...r.notes].filter(([id]) => own.has(id)).map(([, n]) => n), r.summary.moves) : r.summary
+      eps = r.eps
+    } catch (err) {
+      logger.warn('[bid-brain] the response shadow failed — the goal\'s decisions stand, nothing changes', { market: m.market, error: errorWords(err) })
+    }
+  }
+  let out = input.decisions as Decision[]
+  if (explore !== 'off') {
+    try {
+      const { plan, options } = await exploreShadow(m, facts, decisions, { now: input.now, eps, lastWrites: input.lastWrites })
+      const words = exploreWords(plan, explore, options)
+      for (const id of new Set([...words.notes.keys(), ...words.evidence.keys()])) add(id, words.notes.get(id), words.evidence.get(id))
+      summary.explore = summarizeExplore(plan, explore, options.filter((o) => 'say' in o && o.say).length)
+      out = applyExplore(input.decisions, input.facts, plan, explore)
+    } catch (err) {
+      logger.warn('[bid-brain] the explore plan failed — the goal\'s decisions stand, nothing changes', { market: m.market, error: errorWords(err) })
+    }
+  }
+  if (!summary.response && !summary.explore) return null
+  return { decisions: out, notes, evidence, summary }
 }

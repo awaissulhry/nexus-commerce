@@ -28,6 +28,9 @@
  *   BB-19     NEXUS_BID_BRAIN_RESPONSE=shadow (the default): each full run also finds each keyword's profit-best bid inside
  *             its band and the marginal ACoS of the last euro (response-explore.ts); the decisions stay the goal's, the
  *             stored why gains " · profit-best …", `evidence.response` the numbers, the run's line the count
+ *   BB-20     NEXUS_BID_BRAIN_EXPLORE=shadow (the default): each full run also plans the day's explore and revive bids
+ *             inside the market's explore budget (response-explore.ts) and logs them the same way; `on`: the picked
+ *             keywords' decisions become layer explore / revive and are acted on like any other (the rest stay the goal's)
  */
 import { randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
@@ -54,6 +57,7 @@ import { loadMarket, loadNowcastEvidence, loadRun, SHADOW_MARKETS, type LastWrit
 import { compareNowcast, nowcastLastSteps, nowcastMode, nowcastOnNotes, nowcastSummaryWords, runForRows, youngPctOf, type NowcastShadowSummary } from './nowcast.js'
 import { upgradesShadow, type UpgradesSummary } from './response-explore.js'
 import { responseSummaryWords } from './response.js'
+import { exploreSummaryWords } from './explore.js'
 
 export type BrainMode = 'off' | 'shadow' | 'live'
 
@@ -86,7 +90,7 @@ export interface ShadowRun {
   runId: string
   mode: BrainMode
   /** BB-6 — `owned`: the market's campaigns the brain owns this run; `writes`: what became of their write decisions. */
-  markets: Array<{ market: string; decided: number; stored: number; byAction: Record<string, number>; byLayer: Record<string, number>; brakes: string[]; /** AB-14 — the market's run failed (its words; also in brakes). */ error?: string; /** AB-14 — a product cycle's run: which way its write decisions go. */ moves?: { raise: number; lower: number; raisedBy: Record<string, number> }; owned?: number; writes?: WriteReport | null; placements?: PlacementReport; strategies?: StrategyReport; brainWrites?: BrainWriteRecord[]; nowcast?: NowcastShadowSummary; nowcastOn?: { dataDay: string; curve: string; youngPct: number }; /** BB-19 */ upgrades?: UpgradesSummary }>
+  markets: Array<{ market: string; decided: number; stored: number; byAction: Record<string, number>; byLayer: Record<string, number>; brakes: string[]; /** AB-14 — the market's run failed (its words; also in brakes). */ error?: string; /** AB-14 — a product cycle's run: which way its write decisions go. */ moves?: { raise: number; lower: number; raisedBy: Record<string, number> }; owned?: number; writes?: WriteReport | null; placements?: PlacementReport; strategies?: StrategyReport; brainWrites?: BrainWriteRecord[]; nowcast?: NowcastShadowSummary; nowcastOn?: { dataDay: string; curve: string; youngPct: number }; /** BB-19 / BB-20 */ upgrades?: UpgradesSummary }>
   pruned: number
   /** BB-6 — the dial and the caps the live writes ran under (absent: nothing owned had to move). */
   guard?: EngineGuardReport
@@ -149,9 +153,13 @@ export async function shadowMarket(market: string, ctx: { runId: string; mode: B
   }
   const facts = buildFacts(rows, run).filter((f) => inScope(campaignOf(f.targetId)) && (!ctx.onlyOwned || owned.has(campaignOf(f.targetId))))
   const decided = facts.map((f) => decide(f))
-  // BB-19 — the profit-best bid beside the goal's (full runs only): words and evidence for the stored rows; the decisions
-  // stay the goal's.
-  const upgrades = rows.light ? null : await upgradesShadow(rows, { facts, decisions: decided, campaignOf })
+  // BB-19 / BB-20 — the profit-best bid beside the goal's, and the day's explore plan (full runs only): words and evidence
+  // for the stored rows; the decisions stay the goal's unless NEXUS_BID_BRAIN_EXPLORE=on picks a keyword. A run that decides
+  // only some campaigns plans over the whole market (`marketFacts`), so the picks of all runs fit one budget.
+  const partial = !!ctx.scope?.campaignIds || !!ctx.scope?.skipCampaignIds || !!ctx.raiseCaps?.size
+  const upgrades = rows.light ? null : await upgradesShadow(rows, {
+    facts, decisions: decided, campaignOf, now: ctx.now, lastWrites, ...(partial ? { marketFacts: () => buildFacts(rows, anchored) } : {}),
+  })
   const decisions = upgrades?.decisions ?? decided
   // BB-15 — the nowcast in shadow (full runs only): words for the stored why; the decisions above are the ones that count.
   // Switched on (the rows were read with it): the why of a decision resting on young days says how much they carry.
@@ -641,7 +649,7 @@ export function shadowSummaryLine(r: ShadowRun): string {
     const words = [writeReportWords(m.writes), placementReportWords(m.placements), strategyReportWords(m.strategies)].filter(Boolean).join(' ')
     const live = m.owned ? ` owned=${m.owned}${words ? ` ${words}` : ''}` : ''
     const nowcast = m.nowcast ? ` · ${nowcastSummaryWords(m.nowcast)}` : m.nowcastOn ? ` · nowcast on to ${m.nowcastOn.dataDay} (${m.nowcastOn.curve}), young days ${m.nowcastOn.youngPct}%` : ''
-    const upgrades = m.upgrades?.response ? ` · ${responseSummaryWords(m.upgrades.response)}` : ''
+    const upgrades = [m.upgrades?.response ? responseSummaryWords(m.upgrades.response) : '', m.upgrades?.explore ? exploreSummaryWords(m.upgrades.explore) : ''].filter(Boolean).map((w) => ` · ${w}`).join('')
     return `${m.market} decided=${m.decided} stored=${m.stored}${actions ? ` ${actions}` : ''}${live}${m.brakes.length ? ` brakes: ${m.brakes.join('; ')}` : ''}${nowcast}${upgrades}`
   })
   const owned = r.markets.reduce((n, m) => n + (m.owned ?? 0), 0)
