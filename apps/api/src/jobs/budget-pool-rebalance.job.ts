@@ -23,7 +23,7 @@ import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { BUDGET_POOL_CRON_ACTOR, computeRebalance, rebalanceAndAudit, type ProposedAllocation } from '../services/advertising/budget-pool-rebalancer.service.js'
 import { engineGuardNote, nothingHeld, openEngineGuard, type EngineGuardReport } from '../services/advertising/ads-engine-guard.js'
-import { addLeverSkipCounts, leverSkipNote, type LeverSkipCounts } from '../services/advertising/brain/engine-skips.js'
+import { addLeverHeld, leverHeldNote, type LeverHeld } from '../services/advertising/brain/engine-skips.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
@@ -39,7 +39,7 @@ interface TickSummary {
   /** 1d — the dial posture and the caps this run ran under, and what they held back (live pools only). */
   guard?: EngineGuardReport
   /** ONE BRAIN AB-6 — campaigns the rebalances left at their budget: a product's brain owns it, or the Owner holds it. */
-  leverHeld?: LeverSkipCounts
+  leverHeld?: LeverHeld
   leverHoldsUnread?: boolean
 }
 
@@ -56,10 +56,10 @@ export async function runBudgetPoolRebalanceOnce(): Promise<TickSummary> {
   let appliedLive = 0
   let skipped = 0
   let totalShiftCents = 0
-  const leverHeld: LeverSkipCounts = {}
+  const leverHeld: LeverHeld = {}
   let leverHoldsUnread = false
-  const noteHeld = (o: { leverHeld?: { counts: LeverSkipCounts; unread?: true } }) => {
-    addLeverSkipCounts(leverHeld, o.leverHeld?.counts)
+  const noteHeld = (o: { leverHeld?: { counts: LeverHeld; unread?: true } }) => {
+    addLeverHeld(leverHeld, o.leverHeld?.counts)
     if (o.leverHeld?.unread) leverHoldsUnread = true
   }
   // 1d — only a live pool writes, so only then are the dial and the caps read.
@@ -114,7 +114,7 @@ export async function runBudgetPoolRebalanceOnce(): Promise<TickSummary> {
   lastSummary = `pools=${pools.length} rebalanced=${rebalanced} live=${appliedLive} skipped=${skipped} shift=${totalShiftCents}¢ ${summary.durationMs}ms${engineGuardNote(summary.guard, {
     suggest: 'each due rebalance of a live pool is recorded as a dry run; nothing is written',
     stopped: 'nothing is written; rebalances wait for Resume',
-  })}${leverSkipNote(leverHeld, leverHoldsUnread)}`
+  })}${leverHeldNote(leverHeld, leverHoldsUnread)}`
   return summary
 }
 

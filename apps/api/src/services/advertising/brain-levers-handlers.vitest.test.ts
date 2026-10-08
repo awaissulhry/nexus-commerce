@@ -115,16 +115,16 @@ describe('sync_negatives_across_campaigns', () => {
     const r = await run('sync_negatives_across_campaigns', {}, ctx)
     expect(h.createNegative).toHaveBeenCalledTimes(1)
     expect(h.createNegative.mock.calls[0][0]).toMatchObject({ externalCampaignId: 'EXT-misano' })
-    expect(r).toMatchObject({ ok: true, output: { added: 1, attempted: 1, brainSkips: { counts: { negatives: 1 }, sample: [{ lever: 'negatives', campaignId: 'c-gale' }] } } })
+    expect(r).toMatchObject({ ok: true, output: { added: 1, attempted: 1, brainSkips: { counts: { productBrain: { negatives: 1 } }, sample: [{ lever: 'negatives', holder: 'productBrain', campaignId: 'c-gale' }] } } })
     const dry = await run('sync_negatives_across_campaigns', {}, ctx, { dryRun: true })
-    expect(dry.output).toMatchObject({ dryRun: true, wouldNegateIn: 1, brainSkips: { counts: { negatives: 1 } } })
+    expect(dry.output).toMatchObject({ dryRun: true, wouldNegateIn: 1, brainSkips: { counts: { productBrain: { negatives: 1 } } } })
   })
 
   it('every campaign held: a named skip, not a failure, and nothing asked', async () => {
     h.campaignLeverOwners.mockResolvedValue(holds({ 'c-gale': { negatives: OWNED }, 'c-misano': { negatives: LOCKED } }))
     const r = await run('sync_negatives_across_campaigns', {}, ctx)
     expect(h.createNegative).not.toHaveBeenCalled()
-    expect(r).toMatchObject({ ok: true, output: { skipped: 'brain-lever', brainSkips: { counts: { negatives: 2 } } } })
+    expect(r).toMatchObject({ ok: true, output: { skipped: 'brain-lever', brainSkips: { counts: { productBrain: { negatives: 1 }, ownerLock: { negatives: 1 } } } } })
     expect(r.output!.why).toContain('every campaign it would negate in is held')
   })
 
@@ -171,13 +171,13 @@ describe('harvest_and_negate', () => {
     const applied = h.applyHarvest.mock.calls[0][0] as { negatives: Array<{ query: string }>; graduations: Array<{ query: string }> }
     expect(applied.negatives.map((n) => n.query)).toEqual(['waste b'])
     expect(applied.graduations.map((g) => g.query)).toEqual(['winner b'])
-    expect(r.output).toMatchObject({ negativesAdded: 1, keywordsGraduated: 1, brainSkips: { counts: { negatives: 1, harvest: 1 } } })
+    expect(r.output).toMatchObject({ negativesAdded: 1, keywordsGraduated: 1, brainSkips: { counts: { productBrain: { negatives: 1 }, ownerLock: { harvest: 1 } } } })
   })
 
   it('a dry run plans without them, so the card never offers them', async () => {
     h.campaignLeverOwners.mockResolvedValue(holds({ 'c-gale': { negatives: OWNED, harvest: OWNED } }))
     const r = await run('harvest_and_negate', {}, {}, { dryRun: true })
-    expect(r.output).toMatchObject({ dryRun: true, wouldNegate: 1, wouldGraduate: 1, brainSkips: { counts: { negatives: 1, harvest: 1 } } })
+    expect(r.output).toMatchObject({ dryRun: true, wouldNegate: 1, wouldGraduate: 1, brainSkips: { counts: { productBrain: { negatives: 1, harvest: 1 } } } })
     expect(h.applyHarvest).not.toHaveBeenCalled()
   })
 
@@ -212,7 +212,7 @@ describe('promote_to_exact — its destinations and its isolation negative', () 
     expect(h.createKeywordLocal).toHaveBeenCalledTimes(1)
     expect(h.createKeywordLocal.mock.calls[0][0]).toMatchObject({ adGroupId: 'dst2' })
     expect(r.output!.outcomes).toContainEqual(expect.objectContaining({ adGroupId: 'dst1', skipped: 'brain-lever' }))
-    expect(r.output!.brainSkips).toMatchObject({ counts: { harvest: 1 } })
+    expect(r.output!.brainSkips).toMatchObject({ counts: { productBrain: { harvest: 1 } } })
   })
 
   it('the source\'s negatives held: no isolation negative, said', async () => {
@@ -220,7 +220,7 @@ describe('promote_to_exact — its destinations and its isolation negative', () 
     const r = await run('promote_to_exact', ACT, CTX)
     expect(h.writeNegativeKeyword).not.toHaveBeenCalled()
     expect(r.output!.isolation).toMatchObject({ adGroupId: 'src1', attempted: false, skipped: 'brain-lever' })
-    expect(r.output!.brainSkips).toMatchObject({ counts: { negatives: 1 } })
+    expect(r.output!.brainSkips).toMatchObject({ counts: { ownerLock: { negatives: 1 } } })
   })
 
   it('nothing enrolled: both destinations as before, no brainSkips', async () => {
@@ -249,7 +249,7 @@ describe('add_negative_* with a mapping — per destination', () => {
     expect(h.createNegative).toHaveBeenCalledTimes(1)
     expect(h.createNegative.mock.calls[0][0]).toMatchObject({ externalAdGroupId: 'EXT-dst2' })
     expect(r.output!.outcomes).toContainEqual(expect.objectContaining({ adGroupId: 'dst1', skipped: 'brain-lever' }))
-    expect(r.output!.brainSkips).toMatchObject({ counts: { negatives: 1 } })
+    expect(r.output!.brainSkips).toMatchObject({ counts: { productBrain: { negatives: 1 } } })
   })
 
   it('nothing enrolled: both, as before', async () => {
@@ -277,7 +277,12 @@ describe('dayparting_apply — a campaign is left whole', () => {
     const r = await run('dayparting_apply', ACT, { marketplace: 'IT' })
     expect(h.suppressCampaignBids).toHaveBeenCalledTimes(1)
     expect(h.suppressCampaignBids.mock.calls[0][0]).toBe('c-misano')
-    expect(r.output).toMatchObject({ changed: 1, brainSkips: { counts: { bids: 1, adGroupBids: 1 } } })
+    expect(r.output).toMatchObject({ changed: 1, brainSkips: { counts: { bidBrain: { bids: 1 }, ownerLock: { adGroupBids: 1 } } } })
+    // Each named as what it is: the bid brain runs the keyword bids; the Owner's lock holds the ad-group bids.
+    expect(r.output!.brainSkips.sample).toEqual([
+      { lever: 'bids', holder: 'bidBrain', campaignId: 'c-bb', why: 'the bid brain runs the keyword bids of campaign "bid brain" (c-bb)' },
+      { lever: 'adGroupBids', holder: 'ownerLock', campaignId: 'c-gale', why: 'the Owner holds the ad group default bids of campaign "GALE c-gale" (c-gale) at his own value — product gale in IT' },
+    ])
   })
 
   it('nothing owned or enrolled: every campaign as before', async () => {
@@ -285,5 +290,24 @@ describe('dayparting_apply — a campaign is left whole', () => {
     const r = await run('dayparting_apply', ACT, { marketplace: 'IT' })
     expect(h.suppressCampaignBids).toHaveBeenCalledTimes(3)
     expect(r.output).not.toHaveProperty('brainSkips')
+  })
+
+  it('the enable window on a bid brain campaign this rule floored: no give-back, counted, in the bid brain\'s own words', async () => {
+    const ENABLE = { ...ACT, windows: WINDOWS.map((w) => ({ ...w, adj: 'enable' })) }
+    const flooredByRule = { bidsSuppressedAt: new Date('2026-10-01T00:00:00Z'), bidsSuppressedBy: 'automation:rule-ab6' }
+    db.campaign.findMany.mockResolvedValue([
+      { id: 'c-bb', name: 'bid brain', ...flooredByRule },
+      { id: 'c-misano', name: 'MISANO', ...flooredByRule },
+    ] as never)
+    h.brainOwned.add('c-bb')
+    const dry = await run('dayparting_apply', ENABLE, { marketplace: 'IT' }, { dryRun: true })
+    expect(dry.output).toMatchObject({ dryRun: true, action: 'enable', wouldChange: 1, sample: ['MISANO'], brainSkips: { counts: { bidBrain: { bids: 1 } } } })
+    const r = await run('dayparting_apply', ENABLE, { marketplace: 'IT' })
+    expect(h.restoreCampaignBids).toHaveBeenCalledTimes(1)
+    expect(h.restoreCampaignBids.mock.calls[0][0]).toBe('c-misano')
+    expect(r.output).toMatchObject({ action: 'enable', changed: 1, brainSkips: { counts: { bidBrain: { bids: 1 } } } })
+    expect(r.output!.brainSkips.sample).toEqual([{ lever: 'bids', holder: 'bidBrain', campaignId: 'c-bb', why: 'the bid brain runs the keyword bids of campaign "bid brain" (c-bb)' }])
+    // Never another holder's words for the bid brain's campaign.
+    expect(JSON.stringify(r.output)).not.toMatch(/product's brain|Owner's lock/)
   })
 })

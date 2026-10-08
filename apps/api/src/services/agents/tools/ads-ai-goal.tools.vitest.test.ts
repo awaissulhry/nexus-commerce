@@ -53,6 +53,15 @@ vi.mock('../../advertising/ads-create.service.js', async (importOriginal) => {
     },
   }
 })
+// ONE BRAIN AB-6 — a product's structure lever, held when a test says so (the real reader otherwise: nothing enrolled here).
+const brainHold = vi.hoisted(() => ({ fn: null as null | ((productId: string, market: string, lever: string, writer: { actor: string; manual?: boolean }) => unknown) }))
+vi.mock('../../advertising/brain/engine-skips.js', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../../advertising/brain/engine-skips.js')>()
+  return {
+    ...real,
+    productLeverSkip: async (...a: Parameters<typeof real.productLeverSkip>) => (brainHold.fn ? brainHold.fn(a[0], a[1], a[2], a[3]) : real.productLeverSkip(...a)),
+  }
+})
 vi.mock('../../advertising/ads-cache.js', () => ({ cached: async (_k: string, _t: number, work: () => Promise<unknown>) => work(), peekCached: async () => undefined, putCached: () => undefined, flushAdsCache: async () => undefined }))
 
 import { callTool, type UserPrincipal } from '../call-tool.js'
@@ -397,5 +406,35 @@ describe('B-2 — the screen\'s own launch is unchanged (no options)', () => {
     expect(await sql(`SELECT DISTINCT enabled, "dryRun" AS dry FROM "AutomationRule" WHERE name LIKE '[AI] Screen goal%'`)).toEqual([{ enabled: true, dry: true }])
     expect((await sql('SELECT enabled, "linkedRuleIds" AS links FROM "AutopilotPlan" WHERE id = $1', [out.planId]))[0]).toMatchObject({ enabled: true })
     expect(out.rules.every((r) => !('syncedEnabled' in r))).toBe(true)
+  })
+})
+
+describe('ONE BRAIN AB-6 — new campaigns of a product are its brain\'s structure lever', () => {
+  it('by rule, on a product whose structure the Owner locked: not run, said, nothing created; a person\'s approval passes, as at the gate', async () => {
+    const args = goal({ name: 'AB6 held goal', seedKeywords: ['brake pads'] })
+    const asked = await ask(args)
+    expect(asked, JSON.stringify(asked)).toMatchObject({ ok: true, mode: 'queued' })
+    const stored = await inside(() => database.client.agentApproval.findUniqueOrThrow({ where: { id: asked.approvalId! } }))
+    const asks: Array<{ lever: string; market: string; manual: boolean }> = []
+    brainHold.fn = (productId, market, lever, writer) => {
+      asks.push({ lever, market, manual: writer.manual === true })
+      return writer.manual
+        ? null
+        : { lever, holder: 'ownerLock', productId, market, reason: `the Owner holds the structure (new ad groups and product ads) of product ${productId} in ${market} at his own value (locked by the Owner's product override)` }
+    }
+    try {
+      const tool = getTool(TOOL)!
+      const ctx = { userId: member.userId, can: () => true, via: 'claude' as const, approvalId: asked.approvalId!, decidedVia: 'auto' as const, approvedByPerson: false, approvedPreview: stored.preview }
+      const byRule = await inside(() => tool.execute!(args, ctx))
+      expect(byRule).toMatchObject({ ok: false, error: expect.stringMatching(/^Not run: the Owner holds the structure \(new ad groups and product ads\) of product .+ in IT at his own value .*one owner per lever\)\.$/) })
+      expect(asks[0]).toEqual({ lever: 'structure', market: 'IT', manual: false })
+      expect(await sql('SELECT id FROM "AdProductGoal" WHERE name = $1', ['AB6 held goal'])).toEqual([])
+      // A person decided it: the hook passes it (the reader is asked as a person's write), and the launch runs.
+      const byPerson = await inside(() => tool.execute!(args, { ...ctx, decidedVia: 'nexus' as const, approvedByPerson: true }))
+      expect(asks.slice(-2).every((a) => a.manual)).toBe(true)
+      expect(byPerson, JSON.stringify(byPerson)).toMatchObject({ ok: true })
+    } finally {
+      brainHold.fn = null
+    }
   })
 })

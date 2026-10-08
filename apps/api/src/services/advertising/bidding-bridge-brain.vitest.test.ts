@@ -1,7 +1,9 @@
 /**
  * ONE BRAIN AB-6 — the external bidding engine writes to Amazon itself (it bypasses the write gate, list-automations A18),
  * so the bridge is its only check:
- *   owned     a keyword of a campaign the bid brain owns (the bids lever) is never handed out; counted in the log
+ *   owned     a keyword of a campaign the bid brain owns (the bids lever) is never handed out — left out IN the query, so
+ *             it never takes a place in the engine's batch (follow-up of #527) — and counted in the log in the bid brain's
+ *             own words; the batch has a stable order (oldest keyword first)
  *   free      every other keyword exactly as before
  *   unread    the owner cannot be read under a live ceiling: no keyword at all this cycle (fail closed — never one that may
  *             be the brain's), the engine's next cycle asks again; it never crashes the engine's call
@@ -11,12 +13,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const h = vi.hoisted(() => ({
-  targets: vi.fn(), connections: vi.fn(), targetFindUnique: vi.fn(), targetUpdate: vi.fn(), logCreate: vi.fn(),
+  targets: vi.fn(), count: vi.fn(), connections: vi.fn(), targetFindUnique: vi.fn(), targetUpdate: vi.fn(), logCreate: vi.fn(),
   owned: vi.fn(), live: { on: true }, warn: vi.fn(), info: vi.fn(),
 }))
 vi.mock('../../db.js', () => ({
   default: {
-    adTarget: { findMany: h.targets, findUnique: h.targetFindUnique, update: h.targetUpdate },
+    adTarget: { findMany: h.targets, count: h.count, findUnique: h.targetFindUnique, update: h.targetUpdate },
     amazonAdsConnection: { findMany: h.connections },
     advertisingActionLog: { create: h.logCreate },
   },
@@ -44,24 +46,42 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs())
 
 describe('getBidContexts — the bids lever of a bid brain campaign', () => {
-  it('its keywords are never handed out; the rest as before; the keywords left out are counted', async () => {
+  const where = () => (h.targets.mock.calls[0][0] as { where: Record<string, any> }).where
+
+  it('its keywords are left out IN the query — they never take a place in the batch — and counted in the bid brain\'s words', async () => {
     h.owned.mockResolvedValue(new Set(['c-gale']))
-    const contexts = await getBidContexts({ marketplace: 'IT' })
+    h.targets.mockResolvedValue([target('t-misano', 'c-misano')])
+    h.count.mockResolvedValue(2)
+    const contexts = await getBidContexts({ marketplace: 'IT', limit: 1 })
     expect(contexts.map((c) => c.bridgeId)).toEqual(['t-misano'])
-    expect(h.owned).toHaveBeenCalledWith(['c-gale', 'c-misano'])
-    expect(h.info).toHaveBeenCalledWith(expect.stringContaining('keywords of bid brain campaigns left out'), expect.objectContaining({ lever: 'bids', keywords: 2 }))
+    expect(h.owned).toHaveBeenCalledWith() // every campaign the bid brain owns, read once, before the batch
+    expect(where().adGroup).toEqual({ campaign: { marketplace: 'IT', liveBidWritesEnabled: true }, campaignId: { notIn: ['c-gale'] } })
+    expect(h.targets.mock.calls[0][0]).toMatchObject({ take: 1, orderBy: { id: 'asc' } })
+    expect((h.count.mock.calls[0][0] as { where: Record<string, any> }).where.adGroup).toEqual({ campaign: { marketplace: 'IT', liveBidWritesEnabled: true }, campaignId: { in: ['c-gale'] } })
+    expect(h.info).toHaveBeenCalledWith('bidding bridge: keywords of bid brain campaigns left out — the bid brain runs their keyword bids (one owner per lever)', expect.objectContaining({ lever: 'bids', keywords: 2, bidBrainCampaigns: 1 }))
   })
 
-  it('nothing owned: every keyword exactly as before, nothing logged', async () => {
+  it('nothing owned: the same query as before (no exclusion), a stable order, no count, nothing logged', async () => {
     const contexts = await getBidContexts({ marketplace: 'IT' })
     expect(contexts.map((c) => c.bridgeId)).toEqual(['t-gale', 't-gale2', 't-misano'])
+    expect(where().adGroup).toEqual({ campaign: { marketplace: 'IT', liveBidWritesEnabled: true } })
+    expect(h.targets.mock.calls[0][0]).toMatchObject({ orderBy: { id: 'asc' } })
+    expect(h.count).not.toHaveBeenCalled()
     expect(h.info).not.toHaveBeenCalled()
   })
 
-  it('the owner cannot be read: no keyword this cycle (fail closed), said, and no crash', async () => {
+  it('the owner cannot be read: no keyword this cycle (fail closed), said, no query, and no crash', async () => {
     h.owned.mockRejectedValue(new Error('db blip'))
     await expect(getBidContexts({ marketplace: 'IT' })).resolves.toEqual([])
-    expect(h.warn).toHaveBeenCalledWith(expect.stringContaining('no keyword is handed out this cycle'), expect.objectContaining({ keywords: 3 }))
+    expect(h.targets).not.toHaveBeenCalled()
+    expect(h.warn).toHaveBeenCalledWith(expect.stringContaining('no keyword is handed out this cycle'), expect.objectContaining({ error: 'db blip' }))
+  })
+
+  it('a failed count is only not said: the batch is handed out as read', async () => {
+    h.owned.mockResolvedValue(new Set(['c-gale']))
+    h.targets.mockResolvedValue([target('t-misano', 'c-misano')])
+    h.count.mockRejectedValue(new Error('db blip'))
+    expect((await getBidContexts({ marketplace: 'IT' })).map((c) => c.bridgeId)).toEqual(['t-misano'])
   })
 })
 

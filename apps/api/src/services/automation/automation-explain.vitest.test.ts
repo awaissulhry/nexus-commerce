@@ -167,11 +167,18 @@ describe('R7 — what an automation wrote, by its exact actor', () => {
       .toEqual([{ code: 'failing', says: '2 of its 5 runs failed in 7 days.' }])
   })
 
-  it('ONE BRAIN AB-6 — writes left to a product\'s brain are said per lever, apart from the caps and the refusals: not a failure', () => {
-    const refusals = { total: 6, byReason: { 'LEVER_HELD:budgets': 3, 'LEVER_HELD:state': 1, DAILY_CAP_EXCEEDED: 2 }, lastAt: null, lastReason: null }
+  it('ONE BRAIN AB-6 — writes left to their lever\'s holder are said per holder, each as what it is, apart from the caps: not a failure', () => {
+    const refusals = { total: 8, byReason: { 'BRAIN_OWNED:budgets': 3, 'OWNER_LOCKED:state': 1, 'BID_BRAIN:bids': 2, DAILY_CAP_EXCEEDED: 2 }, lastAt: null, lastReason: null }
     expect(verdictsOf('AUTO', 'x', { subject: null, runs: null, writes: null, refusals }, 7)).toEqual([
       { code: 'capped', says: 'Its own caps stopped it 2 times in 7 days (DAILY_CAP_EXCEEDED 2): the cap, not the rule, decides how much it reaches.' },
-      { code: 'lever-held', says: 'It left 4 writes alone in 7 days on levers a product\'s brain owns or the Owner holds at his own value (budgets 3, state 1): one owner per lever, not a failure.' },
+      { code: 'lever-held', says: 'It left 6 writes alone in 7 days on levers another owner holds — a product\'s brain owns budgets 3; the Owner\'s lock holds state 1; the bid brain runs bids 2: one owner per lever, not a failure.' },
+    ])
+  })
+
+  it('ONE BRAIN AB-6 — a row recorded before the holders were told apart: the keyword bids were the bid brain\'s; any other lever is said as either', () => {
+    const refusals = { total: 3, byReason: { 'LEVER_HELD:bids': 2, 'LEVER_HELD:budgets': 1 }, lastAt: null, lastReason: null }
+    expect(verdictsOf('AUTO', 'x', { subject: null, runs: null, writes: null, refusals }, 7)).toEqual([
+      { code: 'lever-held', says: 'It left 3 writes alone in 7 days on levers another owner holds — the bid brain runs bids 2; a product\'s brain or the Owner\'s lock holds (recorded before they were told apart) budgets 1: one owner per lever, not a failure.' },
     ])
   })
 })

@@ -54,14 +54,14 @@ describe('pace_budget', () => {
     const r = await pace(false)
     expect(h.updateCampaignWithSync).toHaveBeenCalledTimes(1)
     expect(h.updateCampaignWithSync.mock.calls[0][0]).toMatchObject({ campaignId: 'c-misano', actor: 'automation:rule-pace' })
-    expect(r.output).toMatchObject({ raised: 1, brainSkips: { counts: { budgets: 1 }, sample: [{ campaignId: 'c-gale' }] } })
+    expect(r.output).toMatchObject({ raised: 1, brainSkips: { counts: { productBrain: { budgets: 1 } }, sample: [{ campaignId: 'c-gale', holder: 'productBrain' }] } })
   })
 
   it('a dry run offers only the free one; all held → nothing to propose', async () => {
     h.campaignLeverOwners.mockResolvedValue(held('c-gale'))
     expect((await pace(true)).output).toMatchObject({ dryRun: true, wouldRaise: 1 })
     h.campaignLeverOwners.mockResolvedValue(new Map([...held('c-gale'), ...held('c-misano')]))
-    expect((await pace(true)).output).toMatchObject({ dryRun: true, wouldRaise: 0, noChange: true, brainSkips: { counts: { budgets: 2 } } })
+    expect((await pace(true)).output).toMatchObject({ dryRun: true, wouldRaise: 0, noChange: true, brainSkips: { counts: { productBrain: { budgets: 2 } } } })
   })
 
   it('nothing enrolled: both raised as before, no brainSkips', async () => {
@@ -84,7 +84,7 @@ describe('liquidate_aged_stock — the boost', () => {
     h.campaignLeverOwners.mockResolvedValue(held('c-gale'))
     const dry = await liquidate(true)
     const boostDry = dry.subActions.find((s) => s.step === 'boost_aged_product_ads')!
-    expect(boostDry.output).toMatchObject({ count: 1, wouldBoost: [{ id: 'c-misano' }], brainSkips: { counts: { budgets: 1 } } })
+    expect(boostDry.output).toMatchObject({ count: 1, wouldBoost: [{ id: 'c-misano' }], brainSkips: { counts: { productBrain: { budgets: 1 } } } })
     expect(h.updateCampaignWithSync).not.toHaveBeenCalled()
   })
 

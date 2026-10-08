@@ -35,8 +35,12 @@ import {
   type CampaignNativeRules,
 } from './native-rules.js'
 
-/** AB-13 — `hours` is brain/hours-proposal.ts brainHours: the product's hour research and painted plan (the tool routes it). */
-export const BRAIN_MAP_VIEWS = ['map', 'clashes', 'setup', 'hours'] as const
+/**
+ * AB-7 — `money` is brain/budget-read.ts: the product's money plan in shadow (the tool routes it). AB-9 — `terms` is
+ * brain/terms-read.ts: the product's term ledger and the market arbiter's leads, in shadow (the tool routes it). AB-13 —
+ * `hours` is brain/hours-proposal.ts brainHours: the product's hour research and painted plan (the tool routes it).
+ */
+export const BRAIN_MAP_VIEWS = ['map', 'clashes', 'setup', 'money', 'terms', 'hours'] as const
 export type BrainMapView = (typeof BRAIN_MAP_VIEWS)[number]
 
 /** The days of action-log evidence a view reads by default, and at most. */
@@ -319,8 +323,8 @@ const isSafetyActor = (actor: string) => BRAIN_SAFETY_ACTOR_PREFIXES.some((p) =>
 export function writerOfActor(userId: string | null, ruleNames: ReadonlyMap<string, string>): Omit<Writer, 'basis'> {
   if (userId && isSafetyActor(userId)) return { who: `safety: ${userId.replace(/^automation:/, '')}`, kind: 'safety', state: 'acts', why: 'a safety owner (always passes)' }
   const c = classifyActor(userId)
-  if (c.kind === 'engine') return c.engine === 'bid-brain'
-    ? { who: 'the brain', kind: 'brain', state: 'acts', why: 'the bid brain wrote' }
+  if (c.kind === 'engine') return c.engine === 'bid-brain' || c.engine === 'brain-money'
+    ? { who: 'the brain', kind: 'brain', state: 'acts', why: c.engine === 'bid-brain' ? 'the bid brain wrote' : 'the brain\'s money writer wrote (AB-8)' }
     : { who: engineLabel(c.engine), kind: 'engine', state: 'acts', why: `${engineLabel(c.engine)} wrote` }
   if (c.kind === 'rule-candidate') {
     const name = ruleNames.get(c.ruleId)
@@ -357,6 +361,12 @@ export function configuredWriters(c: CampaignRow & { market: string | null; prod
       if (lever === 'bids') continue
       const l = settings.levers[lever]
       if (l.effective === 'OBSERVE') add(lever, { who: 'the brain', kind: 'brain', state: 'watches', why: `OBSERVE: ${LEVER_LEVELS_NOW[lever].others}` })
+      // AB-8 — the money levers have a writer: AUTO acts and PROPOSE asks under a live switch; otherwise the brain only plans.
+      else if ((lever === 'budgets' || lever === 'portfolioCap') && (l.effective === 'AUTO' || l.effective === 'PROPOSE')) {
+        add(lever, cfg.ceilingLive
+          ? { who: 'the brain', kind: 'brain', state: l.effective === 'AUTO' ? 'acts' : 'asks', why: `${l.effective}: ${l.effective === 'AUTO' ? 'the brain\'s money writer sets it inside the pace (AB-8)' : 'the brain asks a person for each change in the Approvals page (AB-8)'}` }
+          : { who: 'the brain', kind: 'brain', state: 'watches', why: `${l.effective}, but NEXUS_BID_BRAIN_MODE is ${cfg.ceiling}: the brain plans it in shadow` })
+      }
       // AB-13 — a lever at PROPOSE: the brain asks a person for each change (the hours lever: its painted plan).
       else if (l.effective === 'PROPOSE') add(lever, { who: 'the brain', kind: 'brain', state: 'asks', why: `PROPOSE: ${LEVER_LEVELS_NOW[lever].others}` })
     }
@@ -646,7 +656,7 @@ export async function brainClashes(args: { market?: string; productId?: string; 
         harvestVersusNegate: blocking.map((b) => ({ ...b, meaning: `the keyword "${b.text}" is targeted and blocked in the same place (${b.negative}): it never serves there` })),
         harvestWithoutDestination: noDestination.map((n) => ({ ...n, meaning: `rule "${n.rule}" can harvest in ${n.campaigns.length} campaign${n.campaigns.length === 1 ? '' : 's'} with no stored destination: the keyword goes back into the ad group that found it and that source is never negated (set-harvest-destination fixes it)` })),
         ...(destinations.some((d) => d.scopeGrain === 'line') ? { caveat: 'product-line destinations exist and are not resolved here: a campaign named under harvestWithoutDestination may be covered by one' } : {}),
-        siblingKeywords: siblings.map((s) => ({ ...s, meaning: `${s.products.length} products bid on "${s.text}" in ${market}: the market arbiter (AB-9) will name a lead; today they compete` })),
+        siblingKeywords: siblings.map((s) => ({ ...s, meaning: `${s.products.length} products bid on "${s.text}" in ${market}: the market arbiter (AB-9, view terms) names a lead in shadow; until AB-10/AB-11 write, they compete` })),
         amazonRules: amazonRulesGap(rows, native),
       },
       ...(cfg.engines ? {} : { notMeasured: ['the engines\' modes could not be read: every engine counts as configured to act'] }),

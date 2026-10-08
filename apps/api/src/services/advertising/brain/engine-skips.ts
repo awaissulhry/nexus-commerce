@@ -19,8 +19,10 @@
  *                is KNOWN to be held (the last answers this process knew still count, lever-owners.ts) and sends the rest
  *                to the write gate, which judges each write and, when it cannot read the owner either, leaves the queued
  *                row to be sent again (review of #523). The run's summary says the holders were unread.
- *   counted      every skip is counted per lever (counts(), note()); the engine puts the count in its summary line, its
- *                notification or its automation-activity record, and the reason in its own log line.
+ *   counted      every skip is counted per holder and lever (counts(), note()) — a product's brain (AdsBrainEnrollment),
+ *                the Owner's lock, or the bid brain (BidBrainEnrollment, the keyword bids) — and each is named as what it
+ *                is, never one for another (Owner rule: 100 % honest words); the engine puts the count in its summary line,
+ *                its notification or its automation-activity record, and the reason in its own log line.
  */
 import prisma from '../../../db.js'
 import { logger } from '../../../utils/logger.js'
@@ -38,19 +40,35 @@ export interface EngineWriter {
   isSuppression?: boolean
 }
 
-/** One write an engine leaves to a product's brain (or to the Owner's lock), with why in words. */
+/**
+ * Who holds a lever an engine leaves (follow-up of #527: each named as what it is):
+ *   productBrain  a product's brain owns it (AdsBrainEnrollment, the lever at PROPOSE or AUTO)
+ *   ownerLock     the Owner holds it at his own value (his whole-lever lock)
+ *   bidBrain      the bid brain runs the campaign's keyword bids (BidBrainEnrollment LIVE or HELD, BB-6)
+ */
+export const LEVER_HOLDERS = ['productBrain', 'ownerLock', 'bidBrain'] as const
+export type LeverHolder = (typeof LEVER_HOLDERS)[number]
+const HOLDER_WORDS: Record<LeverHolder, string> = { productBrain: 'a product\'s brain', ownerLock: 'the Owner\'s lock', bidBrain: 'the bid brain' }
+export const isLeverHolder = (v: unknown): v is LeverHolder => typeof v === 'string' && (LEVER_HOLDERS as readonly string[]).includes(v)
+/** The holder of a product brain's hold (brain/lever-owners.ts): owned → a product's brain, locked → the Owner's lock. */
+export const holderOfHold = (kind: LeverHold['kind']): LeverHolder => (kind === 'owned' ? 'productBrain' : 'ownerLock')
+
+/** One write an engine leaves to its lever's holder, with why in words. */
 export interface LeverSkip {
   lever: BrainLever
-  kind: LeverHold['kind']
+  holder: LeverHolder
   campaignId: string
   campaignName: string | null
-  productId: string
-  market: string
+  /** The product whose brain owns or whose lock holds it; null for the bid brain (it runs campaigns, not products). */
+  productId: string | null
+  market: string | null
   /** "a product's brain runs the daily budget of campaign "X" (c1) — product p1 in IT" */
   reason: string
 }
 
 export type LeverSkipCounts = Partial<Record<BrainLever, number>>
+/** Skips per holder, then per lever: { productBrain: { budgets: 2 }, bidBrain: { bids: 1 } }. */
+export type LeverHeld = Partial<Record<LeverHolder, LeverSkipCounts>>
 
 const where = (campaignId: string, name: string | null | undefined) => `campaign ${name ? `"${name}" (${campaignId})` : campaignId}`
 
@@ -69,39 +87,73 @@ export function leverSkipOf(owners: CampaignLeverOwners | undefined, lever: Brai
   // Exactly the gate's question: would it refuse this writer on this held lever?
   if (!leverHoldRefusal(lever, hold, leverWriterOf(lever, writer), where(owners.campaignId, owners.name), writer.actor)) return null
   return {
-    lever, kind: hold.kind, campaignId: owners.campaignId, campaignName: owners.name ?? null, productId: hold.productId, market: hold.market,
+    lever, holder: holderOfHold(hold.kind), campaignId: owners.campaignId, campaignName: owners.name ?? null, productId: hold.productId, market: hold.market,
     reason: leverSkipReason(lever, hold, owners.campaignId, owners.name),
   }
 }
 
-/** Add one run's counts into another's (in place). */
-export function addLeverSkipCounts(into: LeverSkipCounts, from: LeverSkipCounts | null | undefined): LeverSkipCounts {
-  for (const [lever, n] of Object.entries(from ?? {}) as Array<[BrainLever, number]>) if (n) into[lever] = (into[lever] ?? 0) + n
+/** A keyword-bids write left to the bid brain (its campaign LIVE or HELD in BidBrainEnrollment, BB-6), in its own words. Pure. */
+export function bidBrainSkip(campaignId: string, name?: string | null): LeverSkip {
+  return {
+    lever: 'bids', holder: 'bidBrain', campaignId, campaignName: name ?? null, productId: null, market: null,
+    reason: `the bid brain runs the keyword bids of ${where(campaignId, name)}`,
+  }
+}
+
+/** Count `n` skips of one holder and lever into a tally (in place). */
+function tallyInto(into: LeverHeld, holder: LeverHolder, lever: BrainLever, n: number): void {
+  if (n <= 0) return
+  const byLever = (into[holder] ??= {})
+  byLever[lever] = (byLever[lever] ?? 0) + n
+}
+
+/** Add one run's tally into another's (in place). */
+export function addLeverHeld(into: LeverHeld, from: LeverHeld | null | undefined): LeverHeld {
+  for (const [holder, byLever] of Object.entries(from ?? {}) as Array<[LeverHolder, LeverSkipCounts]>) {
+    if (!isLeverHolder(holder)) continue
+    for (const [lever, n] of Object.entries(byLever ?? {}) as Array<[BrainLever, number]>) if (typeof n === 'number') tallyInto(into, holder, lever, n)
+  }
   return into
 }
 
+/** The tally of a list of skips. Pure. */
+export function leverHeldOf(skips: readonly LeverSkip[]): LeverHeld {
+  const out: LeverHeld = {}
+  for (const s of skips) tallyInto(out, s.holder, s.lever, 1)
+  return out
+}
+
+/** How many writes a tally counts. Pure. */
+export function leverHeldTotal(held: LeverHeld | null | undefined): number {
+  return Object.values(held ?? {}).reduce((n, byLever) => n + Object.values(byLever ?? {}).reduce((m, v) => m + (v ?? 0), 0), 0)
+}
+
 /**
- * A run summary's words for its skips: " brain-levers=budgets:2,state:1 (left to a product's brain or the Owner's lock)",
- * " brain-levers=unread (nothing skipped on a guess; …)" when the holders could not be read, or "" on
- * a run that skipped nothing (every run while nothing is enrolled). Pure.
+ * A run summary's words for its skips, each holder named as what it is: " brain-levers=a product's brain: budgets 2,
+ * state 1; the Owner's lock: negatives 1; the bid brain: bids 1 (one owner per lever)"; " brain-levers=unread (nothing
+ * skipped on a guess; …)" when the holders could not be read; "" on a run that skipped nothing (every run while nothing is
+ * enrolled). Pure.
  */
-export function leverSkipNote(counts: LeverSkipCounts | null | undefined, unread = false): string {
-  const parts = (Object.entries(counts ?? {}) as Array<[BrainLever, number]>).filter(([, n]) => n > 0).map(([lever, n]) => `${lever}:${n}`)
-  const said = parts.length ? ` brain-levers=${parts.join(',')} (left to a product's brain or the Owner's lock)` : ''
+export function leverHeldNote(held: LeverHeld | null | undefined, unread = false): string {
+  const parts = LEVER_HOLDERS.flatMap((holder) => {
+    const levers = (Object.entries(held?.[holder] ?? {}) as Array<[BrainLever, number]>).filter(([, n]) => n > 0)
+    return levers.length ? [`${HOLDER_WORDS[holder]}: ${levers.map(([lever, n]) => `${lever} ${n}`).join(', ')}`] : []
+  })
+  const said = parts.length ? ` brain-levers=${parts.join('; ')} (one owner per lever)` : ''
   return unread ? `${said} brain-levers=unread (nothing skipped on a guess; the write gate judges each write)` : said
 }
 
 /**
- * What an action or a run that writes several campaigns adds to its output for the skips it made (`brainSkips`: counts per
- * lever, a sample with why, and whether the holders were unread); empty when it skipped nothing and read fine. Pure.
+ * What an action or a run that writes several campaigns adds to its output for the skips it made (`brainSkips`: the tally
+ * per holder and lever, a sample with why, and whether the holders were unread); empty when it skipped nothing and read
+ * fine. Pure.
  */
-export function brainSkipsOutput(counts: LeverSkipCounts, sample: readonly LeverSkip[], unread = false): Record<string, unknown> {
-  const total = Object.values(counts).reduce((n, v) => n + (v ?? 0), 0)
-  if (!total && !unread) return {}
+export function brainSkipsOutput(held: LeverHeld, sample: readonly LeverSkip[], unread = false): Record<string, unknown> {
+  if (!leverHeldTotal(held) && !unread) return {}
   return {
     brainSkips: {
-      counts,
-      ...(sample.length ? { sample: sample.slice(0, 5).map((s) => ({ lever: s.lever, campaignId: s.campaignId, why: s.reason })) } : {}),
+      counts: held,
+      ...(sample.length ? { sample: sample.slice(0, 5).map((s) => ({ lever: s.lever, holder: s.holder, campaignId: s.campaignId, why: s.reason })) } : {}),
       ...(unread ? { unread: 'who holds the levers could not be read: nothing was skipped on a guess, the write gate judged each write' } : {}),
     },
   }
@@ -109,7 +161,7 @@ export function brainSkipsOutput(counts: LeverSkipCounts, sample: readonly Lever
 
 /** What one engine run knows about who holds the levers of the campaigns it may write. */
 export class LeverHolds {
-  private readonly tally: LeverSkipCounts = {}
+  private readonly tally: LeverHeld = {}
 
   constructor(
     private readonly owners: ReadonlyMap<string, CampaignLeverOwners>,
@@ -126,26 +178,33 @@ export class LeverHolds {
   /** The skip for this run's writer on `lever` of `campaignId`, counted once per call (one call per write left), or null. */
   skip(campaignId: string | null | undefined, lever: BrainLever): LeverSkip | null {
     const s = this.peek(campaignId, lever)
-    if (s) this.tally[lever] = (this.tally[lever] ?? 0) + 1
+    if (s) tallyInto(this.tally, s.holder, s.lever, 1)
     return s
   }
 
-  /** Count `n` writes left for a reason this reader does not judge itself (the bid brain's keyword bids, BB-6; a product's structure). */
-  count(lever: BrainLever, n = 1): void {
-    if (n > 0) this.tally[lever] = (this.tally[lever] ?? 0) + n
+  /** A keyword-bids write left to the bid brain (the caller read BB-6's brainOwnedCampaignIds), counted, in its words. */
+  skipBidBrain(campaignId: string, name?: string | null): LeverSkip {
+    const s = bidBrainSkip(campaignId, name)
+    tallyInto(this.tally, s.holder, s.lever, 1)
+    return s
   }
 
-  counts(): LeverSkipCounts {
-    return { ...this.tally }
+  /** Count `n` writes left for a holder this reader did not judge itself (a product's structure, asked by the build). */
+  count(holder: LeverHolder, lever: BrainLever, n = 1): void {
+    tallyInto(this.tally, holder, lever, n)
+  }
+
+  counts(): LeverHeld {
+    return addLeverHeld({}, this.tally)
   }
 
   total(): number {
-    return Object.values(this.tally).reduce((n, v) => n + (v ?? 0), 0)
+    return leverHeldTotal(this.tally)
   }
 
-  /** The run summary's words (leverSkipNote). */
+  /** The run summary's words (leverHeldNote). */
   note(): string {
-    return leverSkipNote(this.tally, this.unread)
+    return leverHeldNote(this.tally, this.unread)
   }
 }
 
@@ -205,7 +264,7 @@ export async function readAdGroupLeverHolds(
 /** One product's lever held for a writer (a build of new campaigns, which no campaign's owner can answer for). */
 export interface ProductLeverSkip {
   lever: BrainLever
-  kind: LeverHold['kind']
+  holder: Exclude<LeverHolder, 'bidBrain'>
   productId: string
   market: string
   reason: string
@@ -233,7 +292,7 @@ export async function productLeverSkip(productId: string, market: string, lever:
     if (!kind || (kind === 'owned' && who === 'brain')) return null
     const words = LEVER_WORDS[lever]
     return {
-      lever, kind, productId: s.productId, market: s.market,
+      lever, holder: kind === 'owned' ? 'productBrain' : 'ownerLock', productId: s.productId, market: s.market,
       reason: kind === 'owned'
         ? `a product's brain runs the ${words} of product ${s.productId} in ${s.market} (${l.why})`
         : `the Owner holds the ${words} of product ${s.productId} in ${s.market} at his own value (${l.why})`,

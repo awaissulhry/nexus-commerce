@@ -23,11 +23,11 @@ beforeEach(() => {
 describe('AB-6 — the pool cron\'s line', () => {
   it('counts the held campaigns of every pool, per lever', async () => {
     h.rebalance
-      .mockResolvedValueOnce({ ok: true, proposed: [], totalShiftCents: 400, leverHeld: { counts: { budgets: 1 } } })
-      .mockResolvedValueOnce({ ok: true, proposed: [], totalShiftCents: 0, leverHeld: { counts: { budgets: 2 } } })
+      .mockResolvedValueOnce({ ok: true, proposed: [], totalShiftCents: 400, leverHeld: { counts: { productBrain: { budgets: 1 } } } })
+      .mockResolvedValueOnce({ ok: true, proposed: [], totalShiftCents: 0, leverHeld: { counts: { productBrain: { budgets: 1 }, ownerLock: { budgets: 1 } } } })
     const r = await runBudgetPoolRebalanceOnce()
-    expect(r.leverHeld).toEqual({ budgets: 3 })
-    expect(getBudgetPoolRebalanceStatus().lastSummary).toMatch(/ brain-levers=budgets:3 \(left to a product's brain or the Owner's lock\)$/)
+    expect(r.leverHeld).toEqual({ productBrain: { budgets: 2 }, ownerLock: { budgets: 1 } })
+    expect(getBudgetPoolRebalanceStatus().lastSummary).toMatch(/ brain-levers=a product's brain: budgets 2; the Owner's lock: budgets 1 \(one owner per lever\)$/)
   })
 
   it('says when the holders could not be read', async () => {

@@ -11,7 +11,7 @@ import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { BUDGET_ENFORCE_DIAL_WORDS, applyBudgetEnforcement, budgetEnforceGate } from '../services/advertising/ads-budget-enforce.service.js'
 import { engineGuardNote } from '../services/advertising/ads-engine-guard.js'
-import { leverSkipNote } from '../services/advertising/brain/engine-skips.js'
+import { leverHeldNote } from '../services/advertising/brain/engine-skips.js'
 
 let task: ReturnType<typeof cron.schedule> | null = null
 let running = false
@@ -34,7 +34,7 @@ async function budgetEnforceTick(): Promise<string> {
   const r = await applyBudgetEnforcement({ dryRun: !apply, actor: 'automation:budget-manager-cron' })
   // W1-6b — ad groups a category or product cap floored or gave back, only when there were any (a normal line is unchanged).
   const groups = r.adGroupsSuppressed || r.adGroupsRestored ? ` adGroupFloors=${r.adGroupsSuppressed} adGroupRestores=${r.adGroupsRestored}` : ''
-  return `plans=${r.result.totals.plans} budgetChanges=${r.result.totals.budgetChanges} applied=${r.budgetApplied} suppress=${r.suppressed} restore=${r.restored} failed=${r.failed} ${r.dryRun ? '(dry-run)' : '(LIVE)'}${groups}${engineGuardNote(r.guard, BUDGET_ENFORCE_DIAL_WORDS)}${leverSkipNote(r.leverHeld, r.leverHoldsUnread)}`
+  return `plans=${r.result.totals.plans} budgetChanges=${r.result.totals.budgetChanges} applied=${r.budgetApplied} suppress=${r.suppressed} restore=${r.restored} failed=${r.failed} ${r.dryRun ? '(dry-run)' : '(LIVE)'}${groups}${engineGuardNote(r.guard, BUDGET_ENFORCE_DIAL_WORDS)}${leverHeldNote(r.leverHeld, r.leverHoldsUnread)}`
 }
 
 export async function runBudgetEnforceCron(): Promise<void> {

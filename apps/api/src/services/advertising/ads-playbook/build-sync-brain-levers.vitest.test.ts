@@ -73,7 +73,7 @@ describe('runSync — a sync the business\'s rule ran', () => {
     expect(res.negatives.leftAlone).toEqual([{ key: 'neg-gale', why: 'Not written: a product\'s brain runs the negatives of campaign "GALE exact" (c-gale) — product gale in IT (one owner per lever).' }])
     expect(res.positives.leftAlone.map((o) => o.key)).toEqual(['kw-gale'])
     expect(res.productAds.leftAlone.map((o) => o.key)).toEqual(['ad-gale'])
-    expect(res.leverHeld).toEqual({ negatives: 1, harvest: 1, structure: 1 })
+    expect(res.leverHeld).toEqual({ productBrain: { negatives: 1, harvest: 1, structure: 1 } })
   })
 
   it('a person approved it: everything written, as at the gate', async () => {
@@ -102,7 +102,7 @@ describe('startPlaybookBuild — new campaigns are the product\'s structure leve
   it('the Owner locked the product\'s structure: a build by rule is not started, and says why', async () => {
     h.brainSettings.mockResolvedValue({ productId: 'gale', market: 'IT', levers: { structure: { owned: false, effective: 'LOCKED', why: 'locked at the Owner\'s own value by the Owner\'s product override' } } })
     const r = await start(false)
-    expect(r).toEqual({ refusal: expect.stringContaining('not built: the Owner holds the structure (new ad groups and product ads) of product gale in IT at his own value'), brainLever: 'structure' })
+    expect(r).toEqual({ refusal: expect.stringContaining('not built: the Owner holds the structure (new ad groups and product ads) of product gale in IT at his own value'), brainLever: 'structure', brainHolder: 'ownerLock' })
     expect(h.brainSettings).toHaveBeenCalledWith('gale-m', 'IT')
     expect(h.transaction).not.toHaveBeenCalled()
   })

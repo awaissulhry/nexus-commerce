@@ -17,6 +17,9 @@
  *             campaign, every lane at 0 % and "up and down" switched to "down only"; when it ends, both back from the
  *             stop's memory in the same tick as the bids. The Owner's locks are read first (unreadable: the lanes and the
  *             strategy wait, the bids still go); the recipe's words join the why of the campaign's decisions
+ *   BB-15     NEXUS_BID_BRAIN_NOWCAST=shadow (the default): each full run also decides the same keywords from the window
+ *             that ends yesterday, maturity-weighted (nowcast.ts); the decisions and every write stay the settled ones,
+ *             and where the two differ the stored why gains " · nowcast to …: would …" and the run's line counts them
  */
 import { randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
@@ -27,7 +30,7 @@ import { engineGuardNote, openEngineGuard, type EngineGuard, type EngineGuardRep
 import { strategyMarket } from '../ads-strategy/bids.js'
 import { decide, type Decision, type TargetFacts } from './decide.js'
 import { applyLaneDirectives, laneWords, type LaneName } from './recipe.js'
-import { buildFacts, isPlanFloorMark, STRATEGY_HOLD_KIND, type CampaignRow } from './facts.js'
+import { buildFacts, isPlanFloorMark, STRATEGY_HOLD_KIND, type CampaignRow, type RunRows } from './facts.js'
 import { BRAIN_ACTOR, brainOwnedCampaignIds } from './live.js'
 import {
   placementReportWords, strategyReportWords, writeOwnedDecisions, writeOwnedPlacements, writeOwnedStrategies, writeReportWords,
@@ -38,7 +41,8 @@ import { stampPlanReceipts } from './plans.js'
 import { ownerLeverLocks, type LeverLocks } from '../brain/owner-brakes.js'
 import { campaignStopOf, fullLanes, strategyStep, type CampaignStop } from './stop-recipe.js'
 import { strategySwitchesToday } from './stop-memory.js'
-import { loadMarket, loadRun, SHADOW_MARKETS, type LastWrite, type PreviousDecision } from './load.js'
+import { loadMarket, loadNowcastEvidence, loadRun, SHADOW_MARKETS, type LastWrite, type LoadedMarket, type PreviousDecision } from './load.js'
+import { compareNowcast, nowcastMode, nowcastOnNotes, nowcastSummaryWords, youngPctOf, type NowcastShadowSummary } from './nowcast.js'
 
 export type BrainMode = 'off' | 'shadow' | 'live'
 
@@ -57,7 +61,7 @@ export interface ShadowRun {
   runId: string
   mode: BrainMode
   /** BB-6 — `owned`: the market's campaigns the brain owns this run; `writes`: what became of their write decisions. */
-  markets: Array<{ market: string; decided: number; stored: number; byAction: Record<string, number>; byLayer: Record<string, number>; brakes: string[]; owned?: number; writes?: WriteReport | null; placements?: PlacementReport; strategies?: StrategyReport; brainWrites?: BrainWriteRecord[] }>
+  markets: Array<{ market: string; decided: number; stored: number; byAction: Record<string, number>; byLayer: Record<string, number>; brakes: string[]; owned?: number; writes?: WriteReport | null; placements?: PlacementReport; strategies?: StrategyReport; brainWrites?: BrainWriteRecord[]; nowcast?: NowcastShadowSummary; nowcastOn?: { dataDay: string; curve: string; youngPct: number } }>
   pruned: number
   /** BB-6 — the dial and the caps the live writes ran under (absent: nothing owned had to move). */
   guard?: EngineGuardReport
@@ -106,6 +110,11 @@ export async function shadowMarket(market: string, ctx: { runId: string; mode: B
   }
   const facts = buildFacts(rows, run).filter((f) => !ctx.onlyOwned || owned.has(campaignOf(f.targetId)))
   const decisions = facts.map((f) => decide(f))
+  // BB-15 — the nowcast in shadow (full runs only): words for the stored why; the decisions above are the ones that count.
+  // Switched on (the rows were read with it): the why of a decision resting on young days says how much they carry.
+  const nowcast = !rows.light && nowcastMode() === 'shadow'
+    ? await nowcastShadow(rows, run, facts, decisions, ctx.now)
+    : rows.nowcast ? { notes: nowcastOnNotes(decisions, rows.nowcast.youngShare, rows.dataDay), summary: null } : null
   const toWrite = owned.size
     ? decisions.filter((d) => d.action === 'write' && owned.has(campaignOf(d.targetId))).map((decision) => ({ campaignId: campaignOf(decision.targetId), market, decision }))
     : []
@@ -144,7 +153,7 @@ export async function shadowMarket(market: string, ctx: { runId: string; mode: B
       mode: owned.has(campaignId) ? 'LIVE' : 'SHADOW', kind, marketplace: market, campaignId, adGroupId, targetId: d.targetId,
       action: d.action, layer: d.layer, currentCents: d.currentCents, decidedCents: d.bidCents, goalBidCents: d.goalBidCents,
       aim: dec(d.goal?.aim), bandLo: dec(d.goal?.lo), bandHi: dec(d.goal?.hi), expectedAcos: dec(d.expectedAcos), confidence: dec(d.confidence),
-      dataDay: new Date(`${d.dataDay}T00:00:00Z`), lastWriter: last?.actor ?? null, lastWriteAt: last?.at ?? null, why: recipe.has(campaignId) ? `${d.why} · ${recipe.get(campaignId)}` : d.why,
+      dataDay: new Date(`${d.dataDay}T00:00:00Z`), lastWriter: last?.actor ?? null, lastWriteAt: last?.at ?? null, why: withNote(recipe.has(campaignId) ? `${d.why} · ${recipe.get(campaignId)}` : d.why, nowcast?.notes.get(d.targetId)),
       evidence: { step: d.step, lastStep: carriedStep(d, prev), clash: d.clash, placements: d.placements.length ? d.placements : undefined, sent: outcome } as unknown as Prisma.InputJsonObject,
       createdAt: ctx.now,
     }]
@@ -154,6 +163,36 @@ export async function shadowMarket(market: string, ctx: { runId: string; mode: B
     market, decided: decisions.length, stored: data.length, byAction: count(decisions, 'action'), byLayer: count(decisions, 'layer'), brakes: run.marketBrakes as string[],
     ...(owned.size ? { owned: owned.size, writes: sent, ...(placed && (placed.written || placed.refused || placed.deferred || placed.locked || placed.waiting) ? { placements: placed } : {}), ...(switched && switched.byCampaign.size ? { strategies: switched } : {}) } : {}),
     ...(owned.size ? { brainWrites: brainWriteRecords(decisions, sent, placed, campaignOf) } : {}),
+    ...(nowcast?.summary ? { nowcast: nowcast.summary } : {}),
+    ...(rows.nowcast ? { nowcastOn: { dataDay: rows.dataDay, curve: rows.nowcast.curve, youngPct: youngPctOf(rows.nowcast.totals) } } : {}),
+  }
+}
+
+/** BB-15 — a stored why with the nowcast's words after it (none: the why unchanged). */
+const withNote = (why: string, note: string | undefined) => (note ? `${why} · ${note}` : why)
+
+/**
+ * BB-15 — the nowcast in shadow: the same keywords decided again from the window that ends yesterday, every keyword-day
+ * weighted by its copy's maturity (load.ts loadNowcastEvidence), with the run's other facts unchanged (the TACoS ad sales
+ * stay the settled window's, as the family sales they are compared with). Null with no usable curve for the market; a
+ * failure is logged and changes nothing — the settled decisions stand.
+ */
+async function nowcastShadow(rows: LoadedMarket, run: RunRows, facts: readonly TargetFacts[], decisions: readonly Decision[], now: Date): Promise<{ notes: Map<string, string>; summary: NowcastShadowSummary } | null> {
+  try {
+    const nc = await loadNowcastEvidence(rows, { now, settledUntil: new Date(`${rows.dataDay}T00:00:00Z`) })
+    if (!nc) return null
+    const wanted = new Set(facts.map((f) => f.targetId))
+    const nowFacts = buildFacts({ ...rows, evidence: nc.evidence, dataDay: nc.dataDay }, run).filter((f) => wanted.has(f.targetId))
+    const youngPct = youngPctOf(nc.totals)
+    return compareNowcast(
+      facts.map((f, i) => ({ facts: f, decision: decisions[i] })),
+      nowFacts.map((f) => ({ facts: f, decision: decide(f) })),
+      nc.youngShare,
+      { dataDay: nc.dataDay, curve: nc.curve, youngPct },
+    )
+  } catch (err) {
+    logger.warn('[bid-brain] nowcast shadow failed — the settled decisions stand, nothing changes', { market: rows.market, error: err instanceof Error ? err.message : String(err) })
+    return null
   }
 }
 
@@ -491,7 +530,8 @@ export function shadowSummaryLine(r: ShadowRun): string {
     const actions = Object.entries(m.byAction).map(([k, v]) => `${k}=${v}`).join(' ')
     const words = [writeReportWords(m.writes), placementReportWords(m.placements), strategyReportWords(m.strategies)].filter(Boolean).join(' ')
     const live = m.owned ? ` owned=${m.owned}${words ? ` ${words}` : ''}` : ''
-    return `${m.market} decided=${m.decided} stored=${m.stored}${actions ? ` ${actions}` : ''}${live}${m.brakes.length ? ` brakes: ${m.brakes.join('; ')}` : ''}`
+    const nowcast = m.nowcast ? ` · ${nowcastSummaryWords(m.nowcast)}` : m.nowcastOn ? ` · nowcast on to ${m.nowcastOn.dataDay} (${m.nowcastOn.curve}), young days ${m.nowcastOn.youngPct}%` : ''
+    return `${m.market} decided=${m.decided} stored=${m.stored}${actions ? ` ${actions}` : ''}${live}${m.brakes.length ? ` brakes: ${m.brakes.join('; ')}` : ''}${nowcast}`
   })
   const owned = r.markets.reduce((n, m) => n + (m.owned ?? 0), 0)
   const mode = r.mode === 'live' && !owned ? 'live (no campaign enrolled LIVE: shadow)' : r.mode

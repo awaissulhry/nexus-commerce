@@ -6115,6 +6115,17 @@
     },
     "relations": []
   },
+  "AdsLagCurve": {
+    "scalar": {},
+    "compound": {
+      "lag_curve_scope": [
+        "marketplace",
+        "adProduct",
+        "scopeId"
+      ]
+    },
+    "relations": []
+  },
   "AdSpendCeiling": {
     "scalar": {},
     "compound": {
@@ -6251,6 +6262,32 @@
     "compound": {
       "campaign": [
         "campaignId"
+      ]
+    },
+    "relations": []
+  },
+  "AdsBrainBudgetDecision": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AdsBrainTerm": {
+    "scalar": {},
+    "compound": {
+      "product_market_term": [
+        "productId",
+        "marketplace",
+        "term"
+      ]
+    },
+    "relations": []
+  },
+  "AdsBrainTermLead": {
+    "scalar": {},
+    "compound": {
+      "market_term": [
+        "marketplace",
+        "term"
       ]
     },
     "relations": []

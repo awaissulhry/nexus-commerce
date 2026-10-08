@@ -4023,6 +4023,41 @@ model AdsDailyVintage {
   @@index([workspaceId])
 }
 
+/// BID BRAIN BB-15 (2026-10-08, design BRAIN-UPGRADES-DESIGN.md U1b) — the attribution lag curve L(a) of one market, or of
+/// one product in it with enough orders of its own: the expected share of a day's final 7-day orders and sales that a copy
+/// pulled at age a days holds (a = 0..14). Fitted each night from the AdsDailyVintage copies, seeded from the settled 1-day
+/// ÷ 7-day ratio (bid-brain/lag-curve.ts); replaced by each fit, no history. Read by the bid brain's nowcast and by the
+/// `bid-brain` read tool (view calibration). Nothing else writes it.
+model AdsLagCurve {
+  // Business ownership comes from verified database context.
+  workspaceId String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String   @id @default(cuid())
+
+  /// Short market code ('IT', 'DE').
+  marketplace String
+  /// SPONSORED_PRODUCTS (the bid brain's ad product).
+  adProduct   String   @default("SPONSORED_PRODUCTS")
+  /// '*' for the market; a product family (Product.parentId ?? Product.id) with its own curve.
+  scopeId     String   @default("*")
+  /// prior | seed | vintages — what the curve rests on.
+  source      String
+  /// The shares by age 0..14: { "orders": number[15], "sales": number[15] }, each non-decreasing in (0, 1].
+  shares      Json
+  /// The brain may nowcast with it: it rests on a 1d/7d seed or on 14 days of vintages (design U1 guardrails).
+  usable      Boolean  @default(false)
+  /// What it rests on: vintage days, campaign-days and their final orders; the seed's first-day shares; the prior.
+  basis       Json
+  /// How a curve fitted without the newest settled days nowcast them (per age: mean absolute error, against no nowcast).
+  calibration Json?
+  fittedAt    DateTime
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([workspaceId, marketplace, adProduct, scopeId], name: "lag_curve_scope", map: "AdsLagCurve_scope_key")
+  @@index([workspaceId])
+}
+
 // CD.11 — hourly grain (Amazon Marketing Stream). Mirrors the daily table but
 // keyed additionally by `hour` (0-23, UTC) so dayparting (which hour×weekday
 // converts) and hourly share-of-voice become possible — the genuine edge over
@@ -20249,6 +20284,166 @@ model AdsNativeRuleSnapshot {
   updatedAt          DateTime @updatedAt
 
   @@unique([workspaceId, campaignId], name: "campaign", map: "AdsNativeRuleSnapshot_workspaceId_campaignId_key")
+  @@index([workspaceId])
+}
+
+/// ONE BRAIN AB-7 — the money plan of one product's brain in one market, decided in SHADOW (one-brain DESIGN.md §2.5,
+/// §2.6, §4, §5; services/advertising/brain/budget-*.ts): the month's envelope, the pace and its brake, the Amazon
+/// portfolio-cap plan and each campaign's daily budget with the intraday ladder, every part with its "why". Nothing here is
+/// written to Amazon (AB-8 writes). Only for a product whose budgets lever is OBSERVE or higher. A row is stored when the
+/// plan's decisions differ from the product's last one (`planHash`), plus the budget day's first as a snapshot; rows older
+/// than 30 days are deleted (Neon cost), as BidBrainDecision. No foreign key: the history outlives a removed product.
+model AdsBrainBudgetDecision {
+  // Business ownership comes from verified database context.
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String @id @default(cuid())
+
+  /// One run of the money shadow (every product of a run shares it).
+  runId       String
+  /// SHADOW (AB-7). LIVE comes with AB-8.
+  mode        String
+  /// change (the decisions differ from the product's last plan) | snapshot (the budget day's first)
+  kind        String
+  /// Product.id of the family root.
+  productId   String
+  /// Short market code ('IT', 'DE').
+  marketplace String
+  /// The budget day (00:00–24:00 UTC, @nexus/shared/ads-budget-day) and its month (YYYY-MM).
+  day         DateTime @db.Date
+  month       String
+  /// The budgets lever's level when decided (OBSERVE, PROPOSE, AUTO).
+  level       String
+
+  /// The month's envelope (null: none) and where it came from (own | playbook | share | none).
+  envelopeCents     Int?
+  envelopeSource    String
+  /// Spend so far and the projected month-end spend; the pace = projected ÷ envelope, percent (null: no envelope).
+  spentCents        Int
+  projectedCents    Int
+  pacePct           Decimal? @db.Decimal(10, 2)
+  /// none | hold_raises | cut_bids | stop_weakest
+  brake             String
+  /// The planned Amazon portfolio cap, in all (null: none planned).
+  portfolioCapCents Int?
+
+  /// The fingerprint of the plan's decisions (budget-plan.ts moneyPlanHash).
+  planHash String
+  /// The whole plan (budget-plan.ts ProductMoneyPlan): envelope, market split, pace curve, brake, portfolio caps,
+  /// campaigns — each with its why.
+  plan     Json
+  /// One line.
+  why      String @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([productId, marketplace, createdAt(sort: Desc)])
+  @@index([runId])
+  @@index([createdAt])
+  @@index([workspaceId])
+}
+
+/// ONE BRAIN AB-9 — the term ledger: ONE decision per term of one product in one market (one-brain DESIGN.md §1, §2.7,
+/// §2.8, §4). Every customer search term the product's own campaigns saw in the window and every keyword or ASIN they
+/// target or negate, normalised (lower case, single spaces). The unique key makes a second decision on one term
+/// impossible: a term is never harvested and negated at once. SHADOW (services/advertising/brain/terms-shadow.ts): the
+/// daily run decides and logs; nothing here writes to Amazon. A changed decision rewrites its row (the state before and
+/// since when are kept); an unchanged one is only stamped with the run; a term that left the window is removed; rows no
+/// run checked for 30 days are deleted. No foreign key: the product id is the family root, as AdsBrainEnrollment's.
+model AdsBrainTerm {
+  // Business ownership comes from verified database context.
+  workspaceId   String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id            String    @id @default(cuid())
+
+  /// Product.id of the family root; short market code ('IT').
+  productId     String
+  marketplace   String
+  /// The term, normalised (an ASIN in lower case).
+  term          String
+  isAsin        Boolean   @default(false)
+  /// TARGETED | HARVEST_CANDIDATE | OWNED_BY_SIBLING | PROTECTED | NEGATED | NEGATE_CANDIDATE | WATCH (brain/terms.ts)
+  state         String
+  previousState String?
+  /// Since when the term holds this state.
+  stateSince    DateTime
+  /// protected-term | brand | winner — why no negative may touch it; null: none.
+  protection    String?
+  /// The market arbiter's lead when sibling products meet on the term (AdsBrainTermLead); null: not contested.
+  leadProductId String?
+  /// Why the brain would not act on it even once the lever writes (lever off or locked, the Owner's lock, past the cap).
+  heldBy        String?
+  capped        Boolean   @default(false)
+  /// A negative candidate a person decides (it has an order in the window: §2.7 PROPOSE).
+  askFirst      Boolean   @default(false)
+  /// How many clashes this decision removes (evidence.clashes).
+  clashCount    Int       @default(0)
+
+  /// The product's own campaigns over the window (`windowDays`, settled days ending at `dataDay`).
+  impressions   Int       @default(0)
+  clicks        Int       @default(0)
+  orders        Int       @default(0)
+  spendCents    Int       @default(0)
+  salesCents    Int       @default(0)
+  windowDays    Int
+  dataDay       DateTime  @db.Date
+
+  /// One line: the deciding rule with its numbers (no money).
+  why           String    @db.Text
+  /// { targets, negatives, destination, lead, wouldLower, clashes, tests } — what the read tool shows.
+  evidence      Json
+  /// Hash of the decision: an unchanged decision is not rewritten.
+  digest        String
+  /// The last run that decided it, when it was checked, and when its decision last changed.
+  runId         String
+  checkedAt     DateTime
+  changedAt     DateTime
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([workspaceId, productId, marketplace, term], name: "product_market_term", map: "AdsBrainTerm_workspaceId_productId_marketplace_term_key")
+  @@index([marketplace, term])
+  @@index([productId, marketplace, state])
+  @@index([checkedAt])
+  @@index([workspaceId])
+}
+
+/// ONE BRAIN AB-9 — the market arbiter's lead on one term sibling products meet on in one market (one-brain DESIGN.md §1:
+/// pinned, else the brand word, else the highest pooled profit per click, then orders, clicks, id). The others never
+/// harvest it and bid at most 0.8 × the lead's bid on it. SHADOW: decided and logged daily for the terms a due product
+/// holds; nothing here writes to Amazon. Rows no run checked for 30 days are deleted.
+model AdsBrainTermLead {
+  // Business ownership comes from verified database context.
+  workspaceId           String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                    String   @id @default(cuid())
+
+  /// Short market code ('IT'); the term, normalised.
+  marketplace           String
+  term                  String
+  /// Product.id of the lead's family root.
+  leadProductId         String
+  previousLeadProductId String?
+  leadSince             DateTime
+  /// pinned | brand | profit | orders | clicks | id
+  rule                  String
+  /// The lead's bid on the term and the most a sibling may bid (0.8 ×); null while the lead has no keyword on it.
+  leadBidCents          Int?
+  maxBidCents           Int?
+  /// [{ productId, lead, targets, wants, orders, clicks, profitPerClickCents, bidCents, brandWord }]
+  contenders            Json
+  /// Sibling keywords above the most they may bid: [{ productId, targetId, campaignId, adGroupId, bidCents, toBidCents }]
+  wouldLower            Json
+  why                   String   @db.Text
+  digest                String
+  runId                 String
+  checkedAt             DateTime
+  changedAt             DateTime
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([workspaceId, marketplace, term], name: "market_term", map: "AdsBrainTermLead_workspaceId_marketplace_term_key")
+  @@index([leadProductId])
+  @@index([checkedAt])
   @@index([workspaceId])
 }
 

@@ -5,9 +5,12 @@
  *              an engine, or one engine twice, is no conflict
  *   churn      bid writes per keyword per day: the total, how many keywords, the most on one
  *   compare    a shadow decision against today's bid: agree (goal or band hold), higher, lower, hold (an override), brake
+ *   BB-15      the calibration view's curve: shares in percent by age, what it rests on, stale after two weeks, a product's
+ *              own curve named by its product
  */
 import { describe, expect, it } from 'vitest'
-import { compareWord, writeStats } from './read.js'
+import { compareWord, curveView, writeStats } from './read.js'
+import { priorShares, seedShares } from './lag-curve.js'
 
 const at = (iso: string) => new Date(iso)
 
@@ -36,5 +39,28 @@ describe('compareWord', () => {
     expect(compareWord({ action: 'write', layer: 'goal', currentCents: 20, decidedCents: 25 })).toBe('higher')
     expect(compareWord({ action: 'write', layer: 'stop', currentCents: 20, decidedCents: 2 })).toBe('lower')
     expect(compareWord({ action: 'brake', layer: 'brake', currentCents: 20, decidedCents: 20 })).toBe('brake')
+  })
+})
+
+describe('BB-15 — the calibration view\'s curve', () => {
+  const seed = { orders1d: 7, orders7d: 10, sales1dCents: 3500, sales7dCents: 5000, days: 30 }
+  const fittedAt = new Date('2026-10-08T05:10:00Z')
+  const curve = {
+    market: 'IT', scopeId: '*', source: 'seed' as const, usable: true, shares: seedShares(seed)!, fittedAt, calibration: null,
+    basis: { vintageDays: 3, campaignDays: 3, finalOrders: 4, seed: { ordersShare: 0.7, salesShare: 0.7, days: 30, orders7d: 10 }, priorFrom: 'seed' as const, priorOrders: 20 },
+  }
+
+  it('shows the shares in percent by age and what the curve rests on', () => {
+    const v = curveView(curve, new Date('2026-10-08T12:00:00Z'))
+    expect(v).toMatchObject({ scope: 'market', source: 'seed', usable: true, stale: false, words: 'IT market curve (1d/7d seed + 3 days of vintages, L(0) 70 %)' })
+    expect(v.sharesPct.orders.slice(0, 8)).toEqual([70, 85, 92.5, 96.3, 98.1, 99.1, 99.5, 100])
+    expect(v.basis).toEqual({ vintageDays: 3, campaignDays: 3, finalOrders: 4, seed: { ordersSharePct: 70, salesSharePct: 70, days: 30, orders7d: 10 }, pooledToward: 'seed', priorOrders: 20 })
+    expect('productId' in v).toBe(false)
+  })
+
+  it('says stale after two weeks, and names a product\'s own curve by its product', () => {
+    expect(curveView(curve, new Date('2026-10-23T12:00:00Z')).stale).toBe(true)
+    const product = curveView({ ...curve, scopeId: 'prod-1', source: 'vintages', shares: priorShares() }, new Date('2026-10-08T12:00:00Z'))
+    expect(product).toMatchObject({ scope: 'product', productId: 'prod-1', words: 'product prod-1 curve (vintages, 3 days, L(0) 75 %)' })
   })
 })

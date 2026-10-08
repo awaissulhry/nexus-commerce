@@ -65,7 +65,7 @@ describe('AB-6 — a pool leaves a held daily budget out', () => {
     expect(byCampaign(r.proposed)).toEqual({ 'c-gale': { to: 2000, shift: 0, held: true }, 'c-misano': { to: 2400, shift: 400 }, 'c-moss': { to: 1600, shift: -400 } })
     expect(r.proposed.map((p) => p.campaignId)).toEqual(['c-gale', 'c-misano', 'c-moss']) // the pool's order
     expect(r.proposed[0].heldBy).toBe('a product\'s brain runs the daily budget of campaign "c-gale" (c-gale) — product gale in IT')
-    expect(r.leverHeld).toEqual({ counts: { budgets: 1 } })
+    expect(r.leverHeld).toEqual({ counts: { productBrain: { budgets: 1 } } })
     expect(r.warnings.join(' ')).toContain('1 campaign kept at its budget')
   })
 
@@ -75,7 +75,7 @@ describe('AB-6 — a pool leaves a held daily budget out', () => {
     expect(r.totalShiftCents).toBe(0)
     expect(r.proposed.every((p) => p.shiftCents === 0 && p.heldBy)).toBe(true)
     expect(r.warnings[0]).toContain('every campaign of the pool is held')
-    expect(r.leverHeld).toEqual({ counts: { budgets: 3 } })
+    expect(r.leverHeld).toEqual({ counts: { productBrain: { budgets: 3 } } })
   })
 
   it('a preview reads nothing; a person\'s approved run passes the held lever, as at the gate; the cron\'s run leaves it', async () => {
@@ -86,7 +86,7 @@ describe('AB-6 — a pool leaves a held daily budget out', () => {
     expect(byCampaign(person.proposed)['c-gale']).toEqual({ to: 3000, shift: 1000 })
     const cron = await rebalanceAndAudit({ poolId: 'pool-1', triggeredBy: 'cron', actor: 'automation:budget-pool-rebalance' })
     expect(byCampaign(cron.proposed)['c-gale']).toEqual({ to: 2000, shift: 0, held: true })
-    expect(cron.leverHeld).toEqual({ counts: { budgets: 1 } })
+    expect(cron.leverHeld).toEqual({ counts: { productBrain: { budgets: 1 } } })
   })
 
   it('the holders cannot be read: nothing left out on a guess, said unread', async () => {

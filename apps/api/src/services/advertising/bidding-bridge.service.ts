@@ -124,15 +124,29 @@ export async function getBidContexts(
     ...(enforceAllowlist ? { liveBidWritesEnabled: true } : {}),
   }
 
+  // BID BRAIN BB-6 — a campaign the brain owns has one bid writer, the brain: the external engine never sees its keywords.
+  // ONE BRAIN AB-6 — the engine writes to Amazon itself (it bypasses the write gate, list-automations A18), so this is its
+  // only check, and it fails closed: when the owner cannot be read under a live ceiling, no keyword is handed out this
+  // cycle (the engine's next cycle asks again) — never one that may be the brain's. Follow-up of #527: the brain's
+  // campaigns are left out IN the query, so they never take a place in the engine's batch (`limit`), and the batch has a
+  // stable order (oldest keyword first) so the same keywords come back cycle after cycle; the keywords left out are counted.
+  let brainOwned: Set<string>
+  try {
+    brainOwned = await brainOwnedCampaignIds()
+  } catch (error) {
+    logger.warn('bidding bridge: could not read which campaigns the bid brain owns — no keyword is handed out this cycle (the external engine bypasses the write gate)', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return []
+  }
+  const keywordWhere = { kind: 'KEYWORD' as const, status: 'ENABLED' as const, isNegative: false, externalTargetId: { not: null }, clicks: { gt: 0 } }
+  const campaignFilter = Object.keys(campaignWhere).length ? { campaign: campaignWhere } : {}
+  const owned = [...brainOwned]
+  const adGroupWhere = { ...campaignFilter, ...(owned.length ? { campaignId: { notIn: owned } } : {}) }
+
   const targets = await prisma.adTarget.findMany({
-    where: {
-      kind: 'KEYWORD',
-      status: 'ENABLED',
-      isNegative: false,
-      externalTargetId: { not: null },
-      clicks: { gt: 0 },
-      ...(Object.keys(campaignWhere).length ? { adGroup: { campaign: campaignWhere } } : {}),
-    },
+    where: { ...keywordWhere, ...(Object.keys(adGroupWhere).length ? { adGroup: adGroupWhere } : {}) },
+    orderBy: { id: 'asc' },
     take: limit,
     select: {
       id: true, externalTargetId: true, bidCents: true, clicks: true, spendCents: true,
@@ -140,25 +154,16 @@ export async function getBidContexts(
       adGroup: { select: { campaignId: true, campaign: { select: { marketplace: true, dynamicBidding: true } } } },
     },
   })
-  // BID BRAIN BB-6 — a campaign the brain owns has one bid writer, the brain: the external engine never sees its keywords.
-  // ONE BRAIN AB-6 — the engine writes to Amazon itself (it bypasses the write gate, list-automations A18), so this is its
-  // only check, and it fails closed: when the owner cannot be read under a live ceiling, no keyword is handed out this
-  // cycle (the engine's next cycle asks again) — never one that may be the brain's. The keywords left out are counted.
-  const campaignIds = [...new Set(targets.map((t) => t.adGroup?.campaignId).filter((id): id is string => !!id))]
-  let brainOwned: Set<string>
-  try {
-    brainOwned = await brainOwnedCampaignIds(campaignIds)
-  } catch (error) {
-    logger.warn('bidding bridge: could not read which campaigns the bid brain owns — no keyword is handed out this cycle (the external engine bypasses the write gate)', {
-      keywords: targets.length, campaigns: campaignIds.length, error: error instanceof Error ? error.message : String(error),
-    })
-    return []
-  }
-  const leftToBrain = brainOwned.size ? targets.filter((t) => t.adGroup?.campaignId && brainOwned.has(t.adGroup.campaignId)).length : 0
-  if (leftToBrain) {
-    logger.info('bidding bridge: keywords of bid brain campaigns left out — the bid brain runs their bids (one owner per lever)', {
-      lever: 'bids', keywords: leftToBrain, campaigns: brainOwned.size,
-    })
+  // The count is only said: a failed count never changes what is handed out.
+  if (owned.length) {
+    try {
+      const leftToBrain = await prisma.adTarget.count({ where: { ...keywordWhere, adGroup: { ...campaignFilter, campaignId: { in: owned } } } })
+      if (leftToBrain) {
+        logger.info('bidding bridge: keywords of bid brain campaigns left out — the bid brain runs their keyword bids (one owner per lever)', {
+          lever: 'bids', keywords: leftToBrain, bidBrainCampaigns: owned.length,
+        })
+      }
+    } catch { /* counted on the next cycle */ }
   }
 
   // Resolve the advertising profile per marketplace once, not per target.
@@ -169,7 +174,6 @@ export async function getBidContexts(
   const profileByMarketplace = new Map(connections.map((c) => [c.marketplace, c.profileId]))
 
   return (targets as BidTargetRow[]).flatMap((target) => {
-    if (target.adGroup?.campaignId && brainOwned.has(target.adGroup.campaignId)) return []
     const marketplace = target.adGroup?.campaign?.marketplace ?? null
     const accountRef = marketplace ? profileByMarketplace.get(marketplace) : undefined
     // No profile or no external id means the engine could not act on it anyway.
