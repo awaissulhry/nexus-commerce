@@ -25,6 +25,10 @@
  *             and where the two differ the stored why gains " · nowcast to …: would …" and the run's line counts them.
  *             The nowcast reads the run's step anchors re-keyed to its own data day (nowcast.ts nowcastLastSteps): a
  *             keyword the settled run already stepped today takes no second step there — in shadow, nor switched on
+ *   BB-17     NEXUS_BID_BRAIN_INTRADAY=shadow (the default): the intraday brakes of the owned campaigns are read and the same
+ *             keywords decided again with them (intradayEffects); the decisions and every write stay the ones without, the
+ *             stored why of one a brake would change gains " · intraday (shadow): would …", and the run's line counts them.
+ *             on: the brakes are in the facts (facts.ts), and the line counts what they changed
  *   BB-22     NEXUS_BID_BRAIN_HOUR_FACTORS=shadow (the default): each full run learns the hour factors of the products of
  *             the owned campaigns whose plan holds an hour (once a day, hour-factors-store.ts) and says beside the plan's
  *             what the learned one would do to this hour's cell; on: the cell's lanes move inside its limits where the
@@ -35,6 +39,9 @@
  *   BB-20     NEXUS_BID_BRAIN_EXPLORE=shadow (the default): each full run also plans the day's explore and revive bids
  *             inside the market's explore budget (response-explore.ts) and logs them the same way; `on`: the picked
  *             keywords' decisions become layer explore / revive and are acted on like any other (the rest stay the goal's)
+ *   BB-21     NEXUS_BID_BRAIN_PROBES=shadow (the default): each full run also steps, measures and plans the switchback
+ *             probes that measure ε (probe.ts, probe-store.ts: the BidProbe ledger) and says what they would bid; `on`:
+ *             a LIVE probe's arm (a campaign the brain owns) is the decision, layer probe, acted on like any other
  */
 import { randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
@@ -45,7 +52,7 @@ import { engineGuardNote, openEngineGuard, type EngineGuard, type EngineGuardRep
 import { strategyMarket } from '../ads-strategy/bids.js'
 import { decide, type Decision, type TargetFacts } from './decide.js'
 import { applyLaneDirectives, laneWords, type LaneName } from './recipe.js'
-import { buildFacts, isPlanFloorMark, STRATEGY_HOLD_KIND, type CampaignRow, type RunRows } from './facts.js'
+import { buildFacts, isPlanFloorMark, STRATEGY_HOLD_KIND, type CampaignRow, type MarketRows, type RunRows } from './facts.js'
 import { BRAIN_ACTOR, brainOwnedCampaignIds } from './live.js'
 import {
   placementReportWords, strategyReportWords, writeOwnedDecisions, writeOwnedPlacements, writeOwnedStrategies, writeReportWords,
@@ -59,10 +66,12 @@ import { campaignStopOf, fullLanes, strategyStep, type CampaignStop } from './st
 import { strategySwitchesToday } from './stop-memory.js'
 import { loadMarket, loadNowcastEvidence, loadRun, SHADOW_MARKETS, type LastWrite, type LoadedMarket, type PreviousDecision } from './load.js'
 import { compareNowcast, nowcastLastSteps, nowcastMode, nowcastOnNotes, nowcastSummaryWords, runForRows, youngPctOf, type NowcastShadowSummary } from './nowcast.js'
+import { anyBrake, compareIntraday, intradaySummaryWords, type IntradaySummary } from './intraday.js'
 import { hourFactorsForRun } from './hour-factors-store.js'
 import { upgradesShadow, type UpgradesSummary } from './response-explore.js'
 import { responseSummaryWords } from './response.js'
 import { exploreSummaryWords } from './explore.js'
+import { probeSummaryWords } from './probe.js'
 
 export type BrainMode = 'off' | 'shadow' | 'live'
 
@@ -95,7 +104,7 @@ export interface ShadowRun {
   runId: string
   mode: BrainMode
   /** BB-6 — `owned`: the market's campaigns the brain owns this run; `writes`: what became of their write decisions. */
-  markets: Array<{ market: string; decided: number; stored: number; byAction: Record<string, number>; byLayer: Record<string, number>; brakes: string[]; /** AB-14 — the market's run failed (its words; also in brakes). */ error?: string; /** AB-14 — a product cycle's run: which way its write decisions go. */ moves?: { raise: number; lower: number; raisedBy: Record<string, number> }; owned?: number; writes?: WriteReport | null; placements?: PlacementReport; strategies?: StrategyReport; brainWrites?: BrainWriteRecord[]; nowcast?: NowcastShadowSummary; nowcastOn?: { dataDay: string; curve: string; youngPct: number }; /** BB-19 / BB-20 */ upgrades?: UpgradesSummary }>
+  markets: Array<{ market: string; decided: number; stored: number; byAction: Record<string, number>; byLayer: Record<string, number>; brakes: string[]; /** AB-14 — the market's run failed (its words; also in brakes). */ error?: string; /** AB-14 — a product cycle's run: which way its write decisions go. */ moves?: { raise: number; lower: number; raisedBy: Record<string, number> }; owned?: number; writes?: WriteReport | null; placements?: PlacementReport; strategies?: StrategyReport; brainWrites?: BrainWriteRecord[]; nowcast?: NowcastShadowSummary; nowcastOn?: { dataDay: string; curve: string; youngPct: number }; /** BB-19 / BB-20 */ upgrades?: UpgradesSummary; /** BB-17 — what the intraday brakes hold and change (on) or would (shadow). */ intraday?: IntradaySummary }>
   pruned: number
   /** BB-6 — the dial and the caps the live writes ran under (absent: nothing owned had to move). */
   guard?: EngineGuardReport
@@ -167,7 +176,7 @@ export async function shadowMarket(market: string, ctx: { runId: string; mode: B
   // only some campaigns plans over the whole market (`marketFacts`), so the picks of all runs fit one budget.
   const partial = !!ctx.scope?.campaignIds || !!ctx.scope?.skipCampaignIds || !!ctx.raiseCaps?.size
   const upgrades = rows.light ? null : await upgradesShadow(rows, {
-    facts, decisions: decided, campaignOf, now: ctx.now, lastWrites, ...(partial ? { marketFacts: () => buildFacts(rows, anchored) } : {}),
+    facts, decisions: decided, campaignOf, now: ctx.now, lastWrites, owned, runId: ctx.runId, ...(partial ? { marketFacts: () => buildFacts(rows, anchored) } : {}),
   })
   const decisions = upgrades?.decisions ?? decided
   // BB-15 — the nowcast in shadow (full runs only): words for the stored why; the decisions above are the ones that count.
@@ -175,6 +184,10 @@ export async function shadowMarket(market: string, ctx: { runId: string; mode: B
   const nowcast = !rows.light && nowcastMode() === 'shadow'
     ? await nowcastShadow(rows, run, facts, decided, ctx.now)
     : rows.nowcast ? { notes: nowcastOnNotes(decisions, rows.nowcast.youngShare, rows.dataDay), summary: null } : null
+  // BB-17 — the intraday brakes: switched on they are in the facts already (the decisions carry them, in their why); in
+  // shadow the decisions stay without them, and where one would change the stored why says so. Both count in the line.
+  // Compared on decide's own decisions (before BB-20's explore picks, which never take a braked keyword when on).
+  const intraday = run.intraday ? intradayEffects(rows, run, facts, decided, campaignOf) : null
   const toWrite = owned.size
     ? decisions.filter((d) => d.action === 'write' && owned.has(campaignOf(d.targetId))).map((decision) => ({ campaignId: campaignOf(decision.targetId), market, decision }))
     : []
@@ -217,7 +230,7 @@ export async function shadowMarket(market: string, ctx: { runId: string; mode: B
       mode: owned.has(campaignId) ? 'LIVE' : 'SHADOW', kind, marketplace: market, campaignId, adGroupId, targetId: d.targetId,
       action: d.action, layer: d.layer, currentCents: d.currentCents, decidedCents: d.bidCents, goalBidCents: d.goalBidCents,
       aim: dec(d.goal?.aim), bandLo: dec(d.goal?.lo), bandHi: dec(d.goal?.hi), expectedAcos: dec(d.expectedAcos), confidence: dec(d.confidence),
-      dataDay: new Date(`${d.dataDay}T00:00:00Z`), lastWriter: last?.actor ?? null, lastWriteAt: last?.at ?? null, why: withNote(withNote(withNote(recipe.has(campaignId) ? `${d.why} · ${recipe.get(campaignId)}` : d.why, upgrades?.notes.get(d.targetId)), nowcast?.notes.get(d.targetId)), hourFactors.notes.get(campaignId)),
+      dataDay: new Date(`${d.dataDay}T00:00:00Z`), lastWriter: last?.actor ?? null, lastWriteAt: last?.at ?? null, why: withNote(withNote(withNote(withNote(recipe.has(campaignId) ? `${d.why} · ${recipe.get(campaignId)}` : d.why, upgrades?.notes.get(d.targetId)), nowcast?.notes.get(d.targetId)), hourFactors.notes.get(campaignId)), intraday?.notes.get(d.targetId)),
       evidence: { step: d.step, lastStep: carriedStep(d, run.lastSteps.get(d.targetId)), clash: d.clash, placements: d.placements.length ? d.placements : undefined, sent: outcome, ...upgrades?.evidence.get(d.targetId) } as unknown as Prisma.InputJsonObject,
       createdAt: ctx.now,
     }]
@@ -231,7 +244,22 @@ export async function shadowMarket(market: string, ctx: { runId: string; mode: B
     ...(nowcast?.summary ? { nowcast: nowcast.summary } : {}),
     ...(rows.nowcast ? { nowcastOn: { dataDay: rows.dataDay, curve: rows.nowcast.curve, youngPct: youngPctOf(rows.nowcast.totals) } } : {}),
     ...(upgrades?.summary ? { upgrades: upgrades.summary } : {}),
+    ...(intraday ? { intraday: intraday.summary } : {}),
   }
+}
+
+/**
+ * BB-17 — the intraday brakes' effect on one market's run: the same keywords decided without them and with them, matched by
+ * target (intraday.ts compareIntraday). Switched on, the run's own decisions carry them and the plain ones are decided again
+ * from facts built without them; in shadow the run's decisions are the plain ones and the braked ones are decided from facts
+ * built with them switched on. Nothing is stored or sent here: the notes go into the stored why, the counts into the line.
+ */
+export function intradayEffects(rows: MarketRows, run: RunRows, facts: readonly TargetFacts[], decisions: readonly Decision[], campaignOf: (targetId: string) => string): ReturnType<typeof compareIntraday> {
+  const ir = run.intraday!
+  if (![...ir.brakes.values()].some(anyBrake)) return compareIntraday(decisions, decisions, ir, campaignOf)
+  const wanted = new Set(facts.map((f) => f.targetId))
+  const rebuilt = buildFacts(rows, { ...run, intraday: ir.mode === 'on' ? undefined : { ...ir, mode: 'on' } }).filter((f) => wanted.has(f.targetId)).map((f) => decide(f))
+  return ir.mode === 'on' ? compareIntraday(rebuilt, decisions, ir, campaignOf) : compareIntraday(decisions, rebuilt, ir, campaignOf)
 }
 
 /** AB-14 — which way the run's write decisions go (stored or not), and how many raises per campaign. Pure. */
@@ -658,8 +686,9 @@ export function shadowSummaryLine(r: ShadowRun): string {
     const words = [writeReportWords(m.writes), placementReportWords(m.placements), strategyReportWords(m.strategies)].filter(Boolean).join(' ')
     const live = m.owned ? ` owned=${m.owned}${words ? ` ${words}` : ''}` : ''
     const nowcast = m.nowcast ? ` · ${nowcastSummaryWords(m.nowcast)}` : m.nowcastOn ? ` · nowcast on to ${m.nowcastOn.dataDay} (${m.nowcastOn.curve}), young days ${m.nowcastOn.youngPct}%` : ''
-    const upgrades = [m.upgrades?.response ? responseSummaryWords(m.upgrades.response) : '', m.upgrades?.explore ? exploreSummaryWords(m.upgrades.explore) : ''].filter(Boolean).map((w) => ` · ${w}`).join('')
-    return `${m.market} decided=${m.decided} stored=${m.stored}${actions ? ` ${actions}` : ''}${live}${m.brakes.length ? ` brakes: ${m.brakes.join('; ')}` : ''}${nowcast}${upgrades}`
+    const upgrades = [m.upgrades?.response ? responseSummaryWords(m.upgrades.response) : '', m.upgrades?.explore ? exploreSummaryWords(m.upgrades.explore) : '', probeSummaryWords(m.upgrades?.probes)].filter(Boolean).map((w) => ` · ${w}`).join('')
+    const intraday = m.intraday ? ` · ${intradaySummaryWords(m.intraday)}` : ''
+    return `${m.market} decided=${m.decided} stored=${m.stored}${actions ? ` ${actions}` : ''}${live}${m.brakes.length ? ` brakes: ${m.brakes.join('; ')}` : ''}${nowcast}${upgrades}${intraday}`
   })
   const owned = r.markets.reduce((n, m) => n + (m.owned ?? 0), 0)
   const mode = r.mode === 'live' && !owned ? 'live (no campaign enrolled LIVE: shadow)' : r.mode

@@ -6247,6 +6247,16 @@
     },
     "relations": []
   },
+  "BidProbe": {
+    "scalar": {},
+    "compound": {
+      "target_start": [
+        "targetId",
+        "startDay"
+      ]
+    },
+    "relations": []
+  },
   "AdsBrainEnrollment": {
     "scalar": {},
     "compound": {
@@ -6396,6 +6406,27 @@
   "AdsBrainStateDecision": {
     "scalar": {},
     "compound": {},
+    "relations": []
+  },
+  "AdsBrainStrategyDecision": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AdsBrainStrategyTest": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AdsBrainLeverClock": {
+    "scalar": {},
+    "compound": {
+      "product_market_lever": [
+        "productId",
+        "marketplace",
+        "lever"
+      ]
+    },
     "relations": []
   },
   "AdWriteRefusal": {

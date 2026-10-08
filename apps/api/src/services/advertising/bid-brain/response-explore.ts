@@ -19,6 +19,10 @@
  *              14-day line); the market's explore budget (the strategy's market row, else the Owner's default)
  *   plan       made over the WHOLE market's keywords (a product cycle's run and the full run make the same one), applied
  *              to the run's own: the picks of all runs of a day never add up past the budget
+ *   probes     BB-21 (probe.ts, probe-store.ts) — the switchback probes' ledger, read once: the DONE live probes' readings
+ *              join each product's ε (productEps), the running probes are stepped, measured and planned over the run's own
+ *              keywords after exploration; under NEXUS_BID_BRAIN_PROBES=on a LIVE probe's arm is the decision, and the
+ *              keywords in a LIVE probe are not explored (their bids are the probe's)
  *
  * Called inside a business (the run's): row-level security keeps each to its own rows.
  */
@@ -40,6 +44,9 @@ import {
 } from './explore.js'
 import { readStockAdGroups } from '../ads-stock-risk.service.js'
 import { openStrategy } from '../ads-strategy/effective.js'
+import { probeMode, type ProbeSummary } from './probe.js'
+import { loadProbeLedger, loadProbeReadings, probesShadow, type LoadedLedger } from './probe-store.js'
+import type { EpsReading } from './response.js'
 
 const DAY_MS = 86_400_000
 const isoDay = (d: Date) => d.toISOString().slice(0, 10)
@@ -135,6 +142,9 @@ export interface ResponseShadow {
   notes: Map<string, ResponseNote>
   summary: ResponseSummary
   eps: Map<string, number>
+  /** BB-21 — each product's ε as found, and the campaigns' signals (the probes' plan reads them). */
+  posteriors?: Map<string | null, EpsPosterior>
+  signals?: Map<string, CampaignSignal>
 }
 
 /**
@@ -144,6 +154,8 @@ export interface ResponseShadow {
 export async function responseShadow(
   m: { dataDay: string; targets: readonly TargetRow[]; adGroups: ReadonlyMap<string, AdGroupRow> },
   facts: readonly TargetFacts[], decisions: readonly Decision[], campaignOf: (targetId: string) => string,
+  /** BB-21 — the DONE live probes' readings per product (none: the moves alone, as before). */
+  probeReadings?: ReadonlyMap<string | null, readonly EpsReading[]>,
 ): Promise<ResponseShadow> {
   const campaignIds = [...new Set(facts.map((f) => campaignOf(f.targetId)).filter(Boolean))]
   const [events, signals] = await Promise.all([loadMoveEvents(m), loadCampaignSignals(campaignIds, m.dataDay)])
@@ -156,13 +168,13 @@ export async function responseShadow(
   facts.forEach((f, i) => {
     const key = productKeyOf(m.adGroups.get(groupOf.get(f.targetId) ?? ''))
     let product = products.get(key)
-    if (!product) { product = productEps(byProduct, key); products.set(key, product) }
+    if (!product) { product = productEps(byProduct, key, undefined, probeReadings); products.set(key, product) }
     const note = responseFor(f, decisions[i], product, signals.get(campaignOf(f.targetId)))
     if (!note) return
     notes.set(f.targetId, note)
     eps.set(f.targetId, note.eps)
   })
-  return { notes, summary: summarizeResponse([...notes.values()], events.filter((e) => moveReading(e)).length), eps }
+  return { notes, summary: summarizeResponse([...notes.values()], events.filter((e) => moveReading(e)).length), eps, posteriors: products, signals }
 }
 
 // ── BB-20 — exploration and revive ────────────────────────────────────────────────────────────────
@@ -265,8 +277,8 @@ export async function exploreShadow(
   return { plan: planExplore(options, budget), options }
 }
 
-/** What BB-19 and BB-20 add to one market's run. */
-export interface UpgradesSummary { response?: ResponseSummary; explore?: ExploreSummary }
+/** What BB-19, BB-20 and BB-21 add to one market's run. */
+export interface UpgradesSummary { response?: ResponseSummary; explore?: ExploreSummary; probes?: ProbeSummary }
 export interface Upgrades {
   /** The decisions to act on: the goal's, except the explore and revive picks under NEXUS_BID_BRAIN_EXPLORE=on. */
   decisions: Decision[]
@@ -290,11 +302,14 @@ export async function upgradesShadow(
   input: {
     facts: readonly TargetFacts[]; decisions: readonly Decision[]; campaignOf: (targetId: string) => string
     now: Date; lastWrites?: ReadonlyMap<string, { at: Date }>; marketFacts?: () => TargetFacts[]
+    /** BB-21 — the campaigns the brain owns this run (a probe there is LIVE under `on`), and the run (the ledger's rows). */
+    owned?: ReadonlySet<string>; runId?: string
   },
 ): Promise<Upgrades | null> {
   const response = responseMode()
   const explore = exploreMode()
-  if ((response === 'off' && explore === 'off') || !input.facts.length) return null
+  const probes = probeMode()
+  if ((response === 'off' && explore === 'off' && probes === 'off') || !input.facts.length) return null
   const own = new Set(input.facts.map((f) => f.targetId))
   const all = input.marketFacts ? input.marketFacts() : null
   const facts = all ?? input.facts
@@ -308,9 +323,20 @@ export async function upgradesShadow(
   }
   const summary: UpgradesSummary = {}
   let eps: ReadonlyMap<string, number> = new Map()
+  // BB-21 — the probes' ledger and their readings, read once (a failure: no probes this run, the response as before).
+  let readings: ReadonlyMap<string | null, EpsReading[]> = new Map()
+  let ledger: LoadedLedger | null = null
+  try {
+    if (response !== 'off' || probes !== 'off') readings = await loadProbeReadings(m.market, input.now)
+    if (probes !== 'off') ledger = await loadProbeLedger(m.market, input.now)
+  } catch (err) {
+    logger.warn('[bid-brain] the probes\' ledger could not be read — no probe this run, nothing changes', { market: m.market, error: errorWords(err) })
+  }
+  let found: Awaited<ReturnType<typeof responseShadow>> | null = null
   if (response !== 'off') {
     try {
-      const r = await responseShadow(m, facts, decisions, input.campaignOf)
+      const r = await responseShadow(m, facts, decisions, input.campaignOf, readings)
+      found = r
       for (const [id, n] of r.notes) {
         const { words, ...numbers } = n
         add(id, words, { response: numbers })
@@ -322,9 +348,14 @@ export async function upgradesShadow(
     }
   }
   let out = input.decisions as Decision[]
+  // BB-21 — under `on`, a keyword in a LIVE probe is not explored: its bids are the probe's.
+  const probing = probes === 'on' && ledger ? new Set(ledger.records.filter((p) => p.mode === 'LIVE' && (p.status === 'RUNNING' || p.status === 'MEASURING')).map((p) => p.targetId)) : null
   if (explore !== 'off') {
     try {
-      const { plan, options } = await exploreShadow(m, facts, decisions, { now: input.now, eps, lastWrites: input.lastWrites })
+      const keep = probing?.size ? facts.flatMap((f, i) => (probing.has(f.targetId) ? [] : [i])) : null
+      const { plan, options } = keep
+        ? await exploreShadow(m, keep.map((i) => facts[i]), keep.map((i) => decisions[i]), { now: input.now, eps, lastWrites: input.lastWrites })
+        : await exploreShadow(m, facts, decisions, { now: input.now, eps, lastWrites: input.lastWrites })
       const words = exploreWords(plan, explore, options)
       for (const id of new Set([...words.notes.keys(), ...words.evidence.keys()])) add(id, words.notes.get(id), words.evidence.get(id))
       summary.explore = summarizeExplore(plan, explore, options.filter((o) => 'say' in o && o.say).length)
@@ -333,6 +364,22 @@ export async function upgradesShadow(
       logger.warn('[bid-brain] the explore plan failed — the goal\'s decisions stand, nothing changes', { market: m.market, error: errorWords(err) })
     }
   }
-  if (!summary.response && !summary.explore) return null
+  // BB-21 — the probes, over the run's own keywords and their decisions after exploration.
+  if (probes !== 'off' && ledger) {
+    try {
+      const p = await probesShadow(m, {
+        facts: input.facts, decisions: out, campaignOf: input.campaignOf, now: input.now, mode: probes, owned: input.owned ?? new Set(),
+        runId: input.runId ?? 'bid-brain', ledger, readings, posteriors: found?.posteriors, signals: found?.signals,
+        loadClicks: async (ids) => new Map([...(await loadActivity(ids, { now: input.now, dataDay: m.dataDay }))].map(([id, a]) => [id, a.clicks14])),
+        loadSignals: (ids) => loadCampaignSignals(ids, m.dataDay),
+      })
+      for (const id of new Set([...p.notes.keys(), ...p.evidence.keys()])) add(id, p.notes.get(id), p.evidence.get(id))
+      if (p.summary) summary.probes = p.summary
+      out = p.decisions
+    } catch (err) {
+      logger.warn('[bid-brain] the probes failed — the decisions stand, nothing changes', { market: m.market, error: errorWords(err) })
+    }
+  }
+  if (!summary.response && !summary.explore && !summary.probes) return null
   return { decisions: out, notes, evidence, summary }
 }

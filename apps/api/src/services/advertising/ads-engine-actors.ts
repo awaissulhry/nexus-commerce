@@ -27,6 +27,7 @@
  *   brain state       `automation:ads-brain-state`                                          brain/state-run.ts
  *   brain negatives   `automation:ads-brain-negatives`                                      brain/negatives-run.ts
  *   brain harvest     `automation:ads-brain-harvest`                                        brain/harvest-write.ts
+ *   brain strategy    `automation:ads-brain-strategy`                                       brain/bidding-mode-run.ts
  *
  * Every writer of the product brain's family (`automation:ads-brain-<what>`) has an engine here, so the anomaly breaker
  * never counts the brain's own writes as changes with no known author (a test reads the brain's sources for every such
@@ -50,6 +51,9 @@ export type EngineKey =
   | 'brain-negatives'
   // ONE BRAIN AB-11 — the brain's harvest writer: a converting term's exact keyword and its source negatives as one pair (AUTO).
   | 'brain-harvest'
+  // ONE BRAIN AB-17 — the brain's bidding-strategy writer: a campaign's switch between fixed, down only and up and down, and
+  // the switch back after its test (biddingStrategy lever at AUTO, after the N4 approval days).
+  | 'brain-strategy'
 
 /** The breaker's buckets: every engine, plus writes no engine or rule claims. */
 export type BreakerBucket = EngineKey | 'unknown'
@@ -87,6 +91,7 @@ export const ENGINE_ACTORS: readonly EngineActorDef[] = [
   { key: 'brain-state', label: 'Brain pauses', actors: ['automation:ads-brain-state'] },
   { key: 'brain-negatives', label: 'Brain negatives', actors: ['automation:ads-brain-negatives'] },
   { key: 'brain-harvest', label: 'Brain harvest', actors: ['automation:ads-brain-harvest'] },
+  { key: 'brain-strategy', label: 'Brain bidding strategy', actors: ['automation:ads-brain-strategy'] },
 ]
 
 /**
@@ -232,6 +237,9 @@ const DEFAULT_ENGINE_CAPS: Readonly<Record<BreakerBucket, Readonly<EngineCaps>>>
   // AB-11 — the brain's harvest writer: at most harvestPerDay (default 10) keywords per product a day, each with a negative
   // exact in its sources (a few each), plus the next runs' retries of a source negative that failed.
   'brain-harvest': { perTick: 100, perDay: 300, breakerPerHour: 150 },
+  // AB-17 — the brain's bidding-strategy writer: at most one switch per campaign per 14 days, decided weekly, plus the switch
+  // back after a test — a handful a week; far below the unknown bucket, so a runaway trips it at once.
+  'brain-strategy': { perTick: 50, perDay: 50, breakerPerHour: 20 },
   unknown: { perTick: null, perDay: null, breakerPerHour: 300 },
 }
 

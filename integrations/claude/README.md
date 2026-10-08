@@ -128,7 +128,7 @@ Some new paths only act when the Owner turns them on in the server's environment
 | `ads-weekly-review` | How the ads are doing, and what to change (a stop is lower bids; a real pause only when you mean one) |
 | `ads-strategy` | Your ads strategy per market, category and product, kept in Nexus: read it, compare, and propose the changes as one plan |
 | `ads-playbook` | How a product's Amazon ads are built and run: include it, build or adopt its campaigns through Nexus's own builder, start them (with your code) or stop them with low bids; phases, drift and winners as Nexus adds them |
-| `ads-daily-manager` | The daily Amazon ads run of a scheduled Claude routine: reads, asks for one plan inside your strategy (it waits for you in Nexus unless you set it to run by rule), reports to Nexus; the routine's setup steps are inside |
+| `ads-daily-manager` | The daily Amazon ads run of a scheduled Claude routine: reads, asks for one plan inside your strategy (it waits for you in Nexus unless you set it to run by rule), reports to Nexus; for a product the ads brain runs it only supervises (never a lever the brain owns; the brain's report, clashes, tool gaps and your decisions in its report); the routine's setup steps are inside |
 | `automation-review` | What is automated, why a rule did or did not act, rules and levels |
 | `platform-health` | Channel accounts, alerts, failed syncs and jobs |
 | `change-plan` | Many changes as one request |

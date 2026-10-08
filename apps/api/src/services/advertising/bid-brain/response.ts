@@ -23,6 +23,9 @@
  *   capped     a campaign that spent ≥ 95 % of its daily budget on 3 of the last 7 settled days: a raise buys no clicks
  *              (ε = 0 upward), so the profit-best bid is never above today's
  *
+ *   probes     BB-21 — a DONE live switchback probe's reading (probe.ts) joins the moves of its product, the cleanest
+ *              reading there is (productEps `probes`)
+ *
  *   NEXUS_BID_BRAIN_RESPONSE = off · shadow (default). There is no `on`: U2 may write only once probes have measured ε for
  *   the product (posterior sd < 0.25, BB-21). Not read: Amazon's theme bid recommendations — fetched on demand only today
  *   (no stored snapshot), and a daily read would be a new Amazon call in production; a later step.
@@ -129,6 +132,9 @@ export interface EpsPosterior extends Normal {
   /** Clean moves of its own product, and of the market's other products, it rests on. */
   ownMoves: number
   marketMoves: number
+  /** BB-21 — the DONE live probes' readings of its own product and of the market's other products (absent: none read). */
+  ownProbes?: number
+  marketProbes?: number
   /** Posterior sd under EPS_MEASURED_SD. */
   measured: boolean
   /** The campaign signal's lean (1: none). */
@@ -142,28 +148,44 @@ const clampEps = (x: number) => Math.min(EPS_MAX, Math.max(0, x))
 /**
  * A product's ε: the market mean learns from the OTHER products' moves (each product's own readings combined first, then
  * read with the products' spread), the product from its own. With no moves at all it is exactly the prior.
+ * BB-21 — `probes`: the DONE live switchback probes' readings per product (probe-store.ts), read beside its moves (a
+ * designed reading, the cleanest there is); with none the result is exactly the moves' alone.
  */
-export function productEps(eventsByProduct: ReadonlyMap<string | null, readonly MoveEvent[]>, productKey: string | null, prior: Normal = EPS_PRIOR): EpsPosterior {
+export function productEps(eventsByProduct: ReadonlyMap<string | null, readonly MoveEvent[]>, productKey: string | null, prior: Normal = EPS_PRIOR, probes: ReadonlyMap<string | null, readonly EpsReading[]> = NO_PROBES): EpsPosterior {
   const tau2 = EPS_PRODUCT_SD * EPS_PRODUCT_SD
   let market: Normal = { mean: prior.mean, sd: Math.sqrt(Math.max(1e-6, prior.sd * prior.sd - tau2)) }
   let marketMoves = 0
-  for (const [key, events] of eventsByProduct) {
+  let marketProbes = 0
+  const keys = probes.size ? new Set([...eventsByProduct.keys(), ...probes.keys()]) : eventsByProduct.keys()
+  for (const key of keys) {
     if (key === productKey && key != null) continue
-    const readings = events.map(moveReading)
-    const r = combineReadings(readings)
+    const readings = (eventsByProduct.get(key) ?? []).map(moveReading)
+    const probed = probes.get(key) ?? []
+    const r = combineReadings([...readings, ...probed])
     if (!r) continue
     marketMoves += readings.filter(Boolean).length
+    marketProbes += probed.length
     market = updateNormal(market, { eps: r.eps, variance: r.variance + tau2 })
   }
   const own = productKey != null ? (eventsByProduct.get(productKey) ?? []).map(moveReading) : []
-  const ownReading = combineReadings(own)
+  const ownProbed = productKey != null ? probes.get(productKey) ?? [] : []
+  const ownReading = combineReadings([...own, ...ownProbed])
   const post = updateNormal({ mean: market.mean, sd: Math.sqrt(market.sd * market.sd + tau2) }, ownReading)
   const ownMoves = own.filter(Boolean).length
-  const from = ownMoves || marketMoves
-    ? [ownMoves ? `${ownMoves} move${ownMoves === 1 ? '' : 's'} of its product` : null, marketMoves ? `${marketMoves} in the market` : null].filter(Boolean).join(', ')
+  const ownProbes = ownProbed.length
+  const n = (k: number, one: string) => `${k} ${one}${k === 1 ? '' : 's'}`
+  const from = ownMoves || marketMoves || ownProbes || marketProbes
+    ? [
+      ownProbes ? `${n(ownProbes, 'probe')} of its product` : null,
+      ownMoves ? `${n(ownMoves, 'move')} of its product` : null,
+      marketMoves ? `${marketMoves} in the market` : null,
+      marketProbes ? `${n(marketProbes, 'probe')} in the market` : null,
+    ].filter(Boolean).join(', ')
     : 'prior'
-  return { mean: clampEps(post.mean), sd: post.sd, ownMoves, marketMoves, measured: post.sd < EPS_MEASURED_SD, lean: 1, from }
+  return { mean: clampEps(post.mean), sd: post.sd, ownMoves, marketMoves, ...(probes.size ? { ownProbes, marketProbes } : {}), measured: post.sd < EPS_MEASURED_SD, lean: 1, from }
 }
+
+const NO_PROBES: ReadonlyMap<string | null, readonly EpsReading[]> = new Map()
 
 /** A campaign's signals: its top-of-search impression share (null: none read) and its budget-capped days. */
 export interface CampaignSignal {
