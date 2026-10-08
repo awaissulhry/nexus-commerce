@@ -61,6 +61,8 @@ export interface IsolationRun {
   written: IsolationWritten | null
   /** ONE BRAIN AB-6 — the negatives left because a product's brain owns (or the Owner holds) their campaign's negatives. */
   leftToBrain: LeverSkip[]
+  /** The same negatives, each with its text, ad group and why (for a caller that lists what it left alone). */
+  leftToBrainItems?: Array<{ text: string; adGroupId: string; why: string }>
   /** Who holds the levers could not be read: nothing was skipped on a guess, the write gate judged each write. */
   holdsUnread?: boolean
 }
@@ -130,14 +132,18 @@ export async function isolateProduct(args: { action: IsolationAction; actor: str
   // a dry run too (brain/engine-skips.ts; nothing read unless a product is enrolled).
   const holds = await readLeverHolds(chosen.map((a) => a.campaignId), { actor: args.actor }, 'isolate_product_terms')
   const leftToBrain: LeverSkip[] = []
+  const leftToBrainItems: NonNullable<IsolationRun['leftToBrainItems']> = []
   chosen = chosen.filter((a) => {
     const skip = holds.skip(a.campaignId, 'negatives')
-    if (skip) leftToBrain.push(skip)
+    if (skip) {
+      leftToBrain.push(skip)
+      leftToBrainItems.push({ text: a.text, adGroupId: a.adGroupId, why: `left alone: ${skip.reason} (one owner per lever)` })
+    }
     return !skip
   })
   chosen = chosen.slice(0, MAX_ISOLATION_ITEMS)
   const written = args.dryRun ? null : await writeAll(args.action.playbookId, chosen, args.actor, inputs.family)
-  return { scope: { adGroups: inputs.scope.length, groups: inputs.scope, excluded: inputs.excluded }, plan, chosen, noLongerDue, written, leftToBrain, ...(holds.unread ? { holdsUnread: true } : {}) }
+  return { scope: { adGroups: inputs.scope.length, groups: inputs.scope, excluded: inputs.excluded }, plan, chosen, noLongerDue, written, leftToBrain, leftToBrainItems, ...(holds.unread ? { holdsUnread: true } : {}) }
 }
 
 const top = <T,>(key: string, list: readonly T[], n = 5) => (list.length ? { [key]: list.length, [`top${key[0].toUpperCase()}${key.slice(1)}`]: list.slice(0, n) } : {})

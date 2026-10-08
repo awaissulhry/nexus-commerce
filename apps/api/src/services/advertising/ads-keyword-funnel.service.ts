@@ -22,6 +22,7 @@ import { PRODUCT_NOT_FOUND } from '../agents/tools/live-product.js'
 import { findLiveProduct } from './ads-strategy/load.js'
 import { strategyMarketOf } from './ads-strategy/terms.js'
 import { compileIsolationFor, isolateProduct } from './ads-playbook/isolation-run.js'
+import { brainSkipsOutput, leverHeldOf } from './brain/engine-skips.js'
 import { playbookStanding, standingRefusal } from './ads-playbook/isolation-load.js'
 import type { ScopeGroup } from './ads-playbook/isolation.js'
 
@@ -103,6 +104,8 @@ const SLOT_ROLE = (g: ScopeGroup | undefined): MatchRole => (g?.role === 'exact'
 export async function crossMatchNegations(productId: string, apply: boolean, actor: string, market: string): Promise<{
   proposals: NegationProposal[]; applied: number; errors: string[]; local: number; alreadyStanding: number
   leftAlone: Array<{ text: string; adGroupId: string | null; why: string }>; excluded: Array<{ slot: string; campaignId: string; adGroupId: string | null; why: string }>
+  /** ONE BRAIN — the negatives left because a product's brain runs (or the Owner holds) their campaign's negatives lever. */
+  brainSkips?: unknown
 } | { refused: string }> {
   const code = strategyMarketOf(market)
   if (!code) return { refused: 'Name a market (for example "IT"): isolation keeps one product\'s own playbook campaigns apart in one market, so nothing was planned.' }
@@ -141,8 +144,14 @@ export async function crossMatchNegations(productId: string, apply: boolean, act
     errors: w ? [...w.refused.map((r) => `${r.text}: ${r.reason}`), ...w.failed.map((f) => `${f.text}: ${f.error}`)] : [],
     local: w?.local ?? 0,
     alreadyStanding: (w?.alreadyStanding ?? 0) + run.plan.alreadyStanding,
-    leftAlone: [...(w?.leftAlone ?? []), ...run.plan.leftAlone].map((l) => ({ text: l.text, adGroupId: l.adGroupId, why: l.why })),
+    // ONE BRAIN AB-6 follow-up — a negative left to a product's brain (or the Owner's lock) is said with its reason and
+    // counted, never dropped from the answer: the brain's negatives module keeps that product's campaigns apart.
+    leftAlone: [
+      ...(w?.leftAlone ?? []), ...run.plan.leftAlone,
+      ...(run.leftToBrainItems ?? []),
+    ].map((l) => ({ text: l.text, adGroupId: l.adGroupId, why: l.why })),
     excluded: run.scope.excluded,
+    ...brainSkipsOutput(leverHeldOf(run.leftToBrain ?? []), run.leftToBrain ?? [], run.holdsUnread === true),
   }
 }
 
