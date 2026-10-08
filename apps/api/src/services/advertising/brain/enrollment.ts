@@ -62,6 +62,7 @@ import type { AdsActor } from '../ads-mutation.service.js'
 import { BRAIN_LEVERS, readSnapshots, type BrainLever, type BrainLevel, type LeverSnapshot } from './levers.js'
 import { loadNativeRules, nativeAutoRefusal } from './native-rules.js'
 import { productCampaigns, productFamily, resolveCampaignOwnership } from './ownership.js'
+import { forgetLeverOwners } from './lever-owners.js'
 import {
   EXCLUDE_KEY, overrideIdentity, resolveBrainSettings, settingsPairRefusal, validateIdentity, validateOverride, type BrainSettings, type LeverSettings,
   type OverrideInput, type OverrideKind, type OverrideRow,
@@ -472,7 +473,10 @@ export async function enrollProduct(args: { productId: string; market: string; b
     }
     return { ok: true as const, productId: root, market, bids, version: row.version, adoptedLive, keptInShadow }
   }, SERIALIZABLE))
-  if (done.ok) logger.info('[ads-brain] product enrolled', { productId: done.productId, market: done.market, by: args.by, bids: done.bids, adoptedLive: done.adoptedLive, keptInShadow: done.keptInShadow })
+  if (done.ok) {
+    forgetLeverOwners() // AB-5 — the write gate's memory of who holds each lever, in this process
+    logger.info('[ads-brain] product enrolled', { productId: done.productId, market: done.market, by: args.by, bids: done.bids, adoptedLive: done.adoptedLive, keptInShadow: done.keptInShadow })
+  }
   return done
 }
 
@@ -620,6 +624,7 @@ async function runChange(args: ChangeArgs, change: Change): Promise<Result<{ pla
     return { ok: true as const, plan, version }
   }, SERIALIZABLE))
   if (done.ok && !done.plan.unchanged) {
+    forgetLeverOwners() // AB-5 — the write gate's memory of who holds each lever, in this process
     const steps = done.plan.steps
     logger.info('[ads-brain] override changed', {
       productId: done.plan.productId, market: done.plan.market, change: change.op, scope: change.input.scope, campaignId: change.input.campaignId ?? null,

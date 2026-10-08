@@ -516,6 +516,8 @@ export async function negateGram(req: NegateGramRequest): Promise<NegateGramResu
         // 🔴 NEG.0 fixed three callers that hid this behind `as never` and were denied at
         // `connection` before ever reaching the whitelist. It is passed, always.
         marketplace: c.marketplace as string,
+        // AB-5 — who negates it, for the gate's one owner per lever (the negatives lever of a product's brain).
+        actor: req.actor,
       })
       if (res.denied) outcomes.push({ ...base, outcome: 'refused', reason: res.denied.reason, externalNegativeKeywordId: null })
       else if (res.alreadyExisted) outcomes.push({ ...base, outcome: 'already_existed', reason: null, externalNegativeKeywordId: null })

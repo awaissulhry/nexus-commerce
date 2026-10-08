@@ -121,18 +121,28 @@ async function resolveCtx(marketplace: string): Promise<{ profileId: string; reg
  *
  * Sponsored Brands and Display adds keep the market-only ask: they go to their own endpoints, and the gate's 6a check
  * (which refuses SB/SD *updates*, sent to Sponsored Products endpoints) must not refuse them.
+ *
+ * ONE BRAIN AB-5 — an add names its lever and its actor (design 2026-10-08-ads-one-brain/DESIGN.md §3 target 2): a
+ * keyword or target is the `keywords` lever (a product brain's harvest), an ad group or a product ad the `structure`
+ * lever, and the actor is who adds it (`userId`: a person, a rule's `automation:<id>`, the brain's own; none is an unnamed
+ * automatic writer). On a campaign a product's brain owns, or whose lever the Owner locked, the gate then refuses another
+ * engine's add (ads-write-gate.ts productBrainRefusal); a person's add passes. A launch's own adds (`creationFlow`) name
+ * no campaign, as before: the campaign it just made is nobody's yet.
  */
 function addGateScope(
   campaign: { id: string; adProduct?: string | null; type?: string | null },
-  input: { creationFlow?: boolean; confirmOwnLimits?: boolean },
+  input: { creationFlow?: boolean; confirmOwnLimits?: boolean; userId?: string | null },
   bid: { field: 'bid' | 'defaultBid'; cents: number } | null,
-): Pick<GateContext, 'campaignId' | 'field' | 'intendedValueCents' | 'confirmOwnLimits'> {
+  lever: 'keywords' | 'structure',
+): Pick<GateContext, 'campaignId' | 'field' | 'intendedValueCents' | 'confirmOwnLimits' | 'dimension' | 'actor'> {
   // 3A — a person's "Send anyway" past his own limits (the gate honours it only with `manual`).
   const confirm = input.confirmOwnLimits === true ? { confirmOwnLimits: true } : {}
+  const named = { dimension: lever, actor: input.userId ?? null }
   const product = adProductOf(campaign)
-  if (product != null && product !== SPONSORED_PRODUCTS) return confirm
+  if (product != null && product !== SPONSORED_PRODUCTS) return { ...confirm, ...named }
   return {
     ...confirm,
+    ...named,
     ...(input.creationFlow ? {} : { campaignId: campaign.id }),
     ...(bid ? { field: bid.field, intendedValueCents: bid.cents } : {}),
   }
@@ -261,7 +271,9 @@ async function createCampaignOnce(input: NewCampaign): Promise<CampaignCreateRes
   if (ctx) {
     // CC-14 — a Sponsored Products budget is judged against Amazon's range in the market, as a budget edit is.
     const budgetCents = Math.round(input.dailyBudgetEur * 100)
-    const gate = await checkAdsWriteGate({ marketplace: input.marketplace, payloadValueCents: budgetCents, ...(input.type === 'SP' ? { field: 'dailyBudget', intendedValueCents: budgetCents } : {}) })
+    // AB-5 — the structure lever, named. A new campaign advertises nothing yet, so no product's brain owns it and the gate
+    // judges no owner here (no campaign is named); its builders check the brain themselves (AB-6, AB-16).
+    const gate = await checkAdsWriteGate({ marketplace: input.marketplace, payloadValueCents: budgetCents, dimension: 'structure', ...(input.type === 'SP' ? { field: 'dailyBudget', intendedValueCents: budgetCents } : {}) })
     if (gate.allowed || input.dryRun) {
       const common = { name: input.name, dailyBudget: input.dailyBudgetEur, state, portfolioId: input.portfolioId, dryRun: input.dryRun }
       // CC-26 — SB and SD send a start date: the day in the account's own time zone, not the UTC day.
@@ -372,7 +384,7 @@ export async function createAdGroupLocal(input: NewAdGroup): Promise<{ id: strin
     const ctx = await resolveCtx(campaign.marketplace)
     if (ctx) {
       const bidCents = Math.round(input.defaultBidEur * 100)
-      const gate = await checkAdsWriteGate({ marketplace: campaign.marketplace, payloadValueCents: bidCents, manual: isPersonCreate(input.manual, input.userId), ...addGateScope({ id: input.campaignId, ...campaign }, input, { field: 'defaultBid', cents: bidCents }) })
+      const gate = await checkAdsWriteGate({ marketplace: campaign.marketplace, payloadValueCents: bidCents, manual: isPersonCreate(input.manual, input.userId), ...addGateScope({ id: input.campaignId, ...campaign }, input, { field: 'defaultBid', cents: bidCents }, 'structure') })
       pastNote = sentPastEvidence(gate, input.userId)
       if (gate.allowed) {
         try {
@@ -486,7 +498,7 @@ async function createKeywordOnce(input: NewKeyword): Promise<KeywordCreateResult
     const ctx = await resolveCtx(ag.campaign.marketplace)
     if (ctx) {
       const bidCents = Math.round(input.bidEur * 100)
-      const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: bidCents, manual: isPersonCreate(input.manual, input.userId), ...addGateScope({ id: ag.campaignId, ...ag.campaign }, input, { field: 'bid', cents: bidCents }) })
+      const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: bidCents, manual: isPersonCreate(input.manual, input.userId), ...addGateScope({ id: ag.campaignId, ...ag.campaign }, input, { field: 'bid', cents: bidCents }, 'keywords') })
       pastNote = sentPastEvidence(gate, input.userId)
       if (gate.allowed) {
         const args = { externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId, keywordText: input.keywordText, matchType: input.matchType, bid: input.bidEur, state: 'enabled' as const }
@@ -598,7 +610,7 @@ export async function pushExistingKeyword(input: { adTargetId: string; userId?: 
   }
   const ctx = await resolveCtx(ag.campaign.marketplace)
   if (!ctx) return { ok: false, externalTargetId: null, outcome: 'refused', refusal: { deniedAt: 'connection', reason: `No active Amazon Ads connection for ${ag.campaign.marketplace}.` } }
-  const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: t.bidCents, manual: isPersonCreate(input.manual, input.userId), ...addGateScope({ id: ag.campaignId, ...ag.campaign }, input, { field: 'bid', cents: t.bidCents }) })
+  const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: t.bidCents, manual: isPersonCreate(input.manual, input.userId), ...addGateScope({ id: ag.campaignId, ...ag.campaign }, input, { field: 'bid', cents: t.bidCents }, 'keywords') })
   if (!gate.allowed) {
     // 🔴 `apps/api`'s tsconfig is NOT strict, so `if (!gate.allowed)` does not narrow the
     // discriminated union the way it would in `apps/web`. `Extract` names the exact variant
@@ -848,7 +860,7 @@ async function createProductAdOnce(input: NewProductAd): Promise<ProductAdCreate
   if (ag.externalAdGroupId && ag.campaign?.externalCampaignId && ag.campaign.marketplace) {
     const ctx = await resolveCtx(ag.campaign.marketplace)
     if (ctx) {
-      const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: 0, manual: isPersonCreate(input.manual, input.userId), ...addGateScope({ id: ag.campaignId, ...ag.campaign }, input, null) })
+      const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: 0, manual: isPersonCreate(input.manual, input.userId), ...addGateScope({ id: ag.campaignId, ...ag.campaign }, input, null, 'structure') })
       if (gate.allowed) {
         // SD takes either identifier; SP genuinely needs the seller SKU, so only SP hard-fails.
         if (!resolved && !isSd) {
@@ -906,7 +918,9 @@ export async function pushCampaignStructure(campaignId: string): Promise<{ ok: b
   if (!campaign?.externalCampaignId || !campaign.marketplace) { out.ok = false; out.errors.push('campaign missing externalCampaignId/marketplace'); return out }
   const ctx = await resolveCtx(campaign.marketplace)
   if (!ctx) { out.ok = false; out.errors.push('no connection for ' + campaign.marketplace); return out }
-  const gate = await checkAdsWriteGate({ marketplace: campaign.marketplace, payloadValueCents: 0, campaignId })
+  // AB-5 — the structure lever, named. A launch repair pushes what Nexus already holds and names no actor: a repair
+  // always passes a brain's ownership (as the write reconcile does), so there is nothing to judge.
+  const gate = await checkAdsWriteGate({ marketplace: campaign.marketplace, payloadValueCents: 0, campaignId, dimension: 'structure' })
   if (!gate.allowed) { out.ok = false; out.errors.push('write-gate closed — allowlist the campaign first'); return out }
   const extC = campaign.externalCampaignId
   const isSd = campaign.adProduct === 'SPONSORED_DISPLAY'
@@ -1065,7 +1079,8 @@ export async function reconcileNegativesAndDelivery(campaignIds: string[]): Prom
 export async function assignPortfolioDirect(campaignId: string, portfolioId: string): Promise<{ ok: boolean; error?: string; rawResponse?: unknown }> {
   const c = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { externalCampaignId: true, marketplace: true } })
   if (!c?.externalCampaignId || !c.marketplace) return { ok: false, error: 'campaign missing externalCampaignId/marketplace' }
-  const gate = await checkAdsWriteGate({ marketplace: c.marketplace, payloadValueCents: 0, campaignId })
+  // AB-5 — the portfolio lever, named; a launch repair pushes the portfolio Nexus already holds and names no actor.
+  const gate = await checkAdsWriteGate({ marketplace: c.marketplace, payloadValueCents: 0, campaignId, dimension: 'portfolio' })
   if (!gate.allowed) return { ok: false, error: 'write-gate closed: ' + ('reason' in gate ? gate.reason : 'denied') }
   const ctx = await resolveCtx(c.marketplace)
   if (!ctx) return { ok: false, error: 'no connection for ' + c.marketplace }
@@ -1214,7 +1229,8 @@ export async function verifyCampaignPortfolios(opts: {
         intended, amazon: null, verdict: 'MISSING_ON_AMAZON',
       }
       if (!dryRun) {
-        const gate = await checkAdsWriteGate({ marketplace, payloadValueCents: 0, ...(opts.creationFlow ? {} : { campaignId: c.id }) })
+        // AB-5 — the portfolio lever, named; the repair pushes the portfolio Nexus already holds and names no actor.
+        const gate = await checkAdsWriteGate({ marketplace, payloadValueCents: 0, dimension: 'portfolio', ...(opts.creationFlow ? {} : { campaignId: c.id }) })
         if (!gate.allowed) {
           row.repaired = false
           row.error = 'write-gate closed: ' + ('reason' in gate ? String(gate.reason) : 'denied')
@@ -1371,7 +1387,7 @@ async function createTargetOnce(input: NewTarget): Promise<TargetCreateResult> {
     const ctx = await resolveCtx(ag.campaign.marketplace)
     if (ctx) {
       const bidCents = Math.round(input.bidEur * 100)
-      const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: bidCents, manual: isPersonCreate(input.manual, input.userId), ...addGateScope({ id: ag.campaignId, ...ag.campaign }, input, { field: 'bid', cents: bidCents }) })
+      const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: bidCents, manual: isPersonCreate(input.manual, input.userId), ...addGateScope({ id: ag.campaignId, ...ag.campaign }, input, { field: 'bid', cents: bidCents }, 'keywords') })
       pastNote = sentPastEvidence(gate, input.userId)
       if (gate.allowed) {
         try {
@@ -1567,7 +1583,7 @@ export async function linkAutoTargeting(input: {
     }
     let error: string | null = null
     // CM-20 — the same campaign rules a bid edit obeys (addGateScope); a launch's own groups pass the allowlist.
-    const gate = await checkAdsWriteGate({ marketplace: ag.campaign!.marketplace, payloadValueCents: bidCents, manual, ...addGateScope(ag.campaign!, input, { field: 'bid', cents: bidCents }) })
+    const gate = await checkAdsWriteGate({ marketplace: ag.campaign!.marketplace, payloadValueCents: bidCents, manual, ...addGateScope(ag.campaign!, input, { field: 'bid', cents: bidCents }, 'keywords') })
     if (!gate.allowed) error = `Not sent to Amazon: ${gateReason(gate)}`
     else {
       try {
@@ -1666,7 +1682,8 @@ export async function createSbAdLocal(input: NewSbAd): Promise<{ id: string; ext
   if (!ag?.externalAdGroupId || !ag.campaign?.externalCampaignId || !marketplace) throw new SbCreativeRefused('The ad group is not on Amazon, so the creative was not sent.')
   const ctx = await resolveCtx(marketplace)
   if (!ctx) throw new SbCreativeRefused(`No active Amazon Ads connection for ${marketplace}.`)
-  const gate = await checkAdsWriteGate({ marketplace, payloadValueCents: 0, manual: isPersonCreate(input.manual, input.userId) })
+  // AB-5 — a Sponsored Brands creative: the structure lever, named (no campaign is named: the brain runs Sponsored Products only).
+  const gate = await checkAdsWriteGate({ marketplace, payloadValueCents: 0, manual: isPersonCreate(input.manual, input.userId), dimension: 'structure', actor: input.userId ?? null })
   if (!gate.allowed) throw new SbCreativeRefused(`The creative was not sent: ${gateReason(gate)}`)
   const r = await createSbAd(ctx, { externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId, brandName, headline: input.headline, logoAssetId, creativeType, landingType, landingUrl, asins, state: 'enabled' })
   const externalId = r.externalId, mode = r.mode

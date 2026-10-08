@@ -1311,6 +1311,7 @@ const makeAddNegativeHandler = (matchType: 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE')
               profileId: conn?.profileId ?? '', externalCampaignId: dst.campaign.externalCampaignId,
               ...(level === 'AD_GROUP' ? { externalAdGroupId: dst.externalAdGroupId } : {}),
               keywordText: keyword, matchType, scope: level as 'AD_GROUP' | 'CAMPAIGN', marketplace,
+              actor: RULE_ACTOR(meta.ruleId), // AB-5 — the gate names the rule when a product's brain owns the negatives
             })
             if (level === 'CAMPAIGN') campaignsDone.add(dst.campaignId)
             if (res.denied) { failedWrites += 1; outcomes.push({ adGroupId: dst.id, matchType, level, reachedAmazon: false, refused: `write gate denied at ${res.denied.deniedAt}: ${res.denied.reason}` }); continue }
@@ -1416,7 +1417,7 @@ const makeAddNegativeHandler = (matchType: 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE')
     if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, keyword, externalCampaignId, matchType, scope } }
     const { createNegative } = await import('./ads-negative-kw.service.js')
     const conn = await (await import('./ads-profile-resolver.js')).adsClientContextFor(marketplace) // CM-29 — the gate's resolver
-    const res = await createNegative({ profileId: conn?.profileId ?? '', externalCampaignId, externalAdGroupId, keywordText: keyword, matchType, scope, marketplace })
+    const res = await createNegative({ profileId: conn?.profileId ?? '', externalCampaignId, externalAdGroupId, keywordText: keyword, matchType, scope, marketplace, actor: RULE_ACTOR(meta.ruleId) })
     // A denied write used to be reported as `ok: true`. With the gate now reachable (above), a
     // refusal by the protected-terms whitelist is the expected outcome for a brand term — and it has
     // to land in the execution row as a failure, or the whitelist is invisible to whoever reads it.
@@ -1751,7 +1752,7 @@ ACTION_HANDLERS.sync_negatives_across_campaigns = async (action, context, meta):
     // local mirror was written anyway. Per-campaign outcomes are counted separately for the same
     // reason — one number over 74 attempts is how those 22 rows became invisible.
     try {
-      const r = await createNegative({ profileId: conn?.profileId ?? '', externalCampaignId: c.externalCampaignId!, keywordText: keyword, matchType: 'NEGATIVE_EXACT', scope: 'CAMPAIGN', marketplace })
+      const r = await createNegative({ profileId: conn?.profileId ?? '', externalCampaignId: c.externalCampaignId!, keywordText: keyword, matchType: 'NEGATIVE_EXACT', scope: 'CAMPAIGN', marketplace, actor: RULE_ACTOR(meta.ruleId) })
       if (r.denied) { denied++; if (errors.length < 5) errors.push(`${c.externalCampaignId}: denied at ${r.denied.deniedAt} — ${r.denied.reason}`) }
       else added++
     }
