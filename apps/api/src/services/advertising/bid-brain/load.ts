@@ -18,6 +18,9 @@
  *               maturity of its copy (the age it was pulled at) under its product's or its market's lag curve — read
  *               for the decisions only with NEXUS_BID_BRAIN_NOWCAST=on and a usable curve (nowcast.ts); off and shadow
  *               read the settled window above, unchanged
+ *   BB-17       the intraday brakes of the campaigns it owns (intraday-load.ts: today's Marketing Stream hours against the
+ *               day's planned spend, the lanes' CPC against their 14-day median, the budget against the best hours) — in
+ *               the facts only with NEXUS_BID_BRAIN_INTRADAY=on; shadow reads and compares them, off reads nothing
  */
 import { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
@@ -39,6 +42,7 @@ import { STOP_FLOOR_KIND } from '../ads-playbook/held.js'
 import { loadPlanHours } from './plans.js'
 import { loadServingBids } from './serving.js'
 import { loadSpendGuard } from './spend-guard.js'
+import { loadIntraday } from './intraday-load.js'
 import { readSavedLanes } from './stop-recipe.js'
 import { LAG_AGES } from './lag-curve.js'
 import { curveWords, nowcastCurves } from './lag-curve-store.js'
@@ -547,13 +551,15 @@ export async function loadRun(m: LoadedMarket, now: Date, opts: { owned?: Readon
   // BB-18 — the bid that served each keyword's window clicks; BB-7 — the hourly plan's hour of each owned campaign.
   const ownedHere = campaignIds.filter((id) => opts.owned?.has(id))
   const { minBidEntriesToday } = ownedHere.length ? await import('../../../jobs/ad-rank-defend.job.js') : { minBidEntriesToday: null }
-  const [servingBids, planHours, minBidEntries, spendGuard] = await Promise.all([
+  const [servingBids, planHours, minBidEntries, spendGuard, intraday] = await Promise.all([
     // BB-15 — under the nowcast, the bid that served its window (to yesterday).
     m.light ? Promise.resolve(new Map<string, number>()) : loadServingBids(m.targets.filter((t) => groupSet.has(t.adGroupId)), m.window ?? settledBounds(MAX_WINDOW_DAYS, 'SPONSORED_PRODUCTS', { now })),
     loadPlanHours(ownedHere, opts.clockNow ?? now),
     minBidEntriesToday ? minBidEntriesToday(ownedHere, opts.clockNow ?? now, ['rank-defend', 'bid-brain']) : Promise.resolve(new Map<string, number>()),
     // BB-10 — the brain's own raise cap: this hour's spend against the same hour of the last 7 days.
     loadSpendGuard(ownedHere, opts.clockNow ?? now),
+    // BB-17 — the intraday brakes (spend, CPC spike, budget) of the campaigns it owns; NEXUS_BID_BRAIN_INTRADAY=off: none.
+    loadIntraday(m, ownedHere, opts.clockNow ?? now),
   ])
   return {
     run: {
@@ -572,6 +578,7 @@ export async function loadRun(m: LoadedMarket, now: Date, opts: { owned?: Readon
       minBidEntries,
       spendGuard,
       owned: new Set(ownedHere),
+      ...(intraday ? { intraday } : {}),
     },
     lastWrites,
     previous,

@@ -29,6 +29,7 @@ import { laneOf, planFacts, type PlanHour } from './plan-hour.js'
 import { stackCeiling } from './recipe.js'
 import { laneHeadroom } from '../rank-controller.js'
 import { MAX_MIN_BID_ENTRIES_PER_DAY } from '../rank-write-projection.js'
+import { applyIntradayAll, type IntradayRun } from './intraday.js'
 
 export interface CampaignRow {
   id: string
@@ -153,6 +154,11 @@ export interface RunRows {
   breakEven?: ReadonlyMap<string, number>
   /** BB-9 — per campaign: the rules' active inputs (BidDirective rows, rule-directives.ts). */
   directives?: ReadonlyMap<string, readonly DirectiveRow[]>
+  /**
+   * BB-17 — the intraday brakes of the campaigns the brain owns (intraday.ts; absent: NEXUS_BID_BRAIN_INTRADAY=off, or none
+   * owned). In the facts only when `mode` is on; in shadow they are read and compared, never decided with (shadow.ts).
+   */
+  intraday?: IntradayRun
 }
 
 /** BB-9 — one active BidDirective as the brain reads it; `label` names who asked ('rule "GALE IT — share of voice"'). */
@@ -468,5 +474,16 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
       ...(inputs.goal ? { goalBy: inputs.goal.by } : {}),
     })
   }
-  return out
+  // BB-17 — the intraday brakes, switched on: each owned campaign's in its keywords' facts (the stack measured as above:
+  // the stop's memory first, the strategy it saved). Shadow and off: the facts exactly as before.
+  return run.intraday?.mode === 'on' ? applyIntradayAll(out, run.intraday, intradayCampaigns(m)) : out
+}
+
+/** BB-17 — each keyword's campaign as the intraday brakes measure its stack (the placements that serve, its strategy). */
+function intradayCampaigns(m: MarketRows): (targetId: string) => { id: string; placements: ReadonlyArray<{ placement: string; percentage: number }>; biddingStrategy: string | null } | null {
+  const groupOf = new Map(m.targets.map((t) => [t.id, t.adGroupId]))
+  return (targetId) => {
+    const c = m.campaigns.get(m.adGroups.get(groupOf.get(targetId) ?? '')?.campaignId ?? '')
+    return c ? { id: c.id, placements: c.savedPlacements ?? c.placements ?? [], biddingStrategy: c.savedStrategy ?? c.biddingStrategy ?? null } : null
+  }
 }

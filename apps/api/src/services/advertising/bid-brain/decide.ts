@@ -4,7 +4,7 @@
  *   brakes     first of all: the kill switch, a halt, the dial OFF, the breaker, data older than 48 hours, a paused or
  *              not-allowlisted campaign — nothing is written, and the reason is said
  *   overrides  the first that applies decides, in this fixed order:
- *                STOP ▸ PIN/HOLD ▸ STOCK/RETAIL ▸ AUTO-UNDO FREEZE ▸ PHASE ▸ MIN-BID HOUR
+ *                STOP ▸ PIN/HOLD ▸ STOCK/RETAIL ▸ AUTO-UNDO FREEZE ▸ PHASE ▸ MIN-BID HOUR ▸ INTRADAY (BB-17)
  *              when several apply the lower bid wins, except a pin (left alone, unless a stop comes first)
  *   restore    BB-8 — no override applies any more, but the last decision was one that lowered the bid (a stop, stock, a
  *              phase floor, a Min-bid hour) and the bid still sits there: the bids go back as if the stop never happened —
@@ -60,6 +60,11 @@ export interface Overrides {
   phase?: { notStarted?: true; floorCents: number; by?: string } | null
   /** The hourly plan's Min-bid hour → its floor. */
   minBidHour?: { floorCents: number } | null
+  /**
+   * BB-17 — the intraday brakes (intraday.ts): the bid steps down from the bid before them (`factor`: the spend cut, a
+   * budget's slow hour) and is capped (`capCents`: a CPC spike); given back when they end (`restore`). `by`: the brakes.
+   */
+  intraday?: { factor?: number; capCents?: number; by: string } | null
 }
 
 export interface TargetFacts {
@@ -107,13 +112,13 @@ export interface TargetFacts {
   restore?: { layer: DecisionLayer; heldCents: number; beforeCents: number | null; retryDataDay?: string | null; foundCents?: number | null } | null
 }
 
-export type DecisionLayer = 'brake' | 'stop' | 'pin' | 'stock' | 'freeze' | 'phase' | 'min_bid_hour' | 'restore' | 'goal' | 'band' | 'limit' | 'no_goal'
+export type DecisionLayer = 'brake' | 'stop' | 'pin' | 'stock' | 'freeze' | 'phase' | 'min_bid_hour' | 'intraday' | 'restore' | 'goal' | 'band' | 'limit' | 'no_goal'
 
 /** BB-9 — a share floor (share of voice, rank, coverage) may reach the bid of this × the band top (design §2). */
 export const SHARE_FLOOR_HI_FACTOR = 1.25
 
-/** BB-8 — the override layers that lower a bid and whose end gives the bids back (`restore`). */
-export const LOWERING_LAYERS: readonly DecisionLayer[] = ['stop', 'stock', 'phase', 'min_bid_hour']
+/** BB-8 — the override layers that lower a bid and whose end gives the bids back (`restore`). BB-17 — the intraday brakes too. */
+export const LOWERING_LAYERS: readonly DecisionLayer[] = ['stop', 'stock', 'phase', 'min_bid_hour', 'intraday']
 export type DecisionAction = 'write' | 'hold' | 'brake'
 
 export interface Decision {
@@ -140,9 +145,9 @@ export interface Decision {
   quietRefusal?: boolean
 }
 
-const OVERRIDE_ORDER = ['stop', 'pin', 'stock', 'freeze', 'phase', 'minBidHour'] as const
+const OVERRIDE_ORDER = ['stop', 'pin', 'stock', 'freeze', 'phase', 'minBidHour', 'intraday'] as const
 type OverrideKey = (typeof OVERRIDE_ORDER)[number]
-const LAYER_OF: Record<OverrideKey, DecisionLayer> = { stop: 'stop', pin: 'pin', stock: 'stock', freeze: 'freeze', phase: 'phase', minBidHour: 'min_bid_hour' }
+const LAYER_OF: Record<OverrideKey, DecisionLayer> = { stop: 'stop', pin: 'pin', stock: 'stock', freeze: 'freeze', phase: 'phase', minBidHour: 'min_bid_hour', intraday: 'intraday' }
 
 const pct = (f: number) => `${Math.round(f * 1000) / 10}%`
 /** A conversion rate needs two decimals: 0.87 %. */
@@ -220,7 +225,8 @@ function goalBid(f: TargetFacts, opts: { noStep?: boolean } = {}): GoalBid | { r
  */
 export function decide(f: TargetFacts): Decision {
   const d = decideBid(f)
-  if (!f.raiseCap || d.action !== 'write' || d.bidCents <= f.currentCents || d.layer === 'restore') return d
+  // BB-17 — an intraday brake's bid above today's is the give-back after another floor, up to the brake: no raise.
+  if (!f.raiseCap || d.action !== 'write' || d.bidCents <= f.currentCents || d.layer === 'restore' || d.layer === 'intraday') return d
   return { ...d, action: 'hold', bidCents: f.currentCents, step: null, why: `${d.layer.replace('_', '-')}: raise held — ${f.raiseCap}; ${f.currentCents}¢ → ${d.bidCents}¢ waits (${d.why})` }
 }
 
@@ -267,6 +273,7 @@ function decideBid(f: TargetFacts): Decision {
       return { ...base, ...known, action: 'hold', layer: 'pin', bidCents: f.currentCents, why: `pin: held by ${pin.by}${pin.until ? ` until ${pin.until}` : ''} — left alone` }
     }
     const bids: Array<{ key: OverrideKey; cents: number; words: string }> = []
+    let yielded: Decision | null = null
     for (const k of applying) {
       if (k === 'stop') bids.push({ key: k, cents: o.stop!.bidCents, words: `stop by ${o.stop!.by} → ${o.stop!.bidCents}¢` })
       else if (k === 'stock') {
@@ -279,6 +286,11 @@ function decideBid(f: TargetFacts): Decision {
       } else if (k === 'freeze') bids.push({ key: k, cents: ok ? Math.min(ok.cents, f.currentCents) : f.currentCents, words: `auto-undo freeze (${o.freeze!.by}): no raise` })
       else if (k === 'phase') bids.push({ key: k, cents: o.phase!.floorCents, words: `${o.phase!.by ?? 'phase not started'} → ${o.phase!.floorCents}¢` })
       else if (k === 'minBidHour') bids.push({ key: k, cents: o.minBidHour!.floorCents, words: `Min-bid hour${f.planNote ? ` (${f.planNote})` : ''} → ${o.minBidHour!.floorCents}¢` })
+      else if (k === 'intraday') {
+        const b = intradayBid(f, o.intraday!)
+        if (b && 'cents' in b) bids.push({ key: k, cents: b.cents, words: b.words })
+        else if (b && 'goal' in b) yielded = b.goal
+      }
     }
     if (bids.length) {
       const lowest = bids.reduce((a, b) => (b.cents < a.cents ? b : a))
@@ -288,6 +300,9 @@ function decideBid(f: TargetFacts): Decision {
       const action: DecisionAction = lowest.cents !== f.currentCents ? 'write' : 'hold'
       return { ...base, ...known, action, layer, bidCents: lowest.cents, placements: placements(lowest.cents), why }
     }
+    // BB-17 — the goal cuts at least as deep as the intraday brake would: its own decision goes (the brake applies on top
+    // of it from the next run, its bid then the bid before).
+    if (yielded) return yielded
   }
 
   // ── BB-8: a stop that lifted gives the bids back. ──
@@ -372,4 +387,36 @@ function decideBid(f: TargetFacts): Decision {
     placements: placements(ok.cents),
     why: `goal: ${recipe}; ${f.currentCents}¢ → ${ok.cents}¢`,
   }
+}
+
+/**
+ * BB-17 — the intraday brakes' bid (intraday.ts): `factor` steps the bid down from the bid before the brakes, `capCents`
+ * caps it — never below the limits' lowest bid (the strategy's, the campaign's, the 5¢ engine floor), never above the bid
+ * before. The bid before: what the brain's last lowering found while the bid still sits at or under it — this brake's own
+ * (so a rerun never cuts its own cut again, and a light tick lands where a full run did) or another floor's that just
+ * ended (the brake then gives back up to its own bid) — else today's.
+ *   null   the brake does not bite (it would not go below the bid before), or another floor just ended and the goal,
+ *          decided from the bid before, lands at or below the brake: the goal or the give-back (`restore`) decides
+ *   goal   the goal, decided from the bid before, cuts at least as deep: its own decision goes, and the brake applies on
+ *          top of it from the next run (its bid then the bid before)
+ * So a brake never lands a bid above what the goal or the give-back would decide without it.
+ */
+function intradayBid(f: TargetFacts, b: NonNullable<Overrides['intraday']>): { cents: number; words: string } | { goal: Decision } | null {
+  const r = f.restore
+  const lowered = !!r && ((LOWERING_LAYERS as readonly string[]).includes(r.layer) || r.layer === 'restore') && f.currentCents <= r.heldCents
+  const before = lowered ? r!.beforeCents ?? [r!.foundCents, f.savedCents].find((c): c is number => c != null && c > 0) ?? f.currentCents : f.currentCents
+  let cents = before
+  if (b.factor != null && b.factor > 0 && b.factor < 1) cents = Math.floor(before * b.factor)
+  if (b.capCents != null && b.capCents > 0) cents = Math.min(cents, b.capCents)
+  cents = Math.min(before, Math.max(cents, limitRange(f.limits, f.lanes).lower))
+  if (cents >= before) return null
+  // What the goal decides from the bid before (as the give-back after a floor does): at or below the brake, it goes.
+  const keep = f.lastStep && f.lastStep.dataDay >= f.dataDay ? f.lastStep : null
+  const asIf = decideBid({ ...f, currentCents: before, lastStep: keep, restore: null, overrides: {}, brakes: [] })
+  if (asIf.action === 'write' && asIf.bidCents <= cents) {
+    // After another floor that ended, the give-back itself lands there (the `restore` layer, its memory cleared).
+    if (lowered && r!.layer !== 'intraday') return null
+    return { goal: { ...asIf, currentCents: f.currentCents, action: asIf.bidCents !== f.currentCents ? 'write' : 'hold', why: `${asIf.why} — at or below ${b.by} (${cents}¢)` } }
+  }
+  return { cents, words: `${b.by} → ${cents}¢ from the ${before}¢ before it` }
 }

@@ -114,6 +114,13 @@ export const BRAIN_SETTINGS = {
   biddingStrategySwitchDays: { type: 'int', default: 14, min: 1, max: 365, scopes: BOTH, what: 'days between two bidding-strategy switches of a campaign (§2.11)' },
   budgetUsePct: { type: 'int', default: 70, min: 10, max: 100, scopes: BOTH, what: 'expected budget use a campaign budget is sized for, % (§2.5)' },
   intradayLadderMaxPct: { type: 'int', default: 100, min: 0, max: 100, scopes: BOTH, what: 'largest intraday budget raise, % of the base budget — Amazon spends at most 2× a day (§2.5)' },
+  // BB-17 — the bid brain's intraday brakes (bid-brain/intraday.ts, §2.6 intraday pacing, U1c); NEXUS_BID_BRAIN_INTRADAY switches them.
+  intradaySpendHoldPct: { type: 'int', default: 130, min: 100, max: 1000, scopes: BOTH, what: 'intraday spend brake: today\'s projected spend above this % of the day\'s planned spend → no bid or placement raises today (§2.6)' },
+  intradaySpendCutPct: { type: 'int', default: 160, min: 100, max: 1000, scopes: BOTH, what: 'intraday spend brake: today\'s projected spend above this % of the day\'s planned spend → the bids step down for the rest of the budget day, given back at 00:00 UTC (§2.6)' },
+  intradaySpendCutStepPct: { type: 'int', default: 10, min: 1, max: 50, scopes: BOTH, what: 'intraday spend brake: how far the bids step down, % of the bid before (§2.6)' },
+  intradayCpcSpikePct: { type: 'int', default: 200, min: 110, max: 1000, scopes: BOTH, what: 'intraday CPC spike: a lane\'s cost per click over the last two hours above this % of its 14-day median for those hours → no raises, its dearest click held to that multiple while it lasts (U1c)' },
+  intradayCpcMinClicks: { type: 'int', default: 5, min: 1, max: 1000, scopes: BOTH, what: 'intraday CPC spike: the clicks a lane needs in the last two hours before its cost per click is judged (U1c)' },
+  intradayBudgetSlowMinPct: { type: 'int', default: 50, min: 10, max: 100, scopes: BOTH, what: 'intraday budget brake: the lowest a low-value hour\'s bids slow to, % of the bid, when the budget would run out before the best hours — 100 = only no raises (§2.6)' },
   // §2.6 money and §9 N1–N4 (Owner yes 10-08)
   paceTargetPct: { type: 'int', default: 90, min: 10, max: 100, scopes: PRODUCT, what: 'the pacing limit: month-end spend the pace aims at, % of the envelope (§2.6)' },
   portfolioCapOn: { type: 'boolean', default: true, scopes: PRODUCT, what: 'N1: the Amazon portfolio cap is set as the hard backstop' },
