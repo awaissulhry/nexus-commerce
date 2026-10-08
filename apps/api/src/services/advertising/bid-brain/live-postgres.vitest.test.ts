@@ -12,7 +12,7 @@
  *   engines    auto-bid's holders name the brain, and the external engine never sees the owned keywords (rules: BB-9's
  *              rule-directives tests)
  *   give-back  the enrollment tool, approved by a person, puts back the bids the campaign had when it went LIVE and
- *              returns it to shadow
+ *              returns it to shadow; AB-2 — and the bidding strategy a stop switched to down only, back to up and down
  *   big door   going LIVE through the tool needs the approver's authenticator code: a plain approve runs nothing
  *
  * Values are made up (public repo).
@@ -169,6 +169,8 @@ describe.skipIf(!concurrentDatabaseUrl())('BB-6 — the live bid brain: one writ
   })
 
   it('give-back: approved by a person, the bids it had when it went LIVE come back and the campaign returns to shadow', async () => {
+    // AB-2 — as a stop's recipe leaves it: down only, up and down saved.
+    await database.pool.query('UPDATE "Campaign" SET "biddingStrategy" = \'LEGACY_FOR_SALES\', "suppressedFromBiddingStrategy" = \'AUTO_FOR_SALES\' WHERE id = \'c-it\'')
     const result = await inside(async () => {
       const run = await database.client.agentRun.create({ data: { agentKey: 'mcp', trigger: 'manual', status: 'done', via: 'claude', userId: 'u-asker' } })
       const asked = await runOrQueueTool('set-bid-brain-enrollment', { campaignId: 'c-it', op: 'give-back', why: 'test give-back' }, person('u-asker', 'claude'), run.id)
@@ -179,6 +181,9 @@ describe.skipIf(!concurrentDatabaseUrl())('BB-6 — the live bid brain: one writ
     expect(await bidOf('t-it')).toBe(45)
     expect(await bidOf('t-low')).toBe(3)
     expect(await rows('SELECT mode FROM "BidBrainEnrollment" WHERE "campaignId" = \'c-it\'')).toEqual([{ mode: 'SHADOW' }])
+    // AB-2 — the strategy the stop switched from is back, as the approver, through the campaign write.
+    expect(await rows('SELECT "biddingStrategy" b FROM "Campaign" WHERE id = \'c-it\'')).toEqual([{ b: 'AUTO_FOR_SALES' }])
+    expect(await rows('SELECT "userId", "payloadAfter" ->> \'biddingStrategy\' AS s FROM "AdvertisingActionLog" WHERE "entityId" = \'c-it\' AND "actionType" = \'AD_BIDDING_STRATEGY_UPDATE\'')).toEqual([{ userId: 'user:u-approver', s: 'AUTO_FOR_SALES' }])
     // Back in shadow, the engines take the campaign again.
     expect((await inside(() => autoBidHolders(['c-it']))).get('c-it')).not.toBe('bidBrain')
   })

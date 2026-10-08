@@ -5,6 +5,8 @@
  *   batched   one override query for many campaigns (after the ownership's); none at all when nothing is in this business
  *   shared    a shared campaign is kept off when one product it advertises excludes it
  *   refusal   op live and release are refused with the brake's words; shadow, give-back and hold are not
+ *   AB-2      the locks the stop recipe obeys (ownerLeverLocks): the placements lever or one lane, and the bidding strategy —
+ *             a campaign's own under any product, a product's on its (shared) campaigns; one query when none is open
  *
  * Values are made up (public repo).
  */
@@ -15,7 +17,7 @@ const owners = vi.hoisted(() => vi.fn())
 vi.mock('../../../db.js', () => ({ default: db }))
 vi.mock('./ownership.js', () => ({ resolveCampaignOwnership: owners }))
 
-const { ownerBrakes } = await import('./owner-brakes.js')
+const { ownerBrakes, ownerLeverLocks } = await import('./owner-brakes.js')
 const { enrollRefusal } = await import('../bid-brain/enrollment.js')
 
 const owner = (campaignId: string, productIds: string[]) => [campaignId, {
@@ -62,5 +64,43 @@ describe('enrollRefusal with an owner brake', () => {
     expect(enrollRefusal(facts('LIVE'), 'give-back')).toBeNull()
     expect(enrollRefusal(facts('LIVE'), 'hold')).toBeNull()
     expect(enrollRefusal({ ...facts(null), ownerBrake: null }, 'live')).toBeNull()
+  })
+})
+
+describe('AB-2 — ownerLeverLocks: what the stop recipe may not write', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('one query and no ownership when no lock is open', async () => {
+    db.adsBrainOverride.findMany.mockResolvedValue([])
+    expect((await ownerLeverLocks(['c-1', 'c-2'])).size).toBe(0)
+    expect(db.adsBrainOverride.findMany).toHaveBeenCalledTimes(1)
+    expect(db.adsBrainOverride.findMany.mock.calls[0][0]).toMatchObject({ where: { endedAt: null, kind: 'LOCK', key: { in: ['placements', 'biddingStrategy'] } } })
+    expect(owners).not.toHaveBeenCalled()
+    expect((await ownerLeverLocks([])).size).toBe(0)
+  })
+
+  it('a campaign\'s own locks — the placements lever, one lane, the strategy — in words, with no ownership read', async () => {
+    db.adsBrainOverride.findMany.mockResolvedValue([
+      row({ productId: 'p-1', marketplace: 'IT', scope: 'CAMPAIGN', campaignId: 'c-1', kind: 'LOCK', key: 'placements', reason: 'my own lanes' }),
+      row({ productId: 'p-1', marketplace: 'IT', scope: 'CAMPAIGN', campaignId: 'c-2', kind: 'LOCK', key: 'placements', ref: 'lane:TOP_OF_SEARCH' }),
+      row({ productId: 'p-1', marketplace: 'IT', scope: 'CAMPAIGN', campaignId: 'c-2', kind: 'LOCK', key: 'biddingStrategy', value: 'AUTO_FOR_SALES' }),
+      // A stored lock that no longer validates (no such lane) is ignored.
+      row({ productId: 'p-1', marketplace: 'IT', scope: 'CAMPAIGN', campaignId: 'c-3', kind: 'LOCK', key: 'placements', ref: 'lane:SIDEBAR' }),
+    ])
+    const locks = await ownerLeverLocks(['c-1', 'c-2', 'c-3'])
+    expect(owners).not.toHaveBeenCalled()
+    expect(locks.get('c-1')).toEqual({ placements: 'locked by the Owner\'s campaign override (user:owner, 2026-10-08) ("my own lanes")', lanes: new Map(), biddingStrategy: null })
+    expect(locks.get('c-2')).toEqual({ placements: null, lanes: new Map([['TOP_OF_SEARCH', 'locked by the Owner\'s campaign override (user:owner, 2026-10-08)']]), biddingStrategy: 'locked by the Owner\'s campaign override (user:owner, 2026-10-08)' })
+    expect(locks.has('c-3')).toBe(false)
+  })
+
+  it('a product\'s lock holds its own and its shared campaigns, not another product\'s', async () => {
+    owners.mockResolvedValue(new Map([owner('c-own', ['p-1']), owner('c-shared', ['p-1', 'p-2']), owner('c-other', ['p-2'])]))
+    db.adsBrainOverride.findMany.mockResolvedValue([row({ productId: 'p-1', marketplace: 'IT', scope: 'PRODUCT', kind: 'LOCK', key: 'biddingStrategy' })])
+    const locks = await ownerLeverLocks(['c-own', 'c-shared', 'c-other'])
+    expect(owners).toHaveBeenCalledWith(['c-own', 'c-shared', 'c-other'])
+    expect(locks.get('c-own')?.biddingStrategy).toBe('locked by the Owner\'s product override (user:owner, 2026-10-08)')
+    expect(locks.get('c-shared')?.biddingStrategy).toMatch(/^locked by the Owner's product override/)
+    expect(locks.has('c-other')).toBe(false)
   })
 })

@@ -13,7 +13,7 @@ import { FEATURES as F } from '@nexus/shared/permissions'
 import prisma from '../../../db.js'
 import { inDatabaseTransaction } from '../../../lib/database-context.js'
 import { logger } from '../../../utils/logger.js'
-import { updateAdGroupWithSync, updateAdTargetWithSync } from '../../advertising/ads-mutation.service.js'
+import { updateAdGroupWithSync, updateAdTargetWithSync, updateCampaignWithSync } from '../../advertising/ads-mutation.service.js'
 import { updatePlacementBidding } from '../../advertising/ads-create.service.js'
 import { recordCampaignBidsChoice } from '../../advertising/brain/enrollment.js'
 import {
@@ -52,13 +52,20 @@ async function preview(args: Record<string, unknown>): Promise<ToolResult> {
   if (f.ceiling !== 'live' && (to === 'LIVE' || to === 'HELD')) warnings.push(`The server switch NEXUS_BID_BRAIN_MODE is ${f.ceiling}: the brain owns ${c.name} only once that switch is live; until then it stays in shadow and today's engines keep writing.`)
   if (c.status !== 'ENABLED' && to === 'LIVE') warnings.push(`${c.name} is ${c.status.toLowerCase()}: the brain writes nothing while it does not run.`)
   if (c.pinBids && to === 'LIVE') warnings.push(`${c.name}'s bids are pinned by hand: the brain leaves pinned bids alone until the pin is lifted.`)
+  // AB-2 — a stop switched the bidding strategy to down only: op shadow writes nothing, so it stays so.
+  if (op === 'shadow' && f.stopStrategy && f.stopStrategy.now === 'LEGACY_FOR_SALES') warnings.push(`${c.name}'s bidding strategy stays down only: a stop switched it from ${f.stopStrategy.saved === 'AUTO_FOR_SALES' ? 'up and down' : f.stopStrategy.saved} and op shadow writes nothing at Amazon — op give-back puts it back.`)
   const back = op === 'give-back' && f.enrollment?.snapshot ? await giveBackPlan(c.id, f.enrollment.snapshot) : null
   const holdDays = op === 'hold' ? Math.max(1, Math.min(60, Number(args.holdDays ?? DEFAULT_HOLD_DAYS))) : null
-  const raises = back && back.raises ? [`${plural(back.raises, 'bid or placement')} back up to ${back.raises === 1 ? 'its' : 'their'} value when the campaign went LIVE`] : op === 'release' ? ['the brain may raise bids again'] : []
+  // AB-2 — up and down given back is a raise of its own (Amazon may then lift a bid up to +100 %), said apart.
+  const upAndDown = back?.biddingStrategy?.to === 'AUTO_FOR_SALES' ? 1 : 0
+  const bidRaises = (back?.raises ?? 0) - upAndDown
+  const raises = back && back.raises
+    ? [...(bidRaises ? [`${plural(bidRaises, 'bid or placement')} back up to ${bidRaises === 1 ? 'its' : 'their'} value when the campaign went LIVE`] : []), ...(upAndDown ? ['the bidding strategy back to up and down (Amazon may raise a bid up to +100 %)'] : [])]
+    : op === 'release' ? ['the brain may raise bids again'] : []
   const effect = {
     live: `Puts ${c.name} (${c.market ?? c.marketplace ?? '?'}) under the bid brain: from its next run it is the campaign's one bid writer — keyword bids toward the goal at most once per new data day, inside the limits; auto-bid, rules and other engines leave the campaign, and a person's own edit still passes and holds that bid. Every bid and placement is kept now for a give-back.`,
     shadow: `Takes ${c.name} back to shadow: the brain stops writing; every bid stays where it is and today's engines resume. When its product is enrolled in the brain, this is kept as a campaign choice there (the product's bids lever leaves it in shadow).`,
-    'give-back': `Takes ${c.name} back to shadow and puts back what it held when it went LIVE: ${plural(back?.targets.length ?? 0, 'keyword bid')}, ${plural(back?.adGroups.length ?? 0, 'ad group default bid')}${back?.placements ? ' and its placements' : ''}, as the person who approves it.`,
+    'give-back': `Takes ${c.name} back to shadow and puts back what it held when it went LIVE: ${plural(back?.targets.length ?? 0, 'keyword bid')}, ${plural(back?.adGroups.length ?? 0, 'ad group default bid')}${back?.placements ? ' and its placements' : ''}${back?.biddingStrategy ? `, and the bidding strategy a stop switched to down only back to ${back.biddingStrategy.to === 'AUTO_FOR_SALES' ? 'up and down' : back.biddingStrategy.to}` : ''}, as the person who approves it.`,
     hold: `Holds ${c.name} for ${plural(holdDays ?? DEFAULT_HOLD_DAYS, 'day')}: the brain raises no bid (a stop still lowers); then it runs again.`,
     release: `Releases the hold on ${c.name}: the brain runs it again, raises included.`,
   }[op]
@@ -73,12 +80,12 @@ async function preview(args: Record<string, unknown>): Promise<ToolResult> {
       basis: enrollmentBasis(f),
       ceiling: f.ceiling,
       ...(holdDays ? { holdDays } : {}),
-      ...(back ? { giveBack: { keywordBids: back.targets.length, adGroupBids: back.adGroups.length, placements: !!back.placements, raises: back.raises } } : {}),
+      ...(back ? { giveBack: { keywordBids: back.targets.length, adGroupBids: back.adGroups.length, placements: !!back.placements, ...(back.biddingStrategy ? { biddingStrategy: back.biddingStrategy } : {}), raises: back.raises } } : {}),
       raises,
       ...(warnings.length ? { warnings } : {}),
       ...code,
       ...(code.stepUp ? {} : { noCode: raises.length ? DAY_TO_DAY_NO_CODE : ADDS_NO_SPEND }),
-      reachNote: op === 'give-back' ? 'It writes bids and placements at Amazon (the write gate judges each).' : 'Nexus only: nothing is sent to Amazon by this change; the brain\'s own runs write afterwards.',
+      reachNote: op === 'give-back' ? `It writes bids${back?.biddingStrategy ? ', placements and the bidding strategy' : ' and placements'} at Amazon (the write gate judges each).` : 'Nexus only: nothing is sent to Amazon by this change; the brain\'s own runs write afterwards.',
       effect: `${effect}${code.stepUp ? ' A new bid writer going live: approving it needs the approver\'s authenticator code.' : ''}`,
     },
   }
@@ -103,6 +110,12 @@ async function putBack(campaignId: string, plan: Awaited<ReturnType<typeof giveB
     const r = await updatePlacementBidding({ campaignId, adjustments: plan.placements.to, actor: run.actor, reason: common.reason, changeSetId: run.changeSetId, manual: run.manual }) as { mode?: string; reason?: string }
     if (r.mode !== 'blocked') sent++
     else if (refused.length < 3) refused.push(r.reason ?? 'placements refused')
+  }
+  // AB-2 — the bidding strategy a stop switched to down only, back to what it was (the campaign write the screens use).
+  if (plan.biddingStrategy) {
+    const r = await updateCampaignWithSync({ campaignId, patch: { biddingStrategy: plan.biddingStrategy.to as 'LEGACY_FOR_SALES' | 'AUTO_FOR_SALES' | 'MANUAL' }, ...common })
+    if (r.ok) sent++
+    else if (refused.length < 3) refused.push(r.error ?? 'bidding strategy refused')
   }
   return { sent, refused }
 }

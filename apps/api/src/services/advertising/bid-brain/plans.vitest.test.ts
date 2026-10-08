@@ -61,14 +61,14 @@ describe('BB-7 — the plan hour as the brain\'s input', () => {
     expect(planFacts(hour(spec({ key: 'sup', bidMode: 'suppress' })), { biddingStrategy: null }, flap)?.minBidHour).toEqual({ floorCents: 2 })
   })
 
-  it('live fix 10-08 — a Min-bid hour sets every placement lane to 0 %; under "up and down" the why says Amazon may still add +100 % at the top', () => {
+  it('live fix 10-08 — a Min-bid hour sets every placement lane to 0 % (AB-2: the strategy\'s switch is the stop recipe\'s, with its own why)', () => {
     const f = planFacts(hour(spec({ key: 'min', pause: true, floorBidCents: 3 })), { biddingStrategy: 'AUTO_FOR_SALES' }, flap)!
     expect(f.lanes).toEqual([
       { lane: 'TOP_OF_SEARCH', planPct: 0, maxCpcCents: null, baseCeilingCents: null, dynamic: 2 },
       { lane: 'REST_OF_SEARCH', planPct: 0, maxCpcCents: null, baseCeilingCents: null, dynamic: 1.5 },
       { lane: 'PRODUCT_PAGE', planPct: 0, maxCpcCents: null, baseCeilingCents: null, dynamic: 1.5 },
     ])
-    expect(f.note).toBe('hourly plan IT GALE JACKET: min — every placement at 0 % — dynamic bidding "up and down" may still add up to +100 % at top of search over the floor (the bidding strategy is not changed here)')
+    expect(f.note).toBe('hourly plan IT GALE JACKET: min — every placement at 0 %')
     const legacy = planFacts(hour(spec({ key: 'min', pause: true })), { biddingStrategy: 'LEGACY_FOR_SALES' }, flap)!
     expect(legacy.lanes.map((l) => l.planPct)).toEqual([0, 0, 0])
     expect(legacy.note).toBe('hourly plan IT GALE JACKET: min — every placement at 0 %')
@@ -232,7 +232,7 @@ describe('live fix 10-08 — a Min-bid hour zeroes the placements in the same ti
     return { d, writes: placementWrites({ market: 'IT', campaigns }, [f], [d], new Set(['c1']), () => 'c1', plan(s)) }
   }
 
-  it('the keyword to its 3¢ floor and every placement to 0 % in one tick; the why names "up and down"', () => {
+  it('the keyword to its 3¢ floor and every placement to 0 % in one tick (AB-2: the stop recipe\'s lanes, its memory saved first)', () => {
     const { d, writes } = tick(spec({ key: 'min', pause: true, floorBidCents: 3 }), 40)
     expect(d).toMatchObject({ action: 'write', layer: 'min_bid_hour', bidCents: 3 })
     expect(writes).toHaveLength(1)
@@ -246,7 +246,7 @@ describe('live fix 10-08 — a Min-bid hour zeroes the placements in the same ti
       { lane: 'top-of-search', from: 300, to: 0, held: null },
       { lane: 'product-page', from: 75, to: 0, held: null },
     ])
-    expect(writes[0].note).toMatch(/every placement at 0 % — dynamic bidding "up and down" may still add up to \+100 %/)
+    expect(writes[0]).toMatchObject({ recipe: 'stop', note: 'hourly plan IT GALE JACKET: min — every placement at 0 %' })
   })
 
   it('the "kept serving" hour of the anti-flap writes no placement zero', () => {

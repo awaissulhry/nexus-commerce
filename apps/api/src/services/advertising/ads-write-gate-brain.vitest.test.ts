@@ -3,6 +3,9 @@
  * LIVE or HELD enrollment) takes a change to its bids or placements only from the brain, a person (or a request a person
  * approved), a forced lowering, and the safety owners. Every other automatic writer is refused (`brain_owned`); a
  * campaign the brain does not own, a budget, a create and a shadow ceiling are judged exactly as before.
+ * ONE BRAIN AB-2 — its bidding strategy is one lever with one automatic owner: the brain (the stop recipe's down-only
+ * switch and the switch back), a person and the repairs pass; every other automatic writer, the safety owners included,
+ * is refused; a campaign the brain does not own and a shadow ceiling are judged as before.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
@@ -26,7 +29,7 @@ vi.mock('./ads-profile-resolver.js', () => ({ adsProfileFor: vi.fn(async () => (
 vi.mock('../../utils/logger.js', () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }))
 vi.mock('./ads-automation-state.service.js', () => ({ getAutomationState: vi.fn(async () => ({ autonomy: 'AUTO', halted: false, haltReason: null, effectivelyStopped: false, degraded: false })) }))
 
-const { checkAdsWriteGate, brainYieldsTo, BRAIN_SAFETY_ACTOR_PREFIXES } = await import('./ads-write-gate.js')
+const { checkAdsWriteGate, brainYieldsTo, brainYieldsStrategyTo, BRAIN_SAFETY_ACTOR_PREFIXES, BRAIN_STRATEGY_REPAIR_PREFIXES } = await import('./ads-write-gate.js')
 
 const ROW = {
   liveBidWritesEnabled: true, dynamicBidding: null, liveBidWritesToday: 0, liveBidWritesDay: null,
@@ -93,6 +96,57 @@ describe('BB-6 — the gate on a campaign the brain owns', () => {
     const r = await bid('automation:auto-bid')
     expect(r).toMatchObject({ allowed: false, deniedAt: 'brain_owned' })
     expect((r as { reason: string }).reason).toMatch(/could not read whether the bid brain owns campaign c1/)
+  })
+})
+
+describe('AB-2 — the bidding strategy of a campaign the brain owns: one owner per lever', () => {
+  // As the campaign write hands it to the gate (updateCampaignWithSync → gateRefusedNow, and the worker at dispatch).
+  const strategy = (actor: string | null | undefined, extra: Record<string, unknown> = {}) =>
+    checkAdsWriteGate({ marketplace: 'IT', payloadValueCents: 0, campaignId: 'c1', field: 'biddingStrategy', fields: ['biddingStrategy'], intendedValueCents: null, ...(actor !== undefined ? { actor } : {}), ...extra })
+
+  it('lets the brain switch it (the stop recipe), and a person or a request a person approved', async () => {
+    expect(await strategy('automation:bid-brain')).toMatchObject({ allowed: true, mode: 'live' })
+    expect(await strategy('user:owner', { manual: true })).toMatchObject({ allowed: true })
+  })
+
+  it('refuses every other automatic writer — the safety owners the bids check lets through included — naming the lever', async () => {
+    for (const actor of ['automation:retail-guard', 'automation:budget-manager-cron', 'automation:budget-enforce', 'automation:auto-undo', 'automation:auto-bid', 'automation:rule-abc', 'automation:rank-defend-s1', 'user:owner']) {
+      const r = await strategy(actor)
+      expect(r, actor).toMatchObject({ allowed: false, deniedAt: 'brain_owned' })
+      expect((r as { reason: string }).reason, actor).toMatch(new RegExp(`one writer per lever\\): ${actor} may not change its bidding strategy`))
+    }
+    // A forced write is no lowering for a strategy: the mark never opens this lever.
+    expect(await strategy('automation:retail-guard', { isSuppression: true })).toMatchObject({ allowed: false, deniedAt: 'brain_owned' })
+  })
+
+  it('lets the repairs that resend Nexus\'s own value through', async () => {
+    for (const actor of BRAIN_STRATEGY_REPAIR_PREFIXES) expect(await strategy(actor), actor).toMatchObject({ allowed: true })
+  })
+
+  it('judges a campaign the brain does not own, and a shadow ceiling, exactly as before', async () => {
+    enrollmentFindMany.mockResolvedValue([])
+    expect(await strategy('automation:retail-guard')).toMatchObject({ allowed: true })
+    enrollmentFindMany.mockReset().mockResolvedValue([{ campaignId: 'c1' }])
+    vi.stubEnv('NEXUS_BID_BRAIN_MODE', 'shadow')
+    expect(await strategy('automation:retail-guard')).toMatchObject({ allowed: true })
+    expect(await strategy('automation:auto-bid')).toMatchObject({ allowed: true })
+    expect(enrollmentFindMany).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when the enrollment cannot be read', async () => {
+    enrollmentFindMany.mockRejectedValue(new Error('db down'))
+    const r = await strategy('automation:retail-guard')
+    expect(r).toMatchObject({ allowed: false, deniedAt: 'brain_owned' })
+    expect((r as { reason: string }).reason).toMatch(/an automatic change to its bidding strategy waits/)
+  })
+
+  it('brainYieldsStrategyTo (pure): the brain, a person, a repair exactly or with its suffix — never a safety owner', () => {
+    expect(brainYieldsStrategyTo({ actor: 'automation:bid-brain' })).toBe(true)
+    expect(brainYieldsStrategyTo({ actor: 'user:owner', manual: true })).toBe(true)
+    expect(brainYieldsStrategyTo({ actor: 'automation:reconcile-sweep' })).toBe(true)
+    expect(brainYieldsStrategyTo({ actor: 'automation:reconciler' })).toBe(false)
+    expect(brainYieldsStrategyTo({ actor: 'automation:budget-manager' })).toBe(false)
+    expect(brainYieldsStrategyTo({ actor: 'automation:bid-brain-x' })).toBe(false)
   })
 })
 
