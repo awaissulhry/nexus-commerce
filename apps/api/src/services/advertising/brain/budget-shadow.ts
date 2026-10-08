@@ -7,8 +7,10 @@
  * AB-8 — at PROPOSE and AUTO, under a live server switch, the money writer (brain/budget-live.ts) carries the plan out:
  * PROPOSE asks a person, AUTO writes the campaign budgets and the portfolio caps through the gate and the gateway. What
  * it did rides on the logged plan (`actions`, the row's mode SHADOW / PROPOSE / LIVE), and a run in which it acted
- * stores its plan even when the decisions did not change. The run reads Amazon's usage of the product's portfolio caps
- * (the brakes use it). Production today: no product is enrolled — nothing is planned, asked or written.
+ * stores its plan even when the decisions did not change. Amazon's usage of the portfolio caps (an Amazon call: the
+ * brakes and the cap's floor use it) is read only at the full slots (every 6 hours), and only for the products whose
+ * budgets or portfolioCap lever is PROPOSE or AUTO — never on the 15-minute ticks, never for a product at OBSERVE (its
+ * plan is a shadow: no reading). Production today: no product is enrolled — nothing is planned, asked, read or written.
  *
  *   stored    a plan whose decisions differ from the product's last one (moneyPlanHash), plus the budget day's first as a
  *             snapshot — so a run on unchanged facts writes nothing (BidBrainDecision's pattern)
@@ -39,7 +41,15 @@ export const MAX_STORED_PACE_PCT = 99_999_999.99
 const DAY_MS = 86_400_000
 const WATCHING: readonly BrainLevel[] = ['OBSERVE', 'PROPOSE', 'AUTO']
 
-export interface MoneyShadowProduct { productId: string; market: string; level: BrainLevel }
+/**
+ * A watched product: its budgets lever's level; AB-8 follow-up — `readsUsage`: its budgets or portfolioCap lever is
+ * PROPOSE or AUTO, so a full slot reads Amazon's usage of its portfolio caps (absent: from `level` alone).
+ */
+export interface MoneyShadowProduct { productId: string; market: string; level: BrainLevel; readsUsage?: boolean }
+
+const ACTING: readonly string[] = ['PROPOSE', 'AUTO']
+/** Whether a full slot reads Amazon's usage of the product's portfolio caps (PROPOSE or AUTO on budgets or portfolioCap). */
+export const readsPortfolioUsage = (p: MoneyShadowProduct): boolean => p.readsUsage ?? ACTING.includes(p.level)
 
 export interface MoneyShadowRun {
   runId: string
@@ -61,7 +71,8 @@ export async function moneyShadowProducts(): Promise<MoneyShadowProduct[]> {
   return enrollments.flatMap((e) => {
     const s = resolveBrainSettings({ productId: e.productId, market: e.marketplace, enrolled: true, overrides })
     const level = s.levers.budgets.effective
-    return isLevel(level) && WATCHING.includes(level) ? [{ productId: e.productId, market: e.marketplace, level }] : []
+    const readsUsage = ACTING.includes(String(level)) || ACTING.includes(String(s.levers.portfolioCap.effective))
+    return isLevel(level) && WATCHING.includes(level) ? [{ productId: e.productId, market: e.marketplace, level, readsUsage }] : []
   }).sort((a, b) => a.market.localeCompare(b.market) || a.productId.localeCompare(b.productId))
 }
 
@@ -112,7 +123,9 @@ export async function runMoneyShadowOnce(opts: { now?: Date; products?: readonly
     const mine = products.filter((p) => p.market === market)
     try {
       const prev = await newestMoneyDecisions(market, mine.map((p) => p.productId))
-      const mm = await loadMarketMoney(market, { now, plan: mine.map((p) => p.productId), previous: new Map([...prev].map(([k, v]) => [k, v.plan])), readPortfolioUsage: true })
+      // Amazon's usage of the caps: at a full slot only, for the products acting on their money (PROPOSE / AUTO) only.
+      const usageFor = opts.between ? [] : mine.filter(readsPortfolioUsage).map((p) => p.productId)
+      const mm = await loadMarketMoney(market, { now, plan: mine.map((p) => p.productId), previous: new Map([...prev].map(([k, v]) => [k, v.plan])), readPortfolioUsage: usageFor })
       if (!mm) throw new Error(`${market} is not a market code`)
       const data: Prisma.AdsBrainBudgetDecisionCreateManyInput[] = []
       for (const p of mine) {

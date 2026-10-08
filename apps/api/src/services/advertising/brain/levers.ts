@@ -12,7 +12,7 @@
  *   default   every lever starts OBSERVE (design §0.13), per product and per campaign, until the Owner overrides it.
  *   now       a level is offered only once code runs it (LEVER_LEVELS_NOW). AB-1: the bids lever takes OBSERVE and AUTO
  *             (the live bid brain, BB-6); AB-13: the hours lever OFF, OBSERVE and PROPOSE (a painted plan always asks, D3);
- *             every other lever OFF or OBSERVE until its own PR. OBSERVE on a lever whose
+ *             AB-11: the harvest lever every level; every other lever OFF or OBSERVE until its own PR. OBSERVE on a lever whose
  *             shadow is not built yet records the intent: it starts watching when its shadow lands; nothing is written.
  *             AB-12: the state lever takes every level (brain/state*.ts); it still starts OBSERVE like every lever.
  *   settings  the caps of §5 and the N1–N4 settings of §9 (Owner yes 10-08), each with the design's default and safety
@@ -60,8 +60,11 @@ export const LEVER_LEVELS_NOW: Record<BrainLever, { levels: readonly BrainLevel[
   // AB-8 — the money writer: OBSERVE plans and logs (AB-7), PROPOSE asks a person for each change, AUTO writes inside the pace.
   budgets: { levels: BRAIN_LEVELS, others: 'campaign budgets: OBSERVE plans and logs them (ads-brain view money), PROPOSE asks a person for the day\'s moves, AUTO writes them and the intraday ladder (AB-8, under a live NEXUS_BID_BRAIN_MODE)' },
   portfolioCap: { levels: BRAIN_LEVELS, others: 'the Amazon portfolio cap: OBSERVE plans it, PROPOSE asks a person, AUTO writes it — monthly, never below this month\'s spend, never a cap removed (AB-8, under a live NEXUS_BID_BRAIN_MODE)' },
-  negatives: { levels: OFF_OBSERVE, others: 'the term ledger decides negatives in shadow (AB-9: OBSERVE logs one decision per term, ads-brain view terms); writing them waits for AB-10' },
-  harvest: { levels: OFF_OBSERVE, others: 'the term ledger decides harvests in shadow (AB-9: OBSERVE logs one decision per term, ads-brain view terms); writing them waits for AB-11' },
+  // AB-10 — the negatives module: OBSERVE logs the day's negatives, PROPOSE asks a person once a day, AUTO writes them as the
+  // brain (inside the caps, after the shadow days of negativesShadowDays, under the live server switch).
+  negatives: { levels: BRAIN_LEVELS, others: 'the negatives module (AB-10, ads-brain view negatives) takes every level' },
+  // AB-11 — the harvest module: OBSERVE logs each harvest, PROPOSE asks a person for the pair, AUTO writes it.
+  harvest: { levels: BRAIN_LEVELS, others: 'AB-11: OBSERVE logs each harvest in shadow, PROPOSE asks a person for the keyword and its source negatives as one change set, AUTO writes it (under NEXUS_ADS_BRAIN_HARVEST_MODE=live); a new campaign is always a request a person approves (ads-brain view harvest)' },
   structure: { levels: OFF_OBSERVE, others: 'new campaigns wait for AB-16' },
   biddingStrategy: { levels: OFF_OBSERVE, others: 'the bidding-strategy lever waits for AB-17' },
   offAmazon: { levels: OFF_OBSERVE, others: 'the off-Amazon lane waits for AB-18' },
@@ -96,6 +99,8 @@ export const BRAIN_SETTINGS = {
   negativesPerDay: { type: 'int', default: 20, min: 0, max: 200, scopes: PRODUCT, what: 'new negatives per product per day (§2.7)' },
   negativesPerEntityWarn: { type: 'int', default: 800, min: 100, max: 950, scopes: BOTH, what: 'negatives in one campaign or ad group before a warning (§2.7)' },
   negativesPerEntityMax: { type: 'int', default: 950, min: 100, max: 950, scopes: BOTH, what: 'negatives in one campaign or ad group, never more — Amazon allows 1,000 (§2.7)' },
+  // AB-10 — §10: a lever runs in shadow before it acts (14 days for negatives); the Owner's own number wins (0: at once).
+  negativesShadowDays: { type: 'int', default: 14, min: 0, max: 90, scopes: PRODUCT, what: 'days the negatives lever runs in shadow before PROPOSE or AUTO act (§10)' },
   harvestPerDay: { type: 'int', default: 10, min: 0, max: 100, scopes: PRODUCT, what: 'new keywords per product per day (§2.8)' },
   newCampaignsPerWeek: { type: 'int', default: 2, min: 0, max: 20, scopes: PRODUCT, what: 'new campaigns per product per week (§2.9)' },
   skcMax: { type: 'int', default: 20, min: 0, max: 200, scopes: PRODUCT, what: 'single-keyword campaigns per product (§2.9)' },

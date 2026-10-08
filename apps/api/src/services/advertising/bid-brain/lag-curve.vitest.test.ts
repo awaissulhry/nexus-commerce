@@ -4,8 +4,8 @@
  *   shapes     the prior and the 1d/7d seed: 1 from the attribution window on, half of what is missing each day
  *   points     a copy "at age a" only where a pull was asked at that age: the vintages keep only pulls that changed
  *              something, and a day read at age 0 and again at 30 (the 60-day re-read) says nothing about ages 1–14
- *   fit        many days of a known curve give that curve back; noise gives a monotone curve inside [5 %, 100 %], 1 at
- *              age 14; a restatement that lowers a day never pushes a share past 100 %
+ *   fit        many days of a known curve give that curve back; noise gives a monotone curve inside [5 %, 100 %], 1 from
+ *              the attribution window (age 7) on; a restatement that lowers a day never pushes a share past 100 %
  *   prior      thin data stays near the seed (or the prior); only a seed or 14 days of vintages make a curve usable
  *   products   a product keeps its own curve only with 30 final orders, pooled toward its market's
  *   maturity   below 40 % a copy is too young (its numbers would be multiplied by more than 2.5); past age 14 it is full
@@ -16,7 +16,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   calibrate, copyAt, dayCopiesOf, fillShares, fitLagCurve, fitProductCurve, isotonic, lagPoints, LAG_AGES, marketPrior,
-  maturityOf, MIN_MATURITY, MIN_SHARE, parseShares, priorShares, seedShares, settledFinal, type DayCopies, type LagSeed,
+  maturityOf, MIN_MATURITY, MIN_SHARE, parseShares, priorShares, seedShares, settledFinal, shapeShares, type DayCopies, type LagSeed,
 } from './lag-curve.js'
 import { CAMPAIGN_REPORT_TYPE_ID } from '../ads-reports.service.js'
 import { SP_CAMPAIGN_REPORT } from './lag-curve-store.js'
@@ -123,6 +123,32 @@ describe('the fit', () => {
     expect(curve.shares.orders[LAG_AGES - 1]).toBe(1)
     expect(curve.basis).toMatchObject({ vintageDays: 60, campaignDays: 240, priorFrom: 'seed', priorOrders: 20 })
     expect(curve.basis.seed).toMatchObject({ ordersShare: 0.7, days: 60 })
+  })
+
+  it('holds 1 from the attribution window on (L(7) = 1), even when a late restatement leaves the age-7 copies below the final', () => {
+    // Each day pulled nightly at ages 0..7, then once more at age 30 (the 60-day re-read), which found 10 % more orders.
+    const restated = (i: number): DayCopies => {
+      const d = nightly(i, 20)
+      return { ...d, copies: [...d.copies, { pulledAt: T0 + (i + 31) * DAY, ageDays: 30, orders: 22, salesCents: 22 * 5000 }], pulledAges: [...d.pulledAges, 30] }
+    }
+    const days = Array.from({ length: 30 }, (_, i) => restated(i))
+    expect(copyAt(days[0], W)!.orders).toBe(20)
+    expect(settledFinal(days[0], W)).toMatchObject({ orders: 22, age: 30 })
+    const curve = fitLagCurve(lagPoints(days, W), marketPrior(SEED), { seed: SEED })
+    for (let a = W; a < LAG_AGES; a++) {
+      expect(curve.shares.orders[a], `orders L(${a})`).toBe(1)
+      expect(curve.shares.sales[a], `sales L(${a})`).toBe(1)
+    }
+    // The ages inside the window are fitted on their own: age 6 reads 20 of the restated 22, not pooled with ages 7..13.
+    expect(curve.shares.orders[6]).toBeGreaterThan(0.9)
+    expect(curve.shares.orders[6]).toBeLessThan(0.93)
+    expect(monotone(curve.shares.orders) && monotone(curve.shares.sales)).toBe(true)
+    // A 14-day window (Brands, Display): fitted through age 13, 1 at 14.
+    const sb = shapeShares(Array(LAG_AGES).fill(0.9), Array(LAG_AGES).fill(1), 14)
+    expect(sb.slice(W, LAG_AGES - 1)).toEqual(Array(LAG_AGES - 1 - W).fill(0.9))
+    expect(sb[LAG_AGES - 1]).toBe(1)
+    // The default window is Sponsored Products' 7 days.
+    expect(shapeShares(Array(LAG_AGES).fill(0.9), Array(LAG_AGES).fill(1)).slice(W)).toEqual(Array(LAG_AGES - W).fill(1))
   })
 
   it('makes noisy, out-of-order shares monotone and keeps every share inside [5 %, 100 %]', () => {

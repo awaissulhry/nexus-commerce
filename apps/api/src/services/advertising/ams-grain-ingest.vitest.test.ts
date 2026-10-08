@@ -14,7 +14,10 @@
  *   late         a row first seen long after its hour is marked, and the reader counts it
  *   switch       NEXUS_AMS_GRAIN_ENABLED=0 writes nothing here
  *   read         today and the last 14 days per campaign × placement × hour in the caller's time zone
- *   keep         the weekly prune drops both tables' rows older than 90 days
+ *   keep         the weekly prune drops both tables' rows older than 90 days, in chunks
+ *   follow-up    a capped day is marked (rows / arrivals) and the reader returns it; the day's count is read once, not per
+ *                row; the arrival log has its own ceiling; the arrival age runs from the record's SQS SentTimestamp; a
+ *                throw inside the grain leaves the campaign grain and the POST's answer as they were
  *
  * Values are made up (public repo).
  */
@@ -23,12 +26,22 @@ import { formulaDatabase } from '../../test-support/formula-database.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
 
 let database: Awaited<ReturnType<typeof formulaDatabase>>
+/** The SQL of every raw read the code under test sent (to count the day-count reads). */
+const rawReads: string[] = []
 vi.mock('../../db.js', () => ({
-  default: new Proxy({}, { get: (_target, property) => Reflect.get(database.client, property) }),
+  default: new Proxy({}, {
+    get: (_target, property) => {
+      const value = Reflect.get(database.client, property)
+      if (property !== '$queryRaw' || typeof value !== 'function') return value
+      return (...args: unknown[]) => { rawReads.push(String((args[0] as { sql?: string })?.sql ?? args[0])); return value.apply(database.client, args) }
+    },
+  }),
 }))
+vi.mock('./ads-cache.js', () => ({ flushAdsCache: vi.fn(async () => undefined) }))
 
 const { ingestMarketingStream } = await import('./ads-marketing-stream.service.js')
-const { loadPlacementHours, cleanupOldPlacementHours, rollUpPlacementHours } = await import('./ams-grain.service.js')
+const { ingestAmsBatch } = await import('./ams-ingest.service.js')
+const { loadPlacementHours, cleanupOldPlacementHours, rollUpPlacementHours, forgetGrainDayCounts } = await import('./ams-grain.service.js')
 
 const business = { workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }
 const inside = <T>(work: () => Promise<T>) => withWorkspace(business, work)
@@ -65,7 +78,10 @@ afterAll(async () => { await database?.close() }, 30_000)
 
 beforeEach(async () => {
   vi.unstubAllEnvs()
+  forgetGrainDayCounts()
+  rawReads.length = 0
   await inside(async () => {
+    await database.client.amazonAdsGrainCap.deleteMany({})
     await database.client.amazonAdsHourlyArrival.deleteMany({})
     await database.client.amazonAdsHourlyPlacement.deleteMany({})
     await database.client.amazonAdsHourlyPerformance.deleteMany({})
@@ -205,6 +221,87 @@ describe('the row-count guard', () => {
     expect(out).toMatchObject({ upserted: 1, grain: { capped: 1, applied: 0 } })
     expect(await grainRows()).toEqual([])
   })
+
+  it('never drops quietly: the capped day is marked for its business, and the reader returns it', async () => {
+    vi.stubEnv('NEXUS_AMS_GRAIN_MAX_ROWS_PER_DAY', '1')
+    await ingest([traffic({ ad_group_id: '2001' }), traffic({ ad_group_id: '2002' }), traffic({ ad_group_id: '2003' })])
+    const marks = await inside(() => database.client.amazonAdsGrainCap.findMany())
+    expect(marks.map((m) => [m.date.toISOString().slice(0, 10), m.kind, m.cap, m.refused])).toEqual([['2026-10-08', 'rows', 1, 2]])
+    // Later refusals in the same process are added at most every 10 minutes (the first one is marked at once).
+    await ingest([traffic({ ad_group_id: '2004' })])
+    expect((await inside(() => database.client.amazonAdsGrainCap.findMany()))[0].refused).toBe(2)
+    const read = await inside(() => loadPlacementHours({ campaignIds: ['c-local-1'], now: AT }))
+    expect(read.cappedDays).toEqual([{ date: '2026-10-08', kind: 'rows', cap: 1, refusedAtLeast: 2 }])
+    // A day with no refusal is not marked; the prune drops the marks with the rows.
+    expect((await inside(() => loadPlacementHours({ campaignIds: ['c-local-1'], now: new Date('2026-09-01T12:00:00Z'), pastDays: 3 }))).cappedDays).toEqual([])
+    await inside(() => cleanupOldPlacementHours(90, new Date('2027-01-10T05:00:00Z')))
+    expect(await inside(() => database.client.amazonAdsGrainCap.findMany())).toEqual([])
+  })
+
+  it('reads the day\'s count once (then counts in memory), not one count(*) per new row', async () => {
+    await ingest(Array.from({ length: 25 }, (_, i) => traffic({ ad_group_id: `30${i}` })))
+    await ingest([traffic({ ad_group_id: '3100' }), traffic({ ad_group_id: '3101', time_window_start: '2026-10-07T10:00:00Z' })])
+    expect((await grainRows()).length).toBe(27)
+    // Two data days touched: two reads of a day's counts in all, whatever the number of rows.
+    expect(rawReads.filter((q) => q.includes('count(*)')).length).toBe(2)
+    // In memory the ceiling still holds exactly: 27 rows on the 8th; a ceiling of 27 refuses the next new row.
+    vi.stubEnv('NEXUS_AMS_GRAIN_MAX_ROWS_PER_DAY', '26')
+    expect((await ingest([traffic({ ad_group_id: '3102' })])).grain).toMatchObject({ capped: 1, created: 0 })
+  })
+})
+
+describe('the arrival log\'s own ceiling', () => {
+  it('past it a new bucket is left out (the row still takes the delta), an existing bucket still adds, and the day is marked', async () => {
+    vi.stubEnv('NEXUS_AMS_GRAIN_MAX_ARRIVALS_PER_DAY', '1')
+    const first = await ingest([traffic({ clicks: 2 })])
+    expect(first.grain).toMatchObject({ applied: 1, created: 1, arrivalsCapped: 0 })
+    // The same row, conversions (another bucket): the row adds, the bucket is not made.
+    const second = await ingest([conversion()])
+    expect(second.grain).toMatchObject({ applied: 1, created: 0, arrivalsCapped: 1 })
+    // The same row and bucket as the first record: the existing bucket still adds.
+    const third = await ingest([traffic({ clicks: 3 })])
+    expect(third.grain).toMatchObject({ applied: 1, arrivalsCapped: 0 })
+    const [row] = await grainRows()
+    expect(metrics(row)).toMatchObject({ clicks: 5, orders7d: 1 })
+    expect((await arrivals()).map((a) => [a.kind, a.records, a.clicks])).toEqual([['traffic', 2, 5]])
+    expect((await inside(() => database.client.amazonAdsGrainCap.findMany())).map((m) => [m.kind, m.refused])).toEqual([['arrivals', 1]])
+  })
+})
+
+describe('the arrival time', () => {
+  it('runs from when the record left the queue (its SQS SentTimestamp, else the caller\'s), not from when it was read', async () => {
+    // Read at 12:20, but sent at 11:05 (the 10:00 hour ended at 11:00): age 0 h, not 1 h.
+    const sent = new Date('2026-10-08T11:05:00Z')
+    await ingest([traffic({ SentTimestamp: String(sent.getTime()) })])
+    expect((await arrivals()).map((a) => [a.ageHours, a.firstAt.toISOString()])).toEqual([[0, sent.toISOString()]])
+    // The caller's sent time (the SQS poller's message), when the record carries none.
+    await ingest([conversion()], new Date('2026-10-08T13:30:00Z'))
+    expect((await arrivals()).find((a) => a.kind === 'conversion')!.ageHours).toBe(2)
+  })
+})
+
+describe('a throw inside the grain', () => {
+  it('leaves the campaign grain and the POST\'s answer exactly as with the grain off', async () => {
+    const batch = () => [traffic({ campaign_id: '1001' }), traffic({ campaign_id: '1002', impressions: 7 })]
+    // The grain off: what the campaign grain and the POST answer were before BB-16.
+    vi.stubEnv('NEXUS_AMS_GRAIN_ENABLED', '0')
+    const off = await inside(() => ingestAmsBatch(batch()))
+    const offRows = await campaignRows()
+    await inside(() => database.client.amazonAdsHourlyPerformance.deleteMany({}))
+    vi.unstubAllEnvs()
+    // A record whose ad group cannot even be read: the grain's parse throws, outside its per-record catch.
+    const exploding = () => batch().map((r, i) => (i === 0 ? Object.defineProperty({ ...r }, 'ad_group_id', { get() { throw new Error('grain blew up') }, enumerable: false }) : r))
+    const on = await inside(() => ingestAmsBatch(exploding()))
+    expect(await campaignRows()).toEqual(offRows)
+    expect(on).toEqual(off)
+    expect(await grainRows()).toEqual([])
+    // A statement that fails inside the per-record catch (7-day sales past a 32-bit integer): counted as failed, the rest
+    // of the batch written, the campaign grain unharmed.
+    await inside(() => database.client.amazonAdsHourlyPerformance.deleteMany({}))
+    const failing = await inside(() => ingestMarketingStream([conversion({ attributed_sales_7d: 900_000_000 }), traffic({ campaign_id: '1002' })] as never, { arrivedAt: AT }))
+    expect(failing).toMatchObject({ received: 2, upserted: 2, grain: { failed: 1, applied: 1, created: 1 } })
+    expect((await campaignRows()).length).toBe(2)
+  })
 })
 
 describe('a late start', () => {
@@ -263,5 +360,14 @@ describe('the weekly prune', () => {
     const out = await inside(() => cleanupOldPlacementHours(90, new Date('2026-10-12T05:00:00Z')))
     expect(out).toEqual({ deletedRows: 1, deletedArrivals: 1, cutoffDate: '2026-07-14' })
     expect((await grainRows()).map((r) => r.date.toISOString().slice(0, 10))).toEqual(['2026-10-08'])
+  })
+
+  it('deletes in chunks: every old row goes, a chunk at a time, and the new ones stay', async () => {
+    await ingest(Array.from({ length: 5 }, (_, i) => traffic({ ad_group_id: `40${i}`, time_window_start: '2026-07-12T10:00:00Z' })), new Date('2026-07-12T12:00:00Z'))
+    await ingest([traffic()])
+    const out = await inside(() => cleanupOldPlacementHours(90, new Date('2026-10-12T05:00:00Z'), { chunk: 2 }))
+    expect(out).toEqual({ deletedRows: 5, deletedArrivals: 5, cutoffDate: '2026-07-14' })
+    expect((await grainRows()).length).toBe(1)
+    expect((await arrivals()).length).toBe(1)
   })
 })

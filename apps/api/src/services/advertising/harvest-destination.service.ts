@@ -18,6 +18,16 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  * 2026-08-21) both passed `undefined`, so **every** harvest this account has ever run took the
  * fallback.
  *
+ * ── ✅ FIXED by ONE BRAIN AB-11 (2026-10-08) ───────────────────────────────────────────────────
+ *
+ * `applyHarvest` no longer falls back to the source. A graduation with no destination named for its match type gets
+ * the destination this module resolves (`resolveStoredDestinations` + `resolveDestination`: the one stored for the
+ * source's scope, else the resolver's only candidate), so it lands elsewhere and its source is negated; when none
+ * resolves (none fits, or the shortlist has several and none is stored) it is refused with `no_destination` and nothing
+ * is created. The Owner's stored destination may still be the source itself, or say negateAtSource off: kept. The ads
+ * brain's own harvest (brain/harvest.ts) never lands in a source either: it chooses an exact ad group of the product, or
+ * asks for a new campaign, and negates the sources in the same change set.
+ *
  * ── 🔴 Why the resolver proposes a SHORTLIST and never a destination ──────────────────────────
  *
  * Measured on prod 2026-08-12 across all 289 ad groups (`scripts/_hv-3-destination.mts`):

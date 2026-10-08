@@ -853,6 +853,9 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   /* One brain — set-ads-brain: the op, the plan it was approved on (what it stores and ends, each campaign's place in the
      bid brain) and the version of the product's brain. */
   'set-ads-brain': ['op', 'basis', 'version'],
+  /* ONE BRAIN AB-11 — the ads brain's harvest: the term, its destination, the start bid, the sources still owed (or what
+     an undo puts back), and where it lands. */
+  'apply-brain-harvest': ['basis', 'reach'],
   // W4-5 — every target or negative with its place and bids (a harvest: its term, source, destination, bid and negative
   // plan, a bid it worked out itself frozen in the approval; a retire: every negative with who made it), where it lands;
   // for negatives also the other products' places and the proven handovers they would close (never the numbers, which

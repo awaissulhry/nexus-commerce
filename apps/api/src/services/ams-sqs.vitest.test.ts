@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseAmsBody, sqsUrlFromArn } from './ams-sqs.service.js'
+import { amsRawMessagesOf, parseAmsBody, sqsUrlFromArn } from './ams-sqs.service.js'
 
 describe('sqsUrlFromArn', () => {
   it('derives the HTTPS queue URL from an SQS ARN', () => {
@@ -47,5 +47,24 @@ describe('parseAmsBody', () => {
   it('returns [] on a JSON primitive', () => {
     expect(parseAmsBody('42')).toEqual([])
     expect(parseAmsBody('"hello"')).toEqual([])
+  })
+})
+
+describe('amsRawMessagesOf (BB-16 follow-up — the sent time)', () => {
+  const now = new Date('2026-10-08T12:00:00Z')
+  it('keeps each message\'s SQS SentTimestamp (epoch milliseconds) as its sent time', () => {
+    const sent = new Date('2026-10-08T11:00:00Z')
+    expect(amsRawMessagesOf([{ ReceiptHandle: 'rh', Body: '{}', MessageId: 'm1', Attributes: { SentTimestamp: String(sent.getTime()) } }], now))
+      .toEqual([{ receiptHandle: 'rh', body: '{}', messageId: 'm1', sentAt: sent }])
+  })
+  it('has none without the attribute, or with one that is no plausible past instant; drops a message with no body', () => {
+    const out = amsRawMessagesOf([
+      { ReceiptHandle: 'a', Body: '{}' },
+      { ReceiptHandle: 'b', Body: '{}', Attributes: { SentTimestamp: 'soon' } },
+      { ReceiptHandle: 'c', Body: '{}', Attributes: { SentTimestamp: String(now.getTime() + 3_600_000) } },
+      { ReceiptHandle: 'd', Body: '{}', Attributes: { SentTimestamp: String(now.getTime() - 20 * 86_400_000) } },
+      { ReceiptHandle: 'e' },
+    ], now)
+    expect(out.map((m) => [m.receiptHandle, m.sentAt])).toEqual([['a', null], ['b', null], ['c', null], ['d', null]])
   })
 })

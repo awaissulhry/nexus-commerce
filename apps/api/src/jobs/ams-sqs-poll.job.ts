@@ -103,7 +103,8 @@ export async function runAmsSqsPoll(): Promise<void> {
               const ingest = async () => {
               const routed = routeRecords(batchRecords as Array<Record<string, unknown>>)
               if (routed.performance.length) {
-                const res = await ingestMarketingStream(routed.performance as never)
+                // BB-16 follow-up — the message's SentTimestamp is the grain's arrival time (not when it was read).
+                const res = await ingestMarketingStream(routed.performance as never, msg.sentAt ? { arrivedAt: msg.sentAt } : {})
                 upserted += res.upserted
               }
               if (routed.change.length) {

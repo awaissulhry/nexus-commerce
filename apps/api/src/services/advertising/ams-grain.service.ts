@@ -11,9 +11,18 @@
  *     2. the row upsert adds the deltas and the record's key ONLY when the key is not already in `appliedKeys`. The check
  *        is in the ON CONFLICT … WHERE, evaluated on the locked, newest row: two deliveries of one record at once add
  *        once; two different records at once both add (no lost update). The sums are exact — never clamped.
- *     3. the arrival log adds the same deltas to the row's (kind, age bucket), only when step 2 applied.
+ *     3. the arrival log adds the same deltas to the row's (kind, age bucket), only when step 2 applied. Its own guard:
+ *        past NEXUS_AMS_GRAIN_MAX_ARRIVALS_PER_DAY bucket rows on the data day (default 40,000) a NEW bucket is not made
+ *        (the delta still lands in its row; an existing bucket still adds) — the log is a learning aid, the row is the data.
+ *   The day's counts (rows, buckets) are read ONCE per business, data day and process (one count, re-read every 10
+ *   minutes so other processes' rows are seen) and counted on in memory: no count(*) per record (that was O(n²) a day).
+ *   A cap never drops quietly: the day is marked in AmazonAdsGrainCap (per business, day and kind: rows / arrivals, with
+ *   at least how many it refused — the first refusal at once, the rest added at most every 10 minutes per process), and
+ *   loadPlacementHours returns the capped days, so a reader can tell an incomplete day from a quiet one.
+ *   `arrivedAt`: when the record left Amazon's queue — a record's own SQS SentTimestamp, else the caller's (the SQS
+ *   poller passes its message's SentTimestamp), else now — so the arrival ages leave out the time it waited in a queue.
  *   A record that changes nothing, a duplicate and every refusal write nothing (Neon cost: only changed rows).
- *   NEXUS_AMS_GRAIN_ENABLED=0 stops the writer; the campaign grain carries on as before.
+ *   NEXUS_AMS_GRAIN_ENABLED=0 stops the writer; the campaign grain carries on as before. Nothing it does throws.
  *
  * READ (loadPlacementHours)
  *   Per campaign × placement × hour, for today and the last N days (default 14) in the caller's time zone: impressions,
@@ -21,20 +30,122 @@
  *   A cell whose sum is negative for a moment (a correction arrived before its original) reads 0 and is counted; cells
  *   built from a late first delta are counted too, so a reader can say what it does not know.
  *
- * KEEP (cleanupOldPlacementHours): 90 days, in the weekly ads cleanup cron (clustered, once per business).
+ * KEEP (cleanupOldPlacementHours): 90 days, in the weekly ads cleanup cron (clustered, once per business), deleted in
+ * chunks of PRUNE_CHUNK_ROWS rows (one short statement each, never one long transaction over a quarter's rows).
  */
 import { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
+import { workspaceContext } from '../../lib/workspace-context.js'
 import { isoDayIn, isKnownTimeZone } from './ads-local-day.js'
-import { GRAIN_DAYS_KEPT, parseGrainRecord, type GrainDelta, type GrainRefusal } from './ams-grain.js'
+import { GRAIN_DAYS_KEPT, parseGrainRecord, recordSentAt, type GrainDelta, type GrainRefusal } from './ams-grain.js'
 
 export const DEFAULT_GRAIN_MAX_ROWS_PER_DAY = 10_000
+/** About four arrival buckets per row (traffic and conversion, a few ages each). */
+export const DEFAULT_GRAIN_MAX_ARRIVALS_PER_DAY = 40_000
+
+const envCap = (name: string, fallback: number): number => {
+  const v = process.env[name]
+  const raw = Number(v)
+  return v != null && v !== '' && Number.isInteger(raw) && raw >= 0 ? raw : fallback
+}
 
 /** The row-count guard's ceiling: new rows per business per data day. */
 export function grainRowCap(): number {
-  const raw = Number(process.env.NEXUS_AMS_GRAIN_MAX_ROWS_PER_DAY)
-  return process.env.NEXUS_AMS_GRAIN_MAX_ROWS_PER_DAY != null && process.env.NEXUS_AMS_GRAIN_MAX_ROWS_PER_DAY !== '' && Number.isInteger(raw) && raw >= 0 ? raw : DEFAULT_GRAIN_MAX_ROWS_PER_DAY
+  return envCap('NEXUS_AMS_GRAIN_MAX_ROWS_PER_DAY', DEFAULT_GRAIN_MAX_ROWS_PER_DAY)
+}
+
+/** The arrival log's ceiling: new (row, kind, age) buckets per business per data day. */
+export function grainArrivalCap(): number {
+  return envCap('NEXUS_AMS_GRAIN_MAX_ARRIVALS_PER_DAY', DEFAULT_GRAIN_MAX_ARRIVALS_PER_DAY)
+}
+
+// ── the day's counts, read once and counted on in memory ─────────────────────────────────────────────────────────────
+
+/** A day's counts are read again after this long (another process may have added rows meanwhile). */
+export const DAY_COUNT_REREAD_MS = 10 * 60_000
+interface DayCount { rows: number; arrivals: number; readAt: number }
+const dayCounts = new Map<string, DayCount>()
+const dayCountReads = new Map<string, Promise<DayCount>>()
+const businessKey = (): string => workspaceContext()?.workspaceId ?? '(no business)'
+
+/** One business's grain rows and arrival buckets of one data day: from memory, read once per process every 10 minutes. */
+async function dayCountOf(date: string, now: number): Promise<DayCount> {
+  const key = `${businessKey()}|${date}`
+  const known = dayCounts.get(key)
+  if (known && now - known.readAt < DAY_COUNT_REREAD_MS) return known
+  let reading = dayCountReads.get(key)
+  if (!reading) {
+    reading = prisma.$queryRaw<Array<{ rows: number; arrivals: number }>>(Prisma.sql`
+      SELECT (SELECT count(*) FROM "AmazonAdsHourlyPlacement" WHERE "date" = ${date}::date)::int AS rows,
+             (SELECT count(*) FROM "AmazonAdsHourlyArrival" WHERE "date" = ${date}::date)::int AS arrivals`)
+      .then(([r]) => {
+        const c: DayCount = { rows: Number(r?.rows ?? 0), arrivals: Number(r?.arrivals ?? 0), readAt: now }
+        dayCounts.set(key, c)
+        return c
+      })
+      .finally(() => dayCountReads.delete(key))
+    dayCountReads.set(key, reading)
+  }
+  return reading
+}
+
+/** Tests: forget every remembered day count and pending cap mark of this process. */
+export function forgetGrainDayCounts(): void {
+  dayCounts.clear()
+  dayCountReads.clear()
+  capMarks.clear()
+}
+
+// ── the capped-day marks ─────────────────────────────────────────────────────────────────────────────────────────────
+
+export type GrainCapKind = 'rows' | 'arrivals'
+/** A day's mark gains the refusals counted in this process at most this often (the first refusal is marked at once). */
+export const CAP_MARK_EVERY_MS = 10 * 60_000
+interface CapMark { business: string; date: string; kind: GrainCapKind; cap: number; pending: number; firstAt: Date; lastAt: Date; flushedAt: number | null }
+const capMarks = new Map<string, CapMark>()
+
+function noteCapped(date: string, kind: GrainCapKind, cap: number, at: Date): void {
+  const business = businessKey()
+  const key = `${business}|${date}|${kind}`
+  const m = capMarks.get(key)
+  if (m) { m.pending += 1; m.cap = cap; if (at < m.firstAt) m.firstAt = at; if (at > m.lastAt) m.lastAt = at; return }
+  capMarks.set(key, { business, date, kind, cap, pending: 1, firstAt: at, lastAt: at, flushedAt: null })
+}
+
+/** Write this business's due marks (one small upsert each); a failed write keeps its count for the next try. Never throws. */
+async function flushCapMarks(now: number): Promise<void> {
+  const business = businessKey()
+  for (const m of capMarks.values()) {
+    if (m.business !== business || m.pending === 0) continue
+    if (m.flushedAt != null && now - m.flushedAt < CAP_MARK_EVERY_MS) continue
+    const n = m.pending
+    try {
+      await prisma.$executeRaw(Prisma.sql`
+        INSERT INTO "AmazonAdsGrainCap" AS x ("id", "date", "kind", "cap", "refused", "firstAt", "lastAt")
+        VALUES (gen_random_uuid()::text, ${m.date}::date, ${m.kind}::text, ${m.cap}::int, ${n}::int,
+                (${m.firstAt.toISOString()}::timestamptz AT TIME ZONE 'UTC'), (${m.lastAt.toISOString()}::timestamptz AT TIME ZONE 'UTC'))
+        ON CONFLICT ("workspaceId", "date", "kind") DO UPDATE SET
+          "refused" = x."refused" + EXCLUDED."refused",
+          "cap"     = EXCLUDED."cap",
+          "firstAt" = LEAST(x."firstAt", EXCLUDED."firstAt"),
+          "lastAt"  = GREATEST(x."lastAt", EXCLUDED."lastAt")`)
+      m.pending -= n
+      m.flushedAt = now
+    } catch (error) {
+      warnOnce('capMark', '[BB-16] AMS grain: the capped-day mark could not be written (kept for the next batch)', { date: m.date, kind: m.kind, error: error instanceof Error ? error.message : String(error) })
+    }
+  }
+}
+
+/** The days of a range (UTC data days) on which the grain refused records at a ceiling, per kind, for readers. */
+export async function grainCappedDays(range: { from: string; to: string }): Promise<Array<{ date: string; kind: GrainCapKind; cap: number; refusedAtLeast: number }>> {
+  const rows = await prisma.amazonAdsGrainCap.findMany({
+    where: { date: { gte: new Date(`${range.from}T00:00:00Z`), lte: new Date(`${range.to}T00:00:00Z`) } },
+    select: { date: true, kind: true, cap: true, refused: true },
+    orderBy: [{ date: 'asc' }, { kind: 'asc' }],
+  })
+  return rows.map((r) => ({ date: r.date.toISOString().slice(0, 10), kind: r.kind === 'arrivals' ? 'arrivals' : 'rows', cap: r.cap, refusedAtLeast: r.refused }))
 }
 
 export const grainEnabled = (): boolean => process.env.NEXUS_AMS_GRAIN_ENABLED !== '0'
@@ -51,6 +162,8 @@ export interface GrainIngestResult {
   noBaseline: number
   /** Records refused by the row-count guard (they would have created a row). */
   capped: number
+  /** Records added to their row whose arrival bucket the arrival log's guard left out. */
+  arrivalsCapped: number
   malformed: number
   noIdempotencyKey: number
   tooOld: number
@@ -62,7 +175,7 @@ export interface GrainIngestResult {
 }
 
 const emptyResult = (received: number): GrainIngestResult => ({
-  received, applied: 0, created: 0, duplicates: 0, noBaseline: 0, capped: 0, malformed: 0, noIdempotencyKey: 0, tooOld: 0, zero: 0, notGrain: 0, failed: 0,
+  received, applied: 0, created: 0, duplicates: 0, noBaseline: 0, capped: 0, arrivalsCapped: 0, malformed: 0, noIdempotencyKey: 0, tooOld: 0, zero: 0, notGrain: 0, failed: 0,
 })
 
 // One warning per reason per 10 minutes per process: the live forwarder posts one record at a time, and a shape Amazon
@@ -78,10 +191,13 @@ function warnOnce(reason: string, message: string, context: Record<string, unkno
 
 type ApplyState = 'exists' | 'new' | 'no_baseline' | 'capped'
 
-/** One record into its row and its arrival bucket, in one statement. */
-async function applyDelta(d: GrainDelta, arrivedAt: Date, cap: number): Promise<{ state: ApplyState; applied: boolean; inserted: boolean }> {
+/**
+ * One record into its row and its arrival bucket, in one statement. `rowsOpen` / `arrivalsOpen`: the day is below the
+ * row / bucket ceilings (the caller's count). With the buckets closed an existing bucket still adds; no new one is made.
+ */
+async function applyDelta(d: GrainDelta, arrivedAt: Date, open: { rowsOpen: boolean; arrivalsOpen: boolean }): Promise<{ state: ApplyState; applied: boolean; inserted: boolean; arrival: 'created' | 'added' | 'capped' | null }> {
   const at = arrivedAt.toISOString()
-  const rows = await prisma.$queryRaw<Array<{ state: ApplyState; applied: boolean; inserted: boolean | null }>>(Prisma.sql`
+  const rows = await prisma.$queryRaw<Array<{ state: ApplyState; applied: boolean; inserted: boolean | null; arrivalCreated: boolean | null; arrivalAdded: boolean | null }>>(Prisma.sql`
     WITH cap AS (
       SELECT CASE
         WHEN EXISTS (
@@ -90,7 +206,7 @@ async function applyDelta(d: GrainDelta, arrivedAt: Date, cap: number): Promise<
              AND t."date" = ${d.date}::date AND t."hour" = ${d.hour}::int
         ) THEN 'exists'
         WHEN ${d.negative}::boolean THEN 'no_baseline'
-        WHEN (SELECT count(*) FROM "AmazonAdsHourlyPlacement" t WHERE t."date" = ${d.date}::date) >= ${cap}::int THEN 'capped'
+        WHEN NOT ${open.rowsOpen}::boolean THEN 'capped'
         ELSE 'new'
       END AS state
     ), g AS (
@@ -132,7 +248,7 @@ async function applyDelta(d: GrainDelta, arrivedAt: Date, cap: number): Promise<
         ${d.impressions}::int, ${d.clicks}::int, ${d.costMicros}::bigint, ${d.orders1d}::int, ${d.orders7d}::int,
         ${d.units1d}::int, ${d.units7d}::int, ${d.sales1dCents}::int, ${d.sales7dCents}::int,
         (${at}::timestamptz AT TIME ZONE 'UTC'), (${at}::timestamptz AT TIME ZONE 'UTC')
-      FROM g
+      FROM g WHERE ${open.arrivalsOpen}::boolean
       ON CONFLICT ("workspaceId", "grainId", "kind", "ageHours") DO UPDATE SET
         "records"      = x."records" + 1,
         "impressions"  = x."impressions" + EXCLUDED."impressions",
@@ -146,18 +262,41 @@ async function applyDelta(d: GrainDelta, arrivedAt: Date, cap: number): Promise<
         "sales7dCents" = x."sales7dCents" + EXCLUDED."sales7dCents",
         "firstAt"      = LEAST(x."firstAt", EXCLUDED."firstAt"),
         "lastAt"       = GREATEST(x."lastAt", EXCLUDED."lastAt")
+      RETURNING (x.xmax = 0) AS inserted
+    ), u AS (
+      -- The bucket ceiling reached: an existing bucket still adds; no new bucket is made.
+      UPDATE "AmazonAdsHourlyArrival" AS x SET
+        "records"      = x."records" + 1,
+        "impressions"  = x."impressions" + ${d.impressions}::int,
+        "clicks"       = x."clicks" + ${d.clicks}::int,
+        "costMicros"   = x."costMicros" + ${d.costMicros}::bigint,
+        "orders1d"     = x."orders1d" + ${d.orders1d}::int,
+        "orders7d"     = x."orders7d" + ${d.orders7d}::int,
+        "units1d"      = x."units1d" + ${d.units1d}::int,
+        "units7d"      = x."units7d" + ${d.units7d}::int,
+        "sales1dCents" = x."sales1dCents" + ${d.sales1dCents}::int,
+        "sales7dCents" = x."sales7dCents" + ${d.sales7dCents}::int,
+        "firstAt"      = LEAST(x."firstAt", (${at}::timestamptz AT TIME ZONE 'UTC')),
+        "lastAt"       = GREATEST(x."lastAt", (${at}::timestamptz AT TIME ZONE 'UTC'))
+      FROM g
+      WHERE NOT ${open.arrivalsOpen}::boolean AND x."grainId" = g."id" AND x."kind" = ${d.kind}::text AND x."ageHours" = ${d.ageHours}::int
       RETURNING 1
     )
-    SELECT cap.state, (g."id" IS NOT NULL) AS applied, COALESCE(g.inserted, false) AS inserted FROM cap LEFT JOIN g ON true
+    SELECT cap.state, (g."id" IS NOT NULL) AS applied, COALESCE(g.inserted, false) AS inserted,
+           (SELECT bool_or(a.inserted) FROM a) AS "arrivalCreated", EXISTS (SELECT 1 FROM a) OR EXISTS (SELECT 1 FROM u) AS "arrivalAdded"
+      FROM cap LEFT JOIN g ON true
   `)
   const row = rows[0]
-  return { state: row?.state ?? 'capped', applied: !!row?.applied, inserted: !!row?.inserted }
+  const applied = !!row?.applied
+  const arrival = !applied ? null : row?.arrivalCreated ? 'created' : row?.arrivalAdded ? 'added' : 'capped'
+  return { state: row?.state ?? 'capped', applied, inserted: !!row?.inserted, arrival }
 }
 
 /**
  * Add a batch of Marketing Stream records to the ad group × placement grain. Runs inside the business the records were
- * routed to (the caller's). `arrivedAt` is when they reached Nexus (default now); `marketplaceOf` is the campaign-grain
- * ingest's marketplace mapping. Never throws: a failed record is counted and logged.
+ * routed to (the caller's). `arrivedAt` is when they left Amazon's queue (the SQS message's SentTimestamp; default now) —
+ * a record's own SentTimestamp wins; `marketplaceOf` is the campaign-grain ingest's marketplace mapping. Never throws: a
+ * failed record is counted and logged.
  */
 export async function ingestPlacementGrain(
   records: ReadonlyArray<Record<string, unknown>>,
@@ -165,10 +304,13 @@ export async function ingestPlacementGrain(
 ): Promise<GrainIngestResult | null> {
   if (!grainEnabled()) return null
   const result = emptyResult(records.length)
-  const arrivedAt = opts.arrivedAt ?? new Date()
+  const now = new Date()
+  const batchArrivedAt = opts.arrivedAt ?? now
   const cap = grainRowCap()
+  const arrivalCap = grainArrivalCap()
   const refused: Partial<Record<GrainRefusal, string>> = {}
   for (const rec of records) {
+    const arrivedAt = recordSentAt(rec, now) ?? batchArrivedAt
     const parsed = parseGrainRecord(rec, arrivedAt, opts.marketplaceOf)
     if ('reason' in parsed) {
       result[parsed.reason] += 1
@@ -177,11 +319,22 @@ export async function ingestPlacementGrain(
     }
     const d = parsed.delta
     try {
-      const out = await applyDelta(d, arrivedAt, cap)
-      if (out.applied) { result.applied += 1; if (out.inserted) result.created += 1 }
-      else if (out.state === 'capped') {
+      const day = await dayCountOf(d.date, now.getTime())
+      const out = await applyDelta(d, arrivedAt, { rowsOpen: day.rows < cap, arrivalsOpen: day.arrivals < arrivalCap })
+      if (out.inserted) day.rows += 1
+      if (out.arrival === 'created') day.arrivals += 1
+      if (out.applied) {
+        result.applied += 1
+        if (out.inserted) result.created += 1
+        if (out.arrival === 'capped') {
+          result.arrivalsCapped += 1
+          noteCapped(d.date, 'arrivals', arrivalCap, arrivedAt)
+          warnOnce('arrivalsCapped', '[BB-16] AMS grain arrival-log guard: a new bucket left out (the row took its delta)', { date: d.date, cap: arrivalCap })
+        }
+      } else if (out.state === 'capped') {
         result.capped += 1
-        warnOnce('capped', '[BB-16] AMS grain row-count guard: a new row refused', { date: d.date, cap, campaignId: d.campaignId })
+        noteCapped(d.date, 'rows', cap, arrivedAt)
+        warnOnce('capped', '[BB-16] AMS grain row-count guard: a new row refused (the day is marked capped)', { date: d.date, cap, campaignId: d.campaignId })
       } else if (out.state === 'no_baseline') result.noBaseline += 1
       else result.duplicates += 1
     } catch (error) {
@@ -189,6 +342,7 @@ export async function ingestPlacementGrain(
       warnOnce('failed', '[BB-16] AMS grain write failed', { campaignId: d.campaignId, error: error instanceof Error ? error.message : String(error) })
     }
   }
+  if (capMarks.size) await flushCapMarks(Date.now())
   for (const [reason, why] of Object.entries(refused)) warnOnce(reason, '[BB-16] AMS grain record refused', { reason, why })
   return result
 }
@@ -235,6 +389,11 @@ export interface PlacementHoursRead {
   negativeCells: number
   /** Campaigns asked for that have no Amazon campaign id (nothing can be read for them). */
   unlinked: string[]
+  /**
+   * BB-16 follow-up — the UTC data days read on which the ingest refused records at a ceiling (grainCappedDays): kind
+   * `rows`, the day's grain is incomplete; `arrivals`, its rows are whole and only the arrival log is short.
+   */
+  cappedDays: Array<{ date: string; kind: GrainCapKind; cap: number; refusedAtLeast: number }>
 }
 
 export const MAX_PAST_DAYS = 60
@@ -265,9 +424,10 @@ export async function loadPlacementHours(input: { campaignIds: readonly string[]
   const pastDays = Math.max(0, Math.min(MAX_PAST_DAYS, Math.floor(input.pastDays ?? 14)))
   const today = isoDayIn(input.now, timeZone)
   const days = Array.from({ length: pastDays + 1 }, (_, i) => shiftDay(today, i - pastDays))
-  const out: PlacementHoursRead = { timeZone, today, days, cells: [], lastArrivalAt: null, lateStartCells: 0, negativeCells: 0, unlinked: [] }
+  const out: PlacementHoursRead = { timeZone, today, days, cells: [], lastArrivalAt: null, lateStartCells: 0, negativeCells: 0, unlinked: [], cappedDays: [] }
   const ids = [...new Set(input.campaignIds)]
   if (!ids.length) return out
+  out.cappedDays = await grainCappedDays({ from: shiftDay(days[0], -1), to: shiftDay(today, 1) })
 
   const campaigns = await prisma.campaign.findMany({ where: { id: { in: ids } }, select: { id: true, externalCampaignId: true } })
   const localOf = new Map<string, string[]>()
@@ -331,11 +491,35 @@ export function rollUpPlacementHours(cells: readonly PlacementHourCell[], keyOf:
 
 // ── keep ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-/** Prune both tables to the last `daysToKeep` days. Runs in the weekly ads cleanup cron (clustered, once per business). */
-export async function cleanupOldPlacementHours(daysToKeep = GRAIN_DAYS_KEPT, now = new Date()): Promise<{ deletedRows: number; deletedArrivals: number; cutoffDate: string }> {
+/** Rows one prune statement deletes at most: a short statement each, never one long transaction over a quarter's rows. */
+export const PRUNE_CHUNK_ROWS = 5_000
+/** A prune stops after this many chunks (the next weekly run carries on): a bound on one run, never an endless loop. */
+export const PRUNE_MAX_CHUNKS = 400
+
+/** Delete a table's rows older than `cutoff` (a UTC day), `chunk` rows per statement; how many went. */
+async function pruneInChunks(table: 'AmazonAdsHourlyArrival' | 'AmazonAdsHourlyPlacement', cutoff: string, chunk: number): Promise<number> {
+  const name = Prisma.raw(`"${table}"`)
+  let total = 0
+  for (let i = 0; i < PRUNE_MAX_CHUNKS; i++) {
+    const n = await prisma.$executeRaw(Prisma.sql`
+      DELETE FROM ${name} WHERE "id" IN (SELECT "id" FROM ${name} WHERE "date" < ${cutoff}::date LIMIT ${chunk}::int)`)
+    total += n
+    if (n < chunk) break
+  }
+  return total
+}
+
+/**
+ * Prune both tables (and the capped-day marks) to the last `daysToKeep` days, in chunks of `chunk` rows. Runs in the
+ * weekly ads cleanup cron (clustered, once per business): the cron is unchanged.
+ */
+export async function cleanupOldPlacementHours(daysToKeep = GRAIN_DAYS_KEPT, now = new Date(), opts: { chunk?: number } = {}): Promise<{ deletedRows: number; deletedArrivals: number; cutoffDate: string }> {
   const cutoff = new Date(now.getTime() - daysToKeep * DAY_MS)
   cutoff.setUTCHours(0, 0, 0, 0)
-  const arrivals = await prisma.amazonAdsHourlyArrival.deleteMany({ where: { date: { lt: cutoff } } })
-  const rows = await prisma.amazonAdsHourlyPlacement.deleteMany({ where: { date: { lt: cutoff } } })
-  return { deletedRows: rows.count, deletedArrivals: arrivals.count, cutoffDate: cutoff.toISOString().slice(0, 10) }
+  const cutoffDate = cutoff.toISOString().slice(0, 10)
+  const chunk = Math.max(1, Math.floor(opts.chunk ?? PRUNE_CHUNK_ROWS))
+  const deletedArrivals = await pruneInChunks('AmazonAdsHourlyArrival', cutoffDate, chunk)
+  const deletedRows = await pruneInChunks('AmazonAdsHourlyPlacement', cutoffDate, chunk)
+  await prisma.amazonAdsGrainCap.deleteMany({ where: { date: { lt: cutoff } } })
+  return { deletedRows, deletedArrivals, cutoffDate }
 }

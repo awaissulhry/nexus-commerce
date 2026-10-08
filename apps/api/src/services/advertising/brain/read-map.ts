@@ -39,9 +39,11 @@ import {
  * AB-7 — `money` is brain/budget-read.ts: the product's money plan in shadow (the tool routes it). AB-9 — `terms` is
  * brain/terms-read.ts: the product's term ledger and the market arbiter's leads, in shadow (the tool routes it). AB-12 —
  * `state` is brain/state-read.ts: the state lever's pauses, resumes and archive proposals (the tool routes it). AB-13 —
- * `hours` is brain/hours-proposal.ts brainHours: the product's hour research and painted plan (the tool routes it).
+ * `hours` is brain/hours-proposal.ts brainHours: the product's hour research and painted plan (the tool routes it). AB-10 —
+ * `negatives` is brain/negatives-read.ts: the product's day of negatives, every entity against the limit, its log. AB-11 —
+ * `harvest` is brain/harvest-read.ts: the product's harvests, their destinations, sources, requests and judgements.
  */
-export const BRAIN_MAP_VIEWS = ['map', 'clashes', 'setup', 'money', 'terms', 'state', 'hours'] as const
+export const BRAIN_MAP_VIEWS = ['map', 'clashes', 'setup', 'money', 'terms', 'state', 'hours', 'negatives', 'harvest'] as const
 export type BrainMapView = (typeof BRAIN_MAP_VIEWS)[number]
 
 /** The days of action-log evidence a view reads by default, and at most. */
