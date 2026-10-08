@@ -43,7 +43,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { notCapRefusal } from './automation-cap-predicate.js'
-import { recordAutomationRefusal, refusalRecordedToday } from './automation-refusals.service.js'
+import { recordAutomationRefusal, refusalRecordedToday, type RefusalReason } from './automation-refusals.service.js'
 
 // ─── Conditions DSL ───────────────────────────────────────────────
 
@@ -544,6 +544,41 @@ function refusalEntityOf(ctx: unknown): { entityType?: string | null; entityId?:
 }
 
 /**
+ * ONE BRAIN AB-6 — record, per lever, the writes this run left to a product's brain or to the Owner's lock
+ * (`LEVER_HELD:<lever>`, the refusal record automation-activity reads). A skip is not a failure: the rule matched and its
+ * lever has another owner. A rule that does not write (a dry run) is counted once a day per lever (BB-9's rule for its
+ * cap); a writing rule counts each write it left. Never throws.
+ */
+async function recordLeverHeld(rule: { id: string; name: string }, actionResults: ActionResult[], dryRun: boolean, context: unknown): Promise<void> {
+  try {
+    const { ruleResultLeverSkips } = await import('./advertising/brain/rule-skips.js')
+    const held = new Map<string, { n: number; why: string | null }>()
+    for (const r of actionResults) {
+      const out = r.output as { brainSkip?: { reason?: unknown }; brainSkips?: { sample?: Array<{ why?: unknown }> } } | undefined
+      const said = out?.brainSkip?.reason ?? out?.brainSkips?.sample?.[0]?.why
+      for (const [lever, n] of Object.entries(ruleResultLeverSkips(r))) {
+        const cur = held.get(lever) ?? { n: 0, why: null }
+        held.set(lever, { n: cur.n + (n ?? 0), why: cur.why ?? (typeof said === 'string' ? said : null) })
+      }
+    }
+    for (const [lever, { n, why }] of held) {
+      if (n <= 0) continue
+      const reason = `LEVER_HELD:${lever}` as RefusalReason
+      if (dryRun && await refusalRecordedToday(rule.id, reason)) continue
+      await recordAutomationRefusal({
+        actorId: rule.id,
+        reason,
+        count: dryRun ? 1 : n,
+        detail: `${rule.name} left ${n} write${n === 1 ? '' : 's'} on its ${lever} lever alone — ${why ?? 'a product\'s brain owns that lever, or the Owner holds it at his own value'} (one owner per lever).${dryRun ? ' It proposes and does not write, so it is counted once a day.' : ''}`,
+        ...refusalEntityOf(context),
+      })
+    }
+  } catch (err) {
+    logger.warn('[automation-rule] could not record the writes left to a product\'s brain', { ruleId: rule.id, error: err instanceof Error ? err.message : String(err) })
+  }
+}
+
+/**
  * 1f — the graduation ceiling of the actions an advertising rule is about to run (`ads-graduation.ts`, the
  * function the set-time check uses). `hasKeywordProtections: false` is the stricter answer and costs no
  * query; the ceiling of a negation is PROPOSE either way today, and only `blockedBy` is reported.
@@ -1009,6 +1044,20 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
       continue
     }
 
+    // ONE BRAIN AB-6 — a lever a product's brain owns (or the Owner locked) on the one campaign this action writes is left
+    // before the rule asks: a named skip in place of the write, in a dry run too, so a PROPOSE rule offers no change the
+    // brain owns (brain/rule-skips.ts). Inert (no read) unless the brain's ceiling is live and something is enrolled; a
+    // holder it cannot read is no skip — the write gate decides. Actions that write several campaigns skip inside.
+    if (rule.domain === 'advertising') {
+      const { ruleLeverSkip } = await import('./advertising/brain/rule-skips.js')
+      const leverSkip = await ruleLeverSkip(action, args.context, { ruleId: rule.id })
+      if (leverSkip) {
+        actionResults.push(leverSkip)
+        anyOk = true
+        continue
+      }
+    }
+
     try {
       const result = await handler(action, args.context, { dryRun, ruleId: rule.id, ...(args.noPersist ? { preview: true } : {}) })
       actionResults.push(result)
@@ -1025,6 +1074,12 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
       })
       anyFailed = true
     }
+  }
+
+  // ONE BRAIN AB-6 — the writes this run left to a product's brain (or the Owner's lock), per lever, in the rule's refusal
+  // record (automation-activity). A rule that does not write is counted once a day per lever, as its cap refusal is (BB-9).
+  if (rule.domain === 'advertising' && !args.noPersist) {
+    await recordLeverHeld(rule, actionResults, dryRun, args.context)
   }
 
   const status: EvaluateRuleResult['status'] = dryRun

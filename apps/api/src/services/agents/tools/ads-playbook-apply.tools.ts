@@ -1031,7 +1031,7 @@ const applyAdsPlaybook: AgentTool = {
       const run = approvedRun(ctx, a.why ?? preview.effect)
       if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
       const requester = await requesterOf(ctx, run.actor)
-      const started = await startPlaybookBuild({ plan: p, actor: run.actor, requester, changeSetId: run.changeSetId, writer: writerOf(run.changeSetId) })
+      const started = await startPlaybookBuild({ plan: p, actor: run.actor, requester, changeSetId: run.changeSetId, writer: writerOf(run.changeSetId), manual: run.manual })
       if ('refusal' in started) return notRun(`Not run: ${started.refusal}`)
       if (started.alreadyRunning) return notRun(`Not run: a build of this product is already running (run ${started.applicationId}): follow it with ads-playbook view build.`)
       return {
@@ -1061,7 +1061,7 @@ const applyAdsPlaybook: AgentTool = {
     const run = approvedRun(ctx, a.why ?? preview.effect)
     if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
     const requester = await requesterOf(ctx, run.actor)
-    const started = await startPlaybookBuild({ plan: p, actor: run.actor, requester, changeSetId: run.changeSetId, writer: writerOf(run.changeSetId) })
+    const started = await startPlaybookBuild({ plan: p, actor: run.actor, requester, changeSetId: run.changeSetId, writer: writerOf(run.changeSetId), manual: run.manual })
     if ('refusal' in started) return notRun(`Not run: ${started.refusal}`)
     if (started.alreadyRunning) return notRun(`Not run: a build of this product is already running (run ${started.applicationId}): follow it with ads-playbook view build.`)
     return {

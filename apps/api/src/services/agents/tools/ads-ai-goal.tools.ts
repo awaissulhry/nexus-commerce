@@ -520,6 +520,15 @@ const createAiGoalCampaigns: AgentTool = {
     const plan = p.plan
     const by = await requesterOf(ctx, run.actor)
 
+    // ONE BRAIN AB-6 — new campaigns of a product are its brain's structure lever (design §3: "AI goals, playbook build
+    // (unless the brain asks it)"): a goal the business's rule runs is not launched for a product whose brain owns its
+    // structure, or whose structure the Owner locked; a person's approval passes, as at the write gate.
+    const { productLeverSkip } = await import('../../advertising/brain/engine-skips.js')
+    for (const x of plan.products) {
+      const held = await productLeverSkip(x.productId, plan.market, 'structure', { actor: run.actor, ...(run.manual ? { manual: true } : {}) }, 'create-ai-goal-campaigns')
+      if (held) return notRun(`Not run: ${held.reason} — its new campaigns are left to it (one owner per lever).`)
+    }
+
     // The screen's two steps: the goal saved (createProductGoal), then launched (materializeProductGoal).
     const { createProductGoal, archiveProductGoal, ValidationError } = await import('../../advertising/ai-product-goal.service.js')
     let goalId: string

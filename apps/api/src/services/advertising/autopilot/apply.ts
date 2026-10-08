@@ -16,6 +16,17 @@ import { updateCampaignWithSync } from '../ads-mutation.service.js'
 import { effectiveTargetAcosPct, clamp, type Goal, type Guardrails, type CampaignSignals } from './presets.js'
 import type { ProposedAction } from './modules.js'
 import { brainOwnedCampaignIds } from '../bid-brain/live.js'
+import { readLeverHolds, type LeverHolds } from '../brain/engine-skips.js'
+import type { BrainLever } from '../brain/levers.js'
+
+/**
+ * ONE BRAIN AB-6 — the product-brain lever an autopilot decision writes: a budget the `budgets` lever, a Top-of-Search
+ * nudge the `placements` lever. Bids stay BB-6's (the bid brain's campaigns are left whole, below); harvest and negate run
+ * through the rule engine, which leaves them itself. Pure.
+ */
+export function autopilotActionLever(module: string): BrainLever | null {
+  return module === 'budget' ? 'budgets' : module === 'placement' ? 'placements' : null
+}
 
 export interface AppliedDecision {
   module: string; campaignId: string; action: string
@@ -73,6 +84,8 @@ export async function applyPlanActions(opts: {
    * the account default and profit data.
    */
   planSetsTargetAcos?: boolean
+  /** AB-6 — who holds the levers of these campaigns, read once for the whole run (absent: read here, once per call). */
+  leverHolds?: LeverHolds
 }): Promise<{ applied: number; denied: number; decisions: AppliedDecision[] }> {
   const { planId, goal, marketplace, guardrails: g, actions, signals } = opts
   const sigById = new Map(signals.map((s) => [s.campaignId, s]))
@@ -84,12 +97,22 @@ export async function applyPlanActions(opts: {
 
   // BID BRAIN BB-6 — a campaign the brain owns has one writer, the brain: the plan's bids and placements leave it.
   const brainOwned = await brainOwnedCampaignIds([...byCampaign.keys()])
-  for (const [campaignId, acts] of byCampaign) {
+  // ONE BRAIN AB-6 — a budget or a placement a product's brain owns (or the Owner holds at his own value) is left, the
+  // rest of the campaign's decisions run (brain/engine-skips.ts): recorded SKIPPED with why, never asked.
+  const leverHolds = opts.leverHolds ?? await readLeverHolds([...byCampaign.keys()], { actor }, `autopilot ${planId}`)
+  for (const [campaignId, planned] of byCampaign) {
     if (brainOwned.has(campaignId)) {
-      denied += acts.length
-      for (const a of acts) decisions.push({ module: a.module, campaignId, action: a.action, reason: `${a.reason} — left alone: the bid brain runs this campaign (one writer per campaign)`, status: 'DENIED' })
+      denied += planned.length
+      for (const a of planned) decisions.push({ module: a.module, campaignId, action: a.action, reason: `${a.reason} — left alone: the bid brain runs this campaign (one writer per campaign)`, status: 'DENIED' })
       continue
     }
+    const acts = planned.filter((a) => {
+      const lever = autopilotActionLever(a.module)
+      const held = lever ? leverHolds.skip(campaignId, lever) : null
+      if (held) decisions.push({ module: a.module, campaignId, action: a.action, reason: `${a.reason} — left alone: ${held.reason} (one owner per lever)`, status: 'SKIPPED' })
+      return !held
+    })
+    if (!acts.length) continue
     const payloadValueCents = Math.max(0, ...acts.map((a) => Number(a.afterCents ?? 0)))
     const gate = await checkAdsWriteGate({ marketplace, campaignId, payloadValueCents })
     if (!gate.allowed) {

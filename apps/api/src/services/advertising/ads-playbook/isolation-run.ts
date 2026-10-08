@@ -34,6 +34,7 @@ import { loadIsolation, type Excluded } from './isolation-load.js'
 import { loadPlaybookIndex, PLAYBOOK_ROW_SELECT, playbookLinks } from './load.js'
 import { resolveProduct } from './resolve.js'
 import { ensureCompiledRule } from './rules.js'
+import { brainSkipsOutput, readLeverHolds, type LeverSkip, type LeverSkipCounts } from '../brain/engine-skips.js'
 
 export interface IsolationItem { kind: PlannedNegative['kind']; text: string; match: 'EXACT' | 'PHRASE'; adGroupId: string; slot: string; owner: string }
 
@@ -58,6 +59,10 @@ export interface IsolationRun {
   chosen: PlannedNegative[]
   noLongerDue: Array<{ text: string; adGroupId: string; why: string }>
   written: IsolationWritten | null
+  /** ONE BRAIN AB-6 — the negatives left because a product's brain owns (or the Owner holds) their campaign's negatives. */
+  leftToBrain: LeverSkip[]
+  /** Who holds the levers could not be read: nothing was skipped on a guess, the write gate judged each write. */
+  holdsUnread?: boolean
 }
 
 const itemOf = (a: PlannedNegative): IsolationItem => ({ kind: a.kind, text: a.text, match: a.match, adGroupId: a.adGroupId, slot: a.slot, owner: a.owner.text })
@@ -121,9 +126,18 @@ export async function isolateProduct(args: { action: IsolationAction; actor: str
     noLongerDue = args.items.filter((i) => !found.has(isolationItemKey(i)))
       .map((i) => ({ text: i.text, adGroupId: i.adGroupId, why: 'It is no longer due on today\'s data (already there, no longer this product\'s, or a winner there now), so it was left alone.' }))
   }
+  // ONE BRAIN AB-6 — a negative in a campaign whose negatives a product's brain owns (or the Owner holds) is left to it, in
+  // a dry run too (brain/engine-skips.ts; nothing read unless a product is enrolled).
+  const holds = await readLeverHolds(chosen.map((a) => a.campaignId), { actor: args.actor }, 'isolate_product_terms')
+  const leftToBrain: LeverSkip[] = []
+  chosen = chosen.filter((a) => {
+    const skip = holds.skip(a.campaignId, 'negatives')
+    if (skip) leftToBrain.push(skip)
+    return !skip
+  })
   chosen = chosen.slice(0, MAX_ISOLATION_ITEMS)
   const written = args.dryRun ? null : await writeAll(args.action.playbookId, chosen, args.actor, inputs.family)
-  return { scope: { adGroups: inputs.scope.length, groups: inputs.scope, excluded: inputs.excluded }, plan, chosen, noLongerDue, written }
+  return { scope: { adGroups: inputs.scope.length, groups: inputs.scope, excluded: inputs.excluded }, plan, chosen, noLongerDue, written, leftToBrain, ...(holds.unread ? { holdsUnread: true } : {}) }
 }
 
 const top = <T,>(key: string, list: readonly T[], n = 5) => (list.length ? { [key]: list.length, [`top${key[0].toUpperCase()}${key.slice(1)}`]: list.slice(0, n) } : {})
@@ -159,6 +173,8 @@ export async function runIsolation(args: { action: Record<string, unknown>; rule
   if ('refused' in run) return args.dryRun ? { type, ok: true, output: { noChange: true, why: run.refused } } : { type, ok: false, error: run.refused }
   const scope = { adGroups: run.scope.adGroups, excluded: run.scope.excluded.slice(0, 20), ...(run.scope.excluded.length > 20 ? { excludedMore: run.scope.excluded.length - 20 } : {}) }
   const leftAlone = top('leftAlone', run.plan.leftAlone)
+  const counts: LeverSkipCounts = run.leftToBrain.length ? { negatives: run.leftToBrain.length } : {}
+  const brainSkips = brainSkipsOutput(counts, run.leftToBrain, run.holdsUnread === true)
   if (args.dryRun) {
     return {
       type,
@@ -175,6 +191,7 @@ export async function runIsolation(args: { action: Record<string, unknown>; rule
         ...(run.plan.adds.length > run.chosen.length && !items ? { itemsLeftForNextRun: run.plan.adds.length - run.chosen.length } : {}),
         ...(run.plan.alreadyStanding ? { alreadyStanding: run.plan.alreadyStanding } : {}),
         ...leftAlone,
+        ...brainSkips,
       },
     }
   }
@@ -183,13 +200,16 @@ export async function runIsolation(args: { action: Record<string, unknown>; rule
   const wrote = w.added + w.local
   const noLongerDue = top('noLongerDue', run.noLongerDue)
   if (items && !run.chosen.length) {
-    return { type, ok: true, output: { skipped: 'no-longer-due', why: 'none of the card\'s negatives is still due on today\'s data, so nothing was written', scope, ...noLongerDue } }
+    if (run.leftToBrain.length && !run.noLongerDue.length) {
+      return { type, ok: true, output: { skipped: 'brain-lever', why: `every negative of the card is left alone: ${run.leftToBrain[0].reason} (one owner per lever)`, scope, ...brainSkips } }
+    }
+    return { type, ok: true, output: { skipped: 'no-longer-due', why: 'none of the card\'s negatives is still due on today\'s data, so nothing was written', scope, ...noLongerDue, ...brainSkips } }
   }
   const problems = [...w.refused.map((r) => r.reason), ...w.failed.map((f) => f.error)]
   // Nothing written, nothing refused, nothing already there: every negative was left alone at the write. Said as a skip,
   // so an accepted card keeps waiting with the reason instead of reading "applied".
   if (!wrote && !problems.length && !w.alreadyStanding && w.leftAlone.length) {
-    return { type, ok: true, output: { skipped: 'left-alone', why: w.leftAlone[0].why, scope, ...top('leftAlone', w.leftAlone) } }
+    return { type, ok: true, output: { skipped: 'left-alone', why: w.leftAlone[0].why, scope, ...top('leftAlone', w.leftAlone), ...brainSkips } }
   }
   return {
     type,
@@ -204,6 +224,7 @@ export async function runIsolation(args: { action: Record<string, unknown>; rule
       ...(w.failed.length ? { failed: w.failed.slice(0, 20) } : {}),
       ...top('leftAlone', [...w.leftAlone, ...run.plan.leftAlone]),
       ...noLongerDue,
+      ...brainSkips,
     },
   }
 }

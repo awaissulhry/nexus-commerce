@@ -23,6 +23,7 @@ import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { BUDGET_POOL_CRON_ACTOR, computeRebalance, rebalanceAndAudit, type ProposedAllocation } from '../services/advertising/budget-pool-rebalancer.service.js'
 import { engineGuardNote, nothingHeld, openEngineGuard, type EngineGuardReport } from '../services/advertising/ads-engine-guard.js'
+import { addLeverSkipCounts, leverSkipNote, type LeverSkipCounts } from '../services/advertising/brain/engine-skips.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
@@ -37,6 +38,9 @@ interface TickSummary {
   durationMs: number
   /** 1d — the dial posture and the caps this run ran under, and what they held back (live pools only). */
   guard?: EngineGuardReport
+  /** ONE BRAIN AB-6 — campaigns the rebalances left at their budget: a product's brain owns it, or the Owner holds it. */
+  leverHeld?: LeverSkipCounts
+  leverHoldsUnread?: boolean
 }
 
 /** 1d — a rebalance writes one budget per allocation that has a campaign and a shift. */
@@ -52,6 +56,12 @@ export async function runBudgetPoolRebalanceOnce(): Promise<TickSummary> {
   let appliedLive = 0
   let skipped = 0
   let totalShiftCents = 0
+  const leverHeld: LeverSkipCounts = {}
+  let leverHoldsUnread = false
+  const noteHeld = (o: { leverHeld?: { counts: LeverSkipCounts; unread?: true } }) => {
+    addLeverSkipCounts(leverHeld, o.leverHeld?.counts)
+    if (o.leverHeld?.unread) leverHoldsUnread = true
+  }
   // 1d — only a live pool writes, so only then are the dial and the caps read.
   const guard = pools.some((p) => !p.dryRun) ? await openEngineGuard('budget-pools') : null
   for (const p of pools) {
@@ -61,6 +71,7 @@ export async function runBudgetPoolRebalanceOnce(): Promise<TickSummary> {
       if (guard!.posture === 'suggest') {
         // The native dry run: the audit row records what it would move (its cool-down starts, as for a dry-run pool).
         const dry = await rebalanceAndAudit({ poolId: p.id, triggeredBy: 'cron', actor: BUDGET_POOL_CRON_ACTOR, forceDryRun: true })
+        noteHeld(dry)
         if (dry.skipped) skipped += 1
         else { rebalanced += 1; totalShiftCents += dry.totalShiftCents }
         held.forward = dry.ok && !dry.skipped && movesOf(dry.proposed) > 0
@@ -79,6 +90,7 @@ export async function runBudgetPoolRebalanceOnce(): Promise<TickSummary> {
       actor: BUDGET_POOL_CRON_ACTOR,
     })
     if (permit) guard!.settle(permit, outcome.applied?.applied ?? 0, nothingHeld())
+    noteHeld(outcome)
     if (outcome.skipped) {
       skipped += 1
       continue
@@ -95,12 +107,14 @@ export async function runBudgetPoolRebalanceOnce(): Promise<TickSummary> {
     totalShiftCents,
     durationMs: Date.now() - startedAt,
     ...(guard ? { guard: guard.report() } : {}),
+    ...(Object.keys(leverHeld).length ? { leverHeld } : {}),
+    ...(leverHoldsUnread ? { leverHoldsUnread } : {}),
   }
   lastRunAt = new Date()
   lastSummary = `pools=${pools.length} rebalanced=${rebalanced} live=${appliedLive} skipped=${skipped} shift=${totalShiftCents}¢ ${summary.durationMs}ms${engineGuardNote(summary.guard, {
     suggest: 'each due rebalance of a live pool is recorded as a dry run; nothing is written',
     stopped: 'nothing is written; rebalances wait for Resume',
-  })}`
+  })}${leverSkipNote(leverHeld, leverHoldsUnread)}`
   return summary
 }
 

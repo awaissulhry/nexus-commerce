@@ -18,6 +18,7 @@ import { logger } from '../../utils/logger.js'
 import { nothingHeld, type EngineGuard } from './ads-engine-guard.js'
 import { settledWhere } from './ads-settled-window.js'
 import { brainOwnedCampaignIds } from './bid-brain/live.js'
+import { brainSkipsOutput, readLeverHolds, type LeverSkip, type LeverSkipCounts } from './brain/engine-skips.js'
 
 const TOP_REPORT_PLACEMENT = 'Top of Search on-Amazon'
 const TOP_BID_KEY = 'PLACEMENT_TOP'
@@ -160,9 +161,12 @@ export async function applyTopOfSearchRecommendations(opts: { windowDays?: numbe
   let applied = 0
   // BB-6 — never on a campaign the bid brain owns (one writer per campaign).
   const brainOwned = await brainOwnedCampaignIds(rows.map((r) => r.campaignId))
+  // ONE BRAIN AB-6 — nor on one whose placements a product's brain owns or the Owner holds (brain/engine-skips.ts).
+  const leverHolds = await readLeverHolds(rows.filter((r) => !brainOwned.has(r.campaignId)).map((r) => r.campaignId), { actor: 'automation:tos-optimizer' }, 'tos-optimizer')
   for (const r of rows) {
     if (brainOwned.has(r.campaignId)) continue
     if (r.action !== 'keep' && r.recommendedPct !== r.currentPct) {
+      if (leverHolds.skip(r.campaignId, 'placements')) continue
       await applyTopOfSearch(r.campaignId, r.recommendedPct, { actor: 'automation:tos-optimizer', reason: r.reason })
       applied += 1
     }
@@ -207,6 +211,8 @@ export interface DefendTosResult {
   rankOwnedNote?: string
   /** BB-6 — moves left alone because the bid brain owns the campaign (one writer per campaign). */
   skippedBrainOwned?: number
+  /** ONE BRAIN AB-6 — moves left alone because a product's brain owns (or the Owner holds) the campaign's placements. */
+  brainSkips?: { counts: LeverSkipCounts; sample?: unknown[]; unread?: string }
   dryRun: boolean
   sample: Array<{ campaign: string; fromPct: number; toPct: number; action: string; reason: string }>
 }
@@ -234,15 +240,24 @@ export async function defendTopOfSearch(opts: {
   const candidate = rows.filter((r) => r.action !== 'keep' && r.recommendedPct !== r.currentPct)
   // BID BRAIN BB-6 — a campaign the brain owns has one writer, the brain: its placements are left to it too.
   const brainOwned = await brainOwnedCampaignIds(candidate.map((r) => r.campaignId))
-  const notBrain = candidate.filter((r) => !brainOwned.has(r.campaignId))
-  const skippedBrainOwned = candidate.length - notBrain.length
+  const notBidBrain = candidate.filter((r) => !brainOwned.has(r.campaignId))
+  const skippedBrainOwned = candidate.length - notBidBrain.length
+  // ONE BRAIN AB-6 — and a campaign whose placements a product's brain owns, or the Owner holds at his own value
+  // (brain/engine-skips.ts), asked before the dry-run return so a preview never offers the move either. Read once per run.
+  const leverHolds = await readLeverHolds(notBidBrain.map((r) => r.campaignId), { actor: opts.actor ?? 'automation:tos-optimizer' }, 'tos-defense')
+  const leftToBrain: LeverSkip[] = []
+  const notBrain = notBidBrain.filter((r) => {
+    const skip = leverHolds.skip(r.campaignId, 'placements')
+    if (skip) leftToBrain.push(skip)
+    return !skip
+  })
   const free = notBrain.filter((r) => !rankOwned.has(r.campaignId))
   const skippedRankOwned = notBrain.length - free.length
   const rankOwnedNote = skippedRankOwned > 0 ? rankOwnedWhy('Top of Search placement', skippedRankOwned) : undefined
   const skippedPaused = free.filter((r) => r.action === 'raise' && r.status === 'PAUSED').length
   const actionable = free.filter((r) => !(r.action === 'raise' && r.status === 'PAUSED'))
   const sample = actionable.slice(0, 8).map((r) => ({ campaign: r.name, fromPct: r.currentPct, toPct: r.recommendedPct, action: r.action, reason: r.reason }))
-  const held = { skippedRankOwned, ...(rankOwnedNote ? { rankOwnedNote } : {}), ...(skippedBrainOwned ? { skippedBrainOwned } : {}) }
+  const held = { skippedRankOwned, ...(rankOwnedNote ? { rankOwnedNote } : {}), ...(skippedBrainOwned ? { skippedBrainOwned } : {}), ...(brainSkipsOutput(leverHolds.counts(), leftToBrain, leverHolds.unread) as Pick<DefendTosResult, 'brainSkips'>) }
   if (opts.dryRun) {
     return { evaluated: rows.length, changed: actionable.length, applied: 0, skippedNotAllowlisted: 0, skippedPaused, ...held, dryRun: true, sample }
   }

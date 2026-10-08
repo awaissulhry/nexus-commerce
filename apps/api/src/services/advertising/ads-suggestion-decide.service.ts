@@ -110,6 +110,7 @@ const SKIP_WORDS: Record<string, string> = {
   campaign_suppressed: "its campaign's bids are suppressed: the next restore would overwrite the change",
   'source-ad-group-not-in-mappings': "the search term's ad group is not in the rule's mappings",
   'term-filter': "the search term does not pass the rule's term filters",
+  'brain-lever': "a product's brain owns this lever of the campaign, or the Owner holds it at his own value",
 }
 
 /** AA-W2-10 — why the rule's handler passed an apply over, in a sentence; null when it did not. Pure. */
@@ -170,16 +171,21 @@ export async function applySuggestion(id: string, ov: ApplyOverride = {}, decide
   const meta = { dryRun: false, ruleId: sug.ruleId, operatorApproved: as.operatorApproved ?? true, ...(approval ? { approval } : {}) }
   const trigger = typeof (triggerData as { trigger?: unknown } | null)?.trigger === 'string' ? (triggerData as { trigger: string }).trigger : null
   const brain = await ruleBrainInput(action as never, triggerData, { ruleId: sug.ruleId, trigger, dryRun: false }, (a) => handler(a as never, triggerData, { ...meta, dryRun: true }))
+  // ONE BRAIN AB-6 — a lever a product's brain owns (or the Owner locked) on the campaign this change writes is left, as the
+  // rule's own run leaves it: the approved write is the rule's, which the write gate refuses there (brain/rule-skips.ts). The
+  // card keeps waiting with the reason (skipSentence below); the Owner can set the lever to shadow or off, or edit by hand.
+  const { ruleLeverSkip } = await import('./brain/rule-skips.js')
+  const leverSkip = brain ? null : await ruleLeverSkip(action as never, triggerData, { ruleId: sug.ruleId })
   // Review 2026-10-08 — a target-ACoS bid card shows the bid a person approves; the formula moved (÷ r̂) and a rule may
   // now wait a data day. The rule's own dry run, as this approval would run it, must still ask that bid: else the card
   // is refused as out of date and stays waiting (the rule's next run refreshes or expires it). Never a different bid
   // than the one the person saw. An override (S.5) is the person's own number and is not compared.
-  if (!brain && !overridden && isTargetAcosBidCard(action)) {
+  if (!brain && !leverSkip && !overridden && isTargetAcosBidCard(action)) {
     const live = await handler(action as never, triggerData, { ...meta, dryRun: true })
     const stale = staleBidCardSentence(sug.proposedAction, live)
     if (stale) return { ok: false, refused: true, error: stale, result: live }
   }
-  const result = brain ?? await handler(action as never, triggerData, meta)
+  const result = brain ?? leverSkip ?? await handler(action as never, triggerData, meta)
   /**
    * 🔴 SG.0 — a refused apply STAYS PENDING.
    *

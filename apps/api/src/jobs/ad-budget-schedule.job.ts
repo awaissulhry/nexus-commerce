@@ -55,6 +55,7 @@ import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { updateCampaignWithSync } from '../services/advertising/ads-mutation.service.js'
 import { allowChange, engineGuardNote, nothingHeld, openEngineGuard, type EngineGuardReport } from '../services/advertising/ads-engine-guard.js'
+import { leverSkipNote, readLeverHolds, type LeverSkipCounts } from '../services/advertising/brain/engine-skips.js'
 import { budgetDayKey, budgetDayStart } from '@nexus/shared/ads-budget-day'
 import { parseDecimalInput } from '@nexus/shared/ads-number'
 
@@ -429,7 +430,9 @@ export function classifyOverride(actor: string | null | undefined): { kind: BSOv
 }
 
 // 1d — `guard`: the dial posture and the caps this run ran under, and what they held back.
-export interface BSTick { evaluated: number; changed: number; yielded: number; refused: number; guard?: EngineGuardReport }
+// ONE BRAIN AB-6 — `leverHeld`: the writes it left because a product's brain owns the campaign's daily budget (or the
+// Owner holds it at his own value), per lever; `leverHoldsUnread`: who holds them could not be read (the gate decided).
+export interface BSTick { evaluated: number; changed: number; yielded: number; refused: number; guard?: EngineGuardReport; leverHeld?: LeverSkipCounts; leverHoldsUnread?: boolean }
 
 export async function runBudgetScheduleOnce(now: Date = new Date()): Promise<BSTick> {
   const schedules = await prisma.budgetSchedule.findMany({
@@ -445,6 +448,15 @@ export async function runBudgetScheduleOnce(now: Date = new Date()): Promise<BST
   let refused = 0
   // 1d — the account dial and this engine's caps, read once per run; each campaign asks before its one write.
   const guard = schedules.length ? await openEngineGuard('budget-schedules') : null
+  // ONE BRAIN AB-6 — who holds the daily budgets of every scheduled campaign, read once per run (brain/engine-skips.ts):
+  // a write — a window's or a give-back's — on a budget a product's brain owns, or the Owner holds at his own value, is
+  // left, and the memo is carried as when the dial holds it back, so the schedule acts on its first run allowed to.
+  // Every schedule's actor is the same kind of writer at the gate (automation:budget-schedule-<id>).
+  const leverHolds = await readLeverHolds(
+    schedules.flatMap((s) => ((s.campaigns as unknown as BSCampaign[]) ?? []).map((c) => c.id)),
+    { actor: 'automation:budget-schedule' },
+    'budget-schedules',
+  )
   for (const s of schedules) {
     const windows = (s.windows as unknown as BSWindow[]) ?? []
     const camps = (s.campaigns as unknown as BSCampaign[]) ?? []
@@ -519,6 +531,13 @@ export async function runBudgetScheduleOnce(now: Date = new Date()): Promise<BST
       }
       const target = d.targetCents / 100
       const isGiveBack = d.purpose === 'giveBack'
+
+      const leverHeld = leverHolds.skip(c.id, 'budgets')
+      if (leverHeld) {
+        if (prev) nextLast[c.id] = prev
+        logger.info('[budget-schedule] left alone — one owner per lever', { scheduleId: s.id, campaignId: c.id, target, giveBack: isGiveBack, why: leverHeld.reason })
+        continue
+      }
 
       /**
        * 1d — the dial and the caps, asked once per campaign before its one write. Entering a window is a new
@@ -654,8 +673,12 @@ export async function runBudgetScheduleOnce(now: Date = new Date()): Promise<BST
     }
     await prisma.budgetSchedule.update({ where: { id: s.id }, data: { lastApplied: nextLast as unknown as Prisma.InputJsonValue, lastEvaluatedAt: new Date() } })
   }
-  logger.info('[budget-schedule] tick', { evaluated: schedules.length, changed, yielded, refused })
-  return { evaluated: schedules.length, changed, yielded, refused, ...(guard ? { guard: guard.report() } : {}) }
+  const leverHeld = leverHolds.counts()
+  logger.info('[budget-schedule] tick', { evaluated: schedules.length, changed, yielded, refused, ...(leverHolds.total() ? { leverHeld } : {}) })
+  return {
+    evaluated: schedules.length, changed, yielded, refused, ...(guard ? { guard: guard.report() } : {}),
+    ...(leverHolds.total() ? { leverHeld } : {}), ...(leverHolds.unread ? { leverHoldsUnread: true } : {}),
+  }
 }
 
 /** 1d — the run's summary line: the counts, plus what the dial or the caps held back (nothing extra on a normal run). */
@@ -663,7 +686,7 @@ export function budgetScheduleSummaryLine(r: BSTick): string {
   return `evaluated=${r.evaluated} changed=${r.changed} yielded=${r.yielded} refused=${r.refused}${engineGuardNote(r.guard, {
     suggest: 'no window is entered; a budget it set is still given back when its window closes',
     stopped: 'nothing is written; windows and give-backs wait for Resume',
-  })}`
+  })}${leverSkipNote(r.leverHeld, r.leverHoldsUnread)}`
 }
 
 export async function runBudgetScheduleCron(): Promise<void> {

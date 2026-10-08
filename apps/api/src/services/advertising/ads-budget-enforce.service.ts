@@ -54,6 +54,7 @@ import { DEFAULT_STOP_BID_CENTS } from './ads-strategy/fields.js'
 import { capMarkets } from './ads-strategy/load.js'
 import { openStrategy, stopBidsIn, strategySourceWords, type StrategyView } from './ads-strategy/effective.js'
 import { adGroupFloorDecisions, scopeCapsThisMonth, type ScopeCap } from './ads-strategy/spend.js'
+import { readLeverHolds, type LeverSkipCounts } from './brain/engine-skips.js'
 
 const FLOOR_CENTS = 100 // €1/day — Amazon's minimum campaign budget
 /** Actor prefix this engine stamps on Campaign.bidsSuppressedBy when it suppresses. */
@@ -401,17 +402,28 @@ export async function computeBudgetEnforcement(opts: { month?: string } = {}): P
  *            would show the restored bids while Amazon stays at 2¢. Not calling them keeps `bidsSuppressedAt` set, so
  *            the first run after Resume restores.
  */
-export async function applyBudgetEnforcement(opts: { month?: string; actor?: AdsActor; dryRun?: boolean } = {}): Promise<{ dryRun: boolean; budgetApplied: number; suppressed: number; restored: number; failed: number; adGroupsSuppressed: number; adGroupsRestored: number; result: EnforcementResult; guard?: EngineGuardReport }> {
+export async function applyBudgetEnforcement(opts: { month?: string; actor?: AdsActor; dryRun?: boolean } = {}): Promise<{ dryRun: boolean; budgetApplied: number; suppressed: number; restored: number; failed: number; adGroupsSuppressed: number; adGroupsRestored: number; result: EnforcementResult; guard?: EngineGuardReport; leverHeld?: LeverSkipCounts; leverHoldsUnread?: boolean }> {
   const result = await computeBudgetEnforcement({ month: opts.month })
   const dryRun = opts.dryRun ?? true
   const actor: AdsActor = opts.actor ?? 'automation:budget-manager'
   let budgetApplied = 0, suppressed = 0, restored = 0, failed = 0, adGroupsSuppressed = 0, adGroupsRestored = 0
   const guard = !dryRun && result.plans.length ? await openEngineGuard('budget-enforce') : null
+  /**
+   * ONE BRAIN AB-6 — the PACING write leaves a campaign whose daily budget a product's brain owns, or the Owner holds at
+   * his own value (brain/engine-skips.ts; design §2.5 retires pacing for brain products, §2.6). Only the pacing: the stop
+   * over spend (its floors and their give-back) is this engine's safety job, which the write gate lets through every
+   * lever and every lock (BRAIN_SAFETY_ACTOR_PREFIXES) — so the pacing is judged here as any other budget writer, not as
+   * that safety owner. Read once per run, only for a live run that paces; nothing is read unless a product is enrolled.
+   */
+  const pacingIds = guard ? result.plans.flatMap((p) => p.campaigns.filter((d) => d.targetDailyCents != null && d.deltaCents !== 0).map((d) => d.id)) : []
+  const pacingHolds = await readLeverHolds(pacingIds, { actor: 'automation:budget-pacing' }, 'budget-enforce pacing')
 
   if (guard) {
     for (const plan of result.plans) {
       for (const d of plan.campaigns) {
-        const paces = d.targetDailyCents != null && d.deltaCents !== 0
+        const brainHeld = d.targetDailyCents != null && d.deltaCents !== 0 ? pacingHolds.skip(d.id, 'budgets') : null
+        if (brainHeld) logger.info('[budget-enforce] pacing left alone — one owner per lever', { campaignId: d.id, why: brainHeld.reason })
+        const paces = d.targetDailyCents != null && d.deltaCents !== 0 && !brainHeld
         if (!paces && !d.suppress && !d.restore) continue
         // W1-6 — the market's own "most actions per run" (the ads strategy) counts this campaign's changes too.
         const permit = guard.permit({ market: plan.marketplace })
@@ -444,8 +456,11 @@ export async function applyBudgetEnforcement(opts: { month?: string; actor?: Ads
     }
   }
 
-  logger.info(`[budget-enforce] ${dryRun ? 'dry-run' : 'applied'}`, { month: result.month, plans: result.totals.plans, budgetApplied, suppressed, restored, adGroupsSuppressed, adGroupsRestored, failed })
-  return { dryRun, budgetApplied, suppressed, restored, failed, adGroupsSuppressed, adGroupsRestored, result, ...(guard ? { guard: guard.report() } : {}) }
+  logger.info(`[budget-enforce] ${dryRun ? 'dry-run' : 'applied'}`, { month: result.month, plans: result.totals.plans, budgetApplied, suppressed, restored, adGroupsSuppressed, adGroupsRestored, failed, ...(pacingHolds.total() ? { leverHeld: pacingHolds.counts() } : {}) })
+  return {
+    dryRun, budgetApplied, suppressed, restored, failed, adGroupsSuppressed, adGroupsRestored, result, ...(guard ? { guard: guard.report() } : {}),
+    ...(pacingHolds.total() ? { leverHeld: pacingHolds.counts() } : {}), ...(pacingHolds.unread ? { leverHoldsUnread: true } : {}),
+  }
 }
 
 /** W1-6b — an action-log reason for an ad-group floor: the reached cap that covers it, and the stop bid's source. */

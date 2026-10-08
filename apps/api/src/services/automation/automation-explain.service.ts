@@ -19,8 +19,10 @@ import { cronRunsFact, lowest, type AutomationAdapter, type AutomationLevel, typ
 
 export const MAX_EXPLAIN_DAYS = 30
 const CAP_REASONS = ['DAILY_CAP_EXCEEDED', 'WRITE_CAP_REACHED', 'VALUE_CAP_EXCEEDED']
+/** ONE BRAIN AB-6 — a write left on a lever a product's brain owns or the Owner holds (`LEVER_HELD:<lever>`). */
+const LEVER_HELD = 'LEVER_HELD:'
 
-export type VerdictCode = 'never-written' | 'not-written-in-window' | 'capped' | 'refused' | 'not-running' | 'no-runs' | 'failing' | 'acting'
+export type VerdictCode = 'never-written' | 'not-written-in-window' | 'capped' | 'lever-held' | 'refused' | 'not-running' | 'no-runs' | 'failing' | 'acting'
 
 export interface Verdict {
   code: VerdictCode
@@ -67,7 +69,14 @@ export function verdictsOf(level: AutomationLevel | null, levelReason: string, f
     const detail = capReasons.map(([reason, count]) => `${reason} ${count}`).join(', ')
     out.push({ code: 'capped', says: `Its own caps stopped it ${capRefusals} times in ${days} days${detail ? ` (${detail})` : ''}: the cap, not the rule, decides how much it reaches.` })
   }
-  const otherRefusals = Object.entries(facts.refusals?.byReason ?? {}).filter(([reason]) => !CAP_REASONS.includes(reason))
+  // ONE BRAIN AB-6 — one owner per lever: what it left to a product's brain (or to the Owner's lock), per lever. Said
+  // apart from a refusal, because nothing is wrong with the rule: the lever has another owner.
+  const leverHeld = Object.entries(facts.refusals?.byReason ?? {}).filter(([reason]) => reason.startsWith(LEVER_HELD))
+  if (leverHeld.length) {
+    const n = leverHeld.reduce((sum, [, c]) => sum + c, 0)
+    out.push({ code: 'lever-held', says: `It left ${n} write${n === 1 ? '' : 's'} alone in ${days} days on levers a product's brain owns or the Owner holds at his own value (${leverHeld.map(([r, c]) => `${r.slice(LEVER_HELD.length)} ${c}`).join(', ')}): one owner per lever, not a failure.` })
+  }
+  const otherRefusals = Object.entries(facts.refusals?.byReason ?? {}).filter(([reason]) => !CAP_REASONS.includes(reason) && !reason.startsWith(LEVER_HELD))
   if (otherRefusals.length) {
     out.push({ code: 'refused', says: `It was refused ${otherRefusals.reduce((n, [, c]) => n + c, 0)} times (${otherRefusals.map(([r, c]) => `${r} ${c}`).join(', ')}).` })
   }

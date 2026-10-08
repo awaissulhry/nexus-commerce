@@ -27,6 +27,7 @@ import { isGoalMode } from './ad-rank-defend.job.js'
 import { allowChange, engineGuardNote, nothingHeld, openEngineGuard, readEnginePosture, type EngineGuard, type EngineGuardReport } from '../services/advertising/ads-engine-guard.js'
 import { isRankOwnedFloor } from '../services/advertising/rank-release.service.js'
 import { brainOwnedCampaignIds } from '../services/advertising/bid-brain/live.js'
+import { leverSkipNote, readLeverHolds, type LeverSkipCounts } from '../services/advertising/brain/engine-skips.js'
 
 // AU.3 — bid multiplier per window. A window can optionally carry a
 // bidMultiplierPct (e.g. +30 to raise bids 30% during peak hours, -50 to
@@ -206,7 +207,9 @@ export async function multiplierWaitWhy(s: { campaignId: string; originalBids: u
 }
 
 // BB-6 — `brainOwned`: classic schedules on a campaign the bid brain owns, left to the brain (one writer per campaign).
-export interface DaypartingSummary { evaluated: number; changed: number; bidsAdjusted: number; guard?: EngineGuardReport; brainOwned?: number }
+// ONE BRAIN AB-6 — `leverHeld`: schedules left because a product's brain owns (or the Owner holds) the campaign's ad-group
+// default bids, per lever; `leverHoldsUnread`: who holds them could not be read (the write gate decided).
+export interface DaypartingSummary { evaluated: number; changed: number; bidsAdjusted: number; guard?: EngineGuardReport; brainOwned?: number; leverHeld?: LeverSkipCounts; leverHoldsUnread?: boolean }
 
 export async function runDaypartingOnce(): Promise<DaypartingSummary> {
   // Goal-mode schedules (a baseline/window rank target) are owned by the
@@ -236,7 +239,11 @@ export async function runDaypartingOnce(): Promise<DaypartingSummary> {
     .filter((s) => !isGoalMode(s.windows, s.defaultTargetKey) && !planGoverned.has(s.campaignId))
   // BID BRAIN BB-6 — a campaign the brain owns has one writer, the brain: its classic schedule is left alone.
   const brainOwned = await brainOwnedCampaignIds(classic.map((s) => s.campaignId))
-  const schedules = classic.filter((s) => !brainOwned.has(s.campaignId))
+  // ONE BRAIN AB-6 — and a campaign whose ad-group default bids a product's brain owns, or the Owner holds at his own
+  // value: a schedule's floor and its give-back move the ad groups' default bids with the keywords', so the campaign is
+  // left whole, as a bid brain campaign is (brain/engine-skips.ts). Read once per run; nothing unless a product is enrolled.
+  const leverHolds = await readLeverHolds(classic.filter((s) => !brainOwned.has(s.campaignId)).map((s) => s.campaignId), { actor: 'automation:dayparting' }, 'dayparting')
+  const schedules = classic.filter((s) => !brainOwned.has(s.campaignId) && !leverHolds.skip(s.campaignId, 'adGroupBids'))
   // 2d — classic schedules switched off while their multiplier was on, whose give-back had to wait (ads automation was
   // stopped): each row keeps its snapshot, and the first run that may write gives the bids back.
   const parked = (await prisma.adSchedule.findMany({ where: { enabled: false }, select: { id: true, campaignId: true, windows: true, defaultTargetKey: true, originalBids: true } }))
@@ -345,12 +352,15 @@ export async function runDaypartingOnce(): Promise<DaypartingSummary> {
     if (r.restored) { changed++; bidsAdjusted += r.restored }
   }
   logger.info('[dayparting] tick', { evaluated: schedules.length, changed, bidsAdjusted })
-  return { evaluated: schedules.length, changed, bidsAdjusted, ...(guard ? { guard: guard.report() } : {}), ...(brainOwned.size ? { brainOwned: brainOwned.size } : {}) }
+  return {
+    evaluated: schedules.length, changed, bidsAdjusted, ...(guard ? { guard: guard.report() } : {}), ...(brainOwned.size ? { brainOwned: brainOwned.size } : {}),
+    ...(leverHolds.total() ? { leverHeld: leverHolds.counts() } : {}), ...(leverHolds.unread ? { leverHoldsUnread: true } : {}),
+  }
 }
 
 /** 1c — the run's summary line: the counts, plus what the dial or the caps held back (nothing extra on a normal run). */
 export function daypartingSummaryLine(r: DaypartingSummary): string {
-  return `evaluated=${r.evaluated} changed=${r.changed}${engineGuardNote(r.guard)}${r.brainOwned ? ` brain-owned=${r.brainOwned} (the bid brain runs them)` : ''}`
+  return `evaluated=${r.evaluated} changed=${r.changed}${engineGuardNote(r.guard)}${r.brainOwned ? ` brain-owned=${r.brainOwned} (the bid brain runs them)` : ''}${leverSkipNote(r.leverHeld, r.leverHoldsUnread)}`
 }
 
 export async function runDaypartingCron(): Promise<void> {
