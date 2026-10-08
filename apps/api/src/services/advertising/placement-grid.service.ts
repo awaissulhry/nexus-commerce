@@ -1512,6 +1512,7 @@ export interface PlacementRulesStrip {
 export async function getPlacementRulesStrip(): Promise<PlacementRulesStrip> {
   const { TRIGGER_WINDOW } = await import('@nexus/shared/ads-rule-window')
   const { settledWhere } = await import('./ads-settled-window.js')
+  await (await import('./ads-settled-facts.js')).primeSettledWindow() // BB-14 — the window the evaluator reads
   /**
    * A Placement rule is triggered by CAMPAIGN_PERFORMANCE_BUDGET (`TRIGGER_BY_SLUG.placement`),
    * so its reach is that trigger's context set — the same one `buildCampaignBudgetContexts`
