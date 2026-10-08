@@ -30,6 +30,7 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // L9 — closing and reopening a listing changes it on the channel. Phase 3 (T1) — so do ending, relisting and deleting it.
 // Phase 3 T3 — ebay-categories reads eBay's category suggestions and a category's details live (it stores nothing).
 // Ads autonomy W3-1 — apply-ad-recommendations asks for a plan whose steps reach Amazon.
+// FBA shipment drafts (Owner 2026-10-08) — plan-fba-shipment fills a draft in Nexus only; a person's "Send to Amazon" reaches Amazon.
 
 const OPEN_WORLD = [
   'add-ad-targets', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'advance-purchase-order',
@@ -39,7 +40,7 @@ const OPEN_WORLD = [
   'create-ai-goal-campaigns',
   'create-ebay-campaign', 'create-negative-keyword', 'decide-automation-suggestions', 'delete-listing', 'dispose-return-items',
   'ebay-categories', 'ebay-keywords-change', 'email-supplier', 'enable-ads', 'end-listing', 'graduate-keyword', 'harvest-search-term', 'import-catalog', 'issue-refund',
-  'link-channel-id', 'listing-live-content', 'lower-ad-bids-for-stock', 'pause-ads', 'plan-fba-shipment', 'promote-ebay-listings', 'publish-listing',
+  'link-channel-id', 'listing-live-content', 'lower-ad-bids-for-stock', 'pause-ads', 'promote-ebay-listings', 'publish-listing',
   'publish-review', 'receive-stock', 'reconcile-stock-count', 'relist-listing', 'reopen-listing', 'replicate-ad-structure', 'reply-to-review', 'request-review', 'resend-prices',
   'reserve-stock', 'restore-ad-bids-after-stock', 'restore-budget-baselines', 'restore-campaign', 'resume-automation',
   'retire-negatives', 'revert-listing-change', 'rollback-bulk-operation', 'run-ad-engine-now',

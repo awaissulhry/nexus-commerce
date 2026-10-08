@@ -1,6 +1,8 @@
 /**
  * Step 4 Send to FBA (Owner 2026-10-07) — the dialog's facts, "Create plan", the Owner's choice, cancel and "Try again".
  * Signatures and rules: `contract.ts` (Part C). Wire shapes, words and the box rule: `@nexus/shared/fba-send`.
+ * Drafts (Owner 2026-10-08) live in draft.service.ts; their "Send to Amazon" is `prepareSend` + `commitSend` here, the
+ * same checks, holds and job as a plan made at once (`createSendPlan`, kept for the tests and as the one send path).
  *
  * Owner decisions kept here:
  *  - Units are HELD at the From warehouse at "Create plan" (StockReservation FBA_SEND, HARD, 45 days) and released AT
@@ -24,7 +26,7 @@ import {
   type FbaPlanStatus, type FbaPlanStep, type FbaPlanStepEntry, type FbaPlanView, type FbaSendDraft, type FbaSendLine,
   type FbaSendLocation, type FbaSendMarket, type FbaSendOwners, type FbaSendSku,
 } from '@nexus/shared/fba-send'
-import { caseSplit, countsFor, isCaseOwner } from '@nexus/shared/stock-cases'
+import { caseSplit, countsFor, isCaseOwner, type CaseCount, type CaseOwner } from '@nexus/shared/stock-cases'
 import prisma from '../../db.js'
 import { publishEvent } from '../../lib/events/publish.js'
 import { logger } from '../../utils/logger.js'
@@ -36,7 +38,7 @@ import { releaseReservationInTx, reserveStockInTx, StockLevelMissingError } from
 import { InsufficientStockError } from '../stock-movement.service.js'
 import { caseSizesOf, sealedByLevel, setFbaOwnersIfUnset } from '../stock/stock-cases.service.js'
 import { requireShipFromAddress, shipFromAddress, type WarehouseAddress } from './address.js'
-import { openPlanUnits, planViewIn } from './read.service.js'
+import { lineCaseCounts, openDraftOf, openPlanUnits, planViewIn } from './read.service.js'
 import { FbaSendError, type FbaActor, type FbaPerson, type FbaPlanSource, type FbaSendDraftQuery } from './contract.js'
 
 type Tx = Prisma.TransactionClient
@@ -90,7 +92,7 @@ export async function lockPlan(tx: Tx, planId: string) {
     where: { id: planId },
     select: {
       id: true, name: true, status: true, currentStep: true, source: true, planId: true, steps: true, options: true,
-      nextCheckAt: true, sourceLocationId: true,
+      nextCheckAt: true, sourceLocationId: true, marketplaceId: true,
       lines: { select: { id: true, productId: true, msku: true, quantity: true, caseCounts: true, shippedQuantity: true, reservationId: true } },
     },
   })
@@ -98,7 +100,7 @@ export async function lockPlan(tx: Tx, planId: string) {
   return row
 }
 
-const words = (status: string) => (FBA_SEND_COPY.status as Record<string, string>)[status] ?? status
+export const words = (status: string) => (FBA_SEND_COPY.status as Record<string, string>)[status] ?? status
 
 /* ── readSendDraft ────────────────────────────────────────────────────────────────────────────── */
 
@@ -109,7 +111,7 @@ const PRODUCT_SELECT = {
 type DraftProduct = Prisma.ProductGetPayload<{ select: typeof PRODUCT_SELECT }>
 
 /** Ticked rows → the SKUs that are sent: a parent is never sent, it stands for its variations (by SKU). */
-async function sendableProducts(productIds: readonly string[]): Promise<DraftProduct[]> {
+export async function sendableProducts(productIds: readonly string[]): Promise<DraftProduct[]> {
   const [found, children] = await Promise.all([
     prisma.product.findMany({ where: { id: { in: [...productIds] }, deletedAt: null }, select: PRODUCT_SELECT }),
     prisma.product.findMany({ where: { parentId: { in: [...productIds] }, deletedAt: null }, select: PRODUCT_SELECT, orderBy: [{ sku: 'asc' }, { id: 'asc' }] }),
@@ -133,11 +135,12 @@ interface DraftFacts {
   warehouse: WarehouseAddress | null
 }
 
-async function draftFacts(query: FbaSendDraftQuery): Promise<DraftFacts> {
+/** `allowEmpty`: a draft with no SKU yet still has its From, To, day and box (the FBA shipments page). */
+async function draftFacts(query: FbaSendDraftQuery, opts: { allowEmpty?: boolean } = {}): Promise<DraftFacts> {
   const asked = [...new Set((Array.isArray(query.productIds) ? query.productIds : []).filter((id): id is string => typeof id === 'string').map((id) => id.trim()).filter(Boolean))]
-  if (asked.length === 0) throw new FbaSendError('NOT_FOUND', 'Choose the SKUs to send')
-  const products = await sendableProducts(asked)
-  if (products.length === 0) throw new FbaSendError('NOT_FOUND', 'Product not found')
+  if (asked.length === 0 && !opts.allowEmpty) throw new FbaSendError('NOT_FOUND', 'Choose the SKUs to send')
+  const products = asked.length > 0 ? await sendableProducts(asked) : []
+  if (products.length === 0 && !opts.allowEmpty) throw new FbaSendError('NOT_FOUND', 'Product not found')
   if (products.length > FBA_SEND_MAX_SKUS) {
     throw new FbaSendError('REFUSED', FBA_SEND_COPY.problem.tooManySkus, [{ code: 'TOO_MANY_SKUS', message: FBA_SEND_COPY.problem.tooManySkus, productId: null, blocking: true }])
   }
@@ -218,14 +221,71 @@ async function draftFacts(query: FbaSendDraftQuery): Promise<DraftFacts> {
   })
 
   return {
-    draft: { from, locations, market, markets, readyToShipOn: nextWorkingDay(today), today, address: check, mixedBox: { ...MIXED_BOX_DEFAULT }, skus },
+    draft: {
+      from, locations, market, markets, readyToShipOn: nextWorkingDay(today), today, address: check, mixedBox: { ...MIXED_BOX_DEFAULT }, skus,
+      draftId: null, lines: [],
+    },
     warehouse,
   }
 }
 
-/** The dialog's facts for the ticked SKUs (contract.ts). Reads only. */
+/** A draft line as the dialog's line: its sealed cases per size and its loose units. */
+export const draftLineOf = (line: { productId: string; caseCounts: unknown; looseUnits: number }): FbaSendLine =>
+  ({ productId: line.productId, cases: lineCaseCounts(line.caseCounts), looseUnits: line.looseUnits })
+
+const DRAFT_LINE_SELECT = { productId: true, caseCounts: true, looseUnits: true, quantity: true } as const
+const draftDay = (value: Date | null | undefined): string | null => (value ? value.toISOString().slice(0, 10) : null)
+const draftBox = (value: unknown): FbaMixedBox | null => (value && typeof value === 'object' && !Array.isArray(value) ? (value as FbaMixedBox) : null)
+
+/** The market code of a stored marketplaceId (null when unknown). */
+async function marketCodeOf(marketplaceId: string | null): Promise<string | null> {
+  if (!marketplaceId) return null
+  const row = await prisma.marketplace.findFirst({ where: { channel: 'AMAZON', marketplaceId }, select: { code: true } })
+  return row?.code ?? null
+}
+
+/**
+ * The dialog's facts for the ticked SKUs (contract.ts), with the open DRAFT for that From + To and its lines for these
+ * SKUs (the dialog starts from them). With `planId`: the draft's own From, To, day, box, SKUs and lines (the page).
+ * Reads only.
+ */
 export async function readSendDraft(query: FbaSendDraftQuery): Promise<FbaSendDraft> {
-  return (await draftFacts(query)).draft
+  const planId = typeof query.planId === 'string' && query.planId.trim() ? query.planId.trim() : null
+  if (planId) {
+    const row = await prisma.fbaInboundPlanV2.findFirst({
+      where: { id: planId, source: { not: null } },
+      select: {
+        id: true, status: true, sourceLocationId: true, marketplaceId: true, readyToShipOn: true, mixedBox: true,
+        lines: { select: DRAFT_LINE_SELECT, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
+      },
+    })
+    if (!row) throw new FbaSendError('NOT_FOUND', 'FBA plan not found')
+    if (row.status !== 'DRAFT') throw new FbaSendError('WRONG_STATE', `The plan is "${words(row.status)}": it is no longer a draft.`)
+    const [location, market] = await Promise.all([
+      row.sourceLocationId ? prisma.stockLocation.findUnique({ where: { id: row.sourceLocationId }, select: { code: true } }) : null,
+      marketCodeOf(row.marketplaceId),
+    ])
+    // A From or market that is gone names nothing (the shared rule then says so) — never the default warehouse.
+    const { draft } = await draftFacts({ productIds: row.lines.map((line) => line.productId), from: location?.code ?? '-', market: market ?? '-' }, { allowEmpty: true })
+    return {
+      ...draft,
+      readyToShipOn: draftDay(row.readyToShipOn) ?? draft.readyToShipOn,
+      mixedBox: draftBox(row.mixedBox) ?? draft.mixedBox,
+      draftId: row.id,
+      lines: row.lines.map(draftLineOf),
+    }
+  }
+  const { draft } = await draftFacts(query)
+  const market = draft.markets.find((m) => m.code === draft.market)
+  const draftId = draft.from && market ? await openDraftOf(prisma, draft.from.id, market.marketplaceId) : null
+  if (!draftId) return draft
+  const ids = draft.skus.map((sku) => sku.productId)
+  const lines = await prisma.fbaInboundPlanLine.findMany({
+    where: { planRowId: draftId, productId: { in: ids } },
+    select: DRAFT_LINE_SELECT,
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+  })
+  return { ...draft, draftId, lines: lines.map(draftLineOf) }
 }
 
 /* ── createSendPlan ───────────────────────────────────────────────────────────────────────────── */
@@ -250,28 +310,48 @@ function parseCreate(req: FbaCreateRequest): { lines: FbaSendLine[]; mixedBox: F
       : line.cases
     return { productId: line.productId.trim(), cases, looseUnits: line.looseUnits ?? 0 }
   })
-  let mixedBox: FbaMixedBox | null = null
-  if (req.mixedBox != null) {
-    const box = req.mixedBox
-    const keys = ['lengthCm', 'widthCm', 'heightCm', 'emptyKg', 'maxKg'] as const
-    if (typeof box !== 'object' || keys.some((key) => typeof box[key] !== 'number')) throw bad('`mixedBox` needs lengthCm, widthCm, heightCm, emptyKg and maxKg as numbers')
-    mixedBox = { lengthCm: box.lengthCm, widthCm: box.widthCm, heightCm: box.heightCm, emptyKg: box.emptyKg, maxKg: box.maxKg }
-  }
-  let owners: FbaSendOwners | null = null
-  if (req.owners != null) {
-    if (typeof req.owners !== 'object' || !isCaseOwner(req.owners.prepOwner) || !isCaseOwner(req.owners.labelOwner)) throw bad('Prep by and Labels by must be AMAZON or SELLER')
-    owners = { prepOwner: req.owners.prepOwner, labelOwner: req.owners.labelOwner }
-  }
-  return { lines, mixedBox, owners }
+  return { lines, mixedBox: req.mixedBox == null ? null : parseMixedBox(req.mixedBox), owners: req.owners == null ? null : parseOwners(req.owners) }
 }
 
-/** "Create plan" (contract.ts): re-checks everything with the shared rule, then ONE transaction (owners, plan, lines,
- *  holds, event), then the job is dispatched. Never calls Amazon. */
-export async function createSendPlan(req: FbaCreateRequest, who: FbaActor, source: FbaPlanSource): Promise<FbaCreateAnswer> {
-  if (source !== 'matrix' && source !== 'claude') throw new FbaSendError('REFUSED', 'Unknown plan source')
-  const parsed = parseCreate(req)
-  const { draft, warehouse } = await draftFacts({ productIds: parsed.lines.map((line) => line.productId), from: req.from, market: req.market })
-  const choice = { lines: parsed.lines, readyToShipOn: req.readyToShipOn, mixedBox: parsed.mixedBox, owners: parsed.owners }
+/** A mixed box as sent: five numbers (the shared rule checks the limits). */
+export function parseMixedBox(box: unknown): FbaMixedBox {
+  const keys = ['lengthCm', 'widthCm', 'heightCm', 'emptyKg', 'maxKg'] as const
+  const b = box as Record<string, unknown> | null
+  if (!b || typeof b !== 'object' || keys.some((key) => typeof b[key] !== 'number')) {
+    throw new FbaSendError('REFUSED', '`mixedBox` needs lengthCm, widthCm, heightCm, emptyKg and maxKg as numbers')
+  }
+  return { lengthCm: b.lengthCm as number, widthCm: b.widthCm as number, heightCm: b.heightCm as number, emptyKg: b.emptyKg as number, maxKg: b.maxKg as number }
+}
+
+/** Prep by / Labels by as sent: both AMAZON or SELLER. */
+export function parseOwners(owners: unknown): FbaSendOwners {
+  const o = owners as Partial<FbaSendOwners> | null
+  if (!o || typeof o !== 'object' || !isCaseOwner(o.prepOwner) || !isCaseOwner(o.labelOwner)) throw new FbaSendError('REFUSED', 'Prep by and Labels by must be AMAZON or SELLER')
+  return { prepOwner: o.prepOwner, labelOwner: o.labelOwner }
+}
+
+/** A send checked by the shared rule and ready to commit (`commitSend`). */
+export interface PreparedSend {
+  draft: FbaSendDraft
+  from: FbaSendLocation
+  market: FbaSendMarket
+  readyToShipOn: string
+  mixedBox: FbaMixedBox
+  sourceAddress: unknown
+  owners: FbaSendOwners | null
+  sending: Array<{ line: FbaSendLine; sku: FbaSendSku; caseCounts: CaseCount[]; owners: { prepOwner: CaseOwner; labelOwner: CaseOwner }; quantity: number }>
+  /** The SKUs that send (units > 0). */
+  productIds: string[]
+  /** The SKUs whose prep / label owner the person's answer fills. */
+  ownersToSave: string[]
+}
+
+/** Re-checks everything with the shared rule (the facts read again now) and the ship-from address. Writes nothing. */
+export async function prepareSend(input: {
+  lines: FbaSendLine[]; from: string; market: string; readyToShipOn: string; mixedBox: FbaMixedBox | null; owners: FbaSendOwners | null
+}): Promise<PreparedSend> {
+  const { draft, warehouse } = await draftFacts({ productIds: input.lines.map((line) => line.productId), from: input.from, market: input.market })
+  const choice = { lines: input.lines, readyToShipOn: input.readyToShipOn, mixedBox: input.mixedBox, owners: input.owners }
   const blocking = sendProblems(draft, choice).filter((problem) => problem.blocking)
   if (blocking.length > 0) throw new FbaSendError('REFUSED', blocking[0].message, blocking)
 
@@ -283,74 +363,115 @@ export async function createSendPlan(req: FbaCreateRequest, who: FbaActor, sourc
     throw new FbaSendError('REFUSED', message, [{ code: 'NO_ADDRESS', message, productId: null, blocking: true }])
   }
 
-  const from = draft.from!
-  const market = draft.markets.find((m) => m.code === draft.market)!
-  const mixedBox = parsed.mixedBox ?? draft.mixedBox
   const skuOf = new Map(draft.skus.map((sku) => [sku.productId, sku]))
-  const sending = parsed.lines
+  const sending = input.lines
     .filter((line) => lineCases(line) > 0 || line.looseUnits > 0)
     .map((line) => {
       const sku = skuOf.get(line.productId)!
       const caseCounts = line.cases.filter((c) => c.cases > 0).sort((a, b) => b.unitsPerCase - a.unitsPerCase)
-      return { line, sku, caseCounts, owners: effectiveOwners(sku, parsed.owners)!, quantity: lineUnits(line) }
+      return { line, sku, caseCounts, owners: effectiveOwners(sku, input.owners)!, quantity: lineUnits(line) }
     })
-  const productIds = sending.map((s) => s.sku.productId)
-  const ownersToSave = parsed.owners ? sending.filter((s) => s.sku.prepOwner === null || s.sku.labelOwner === null).map((s) => s.sku.productId) : []
+  return {
+    draft,
+    from: draft.from!,
+    market: draft.markets.find((m) => m.code === draft.market)!,
+    readyToShipOn: input.readyToShipOn,
+    mixedBox: input.mixedBox ?? draft.mixedBox,
+    sourceAddress,
+    owners: input.owners,
+    sending,
+    productIds: sending.map((s) => s.sku.productId),
+    ownersToSave: input.owners ? sending.filter((s) => s.sku.prepOwner === null || s.sku.labelOwner === null).map((s) => s.sku.productId) : [],
+  }
+}
 
+/**
+ * In the caller's transaction: the owners remembered, the plan row → QUEUED with the frozen Amazon name, its lines
+ * replaced by the sending ones (a draft's 0-unit lines go) each with its FBA_SEND hold at From, `fba.plan_changed`.
+ * `alsoChanged` = more SKUs whose screens re-read (a draft's lines that did not send). Never calls Amazon.
+ */
+export async function commitSend(tx: Tx, planId: string, p: PreparedSend, who: FbaActor, source: FbaPlanSource, alsoChanged: readonly string[] = []) {
+  await lockProductStock(tx, p.productIds)
+  const owners = p.owners && p.ownersToSave.length > 0
+    ? await setFbaOwnersIfUnset(tx, { productIds: p.ownersToSave, prepOwner: p.owners.prepOwner, labelOwner: p.owners.labelOwner, actor: who.actor })
+    : []
+  await tx.fbaInboundPlanV2.update({
+    where: { id: planId },
+    data: {
+      status: 'QUEUED', currentStep: 'CREATE', source,
+      channelConnectionId: p.market.accountId, marketplaceId: p.market.marketplaceId, sourceLocationId: p.from.id,
+      sourceAddress: p.sourceAddress as Prisma.InputJsonValue, readyToShipOn: new Date(`${p.readyToShipOn}T00:00:00.000Z`),
+      mixedBox: p.mixedBox as unknown as Prisma.InputJsonValue, steps: [] as unknown as Prisma.InputJsonValue, nextCheckAt: null,
+      // The plan's name at Amazon (FROZEN: a crashed create finds its plan again by it).
+      name: fbaAmazonPlanName(p.draft.market, p.draft.today, planId),
+    },
+  })
+  await tx.fbaInboundPlanLine.deleteMany({ where: { planRowId: planId } })
+  for (const s of p.sending) {
+    const hold = await reserveStockInTx(tx, {
+      productId: s.sku.productId, locationId: p.from.id, quantity: s.quantity, reason: 'FBA_SEND', kind: 'HARD',
+      ttlMs: FBA_SEND_HOLD_TTL_MS, actor: who.actor,
+    })
+    await tx.fbaInboundPlanLine.create({
+      data: {
+        planRowId: planId, productId: s.sku.productId, msku: s.sku.msku!, quantity: s.quantity,
+        caseCounts: s.caseCounts as unknown as Prisma.InputJsonValue, looseUnits: s.line.looseUnits, prepOwner: s.owners.prepOwner, labelOwner: s.owners.labelOwner,
+        reservationId: hold.id,
+      },
+    })
+  }
+  await publishPlanChanged(tx, planId, 'QUEUED', 'CREATE', [...p.productIds, ...alsoChanged])
+  return owners
+}
+
+/** Not enough free units when the holds were made (a sale came first) → the shared OVER_FREE refusal. */
+export function sendRefusal(error: unknown, p: PreparedSend): unknown {
+  if (error instanceof InsufficientStockError || error instanceof StockLevelMissingError) {
+    const sku = p.draft.skus.find((s) => s.productId === error.productId)
+    const asked = p.sending.find((s) => s.sku.productId === error.productId)?.quantity ?? 0
+    const free = error instanceof InsufficientStockError ? Math.max(0, error.have) : 0
+    const message = FBA_SEND_COPY.problem.overFree(sku?.sku ?? error.productId, asked, free, p.from.code)
+    return new FbaSendError('REFUSED', message, [{ code: 'OVER_FREE', message, productId: error.productId, blocking: true }])
+  }
+  return error
+}
+
+/** After the commit: the owners audited, the held products re-advertised, the job dispatched. */
+export async function afterSend(planId: string, owners: Awaited<ReturnType<typeof setFbaOwnersIfUnset>>, p: PreparedSend, who: FbaActor): Promise<void> {
+  await auditOwners(owners, who, planId)
+  recascadeSoon(p.productIds, planId, who.actor)
+  await dispatchSoon(planId)
+}
+
+/** The owners a send or a draft filled, audited after the commit (auditing never rolls a save back). */
+export async function auditOwners(owners: Awaited<ReturnType<typeof setFbaOwnersIfUnset>>, who: FbaActor, planId: string): Promise<void> {
+  if (owners.length === 0) return
+  const audit: AuditWriteInput[] = owners.map((changed) => ({
+    userId: who.userId, entityType: 'ProductPackage', entityId: changed.productId, action: 'update',
+    before: changed.before, after: changed.after, metadata: { actor: who.actor, via: 'fba-send', planId },
+  }))
+  await auditLogService.writeMany(audit)
+}
+
+/** "Create plan" at once (contract.ts): `prepareSend`, then ONE transaction (a new plan row, `commitSend`), then the job
+ *  is dispatched. Never calls Amazon. The Matrix and Claude now fill a draft and send it (draft.service.ts). */
+export async function createSendPlan(req: FbaCreateRequest, who: FbaActor, source: FbaPlanSource): Promise<FbaCreateAnswer> {
+  if (source !== 'matrix' && source !== 'claude') throw new FbaSendError('REFUSED', 'Unknown plan source')
+  const parsed = parseCreate(req)
+  const prepared = await prepareSend({ lines: parsed.lines, from: req.from, market: req.market, readyToShipOn: req.readyToShipOn, mixedBox: parsed.mixedBox, owners: parsed.owners })
   let outcome: { planId: string; owners: Awaited<ReturnType<typeof setFbaOwnersIfUnset>> }
   try {
     outcome = await prisma.$transaction(async (tx) => {
-      await lockProductStock(tx, productIds)
-      const owners = parsed.owners && ownersToSave.length > 0
-        ? await setFbaOwnersIfUnset(tx, { productIds: ownersToSave, prepOwner: parsed.owners.prepOwner, labelOwner: parsed.owners.labelOwner, actor: who.actor })
-        : []
       const plan = await tx.fbaInboundPlanV2.create({
-        data: {
-          status: 'QUEUED', currentStep: 'CREATE', source, createdBy: who.actor,
-          channelConnectionId: market.accountId, marketplaceId: market.marketplaceId, sourceLocationId: from.id,
-          sourceAddress: sourceAddress as unknown as Prisma.InputJsonValue, readyToShipOn: new Date(`${req.readyToShipOn}T00:00:00.000Z`),
-          mixedBox: mixedBox as unknown as Prisma.InputJsonValue, steps: [] as unknown as Prisma.InputJsonValue,
-        },
+        data: { status: 'QUEUED', currentStep: 'CREATE', source, createdBy: who.actor, steps: [] as unknown as Prisma.InputJsonValue },
         select: { id: true },
       })
-      // The plan's name at Amazon (FROZEN: a crashed create finds its plan again by it). Needs the row id.
-      await tx.fbaInboundPlanV2.update({ where: { id: plan.id }, data: { name: fbaAmazonPlanName(draft.market, draft.today, plan.id) } })
-      for (const s of sending) {
-        const hold = await reserveStockInTx(tx, {
-          productId: s.sku.productId, locationId: from.id, quantity: s.quantity, reason: 'FBA_SEND', kind: 'HARD',
-          ttlMs: FBA_SEND_HOLD_TTL_MS, actor: who.actor,
-        })
-        await tx.fbaInboundPlanLine.create({
-          data: {
-            planRowId: plan.id, productId: s.sku.productId, msku: s.sku.msku!, quantity: s.quantity,
-            caseCounts: s.caseCounts as unknown as Prisma.InputJsonValue, looseUnits: s.line.looseUnits, prepOwner: s.owners.prepOwner, labelOwner: s.owners.labelOwner,
-            reservationId: hold.id,
-          },
-        })
-      }
-      await publishPlanChanged(tx, plan.id, 'QUEUED', 'CREATE', productIds)
-      return { planId: plan.id, owners }
+      return { planId: plan.id, owners: await commitSend(tx, plan.id, prepared, who, source) }
     }, TX_OPTIONS)
   } catch (error) {
-    if (error instanceof InsufficientStockError || error instanceof StockLevelMissingError) {
-      const sku = skuOf.get(error.productId)
-      const asked = sending.find((s) => s.sku.productId === error.productId)?.quantity ?? 0
-      const free = error instanceof InsufficientStockError ? Math.max(0, error.have) : 0
-      const message = FBA_SEND_COPY.problem.overFree(sku?.sku ?? error.productId, asked, free, from.code)
-      throw new FbaSendError('REFUSED', message, [{ code: 'OVER_FREE', message, productId: error.productId, blocking: true }])
-    }
-    throw error
+    throw sendRefusal(error, prepared)
   }
-
-  if (outcome.owners.length > 0) {
-    const audit: AuditWriteInput[] = outcome.owners.map((changed) => ({
-      userId: who.userId, entityType: 'ProductPackage', entityId: changed.productId, action: 'update',
-      before: changed.before, after: changed.after, metadata: { actor: who.actor, via: 'fba-send', planId: outcome.planId },
-    }))
-    await auditLogService.writeMany(audit)
-  }
-  recascadeSoon(productIds, outcome.planId, who.actor)
-  await dispatchSoon(outcome.planId)
+  await afterSend(outcome.planId, outcome.owners, prepared, who)
   return { planId: outcome.planId }
 }
 

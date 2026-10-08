@@ -57,6 +57,7 @@ beforeAll(() => scoped(async () => {
   await prisma.product.create({ data: { id: 'fi-sent', sku: 'TEST-SKU-FI-SENT', name: 'Shipped, Amazon not read yet', basePrice: 10 } })
   await prisma.product.create({ data: { id: 'fi-arrived', sku: 'TEST-SKU-FI-ARRIVED', name: 'At Amazon', basePrice: 10 } })
   await prisma.product.create({ data: { id: 'fi-part', sku: 'TEST-SKU-FI-PART', name: 'One of two shipments marked', basePrice: 10 } })
+  await prisma.product.create({ data: { id: 'fi-draft', sku: 'TEST-SKU-FI-DRAFT', name: 'In a draft and a plan', basePrice: 10 } })
 
   // Amazon's fulfillable FBA number for red: 92 (the FBA qty cell's value).
   const fba = await prisma.stockLocation.create({ data: { type: 'AMAZON_FBA', code: 'AMAZON-EU-FBA', name: 'Amazon FBA (test)' } })
@@ -84,6 +85,9 @@ beforeAll(() => scoped(async () => {
   await plan('plan-arrived-666666', 'AT_AMAZON', T2, [['fi-arrived', 9, 9]])
   // Two shipments, one marked Shipped: the plan stays READY_TO_SHIP until the last one — its shipped units still count.
   await plan('plan-part-777777', 'READY_TO_SHIP', T2, [['fi-part', 10, 4]])
+  // Drafts (Owner 2026-10-08): a Send-to-FBA DRAFT holds nothing — listed as a plan of the family, never "planned".
+  await plan('plan-draft-888888', 'DRAFT', T2, [['fi-draft', 18, 0]], { name: 'Draft IT-MAIN → Amazon IT' })
+  await plan('plan-under-999999', 'QUEUED', T1, [['fi-draft', 5, 0]])
 }), 120_000)
 afterAll(async () => { await state.db?.close() }, 60_000)
 
@@ -118,6 +122,17 @@ describe('the Matrix read carries "Inbound +N" and the open plans', () => {
     const none = await getMatrixRead({ productId: 'fi-none', canEditPrice: true })
     expect(none.rows[0]!.fbaInbound).toBeNull()
     expect(none.fbaPlans).toEqual([])
+  }))
+})
+
+describe('drafts (Owner 2026-10-08)', () => {
+  it('a DRAFT of the family is listed (status DRAFT, its units) for the footer link; its units are never "planned" (only the plan under way counts)', () => scoped(async () => {
+    const read = await getMatrixRead({ productId: 'fi-draft', canEditPrice: true })
+    expect(read.fbaPlans).toEqual([
+      { id: 'plan-draft-888888', name: 'Draft IT-MAIN → Amazon IT', status: 'DRAFT', units: 18 },
+      { id: 'plan-under-999999', name: 'Nexus IT 2026-10-08 #999999', status: 'QUEUED', units: 5 },
+    ])
+    expect(read.rows[0]!.fbaInbound).toEqual({ units: 0, working: 0, shipped: 0, receiving: 0, readAt: null, planned: 5, sent: 0 })
   }))
 })
 

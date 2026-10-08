@@ -1,19 +1,21 @@
 /**
  * Step 4 Send to FBA (Part C) — the races, on a REAL multi-connection PostgreSQL, through the real route, hooks and services.
  *
- *   1. A double-click on "Create plan" (three POSTs with one Idempotency-Key at the same moment) makes ONE plan with ONE
- *      set of holds; every answer is that plan or "still running".
+ *   1. A double-click on "Send to Amazon" (three POSTs with one Idempotency-Key at the same moment) sends the draft ONCE,
+ *      with ONE set of holds; every answer is that plan or "still running".
  *   2. Holds are released at the click on cancel — two cancels at once release each hold once (one wins, the other is
  *      refused); a cancel racing a sale of the free units: both land, nothing stays held.
  *   3. "Mark shipped" twice at once (a double-click, two tabs): one FBA_TRANSFER_OUT, the units leave once.
  *   4. "Mark shipped" racing a sale on the same SKU: the units, the holds and the sealed cases end right in either order
  *      (Σ sealed cases × units per case never exceed the units).
+ *   5. Drafts (Owner 2026-10-08): two "Add to draft" at once for one From + To make ONE draft holding both SKUs; two
+ *      "Send to Amazon" at once without a shared key (two tabs) send it once and hold once.
  *
  * Why a real server: on PGlite (one connection) every transaction queues, so none of these can race there.
  * Part B's job (dispatchFbaPlan) is a spy: nothing reaches Amazon.
  *
  * 🔴 Needs a MULTI-CONNECTION PostgreSQL; without one the suite SKIPS. From the repo root:
- * `node scripts/run-real-postgres-tests.mjs --suites '[{"name":"fba send","file":"src/services/fba-inbound/fba-send-postgres.vitest.test.ts","expect":4}]'`
+ * `node scripts/run-real-postgres-tests.mjs --suites '[{"name":"fba send","file":"src/services/fba-inbound/fba-send-postgres.vitest.test.ts","expect":5}]'`
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { randomUUID } from 'node:crypto'
@@ -49,7 +51,7 @@ vi.mock('../stock-movement.service.js', async (importOriginal) => ({
 }))
 /** The contract with the real Part C services behind it (loaded at call time) and Part B's job as a spy. */
 vi.mock('./contract.js', () => {
-  const HTTP: Record<string, number> = { NOT_FOUND: 404, REFUSED: 400, WRONG_STATE: 409, OPTION_UNKNOWN: 400, OPTIONS_EXPIRED: 409, NEEDS_PERSON: 403, TRACKING_INVALID: 400, LABELS_UNAVAILABLE: 409, NOT_BUILT: 501 }
+  const HTTP: Record<string, number> = { NOT_FOUND: 404, REFUSED: 400, WRONG_STATE: 409, OPTION_UNKNOWN: 400, OPTIONS_EXPIRED: 409, NEEDS_PERSON: 403, TRACKING_INVALID: 400, LABELS_UNAVAILABLE: 409, DRAFT_EXISTS: 409, NOT_BUILT: 501 }
   class FbaSendError extends Error {
     constructor(readonly code: string, message: string, readonly problems: unknown[] = []) { super(message); this.name = 'FbaSendError' }
     get httpStatus() { return HTTP[this.code] }
@@ -60,7 +62,9 @@ vi.mock('./contract.js', () => {
     readSendDraft: from('./send.service.js', 'readSendDraft'), createSendPlan: from('./send.service.js', 'createSendPlan'),
     confirmChoice: from('./send.service.js', 'confirmChoice'), cancelPlan: from('./send.service.js', 'cancelPlan'), retryPlan: from('./send.service.js', 'retryPlan'),
     markShipped: from('./ship.service.js', 'markShipped'), labelsFor: from('./ship.service.js', 'labelsFor'),
-    readPlans: from('./read.service.js', 'readPlans'), readPlan: from('./read.service.js', 'readPlan'),
+    readPlans: from('./read.service.js', 'readPlans'), readPlan: from('./read.service.js', 'readPlan'), readPlanList: from('./read.service.js', 'readPlanList'),
+    addToDraft: from('./draft.service.js', 'addToDraft'), updateDraft: from('./draft.service.js', 'updateDraft'),
+    deleteDraft: from('./draft.service.js', 'deleteDraft'), sendDraft: from('./draft.service.js', 'sendDraft'),
   }
 })
 
@@ -79,6 +83,7 @@ const person = { actor: 'race@example.test', userId: 'u-race' }
 describe.skipIf(!concurrentDatabaseUrl())(`Step 4 Send to FBA — races on a real PostgreSQL (needs ${CONCURRENT_PG_ENV})`, () => {
   let app: FastifyInstance
   let send: typeof import('./send.service.js')
+  let draft: typeof import('./draft.service.js')
   let ship: typeof import('./ship.service.js')
   let movement: typeof import('../stock-movement.service.js')
   let locationId = ''
@@ -99,6 +104,7 @@ describe.skipIf(!concurrentDatabaseUrl())(`Step 4 Send to FBA — races on a rea
       listingStatus: 'ACTIVE', isPublished: true, fulfillmentMethod: 'FBA' } as never }))
     return { productId, sku, levelId }
   }
+  const addBody = (productId: string, cases = 2, looseUnits = 3) => ({ from: 'IT-MAIN', market: 'IT', lines: [{ productId, cases: [{ unitsPerCase: UPC, cases }], looseUnits }] })
   const createBody = (productId: string, cases = 2, looseUnits = 3) => ({ from: 'IT-MAIN', market: 'IT', readyToShipOn: nextWorkingDay(send.romeToday()), lines: [{ productId, cases: [{ unitsPerCase: UPC, cases }], looseUnits }] })
   /** The level's units and holds, its STORED sealed count, and the ledger agreeing with itself. */
   const state = async (p: { productId: string; levelId: string }, start = 51) => {
@@ -150,6 +156,7 @@ describe.skipIf(!concurrentDatabaseUrl())(`Step 4 Send to FBA — races on a rea
     vi.stubEnv('NEXUS_ISSUER_NAME', '')
     vi.stubEnv('NEXUS_ISSUER_PHONE', '')
     send = await import('./send.service.js')
+    draft = await import('./draft.service.js')
     ship = await import('./ship.service.js')
     movement = await import('../stock-movement.service.js')
     const { registerCommandIdempotency } = await import('../../lib/command-idempotency.js')
@@ -173,9 +180,12 @@ describe.skipIf(!concurrentDatabaseUrl())(`Step 4 Send to FBA — races on a rea
 
   beforeEach(() => vi.mocked(dispatchFbaPlan).mockClear())
 
-  it('1. a double-click on "Create plan" (three POSTs, one Idempotency-Key, at once): ONE plan, ONE set of holds', async () => {
+  it('1. a double-click on "Send to Amazon" (three POSTs, one Idempotency-Key, at once): ONE plan, ONE set of holds', async () => {
     const p = await seed()
-    const post = () => app.inject({ method: 'POST', url: '/api/fba/inbound/plans', payload: createBody(p.productId), headers: { 'idempotency-key': `create-${p.productId}` } })
+    const added = await app.inject({ method: 'POST', url: '/api/fba/inbound/drafts', payload: addBody(p.productId) })
+    expect(added.statusCode).toBe(200)
+    const draftId = added.json().planId as string
+    const post = () => app.inject({ method: 'POST', url: `/api/fba/inbound/plans/${draftId}/send`, payload: {}, headers: { 'idempotency-key': `send-${p.productId}` } })
     const answers = await Promise.all([post(), post(), post()])
     const statuses = answers.map((a) => a.statusCode)
     expect(statuses.every((code) => code === 202 || code === 409)).toBe(true)
@@ -184,6 +194,8 @@ describe.skipIf(!concurrentDatabaseUrl())(`Step 4 Send to FBA — races on a rea
     expect(new Set(created).size).toBe(1)
     const plans = await q<{ id: string }>(`SELECT p.id FROM "FbaInboundPlanV2" p JOIN "FbaInboundPlanLine" l ON l."planRowId" = p.id WHERE l."productId" = $1`, [p.productId])
     expect(plans.map((row) => row.id)).toEqual([created[0]])
+    expect(created[0]).toBe(draftId)
+    expect((await q<{ status: string }>(`SELECT status FROM "FbaInboundPlanV2" WHERE id = $1`, [draftId]))[0].status).toBe('QUEUED')
     expect(await state(p)).toEqual({ quantity: 51, reserved: 27, cases: 4 })
     expect(dispatchFbaPlan).toHaveBeenCalledTimes(1)
     // The same click again after it answered replays the plan, never a second one.
@@ -247,4 +259,29 @@ describe.skipIf(!concurrentDatabaseUrl())(`Step 4 Send to FBA — races on a rea
       expect(await state(m)).toEqual({ quantity: 14, reserved: 0, cases: 1 })
     }))
   }, 120_000)
+
+  it('5. two "Add to draft" at once make ONE draft with both SKUs; two "Send to Amazon" at once (no shared key) send it once, hold once', async () => {
+    const a = await seed()
+    const b = await seed()
+    const adds = await Promise.all([
+      settled(inBusiness(() => draft.addToDraft(addBody(a.productId), person, 'matrix'))),
+      settled(inBusiness(() => draft.addToDraft(addBody(b.productId, 1, 0), person, 'claude'))),
+    ])
+    expect(adds.map((r) => (r.ok ? 'ok' : String(r.error?.message)))).toEqual(['ok', 'ok'])
+    const planIds = new Set(adds.map((r) => (r as { value: { planId: string } }).value.planId))
+    expect(planIds.size).toBe(1)
+    const [planId] = [...planIds]
+    const open = await q<{ n: string }>(`SELECT count(*)::text AS n FROM "FbaInboundPlanV2" WHERE status = 'DRAFT' AND source IS NOT NULL AND "sourceLocationId" = $1`, [locationId])
+    expect(Number(open[0].n)).toBe(1)
+    expect((await q(`SELECT 1 FROM "FbaInboundPlanLine" WHERE "planRowId" = $1`, [planId])).length).toBe(2)
+    expect(await state(a)).toMatchObject({ reserved: 0 })
+
+    const sends = await Promise.all([settled(inBusiness(() => draft.sendDraft(planId, {}, person))), settled(inBusiness(() => draft.sendDraft(planId, {}, person)))])
+    expect(sends.map((r) => (r.ok ? (r.value as { planId: string }).planId : String(r.error?.message)))).toEqual([planId, planId])
+    expect(await state(a)).toEqual({ quantity: 51, reserved: 27, cases: 4 })
+    expect(await state(b)).toEqual({ quantity: 51, reserved: 12, cases: 4 })
+    const holds = await q<{ n: string }>(`SELECT count(*)::text AS n FROM "StockReservation" WHERE "stockLevelId" = $1 AND "releasedAt" IS NULL`, [a.levelId])
+    expect(Number(holds[0].n)).toBe(1)
+    expect(dispatchFbaPlan).toHaveBeenCalledTimes(1)
+  }, 60_000)
 })

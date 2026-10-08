@@ -52,7 +52,7 @@ import {
   type SyncCell,
 } from '@nexus/shared/matrix-contract'
 import type { SellingStateRead } from '@nexus/shared/listing-actions'
-import { FBA_CLOSED_STATUSES, isFbaPlanOpen, type FbaPlanStatus } from '@nexus/shared/fba-send'
+import { FBA_CLOSED_STATUSES, isFbaPlanOpen, isFbaPlanUnderWay, type FbaPlanStatus } from '@nexus/shared/fba-send'
 import { isCaseOwner } from '@nexus/shared/stock-cases'
 import { destinationSellingStates, oldClosePauses } from '../listings/listing-action.service.js'
 import { ledgerInputs, loadMarketSources, loadSyncLedgers } from '../stock-pool/sync-ledgers.js'
@@ -203,7 +203,7 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
       select: { productId: true, sku: true, marketplaceId: true, quantity: true, rawData: true, lastSyncedAt: true },
     }),
     prisma.fbaInboundPlanLine.findMany({
-      where: { productId: { in: memberIds }, plan: { status: { notIn: [...FBA_CLOSED_STATUSES] } } },
+      where: { productId: { in: memberIds }, plan: { source: { not: null }, status: { notIn: [...FBA_CLOSED_STATUSES] } } },
       select: { productId: true, quantity: true, shippedQuantity: true, plan: { select: { id: true, name: true, status: true, createdAt: true } } },
     }),
   ]); queries += 18
@@ -315,8 +315,10 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
     }
   }
   const openLines = fbaPlanLines.filter((l) => isFbaPlanOpen(l.plan.status))
+  /* "Planned": units of plans UNDER WAY (sent to Amazon's steps, holds standing). A DRAFT (Owner 2026-10-08) holds
+     nothing: it shows only as a plan of the family (`fbaPlans`, status DRAFT) — the footer's "FBA draft · N units". */
   const plannedOf = new Map<string, number>()
-  for (const l of openLines) plannedOf.set(l.productId, (plannedOf.get(l.productId) ?? 0) + Math.max(0, l.quantity - l.shippedQuantity))
+  for (const l of openLines) if (isFbaPlanUnderWay(l.plan.status)) plannedOf.set(l.productId, (plannedOf.get(l.productId) ?? 0) + Math.max(0, l.quantity - l.shippedQuantity))
   /* "Sent" (Owner 2026-10-07): units Nexus marked Shipped in plans still SHIPPED — Amazon has not started receiving all
      of them, so its next read may not count them yet. The cell shows the bigger of this and Amazon's `units`
      (`fbaInboundShown`), never the sum. AT_AMAZON and later plans are Amazon's number only. */
@@ -336,7 +338,7 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
     }
     return out.units === 0 && out.planned === 0 && out.sent === 0 ? null : { ...out, readAt: readAt?.toISOString() ?? null }
   }
-  /* The family's open plans, newest first; `units` = this family's units in each. */
+  /* The family's open plans (its DRAFT included), newest first; `units` = this family's units in each. */
   const plansById = new Map<string, MatrixFbaPlan & { createdAt: Date }>()
   for (const l of openLines) {
     const plan = plansById.get(l.plan.id) ?? { id: l.plan.id, name: l.plan.name || `#${l.plan.id.slice(-6)}`, status: l.plan.status as FbaPlanStatus, units: 0, createdAt: l.plan.createdAt }

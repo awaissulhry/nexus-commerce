@@ -1,12 +1,18 @@
 /**
- * Step 4 Send to FBA (Owner 2026-10-07) — the Matrix "Send to FBA…" dialog and the FBA plans drawer.
+ * Step 4 Send to FBA (Owner 2026-10-07) — the Matrix "Send to FBA…" dialog, the FBA plans drawer and (Owner 2026-10-08) the
+ * FBA shipments page (Fulfillment › Outbound): the dialog fills ONE open draft per From + To; the page edits, deletes and
+ * sends it.
  * All under `/api/fba/inbound` → permission `inbound.manage` (permissions-manifest.ts). Zero database calls here
  * (check-route-prisma-ratchet): the route parses, calls the services through `services/fba-inbound/contract.ts`, and maps
  * a thrown `FbaSendError` to its status with `{ ok: false, code, error, problems }`.
  *
- *   GET  /fba/inbound/send-draft?productIds=a,b&from=IT-MAIN&market=IT   → 200 FbaSendDraft
- *   POST /fba/inbound/plans                     (Idempotency-Key)        → 202 { planId }
- *   GET  /fba/inbound/plans?productId=<id>&open=1                        → 200 { plans: FbaPlanView[] }
+ *   GET  /fba/inbound/send-draft?productIds=a,b&from=IT-MAIN&market=IT   → 200 FbaSendDraft (+ the open draft's lines)
+ *   GET  /fba/inbound/send-draft?planId=<draft>                          → 200 FbaSendDraft (the draft's own)
+ *   POST /fba/inbound/drafts                    (Idempotency-Key)        → 200 { planId }      "Add to draft"
+ *   PATCH /fba/inbound/plans/:id                                         → 200 FbaPlanView     edit a DRAFT
+ *   DELETE /fba/inbound/plans/:id                                        → 200 { planId, deleted: true }
+ *   POST /fba/inbound/plans/:id/send            (Idempotency-Key)        → 202 { planId }      "Send to Amazon"
+ *   GET  /fba/inbound/plans?view=drafts|active|done&productId=&cursor=&limit=  (or open=1) → 200 FbaPlanListAnswer
  *   GET  /fba/inbound/plans/:id                                          → 200 FbaPlanView | 404
  *   POST /fba/inbound/plans/:id/choice          (Idempotency-Key)        → 200 FbaPlanView
  *   POST /fba/inbound/plans/:id/cancel          (Idempotency-Key)        → 200 FbaPlanView
@@ -18,10 +24,14 @@
  * only door to Amazon's final confirms, and it needs a signed-in person (`confirmedBy` = their user id).
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
-import type { FbaChoiceRequest, FbaCreateRequest, FbaShippedRequest } from '@nexus/shared/fba-send'
 import {
-  cancelPlan, confirmChoice, createSendPlan, FbaSendError, labelsFor, markShipped, readPlan, readPlans, readSendDraft, retryPlan,
-  type FbaActor,
+  FBA_PLAN_VIEWS,
+  type FbaChoiceRequest, type FbaDraftAddRequest, type FbaDraftSendRequest, type FbaDraftUpdateRequest, type FbaPlanListView,
+  type FbaShippedRequest,
+} from '@nexus/shared/fba-send'
+import {
+  addToDraft, cancelPlan, confirmChoice, deleteDraft, FbaSendError, labelsFor, markShipped, readPlan, readPlanList, readSendDraft,
+  retryPlan, sendDraft, updateDraft, type FbaActor,
 } from '../services/fba-inbound/contract.js'
 
 /** Who acts: the signed-in person's e-mail (or id), as the Matrix doors name the actor. */
@@ -58,25 +68,33 @@ function logFailure(reply: FastifyReply, error: unknown) {
 export default async function fbaSendRoutes(app: FastifyInstance) {
   app.get('/fba/inbound/send-draft', async (request, reply) => {
     const q = (request.query ?? {}) as Record<string, unknown>
+    const planId = typeof q.planId === 'string' && q.planId.trim() ? q.planId.trim() : null
     const productIds = idsOf(q.productIds)
-    if (productIds.length === 0) return reply.code(400).send({ ok: false, code: 'REFUSED', error: 'Name the SKUs: productIds=a,b', problems: [] })
+    if (!planId && productIds.length === 0) return reply.code(400).send({ ok: false, code: 'REFUSED', error: 'Name the SKUs: productIds=a,b', problems: [] })
     return answer(reply, () => readSendDraft({
       productIds,
+      planId,
       from: typeof q.from === 'string' && q.from.trim() ? q.from.trim() : null,
       market: typeof q.market === 'string' && q.market.trim() ? q.market.trim() : null,
     }))
   })
 
-  app.post('/fba/inbound/plans', async (request, reply) => {
-    const body = (request.body ?? {}) as FbaCreateRequest
-    return answer(reply, () => createSendPlan(body, actorOf(request), 'matrix'), 202)
+  app.post('/fba/inbound/drafts', async (request, reply) => {
+    const body = (request.body ?? {}) as FbaDraftAddRequest
+    return answer(reply, () => addToDraft(body, actorOf(request), 'matrix'))
   })
 
   app.get('/fba/inbound/plans', async (request, reply) => {
     const q = (request.query ?? {}) as Record<string, unknown>
     const productId = typeof q.productId === 'string' && q.productId.trim() ? q.productId.trim() : null
     const open = q.open === '1' || q.open === 'true'
-    return answer(reply, async () => ({ plans: await readPlans({ productId, open }) }))
+    const view = typeof q.view === 'string' && (FBA_PLAN_VIEWS as readonly string[]).includes(q.view) ? (q.view as FbaPlanListView) : null
+    if (typeof q.view === 'string' && q.view && !view) {
+      return reply.code(400).send({ ok: false, code: 'REFUSED', error: `view must be one of ${FBA_PLAN_VIEWS.join(', ')}`, problems: [] })
+    }
+    const cursor = typeof q.cursor === 'string' && q.cursor.trim() ? q.cursor.trim() : null
+    const limit = typeof q.limit === 'string' && q.limit.trim() ? Number(q.limit) : null
+    return answer(reply, () => readPlanList({ productId, open, view, cursor, limit }))
   })
 
   app.get('/fba/inbound/plans/:id', async (request, reply) => {
@@ -86,6 +104,21 @@ export default async function fbaSendRoutes(app: FastifyInstance) {
       if (!plan) throw new FbaSendError('NOT_FOUND', 'FBA plan not found')
       return plan
     })
+  })
+
+  app.patch('/fba/inbound/plans/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    return answer(reply, () => updateDraft(id, (request.body ?? {}) as FbaDraftUpdateRequest, actorOf(request)))
+  })
+
+  app.delete('/fba/inbound/plans/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    return answer(reply, () => deleteDraft(id, actorOf(request)))
+  })
+
+  app.post('/fba/inbound/plans/:id/send', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    return answer(reply, () => sendDraft(id, (request.body ?? {}) as FbaDraftSendRequest, actorOf(request)), 202)
   })
 
   app.post('/fba/inbound/plans/:id/choice', async (request, reply) => {

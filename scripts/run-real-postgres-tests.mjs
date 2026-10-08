@@ -211,7 +211,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'Claude\'s approved bulk bid change and an engine write on one target (MCP full control A7: both queued, one claim wins, the other waits for it)', file: 'src/services/advertising/ads-claude-bulk-postgres.vitest.test.ts', expect: 2 },
   { name: 'Sells from: a sale takes stock from the first listed location with enough (Step 2)', file: 'src/services/stock/sale-location-postgres.vitest.test.ts', expect: 6 },
   { name: 'sealed cases under concurrency (Step 3: ten sales at once end at floor(units / case size), a case count racing a sale, a case size replaced while a sale runs)', file: 'src/services/stock/stock-cases-postgres.vitest.test.ts', expect: 3 },
-  { name: 'Send to FBA races (Step 4: a double-click on Create plan makes one plan and one set of holds, cancel releases the holds once, Mark shipped twice moves once, Mark shipped racing a sale keeps units and sealed cases right)', file: 'src/services/fba-inbound/fba-send-postgres.vitest.test.ts', expect: 4 },
+  { name: 'Send to FBA races (Step 4: a double-click on Send to Amazon sends the draft once with one set of holds, cancel releases the holds once, Mark shipped twice moves once, Mark shipped racing a sale keeps units and sealed cases right, two Add to draft at once make one draft and two sends hold once)', file: 'src/services/fba-inbound/fba-send-postgres.vitest.test.ts', expect: 5 },
 ]
 const IMAGES = ['pgvector/pgvector:pg17', 'postgres:17', 'postgres:17-alpine']
 const DEAD = 'postgresql://nobody@127.0.0.1:1/real_pg_no_stray_writes_test'

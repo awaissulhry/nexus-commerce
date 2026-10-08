@@ -1,13 +1,14 @@
 /**
- * MCP full control 08 S13 — plan-fba-shipment and fba-shipment-options (decided S-3: Claude creates the plan; confirming
+ * MCP full control 08 S13 — plan-fba-shipment and fba-shipment-options (decided S-3: Claude plans the shipment; confirming
  * where it goes, with Amazon's fees, stays a person's click in Nexus). Step 4 (2026-10-07): both run on the Matrix's
- * Send to FBA services.
+ * Send to FBA services. Drafts (Owner 2026-10-08): the plan tool fills the ONE open draft for the warehouse and market.
  *
- *   plan-fba-shipment   the dry run shows what is held where (From, lines, boxes) and writes nothing; refusals by the shared
- *                       rule (owners not set → "set them in the Matrix Case column", no listing, more than free); on approval
- *                       the plan is created (source claude, the approver as actor), its units HELD at the warehouse, the job
- *                       dispatched. No quantity changes anywhere except the hold: StockLevel quantity, the products' totals,
- *                       the FBA level and every listing's quantity are unchanged.
+ *   plan-fba-shipment   the dry run shows the lines, boxes and what "Send to Amazon" would refuse today (owners not set →
+ *                       "set them in the Matrix Case column", more than free, a case size the SKU lacks) and writes
+ *                       nothing; refused only when nothing can be drafted (no Amazon account in the market, a plain case
+ *                       count for a SKU without one case size). On approval the SKUs go into the draft (source claude, the
+ *                       approver as actor): nothing is held, nothing dispatched, no quantity moves. A person's "Send to
+ *                       Amazon" then holds the units and starts the job.
  *   fba-shipment-options reads the plan's stored status, steps and options (Amazon is not called; nothing is written).
  *
  * Real SQL (PGlite with the production schema); the job (dispatchFbaPlan) is a spy: nothing reaches Amazon.
@@ -50,16 +51,18 @@ vi.mock('../stock-movement.service.js', async (importOriginal) => ({
 }))
 /** The contract with the real Part C services behind it (loaded at call time) and Part B's job as a spy. */
 vi.mock('../fba-inbound/contract.js', () => {
-  const HTTP: Record<string, number> = { NOT_FOUND: 404, REFUSED: 400, WRONG_STATE: 409, OPTION_UNKNOWN: 400, OPTIONS_EXPIRED: 409, NEEDS_PERSON: 403, TRACKING_INVALID: 400, LABELS_UNAVAILABLE: 409, NOT_BUILT: 501 }
+  const HTTP: Record<string, number> = { NOT_FOUND: 404, REFUSED: 400, WRONG_STATE: 409, OPTION_UNKNOWN: 400, OPTIONS_EXPIRED: 409, NEEDS_PERSON: 403, TRACKING_INVALID: 400, LABELS_UNAVAILABLE: 409, DRAFT_EXISTS: 409, NOT_BUILT: 501 }
   class FbaSendError extends Error {
     constructor(readonly code: string, message: string, readonly problems: unknown[] = []) { super(message); this.name = 'FbaSendError' }
     get httpStatus() { return HTTP[this.code] }
   }
   const sendFn = (name: string) => async (...args: unknown[]) => ((await import('../fba-inbound/send.service.js')) as any)[name](...args)
   const readFn = (name: string) => async (...args: unknown[]) => ((await import('../fba-inbound/read.service.js')) as any)[name](...args)
+  const draftFn = (name: string) => async (...args: unknown[]) => ((await import('../fba-inbound/draft.service.js')) as any)[name](...args)
   return {
     FbaSendError, dispatchFbaPlan: vi.fn(async () => 'inline'),
     readSendDraft: sendFn('readSendDraft'), createSendPlan: sendFn('createSendPlan'), readPlan: readFn('readPlan'), readPlans: readFn('readPlans'),
+    addToDraft: draftFn('addToDraft'), sendDraft: draftFn('sendDraft'),
   }
 })
 
@@ -116,45 +119,61 @@ afterAll(async () => {
 })
 
 describe('08 S13 — FBA plans through the Send to FBA services', () => {
-  it('plan-fba-shipment: the dry run shows what is held where and writes nothing; refusals name the fix', async () => {
+  it('plan-fba-shipment: the dry run shows the lines and what "Send to Amazon" would refuse, and writes nothing', async () => {
     expect((await run('plan-fba-shipment', { marketplace: 'DE', lines: [{ productId: ids.jacket, units: 6 }] })).error)
-      .toBe('No Amazon account sells in DE. TEST-SKU-S13-FBA: no Amazon listing in DE. Nothing was sent to Amazon.')
-    expect((await run('plan-fba-shipment', { marketplace: 'IT', lines: [{ productId: ids.boots, units: 2 }] })).error)
-      .toBe('TEST-SKU-S13-BOOTS: choose who preps and labels (Prep by / Labels by) — Set Prep by / Labels by in the Matrix Case column first. Nothing was sent to Amazon.')
-    expect((await run('plan-fba-shipment', { marketplace: 'IT', lines: [{ productId: ids.jacket, units: 20 }] })).error)
-      .toBe('TEST-SKU-S13-FBA: 20 units asked; 12 free at TEST-MAIN. Nothing was sent to Amazon.')
+      .toBe('No Amazon account sells in DE. Nothing was changed.')
     // Cases name their size; a plain number stands for the SKU's one case size — the jacket has none.
     expect((await run('plan-fba-shipment', { marketplace: 'IT', lines: [{ productId: ids.jacket, cases: 1 }] })).error)
-      .toBe('TEST-SKU-S13-FBA: No case size — set it in the Matrix (Case column). Nothing was sent to Amazon.')
-    expect((await run('plan-fba-shipment', { marketplace: 'IT', lines: [{ productId: ids.jacket, cases: [{ unitsPerCase: 6, cases: 1 }] }] })).error)
-      .toBe('TEST-SKU-S13-FBA: No 6 / case size — set it in the Matrix (Case column). Nothing was sent to Amazon.')
+      .toBe('TEST-SKU-S13-FBA: No case size — set it in the Matrix (Case column). Nothing was changed.')
+    const boots = await run('plan-fba-shipment', { marketplace: 'IT', lines: [{ productId: ids.boots, units: 2 }] })
+    expect(boots, boots.error).toMatchObject({ ok: true, preview: { beforeSending: ['TEST-SKU-S13-BOOTS: choose who preps and labels (Prep by / Labels by) — Set Prep by / Labels by in the Matrix Case column first.'] } })
+    const many = await run('plan-fba-shipment', { marketplace: 'IT', lines: [{ productId: ids.jacket, units: 20 }] })
+    expect(many, many.error).toMatchObject({ ok: true, preview: { beforeSending: ['TEST-SKU-S13-FBA: 20 units asked; 12 free at TEST-MAIN.'] } })
+    const size = await run('plan-fba-shipment', { marketplace: 'IT', lines: [{ productId: ids.jacket, cases: [{ unitsPerCase: 6, cases: 1 }] }] })
+    expect(size, size.error).toMatchObject({ ok: true, preview: { beforeSending: ['TEST-SKU-S13-FBA: No 6 / case size — set it in the Matrix (Case column).'] } })
     const dry = await run('plan-fba-shipment', { marketplace: 'it', lines: [{ productId: ids.jacket, quantity: 6 }] })
     expect(dry, dry.error).toMatchObject({ ok: true, preview: {
-      marketplace: 'IT', from: { code: 'TEST-MAIN', town: 'Testville' },
+      summary: 'Add 6 units of 1 SKUs to the FBA draft from TEST-MAIN to Amazon IT. Nothing is held or sent to Amazon.',
+      marketplace: 'IT', from: { code: 'TEST-MAIN', town: 'Testville' }, draft: { existing: false },
       lines: [{ sku: 'TEST-SKU-S13-FBA', cases: [], units: 6, quantity: 6, freeNow: 12, prepBy: 'SELLER', labelsBy: 'SELLER' }],
       totals: { skus: 1, units: 6, boxes: 1, mixedBoxes: 1 }, note: expect.stringContaining('Claude cannot confirm'),
     } })
+    expect((dry.preview as { note: string }).note).toContain('Send to Amazon')
+    expect((dry.preview as Record<string, unknown>).beforeSending).toBeUndefined()
     expect(await inside(() => database.client.fbaInboundPlanV2.count())).toBe(0)
     expect(dispatchFbaPlan).not.toHaveBeenCalled()
   })
 
-  it('on approval: the plan is created by the approver (source claude), its units held at the warehouse, the job dispatched; no quantity moves', async () => {
+  it('on approval: the SKUs go into the ONE draft (source claude, the approver as actor), nothing held or dispatched; a person sends it', async () => {
     const before = await quantities()
     const ran = await run('plan-fba-shipment', { marketplace: 'IT', lines: [{ productId: ids.jacket, units: 6 }] }, 'execute')
-    expect(ran, ran.error).toMatchObject({ ok: true, data: { planId: expect.any(String), held: { from: 'TEST-MAIN', units: 6 } } })
+    expect(ran, ran.error).toMatchObject({ ok: true, data: { planId: expect.any(String), draft: true, units: 6, next: expect.stringContaining('Send to Amazon') } })
     const planId = (ran.data as { planId: string }).planId
     expect(await inside(() => database.client.fbaInboundPlanV2.findUniqueOrThrow({ where: { id: planId }, select: { status: true, source: true, createdBy: true, planId: true, confirmedBy: true } })))
-      .toEqual({ status: 'QUEUED', source: 'claude', createdBy: 'u-approver', planId: null, confirmedBy: null })
+      .toEqual({ status: 'DRAFT', source: 'claude', createdBy: 'u-approver', planId: null, confirmedBy: null })
+    // The same SKU again takes the new numbers in the same draft.
+    const again = await run('plan-fba-shipment', { marketplace: 'IT', lines: [{ productId: ids.jacket, units: 4 }] }, 'execute')
+    expect((again.data as { planId: string }).planId).toBe(planId)
+    expect(await inside(() => database.client.fbaInboundPlanLine.findMany({ where: { planRowId: planId }, select: { productId: true, quantity: true, msku: true, reservationId: true } })))
+      .toEqual([{ productId: ids.jacket, quantity: 4, msku: null, reservationId: null }])
+    expect(dispatchFbaPlan).not.toHaveBeenCalled()
+    expect(await inside(() => database.client.stockLevel.findFirstOrThrow({ where: { productId: ids.jacket, locationId: ids.main }, select: { quantity: true, reserved: true, available: true } })))
+      .toEqual({ quantity: 12, reserved: 0, available: 12 })
+    expect(await quantities()).toEqual(before)
+
+    // A person's "Send to Amazon" (the FBA shipments page): the units are held, the job starts.
+    const { sendDraft } = await import('../fba-inbound/draft.service.js')
+    expect(await inside(() => sendDraft(planId, {}, { actor: 'owner@example.test', userId: 'u-owner' }))).toEqual({ planId })
+    expect(await inside(() => database.client.fbaInboundPlanV2.findUniqueOrThrow({ where: { id: planId }, select: { status: true, source: true } }))).toEqual({ status: 'QUEUED', source: 'claude' })
     expect(dispatchFbaPlan).toHaveBeenCalledWith(planId)
     expect(await inside(() => database.client.stockLevel.findFirstOrThrow({ where: { productId: ids.jacket, locationId: ids.main }, select: { quantity: true, reserved: true, available: true } })))
-      .toEqual({ quantity: 12, reserved: 6, available: 6 })
-    expect(await quantities()).toEqual(before)
+      .toEqual({ quantity: 12, reserved: 4, available: 8 })
   })
 
   it('fba-shipment-options: reads the stored status, steps and options (Amazon not called, nothing written); an unknown plan is said so', async () => {
     const plan = await inside(() => database.client.fbaInboundPlanV2.findFirstOrThrow({ where: { source: 'claude' } }))
     const queued = await run('fba-shipment-options', { planId: plan.id })
-    expect(queued, queued.error).toMatchObject({ ok: true, data: { plan: { id: plan.id, status: 'QUEUED', statusText: 'Queued', market: 'IT', from: 'TEST-MAIN', units: 6 }, options: null, can: { cancel: true, choose: false } } })
+    expect(queued, queued.error).toMatchObject({ ok: true, data: { plan: { id: plan.id, status: 'QUEUED', statusText: 'Queued', market: 'IT', from: 'TEST-MAIN', units: 4 }, options: null, can: { cancel: true, choose: false } } })
     const options = {
       readAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
       placements: [{ placementOptionId: 'po-1', status: 'OFFERED', expiresAt: null, fees: [{ type: 'FEE', target: 'Placement Services', description: null, value: { amount: 0, currency: 'EUR' } }], discounts: [],

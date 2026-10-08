@@ -1,28 +1,30 @@
 /**
- * MCP full control 08 S13 — sending stock into Amazon FBA (decided S-3, Owner 2026-10-01): Claude asks to create the
- * plan (plan-fba-shipment) and reads where it stands and what Amazon offers (fba-shipment-options). Confirming at Amazon
- * — the shipments, fulfilment centres, carriers and fees — stays a person's click in Nexus: no tool here reaches it.
+ * MCP full control 08 S13 — sending stock into Amazon FBA (decided S-3, Owner 2026-10-01): Claude asks to plan the
+ * shipment (plan-fba-shipment) and reads where it stands and what Amazon offers (fba-shipment-options). Confirming at
+ * Amazon — the shipments, fulfilment centres, carriers and fees — stays a person's click in Nexus: no tool here reaches it.
  *
  * Step 4 Send to FBA (2026-10-07): both tools run on the SAME services as the Matrix "Send to FBA…" dialog
  * (services/fba-inbound/, through its contract): one rule for the boxes and the refusals, one job that talks to Amazon
- * outside any request. A plan HOLDS its units at the From warehouse at once (FBM listings show the lower number); the
- * units leave the warehouse only when a person marks a shipment Shipped. FBA stock is Amazon's number: nothing here
- * writes it. Prep / label owners come from each SKU's case pack (the Matrix Case column); a SKU with them "not set" is
- * refused, never guessed. The ship-from address is the From warehouse + Settings › Company; a gap is refused.
+ * outside any request. Drafts (Owner 2026-10-08): plan-fba-shipment puts the SKUs into the ONE open DRAFT for that
+ * warehouse and market, exactly as the dialog's "Add to draft" does — nothing is held, nothing reaches Amazon. A person
+ * sends the draft from Fulfillment › Outbound › FBA shipments ("Send to Amazon": the checks again, the holds, Amazon's
+ * steps). FBA stock is Amazon's number: nothing here writes it. Prep / label owners come from each SKU's case pack (the
+ * Matrix Case column) and are never Claude's to choose.
  */
 
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
-import { FBA_SEND_COPY, lineCases, lineUnits, sendSummary, type FbaCreateRequest, type FbaPlanView, type FbaSendDraft, type FbaSendLine } from '@nexus/shared/fba-send'
+import { FBA_SEND_COPY, lineCases, lineUnits, sendSummary, type FbaDraftAddRequest, type FbaPlanView, type FbaSendDraft, type FbaSendLine } from '@nexus/shared/fba-send'
 import { CASE_COPY, type CaseCount } from '@nexus/shared/stock-cases'
 import prisma from '../../../db.js'
 import type { AgentTool, ToolResult } from '../tool-types.js'
 import { amazonSkusInMarket } from '../../listings/reported-sku.js'
-import { createSendPlan, FbaSendError, readPlan, readSendDraft } from '../../fba-inbound/contract.js'
+import { addToDraft, FbaSendError, readPlan, readSendDraft } from '../../fba-inbound/contract.js'
 
 const PLAN_MAX_SKUS = 50
 const NOT_YET = 'Nothing changes until a person approves this in Nexus.'
 const PERSON_CONFIRMS = 'Where it goes (shipments, fulfilment centres, carrier, Amazon\'s fees) is chosen and confirmed by a person in Nexus; Claude cannot confirm it.'
+const PERSON_SENDS = `A person sends the draft from Fulfillment › Outbound › ${FBA_SEND_COPY.pageTitle} ("Send to Amazon"): Nexus checks it again, holds the units and starts Amazon's steps.`
 const upper = (value: unknown) => (typeof value === 'string' ? value.trim().toUpperCase() : value)
 type Refusal = { error: string }
 /** One sentence, ending with its full stop. */
@@ -32,12 +34,15 @@ const refused = (r: unknown): r is Refusal => !!r && typeof r === 'object' && 'e
 // ── plan-fba-shipment ─────────────────────────────────────────────────────────────────────────────────
 
 interface Prepared {
-  request: FbaCreateRequest
+  request: FbaDraftAddRequest
   draft: FbaSendDraft
   lines: FbaSendLine[]
+  /** What "Send to Amazon" would refuse today (the shared rule): the draft keeps the SKUs, a person fixes these first. */
+  beforeSending: string[]
 }
 
-/** The request the Matrix would send, checked by the same rule (`sendSummary`). Owners are never Claude's to choose. */
+/** The lines the dialog's "Add to draft" would send, and what the shared rule says about sending them. Owners are never
+ *  Claude's to choose. Writes nothing. */
 async function prepare(args: Record<string, unknown>): Promise<Prepared | Refusal> {
   const asked = (args.lines ?? []) as Array<{ productId: string; cases?: number | CaseCount[]; units?: number; quantity?: number }>
   const ids = asked.map((line) => line.productId)
@@ -48,6 +53,8 @@ async function prepare(args: Record<string, unknown>): Promise<Prepared | Refusa
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error) }
   }
+  if (!draft.from) return { error: `${FBA_SEND_COPY.problem.notWarehouse}. Nothing was changed.` }
+  if (!draft.markets.some((m) => m.code === draft.market)) return { error: `${FBA_SEND_COPY.problem.noAccount(draft.market)}. Nothing was changed.` }
   // Sealed cases per case size. A plain number stands for the SKU's ONE case size; a SKU with several names each size.
   const lines: FbaSendLine[] = []
   for (const line of asked) {
@@ -62,30 +69,28 @@ async function prepare(args: Record<string, unknown>): Promise<Prepared | Refusa
       const name = sku?.sku ?? line.productId
       return {
         error: sizes.length === 0
-          ? `${name}: ${CASE_COPY.noSize}. Nothing was sent to Amazon.`
-          : `${name} has ${CASE_COPY.sizes(sizes.map((size) => size.unitsPerCase))}: give the cases of each size as [{ unitsPerCase, cases }]. Nothing was sent to Amazon.`,
+          ? `${name}: ${CASE_COPY.noSize}. Nothing was changed.`
+          : `${name} has ${CASE_COPY.sizes(sizes.map((size) => size.unitsPerCase))}: give the cases of each size as [{ unitsPerCase, cases }]. Nothing was changed.`,
       }
     }
     lines.push({ productId: line.productId, cases: [{ unitsPerCase: sizes[0].unitsPerCase, cases: line.cases }], looseUnits })
   }
   const readyToShipOn = typeof args.readyToShipOn === 'string' && args.readyToShipOn ? args.readyToShipOn : draft.readyToShipOn
   const summary = sendSummary(draft, { lines, readyToShipOn, mixedBox: null, owners: null })
-  if (summary.blocking.length > 0) {
-    // A SKU whose listing has no single seller SKU reads "no listing" in the shared rule; Claude gets the exact reason.
-    const conflicts = summary.blocking.some((problem) => problem.code === 'NO_LISTING') && draft.markets.some((m) => m.code === draft.market)
-      ? await amazonSkusInMarket(prisma as never, { accountId: draft.markets.find((m) => m.code === draft.market)!.accountId, marketplace: draft.market, products: draft.skus.map((sku) => ({ id: sku.productId, sku: sku.sku })) })
-      : new Map()
-    const sentences = summary.blocking.map((problem) => {
-      if (problem.code === 'NO_OWNERS') return `${problem.message} — ${FBA_SEND_COPY.ownersForClaude}`
-      const conflict = problem.code === 'NO_LISTING' && problem.productId ? conflicts.get(problem.productId) : undefined
-      return conflict && conflict.ok === false && conflict.code === 'CONFLICT' ? conflict.sentence : problem.message
-    })
-    return { error: `${[...new Set(sentences)].map(sentence).join(' ')} Nothing was sent to Amazon.` }
-  }
+  // A SKU whose listing has no single seller SKU reads "no listing" in the shared rule; Claude gets the exact reason.
+  const conflicts = summary.blocking.some((problem) => problem.code === 'NO_LISTING')
+    ? await amazonSkusInMarket(prisma as never, { accountId: draft.markets.find((m) => m.code === draft.market)!.accountId, marketplace: draft.market, products: draft.skus.map((sku) => ({ id: sku.productId, sku: sku.sku })) })
+    : new Map()
+  const beforeSending = [...new Set(summary.blocking.filter((problem) => problem.code !== 'NO_UNITS').map((problem) => {
+    if (problem.code === 'NO_OWNERS') return sentence(`${problem.message} — ${FBA_SEND_COPY.ownersForClaude}`)
+    const conflict = problem.code === 'NO_LISTING' && problem.productId ? conflicts.get(problem.productId) : undefined
+    return sentence(conflict && conflict.ok === false && conflict.code === 'CONFLICT' ? conflict.sentence : problem.message)
+  }))]
   return {
-    request: { from: draft.from!.code, market: draft.market, readyToShipOn, lines, mixedBox: null, owners: null },
+    request: { from: draft.from.code, market: draft.market, readyToShipOn, lines, mixedBox: null, owners: null },
     draft,
     lines,
+    beforeSending,
   }
 }
 
@@ -105,57 +110,62 @@ const planFbaShipment: AgentTool = {
       ]).optional().describe('sealed cases to send, as identical case boxes per case size: [{ unitsPerCase, cases }], or a number when the SKU has one case size (needs each case size\'s dimensions and weight)'),
       units: z.coerce.number().int().min(0).max(10_000).optional().describe('loose units to send, packed in mixed boxes (needs the SKU\'s unit weight)'),
       quantity: z.coerce.number().int().min(0).max(10_000).optional().describe('older name for units'),
-    })).min(1).max(PLAN_MAX_SKUS).describe(`the SKUs, 1 to ${PLAN_MAX_SKUS}`),
+    })).min(1).max(PLAN_MAX_SKUS).describe(`the SKUs, 1 to ${PLAN_MAX_SKUS}; a SKU with no cases and no units is taken out of the draft`),
     from: z.string().trim().min(1).max(40).optional().describe('the warehouse the boxes leave from, by its code (default: the default warehouse)'),
     readyToShipOn: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('the day the boxes are ready, YYYY-MM-DD (default: the next working day)'),
   }),
   requires: [F.inboundManage],
   category: 'fulfillment',
-  riskTier: 'high',
+  riskTier: 'medium',
   readOnly: false,
   alwaysAsk: true,
-  openWorld: true,
+  openWorld: false,
+  // Claude's undo-change cannot put a draft back; a person changes or deletes it on the FBA shipments page.
   reversibility: 'none',
   maxClaudeTrust: 'ask',
   description:
-    'Create a Send to FBA plan, exactly as the Matrix "Send to FBA…" dialog does: the SKUs (sealed cases and loose '
-    + 'units), the warehouse they leave from and the Amazon market. On approval the units are HELD at that warehouse '
-    + '(FBM listings show the lower number) and Nexus creates the plan at Amazon in the background; then a person '
-    + 'chooses where it goes (shipments, fulfilment centres, carrier, Amazon\'s fees) and confirms it in Nexus — Claude '
-    + 'cannot. Units leave the warehouse only when a person marks a shipment Shipped; FBA stock is Amazon\'s number and '
-    + 'never changes here. A person can cancel the plan in Nexus (free at Amazon until it is confirmed). Refused while a '
-    + 'SKU has no Amazon listing in the market, has Prep by / Labels by not set, lacks free units, or the ship-from '
-    + 'address (warehouse address, company name and phone) is incomplete. Always waits for a person to approve it.',
+    'Put SKUs into the FBA shipment draft for a warehouse and an Amazon market, exactly as the Matrix "Send to FBA…" '
+    + 'dialog\'s "Add to draft" does: sealed cases per case size and loose units. There is ONE open draft per warehouse '
+    + 'and market; a SKU already in it takes the new numbers, a SKU with no cases and no units is taken out. Nothing is '
+    + 'held and nothing reaches Amazon: a person sends the draft from Fulfillment › Outbound › FBA shipments ("Send to '
+    + 'Amazon"), when Nexus checks it again, holds the units at the warehouse and creates the plan at Amazon; then a '
+    + 'person chooses where it goes (shipments, fulfilment centres, carrier, Amazon\'s fees) and confirms it — Claude '
+    + 'cannot. The answer lists what "Send to Amazon" would refuse today (no Amazon listing in the market, Prep by / '
+    + 'Labels by not set, more than free, an incomplete ship-from address, …) so it can be fixed first. FBA stock is '
+    + 'Amazon\'s number and never changes here. Always waits for a person to approve it.',
   async handler(args): Promise<ToolResult> {
     const plan = await prepare(args)
     if (refused(plan)) return { ok: false, error: plan.error }
     const { draft, lines } = plan
-    const summary = sendSummary(draft, { lines, readyToShipOn: plan.request.readyToShipOn, mixedBox: null, owners: null })
+    const summary = sendSummary(draft, { lines, readyToShipOn: plan.request.readyToShipOn ?? draft.readyToShipOn, mixedBox: null, owners: null })
     const skuOf = new Map(draft.skus.map((sku) => [sku.productId, sku]))
-    const sent = lines.filter((line) => lineCases(line) > 0 || line.looseUnits > 0)
+    const inDraft = new Map(draft.lines.map((line) => [line.productId, lineUnits(line)]))
+    const from = draft.from!
     return {
       ok: true,
       preview: {
-        summary: `Send ${summary.units} units of ${summary.skus} SKUs from ${draft.from!.code} to Amazon ${draft.market} (held at ${draft.from!.code} until shipped).`,
+        summary: `Add ${summary.units} units of ${summary.skus} SKUs to the FBA draft from ${from.code} to Amazon ${draft.market}. Nothing is held or sent to Amazon.`,
         marketplace: draft.market,
-        from: { code: draft.from!.code, town: draft.from!.town, address: draft.address.summary },
+        from: { code: from.code, town: from.town, address: draft.address.summary },
         readyToShipOn: plan.request.readyToShipOn,
-        lines: sent.map((line) => {
+        draft: draft.draftId ? { planId: draft.draftId, existing: true } : { existing: false },
+        lines: lines.map((line) => {
           const sku = skuOf.get(line.productId)!
+          const out = lineCases(line) === 0 && line.looseUnits === 0
           return {
             sku: sku.msku ?? sku.sku,
             ...(sku.msku && sku.msku !== sku.sku ? { productSku: sku.sku } : {}),
-            cases: line.cases.filter((c) => c.cases > 0),
-            units: line.looseUnits,
-            quantity: lineUnits(line),
+            ...(out ? { takenOut: true } : { cases: line.cases.filter((c) => c.cases > 0), units: line.looseUnits, quantity: lineUnits(line) }),
+            ...(inDraft.has(line.productId) ? { inDraftNow: inDraft.get(line.productId) } : {}),
             freeNow: sku.free,
             prepBy: sku.prepOwner,
             labelsBy: sku.labelOwner,
           }
         }),
         totals: { skus: summary.skus, units: summary.units, boxes: summary.boxes, caseBoxes: summary.caseBoxes, mixedBoxes: summary.mixedBoxes, weightKg: summary.weightKg },
+        ...(plan.beforeSending.length ? { beforeSending: plan.beforeSending } : {}),
         ...(summary.warnings.length ? { warnings: summary.warnings.map((warning) => warning.message) } : {}),
-        note: `${NOT_YET} Then the units are held at ${draft.from!.code} and the plan is created at Amazon. ${PERSON_CONFIRMS}`,
+        note: `${NOT_YET} ${PERSON_SENDS} ${PERSON_CONFIRMS}`,
       },
     }
   },
@@ -163,18 +173,24 @@ const planFbaShipment: AgentTool = {
     const plan = await prepare(args)
     if (refused(plan)) return { ok: false, error: plan.error }
     try {
-      const { planId } = await createSendPlan(plan.request, { actor: ctx.userId ?? 'claude', userId: ctx.userId ?? null }, 'claude')
+      const { planId } = await addToDraft(plan.request, { actor: ctx.userId ?? 'claude', userId: ctx.userId ?? null }, 'claude')
       return {
         ok: true,
-        data: { planId, held: { from: plan.request.from, units: plan.lines.reduce((n, l) => n + lineUnits(l), 0) }, next: PERSON_CONFIRMS },
+        data: {
+          planId,
+          draft: true,
+          units: plan.lines.reduce((n, l) => n + lineUnits(l), 0),
+          ...(plan.beforeSending.length ? { beforeSending: plan.beforeSending } : {}),
+          next: `${PERSON_SENDS} ${PERSON_CONFIRMS}`,
+        },
         change: { before: { marketplace: plan.request.market }, after: { planId } },
       }
     } catch (error) {
       if (error instanceof FbaSendError) {
         const extra = error.problems.filter((problem) => problem.message !== error.message).map((problem) => problem.message)
-        return { ok: false, error: `${[error.message, ...extra].map(sentence).join(' ')} Nothing was sent to Amazon.` }
+        return { ok: false, error: `${[error.message, ...extra].map(sentence).join(' ')} Nothing was changed.` }
       }
-      return { ok: false, error: `The plan was not created: ${error instanceof Error ? error.message : String(error)}` }
+      return { ok: false, error: `The draft was not changed: ${error instanceof Error ? error.message : String(error)}` }
     }
   },
 }

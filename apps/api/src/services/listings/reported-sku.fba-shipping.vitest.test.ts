@@ -55,7 +55,11 @@ vi.mock('../fba-inbound/contract.js', () => {
   }
   const sendFn = (name: string) => async (...args: unknown[]) => ((await import('../fba-inbound/send.service.js')) as any)[name](...args)
   const readFn = (name: string) => async (...args: unknown[]) => ((await import('../fba-inbound/read.service.js')) as any)[name](...args)
-  return { FbaSendError, dispatchFbaPlan: vi.fn(async () => 'inline'), readSendDraft: sendFn('readSendDraft'), createSendPlan: sendFn('createSendPlan'), readPlan: readFn('readPlan'), readPlans: readFn('readPlans') }
+  const draftFn = (name: string) => async (...args: unknown[]) => ((await import('../fba-inbound/draft.service.js')) as any)[name](...args)
+  return {
+    FbaSendError, dispatchFbaPlan: vi.fn(async () => 'inline'), readSendDraft: sendFn('readSendDraft'), createSendPlan: sendFn('createSendPlan'), readPlan: readFn('readPlan'), readPlans: readFn('readPlans'),
+    addToDraft: draftFn('addToDraft'), sendDraft: draftFn('sendDraft'),
+  }
 })
 vi.mock('../stock-movement.service.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../stock-movement.service.js')>()),
@@ -117,7 +121,12 @@ afterAll(async () => { await database?.close() })
 
 describe('plan-fba-shipment — the msku is the listing\'s seller SKU in the plan\'s market', () => {
   const planLines = (planId: string) => inside(() => database.client.fbaInboundPlanLine.findMany({ where: { planRowId: planId }, orderBy: { createdAt: 'asc' }, select: { msku: true, quantity: true } }))
-  const plans = () => inside(() => database.client.fbaInboundPlanV2.count({ where: { source: 'claude' } }))
+  const plans = () => inside(() => database.client.fbaInboundPlanV2.count({ where: { source: 'claude', status: { not: 'DRAFT' } } }))
+  /** A person's "Send to Amazon" on the draft Claude filled (the FBA shipments page). */
+  const send = async (planId: string) => {
+    const { sendDraft } = await import('../fba-inbound/draft.service.js')
+    return inside(() => sendDraft(planId, {}, { actor: 'owner@example.test', userId: 'u-owner' }))
+  }
   beforeAll(async () => {
     vi.stubEnv('NEXUS_ISSUER_NAME', '')
     vi.stubEnv('NEXUS_ISSUER_PHONE', '')
@@ -136,12 +145,12 @@ describe('plan-fba-shipment — the msku is the listing\'s seller SKU in the pla
   })
   afterAll(() => { vi.unstubAllEnvs() })
 
-  it('parity: a listing without its own SKU sends the product SKU, as before; no Amazon listing in the market is refused, never sent', async () => {
+  it('parity: a listing without its own SKU sends the product SKU, as before; no Amazon listing in the market is named before sending', async () => {
     s.account = acc.a
     const dry = await plan([{ productId: pid.PLAIN, quantity: 2 }])
     expect(dry, dry.error).toMatchObject({ ok: true, preview: { lines: [{ sku: 'PLAIN', quantity: 2, freeNow: 3 }] } })
     expect((dry.preview as any).lines[0]).not.toHaveProperty('productSku')
-    expect(await plan([{ productId: pid.NOLIST, quantity: 1 }])).toEqual({ ok: false, error: 'NOLIST: no Amazon listing in IT. Nothing was sent to Amazon.' })
+    expect(await plan([{ productId: pid.NOLIST, quantity: 1 }])).toMatchObject({ ok: true, preview: { beforeSending: ['NOLIST: no Amazon listing in IT.'] } })
   })
 
   it('an own SKU in the market is the msku, and the preview names the Nexus SKU beside it; a draft sends the SKU it will be published as', async () => {
@@ -149,15 +158,22 @@ describe('plan-fba-shipment — the msku is the listing\'s seller SKU in the pla
     const dry = await plan([{ productId: pid.OWNP, quantity: 2 }, { productId: pid.DRAFTP, quantity: 1 }])
     expect(dry, dry.error).toMatchObject({ ok: true, preview: { lines: [{ sku: 'OWNP-IT', productSku: 'OWNP', quantity: 2 }, { sku: 'DRAFTP-NEW', productSku: 'DRAFTP', quantity: 1 }] } })
     const ran = await plan([{ productId: pid.OWNP, quantity: 2 }, { productId: pid.PLAIN, quantity: 2 }], 'execute')
-    expect(ran, ran.error).toMatchObject({ ok: true, data: { planId: expect.any(String) } })
-    expect(await planLines((ran.data as { planId: string }).planId)).toEqual([{ msku: 'OWNP-IT', quantity: 2 }, { msku: 'PLAIN', quantity: 2 }])
+    expect(ran, ran.error).toMatchObject({ ok: true, data: { planId: expect.any(String), draft: true } })
+    const planId = (ran.data as { planId: string }).planId
+    // A draft keeps no seller SKU: "Send to Amazon" reads it then.
+    expect(await planLines(planId)).toEqual([{ msku: null, quantity: 2 }, { msku: null, quantity: 2 }])
+    expect(await send(planId)).toEqual({ planId })
+    expect(await planLines(planId)).toEqual([{ msku: 'OWNP-IT', quantity: 2 }, { msku: 'PLAIN', quantity: 2 }])
   })
 
-  it('🔴 no single seller SKU: refused with a sentence, nothing created; another account\'s listing is never used', async () => {
+  it('🔴 no single seller SKU: named with its sentence, and "Send to Amazon" is refused (nothing held, nothing sent); another account\'s listing is never used', async () => {
     s.account = acc.a
     const before = await plans()
-    const refused = await plan([{ productId: pid['TWO-OFF'], quantity: 1 }], 'execute')
-    expect(refused).toEqual({ ok: false, error: 'TWO-OFF: its Amazon IT listing has more than one seller SKU on record (TWO-A, TWO-B). Nexus did not pick one: set the listing\'s own SKU first. Nothing was sent to Amazon.' })
+    const dry = await plan([{ productId: pid['TWO-OFF'], quantity: 1 }])
+    expect((dry.preview as any).beforeSending).toEqual(['TWO-OFF: its Amazon IT listing has more than one seller SKU on record (TWO-A, TWO-B). Nexus did not pick one: set the listing\'s own SKU first.'])
+    const ran = await plan([{ productId: pid['TWO-OFF'], quantity: 1 }], 'execute')
+    expect(ran, ran.error).toMatchObject({ ok: true, data: { draft: true } })
+    await expect(send((ran.data as { planId: string }).planId)).rejects.toMatchObject({ code: 'REFUSED' })
     expect(await plans()).toBe(before)
     expect((await plan([{ productId: pid.MIXED, quantity: 1 }])).preview).toMatchObject({ lines: [{ sku: 'MIXED' }] })
     s.account = acc.b

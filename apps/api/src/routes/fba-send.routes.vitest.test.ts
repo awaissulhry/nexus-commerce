@@ -1,9 +1,10 @@
 /**
- * Step 4 Send to FBA (Part C) — the routes the Matrix dialog and the FBA plans drawer call, and the retired doors.
+ * Step 4 Send to FBA (Part C) — the routes the Matrix dialog, the FBA plans drawer and the FBA shipments page call, and the
+ * retired doors.
  *
  *   routes      each route parses, calls its service through the contract with the signed-in person as the actor, and
  *               answers the service's shape; a thrown FbaSendError answers its status with { ok: false, code, error,
- *               problems }; "Create plan" answers 202 { planId }.
+ *               problems }; "Add to draft" answers 200 { planId }, "Send to Amazon" 202 { planId } (drafts, Owner 2026-10-08).
  *   double      every POST is in COMMAND_SCOPES: the same Idempotency-Key twice runs the service once and replays the answer.
  *   permission  the real RBAC gate (enforce): `inbound.manage` may, `inventory.view` alone may not.
  *   410         the wizard's step routes (POST /api/fba/inbound/v2 …) and the v0 plan / create routes answer 410 Gone with
@@ -41,16 +42,20 @@ vi.mock('../lib/auth/audit.js', () => ({ writeAuthAudit: vi.fn(async () => undef
 vi.mock('../services/fba-inbound/send.service.js', () => ({
   readSendDraft: vi.fn(), createSendPlan: vi.fn(), confirmChoice: vi.fn(), cancelPlan: vi.fn(), retryPlan: vi.fn(),
 }))
+vi.mock('../services/fba-inbound/draft.service.js', () => ({ addToDraft: vi.fn(), updateDraft: vi.fn(), deleteDraft: vi.fn(), sendDraft: vi.fn() }))
 vi.mock('../services/fba-inbound/ship.service.js', () => ({ markShipped: vi.fn(), labelsFor: vi.fn() }))
 vi.mock('../services/fba-inbound/read.service.js', () => ({
-  readPlans: vi.fn(), readPlan: vi.fn(),
+  readPlans: vi.fn(), readPlan: vi.fn(), readPlanList: vi.fn(),
   wizardPlanRows: vi.fn(async () => [{ id: 'wiz-1', status: 'ACTIVE' }]), wizardPlanRow: vi.fn(async (id: string) => (id === 'wiz-1' ? { id, status: 'ACTIVE' } : null)),
 }))
 
 import { permissionForRoute } from '../lib/auth/permissions-manifest.js'
 import { rbacHook } from '../lib/auth/rbac-hook.js'
 import { COMMAND_SCOPE_ROUTES, registerCommandIdempotency } from '../lib/command-idempotency.js'
-import { cancelPlan, confirmChoice, createSendPlan, FbaSendError, labelsFor, markShipped, readPlan, readPlans, readSendDraft, retryPlan } from '../services/fba-inbound/contract.js'
+import {
+  addToDraft, cancelPlan, confirmChoice, createSendPlan, deleteDraft, FbaSendError, labelsFor, markShipped, readPlan, readPlanList, readSendDraft,
+  retryPlan, sendDraft, updateDraft,
+} from '../services/fba-inbound/contract.js'
 
 const business = { workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: ['OWNER'] }
 const MANAGER = [F.inboundManage].join(',')
@@ -60,7 +65,7 @@ const WHO = { actor: 'fba@example.test', userId: 'u-fba' }
 let app: FastifyInstance
 
 type Json = any
-async function call(method: 'GET' | 'POST', url: string, payload?: unknown, headers: Record<string, string> = {}): Promise<{ status: number; body: Json }> {
+async function call(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', url: string, payload?: unknown, headers: Record<string, string> = {}): Promise<{ status: number; body: Json }> {
   const response = await app.inject({ method, url, payload: payload as never, headers: { 'x-test-permissions': MANAGER, ...headers } })
   return { status: response.statusCode, body: response.body ? response.json() : null }
 }
@@ -94,30 +99,58 @@ describe('/api/fba/inbound — Send to FBA', () => {
   it('GET send-draft: the ids (comma list), From and market reach readSendDraft; no ids → 400; a refusal answers its status', async () => {
     vi.mocked(readSendDraft).mockResolvedValueOnce({ market: 'IT' } as never)
     expect(await call('GET', '/api/fba/inbound/send-draft?productIds=a,b&from=TEST-MAIN&market=it')).toEqual({ status: 200, body: { market: 'IT' } })
-    expect(readSendDraft).toHaveBeenCalledWith({ productIds: ['a', 'b'], from: 'TEST-MAIN', market: 'it' })
+    expect(readSendDraft).toHaveBeenCalledWith({ productIds: ['a', 'b'], planId: null, from: 'TEST-MAIN', market: 'it' })
     expect((await call('GET', '/api/fba/inbound/send-draft')).status).toBe(400)
+    vi.mocked(readSendDraft).mockResolvedValueOnce({ draftId: 'draft-1' } as never)
+    expect((await call('GET', '/api/fba/inbound/send-draft?planId=draft-1')).body).toEqual({ draftId: 'draft-1' })
+    expect(readSendDraft).toHaveBeenLastCalledWith({ productIds: [], planId: 'draft-1', from: null, market: null })
     vi.mocked(readSendDraft).mockRejectedValueOnce(new FbaSendError('NOT_FOUND', 'Product not found'))
     expect(await call('GET', '/api/fba/inbound/send-draft?productIds=x')).toEqual({ status: 404, body: { ok: false, code: 'NOT_FOUND', error: 'Product not found', problems: [] } })
   })
 
-  it('POST plans: 202 { planId } as the signed-in person, source matrix; a refusal is 400 with the problems; one Idempotency-Key runs once', async () => {
-    const body = { from: 'TEST-MAIN', market: 'IT', readyToShipOn: '2026-10-08', lines: [{ productId: 'a', cases: 1, looseUnits: 2 }] }
-    vi.mocked(createSendPlan).mockResolvedValue({ planId: 'plan-1' })
-    const first = await call('POST', '/api/fba/inbound/plans', body, { 'idempotency-key': 'create-once' })
-    expect(first).toEqual({ status: 202, body: { planId: 'plan-1' } })
-    expect(createSendPlan).toHaveBeenCalledWith(body, WHO, 'matrix')
-    const replay = await call('POST', '/api/fba/inbound/plans', body, { 'idempotency-key': 'create-once' })
-    expect(replay).toEqual(first)
-    expect(createSendPlan).toHaveBeenCalledTimes(1)
-    const problem = { code: 'NO_OWNERS', message: 'A: choose who preps and labels (Prep by / Labels by)', productId: 'a', blocking: true }
-    vi.mocked(createSendPlan).mockRejectedValueOnce(new FbaSendError('REFUSED', problem.message, [problem]))
-    expect(await call('POST', '/api/fba/inbound/plans', body, { 'idempotency-key': 'create-refused' })).toEqual({ status: 400, body: { ok: false, code: 'REFUSED', error: problem.message, problems: [problem] } })
+  it('POST drafts ("Add to draft"): 200 { planId } as the signed-in person, source matrix; one Idempotency-Key runs once; the old POST plans is gone', async () => {
+    const body = { from: 'TEST-MAIN', market: 'IT', lines: [{ productId: 'a', cases: [{ unitsPerCase: 12, cases: 1 }], looseUnits: 2 }] }
+    vi.mocked(addToDraft).mockResolvedValue({ planId: 'draft-1' })
+    const first = await call('POST', '/api/fba/inbound/drafts', body, { 'idempotency-key': 'add-once' })
+    expect(first).toEqual({ status: 200, body: { planId: 'draft-1' } })
+    expect(addToDraft).toHaveBeenCalledWith(body, WHO, 'matrix')
+    expect(await call('POST', '/api/fba/inbound/drafts', body, { 'idempotency-key': 'add-once' })).toEqual(first)
+    expect(addToDraft).toHaveBeenCalledTimes(1)
+    vi.mocked(addToDraft).mockRejectedValueOnce(new FbaSendError('REFUSED', 'Choose one of your active warehouses as From'))
+    expect((await call('POST', '/api/fba/inbound/drafts', body, { 'idempotency-key': 'add-refused' })).status).toBe(400)
+    expect((await call('POST', '/api/fba/inbound/plans', body)).status).toBe(404)
+    expect(createSendPlan).not.toHaveBeenCalled()
   })
 
-  it('GET plans (by family, open) and one plan; a missing plan is 404', async () => {
-    vi.mocked(readPlans).mockResolvedValueOnce([VIEW] as never)
-    expect(await call('GET', '/api/fba/inbound/plans?productId=fam-1&open=1')).toEqual({ status: 200, body: { plans: [VIEW] } })
-    expect(readPlans).toHaveBeenCalledWith({ productId: 'fam-1', open: true })
+  it('PATCH / DELETE a draft and "Send to Amazon" (202, one Idempotency-Key runs once); DRAFT_EXISTS and WRONG_STATE are 409', async () => {
+    const patch = { readyToShipOn: '2026-10-09', lines: [{ productId: 'a', cases: [], looseUnits: 0 }] }
+    vi.mocked(updateDraft).mockResolvedValueOnce({ id: 'draft-1', status: 'DRAFT' } as never)
+    expect(await call('PATCH', '/api/fba/inbound/plans/draft-1', patch)).toEqual({ status: 200, body: { id: 'draft-1', status: 'DRAFT' } })
+    expect(updateDraft).toHaveBeenCalledWith('draft-1', patch, WHO)
+    vi.mocked(updateDraft).mockRejectedValueOnce(new FbaSendError('DRAFT_EXISTS', FBA_SEND_COPY.draftExists('TEST-MAIN', 'DE')))
+    expect(await call('PATCH', '/api/fba/inbound/plans/draft-1', { market: 'DE' })).toEqual({ status: 409, body: { ok: false, code: 'DRAFT_EXISTS', error: FBA_SEND_COPY.draftExists('TEST-MAIN', 'DE'), problems: [] } })
+    vi.mocked(deleteDraft).mockResolvedValueOnce({ planId: 'draft-1', deleted: true })
+    expect(await call('DELETE', '/api/fba/inbound/plans/draft-1')).toEqual({ status: 200, body: { planId: 'draft-1', deleted: true } })
+    expect(deleteDraft).toHaveBeenCalledWith('draft-1', WHO)
+    vi.mocked(deleteDraft).mockRejectedValueOnce(new FbaSendError('WRONG_STATE', 'only a draft can be deleted'))
+    expect((await call('DELETE', '/api/fba/inbound/plans/plan-1')).status).toBe(409)
+    vi.mocked(sendDraft).mockResolvedValue({ planId: 'draft-1' })
+    const sent = await call('POST', '/api/fba/inbound/plans/draft-1/send', { readyToShipOn: '2026-10-09' }, { 'idempotency-key': 'send-once' })
+    expect(sent).toEqual({ status: 202, body: { planId: 'draft-1' } })
+    expect(await call('POST', '/api/fba/inbound/plans/draft-1/send', { readyToShipOn: '2026-10-09' }, { 'idempotency-key': 'send-once' })).toEqual(sent)
+    expect(sendDraft).toHaveBeenCalledTimes(1)
+    expect(sendDraft).toHaveBeenCalledWith('draft-1', { readyToShipOn: '2026-10-09' }, WHO)
+  })
+
+  it('GET plans: the tab, family, open, cursor and limit reach readPlanList; an unknown tab is 400; one plan; a missing plan is 404', async () => {
+    const list = { plans: [VIEW], next: null, counts: { drafts: 1, active: 1, done: 0 } }
+    vi.mocked(readPlanList).mockResolvedValueOnce(list as never)
+    expect(await call('GET', '/api/fba/inbound/plans?productId=fam-1&open=1')).toEqual({ status: 200, body: list })
+    expect(readPlanList).toHaveBeenCalledWith({ productId: 'fam-1', open: true, view: null, cursor: null, limit: null })
+    vi.mocked(readPlanList).mockResolvedValueOnce(list as never)
+    await call('GET', '/api/fba/inbound/plans?view=drafts&cursor=abc&limit=10')
+    expect(readPlanList).toHaveBeenLastCalledWith({ productId: null, open: false, view: 'drafts', cursor: 'abc', limit: 10 })
+    expect((await call('GET', '/api/fba/inbound/plans?view=later')).status).toBe(400)
     vi.mocked(readPlan).mockResolvedValueOnce(VIEW as never)
     expect(await call('GET', '/api/fba/inbound/plans/plan-1')).toEqual({ status: 200, body: VIEW })
     vi.mocked(readPlan).mockResolvedValueOnce(null)
@@ -157,15 +190,20 @@ describe('/api/fba/inbound — Send to FBA', () => {
   })
 
   it('every POST is a durable command; the routes need inbound.manage (inventory.view alone is refused)', async () => {
-    for (const route of ['/api/fba/inbound/plans', '/api/fba/inbound/plans/:id/choice', '/api/fba/inbound/plans/:id/cancel', '/api/fba/inbound/plans/:id/retry', '/api/fba/inbound/shipments/:id/shipped']) {
+    for (const route of ['/api/fba/inbound/drafts', '/api/fba/inbound/plans/:id/send', '/api/fba/inbound/plans/:id/choice', '/api/fba/inbound/plans/:id/cancel', '/api/fba/inbound/plans/:id/retry', '/api/fba/inbound/shipments/:id/shipped']) {
       expect(COMMAND_SCOPE_ROUTES).toContain(route)
       expect(permissionForRoute('POST', route)).toBe('inbound.manage')
     }
+    expect(COMMAND_SCOPE_ROUTES).not.toContain('/api/fba/inbound/plans')
     expect(permissionForRoute('GET', '/api/fba/inbound/send-draft')).toBe('inbound.manage')
+    expect(permissionForRoute('PATCH', '/api/fba/inbound/plans/:id')).toBe('inbound.manage')
+    expect(permissionForRoute('DELETE', '/api/fba/inbound/plans/:id')).toBe('inbound.manage')
     expect((await call('GET', '/api/fba/inbound/plans', undefined, { 'x-test-permissions': VIEWER })).status).toBe(403)
-    expect((await call('POST', '/api/fba/inbound/plans', {}, { 'x-test-permissions': VIEWER })).status).toBe(403)
-    expect(readPlans).not.toHaveBeenCalled()
-    expect(createSendPlan).not.toHaveBeenCalled()
+    expect((await call('POST', '/api/fba/inbound/drafts', {}, { 'x-test-permissions': VIEWER })).status).toBe(403)
+    expect((await call('DELETE', '/api/fba/inbound/plans/draft-1', undefined, { 'x-test-permissions': VIEWER })).status).toBe(403)
+    expect(readPlanList).not.toHaveBeenCalled()
+    expect(addToDraft).not.toHaveBeenCalled()
+    expect(deleteDraft).not.toHaveBeenCalled()
   })
 })
 

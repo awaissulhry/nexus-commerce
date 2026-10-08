@@ -80,9 +80,11 @@ const COMMAND_SCOPES: Record<string, string> = {
   '/api/advertising/negative-targets/create': 'ads-negative-target-create',
   '/api/advertising/negative-keywords': 'ads-negative-keyword-create',
   '/api/advertising/sb-creatives/create': 'ads-sb-creative-create',
-  // Step 4 Send to FBA — one "Create plan" press, one plan and one set of holds; one pick confirmed at Amazon; one
-  // cancel, one "Try again", one "Mark shipped" (one stock movement) per press, even when the answer is lost.
-  '/api/fba/inbound/plans': 'fba-plan-create',
+  // Step 4 Send to FBA — one "Add to draft" press, one change of the draft; one "Send to Amazon" press, one plan and one
+  // set of holds; one pick confirmed at Amazon; one cancel, one "Try again", one "Mark shipped" (one stock movement) per
+  // press, even when the answer is lost.
+  '/api/fba/inbound/drafts': 'fba-draft-add',
+  '/api/fba/inbound/plans/:id/send': 'fba-plan-send',
   '/api/fba/inbound/plans/:id/choice': 'fba-plan-choice',
   '/api/fba/inbound/plans/:id/cancel': 'fba-plan-cancel',
   '/api/fba/inbound/plans/:id/retry': 'fba-plan-retry',

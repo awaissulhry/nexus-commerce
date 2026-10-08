@@ -16,8 +16,12 @@
  *
  * Routes (Part C, `routes/fba-send.routes.ts`, zero Prisma; all under `/api/fba/inbound` → `F.inboundManage`):
  *   GET  /fba/inbound/send-draft?productIds=a,b&from=IT-MAIN&market=IT   → readSendDraft        → 200 FbaSendDraft
- *   POST /fba/inbound/plans                     (Idempotency-Key)        → createSendPlan       → 202 FbaCreateAnswer
- *   GET  /fba/inbound/plans?productId=<id>&open=1                        → readPlans            → 200 { plans: FbaPlanView[] }
+ *   GET  /fba/inbound/send-draft?planId=<draft>                          → readSendDraft        → 200 FbaSendDraft
+ *   POST /fba/inbound/drafts                    (Idempotency-Key)        → addToDraft           → 200 FbaCreateAnswer
+ *   PATCH /fba/inbound/plans/:id                                         → updateDraft          → 200 FbaPlanView
+ *   DELETE /fba/inbound/plans/:id                                        → deleteDraft          → 200 { planId, deleted }
+ *   POST /fba/inbound/plans/:id/send            (Idempotency-Key)        → sendDraft            → 202 FbaCreateAnswer
+ *   GET  /fba/inbound/plans?view=drafts|active|done&productId=&cursor=&limit= (or open=1) → readPlanList → 200 FbaPlanListAnswer
  *   GET  /fba/inbound/plans/:id                                          → readPlan             → 200 FbaPlanView | 404
  *   POST /fba/inbound/plans/:id/choice          (Idempotency-Key)        → confirmChoice        → 200 FbaPlanView
  *   POST /fba/inbound/plans/:id/cancel          (Idempotency-Key)        → cancelPlan           → 200 FbaPlanView
@@ -25,8 +29,8 @@
  *   GET  /fba/inbound/shipments/:id/labels                               → labelsFor            → 200 FbaLabelsAnswer
  *   POST /fba/inbound/shipments/:id/shipped     (Idempotency-Key)        → markShipped          → 200 FbaPlanView
  * A thrown `FbaSendError` answers `httpStatus` with `{ ok: false, code, error: message, problems }`.
- * COMMAND_SCOPES (lib/command-idempotency.ts): '/api/fba/inbound/plans' 'fba-plan-create', '/api/fba/inbound/plans/:id/choice'
- * 'fba-plan-choice', '/api/fba/inbound/plans/:id/cancel' 'fba-plan-cancel', '/api/fba/inbound/plans/:id/retry'
+ * COMMAND_SCOPES (lib/command-idempotency.ts): '/api/fba/inbound/drafts' 'fba-draft-add', '/api/fba/inbound/plans/:id/send'
+ * 'fba-plan-send', '/api/fba/inbound/plans/:id/choice' 'fba-plan-choice', '/api/fba/inbound/plans/:id/cancel' 'fba-plan-cancel', '/api/fba/inbound/plans/:id/retry'
  * 'fba-plan-retry', '/api/fba/inbound/shipments/:id/shipped' 'fba-shipment-shipped'.
  *
  * Hard rules every body keeps: every Amazon call goes through the client → gateway (never `fetch`); Amazon writes only
@@ -35,7 +39,7 @@
  * FBA_TRANSFER_OUT at the From WAREHOUSE only); `fba.plan_changed` is published in the transaction that moves the plan.
  */
 import type {
-  FbaChoiceRequest, FbaCreateAnswer, FbaCreateRequest, FbaLabelsAnswer, FbaPlanStatus, FbaPlanStep, FbaPlanView,
+  FbaChoiceRequest, FbaCreateAnswer, FbaCreateRequest, FbaLabelsAnswer, FbaPlanListView, FbaPlanStatus, FbaPlanStep, FbaPlanView,
   FbaSendDraft, FbaSendProblem, FbaShippedRequest,
 } from '@nexus/shared/fba-send'
 
@@ -49,12 +53,16 @@ export interface FbaActor {
 }
 /** A person — required where only a person may act (confirming at Amazon is final). */
 export type FbaPerson = FbaActor & { userId: string }
-/** Where a plan was created: the Matrix dialog, or Claude's request after a person approved it. */
+/** Where a plan (or its draft) was made: the Matrix dialog / the FBA shipments page, or Claude's request after a person
+ *  approved it. */
 export type FbaPlanSource = 'matrix' | 'claude'
 
 export interface FbaSendDraftQuery {
-  /** Ticked rows; a parent expands to its variations (a parent is never sent). 1..FBA_SEND_MAX_SKUS after expanding. */
+  /** Ticked rows; a parent expands to its variations (a parent is never sent). 1..FBA_SEND_MAX_SKUS after expanding.
+   *  Ignored with `planId` (the draft's own SKUs). */
   productIds: string[]
+  /** A DRAFT: its own From, market, ready day, box, SKUs and lines (the FBA shipments page). */
+  planId?: string | null
   /** StockLocation.code; absent = the business's default warehouse. */
   from?: string | null
   /** Market code; absent = the From country's market, else IT. */
@@ -63,8 +71,14 @@ export interface FbaSendDraftQuery {
 export interface FbaPlansQuery {
   /** A product (or a family root: its variations count too); absent = every plan. */
   productId?: string | null
-  /** true = only open plans (`isFbaPlanOpen`). */
+  /** true = only open plans (`isFbaPlanOpen`: drafts and under way) — the Matrix drawer. */
   open?: boolean
+  /** One tab of the FBA shipments page; absent = every plan (or `open`). */
+  view?: FbaPlanListView | null
+  /** The `next` of the previous page. */
+  cursor?: string | null
+  /** 1..100, default 25. */
+  limit?: number | null
 }
 
 /* ── errors ───────────────────────────────────────────────────────────────────────────────────── */
@@ -78,10 +92,11 @@ export type FbaSendErrorCode =
   | 'NEEDS_PERSON'       // confirming at Amazon needs a person's click
   | 'TRACKING_INVALID'   // Shipped: not one non-empty tracking number for every box of the shipment
   | 'LABELS_UNAVAILABLE' // no confirmed shipment / boxes yet, or Amazon gave no label link
+  | 'DRAFT_EXISTS'       // the From + To of a draft edit already has another open draft
   | 'NOT_BUILT'          // stage-1 stub
 export const FBA_SEND_ERROR_HTTP: Readonly<Record<FbaSendErrorCode, number>> = {
   NOT_FOUND: 404, REFUSED: 400, WRONG_STATE: 409, OPTION_UNKNOWN: 400, OPTIONS_EXPIRED: 409, NEEDS_PERSON: 403,
-  TRACKING_INVALID: 400, LABELS_UNAVAILABLE: 409, NOT_BUILT: 501,
+  TRACKING_INVALID: 400, LABELS_UNAVAILABLE: 409, DRAFT_EXISTS: 409, NOT_BUILT: 501,
 }
 export class FbaSendError extends Error {
   constructor(readonly code: FbaSendErrorCode, message: string, readonly problems: FbaSendProblem[] = []) {
@@ -132,8 +147,9 @@ function notBuilt(name: string): never {
 /* ══ Part C — send / read / ship (built 2026-10-07; signatures unchanged, rules in each function's JSDoc there). ══════ */
 
 export { readSendDraft, createSendPlan, confirmChoice, cancelPlan, retryPlan } from './send.service.js'
+export { addToDraft, updateDraft, deleteDraft, sendDraft } from './draft.service.js'
 export { markShipped, labelsFor } from './ship.service.js'
-export { readPlans, readPlan } from './read.service.js'
+export { readPlans, readPlan, readPlanList } from './read.service.js'
 
 /* ══ Part B — the job (built 2026-10-07; signatures unchanged, rules in each function's JSDoc there). ════════════════ */
 

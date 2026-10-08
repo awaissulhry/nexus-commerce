@@ -1,31 +1,34 @@
 /**
- * Step 4 Send to FBA (Owner 2026-10-07) — the reads: the plans the Matrix drawer shows (`readPlans`, `readPlan`), the
- * units already in open plans (the dialog's IN_OPEN_PLAN warning), and the two raw reads the retired wizard's GET routes
- * keep (`wizardPlanRows`, `wizardPlanRow`). Reads only: nothing here writes, calls Amazon or touches stock.
+ * Step 4 Send to FBA (Owner 2026-10-07) — the reads: the plans the Matrix drawer and the FBA shipments page show
+ * (`readPlanList`, `readPlans`, `readPlan`), the open draft of a From + To (`openDraftOf`), the units already in plans
+ * under way (the dialog's IN_OPEN_PLAN warning), and the two raw reads the retired wizard's GET routes keep
+ * (`wizardPlanRows`, `wizardPlanRow`). Reads only: nothing here writes, calls Amazon or touches stock.
  *
  * A Send-to-FBA plan has `source` 'matrix' | 'claude'. Older wizard plans (`source` null) carry the old status words,
  * which do not fit `FbaPlanStatus`: they are never listed here and `readPlan` answers null for them.
  */
 import type { Prisma } from '@prisma/client'
 import {
-  FBA_CLOSED_STATUSES, fbaPlanCan, isFbaPlanOpen, isFbaPlanStatus, isFbaPlanStep,
-  type FbaAmazonProblem, type FbaChoiceRequest, type FbaMixedBox, type FbaPlanLineView, type FbaPlanOptions,
-  type FbaPlanStepEntry, type FbaPlanView, type FbaShipmentBox, type FbaShipmentTracking, type FbaShipmentTransport,
+  FBA_CLOSED_STATUSES, FBA_PLAN_VIEWS, fbaPlanCan, fbaPlanViewOf, isFbaPlanOpen, isFbaPlanStatus, isFbaPlanStep, isFbaPlanUnderWay,
+  type FbaAmazonProblem, type FbaChoiceRequest, type FbaMixedBox, type FbaPlanLineView, type FbaPlanListAnswer, type FbaPlanListView,
+  type FbaPlanOptions, type FbaPlanStepEntry, type FbaPlanView, type FbaShipmentBox, type FbaShipmentTracking, type FbaShipmentTransport,
   type FbaShipmentView,
 } from '@nexus/shared/fba-send'
 import { isCaseSize, type CaseCount } from '@nexus/shared/stock-cases'
 import prisma from '../../db.js'
-import type { FbaPlansQuery } from './contract.js'
+import { FbaSendError, type FbaPlansQuery } from './contract.js'
 
 type Db = Prisma.TransactionClient | typeof prisma
 
 /** The most plans one list answers (newest first). */
 export const FBA_PLANS_LIST_LIMIT = 50
+/** The FBA shipments page's page size: default and most. */
+export const FBA_PLAN_PAGE = { default: 25, max: 100 } as const
 
 export const PLAN_VIEW_SELECT = {
   id: true, name: true, status: true, currentStep: true, source: true, planId: true, marketplaceId: true, sourceLocationId: true,
   readyToShipOn: true, mixedBox: true, options: true, choice: true, steps: true, lastError: true, nextCheckAt: true,
-  createdAt: true, createdBy: true, confirmedAt: true, confirmedBy: true, cancelledAt: true,
+  createdAt: true, createdBy: true, confirmedAt: true, confirmedBy: true, cancelledAt: true, updatedAt: true,
   lines: {
     select: {
       productId: true, msku: true, quantity: true, caseCounts: true, looseUnits: true, prepOwner: true,
@@ -168,22 +171,80 @@ export async function readPlans(query: FbaPlansQuery): Promise<FbaPlanView[]> {
   return query.open ? views.filter((view) => isFbaPlanOpen(view.status)) : views
 }
 
+/** Where each tab's rows are (a Send-to-FBA plan has its own statuses; an older wizard row has no source). */
+function viewWhere(view: FbaPlanListView): Prisma.FbaInboundPlanV2WhereInput {
+  if (view === 'drafts') return { status: 'DRAFT' }
+  if (view === 'done') return { status: { in: [...FBA_CLOSED_STATUSES] } }
+  return { status: { notIn: ['DRAFT', ...FBA_CLOSED_STATUSES] } }
+}
+
+/** The page cursor: the last row's updatedAt and id (newest first), opaque to the caller. */
+const encodeCursor = (row: { updatedAt: Date; id: string }) => Buffer.from(JSON.stringify([row.updatedAt.toISOString(), row.id])).toString('base64url')
+function decodeCursor(cursor: string): { updatedAt: Date; id: string } {
+  try {
+    const [at, id] = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as [unknown, unknown]
+    const updatedAt = new Date(String(at))
+    if (typeof id !== 'string' || !id || Number.isNaN(updatedAt.getTime())) throw new Error('bad cursor')
+    return { updatedAt, id }
+  } catch {
+    throw new FbaSendError('REFUSED', 'This page link is not valid any more: open the list again')
+  }
+}
+
+/**
+ * The FBA shipments page (and the Matrix drawer with `open`): one tab (`view`) or every plan, newest change first
+ * (updatedAt, then id), `limit` per page (default 25, at most 100), `next` = the cursor of the next page. `counts` =
+ * each tab's count under the same `productId` filter. Only Send-to-FBA rows (with a source).
+ */
+export async function readPlanList(query: FbaPlansQuery): Promise<FbaPlanListAnswer> {
+  const base: Prisma.FbaInboundPlanV2WhereInput = { source: { not: null } }
+  if (query.productId) base.lines = { some: { productId: { in: await familyOf(prisma, query.productId) } } }
+  const raw = Number(query.limit)
+  const limit = Number.isFinite(raw) && raw >= 1 ? Math.min(Math.floor(raw), FBA_PLAN_PAGE.max) : FBA_PLAN_PAGE.default
+  const filters: Prisma.FbaInboundPlanV2WhereInput[] = [base]
+  if (query.view) filters.push(viewWhere(query.view))
+  else if (query.open) filters.push({ status: { notIn: [...FBA_CLOSED_STATUSES] } })
+  if (query.cursor) {
+    const after = decodeCursor(query.cursor)
+    filters.push({ OR: [{ updatedAt: { lt: after.updatedAt } }, { updatedAt: after.updatedAt, id: { lt: after.id } }] })
+  }
+  const [rows, grouped] = await Promise.all([
+    prisma.fbaInboundPlanV2.findMany({ where: { AND: filters }, select: PLAN_VIEW_SELECT, orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }], take: limit + 1 }),
+    prisma.fbaInboundPlanV2.groupBy({ by: ['status'], where: base, _count: { _all: true } }),
+  ])
+  const page = rows.slice(0, limit)
+  const counts = Object.fromEntries(FBA_PLAN_VIEWS.map((view) => [view, 0])) as Record<FbaPlanListView, number>
+  for (const group of grouped) if (isFbaPlanStatus(group.status)) counts[fbaPlanViewOf(group.status)] += group._count._all
+  return { plans: await planViews(prisma, page), next: rows.length > limit ? encodeCursor(page[page.length - 1]) : null, counts }
+}
+
+/** The open DRAFT of this business for one From warehouse and Amazon market (its id), or null. */
+export async function openDraftOf(db: Db, sourceLocationId: string, marketplaceId: string): Promise<string | null> {
+  const row = await db.fbaInboundPlanV2.findFirst({
+    where: { status: 'DRAFT', source: { not: null }, sourceLocationId, marketplaceId },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    select: { id: true },
+  })
+  return row?.id ?? null
+}
+
 /** One Send-to-FBA plan with its lines, steps, options, choice and shipments; null when absent or an older wizard plan. */
 export async function readPlan(planId: string): Promise<FbaPlanView | null> {
   if (typeof planId !== 'string' || planId.trim() === '') return null
   return planViewIn(prisma, planId)
 }
 
-/** Units of each product in OPEN Send-to-FBA plans, not shipped yet (Σ quantity − shippedQuantity). */
+/** Units of each product in Send-to-FBA plans UNDER WAY (sent, not closed — a draft holds nothing), not shipped yet
+ *  (Σ quantity − shippedQuantity). */
 export async function openPlanUnits(db: Db, productIds: readonly string[]): Promise<Map<string, number>> {
   const out = new Map<string, number>()
   if (productIds.length === 0) return out
   const lines = await db.fbaInboundPlanLine.findMany({
-    where: { productId: { in: [...productIds] }, plan: { source: { not: null }, status: { notIn: [...FBA_CLOSED_STATUSES] } } },
+    where: { productId: { in: [...productIds] }, plan: { source: { not: null }, status: { notIn: ['DRAFT', ...FBA_CLOSED_STATUSES] } } },
     select: { productId: true, quantity: true, shippedQuantity: true, plan: { select: { status: true } } },
   })
   for (const line of lines) {
-    if (!isFbaPlanOpen(line.plan.status)) continue
+    if (!isFbaPlanUnderWay(line.plan.status)) continue
     out.set(line.productId, (out.get(line.productId) ?? 0) + Math.max(0, line.quantity - line.shippedQuantity))
   }
   return out

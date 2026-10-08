@@ -407,11 +407,14 @@ describe('failures and holds', () => {
 })
 
 describe('the claim', () => {
-  it('a lease held by another run, or an older wizard plan, is not claimed', async () => {
+  it('a lease held by another run, an older wizard plan, or a DRAFT (Owner 2026-10-08: nothing at Amazon until "Send to Amazon") is not claimed', async () => {
     const leased = await newPlan({ nextCheckAt: new Date(Date.parse('2026-10-08T07:00:00.000Z') + FBA_LEASE_MS) })
     expect(await run(leased)).toEqual({ claimed: false, status: null, step: null, nextCheckAt: null })
     const wizard = await newPlan({ source: null, status: 'CREATING' })
     expect((await run(wizard)).claimed).toBe(false)
+    const draft = await newPlan({ status: 'DRAFT' })
+    expect(await run(draft)).toEqual({ claimed: false, status: null, step: null, nextCheckAt: null })
+    expect((await planOf(draft)).status).toBe('DRAFT')
     expect(fake.requests).toEqual([])
   })
 })
