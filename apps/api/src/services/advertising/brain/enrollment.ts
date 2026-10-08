@@ -36,9 +36,11 @@
  *   by hand        set-bid-brain-enrollment op live / shadow / give-back is recorded as a campaign override
  *                  (recordCampaignBidsChoice), and op live / release is refused on a campaign the Owner keeps off
  *                  the bid brain (brain/owner-brakes.ts).
- *   Amazon's rules AB-4 (design §2.12) — a change that takes a lever to AUTO on one of the product's own campaigns, or
- *                  puts one LIVE under the bid brain, is refused while one of Amazon's own rules acts on that lever there
- *                  (an Amazon budget rule on budgets, a bidding strategy Amazon runs on bids): two brains on one lever.
+ *   Amazon's rules AB-4 (design §2.12) — a change that takes a lever to AUTO on one of the product's own campaigns is
+ *                  refused while one of Amazon's own rules acts on that lever there (an Amazon budget rule on budgets, a
+ *                  bidding strategy Amazon runs on bids): two brains on one lever. A campaign the change would put LIVE
+ *                  only as a side effect (its bids resolved AUTO before it too) is a named skip instead, and the rest
+ *                  of the plan runs; a step back to shadow (and a give-back) is never checked.
  *                  Read from the daily snapshot and the synced strategy (brain/native-rules.ts); a kind Nexus could not
  *                  read refuses nothing. Enrolling refuses nothing either: it adopts what already runs, and the map shows
  *                  the clash.
@@ -60,7 +62,7 @@ import { enrollmentFacts, enrollRefusal, PLANS_JOIN_THE_BRAIN, setEnrollment, ty
 import { giveBackStopMemory } from '../bid-brain/stop-memory.js'
 import type { AdsActor } from '../ads-mutation.service.js'
 import { BRAIN_LEVERS, readSnapshots, type BrainLever, type BrainLevel, type LeverSnapshot } from './levers.js'
-import { loadNativeRules, nativeAutoRefusal } from './native-rules.js'
+import { loadNativeRules, nativeAutoRefusal, nativeRuleLines } from './native-rules.js'
 import { productCampaigns, productFamily, resolveCampaignOwnership } from './ownership.js'
 import {
   EXCLUDE_KEY, overrideIdentity, resolveBrainSettings, settingsPairRefusal, validateIdentity, validateOverride, type BrainSettings, type LeverSettings,
@@ -580,11 +582,18 @@ async function changePlan(root: string, market: string, change: Change): Promise
       wanted.push({ campaignId: c.campaignId, name: c.name, status: c.status, mode: c.mode, want: 'NOT', wantWhy: `${bids.why} (a shared campaign)`, brake: true })
     }
   }
-  const planned = planBids(await withChecks(wanted))
+  const checked = await withChecks(wanted)
+  // AB-4 follow-up — a campaign this would put LIVE only as a side effect (its bids resolved AUTO before the change too: a
+  // campaign choice of its own, a re-apply's newly added campaign) stays in shadow, named, while an Amazon rule acts on its
+  // bids; the rest of the plan runs. The change's own AUTO still refuses below. Steps back to shadow are never checked.
+  const sideLive = checked.filter((c) => needsCheck(c.want, c.mode) === 'live' && !c.liveRefusal && !turnsAuto.some((t) => t.campaignId === c.campaignId && t.lever === 'bids'))
+  const sideRules = sideLive.length ? await loadNativeRules(sideLive.map((c) => c.campaignId)) : null
+  const planned = planBids(checked.map((c) => {
+    const lines = sideRules && sideLive.includes(c) ? nativeRuleLines(sideRules.get(c.campaignId), 'bids') : []
+    return lines.length ? { ...c, liveRefusal: `an Amazon rule acts on it: ${lines.join('; ')} — it stays in shadow` } : c
+  }))
   if ('refusal' in planned) throw new BrainRefusal(planned.refusal)
-  // Every campaign this puts LIVE under the bid brain takes its bids to AUTO, a re-apply's newly added campaign included.
-  const nameOf = new Map(all.map((c) => [c.campaignId, c.name]))
-  await refuseOverAmazonRules([...turnsAuto, ...goesLive(planned.steps).map((campaignId) => ({ campaignId, name: nameOf.get(campaignId) ?? campaignId, lever: 'bids' as const }))])
+  await refuseOverAmazonRules(turnsAuto)
   return done(planned.steps)
 }
 
