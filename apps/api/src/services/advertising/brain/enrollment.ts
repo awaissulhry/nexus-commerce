@@ -6,8 +6,10 @@
  *
  *   enrollProduct  creates the enrollment. Every lever starts at the brain's default (OBSERVE). The bids lever is
  *                  ADOPTED from the campaigns as they are: when the bid brain already runs one of the product's own
- *                  campaigns (LIVE or HELD) a product override sets it AUTO ("adopted"). Enrolling writes no
- *                  BidBrainEnrollment row: campaigns put LIVE one by one (GALE IT, 2026-10-08) stay exactly as they are.
+ *                  campaigns (LIVE or HELD) a product override sets it AUTO ("adopted"), and each own campaign still in
+ *                  shadow gets a campaign override OBSERVE ("adopted"), so nothing goes LIVE later behind the Owner's
+ *                  back. Enrolling writes no BidBrainEnrollment row: campaigns put LIVE one by one (GALE IT, 2026-10-08)
+ *                  stay exactly as they are.
  *   setOverride    one Owner choice at product or campaign scope (a level, a lock, an exclusion, a setting); it ends
  *                  the open choice it replaces. endOverride ends one (the next level applies again). setLever is the
  *                  product's level of one lever.
@@ -22,10 +24,18 @@
  *                    anything else  (OBSERVE, excluded, locked) a LIVE or HELD campaign goes back to shadow (op shadow:
  *                                   bids stay); one that may not (a floor the brain set that no engine would give
  *                                   back) refuses the whole change. An excluded or locked campaign never goes LIVE.
- *                  A shared campaign is never moved (D2 = A): a LIVE row a person set on it stays; the view names it.
+ *                  A shared campaign never goes LIVE from here (D2 = A). It goes back to shadow only when the Owner keeps
+ *                  the bid brain off it (an exclusion, or a lock of its whole bids lever): an exclusion wins. Otherwise
+ *                  a LIVE row a person set on it stays, and the view names it.
  *                  Setting a choice it already has re-applies it (a campaign added since is put LIVE); a run with
  *                  nothing to change writes nothing.
- *   all or nothing one transaction per change; compare-and-set on the enrollment's version.
+ *   all or nothing one Serializable transaction per change; compare-and-set on the enrollment's version, and on the
+ *                  plan's basis (planBasis: what it stores, ends and does to each campaign) when the approval names one.
+ *   big door       a plan that puts any campaign LIVE (`goesLive`) needs the approver's code (`needsCode`), whatever
+ *                  kind of change does it — ending an exclusion, a lock or an adopted OBSERVE included.
+ *   by hand        set-bid-brain-enrollment op live / shadow / give-back is recorded as a campaign override
+ *                  (recordCampaignBidsChoice), and op live / release is refused on a campaign the Owner keeps off
+ *                  the bid brain (brain/owner-brakes.ts).
  *   reads          brainSettings (resolved, with provenance), brainView (settings, campaigns, drift),
  *                  bidBrainRowsByProduct (today's LIVE / HELD rows by product; it changes nothing).
  *
@@ -34,6 +44,7 @@
  * BidBrainEnrollment. No tool calls this yet (AB-1): the change tool and its approval (enrolling, or a lever to AUTO, is
  * a big door: the approver's code) come in their own PR.
  */
+import { createHash } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
 import { inDatabaseTransaction } from '../../../lib/database-context.js'
@@ -43,8 +54,8 @@ import { enrollmentFacts, enrollRefusal, PLANS_JOIN_THE_BRAIN, setEnrollment, ty
 import { readSnapshots, type BrainLever, type BrainLevel, type LeverSnapshot } from './levers.js'
 import { productCampaigns, productFamily, resolveCampaignOwnership } from './ownership.js'
 import {
-  EXCLUDE_KEY, overrideIdentity, resolveBrainSettings, validateIdentity, validateOverride, type BrainSettings, type LeverSettings, type OverrideInput,
-  type OverrideKind, type OverrideRow,
+  EXCLUDE_KEY, overrideIdentity, resolveBrainSettings, settingsPairRefusal, validateIdentity, validateOverride, type BrainSettings, type LeverSettings,
+  type OverrideInput, type OverrideKind, type OverrideRow,
 } from './settings.js'
 
 const OWNED_MODES: readonly EnrollMode[] = ['LIVE', 'HELD']
@@ -121,6 +132,21 @@ export function bidsSnapshotOf(steps: readonly BidsStep[]): BidsLeverSnapshot {
   }
 }
 
+/**
+ * AB-1 review — the approval basis of a plan: what it stores and ends and what it does to each campaign. A change
+ * approved on one basis runs only on the same one (a campaign's allowlist, floor or mode moved since: refused).
+ */
+export function planBasis(plan: Pick<OverridePlan, 'set' | 'ends' | 'steps'>): string {
+  const steps = plan.steps?.map((s) => [s.campaignId, s.op]) ?? null
+  return createHash('sha256').update(JSON.stringify([plan.set, plan.ends, steps])).digest('base64url').slice(0, 16)
+}
+
+/** The campaigns a plan puts under the bid brain. Any one makes the change a big door (the approver's code). */
+export const goesLive = (steps: readonly BidsStep[] | undefined): string[] => (steps ?? []).filter((s) => s.op === 'live').map((s) => s.campaignId)
+
+/** A shared campaign moves only one way: back to shadow when the Owner keeps the bid brain off it (excluded, bids locked). */
+export const sharedLeaves = (bids: LeverSettings): boolean => bids.effective === 'EXCLUDED' || bids.effective === 'LOCKED'
+
 /** Does this choice change what the bids lever resolves to? (its level, a lock of the whole bids lever, an exclusion) */
 export const touchesBids = (o: { kind: string; key: string; ref?: string | null }): boolean =>
   (o.kind === 'LEVEL' && o.key === 'bids') || (o.kind === 'LOCK' && o.key === 'bids' && !o.ref) || o.kind === 'EXCLUDE'
@@ -168,7 +194,8 @@ async function withChecks(campaigns: readonly BidsCampaignState[]): Promise<Bids
   for (const c of campaigns) {
     const op = needsCheck(c.want, c.mode)
     if (!op) { out.push(c); continue }
-    const facts = await enrollmentFacts(c.campaignId, { plansJoin: PLANS_JOIN_THE_BRAIN })
+    // The plan already resolved the Owner's overrides as they will be after the change (skipOwnerBrake).
+    const facts = await enrollmentFacts(c.campaignId, { plansJoin: PLANS_JOIN_THE_BRAIN, skipOwnerBrake: true })
     const refusal = facts ? enrollRefusal(facts, op) : `${c.name} is no longer in this business`
     out.push(op === 'live' ? { ...c, liveRefusal: refusal } : { ...c, shadowRefusal: refusal })
   }
@@ -252,8 +279,10 @@ export async function brainView(productId: string, market: string): Promise<Brai
     const stray = campaigns.filter((c) => c.owner === 'product' && c.bids.effective !== 'AUTO' && isOwnedMode(c.mode))
     if (stray.length) drift.push(`${count(stray.length, 'own campaign is', 'own campaigns are')} LIVE although bids resolve to ${[...new Set(stray.map((c) => c.bids.effective))].join(' / ')} (${names(stray)}): put LIVE one by one`)
   }
-  const sharedLive = campaigns.filter((c) => c.owner === 'shared' && isOwnedMode(c.mode))
+  const sharedLive = campaigns.filter((c) => c.owner === 'shared' && isOwnedMode(c.mode) && !sharedLeaves(c.bids))
   if (sharedLive.length) drift.push(`${count(sharedLive.length, 'shared campaign is', 'shared campaigns are')} LIVE by a per-campaign enrollment (${names(sharedLive)}): no product's lever moves ${sharedLive.length === 1 ? 'it' : 'them'}`)
+  const keptOff = campaigns.filter((c) => isOwnedMode(c.mode) && sharedLeaves(c.bids))
+  if (keptOff.length) drift.push(`${count(keptOff.length, 'campaign is', 'campaigns are')} LIVE although the Owner keeps the bid brain off (${names(keptOff)}): set that choice again to take ${keptOff.length === 1 ? 'it' : 'them'} back to shadow`)
   const left = [...new Set(strayRows.map((r) => r.campaignId).filter((id): id is string => !!id))]
   if (left.length) drift.push(`the Owner's overrides on ${count(left.length, 'campaign')} that no longer ${left.length === 1 ? 'advertises' : 'advertise'} this product here (${left.join(', ')}): they still apply to ${left.length === 1 ? 'that campaign' : 'those campaigns'}`)
   return {
@@ -320,6 +349,16 @@ async function refusing<T>(work: () => Promise<{ ok: true } & T>): Promise<Resul
 }
 
 const json = (v: unknown) => v as Prisma.InputJsonValue
+
+/**
+ * AB-1 review — every change of a brain runs Serializable: "one open override per thing" and the version's
+ * compare-and-set hold only there. Inside an outer transaction at another level inDatabaseTransaction throws.
+ */
+const SERIALIZABLE = { isolationLevel: 'Serializable' as const }
+
+/** Settings checked against each other (settingsPairRefusal). */
+const PAIRED = new Set(['negativesPerEntityWarn', 'negativesPerEntityMax'])
+
 const sameValue = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
 
 /** The market code and the product's family root a change is about (a variation names its parent's enrollment). */
@@ -346,8 +385,13 @@ async function writeRow(row: { id: string; version: number }, data: Prisma.AdsBr
   return row.version + 1
 }
 
-/** Enroll a product in one market: every lever at the brain's default, the bids lever adopted from its campaigns (no campaign row written). */
-export async function enrollProduct(args: { productId: string; market: string; by: string; now?: Date }): Promise<Result<{ productId: string; market: string; bids: 'AUTO' | 'OBSERVE'; version: number; adoptedLive: string[] }>> {
+/**
+ * Enroll a product in one market: every lever at the brain's default, the bids lever adopted from its campaigns (no
+ * campaign row written). AB-1 review — adopting AUTO keeps each own campaign that is in shadow where it is with a
+ * campaign override OBSERVE ("adopted"): a later product re-apply or the cycle never puts it LIVE behind the Owner's
+ * back; ending that override is the Owner's go (a big door).
+ */
+export async function enrollProduct(args: { productId: string; market: string; by: string; now?: Date }): Promise<Result<{ productId: string; market: string; bids: 'AUTO' | 'OBSERVE'; version: number; adoptedLive: string[]; keptInShadow: string[] }>> {
   const now = args.now ?? new Date()
   const done = await refusing(() => inDatabaseTransaction(prisma, async () => {
     const { root, market } = await scopeOf(args.productId, args.market)
@@ -355,6 +399,7 @@ export async function enrollProduct(args: { productId: string; market: string; b
     if (!camps) throw new BrainRefusal(`product ${args.productId} is no longer a live product of this business`)
     const bids = adoptedBidsLevel(camps.own)
     const adoptedLive = camps.own.filter((c) => isOwnedMode(c.mode)).map((c) => c.campaignId)
+    const keptInShadow = bids === 'AUTO' ? camps.own.filter((c) => !isOwnedMode(c.mode)).map((c) => c.campaignId) : []
     const existing = await prisma.adsBrainEnrollment.findFirst({ where: { productId: root, marketplace: market }, select: { id: true } })
     if (existing) throw new BrainRefusal(`the product is already enrolled in the brain for ${market}`)
     const row = await prisma.adsBrainEnrollment.create({
@@ -368,16 +413,22 @@ export async function enrollProduct(args: { productId: string; market: string; b
       throw e
     })
     if (bids === 'AUTO') {
-      await prisma.adsBrainOverride.create({
-        data: {
-          productId: root, marketplace: market, scope: 'PRODUCT', kind: 'LEVEL', key: 'bids', value: 'AUTO', by: args.by,
-          reason: `adopted at enrollment: the bid brain already runs ${count(adoptedLive.length, 'own campaign')} LIVE (${adoptedLive.join(', ')})`,
-        },
+      await prisma.adsBrainOverride.createMany({
+        data: [
+          {
+            productId: root, marketplace: market, scope: 'PRODUCT', kind: 'LEVEL', key: 'bids', value: 'AUTO', by: args.by,
+            reason: `adopted at enrollment: the bid brain already runs ${count(adoptedLive.length, 'own campaign')} LIVE (${adoptedLive.join(', ')})`,
+          },
+          ...keptInShadow.map((campaignId) => ({
+            productId: root, marketplace: market, scope: 'CAMPAIGN', campaignId, kind: 'LEVEL', key: 'bids', value: 'OBSERVE', by: args.by,
+            reason: 'adopted at enrollment: in shadow when the product enrolled — the product\'s AUTO does not put it LIVE until this override is ended',
+          })),
+        ],
       })
     }
-    return { ok: true as const, productId: root, market, bids, version: row.version, adoptedLive }
-  }))
-  if (done.ok) logger.info('[ads-brain] product enrolled', { productId: done.productId, market: done.market, by: args.by, bids: done.bids, adoptedLive: done.adoptedLive })
+    return { ok: true as const, productId: root, market, bids, version: row.version, adoptedLive, keptInShadow }
+  }, SERIALIZABLE))
+  if (done.ok) logger.info('[ads-brain] product enrolled', { productId: done.productId, market: done.market, by: args.by, bids: done.bids, adoptedLive: done.adoptedLive, keptInShadow: done.keptInShadow })
   return done
 }
 
@@ -388,13 +439,22 @@ export interface OverridePlan {
   set: { scope: string; campaignId: string | null; kind: OverrideKind; key: string; ref: string; value: unknown } | null
   /** The open override it ends (replaced, or ended on request), if any. */
   ends: string | null
-  /** Bids lever only: what happens to each campaign the choice reaches; the shared ones are never moved. */
+  /** Bids lever only: what happens to each campaign the choice reaches. A shared one only ever goes back to shadow. */
   steps?: BidsStep[]
+  /** The campaigns it puts under the bid brain. */
+  goesLive: string[]
+  /** A big door: it puts a campaign under the bid brain (whatever kind of change does it), so the approver's code. */
+  needsCode: boolean
+  /** What the approval is made on (planBasis): a change runs only on the same basis. */
+  basis: string
   /** Nothing would change (the same choice, and no campaign to move). */
   unchanged: boolean
 }
 
 type Change = { op: 'set'; input: OverrideInput } | { op: 'end'; input: Pick<OverrideInput, 'scope' | 'campaignId' | 'kind' | 'key' | 'ref'> }
+
+/** Who asks, why, and what the approval was made on (the enrollment's version, the plan's basis). */
+export interface ChangeArgs { productId: string; market: string; by: string; reason?: string | null; expectVersion?: number; expectBasis?: string; now?: Date }
 
 /** The plan of one change, read now (inside the change's transaction when it runs). */
 async function changePlan(root: string, market: string, change: Change): Promise<OverridePlan> {
@@ -404,10 +464,12 @@ async function changePlan(root: string, market: string, change: Change): Promise
   const identity = 'override' in valid ? valid.override : valid.identity
   const camps = await campaignsOf(root, market)
   if (!camps) throw new BrainRefusal(`product ${root} is no longer a live product of this business`)
-  const reach = identity.scope === 'CAMPAIGN' ? [...camps.own, ...camps.shared].filter((c) => c.campaignId === identity.campaignId) : camps.own
-  if (identity.scope === 'CAMPAIGN' && !reach.length && change.op === 'set') throw new BrainRefusal(`campaign ${identity.campaignId} does not advertise this product in ${market} (archived campaigns and other ad products are left out)`)
+  const all = [...camps.own, ...camps.shared]
+  if (identity.scope === 'CAMPAIGN' && change.op === 'set' && !all.some((c) => c.campaignId === identity.campaignId)) {
+    throw new BrainRefusal(`campaign ${identity.campaignId} does not advertise this product in ${market} (archived campaigns and other ad products are left out)`)
+  }
   // The campaign named is read too when it no longer advertises the product: its override can still be ended.
-  const campaignIds = [...new Set([...camps.own, ...camps.shared].map((c) => c.campaignId).concat(identity.campaignId ? [identity.campaignId] : []))]
+  const campaignIds = [...new Set(all.map((c) => c.campaignId).concat(identity.campaignId ? [identity.campaignId] : []))]
   const overrides = await openOverrides(root, market, campaignIds)
   const key = overrideIdentity(identity)
   const open = overrides.filter((o) => overrideIdentity(o) === key).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0] ?? null
@@ -425,25 +487,51 @@ async function changePlan(root: string, market: string, change: Change): Promise
     after = overrides.filter((o) => o.id !== open.id)
   }
   const ends = set || change.op === 'end' ? open?.id ?? null : null
-  if (!touchesBids(identity)) return { productId: root, market, set, ends, unchanged: !set && !ends }
-  // The bids lever: what it resolves to on each own campaign the choice reaches, after the change. Shared: never moved.
-  const own = reach.filter((c) => camps.own.some((o) => o.campaignId === c.campaignId))
-  const wanted: BidsCampaignState[] = own.map((c) => {
-    const w = bidsWant(resolveBrainSettings({ productId: root, market, campaignId: c.campaignId, enrolled: true, overrides: after }).levers.bids)
-    return { campaignId: c.campaignId, name: c.name, status: c.status, mode: c.mode, want: w.want, wantWhy: w.why }
-  })
+  const resolved = (campaignId: string | null) => resolveBrainSettings({ productId: root, market, campaignId, enrolled: true, overrides: after })
+  // AB-1 review — two settings checked against each other, for the product and every campaign with its own value.
+  if (identity.kind === 'VALUE' && PAIRED.has(identity.key)) {
+    const own = [...new Set(after.filter((o) => o.scope === 'CAMPAIGN' && o.kind === 'VALUE' && PAIRED.has(o.key) && o.campaignId).map((o) => o.campaignId!))]
+    for (const campaignId of [null, ...own]) {
+      const refusal = settingsPairRefusal(resolved(campaignId).values, campaignId ? ` on campaign ${campaignId}` : '')
+      if (refusal) throw new BrainRefusal(refusal)
+    }
+  }
+  const done = (steps?: BidsStep[]): OverridePlan => {
+    const live = goesLive(steps)
+    const plan = { productId: root, market, set, ends, ...(steps ? { steps } : {}), goesLive: live, needsCode: live.length > 0, unchanged: !set && !ends && !(steps && planMoves(steps)) }
+    return { ...plan, basis: planBasis(plan) }
+  }
+  if (!touchesBids(identity)) return done()
+  // The bids lever, after the change, on each campaign the choice reaches: an own campaign follows what it resolves to;
+  // a shared one only leaves (back to shadow) when the Owner keeps the bid brain off it — it never goes LIVE from here.
+  const reach = identity.scope === 'CAMPAIGN' ? all.filter((c) => c.campaignId === identity.campaignId) : all
+  const ownIds = new Set(camps.own.map((c) => c.campaignId))
+  const wanted: BidsCampaignState[] = []
+  for (const c of reach) {
+    const bids = resolved(c.campaignId).levers.bids
+    if (ownIds.has(c.campaignId)) {
+      const w = bidsWant(bids)
+      wanted.push({ campaignId: c.campaignId, name: c.name, status: c.status, mode: c.mode, want: w.want, wantWhy: w.why })
+    } else if (sharedLeaves(bids) && isOwnedMode(c.mode)) {
+      wanted.push({ campaignId: c.campaignId, name: c.name, status: c.status, mode: c.mode, want: 'NOT', wantWhy: `${bids.why} (a shared campaign)` })
+    }
+  }
   const planned = planBids(await withChecks(wanted))
   if ('refusal' in planned) throw new BrainRefusal(planned.refusal)
-  return { productId: root, market, set, ends, steps: planned.steps, unchanged: !set && !ends && !planMoves(planned.steps) }
+  return done(planned.steps)
 }
 
 /** Run one change: end the replaced override, store the new one, move the bids lever's campaigns, bump the version. */
-async function runChange(args: { productId: string; market: string; by: string; reason?: string | null; expectVersion?: number; now?: Date }, change: Change): Promise<Result<{ plan: OverridePlan; version: number }>> {
+async function runChange(args: ChangeArgs, change: Change): Promise<Result<{ plan: OverridePlan; version: number }>> {
   const now = args.now ?? new Date()
   const done = await refusing(() => inDatabaseTransaction(prisma, async () => {
     const { root, market } = await scopeOf(args.productId, args.market)
     const row = await currentRow(root, market, args.expectVersion)
     const plan = await changePlan(root, market, change)
+    // AB-1 review — the version does not move when an allowlist, a floor or a campaign's mode does: the steps decide.
+    if (args.expectBasis && plan.basis !== args.expectBasis) {
+      throw new BrainRefusal('what this change would do changed since it was approved (a campaign\'s allowlist, floor or place in the bid brain moved): nothing changed, preview it again')
+    }
     if (plan.unchanged) return { ok: true as const, plan, version: row.version }
     if (plan.ends) {
       const ended = await prisma.adsBrainOverride.updateMany({ where: { id: plan.ends, endedAt: null }, data: { endedAt: now, endedBy: args.by } })
@@ -462,7 +550,7 @@ async function runChange(args: { productId: string; market: string; by: string; 
     const snapshot = plan.steps?.some((s) => s.op === 'live') ? { takenAt: now.toISOString(), by: args.by, data: bidsSnapshotOf(plan.steps) } : null
     const version = await writeRow(row, snapshot ? { snapshots: json({ ...readSnapshots(row.snapshots), bids: snapshot }) } : {}, args.by)
     return { ok: true as const, plan, version }
-  }))
+  }, SERIALIZABLE))
   if (done.ok && !done.plan.unchanged) {
     const steps = done.plan.steps
     logger.info('[ads-brain] override changed', {
@@ -485,18 +573,38 @@ export async function planOverride(args: { productId: string; market: string } &
 }
 
 /** Set one Owner choice (it ends the open one it replaces). All or nothing. */
-export async function setOverride(args: { productId: string; market: string; override: OverrideInput; by: string; reason?: string | null; expectVersion?: number; now?: Date }) {
+export async function setOverride(args: ChangeArgs & { override: OverrideInput }) {
   return runChange(args, { op: 'set', input: args.override })
 }
 
 /** End one Owner choice: the next level (product, then the brain's default) applies again. All or nothing. */
-export async function endOverride(args: { productId: string; market: string; override: Change['input']; by: string; reason?: string | null; expectVersion?: number; now?: Date }) {
+export async function endOverride(args: ChangeArgs & { override: Change['input'] }) {
   return runChange(args, { op: 'end', input: args.override })
 }
 
 /** The product's level of one lever (a PRODUCT LEVEL override). */
-export async function setLever(args: { productId: string; market: string; lever: BrainLever; level: BrainLevel; by: string; reason?: string | null; expectVersion?: number; now?: Date }) {
+export async function setLever(args: ChangeArgs & { lever: BrainLever; level: BrainLevel }) {
   return runChange(args, { op: 'set', input: { scope: 'PRODUCT', kind: 'LEVEL', key: args.lever, value: args.level } })
+}
+
+/**
+ * AB-1 review — set-bid-brain-enrollment moved one campaign by hand (op live, shadow or give-back): the product's
+ * brain records it as a campaign override of the bids lever (AUTO for live, OBSERVE for shadow), so a later product
+ * re-apply or the cycle never undoes the Owner's per-campaign choice. Only for an own campaign of an enrolled product,
+ * and only when its bids resolve otherwise now (the campaign override then names the person). Run inside the tool's
+ * transaction: a refusal throws, so the campaign's move and its record go together or not at all. Null: nothing to record.
+ */
+export async function recordCampaignBidsChoice(args: { campaignId: string; level: 'AUTO' | 'OBSERVE'; by: string; reason?: string | null; now?: Date }): Promise<{ productId: string; market: string } | null> {
+  const owner = (await resolveCampaignOwnership([args.campaignId])).get(args.campaignId)
+  if (!owner || owner.owner.kind !== 'product' || !owner.market || owner.adProduct !== 'SPONSORED_PRODUCTS') return null
+  const productId = owner.owner.productId
+  const enrolled = await prisma.adsBrainEnrollment.findFirst({ where: { productId, marketplace: owner.market }, select: { id: true } })
+  if (!enrolled) return null
+  const bids = resolveBrainSettings({ productId, market: owner.market, campaignId: args.campaignId, enrolled: true, overrides: await openOverrides(productId, owner.market, [args.campaignId]) }).levers.bids
+  if ((bids.effective === 'AUTO') === (args.level === 'AUTO')) return null
+  const done = await setOverride({ productId, market: owner.market, override: { scope: 'CAMPAIGN', campaignId: args.campaignId, kind: 'LEVEL', key: 'bids', value: args.level }, by: args.by, reason: args.reason ?? null, now: args.now })
+  if ('refusal' in done) throw new BrainRefusal(`the product's brain could not record this campaign's choice: ${done.refusal}`)
+  return { productId, market: owner.market }
 }
 
 export { EXCLUDE_KEY }

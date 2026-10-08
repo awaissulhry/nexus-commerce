@@ -8,6 +8,8 @@
  *             whole change; shadow ones stay — an excluded or locked campaign never goes LIVE
  *   checks    only the campaigns that would move are checked; only bids level, a whole bids lock and an exclusion move them
  *   snapshot  what the lever kept when it put campaigns LIVE: put LIVE now, LIVE already, skipped with the reason
+ *   basis     the approval basis changes when a campaign's step does (a skip that became a live step), not otherwise
+ *   big door  any live step makes a plan a big door; a shared campaign only leaves when excluded or bids-locked
  *
  * Values are made up (public repo).
  */
@@ -15,7 +17,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../../db.js', () => ({ default: {} }))
 
-const { adoptedBidsLevel, bidsSnapshotOf, bidsWant, needsCheck, planBids, planMoves, touchesBids } = await import('./enrollment.js')
+const { adoptedBidsLevel, bidsSnapshotOf, bidsWant, goesLive, needsCheck, planBasis, planBids, planMoves, sharedLeaves, touchesBids } = await import('./enrollment.js')
 const { resolveBrainSettings } = await import('./settings.js')
 
 const c = (campaignId: string, mode: 'SHADOW' | 'LIVE' | 'HELD' | null, want: 'AUTO' | 'NOT', extra: Record<string, string | null> = {}) => ({ campaignId, name: `Campaign ${campaignId}`, status: 'ENABLED', mode, want, ...extra })
@@ -106,5 +108,35 @@ describe('bidsSnapshotOf', () => {
       { campaignId: 'c', name: 'C', op: 'keep', mode: null },
       { campaignId: 'd', name: 'D', op: 'skip', why: 'not allowlisted' },
     ])).toEqual({ enrolled: ['a'], alreadyLive: ['b'], skipped: [{ campaignId: 'd', why: 'not allowlisted' }] })
+  })
+})
+
+describe('planBasis, goesLive and sharedLeaves (AB-1 review)', () => {
+  const set = { scope: 'PRODUCT', campaignId: null, kind: 'LEVEL' as const, key: 'bids', ref: '', value: 'AUTO' }
+  const skip = { campaignId: 'a', name: 'A', op: 'skip' as const, why: 'not on the live-write allowlist' }
+  const live = { campaignId: 'a', name: 'A', op: 'live' as const }
+
+  it('the basis is stable for the same plan and moves when a campaign\'s step does', () => {
+    const one = planBasis({ set, ends: null, steps: [skip] })
+    expect(planBasis({ set, ends: null, steps: [{ ...skip, why: 'another reason' }] })).toBe(one)
+    expect(planBasis({ set, ends: null, steps: [live] })).not.toBe(one)
+    expect(planBasis({ set: null, ends: 'o-1', steps: [skip] })).not.toBe(one)
+    expect(planBasis({ set, ends: null })).not.toBe(one)
+  })
+
+  it('any live step is a big door, whatever kind of change makes it', () => {
+    expect(goesLive([skip, live, { campaignId: 'b', name: 'B', op: 'shadow', why: 'x' }])).toEqual(['a'])
+    expect(goesLive(undefined)).toEqual([])
+  })
+
+  it('a shared campaign leaves only when the Owner keeps the bid brain off it', () => {
+    const o = (kind: string, key: string, value: unknown = null, scope = 'CAMPAIGN') =>
+      ({ id: `${kind}-${key}-${scope}`, productId: 'p-1', marketplace: 'IT', scope, campaignId: scope === 'CAMPAIGN' ? 'c-1' : null, kind, key, ref: '', value, by: 'user:owner', reason: null, createdAt: new Date('2026-10-08T10:00:00Z'), endedAt: null })
+    const bids = (overrides: ReturnType<typeof o>[]) => resolveBrainSettings({ productId: 'p-1', market: 'IT', campaignId: 'c-1', enrolled: true, overrides }).levers.bids
+    expect(sharedLeaves(bids([o('EXCLUDE', '*')]))).toBe(true)
+    expect(sharedLeaves(bids([o('EXCLUDE', '*', null, 'PRODUCT')]))).toBe(true)
+    expect(sharedLeaves(bids([o('LOCK', 'bids')]))).toBe(true)
+    expect(sharedLeaves(bids([o('LEVEL', 'bids', 'OBSERVE', 'PRODUCT')]))).toBe(false)
+    expect(sharedLeaves(bids([]))).toBe(false)
   })
 })

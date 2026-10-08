@@ -9,7 +9,8 @@
  *   hold       LIVE → HELD until a date: the brain raises nothing (a stop still applies); auto-undo holds this way too.
  *   release    HELD → LIVE.
  *
- * Before LIVE, the campaign must be Sponsored Products, on the live-write allowlist, and free of a writer the brain
+ * Before LIVE (and on release), the campaign must be Sponsored Products, not kept off by the Owner (AB-1: an exclusion
+ * or a lock of its whole bids lever, brain/owner-brakes.ts), on the live-write allowlist, and free of a writer the brain
  * does not take over: a classic dayparting schedule, a running autopilot plan or an older family plan (ProductRankPlan)
  * — switch it off first. BB-7 — an hourly bid plan joins as the brain's input (bid-brain/plan-hour.ts), unless one of
  * its hours sets the ad groups' base bid (the brain sets the bids from the goal). And it must be serving: a campaign a
@@ -21,6 +22,7 @@ import { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
 import { logger } from '../../../utils/logger.js'
 import { strategyMarket } from '../ads-strategy/bids.js'
+import { ownerBrakes } from '../brain/owner-brakes.js'
 import { STOP_HOLD_KIND } from './facts.js'
 import { brainLiveCeiling } from './live.js'
 import { bidBrainMode } from './shadow.js'
@@ -51,6 +53,8 @@ export interface EnrollmentFacts {
   floored?: string | null
   /** BB-7 review — keywords at a floor the brain set with no memory of their bid (floorsWithoutMemory): refuses op shadow. */
   floorsWithoutMemory?: number
+  /** AB-1 review — the Owner keeps the bid brain off it (an exclusion, or its whole bids lever locked): refuses op live and release. */
+  ownerBrake?: string | null
 }
 
 const placementsOf = (dynamicBidding: unknown): Array<{ placement: string; percentage: number }> =>
@@ -121,7 +125,7 @@ export async function flooredNow(campaignId: string): Promise<string | null> {
 }
 
 /** Everything the enrollment tool shows and checks; null when the campaign is not in this business. */
-export async function enrollmentFacts(campaignId: string, opts: { plansJoin?: boolean } = {}): Promise<EnrollmentFacts | null> {
+export async function enrollmentFacts(campaignId: string, opts: { plansJoin?: boolean; skipOwnerBrake?: boolean } = {}): Promise<EnrollmentFacts | null> {
   const c = await prisma.campaign.findFirst({
     where: { id: campaignId },
     select: { id: true, name: true, marketplace: true, status: true, adProduct: true, liveBidWritesEnabled: true, pinBids: true },
@@ -136,6 +140,8 @@ export async function enrollmentFacts(campaignId: string, opts: { plansJoin?: bo
     blockers: await brainBlockers(c.id, opts),
     floored: await flooredNow(c.id),
     floorsWithoutMemory: row && row.mode !== 'SHADOW' ? await floorsWithoutMemory(c.id) : 0,
+    // AB-1 review — the product's brain resolves the Owner's overrides itself (skipOwnerBrake): it plans on the state after its change.
+    ownerBrake: opts.skipOwnerBrake ? null : (await ownerBrakes([c.id])).get(c.id) ?? null,
   }
 }
 
@@ -154,6 +160,7 @@ export function enrollRefusal(f: EnrollmentFacts, op: EnrollOp): string | null {
   const next = nextMode(op, f.enrollment?.mode ?? null)
   if ('refusal' in next) return `${c.name}: ${next.refusal}.`
   if (op === 'live' || op === 'release') {
+    if (f.ownerBrake) return `${c.name} cannot go LIVE: ${f.ownerBrake}. The bid brain stays off it until that override is ended.`
     if (!c.allowlisted) return `${c.name} is not on the live-write allowlist: no automatic write reaches Amazon for it (set-campaign-live-writes first).`
     if (f.blockers.length) return `${c.name} cannot go LIVE yet: ${f.blockers.join('; ')}.`
   }

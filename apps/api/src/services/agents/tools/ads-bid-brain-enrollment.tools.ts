@@ -11,8 +11,10 @@
 import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
 import prisma from '../../../db.js'
+import { inDatabaseTransaction } from '../../../lib/database-context.js'
 import { updateAdGroupWithSync, updateAdTargetWithSync } from '../../advertising/ads-mutation.service.js'
 import { updatePlacementBidding } from '../../advertising/ads-create.service.js'
+import { recordCampaignBidsChoice } from '../../advertising/brain/enrollment.js'
 import {
   DEFAULT_HOLD_DAYS, ENROLL_OPS, enrollRefusal as refusalOf, enrollmentBasis, enrollmentFacts, giveBackPlan, nextMode, PLANS_JOIN_THE_BRAIN, readSnapshot,
   setEnrollment, type EnrollMode, type EnrollOp,
@@ -54,7 +56,7 @@ async function preview(args: Record<string, unknown>): Promise<ToolResult> {
   const raises = back && back.raises ? [`${plural(back.raises, 'bid or placement')} back up to ${back.raises === 1 ? 'its' : 'their'} value when the campaign went LIVE`] : op === 'release' ? ['the brain may raise bids again'] : []
   const effect = {
     live: `Puts ${c.name} (${c.market ?? c.marketplace ?? '?'}) under the bid brain: from its next run it is the campaign's one bid writer — keyword bids toward the goal at most once per new data day, inside the limits; auto-bid, rules and other engines leave the campaign, and a person's own edit still passes and holds that bid. Every bid and placement is kept now for a give-back.`,
-    shadow: `Takes ${c.name} back to shadow: the brain stops writing; every bid stays where it is and today's engines resume.`,
+    shadow: `Takes ${c.name} back to shadow: the brain stops writing; every bid stays where it is and today's engines resume. When its product is enrolled in the brain, this is kept as a campaign choice there (the product's bids lever leaves it in shadow).`,
     'give-back': `Takes ${c.name} back to shadow and puts back what it held when it went LIVE: ${plural(back?.targets.length ?? 0, 'keyword bid')}, ${plural(back?.adGroups.length ?? 0, 'ad group default bid')}${back?.placements ? ' and its placements' : ''}, as the person who approves it.`,
     hold: `Holds ${c.name} for ${plural(holdDays ?? DEFAULT_HOLD_DAYS, 'day')}: the brain raises no bid (a stop still lowers); then it runs again.`,
     release: `Releases the hold on ${c.name}: the brain runs it again, raises included.`,
@@ -146,7 +148,8 @@ const setBidBrainEnrollment: AgentTool = {
     + 'campaign, and a person\'s own edit still passes and holds that bid. Every bid and placement is kept for a give-back. '
     + 'Going LIVE is a big door: approving it needs the approver\'s authenticator code. op hold: the brain raises nothing for '
     + 'some days; op release ends a hold; op shadow: the brain stops, bids stay; op give-back: back to shadow and the bids '
-    + 'and placements put back as they were when it went LIVE. LIVE needs the campaign on the live-write allowlist, its '
+    + 'and placements put back as they were when it went LIVE. LIVE (and release) needs the campaign not kept off the bid brain by '
+    + 'the Owner in its product\'s brain (an exclusion or a lock of its bids), on the live-write allowlist, its '
     + 'bids serving (not held at a floor), and no classic dayparting schedule, running autopilot plan or older family rank '
     + 'plan on it; its hourly bid plan joins the brain (each hour\'s placement % and Min-bid floors, inside the brain\'s '
     + 'limits) unless an hour sets a base bid. A person approves every op in Nexus (or confirms it '
@@ -165,7 +168,19 @@ const setBidBrainEnrollment: AgentTool = {
     const run = approvedRun(ctx, String(args.why ?? '') || p.effect)
     if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
     const campaign = await prisma.campaign.findFirst({ where: { id: p.campaign.id }, select: { marketplace: true } })
-    const set = await setEnrollment({ campaignId: p.campaign.id, marketplace: p.campaign.market ?? campaign?.marketplace ?? '', op: p.op, by: run.actor, holdDays: p.holdDays ?? null, reason: run.reason })
+    // AB-1 review — a campaign moved by hand is recorded in its product's brain (a campaign override of the bids lever),
+    // in the same transaction, so a product re-apply or the cycle never undoes it. Hold and release change no level.
+    const level = p.op === 'live' ? 'AUTO' : p.op === 'shadow' || p.op === 'give-back' ? 'OBSERVE' : null
+    let set: Awaited<ReturnType<typeof setEnrollment>>
+    try {
+      set = await inDatabaseTransaction(prisma, async () => {
+        const moved = await setEnrollment({ campaignId: p.campaign.id, marketplace: p.campaign.market ?? campaign?.marketplace ?? '', op: p.op, by: run.actor, holdDays: p.holdDays ?? null, reason: run.reason })
+        if (level) await recordCampaignBidsChoice({ campaignId: p.campaign.id, level, by: run.actor, reason: `set-bid-brain-enrollment op ${p.op}: ${run.reason}` })
+        return moved
+      }, { isolationLevel: 'Serializable' })
+    } catch (e) {
+      return notRun(`Not run: ${(e as Error).message}. Nothing changed.`)
+    }
     let gaveBack: { sent: number; refused: string[] } | null = null
     if (p.op === 'give-back') {
       const row = await prisma.bidBrainEnrollment.findFirst({ where: { campaignId: p.campaign.id }, select: { snapshot: true } })

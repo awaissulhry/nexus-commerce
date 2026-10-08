@@ -11,11 +11,13 @@
  *   scope       only this product × market's product overrides and this campaign's overrides count; ended rows never
  *   fail closed a stored row that no longer validates is ignored and listed
  *   validate    the writer's checks: identity and value per kind
+ *   brake       what keeps the bid brain off a campaign (an exclusion, a whole bids lock), naming who, when and why
+ *   pair        the negatives warning level never above the maximum, each value's source named
  *
  * Values are made up (public repo).
  */
 import { describe, expect, it } from 'vitest'
-import { resolveBrainSettings, validateIdentity, validateOverride, type OverrideRow } from './settings.js'
+import { describeProvenance, ownerBrakeOf, resolveBrainSettings, settingsPairRefusal, validateIdentity, validateOverride, type OverrideRow } from './settings.js'
 
 let n = 0
 const row = (o: Partial<OverrideRow> & Pick<OverrideRow, 'scope' | 'kind' | 'key'>): OverrideRow => ({
@@ -141,5 +143,27 @@ describe('validateOverride', () => {
     expect(validateOverride({ scope: 'PRODUCT', kind: 'PAUSE' as never, key: 'x' })).toEqual({ refusal: expect.stringContaining('LEVEL, LOCK, EXCLUDE, VALUE') })
     // An end names only what it ends.
     expect(validateIdentity({ scope: 'PRODUCT', kind: 'VALUE', key: 'paceTargetPct' })).toEqual({ identity: { scope: 'PRODUCT', campaignId: null, kind: 'VALUE', key: 'paceTargetPct', ref: '' } })
+  })
+})
+
+describe('ownerBrakeOf and settingsPairRefusal (AB-1 review)', () => {
+  it('names the exclusion or the bids lock that keeps the bid brain off, with who, when and why', () => {
+    const out = row({ scope: 'CAMPAIGN', campaignId: 'c-1', kind: 'EXCLUDE', key: '*', by: 'user:owner', reason: 'my own campaign', createdAt: new Date('2026-10-08T09:00:00Z') })
+    expect(ownerBrakeOf(resolve([out]))).toBe('it is excluded from the brain by the Owner\'s campaign override (user:owner, 2026-10-08): "my own campaign"')
+    const lock = row({ scope: 'PRODUCT', kind: 'LOCK', key: 'bids', by: 'user:owner-2', createdAt: new Date('2026-10-07T09:00:00Z') })
+    expect(ownerBrakeOf(resolve([lock]))).toBe('its bids are locked at the Owner\'s own value by the Owner\'s product override (user:owner-2, 2026-10-07)')
+    // A campaign level of its own lifts a product-wide lock; a lock of one keyword is no brake on the campaign.
+    expect(ownerBrakeOf(resolve([lock, row({ scope: 'CAMPAIGN', campaignId: 'c-1', kind: 'LEVEL', key: 'bids', value: 'AUTO' })]))).toBeNull()
+    expect(ownerBrakeOf(resolve([row({ scope: 'CAMPAIGN', campaignId: 'c-1', kind: 'LOCK', key: 'bids', ref: 'target:t-1' })]))).toBeNull()
+    expect(ownerBrakeOf(resolve([]))).toBeNull()
+    expect(describeProvenance(resolve([]).levers.bids.level)).toBe('the brain\'s default')
+  })
+
+  it('the warning level never above the maximum, each value\'s source named', () => {
+    expect(settingsPairRefusal(resolve([]).values)).toBeNull()
+    const warn = row({ scope: 'PRODUCT', kind: 'VALUE', key: 'negativesPerEntityWarn', value: 950 })
+    const max = row({ scope: 'CAMPAIGN', campaignId: 'c-1', kind: 'VALUE', key: 'negativesPerEntityMax', value: 100 })
+    expect(settingsPairRefusal(resolve([warn]).values)).toBeNull()
+    expect(settingsPairRefusal(resolve([warn, max]).values, ' on campaign c-1')).toMatch(/^negativesPerEntityWarn \(950, the Owner's product override .*\) would be above negativesPerEntityMax \(100, the Owner's campaign override .*\) on campaign c-1/)
   })
 })
