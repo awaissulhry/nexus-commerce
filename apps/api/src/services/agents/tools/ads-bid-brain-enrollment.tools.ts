@@ -14,8 +14,8 @@ import prisma from '../../../db.js'
 import { updateAdGroupWithSync, updateAdTargetWithSync } from '../../advertising/ads-mutation.service.js'
 import { updatePlacementBidding } from '../../advertising/ads-create.service.js'
 import {
-  DEFAULT_HOLD_DAYS, ENROLL_OPS, enrollmentBasis, enrollmentFacts, giveBackPlan, nextMode, readSnapshot, setEnrollment,
-  type EnrollMode, type EnrollOp, type EnrollmentFacts,
+  DEFAULT_HOLD_DAYS, ENROLL_OPS, enrollRefusal as refusalOf, enrollmentBasis, enrollmentFacts, giveBackPlan, nextMode, PLANS_JOIN_THE_BRAIN, readSnapshot,
+  setEnrollment, type EnrollMode, type EnrollOp,
 } from '../../advertising/bid-brain/enrollment.js'
 import { STEP_UP_NEEDS, type StepUp } from '../step-up-approval.js'
 import { approvedRun, notRun } from './ads-change-kit.js'
@@ -27,28 +27,12 @@ const BIG_DOOR_HOW = 'A person with settings.security.manage approves it in Nexu
 
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`
 
-/** BB-7 — an hourly plan joins as the brain's input instead of blocking LIVE (bid-brain/plan-hour.ts). */
-export const PLANS_JOIN_THE_BRAIN = true
+/** BB-7 — an hourly plan joins as the brain's input instead of blocking LIVE (held in bid-brain/enrollment.ts since AB-1). */
+export { PLANS_JOIN_THE_BRAIN }
 
 function stepUpFor(op: EnrollOp, name: string): { stepUp?: StepUp } {
   if (op !== 'live' || !needsCode('set-bid-brain-enrollment: live')) return {}
   return { stepUp: { what: `puts ${name} under the bid brain (it becomes the campaign's one bid writer)`, raises: ['Bid writer'], needs: STEP_UP_NEEDS, how: BIG_DOOR_HOW } }
-}
-
-function refusalOf(f: EnrollmentFacts, op: EnrollOp): string | null {
-  const c = f.campaign
-  if (c.adProduct && c.adProduct !== 'SPONSORED_PRODUCTS') return `${c.name} is not a Sponsored Products campaign: the bid brain decides Sponsored Products keyword bids only.`
-  const next = nextMode(op, f.enrollment?.mode ?? null)
-  if ('refusal' in next) return `${c.name}: ${next.refusal}.`
-  if (op === 'live' || op === 'release') {
-    if (!c.allowlisted) return `${c.name} is not on the live-write allowlist: no automatic write reaches Amazon for it (set-campaign-live-writes first).`
-    if (f.blockers.length) return `${c.name} cannot go LIVE yet: ${f.blockers.join('; ')}.`
-  }
-  if (op === 'live' && f.floored) return `${c.name} cannot go LIVE now: ${f.floored}.`
-  // BB-7 review — back to shadow only when every floor the brain holds can be given back by the engines that take over.
-  if (op === 'shadow' && f.floorsWithoutMemory) return `${c.name} cannot go back to shadow now: ${plural(f.floorsWithoutMemory, 'keyword')} ${f.floorsWithoutMemory === 1 ? 'sits' : 'sit'} at a floor the bid brain set that no engine would give back after it (no memory of the bid before, or none an owner's floor mark points at). Use op give-back (it puts back the bids and placements the campaign had when it went LIVE), or try again once the floor has lifted.`
-  if (op === 'give-back' && !f.enrollment?.snapshot) return `${c.name} has no snapshot to give back (it never went LIVE).`
-  return null
 }
 
 async function preview(args: Record<string, unknown>): Promise<ToolResult> {

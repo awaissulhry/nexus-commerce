@@ -73,6 +73,9 @@
  *     plan carried out by the brain: placements inside the CPC ceiling, Min-bid floors with the anti-flap, the bids given back.
  *   · `services/advertising/bid-brain/hook-postgres.vitest.test.ts` (bid brain BB-10, 2026-10-08) — the auto-undo hook: the
  *     run-completed event in the outbox, holds and releases, and the hold after an approved undo of a brain change.
+ *   · `services/advertising/brain/enrollment-postgres.vitest.test.ts` (one brain AB-1, 2026-10-08) — a product's brain: its
+ *     tables under row security, the campaign → product resolver, the bids lever adopting and driving BidBrainEnrollment,
+ *     the Owner's overrides (exclude, lock, levels, settings) and two changes on one version (one wins).
  *   · `services/agents/change-plan-postgres.vitest.test.ts` (MCP full control C6, 2026-10-01) — a 200-step change plan:
  *     a stopped worker resumes, two workers at once run every step exactly once, a stale step is skipped.
  *   · `services/advertising/ads-claude-bulk-postgres.vitest.test.ts` (MCP full control A7, 2026-10-02) — an approved
@@ -216,6 +219,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'a 200-step change plan (MCP full control C6: one approval, a stopped worker resumed, two workers at once, each step exactly once, a stale step skipped)', file: 'src/services/agents/change-plan-postgres.vitest.test.ts', expect: 2 },
   { name: 'identity: one channel item, two businesses, the same moment (MCP full control I12: report mode both succeed with one claim; enforce mode one wins)', file: 'src/services/identity/channel-item-claim-postgres.vitest.test.ts', expect: 2 },
   { name: 'Claude\'s approved bulk bid change and an engine write on one target (MCP full control A7: both queued, one claim wins, the other waits for it)', file: 'src/services/advertising/ads-claude-bulk-postgres.vitest.test.ts', expect: 2 },
+  { name: 'a product\'s brain (AB-1: its tables under row security; the campaign → product resolver on real rows; enrolling adopts the bids lever and writes no campaign row; bids AUTO puts the own campaigns LIVE that may and leaves the LIVE, refused and shared ones, a rerun writes nothing; an excluded or bids-locked campaign leaves the bid brain and ending it re-applies; settings campaign > product > default with who and when; two changes on one version, one wins; refusals change nothing; bids OBSERVE takes the own campaigns back to shadow)', file: 'src/services/advertising/brain/enrollment-postgres.vitest.test.ts', expect: 10 },
   { name: 'the shadow bid brain (BB-3: allowlisted IT/DE keywords only, no write path, changes and a daily snapshot stored, halt and stale-data brakes, 30-day prune, one business; BB-4: why, what-if, diff; BB-5: a TACoS target with its band from the family\'s sales; BB-8: overrides from their sources, the bids going back; BB-9: a rule\'s bid action on an owned campaign stored as the brain\'s input and obeyed)', file: 'src/services/advertising/bid-brain/shadow-postgres.vitest.test.ts', expect: 9 },
 ]
 const IMAGES = ['pgvector/pgvector:pg17', 'postgres:17', 'postgres:17-alpine']

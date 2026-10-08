@@ -454,6 +454,8 @@
     "BidBrainDecision",
     "BidHold",
     "BidDirective",
+    "AdsBrainEnrollment",
+    "AdsBrainOverride",
     "AdWriteRefusal",
     "AutomationRefusalDaily",
     "KeywordBidProposal",
