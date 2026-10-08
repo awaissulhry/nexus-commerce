@@ -16,7 +16,7 @@
 --
 -- Order: (1) the DDL Prisma derives from schema.prisma (`prisma migrate diff`, schema → schema); (2) row-level security
 -- for the new table, emitted by workspaceModelSql() in scripts/workspace-policies.mjs so it carries the same bytes the
--- disposable test database gets (the 20261008v_case_packs pattern).
+-- disposable test database gets (the 20261008w_case_packs pattern).
 -- AlterTable
 ALTER TABLE "FBAShipment" ADD COLUMN     "amazonShipmentId" TEXT,
 ADD COLUMN     "boxes" JSONB,

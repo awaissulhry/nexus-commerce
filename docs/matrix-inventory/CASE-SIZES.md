@@ -2,7 +2,7 @@
 
 The Owner asked: a SKU may have several case sizes (for example 12 / case and 6 / case), not only one. Everything must
 stay wired end to end and update in real time. The Step 3 and Step 4 tables were never released, so the migrations
-`20261008v_case_packs` and `20261008w_fba_send` were rewritten in place (the private test databases were moved by hand).
+`20261008w_case_packs` and `20261008x_fba_send` were rewritten in place (the private test databases were moved by hand).
 
 ## Data (done — commit "foundation")
 - `ProductPackage` — one row per SKU: `fbaPrepOwner`, `fbaLabelOwner` only (AMAZON | SELLER | null).
