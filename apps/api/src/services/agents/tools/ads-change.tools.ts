@@ -74,7 +74,8 @@ import type { AgentTool, FieldPermission, ToolContext, ToolResult, ToolUndo } fr
 import { heldSources, recommendationIdFor, settleSources, sourceArg, sourceOf, sourcePreview, sourceRefusal, sourcesRecord, unsettleChange, withSource, type AdChangeSource, type SourceFact } from './ads-change-source.js'
 import { afterUndone } from '../change-record.service.js'
 import { pausesNoClaudeMade } from './ads-status.tools.js'
-import { codeGate, needsCode } from './ads-code-rule.js'
+import { codeGate, goLiveDoor, needsCode } from './ads-code-rule.js'
+import { structureGoLive, type StructureGoLive } from '../../advertising/brain/structure-golive.js'
 import { STEP_UP_NEEDS, type StepUp } from '../step-up-approval.js'
 import { alsoChangedByOf, budgetEnginesOf } from './ads-budget-kit.js'
 import { floorOriginsOf, floorUntilWords, ownFloorRaiseRefusal } from './ads-ad-groups.tools.js'
@@ -1675,8 +1676,10 @@ async function bornAtFloorSince(campaignId: string, suppressedAt: Date | null): 
  * approver's authenticator code. A restore after a later stop (suppress-campaign, a person's no-pause stop) is
  * day-to-day: no code.
  */
-function restoreStepUp(born: Date | null, name: string): { stepUp?: StepUp } {
-  if (!born || !needsCode('restore-campaign: born at the floor')) return {}
+function restoreStepUp(born: Date | null, name: string, brain: StructureGoLive | null = null): { stepUp?: StepUp; noCode?: string } {
+  if (!born) return {}
+  // AB-16 (D1 = B) — a campaign the ads brain built, going live inside its caps: the brain's line (a normal approval).
+  if (!needsCode(goLiveDoor('restore-campaign: born at the floor', brain))) return brain?.inside ? { noCode: brain.why } : {}
   return { stepUp: { what: `gives ${name}, born at the floor, its planned bids (a new campaign starts spending)`, raises: ['Bids', 'Spend'], needs: STEP_UP_NEEDS, how: BIG_DOOR_HOW } }
 }
 
@@ -1730,7 +1733,9 @@ async function restorePreview(args: Record<string, unknown>, ctx?: Pick<ToolCont
     approvalId: ctx?.approvalId,
   })
   const born = await bornAtFloorSince(campaign.id, campaign.bidsSuppressedAt)
-  const code = restoreStepUp(born, campaign.name)
+  // AB-16 (D1 = B) — is it a campaign the ads brain built, going live inside its caps? (null: not one: the door as before)
+  const brainGoLive = born ? await structureGoLive([campaign.id]) : null
+  const code = restoreStepUp(born, campaign.name, brainGoLive)
   return {
     ok: true,
     preview: {
@@ -1753,6 +1758,7 @@ async function restorePreview(args: Record<string, unknown>, ctx?: Pick<ToolCont
       ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
       ...(groups.ownFloors ? { staysFloored: { adGroups: groups.ownFloors, floors: stays.slice(0, LINES_SHOWN) } } : {}),
       ...(born ? { bornAtFloor: { since: born.toISOString() } } : {}),
+      ...(brainGoLive ? { brainStructure: { inside: brainGoLive.inside, why: brainGoLive.why } } : {}),
       ...code,
       ...rule,
       effect: `Puts back the bids ${campaign.name} had before it was suppressed: ${remembered.length} target${remembered.length === 1 ? '' : 's'} and ${groups.remembered} ad group default${groups.remembered === 1 ? '' : 's'}${highest ? `, the highest ${amountLabel(highest, currency)}` : ''}${held.length ? `; ${held.length} at a bid limit instead of the bid it had (each line says which)` : ''}. The campaign serves again.${stays.length ? ` ${stays.length} ad group${stays.length === 1 ? ' stays' : 's stay'} at ${stays.length === 1 ? 'its' : 'their'} own floor: ${stays.slice(0, 3).map((g) => `"${g.name}" ${g.until}`).join('; ')}${stays.length > 3 ? `; and ${stays.length - 3} more (staysFloored)` : ''}.` : ''}${born ? ` It was born at the floor and has not spent at its planned bids yet: a new campaign starts spending${code.stepUp ? ', so approving it needs the approver\'s authenticator code' : ''}.` : ''}`,
@@ -1903,6 +1909,9 @@ async function liveWritesPreview(args: Record<string, unknown>, ctx?: Pick<ToolC
   const onByRuleToday = enabled ? await allowlistedByRuleToday(ctx?.approvalId) : 0
   // A Nexus switch: no write for the gate to judge (the writes it lets through are judged when they write).
   const facts = await ruleFactsFor({ tool: LIVE_WRITES_TOOL, limits: LIVE_WRITES_LIMITS, items: [{ entity: { kind: 'campaign', id: campaign.id }, change: { field: 'liveWrites', from: campaign.liveBidWritesEnabled, to: enabled }, nexusOnly: true }], writes: [], approvalId: ctx?.approvalId })
+  // AB-16 (D1 = B) — is it a campaign the ads brain built, going live inside its caps? (null: not one: the door as before)
+  const brainGoLive = enabled ? await structureGoLive([campaign.id]) : null
+  const liveCode = liveWritesStepUp(enabled, campaign.name, brainGoLive)
   return {
     ok: true,
     preview: {
@@ -1914,9 +1923,10 @@ async function liveWritesPreview(args: Record<string, unknown>, ctx?: Pick<ToolC
       alsoChangedBy: bound.automations,
       ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
       ...facts,
-      ...liveWritesStepUp(enabled, campaign.name),
+      ...(brainGoLive ? { brainStructure: { inside: brainGoLive.inside, why: brainGoLive.why } } : {}),
+      ...liveCode,
       effect: enabled
-        ? `Puts ${campaign.name} on the live-write allowlist: approved changes${bound.automations.length ? ' and its rules and schedules' : ''} may then write its bids, budget and placements at Amazon${connectionLive ? '' : ' — once Amazon ads writes are live and its market\'s connection allows writes (today they would not reach Amazon)'}.${liveWritesStepUp(enabled, campaign.name).stepUp ? ' A new structure going live: approving it needs the approver\'s authenticator code.' : ''}`
+        ? `Puts ${campaign.name} on the live-write allowlist: approved changes${bound.automations.length ? ' and its rules and schedules' : ''} may then write its bids, budget and placements at Amazon${connectionLive ? '' : ' — once Amazon ads writes are live and its market\'s connection allows writes (today they would not reach Amazon)'}.${liveCode.stepUp ? ' A new structure going live: approving it needs the approver\'s authenticator code.' : brainGoLive?.inside ? ` ${brainGoLive.why}.` : ''}`
         : `Takes ${campaign.name} off the live-write allowlist: no write reaches Amazon for it any more (bids already sent stay where they are; nothing is paused).`,
     },
   }
@@ -1927,8 +1937,10 @@ async function liveWritesPreview(args: Record<string, unknown>, ctx?: Pick<ToolC
  * ON the allowlist a big door — the writes it lets through start a structure spending — so a person approves it with the
  * approver's authenticator code; taking one off is a brake (no code).
  */
-function liveWritesStepUp(enabled: boolean, name: string): { stepUp?: StepUp } {
-  if (!enabled || !needsCode('set-campaign-live-writes: on')) return {}
+function liveWritesStepUp(enabled: boolean, name: string, brain: StructureGoLive | null = null): { stepUp?: StepUp; noCode?: string } {
+  if (!enabled) return {}
+  // AB-16 (D1 = B) — a campaign the ads brain built, going live inside its caps: the brain's line (a normal approval).
+  if (!needsCode(goLiveDoor('set-campaign-live-writes: on', brain))) return brain?.inside ? { noCode: brain.why } : {}
   return { stepUp: { what: `puts ${name} on the live-write allowlist (its approved changes, rules and schedules may then write at Amazon)`, raises: ['Live writes'], needs: STEP_UP_NEEDS, how: BIG_DOOR_HOW } }
 }
 

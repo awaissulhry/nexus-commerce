@@ -15,6 +15,7 @@
  *             AB-11: the harvest lever every level; every other lever OFF or OBSERVE until its own PR. OBSERVE on a lever whose
  *             shadow is not built yet records the intent: it starts watching when its shadow lands; nothing is written.
  *             AB-12: the state lever takes every level (brain/state*.ts); it still starts OBSERVE like every lever.
+ *             AB-16: the structure lever OFF, OBSERVE and PROPOSE (never AUTO: every build, go-live and move asks a person).
  *   settings  the caps of §5 and the N1–N4 settings of §9 (Owner yes 10-08), each with the design's default and safety
  *             bounds (Amazon's own where it has one); the Owner may set any value inside them, per product, and per
  *             campaign where the setting means something for one campaign.
@@ -65,7 +66,9 @@ export const LEVER_LEVELS_NOW: Record<BrainLever, { levels: readonly BrainLevel[
   negatives: { levels: BRAIN_LEVELS, others: 'the negatives module (AB-10, ads-brain view negatives) takes every level' },
   // AB-11 — the harvest module: OBSERVE logs each harvest, PROPOSE asks a person for the pair, AUTO writes it.
   harvest: { levels: BRAIN_LEVELS, others: 'AB-11: OBSERVE logs each harvest in shadow, PROPOSE asks a person for the keyword and its source negatives as one change set, AUTO writes it (under NEXUS_ADS_BRAIN_HARVEST_MODE=live); a new campaign is always a request a person approves (ads-brain view harvest)' },
-  structure: { levels: OFF_OBSERVE, others: 'new campaigns wait for AB-16' },
+  // AB-16 — structure: OBSERVE logs each proposal in shadow, PROPOSE asks a person for each build, go-live and move. Never
+  // AUTO: the brain never creates, splits or moves a campaign without a person's approval (D1 = B, D2 = A).
+  structure: { levels: ['OFF', 'OBSERVE', 'PROPOSE'], others: 'AB-16: single-keyword campaigns for key terms, the split of a shared campaign into one per product and the move of the product\'s campaigns into its one portfolio — OBSERVE logs each proposal in shadow (ads-brain view structure), PROPOSE asks a person for each build, its go-live (a normal approval inside the caps, D1 = B) and each move; never AUTO: the brain never creates, splits or moves a campaign without a person\'s approval' },
   biddingStrategy: { levels: OFF_OBSERVE, others: 'the bidding-strategy lever waits for AB-17' },
   offAmazon: { levels: OFF_OBSERVE, others: 'the off-Amazon lane waits for AB-18' },
 }
@@ -105,6 +108,9 @@ export const BRAIN_SETTINGS = {
   newCampaignsPerWeek: { type: 'int', default: 2, min: 0, max: 20, scopes: PRODUCT, what: 'new campaigns per product per week (§2.9)' },
   skcMax: { type: 'int', default: 20, min: 0, max: 200, scopes: PRODUCT, what: 'single-keyword campaigns per product (§2.9)' },
   firstBudgetPctOfEnvelope: { type: 'int', default: 10, min: 1, max: 100, scopes: PRODUCT, what: 'a new campaign\'s first budget, % of the envelope (§2.9)' },
+  // AB-16 — the single-keyword-campaign rule's own numbers (§2.9 b): the Owner's own number wins.
+  skcOrderSharePct: { type: 'int', default: 15, min: 5, max: 100, scopes: PRODUCT, what: 'a term with at least this share of the product\'s ad orders over 30 settled days gets a single-keyword campaign proposed, % (§2.9)' },
+  skcHourCurvePct: { type: 'int', default: 30, min: 10, max: 200, scopes: PRODUCT, what: 'a term whose hourly conversion curve differs from its campaign\'s by at least this much in one part of the day gets a single-keyword campaign proposed, percentage points of the index (§2.9)' },
   minBidEntriesPerDay: { type: 'int', default: 2, min: 0, max: 24, scopes: BOTH, what: 'Min-bid hour entries per campaign per day (§2.3)' },
   hourCellMovePct: { type: 'int', default: 30, min: 0, max: 100, scopes: PRODUCT, what: 'largest move of an hour cell per painted plan, % (§2.3)' },
   hourProposalsPerWeek: { type: 'int', default: 1, min: 0, max: 7, scopes: PRODUCT, what: 'painted hourly plan proposals per week (§2.3)' },

@@ -39,7 +39,7 @@ vi.mock('../../../db.js', () => ({
   },
 }))
 
-import { bidsStep, harvestStep, harvestStepOf, hoursStep, moneyStep, negativesStep, readMoneyInOut, stateStep, termsStep, type StepContext, type TickFacts } from './cycle-steps.js'
+import { bidsStep, harvestStep, harvestStepOf, hoursStep, moneyStep, negativesStep, readMoneyInOut, stateStep, structureStepOf, termsStep, type StepContext, type StructureRunLike, type TickFacts } from './cycle-steps.js'
 import { CYCLE_STEPS, type CycleStep, type StepRecord } from './cycle.js'
 
 const NOW = new Date('2026-10-09T06:55:00Z')
@@ -151,6 +151,33 @@ describe('AB-14 — ③ negatives and ④ harvest', () => {
     m.halfDone.mockResolvedValue(0)
     expect(await harvestStep(ctxOf())).toMatchObject({ status: 'done', runId: 'hv-1' })
     expect(m.halfDone).toHaveBeenCalledWith({ where: { productId: 'jacket', marketplace: 'IT', status: 'HALF_DONE' } })
+  })
+})
+
+describe('AB-16 — the structure step (weekly)', () => {
+  const run = (over: Partial<StructureRunLike> = {}): StructureRunLike => ({
+    ran: true, why: '1 product', runId: 'st-1', decided: { skc: 1, split: 0, portfolio: 1, held: 1 }, acted: { logged: 2, proposed: 0 },
+    pending: { built: 0, liveAsked: 0, live: 0, retireAsked: 0, done: 0, declined: 0, failed: 0 }, notDue: 0, skipped: [], failed: [], ...over,
+  })
+  const dueYes = async () => ({ due: true, why: 'x', products: [{ productId: 'jacket' }] })
+  it('off when the structure lever is OFF or excluded: the module is never run', async () => {
+    const r = vi.fn()
+    expect(await structureStepOf(async () => ({ due: false, why: 'none', products: [] }), r)(ctxOf())).toMatchObject({ status: 'off', why: expect.stringMatching(/structure lever is OFF/) })
+    expect(r).not.toHaveBeenCalled()
+  })
+  it('the weekly day: what it decided, in shadow — nothing asked; the requests that wait for a person', async () => {
+    const r = vi.fn(async () => run())
+    const out = await structureStepOf(dueYes, r, async () => [{ what: 'go-live of the single-keyword campaign for "racing jacket"', approvalId: 'appr-3' }])(ctxOf())
+    expect(r).toHaveBeenCalledWith({ now: NOW, due: expect.objectContaining({ due: true }) })
+    expect(out).toMatchObject({ status: 'done', runId: 'st-1', why: expect.stringMatching(/^decided: skc 1, portfolio 1, held 1, logged 2/), waiting: [{ approvalId: 'appr-3' }] })
+    expect(out.did?.lines[0]).toMatch(/\(shadow: nothing asked, nothing at Amazon\)$/)
+    // A run on another day only syncs what earlier requests became.
+    expect(await structureStepOf(dueYes, async () => run({ notDue: 1, decided: { skc: 0, split: 0, portfolio: 0, held: 0 }, acted: { logged: 0, proposed: 0 } }))(ctxOf())).toMatchObject({ status: 'done', why: expect.stringMatching(/^not the weekly day/) })
+  })
+  it('a failed or skipped product says so; never a step that acts (it only asks a person)', async () => {
+    expect(await structureStepOf(dueYes, async () => run({ failed: [{ productId: 'jacket', market: 'IT', error: 'db away' }] }))(ctxOf())).toMatchObject({ status: 'failed', why: expect.stringMatching(/db away/) })
+    expect(await structureStepOf(dueYes, async () => run({ skipped: [{ productId: 'jacket', market: 'IT', why: 'no family root' }] }))(ctxOf())).toMatchObject({ status: 'skipped' })
+    expect(await structureStepOf(dueYes, async () => run())(ctxOf())).not.toHaveProperty('holds')
   })
 })
 

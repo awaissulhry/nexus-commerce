@@ -474,6 +474,7 @@
     "AdsBrainStateDecision",
     "AdsBrainNegative",
     "AdsBrainCycle",
+    "AdsBrainStructure",
     "AdWriteRefusal",
     "AutomationRefusalDaily",
     "KeywordBidProposal",

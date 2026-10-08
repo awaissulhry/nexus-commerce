@@ -149,7 +149,7 @@ describe('leverDoes and effectiveWord — what the brain will start doing', () =
     expect(leverDoes('budgets', 'AUTO', 'shadow')).toMatch(/while the server switch NEXUS_BID_BRAIN_MODE is shadow, it decides in shadow/)
     expect(leverDoes('hours', 'PROPOSE', 'live')).toMatch(/asks a person for each change/)
     expect(leverDoes('negatives', 'OBSERVE', 'live')).toMatch(/^shadow: the brain decides where and what to negate .* and logs it, and writes nothing \(today: .*AB-10/)
-    expect(leverDoes('structure', 'OBSERVE', 'live')).toMatch(/\(today: new campaigns wait for AB-16\)$/)
+    expect(leverDoes('structure', 'OBSERVE', 'live')).toMatch(/\(today: AB-16: single-keyword campaigns .* never AUTO: the brain never creates, splits or moves a campaign without a person's approval\)$/)
     expect(leverDoes('budgets', 'LOCKED', 'live')).toMatch(/write gate refuses every other automatic writer/)
     expect(leverDoes('bids', 'LOCKED', 'live')).toMatch(/the bid brain leaves its keyword bids .* pin the campaign's bids/)
     expect(leverDoes('state', 'EXCLUDED', 'live')).toMatch(/today's engines run it/)
