@@ -194,7 +194,7 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-14 — the product cycle (real Pos
     expect(row).toMatchObject({ productId: P, marketplace: 'IT', changeSetId: changeSetIdOf(P, 'IT', day), status: 'DONE', attempts: 1, leaseUntil: null })
     const status = Object.fromEntries(Object.entries(row.steps as Data).map(([k, v]) => [k, (v as Data).status]))
     expect(status).toMatchObject({ state: 'done', money: 'done', bids: 'done' })
-    for (const s of ['terms', 'negatives', 'harvest', 'hours']) expect(['done', 'skipped'], s).toContain(status[s])
+    for (const s of ['terms', 'negatives', 'harvest', 'hours', 'bidding']) expect(['done', 'skipped'], s).toContain(status[s])
     expect(row.steps.state.why).toMatch(/^OBSERVE: pause 2/)
     expect(row.steps.harvest.acts).toBe(false)
     // The bid brain decided JACKET's own campaigns only, in the cycle's bids run.
@@ -204,7 +204,10 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-14 — the product cycle (real Pos
     expect((await counts()).queued).toBe(0)
     // The report.
     expect(row.report).toMatchObject({ v: 1, productId: P, name: 'Jacket', market: 'IT', dataDay: day, status: 'DONE', changeSetId: changeSetIdOf(P, 'IT', day) })
-    expect(row.report.levers.map((l: Data) => l.step)).toEqual(['state', 'terms', 'negatives', 'harvest', 'structure', 'money', 'bids', 'hours'])
+    expect(row.report.levers.map((l: Data) => l.step)).toEqual(['state', 'terms', 'negatives', 'harvest', 'structure', 'money', 'bids', 'hours', 'bidding'])
+    // AB-17 — the bidding strategy in shadow (the state step's pauses are shadow too, so they hold nothing): c-it is floored
+    // by a stop (a keyword's remembered bid) and held; c-two already runs down only, the thin product's choice. Nothing at Amazon.
+    expect((await rows('SELECT "campaignId", action, outcome FROM "AdsBrainStrategyDecision" WHERE "workspaceId" = $1 ORDER BY "campaignId"', [W])).map((x) => [x.campaignId, x.action, x.outcome])).toEqual([['c-it', 'hold', 'held'], ['c-two', 'keep', 'none']])
     expect(row.report.money.inOut.week).toMatchObject({ spendCents: expect.any(Number), salesCents: expect.any(Number) })
     expect(row.summary).toMatch(/^Jacket in IT, data day /)
     expect(row.summary).not.toMatch(/€/)

@@ -418,8 +418,9 @@ type GroupRow = {
 /**
  * Hourly spend, clicks and orders per campaign × placement × hour for today and the `pastDays` days before it (default
  * 14, at most 60), in `timeZone` (default UTC; an unknown zone reads as UTC). Several ad groups of one campaign are summed.
+ * BB-17 — `utcHours`: only these stored UTC hours are read (the intraday brakes read two hours a day, not 24).
  */
-export async function loadPlacementHours(input: { campaignIds: readonly string[]; now: Date; timeZone?: string | null; pastDays?: number }): Promise<PlacementHoursRead> {
+export async function loadPlacementHours(input: { campaignIds: readonly string[]; now: Date; timeZone?: string | null; pastDays?: number; utcHours?: readonly number[] }): Promise<PlacementHoursRead> {
   const timeZone = isKnownTimeZone(input.timeZone) ? input.timeZone.trim() : 'UTC'
   const pastDays = Math.max(0, Math.min(MAX_PAST_DAYS, Math.floor(input.pastDays ?? 14)))
   const today = isoDayIn(input.now, timeZone)
@@ -446,6 +447,7 @@ export async function loadPlacementHours(input: { campaignIds: readonly string[]
       FROM "AmazonAdsHourlyPlacement"
      WHERE "campaignId" IN (${Prisma.join([...localOf.keys()])})
        AND "date" >= ${shiftDay(days[0], -1)}::date AND "date" <= ${shiftDay(today, 1)}::date
+       ${input.utcHours ? Prisma.sql`AND "hour" = ANY(${[...input.utcHours]}::int[])` : Prisma.empty}
      GROUP BY "campaignId", "placement", "date", "hour"`)
 
   const inWindow = new Set(days)

@@ -16,8 +16,8 @@ const noneAct = Object.fromEntries(CYCLE_STEPS.map((s) => [s, false])) as Record
 const acting = (...steps: CycleStep[]) => ({ ...noneAct, ...Object.fromEntries(steps.map((s) => [s, true])) }) as Record<CycleStep, boolean>
 
 describe('AB-14 — the order', () => {
-  it('stops and state, the term ledger, negatives before harvest, money before bids, hours last (design §4)', () => {
-    expect(CYCLE_STEPS).toEqual(['state', 'terms', 'negatives', 'harvest', 'structure', 'money', 'bids', 'hours'])
+  it('stops and state, the term ledger, negatives before harvest, structure, money before bids, then hours and the bidding strategy (design §4)', () => {
+    expect(CYCLE_STEPS).toEqual(['state', 'terms', 'negatives', 'harvest', 'structure', 'money', 'bids', 'hours', 'bidding'])
   })
 
   it('one change set per product × market × data day', () => {
@@ -76,7 +76,7 @@ describe('AB-14 — which step waits for which', () => {
   })
 
   it('a retry runs only what did not end; the cycle is DONE only when every step ended', () => {
-    const records: StepRecords = { state: rec('done'), terms: rec('done'), negatives: rec('failed'), harvest: rec('blocked'), structure: rec('done'), money: rec('done'), bids: rec('done'), hours: rec('off') }
+    const records: StepRecords = { state: rec('done'), terms: rec('done'), negatives: rec('failed'), harvest: rec('blocked'), structure: rec('done'), money: rec('done'), bids: rec('done'), hours: rec('off'), bidding: rec('off') }
     expect(stepsToRun(records)).toEqual(['negatives', 'harvest'])
     expect(cycleStatusOf(records)).toBe('PARTIAL')
     expect(cycleStatusOf({ ...records, negatives: rec('done'), harvest: rec('skipped') })).toBe('DONE')
@@ -115,6 +115,7 @@ describe('AB-14 — the day\'s product report', () => {
       money: rec('done', { acts: true, waiting: [{ what: 'the portfolio cap', approvalId: 'appr-1' }], did: { lines: ['asked a person for the campaign budgets: raise 1'], money: { lines: ['The month is on pace: €100.00 of €400.00.'] } } }),
       bids: rec('done', { acts: true, did: { lines: ['20 keywords decided on 2 own campaigns: raise 3, lower 1, hold 16'], clashes: ['the state step (shadow) would pause Jacket exact; the bids raised 2 keywords on Jacket exact — when stops and state acts, those raises wait.'] } }),
       hours: rec('failed', { why: 'the hourly research failed for the product (logged)' }),
+      bidding: rec('off', { why: 'the bidding-strategy lever is OFF' }),
     },
     excluded: null,
     holds: [{ lever: 'budgets', scope: 'campaign', campaignId: 'c2', ref: '', by: 'user:owner', at: '2026-10-01T10:00:00.000Z', reason: 'my own budget' }],
@@ -125,7 +126,7 @@ describe('AB-14 — the day\'s product report', () => {
 
   it('what each lever did in order, what waits for the Owner, clashes, his locks, problems, later — and the money apart', () => {
     const { report } = buildReport(input())
-    expect(report.levers.map((l) => [l.step, l.status, l.acts])).toEqual([['state', 'done', false], ['terms', 'done', false], ['negatives', 'done', false], ['harvest', 'off', false], ['structure', 'done', false], ['money', 'done', true], ['bids', 'done', true], ['hours', 'failed', false]])
+    expect(report.levers.map((l) => [l.step, l.status, l.acts])).toEqual([['state', 'done', false], ['terms', 'done', false], ['negatives', 'done', false], ['harvest', 'off', false], ['structure', 'done', false], ['money', 'done', true], ['bids', 'done', true], ['hours', 'failed', false], ['bidding', 'off', false]])
     expect(report.waitsForOwner).toEqual([{ what: 'the portfolio cap', approvalId: 'appr-1' }])
     expect(report.clashes).toHaveLength(1)
     expect(report.heldByOwner).toEqual(['Locked by user:owner on 2026-10-01: the whole budgets lever on campaign c2 — "my own budget". The brain writes nothing there and only recommends.'])
