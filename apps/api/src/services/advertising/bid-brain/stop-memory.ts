@@ -68,12 +68,13 @@ const lanesOf = (dynamicBidding: unknown): Placement[] => {
  * AB-2 — the rollback: put back what a stop's memory still owes the campaign — the saved lanes (one placement write) and
  * the saved strategy (the campaign write, while the campaign still runs on the stop's down only) — as `write.actor`, and
  * clear each memory once it is back (or owes nothing: settled, or changed by someone since). A refused write keeps its
- * memory, so the next restore tries again. `lanes: false`: a give-back that puts the LIVE-time placements back itself
- * only clears the saved lanes. Answers what was sent and refused, and whether anything is still owed.
+ * memory, so the next restore tries again. `lanes`: false — a give-back put the LIVE-time placements back itself, so the
+ * saved lanes are only cleared; 'keep' — that give-back's placement write was refused, so they stay (owed) for the next
+ * try. Answers what was sent (`given`, in words) and refused, and whether anything is still owed.
  */
-export async function giveBackStopMemory(campaignId: string, write: { actor: AdsActor; reason: string; changeSetId?: string | null; manual?: boolean; confirmOwnLimits?: boolean; lanes?: boolean }): Promise<{ sent: number; refused: string[]; owed: boolean }> {
+export async function giveBackStopMemory(campaignId: string, write: { actor: AdsActor; reason: string; changeSetId?: string | null; manual?: boolean; confirmOwnLimits?: boolean; lanes?: boolean | 'keep' }): Promise<{ sent: number; given: string[]; refused: string[]; owed: boolean }> {
   const c = await prisma.campaign.findFirst({ where: { id: campaignId }, select: { dynamicBidding: true, biddingStrategy: true, suppressedFromPlacements: true, suppressedFromBiddingStrategy: true } })
-  const out = { sent: 0, refused: [] as string[], owed: false }
+  const out = { sent: 0, given: [] as string[], refused: [] as string[], owed: false }
   if (!c) return out
   const savedPlacements = readSavedLanes(c.suppressedFromPlacements)
   const savedStrategy = c.suppressedFromBiddingStrategy ? String(c.suppressedFromBiddingStrategy) : null
@@ -81,19 +82,21 @@ export async function giveBackStopMemory(campaignId: string, write: { actor: Ads
   const owed = stopMemoryOwed({ placements: lanesOf(c.dynamicBidding), biddingStrategy: String(c.biddingStrategy), savedPlacements, savedStrategy })
   const reason = `${write.reason} — the stop recipe's saved settings back`.slice(0, 480)
   if (savedPlacements) {
-    if (!owed.lanes || write.lanes === false) await forgetLanes(campaignId)
+    if (write.lanes === 'keep') out.owed ||= owed.lanes
+    else if (!owed.lanes || write.lanes === false) await forgetLanes(campaignId)
     else {
       const { updatePlacementBidding } = await import('../ads-create.service.js')
       const r = await updatePlacementBidding({ campaignId, adjustments: fullLanes(savedPlacements), actor: write.actor, reason, changeSetId: write.changeSetId ?? null, manual: write.manual }) as { mode?: string; reason?: string }
-      if (r.mode !== 'blocked') { out.sent++; await forgetLanes(campaignId) } else { out.refused.push(r.reason ?? 'placements refused'); out.owed = true }
+      if (r.mode !== 'blocked') { out.sent++; out.given.push('the placements it set to 0 %'); await forgetLanes(campaignId) } else { out.refused.push(r.reason ?? 'placements refused'); out.owed = true }
     }
   }
   if (savedStrategy) {
     if (!owed.strategy) await forgetStrategy(campaignId)
     else {
+      // The gate asked before Nexus's copy changes (as live-writer.ts asks it): a refusal changes nothing and keeps the memory.
       const { updateCampaignWithSync } = await import('../ads-mutation.service.js')
-      const r = await updateCampaignWithSync({ campaignId, patch: { biddingStrategy: savedStrategy as 'LEGACY_FOR_SALES' | 'AUTO_FOR_SALES' | 'MANUAL' }, actor: write.actor, reason, changeSetId: write.changeSetId ?? null, manual: write.manual, confirmOwnLimits: write.confirmOwnLimits, applyImmediately: true })
-      if (r.ok) { out.sent += r.outboundQueueId ? 1 : 0; await forgetStrategy(campaignId) } else { out.refused.push(r.error ?? 'bidding strategy refused'); out.owed = true }
+      const r = await updateCampaignWithSync({ campaignId, patch: { biddingStrategy: savedStrategy as 'LEGACY_FOR_SALES' | 'AUTO_FOR_SALES' | 'MANUAL' }, actor: write.actor, reason, changeSetId: write.changeSetId ?? null, manual: write.manual, confirmOwnLimits: write.confirmOwnLimits, applyImmediately: true, askGate: true })
+      if (r.ok) { out.sent += r.outboundQueueId ? 1 : 0; out.given.push(`the bidding strategy (${savedStrategy === 'AUTO_FOR_SALES' ? 'up and down' : savedStrategy})`); await forgetStrategy(campaignId) } else { out.refused.push(r.error ?? 'bidding strategy refused'); out.owed = true }
     }
   }
   return out

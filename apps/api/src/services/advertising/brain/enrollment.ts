@@ -51,6 +51,8 @@ import { inDatabaseTransaction } from '../../../lib/database-context.js'
 import { logger } from '../../../utils/logger.js'
 import { strategyMarket } from '../ads-strategy/bids.js'
 import { enrollmentFacts, enrollRefusal, PLANS_JOIN_THE_BRAIN, setEnrollment, type EnrollMode } from '../bid-brain/enrollment.js'
+import { giveBackStopMemory } from '../bid-brain/stop-memory.js'
+import type { AdsActor } from '../ads-mutation.service.js'
 import { readSnapshots, type BrainLever, type BrainLevel, type LeverSnapshot } from './levers.js'
 import { productCampaigns, productFamily, resolveCampaignOwnership } from './ownership.js'
 import {
@@ -225,7 +227,10 @@ async function withChecks(campaigns: readonly BidsCampaignState[]): Promise<Bids
     // The plan already resolved the Owner's overrides as they will be after the change (no checkOwnerBrake).
     const facts = await enrollmentFacts(c.campaignId, { plansJoin: PLANS_JOIN_THE_BRAIN })
     const refusal = facts ? enrollRefusal(facts, op) : `${c.name} is no longer in this business`
-    out.push(op === 'live' ? { ...c, liveRefusal: refusal } : { ...c, shadowRefusal: refusal })
+    // AB-2 follow-up — a stop's saved lanes or strategy still owed: setEnrollment refuses LIVE (it never drops them unseen),
+    // so this campaign is a named skip, not a failed change; set-bid-brain-enrollment op live gives them back first.
+    const owed = op === 'live' && !refusal && facts?.stopMemory ? `${c.name} cannot go LIVE yet: ${facts.stopMemory.words} — set-bid-brain-enrollment op live gives them back first` : null
+    out.push(op === 'live' ? { ...c, liveRefusal: refusal ?? owed } : { ...c, shadowRefusal: refusal })
   }
   return out
 }
@@ -596,6 +601,20 @@ async function runChange(args: ChangeArgs, change: Change): Promise<Result<{ pla
       kind: change.input.kind, key: change.input.key, by: args.by,
       ...(steps ? { live: steps.filter((s) => s.op === 'live').length, shadow: steps.filter((s) => s.op === 'shadow').length, skipped: steps.filter((s) => s.op === 'skip').length } : {}),
     })
+    // AB-2 follow-up — each campaign the change took back to shadow gets what a stop saved back (the lanes it set to 0 %, the
+    // strategy it switched to down only), as the per-campaign op shadow does — after the commit, never inside it. A refused
+    // write keeps its memory: the next restore of its stop (restoreCampaignBids) or op give-back gives it back.
+    for (const s of steps ?? []) {
+      if (s.op !== 'shadow') continue
+      const person = args.by.startsWith('user:')
+      const actor = (person || args.by.startsWith('automation:') ? args.by : 'automation:ads-brain') as AdsActor
+      try {
+        const back = await giveBackStopMemory(s.campaignId, { actor, reason: `the product's brain took it back to shadow — ${args.reason ?? s.why}`, manual: person })
+        if (back.owed) logger.warn('[ads-brain] a stop\'s saved settings could not all be given back on the way to shadow', { campaignId: s.campaignId, refused: back.refused })
+      } catch (err) {
+        logger.warn('[ads-brain] could not give back a stop\'s saved settings on the way to shadow', { campaignId: s.campaignId, error: err instanceof Error ? err.message : String(err) })
+      }
+    }
   }
   return done
 }
