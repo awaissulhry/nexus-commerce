@@ -20,7 +20,12 @@
  *   give-back the next budget day A1's ladder goes back to its base through the real gate (the day opens at the base);
  *             Amazon's usage of the cap is read and kept in the plan
  *   owner     a lock on A2's budget: not written, and the gate refuses the brain there; the Owner's cap amount: the cap
- *             never above it; an amount below the month's spend: not written; the per-write value cap refuses a cap above it
+ *             never above it; an amount below the month's spend: not written; a cap above the per-write value cap is
+ *             neither written nor asked (checked before: no doomed write reaches the gate) — the person's own portfolio
+ *             path is refused above it too (verified here), so nothing in Nexus could set it: said once a month
+ *   race      six runs asking one request at once: one claim lands, one request is made
+ *   usage     Amazon's usage of the caps: one call at a full slot for a product acting on its money; none at a 15-minute
+ *             tick; none at OBSERVE
  *   business  another business plans and writes nothing
  *
  * Every value is made up (public repo).
@@ -64,6 +69,8 @@ vi.mock('../ads-api-client.js', async (importOriginal) => ({
 }))
 
 const { runMoneyShadowOnce, moneyLiveProducts } = await import('./budget-shadow.js')
+const { askOnce } = await import('./budget-live.js')
+const { updatePortfolioById } = await import('../ads-portfolio.service.js')
 const { enrollProduct, setLever, setOverride } = await import('./enrollment.js')
 const { forgetLeverOwners } = await import('./lever-owners.js')
 const { setAutonomy } = await import('../ads-automation-state.service.js')
@@ -197,6 +204,8 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-8 — the money writer through the
       'Campaign A1': ['keep', 1_500, 75], 'Campaign A2': ['lower', 1_400, null], 'Campaign A3': ['lower', 700, null], 'Campaign AB shared': ['lower', 700, null],
     })
     expect([await approvals(), await traces()]).toEqual([[], { q: 0, l: 0 }])
+    // OBSERVE: no Amazon read of the caps' usage.
+    expect(amazon.reads).toEqual([])
   })
 
   it('propose: one request for the day\'s campaign moves and one for the cap, waiting for a person; nothing written; a rerun asks nothing', async () => {
@@ -218,7 +227,7 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-8 — the money writer through the
   it('auto: through the real gate — the base moves and the rung above the ceiling queued as the brain, the cap written monthly; others untouched; a rerun writes and logs nothing', async () => {
     for (const lever of ['budgets', 'portfolioCap'] as const) expect(await inW(() => setLever({ productId: A, market: 'IT', by: 'user:owner', lever, level: 'AUTO' }))).toMatchObject({ ok: true })
     forgetLeverOwners()
-    expect(await inW(() => moneyLiveProducts())).toEqual([{ productId: A, market: 'IT', level: 'AUTO' }])
+    expect(await inW(() => moneyLiveProducts())).toEqual([{ productId: A, market: 'IT', level: 'AUTO', readsUsage: true }])
     const at = new Date(NOW.getTime() + 180_000)
     const out = await run(at)
     expect(out.failed).toEqual([])
@@ -279,15 +288,52 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-8 — the money writer through the
     await run(new Date(DAY3.getTime() + 3_600_000))
     expect(await portfolio(PF_X)).toEqual({ budgetPolicy: 'MONTHLY_RECURRING', amount: '600.00' })
     expect((await decisions()).at(-1)!.plan.actions.portfolios[0]).toMatchObject({ sent: 'held', why: expect.stringMatching(/is not above this month's spend in it plus one day/) })
-    // The per-write value cap at its default (€500): a cap above it is refused by the gate, nothing changes.
+    // The per-write value cap at its default: a cap above it is checked BEFORE the write — held, never sent to the gate.
     vi.stubEnv('NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS', '')
     expect(await inW(() => setOverride({ productId: A, market: 'IT', by: 'user:owner', reason: 'test', override: { scope: 'PRODUCT', kind: 'VALUE', key: 'portfolioCapCents', value: 70_000 } }))).toMatchObject({ ok: true })
+    const refusalsBefore = await rows<{ n: number }>('SELECT count(*)::int AS n FROM "AdWriteRefusal" WHERE "workspaceId" = $1 AND "deniedAt" = \'value_cap\'', [W])
     await run(new Date(DAY3.getTime() + 2 * 3_600_000))
+    await run(new Date(DAY3.getTime() + 2 * 3_600_000 + 60_000))
     expect(await portfolio(PF_X)).toEqual({ budgetPolicy: 'MONTHLY_RECURRING', amount: '600.00' })
-    expect((await decisions()).at(-1)!.plan.actions.portfolios[0]).toMatchObject({ sent: 'refused', reason: expect.stringMatching(/exceeds cap 50000¢/) })
+    expect((await decisions()).at(-1)!.plan.actions.portfolios[0]).toMatchObject({ sent: 'held', why: expect.stringMatching(/above the per-write value cap .* the gate refuses it for every writer/) })
+    expect(await rows('SELECT count(*)::int AS n FROM "AdWriteRefusal" WHERE "workspaceId" = $1 AND "deniedAt" = \'value_cap\'', [W])).toEqual(refusalsBefore)
+    // Said once this month, whatever the number of runs; no request was made for it.
+    expect(await rows('SELECT kind, status, "approvalId" FROM "AdsBrainAsk" WHERE "workspaceId" = $1 AND key LIKE \'cap-over:%\'', [W])).toEqual([{ kind: 'portfolioCapOverValue', status: 'blocked', approvalId: null }])
+    // Verified: the person's own path (the Portfolios page; an approved set-portfolio runs the same) is refused above the
+    // value cap as well — a portfolio write carries no "send anyway" — so a request for it could never run.
+    expect(await inW(() => updatePortfolioById({ portfolioId: PF_X, budget: { amount: 700, currencyCode: 'EUR', policy: 'monthlyRecurring' } }))).toMatchObject({ ok: false, mode: 'gated', error: expect.stringMatching(/exceeds cap 50000¢/) })
     vi.stubEnv('NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS', '500000')
     // Product Z's campaigns (the bid brain's) never moved.
     expect(await budgetsOf()).toMatchObject({ z1: '12.00', z2: '12.00', b1: '10.00', shared: '10.00' })
+  })
+
+  it('race: six runs ask one request at once — one claim lands, one request is made, the others answer without asking', async () => {
+    const before = (await approvals()).length
+    const day = '2026-10-20'
+    const spec = { kind: 'budgets' as const, key: `budgets:${A}:IT:${day}`, productId: A, market: 'IT', day, tool: 'set-campaign-budget' as const, args: { campaigns: [{ campaignId: C('a3'), dailyBudgetCents: 600 }], why: 'ads brain — race test' }, why: 'ads brain — race test' }
+    const out = await Promise.all(Array.from({ length: 6 }, () => inW(() => askOnce(spec))))
+    expect(out.filter((p) => p.fresh)).toHaveLength(1)
+    expect(out.filter((p) => !p.fresh).every((p) => p.approvalId == null || p.approvalId === out.find((x) => x.fresh)!.approvalId)).toBe(true)
+    const claims = await rows<{ status: string; approvalId: string | null }>('SELECT status, "approvalId" FROM "AdsBrainAsk" WHERE "workspaceId" = $1 AND key = $2', [W, spec.key])
+    expect(claims).toHaveLength(1)
+    expect((await approvals()).length).toBe(before + (claims[0].status === 'asked' ? 1 : 0))
+    // Asked again later the same day: the claim answers, nothing new.
+    expect(await inW(() => askOnce(spec))).toMatchObject({ fresh: false })
+    expect(await rows('SELECT count(*)::int AS n FROM "AdsBrainAsk" WHERE "workspaceId" = $1 AND key = $2', [W, spec.key])).toEqual([{ n: 1 }])
+  })
+
+  it('usage: one Amazon read of the caps at a full slot for a product acting on its money; none at a 15-minute tick; none at OBSERVE', async () => {
+    const reads = () => amazon.reads.filter((p) => p === '/portfolios/budget/usage').length
+    const at = new Date(DAY3.getTime() + 5 * 3_600_000)
+    const before = reads()
+    await run(at)
+    expect(reads()).toBe(before + 1)
+    vi.setSystemTime(at)
+    await inW(async () => runMoneyShadowOnce({ now: at, between: true, products: await moneyLiveProducts() }))
+    expect(reads()).toBe(before + 1)
+    for (const lever of ['budgets', 'portfolioCap'] as const) expect(await inW(() => setLever({ productId: A, market: 'IT', by: 'user:owner', lever, level: 'OBSERVE' }))).toMatchObject({ ok: true })
+    await run(new Date(at.getTime() + 60_000))
+    expect(reads()).toBe(before + 1)
   })
 
   it('business: another business with nothing enrolled plans and writes nothing', async () => {

@@ -7,6 +7,10 @@
  *   ladder    the brain's own budget write may pass the day-move CEILING as its intraday ladder (≤ +100 % of today's base,
  *             the base inside the bound), and the day after a ladder opens at the base for it; the floor binds it as
  *             everyone. Another writer with the same numbers is refused as before — the limit is not loosened for anyone else.
+ *   unread    follow-up: when the money actor's lever holders cannot be read, the gate fails with the read's error (the
+ *             ads worker sends the row again later) — never a refusal it would settle SKIPPED, as AB-5 (#523) set it
+ *   dispatch  follow-up: a queued ladder rung is judged again when the worker sends it: its own queued row is not counted
+ *             against it, and an Owner's lock or a server switch turned off since it was asked refuses it there
  *
  * The lever holders are mocked (brain/lever-owners.ts has its own tests and a real-PostgreSQL suite); the budget log is
  * what the gate reads. Every value is made up (public repo).
@@ -15,15 +19,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CampaignLeverOwners, LeverHold } from './brain/lever-owners.js'
 
 const campaignFindUnique = vi.fn()
-type LogRow = { userId: string | null; payloadBefore: unknown; payloadAfter: unknown; evidence?: unknown; amazonResponseStatus?: string; at: Date }
+type LogRow = { userId: string | null; payloadBefore: unknown; payloadAfter: unknown; evidence?: unknown; amazonResponseStatus?: string; at: Date; queueId?: string | null }
 let log: LogRow[] = []
-/** The budget log as Prisma answers the gate: rows of the campaign by createdAt bounds, order and take. */
-const actionLogFindMany = vi.fn(async (args: { where?: { createdAt?: { gte?: Date; lt?: Date } }; orderBy?: { createdAt: 'asc' | 'desc' }; take?: number }) => {
+/**
+ * The budget log as Prisma answers the gate: rows of the campaign by createdAt bounds, order and take — and, at dispatch,
+ * without the write's own queued row (the gate's `OR: [{ outboundQueueId: null }, { outboundQueueId: { not } }]`).
+ */
+const actionLogFindMany = vi.fn(async (args: { where?: { createdAt?: { gte?: Date; lt?: Date }; OR?: Array<{ outboundQueueId: null | { not: string } }> }; orderBy?: { createdAt: 'asc' | 'desc' }; take?: number }) => {
   const c = args.where?.createdAt
-  let rows = log.filter((r) => (!c?.gte || r.at >= c.gte) && (!c?.lt || r.at < c.lt))
+  const own = args.where?.OR?.map((o) => o.outboundQueueId).find((q): q is { not: string } => !!q && typeof q === 'object')?.not
+  let rows = log.filter((r) => (!c?.gte || r.at >= c.gte) && (!c?.lt || r.at < c.lt) && (!own || r.queueId !== own))
   rows = [...rows].sort((a, b) => a.at.getTime() - b.at.getTime())
   if (args.orderBy?.createdAt === 'desc') rows.reverse()
-  return (args.take ? rows.slice(0, args.take) : rows).map(({ at: _at, ...r }) => r)
+  return (args.take ? rows.slice(0, args.take) : rows).map(({ at: _at, queueId: _q, ...r }) => r)
 })
 const actionLogFindFirst = vi.fn(async (args: Parameters<typeof actionLogFindMany>[0]) => (await actionLogFindMany({ ...args, orderBy: { createdAt: 'asc' } }))[0] ?? null)
 vi.mock('../../db.js', () => ({
@@ -68,8 +76,8 @@ function holds(budgets: LeverHold | null) {
 /** A budget write of c1 from `fromCents` to `toCents`, as the worker hands it to the gate. */
 const budget = (actor: string | null, fromCents: number, toCents: number, extra: Record<string, unknown> = {}) =>
   checkAdsWriteGate({ marketplace: 'IT', campaignId: 'c1', payloadValueCents: toCents, field: 'dailyBudget', fields: ['dailyBudget'], intendedValueCents: toCents, previousValueCents: fromCents, actor, ...extra } as never)
-const row = (userId: string, before: number, after: number, at: Date, layer: string | null = null, status = 'SUCCESS'): LogRow =>
-  ({ userId, payloadBefore: { dailyBudget: before / 100 }, payloadAfter: { dailyBudget: after / 100 }, evidence: layer ? { brain: { layer } } : null, amazonResponseStatus: status, at })
+const row = (userId: string, before: number, after: number, at: Date, layer: string | null = null, status = 'SUCCESS', queueId: string | null = null): LogRow =>
+  ({ userId, payloadBefore: { dailyBudget: before / 100 }, payloadAfter: { dailyBudget: after / 100 }, evidence: layer ? { brain: { layer } } : null, amazonResponseStatus: status, at, queueId })
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
@@ -167,5 +175,59 @@ describe('AB-8 — the intraday ladder\'s give-back exception (the day-move boun
     log.push(row('user:owner', 6_250, 9_000, YESTERDAY(20)))
     // The day opens at the person's €90 for everyone, the brain included: €45 is past the floor.
     expect(await budget(MONEY_BUDGETS_ACTOR, 9_000, 4_500)).toMatchObject({ allowed: false, deniedAt: 'budget_day_move' })
+  })
+})
+
+describe('AB-8 follow-up — the money actor\'s holders cannot be read: try again, never a refusal', () => {
+  it('a budget: the gate fails with the read\'s own error (the worker sends the row again later), not a deny it would settle SKIPPED', async () => {
+    // AB-5's check reads the holders first (the brain owns the lever: it passes); the money actor's own read then fails.
+    campaignLeverOwners.mockResolvedValueOnce(new Map([['c1', { campaignId: 'c1', name: ROW.name, market: 'IT', levers: { budgets: owned() } }]])).mockRejectedValueOnce(new Error('db down'))
+    await expect(budget(MONEY_BUDGETS_ACTOR, 4_000, 4_500)).rejects.toThrow('db down')
+    // Unreadable from the first read: the same.
+    campaignLeverOwners.mockReset().mockRejectedValue(new Error('db down'))
+    await expect(budget(MONEY_BUDGETS_ACTOR, 4_000, 4_500)).rejects.toThrow('db down')
+    // A person's write needs no read.
+    expect(await budget('user:owner', 4_000, 4_500, { manual: true })).toMatchObject({ allowed: true })
+  })
+
+  it('a portfolio cap: the same', async () => {
+    portfolioCapHold.mockResolvedValueOnce(owned()).mockRejectedValueOnce(new Error('db down'))
+    await expect(checkAdsWriteGate({ marketplace: 'IT', payloadValueCents: 30_000, dimension: 'portfolio', portfolioId: 'pf-1', field: 'budgetAmount', fields: ['budgetAmount'], actor: MONEY_PORTFOLIO_ACTOR } as never)).rejects.toThrow('db down')
+  })
+})
+
+describe('AB-8 follow-up — a queued ladder rung is judged again at dispatch', () => {
+  /** At 08:00 the brain asked a rung €40 → €70 on today's €40 base; Nexus wrote its copy and queued it (its row PENDING). */
+  const queued = () => {
+    log = [row(MONEY_BUDGETS_ACTOR, 4_000, 7_000, TODAY(8), 'ladder', 'PENDING', 'q-rung')]
+    campaignFindUnique.mockResolvedValue({ ...ROW, dailyBudget: 70 })
+  }
+  /** The worker's gate call for that row: its queue id, the value it replaces and the value it sends. */
+  const dispatch = () => budget(MONEY_BUDGETS_ACTOR, 4_000, 7_000, { queueId: 'q-rung' })
+
+  it('nothing changed since it was asked: it passes — its own queued row is not counted against it', async () => {
+    queued()
+    expect(await dispatch()).toMatchObject({ allowed: true })
+  })
+
+  it('the Owner locked the budget since: refused at dispatch, in his words', async () => {
+    queued()
+    holds(locked())
+    expect(await dispatch()).toMatchObject({ allowed: false, deniedAt: 'owner_locked' })
+  })
+
+  it('the lever left the brain, or the server switch went to shadow, since: refused as not the brain\'s', async () => {
+    queued()
+    holds(null)
+    expect(await dispatch()).toMatchObject({ allowed: false, deniedAt: 'brain_not_owner' })
+    holds(owned())
+    vi.stubEnv('NEXUS_BID_BRAIN_MODE', 'shadow')
+    expect(await dispatch()).toMatchObject({ allowed: false, deniedAt: 'brain_not_owner', reason: expect.stringMatching(/NEXUS_BID_BRAIN_MODE is not live/) })
+  })
+
+  it('a rung that became past +100 % of today\'s base since (the brain\'s base moved down meanwhile): refused at dispatch', async () => {
+    // The base went €40 → €30 at 09:00 (landed) after the rung to €70 was queued at 08:00: €70 is past €30 + 100 % = €60.
+    log = [row(MONEY_BUDGETS_ACTOR, 4_000, 7_000, TODAY(8), 'ladder', 'PENDING', 'q-rung'), row(MONEY_BUDGETS_ACTOR, 4_000, 3_000, TODAY(9), 'base')]
+    expect(await dispatch()).toMatchObject({ allowed: false, deniedAt: 'budget_day_move' })
   })
 })
