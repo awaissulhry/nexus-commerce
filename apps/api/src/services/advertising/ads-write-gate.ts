@@ -21,8 +21,10 @@ import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { adsMode } from './ads-api-client.js'
-import { dimensionsForWrite, pinDenial, type AuthorityDimension } from './ads-authority-pins.js'
+import { dimensionsForWrite, leverDimensionsForWrite, pinDenial, type AuthorityDimension } from './ads-authority-pins.js'
 import { BRAIN_ACTOR, brainLiveCeiling, brainOwnedCampaignIds } from './bid-brain/live.js'
+import { campaignLeverOwners, portfolioCapHold, type LeverHold } from './brain/lever-owners.js'
+import type { BrainLever } from './brain/levers.js'
 import { protectedNegativeRefusal } from './ads-negation-policy.js'
 import { adProductOf, adWriteRefusal, type AdWrite } from '@nexus/shared/ads-ad-product'
 import { budgetDayStart } from '@nexus/shared/ads-budget-day'
@@ -65,7 +67,10 @@ export type GateDeniedAt =
   | 'needs_confirmation'
   // BID BRAIN BB-6 — the campaign's bids and placements are the bid brain's (one writer per campaign): another
   // automatic writer's change is refused (brainYieldsTo).
+  // ONE BRAIN AB-5 — and every other lever a product's brain owns (leverWriterOf); also when its owner cannot be read.
   | 'brain_owned'
+  // ONE BRAIN AB-5 — the Owner locked the whole lever at his own value: every automatic writer is refused, the brain too.
+  | 'owner_locked'
 
 /**
  * 3A (Owner decided 2026-10-06) — the limits that are HIS: his campaign's bid and budget bounds and his bid policies
@@ -143,8 +148,16 @@ export interface GateContext {
    * The dimension this write belongs to, when the caller knows it and no field name
    * carries it. `updatePlacementBidding` pushes multipliers inline rather than through
    * the queue, so it has no `fieldChanges` to derive from and names its dimension here.
+   * ONE BRAIN AB-5 — every write names its lever: the fields name it for a change (leverDimensionsForWrite), and a write
+   * no field names says it here — `keywords` (a keyword or target created), `structure` (an ad group, a product ad, a
+   * campaign created), `negatives` (a negative added or retired), `portfolio` (a portfolio's cap, a portfolio made).
    */
   dimension?: AuthorityDimension | null
+  /**
+   * ONE BRAIN AB-5 — the portfolio a portfolio's own write changes (Nexus's row id or Amazon's portfolio id), with no
+   * `campaignId`: the brain that owns the portfolio cap lever of every campaign in it, or the Owner's lock, judges it.
+   */
+  portfolioId?: string | null
   /** Intended new value in cents, when the field is numeric. */
   intendedValueCents?: number | null
   /** The keyword text, when this write negates a term. */
@@ -314,6 +327,135 @@ async function brainOwnedRefusal(campaignId: string, actor: string | null, what 
       ? `campaign ${campaignId} is run by the bid brain (one writer per campaign): ${actor || 'an unnamed automatic writer'} may not change its bids or placements — the brain decides them. A person's edit, a request a person approved, a stop that lowers bids and the safety checks still pass; set-bid-brain-enrollment gives the campaign back.`
       : `campaign ${campaignId} is run by the bid brain (one writer per lever): ${actor || 'an unnamed automatic writer'} may not change ${what} — the brain's stop recipe sets it. A person's edit and a request a person approved still pass; set-bid-brain-enrollment gives the campaign back.`,
   }
+}
+
+/**
+ * ONE BRAIN AB-5 — one owner per lever (design 2026-10-08-ads-one-brain/DESIGN.md §3 target 2-5, §2.10). A product's
+ * brain owns a lever of a campaign when the product is enrolled, the lever is at PROPOSE or AUTO there, the campaign is
+ * not excluded and the lever not locked (brain/lever-owners.ts, brain/settings.ts). On such a lever the gate passes only
+ * the brain's actor for it, a person (`manual`), a forced lowering and the safety owners; every other automatic writer
+ * is refused, naming the lever and the product's brain. On a lever the Owner LOCKED at his own value the brain is
+ * refused too (his value stands); a person passes. Under the env ceiling `live` only, and only for a write that names
+ * its actor (as BB-6): a tool's preview and a repair that resends Nexus's own value name none.
+ *
+ *   the brain    PRODUCT_BRAIN_ACTOR on every lever (exactly, or `-<what>`), and the bid brain (BRAIN_ACTOR) on the levers it
+ *                writes (BID_BRAIN_LEVERS). On placements and the bidding strategy both pass the Owner's lock: the brain's
+ *                own writers read those locks and obey them (brain/owner-brakes.ts ownerLeverLocks, AB-2) — a stop still
+ *                lowers a locked lever as it beats a pinned bid, and its give-back puts the Owner's value back; a placement
+ *                or strategy write carries no mark that tells a stop or a give-back from a plan write, so the gate leaves
+ *                that to them. Every other lever locked: the brain is refused.
+ *   safety       the safety owners (BRAIN_SAFETY_ACTOR_PREFIXES: budget enforcement, the retail guard, auto-undo's restores,
+ *                the write reconcile and resync) and a forced lowering (`isSuppression`: suppress-campaign, the stock tools'
+ *                lowering, a playbook STOP, every no-pause floor — and a deliberate pause, isLetGoWrite) pass every lever
+ *                and every lock: a floor never waits for an owner. The bidding strategy keeps AB-2's narrower rule: only the
+ *                repairs (BRAIN_STRATEGY_REPAIR_PREFIXES), never a "lowering".
+ *   bids         the keyword-bids lever is not judged here: it stays the bid brain's BidBrainEnrollment (BB-6 above),
+ *                exactly as the 10 GALE IT campaigns run today.
+ */
+export const PRODUCT_BRAIN_ACTOR = 'automation:ads-brain'
+const BID_BRAIN_LEVERS: ReadonlySet<BrainLever> = new Set<BrainLever>(['bids', 'adGroupBids', 'placements', 'biddingStrategy'])
+const BRAIN_OBEYS_LOCKS_ITSELF: ReadonlySet<BrainLever> = new Set<BrainLever>(['placements', 'biddingStrategy'])
+
+/** Who a writer is on one lever: it always passes, it is the brain's (passes an owned lever), or another automatic writer. */
+export type LeverWriter = 'passes' | 'brain' | 'other'
+
+const actorMatches = (actor: string, prefixes: readonly string[]) => prefixes.some((p) => actor === p || actor.startsWith(`${p}-`))
+
+/** AB-5 — who this writer is on this lever (see above). Never reads the person from the free-text actor. Pure. */
+export function leverWriterOf(lever: BrainLever, ctx: Pick<GateContext, 'actor' | 'manual' | 'isSuppression'>): LeverWriter {
+  const actor = ctx.actor ?? ''
+  if (ctx.manual === true) return 'passes'
+  if (lever === 'biddingStrategy' ? actorMatches(actor, BRAIN_STRATEGY_REPAIR_PREFIXES) : ctx.isSuppression === true || actorMatches(actor, BRAIN_SAFETY_ACTOR_PREFIXES)) return 'passes'
+  const brain = actorMatches(actor, [PRODUCT_BRAIN_ACTOR]) || (actor === BRAIN_ACTOR && BID_BRAIN_LEVERS.has(lever))
+  if (!brain) return 'other'
+  return BRAIN_OBEYS_LOCKS_ITSELF.has(lever) ? 'passes' : 'brain'
+}
+
+const DIMENSION_LEVER: Record<Exclude<AuthorityDimension, 'bids'>, BrainLever> = {
+  placement: 'placements', budget: 'budgets', state: 'state', negatives: 'negatives', keywords: 'harvest',
+  structure: 'structure', portfolio: 'portfolioCap', biddingStrategy: 'biddingStrategy',
+}
+
+/**
+ * AB-5 — the brain levers a write changes, from its lever dimensions (leverDimensionsForWrite) and its fields: a keyword's
+ * or target's bid is the `bids` lever, an ad group's default bid the `adGroupBids` lever, a new keyword the `harvest`
+ * lever, a new ad group or product ad the `structure` lever, a portfolio move or cap the `portfolioCap` lever. Pure.
+ */
+export function brainLeversOfWrite(dimensions: readonly AuthorityDimension[], fields: ReadonlyArray<string | null | undefined>): BrainLever[] {
+  const out = new Set<BrainLever>()
+  for (const d of dimensions) {
+    if (d !== 'bids') { out.add(DIMENSION_LEVER[d]); continue }
+    if (fields.includes('defaultBid')) out.add('adGroupBids')
+    if (fields.includes('bid') || !fields.includes('defaultBid')) out.add('bids')
+  }
+  return [...out]
+}
+
+/** A lever in the words a refusal uses. */
+export const LEVER_WORDS: Record<BrainLever, string> = {
+  bids: 'keyword bids', adGroupBids: 'ad group default bids', hours: 'hourly plan', placements: 'placements',
+  state: 'state (pause, enable, archive)', budgets: 'daily budget', portfolioCap: 'portfolio and portfolio cap',
+  negatives: 'negatives', harvest: 'new keywords and targets', structure: 'structure (new ad groups and product ads)',
+  biddingStrategy: 'bidding strategy', offAmazon: 'off-Amazon setting',
+}
+
+const stillPass = (lever: BrainLever) => lever === 'biddingStrategy'
+  ? 'A person\'s edit, a request a person approved and the repairs that resend Nexus\'s own value still pass'
+  : 'A person\'s edit, a request a person approved, a forced lowering and the safety checks still pass'
+
+/**
+ * AB-5 — the refusal for this writer on this held lever of `where` ("campaign …" or "portfolio …"); null when the writer
+ * passes it (the brain on its owned lever). Pure.
+ */
+export function leverHoldRefusal(lever: BrainLever, hold: LeverHold, writer: LeverWriter, where: string, actor: string | null | undefined): Extract<GateDecision, { allowed: false }> | null {
+  if (writer === 'passes' || (hold.kind === 'owned' && writer === 'brain')) return null
+  const who = actor || 'an unnamed automatic writer'
+  const words = LEVER_WORDS[lever]
+  if (hold.kind === 'owned') {
+    return {
+      allowed: false,
+      deniedAt: 'brain_owned',
+      reason: `${where} is run by the brain of product ${hold.productId} in ${hold.market} (one owner per lever): ${who} may not change its ${words} — the brain owns that lever (${hold.why}). ${stillPass(lever)}; the Owner can set the lever to shadow or off, exclude ${where.startsWith('portfolio') ? 'its campaigns' : 'the campaign'}, or lock his own value.`,
+    }
+  }
+  return {
+    allowed: false,
+    deniedAt: 'owner_locked',
+    reason: `the Owner holds the ${words} of ${where} at his own value (${hold.why}; the brain of product ${hold.productId} in ${hold.market}): ${who} may not change it${writer === 'brain' ? ' — the brain included' : ''}. ${stillPass(lever)}; ending the lock lets automation write it again.`,
+  }
+}
+
+/**
+ * AB-5 — the refusal for an automatic change to a lever a product's brain owns or the Owner locked, on one campaign or one
+ * portfolio's cap; null when nothing holds it. Reads only for the writers that do not always pass (a person, the safety
+ * owners and a forced lowering read nothing). Fail closed: when the holders cannot be read, an automatic change waits.
+ */
+async function productBrainRefusal(target: { campaignId: string; name?: string | null } | { portfolioId: string }, levers: readonly BrainLever[], ctx: GateContext): Promise<Extract<GateDecision, { allowed: false }> | null> {
+  const judged = levers.filter((l) => l !== 'bids' && leverWriterOf(l, ctx) !== 'passes')
+  if (!judged.length) return null
+  const where = 'campaignId' in target ? `campaign ${target.name ? `"${target.name}" (${target.campaignId})` : target.campaignId}` : `portfolio ${target.portfolioId}`
+  let holds: Partial<Record<BrainLever, LeverHold>>
+  try {
+    if ('campaignId' in target) holds = (await campaignLeverOwners([target.campaignId])).get(target.campaignId)?.levers ?? {}
+    else {
+      const hold = await portfolioCapHold(target.portfolioId)
+      holds = hold ? { portfolioCap: hold } : {}
+    }
+  } catch (err) {
+    logger.warn('[ads-write-gate] could not read which product brain holds this lever — automatic change refused', { ...target, levers: judged, error: String(err) })
+    return {
+      allowed: false,
+      deniedAt: 'brain_owned',
+      reason: `could not read whether a product's brain owns the ${judged.map((l) => LEVER_WORDS[l]).join(' and ')} of ${where} — an automatic change waits (one owner per lever). A person's edit still passes.`,
+    }
+  }
+  for (const lever of judged) {
+    const hold = holds[lever]
+    if (!hold) continue
+    const refusal = leverHoldRefusal(lever, hold, leverWriterOf(lever, ctx), where, ctx.actor)
+    if (refusal) return refusal
+  }
+  return null
 }
 
 export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision> {
@@ -540,8 +682,9 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
      * third of the audit log carried a NULL actor as recently as 2026-08-04): only from
      * `ctx.manual`, which the routes set for a person's click with a `user:` actor (wave 1e).
      */
+    const fieldList = ctx.fields?.length ? ctx.fields : [ctx.field]
     const dimensions = dimensionsForWrite({
-      fields: ctx.fields?.length ? ctx.fields : [ctx.field],
+      fields: fieldList,
       dimension: ctx.dimension ?? null,
     })
     const pinned = person ? null : pinDenial(campaign, {
@@ -556,16 +699,28 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
     // BID BRAIN BB-6 — one writer per campaign, after the pins (a pin is the broader refusal) and before the bounds. A
     // change to the bids or placements of a campaign the brain owns (bid-brain/live.ts) passes only from the writers
     // it yields to (brainYieldsTo). Judged for a CHANGE, which every change path names the actor of (the worker, the
-    // mutation layer's own ask, the placement write); a create — a new keyword's first bid — and a tool's preview name
-    // none and are not judged here. Read only under a live ceiling, so it costs nothing while the brain is in shadow.
+    // mutation layer's own ask, the placement write); a tool's preview names none and is not judged here. Read only
+    // under a live ceiling, so it costs nothing while the brain is in shadow.
     // ONE BRAIN AB-2 — one owner per lever: the bidding strategy of a campaign the brain owns passes only from the brain, a
     // person and the repairs (brainYieldsStrategyTo) — not from the safety owners the bids check below lets through.
-    if (ctx.actor !== undefined && brainLiveCeiling() && (ctx.fields?.length ? ctx.fields : [ctx.field]).includes('biddingStrategy') && !brainYieldsStrategyTo(ctx)) {
+    // ONE BRAIN AB-5 — the lever dimensions (leverDimensionsForWrite): a create names its own lever (a new keyword's first
+    // bid is the `keywords` lever, not a bids change), so a create is judged below, by the product brain's harvest or
+    // structure lever, never here — as before AB-5, when no create named its actor. For every change the dimensions are
+    // the pins' (the bidding strategy has its own now, and the strategy check above it is the stricter of the two).
+    const levers = leverDimensionsForWrite({ fields: fieldList, dimension: ctx.dimension ?? null })
+    if (ctx.actor !== undefined && brainLiveCeiling() && fieldList.includes('biddingStrategy') && !brainYieldsStrategyTo(ctx)) {
       const refusal = await brainOwnedRefusal(ctx.campaignId, ctx.actor, 'its bidding strategy')
       if (refusal) return refusal
     }
-    if (ctx.actor !== undefined && brainLiveCeiling() && (dimensions.includes('bids') || dimensions.includes('placement')) && !brainYieldsTo(ctx)) {
+    if (ctx.actor !== undefined && brainLiveCeiling() && (levers.includes('bids') || levers.includes('placement')) && !brainYieldsTo(ctx)) {
       const refusal = await brainOwnedRefusal(ctx.campaignId, ctx.actor)
+      if (refusal) return refusal
+    }
+    // ONE BRAIN AB-5 — one owner per lever of a product's brain (productBrainRefusal, leverWriterOf): every lever this write
+    // names but the keyword bids above. After BB-6 (the bid brain's own campaigns answer first, in its words) and before
+    // the bounds. Nothing enrolled in the business: one remembered query, no refusal.
+    if (ctx.actor !== undefined && brainLiveCeiling()) {
+      const refusal = await productBrainRefusal({ campaignId: ctx.campaignId, name: campaign.name }, brainLeversOfWrite(levers, fieldList), ctx)
       if (refusal) return refusal
     }
 
@@ -653,6 +808,16 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
     // clamps below, plus cpcCeiling) so no single write can set a wild bid, and the Ads
     // client's 429 backoff (ads-api-client.ts) paces bursts against Amazon's rate limits.
     // liveBidWritesToday is still recorded (see recordWrite) for observability only.
+  }
+
+  // ONE BRAIN AB-5 — a portfolio's own write (its cap; no campaign): the brain that owns the portfolio cap lever of every
+  // campaign in it, or the Owner's lock of that lever on any of them (portfolioCapHold). Same rules as a campaign's lever.
+  if (ctx.campaignId === undefined && ctx.portfolioId && ctx.actor !== undefined && brainLiveCeiling()) {
+    const fieldList = ctx.fields?.length ? ctx.fields : [ctx.field]
+    if (brainLeversOfWrite(leverDimensionsForWrite({ fields: fieldList, dimension: ctx.dimension ?? null }), fieldList).includes('portfolioCap')) {
+      const refusal = await productBrainRefusal({ portfolioId: ctx.portfolioId }, ['portfolioCap'], ctx)
+      if (refusal) return refusal
+    }
   }
 
   // Value cap: blast-radius limit per write. Composite actions are

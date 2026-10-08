@@ -35,6 +35,7 @@ import { SPONSORED_BRANDS, SPONSORED_DISPLAY, SPONSORED_PRODUCTS, adProductOf, a
 import { bidCostType, marketLimitsOf, marketLimitsRefusal } from '@nexus/shared/ads-market-limits'
 import { normalizeMarketplaceCode } from '../../utils/marketplace-code.js'
 import { checkAdsWriteGate, entityBoundsDenial, logGateDeny, ownLimitsSentence, sentPastSentence, type EntityBoundsCampaign, type OwnLimit, type OwnLimitKind } from './ads-write-gate.js'
+import type { AuthorityDimension } from './ads-authority-pins.js'
 import { NO_LIMITS, bidLimitsFor, limitSources, strategyWords, stepClamp, type StrategyBidLimits, type WriteSources } from './ads-strategy/bids.js'
 
 // Conservative grace window. Operators have 5 min to cancel before
@@ -386,6 +387,8 @@ async function gateRefusedNow(args: {
   adGroupId?: string | null
   /** W4-11 — what the write is, as the worker hands it to the gate (an SB/SD write a caller may send). */
   write?: AdWrite | null
+  /** ONE BRAIN AB-5 — the lever no field names, as the worker hands it to the gate (a negative's retire: `negatives`). */
+  dimension?: AuthorityDimension | null
 }): Promise<MutationOutcome | null> {
   if (!args.askGate) return null
   const cents = (v: string | null | undefined, euros = false): number | null => {
@@ -411,6 +414,7 @@ async function gateRefusedNow(args: {
     manual: isPersonEdit(args.manual, args.actor),
     confirmOwnLimits: args.confirmOwnLimits === true,
     ...(args.write ? { write: args.write } : {}),
+    ...(args.dimension ? { dimension: args.dimension } : {}),
   })
   if (gate.allowed !== false) {
     const past = (gate as { pastOwnLimits?: OwnLimit[] }).pastOwnLimits
@@ -1922,6 +1926,8 @@ export async function updateAdTargetWithSync(args: {
     askGate: args.askGate, quietRefusal: args.quietRefusal, actor: args.actor, entity: 'AD_TARGET', entityId: args.adTargetId,
     campaignId: existing.adGroup?.campaign?.id, marketplace: existing.adGroup?.campaign?.marketplace, changes, force: forcedLowering,
     manual: args.manual, confirmOwnLimits, past, adGroupId: existing.adGroup?.id ?? null, write: sbSdWrite,
+    // AB-5 — a negative's status is its retire (the negatives lever), as the worker tells the gate at dispatch.
+    ...(existing.isNegative ? { dimension: 'negatives' as const } : {}),
   })
   if (atDispatch) return atDispatch
 

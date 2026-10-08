@@ -116,7 +116,7 @@ function estimatePayloadValueCents(payload: AdMutationPayload, sentCap?: Portfol
  * The campaign a write belongs to, and (W1-5) the ad group a bid lands in — the ad group itself for its default bid —
  * from the same read, so the gate holds the bid to the ads strategy of that ad group's products.
  */
-async function resolveWriteScope(payload: AdMutationPayload): Promise<{ campaignId: string | null; adGroupId: string | null }> {
+async function resolveWriteScope(payload: AdMutationPayload): Promise<{ campaignId: string | null; adGroupId: string | null; /** AB-5 — the target is a negative (its status is a negative's retire). */ negative?: boolean }> {
   const none = { campaignId: null, adGroupId: null }
   try {
     switch (payload.entityType) {
@@ -131,9 +131,9 @@ async function resolveWriteScope(payload: AdMutationPayload): Promise<{ campaign
       case 'AD_TARGET': {
         const t = await prisma.adTarget.findUnique({
           where: { id: payload.entityId },
-          select: { adGroupId: true, adGroup: { select: { campaignId: true } } },
+          select: { adGroupId: true, isNegative: true, adGroup: { select: { campaignId: true } } },
         })
-        return { campaignId: t?.adGroup?.campaignId ?? null, adGroupId: t?.adGroupId ?? null }
+        return { campaignId: t?.adGroup?.campaignId ?? null, adGroupId: t?.adGroupId ?? null, negative: t?.isNegative === true }
       }
       case 'PRODUCT_AD': {
         const a = await prisma.adProductAd.findUnique({
@@ -702,7 +702,7 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
     ? await portfolioBudgetOf(payload).catch((err) => ({ error: `portfolio budget could not be read: ${err instanceof Error ? err.message : String(err)}` }))
     : undefined
   const payloadValueCents = estimatePayloadValueCents(payload, portfolioCap)
-  const { campaignId, adGroupId } = await resolveWriteScope(payload)
+  const { campaignId, adGroupId, negative } = await resolveWriteScope(payload)
   // W4-11 — a row the mutation layer marked as an SB/SD write it let through: its route, and the write described to the
   // gate (adWriteRefusal). An unmarked row is not described, so an SB/SD one any other path queued is refused (6a).
   const sbSdRoute = (row.payload as { sbSd?: unknown } | null)?.sbSd === true ? await sbSdRouteOf(payload) : null
@@ -737,6 +737,12 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
     // judged against whichever one `field` happened to surface, so a budget pin would hold
     // on single-field payloads and silently miss the combined one.
     fields: payload.fieldChanges.map((c) => c.field),
+    // ONE BRAIN AB-5 — the lever a field does not name: a negative's status is the negatives lever (its retire), and a
+    // portfolio's own write (its cap, its dates) the portfolio lever, judged on the portfolio's campaigns.
+    ...(negative ? { dimension: 'negatives' as const } : {}),
+    ...(payload.entityType === 'PORTFOLIO'
+      ? { portfolioId: payload.entityId, ...(payload.fieldChanges.some((c) => PORTFOLIO_CAP_FIELDS.includes(c.field)) ? { dimension: 'portfolio' as const } : {}) }
+      : {}),
     intendedValueCents: Number.isFinite(intendedBidCents ?? NaN) ? intendedBidCents : intendedBudgetCents,
     // ADX G1 — suppression drives bids to ~2¢ under the no-pause rule; a halt, a min bound
     // or a bids pin must not block it. 2.2 — `force` is read off the queue row's JSON, its

@@ -332,7 +332,9 @@ export async function updatePortfolioById(args: {
     const { checkAdsWriteGate } = await import('./ads-write-gate.js')
     // The budget amount is the write's blast-radius value for the gate's value cap.
     const payloadValueCents = args.budget ? Math.round(args.budget.amount * 100) : 0
-    const gate = await checkAdsWriteGate({ marketplace: conn.marketplace, payloadValueCents })
+    // ONE BRAIN AB-5 — the portfolio lever, named. Its callers are persons (the screen, an approved set-portfolio) and name
+    // no actor: the gate judges no brain's ownership here (a queued portfolio write through the worker is judged).
+    const gate = await checkAdsWriteGate({ marketplace: conn.marketplace, payloadValueCents, dimension: 'portfolio', portfolioId: args.portfolioId })
     if (gate.allowed) {
       const r = await updatePortfolio({ profileId: row.profileId, region: regionOf(conn.region) }, { portfolioId: args.portfolioId, name: args.name, state: args.state, budget: args.budget })
       mode = r.mode
@@ -386,7 +388,8 @@ export async function createPortfolio(input: {
     profileId = conn.profileId
     const region: AdsRegion = conn.region
     const { checkAdsWriteGate } = await import('./ads-write-gate.js')
-    const gate = await checkAdsWriteGate({ marketplace, payloadValueCents: 0 })
+    // AB-5 — the portfolio lever, named (a new portfolio holds no campaign: no brain owns it).
+    const gate = await checkAdsWriteGate({ marketplace, payloadValueCents: 0, dimension: 'portfolio' })
     if (gate.allowed) {
       const r = await createAmazonPortfolio({ profileId, region }, { name, state: 'enabled' })
       externalId = r.externalId; mode = r.mode
@@ -530,7 +533,7 @@ export async function portfolioWriteGate(portfolio: { portfolioId: string; profi
   const conn = await prisma.amazonAdsConnection.findFirst({ where: { profileId: portfolio.profileId, isActive: true }, select: { marketplace: true } })
   if (!conn) return { nexusOnly: 'no active Amazon Ads connection holds its profile, so Nexus would change only its own copy' }
   const { checkAdsWriteGate } = await import('./ads-write-gate.js')
-  return { decision: await checkAdsWriteGate({ marketplace: conn.marketplace, payloadValueCents }) }
+  return { decision: await checkAdsWriteGate({ marketplace: conn.marketplace, payloadValueCents, dimension: 'portfolio', portfolioId: portfolio.portfolioId }) }
 }
 
 /**
@@ -543,5 +546,5 @@ export async function portfolioCreateGate(marketplace: string): Promise<{ decisi
   const conn = await adsClientContextFor(marketplace)
   if (!conn) return { nexusOnly: `no Amazon Ads profile serves ${marketplace}, so it would be made in Nexus only` }
   const { checkAdsWriteGate } = await import('./ads-write-gate.js')
-  return { decision: await checkAdsWriteGate({ marketplace, payloadValueCents: 0 }), profileId: conn.profileId }
+  return { decision: await checkAdsWriteGate({ marketplace, payloadValueCents: 0, dimension: 'portfolio' }), profileId: conn.profileId }
 }
