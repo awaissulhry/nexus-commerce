@@ -58,7 +58,7 @@ function recorder(step: Exclude<Step, 'terms'>) {
   }
 }
 const runners = {
-  state: recorder('state'), negatives: recorder('negatives'), harvest: recorder('harvest'), structure: recorder('structure'), money: recorder('money'), bids: recorder('bids'), hours: recorder('hours'),
+  state: recorder('state'), negatives: recorder('negatives'), harvest: recorder('harvest'), structure: recorder('structure'), money: recorder('money'), bids: recorder('bids'), hours: recorder('hours'), bidding: recorder('bidding'),
   terms: async (market: string, ctxs: readonly Ctx[]) => {
     h.calls.push({ step: 'terms', productId: ctxs.map((c) => c.productId).join('+'), market, changeSetId: brainCycleStamp()?.changeSetId ?? null, stampStep: null, packed: null })
     return new Map(ctxs.map((c) => [c.productId, h.answer.terms ? h.answer.terms(c) : done('terms ran')]))
@@ -125,9 +125,9 @@ describe('AB-14 — the product cycle', () => {
     const r = await tick(T1)
     expect(r).toMatchObject({ ran: true, dataDay: day, left: [] })
     expect(h.calls.map((c) => `${c.market}:${c.step}:${c.productId}`)).toEqual([
-      'DE:state:jacket', 'DE:terms:jacket', 'DE:negatives:jacket', 'DE:harvest:jacket', 'DE:structure:jacket', 'DE:money:jacket', 'DE:bids:jacket', 'DE:hours:jacket',
+      'DE:state:jacket', 'DE:terms:jacket', 'DE:negatives:jacket', 'DE:harvest:jacket', 'DE:structure:jacket', 'DE:money:jacket', 'DE:bids:jacket', 'DE:hours:jacket', 'DE:bidding:jacket',
       'IT:state:helmet', 'IT:state:jacket', 'IT:terms:helmet+jacket', 'IT:negatives:helmet', 'IT:negatives:jacket', 'IT:harvest:helmet', 'IT:harvest:jacket',
-      'IT:structure:helmet', 'IT:structure:jacket', 'IT:money:helmet', 'IT:money:jacket', 'IT:bids:helmet', 'IT:bids:jacket', 'IT:hours:helmet', 'IT:hours:jacket',
+      'IT:structure:helmet', 'IT:structure:jacket', 'IT:money:helmet', 'IT:money:jacket', 'IT:bids:helmet', 'IT:bids:jacket', 'IT:hours:helmet', 'IT:hours:jacket', 'IT:bidding:helmet', 'IT:bidding:jacket',
     ])
     const rows = await cycles()
     expect(rows.map((x) => [x.productId, x.marketplace, x.status, x.attempts, x.changeSetId])).toEqual([
@@ -187,7 +187,7 @@ describe('AB-14 — the product cycle', () => {
     expect(callsFor('jacket', 'IT')).toEqual(['state'])
     const [failed] = await cycleOf('jacket', 'IT')
     expect(failed).toMatchObject({ status: 'PARTIAL', attempts: 1, leaseUntil: null })
-    expect(statuses(failed)).toEqual({ state: 'failed', terms: 'blocked', negatives: 'blocked', harvest: 'blocked', structure: 'blocked', money: 'blocked', bids: 'blocked', hours: 'blocked' })
+    expect(statuses(failed)).toEqual({ state: 'failed', terms: 'blocked', negatives: 'blocked', harvest: 'blocked', structure: 'blocked', money: 'blocked', bids: 'blocked', hours: 'blocked', bidding: 'blocked' })
     expect(failed.steps.state).toMatchObject({ acts: true, attempt: 1 })
     expect(failed.steps.money.why).toMatch(/^waits for stops and state: stops and state acts on this product \(PROPOSE or AUTO\) and failed/)
     expect((await cycleOf('helmet', 'IT'))[0].status).toBe('DONE')
@@ -196,7 +196,7 @@ describe('AB-14 — the product cycle', () => {
     h.calls = []
     h.answer = {}
     const r = await tick(hoursAfter(T1, 1))
-    expect(callsFor('jacket', 'IT')).toEqual(['state', 'terms', 'negatives', 'harvest', 'structure', 'money', 'bids', 'hours'])
+    expect(callsFor('jacket', 'IT')).toEqual(['state', 'terms', 'negatives', 'harvest', 'structure', 'money', 'bids', 'hours', 'bidding'])
     expect(h.calls.filter((c) => c.productId !== 'jacket' || c.market !== 'IT').map((c) => c.step)).toEqual(['state', 'state'])
     expect(r.cycles.map((c) => [c.productId, c.market, c.status, c.attempt])).toEqual([['jacket', 'IT', 'DONE', 2]])
     const [again] = await cycleOf('jacket', 'IT')
@@ -209,16 +209,16 @@ describe('AB-14 — the product cycle', () => {
     h.answer.negatives = failFor('helmet', 'IT', 'the run failed for it: timeout')
     h.answer.money = failFor('jacket', 'IT', 'the money plan failed: no market')
     await tick(T1)
-    expect(statuses((await cycleOf('helmet', 'IT'))[0])).toEqual({ state: 'done', terms: 'done', negatives: 'failed', harvest: 'blocked', structure: 'done', money: 'done', bids: 'done', hours: 'done' })
+    expect(statuses((await cycleOf('helmet', 'IT'))[0])).toEqual({ state: 'done', terms: 'done', negatives: 'failed', harvest: 'blocked', structure: 'done', money: 'done', bids: 'done', hours: 'done', bidding: 'done' })
     expect((await cycleOf('helmet', 'IT'))[0].steps.harvest.why).toMatch(/^waits for negatives: it reads what negatives decides/)
-    expect(statuses((await cycleOf('jacket', 'IT'))[0])).toEqual({ state: 'done', terms: 'done', negatives: 'done', harvest: 'done', structure: 'done', money: 'failed', bids: 'done', hours: 'done' })
+    expect(statuses((await cycleOf('jacket', 'IT'))[0])).toEqual({ state: 'done', terms: 'done', negatives: 'done', harvest: 'done', structure: 'done', money: 'failed', bids: 'done', hours: 'done', bidding: 'done' })
     expect(callsFor('helmet', 'IT')).not.toContain('harvest')
     // Acting money that fails holds the bids (budget before bid).
     await clearCycles()
     await setLevel('jacket', 'IT', 'budgets', 'AUTO')
     h.calls = []
     await tick(T1)
-    expect(statuses((await cycleOf('jacket', 'IT'))[0])).toMatchObject({ money: 'failed', bids: 'blocked', hours: 'blocked' })
+    expect(statuses((await cycleOf('jacket', 'IT'))[0])).toMatchObject({ money: 'failed', bids: 'blocked', hours: 'blocked', bidding: 'blocked' })
     expect(callsFor('jacket', 'IT')).toEqual(['state', 'terms', 'negatives', 'harvest', 'structure', 'money'])
   })
 
@@ -265,7 +265,7 @@ describe('AB-14 — the product cycle', () => {
     const day = dayOf(T1)
     const [row] = await cycleOf('jacket', 'IT')
     expect(row.report).toMatchObject({ v: 1, productId: 'jacket', name: 'Jacket', market: 'IT', dataDay: day, status: 'DONE', waitsForOwner: [{ what: 'the portfolio cap', approvalId: 'appr-1' }] })
-    expect(row.report.headline).toBe(`Jacket in IT, data day ${day}: cycle done — 8 levers decided, all in shadow or off; 1 request waiting for you.`)
+    expect(row.report.headline).toBe(`Jacket in IT, data day ${day}: cycle done — 9 levers decided, all in shadow or off; 1 request waiting for you.`)
     expect(row.report.money.lines).toContain('The cap asked for: €100.00.')
     expect(row.summary).toContain('Waiting for you: the portfolio cap (approval appr-1).')
     expect(row.summary).not.toMatch(/€/)
