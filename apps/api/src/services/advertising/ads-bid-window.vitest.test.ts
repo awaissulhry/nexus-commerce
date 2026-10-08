@@ -72,6 +72,14 @@ describe('the waits', () => {
     expect(movedThisDataDay('2026-10-01', [other('2026-10-01', 12, 2)])).toBeNull()
   })
 
+  it('BB-14 — the data day steps back one day (00:20 clock rule 10-02, 06:20 settled 10-01): the 10-02 move holds 10-01', () => {
+    const at0020 = own('2026-10-02', 40, 50)
+    expect(movedThisDataDay('2026-10-01', [at0020])).toBe('already moved on data day 2026-10-02, newer than this run\'s 2026-10-01 (40 → 50¢ by automation:auto-bid) — one move per data day')
+    // Another writer's newer move holds it too; the next data day after it is free again.
+    expect(movedThisDataDay('2026-10-01', [other('2026-10-02', 40, 50)])).not.toBeNull()
+    expect(movedThisDataDay('2026-10-03', [at0020])).toBeNull()
+  })
+
   it('no quick reversal: 8 → 10¢ on one data day, 10 → 8¢ on the next waits; the same direction does not', () => {
     const raise = [own('2026-09-30', 8, 10)]
     expect(reversalWait('2026-10-01', 10, 8, raise)).toBe(`would reverse its own raise 8 → 10¢ of data day 2026-09-30 — a reversal waits ${REVERSAL_WAIT_DATA_DAYS} data days (2 to go)`)

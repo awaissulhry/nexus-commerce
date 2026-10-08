@@ -61,6 +61,7 @@ const bidBrain: AgentTool = {
     + 'keyword (targetId), a campaign, a product, or a market. Bids, targets and the why are ad-spend money: hidden from a '
     + 'person without permission to see ad spend. Nexus only; reads nothing from Amazon.',
   handler: async (args) => {
+    await (await import('../../advertising/ads-settled-facts.js')).primeSettledWindow() // BB-14 — the scheduler's window
     const out = await readBidBrain(args as BrainReadArgs)
     return 'error' in out ? { ok: false, error: out.error } : { ok: true, data: out.data }
   },

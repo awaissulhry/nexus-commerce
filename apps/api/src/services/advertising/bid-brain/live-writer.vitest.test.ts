@@ -3,10 +3,10 @@
  *
  *   writer     only `write` decisions that move a bid are sent; each through updateAdTargetWithSync with askGate as
  *              automation:bid-brain, with its evidence; a floor is forced; a refusal is counted with its reason
- *   dial       SUGGEST sends nothing and counts would-apply; a used cap defers the rest of the run
+ *   dial       SUGGEST sends nothing and counts would-apply; a used cap defers the rest of the run; a give-back after
+ *              a floor (restore) is forced and lands under SUGGEST and with the caps used up (Owner decision S2)
  *   ceiling    `live` only (live.ts); BRAIN_HOLD_DAYS stays the person's 60 days (bid-grid.service.ts)
  *   modes      what each enrollment op leads to, and from where it is refused
- *   rules      a bid action on an owned campaign is left to the brain; any other action, or a shadow ceiling, runs
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 
@@ -23,12 +23,11 @@ vi.mock('../../../db.js', () => ({
 }))
 vi.mock('../../../utils/logger.js', () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }))
 
-const { writeOwnedDecisions, isFloorWrite, writeEvidence, writeReportWords } = await import('./live-writer.js')
+const { writeOwnedDecisions, isFloorWrite, writeEvidence, writeKind, writeReportWords } = await import('./live-writer.js')
 const { makeEngineGuard } = await import('../ads-engine-guard.js')
 const { brainLiveCeiling, BRAIN_ACTOR } = await import('./live.js')
 const { BRAIN_HOLD_DAYS } = await import('./brain-holds.js')
 const { nextMode } = await import('./enrollment.js')
-const { ruleBrainSkip } = await import('./rule-skip.js')
 import type { Decision } from './decide.js'
 
 const decision = (over: Partial<Decision> = {}): Decision => ({
@@ -103,6 +102,33 @@ describe('writeOwnedDecisions', () => {
     expect(g.report().deferredByCap).toBe(1)
   })
 
+  it('a give-back after a floor is a restore: forced, and it lands under SUGGEST and with the caps used up', async () => {
+    const back = decision({ targetId: 'tb', layer: 'restore' as Decision['layer'], currentCents: 3, bidCents: 45 })
+    expect(writeKind(back)).toBe('restore')
+    expect(writeKind(decision({ layer: 'min_bid_hour', currentCents: 45, bidCents: 3 }))).toBe('floor')
+    expect(writeKind(decision())).toBe('forward')
+    // SUGGEST: the raise waits, the give-back goes.
+    const s = await writeOwnedDecisions([
+      { campaignId: 'c1', market: 'IT', decision: decision() },
+      { campaignId: 'c1', market: 'IT', decision: back },
+    ], { runId: 'r', guard: guard('suggest') })
+    expect(s).toMatchObject({ wouldApply: 1, queued: 1 })
+    expect(update).toHaveBeenCalledTimes(1)
+    expect(update.mock.calls[0][0]).toMatchObject({ adTargetId: 'tb', patch: { bidCents: 45 }, force: true })
+    update.mockClear()
+    // The run's cap used up by c1: c2's raise is deferred, c3's give-back still lands.
+    const g = guard('auto', 1)
+    const c = await writeOwnedDecisions([
+      { campaignId: 'c1', market: 'IT', decision: decision() },
+      { campaignId: 'c2', market: 'IT', decision: decision({ targetId: 't9' }) },
+      { campaignId: 'c3', market: 'IT', decision: { ...back, targetId: 'tc' } },
+    ], { runId: 'r', guard: g })
+    expect(c).toMatchObject({ queued: 2, deferred: 1 })
+    expect(c.byTarget.get('tc')).toMatchObject({ sent: 'queued' })
+    // An ordinary raise is not forced: the mutation layer's step clamp still holds it.
+    expect(update.mock.calls.find((call) => call[0].adTargetId === 't1')?.[0].force).toBeUndefined()
+  })
+
   it('writeEvidence rounds the expected ACoS and keeps the why', () => {
     expect(writeEvidence(decision({ expectedAcos: 0.212345 }), 'r')).toMatchObject({ metric: 'expectedAcos', observed: 0.2123, threshold: 0.35, note: 'goal: aim 35%; 30¢ → 36¢' })
   })
@@ -130,25 +156,5 @@ describe('the ceiling, the hold days and the enrollment modes', () => {
     expect(nextMode('shadow', 'HELD')).toEqual({ to: 'SHADOW' })
     expect(nextMode('give-back', 'LIVE')).toEqual({ to: 'SHADOW' })
     expect(nextMode('give-back', null)).toMatchObject({ refusal: expect.stringMatching(/nothing to give back/) })
-  })
-})
-
-describe('ruleBrainSkip', () => {
-  it('leaves a bid action on an owned campaign to the brain; anything else runs', async () => {
-    vi.stubEnv('NEXUS_BID_BRAIN_MODE', 'live')
-    enrollmentFindMany.mockResolvedValue([{ campaignId: 'c1' }])
-    expect(await ruleBrainSkip({ type: 'bid_down' }, { campaign: { id: 'c1' } })).toMatch(/left to the bid brain: it runs campaign c1/)
-    adGroupFindUnique.mockResolvedValue({ campaignId: 'c1' })
-    expect(await ruleBrainSkip({ type: 'placement_apply' }, { adGroup: { id: 'g1' } })).toMatch(/left to the bid brain/)
-    expect(await ruleBrainSkip({ type: 'notify' }, { campaign: { id: 'c1' } })).toBeNull()
-    expect(await ruleBrainSkip({ type: 'add_negative_exact' }, { campaign: { id: 'c1' } })).toBeNull()
-    enrollmentFindMany.mockResolvedValue([])
-    expect(await ruleBrainSkip({ type: 'bid_down' }, { campaign: { id: 'c2' } })).toBeNull()
-  })
-
-  it('reads nothing under a shadow ceiling', async () => {
-    vi.stubEnv('NEXUS_BID_BRAIN_MODE', 'shadow')
-    expect(await ruleBrainSkip({ type: 'bid_down' }, { campaign: { id: 'c1' } })).toBeNull()
-    expect(enrollmentFindMany).not.toHaveBeenCalled()
   })
 })

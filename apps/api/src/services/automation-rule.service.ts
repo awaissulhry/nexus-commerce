@@ -43,7 +43,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { notCapRefusal } from './automation-cap-predicate.js'
-import { recordAutomationRefusal } from './automation-refusals.service.js'
+import { recordAutomationRefusal, refusalRecordedToday } from './automation-refusals.service.js'
 
 // ─── Conditions DSL ───────────────────────────────────────────────
 
@@ -814,17 +814,36 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
           errorMessage: 'DAILY_CAP_EXCEEDED',
         }
       }
+      // BB-9 — a rule that does not write (PROPOSE, OBSERVE) is counted once a day: its first refusal is recorded and
+      // published as below, every later match that day is refused silently. 'GALE IT — share of voice' (cap 1) logged
+      // 425 refusals in two days, one per keyword it matched, and the count read as if the cap — not the rule — decided
+      // its reach. A writing (AUTO) rule still counts each refusal: there the count is the reach its cap takes away.
+      // The cap itself is unchanged.
+      const { resolveAutonomy: levelOf, levelActs: writes } = await import('./advertising/ads-autonomy.js')
+      const oncePerDay = !writes(levelOf(rule as { enabled: boolean; dryRun: boolean; autonomyLevel?: string | null }))
+      if (oncePerDay && await refusalRecordedToday(rule.id, 'DAILY_CAP_EXCEEDED')) {
+        return {
+          ruleId: rule.id,
+          matched: true,
+          status: 'CAP_EXCEEDED',
+          actionResults: [],
+          durationMs: Date.now() - startedAt,
+          errorMessage: 'DAILY_CAP_EXCEEDED',
+        }
+      }
       // AUTO.P0 — the durable half. The publish below reaches an in-process 50-event, 5-minute
       // ring buffer on one instance, which is why the `capped` chip has rendered 0 for every rule
       // since 2026-08-04 while rules were being refused tens of thousands of times a day. NOT an
       // execution row — ADX.1 removed that for good reason (the cap counted its own refusals and
       // ratcheted itself); this is an aggregated counter that can never feed back into the cap.
-      void recordAutomationRefusal({
+      // Awaited when counted once a day, so the next match (the next keyword of this tick) already sees it.
+      const recorded = recordAutomationRefusal({
         actorId: rule.id,
         reason: 'DAILY_CAP_EXCEEDED',
-        detail: `${rule.name} reached its daily cap of ${rule.maxExecutionsPerDay} and was refused. Further matches today are refused, not queued.`,
+        detail: `${rule.name} reached its daily cap of ${rule.maxExecutionsPerDay} and was refused. Further matches today are refused, not queued.${oncePerDay ? ' It proposes and does not write, so it is counted once a day.' : ''}`,
         ...refusalEntityOf(args.context),
       })
+      if (oncePerDay) await recorded
       // No execution row: that is the bug. Still publish to the activity feed so a
       // capped rule is visible rather than silent.
       void import('./ads-execution-events.service.js').then(m => {
@@ -970,12 +989,23 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
       }
     }
 
-    // BID BRAIN BB-6 — a bid or placement action on a campaign the brain owns is left to the brain (one writer per
-    // campaign): skipped with its reason, not failed. Inert unless the brain's ceiling is live.
-    const brainSkip = await import('./advertising/bid-brain/rule-skip.js').then((m) => m.ruleBrainSkip(action, args.context)).catch(() => null)
-    if (brainSkip) {
-      actionResults.push({ type: action.type, ok: true, output: { skipped: brainSkip } })
-      anyOk = true
+    // BID BRAIN BB-9 — on a campaign the brain owns, a bid or placement action becomes the brain's input (a BidDirective,
+    // bid-brain/rule-directives.ts) instead of a write; a dry run says what it would ask. Every other campaign runs the
+    // action as before. Inert (no read) unless the brain's ceiling is live. A failure is the action's failure, never a
+    // fall-through to a write the brain's campaign refuses.
+    try {
+      const { ruleBrainInput } = await import('./advertising/bid-brain/rule-directives.js')
+      const trigger = rule.trigger ?? (getFieldPath(args.context, 'trigger') as string | undefined) ?? null
+      const brainInput = await ruleBrainInput(action, args.context, { ruleId: rule.id, trigger, dryRun }, (a) => handler(a as Action, args.context, { dryRun: true, ruleId: rule.id, preview: true }))
+      if (brainInput) {
+        actionResults.push(brainInput)
+        if (brainInput.ok) anyOk = true
+        else anyFailed = true
+        continue
+      }
+    } catch (err) {
+      actionResults.push({ type: action.type, ok: false, error: `bid brain input: ${err instanceof Error ? err.message : String(err)}` })
+      anyFailed = true
       continue
     }
 

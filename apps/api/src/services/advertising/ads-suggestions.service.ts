@@ -112,6 +112,33 @@ export function acosThresholdOf(conditions: unknown): number | null {
   return null
 }
 
+/**
+ * Review 2026-10-08 — the bid_apply ops whose bid moved to the ÷ r̂ formula and may wait a data day: their card shows a
+ * bid a person approves, so it must be the rule's current one (ads-suggestion-decide.service.ts refuses a stale one).
+ */
+export function isTargetAcosBidCard(action: Record<string, unknown> | null | undefined): boolean {
+  return action?.type === 'bid_apply' && (action.op === 'targetAcos' || action.op === 'curBidTargetAcos')
+}
+
+/** "120¢ → 96¢", "120→96 cents", "40% → 60%": the from and to a handler's dry run states (a card's `wouldChange`). */
+export function parseWouldChange(v: unknown): { from: number; to: number } | null {
+  if (typeof v !== 'string') return null
+  const m = /(-?\d+(?:\.\d+)?)\s*(?:¢|%|cents)?\s*→\s*(-?\d+(?:\.\d+)?)/.exec(v)
+  return m ? { from: Number(m[1]), to: Number(m[2]) } : null
+}
+
+/**
+ * Expire a pending card now (the lifecycle's own state: it returns to pending when the rule asks it again). A failure is
+ * logged and leaves the card to the 3-day sweep; it never stops the run's other cards.
+ */
+async function expirePendingCard(ruleId: string, entityId: string, key: string): Promise<void> {
+  const now = new Date()
+  await prisma.adsRuleSuggestion.updateMany({
+    where: { ruleId, entityId, proposedKey: key, status: 'pending' },
+    data: { status: 'expired', decidedAt: now, decidedBy: 'system:stale' },
+  }).catch((e: unknown) => logger.warn('[ads-suggestions] could not expire a stale bid card — the sweep will', { ruleId, entityId, key, error: e instanceof Error ? e.message : String(e) }))
+}
+
 // stable change-kind key (intent, not current value) so the same proposed change dedupes.
 function proposedKey(action: Record<string, unknown>): string {
   const parts = [String(action.type ?? '')]
@@ -177,7 +204,14 @@ export async function generateSuggestionsFromExecution(args: {
       const action = args.actions[i] ?? {}
       // only surface ACTIONABLE proposals — skip failures, no-change, allowlist-skips
       const out = (res.output ?? {}) as { noChange?: boolean; skipped?: string; noActiveWindow?: boolean; wouldChange?: unknown }
-      if (res.ok === false || out.noChange || out.skipped || out.noActiveWindow) continue
+      if (res.ok === false || out.noChange || out.skipped || out.noActiveWindow) {
+        // Review 2026-10-08 — a target-ACoS bid card whose rule now asks no change (it waits a data day, the bid is
+        // already where it should be, no sale to scale by) is no one's current opinion: it expires now, not in 3 days,
+        // so a person never approves a bid the rule no longer asks (the ÷ r̂ formula moved many of them). A card the
+        // rule still asks is refreshed by the upsert below, numbers and all.
+        if (isTargetAcosBidCard(action)) await expirePendingCard(args.ruleId, entity.id, proposedKey(action))
+        continue
+      }
 
       // ADX A2.1 — a suggestion is a CHANGE an operator can approve or dismiss. Two
       // categories were passing the filter above and drowning the queue.

@@ -49,12 +49,17 @@ vi.mock('../../db.js', () => ({
     },
     amazonAdsDailyPerformance: {
       groupBy: vi.fn(async () => []),
+      findMany: vi.fn(async () => []),
       upsert: vi.fn(async (args: { create: Record<string, unknown> }) => { perfUpserts.push(args); return {} }),
     },
+    // BB-13 — the campaign ingest keeps each changed copy of a day as a vintage.
+    adsDailyVintage: { findMany: vi.fn(async () => []), createMany: vi.fn(async () => ({ count: 0 })) },
     amazonAdsReportJob: {
       findFirst: vi.fn(async () => null),
       create: vi.fn(async () => ({ id: 'job-new' })),
       findUnique: vi.fn(async () => job),
+      // BB-13 — no newer pull of the same days (supersededDays).
+      findMany: vi.fn(async () => []),
       update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => { jobUpdates.push(data); return {} }),
     },
   },
@@ -214,7 +219,7 @@ describe('the report paths', () => {
 
   it('ingest: a euro account with nothing stored still stores EUR, exactly as before', async () => {
     conns.push({ profileId: 'p-it', region: 'EU', marketplace: 'IT', isActive: true })
-    job = { id: 'j2', profileId: 'p-it', adProduct: 'SPONSORED_PRODUCTS', reportTypeId: 'spCampaigns', status: 'COMPLETED', location: 'https://reports.example.test/j2' }
+    job = { id: 'j2', startDate: new Date('2026-10-04'), endDate: new Date('2026-10-04'), createdAt: new Date('2026-10-05T01:15:00Z'), profileId: 'p-it', adProduct: 'SPONSORED_PRODUCTS', reportTypeId: 'spCampaigns', status: 'COMPLETED', location: 'https://reports.example.test/j2' }
     const body = gzipSync(Buffer.from(JSON.stringify([{ date: '2026-10-04', campaignId: 111, impressions: 10, clicks: 1, cost: 0.5 }])))
     vi.stubGlobal('fetch', vi.fn(async () => new Response(body)))
     expect(await reports.ingestCompletedJob('j2')).toEqual({ jobId: 'j2', rowsIngested: 1 })
@@ -224,7 +229,7 @@ describe('the report paths', () => {
   it('ingest: a pound account stores GBP, not EUR', async () => {
     conns.push({ profileId: 'p-uk', region: 'EU', marketplace: 'UK', isActive: true })
     profiles.push({ profileId: 'p-uk', marketplace: 'UK', currencyCode: 'GBP' })
-    job = { id: 'j3', profileId: 'p-uk', adProduct: 'SPONSORED_PRODUCTS', reportTypeId: 'spCampaigns', status: 'COMPLETED', location: 'https://reports.example.test/j3' }
+    job = { id: 'j3', startDate: new Date('2026-10-04'), endDate: new Date('2026-10-04'), createdAt: new Date('2026-10-05T01:15:00Z'), profileId: 'p-uk', adProduct: 'SPONSORED_PRODUCTS', reportTypeId: 'spCampaigns', status: 'COMPLETED', location: 'https://reports.example.test/j3' }
     const body = gzipSync(Buffer.from(JSON.stringify([{ date: '2026-10-04', campaignId: 222, cost: 1 }])))
     vi.stubGlobal('fetch', vi.fn(async () => new Response(body)))
     await reports.ingestCompletedJob('j3')

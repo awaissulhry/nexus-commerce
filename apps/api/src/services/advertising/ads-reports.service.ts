@@ -33,6 +33,7 @@ import {
   type AdsRegion,
 } from './ads-api-client.js'
 import { reportCurrencyOrSkip } from './ads-profile-facts.service.js'
+import { ageDays, pullSettles } from './ads-report-settle.js'
 
 export type AdProduct =
   | 'SPONSORED_PRODUCTS'
@@ -663,6 +664,16 @@ export async function ingestCompletedJob(jobId: string): Promise<IngestResult> {
     return { jobId, rowsIngested: 0, error: `parse: ${msg}` }
   }
 
+  // BB-13 — every night re-reads the last 8 / 15 days, so two pulls can hold the same day. The newer copy wins: rows of
+  // a day a later-asked pull of the same report has already written are not written again (a stuck job that finishes
+  // late must not put an older copy back).
+  const superseded = await supersededDays(job)
+  if (superseded.size > 0) {
+    const before = rows.length
+    rows = rows.filter((r) => !(r.date && superseded.has(String(r.date).slice(0, 10))))
+    logger.info('[ads-reports] rows of days a newer pull already wrote are skipped', { jobId, skipped: before - rows.length, days: [...superseded].sort() })
+  }
+
   logger.info('[ads-reports] ingesting', {
     jobId, rowsToProcess: rows.length,
     adProduct: job.adProduct, reportTypeId: job.reportTypeId,
@@ -695,15 +706,40 @@ export async function ingestCompletedJob(jobId: string): Promise<IngestResult> {
   return { jobId, rowsIngested: upserted }
 }
 
+/**
+ * BB-13 — the days (YYYY-MM-DD) of `job`'s range that a pull of the same report asked LATER has already ingested. Those
+ * days hold a newer copy than this job's, so this job must not overwrite them.
+ */
+async function supersededDays(job: { id: string; profileId: string; adProduct: string; reportTypeId: string; startDate: Date; endDate: Date; createdAt: Date }): Promise<Set<string>> {
+  const newer = await prisma.amazonAdsReportJob.findMany({
+    where: {
+      profileId: job.profileId, adProduct: job.adProduct, reportTypeId: job.reportTypeId,
+      createdAt: { gt: job.createdAt }, ingestedAt: { not: null }, id: { not: job.id },
+      startDate: { lte: job.endDate }, endDate: { gte: job.startDate },
+    },
+    select: { startDate: true, endDate: true },
+  })
+  const days = new Set<string>()
+  for (const n of newer) {
+    const from = Math.max(n.startDate.getTime(), job.startDate.getTime())
+    const to = Math.min(n.endDate.getTime(), job.endDate.getTime())
+    for (let t = from; t <= to; t += 86_400_000) days.add(new Date(t).toISOString().slice(0, 10))
+  }
+  return days
+}
+
 // ── Per-report-type ingest helpers ───────────────────────────────────
 
 async function ingestCampaignRows(
-  job: { id: string; profileId: string; adProduct: string },
+  job: { id: string; profileId: string; adProduct: string; createdAt: Date },
   rows: ReportRow[],
   marketplace: string,
   currencyCode: string,
 ): Promise<number> {
   let upserted = 0
+  // BB-13 — a ranged pull repeats each campaign once per day: look it up once.
+  const localCampaign = campaignResolver()
+  const vintages = await campaignVintageRecorder(job, rows, marketplace)
   for (const r of rows) {
     if (!r.date || r.campaignId == null) continue
     const entityId = typeof r.campaignId === 'string' ? r.campaignId : String(r.campaignId)
@@ -714,10 +750,7 @@ async function ingestCampaignRows(
     // account). Matching on marketplace too missed the row whenever the
     // campaign was stored under the short code (DE) but the report's profile
     // marketplace is the Amazon id (A1PA…) → localEntityId went null.
-    const local = await prisma.campaign.findFirst({
-      where: { externalCampaignId: entityId },
-      select: { id: true },
-    })
+    const local = await localCampaign(entityId)
 
     // Per-adProduct attribution mapping. Phase G: SB v3 reports return
     // unsuffixed `sales`/`purchases` (same shape as SD v3) rather than
@@ -812,6 +845,12 @@ async function ingestCampaignRows(
       entityStatus: strOrNull(r.campaignStatus),
     }
 
+    vintages.note(entityId, date, {
+      impressions: r.impressions ?? 0, clicks: r.clicks ?? 0, costMicros: toMicros(r.cost),
+      sales1dCents: sp ? centsOrNull(r.sales1d) : null, sales7dCents, sales14dCents,
+      orders1d: sp ? intOrNull(r.purchases1d) : null, orders7d, orders14d: sp ? intOrNull(r.purchases14d) : null,
+    })
+
     try {
       await prisma.amazonAdsDailyPerformance.upsert({
         where: {
@@ -848,7 +887,126 @@ async function ingestCampaignRows(
       logger.warn('[ads-reports] campaign row upsert failed', { jobId: job.id, entityId, error: msg.slice(0, 200) })
     }
   }
+  await vintages.flush()
   return upserted
+}
+
+/** BB-13 — one lookup per Amazon campaign id per ingest (a ranged pull names each campaign once per day). */
+function campaignResolver(): (externalCampaignId: string) => Promise<{ id: string } | null> {
+  const cache = new Map<string, Promise<{ id: string } | null>>()
+  return (externalCampaignId) => {
+    let hit = cache.get(externalCampaignId)
+    if (!hit) {
+      hit = prisma.campaign.findFirst({ where: { externalCampaignId }, select: { id: true } })
+      cache.set(externalCampaignId, hit)
+    }
+    return hit
+  }
+}
+
+/** The numbers of one campaign day that a vintage keeps. */
+export interface VintageNumbers {
+  impressions: number
+  clicks: number
+  costMicros: bigint
+  sales1dCents: number | null
+  sales7dCents: number | null
+  sales14dCents: number | null
+  orders1d: number | null
+  orders7d: number | null
+  orders14d: number | null
+}
+
+const VINTAGE_FIELDS = ['impressions', 'clicks', 'costMicros', 'sales1dCents', 'sales7dCents', 'sales14dCents', 'orders1d', 'orders7d', 'orders14d'] as const
+
+/** True when two copies of a campaign day hold the same numbers (a re-pull that changed nothing keeps no vintage). */
+export function sameVintage(a: VintageNumbers, b: VintageNumbers): boolean {
+  return VINTAGE_FIELDS.every((f) => String(a[f] ?? '') === String(b[f] ?? ''))
+}
+
+/**
+ * BB-13 — keeps the copies of each campaign day this pull touches (AdsDailyVintage). Read once before the rows are
+ * written: the copy the table holds now, the newest vintage of each day, and when the held copy was asked. Then, per
+ * row: the held copy is kept once as `stored` when the day has no vintage yet (so the first copy survives the
+ * re-pull that replaces it), and this pull is kept as `pull` when its numbers differ from the newest copy. Written in
+ * one batch at the end; a failure there is logged and never fails the ingest (the daily rows are what decisions read).
+ */
+async function campaignVintageRecorder(
+  job: { id: string; profileId: string; adProduct: string; createdAt: Date },
+  rows: ReportRow[],
+  marketplace: string,
+): Promise<{ note(entityId: string, date: Date, numbers: VintageNumbers): void; flush(): Promise<void> }> {
+  const ids = [...new Set(rows.filter((r) => r.date && r.campaignId != null).map((r) => String(r.campaignId)))]
+  const dates = [...new Set(rows.filter((r) => r.date && r.campaignId != null).map((r) => String(r.date).slice(0, 10)))]
+    .map((d) => new Date(`${d}T00:00:00.000Z`)).filter((d) => !Number.isNaN(d.getTime()))
+  const key = (entityId: string, date: Date) => `${entityId}|${date.toISOString().slice(0, 10)}`
+  const held = new Map<string, VintageNumbers & { reportRunId: string | null; reportedAt: Date }>()
+  const newest = new Map<string, VintageNumbers & { pulledAt: Date }>()
+  const askedAt = new Map<string, Date>()
+  let readable = true
+  try {
+    if (ids.length && dates.length) {
+      const where = { profileId: job.profileId, adProduct: job.adProduct, entityType: 'CAMPAIGN', entityId: { in: ids }, date: { in: dates } }
+      const [current, kept] = await Promise.all([
+        prisma.amazonAdsDailyPerformance.findMany({
+          where,
+          select: { entityId: true, date: true, impressions: true, clicks: true, costMicros: true, sales1dCents: true, sales7dCents: true, sales14dCents: true, orders1d: true, orders7d: true, orders14d: true, reportRunId: true, reportedAt: true },
+        }),
+        prisma.adsDailyVintage.findMany({
+          where,
+          orderBy: { pulledAt: 'desc' },
+          select: { entityId: true, date: true, pulledAt: true, impressions: true, clicks: true, costMicros: true, sales1dCents: true, sales7dCents: true, sales14dCents: true, orders1d: true, orders7d: true, orders14d: true },
+        }),
+      ])
+      for (const c of current) held.set(key(c.entityId, c.date), c)
+      for (const v of kept) if (!newest.has(key(v.entityId, v.date))) newest.set(key(v.entityId, v.date), v)
+      const runIds = [...new Set(current.map((c) => c.reportRunId).filter((id): id is string => !!id && id !== job.id))]
+      if (runIds.length) {
+        const asked = await prisma.amazonAdsReportJob.findMany({ where: { id: { in: runIds } }, select: { id: true, createdAt: true } })
+        for (const a of asked) askedAt.set(a.id, a.createdAt)
+      }
+    }
+  } catch (err) {
+    // The vintages are a record, not an input: if they cannot be read, this pull keeps none and the daily rows are
+    // still written (a vintage written without the copy it follows would mislabel the first copy).
+    readable = false
+    logger.warn('[ads-reports] vintages not read: this pull keeps none (the daily rows are written)', { jobId: job.id, error: String(err).slice(0, 300) })
+  }
+  const out: Array<Record<string, unknown>> = []
+  const base = (entityId: string, date: Date) => ({ profileId: job.profileId, marketplace, adProduct: job.adProduct, entityType: 'CAMPAIGN', entityId, date })
+  const pick = (n: VintageNumbers): VintageNumbers => ({
+    impressions: n.impressions ?? 0, clicks: n.clicks ?? 0, costMicros: n.costMicros ?? 0n,
+    sales1dCents: n.sales1dCents ?? null, sales7dCents: n.sales7dCents ?? null, sales14dCents: n.sales14dCents ?? null,
+    orders1d: n.orders1d ?? null, orders7d: n.orders7d ?? null, orders14d: n.orders14d ?? null,
+  })
+  return {
+    note(entityId, date, numbers) {
+      if (!readable) return
+      const k = key(entityId, date)
+      let previous: VintageNumbers | undefined = newest.get(k)
+      const h = held.get(k)
+      if (!previous && h && h.reportRunId !== job.id) {
+        // The day's first copy, about to be replaced: keep it once, dated when it was asked.
+        const pulledAt = (h.reportRunId && askedAt.get(h.reportRunId)) || h.reportedAt
+        if (pulledAt.getTime() < job.createdAt.getTime()) {
+          out.push({ ...base(entityId, date), ...pick(h), pulledAt, ageDays: ageDays(date, pulledAt), source: 'stored', reportRunId: h.reportRunId })
+          previous = pick(h)
+        }
+      }
+      const now = pick(numbers)
+      if (previous && sameVintage(previous, now)) return
+      out.push({ ...base(entityId, date), ...now, pulledAt: job.createdAt, ageDays: ageDays(date, job.createdAt), source: 'pull', reportRunId: job.id })
+      newest.set(k, { ...now, pulledAt: job.createdAt })
+    },
+    async flush() {
+      if (!out.length) return
+      try {
+        await prisma.adsDailyVintage.createMany({ data: out as never, skipDuplicates: true })
+      } catch (err) {
+        logger.warn('[ads-reports] vintages not kept (the daily rows were written)', { jobId: job.id, rows: out.length, error: String(err).slice(0, 300) })
+      }
+    },
+  }
 }
 
 async function ingestSearchTermRows(
@@ -938,9 +1096,23 @@ async function ingestSearchTermRows(
     })
     return 0
   }
+  // BB-13 — every night re-reads the last 8 / 15 days, and these rows are inserted, not upserted (no unique key: see
+  // above). So the older copy of each day this pull holds is removed in the same transaction, or the day would count
+  // twice. Only days with rows in this pull: an empty answer never wipes a day. Days a newer pull already wrote were
+  // dropped before this point (`supersededDays`), so what is replaced is always older.
+  const pulledDays = [...new Set(inserts.map((i) => (i.date as Date).toISOString().slice(0, 10)))]
+    .map((d) => new Date(`${d}T00:00:00.000Z`))
   // createMany is faster than per-row create for high-cardinality
   // search-term data (potentially 1K+ rows per profile per day).
-  const result = await prisma.amazonAdsSearchTerm.createMany({ data: inserts })
+  const result = await prisma.$transaction(async (tx) => {
+    const replaced = await tx.amazonAdsSearchTerm.deleteMany({
+      where: { profileId: job.profileId, adProduct: job.adProduct, date: { in: pulledDays }, reportRunId: { not: job.id } },
+    })
+    if (replaced.count > 0) {
+      logger.info('[ads-reports] search-term days re-read: the older copy is replaced', { jobId: job.id, rowsReplaced: replaced.count, days: pulledDays.length })
+    }
+    return tx.amazonAdsSearchTerm.createMany({ data: inserts })
+  })
   return result.count
 }
 
@@ -1096,7 +1268,7 @@ async function ingestTargetRows(
 }
 
 async function ingestProductAdRows(
-  job: { id: string; profileId: string; adProduct: string },
+  job: { id: string; profileId: string; adProduct: string; createdAt: Date },
   rows: ReportRow[],
   marketplace: string,
   currencyCode: string,
@@ -1155,8 +1327,9 @@ async function ingestProductAdRows(
           sales7dCents, orders7d, units7d, reportedAt: new Date(),
         },
       })
-      // Keep the AdProductAd running totals fresh too (best-effort).
-      if (local) {
+      // Keep the AdProductAd running totals fresh too (best-effort). BB-13 — not from a settling re-read of an older
+      // day (`pullSettles`): those numbers belong to a day a week back, and the totals carry the newest day.
+      if (local && !pullSettles(date, job.createdAt, job.adProduct)) {
         await prisma.adProductAd.update({
           where: { id: local.id },
           data: { impressions: r.impressions ?? 0, clicks: r.clicks ?? 0, spendCents: Math.round(Number(toMicros(r.cost)) / 10_000), salesCents: sales7dCents },
@@ -1223,6 +1396,11 @@ async function activeProfilesWithCampaigns(): Promise<Array<{ profileId: string;
   return kept
 }
 
+/** BB-13 — a cycle asked for some accounts only (the settle catch-up asks per account); all when `profileIds` is omitted. */
+function onlyProfiles<T extends { profileId: string }>(profiles: T[], profileIds: readonly string[] | undefined): T[] {
+  return profileIds ? profiles.filter((p) => profileIds.includes(p.profileId)) : profiles
+}
+
 /**
  * ACR Stage 5 — which (marketplace, adProduct) pairs can a report possibly have rows for?
  *
@@ -1285,12 +1463,12 @@ export async function deliveringAdProducts(
 }
 
 export async function runReportCreationCycle(
-  args: { startDate: string; endDate: string; adProducts?: AdProduct[] } = { startDate: '', endDate: '' },
+  args: { startDate: string; endDate: string; adProducts?: AdProduct[]; profileIds?: readonly string[] } = { startDate: '', endDate: '' },
 ): Promise<CreationCycleResult> {
   const result: CreationCycleResult = { jobsCreated: 0, jobsSkipped: 0, errors: [] }
   const adProducts = args.adProducts ?? ['SPONSORED_PRODUCTS', 'SPONSORED_DISPLAY', 'SPONSORED_BRANDS']
 
-  const profiles = await activeProfilesWithCampaigns()
+  const profiles = onlyProfiles(await activeProfilesWithCampaigns(), args.profileIds)
   const delivering = await deliveringAdProducts(profiles.map((p) => p.marketplace))
   const dormant: string[] = []
 
@@ -1343,14 +1521,14 @@ export async function runReportCreationCycle(
 // ── Phase 6: search term + placement creation cycles ─────────────────
 
 export async function runSearchTermReportCycle(
-  args: { startDate: string; endDate: string; adProducts?: AdProduct[] },
+  args: { startDate: string; endDate: string; adProducts?: AdProduct[]; profileIds?: readonly string[] },
 ): Promise<CreationCycleResult> {
   const result: CreationCycleResult = { jobsCreated: 0, jobsSkipped: 0, errors: [] }
   // SD has no search-term concept; default to SP + SB only.
   const adProducts = (args.adProducts ?? ['SPONSORED_PRODUCTS', 'SPONSORED_BRANDS'])
     .filter((p) => SEARCH_TERM_REPORT_TYPE_ID[p] != null)
 
-  const profiles = await activeProfilesWithCampaigns()
+  const profiles = onlyProfiles(await activeProfilesWithCampaigns(), args.profileIds)
   // Same dormancy gate as the campaign cycle — 183 of the 653 wasted jobs were `sbSearchTerm`.
   const delivering = await deliveringAdProducts(profiles.map((p) => p.marketplace))
   const dormant: string[] = []
@@ -1402,11 +1580,11 @@ export async function runSearchTermReportCycle(
 }
 
 export async function runPlacementReportCycle(
-  args: { startDate: string; endDate: string },
+  args: { startDate: string; endDate: string; profileIds?: readonly string[] },
 ): Promise<CreationCycleResult> {
   // Placement reports are SP-only.
   const result: CreationCycleResult = { jobsCreated: 0, jobsSkipped: 0, errors: [] }
-  const profiles = await activeProfilesWithCampaigns()
+  const profiles = onlyProfiles(await activeProfilesWithCampaigns(), args.profileIds)
 
   for (const profile of profiles) {
     const region: AdsRegion = (profile.region === 'NA' || profile.region === 'FE')
@@ -1456,10 +1634,10 @@ function enumerateDays(startDate: string, endDate: string): string[] {
 }
 
 export async function runAdvertisedProductReportCycle(
-  args: { startDate: string; endDate: string },
+  args: { startDate: string; endDate: string; profileIds?: readonly string[] },
 ): Promise<CreationCycleResult> {
   const result: CreationCycleResult = { jobsCreated: 0, jobsSkipped: 0, errors: [] }
-  const profiles = await activeProfilesWithCampaigns()
+  const profiles = onlyProfiles(await activeProfilesWithCampaigns(), args.profileIds)
   const days = enumerateDays(args.startDate, args.endDate)
   for (const profile of profiles) {
     const region: AdsRegion = (profile.region === 'NA' || profile.region === 'FE')
@@ -1495,10 +1673,10 @@ export async function runAdvertisedProductReportCycle(
 
 /** One targeting report per active profile per day in the range. */
 export async function runTargetingReportCycle(
-  args: { startDate: string; endDate: string },
+  args: { startDate: string; endDate: string; profileIds?: readonly string[] },
 ): Promise<CreationCycleResult> {
   const result: CreationCycleResult = { jobsCreated: 0, jobsSkipped: 0, errors: [] }
-  const profiles = await activeProfilesWithCampaigns()
+  const profiles = onlyProfiles(await activeProfilesWithCampaigns(), args.profileIds)
   const days = enumerateDays(args.startDate, args.endDate)
   for (const profile of profiles) {
     const region: AdsRegion = (profile.region === 'NA' || profile.region === 'FE')
@@ -1566,6 +1744,19 @@ export async function cleanupOldHourlyPerformance(
     deletedHourlyRows: result.count,
     cutoffDate: cutoff.toISOString().slice(0, 10),
   }
+}
+
+/** BB-13 — how long the copies of a campaign day are kept (AdsDailyVintage): long enough to learn how a day fills. */
+export const VINTAGE_DAYS_KEPT = 120
+
+/** BB-13 — prune vintages of days older than `daysToKeep`. Runs in the same weekly cleanup cron as search terms. */
+export async function cleanupOldVintages(
+  daysToKeep = VINTAGE_DAYS_KEPT,
+): Promise<{ deletedVintages: number; cutoffDate: string }> {
+  const cutoff = new Date(Date.now() - daysToKeep * 24 * 60 * 60 * 1000)
+  cutoff.setUTCHours(0, 0, 0, 0)
+  const result = await prisma.adsDailyVintage.deleteMany({ where: { date: { lt: cutoff } } })
+  return { deletedVintages: result.count, cutoffDate: cutoff.toISOString().slice(0, 10) }
 }
 
 // ── Phase 6: negative keyword candidates ─────────────────────────────

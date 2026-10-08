@@ -15,7 +15,7 @@
  * protocol-level (404/409/422/423); a REFUSAL is not one of them — see applySuggestion.
  */
 import prisma from '../../db.js'
-import { muteSuggestion, unmuteSuggestion, type DecideResult } from './ads-suggestions.service.js'
+import { isTargetAcosBidCard, muteSuggestion, parseWouldChange, unmuteSuggestion, type DecideResult } from './ads-suggestions.service.js'
 import { done, refused, type ServiceOutcome } from '../automation/service-outcome.js'
 
 export type { DecideResult }
@@ -164,7 +164,22 @@ export async function applySuggestion(id: string, ov: ApplyOverride = {}, decide
   // 4e — `operatorApproved`: a person approved this change, so a placement lane the rank engine holds is written, not skipped.
   // AA-W2-10 — the Suggestions page is always a person; an approval says who decided it (ApplyAs).
   const approval = as.approval ? { ...as.approval, negatives: [] as string[] } : undefined
-  const result = await handler(action as never, triggerData, { dryRun: false, ruleId: sug.ruleId, operatorApproved: as.operatorApproved ?? true, ...(approval ? { approval } : {}) })
+  // BB-9 — on a campaign the bid brain owns, the approved change is stored as the brain's input (a BidDirective from this
+  // rule), not written: the brain is the campaign's one bid writer. Every other campaign is applied as before.
+  const { ruleBrainInput } = await import('./bid-brain/rule-directives.js')
+  const meta = { dryRun: false, ruleId: sug.ruleId, operatorApproved: as.operatorApproved ?? true, ...(approval ? { approval } : {}) }
+  const trigger = typeof (triggerData as { trigger?: unknown } | null)?.trigger === 'string' ? (triggerData as { trigger: string }).trigger : null
+  const brain = await ruleBrainInput(action as never, triggerData, { ruleId: sug.ruleId, trigger, dryRun: false }, (a) => handler(a as never, triggerData, { ...meta, dryRun: true }))
+  // Review 2026-10-08 — a target-ACoS bid card shows the bid a person approves; the formula moved (÷ r̂) and a rule may
+  // now wait a data day. The rule's own dry run, as this approval would run it, must still ask that bid: else the card
+  // is refused as out of date and stays waiting (the rule's next run refreshes or expires it). Never a different bid
+  // than the one the person saw. An override (S.5) is the person's own number and is not compared.
+  if (!brain && !overridden && isTargetAcosBidCard(action)) {
+    const live = await handler(action as never, triggerData, { ...meta, dryRun: true })
+    const stale = staleBidCardSentence(sug.proposedAction, live)
+    if (stale) return { ok: false, refused: true, error: stale, result: live }
+  }
+  const result = brain ?? await handler(action as never, triggerData, meta)
   /**
    * 🔴 SG.0 — a refused apply STAYS PENDING.
    *
@@ -185,6 +200,32 @@ export async function applySuggestion(id: string, ov: ApplyOverride = {}, decide
     where: { id }, data: { status: 'applied', decidedAt: new Date(), decidedBy, appliedResult: { ...(result as object), ...(overridden && overrideRecord ? { override: overrideRecord } : {}) } as object },
   })
   return { ok: true, result, ...(approval?.negatives.length ? { negatives: approval.negatives } : {}) }
+}
+
+/** A bid card may be off by this much from the rule's current ask (the auto-bid dead zone's shape: 2¢ or 10 %, the larger). */
+const CARD_TOLERANCE_CENTS = 2
+const CARD_TOLERANCE_SHARE = 0.1
+
+/**
+ * Review 2026-10-08 — why a bid card is out of date, or null. Compared with the rule's dry run as the approval would run
+ * it: it asks no change any more (it waits, or the bid is already right), it moves the other way, or its bid is more
+ * than 2¢ / 10 % (the larger) from the card's. A card that shows no bid has nothing to compare. Pure.
+ */
+export function staleBidCardSentence(card: unknown, live: { ok: boolean; output?: unknown; error?: string }): string | null {
+  const shown = parseWouldChange((card as { wouldChange?: unknown } | null)?.wouldChange)
+  if (!shown || shown.to === shown.from) return null
+  const out = (live.output ?? {}) as { wouldChange?: unknown; skipped?: unknown; why?: unknown; noChange?: unknown }
+  const now = live.ok === false || out.skipped || out.noChange ? null : parseWouldChange(out.wouldChange)
+  const showed = `it shows ${shown.from}¢ → ${shown.to}¢`
+  const tail = 'Nothing was written; the card stays waiting, and the rule\'s next run refreshes or expires it.'
+  if (!now || now.to === now.from) {
+    const why = live.error ?? (typeof out.why === 'string' ? out.why : null) ?? (out.noChange ? 'the bid is already where the rule wants it' : typeof out.skipped === 'string' ? out.skipped : 'it asks no change')
+    return `The bid this card shows is out of date: ${showed}, and the rule now asks no change (${why}). ${tail}`
+  }
+  const sameWay = (now.to > now.from) === (shown.to > shown.from)
+  const close = Math.abs(now.to - shown.to) <= Math.max(CARD_TOLERANCE_CENTS, shown.to * CARD_TOLERANCE_SHARE)
+  if (sameWay && close) return null
+  return `The bid this card shows is out of date: ${showed}, and the rule now asks ${now.from}¢ → ${now.to}¢ — refresh. ${tail}`
 }
 
 export async function dismissSuggestion(id: string, decidedBy = 'operator'): Promise<DecideResult> {
