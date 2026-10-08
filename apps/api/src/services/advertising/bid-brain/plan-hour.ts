@@ -9,9 +9,13 @@
  *               (pickActiveEvents). Two goal-mode schedules on one campaign: the first by id (rank-defend runs both).
  *   Min bid     a `pause` (or base bid `suppress`) target: every keyword at its floor (floorBidCents, else 2¢) — MIN-BID
  *               HOUR — at most MAX_MIN_BID_ENTRIES_PER_DAY entries a UTC day, counted with rank-defend's (its anti-flap);
- *               a later Min-bid hour keeps the campaign serving, and says so
+ *               a later Min-bid hour keeps the campaign serving, and says so (no lane set: nothing zeroed). Live fix
+ *               10-08 — the Min-bid hour also sets every placement lane to 0 % (minBidLanes), as rank-defend did: a
+ *               3¢ floor at 300 % top of search still cost 12¢. Under dynamic bidding "up and down" (AUTO_FOR_SALES)
+ *               Amazon may still add up to +100 % at top of search over the floor: said in the why, the strategy kept.
  *   lanes       the placement % the hour names: a blended target sets all three lanes (an undeclared one to 0, as
- *               buildBlendedAdjustments does), a single-placement target its one lane (the others stay as they are).
+ *               buildBlendedAdjustments does), a single-placement target its one lane (the others stay as they are —
+ *               at 0 % after a Min-bid hour; the write's why says so).
  *               Each lane's CPC ceiling is the target's, held with Amazon's dynamic bidding (rank-controller.ts
  *               laneHeadroom; recipe.ts placementsFor caps the % so base × (1 + p) × dynamic stays within it)
  *   base bid    an hour that sets the ad groups' base bid ('absolute', 'deltaPct') is not carried out: the brain sets the
@@ -65,6 +69,15 @@ export const isMinBidSpec = (spec: Pick<RankTargetSpec, 'pause' | 'bidMode'>): b
 /** A target that moves the ad groups' base bid: the brain does not carry it out. */
 export const setsBaseBid = (spec: Pick<RankTargetSpec, 'bidMode'>): boolean => spec.bidMode === 'absolute' || spec.bidMode === 'deltaPct'
 
+/** Live fix 10-08 — a Min-bid hour's lanes: every managed placement at 0 %, so no placement % raises the floor again. */
+export function minBidLanes(biddingStrategy?: string | null): Lane[] {
+  return MANAGED_PLACEMENTS.map((p) => ({ lane: laneOf(p), planPct: 0, maxCpcCents: null, baseCeilingCents: null, dynamic: laneHeadroom(biddingStrategy, p) }))
+}
+
+/** Live fix 10-08 — what still lifts a Min-bid floor at Amazon after the placements are at 0 % (the why). */
+export const dynamicAtFloorWords = (biddingStrategy?: string | null): string =>
+  biddingStrategy === 'AUTO_FOR_SALES' ? ' — dynamic bidding "up and down" may still add up to +100 % at top of search over the floor (the bidding strategy is not changed here)' : ''
+
 /** What the hour gives `decide`: the lanes, a Min-bid floor, and the plan in words. Pure. */
 export interface PlanFacts {
   lanes: Lane[]
@@ -86,7 +99,8 @@ export function planFacts(hour: PlanHour, campaign: { biddingStrategy?: string |
     if (!opts.inMinBid && opts.entriesToday >= opts.maxEntries) {
       return { lanes: [], minBidHour: null, note: `${named} — kept serving: it entered Min bid ${opts.entriesToday === 1 ? 'once' : `${opts.entriesToday} times`} today (UTC), at most ${opts.maxEntries} a day`, baseBidIgnored: false }
     }
-    return { lanes: [], minBidHour: { floorCents: spec.floorBidCents ?? DEFAULT_MIN_BID_FLOOR_CENTS }, note: named, baseBidIgnored: false }
+    // Live fix 10-08 — every placement lane to 0 % with the floor (written in the same tick as the keyword floors).
+    return { lanes: minBidLanes(campaign.biddingStrategy), minBidHour: { floorCents: spec.floorBidCents ?? DEFAULT_MIN_BID_FLOOR_CENTS }, note: `${named} — every placement at 0 %${dynamicAtFloorWords(campaign.biddingStrategy)}`, baseBidIgnored: false }
   }
   const declared = spec.lanes?.length
     ? new Map(spec.lanes.map((l) => [l.placement, l.biasPct ?? 0]))

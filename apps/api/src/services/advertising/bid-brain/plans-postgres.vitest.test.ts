@@ -53,7 +53,7 @@ vi.mock('../ads-stock-risk.service.js', async (importOriginal) => ({
 }))
 
 const { runShadowOnce } = await import('./shadow.js')
-const { setEnrollment } = await import('./enrollment.js')
+const { giveBackPlan, readSnapshot, setEnrollment } = await import('./enrollment.js')
 const { BRAIN_ACTOR } = await import('./live.js')
 const { setAutonomy } = await import('../ads-automation-state.service.js')
 const { runRankDefendOnce } = await import('../../../jobs/ad-rank-defend.job.js')
@@ -150,14 +150,26 @@ describe.skipIf(!concurrentDatabaseUrl())('BB-7 — an owned campaign\'s hourly 
     await inside(() => runShadowOnce({ now: at(NOW, 4), mode: 'live', onlyOwned: true, clockNow: at(NIGHT, 15) }))
     expect(await entries()).toEqual([{ n: 1 }])
     expect((await rows<{ n: number }>('SELECT count(*)::int n FROM "OutboundSyncQueue" WHERE "workspaceId" = $1', [W]))[0].n).toBe(queued)
-    // Placements are left as they are through a Min-bid hour.
-    expect(amz.puts).toHaveLength(1)
+    // Live fix 10-08 — the same tick set every placement to 0 % (the floor is not lifted again at a placement); the rerun
+    // in the same hour writes nothing more.
+    expect(amz.puts).toHaveLength(2)
+    const zeroed = amz.puts[1].patch.placementBidding as typeof amz.placements
+    expect(zeroed.map((p) => p.placement)).toEqual(expect.arrayContaining(['PLACEMENT_TOP', 'PLACEMENT_PRODUCT_PAGE']))
+    expect(zeroed.every((p) => p.percentage === 0)).toBe(true)
+    const [zeroLog] = await rows<{ userId: string }>('SELECT "userId" FROM "AdvertisingActionLog" WHERE "entityId" = \'c-it\' AND "actionType" = \'update_placement_bidding\' ORDER BY "createdAt" DESC LIMIT 1')
+    expect(zeroLog.userId).toBe(BRAIN_ACTOR)
     ;(globalThis as { __bb7Before?: typeof before }).__bb7Before = before
   })
 
   it('the serving hour after gives each bid back in one write, not 25 % at a time from the floor', async () => {
     const before = (globalThis as { __bb7Before?: Record<string, number> }).__bb7Before!
     await inside(() => runShadowOnce({ now: at(NOW, 5), mode: 'live', onlyOwned: true, clockNow: at(NOON, 60) }))
+    // Live fix 10-08 — the plan's lanes come back with the serving hour (its blended target sets all three).
+    expect(amz.puts).toHaveLength(3)
+    const lanes = Object.fromEntries((amz.puts[2].patch.placementBidding as typeof amz.placements).map((p) => [p.placement, p.percentage]))
+    expect(lanes.PLACEMENT_TOP).toBeGreaterThan(0)
+    expect(lanes.PLACEMENT_PRODUCT_PAGE).toBeGreaterThan(0)
+    expect(lanes.PLACEMENT_REST_OF_SEARCH ?? 0).toBe(0)
     const back = await bidOf('t-it')
     // Back to the bid before the floor, or one step from it toward the goal: never 3¢ × 1.25.
     expect(back).toBeGreaterThanOrEqual(Math.floor(before['t-it'] * 0.75))
@@ -317,5 +329,25 @@ describe.skipIf(!concurrentDatabaseUrl())('BB-7 — an owned campaign\'s hourly 
     expect(light.evidence.size).toBe(0)
     expect(light.light).toBe(true)
     expect(await rows('SELECT count(*)::int n FROM "BidBrainDecision" WHERE layer = \'no_goal\'')).toEqual([{ n: 0 }])
+  })
+
+  it('live fix 10-08 — a Min-bid tick zeroes the placements with the floors; a give-back then puts the placements of LIVE time back', async () => {
+    await database.pool.query('UPDATE "AdSchedule" SET enabled = true WHERE "campaignId" = \'c-it\'')
+    // The placements the campaign had when it went LIVE, kept in its snapshot.
+    await database.pool.query('UPDATE "BidBrainEnrollment" SET snapshot = jsonb_set(snapshot::jsonb, \'{placements}\', $1::jsonb) WHERE "campaignId" = \'c-it\'', [JSON.stringify([{ placement: 'PLACEMENT_TOP', percentage: 150 }, { placement: 'PLACEMENT_PRODUCT_PAGE', percentage: 50 }])])
+    // The placements live now, as the serving hour before left them.
+    amz.placements = [{ placement: 'PLACEMENT_TOP', percentage: 120 }, { placement: 'PLACEMENT_PRODUCT_PAGE', percentage: 40 }]
+    await database.pool.query('UPDATE "Campaign" SET "dynamicBidding" = $1::jsonb WHERE id = \'c-it\'', [JSON.stringify({ strategy: 'LEGACY_FOR_SALES', placementBidding: amz.placements })])
+    const night = new Date(NIGHT.getTime() + 3 * DAY)
+    const puts = amz.puts.length
+    await inside(() => runShadowOnce({ now: at(NOW, 40), mode: 'live', onlyOwned: true, clockNow: night }))
+    expect(await bidOf('t-it')).toBe(3)
+    expect(amz.puts.length).toBeGreaterThan(puts)
+    expect((amz.puts.at(-1)!.patch.placementBidding as typeof amz.placements).every((p) => p.percentage === 0)).toBe(true)
+    const [row] = await rows<{ snapshot: unknown }>('SELECT snapshot FROM "BidBrainEnrollment" WHERE "campaignId" = \'c-it\'')
+    const plan = await inside(() => giveBackPlan('c-it', readSnapshot(row.snapshot)!))
+    expect(plan.placements?.to).toEqual([{ placement: 'PLACEMENT_TOP', percentage: 150 }, { placement: 'PLACEMENT_PRODUCT_PAGE', percentage: 50 }])
+    expect(plan.placements?.from.every((p) => p.percentage === 0)).toBe(true)
+    expect(plan.raises).toBeGreaterThan(0)
   })
 })

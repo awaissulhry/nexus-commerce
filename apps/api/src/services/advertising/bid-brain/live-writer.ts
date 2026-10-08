@@ -30,7 +30,7 @@ import { buildBlendedAdjustments, MANAGED_PLACEMENTS } from '../ads-placement-ma
 import { logger } from '../../../utils/logger.js'
 import type { Decision } from './decide.js'
 import { BRAIN_ACTOR } from './live.js'
-import { placementOf } from './plan-hour.js'
+import { laneOf, placementOf } from './plan-hour.js'
 import { laneWords, placementsFor, type Lane } from './recipe.js'
 
 export interface BrainWrite {
@@ -175,8 +175,11 @@ export interface PlacementWrite {
   raiseCap?: string | null
 }
 
-/** What one campaign's placements become, and which lanes change; null when nothing changes. Pure. */
-export function placementPlan(w: Pick<PlacementWrite, 'lanes' | 'current' | 'maxBidCents' | 'raiseCap'>): { adjustments: Array<{ placement: string; percentage: number }>; changes: Array<{ lane: string; from: number; to: number; held: string | null }> } | null {
+/**
+ * What one campaign's placements become, and which lanes change; null when nothing changes. Pure. Live fix 10-08 — `kept`:
+ * a single-placement hour sets its own lane only; the other lanes as they stay (at 0 % after a Min-bid hour), for the why.
+ */
+export function placementPlan(w: Pick<PlacementWrite, 'lanes' | 'current' | 'maxBidCents' | 'raiseCap'>): { adjustments: Array<{ placement: string; percentage: number }>; changes: Array<{ lane: string; from: number; to: number; held: string | null }>; kept: Array<{ lane: string; pct: number }> } | null {
   if (!w.lanes.length) return null
   // The CR cap of placementsFor waits for the placement report (crRatio null): only the CPC ceilings hold here.
   const decided = placementsFor(w.maxBidCents, w.lanes, { aim: 1, hi: 1 })
@@ -198,7 +201,8 @@ export function placementPlan(w: Pick<PlacementWrite, 'lanes' | 'current' | 'max
     const d = decided.find((x) => placementOf(x.lane) === p)
     return [{ lane: laneWords(d?.lane ?? 'REST_OF_SEARCH'), from, to, held: d?.held ?? null }]
   })
-  return changes.length ? { adjustments, changes } : null
+  const kept = blended ? [] : MANAGED_PLACEMENTS.filter((p) => !requested.some((r) => r.placement === p)).map((p) => ({ lane: laneWords(laneOf(p)), pct: valueOf(adjustments, p) }))
+  return changes.length ? { adjustments, changes, kept } : null
 }
 
 export interface PlacementReport {
@@ -227,6 +231,7 @@ export async function writeOwnedPlacements(list: readonly PlacementWrite[], ctx:
       continue
     }
     const words = plan.changes.map((c) => `${c.lane} ${c.from}% → ${c.to}%${c.held ? ` (held by ${c.held})` : ''}`).join(', ')
+      + (plan.kept.length ? `; the hour sets one placement: ${plan.kept.map((k) => `${k.lane} stays at ${k.pct}%`).join(', ')}` : '')
     try {
       const r = await updatePlacementBidding({
         campaignId: w.campaignId,
