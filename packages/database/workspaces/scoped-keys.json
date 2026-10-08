@@ -6316,6 +6316,11 @@
     },
     "relations": []
   },
+  "AdsBrainStateDecision": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
   "AdWriteRefusal": {
     "scalar": {},
     "compound": {},

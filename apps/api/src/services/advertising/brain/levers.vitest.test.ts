@@ -13,7 +13,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  BRAIN_LEVERS, BRAIN_SETTINGS, DEFAULT_LEVEL, levelRefusal, lockRef, lockValueRefusal, ownsLever, readSnapshots, settingDefaults, settingRefusal,
+  BRAIN_LEVERS, BRAIN_SETTINGS, DEFAULT_LEVEL, isCalendarDay, levelRefusal, lockRef, lockValueRefusal, ownsLever, readSnapshots, settingDefaults, settingRefusal,
 } from './levers.js'
 
 describe('levels', () => {
@@ -27,15 +27,15 @@ describe('levels', () => {
     expect(levelRefusal('bids', 'OBSERVE')).toBeNull()
     expect(levelRefusal('bids', 'PROPOSE')).toMatch(/no proposal path/)
     expect(levelRefusal('bids', 'OFF')).toMatch(/decides every allowlisted campaign in shadow/)
-    // AB-8 — the money levers have their writer: every level.
-    for (const lever of ['budgets', 'portfolioCap'] as const) {
+    // AB-8 — the money levers have their writer; AB-12 — the state lever too: every level.
+    for (const lever of ['budgets', 'portfolioCap', 'state'] as const) {
       for (const level of ['OFF', 'OBSERVE', 'PROPOSE', 'AUTO'] as const) expect(levelRefusal(lever, level), `${lever} ${level}`).toBeNull()
     }
     // AB-13 — the hours lever paints and asks (D3 = B+): PROPOSE yes, AUTO never.
     expect(levelRefusal('hours', 'PROPOSE')).toBeNull()
     expect(levelRefusal('hours', 'OFF')).toBeNull()
     expect(levelRefusal('hours', 'AUTO')).toMatch(/takes OFF or OBSERVE or PROPOSE today, not AUTO: .*never AUTO/)
-    for (const lever of BRAIN_LEVERS.filter((l) => l !== 'bids' && l !== 'budgets' && l !== 'portfolioCap' && l !== 'hours')) {
+    for (const lever of BRAIN_LEVERS.filter((l) => l !== 'bids' && l !== 'budgets' && l !== 'portfolioCap' && l !== 'state' && l !== 'hours')) {
       expect(levelRefusal(lever, 'OFF')).toBeNull()
       expect(levelRefusal(lever, 'OBSERVE')).toBeNull()
       expect(levelRefusal(lever, 'AUTO')).toMatch(/takes OFF or OBSERVE today, not AUTO: .*AB-\d+/)
@@ -70,6 +70,20 @@ describe('settings', () => {
     expect(settingRefusal('mystery', 1, 'PRODUCT')).toMatch(/not a setting/)
     expect(settingRefusal('hourResearchWeeks', 9, 'PRODUCT')).toMatch(/from 2 to 8, not 9/)
     expect(settingRefusal('hourPlanAsLimits', true, 'CAMPAIGN')).toMatch(/set per product, not per campaign/)
+  })
+
+  it('AB-12 — the state lever\'s settings: 3 days at the least for a pause, weeks before an archive proposal, the Owner\'s long stop as a day', () => {
+    expect(settingDefaults()).toMatchObject({ pauseMinDays: 3, archiveDeadWeeks: 4, longStopUntil: null })
+    expect(settingRefusal('pauseMinDays', 7, 'CAMPAIGN')).toBeNull()
+    expect(settingRefusal('pauseMinDays', 2, 'PRODUCT')).toMatch(/from 3 to 60, not 2/)
+    expect(settingRefusal('archiveDeadWeeks', 1, 'PRODUCT')).toMatch(/from 2 to 52/)
+    expect(settingRefusal('longStopUntil', '2026-11-02', 'CAMPAIGN')).toBeNull()
+    expect(settingRefusal('longStopUntil', null, 'PRODUCT')).toBeNull()
+    for (const bad of ['2026-02-30', '02/11/2026', '2026-11-2', 20261102, '1999-01-01']) {
+      expect(settingRefusal('longStopUntil', bad, 'PRODUCT'), String(bad)).toMatch(/takes a day as YYYY-MM-DD \(2020 to 2099\) or empty/)
+    }
+    expect(isCalendarDay('2028-02-29')).toBe(true)
+    expect(isCalendarDay('2026-02-29')).toBe(false)
   })
 })
 

@@ -34,7 +34,8 @@ import { packEvidence, type AdWriteEvidence } from './ads-evidence.js'
 import { SPONSORED_BRANDS, SPONSORED_DISPLAY, SPONSORED_PRODUCTS, adProductOf, adWriteRefusal, type AdProductSource, type AdWrite } from '@nexus/shared/ads-ad-product'
 import { bidCostType, marketLimitsOf, marketLimitsRefusal } from '@nexus/shared/ads-market-limits'
 import { normalizeMarketplaceCode } from '../../utils/marketplace-code.js'
-import { checkAdsWriteGate, entityBoundsDenial, logGateDeny, ownLimitsSentence, sentPastSentence, type EntityBoundsCampaign, type OwnLimit, type OwnLimitKind } from './ads-write-gate.js'
+import { BRAIN_STATE_ACTOR, checkAdsWriteGate, entityBoundsDenial, logGateDeny, ownLimitsSentence, sentPastSentence, type EntityBoundsCampaign, type OwnLimit, type OwnLimitKind } from './ads-write-gate.js'
+import { brainLiveCeiling } from './bid-brain/live.js'
 import { queuedWriteLever } from './ads-authority-pins.js'
 import { NO_LIMITS, bidLimitsFor, limitSources, strategyWords, stepClamp, type StrategyBidLimits, type WriteSources } from './ads-strategy/bids.js'
 
@@ -103,6 +104,28 @@ export function isSchedulingEngineActor(actor: string): boolean {
  */
 export function isAutomatedPause(actor: string, status: string | null | undefined): boolean {
   return status === 'PAUSED' && actor.startsWith('automation:')
+}
+
+/**
+ * ONE BRAIN AB-12 — the one exception to 1f (Owner D4 = A, 2026-10-08: "the brain may pause a campaign alone for a
+ * multi-day stop"): the brain's state writer (BRAIN_STATE_ACTOR) pausing a CAMPAIGN, asking the write gate before anything
+ * is written (`askGate`), under the live ceiling. The gate then lets it through only where a product's brain owns the
+ * campaign's state lever (ads-write-gate.ts brainStateNotOwnedRefusal), at enqueue and again at dispatch. A short stop
+ * stays the stop recipe's low bids; every other automation is still refused by 1f.
+ */
+export function isBrainStatePause(args: { actor: string; askGate?: boolean }): boolean {
+  return args.actor === BRAIN_STATE_ACTOR && args.askGate === true && brainLiveCeiling()
+}
+
+/**
+ * AB-12 — what the brain's state writer may ask of a campaign: its status only, PAUSED or ENABLED. An archive is only ever
+ * its proposal (a person approves archive-ads), and it writes no other field. Null: allowed (or not the brain's writer).
+ */
+export function brainStatePatchRefusal(actor: string, patch: Record<string, unknown>): string | null {
+  if (actor !== BRAIN_STATE_ACTOR) return null
+  const fields = Object.entries(patch).filter(([, v]) => v !== undefined).map(([k]) => k)
+  if (fields.some((f) => f !== 'status')) return 'brain_state_writes_status_only'
+  return patch.status === 'PAUSED' || patch.status === 'ENABLED' ? null : 'brain_state_never_archives'
 }
 
 /**
@@ -1288,8 +1311,15 @@ export async function updateCampaignWithSync(args: {
       error: 'engine_may_not_set_campaign_status',
     }
   }
-  // 1f — see isAutomatedPause. Same placement and reasoning as SYNC.1: before the diff, and loud.
-  if (isAutomatedPause(args.actor, args.patch.status)) {
+  // AB-12 — the brain's state writer asks for the status only, PAUSED or ENABLED (brainStatePatchRefusal).
+  const brainPatch = brainStatePatchRefusal(args.actor, args.patch as Record<string, unknown>)
+  if (brainPatch) {
+    logger.warn('[ads-mutation] refused a brain state write that is not a pause or a resume', { campaignId: args.campaignId, actor: args.actor, patch: Object.keys(args.patch) })
+    return { ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: brainPatch }
+  }
+  // 1f — see isAutomatedPause. Same placement and reasoning as SYNC.1: before the diff, and loud. AB-12 — except the brain's
+  // own pause for a stop of several days (isBrainStatePause), which the gate is asked about below before anything is written.
+  if (isAutomatedPause(args.actor, args.patch.status) && !isBrainStatePause(args)) {
     logger.warn('[ads-mutation] refused automated campaign pause', {
       campaignId: args.campaignId, actor: args.actor, from: existing.status, reason: args.reason ?? null,
     })

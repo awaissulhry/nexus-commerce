@@ -6887,6 +6887,10 @@
       "fields": []
     },
     {
+      "name": "AdsBrainStateDecision",
+      "fields": []
+    },
+    {
       "name": "AdWriteRefusal",
       "fields": []
     },

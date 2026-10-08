@@ -468,6 +468,7 @@
     "AmazonAdsHourlyArrival",
     "AdsBrainTerm",
     "AdsBrainTermLead",
+    "AdsBrainStateDecision",
     "AdWriteRefusal",
     "AutomationRefusalDaily",
     "KeywordBidProposal",
