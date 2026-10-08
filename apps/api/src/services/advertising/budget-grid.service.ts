@@ -848,6 +848,7 @@ export interface BudgetStrip {
 export async function getBudgetRulesStrip(): Promise<BudgetStrip> {
   const { TRIGGER_WINDOW } = await import('@nexus/shared/ads-rule-window')
   const { settledWhere } = await import('./ads-settled-window.js')
+  await (await import('./ads-settled-facts.js')).primeSettledWindow() // BB-14 — the window the evaluator reads
   const spec = TRIGGER_WINDOW.CAMPAIGN_PERFORMANCE_BUDGET
   const windowDays = spec && spec.kind === 'window' ? spec.days : 7
   const settled = settledWhere(windowDays) // 6c — the same settled window the evaluator reads

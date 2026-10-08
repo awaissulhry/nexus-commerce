@@ -60,6 +60,7 @@ import { getAutomationState } from '../../advertising/ads-automation-state.servi
 import { getEngineLevers } from '../../advertising/ads-control-room.service.js'
 import { pipelineHealth } from '../../advertising/ads-pipeline-health.service.js'
 import { dataVintageByMarket, type MarketVintage } from '../../advertising/ads-report-settle.service.js'
+import { primeSettledWindow } from '../../advertising/ads-settled-facts.js'
 import { adsProfileFor } from '../../advertising/ads-profile-resolver.js'
 import { getBidGrid, type BidTargetRow } from '../../advertising/bid-grid.service.js'
 import { previewHarvest, type HarvestCandidate } from '../../advertising/ads-harvest.service.js'
@@ -552,6 +553,7 @@ const adsOverview: AgentTool = {
     + 'campaigns without a rule, rates above break-even), pacing against the monthly ceilings, and whether eBay ad '
     + 'writes are live or sandbox.',
   handler: async (args) => {
+    await primeSettledWindow() // BB-14 — the settled window the scheduler's decisions read
     const a = args as { channel: AdChannel; market?: string; days: number }
     return { ok: true, data: a.channel === 'ebay' ? await ebayOverview(a) : await amazonOverview(a) }
   },
@@ -694,6 +696,7 @@ const adCampaigns: AgentTool = {
     + 'sales and ACoS over the window; writes says whether eBay ad writes are live or sandbox.'
     + MONEY_WORDS + PAGING,
   handler: (args) => listTool('ad-campaigns', async () => {
+    await primeSettledWindow() // BB-14 — the settled window the scheduler's decisions read
     const a = args as unknown as CampaignListArgs
     const scope = scopeOf('ad-campaigns', args)
     return { ok: true, data: a.channel === 'ebay' ? await ebayCampaigns(a, scope) : await amazonCampaigns(a, scope) }
