@@ -12,7 +12,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  BRAIN_LEVERS, BRAIN_SETTINGS, DEFAULT_LEVEL, levelRefusal, lockRef, lockValueRefusal, ownsLever, readSnapshots, settingDefaults, settingRefusal,
+  BRAIN_LEVERS, BRAIN_SETTINGS, DEFAULT_LEVEL, isCalendarDay, levelRefusal, lockRef, lockValueRefusal, ownsLever, readSnapshots, settingDefaults, settingRefusal,
 } from './levers.js'
 
 describe('levels', () => {
@@ -26,7 +26,9 @@ describe('levels', () => {
     expect(levelRefusal('bids', 'OBSERVE')).toBeNull()
     expect(levelRefusal('bids', 'PROPOSE')).toMatch(/no proposal path/)
     expect(levelRefusal('bids', 'OFF')).toMatch(/decides every allowlisted campaign in shadow/)
-    for (const lever of BRAIN_LEVERS.filter((l) => l !== 'bids')) {
+    // AB-12 — the state lever takes every level (OBSERVE logs, PROPOSE asks, AUTO pauses and resumes alone).
+    for (const level of ['OFF', 'OBSERVE', 'PROPOSE', 'AUTO'] as const) expect(levelRefusal('state', level), level).toBeNull()
+    for (const lever of BRAIN_LEVERS.filter((l) => l !== 'bids' && l !== 'state')) {
       expect(levelRefusal(lever, 'OFF')).toBeNull()
       expect(levelRefusal(lever, 'OBSERVE')).toBeNull()
       expect(levelRefusal(lever, 'AUTO')).toMatch(/takes OFF or OBSERVE today, not AUTO: .*AB-\d+/)
@@ -57,6 +59,20 @@ describe('settings', () => {
     expect(settingRefusal('strategySwitchMode', 'SOMETIMES', 'PRODUCT')).toMatch(/PROPOSE_THEN_AUTO or ALWAYS_PROPOSE/)
     expect(settingRefusal('paceTargetPct', 80, 'CAMPAIGN')).toMatch(/set per product, not per campaign/)
     expect(settingRefusal('mystery', 1, 'PRODUCT')).toMatch(/not a setting/)
+  })
+
+  it('AB-12 — the state lever\'s settings: 3 days at the least for a pause, weeks before an archive proposal, the Owner\'s long stop as a day', () => {
+    expect(settingDefaults()).toMatchObject({ pauseMinDays: 3, archiveDeadWeeks: 4, longStopUntil: null })
+    expect(settingRefusal('pauseMinDays', 7, 'CAMPAIGN')).toBeNull()
+    expect(settingRefusal('pauseMinDays', 2, 'PRODUCT')).toMatch(/from 3 to 60, not 2/)
+    expect(settingRefusal('archiveDeadWeeks', 1, 'PRODUCT')).toMatch(/from 2 to 52/)
+    expect(settingRefusal('longStopUntil', '2026-11-02', 'CAMPAIGN')).toBeNull()
+    expect(settingRefusal('longStopUntil', null, 'PRODUCT')).toBeNull()
+    for (const bad of ['2026-02-30', '02/11/2026', '2026-11-2', 20261102, '1999-01-01']) {
+      expect(settingRefusal('longStopUntil', bad, 'PRODUCT'), String(bad)).toMatch(/takes a day as YYYY-MM-DD \(2020 to 2099\) or empty/)
+    }
+    expect(isCalendarDay('2028-02-29')).toBe(true)
+    expect(isCalendarDay('2026-02-29')).toBe(false)
   })
 })
 

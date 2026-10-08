@@ -854,6 +854,8 @@ export async function startScheduler(): Promise<void> {
     const { startBidBrainCron } = await import('../jobs/ads-bid-brain.job.js');
     // ONE BRAIN AB-4 — the daily read of Amazon's own rules on brain campaigns (only while the brain is live or a product is enrolled).
     const { startNativeRulesCron } = await import('../jobs/ads-native-rules.job.js');
+    // ONE BRAIN AB-12 — the state lever: pauses for multi-day stops, resumes, archive proposals (only products whose state lever is OBSERVE or higher).
+    const { startBrainStateCron } = await import('../jobs/ads-brain-state.job.js');
     // RS.5 — rank-defend loop (self-gated on NEXUS_ENABLE_RANK_DEFEND=1).
     const { startAdsRetentionCron } = await import('../jobs/ads-retention.job.js');
     const { startRankDefendCron } = await import('../jobs/ad-rank-defend.job.js');
@@ -900,6 +902,7 @@ export async function startScheduler(): Promise<void> {
     startAutopilotCron();
     startBidBrainCron();
     startNativeRulesCron();
+    startBrainStateCron();
     startRankDefendCron();
     // HX.11 — prunes the ads history tables. OFF unless NEXUS_ENABLE_ADS_RETENTION=1, because it deletes.
     startAdsRetentionCron();

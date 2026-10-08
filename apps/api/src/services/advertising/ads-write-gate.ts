@@ -72,6 +72,9 @@ export type GateDeniedAt =
   | 'brain_owned'
   // ONE BRAIN AB-5 — the Owner locked the whole lever at his own value: every automatic writer is refused, the brain too.
   | 'owner_locked'
+  // ONE BRAIN AB-12 — the brain's own pause or resume (BRAIN_STATE_ACTOR) on a campaign whose state lever no product's
+  // brain owns now (OBSERVE, OFF, excluded, shared, nothing enrolled), or under a shadow ceiling: refused.
+  | 'brain_lever_not_owned'
 
 /**
  * 3A (Owner decided 2026-10-06) — the limits that are HIS: his campaign's bid and budget bounds and his bid policies
@@ -355,6 +358,12 @@ async function brainOwnedRefusal(campaignId: string, actor: string | null, what 
  *                of the gate, so the write is tried again later (productBrainRefusal). A person never needs the read.
  */
 export const PRODUCT_BRAIN_ACTOR = 'automation:ads-brain'
+/**
+ * ONE BRAIN AB-12 — the brain's state writer (D4 = A: it pauses alone for a stop of several days and resumes when the stop
+ * ends; brain/state-run.ts). A writer of PRODUCT_BRAIN_ACTOR's family, so an owned state lever passes it as the brain; on
+ * top of that it lands only where a product's brain OWNS the campaign's state lever (brainStateNotOwnedRefusal).
+ */
+export const BRAIN_STATE_ACTOR = `${PRODUCT_BRAIN_ACTOR}-state` as const
 const BID_BRAIN_LEVERS: ReadonlySet<BrainLever> = new Set<BrainLever>(['bids', 'adGroupBids', 'placements', 'biddingStrategy'])
 const BRAIN_OBEYS_LOCKS_ITSELF: ReadonlySet<BrainLever> = new Set<BrainLever>(['placements', 'biddingStrategy'])
 
@@ -451,6 +460,28 @@ async function productBrainRefusal(target: { campaignId: string; name?: string |
     if (refusal) return refusal
   }
   return null
+}
+
+/**
+ * ONE BRAIN AB-12 — the brain's own pause or resume (BRAIN_STATE_ACTOR) lands only where a product's brain OWNS the
+ * campaign's state lever (enrolled, the lever at PROPOSE or AUTO there, not excluded, not locked — brain/lever-owners.ts),
+ * and only under the live ceiling, where the gate judges levers at all. Anywhere else — nothing held (the lever at OBSERVE
+ * or OFF, the campaign excluded or shared, nothing enrolled) or a shadow ceiling — it is refused, so an Owner's choice made
+ * while the write waited in the queue still wins at dispatch. A lock is refused before this, in the Owner's words
+ * (productBrainRefusal). Null: it may land. A holder that cannot be read throws, as every failed read in the gate does.
+ */
+export async function brainStateNotOwnedRefusal(target: { campaignId: string; name?: string | null }): Promise<Extract<GateDecision, { allowed: false }> | null> {
+  const where = `campaign ${target.name ? `"${target.name}" (${target.campaignId})` : target.campaignId}`
+  if (!brainLiveCeiling()) {
+    return { allowed: false, deniedAt: 'brain_lever_not_owned', reason: `${BRAIN_STATE_ACTOR} changes the state of ${where} only while the brain's server switch is live (NEXUS_BID_BRAIN_MODE=live): it is not, so the brain only watches. Nothing was changed.` }
+  }
+  const hold = (await campaignLeverOwners([target.campaignId])).get(target.campaignId)?.levers.state
+  if (hold?.kind === 'owned') return null
+  return {
+    allowed: false,
+    deniedAt: 'brain_lever_not_owned',
+    reason: `no product's brain owns the state (pause, enable, archive) of ${where}${hold ? ` (${hold.why})` : ''}: the brain pauses and resumes only a campaign whose state lever it owns — enrolled, the lever at PROPOSE or AUTO, not excluded, not locked. Nothing was changed.`,
+  }
 }
 
 export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision> {
@@ -716,6 +747,12 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
     // the bounds. Nothing enrolled in the business: one remembered query, no refusal.
     if (ctx.actor !== undefined && brainLiveCeiling()) {
       const refusal = await productBrainRefusal({ campaignId: ctx.campaignId, name: campaign.name }, brainLeversOfWrite(levers, fieldList), ctx)
+      if (refusal) return refusal
+    }
+    // ONE BRAIN AB-12 — the brain's own pause and resume: only where a product's brain owns the campaign's state lever, under
+    // the live ceiling (brainStateNotOwnedRefusal). Every other writer is judged exactly as before.
+    if (ctx.actor === BRAIN_STATE_ACTOR) {
+      const refusal = await brainStateNotOwnedRefusal({ campaignId: ctx.campaignId, name: campaign.name })
       if (refusal) return refusal
     }
 

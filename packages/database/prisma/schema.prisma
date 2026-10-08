@@ -20166,6 +20166,65 @@ model AdsBrainBudgetDecision {
   @@index([workspaceId])
 }
 
+/// ONE BRAIN AB-12 — what one product's brain decided about the state of one of its campaigns (one-brain DESIGN.md §2.4,
+/// §2.10, §5, D4 = A; services/advertising/brain/state*.ts): pause for a stop expected to last 3 days or more, resume
+/// when its cause ends, propose to archive a campaign dead for weeks — or keep it as it is, each with its "why". The
+/// state lever's level decides what happens: OBSERVE logs only (SHADOW), PROPOSE asks a person (an approval request),
+/// AUTO writes the status through the normal path (queue → write gate → gateway). An archive is only ever a proposal.
+/// A row is stored when a campaign's decision differs from its last one (`decisionHash`), plus the UTC day's first for a
+/// campaign the brain paused or has a request waiting for (the brain's memory of its own pause rides on the newest row);
+/// rows older than 30 days are deleted (Neon cost). No foreign key: the history outlives a removed campaign or product.
+model AdsBrainStateDecision {
+  // Business ownership comes from verified database context.
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String @id @default(cuid())
+
+  /// One run of the state brain (every campaign of a run shares it).
+  runId       String
+  /// SHADOW (decided and logged) | PROPOSE (asked a person) | LIVE (written as the brain).
+  mode        String
+  /// change (the decision differs from the campaign's last one) | snapshot (the UTC day's first, for a pause or a request)
+  kind        String
+  /// Product.id of the family root.
+  productId   String
+  /// Short market code ('IT', 'DE').
+  marketplace String
+  /// Campaign.id.
+  campaignId  String
+  /// The state lever's effective level on the campaign when decided (OBSERVE, PROPOSE, AUTO, LOCKED, EXCLUDED, OFF).
+  level       String
+  /// pause | resume | archive | keep | hold | skip
+  action      String
+  /// What happened: shadow | queued | asked | waiting | capped | refused | held | none
+  outcome     String
+  /// The stop's cause: stock | monthly_cap | playbook | declared | dead | none
+  cause       String
+  /// The campaign's status when decided.
+  status      String
+  /// When the stop is expected to end (null: open-ended or no stop), and the hours from the decision to it.
+  expectedEndAt DateTime?
+  horizonHours  Int?
+  /// The approval request a PROPOSE (or an archive) asked for, when one was asked or is waiting.
+  approvalId  String?
+
+  /// The fingerprint of the decision (state.ts stateDecisionHash).
+  decisionHash String
+  /// The whole decision (state.ts StateDecision): the causes with their horizons, the hold, the caps, the brain's memory of
+  /// its own pause (statusBefore, the stop recipe's memory at the pause) — each with its why.
+  decision     Json
+  /// One line.
+  why          String @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([campaignId, createdAt(sort: Desc)])
+  @@index([productId, marketplace, createdAt(sort: Desc)])
+  @@index([marketplace, createdAt])
+  @@index([runId])
+  @@index([createdAt])
+  @@index([workspaceId])
+}
+
 /// AUTO.A7 / substrate S5 — the durable record of a write-gate refusal.
 ///
 /// Until now `logGateDeny` wrote to the application log and NOWHERE ELSE, so no surface could
