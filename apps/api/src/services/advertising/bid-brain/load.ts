@@ -29,6 +29,8 @@ import { breakevenByProduct } from '../ads-target-acos.service.js'
 import { DEFAULT_STOP_BID_CENTS } from '../ads-strategy/fields.js'
 import { PHASE_FLOOR_KIND } from '../ads-playbook/phase.js'
 import { STOP_FLOOR_KIND } from '../ads-playbook/held.js'
+import { loadPlanHours } from './plans.js'
+import { loadServingBids } from './serving.js'
 
 /** The markets the shadow decides for (Owner, 2026-10-07: shadow on IT and DE first). */
 export const SHADOW_MARKETS = ['IT', 'DE'] as const
@@ -36,6 +38,15 @@ export const SHADOW_MARKETS = ['IT', 'DE'] as const
 export const STALE_DATA_HOURS = 48
 
 const isoDay = (d: Date) => d.toISOString().slice(0, 10)
+
+/** Campaign.dynamicBidding.placementBidding as stored, the valid entries only. */
+export function placementsOf(dynamicBidding: unknown): Array<{ placement: string; percentage: number }> {
+  const list = ((dynamicBidding ?? {}) as { placementBidding?: unknown }).placementBidding
+  return (Array.isArray(list) ? list : [])
+    .filter((p): p is { placement: string; percentage: unknown } => typeof (p as { placement?: unknown })?.placement === 'string')
+    .map((p) => ({ placement: p.placement, percentage: Number(p.percentage) }))
+    .filter((p) => Number.isFinite(p.percentage))
+}
 
 /** One market's campaigns, ad groups, keywords, evidence and listing prices. */
 export async function loadMarket(market: string, opts: { now?: Date } = {}): Promise<MarketRows & { newestReportAt: Date | null }> {
@@ -47,6 +58,7 @@ export async function loadMarket(market: string, opts: { now?: Date } = {}): Pro
     select: {
       id: true, marketplace: true, status: true, liveBidWritesEnabled: true, pinBids: true, pinnedBy: true, bidsSuppressedAt: true,
       bidsSuppressedFloorCents: true, bidsSuppressedBy: true, minBidCents: true, maxBidCents: true, dynamicBidding: true,
+      biddingStrategy: true,
     },
   })
   const campaigns = new Map<string, CampaignRow>()
@@ -56,6 +68,9 @@ export async function loadMarket(market: string, opts: { now?: Date } = {}): Pro
       id: c.id, status: String(c.status), pinBids: c.pinBids, pinnedBy: c.pinnedBy, bidsSuppressedAt: c.bidsSuppressedAt,
       bidsSuppressedFloorCents: c.bidsSuppressedFloorCents, bidsSuppressedBy: c.bidsSuppressedBy, minBidCents: c.minBidCents,
       maxBidCents: c.maxBidCents, ownTargetAcos: (c.dynamicBidding as { targetAcos?: unknown } | null)?.targetAcos, allowlisted: c.liveBidWritesEnabled,
+      // BB-18 — how Amazon may lift the bid: its bidding strategy and the placement % in force.
+      biddingStrategy: c.biddingStrategy ?? null,
+      placements: placementsOf(c.dynamicBidding),
     })
   }
   const empty = { market, dataDay, campaigns, adGroups: new Map(), targets: [], evidence: new Map(), adSales30: new Map(), prices: new Map(), newestReportAt: null }
@@ -365,7 +380,11 @@ export async function previousDecisions(targetIds: readonly string[], now: Date)
 }
 
 /** The run's other facts for the allowlisted campaigns of one market. */
-export async function loadRun(m: MarketRows & { newestReportAt: Date | null }, now: Date): Promise<{ run: RunRows; lastWrites: Map<string, LastWrite>; previous: Map<string, PreviousDecision> }> {
+/**
+ * BB-7 — `owned`: the campaigns the brain owns this run (their hourly plan's hour and today's Min-bid entries are read);
+ * `clockNow`: the database clock the plan's hour is read on (rank-defend's), else `now`.
+ */
+export async function loadRun(m: MarketRows & { newestReportAt: Date | null }, now: Date, opts: { owned?: ReadonlySet<string>; clockNow?: Date } = {}): Promise<{ run: RunRows; lastWrites: Map<string, LastWrite>; previous: Map<string, PreviousDecision> }> {
   const campaignIds = [...m.campaigns.values()].filter((c) => c.allowlisted).map((c) => c.id)
   const campaignSet = new Set(campaignIds)
   const groupIds = [...m.adGroups.values()].filter((g) => campaignSet.has(g.campaignId)).map((g) => g.id)
@@ -394,6 +413,14 @@ export async function loadRun(m: MarketRows & { newestReportAt: Date | null }, n
   const lastSteps = new Map([...previous].flatMap(([id, p]) => (p.lastStep ? [[id, p.lastStep] as const] : [])))
   // Profit rows carry the market's code ('IT'), as the roll-up writes them.
   const sources = await loadOverrideSources(m, { campaignIds, groupIds, strategy, previous, marketplaces: [m.market] })
+  // BB-18 — the bid that served each keyword's window clicks; BB-7 — the hourly plan's hour of each owned campaign.
+  const ownedHere = campaignIds.filter((id) => opts.owned?.has(id))
+  const { minBidEntriesToday } = ownedHere.length ? await import('../../../jobs/ad-rank-defend.job.js') : { minBidEntriesToday: null }
+  const [servingBids, planHours, minBidEntries] = await Promise.all([
+    loadServingBids(m.targets.filter((t) => groupSet.has(t.adGroupId)), settledBounds(MAX_WINDOW_DAYS, 'SPONSORED_PRODUCTS', { now })),
+    loadPlanHours(ownedHere, opts.clockNow ?? now),
+    minBidEntriesToday ? minBidEntriesToday(ownedHere, opts.clockNow ?? now, ['rank-defend', 'bid-brain']) : Promise.resolve(new Map<string, number>()),
+  ])
   return {
     run: {
       ...sources,
@@ -405,6 +432,9 @@ export async function loadRun(m: MarketRows & { newestReportAt: Date | null }, n
       enrollments: new Map(enrollments.map((e) => [e.campaignId, { mode: e.mode, heldBy: e.heldBy, heldUntil: e.heldUntil }])),
       lastSteps,
       familySales,
+      servingBids,
+      planHours,
+      minBidEntries,
     },
     lastWrites,
     previous,

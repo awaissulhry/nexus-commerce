@@ -27,8 +27,8 @@ const BIG_DOOR_HOW = 'A person with settings.security.manage approves it in Nexu
 
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`
 
-/** BB-7 sets it: an hourly plan joins as the brain's input instead of blocking LIVE. */
-export const PLANS_JOIN_THE_BRAIN = false
+/** BB-7 — an hourly plan joins as the brain's input instead of blocking LIVE (bid-brain/plan-hour.ts). */
+export const PLANS_JOIN_THE_BRAIN = true
 
 function stepUpFor(op: EnrollOp, name: string): { stepUp?: StepUp } {
   if (op !== 'live' || !needsCode('set-bid-brain-enrollment: live')) return {}
@@ -44,6 +44,7 @@ function refusalOf(f: EnrollmentFacts, op: EnrollOp): string | null {
     if (!c.allowlisted) return `${c.name} is not on the live-write allowlist: no automatic write reaches Amazon for it (set-campaign-live-writes first).`
     if (f.blockers.length) return `${c.name} cannot go LIVE yet: ${f.blockers.join('; ')}.`
   }
+  if (op === 'live' && f.floored) return `${c.name} cannot go LIVE now: ${f.floored}.`
   if (op === 'give-back' && !f.enrollment?.snapshot) return `${c.name} has no snapshot to give back (it never went LIVE).`
   return null
 }
@@ -159,8 +160,10 @@ const setBidBrainEnrollment: AgentTool = {
     + 'campaign, and a person\'s own edit still passes and holds that bid. Every bid and placement is kept for a give-back. '
     + 'Going LIVE is a big door: approving it needs the approver\'s authenticator code. op hold: the brain raises nothing for '
     + 'some days; op release ends a hold; op shadow: the brain stops, bids stay; op give-back: back to shadow and the bids '
-    + 'and placements put back as they were when it went LIVE. LIVE needs the campaign on the live-write allowlist and no '
-    + 'classic dayparting schedule or running autopilot plan on it. A person approves every op in Nexus (or confirms it '
+    + 'and placements put back as they were when it went LIVE. LIVE needs the campaign on the live-write allowlist, its '
+    + 'bids serving (not held at a floor), and no classic dayparting schedule, running autopilot plan or older family rank '
+    + 'plan on it; its hourly bid plan joins the brain (each hour\'s placement % and Min-bid floors, inside the brain\'s '
+    + 'limits) unless an hour sets a base bid. A person approves every op in Nexus (or confirms it '
     + 'in Claude with their code); nothing changes until then.',
   async handler(args) {
     return preview(args)

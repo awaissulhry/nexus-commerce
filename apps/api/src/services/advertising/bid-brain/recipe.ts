@@ -10,6 +10,9 @@
  *              day — so a rerun on the same evidence lands on the same bid (no `current × ratio` compounding)
  *   limits     strategy lowest/highest bid, the campaign's own bounds, the 5¢ engine floor, and a lane ceiling: the
  *              base bid never exceeds a lane's max CPC (C2: a plan asked for a bid no one could set)
+ *   BB-18      the bid stack: Amazon charges up to base × (1 + placement %) × its dynamic bidding (up to ×2 at the top of
+ *              search, ×1.5 elsewhere, for "up and down"; ×1 otherwise) — so a lane's ceiling holds base × dynamic at
+ *              0 % placement, and base × (1 + p) × dynamic with its placement %
  *
  * Pure: no database, no clock.
  */
@@ -54,7 +57,12 @@ export interface Lane {
   maxCpcCents?: number | null
   /** CR̂ of the lane ÷ CR̂ of all placements, once the placement report has data; null = not known yet. */
   crRatio?: number | null
+  /** BB-18 — Amazon's dynamic bidding on this lane (rank-controller.ts laneHeadroom): 1, 1.5 or 2. Absent: 1. */
+  dynamic?: number | null
 }
+
+/** BB-18 — a lane's dynamic-bidding multiple, never below 1. */
+export const dynamicOf = (l: Pick<Lane, 'dynamic'>): number => (l.dynamic != null && l.dynamic > 1 ? l.dynamic : 1)
 
 /** The bid at which a pooled estimate meets an ACoS: acos × CR̂ × AOV̂ ÷ r̂ (cents, unrounded). */
 export function bidForAcos(acos: number, cr: number, aovCents: number, ratio: number): number {
@@ -122,7 +130,8 @@ export function limitRange(limits: BidLimits, lanes: readonly Lane[] = []): { lo
   const uppers: Array<[number | null | undefined, string]> = [
     [limits.maxBidCents, 'the strategy highest bid'],
     [limits.campaignMaxCents, "the campaign's highest bid"],
-    ...lanes.map((l): [number | null | undefined, string] => [l.maxCpcCents, `the ${laneWords(l.lane)} CPC ceiling`]),
+    // BB-18 — at 0 % placement Amazon can still add its dynamic bidding: the base bid × that stays within the ceiling.
+    ...lanes.map((l): [number | null | undefined, string] => [l.maxCpcCents != null ? Math.floor(l.maxCpcCents / dynamicOf(l)) : null, `the ${laneWords(l.lane)} CPC ceiling${dynamicOf(l) > 1 ? ` (÷${dynamicOf(l)} Amazon dynamic bidding)` : ''}`]),
   ]
   for (const [v, from] of uppers) {
     if (v != null && v > 0 && (upper == null || v < upper)) { upper = v; upperFrom = from }
@@ -146,16 +155,16 @@ export interface PlacementDecision {
 }
 
 /**
- * Each lane's placement %: the plan's, held so that bid × (1 + p) stays within the lane's CPC ceiling, and — once the
- * placement report has data — so that 1 + p ≤ CR̂_lane ÷ CR̂_all × hi ÷ aim.
+ * Each lane's placement %: the plan's, held so that bid × (1 + p) × dynamic bidding stays within the lane's CPC ceiling
+ * (BB-18), and — once the placement report has data — so that 1 + p ≤ CR̂_lane ÷ CR̂_all × hi ÷ aim.
  */
 export function placementsFor(bidCents: number, lanes: readonly Lane[], goal: { aim: number; hi: number }): PlacementDecision[] {
   return lanes.map((l) => {
     let pct = Math.max(0, l.planPct)
     let held: string | null = null
     if (l.maxCpcCents != null && l.maxCpcCents > 0 && bidCents > 0) {
-      const cap = Math.max(0, Math.floor((l.maxCpcCents / bidCents - 1) * 100))
-      if (pct > cap) { pct = cap; held = `the ${laneWords(l.lane)} CPC ceiling ${l.maxCpcCents}¢` }
+      const cap = Math.max(0, Math.floor((l.maxCpcCents / (bidCents * dynamicOf(l)) - 1) * 100))
+      if (pct > cap) { pct = cap; held = `the ${laneWords(l.lane)} CPC ceiling ${l.maxCpcCents}¢${dynamicOf(l) > 1 ? ` with Amazon's dynamic bidding ×${dynamicOf(l)}` : ''}` }
     }
     if (l.crRatio != null && l.crRatio > 0 && goal.aim > 0) {
       const cap = Math.max(0, Math.floor((l.crRatio * (goal.hi / goal.aim) - 1) * 100))
@@ -163,4 +172,15 @@ export function placementsFor(bidCents: number, lanes: readonly Lane[], goal: { 
     }
     return { lane: l.lane, planPct: l.planPct, pct, held }
   })
+}
+
+/**
+ * BB-18 — the most a click can cost against the base bid: the highest lane's (1 + placement %) × dynamic bidding, never
+ * below 1. `lanes` are the placements that served (the campaign's own %) and those a plan sets; with none it is 1, the
+ * old second-price ceiling of the paid CPC ÷ bid ratio (estimator.ts laneCpcRatio).
+ */
+export function stackCeiling(lanes: ReadonlyArray<Pick<Lane, 'planPct' | 'dynamic'>> = []): number {
+  let top = 1
+  for (const l of lanes) top = Math.max(top, (1 + Math.max(0, l.planPct) / 100) * dynamicOf(l))
+  return Math.round(top * 1000) / 1000
 }

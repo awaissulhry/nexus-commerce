@@ -124,6 +124,15 @@ export function strategyHeadroom(biddingStrategy: string | null | undefined): nu
   return (biddingStrategy && STRATEGY_HEADROOM[biddingStrategy]) || 1
 }
 
+/**
+ * BID BRAIN BB-18 — the same headroom per placement: Amazon's "dynamic bids — up and down" adds up to +100 % at Top of
+ * Search (strategyHeadroom) and up to +50 % on every other placement. The bid brain holds each lane's ceiling with it.
+ */
+export function laneHeadroom(biddingStrategy: string | null | undefined, placement: string): number {
+  if (biddingStrategy === 'AUTO_FOR_SALES' && placement !== 'PLACEMENT_TOP') return 1.5
+  return strategyHeadroom(biddingStrategy)
+}
+
 export interface CpcCap { capPct: number; baseAlone: boolean }
 export function cpcCapPct(maxCpcCents: number | null | undefined, maxBaseBidCents: number | null | undefined, strategyMultiple = 1): CpcCap | null {
   if (maxCpcCents == null || !(maxCpcCents > 0)) return null

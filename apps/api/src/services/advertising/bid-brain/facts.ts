@@ -24,6 +24,10 @@
 import type { TargetFacts, Overrides, DecisionLayer } from './decide.js'
 import { NO_EVIDENCE, type Evidence, type PoolNode } from './estimator.js'
 import { BRAIN_PHASES, type BrainPhase, type GoalInputs } from './goal.js'
+import { laneOf, planFacts, type PlanHour } from './plan-hour.js'
+import { stackCeiling } from './recipe.js'
+import { laneHeadroom } from '../rank-controller.js'
+import { MAX_MIN_BID_ENTRIES_PER_DAY } from '../rank-write-projection.js'
 
 export interface CampaignRow {
   id: string
@@ -39,6 +43,10 @@ export interface CampaignRow {
   ownTargetAcos: unknown
   /** On the live-write allowlist: the brain decides only for these. */
   allowlisted: boolean
+  /** BB-18 — Amazon's bidding strategy of the campaign (LEGACY_FOR_SALES, AUTO_FOR_SALES, MANUAL); null: not known. */
+  biddingStrategy?: string | null
+  /** BB-18 — the campaign's placement % now (Campaign.dynamicBidding.placementBidding), the bidding-API placements. */
+  placements?: ReadonlyArray<{ placement: string; percentage: number }>
 }
 
 export interface AdGroupRow {
@@ -118,6 +126,12 @@ export interface RunRows {
   familySales?: ReadonlyMap<string, number>
   /** BB-8 — per ad group: its stock (absent: nothing to say). */
   stock?: ReadonlyMap<string, StockFact>
+  /** BB-18 — per keyword: the bid that served its window's clicks (absent: today's bid served them all). */
+  servingBids?: ReadonlyMap<string, number>
+  /** BB-7 — per campaign the brain owns: its hourly plan's hour (absent: no plan). */
+  planHours?: ReadonlyMap<string, PlanHour>
+  /** BB-7 — per campaign: its Min-bid entries this UTC day (rank-defend's and the brain's). */
+  minBidEntries?: ReadonlyMap<string, number>
   /** BB-8 — per campaign: what a playbook holds on it. */
   playbook?: ReadonlyMap<string, PlaybookFact>
   /** BB-8 — per keyword: the brain's last decision lowered it by an override; the bid of its last decision before. */
@@ -163,10 +177,10 @@ const keywordKey = (t: TargetRow) => `${t.kind}|${t.expressionType}|${t.expressi
 const day = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null)
 
 /**
- * The ad group's paid CPC ÷ bid, with today's bids standing in for the bids of the window: null under 10 clicks (the
- * estimator then takes 0.85).
+ * The ad group's paid CPC ÷ bid: null under 10 clicks (the estimator then takes 0.85). BB-18 — each keyword's bid is the
+ * one that served its window's clicks (`serving`), today's bid where none moved.
  */
-export function cpcRatioOf(targets: readonly TargetRow[], ev: (id: string) => Evidence): number | null {
+export function cpcRatioOf(targets: readonly TargetRow[], ev: (id: string) => Evidence, serving?: ReadonlyMap<string, number>): number | null {
   let cost = 0
   let clicks = 0
   let bidClicks = 0
@@ -174,7 +188,7 @@ export function cpcRatioOf(targets: readonly TargetRow[], ev: (id: string) => Ev
     const e = ev(t.id)
     cost += e.costCents
     clicks += e.clicks
-    bidClicks += e.clicks * t.bidCents
+    bidClicks += e.clicks * (serving?.get(t.id) ?? t.bidCents)
   }
   return clicks >= 10 && bidClicks > 0 ? cost / bidClicks : null
 }
@@ -231,6 +245,15 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
   const groupEvidence = new Map([...byGroup].map(([id, ts]) => [id, sum(ts.map((t) => ev(t.id)))]))
   const familyEvidence = new Map([...groupsByFamily].map(([fam, ids]) => [fam, sum(ids.map((id) => groupEvidence.get(id)!))]))
   const market = sum(m.targets.map((t) => ev(t.id)))
+
+  // BB-7 — a campaign already sitting in a Min-bid hour the brain floored (a keyword's last decision lowered it there):
+  // this hour is no new entry for the anti-flap.
+  const inMinBid = new Set<string>()
+  for (const t of m.targets) {
+    if (run.lowered?.get(t.id)?.layer !== 'min_bid_hour') continue
+    const c = m.adGroups.get(t.adGroupId)?.campaignId
+    if (c) inMinBid.add(c)
+  }
 
   const out: TargetFacts[] = []
   for (const t of m.targets) {
@@ -291,6 +314,14 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
     if (enrollment?.mode === 'HELD') overrides.freeze = { by: enrollment.heldBy ?? 'a hold' }
     else if (undoHold) overrides.freeze = { by: `${undoHold.by}${undoHold.until ? ` until ${day(undoHold.until)}` : ''}` }
 
+    // BB-7 — the campaign's hourly plan, where the brain owns it: its lanes, a Min-bid floor (the lower floor wins), the why.
+    const hour = run.planHours?.get(campaign.id)
+    const plan = hour ? planFacts(hour, campaign, { entriesToday: run.minBidEntries?.get(campaign.id) ?? 0, inMinBid: inMinBid.has(campaign.id), maxEntries: MAX_MIN_BID_ENTRIES_PER_DAY }) : null
+    if (plan?.minBidHour && (!overrides.minBidHour || plan.minBidHour.floorCents < overrides.minBidHour.floorCents)) overrides.minBidHour = plan.minBidHour
+    // BB-18 — the most a click can cost against the base bid: the placements that served and those the plan sets.
+    const served = (campaign.placements ?? []).map((p) => ({ planPct: p.percentage, dynamic: laneHeadroom(campaign.biddingStrategy, p.placement), lane: laneOf(p.placement) }))
+    const ratioCeiling = stackCeiling([...served, ...(plan?.lanes ?? []), { planPct: 0, dynamic: laneHeadroom(campaign.biddingStrategy, 'PLACEMENT_TOP') }])
+
     const brakes = [...run.marketBrakes]
     if (campaign.status !== 'ENABLED') brakes.push(`campaign ${campaign.status.toLowerCase()}`)
     if (group.status !== 'ENABLED') brakes.push(`ad group ${group.status.toLowerCase()}`)
@@ -299,7 +330,11 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
       targetId: t.id,
       currentCents: t.bidCents,
       chain,
-      parentCpcRatio: cpcRatioOf(byGroup.get(group.id) ?? [], ev),
+      parentCpcRatio: cpcRatioOf(byGroup.get(group.id) ?? [], ev, run.servingBids),
+      servingCents: run.servingBids?.get(t.id) ?? null,
+      ratioCeiling,
+      ...(plan?.lanes.length ? { lanes: plan.lanes } : {}),
+      ...(plan ? { planNote: plan.note } : {}),
       listPriceCents: group.families.map((f) => m.prices.get(f)).find((p) => p != null && p > 0) ?? null,
       goal,
       limits: {
