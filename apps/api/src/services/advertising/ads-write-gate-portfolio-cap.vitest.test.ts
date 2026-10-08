@@ -31,7 +31,8 @@ vi.mock('../../db.js', () => ({
     adProductAd: { findMany: vi.fn(async () => []) },
     adWriteRefusal: { create: vi.fn(async () => ({})) },
     adsStrategy: { findFirst: vi.fn(async () => null), findMany: vi.fn(async () => []) },
-    adsBrainOverride: { get findFirst() { return overrideFindFirst } },
+    // AB-15 — no kill switch open here (the gate reads them for the brain's own actors).
+    adsBrainOverride: { get findFirst() { return overrideFindFirst }, findMany: vi.fn(async () => []) },
     amazonAdsPortfolio: { get findFirst() { return portfolioFindFirst } },
   },
 }))
