@@ -1757,6 +1757,14 @@
       "fields": []
     },
     {
+      "name": "AmazonAdsHourlyPlacement",
+      "fields": []
+    },
+    {
+      "name": "AmazonAdsHourlyArrival",
+      "fields": []
+    },
+    {
       "name": "AdBudgetUsageSample",
       "fields": []
     },

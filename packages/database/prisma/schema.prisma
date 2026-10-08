@@ -4095,6 +4095,91 @@ model AmazonAdsHourlyPerformance {
   @@index([workspaceId])
 }
 
+/// BID BRAIN BB-16 (2026-10-08, design BRAIN-UPGRADES-DESIGN.md U1c / F2, one-brain DESIGN.md §2.3 and §2.6) — the
+/// Marketing Stream's Sponsored Products hours at AD GROUP × PLACEMENT grain, with the real 1-day AND 7-day attributed
+/// conversions. AmazonAdsHourlyPerformance (campaign grain, 1-day conversions in its 7d-named columns) is unchanged and
+/// keeps its readers; this table sits beside it, written by the same ingest from the same records.
+///   one row   = Σ of every sp-traffic and sp-conversion delta Amazon sent for (campaign, ad group, placement, UTC hour).
+///               Amazon sends restatements as deltas, negative ones included (invalid clicks, returns); the sums are
+///               exact and never clamped here (a reader clamps a transient negative cell at 0 and says so).
+///   appliedKeys the dataset idempotency keys already summed into the row (8-byte hashes of dataset + idempotency_id):
+///               a redelivery adds nothing. The check sits in the row-locked update, so two deliveries at once cannot both add.
+///   lateStart the row's first delta arrived more than 12 hours after its hour ended: earlier deltas may be missing (an
+///               hour before the grain began, or a feed gap). Readers count these cells.
+///   placement PLACEMENT_TOP | PLACEMENT_PRODUCT_PAGE | PLACEMENT_REST_OF_SEARCH | OFF_AMAZON | UNKNOWN | OTHER:<label>.
+/// Rows are bounded (a row-count guard refuses new rows above NEXUS_AMS_GRAIN_MAX_ROWS_PER_DAY a data day) and kept 90 days.
+model AmazonAdsHourlyPlacement {
+  // Business ownership comes from verified database context.
+  workspaceId    String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id             String    @id @default(cuid())
+  /// The record's advertiser / profile id, as the stream named it (null when it named none).
+  profileId      String?
+  /// Short market code ('IT'), null when the record named no marketplace.
+  marketplace    String?
+  /// Amazon's campaign id.
+  campaignId     String
+  /// Amazon's ad group id.
+  adGroupId      String
+  placement      String
+  date           DateTime  @db.Date
+  /// 0-23, UTC.
+  hour           Int
+  currencyCode   String?
+
+  impressions    Int       @default(0)
+  clicks         Int       @default(0)
+  costMicros     BigInt    @default(0)
+  orders1d       Int       @default(0)
+  orders7d       Int       @default(0)
+  units1d        Int       @default(0)
+  units7d        Int       @default(0)
+  sales1dCents   Int       @default(0)
+  sales7dCents   Int       @default(0)
+
+  appliedKeys    BigInt[]  @default([])
+  lateStart      Boolean   @default(false)
+  firstArrivalAt DateTime
+  lastArrivalAt  DateTime
+  createdAt      DateTime  @default(now())
+
+  @@unique([workspaceId, campaignId, adGroupId, placement, date, hour], name: "grain", map: "AmazonAdsHourlyPlacement_grain_key")
+  @@index([workspaceId, date])
+}
+
+/// BID BRAIN BB-16 — when each hour's deltas arrived (the delta-arrival log), so later steps can learn how an hour fills:
+/// the attribution curve (conversions arriving days after the click hour) and click validation (traffic restated within
+/// 72 hours). One row per AmazonAdsHourlyPlacement row × kind × age bucket, holding the Σ of the deltas that arrived in it.
+///   kind      traffic | conversion
+///   ageHours  whole hours from the END of the row's hour to the arrival, bucketed: exact below 48 h, whole days below
+///             14 days, whole weeks after (Amazon restates conversions for up to 60 days)
+/// grainId is AmazonAdsHourlyPlacement.id; `date` is that row's date (both are pruned together, 90 days).
+model AmazonAdsHourlyArrival {
+  // Business ownership comes from verified database context.
+  workspaceId  String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id           String   @id @default(cuid())
+  grainId      String
+  date         DateTime @db.Date
+  kind         String
+  ageHours     Int
+  records      Int      @default(0)
+
+  impressions  Int      @default(0)
+  clicks       Int      @default(0)
+  costMicros   BigInt   @default(0)
+  orders1d     Int      @default(0)
+  orders7d     Int      @default(0)
+  units1d      Int      @default(0)
+  units7d      Int      @default(0)
+  sales1dCents Int      @default(0)
+  sales7dCents Int      @default(0)
+
+  firstAt      DateTime
+  lastAt       DateTime
+
+  @@unique([workspaceId, grainId, kind, ageHours], name: "bucket", map: "AmazonAdsHourlyArrival_bucket_key")
+  @@index([workspaceId, date])
+}
+
 // ADM-P6 — Amazon's OWN per-campaign budget-usage reading, sampled.
 //
 // `POST /sp/campaigns/budget/usage` answers for every Sponsored Products campaign

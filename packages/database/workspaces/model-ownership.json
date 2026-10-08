@@ -463,6 +463,8 @@
     "AdsBrainOverride",
     "AdsNativeRuleSnapshot",
     "AdsBrainBudgetDecision",
+    "AmazonAdsHourlyPlacement",
+    "AmazonAdsHourlyArrival",
     "AdWriteRefusal",
     "AutomationRefusalDaily",
     "KeywordBidProposal",
