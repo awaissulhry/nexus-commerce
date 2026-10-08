@@ -83,8 +83,12 @@ const P = `${hex}-jacket`, P1 = `${hex}-jacket-m`
 const TABLE = 'BidBrainHourFactor'
 const PLAN_NAME = `Test jacket IT ${hex}`
 const EVERY = [0, 1, 2, 3, 4, 5, 6]
-// The real clock: the bid brain reads its evidence window and its research days from it.
-const NOW = new Date()
+// The real clock: the bid brain reads its evidence window and its research days from it. Between Rome's midnight and UTC's
+// (22:00–24:00 UTC in summer) the plan's noon below is on another Rome day than NOW: step NOW back into the same day.
+const NOW = (() => {
+  const n = new Date()
+  return localDayHour(n, 'Europe/Rome').day === n.toISOString().slice(0, 10) ? n : new Date(n.getTime() - 3 * 3_600_000)
+})()
 const DAY = 86_400_000
 const today = NOW.toISOString().slice(0, 10)
 // The plan's clock (Europe/Rome): 12:00 serves the 200 % top-of-search target.

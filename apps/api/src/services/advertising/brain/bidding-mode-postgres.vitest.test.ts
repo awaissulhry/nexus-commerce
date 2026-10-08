@@ -246,7 +246,7 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-17 — the bidding-strategy lever 
   })
 
   it('AUTO after the approval days: the brain\'s switch through the real campaign path and gate — one queued write as the brain, a test opened; a rerun writes nothing', async () => {
-    await database.pool.query('UPDATE "AdsBrainLeverClock" SET since = $2 WHERE "workspaceId" = $1', [W, new Date(NOW.getTime() - 31 * DAY)])
+    await database.pool.query('UPDATE "AdsBrainLeverClock" SET since = $2 WHERE "workspaceId" = $1', [W, new Date(NOW.getTime() - 31 * DAY).toISOString()])
     await database.pool.query('UPDATE "Campaign" SET "biddingStrategy" = \'AUTO_FOR_SALES\' WHERE id = \'c-auto\'')
     const r = await run()
     expect(byCampaign(r)['c-auto']).toMatchObject({ action: 'switch', outcome: 'queued', to: 'LEGACY_FOR_SALES' })
@@ -288,8 +288,9 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-17 — the bidding-strategy lever 
     // Day 0 of c-up's test 20 days ago: its approved switch and its test moved back; the market's daily report written.
     const switchedAt = new Date(NOW.getTime() - 20 * DAY)
     const t = (await tests()).find((x) => x.campaignId === 'c-up')!
-    await database.pool.query('UPDATE "AdsBrainStrategyTest" SET "switchedAt" = $2 WHERE id = $1', [t.id, switchedAt])
-    await database.pool.query('UPDATE "AdvertisingActionLog" SET "createdAt" = $2 WHERE "workspaceId" = $1 AND "entityId" = \'c-up\'', [W, switchedAt])
+    // ISO text, not a Date: node-pg writes a Date in the machine's own zone into these zone-less columns (UTC in Nexus).
+    await database.pool.query('UPDATE "AdsBrainStrategyTest" SET "switchedAt" = $2 WHERE id = $1', [t.id, switchedAt.toISOString()])
+    await database.pool.query('UPDATE "AdvertisingActionLog" SET "createdAt" = $2 WHERE "workspaceId" = $1 AND "entityId" = \'c-up\'', [W, switchedAt.toISOString()])
     const switchDay = Date.parse(`${isoDay(switchedAt)}T00:00:00Z`)
     const daily = []
     for (let i = -16; i <= 19; i++) {
