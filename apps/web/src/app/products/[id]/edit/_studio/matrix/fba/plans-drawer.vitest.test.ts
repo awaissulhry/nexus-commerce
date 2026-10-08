@@ -10,7 +10,8 @@ import {
 import {
   DRAWER_COPY, FBA_ROUTES, amazonWord, arriveText, canPrintLabels, canShip, choiceHeld, choicePayload, clockText, commandSlot, dayRange,
   defaultPicks, feesText, fillDown, isFbaPlanEvent, isRunning, lineRows, moneyText, newestFirst, offeredPlacements, packedText, placementLines,
-  placementTitle, planFacts, planName, planProductIds, readLabelsAnswer, readOnePlanAnswer, readPlanAnswer, readPlansAnswer, rereadDelay,
+  placementTitle, planBoxesText, planFacts, planName, planProductIds, planUpdatedAt, readLabelsAnswer, readOnePlanAnswer, readPlanAnswer, readPlanListAnswer,
+  readPlansAnswer, rereadDelay,
   REREAD_IDLE_MS, REREAD_RUNNING_MS, shipmentTitle, shipmentTransportText, shippedConfirmText, shippedPayload, shippedText, shownPlanId,
   statusText, statusTone, timelineItems, trackingHeld, trackingRows, transportText, windowText, withTransport, withWindow,
 } from './plansDrawer'
@@ -48,7 +49,7 @@ const plan = (over: Partial<FbaPlanView> = {}): FbaPlanView => ({
   ],
   steps: [], options: null, choice: null, shipments: [], problems: [], message: null, nextCheckAt: null,
   createdAt: T('08:00'), createdBy: 'owner@example.com', confirmedAt: null, confirmedBy: null, cancelledAt: null,
-  can: { choose: false, newOptions: false, retry: false, cancel: true },
+  can: { edit: false, send: false, discard: false, choose: false, newOptions: false, retry: false, cancel: true },
   ...over,
 })
 
@@ -86,7 +87,7 @@ const ONE_SHIPMENT: FbaPlacementOption = {
 const waiting = (over: Partial<FbaPlanView> = {}) => plan({
   status: 'WAITING_FOR_CHOICE', step: 'CONFIRM',
   options: { readAt: T('08:30'), expiresAt: T('14:30'), placements: [TWO_SHIPMENTS, ONE_SHIPMENT, { ...ONE_SHIPMENT, placementOptionId: 'po-old', status: 'EXPIRED' }] },
-  can: { choose: true, newOptions: false, retry: false, cancel: true },
+  can: { edit: false, send: false, discard: false, choose: true, newOptions: false, retry: false, cancel: true },
   ...over,
 })
 
@@ -396,16 +397,46 @@ describe('live', () => {
   })
 })
 
-describe('the drawer file keeps the design-system rules', () => {
-  const source = readFileSync(join(__dirname, 'FbaPlansDrawer.tsx'), 'utf8')
+describe('the drawer and the shared plan view keep the design-system rules', () => {
+  const drawer = readFileSync(join(__dirname, 'FbaPlansDrawer.tsx'), 'utf8')
+  const detail = readFileSync(join(__dirname, 'FbaPlanDetail.tsx'), 'utf8')
   it('no raw controls, no Tailwind, the DS Drawer at 480 px', () => {
-    expect(source).not.toMatch(/<(button|input|select|textarea|table)[\s>]/)
-    expect(source).not.toMatch(/className="[^"]*\b(text|bg|flex|grid|p|m|px|py|gap)-[a-z0-9]/)
-    expect(source).toMatch(/export const FBA_PLANS_DRAWER_WIDTH = 480/)
-    expect(source).toMatch(/<Drawer\b/)
+    for (const source of [drawer, detail]) {
+      expect(source).not.toMatch(/<(button|input|select|textarea|table)[\s>]/)
+      expect(source).not.toMatch(/className="[^"]*\b(text|bg|flex|grid|p|m|px|py|gap)-[a-z0-9]/)
+    }
+    expect(drawer).toMatch(/export const FBA_PLANS_DRAWER_WIDTH = 480/)
+    expect(drawer).toMatch(/<Drawer\b/)
+    // ONE plan view: the drawer uses the shared hook (the FBA shipments page does too).
+    expect(drawer).toMatch(/useFbaPlanDetail\(/)
   })
   it('confirming at Amazon is one click on the server\'s option — no authenticator code is asked', () => {
-    expect(source).not.toMatch(/ConfirmPhraseField|confirmPhrase|type-to-confirm|totp/i)
-    expect(source).toMatch(/FBA_SEND_COPY\.confirmFinal/)
+    expect(detail).not.toMatch(/ConfirmPhraseField|confirmPhrase|type-to-confirm|totp/i)
+    expect(detail).toMatch(/FBA_SEND_COPY\.confirmFinal/)
+  })
+})
+
+describe('the FBA shipments page\'s list (Owner 2026-10-08)', () => {
+  it('a draft is neutral; the tab\'s route pages with a cursor', () => {
+    expect(statusTone('DRAFT')).toBe('neutral')
+    expect(statusText('DRAFT')).toBe('Draft')
+    expect(FBA_ROUTES.list('drafts')).toBe('/api/fba/inbound/plans?view=drafts&limit=50')
+    expect(FBA_ROUTES.list('done', 'c 1', 20)).toBe('/api/fba/inbound/plans?view=done&limit=20&cursor=c%201')
+  })
+
+  it('the list answer: plans, the next cursor and every tab\'s count; a refusal throws its sentence', () => {
+    const answer = readPlanListAnswer(200, { plans: [plan(), { nope: 1 }], next: 'n2', counts: { drafts: 1, active: '3', done: -2 } })
+    expect(answer.plans.map(p => p.id)).toEqual([plan().id])
+    expect(answer.next).toBe('n2')
+    expect(answer.counts).toEqual({ drafts: 1, active: 0, done: 0 })
+    expect(readPlanListAnswer(200, { plans: [], next: '' }).next).toBeNull()
+    expect(() => readPlanListAnswer(500, { error: 'Down' })).toThrow('Down')
+  })
+
+  it('when a plan last moved, and its boxes at Amazon', () => {
+    const p = plan()
+    expect(planUpdatedAt({ ...p, steps: [], shipments: [], confirmedAt: null, cancelledAt: null })).toBe(p.createdAt)
+    expect(planUpdatedAt({ ...p, steps: [], shipments: [], confirmedAt: '2099-01-01T00:00:00Z', cancelledAt: null })).toBe('2099-01-01T00:00:00Z')
+    expect(planBoxesText({ shipments: [] })).toBe('—')
   })
 })

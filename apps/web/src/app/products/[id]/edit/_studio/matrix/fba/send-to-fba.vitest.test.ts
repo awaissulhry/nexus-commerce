@@ -11,9 +11,10 @@ import { MatrixSelectionActions } from '../MatrixSelectionActions'
 import type { MatrixRead } from '../contract'
 import { isFbaPlanEvent } from './plansDrawer'
 import {
-  OWNERS_DEFAULT, SEND_HELD, caseSteppers, casesMax, casesOf, choiceOf, createRequest, draftUrl, errorSentence, fetchSendDraft, hasAmazonListing, openPlans, ownersAsked,
-  parseSendDraft, parseSide, postCancelPlan, postSendPlan, primaryOf, problemBanners, problemsOf, sendDescription, sendHeld, sendProductIds,
-  skuBoxes, skuCheck, startForm, startLines, summarize, summaryLine, unitsMax, withCases, type SendForm,
+  OWNERS_DEFAULT, SEND_HELD, addPrimaryOf, addedUnits, caseSteppers, casesMax, casesOf, choiceOf, deleteDraft, draftAddRequest, draftLinesOf, draftPlans,
+  draftSendRequest, draftUndoRequest, draftUpdateRequest, draftUrl, errorSentence, fbaPageHref, fetchSendDraft, footerLinks, hasAmazonListing, openPlans,
+  ownersAsked, parseLines, parseSendDraft, parseSide, patchDraft, postDraftAdd, postSendDraft, problemBanners, problemsOf, sendDescription, sendHeld,
+  sendPrimaryOf, sendProductIds, skuBoxes, skuCheck, startForm, startLines, summarize, summaryLine, underWayPlans, unitsMax, withCases, type SendForm,
 } from './sendToFba'
 
 /**
@@ -44,6 +45,8 @@ const draftOf = (over: Partial<FbaSendDraft> = {}): FbaSendDraft => ({
   address: { missing: [], summary: 'Main warehouse, Rimini' },
   mixedBox: { ...MIXED_BOX_DEFAULT },
   skus: [GALE_M, GALE_L],
+  draftId: null,
+  lines: [],
   ...over,
 })
 /** `cases: 2` = two cases of 12 (GALE-M's one size); a list names the sizes. */
@@ -106,10 +109,34 @@ describe('the toolbar: who is sent and when it is offered', () => {
     expect(openPlans({ fbaPlans: undefined })).toEqual([])
     expect(openPlans({ fbaPlans: [{ id: 'a', name: 'A', status: 'QUEUED', units: 3 }, { id: 'b', name: 'B', status: 'CANCELLED', units: 2 }] }).map((p) => p.id)).toEqual(['a'])
   })
+
+  it('drafts and plans under way apart: a draft is open but holds nothing (the FBA cell\'s "in Nexus plan" skips it)', () => {
+    const read = { fbaPlans: [
+      { id: 'd', name: 'Draft', status: 'DRAFT' as const, units: 18 },
+      { id: 'q', name: 'Q', status: 'READY_TO_SHIP' as const, units: 6 },
+      { id: 'c', name: 'C', status: 'CLOSED' as const, units: 4 },
+    ] }
+    expect(openPlans(read).map((p) => p.id)).toEqual(['d', 'q'])
+    expect(underWayPlans(read).map((p) => p.id)).toEqual(['q'])
+    expect(draftPlans(read).map((p) => p.id)).toEqual(['d'])
+  })
+
+  it('the footer links open the FBA shipments page: the draft, then the shipments under way', () => {
+    expect(footerLinks(null)).toEqual([])
+    const one = footerLinks({ fbaPlans: [{ id: 'd', name: 'Draft', status: 'DRAFT', units: 18 }, { id: 'q', name: 'Q', status: 'READY_TO_SHIP', units: 6 }] })
+    expect(one).toEqual([
+      { key: 'draft', label: 'FBA draft · 18 units', href: '/fulfillment/outbound/fba?plan=d', title: FBA_SEND_COPY.openPage },
+      { key: 'shipments', label: 'FBA shipment · Ready to ship', href: '/fulfillment/outbound/fba?plan=q', title: FBA_SEND_COPY.openPage },
+    ])
+    const many = footerLinks({ fbaPlans: [{ id: 'a', name: 'A', status: 'QUEUED', units: 3 }, { id: 'b', name: 'B', status: 'LABELS', units: 2 }] })
+    expect(many).toEqual([{ key: 'shipments', label: 'FBA shipments · 2', href: '/fulfillment/outbound/fba?view=active', title: FBA_SEND_COPY.openPage }])
+    expect(fbaPageHref()).toBe('/fulfillment/outbound/fba')
+    expect(fbaPageHref({ view: 'drafts', plan: 'x' })).toBe('/fulfillment/outbound/fba?view=drafts&plan=x')
+  })
 })
 
 describe('the dialog: defaults, table, counts and the button — the shared rules', () => {
-  it('opens at 0 units, on the server\'s ready day and box, owners Seller; Create plan is held "Add units to send"', () => {
+  it('opens at 0 units, on the server\'s ready day and box, owners Seller; Add to draft is held "Add units to send"', () => {
     const draft = draftOf()
     const form = startForm(draft)
     expect(form.lines).toEqual({ 'p-m': { productId: 'p-m', cases: [], looseUnits: 0 }, 'p-l': { productId: 'p-l', cases: [], looseUnits: 0 } })
@@ -117,7 +144,7 @@ describe('the dialog: defaults, table, counts and the button — the shared rule
     expect(form.mixedBox).toEqual(MIXED_BOX_DEFAULT)
     expect(form.owners).toEqual(OWNERS_DEFAULT)
     const summary = summarize(draft, form)
-    expect(primaryOf(summary, null)).toEqual({ label: 'Create plan · 0 units', held: FBA_SEND_COPY.problem.noUnits })
+    expect(addPrimaryOf(summary, draft, form, null)).toEqual({ label: 'Add to draft · 0 units', held: FBA_SEND_COPY.problem.noUnits })
     // "Nothing to send" is the button's reason, never a red Banner on a fresh dialog.
     expect(problemBanners(summary.problems)).toEqual([])
   })
@@ -129,7 +156,7 @@ describe('the dialog: defaults, table, counts and the button — the shared rule
     expect(summary).toEqual(sendSummary(draft, choiceOf(draft, form)))
     expect(summary.units).toBe(29)
     expect(summary.boxes).toBe(3)
-    expect(primaryOf(summary, null)).toEqual({ label: 'Create plan · 29 units', held: null })
+    expect(sendPrimaryOf(summary, null)).toEqual({ label: 'Send to Amazon · 29 units', held: null })
     // The ONE summary line (Owner): the shared numbers in words.
     expect(summaryLine(summary)).toBe(`2 SKUs · 29 units · 3 boxes · ${FBA_SEND_COPY.weight(summary.weightKg)}`)
     expect(summaryLine({ skus: 1, units: 1, boxes: 1, weightKg: 2.1 })).toBe('1 SKU · 1 unit · 1 box · 2.1 kg')
@@ -155,7 +182,7 @@ describe('the dialog: defaults, table, counts and the button — the shared rule
     expect(unitsMax({ free: -3 })).toBe(0)
   })
 
-  it('refusals: the row\'s Check names its first one, the Banners group them by kind, Create plan is held with the first', () => {
+  it('refusals: the row\'s Check names its first one, the Banners group them by kind, Send to Amazon is held with the first', () => {
     const draft = draftOf({ address: { missing: ['phoneNumber'], summary: null }, skus: [GALE_M, { ...GALE_L, unitWeightKg: null }] })
     const form = withLines(startForm(draft), { 'p-m': { cases: 5 }, 'p-l': { looseUnits: 2 } })
     const summary = summarize(draft, form)
@@ -164,7 +191,7 @@ describe('the dialog: defaults, table, counts and the button — the shared rule
     expect(banners[0]).toMatchObject({ tone: 'danger', title: FBA_SEND_COPY.problemTitle.NO_ADDRESS, messages: [FBA_SEND_COPY.problem.noAddress(['phoneNumber'], 'IT-MAIN')] })
     // The plan's problems sit under From / To; the SKUs' under the table.
     expect(banners.map((b) => b.whole)).toEqual([true, false, false, false])
-    expect(primaryOf(summary, null).held).toBe(FBA_SEND_COPY.problem.noAddress(['phoneNumber'], 'IT-MAIN'))
+    expect(sendPrimaryOf(summary, null).held).toBe(FBA_SEND_COPY.problem.noAddress(['phoneNumber'], 'IT-MAIN'))
     expect(skuCheck(summary, 'p-m', form.lines['p-m'])).toMatchObject({ tone: 'danger', text: FBA_SEND_COPY.problemTitle.OVER_FREE_CASES })
     expect(skuCheck(summary, 'p-l', form.lines['p-l'])).toMatchObject({ tone: 'danger', text: FBA_SEND_COPY.problemTitle.NO_UNIT_WEIGHT })
   })
@@ -173,7 +200,7 @@ describe('the dialog: defaults, table, counts and the button — the shared rule
     const draft = draftOf({ skus: [GALE_M, { ...GALE_L, openPlanUnits: 4 }] })
     const summary = summarize(draft, withLines(startForm(draft), { 'p-l': { looseUnits: 2 } }))
     expect(problemBanners(summary.problems)).toEqual([{ code: 'IN_OPEN_PLAN', title: FBA_SEND_COPY.problemTitle.IN_OPEN_PLAN, tone: 'warning', messages: [FBA_SEND_COPY.problem.inOpenPlan('GALE-L', 4)], whole: false }])
-    expect(primaryOf(summary, null).held).toBeNull()
+    expect(sendPrimaryOf(summary, null).held).toBeNull()
     expect(skuCheck(summary, 'p-l', { productId: 'p-l', cases: [], looseUnits: 2 })).toMatchObject({ tone: 'warning' })
   })
 
@@ -195,7 +222,7 @@ describe('the dialog: defaults, table, counts and the button — the shared rule
     const unset = draftOf({ skus: [GALE_M, { ...GALE_L, labelOwner: null }] })
     expect(ownersAsked(unset)).toBe(true)
     const form = { ...withLines(startForm(unset), { 'p-l': { looseUnits: 1 } }), owners: { prepOwner: 'AMAZON' as const, labelOwner: 'SELLER' as const } }
-    expect(createRequest(unset, form)?.owners).toEqual({ prepOwner: 'AMAZON', labelOwner: 'SELLER' })
+    expect(draftAddRequest(unset, form)?.owners).toEqual({ prepOwner: 'AMAZON', labelOwner: 'SELLER' })
   })
 
   it('From / To changed: the new draft keeps what was typed for the SKUs still there', () => {
@@ -204,21 +231,69 @@ describe('the dialog: defaults, table, counts and the button — the shared rule
     expect(startLines(draftOf({ skus: [GALE_L] }), typed)).toEqual({ 'p-l': { productId: 'p-l', cases: [], looseUnits: 4 } })
   })
 
-  it('the request: From by code, the market, the day, ONLY the SKUs with units; the box only when changed', () => {
+  it('Add to draft: From by code, the market, the day, the SKUs with units; the box only when changed; no From → none', () => {
     const draft = draftOf()
     const form = withLines(startForm(draft), { 'p-l': { looseUnits: 5 } })
-    expect(createRequest(draft, form)).toEqual({
+    expect(draftAddRequest(draft, form)).toEqual({
       from: 'IT-MAIN', market: 'IT', readyToShipOn: '2026-10-08', lines: [{ productId: 'p-l', cases: [], looseUnits: 5 }], mixedBox: null, owners: null,
     })
     const box = { ...MIXED_BOX_DEFAULT, heightCm: 30 }
-    expect(createRequest(draft, { ...form, mixedBox: box })?.mixedBox).toEqual(box)
-    expect(createRequest(draftOf({ from: null }), form)).toBeNull()
+    expect(draftAddRequest(draft, { ...form, mixedBox: box })?.mixedBox).toEqual(box)
+    expect(draftAddRequest(draftOf({ from: null }), form)).toBeNull()
+    expect(addedUnits(draftAddRequest(draft, form)!)).toBe(5)
   })
 
-  it('the button while busy: reading holds it, creating says so', () => {
-    const summary = summarize(draftOf(), withLines(startForm(draftOf()), { 'p-l': { looseUnits: 1 } }))
-    expect(primaryOf(summary, 'reading')).toEqual({ label: 'Create plan · 1 unit', held: 'Reading the warehouse…' })
-    expect(primaryOf(summary, 'creating')).toEqual({ label: 'Creating…', held: 'Creating…' })
+  it('the dialog starts from the open draft\'s numbers; a SKU set back to 0 leaves the draft; Undo puts the old numbers back', () => {
+    const draft = draftOf({ draftId: 'd1', lines: [{ productId: 'p-m', cases: [{ unitsPerCase: 12, cases: 1 }], looseUnits: 2 }] })
+    const form = startForm(draft)
+    expect(form.lines['p-m']).toEqual({ productId: 'p-m', cases: [{ unitsPerCase: 12, cases: 1 }], looseUnits: 2 })
+    expect(form.lines['p-l']).toEqual({ productId: 'p-l', cases: [], looseUnits: 0 })
+    // GALE-M back to 0 (out of the draft), GALE-L 3 loose (in): GALE-L at 0 before is not sent as a removal.
+    const typed = withLines(form, { 'p-m': { cases: 0, looseUnits: 0 }, 'p-l': { looseUnits: 3 } })
+    const req = draftAddRequest(draft, typed)!
+    expect(req.lines).toEqual([{ productId: 'p-m', cases: [], looseUnits: 0 }, { productId: 'p-l', cases: [], looseUnits: 3 }])
+    expect(addPrimaryOf(summarize(draft, typed), draft, typed, null).held).toBeNull()
+    // Only removing is still a change: the button is not held at 0 units then.
+    const onlyOut = withLines(form, { 'p-m': { cases: 0, looseUnits: 0 } })
+    expect(addPrimaryOf(summarize(draft, onlyOut), draft, onlyOut, null)).toEqual({ label: 'Add to draft · 0 units', held: null })
+    expect(draftUndoRequest(draft, req)).toEqual({
+      from: 'IT-MAIN', market: 'IT',
+      lines: [{ productId: 'p-m', cases: [{ unitsPerCase: 12, cases: 1 }], looseUnits: 2 }, { productId: 'p-l', cases: [], looseUnits: 0 }],
+    })
+  })
+
+  it('Add to draft is held only by what a draft cannot keep; every other problem stays for "Send to Amazon"', () => {
+    const draft = draftOf()
+    const over = withLines(startForm(draft), { 'p-l': { looseUnits: 99 } })
+    const summary = summarize(draft, over)
+    expect(summary.held).toBe('GALE-L: 99 units asked; 12 free at IT-MAIN')
+    expect(addPrimaryOf(summary, draft, over, null)).toEqual({ label: 'Add to draft · 99 units', held: null })
+    expect(sendPrimaryOf(summary, null)).toEqual({ label: 'Send to Amazon · 99 units', held: 'GALE-L: 99 units asked; 12 free at IT-MAIN' })
+    const noAccount = draftOf({ markets: [] })
+    const f = withLines(startForm(noAccount), { 'p-l': { looseUnits: 1 } })
+    expect(addPrimaryOf(summarize(noAccount, f), noAccount, f, null).held).toBe('No Amazon account sells in IT')
+  })
+
+  it('the buttons while busy: reading holds them, adding / saving / sending say so', () => {
+    const draft = draftOf()
+    const form = withLines(startForm(draft), { 'p-l': { looseUnits: 1 } })
+    const summary = summarize(draft, form)
+    expect(addPrimaryOf(summary, draft, form, 'reading')).toEqual({ label: 'Add to draft · 1 unit', held: 'Reading the warehouse…' })
+    expect(addPrimaryOf(summary, draft, form, 'adding')).toEqual({ label: 'Adding…', held: 'Adding…' })
+    expect(sendPrimaryOf(summary, 'saving')).toEqual({ label: 'Send to Amazon · 1 unit', held: 'Saving the draft…' })
+    expect(sendPrimaryOf(summary, 'sending')).toEqual({ label: 'Sending…', held: 'Sending…' })
+  })
+
+  it('the page saves every SKU of the draft, 0s too; Send carries the day, the box when changed and the owners when asked', () => {
+    const draft = draftOf()
+    const form = withLines(startForm(draft), { 'p-m': { cases: [{ unitsPerCase: 12, cases: 1 }] } })
+    expect(draftLinesOf(draft, form)).toEqual([
+      { productId: 'p-m', cases: [{ unitsPerCase: 12, cases: 1 }], looseUnits: 0 }, { productId: 'p-l', cases: [], looseUnits: 0 },
+    ])
+    expect(draftUpdateRequest(draft, form)).toEqual({ lines: draftLinesOf(draft, form), readyToShipOn: '2026-10-08', mixedBox: null })
+    expect(draftSendRequest(draft, form)).toEqual({ readyToShipOn: '2026-10-08', mixedBox: null })
+    const unset = draftOf({ skus: [{ ...GALE_L, prepOwner: null }] })
+    expect(draftSendRequest(unset, startForm(unset)).owners).toEqual(OWNERS_DEFAULT)
   })
 })
 
@@ -246,7 +321,7 @@ describe('several case sizes: one Cases stepper per size', () => {
     expect(skuBoxes(summary.plan, 'p-s')).toBe('3')
     expect(skuCheck(summary, 'p-s', form.lines['p-s'])).toEqual({ tone: 'success', text: 'Ready', message: null })
     const zeroSix = withLines(startForm(draft), { 'p-s': { cases: [{ unitsPerCase: 12, cases: 1 }, { unitsPerCase: 6, cases: 0 }] } })
-    expect(createRequest(draft, zeroSix)?.lines).toEqual([{ productId: 'p-s', cases: [{ unitsPerCase: 12, cases: 1 }], looseUnits: 0 }])
+    expect(draftAddRequest(draft, zeroSix)?.lines).toEqual([{ productId: 'p-s', cases: [{ unitsPerCase: 12, cases: 1 }], looseUnits: 0 }])
   })
 
   it('more cases of one size than free: that size is named, the other size is fine', () => {
@@ -280,6 +355,7 @@ describe('the routes', () => {
   it('GET send-draft: the ticked ids, From and To; the answer read; a missing route says it is not ready', async () => {
     expect(draftUrl('https://api', { productIds: ['a', 'b'], from: 'IT-MAIN', market: 'DE' })).toBe('https://api/api/fba/inbound/send-draft?productIds=a%2Cb&from=IT-MAIN&market=DE')
     expect(draftUrl('', { productIds: ['a'] })).toBe('/api/fba/inbound/send-draft?productIds=a')
+    expect(draftUrl('', { productIds: [], planId: 'd1' })).toBe('/api/fba/inbound/send-draft?planId=d1')
     const seen: string[] = []
     const ok = (async (url: string) => { seen.push(url); return new Response(JSON.stringify(draftOf()), { status: 200 }) }) as unknown as typeof fetch
     const draft = await fetchSendDraft({ productIds: ['p-m', 'p-l'] }, { fetchImpl: ok, baseUrl: '' })
@@ -296,48 +372,66 @@ describe('the routes', () => {
     const d = parseSendDraft({ skus: [{ productId: 'x', sku: 'X', caseSizes: [{ unitsPerCase: 0 }, 'no'], freeSealed: 3, unitWeightKg: -1, prepOwner: 'ME' }] })
     expect(d).toMatchObject({ from: null, locations: [], markets: [], market: 'IT', mixedBox: MIXED_BOX_DEFAULT, address: { missing: [], summary: null } })
     expect(d.skus[0]).toMatchObject({ msku: null, caseSizes: [], freeSealed: [], unitWeightKg: null, prepOwner: null, free: 0 })
+    expect(d).toMatchObject({ draftId: null, lines: [] })
+    expect(parseLines([{ productId: 'a', cases: [{ unitsPerCase: 6, cases: 1 }, { unitsPerCase: 12, cases: 2 }], looseUnits: 3 }, { productId: 'a' }, 'x', { productId: 'b', looseUnits: -2 }]))
+      .toEqual([{ productId: 'a', cases: [{ unitsPerCase: 12, cases: 2 }, { unitsPerCase: 6, cases: 1 }], looseUnits: 3 }, { productId: 'b', cases: [], looseUnits: 0 }])
   })
 
-  it('POST plans: one Idempotency-Key per intent, the request as JSON; 202 → the plan id; 400 → the server\'s reasons', async () => {
+  it('POST drafts: the request as JSON; 200 → the draft id; 400 → the server\'s reasons', async () => {
+    const calls: Array<{ url: string; method: string; body: unknown }> = []
+    let answer: Response = new Response(JSON.stringify({ planId: 'd1' }), { status: 200 })
+    const fetchImpl = (async (url: string, init: RequestInit) => {
+      calls.push({ url, method: String(init.method), body: init.body ? JSON.parse(String(init.body)) : null })
+      return answer
+    }) as unknown as typeof fetch
+    const req = draftAddRequest(draftOf(), withLines(startForm(draftOf()), { 'p-l': { looseUnits: 2 } }))!
+    expect(await postDraftAdd(req, { baseUrl: '', fetchImpl })).toEqual({ ok: true, planId: 'd1' })
+    expect(calls).toEqual([{ url: '/api/fba/inbound/drafts', method: 'POST', body: req }])
+    answer = new Response(JSON.stringify({ ok: false, code: 'REFUSED', error: 'Not saved', problems: [{ code: 'UNKNOWN_SKU', message: 'x: not one of the SKUs', productId: 'x', blocking: true }] }), { status: 400 })
+    expect(await postDraftAdd(req, { baseUrl: '', fetchImpl })).toEqual({
+      ok: false, message: 'Not saved', problems: [{ code: 'UNKNOWN_SKU', message: 'x: not one of the SKUs', productId: 'x', blocking: true }],
+    })
+  })
+
+  it('PATCH a draft (409 DRAFT_EXISTS keeps its code), DELETE a draft', async () => {
+    const calls: Array<{ url: string; method: string }> = []
+    let answer: Response = new Response(JSON.stringify({ id: 'd1', status: 'DRAFT' }), { status: 200 })
+    const fetchImpl = (async (url: string, init: RequestInit) => { calls.push({ url, method: String(init.method) }); return answer }) as unknown as typeof fetch
+    expect(await patchDraft('d1', { readyToShipOn: '2026-10-09' }, { baseUrl: '', fetchImpl })).toMatchObject({ ok: true, plan: { id: 'd1', status: 'DRAFT' } })
+    answer = new Response(JSON.stringify({ ok: false, code: 'DRAFT_EXISTS', error: 'There is already a draft from IT-MAIN to Amazon DE' }), { status: 409 })
+    expect(await patchDraft('d1', { market: 'DE' }, { baseUrl: '', fetchImpl })).toEqual({
+      ok: false, message: 'There is already a draft from IT-MAIN to Amazon DE', code: 'DRAFT_EXISTS', problems: [],
+    })
+    answer = new Response(JSON.stringify({ ok: true }), { status: 200 })
+    expect(await deleteDraft('d1', { baseUrl: '', fetchImpl })).toEqual({ ok: true })
+    answer = new Response(JSON.stringify({ ok: false, code: 'WRONG_STATE', error: 'Only a draft can be deleted' }), { status: 409 })
+    expect(await deleteDraft('d1', { baseUrl: '', fetchImpl })).toEqual({ ok: false, message: 'Only a draft can be deleted' })
+    expect(calls).toEqual([
+      { url: '/api/fba/inbound/plans/d1', method: 'PATCH' }, { url: '/api/fba/inbound/plans/d1', method: 'PATCH' },
+      { url: '/api/fba/inbound/plans/d1', method: 'DELETE' }, { url: '/api/fba/inbound/plans/d1', method: 'DELETE' },
+    ])
+  })
+
+  it('Send to Amazon: one Idempotency-Key per intent; 202 → the plan id; 400 → the reasons; no answer keeps the key', async () => {
     const calls: Array<{ url: string; key: string | null; body: unknown }> = []
-    let answer: Response = new Response(JSON.stringify({ planId: 'plan-1' }), { status: 202 })
+    let answer: Response = new Response(JSON.stringify({ planId: 'd1' }), { status: 202 })
     vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
       calls.push({ url, key: new Headers(init.headers).get(IDEMPOTENCY_KEY_HEADER), body: JSON.parse(String(init.body)) })
       return answer
     })
     const slot = new CommandKey(() => 'key-1')
-    const req = createRequest(draftOf(), withLines(startForm(draftOf()), { 'p-l': { looseUnits: 2 } }))!
-    expect(await postSendPlan(slot, req, { baseUrl: '' })).toEqual({ ok: true, planId: 'plan-1' })
-    expect(calls).toEqual([{ url: '/api/fba/inbound/plans', key: 'key-1', body: req }])
+    const req = { readyToShipOn: '2026-10-09', mixedBox: null }
+    expect(await postSendDraft(slot, 'd1', req, { baseUrl: '' })).toEqual({ ok: true, planId: 'd1' })
+    expect(calls).toEqual([{ url: '/api/fba/inbound/plans/d1/send', key: 'key-1', body: req }])
     expect(slot.pending).toBeNull()
-
-    answer = new Response(JSON.stringify({ ok: false, code: 'REFUSED', error: 'Not created', problems: [{ code: 'OVER_FREE', message: 'GALE-L: 99 units asked; 12 free at IT-MAIN', productId: 'p-l', blocking: true }, { bad: 1 }] }), { status: 400 })
-    expect(await postSendPlan(slot, req, { baseUrl: '' })).toEqual({
-      ok: false, message: 'Not created', problems: [{ code: 'OVER_FREE', message: 'GALE-L: 99 units asked; 12 free at IT-MAIN', productId: 'p-l', blocking: true }],
+    answer = new Response(JSON.stringify({ ok: false, code: 'REFUSED', error: 'Not sent', problems: [{ code: 'OVER_FREE', message: 'GALE-L: 99 units asked; 12 free at IT-MAIN', productId: 'p-l', blocking: true }] }), { status: 400 })
+    expect(await postSendDraft(slot, 'd1', req, { baseUrl: '' })).toEqual({
+      ok: false, message: 'Not sent', problems: [{ code: 'OVER_FREE', message: 'GALE-L: 99 units asked; 12 free at IT-MAIN', productId: 'p-l', blocking: true }],
     })
-    answer = new Response(JSON.stringify({ error: 'The same request is still running. Try again.' }), { status: 409 })
-    const running = await postSendPlan(slot, req, { baseUrl: '' })
-    expect(running.ok).toBe(false)
-    expect(!running.ok && running.message).toContain('still running')
-    // Still running: the key is kept, so the next press replays instead of making a second plan.
-    expect(slot.pending).not.toBeNull()
-  })
-
-  it('no answer at all: the key is kept — pressing again cannot make a second plan', async () => {
     vi.stubGlobal('fetch', async () => { throw new TypeError('Failed to fetch') })
-    const slot = new CommandKey(() => 'key-2')
-    await expect(postSendPlan(slot, createRequest(draftOf(), withLines(startForm(draftOf()), { 'p-l': { looseUnits: 1 } }))!, { baseUrl: '' })).rejects.toThrow('Failed to fetch')
-    expect(slot.pending).toBe('key-2')
-  })
-
-  it('Undo = POST …/cancel on the created plan; a refusal says the server\'s sentence', async () => {
-    const urls: string[] = []
-    let answer = new Response(JSON.stringify({ id: 'plan-1', status: 'CANCELLED' }), { status: 200 })
-    vi.stubGlobal('fetch', async (url: string) => { urls.push(url); return answer })
-    expect(await postCancelPlan(new CommandKey(), 'plan-1', { baseUrl: '' })).toMatchObject({ ok: true, plan: { id: 'plan-1', status: 'CANCELLED' } })
-    expect(urls).toEqual(['/api/fba/inbound/plans/plan-1/cancel'])
-    answer = new Response(JSON.stringify({ ok: false, code: 'WRONG_STATE', error: 'A shipment is already marked Shipped' }), { status: 409 })
-    expect(await postCancelPlan(new CommandKey(), 'plan-1', { baseUrl: '' })).toEqual({ ok: false, message: 'A shipment is already marked Shipped' })
+    const kept = new CommandKey(() => 'key-2')
+    await expect(postSendDraft(kept, 'd1', req, { baseUrl: '' })).rejects.toThrow('Failed to fetch')
+    expect(kept.pending).toBe('key-2')
   })
 
   it('error sentences and problems are read defensively', () => {

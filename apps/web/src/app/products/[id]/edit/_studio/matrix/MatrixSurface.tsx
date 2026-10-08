@@ -64,7 +64,7 @@ import {
 } from '@/design-system/grid'
 import { useAuth } from '@/lib/auth/AuthProvider'
 import { getBackendUrl } from '@/lib/backend-url'
-import { commandKeyFor } from '@/lib/command-key'
+import Link from '@/lib/workspaces/Link'
 import { FBA_SEND_COPY } from '@nexus/shared/fba-send'
 import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { InventoryEditorModal } from '@/app/products/next/InventoryEditorModal'
@@ -105,8 +105,9 @@ import { CaseDialog, type CaseSaved, type CaseTarget } from './CaseDialog'
 import { allVariants, CASE_MIXED } from './casePack'
 import { refusalLead, refusedRowIds, type RefusedMark } from './refusals'
 import { BulkEditDialog } from './bulk/BulkEditDialog'
-import { SendToFbaDialog, type SendToFbaCreated, type SendToFbaTarget } from './fba/SendToFbaDialog'
-import { DONE_COPY, hasAmazonListing, openPlans, postCancelPlan, sendDescription, sendHeld, sendProductIds } from './fba/sendToFba'
+import { SendToFbaDialog, type SendToFbaAdded, type SendToFbaTarget } from './fba/SendToFbaDialog'
+import { DONE_COPY, deleteDraft, fbaPageHref, footerLinks, hasAmazonListing, openPlans, postDraftAdd, sendDescription, sendHeld, sendProductIds, underWayPlans } from './fba/sendToFba'
+import { FBA_ROUTES, readOnePlanAnswer } from './fba/plansDrawer'
 import { FbaPlansDrawer } from './fba/FbaPlansDrawer'
 import { createBulkSource, type BulkDoors } from './bulk/bulkSource'
 import type { BulkContext } from './bulk/fields'
@@ -340,44 +341,57 @@ export function MatrixSurface({ productId }: { productId: string }) {
     )
     reread()
   }, [toast, productId])
-  /* Send to FBA (Step 4, Owner 2026-10-07): the toolbar's `Send to FBA…` opens ONE dialog on the ticked SKUs; Create plan
-     holds the units at From and queues the plan; the FBA qty cell shows Amazon's inbound "+N", and the plans drawer
-     follows every open plan of this family. Nexus never writes the FBA quantity. */
+  /* Send to FBA (Step 4, Owner 2026-10-07; drafts 2026-10-08): the toolbar's `Send to FBA…` opens ONE dialog on the ticked
+     SKUs; "Add to draft" puts them into the open draft for that From + To (no hold, no Amazon call); the FBA shipments
+     page (Fulfillment › Outbound) sends it. The footer links to the page; the FBA qty cell shows Amazon's inbound "+N" and
+     opens the plans drawer. Nexus never writes the FBA quantity. */
   const canInbound = has('inbound.manage')
   const [fbaSend, setFbaSend] = useState<SendToFbaTarget | null>(null)
   /** The plans drawer: open on one plan (`Follow it`), or on the family's open plans (`planId: null`). */
   const [plansDrawer, setPlansDrawer] = useState<{ planId: string | null } | null>(null)
-  const fbaPlansOf = useCallback(() => openPlans(readRef.current), [])
-  /** A plan made or cancelled moved the holds: the Matrix (and every page that shows stock) reads again. */
-  const onFbaChanged = useCallback(() => {
-    emitInvalidation({ type: 'stock.adjusted', id: productId, meta: { productId, source: 'matrix-fba-send', subtype: 'fba-plan' } })
+  /** The FBA cell's "in Nexus plan": the plans under way only (a draft holds nothing yet). */
+  const fbaPlansOf = useCallback(() => underWayPlans(readRef.current), [])
+  /** A draft changed: the Matrix (its footer link) and the drawer read again — the same hint the event bridge gives. */
+  const onFbaChanged = useCallback((planId: string, productIds: readonly string[]) => {
+    for (const id of new Set([productId, ...productIds])) {
+      emitInvalidation({ type: 'inventory.stock_changed', id, meta: { source: 'matrix-fba-send', subtype: 'fba-plan', planId, productId: id } })
+    }
   }, [productId])
-  /** Closed after a plan was made: the Done screen's Undo again, as a toast (the bulk Edit's pattern). */
-  const onFbaClosed = useCallback((result: { created: SendToFbaCreated; undone: boolean } | null) => {
+  /** Closed after "Add to draft": one toast with Open (the FBA shipments page on the draft) and Undo. */
+  const onFbaClosed = useCallback((added: SendToFbaAdded | null) => {
     setFbaSend(null)
-    if (!result || result.undone) return
-    const { planId, units } = result.created
+    if (!added) return
+    onFbaChanged(added.planId, added.productIds)
     let used = false
     const undo = async () => {
       if (used) return
       used = true
       try {
-        // The drawer's Cancel uses the same intent slot: a cancel pressed in both places is ONE cancel.
-        const outcome = await postCancelPlan(commandKeyFor(`fba-cancel:${planId}`), planId)
-        toast.toast(outcome.ok ? DONE_COPY.undoneToast : outcome.message, outcome.ok ? 'info' : 'danger')
+        const outcome = await postDraftAdd(added.undo)
+        if (!outcome.ok) { toast.toast(outcome.message, 'danger'); return }
+        // This add made the draft: when the Undo left it empty, it goes too.
+        if (added.made) {
+          const read = await fetch(`${getBackendUrl()}${FBA_ROUTES.plan(added.planId)}`)
+          const plan = readOnePlanAnswer(read.status, await read.json().catch(() => null))
+          if (plan && plan.status === 'DRAFT' && plan.units === 0) await deleteDraft(added.planId)
+        }
+        toast.toast(DONE_COPY.undoneToast, 'info')
       } catch (e) {
         toast.toast(e instanceof Error ? e.message : String(e), 'danger')
       } finally {
-        onFbaChanged()
+        onFbaChanged(added.planId, added.productIds)
       }
     }
     toast.toast(
-      <span className="nds-matrix-toast">{DONE_COPY.created(units)} <Button size="sm" variant="link" title={FBA_SEND_COPY.undoHint} onClick={() => { void undo() }}>{FBA_SEND_COPY.undo}</Button></span>,
+      <span className="nds-matrix-toast">
+        {DONE_COPY.added(added.units)}{' '}
+        <Button asChild size="sm" variant="link"><Link href={fbaPageHref({ plan: added.planId })}>{DONE_COPY.open}</Link></Button>{' '}
+        <Button size="sm" variant="link" onClick={() => { void undo() }}>{FBA_SEND_COPY.undo}</Button>
+      </span>,
       'success',
       { duration: 12000 },
     )
   }, [toast, onFbaChanged])
-  const onFbaFollow = useCallback((planId: string) => { setFbaSend(null); setPlansDrawer({ planId }) }, [])
   const onReloadRef = useRef<() => void>(() => {})
 
   /**
@@ -981,7 +995,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
       onSelect: () => setFbaSend({ productIds, subtitle: sheet?.family.sku }),
     }
   }, [selectedRows, rows, canInbound, read, busy, sheet])
-  const fbaPlansOpen = useMemo(() => (canInbound ? openPlans(read).length : 0), [canInbound, read])
+  const fbaLinks = useMemo(() => (canInbound ? footerLinks(read) : []), [canInbound, read])
 
   // After a switch: the Matrix re-reads now, and once more when the background has sent the new numbers.
   const reloadSoonAgain = useCallback(() => { onReloadRef.current(); setTimeout(() => onReloadRef.current(), 1500) }, [])
@@ -1054,8 +1068,11 @@ export function MatrixSurface({ productId }: { productId: string }) {
                   {notListed && <span className="nds-cell-muted">{notListed}</span>}
                 </span>
                 {scopeNote && <span className="nds-cell-muted" title={scopeNote}>{scopeNote.split(' — ')[0]}</span>}
-                {/* Send to FBA: the family's open plans, one click from the grid (the FBA qty cell opens them too). */}
-                {fbaPlansOpen > 0 && <Button size="sm" variant="link" onClick={() => setPlansDrawer({ planId: null })}>{FBA_SEND_COPY.plansButton(fbaPlansOpen)}</Button>}
+                {/* Send to FBA: the family's draft and its plans under way, one click to the FBA shipments page (the FBA qty
+                    cell opens the plans drawer). */}
+                {fbaLinks.map((l) => (
+                  <Button key={l.key} asChild size="sm" variant="link" title={l.title}><Link href={l.href}>{l.label}</Link></Button>
+                ))}
                 {conflicts.length > 0 && (
                   <Button size="sm" variant="link" onClick={reload}>{conflicts.length} {conflicts.length === 1 ? 'row' : 'rows'} changed elsewhere — refresh</Button>
                 )}
@@ -1132,7 +1149,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
 
       {caseTarget && <CaseDialog target={caseTarget} onClose={() => setCaseTarget(null)} onSaved={onCaseSaved} />}
 
-      {fbaSend && <SendToFbaDialog target={fbaSend} onClose={onFbaClosed} onChanged={onFbaChanged} onFollow={onFbaFollow} />}
+      {fbaSend && <SendToFbaDialog target={fbaSend} onClose={onFbaClosed} />}
 
       {/* The plans drawer (Part E2): it reads only while open, and after its own clicks it tells the stock pages (the
           Matrix included) to read again. */}

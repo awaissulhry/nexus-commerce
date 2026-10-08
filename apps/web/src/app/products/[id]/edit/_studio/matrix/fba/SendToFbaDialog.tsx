@@ -2,40 +2,28 @@
 
 /**
  * Send to FBA (Step 4 part E1, Owner 2026-10-07: "super simple", the Products page's Available pop-up + the PSIE dialog
- * pattern). The toolbar's `Send to FBA…` opens it on the ticked SKUs:
+ * pattern; Owner 2026-10-08: it fills a DRAFT). The toolbar's `Send to FBA…` opens it on the ticked SKUs:
  *
  *     Send to FBA · 6 SKUs                                         ✕
- *     From [IT-MAIN · Rimini]   To [Amazon IT]   Ready [08/10/2026]
- *     Prep by [Amazon|Seller]   Labels by [Amazon|Seller]          ← only when a SKU has "not set"; saved for those SKUs
- *     SKU · Free · Cases · Units · Boxes · Check                      ← ONE table, 0 by default, Tab / Enter move down
- *                                                                       (a SKU with several case sizes: one Cases stepper
- *                                                                       per size, biggest first, each marked ×12 / ×6)
- *     Loose units go in 2 mixed boxes · 60 × 40 × 40 cm   ▸ Change box size
- *     one Banner per kind of problem (the shared `sendProblems`): the plan's under From / To (account, address, day,
- *     box), the SKUs' under the table (listing, free units, EU box limits 63.5 cm / 23 kg, unit weight, …)
- *     2 SKUs · 29 units · 3 boxes · 31.4 kg                          ← ONE summary line, the shared `sendSummary`
- *                                          [Cancel] [Create plan · 120 units]
- *     Done: "Plan sent to Amazon. …"   [Undo]               [Follow it] [Done]
+ *     the shared form (`FbaSendForm`): From · To · Ready, Prep by / Labels by, the SKU table, the box, the problems,
+ *     ONE summary line                       [Cancel] [Add to draft · 120 units]
  *
- * Create plan holds the units at From (the server makes the holds) and queues the plan; Undo cancels it (free until the
- * placement is confirmed with Amazon). Nothing here computes a box, a count or a refusal: `sendToFba.ts` hands the
- * shared rules the person's choice, and the server re-checks the create with the same rules.
+ * "Add to draft" puts these SKUs into the ONE open draft for that From + To (made when none): no Amazon call, no hold.
+ * The table starts from the draft's numbers for SKUs it already holds; a SKU set back to 0 leaves the draft. The dialog
+ * closes and the Matrix shows "Added to draft · Open · Undo"; the FBA shipments page (Fulfillment › Outbound) sends the
+ * draft. Nothing here computes a box, a count or a refusal: `sendToFba.ts` hands the shared rules the person's choice.
  */
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { FBA_SEND_COPY, type FbaSendDraft, type FbaSendLine, type FbaSendProblem, type FbaSendSku } from '@nexus/shared/fba-send'
-import type { CaseOwner } from '@nexus/shared/stock-cases'
+import { FBA_SEND_COPY, type FbaDraftAddRequest, type FbaSendDraft, type FbaSendProblem } from '@nexus/shared/fba-send'
 
-import { Banner, DateField, Disclosure, EmptyState, Field, Listbox, Modal } from '@/design-system/components'
-// The DS grid's DataGrid (AG Grid, the same props) — the retiring `components/DataGrid` is on the grid-kit ratchet.
-import { DataGrid, type Column } from '@/design-system/grid/datagrid'
-import { Button, Input, NumberStepper, Pill, SegmentedControl, Skeleton } from '@/design-system/primitives'
-import { useCommandKey } from '@/lib/command-key'
+import { Banner, Modal } from '@/design-system/components'
+import { Button, Skeleton } from '@/design-system/primitives'
 
+import { FbaSendForm } from './FbaSendForm'
 import {
-  DONE_COPY, OWNER_OPTIONS, caseSteppers, casesOf, createRequest, fetchSendDraft, locationOption, marketOption, ownersAsked, parseSide, postCancelPlan,
-  postSendPlan, primaryOf, problemBanners, skuBoxes, skuCheck, startForm, startLines, summarize, summaryLine, unitsMax, withCases,
-  type CancelOutcome, type CreateOutcome, type DraftQuery, type SendForm,
+  addPrimaryOf, addedUnits, draftAddRequest, draftUndoRequest, fetchSendDraft, postDraftAdd, startForm, startLines, summarize,
+  type CreateOutcome, type DraftQuery, type SendForm,
 } from './sendToFba'
 import styles from './fba.module.css'
 
@@ -46,18 +34,25 @@ export interface SendToFbaTarget {
   subtitle?: string
 }
 
-/** What the dialog created: the page re-reads, and offers Undo again in a toast when it closes. */
-export interface SendToFbaCreated { planId: string; units: number }
+/** What "Add to draft" did: the draft, the units put in, and how to put the draft back (Undo). */
+export interface SendToFbaAdded {
+  planId: string
+  units: number
+  /** This add made the draft (there was none for this From + To). */
+  made: boolean
+  /** The Undo: these SKUs back to the numbers the draft held for them. */
+  undo: FbaDraftAddRequest
+  /** The SKUs this add touched (the stock pages re-read them). */
+  productIds: string[]
+}
 
 export interface SendToFbaApi {
   readDraft: (q: DraftQuery, signal?: AbortSignal) => Promise<FbaSendDraft>
-  create: (...args: Parameters<typeof postSendPlan>) => Promise<CreateOutcome>
-  cancel: (...args: Parameters<typeof postCancelPlan>) => Promise<CancelOutcome>
+  add: (req: FbaDraftAddRequest) => Promise<CreateOutcome>
 }
 const ROUTES: SendToFbaApi = {
   readDraft: (q, signal) => fetchSendDraft(q, { signal }),
-  create: (...args) => postSendPlan(...args),
-  cancel: (...args) => postCancelPlan(...args),
+  add: (req) => postDraftAdd(req),
 }
 
 /** Mounted once per opening (the page renders it only while it is open): every choice starts from the server's draft. */
@@ -65,22 +60,12 @@ export interface SendToFbaDialogProps {
   target: SendToFbaTarget
   /** The routes; injectable for a test. */
   api?: Partial<SendToFbaApi>
-  /** Closed — with the plan it created (and whether Undo cancelled it), or null when nothing was created. */
-  onClose: (result: { created: SendToFbaCreated; undone: boolean } | null) => void
-  /** A plan was created or cancelled: the holds moved the stock, so the page reads again. */
-  onChanged: () => void
-  /** `Follow it`: the plans drawer on this plan. */
-  onFollow: (planId: string) => void
+  /** Closed — with what "Add to draft" did, or null when nothing was added. */
+  onClose: (added: SendToFbaAdded | null) => void
 }
-
-type Side = 'lengthCm' | 'widthCm' | 'heightCm'
-const SIDES: ReadonlyArray<[Side, string]> = [['lengthCm', 'Length'], ['widthCm', 'Width'], ['heightCm', 'Height']]
-const SHOWN_MESSAGES = 4
 
 export function SendToFbaDialog(p: SendToFbaDialogProps) {
   const api: SendToFbaApi = { ...ROUTES, ...p.api }
-  const createKey = useCommandKey()
-  const cancelKey = useCommandKey()
   const bodyRef = useRef<HTMLDivElement>(null)
 
   const [query, setQuery] = useState<DraftQuery>(() => ({ productIds: p.target.productIds }))
@@ -88,12 +73,8 @@ export function SendToFbaDialog(p: SendToFbaDialogProps) {
   const [reading, setReading] = useState(true)
   const [readError, setReadError] = useState<string | null>(null)
   const [form, setForm] = useState<SendForm | null>(null)
-  const [sides, setSides] = useState<Record<Side, string>>({ lengthCm: '', widthCm: '', heightCm: '' })
-  const [creating, setCreating] = useState(false)
+  const [adding, setAdding] = useState(false)
   const [failure, setFailure] = useState<{ message: string; problems: FbaSendProblem[] } | null>(null)
-  const [created, setCreated] = useState<SendToFbaCreated | null>(null)
-  const [undo, setUndo] = useState<'idle' | 'undoing' | 'undone'>('idle')
-  const [undoError, setUndoError] = useState<string | null>(null)
   const focused = useRef(false)
 
   /* The draft: on opening, and again when From or To changes (what was typed stays for the SKUs still there). */
@@ -105,7 +86,6 @@ export function SendToFbaDialog(p: SendToFbaDialogProps) {
         if (ctrl.signal.aborted) return
         setDraft(next)
         setForm((f) => (f ? { ...f, lines: startLines(next, f.lines) } : startForm(next)))
-        setSides((s) => (s.lengthCm ? s : { lengthCm: String(next.mixedBox.lengthCm), widthCm: String(next.mixedBox.widthCm), heightCm: String(next.mixedBox.heightCm) }))
         setReading(false)
       },
       (e: unknown) => {
@@ -138,190 +118,36 @@ export function SendToFbaDialog(p: SendToFbaDialogProps) {
   }, [draft, reading])
 
   const summary = useMemo(() => (draft && form ? summarize(draft, form) : null), [draft, form])
-  const primary = summary ? primaryOf(summary, creating ? 'creating' : reading ? 'reading' : null) : { label: FBA_SEND_COPY.primary(0), held: reading ? 'Reading the warehouse…' : readError }
-  const asked = draft ? ownersAsked(draft) : false
-  const banners = useMemo(() => (summary ? problemBanners(summary.problems) : []), [summary])
+  const primary = summary && draft && form
+    ? addPrimaryOf(summary, draft, form, adding ? 'adding' : reading ? 'reading' : null)
+    : { label: FBA_SEND_COPY.addToDraft(0), held: reading ? 'Reading the warehouse…' : readError }
 
-  const setLine = (productId: string, change: (line: FbaSendLine) => FbaSendLine) => {
-    setForm((f) => (f ? { ...f, lines: { ...f.lines, [productId]: { ...change(f.lines[productId] ?? { productId, cases: [], looseUnits: 0 }), productId } } } : f))
-    setFailure(null)
-  }
-  const setSide = (side: Side, text: string) => {
-    setSides((s) => ({ ...s, [side]: text }))
-    // An empty or non-numeric side is held as 0: the shared box check names it, and nothing is sent.
-    setForm((f) => (f ? { ...f, mixedBox: { ...f.mixedBox, [side]: parseSide(text) ?? 0 } } : f))
-    setFailure(null)
-  }
-
-  /* Tab / Enter move DOWN a column (the Available pop-up's spreadsheet feel); Shift goes up; past the ends, Tab is Tab.
-     The Cases column counts its steppers in order: a SKU's sizes, then the next SKU's. */
-  const moveDown = (e: KeyboardEvent<HTMLInputElement>, column: 'cases' | 'units', index: number) => {
-    if ((e.key !== 'Tab' && e.key !== 'Enter') || e.altKey || e.ctrlKey || e.metaKey || e.nativeEvent.isComposing) return
-    const next = bodyRef.current?.querySelector<HTMLInputElement>(`[data-fba-step="${column}-${index + (e.shiftKey ? -1 : 1)}"]`)
-    if (!next) { if (e.key === 'Enter') e.preventDefault(); return }
-    e.preventDefault()
-    next.focus()
-    next.select()
-  }
-
-  const create = async () => {
+  const add = async () => {
     if (!draft || !form || primary.held !== null) return
-    const req = createRequest(draft, form)
+    const req = draftAddRequest(draft, form)
     if (!req) return
-    setCreating(true); setFailure(null)
+    setAdding(true); setFailure(null)
     try {
-      const outcome = await api.create(createKey, req)
+      const outcome = await api.add(req)
       if (!outcome.ok) { setFailure({ message: outcome.message, problems: outcome.problems }); return }
-      setCreated({ planId: outcome.planId, units: summary?.units ?? 0 })
-      p.onChanged()
+      p.onClose({
+        planId: outcome.planId,
+        units: addedUnits(req),
+        made: draft.draftId === null,
+        undo: draftUndoRequest(draft, req),
+        productIds: req.lines.map((l) => l.productId),
+      })
     } catch (e) {
-      // No answer: the key is kept, so pressing again cannot make a second plan.
       setFailure({ message: e instanceof Error ? e.message : String(e), problems: [] })
     } finally {
-      setCreating(false)
+      setAdding(false)
     }
   }
 
-  const undoPlan = async () => {
-    if (!created || undo !== 'idle') return
-    setUndo('undoing'); setUndoError(null)
-    try {
-      const outcome = await api.cancel(cancelKey, created.planId)
-      if (!outcome.ok) { setUndoError(outcome.message); setUndo('idle'); return }
-      setUndo('undone')
-      p.onChanged()
-    } catch (e) {
-      setUndoError(e instanceof Error ? e.message : String(e))
-      setUndo('idle')
-    }
-  }
-
-  const close = () => {
-    if (creating || undo === 'undoing') return
-    p.onClose(created ? { created, undone: undo === 'undone' } : null)
-  }
-
-  /* ── the table ── */
-
-  const indexOf = useMemo(() => new Map((draft?.skus ?? []).map((s, i) => [s.productId, i])), [draft])
-  /* The first Cases stepper of each SKU, counted down the column. */
-  const caseIndexOf = useMemo(() => {
-    const out = new Map<string, number>()
-    let next = 0
-    for (const s of draft?.skus ?? []) { out.set(s.productId, next); next += s.caseSizes.length }
-    return out
-  }, [draft])
-  const severalSizes = (draft?.skus ?? []).some((s) => s.caseSizes.length > 1)
-  const columns: Column<FbaSendSku>[] = [
-    { key: 'sku', label: FBA_SEND_COPY.columns.sku, width: 250, render: (s) => <span className={styles.sku}>{s.sku}</span> },
-    { key: 'free', label: FBA_SEND_COPY.columns.free, width: severalSizes ? 128 : 96, numeric: true, render: (s) => FBA_SEND_COPY.free(s.free, s.freeSealed) },
-    {
-      key: 'cases', label: FBA_SEND_COPY.columns.cases, width: severalSizes ? 148 : 128,
-      render: (s) => {
-        const steppers = caseSteppers(s)
-        if (steppers.length === 0) return <span className={styles.muted}>—</span>
-        const line = form?.lines[s.productId]
-        const one = steppers.length === 1
-        const first = caseIndexOf.get(s.productId) ?? 0
-        // One case size: the stepper exactly as before. Several: one per size, stacked, each marked with its size.
-        const list = steppers.map(({ unitsPerCase, max }, k) => (
-          <NumberStepper key={unitsPerCase} size="sm" min={0} max={max} value={casesOf(line, unitsPerCase)} disabled={creating || !!created}
-            suffix={one ? undefined : `×${unitsPerCase}`}
-            aria-label={one ? `Cases of ${s.sku}` : `Cases of ${unitsPerCase} (${s.sku})`}
-            decrementLabel={one ? `One case less of ${s.sku}` : `One case of ${unitsPerCase} less (${s.sku})`}
-            incrementLabel={one ? `One case more of ${s.sku}` : `One case of ${unitsPerCase} more (${s.sku})`}
-            data-fba-step={`cases-${first + k}`} onKeyDown={(e) => moveDown(e, 'cases', first + k)}
-            onFocus={(e) => e.currentTarget.select()} onChange={(n) => setLine(s.productId, (l) => withCases(l, unitsPerCase, n))} />
-        ))
-        return one ? list[0] : <span className={styles.steppers}>{list}</span>
-      },
-    },
-    {
-      key: 'units', label: FBA_SEND_COPY.columns.units, width: 128,
-      render: (s) => (
-        <NumberStepper size="sm" min={0} max={unitsMax(s)} value={form?.lines[s.productId]?.looseUnits ?? 0} disabled={creating || !!created}
-          aria-label={`Loose units of ${s.sku}`} decrementLabel={`One unit less of ${s.sku}`} incrementLabel={`One unit more of ${s.sku}`}
-          data-fba-step={`units-${indexOf.get(s.productId) ?? 0}`} onKeyDown={(e) => moveDown(e, 'units', indexOf.get(s.productId) ?? 0)}
-          onFocus={(e) => e.currentTarget.select()} onChange={(n) => setLine(s.productId, (l) => ({ ...l, looseUnits: n }))} />
-      ),
-    },
-    { key: 'boxes', label: FBA_SEND_COPY.columns.boxes, width: 96, numeric: true, render: (s) => (summary ? skuBoxes(summary.plan, s.productId) : '—') },
-    {
-      key: 'check', label: FBA_SEND_COPY.columns.check, width: 200,
-      render: (s) => {
-        const check = summary ? skuCheck(summary, s.productId, form?.lines[s.productId]) : null
-        return check ? <Pill tone={check.tone}>{check.text}</Pill> : null
-      },
-    },
-  ]
-
-  /* ── the parts ── */
-
-  const where = draft && form && (
-    <div className={styles.where}>
-      <Field label={FBA_SEND_COPY.from}>
-        <Listbox size="sm" options={draft.locations.map(locationOption)} value={draft.from?.code} placeholder="Choose a warehouse"
-          disabled={creating || !!created} onChange={(code) => setQuery((q) => ({ ...q, from: code }))} />
-      </Field>
-      <Field label={FBA_SEND_COPY.to}>
-        <Listbox size="sm" options={draft.markets.map(marketOption)} value={draft.markets.some((m) => m.code === draft.market) ? draft.market : undefined}
-          placeholder={draft.market} disabled={creating || !!created} onChange={(market) => setQuery((q) => ({ ...q, market }))} />
-      </Field>
-      <Field label={FBA_SEND_COPY.ready}>
-        <DateField value={form.readyToShipOn} min={draft.today || undefined} disabled={creating || !!created}
-          onChange={(day) => { setForm((f) => (f ? { ...f, readyToShipOn: day } : f)); setFailure(null) }} />
-      </Field>
-    </div>
-  )
-
-  const owners = draft && form && asked && (
-    <div className={styles.owners}>
-      {(['prepOwner', 'labelOwner'] as const).map((key) => (
-        <div key={key} className="nds-field-w">
-          <span className="nds-field-lbl" aria-hidden="true">{key === 'prepOwner' ? FBA_SEND_COPY.prepBy : FBA_SEND_COPY.labelsBy}</span>
-          <SegmentedControl ariaLabel={key === 'prepOwner' ? FBA_SEND_COPY.prepBy : FBA_SEND_COPY.labelsBy} size="sm" value={form.owners[key]}
-            disabled={creating || !!created} options={OWNER_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
-            onChange={(v) => { setForm((f) => (f ? { ...f, owners: { ...f.owners, [key]: v as CaseOwner } } : f)); setFailure(null) }} />
-        </div>
-      ))}
-      <span className={styles.muted}>{FBA_SEND_COPY.ownersHint}</span>
-    </div>
-  )
-
-  const box = summary && summary.looseUnits > 0 && (
-    <div className={styles.box}>
-      {summary.mixedLine && <span>{summary.mixedLine}</span>}
-      <Disclosure summary={FBA_SEND_COPY.changeBox}>
-        <div className={styles.sides}>
-          {SIDES.map(([side, word]) => (
-            <Field key={side} label={word}>
-              <Input size="sm" inputMode="decimal" autoComplete="off" suffix="cm" value={sides[side]} disabled={creating || !!created}
-                aria-invalid={parseSide(sides[side]) === null ? true : undefined} onChange={(e) => setSide(side, e.target.value)} />
-            </Field>
-          ))}
-        </div>
-      </Disclosure>
-    </div>
-  )
-
-  /* ONE summary line (Owner): what Create plan sends, as the shared rules count it. */
-  const totals = summary && <p className={styles.totals} role="status">{summaryLine(summary)}</p>
-
-  const list = (messages: readonly string[]) => (messages.length === 1 ? messages[0] : (
-    <ul className={styles.list}>
-      {messages.slice(0, SHOWN_MESSAGES).map((m) => <li key={m}>{m}</li>)}
-      {messages.length > SHOWN_MESSAGES && <li>…and {messages.length - SHOWN_MESSAGES} more</li>}
-    </ul>
-  ))
-  const bannersOf = (whole: boolean) => banners.filter((b) => b.whole === whole).map((b) => <Banner key={b.code} tone={b.tone} title={b.title}>{list(b.messages)}</Banner>)
-  const failed = failure && (
-    <Banner tone="danger" title="The plan was not created">
-      {failure.problems.length ? list([failure.message, ...failure.problems.map((x) => x.message)]) : failure.message}
-    </Banner>
-  )
+  const close = () => { if (!adding) p.onClose(null) }
 
   let body
-  if (!draft) {
+  if (!draft || !form) {
     body = readError
       ? <Banner tone="danger" title="The send could not be read" action={<Button size="sm" variant="secondary" onClick={() => setQuery((q) => ({ ...q }))}>Try again</Button>}>{readError}</Banner>
       : (
@@ -329,51 +155,32 @@ export function SendToFbaDialog(p: SendToFbaDialogProps) {
           <Skeleton height={28} /><Skeleton height={14} /><Skeleton height={14} width="90%" /><Skeleton height={14} width="75%" />
         </div>
       )
-  } else if (created) {
-    body = (
-      <>
-        {undo === 'undone' ? <Banner tone="info">{DONE_COPY.undone}</Banner> : <Banner tone="success">{FBA_SEND_COPY.done}</Banner>}
-        {undoError && <Banner tone="danger" title="The plan was not cancelled">{undoError}</Banner>}
-        {totals}
-      </>
-    )
   } else {
     body = (
       <>
         {readError && <Banner tone="danger" title="The send could not be read again">{readError}</Banner>}
-        {failed}
-        {where}
-        {bannersOf(true)}
-        {owners}
-        <div className={styles.table} aria-busy={reading || undefined}>
-          <DataGrid ariaLabel="SKUs to send" size="sm" keyboardScroll maxHeight={320} columns={columns} rows={draft.skus} rowKey={(s) => s.productId}
-            emptyState={<EmptyState title="No SKU to send" description="None of the ticked rows is a SKU this business sells." />} />
-        </div>
-        {box}
-        {bannersOf(false)}
-        {totals}
+        {failure && (
+          <Banner tone="danger" title="The draft was not saved">
+            {failure.problems.length ? [failure.message, ...failure.problems.map((x) => x.message)].join(' · ') : failure.message}
+          </Banner>
+        )}
+        <FbaSendForm
+          draft={draft} form={form} summary={summary} disabled={adding} reading={reading}
+          onFrom={(code) => setQuery((q) => ({ ...q, from: code }))}
+          onMarket={(market) => setQuery((q) => ({ ...q, market }))}
+          onForm={(change) => { setForm((f) => (f ? change(f) : f)); setFailure(null) }}
+        />
       </>
     )
   }
 
   const heldProps = (reason: string | null) => (reason !== null ? { 'aria-disabled': true as const, className: 'held', title: reason } : {})
-  const footer = created ? (
+  const footer = (
     <>
-      {undo !== 'undone' && (
-        <Button size="sm" variant="secondary" title={FBA_SEND_COPY.undoHint} onClick={() => { void undoPlan() }} {...heldProps(undo === 'undoing' ? 'Undoing…' : null)}>
-          {undo === 'undoing' ? 'Undoing…' : FBA_SEND_COPY.undo}
-        </Button>
-      )}
+      <span className={styles.status} role="status">{draft && primary.held !== 'Adding…' ? primary.held ?? '' : ''}</span>
       <span className="grow" />
-      {undo !== 'undone' && <Button size="sm" variant="secondary" onClick={() => p.onFollow(created.planId)} {...heldProps(undo === 'undoing' ? 'Undoing…' : null)}>{FBA_SEND_COPY.follow}</Button>}
-      <Button size="sm" variant="primary" onClick={close} {...heldProps(undo === 'undoing' ? 'Undoing…' : null)}>{FBA_SEND_COPY.doneButton}</Button>
-    </>
-  ) : (
-    <>
-      <span className={styles.status} role="status">{draft && primary.held !== 'Creating…' ? primary.held ?? '' : ''}</span>
-      <span className="grow" />
-      <Button size="sm" variant="secondary" onClick={close} {...heldProps(creating ? 'Creating…' : null)}>Cancel</Button>
-      <Button size="sm" variant="primary" onClick={() => { void create() }} title={primary.held ?? primary.label} {...heldProps(primary.held)}>{primary.label}</Button>
+      <Button size="sm" variant="secondary" onClick={close} {...heldProps(adding ? 'Adding…' : null)}>Cancel</Button>
+      <Button size="sm" variant="primary" onClick={() => { void add() }} title={primary.held ?? primary.label} {...heldProps(primary.held)}>{primary.label}</Button>
     </>
   )
 

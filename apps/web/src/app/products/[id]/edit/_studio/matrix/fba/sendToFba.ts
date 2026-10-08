@@ -3,7 +3,9 @@
  * the words are the shared `@nexus/shared/fba-send` (`sendSummary`, `planBoxes`, `sendProblems`, `FBA_SEND_COPY`): the
  * server re-checks a create with the same functions, so the dialog cannot promise a box or a count the server would
  * refuse. What is here: who is sent (the ticked rows), the defaults, the table's per-SKU words, one Banner per kind of
- * problem, the create request, the three routes the dialog calls, and the Matrix read's two Step 4 fields.
+ * problem, the draft request, the routes the dialog and the FBA shipments page call, and the Matrix read's two Step 4
+ * fields. Owner 2026-10-08: the dialog no longer creates a plan — "Add to draft" puts the SKUs into the ONE open draft
+ * for that From + To (no Amazon call, no hold); the FBA shipments page (Fulfillment › Outbound) sends it.
  *
  *     Send to FBA · 6 SKUs                                         ✕
  *     From [IT-MAIN · Rimini]   To [Amazon IT]   Ready [08/10/2026]
@@ -20,10 +22,10 @@
  *     → Done: "Plan sent to Amazon. …"   [Undo]            [Follow it] [Done]
  */
 import {
-  FBA_SEND_COPY, FBA_SEND_MAX_SKUS, MIXED_BOX_DEFAULT, isFbaPlanOpen, isFbaPlanStatus, lineCases, sendSummary,
-  type FbaBoxResult, type FbaCaseSize, type FbaCreateRequest, type FbaMixedBox, type FbaPlanView, type FbaSendChoice, type FbaSendDraft,
-  type FbaSendLine, type FbaSendLocation, type FbaSendMarket, type FbaSendOwners, type FbaSendProblem, type FbaSendProblemCode,
-  type FbaSendSku, type FbaSendSummary,
+  FBA_SEND_COPY, FBA_SEND_MAX_SKUS, MIXED_BOX_DEFAULT, isFbaPlanOpen, isFbaPlanStatus, isFbaPlanUnderWay, lineCases, lineUnits, sendSummary,
+  type FbaBoxResult, type FbaCaseSize, type FbaDraftAddRequest, type FbaDraftSendRequest, type FbaDraftUpdateRequest, type FbaMixedBox,
+  type FbaPlanListView, type FbaPlanView, type FbaSendChoice, type FbaSendDraft, type FbaSendLine, type FbaSendLocation, type FbaSendMarket,
+  type FbaSendOwners, type FbaSendProblem, type FbaSendProblemCode, type FbaSendSku, type FbaSendSummary,
 } from '@nexus/shared/fba-send'
 import type { CaseCount, CaseOwner } from '@nexus/shared/stock-cases'
 
@@ -76,9 +78,59 @@ export function sendDescription(skus: number, wholeFamily: boolean): string {
   return wholeFamily ? `The whole family: ${n} to Amazon FBA` : `${n} to Amazon FBA`
 }
 
-/** This family's open plans (`MatrixRead.fbaPlans`), newest first as read; absent = an older server = none. */
+/** This family's open plans and drafts (`MatrixRead.fbaPlans`), newest first as read; absent = an older server = none. */
 export function openPlans(read: Pick<MatrixRead, 'fbaPlans'> | null | undefined): MatrixFbaPlan[] {
   return (read?.fbaPlans ?? []).filter((p) => isFbaPlanOpen(p.status))
+}
+/** This family's plans under way (sent, not closed): the FBA cell's "in Nexus plan", the footer's shipment link. */
+export function underWayPlans(read: Pick<MatrixRead, 'fbaPlans'> | null | undefined): MatrixFbaPlan[] {
+  return (read?.fbaPlans ?? []).filter((p) => isFbaPlanUnderWay(p.status))
+}
+/** This family's DRAFT(s) — normally one per From + To. */
+export function draftPlans(read: Pick<MatrixRead, 'fbaPlans'> | null | undefined): MatrixFbaPlan[] {
+  return (read?.fbaPlans ?? []).filter((p) => p.status === 'DRAFT')
+}
+
+/* ── the FBA shipments page (Fulfillment › Outbound, Owner 2026-10-08) ────────────────────────── */
+
+export const FBA_PAGE_PATH = '/fulfillment/outbound/fba'
+
+/** The page, on one shipment (`?plan=`) or on a tab (`?view=`); the workspace prefix is added by the caller's router. */
+export function fbaPageHref(at: { plan?: string | null; view?: FbaPlanListView | null } = {}): string {
+  const params = new URLSearchParams()
+  if (at.view) params.set('view', at.view)
+  if (at.plan) params.set('plan', at.plan)
+  const q = params.toString()
+  return q ? `${FBA_PAGE_PATH}?${q}` : FBA_PAGE_PATH
+}
+
+export interface FooterLink { key: 'draft' | 'shipments'; label: string; href: string; title: string }
+
+/**
+ * The Matrix footer's links to the page: `FBA draft · 18 units` when a DRAFT holds this family's SKUs, and
+ * `FBA shipment · Ready to ship` / `FBA shipments · 3` for the plans under way. Each opens the page at that shipment
+ * (one) or on its tab (several).
+ */
+export function footerLinks(read: Pick<MatrixRead, 'fbaPlans'> | null | undefined): FooterLink[] {
+  const out: FooterLink[] = []
+  const drafts = draftPlans(read)
+  if (drafts.length > 0) {
+    const units = drafts.reduce((n, p) => n + p.units, 0)
+    out.push({
+      key: 'draft', label: FBA_SEND_COPY.draftLink(units),
+      href: drafts.length === 1 ? fbaPageHref({ plan: drafts[0].id }) : fbaPageHref({ view: 'drafts' }),
+      title: FBA_SEND_COPY.openPage,
+    })
+  }
+  const going = underWayPlans(read)
+  if (going.length > 0) {
+    out.push({
+      key: 'shipments', label: FBA_SEND_COPY.shipmentLink(going.length, FBA_SEND_COPY.status[going[0].status] ?? going[0].status),
+      href: going.length === 1 ? fbaPageHref({ plan: going[0].id }) : fbaPageHref({ view: 'active' }),
+      title: FBA_SEND_COPY.openPage,
+    })
+  }
+  return out
 }
 
 /* ── the form ─────────────────────────────────────────────────────────────────────────────────── */
@@ -104,10 +156,20 @@ export const ownersAsked = (draft: Pick<FbaSendDraft, 'skus'>): boolean => draft
 
 const zero = (productId: string): FbaSendLine => ({ productId, cases: [], looseUnits: 0 })
 
-/** Every SKU at 0 (the Owner's default), keeping what was typed for a SKU still in the new draft (From / To changed). */
-export function startLines(draft: Pick<FbaSendDraft, 'skus'>, keep?: SendLines): Record<string, FbaSendLine> {
+/**
+ * Where each SKU starts: what was typed (a SKU still there after From / To changed), else the open draft's numbers for
+ * it (`draft.lines`), else 0 (the Owner's default).
+ */
+export function startLines(draft: Pick<FbaSendDraft, 'skus'> & Partial<Pick<FbaSendDraft, 'lines'>>, keep?: SendLines): Record<string, FbaSendLine> {
+  const inDraft = new Map((draft.lines ?? []).map((l) => [l.productId, l]))
   const out: Record<string, FbaSendLine> = {}
-  for (const s of draft.skus) out[s.productId] = keep?.[s.productId] ? { ...keep[s.productId]!, productId: s.productId } : zero(s.productId)
+  for (const s of draft.skus) {
+    const typed = keep?.[s.productId]
+    const saved = inDraft.get(s.productId)
+    out[s.productId] = typed
+      ? { ...typed, productId: s.productId }
+      : saved ? { productId: s.productId, cases: saved.cases.map((c) => ({ ...c })), looseUnits: saved.looseUnits } : zero(s.productId)
+  }
   return out
 }
 
@@ -131,26 +193,91 @@ export function choiceOf(draft: FbaSendDraft, form: SendForm): FbaSendChoice {
 /** The shared verdict: counts, boxes, problems, the primary button and why it is held. */
 export const summarize = (draft: FbaSendDraft, form: SendForm): FbaSendSummary => sendSummary(draft, choiceOf(draft, form))
 
-/** POST /api/fba/inbound/plans — only the SKUs with units; null while there is no From warehouse. */
-export function createRequest(draft: FbaSendDraft, form: SendForm): FbaCreateRequest | null {
+/** A line as the server keeps it: the sizes with 0 cases left out. */
+const tidy = (l: FbaSendLine): FbaSendLine => ({ productId: l.productId, cases: l.cases.filter((c) => c.cases > 0).map((c) => ({ ...c })), looseUnits: l.looseUnits })
+const hasUnits = (l: FbaSendLine): boolean => lineCases(l) > 0 || l.looseUnits > 0
+
+/**
+ * POST /api/fba/inbound/drafts — "Add to draft": every SKU of the dialog. A SKU with units goes into the draft with these
+ * numbers; a SKU at 0 that the draft holds is taken out; a SKU at 0 the draft does not hold is left out. Null while there
+ * is no From warehouse.
+ */
+export function draftAddRequest(draft: FbaSendDraft, form: SendForm): FbaDraftAddRequest | null {
   if (!draft.from) return null
   const choice = choiceOf(draft, form)
+  const inDraft = new Set((draft.lines ?? []).map((l) => l.productId))
   return {
     from: draft.from.code,
     market: draft.market,
+    lines: choice.lines.filter((l) => hasUnits(l) || inDraft.has(l.productId)).map(tidy),
     readyToShipOn: form.readyToShipOn,
-    lines: choice.lines.filter((l) => lineCases(l) > 0 || l.looseUnits > 0)
-      .map((l) => ({ productId: l.productId, cases: l.cases.filter((c) => c.cases > 0), looseUnits: l.looseUnits })),
     mixedBox: choice.mixedBox ?? null,
     owners: choice.owners ?? null,
   }
 }
 
-/** The primary button: its words, and why it is held (busy first, then the first blocking problem). */
-export function primaryOf(summary: FbaSendSummary, busy: 'reading' | 'creating' | null): { label: string; held: string | null } {
-  if (busy === 'creating') return { label: 'Creating…', held: 'Creating…' }
-  if (busy === 'reading') return { label: summary.primary, held: 'Reading the warehouse…' }
-  return { label: summary.primary, held: summary.held }
+/** The Undo of an "Add to draft": these SKUs back to the numbers the draft held for them (0 = out of the draft again). */
+export function draftUndoRequest(draft: FbaSendDraft, sent: FbaDraftAddRequest): FbaDraftAddRequest {
+  const before = new Map((draft.lines ?? []).map((l) => [l.productId, l]))
+  return {
+    from: sent.from,
+    market: sent.market,
+    lines: sent.lines.map((l) => (before.has(l.productId) ? tidy(before.get(l.productId)!) : { productId: l.productId, cases: [], looseUnits: 0 })),
+  }
+}
+
+/** Units an "Add to draft" puts in: the SKUs of this dialog with units. */
+export const addedUnits = (req: Pick<FbaDraftAddRequest, 'lines'>): number => req.lines.reduce((n, l) => n + lineUnits(l), 0)
+
+/** The refusals that hold "Add to draft" (a draft keeps every other problem for the page, where "Send to Amazon" checks). */
+const ADD_BLOCKING = new Set<FbaSendProblemCode>(['NOT_A_WAREHOUSE', 'NO_ACCOUNT', 'UNKNOWN_SKU', 'INVALID_QUANTITY', 'TOO_MANY_SKUS'])
+
+/**
+ * The dialog's button, `Add to draft · N units`, and why it is held: busy first; then From / To / the counts; then
+ * nothing to add (0 units, and no SKU of the draft to take out). Every other problem shows as a Banner and stays for
+ * "Send to Amazon".
+ */
+export function addPrimaryOf(summary: FbaSendSummary, draft: Pick<FbaSendDraft, 'lines'>, form: Pick<SendForm, 'lines'>, busy: 'reading' | 'adding' | null): { label: string; held: string | null } {
+  const label = FBA_SEND_COPY.addToDraft(summary.units)
+  if (busy === 'adding') return { label: 'Adding…', held: 'Adding…' }
+  if (busy === 'reading') return { label, held: 'Reading the warehouse…' }
+  const blocking = summary.blocking.find((p) => ADD_BLOCKING.has(p.code))
+  if (blocking) return { label, held: blocking.message }
+  const inDraft = new Set((draft.lines ?? []).map((l) => l.productId))
+  const removes = Object.values(form.lines).some((l) => inDraft.has(l.productId) && !hasUnits(l))
+  if (summary.units === 0 && !removes) return { label, held: FBA_SEND_COPY.problem.noUnits }
+  return { label, held: null }
+}
+
+/** The page's button, `Send to Amazon · N units`: held while busy or by the first blocking problem (the server's rule). */
+export function sendPrimaryOf(summary: FbaSendSummary, busy: 'reading' | 'saving' | 'sending' | null): { label: string; held: string | null } {
+  const label = FBA_SEND_COPY.sendToAmazon(summary.units)
+  if (busy === 'sending') return { label: 'Sending…', held: 'Sending…' }
+  if (busy === 'reading') return { label, held: 'Reading the warehouse…' }
+  if (busy === 'saving') return { label, held: 'Saving the draft…' }
+  return { label, held: summary.held }
+}
+
+/** The draft's lines as the page keeps them (PATCH `lines`): every SKU shown, 0-unit ones too (a SKU added, numbers to come). */
+export function draftLinesOf(draft: Pick<FbaSendDraft, 'skus'>, form: Pick<SendForm, 'lines'>): FbaSendLine[] {
+  return draft.skus.map((s) => tidy(form.lines[s.productId] ?? zero(s.productId)))
+}
+
+/** PATCH /api/fba/inbound/plans/:id — what the page saves as you type: the lines, the day, the box when changed, the owners when asked. */
+export function draftUpdateRequest(draft: FbaSendDraft, form: SendForm): FbaDraftUpdateRequest {
+  const choice = choiceOf(draft, form)
+  return {
+    lines: draftLinesOf(draft, form),
+    readyToShipOn: form.readyToShipOn,
+    mixedBox: choice.mixedBox ?? null,
+    ...(choice.owners ? { owners: choice.owners } : {}),
+  }
+}
+
+/** POST /api/fba/inbound/plans/:id/send — the day, the box when changed, the owners when asked. */
+export function draftSendRequest(draft: FbaSendDraft, form: SendForm): FbaDraftSendRequest {
+  const choice = choiceOf(draft, form)
+  return { readyToShipOn: form.readyToShipOn, mixedBox: choice.mixedBox ?? null, ...(choice.owners ? { owners: choice.owners } : {}) }
 }
 
 /* ── the table ────────────────────────────────────────────────────────────────────────────────── */
@@ -252,9 +379,10 @@ export function parseSide(text: string): number | null {
 /* ── the done screen ──────────────────────────────────────────────────────────────────────────── */
 
 export const DONE_COPY = {
-  undone: 'Plan cancelled. The units are free again.',
-  created: (units: number) => `FBA plan created · ${units} ${units === 1 ? 'unit' : 'units'} held`,
-  undoneToast: 'FBA plan cancelled · the units are free again',
+  /** The Matrix toast after "Add to draft". */
+  added: (units: number) => `${FBA_SEND_COPY.addedToDraft} · ${units.toLocaleString('en')} ${units === 1 ? 'unit' : 'units'}`,
+  undoneToast: 'Draft put back as it was',
+  open: 'Open',
 } as const
 
 /* ── the routes ───────────────────────────────────────────────────────────────────────────────── */
@@ -281,10 +409,13 @@ export function problemsOf(body: unknown): FbaSendProblem[] {
   })
 }
 
-export interface DraftQuery { productIds: readonly string[]; from?: string | null; market?: string | null }
+/** The SKUs at From (the Matrix dialog), or a draft's own SKUs, From, To, day and box (`planId`, the page). */
+export interface DraftQuery { productIds: readonly string[]; from?: string | null; market?: string | null; planId?: string | null }
 
 export function draftUrl(base: string, q: DraftQuery): string {
-  const params = new URLSearchParams({ productIds: q.productIds.join(',') })
+  const params = new URLSearchParams()
+  if (q.productIds.length) params.set('productIds', q.productIds.join(','))
+  if (q.planId) params.set('planId', q.planId)
   if (q.from) params.set('from', q.from)
   if (q.market) params.set('market', q.market)
   return `${base}/api/fba/inbound/send-draft?${params.toString()}`
@@ -376,7 +507,21 @@ export function parseSendDraft(body: unknown): FbaSendDraft {
         openPlanUnits: num(s.openPlanUnits),
       }]
     }),
+    draftId: str(b.draftId),
+    lines: parseLines(b.lines),
   }
+}
+
+/** Lines as sent (`FbaSendLine[]`): one per SKU, whole counts ≥ 0, sizes biggest first; malformed entries dropped. */
+export function parseLines(raw: unknown): FbaSendLine[] {
+  if (!Array.isArray(raw)) return []
+  const seen = new Set<string>()
+  return raw.flatMap((x): FbaSendLine[] => {
+    const l = x as Record<string, unknown> | null
+    if (!l || typeof l.productId !== 'string' || seen.has(l.productId)) return []
+    seen.add(l.productId)
+    return [{ productId: l.productId, cases: parseCaseCounts(l.cases), looseUnits: Math.max(0, Math.floor(num(l.looseUnits))) }]
+  })
 }
 
 /** GET /api/fba/inbound/send-draft — the SKUs at From, the markets, the address check and the defaults. */
@@ -390,30 +535,61 @@ export async function fetchSendDraft(q: DraftQuery, opts: RouteOptions = {}): Pr
 
 export type CreateOutcome = { ok: true; planId: string } | { ok: false; message: string; problems: FbaSendProblem[] }
 
-/** POST /api/fba/inbound/plans with the intent's Idempotency-Key (a double click or a resend makes ONE plan). */
-export async function postSendPlan(slot: CommandKey, req: FbaCreateRequest, opts: Pick<RouteOptions, 'baseUrl'> = {}): Promise<CreateOutcome> {
-  const { response, body, conflict } = await sendCommand<Record<string, unknown>>(slot, `${opts.baseUrl ?? getBackendUrl()}/api/fba/inbound/plans`, {
+/** POST /api/fba/inbound/drafts — "Add to draft" (and its Undo): the draft's planId, or the server's sentence. */
+export async function postDraftAdd(req: FbaDraftAddRequest, opts: Pick<RouteOptions, 'baseUrl' | 'fetchImpl'> = {}): Promise<CreateOutcome> {
+  const doFetch = opts.fetchImpl ?? fetch
+  const res = await doFetch(`${opts.baseUrl ?? getBackendUrl()}/api/fba/inbound/drafts`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(req),
   })
-  if (conflict) return { ok: false, message: commandConflictMessage(conflict, 'plan request'), problems: [] }
-  if (response.ok && body && typeof body.planId === 'string') return { ok: true, planId: body.planId }
-  return { ok: false, message: errorSentence(body, response.status, 'The plan was not created'), problems: problemsOf(body) }
+  const body = await res.json().catch(() => null) as Record<string, unknown> | null
+  if (res.ok && body && typeof body.planId === 'string') return { ok: true, planId: body.planId }
+  return { ok: false, message: errorSentence(body, res.status, 'The draft was not saved'), problems: problemsOf(body) }
 }
 
-export type CancelOutcome = { ok: true; plan: FbaPlanView | null } | { ok: false; message: string }
+export type DraftSaveOutcome = { ok: true; plan: FbaPlanView | null } | { ok: false; message: string; code: string | null; problems: FbaSendProblem[] }
 
-/** POST /api/fba/inbound/plans/:id/cancel — Undo: the holds are released at the click; free until confirmed with Amazon. */
-export async function postCancelPlan(slot: CommandKey, planId: string, opts: Pick<RouteOptions, 'baseUrl'> = {}): Promise<CancelOutcome> {
-  const { response, body, conflict } = await sendCommand<Record<string, unknown>>(slot, `${opts.baseUrl ?? getBackendUrl()}/api/fba/inbound/plans/${encodeURIComponent(planId)}/cancel`, {
+const codeOf = (body: unknown): string | null => {
+  const b = body && typeof body === 'object' ? (body as Record<string, unknown>) : null
+  return b && typeof b.code === 'string' ? b.code : null
+}
+const planOf = (body: unknown): FbaPlanView | null => {
+  const b = body && typeof body === 'object' ? (body as Record<string, unknown>) : null
+  return b && typeof b.id === 'string' && typeof b.status === 'string' ? (b as unknown as FbaPlanView) : null
+}
+
+/** PATCH /api/fba/inbound/plans/:id — the page saves a draft as the person types; 409 DRAFT_EXISTS says so. */
+export async function patchDraft(planId: string, req: FbaDraftUpdateRequest, opts: Pick<RouteOptions, 'baseUrl' | 'fetchImpl'> = {}): Promise<DraftSaveOutcome> {
+  const doFetch = opts.fetchImpl ?? fetch
+  const res = await doFetch(`${opts.baseUrl ?? getBackendUrl()}/api/fba/inbound/plans/${encodeURIComponent(planId)}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(req),
+  })
+  const body = await res.json().catch(() => null)
+  if (res.ok) return { ok: true, plan: planOf(body) }
+  return { ok: false, message: errorSentence(body, res.status, 'The draft was not saved'), code: codeOf(body), problems: problemsOf(body) }
+}
+
+/** DELETE /api/fba/inbound/plans/:id — "Delete draft" (and the Undo of an "Add to draft" that made it). */
+export async function deleteDraft(planId: string, opts: Pick<RouteOptions, 'baseUrl' | 'fetchImpl'> = {}): Promise<{ ok: true } | { ok: false; message: string }> {
+  const doFetch = opts.fetchImpl ?? fetch
+  const res = await doFetch(`${opts.baseUrl ?? getBackendUrl()}/api/fba/inbound/plans/${encodeURIComponent(planId)}`, { method: 'DELETE' })
+  if (res.ok) return { ok: true }
+  return { ok: false, message: errorSentence(await res.json().catch(() => null), res.status, 'The draft was not deleted') }
+}
+
+/** POST /api/fba/inbound/plans/:id/send with the intent's Idempotency-Key — "Send to Amazon" (a double click sends ONE plan). */
+export async function postSendDraft(slot: CommandKey, planId: string, req: FbaDraftSendRequest, opts: Pick<RouteOptions, 'baseUrl'> = {}): Promise<CreateOutcome> {
+  const { response, body, conflict } = await sendCommand<Record<string, unknown>>(slot, `${opts.baseUrl ?? getBackendUrl()}/api/fba/inbound/plans/${encodeURIComponent(planId)}/send`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: '{}',
+    body: JSON.stringify(req),
   })
-  if (conflict) return { ok: false, message: commandConflictMessage(conflict, 'cancel request') }
-  if (response.ok) return { ok: true, plan: body && typeof body.id === 'string' ? (body as unknown as FbaPlanView) : null }
-  return { ok: false, message: errorSentence(body, response.status, 'The plan was not cancelled') }
+  if (conflict) return { ok: false, message: commandConflictMessage(conflict, 'send request'), problems: [] }
+  if (response.ok) return { ok: true, planId: body && typeof body.planId === 'string' ? body.planId : planId }
+  return { ok: false, message: errorSentence(body, response.status, 'The plan was not sent'), problems: problemsOf(body) }
 }
 
 /* ── the Matrix read's Step 4 fields (`source.ts` parses through these) ──────────────────────── */

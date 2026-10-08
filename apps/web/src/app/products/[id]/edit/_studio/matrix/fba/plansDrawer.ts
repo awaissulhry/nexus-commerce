@@ -7,8 +7,8 @@
  * Nothing here calls a server: the URLs and the answer readers are pure so they are tested; the drawer does the fetches.
  */
 import {
-  FBA_JOB_STATUSES, FBA_SEND_COPY,
-  type FbaChoiceRequest, type FbaDeliveryWindowOption, type FbaFee, type FbaMoney, type FbaPlacementOption, type FbaPlacementShipment,
+  FBA_JOB_STATUSES, FBA_PLAN_VIEWS, FBA_SEND_COPY,
+  type FbaChoiceRequest, type FbaPlanListAnswer, type FbaPlanListView, type FbaDeliveryWindowOption, type FbaFee, type FbaMoney, type FbaPlacementOption, type FbaPlacementShipment,
   type FbaPlanLineView, type FbaPlanStatus, type FbaPlanStep, type FbaPlanView, type FbaShipmentView, type FbaShippedRequest, type FbaTransportOption,
 } from '@nexus/shared/fba-send'
 import { CASE_COPY } from '@nexus/shared/stock-cases'
@@ -82,7 +82,7 @@ export function statusTone(status: FbaPlanStatus): Tone {
     case 'FAILED': return 'danger'
     case 'WAITING_FOR_CHOICE': case 'READY_TO_SHIP': case 'HELD': return 'warning'
     case 'SHIPPED': case 'AT_AMAZON': return 'success'
-    case 'CLOSED': case 'CANCELLED': case 'CANCELLING': return 'neutral'
+    case 'CLOSED': case 'CANCELLED': case 'CANCELLING': case 'DRAFT': return 'neutral'
     default: return 'info'
   }
 }
@@ -534,6 +534,9 @@ export function lineRows(plan: Pick<FbaPlanView, 'lines'>): Array<{ id: string; 
 const enc = encodeURIComponent
 export const FBA_ROUTES = {
   plans: (productId: string) => `/api/fba/inbound/plans?productId=${enc(productId)}&open=1`,
+  /** The FBA shipments page: one tab, newest first, a page at a time. */
+  list: (view: FbaPlanListView, cursor?: string | null, limit = 50) =>
+    `/api/fba/inbound/plans?view=${enc(view)}&limit=${limit}${cursor ? `&cursor=${enc(cursor)}` : ''}`,
   plan: (planId: string) => `/api/fba/inbound/plans/${enc(planId)}`,
   choice: (planId: string) => `/api/fba/inbound/plans/${enc(planId)}/choice`,
   cancel: (planId: string) => `/api/fba/inbound/plans/${enc(planId)}/cancel`,
@@ -575,6 +578,21 @@ export function readPlansAnswer(status: number, body: unknown): FbaPlanView[] {
   throw new Error(refusalText(status, body).message)
 }
 
+const countOf = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0)
+
+/** GET /plans?view=&cursor= → the page's tab: its plans (in the server's order), the next cursor and every tab's count. */
+export function readPlanListAnswer(status: number, body: unknown): FbaPlanListAnswer {
+  if (status >= 200 && status < 300 && isRecord(body) && Array.isArray(body.plans)) {
+    const counts = isRecord(body.counts) ? body.counts : {}
+    return {
+      plans: body.plans.filter(looksLikePlan),
+      next: typeof body.next === 'string' && body.next ? body.next : null,
+      counts: Object.fromEntries(FBA_PLAN_VIEWS.map(v => [v, countOf(counts[v])])) as Record<FbaPlanListView, number>,
+    }
+  }
+  throw new Error(refusalText(status, body).message)
+}
+
 /** GET /plans/:id → the plan; 404 → null; anything else throws the server's sentence. */
 export function readOnePlanAnswer(status: number, body: unknown): FbaPlanView | null {
   if (status === 404) return null
@@ -603,6 +621,17 @@ export const REREAD_RUNNING_MS = 8_000
 export const REREAD_IDLE_MS = 60_000
 export const rereadDelay = (plans: ReadonlyArray<Pick<FbaPlanView, 'status'>>): number =>
   plans.some(p => isRunning(p.status)) ? REREAD_RUNNING_MS : REREAD_IDLE_MS
+
+/** When the plan last moved, from what the server sent: the newest of its creation, steps, confirm, cancel and shipments. */
+export function planUpdatedAt(plan: Pick<FbaPlanView, 'createdAt' | 'steps' | 'confirmedAt' | 'cancelledAt' | 'shipments'>): string {
+  return latest([plan.createdAt, plan.confirmedAt, plan.cancelledAt, ...plan.steps.map(e => e.finishedAt), ...plan.shipments.map(s => s.shippedAt)]) ?? plan.createdAt
+}
+
+/** The boxes of a plan Amazon has (its shipments'); `—` before that (a draft, or a plan before its boxes are sent). */
+export function planBoxesText(plan: Pick<FbaPlanView, 'shipments'>): string {
+  const n = plan.shipments.reduce((sum, s) => sum + s.boxes.length, 0)
+  return n > 0 ? n.toLocaleString('en-GB') : '—'
+}
 
 /** The products of a plan, for the stock re-read hint after a click here (cancel releases holds; Shipped moves units). */
 export const planProductIds = (plan: Pick<FbaPlanView, 'lines'>): string[] => [...new Set(plan.lines.map(l => l.productId))]
