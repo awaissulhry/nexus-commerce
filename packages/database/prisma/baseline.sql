@@ -9616,6 +9616,39 @@ CREATE TABLE "BidDirective" (
 );
 
 -- CreateTable
+CREATE TABLE "BidProbe" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "campaignId" TEXT NOT NULL,
+    "adGroupId" TEXT NOT NULL,
+    "targetId" TEXT NOT NULL,
+    "productKey" TEXT,
+    "mode" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "centerCents" INTEGER NOT NULL,
+    "highCents" INTEGER NOT NULL,
+    "lowCents" INTEGER NOT NULL,
+    "amplitude" DOUBLE PRECISION NOT NULL,
+    "protection" TEXT,
+    "sequence" TEXT NOT NULL,
+    "startDay" DATE NOT NULL,
+    "endDay" DATE NOT NULL,
+    "days" JSONB NOT NULL DEFAULT '{}',
+    "observed" JSONB,
+    "reading" JSONB,
+    "epsPrior" JSONB,
+    "epsPosterior" JSONB,
+    "why" TEXT NOT NULL,
+    "stoppedWhy" TEXT,
+    "runId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "BidProbe_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AdsBrainEnrollment" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -15747,6 +15780,21 @@ CREATE INDEX "BidDirective_targetId_idx" ON "BidDirective"("targetId");
 
 -- CreateIndex
 CREATE INDEX "BidDirective_workspaceId_idx" ON "BidDirective"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "BidProbe_marketplace_status_idx" ON "BidProbe"("marketplace", "status");
+
+-- CreateIndex
+CREATE INDEX "BidProbe_targetId_createdAt_idx" ON "BidProbe"("targetId", "createdAt" DESC);
+
+-- CreateIndex
+CREATE INDEX "BidProbe_updatedAt_idx" ON "BidProbe"("updatedAt");
+
+-- CreateIndex
+CREATE INDEX "BidProbe_workspaceId_idx" ON "BidProbe"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "BidProbe_workspaceId_targetId_startDay_key" ON "BidProbe"("workspaceId", "targetId", "startDay");
 
 -- CreateIndex
 CREATE INDEX "AdsBrainEnrollment_marketplace_idx" ON "AdsBrainEnrollment"("marketplace");

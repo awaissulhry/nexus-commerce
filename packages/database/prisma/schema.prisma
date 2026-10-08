@@ -20153,6 +20153,68 @@ model BidDirective {
   @@index([workspaceId])
 }
 
+/// BID BRAIN BB-21 — one switchback probe of one keyword (2026-10-08, design 2026-10-07-hands-off/BRAIN-UPGRADES-DESIGN.md
+/// U2 "Learning ε", U3 "Switchback probes"; services/advertising/bid-brain/probe.ts, probe-store.ts). 12 serving days (the
+/// market's own zone) in four periods of 3 on two bids around the brain's own (center ± δ, symmetric: budget-neutral),
+/// in the order `sequence` (HLLH or LHHL); each full run records its day, then the probe is measured per arm and its
+/// reading of the keyword's bid elasticity ε updates its product's ε (`epsPrior` → `epsPosterior`), which the response
+/// model reads (DONE LIVE rows only). SHADOW: planned and followed with no bid change (its measurement a placebo);
+/// LIVE: NEXUS_BID_BRAIN_PROBES=on and a campaign the brain owns — its arms are the brain's decisions. One probe per
+/// keyword and start day; ended ones are kept a year. No foreign key: the history outlives a removed keyword.
+model BidProbe {
+  // Business ownership comes from verified database context.
+  workspaceId  String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id           String   @id @default(cuid())
+
+  /// Short market code ('IT').
+  marketplace  String
+  campaignId   String
+  adGroupId    String
+  /// AdTarget.id.
+  targetId     String
+  /// The pool its reading feeds: its ad group's product families, sorted and joined by '|'; null: none known (the market).
+  productKey   String?
+  /// SHADOW | LIVE
+  mode         String
+  /// RUNNING | MEASURING | DONE | STOPPED
+  status       String
+  /// The brain's bid at the start and the two arms (cents): high = center + δ, low = center − δ.
+  centerCents  Int
+  highCents    Int
+  lowCents     Int
+  /// δ ÷ center (0.15; 0.05 on a protected, brand or winner term).
+  amplitude    Float
+  /// protected-term | brand | winner — why the amplitude is the small one; null: none.
+  protection   String?
+  /// The arm of each 3-day period: HLLH | LHHL.
+  sequence     String
+  /// The first and last serving day.
+  startDay     DateTime @db.Date
+  endDay       DateTime @db.Date
+  /// Per serving day 'YYYY-MM-DD': { arm, bidCents, served, yielded?, minBid? } (probe.ts ProbeDay).
+  days         Json     @default("{}")
+  /// Per arm the clean days' clicks, impressions, cost (cents) and orders, the washouts and the over-dispersion.
+  observed     Json?
+  /// The reading { eps, variance } — LIVE and DONE only.
+  reading      Json?
+  /// Its product's ε { mean, sd } before the reading and after it.
+  epsPrior     Json?
+  epsPosterior Json?
+  /// Why it was picked (bids in cents); why it stopped.
+  why          String   @db.Text
+  stoppedWhy   String?  @db.Text
+  /// The bid brain's run that last wrote it.
+  runId        String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([workspaceId, targetId, startDay], name: "target_start", map: "BidProbe_workspaceId_targetId_startDay_key")
+  @@index([marketplace, status])
+  @@index([targetId, createdAt(sort: Desc)])
+  @@index([updatedAt])
+  @@index([workspaceId])
+}
+
 /// ONE BRAIN AB-1 — one product's brain in one market (one-brain DESIGN.md §1, §3, §6, §10; Owner 10-08). The product is
 /// the family root (a parent, or a product with no parent); its campaigns come from the products they advertise
 /// (services/advertising/brain/ownership.ts) — a campaign that advertises another product too is shared and no product's

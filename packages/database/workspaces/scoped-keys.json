@@ -6237,6 +6237,16 @@
     "compound": {},
     "relations": []
   },
+  "BidProbe": {
+    "scalar": {},
+    "compound": {
+      "target_start": [
+        "targetId",
+        "startDay"
+      ]
+    },
+    "relations": []
+  },
   "AdsBrainEnrollment": {
     "scalar": {},
     "compound": {

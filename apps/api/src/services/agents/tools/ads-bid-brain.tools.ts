@@ -9,6 +9,7 @@
  *   diff     per day, the brain against what today's writers set, and conflicts and churn from the action log
  *   calibration  BB-15 — the attribution lag curve per market (and product): how much of a day's final orders a young copy
  *            holds at each age, what the curve rests on, and the nowcast's mean absolute error on the newest settled days
+ *   probes   BB-21 — the switchback probes that measure each keyword's bid elasticity ε, and ε per product from them
  */
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
@@ -20,7 +21,9 @@ const PCT = z.coerce.number().min(1).max(500)
 
 /** Bids, targets and the why (which names bids and the order value) are ad-spend money. */
 const BRAIN_MONEY: Readonly<Record<string, FieldPermission>> = Object.fromEntries(
-  ['currentCents', 'decidedCents', 'goalBidCents', 'whatIfCents', 'aimPct', 'bandLoPct', 'bandHiPct', 'expectedAcosPct', 'targetAcosPct', 'why']
+  ['currentCents', 'decidedCents', 'goalBidCents', 'whatIfCents', 'aimPct', 'bandLoPct', 'bandHiPct', 'expectedAcosPct', 'targetAcosPct', 'why',
+    // BB-21 — a probe's bids, its days' bids and what each side cost.
+    'centerCents', 'highCents', 'lowCents', 'bidCents', 'costCents', 'stoppedWhy']
     .map((key) => [key, FIELDS.financialsAdspendView]),
 )
 
@@ -34,7 +37,7 @@ const bidBrain: AgentTool = {
   restrictedFields: BRAIN_MONEY,
   input: z.object({
     view: z.enum(BRAIN_VIEWS).default('why')
-      .describe('why (default): each keyword\'s newest decision and why; what-if: decided again now with targetAcosPct (and a band); diff: per day, the brain against what today\'s writers set, with conflicts and churn; calibration: the attribution lag curve per market (and product) and how well its nowcast predicted the newest settled days'),
+      .describe('why (default): each keyword\'s newest decision and why; what-if: decided again now with targetAcosPct (and a band); diff: per day, the brain against what today\'s writers set, with conflicts and churn; calibration: the attribution lag curve per market (and product) and how well its nowcast predicted the newest settled days; probes: the switchback probes that measure each keyword\'s bid elasticity ε and ε per product'),
     market: z.string().trim().toUpperCase().min(2).max(20).optional()
       .describe('one Amazon market code (the shadow runs on IT and DE); omit with no campaign, keyword or product for both'),
     campaignId: ID.optional().describe('one Amazon campaign, its Nexus id (ad-campaigns)'),
@@ -44,7 +47,7 @@ const bidBrain: AgentTool = {
     bandLoPct: PCT.optional().describe('what-if: the bottom of the ACoS band, a percent (the brain leaves a bid alone inside the band)'),
     bandHiPct: PCT.optional().describe('what-if: the top of the ACoS band, a percent'),
     days: z.coerce.number().int().min(1).max(30).default(7).describe('diff: how many days back (default 7, max 30)'),
-    limit: z.coerce.number().int().min(1).max(200).default(50).describe('why and what-if: how many keywords, the biggest moves first (default 50, max 200)'),
+    limit: z.coerce.number().int().min(1).max(200).default(50).describe('why and what-if: how many keywords, the biggest moves first; probes: how many probes, the newest first (default 50, max 200)'),
   }),
   description:
     "Read the bid brain: the one engine that will decide every Amazon Sponsored Products keyword bid from the business's "
@@ -63,7 +66,13 @@ const bidBrain: AgentTool = {
     + 'the share of a day\'s final 7-day orders and sales a copy pulled a days after the day already holds, what it rests on '
     + '(vintage days, the 1d/7d seed), and how well a curve fitted without the newest settled days nowcast them (mean '
     + 'absolute error per age, against reading the young copy as final); the brain\'s nowcast weights young days by it '
-    + '(NEXUS_BID_BRAIN_NOWCAST: shadow by default — the decisions stay on settled days and the why names any difference). Scope: a '
+    + '(NEXUS_BID_BRAIN_NOWCAST: shadow by default — the decisions stay on settled days and the why names any difference). '
+    + 'view probes: the switchback probes that measure how a keyword\'s clicks answer its bid (ε, which the profit-best bid '
+    + 'needs): 12 days of two bids around the brain\'s own (±15 %, ±5 % on a protected, brand or winner term), 6 days each so '
+    + 'the average is the brain\'s bid, each probe\'s days, what each side got (clicks, cost, orders), its reading of ε and '
+    + 'its product\'s ε before and after; pools: ε per product from the probes (NEXUS_BID_BRAIN_PROBES: shadow by default — '
+    + 'planned and measured, no bid changes, a shadow probe\'s measurement is a placebo; on — the bids of a campaign the brain '
+    + 'owns follow the probe). Scope: a '
     + 'keyword (targetId), a campaign, a product, or a market. Bids, targets and the why are ad-spend money: hidden from a '
     + 'person without permission to see ad spend. Nexus only; reads nothing from Amazon.',
   handler: async (args) => {

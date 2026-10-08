@@ -31,6 +31,9 @@
  *   BB-20     NEXUS_BID_BRAIN_EXPLORE=shadow (the default): each full run also plans the day's explore and revive bids
  *             inside the market's explore budget (response-explore.ts) and logs them the same way; `on`: the picked
  *             keywords' decisions become layer explore / revive and are acted on like any other (the rest stay the goal's)
+ *   BB-21     NEXUS_BID_BRAIN_PROBES=shadow (the default): each full run also steps, measures and plans the switchback
+ *             probes that measure ε (probe.ts, probe-store.ts: the BidProbe ledger) and says what they would bid; `on`:
+ *             a LIVE probe's arm (a campaign the brain owns) is the decision, layer probe, acted on like any other
  */
 import { randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
@@ -58,6 +61,7 @@ import { compareNowcast, nowcastLastSteps, nowcastMode, nowcastOnNotes, nowcastS
 import { upgradesShadow, type UpgradesSummary } from './response-explore.js'
 import { responseSummaryWords } from './response.js'
 import { exploreSummaryWords } from './explore.js'
+import { probeSummaryWords } from './probe.js'
 
 export type BrainMode = 'off' | 'shadow' | 'live'
 
@@ -158,7 +162,7 @@ export async function shadowMarket(market: string, ctx: { runId: string; mode: B
   // only some campaigns plans over the whole market (`marketFacts`), so the picks of all runs fit one budget.
   const partial = !!ctx.scope?.campaignIds || !!ctx.scope?.skipCampaignIds || !!ctx.raiseCaps?.size
   const upgrades = rows.light ? null : await upgradesShadow(rows, {
-    facts, decisions: decided, campaignOf, now: ctx.now, lastWrites, ...(partial ? { marketFacts: () => buildFacts(rows, anchored) } : {}),
+    facts, decisions: decided, campaignOf, now: ctx.now, lastWrites, owned, runId: ctx.runId, ...(partial ? { marketFacts: () => buildFacts(rows, anchored) } : {}),
   })
   const decisions = upgrades?.decisions ?? decided
   // BB-15 — the nowcast in shadow (full runs only): words for the stored why; the decisions above are the ones that count.
@@ -649,7 +653,7 @@ export function shadowSummaryLine(r: ShadowRun): string {
     const words = [writeReportWords(m.writes), placementReportWords(m.placements), strategyReportWords(m.strategies)].filter(Boolean).join(' ')
     const live = m.owned ? ` owned=${m.owned}${words ? ` ${words}` : ''}` : ''
     const nowcast = m.nowcast ? ` · ${nowcastSummaryWords(m.nowcast)}` : m.nowcastOn ? ` · nowcast on to ${m.nowcastOn.dataDay} (${m.nowcastOn.curve}), young days ${m.nowcastOn.youngPct}%` : ''
-    const upgrades = [m.upgrades?.response ? responseSummaryWords(m.upgrades.response) : '', m.upgrades?.explore ? exploreSummaryWords(m.upgrades.explore) : ''].filter(Boolean).map((w) => ` · ${w}`).join('')
+    const upgrades = [m.upgrades?.response ? responseSummaryWords(m.upgrades.response) : '', m.upgrades?.explore ? exploreSummaryWords(m.upgrades.explore) : '', probeSummaryWords(m.upgrades?.probes)].filter(Boolean).map((w) => ` · ${w}`).join('')
     return `${m.market} decided=${m.decided} stored=${m.stored}${actions ? ` ${actions}` : ''}${live}${m.brakes.length ? ` brakes: ${m.brakes.join('; ')}` : ''}${nowcast}${upgrades}`
   })
   const owned = r.markets.reduce((n, m) => n + (m.owned ?? 0), 0)

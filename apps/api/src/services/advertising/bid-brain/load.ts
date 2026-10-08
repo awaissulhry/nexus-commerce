@@ -415,7 +415,8 @@ async function loadLowered(previous: ReadonlyMap<string, PreviousDecision>): Pro
   const ids = [...previous].filter(([, p]) => (LOWERING_LAYERS as readonly string[]).includes(p.layer) || p.layer === 'restore').map(([id]) => id)
   if (!ids.length) return out
   // The bid before: a decision no override lowered (a give-back that wrote counts; one that held at the floor does not).
-  const kept = ['goal', 'band', 'limit', 'no_goal', 'pin', 'freeze']
+  // BB-21 — a LIVE probe's arm too: a Min-bid hour's give-back returns to the day's arm, not to the bid before the probe.
+  const kept = ['goal', 'band', 'limit', 'no_goal', 'pin', 'freeze', 'probe']
   const rows = await prisma.$queryRaw<Array<{ targetId: string; decidedCents: number }>>(Prisma.sql`
     SELECT DISTINCT ON (d."targetId") d."targetId", d."decidedCents" FROM "BidBrainDecision" d
      WHERE d."targetId" = ANY(${ids}::text[]) AND (d.layer = ANY(${kept}::text[]) OR (d.layer = 'restore' AND d.action = 'write'))

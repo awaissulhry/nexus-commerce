@@ -119,6 +119,8 @@ describe.skipIf(!concurrentDatabaseUrl())('BB-15 — the lag curve and the nowca
 
   beforeAll(async () => {
     vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1')
+    // BB-21 — the switchback probes (shadow by default) add their own "would bid" words to the why: off here, the nowcast alone.
+    vi.stubEnv('NEXUS_BID_BRAIN_PROBES', 'off')
     database = await concurrentDatabase()
     for (const id of [W, OTHER]) {
       await database.pool.query('INSERT INTO "Workspace" (id,name,status,"createdByUserId","creationKey","updatedAt") VALUES ($1,$1,\'active\',\'test\',$1,now())', [id])

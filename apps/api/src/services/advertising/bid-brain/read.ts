@@ -12,6 +12,8 @@
  *   calibration  BB-15 — the attribution lag curve per market (and per product with a curve of its own): the share of a
  *            day's final orders and sales a copy pulled at each age holds, what it rests on, and how well a curve fitted
  *            without the newest settled days nowcast them (mean absolute error per age, against no nowcast)
+ *   probes   BB-21 — the switchback probes of a scope (probe-store.ts readProbes): arms, days, what each measured, and ε
+ *            per product from their readings
  */
 import { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
@@ -26,8 +28,9 @@ import { CALIBRATION_DAYS, CURVE_MAX_AGE_DAYS, curveWords, MARKET_SCOPE, storedC
 import { LAG_AGES, MIN_MATURITY, NOWCAST_MAX_FACTOR } from './lag-curve.js'
 import { YOUNG_SHARE_MAX } from './estimator.js'
 import { nowcastMode, runForRows } from './nowcast.js'
+import { readProbes } from './probe-store.js'
 
-export const BRAIN_VIEWS = ['why', 'what-if', 'diff', 'calibration'] as const
+export const BRAIN_VIEWS = ['why', 'what-if', 'diff', 'calibration', 'probes'] as const
 export type BrainView = (typeof BRAIN_VIEWS)[number]
 
 export interface BrainReadArgs {
@@ -318,5 +321,9 @@ export async function readBidBrain(args: BrainReadArgs): Promise<{ data: unknown
   if (view === 'what-if') return whatIfView(args)
   if (view === 'diff') return diffView(args)
   if (view === 'calibration') return calibrationView(args)
+  if (view === 'probes') {
+    const scope = await scopeTargets(args)
+    return scope.error ? { error: scope.error } : readProbes(scope, { limit: args.limit })
+  }
   return whyView(args)
 }
