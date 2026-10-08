@@ -62,7 +62,7 @@ import { getBidGrid, type BidTargetRow } from '../../advertising/bid-grid.servic
 import { createHash } from 'node:crypto'
 import { updatePlacementBidding } from '../../advertising/ads-create.service.js'
 import { adGroupCampaigns, adGroupDefaultBids, adGroupSuppressionCounts, highestAdGroupBidAbove } from '../../advertising/ads-entity-lookup.service.js'
-import { restoreBidsFor, restoreCampaignBids, suppressCampaignBids, SUPPRESSION_FLOOR_CENTS } from '../../advertising/ads-bid-suppression.service.js'
+import { openStopHolds, restoreBidsFor, restoreCampaignBids, suppressCampaignBids, SUPPRESSION_FLOOR_CENTS } from '../../advertising/ads-bid-suppression.service.js'
 import { stopBidsFor, strategySourceWords } from '../../advertising/ads-strategy/effective.js'
 import { playbookHoldOf, playbookHolds, startOnlyRefusal } from '../../advertising/ads-playbook/held.js'
 import { amountLabel, campaignCurrency, checkLiveReach, liftSuppressionRefusal, suppressionOf, type AdWriteIntent, type LiveReach } from './ads-tool-guards.js'
@@ -1686,7 +1686,9 @@ async function restorePreview(args: Record<string, unknown>, ctx?: Pick<ToolCont
   if (!campaign) return { ok: false, error: `campaign ${campaignId} not found` }
   const notSp = spOnlyRefusal(campaign)
   if (notSp) return { ok: false, error: notSp }
-  const refused = liftSuppressionRefusal(campaign)
+  // #513 review — a stop declared as a STOP hold (a campaign the bid brain owns) is a suppression too.
+  const stopHolds = (await openStopHolds([campaign.id])).get(campaign.id) ?? []
+  const refused = liftSuppressionRefusal(campaign, stopHolds)
   if (refused) return { ok: false, error: `${campaign.name} is not restored here: ${refused}.` }
   // PB-5b — a playbook's campaign (built, or at a floor its stop holds) gets its bids back only with the playbook's START.
   const playbookHeld = (await playbookHolds([campaign.id])).get(campaign.id)
@@ -1734,7 +1736,7 @@ async function restorePreview(args: Record<string, unknown>, ctx?: Pick<ToolCont
     preview: {
       action: 'restore-campaign',
       campaign: { id: campaign.id, name: campaign.name, marketplace: campaign.marketplace },
-      suppressedBy: campaign.bidsSuppressedBy,
+      suppressedBy: campaign.bidsSuppressedAt ? campaign.bidsSuppressedBy : (stopHolds[0] ?? null),
       currency,
       restores: { targets: remembered.length, adGroups: groups.remembered },
       bids: remembered.slice(0, LINES_SHOWN).map((t) => ({

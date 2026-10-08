@@ -36,6 +36,80 @@ import type { AdWriteEvidence } from './ads-evidence.js'
 import { deltaBidCents } from './ads-placement-math.js'
 import { effectiveBidBounds, withStrategyBand, type BidBound } from './ads-write-gate.js'
 import { NO_LIMITS, bidSideWords, clampBid, clampToStrategy, limitWords, strategyBidReader, strategyWords, type BidHoldLog, type StrategyBidLimits } from './ads-strategy/bids.js'
+import { brainOwnedCampaignIds } from './bid-brain/live.js'
+// BID BRAIN pre-go-live — STOP_HOLD_KIND: a stop declared while another owner's stop holds the campaign's mark is kept as
+// a campaign-wide BidHold of this kind (declareOwnedStop); the brain reads it as a stop (facts.ts).
+import { declaredStopFloor, isPlanFloorMark, STOP_HOLD_KIND } from './bid-brain/facts.js'
+
+/**
+ * BID BRAIN pre-go-live — on a campaign the brain owns, a stop always lands (it was lost while the brain's Min-bid floor
+ * held the campaign's mark: `bidsSuppressedAt` was set, so the stop returned at once, and the hour's end gave the bids back):
+ *   no mark, or the brain's own plan floor mark   the stop takes the mark (the keywords keep the memory the floor saved)
+ *   the same owner's mark                         nothing to do
+ *   another owner's stop on the mark              this stop is kept as a campaign-wide STOP hold (BidHold), so it outlives
+ *                                                 the first; the brain reads both and applies the lowest floor (facts.ts)
+ * No bid is written: the brain floors the bids.
+ */
+async function declareOwnedStop(campaignId: string, mark: { bidsSuppressedAt: Date | null; bidsSuppressedBy: string | null }, floor: number, opts: { actor: AdsActor; reason?: string }): Promise<void> {
+  if (!mark.bidsSuppressedAt || isPlanFloorMark(mark.bidsSuppressedBy)) {
+    await prisma.campaign.update({ where: { id: campaignId }, data: { bidsSuppressedAt: new Date(), bidsSuppressedFloorCents: floor, bidsSuppressedBy: opts.actor } })
+  } else if (mark.bidsSuppressedBy !== opts.actor) {
+    const open = await prisma.bidHold.findFirst({ where: { campaignId, targetId: null, kind: STOP_HOLD_KIND, by: opts.actor, endedAt: null }, select: { id: true } })
+    // #513 review — the floor this owner declared goes with it (`floorCents`): the brain applies that floor, not another.
+    if (!open) await prisma.bidHold.create({ data: { campaignId, targetId: null, kind: STOP_HOLD_KIND, by: opts.actor, until: null, floorCents: floor, reason: (opts.reason ?? 'a stop').slice(0, 500) } })
+  }
+  logger.info('[no-pause] stop declared on a campaign the bid brain owns — the brain floors its bids', { campaignId, floor, by: opts.actor, over: mark.bidsSuppressedBy })
+}
+
+/**
+ * #513 review — a declared stop is never left without the campaign's mark, so every screen and tool that reads the mark
+ * sees it, and its owner's lift ends it. When the mark is free — its owner lifted its stop, or the campaign leaves the
+ * brain with none (enrollment.ts, op shadow / give-back) — the oldest stop still declared as a STOP hold takes it: its
+ * owner, its floor and the time it was declared. That hold ends; the saved bids stay for that owner's lift. Any other hold
+ * stays declared and takes the mark the same way on the next lift. Mark first, hold last: a run cut off between the two
+ * leaves the stop in force twice, never lost. True when a stop took the mark.
+ */
+export async function handMarkToStopHold(campaignId: string, endedBy: string): Promise<boolean> {
+  const hold = await prisma.bidHold.findFirst({
+    where: { campaignId, targetId: null, kind: STOP_HOLD_KIND, endedAt: null },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true, by: true, reason: true, floorCents: true, createdAt: true },
+  })
+  if (!hold) return false
+  const floor = normaliseFloorCents(declaredStopFloor(hold))
+  await prisma.campaign.update({ where: { id: campaignId }, data: { bidsSuppressedAt: hold.createdAt, bidsSuppressedFloorCents: floor, bidsSuppressedBy: hold.by } })
+  await prisma.bidHold.update({ where: { id: hold.id }, data: { endedAt: new Date(), endedBy } })
+  logger.info('[no-pause] a stop still declared takes the campaign\'s mark — the bids stay at the floor', { campaignId, by: hold.by, floor, liftedBy: endedBy })
+  return true
+}
+
+/** #513 review — the stops declared as STOP holds, per campaign (their owners). No query for no campaign. */
+export async function openStopHolds(campaignIds: readonly string[]): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>()
+  if (!campaignIds.length) return out
+  const rows = await prisma.bidHold.findMany({ where: { campaignId: { in: [...campaignIds] }, targetId: null, kind: STOP_HOLD_KIND, endedAt: null }, select: { campaignId: true, by: true } })
+  for (const r of rows) out.set(r.campaignId, [...(out.get(r.campaignId) ?? []), r.by])
+  return out
+}
+
+/** #513 review — a lift ends its owner's own declared stop; a person's lift (`manual`) ends every one. */
+async function endStopHolds(campaignId: string, opts: { actor: AdsActor; manual?: boolean }): Promise<void> {
+  await prisma.bidHold.updateMany({ where: { campaignId, targetId: null, kind: STOP_HOLD_KIND, endedAt: null, ...(opts.manual ? {} : { by: opts.actor }) }, data: { endedAt: new Date(), endedBy: opts.actor } })
+}
+
+/**
+ * BID BRAIN BB-8 — a campaign the bid brain owns (bid-brain/live.ts: the env ceiling `live` and its enrollment LIVE or
+ * HELD) is stopped and given back by DECLARING only. A stop sets its marks (who, at which floor) and writes no bid; the
+ * brain, the campaign's one bid writer, floors the bids on its next run (its STOP / STOCK / PHASE / MIN-BID HOUR layers).
+ * A give-back clears the marks and writes no bid; the brain puts the bids back on its next run, from the bid it had
+ * before the stop toward its goal (decide.ts `restore`). So no restore memory is kept for an owned campaign, and one left
+ * from before the campaign joined the brain is dropped when the stop lifts. Under any other ceiling nothing here changes
+ * (no query: brainOwnedCampaignIds answers empty at once).
+ */
+async function ownedByBrain(campaignId: string | null | undefined): Promise<boolean> {
+  if (!campaignId) return false
+  return (await brainOwnedCampaignIds([campaignId])).has(campaignId)
+}
 
 /**
  * ADS AUTONOMY W1-5 — the bounds a give-back (a restore after a stop, a base-bid revert) is held to, per ad group: the
@@ -131,9 +205,16 @@ export async function suppressCampaignBids(
   // his other edits (isPersonEdit). Absent for every existing caller.
   opts: { actor: AdsActor; reason?: string; applyImmediately?: boolean; floorCents?: number | null; changeSetId?: string | null; evidence?: AdWriteEvidence | null; manual?: boolean },
 ): Promise<number> {
-  const camp = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { id: true, bidsSuppressedAt: true } })
-  if (!camp || camp.bidsSuppressedAt) return 0 // missing or already suppressed → no-op
+  const camp = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { id: true, bidsSuppressedAt: true, bidsSuppressedBy: true } })
+  if (!camp) return 0
   const floor = normaliseFloorCents(opts.floorCents)
+  // BB-8 — the bid brain owns it: the stop is declared, and the brain floors the bids (see ownedByBrain). Pre-go-live —
+  // asked before the "already floored" no-op: a stop declared over the brain's own floor must land (declareOwnedStop).
+  if (await ownedByBrain(campaignId)) {
+    await declareOwnedStop(campaignId, camp, floor, opts)
+    return 0
+  }
+  if (camp.bidsSuppressedAt) return 0 // already suppressed → no-op
   const reason = opts.reason ?? 'no-pause: bids floored instead of pausing'
   const applyImmediately = opts.applyImmediately ?? true
   let touched = 0
@@ -198,6 +279,11 @@ export async function refloorCampaignBids(
   const camp = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { id: true, bidsSuppressedAt: true, bidsSuppressedFloorCents: true } })
   if (!camp?.bidsSuppressedAt) return 0 // not suppressed → suppressCampaignBids owns this
   const floor = normaliseFloorCents(opts.floorCents)
+  // BB-8 — the bid brain owns it: only the declared floor moves; the brain sets the bids.
+  if (await ownedByBrain(campaignId)) {
+    if (camp.bidsSuppressedFloorCents !== floor) await prisma.campaign.update({ where: { id: campaignId }, data: { bidsSuppressedFloorCents: floor } })
+    return 0
+  }
   const current = camp.bidsSuppressedFloorCents ?? SUPPRESSION_FLOOR_CENTS // null = pre-MB.1 row, floored at 2¢
   const reason = opts.reason ?? `no-pause: floor moved ${(current / 100).toFixed(2)} → ${(floor / 100).toFixed(2)}`
   const applyImmediately = opts.applyImmediately ?? true
@@ -276,8 +362,35 @@ export async function restoreCampaignBids(
     planned?: { floorCents: number; left: Array<{ kind: 'adGroup' | 'target'; id: string; bidCents: number; rememberedCents: number }> }
   },
 ): Promise<number> {
-  const camp = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { id: true, bidsSuppressedAt: true } })
-  if (!camp || !camp.bidsSuppressedAt) return 0 // not suppressed → no-op
+  const camp = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { id: true, bidsSuppressedAt: true, bidsSuppressedBy: true } })
+  if (!camp) return 0
+  // BB-8 — the bid brain owns it: the stop is lifted by clearing its marks; the brain gives the bids back. A memory left
+  // from before the campaign joined the brain is dropped (an ad group floored on its own keeps its floor and memory).
+  // Pre-go-live — an owner lifts its own stop only: its STOP hold ends (declareOwnedStop), and the mark clears when it is
+  // this owner's (a person's restore lifts every stop); another owner's stop keeps the mark and the floor. #513 review — a
+  // stop still declared as a STOP hold takes the mark this owner frees (handMarkToStopHold), with the saved bids.
+  if (await ownedByBrain(campaignId)) {
+    await endStopHolds(campaignId, opts)
+    if (!camp.bidsSuppressedAt) return 0
+    const mine = opts.manual === true || !camp.bidsSuppressedBy || camp.bidsSuppressedBy === opts.actor
+    if (!mine) {
+      logger.info('[no-pause] another owner\'s stop still holds this campaign the bid brain owns — left as it is', { campaignId, by: opts.actor, held: camp.bidsSuppressedBy })
+      return 0
+    }
+    if (!opts.manual && await handMarkToStopHold(campaignId, opts.actor)) return 0
+    // Memories first, the marks last: a run cut off half-way still reads as stopped, and the next give-back finishes it.
+    await prisma.adGroup.updateMany({ where: { campaignId, bidsSuppressedAt: null, suppressedFromBidCents: { not: null } }, data: { suppressedFromBidCents: null } })
+    await prisma.adTarget.updateMany({ where: { adGroup: { campaignId, bidsSuppressedAt: null }, suppressedFromBidCents: { not: null } }, data: { suppressedFromBidCents: null } })
+    await prisma.campaign.update({ where: { id: campaignId }, data: { bidsSuppressedAt: null, bidsSuppressedFloorCents: null, bidsSuppressedBy: null } })
+    logger.info('[no-pause] stop lifted on a campaign the bid brain owns — the brain gives its bids back', { campaignId, by: opts.actor })
+    return 0
+  }
+  if (!camp.bidsSuppressedAt) return 0 // not suppressed → no-op
+  // #513 review — a campaign that left the brain with a stop still declared as a STOP hold (enrollment.ts keeps it): the
+  // lift ends this owner's own (a person's: every one), and another still declared takes the mark — the bids stay floored
+  // with their memory, for that owner's lift. A campaign never owned has none: one update and one read, nothing changes.
+  await endStopHolds(campaignId, opts)
+  if (!opts.manual && await handMarkToStopHold(campaignId, opts.actor)) return 0
   const reason = opts.reason ?? 'no-pause: restored prior bids on resume'
   const applyImmediately = opts.applyImmediately ?? true
   let touched = 0, failed = 0
@@ -349,9 +462,15 @@ export async function suppressAdGroupBids(
   adGroupId: string,
   opts: { actor: AdsActor; reason?: string; applyImmediately?: boolean; floorCents?: number | null },
 ): Promise<number> {
-  const group = await prisma.adGroup.findUnique({ where: { id: adGroupId }, select: { id: true, defaultBidCents: true, suppressedFromBidCents: true, bidsSuppressedAt: true } })
+  const group = await prisma.adGroup.findUnique({ where: { id: adGroupId }, select: { id: true, campaignId: true, defaultBidCents: true, suppressedFromBidCents: true, bidsSuppressedAt: true } })
   if (!group || group.bidsSuppressedAt) return 0
   const floor = normaliseFloorCents(opts.floorCents)
+  // BB-8 — the bid brain owns its campaign: the ad group's stop is declared, and the brain floors its bids.
+  if (await ownedByBrain(group.campaignId)) {
+    await prisma.adGroup.update({ where: { id: group.id }, data: { bidsSuppressedAt: new Date(), bidsSuppressedFloorCents: floor, bidsSuppressedBy: opts.actor } })
+    logger.info('[no-pause] ad group stop declared in a campaign the bid brain owns — the brain floors its bids', { adGroupId, floor, by: opts.actor })
+    return 0
+  }
   const reason = opts.reason ?? 'no-pause: ad group bids floored instead of pausing'
   const applyImmediately = opts.applyImmediately ?? true
   let touched = 0
@@ -394,6 +513,14 @@ export async function restoreAdGroupBids(
   const group = await prisma.adGroup.findUnique({ where: { id: adGroupId }, select: { id: true, campaignId: true, defaultBidCents: true, suppressedFromBidCents: true, bidsSuppressedAt: true, campaign: { select: { bidsSuppressedAt: true } } } })
   if (!group?.bidsSuppressedAt) return 0
   const handOver = () => prisma.adGroup.update({ where: { id: group.id }, data: { bidsSuppressedAt: null, bidsSuppressedFloorCents: null, bidsSuppressedBy: null } })
+  // BB-8 — the bid brain owns its campaign: the ad group's stop is lifted by clearing its marks and any memory; the brain
+  // gives the bids back (inside a campaign stop, that stop still holds them: the brain reads it).
+  if (await ownedByBrain(group.campaignId)) {
+    await prisma.adTarget.updateMany({ where: { adGroupId, suppressedFromBidCents: { not: null } }, data: { suppressedFromBidCents: null } })
+    await prisma.adGroup.update({ where: { id: group.id }, data: { suppressedFromBidCents: null, bidsSuppressedAt: null, bidsSuppressedFloorCents: null, bidsSuppressedBy: null } })
+    logger.info('[no-pause] ad group stop lifted in a campaign the bid brain owns — the brain gives its bids back', { adGroupId, by: opts.actor })
+    return 0
+  }
   if (group.campaign?.bidsSuppressedAt) {
     await handOver()
     logger.info('[no-pause] ad group floor handed over to its campaign floor — the campaign restore puts its bids back', { adGroupId })
@@ -464,11 +591,21 @@ export async function lowerAdGroupBids(
 ): Promise<{ moved: number; failed: number }> {
   const group = await prisma.adGroup.findUnique({
     where: { id: adGroupId },
-    select: { id: true, defaultBidCents: true, suppressedFromBidCents: true, bidsSuppressedAt: true, bidsSuppressedBy: true, campaign: { select: { bidsSuppressedAt: true } } },
+    select: { id: true, campaignId: true, defaultBidCents: true, suppressedFromBidCents: true, bidsSuppressedAt: true, bidsSuppressedBy: true, campaign: { select: { bidsSuppressedAt: true } } },
   })
   if (!group || group.campaign?.bidsSuppressedAt) return { moved: 0, failed: 0 }
   if (group.bidsSuppressedAt && group.bidsSuppressedBy !== opts.actor && !group.bidsSuppressedBy?.startsWith('user:')) return { moved: 0, failed: 0 }
   const floor = normaliseFloorCents(opts.floorCents)
+  // BB-8 — the bid brain owns its campaign: the stock floor is declared (its owner kept as below), and the brain floors
+  // the bids on its next run. Nothing moved here.
+  if (await ownedByBrain(group.campaignId)) {
+    await prisma.adGroup.update({
+      where: { id: group.id },
+      data: group.bidsSuppressedAt ? { bidsSuppressedFloorCents: floor } : { bidsSuppressedAt: new Date(), bidsSuppressedFloorCents: floor, bidsSuppressedBy: opts.actor },
+    })
+    logger.info('[no-pause] stock floor declared in a campaign the bid brain owns — the brain floors its bids', { adGroupId, floor, by: opts.actor })
+    return { moved: 0, failed: 0 }
+  }
   const write = { actor: opts.actor, reason: opts.reason, applyImmediately: opts.applyImmediately ?? true, force: true, changeSetId: opts.changeSetId ?? null, manual: opts.manual }
   let moved = 0, failed = 0
   if (group.defaultBidCents > floor) {

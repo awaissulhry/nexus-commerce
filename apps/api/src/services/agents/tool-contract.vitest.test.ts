@@ -505,6 +505,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       // A7 — a bulk bid change is reversed as one change set by undo-ad-change.
       'bulk-ad-bid-change': { before: { changeSetId: 'ap1', bids: { t1: 30 } }, after: { bids: { t1: 35 } } },
       'undo-ad-change': { before: { changeSetId: 'ap2', undid: { mode: 'set', changeSetId: 'ap1' } }, after: { changeSetId: 'ap2', standing: 3 } },
+      // Auto-undo (A19) — a person's approved undo of one judged change is put back by undo-ad-change of its change set.
+      'undo-worse-ad-change': { before: { changeSetId: 'ap3', undid: { judgementId: 'j1' } }, after: { changeSetId: 'ap3', standing: 1 } },
       // W4-7 — a plan, a schedule and a pool are set back through their own tool; a restore to baseline through
       // set-campaign-budget's list form.
       'set-monthly-ad-budget': {
@@ -701,6 +703,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'report-ads-run': { before: { runId: 'r1', status: 'running', withdrawn: false }, after: { runId: 'r1', status: 'done', withdrawn: false } },
       // W4-2 — the expected report time it replaced, set again.
       'set-ads-report-time': { before: { expected: { time: '08:00', timeZone: 'Europe/Rome' } }, after: { expected: { time: '08:30', timeZone: 'Europe/Rome' } } },
+      // BB-6 — a campaign's place in the bid brain put back (LIVE → the op that returns it).
+      'set-bid-brain-enrollment': { before: { campaignId: 'c1', mode: 'SHADOW' }, after: { campaignId: 'c1', mode: 'LIVE' } },
       // W4-8 — a rule's campaigns put back (replace); a coverage term's values put back through the same tool.
       'assign-ad-rules': { before: { ruleId: 'r1', name: 'Rule — DE', binding: 'picker', campaignIds: ['c1'] }, after: { ruleId: 'r1', name: 'Rule — DE', binding: 'picker', campaignIds: ['c1', 'c2'] } },
       'set-coverage-set': {

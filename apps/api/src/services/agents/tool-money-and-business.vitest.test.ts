@@ -148,6 +148,7 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'delete-listing': 'a Delete needs a listing on its account and the channel\'s gate (listing-lifecycle.tools test)',
   'add-photo-from-url': 'it fetches a web link and stores the file (Cloudinary), neither of which this suite has (photos-link.tools test)',
   'plan-fba-shipment': 'a Send to FBA plan needs an Amazon account selling in the market, a warehouse with its address and the SKU\'s Amazon listing, none of which this seed has (fba-plan-tools test)',
+  'set-bid-brain-enrollment': 'a campaign goes LIVE under the bid brain only from the live-write allowlist, which the seeded campaign is not on (bid-brain/live-postgres test)',
 }
 
 /**
@@ -263,6 +264,7 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   // A2 — the ad reads, aimed at the seeded campaign where they take one (business B's reads as not found from A).
   // A10 — undo of an ad change set (it needs money: refused for a person without it).
   'undo-ad-change': () => ({ changeSetId: 'none' }),
+  'undo-worse-ad-change': () => ({ judgementId: 'none' }),
   // A6 — campaign budget and placements (they need money: refused for a person without it).
   'set-campaign-budget': (ids) => ({ campaignId: ids.campaignId, dailyBudgetCents: 2500 }),
   'set-placement-multipliers': (ids) => ({ campaignId: ids.campaignId, topOfSearchPct: 30 }),
@@ -280,6 +282,7 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'restore-campaign': (ids) => ({ campaignId: ids.campaignId }),
   // A12 — the live-write allowlist (no money in it).
   'set-campaign-live-writes': (ids) => ({ campaignId: ids.campaignId, enabled: true }),
+  'set-bid-brain-enrollment': (ids) => ({ campaignId: ids.campaignId, op: 'live' }),
   // AA-W2-12 — a real pause and an enable name the budgets that stop or start spending (they need money).
   'pause-ads': (ids) => ({ campaignIds: [ids.campaignId] }),
   'enable-ads': (ids) => ({ campaignIds: [ids.campaignId] }),
@@ -304,6 +307,9 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'set-campaign-target-acos': (ids) => ({ campaignIds: [ids.campaignId], targetAcosPct: 25 }),
   // Ads autonomy W1-2 — the strategy for the seeded campaign's market: its targets, bids and caps are money.
   'ads-strategy': (ids) => ({ market: 'IT', campaignId: ids.campaignId }),
+  'bid-brain': (ids) => ({ view: 'why', campaignId: ids.campaignId }),
+  // AB-3 — the brain's map of one campaign (every lever's owner, the writers set up and those that wrote).
+  'ads-brain': (ids) => ({ view: 'map', campaignId: ids.campaignId }),
   // Ads playbook PB-2 — the seeded product's playbook in IT: its daily budget and base bid are money, and so are the
   // strategy's numbers shown beside it.
   'ads-playbook': (ids) => ({ market: 'IT', productId: ids.productId }),
@@ -375,6 +381,8 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'audit-trail': (ids) => ({ entityId: ids.productId }),
   'sync-activity': () => ({ kind: 'queue' }),
   'ai-usage': () => ({}),
+  // Platform health watchdog — the newest daily run of the checks (none stored here: says so), and one check live.
+  'platform-health-checks': () => ({}),
   // MCP full control P7 — previews of the organizing changes.
   'set-product-tags': (ids) => ({ productId: ids.productId, tags: ['MONEY tag'] }),
   'move-workflow-stage': (ids) => ({ productId: ids.productId, stageId: ids.stageId }),

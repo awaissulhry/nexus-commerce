@@ -3972,6 +3972,49 @@ model AmazonAdsDailyPerformance {
   @@index([workspaceId])
 }
 
+/// BID BRAIN BB-13 (2026-10-08, design BRAIN-UPGRADES-DESIGN.md U1a) — the copies of one campaign day as Amazon
+/// filled it in. Amazon keeps adding attributed sales to a day for 7 days (Sponsored Products) or 14 (Brands,
+/// Display); the daily reports now re-read the last 8 / 15 days every night, and AmazonAdsDailyPerformance keeps only
+/// the newest copy. Each pull whose numbers differ from the previous copy is kept here, so Nexus can show how much a
+/// first copy under-counts (the platform health check `ads-data-settled`) and learn how fast a day fills.
+///   ageDays  whole days from the END of `date` to the pull (0 = pulled the next morning; 7 = complete for SP)
+///   source   pull   = a report Nexus ingested
+///            stored = the copy the table already held before a re-pull replaced it (its first pull, kept once)
+/// CAMPAIGN grain only (about 20 live campaigns): keyword grain would cost rows for no extra signal. Kept 120 days.
+model AdsDailyVintage {
+  // Business ownership comes from verified database context.
+  workspaceId  String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id           String   @id @default(cuid())
+  profileId    String
+  marketplace  String
+  adProduct    String
+  entityType   String
+  /// Amazon's campaign id.
+  entityId     String
+  date         DateTime @db.Date
+  /// When the numbers were asked of Amazon (the report job's createdAt; for `stored`, the old copy's report time).
+  pulledAt     DateTime
+  ageDays      Int
+  source       String   @default("pull")
+  /// AmazonAdsReportJob.id of the pull (null when unknown).
+  reportRunId  String?
+  impressions  Int
+  clicks       Int
+  costMicros   BigInt
+  sales1dCents Int?
+  sales7dCents Int?
+  sales14dCents Int?
+  orders1d     Int?
+  orders7d     Int?
+  orders14d    Int?
+  createdAt    DateTime @default(now())
+
+  @@unique([workspaceId, profileId, adProduct, entityType, entityId, date, pulledAt], name: "vintage_pull", map: "AdsDailyVintage_pull_key")
+  @@index([marketplace, date])
+  @@index([createdAt])
+  @@index([workspaceId])
+}
+
 // CD.11 — hourly grain (Amazon Marketing Stream). Mirrors the daily table but
 // keyed additionally by `hour` (0-23, UTC) so dayparting (which hour×weekday
 // converts) and hourly share-of-voice become possible — the genuine edge over
@@ -17934,6 +17977,66 @@ model AutomationSwitch {
   @@index([workspaceId])
 }
 
+/// ADS AUTONOMY — auto-undo (automation A19, apps/api/src/services/advertising/ads-auto-undo.service.ts): ONE row per
+/// AUTOMATIC Amazon ad change it judged — an engine's (auto-bid, the hourly bid plans, autopilot …), a rule's at AUTO,
+/// or a Claude change that ran by the business's rule; never a person's own change or one a person approved. Written
+/// once the change has its settled days after it, re-checked until its longest window is settled, with the shared
+/// watch-week outcome (`outcome`), the numbers it stands on (`evidence`) and what auto-undo did: nothing, would undo
+/// (OBSERVE), asked a person (PROPOSE, `undoApprovalId`), undid it (AUTO, `undoActionLogId`) or held it (and why).
+/// No foreign key to the action log: the log keeps its own retention.
+model AdsAutoUndoJudgement {
+  // Business ownership comes from verified database context.
+  workspaceId     String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id              String    @id @default(cuid())
+  /// The AdvertisingActionLog row of the change judged.
+  actionLogId     String
+  /// Who made it: the actor string as written, its kind (engine | rule | claude-rule) and its name in words.
+  actor           String
+  origin          String
+  originLabel     String?
+  /// claude-rule: the Claude request that ran by the business's rule (its change set).
+  approvalId      String?
+  /// AD_TARGET | AD_GROUP | CAMPAIGN, and the Nexus id.
+  entityType      String
+  entityId        String
+  entityLabel     String?
+  marketplace     String?
+  /// bid | dailyBudget | placement:<code>
+  lever           String
+  /// raise | cut — the way the change went (its undo goes the other way).
+  direction       String
+  /// The lever's value before and after the change: cents for a bid or a budget, percent for a placement.
+  fromValue       Float?
+  toValue         Float?
+  changedAt       DateTime
+  /// not_enough_data | not_worse | worse | superseded — `worse` is clearly worse by the thresholds of its market.
+  verdict         String
+  /// The shared outcome (ads-watch-week.service.ts outcomeOf): better | worse | flat | no_sales | no_spend | no_peers | not_yet | no_data
+  outcome         String?
+  /// The windows, the comparable entities, the thresholds and the reasons the verdict stands on.
+  evidence        Json?
+  /// none | would_undo | proposed | undone | held
+  action          String    @default("none")
+  actionReason    String?
+  actionAt        DateTime?
+  /// The level auto-undo ran at when it last judged it: OBSERVE | PROPOSE | AUTO.
+  level           String
+  /// PROPOSE: the request a person decides; AUTO (or that request, once run): the write that put the value back.
+  undoApprovalId  String?
+  undoActionLogId String?
+  /// true once its longest window is settled, or an action was taken, or it was superseded: never judged again.
+  final           Boolean   @default(false)
+  judgedAt        DateTime  @default(now())
+  checkedAt       DateTime  @default(now())
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([workspaceId, actionLogId], name: "workspace_actionLogId", map: "AdsAutoUndoJudgement_workspace_actionLogId_key")
+  @@index([workspaceId])
+  @@index([final, checkedAt])
+  @@index([action, actionAt])
+}
+
 model AdsAutomationState {
   // Business ownership comes from verified database context.
   workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
@@ -19444,6 +19547,11 @@ model AdsStrategy {
   targetKind String?
   /// Integer percent, 1..300.
   targetPct  Int?
+  /// BID BRAIN BB-5 — the band around the target, in the target's own kind (integer percent, 1..500): inside it the bid
+  /// brain leaves a bid alone, and `targetPct` is the aim inside it (Owner 2026-10-07). Part of the target group, resolved
+  /// WHOLE with it. Either side may be empty: −10 % / +15 % around targetPct stands in for it. Read by the bid brain only.
+  targetLoPct Int?
+  targetHiPct Int?
 
   /// Money limits. Every limit that applies binds; the stricter one wins.
   monthlySpendCapCents Int?
@@ -19719,6 +19827,251 @@ model AdsPlaybookLink {
 
   @@unique([workspaceId, kind, refId], name: "kind_refId", map: "AdsPlaybookLink_kind_refId_key")
   @@unique([workspaceId, playbookId, kind, key], name: "playbookId_kind_key", map: "AdsPlaybookLink_playbookId_kind_key_key")
+  @@index([workspaceId])
+}
+
+/// BID BRAIN BB-2 — one campaign's place in the bid brain (design BID-BRAIN-DESIGN.md §5, Owner 10-07). The env
+/// `NEXUS_BID_BRAIN_MODE` (off | shadow | live) is the ceiling; this row is the campaign's own mode under it.
+///   SHADOW  the brain decides and logs (BidBrainDecision), writes nothing
+///   LIVE    the brain is the campaign's one bid writer (BB-6; a big door — the approver's authenticator code)
+///   HELD    auto-undo or a person holds it: no raises, stops still apply (until `heldUntil`)
+/// No row = shadow while the campaign is on the live-write allowlist (BB-3). No foreign key: the history outlives a
+/// removed campaign, and the loaders join by id.
+model BidBrainEnrollment {
+  // Business ownership comes from verified database context.
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String @id @default(cuid())
+
+  /// Campaign.id.
+  campaignId  String
+  /// Short market code ('IT', 'DE').
+  marketplace String
+  /// SHADOW | LIVE | HELD
+  mode        String @default("SHADOW")
+
+  /// HELD only: until when, by whom ('auto-undo', 'user:<id>') and why.
+  heldUntil  DateTime?
+  heldBy     String?
+  heldReason String?
+
+  /// The campaign's bids and placements when it joined: what "give back" restores (BB-6).
+  snapshot   Json?
+  /// 'user:<id>' or 'claude:<approvalId>' — who enrolled it.
+  enrolledBy String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workspaceId, campaignId], name: "campaign_enrollment", map: "BidBrainEnrollment_workspaceId_campaignId_key")
+  @@index([mode])
+  @@index([workspaceId])
+}
+
+/// BID BRAIN BB-2 — one decision of the bid brain for one keyword or target, with its "why". In shadow (BB-3) it
+/// records what the brain WOULD set next to what today's writers actually set (`currentCents`, `lastWriter`), so the
+/// diff (BB-4) can count agree / higher / lower / hold / conflicts. Only rows that changed since the target's last
+/// decision are written, plus one daily snapshot (`kind`), and rows older than 30 days are deleted (Neon cost).
+model BidBrainDecision {
+  // Business ownership comes from verified database context.
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String @id @default(cuid())
+
+  /// One run of the brain (every decision of a run shares it).
+  runId       String
+  /// SHADOW | LIVE — the mode it was decided in.
+  mode        String
+  /// change (differs from the target's last decision) | snapshot (the day's first)
+  kind        String
+  marketplace String
+  campaignId  String
+  adGroupId   String?
+  /// AdTarget.id. No foreign key: the history outlives a removed target.
+  targetId    String
+
+  /// write | hold | brake
+  action String
+  /// brake | stop | pin | stock | freeze | phase | min_bid_hour | goal | band | limit | no_goal
+  layer  String
+
+  /// The bid today's writers had set when the brain decided, and the bid the brain decided (equal on a hold).
+  currentCents Int
+  decidedCents Int
+  /// What the goal alone asks; null without a goal or an order value.
+  goalBidCents Int?
+  /// The ACoS aim and band, and the ACoS expected at today's bid, as fractions (0.2 = 20 %).
+  aim          Decimal? @db.Decimal(8, 4)
+  bandLo       Decimal? @db.Decimal(8, 4)
+  bandHi       Decimal? @db.Decimal(8, 4)
+  expectedAcos Decimal? @db.Decimal(10, 4)
+  /// 0..1 — the share of the estimate resting on data.
+  confidence   Decimal? @db.Decimal(6, 4)
+  /// The newest settled day the evidence reads.
+  dataDay      DateTime @db.Date
+
+  /// The last writer of this target's bid before the decision (AdvertisingActionLog.userId) and when.
+  lastWriter  String?
+  lastWriteAt DateTime?
+
+  /// One line: the deciding layer, the aim, CR̂ with n, the factor and the clamp.
+  why      String @db.Text
+  /// { step, placements, clash, chain } — the parts of the decision a screen or the read tool shows.
+  evidence Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([campaignId, createdAt(sort: Desc)])
+  @@index([targetId, createdAt(sort: Desc)])
+  @@index([runId])
+  @@index([createdAt])
+  @@index([workspaceId])
+}
+
+/// BID BRAIN BB-2 — a hold on a campaign's or one target's bids, with an end date: a pin, a person's own bid, a
+/// Claude request a person approved (60 days, as today), or an auto-undo freeze. The brain leaves a held bid alone
+/// (a stop still applies); a hand-back ends it (`endedAt`). Replaces the skip lists' implicit holds (design §2).
+model BidHold {
+  // Business ownership comes from verified database context.
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String @id @default(cuid())
+
+  campaignId String
+  /// AdTarget.id; null = every bid of the campaign.
+  targetId   String?
+  /// PIN | PERSON | CLAUDE | AUTO_UNDO
+  kind       String
+  /// null = until handed back.
+  until      DateTime?
+  /// 'user:<id>', 'claude:<approvalId>', 'auto-undo'.
+  by         String
+  reason     String?
+  /// STOP only: the floor its owner declared, in cents (the brain applies the lowest). Null on other kinds and on a
+  /// STOP written before this column (its reason then starts "<n>¢ floor: ").
+  floorCents Int?
+
+  endedAt DateTime?
+  endedBy String?
+
+  createdAt DateTime @default(now())
+
+  @@index([campaignId, endedAt])
+  @@index([targetId])
+  @@index([workspaceId])
+}
+
+/// BID BRAIN BB-2 — a rule's bid action as an INPUT to the brain instead of a write (design §2, BB-9): a ceiling, a
+/// floor, a goal or a share floor on a campaign, a target or a placement lane. When directives overlap the lowest
+/// ceiling and the highest floor win; a floor above a ceiling loses and the clash is logged once.
+model BidDirective {
+  // Business ownership comes from verified database context.
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String @id @default(cuid())
+
+  campaignId String
+  /// AdTarget.id; null = every target of the campaign.
+  targetId   String?
+  /// TOP_OF_SEARCH | PRODUCT_PAGE | REST_OF_SEARCH for a placement directive; null for a bid.
+  lane       String?
+  /// CEILING | FLOOR | GOAL | SHARE_FLOOR
+  kind       String
+  /// A bid ceiling or floor in cents (or a placement cap in percent for a lane).
+  valueCents Int?
+  /// A GOAL's ACoS, integer percent.
+  valuePct   Int?
+  /// 'rule:<AutomationRule.id>', 'coverage', 'playbook' — who asked.
+  source     String
+  /// When it stops applying (bid_down: 7 days).
+  until      DateTime?
+  reason     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([campaignId])
+  @@index([targetId])
+  @@index([workspaceId])
+}
+
+/// ONE BRAIN AB-1 — one product's brain in one market (one-brain DESIGN.md §1, §3, §6, §10; Owner 10-08). The product is
+/// the family root (a parent, or a product with no parent); its campaigns come from the products they advertise
+/// (services/advertising/brain/ownership.ts) — a campaign that advertises another product too is shared and no product's
+/// brain owns it. This row says the product is enrolled and is the one point every change of its brain goes through
+/// (`version`, compare-and-set). Every setting is a brain default (brain/levers.ts) the Owner may override per product or
+/// per campaign (AdsBrainOverride). The bids lever drives BidBrainEnrollment (the rows the live bid brain reads, BB-6…
+/// BB-10). No row = not enrolled: today's engines run it. No foreign key: the history outlives a removed product.
+model AdsBrainEnrollment {
+  // Business ownership comes from verified database context.
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String @id @default(cuid())
+
+  /// Product.id of the family root (a parent, or a product with no parent): its variations belong to it.
+  productId   String
+  /// Short market code ('IT', 'DE').
+  marketplace String
+  /// +1 on every change of this brain (an override set or ended, a lever's campaigns moved): an approval made on
+  /// another version does not run.
+  version     Int    @default(1)
+
+  /// Per lever, what it held when it last went live: { "<lever>": { takenAt, by, data } } (the bids lever: which
+  /// campaigns it put LIVE, which were LIVE already, which it skipped and why; each campaign's bids are in its
+  /// BidBrainEnrollment.snapshot).
+  snapshots  Json?
+  /// 'user:<id>' or 'claude:<approvalId>' — who enrolled it.
+  enrolledBy String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  /// Who changed it last.
+  updatedBy String
+
+  @@unique([workspaceId, productId, marketplace], name: "product_market", map: "AdsBrainEnrollment_workspaceId_productId_marketplace_key")
+  @@index([marketplace])
+  @@index([workspaceId])
+}
+
+/// ONE BRAIN AB-1 — one choice of the Owner over a brain default (one-brain DESIGN.md §10, Owner 10-08: "I should be
+/// able to control it individually as well"). Precedence (brain/settings.ts resolveBrainSettings): an exclusion wins over
+/// every lever; a lock of the whole lever (the campaign's, else the product's) beats every level; then a CAMPAIGN override
+/// > a PRODUCT override > the brain default. Each row keeps who, when and why, so
+/// every resolved value names its source. Rows are never deleted: a new choice ends the one it replaces (`endedAt`),
+/// and ending a choice falls back to the next level. At most one open row per (scope, campaign, kind, key, ref) — the
+/// writer ends the old one in the same transaction.
+///   LEVEL    a lever's level (key = lever; value = "OFF" | "OBSERVE" | "PROPOSE" | "AUTO")
+///   LOCK     a lever held at the Owner's own value (key = lever; ref "" = the whole lever, else one thing in it such as
+///            "hourCell:d1h14", "lane:TOP_OF_SEARCH", "term:<text>"; value = his value, null = as it is now): the brain
+///            never writes it and only recommends
+///   EXCLUDE  out of the brain completely (key "*"): a campaign stays with today's engines; a product leaves the brain
+///   VALUE    a setting (key = a cap or an N1–N4 setting such as "portfolioCapOn", "paceTargetPct"; value = its value)
+model AdsBrainOverride {
+  // Business ownership comes from verified database context.
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String @id @default(cuid())
+
+  /// The enrollment it was set under (Product.id of the family root, short market code).
+  productId   String
+  marketplace String
+  /// PRODUCT | CAMPAIGN
+  scope       String
+  /// Campaign.id for a CAMPAIGN override (it applies to that campaign); null for a PRODUCT one.
+  campaignId  String?
+  /// LEVEL | LOCK | EXCLUDE | VALUE
+  kind        String
+  /// The lever (LEVEL, LOCK), the setting (VALUE), "*" (EXCLUDE).
+  key         String
+  /// LOCK only: "" = the whole lever, else the one thing it holds ("<kind>:<what>").
+  ref         String  @default("")
+  /// The level, the Owner's own value or the setting's value; null where the kind takes none.
+  value       Json?
+  /// 'user:<id>' or 'claude:<approvalId>' — whose choice it is.
+  by          String
+  reason      String?
+
+  createdAt DateTime  @default(now())
+  /// When a newer choice replaced it or it was ended; null = in force.
+  endedAt   DateTime?
+  endedBy   String?
+
+  @@index([productId, marketplace, endedAt])
+  @@index([campaignId, endedAt])
   @@index([workspaceId])
 }
 
@@ -21229,5 +21582,39 @@ model ChannelItemClaim {
   claimedAt     DateTime  @default(now())
 
   @@id([channel, marketplace, externalId])
+  @@index([workspaceId])
+}
+
+/// Platform health watchdog (2026-10-07). The Owner's ads run by themselves, so a part that stops must be found by the
+/// platform, not by chance: eight faults ran silently for days that day (SQP requests refused every night under a SUCCESS
+/// cron row, the scheduler dying at 03:20 UTC, a graduation gate reading a sandbox connection, …). Once a day
+/// (`jobs/platform-health-watchdog.job.ts`, also "Run now") every check of `services/platform-health/` measures one part
+/// and leaves ONE row here: its verdict, in plain words, with the numbers it rests on. A failing check also keeps ONE
+/// open alert (AlertRule metric `platformHealth:<checkId>`), resolved when it passes again. Claude's
+/// `platform-health-checks` reads the newest run. Rows older than 60 days are removed by the watchdog itself.
+model PlatformHealthCheck {
+  workspaceId String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String   @id @default(cuid())
+  /// One watchdog run: every check it measured shares this id.
+  runId       String
+  /// The check (`cron-runs`, `sqp-feed`, …) and the part of the platform it watches (scheduler, data-feeds, …).
+  checkId     String
+  subsystem   String
+  /// ok | warn | fail | unknown (it could not measure: `message` says why — never counted as ok).
+  status      String
+  /// What is wrong, or that all is well, in plain words.
+  message     String
+  likelyCause String?
+  nextStep    String?
+  /// The numbers the verdict rests on (counts, dates, names; never money).
+  evidence    Json
+  /// cron | manual (a "Run now")
+  triggeredBy String   @default("cron")
+  measuredAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([checkId, measuredAt(sort: Desc)])
+  @@index([runId])
+  @@index([measuredAt])
   @@index([workspaceId])
 }

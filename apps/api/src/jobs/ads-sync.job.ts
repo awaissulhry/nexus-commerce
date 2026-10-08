@@ -52,7 +52,14 @@ import {
   ingestCompletedJob,
   cleanupOldSearchTerms,
   cleanupOldHourlyPerformance,
+  cleanupOldVintages,
 } from '../services/advertising/ads-reports.service.js'
+import {
+  catchUpSummaryLine,
+  perDaySettlingCycle,
+  runSettleCatchUp,
+  settlingCycle,
+} from '../services/advertising/ads-report-settle.service.js'
 import {
   runFbaFeesIngest,
   summarizeFbaFeesIngest,
@@ -81,6 +88,7 @@ let reportCreatePlTask: ReturnType<typeof cron.schedule> | null = null
 let reportCreateApTask: ReturnType<typeof cron.schedule> | null = null
 let reportCreateTgTask: ReturnType<typeof cron.schedule> | null = null
 let reportGapFillTask: ReturnType<typeof cron.schedule> | null = null
+let reportSettleCatchUpTask: ReturnType<typeof cron.schedule> | null = null
 let reportPollTask: ReturnType<typeof cron.schedule> | null = null
 let brandMetricsTask: ReturnType<typeof cron.schedule> | null = null
 let reportIngestTask: ReturnType<typeof cron.schedule> | null = null
@@ -288,22 +296,22 @@ export function startFbaFeesIngestCron(): void {
 
 // ── Phase 11: Reports API pipeline crons ─────────────────────────────
 //
-// Three creation crons (staggered 15 min apart) and two processing crons.
-// Yesterday's date is computed at runtime so no date is baked into the
-// schedule — safe across midnight rollovers.
-
-function yesterday(): { startDate: string; endDate: string } {
-  const d = new Date()
-  d.setUTCDate(d.getUTCDate() - 1)
-  const iso = d.toISOString().slice(0, 10)
-  return { startDate: iso, endDate: iso }
-}
+// Five creation crons (staggered) and two processing crons. The dates are
+// computed at runtime so no date is baked into the schedule — safe across
+// midnight rollovers.
+//
+// BB-13 (2026-10-08) — each creation cron asks the span where a day is still
+// filling, not yesterday alone: Amazon adds a click's purchase to the click's
+// day for 7 days (Sponsored Products) or 14 (Brands, Display), and a day asked
+// only the next morning kept its first, incomplete copy for ever. Ranged
+// reports ask [today − 8, yesterday] (SP) / [today − 15, yesterday] (SB/SD) in
+// one job; targeting and advertised product (one day per job) ask yesterday and
+// the day that completes tonight (ads-report-settle.service.ts).
 
 // 01:15 UTC daily — campaign-level performance reports
 export async function runReportCreateCron(): Promise<void> {
   await recordCronRun('ads-report-create', async () => {
-    const { startDate, endDate } = yesterday()
-    const result = await runReportCreationCycle({ startDate, endDate })
+    const result = await settlingCycle((a) => runReportCreationCycle(a), ['SPONSORED_PRODUCTS', 'SPONSORED_DISPLAY', 'SPONSORED_BRANDS'])
     return `created=${result.jobsCreated} skipped=${result.jobsSkipped} errors=${result.errors.length}`
   }).catch((err) => logger.error('ads-report-create cron: failure', { error: String(err) }))
 }
@@ -321,6 +329,23 @@ export async function runReportGapFillCron(): Promise<void> {
     const markets = [...new Set(r.gaps.map((g) => g.marketplace))].join(',') || 'none'
     return `gaps=${r.gapsFound} markets=${markets} created=${r.jobsCreated} skipped=${r.jobsSkipped} errors=${r.errors.length}`
   }).catch((err) => logger.error('ads-report-gapfill cron: failure', { error: String(err) }))
+}
+
+// 03:20–09:20 UTC hourly — BB-13 settle catch-up: days of the last 60 with no
+// settled copy are asked again, at most 30 report jobs a run. After deploy it
+// re-reads the 60 days once (2–3 nights); then it finds nothing unless a night's
+// settling pull failed. Runs after the creates and the gap-fill.
+export async function runReportSettleCatchUpCron(): Promise<void> {
+  await recordCronRun('ads-report-settle', async () => catchUpSummaryLine(await runSettleCatchUp()))
+    .catch((err) => logger.error('ads-report-settle cron: failure', { error: String(err) }))
+}
+
+export function startReportSettleCatchUpCron(): void {
+  if (reportSettleCatchUpTask) { logger.warn('ads-report-settle already started'); return }
+  const schedule = process.env.NEXUS_ADS_REPORT_SETTLE_SCHEDULE ?? '20 3-9 * * *'
+  if (!cron.validate(schedule)) { logger.error('ads-report-settle: invalid schedule', { schedule }); return }
+  reportSettleCatchUpTask = cron.schedule(schedule, async () => { await runReportSettleCatchUpCron() })
+  logger.info('ads-report-settle cron: scheduled', { schedule })
 }
 
 export function startReportGapFillCron(): void {
@@ -342,8 +367,7 @@ export function startReportCreateCron(): void {
 // 01:30 UTC daily — search-term reports (SP + SB)
 export async function runReportCreateStCron(): Promise<void> {
   await recordCronRun('ads-report-create-st', async () => {
-    const { startDate, endDate } = yesterday()
-    const result = await runSearchTermReportCycle({ startDate, endDate })
+    const result = await settlingCycle((a) => runSearchTermReportCycle(a), ['SPONSORED_PRODUCTS', 'SPONSORED_BRANDS'])
     return `created=${result.jobsCreated} skipped=${result.jobsSkipped} errors=${result.errors.length}`
   }).catch((err) => logger.error('ads-report-create-st cron: failure', { error: String(err) }))
 }
@@ -359,8 +383,7 @@ export function startReportCreateStCron(): void {
 // 01:45 UTC daily — placement reports (SP only)
 export async function runReportCreatePlCron(): Promise<void> {
   await recordCronRun('ads-report-create-pl', async () => {
-    const { startDate, endDate } = yesterday()
-    const result = await runPlacementReportCycle({ startDate, endDate })
+    const result = await settlingCycle((a) => runPlacementReportCycle(a), ['SPONSORED_PRODUCTS'])
     return `created=${result.jobsCreated} skipped=${result.jobsSkipped} errors=${result.errors.length}`
   }).catch((err) => logger.error('ads-report-create-pl cron: failure', { error: String(err) }))
 }
@@ -407,8 +430,7 @@ export function startReportCreatePlCron(): void {
 // 01:50 UTC daily — advertised-product reports (SP only) — PC.0
 export async function runReportCreateApCron(): Promise<void> {
   await recordCronRun('ads-report-create-ap', async () => {
-    const { startDate, endDate } = yesterday()
-    const result = await runAdvertisedProductReportCycle({ startDate, endDate })
+    const result = await perDaySettlingCycle((a) => runAdvertisedProductReportCycle(a))
     return `created=${result.jobsCreated} skipped=${result.jobsSkipped} errors=${result.errors.length}`
   }).catch((err) => logger.error('ads-report-create-ap cron: failure', { error: String(err) }))
 }
@@ -431,8 +453,7 @@ export async function runReportCreateApCron(): Promise<void> {
 // created together.
 export async function runReportCreateTgCron(): Promise<void> {
   await recordCronRun('ads-report-create-tg', async () => {
-    const { startDate, endDate } = yesterday()
-    const result = await runTargetingReportCycle({ startDate, endDate })
+    const result = await perDaySettlingCycle((a) => runTargetingReportCycle(a))
     return `created=${result.jobsCreated} skipped=${result.jobsSkipped} errors=${result.errors.length}`
   }).catch((err) => logger.error('ads-report-create-tg cron: failure', { error: String(err) }))
 }
@@ -492,7 +513,8 @@ export async function runReportIngestCron(): Promise<void> {
     //
     // No `take` cap. The cap was 10 against ~68 jobs landing in one 30-second
     // burst; work that missed the window was dropped silently and permanently,
-    // because yesterday() requests each date exactly once and never revisits it.
+    // because the create crons then asked each date exactly once (BB-13 now
+    // re-reads each day for 8 / 15 days, and the settle catch-up asks again).
     // Now that finished jobs leave the set for good, the set drains and stays small.
     const staleAfter = new Date(Date.now() - INGEST_URL_TTL_MS)
     const jobs = await prisma.amazonAdsReportJob.findMany({
@@ -541,7 +563,8 @@ export async function runSearchTermCleanupCron(): Promise<void> {
   await recordCronRun('ads-search-term-cleanup', async () => {
     const result = await cleanupOldSearchTerms(90)
     const hourly = await cleanupOldHourlyPerformance(90)
-    return `searchTerms=${result.deletedSearchTerms} hourly=${hourly.deletedHourlyRows} cutoff=${result.cutoffDate}`
+    const vintages = await cleanupOldVintages()
+    return `searchTerms=${result.deletedSearchTerms} hourly=${hourly.deletedHourlyRows} vintages=${vintages.deletedVintages} cutoff=${result.cutoffDate}`
   }).catch((err) => logger.error('ads-search-term-cleanup cron: failure', { error: String(err) }))
 }
 
@@ -774,6 +797,8 @@ export function startAllAdvertisingCrons(): void {
   // Closes the loop on the four create crons above: any day they failed to
   // populate gets requested again instead of staying empty forever.
   startReportGapFillCron()
+  // BB-13 — re-asks the days of the last 60 with no settled copy (the one-time re-read after deploy, then failed nights).
+  startReportSettleCatchUpCron()
   startSearchTermCleanupCron()
   // Phase 1: Brand Metrics — brand funnel vs category benchmarks (weekly).
   startBrandMetricsCron()
@@ -816,6 +841,7 @@ export function stopAllAdvertisingCrons(): void {
     adsMetricsIngestTask = null
   }
   if (fbaFeesIngestTask) { fbaFeesIngestTask.stop(); fbaFeesIngestTask = null }
+  if (reportSettleCatchUpTask) { reportSettleCatchUpTask.stop(); reportSettleCatchUpTask = null }
   for (const [key, task] of [
     ['reportCreateTask',    reportCreateTask]    as const,
     ['reportCreateStTask',  reportCreateStTask]  as const,

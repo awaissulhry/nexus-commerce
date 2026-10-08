@@ -271,6 +271,10 @@ describe('subject derivation', () => {
         dryRun: false, durationMs: null, marketplace: null, campaignId: null, campaignName: null,
         externalCampaignId: null, actionCount: 0,
       },
+      'ads.bid-brain.run-completed': {
+        runId: 'bb-1', mode: 'live', campaignIds: ['c1'],
+        writes: [{ actionLogId: 'l1', entityId: 't1', field: 'bid', from: 30, to: 36 }, { actionLogId: null, entityId: 'c1', field: 'placementBidding', from: null, to: null }],
+      },
       'po.created': { poId: 'po1', poNumber: 'PO-1' },
       'po.transitioned': { poId: 'po1', poNumber: 'PO-1', fromStatus: 'DRAFT', toStatus: 'SENT' },
       'po.updated': { poId: 'po1' },

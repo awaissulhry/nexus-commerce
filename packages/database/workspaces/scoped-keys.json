@@ -5734,6 +5734,13 @@
     "compound": {},
     "relations": []
   },
+  "AdsAutoUndoJudgement": {
+    "scalar": {
+      "actionLogId": "workspace_actionLogId"
+    },
+    "compound": {},
+    "relations": []
+  },
   "AmazonReportRun": {
     "scalar": {
       "reportId": "workspace_reportId"
@@ -6094,6 +6101,20 @@
     "compound": {},
     "relations": []
   },
+  "AdsDailyVintage": {
+    "scalar": {},
+    "compound": {
+      "vintage_pull": [
+        "profileId",
+        "adProduct",
+        "entityType",
+        "entityId",
+        "date",
+        "pulledAt"
+      ]
+    },
+    "relations": []
+  },
   "AdSpendCeiling": {
     "scalar": {},
     "compound": {
@@ -6179,6 +6200,45 @@
         "key"
       ]
     },
+    "relations": []
+  },
+  "BidBrainEnrollment": {
+    "scalar": {},
+    "compound": {
+      "campaign_enrollment": [
+        "campaignId"
+      ]
+    },
+    "relations": []
+  },
+  "BidBrainDecision": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "BidHold": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "BidDirective": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AdsBrainEnrollment": {
+    "scalar": {},
+    "compound": {
+      "product_market": [
+        "productId",
+        "marketplace"
+      ]
+    },
+    "relations": []
+  },
+  "AdsBrainOverride": {
+    "scalar": {},
+    "compound": {},
     "relations": []
   },
   "AdWriteRefusal": {
@@ -6772,5 +6832,10 @@
         ]
       }
     ]
+  },
+  "PlatformHealthCheck": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
   }
 }

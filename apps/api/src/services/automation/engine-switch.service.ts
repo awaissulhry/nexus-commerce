@@ -16,7 +16,7 @@ import prisma from '../../db.js'
 import type { ToolPermission } from '../agents/tool-types.js'
 import { LEVELS, lowest, type AutomationLevel, type LevelSwitch, type SwitchRow } from './automation-levels.js'
 
-export const ENGINE_KEYS = ['rank-defend', 'budget-enforce', 'auto-bid', 'tos-defense', 'coverage-engine', 'fleet-analysts', 'repricer'] as const
+export const ENGINE_KEYS = ['rank-defend', 'budget-enforce', 'auto-bid', 'tos-defense', 'coverage-engine', 'fleet-analysts', 'repricer', 'auto-undo'] as const
 export type EngineKey = (typeof ENGINE_KEYS)[number]
 
 export interface EngineDef {
@@ -30,6 +30,12 @@ export interface EngineDef {
   manage: ToolPermission
   /** Switched down, can it raise spend (part 06 §3, brakes are not down)? Why, or null. */
   brake: string | null
+  /**
+   * ADS AUTONOMY (auto-undo) — the level it is at with no row, when that is below its top: born there, so a business
+   * that never moved it gets this level (under the env), and a person turns it up. Absent: no row = its top level
+   * (the env alone decides), as for every engine before.
+   */
+  born?: AutomationLevel
 }
 
 export const ENGINES: Record<EngineKey, EngineDef> = {
@@ -46,9 +52,17 @@ export const ENGINES: Record<EngineKey, EngineDef> = {
   'coverage-engine': { key: 'coverage-engine', name: 'Coverage engine', automation: 'A12', levels: ['OFF', 'OBSERVE', 'AUTO'], manage: FEATURES.adsAutomationManage, brake: null },
   'fleet-analysts': { key: 'fleet-analysts', name: 'Analyst fleet sweep', automation: 'F1', levels: ['OFF', 'OBSERVE'], manage: FEATURES.aiRun, brake: null },
   repricer: { key: 'repricer', name: 'Snapshot repricer', automation: 'N2', levels: ['OFF', 'OBSERVE', 'AUTO'], manage: FEATURES.pricingRulesManage, brake: null },
+  // ADS AUTONOMY — auto-undo puts back an automatic ad change that made things clearly worse. Born OBSERVE: it only
+  // records what it would undo until a person turns it up (PROPOSE asks a person per undo; AUTO undoes inside its caps).
+  'auto-undo': {
+    key: 'auto-undo', name: 'Auto-undo', automation: 'A19', levels: ['OFF', 'OBSERVE', 'PROPOSE', 'AUTO'], manage: FEATURES.adsAutomationManage, born: 'OBSERVE',
+    brake: 'it puts back automatic ad changes that made things clearly worse: switched down, such a change stays as it is',
+  },
 }
 
 const top = (def: EngineDef) => def.levels[def.levels.length - 1]
+/** The level an engine is at with no row: where it is born (auto-undo: OBSERVE), else its top (the env alone decides). */
+export const levelWithoutRow = (def: EngineDef): AutomationLevel => def.born ?? top(def)
 const rank = (level: AutomationLevel) => LEVELS.indexOf(level)
 
 export interface EngineSwitchRow {
@@ -72,7 +86,12 @@ export async function readEngineSwitch(key: EngineKey): Promise<EngineSwitchRow 
  */
 export async function engineMode(key: EngineKey, envMode: AutomationLevel): Promise<{ mode: AutomationLevel; switched: EngineSwitchRow | null; note: string | null }> {
   const switched = await readEngineSwitch(key)
-  if (!switched) return { mode: envMode, switched: null, note: null }
+  if (!switched) {
+    // An engine born below its top (auto-undo) stays there until a person turns it up.
+    const born = ENGINES[key].born
+    if (born && rank(born) < rank(envMode)) return { mode: born, switched: null, note: `${ENGINES[key].name} is born ${born}: a person turns it up for this business` }
+    return { mode: envMode, switched: null, note: null }
+  }
   const mode = lowest(envMode, switched.mode)
   return { mode, switched, note: rank(switched.mode) < rank(envMode) ? `switched to ${switched.mode} for this business by ${switched.setBy}` : null }
 }
@@ -103,7 +122,7 @@ export async function changeEngineSwitch(key: string, mode: string, actorUserId:
   const def = ENGINES[key as EngineKey]
   if (!(def.levels as readonly string[]).includes(mode)) return { ok: false, status: 400, error: `${def.name} can be ${def.levels.join(', ')} — not ${mode}.` }
   const to = mode as AutomationLevel
-  const from = (await readEngineSwitch(def.key))?.mode ?? top(def)
+  const from = (await readEngineSwitch(def.key))?.mode ?? levelWithoutRow(def)
   if (to === from) return { ok: false, status: 409, error: `${def.name} is already ${to} for this business.` }
   const env = await engineEnv(def.key)
   if (rank(to) > rank(from)) {
@@ -121,11 +140,14 @@ async function recordEngineSwitch(key: EngineKey, from: AutomationLevel, to: Aut
   await auditLogService.write({ userId: actorUserId, entityType: 'AutomationSwitch', entityId: key, action: 'set_engine_switch', before: { mode: from }, after: { mode: to, reason } }).catch(() => undefined)
 }
 
-/** Set this business's switch. The engine's top level removes the row: back to "the env alone decides". */
+/**
+ * Set this business's switch. The engine's level with no row (its top; where it is born, for auto-undo) removes the row:
+ * back to "the env alone decides".
+ */
 export async function setEngineSwitch(key: EngineKey, mode: AutomationLevel, setBy: string, reason: string | null = null): Promise<void> {
   const def = ENGINES[key]
   if (!def.levels.includes(mode)) throw new Error(`${def.name} can be ${def.levels.join(', ')} — not ${mode}`)
-  if (mode === top(def)) {
+  if (mode === levelWithoutRow(def)) {
     await prisma.automationSwitch.deleteMany({ where: { key } })
     return
   }
@@ -150,7 +172,7 @@ export function engineLevelSwitch(key: EngineKey, env: () => { ceiling: Automati
       const row = await readEngineSwitch(key)
       // 2a (Owner S7) — switched off, rank-defend's floors freeze until it is back on: its brake says how many there are now.
       const brake = key === 'rank-defend' ? await (await import('../advertising/rank-release.service.js')).rankSwitchBrake(def.brake) : def.brake
-      return { id: key, name: `${def.name} (this business's switch)`, level: row?.mode ?? top(def), basis: row?.setAt ?? null, brake }
+      return { id: key, name: `${def.name} (this business's switch)`, level: row?.mode ?? levelWithoutRow(def), basis: row?.setAt ?? null, brake }
     },
     async refusal(_row, level) {
       const e = env()

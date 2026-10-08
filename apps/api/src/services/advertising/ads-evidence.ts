@@ -73,6 +73,18 @@ export interface AdWriteEvidence {
    * too); a person's own edit never carries it.
    */
   handBack?: 'auto-bid'
+  /**
+   * Bid optimiser review 2026-10-08 (B) — the settled data day ('YYYY-MM-DD', the newest day of the window) the bid
+   * optimiser decided this bid on. Its next run does not reverse this move until REVERSAL_WAIT_DATA_DAYS newer data days
+   * exist (ads-bid-window.ts). A record of the decision: no gate trusts it.
+   */
+  dataDay?: string
+  /**
+   * BID BRAIN BB-6 — a write of the bid brain (actor `automation:bid-brain`): the run that decided it, the deciding layer
+   * (goal, band, limit, stop, stock, freeze, phase, min_bid_hour), the newest settled data day it read and the goal bid.
+   * A record for the reader (the Change Log, auto-undo, the read tool): no gate trusts it.
+   */
+  brain?: { runId: string; layer: string; dataDay: string; goalBidCents: number | null }
 }
 
 /**

@@ -108,6 +108,8 @@ beforeAll(async () => {
     // A blend whose Top lane carries a ceiling and keep-climbing: each lane now holds its own %.
     await db().rankTarget.create({ data: { key: 'blend', name: 'Blend', biasPct: 0, lanes: [{ placement: 'PLACEMENT_TOP', biasPct: 80, maxBiasPct: 400, keepClimbing: true, allOut: true }, { placement: 'PLACEMENT_REST_OF_SEARCH', biasPct: 20 }] } })
     await db().rankTarget.create({ data: { key: 'minbid', name: 'Min bid', pause: true, floorBidCents: 2 } })
+    // C2 — Top +150 % under a €0.45 CPC ceiling, as IT_Auto_Close's plan hour on 2026-10-07.
+    await db().rankTarget.create({ data: { key: 'top150cap45', name: 'Top +150% (45¢ ceiling)', biasPct: 150, maxCpcCents: 45 } })
     await db().adsAutomationState.upsert({ where: { id: 'singleton' }, create: { id: 'singleton', autonomy: 'AUTO', halted: false }, update: { autonomy: 'AUTO', halted: false } })
   })
 }, 180_000)
@@ -212,5 +214,36 @@ describe('2e — a tick writes only when the hour\'s painted value changes', () 
     const after = await tick()
     expect(after.applied).toBe(0)
     expect(rec.bids).toEqual([])
+  })
+})
+
+describe('C2 — the CPC ceiling is measured against the bids that serve', () => {
+  /** An auto campaign as IT_Auto_Close: its ad group's default bid, one live auto target and three paused ones. */
+  const auto = (id: string, liveBidCents: number) => inside(async () => {
+    await db().adGroup.update({ where: { id: `${id}-g` }, data: { defaultBidCents: 50, targetingType: 'AUTO' } })
+    await db().adTarget.update({ where: { id: `${id}-t0` }, data: { kind: 'AUTO', expressionType: 'SEARCH_CLOSE_MATCH', bidCents: liveBidCents } })
+    for (const [i, match] of ['SEARCH_LOOSE_MATCH', 'PRODUCT_SUBSTITUTES', 'PRODUCT_COMPLEMENTS'].entries()) {
+      await db().adTarget.create({ data: { id: `${id}-p${i}`, adGroupId: `${id}-g`, kind: 'AUTO', expressionType: match, expressionValue: match, bidCents: 30, status: 'PAUSED' } })
+    }
+  })
+
+  it("an ad group default no target uses is not the base: the 14¢ live target leaves 150 % uncapped (it was capped to 0 %)", async () => {
+    await seed('ac', { defaultTargetKey: 'top150cap45' })
+    await auto('ac', 14)
+    await only('ac')
+    const r = await tick()
+    // €0.45 / 14¢ − 1 = 221 %: 150 % fits. Before, the 50¢ default read "base bid ALONE exceeds it" and wrote 0 %.
+    expect(await placementsOf('ac')).toEqual({ PLACEMENT_TOP: 150 })
+    const d = r.decisions.find((x) => x.campaignId === 'ac')!
+    expect(d.reason).not.toContain('CPC ceiling')
+  })
+
+  it('a live bid the ceiling cannot carry at 150 % still caps it: 30¢ → 50 %', async () => {
+    await seed('ac30', { defaultTargetKey: 'top150cap45' })
+    await auto('ac30', 30)
+    await only('ac30')
+    const r = await tick()
+    expect(await placementsOf('ac30')).toEqual({ PLACEMENT_TOP: 50 })
+    expect(r.decisions.find((x) => x.campaignId === 'ac30')!.reason).toContain('capped 150→50% by €0.45 CPC ceiling')
   })
 })

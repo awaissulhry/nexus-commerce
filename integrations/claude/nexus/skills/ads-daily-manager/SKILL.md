@@ -32,6 +32,7 @@ The Nexus server's instructions hold the rules for every change. Follow them. In
    - `dailyCap`, and each market's `strategyVersion`.
 
    A refused start (a run still open, or the day's runs used up) ends the run: one sentence, then stop. Never start a second run.
+3. `platform-health-checks` (`status: "problems"`): Nexus's own daily checks, before anything else is read. Every check that is not ok goes in `problems` in its own words. A market whose ads daily reports check is late or failing gets no bid or budget change today; while the ad writes or queue path check fails, ask for no new bid or budget change (say why); a stale run (the watchdog itself did not run) is a problem too.
 
 ## 2. Read, in this order
 
@@ -54,6 +55,7 @@ From `ads-manager-runs`, and `approval-status` where a step's detail matters:
 - A declined change was the Owner's answer: ask it again only when the data behind it has changed, and say so in its `why`.
 - A step skipped as stale or refused: ask again at most once, with fresh values. An expired request: again only if today's data still supports it.
 - What ran 3 or more days ago: did the number it aimed at move? Say it as observed, not as proof of cause.
+- Auto-undo (`automation-activity` / `automation-detail`, automation `A19`): what it judged of the automatic changes (engines, rules at AUTO, Claude changes that ran by rule) and what it did — would undo (OBSERVE), asked a person (PROPOSE) or undid (AUTO). Never ask again for a change it undid or asked about; one it would undo at OBSERVE may go in the plan as `undo-worse-ad-change` with its `judgementId` (a person approves it). Nexus adds its line to the report.
 
 ## 4. Decide, in this order
 
@@ -62,7 +64,7 @@ A higher item wins an entity over a lower one.
 2. **Stock.** `lower-ad-bids-for-stock` for ad groups `ad-stock-risk` names out of stock or short (a mixed ad group is left as it is); `restore-ad-bids-after-stock` where cover is back.
 3. **Waste.** `create-negative-keyword` for terms over the strategy's negate thresholds, in the ad group they spent in; many negatives, or one set of terms into many of one product's ad groups, in one `add-negative-targets` step. Never a term that wins there, never a protected term or product, never `allowOtherProducts` (a person's word only).
 4. **Growth.** Converting terms over the harvest thresholds: `harvest-search-term` with `negateSource: false` (into the destination `set-harvest-destination` stored, or the one named), or `graduate-keyword`, into the product's own exact keyword. A term that already has a home is not created again. Its negative in the source comes in a later run, only once the new exact keyword converts (`add-negative-targets`: the card says the handover is proven, and a person decides it).
-5. **Bids.** The engines' recommendations first, carried out by id (see 5); then your own judgment, inside the strategy's bid limits and largest change. An ad group's default bid is `set-ad-group` (`op: "edit"`). A bid past the largest change is warned on the card and a person's approval sends it in full; by rule it moves only as far as the largest change allows. A bid meant to go back to auto-bid takes `afterwards: "auto-bid"`; the default `hold` keeps auto-bid off it for 60 days. A winner that declines: bid first, then `set-placement-multipliers` on its campaign.
+5. **Bids.** The engines' recommendations first, carried out by id (see 5); then your own judgment, inside the strategy's bid limits and largest change. An ad group's default bid is `set-ad-group` (`op: "edit"`). A bid past the largest change is warned on the card and a person's approval sends it in full; by rule it moves only as far as the largest change allows. A bid meant to go back to auto-bid takes `afterwards: "auto-bid"`; the default `hold` keeps auto-bid off it for 60 days. A winner that declines: bid first, then `set-placement-multipliers` on its campaign. A campaign the bid brain runs (`bid-brain` lists it under `owned`) gets no bid or placement request from this run: the brain moves its bids; a stop that lowers bids still goes.
 6. **Budgets.** `set-campaign-budget` (one campaign, or a list in one step), inside the monthly cap; `restore-budget-baselines` puts budgets back to the baseline a person captured. Nexus bounds how far a budget may move in a day (the preview says so): spread bigger moves over days.
 7. **Structure** (new ad groups, keywords and targets, product ads, campaigns, markets; portfolios and campaign settings; hourly bid plans, budget schedules, budget pools and the month's budget plan): only on the weekly day (9), as a proposal.
 

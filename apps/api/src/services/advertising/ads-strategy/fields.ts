@@ -39,7 +39,10 @@ export const MARKET_SCOPE = '*'
 
 /** Descriptive in W1: Claude reads it; no engine derives a number from it (lifecycle goals are W5). */
 export const STRATEGY_GOALS = ['LAUNCH', 'GROW', 'PROFIT', 'CLEAR_STOCK', 'DEFEND'] as const
-/** Engines steer by ACoS only: a TACOS target is stored and shown, and engines fall through to the next ACoS target. */
+/**
+ * Today's engines steer by ACoS only: a TACOS target is stored and shown, and they fall through to the next ACoS target.
+ * BB-5 — the bid brain (in shadow) reads a TACoS target and turns it into an ACoS aim from the market's sales.
+ */
 export const TARGET_KINDS = ['ACOS', 'TACOS'] as const
 /** A temporary stop. W1 engines stop with low bids only; PAUSE waits for W2/W3. */
 export const STOP_METHODS = ['LOW_BIDS', 'PAUSE'] as const
@@ -157,7 +160,7 @@ export function negateStricter(a: Omit<NegateThresholds, 'windowDays'>, b: Omit<
 
 /** The AdsStrategy columns that hold the Owner's settings (scope, version and audit columns are not settings). */
 export type StrategyColumn =
-  | 'goal' | 'goalNote' | 'targetKind' | 'targetPct' | 'monthlySpendCapCents' | 'minBidCents' | 'maxBidCents'
+  | 'goal' | 'goalNote' | 'targetKind' | 'targetPct' | 'targetLoPct' | 'targetHiPct' | 'monthlySpendCapCents' | 'minBidCents' | 'maxBidCents'
   | 'maxChangePct' | 'maxActionsPerRun' | 'protect' | 'harvestMinOrders' | 'harvestMinClicks' | 'harvestMaxAcosPct'
   | 'harvestWindowDays' | 'negateMinClicks' | 'negateMinSpendCents' | 'negateMaxOrders' | 'negateWindowDays'
   | 'stopMethod' | 'stopBidCents' | 'claudeAutonomy' | 'reviewEveryDays'
@@ -176,6 +179,9 @@ export const COLUMN_CHECKS: Readonly<Record<StrategyColumn, ColumnCheck>> = {
   goalNote: { kind: 'text', maxLength: 2000 },
   targetKind: { kind: 'enum', values: TARGET_KINDS },
   targetPct: { kind: 'int', min: 1, max: MAX_TARGET_PCT },
+  // BB-5 — the band around the target, in the target's own kind.
+  targetLoPct: { kind: 'int', min: 1, max: MAX_TARGET_PCT },
+  targetHiPct: { kind: 'int', min: 1, max: MAX_TARGET_PCT },
   monthlySpendCapCents: { kind: 'int', min: 0 },
   minBidCents: { kind: 'int', min: 0 },
   maxBidCents: { kind: 'int', min: 0 },
@@ -260,6 +266,8 @@ export const READERS = {
   claudePreview: "Claude's bid previews (the warning past it, and the bid a run by rule writes)",
   // AA-W2-2b — the strategy-bound ad tools' common checks (agents/tools/ads-autonomy-kit.ts, C5) in Claude's door.
   claudeByRule: "Claude's door, for an ad change that may run by the business's rule in this market (an ad tool set to run by rule, where its code allows it)",
+  // BB-5 — the bid brain reads the target as written: ACoS or TACoS, and its band.
+  bidBrain: 'the bid brain, in shadow (decides each keyword bid of an allowlisted IT or DE campaign from the target, its band and a TACoS target turned into an ACoS aim, and logs it; it writes nothing yet)',
 } as const
 const TARGET_READERS = [READERS.optimiser, READERS.bidRules, READERS.autopilot]
 const BAND_READERS = [READERS.gate, READERS.optimiser, READERS.bidRules, READERS.hourly, READERS.restores, READERS.autopilot]
@@ -268,8 +276,13 @@ const STEP_READERS = [READERS.stepClamp, READERS.optimiser, READERS.claudePrevie
 export const STRATEGY_FIELDS: readonly StrategyField[] = [
   { key: 'goal', label: 'Goal', columns: ['goal'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'mixed', raise: 'any', money: false, readBy: [] },
   { key: 'goalNote', label: 'Why', columns: ['goalNote'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'mixed', raise: 'never', money: false, readBy: [] },
-  // Read as an ACoS target only: a TACoS target is stored and shown, and the engines take the next ACoS target down.
-  { key: 'target', label: 'Target', columns: ['targetKind', 'targetPct'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'mixed', raise: 'target', money: true, readBy: TARGET_READERS },
+  // Today's engines read it as an ACoS target only: a TACoS target is stored and shown, and they take the next ACoS target
+  // down. BB-5 — the band (targetLoPct–targetHiPct, either side optional) is part of the group: the bid brain leaves a bid
+  // alone inside it and aims at targetPct; it reads a TACoS target too.
+  {
+    key: 'target', label: 'Target', columns: ['targetKind', 'targetPct', 'targetLoPct', 'targetHiPct'], required: ['targetKind', 'targetPct'], levels: ALL_LEVELS,
+    resolve: 'inherit', safer: 'mixed', raise: 'target', money: true, readBy: [...TARGET_READERS, READERS.bidBrain],
+  },
   // The number Nexus's bid engines steer by: the first ACoS target down the chain (a TACoS target is skipped), after a
   // rule's or plan's own number and the campaign's own target, before the account default.
   // AA-W2-8 — and Claude's door: a campaign's own target, set by rule, stays at or below it (ads-target-acos.tools.ts).
@@ -384,7 +397,7 @@ export function notReadYet(): StrategyFieldKey[] {
  * where it comes from: the read tool's `restrictedFields`, and the strategy GET routes.
  */
 export const STRATEGY_MONEY: Readonly<Record<string, string>> = Object.fromEntries(
-  ['targetPct', 'targetAcosPct', 'monthlySpendCapCents', 'minBidCents', 'maxBidCents', 'harvestMaxAcosPct', 'negateMinSpendCents', 'stopBidCents', 'monthlyBudgetCents',
+  ['targetPct', 'targetLoPct', 'targetHiPct', 'targetAcosPct', 'monthlySpendCapCents', 'minBidCents', 'maxBidCents', 'harvestMaxAcosPct', 'negateMinSpendCents', 'stopBidCents', 'monthlyBudgetCents',
     // W1-6 — this month against a cap: spend so far, the forecast and the cap where bids drop.
     'spendCents', 'forecastSpendCents', 'stopCapCents',
     // W1-6b — spend of ads Nexus cannot tie to a product (counted on no category or product cap).

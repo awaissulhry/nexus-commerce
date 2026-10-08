@@ -408,6 +408,7 @@
     "DevelopmentCertification",
     "AdsAutomationState",
     "AutomationSwitch",
+    "AdsAutoUndoJudgement",
     "AmazonReportRun",
     "SharedListingMembership",
     "SyncChannelPolicy",
@@ -444,6 +445,7 @@
     "AdsHarvestPolicy",
     "AdsHarvestDestination",
     "SqpReportRequest",
+    "AdsDailyVintage",
     "AdSpendCeiling",
     "AdBidPolicy",
     "AdsStrategy",
@@ -452,6 +454,12 @@
     "AdsPlaybook",
     "AdsPlaybookVersion",
     "AdsPlaybookLink",
+    "BidBrainEnrollment",
+    "BidBrainDecision",
+    "BidHold",
+    "BidDirective",
+    "AdsBrainEnrollment",
+    "AdsBrainOverride",
     "AdWriteRefusal",
     "AutomationRefusalDaily",
     "KeywordBidProposal",
@@ -484,6 +492,7 @@
     "ShopifyColourSync",
     "BuyerMessage",
     "ChannelHeldId",
-    "ChannelHeldSweep"
+    "ChannelHeldSweep",
+    "PlatformHealthCheck"
   ]
 }

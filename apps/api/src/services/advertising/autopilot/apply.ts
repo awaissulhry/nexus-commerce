@@ -15,6 +15,7 @@ import { setSearchPlacement } from '../ads-top-of-search.service.js'
 import { updateCampaignWithSync } from '../ads-mutation.service.js'
 import { effectiveTargetAcosPct, clamp, type Goal, type Guardrails, type CampaignSignals } from './presets.js'
 import type { ProposedAction } from './modules.js'
+import { brainOwnedCampaignIds } from '../bid-brain/live.js'
 
 export interface AppliedDecision {
   module: string; campaignId: string; action: string
@@ -81,7 +82,14 @@ export async function applyPlanActions(opts: {
   let applied = 0, denied = 0
   const actor = `automation:autopilot-${planId}`
 
+  // BID BRAIN BB-6 — a campaign the brain owns has one writer, the brain: the plan's bids and placements leave it.
+  const brainOwned = await brainOwnedCampaignIds([...byCampaign.keys()])
   for (const [campaignId, acts] of byCampaign) {
+    if (brainOwned.has(campaignId)) {
+      denied += acts.length
+      for (const a of acts) decisions.push({ module: a.module, campaignId, action: a.action, reason: `${a.reason} — left alone: the bid brain runs this campaign (one writer per campaign)`, status: 'DENIED' })
+      continue
+    }
     const payloadValueCents = Math.max(0, ...acts.map((a) => Number(a.afterCents ?? 0)))
     const gate = await checkAdsWriteGate({ marketplace, campaignId, payloadValueCents })
     if (!gate.allowed) {

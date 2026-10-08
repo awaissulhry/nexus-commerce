@@ -1677,6 +1677,34 @@ CREATE TABLE "AmazonAdsDailyPerformance" (
 );
 
 -- CreateTable
+CREATE TABLE "AdsDailyVintage" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "adProduct" TEXT NOT NULL,
+    "entityType" TEXT NOT NULL,
+    "entityId" TEXT NOT NULL,
+    "date" DATE NOT NULL,
+    "pulledAt" TIMESTAMP(3) NOT NULL,
+    "ageDays" INTEGER NOT NULL,
+    "source" TEXT NOT NULL DEFAULT 'pull',
+    "reportRunId" TEXT,
+    "impressions" INTEGER NOT NULL,
+    "clicks" INTEGER NOT NULL,
+    "costMicros" BIGINT NOT NULL,
+    "sales1dCents" INTEGER,
+    "sales7dCents" INTEGER,
+    "sales14dCents" INTEGER,
+    "orders1d" INTEGER,
+    "orders7d" INTEGER,
+    "orders14d" INTEGER,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "AdsDailyVintage_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AmazonAdsHourlyPerformance" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -8358,6 +8386,42 @@ CREATE TABLE "AutomationSwitch" (
 );
 
 -- CreateTable
+CREATE TABLE "AdsAutoUndoJudgement" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "actionLogId" TEXT NOT NULL,
+    "actor" TEXT NOT NULL,
+    "origin" TEXT NOT NULL,
+    "originLabel" TEXT,
+    "approvalId" TEXT,
+    "entityType" TEXT NOT NULL,
+    "entityId" TEXT NOT NULL,
+    "entityLabel" TEXT,
+    "marketplace" TEXT,
+    "lever" TEXT NOT NULL,
+    "direction" TEXT NOT NULL,
+    "fromValue" DOUBLE PRECISION,
+    "toValue" DOUBLE PRECISION,
+    "changedAt" TIMESTAMP(3) NOT NULL,
+    "verdict" TEXT NOT NULL,
+    "outcome" TEXT,
+    "evidence" JSONB,
+    "action" TEXT NOT NULL DEFAULT 'none',
+    "actionReason" TEXT,
+    "actionAt" TIMESTAMP(3),
+    "level" TEXT NOT NULL,
+    "undoApprovalId" TEXT,
+    "undoActionLogId" TEXT,
+    "final" BOOLEAN NOT NULL DEFAULT false,
+    "judgedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "checkedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "AdsAutoUndoJudgement_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AdsAutomationState" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL DEFAULT 'singleton',
@@ -9230,6 +9294,8 @@ CREATE TABLE "AdsStrategy" (
     "goalNote" TEXT,
     "targetKind" TEXT,
     "targetPct" INTEGER,
+    "targetLoPct" INTEGER,
+    "targetHiPct" INTEGER,
     "monthlySpendCapCents" INTEGER,
     "minBidCents" INTEGER,
     "maxBidCents" INTEGER,
@@ -9371,6 +9437,129 @@ CREATE TABLE "AdsPlaybookLink" (
     "updatedBy" TEXT NOT NULL,
 
     CONSTRAINT "AdsPlaybookLink_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "BidBrainEnrollment" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "campaignId" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "mode" TEXT NOT NULL DEFAULT 'SHADOW',
+    "heldUntil" TIMESTAMP(3),
+    "heldBy" TEXT,
+    "heldReason" TEXT,
+    "snapshot" JSONB,
+    "enrolledBy" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "BidBrainEnrollment_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "BidBrainDecision" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "runId" TEXT NOT NULL,
+    "mode" TEXT NOT NULL,
+    "kind" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "campaignId" TEXT NOT NULL,
+    "adGroupId" TEXT,
+    "targetId" TEXT NOT NULL,
+    "action" TEXT NOT NULL,
+    "layer" TEXT NOT NULL,
+    "currentCents" INTEGER NOT NULL,
+    "decidedCents" INTEGER NOT NULL,
+    "goalBidCents" INTEGER,
+    "aim" DECIMAL(8,4),
+    "bandLo" DECIMAL(8,4),
+    "bandHi" DECIMAL(8,4),
+    "expectedAcos" DECIMAL(10,4),
+    "confidence" DECIMAL(6,4),
+    "dataDay" DATE NOT NULL,
+    "lastWriter" TEXT,
+    "lastWriteAt" TIMESTAMP(3),
+    "why" TEXT NOT NULL,
+    "evidence" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "BidBrainDecision_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "BidHold" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "campaignId" TEXT NOT NULL,
+    "targetId" TEXT,
+    "kind" TEXT NOT NULL,
+    "until" TIMESTAMP(3),
+    "by" TEXT NOT NULL,
+    "reason" TEXT,
+    "floorCents" INTEGER,
+    "endedAt" TIMESTAMP(3),
+    "endedBy" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "BidHold_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "BidDirective" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "campaignId" TEXT NOT NULL,
+    "targetId" TEXT,
+    "lane" TEXT,
+    "kind" TEXT NOT NULL,
+    "valueCents" INTEGER,
+    "valuePct" INTEGER,
+    "source" TEXT NOT NULL,
+    "until" TIMESTAMP(3),
+    "reason" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "BidDirective_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AdsBrainEnrollment" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "version" INTEGER NOT NULL DEFAULT 1,
+    "snapshots" JSONB,
+    "enrolledBy" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "updatedBy" TEXT NOT NULL,
+
+    CONSTRAINT "AdsBrainEnrollment_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AdsBrainOverride" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "scope" TEXT NOT NULL,
+    "campaignId" TEXT,
+    "kind" TEXT NOT NULL,
+    "key" TEXT NOT NULL,
+    "ref" TEXT NOT NULL DEFAULT '',
+    "value" JSONB,
+    "by" TEXT NOT NULL,
+    "reason" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "endedAt" TIMESTAMP(3),
+    "endedBy" TEXT,
+
+    CONSTRAINT "AdsBrainOverride_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -10179,6 +10368,25 @@ CREATE TABLE "ChannelItemClaim" (
     "claimedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "ChannelItemClaim_pkey" PRIMARY KEY ("channel","marketplace","externalId")
+);
+
+-- CreateTable
+CREATE TABLE "PlatformHealthCheck" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "runId" TEXT NOT NULL,
+    "checkId" TEXT NOT NULL,
+    "subsystem" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "message" TEXT NOT NULL,
+    "likelyCause" TEXT,
+    "nextStep" TEXT,
+    "evidence" JSONB NOT NULL,
+    "triggeredBy" TEXT NOT NULL DEFAULT 'cron',
+    "measuredAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "PlatformHealthCheck_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -11008,6 +11216,18 @@ CREATE INDEX "AmazonAdsDailyPerformance_workspaceId_idx" ON "AmazonAdsDailyPerfo
 
 -- CreateIndex
 CREATE UNIQUE INDEX "AmazonAdsDailyPerformance_profileId_adProduct_entityT_4f88ac473" ON "AmazonAdsDailyPerformance"("workspaceId", "profileId", "adProduct", "entityType", "entityId", "date");
+
+-- CreateIndex
+CREATE INDEX "AdsDailyVintage_marketplace_date_idx" ON "AdsDailyVintage"("marketplace", "date");
+
+-- CreateIndex
+CREATE INDEX "AdsDailyVintage_createdAt_idx" ON "AdsDailyVintage"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "AdsDailyVintage_workspaceId_idx" ON "AdsDailyVintage"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AdsDailyVintage_pull_key" ON "AdsDailyVintage"("workspaceId", "profileId", "adProduct", "entityType", "entityId", "date", "pulledAt");
 
 -- CreateIndex
 CREATE INDEX "AmazonAdsHourlyPerformance_localEntityId_date_idx" ON "AmazonAdsHourlyPerformance"("localEntityId", "date");
@@ -14616,6 +14836,18 @@ CREATE INDEX "AutomationSwitch_workspaceId_idx" ON "AutomationSwitch"("workspace
 CREATE UNIQUE INDEX "AutomationSwitch_workspace_key_key" ON "AutomationSwitch"("workspaceId", "key");
 
 -- CreateIndex
+CREATE INDEX "AdsAutoUndoJudgement_workspaceId_idx" ON "AdsAutoUndoJudgement"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "AdsAutoUndoJudgement_final_checkedAt_idx" ON "AdsAutoUndoJudgement"("final", "checkedAt");
+
+-- CreateIndex
+CREATE INDEX "AdsAutoUndoJudgement_action_actionAt_idx" ON "AdsAutoUndoJudgement"("action", "actionAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AdsAutoUndoJudgement_workspace_actionLogId_key" ON "AdsAutoUndoJudgement"("workspaceId", "actionLogId");
+
+-- CreateIndex
 CREATE INDEX "AdsAutomationState_workspaceId_idx" ON "AdsAutomationState"("workspaceId");
 
 -- CreateIndex
@@ -15054,6 +15286,66 @@ CREATE UNIQUE INDEX "AdsPlaybookLink_kind_refId_key" ON "AdsPlaybookLink"("works
 CREATE UNIQUE INDEX "AdsPlaybookLink_playbookId_kind_key_key" ON "AdsPlaybookLink"("workspaceId", "playbookId", "kind", "key");
 
 -- CreateIndex
+CREATE INDEX "BidBrainEnrollment_mode_idx" ON "BidBrainEnrollment"("mode");
+
+-- CreateIndex
+CREATE INDEX "BidBrainEnrollment_workspaceId_idx" ON "BidBrainEnrollment"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "BidBrainEnrollment_workspaceId_campaignId_key" ON "BidBrainEnrollment"("workspaceId", "campaignId");
+
+-- CreateIndex
+CREATE INDEX "BidBrainDecision_campaignId_createdAt_idx" ON "BidBrainDecision"("campaignId", "createdAt" DESC);
+
+-- CreateIndex
+CREATE INDEX "BidBrainDecision_targetId_createdAt_idx" ON "BidBrainDecision"("targetId", "createdAt" DESC);
+
+-- CreateIndex
+CREATE INDEX "BidBrainDecision_runId_idx" ON "BidBrainDecision"("runId");
+
+-- CreateIndex
+CREATE INDEX "BidBrainDecision_createdAt_idx" ON "BidBrainDecision"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "BidBrainDecision_workspaceId_idx" ON "BidBrainDecision"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "BidHold_campaignId_endedAt_idx" ON "BidHold"("campaignId", "endedAt");
+
+-- CreateIndex
+CREATE INDEX "BidHold_targetId_idx" ON "BidHold"("targetId");
+
+-- CreateIndex
+CREATE INDEX "BidHold_workspaceId_idx" ON "BidHold"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "BidDirective_campaignId_idx" ON "BidDirective"("campaignId");
+
+-- CreateIndex
+CREATE INDEX "BidDirective_targetId_idx" ON "BidDirective"("targetId");
+
+-- CreateIndex
+CREATE INDEX "BidDirective_workspaceId_idx" ON "BidDirective"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainEnrollment_marketplace_idx" ON "AdsBrainEnrollment"("marketplace");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainEnrollment_workspaceId_idx" ON "AdsBrainEnrollment"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AdsBrainEnrollment_workspaceId_productId_marketplace_key" ON "AdsBrainEnrollment"("workspaceId", "productId", "marketplace");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainOverride_productId_marketplace_endedAt_idx" ON "AdsBrainOverride"("productId", "marketplace", "endedAt");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainOverride_campaignId_endedAt_idx" ON "AdsBrainOverride"("campaignId", "endedAt");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainOverride_workspaceId_idx" ON "AdsBrainOverride"("workspaceId");
+
+-- CreateIndex
 CREATE INDEX "AdWriteRefusal_deniedAt_createdAt_idx" ON "AdWriteRefusal"("deniedAt", "createdAt");
 
 -- CreateIndex
@@ -15418,6 +15710,18 @@ CREATE UNIQUE INDEX "ChannelHeldSweep_workspaceId_channelConnectionId_channel_ke
 
 -- CreateIndex
 CREATE INDEX "ChannelItemClaim_workspaceId_idx" ON "ChannelItemClaim"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "PlatformHealthCheck_checkId_measuredAt_idx" ON "PlatformHealthCheck"("checkId", "measuredAt" DESC);
+
+-- CreateIndex
+CREATE INDEX "PlatformHealthCheck_runId_idx" ON "PlatformHealthCheck"("runId");
+
+-- CreateIndex
+CREATE INDEX "PlatformHealthCheck_measuredAt_idx" ON "PlatformHealthCheck"("measuredAt");
+
+-- CreateIndex
+CREATE INDEX "PlatformHealthCheck_workspaceId_idx" ON "PlatformHealthCheck"("workspaceId");
 
 -- AddForeignKey
 ALTER TABLE "Product" ADD CONSTRAINT "Product_familyId_fkey" FOREIGN KEY ("familyId") REFERENCES "ProductFamily"("id") ON DELETE SET NULL ON UPDATE CASCADE;

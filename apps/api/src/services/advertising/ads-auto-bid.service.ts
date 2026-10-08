@@ -26,15 +26,21 @@
  * write there), is left alone and counted, as above. And a run asks the write gate before Nexus writes its copy
  * (askGate): a write the gate refuses leaves the stored bid as it was, makes no queue row, and is counted as not sent —
  * before, Nexus showed the new bid until the worker refused it and put the old one back, and the run called it applied.
+ *
+ * Waits said (review follow-up 2026-10-08) — a move the optimiser holds for a newer data day (`preview.waiting`: an
+ * automatic writer already moved the bid on this data day, or it would undo the optimiser's own move of the last 3 data
+ * days) is counted in the summary, the notification and the A4 preview, when auto-bid would otherwise move it; the rest
+ * are left alone for their own reason, as before. Each bid the optimiser wanted to move is moved, waits, or is left alone.
  */
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
-import { previewBidOptimization, applyBidOptimization, type BidProposal } from './ads-bid-optimizer.service.js'
+import { previewBidOptimization, applyBidOptimization, type BidProposal, type WaitingMove } from './ads-bid-optimizer.service.js'
 import { notifyAutomation } from './ads-automation-notify.service.js'
 import { allowChange, engineCapsText, engineGuardNote, nothingHeld, openEngineGuard, type EngineGuardReport } from './ads-engine-guard.js'
 import type { TargetAcosSource } from './ads-target-acos-resolver.js'
 import { bidderByCampaign, personBidTargetIds } from './bid-grid.service.js'
 import { rankOwnedCampaignIds } from './rank-release.service.js'
+import { brainOwnedCampaignIds } from './bid-brain/live.js'
 
 // Skip immaterial moves — protects the Amazon API rate budget + per-campaign
 // daily write caps from churn on sub-cent noise.
@@ -58,8 +64,8 @@ export const AUTO_BID_SCOPE_WORDS = 'it moves only bids where you set a target A
  */
 const OWNER_TARGET_SOURCES: ReadonlySet<TargetAcosSource> = new Set<TargetAcosSource>(['explicit', 'campaign', 'strategy', 'account'])
 
-/** Who else holds a campaign's bids, for auto-bid (autoBidHolders). */
-export type AutoBidHolder = 'pinned' | 'hourlyPlan' | 'goalPlan'
+/** Who else holds a campaign's bids, for auto-bid (autoBidHolders). BB-6 — `bidBrain`: the bid brain owns it. */
+export type AutoBidHolder = 'pinned' | 'hourlyPlan' | 'goalPlan' | 'bidBrain'
 /**
  * Why a bid cannot reach Amazon, so auto-bid does not move it (cannotReachAmazon): its campaign or ad group is paused or
  * archived, or its campaign is off the live-write allowlist.
@@ -79,10 +85,11 @@ const LEFT_ALONE_WORDS: Record<keyof AutoBidLeftAlone, string> = {
   goalPlan: 'a goal plan holds',
   person: 'a person holds',
   pinned: 'a pin holds',
+  bidBrain: 'the bid brain runs',
 }
 
 export function noneLeftAlone(): AutoBidLeftAlone {
-  return { noTargetSetByYou: 0, notRunning: 0, notOnAllowlist: 0, hourlyPlan: 0, goalPlan: 0, person: 0, pinned: 0 }
+  return { noTargetSetByYou: 0, notRunning: 0, notOnAllowlist: 0, hourlyPlan: 0, goalPlan: 0, person: 0, pinned: 0, bidBrain: 0 }
 }
 
 export function leftAloneTotal(l: AutoBidLeftAlone | null | undefined): number {
@@ -111,17 +118,20 @@ export async function autoBidHolders(campaignIds: string[], personTargets?: Read
   const out = new Map<string, AutoBidHolder>()
   if (!campaignIds.length) return out
   const { RUNNING_AUTOPILOT_PLANS } = await import('../../jobs/ad-autopilot.job.js')
-  const [bidders, rankHeld, plans, pinned] = await Promise.all([
+  const [bidders, rankHeld, plans, pinned, brain] = await Promise.all([
     bidderByCampaign(personTargets),
     rankOwnedCampaignIds(),
     prisma.autopilotPlan.findMany({ where: RUNNING_AUTOPILOT_PLANS, select: { campaignIds: true } }),
     prisma.campaign.findMany({ where: { id: { in: campaignIds }, pinBids: true }, select: { id: true } }),
+    // BB-6 — a campaign the bid brain owns has one bid writer, the brain: auto-bid leaves it first of all.
+    brainOwnedCampaignIds(campaignIds),
   ])
   const pins = new Set(pinned.map((c) => c.id))
   const planHeld = new Set(plans.flatMap((p) => (Array.isArray(p.campaignIds) ? (p.campaignIds as unknown[]).map(String) : [])))
   for (const id of campaignIds) {
     const bidder = bidders.get(id)?.kind
-    const holder: AutoBidHolder | null = pins.has(id) ? 'pinned'
+    const holder: AutoBidHolder | null = brain.has(id) ? 'bidBrain'
+      : pins.has(id) ? 'pinned'
       : bidder === 'schedule' || rankHeld.has(id) ? 'hourlyPlan'
         : planHeld.has(id) ? 'goalPlan' : null
     if (holder) out.set(id, holder)
@@ -175,15 +185,41 @@ export interface AutoBidPlan {
   /** Each move's campaign. */
   campaignOf: Map<string, string>
   leftAlone: AutoBidLeftAlone
+  /** Review follow-up — the moves it would set but that wait for a newer data day (of at least 2¢, passing ownerMoves). */
+  waiting: WaitingMove[]
 }
+
+/** The waits a run counts, per kind (WaitingMove.wait). */
+export type AutoBidWaiting = Record<WaitingMove['wait'], number>
+
+const WAITING_WORDS: Record<keyof AutoBidWaiting, string> = {
+  movedToday: 'already moved on this data day',
+  reversal: 'would undo its own move of the last 3 data days',
+}
+
+/** Counted per kind. */
+export function waitingCounts(waiting: readonly Pick<WaitingMove, 'wait'>[]): AutoBidWaiting {
+  const out: AutoBidWaiting = { movedToday: 0, reversal: 0 }
+  for (const w of waiting) out[w.wait]++
+  return out
+}
+
+/** "2 already moved on this data day, 1 would undo its own move of the last 3 data days"; '' when none waits. */
+export function waitingWords(w: AutoBidWaiting | null | undefined): string {
+  if (!w) return ''
+  return (Object.keys(WAITING_WORDS) as Array<keyof AutoBidWaiting>).filter((k) => w[k] > 0).map((k) => `${w[k]} ${WAITING_WORDS[k]}`).join(', ')
+}
+
+const waitingTotal = (w: AutoBidWaiting | null | undefined) => (w ? w.movedToday + w.reversal : 0)
 
 /** The bids auto-bid would set now — for the run and for its preview (A4) alike, so the preview is the run. */
 export async function planAutoBid(): Promise<AutoBidPlan> {
   // Profit-native target ACOS + Bayesian sparse-data path (best signal); a run moves only the Owner's targets.
   const preview = await previewBidOptimization(AUTO_BID_OPTIMIZER_OPTIONS)
   const material = preview.proposals.filter((p) => Math.abs(p.deltaCents) >= MIN_DELTA_CENTS)
+  const waitingMaterial = preview.waiting.filter((w) => Math.abs(w.wouldBeCents - w.currentBidCents) >= MIN_DELTA_CENTS)
   // Who holds a bid, and whether it can reach Amazon, is read only for the moves toward a target he set (none: no read).
-  const withTarget = material.filter((p) => OWNER_TARGET_SOURCES.has(p.targetSource))
+  const withTarget = [...material, ...waitingMaterial].filter((p) => OWNER_TARGET_SOURCES.has(p.targetSource))
   const targets = withTarget.length
     ? await prisma.adTarget.findMany({
         where: { id: { in: withTarget.map((p) => p.targetId) } },
@@ -199,7 +235,10 @@ export async function planAutoBid(): Promise<AutoBidPlan> {
   const personTargets = withTarget.length ? await personBidTargetIds() : new Set<string>()
   const holders = await autoBidHolders([...new Set(campaignOf.values())], personTargets)
   const { moves, leftAlone } = ownerMoves(material, campaignOf, holders, personTargets, unreachable)
-  return { preview, moves, campaignOf, leftAlone }
+  // A wait it would otherwise move is counted as waiting; one it would leave alone anyway is left alone for that reason.
+  const waits = ownerMoves(waitingMaterial, campaignOf, holders, personTargets, unreachable)
+  for (const k of Object.keys(leftAlone) as Array<keyof AutoBidLeftAlone>) leftAlone[k] += waits.leftAlone[k]
+  return { preview, moves, campaignOf, leftAlone, waiting: waits.moves }
 }
 
 export interface AutoBidResult {
@@ -211,6 +250,8 @@ export interface AutoBidResult {
   notSentReasons?: string[]
   /** Owner targets only — the bids it would have moved and left alone, per reason. */
   leftAlone?: AutoBidLeftAlone
+  /** Review follow-up — the bids it would move but that wait for a newer data day, per kind. */
+  waiting?: AutoBidWaiting
   /** 1d — the dial posture and the caps this run ran under, and what they held back. */
   guard?: EngineGuardReport
 }
@@ -225,8 +266,9 @@ export async function runAutoBidOnce(): Promise<AutoBidResult> {
   // Toward the Owner's targets only, and never a bid another owner holds (planAutoBid).
   const plan = await planAutoBid()
   const { leftAlone, campaignOf } = plan
-  const changes = plan.moves.map((p) => ({ targetId: p.targetId, proposedBidCents: p.proposedBidCents, sources: p.sources }))
-  if (changes.length === 0) return { proposed: 0, applied: 0, dryRun: forceDry, leftAlone, guard: guard.report() }
+  const waiting = waitingCounts(plan.waiting)
+  const changes = plan.moves.map((p) => ({ targetId: p.targetId, proposedBidCents: p.proposedBidCents, sources: p.sources, dataDay: p.dataDay }))
+  if (changes.length === 0) return { proposed: 0, applied: 0, dryRun: forceDry, leftAlone, waiting, guard: guard.report() }
 
   // 1d — whole campaigns, in the optimiser's order (biggest moves first), while the caps have room: a campaign is
   // never split. Under SUGGEST each campaign is only counted (would-apply). Counted as planned — one bulk write
@@ -247,15 +289,16 @@ export async function runAutoBidOnce(): Promise<AutoBidResult> {
   const res = await applyBidOptimization({ changes: allowed, actor: 'automation:auto-bid', dryRun: forceDry, askGate: true })
   const notSent = res.notSent ?? 0
   const notSentReasons = res.notSentReasons ?? []
-  logger.info('[ads-auto-bid] run', { proposed: changes.length, applied: res.applied, notSent, dryRun: res.dryRun, deferredByCap: report.deferredByCap, leftAlone })
+  logger.info('[ads-auto-bid] run', { proposed: changes.length, applied: res.applied, notSent, dryRun: res.dryRun, deferredByCap: report.deferredByCap, leftAlone, waiting })
   const alone = leftAloneWords(leftAlone)
+  const waits = waitingWords(waiting)
   await notifyAutomation({
     type: 'ads-auto-bid',
     severity: 'info',
     title: forceDry ? `Auto-bid: ${changes.length} bid changes proposed` : `Auto-bid: ${res.applied} bid changes queued for Amazon`,
-    body: `Target-ACoS optimization: ${AUTO_BID_SCOPE_WORDS} (${changes.length} to move${alone ? `; left alone: ${alone}` : ''}). ${forceDry ? 'The account dial is at Propose — proposals only.' : 'Writes gated per-campaign allowlist + caps.'}${notSent ? ` ${notSentWords(notSent, notSentReasons)}.` : ''}${report.deferredByCap ? ` ${report.deferredByCap} campaigns wait for the next run (its own cap: ${engineCapsText('auto-bid')}).` : ''}`,
+    body: `Target-ACoS optimization: ${AUTO_BID_SCOPE_WORDS} (${changes.length} to move${alone ? `; left alone: ${alone}` : ''}${waits ? `; waiting for a newer data day: ${waits}` : ''}). ${forceDry ? 'The account dial is at Propose — proposals only.' : 'Writes gated per-campaign allowlist + caps.'}${notSent ? ` ${notSentWords(notSent, notSentReasons)}.` : ''}${report.deferredByCap ? ` ${report.deferredByCap} campaigns wait for the next run (its own cap: ${engineCapsText('auto-bid')}).` : ''}`,
   }).catch(() => {})
-  return { proposed: changes.length, applied: res.applied, dryRun: res.dryRun, ...(notSent ? { notSent, notSentReasons } : {}), leftAlone, guard: report }
+  return { proposed: changes.length, applied: res.applied, dryRun: res.dryRun, ...(notSent ? { notSent, notSentReasons } : {}), leftAlone, waiting, guard: report }
 }
 
 /** "2 not sent to Amazon, nothing changed in Nexus (Not sent to Amazon: …)" — the bids the write refused, with their reasons. */
@@ -272,11 +315,17 @@ export function autoBidLeftAloneNote(l: AutoBidLeftAlone | null | undefined): st
   return n ? ` left-alone=${n} (${leftAloneWords(l)}: ${AUTO_BID_SCOPE_WORDS})` : ''
 }
 
+/** Review follow-up — what waits for a newer data day, for the summary line; empty when nothing waits. */
+export function autoBidWaitingNote(w: AutoBidWaiting | null | undefined): string {
+  const n = waitingTotal(w)
+  return n ? ` waiting=${n} (${waitingWords(w)}: one move per data day, no quick reversal)` : ''
+}
+
 /** 1d — the run's summary line, for the cron and Run now: the counts, plus what it left alone and what the dial or the caps held back. */
 export function autoBidSummaryLine(r: AutoBidResult): string {
   if (r.skipped) return `skipped=${r.skipped}`
   const notSent = r.notSent ? ` not-sent=${r.notSent} (${notSentWords(r.notSent, r.notSentReasons ?? [])})` : ''
-  return `proposed=${r.proposed} applied=${r.applied} dryRun=${r.dryRun}${notSent}${autoBidLeftAloneNote(r.leftAlone)}${engineGuardNote(r.guard, {
+  return `proposed=${r.proposed} applied=${r.applied} dryRun=${r.dryRun}${notSent}${autoBidWaitingNote(r.waiting)}${autoBidLeftAloneNote(r.leftAlone)}${engineGuardNote(r.guard, {
     suggest: 'nothing is written; the bids it would set are counted',
     stopped: 'nothing is written',
   })}`

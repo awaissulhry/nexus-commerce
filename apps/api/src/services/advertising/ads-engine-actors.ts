@@ -22,6 +22,7 @@
  *   autopilot         `automation:autopilot-<planId>`, `automation:autopilot` (its ToS step) autopilot/apply.ts
  *   write reconcile   `automation:reconcile` (bids), `automation:ads-write-reconcile` (placements)
  *                                                                                          ads-write-reconcile.service.ts
+ *   bid brain         `automation:bid-brain`                                                bid-brain/live-writer.ts
  *
  * Rules are not here: a rule writes as `automation:<ruleId>` and keeps its own brakes (its caps and the
  * breaker's rule-action signal).
@@ -31,6 +32,8 @@ import { logger } from '../../utils/logger.js'
 export type EngineKey =
   | 'rank-defend' | 'dayparting' | 'budget-schedules' | 'budget-enforce' | 'budget-pools'
   | 'auto-bid' | 'tos-defense' | 'coverage-engine' | 'autopilot' | 'write-reconcile'
+  // BID BRAIN BB-6 — the one writer of the campaigns enrolled LIVE (bid-brain/live.ts).
+  | 'bid-brain'
 
 /** The breaker's buckets: every engine, plus writes no engine or rule claims. */
 export type BreakerBucket = EngineKey | 'unknown'
@@ -63,6 +66,7 @@ export const ENGINE_ACTORS: readonly EngineActorDef[] = [
   { key: 'coverage-engine', label: 'Coverage engine', actors: ['automation:coverage-engine'] },
   { key: 'autopilot', label: 'Autopilot', actors: ['automation:autopilot'], prefixes: ['automation:autopilot-'] },
   { key: 'write-reconcile', label: 'Retry of failed changes', actors: ['automation:reconcile', 'automation:ads-write-reconcile'] },
+  { key: 'bid-brain', label: 'Bid brain', actors: ['automation:bid-brain'] },
 ]
 
 /**
@@ -193,6 +197,9 @@ const DEFAULT_ENGINE_CAPS: Readonly<Record<BreakerBucket, Readonly<EngineCaps>>>
   autopilot: { perTick: 150, perDay: 600, breakerPerHour: 300 },
   'auto-bid': { perTick: 300, perDay: 1_200, breakerPerHour: 600 },
   'write-reconcile': { perTick: null, perDay: null, breakerPerHour: 600 },
+  // BB-6 — the bid brain moves a keyword at most once per new data day, plus the hour's placements and Min-bid floors of
+  // its campaigns (BB-7): auto-bid's caps for its bids, and room for the hourly placement writes.
+  'bid-brain': { perTick: 300, perDay: 1_500, breakerPerHour: 600 },
   unknown: { perTick: null, perDay: null, breakerPerHour: 300 },
 }
 

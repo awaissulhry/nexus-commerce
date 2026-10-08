@@ -798,6 +798,8 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'restore-campaign': ['suppressedBy', 'basis', 'reach'],
   // A12 — the allowlist setting it starts from.
   'set-campaign-live-writes': ['liveWrites'],
+  // BB-6 — the bid brain enrollment it starts from (its mode, hold and last change) and the op.
+  'set-bid-brain-enrollment': ['op', 'enrollment', 'basis'],
   // T5 — every campaign asked with the target it stores now and gets (basis), and the counts (a raise, a clear).
   'set-campaign-target-acos': ['basis', 'totals'],
   // A11 — the whole plan (products, targeting, budget and currency), the market's spend ceiling, where it lands.
@@ -843,6 +845,8 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'create-ebay-campaign': ['plan', 'account', 'ceiling', 'reach'],
   // A10 — what the undo restores (each write and the value it puts back), the negatives it retires, where it lands.
   'undo-ad-change': ['source', 'rows', 'negatives', 'reach'],
+  /* ADS AUTONOMY — auto-undo's one undo: the judgement it carries out, what goes back (from → to) and where it lands. */
+  'undo-worse-ad-change': ['judgement', 'restore', 'reach'],
   // W4-5 — every target or negative with its place and bids (a harvest: its term, source, destination, bid and negative
   // plan, a bid it worked out itself frozen in the approval; a retire: every negative with who made it), where it lands;
   // for negatives also the other products' places and the proven handovers they would close (never the numbers, which

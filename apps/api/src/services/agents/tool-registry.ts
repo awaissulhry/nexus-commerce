@@ -15,6 +15,9 @@ import { ADS_RECOMMENDATION_TOOLS } from './tools/ads-recommendations-apply.tool
 import { ADS_CHANGE_TOOLS } from './tools/ads-change.tools.js'
 import { ADS_TARGET_ACOS_TOOLS } from './tools/ads-target-acos.tools.js'
 import { ADS_STRATEGY_TOOLS } from './tools/ads-strategy.tools.js'
+import { ADS_BID_BRAIN_TOOLS } from './tools/ads-bid-brain.tools.js'
+import { ADS_BID_BRAIN_ENROLLMENT_TOOLS } from './tools/ads-bid-brain-enrollment.tools.js'
+import { ADS_BRAIN_TOOLS } from './tools/ads-brain.tools.js'
 import { ADS_PLAYBOOK_TOOLS } from './tools/ads-playbook.tools.js'
 import { ADS_MANAGER_TOOLS } from './tools/ads-manager.tools.js'
 import { ADS_CREATE_TOOLS } from './tools/ads-create.tools.js'
@@ -36,6 +39,7 @@ import { ADS_TARGET_TOOLS } from './tools/ads-targets.tools.js'
 import { ADS_NEGATIVE_TOOLS } from './tools/ads-negatives.tools.js'
 import { ADS_AD_GROUP_TOOLS } from './tools/ads-ad-groups.tools.js'
 import { ADS_QUEUED_WRITE_TOOLS } from './tools/ads-queued-write.tools.js'
+import { ADS_AUTO_UNDO_TOOLS } from './tools/ads-auto-undo.tools.js'
 import { EBAY_AD_TOOLS } from './tools/ebay-ads.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 import { CHANNEL_TOOLS } from './tools/channel.tools.js'
@@ -62,6 +66,7 @@ import { CATALOG_STRUCTURE_TOOLS } from './tools/catalog-structure.tools.js'
 import { PLATFORM_LIBRARY_TOOLS } from './tools/platform-library.tools.js'
 import { REPORT_TOOLS } from './tools/reports.tools.js'
 import { PLATFORM_ACTIVITY_TOOLS } from './tools/platform-activity.tools.js'
+import { PLATFORM_HEALTH_TOOLS } from './tools/platform-health.tools.js'
 import { ORGANIZE_CATALOG_TOOLS } from './tools/organize-catalog.tools.js'
 import { ORGANIZE_PLATFORM_TOOLS } from './tools/organize-platform.tools.js'
 import { STRUCTURE_CHANGE_TOOLS } from './tools/structure-change.tools.js'
@@ -124,6 +129,12 @@ const ALL: AgentTool[] = [
   ...ADS_TARGET_ACOS_TOOLS,
   // Ads autonomy W1-2/W1-3 — the Owner's ads strategy per market, category and product: read, and set (raises need the code).
   ...ADS_STRATEGY_TOOLS,
+  // Bid brain BB-4 — what the shadow bid brain decides (why this bid, what-if for a target, the shadow vs actual diff), read.
+  ...ADS_BID_BRAIN_TOOLS,
+  // BB-6 — a campaign under the bid brain (LIVE with the approver's code), held, released, back to shadow or given back.
+  ...ADS_BID_BRAIN_ENROLLMENT_TOOLS,
+  // One brain AB-3 — the brain's map: who owns each lever of each campaign, the clashes and what is not set up, read.
+  ...ADS_BRAIN_TOOLS,
   // Ads playbook PB-2 — how a product's ads are built and run (templates, rows per market, category and product), read.
   ...ADS_PLAYBOOK_TOOLS,
   // Ads autonomy W4-1 — the daily Claude ads run reports itself (bell + one e-mail a day), and its history.
@@ -158,6 +169,8 @@ const ALL: AgentTool[] = [
   ...ADS_AD_GROUP_TOOLS,
   // Ads autonomy W3-2 — cancel an ad write Nexus queued and has not sent yet (a brake: nothing reaches Amazon).
   ...ADS_QUEUED_WRITE_TOOLS,
+  // ADS AUTONOMY — auto-undo (A19): one undo of an automatic change it judged clearly worse, a person decides it.
+  ...ADS_AUTO_UNDO_TOOLS,
   ...EBAY_AD_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).
   ...APPROVAL_TOOLS,
@@ -201,6 +214,8 @@ const ALL: AgentTool[] = [
   // MCP full control P6 — reports, the alerts inbox, the audit trail, sync activity and AI usage, read.
   ...REPORT_TOOLS,
   ...PLATFORM_ACTIVITY_TOOLS,
+  // Platform health watchdog (2026-10-07) — the daily checks of crons, feeds, ad writes, approvals, automation and queues.
+  ...PLATFORM_HEALTH_TOOLS,
   // MCP full control P7 — organizing changes: tags, workflow stage, saved views, alert rules, acknowledging alerts, the image library.
   ...ORGANIZE_CATALOG_TOOLS,
   ...ORGANIZE_PLATFORM_TOOLS,

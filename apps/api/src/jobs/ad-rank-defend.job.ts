@@ -34,18 +34,21 @@ import { updateAdGroupWithSync, type AdsActor } from '../services/advertising/ad
 import { suppressCampaignBids, restoreCampaignBids, refloorCampaignBids, normaliseFloorCents, applyBaseBidDelta, revertBaseBidDelta } from '../services/advertising/ads-bid-suppression.service.js'
 import { detectSelfCompetition, type CampaignTargeting, type SelfCompetitionConflict } from '../services/advertising/rank-self-competition.js'
 import { clampPct, deltaBidCents } from '../services/advertising/ads-placement-math.js'
+import { resolveMaxBaseBidByCampaign } from '../services/advertising/ads-placement-manual.js'
 import { DRY_RUN, allowChange, engineGuardNote, nothingHeld, openEngineGuard, type CampaignPermit, type EngineGuard, type EngineGuardReport, type HeldBack } from '../services/advertising/ads-engine-guard.js'
 import { addRelease, emptyRelease, floorOwnerWords, isRankOwnedFloor, releaseCampaigns, sweepOrphanReleases, type ReleaseReport } from '../services/advertising/rank-release.service.js'
 import { isOutOfBudget, outOfBudgetWords } from '../services/advertising/delivery-reasons.js'
-import { engineActorWhere } from '../services/advertising/ads-engine-actors.js'
+import { engineActorWhere, type EngineKey } from '../services/advertising/ads-engine-actors.js'
 import { MAX_MIN_BID_ENTRIES_PER_DAY, noWrites, type RankWriteCounts } from '../services/advertising/rank-write-projection.js'
 import { NO_LIMITS, clampToStrategy, holdNote, limitWords, newHoldLog, strategyBidReader, strategyWords, type BidHoldLog } from '../services/advertising/ads-strategy/bids.js'
+import { brainOwnedCampaignIds } from '../services/advertising/bid-brain/live.js'
 
 // Clock source for time-of-day window resolution: the DATABASE clock, not the container's process
 // clock. Railway cron containers have exhibited multi-hour clock skew (the process clock ran ~2h
 // behind real time while Postgres stayed correct), which silently shifted every rank/dayparting
 // window. Sourcing "now" from Postgres makes window selection immune to container clock drift.
-async function dbNow(): Promise<Date> {
+// BB-7 — exported (keyword only) so the bid brain resolves an hourly plan's hour on the same clock.
+export async function dbNow(): Promise<Date> {
   try {
     const rows = await prisma.$queryRaw<Array<{ now: Date }>>`SELECT now() as now`
     const n = rows?.[0]?.now
@@ -58,7 +61,8 @@ async function dbNow(): Promise<Date> {
 // RD.8 — leadMinutes shifts the evaluation clock forward so a plan starts converging
 // BEFORE a window opens (Amazon bid changes propagate with lag → arrive at-rank, not late).
 // baseNow: the authoritative clock (pass dbNow()); defaults to the process clock only as a fallback.
-function nowInTz(tz: string, leadMinutes = 0, baseNow?: Date): { day: number; hour: number } {
+// BB-7 — exported (keyword only): the bid brain resolves an hourly plan's hour with the same rule.
+export function nowInTz(tz: string, leadMinutes = 0, baseNow?: Date): { day: number; hour: number } {
   const baseMs = (baseNow ?? new Date()).getTime()
   const at = leadMinutes ? new Date(baseMs + leadMinutes * 60_000) : new Date(baseMs)
   const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', hour: 'numeric', hour12: false }).formatToParts(at)
@@ -70,7 +74,7 @@ function nowInTz(tz: string, leadMinutes = 0, baseNow?: Date): { day: number; ho
   return { day: dayIdx < 0 ? 0 : dayIdx, hour }
 }
 
-interface RankTargetRow { key: string; placement: string; targetISPct: number | null; acosCapPct: number | null; maxCpcCents: number | null; biasPct: number | null; pause: boolean; floorBidCents?: number | null; allOut: boolean; jumpStartPct?: number | null; stepUpPct?: number | null; stepDownPct?: number | null; maxBiasPct?: number | null; keepClimbing?: boolean; lanes?: unknown; bidMode?: string | null; bidValueCents?: number | null; bidDeltaPct?: number | null }
+export interface RankTargetRow { key: string; placement: string; targetISPct: number | null; acosCapPct: number | null; maxCpcCents: number | null; biasPct: number | null; pause: boolean; floorBidCents?: number | null; allOut: boolean; jumpStartPct?: number | null; stepUpPct?: number | null; stepDownPct?: number | null; maxBiasPct?: number | null; keepClimbing?: boolean; lanes?: unknown; bidMode?: string | null; bidValueCents?: number | null; bidDeltaPct?: number | null }
 // RD.P2 — exported (keyword only, no behaviour change) so the Rank & Dayparting page can derive
 // its Mode column from the ENGINE's spec mapping rather than a second copy of it. A duplicate is
 // free to drift from the loop that actually decides, which is the defect that page exists to fix.
@@ -79,7 +83,7 @@ export const toSpec = (t: RankTargetRow): RankTargetSpec => ({ key: t.key, place
 // RTC — merge per-scope target overrides onto a spec, keyed by the spec's own target
 // key. Maps apply in order, so later (more specific) wins: product then campaign.
 type TargetOverride = { biasPct?: number; targetISPct?: number; acosCapPct?: number; maxCpcCents?: number; floorBidCents?: number; jumpStartPct?: number; stepUpPct?: number; stepDownPct?: number; maxBiasPct?: number; keepClimbing?: boolean; lanes?: LaneSpec[]; bidMode?: string | null; bidValueCents?: number | null; bidDeltaPct?: number | null }
-type TargetOverrideMap = Record<string, TargetOverride> | null | undefined
+export type TargetOverrideMap = Record<string, TargetOverride> | null | undefined
 export function applyTargetOverrides(spec: RankTargetSpec, ...maps: TargetOverrideMap[]): RankTargetSpec {
   let out = spec
   for (const m of maps) {
@@ -175,7 +179,8 @@ export type RankReleaseSummary = Omit<ReleaseReport, 'campaigns'> & { swept: num
 // 2c — `writes` (live runs only): the run's changes by kind, the give-backs of `release` included in `restore`;
 // `keptServing`: campaigns the anti-flap kept serving through a Min-bid hour.
 // W1-5 — `holds`: the bids a limit held this run (the ads strategy band on a base bid; a bound on a give-back), for the run line.
-export interface RankDefendSummary { evaluated: number; applied: number; decisions: RankDefendDecision[]; plans?: RankPlanRunSummary[]; guard?: EngineGuardReport; skipped?: string; release?: RankReleaseSummary; writes?: RankWriteCounts; keptServing?: number; holds?: BidHoldLog }
+// BB-6 — `brainOwned`: campaigns of its plans and schedules the bid brain owns, left to the brain (one writer per campaign).
+export interface RankDefendSummary { evaluated: number; applied: number; decisions: RankDefendDecision[]; plans?: RankPlanRunSummary[]; guard?: EngineGuardReport; skipped?: string; release?: RankReleaseSummary; writes?: RankWriteCounts; keptServing?: number; holds?: BidHoldLog; brainOwned?: number }
 
 interface CampRow { id: string; name: string; status: string; dynamicBidding: unknown; biddingStrategy?: string | null; bidsSuppressedAt?: Date | null; bidsSuppressedFloorCents?: number | null; bidsSuppressedBy?: string | null; deliveryReasons?: string[]; marketplace?: string | null }
 interface RankCampaignResult { decision: RankDefendDecision; applied: number; held: HeldBack; writes: RankWriteCounts; keptServing: boolean }
@@ -366,14 +371,16 @@ export const firstKeptServingNoticeToday = oncePerUtcDay()
  */
 const MIN_BID_ENTRY_MARK = 'rankMinBidEntry'
 const utcMidnight = (now: Date): Date => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
-async function minBidEntriesToday(campaignIds: string[], now: Date): Promise<Map<string, number>> {
+// BB-7 — exported, and counted for the bid brain too (`engines`): a campaign the brain took over today keeps the entries
+// rank-defend made, and the brain's own count toward the same limit.
+export async function minBidEntriesToday(campaignIds: string[], now: Date, engines: readonly EngineKey[] = ['rank-defend']): Promise<Map<string, number>> {
   const out = new Map<string, number>()
   if (!campaignIds.length) return out
   try {
     const rows = await prisma.advertisingActionLog.groupBy({
       by: ['entityId'],
       where: {
-        ...engineActorWhere('rank-defend'), actionType: 'custom_event', entityType: 'CAMPAIGN', entityId: { in: campaignIds },
+        OR: engines.flatMap((e) => engineActorWhere(e).OR), actionType: 'custom_event', entityType: 'CAMPAIGN', entityId: { in: campaignIds },
         createdAt: { gte: utcMidnight(now) }, payloadAfter: { path: [MIN_BID_ENTRY_MARK], equals: true },
       },
       _count: { _all: true },
@@ -385,7 +392,8 @@ async function minBidEntriesToday(campaignIds: string[], now: Date): Promise<Map
   }
   return out
 }
-async function recordMinBidEntry(campaignId: string, actor: string, floorCents: number, entry: number): Promise<void> {
+// BB-7 — exported: the bid brain records its entries the same way (one custom_event row per entry).
+export async function recordMinBidEntry(campaignId: string, actor: string, floorCents: number, entry: number): Promise<void> {
   try {
     await prisma.advertisingActionLog.create({
       data: {
@@ -395,7 +403,7 @@ async function recordMinBidEntry(campaignId: string, actor: string, floorCents: 
     })
   } catch (e) { logger.warn('[rank-defend] could not record a Min-bid entry — it will not count toward today\'s limit', { campaignId, error: (e as Error).message }) }
 }
-const keptServingWords = (entries: number): string =>
+export const keptServingWords = (entries: number): string =>
   `kept serving: this campaign already entered Min bid ${entries === 1 ? 'once' : `${entries} times`} today (UTC) — a campaign is floored at most ${MAX_MIN_BID_ENTRIES_PER_DAY} times a day, so its bids stay as they are until tomorrow`
 
 async function decideAndMaybeApply(
@@ -716,6 +724,11 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
 
   // Union of schedule + plan campaigns → one campaign load + one signal pass.
   const unionIds = [...new Set([...schedules.map((s) => s.campaignId), ...governed])]
+  // BID BRAIN BB-6 — a campaign the brain owns has one writer, the brain: this engine neither writes it nor gives back
+  // what it floored there (the brain takes its hours, BB-7). Counted as governed, so the schedules and the orphan sweep
+  // leave it too; the plans skip it below.
+  const brainOwned = await brainOwnedCampaignIds(unionIds)
+  for (const id of brainOwned) governed.add(id)
   const campaigns = await prisma.campaign.findMany({ where: { id: { in: unionIds } }, select: { id: true, name: true, marketplace: true, status: true, externalCampaignId: true, dynamicBidding: true, biddingStrategy: true, acos: true, spend: true, bidsSuppressedAt: true, bidsSuppressedFloorCents: true, bidsSuppressedBy: true, deliveryReasons: true } })
   const campById = new Map(campaigns.map((c) => [c.id, c]))
   // RTC — per-campaign (campaign-scope) target overrides for every campaign in play.
@@ -728,28 +741,14 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
   // 2e — no signal reads here any more (Top-of-search share, the hourly loss proxy, SQP share): the tick sets the
   // hour's fixed values and none of them fed anything else.
 
-  // MB.4 — each campaign's HIGHEST live base bid, the number the CPC ceiling is measured
-  // against. `suppressedFromBidCents` is taken into account because it is what the bid
-  // RETURNS to the moment a serving target takes over: reading only the floored 2¢ of a
-  // suppressed campaign would compute a ceiling-free cap for the very tick that restores it.
-  // Grouped rather than row-by-row — one campaign here holds 141 targets.
-  const maxBaseBidByCampaign = new Map<string, number>()
+  // MB.4 — each campaign's HIGHEST live base bid, the number the CPC ceiling is measured against
+  // (resolveMaxBaseBidByCampaign, ads-placement-manual.ts — one reading with the Hourly Bids runtime and the previews).
+  // `suppressedFromBidCents` counts, because it is what the bid RETURNS to the moment a serving target takes over.
+  // C2 — only the bids that serve: enabled targets, and an ad group's default bid only where it holds no target (the
+  // default of an auto ad group whose targets bid 14¢ is not a base bid, and capped its Top of search to 0 %).
+  let maxBaseBidByCampaign = new Map<string, number>()
   try {
-    const [agRows, agIndex] = await Promise.all([
-      prisma.adGroup.groupBy({ by: ['campaignId'], where: { campaignId: { in: unionIds } }, _max: { defaultBidCents: true, suppressedFromBidCents: true } }),
-      prisma.adGroup.findMany({ where: { campaignId: { in: unionIds } }, select: { id: true, campaignId: true } }),
-    ])
-    for (const r of agRows) {
-      const v = Math.max(r._max.defaultBidCents ?? 0, r._max.suppressedFromBidCents ?? 0)
-      if (v > 0) maxBaseBidByCampaign.set(r.campaignId, v)
-    }
-    const campByAdGroup = new Map(agIndex.map((g) => [g.id, g.campaignId]))
-    const tgRows = await prisma.adTarget.groupBy({ by: ['adGroupId'], where: { adGroup: { campaignId: { in: unionIds } }, isNegative: false }, _max: { bidCents: true, suppressedFromBidCents: true } })
-    for (const r of tgRows) {
-      const cid = campByAdGroup.get(r.adGroupId); if (!cid) continue
-      const v = Math.max(r._max.bidCents ?? 0, r._max.suppressedFromBidCents ?? 0)
-      if (v > (maxBaseBidByCampaign.get(cid) ?? 0)) maxBaseBidByCampaign.set(cid, v)
-    }
+    maxBaseBidByCampaign = await resolveMaxBaseBidByCampaign(unionIds)
   } catch (e) { logger.warn('[rank-defend] max-base-bid read failed — CPC ceilings not enforced this tick', { error: (e as Error).message }) }
 
   const decisions: RankDefendDecision[] = []
@@ -785,7 +784,7 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
     const write = !dryRun && PLAN_ALLOW_APPLY && (!plan.manualOnly || !!opts.force)
     if (write && (!key || !targetByKey.get(key))) {
       const why = key ? `its plan names "${key}", which no longer exists` : 'its plan holds nothing at this hour'
-      for (const fc of famCamps) idle.push({ campaignId: fc.id, actor: `automation:rank-plan-${plan.id}`, why })
+      for (const fc of famCamps) if (!brainOwned.has(fc.id)) idle.push({ campaignId: fc.id, actor: `automation:rank-plan-${plan.id}`, why })
     }
     if (key) {
       const target = targetByKey.get(key)
@@ -801,6 +800,7 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
         planConflicts = sc.conflicts
         const baselineTarget = plan.defaultTargetKey ? targetByKey.get(plan.defaultTargetKey) : undefined
         for (const fc of famCamps) {
+          if (brainOwned.has(fc.id)) continue
           const camp = campById.get(fc.id); if (!camp) continue
           const oos = readinessByCamp.get(fc.id) === 'pause'
           const demote = sc.demoted.has(fc.id) && !!baselineTarget && plan.defaultTargetKey !== key
@@ -919,7 +919,7 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
   }
 
   if (release) writes.restore += release.writes
-  return { evaluated: decisions.length, applied, decisions, plans: planSummaries, ...(guard ? { guard: guard.report(), writes, keptServing } : {}), ...(release ? { release } : {}), ...(holds.holds.length ? { holds } : {}) }
+  return { evaluated: decisions.length, applied, decisions, plans: planSummaries, ...(guard ? { guard: guard.report(), writes, keptServing } : {}), ...(release ? { release } : {}), ...(holds.holds.length ? { holds } : {}), ...(brainOwned.size ? { brainOwned: brainOwned.size } : {}) }
 }
 
 interface IdleCampaign { campaignId: string; actor: AdsActor; why: string }
@@ -967,7 +967,7 @@ export function rankWritesNote(r: Pick<RankDefendSummary, 'writes' | 'keptServin
 /** 1c — the run's summary line: the counts, plus what the dial or the caps held back (nothing extra on a normal run). */
 export function rankDefendSummaryLine(r: RankDefendSummary): string {
   if (r.skipped) return `skipped: ${r.skipped}`
-  return `evaluated=${r.evaluated} applied=${r.applied}${rankWritesNote(r)}${engineGuardNote(r.guard)}${rankReleaseNote(r.release)}${holdNote(r.holds)}`
+  return `evaluated=${r.evaluated} applied=${r.applied}${rankWritesNote(r)}${engineGuardNote(r.guard)}${rankReleaseNote(r.release)}${holdNote(r.holds)}${r.brainOwned ? ` brain-owned=${r.brainOwned} (the bid brain runs them)` : ''}`
 }
 
 export async function runRankDefendCron(): Promise<void> {

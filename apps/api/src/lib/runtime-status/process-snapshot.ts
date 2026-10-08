@@ -234,6 +234,18 @@ export function describeProcesses(live: LiveProcesses, now = Date.now()) {
   })) as Record<ProcessRole, { reporting: boolean; instances: Array<{ instanceId: string; startedAt: string; uptimeSec: number; publishedAt: string; ready: boolean }>; reason?: string }>
 }
 
+// ── Build ───────────────────────────────────────────────────────────────────
+//
+// Which commit and Railway deployment a process runs. A process that started again under the SAME deployment was
+// restarted by a crash or an out-of-memory kill, not by a deploy (the platform health watchdog tells the two apart).
+// Neither value is a secret: Railway sets both on every service.
+
+export function buildSection(env: NodeJS.ProcessEnv = process.env): { sha: string | null; deployment: string | null } {
+  const sha = (env.RAILWAY_GIT_COMMIT_SHA ?? '').trim().slice(0, 12)
+  const deployment = (env.RAILWAY_DEPLOYMENT_ID ?? '').trim()
+  return { sha: /^[0-9a-f]{7,12}$/i.test(sha) ? sha : null, deployment: /^[A-Za-z0-9-]{1,64}$/.test(deployment) ? deployment : null }
+}
+
 // ── Environment flags ───────────────────────────────────────────────────────
 //
 // Feature flags are set per Railway service, so the API's process.env says nothing certain about the

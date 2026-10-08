@@ -31,6 +31,7 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Phase 3 T3 — ebay-categories reads eBay's category suggestions and a category's details live (it stores nothing).
 // Ads autonomy W3-1 — apply-ad-recommendations asks for a plan whose steps reach Amazon.
 // FBA shipment drafts (Owner 2026-10-08) — plan-fba-shipment fills a draft in Nexus only; a person's "Send to Amazon" reaches Amazon.
+// Ads autonomy (auto-undo, A19) — undo-worse-ad-change puts a bid, budget or placement back at Amazon.
 
 const OPEN_WORLD = [
   'add-ad-targets', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'advance-purchase-order',
@@ -45,13 +46,13 @@ const OPEN_WORLD = [
   'reserve-stock', 'restore-ad-bids-after-stock', 'restore-budget-baselines', 'restore-campaign', 'resume-automation',
   'retire-negatives', 'revert-listing-change', 'rollback-bulk-operation', 'run-ad-engine-now',
   'save-channel-mapping', 'save-price-rule', 'schedule-pickup', 'schedule-price-change', 'send-customer-message',
-  'set-ad-group', 'set-budget-pool', 'set-budget-schedule', 'set-campaign-budget', 'set-campaign-settings',
+  'set-ad-group', 'set-bid-brain-enrollment', 'set-budget-pool', 'set-budget-schedule', 'set-campaign-budget', 'set-campaign-settings',
   'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'set-ebay-price-promotion', 'set-hourly-bid-plan',
   'set-listing-price', 'set-listing-stock', 'set-master-prices', 'set-monthly-ad-budget', 'set-placement-multipliers',
   'set-portfolio', 'set-price',
   'set-promotion', 'set-shopify-content', 'set-stock', 'set-stock-policy', 'set-stock-source', 'set-target-bid', 'shipping-rates',
   'shopify-content', 'submit-change-plan', 'suppress-campaign', 'sync-orders-now', 'transfer-stock', 'tune-ad-engine',
-  'turn-down-automation', 'turn-up-automation', 'undo-ad-change', 'void-shipping-label',
+  'turn-down-automation', 'turn-up-automation', 'undo-ad-change', 'undo-worse-ad-change', 'void-shipping-label',
 ]
 
 describe('MCP.7 — every tool, as Claude sees it', () => {
@@ -129,13 +130,20 @@ describe('C3 — the server and every change tool name the business', () => {
       'Archive an ad (archive-ads) only when it is meant for good',
       // W1-8 — where the ads strategy lives, and that it only narrows.
       'read it with ads-strategy, change', 'It only narrows what this business lets',
+      // BB-4 — the bid brain's read tool; BB-6 — it writes only for a campaign put LIVE, with the approver's code.
+      'bid-brain (read only; the bid', 'writes only for a campaign set-bid-brain-enrollment put LIVE',
+      "needs the approver's authenticator code; its diff view",
+      // AB-3 — the brain's map, read only.
+      'ads-brain (read only; views map, clashes, setup)',
       // PB-11 — where the playbook lives, and that a start needs the approver's code.
       'read it with ads-playbook, change it with', 'start, stop or sync its campaigns, switch its phase',
       "a start needs the approver's authenticator code",
       // W4-14 — a copy into another market, a person's hourly plan and a person's pause keep their own doors.
       'a copy into another market never runs by rule',
       'An hourly bid plan a person made changes by rule only where the business allowed it',
-      "only with enable-ads includePeoplesPauses and the approver's authenticator code, never by rule"]) {
+      "only with enable-ads includePeoplesPauses and the approver's authenticator code, never by rule",
+      // Platform health watchdog (2026-10-07) — the daily checks are read first in an unattended run.
+      'read platform-health-checks first in a daily or unattended run']) {
       expect(mcpInstructions(business), rule).toContain(rule)
     }
   })

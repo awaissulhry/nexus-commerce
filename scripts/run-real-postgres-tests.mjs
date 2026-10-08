@@ -67,6 +67,18 @@
  *   · `services/automation-state-two-business-postgres.vitest.test.ts` (MCP full control R1, 2026-10-01) — the ads
  *     automation dial and halt, the fleet halt and the review mailer pause are one row PER BUSINESS under row security:
  *     a halt in one business never stops another, and the legacy business keeps its old row id.
+ *   · `services/advertising/bid-brain/live-postgres.vitest.test.ts` (bid brain BB-6, 2026-10-08) — the live bid brain: one
+ *     writer per campaign through the real write gate under row security, a person's bid held, give-back restored.
+ *   · `services/advertising/bid-brain/plans-postgres.vitest.test.ts` (bid brain BB-7, 2026-10-08) — an owned campaign's hourly
+ *     plan carried out by the brain: placements inside the CPC ceiling, Min-bid floors with the anti-flap, the bids given back.
+ *   · `services/advertising/bid-brain/hook-postgres.vitest.test.ts` (bid brain BB-10, 2026-10-08) — the auto-undo hook: the
+ *     run-completed event in the outbox, holds and releases, and the hold after an approved undo of a brain change.
+ *   · `services/advertising/brain/enrollment-postgres.vitest.test.ts` (one brain AB-1, 2026-10-08) — a product's brain: its
+ *     tables under row security, the campaign → product resolver, the bids lever adopting and driving BidBrainEnrollment,
+ *     the Owner's overrides (exclude, lock, levels, settings), the per-campaign tool kept in step with them, and two changes
+ *     on one version (one wins).
+ *   · `services/advertising/brain/read-map-postgres.vitest.test.ts` (one brain AB-3, 2026-10-08) — the ads-brain map on a GALE
+ *     IT shape: each lever's owner from what is set up and from the action log, the clashes and the gaps, the setup.
  *   · `services/agents/change-plan-postgres.vitest.test.ts` (MCP full control C6, 2026-10-01) — a 200-step change plan:
  *     a stopped worker resumes, two workers at once run every step exactly once, a stale step is skipped.
  *   · `services/advertising/ads-claude-bulk-postgres.vitest.test.ts` (MCP full control A7, 2026-10-02) — an approved
@@ -76,6 +88,9 @@
  *   · `services/fba-inbound/fba-send-postgres.vitest.test.ts` (Step 4 Send to FBA, 2026-10-07) — a double-click on
  *     "Create plan" through the route makes one plan and one set of holds; two cancels release each hold once; "Mark
  *     shipped" twice moves the units once; "Mark shipped" racing a sale keeps units, holds and sealed cases right.
+ *   · `services/advertising/bid-brain/shadow-postgres.vitest.test.ts` (bid brain BB-3, 2026-10-07) — the shadow bid brain's
+ *     loaders (a decayed evidence aggregate, DISTINCT ON reads) and its run under row security: it decides allowlisted
+ *     IT/DE keywords, stores only changes and a daily snapshot, brakes on a halt or stale data, and writes nothing else.
  * Both therefore SKIP unless given a multi-connection server, which means a normal suite run verifies
  * nothing. This script supplies one.
  *
@@ -200,6 +215,9 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'category tree races (moves, creates, memberships and workspace commands serialize on the tree lock)', file: 'src/services/category-tree-concurrency.vitest.test.ts', expect: 5 },
   { name: 'Amazon Ads drift closes on evidence, per profile (structural reconcile under row security)', file: 'src/services/advertising/ads-structural-reconcile-postgres.vitest.test.ts', expect: 1 },
   { name: 'automation brakes per business (ads dial and halt, fleet halt, review mailer pause, the breaker / target ACOS / halt Claude tunes, and the R16 engine switches: one business never stops another; legacy ids kept)', file: 'src/services/automation-state-two-business-postgres.vitest.test.ts', expect: 5 },
+  { name: 'the live bid brain (BB-6: an owned campaign gets exactly the brain\'s writes and a shadow one none, a rerun writes nothing, another engine refused by the gate, a stop and a person pass, the person\'s bid held, engines leave it, give-back restores the snapshot, LIVE needs the approver\'s code)', file: 'src/services/advertising/bid-brain/live-postgres.vitest.test.ts', expect: 6 },
+  { name: 'an owned campaign\'s hourly plan through the brain (BB-7: placements once inside the CPC ceiling, rank-defend leaves it, the receipt; a Min-bid hour floors every keyword with one anti-flap entry; the hour after gives the bids back in one write; the floors\' memory and a hand-back given back by rank-defend; op shadow refused without memory; light ticks; out of stock and back, a refused give-back, a plan switched off during its floor; a stop declared during a Min-bid hour stays, a second owner\'s stop outlives the first; op shadow refused while a give-back waits; the second owner\'s stop takes the mark at its own floor when the first lifts, and the retail guard lifts it once it no longer flags the campaign; a Min-bid hour zeroes every placement in the same tick, the serving hour sets the lanes again, a give-back brings the LIVE-time placements back)', file: 'src/services/advertising/bid-brain/plans-postgres.vitest.test.ts', expect: 12 },
+  { name: 'the bid brain\'s auto-undo hook (BB-10: one run-completed event per run that wrote, with each bid\'s action-log row; hold and release, the later end wins; a held campaign gets no raise; a brain change an approved undo put back pins its keyword and holds its campaign 7 days; an AUTO undo of a brain cut stays through the next ticks)', file: 'src/services/advertising/bid-brain/hook-postgres.vitest.test.ts', expect: 4 },
   { name: '"New attribute" race (sheet pop-up A3: two creates of one name leave one attribute and one family link)', file: 'src/services/pim/own-axis-attribute-postgres.vitest.test.ts', expect: 1 },
   { name: 'Shopify sheet draft saves racing (Lane B: one winner per cell, nothing lost, a refused save is not in the draft)', file: 'src/services/shopify/channel-sheet-race-postgres.vitest.test.ts', expect: 2 },
   { name: 'Shopify sheet root-creation proof (one action across 1,000-cell requests; business, account, family, alias and actor bounds; recreated roots; current cell state; expiry; refusal, rollback and a forced first-create race; lost answer)', file: 'src/services/shopify/channel-sheet-root-proof-postgres.vitest.test.ts', expect: 18 },
@@ -212,6 +230,9 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'Sells from: a sale takes stock from the first listed location with enough (Step 2)', file: 'src/services/stock/sale-location-postgres.vitest.test.ts', expect: 6 },
   { name: 'sealed cases under concurrency (Step 3: ten sales at once end at floor(units / case size), a case count racing a sale, a case size replaced while a sale runs)', file: 'src/services/stock/stock-cases-postgres.vitest.test.ts', expect: 3 },
   { name: 'Send to FBA races (Step 4: a double-click on Send to Amazon sends the draft once with one set of holds, cancel releases the holds once, Mark shipped twice moves once, Mark shipped racing a sale keeps units and sealed cases right, two Add to draft at once make one draft and two sends hold once)', file: 'src/services/fba-inbound/fba-send-postgres.vitest.test.ts', expect: 5 },
+  { name: 'the ads brain map (AB-3: each lever\'s owner on a GALE IT shape from what is set up and from the action log — the brain and a market rule clash on LIVE campaigns, auto-bid\'s writes as evidence, a person\'s budget, an old write left out; one campaign; the market\'s products; clashes and the gaps — a keyword blocked where it is targeted, a harvest rule with no destination, a keyword two products bid on; setup — engines held off with their fix, a product LIVE one campaign at a time but not enrolled)', file: 'src/services/advertising/brain/read-map-postgres.vitest.test.ts', expect: 4 },
+  { name: 'a product\'s brain (AB-1: its tables under row security; the campaign → product resolver on real rows; enrolling adopts the bids lever, keeps own campaigns in shadow with an adopted OBSERVE and writes no campaign row; adopted brakes hold, ending one is a big door that runs only on its approved basis; an excluded or bids-locked campaign leaves the bid brain and the per-campaign tool refuses it; an exclusion wins on a shared LIVE campaign; the tool\'s op shadow is kept as a campaign choice; settings campaign > product > default with the warning never above the maximum; two changes on one version, one wins; refusals, a weaker outer transaction included, change nothing; a product lock holds a campaign set to AUTO by hand; an exclusion on a campaign at a brain floor waits, held; bids OBSERVE takes the own campaigns back to shadow, a HELD one included, and names the campaigns it does not reach; give-back always runs once a product is enrolled — archived campaign, deleted family root, plain)', file: 'src/services/advertising/brain/enrollment-postgres.vitest.test.ts', expect: 15 },
+  { name: 'the shadow bid brain (BB-3: allowlisted IT/DE keywords only, no write path, changes and a daily snapshot stored, halt and stale-data brakes, 30-day prune, one business; BB-4: why, what-if, diff; BB-5: a TACoS target with its band from the family\'s sales; BB-8: overrides from their sources, the bids going back; BB-9: a rule\'s bid action on an owned campaign stored as the brain\'s input and obeyed)', file: 'src/services/advertising/bid-brain/shadow-postgres.vitest.test.ts', expect: 9 },
 ]
 const IMAGES = ['pgvector/pgvector:pg17', 'postgres:17', 'postgres:17-alpine']
 const DEAD = 'postgresql://nobody@127.0.0.1:1/real_pg_no_stray_writes_test'

@@ -1745,6 +1745,10 @@
       "fields": []
     },
     {
+      "name": "AdsDailyVintage",
+      "fields": []
+    },
+    {
       "name": "AmazonAdsHourlyPerformance",
       "fields": []
     },
@@ -6496,6 +6500,10 @@
       "fields": []
     },
     {
+      "name": "AdsAutoUndoJudgement",
+      "fields": []
+    },
+    {
       "name": "AdsAutomationState",
       "fields": [
         {
@@ -6820,6 +6828,30 @@
     },
     {
       "name": "AdsPlaybookLink",
+      "fields": []
+    },
+    {
+      "name": "BidBrainEnrollment",
+      "fields": []
+    },
+    {
+      "name": "BidBrainDecision",
+      "fields": []
+    },
+    {
+      "name": "BidHold",
+      "fields": []
+    },
+    {
+      "name": "BidDirective",
+      "fields": []
+    },
+    {
+      "name": "AdsBrainEnrollment",
+      "fields": []
+    },
+    {
+      "name": "AdsBrainOverride",
       "fields": []
     },
     {
@@ -7716,6 +7748,10 @@
           "relationOnDelete": "Restrict"
         }
       ]
+    },
+    {
+      "name": "PlatformHealthCheck",
+      "fields": []
     }
   ]
 }
