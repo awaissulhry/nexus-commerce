@@ -4180,6 +4180,31 @@ model AmazonAdsHourlyArrival {
   @@index([workspaceId, date])
 }
 
+/// BID BRAIN BB-16 follow-up — a data day on which the Marketing Stream grain ingest refused records at its ceiling, per
+/// business (services/advertising/ams-grain.service.ts). kind `rows`: records that would have created a row in
+/// AmazonAdsHourlyPlacement past NEXUS_AMS_GRAIN_MAX_ROWS_PER_DAY were refused (that day's grain is incomplete);
+/// `arrivals`: deltas were added to their row but left out of the arrival log past NEXUS_AMS_GRAIN_MAX_ARRIVALS_PER_DAY
+/// (the row is whole; the lag curve learns less). A reader that finds a row here says the day is capped. `refused`
+/// is a lower bound: each process adds what it refused at most every few minutes. Pruned with the grain (90 days).
+model AmazonAdsGrainCap {
+  // Business ownership comes from verified database context.
+  workspaceId String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String   @id @default(cuid())
+  /// The UTC data day the refused records were for.
+  date        DateTime @db.Date
+  /// rows | arrivals
+  kind        String
+  /// The ceiling in force when it was last refused.
+  cap         Int
+  /// Records refused (at least).
+  refused     Int      @default(0)
+  firstAt     DateTime
+  lastAt      DateTime
+
+  @@unique([workspaceId, date, kind], name: "day_kind", map: "AmazonAdsGrainCap_day_kind_key")
+  @@index([workspaceId, date])
+}
+
 // ADM-P6 — Amazon's OWN per-campaign budget-usage reading, sampled.
 //
 // `POST /sp/campaigns/budget/usage` answers for every Sponsored Products campaign
@@ -20351,6 +20376,42 @@ model AdsBrainBudgetDecision {
   @@index([workspaceId])
 }
 
+/// ONE BRAIN AB-8 follow-up — the money writer's asks, one row per key (services/advertising/brain/budget-live.ts askOnce).
+/// The unique key makes "ask once" atomic: two runs at once insert one row, and only the run whose insert landed asks.
+///   budgets:<product>:<market>:<day>                one request a product a budget day
+///   cap:<product>:<market>:<portfolio>:<day>        at most one cap request a portfolio a day (and one per amount a month)
+///   cap-over:<product>:<market>:<portfolio>:<month> a cap above the per-write value cap: said once a month, never asked
+/// The row stays when the gate refused to queue the request or a person refused it: the same key is not asked again.
+/// No foreign key: the product id is the family root, as AdsBrainEnrollment's; the approval may be pruned on its own.
+model AdsBrainAsk {
+  // Business ownership comes from verified database context.
+  workspaceId String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String   @id @default(cuid())
+  key         String
+  /// budgets | portfolioCap | portfolioCapOverValue
+  kind        String
+  /// Product.id of the family root; short market code ('IT'); Amazon's portfolio id (a cap's).
+  productId   String
+  marketplace String
+  portfolioId String?
+  /// The budget day the ask is for (a month's notice: its first day).
+  day         DateTime @db.Date
+  /// asking (claimed, being asked) | asked (a request waits or was decided: approvalId) | refused (the gate did not queue
+  /// it: reason) | blocked (not asked: nobody could carry it out — reason)
+  status      String
+  approvalId  String?
+  /// What it asks for (a cap's amount; null for a list of budgets).
+  toCents     Int?
+  reason      String?  @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workspaceId, key], name: "ask_key", map: "AdsBrainAsk_workspaceId_key_key")
+  @@index([productId, marketplace, day])
+  @@index([workspaceId])
+}
+
 /// ONE BRAIN AB-9 — the term ledger: ONE decision per term of one product in one market (one-brain DESIGN.md §1, §2.7,
 /// §2.8, §4). Every customer search term the product's own campaigns saw in the window and every keyword or ASIN they
 /// target or negate, normalised (lower case, single spaces). The unique key makes a second decision on one term
@@ -20581,6 +20642,78 @@ model AdsBrainStateDecision {
   @@index([marketplace, createdAt])
   @@index([runId])
   @@index([createdAt])
+  @@index([workspaceId])
+}
+
+/// ONE BRAIN AB-11 — one harvest of one term of one product in one market (one-brain DESIGN.md §2.8, §2.9, §4 step 4, §5,
+/// §8 row AB-11). The term ledger (AdsBrainTerm) names a HARVEST_CANDIDATE; the harvest module (services/advertising/brain/
+/// harvest.ts) chooses where it goes (an existing exact ad group of the product, or a new campaign built through a Nexus
+/// builder, by approval), and adds the keyword there AND the negative exact in every source in ONE change set (both or
+/// neither; a negative that fails leaves the pair HALF_DONE and is retried). After the attribution window + 72 h it judges
+/// the keyword against the evidence it was harvested on. OBSERVE logs it (SHADOW), PROPOSE asks a person, AUTO writes as
+/// the brain under the harvest ceiling. The unique key keeps one harvest per term: a term is placed once and never moved
+/// again (the Owner's rule: winners are never reshuffled). No foreign key: the product id is the family root.
+model AdsBrainHarvest {
+  // Business ownership comes from verified database context.
+  workspaceId     String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id              String    @id @default(cuid())
+
+  /// Product.id of the family root; short market code ('IT'); the term, normalised (an ASIN in lower case).
+  productId       String
+  marketplace     String
+  term            String
+  isAsin          Boolean   @default(false)
+  /// SHADOW | HELD | PROPOSED | CAMPAIGN_PROPOSED | CAMPAIGN_BUILT | WRITING | DONE | HALF_DONE | REFUSED | FAILED |
+  /// DECLINED | UNDO_PROPOSED | UNDONE (brain/harvest.ts HARVEST_STATUSES)
+  status          String
+  /// The harvest lever's level the change set was decided at: OBSERVE | PROPOSE | AUTO.
+  level           String
+  /// EXISTING (an ad group of the product's own) | NEW_CAMPAIGN (a builder's campaign, by approval) | NONE
+  destinationKind String
+  /// stored (the Owner's harvest destination) | playbook (the product's exact slot) | own (its one exact ad group) |
+  /// ranked (the best of several) | new (a new campaign)
+  destHow         String?
+  destCampaignId  String?
+  destAdGroupId   String?
+  /// The start bid (the bid brain's goal maths inside the limits); money.
+  bidCents        Int?
+  /// The keyword (or product target) the harvest made, and when it began to serve (the judging clock starts there).
+  keywordTargetId String?
+  landedAt        DateTime?
+  /// Every place the term ran: [{ adGroupId, campaignId, clicks, action: negate | standing | skipped | kept, why,
+  /// negativeTargetId?, result?: landed | failed | refused, error? }]
+  sources         Json
+  /// The request a person decides (the pair, or the builder's campaign), and the undo request after a worse judgement.
+  approvalId      String?
+  undoApprovalId  String?
+  attempts        Int       @default(0)
+  lastError       String?   @db.Text
+  /// Why the brain did not act (the lever, the ceiling, a cap, the Owner's lock or choice); null: nothing held it.
+  heldBy          String?   @db.Text
+  /// One line (no money).
+  why             String    @db.Text
+  /// What the harvest stands on: the candidate's window (clicks, orders, spend, sales, CR̂, AOV̂), the harvest test, the
+  /// destination's size and the start bid's why. Money under its own keys (the read tool hides them).
+  evidence        Json
+  /// The judgement after the attribution window + 72 h: WAITING | KEPT | WORSE, with its evidence.
+  judgeAfter      DateTime?
+  judgedAt        DateTime?
+  verdict         String?
+  judgement       Json?
+  /// Hash of the decision: an unchanged shadow decision is only stamped.
+  digest          String
+  runId           String
+  decidedAt       DateTime
+  checkedAt       DateTime
+  changedAt       DateTime
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([workspaceId, productId, marketplace, term], name: "product_market_term", map: "AdsBrainHarvest_workspaceId_productId_marketplace_term_key")
+  @@index([marketplace, status])
+  @@index([status, judgeAfter])
+  @@index([checkedAt])
   @@index([workspaceId])
 }
 

@@ -19,8 +19,9 @@
  *   AB-8      the budget log as the money writer and the gate read it (brain/budget-ladder.ts): each campaign's day opening
  *             as the BRAIN's writes are measured (after its ladder of an earlier day, the base), the ladder its budget
  *             stands on, what the brain asked today and who else moved it today; who set each portfolio's cap today (the
- *             brain or anyone else); and — when the run asks (`readPortfolioUsage`) — Amazon's usage of the caps, read
- *             through the channel gateway (ads-budget-usage.service.ts readPortfolioBudgetUsage). A dry run reads no Amazon.
+ *             brain or anyone else); and — when the run asks (`readPortfolioUsage`: the products to read it for) — Amazon's
+ *             usage of their caps, read through the channel gateway (ads-budget-usage.service.ts readPortfolioBudgetUsage)
+ *             in one call. A dry run reads no Amazon.
  */
 import { Prisma } from '@prisma/client'
 import { budgetDayStart } from '@nexus/shared/ads-budget-day'
@@ -97,7 +98,7 @@ const between = (m: ReadonlyMap<string, Day>, from: string, to: string) => {
  * The money facts of one market at `now`, and the full facts of the products in `plan` (family roots). Read only.
  * `previous`: each planned product's newest stored plan of today (its ladder rungs), when the caller read them.
  */
-export async function loadMarketMoney(marketIn: string, opts: { now: Date; plan: readonly string[]; previous?: ReadonlyMap<string, Pick<ProductMoneyPlan, 'day' | 'campaigns'>>; /** AB-8 — read Amazon's usage of the caps (a run, never a dry run). */ readPortfolioUsage?: boolean }): Promise<MarketMoney | null> {
+export async function loadMarketMoney(marketIn: string, opts: { now: Date; plan: readonly string[]; previous?: ReadonlyMap<string, Pick<ProductMoneyPlan, 'day' | 'campaigns'>>; /** AB-8 — read Amazon's usage of the caps (a run, never a dry run): true for every planned product, or the products to read it for (their own campaigns' portfolios only; none: no Amazon call). */ readPortfolioUsage?: boolean | readonly string[] }): Promise<MarketMoney | null> {
   const market = strategyMarket(marketIn)
   if (!market || !/^[A-Z]{2}$/.test(market)) return null
   const now = opts.now
@@ -269,7 +270,11 @@ export async function loadMarketMoney(marketIn: string, opts: { now: Date; plan:
      ORDER BY "entityId", "createdAt" DESC`) : []
   const lastWrite = new Map(portfolioWrites.map((r) => [r.entityId, r]))
   const capped = portfolioRows.filter((p) => p.budgetPolicy && p.budgetPolicy !== 'NO_CAP' && decimalCents(p.budgetAmount) != null)
-  const usageRead: PortfolioUsageRead | null = opts.readPortfolioUsage && capped.length ? await readPortfolioBudgetUsage(market, capped.map((p) => p.externalPortfolioId)) : null
+  // AB-8 follow-up — only the portfolios of the products the run reads the usage for (one Amazon call, or none).
+  const usageProducts = opts.readPortfolioUsage === true ? planned : Array.isArray(opts.readPortfolioUsage) ? planned.filter((r) => (opts.readPortfolioUsage as readonly string[]).includes(r)) : []
+  const usagePortfolios = new Set(usageProducts.flatMap((r) => (plannedOwn.get(r) ?? []).map((c) => c.portfolioId).filter((p): p is string => !!p)))
+  const cappedAsked = capped.filter((p) => usagePortfolios.has(p.externalPortfolioId))
+  const usageRead: PortfolioUsageRead | null = cappedAsked.length ? await readPortfolioBudgetUsage(market, cappedAsked.map((p) => p.externalPortfolioId)) : null
   const monthFromMs = thisMonth.getTime()
   const usageOf = (pid: string): PortfolioUsage | null => {
     if (!usageRead) return null
@@ -401,7 +406,7 @@ export async function loadMarketMoney(marketIn: string, opts: { now: Date; plan:
         lastMonthSpendCents: between(days, lastMonthFrom, lastMonthTo).cost,
         monthSpendCents: between(days, monthFrom, dataThrough ?? '').cost + (streamLive ? streamIn : 0),
         today: row ? { policy: row.budgetPolicy ?? null, amountCents: decimalCents(row.budgetAmount), inBudget: row.inBudget, setBy: setByOf(row) } : null,
-        ...(usageRead && pid ? { usage: usageOf(pid) } : {}),
+        ...(usageRead && pid && usagePortfolios.has(pid) ? { usage: usageOf(pid) } : {}),
       }
     })
 

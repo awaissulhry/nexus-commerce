@@ -17,7 +17,8 @@ const recorded: any[] = []
 const completed: any[] = []
 const ingested: any[] = []
 const deletedHandles: string[] = []
-let queue: Array<{ receiptHandle: string; body: string; messageId: string }> = []
+let queue: Array<{ receiptHandle: string; body: string; messageId: string; sentAt?: Date | null }> = []
+const arrivals: Array<Date | undefined> = []
 let nextWrite: any = { id: 'row-1', duplicate: false }
 
 vi.mock('../services/ams-sqs.service.js', () => ({
@@ -37,7 +38,7 @@ vi.mock('../lib/workspace-ingress.js', () => ({
   verifiedChannelWorkspace: async () => ({ workspaceId: 'ws-1', connectionId: 'conn-1' }),
 }))
 vi.mock('../services/advertising/ads-marketing-stream.service.js', () => ({
-  ingestMarketingStream: async (rows: any[]) => { ingested.push(...rows); return { received: rows.length, upserted: rows.length, skipped: 0 } },
+  ingestMarketingStream: async (rows: any[], opts: { arrivedAt?: Date } = {}) => { ingested.push(...rows); arrivals.push(opts.arrivedAt); return { received: rows.length, upserted: rows.length, skipped: 0 } },
 }))
 vi.mock('../services/advertising/ads-stream-change.service.js', () => ({
   ingestEntityChanges: async () => ({ campaigns: 0, adGroups: 0, targets: 0, unmatched: 0 }),
@@ -58,7 +59,7 @@ const message = (id: string) => ({
 })
 
 beforeEach(() => {
-  recorded.length = 0; completed.length = 0; ingested.length = 0; deletedHandles.length = 0
+  recorded.length = 0; completed.length = 0; ingested.length = 0; deletedHandles.length = 0; arrivals.length = 0
   queue = []
   nextWrite = { id: 'row-1', duplicate: false }
   vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1')
@@ -92,6 +93,13 @@ describe('a new message', () => {
     expect(ingested).toHaveLength(1)
     expect(completed[0]).toMatchObject({ id: 'row-1', ok: true })
     expect(deletedHandles).toEqual(['rh-m-3'])
+  })
+
+  it('BB-16 follow-up — hands the message\'s SQS SentTimestamp to the ingest as the arrival time; without one, none', async () => {
+    const sentAt = new Date('2026-09-20T11:05:00Z')
+    queue = [{ ...message('m-5'), sentAt }, { ...message('m-6'), sentAt: null }]
+    await runAmsSqsPoll()
+    expect(arrivals).toEqual([sentAt, undefined])
   })
 
   it('is NOT ingested and NOT acked when the ledger is unavailable', async () => {

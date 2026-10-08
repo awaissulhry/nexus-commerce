@@ -195,7 +195,8 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-7 — the money shadow (real Postg
   it('shadow: enrolled, planned and logged once; one base move a day; the next day a change, the day after a snapshot; the Owner\'s change a change; nothing at Amazon', async () => {
     const before = await amazonRows()
     expect(await inW(() => enrollProduct({ productId: A, market: 'IT', by: 'user:owner', now: NOW }))).toMatchObject({ ok: true })
-    expect(await inW(() => moneyShadowProducts())).toEqual([{ productId: A, market: 'IT', level: 'OBSERVE' }])
+    // AB-8 follow-up — at OBSERVE (budgets and portfolioCap) a full slot reads no Amazon usage of the caps.
+    expect(await inW(() => moneyShadowProducts())).toEqual([{ productId: A, market: 'IT', level: 'OBSERVE', readsUsage: false }])
     const first = await inW(() => runMoneyShadowOnce({ now: NOW }))
     expect(first).toMatchObject({ ran: true, failed: [], products: [{ productId: A, market: 'IT', stored: 'change', brake: 'hold_raises', pacePct: 96.88 }] })
     let logged = await decisions()

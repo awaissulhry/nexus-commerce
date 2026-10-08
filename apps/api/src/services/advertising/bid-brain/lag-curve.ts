@@ -22,7 +22,10 @@
  *             age a, counted only where a pull of the day was really asked at age a (the report jobs) — the vintages keep
  *             only the pulls that changed something, so "no row" alone never means "no change".
  *   shape     monotone (more of the final is known as a day ages: weighted pool-adjacent-violators), bounded to
- *             [MIN_SHARE, 1] (a restatement can lower a day, so a ratio may pass 1), and 1 at age 14 by definition.
+ *             [MIN_SHARE, 1] (a restatement can lower a day, so a ratio may pass 1), and 1 from the attribution window on
+ *             by definition (Sponsored Products: from age 7, design L(7) = 1; Brands and Display: age 14). Only the ages
+ *             inside the window are fitted: a late restatement that leaves the age-7..13 copies below the final can
+ *             neither keep L(7..13) below 1 nor drag the younger ages down with it.
  *   pooling   a product keeps its own curve only with PRODUCT_MIN_ORDERS final orders behind it, its market's curve as its
  *             prior (PRODUCT_PRIOR_ORDERS); a product with few orders (GALE) reads its market's.
  *   usable    the brain may nowcast with a curve only when it rests on a seed or on MIN_VINTAGE_DAYS days of vintages
@@ -257,10 +260,17 @@ export function isotonic(values: readonly number[], weights: readonly number[]):
   return blocks.flatMap((b) => Array.from({ length: b.n }, () => b.v))
 }
 
-/** Monotone, inside [MIN_SHARE, 1], 1 at the last age. */
-export function shapeShares(raw: readonly number[], weights: readonly number[]): number[] {
-  const mono = isotonic(raw.map((x) => (Number.isFinite(x) ? x : 1)), weights)
-  return mono.map((x, a) => (a === LAG_AGES - 1 ? 1 : round4(clamp(x, MIN_SHARE, 1))))
+/** Sponsored Products' attribution window (days): the default window of a fit. */
+const SP_WINDOW_DAYS = attributionWindowDays('SPONSORED_PRODUCTS')
+
+/**
+ * Monotone, inside [MIN_SHARE, 1], and 1 from the attribution window on (`windowDays`, default Sponsored Products' 7; the
+ * last age always): only the ages inside the window are fitted (isotonic), the rest is 1 by definition.
+ */
+export function shapeShares(raw: readonly number[], weights: readonly number[], windowDays: number = SP_WINDOW_DAYS): number[] {
+  const w = Math.max(1, Math.min(LAG_AGES, Math.floor(Number.isFinite(windowDays) ? windowDays : SP_WINDOW_DAYS)))
+  const mono = isotonic(raw.slice(0, w).map((x) => (Number.isFinite(x) ? x : 1)), weights.slice(0, w))
+  return Array.from({ length: LAG_AGES }, (_, a) => (a >= w || a === LAG_AGES - 1 ? 1 : round4(clamp(mono[a], MIN_SHARE, 1))))
 }
 
 /** The prior a fit pools toward: its curve, its strength in orders, and where it comes from. */
@@ -272,8 +282,8 @@ export function marketPrior(seed: LagSeed | null | undefined, adProduct: string 
   return s ? { shares: s, strengthOrders: SEED_STRENGTH_ORDERS, from: 'seed' } : { shares: priorShares(adProduct), strengthOrders: PRIOR_STRENGTH_ORDERS, from: 'prior' }
 }
 
-/** Fit a curve to its points, pooled toward `prior` (see the header). */
-export function fitLagCurve(points: LagPoints, prior: LagPrior, opts: { seed?: LagSeed | null } = {}): LagCurve {
+/** Fit a curve to its points, pooled toward `prior` (see the header); `windowDays`: the attribution window (default SP's). */
+export function fitLagCurve(points: LagPoints, prior: LagPrior, opts: { seed?: LagSeed | null; windowDays?: number } = {}): LagCurve {
   const k = Math.max(0, prior.strengthOrders)
   const blend = (key: 'orders' | 'sales') => {
     const raw: number[] = []
@@ -287,7 +297,7 @@ export function fitLagCurve(points: LagPoints, prior: LagPrior, opts: { seed?: L
       raw.push(lambda * observed + (1 - lambda) * prior.shares[key][a])
       weights.push(s.finalOrders + k + 1e-6)
     }
-    return shapeShares(raw, weights)
+    return shapeShares(raw, weights, opts.windowDays)
   }
   const shares = { orders: blend('orders'), sales: blend('sales') }
   const first = seedFirstShares(opts.seed)
@@ -310,9 +320,9 @@ export function fitLagCurve(points: LagPoints, prior: LagPrior, opts: { seed?: L
 }
 
 /** A product's own curve, its market's curve as the prior; null with fewer than PRODUCT_MIN_ORDERS final orders. */
-export function fitProductCurve(points: LagPoints, market: LagCurve): LagCurve | null {
+export function fitProductCurve(points: LagPoints, market: LagCurve, windowDays?: number): LagCurve | null {
   if (points.finalOrders < PRODUCT_MIN_ORDERS || !market.usable) return null
-  const curve = fitLagCurve(points, { shares: market.shares, strengthOrders: PRODUCT_PRIOR_ORDERS, from: 'market' })
+  const curve = fitLagCurve(points, { shares: market.shares, strengthOrders: PRODUCT_PRIOR_ORDERS, from: 'market' }, { windowDays })
   return { ...curve, source: 'vintages', usable: true }
 }
 
@@ -391,7 +401,7 @@ export function calibrate(days: readonly DayCopies[], prior: LagPrior, opts: { e
   if (!dates.length) return null
   const evalDates = new Set(dates.slice(-Math.max(1, opts.evalDays)))
   const train = settled.filter((d) => !evalDates.has(d.date))
-  const curve = fitLagCurve(lagPoints(train, opts.windowDays), prior, { seed: opts.seed })
+  const curve = fitLagCurve(lagPoints(train, opts.windowDays), prior, { seed: opts.seed, windowDays: opts.windowDays })
   const maturity = maturityOf(curve.shares)
   const ages: CalibrationAge[] = []
   for (let a = 0; a < Math.min(LAG_AGES, opts.windowDays); a++) {

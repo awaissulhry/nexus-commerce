@@ -28,14 +28,14 @@ describe('levels', () => {
     expect(levelRefusal('bids', 'PROPOSE')).toMatch(/no proposal path/)
     expect(levelRefusal('bids', 'OFF')).toMatch(/decides every allowlisted campaign in shadow/)
     // AB-8 — the money levers have their writer; AB-12 — the state lever too; AB-10 — the negatives lever too: every level.
-    for (const lever of ['budgets', 'portfolioCap', 'state', 'negatives'] as const) {
+    for (const lever of ['budgets', 'portfolioCap', 'state', 'negatives', 'harvest'] as const) {
       for (const level of ['OFF', 'OBSERVE', 'PROPOSE', 'AUTO'] as const) expect(levelRefusal(lever, level), `${lever} ${level}`).toBeNull()
     }
     // AB-13 — the hours lever paints and asks (D3 = B+): PROPOSE yes, AUTO never.
     expect(levelRefusal('hours', 'PROPOSE')).toBeNull()
     expect(levelRefusal('hours', 'OFF')).toBeNull()
     expect(levelRefusal('hours', 'AUTO')).toMatch(/takes OFF or OBSERVE or PROPOSE today, not AUTO: .*never AUTO/)
-    for (const lever of BRAIN_LEVERS.filter((l) => l !== 'bids' && l !== 'budgets' && l !== 'portfolioCap' && l !== 'state' && l !== 'hours' && l !== 'negatives')) {
+    for (const lever of BRAIN_LEVERS.filter((l) => l !== 'bids' && l !== 'budgets' && l !== 'portfolioCap' && l !== 'state' && l !== 'hours' && l !== 'negatives' && l !== 'harvest')) {
       expect(levelRefusal(lever, 'OFF')).toBeNull()
       expect(levelRefusal(lever, 'OBSERVE')).toBeNull()
       expect(levelRefusal(lever, 'AUTO')).toMatch(/takes OFF or OBSERVE today, not AUTO: .*AB-\d+/)

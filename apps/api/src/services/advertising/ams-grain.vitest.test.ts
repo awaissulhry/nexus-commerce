@@ -2,7 +2,7 @@
  * BID BRAIN BB-16 — one Marketing Stream record → one delta at ad group × placement grain (pure). Values are made up.
  */
 import { describe, expect, it } from 'vitest'
-import { GRAIN_DAYS_KEPT, OFF_AMAZON, ageBucketHours, normalizeStreamPlacement, parseGrainRecord, streamRecordKey } from './ams-grain.js'
+import { GRAIN_DAYS_KEPT, OFF_AMAZON, ageBucketHours, normalizeStreamPlacement, parseGrainRecord, recordSentAt, sentTimeOf, streamRecordKey } from './ams-grain.js'
 
 const AT = new Date('2026-10-08T12:20:00Z')
 const market = (raw: string) => (raw === 'APJ6JRA9NG5V4' ? 'IT' : raw)
@@ -117,5 +117,26 @@ describe('refused records, each with its reason', () => {
   it('numeric strings are numbers, absent metrics are 0', () => {
     const out = parse(traffic({ impressions: '30', clicks: undefined, cost: '0.25' }))
     expect(out.ok && out.delta).toMatchObject({ impressions: 30, clicks: 0, costMicros: 250_000n })
+  })
+})
+
+describe('the sent time (BB-16 follow-up)', () => {
+  it('reads SQS\'s SentTimestamp (epoch ms, number or digits) or an ISO time, when it is a plausible past instant', () => {
+    const sent = new Date('2026-10-08T11:05:00Z')
+    expect(sentTimeOf(sent.getTime(), AT)).toEqual(sent)
+    expect(sentTimeOf(String(sent.getTime()), AT)).toEqual(sent)
+    expect(sentTimeOf(sent.toISOString(), AT)).toEqual(sent)
+    // A minute ahead of this clock (two clocks): taken, held at now. Later, older than SQS keeps a message, or garbage: none.
+    expect(sentTimeOf(AT.getTime() + 60_000, AT)).toEqual(AT)
+    for (const bad of [AT.getTime() + 3_600_000, AT.getTime() - 15 * 86_400_000, 'soon', '', null, undefined, Number.NaN, {}]) expect(sentTimeOf(bad, AT)).toBeNull()
+    expect(recordSentAt(traffic({ SentTimestamp: String(sent.getTime()) }), AT)).toEqual(sent)
+    expect(recordSentAt(traffic(), AT)).toBeNull()
+  })
+
+  it('ages a delta from when it was sent, not when it was read', () => {
+    const read = parse(traffic(), new Date('2026-10-08T15:30:00Z'))
+    const sent = parse(traffic(), new Date('2026-10-08T11:05:00Z'))
+    expect(read.ok && read.delta.ageHours).toBe(4)
+    expect(sent.ok && sent.delta.ageHours).toBe(0)
   })
 })

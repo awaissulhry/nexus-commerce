@@ -179,6 +179,23 @@ describe('AB-8 — Amazon\'s usage of the portfolio caps in the plan', () => {
     }
   })
 
+  it('a lowered cap never lands below Amazon\'s own count of the month\'s spend (read in the same run), only Nexus\'s', () => {
+    // Nexus counts 7,500¢ this month; Amazon reads 95 % of its 10,000¢ cap = 9,500¢. The envelope's cap (6,900¢) is below both.
+    const ahead = capped(10_000, 0.95)
+    const p = planPortfolioCaps({ envelopeCents: 6_000, settings: settingsOf(), portfolios: [ahead], runRateCents: 1_000 })
+    // The floor is Amazon's 9,500¢ plus one day (1,000¢), not Nexus's 7,500¢ plus one day.
+    expect(p.portfolios[0]).toMatchObject({ capCents: 10_500, belowSpend: true, action: 'set' })
+    expect(p.portfolios[0].why).toMatch(/Amazon counts .* spent this month, Nexus /)
+    // The Owner's own amount below it is kept, and the warning names the same floor.
+    const owner = planPortfolioCaps({ envelopeCents: 6_000, settings: settingsOf([ov('VALUE', 'portfolioCapCents', 9_000)]), portfolios: [ahead], runRateCents: 1_000 })
+    expect(owner.portfolios[0]).toMatchObject({ capCents: 9_000, belowSpend: true })
+    expect(owner.portfolios[0].why).toContain('the Owner\'s amount is kept')
+    // An earlier month's reading, or none: Nexus's count, as before.
+    for (const pf of [capped(10_000, 0.95, {}, 'stale'), { ...capped(10_000, 0.95), usage: undefined }]) {
+      expect(planPortfolioCaps({ envelopeCents: 6_000, settings: settingsOf(), portfolios: [pf], runRateCents: 1_000 }).portfolios[0].capCents).toBe(8_500)
+    }
+  })
+
   it('with no envelope, a cap Amazon is about to reach brakes all the same: ≥ 95 % projected no raises, ≥ 100 % bids step down', () => {
     const none = { productId: PRODUCT, cents: null, source: 'none' as const, why: 'no monthly budget' }
     // €80.00 spent by Amazon's count + €10.00 a day × 23.5 days = €315.00 by month end.

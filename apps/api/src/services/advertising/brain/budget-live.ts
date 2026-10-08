@@ -5,9 +5,12 @@
  *   OBSERVE   shadow only: the plan is logged (AB-7), nothing is asked or written (this module is not called)
  *   PROPOSE   the day's base moves of the campaigns, and the portfolio caps, as requests a person approves in Nexus
  *             (set-campaign-budget's list form, set-portfolio), through the normal approval gate as auto-undo asks
- *             (runOrQueueTool, forceAsk): one request per product a budget day, one per cap amount a month — never asked
- *             twice, whatever became of it. An approved request runs as the person who approved it. The intraday
- *             ladder is never proposed: an approval would come too late in the day.
+ *             (runOrQueueTool, forceAsk): one request per product a budget day; for a cap at most one a portfolio a day,
+ *             one per amount a month, and none while one waits for a person. "Once" is a unique key (AdsBrainAsk): the
+ *             key is claimed before the request is asked, so two runs at once ask one request, and a key the gate refused
+ *             to queue or a person refused is not asked again that day — the answer says when it asks again (the next
+ *             budget day). An approved request runs as the person who approved it. The intraday ladder is never
+ *             proposed: an approval would come too late in the day.
  *   AUTO      written as the brain: each campaign's budget through the one path every budget takes
  *             (updateCampaignWithSync with askGate: the gate before Nexus's copy, the 5-minute queue, the gate again at
  *             dispatch, then the channel gateway), as MONEY_BUDGETS_ACTOR; the portfolio cap through the Portfolios
@@ -28,14 +31,21 @@
  *             portfolio (it would stop every campaign at once — the pace brakes act first), never a cap removed or its
  *             kind changed, never raised above a cap someone else set (the Owner's cap stands: the brain may only
  *             lower it), unless the Owner's own amount (portfolioCapCents) is what the plan applies.
+ *   value cap the gate's per-write value cap (NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS, unchanged for everyone) is checked
+ *             before anything is asked or written: a budget or a cap above it is held, never sent to a doomed write. A
+ *             cap above it cannot be set from Nexus by anyone — the gate refuses the brain, an approved set-portfolio and
+ *             the Portfolios page alike (a portfolio write carries no person's "send anyway") — so no request is made
+ *             either: the brain says so once a month per portfolio (AdsBrainAsk `cap-over:`), and holds it each run.
  *   brakes    the account dial and the brain's own engine caps (ads-engine-actors.ts `brain-money`), asked once per
  *             campaign before its first write (never split); under SUGGEST nothing new is written and only an earlier
  *             day's ladder is given back (a restore, as the bid brain's give-backs).
  *   once      a rerun writes nothing: a budget already as planned is not asked (and the mutation layer queues no
  *             unchanged value), a base move or rung the brain asked today is not asked again, a cap already as planned
- *             is `keep` in the plan, a request already asked is not asked again.
+ *             is `keep` in the plan, a request already asked (its key claimed) is not asked again.
  */
+import { Prisma } from '@prisma/client'
 import type { AdWriteEvidence } from '../ads-evidence.js'
+import { maxWriteValueCents } from '../ads-write-gate.js'
 import { allowChange, nothingHeld, type ChangeKind, type EngineGuard } from '../ads-engine-guard.js'
 import type { AdsActor } from '../ads-mutation.service.js'
 import prisma from '../../../db.js'
@@ -58,9 +68,9 @@ export type CampaignStep =
   | { campaignId: string; name: string; level: string; do: 'ask'; fromCents: number; toCents: number; why: string }
   | { campaignId: string; name: string; level: string; do: 'hold'; why: string }
 
-/** One portfolio's step this run (pure: moneyStepsOf). */
+/** One portfolio's step this run (pure: moneyStepsOf). `over-value`: above the per-write value cap — said once a month, never asked. */
 export type CapStep =
-  | { portfolioId: string; name: string | null; level: string; do: 'write' | 'ask'; fromCents: number | null; toCents: number; why: string }
+  | { portfolioId: string; name: string | null; level: string; do: 'write' | 'ask' | 'over-value'; fromCents: number | null; toCents: number; why: string }
   | { portfolioId: string | null; name: string | null; level: string; do: 'hold'; why: string }
 
 /** What became of one campaign step. */
@@ -89,7 +99,11 @@ export interface CapAction {
   reason?: string
 }
 
-/** A request the brain asked a person for (PROPOSE), or found already asked. */
+/**
+ * A request the brain asked a person for (PROPOSE), or found already asked. `status`: the approval's (pending, rejected, …),
+ * else the claim's (refused: the gate did not queue it; blocked: not asked, nobody could carry it out; asking: another
+ * run is asking it now).
+ */
 export interface MoneyProposal { kind: 'budgets' | 'portfolioCap'; key: string; approvalId: string | null; status: string; fresh: boolean; why: string }
 
 /** What the money writer did with one product's plan; it rides on the logged plan (outside its fingerprint). */
@@ -130,10 +144,15 @@ const NOT_LIVE = 'the server switch NEXUS_BID_BRAIN_MODE is not live: the brain 
 export function moneyStepsOf(plan: ProductMoneyPlan, facts: Pick<ProductMoneyFacts, 'campaigns' | 'today' | 'currency'>, ctx: {
   live: boolean
   native?: ReadonlyMap<string, readonly string[]>
+  /** The gate's per-write value cap (cents); absent: not checked here. */
+  valueCapCents?: number | null
   /** AB-15 — the Owner's kill switch, or the hold after an auto-undo, on a campaign's budget or a portfolio's cap: in words. */
   holds?: { budget: (campaignId: string) => string | null; cap: (portfolioId: string) => string | null }
 }): { campaigns: CampaignStep[]; portfolios: CapStep[] } {
   const w = (c: number) => money(c, facts.currency)
+  const cap = ctx.valueCapCents ?? null
+  const overValue = (to: number) => cap != null && to > cap
+  const valueCapWords = (what: string, to: number) => `${what} ${w(to)} is above the per-write value cap ${w(cap!)} (NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS): the gate refuses the brain there — not written`
   const byId = new Map(facts.campaigns.map((c) => [c.campaignId, c]))
   const campaigns: CampaignStep[] = []
   for (const c of plan.campaigns) {
@@ -159,6 +178,7 @@ export function moneyStepsOf(plan: ProductMoneyPlan, facts: Pick<ProductMoneyFac
     if (baseMove) {
       if (t.baseAsked) hold('the day\'s base move was asked already today: one base move a day')
       else if (level === 'PROPOSE') campaigns.push({ ...head, do: 'ask', fromCents: c.todayCents, toCents: c.stepCents, why: c.why })
+      else if (overValue(c.stepCents)) hold(valueCapWords('the day\'s base', c.stepCents))
       else {
         // An earlier day's ladder still under the budget: going back to its base is a give-back (a restore) on its own.
         const owed = f.ladderNow?.fromDay === 'before' && c.stepCents <= c.todayCents ? f.ladderNow.baseCents : null
@@ -175,6 +195,7 @@ export function moneyStepsOf(plan: ProductMoneyPlan, facts: Pick<ProductMoneyFac
       const to = c.stepCents + ladder.cents
       if (t.ladderAskedCents != null && to <= t.ladderAskedCents) { hold(`the rung to ${w(to)} was asked already today`); continue }
       if (to <= c.todayCents) continue
+      if (overValue(to)) { hold(valueCapWords(`the rung +${ladder.pct} % to`, to)); continue }
       campaigns.push({ ...head, do: 'write', layer: LADDER_LAYER, fromCents: baseWritten ? c.stepCents : c.todayCents, toCents: to, kind: 'forward', why: ladder.why })
     }
   }
@@ -196,6 +217,10 @@ export function moneyStepsOf(plan: ProductMoneyPlan, facts: Pick<ProductMoneyFac
       if (e.todayPolicy !== 'MONTHLY_RECURRING') { hold(`a ${String(e.todayPolicy ?? 'unknown').toLowerCase().replace(/_/g, ' ')} cap someone else set stands: the brain never changes a cap's kind or removes one`); continue }
       if (e.todayCapCents == null || e.capCents > e.todayCapCents) { hold(`the cap${e.todayCapCents != null ? ` ${w(e.todayCapCents)}` : ''} someone else set stands: the brain may lower it, never raise it (it would plan ${w(e.capCents)})`); continue }
     }
+    if (overValue(e.capCents)) {
+      portfolios.push({ ...head, portfolioId: e.portfolioId, do: 'over-value', fromCents: e.todayCapCents, toCents: e.capCents, why: `a cap of ${w(e.capCents)} is above the per-write value cap ${w(cap!)} (NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS): the gate refuses it for every writer — the brain, an approved set-portfolio and the Portfolios page alike (a portfolio write carries no "send anyway") — so it is neither written nor asked; set it in Seller Central, or raise the value cap` })
+      continue
+    }
     portfolios.push({ ...head, portfolioId: e.portfolioId, do: level === 'PROPOSE' ? 'ask' : 'write', fromCents: e.todayCapCents, toCents: e.capCents, why: `${plan.portfolioCap.why}; ${e.why}` })
   }
   return { campaigns, portfolios }
@@ -214,31 +239,132 @@ export function moneyEvidence(plan: Pick<ProductMoneyPlan, 'pace' | 'day'>, runI
 
 const emptyActions = (mode: MoneyMode, why: string): MoneyActions => ({ mode, why, campaigns: [], portfolios: [], proposals: [], counts: { queued: 0, written: 0, asked: 0, held: 0, refused: 0, deferred: 0, wouldApply: 0 } })
 
-/**
- * One request a person approves (PROPOSE), asked once per key: an earlier request with this key — waiting, decided or
- * expired — is the answer, never a second one. Through the normal approval gate (runOrQueueTool, forceAsk), as auto-undo
- * asks; the request's dry run is the tool's own (where it lands, the gate as the approver).
- */
-export async function askOnce(kind: MoneyProposal['kind'], key: string, tool: 'set-campaign-budget' | 'set-portfolio', args: Record<string, unknown>, why: string): Promise<MoneyProposal> {
-  const earlier = await prisma.agentApproval.findFirst({
-    where: { toolName: tool, agentRun: { agentKey: MONEY_AGENT_KEY, entityId: key } },
-    orderBy: { requestedAt: 'desc' },
-    select: { id: true, status: true },
-  })
-  if (earlier) return { kind, key, approvalId: earlier.id, status: earlier.status, fresh: false, why: WAITING.has(earlier.status) ? 'asked already: it waits for a person' : `asked already: ${earlier.status}` }
-  const { runOrQueueTool } = await import('../../agents/approval-gate.service.js')
-  const { systemPrincipal } = await import('../../agents/call-tool.js')
-  const run = await prisma.agentRun.create({ data: { agentKey: MONEY_AGENT_KEY, trigger: 'schedule', status: 'running', entityType: kind, entityId: key, input: { tool, args } as never } })
-  const asked = await runOrQueueTool(tool, args, systemPrincipal(ASK_PRINCIPAL), run.id, { forceAsk: true })
-  const queued = asked.mode === 'queued' && !!asked.approvalId
-  await prisma.agentRun.update({
-    where: { id: run.id },
-    data: queued ? { status: 'done', ok: true, output: { mode: 'queued', approvalId: asked.approvalId ?? null } } : { status: 'failed', ok: false, errorMessage: (asked.error ?? 'not queued').slice(0, 500) },
-  })
-  return queued
-    ? { kind, key, approvalId: asked.approvalId!, status: 'pending', fresh: true, why }
-    : { kind, key, approvalId: null, status: 'refused', fresh: true, why: `not asked: ${asked.error ?? 'the request was not queued'}` }
+/** One request the money writer may ask (askOnce). */
+export interface AskSpec {
+  kind: MoneyProposal['kind']
+  /** The claim: budgets:<product>:<market>:<day> · cap:<product>:<market>:<portfolio>:<day>. */
+  key: string
+  productId: string
+  market: string
+  portfolioId?: string | null
+  /** The budget day (YYYY-MM-DD); its month is the cap's month. */
+  day: string
+  /** A cap's amount (one request per amount a month); null for a list of budgets. */
+  toCents?: number | null
+  tool: 'set-campaign-budget' | 'set-portfolio'
+  args: Record<string, unknown>
+  why: string
 }
+
+const DAY_MS = 86_400_000
+const nextDayOf = (day: string) => new Date(Date.parse(`${day}T00:00:00Z`) + DAY_MS).toISOString().slice(0, 10)
+const dayDate = (day: string) => new Date(`${day}T00:00:00Z`)
+
+/** The approvals' status and decider, by id (one read). */
+async function approvalsById(ids: ReadonlyArray<string | null>): Promise<Map<string, { status: string; decidedBy: string | null }>> {
+  const wanted = [...new Set(ids.filter((x): x is string => !!x))]
+  if (!wanted.length) return new Map()
+  const rows = await prisma.agentApproval.findMany({ where: { id: { in: wanted } }, select: { id: true, status: true, decidedBy: true } })
+  return new Map(rows.map((r) => [r.id, { status: r.status, decidedBy: r.decidedBy }]))
+}
+
+/** What an earlier claim of the same key answers (it is never asked twice). */
+function answerOf(spec: AskSpec, claim: { status: string; approvalId: string | null; reason: string | null }, approval: { status: string; decidedBy: string | null } | undefined): MoneyProposal {
+  const again = nextDayOf(spec.day)
+  const base = { kind: spec.kind, key: spec.key, approvalId: claim.approvalId, fresh: false }
+  if (claim.status === 'asking') return { ...base, status: 'asking', why: 'another run is asking it right now: not asked twice' }
+  if (claim.status === 'refused') return { ...base, status: 'refused', why: `not asked again today: the gate did not queue it (${claim.reason ?? 'refused'}); the brain asks again on the next budget day (${again})` }
+  const status = approval?.status ?? 'unknown'
+  if (status === 'rejected') {
+    const by = approval?.decidedBy ? ` (${approval.decidedBy})` : ''
+    return {
+      ...base, status,
+      why: spec.kind === 'budgets'
+        ? `a person refused it today${by}: not asked again today; the brain asks again on the next budget day (${again})`
+        : `a person refused it today${by}: not asked again today; from ${again} the brain asks again only for another amount (this one not again this month)`,
+    }
+  }
+  return { ...base, status, why: WAITING.has(status) ? 'asked already today: it waits for a person' : `asked already today: ${status}` }
+}
+
+/**
+ * One request a person approves (PROPOSE), asked once per key (see the header): the key is CLAIMED first (AdsBrainAsk,
+ * unique per business — an insert that lands, or nothing), and only the run whose claim landed asks. Through the normal
+ * approval gate (runOrQueueTool, forceAsk), as auto-undo asks; the request's dry run is the tool's own (where it lands,
+ * the gate as the approver). A cap is also asked at most once per amount a month, and never while one waits for a person.
+ * A failure while asking gives the key back (the next run may try); a refusal keeps it (asked again the next budget day).
+ */
+export async function askOnce(spec: AskSpec): Promise<MoneyProposal> {
+  const { kind, key, tool, args, why } = spec
+  if (kind === 'portfolioCap') {
+    const earlier = await prisma.adsBrainAsk.findMany({
+      where: { kind: 'portfolioCap', productId: spec.productId, marketplace: spec.market, portfolioId: spec.portfolioId ?? null, day: { gte: dayDate(`${spec.day.slice(0, 7)}-01`) } },
+      orderBy: { createdAt: 'desc' },
+      select: { key: true, status: true, approvalId: true, toCents: true, reason: true },
+    })
+    const approvals = await approvalsById(earlier.map((e) => e.approvalId))
+    const waiting = earlier.find((e) => e.status === 'asking' || (e.approvalId && WAITING.has(approvals.get(e.approvalId)?.status ?? '')))
+    if (waiting) {
+      return { kind, key, approvalId: waiting.approvalId, status: waiting.approvalId ? approvals.get(waiting.approvalId)?.status ?? 'pending' : 'asking', fresh: false, why: `a request for this portfolio's cap${waiting.toCents != null ? ` (${money(waiting.toCents)})` : ''} waits for a person: no second one` }
+    }
+    const same = spec.toCents != null ? earlier.find((e) => e.toCents === spec.toCents && e.status !== 'blocked') : undefined
+    if (same && same.key !== key) {
+      const st = same.approvalId ? approvals.get(same.approvalId)?.status ?? 'unknown' : same.status
+      return { kind, key, approvalId: same.approvalId, status: st, fresh: false, why: `this amount was asked already this month (${st}): not asked again this month` }
+    }
+  }
+  const claimed = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    INSERT INTO "AdsBrainAsk" ("id", "key", "kind", "productId", "marketplace", "portfolioId", "day", "status", "toCents", "updatedAt")
+    VALUES (gen_random_uuid()::text, ${key}, ${kind}, ${spec.productId}, ${spec.market}, ${spec.portfolioId ?? null}::text, ${spec.day}::date, 'asking', ${spec.toCents ?? null}::int, now())
+    ON CONFLICT ("workspaceId", "key") DO NOTHING
+    RETURNING "id"`)
+  if (!claimed.length) {
+    const claim = await prisma.adsBrainAsk.findFirst({ where: { key }, select: { status: true, approvalId: true, reason: true } })
+    if (!claim) return { kind, key, approvalId: null, status: 'asking', fresh: false, why: 'another run is asking it right now: not asked twice' }
+    return answerOf(spec, claim, (await approvalsById([claim.approvalId])).get(claim.approvalId ?? ''))
+  }
+  const claimId = claimed[0].id
+  try {
+    const { runOrQueueTool } = await import('../../agents/approval-gate.service.js')
+    const { systemPrincipal } = await import('../../agents/call-tool.js')
+    const run = await prisma.agentRun.create({ data: { agentKey: MONEY_AGENT_KEY, trigger: 'schedule', status: 'running', entityType: kind, entityId: key, input: { tool, args } as never } })
+    const asked = await runOrQueueTool(tool, args, systemPrincipal(ASK_PRINCIPAL), run.id, { forceAsk: true })
+    const queued = asked.mode === 'queued' && !!asked.approvalId
+    const reason = queued ? null : (asked.error ?? 'the request was not queued').slice(0, 1_000)
+    await prisma.agentRun.update({
+      where: { id: run.id },
+      data: queued ? { status: 'done', ok: true, output: { mode: 'queued', approvalId: asked.approvalId ?? null } } : { status: 'failed', ok: false, errorMessage: (reason ?? '').slice(0, 500) },
+    })
+    await prisma.adsBrainAsk.update({ where: { id: claimId }, data: queued ? { status: 'asked', approvalId: asked.approvalId! } : { status: 'refused', reason } })
+    return queued
+      ? { kind, key, approvalId: asked.approvalId!, status: 'pending', fresh: true, why }
+      : { kind, key, approvalId: null, status: 'refused', fresh: true, why: `not asked: ${reason}; the brain asks again on the next budget day (${nextDayOf(spec.day)})` }
+  } catch (err) {
+    // Asking failed (not refused): give the key back so a later run may ask it.
+    await prisma.adsBrainAsk.delete({ where: { id: claimId } }).catch(() => undefined)
+    throw err
+  }
+}
+
+/**
+ * A cap above the per-write value cap (moneyStepsOf `over-value`): nobody in Nexus can set it, so nothing is asked. It is
+ * said once a month per portfolio (the claim `cap-over:…:<month>`, logged when it lands) and held with its reason each run.
+ */
+export async function noticeOverValueCap(spec: { productId: string; market: string; portfolioId: string; day: string; toCents: number; why: string }): Promise<MoneyProposal> {
+  const month = spec.day.slice(0, 7)
+  const key = `cap-over:${spec.productId}:${spec.market}:${spec.portfolioId}:${month}`
+  const landed = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    INSERT INTO "AdsBrainAsk" ("id", "key", "kind", "productId", "marketplace", "portfolioId", "day", "status", "toCents", "reason", "updatedAt")
+    VALUES (gen_random_uuid()::text, ${key}, 'portfolioCapOverValue', ${spec.productId}, ${spec.market}, ${spec.portfolioId}, ${`${month}-01`}::date, 'blocked', ${spec.toCents}::int, ${spec.why}, now())
+    ON CONFLICT ("workspaceId", "key") DO NOTHING
+    RETURNING "id"`)
+  if (landed.length) logger.warn('[brain-money] a portfolio cap above the per-write value cap: not written, not asked (said once a month)', { productId: spec.productId, market: spec.market, portfolioId: spec.portfolioId, toCents: spec.toCents })
+  return { kind: 'portfolioCap', key, approvalId: null, status: 'blocked', fresh: landed.length > 0, why: `${spec.why}${landed.length ? '' : ' (said already this month)'}` }
+}
+
+/** What became of a request, as a step's outcome: asked (it waits, or was just asked), refused by the gate, else held. */
+const sentOfProposal = (p: MoneyProposal): 'asked' | 'refused' | 'held' =>
+  p.approvalId && (p.fresh || WAITING.has(p.status) || p.status === 'pending') ? 'asked' : p.status === 'refused' ? 'refused' : 'held'
 
 /** The why a tool request carries: at most 300 characters (the tools' `why`). */
 const askWhy = (text: string) => (text.length <= 300 ? text : `${text.slice(0, 297)}...`)
@@ -269,9 +395,10 @@ export async function runMoneyActions(plan: ProductMoneyPlan, facts: ProductMone
     const readings = await loadNativeRules(candidates)
     native = new Map(candidates.map((id) => [id, nativeRuleLines(readings.get(id), 'budgets')]))
   }
-  // AB-15 — the kill switch and the holds after auto-undo's undos (brain/lever-holds.ts): a held campaign or cap is not written.
+  // The gate's per-write value cap, checked before anything is asked or written (no doomed write). AB-15 — the kill switch
+  // and the holds after auto-undo's undos (brain/lever-holds.ts): a held campaign or cap is not written.
   const { moneyHolds } = await import('./lever-holds.js')
-  const steps = moneyStepsOf(plan, facts, { live: ctx.live, native, holds: await moneyHolds(plan.productId, plan.market) })
+  const steps = moneyStepsOf(plan, facts, { live: ctx.live, native, valueCapCents: maxWriteValueCents(), holds: await moneyHolds(plan.productId, plan.market) })
   const byCampaign = new Map<string, CampaignStep[]>()
   for (const s of steps.campaigns) byCampaign.set(s.campaignId, [...(byCampaign.get(s.campaignId) ?? []), s])
   const decision = new Map(plan.campaigns.map((c) => [c.campaignId, c]))
@@ -345,11 +472,14 @@ export async function runMoneyActions(plan: ProductMoneyPlan, facts: ProductMone
   else if (asks.length) {
     const label = plan.name ?? plan.productId
     const why = askWhy(`ads brain — ${label} (${plan.market}) ${plan.day}: the day's budget moves inside the pace (${plan.brake.level === 'none' ? 'no brake' : `brake ${plan.brake.level}`}); ${asks.map((a) => `${a.name} ${w(a.fromCents)} → ${w(a.toCents)}`).join(', ')}`)
-    const p = await askOnce('budgets', `budgets:${plan.productId}:${plan.market}:${plan.day}`, 'set-campaign-budget', { campaigns: asks.map((a) => ({ campaignId: a.campaignId, dailyBudgetCents: a.toCents })), why }, why)
+    const p = await askOnce({
+      kind: 'budgets', key: `budgets:${plan.productId}:${plan.market}:${plan.day}`, productId: plan.productId, market: plan.market, day: plan.day,
+      tool: 'set-campaign-budget', args: { campaigns: asks.map((a) => ({ campaignId: a.campaignId, dailyBudgetCents: a.toCents })), why }, why,
+    })
     out.proposals.push(p)
     for (const a of asks) {
       const s = byCampaign.get(a.campaignId)!.find((x) => x.do === 'ask')!
-      note({ campaignId: a.campaignId, name: a.name, level: s.level, layer: BASE_LAYER, fromCents: a.fromCents, toCents: a.toCents, sent: p.approvalId ? 'asked' : 'refused', why: s.why, reason: p.why })
+      note({ campaignId: a.campaignId, name: a.name, level: s.level, layer: BASE_LAYER, fromCents: a.fromCents, toCents: a.toCents, sent: sentOfProposal(p), why: s.why, reason: p.why })
     }
     if (p.fresh && p.approvalId) out.counts.asked++
   }
@@ -357,12 +487,24 @@ export async function runMoneyActions(plan: ProductMoneyPlan, facts: ProductMone
   // ── Portfolio caps (at the full slots only: a cap changes rarely) ─────────────────────────────────────────────────
   for (const s of ctx.budgetsOnly ? [] : steps.portfolios) {
     if (s.do === 'hold') { out.portfolios.push({ portfolioId: s.portfolioId, name: s.name, level: s.level, fromCents: null, toCents: null, sent: 'held', why: s.why }); out.counts.held++; continue }
+    if (s.do === 'over-value') {
+      const p = await noticeOverValueCap({ productId: plan.productId, market: plan.market, portfolioId: s.portfolioId, day: plan.day, toCents: s.toCents, why: s.why })
+      out.proposals.push(p)
+      out.counts.held++
+      out.portfolios.push({ portfolioId: s.portfolioId, name: s.name, level: s.level, fromCents: s.fromCents, toCents: s.toCents, sent: 'held', why: s.why, reason: p.why })
+      continue
+    }
     if (s.do === 'ask') {
-      const p = await askOnce('portfolioCap', `cap:${plan.productId}:${plan.market}:${s.portfolioId}:${plan.month}:${s.toCents}`, 'set-portfolio',
-        { op: 'update', portfolioId: s.portfolioId, cap: { amountCents: s.toCents, policy: 'monthly' }, why: askWhy(`ads brain — ${s.why}`) }, s.why)
+      const p = await askOnce({
+        kind: 'portfolioCap', key: `cap:${plan.productId}:${plan.market}:${s.portfolioId}:${plan.day}`, productId: plan.productId, market: plan.market,
+        portfolioId: s.portfolioId, day: plan.day, toCents: s.toCents,
+        tool: 'set-portfolio', args: { op: 'update', portfolioId: s.portfolioId, cap: { amountCents: s.toCents, policy: 'monthly' }, why: askWhy(`ads brain — ${s.why}`) }, why: s.why,
+      })
       out.proposals.push(p)
       if (p.fresh && p.approvalId) out.counts.asked++
-      out.portfolios.push({ portfolioId: s.portfolioId, name: s.name, level: s.level, fromCents: s.fromCents, toCents: s.toCents, sent: p.approvalId ? 'asked' : 'refused', why: s.why, reason: p.why })
+      const sent = sentOfProposal(p)
+      if (sent === 'held') out.counts.held++
+      out.portfolios.push({ portfolioId: s.portfolioId, name: s.name, level: s.level, fromCents: s.fromCents, toCents: s.toCents, sent, why: s.why, reason: p.why })
       continue
     }
     const g = await openGuard()
