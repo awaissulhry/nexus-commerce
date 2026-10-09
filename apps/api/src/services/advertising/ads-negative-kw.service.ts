@@ -141,6 +141,11 @@ export interface WriteNegativeKeywordArgs {
   /** PB-5 — the approval this write runs for: its AdvertisingActionLog row carries it (executionId). */
   changeSetId?: string | null
   /**
+   * The brain's match-type funnel only (brain/negatives.ts, Owner 2026-10-09): a negative phrase of two words or more may
+   * narrow the broad keywords holding its words in its ad group (ads-winner-lock.ts BlockOpts). Absent: L1 as for everyone.
+   */
+  broadNarrowing?: boolean
+  /**
    * W4-11 — a Claude request (add-negative-targets): a negative keyword in a Sponsored Brands ad group is sent to SB's
    * own endpoint (POST /sb/negativeKeywords). Absent: Sponsored Products only, as before (the gate refuses SB/SD).
    */
@@ -367,6 +372,8 @@ interface KeywordJob {
   pushing?: boolean
   /** 1e — a person's own add (already checked by isPersonCreate): passes the halt and autonomy OFF at the gate. */
   manual?: boolean
+  /** The brain's funnel: a negative phrase may narrow broad keywords (WriteNegativeKeywordArgs.broadNarrowing). */
+  broadNarrowing?: boolean
   /** W4-11 — see WriteNegativeKeywordArgs.allowSbSd. */
   allowSbSd?: boolean
   /**
@@ -389,7 +396,7 @@ function sbSdNegative(allow: boolean | undefined, campaign: CampaignRow, kind: '
 async function sendKeyword(job: KeywordJob): Promise<Sent> {
   const { placement: { campaign, adGroup }, scope, text, matchType } = job
   const invalid = keywordTextRefusal(text, matchType) ?? await protectedRefusal(text, matchType, campaign)
-    ?? await ownKeywordRefusal({ scope, adGroupId: adGroup?.id ?? null, campaignId: campaign.id }, text, matchType === 'NEGATIVE_PHRASE' ? 'PHRASE' : 'EXACT')
+    ?? await ownKeywordRefusal({ scope, adGroupId: adGroup?.id ?? null, campaignId: campaign.id }, text, matchType === 'NEGATIVE_PHRASE' ? 'PHRASE' : 'EXACT', { broadNarrowing: job.broadNarrowing === true })
   if (invalid) return { kind: 'refused', refusal: invalid }
   const pushable = !!campaign.externalCampaignId && (scope !== 'AD_GROUP' || !!adGroup?.externalAdGroupId)
   let heal: string | null = null
@@ -646,7 +653,7 @@ export async function writeNegativeKeyword(args: WriteNegativeKeywordArgs): Prom
   if (args.scope === 'CAMPAIGN' && !placement.adGroup) {
     return done('negative keyword', failedResult(`${placement.campaign.id} has no ad group to hold Nexus's copy of a campaign negative, so nothing was sent.`, mode))
   }
-  const sent = await sendKeyword({ placement, scope: args.scope, text, matchType, protectConverting: args.protectConverting, creationFlow: args.creationFlow, profileId: args.profileId, region: args.region, manual: isPersonCreate(args.manual, args.userId), allowSbSd: args.allowSbSd, actor: args.userId ?? null })
+  const sent = await sendKeyword({ placement, scope: args.scope, text, matchType, protectConverting: args.protectConverting, creationFlow: args.creationFlow, profileId: args.profileId, region: args.region, manual: isPersonCreate(args.manual, args.userId), allowSbSd: args.allowSbSd, actor: args.userId ?? null, broadNarrowing: args.broadNarrowing === true })
   const early = settled(sent, sent.kind === 'draft' ? 'local' : mode)
   if (early) return done('negative keyword', early)
 

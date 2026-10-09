@@ -211,7 +211,7 @@ export const LEVER_DECIDES: Record<BrainLever, string> = {
   adGroupBids: 'each ad group\'s default bid',
   hours: 'the market\'s hours each week and the hourly plan it paints from them (a plan change always asks a person, D3)',
   placements: 'the placement % of each hour, with the painted hourly plan',
-  state: 'a pause for a stop of 3 days or more and its resume (an archive is only ever proposed)',
+  state: 'a pause for a stop of 3 days or more and its resume, and a pause of a campaign without an impression for weeks (never an archive)',
   budgets: 'each campaign\'s daily budget inside the pace, and the intraday ladder',
   portfolioCap: 'the Amazon portfolio cap, monthly, never below this month\'s spend',
   negatives: 'where and what to negate (waste, the product set, isolation) inside each campaign\'s negative budget, and revives',
@@ -287,6 +287,7 @@ export const SPEND_RATINGS: Partial<Record<BrainSetting, Rating>> = {
   negativesPerEntityWarn: { when: 'never', words: 'a warning level only' },
   negativesPerEntityMax: { when: 'down', words: 'fewer negatives fit in a campaign or ad group: wasted clicks may run longer' },
   negativesShadowDays: { when: 'never', words: 'how long the negatives lever stays in shadow before it acts' },
+  funnelNegatives: { when: 'never', words: 'the match-type funnel only adds negatives; off, it adds none and lifts none' },
   harvestPerDay: { when: 'up', words: 'more new keywords a day, each starting to spend' },
   newCampaignsPerWeek: { when: 'up', words: 'more new campaigns a week, each with its own budget' },
   skcMax: { when: 'up', words: 'more single-keyword campaigns, each with its own budget' },
@@ -317,7 +318,7 @@ export const SPEND_RATINGS: Partial<Record<BrainSetting, Rating>> = {
   strategySwitchMode: { when: { from: 'ALWAYS_PROPOSE', to: 'PROPOSE_THEN_AUTO' }, words: 'bidding-strategy switches may run alone after 30 days (up and down lets Amazon raise a bid up to +100 %)' },
   strategyApprovalDays: { when: 'down', words: 'bidding-strategy switches may run alone sooner (up and down lets Amazon raise a bid up to +100 %)' },
   pauseMinDays: { when: 'never', words: 'a shorter stop stays on low bids instead of a pause' },
-  archiveDeadWeeks: { when: 'never', words: 'an archive is only ever a proposal' },
+  archiveDeadWeeks: { when: 'never', words: 'a campaign without an impression is paused, never archived' },
   longStopUntil: { when: 'cleared-or-earlier', words: 'the Owner\'s long stop ends sooner: the brain resumes the campaigns sooner' },
 }
 

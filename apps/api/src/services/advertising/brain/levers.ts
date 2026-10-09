@@ -108,6 +108,8 @@ export const BRAIN_SETTINGS = {
   negativesPerEntityMax: { type: 'int', default: 950, min: 100, max: 950, scopes: BOTH, what: 'negatives in one campaign or ad group, never more — Amazon allows 1,000 (§2.7)' },
   // AB-10 — §10: a lever runs in shadow before it acts (14 days for negatives); the Owner's own number wins (0: at once).
   negativesShadowDays: { type: 'int', default: 14, min: 0, max: 90, scopes: PRODUCT, what: 'days the negatives lever runs in shadow before PROPOSE or AUTO act (§10)' },
+  // The Owner's match-type funnel (2026-10-09): per campaign, the one where the negative lands.
+  funnelNegatives: { type: 'boolean', default: true, scopes: BOTH, what: 'the match-type funnel: each live exact keyword of the product negated exact in its phrase, broad and auto ad groups, each live phrase keyword negated phrase in its broad and auto ad groups (Owner 2026-10-09)' },
   harvestPerDay: { type: 'int', default: 10, min: 0, max: 100, scopes: PRODUCT, what: 'new keywords per product per day (§2.8)' },
   newCampaignsPerWeek: { type: 'int', default: 2, min: 0, max: 20, scopes: PRODUCT, what: 'new campaigns per product per week (§2.9)' },
   skcMax: { type: 'int', default: 20, min: 0, max: 200, scopes: PRODUCT, what: 'single-keyword campaigns per product (§2.9)' },
@@ -144,7 +146,7 @@ export const BRAIN_SETTINGS = {
   strategyApprovalDays: { type: 'int', default: 30, min: 0, max: 365, scopes: PRODUCT, what: 'N4: the days after the bidding-strategy lever became the brain\'s on the product during which every switch at AUTO waits for approval (0: at once alone)' },
   // AB-12 — the state lever (§2.4, D4 = A)
   pauseMinDays: { type: 'int', default: 3, min: 3, max: 60, scopes: BOTH, what: 'a stop expected to last at least this many days is a pause; a shorter one stays on low bids, never a pause (§2.4, D4)' },
-  archiveDeadWeeks: { type: 'int', default: 4, min: 2, max: 52, scopes: BOTH, what: 'weeks without an impression before the brain proposes to archive a campaign — only ever a proposal (§2.4)' },
+  archiveDeadWeeks: { type: 'int', default: 4, min: 2, max: 52, scopes: BOTH, what: 'weeks without an impression before the brain pauses an enabled campaign — it never archives (Owner 2026-10-09)' },
   longStopUntil: { type: 'dayOrNull', default: null, scopes: BOTH, what: 'the Owner\'s long stop: the brain pauses through this day (YYYY-MM-DD, UTC) and resumes after it; empty = none (§2.4)' },
 } as const satisfies Record<string, SettingSpec>
 

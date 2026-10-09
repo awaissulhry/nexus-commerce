@@ -96,8 +96,20 @@ export function negativeBlocksTerm(neg: { text: string; match: 'EXACT' | 'PHRASE
   return containsInOrder(words(term), words(neg.text))
 }
 
+/**
+ * The Owner's match-type funnel (2026-10-09): a negative phrase of two words or more in an ad group buying BROAD keywords
+ * holding its words NARROWS them — the searches holding the phrase go to its tighter home, and the broad keywords still
+ * serve their words apart or in another order. Only the brain's funnel asks for it (brain/negatives.ts); a one-word phrase
+ * still blocks a broad keyword holding that word (every search it could serve holds it), and an exact or phrase keyword
+ * holding the phrase is still blocked.
+ */
+export interface BlockOpts { broadNarrowing?: boolean }
+
+/** A phrase negative the funnel may stand over broad keywords: two words or more. */
+export const narrowsBroad = (negText: string): boolean => words(negText).length >= 2
+
 /** Pure — the positive a negative would block in the same ad group (L1), or null. */
-export function blockedPositive(neg: { text: string; match: NegativeMatch }, positives: readonly Positive[]): Positive | null {
+export function blockedPositive(neg: { text: string; match: NegativeMatch }, positives: readonly Positive[], opts: BlockOpts = {}): Positive | null {
   if (neg.match === 'PRODUCT') {
     const asin = asinOf(neg.text)
     return positives.find((p) => p.match === 'PRODUCT' && asinOf(p.text) === asin) ?? null
@@ -106,7 +118,8 @@ export function blockedPositive(neg: { text: string; match: NegativeMatch }, pos
   if (!text) return null
   if (neg.match === 'EXACT') return positives.find((p) => p.match === 'EXACT' && normaliseNegTerm(p.text) === text) ?? null
   const phrase = words(neg.text)
-  return positives.find((p) => p.match !== 'PRODUCT' && containsInOrder(words(p.text), phrase)) ?? null
+  const narrows = opts.broadNarrowing === true && narrowsBroad(neg.text)
+  return positives.find((p) => p.match !== 'PRODUCT' && !(narrows && p.match === 'BROAD') && containsInOrder(words(p.text), phrase)) ?? null
 }
 
 /**
@@ -138,11 +151,11 @@ export function blockedWords(p: Positive, adGroupName?: string | null): string {
  * positive where it lands — its ad group, or (campaign scope) any ad group of its campaign. Null: it blocks nothing.
  * Every writer asks it: the rules, the harvest, n-grams, the funnel, Claude's tools, the screens and the bulk sheet.
  */
-export async function ownKeywordRefusal(where: { scope: 'AD_GROUP' | 'CAMPAIGN'; adGroupId: string | null; campaignId: string }, text: string, match: NegativeMatch): Promise<{ deniedAt: string; reason: string } | null> {
+export async function ownKeywordRefusal(where: { scope: 'AD_GROUP' | 'CAMPAIGN'; adGroupId: string | null; campaignId: string }, text: string, match: NegativeMatch, opts: BlockOpts = {}): Promise<{ deniedAt: string; reason: string } | null> {
   const ids = where.scope === 'AD_GROUP'
     ? (where.adGroupId ? [where.adGroupId] : [])
     : (await prisma.adGroup.findMany({ where: { campaignId: where.campaignId }, select: { id: true } })).map((g) => g.id)
-  const own = blockedPositive({ text, match }, [...(await positivesIn(ids)).values()].flat())
+  const own = blockedPositive({ text, match }, [...(await positivesIn(ids)).values()].flat(), opts)
   if (!own) return null
   const group = await prisma.adGroup.findUnique({ where: { id: own.adGroupId }, select: { name: true } })
   const neg = match === 'PRODUCT' ? `A negative product target ${text.trim()}` : `A negative ${match.toLowerCase()} "${text.trim()}"`

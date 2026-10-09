@@ -33,7 +33,7 @@ function facts(over: Partial<StateFacts> = {}): StateFacts {
 const CTX: StateContext = { now: NOW, ceilingLive: true, posture: { posture: 'auto', why: 'the account ads dial is AUTO' }, pausesLeft: { acting: 3, shadow: 3 } }
 const ctx = (over: Partial<StateContext> = {}): StateContext => ({ ...CTX, ...over })
 /** The brain's own AUTO pause, `hoursAgo` hours ago, for `causes`. */
-const brainPaused = (hoursAgo: number, causes: StateFacts['causes'] = [], memoryCauses: Array<'stock' | 'monthly_cap' | 'playbook' | 'declared'> = ['stock']): Partial<StateFacts> => ({
+const brainPaused = (hoursAgo: number, causes: StateFacts['causes'] = [], memoryCauses: Array<'stock' | 'monthly_cap' | 'playbook' | 'declared' | 'dead'> = ['stock']): Partial<StateFacts> => ({
   status: 'PAUSED', causes,
   lastStatusChange: { to: 'PAUSED', at: at(hoursAgo), by: 'brain', who: 'automation:ads-brain-state', via: 'auto', approvalId: null },
   memory: { pausedAt: at(hoursAgo).toISOString(), via: 'auto', approvalId: null, statusBefore: 'ENABLED', causes: memoryCauses, expectedEndAt: null, stop: STOP_MEMORY },
@@ -213,31 +213,33 @@ describe('holds — the brain pauses only what serves, and resumes only its own 
   })
 })
 
-describe('archive — only ever a proposal', () => {
+describe('dead — paused, never archived (the Owner, 2026-10-09)', () => {
   const dead = { impressions: 0, ageDays: 60 }
 
-  it('no impression for 4 weeks: proposed at AUTO and at PROPOSE (never written), logged at OBSERVE', () => {
-    for (const level of ['AUTO', 'PROPOSE'] as const) {
-      const d = decideState(facts({ ...dead, lever: { effective: level, why: level } }), CTX)
-      expect(d, level).toMatchObject({ action: 'archive', mode: 'PROPOSE', outcome: 'ask', to: 'ARCHIVED', cause: 'dead' })
-      expect(d.why).toMatch(/only ever a proposal, a person decides/)
-    }
-    expect(decideState(facts({ ...dead, lever: { effective: 'OBSERVE', why: 'OBSERVE' } }), CTX)).toMatchObject({ action: 'archive', mode: 'SHADOW', outcome: 'shadow' })
+  it('no impression for 4 weeks while enabled: paused alone at AUTO, asked at PROPOSE, logged at OBSERVE — never an archive', () => {
+    const auto = decideState(facts({ ...dead, lever: { effective: 'AUTO', why: 'AUTO' } }), CTX)
+    expect(auto).toMatchObject({ action: 'pause', mode: 'LIVE', outcome: 'write', to: 'PAUSED', cause: 'dead' })
+    expect(auto.startsMemory).toMatchObject({ causes: ['dead'], expectedEndAt: null })
+    expect(auto.why).toMatch(/paused, never archived/)
+    expect(decideState(facts({ ...dead, lever: { effective: 'PROPOSE', why: 'PROPOSE' } }), CTX)).toMatchObject({ action: 'pause', mode: 'PROPOSE', outcome: 'ask', to: 'PAUSED' })
+    expect(decideState(facts({ ...dead, lever: { effective: 'OBSERVE', why: 'OBSERVE' } }), CTX)).toMatchObject({ action: 'pause', mode: 'SHADOW', outcome: 'shadow' })
+    // It counts in the day's pauses like any other.
+    expect(decideState(facts(dead), ctx({ pausesLeft: { acting: 0, shadow: 3 } }))).toMatchObject({ action: 'pause', outcome: 'capped' })
   })
 
-  it('not judged without the report, too young, in a stop, or held; a paused campaign out of its hold is proposed', () => {
+  it('not judged without the report, too young, in a stop, or held; a campaign already paused stays as it is', () => {
     expect(decideState(facts({ impressions: null, ageDays: 60 }), CTX).action).toBe('keep')
     expect(decideState(facts({ impressions: 0, ageDays: 20 }), CTX).action).toBe('keep')
-    expect(decideState(facts({ ...dead, causes: [stockLong] }), CTX).action).toBe('pause')
+    expect(decideState(facts({ ...dead, causes: [stockLong] }), CTX)).toMatchObject({ action: 'pause', cause: 'stock' })
     expect(decideState(facts({ ...dead, status: 'PAUSED', lastStatusChange: { to: 'PAUSED', at: at(24 * 10), by: 'person', who: 'user:owner' } }), CTX).action).toBe('hold')
-    expect(decideState(facts({ ...dead, status: 'PAUSED', lastStatusChange: { to: 'PAUSED', at: at(24 * 90), by: 'person', who: 'user:owner' } }), CTX)).toMatchObject({ action: 'archive', outcome: 'ask' })
+    expect(decideState(facts({ ...dead, status: 'PAUSED', lastStatusChange: { to: 'PAUSED', at: at(24 * 90), by: 'person', who: 'user:owner' } }), CTX)).toMatchObject({ action: 'hold', outcome: 'none' })
   })
 
-  it('a request still waiting is not asked twice; one declined waits 30 days', () => {
-    const asked = (state: 'waiting' | 'declined', daysAgo: number) => facts({ ...dead, asked: { action: 'archive', approvalId: 'ap-9', state, at: at(daysAgo * 24) } })
-    expect(decideState(asked('waiting', 1), CTX)).toMatchObject({ outcome: 'waiting', approvalId: 'ap-9' })
-    expect(decideState(asked('declined', 5), CTX)).toMatchObject({ outcome: 'held', why: expect.stringMatching(/declined .* asked again after 30 days/) })
-    expect(decideState(asked('declined', 31), CTX)).toMatchObject({ outcome: 'ask' })
+  it('the brain never switches a campaign it paused for no impressions on again — a person does', () => {
+    const d = decideState(facts({ ...dead, ...brainPaused(24 * 30, [], ['dead']) }), CTX)
+    expect(d).toMatchObject({ action: 'keep', cause: 'dead', to: null })
+    expect(d.memory).toMatchObject({ causes: ['dead'] })
+    expect(d.why).toMatch(/stays paused, never archived; the brain never switches it on again \(a person does: enable-ads\)/)
   })
 })
 
@@ -284,9 +286,9 @@ describe('levels and the Owner', () => {
     expect(decideState(facts(brainPaused(30)), CTX).attention).toBeNull()
   })
 
-  it('the state lever writes the status only: a pause, a resume, an archive proposal — nothing else', () => {
+  it('the state lever writes the status only: a pause, a resume — never an archive, nothing else', () => {
     const tos = [decideState(facts({ causes: [stockLong] }), CTX), decideState(facts(brainPaused(30)), CTX), decideState(facts({ impressions: 0, ageDays: 60 }), CTX)].map((d) => d.to)
-    expect(tos).toEqual(['PAUSED', 'ENABLED', 'ARCHIVED'])
+    expect(tos).toEqual(['PAUSED', 'ENABLED', 'PAUSED'])
     expect(coreStateDecision(facts(), NOW)).toMatchObject({ wouldDo: 'keep', to: null, why: 'serving: no stop holds it' })
   })
 })

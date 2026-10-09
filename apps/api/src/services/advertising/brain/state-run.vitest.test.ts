@@ -2,7 +2,7 @@
  * ONE BRAIN AB-12 — one run of the state brain (brain/state-run.ts), with the loader and the database mocked (the real
  * reads, the gate and the status path run in the real-PostgreSQL suite state-postgres): the levels end to end — OBSERVE
  * logs only, PROPOSE asks one request per action per product (enable-ads lifting the brain's own AUTO pause asks the
- * approver's code), AUTO writes per campaign and an archive is asked even at AUTO; the day's cap across a market's
+ * approver's code), AUTO writes per campaign — a campaign dead for weeks is paused too, never archived; the day's cap across a market's
  * products; a refusal tried again once a UTC day; rows only on change (and the day's first for a pause the brain carries);
  * one product failing never stops the others; nothing watched → only the prune.
  * Values are made up (public repo).
@@ -131,16 +131,18 @@ describe('AB-12 — the state brain\'s run', () => {
     expect(requestArgs('resume', []).args).not.toHaveProperty('includePeoplesPauses')
   })
 
-  it('AUTO: each pause written as the brain, its memory on the row; an archive is still only asked', async () => {
+  it('AUTO: each pause written as the brain, its memory on the row; a campaign dead for weeks is paused too, never archived', async () => {
     load('jacket', [facts('c1', 'AUTO'), facts('c2', 'AUTO', { causes: [], impressions: 0, ageDays: 90 })])
     await run()
-    expect(write).toHaveBeenCalledTimes(1)
-    expect(write.mock.calls[0].slice(0, 2)).toEqual(['c1', 'PAUSED'])
-    expect(ask).toHaveBeenCalledWith('archive-ads', expect.objectContaining({ campaignIds: ['c2'] }))
+    expect(write).toHaveBeenCalledTimes(2)
+    expect(write.mock.calls.map((c) => c.slice(0, 2))).toEqual([['c1', 'PAUSED'], ['c2', 'PAUSED']])
+    expect(ask).not.toHaveBeenCalled()
     const pause = h.created.find((x) => x.campaignId === 'c1')!
     expect(pause).toMatchObject({ mode: 'LIVE', outcome: 'queued', action: 'pause' })
     expect((pause.decision as { memory: { statusBefore: string; stop: unknown } }).memory).toMatchObject({ statusBefore: 'ENABLED', stop: STOP_MEMORY })
-    expect(h.created.find((x) => x.campaignId === 'c2')).toMatchObject({ mode: 'PROPOSE', action: 'archive', outcome: 'asked' })
+    const dead = h.created.find((x) => x.campaignId === 'c2')!
+    expect(dead).toMatchObject({ mode: 'LIVE', action: 'pause', outcome: 'queued' })
+    expect((dead.decision as { memory: { causes: string[] } }).memory).toMatchObject({ causes: ['dead'] })
   })
 
   it('AUTO: a refused write leaves no memory and is tried again only the next UTC day', async () => {
@@ -223,7 +225,7 @@ describe('AB-12 — the state brain\'s run', () => {
     expect(write).not.toHaveBeenCalled()
     expect(ask).not.toHaveBeenCalled()
     expect(h.created.find((x) => x.campaignId === 'c1')).toMatchObject({ action: 'pause', outcome: 'held', why: expect.stringContaining('not done: stopped by the Owner\'s kill switch') })
-    expect(h.created.find((x) => x.campaignId === 'c2')).toMatchObject({ action: 'archive', outcome: 'held' })
+    expect(h.created.find((x) => x.campaignId === 'c2')).toMatchObject({ action: 'pause', outcome: 'held' })
     expect(r.campaigns.map((c) => c.outcome)).toEqual(['held', 'held'])
   })
 

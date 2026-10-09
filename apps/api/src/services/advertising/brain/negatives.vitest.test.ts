@@ -58,7 +58,8 @@ function decision(term: string, evidence: TermEvidence, opts: { targets?: TermPl
   return decideTerm(f, c, termTests(f, c), opts.lead ?? null)
 }
 const pos = (adGroupId: string, text: string, match: Positive['match'], live = true): Positive => ({ adTargetId: `p-${adGroupId}-${text}`, adGroupId, text, match, live })
-const campaign = (id: string, extra: Partial<NegCampaign> = {}): NegCampaign => ({ id, name: id, status: 'ENABLED', targetingType: 'MANUAL', lever: 'AUTO', leverWhy: 'the negatives lever: AUTO', lockedAdGroups: new Set(), warn: 800, max: 950, ...extra })
+// The match-type funnel is off here, so each test below sees only its own reason; the funnel's own tests switch it on.
+const campaign = (id: string, extra: Partial<NegCampaign> = {}): NegCampaign => ({ id, name: id, status: 'ENABLED', targetingType: 'MANUAL', lever: 'AUTO', leverWhy: 'the negatives lever: AUTO', lockedAdGroups: new Set(), warn: 800, max: 950, funnel: false, ...extra })
 const group = (id: string, campaignId: string, positives: Positive[] = [], extra: Partial<NegAdGroup> = {}): NegAdGroup => ({ id, campaignId, name: id, status: 'ENABLED', positives, ...extra })
 let nid = 0
 const neg = (adGroupId: string, text: string, match: StandingNegative['match'], extra: Partial<StandingNegative> = {}): StandingNegative => ({
@@ -207,6 +208,81 @@ describe('AB-10 — the product set, n-grams and isolation', () => {
       adGroups: [group('g-auto', 'c-auto'), group('g-exact', 'c-exact', [pos('g-exact', 'racing jacket', 'EXACT', false)])],
     }))
     expect(paused.items).toEqual([])
+  })
+})
+
+describe('the Owner\'s match-type funnel (2026-10-09): exact → negative exact in phrase, broad, auto; phrase → negative phrase in broad, auto', () => {
+  // One campaign per match type, one ad group each, as the Owner builds them; the funnel on everywhere.
+  const on = (id: string, extra: Partial<NegCampaign> = {}) => campaign(id, { funnel: true, ...extra })
+  const funnelInput = (over: Partial<NegativesInput> & { decisions?: TermDecision[]; places?: Record<string, Record<string, TermEvidence>> } = {}) => input({
+    decisions: [],
+    campaigns: [on('c-auto', { targetingType: 'AUTO' }), on('c-exact'), on('c-phrase'), on('c-broad'), on('c-pat')],
+    adGroups: [
+      group('g-auto', 'c-auto'),
+      group('g-exact', 'c-exact', [pos('g-exact', 'racing jacket', 'EXACT')]),
+      group('g-phrase', 'c-phrase', [pos('g-phrase', 'racing jacket', 'PHRASE'), pos('g-phrase', 'moto jacket', 'PHRASE')]),
+      group('g-broad', 'c-broad', [pos('g-broad', 'racing jacket', 'BROAD'), pos('g-broad', 'moto jacket', 'BROAD')]),
+      group('g-pat', 'c-pat', [pos('g-pat', 'B0COMPET01', 'PRODUCT')]),
+    ],
+    ...over,
+  })
+
+  it('each looser ad group negates the tighter keyword; a phrase there covers the exact; a two-word phrase narrows the broad keyword', () => {
+    const plan = decideNegatives(funnelInput())
+    expect(plan.items.map(brief)).toEqual([
+      'ADD funnel PHRASE "moto jacket" g-auto AUTO',
+      'ADD funnel PHRASE "racing jacket" g-auto AUTO',
+      'ADD funnel PHRASE "moto jacket" g-broad AUTO',
+      'ADD funnel PHRASE "racing jacket" g-broad AUTO',
+      'ADD funnel EXACT "racing jacket" g-phrase AUTO',
+    ])
+    // The broad keywords holding the phrase still serve its words apart or in another order: written with the narrowing.
+    expect(plan.items.filter((i) => i.narrowsBroad).map((i) => i.adGroupId)).toEqual(['g-broad', 'g-broad'])
+    expect(plan.items.find((i) => i.adGroupId === 'g-phrase')!.why).toMatch(/buys "racing jacket" as a exact keyword in 1 ad group \(g-exact\)/)
+    // Never in the exact ad group (it buys only its own words) nor in a product-targeting one.
+    expect(plan.items.some((i) => i.adGroupId === 'g-exact' || i.adGroupId === 'g-pat')).toBe(false)
+  })
+
+  it('a one-word phrase over a broad keyword holding that word would block it: held there by the own-keyword lock', () => {
+    const plan = decideNegatives(funnelInput({
+      adGroups: [
+        group('g-auto', 'c-auto'),
+        group('g-phrase', 'c-phrase', [pos('g-phrase', 'jacket', 'PHRASE')]),
+        group('g-broad', 'c-broad', [pos('g-broad', 'moto jacket', 'BROAD')]),
+      ],
+    }))
+    expect(plan.items.map(brief)).toEqual(['ADD funnel PHRASE "jacket" g-auto AUTO', 'ADD funnel PHRASE "jacket" g-broad AUTO HELD'])
+    expect(plan.items[1].heldBy).toMatch(/it would block the product's own broad keyword "moto jacket"/)
+  })
+
+  it('where its searches convert in the looser group, the negative waits until the home converts too (the handover rule)', () => {
+    const racing = decision('racing jacket', ev(400, 2, 8000), { targets: [place('g-exact', 'EXACT'), place('g-phrase', 'PHRASE'), place('g-broad', 'BROAD')] })
+    const only = { adGroups: [group('g-exact', 'c-exact', [pos('g-exact', 'racing jacket', 'EXACT')]), group('g-phrase', 'c-phrase', [pos('g-phrase', 'racing jacket', 'PHRASE')])] }
+    const waiting = decideNegatives(funnelInput({ ...only, decisions: [racing], places: { 'racing jacket': { 'g-exact': ev(100, 0, 2000), 'g-phrase': ev(300, 2, 6000) } } }))
+    // It served there, so isolation asks for the same negative: one item, both reasons.
+    expect(waiting.items.map(brief)).toEqual(['ADD isolation EXACT "racing jacket" g-phrase AUTO HELD'])
+    expect(waiting.items[0].reasons).toEqual(['isolation', 'funnel'])
+    expect(waiting.items[0].heldBy).toMatch(/its exact home has no order yet/)
+    const proven = decideNegatives(funnelInput({ ...only, decisions: [racing], places: { 'racing jacket': { 'g-exact': ev(100, 1, 2000), 'g-phrase': ev(300, 2, 6000) } } }))
+    expect(proven.items.map(brief)).toEqual(['ADD isolation EXACT "racing jacket" g-phrase AUTO'])
+  })
+
+  it('nothing where the Owner switched it off, a negative already blocks it, the home is not live, or the term is locked', () => {
+    const off = decideNegatives(funnelInput({ campaigns: [on('c-auto', { targetingType: 'AUTO', funnel: false }), on('c-exact'), on('c-phrase'), on('c-broad', { funnel: false }), on('c-pat')] }))
+    expect(off.items.map(brief)).toEqual(['ADD funnel EXACT "racing jacket" g-phrase AUTO'])
+    const standing = decideNegatives(funnelInput({ standing: [neg('g-phrase', 'racing jacket', 'EXACT'), neg('g-broad', 'racing jacket', 'PHRASE'), neg('g-broad', 'moto jacket', 'PHRASE'), neg('g-auto', 'jacket', 'PHRASE')] }))
+    expect(standing.items).toEqual([])
+    const notLive = decideNegatives(funnelInput({ adGroups: [group('g-exact', 'c-exact', [pos('g-exact', 'racing jacket', 'EXACT', false)]), group('g-phrase', 'c-phrase', [pos('g-phrase', 'moto jacket', 'BROAD')])] }))
+    expect(notLive.items).toEqual([])
+    const locked = decideNegatives(funnelInput({ lockedTerms: new Set(['racing jacket', 'moto jacket']) }))
+    expect(locked.items).toEqual([])
+  })
+
+  it('at PROPOSE a phrase that narrows a broad keyword is held (a request keeps the lock), and the exact it would cover is asked instead', () => {
+    const plan = decideNegatives(funnelInput({ campaigns: [on('c-auto', { targetingType: 'AUTO' }), on('c-exact'), on('c-phrase'), on('c-broad', { lever: 'PROPOSE' }), on('c-pat')] }))
+    const broad = plan.items.filter((i) => i.adGroupId === 'g-broad').map(brief)
+    expect(broad).toEqual(['ADD funnel EXACT "racing jacket" g-broad PROPOSE', 'ADD funnel PHRASE "moto jacket" g-broad PROPOSE HELD', 'ADD funnel PHRASE "racing jacket" g-broad PROPOSE HELD'])
+    expect(plan.items.find((i) => i.heldBy)!.heldBy).toMatch(/only the brain writes that, at AUTO/)
   })
 })
 

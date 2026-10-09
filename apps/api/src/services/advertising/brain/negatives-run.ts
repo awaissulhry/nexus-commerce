@@ -214,6 +214,7 @@ export async function loadNegativesFacts(m: MarketFacts, decided: MarketDecision
       lever: lever.effective as LeverEffective, leverWhy: `the negatives lever: ${lever.why}`,
       lockedAdGroups: new Set(lever.locks.filter((l) => l.ref.startsWith('adGroup:')).map((l) => l.ref.slice('adGroup:'.length))),
       warn: Number(s.values.negativesPerEntityWarn.value), max: Number(s.values.negativesPerEntityMax.value),
+      funnel: s.values.funnelNegatives.value !== false,
     }
   }).sort((a, b) => a.id.localeCompare(b.id))
 
@@ -342,6 +343,7 @@ async function writeAdd(i: Planned, market: string): Promise<Partial<Planned>> {
     : await writeNegativeKeyword({
       scope: i.level, ...(i.level === 'AD_GROUP' ? { adGroupId: i.adGroupId! } : { campaignId: i.campaignId }),
       keywordText: i.text, matchType: i.match === 'PHRASE' ? 'PHRASE' : 'EXACT', userId: BRAIN_NEGATIVES_ACTOR, evidence,
+      ...(i.narrowsBroad ? { broadNarrowing: true } : {}),
     })
   if (r.outcome === 'refused') return { status: 'REFUSED', result: `refused at ${r.refusal?.deniedAt}: ${r.refusal?.reason}`.slice(0, 2000) }
   if (r.outcome === 'failed') return { status: 'FAILED', result: (r.error ?? 'failed').slice(0, 2000) }

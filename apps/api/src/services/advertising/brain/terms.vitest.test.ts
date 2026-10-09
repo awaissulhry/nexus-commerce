@@ -190,6 +190,9 @@ describe('AB-9 — one decision per term', () => {
     expect(graduated.clashes).toEqual([])
     // A campaign-level phrase negative blocks every keyword of the campaign that holds it.
     expect(selfBlockingPairs({ targets: [place({ match: 'BROAD', adGroupId: 'g-2' })], negatives: [place({ match: 'PHRASE', level: 'CAMPAIGN', adGroupId: 'g-9', text: 'city' })] })).toHaveLength(1)
+    // The Owner's match-type funnel: a phrase of two words or more over a broad keyword narrows it — no clash, no revive.
+    expect(selfBlockingPairs({ term: 'city jacket', targets: [place({ match: 'BROAD', adGroupId: 'g-2' })], negatives: [place({ match: 'PHRASE', level: 'CAMPAIGN', adGroupId: 'g-9' })] })).toEqual([])
+    expect(selfBlockingPairs({ targets: [place({ match: 'PHRASE', adGroupId: 'g-2' })], negatives: [place({ match: 'PHRASE', level: 'CAMPAIGN', adGroupId: 'g-9', text: 'city jacket' })] })).toHaveLength(1)
   })
 
   it('the text of the product\'s own phrase or broad keyword is never negated (it would block that keyword)', () => {

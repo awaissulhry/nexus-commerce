@@ -17,8 +17,8 @@
  *   resume    stock back: the brain's pause, 30 hours on, resumed — ENABLED again, the stop's memory (lanes, strategy, the
  *             keywords' remembered bids, the floor's mark) exactly as before, only the status written
  *   lock      the Owner's lock of the state lever: the brain refused at the gate in his words, and decides nothing
- *   archive   the HELMET family's campaign without an impression for 4 weeks: asked through the real approval queue (archive-
- *             ads, as "Nexus ads brain"), never archived; asked once
+ *   dead      the HELMET family's campaign without an impression for 4 weeks: paused through the real status path and gate,
+ *             never archived, nothing asked (the Owner, 2026-10-09); the brain keeps its own pause and never switches it on
  *   business  another business with nothing enrolled decides nothing and sees none of these rows
  *   view      the ads-brain view state: each campaign decided now beside what was logged; the market's pauses and requests;
  *             nothing stored
@@ -252,22 +252,24 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-12 — the state lever (real Postg
     expect(await inW(() => endOverride({ productId: P, market: 'IT', by: 'user:owner', now: NOW, override: { scope: 'CAMPAIGN', campaignId: 'c-it', kind: 'LOCK', key: 'state' } }))).toMatchObject({ ok: true })
   })
 
-  it('archive: HELMET\'s campaign without an impression for 4 weeks is asked through the real approval queue — never archived; asked once', async () => {
+  it('dead: HELMET\'s campaign without an impression for 4 weeks is paused through the real status path — never archived, nothing asked; the brain keeps its pause', async () => {
     expect(await inW(() => enrollProduct({ productId: Q, market: 'IT', by: 'user:owner', now: NOW }))).toMatchObject({ ok: true })
     expect(await inW(() => setLever({ productId: Q, market: 'IT', lever: 'state', level: 'AUTO', by: 'user:owner', now: NOW }))).toMatchObject({ ok: true })
     // Within the report's freshness (its newest day at most 3 days old), as the product's own runs read it.
     const r = await inW(() => runStateBrainOnce({ now: later(4), products: [{ productId: Q, market: 'IT', level: 'AUTO' }] }))
-    expect(r.campaigns).toEqual([expect.objectContaining({ campaignId: 'c-dead', action: 'archive', outcome: 'asked' })])
-    const approvals = await rows<Data>('SELECT id, "toolName", status, args FROM "AgentApproval" WHERE "workspaceId" = $1', [W])
-    expect(approvals).toHaveLength(1)
-    expect(approvals[0]).toMatchObject({ toolName: 'archive-ads', status: 'pending', args: { campaignIds: ['c-dead'] } })
-    expect(approvals[0].args.why).toMatch(/^The ads brain: AUTO, but an archive is only ever a proposal: asks a person to archive it — no impression for 4 weeks while enabled/)
-    expect(await statusOf('c-dead')).toBe('ENABLED')
-    expect((await decisions()).find((d) => d.campaignId === 'c-dead')).toMatchObject({ mode: 'PROPOSE', action: 'archive', outcome: 'asked', approvalId: approvals[0].id })
-    // The next run: the request waits — not asked twice.
-    const again = await inW(() => runStateBrainOnce({ now: later(5), products: [{ productId: Q, market: 'IT', level: 'AUTO' }] }))
-    expect(again.campaigns).toEqual([expect.objectContaining({ campaignId: 'c-dead', action: 'archive', outcome: 'waiting', approvalId: approvals[0].id })])
-    expect(await rows('SELECT id FROM "AgentApproval" WHERE "workspaceId" = $1', [W])).toHaveLength(1)
+    expect(r.campaigns).toEqual([expect.objectContaining({ campaignId: 'c-dead', action: 'pause', outcome: 'queued' })])
+    expect(await statusOf('c-dead')).toBe('PAUSED')
+    const mine = (await queued()).filter((q) => q.entityId === 'c-dead')
+    expect(mine).toHaveLength(1)
+    expect(mine[0].payload).toMatchObject({ actor: BRAIN_STATE_ACTOR, fieldChanges: [{ field: 'status', oldValue: 'ENABLED', newValue: 'PAUSED' }] })
+    expect(await rows('SELECT id FROM "AgentApproval" WHERE "workspaceId" = $1', [W])).toEqual([])
+    const row = (await decisions()).find((d) => d.campaignId === 'c-dead' && d.outcome === 'queued')!
+    expect(row).toMatchObject({ mode: 'LIVE', action: 'pause', level: 'AUTO' })
+    expect(row.decision.memory).toMatchObject({ via: 'auto', statusBefore: 'ENABLED', causes: ['dead'], expectedEndAt: null })
+    // Later runs: its own pause for no impressions holds — kept, never switched on again by the brain, nothing written.
+    const again = await inW(() => runStateBrainOnce({ now: later(40), products: [{ productId: Q, market: 'IT', level: 'AUTO' }] }))
+    expect(again.campaigns).toEqual([expect.objectContaining({ campaignId: 'c-dead', action: 'keep', outcome: 'none' })])
+    expect((await queued()).filter((q) => q.entityId === 'c-dead')).toHaveLength(1)
   })
 
   it('another business: nothing enrolled there — it decides nothing and sees none of these rows', async () => {
@@ -291,7 +293,8 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-12 — the state lever (real Postg
     const market = await state({ market: 'IT', now: later(64) })
     expect(market.data).toMatchObject({ view: 'state', scope: { market: 'IT' } })
     expect(market.data!.products).toEqual(expect.arrayContaining([{ productId: P, level: 'AUTO' }, { productId: Q, level: 'AUTO' }]))
-    expect(market.data!.waiting).toEqual([expect.objectContaining({ campaignId: 'c-dead', action: 'archive' })])
+    expect(market.data!.waiting).toEqual([])
+    expect(market.data!.pausedByTheBrain).toEqual(expect.arrayContaining([expect.objectContaining({ campaignId: 'c-dead', causes: ['dead'] })]))
     expect(await state({ market: 'XX1' })).toMatchObject({ ok: false })
     expect(await state({ productId: 'no-such-product', market: 'IT', now: later(64) })).toMatchObject({ ok: false, error: 'Product not found' })
     expect((await decisions()).length).toBe(before)

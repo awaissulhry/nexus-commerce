@@ -39,6 +39,18 @@ describe('L1 — a negative never blocks a positive of its own ad group', () => 
     expect(blockedPositive({ text: 'test jacket', match: 'PHRASE' }, [pos('B0TEST0001', 'PRODUCT')])).toBeNull()
   })
 
+  it('the brain\'s funnel only: a phrase of two words or more narrows a broad keyword; one word, or an exact or phrase keyword, is still blocked', () => {
+    const broad = pos('warm test jacket blue', 'BROAD')
+    const phrase = pos('test jacket blue', 'PHRASE')
+    const narrowing = { broadNarrowing: true }
+    expect(blockedPositive({ text: 'test jacket', match: 'PHRASE' }, [broad], narrowing)).toBeNull()
+    expect(blockedPositive({ text: 'jacket', match: 'PHRASE' }, [broad], narrowing)).toBe(broad)
+    expect(blockedPositive({ text: 'test jacket', match: 'PHRASE' }, [broad, phrase], narrowing)).toBe(phrase)
+    expect(blockedPositive({ text: 'test jacket blue', match: 'EXACT' }, [pos('test jacket blue', 'EXACT')], narrowing)?.match).toBe('EXACT')
+    // Without the option (every other writer, a person included): L1 as before.
+    expect(blockedPositive({ text: 'test jacket', match: 'PHRASE' }, [broad])).toBe(broad)
+  })
+
   it('a negative product target blocks the product target of the same ASIN only', () => {
     const asin = pos('B0TEST0001', 'PRODUCT')
     expect(blockedPositive({ text: 'b0test0001', match: 'PRODUCT' }, [asin])).toBe(asin)

@@ -16,7 +16,7 @@
  *               it asked for (an approval its log names)
  *   memory      each campaign's newest decision in the brain's log (its pause memory, the stop first seen, its request),
  *               the requests' approval status, the stop recipe's memory now (Campaign + keywords)
- *   dead        impressions over each campaign's archive window from the daily report, judged only when the market's
+ *   dead        impressions over each campaign's dead window (archiveDeadWeeks) from the daily report, judged only when the market's
  *               report is fresh (≤ 3 days) and reaches back over the window
  */
 import { Prisma } from '@prisma/client'

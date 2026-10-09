@@ -21,8 +21,10 @@
  *                service's own hysteresis), the campaign goes back to the status it had (ENABLED). The pause writes
  *                nothing else, so the stop recipe's memory — the keywords' bids, the lanes and the bidding strategy it
  *                saved — is exactly as it was, and the stop's owner gives it back as the stop ends
- *   archive      a campaign without an impression for `archiveDeadWeeks` weeks (and older than that) is PROPOSED for
- *                archiving — never archived alone, whatever the level (archive-ads cannot be undone)
+ *   dead         an ENABLED campaign without an impression for `archiveDeadWeeks` weeks (and older than that) is PAUSED,
+ *                never archived (the Owner, 2026-10-09: "instead of archiving the campaigns and ad groups, we simply pause
+ *                them"); the brain never resumes such a pause — a person switches it on again. A campaign already paused
+ *                stays as it is
  *   holds        the brain pauses only an ENABLED campaign and resumes only a pause it made itself (its own write, or a
  *                request it asked for that a person approved). A status change by anyone else — a person in Nexus, Amazon
  *                (Seller Central), a rule — is a hold for HOLD_DAYS (design §2.10): the brain neither pauses nor resumes
@@ -36,7 +38,7 @@
  *   levels       OFF / not enrolled / excluded → nothing (a shared campaign too: D2 = A); LOCKED → nothing, the
  *                recommendation only; OBSERVE → SHADOW (logged); PROPOSE → an approval request; AUTO → written as the
  *                brain (BRAIN_STATE_ACTOR) through the normal status path, only under the live ceiling and while the
- *                account's ads automation runs — an archive is a request at AUTO too
+ *                account's ads automation runs
  *   never        a bid, a budget, a lane, a strategy or a stock quantity (FBA included): the state lever writes the
  *                campaign's status and nothing else
  */
@@ -44,6 +46,8 @@ import { createHash } from 'node:crypto'
 
 export const STATE_CAUSES = ['stock', 'monthly_cap', 'playbook', 'declared'] as const
 export type StateCause = (typeof STATE_CAUSES)[number]
+/** What a pause of the brain's holds for: a stop's causes, or `dead` — no impression for weeks (it never resumes alone). */
+export type PauseCause = StateCause | 'dead'
 /** How a stop's end is known. */
 export type HorizonSource = 'restock_date' | 'forecast' | 'month_end' | 'declared' | 'open' | 'soon'
 
@@ -57,7 +61,7 @@ export const MIN_SERVING_HOURS = 24
 export const OPEN_SETTLE_HOURS = 24
 /** A status change by anyone but the brain holds the campaign this long (design §2.10: a person's edit is a 60-day hold). */
 export const HOLD_DAYS = 60
-/** A request a person declined (rejected, or let expire) is not asked again for this long. */
+/** A request a person declined (rejected, or let expire) is not asked again for this long (archive: a request carried from before 2026-10-09). */
 export const DECLINE_DAYS: Record<'pause' | 'resume' | 'archive', number> = { pause: 1, resume: 1, archive: 30 }
 /** The state brain's log is kept this long (Neon cost). */
 export const STATE_DECISION_DAYS_KEPT = 30
@@ -214,8 +218,8 @@ export interface PauseMemory {
   via: 'auto' | 'request'
   approvalId: string | null
   statusBefore: 'ENABLED'
-  /** Every cause seen while it holds (the resume waits for all of them). */
-  causes: StateCause[]
+  /** Every cause seen while it holds (the resume waits for all of them; `dead`: no resume alone). */
+  causes: PauseCause[]
   expectedEndAt: string | null
   /** The stop recipe's memory when it paused: unchanged by the pause, given back by the stop's owner. */
   stop: StopMemorySnapshot
@@ -251,7 +255,7 @@ export interface StateFacts {
   memory: PauseMemory | null
   /** The stop recipe's memory now. */
   stopMemory: StopMemorySnapshot
-  /** The newest request the brain asked for on this campaign: waiting, done, or declined (rejected / expired) and when. */
+  /** The newest request the brain asked for on this campaign: waiting, done, or declined (rejected / expired) and when (archive: from before 2026-10-09). */
   asked: { action: 'pause' | 'resume' | 'archive'; approvalId: string; state: 'waiting' | 'done' | 'declined'; at: Date } | null
   /** Impressions over the last `archiveDeadWeeks` weeks when the daily report covers them; null: cannot judge. */
   impressions: number | null
@@ -276,7 +280,7 @@ export interface StateContext {
   pausesLeft: { acting: number; shadow: number }
 }
 
-export type StateAction = 'pause' | 'resume' | 'archive' | 'keep' | 'hold' | 'skip'
+export type StateAction = 'pause' | 'resume' | 'keep' | 'hold' | 'skip'
 export type StateMode = 'SHADOW' | 'PROPOSE' | 'LIVE'
 /** What the decision asks the runner to do: log only, ask a person, write, or nothing (and why not). */
 export type PlannedOutcome = 'shadow' | 'ask' | 'write' | 'waiting' | 'capped' | 'held' | 'none'
@@ -291,10 +295,10 @@ export interface StateDecision {
   status: string
   action: StateAction
   /** What the brain itself would do here, before its level: the recommendation a locked or watching lever shows. */
-  wouldDo: 'pause' | 'resume' | 'archive' | 'keep' | 'hold' | 'skip'
+  wouldDo: StateAction
   mode: StateMode
   outcome: PlannedOutcome
-  /** The deciding cause (dead: an archive proposal). */
+  /** The deciding cause (dead: no impression for weeks — a pause, never an archive). */
   cause: StateCause | 'dead' | 'none'
   causes: Array<{ cause: StateCause; endsAt: string | null; source: HorizonSource; words: string }>
   expectedEndAt: string | null
@@ -302,7 +306,7 @@ export interface StateDecision {
   /** When the brain first saw the stop in force (carried to the next run). */
   stopSince: string | null
   /** The status a resume writes; the status a pause leaves (ENABLED). */
-  to: 'PAUSED' | 'ENABLED' | 'ARCHIVED' | null
+  to: 'PAUSED' | 'ENABLED' | null
   /** The brain's memory of its own pause IN FORCE, carried on the log while it holds (null: no pause of the brain's holds). */
   memory: PauseMemory | null
   /** A pause decided here: the memory it starts once it lands (written at AUTO; carried on the request at PROPOSE). */
@@ -321,10 +325,10 @@ export interface StateDecision {
   why: string
 }
 
-const CAUSE_WORDS: Record<StateCause, string> = { stock: 'out of stock', monthly_cap: 'the monthly cap', playbook: 'a playbook STOP', declared: 'the Owner\'s long stop' }
+const CAUSE_WORDS: Record<PauseCause, string> = { stock: 'out of stock', monthly_cap: 'the monthly cap', playbook: 'a playbook STOP', declared: 'the Owner\'s long stop', dead: 'no impression for weeks' }
 const WHO_WORDS: Record<StatusChanger, string> = { brain: 'the brain', person: 'a person', automation: 'an automation', outside: 'a change outside Nexus (Amazon, Seller Central)' }
 const changerWords = (c: NonNullable<StateFacts['lastStatusChange']>) => (c.by === 'person' || c.by === 'automation' ? `${WHO_WORDS[c.by]} (${c.who})` : WHO_WORDS[c.by])
-const causeList = (causes: readonly StateCause[]) => [...new Set(causes)].map((c) => CAUSE_WORDS[c]).join(' and ')
+const causeList = (causes: readonly PauseCause[]) => [...new Set(causes)].map((c) => CAUSE_WORDS[c]).join(' and ')
 const horizonWords = (h: Horizon): string =>
   h.kind === 'none' ? 'no stop' : h.kind === 'open' ? `${h.cause.words} — open-ended` : h.kind === 'soon' ? `${h.cause.words} — it may end any day` : `${h.cause.words} — expected to end ${day(h.endsAt)} (in ${Math.round(h.hours)} h)`
 
@@ -374,6 +378,9 @@ export function coreStateDecision(f: StateFacts, now: Date): Core {
 
   if (brainPause) {
     const memory = pauseMemoryOf(f)
+    if (memory.causes.includes('dead')) {
+      return { wouldDo: 'keep', cause: 'dead', horizon, to: null, memory, hold: null, brainPause: true, why: `the brain paused it on ${day(memory.pausedAt)}: no impression for ${plural(f.archiveDeadWeeks, 'week')} — it stays paused, never archived; the brain never switches it on again (a person does: enable-ads)` }
+    }
     const stockStill = memory.causes.includes('stock') && f.stockNotRecovered
     const carried: PauseMemory = { ...memory, causes: [...new Set([...memory.causes, ...f.causes.map((c) => c.cause)])] }
     if (f.causes.length || stockStill) {
@@ -399,14 +406,9 @@ export function coreStateDecision(f: StateFacts, now: Date): Core {
     : null
   const deadWeeks = f.archiveDeadWeeks
   const dead = f.impressions === 0 && f.ageDays >= deadWeeks * 7 && horizon.kind === 'none'
-  const archive = (who: string): Core => ({
-    wouldDo: 'archive', cause: 'dead', horizon, to: 'ARCHIVED', memory: null, hold: null, brainPause: false,
-    why: `no impression for ${plural(deadWeeks, 'week')}${who}: proposed for archiving — only ever a proposal, a person decides (Amazon cannot switch an archived campaign on again)`,
-  })
 
   if (f.status === 'PAUSED') {
     if (heldBy) return nothing('hold', `paused by ${changerWords(last!)} on ${day(last!.at)}: a pause the brain did not make is a hold — it never resumes it`, heldBy)
-    if (dead) return archive(` (paused${last ? ` by ${changerWords(last)} on ${day(last.at)}` : ', with no pause on record'})`)
     return nothing('hold', `paused${last ? ` by ${changerWords(last)} on ${day(last.at)}` : ' outside any record Nexus keeps (Amazon, or before Nexus)'}: the brain never resumes a pause it did not make`)
   }
   if (f.status !== 'ENABLED') return nothing('skip', `status ${f.status}: nothing to decide`)
@@ -431,11 +433,18 @@ export function coreStateDecision(f: StateFacts, now: Date): Core {
   if (horizon.kind === 'short' || horizon.kind === 'soon') {
     return nothing('keep', `a short stop — ${horizonWords(horizon)}: ${LOW_BIDS} — never a pause`)
   }
-  if (dead) return archive(' while enabled')
+  if (dead) {
+    if (missed?.to === 'PAUSED') return nothing('keep', `no impression for ${plural(deadWeeks, 'week')}, but ${missWords(missed)}`)
+    return {
+      wouldDo: 'pause', cause: 'dead', horizon, to: 'PAUSED', hold: null, brainPause: false,
+      memory: { pausedAt: now.toISOString(), via: 'auto', approvalId: null, statusBefore: 'ENABLED', causes: ['dead'], expectedEndAt: null, stop: f.stopMemory },
+      why: `no impression for ${plural(deadWeeks, 'week')} while enabled: paused, never archived (the Owner's rule); it stays paused until a person switches it on`,
+    }
+  }
   return nothing('keep', 'serving: no stop holds it')
 }
 
-const ACTS: ReadonlySet<string> = new Set(['pause', 'resume', 'archive'])
+const ACTS: ReadonlySet<string> = new Set(['pause', 'resume'])
 
 /** The state brain's decision for one campaign at its level. Pure. */
 export function decideState(f: StateFacts, ctx: StateContext): StateDecision {
@@ -465,9 +474,9 @@ export function decideState(f: StateFacts, ctx: StateContext): StateDecision {
     return { ...base, action: 'skip', outcome: 'none', why: f.lever.why }
   }
   if (!acts) return base
-  // The level decides how it acts. An archive is a request at PROPOSE and at AUTO alike: never alone. AUTO writes only
-  // under the live ceiling (the gate judges the brain's writes only there); otherwise it watches.
-  const asks = level === 'PROPOSE' || (level === 'AUTO' && core.wouldDo === 'archive')
+  // The level decides how it acts. AUTO writes only under the live ceiling (the gate judges the brain's writes only
+  // there); otherwise it watches.
+  const asks = level === 'PROPOSE'
   const mode: StateMode = asks ? 'PROPOSE' : level === 'AUTO' && ctx.ceilingLive ? 'LIVE' : 'SHADOW'
   // A pause asked for becomes the brain's once a person approves it: its memory says so.
   const decided: StateDecision = { ...base, mode, ...(asks && base.startsMemory ? { startsMemory: { ...base.startsMemory, via: 'request' as const } } : {}) }
@@ -480,14 +489,14 @@ export function decideState(f: StateFacts, ctx: StateContext): StateDecision {
     return { ...decided, outcome: 'shadow', why: `${note} — would ${core.wouldDo}: ${core.why}` }
   }
   if (asks) {
-    const action = core.wouldDo as 'pause' | 'resume' | 'archive'
+    const action = core.wouldDo as 'pause' | 'resume'
     const a = f.asked?.action === action ? f.asked : null
     if (a?.state === 'waiting') return { ...decided, outcome: 'waiting', approvalId: a.approvalId, why: `a request to ${action} it waits for a person (${a.approvalId}) — ${core.why}` }
     if (a?.state === 'declined' && hoursBetween(a.at, now) < DECLINE_DAYS[action] * 24) {
       return { ...decided, outcome: 'held', approvalId: a.approvalId, why: `a person declined the request to ${action} it on ${day(a.at)}: asked again after ${plural(DECLINE_DAYS[action], 'day')} — ${core.why}` }
     }
     const lift = core.liftsAutomationPause ? ' (the brain paused it alone: its own resume, a person\'s normal approval lifts it)' : ''
-    return { ...decided, outcome: 'ask', why: `${level === 'AUTO' ? 'AUTO, but an archive is only ever a proposal' : 'PROPOSE'}: asks a person to ${action} it${lift} — ${core.why}` }
+    return { ...decided, outcome: 'ask', why: `PROPOSE: asks a person to ${action} it${lift} — ${core.why}` }
   }
   if (ctx.posture.posture !== 'auto') return { ...decided, outcome: 'held', why: `AUTO, but the account's ads automation is not running (${ctx.posture.why}): nothing written now — would ${core.wouldDo}: ${core.why}` }
   return { ...decided, outcome: 'write', why: `AUTO: ${core.wouldDo === 'pause' ? 'paused' : 'resumed'} by the brain — ${core.why}` }
