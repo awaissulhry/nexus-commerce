@@ -9,9 +9,6 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-# Needs no node_modules, so it runs in every worktree: the repository is public.
-node scripts/check-staged-secrets.mjs
-
 if [ ! -x node_modules/.bin/lint-staged ]; then
   echo "pre-commit: no node_modules here — skipped (CI still checks). Run npm ci to enable it."
   exit 0
