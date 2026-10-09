@@ -182,6 +182,8 @@ export function selfBlocking(rows: readonly KeywordRow[]): Array<{ campaignId: s
       const here = n.level === 'CAMPAIGN' ? n.campaignId === p.campaignId : n.adGroupId === p.adGroupId
       if (!here) return false
       const neg = norm(n.text)
+      // A negative phrase of two words or more narrows a broad keyword (the Owner's match-type funnel): not a block.
+      if (n.match === 'NEGATIVE_PHRASE' && p.match === 'BROAD' && neg.split(' ').length >= 2) return false
       return n.match === 'NEGATIVE_EXACT' ? neg === text && p.match === 'EXACT' : contains(text, neg)
     })
     if (hit) out.push({ campaignId: p.campaignId, adGroupId: p.adGroupId, text, positiveId: p.id, negativeId: hit.id, negative: `${hit.match === 'NEGATIVE_EXACT' ? 'negative exact' : 'negative phrase'} "${norm(hit.text)}" at its ${hit.level === 'CAMPAIGN' ? 'campaign' : 'ad group'}` })

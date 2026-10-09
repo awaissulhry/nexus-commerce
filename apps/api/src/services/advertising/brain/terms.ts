@@ -40,6 +40,7 @@
  */
 import { estimate, type Evidence, type NodeEstimate, type PoolNode } from '../bid-brain/estimator.js'
 import { isAsin, normaliseTerm, protectedTermHit, type ProtectedTerm } from '../ads-negation-policy.js'
+import { narrowsBroad } from '../ads-winner-lock.js'
 
 export const TERM_STATES = ['TARGETED', 'HARVEST_CANDIDATE', 'OWNED_BY_SIBLING', 'PROTECTED', 'NEGATED', 'NEGATE_CANDIDATE', 'WATCH'] as const
 export type TermState = (typeof TERM_STATES)[number]
@@ -376,12 +377,16 @@ function leverHold(lever: 'negatives' | 'harvest', effective: LeverEffective): s
 const placeWords = (p: TermPlace) => `${p.match === 'PRODUCT' ? 'product target' : `${p.match.toLowerCase()} keyword`} in ad group ${p.adGroupId}`
 const negativeWords = (n: TermPlace) => `${n.match === 'PRODUCT' ? 'negative product target' : `negative ${n.match.toLowerCase()}`}${n.text ? ` "${n.text}"` : ''} at its ${n.level === 'CAMPAIGN' ? 'campaign' : 'ad group'}`
 
-/** A positive and a negative of the product in one place (the clashes view's harvest-vs-negate gap, read-map.ts selfBlocking). */
-export function selfBlockingPairs(f: Pick<TermFacts, 'targets' | 'negatives'>): Array<{ target: TermPlace; negative: TermPlace }> {
+/**
+ * A positive and a negative of the product in one place (the clashes view's harvest-vs-negate gap, read-map.ts selfBlocking).
+ * A negative phrase of two words or more over a BROAD keyword narrows it (the Owner's match-type funnel: it still serves
+ * the words apart or in another order): no clash.
+ */
+export function selfBlockingPairs(f: Pick<TermFacts, 'targets' | 'negatives'> & { term?: string }): Array<{ target: TermPlace; negative: TermPlace }> {
   const out: Array<{ target: TermPlace; negative: TermPlace }> = []
   for (const t of f.targets) {
     const n = f.negatives.find((x) => (x.level === 'CAMPAIGN' ? x.campaignId === t.campaignId : x.adGroupId === t.adGroupId)
-      && (x.match === 'PHRASE' || (x.match === 'EXACT' && t.match === 'EXACT') || (x.match === 'PRODUCT' && t.match === 'PRODUCT')))
+      && ((x.match === 'PHRASE' && !(t.match === 'BROAD' && narrowsBroad(x.text ?? f.term ?? ''))) || (x.match === 'EXACT' && t.match === 'EXACT') || (x.match === 'PRODUCT' && t.match === 'PRODUCT')))
     if (n) out.push({ target: t, negative: n })
   }
   return out

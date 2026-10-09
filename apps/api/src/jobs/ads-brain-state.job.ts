@@ -47,5 +47,5 @@ export function startBrainStateCron(): void {
     running = true
     await runBrainStateTick().finally(() => { running = false })
   }, { lockTtlMs: 10 * 60_000 })
-  logger.info(`[ads-brain-state] cron scheduled (${schedule}, per business): pauses, resumes and archive proposals for products whose state lever is OBSERVE or higher`)
+  logger.info(`[ads-brain-state] cron scheduled (${schedule}, per business): pauses and resumes for products whose state lever is OBSERVE or higher`)
 }

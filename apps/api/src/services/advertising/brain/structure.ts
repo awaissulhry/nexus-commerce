@@ -279,7 +279,7 @@ export function templateOwners(kind: 'SKC' | 'SPLIT'): Record<string, string> {
   const common = {
     bids: 'the product\'s brain (bids lever): born at the 2-cent floor with its planned bids remembered; after its go-live the bid brain graduates each bid toward the goal, at most one step a data day',
     budgets: 'the product\'s brain (budgets lever): a first budget held to the first-budget cap, then sized to its expected spend inside the pace',
-    state: 'the product\'s brain (state lever): its pauses for long stops, an archive only ever proposed',
+    state: 'the product\'s brain (state lever): its pauses for long stops and for weeks without an impression (never an archive)',
     negatives: 'the product\'s negative set, copied to every campaign of the product by the negatives lever (AB-10) — never a negative over its own keyword',
     portfolio: 'the product\'s one portfolio (N2): a campaign born outside it is proposed for the move',
     biddingStrategy: 'down only at birth; the bidding-strategy lever decides later (AB-17)',
@@ -477,7 +477,7 @@ function decideSplit(f: StructureProductFacts, c: SharedCampaignFact, now: Date,
     `Budgets: each copy starts at its product's share of the shared campaign's ${known ? 'spend over the window' : 'budget (no product-ad report: an equal share)'}, held to an enrolled product's first-budget cap; the budgets lever sizes it from there.`,
     'History: Amazon cannot move a campaign\'s history — it stays with the shared campaign, in Amazon and in Nexus; each copy starts fresh from the copied bids.',
     'Go-live: a normal approval inside the caps (D1 = B) — each copy on the live-write allowlist with its planned bids back; outside the caps the approver\'s code, as before.',
-    `Then: once every copy is live, "${c.name}" goes to low bids (suppress-campaign — the Owner's temporary stop, undone in about a minute), a request a person decides; it is never paused or archived by the split (the state lever proposes an archive once it has been dead for weeks).`,
+    `Then: once every copy is live, "${c.name}" goes to low bids (suppress-campaign — the Owner's temporary stop, undone in about a minute), a request a person decides; it is never paused or archived by the split.`,
   ]
   d.evidence = { ...evidence, copies: steps.map((s) => ({ productId: s.product.productId, label: s.product.label, skip: s.skip.length, accept: s.accept.length, money: { dailyBudgetCents: s.budget } })) }
   if (d.act !== 'none') { take.campaigns++; take.market += products.length }

@@ -199,6 +199,8 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-10 — the negatives module (real 
     expect(await rows('SELECT status FROM "CronRun" WHERE "jobName" = $1', [BRAIN_NEGATIVES_JOB])).toHaveLength(1)
     const l = await log()
     expect(l.map(brief).sort()).toEqual([
+      // The Owner's match-type funnel: the exact home's keyword negated exact in the broad ad group too, where it never served.
+      `ADD funnel EXACT "racing jacket" ${G('jk-broad')} SHADOW`,
       `ADD isolation EXACT "racing jacket" ${G('jk-auto')} SHADOW`,
       `ADD productSet EXACT "free" ${G('jk-auto')} SHADOW`,
       `ADD productSet EXACT "free" ${G('jk-broad')} SHADOW`,
@@ -214,7 +216,7 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-10 — the negatives module (real 
     expect(await traces()).toEqual(before.traces)
     expect(await negativeRows()).toEqual(before.negatives)
     const again = await inW(() => runNegativesOnce({ now: new Date(NOW.getTime() + 60_000) }))
-    expect(again.stored).toEqual({ created: 0, changed: 0, unchanged: 6 })
+    expect(again.stored).toEqual({ created: 0, changed: 0, unchanged: 7 })
   })
 
   it('AUTO (owned): each add written as the brain through the negative write service and the real gate; the revive queued; a rerun writes nothing more', async () => {
@@ -223,17 +225,17 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-10 — the negatives module (real 
     expect(await inW(() => setOverride({ productId: JACKET, market: 'IT', by: 'user:owner', now: NOW, override: { scope: 'PRODUCT', kind: 'VALUE', key: 'negativesShadowDays', value: 0 } }))).toMatchObject({ ok: true })
     forgetLeverOwners()
     const run = await inW(() => runNegativesOnce({ now: NOW }))
-    expect(run.byStatus).toEqual({ WRITTEN: 5, QUEUED: 1 })
+    expect(run.byStatus).toEqual({ WRITTEN: 6, QUEUED: 1 })
     const l = await log()
     expect(l.filter((r) => r.action === 'ADD').every((r) => r.status === 'WRITTEN' && r.mode === 'AUTO' && r.adTargetId && /added at Amazon \(AMZ-NK-\d\)/.test(r.result))).toBe(true)
-    // Amazon was asked for exactly these five, each in its ad group.
+    // Amazon was asked for exactly these six, each in its ad group (the funnel's in the broad one).
     expect(amz.keywords.map((k) => `${k.keywordText}@${k.externalAdGroupId}`).sort()).toEqual([
-      `cheap jacket@EXT-${G('jk-auto')}`, `free@EXT-${G('jk-auto')}`, `free@EXT-${G('jk-broad')}`, `free@EXT-${G('jk-exact')}`, `racing jacket@EXT-${G('jk-auto')}`,
+      `cheap jacket@EXT-${G('jk-auto')}`, `free@EXT-${G('jk-auto')}`, `free@EXT-${G('jk-broad')}`, `free@EXT-${G('jk-exact')}`, `racing jacket@EXT-${G('jk-auto')}`, `racing jacket@EXT-${G('jk-broad')}`,
     ])
     const made = (await negativeRows()).filter((n) => n.externalTargetId?.startsWith('AMZ-'))
-    expect(made).toHaveLength(5)
+    expect(made).toHaveLength(6)
     const audits = await rows<{ userId: string; n: number }>('SELECT "userId", count(*)::int n FROM "AdvertisingActionLog" WHERE "workspaceId" = $1 AND "actionType" = \'create_negative_keyword\' AND "entityId" = ANY($2) GROUP BY "userId"', [W, made.map((m) => m.id)])
-    expect(audits).toEqual([{ userId: BRAIN_NEGATIVES_ACTOR, n: 5 }])
+    expect(audits).toEqual([{ userId: BRAIN_NEGATIVES_ACTOR, n: 6 }])
     // The revive: the rule's negative archived here and queued for Amazon (the gate judges it at dispatch).
     const revive = l.find((r) => r.reason === 'reviveConverts')!
     expect(revive).toMatchObject({ status: 'QUEUED', mode: 'AUTO' })
@@ -314,7 +316,7 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-10 — the negatives module (real 
     expect(d.entities.find((e: Data) => e.id === G('jk-auto'))).toMatchObject({ kind: 'AD_GROUP', standing: 4, warn: 800, max: 950, amazonLimit: 1000, state: 'ok' })
     expect(d.log.rows.length).toBeGreaterThanOrEqual(8)
     const market = await view({ market: 'IT' })
-    expect(market.data!.products).toEqual([expect.objectContaining({ productId: JACKET, name: 'Jacket', byStatus: expect.objectContaining({ WRITTEN: 6, PROPOSED: 1 }), waitingRequests: [expect.any(String)] })])
+    expect(market.data!.products).toEqual([expect.objectContaining({ productId: JACKET, name: 'Jacket', byStatus: expect.objectContaining({ WRITTEN: 7, PROPOSED: 1 }), waitingRequests: [expect.any(String)] })])
     // The glove is not enrolled: decided as if at the default level, stored nowhere.
     const glove = await view({ market: 'IT', productId: GLOVE })
     expect(glove.data!.product).toMatchObject({ enrolled: false, lever: { effective: 'NOT_ENROLLED' } })

@@ -260,7 +260,7 @@ async function pendingWork(p: StructureDueProduct, now: Date, canAsk: { yes: boo
       if (built.state === 'waiting') { if (r.heldBy !== `waiting: ${built.why}`) await update({ heldBy: `waiting: ${built.why}` }); continue }
       if (built.state === 'failed' || a.status === 'failed') {
         const why = built.state === 'failed' ? built.why : `the approved request ${a.id} failed`
-        await update({ status: 'FAILED', builtCampaignIds: built.campaignIds, heldBy: `${why}${built.campaignIds.length ? ` — what it made (${plural(built.campaignIds.length, 'campaign')}) waits for a person: archive-ads, or its go-live by hand` : ''}`.slice(0, 2000) })
+        await update({ status: 'FAILED', builtCampaignIds: built.campaignIds, heldBy: `${why}${built.campaignIds.length ? ` — what it made (${plural(built.campaignIds.length, 'campaign')}) waits for a person: pause-ads, or its go-live by hand` : ''}`.slice(0, 2000) })
         s.pending.failed++
         continue
       }

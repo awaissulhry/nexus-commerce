@@ -188,6 +188,9 @@ describe('terms', () => {
     ]
     expect(selfBlocking(rows).map((b) => [b.positiveId, b.negativeId])).toEqual([['t1', 'n1'], ['t2', 'n2']])
     expect(selfBlocking(rows)[1].negative).toBe('negative phrase "moto jacket" at its campaign')
+    // The Owner's match-type funnel: a phrase of two words or more narrows a broad keyword; one word still blocks it.
+    const funnel = [k('b1', 'c4', 'g6', 'racing jacket', 'BROAD'), k('n5', 'c4', 'g6', 'racing jacket', 'NEGATIVE_PHRASE', true, 'AD_GROUP'), k('b2', 'c5', 'g7', 'racing jacket', 'BROAD'), k('n6', 'c5', 'g7', 'jacket', 'NEGATIVE_PHRASE', true, 'AD_GROUP')]
+    expect(selfBlocking(funnel).map((b) => [b.positiveId, b.negativeId])).toEqual([['b2', 'n6']])
   })
 
   it('a keyword two products bid on in one market; shared and unowned campaigns do not count', () => {

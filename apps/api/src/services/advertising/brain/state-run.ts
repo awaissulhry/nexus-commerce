@@ -3,17 +3,16 @@
  * whose state lever is OBSERVE or higher, each of its campaigns' state decided and acted on at its level, and logged
  * (AdsBrainStateDecision).
  *
- *   OBSERVE   logged only (SHADOW): what the brain would pause, resume or propose to archive
+ *   OBSERVE   logged only (SHADOW): what the brain would pause or resume (it never archives: Owner 2026-10-09)
  *   PROPOSE   an approval request per product and action, through the normal approval gate (the auto-undo pattern,
  *             ads-auto-undo.service.ts proposeUndo): pause-ads, enable-ads (with includePeoplesPauses when it lifts the
- *             brain's own AUTO pause — Nexus's own request: a person's normal approval lifts it, batch 2 fix) or
- *             archive-ads, asked as "Nexus ads brain"; a request still waiting is never asked twice; a person approves or
+ *             brain's own AUTO pause — Nexus's own request: a person's normal approval lifts it, batch 2 fix), asked as
+ *             "Nexus ads brain"; a request still waiting is never asked twice; a person approves or
  *             declines it in Nexus
  *   AUTO      the status written as the brain (BRAIN_STATE_ACTOR) through the normal campaign path —
  *             updateCampaignWithSync asks the write gate before anything is written (askGate), then the queue, the gate
  *             again at dispatch, the channel gateway (hard rule 4). The gate lets it through only where a product's brain
- *             owns the campaign's state lever; a lock, an exclusion, a lever at OBSERVE or a shadow ceiling refuse it. An
- *             archive is a request at AUTO too: never alone
+ *             owns the campaign's state lever; a lock, an exclusion, a lever at OBSERVE or a shadow ceiling refuse it
  *   caps      ≤ 3 pauses a UTC day per market (state.ts MAX_PAUSES_PER_MARKET_DAY), counted from the log: the ones that act
  *             (asked or queued) and the shadow's apart
  *   log       a row when a campaign's decision changes (decisionHash), plus the UTC day's first for a campaign the brain
@@ -38,13 +37,13 @@ import {
 const DAY_MS = 86_400_000
 /** What the brain's requests are asked as, in Nexus's approval queue. */
 export const STATE_REQUESTER = 'Nexus ads brain'
-const TOOL_OF = { pause: 'pause-ads', resume: 'enable-ads', archive: 'archive-ads' } as const
+const TOOL_OF = { pause: 'pause-ads', resume: 'enable-ads' } as const
 
 /** The final outcome a row records. */
 export type StateOutcome = 'shadow' | 'queued' | 'asked' | 'waiting' | 'capped' | 'refused' | 'held' | 'none'
 
-/** Ask a person for one change of several campaigns (PROPOSE, or an archive): its approval, or why it was not asked. */
-export type AskFn = (tool: 'pause-ads' | 'enable-ads' | 'archive-ads', args: Record<string, unknown>) => Promise<{ approvalId: string } | { error: string }>
+/** Ask a person for one change of several campaigns (PROPOSE): its approval, or why it was not asked. */
+export type AskFn = (tool: 'pause-ads' | 'enable-ads', args: Record<string, unknown>) => Promise<{ approvalId: string } | { error: string }>
 /** Write one campaign's status as the brain (AUTO): queued, or why not. */
 export type WriteFn = (campaignId: string, status: 'PAUSED' | 'ENABLED', reason: string, runId: string) => Promise<{ queued: boolean; error: string | null }>
 
@@ -59,8 +58,8 @@ export interface StateRun {
   pruned: number
 }
 
-/** The request of a decision: the pause-ads / enable-ads / archive-ads args (a resume of the brain's own AUTO pause also lifts an automation's pause). */
-export function requestArgs(action: 'pause' | 'resume' | 'archive', decisions: readonly StateDecision[]): { tool: 'pause-ads' | 'enable-ads' | 'archive-ads'; args: Record<string, unknown> } {
+/** The request of a decision: the pause-ads / enable-ads args (a resume of the brain's own AUTO pause also lifts an automation's pause). */
+export function requestArgs(action: 'pause' | 'resume', decisions: readonly StateDecision[]): { tool: 'pause-ads' | 'enable-ads'; args: Record<string, unknown> } {
   const lift = action === 'resume' && decisions.some((d) => d.liftsAutomationPause)
   const why = decisions.length === 1 ? decisions[0].why : `${decisions.length} campaigns of one product: ${decisions.map((d) => `${d.name} — ${d.why}`).join(' | ')}`
   return { tool: TOOL_OF[action], args: { campaignIds: decisions.map((d) => d.campaignId), why: `The ads brain: ${why}`.slice(0, 300), ...(lift ? { includePeoplesPauses: true } : {}) } }
@@ -108,7 +107,7 @@ const utcDay = (d: Date | string) => new Date(d).toISOString().slice(0, 10)
 
 /** The request a row carries: one asked now, or the one carried before while it waits or its quiet days run. */
 function carriedAsk(d: StateDecision, outcome: StateOutcome, approvalId: string | null, before: (AskedRecord & { status: string | null }) | undefined, now: Date): AskedRecord | null {
-  if (outcome === 'asked' && approvalId && (d.action === 'pause' || d.action === 'resume' || d.action === 'archive')) {
+  if (outcome === 'asked' && approvalId && (d.action === 'pause' || d.action === 'resume')) {
     return { action: d.action, approvalId, at: now.toISOString(), ...(d.action === 'pause' && d.startsMemory ? { memory: d.startsMemory } : {}) }
   }
   if (!before) return null
@@ -168,7 +167,7 @@ export async function runStateBrainOnce(opts: { now?: Date; products?: readonly 
           }
         }
         // Act: one request per action for the product's campaigns asked about; one write per campaign written.
-        for (const action of ['pause', 'resume', 'archive'] as const) {
+        for (const action of ['pause', 'resume'] as const) {
           const asking = decisions.filter((d) => d.action === action && d.outcome === 'ask' && !final.has(d.campaignId))
           if (!asking.length) continue
           const { tool, args } = requestArgs(action, asking)

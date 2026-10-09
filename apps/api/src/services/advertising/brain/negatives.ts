@@ -26,6 +26,13 @@
  *                          source, only once its home converts too — a winner keeps running where it wins until then
  *              consolidate an entity at its warning level (§2.7): a word recurring in 3 or more of its exact negatives
  *                          becomes one negative phrase there; the exacts it covers retire on a later day, once it is live
+ *              funnel      the Owner's match-type structure (2026-10-09), kept every day and not only at the build (the
+ *                          playbook build places the same: compile.ts): each live EXACT keyword of the product → negative
+ *                          exact in its phrase, broad and auto ad groups; each live PHRASE keyword → negative phrase in its
+ *                          broad and auto ad groups — so a search goes to the tightest match that buys it. A phrase of two
+ *                          words or more narrows the broad keywords holding its words there (they still serve the words
+ *                          apart or in another order: ads-winner-lock.ts BlockOpts) — the brain's own write at AUTO only.
+ *                          The handover rule as isolation: where it converts, only once its home converts too
  *   retires    duplicate   at the warning level: a negative another live negative covers in the same place (a phrase
  *                          holding its words, a campaign negative over an ad group one, the same negative twice)
  *              revive      a negative that blocks the product's own keyword in its place (the ledger's self-blocking clash),
@@ -53,7 +60,7 @@
  *   words      no money in a `why` (amounts live under `money` keys the read tool hides without the ad-spend permission).
  */
 import { isAsin, negativeKeywordTextProblem, normaliseTerm, protectedTermHit, type ProtectedTerm } from '../ads-negation-policy.js'
-import { blockedPositive, type Positive } from '../ads-winner-lock.js'
+import { blockedPositive, narrowsBroad, type Positive } from '../ads-winner-lock.js'
 import { SIZE_RE } from '../negatives-ngrams.service.js'
 import { addEvidence, brandWordIn, negateClicksNeeded, NO_TERM_EVIDENCE, SPEND_GATE_CPAS, termKey, type LeverEffective, type TermDecision, type TermEvidence } from './terms.js'
 
@@ -90,13 +97,13 @@ const STOPWORDS = new Set([
 export type NegMatch = 'EXACT' | 'PHRASE' | 'PRODUCT'
 export type NegLevel = 'CAMPAIGN' | 'AD_GROUP'
 export type NegAction = 'ADD' | 'RETIRE'
-export const NEG_REASONS = ['productSet', 'waste', 'ngram', 'isolation', 'consolidate', 'duplicate', 'reviveSelfBlocking', 'reviveProtected', 'reviveLead', 'reviveConverts'] as const
+export const NEG_REASONS = ['productSet', 'waste', 'ngram', 'isolation', 'consolidate', 'duplicate', 'reviveSelfBlocking', 'reviveProtected', 'reviveLead', 'reviveConverts', 'funnel'] as const
 export type NegReason = (typeof NEG_REASONS)[number]
 export type NegMode = 'OBSERVE' | 'PROPOSE' | 'AUTO'
 /** Who made a standing negative, from its create record: the brain, another engine or rule, a person, or nobody known. */
 export type Origin = 'brain' | 'automation' | 'person' | 'unknown'
 
-const ADD_PRIORITY: Record<NegReason, number> = { productSet: 0, waste: 1, ngram: 2, isolation: 3, consolidate: 4, duplicate: 9, reviveSelfBlocking: 9, reviveProtected: 9, reviveLead: 9, reviveConverts: 9 }
+const ADD_PRIORITY: Record<NegReason, number> = { productSet: 0, waste: 1, ngram: 2, isolation: 3, funnel: 3, consolidate: 4, duplicate: 9, reviveSelfBlocking: 9, reviveProtected: 9, reviveLead: 9, reviveConverts: 9 }
 const REVIVES: ReadonlySet<NegReason> = new Set(['reviveSelfBlocking', 'reviveProtected', 'reviveLead', 'reviveConverts'])
 
 // ── The facts (the run builds them) ─────────────────────────────────────────────────────────────────────────────
@@ -115,6 +122,8 @@ export interface NegCampaign {
   /** The Owner's per-entity budget for this campaign and its ad groups (settings negativesPerEntityWarn / Max). */
   warn: number
   max: number
+  /** The Owner's funnelNegatives setting here (absent: on, its default). */
+  funnel?: boolean
 }
 
 export interface NegAdGroup {
@@ -191,6 +200,8 @@ export interface NegItem {
   mode: NegMode
   /** §2.7: a term with an order, or a person's negative: a person decides, whatever the level. */
   askFirst: boolean
+  /** The funnel: a negative phrase that narrows broad keywords in its ad group (written with BlockOpts.broadNarrowing). */
+  narrowsBroad?: boolean
   /** Why it is not done even at its level (the entity is full, past the cap, the shadow, a guard on its place); null: nothing. */
   heldBy: string | null
   why: string
@@ -362,7 +373,7 @@ function sumOver(places: ReadonlyMap<string, TermEvidence>, groupIds: Iterable<s
  * one campaign negative where two ad groups or more of a campaign take it (no locked ad group there, no positive blocked
  * anywhere in it), else each ad group. Places where it would block a positive come back held with the lock's words.
  */
-function placements(f: Facts, text: string, match: NegMatch, groupIds: readonly string[], opts: { campaignLevel: boolean }): Array<{ level: NegLevel; campaignId: string; adGroupId: string | null; groupIds: string[]; heldBy: string | null }> {
+function placements(f: Facts, text: string, match: NegMatch, groupIds: readonly string[], opts: { campaignLevel: boolean; broadNarrowing?: boolean }): Array<{ level: NegLevel; campaignId: string; adGroupId: string | null; groupIds: string[]; heldBy: string | null }> {
   const out: Array<{ level: NegLevel; campaignId: string; adGroupId: string | null; groupIds: string[]; heldBy: string | null }> = []
   const byCampaign = new Map<string, string[]>()
   for (const id of groupIds) {
@@ -377,7 +388,7 @@ function placements(f: Facts, text: string, match: NegMatch, groupIds: readonly 
       continue
     }
     for (const id of ids.sort()) {
-      const own = blockedPositive({ text, match }, f.positivesAt('AD_GROUP', campaignId, id))
+      const own = blockedPositive({ text, match }, f.positivesAt('AD_GROUP', campaignId, id), { broadNarrowing: opts.broadNarrowing === true })
       out.push({
         level: 'AD_GROUP', campaignId, adGroupId: id, groupIds: [id],
         heldBy: own ? `it would block the product's own ${own.match === 'PRODUCT' ? `product target ${own.text}` : `${own.match.toLowerCase()} keyword "${own.text}"`} in ad group ${id} (the lock L1): never added there` : null,
@@ -534,7 +545,75 @@ function addDrafts(f: Facts): Draft[] {
       })
     }
   }
+
+  // 5 — the funnel: each live exact or phrase keyword's searches go to it; the product's looser ad groups negate them.
+  drafts.push(...funnelDrafts(f, openKeywordGroups))
   return drafts
+}
+
+type Looseness = 'AUTO' | 'BROAD' | 'PHRASE' | 'EXACT'
+
+/** An open keyword or auto ad group's loosest match: auto, else its broadest keyword. */
+function loosestOf(f: Facts, groupId: string): Looseness {
+  if (f.kindOf(groupId) === 'AUTO') return 'AUTO'
+  const matches = new Set(f.groups.get(groupId)!.positives.map((p) => p.match))
+  return matches.has('BROAD') ? 'BROAD' : matches.has('PHRASE') ? 'PHRASE' : 'EXACT'
+}
+
+/** Where a home of this match type sends its looser searches from (compile.ts's build-time isolation, the same slots). */
+const LOOSER: Record<'EXACT' | 'PHRASE', ReadonlySet<Looseness>> = { EXACT: new Set(['PHRASE', 'BROAD', 'AUTO']), PHRASE: new Set(['BROAD', 'AUTO']) }
+
+/**
+ * The Owner's match-type funnel (2026-10-09). A home is a live EXACT or PHRASE keyword in a running ad group of a running
+ * campaign of the product. Its text is negated with its own match type in every open ad group of the product that is looser
+ * (LOOSER) and does not already block it. Where the search converts in that looser group and its home has no order yet,
+ * the negative waits (the Owner's handover rule, as isolation).
+ */
+function funnelDrafts(f: Facts, openKeywordGroups: readonly string[]): Draft[] {
+  const homes = new Map<string, { match: 'EXACT' | 'PHRASE'; text: string; groupIds: Set<string> }>()
+  for (const g of f.groups.values()) {
+    if (f.campaigns.get(g.campaignId)?.status !== 'ENABLED' || g.status !== 'ENABLED') continue
+    for (const p of g.positives) {
+      if (!p.live || (p.match !== 'EXACT' && p.match !== 'PHRASE')) continue
+      const text = normaliseTerm(p.text)
+      if (!text || isAsin(text) || f.input.lockedTerms.has(text)) continue
+      const key = `${p.match}|${text}`
+      const h = homes.get(key) ?? { match: p.match, text, groupIds: new Set<string>() }
+      h.groupIds.add(g.id)
+      homes.set(key, h)
+    }
+  }
+  const out: Draft[] = []
+  for (const h of [...homes.values()].sort((a, b) => a.match.localeCompare(b.match) || a.text.localeCompare(b.text))) {
+    const negMatch = h.match === 'PHRASE' ? 'NEGATIVE_PHRASE' : 'NEGATIVE_EXACT'
+    // The searches this negative takes away: the term itself (exact), or every term holding its words (phrase).
+    const terms = h.match === 'EXACT' ? [h.text] : f.input.decisions.filter((d) => !d.isAsin && holdsRun(d.term, h.text)).map((d) => d.term)
+    const ordersIn = (ids: Iterable<string>) => terms.reduce((s, t) => s + sumOver(f.placeOf(t), ids).orders, 0)
+    const homeOrders = ordersIn(h.groupIds)
+    const protectedHit = protectedTermHit(h.text, negMatch, f.input.protections)
+    const textProblem = negativeKeywordTextProblem(h.text, negMatch)
+    const ev = f.decisions.get(h.text)?.evidence ?? NO_TERM_EVIDENCE
+    const homeIds = [...h.groupIds].sort()
+    for (const id of openKeywordGroups) {
+      if (h.groupIds.has(id) || !LOOSER[h.match].has(loosestOf(f, id)) || f.coveredIn(h.text, h.match, id)) continue
+      if (f.campaigns.get(f.groups.get(id)!.campaignId)?.funnel === false) continue
+      const narrowing = h.match === 'PHRASE' && narrowsBroad(h.text) && !!blockedPositive({ text: h.text, match: 'PHRASE' }, f.positivesAt('AD_GROUP', f.groups.get(id)!.campaignId, id))
+      const [p] = placements(f, h.text, h.match, [id], { campaignLevel: false, broadNarrowing: h.match === 'PHRASE' })
+      const here = terms.reduce((e, t) => addEvidence(e, f.placeOf(t).get(id) ?? NO_TERM_EVIDENCE), NO_TERM_EVIDENCE)
+      const proven = here.orders === 0 || homeOrders > 0
+      out.push({
+        action: 'ADD', reasons: ['funnel'], kind: 'KEYWORD', match: h.match, text: h.text, level: 'AD_GROUP', campaignId: p.campaignId, adGroupId: id,
+        askFirst: false, ...(narrowing && !p.heldBy ? { narrowsBroad: true } : {}),
+        heldBy: p.heldBy
+          ?? (protectedHit ? `a protected term is never negated ("${normaliseTerm(protectedHit.protection.term)}")` : null)
+          ?? (textProblem ? `Amazon would refuse it: ${textProblem}` : null)
+          ?? (proven ? null : `its searches convert here and its ${h.match.toLowerCase()} home has no order yet: a winner keeps running where it wins until its home proves itself (the Owner's handover rule, PB-7)`),
+        why: `match-type funnel: the product buys "${h.text}" as a ${h.match.toLowerCase()} keyword in ${plural(homeIds.length, 'ad group')} (${homeIds.join(', ')}); negated ${h.match.toLowerCase()} in this ${loosestOf(f, id).toLowerCase()} ad group so its searches go to that home (the Owner's structure)${narrowing ? '; the broad keywords here still serve these words apart or in another order' : ''}`,
+        evidence: { clicks: ev.clicks, orders: ev.orders, placeClicks: here.clicks, placeOrders: here.orders, money: { spendCents: ev.spendCents, salesCents: ev.salesCents, placeSpendCents: here.spendCents } },
+      })
+    }
+  }
+  return out
 }
 
 // ── Retires: revive and duplicates ───────────────────────────────────────────────────────────────────────────────
@@ -714,6 +793,7 @@ export function decideNegatives(input: NegativesInput): NegativesPlan {
     if (was) {
       for (const r of d.reasons) if (!was.reasons.includes(r)) was.reasons.push(r)
       was.askFirst ||= d.askFirst
+      if (d.narrowsBroad) was.narrowsBroad = true
       if (!was.heldBy && d.heldBy) was.heldBy = d.heldBy
       continue
     }
@@ -724,7 +804,8 @@ export function decideNegatives(input: NegativesInput): NegativesPlan {
   for (const i of adds) {
     if (i.match !== 'EXACT') continue
     const cover = adds.find((p) => p !== i && p.match === 'PHRASE' && !p.heldBy && holdsRun(i.text, p.text)
-      && (p.level === 'CAMPAIGN' ? p.campaignId === i.campaignId : p.adGroupId === i.adGroupId))
+      && (p.level === 'CAMPAIGN' ? p.campaignId === i.campaignId : p.adGroupId === i.adGroupId)
+      && (!p.narrowsBroad || f.campaigns.get(p.campaignId)?.lever === 'AUTO'))
     if (cover) byKey.delete(i.key)
   }
 
@@ -734,6 +815,8 @@ export function decideNegatives(input: NegativesInput): NegativesPlan {
     const m = modeOf(c, i.askFirst, shadow)
     i.mode = m.mode
     if (m.note) i.why = `${i.why} (${m.note})`
+    // A request runs through add-negative-targets, which keeps the own-keyword lock for everyone: narrowing is AUTO's.
+    if (i.narrowsBroad && i.mode === 'PROPOSE' && !i.heldBy) i.heldBy = 'it narrows broad keywords in its ad group: only the brain writes that, at AUTO — a request through add-negative-targets keeps the own-keyword lock'
   }
 
   // The budget and the caps: retires first (revives in their cap), then adds by priority.

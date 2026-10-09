@@ -4,7 +4,7 @@
  * nothing, in Nexus or at Amazon, asks nobody and stores nothing.
  *
  *   product × market  each campaign's state decided NOW (a dry run: any product, enrolled or not, at the level its state
- *                     lever has — what the brain would pause, resume, propose to archive or keep, and why), beside the
+ *                     lever has — what the brain would pause, resume or keep, and why; it never archives), beside the
  *                     newest decision the brain logged for it; the brain's pauses in force with their memory; requests
  *                     waiting; what needs a person (a pause the brain can no longer give back at its lever's level); the
  *                     day's pause cap, used and left
@@ -32,9 +32,9 @@ export const STATE_RULES = {
   causes: 'out of stock (dated restock, else the lead time, else open-ended), the month\'s spend cap (lifts on the 1st), a playbook STOP (open-ended), the Owner\'s long stop (longStopUntil)',
   openEnded: `an open-ended stop pauses once it has held ${OPEN_SETTLE_HOURS} h`,
   resume: `when every cause of the brain's own pause has ended, after at least ${MIN_PAUSED_HOURS} h paused; back to the status before (ENABLED) — the stop's memory (bids, lanes, strategy) is given back by its owner`,
-  noFlipFlop: `a resumed campaign serves at least ${MIN_SERVING_HOURS} h before another pause; a declined request waits ${DECLINE_DAYS.pause} day (pause, resume) or ${DECLINE_DAYS.archive} days (archive)`,
+  noFlipFlop: `a resumed campaign serves at least ${MIN_SERVING_HOURS} h before another pause; a declined request waits ${DECLINE_DAYS.pause} day (pause, resume)`,
   holds: `the brain pauses only an ENABLED campaign and resumes only a pause it made; anyone else's status change is a hold for ${HOLD_DAYS} days`,
-  archive: 'no impression for archiveDeadWeeks weeks (4 by default): a proposal only, whatever the level',
+  dead: 'no impression for archiveDeadWeeks weeks (4 by default) while enabled: paused, never archived; the brain never switches it on again (a person does)',
   cap: `at most ${MAX_PAUSES_PER_MARKET_DAY} pauses a UTC day per market`,
   levels: 'OBSERVE logs; PROPOSE asks a person; AUTO writes as the brain through the write gate (only under the live server switch, while the account\'s ads automation runs)',
   never: 'a bid, a budget, a lane, a strategy or a stock quantity (FBA included): the state lever writes the campaign status only',

@@ -97,7 +97,7 @@ export const stateStep: StepRunner = async (ctx) => {
   const holds: Array<[string, string]> = mine.filter((c) => c.action === 'pause' && PAUSE_HOLDS.includes(c.outcome)).map((c) => [c.campaignId, `it pauses ${nameOf(ctx, c.campaignId)} (${c.outcome})`])
   const shadowHolds: Array<[string, string]> = mine.filter((c) => c.action === 'pause' && c.outcome === 'shadow').map((c) => [c.campaignId, `the state step (shadow) would pause ${nameOf(ctx, c.campaignId)}`])
   const waiting: Waiting[] = mine.filter((c) => (c.outcome === 'asked' || c.outcome === 'waiting') && c.approvalId).map((c) => ({ what: `${c.action} ${nameOf(ctx, c.campaignId)}`, approvalId: c.approvalId ?? null }))
-  const moves = mine.filter((c) => c.action === 'pause' || c.action === 'resume' || c.action === 'archive')
+  const moves = mine.filter((c) => c.action === 'pause' || c.action === 'resume')
   const lines = moves.length
     ? moves.map((c) => `${nameOf(ctx, c.campaignId)}: ${c.outcome === 'shadow' ? `would ${c.action} (shadow)` : `${c.action} ${c.outcome}`} — ${c.why}`)
     : [`${plural(mine.length, 'campaign')} decided: ${countsLine(counts) || 'nothing to change'}`]
