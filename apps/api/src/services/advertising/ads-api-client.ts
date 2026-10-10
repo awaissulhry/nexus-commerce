@@ -2958,6 +2958,13 @@ export interface ReportRequest {
    * job's wall-clock, not a multiple of it.
    */
   pollMinutes?: number
+  /**
+   * Lane 5 (2026-10-10) — opt-in report type and group-by, for a report that is not the campaigns one (the keyword-grain
+   * top-of-search impression share asks `spTargeting` grouped by `targeting`). Omitted, the request is exactly the one
+   * every caller sent before: `spCampaigns`, grouped by the report type.
+   */
+  reportTypeId?: string
+  groupBy?: string[]
 }
 
 export async function fetchReport(
@@ -2980,19 +2987,19 @@ export async function fetchReport(
       method: 'POST',
       path: '/reporting/reports',
       body: {
-        name: `nexus-${req.reportType}-${req.startDate}-${req.endDate}${req.columnsOverride ? '-c' : ''}`,
+        name: `nexus-${req.reportType}-${req.startDate}-${req.endDate}${req.columnsOverride ? '-c' : ''}${req.reportTypeId ? `-${req.reportTypeId}` : ''}`,
         startDate: req.startDate,
         endDate: req.endDate,
         configuration: {
           adProduct: 'SPONSORED_PRODUCTS',
-          groupBy: [req.reportType === 'campaigns' ? 'campaign' : req.reportType.replace(/s$/, '')],
+          groupBy: req.groupBy ?? [req.reportType === 'campaigns' ? 'campaign' : req.reportType.replace(/s$/, '')],
           columns: req.columnsOverride ?? [
             'date', 'campaignId', 'adGroupId', 'keywordId', 'adId',
             'impressions', 'clicks', 'cost', 'sales1d', 'sales7d', 'sales14d',
             'orders1d', 'orders7d', 'unitsSoldClicks7d',
             ...(req.extraColumns ?? []),
           ],
-          reportTypeId: `spCampaigns`,
+          reportTypeId: req.reportTypeId ?? `spCampaigns`,
           timeUnit: 'DAILY',
           format: 'GZIP_JSON',
         },

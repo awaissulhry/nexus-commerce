@@ -591,12 +591,38 @@ const strOrNull = (v: string | number | undefined | null): string | null =>
  * So there is now ONE definition and both writers call it. The `> 1` test is the
  * only discriminator available: a share cannot exceed 100%, so a value above 1
  * must be a percentage.
+ *
+ * 🔴 Lane 5 (2026-10-10, audit T1) — decided per VALUE, that test misreads a low
+ * share: a raw `0.8` that means 0.8 % (in a report of percentages) was stored as
+ * 80 %. The "fraction (`0.09`) in the same report" above is equally explained by a
+ * 0.09 % share in a report of percentages; one low-share campaign checked against
+ * Amazon's console settles it (not done yet). So the top-of-search columns now decide the unit ONCE PER REPORT
+ * (`impressionShareUnit`: any value above 1 in that report → the whole report is
+ * percentages, else fractions) and pass it here as `unit`. Without `unit` the old
+ * per-value rule stands (the other rate-shaped columns that call this).
  */
-export function toImpressionShareFraction(v: unknown): number | null {
+export function toImpressionShareFraction(v: unknown, unit?: ImpressionShareUnit): number | null {
   if (v == null || v === '') return null
   const n = Number(v)
   if (!Number.isFinite(n) || n < 0) return null
+  if (unit === 'percent') return n <= 100 ? n / 100 : null
+  if (unit === 'fraction') return n <= 1 ? n : null
   return n > 1 ? n / 100 : n
+}
+
+export type ImpressionShareUnit = 'percent' | 'fraction'
+
+/**
+ * Lane 5 (audit T1) — the unit of one report's impression-share column, decided once for the whole report: any value
+ * above 1 → every value of it is a percentage; otherwise fractions. Null, empty and invalid values do not vote. Pure.
+ */
+export function impressionShareUnit(values: Iterable<unknown>): ImpressionShareUnit {
+  for (const v of values) {
+    if (v == null || v === '') continue
+    const n = Number(v)
+    if (Number.isFinite(n) && n > 1) return 'percent'
+  }
+  return 'fraction'
 }
 
 export async function ingestCompletedJob(jobId: string): Promise<IngestResult> {
@@ -664,6 +690,9 @@ export async function ingestCompletedJob(jobId: string): Promise<IngestResult> {
     return { jobId, rowsIngested: 0, error: `parse: ${msg}` }
   }
 
+  // Lane 5 (audit T1) — the top-of-search share's unit is decided on the whole report, before any day is skipped below.
+  const tosUnit = impressionShareUnit(rows.map((r) => r.topOfSearchImpressionShare))
+
   // BB-13 — every night re-reads the last 8 / 15 days, so two pulls can hold the same day. The newer copy wins: rows of
   // a day a later-asked pull of the same report has already written are not written again (a stuck job that finishes
   // late must not put an older copy back).
@@ -682,7 +711,7 @@ export async function ingestCompletedJob(jobId: string): Promise<IngestResult> {
   // Dispatch on reportTypeId — each variant writes to a different table.
   let upserted = 0
   if (job.reportTypeId === 'spCampaigns' || job.reportTypeId === 'sdCampaigns' || job.reportTypeId === 'sbCampaigns') {
-    upserted = await ingestCampaignRows(job, rows, marketplace, currencyCode)
+    upserted = await ingestCampaignRows(job, rows, marketplace, currencyCode, tosUnit)
   } else if (job.reportTypeId === 'spSearchTerm' || job.reportTypeId === 'sbSearchTerm') {
     upserted = await ingestSearchTermRows(job, rows, marketplace, currencyCode)
   } else if (job.reportTypeId === PLACEMENT_REPORT_TYPE_ID) {
@@ -735,6 +764,8 @@ async function ingestCampaignRows(
   rows: ReportRow[],
   marketplace: string,
   currencyCode: string,
+  /** Lane 5 (audit T1) — the report's top-of-search share unit, decided once for the whole report. */
+  tosUnit: ImpressionShareUnit = impressionShareUnit(rows.map((r) => r.topOfSearchImpressionShare)),
 ): Promise<number> {
   let upserted = 0
   // BB-13 — a ranged pull repeats each campaign once per day: look it up once.
@@ -814,8 +845,9 @@ async function ingestCampaignRows(
       unitsSameSku14d: intOrNull(r.unitsSoldSameSku14d),
       unitsSameSku30d: intOrNull(r.unitsSoldSameSku30d),
 
-      // Normalised, NOT raw — Amazon mixes percentages and fractions in one report.
-      topOfSearchIS: toImpressionShareFraction(r.topOfSearchImpressionShare),
+      // Normalised, NOT raw — Amazon mixes percentages and fractions in one report. Lane 5 (audit T1): in the unit
+      // decided once for this whole report, never per value (a 0.8 % share stored as 80 %).
+      topOfSearchIS: toImpressionShareFraction(r.topOfSearchImpressionShare, tosUnit),
 
       // ADM-A3 — null, never 0, when this ad product's report does not carry the column. The two
       // pre-existing NTB fields carry `@default(0)`, which is precisely how "we never asked" came
