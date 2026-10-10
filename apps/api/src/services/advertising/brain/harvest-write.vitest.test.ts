@@ -186,6 +186,10 @@ describe('harvest fix B1 + B10 — the pair lands only where the term serves', (
     expect(h.negative).not.toHaveBeenCalled()
     expect(o).toMatchObject({ status: 'HALF_DONE', why: expect.stringMatching(/no source is negated \(the term would serve nowhere\); retried by the next run/) })
     expect(o.sources.map((x) => x.result)).toEqual(['landed', 'failed'])
+    // Review N1 — no landing: the judging clock does not start on it (one that landed before keeps its own).
+    const at = new Date('2026-10-09T05:25:00Z')
+    expect(outcomeData(o, at)).not.toHaveProperty('landedAt')
+    expect(outcomeData(o, at, new Date('2026-10-01T05:25:00Z'))).not.toHaveProperty('landedAt')
     // Serving again: the next run sends what is owed.
     h.serving.mockImplementation(async (items: Array<{ adTargetId: string }>) => new Set(items.map((i) => i.adTargetId)))
     expect(await writePair(pair({ keywordTargetId: 'k1', sources: o.sources }), who)).toMatchObject({ status: 'DONE' })

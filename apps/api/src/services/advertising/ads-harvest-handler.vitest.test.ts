@@ -472,6 +472,13 @@ describe('PB-6a — harvest_and_negate keeps winners and runs only its own half'
     expect(h.createKeywordLocal).toHaveBeenCalledTimes(1)
   })
 
+  it('harvest fix — a switch-on of a paused keyword is counted apart on the card, never as a graduation', async () => {
+    landingGuard.check.mockResolvedValueOnce({ kind: 'enable', targetId: 'k-paused', externalTargetId: 'AMZ-KP', why: 'switch on the paused exact keyword "giacca moto uomo" in ad group "Exact" again' })
+    const dry = await harvest(RULE, { ...meta, dryRun: true })
+    expect(dry.output).toMatchObject({ wouldGraduate: 0, wouldSwitchOn: 1, wouldNegate: 1 })
+    expect(dry.output?.items).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'graduation', step: 'create', switchOn: true })]))
+  })
+
   it('a v2 rule\'s empty list is none: a source with graduate [] proposes no graduation', async () => {
     const dry = await harvest({ ...RULE, v: 2, sources: [{ ...RULE.sources[0], graduate: [] }] }, { ...meta, dryRun: true })
     expect(dry.output).toMatchObject({ wouldGraduate: 0, wouldNegate: 1 })

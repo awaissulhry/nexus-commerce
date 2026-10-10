@@ -35,12 +35,15 @@
 import prisma from '../../db.js'
 import { normaliseNegTerm } from './ads-protect-converting.js'
 import { negativeBlocksTerm } from './ads-winner-lock.js'
-import { IN_FLIGHT_STATES } from '../ads-core/ad-mutation-state.js'
+import { isBelievablyPending } from '../ads-core/ad-mutation-state.js'
 
 export type LandingMatch = 'EXACT' | 'PHRASE' | 'BROAD' | 'PRODUCT'
 export interface LandingNegative { text: string; match: 'EXACT' | 'PHRASE' | 'PRODUCT'; level: 'AD_GROUP' | 'CAMPAIGN' }
-/** `confirmed`: no switch of its status is on its way to Amazon, and the last one Amazon took (switchConfirmed). */
-export interface LandingTarget { id: string; status: string; externalTargetId: string | null; confirmed: boolean }
+/**
+ * `confirmed`: no switch of its status is on its way to Amazon, and no switch-on failed a moment ago (unconfirmedSwitches);
+ * `unconfirmed` says which of the two, for the words.
+ */
+export interface LandingTarget { id: string; status: string; externalTargetId: string | null; confirmed: boolean; unconfirmed?: 'in_flight' | 'failed' }
 
 /** One destination ad group as the guard reads it for one term. */
 export interface LandingFacts {
@@ -113,7 +116,10 @@ export function decideLanding(f: LandingFacts): LandingDecision {
   const atAmazon = f.existing.filter((t) => !!t.externalTargetId)
   const on = atAmazon.find((t) => t.status === 'ENABLED' && t.confirmed) ?? atAmazon.find((t) => t.status === 'ENABLED')
   if (on && !on.confirmed) {
-    return { kind: 'landed', targetId: on.id, externalTargetId: on.externalTargetId!, serves: false, why: `the ${what(f.match)} "${f.term}" in ad group "${g.name}" was switched on again and Amazon has not confirmed it yet, so the source is not negated` }
+    const words = on.unconfirmed === 'failed'
+      ? `the last switch-on of the ${what(f.match)} "${f.term}" in ad group "${g.name}" did not reach Amazon, so the source is not negated`
+      : `the ${what(f.match)} "${f.term}" in ad group "${g.name}" was switched on again and Amazon has not confirmed it yet, so the source is not negated`
+    return { kind: 'landed', targetId: on.id, externalTargetId: on.externalTargetId!, serves: false, why: words }
   }
   if (on) return { kind: 'landed', targetId: on.id, externalTargetId: on.externalTargetId!, serves, why: `the ${what(f.match)} "${f.term}" already runs in ad group "${g.name}"${idle}` }
   const paused = atAmazon.find((t) => t.status === 'PAUSED')
@@ -124,27 +130,35 @@ export function decideLanding(f: LandingFacts): LandingDecision {
 }
 
 /**
- * Of these targets, the ones whose status Amazon confirmed: no switch of it in flight (PENDING / IN_FLIGHT, inside the
- * trust window), and the newest settled switch APPLIED (a FAILED or CANCELLED one did not reach Amazon). A target Nexus
- * never switched (read from Amazon as it is) is confirmed. One read.
+ * How long a FAILED or CANCELLED switch-on still counts against its keyword: the ads queue's whole life of a write — sent
+ * at once, its retry ladder of 2^n minutes to 3 retries (about a quarter of an hour), the drain's own cadence — with room
+ * to spare. By then the worker has put the keyword's row back to what Amazon holds, so the row's own status is the truth,
+ * and an old failure never blocks a keyword that runs at Amazon now (enabled since by other means).
  */
-async function switchConfirmed(targetIds: readonly string[]): Promise<Set<string>> {
+export const FAILED_SWITCH_WINDOW_MS = 60 * 60_000
+
+/**
+ * Of these targets, the ones whose status Amazon has not confirmed, and why: a switch of it still on its way (PENDING /
+ * IN_FLIGHT, believed for the mutation layer's trust window, ad-mutation-state.ts isBelievablyPending: 24 h), or its
+ * newest settled switch a switch-on that FAILED or was CANCELLED within FAILED_SWITCH_WINDOW_MS. Every other target is
+ * confirmed — one Nexus never switched (read from Amazon as it is) too. One read.
+ */
+export async function unconfirmedSwitches(targetIds: readonly string[], now: Date = new Date()): Promise<Map<string, 'in_flight' | 'failed'>> {
   const ids = [...new Set(targetIds.filter(Boolean))]
-  if (!ids.length) return new Set()
-  const since = new Date(Date.now() - 24 * 3_600_000)
+  const out = new Map<string, 'in_flight' | 'failed'>()
+  if (!ids.length) return out
   const rows = await prisma.adMutation.findMany({
     where: { entityType: 'AD_TARGET', entityId: { in: ids }, field: 'status' },
     orderBy: { createdAt: 'desc' },
-    select: { entityId: true, state: true, intendedValue: true, createdAt: true },
+    select: { entityId: true, state: true, intendedValue: true, createdAt: true, settledAt: true, updatedAt: true },
   })
-  const out = new Set(ids)
   const seen = new Set<string>()
   for (const r of rows) {
-    if ((IN_FLIGHT_STATES as readonly string[]).includes(r.state)) { if (r.createdAt >= since) out.delete(r.entityId); continue }
+    if (r.state === 'PENDING' || r.state === 'IN_FLIGHT') { if (isBelievablyPending(r, now)) out.set(r.entityId, 'in_flight'); continue }
     if (seen.has(r.entityId)) continue
     seen.add(r.entityId)
-    // A switch-on that never reached Amazon (the worker puts the row back; this covers the moment before it does).
-    if ((r.state === 'FAILED' || r.state === 'CANCELLED') && r.intendedValue === 'ENABLED') out.delete(r.entityId)
+    const settled = (r.settledAt ?? r.updatedAt).getTime()
+    if ((r.state === 'FAILED' || r.state === 'CANCELLED') && r.intendedValue === 'ENABLED' && now.getTime() - settled < FAILED_SWITCH_WINDOW_MS && !out.has(r.entityId)) out.set(r.entityId, 'failed')
   }
   return out
 }
@@ -186,11 +200,11 @@ export async function landingFacts(args: { adGroupId: string; term: string; matc
     }),
     standingNegatives([g.id], [g.campaign.id], [product ? 'PRODUCT' : 'KEYWORD']),
   ])
-  const confirmed = await switchConfirmed(existing.filter((t) => String(t.status) === 'ENABLED').map((t) => t.id))
+  const unconfirmed = await unconfirmedSwitches(existing.filter((t) => String(t.status) === 'ENABLED').map((t) => t.id))
   return {
     term, match: args.match,
     adGroup: { id: g.id, name: g.name, status: String(g.status), campaign: { id: g.campaign.id, name: g.campaign.name, status: String(g.campaign.status), suppressed: !!g.campaign.bidsSuppressedAt } },
-    existing: existing.map((t) => ({ id: t.id, status: String(t.status), externalTargetId: t.externalTargetId, confirmed: confirmed.has(t.id) })),
+    existing: existing.map((t) => ({ id: t.id, status: String(t.status), externalTargetId: t.externalTargetId, confirmed: !unconfirmed.has(t.id), ...(unconfirmed.has(t.id) ? { unconfirmed: unconfirmed.get(t.id)! } : {}) })),
     negatives: negatives.map(({ text, match, level }) => ({ text, match, level })),
   }
 }
@@ -254,7 +268,7 @@ export async function enableLanding(targetId: string, bidCents: number, who: Lan
 
 /**
  * The homes among these that a source may hand its term to: the target ENABLED with Amazon's id and its last switch
- * confirmed by Amazon (switchConfirmed), in an ENABLED ad group of an ENABLED campaign whose bids are not suppressed, and
+ * confirmed by Amazon (unconfirmedSwitches), in an ENABLED ad group of an ENABLED campaign whose bids are not suppressed, and
  * no negative there that blocks the term. A paused, archived, unconfirmed, stopped or blocked home would leave the term
  * serving nowhere once its source is negated. Three reads.
  */
@@ -266,8 +280,8 @@ export async function servingLandings(items: ReadonlyArray<{ adTargetId: string;
     where: { id: { in: ids } },
     select: { id: true, status: true, externalTargetId: true, kind: true, adGroupId: true, adGroup: { select: { status: true, campaignId: true, campaign: { select: { status: true, bidsSuppressedAt: true } } } } },
   })
-  const confirmed = await switchConfirmed(rows.map((r) => r.id))
-  const live = new Map(rows.filter((r) => String(r.status) === 'ENABLED' && !!r.externalTargetId && confirmed.has(r.id) && String(r.adGroup?.status) === 'ENABLED'
+  const unconfirmed = await unconfirmedSwitches(rows.map((r) => r.id))
+  const live = new Map(rows.filter((r) => String(r.status) === 'ENABLED' && !!r.externalTargetId && !unconfirmed.has(r.id) && String(r.adGroup?.status) === 'ENABLED'
     && String(r.adGroup?.campaign?.status) === 'ENABLED' && !r.adGroup?.campaign?.bidsSuppressedAt).map((r) => [r.id, r]))
   if (!live.size) return out
   const negatives = await standingNegatives([...new Set([...live.values()].map((r) => r.adGroupId))], [...new Set([...live.values()].map((r) => r.adGroup!.campaignId))], ['KEYWORD', 'PRODUCT'])

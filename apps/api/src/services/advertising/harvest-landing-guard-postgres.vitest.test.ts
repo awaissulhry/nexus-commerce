@@ -17,7 +17,8 @@
  *   idle      a destination whose campaign is paused, or whose bids are suppressed (a stop): the keyword is created there,
  *             the source is NOT negated; a paused keyword in it is held, never switched on
  *   homes     servingLandings: only an enabled keyword with Amazon's id and its switch confirmed, in a serving ad group and
- *             campaign, with no negative blocking the term there, may take a term over; another business's rows never read
+ *             campaign, with no negative blocking the term there, may take a term over; a switch-on that failed days ago
+ *             blocks nothing, one that failed a moment ago is said as it is; another business's rows never read
  *
  * Every value is made up (public repo).
  */
@@ -200,12 +201,26 @@ describe.skipIf(!concurrentDatabaseUrl())('harvest fix B1 + B10 — a harvest la
     // Switched on a moment ago, its switch still on its way to Amazon.
     const unconfirmed = await target(G('gl-exact'), 'waking gloves', { externalTargetId: 'AMZ-HOME-6' })
     await inW(() => database.client.adMutation.create({ data: { entityType: 'AD_TARGET', entityId: unconfirmed.id, field: 'status', intendedValue: 'ENABLED', previousValue: 'PAUSED', state: 'PENDING', actor: 'user:owner' } }))
+    // Review N2 — a switch-on refused days ago (since enabled at Amazon by other means) never blocks it; one that failed a
+    // moment ago does, and is said as it is.
+    const mutation = (entityId: string, state: string, settledMsAgo: number) => inW(() => database.client.adMutation.create({ data: {
+      entityType: 'AD_TARGET', entityId, field: 'status', intendedValue: 'ENABLED', previousValue: 'PAUSED', state, actor: 'user:owner',
+      createdAt: new Date(Date.now() - settledMsAgo - 60_000), settledAt: new Date(Date.now() - settledMsAgo),
+    } }))
+    const revived = await target(G('gl-exact'), 'revived gloves', { externalTargetId: 'AMZ-HOME-7' })
+    await mutation(revived.id, 'CANCELLED', 3 * 86_400_000)
+    const failedNow = await target(G('gl-exact'), 'failing gloves', { externalTargetId: 'AMZ-HOME-8' })
+    await mutation(failedNow.id, 'FAILED', 5 * 60_000)
     const items = [
       { adTargetId: live.id, term: 'home gloves' }, { adTargetId: pausedHome.id, term: 'resting gloves' },
       { adTargetId: idleHome.id, term: 'home gloves' }, { adTargetId: blockedHome.id, term: 'fleece liner' },
       { adTargetId: stoppedHome.id, term: 'home gloves' }, { adTargetId: unconfirmed.id, term: 'waking gloves' },
+      { adTargetId: revived.id, term: 'revived gloves' }, { adTargetId: failedNow.id, term: 'failing gloves' },
     ]
-    expect([...await inW(() => servingLandings(items))]).toEqual([live.id])
+    expect([...await inW(() => servingLandings(items))].sort()).toEqual([live.id, revived.id].sort())
+    expect(await inW(() => checkLanding({ adGroupId: G('gl-exact'), term: 'revived gloves', match: 'EXACT' }))).toMatchObject({ kind: 'landed', targetId: revived.id, serves: true })
+    expect(await inW(() => checkLanding({ adGroupId: G('gl-exact'), term: 'failing gloves', match: 'EXACT' }))).toMatchObject({ kind: 'landed', serves: false, why: expect.stringMatching(/the last switch-on of the exact keyword "failing gloves" .* did not reach Amazon/) })
+    expect(await inW(() => checkLanding({ adGroupId: G('gl-exact'), term: 'waking gloves', match: 'EXACT' }))).toMatchObject({ kind: 'landed', serves: false, why: expect.stringMatching(/Amazon has not confirmed it yet/) })
     expect((await inW2(() => servingLandings(items))).size).toBe(0)
   })
 })

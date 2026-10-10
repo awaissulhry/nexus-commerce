@@ -146,7 +146,8 @@ export async function writePair(p: { term: string; isAsin: boolean; destAdGroupI
   if (!keywordPending && p.sources.some(owes) && !(await servingLandings([{ adTargetId: p.keywordTargetId!, term: p.term }])).size) {
     const why = `the ${p.isAsin ? 'product target' : 'keyword'} is not enabled at Amazon (or its switch-on is not confirmed yet) in a serving ad group now, or a negative there blocks the term: no source is negated (the term would serve nowhere)`
     const sources = p.sources.map((s) => (owes(s) ? { ...s, result: 'failed' as const, error: why } : s))
-    return { status: 'HALF_DONE', keyword: { targetId: p.keywordTargetId, externalTargetId: null, existed: true }, sources, why: `the keyword stands, but ${why}; retried by the next run`, error: why }
+    // Not serving now: no landing, so the judging clock does not start here (a pair that landed before keeps its own).
+    return { status: 'HALF_DONE', keyword: { targetId: p.keywordTargetId, externalTargetId: null, existed: true, confirmed: false }, sources, why: `the keyword stands, but ${why}; retried by the next run`, error: why }
   }
   const pre = await preflightPair({ ...p, keywordPending, sources: p.sources.filter(owes) }, who)
   if (!('ok' in pre)) {

@@ -12,14 +12,18 @@ const h = vi.hoisted(() => ({
   target: { bidCents: 20, adGroupId: 'g-exact', adGroup: { campaign: { id: 'c-exact', marketplace: 'IT', minBidCents: null as number | null, maxBidCents: null as number | null, dynamicBidding: null as unknown } } },
   limits: { minBidCents: null, maxBidCents: null, maxChangePct: null } as Record<string, unknown>,
   written: 40,
+  mutations: [] as Array<Record<string, unknown>>,
 }))
 vi.mock('../../db.js', () => ({
-  default: { adTarget: { findUnique: vi.fn(async (a: { select: Record<string, unknown> }) => (a.select.adGroup ? h.target : { bidCents: h.written })) } },
+  default: {
+    adTarget: { findUnique: vi.fn(async (a: { select: Record<string, unknown> }) => (a.select.adGroup ? h.target : { bidCents: h.written })) },
+    adMutation: { findMany: vi.fn(async () => [...h.mutations].sort((a, b) => (b.createdAt as Date).getTime() - (a.createdAt as Date).getTime())) },
+  },
 }))
 vi.mock('./ads-mutation.service.js', () => ({ updateAdTargetWithSync: (a: Record<string, unknown>) => h.update(a) }))
 vi.mock('./ads-strategy/bids.js', async (original) => ({ ...(await original<object>()), bidLimitsFor: vi.fn(async () => h.limits) }))
 
-const { blockingNegative, decideLanding, enableLanding, landingKey, switchOnBid } = await import('./harvest-landing-guard.js')
+const { blockingNegative, decideLanding, enableLanding, FAILED_SWITCH_WINDOW_MS, landingKey, switchOnBid, unconfirmedSwitches } = await import('./harvest-landing-guard.js')
 
 const facts = (over: Partial<LandingFacts> = {}): LandingFacts => ({
   term: 'touring jacket', match: 'EXACT',
@@ -50,7 +54,9 @@ describe('harvest fix B1 — what counts as landed', () => {
   })
 
   it('an ENABLED one switched on a moment ago and not confirmed by Amazon yet: not landed yet (serves false)', () => {
-    expect(decideLanding(facts({ existing: [kw('ENABLED', 'AMZ-ON', false)] }))).toMatchObject({ kind: 'landed', serves: false, why: expect.stringMatching(/was switched on again and Amazon has not confirmed it yet, so the source is not negated/) })
+    expect(decideLanding(facts({ existing: [{ ...kw('ENABLED', 'AMZ-ON', false), unconfirmed: 'in_flight' }] }))).toMatchObject({ kind: 'landed', serves: false, why: expect.stringMatching(/was switched on again and Amazon has not confirmed it yet, so the source is not negated/) })
+    // Its switch-on failed a moment ago: said as it is, never "not confirmed yet".
+    expect(decideLanding(facts({ existing: [{ ...kw('ENABLED', 'AMZ-ON', false), unconfirmed: 'failed' }] }))).toMatchObject({ kind: 'landed', serves: false, why: 'the last switch-on of the exact keyword "touring jacket" in ad group "Exact" did not reach Amazon, so the source is not negated' })
   })
 
   it('an ARCHIVED one: held with the reason, nothing written, the source never negated', () => {
@@ -165,5 +171,37 @@ describe('harvest fix B1 — a paused landing is switched on with the harvest\'s
     h.target.adGroup.campaign.dynamicBidding = { maxBidChangePct: 50 }
     expect(await switchOnBid({ targetId: 't-paused', wantCents: 40, who: { actor: 'automation:ads-brain-harvest' } })).toEqual({ cents: 30, currentCents: 20, held: 'held by the largest bid change per step' })
     expect(await switchOnBid({ targetId: 't-paused', wantCents: 40, who: { actor: 'user:owner', manual: true } })).toMatchObject({ cents: 40, held: null })
+  })
+})
+
+describe('review N2 — which switches leave a keyword unconfirmed: only one in flight, or a switch-on that failed a moment ago', () => {
+  const NOW = new Date('2026-10-10T12:00:00Z')
+  const ago = (ms: number) => new Date(NOW.getTime() - ms)
+  const m = (entityId: string, state: string, intendedValue: string, createdMsAgo: number, settledMsAgo: number | null = null) => ({
+    entityId, state, intendedValue, createdAt: ago(createdMsAgo), settledAt: settledMsAgo == null ? null : ago(settledMsAgo), updatedAt: ago(settledMsAgo ?? createdMsAgo),
+  })
+  const MIN = 60_000
+
+  it('in flight inside the trust window: unconfirmed; one stuck past it is no longer believed', async () => {
+    h.mutations = [m('t-new', 'PENDING', 'ENABLED', 2 * MIN), m('t-stuck', 'IN_FLIGHT', 'ENABLED', 25 * 60 * MIN)]
+    expect(await unconfirmedSwitches(['t-new', 't-stuck'], NOW)).toEqual(new Map([['t-new', 'in_flight']]))
+  })
+
+  it('a switch-on that FAILED or was CANCELLED a moment ago: unconfirmed; an old one never blocks a keyword that runs now', async () => {
+    h.mutations = [
+      m('t-fresh', 'FAILED', 'ENABLED', 20 * MIN, 10 * MIN),
+      m('t-gate', 'CANCELLED', 'ENABLED', 30 * MIN, FAILED_SWITCH_WINDOW_MS - MIN),
+      m('t-old', 'CANCELLED', 'ENABLED', 3 * 24 * 60 * MIN, 3 * 24 * 60 * MIN),
+      m('t-late', 'FAILED', 'ENABLED', 2 * 60 * MIN, FAILED_SWITCH_WINDOW_MS + MIN),
+    ]
+    expect(await unconfirmedSwitches(['t-fresh', 't-gate', 't-old', 't-late'], NOW)).toEqual(new Map([['t-fresh', 'failed'], ['t-gate', 'failed']]))
+  })
+
+  it('only the newest settled switch counts, and only a switch-on: a failed pause, or a failure under a newer applied switch, blocks nothing', async () => {
+    h.mutations = [
+      m('t-pause', 'FAILED', 'PAUSED', 5 * MIN, 4 * MIN),
+      m('t-again', 'APPLIED', 'ENABLED', 3 * MIN, 2 * MIN), m('t-again', 'FAILED', 'ENABLED', 10 * MIN, 9 * MIN),
+    ]
+    expect((await unconfirmedSwitches(['t-pause', 't-again', 't-never'], NOW)).size).toBe(0)
   })
 })

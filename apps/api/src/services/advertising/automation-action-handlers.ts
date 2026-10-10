@@ -1013,7 +1013,8 @@ ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<Act
 
   if (meta.dryRun) {
     const planned = await planRuleHarvest({ negatives, graduations, productNegatives, productGraduations, plan, destinations, rule })
-    const steps = (step: string, kinds: string[]) => planned.items.filter((i) => i.step === step && kinds.includes(i.kind)).length
+    // Harvest fix B1 — a switch-on of a paused keyword creates nothing: counted apart (wouldSwitchOn), never as a graduation.
+    const steps = (step: string, kinds: string[]) => planned.items.filter((i) => i.step === step && kinds.includes(i.kind) && !i.switchOn).length
     const refused = planned.items.filter((i) => i.step === 'refused').map((i) => ({ query: i.query, externalAdGroupId: i.externalAdGroupId, why: i.why }))
     return {
       type: action.type,
@@ -1029,6 +1030,7 @@ ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<Act
         wouldNegate: steps('negate', ['negative']),
         wouldGraduate: steps('create', ['graduation']),
         wouldGraduateProduct: steps('create', ['productGraduation']),
+        ...(planned.switchOns ? { wouldSwitchOn: planned.switchOns } : {}),
         wouldNegateProduct: steps('negate', ['productNegative']),
         // PB-6a (L4) — terms whose home now meets the harvest bar: negated in their source, nothing created.
         wouldHandOver: steps('handover', ['graduation', 'productGraduation']),
