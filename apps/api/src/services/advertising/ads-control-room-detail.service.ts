@@ -105,6 +105,44 @@ const EVIDENCE: Record<string, EvidenceSource> = {
     writesEntities: true,
     emptyNote: 'No bid changes in this window.',
   },
+  // Ads brain page A4 — the brain's writers (brain/engine-levers.ts). The six that write are found by their actor strings in
+  // ads-engine-actors.ts; the three that write nothing by themselves say why their list is empty.
+  'bid-brain': {
+    writesEntities: true,
+    emptyNote: 'No bid writes by the bid brain in this window: it writes only the campaigns enrolled LIVE, under a live NEXUS_BID_BRAIN_MODE.',
+  },
+  'brain-money': {
+    writesEntities: true,
+    emptyNote: 'No budget or portfolio-cap writes by the brain in this window.',
+  },
+  'brain-state': {
+    writesEntities: true,
+    emptyNote: 'No pause or resume by the brain in this window.',
+  },
+  'brain-negatives': {
+    writesEntities: true,
+    emptyNote: 'No negative added, retired or revived by the brain in this window.',
+  },
+  'brain-harvest': {
+    writesEntities: true,
+    emptyNote: 'No keyword harvested by the brain in this window.',
+  },
+  'brain-strategy': {
+    writesEntities: true,
+    emptyNote: 'No bidding-strategy switch by the brain in this window.',
+  },
+  'brain-hours': {
+    writesEntities: false,
+    emptyNote: 'It writes nothing by itself: each hourly plan it paints is a request a person approves (apply-brain-hourly-plan); ads-brain view hours shows them.',
+  },
+  'brain-structure': {
+    writesEntities: false,
+    emptyNote: 'It writes nothing by itself: each build, go-live and move is a request a person approves; ads-brain view structure shows them.',
+  },
+  'brain-cycle': {
+    writesEntities: false,
+    emptyNote: 'The cycle runs the brain\'s writers in order; each write belongs to the writer that made it (their rows above).',
+  },
 }
 
 /**

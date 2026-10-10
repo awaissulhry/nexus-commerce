@@ -89,6 +89,15 @@ const COMMAND_SCOPES: Record<string, string> = {
   '/api/fba/inbound/plans/:id/cancel': 'fba-plan-cancel',
   '/api/fba/inbound/plans/:id/retry': 'fba-plan-retry',
   '/api/fba/inbound/shipments/:id/shipped': 'fba-shipment-shipped',
+  // Ads brain page A5 — one request (or one decision) per press on the brain page, even when the answer is lost and the
+  // page sends it again: a double click never asks twice, kills twice or approves twice.
+  '/api/advertising/automation/brain/control': 'brain-control',
+  '/api/advertising/automation/brain/kill': 'brain-kill',
+  '/api/advertising/automation/brain/bid-brain/enrollment': 'brain-bid-enrollment',
+  '/api/advertising/automation/brain/hours/apply': 'brain-hours-apply',
+  '/api/advertising/automation/brain/harvest/apply': 'brain-harvest-apply',
+  '/api/advertising/automation/brain/retire': 'brain-retire',
+  '/api/advertising/automation/brain/requests/:approvalId/decide': 'brain-request-decide',
 }
 
 /** The POST routes whose Idempotency-Key is honoured (for the tests that hold a route to it). */

@@ -246,6 +246,8 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-1 — a product\'s brain: enrollme
       products: [{ productId: P, market: 'IT', campaignIds: ['a-live', 'b-asin', 'c-fba'].map(C).sort(), enrolled: true }],
       shared: [{ campaignId: C('e-shared'), market: 'IT', productIds: [P, Q].sort() }],
       none: [],
+      // A2b — no LIVE row sits on an archived campaign here (the routes' test reads one: advertising-brain.routes).
+      ownedButArchived: [],
     })
   })
 

@@ -35,6 +35,11 @@
  *               90 % interval.
  *   windows     the painted week as windows the plan stores (`endHour` exclusive, the baseline kept where it still
  *               holds an hour), read back through the engine's own rule (resolveActiveTargetKey) before it is returned.
+ *   unmoved     A2c — every hour of a block that wants to move but stays, with why (stepWhy beside stepFrom: the next step
+ *               past hourCellMovePct, the top or bottom of the plan's ladder, no Min-bid target, already at Min bid, no
+ *               target; and the Owner's hour lock, lane lock, his plan as the limit, the anti-flap) and what unblocks it.
+ *               A plan that paints nothing says so in its first line, with the counts per reason — never "every block
+ *               stays inside the band" when blocks wanted to move.
  */
 import { resolveActiveTargetKey, type ScheduleWindow } from '../rank-controller.js'
 import type { LaneName } from '../bid-brain/recipe.js'
@@ -106,6 +111,22 @@ export interface PaintEffect {
   assumptions: string[]
 }
 
+/** A2c — why an hour of a block that wants to move stays. */
+export type UnmovedReason = 'locked' | 'no-target' | 'cap' | 'top' | 'bottom' | 'no-min-bid-target' | 'already-min-bid' | 'limit' | 'lane' | 'anti-flap'
+
+/** A2c — the hours of one block that wanted to move and stayed, for one reason. */
+export interface UnmovedBlock {
+  block: string
+  d: number
+  part: number
+  dir: Direction
+  reason: UnmovedReason
+  /** The reason in words, and what would let the hour move. */
+  why: string
+  unblock: string
+  cells: string[]
+}
+
 export interface PaintedPlan {
   /** Why nothing could be painted (no ladder, no goal, frozen); null when the painter ran. */
   held: string | null
@@ -118,6 +139,8 @@ export interface PaintedPlan {
   /** Hours held to the Owner's plan (limits), and Min-bid runs given back by the anti-flap. */
   limited: string[]
   antiFlap: Array<{ d: number; cells: string[]; why: string }>
+  /** A2c — the hours of blocks that wanted to move and stayed, grouped by block and reason (none when nothing wanted to move). */
+  unmoved: UnmovedBlock[]
   /** What the plan stores after (only when something changed). */
   windows: Array<{ days: number[]; startHour: number; endHour: number; targetKey: string }> | null
   defaultTargetKey: string | null
@@ -235,6 +258,42 @@ export function stepFrom(current: string, dir: Direction, ladder: { serving: str
   let j = i - 1
   while (j - 1 >= 0 && within(ladder.serving[j - 1])) j--
   return ladder.serving[j]
+}
+
+/**
+ * A2c — why stepFrom keeps `current` although its block wants to move (null: it moves, or the block keeps). Pure; it reads
+ * stepFrom's own branches, so the two never disagree.
+ */
+export function stepWhy(current: string, dir: Direction, ladder: { serving: string[]; minBid: string | null }, targets: ReadonlyMap<string, PaintTarget>, cap: number): Exclude<UnmovedReason, 'locked' | 'limit' | 'lane' | 'anti-flap'> | null {
+  if (dir === 'keep') return null
+  const t = targets.get(current)
+  if (!t) return 'no-target'
+  if (cap <= 0) return 'cap'
+  if (t.floor) return dir === 'up' ? (ladder.serving.length ? null : 'no-target') : 'already-min-bid'
+  if (dir === 'minbid') return ladder.minBid ? null : 'no-min-bid-target'
+  const i = ladder.serving.indexOf(current)
+  if (i < 0) return 'no-target'
+  if (dir === 'up') {
+    if (i + 1 >= ladder.serving.length) return 'top'
+    return Math.abs(factor(targets.get(ladder.serving[i + 1])!) / factor(t) - 1) <= cap + 1e-9 ? null : 'cap'
+  }
+  return i === 0 ? 'bottom' : null
+}
+
+/** A2c — each reason in words and what unblocks it (no money: these are the plan's plain words). */
+export function unmovedWords(reason: UnmovedReason, settings: PaintInput['settings']): { why: string; unblock: string } {
+  switch (reason) {
+    case 'locked': return { why: 'locked by the Owner', unblock: 'his hour lock ends (set-ads-brain unlock)' }
+    case 'no-target': return { why: 'hold no target the brain can move (none in the plan there, or one that no longer exists)', unblock: 'give those hours a target of the plan' }
+    case 'cap': return { why: `the next step of the plan's ladder moves the bid more than hourCellMovePct (${settings.hourCellMovePct} %)`, unblock: 'raise hourCellMovePct (set-ads-brain set-value), or add a target between the two steps to the plan' }
+    case 'top': return { why: 'already at the plan\'s highest target', unblock: 'add a higher target to the plan' }
+    case 'bottom': return { why: 'already at the plan\'s lowest serving target', unblock: 'add a lower target to the plan (the brain never turns a step down into Min bid)' }
+    case 'no-min-bid-target': return { why: 'no Min-bid target in the plan or the library', unblock: 'add a Min-bid target (the library\'s "pause")' }
+    case 'already-min-bid': return { why: 'already at Min bid', unblock: 'nothing: an hour cannot go lower' }
+    case 'limit': return { why: 'held to the Owner\'s own plan (hourPlanAsLimits)', unblock: 'raise his plan in those hours, or set hourPlanAsLimits off' }
+    case 'lane': return { why: 'the move would change a lane the Owner locked', unblock: 'his lane lock ends (placements lever)' }
+    case 'anti-flap': return { why: `past ${settings.minBidEntriesPerDay} Min-bid ${settings.minBidEntriesPerDay === 1 ? 'entry' : 'entries'} a day (the anti-flap)`, unblock: 'raise minBidEntriesPerDay (set-ads-brain set-value)' }
+  }
 }
 
 /** The Min-bid runs of a day: [start, end) hours; a run at 00:00 counts as an entry only if the day before ended outside Min bid. */
@@ -369,7 +428,7 @@ export function paintPlan(input: PaintInput): PaintedPlan {
   const ladder = ladderOf(input.plan, targets)
   const empty = (held: string): PaintedPlan => ({
     held, ladder: { serving: ladder.serving, minBid: ladder.minBid }, blocks: [], week: { before, after: before.map((d) => [...d]) }, changes: [],
-    locked: [...input.locks.cells].sort(), limited: [], antiFlap: [], windows: null, defaultTargetKey: input.plan.defaultTargetKey, effect: null,
+    locked: [...input.locks.cells].sort(), limited: [], antiFlap: [], unmoved: [], windows: null, defaultTargetKey: input.plan.defaultTargetKey, effect: null,
     summary: [held], money: [],
   })
   if (!ladder.serving.length) return empty('The plan holds no serving target the brain could move between (its targets are Min bid, missing or none): nothing painted.')
@@ -413,18 +472,21 @@ export function paintPlan(input: PaintInput): PaintedPlan {
     return ok.length ? ok[ok.length - 1] : (ladder.minBid ?? cand)
   }
 
+  // A2c — each hour of a block that wants to move and stays, with why.
+  const stayed: Array<{ ref: string; d: number; h: number; reason: UnmovedReason }> = []
+  const stays = (b: BlockDecision, h: number, reason: UnmovedReason) => { if (b.dir !== 'keep') stayed.push({ ref: cellRef(b.d, h), d: b.d, h, reason }) }
   for (const b of blocks) {
     for (let i = 0; i < PART_HOURS; i++) {
       const h = b.part * PART_HOURS + i
       const ref = cellRef(b.d, h)
       const cur = before[b.d][h]
-      if (input.locks.cells.has(ref)) { if (b.dir !== 'keep') lockedTouched.add(ref); continue }
-      if (cur == null || !targets.has(cur)) continue
+      if (input.locks.cells.has(ref)) { if (b.dir !== 'keep') lockedTouched.add(ref); stays(b, h, 'locked'); continue }
+      if (cur == null || !targets.has(cur)) { stays(b, h, 'no-target'); continue }
       const step = stepFrom(cur, b.dir, ladder, targets, cap)
       const cand = holdToLimit(b.d, h, step)
       if (cand !== step) limited.push(ref)
-      if (cand === cur) continue
-      if (!lanesKept(cur, cand)) { lanesRefused.add(ref); continue }
+      if (cand === cur) { stays(b, h, step === cur ? stepWhy(cur, b.dir, ladder, targets, cap) ?? 'no-target' : 'limit'); continue }
+      if (!lanesKept(cur, cand)) { lanesRefused.add(ref); stays(b, h, 'lane'); continue }
       after[b.d][h] = cand
       why.set(ref, cand !== step ? `${b.why}; held to the Owner's plan (${cand})` : b.why)
     }
@@ -444,7 +506,7 @@ export function paintPlan(input: PaintInput): PaintedPlan {
       }).filter((r) => r.cells.length)
       if (!newRuns.length) break
       const back = newRuns.sort((a, b) => a.spend - b.spend || a.start - b.start)[0]
-      for (const h of back.cells) { after[d][h] = before[d][h]; why.delete(cellRef(d, h)) }
+      for (const h of back.cells) { after[d][h] = before[d][h]; why.delete(cellRef(d, h)); stayed.push({ ref: cellRef(d, h), d, h, reason: 'anti-flap' }) }
       antiFlap.push({ d, cells: back.cells.map((h) => cellRef(d, h)), why: `${DAY_WORDS[d]}: at most ${maxEntries} Min-bid ${maxEntries === 1 ? 'entry' : 'entries'} a day — the new run ${String(back.start).padStart(2, '0')}–${String(back.end).padStart(2, '0')} stays as it was` })
     }
   }
@@ -456,6 +518,27 @@ export function paintPlan(input: PaintInput): PaintedPlan {
   const encoded = changes.length ? encodeWeek(after, input.plan.defaultTargetKey) : null
   const effect = changes.length ? expectedEffect(research, before, changes, targets) : null
 
+  // A2c — the hours that stayed, grouped by block and reason, in the week's order.
+  const blockOf = new Map(blocks.map((b) => [blockKey(b.d, b.part), b]))
+  const groups = new Map<string, UnmovedBlock>()
+  for (const x of stayed) {
+    const b = blockOf.get(blockKey(x.d, partOf(x.h)))!
+    const key = `${blockKey(b.d, b.part)}|${x.reason}`
+    const g = groups.get(key) ?? { block: `${DAY_WORDS[b.d]} ${partWords(b.part)}`, d: b.d, part: b.part, dir: b.dir, reason: x.reason, ...unmovedWords(x.reason, input.settings), cells: [] }
+    g.cells.push(x.ref)
+    groups.set(key, g)
+  }
+  const unmoved = [...groups.values()].sort((a, b) => a.d - b.d || a.part - b.part || a.reason.localeCompare(b.reason))
+  /** "6 hours already at the plan's highest target (add a higher target to the plan); …" — counts per reason, the most first. */
+  const reasonLines = (list: readonly UnmovedBlock[]) => {
+    const byReason = new Map<UnmovedReason, number>()
+    for (const g of list) byReason.set(g.reason, (byReason.get(g.reason) ?? 0) + g.cells.length)
+    return [...byReason].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([reason, n]) => { const w = unmovedWords(reason, input.settings); return `${plural(n, 'hour')} ${w.why} (${w.unblock})` }).join('; ')
+  }
+  const wanting = blocks.filter((b) => b.dir !== 'keep')
+  const dirWords = (['down', 'minbid', 'up'] as const).map((dir) => { const n = wanting.filter((b) => b.dir === dir).length; return n ? `${n} ${dir === 'minbid' ? 'to Min bid' : dir}` : '' }).filter(Boolean).join(', ')
+
   const count = (pred: (c: CellChange) => boolean) => changes.filter(pred).length
   const toFloor = count((c) => !isFloor(c.from) && isFloor(c.to))
   const offFloor = count((c) => isFloor(c.from) && !isFloor(c.to))
@@ -464,7 +547,13 @@ export function paintPlan(input: PaintInput): PaintedPlan {
   const summary: string[] = []
   summary.push(changes.length
     ? `Paints ${plural(changes.length, 'hour')} of the week (${[ups ? `${ups} up` : '', downs ? `${downs} down` : '', toFloor ? `${toFloor} to Min bid` : '', offFloor ? `${offFloor} out of Min bid` : ''].filter(Boolean).join(', ')}) in 4-hour blocks, between the plan's own targets (${ladder.serving.join(' < ')}${ladder.minBid ? `; Min bid: ${ladder.minBid}` : ''}), at most ${Math.round(cap * 100)} % of bid multiplier per hour (one step at least).`
-    : `Paints nothing: every block of the week stays inside the goal's band, or too close to it to move${lockedTouched.size ? ', or is locked' : ''}.`)
+    // A2c — nothing painted although blocks wanted to move: say how many and what holds each hour, never "inside the band".
+    : wanting.length
+      ? `Paints nothing although ${plural(wanting.length, 'block')} of the week ${wanting.length === 1 ? 'wants' : 'want'} to move (${dirWords}): ${reasonLines(unmoved)}.`
+      : 'Paints nothing: every block of the week stays inside the goal\'s band, or too close to it to move.')
+  // A2c — some hours moved, others of the moving blocks stayed for the ladder's own reasons (locks, limits and the anti-flap have their lines below).
+  const ladderStays = changes.length ? unmoved.filter((g) => !['locked', 'lane', 'limit', 'anti-flap'].includes(g.reason)) : []
+  if (ladderStays.length) summary.push(`Hours of the moving blocks that stay: ${reasonLines(ladderStays)}.`)
   if (input.locks.cells.size) summary.push(`${plural(input.locks.cells.size, 'hour')} locked by the Owner kept as they are${lockedTouched.size ? ` (${lockedTouched.size} of them the brain would have moved)` : ''}.`)
   if (input.locks.lanes.size) summary.push(`Lanes the Owner locked kept: ${[...input.locks.lanes].join(', ')} — a target that would change them is not taken${lanesRefused.size ? ` (${plural(lanesRefused.size, 'hour')} stay for that)` : ''}.`)
   if (limitWeek) summary.push(`Held to the Owner's own plan (hourPlanAsLimits): never above his target or placement % in an hour, his Min-bid hours stay${limited.length ? ` — ${plural(new Set(limited).size, 'hour')} held` : ''}.`)
@@ -479,7 +568,7 @@ export function paintPlan(input: PaintInput): PaintedPlan {
   }
   return {
     held: null, ladder: { serving: ladder.serving, minBid: ladder.minBid }, blocks, week: { before, after }, changes,
-    locked: [...input.locks.cells].sort(), limited: [...new Set(limited)].sort(), antiFlap,
+    locked: [...input.locks.cells].sort(), limited: [...new Set(limited)].sort(), antiFlap, unmoved,
     windows: encoded?.windows ?? null, defaultTargetKey: encoded ? encoded.defaultTargetKey : input.plan.defaultTargetKey,
     effect, summary, money: moneyLines,
   }

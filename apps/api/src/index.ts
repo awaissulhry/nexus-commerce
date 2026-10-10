@@ -76,6 +76,7 @@ import advertisingIntelRoutes from "./routes/advertising-intel.routes.js";
 import automationSwitchRoutes from "./routes/automation-switch.routes.js";
 import advertisingStrategyRoutes from "./routes/advertising-strategy.routes.js";
 import advertisingPlaybookRoutes from "./routes/advertising-playbook.routes.js";
+import advertisingBrainRoutes from "./routes/advertising-brain.routes.js";
 // KT.6 — the Keyword Tracker's action endpoints. A separate file: see its header.
 import keywordActionsRoutes from "./routes/keyword-actions.routes.js";
 import advertisingAiRoutes from "./routes/advertising-ai.routes.js";
@@ -643,6 +644,7 @@ app.register(advertisingRoutes, { prefix: '/api' });
 app.register(automationSwitchRoutes, { prefix: '/api' });
 app.register(advertisingStrategyRoutes, { prefix: '/api' });
 app.register(advertisingPlaybookRoutes, { prefix: '/api' });
+app.register(advertisingBrainRoutes, { prefix: '/api' }); // ads brain page A1 — the brain's read views (same code as Claude's ads-brain / bid-brain)
 app.register(advertisingIntelRoutes, { prefix: '/api' });
 app.register(keywordActionsRoutes, { prefix: '/api' });
 app.register(advertisingAiRoutes, { prefix: '/api' }); // AIAD — AI Advertising goal wiring

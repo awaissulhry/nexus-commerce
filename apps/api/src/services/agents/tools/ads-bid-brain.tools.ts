@@ -13,21 +13,10 @@
  *            plan's, with its confidence, and what it would apply inside each cell's limits
  *   probes   BB-21 — the switchback probes that measure each keyword's bid elasticity ε, and ε per product from them
  */
-import { z } from 'zod'
-import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
-import { BRAIN_VIEWS, readBidBrain, type BrainReadArgs } from '../../advertising/bid-brain/read.js'
-import type { AgentTool, FieldPermission } from '../tool-types.js'
-
-const ID = z.string().trim().min(1).max(64)
-const PCT = z.coerce.number().min(1).max(500)
-
-/** Bids, targets and the why (which names bids and the order value) are ad-spend money. */
-const BRAIN_MONEY: Readonly<Record<string, FieldPermission>> = Object.fromEntries(
-  ['currentCents', 'decidedCents', 'goalBidCents', 'whatIfCents', 'aimPct', 'bandLoPct', 'bandHiPct', 'expectedAcosPct', 'targetAcosPct', 'why',
-    // BB-21 — a probe's bids, its days' bids and what each side cost.
-    'centerCents', 'highCents', 'lowCents', 'bidCents', 'costCents', 'stoppedWhy']
-    .map((key) => [key, FIELDS.financialsAdspendView]),
-)
+import { FEATURES as F } from '@nexus/shared/permissions'
+import type { BrainReadArgs } from '../../advertising/bid-brain/read.js'
+import { BID_BRAIN_MONEY, BID_BRAIN_VIEW_INPUT, readBidBrainView } from '../../advertising/brain/read-view.js'
+import type { AgentTool } from '../tool-types.js'
 
 const bidBrain: AgentTool = {
   name: 'bid-brain',
@@ -36,21 +25,10 @@ const bidBrain: AgentTool = {
   riskTier: 'low',
   readOnly: true,
   requires: [F.adsView],
-  restrictedFields: BRAIN_MONEY,
-  input: z.object({
-    view: z.enum(BRAIN_VIEWS).default('why')
-      .describe('why (default): each keyword\'s newest decision and why; what-if: decided again now with targetAcosPct (and a band); diff: per day, the brain against what today\'s writers set, with conflicts and churn; calibration: the attribution lag curve per market (and product) and how well its nowcast predicted the newest settled days; hour-factors: per product, the learned hour factor of each hour of the week against the approved hourly plan\'s, with its confidence and what it would apply inside each cell\'s limits; probes: the switchback probes that measure each keyword\'s bid elasticity ε and ε per product'),
-    market: z.string().trim().toUpperCase().min(2).max(20).optional()
-      .describe('one Amazon market code (the shadow runs on IT and DE); omit with no campaign, keyword or product for both'),
-    campaignId: ID.optional().describe('one Amazon campaign, its Nexus id (ad-campaigns)'),
-    targetId: ID.optional().describe('one keyword or target, its Nexus id (ad-targets)'),
-    productId: ID.optional().describe('one product (a parent covers its variations), its Nexus id: every keyword of the ad groups advertising it'),
-    targetAcosPct: PCT.optional().describe('what-if: the target ACoS to decide with, a percent (20 = 20 %)'),
-    bandLoPct: PCT.optional().describe('what-if: the bottom of the ACoS band, a percent (the brain leaves a bid alone inside the band)'),
-    bandHiPct: PCT.optional().describe('what-if: the top of the ACoS band, a percent'),
-    days: z.coerce.number().int().min(1).max(30).default(7).describe('diff: how many days back (default 7, max 30)'),
-    limit: z.coerce.number().int().min(1).max(200).default(50).describe('why and what-if: how many keywords, the biggest moves first (default 50, max 200); hour-factors: how many products (at most 20); probes: how many probes, the newest first'),
-  }),
+  // The money keys, the input and the settled-window read live in advertising/brain/read-view.ts: the brain page's
+  // routes read the same views through the same code (ads brain page A1).
+  restrictedFields: BID_BRAIN_MONEY,
+  input: BID_BRAIN_VIEW_INPUT,
   description:
     "Read the bid brain: the one engine that will decide every Amazon Sponsored Products keyword bid from the business's "
     + 'goal (goal bid × hour factor, then placements, inside the limits, unless a stop, a pin or stock says otherwise). It '
@@ -85,8 +63,7 @@ const bidBrain: AgentTool = {
     + 'keyword (targetId), a campaign, a product, or a market. Bids, targets and the why are ad-spend money: hidden from a '
     + 'person without permission to see ad spend. Nexus only; reads nothing from Amazon.',
   handler: async (args) => {
-    await (await import('../../advertising/ads-settled-facts.js')).primeSettledWindow() // BB-14 — the scheduler's window
-    const out = await readBidBrain(args as BrainReadArgs)
+    const out = await readBidBrainView(args as BrainReadArgs) // BB-14 — on the scheduler's settled window
     return 'error' in out ? { ok: false, error: out.error } : { ok: true, data: out.data }
   },
 }

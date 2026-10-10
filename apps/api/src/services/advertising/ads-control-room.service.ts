@@ -95,6 +95,8 @@ export interface EngineLever {
   writes7d: number
   /** 7a — never ran · ran and changed nothing in 7 days · changed something in 7 days. */
   activity: EngineActivity
+  /** Ads brain page A4 — 'brain' for a row of one of the brain's writers (brain/engine-levers.ts); absent for an engine. */
+  family?: 'brain'
 }
 
 /**
@@ -289,17 +291,23 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
     'ads-auto-bid', 'ad-autopilot', 'ads-anomaly-guard', 'top-of-search-defense',
     'tos-is-ingest', 'sqp-ingest', 'ads-structural-reconcile', 'drain-ads-sync',
     'ads-coverage-engine', 'fleet-sweep', 'fleet-council',
+    // A4 — the brain's writers' runs (brain/engine-levers.ts BRAIN_WRITERS).
+    'ads-bid-brain-shadow', 'ads-brain-money-shadow', 'ads-brain-state', 'ads-brain-negatives', 'ads-brain-harvest', 'ads-brain-cycle',
+    'ads-brain-hours', 'ads-brain-structure',
   ]
   const { getAutomationCatalog } = await import('../automation/automation-catalog.service.js')
   const catalogIds = new Set(Object.values(CATALOG_OF).filter((id) => id !== 'A3'))
 
-  const [state, facts, catalog, writeGroups, census, enabledAnalysts] = await Promise.all([
+  const { brainEngineFacts } = await import('./brain/engine-levers.js')
+  const [state, facts, catalog, writeGroups, census, enabledAnalysts, brainRows] = await Promise.all([
     getAutomationState(),
     cronFacts(CRONS),
     getAutomationCatalog((a) => catalogIds.has(a.id)),
     prisma.advertisingActionLog.groupBy({ by: ['userId'], where: { createdAt: { gte: new Date(Date.now() - 7 * DAY) } }, _count: { _all: true } }),
     campaignCensus(),
     prisma.agentCharter.count({ where: { enabled: true, tier: 'analyst', key: { not: 'fleet-selftest' } } }),
+    // A4 — a brain that cannot be read never hides the engines: its rows are left out and the board says so in a warning row.
+    brainEngineFacts().catch((err: unknown) => (err instanceof Error ? err : new Error(String(err)))),
   ])
   // 7b — the census every screen reads, so "82 of 220 allowlisted" is one number everywhere.
   const { allowlisted, total: totalCampaigns } = census
@@ -371,6 +379,23 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
       suggest: 'logs the bids it would set, as in observe mode, and writes nothing',
       stopped: 'Stopped: it logs the bids it would set and writes nothing until Resume',
     },
+    // A4 — the brain's writers that read the dial (brain/engine-levers.ts, measured): they hold every change.
+    'bid-brain': {
+      suggest: 'decides each run and writes no bid (the why names what it would set)',
+      stopped: 'Stopped: it decides and logs, and writes no bid until Resume',
+    },
+    'brain-money': {
+      suggest: 'plans each run and writes no budget or cap (each held change says would-apply)',
+      stopped: 'Stopped: it plans and logs, and writes no budget or cap until Resume',
+    },
+    'brain-state': {
+      suggest: 'decides each pause and resume and writes none (held)',
+      stopped: 'Stopped: it decides and logs, and pauses or resumes nothing until Resume',
+    },
+    'brain-strategy': {
+      suggest: 'decides each switch and writes none (held)',
+      stopped: 'Stopped: it decides and logs, and switches nothing until Resume',
+    },
   }
   const capReason = (): string | null => {
     if (envKill) return 'NEXUS_ADS_AUTOMATION_KILL is set — nothing runs until it is cleared'
@@ -393,6 +418,12 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
     env?: LeverMode
     /** Its catalog entry is missing: its group cannot be said. */
     unknown?: boolean
+    /**
+     * A4 — a brain writer: what the brain really does with its levers across the enrolled products (already bounded by the
+     * env), which the row's mode follows below the env. Its own switch is the Owner's lever levels, not an engine switch.
+     */
+    effective?: { mode: LeverMode; reason: string }
+    family?: 'brain'
   }
 
   const mk = (
@@ -402,8 +433,9 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
   ): EngineLever => {
     // R16 — this business's switch only lowers what the env allows; the env (and the account dial below) still win.
     const set = switches.get(key) ?? null
-    const rawMode: LeverMode = set ? lowest(envMode, set.mode as LeverMode) : envMode
-    const rawReason = set && rawMode !== envMode ? `Switched to ${set.mode} for this business (${set.setBy})` : envReason
+    const switched: LeverMode = set ? lowest(envMode, set.mode as LeverMode) : envMode
+    const rawMode: LeverMode = extra.effective ? lowest(switched, extra.effective.mode) : switched
+    const rawReason = set && switched !== envMode ? `Switched to ${set.mode} for this business (${set.setBy})` : extra.effective ? extra.effective.reason : envReason
     const control = {
       env: { mode: envMode, reason: extra.envWords ?? envReason },
       switch: set ? { mode: set.mode as LeverMode, setBy: set.setBy, setAt: set.setAt, reason: set.reason } : null,
@@ -437,7 +469,7 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
     const lastRunAt = f?.startedAt ?? null
     const writes7d = writesBy.get(key) ?? 0
     const exposure = engineExposure({
-      writesOnOwn: extra.writesOnOwn, env: extra.env ?? envMode, switchedDown: rawMode !== envMode, unknown: extra.unknown,
+      writesOnOwn: extra.writesOnOwn, env: extra.env ?? envMode, switchedDown: switched !== envMode, unknown: extra.unknown,
       dialHolds: haltBehaviour !== 'exempt' && (accountStopped || (extra.writesOnOwn && state.autonomy === 'SUGGEST')),
       rows: extra.rows ?? null, mode,
     })
@@ -452,6 +484,7 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
       exposure: { ...exposure, start: exposure.group === 'ready' ? extra.start ?? null : null },
       writes7d,
       activity: engineActivity(lastRunAt, writes7d),
+      ...(extra.family ? { family: extra.family } : {}),
     }
   }
 
@@ -560,6 +593,21 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
         start: 'Switch on an analyst charter to start it.',
       }),
   ]
+
+  // A4 — one row per brain writer (family 'brain'): its env from its own reader, its mode what the brain really does now.
+  const BRAIN_START = 'Enroll a product in the brain and give it this lever at PROPOSE or AUTO (set-ads-brain) to start it.'
+  if (brainRows instanceof Error) {
+    levers.push(mk('brain', 'Ads brain', 'The brain\'s writers', null, null, 'OFF', `The brain's writers could not be read: ${brainRows.message.slice(0, 200)}`, null, 'gated', { writesOnOwn: true, unknown: true, family: 'brain' }))
+  } else {
+    for (const b of brainRows) {
+      levers.push(mk(
+        b.def.key, b.def.name, b.def.what, b.def.cron, b.def.schedule, b.env.mode, b.env.why,
+        b.rows.total ? `${b.rows.auto} of ${b.rows.total} ${b.def.key === 'bid-brain' ? 'LIVE / HELD campaigns' : 'enrolled products'} acting now` : null,
+        b.def.haltBehaviour,
+        { writesOnOwn: b.def.writesOnOwn, rows: b.def.writesOnOwn ? b.rows : null, effective: { mode: b.effective.mode, reason: b.effective.why }, start: BRAIN_START, family: 'brain' },
+      ))
+    }
+  }
 
   return {
     levers,

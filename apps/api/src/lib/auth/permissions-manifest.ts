@@ -417,6 +417,13 @@ export const ENTRIES: Entry[] = [
   // for the same reason as the preview above.
   P(F.adsView, (m, p) => isRead(m) && p === '/api/advertising/rank-release/enabled-orphans'),
   P(F.adsCampaignsManage, (m, p) => !isRead(m) && /^\/api\/advertising\/rank-release\/enabled-orphans\/[^/]+\/release$/.test(p)),
+  // Ads brain page A1 / A3 / A5 — the brain's reads (routes/advertising-brain.routes.ts: the same answers as Claude's ads-brain
+  // and bid-brain tools, the switchboard, the requests waiting; all need ads.view): named on their own so no reorder of the
+  // /automation rules below can make a read need ads.automation.manage. Reads only; the brain's writes keep the /automation rule.
+  P(F.adsView, (m, p) => isRead(m) && /^\/api\/advertising\/automation\/brain\/((views|bid-brain)\/[^/]+|switchboard|requests)$/.test(p)),
+  // A5 — the brain's writes (each a request through the approval gate, which checks the tool's own permissions and ai.run):
+  // ads.automation.manage, named on its own so the /bid rule below can never catch …/brain/bid-brain/enrollment.
+  P(F.adsAutomationManage, (m, p) => !isRead(m) && p.startsWith('/api/advertising/automation/brain/')),
   P(F.adsView, (m, p) => isRead(m) && pfx('/api/advertising')(m, p)),
   // Ads wave 4a — which Amazon Ads accounts Nexus reads is part of connecting the account (ads.connect, as the
   // /api/amazon-ads/auth sign-in): named on its own so it never falls through to ads.campaigns.manage below.
