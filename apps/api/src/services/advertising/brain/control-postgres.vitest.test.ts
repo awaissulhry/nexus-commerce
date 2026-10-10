@@ -322,6 +322,11 @@ describe.skipIf(!concurrentDatabaseUrl())('set-ads-brain — the Owner\'s contro
     expect((await openOverrides()).filter((o) => o.key === 'tosTargetPct')).toEqual([expect.objectContaining({ scope: 'CAMPAIGN', campaignId: C('a-live'), kind: 'VALUE', ref, value: 40 })])
     expect((await inW(() => brainSettings(P1, 'IT')))!.values.tosTargetPct.value).toBeNull()
     expect((await inW(() => brainSettings(P1, 'IT', C('a-live'))))!.values.tosTargetPct.value).toBeNull()
+    // The ads-brain map lists it on its campaign's row (keywordValues), never as the campaign's own setting.
+    const m = (await map()).data
+    expect(campaignRow(m, 'a-live').keywordValues).toEqual([expect.objectContaining({ key: 'tosTargetPct', ref, value: 40, by: 'user:u-approver', reason: expect.stringContaining('test keyword target') })])
+    expect(campaignRow(m, 'a-live').ownSettings?.tosTargetPct).toBeUndefined()
+    expect(m.product.keywordValues).toBeUndefined()
 
     const change = await changeOf(own.approvalId)
     expect(change.after).toMatchObject({ op: 'set-value', scope: 'CAMPAIGN', campaignId: C('a-live'), kind: 'VALUE', key: 'tosTargetPct', ref, open: true, value: 40 })

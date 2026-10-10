@@ -26,7 +26,7 @@ import { describe, expect, it, vi } from 'vitest'
 vi.mock('../../../db.js', () => ({ default: {} }))
 
 const {
-  amazonRulesGap, brainNoteOf, clashOf, configuredWriters, engineState, leverOfAction, leverOwner, leversOfRuleAction, ruleState, selfBlocking, serverVariables, siblingTerms, writerOfActor,
+  amazonRulesGap, brainNoteOf, clashOf, configuredWriters, engineState, leverOfAction, leverOwner, leversOfRuleAction, ruleState, selfBlocking, serverVariables, siblingTerms, writerOfActor, keywordValuesOf,
 } = await import('./read-map.js')
 const { resolveBrainSettings } = await import('./settings.js')
 const { campaignNativeRules } = await import('./native-rules.js')
@@ -354,5 +354,20 @@ describe('AB-4 amazonRulesGap — Amazon\'s own rules in the clashes view', () =
     expect(clashOf([brain, amazon])).toEqual(['Amazon-run bidding strategy "RULE_BASED"', 'the brain'])
     expect(leverOwner([brain, amazon], { excluded: false, brainNote: null })).toBe('two or more writers: Amazon-run bidding strategy "RULE_BASED", the brain')
     expect(leverOwner([amazon], { excluded: false, brainNote: null })).toBe('Amazon-run bidding strategy "RULE_BASED"')
+  })
+})
+
+describe('keywordValuesOf — the Owner\'s own per-keyword values (integration review fix)', () => {
+  const row = (o: Record<string, unknown>) => ({ id: 'o', productId: 'p1', marketplace: 'IT', scope: 'CAMPAIGN', campaignId: 'c1', kind: 'VALUE', key: 'tosTargetPct', ref: 'target:t-1', value: 40, by: 'user:owner', reason: null, createdAt: new Date('2026-10-09T08:00:00Z'), endedAt: null, ...o }) as never
+  it('a campaign\'s keyword values, or the product\'s in a market; never a plain value, an ended one or another scope\'s', () => {
+    const rows = [
+      row({}), row({ ref: 'target:t-2', value: null, reason: 'off here' }), row({ ref: '' }), row({ endedAt: new Date() }),
+      row({ campaignId: 'c2' }), row({ scope: 'PRODUCT', campaignId: null, ref: 'target:t-9', value: 30 }), row({ scope: 'PRODUCT', campaignId: null, marketplace: 'DE', ref: 'target:t-8' }),
+    ]
+    expect(keywordValuesOf(rows, { scope: 'CAMPAIGN', campaignId: 'c1' })).toEqual([
+      { key: 'tosTargetPct', ref: 'target:t-1', value: 40, by: 'user:owner', at: '2026-10-09T08:00:00.000Z' },
+      { key: 'tosTargetPct', ref: 'target:t-2', value: null, by: 'user:owner', at: '2026-10-09T08:00:00.000Z', reason: 'off here' },
+    ])
+    expect(keywordValuesOf(rows, { scope: 'PRODUCT', productId: 'p1', market: 'IT' }).map((v) => [v.ref, v.value])).toEqual([['target:t-9', 30]])
   })
 })

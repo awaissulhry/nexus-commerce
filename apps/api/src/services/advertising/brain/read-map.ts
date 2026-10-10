@@ -498,6 +498,21 @@ const provenanceView = (p: Provenance) => ({ source: p.source, by: p.by, at: p.a
  */
 const lockView = (lock: { value: unknown } & Provenance) => ({ value: lock.value ?? null, ...provenanceView(lock) })
 
+/**
+ * Integration review fix (2026-10-10) — the Owner's own per-keyword values (set-ads-brain set-value with ref
+ * target:<AdTarget.id>; today tosTargetPct) at one scope: a campaign's, or the product's in a market. Each with its key,
+ * the keyword's ref, the value (null = off for that keyword), who set it, when and why. The resolved settings above never
+ * show them (a keyword's value is not the campaign's or the product's). Pure.
+ */
+export function keywordValuesOf(overrides: readonly OverrideRow[], at: { scope: 'CAMPAIGN'; campaignId: string } | { scope: 'PRODUCT'; productId: string; market: string }) {
+  const iso = (d: Date | string) => (d instanceof Date ? d.toISOString() : String(d))
+  return overrides
+    .filter((o) => !o.endedAt && o.kind === 'VALUE' && typeof o.ref === 'string' && o.ref.startsWith('target:')
+      && (at.scope === 'CAMPAIGN' ? o.scope === 'CAMPAIGN' && o.campaignId === at.campaignId : o.scope === 'PRODUCT' && o.productId === at.productId && o.marketplace === at.market))
+    .sort((a, b) => a.key.localeCompare(b.key) || a.ref.localeCompare(b.ref))
+    .map((o) => ({ key: o.key, ref: o.ref, value: o.value ?? null, by: o.by, at: iso(o.createdAt), ...(o.reason ? { reason: o.reason } : {}) }))
+}
+
 /** MCP.12 — the words every tool uses for a product that is deleted (Product.deletedAt) or not in this business. */
 export const PRODUCT_NOT_FOUND = 'Product not found'
 
@@ -568,6 +583,8 @@ async function campaignLevers(campaigns: readonly CampaignRow[], owners: Readonl
         ...(settings && Object.values(settings.values).some((v) => v.source === 'campaign')
           ? { ownSettings: Object.fromEntries(Object.entries(settings.values).filter(([, v]) => v.source === 'campaign').map(([k, v]) => [k, { [k]: v.value, ...provenanceView(v) }])) }
           : {}),
+        // The Owner's own per-keyword values in this campaign (keywordValuesOf).
+        ...(() => { const kw = keywordValuesOf(cfg.overrides, { scope: 'CAMPAIGN', campaignId: c.id }); return kw.length ? { keywordValues: kw } : {} })(),
         levers,
         amazonRules: campaignNativeView(native.get(c.id)),
       }
@@ -631,8 +648,9 @@ export async function brainMap(args: MapArgs, opts: ViewClock = {}): Promise<{ d
   if (!view) return { error: `product ${args.productId} has no single family (a parentless product whose ASIN variations of several families carry): fix its family first` }
   const ids = view.campaigns.map((c) => c.campaignId)
   const [campaigns, owners] = await Promise.all([campaignsById(ids), resolveCampaignOwnership(ids)])
-  const { rows } = await campaignLevers(campaigns, owners, days, now)
+  const { rows, cfg } = await campaignLevers(campaigns, owners, days, now)
   const settings = view.settings
+  const productKeywordValues = keywordValuesOf(cfg.overrides, { scope: 'PRODUCT', productId: view.productId, market })
   const kills = await productKills(view.productId, market)
   return {
     data: {
@@ -651,6 +669,8 @@ export async function brainMap(args: MapArgs, opts: ViewClock = {}): Promise<{ d
         kills: Object.values(kills).map((k) => killOut(k!)),
         settings: Object.fromEntries(Object.entries(settings.values).map(([k, v]) => [k, { [k]: v.value, source: v.source, by: v.by, at: v.at, ...(v.reason ? { reason: v.reason } : {}) }])),
         ...(settings.ignored.length ? { ignoredOverrides: settings.ignored } : {}),
+        // The product's own per-keyword values (each keyword's own; a campaign's are on its row).
+        ...(productKeywordValues.length ? { keywordValues: productKeywordValues } : {}),
       },
       bidsAsCampaigns: view.bidsAsCampaigns,
       notReached: view.notReached,
