@@ -308,6 +308,9 @@ export async function brainView(productId: string, market: string): Promise<Brai
     openOverrides(camps.root, m, all.map((c) => c.campaignId)),
     prisma.adsBrainOverride.findMany({ where: { endedAt: null, scope: 'CAMPAIGN', productId: camps.root, marketplace: m, campaignId: { notIn: all.map((c) => c.campaignId) } }, select: { campaignId: true } }),
   ])
+  // A2b — the campaigns of those overrides that are archived (productCampaigns leaves archived campaigns out): no effect.
+  const strayIds = [...new Set(strayRows.map((r) => r.campaignId).filter((id): id is string => !!id))]
+  const archivedStray = new Set(strayIds.length ? (await prisma.campaign.findMany({ where: { id: { in: strayIds }, status: 'ARCHIVED' }, select: { id: true } })).map((c) => c.id) : [])
   const enrolled = !!row
   const resolve = (campaignId: string | null) => resolveBrainSettings({ productId: camps.root, market: m, campaignId, enrolled, overrides })
   const campaigns: BrainCampaignView[] = all.map((c) => {
@@ -328,8 +331,10 @@ export async function brainView(productId: string, market: string): Promise<Brai
   if (sharedLive.length) drift.push(`${count(sharedLive.length, 'shared campaign is', 'shared campaigns are')} LIVE by a per-campaign enrollment (${names(sharedLive)}): no product's lever moves ${sharedLive.length === 1 ? 'it' : 'them'}`)
   const keptOff = campaigns.filter((c) => isOwnedMode(c.mode) && ownerKeepsOff(c.bids))
   if (keptOff.length) drift.push(`${count(keptOff.length, 'campaign is', 'campaigns are')} LIVE although the Owner keeps the bid brain off (${names(keptOff)}): set that choice again to take ${keptOff.length === 1 ? 'it' : 'them'} back to shadow`)
-  const left = [...new Set(strayRows.map((r) => r.campaignId).filter((id): id is string => !!id))]
+  const left = strayIds.filter((id) => !archivedStray.has(id))
   if (left.length) drift.push(`the Owner's overrides on ${count(left.length, 'campaign')} that no longer ${left.length === 1 ? 'advertises' : 'advertise'} this product here (${left.join(', ')}): they still apply to ${left.length === 1 ? 'that campaign' : 'those campaigns'}`)
+  const onArchived = strayRows.filter((r) => r.campaignId && archivedStray.has(r.campaignId)).length
+  if (onArchived) drift.push(`${count(onArchived, 'Owner choice')} ${onArchived === 1 ? 'sits' : 'sit'} on ${count(archivedStray.size, 'archived campaign')} (${[...archivedStray].sort().join(', ')}): no effect — nothing runs on an archived campaign`)
   return {
     productId: camps.root, market: m, enrolled, version: row?.version ?? null, enrolledBy: row?.enrolledBy ?? null,
     updatedBy: row?.updatedBy ?? null, updatedAt: row?.updatedAt.toISOString() ?? null, snapshots: readSnapshots(row?.snapshots),
@@ -342,17 +347,26 @@ export async function brainView(productId: string, market: string): Promise<Brai
 /**
  * Today's LIVE and HELD BidBrainEnrollment rows by owner (a read: it maps the rows set per campaign — GALE IT's ten —
  * and changes none): per product and market the campaigns and whether the product is enrolled; the shared and the
- * unowned campaigns apart.
+ * unowned campaigns apart. A2b — a row on an archived campaign is left over (nothing runs there): left out of the
+ * groups and listed under `ownedButArchived`.
  */
 export async function bidBrainRowsByProduct(market?: string): Promise<{
   products: Array<{ productId: string; market: string; campaignIds: string[]; enrolled: boolean }>
   shared: Array<{ campaignId: string; market: string | null; productIds: string[] }>
   none: Array<{ campaignId: string; market: string | null }>
+  ownedButArchived: Array<{ campaignId: string; market: string | null; mode: string }>
 }> {
   const m = market ? marketOf(market) : null
-  if (market && !m) return { products: [], shared: [], none: [] }
-  const rows = (await prisma.bidBrainEnrollment.findMany({ where: { mode: { in: [...OWNED_MODES] } }, select: { campaignId: true, marketplace: true } }))
+  if (market && !m) return { products: [], shared: [], none: [], ownedButArchived: [] }
+  const enrolledRows = (await prisma.bidBrainEnrollment.findMany({ where: { mode: { in: [...OWNED_MODES] } }, select: { campaignId: true, marketplace: true, mode: true } }))
     .filter((r) => !m || strategyMarket(r.marketplace) === m)
+  const archivedIds = new Set(enrolledRows.length
+    ? (await prisma.campaign.findMany({ where: { id: { in: enrolledRows.map((r) => r.campaignId) }, status: 'ARCHIVED' }, select: { id: true } })).map((c) => c.id)
+    : [])
+  const ownedButArchived = enrolledRows.filter((r) => archivedIds.has(r.campaignId))
+    .map((r) => ({ campaignId: r.campaignId, market: strategyMarket(r.marketplace), mode: r.mode }))
+    .sort((a, b) => a.campaignId.localeCompare(b.campaignId))
+  const rows = enrolledRows.filter((r) => !archivedIds.has(r.campaignId))
   const owners = await resolveCampaignOwnership(rows.map((r) => r.campaignId))
   const byProduct = new Map<string, { productId: string; market: string; campaignIds: string[] }>()
   const shared: Array<{ campaignId: string; market: string | null; productIds: string[] }> = []
@@ -379,6 +393,7 @@ export async function bidBrainRowsByProduct(market?: string): Promise<{
       .sort((a, b) => a.market.localeCompare(b.market) || a.productId.localeCompare(b.productId)),
     shared: shared.sort((a, b) => a.campaignId.localeCompare(b.campaignId)),
     none: none.sort((a, b) => a.campaignId.localeCompare(b.campaignId)),
+    ownedButArchived,
   }
 }
 
@@ -619,7 +634,7 @@ async function runChange(args: ChangeArgs, change: Change): Promise<Result<{ pla
     }
     if (plan.set) {
       await prisma.adsBrainOverride.create({
-        data: { productId: root, marketplace: market, scope: plan.set.scope, campaignId: plan.set.campaignId, kind: plan.set.kind, key: plan.set.key, ref: plan.set.ref, value: plan.set.value === null ? undefined : json(plan.set.value), by: args.by, reason: args.reason?.slice(0, 500) ?? null },
+        data: { productId: root, marketplace: market, scope: plan.set.scope, campaignId: plan.set.campaignId, kind: plan.set.kind, key: plan.set.key, ref: plan.set.ref, value: plan.set.value === null ? undefined : json(plan.set.value), by: args.by, reason: args.reason?.slice(0, 500) ?? null, createdAt: now },
       })
     }
     for (const s of plan.steps ?? []) {

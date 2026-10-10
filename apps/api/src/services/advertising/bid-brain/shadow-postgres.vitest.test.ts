@@ -102,20 +102,22 @@ describe.skipIf(!concurrentDatabaseUrl())('BB-3 — the shadow bid brain (real P
       .toEqual([{ id: 't-it', bidCents: 45 }, { id: 't-low', bidCents: 3 }, { id: 't-pin', bidCents: 40 }])
   })
 
+  // C4 — the read views decide at the test's clock (NOW), as the shadow run did: from two days on, the real clock would
+  // brake every decision on the 48-hour stale-data rule and the what-if's "aim 60%" line would be gone.
   it('BB-4 — the read: why per campaign, a what-if that stores nothing, and the diff per day', async () => {
-    const why = await inside(() => readBidBrain({ view: 'why', campaignId: 'c-pin' })) as { data: { decisions: Array<Record<string, unknown>> } }
+    const why = await inside(() => readBidBrain({ view: 'why', campaignId: 'c-pin' }, { now: NOW })) as { data: { decisions: Array<Record<string, unknown>> } }
     expect(why.data.decisions).toHaveLength(1)
     expect(why.data.decisions[0]).toMatchObject({ targetId: 't-pin', keyword: 'pinned jacket (EXACT)', layer: 'pin', action: 'hold', currentCents: 40 })
     const stored = await inside(() => database.client.bidBrainDecision.count())
-    const whatIf = await inside(() => readBidBrain({ view: 'what-if', campaignId: 'c-it', targetAcosPct: 60 })) as { data: { decisions: Array<Record<string, unknown>>; totals: Record<string, number> } }
+    const whatIf = await inside(() => readBidBrain({ view: 'what-if', campaignId: 'c-it', targetAcosPct: 60 }, { now: NOW })) as { data: { decisions: Array<Record<string, unknown>>; totals: Record<string, number> } }
     expect(whatIf.data.totals.keywords).toBe(3)
     expect(whatIf.data.decisions.find((d) => d.targetId === 't-it')?.why).toMatch(/aim 60%/)
     expect(await inside(() => database.client.bidBrainDecision.count())).toBe(stored)
-    const diff = await inside(() => readBidBrain({ view: 'diff', market: 'IT', days: 7 })) as { data: { days: Array<Record<string, number | string>> } }
+    const diff = await inside(() => readBidBrain({ view: 'diff', market: 'IT', days: 7 }, { now: NOW })) as { data: { days: Array<Record<string, number | string>> } }
     const today = diff.data.days.find((d) => d.day === NOW.toISOString().slice(0, 10))!
     expect(today).toMatchObject({ decided: 4, conflicts: 0, writes: 0 })
     expect((today.agree as number) + (today.higher as number) + (today.lower as number) + (today.hold as number) + (today.brake as number)).toBe(4)
-    expect(await inside(() => readBidBrain({ view: 'what-if', campaignId: 'c-it' }))).toEqual({ error: 'what-if needs targetAcosPct (and optionally bandLoPct / bandHiPct).' })
+    expect(await inside(() => readBidBrain({ view: 'what-if', campaignId: 'c-it' }, { now: NOW }))).toEqual({ error: 'what-if needs targetAcosPct (and optionally bandLoPct / bandHiPct).' })
   })
 
   it('a rerun on the same facts stores nothing; the next day stores one snapshot each', async () => {

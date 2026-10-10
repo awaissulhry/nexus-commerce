@@ -30,7 +30,8 @@ import { BRAIN_LEVERS, LEVER_LEVELS_NOW, type BrainLever } from './levers.js'
 import { productCampaigns, resolveCampaignOwnership, type CampaignOwnership } from './ownership.js'
 import { brainView, bidBrainRowsByProduct } from './enrollment.js'
 import { resolveBrainSettings, type BrainSettings, type OverrideRow, type Provenance } from './settings.js'
-import { killWords, openKills, productKills, type BrainKill } from './kill-switch.js'
+import { killOf, killWords, openKills, productKills, type BrainKill } from './kill-switch.js'
+import { brainLeverState, leverFactsOf, loadGateDecider, loadLeverFacts, loadLeverRuntime, type LeverGates, type LeverRuntime } from './lever-state.js'
 import {
   actingRules, campaignNativeView, DAILY_READ_AT, loadNativeRules, NATIVE_RULE_CAPABILITY, nativeReadStatus, nativeRuleWriters, notReadableKinds,
   type CampaignNativeRules,
@@ -83,10 +84,12 @@ export function leverOfAction(actionType: string, entityType: string): BrainLeve
     case 'AD_BUDGET_UPDATE': case 'set_campaign_budget_bounds': return 'budgets'
     case 'update_placement_bidding': return 'placements'
     case 'AD_ENTITY_STATE_UPDATE': return 'state'
-    case 'create_negative_keyword': case 'retire_negative': return 'negatives'
+    case 'create_negative_keyword': case 'create_negative_product_target': case 'retire_negative': return 'negatives'
     case 'create_keyword': return 'harvest'
     case 'create_campaign': case 'create_ad_group': return 'structure'
     case 'AD_CAMPAIGN_PORTFOLIO_UPDATE': case 'AD_PORTFOLIO_UPDATE': case 'AD_PORTFOLIO_CREATE': return 'portfolioCap'
+    // Ads brain page A2a — a campaign's Amazon bidding strategy (ads-mutation.service.ts sets this action type).
+    case 'AD_BIDDING_STRATEGY_UPDATE': return 'biddingStrategy'
     default: return null
   }
 }
@@ -132,9 +135,10 @@ export function clashOf(writers: readonly Writer[]): string[] | null {
 
 /**
  * Who owns one lever of one campaign today, in one line. `brainNote`: what the brain does there when it only watches
- * (the bid brain's shadow, or a lever whose shadow is not built yet), null when it does not.
+ * (the bid brain's shadow, or a lever whose shadow is not built yet), null when it does not. A2a — when nobody is set to
+ * act or ask now, the writers that changed it in the evidence window (`days`) are named: nobody acts, but someone wrote.
  */
-export function leverOwner(writers: readonly Writer[], ctx: { excluded: boolean; brainNote: string | null }): string {
+export function leverOwner(writers: readonly Writer[], ctx: { excluded: boolean; brainNote: string | null; days?: number; archived?: boolean }): string {
   const lock = writers.find((w) => w.kind === 'owner' && w.state === 'holds')
   if (lock) return `the Owner (${lock.why})`
   const acting = [...new Set(writers.filter((w) => w.basis === 'configured' && w.state === 'acts').map((w) => w.who))]
@@ -144,8 +148,17 @@ export function leverOwner(writers: readonly Writer[], ctx: { excluded: boolean;
   if (acting.length === 1) return acting[0]
   const asking = [...new Set(writers.filter((w) => w.basis === 'configured' && w.state === 'asks').map((w) => w.who))]
   if (asking.length) return `nobody acts alone — ${asking.sort().join(', ')} ${asking.length === 1 ? 'asks' : 'ask'} a person`
+  const wrote = writers.filter((w) => w.basis === 'wrote' && w.changes)
+  if (wrote.length) {
+    const lines = wrote.map((w) => `${w.who} wrote ${plural(w.changes!, 'change')}${ctx.days ? ` in ${plural(ctx.days, 'day')}` : ''}${w.last ? ` (last ${w.last.slice(0, 10)})` : ''}`)
+    return `nobody set to act now — ${lines.join('; ')}${ctx.archived ? ` (${ARCHIVED_WORDS})` : ctx.excluded ? ' (excluded from the brain by the Owner)' : ctx.brainNote ? `; ${ctx.brainNote}` : ''}`
+  }
+  if (ctx.archived) return `nobody (${ARCHIVED_WORDS})`
   return ctx.excluded ? 'nobody (excluded from the brain by the Owner)' : ctx.brainNote ? `nobody acts (${ctx.brainNote})` : 'nobody'
 }
+
+/** Wave 2 — why nobody owns a lever of an archived campaign. */
+export const ARCHIVED_WORDS = 'archived: nothing runs on an archived campaign'
 
 /** What the brain does on a lever where it only watches, in the owner line's words. */
 export function brainNoteOf(writers: readonly Writer[]): string | null {
@@ -226,7 +239,8 @@ async function engineFacts(): Promise<{ engines: Map<string, EngineFact>; levers
   try {
     const { getEngineLevers } = await import('../ads-control-room.service.js')
     const read = await getEngineLevers()
-    const levers = read.levers.map((l) => ({ key: l.key, name: l.name, mode: l.mode, group: l.exposure.group, why: l.modeReason, start: l.exposure.start, warning: l.warning }))
+    // A4 — the brain's own rows (family 'brain') are the brain, not a tool it lists: the setup view has its own brain part.
+    const levers = read.levers.filter((l) => l.family !== 'brain').map((l) => ({ key: l.key, name: l.name, mode: l.mode, group: l.exposure.group, why: l.modeReason, start: l.exposure.start, warning: l.warning }))
     return { engines: new Map(levers.map((l) => [l.key, l])), levers }
   } catch {
     return null
@@ -240,15 +254,21 @@ async function dialOf(): Promise<Dial> {
 }
 
 /** Everything configured that can write to these campaigns, in a fixed number of reads. */
-async function loadConfig(campaigns: readonly CampaignRow[], owners: ReadonlyMap<string, CampaignOwnership>) {
+async function loadConfig(campaigns: readonly CampaignRow[], owners: ReadonlyMap<string, CampaignOwnership>, now: Date) {
   const ids = campaigns.map((c) => c.id)
-  const month = new Date().toISOString().slice(0, 7)
+  const month = now.toISOString().slice(0, 7)
   const { brainOwnedCampaignIds, brainLiveCeiling } = await import('../bid-brain/live.js')
   const { rankOwnedCampaignIds } = await import('../rank-release.service.js')
   const { isGoalMode } = await import('../../../jobs/ad-rank-defend.job.js')
   const { RUNNING_AUTOPILOT_PLANS } = await import('../../../jobs/ad-autopilot.job.js')
   const { bidBrainMode } = await import('../bid-brain/shadow.js')
-  const [brainRows, brainOwned, rankHeld, schedules, autopilots, rules, budgetSchedules, poolAllocations, budgetPlans, goals, playbookSlots, coverageSets, bidHolds, overrides, enrollments, engines, dial] = await Promise.all([
+  // A2a — the products × markets whose brain speaks for a campaign here: their levers' own gates are read once.
+  const speaking = [...new Map(campaigns.flatMap((c) => {
+    const o = owners.get(c.id)
+    const market = strategyMarket(c.marketplace)
+    return o?.owner.kind === 'product' && market ? [[`${o.owner.productId}\u0000${market}`, { productId: o.owner.productId, market }] as const] : []
+  })).values()]
+  const [brainRows, brainOwned, rankHeld, schedules, autopilots, rules, budgetSchedules, poolAllocations, budgetPlans, goals, playbookSlots, coverageSets, bidHolds, overrides, enrollments, engines, dial, runtime, kills, leverFacts] = await Promise.all([
     prisma.bidBrainEnrollment.findMany({ where: { campaignId: { in: ids } }, select: { campaignId: true, mode: true, heldUntil: true } }),
     brainOwnedCampaignIds(ids),
     rankOwnedCampaignIds(),
@@ -269,6 +289,9 @@ async function loadConfig(campaigns: readonly CampaignRow[], owners: ReadonlyMap
     prisma.adsBrainEnrollment.findMany({ select: { productId: true, marketplace: true } }),
     engineFacts(),
     dialOf(),
+    loadLeverRuntime(),
+    openKills(),
+    loadLeverFacts(speaking),
   ])
   // Rules scoped to a product name its family root (a variation's parent), read in one query.
   const ruleProducts = [...new Set(rules.map((r) => r.scopeProductId).filter((v): v is string => !!v))]
@@ -290,16 +313,19 @@ async function loadConfig(campaigns: readonly CampaignRow[], owners: ReadonlyMap
     enrolled: new Set(enrollments.map((e) => `${e.productId}\u0000${e.marketplace}`)),
     engines: engines?.engines ?? null,
     dial,
+    runtime,
+    kills,
+    leverFacts,
   }
 }
 
 type Config = Awaited<ReturnType<typeof loadConfig>>
 
 /** Who wrote each lever of these campaigns in the last `days` (the action log, one statement; rolled back and failed rows left out). */
-async function loadEvidence(campaignIds: readonly string[], days: number, ruleNames: ReadonlyMap<string, string>) {
+async function loadEvidence(campaignIds: readonly string[], days: number, ruleNames: ReadonlyMap<string, string>, now: Date) {
   const out = new Map<string, Map<BrainLever, Writer[]>>()
   if (!campaignIds.length) return out
-  const since = new Date(Date.now() - days * 86_400_000)
+  const since = new Date(now.getTime() - days * 86_400_000)
   const rows = await prisma.$queryRaw<Array<{ campaignId: string; userId: string | null; actionType: string; entityType: string; n: number; last: Date }>>(Prisma.sql`
     SELECT x."campaignId", x."userId", x."actionType", x."entityType", count(*)::int AS n, max(x."createdAt") AS last
       FROM (SELECT CASE WHEN l."entityType" = 'CAMPAIGN' THEN l."entityId" ELSE g."campaignId" END AS "campaignId",
@@ -331,12 +357,22 @@ async function loadEvidence(campaignIds: readonly string[], days: number, ruleNa
 /** A safety owner's actor (the write gate's own list): it always passes and is never a clash. */
 const isSafetyActor = (actor: string) => BRAIN_SAFETY_ACTOR_PREFIXES.some((p) => actor === p || actor.startsWith(`${p}-`))
 
+/** The brain's own writers (ads-engine-actors.ts), each in the map's words. A2a — the negatives and harvest writers too. */
+const BRAIN_WRITER_WHY: Partial<Record<EngineKey, string>> = {
+  'bid-brain': 'the bid brain wrote',
+  'brain-money': 'the brain\'s money writer wrote (AB-8)',
+  'brain-state': 'the brain\'s state writer paused or resumed it (AB-12)',
+  'brain-negatives': 'the brain\'s negatives writer added or retired it (AB-10)',
+  'brain-harvest': 'the brain\'s harvest writer added it (AB-11)',
+  'brain-strategy': 'the brain\'s bidding-strategy writer switched it (AB-17)',
+}
+
 /** Who an action-log actor is, in the map's words. */
 export function writerOfActor(userId: string | null, ruleNames: ReadonlyMap<string, string>): Omit<Writer, 'basis'> {
   if (userId && isSafetyActor(userId)) return { who: `safety: ${userId.replace(/^automation:/, '')}`, kind: 'safety', state: 'acts', why: 'a safety owner (always passes)' }
   const c = classifyActor(userId)
-  if (c.kind === 'engine') return c.engine === 'bid-brain' || c.engine === 'brain-money' || c.engine === 'brain-state' || c.engine === 'brain-strategy'
-    ? { who: 'the brain', kind: 'brain', state: 'acts', why: c.engine === 'bid-brain' ? 'the bid brain wrote' : c.engine === 'brain-money' ? 'the brain\'s money writer wrote (AB-8)' : c.engine === 'brain-strategy' ? 'the brain\'s bidding-strategy writer switched it (AB-17)' : 'the brain\'s state writer paused or resumed it (AB-12)' }
+  if (c.kind === 'engine') return c.engine in BRAIN_WRITER_WHY
+    ? { who: 'the brain', kind: 'brain', state: 'acts', why: BRAIN_WRITER_WHY[c.engine]! }
     : { who: engineLabel(c.engine), kind: 'engine', state: 'acts', why: `${engineLabel(c.engine)} wrote` }
   if (c.kind === 'rule-candidate') {
     const name = ruleNames.get(c.ruleId)
@@ -346,8 +382,11 @@ export function writerOfActor(userId: string | null, ruleNames: ReadonlyMap<stri
   return { who: 'no known author', kind: 'unknown', state: 'acts', why: 'the change carries no actor' }
 }
 
+/** A2a — the gates of the levers of the product whose brain speaks for one campaign, each decided by its lever's own code. */
+export type CampaignGates = LeverGates
+
 /** The writers configured on one campaign, per lever (the brain, the engines, the rules, the Owner). Pure over the config. */
-export function configuredWriters(c: CampaignRow & { market: string | null; productIds: string[]; brainCanOwn: boolean }, cfg: Pick<Config, 'brainMode' | 'brainOwned' | 'ceilingLive' | 'ceiling' | 'rankHeld' | 'schedules' | 'autopilotOf' | 'rules' | 'rootOfRuleProduct' | 'budgetScheduleOf' | 'poolOf' | 'budgetPlanFor' | 'goalOf' | 'slotOf' | 'coverageOf' | 'heldKeywords' | 'engines' | 'dial'>, settings: Pick<BrainSettings, 'excluded' | 'levers'> | null): Record<BrainLever, Writer[]> {
+export function configuredWriters(c: CampaignRow & { market: string | null; productIds: string[]; brainCanOwn: boolean; killed?: Partial<Record<BrainLever, string>> }, cfg: Pick<Config, 'brainMode' | 'brainOwned' | 'ceilingLive' | 'ceiling' | 'rankHeld' | 'schedules' | 'autopilotOf' | 'rules' | 'rootOfRuleProduct' | 'budgetScheduleOf' | 'poolOf' | 'budgetPlanFor' | 'goalOf' | 'slotOf' | 'coverageOf' | 'heldKeywords' | 'engines' | 'dial'> & { runtime: LeverRuntime }, settings: Pick<BrainSettings, 'excluded' | 'levers'> | null, gates?: CampaignGates): Record<BrainLever, Writer[]> {
   const out = Object.fromEntries(BRAIN_LEVERS.map((l) => [l, [] as Writer[]])) as Record<BrainLever, Writer[]>
   const add = (lever: BrainLever, w: Omit<Writer, 'basis'>) => out[lever].push({ ...w, basis: 'configured' })
   // An engine named as its evidence names it (engineLabel), so what is set up and what wrote meet on one name.
@@ -358,35 +397,38 @@ export function configuredWriters(c: CampaignRow & { market: string | null; prod
   }
   const sp = c.adProduct === 'SPONSORED_PRODUCTS'
   const brainMode = cfg.brainMode.get(c.id) ?? null
+  // A2b / wave 2 — nothing runs on an archived campaign: no engine, rule, brain lever or lock acts there. Only a LIVE or
+  // HELD bid brain enrollment left on it is said (bid-brain/live.ts unchanged); who wrote before stays in the evidence.
+  if (c.status === 'ARCHIVED') {
+    if (cfg.brainOwned.has(c.id)) add('bids', { who: 'the brain', kind: 'brain', state: 'off', why: `archived: its bid brain enrollment (${brainMode ?? 'LIVE'}) is left over — nothing runs on an archived campaign` })
+    return out
+  }
   const brainOwns = cfg.brainOwned.has(c.id)
-  // The brain: bids (and the hourly plan's placements and Min-bid hours) when it owns the campaign; else it watches.
+  // The brain: bids (and the hourly plan's placements and Min-bid hours) when it owns the campaign; else it watches. Wave 2
+  // — the Owner's kill switch on one of those levers: the bid brain decides and logs there and writes nothing (the gate
+  // refuses its actor on that lever).
+  const killedWords = (lever: BrainLever, owning: string) => `${owning}, but ${c.killed![lever]}: it decides and logs, and writes nothing`
   if (brainOwns) {
     const held = brainMode === 'HELD'
-    add('bids', { who: 'the brain', kind: 'brain', state: 'acts', why: held ? 'the bid brain owns it, HELD: it raises nothing' : 'the bid brain owns it (LIVE)' })
-    if (cfg.rankHeld.has(c.id)) for (const l of ['hours', 'placements'] as const) add(l, { who: 'the brain', kind: 'brain', state: 'acts', why: 'the bid brain runs its hourly plan (BB-7)' })
+    const owning = held ? 'the bid brain owns it, HELD: it raises nothing' : 'the bid brain owns it (LIVE)'
+    add('bids', c.killed?.bids ? { who: 'the brain', kind: 'brain', state: 'watches', why: killedWords('bids', owning) } : { who: 'the brain', kind: 'brain', state: 'acts', why: owning })
+    if (cfg.rankHeld.has(c.id)) {
+      for (const l of ['hours', 'placements'] as const) {
+        add(l, c.killed?.[l] ? { who: 'the brain', kind: 'brain', state: 'watches', why: killedWords(l, 'the bid brain runs its hourly plan (BB-7)') } : { who: 'the brain', kind: 'brain', state: 'acts', why: 'the bid brain runs its hourly plan (BB-7)' })
+      }
+    }
   } else if (sp && c.liveBidWritesEnabled && cfg.ceiling !== 'off') {
     add('bids', { who: 'the brain', kind: 'brain', state: 'watches', why: brainMode === 'LIVE' || brainMode === 'HELD' ? `enrolled ${brainMode}, but NEXUS_BID_BRAIN_MODE is ${cfg.ceiling}: the brain decides in shadow` : 'the bid brain decides it in shadow (allowlisted), writes nothing' })
   }
-  // Other levers: the brain's resolved level (no writer for them yet: OBSERVE records the intent). Never on a shared campaign.
+  // Other levers: what the brain really does with each at its resolved level (lever-state.ts — the server switch, the
+  // lever's own gate, the Owner's kill, the account; A2a). A lever the Owner gave the brain (PROPOSE or AUTO) is listed
+  // even when nothing runs it, with why. Never on a shared campaign.
   if (settings && c.brainCanOwn) {
     for (const lever of BRAIN_LEVERS) {
       if (lever === 'bids') continue
       const l = settings.levers[lever]
-      if (l.effective === 'OBSERVE') add(lever, { who: 'the brain', kind: 'brain', state: 'watches', why: `OBSERVE: ${LEVER_LEVELS_NOW[lever].others}` })
-      // AB-8 — the money levers have a writer: AUTO acts and PROPOSE asks under a live switch; otherwise the brain only plans.
-      else if ((lever === 'budgets' || lever === 'portfolioCap') && (l.effective === 'AUTO' || l.effective === 'PROPOSE')) {
-        add(lever, cfg.ceilingLive
-          ? { who: 'the brain', kind: 'brain', state: l.effective === 'AUTO' ? 'acts' : 'asks', why: `${l.effective}: ${l.effective === 'AUTO' ? 'the brain\'s money writer sets it inside the pace (AB-8)' : 'the brain asks a person for each change in the Approvals page (AB-8)'}` }
-          : { who: 'the brain', kind: 'brain', state: 'watches', why: `${l.effective}, but NEXUS_BID_BRAIN_MODE is ${cfg.ceiling}: the brain plans it in shadow` })
-      }
-      // AB-13 — a lever at PROPOSE: the brain asks a person for each change (the hours lever: its painted plan).
-      else if (l.effective === 'PROPOSE') add(lever, { who: 'the brain', kind: 'brain', state: 'asks', why: `PROPOSE: ${LEVER_LEVELS_NOW[lever].others}` })
-      // AB-12 — the state lever at AUTO: the brain pauses and resumes alone under a live switch (set-ads-brain sets it).
-      else if (lever === 'state' && l.effective === 'AUTO') {
-        add(lever, cfg.ceilingLive
-          ? { who: 'the brain', kind: 'brain', state: 'acts', why: 'AUTO: the brain pauses a campaign for a stop of 3 days or more and resumes it when the stop ends, alone inside the caps (AB-12); an archive is only ever proposed' }
-          : { who: 'the brain', kind: 'brain', state: 'watches', why: `AUTO, but NEXUS_BID_BRAIN_MODE is ${cfg.ceiling}: the brain decides its pauses in shadow` })
-      }
+      const s = brainLeverState({ lever, effective: l.effective, killed: c.killed?.[lever] ?? null, negativesShadow: gates?.negativesShadow, strategyAsks: gates?.strategyAsks }, cfg.runtime)
+      if (s.state !== 'off' || l.owned) add(lever, { who: 'the brain', kind: 'brain', state: s.state, why: s.why })
     }
   }
   // The Owner: a lock (the brain's override), pinned bids, holds on keywords.
@@ -441,6 +483,12 @@ export function configuredWriters(c: CampaignRow & { market: string | null; prod
 
 export interface MapArgs { productId?: string; campaignId?: string; market?: string; days?: number }
 
+/**
+ * The clock a view reads (the evidence window, the month, how old Amazon's rules read is); default now. A second parameter,
+ * so a tool's or a route's input can never set it — tests pin it (as bid-brain/read.ts readBidBrain, C4).
+ */
+export interface ViewClock { now?: Date }
+
 /** Where an Owner's choice comes from, as the map shows it (his reason only when he gave one). */
 const provenanceView = (p: Provenance) => ({ source: p.source, by: p.by, at: p.at, ...(p.reason ? { reason: p.reason } : {}) })
 /**
@@ -462,10 +510,13 @@ const daysOf = (d?: number) => Math.max(1, Math.min(MAX_EVIDENCE_DAYS, Math.roun
 const campaignsById = async (ids: readonly string[]) => (ids.length ? (await prisma.campaign.findMany({ where: { id: { in: [...ids] } }, select: CAMPAIGN_SELECT })).map((c) => ({ ...c, status: String(c.status) })) as CampaignRow[] : [])
 
 /** Per campaign: who owns each lever today, with every writer (configured and in the evidence window). */
-async function campaignLevers(campaigns: readonly CampaignRow[], owners: ReadonlyMap<string, CampaignOwnership>, days: number) {
-  const [cfg, native] = await Promise.all([loadConfig(campaigns, owners), loadNativeRules(campaigns.map((c) => c.id))])
+async function campaignLevers(campaigns: readonly CampaignRow[], owners: ReadonlyMap<string, CampaignOwnership>, days: number, now: Date) {
+  const [cfg, native] = await Promise.all([loadConfig(campaigns, owners, now), loadNativeRules(campaigns.map((c) => c.id), now)])
   const ruleNames = new Map(cfg.rules.map((r) => [r.id, r.name]))
-  const evidence = await loadEvidence(campaigns.map((c) => c.id), days, ruleNames)
+  const evidence = await loadEvidence(campaigns.map((c) => c.id), days, ruleNames, now)
+  // A2a — each lever's own gate, decided by its own code: the negatives' shadow days, the bidding strategy's N4 clock.
+  const decide = await loadGateDecider()
+  const gatesOf = (productId: string, market: string, settings: BrainSettings): CampaignGates => decide(leverFactsOf(cfg.leverFacts, productId, market), settings, cfg.runtime.ceilingLive, now)
   return {
     cfg,
     native,
@@ -476,7 +527,14 @@ async function campaignLevers(campaigns: readonly CampaignRow[], owners: Readonl
       const productId = o?.owner.kind === 'product' ? o.owner.productId : o?.productIds[0] ?? null
       const enrolled = !!productId && !!market && cfg.enrolled.has(`${productId}\u0000${market}`)
       const settings = productId && market ? resolveBrainSettings({ productId, market, campaignId: c.id, enrolled, overrides: cfg.overrides }) : null
-      const configured = configuredWriters({ ...c, market, productIds: o?.productIds ?? [], brainCanOwn: o?.owner.kind === 'product' }, cfg, settings)
+      const brainCanOwn = o?.owner.kind === 'product'
+      // The Owner's kill switches that reach this campaign: its product's (a shared campaign is no product's: only a kill
+      // of every product reaches it, as kill-switch.ts campaignKills reads it).
+      const killed = Object.fromEntries(BRAIN_LEVERS.flatMap((lever) => {
+        const k = killOf(cfg.kills, { lever, productId: brainCanOwn ? productId : null, market })
+        return k ? [[lever, killWords(k)]] : []
+      })) as Partial<Record<BrainLever, string>>
+      const configured = configuredWriters({ ...c, market, productIds: o?.productIds ?? [], brainCanOwn, killed }, cfg, settings, settings && brainCanOwn && productId && market ? gatesOf(productId, market, settings) : undefined)
       // AB-4 — Amazon's own rules that act on the campaign write its levers too (a second brain inside Amazon).
       const amazon = nativeRuleWriters(native.get(c.id))
       const levers = Object.fromEntries(BRAIN_LEVERS.map((lever) => {
@@ -487,7 +545,7 @@ async function campaignLevers(campaigns: readonly CampaignRow[], owners: Readonl
         ]
         return [lever, {
           // AB-18 — the off-Amazon setting has no Amazon Ads API field Nexus could verify: nobody in Nexus reads or writes it.
-          owner: lever === 'offAmazon' ? OFF_AMAZON_OWNER : leverOwner(writers, { excluded: !!settings?.excluded.value, brainNote: brainNoteOf(writers) }),
+          owner: lever === 'offAmazon' ? OFF_AMAZON_OWNER : leverOwner(writers, { excluded: !!settings?.excluded.value, brainNote: brainNoteOf(writers), days, archived: c.status === 'ARCHIVED' }),
           // A shared campaign is no product's brain's (D2: split it); its exclusions and locks still hold (in the writers).
           ...(o?.owner.kind === 'shared' ? { brain: 'SHARED', brainWhy: 'a shared campaign: no product\'s brain owns its levers (the brain proposes a split, D2)' }
             : settings ? { brain: settings.levers[lever].effective, brainWhy: settings.levers[lever].why } : {}),
@@ -522,13 +580,14 @@ async function campaignLevers(campaigns: readonly CampaignRow[], owners: Readonl
  * does not reach) and every lever of each of its campaigns, owned and shared. With campaignId: that campaign alone.
  * With market only: the products the brain knows there (enrolled, or LIVE per campaign) — pick one.
  */
-export async function brainMap(args: MapArgs): Promise<{ data: unknown } | { error: string }> {
+export async function brainMap(args: MapArgs, opts: ViewClock = {}): Promise<{ data: unknown } | { error: string }> {
+  const now = opts.now ?? new Date()
   const days = daysOf(args.days)
   if (args.campaignId) {
     const [c] = await campaignsById([args.campaignId])
     if (!c) return { error: `campaign ${args.campaignId} not found` }
     const owners = await resolveCampaignOwnership([c.id])
-    const { rows } = await campaignLevers([c], owners, days)
+    const { rows } = await campaignLevers([c], owners, days, now)
     return { data: { view: 'map', scope: { campaignId: c.id }, evidenceDays: days, campaigns: rows, amazonRulesNotRead: notReadableKinds(), ceiling: (await import('../bid-brain/shadow.js')).bidBrainMode() } }
   }
   // MCP.12 — a product named by id is checked first: a deleted or unknown one is not found, before anything else is asked.
@@ -559,6 +618,8 @@ export async function brainMap(args: MapArgs): Promise<{ data: unknown } | { err
           liveCampaigns: rows.products.find((p) => p.productId === k.productId && p.market === k.market)?.campaignIds ?? [],
         })),
         sharedLive: rows.shared, unownedLive: rows.none,
+        // A2b — LIVE or HELD enrollments left over on archived campaigns: nothing runs there.
+        ...(rows.ownedButArchived.length ? { ownedButArchived: rows.ownedButArchived } : {}),
         // AB-15 — every kill switch in force here: one product's lever, or a lever of every product.
         kills: (await openKills()).filter((k) => !market || !k.market || k.market === market).map(killOut),
         next: 'Read one product with productId and its market: every lever of its campaigns, who owns each, and the brain\'s settings.',
@@ -570,7 +631,7 @@ export async function brainMap(args: MapArgs): Promise<{ data: unknown } | { err
   if (!view) return { error: `product ${args.productId} has no single family (a parentless product whose ASIN variations of several families carry): fix its family first` }
   const ids = view.campaigns.map((c) => c.campaignId)
   const [campaigns, owners] = await Promise.all([campaignsById(ids), resolveCampaignOwnership(ids)])
-  const { rows } = await campaignLevers(campaigns, owners, days)
+  const { rows } = await campaignLevers(campaigns, owners, days, now)
   const settings = view.settings
   const kills = await productKills(view.productId, market)
   return {
@@ -638,8 +699,8 @@ export function amazonRulesGap(rows: ReadonlyArray<{ campaignId: string; name: s
 }
 
 /** AB-4 — the setup view's line on Amazon's own rules: what the daily read holds, and what Nexus cannot read. */
-async function amazonRulesSetup(market: string | null): Promise<{ item: string; state: string; fix: string }> {
-  const s = await nativeReadStatus(market)
+async function amazonRulesSetup(market: string | null, now: Date): Promise<{ item: string; state: string; fix: string }> {
+  const s = await nativeReadStatus(market, now)
   const notRead = notReadableKinds().map((k) => `${k.label.replace(/^Amazon /, '')}s`).join(' and ')
   const budget = s.campaigns
     ? `budget rules: the daily read covers ${plural(s.campaigns, 'brain campaign')}, last at ${s.lastAt}${s.couldNotRead ? `; ${s.couldNotRead} could not be read (the clashes view says why)` : ''}; ${s.acting ? `${plural(s.acting, 'rule acts', 'rules act')} on a brain campaign (the clashes view lists them)` : 'none acts on a brain campaign'}`
@@ -654,7 +715,8 @@ async function amazonRulesSetup(market: string | null): Promise<{ item: string; 
 }
 
 /** View clashes: every campaign × lever with two automatic writers, and the known gaps, in one market (or one product's campaigns). */
-export async function brainClashes(args: { market?: string; productId?: string; days?: number }): Promise<{ data: unknown } | { error: string }> {
+export async function brainClashes(args: { market?: string; productId?: string; days?: number }, opts: ViewClock = {}): Promise<{ data: unknown } | { error: string }> {
+  const now = opts.now ?? new Date()
   const days = daysOf(args.days)
   const market = args.market ? strategyMarket(args.market) : null
   if (args.productId) {
@@ -672,7 +734,7 @@ export async function brainClashes(args: { market?: string; productId?: string; 
       .filter((c) => strategyMarket(c.marketplace) === market).map((c) => c.id)
   }
   const [campaigns, owners] = await Promise.all([campaignsById(ids), resolveCampaignOwnership(ids)])
-  const { rows, cfg, native } = await campaignLevers(campaigns, owners, days)
+  const { rows, cfg, native } = await campaignLevers(campaigns, owners, days, now)
   const clashes = rows.flatMap((r) => BRAIN_LEVERS.flatMap((lever) => {
     const l = r.levers[lever]
     return l.clash ? [{ campaignId: r.campaignId, name: r.name, lever, writers: l.writers.filter(automatic).map((w) => ({ who: w.who, basis: w.basis, state: w.state, why: w.why, ...(w.changes ? { changes: w.changes, last: w.last } : {}) })) }] : []
@@ -718,7 +780,8 @@ export async function brainClashes(args: { market?: string; productId?: string; 
 }
 
 /** View setup: what is not set up or is held off, with the fix — the Control Room's reading, plus the brain's own setup. */
-export async function brainSetup(args: { market?: string }): Promise<{ data: unknown } | { error: string }> {
+export async function brainSetup(args: { market?: string }, opts: ViewClock = {}): Promise<{ data: unknown } | { error: string }> {
+  const now = opts.now ?? new Date()
   const market = args.market ? strategyMarket(args.market) : null
   const [engines, { bidBrainMode }] = await Promise.all([engineFacts(), import('../bid-brain/shadow.js')])
   const GROUP_WORDS: Record<string, string> = {
@@ -742,7 +805,9 @@ export async function brainSetup(args: { market?: string }): Promise<{ data: unk
     brain.push({ item: `product ${p.productId} (${p.market})`, state: `${p.campaignIds.length} campaign${p.campaignIds.length === 1 ? ' is' : 's are'} LIVE under the bid brain one by one, but the product is not enrolled: no product-level setting, exclusion or lock applies`, fix: 'enroll the product in the brain (it adopts the LIVE campaigns as they are)' })
   }
   if (rows.shared.length) brain.push({ item: 'shared campaigns LIVE', state: `${rows.shared.length} shared campaign${rows.shared.length === 1 ? ' is' : 's are'} LIVE by a per-campaign enrollment: no product's lever moves ${rows.shared.length === 1 ? 'it' : 'them'}`, fix: 'split each into one campaign per product (D2), or take it back to shadow' })
+  // A2b — an enrollment left over on an archived campaign: no effect, but it reads as owned until it ends.
+  if (rows.ownedButArchived.length) brain.push({ item: 'bid brain enrollments on archived campaigns', state: `${rows.ownedButArchived.length} archived campaign${rows.ownedButArchived.length === 1 ? ' is' : 's are'} still enrolled LIVE or HELD (${rows.ownedButArchived.map((r) => r.campaignId).join(', ')}): left over — nothing runs on an archived campaign`, fix: 'take each back to shadow (set-bid-brain-enrollment op shadow)' })
   brain.push({ item: 'levers with no writer yet', state: BRAIN_LEVERS.filter((l) => !LEVER_LEVELS_NOW[l].levels.includes('AUTO')).map((l) => `${l}: ${LEVER_LEVELS_NOW[l].others}`).join('; '), fix: 'nothing to set: each lever\'s own PR brings its writer (design §8)' })
-  brain.push(await amazonRulesSetup(market))
+  brain.push(await amazonRulesSetup(market, now))
   return { data: { view: 'setup', scope: market ? { market } : {}, tools: tools ?? 'could not measure: the engines\' settings could not be read', brain } }
 }

@@ -14,6 +14,10 @@
  *   actors    an action-log actor in the map's words (engine label, rule name, safety owner, person)
  *   amazon    AB-4 — Amazon's own rules: each one that acts on a brain campaign is a clash; one elsewhere is listed apart;
  *             an Amazon rule counts as an automatic writer of its lever; what could not be read is said
+ *   truth     A2a — a lever the Owner gave the brain says what the brain really does there (lever-state.ts): the negatives
+ *             act after their shadow days under the live switch, the harvest watches under its own switch naming it, the
+ *             bidding strategy asks during the N4 clock; the brain's negatives and harvest writes and a bidding-strategy
+ *             switch are evidence; nobody set to act but someone wrote is said with who, how many and when
  *
  * Values are made up (public repo).
  */
@@ -28,6 +32,13 @@ const { resolveBrainSettings } = await import('./settings.js')
 const { campaignNativeRules } = await import('./native-rules.js')
 
 const DIAL = { stopped: false, suggest: false }
+/** A2a — the server switches as production has them today: the bid brain in shadow, nothing else live. */
+const RUNTIME = {
+  ceiling: 'shadow', ceilingLive: false, cycleOn: false, hoursOn: true,
+  harvest: { live: false, why: 'the brain\'s env ceiling NEXUS_BID_BRAIN_MODE is not live' },
+  structure: { live: false, why: 'the brain\'s env ceiling NEXUS_BID_BRAIN_MODE is not live' },
+  posture: { posture: 'auto' as const, why: 'the account ads dial is AUTO' },
+}
 const GALE = 'p-gale'
 
 const campaign = (id: string, extra: Record<string, unknown> = {}) => ({
@@ -70,6 +81,7 @@ const cfg = {
   heldKeywords: new Map([['c-gale-4', 2]]),
   engines,
   dial: DIAL,
+  runtime: { ...RUNTIME, ceiling: 'live', ceilingLive: true },
 }
 const settings = (campaignId: string, overrides: Parameters<typeof resolveBrainSettings>[0]['overrides'] = []) =>
   resolveBrainSettings({ productId: GALE, market: 'IT', campaignId, enrolled: true, overrides })
@@ -83,6 +95,9 @@ describe('levers of an action and of a rule action', () => {
     expect(leverOfAction('AD_ENTITY_STATE_UPDATE', 'CAMPAIGN')).toBe('state')
     expect(leverOfAction('create_negative_keyword', 'AD_TARGET')).toBe('negatives')
     expect(leverOfAction('create_keyword', 'AD_TARGET')).toBe('harvest')
+    // A2a — a negative product target and a bidding-strategy switch are levers too.
+    expect(leverOfAction('create_negative_product_target', 'AD_TARGET')).toBe('negatives')
+    expect(leverOfAction('AD_BIDDING_STRATEGY_UPDATE', 'CAMPAIGN')).toBe('biddingStrategy')
     expect(leverOfAction('update_rule', 'RULE')).toBeNull()
   })
 
@@ -137,6 +152,29 @@ describe('configuredWriters and leverOwner — the GALE IT shape', () => {
     expect(configuredWriters(campaign('c-gale-3'), cfg, settings('c-gale-3')).structure.map((x) => [x.who, x.state])).toEqual([['the brain', 'watches'], ['the playbook', 'asks']])
   })
 
+  it('A2b / wave 2 — an archived campaign: no engine, rule, brain lever or lock is set to act there; a LIVE enrollment left on it is said', () => {
+    const w = configuredWriters(campaign('c-gale-7', { status: 'ARCHIVED' }), cfg, settings('c-gale-7'))
+    expect(w.bids).toEqual([{ who: 'the brain', kind: 'brain', state: 'off', basis: 'configured', why: 'archived: its bid brain enrollment (LIVE) is left over — nothing runs on an archived campaign' }])
+    for (const [lever, writers] of Object.entries(w)) if (lever !== 'bids') expect(writers, lever).toEqual([])
+    expect(clashOf(w.bids)).toBeNull()
+    expect(leverOwner(w.bids, { excluded: false, brainNote: null, archived: true })).toBe('nobody (archived: nothing runs on an archived campaign)')
+    const wrote = { who: 'Bid optimiser', kind: 'engine' as const, state: 'acts' as const, basis: 'wrote' as const, why: 'Bid optimiser wrote', changes: 2, last: '2026-10-01T05:00:00.000Z' }
+    expect(leverOwner([...w.bids, wrote], { excluded: false, brainNote: null, days: 14, archived: true })).toBe('nobody set to act now — Bid optimiser wrote 2 changes in 14 days (last 2026-10-01) (archived: nothing runs on an archived campaign)')
+    // An archived campaign nobody enrolled: nothing at all.
+    expect(Object.values(configuredWriters(campaign('c-plan-a', { status: 'ARCHIVED' }), cfg, settings('c-plan-a'))).flat()).toEqual([])
+  })
+
+  it('wave 2 — the Owner\'s kill switch on the bids of a campaign the bid brain owns: it watches there, in his words', () => {
+    const killed = 'stopped by the Owner\'s kill switch (user:owner, 2026-10-09, product p-gale in IT): "testing"'
+    const w = configuredWriters(campaign('c-gale-1', { killed: { bids: killed } }), cfg, settings('c-gale-1'))
+    expect(w.bids.find((x) => x.kind === 'brain')).toMatchObject({ state: 'watches', why: `the bid brain owns it (LIVE), but ${killed}: it decides and logs, and writes nothing` })
+    // Its hourly plan still runs (another lever); the rule at Auto is the one writer that acts on the bids.
+    expect(w.hours.find((x) => x.kind === 'brain')).toMatchObject({ state: 'acts' })
+    expect(leverOwner(w.bids, { excluded: false, brainNote: brainNoteOf(w.bids) })).toBe('rule "Lower bids on waste"')
+    const placements = configuredWriters(campaign('c-gale-1', { killed: { placements: killed } }), cfg, settings('c-gale-1'))
+    expect(placements.placements.find((x) => x.kind === 'brain')).toMatchObject({ state: 'watches' })
+  })
+
   it('an allowlisted campaign nobody holds: auto-bid acts beside the brain in shadow', () => {
     const w = configuredWriters(campaign('c-free'), cfg, settings('c-free'))
     expect(w.bids.map((x) => [x.who, x.state])).toEqual([['the brain', 'watches'], ['Bid optimiser', 'acts'], ['rule "Lower bids on waste"', 'acts']])
@@ -164,6 +202,57 @@ describe('configuredWriters and leverOwner — the GALE IT shape', () => {
     expect(leverOwner([], { excluded: false, brainNote: null })).toBe('nobody')
     expect(leverOwner([], { excluded: true, brainNote: null })).toBe('nobody (excluded from the brain by the Owner)')
     expect(leverOwner([{ who: 'rule "x"', kind: 'rule', state: 'asks', basis: 'configured', why: '' }], { excluded: false, brainNote: null })).toBe('nobody acts alone — rule "x" asks a person')
+  })
+
+  it('A2a — nobody set to act, but someone wrote: who, how many, in how many days, and when last', () => {
+    const wrote = { who: 'the brain', kind: 'brain' as const, state: 'acts' as const, basis: 'wrote' as const, why: 'the brain\'s negatives writer added or retired it (AB-10)', changes: 3, last: '2026-10-08T05:00:00.000Z' }
+    const watching = { who: 'the brain', kind: 'brain' as const, state: 'watches' as const, basis: 'configured' as const, why: 'OBSERVE: x' }
+    expect(leverOwner([watching, wrote], { excluded: false, brainNote: 'the brain is set to watch; x', days: 14 }))
+      .toBe('nobody set to act now — the brain wrote 3 changes in 14 days (last 2026-10-08); the brain is set to watch; x')
+    expect(leverOwner([wrote], { excluded: true, brainNote: null, days: 7 })).toBe('nobody set to act now — the brain wrote 3 changes in 7 days (last 2026-10-08) (excluded from the brain by the Owner)')
+    // One that acts or asks still decides the line.
+    expect(leverOwner([wrote, { ...watching, state: 'asks' }], { excluded: false, brainNote: null, days: 14 })).toBe('nobody acts alone — the brain asks a person')
+  })
+})
+
+describe('A2a — the map says what the brain really does with a lever the Owner gave it', () => {
+  const level = (key: string, value: string, id = key) => ({ id: `o-${id}`, productId: GALE, marketplace: 'IT', scope: 'PRODUCT', campaignId: null, kind: 'LEVEL', key, ref: '', value, by: 'user:owner', reason: null, createdAt: new Date('2026-10-01T09:00:00Z'), endedAt: null })
+  const auto = settings('c-gale-6', [level('negatives', 'AUTO'), level('harvest', 'AUTO'), level('biddingStrategy', 'AUTO'), level('structure', 'PROPOSE')])
+  const gates = (over: Record<string, unknown> = {}) => ({ negativesShadow: { inShadow: false, why: null }, strategyAsks: null, ...over })
+  const brainOf = (w: Record<string, Array<{ kind: string; state: string; why: string }>>, lever: string) => w[lever].find((x) => x.kind === 'brain')
+
+  it('negatives AUTO past its shadow days under the live switch: the brain acts, and the line says so', () => {
+    const w = configuredWriters(campaign('c-gale-6'), cfg, auto, gates())
+    expect(brainOf(w, 'negatives')).toMatchObject({ state: 'acts', why: expect.stringMatching(/^AUTO: the brain writes the day's negatives alone/) })
+    expect(leverOwner(w.negatives.filter((x) => !x.who.startsWith('rule')), { excluded: false, brainNote: null })).toBe('the brain')
+    // Inside its shadow days it watches, naming them.
+    const shadow = configuredWriters(campaign('c-gale-6'), cfg, auto, gates({ negativesShadow: { inShadow: true, why: 'the negatives lever runs 14 days in shadow first: 3 days run' } }))
+    expect(brainOf(shadow, 'negatives')).toMatchObject({ state: 'watches', why: 'AUTO, but in shadow for now: the negatives lever runs 14 days in shadow first: 3 days run' })
+  })
+
+  it('harvest AUTO watches under its own switch, naming it; the structure asks only under its own', () => {
+    const w = configuredWriters(campaign('c-gale-6'), cfg, auto, gates())
+    expect(brainOf(w, 'harvest')).toMatchObject({ state: 'watches', why: expect.stringContaining('NEXUS_BID_BRAIN_MODE is not live') })
+    expect(brainOf(w, 'structure')).toMatchObject({ state: 'watches' })
+    const live = { ...cfg, runtime: { ...cfg.runtime, harvest: { live: true, why: 'live' }, structure: { live: true, why: 'live' } } }
+    const w2 = configuredWriters(campaign('c-gale-6'), live, auto, gates())
+    expect(brainOf(w2, 'harvest')).toMatchObject({ state: 'acts' })
+    expect(brainOf(w2, 'structure')).toMatchObject({ state: 'asks' })
+  })
+
+  it('the bidding strategy: off without the product cycle, asks during N4, acts after it — never "nobody" while the Owner gave it', () => {
+    const off = configuredWriters(campaign('c-gale-6'), cfg, auto, gates())
+    expect(brainOf(off, 'biddingStrategy')).toMatchObject({ state: 'off', why: expect.stringContaining('NEXUS_ADS_BRAIN_CYCLE is off') })
+    const cycle = { ...cfg, runtime: { ...cfg.runtime, cycleOn: true } }
+    const n4 = configuredWriters(campaign('c-gale-6'), cycle, auto, gates({ strategyAsks: { why: 'AUTO, but for the first 30 days the lever is the brain\'s every switch asks a person (N4)' } }))
+    expect(brainOf(n4, 'biddingStrategy')).toMatchObject({ state: 'asks', why: expect.stringContaining('(N4)') })
+    expect(leverOwner(n4.biddingStrategy, { excluded: false, brainNote: null })).toBe('nobody acts alone — the brain asks a person')
+    expect(brainOf(configuredWriters(campaign('c-gale-6'), cycle, auto, gates()), 'biddingStrategy')).toMatchObject({ state: 'acts' })
+  })
+
+  it('the Owner\'s kill switch: the brain only watches the lever, in his words', () => {
+    const w = configuredWriters(campaign('c-gale-6', { killed: { negatives: 'stopped by the Owner\'s kill switch (user:owner, 2026-10-09, product p-gale in IT)' } }), cfg, auto, gates())
+    expect(brainOf(w, 'negatives')).toMatchObject({ state: 'watches', why: expect.stringContaining('stopped by the Owner\'s kill switch') })
   })
 })
 
@@ -206,6 +295,10 @@ describe('writerOfActor', () => {
     expect(writerOfActor('automation:auto-bid', names)).toMatchObject({ who: 'Bid optimiser', kind: 'engine' })
     expect(writerOfActor('automation:rank-defend-s1', names)).toMatchObject({ who: 'Hourly bid plans', kind: 'engine' })
     expect(writerOfActor('automation:bid-brain', names)).toMatchObject({ who: 'the brain', kind: 'brain' })
+    // A2a — the brain's negatives and harvest writers are the brain, not an engine.
+    expect(writerOfActor('automation:ads-brain-negatives', names)).toMatchObject({ who: 'the brain', kind: 'brain', why: expect.stringContaining('negatives writer') })
+    expect(writerOfActor('automation:ads-brain-harvest', names)).toMatchObject({ who: 'the brain', kind: 'brain', why: expect.stringContaining('harvest writer') })
+    expect(writerOfActor('automation:ads-brain-strategy', names)).toMatchObject({ who: 'the brain', kind: 'brain' })
     expect(writerOfActor('automation:r-bid', names)).toMatchObject({ who: 'rule "Lower bids on waste"', kind: 'rule' })
     expect(writerOfActor('automation:retail-guard-cron', names)).toMatchObject({ kind: 'safety' })
     expect(writerOfActor('user:owner', names)).toMatchObject({ who: 'a person', kind: 'person' })

@@ -10,6 +10,11 @@
  *                     day's pause cap, used and left
  *   market            the products the state brain watches there, the day's pauses (used / left), the brain's pauses in
  *                     force, its requests waiting, and what needs a person
+ *
+ * A2b — a request is waiting only while a person can still decide it: pending or scheduled, not past its expiry (one read of
+ * the requests). A request decided since (approved and run, declined, expired) is listed under `decided`; a campaign
+ * archived since its newest decision is under `archived` (the brain no longer decides an archived campaign: state-load.ts),
+ * never waiting, paused by the brain or needing a person. The product's `logged` decision names its request's status.
  */
 import prisma from '../../../db.js'
 import { strategyMarket } from '../ads-strategy/bids.js'
@@ -39,6 +44,24 @@ export const STATE_RULES = {
   levels: 'OBSERVE logs; PROPOSE asks a person; AUTO writes as the brain through the write gate (only under the live server switch, while the account\'s ads automation runs)',
   never: 'a bid, a budget, a lane, a strategy or a stock quantity (FBA included): the state lever writes the campaign status only',
 } as const
+
+/** A2b — a request's status now, as the view says it: 'expired' for a pending one past its expiry, 'gone' when none is stored. */
+export interface RequestStatus { status: string; expiresAt: string | null; decidedAt: string | null; decidedBy: string | null }
+
+/** A2b — a person can still decide it: pending or scheduled (an expired one is said as expired). Pure. */
+export const isWaitingRequest = (r: RequestStatus | undefined): boolean => r?.status === 'pending' || r?.status === 'scheduled'
+
+/** A2b — the status of these requests now, in one read. */
+async function requestStatuses(ids: ReadonlyArray<string | null>, now: Date): Promise<Map<string, RequestStatus>> {
+  const wanted = [...new Set(ids.filter((id): id is string => !!id))]
+  const rows = wanted.length ? await prisma.agentApproval.findMany({ where: { id: { in: wanted } }, select: { id: true, status: true, expiresAt: true, decidedAt: true, decidedBy: true } }) : []
+  const out = new Map<string, RequestStatus>(wanted.map((id) => [id, { status: 'gone', expiresAt: null, decidedAt: null, decidedBy: null }]))
+  for (const a of rows) {
+    const expired = (a.status === 'pending' || a.status === 'scheduled') && a.expiresAt != null && a.expiresAt < now
+    out.set(a.id, { status: expired ? 'expired' : a.status, expiresAt: a.expiresAt?.toISOString() ?? null, decidedAt: a.decidedAt?.toISOString() ?? null, decidedBy: a.decidedBy ?? null })
+  }
+  return out
+}
 
 /** One decision as the view shows it. */
 export function stateView(d: StateDecision) {
@@ -82,7 +105,10 @@ export async function brainState(args: { productId?: string; market?: string; no
       if (d.action === 'pause' && d.outcome === 'shadow' && !f.shadowPaused) pausesLeft.shadow--
       return d
     })
-    const kept = await prisma.adsBrainStateDecision.count({ where: { productId: loaded.productId, marketplace: market } })
+    const [kept, requests] = await Promise.all([
+      prisma.adsBrainStateDecision.count({ where: { productId: loaded.productId, marketplace: market } }),
+      requestStatuses([...loaded.previous.values()].map((p) => p.approvalId), now),
+    ])
     return {
       data: {
         view: 'state', scope: { productId: loaded.productId, market }, enrolled: loaded.enrolled, dryRun: true, at: now.toISOString(),
@@ -90,7 +116,8 @@ export async function brainState(args: { productId?: string; market?: string; no
         switches, cap, rules: STATE_RULES,
         campaigns: decisions.map((d) => {
           const last = loaded.previous.get(d.campaignId)
-          return { ...stateView(d), logged: last ? { at: last.createdAt.toISOString(), mode: last.mode, action: last.action, outcome: last.outcome, approvalId: last.approvalId, why: last.decision.why } : null }
+          const request = last?.approvalId ? requests.get(last.approvalId) : undefined
+          return { ...stateView(d), logged: last ? { at: last.createdAt.toISOString(), mode: last.mode, action: last.action, outcome: last.outcome, approvalId: last.approvalId, ...(request ? { approvalStatus: request.status } : {}), why: last.decision.why } : null }
         }),
         attention: decisions.filter((d) => d.attention).map((d) => ({ campaignId: d.campaignId, name: d.name, attention: d.attention })),
         rowsKept: kept, keptDays: STATE_DECISION_DAYS_KEPT,
@@ -103,15 +130,29 @@ export async function brainState(args: { productId?: string; market?: string; no
     select: { campaignId: true }, distinct: ['campaignId'],
   })
   const newest = await newestStateDecisions(recent.map((r) => r.campaignId))
-  const rows = [...newest.values()]
+  const all = [...newest.values()]
+  // A2b — the campaigns' status now and the requests' status now: one read each.
+  const [statuses, requests] = await Promise.all([
+    all.length ? prisma.campaign.findMany({ where: { id: { in: all.map((r) => r.campaignId) } }, select: { id: true, status: true } }) : Promise.resolve([]),
+    requestStatuses(all.map((r) => r.approvalId), now),
+  ])
+  const statusOf = new Map(statuses.map((c) => [c.id, String(c.status)]))
+  const archived = all.filter((r) => statusOf.get(r.campaignId) === 'ARCHIVED')
+  const rows = all.filter((r) => statusOf.get(r.campaignId) !== 'ARCHIVED')
   // The newest row carries the brain's memory exactly while its own pause holds (state-run.ts).
   const brainPauses = rows.filter((r) => !!r.decision.memory)
+  const asked = rows.filter((r) => (r.outcome === 'asked' || r.outcome === 'waiting') && r.approvalId)
   return {
     data: {
       view: 'state', scope: { market }, at: now.toISOString(), switches, cap, rules: STATE_RULES,
       products: watched.map((p) => ({ productId: p.productId, level: p.level })),
       pausedByTheBrain: brainPauses.map((r) => ({ campaignId: r.campaignId, productId: r.decision.productId, name: r.decision.name, since: r.decision.memory!.pausedAt, causes: r.decision.memory!.causes, expectedEndAt: r.decision.memory!.expectedEndAt, level: r.decision.level, why: r.decision.why })),
-      waiting: rows.filter((r) => r.outcome === 'asked' || r.outcome === 'waiting').map((r) => ({ campaignId: r.campaignId, productId: r.decision.productId, name: r.decision.name, action: r.action, approvalId: r.approvalId, at: r.createdAt.toISOString() })),
+      waiting: asked.filter((r) => isWaitingRequest(requests.get(r.approvalId!))).map((r) => ({ campaignId: r.campaignId, productId: r.decision.productId, name: r.decision.name, action: r.action, approvalId: r.approvalId, approvalStatus: requests.get(r.approvalId!)!.status, expiresAt: requests.get(r.approvalId!)!.expiresAt, at: r.createdAt.toISOString() })),
+      decided: asked.filter((r) => !isWaitingRequest(requests.get(r.approvalId!))).map((r) => {
+        const q = requests.get(r.approvalId!)!
+        return { campaignId: r.campaignId, productId: r.decision.productId, name: r.decision.name, action: r.action, approvalId: r.approvalId, approvalStatus: q.status, decidedAt: q.decidedAt, decidedBy: q.decidedBy, at: r.createdAt.toISOString() }
+      }),
+      archived: archived.map((r) => ({ campaignId: r.campaignId, productId: r.decision.productId, name: r.decision.name, action: r.action, outcome: r.outcome, at: r.createdAt.toISOString(), ...(r.approvalId ? { approvalId: r.approvalId, approvalStatus: requests.get(r.approvalId)?.status ?? 'gone' } : {}), why: 'archived since the brain\'s newest decision: the brain no longer decides it, and nothing waits on it here' })),
       attention: rows.filter((r) => r.decision.attention).map((r) => ({ campaignId: r.campaignId, name: r.decision.name, attention: r.decision.attention })),
       next: 'Read one product with productId and market: each campaign decided now (dry run) beside the newest logged decision.',
     },

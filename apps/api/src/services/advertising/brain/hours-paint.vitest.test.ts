@@ -11,11 +11,13 @@
  *   anti-flap  at most minBidEntriesPerDay entries a day, the new run with the least spend going back first
  *   windows    the painted week reads back through the engine's own rule
  *   effect     a Min-bid hour cuts spend and orders, leaving Min bid adds them, each with lo ≤ mid ≤ hi
+ *   unmoved    A2c — stepWhy agrees with stepFrom everywhere; a plan that paints nothing although blocks want to move says
+ *              how many and what holds each hour (the cap, the ladder's end, a lock, the anti-flap) and what unblocks it
  */
 import { describe, expect, it } from 'vitest'
 import {
-  decideBlocks, encodeWeek, expectedEffect, gridLines, ladderOf, minBidRuns, paintPlan, stepFrom, weekOf,
-  type Goal, type PaintInput,
+  decideBlocks, encodeWeek, expectedEffect, gridLines, ladderOf, minBidRuns, paintPlan, stepFrom, stepWhy, weekOf,
+  type Direction, type Goal, type PaintInput,
 } from './hours-paint.js'
 import { blockKey, cellRef } from './hours-research.js'
 import { researchWith, testTargets } from './__fixtures__/hours-facts.js'
@@ -165,6 +167,8 @@ describe('painting', () => {
     expect(out.week.after[4][13]).toBe('pause') // 12–16 spent more: kept
     expect(out.week.after[4][5]).toBe('defend') // 04–08 went back (00–06 is defend in the plan, 06–08 rest)
     expect(out.antiFlap).toEqual([expect.objectContaining({ d: 4, why: expect.stringMatching(/at most 1 Min-bid entry a day/) })])
+    // A2c — the hours given back are said as unmoved by the anti-flap, with what unblocks them.
+    expect(out.unmoved.filter((u) => u.reason === 'anti-flap')).toEqual([expect.objectContaining({ d: 4, part: 1, dir: 'minbid', unblock: expect.stringContaining('minBidEntriesPerDay') })])
   })
 
   it('holds and says why: no goal, no serving target, a 0 % move, no level', () => {
@@ -184,6 +188,56 @@ describe('painting', () => {
     expect(g.days[0].before).toHaveLength(24)
     expect(g.days[0].marks).toBe(`#${' '.repeat(15)}^^^^${' '.repeat(4)}`)
     expect(Object.values(g.legend).sort()).toEqual(['defend', 'own', 'rest'])
+  })
+})
+
+describe('A2c — the hours that wanted to move and stayed', () => {
+  it('stepWhy says why exactly when stepFrom keeps the hour', () => {
+    const ladders = [{ serving: ['rest', 'defend', 'own', 'allout'], minBid: 'pause' }, { serving: ['rest', 'own'], minBid: 'pause' }, { serving: ['rest', 'own'], minBid: null }]
+    for (const ladder of ladders) for (const key of ['rest', 'defend', 'own', 'allout', 'pause', 'gone']) for (const dir of ['up', 'down', 'minbid', 'keep'] as Direction[]) for (const cap of [0, 0.3, 0.5, 1]) {
+      const moves = stepFrom(key, dir, ladder, T, cap) !== key
+      const why = stepWhy(key, dir, ladder, T, cap)
+      expect(why === null, `${key} ${dir} cap ${cap} on ${ladder.serving.join('<')}: ${why}`).toBe(moves || dir === 'keep')
+    }
+    expect(stepWhy('rest', 'up', { serving: ['rest', 'own'], minBid: 'pause' }, T, 0.3)).toBe('cap')
+    expect(stepWhy('allout', 'up', { serving: ['rest', 'own', 'allout'], minBid: 'pause' }, T, 1)).toBe('top')
+    expect(stepWhy('rest', 'down', { serving: ['rest', 'own'], minBid: 'pause' }, T, 0.3)).toBe('bottom')
+    expect(stepWhy('own', 'minbid', { serving: ['rest', 'own'], minBid: null }, T, 0.3)).toBe('no-min-bid-target')
+    expect(stepWhy('pause', 'down', { serving: ['rest', 'own'], minBid: 'pause' }, T, 0.3)).toBe('already-min-bid')
+  })
+
+  it('nothing painted although blocks want to move: the first line counts them and names what holds each hour', () => {
+    // Monday 08–12 wants up (rest → defend is +50 %, past the 30 % cap); Wednesday 08–12 wants down (rest is the lowest step).
+    const research = researchWith({ block: (d, p) => (d === 1 && p === 2 ? { crIndex: 1.7, crShape: 20 } : d === 3 && p === 2 ? { crIndex: 0.55, crShape: 20 } : {}) })
+    const out = paintPlan(input({ research }))
+    expect(out.changes).toEqual([])
+    expect(out.unmoved.map((u) => [u.block, u.dir, u.reason, u.cells])).toEqual([
+      ['Mon 08–12', 'up', 'cap', [8, 9, 10, 11].map((h) => cellRef(1, h))],
+      ['Wed 08–12', 'down', 'bottom', [8, 9, 10, 11].map((h) => cellRef(3, h))],
+    ])
+    expect(out.summary[0]).toBe('Paints nothing although 2 blocks of the week want to move (1 down, 1 up): '
+      + '4 hours already at the plan\'s lowest serving target (add a lower target to the plan (the brain never turns a step down into Min bid)); '
+      + '4 hours the next step of the plan\'s ladder moves the bid more than hourCellMovePct (30 %) (raise hourCellMovePct (set-ads-brain set-value), or add a target between the two steps to the plan).')
+    expect(out.summary[0]).not.toMatch(/inside the goal's band/)
+  })
+
+  it('a block whose every hour the Owner locked: said as locked, with what frees it', () => {
+    const research = researchWith({ block: (d, p) => (d === 1 && p === 4 ? { crIndex: 0.55, crShape: 20 } : {}) })
+    const out = paintPlan(input({ research, locks: { cells: new Set([16, 17, 18, 19].map((h) => cellRef(1, h))), lanes: new Set() } }))
+    expect(out.changes).toEqual([])
+    expect(out.unmoved).toEqual([expect.objectContaining({ block: 'Mon 16–20', dir: 'down', reason: 'locked', cells: [16, 17, 18, 19].map((h) => cellRef(1, h)) })])
+    expect(out.summary[0]).toBe('Paints nothing although 1 block of the week wants to move (1 down): 4 hours locked by the Owner (his hour lock ends (set-ads-brain unlock)).')
+  })
+
+  it('some hours moved: the ladder\'s stays get a line of their own; nothing wanted to move: the band sentence, nothing unmoved', () => {
+    const research = researchWith({ block: (d, p) => (d === 1 && p === 4 ? { crIndex: 0.55, crShape: 20 } : d === 1 && p === 2 ? { crIndex: 1.7, crShape: 20 } : {}) })
+    const out = paintPlan(input({ research }))
+    expect(out.changes).toHaveLength(4)
+    expect(out.summary[0]).toMatch(/^Paints 4 hours of the week \(4 down\)/)
+    expect(out.summary[1]).toBe('Hours of the moving blocks that stay: 4 hours the next step of the plan\'s ladder moves the bid more than hourCellMovePct (30 %) (raise hourCellMovePct (set-ads-brain set-value), or add a target between the two steps to the plan).')
+    const calm = paintPlan(input())
+    expect(calm.unmoved).toEqual([])
+    expect(calm.summary[0]).toBe('Paints nothing: every block of the week stays inside the goal\'s band, or too close to it to move.')
   })
 })
 

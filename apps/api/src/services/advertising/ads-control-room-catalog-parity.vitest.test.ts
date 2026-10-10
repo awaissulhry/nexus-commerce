@@ -82,6 +82,10 @@ describe('7a — the levers and the automation catalog are one reading', () => {
       'rank-defend': 'ready', dayparting: 'ready', 'budget-enforce': 'ready', 'budget-schedules': 'ready', 'budget-pools': 'ready',
       'auto-bid': 'acts', autopilot: 'ready', 'anomaly-guard': 'never', 'tos-defense': 'server-off', 'write-delivery': 'never',
       'coverage-engine': 'server-off', 'structural-reconcile': 'never', 'fleet-analysts': 'server-off',
+      // Ads brain page A4 — the brain's writers (family 'brain'): no brain switch set, nothing enrolled. The writers that
+      // write by themselves are held by their server switch; hours and structure (they only ask) are ready.
+      'bid-brain': 'server-off', 'brain-money': 'server-off', 'brain-state': 'server-off', 'brain-negatives': 'server-off',
+      'brain-harvest': 'server-off', 'brain-strategy': 'server-off', 'brain-hours': 'ready', 'brain-structure': 'ready', 'brain-cycle': 'server-off',
     })
     // Nothing vanishes: every engine is still on the board, on the mode the env, the switch and the dial allow.
     expect(levers.get('dayparting')).toMatchObject({ mode: 'AUTO', modeReason: expect.stringContaining('No classic dayparting schedules'), exposure: { label: 'Ready — nothing set up', start: expect.stringContaining('classic dayparting schedule') } })

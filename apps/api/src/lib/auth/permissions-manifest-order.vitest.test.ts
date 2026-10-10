@@ -128,6 +128,25 @@ describe('permission manifest ordering', () => {
     expect(permissionForRoute(method, path)).toBe(permission)
   })
 
+  // Ads brain page A1 — the brain's read views are reads Claude's ads-brain / bid-brain tools answer at ads.view; a write
+  // under the same prefix keeps the ads automation rule (control).
+  it.each([
+    ['GET', '/api/advertising/automation/brain/views/:view', 'ads.view'],
+    ['GET', '/api/advertising/automation/brain/views/map', 'ads.view'],
+    ['GET', '/api/advertising/automation/brain/bid-brain/:view', 'ads.view'],
+    ['GET', '/api/advertising/automation/brain/bid-brain/what-if', 'ads.view'],
+    // A3 / A5 — the switchboard and the requests waiting are reads too.
+    ['GET', '/api/advertising/automation/brain/switchboard', 'ads.view'],
+    ['GET', '/api/advertising/automation/brain/requests', 'ads.view'],
+    ['POST', '/api/advertising/automation/brain/views/map', 'ads.automation.manage'],
+    ['POST', '/api/advertising/automation/brain/control', 'ads.automation.manage'],
+    ['POST', '/api/advertising/automation/brain/kill', 'ads.automation.manage'],
+    ['POST', '/api/advertising/automation/brain/bid-brain/enrollment', 'ads.automation.manage'],
+    ['POST', '/api/advertising/automation/brain/requests/:approvalId/decide', 'ads.automation.manage'],
+  ])('A1: %s %s requires %s', (method, path, permission) => {
+    expect(permissionForRoute(method, path)).toBe(permission)
+  })
+
   // Ads wave 4a — which Amazon Ads accounts Nexus reads belongs with connecting the account; the spend switches next to
   // it keep ads.campaigns.manage (control).
   it.each([

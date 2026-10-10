@@ -84,11 +84,11 @@ async function keywordWords(ids: readonly string[]): Promise<Map<string, { keywo
   return new Map(rows.map((r) => [r.id, { keyword: `${r.expressionValue} (${r.expressionType})`, campaignId: r.adGroup.campaignId }]))
 }
 
-async function whyView(args: BrainReadArgs) {
+async function whyView(args: BrainReadArgs, now: Date) {
   const scope = await scopeTargets(args)
   if (scope.error) return { error: scope.error }
   const limit = Math.min(200, Math.max(1, args.limit ?? 50))
-  const since = new Date(Date.now() - 30 * DAY)
+  const since = new Date(now.getTime() - 30 * DAY)
   const marketFilter = scope.ids ? Prisma.empty : Prisma.sql`AND d.marketplace = ANY(${scope.markets}::text[])`
   const idFilter = scope.ids ? Prisma.sql`AND d."targetId" = ANY(${scope.ids}::text[])` : Prisma.empty
   const rows = scope.ids && !scope.ids.length ? [] : await prisma.$queryRaw<Array<Record<string, unknown>>>(Prisma.sql`
@@ -110,11 +110,11 @@ async function whyView(args: BrainReadArgs) {
     decidedAt: (r.createdAt as Date).toISOString(), lastWriter: r.lastWriter, why: r.why,
     mode: r.mode, ...(r.sent ? { sent: r.sent } : {}),
   }))
-  const owned = await ownedNow()
+  const { owned, ownedButArchived } = await ownedNow()
   const live = decisions.some((d) => d.mode === 'LIVE')
   return {
     data: {
-      view: 'why', mode: bidBrainMode(), markets: scope.markets, owned, decisions,
+      view: 'why', mode: bidBrainMode(), markets: scope.markets, owned, ...leftOver(ownedButArchived), decisions,
       note: !decisions.length
         ? `No decision for this scope yet: ${SCHEDULE_WORDS}.`
         : live
@@ -124,12 +124,11 @@ async function whyView(args: BrainReadArgs) {
   }
 }
 
-async function whatIfView(args: BrainReadArgs) {
+async function whatIfView(args: BrainReadArgs, now: Date) {
   if (args.targetAcosPct == null && args.bandLoPct == null && args.bandHiPct == null) return { error: 'what-if needs targetAcosPct (and optionally bandLoPct / bandHiPct).' }
   const scope = await scopeTargets(args)
   if (scope.error) return { error: scope.error }
   const limit = Math.min(200, Math.max(1, args.limit ?? 50))
-  const now = new Date()
   const wanted = scope.ids ? new Set(scope.ids) : null
   const out: Array<{ before: Decision; after: Decision; market: string }> = []
   for (const market of scope.markets.slice(0, 5)) {
@@ -200,10 +199,21 @@ export function brainWritesByDay(writes: ReadonlyArray<{ userId: string | null; 
   return out
 }
 
-/** BB-6 — the campaigns the brain owns now (none under a non-live ceiling). */
-async function ownedNow(): Promise<string[]> {
-  return [...(await brainOwnedCampaignIds())].sort()
+/**
+ * BB-6 — the campaigns the brain owns now (none under a non-live ceiling). A2b — an archived campaign is left out and named
+ * apart: its LIVE or HELD enrollment is left over, and nothing runs on an archived campaign (live.ts is unchanged).
+ */
+async function ownedNow(): Promise<{ owned: string[]; ownedButArchived: string[] }> {
+  const ids = [...(await brainOwnedCampaignIds())].sort()
+  if (!ids.length) return { owned: [], ownedButArchived: [] }
+  const archived = new Set((await prisma.campaign.findMany({ where: { id: { in: ids }, status: 'ARCHIVED' }, select: { id: true } })).map((c) => c.id))
+  return { owned: ids.filter((id) => !archived.has(id)), ownedButArchived: ids.filter((id) => archived.has(id)) }
 }
+
+/** A2b — the left-over enrollments on archived campaigns, said only when there are some. */
+const leftOver = (ownedButArchived: readonly string[]) => (ownedButArchived.length
+  ? { ownedButArchived, ownedButArchivedNote: `${ownedButArchived.length} archived campaign${ownedButArchived.length === 1 ? ' is' : 's are'} still enrolled LIVE or HELD: left over — nothing runs on an archived campaign, and ${ownedButArchived.length === 1 ? 'it is' : 'they are'} not in owned` }
+  : {})
 
 /** One decision against today's bid: agree (the brain leaves it), higher, lower, held by an override, braked. */
 export function compareWord(d: { action: string; layer: string; currentCents: number; decidedCents: number }): 'agree' | 'higher' | 'lower' | 'hold' | 'brake' {
@@ -212,11 +222,11 @@ export function compareWord(d: { action: string; layer: string; currentCents: nu
   return d.layer === 'band' || d.layer === 'goal' ? 'agree' : 'hold'
 }
 
-async function diffView(args: BrainReadArgs) {
+async function diffView(args: BrainReadArgs, now: Date) {
   const scope = await scopeTargets(args)
   if (scope.error) return { error: scope.error }
   const days = Math.min(30, Math.max(1, args.days ?? 7))
-  const since = new Date(Date.now() - days * DAY)
+  const since = new Date(now.getTime() - days * DAY)
   const marketFilter = scope.ids ? Prisma.empty : Prisma.sql`AND d.marketplace = ANY(${scope.markets}::text[])`
   const idFilter = scope.ids ? Prisma.sql`AND d."targetId" = ANY(${scope.ids}::text[])` : Prisma.empty
   const latest = scope.ids && !scope.ids.length ? [] : await prisma.$queryRaw<Array<{ targetId: string; day: string; action: string; layer: string; currentCents: number; decidedCents: number }>>(Prisma.sql`
@@ -241,10 +251,10 @@ async function diffView(args: BrainReadArgs) {
   const dayList = [...new Set([...byDay.keys(), ...[...stats.keys()].filter((d) => d >= since.toISOString().slice(0, 10))])].sort().reverse()
   const brain = brainWritesByDay(writes)
   const rows = dayList.map((day) => ({ day, ...(byDay.get(day) ?? { decided: 0, agree: 0, higher: 0, lower: 0, hold: 0, brake: 0 }), ...(stats.get(day) ?? { conflicts: 0, writes: 0, targetsWritten: 0, maxWritesPerTarget: 0 }), brainWrites: brain.get(day) ?? 0 }))
-  const owned = await ownedNow()
+  const { owned, ownedButArchived } = await ownedNow()
   return {
     data: {
-      view: 'diff', mode: bidBrainMode(), markets: scope.markets, owned, days: rows,
+      view: 'diff', mode: bidBrainMode(), markets: scope.markets, owned, ...leftOver(ownedButArchived), days: rows,
       note: rows.length
         ? `Per UTC day, each keyword's last decision against the bid today's writers set: agree (the brain leaves it), higher / lower (the brain would move it), hold (a stop, pin, stock or other override decides), brake. conflicts: keywords two different automatic writers changed within 24 hours (the goal is 0); writes and maxWritesPerTarget: bid writes that day (churn); brainWrites: the brain's own (only on the campaigns it owns — ${owned.length ? `${owned.length} now` : 'none now, so it wrote nothing'}).`
         : `No decision in the last ${days} days: ${SCHEDULE_WORDS}.`,
@@ -288,10 +298,9 @@ async function familyOf(productId: string): Promise<string | null> {
   return p ? p.parentId ?? p.id : null
 }
 
-async function calibrationView(args: BrainReadArgs) {
+async function calibrationView(args: BrainReadArgs, now: Date) {
   const scope = await scopeTargets(args)
   if (scope.error) return { error: scope.error }
-  const now = new Date()
   const curves = await storedCurves(scope.markets)
   const family = args.productId ? await familyOf(args.productId) : null
   const markets = scope.markets.map((market) => {
@@ -319,15 +328,20 @@ async function calibrationView(args: BrainReadArgs) {
   }
 }
 
-export async function readBidBrain(args: BrainReadArgs): Promise<{ data: unknown } | { error: string }> {
+/**
+ * One view. C4 — `opts.now` is the clock the why, what-if, diff and calibration views read (default: now); a second
+ * parameter, so the read tool's input can never set it.
+ */
+export async function readBidBrain(args: BrainReadArgs, opts: { now?: Date } = {}): Promise<{ data: unknown } | { error: string }> {
   const view = args.view ?? 'why'
-  if (view === 'what-if') return whatIfView(args)
-  if (view === 'diff') return diffView(args)
-  if (view === 'calibration') return calibrationView(args)
+  const now = opts.now ?? new Date()
+  if (view === 'what-if') return whatIfView(args, now)
+  if (view === 'diff') return diffView(args, now)
+  if (view === 'calibration') return calibrationView(args, now)
   if (view === 'hour-factors') return (await import('./hour-factors-read.js')).hourFactorsView(args)
   if (view === 'probes') {
     const scope = await scopeTargets(args)
     return scope.error ? { error: scope.error } : readProbes(scope, { limit: args.limit })
   }
-  return whyView(args)
+  return whyView(args, now)
 }

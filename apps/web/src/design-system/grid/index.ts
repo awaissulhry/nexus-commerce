@@ -98,8 +98,10 @@ export { cellDetailKeys, CELL_DETAIL_TRIGGER, type CellDetailKeyParams } from '.
 export { landOnCell, collapsedAncestors, LANDING_CLASS, LANDING_MS, type LandOptions, type LandingGridApi, type LandingRowNode } from './landOnCell'
 export {
   gridSelection, selectionColumn, integerColumn, moneyColumn, euroColumn, percentColumn, deltaColumn, dateColumn, statusColumn, textColumn,
-  stockColumn, lockedColumn, holdColumn, actionsColumn, changeColumn, type GridSelectionOptions, type ActionsColumnOptions,
+  stockColumn, lockedColumn, holdColumn, actionsColumn, changeColumn, switchColumn, type GridSelectionOptions, type ActionsColumnOptions, type SwitchColumnOptions,
 } from './columns/presets'
+// Ads brain page D2 (2026-10-10) — an on/off column that only changes a draft; Space on it never selects the row.
+export { SwitchCell, switchWord, switchHandlerOf, suppressSwitchKeys, switchKeyFlips, SWITCH_WORDS, type SwitchCellParams, type SwitchHandlers, type SwitchWords } from './renderers/SwitchCell'
 // Approvals grid (2026-10-05) — G1 before → after (a plain component + the cell), G2 up to two visible verbs per row
 // (`actionsColumn({ primary: [a, b] | (row) => … })`, `actionVerbs` from the registry), G8 single-key grid shortcuts.
 export { ChangeValue, ChangeCell, type ChangeValueProps, type ChangeCellParams } from './renderers/ChangeCell'

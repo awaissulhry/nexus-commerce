@@ -1114,7 +1114,8 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
   'relist-listing': { get confirmSku() { return seeded.b.sku } },
   'delete-listing': { get confirmSku() { return seeded.b.sku } },
   // Ads autonomy W3-1 — unmute the recommendation of B's campaign that B muted (its label is B's).
-  'mute-ad-recommendations': () => ({ recommendationIds: [`budget:${seeded.b.campaignId}`], op: 'unmute' }),
+  // C5 (#540): `markets` is optional and needs real codes; the probe aims at B's ids only, so it is left out.
+  'mute-ad-recommendations': () => ({ recommendationIds: [`budget:${seeded.b.campaignId}`], op: 'unmute', markets: undefined }),
   // W3-1 — undo-ad-change names a recorded write (and its set); `changeId` (one step of a plan's set) is left out: the
   // loop's changeId is another request's change.
   'undo-ad-change': { changeId: undefined },

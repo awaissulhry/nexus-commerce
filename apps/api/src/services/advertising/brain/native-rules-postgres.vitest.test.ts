@@ -54,7 +54,7 @@ const { readNativeRulesOnce } = await import('./native-rules.js')
 const { brainSettings, enrollProduct, endOverride, planOverride, setLever } = await import('./enrollment.js')
 const { decideApproval, runOrQueueTool } = await import('../../agents/approval-gate.service.js')
 const { parseCampaignBudgetRules } = await import('../ads-api-client.js')
-const { ADS_BRAIN_TOOLS } = await import('../../agents/tools/ads-brain.tools.js')
+const { readBrainView } = await import('./read-view.js')
 
 const hex = randomBytes(4).toString('hex')
 const H = hex.slice(0, 2).toUpperCase()
@@ -75,7 +75,15 @@ const person = (userId: string, via: 'claude' | 'app') => ({
   kind: 'user' as const, userId, label: `Person ${userId}`, via, workspace: scope(W),
   permissions: { isOwner: false, permissions: new Set<string>([...Object.values(FEATURES), ...Object.values(FIELDS)]) },
 })
-const tool = (args: Record<string, unknown>) => inW(() => ADS_BRAIN_TOOLS[0].handler!(args, {} as never)) as Promise<{ ok: boolean; data?: Data; error?: string }>
+/**
+ * The ads-brain views as Claude's tool reads them (its handler is readBrainView), on the test's clock: the rules were read at
+ * NOW, and from 50 hours on the real clock would call every reading stale (STALE_AFTER_MS) — the view reads at NOW, as C4
+ * pinned the bid brain's views.
+ */
+const tool = async (args: Record<string, unknown>) => {
+  const out = await inW(() => readBrainView(args, { now: NOW }))
+  return ('error' in out ? { ok: false, error: out.error } : { ok: true, data: out.data }) as { ok: boolean; data?: Data; error?: string }
+}
 
 // Amazon, stubbed: the fixture's four rules on the budget campaign, none elsewhere; every ask recorded.
 const FIXTURE = JSON.parse(readFileSync(new URL('./__fixtures__/sp-campaign-budget-rules.json', import.meta.url), 'utf8')) as unknown

@@ -56,38 +56,9 @@
  *            and after, or a matched level), ad profit, ACoS, TACoS and ad orders with 95 % intervals — or not enough data yet,
  *            and why; the margin it uses and where it comes from
  */
-import { z } from 'zod'
-import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
-import { BRAIN_MAP_VIEWS, brainClashes, brainMap, brainSetup, DEFAULT_EVIDENCE_DAYS, MAX_EVIDENCE_DAYS } from '../../advertising/brain/read-map.js'
-import { brainMoney } from '../../advertising/brain/budget-read.js'
-import { brainTerms, DEFAULT_TERMS_LIMIT, MAX_TERMS_LIMIT } from '../../advertising/brain/terms-read.js'
-import { TERM_STATES } from '../../advertising/brain/terms.js'
-import { brainNegatives, DEFAULT_NEGATIVES_LIMIT, MAX_NEGATIVES_LIMIT } from '../../advertising/brain/negatives-read.js'
-import { brainState } from '../../advertising/brain/state-read.js'
-import { brainHours } from '../../advertising/brain/hours-proposal.js'
-import { brainHarvest, DEFAULT_HARVEST_LIMIT, MAX_HARVEST_LIMIT } from '../../advertising/brain/harvest-read.js'
-import { HARVEST_STATUSES } from '../../advertising/brain/harvest.js'
-import { brainReport } from '../../advertising/brain/cycle-read.js'
-import { brainBidding } from '../../advertising/brain/bidding-mode-read.js'
-import { brainStructure, DEFAULT_STRUCTURE_LIMIT, MAX_STRUCTURE_LIMIT } from '../../advertising/brain/structure-read.js'
-import { STRUCTURE_STATUSES } from '../../advertising/brain/structure.js'
-import { brainRetire } from '../../advertising/brain/retire-run.js'
-import { brainProof } from '../../advertising/brain/proof-read.js'
-import { PROOF_WEEKS_DEFAULT, PROOF_WEEKS_MAX, PROOF_WEEKS_MIN } from '../../advertising/brain/proof.js'
-import type { AgentTool, FieldPermission } from '../tool-types.js'
-
-const ID = z.string().trim().min(1).max(64)
-
-/**
- * The portfolio cap amount (a setting) and the money an Owner's lock may hold are ad-spend money. AB-7 — the money view
- * puts every amount, percent of spend and sentence naming one under a `money` key: hidden whole without the permission.
- * AB-9 — the terms view puts every amount (spend, sales, CPC, order value, profit per click, bids, the spend gate, the
- * ACoS bound) under `money` keys too. AB-13 — so does the hours view (amounts, ACoS and the sentences naming them). AB-10 — the negatives view puts every amount (spend, sales, the spend gate) under `money`. AB-11 — the harvest view's start bids,
- * candidate money, first budgets and judged ACoS too. AB-17 — the bidding view's stack cents and its tests' figures too.
- */
-const BRAIN_MAP_MONEY: Readonly<Record<string, FieldPermission>> = Object.fromEntries(
-  ['portfolioCapCents', 'dailyBudgetCents', 'amountCents', 'money'].map((key) => [key, FIELDS.financialsAdspendView]),
-)
+import { FEATURES as F } from '@nexus/shared/permissions'
+import { BRAIN_VIEW_INPUT, BRAIN_VIEW_MONEY, readBrainView, type BrainViewArgs } from '../../advertising/brain/read-view.js'
+import type { AgentTool } from '../tool-types.js'
 
 const adsBrain: AgentTool = {
   name: 'ads-brain',
@@ -96,24 +67,10 @@ const adsBrain: AgentTool = {
   riskTier: 'low',
   readOnly: true,
   requires: [F.adsView],
-  restrictedFields: BRAIN_MAP_MONEY,
-  input: z.object({
-    view: z.enum(BRAIN_MAP_VIEWS).default('map')
-      .describe('retire: what retire-ads-writers would switch off for a product once every lever is AUTO or the Owner\'s choice (and what stays, each with why), what is retired now; proof: the A/B proof — each brain product against a matched comparison product, ad profit, ACoS, TACoS and orders with 95 % intervals, or not enough data yet. structure: a product\'s structure proposals — single-keyword campaigns, splits of shared campaigns, the move into its portfolio — decided now beside what the brain stored, with each request and whether a go-live is inside the caps; or a market\'s. map (default): who owns each lever of each campaign today; clashes: two automatic writers on one campaign\'s lever, and the known gaps; setup: what is not set up or held off, with the fix; money: a product\'s money plan in shadow — envelope, pace, brake, portfolio cap, campaign budgets, the off-Amazon lane — or a market\'s split; terms: a product\'s term ledger in shadow — one decision per search term, the market arbiter\'s leads, the clashes it removes — or a market\'s ledgers; state: each campaign\'s pause or resume decided now (it never archives), with its cause and horizon, beside what the brain logged; hours: one product\'s hourly research and painted plan with its approval (market and productId); negatives: a product\'s negatives — the day\'s adds, retirements and revives with their level and outcome, every campaign and ad group against the limit — or a market\'s logs; harvest: a product\'s harvests — destination, sources and their negatives, start bid, the request a person decides, the judgement after the attribution window + 72 h — or a market\'s; report: the day\'s product report the product cycle stored — what each lever did or would do in shadow, ad sales against spend, what waits for the Owner, clashes, his locks — or a market\'s newest reports; bidding: each campaign\'s Amazon bidding strategy decided now (fixed, down only, up and down) with its rule, its switchback test and the approval clock (N4), or a market\'s tests and requests'),
-    market: z.string().trim().toUpperCase().min(2).max(20).optional()
-      .describe('one Amazon market code (business-overview). map: with productId; alone, or omitted, the products the brain knows there (or in every market); clashes, money, terms, state, hours, negatives, harvest, report, structure, bidding, retire and proof: required'),
-    productId: ID.optional().describe('map / clashes / money / terms / state / hours / negatives / harvest / report / structure / bidding / retire / proof: one product (a variation names its parent), its Nexus id'),
-    day: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('report: the data day (YYYY-MM-DD) of the cycle to read; omitted, the newest'),
-    weeks: z.coerce.number().int().min(PROOF_WEEKS_MIN).max(PROOF_WEEKS_MAX).optional().describe(`proof: how many weeks to compare (${PROOF_WEEKS_MIN}–${PROOF_WEEKS_MAX}, default ${PROOF_WEEKS_DEFAULT})`),
-    since: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('proof, with productId: the day the brain started acting on the product (YYYY-MM-DD); omitted, the day Nexus recorded (the bid brain took a campaign live, or a lever went to AUTO)'),
-    campaignId: ID.optional().describe('map: one Amazon campaign, its Nexus id (ad-campaigns)'),
-    days: z.coerce.number().int().min(1).max(MAX_EVIDENCE_DAYS).default(DEFAULT_EVIDENCE_DAYS)
-      .describe(`map / clashes: how many days of the action log count as evidence of who wrote (default ${DEFAULT_EVIDENCE_DAYS}, max ${MAX_EVIDENCE_DAYS})`),
-    state: z.enum(TERM_STATES).optional().describe('terms: only the terms in this term state (view state takes no filter)'),
-    status: z.enum([...new Set([...HARVEST_STATUSES, ...STRUCTURE_STATUSES])] as [string, ...string[]]).optional().describe(`harvest: only the harvests in this status (${HARVEST_STATUSES.join(', ')}); structure: only the proposals in this status (${STRUCTURE_STATUSES.join(', ')})`),
-    limit: z.coerce.number().int().min(1).max(Math.max(MAX_TERMS_LIMIT, MAX_NEGATIVES_LIMIT, MAX_HARVEST_LIMIT, MAX_STRUCTURE_LIMIT)).default(DEFAULT_TERMS_LIMIT)
-      .describe(`terms: how many terms to list (default ${DEFAULT_TERMS_LIMIT}, max ${MAX_TERMS_LIMIT}); the counts per state cover every term. negatives: how many of each list (default ${DEFAULT_NEGATIVES_LIMIT}, max ${MAX_NEGATIVES_LIMIT}). harvest: how many harvests (default ${DEFAULT_HARVEST_LIMIT}, max ${MAX_HARVEST_LIMIT}). structure: how many stored proposals (default ${DEFAULT_STRUCTURE_LIMIT}, max ${MAX_STRUCTURE_LIMIT})`),
-  }),
+  // The money keys, the input and the dispatch live in advertising/brain/read-view.ts: the brain page's routes read the
+  // same views through the same code (ads brain page A1).
+  restrictedFields: BRAIN_VIEW_MONEY,
+  input: BRAIN_VIEW_INPUT,
   description:
     'Read the ads brain\'s map for Amazon Sponsored Products: one brain per product and market will run every lever (bids, '
     + 'ad group bids, hours, placements, state, budgets, portfolio cap, negatives, harvest, structure, bidding strategy, '
@@ -253,21 +210,7 @@ const adsBrain: AgentTool = {
     + 'the cost price against the list price, else none) — amounts under money keys. '
     + 'Nexus only: it reads what Nexus stored and asks Amazon nothing.',
   handler: async (args) => {
-    const a = args as { view?: string; market?: string; productId?: string; campaignId?: string; days?: number; state?: string; status?: string; limit?: number; day?: string; weeks?: number; since?: string }
-    const out = a.view === 'clashes' ? await brainClashes(a)
-      : a.view === 'setup' ? await brainSetup(a)
-        : a.view === 'money' ? await brainMoney(a)
-          : a.view === 'terms' ? await brainTerms(a)
-            : a.view === 'state' ? await brainState(a)
-              : a.view === 'negatives' ? await brainNegatives(a)
-                : a.view === 'hours' ? await brainHours(a)
-                  : a.view === 'harvest' ? await brainHarvest(a)
-                    : a.view === 'report' ? await brainReport(a)
-                      : a.view === 'structure' ? await brainStructure(a)
-                        : a.view === 'bidding' ? await brainBidding(a)
-                          : a.view === 'retire' ? await brainRetire(a)
-                            : a.view === 'proof' ? await brainProof(a)
-                              : await brainMap(a)
+    const out = await readBrainView(args as BrainViewArgs)
     return 'error' in out ? { ok: false, error: out.error } : { ok: true, data: out.data }
   },
 }
