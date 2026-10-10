@@ -575,6 +575,8 @@
 .nds-cell-locked { color: var(--nds-grid-locked-fg); display: inline-flex; align-items: center; gap: 6px; }
 /* The outline lock (`LockGlyph`): the held Status cell's icon and ink (`.nds-selling-lock`), so the app has one lock. */
 .nds-cell-lock-glyph { flex: none; color: var(--nds-grid-muted-fg); }
+/* switch (`switchColumn`, 2026-10-10): the toggle, its word and the "Not saved" tag on one line, never wrapping the row. */
+.nds-cell-switch { display: inline-flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; }
 /* `WarnGlyph` / `PauseGlyphIcon` (2026-10-08): outline icons in their holder's ink, sitting on the text's middle. */
 .nds-cell-glyph { flex: none; display: inline-block; vertical-align: -2px; }
 

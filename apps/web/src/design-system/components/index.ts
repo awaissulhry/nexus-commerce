@@ -30,6 +30,12 @@ export { PerformanceGraph, type PerformanceGraphProps, type ChartSeries } from '
 // dual-axis, and a burn-down's series are all one unit.
 export { BurnDownChart, type BurnDownChartProps, type BurnDownPoint } from './BurnDownChart'
 export { Heatmap, type HeatmapProps } from './Heatmap'
+// Ads brain page D1 (2026-10-10) — a week × hour editor with locks: paint, lock, research shading, keyboard-first, on its side on a phone.
+export { WeekHourGrid, type WeekHourGridProps, type WeekHourMetric } from './WeekHourGrid'
+export {
+  weekHourKey, parseWeekHourKey, dayName, hourText, weekHourCellName, MONDAY_FIRST, WEEK_HOUR_MAX_BRUSHES, WEEK_HOUR_SIDE_BELOW,
+  type WeekHourBrush, type WeekHourCell, type WeekHourAddress, type WeekHourMode, type WeekHourTone,
+} from './weekHourModel'
 export { SavedChip, type SavedChipProps, type SavedChipAction } from './SavedChip'
 export { DataGrid, type DataGridProps, type Column } from './DataGrid'
 export { ImageUpload, type ImageUploadProps, type ImageUploadCriterion } from './ImageUpload'

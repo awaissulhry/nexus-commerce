@@ -30,6 +30,7 @@ import { ChangeCell, type ChangeCellParams } from '../renderers/ChangeCell'
 import { asChangeValueData, changeSummaryText, changeTooltipText } from '../renderers/changeValue'
 import { actionsColumnWidth, isMultiVerb } from '../renderers/rowVerbs'
 import { rendererOwnsKeyboard } from '../rendererKeyboard'
+import { SwitchCell, SWITCH_WORDS, suppressSwitchKeys, switchWord, type SwitchCellParams, type SwitchWords } from '../renderers/SwitchCell'
 
 /* ── selection ────────────────────────────────────────────────────────────────────────────── */
 
@@ -139,6 +140,51 @@ export const stockColumn = <T,>(field: Field<T>, params: StockCellParams = {}): 
   cellRenderer: StockCell,
   cellRendererParams: params,
 })
+
+/* ── switch ───────────────────────────────────────────────────────────────────────────────── */
+
+export interface SwitchColumnOptions<T> {
+  /** "Brain", "Locked", "Protect", "May change it". */
+  header: string
+  /** Accessible name of each row's switch: "Keep JACKET-A under the brain". */
+  label(row: T): string
+  /** Default "On" / "Off". */
+  words?: SwitchWords
+  /** Shown as title and aria-description; null = the switch may move. */
+  disabledReason?(row: T): string | null
+  /** The "Not saved" tag while the page's draft holds a change for this row. */
+  pending?(row: T): boolean
+}
+
+/**
+ * An on/off column (ads brain page D2, 2026-10-10). The value is the row's boolean at `field`; a flip goes to the grid's
+ * `context.current.onSwitch(row, next, field)` and changes a DRAFT — never the server (the page's `EditModeBar` saves).
+ * Space and Enter on a focused switch cell flip it instead of selecting the row (`suppressKeyboardEvent`). It sorts
+ * Off before On, and the CSV, the clipboard, the quick filter and the column filter read the same words.
+ */
+export const switchColumn = <T,>(field: Field<T>, opts: SwitchColumnOptions<T>): ColDef<T> => {
+  const words = opts.words ?? SWITCH_WORDS
+  const params: SwitchCellParams<T> = {
+    field,
+    label: (row) => opts.label(row),
+    words,
+    disabledReason: opts.disabledReason ? (row) => opts.disabledReason!(row) : undefined,
+    pending: opts.pending ? (row) => opts.pending!(row) : undefined,
+  }
+  return {
+    field: fieldOf<T>(field),
+    headerName: opts.header,
+    editable: false,
+    cellClass: 'nds-ag-cell',
+    cellRenderer: SwitchCell,
+    cellRendererParams: params,
+    valueFormatter: (p) => switchWord(p.value, words),
+    filterValueGetter: (p) => switchWord(p.getValue(field), words),
+    getQuickFilterText: (p) => switchWord(p.value, words),
+    comparator: (a, b) => Number(a === true) - Number(b === true),
+    suppressKeyboardEvent: suppressSwitchKeys,
+  }
+}
 
 /* ── locked ───────────────────────────────────────────────────────────────────────────────── */
 
