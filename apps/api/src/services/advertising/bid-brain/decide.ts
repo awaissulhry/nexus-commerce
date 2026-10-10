@@ -15,6 +15,12 @@
  *   goal       otherwise the recipe (recipe.ts) from the pooled estimate (estimator.ts) and the goal (goal.ts); it writes
  *              only when the expected ACoS at today's bid is outside the band and the bid moves by ≥ 2¢ and ≥ 5 %, and a
  *              bid outside a hard limit is always brought back inside it
+ *   share      Lane 5 — with a target top-of-search impression share (`share`, share.ts; absent: off, nothing changes),
+ *              after the limits and the rule inputs and before the band: the band top wins (an ACoS above it goes to the
+ *              goal, which lowers); a reading that counts raises one step below target − 5 points (capped at the band
+ *              top's bid, the highest limit and the top-of-search lane), lowers one step above target + 5, holds within;
+ *              right after its own move it waits; a reading that does not count moves nothing and the goal decides, the
+ *              why saying why the share held. The overrides, the brakes and the raise cap decide before it.
  *
  * Idempotent: the same facts give the same decision. The step is taken from the bid before the brain's first step on
  * the newest data day (`lastStep`), so a rerun on unchanged evidence never compounds (C3: 33→25→19→14¢ in six hours).
@@ -22,6 +28,7 @@
  */
 import { estimate, laneCpcRatio, type Estimate, type PoolNode } from './estimator.js'
 import { goalWords, isGoal, resolveGoal, type Goal, type GoalInputs, type GoalRefusal } from './goal.js'
+import { readingWords, shareMove, SHARE_NEXT_LEVER, tosLaneCap, type ShareFacts } from './share.js'
 import {
   applyDirectives,
   applyLaneDirectives,
@@ -112,6 +119,8 @@ export interface TargetFacts {
   lastStep?: { dataDay: string; fromCents: number; toCents: number } | null
   /** Brakes in force, in words ("campaign paused"). Any brake: nothing is decided. */
   brakes?: readonly string[]
+  /** Lane 5 — the keyword's target top-of-search impression share and its reading (share.ts). Absent: no target, off. */
+  share?: ShareFacts | null
   overrides?: Overrides
   /**
    * BB-8 — the brain's last decision lowered this bid by an override (`layer`, to `heldCents`), or was a give-back that
@@ -123,7 +132,8 @@ export interface TargetFacts {
 
 /** BB-20 — `explore` / `revive`: an explore plan's pick replacing the goal's decision (explore.ts; NEXUS_BID_BRAIN_EXPLORE=on only). */
 /** BB-21 — `probe`: a LIVE switchback probe's arm replacing the goal's decision (probe.ts; NEXUS_BID_BRAIN_PROBES=on only). */
-export type DecisionLayer = 'brake' | 'stop' | 'pin' | 'stock' | 'freeze' | 'phase' | 'min_bid_hour' | 'money' | 'intraday' | 'restore' | 'goal' | 'band' | 'limit' | 'no_goal' | 'explore' | 'revive' | 'probe'
+/** Lane 5 — `share`: the target top-of-search impression share (share.ts) moved or held the bid. */
+export type DecisionLayer = 'brake' | 'stop' | 'pin' | 'stock' | 'freeze' | 'phase' | 'min_bid_hour' | 'money' | 'intraday' | 'restore' | 'goal' | 'band' | 'limit' | 'no_goal' | 'explore' | 'revive' | 'probe' | 'share'
 
 /** BB-9 — a share floor (share of voice, rank, coverage) may reach the bid of this × the band top (design §2). */
 export const SHARE_FLOOR_HI_FACTOR = 1.25
@@ -396,14 +406,22 @@ function decideBid(f: TargetFacts): Decision {
       return { ...base, ...known, action: 'write', layer: 'limit', bidCents: cents, placements: placements(cents), why: `rule input: ${f.currentCents}¢ is outside the ${ruled.applied.join('; ')} → ${cents}¢ (${recipe})` }
     }
   }
+  // Lane 5 — the target top-of-search impression share: after the limits and the rule inputs, before the band.
+  let shareNote: string | null = null
+  if (f.share) {
+    const sh = shareLayer(f, ok, expNow, lanes)
+    if ('note' in sh) shareNote = sh.note
+    else return { ...base, ...known, ...sh, layer: 'share', placements: placements(sh.bidCents) }
+  }
+  const noted = (why: string) => (shareNote ? `${why} · ${shareNote}` : why)
   if (expNow != null && expNow >= ok.goal.lo && expNow <= ok.goal.hi) {
-    return { ...base, ...known, action: 'hold', layer: 'band', bidCents: f.currentCents, placements: placements(f.currentCents), why: `in band: expected ACoS ${pct(expNow)} at ${f.currentCents}¢ is inside ${pct(ok.goal.lo)}–${pct(ok.goal.hi)} — no change (${recipe})` }
+    return { ...base, ...known, action: 'hold', layer: 'band', bidCents: f.currentCents, placements: placements(f.currentCents), why: noted(`in band: expected ACoS ${pct(expNow)} at ${f.currentCents}¢ is inside ${pct(ok.goal.lo)}–${pct(ok.goal.hi)} — no change (${recipe})`) }
   }
   const delta = Math.abs(ok.cents - f.currentCents)
   if (delta < MIN_WRITE_CENTS || delta < f.currentCents * MIN_WRITE_SHARE) {
     const already = !!f.lastStep && f.lastStep.dataDay >= f.dataDay && f.lastStep.toCents === f.currentCents
     const why = already ? `goal: already moved for data day ${f.dataDay} — waits for a new day (${recipe})` : `goal: ${recipe}; ${f.currentCents}¢ → ${ok.cents}¢ is too small a change`
-    return { ...base, ...known, action: 'hold', layer: 'goal', bidCents: f.currentCents, placements: placements(f.currentCents), why }
+    return { ...base, ...known, action: 'hold', layer: 'goal', bidCents: f.currentCents, placements: placements(f.currentCents), why: noted(why) }
   }
   return {
     ...base,
@@ -413,8 +431,43 @@ function decideBid(f: TargetFacts): Decision {
     bidCents: ok.cents,
     step: { dataDay: f.dataDay, fromCents: ok.anchor, toCents: ok.cents },
     placements: placements(ok.cents),
-    why: `goal: ${recipe}; ${f.currentCents}¢ → ${ok.cents}¢`,
+    why: noted(`goal: ${recipe}; ${f.currentCents}¢ → ${ok.cents}¢`),
   }
+}
+
+/**
+ * Lane 5 — the share layer for one keyword with a target (share.ts): a decision of its own (a move, a hold within the dead
+ * zone or at a cap, the wait after its move), or a note for the goal's decision when the band top wins or the reading does
+ * not count. Every line names the reading's grain, days, range and impressions (readingWords); never a word for a place.
+ */
+function shareLayer(f: TargetFacts, ok: GoalBid, expNow: number | null, lanes: readonly Lane[]): { action: DecisionAction; bidCents: number; step: Decision['step']; why: string } | { note: string } {
+  const s = f.share!
+  const head = `share: target top-of-search impression share ${s.targetPct}% (${s.targetBy})`
+  const acos = expNow != null ? `expected ACoS ${pct(expNow)} at ${f.currentCents}¢, band ${pct(ok.goal.lo)}–${pct(ok.goal.hi)}` : `no expected ACoS at ${f.currentCents}¢`
+  const read = s.reading ? readingWords(s.reading) : null
+  const hold = (why: string) => ({ action: 'hold' as const, bidCents: f.currentCents, step: null, why })
+  // The band top wins (D1 = A): an ACoS above it goes to the goal, which lowers — whatever the share says.
+  if (expNow != null && expNow > ok.goal.hi) return { note: `${head}: no share move — the band top wins (${acos})${read ? `; ${read}` : ''}` }
+  if (s.waiting) return hold(`${head}: ${s.held}${read ? `; ${read}` : ''} — no change (${acos})`)
+  if (s.held || !s.reading) return { note: `${head}: no share move — ${s.held ?? 'no reading'}${read ? `; ${read}` : ''}` }
+  const caps = [
+    { cents: Math.floor(ok.floorCaps.floor), from: `the bid where the expected ACoS meets the band top ${pct(ok.goal.hi)}` },
+    ok.range.upper != null ? { cents: ok.range.upper, from: ok.range.upperFrom ?? 'the highest bid' } : null,
+    tosLaneCap(lanes),
+  ]
+  const m = shareMove({ currentCents: f.currentCents, reading: s.reading, targetPct: s.targetPct, maxChangePct: f.limits.maxChangePct ?? DEFAULT_MAX_CHANGE_PCT, caps, floorCents: ok.range.lower })
+  const versus = `${read} is ${s.reading.pct < s.targetPct ? 'below' : 'above'} the target by more than 5 points`
+  if (m.dir === 'raise') {
+    const capWords = m.capped ? ` (held to ${m.capped.from}, ${Math.floor(m.capped.cents)}¢; ${SHARE_NEXT_LEVER})` : ''
+    return { action: 'write', bidCents: m.cents, step: { dataDay: f.dataDay, fromCents: f.currentCents, toCents: m.cents }, why: `${head}: ${versus} → raise ≤${m.stepPct}%: ${f.currentCents}¢ → ${m.cents}¢${capWords} (${acos})` }
+  }
+  if (m.dir === 'lower') {
+    return { action: 'write', bidCents: m.cents, step: { dataDay: f.dataDay, fromCents: f.currentCents, toCents: m.cents }, why: `${head}: ${versus} → lower ≤${m.stepPct}%: ${f.currentCents}¢ → ${m.cents}¢${m.cents === ok.range.lower ? ` (held at ${ok.range.lowerFrom})` : ''} (${acos})` }
+  }
+  if (m.why === 'dead_zone') return hold(`${head}: ${read} is within 5 points of the target — no change (${acos})`)
+  if (m.why === 'at_cap') return hold(`${head}: ${versus}, but ${f.currentCents}¢ is at or above its cap (${m.capped?.from}, ${m.capped ? Math.floor(m.capped.cents) : f.currentCents}¢) — no raise; ${SHARE_NEXT_LEVER} (${acos})`)
+  if (m.why === 'at_floor') return hold(`${head}: ${versus}, but ${f.currentCents}¢ is at ${ok.range.lowerFrom} — no lower (${acos})`)
+  return hold(`${head}: ${versus}, but the strategy's largest change is 0 % — no change (${acos})`)
 }
 
 /**

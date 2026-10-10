@@ -175,3 +175,18 @@ describe('AB-2 — the bid stack as if no stop had happened', () => {
     expect(g.ratioCeiling).toBe(1)
   })
 })
+
+describe('Lane 5 — the target top-of-search impression share in the facts', () => {
+  it('a keyword with a target carries its share facts; every other keyword\'s facts are exactly as before', () => {
+    const share = { targetPct: 40, targetBy: 'the Owner\'s campaign override (user:owner, 2026-10-09)', reading: null, held: 'no reading', waiting: false, lastMove: null }
+    const before = buildFacts(market(), run())
+    const after = buildFacts(market(), run({ share: new Map([['t1', share], ['t3', share]]) }))
+    expect(after[0].share).toEqual(share)
+    expect(after[1]).toEqual(before[1])
+    expect(after[1]).not.toHaveProperty('share')
+    const { share: _s, ...rest } = after[0]
+    expect(rest).toEqual(before[0])
+    // t3's campaign is not allowlisted: it is not decided, with or without a target.
+    expect(after.map((f) => f.targetId)).toEqual(['t1', 't2'])
+  })
+})

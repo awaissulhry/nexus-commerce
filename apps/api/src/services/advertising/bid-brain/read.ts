@@ -17,6 +17,9 @@
  *            cap (hour-factors-read.ts)
  *   probes   BB-21 — the switchback probes of a scope (probe-store.ts readProbes): arms, days, what each measured, and ε
  *            per product from their readings
+ *   share    Lane 5 — a keyword with a target top-of-search impression share: `why` shows its stored share (the target and
+ *            who set it, the reading with its grain, days, range and impressions, why it held, the last share move);
+ *            `what-if` decides with it, as the run does
  */
 import { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
@@ -32,6 +35,7 @@ import { LAG_AGES, MIN_MATURITY, NOWCAST_MAX_FACTOR } from './lag-curve.js'
 import { YOUNG_SHARE_MAX } from './estimator.js'
 import { nowcastMode, runForRows } from './nowcast.js'
 import { readProbes } from './probe-store.js'
+import { loadShare } from './share-load.js'
 
 export const BRAIN_VIEWS = ['why', 'what-if', 'diff', 'calibration', 'hour-factors', 'probes'] as const
 export type BrainView = (typeof BRAIN_VIEWS)[number]
@@ -95,7 +99,7 @@ async function whyView(args: BrainReadArgs, now: Date) {
     SELECT * FROM (
       SELECT DISTINCT ON (d."targetId") d."targetId", d."campaignId", d.marketplace, d.action, d.layer, d."currentCents", d."decidedCents",
              d."goalBidCents", d.aim, d."bandLo", d."bandHi", d."expectedAcos", d.confidence, d."dataDay", d."createdAt", d."lastWriter", d.why,
-             d.mode, d.evidence -> 'sent' AS sent
+             d.mode, d.evidence -> 'sent' AS sent, d.evidence -> 'share' AS share
         FROM "BidBrainDecision" d
        WHERE d."createdAt" >= ${since} ${idFilter} ${marketFilter}
        ORDER BY d."targetId", d."createdAt" DESC) latest
@@ -108,7 +112,7 @@ async function whyView(args: BrainReadArgs, now: Date) {
     aimPct: pct(r.aim), bandLoPct: pct(r.bandLo), bandHiPct: pct(r.bandHi), expectedAcosPct: pct(r.expectedAcos),
     confidence: r.confidence == null ? null : Number(r.confidence), dataDay: (r.dataDay as Date).toISOString().slice(0, 10),
     decidedAt: (r.createdAt as Date).toISOString(), lastWriter: r.lastWriter, why: r.why,
-    mode: r.mode, ...(r.sent ? { sent: r.sent } : {}),
+    mode: r.mode, ...(r.sent ? { sent: r.sent } : {}), ...(r.share ? { share: r.share } : {}),
   }))
   const { owned, ownedButArchived } = await ownedNow()
   const live = decisions.some((d) => d.mode === 'LIVE')
@@ -135,7 +139,10 @@ async function whatIfView(args: BrainReadArgs, now: Date) {
     const rows = await loadMarket(market, { now })
     if (!rows.targets.length) continue
     // BB-15 follow-up — with the nowcast on, the step anchors as the run reads them (re-keyed to its data day).
-    const run = runForRows(rows, (await loadRun(rows, now)).run)
+    const loaded = runForRows(rows, (await loadRun(rows, now)).run)
+    // Lane 5 — the target top-of-search impression share, as the run reads it (none set: undefined, nothing changes).
+    const share = await loadShare(rows, now)
+    const run = share ? { ...loaded, share } : loaded
     for (const f of buildFacts(rows, run)) {
       if (wanted && !wanted.has(f.targetId)) continue
       const goal = {
@@ -215,11 +222,14 @@ const leftOver = (ownedButArchived: readonly string[]) => (ownedButArchived.leng
   ? { ownedButArchived, ownedButArchivedNote: `${ownedButArchived.length} archived campaign${ownedButArchived.length === 1 ? ' is' : 's are'} still enrolled LIVE or HELD: left over — nothing runs on an archived campaign, and ${ownedButArchived.length === 1 ? 'it is' : 'they are'} not in owned` }
   : {})
 
-/** One decision against today's bid: agree (the brain leaves it), higher, lower, held by an override, braked. */
+/**
+ * One decision against today's bid: agree (the brain leaves it), higher, lower, held by an override, braked. Lane 5 — a
+ * share hold (within the dead zone, at a cap, waiting for its reading days) is the brain's own: agree.
+ */
 export function compareWord(d: { action: string; layer: string; currentCents: number; decidedCents: number }): 'agree' | 'higher' | 'lower' | 'hold' | 'brake' {
   if (d.action === 'brake') return 'brake'
   if (d.action === 'write') return d.decidedCents > d.currentCents ? 'higher' : 'lower'
-  return d.layer === 'band' || d.layer === 'goal' ? 'agree' : 'hold'
+  return d.layer === 'band' || d.layer === 'goal' || d.layer === 'share' ? 'agree' : 'hold'
 }
 
 async function diffView(args: BrainReadArgs, now: Date) {

@@ -42,6 +42,10 @@
  *   BB-21     NEXUS_BID_BRAIN_PROBES=shadow (the default): each full run also steps, measures and plans the switchback
  *             probes that measure ε (probe.ts, probe-store.ts: the BidProbe ledger) and says what they would bid; `on`:
  *             a LIVE probe's arm (a campaign the brain owns) is the decision, layer probe, acted on like any other
+ *   Lane 5    the target top-of-search impression share (share.ts, share-load.ts): each full run reads the Owner's
+ *             tosTargetPct; a keyword with one carries its reading into decide (layer `share`), and its stored decision
+ *             keeps `evidence.share` (target, who set it, the reading, why it held, the last share move — one move per new
+ *             reading day). No target set anywhere: nothing more is read and every decision is exactly as before
  */
 import { randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
@@ -72,6 +76,8 @@ import { upgradesShadow, type UpgradesSummary } from './response-explore.js'
 import { responseSummaryWords } from './response.js'
 import { exploreSummaryWords } from './explore.js'
 import { probeSummaryWords } from './probe.js'
+import { loadShare } from './share-load.js'
+import { shareEvidence, type ShareFacts } from './share.js'
 
 export type BrainMode = 'off' | 'shadow' | 'live'
 
@@ -153,7 +159,9 @@ export async function shadowMarket(market: string, ctx: { runId: string; mode: B
   // BB-22 — the learned hour factors (NEXUS_BID_BRAIN_HOUR_FACTORS off · shadow, the default: their moves said in the why,
   // nothing changed · on: the approved plan's lanes moved inside each cell's limits where the product's brain owns hours).
   const hourFactors = await hourFactorsForRun(market, capped, { now: ctx.now, clockNow: ctx.clockNow ?? ctx.now, light: !!rows.light })
-  const run = hourFactors.run
+  // Lane 5 — the target top-of-search impression share (full runs only; none set anywhere: undefined, nothing changes).
+  const share = await loadShare(rows, ctx.now)
+  const run = share ? { ...hourFactors.run, share } : hourFactors.run
   const groupOf = new Map(rows.targets.map((t) => [t.id, t.adGroupId]))
   const campaignOf = (targetId: string): string => {
     const adGroupId = groupOf.get(targetId)
@@ -166,7 +174,7 @@ export async function shadowMarket(market: string, ctx: { runId: string; mode: B
   // only some campaigns plans over the whole market (`marketFacts`), so the picks of all runs fit one budget.
   const partial = !!ctx.scope?.campaignIds || !!ctx.scope?.skipCampaignIds || !!ctx.raiseCaps?.size
   const upgrades = rows.light ? null : await upgradesShadow(rows, {
-    facts, decisions: decided, campaignOf, now: ctx.now, lastWrites, owned, runId: ctx.runId, ...(partial ? { marketFacts: () => buildFacts(rows, anchored) } : {}),
+    facts, decisions: decided, campaignOf, now: ctx.now, lastWrites, owned, runId: ctx.runId, ...(partial ? { marketFacts: () => buildFacts(rows, share ? { ...anchored, share } : anchored) } : {}),
   })
   const decisions = upgrades?.decisions ?? decided
   // BB-15 — the nowcast in shadow (full runs only): words for the stored why; the decisions above are the ones that count.
@@ -211,6 +219,9 @@ export async function shadowMarket(market: string, ctx: { runId: string; mode: B
   if (sent) await rememberFloors(rows, decisions, sent, run.planHours, campaignOf, ctx.clockNow ?? ctx.now)
   // … and the plan's receipt (what it holds now), as rank-defend stamps its own.
   if (run.planHours?.size) await stampPlanReceipts(run.planHours, ctx.clockNow ?? ctx.now)
+  // Lane 5 — each keyword's share facts, for its stored evidence (the run's UTC day is a share move's day).
+  const shareOf = new Map<string, ShareFacts>(facts.flatMap((f) => (f.share ? [[f.targetId, f.share] as const] : [])))
+  const runDay = ctx.now.toISOString().slice(0, 10)
   const data = decisions.flatMap((d) => {
     // A light tick has no goal: its no_goal holds say nothing new and are not stored (the full run's decision stands).
     if (rows.light && d.layer === 'no_goal') return []
@@ -228,7 +239,7 @@ export async function shadowMarket(market: string, ctx: { runId: string; mode: B
       aim: dec(d.goal?.aim), bandLo: dec(d.goal?.lo), bandHi: dec(d.goal?.hi), expectedAcos: dec(d.expectedAcos), confidence: dec(d.confidence),
       dataDay: new Date(`${d.dataDay}T00:00:00Z`), lastWriter: last?.actor ?? null, lastWriteAt: last?.at ?? null, why: withNote(withNote(withNote(withNote(recipe.has(campaignId) ? `${d.why} · ${recipe.get(campaignId)}` : d.why, upgrades?.notes.get(d.targetId)), nowcast?.notes.get(d.targetId)), hourFactors.notes.get(campaignId)), intraday?.notes.get(d.targetId)),
       // The step the next run anchors on (nowcast.ts stepToStore): marked when the rows were read with the nowcast on.
-      evidence: { step: d.step, lastStep: stepToStore(d, run.lastSteps.get(d.targetId), !!rows.nowcast), clash: d.clash, placements: d.placements.length ? d.placements : undefined, sent: outcome, ...upgrades?.evidence.get(d.targetId) } as unknown as Prisma.InputJsonObject,
+      evidence: { step: d.step, lastStep: stepToStore(d, run.lastSteps.get(d.targetId), !!rows.nowcast), clash: d.clash, placements: d.placements.length ? d.placements : undefined, sent: outcome, ...upgrades?.evidence.get(d.targetId), ...(shareOf.has(d.targetId) ? { share: shareEvidence(d, shareOf.get(d.targetId)!, runDay) } : {}) } as unknown as Prisma.InputJsonObject,
       createdAt: ctx.now,
     }]
   })
