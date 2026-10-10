@@ -151,7 +151,6 @@ const daysSince = (now: Date, d: Date) => Math.max(0, Math.floor((now.getTime() 
 
 /** B4 — how far back the Top-of-Search lane reads a campaign's own daily shares. */
 export const TOP_IS_WINDOW_DAYS = 30
-const TOP_REPORT_PLACEMENT = 'Top of Search on-Amazon'
 
 /**
  * A 0..1 share in words. A non-zero share below 0.01 % reads "<0.01%", never "0%" or "0.0%"; below 1 % it
@@ -169,6 +168,8 @@ const valuePctOf = (v: number) => Number((v * 100).toPrecision(3))
 export interface TopIsReading {
   /** 0..1 — computed by Nexus: the impression-weighted average of the shares Amazon reported for the campaign */
   share: number
+  /** where its daily readings came from (review fix): Amazon's placement report, its campaign report, or both, in words */
+  source?: string
   /** days with a reading in the window */
   days: number
   /** the campaign's OWN newest reading */
@@ -180,8 +181,9 @@ export interface TopIsReading {
  * `weightedIS`, passed in so this stays pure), the days that carry a reading, and its own newest date.
  */
 export function topIsReadingOf(
-  rows: ReadonlyArray<{ date: Date; value: number; weight: number }>,
+  rows: ReadonlyArray<{ date: Date; value: number; weight: number; source?: 'placement' | 'campaign' }>,
   average: (points: Array<{ value: number; weight: number }>) => number | null,
+  sourceWords?: (rows: ReadonlyArray<{ source: 'placement' | 'campaign' }>) => string,
 ): TopIsReading | null {
   const usable = rows.filter((r) => Number.isFinite(r.value))
   if (!usable.length) return null
@@ -189,7 +191,8 @@ export function topIsReadingOf(
   if (share == null) return null
   const days = new Set(usable.map((r) => r.date.toISOString().slice(0, 10))).size
   const newest = new Date(Math.max(...usable.map((r) => +r.date)))
-  return { share, days, newest }
+  const source = sourceWords ? sourceWords(usable.map((r) => ({ source: r.source ?? 'placement' }))) : undefined
+  return { share, days, newest, ...(source ? { source } : {}) }
 }
 
 /**
@@ -220,7 +223,7 @@ export function topLaneSignal(lane: string, reading: TopIsReading | null, dbNow:
     label: `Top-IS ${TOP_IS_WINDOW_DAYS}-day wtd avg ${words} (${dayWord})`,
     detail: `The top-of-search impression share Amazon reported for this campaign (campaign level), averaged by Nexus `
       + `(impression-weighted) over the ${dayWord} with a reading in the last ${TOP_IS_WINDOW_DAYS}: ${words}. `
-      + `Newest reading ${newest}, ${age} day${age === 1 ? '' : 's'} old.`,
+      + `Newest reading ${newest}, ${age} day${age === 1 ? '' : 's'} old.${reading.source ? ` Source: ${reading.source}.` : ''}`,
   }
 }
 
@@ -306,22 +309,17 @@ export async function getRankRuntime(): Promise<RankRuntimePayload> {
   if (topExtByCampaign.size) {
     const since = new Date(+dbNow - TOP_IS_WINDOW_DAYS * 86_400_000)
     since.setUTCHours(0, 0, 0, 0)
-    const rows = await prisma.amazonAdsPlacementReport.findMany({
-      where: {
-        campaignId: { in: [...new Set(topExtByCampaign.values())] }, placement: TOP_REPORT_PLACEMENT,
-        topOfSearchIS: { not: null }, date: { gte: since },
-      },
-      select: { campaignId: true, date: true, impressions: true, topOfSearchIS: true },
-    })
-    const byExt = new Map<string, Array<{ date: Date; value: number; weight: number }>>()
+    // Review fix — the placement table is filled only by the TOS ingest cron (off by default): a campaign-day it has no
+    // reading for falls back to the campaign report's own row, and the signal says its source.
+    const { weightedIS, campaignTopOfSearchReadings, tosSourceWords } = await import('./placement-grid.service.js')
+    const rows = await campaignTopOfSearchReadings([...topExtByCampaign.values()], since)
+    const byExt = new Map<string, Array<{ date: Date; value: number; weight: number; source: 'placement' | 'campaign' }>>()
     for (const r of rows) {
-      if (r.topOfSearchIS == null) continue
       const list = byExt.get(r.campaignId) ?? []
-      list.push({ date: r.date, value: Number(r.topOfSearchIS), weight: r.impressions ?? 0 })
+      list.push({ date: r.date, value: r.share, weight: r.impressions ?? 0, source: r.source })
       byExt.set(r.campaignId, list)
     }
-    const { weightedIS } = await import('./placement-grid.service.js')
-    for (const [campaignId, ext] of topExtByCampaign) topIsByCampaign.set(campaignId, topIsReadingOf(byExt.get(ext) ?? [], weightedIS))
+    for (const [campaignId, ext] of topExtByCampaign) topIsByCampaign.set(campaignId, topIsReadingOf(byExt.get(ext) ?? [], weightedIS, tosSourceWords))
   }
 
   // ASINs per campaign — needed for the SQP lane and for "has this ASIN set EVER been covered".

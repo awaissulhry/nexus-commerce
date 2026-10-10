@@ -349,7 +349,17 @@ describe('ktTopOfSearchFact', () => {
       grain: 'campaign', campaignsWithReading: 2, campaignsInScope: 5, readings: 3,
       oldest: '2026-10-07', newest: '2026-10-09', asOf: '2026-10-09', windowDays: KT_TOS_MAX_AGE_DAYS,
     })
-    expect(fact.basis).toBe('campaign-level: the top-of-search impression share Amazon reported for 2 campaigns, averaged by Nexus (impression-weighted) over 3 campaign-day readings from 2026-10-07 to 2026-10-09')
+    expect(fact.basis).toBe('campaign-level: the top-of-search impression share Amazon reported for 2 campaigns, averaged by Nexus (impression-weighted) over 3 campaign-day readings from 2026-10-07 to 2026-10-09; source: Amazon\'s placement report (3 readings)')
+    expect(fact.sources).toEqual({ placementReport: 3, campaignReport: 0 })
+  })
+
+  it('review fix — says where its readings came from: the placement report, the campaign report, or both', () => {
+    const fact = ktTopOfSearchFact([
+      { ...r('c1', '2026-10-08', 0.4, 300), source: 'placement' as const },
+      { ...r('c2', '2026-10-08', 0.2, 100), source: 'campaign' as const },
+    ], { campaignsInScope: 2, average: weightedIS, now: NOW })!
+    expect(fact.sources).toEqual({ placementReport: 1, campaignReport: 1 })
+    expect(fact.basis).toMatch(/; source: Amazon's placement report \(1 reading\) and campaign report \(1 reading\)$/)
   })
 
   it('a reading exactly 7 days old counts; 8 days does not', () => {

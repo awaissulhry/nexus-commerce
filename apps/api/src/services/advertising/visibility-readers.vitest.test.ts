@@ -101,6 +101,13 @@ beforeAll(async () => {
     await top('EXT-VIS-1', ago(3), '0.1000', 100)
     await top('EXT-VIS-1', ago(20), '0.9000', 1000) // older than 7 days: out of the tracker's fact, inside the board's 30
     await top('EXT-VIS-2', ago(1), '0.2000', 100)
+    // Review fix — the campaign report's own rows: a day the placement table lacks is read from them; a day it has is not.
+    const itCampaignDay = (entityId: string, date: Date, share: string, impressions: number) => db.amazonAdsDailyPerformance.create({ data: {
+      profileId: 'P-VIS', currencyCode: 'EUR', entityType: 'CAMPAIGN', marketplace: 'IT', adProduct: 'SPONSORED_PRODUCTS', reportedAt: ago(0),
+      date, entityId, impressions, topOfSearchIS: share,
+    } as never })
+    await itCampaignDay('EXT-VIS-2', ago(2), '0.6000', 100) // no placement reading that day: used
+    await itCampaignDay('EXT-VIS-1', ago(2), '0.9000', 5000) // the placement row has that day: not used
 
     // ── DE, for the report specs ──
     const de = (data: Record<string, unknown>) => db.searchQueryPerformance.create({ data: { marketplace: 'DE', reportPeriod: 'WEEK', searchQuery: 'helmet', ...data } as never })
@@ -151,13 +158,15 @@ describe('B2 / C6 / B3 — the Keyword Tracker', () => {
 
   it('the top-of-search scope fact: readings of the last 7 days only, impression-weighted, campaign-level, dated both ends', async () => {
     const { topOfSearch } = await inside(() => getKeywordTracker({ market: 'IT' }))
-    // (0.40×300 + 0.10×100 + 0.20×100) ÷ 500 — the 20-day-old 0.90 reading is left out
+    // (0.40×300 + 0.10×100 + 0.20×100 + 0.60×100 from the campaign report) ÷ 600 — the 20-day-old 0.90 reading is left
+    // out, and so is the campaign row of a day the placement table already has
     expect(topOfSearch).toMatchObject({
-      grain: 'campaign', campaignsWithReading: 2, campaignsInScope: 2, readings: 3,
+      grain: 'campaign', campaignsWithReading: 2, campaignsInScope: 2, readings: 4,
       oldest: iso(ago(3)), newest: iso(ago(1)), asOf: iso(ago(1)), windowDays: 7,
+      sources: { placementReport: 3, campaignReport: 1 },
     })
-    expect(topOfSearch!.avgShare).toBeCloseTo(0.3, 10)
-    expect(topOfSearch!.basis).toMatch(/^campaign-level: /)
+    expect(topOfSearch!.avgShare).toBeCloseTo(0.35, 10)
+    expect(topOfSearch!.basis).toMatch(/^campaign-level: .*; source: Amazon's placement report \(3 readings\) and campaign report \(1 reading\)$/)
   })
 
   it('the term drawer agrees with the row: shares from the counts, a null share stays null, no MONTH week in the series', async () => {

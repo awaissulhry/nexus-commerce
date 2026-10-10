@@ -269,6 +269,8 @@ export interface KtTopOfSearchFact {
   /** = `newest`; kept for the client shipped before B3 */
   asOf: string
   windowDays: number
+  /** where the readings came from: the placement report's TOP rows, else the campaign report's rows (review fix) */
+  sources: { placementReport: number; campaignReport: number }
   /** the words to show beside it */
   basis: string
 }
@@ -280,7 +282,7 @@ export interface KtTopOfSearchFact {
  * passed in so this stays pure). Null when no campaign in scope has a reading that recent.
  */
 export function ktTopOfSearchFact(
-  readings: ReadonlyArray<{ campaignId: string; date: Date; share: number; impressions: number | null }>,
+  readings: ReadonlyArray<{ campaignId: string; date: Date; share: number; impressions: number | null; source?: 'placement' | 'campaign' }>,
   opts: {
     campaignsInScope: number
     average: (points: Array<{ value: number; weight: number }>) => number | null
@@ -299,6 +301,12 @@ export function ktTopOfSearchFact(
   const oldest = iso(new Date(Math.min(...dates)))!
   const newest = iso(new Date(Math.max(...dates)))!
   const campaigns = new Set(recent.map((r) => r.campaignId)).size
+  const fromPlacement = recent.filter((r) => (r.source ?? 'placement') === 'placement').length
+  const fromCampaign = recent.length - fromPlacement
+  const n = (k: number) => `${k} reading${k === 1 ? '' : 's'}`
+  const sourceWords = fromPlacement && fromCampaign
+    ? `Amazon's placement report (${n(fromPlacement)}) and campaign report (${n(fromCampaign)})`
+    : fromPlacement ? `Amazon's placement report (${n(fromPlacement)})` : `Amazon's campaign report (${n(fromCampaign)})`
   return {
     avgShare,
     grain: 'campaign',
@@ -309,8 +317,10 @@ export function ktTopOfSearchFact(
     newest,
     asOf: newest,
     windowDays: maxAgeDays,
+    sources: { placementReport: fromPlacement, campaignReport: fromCampaign },
     basis: `campaign-level: the top-of-search impression share Amazon reported for ${campaigns} campaign${campaigns === 1 ? '' : 's'}, `
-      + `averaged by Nexus (impression-weighted) over ${recent.length} campaign-day reading${recent.length === 1 ? '' : 's'} from ${oldest} to ${newest}`,
+      + `averaged by Nexus (impression-weighted) over ${recent.length} campaign-day reading${recent.length === 1 ? '' : 's'} from ${oldest} to ${newest}; `
+      + `source: ${sourceWords}`,
   }
 }
 
@@ -1121,17 +1131,11 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
   // newest reading at ANY age, dated by the newest one alone.
   const tosSince = new Date(); tosSince.setUTCHours(0, 0, 0, 0)
   tosSince.setTime(+tosSince - KT_TOS_MAX_AGE_DAYS * 86_400_000)
-  const tosRows = scopeExternalIds.length
-    ? await prisma.amazonAdsPlacementReport.findMany({
-      where: { campaignId: { in: scopeExternalIds }, topOfSearchIS: { not: null }, date: { gte: tosSince } },
-      select: { campaignId: true, date: true, topOfSearchIS: true, impressions: true },
-    })
-    : []
-  const { weightedIS } = await import('./placement-grid.service.js')
+  // Review fix — the placement table is filled only by the TOS ingest cron (off by default): a campaign-day it has no
+  // reading for falls back to the campaign report's own row (campaignTopOfSearchReadings), and the fact says its source.
+  const { weightedIS, campaignTopOfSearchReadings } = await import('./placement-grid.service.js')
   const tos = ktTopOfSearchFact(
-    tosRows.filter((r) => r.topOfSearchIS != null).map((r) => ({
-      campaignId: r.campaignId, date: r.date, share: Number(r.topOfSearchIS), impressions: r.impressions ?? null,
-    })),
+    await campaignTopOfSearchReadings(scopeExternalIds, tosSince),
     { campaignsInScope: scopeExternalIds.length, average: weightedIS },
   )
 

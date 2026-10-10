@@ -12,7 +12,7 @@ import { describe, expect, it, vi } from 'vitest'
 vi.mock('../../db.js', () => ({ default: {} }))
 
 const { topIsReadingOf, topLaneSignal, sqpLaneSignal, sharePctWords, TOP_IS_WINDOW_DAYS } = await import('./rank-runtime.service.js')
-const { weightedIS } = await import('./placement-grid.service.js')
+const { weightedIS, mergeTopOfSearchReadings, tosSourceWords } = await import('./placement-grid.service.js')
 
 const D = (s: string) => new Date(`${s}T00:00:00.000Z`)
 const NOW = new Date('2026-10-10T12:00:00.000Z')
@@ -30,6 +30,33 @@ describe('topIsReadingOf', () => {
 
   it('no rows is no reading', () => {
     expect(topIsReadingOf([], weightedIS)).toBeNull()
+  })
+
+  it('review fix — names the source of its readings', () => {
+    const r = topIsReadingOf([
+      { date: D('2026-10-07'), value: 0.3, weight: 100, source: 'placement' },
+      { date: D('2026-10-08'), value: 0.5, weight: 100, source: 'campaign' },
+    ], weightedIS, tosSourceWords)!
+    expect(r.source).toBe('Amazon\'s placement report (1 reading) and campaign report (1 reading)')
+    expect(topLaneSignal('PLACEMENT_TOP', r, NOW).detail).toMatch(/ Source: Amazon's placement report \(1 reading\) and campaign report \(1 reading\)\.$/)
+  })
+})
+
+describe('mergeTopOfSearchReadings — the placement table where it has the day, else the campaign report (review fix)', () => {
+  it('one reading per campaign-day: the placement row first; a campaign row only for a day the placement table lacks', () => {
+    const merged = mergeTopOfSearchReadings(
+      [{ campaignId: 'E1', date: D('2026-10-07'), share: 0.3, impressions: 50 }],
+      [
+        { campaignId: 'E1', date: D('2026-10-07'), share: 0.9, impressions: 500 }, // the placement row has this day
+        { campaignId: 'E1', date: D('2026-10-08'), share: 0.4, impressions: 400 },
+        { campaignId: 'E2', date: D('2026-10-07'), share: 0.1, impressions: 100 },
+      ],
+    )
+    expect(merged.map((m) => [m.campaignId, m.date.toISOString().slice(0, 10), m.share, m.source])).toEqual([
+      ['E1', '2026-10-07', 0.3, 'placement'], ['E1', '2026-10-08', 0.4, 'campaign'], ['E2', '2026-10-07', 0.1, 'campaign'],
+    ])
+    expect(tosSourceWords(merged)).toBe('Amazon\'s placement report (1 reading) and campaign report (2 readings)')
+    expect(tosSourceWords(merged.filter((m) => m.source === 'campaign'))).toBe('Amazon\'s campaign report (2 readings)')
   })
 })
 
