@@ -6470,7 +6470,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     })
   })
 
-  // ── AX2.6: Share of Voice + impression-share intel ──────────────────
+  // ── AX2.6: our own search-term impression mix + overlap / outbid checks ──
+  // The path keeps its old name, but nothing here is a share of voice: `impressionMixPct` (was `sovPct`, renamed
+  // 2026-10-10 — no web reader) is a query's share of OUR OWN search-term impressions, not a market share. Amazon's
+  // market share per query is Brand Analytics SQP (GET /advertising/share-of-voice-page).
   fastify.get('/advertising/share-of-voice', async (request, reply) => {
     const q = request.query as Record<string, string | undefined>
     const { analyzeShareOfVoice } = await import('../services/advertising/ads-impression-share.service.js')
@@ -6479,63 +6482,50 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // ── SK3: Keyword Tracker rank backend ───────────────────────────────
-  // GET — the latest rank snapshot per (keyword, marketplace), plus the delta vs the prior snapshot
-  // (positive delta = improved = moved toward #1). Feeds the Keyword Tracker report + KEYWORD_RANK_BID.
+  // GET — the latest reading per (keyword, marketplace, ASIN), plus the delta vs that ASIN's prior rank reading
+  // (positive delta = improved = moved toward #1). 2026-10-10 (AUDIT B5): grouped by ASIN too (a delta across two
+  // ASINs is not a rank change), a reading that carries a rank represents the item over the feed's search-volume-only
+  // rows, and each item says its age and whether it is past KEYWORD_RANK_MAX_AGE_DAYS (then no engine acts on it) —
+  // the rules the evaluator applies (buildKeywordRankBidContexts). See keyword-ranks-read.ts.
   fastify.get('/advertising/keyword-ranks', async (request, reply) => {
     const q = request.query as { marketplace?: string; asin?: string; limit?: string }
     const limit = Math.max(1, Math.min(2000, Number(q.limit ?? 500)))
+    const { collapseKeywordRanks, KEYWORD_RANK_MAX_AGE_DAYS } = await import('../services/advertising/keyword-ranks-read.js')
     const rows = await prisma.keywordRank.findMany({
       where: { ...(q.marketplace ? { marketplace: q.marketplace } : {}), ...(q.asin ? { asin: q.asin } : {}) },
-      orderBy: [{ keyword: 'asc' }, { marketplace: 'asc' }, { capturedAt: 'desc' }],
-      take: 8000, // gather enough history to derive latest + prior per keyword (deduped below)
+      // KT-P3 — newest first, so a cap drops the OLDEST readings, never the keywords late in the alphabet.
+      orderBy: [{ capturedAt: 'desc' }],
+      take: 8000, // gather enough history to derive latest + prior per keyword × market × ASIN
+      select: { id: true, keyword: true, marketplace: true, asin: true, organicRank: true, sponsoredRank: true, searchVolume: true, capturedAt: true, source: true },
     })
-    // collapse to latest + prior per (keyword, marketplace)
-    const byKey = new Map<string, { latest: typeof rows[number]; prior?: typeof rows[number] }>()
-    for (const r of rows) {
-      const k = `${r.keyword}\u001f${r.marketplace}`
-      const e = byKey.get(k)
-      if (!e) byKey.set(k, { latest: r })
-      else if (!e.prior) e.prior = r
-    }
-    const items = [...byKey.values()].slice(0, limit).map(({ latest, prior }) => ({
-      id: latest.id, keyword: latest.keyword, marketplace: latest.marketplace, asin: latest.asin,
-      organicRank: latest.organicRank, sponsoredRank: latest.sponsoredRank, searchVolume: latest.searchVolume,
-      capturedAt: latest.capturedAt, source: latest.source,
-      /**
-       * KT-P3 — `null`, never `0`. A `0` here means "rank did not change", and this endpoint feeds
-       * the Keyword Tracker builder's preview, where a fabricated zero renders as a real reading in
-       * the Δ column. The engine-side twin of this line lives in `buildKeywordRankBidContexts`,
-       * where the value must be ABSENT rather than null because `applyOperator` coerces `null` to
-       * `0` — see the note there. On the wire, `null` is correct and the client renders it as "—".
-       */
-      rankDelta: prior?.organicRank != null && latest.organicRank != null ? prior.organicRank - latest.organicRank : null,
-    }))
+    const items = collapseKeywordRanks(rows, new Date(), limit)
     reply.header('Cache-Control', 'private, max-age=60')
-    return { count: items.length, items }
+    return {
+      count: items.length,
+      maxAgeDays: KEYWORD_RANK_MAX_AGE_DAYS,
+      note: `One item per keyword × market × ASIN. organicRank / sponsoredRank come only from a hand import (no Amazon API gives a keyword rank); the Brand Analytics feed writes search volume only (searches per week, dated at the week's end). stale = older than ${KEYWORD_RANK_MAX_AGE_DAYS} days: no engine acts on it.`,
+      items,
+    }
   })
   // POST — ingest rank snapshots by hand (an import). The keyword-rank-feed cron writes the other source,
   // search volume from Brand Analytics weeks (`source: brand-analytics-sqp`), and no automatic source fills
   // organicRank / sponsoredRank — this route is the only way they arrive. Each row is a point-in-time
   // observation; we append (never overwrite) so the time-series + deltas stay intact. searchVolume is
   // searches per week, the unit the feed writes, so the two sources compare.
+  // 2026-10-10 (AUDIT K1, K2): a rank below 1 is refused (it used to become #1) and every row must say when it was
+  // observed (`capturedAt`; it used to default to now). One bad row refuses the whole import: nothing half-stored.
   fastify.post('/advertising/keyword-ranks', async (request, reply) => {
     const b = request.body as { ranks?: Array<{ keyword?: string; marketplace?: string; asin?: string; organicRank?: number; sponsoredRank?: number; searchVolume?: number; capturedAt?: string; source?: string }> }
     const list = Array.isArray(b?.ranks) ? b.ranks : []
-    const clean = list
-      .filter((r) => r && typeof r.keyword === 'string' && r.keyword.trim() && typeof r.marketplace === 'string' && r.marketplace.trim())
-      .map((r) => ({
-        keyword: r.keyword!.trim(),
-        marketplace: r.marketplace!.trim().toUpperCase(),
-        asin: r.asin?.trim() || null,
-        organicRank: r.organicRank != null && Number.isFinite(Number(r.organicRank)) ? Math.max(1, Math.round(Number(r.organicRank))) : null,
-        sponsoredRank: r.sponsoredRank != null && Number.isFinite(Number(r.sponsoredRank)) ? Math.max(1, Math.round(Number(r.sponsoredRank))) : null,
-        searchVolume: r.searchVolume != null && Number.isFinite(Number(r.searchVolume)) ? Math.max(0, Math.round(Number(r.searchVolume))) : null,
-        capturedAt: r.capturedAt ? new Date(r.capturedAt) : new Date(),
-        source: (r.source?.trim() || 'manual').slice(0, 64),
-      }))
-    if (!clean.length) { reply.status(400); return { error: 'ranks[] required (each needs keyword + marketplace)' } }
+    const { cleanKeywordRankImport } = await import('../services/advertising/keyword-ranks-read.js')
+    const { rows: clean, refused, skipped } = cleanKeywordRankImport(list)
+    if (refused.length) {
+      reply.status(400)
+      return { error: `${refused.length} row${refused.length === 1 ? '' : 's'} refused — nothing was stored. A rank is 1 or more, and every row needs capturedAt (when it was observed).`, refused }
+    }
+    if (!clean.length) { reply.status(400); return { error: 'ranks[] required (each needs keyword + marketplace + capturedAt)' } }
     const res = await prisma.keywordRank.createMany({ data: clean })
-    return { ingested: res.count }
+    return { ingested: res.count, ...(skipped ? { skipped, skippedWhy: 'rows with no keyword or market name nothing' } : {}) }
   })
 
   // ── AX3.14: Advertising Events log ──────────────────────────────────
@@ -7438,10 +7428,16 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     request.raw.on('close', () => { alive = false; clearInterval(iv) })
   })
 
-  // ── RS.1 — Rank Targets (reusable rank GOALS for the schedule + baseline) ──
-  // "Rank" on Amazon = a Top-of-Search impression-share target held by bid-to-win.
-  // A target = placement + targetISPct + ACOS/CPC guardrails; the RS defend loop
-  // (RS.5) converges bids toward targetISPct, re-taking the slot if we lose it.
+  // ── RS.1 — top-of-search goals (route and model keep the historical "rank target" name) ──
+  // Reusable goals for the Hourly Bids schedule + baseline. A target = placement + Placement % + guardrails.
+  // 2026-10-10 (AUDIT C3): `targetISPct` is a top-of-search impression SHARE goal, never a rank or position, and since
+  // 2e NOTHING reads it — the Hourly Bids plan holds each hour's Placement % and reads no share (rank-controller.ts).
+  // (This comment used to say the loop converges bids toward it; that stopped with 2e.) The values stay as stored and
+  // the GET says so in `notes`, so no reader takes them for a goal the engine chases. Nothing deleted.
+  const RANK_TARGET_NOTES = {
+    targetISPct: 'not used: the Hourly Bids plan reads no share (since 2e). A top-of-search impression share goal you set, kept as stored; no engine bids toward it.',
+    goals: 'Top-of-search goals for the Hourly Bids schedule: each hour holds its goal\'s Placement %. None is a rank or position — Amazon gives no keyword rank by API.',
+  }
   const BUILTIN_RANK_TARGETS = [
     { key: 'own-top', name: 'Own Top of Search', placement: 'PLACEMENT_TOP', targetISPct: 70, acosCapPct: 45, biasPct: 100, pause: false, color: '#0a7d48', builtIn: true, sortOrder: 1 },
     { key: 'defend-top', name: 'Defend Top', placement: 'PLACEMENT_TOP', targetISPct: 35, acosCapPct: 35, biasPct: 50, pause: false, color: '#3aa873', builtIn: true, sortOrder: 2 },
@@ -7465,7 +7461,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (q.productId) scopeOr.push({ scopeProductId: q.productId })
     if (q.campaignId) scopeOr.push({ scopeCampaignId: q.campaignId })
     const items = await prisma.rankTarget.findMany({ where: { OR: scopeOr }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }] })
-    return { items, count: items.length }
+    return { items, count: items.length, notes: RANK_TARGET_NOTES }
   })
   fastify.post('/advertising/rank-targets', async (request, reply) => {
     const b = request.body as Record<string, unknown>

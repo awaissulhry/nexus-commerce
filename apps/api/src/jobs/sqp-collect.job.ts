@@ -19,6 +19,9 @@
  * `EXPIRED` (a 404: the document is genuinely gone), `FATAL`/`CANCELLED` (Amazon ended it) and
  * `ERROR` (our side), and they are deliberately different words: the old design's single
  * `failedAsins` counter is exactly what hid the fact that nothing had actually failed.
+ *
+ * Runs only when `NEXUS_ENABLE_AMAZON_ADS_CRON` is on (the scheduler starts it inside its ads-cron
+ * block, default off); then `NEXUS_DISABLE_SQP_COLLECT_CRON=1` is the opt-out.
  */
 
 import cron from '../lib/cron/clustered.js'

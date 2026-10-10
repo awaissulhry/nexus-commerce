@@ -83,8 +83,46 @@ export function periodWindow(period: SqpPeriod, now: Date, lookback = 1): { star
   const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 3, 0)) // last day of quarter
   return { start, end }
 }
-/** Brand share of a funnel stage, clamped to [0,1]. Pure. */
+/**
+ * Brand share of a funnel stage, clamped to [0,1]. Pure.
+ *
+ * ⚠ WRITE PATH ONLY (the share columns are NOT NULL, so a total of 0 is stored as 0 here). A reader never trusts that
+ * stored 0: it computes the share from the counts with `shareOrNull` / `sqpRowShares`, which say null when there is
+ * no total to take a share of.
+ */
 export function share(brand: number, total: number): number { return total > 0 ? Math.max(0, Math.min(1, brand / total)) : 0 }
+
+/**
+ * The READER's share of a funnel stage (2026-10-10, honest numbers): our ASIN's count ÷ the market's count, clamped to
+ * [0,1] — null when the market count is 0 or missing, because a stored 0 there means "Amazon reported nothing", not
+ * "we hold none of it". 0 stays a real answer when the total is real. Pure.
+ */
+export function shareOrNull(ours: number | null | undefined, total: number | null | undefined): number | null {
+  const t = Number(total)
+  if (!Number.isFinite(t) || t <= 0) return null
+  const o = Number(ours)
+  return Math.max(0, Math.min(1, (Number.isFinite(o) ? o : 0) / t))
+}
+
+/** A reader's `reportPeriod` query value: absent → WEEK (the period every writer stores); anything else unknown → null. Pure. */
+export function parseSqpPeriod(v: unknown): SqpPeriod | null {
+  if (v == null || (typeof v === 'string' && !v.trim())) return 'WEEK'
+  const p = String(v).trim().toUpperCase()
+  return p === 'WEEK' || p === 'MONTH' || p === 'QUARTER' ? p : null
+}
+
+/** The four funnel shares of one stored SQP row, computed from its counts (never the stored share columns). Pure. */
+export function sqpRowShares(r: {
+  impressionsTotal: number; impressionsBrand: number; clicksTotal: number; clicksBrand: number
+  cartAddsTotal: number; cartAddsBrand: number; purchasesTotal: number; purchasesBrand: number
+}): { impressionShare: number | null; clickShare: number | null; cartAddShare: number | null; purchaseShare: number | null } {
+  return {
+    impressionShare: shareOrNull(r.impressionsBrand, r.impressionsTotal),
+    clickShare: shareOrNull(r.clicksBrand, r.clicksTotal),
+    cartAddShare: shareOrNull(r.cartAddsBrand, r.cartAddsTotal),
+    purchaseShare: shareOrNull(r.purchasesBrand, r.purchasesTotal),
+  }
+}
 
 /**
  * Defensively map an SQP report payload to flat rows. The report nests counts
@@ -247,10 +285,37 @@ export interface SqpShareReading {
 const DAY_MS = 86_400_000
 
 /**
+ * S4 (2026-10-10) — the family's impression share in ONE week, from its ASIN-level rows. Pure.
+ *
+ * Each SQP row is one (search query, ASIN); `impressionsTotal` is the query's MARKET total and is repeated identically
+ * on every ASIN row of that query, while `impressionsBrand` is that ASIN's own count. So per query: the market total is
+ * the MAX over the family's rows (counted once) and ours is the SUM over them — the rule ads-coverage.service.ts has
+ * followed since 2026-08-05. Adding the total once per ASIN row (the old loop) understated a family share ×N.
+ * Null when no query carries a market total (> 0): nothing to take a share of.
+ */
+export function familyImpressionShare(rows: ReadonlyArray<{ searchQuery: string; impressionsBrand: number; impressionsTotal: number }>): { share: number | null; ours: number; market: number } {
+  const perQuery = new Map<string, { ours: number; market: number }>()
+  for (const r of rows) {
+    const q = perQuery.get(r.searchQuery) ?? { ours: 0, market: 0 }
+    q.ours += Math.max(0, Number(r.impressionsBrand) || 0)
+    q.market = Math.max(q.market, Number(r.impressionsTotal) || 0)
+    perQuery.set(r.searchQuery, q)
+  }
+  let ours = 0, market = 0
+  for (const q of perQuery.values()) {
+    if (q.market <= 0) continue // a query with no market total says nothing about a share
+    ours += q.ours
+    market += q.market
+  }
+  return { share: market > 0 ? Math.max(0, Math.min(1, ours / market)) : null, ours, market }
+}
+
+/**
  * RM2 — the family's brand IMPRESSION SHARE (0..1) from the latest weekly SQP report, **with its
  * age and its basis**. Used as a coarse feedback signal for Rest-of-Search rank targets, which have
- * NO Amazon placement-IS metric. Impression-weighted across the family's ASIN-level rows for the
- * most recent period only (older weeks would dilute it).
+ * NO Amazon placement-IS metric. Computed by Nexus from Amazon's weekly SQP counts across the
+ * family's ASIN-level rows (market total once per query, our counts summed — `familyImpressionShare`)
+ * for the most recent WEEK only (older weeks would dilute it; MONTH/QUARTER rows are another period).
  *
  * This is the function that had no age check at all for five days after the spec named it, while
  * being the only signal a live bidder uses to decide whether we are losing a rank we asked to hold.
@@ -266,10 +331,10 @@ export async function sqpShareForAsins(
   if (!asins.length) return none('never', 'No advertised ASINs in scope, so there is nothing to look up.')
 
   const rows = await prisma.searchQueryPerformance.findMany({
-    where: { marketplace, asin: { in: asins } },
+    where: { marketplace, reportPeriod: 'WEEK', asin: { in: asins } },
     orderBy: { startDate: 'desc' },
     take: 3000,
-    select: { startDate: true, asin: true, impressionsBrand: true, impressionsTotal: true },
+    select: { startDate: true, asin: true, searchQuery: true, impressionsBrand: true, impressionsTotal: true },
   })
   if (!rows.length) {
     return none('never', `None of these ${asins.length} ASINs has ever appeared in Brand Analytics for ${marketplace}. That is an onboarding problem, not a stale feed — no recency guard would fix it.`)
@@ -281,19 +346,15 @@ export async function sqpShareForAsins(
   // Age from the week's START, matching how `rank-runtime` already measures it, so the two agree.
   const ageDays = Math.max(0, Math.floor((+now - latest) / DAY_MS))
 
-  let brand = 0, total = 0
+  const week = rows.filter((r) => +r.startDate === latest)
   const withData = new Set<string>()
-  for (const r of rows) {
-    if (+r.startDate !== latest) continue
-    brand += r.impressionsBrand
-    total += r.impressionsTotal
-    withData.add(r.asin)
-  }
+  for (const r of week) if (r.asin) withData.add(r.asin)
   const contributors = { withData: withData.size, total: asins.length }
 
-  // total === 0 means the week carries rows but no impressions to take a share OF — which is not
-  // the same as "we hold none" (brand 0 of a real total), and not the same as "never covered".
-  const share = total > 0 ? Math.max(0, Math.min(1, brand / total)) : null
+  // S4 — market total once per query (MAX), our counts summed. A null share means the week carries
+  // rows but no market impressions to take a share OF — which is not the same as "we hold none"
+  // (ours 0 of a real total), and not the same as "never covered".
+  const { share } = familyImpressionShare(week)
 
   const tooOld = ageDays > SQP_STALL_DAYS
   const frac = contributors.total ? contributors.withData / contributors.total : 0

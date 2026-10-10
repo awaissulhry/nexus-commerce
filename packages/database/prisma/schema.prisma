@@ -4305,11 +4305,17 @@ model SearchQueryPerformance {
   reportPeriod      String // WEEK | MONTH | QUARTER
   startDate         DateTime @db.Date // period start
   searchQuery       String
-  asin              String? // null = brand-level; set = ASIN-level row
-  searchQueryVolume Int      @default(0) // total market searches for this query (rank proxy)
-  searchQueryRank   Int? // query's popularity rank in the marketplace
+  asin              String? // the ASIN the report was requested for (both current writers set it: SQP is requested one ASIN at a time). NOT "brand-level"
+  searchQueryVolume Int      @default(0) // the query's search volume in the marketplace for the period (Amazon's searchQueryVolume); 0 = not reported
+  // Amazon's Search Query Score for THIS ASIN (`searchQueryScore`): the query's rank among this ASIN's own
+  // queries, lower = more searched. NOT a marketplace rank, not a keyword or product position.
+  searchQueryRank   Int?
 
-  // Funnel: total = whole market, brand = OUR share count. shares are 0..1.
+  // Funnel: *Total = the whole market's count for the query (repeated identically on every ASIN row of
+  // that query — take MAX across ASINs, never SUM); *Brand = THIS ASIN's own count (Amazon's asin…Count,
+  // despite the column name — SUM across ASINs). Shares are 0..1, computed by Nexus at write time; a
+  // stored 0 with a 0 total means "not reported", so readers compute the share from the counts (null
+  // when the total is 0).
   impressionsTotal Int     @default(0)
   impressionsBrand Int     @default(0)
   impressionShare  Decimal @default(0) @db.Decimal(6, 4)
@@ -17689,11 +17695,12 @@ model AutopilotDecision {
   @@index([workspaceId])
 }
 
-// RS.1 — a named, reusable rank GOAL ("Own Top of Search", "Defend", "Rest of
-// Search", "Pause"). Dropped onto AdSchedule windows (by key) and used as a
-// schedule baseline. "Rank" on Amazon = a Top-of-Search impression-share target
-// held by bid-to-win, so a target is {placement + targetIS + ACOS/CPC guardrails};
-// the RS closed loop (RS.5) converges bids toward targetISPct within the caps.
+// RS.1 — a named, reusable top-of-search GOAL ("Own Top of Search", "Defend",
+// "Rest of Search", "Pause"), kept under the historical model name. Dropped onto
+// AdSchedule windows (by key) and used as a schedule baseline. A target is
+// {placement + Placement % + guardrails}. targetISPct is a top-of-search impression
+// SHARE goal, never a rank or position, and since 2e nothing reads it: the Hourly
+// Bids plan holds each hour's Placement % and reads no share. Kept, not deleted.
 model RankTarget {
   // Business ownership comes from verified database context.
   workspaceId     String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
@@ -17702,7 +17709,7 @@ model RankTarget {
   name            String
   // PLACEMENT_TOP | PLACEMENT_REST_OF_SEARCH | PLACEMENT_PRODUCT_PAGE
   placement       String   @default("PLACEMENT_TOP")
-  targetISPct     Int? // target Top-of-Search impression share % (0-100); null = no IS target
+  targetISPct     Int? // top-of-search impression share goal % (0-100); null = none. Not used since 2e (the Hourly Bids plan reads no share)
   acosCapPct      Int? // ACOS ceiling % the loop must respect; null = use campaign/global default
   maxCpcCents     Int? // hard bid ceiling the loop may set; null = use CPC-ceiling guardrail
   biasPct         Int? // starting placement-bias % (0-900) applied on entry

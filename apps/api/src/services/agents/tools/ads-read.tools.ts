@@ -1362,19 +1362,20 @@ const adRecommendations: AgentTool = {
   input: z.object({
     channel: channelArg,
     category: z.preprocess(lower, z.enum(REC_CATEGORIES)).optional()
-      .describe('only bid, negative, graduate, budget, sov (share of voice), retail (unsellable products), rule (a rule\'s pending suggestion), autopilot (an autopilot plan\'s waiting decision) or tracker (a Keyword Tracker bid proposal)'),
+      .describe('only bid, negative, graduate, budget, sov (Nexus\'s own search-term checks: likely outbid, overlapping campaigns — not Amazon\'s share of voice), retail (unsellable products), rule (a rule\'s pending suggestion), autopilot (an autopilot plan\'s waiting decision) or tracker (a Keyword Tracker bid proposal)'),
     campaignId: campaignArg,
     market: marketArg,
     days: daysArg(30, 'the window the engines judge'),
     // C5 (2026-10-10) — the engines' lines for what runs, or every line (read only).
     scope: z.enum(['running', 'all']).default('running')
-      .describe('running (default): the engines\' lines for running campaigns only — a bid only toward a target ACoS you set, none on a lever a product\'s brain owns or you locked, share of voice per market, none in a market you muted; all: every line, each one the running scope leaves out saying why (outOfScope) — read only, apply-ad-recommendations carries out running lines'),
+      .describe('running (default): the engines\' lines for running campaigns only — a bid only toward a target ACoS you set, none on a lever a product\'s brain owns or you locked, the sov checks per market, none in a market you muted; all: every line, each one the running scope leaves out saying why (outOfScope) — read only, apply-ad-recommendations carries out running lines'),
     limit: limitArg,
     cursor: cursorArg,
   }),
   description:
     'What the Amazon ad engines recommend now (bid changes, wasteful terms to negate, converting terms to graduate, '
-    + 'budget changes, share-of-voice and unsellable-product warnings), most severe first, then the automation rules\' '
+    + 'budget changes, sov lines — Nexus\'s own search-term checks (likely outbid, overlapping campaigns), not Amazon\'s '
+    + 'share of voice — and unsellable-product warnings), most severe first, then the automation rules\' '
     + 'pending suggestions, the autopilot plans\' waiting decisions (autopilot:, the A.I. Bids tab: a bid, budget or '
     + 'placement change of one campaign; an id lasts until its plan\'s next run, every 15 minutes) and the Keyword '
     + 'Tracker\'s waiting bid proposals (kt:, one bid on every target of a term in a market). Per recommendation: id, category, severity, title, why (detail), estimated impact and what '
@@ -1385,7 +1386,7 @@ const adRecommendations: AgentTool = {
     + 'them with mute-ad-recommendations (a rule\'s suggestion, an autopilot decision or a proposal: dismiss or restore); '
     + 'one already carried out is not offered again until the data shows what the change did. By default (scope running) '
     + 'the engines\' lines are for running campaigns only: a bid toward a target ACoS you set, nothing on a lever a '
-    + 'product\'s brain owns or you locked (the brain\'s own views carry those), share of voice per market, nothing in a '
+    + 'product\'s brain owns or you locked (the brain\'s own views carry those), the sov checks per market, nothing in a '
     + 'market you muted (mute-ad-recommendations with markets); leftOut counts what it left out, by why, and scope all '
     + 'lists every line with why it is left out (outOfScope). Filter by category, '
     + 'campaignId or market. The list '

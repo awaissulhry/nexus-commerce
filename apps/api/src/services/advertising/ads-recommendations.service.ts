@@ -15,7 +15,8 @@
  * for an ENABLED campaign; a bid line only toward a target ACoS he set (auto-bid's OWNER_TARGET_SOURCES: never the 30 %
  * fallback or a profit-worked target); never on a lever a product's brain owns or he locked (the bid brain's keyword
  * bids, a product brain's negatives, harvest, budgets — readLeverHolds, as rank-defend reads them: the brain's own views
- * carry those levers); share of voice per market, over its enabled campaigns; and nothing in a market he muted
+ * carry those levers); the `sov` lines (Nexus's own search-term checks — likely outbid, overlapping campaigns — not
+ * Amazon's share of voice) per market, over its enabled campaigns; and nothing in a market he muted
  * (AdsSuggestionMute entity MARKETPLACE). What it leaves out is counted (`leftOut`), and scope `all` (read only) lists
  * every line as before, each one the running scope leaves out saying why (`outOfScope`), so nothing is hidden from him.
  */
@@ -128,7 +129,8 @@ export interface RecommendationsResult {
 interface LineFacts { campaignId: string | null; status: string | null; market: string | null; lever: BrainLever | null; target?: { source: TargetAcosSource; pct: number } }
 
 /**
- * C5 — the share-of-voice markets, each read on its own (a query in two markets is not two campaigns competing): scope
+ * C5 — the markets of the `sov` lines (our own search-term checks, not Amazon's share of voice), each read on its own
+ * (a query in two markets is not two campaigns competing): scope
  * `running` — each market with an enabled Sponsored Products campaign, over those campaigns (their Amazon ids); scope
  * `all` — each market with any Sponsored Products campaign, over every campaign (null).
  */
@@ -151,13 +153,16 @@ const chosenBy = (c: HarvestCandidate) =>
 export const __test_withDerived = withDerived
 
 /**
- * C5 — `scope` (default `running`; `all` when `includeMuted` names none, so the Muted view lists every muted line). Share
- * of voice is read per market in both: a query in two markets is not two campaigns competing.
+ * C5 — `scope` (default `running`; `all` when `includeMuted` names none, so the Muted view lists every muted line). The
+ * `sov` checks (our own search terms, not Amazon's share of voice) are read per market in both: a query in two markets
+ * is not two campaigns competing.
  */
 export async function buildRecommendations(opts: { windowDays?: number; targetAcos?: number; includeMuted?: boolean; scope?: RecScope } = {}): Promise<RecommendationsResult> {
   const windowDays = opts.windowDays ?? 30
   const scope: RecScope = opts.scope ?? (opts.includeMuted ? 'all' : 'running')
-  // C5 — share of voice per market: over its enabled campaigns in the running scope, over every campaign in `all`.
+  // C5 — our own search-term checks per market (category `sov`: likely outbid, overlapping campaigns — Nexus's
+  // heuristics on our search-term report, not Amazon's share of voice): over its enabled campaigns in the running
+  // scope, over every campaign in `all`.
   const markets = await sovMarkets(scope)
   const [bid, harvest, pacing, retail, sovByMarket] = await Promise.all([
     previewBidOptimization({ targetAcos: opts.targetAcos }),
@@ -171,7 +176,7 @@ export async function buildRecommendations(opts: { windowDays?: number; targetAc
   ])
 
   const recs: Recommendation[] = []
-  /** C5 — each line's facts for the running scope, and the id an older mute knew it by (share of voice before C5). */
+  /** C5 — each line's facts for the running scope, and the id an older mute knew it by (the `sov` lines before C5). */
   const facts = new Map<Recommendation, LineFacts>()
   const legacyId = new Map<Recommendation, string>()
 
@@ -263,7 +268,8 @@ export async function buildRecommendations(opts: { windowDays?: number; targetAc
     facts.set(recs[recs.length - 1], { campaignId: p.campaignId, status: 'ENABLED', market: p.marketplace, lever: 'budgets' })
   }
 
-  // SOV intel — informational (the actionable parts already surface as bid recs).
+  // `sov` lines — informational (the actionable parts already surface as bid recs). Nexus's own checks on our
+  // search-term report (likely outbid, overlapping campaigns); not Amazon's share of voice, which no line here reads.
   // C5 — per market (`sov:outbid:<market>:<query>`; a mute of the query made before C5 still hides it in every market).
   for (const { market, sov } of sovByMarket) {
     for (const r of sov.rows.filter((x) => x.flag === 'outbid').slice(0, 25)) {
