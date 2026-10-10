@@ -593,9 +593,25 @@ export interface DecisionRow extends SourceRow {
   proposedKey: string
 }
 
+/**
+ * F4 — per market × query, the newest Amazon WEEK that carries a search volume, and that week's start (YYYY-MM-DD).
+ * A volume of 0 or none is not a reading (a query Amazon lists was searched), so it is skipped, never shown as 0. Pure.
+ */
+export function newestWeekVolumes(cells: ReadonlyArray<{ marketplace: string; searchQuery: string; startDate: Date; volume: number | null }>): Map<string, { volume: number; weekStart: string }> {
+  const out = new Map<string, { volume: number; weekStart: string; at: number }>()
+  for (const c of cells) {
+    if (c.volume == null || !(c.volume > 0)) continue
+    const k = `${c.marketplace}|${c.searchQuery}`
+    const at = c.startDate.getTime()
+    const held = out.get(k)
+    if (!held || at > held.at) out.set(k, { volume: c.volume, weekStart: c.startDate.toISOString().slice(0, 10), at })
+  }
+  return new Map([...out].map(([k, v]) => [k, { volume: v.volume, weekStart: v.weekStart }]))
+}
+
 export async function attachDecisionData<T extends DecisionRow>(
   items: T[],
-): Promise<Array<T & { metrics: SuggestionMetrics | null; current: SuggestionCurrent; suggested: SuggestionSuggested; volume: number | null }>> {
+): Promise<Array<T & { metrics: SuggestionMetrics | null; current: SuggestionCurrent; suggested: SuggestionSuggested; volume: number | null; searchVolumeWeekStart: string | null }>> {
   if (items.length === 0) return []
   const since = new Date(Date.now() - WINDOW_DAYS * 24 * 3600 * 1000)
 
@@ -686,24 +702,22 @@ export async function attachDecisionData<T extends DecisionRow>(
   const negCampByExt = new Map(negCampaigns.map((c) => [c.externalCampaignId, c] as const))
   const destByLocalId = new Map(localDestGroups.map((g) => [g.id, g] as const))
 
-  // SG.2f — market search volume for SEARCH_TERM rows, from the Brand Analytics feed (brand-level
-  // rows, asin null = the whole market's volume). Latest period wins; absence renders "—" — the
-  // feed covers a minority of queries and a missing row is not a zero.
+  // SG.2f — market search volume for SEARCH_TERM rows, from Amazon Brand Analytics (Search Query Performance).
+  // F4 (2026-10-10, honest numbers): WEEK rows only — a month's or a quarter's volume is a different number and used to
+  // win whenever its period started later — and the week travels with the number (`searchVolumeWeekStart`). The
+  // volume is the query's market-level count, repeated on every ASIN row of the query (every writer sets an ASIN, so
+  // the old `asin: null` filter matched nothing), so it is the MAX over a week's rows, as keyword-rank-feed reads it.
+  // Absence renders "—" — the feed covers a minority of queries and a missing row is not a zero.
   const termQueries = [...new Set(termPairs.map((p) => p.query).filter(Boolean))]
   const termMkts = [...new Set(items.filter((i) => i.entityType === 'SEARCH_TERM').map((i) => i.marketplace).filter((x): x is string => !!x))]
-  const volRows = termQueries.length
-    ? await prisma.searchQueryPerformance.findMany({
-      where: { searchQuery: { in: termQueries }, ...(termMkts.length ? { marketplace: { in: termMkts } } : {}), asin: null },
-      select: { searchQuery: true, marketplace: true, searchQueryVolume: true, startDate: true },
-      orderBy: { startDate: 'desc' },
-      take: 2000,
+  const volCells = termQueries.length
+    ? await prisma.searchQueryPerformance.groupBy({
+      by: ['marketplace', 'searchQuery', 'startDate'],
+      where: { reportPeriod: 'WEEK', searchQuery: { in: termQueries }, ...(termMkts.length ? { marketplace: { in: termMkts } } : {}) },
+      _max: { searchQueryVolume: true },
     })
     : []
-  const volByKey = new Map<string, number>()
-  for (const v of volRows) {
-    const k = `${v.marketplace}|${v.searchQuery}`
-    if (!volByKey.has(k)) volByKey.set(k, v.searchQueryVolume) // newest first
-  }
+  const volByKey = newestWeekVolumes(volCells.map((c) => ({ marketplace: c.marketplace, searchQuery: c.searchQuery, startDate: c.startDate, volume: c._max.searchQueryVolume ?? null })))
 
   const extTargetIds = targets.map((t) => t.externalTargetId).filter((x): x is string => !!x)
   const extCampaignIds = campaigns.map((c) => c.externalCampaignId).filter((x): x is string => !!x)
@@ -764,6 +778,7 @@ export async function attachDecisionData<T extends DecisionRow>(
     const current: SuggestionCurrent = {}
     const suggested: SuggestionSuggested = {}
     let volume: number | null = null
+    let searchVolumeWeekStart: string | null = null
     if (it.entityType === 'AD_TARGET') {
       const t = targetById.get(it.entityId)
       if (t) {
@@ -796,7 +811,9 @@ export async function attachDecisionData<T extends DecisionRow>(
     } else if (it.entityType === 'SEARCH_TERM') {
       const p = perfByTermPair.get(it.entityId)
       if (p) metrics = derive(p)
-      volume = volByKey.get(`${it.marketplace}|${it.entityName ?? it.entityId.slice(it.entityId.indexOf(':') + 1)}`) ?? null
+      const vol = volByKey.get(`${it.marketplace}|${it.entityName ?? it.entityId.slice(it.entityId.indexOf(':') + 1)}`)
+      volume = vol?.volume ?? null
+      searchVolumeWeekStart = vol?.weekStart ?? null
       // a harvest promotion proposes a STARTING bid — surface it in the same column family
       const bidEur = Number(action.bidEur)
       if (Number.isFinite(bidEur) && bidEur > 0) suggested.bidCents = Math.round(bidEur * 100)
@@ -878,7 +895,7 @@ export async function attachDecisionData<T extends DecisionRow>(
         }
       }
     }
-    return { ...it, metrics, current, suggested, volume }
+    return { ...it, metrics, current, suggested, volume, searchVolumeWeekStart }
   })
 }
 

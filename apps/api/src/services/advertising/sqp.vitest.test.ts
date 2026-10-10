@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseSqp, share, periodWindow } from './sqp.service.js'
+import { parseSqp, share, periodWindow, shareOrNull, sqpRowShares, parseSqpPeriod, familyImpressionShare } from './sqp.service.js'
 
 describe('periodWindow', () => {
   it('WEEK: completed Sunday→Saturday, end is the Saturday (SQP requirement)', () => {
@@ -31,10 +31,73 @@ describe('periodWindow', () => {
 })
 
 describe('share', () => {
-  it('brand / total, clamped to [0,1]', () => {
+  it('brand / total, clamped to [0,1] (the WRITE path: the columns are NOT NULL)', () => {
     expect(share(30, 120)).toBeCloseTo(0.25, 5)
-    expect(share(5, 0)).toBe(0) // no market volume → 0, not NaN
+    expect(share(5, 0)).toBe(0) // no market volume → 0, not NaN (stored only; readers use shareOrNull)
     expect(share(150, 100)).toBe(1) // never above 1
+  })
+})
+
+describe('shareOrNull / sqpRowShares — a reader computes the share from the counts (S1, 2026-10-10)', () => {
+  it('null when the market count is 0 or missing — a stored 0 there means "not reported", not "we hold none"', () => {
+    expect(shareOrNull(5, 0)).toBeNull()
+    expect(shareOrNull(0, 0)).toBeNull()
+    expect(shareOrNull(3, null)).toBeNull()
+    expect(shareOrNull(3, undefined)).toBeNull()
+    expect(shareOrNull(3, -1)).toBeNull()
+  })
+  it('0 stays a real answer when the market count is real; clamped to [0,1]', () => {
+    expect(shareOrNull(0, 200)).toBe(0)
+    expect(shareOrNull(50, 200)).toBeCloseTo(0.25, 10)
+    expect(shareOrNull(300, 200)).toBe(1)
+  })
+  it('all four funnel stages, each on its own counts', () => {
+    expect(sqpRowShares({
+      impressionsTotal: 1000, impressionsBrand: 10, clicksTotal: 0, clicksBrand: 0,
+      cartAddsTotal: 40, cartAddsBrand: 0, purchasesTotal: 0, purchasesBrand: 0,
+    })).toEqual({ impressionShare: 0.01, clickShare: null, cartAddShare: 0, purchaseShare: null })
+  })
+})
+
+describe('parseSqpPeriod — one period at a time, WEEK unless asked', () => {
+  it('absent or blank → WEEK; a known period in any case; anything else → null (the route refuses it)', () => {
+    expect(parseSqpPeriod(undefined)).toBe('WEEK')
+    expect(parseSqpPeriod('')).toBe('WEEK')
+    expect(parseSqpPeriod('month')).toBe('MONTH')
+    expect(parseSqpPeriod(' QUARTER ')).toBe('QUARTER')
+    expect(parseSqpPeriod('YEAR')).toBeNull()
+  })
+})
+
+describe('familyImpressionShare — S4: the market total once per query, our ASIN counts summed', () => {
+  it('two ASINs on one query: total counted once (it is repeated on each ASIN row), ours added', () => {
+    // One query, market total 1000 repeated on both ASIN rows; our ASINs took 30 + 20.
+    const r = familyImpressionShare([
+      { searchQuery: 'test jacket', impressionsBrand: 30, impressionsTotal: 1000 },
+      { searchQuery: 'test jacket', impressionsBrand: 20, impressionsTotal: 1000 },
+    ])
+    expect(r).toEqual({ share: 0.05, ours: 50, market: 1000 })
+    // The old loop added the total once per row: 50 / 2000 = 0.025, understated ×2.
+  })
+  it('several queries: Σ ours ÷ Σ (one market total per query)', () => {
+    const r = familyImpressionShare([
+      { searchQuery: 'q1', impressionsBrand: 10, impressionsTotal: 100 },
+      { searchQuery: 'q1', impressionsBrand: 0, impressionsTotal: 100 },
+      { searchQuery: 'q1', impressionsBrand: 5, impressionsTotal: 100 },
+      { searchQuery: 'q2', impressionsBrand: 25, impressionsTotal: 400 },
+    ])
+    expect(r.market).toBe(500)
+    expect(r.ours).toBe(40)
+    expect(r.share).toBeCloseTo(0.08, 10)
+  })
+  it('a query with no market total is left out; none at all → null, never 0', () => {
+    expect(familyImpressionShare([{ searchQuery: 'q', impressionsBrand: 4, impressionsTotal: 0 }]).share).toBeNull()
+    expect(familyImpressionShare([]).share).toBeNull()
+    const r = familyImpressionShare([
+      { searchQuery: 'q-none', impressionsBrand: 9, impressionsTotal: 0 },
+      { searchQuery: 'q-real', impressionsBrand: 0, impressionsTotal: 300 },
+    ])
+    expect(r).toEqual({ share: 0, ours: 0, market: 300 }) // a real 0: none of a real total
   })
 })
 

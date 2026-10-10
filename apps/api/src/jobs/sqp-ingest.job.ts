@@ -5,10 +5,13 @@
  * Amazon marketplace into SearchQueryPerformance, so the competitive-share view
  * stays current. Idempotent upsert (re-fetching the same week is safe).
  *
- * 🔴 **Default ON.** `NEXUS_ENABLE_SQP_INGEST_CRON` does NOT gate this and never did — it has
- * zero readers anywhere in the repo, and this header used to claim it meant "default OFF". The
- * real switch is the inverted `NEXUS_DISABLE_SQP_INGEST_CRON=1` opt-out, read once in
- * `startSqpIngestCron` below. Registered in CRON_REGISTRY for manual triggering either way.
+ * 🔴 **Runs only when `NEXUS_ENABLE_AMAZON_ADS_CRON` is on.** The scheduler starts this cron inside
+ * its ads-cron block (runtime/scheduler.ts, `if (adsCronOn)`), and that flag is default OFF — so
+ * with it off, nothing here runs at all. With it on, `NEXUS_DISABLE_SQP_INGEST_CRON=1` is the
+ * opt-out, read once in `startSqpIngestCron` below. (This header used to say "Default ON", which
+ * was true only inside that block.) `NEXUS_ENABLE_SQP_INGEST_CRON` does NOT gate this and never
+ * did — it has zero readers anywhere in the repo. Registered in CRON_REGISTRY for manual
+ * triggering either way.
  *
  * ── What this job's summary is FOR (SQP.1, 2026-08-12) ────────────────────────────────────────
  * It used to report `markets=9 ok=4 failed=5 rows=0` — and did so for two consecutive nights
@@ -465,8 +468,9 @@ export function startSqpIngestCron(): void {
     logger.warn('sqp-ingest cron already started')
     return
   }
-  // RM2 — Brand Analytics SQP access is confirmed (probe = available), so this is default-ON now;
-  // it powers the Rest-of-Search feedback signal + the SQP insights. Opt out with NEXUS_DISABLE_SQP_INGEST_CRON=1.
+  // RM2 — Brand Analytics SQP access is confirmed (probe = available). The scheduler calls this only
+  // when NEXUS_ENABLE_AMAZON_ADS_CRON is on (default off); then it runs unless
+  // NEXUS_DISABLE_SQP_INGEST_CRON=1. It powers the Rest-of-Search feedback signal + the SQP insights.
   if (envEnabled('NEXUS_DISABLE_SQP_INGEST_CRON')) {
     logger.info('sqp-ingest cron disabled (NEXUS_DISABLE_SQP_INGEST_CRON=1)')
     return
