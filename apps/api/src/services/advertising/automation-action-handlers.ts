@@ -1676,7 +1676,7 @@ ACTION_HANDLERS.promote_to_exact = async (action, context, meta): Promise<Action
   const { familyAdGroups, homeOf, positivesIn, productFamilyOf } = await import('./ads-winner-lock.js')
   const productScope = await familyAdGroups(await productFamilyOf([src.id]), src.campaign?.marketplace ?? null)
   const positives = [...(await positivesIn([...productScope, src.id, ...targets.map((t) => t.adGroupId)])).values()].flat()
-  const homes: Array<{ adGroupId: string }> = []
+  const homes: Array<{ adGroupId: string; adTargetId: string }> = []
   // ONE BRAIN AB-6 — a destination whose campaign's harvest a product's brain owns (or the Owner holds) gets nothing, and
   // the source's isolation negative is left when its campaign's negatives are held (the source's own harvest lever was
   // asked before the handler ran: brain/rule-skips.ts). In a dry run too, so no card offers either.
@@ -1752,7 +1752,11 @@ ACTION_HANDLERS.promote_to_exact = async (action, context, meta): Promise<Action
     leftToBrain.push(sourceHeld)
     isolation = { adGroupId: src.id, attempted: false, skipped: 'brain-lever', reason: `${sourceHeld.reason} (one owner per lever)` }
   } else if (action.negateInSource === true) {
-    const away = homes.filter((h) => h.adGroupId !== src.id)
+    // Harvest fix B1 + B10 (harvest-landing-guard.ts) — only a home that serves takes the term over (enabled and confirmed
+    // at Amazon, its campaign and ad group serving, no negative there blocking it): never a paused or blocked one.
+    const { servingLandings } = await import('./harvest-landing-guard.js')
+    const serving = await servingLandings(homes.filter((h) => h.adGroupId !== src.id).map((h) => ({ adTargetId: h.adTargetId, term: query })))
+    const away = homes.filter((h) => h.adGroupId !== src.id && serving.has(h.adTargetId))
     const { homeWinners, winnerKey } = await import('./ads-harvest.service.js')
     const winners = away.length ? await homeWinners(away.map((h) => ({ term: query, adGroupId: h.adGroupId })), { defaults: { ...HARVEST_DEFAULTS } }) : new Set<string>()
     const proven = away.find((h) => winners.has(winnerKey(query, h.adGroupId)))?.adGroupId ?? null

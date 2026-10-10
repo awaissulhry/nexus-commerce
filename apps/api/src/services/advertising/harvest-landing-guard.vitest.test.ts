@@ -1,23 +1,32 @@
 /**
- * Harvest fix B1 + B10 — the landing guard's decision (harvest-landing-guard.ts decideLanding, pure) and its switch of a
- * paused landing (enableLanding, the keyword state write path stubbed). The reads run on a real PostgreSQL in
- * harvest-landing-guard-postgres.vitest.test.ts. Values are made up (public repo).
+ * Harvest fix B1 + B10 — the landing guard's decision (harvest-landing-guard.ts decideLanding, pure), the bid a paused
+ * landing is switched on with (switchOnBid) and the switch itself (enableLanding, the keyword state write path stubbed).
+ * The reads run on a real PostgreSQL in harvest-landing-guard-postgres.vitest.test.ts. Values are made up (public repo).
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LandingFacts } from './harvest-landing-guard.js'
 
-const h = vi.hoisted(() => ({ update: vi.fn(async (_a: Record<string, unknown>) => ({ ok: true, outboundQueueId: 'q1', bidHistoryIds: [], actionLogId: 'log-1', error: null }) as Record<string, unknown>) }))
-vi.mock('../../db.js', () => ({ default: {} }))
+const h = vi.hoisted(() => ({
+  update: vi.fn(async (_a: Record<string, unknown>) => ({ ok: true, outboundQueueId: 'q1', bidHistoryIds: [], actionLogId: 'log-1', error: null }) as Record<string, unknown>),
+  // The paused keyword: its bid now, its campaign's bounds and largest change per step.
+  target: { bidCents: 20, adGroupId: 'g-exact', adGroup: { campaign: { id: 'c-exact', marketplace: 'IT', minBidCents: null as number | null, maxBidCents: null as number | null, dynamicBidding: null as unknown } } },
+  limits: { minBidCents: null, maxBidCents: null, maxChangePct: null } as Record<string, unknown>,
+  written: 40,
+}))
+vi.mock('../../db.js', () => ({
+  default: { adTarget: { findUnique: vi.fn(async (a: { select: Record<string, unknown> }) => (a.select.adGroup ? h.target : { bidCents: h.written })) } },
+}))
 vi.mock('./ads-mutation.service.js', () => ({ updateAdTargetWithSync: (a: Record<string, unknown>) => h.update(a) }))
+vi.mock('./ads-strategy/bids.js', async (original) => ({ ...(await original<object>()), bidLimitsFor: vi.fn(async () => h.limits) }))
 
-const { blockingNegative, decideLanding, enableLanding, landingKey } = await import('./harvest-landing-guard.js')
+const { blockingNegative, decideLanding, enableLanding, landingKey, switchOnBid } = await import('./harvest-landing-guard.js')
 
 const facts = (over: Partial<LandingFacts> = {}): LandingFacts => ({
   term: 'touring jacket', match: 'EXACT',
-  adGroup: { id: 'g-exact', name: 'Exact', status: 'ENABLED', campaign: { id: 'c-exact', name: 'Jacket Exact', status: 'ENABLED' } },
+  adGroup: { id: 'g-exact', name: 'Exact', status: 'ENABLED', campaign: { id: 'c-exact', name: 'Jacket Exact', status: 'ENABLED', suppressed: false } },
   existing: [], negatives: [], ...over,
 })
-const kw = (status: string, externalTargetId: string | null = `AMZ-${status}`) => ({ id: `t-${status.toLowerCase()}`, status, externalTargetId })
+const kw = (status: string, externalTargetId: string | null = `AMZ-${status}`, confirmed = true) => ({ id: `t-${status.toLowerCase()}`, status, externalTargetId, confirmed })
 
 describe('harvest fix B1 — what counts as landed', () => {
   it('nothing of the term there: created, and it serves', () => {
@@ -28,11 +37,20 @@ describe('harvest fix B1 — what counts as landed', () => {
     expect(decideLanding(facts({ existing: [kw('ENABLED')] }))).toMatchObject({ kind: 'landed', targetId: 't-enabled', externalTargetId: 'AMZ-ENABLED', serves: true })
   })
 
-  it('a PAUSED one: switched on again as the landing — never "found"', () => {
+  it('a PAUSED one: switched on again — never "found", and no landing yet (no serves: the source waits for Amazon)', () => {
     expect(decideLanding(facts({ existing: [kw('PAUSED')] }))).toEqual({
-      kind: 'enable', targetId: 't-paused', externalTargetId: 'AMZ-PAUSED', serves: true,
-      why: 'the exact keyword "touring jacket" stands paused in ad group "Exact": it is switched on again as the landing',
+      kind: 'enable', targetId: 't-paused', externalTargetId: 'AMZ-PAUSED',
+      why: 'switch on the paused exact keyword "touring jacket" in ad group "Exact" again, at the harvest\'s start bid (nothing is created); its source is negated only once Amazon confirms it',
     })
+  })
+
+  it('a paused one in a destination that does not serve: held — switching it on would land nothing', () => {
+    const stopped = facts({ existing: [kw('PAUSED')], adGroup: { id: 'g-exact', name: 'Exact', status: 'ENABLED', campaign: { id: 'c-exact', name: 'Jacket Exact', status: 'ENABLED', suppressed: true } } })
+    expect(decideLanding(stopped)).toMatchObject({ kind: 'hold', deniedAt: 'landing_idle', why: expect.stringMatching(/stands paused there, and switching it on would land nothing: its campaign's bids are suppressed/) })
+  })
+
+  it('an ENABLED one switched on a moment ago and not confirmed by Amazon yet: not landed yet (serves false)', () => {
+    expect(decideLanding(facts({ existing: [kw('ENABLED', 'AMZ-ON', false)] }))).toMatchObject({ kind: 'landed', serves: false, why: expect.stringMatching(/was switched on again and Amazon has not confirmed it yet, so the source is not negated/) })
   })
 
   it('an ARCHIVED one: held with the reason, nothing written, the source never negated', () => {
@@ -55,8 +73,13 @@ describe('harvest fix B1 — what counts as landed', () => {
   it('a destination that does not serve: never a landing the source may be negated for, and it says why', () => {
     const pausedCampaign = facts({ adGroup: { id: 'g-exact', name: 'Exact', status: 'ENABLED', campaign: { id: 'c-exact', name: 'Jacket Exact', status: 'PAUSED' } } })
     expect(decideLanding(pausedCampaign)).toEqual({ kind: 'create', serves: false, why: 'nothing of "touring jacket" stands in ad group "Exact": it is created there; its campaign "Jacket Exact" is paused, so the source is not negated' })
-    const pausedGroup = facts({ adGroup: { id: 'g-exact', name: 'Exact', status: 'PAUSED', campaign: { id: 'c-exact', name: 'Jacket Exact', status: 'ENABLED' } }, existing: [kw('ENABLED')] })
+    const pausedGroup = facts({ adGroup: { id: 'g-exact', name: 'Exact', status: 'PAUSED', campaign: { id: 'c-exact', name: 'Jacket Exact', status: 'ENABLED', suppressed: false } }, existing: [kw('ENABLED')] })
     expect(decideLanding(pausedGroup)).toMatchObject({ kind: 'landed', serves: false, why: expect.stringMatching(/the ad group is paused, so the source is not negated$/) })
+  })
+
+  it('a campaign whose bids are suppressed (a stop, or born at the floor) does not serve either', () => {
+    const stopped = facts({ adGroup: { id: 'g-exact', name: 'Exact', status: 'ENABLED', campaign: { id: 'c-exact', name: 'Jacket Exact', status: 'ENABLED', suppressed: true } } })
+    expect(decideLanding(stopped)).toEqual({ kind: 'create', serves: false, why: 'nothing of "touring jacket" stands in ad group "Exact": it is created there; its campaign\'s bids are suppressed (a stop, or born at the floor and not started), so the source is not negated' })
   })
 
   it('the ad group gone from Nexus: held', () => {
@@ -104,21 +127,43 @@ describe('harvest fix B10 — a negative there that blocks the term holds the la
   })
 })
 
-describe('harvest fix B1 — a paused landing is switched on through the keyword state write path', () => {
-  beforeEach(() => h.update.mockClear())
+describe('harvest fix B1 — a paused landing is switched on with the harvest\'s start bid, through the keyword state write path', () => {
+  beforeEach(() => {
+    h.update.mockClear()
+    h.target.bidCents = 20
+    h.target.adGroup.campaign = { id: 'c-exact', marketplace: 'IT', minBidCents: null, maxBidCents: null, dynamicBidding: null }
+    h.limits = { minBidCents: null, maxBidCents: null, maxChangePct: null }
+  })
 
-  it('asks the write gate now and sends at once, as the harvest\'s own writer and change set', async () => {
-    expect(await enableLanding('t-paused', { actor: 'automation:ads-brain-harvest', changeSetId: 'ap-1', reason: 'harvest' })).toEqual({ ok: true, actionLogId: 'log-1', why: null })
-    expect(h.update).toHaveBeenCalledWith(expect.objectContaining({ adTargetId: 't-paused', patch: { status: 'ENABLED' }, actor: 'automation:ads-brain-harvest', changeSetId: 'ap-1', askGate: true, applyImmediately: true }))
+  it('status and bid in ONE patch: the bounds and the gate asked now, sent at once, as the harvest\'s own writer and change set; the bid written comes back', async () => {
+    expect(await enableLanding('t-paused', 40, { actor: 'automation:ads-brain-harvest', changeSetId: 'ap-1', reason: 'harvest' })).toEqual({ ok: true, actionLogId: 'log-1', why: null, bidCents: 40 })
+    expect(h.update).toHaveBeenCalledWith(expect.objectContaining({ adTargetId: 't-paused', patch: { status: 'ENABLED', bidCents: 40 }, actor: 'automation:ads-brain-harvest', changeSetId: 'ap-1', askGate: true, applyImmediately: true }))
   })
 
   it('a bare person id is that person', async () => {
-    await enableLanding('t-paused', { actor: 'owner-1', manual: true, reason: 'harvest' })
+    await enableLanding('t-paused', 40, { actor: 'owner-1', manual: true, reason: 'harvest' })
     expect(h.update).toHaveBeenCalledWith(expect.objectContaining({ actor: 'user:owner-1', manual: true }))
   })
 
   it('a refusal comes back with its words: the caller negates nothing', async () => {
     h.update.mockResolvedValueOnce({ ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'campaign_allowlist: not allowlisted' })
-    expect(await enableLanding('t-paused', { actor: 'user:owner', reason: 'harvest' })).toEqual({ ok: false, actionLogId: null, why: 'campaign_allowlist: not allowlisted' })
+    expect(await enableLanding('t-paused', 40, { actor: 'user:owner', reason: 'harvest' })).toEqual({ ok: false, actionLogId: null, why: 'campaign_allowlist: not allowlisted', bidCents: null })
+  })
+
+  it('the bid: the start bid as asked when nothing binds it', async () => {
+    expect(await switchOnBid({ targetId: 't-paused', wantCents: 40, who: { actor: 'automation:ads-brain-harvest' } })).toEqual({ cents: 40, currentCents: 20, held: null })
+  })
+
+  it('the bid is held like a create\'s: inside the strategy band, then the campaign\'s own bounds', async () => {
+    h.limits = { minBidCents: null, maxBidCents: { value: 35, source: { level: 'market' } }, maxChangePct: null }
+    expect(await switchOnBid({ targetId: 't-paused', wantCents: 40, who: { actor: 'user:owner', manual: true } })).toEqual({ cents: 35, currentCents: 20, held: 'held by the ads strategy\'s band' })
+    h.target.adGroup.campaign.maxBidCents = 30
+    expect(await switchOnBid({ targetId: 't-paused', wantCents: 40, who: { actor: 'user:owner', manual: true } })).toMatchObject({ cents: 30, held: 'held by the ads strategy\'s band and the campaign\'s highest bid' })
+  })
+
+  it('an engine\'s or a rule\'s switch steps from the current bid as the mutation layer does; a person\'s own does not', async () => {
+    h.target.adGroup.campaign.dynamicBidding = { maxBidChangePct: 50 }
+    expect(await switchOnBid({ targetId: 't-paused', wantCents: 40, who: { actor: 'automation:ads-brain-harvest' } })).toEqual({ cents: 30, currentCents: 20, held: 'held by the largest bid change per step' })
+    expect(await switchOnBid({ targetId: 't-paused', wantCents: 40, who: { actor: 'user:owner', manual: true } })).toMatchObject({ cents: 40, held: null })
   })
 })

@@ -45,12 +45,14 @@ const landingGuard = vi.hoisted(() => ({
   check: vi.fn(async (..._a: unknown[]) => ({ kind: 'create', serves: true, why: 'nothing there' }) as Record<string, unknown>),
   enable: vi.fn(async (..._a: unknown[]) => ({ ok: true, actionLogId: 'log-on' }) as Record<string, unknown>),
   serving: vi.fn(async (items: Array<{ adTargetId: string }>) => new Set(items.map((i) => i.adTargetId))),
+  switchBid: vi.fn(async (a: { wantCents: number }) => ({ cents: a.wantCents, currentCents: 10, held: null }) as Record<string, unknown>),
 }))
 vi.mock('./harvest-landing-guard.js', async (original) => ({
   ...(await original<object>()),
   checkLanding: (...a: unknown[]) => landingGuard.check(...a),
   enableLanding: (...a: unknown[]) => landingGuard.enable(...a),
   servingLandings: (items: Array<{ adTargetId: string }>) => landingGuard.serving(items),
+  switchOnBid: (a: { wantCents: number }) => landingGuard.switchBid(a),
 }))
 vi.mock('../../db.js', () => ({
   default: {
@@ -318,6 +320,15 @@ describe('5d / PB-6a — negate-in-source only once the home proves itself', () 
     expect(h.writeNegativeKeyword).toHaveBeenCalledTimes(1)
     expect(h.writeNegativeKeyword.mock.calls[0][0]).toMatchObject({ scope: 'AD_GROUP', adGroupId: 'src1', keywordText: 'giacca moto uomo', matchType: 'EXACT', protectConverting: null })
     expect(handover.output?.isolation).toMatchObject({ attempted: true, adGroupId: 'src1', reachedAmazon: true })
+  })
+
+  it('harvest fix B1 + B10 — a proven home that does not serve (paused, unconfirmed, stopped or blocked) never takes the term over', async () => {
+    proven()
+    landingGuard.serving.mockResolvedValueOnce(new Set())
+    const r = await promote(NEG, CTX)
+    expect(landingGuard.serving).toHaveBeenCalledWith([{ adTargetId: 'home1', term: 'giacca moto uomo' }])
+    expect(h.writeNegativeKeyword).not.toHaveBeenCalled()
+    expect(r.output?.isolation).not.toMatchObject({ attempted: true })
   })
 
   it('nothing landed and no home → no negative', async () => {

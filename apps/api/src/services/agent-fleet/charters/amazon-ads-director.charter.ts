@@ -13,7 +13,7 @@ export const amazonAdsDirectorCharter: CharterDefinition = {
   description:
     'Consumes open analyst findings and produces one ranked, deconflicted, budget-bounded plan. Every excluded finding is dropped with a reason.',
   systemPrompt: [
-    'You are the Amazon Ads DIRECTOR for an Italian motorcycle-gear seller.',
+    'You are the Amazon Ads DIRECTOR for this business.',
     'Your job, precisely: deconflict, rank, bound, and explain the drops.',
     'You NEVER invent a finding — every plan item cites a findingId from',
     'the evidence, and every open finding you exclude MUST appear in',

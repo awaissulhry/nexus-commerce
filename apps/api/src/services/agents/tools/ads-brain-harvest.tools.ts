@@ -22,7 +22,7 @@ import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import { claimHarvest, executeClaimedPair, HARVEST_TOOL, undoHarvest, type Who } from '../../advertising/brain/harvest-write.js'
 import { harvestRequestFacts, harvestStanding, markUndone, placeWords, WRITABLE } from '../../advertising/brain/harvest-request.js'
-import { checkLanding } from '../../advertising/harvest-landing-guard.js'
+import { checkLanding, switchOnBid } from '../../advertising/harvest-landing-guard.js'
 import { approvedRun, gateRefusal, notRun, reachNote, recheck, type RuleWrite, type StoredReach } from './ads-change-kit.js'
 import { amountLabel, campaignCurrency } from './ads-tool-guards.js'
 import { fingerprint, reachOver } from './ads-targeting-kit.js'
@@ -74,11 +74,13 @@ async function preview(raw: Record<string, unknown>): Promise<ToolResult> {
   }
   const { dest, owed } = facts
   // Harvest fix B1 + B10 (harvest-landing-guard.ts) — an archived keyword of the term or a negative that blocks it in the
-  // destination: never asked for. A paused one there is switched on again instead of a new keyword.
+  // destination: never asked for. A paused one there is switched on again instead of a new keyword, at the bid shown here
+  // (switchOnBid, as the approver: the bid the write sends), and its source negatives follow once Amazon confirms it.
   const landing = record.keywordTargetId ? null : await checkLanding({ adGroupId: dest.id, term: record.term, match: record.isAsin ? 'PRODUCT' : 'EXACT' })
   if (landing?.kind === 'hold') return { ok: false, error: `Not queued: ${landing.why}.` }
   const enable = landing?.kind === 'enable'
-  const bidCents = record.bidCents!
+  const sw = landing?.kind === 'enable' ? await switchOnBid({ targetId: landing.targetId, wantCents: record.bidCents!, who: { actor: 'user:approver', manual: true } }) : null
+  const bidCents = sw ? sw.cents : record.bidCents!
   const term = record.isAsin ? record.term.toUpperCase() : record.term
   const writes: Array<RuleWrite & { label: string }> = [
     ...(!record.keywordTargetId ? [{ campaignId: dest.campaign.id, adGroupId: dest.id, marketplace: dest.campaign.marketplace, changes: [{ field: 'bid', valueCents: bidCents }], label: `campaign "${dest.campaign.name}"` }] : []),
@@ -89,8 +91,10 @@ async function preview(raw: Record<string, unknown>): Promise<ToolResult> {
   if ('refused' in reached) return { ok: false, error: `Not queued: ${reached.label}: ${gateRefusal(reached.refused)}` }
   const currency = campaignCurrency(dest.campaign)
   const what = record.isAsin ? 'product target' : 'exact keyword'
-  const effect = `${record.keywordTargetId ? `The ${what} "${record.term}" stands in ${placeWords(dest)}; ` : enable ? `Harvests "${record.term}": its paused ${what} in ${placeWords(dest)} switched on again (the ads brain's choice); ` : `Harvests "${record.term}": an ${what} at ${amountLabel(bidCents, currency)} in ${placeWords(dest)} (the ads brain's choice); `}`
-    + (owed.length ? `then a negative exact of it in ${owed.map((s) => placeWords(s.place)).join(', ')}, so ${owed.length === 1 ? 'that ad group stops' : 'those ad groups stop'} paying for it — only once the keyword stands, and both halves or neither.` : 'no source is left to negate.')
+  const effect = `${record.keywordTargetId ? `The ${what} "${record.term}" stands in ${placeWords(dest)}; ` : enable ? `Harvests "${record.term}": its paused ${what} in ${placeWords(dest)} switched on again at ${amountLabel(bidCents, currency)}${sw?.held ? ` (${sw.held})` : ''} (the ads brain's choice); ` : `Harvests "${record.term}": an ${what} at ${amountLabel(bidCents, currency)} in ${placeWords(dest)} (the ads brain's choice); `}`
+    + (!owed.length ? 'no source is left to negate.'
+      : enable ? `a negative exact of it in ${owed.map((s) => placeWords(s.place)).join(', ')} follows once Amazon confirms the switch (the brain's next daily run), never before.`
+        : `then a negative exact of it in ${owed.map((s) => placeWords(s.place)).join(', ')}, so ${owed.length === 1 ? 'that ad group stops' : 'those ad groups stop'} paying for it — only once the keyword stands, and both halves or neither.`)
   return {
     ok: true,
     preview: {
@@ -98,10 +102,10 @@ async function preview(raw: Record<string, unknown>): Promise<ToolResult> {
       destinationAdGroup: { id: dest.id, name: dest.name, campaign: dest.campaign.name, how: record.destHow },
       campaign: { id: dest.campaign.id, name: dest.campaign.name, marketplace: dest.campaign.marketplace },
       changes: [
-        ...(!record.keywordTargetId ? [enable ? { label: `${what} "${record.term}" · ${placeWords(dest)}`, fromLabel: 'Paused', toLabel: 'Enabled' } : { label: `${what} "${record.term}" · ${placeWords(dest)}`, fromLabel: 'none', toLabel: `at ${amountLabel(bidCents, currency)}` }] : []),
+        ...(!record.keywordTargetId ? [enable ? { label: `${what} "${record.term}" · ${placeWords(dest)}`, fromLabel: `Paused at ${amountLabel(sw!.currentCents, currency)}`, toLabel: `Enabled at ${amountLabel(bidCents, currency)}` } : { label: `${what} "${record.term}" · ${placeWords(dest)}`, fromLabel: 'none', toLabel: `at ${amountLabel(bidCents, currency)}` }] : []),
         ...owed.map((s) => ({ label: `negative exact "${record.term}" · ${placeWords(s.place)}`, fromLabel: 'none', toLabel: record.isAsin ? 'negative product target' : 'negative exact' })),
       ],
-      raises: !record.keywordTargetId ? [enable ? `${what} "${record.term}" switched on again` : `${what} "${record.term}" at ${amountLabel(bidCents, currency)}`] : [],
+      raises: !record.keywordTargetId ? [enable ? `${what} "${record.term}" switched on again at ${amountLabel(bidCents, currency)}` : `${what} "${record.term}" at ${amountLabel(bidCents, currency)}`] : [],
       sources: owed.map((s) => ({ adGroupId: s.adGroupId, action: s.action, why: s.why, ...(s.result ? { result: s.result } : {}) })),
       why: record.why,
       basis: fingerprint({ harvestId: record.id, term: record.term, dest: dest.id, bidCents, keyword: record.keywordTargetId, owed: owed.map((s) => s.adGroupId).sort(), ...(enable ? { landing: 'enable' } : {}) }),
@@ -160,7 +164,8 @@ const applyBrainHarvest: AgentTool = {
     + 'queued, when the harvest is not waiting for this, the destination does not serve now, an archived keyword of the '
     + 'term or a negative that blocks it stands there, the term found a home in another ad group of the product meanwhile '
     + '(one owner per term), or the write gate would refuse either half. A paused keyword of the term there is switched '
-    + 'on again instead of a new one.',
+    + 'on again at the start bid instead of a new one; its source negatives follow only once Amazon confirms it (the '
+    + 'brain\'s next run).',
   async handler(args) {
     return preview(args)
   },

@@ -1,9 +1,12 @@
 /**
- * Harvest fix B15 — the keyword harvester's charter names no business: the fleet runs in every business and the repository
- * is public, so its prompt says "this business". The rest of the charter is as it was.
+ * Harvest fix B15 — the ads analysts' charters name no business: the fleet runs in every business and the repository is
+ * public, so their prompts say "this business". The rest of each charter is as it was.
  */
 import { describe, expect, it } from 'vitest'
 import { amazonKeywordHarvesterCharter } from './amazon-keyword-harvester.charter.js'
+import { amazonAdsDirectorCharter } from './amazon-ads-director.charter.js'
+import { amazonBidTunerCharter } from './amazon-bid-tuner.charter.js'
+import { amazonNegativeMinerCharter } from './amazon-negative-miner.charter.js'
 
 describe('harvest fix B15 — the keyword harvester\'s charter', () => {
   it('says "this business" and describes no business, trade or home market', () => {
@@ -17,4 +20,13 @@ describe('harvest fix B15 — the keyword harvester\'s charter', () => {
     expect(amazonKeywordHarvesterCharter.systemPrompt).toContain("kind 'harvest_candidate'")
     expect(amazonKeywordHarvesterCharter.systemPrompt).toContain('<kind>:<entityId>')
   })
+})
+
+describe('harvest fix B15 — the other ads charters say "this business" too', () => {
+  for (const c of [amazonAdsDirectorCharter, amazonBidTunerCharter, amazonNegativeMinerCharter]) {
+    it(`${c.key}: "this business", no seller described, no home market`, () => {
+      expect(c.systemPrompt).toContain('this business')
+      expect(c.systemPrompt).not.toMatch(/\bseller\b|-primary\b/i)
+    })
+  }
 })

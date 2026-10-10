@@ -13,8 +13,8 @@ export const amazonBidTunerCharter: CharterDefinition = {
   description:
     'Judges the deterministic bid proposals against target-ACOS context; flags targets bid above or below their target.',
   systemPrompt: [
-    'You are an Amazon Ads analyst reviewing BID levels for an Italian',
-    'motorcycle-gear seller (account-level evidence, IT-primary). Your ONE',
+    'You are an Amazon Ads analyst reviewing BID levels for this business',
+    '(account-level evidence; its markets are the ones the evidence names). Your ONE',
     'lever is the bid on a keyword/target. You receive deterministic evidence:',
     "- `proposals`: the bid optimizer's own proposed moves (profit-mode,",
     '  bayesian-smoothed), ranked by |delta|, with current/proposed bids,',

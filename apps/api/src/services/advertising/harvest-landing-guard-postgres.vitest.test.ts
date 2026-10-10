@@ -9,12 +9,15 @@
  *             "already there" with it — held by name instead: no keyword sent, no source negative
  *   negative  an exact negative of the term in the destination ad group, or a phrase negative of its campaign holding the
  *             term's words: held the same (B10)
- *   paused    a paused exact keyword of the term: switched on again through the keyword state write path (its row ENABLED,
- *             one queue row, one action log row as the writer), no create, and then the source is negated
+ *   paused    a paused exact keyword of the term: switched on again with the harvest's start bid through the keyword state
+ *             write path (its row ENABLED at that bid, one queue row sent at once, one action log row as the writer), no
+ *             create — and the source is NOT negated: not on the switch, not on a second harvest before Amazon confirmed it;
+ *             once its switch is settled at Amazon, the next harvest negates the source
  *   landed    an enabled one: no create, the source negated (as before)
- *   idle      a destination whose campaign is paused: the keyword is created there, the source is NOT negated
- *   homes     servingLandings: only an enabled keyword with Amazon's id, in a serving ad group and campaign, with no negative
- *             blocking the term there, may take a term over; another business's rows are never read
+ *   idle      a destination whose campaign is paused, or whose bids are suppressed (a stop): the keyword is created there,
+ *             the source is NOT negated; a paused keyword in it is held, never switched on
+ *   homes     servingLandings: only an enabled keyword with Amazon's id and its switch confirmed, in a serving ad group and
+ *             campaign, with no negative blocking the term there, may take a term over; another business's rows never read
  *
  * Every value is made up (public repo).
  */
@@ -94,6 +97,7 @@ async function seed() {
   await campaign('gl-auto', 'Auto', { targetingType: 'AUTO' })
   await campaign('gl-exact', 'Exact')
   await campaign('gl-paused', 'Exact paused', { status: 'PAUSED' })
+  await campaign('gl-stopped', 'Exact stopped', { bidsSuppressedAt: new Date('2026-10-01T00:00:00Z') })
   await db.adsStrategy.create({ data: { channel: 'AMAZON', market: 'IT', level: 'MARKET', scopeId: '*', label: 'IT', targetKind: 'ACOS', targetPct: 25, targetHiPct: 30, updatedBy: 'user:owner' } })
   await db.marketplace.create({ data: { channel: 'AMAZON', code: 'IT', name: 'Amazon Italy', region: 'EU', currency: 'EUR', language: 'it' } })
   await db.adSpendCeiling.create({ data: { grain: 'MARKET', scopeId: 'IT', label: 'IT', dailyCapCents: 10_000 } })
@@ -136,21 +140,31 @@ describe.skipIf(!concurrentDatabaseUrl())('harvest fix B1 + B10 — a harvest la
     expect(amz.negatives).toEqual([expect.objectContaining({ keywordText: 'summer gloves' })])
   })
 
-  it('a paused exact keyword of the term: switched on again (one queue row, one action log row as the writer), no create, then the source is negated', async () => {
+  it('a paused exact keyword of the term: switched on again at the start bid (no create) — the source is negated only once Amazon confirmed the switch', async () => {
     reset()
-    const paused = await target(G('gl-exact'), 'paused gloves', { status: 'PAUSED', externalTargetId: 'AMZ-PAUSED-1' })
+    const paused = await target(G('gl-exact'), 'paused gloves', { status: 'PAUSED', externalTargetId: 'AMZ-PAUSED-1', bidCents: 15 })
     const r = await promote('paused gloves')
     expect(amz.keywords).toEqual([])
-    expect(r.outcomes[0]).toMatchObject({ outcome: 'acted', targetId: paused.id, externalTargetId: 'AMZ-PAUSED-1', negative: { reachedAmazon: true } })
-    expect(amz.negatives).toEqual([expect.objectContaining({ keywordText: 'paused gloves' })])
-    const row = await inW(() => database.client.adTarget.findUniqueOrThrow({ where: { id: paused.id }, select: { status: true } }))
-    expect(row.status).toBe('ENABLED')
+    expect(amz.negatives).toEqual([])
+    expect(r.outcomes[0]).toMatchObject({ outcome: 'acted', targetId: paused.id, externalTargetId: 'AMZ-PAUSED-1', negative: null, negateReason: expect.stringMatching(/switch on the paused exact keyword "paused gloves" .* its source is negated only once Amazon confirms it/) })
+    // One patch: status and the harvest's start bid (the bid the page showed), through the queue, sent at once.
+    const row = await inW(() => database.client.adTarget.findUniqueOrThrow({ where: { id: paused.id }, select: { status: true, bidCents: true } }))
+    expect(row).toEqual({ status: 'ENABLED', bidCents: 40 })
     const logs = await inW(() => database.client.advertisingActionLog.findMany({ where: { entityId: paused.id }, select: { userId: true, actionType: true, payloadBefore: true, payloadAfter: true, outboundQueueId: true } }))
-    expect(logs).toEqual([expect.objectContaining({ userId: 'user:owner', actionType: 'AD_ENTITY_STATE_UPDATE', payloadBefore: expect.objectContaining({ status: 'PAUSED' }), payloadAfter: expect.objectContaining({ status: 'ENABLED' }) })])
-    // Sent at once (no grace window): the source negative follows the switch, never the other way round for long.
+    expect(logs).toEqual([expect.objectContaining({ userId: 'user:owner', actionType: 'AD_ENTITY_STATE_UPDATE', payloadBefore: expect.objectContaining({ status: 'PAUSED', bidCents: 15 }), payloadAfter: expect.objectContaining({ status: 'ENABLED', bidCents: 40 }) })])
     const queued = await inW(() => database.client.outboundSyncQueue.findUniqueOrThrow({ where: { id: logs[0].outboundQueueId! }, select: { syncType: true, holdUntil: true } }))
     expect(queued.syncType).toBe('AD_ENTITY_STATE_UPDATE')
     expect(queued.holdUntil!.getTime()).toBeLessThanOrEqual(Date.now())
+    // Harvested again before Amazon confirmed it: still no source negative, and no second switch.
+    const early = await promote('paused gloves')
+    expect(amz.negatives).toEqual([])
+    expect(early.outcomes[0]).toMatchObject({ negative: null, negateReason: expect.stringMatching(/Amazon has not confirmed it yet, so the source is not negated/) })
+    // The worker settles the switch at Amazon: the next harvest finds it running and negates the source.
+    await inW(() => database.client.adMutation.updateMany({ where: { outboundQueueId: logs[0].outboundQueueId! }, data: { state: 'APPLIED', settledAt: new Date() } }))
+    const late = await promote('paused gloves')
+    expect(amz.keywords).toEqual([])
+    expect(amz.negatives).toEqual([expect.objectContaining({ keywordText: 'paused gloves' })])
+    expect(late.outcomes[0]).toMatchObject({ outcome: 'acted', targetId: paused.id, negative: { reachedAmazon: true } })
   })
 
   it('an enabled one: no create, the source negated (as before); a destination whose campaign is paused: created there, the source NOT negated', async () => {
@@ -164,17 +178,32 @@ describe.skipIf(!concurrentDatabaseUrl())('harvest fix B1 + B10 — a harvest la
     expect(amz.keywords).toEqual([expect.objectContaining({ keywordText: 'idle gloves' })])
     expect(amz.negatives).toEqual([])
     expect(idle.outcomes[0]).toMatchObject({ negative: null, negateReason: expect.stringMatching(/its campaign "gl-paused .*" is paused, so the source is not negated/) })
+    // A campaign whose bids are suppressed (a stop) does not serve either; a paused keyword in it is never switched on.
+    reset()
+    const stopped = await promote('stopped gloves', G('gl-stopped'))
+    expect(amz.keywords).toEqual([expect.objectContaining({ keywordText: 'stopped gloves' })])
+    expect(amz.negatives).toEqual([])
+    expect(stopped.outcomes[0].negateReason).toMatch(/its campaign's bids are suppressed \(a stop, or born at the floor and not started\), so the source is not negated/)
+    const resting = await target(G('gl-stopped'), 'resting stopped gloves', { status: 'PAUSED', externalTargetId: 'AMZ-REST-1' })
+    const held = await promote('resting stopped gloves', G('gl-stopped'))
+    expect(held.outcomes[0]).toMatchObject({ outcome: 'refused', refusal: { deniedAt: 'landing_idle' } })
+    expect((await inW(() => database.client.adTarget.findUniqueOrThrow({ where: { id: resting.id }, select: { status: true } }))).status).toBe('PAUSED')
   })
 
-  it('servingLandings: only an enabled keyword at Amazon, serving, unblocked, may take a term over; another business\'s rows never read', async () => {
+  it('servingLandings: only an enabled keyword at Amazon, confirmed, serving, unblocked, may take a term over; another business\'s rows never read', async () => {
     const live = await target(G('gl-exact'), 'home gloves', { externalTargetId: 'AMZ-HOME-1' })
     const pausedHome = await target(G('gl-exact'), 'resting gloves', { status: 'PAUSED', externalTargetId: 'AMZ-HOME-2' })
     const idleHome = await target(G('gl-paused'), 'home gloves', { externalTargetId: 'AMZ-HOME-3' })
     const blockedHome = await target(G('gl-exact'), 'fleece liner', { externalTargetId: 'AMZ-HOME-4' })
     await target(G('gl-exact'), 'liner', { isNegative: true, negativeLevel: 'CAMPAIGN', expressionType: 'NEGATIVE_PHRASE', externalTargetId: 'AMZ-NEG-3', bidCents: 0 })
+    const stoppedHome = await target(G('gl-stopped'), 'home gloves', { externalTargetId: 'AMZ-HOME-5' })
+    // Switched on a moment ago, its switch still on its way to Amazon.
+    const unconfirmed = await target(G('gl-exact'), 'waking gloves', { externalTargetId: 'AMZ-HOME-6' })
+    await inW(() => database.client.adMutation.create({ data: { entityType: 'AD_TARGET', entityId: unconfirmed.id, field: 'status', intendedValue: 'ENABLED', previousValue: 'PAUSED', state: 'PENDING', actor: 'user:owner' } }))
     const items = [
       { adTargetId: live.id, term: 'home gloves' }, { adTargetId: pausedHome.id, term: 'resting gloves' },
       { adTargetId: idleHome.id, term: 'home gloves' }, { adTargetId: blockedHome.id, term: 'fleece liner' },
+      { adTargetId: stoppedHome.id, term: 'home gloves' }, { adTargetId: unconfirmed.id, term: 'waking gloves' },
     ]
     expect([...await inW(() => servingLandings(items))]).toEqual([live.id])
     expect((await inW2(() => servingLandings(items))).size).toBe(0)
