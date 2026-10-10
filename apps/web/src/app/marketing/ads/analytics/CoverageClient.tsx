@@ -28,6 +28,7 @@ import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { useSharedAdsMarket } from '../_shell/MarketplaceContext'
 import { ConflictsTab } from './ConflictsTab'
+import { sharePct } from '../campaigns/_grid/format'
 // Self-contained: this page borrows no class from the Control Room's stylesheet. Reusing
 // `.acr-*` here rendered banners and section heads unstyled on prod, because that sheet is
 // imported by the Control Room and nothing else — a cross-page dependency that only shows up
@@ -47,7 +48,9 @@ function coverageColumns(maxShare: number, tosIsMeasured: boolean): Array<Column
     { key: 'marketImpressions', label: 'Market impressions', align: 'right', sortable: true, sortValue: (r) => r.marketImpressions, render: (r) => intl(r.marketImpressions) },
     { key: 'ourImpressions', label: 'Ours', align: 'right', sortable: true, sortValue: (r) => num(r.ourImpressions), render: (r) => intl(r.ourImpressions) },
     {
-      key: 'share', label: 'Share of page one', align: 'right', width: 200, sortable: true, sortValue: (r) => num(r.share),
+      // Amazon counts search-results impressions with no page filter, so this is the term's impression share, not "page one".
+      key: 'share', label: tip('Impression share (SQP)', "Our ASINs' impressions ÷ the term's total search impressions in the selected week, computed by Nexus from Amazon's weekly Search Query Performance counts."),
+      prefsLabel: 'Impression share (SQP)', align: 'right', width: 200, sortable: true, sortValue: (r) => num(r.share),
       render: (r) => (
         <span className="cov-sharecell">
           <span className="cov-bar" aria-hidden><span className="cov-bar-fill" style={{ width: `${barWidth(r.share, maxShare)}%` }} /></span>
@@ -58,7 +61,7 @@ function coverageColumns(maxShare: number, tosIsMeasured: boolean): Array<Column
     {
       key: 'ourAsins', label: tip('Ours on page', 'How many of OUR ASINs appear on this SERP. Context — presence is not the constraint.'),
       prefsLabel: 'Ours on page', align: 'right', sortable: true, sortValue: (r) => r.ourAsins,
-      render: (r) => <span className={r.ourAsins > 1 ? 'multi' : undefined}>{r.ourAsins || '—'}</span>,
+      render: (r) => <span className={r.ourAsins > 1 ? 'multi' : undefined}>{r.ourAsins ?? '—'}</span>,
     },
     {
       key: 'pwScore', label: tip('Position-weighted', "Share re-expressed in top-of-search-equivalent units: share × (top mix + rest mix × the account's own measured rest:top CTR ratio)."),
@@ -68,12 +71,14 @@ function coverageColumns(maxShare: number, tosIsMeasured: boolean): Array<Column
     {
       key: 'topMix', label: tip('Top mix', 'Share of our paid search impressions that sat in top-of-search, from the placement mix of the campaigns holding this term.'),
       prefsLabel: 'Top mix', align: 'right', sortable: true, sortValue: (r) => num(r.topMix),
-      render: (r) => <span title={POSITION_WHY[r.positionBasis] || undefined}>{r.topMix != null ? pctOf(r.topMix) : <span className="cov-unk">—</span>}</span>,
+      render: (r) => <span title={POSITION_WHY[r.positionBasis] || undefined}>{r.topMix != null ? sharePct(r.topMix, 0) : <span className="cov-unk">—</span>}</span>,
     },
     {
-      key: 'tosIS', label: tip('ToS-IS', "Amazon's own top-of-search impression share for the holding campaigns."),
-      prefsLabel: 'ToS-IS', align: 'right', sortable: true, sortValue: (r) => num(r.tosIS),
-      render: (r) => <span title={tosIsMeasured ? undefined : 'Amazon has not returned this metric yet — the ingest is fixed but has not run.'}>{r.tosIS != null ? pctOf(r.tosIS) : <span className="cov-unk">—</span>}</span>,
+      // Not Amazon's own number for this term: Amazon reports top-of-search IS per CAMPAIGN and day; Nexus averages the
+      // campaigns holding the term, impression-weighted, over a rolling 30 days — a different window from the SQP week.
+      key: 'tosIS', label: tip('ToS IS (30-day, Nexus)', "Top-of-search impression share of the campaigns holding this term — Amazon reports it per campaign and day; Nexus averages those campaigns' daily shares, impression-weighted, over the last 30 days (not the selected week)."),
+      prefsLabel: 'ToS IS (30-day, Nexus)', align: 'right', sortable: true, sortValue: (r) => num(r.tosIS),
+      render: (r) => <span title={tosIsMeasured ? undefined : 'Amazon has not returned this metric yet — the ingest is fixed but has not run.'}>{r.tosIS != null ? sharePct(r.tosIS, 0) : <span className="cov-unk">—</span>}</span>,
     },
     {
       key: 'targets', label: tip('Keywords', 'Non-negative keywords targeting this exact term in this marketplace.'),
@@ -130,8 +135,18 @@ interface Board {
 }
 
 const intl = (v: number | null) => (v == null ? '—' : v.toLocaleString('en-IE'))
-const pct = (v: number | null) => (v == null ? '—' : `${(v * 100).toFixed(2)}%`)
+/** A share: "—" for no reading, "<0.01%" for a tiny non-zero one — never a rounded "0.00%" (the ads console's one rule). */
+const pct = (v: number | null) => sharePct(v)
+/** A ratio that is not a share (the rest:top weight) — whole percent. */
 const pctOf = (v: number) => `${Math.round(v * 100)}%`
+/** A Brand Analytics week by its Sunday start — "week of 27 Sep 2026 · started 13 d ago". */
+const weekLabel = (start: string | null, now = Date.now()): string => {
+  if (!start) return '—'
+  const d = new Date(`${start}T00:00:00Z`)
+  if (Number.isNaN(d.getTime())) return start
+  const ago = Math.max(0, Math.floor((now - d.getTime()) / 86_400_000))
+  return `week of ${d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })} · started ${ago} d ago`
+}
 /**
  * Why a null here is never rendered as 0%: `positionBasis` names the reason, and a coverage
  * board that prints 0% for "we have no evidence" says we are absent from the top of the page,
@@ -186,7 +201,7 @@ export function CoverageClient() {
     <div className="cov">
       <AdsPageHeader
         title="Coverage"
-        subtitle="How much of page one we hold, per keyword — market size, our share, and what we hold it with."
+        subtitle="Our impression share per search term (Amazon Search Query Performance, weekly) — market size, our share, and what we hold it with."
         // AM-27 — offer only the markets this page can serve (those with search-query data), never "All markets", and
         // show the market the board really is: the server answers for the first served market when the chosen one has
         // no data, and the header used to keep naming the chosen one.
@@ -219,7 +234,7 @@ export function CoverageClient() {
         <>
           <div className="cov-top">
             <div className="cov-hero">
-              <div className="cov-hero-k">Share of page one · {board.week ?? '—'}</div>
+              <div className="cov-hero-k">Impression share (SQP) · {weekLabel(board.week)}</div>
               <div className="cov-hero-v">
                 {pct(board.totals.share)}
                 <span className="cov-hero-sub">
@@ -254,7 +269,7 @@ export function CoverageClient() {
                 >
                   {board.weeks.map((w) => (
                     <option key={w.startDate} value={w.startDate}>
-                      {w.startDate}{w.measured ? '' : ' · not measured'}
+                      {weekLabel(w.startDate)}{w.measured ? '' : ' · not measured'}
                     </option>
                   ))}
                 </Select>

@@ -32,6 +32,7 @@ import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { useAdsMarketplace, useSharedAdsMarket } from '../../_shell/MarketplaceContext'
 import { RulesTabs, rulesTabHeader } from '../_shared/tabs'
 import { RulesGrid } from '../_shared/RulesGrid'
+import { keywordFeedWeek, ranksMeasured, type KeywordFeedMeasured } from '../_shared/PerformanceCriteria'
 
 
 interface FeedHealth {
@@ -41,6 +42,8 @@ interface FeedHealth {
   newestCapturedAt: string | null
   coveredTargets: number
   totalTargets: number
+  /** readings younger than `maxAgeDays`, and how many carry each field (the Brand Analytics feed fills searchVolume only) */
+  measured?: KeywordFeedMeasured
 }
 
 /**
@@ -70,28 +73,40 @@ function FeedStrip() {
   if (feed.rows === 0) {
     return (
       <p className="h10-ktp-strip" role="status">
-        <span className="warn">⚠ No keyword rank has ever been recorded.</span>
+        <span className="warn">⚠ No keyword reading has been recorded yet.</span>
         <span>
-          These rules bid on organic and paid rank, and the rank feed is empty — <b>0</b> observations
-          against <b>{n(feed.totalTargets)}</b> keyword targets in your campaigns. A rule created here
-          would match nothing on every run, so the builder holds Create until the feed has data.
+          These rules read each keyword’s weekly search volume (Amazon Brand Analytics); organic and
+          sponsored rank have no Amazon source. The feed is empty — <b>0</b> readings against{' '}
+          <b>{n(feed.totalTargets)}</b> keyword targets in your campaigns. A rule created here would match
+          nothing on every run, so the builder holds Create until the feed has data.
         </span>
       </p>
     )
   }
+  /**
+   * Free visibility numbers (2026-10-10) — every row the feed writes is a SEARCH-VOLUME reading (Brand Analytics, one
+   * week per row); the strip called them "rank observations". It now says what they are, which week the newest covers,
+   * and how many fresh readings carry each rank — 0 unless a hand import supplied one (`feed.measured`).
+   */
+  const m = feed.measured
+  const noRanks = ranksMeasured(m) === false
+  const week = noRanks ? keywordFeedWeek(feed.newestCapturedAt) : null
   const age = feed.newestCapturedAt
     ? Math.floor((Date.now() - new Date(feed.newestCapturedAt).getTime()) / 86_400_000)
     : null
   return (
     <p className="h10-ktp-strip" role="status">
-      <span><b>{n(feed.rows)}</b> rank observations</span>
+      {m
+        ? <span><b>{n(m.searchVolume)}</b> search-volume readings in the last {m.maxAgeDays} days (Amazon Brand Analytics, weekly{week ? <>; newest week {week.label}, ended {week.ageDays === 0 ? 'today' : `${week.ageDays} d ago`}</> : null})</span>
+        : <span><b>{n(feed.rows)}</b> keyword readings</span>}
+      {m && (<><span className="sep">·</span><span>organic rank <b>{n(m.organicRank)}</b> · sponsored rank <b>{n(m.sponsoredRank)}</b>{noRanks ? ' — no Amazon source' : ' (hand import)'}</span></>)}
       <span className="sep">·</span>
       <span><b>{n(feed.keywords)}</b> keywords across <b>{feed.markets}</b> {feed.markets === 1 ? 'market' : 'markets'}</span>
       <span className="sep">·</span>
       {/* The reach that matters is not the feed's size but how much of it a rule can act on: a
           keyword we do not bid on cannot have its bid changed. */}
       <span><b>{n(feed.coveredTargets)}</b> of <b>{n(feed.totalTargets)}</b> keyword targets covered</span>
-      {age != null && (<><span className="sep">·</span><span>newest {age === 0 ? 'today' : `${age}d old`}</span></>)}
+      {!week && age != null && (<><span className="sep">·</span><span>newest reading {age === 0 ? 'today' : `${age} d old`}</span></>)}
     </p>
   )
 }

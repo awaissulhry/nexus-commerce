@@ -34,6 +34,7 @@ describe('ACoS and other percents (a FRACTION in)', () => {
     expect(pct(0.038)).toBe('3.80%') // …and 3.8%
     expect(pct(0.385)).toBe(gridPct(0.385))
     expect(formatCell(0.385, 'pct', 'EUR')).toBe('38.50%') // the runner printed 38.5%
+    expect(formatCell(0.00002, 'pct', 'EUR')).toBe('<0.01%') // a tiny share, never a rounded 0.00%
     expect(businessPct(0.385)).toBe('38.50%') // the business context panel printed 38.5%
   })
   it('no value is a dash', () => {

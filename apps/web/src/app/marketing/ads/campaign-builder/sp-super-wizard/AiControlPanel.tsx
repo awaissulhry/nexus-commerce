@@ -40,11 +40,13 @@ export const aiGuardrailsToCents = (g: AiGuardrails) => ({
 })
 
 const GOALS: Array<{ key: AiGoal; label: string; desc: string; Icon: typeof Target }> = [
-  { key: 'LAUNCH', label: 'Launch', desc: 'Maximise impressions & rank for a new product — looser ACoS, fast ramp.', Icon: Megaphone },
+  { key: 'LAUNCH', label: 'Launch', desc: 'Maximise impressions for a new product — looser ACoS, fast ramp.', Icon: Megaphone },
   { key: 'PROFIT', label: 'Profit', desc: 'Protect margin — profit-native target ACoS, conservative ramp, tight caps.', Icon: Target },
   { key: 'BALANCED', label: 'Balanced', desc: 'Scale efficiently at your target ACoS with sensible defaults.', Icon: Scale },
   { key: 'LIQUIDATE', label: 'Liquidate', desc: 'Clear inventory — max orders, high budgets, inventory-aware.', Icon: ShoppingCart },
-  { key: 'DEFEND_RANK', label: 'Defend Rank', desc: 'Hold Top-of-Search impression share within an ACoS cap.', Icon: Trophy },
+  // Free visibility numbers (2026-10-10, F2) — nothing in the autopilot reads this goal's top-of-search settings and its
+  // top-of-search IS input is not fed, so it runs exactly like Balanced. The card says so instead of promising a hold.
+  { key: 'DEFEND_RANK', label: 'Top-of-search', desc: 'Runs exactly like Balanced today: bids toward your target ACoS, budget pacing, harvesting. Nothing reads top-of-search impression share yet, so nothing holds it.', Icon: Trophy },
 ]
 const AUTONOMY: Array<{ key: AiAutonomy; label: string; desc: string }> = [
   { key: 'SUGGEST', label: 'Suggest', desc: 'AI proposes changes; you approve them. Recommended.' },
@@ -54,8 +56,8 @@ const AUTONOMY: Array<{ key: AiAutonomy; label: string; desc: string }> = [
 const MODULES: Array<{ key: keyof AiModules; label: string; note?: string }> = [
   { key: 'bid', label: 'Bid optimization' },
   { key: 'budget', label: 'Budget pacing' },
-  { key: 'placement', label: 'Placement tuning' },
-  { key: 'rank', label: 'Rank defense' },
+  { key: 'placement', label: 'Placement tuning', note: 'needs top-of-search impression share, which is not fed yet — proposes nothing' },
+  { key: 'rank', label: 'Top-of-search share', note: 'not built — on or off changes nothing' },
   { key: 'dayparting', label: 'Dayparting' },
   { key: 'harvest', label: 'Keyword harvesting', note: 'via Rule Setting' },
   { key: 'negate', label: 'Negative targeting', note: 'via Rule Setting' },
@@ -76,7 +78,7 @@ export function AiControlPanel({ value, onChange }: { value: AiControlConfig; on
   return (
     <>
       <div className="h10-spw-card">
-        <h3><Sparkles size={16} /> AI Goal <InfoTip tip="Pick one outcome. The AI configures every control module — bids, budgets, placements, rank, dayparting — to pursue it within your guardrails." /></h3>
+        <h3><Sparkles size={16} /> AI Goal <InfoTip tip="Pick one outcome. The AI runs the control modules you switch on below to pursue it within your guardrails." /></h3>
         <p className="h10-spw-desc">Choose the goal for this campaign set. You can change it any time from the control canvas.</p>
         <div className="h10-ai-goals">
           {GOALS.map((go) => <RadioCard key={go.key} name="ai-goal" title={go.label} description={go.desc} selected={value.goal === go.key} checked={value.goal === go.key} onChange={() => set({ goal: go.key })} />)}

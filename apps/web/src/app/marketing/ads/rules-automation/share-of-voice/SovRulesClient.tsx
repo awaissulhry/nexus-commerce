@@ -59,6 +59,13 @@ const sharePct = (f: number | null): string => {
   return `${(f * 100).toFixed(2)}%`
 }
 
+/** A Brand Analytics week by its Sunday start, "27 Sep" — `week` is the start date (YYYY-MM-DD). */
+const weekOf = (iso: string | null): string => {
+  if (!iso) return '—'
+  const d = new Date(`${iso}T00:00:00Z`)
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })
+}
+
 export function SovRulesClient() {
   const router = useRouter()
   const params = useSearchParams()
@@ -121,12 +128,13 @@ export function SovRulesClient() {
           carry a market share{counts.medianPct != null && <> · median <b>{sharePct(counts.medianPct)}</b></>}
           {counts.underOnePct > 0 && <> · <b>{counts.underOnePct.toLocaleString('en-IE')}</b> under 1%</>}
           {shown.filter((p) => !p.refused).length > 0 && (
-            <> · Amazon’s week: {shown.filter((p) => !p.refused).map((p) => `${p.marketplace} ${p.week}${p.ageDays != null ? ` (${p.ageDays}d)` : ''}`).join(' · ')}</>
+            /* `ageDays` counts from the week's START (Sunday), so it is said as "started N d ago", never as the data's age. */
+            <> · Amazon’s week: {shown.filter((p) => !p.refused).map((p) => `${p.marketplace} week of ${weekOf(p.week)}${p.ageDays != null ? ` (started ${p.ageDays} d ago)` : ''}`).join(' · ')}</>
           )}
           {/* A market the gate refused is the one thing a count cannot show: those keywords are not
               "unmeasured", they are deliberately not offered until Amazon publishes a whole week. */}
           {refused.length > 0 && <> · <b>{refused.map((p) => p.marketplace).join('/')}</b> skipped — no complete week yet</>}
-          {' '}· shares come from Amazon’s own search-query report
+          {' '}· impression share of our ASINs, computed by Nexus from Amazon’s weekly Search Query Performance counts
         </p>
       )}
       <RulesGrid

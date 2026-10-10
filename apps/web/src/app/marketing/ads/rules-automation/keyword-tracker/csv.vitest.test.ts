@@ -57,6 +57,12 @@ describe('buildCsv', () => {
     expect(csv).toContain('0.00%')
   })
 
+  it('exports a tiny measured share as "<0.01%", never a rounded 0.00% (free visibility numbers, 2026-10-10)', () => {
+    const csv = buildCsv([row({ state: 'measured', impressionShare: 0.00003 })], payload)
+    expect(csv).toContain('<0.01%')
+    expect(csv).not.toContain('0.00%')
+  })
+
   it('says "no earlier week" rather than leaving the Δ blank on a measured row', () => {
     const csv = buildCsv([row({ deltaPP: null })], payload)
     expect(csv).toContain('no earlier week')

@@ -6,7 +6,7 @@
  *
  * AIAD.4 made the builder honest and evidence-based:
  *  - the goal carries a MARKETPLACE (was silently defaulting to IT at materialization);
- *  - five strategies (Impression&Click / Sales / ROAS / Liquidate / Defend Rank) mapping to
+ *  - five strategies (Impression&Click / Sales / ROAS / Liquidate / Top-of-search, which runs as Sales) mapping to
  *    the Conductor's presets — a superset of Perpetua's four and H10's three;
  *  - Target ACoS + bid-band dials feed the plan's guardrails;
  *  - Suggested keywords are the ASINs' real converting search terms (clicks · orders · sales,
@@ -66,7 +66,9 @@ const TARGETS: Array<{ key: TargetKey; title: string; Icon: ComponentType<{ size
   { key: 'sales', title: 'Sales', Icon: IconBars, bestFor: 'Gross Revenue', desc: 'This strategy aims to increase orders and sales. It is suitable for products that require orders.' },
   { key: 'roas', title: 'ROAS', Icon: IconLine, bestFor: 'Most Scenarios', desc: 'This strategy emphasizes an adjustment mode focused on ROAS/ACOS and is suitable for most scenarios.' },
   { key: 'liquidate', title: 'Liquidate', Icon: IconLiquidate, bestFor: 'Clearing Inventory', desc: 'Maximize sell-through at a relaxed efficiency target — for overstocked or end-of-life products.' },
-  { key: 'rank', title: 'Defend Rank', Icon: IconShieldRank, bestFor: 'Protecting Position', desc: 'Hold visibility on the terms you own — Top-of-Search emphasis with steady, defensive pacing.' },
+  // Free visibility numbers (2026-10-10, F2) — RANK becomes the DEFEND_RANK plan, which runs exactly like Sales/Balanced:
+  // nothing in the autopilot reads its top-of-search settings, and its top-of-search IS input is not fed.
+  { key: 'rank', title: 'Top-of-search', Icon: IconShieldRank, bestFor: 'Runs as Sales today', desc: 'Runs exactly like Sales today — bids toward your target ACoS, steady pacing, harvesting. Nothing reads top-of-search impression share yet, so no top-of-search emphasis runs.' },
 ]
 const TARGET_API: Record<TargetKey, string> = { impression: 'IMPRESSION', sales: 'SALES', roas: 'ROAS', liquidate: 'LIQUIDATE', rank: 'RANK' }
 const BUDGET_MODES: Array<{ key: BudgetMode; title: string; Icon: typeof CheckSquare; desc: string; audience: string; chips: string[] }> = [
