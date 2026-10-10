@@ -22,12 +22,21 @@
  *                   rule (D1 = B).
  *   undo            the pair put back as a pair (undoHarvest): the gate asked for both halves first, the source negatives
  *                   retired, then the keyword paused — never a keyword paused while a source still blocks the term.
+ *   landing         (harvest fix B1 + B10, harvest-landing-guard.ts) before anything is written: an archived keyword of the
+ *                   term or a negative that blocks it in the destination, or a destination that does not serve, holds the
+ *                   pair (HELD, nothing written, decided again by the next run); an enabled one is the keyword (nothing
+ *                   created). A paused one is switched on again at the start bid (held as a create's) instead of a create —
+ *                   but that is no landing yet: the pair is HALF_DONE with every source still owed, and the next run sends
+ *                   them once Amazon confirmed the switch. A keyword that already stands is asked again before an owed
+ *                   source negative is sent: one paused, unconfirmed, stopped or blocked since sends none (the term would
+ *                   serve nowhere) — the negatives stay owed and the next run tries again.
  */
 import type { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
 import { logger } from '../../../utils/logger.js'
 import { checkAdsWriteGate } from '../ads-write-gate.js'
 import { createKeywordLocal, createTargetLocal } from '../ads-create.service.js'
+import { checkLanding, enableLanding, servingLandings, switchOnBid } from '../harvest-landing-guard.js'
 import { writeNegativeKeyword, writeNegativeProductTarget } from '../ads-negative-kw.service.js'
 import { HARVEST_ACTOR, JUDGE_AFTER_MS, type HarvestStatus, type NewCampaignPlan, type SourcePlan } from './harvest.js'
 
@@ -62,7 +71,8 @@ const json = (v: unknown) => v as Prisma.InputJsonValue
 
 export interface PairOutcome {
   status: HarvestStatus
-  keyword: { targetId: string | null; externalTargetId: string | null; existed: boolean } | null
+  /** `confirmed` false: switched on again, Amazon has not confirmed it yet (the judging clock waits); `bidCents`: written. */
+  keyword: { targetId: string | null; externalTargetId: string | null; existed: boolean; confirmed?: boolean; bidCents?: number | null } | null
   sources: SourceState[]
   why: string
   error: string | null
@@ -127,6 +137,18 @@ export async function writePair(p: { term: string; isAsin: boolean; destAdGroupI
   const keywordPending = !p.keywordTargetId
   // A negative the gate or the Owner refused is named, not retried by the brain; a person's approval asks for it again.
   const owes = (s: SourceState) => s.action === 'negate' && s.result !== 'landed' && (p.retryRefused === true || s.result !== 'refused')
+  // Harvest fix B1 + B10 — the landing guard (see the header): nothing is written where the term could not serve.
+  const landing = keywordPending ? await checkLanding({ adGroupId: p.destAdGroupId, term: p.term, match: p.isAsin ? 'PRODUCT' : 'EXACT' }) : null
+  if (landing && (landing.kind === 'hold' || (landing.kind !== 'enable' && !landing.serves))) {
+    const why = landing.kind === 'hold' ? landing.why : `${landing.why}: the brain never harvests into a destination that does not serve`
+    return { status: 'HELD', keyword: null, sources: [...p.sources], why: `held — ${why}`, error: why }
+  }
+  if (!keywordPending && p.sources.some(owes) && !(await servingLandings([{ adTargetId: p.keywordTargetId!, term: p.term }])).size) {
+    const why = `the ${p.isAsin ? 'product target' : 'keyword'} is not enabled at Amazon (or its switch-on is not confirmed yet) in a serving ad group now, or a negative there blocks the term: no source is negated (the term would serve nowhere)`
+    const sources = p.sources.map((s) => (owes(s) ? { ...s, result: 'failed' as const, error: why } : s))
+    // Not serving now: no landing, so the judging clock does not start here (a pair that landed before keeps its own).
+    return { status: 'HALF_DONE', keyword: { targetId: p.keywordTargetId, externalTargetId: null, existed: true, confirmed: false }, sources, why: `the keyword stands, but ${why}; retried by the next run`, error: why }
+  }
   const pre = await preflightPair({ ...p, keywordPending, sources: p.sources.filter(owes) }, who)
   if (!('ok' in pre)) {
     const why = `the write gate refuses the ${pre.half === 'keyword' ? 'keyword' : 'source negative'} (${pre.deniedAt}: ${pre.refusal})`
@@ -135,7 +157,26 @@ export async function writePair(p: { term: string; isAsin: boolean; destAdGroupI
     return { status: 'HALF_DONE', keyword: { targetId: p.keywordTargetId, externalTargetId: null, existed: true }, sources, why: `the keyword stands; ${why}`, error: why }
   }
   let keyword: PairOutcome['keyword'] = { targetId: p.keywordTargetId, externalTargetId: null, existed: true }
-  if (keywordPending) {
+  if (keywordPending && landing?.kind === 'enable') {
+    // A paused keyword of the term in the destination: switched on again at the start bid (the bid the request showed).
+    // No landing yet: every source stays owed until Amazon confirmed the switch (the next run, servingLandings above).
+    const sw = await switchOnBid({ targetId: landing.targetId, wantCents: p.bidCents, who })
+    const on = await enableLanding(landing.targetId, sw.cents, { actor: who.actor, manual: who.manual, confirmOwnLimits: who.confirmOwnLimits, changeSetId: who.changeSetId, reason: `${who.reason} — ${landing.why}` })
+    if (!on.ok) {
+      const why = `${landing.why} — but the switch was refused (${on.why}): nothing was negated, nothing changed`
+      return { status: 'REFUSED', keyword: null, sources: [...p.sources], why, error: on.why }
+    }
+    const kw = { targetId: landing.targetId, externalTargetId: landing.externalTargetId, existed: true, confirmed: false, bidCents: on.bidCents }
+    const wait = 'waiting for Amazon to confirm the switch-on: sent by the next run'
+    const sources = p.sources.map((s) => (owes(s) ? { ...s, result: 'failed' as const, error: wait } : s))
+    const owedNow = sources.filter((s) => s.action === 'negate' && s.result !== 'landed').length
+    return owedNow
+      ? { status: 'HALF_DONE', keyword: kw, sources, why: `the paused ${p.isAsin ? 'product target' : 'keyword'} was switched on again${sw.held ? ` (its bid ${sw.held})` : ''}; ${owedNow === 1 ? 'its source negative waits' : `its ${owedNow} source negatives wait`} for Amazon to confirm the switch-on: sent by the next run`, error: wait }
+      : { status: 'DONE', keyword: kw, sources, why: `the paused ${p.isAsin ? 'product target' : 'keyword'} was switched on again${sw.held ? ` (its bid ${sw.held})` : ''}; no source to negate`, error: null }
+  } else if (keywordPending && landing?.kind === 'landed') {
+    // An enabled keyword of the term already runs there: it is the keyword (the row the guard found, never another).
+    keyword = { targetId: landing.targetId, externalTargetId: landing.externalTargetId, existed: true }
+  } else if (keywordPending) {
     const k = await addKeyword(p, who)
     if (!k.landed) {
       const why = `the ${p.isAsin ? 'product target' : 'keyword'} did not reach Amazon (${k.reason ?? 'no id came back'}): nothing was negated, nothing changed`
@@ -160,11 +201,14 @@ export async function writePair(p: { term: string; isAsin: boolean; destAdGroupI
  * the campaign went live).
  */
 export function outcomeData(o: PairOutcome, now: Date, landedBefore: Date | null = null): Prisma.AdsBrainHarvestUpdateInput {
-  const stands = o.status === 'DONE' || o.status === 'HALF_DONE'
+  // A switch-on Amazon has not confirmed is no landing yet: the clock starts with the pair the next run completes.
+  const stands = o.status === 'DONE' || (o.status === 'HALF_DONE' && o.keyword?.confirmed !== false)
   return {
     status: o.status,
+    ...(o.status === 'HELD' ? { heldBy: o.error } : {}),
     sources: json(o.sources),
     ...(o.keyword?.targetId ? { keywordTargetId: o.keyword.targetId } : {}),
+    ...(o.keyword?.bidCents != null ? { bidCents: o.keyword.bidCents } : {}),
     ...(stands && !landedBefore ? { landedAt: now, judgeAfter: new Date(now.getTime() + JUDGE_AFTER_MS), verdict: 'WAITING' } : {}),
     lastError: o.error,
     why: o.why,

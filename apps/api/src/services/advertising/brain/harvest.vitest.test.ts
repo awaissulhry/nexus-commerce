@@ -127,6 +127,28 @@ describe('AB-11 — the destination: the Owner\'s, the playbook\'s, the product\
     expect(chooseDestination(TOURING(), productFacts({}, [group('g-auto', { role: 'AUTO', manual: false })]))).toMatchObject({ kind: 'NONE', why: expect.stringMatching(/no exact ad group/) })
   })
 
+  it('harvest fix B1 + B10 — an archived exact keyword of the term, or a negative that blocks it, there: never a destination; the next one takes it, or it is held by name', () => {
+    // An archived exact keyword of the term in the only exact ad group: held, never a second structure beside it.
+    const archived = [group('g-auto', { role: 'AUTO', manual: false }), group('g-exact', { archived: new Set(['touring jacket']) })]
+    expect(chooseDestination(TOURING(), productFacts({}, archived))).toEqual({ held: expect.stringMatching(/cannot take it now: "g-exact" — the exact keyword "touring jacket" there is archived: Amazon cannot switch an archived one on again/) })
+    // Another term in that ad group is not held by it (the key is the term's).
+    expect(chooseDestination(candidate('rain jacket', ev(150, 5, 3000, 40_000)), productFacts({}, archived))).toMatchObject({ kind: 'EXISTING', adGroupId: 'g-exact' })
+    // Two exact ad groups: the one that can take it does.
+    const two = [group('g-auto', { role: 'AUTO', manual: false }), group('g-a', { keywords: 40, archived: new Set(['touring jacket']) }), group('g-b', { keywords: 12 })]
+    expect(chooseDestination(TOURING(), productFacts({}, two))).toMatchObject({ kind: 'EXISTING', how: 'own', adGroupId: 'g-b' })
+    // A negative phrase of the destination's campaign that blocks the term (B10): the Owner's stored destination holds whole.
+    const blocked: TermPlace = { campaignId: 'c-g-exact', adGroupId: 'g-exact', targetId: 'n9', match: 'PHRASE', level: 'CAMPAIGN', text: 'touring' }
+    const c = candidate('touring jacket', ev(150, 5, 3000, 40_000), { negatives: [blocked] })
+    const stored = { adGroupId: 'g-exact', negateAtSource: true, grain: 'portfolio', own: true }
+    expect(chooseDestination({ ...c, stored }, productFacts())).toEqual({ held: expect.stringMatching(/cannot take it now: a negative phrase "touring" in campaign "campaign g-exact" blocks "touring jacket" there: a keyword for it would never show/) })
+    // A negative in a source only (not the destination) holds nothing here.
+    const inSource: TermPlace = { campaignId: 'c-g-auto', adGroupId: 'g-auto', targetId: 'n8', match: 'EXACT', level: 'AD_GROUP' }
+    expect(chooseDestination(candidate('touring jacket', ev(150, 5, 3000, 40_000), { negatives: [inSource] }), productFacts())).toMatchObject({ kind: 'EXISTING', adGroupId: 'g-exact' })
+    // An ASIN: its archived product target.
+    const f = productFacts({}, [group('g-pat', { role: 'EXACT', productTargets: 4, archived: new Set(['B0JACKET01']) })])
+    expect(destinationRefusal(f.groups.get('g-pat'), 'b0jacket01', true, f)).toMatch(/the product target "b0jacket01" there is archived/)
+  })
+
   it('the Owner\'s campaign settings: an excluded campaign, a locked harvest lever or a locked term is never a destination', () => {
     const f = productFacts()
     const g = f.groups.get('g-exact')!

@@ -45,6 +45,21 @@ vi.mock('./ads-protect-converting.js', () => ({
   normaliseNegTerm: (s: string) => s.trim().toLowerCase(),
 }))
 vi.mock('../../utils/logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }))
+// Harvest fix B1 + B10 — the landing guard (harvest-landing-guard.ts) is pinned in its own tests: here every landing passes
+// (nothing of the term in the destination, serving), and every home serves, unless a test says otherwise.
+const landingGuard = vi.hoisted(() => ({
+  check: vi.fn(async (..._a: unknown[]) => ({ kind: 'create', serves: true, why: 'nothing there' }) as Record<string, unknown>),
+  enable: vi.fn(async (..._a: unknown[]) => ({ ok: true, actionLogId: 'log-on' }) as Record<string, unknown>),
+  serving: vi.fn(async (items: Array<{ adTargetId: string }>) => new Set(items.map((i) => i.adTargetId))),
+  switchBid: vi.fn(async (a: { wantCents: number }) => ({ cents: a.wantCents, currentCents: 10, held: null }) as Record<string, unknown>),
+}))
+vi.mock('./harvest-landing-guard.js', async (original) => ({
+  ...(await original<object>()),
+  checkLanding: (...a: unknown[]) => landingGuard.check(...a),
+  enableLanding: (...a: unknown[]) => landingGuard.enable(...a),
+  servingLandings: (items: Array<{ adTargetId: string }>) => landingGuard.serving(items),
+  switchOnBid: (a: { wantCents: number }) => landingGuard.switchBid(a),
+}))
 // AB-11 — a graduation with no destination named gets the harvest destination the Keyword Harvest page's resolver gives.
 let resolved: { chosen: { adGroupId: string } | null; source: string; shortlist: unknown[] } = { chosen: null, source: 'none', shortlist: [] }
 let storedDest = new Map<string, { adGroupId: string; negateAtSource: boolean }>()
@@ -121,6 +136,11 @@ beforeEach(() => {
   findProductAds.mockResolvedValue([])
   findProducts.mockReset()
   findProducts.mockResolvedValue([])
+  // Harvest fix B1 + B10 — the guard lets every landing through unless a test says otherwise.
+  landingGuard.check.mockReset(); landingGuard.enable.mockReset(); landingGuard.serving.mockReset()
+  landingGuard.check.mockResolvedValue({ kind: 'create', serves: true, why: 'nothing there' })
+  landingGuard.enable.mockResolvedValue({ ok: true, actionLogId: 'log-on' })
+  landingGuard.serving.mockImplementation(async (items: Array<{ adTargetId: string }>) => new Set(items.map((i) => i.adTargetId)))
 })
 
 describe('HV.8a — the wasteful negation reports what actually landed', () => {
@@ -322,6 +342,142 @@ describe('5d — the isolation negative follows a landing elsewhere', () => {
  * PB-6a — winners stay. L1 binds every caller; L2 and the handover (the Owner's choice: the source is closed only once the
  * new home meets the harvest bar there) bind a rule's harvest (`rule`). Made-up terms and ids.
  */
+/**
+ * Harvest fix B1 + B10 (harvest-landing-guard.ts, its own tests pin the decision) — a landing that cannot serve the term is
+ * no landing: an archived keyword of it, or a negative that blocks it, holds the destination; a paused one is switched on
+ * again instead of "found"; a destination that does not serve never negates the source; a rule hands a term over only to
+ * a home that serves. Values are made up (public repo).
+ */
+describe('harvest fix B1 + B10 — the landing guard decides what counts as landed', () => {
+  const grad = { ...(candidate as object), orders: 3 } as never
+  const dest = { EXACT: 'dst-exact' }
+  const hold = (deniedAt: string, words: string) => ({ kind: 'hold', deniedAt, why: `ad group "Exact" cannot take "giacca moto": ${words}. Nothing was written there and the source is not negated` })
+  beforeEach(() => {
+    createKeywordLocal.mockResolvedValue({ id: 'k1', externalTargetId: 'AMZ-K1' })
+    writeNegativeKeyword.mockResolvedValue(result({ externalTargetId: 'AMZ-N1', reachedAmazon: true }))
+  })
+
+  it('an archived keyword of the term in the destination: held — nothing created, the source never negated', async () => {
+    landingGuard.check.mockResolvedValue(hold('landing_archived', 'the exact keyword "giacca moto" there is archived'))
+    const r = await applyHarvest({ graduations: [grad], destinations: dest })
+    expect(landingGuard.check).toHaveBeenCalledWith({ adGroupId: 'dst-exact', term: 'giacca moto', match: 'EXACT' })
+    expect(createKeywordLocal).not.toHaveBeenCalled()
+    expect(writeNegativeKeyword).not.toHaveBeenCalled()
+    expect(r.keywordsGraduated).toBe(0)
+    expect(r.outcomes[0]).toMatchObject({ outcome: 'refused', negative: null, refusal: { deniedAt: 'landing_archived', reason: expect.stringMatching(/archived/) } })
+  })
+
+  it('a negative that blocks the term in the destination (B10): held the same', async () => {
+    landingGuard.check.mockResolvedValue(hold('landing_negative', 'a negative phrase "giacca" in campaign "Exact" blocks "giacca moto" there'))
+    const r = await applyHarvest({ graduations: [grad], destinations: dest })
+    expect(createKeywordLocal).not.toHaveBeenCalled()
+    expect(writeNegativeKeyword).not.toHaveBeenCalled()
+    expect(r.outcomes[0]).toMatchObject({ outcome: 'refused', refusal: { deniedAt: 'landing_negative', reason: expect.stringMatching(/blocks "giacca moto"/) } })
+  })
+
+  const SWITCH = 'switch on the paused exact keyword "giacca moto" in ad group "Exact" again, at the harvest\'s start bid (nothing is created); its source is negated only once Amazon confirms it'
+
+  it('a paused keyword of the term: switched on again with the start bid (never "found") — and the source is NOT negated until Amazon confirms it', async () => {
+    landingGuard.check.mockResolvedValue({ kind: 'enable', targetId: 'k-paused', externalTargetId: 'AMZ-KP', why: SWITCH })
+    landingGuard.switchBid.mockResolvedValueOnce({ cents: 45, currentCents: 10, held: 'held by the ads strategy\'s band' })
+    const r = await applyHarvest({ graduations: [grad], destinations: dest, userId: 'user:owner' })
+    expect(landingGuard.switchBid).toHaveBeenCalledWith({ targetId: 'k-paused', wantCents: 60, who: { actor: 'user:owner' } }) // 1795 / 30 clicks
+    expect(landingGuard.enable).toHaveBeenCalledWith('k-paused', 45, expect.objectContaining({ actor: 'user:owner' }))
+    expect(createKeywordLocal).not.toHaveBeenCalled()
+    expect(writeNegativeKeyword).not.toHaveBeenCalled()
+    expect(r.keywordsGraduated).toBe(0)
+    expect(r.outcomes[0]).toMatchObject({ outcome: 'acted', targetId: 'k-paused', externalTargetId: 'AMZ-KP', negative: null })
+    expect(r.outcomes[0].negateReason).toBe(`No negative was created yet: ${SWITCH} (its bid held by the ads strategy's band) — harvest the term again once it is confirmed.`)
+  })
+
+  it('on a rule\'s harvest the outcome names the follow-up: its next handover', async () => {
+    landingGuard.check.mockResolvedValue({ kind: 'enable', targetId: 'k-paused', externalTargetId: 'AMZ-KP', why: SWITCH })
+    const r = await applyHarvest({ graduations: [grad], destinations: dest, plan: { EAG1: { negateOnLanding: true } }, rule: { criteria: { windowDays: 60, minOrders: 2 } } })
+    expect(writeNegativeKeyword).not.toHaveBeenCalled()
+    expect(r.outcomes[0].negateReason).toMatch(/the rule hands the term over on a later run\.$/)
+  })
+
+  it('an enabled keyword already there is recorded as it is (the row the guard found), nothing created, the source negated', async () => {
+    landingGuard.check.mockResolvedValue({ kind: 'landed', targetId: 'k-on', externalTargetId: 'AMZ-ON', serves: true, why: 'the exact keyword "giacca moto" already runs in ad group "Exact"' })
+    const r = await applyHarvest({ graduations: [grad], destinations: dest })
+    expect(createKeywordLocal).not.toHaveBeenCalled()
+    expect(writeNegativeKeyword).toHaveBeenCalledTimes(1)
+    expect(r.outcomes[0]).toMatchObject({ outcome: 'acted', targetId: 'k-on', externalTargetId: 'AMZ-ON', negative: { reachedAmazon: true } })
+  })
+
+  it('the switch refused: nothing negated, refused by name', async () => {
+    landingGuard.check.mockResolvedValue({ kind: 'enable', targetId: 'k-paused', externalTargetId: 'AMZ-KP', why: SWITCH })
+    landingGuard.enable.mockResolvedValue({ ok: false, why: 'campaign_allowlist: not allowlisted' })
+    const r = await applyHarvest({ graduations: [grad], destinations: dest })
+    expect(writeNegativeKeyword).not.toHaveBeenCalled()
+    expect(r.outcomes[0]).toMatchObject({ outcome: 'refused', refusal: { deniedAt: 'landing_enable', reason: expect.stringMatching(/the switch was refused \(campaign_allowlist/) } })
+  })
+
+  it('a destination that does not serve (B1): the keyword may be created there, the source is never negated', async () => {
+    landingGuard.check.mockResolvedValue({ kind: 'create', serves: false, why: 'nothing of "giacca moto" stands in ad group "Exact": it is created there; its campaign "Exact" is paused, so the source is not negated' })
+    const r = await applyHarvest({ graduations: [grad], destinations: dest })
+    expect(createKeywordLocal).toHaveBeenCalledTimes(1)
+    expect(writeNegativeKeyword).not.toHaveBeenCalled()
+    expect(r.outcomes[0].negative).toBeNull()
+    expect(r.outcomes[0].negateReason).toMatch(/paused, so the source is not negated/)
+  })
+
+  it('an ASIN the same: an archived product target held; a paused one switched on, its negative product target only once confirmed', async () => {
+    const asin = { ...(candidate as object), query: 'B0ABCD1234', orders: 3 } as never
+    const product = { productGraduations: [asin], plan: { EAG1: { graduateProduct: true } }, destinations: { PRODUCT: 'dst-pat' } }
+    writeNegativeProductTarget.mockResolvedValue({ outcome: 'created', externalTargetId: 'AMZ-NP', adTargetId: 'np1' })
+    landingGuard.check.mockResolvedValue(hold('landing_archived', 'the product target "B0ABCD1234" there is archived'))
+    const held = await applyHarvest(product)
+    expect(createTargetLocal).not.toHaveBeenCalled()
+    expect(writeNegativeProductTarget).not.toHaveBeenCalled()
+    expect(held.errors.join()).toMatch(/archived/)
+    landingGuard.check.mockResolvedValue({ kind: 'enable', targetId: 'pt-paused', externalTargetId: 'AMZ-PT', why: 'switch on the paused product target' })
+    await applyHarvest(product)
+    expect(landingGuard.check).toHaveBeenLastCalledWith({ adGroupId: 'dst-pat', term: 'B0ABCD1234', match: 'PRODUCT' })
+    expect(landingGuard.enable).toHaveBeenCalledWith('pt-paused', expect.any(Number), expect.anything())
+    expect(createTargetLocal).not.toHaveBeenCalled()
+    expect(writeNegativeProductTarget).not.toHaveBeenCalled()
+    // Confirmed at Amazon (the guard now finds it running): its source gets the negative product target.
+    landingGuard.check.mockResolvedValue({ kind: 'landed', targetId: 'pt-paused', externalTargetId: 'AMZ-PT', serves: true, why: 'runs' })
+    await applyHarvest(product)
+    expect(writeNegativeProductTarget).toHaveBeenCalledTimes(1)
+  })
+
+  it('a rule\'s handover: a home that does not serve (paused, archived campaign, or a negative there) never takes the term over', async () => {
+    const home = { id: 't-home', adGroupId: 'dst-exact', kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'giacca moto', status: 'PAUSED', externalTargetId: 'AMZ-H', isNegative: false }
+    findTargets.mockImplementation(async (a: unknown) => {
+      const where = (a as { where: { adGroupId?: { in: string[] }; isNegative?: boolean } }).where
+      return where.adGroupId?.in.includes('dst-exact') && where.isNegative === false ? [home] : []
+    })
+    homeGroups = [{ id: 'dst-exact', externalAdGroupId: 'EAG-DST', campaign: { marketplace: 'IT' } }]
+    const rule = { homeScope: ['ag1', 'dst-exact'], criteria: { windowDays: 60, minOrders: 2 } }
+    landingGuard.serving.mockResolvedValue(new Set())
+    const kept = await applyHarvest({ graduations: [grad], destinations: dest, plan: { EAG1: { negateOnLanding: true } }, rule })
+    expect(landingGuard.serving).toHaveBeenCalledWith([{ term: 'giacca moto', adGroupId: 'dst-exact', adTargetId: 't-home' }])
+    expect(createKeywordLocal).not.toHaveBeenCalled()
+    expect(writeNegativeKeyword).not.toHaveBeenCalled()
+    expect(kept.outcomes[0]).toMatchObject({ refusal: { deniedAt: 'already_home' } })
+    // The same home serving: handed over at once, as the row asks.
+    landingGuard.serving.mockResolvedValue(new Set(['t-home']))
+    await applyHarvest({ graduations: [grad], destinations: dest, plan: { EAG1: { negateOnLanding: true } }, rule })
+    expect(writeNegativeKeyword).toHaveBeenCalledTimes(1)
+  })
+
+  it('a rule\'s card proposes a switch-on as what it is, and counts it apart', async () => {
+    landingGuard.check.mockResolvedValue({ kind: 'enable', targetId: 'k-paused', externalTargetId: 'AMZ-KP', why: SWITCH })
+    const plan = await planRuleHarvest({ negatives: [], graduations: [grad], productNegatives: [], productGraduations: [], destinations: dest, rule: { criteria: { windowDays: 60, minOrders: 2 } } })
+    expect(plan.items).toEqual([{ kind: 'graduation', query: 'giacca moto', externalAdGroupId: 'EAG1', step: 'create', switchOn: true, why: `S${SWITCH.slice(1)}.` }])
+    expect(plan.switchOns).toBe(1)
+  })
+
+  it('a rule\'s card never proposes a destination the term cannot land in: it says why', async () => {
+    landingGuard.check.mockResolvedValue(hold('landing_archived', 'the exact keyword "giacca moto" there is archived'))
+    const plan = await planRuleHarvest({ negatives: [], graduations: [grad], productNegatives: [], productGraduations: [], destinations: dest, rule: { criteria: { windowDays: 60, minOrders: 2 } } })
+    expect(plan.graduations).toEqual([])
+    expect(plan.items).toEqual([expect.objectContaining({ kind: 'graduation', step: 'refused', why: expect.stringMatching(/archived/) })])
+  })
+})
+
 describe('PB-6a — winners stay', () => {
   type Row = { id: string; adGroupId: string; kind: string; expressionType: string; expressionValue: string; status: string; externalTargetId: string | null; isNegative: boolean }
   let targets: Row[] = []

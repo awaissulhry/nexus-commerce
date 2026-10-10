@@ -37,6 +37,7 @@ import prisma from '../../db.js'
 import { applyHarvest, type HarvestOutcome } from './ads-harvest.service.js'
 import { getKeywordHarvest, type HarvestRow } from './keyword-harvest.service.js'
 import { checkAdsWriteGate } from './ads-write-gate.js'
+import { checkLanding, switchOnBid } from './harvest-landing-guard.js'
 import type { AdWriteEvidence } from './ads-evidence.js'
 
 /** The floor `applyHarvest` already applies when a term has no clicks. Restated so the preview matches. */
@@ -149,10 +150,30 @@ export async function planPromotion(args: {
     // Pre-flight BOTH halves. A refusal is not a failure (C7) and it must be visible before the
     // button, not after — D5, decided two sessions ago.
     let blocked: PromotePlanRow['blocked'] = null
-    if (promotableShape) {
+    let wouldNegateAtSource = d?.wouldNegateAtSource ?? false
+    let negateReason = d?.negateReason ?? 'No destination is resolved, so nothing would be written.'
+    // Harvest fix B1 + B10 (harvest-landing-guard.ts) — the landing guard, as the write asks it: an archived keyword of the
+    // term or a negative that blocks it in the destination refuses the row; a paused one is switched on again at the bid
+    // shown (switchOnBid: the bid the write sends) and its source waits for Amazon's confirmation; a destination that does
+    // not serve never negates the source.
+    const cap = (w: string) => `${w[0].toUpperCase()}${w.slice(1)}`
+    const landing = promotableShape ? await checkLanding({ adGroupId: chosen!.adGroupId, term: r.term, match: /^b0[a-z0-9]{8}$/i.test(r.term.trim()) ? 'PRODUCT' : 'EXACT' }) : null
+    if (landing?.kind === 'hold') blocked = { deniedAt: landing.deniedAt, reason: landing.why, half: 'keyword' }
+    else if (landing?.kind === 'enable') {
+      // The write runs as the person's actor without his manual mark (applyHarvest), so the engine's step applies: as here.
+      const sw = await switchOnBid({ targetId: landing.targetId, wantCents: bid.bidCents, who: { actor: 'automation:harvest' } })
+      bid.bidCents = sw.cents
+      bid.clamped = null
+      wouldNegateAtSource = false
+      negateReason = `${cap(landing.why)}${sw.held ? ` (its bid ${sw.held})` : ''} — harvest the term again once it is confirmed.`
+    } else if (landing && !landing.serves) {
+      wouldNegateAtSource = false
+      negateReason = `${cap(landing.why)}.`
+    } else if (landing?.kind === 'landed') negateReason = `${cap(landing.why)}: nothing is created${wouldNegateAtSource ? ', and the source is negated' : ''}.`
+    if (promotableShape && !blocked) {
       const kw = await checkAdsWriteGate({ marketplace: r.market, payloadValueCents: bid.bidCents, campaignId: chosen!.campaignId, dimension: 'keywords' } as never) as { allowed: boolean; reason?: string; deniedAt?: string }
       if (!kw.allowed) blocked = { deniedAt: String(kw.deniedAt), reason: String(kw.reason), half: 'keyword' }
-      else if (d!.wouldNegateAtSource) {
+      else if (wouldNegateAtSource) {
         const neg = await checkAdsWriteGate({ marketplace: r.market, payloadValueCents: 0, campaignId: r.campaign.id ?? undefined, isNegation: true, keywordText: r.term, dimension: 'negatives' } as never) as { allowed: boolean; reason?: string; deniedAt?: string }
         if (!neg.allowed) blocked = { deniedAt: String(neg.deniedAt), reason: String(neg.reason), half: 'negative' }
       }
@@ -171,8 +192,8 @@ export async function planPromotion(args: {
       observedCpcCents: bid.observedCpcCents,
       bidCents: bid.bidCents,
       clamped: bid.clamped,
-      wouldNegateAtSource: d?.wouldNegateAtSource ?? false,
-      negateReason: d?.negateReason ?? 'No destination is resolved, so nothing would be written.',
+      wouldNegateAtSource,
+      negateReason,
       blocked,
       // 🔴 A blocked NEGATIVE half blocks the whole pair. Promoting without the isolation negative
       // is the defect this session exists to close, so it is refused rather than half-done.

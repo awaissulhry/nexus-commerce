@@ -7,7 +7,8 @@
  *   due        an enrolled product, not excluded, whose harvest lever resolves to OBSERVE, PROPOSE or AUTO (product level).
  *   groups     the product's own ad groups (campaigns that advertise it alone, brain/ownership.ts) with their role (name
  *              first, then their keywords: harvest-destination.service.ts roleOf), their size, whether they serve now
- *              (campaign and ad group enabled, the campaign's bids not suppressed) and the campaign's bid bounds.
+ *              (campaign and ad group enabled, the campaign's bids not suppressed), the campaign's bid bounds, and the
+ *              archived exact keywords and product targets Amazon holds there (harvest fix B1: they can never take those).
  *   settings   the Owner's settings per campaign (brain/settings.ts: the campaign's overrides over the product's): the
  *              exclusion, the harvest and negatives levers, their term and ad-group locks — AB-9 reads the product level
  *              only, so the harvest skips what the Owner keeps per campaign here.
@@ -36,6 +37,7 @@ import {
 } from './harvest.js'
 import type { LeverEffective, TermDecision } from './terms.js'
 import { structureCampaignsUsed } from './structure-load.js'
+import { landingKey } from '../harvest-landing-guard.js'
 
 const ACTS: readonly string[] = ['OBSERVE', 'PROPOSE', 'AUTO']
 const OVERRIDE_SELECT = { id: true, productId: true, marketplace: true, scope: true, campaignId: true, kind: true, key: true, ref: true, value: true, by: true, reason: true, createdAt: true, endedAt: true } as const
@@ -97,7 +99,7 @@ export async function loadHarvestMarket(market: string, due: readonly DueProduct
   const groupIds = [...new Set(present.flatMap((d) => [...terms.products.get(d.productId)!.adGroups]))]
   const campaignIds = [...new Set(present.flatMap((d) => [...terms.products.get(d.productId)!.campaigns]))]
   const weekAgo = new Date(now.getTime() - 7 * 86_400_000)
-  const [groups, positives, overrides, playbooks, stored, records, marketCampaigns, productAds, budgets, names, marketLimits, strategyLimits] = await Promise.all([
+  const [groups, positives, overrides, playbooks, stored, records, marketCampaigns, productAds, budgets, names, marketLimits, strategyLimits, archivedRows] = await Promise.all([
     groupIds.length ? prisma.adGroup.findMany({
       where: { id: { in: groupIds } },
       select: { id: true, name: true, status: true, campaignId: true, campaign: { select: { id: true, name: true, status: true, targetingType: true, bidsSuppressedAt: true, minBidCents: true, maxBidCents: true, portfolioId: true } } },
@@ -119,6 +121,11 @@ export async function loadHarvestMarket(market: string, due: readonly DueProduct
     prisma.campaign.findMany({ where: { adProduct: 'SPONSORED_PRODUCTS' }, select: { name: true, marketplace: true } }),
     bidLimitsFor({ marketplace: market }),
     groupIds.length ? strategyBidReader().forAdGroups(groupIds.map((id) => ({ adGroupId: id, marketplace: market }))) : Promise.resolve(new Map()),
+    // Harvest fix B1 — the archived exact keywords and product targets Amazon holds in the own ad groups.
+    groupIds.length ? prisma.adTarget.findMany({
+      where: { adGroupId: { in: groupIds }, isNegative: false, status: 'ARCHIVED', externalTargetId: { not: null }, OR: [{ kind: 'PRODUCT' }, { kind: 'KEYWORD', expressionType: { in: ['EXACT', '_EXACT'] } }] },
+      select: { adGroupId: true, kind: true, expressionValue: true },
+    }) : Promise.resolve([]),
   ])
   // AB-16 — the structure lever's new campaigns this week and its standing single-keyword campaigns: the same caps.
   const structureUsed = await structureCampaignsUsed(market, roots, weekAgo)
@@ -130,6 +137,8 @@ export async function loadHarvestMarket(market: string, due: readonly DueProduct
   const productById = new Map(products.map((p) => [p.id, p]))
   const rootNames = roots.length ? await prisma.product.findMany({ where: { id: { in: roots } }, select: { id: true, sku: true, name: true } }) : []
 
+  const archivedIn = new Map<string, Set<string>>()
+  for (const t of archivedRows) archivedIn.set(t.adGroupId, (archivedIn.get(t.adGroupId) ?? new Set()).add(landingKey(t.expressionValue, t.kind === 'PRODUCT')))
   const positivesIn = new Map<string, Array<{ kind: string; expressionType: string }>>()
   for (const t of positives) positivesIn.set(t.adGroupId, [...(positivesIn.get(t.adGroupId) ?? []), t])
   const groupFacts = new Map<string, HarvestGroup & { portfolioId: string | null }>()
@@ -147,6 +156,7 @@ export async function loadHarvestMarket(market: string, due: readonly DueProduct
       manual, keywords: keywords.length, productTargets: list.filter((t) => t.kind === 'PRODUCT').length,
       serving: notServing == null, notServing, campaignMinCents: g.campaign?.minBidCents ?? null, campaignMaxCents: g.campaign?.maxBidCents ?? null,
       portfolioId: g.campaign?.portfolioId ?? null,
+      archived: archivedIn.get(g.id) ?? new Set(),
     })
   }
 

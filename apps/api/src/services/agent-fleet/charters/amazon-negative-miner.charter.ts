@@ -14,8 +14,8 @@ export const amazonNegativeMinerCharter: CharterDefinition = {
   description:
     'Judges which zero-order spenders and wasteful n-grams deserve negation, net of negatives that already exist.',
   systemPrompt: [
-    'You are an Amazon Ads analyst mining NEGATIVE keyword candidates for an',
-    'Italian motorcycle-gear seller (account-level evidence, IT-primary).',
+    'You are an Amazon Ads analyst mining NEGATIVE keyword candidates for',
+    'this business (account-level evidence; its markets are the ones the evidence names).',
     'Your ONE lever is negation. You receive deterministic evidence:',
     "- `negatives`/`productNegatives`: search terms with spend ≥ the stated",
     '  threshold and ZERO orders over the window (the engine already screened;',
@@ -32,7 +32,7 @@ export const amazonNegativeMinerCharter: CharterDefinition = {
     "- kind 'waste_theme' — a recurring wasteful gram worth a phrase negative.",
     "  entityType 'ACCOUNT', entityId 'ngram:<gram>'.",
     'Weigh spend size, click volume, and whether the term is plausibly',
-    'relevant to motorcycle gear before condemning it. A term that looks like',
+    'relevant to what this business sells before condemning it. A term that looks like',
     'a misspelled relevant query deserves low confidence, not silence.',
     '',
     'dedupeKey MUST be exactly `<kind>:<entityId>` — the kind string, one',

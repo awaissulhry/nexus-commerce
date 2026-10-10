@@ -13,7 +13,8 @@
  *                tool keeps its own rules: this is the brain's harvest.)
  *   destination  the first that applies, each only where it can take it now (a manual ad group of the product's own
  *                campaigns with the right role, serving — campaign and ad group enabled, bids not suppressed — and the
- *                Owner's campaign settings allow it: not excluded, the harvest lever not off or locked, the term not locked):
+ *                Owner's campaign settings allow it: not excluded, the harvest lever not off or locked, the term not locked;
+ *                no archived exact keyword of the term and no negative that blocks it there — harvest-landing-guard.ts):
  *                  stored    the Owner's harvest destination for the source (set-harvest-destination): his choice wins
  *                            whole — one that cannot take it now holds the harvest, it never falls back to another
  *                  playbook  the product's exact slot (AdsPlaybookLink): a term with the product's brand word goes to its
@@ -57,10 +58,11 @@
  *   words        no money and no ACoS figure in a `why` (the read tool strips the numbers by key, so the words never carry one).
  */
 import { crLowerBound80, DEFAULT_CPC_RATIO } from '../bid-brain/estimator.js'
+import { archivedWords, landingKey, negativeWords } from '../harvest-landing-guard.js'
 import { bidForAcos, clampToRange, limitRange } from '../bid-brain/recipe.js'
 import {
   brandWordIn, harvestOrdersNeeded, negateClicksNeeded, termEstimate,
-  type LeverEffective, type ProductContext, type TermDecision, type TermEvidence,
+  type LeverEffective, type ProductContext, type TermDecision, type TermEvidence, type TermPlace,
 } from './terms.js'
 
 export const HARVEST_STATUSES = [
@@ -138,6 +140,11 @@ export interface HarvestGroup {
   /** Its campaign's own bid bounds (Campaign.minBidCents / maxBidCents). */
   campaignMinCents: number | null
   campaignMaxCents: number | null
+  /**
+   * Harvest fix B1 (harvest-landing-guard.ts) — the terms (landingKey) of the archived exact keywords and product targets
+   * with Amazon's id in it: Amazon cannot switch one on again and Nexus never adds it twice, so it can never take them.
+   */
+  archived?: ReadonlySet<string>
 }
 
 /** The Owner's settings of one campaign for this product (brain/settings.ts, the campaign's overrides over the product's). */
@@ -277,14 +284,21 @@ function leverWords(lever: 'harvest' | 'negatives' | 'structure', effective: Lev
   return `${where} is not enrolled in the brain`
 }
 
-/** Why this ad group cannot take the harvested term now (null: it can). Pure. */
-export function destinationRefusal(g: HarvestGroup | undefined, term: string, isAsin: boolean, facts: Pick<HarvestProductFacts, 'campaigns'>): string | null {
+/**
+ * Why this ad group cannot take the harvested term now (null: it can). `negatives`: the product's negatives that block the
+ * term (the ledger's TermDecision.negatives) — one in this ad group or its campaign holds it (harvest fix B10). Pure.
+ */
+export function destinationRefusal(g: HarvestGroup | undefined, term: string, isAsin: boolean, facts: Pick<HarvestProductFacts, 'campaigns'>, negatives: readonly TermPlace[] = []): string | null {
   if (!g) return 'it is not one of this product\'s own ad groups (the brain never harvests into another product\'s or a shared campaign)'
   const where = `campaign "${g.campaignName}"`
   if (!g.manual || g.role === 'AUTO') return `it is in an automatic campaign or ad group, which cannot take ${isAsin ? 'a product target' : 'a keyword'}`
   if (!isAsin && g.role !== 'EXACT') return `it is not an exact ad group (${g.role ? g.role.toLowerCase() : 'its role is unknown'}): a term climbs once, straight to exact`
   if (isAsin && g.productTargets === 0) return 'it holds no product targets'
   if (!g.serving) return `it does not serve now: ${g.notServing ?? 'paused'}`
+  // Harvest fix B1 + B10 — an archived keyword of the term, or a negative that blocks it, there: it could never land.
+  if (g.archived?.has(landingKey(term, isAsin))) return archivedWords(term, isAsin ? 'PRODUCT' : 'EXACT')
+  const blocks = negatives.find((n) => (n.level === 'CAMPAIGN' ? n.campaignId === g.campaignId : n.adGroupId === g.id))
+  if (blocks) return negativeWords(term, { text: blocks.text ?? term, match: blocks.match, level: blocks.level }, { adGroup: g.name, campaign: g.campaignName })
   const cs = facts.campaigns.get(g.campaignId)
   if (!cs) return `the Owner's settings of ${where} could not be read`
   if (cs.excluded) return `${where} is excluded from the brain by the Owner`
@@ -301,7 +315,7 @@ const rankKey = (g: HarvestGroup, isAsin: boolean) => [g.roleFromName ? 1 : 0, i
  */
 export function chooseDestination(c: HarvestCandidateFacts, facts: HarvestProductFacts): HarvestDestinationPlan | { held: string } {
   const { term, isAsin } = c.decision
-  const refusal = (id: string) => destinationRefusal(facts.groups.get(id), term, isAsin, facts)
+  const refusal = (id: string) => destinationRefusal(facts.groups.get(id), term, isAsin, facts, c.decision.negatives)
   const existing = (how: Exclude<DestinationHow, 'new'>, g: HarvestGroup, why: string, tie?: string[]): HarvestDestinationPlan => ({
     kind: 'EXISTING', how, adGroupId: g.id, campaignId: g.campaignId, keywords: isAsin ? g.productTargets : g.keywords, why, ...(tie?.length ? { tie } : {}),
   })
