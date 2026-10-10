@@ -35,6 +35,7 @@ import { useAdsMarketplace, useSharedAdsMarket } from '../../_shell/MarketplaceC
 import { RulesTabs, rulesTabHeader } from '../_shared/tabs'
 import { RulesGrid } from '../_shared/RulesGrid'
 import { getBackendUrl } from '@/lib/backend-url'
+import { refusedSovMarkets } from '../_shared/sovWeekWords'
 
 
 interface SovStripCounts {
@@ -45,7 +46,7 @@ interface SovStripCounts {
 }
 interface SovStrip extends SovStripCounts {
   byMarket: Record<string, SovStripCounts>
-  periods: Array<{ marketplace: string; week: string | null; ageDays: number | null; refused: boolean }>
+  periods: Array<{ marketplace: string; week: string | null; ageDays: number | null; refused: boolean; reason?: string; weekEndAgeDays?: number | null; maxAgeDays?: number; note?: string }>
 }
 
 /**
@@ -57,6 +58,13 @@ const sharePct = (f: number | null): string => {
   if (f == null) return '—'
   if (f > 0 && f < 0.0001) return '<0.01%'
   return `${(f * 100).toFixed(2)}%`
+}
+
+/** A Brand Analytics week by its Sunday start, "27 Sep" — `week` is the start date (YYYY-MM-DD). */
+const weekOf = (iso: string | null): string => {
+  if (!iso) return '—'
+  const d = new Date(`${iso}T00:00:00Z`)
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })
 }
 
 export function SovRulesClient() {
@@ -88,7 +96,8 @@ export function SovRulesClient() {
   }, [])
 
   const shown = strip?.periods.filter((p) => (market === 'all' ? true : p.marketplace === market)) ?? []
-  const refused = shown.filter((p) => p.refused)
+  // A market refused as too old has a complete week: it is said with that week's age and the limit, never as "no complete week".
+  const refused = refusedSovMarkets(shown)
   /**
    * 🔴 The counts follow the market selector. Printing the account's totals beside one market's
    * week is a scope lie an operator has no way to detect: on `?market=DE` the strip read
@@ -121,12 +130,14 @@ export function SovRulesClient() {
           carry a market share{counts.medianPct != null && <> · median <b>{sharePct(counts.medianPct)}</b></>}
           {counts.underOnePct > 0 && <> · <b>{counts.underOnePct.toLocaleString('en-IE')}</b> under 1%</>}
           {shown.filter((p) => !p.refused).length > 0 && (
-            <> · Amazon’s week: {shown.filter((p) => !p.refused).map((p) => `${p.marketplace} ${p.week}${p.ageDays != null ? ` (${p.ageDays}d)` : ''}`).join(' · ')}</>
+            /* `ageDays` counts from the week's START (Sunday), so it is said as "started N d ago", never as the data's age. */
+            <> · Amazon’s week: {shown.filter((p) => !p.refused).map((p) => `${p.marketplace} week of ${weekOf(p.week)}${p.ageDays != null ? ` (started ${p.ageDays} d ago)` : ''}`).join(' · ')}</>
           )}
           {/* A market the gate refused is the one thing a count cannot show: those keywords are not
               "unmeasured", they are deliberately not offered until Amazon publishes a whole week. */}
-          {refused.length > 0 && <> · <b>{refused.map((p) => p.marketplace).join('/')}</b> skipped — no complete week yet</>}
-          {' '}· shares come from Amazon’s own search-query report
+          {refused.incomplete.length > 0 && <> · <b>{refused.incomplete.join('/')}</b> skipped — no complete week yet</>}
+          {refused.tooOld.map((t) => <span key={t.marketplace}> · <b>{t.marketplace}</b> skipped — {t.words}</span>)}
+          {' '}· impression share of our ASINs, computed by Nexus from Amazon’s weekly Search Query Performance counts
         </p>
       )}
       <RulesGrid

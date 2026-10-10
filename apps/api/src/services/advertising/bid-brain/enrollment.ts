@@ -27,6 +27,7 @@ import prisma from '../../../db.js'
 import { logger } from '../../../utils/logger.js'
 import { strategyMarket } from '../ads-strategy/bids.js'
 import { ownerBrakes } from '../brain/owner-brakes.js'
+import { UNLOWERED_LAYERS } from './decide.js'
 import { STOP_HOLD_KIND } from './facts.js'
 import { brainLiveCeiling } from './live.js'
 import { bidBrainMode } from './shadow.js'
@@ -364,7 +365,8 @@ export async function floorsWithoutMemory(campaignId: string): Promise<number> {
   // Only floors the brain wrote itself (a floor or give-back write since the keyword's last decision no override lowered):
   // a stop someone else wrote, which the brain only held, is that owner's to give back, and a hand-back changes nothing.
   // Batch 3 review — the forward layers of BB-20/21 count as unlowered too, and an intraday brake (BB-17) is a floor.
-  const kept = ['goal', 'band', 'limit', 'no_goal', 'pin', 'freeze', 'probe', 'explore', 'revive']
+  // Lane 5 review fix — a share move too (decide.ts UNLOWERED_LAYERS, the one list load.ts reads as well).
+  const kept = [...UNLOWERED_LAYERS] as string[]
   const rows = await prisma.$queryRaw<Array<{ n: number }>>(Prisma.sql`
     WITH last AS (
       SELECT DISTINCT ON (d."targetId") d."targetId", d.layer, d."decidedCents", d."currentCents"

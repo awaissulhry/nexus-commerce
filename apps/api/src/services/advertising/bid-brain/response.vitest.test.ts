@@ -21,7 +21,7 @@ import type { Evidence } from './estimator.js'
 import { bidForAcos } from './recipe.js'
 import {
   EPS_PRIOR_MEAN, EPS_PRIOR_SD, combineReadings, goalContext, goalTail, keywordEps, marginalAcos, moveEventsOf, moveReading,
-  productEps, profitBestBid, responseFor, responseMode, summarizeResponse, tosLean, type EpsPosterior, type MoveEvent,
+  productEps, profitBestBid, responseFor, responseMode, summarizeResponse, tosLean, TOS_MIN_DAYS, type EpsPosterior, type MoveEvent,
 } from './response.js'
 
 const ev = (clicks: number, orders = 0, salesCents = 0, costCents = 0): Evidence => ({ clicks, orders, salesCents, costCents })
@@ -157,9 +157,21 @@ describe('pooling market → product', () => {
     expect(tosLean(null, 0.95)).toMatchObject({ lean: 1 })
     const leaned = keywordEps(prior, { tosShare: 0.62, tosDays: 14, cappedDays: 0 }, 0.85)
     expect(leaned.mean).toBeCloseTo(0.56, 6)
-    expect(leaned.from).toMatch(/^prior; top-of-search share 62% → inelastic$/)
+    expect(leaned.from).toMatch(/^prior; campaign top-of-search IS 62% \(14 days\) → inelastic$/)
     const measured: EpsPosterior = { ...prior, mean: 0.4, sd: 0.1, measured: true }
     expect(keywordEps(measured, { tosShare: 0.62, tosDays: 14, cappedDays: 0 }, 0.85)).toBe(measured)
+  })
+
+  it('🔴 A5 — fewer than 7 days of the campaign\'s top-of-search IS lean nothing (one day used to lean every keyword)', () => {
+    const prior = productEps(new Map(), 'jacket')
+    expect(TOS_MIN_DAYS).toBe(7)
+    for (const tosDays of [1, 6]) {
+      expect(tosLean({ tosShare: 0.62, tosDays, cappedDays: 0 }, 0.85)).toEqual({ lean: 1, words: null })
+      expect(tosLean({ tosShare: 0.08, tosDays, cappedDays: 0 }, 0.95)).toEqual({ lean: 1, words: null })
+      expect(keywordEps(prior, { tosShare: 0.62, tosDays, cappedDays: 0 }, 0.85)).toBe(prior)
+    }
+    expect(tosLean({ tosShare: 0.62, tosDays: 7, cappedDays: 0 }, 0.85)).toEqual({ lean: 0.7, words: 'campaign top-of-search IS 62% (7 days) → inelastic' })
+    expect(tosLean({ tosShare: 0.08, tosDays: 7, cappedDays: 0 }, 0.95)).toEqual({ lean: 1.25, words: 'campaign top-of-search IS 8% (7 days) at CPC/bid 0.95 → bid-limited' })
   })
 })
 

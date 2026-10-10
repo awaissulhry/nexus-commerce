@@ -65,8 +65,8 @@ import {
 import { loadNativeRules, nativeAutoRefusal, nativeRuleLines } from './native-rules.js'
 import { productFamily } from './ownership.js'
 import {
-  describeProvenance, EXCLUDE_KEY, overrideIdentity, resolveBrainSettings, type BrainSettings, type LeverSettings, type OverrideInput, type OverrideKind,
-  type OverrideRow, type Provenance,
+  describeProvenance, EXCLUDE_KEY, KEYWORD_VALUE_SETTINGS, keywordRefTarget, overrideIdentity, resolveBrainSettings, resolveKeywordValue, valueRef, type BrainSettings,
+  type KeywordValueSetting, type LeverSettings, type OverrideInput, type OverrideKind, type OverrideRow, type Provenance,
 } from './settings.js'
 import { brainPausesInForce } from './state-load.js'
 import { PORTFOLIO_CAP_LIMIT_SETTING, serverPortfolioCapLimitCents } from './portfolio-cap-limit.js'
@@ -320,6 +320,8 @@ export const SPEND_RATINGS: Partial<Record<BrainSetting, Rating>> = {
   pauseMinDays: { when: 'never', words: 'a shorter stop stays on low bids instead of a pause' },
   archiveDeadWeeks: { when: 'never', words: 'a campaign without an impression is paused, never archived' },
   longStopUntil: { when: 'cleared-or-earlier', words: 'the Owner\'s long stop ends sooner: the brain resumes the campaigns sooner' },
+  // Lane 5 — a higher target raises keyword bids toward it (inside the band top); empty = off, the ACoS goal alone may then raise bids the share held lower.
+  tosTargetPct: { when: 'up-or-cleared', words: 'a higher target top-of-search impression share: the bid brain may raise keyword bids toward it, one step of at most 10 % per new reading, never above the band top\'s bid, the highest bid or the top-of-search CPC ceiling (empty = off: the ACoS goal alone may then raise bids the share held lower)' },
 }
 
 /**
@@ -419,6 +421,12 @@ export function shapeRefusal(input: ControlInput): string | null {
   if (op !== 'leave' && has(input.bids)) return 'bids says what op leave does with the campaigns the bid brain runs; it is not an argument of this op'
   if (op !== 'leave' && has(input.pauses)) return 'pauses says what op leave does with the campaigns the brain\'s own pause holds; it is not an argument of this op'
   if (op !== 'set-level' && op !== 'set-value' && input.reset) return `reset ends a level (set-level) or a value (set-value); ${op === 'lock' ? 'unlock ends a lock' : op === 'exclude' ? 'include ends an exclusion' : `op ${op} takes no reset`}`
+  // Free visibility numbers (integration fix) — a ref is never dropped: an op that cannot take one refuses it, so a request
+  // meant for one thing never lands silently on the whole lever, the campaign or the product.
+  if ((op === 'enroll' || op === 'leave' || op === 'set-level' || op === 'exclude' || op === 'include') && has(input.ref)) {
+    const whole = op === 'exclude' || op === 'include' ? ` — ${op} takes the whole ${input.campaignId ? 'campaign' : 'product'} ${op === 'exclude' ? 'out of' : 'back into'} the brain (to hold one thing, lock it)` : ''
+    return `${op} takes no ref (${String(input.ref)})${whole}: a ref names one thing in a lock (lock, unlock) or one keyword's own value of ${KEYWORD_VALUE_SETTINGS.join(', ')} (set-value, ref target:<AdTarget.id>)`
+  }
   switch (op) {
     case 'set-level':
       if (!has(input.lever)) return 'set-level names the lever (lever)'
@@ -432,13 +440,17 @@ export function shapeRefusal(input: ControlInput): string | null {
       return null
     case 'exclude':
     case 'include':
-      if (has(input.lever) || has(input.level) || has(input.ref)) return `${op} takes the whole ${input.campaignId ? 'campaign' : 'product'} ${op === 'exclude' ? 'out of' : 'back into'} the brain: no lever (to hold one lever, lock it)`
+      if (has(input.lever) || has(input.level)) return `${op} takes the whole ${input.campaignId ? 'campaign' : 'product'} ${op === 'exclude' ? 'out of' : 'back into'} the brain: no lever (to hold one lever, lock it)`
       if (input.value !== undefined) return `${op} takes no value`
       return null
     case 'set-value':
       if (!has(input.key)) return 'set-value names the setting (key)'
       if (input.reset && input.value !== undefined) return 'set-value takes a value or reset: true (back to the product\'s value or the brain\'s default), not both'
       if (!input.reset && input.value === undefined) return `set-value names the value of ${input.key} (value), or reset: true to go back to the product's value or the brain's default`
+      if (has(input.ref) && isSetting(input.key)) {
+        const ref = valueRef(input.key, input.ref)
+        if ('refusal' in ref) return ref.refusal
+      }
       return null
     default:
       return null
@@ -500,7 +512,12 @@ function changeOf(input: ControlInput, campaignId: string | null): { op: 'set'; 
     case 'unlock': return { op: 'end', input: { ...base, kind: 'LOCK', key: String(input.lever), ref: input.ref ?? '' } }
     case 'exclude': return { op: 'set', input: { ...base, kind: 'EXCLUDE', key: EXCLUDE_KEY } }
     case 'include': return { op: 'end', input: { ...base, kind: 'EXCLUDE', key: EXCLUDE_KEY } }
-    default: return input.reset ? { op: 'end', input: { ...base, kind: 'VALUE', key: String(input.key) } } : { op: 'set', input: { ...base, kind: 'VALUE', key: String(input.key), value: input.value } }
+    // set-value carries its ref (one keyword's own value of a keyword setting): dropping it would set the campaign's or the
+    // product's value instead (integration fix). validateIdentity refuses a ref for any other setting.
+    default: {
+      const ref = typeof input.ref === 'string' ? input.ref.trim() : ''
+      return input.reset ? { op: 'end', input: { ...base, kind: 'VALUE', key: String(input.key), ref } } : { op: 'set', input: { ...base, kind: 'VALUE', key: String(input.key), ref, value: input.value } }
+    }
   }
 }
 
@@ -536,13 +553,21 @@ async function previewOverride(ctx: Ctx): Promise<ControlOutcome> {
   const a = resolveWith(after)
   const kind = change.input.kind
   const key = change.input.key
-  const normal = kind === 'LOCK' && isLever(key) ? lockRef(key, change.input.ref) : { ref: '' }
+  const normal = kind === 'LOCK' && isLever(key) ? lockRef(key, change.input.ref) : kind === 'VALUE' && isSetting(key) ? valueRef(key, change.input.ref) : { ref: '' }
   const ref = plan.set?.ref ?? ('ref' in normal ? normal.ref : '')
   const scopeId = campaignId
-  const fromWords = choiceWords(kind, key, ref, b(scopeId))
-  const toWords = choiceWords(kind, key, ref, a(scopeId))
+  // Integration fix — one keyword's own value (set-value, ref target:<AdTarget.id>): the keyword must be one of this
+  // product's, in the campaign named; a value that would apply to no keyword, or to a wider scope, is refused.
+  const named = kind === 'VALUE' ? await keywordOf(ctx, all, keywordRefTarget(ref), change.op, campaignId, key) : { keyword: null }
+  if ('refusal' in named) return no(named.refusal)
+  const keyword = named.keyword
+  const keywordValue = (rows: readonly OverrideRow[]) => resolveKeywordValue({ productId: root, market, campaignId: keyword!.campaignId, targetId: keyword!.targetId, overrides: rows }, key as KeywordValueSetting)
+  const valueBefore = kind !== 'VALUE' ? null : keyword ? keywordValue(before).value : b(scopeId).values[key as BrainSetting].value
+  const valueAfter = kind !== 'VALUE' ? null : keyword ? keywordValue(after).value : a(scopeId).values[key as BrainSetting].value
+  const fromWords = keyword ? keywordWords(keywordValue(before)) : choiceWords(kind, key, ref, b(scopeId))
+  const toWords = keyword ? keywordWords(keywordValue(after)) : choiceWords(kind, key, ref, a(scopeId))
   const label = kind === 'EXCLUDE' ? (campaignId ? 'the campaign' : 'the product')
-    : kind === 'VALUE' ? key
+    : kind === 'VALUE' ? (keyword ? `${key} of ${keyword.words}` : key)
       : `${leverWord(key as BrainLever)}${kind === 'LOCK' ? (ref ? ` (${ref}) lock` : ' lock') : ' level'}`
   const where = target ? `campaign ${target.name}` : campaignId ? `campaign ${campaignId}` : `${ctx.name} (${market})`
   if (plan.unchanged) return no(`Not queued: nothing would change — ${label} on ${where} is already ${fromWords}`)
@@ -571,7 +596,11 @@ async function previewOverride(ctx: Ctx): Promise<ControlOutcome> {
     return { campaignId: c.campaignId, name: c.name, owner: c.owner, status: c.status, changes, reached, why }
   }
   const productOnlySetting = kind === 'VALUE' && !BRAIN_SETTINGS[key as BrainSetting].scopes.includes('CAMPAIGN')
-  const campaigns = productOnlySetting ? [] : (target ? [target] : campaignId ? [] : all).map(reachOne)
+  // A keyword's own value reaches that keyword's campaign only, and changes nothing else there.
+  const keywordReach = (c: Camp): CampaignReach => ({
+    campaignId: c.campaignId, name: c.name, owner: c.owner, status: c.status, changes: [{ what: label, from: fromWords, to: toWords }], reached: true, why: 'the campaign of the keyword this change names',
+  })
+  const campaigns = keyword ? (keyword.campaign ? [keywordReach(keyword.campaign)] : []) : productOnlySetting ? [] : (target ? [target] : campaignId ? [] : all).map(reachOne)
   const notReached = [
     ...plan.notReached,
     ...campaigns.filter((c) => !c.reached && !plan.notReached.some((n) => n.campaignId === c.campaignId)).map((c) => ({ campaignId: c.campaignId, name: c.name, why: c.why })),
@@ -579,7 +608,7 @@ async function previewOverride(ctx: Ctx): Promise<ControlOutcome> {
   const own = ctx.own.map((c) => ({ campaignId: c.campaignId, name: c.name }))
   const turnsAuto = turnsAutoOf(b, a, own)
   const live = plan.goesLive
-  const raisedLimit = kind === 'VALUE' ? limitRaise(key, b(scopeId).values[key as BrainSetting].value, a(scopeId).values[key as BrainSetting].value) : null
+  const raisedLimit = kind === 'VALUE' ? limitRaise(key, valueBefore as SettingValue, valueAfter as SettingValue) : null
   const bigDoor = [
     ...turnsAuto.map((t) => `${leverWord(t.lever)} to AUTO on ${t.where}`),
     ...(live.length ? [`${plural(live.length, 'campaign')} under the bid brain (${names(all.filter((c) => live.includes(c.campaignId)))})`] : []),
@@ -592,7 +621,7 @@ async function previewOverride(ctx: Ctx): Promise<ControlOutcome> {
   const scopeA = a(scopeId)
   const starts = startLines(levers, (l) => scopeB.levers[l].effective, (l) => scopeA.levers[l].effective, ctx.ceiling, campaignId ? where : '')
   if (kind === 'LOCK' && ref) starts.push(`${leverWord(key as BrainLever)}: ${change.op === 'set' ? `the brain leaves ${ref} as it is, and writes the rest of the lever at its level` : `the brain may write ${ref} again, at the lever's level`}`)
-  if (kind === 'VALUE') starts.push(`${key} (${BRAIN_SETTINGS[key as BrainSetting].what}): ${fromWords} → ${toWords}`)
+  if (kind === 'VALUE') starts.push(`${label} (${BRAIN_SETTINGS[key as BrainSetting].what}): ${fromWords} → ${toWords}`)
   if (!starts.length && kind !== 'VALUE') starts.push(`${label}: saved as ${toWords}; what the brain does on ${where} stays the same (${firstWhy(scopeA, levers)})`)
 
   // Spend: what can add it (said, never silent), and the warnings.
@@ -607,9 +636,10 @@ async function previewOverride(ctx: Ctx): Promise<ControlOutcome> {
     warnings.push(`${names(leaving)} ${leaving.length === 1 ? 'goes' : 'go'} back to shadow: the bid brain stops writing ${leaving.length === 1 ? 'its' : 'their'} keyword bids (they stay where they are) and today's engines (auto-bid, rules) may move them again, raises included.`)
   }
   if (kind === 'VALUE') {
-    const r = settingRaise(key, b(scopeId).values[key as BrainSetting].value, a(scopeId).values[key as BrainSetting].value)
-    if (r) raises.push(r)
+    const r = settingRaise(key, valueBefore as SettingValue, valueAfter as SettingValue)
+    if (r) raises.push(keyword ? `${r} (for ${keyword.words} only)` : r)
   }
+  if (keyword && !keyword.campaign) warnings.push(`${keyword.words} no longer runs in a campaign of ${ctx.name} in ${market}: its own value is ended all the same.`)
   const released = releasedLevers(b, a, [{ campaignId: null, name: 'the product' }, ...own])
   if (released.length) warnings.push(`Today's engines may write these levers again (whatever is set up there, raises included): ${released.join('; ')}.`)
   const becomesOwned = [null, ...own.map((c) => c.campaignId)].some((cid) => BRAIN_LEVERS.some((l) => a(cid).levers[l].owned && !b(cid).levers[l].owned))
@@ -634,7 +664,8 @@ async function previewOverride(ctx: Ctx): Promise<ControlOutcome> {
   const goLive = (plan.steps ?? []).filter((s) => s.op === 'live')
   const back = (plan.steps ?? []).filter((s) => s.op === 'shadow' || (s.op === 'wait' && s.hold))
   const notReachedWords = notReached.length ? `; ${plural(notReached.length, 'campaign')} ${notReached.length === 1 ? 'is' : 'are'} not reached (${names(notReached)})` : ''
-  const reachWords = campaignId ? '' : productOnlySetting ? ' It is a setting of the whole product.' : campaigns.length
+  const reachWords = keyword ? ` It applies to that keyword only${keyword.campaign ? ` (in ${keyword.campaign.name})` : ''}: the campaign's and the product's values stay as they are.`
+    : campaignId ? '' : productOnlySetting ? ' It is a setting of the whole product.' : campaigns.length
     ? ` It reaches ${plural(campaigns.filter((c) => c.reached).length, 'campaign')} of ${campaigns.length}${notReachedWords}.`
     : ' The product has no Sponsored Products campaign in this market yet: it applies to every campaign it gets.'
   const moveWords = [
@@ -669,6 +700,34 @@ async function previewOverride(ctx: Ctx): Promise<ControlOutcome> {
 }
 
 const firstWhy = (s: BrainSettings, levers: readonly BrainLever[]) => (levers.length ? s.levers[levers[0]].why : s.excluded.value ? `excluded by ${prov(s.excluded)}` : 'unchanged')
+
+/** A keyword's value of a keyword setting in words: its own (who, when), or none of its own and what it follows. Pure. */
+export function keywordWords(v: ReturnType<typeof resolveKeywordValue>): string {
+  return v.grain === 'keyword'
+    ? `${JSON.stringify(v.value)} (the keyword's own value${v.by ? `, ${v.by}${v.at && !v.at.startsWith('+') ? `, ${v.at.slice(0, 10)}` : ''}` : ''})`
+    : `${JSON.stringify(v.value)} (no value of its own: ${prov(v)})`
+}
+
+/**
+ * Integration fix — the keyword a set-value ref names (target:<AdTarget.id>): null when the ref names none. A new value
+ * (op set) needs the keyword in one of the product's campaigns in this market, in the campaign named when one is; a
+ * product-wide value of a keyword in a shared campaign is refused (the brain does not read a product's value there, D2).
+ * Ending a value needs none of that: its keyword may be gone.
+ */
+async function keywordOf(ctx: Ctx, all: readonly Camp[], targetId: string | null, op: 'set' | 'end', campaignId: string | null, key: string):
+  Promise<{ keyword: { targetId: string; words: string; campaign: Camp | null; campaignId: string | null } | null } | { refusal: string }> {
+  if (!targetId) return { keyword: null }
+  const t = await prisma.adTarget.findFirst({ where: { id: targetId }, select: { expressionType: true, expressionValue: true, adGroup: { select: { campaignId: true } } } })
+  const campaign = t ? all.find((c) => c.campaignId === t.adGroup.campaignId) ?? null : null
+  const words = t ? `keyword "${t.expressionValue}" (${t.expressionType.toLowerCase()}, ${targetId})` : `keyword ${targetId}`
+  if (op === 'set') {
+    if (!t) return { refusal: `target:${targetId} is not a keyword of this business: ad-targets names each keyword's Nexus id` }
+    if (!campaign) return { refusal: `${words} is in campaign ${t.adGroup.campaignId}, which does not advertise ${ctx.name} in ${ctx.market}: its own ${key} would apply nowhere` }
+    if (campaignId && campaign.campaignId !== campaignId) return { refusal: `${words} is in campaign ${campaign.name}, not in campaign ${campaignId}: name its own campaign, or no campaignId for the product's value of this keyword` }
+    if (!campaignId && campaign.owner === 'shared') return { refusal: `${words} is in ${campaign.name}, a shared campaign (it advertises another product too): the brain does not read a product's value there (D2) — name the campaign (campaignId ${campaign.campaignId}) to give the keyword its own value` }
+  }
+  return { keyword: { targetId, words, campaign, campaignId: campaign?.campaignId ?? campaignId } }
+}
 
 function openAt(rows: readonly OverrideRow[], input: Pick<OverrideInput, 'scope' | 'campaignId' | 'kind' | 'key'>, ref: string): OverrideRow | undefined {
   const id = overrideIdentity({ scope: input.scope, campaignId: input.campaignId ?? null, kind: input.kind, key: input.kind === 'EXCLUDE' ? EXCLUDE_KEY : input.key, ref })
@@ -1133,7 +1192,7 @@ export function controlUndoRequest(before: Record<string, unknown>): { args: Rec
     case 'LEVEL': return { args: { ...base, ...campaignId, op: 'set-level', lever: before.key, ...(open ? { level: value } : { reset: true }) } }
     case 'LOCK': return { args: { ...base, ...campaignId, op: open ? 'lock' : 'unlock', lever: before.key, ...(before.ref ? { ref: before.ref } : {}), ...(open && value !== null && value !== undefined ? { value } : {}) } }
     case 'EXCLUDE': return { args: { ...base, ...campaignId, op: open ? 'exclude' : 'include' } }
-    case 'VALUE': return { args: { ...base, ...campaignId, op: 'set-value', key: before.key, ...(open ? { value: value ?? null } : { reset: true }) } }
+    case 'VALUE': return { args: { ...base, ...campaignId, op: 'set-value', key: before.key, ...(before.ref ? { ref: before.ref } : {}), ...(open ? { value: value ?? null } : { reset: true }) } }
     default: return { refusal: 'This change does not record what it changed.' }
   }
 }

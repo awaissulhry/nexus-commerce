@@ -238,8 +238,8 @@ export const REPORT_CATALOGUE: ReportEntry[] = [
   // Query Performance above, so its freshness is measured rather than asserted.
   {
     id: 'coverage',
-    title: 'Coverage — page-one share',
-    answers: 'How much of page one we hold on a keyword, against the whole market.',
+    title: 'Coverage — impression share (SQP, weekly)',
+    answers: 'Our ASINs’ share of a search term’s impressions in one week, computed by Nexus from Amazon’s Search Query Performance counts.',
     source: 'Brand Analytics · search query performance',
     grain: 'keyword × week × market',
     group: 'Market & brand',

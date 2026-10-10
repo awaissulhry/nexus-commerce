@@ -16,13 +16,15 @@
  * this file has no dependency on the component.
  */
 
+import { sharePct } from '../../campaigns/_grid/format'
+
 export type KtCsvRowState = 'measured' | 'no-row-this-period' | 'never-measured' | 'not-measurable-here'
 
 export interface KtCsvRow {
   keyword: string
   marketplace: string
   marketVolume?: number | null
-  marketRank?: number | null
+  searchQueryScore?: number | null
   impressionShare?: number | null
   shareBound?: number | null
   bestAsin?: string | null
@@ -53,7 +55,8 @@ export interface KtCsvPayload {
   rows: KtCsvRow[]
 }
 
-const sharePct = (v: number) => `${(v * 100).toFixed(2)}%`
+// Free visibility numbers (2026-10-10) — the console's one share formatter (`sharePct`): a tiny non-zero share reads
+// "<0.01%" and no reading reads "—", never a rounded or substituted "0.00%".
 /** Tolerates a response predating `state` (a KT.1-era payload). */
 const rowState = (r: KtCsvRow): KtCsvRowState => r.state ?? (r.measured ? 'measured' : 'never-measured')
 
@@ -76,7 +79,7 @@ export function buildCsv(rows: KtCsvRow[], d: KtCsvPayload): string {
   }
   const shareCell = (r: KtCsvRow) => {
     switch (rowState(r)) {
-      case 'measured': return sharePct(r.impressionShare ?? 0)
+      case 'measured': return sharePct(r.impressionShare)
       case 'no-row-this-period': return 'no row this week'
       case 'not-measurable-here': return 'not measurable here'
       default: return 'never measured'
@@ -95,17 +98,17 @@ export function buildCsv(rows: KtCsvRow[], d: KtCsvPayload): string {
     ['share column', "our BEST single ASIN's share; 'share bound' is an UPPER bound over our ASINs, not a total"],
     ['spend column', 'spend on the exact query text in the SAME week as the share; per TERM, not per ASIN'],
     ['top-of-search IS', d.topOfSearch
-      ? `${(d.topOfSearch.avgShare * 100).toFixed(2)}% across ${d.topOfSearch.campaignsWithReading} of ${d.topOfSearch.campaignsInScope} campaigns (to ${d.topOfSearch.asOf})`
+      ? `${sharePct(d.topOfSearch.avgShare)} across ${d.topOfSearch.campaignsWithReading} of ${d.topOfSearch.campaignsInScope} campaigns (to ${d.topOfSearch.asOf})`
       : 'no reading'],
     ['exported rows', String(rows.length)],
     [],
   ]
-  const head = ['keyword', 'market', 'market volume', 'market rank', 'best ASIN share', 'share bound',
+  const head = ['keyword', 'market', 'market volume', 'search query score (best ASIN)', 'best ASIN share', 'share bound',
     'best ASIN', 'our ASINs on query', 'delta pp', 'gap days', 'prior share', 'prior week',
     'spend EUR (that week)', 'clicks', 'orders', 'as of', 'last seen', 'state', 'branded',
     'advertised ASINs on term', 'covered advertised ASINs']
   const body = rows.map((r) => [
-    r.keyword, r.marketplace, r.marketVolume ?? '', r.marketRank ?? '',
+    r.keyword, r.marketplace, r.marketVolume ?? '', r.searchQueryScore ?? '',
     shareCell(r), r.shareBound != null ? sharePct(r.shareBound) : '',
     r.bestAsin ?? '', r.asinsCompeting,
     r.deltaPP != null ? r.deltaPP.toFixed(2) : (rowState(r) === 'measured' ? 'no earlier week' : ''),

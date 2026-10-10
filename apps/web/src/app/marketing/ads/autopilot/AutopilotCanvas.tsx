@@ -37,18 +37,26 @@ export interface CanvasSpec {
   outputSub?: string
 }
 
-const GOAL_LABEL: Record<string, string> = { LAUNCH: 'Launch', PROFIT: 'Profit', BALANCED: 'Balanced', LIQUIDATE: 'Liquidate', DEFEND_RANK: 'Defend Rank' }
+/**
+ * Free visibility numbers (2026-10-10, F1) — the words say what RUNS (apps/api autopilot, read 2026-10-10):
+ *  · the DEFEND_RANK goal's own preset fields (`bidStrategy: 'rank'`, `rankDefend`) are read by nothing, so it runs
+ *    exactly like Balanced;
+ *  · the signal builder (`ad-autopilot.job.ts`) hard-sets the top-of-search IS input to null, so the placement module
+ *    (which needs it) proposes nothing, and the "rank" module has no controller at all.
+ * A top-of-search share is never called a rank.
+ */
+const GOAL_LABEL: Record<string, string> = { LAUNCH: 'Launch', PROFIT: 'Profit', BALANCED: 'Balanced', LIQUIDATE: 'Liquidate', DEFEND_RANK: 'Top-of-search (runs as Balanced)' }
 const SIGNALS = [
   { id: 'sig-perf', label: 'Performance', sub: 'spend · sales · ACoS · CVR' },
   { id: 'sig-profit', label: 'Profit', sub: 'margin · break-even ACoS' },
   { id: 'sig-inv', label: 'Inventory', sub: 'days of supply' },
-  { id: 'sig-rank', label: 'Rank', sub: 'Top-of-Search IS' },
+  { id: 'sig-rank', label: 'Top-of-search IS', sub: 'campaign, daily, 1–3 d late · not read yet' },
 ]
 const MODULES = [
   { key: 'bid', label: 'Bid', sub: 'tACoS · θ_inv · θ_intra' },
   { key: 'budget', label: 'Budget', sub: 'pacing · rebalance' },
-  { key: 'placement', label: 'Placement', sub: 'ToS / PDP / RoS' },
-  { key: 'rank', label: 'Rank Defense', sub: 'IS controller' },
+  { key: 'placement', label: 'Placement', sub: 'needs top-of-search IS, not fed yet — proposes nothing' },
+  { key: 'rank', label: 'Top-of-search share', sub: 'not built — on or off changes nothing' },
   { key: 'dayparting', label: 'Dayparting', sub: 'time windows' },
   { key: 'harvest', label: 'Harvest', sub: 'via Rule Setting', delegated: true },
   { key: 'negate', label: 'Negate', sub: 'via Rule Setting', delegated: true },

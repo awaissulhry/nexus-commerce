@@ -334,6 +334,61 @@ export function weightedIS(points: Array<{ value: number; weight: number }>): nu
   return points.reduce((s, p) => s + p.value, 0) / points.length
 }
 
+/** Where one campaign-day top-of-search reading comes from. */
+export type TosReadingSource = 'placement' | 'campaign'
+/** The placement report's label of the top-of-search row: the only row that carries the share. */
+const REPORT_TOP_PLACEMENT = 'Top of Search on-Amazon'
+export interface CampaignTosReading { campaignId: string; date: Date; share: number; impressions: number | null; source: TosReadingSource }
+
+/**
+ * Integration review fix (2026-10-10) — one reading per campaign and day: the TOP placement row's (AmazonAdsPlacementReport,
+ * filled only by the TOS ingest cron, off by default) where it has the day, else the AmazonAdsDailyPerformance CAMPAIGN
+ * row's (the core campaign report asks for the column every night). Never both for one campaign-day. Pure.
+ */
+export function mergeTopOfSearchReadings(
+  placement: ReadonlyArray<Omit<CampaignTosReading, 'source'>>,
+  campaign: ReadonlyArray<Omit<CampaignTosReading, 'source'>>,
+): CampaignTosReading[] {
+  const key = (r: { campaignId: string; date: Date }) => `${r.campaignId}|${r.date.toISOString().slice(0, 10)}`
+  const out = new Map<string, CampaignTosReading>()
+  for (const r of placement) if (Number.isFinite(r.share)) out.set(key(r), { ...r, source: 'placement' })
+  for (const r of campaign) if (Number.isFinite(r.share) && !out.has(key(r))) out.set(key(r), { ...r, source: 'campaign' })
+  return [...out.values()]
+}
+
+/** "Amazon's placement report (2 readings) and campaign report (1)" — where the readings came from, in words. Pure. */
+export function tosSourceWords(readings: ReadonlyArray<{ source: TosReadingSource }>): string {
+  const p = readings.filter((r) => r.source === 'placement').length
+  const c = readings.length - p
+  const n = (k: number) => `${k} reading${k === 1 ? '' : 's'}`
+  if (p && c) return `Amazon's placement report (${n(p)}) and campaign report (${n(c)})`
+  return p ? `Amazon's placement report (${n(p)})` : `Amazon's campaign report (${n(c)})`
+}
+
+/**
+ * The top-of-search share Amazon reported for these campaigns (EXTERNAL ids), per day since `since`: placement rows first,
+ * campaign rows for the campaign-days the placement table has no reading for (mergeTopOfSearchReadings). Impressions: the
+ * placement row's (top of search), else the campaign's own (the day's weight either way).
+ */
+export async function campaignTopOfSearchReadings(externalIds: readonly string[], since: Date): Promise<CampaignTosReading[]> {
+  if (!externalIds.length) return []
+  const ids = [...new Set(externalIds)]
+  const [placement, campaign] = await Promise.all([
+    prisma.amazonAdsPlacementReport.findMany({
+      where: { campaignId: { in: ids }, placement: REPORT_TOP_PLACEMENT, topOfSearchIS: { not: null }, date: { gte: since } },
+      select: { campaignId: true, date: true, topOfSearchIS: true, impressions: true },
+    }),
+    prisma.amazonAdsDailyPerformance.findMany({
+      where: { entityType: 'CAMPAIGN', adProduct: 'SPONSORED_PRODUCTS', entityId: { in: ids }, topOfSearchIS: { not: null }, date: { gte: since } },
+      select: { entityId: true, date: true, topOfSearchIS: true, impressions: true },
+    }),
+  ])
+  return mergeTopOfSearchReadings(
+    placement.map((r) => ({ campaignId: r.campaignId, date: r.date, share: Number(r.topOfSearchIS), impressions: r.impressions ?? null })),
+    campaign.map((r) => ({ campaignId: r.entityId, date: r.date, share: Number(r.topOfSearchIS), impressions: r.impressions ?? null })),
+  )
+}
+
 /** micros → cents. `costMicros` is a BigInt; Number() on it is safe at this account's magnitudes. */
 const microsToCents = (v: bigint | number | null | undefined): number =>
   Math.round(Number(v ?? 0) / 10_000)

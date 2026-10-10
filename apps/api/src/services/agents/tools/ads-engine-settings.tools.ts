@@ -298,7 +298,7 @@ const setCoverageSet: AgentTool = {
       leadAsin: z.string().trim().min(10).max(10).nullable().optional().describe('the family ASIN that leads the term (one of the family\'s own); null = none'),
       status: z.enum(TERM_STATUSES).optional().describe('ACTIVE (the engine holds it) or PAUSED (the engine leaves it alone; nothing at Amazon is paused)'),
       maxCpcCents: z.coerce.number().int().min(1).max(100_000).nullable().optional().describe('the highest bid the engine may set for it, in cents of the market\'s currency; null = the engine\'s default'),
-      targetSharePct: z.coerce.number().gt(0).max(100).nullable().optional().describe('the impression share it aims for, in % (e.g. 25); null = none (the engine only holds or lowers)'),
+      targetSharePct: z.coerce.number().gt(0).max(100).nullable().optional().describe('the share it aims for, in % (e.g. 25): the weekly Brand Analytics impression share of the set\'s ASINs for the query (computed by Nexus: the set\'s ASINs\' impressions ÷ the query\'s total impressions on Amazon\'s complete week, at most 14 days old); null = none (the engine only holds or lowers)'),
       isControl: z.boolean().optional().describe('true holds it out of the engine as a control; false hands it to the engine'),
     })).max(MAX_TERM_EDITS).optional().describe(`edit-terms: each term with only the fields that change, up to ${MAX_TERM_EDITS}`),
     why: WHY,

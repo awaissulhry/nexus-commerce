@@ -13,7 +13,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   blockKey, hourKey, intervalFactors, normalise, poolCurves, researchHours, shrinkCpcIndex, shrinkIndex, shrinkShares, weekdayOf,
-  PRIOR_ORDERS, type ResearchFacts,
+  topOfSearchShareWords, PRIOR_ORDERS, type ResearchFacts,
 } from './hours-research.js'
 import { cellsOf, daysFrom, factsOf, totalsOf } from './__fixtures__/hours-facts.js'
 
@@ -166,14 +166,24 @@ describe('the market\'s dynamics', () => {
 
   it('lanes: top of search\'s share, its conversion against the rest, Amazon\'s impression share', () => {
     const lanes: ResearchFacts['lanes'] = [
-      { lane: 'TOP_OF_SEARCH', impressions: 1000, clicks: 300, spendCents: 15_000, orders: 9, salesCents: 72_000, topOfSearchSharePct: 12 },
+      { lane: 'TOP_OF_SEARCH', impressions: 1000, clicks: 300, spendCents: 15_000, orders: 9, salesCents: 72_000, topOfSearchSharePct: 12, topOfSearchShareBasis: { campaigns: 3, days: 21, newest: '2026-10-08' } },
       { lane: 'REST_OF_SEARCH', impressions: 4000, clicks: 600, spendCents: 18_000, orders: 6, salesCents: 48_000, topOfSearchSharePct: null },
       { lane: 'PRODUCT_PAGE', impressions: 3000, clicks: 100, spendCents: 2_000, orders: 0, salesCents: 0, topOfSearchSharePct: null },
     ]
     const r = researchHours(factsOf({ days: FOUR_WEEKS, product: { clicks: () => 2, cr: () => 0.01 }, market: marketShape, lanes }))
     expect(r.topOfSearchShareKnown).toBe(true)
     expect(r.topOfSearchSpendShare).toBeCloseTo(15_000 / 35_000, 4)
-    expect(r.summary.join('\n')).toMatch(/top of search 30 % of clicks and 43 % of spend, converting 3.5 × the other lanes; Amazon's top-of-search impression share about 12 %/)
+    // C2 (2026-10-10) — Amazon's per campaign and day; the average is Nexus's, over named campaigns and days, dated
+    expect(r.summary.join('\n')).toMatch(/top of search 30 % of clicks and 43 % of spend, converting 3.5 × the other lanes; the top-of-search impression share Amazon reported for these 3 campaigns \(campaign level\), averaged by Nexus over 21 days with a reading, newest 2026-10-08: about 12 %/)
+    expect(r.summary.join('\n')).not.toMatch(/Amazon's top-of-search impression share about/)
+    expect(r.lanes.find((l) => l.lane === 'TOP_OF_SEARCH')!.topOfSearchShareBasis).toEqual({ campaigns: 3, days: 21, newest: '2026-10-08' })
+  })
+
+  it('C2 — the words: one campaign and one day read as such; a tiny real share is never "about 0 %"', () => {
+    expect(topOfSearchShareWords(34.4, { campaigns: 1, days: 1, newest: '2026-10-08' }))
+      .toBe('the top-of-search impression share Amazon reported for this campaign (campaign level), averaged by Nexus over 1 day with a reading, newest 2026-10-08: about 34 %')
+    expect(topOfSearchShareWords(0.004, { campaigns: 2, days: 5, newest: null })).toMatch(/: about <0\.01 %$/)
+    expect(topOfSearchShareWords(0.4, null)).toBe('the top-of-search impression share Amazon reported for these campaigns (campaign level), averaged by Nexus: about 0.40 %')
   })
 
   it('no Marketing Stream hours: said, and nothing invented', () => {

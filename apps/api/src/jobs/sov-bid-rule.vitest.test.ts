@@ -19,13 +19,15 @@ vi.mock('../db.js', () => ({
   },
 }))
 vi.mock('../services/advertising/ads-sov-keyword-share.service.js', () => ({
+  SOV_SHARE_MAX_AGE_DAYS: 14,
   keywordMarketShares: h.shares,
   sovShareKey: (m: string | null | undefined, q: string | null | undefined) => `${m ?? ''}|${(q ?? '').trim().toLowerCase()}`,
 }))
 vi.mock('../services/advertising/ads-impression-share.service.js', () => ({ analyzeShareOfVoice: vi.fn(async () => ({ rows: [] })) }))
 
 import prisma from '../db.js'
-import { buildSovBidContexts } from './advertising-rule-evaluator.job.js'
+import { analyzeShareOfVoice } from '../services/advertising/ads-impression-share.service.js'
+import { buildSovBidContexts, sovShareNote } from './advertising-rule-evaluator.job.js'
 import { evaluateConditions } from '../services/automation/conditions-tree.js'
 import { contextIdentity, ruleMatchesScope } from '../services/automation-rule-scope.js'
 import { guardRule } from '../services/automation/automation-rule-guard.js'
@@ -41,7 +43,7 @@ const CONDITIONS = [
 ]
 const ACTIONS = [{ type: 'bid_apply', op: 'incPct', value: 10, maxEur: 0.8 }]
 
-const share = (marketplace: string, query: string, sharePct: number) => ({ marketplace, query, sharePct, impressionsBrand: 1, impressionsTotal: 10, asinRows: 1 })
+const share = (marketplace: string, query: string, sharePct: number) => ({ marketplace, query, sharePct, impressionsBrand: 1, impressionsTotal: 10, asinRows: 1, weekStart: '2026-09-27', shareAgeDays: 6 })
 const target = (id: string, text: string, campaignId: string, marketplace: string) => ({
   id, expressionValue: text, adGroup: { id: `ag-${id}`, campaign: { id: campaignId, marketplace } },
 })
@@ -108,6 +110,41 @@ describe('SOV_BID — the live rule end to end', () => {
     expect(inScope.map((c) => c.adTarget.id)).toEqual(['t1', 't2', 't3'])
     const other = new Map<string, string | null>([['c-gale', '999']])
     expect(ctxs.filter((c) => ruleMatchesScope(scope, contextIdentity(c, new Map(), other)))).toEqual([])
+  })
+
+  it('Campaign Concentration: a query with no impressions (null) leaves topSharePct absent, never a 0 that "< 60 %" reads as low', async () => {
+    vi.mocked(analyzeShareOfVoice).mockImplementation(async (o) => ({
+      rows: o?.marketplace === 'IT' ? [{ query: 'giubbotto moto uomo', topCampaignSharePct: null }, { query: 'giacca moto estiva', topCampaignSharePct: 0.9 }] : [],
+    }) as never)
+    try {
+      const ctxs = await buildSovBidContexts()
+      expect('topSharePct' in ctxs.find((c) => c.adTarget.id === 't1')!.adTarget).toBe(false)
+      expect(ctxs.find((c) => c.adTarget.id === 't2')!.adTarget.topSharePct).toBe(0.9)
+      expect(evaluateConditions([{ field: 'adTarget.topSharePct', op: 'lt', value: 0.6 }] as never, ctxs.find((c) => c.adTarget.id === 't1') as never)).toBe(false)
+    } finally {
+      vi.mocked(analyzeShareOfVoice).mockImplementation(async () => ({ rows: [] }) as never)
+    }
+  })
+
+  it('A3 — asks for shares at most 14 days old, and every context says how old its share is', async () => {
+    const ctxs = await buildSovBidContexts()
+    expect(h.shares).toHaveBeenCalledWith({ maxAgeDays: 14 })
+    for (const c of ctxs) expect(c.adTarget).toMatchObject({ shareAgeDays: 6, shareWeek: '2026-09-27' })
+  })
+
+  it('🔴 A3 — a market whose newest complete week is too old is refused by the gate: its keywords get no context, never a 0', async () => {
+    h.shares.mockResolvedValue({
+      byKey: new Map([['DE|motorradjacke', share('DE', 'motorradjacke', 0.03)]]),
+      periods: [{ marketplace: 'IT', reason: 'too-old', refused: true, note: 'IT: the newest complete Brand Analytics week (week of 2026-09-13) ended 20 days ago; shares older than 14 days are not used' }],
+      measuredMarkets: ['DE'],
+    })
+    const notes: string[] = []
+    const ctxs = await buildSovBidContexts({ notes })
+    expect(ctxs.map((c) => c.adTarget.id)).toEqual(['t4'])
+    // Review fix — the tick's own summary line says why IT matched nothing.
+    expect(notes).toEqual(['IT: the newest complete Brand Analytics week (week of 2026-09-13) ended 20 days ago; shares older than 14 days are not used'])
+    expect(sovShareNote(notes)).toBe(' · SOV_BID share not used: IT: the newest complete Brand Analytics week (week of 2026-09-13) ended 20 days ago; shares older than 14 days are not used')
+    expect(sovShareNote([])).toBe('')
   })
 
   it('no complete SQP week in any market → no context at all (the rule then matches nothing, by design)', async () => {

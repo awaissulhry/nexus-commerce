@@ -24,6 +24,17 @@ One run a day, for one business, on Amazon Sponsored Products: read, decide insi
 
 The Nexus server's instructions hold the rules for every change. Follow them. In a scheduled run there is no one to ask in the chat: the plan on the Approvals page is the question. A person running this skill by hand is shown the plan and asked before it is sent.
 
+## Amazon's visibility numbers
+
+What Nexus has from Amazon, free:
+- **Top-of-search impression share**: per campaign and day; per keyword where Nexus's keyword pass filled it — each reading names its grain. 1–3 days late (the Sponsored Products reports).
+- **Brand Analytics Search Query Performance (SQP)**: per search query and ASIN, weekly (Sunday to Saturday), about 5 days after the week ends: our impressions, clicks, cart adds and purchases against the query's totals, and the query's search volume.
+- **Best Sellers Rank**: per ASIN and category, every 3 hours (`sales-rank`).
+
+What it does not have: an organic or an ad (sponsored) keyword rank or position. Amazon offers no source for either: never estimate, invent or buy one, and never call a share a rank or a position.
+
+Say each with its grain (campaign, keyword, search query, ASIN), its window (a day, the week of …, 30 days) and its date; "not reported" when there is none, never 0. A value Nexus computes (a weighted average, a sum over ASINs) says "computed by Nexus from Amazon's …"; only a value Amazon reports is Amazon's. In the run's report (7) they are words, never figures.
+
 ## 1. Start
 
 1. `business-overview`: the business, its markets, its time zone (the weekly day is Monday there).

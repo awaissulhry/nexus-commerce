@@ -26,7 +26,7 @@ interface Plan { id: string; name: string; goal: string; autonomy: string; modul
 interface Decision { id: string; at: string; module: string; action: string; reason: string; status: string; source: string; campaignId?: string | null }
 
 const GOALS = ['LAUNCH', 'PROFIT', 'BALANCED', 'LIQUIDATE', 'DEFEND_RANK']
-const GOAL_LABEL: Record<string, string> = { LAUNCH: 'Launch', PROFIT: 'Profit', BALANCED: 'Balanced', LIQUIDATE: 'Liquidate', DEFEND_RANK: 'Defend Rank' }
+const GOAL_LABEL: Record<string, string> = { LAUNCH: 'Launch', PROFIT: 'Profit', BALANCED: 'Balanced', LIQUIDATE: 'Liquidate', DEFEND_RANK: 'Top-of-search (runs as Balanced)' }
 const AUTONOMY = ['OFF', 'SUGGEST', 'AUTO']
 const AUT_LABEL: Record<string, string> = { OFF: 'Off', SUGGEST: 'Suggest', AUTO: 'Automate' }
 

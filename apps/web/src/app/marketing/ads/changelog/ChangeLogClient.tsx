@@ -26,6 +26,7 @@ import { AdsDataGrid, type GridColumn, type GridFilter } from '../campaigns/_gri
 // reason, so the two surfaces cannot disagree about what counts as noise.
 import { isRoutine } from '../campaigns/ChangeAnnotations'
 import { fmtChangeValue } from '../_shared/changeValue'
+import { type Evidence, fmtEvidence, isThin } from './evidence'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button, Checkbox, FilterChip, Pill, Select, Textarea, ToolbarButton } from '@/design-system/primitives'
 import { Modal } from '@/design-system/components'
@@ -55,47 +56,14 @@ interface ChangeRow {
   undoBlockedReason?: string
 }
 
-/**
- * ADX G6 — why a change happened, not just what changed and who did it.
- * Every field optional: a write with nothing numeric to say still records a note,
- * and most writers do not emit this yet, so null is normal rather than an error.
- */
-interface Evidence {
-  targetKey?: string; metric?: string
-  observed?: number | null; threshold?: number | null
-  windowDays?: number | null; sampleSize?: number | null
-  sampleUnit?: 'rows' | 'days' | 'impressions'
-  note?: string
-}
-
-/**
- * Compact one-liner: "TOS IS 31 vs 45 · 3 days". Deliberately terse because it sits
- * inside a grid cell; the full object goes in the title attribute.
- */
-function fmtEvidence(e: Evidence): string {
-  const bits: string[] = []
-  if (e.metric) bits.push(e.metric.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase())
-  if (e.observed != null && e.threshold != null) bits.push(`${e.observed} vs ${e.threshold}`)
-  else if (e.observed != null) bits.push(String(e.observed))
-  if (e.sampleSize != null) bits.push(`${e.sampleSize} ${e.sampleUnit ?? 'rows'}`)
-  else if (e.windowDays != null) bits.push(`${e.windowDays}d`)
-  return bits.join(' · ')
-}
-
-/** Thin data should be visible on its face — some schedules hold 1-5 days where the account has 56. */
-function isThin(e: Evidence): boolean {
-  if (e.sampleUnit === 'days' && typeof e.sampleSize === 'number') return e.sampleSize < 7
-  return e.sampleUnit === 'rows' && e.sampleSize === 0
-}
-
 const SOURCE_LABELS: Record<string, { label: string; cls: string; tip: string }> = {
-  automation: { label: 'Automation', cls: 'ok', tip: 'Made by a rank schedule, family plan, rule or standing job' },
+  automation: { label: 'Automation', cls: 'ok', tip: 'Made by an hourly bid schedule, family plan, rule or standing job' },
   operator: { label: 'Operator', cls: 'arch', tip: 'Made by a person in the console' },
   system: { label: 'System', cls: 'arch', tip: 'No actor recorded' },
   external: { label: 'External', cls: 'warn', tip: 'Originated outside Nexus (e.g. Seller Central) and was accepted' },
 }
 const ORIGIN_LABELS: Record<string, string> = {
-  schedule: 'Rank schedule', plan: 'Family plan', rule: 'Rule', job: 'Standing job', manual: 'Manual', unknown: '—',
+  schedule: 'Hourly bid schedule', plan: 'Family plan', rule: 'Rule', job: 'Standing job', manual: 'Manual', unknown: '—',
 }
 // Delivery, not intent. APPLIED is the only state meaning Amazon took the change.
 const DELIVERY_TONE: Record<string, string> = { APPLIED: 'ok', FAILED: 'bad', PENDING: 'warn', IN_FLIGHT: 'warn', CANCELLED: 'arch', SUPERSEDED: 'arch' }

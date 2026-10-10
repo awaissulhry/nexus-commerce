@@ -39,6 +39,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { TermChart, type TermPoint } from './TermChart'
 import { BidAction } from './BidAction'
 import { ChangeLog } from './ChangeLog'
+import { sharePct } from '../../campaigns/_grid/format'
 
 interface TermPayload {
   term: string
@@ -48,7 +49,7 @@ interface TermPayload {
   periodAgeDays: number | null
   periodTruncated: boolean
   header: {
-    marketVolume: number | null; marketRank: number | null; share: number
+    marketVolume: number | null; searchQueryScore: number | null; share: number | null
     shareBound: number | null; bestAsin: string | null; asinsOnQuery: number
   } | null
   series: {
@@ -56,7 +57,8 @@ interface TermPayload {
     lastShareWeek: string | null; lastSpendWeek: string | null
     shareTrailsSpendByDays: number | null; shareWeeksExcluded: number
   }
-  asins: Array<{ asin: string; sku: string | null; name: string | null; share: number; clickShare: number; advertisedOnTerm: boolean }>
+  /** Each share is null when Amazon reported no query total that week (no reading, never 0). */
+  asins: Array<{ asin: string; sku: string | null; name: string | null; share: number | null; clickShare: number | null; advertisedOnTerm: boolean }>
   bidCampaigns: Array<{
     id: string; name: string; status: string; adGroupCount: number; matchTypes: string[]
     adGroups: Array<{ id: string; name: string; matchTypes: string[]; targets: number; enabledTargets: number; minBidCents: number; maxBidCents: number }>
@@ -66,7 +68,9 @@ interface TermPayload {
 }
 
 const num = (n: number) => n.toLocaleString('en-IE')
-const pct = (v: number) => `${(v * 100).toFixed(2)}%`
+// Free visibility numbers (2026-10-10) — every share goes through the console's one formatter (`sharePct`): no reading
+// reads "—" and a tiny non-zero share "<0.01%", never a rounded or substituted "0.00%".
+const pct = (v: number | null | undefined) => sharePct(v)
 const eur = (c: number) => `€${(c / 100).toFixed(2)}`
 const dayMonth = (iso: string) => {
   const d = new Date(`${iso}T00:00:00Z`)
@@ -134,7 +138,7 @@ export function TermDrawer({
             {/* KT.5's vocabulary verbatim — one way of saying "as of" on this page, not two */}
             <p>
               {market}
-              {h && <> · volume <b>{num(h.marketVolume ?? 0)}</b> · market rank <b>#{num(h.marketRank ?? 0)}</b></>}
+              {h && <> · volume <b>{h.marketVolume != null ? num(h.marketVolume) : '—'}</b> · <i title={"Amazon's Search Query Score for this ASIN (lower = more searched among this ASIN's queries)"}>Search Query Score</i> <b>{h.searchQueryScore != null ? num(h.searchQueryScore) : '—'}</b></>}
               {h && <> · best ASIN’s share <b>{pct(h.share)}</b>{h.shareBound != null && <> <i title={`Our ${h.asinsOnQuery} ASINs on this query sum to ${pct(h.shareBound)} — an UPPER BOUND, not a total: two of our ASINs can appear in one search, so the parts overlap.`}>≤{pct(h.shareBound)}</i></>}</>}
               {data?.period && <> · week of <b>{dayMonth(data.period)}</b> ({data.periodAgeDays}d old)</>}
             </p>
@@ -201,7 +205,7 @@ export function TermDrawer({
                     { key: 'asin', label: 'ASIN', render: (a) => <span className="mono">{a.asin}</span> },
                     { key: 'product', label: 'Product', render: (a) => (a.name ? <span title={a.name}>{a.sku ? `${a.sku} — ` : ''}{a.name}</span> : <span className="h10-kt-nd">not in the PIM</span>) },
                     { key: 'share', label: 'Share', align: 'right', render: (a) => <b>{pct(a.share)}</b> },
-                    { key: 'clickshare', label: 'Click share', align: 'right', render: (a) => (a.clickShare > 0 ? <>{pct(a.clickShare)}</> : <span className="h10-kt-nd">—</span>) },
+                    { key: 'clickshare', label: 'Click share', align: 'right', render: (a) => (a.clickShare != null ? <>{pct(a.clickShare)}</> : <span className="h10-kt-nd">—</span>) },
                     { key: 'onterm', label: 'On this term', render: (a) => (a.advertisedOnTerm
                       ? <span className="h10-kt-drok">advertised</span>
                       : <span className="h10-kt-drno" title="This ASIN holds the query organically or via another campaign, but it is not in any ad group bidding this term.">not advertised on it</span>) },

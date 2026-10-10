@@ -678,7 +678,7 @@ export function FamilyCockpitClient() {
 
           <div className="fc-autorow">
             <div><span className="k">Writable campaigns</span><span className="v">{ck.totals.allowlisted} of {ck.totals.campaigns}</span></div>
-            <div><span className="k">Rank schedules</span><span className="v">{ck.automation.schedulesEnabled} enabled of {ck.automation.schedulesTotal}</span></div>
+            <div><span className="k">Hourly bid schedules</span><span className="v">{ck.automation.schedulesEnabled} enabled of {ck.automation.schedulesTotal}</span></div>
             <div><span className="k">Pending proposals</span><span className="v">{ck.proposals?.pending ?? 0}</span></div>
             <div><span className="k">Pure-waste recoverable</span><span className="v">{eur(ck.proposals?.recoverableCents ?? 0)}</span></div>
           </div>

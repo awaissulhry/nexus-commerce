@@ -1411,16 +1411,26 @@ async function buildRisingStarContexts() {
 // `< 1 %` matches 29.8 % of rows instead of 98.6 %.
 //
 // `adTarget.id` still lets `bid_apply` act on the target; nothing about the action changed.
+//
+// A3 (2026-10-10) — the share is at most SOV_SHARE_MAX_AGE_DAYS (14, the KEYWORD_RANK_BID limit) old, counted from
+// the end of its Amazon week. The gate used to take a complete week up to 56 days old. A market whose newest complete
+// week is older is refused like a truncated one: its keywords get NO context (a share is never null or 0 here), and
+// the market's `note` says why — in this tick's log line, the rule preview's `periods` and the SOV tab's census.
+// Every context carries `adTarget.shareAgeDays` (days since its week ended) and `adTarget.shareWeek` (its start).
 /**
  * Exported for verification, exactly as `buildCampaignBudgetContexts` above is: a probe that
  * re-implements the emitter to check it would be checking its own copy, which is how a verifier
  * comes to pass on code the engine does not run.
  */
-export async function buildSovBidContexts() {
+export async function buildSovBidContexts(opts: { notes?: string[] } = {}) {
   try {
-    const { keywordMarketShares, sovShareKey } = await import('../services/advertising/ads-sov-keyword-share.service.js')
+    const { keywordMarketShares, sovShareKey, SOV_SHARE_MAX_AGE_DAYS } = await import('../services/advertising/ads-sov-keyword-share.service.js')
     const { analyzeShareOfVoice } = await import('../services/advertising/ads-impression-share.service.js')
-    const shares = await keywordMarketShares()
+    const shares = await keywordMarketShares({ maxAgeDays: SOV_SHARE_MAX_AGE_DAYS })
+    const tooOld = shares.periods.filter((p) => p.reason === 'too-old')
+    if (tooOld.length) logger.info('[ads-rule-evaluator] SOV_BID: share not used in some markets', { why: tooOld.map((p) => p.note) })
+    // Review fix — the tick's own summary line says it too (`notes`), so the run record explains a rule that matched nothing.
+    for (const p of tooOld) if (p.note) opts.notes?.push(p.note)
     if (!shares.byKey.size) return []
 
     /**
@@ -1434,7 +1444,8 @@ export async function buildSovBidContexts() {
     const concentration = new Map<string, number>()
     for (const marketplace of shares.measuredMarkets) {
       const own = await analyzeShareOfVoice({ windowDays: 30, marketplace, limit: Number.MAX_SAFE_INTEGER })
-      for (const r of own.rows) concentration.set(sovShareKey(marketplace, r.query), r.topCampaignSharePct)
+      // A query with no impressions has no concentration (null): it stays out of the map, so the context leaves it absent.
+      for (const r of own.rows) if (r.topCampaignSharePct != null) concentration.set(sovShareKey(marketplace, r.query), r.topCampaignSharePct)
     }
 
     const targets = await prisma.adTarget.findMany({
@@ -1490,7 +1501,8 @@ export async function buildSovBidContexts() {
             id: t.id,
             /**
              * Fractions (0..1).
-             * · `sovPct` — Amazon's own share of THIS query's market that our ASINs took.
+             * · `sovPct` — the share of THIS query's market impressions our ASINs took, computed by Nexus from
+             *   Amazon's weekly Search Query Performance counts (not a number Amazon reports itself).
              * · `topSharePct` — our biggest campaign's share of the impressions WE took on it
              *   (cannibalisation). Null where we ran no ads on the query, which is a real state:
              *   a query can have a market share and no campaign concentration.
@@ -1499,6 +1511,10 @@ export async function buildSovBidContexts() {
              *   `SOV_METRIC` in the same change, so nothing compares against undefined.
              */
             sovPct: s.sharePct,
+            // A3 — how old the share is: whole days since its Amazon week ended (never above SOV_SHARE_MAX_AGE_DAYS),
+            // and that week's start (YYYY-MM-DD).
+            shareAgeDays: s.shareAgeDays,
+            shareWeek: s.weekStart,
             // KT-P/C1 — absent where we ran no ads on the query in the window. As a null it read
             // as 0 and satisfied `Campaign Concentration < 60%`, which is the opposite of what a
             // missing concentration means (SOV-P measured 86 of 793 null, 4 matched).
@@ -1755,6 +1771,11 @@ export async function buildKeywordRankBidContexts() {
   } catch (e) { logger.warn('[ads-rule-evaluator] buildKeywordRankBidContexts failed', { error: (e as Error).message }); return [] }
 }
 
+/** Review fix — " · SOV_BID share not used: IT: …" for the tick's summary line; '' when every market's week was usable. Pure. */
+export function sovShareNote(notes: readonly string[]): string {
+  return notes.length ? ` · SOV_BID share not used: ${notes.join('; ')}` : ''
+}
+
 /**
  * ADS AUTONOMY W4-8 — `onLine` hears the tick's own summary line (the one its scheduled run records), or why it evaluated
  * nothing: what a hand-run records as its ONE run row (runAdvertisingRuleEvaluatorLineOnce). Callers without it are
@@ -1784,6 +1805,8 @@ export async function runAdvertisingRuleEvaluatorOnce(opts: { onLine?: (line: st
     }
     forceDryRun = await shouldForceDryRun()
   } catch { /* state unavailable → fall through (env kill remains the backstop) */ }
+  // Review fix — the markets whose Share of Voice week is too old to use, said in this tick's summary line.
+  const sovNotes: string[] = []
   const [fbaAge, profitability, cacSpike, underperform, campaignBudget,
     zeroImpression, lowCtr, cvrDrop, wastedKeyword, searchTermConverting,
     highAcosKeyword, scaleOpportunity, adGroupUnderperform,
@@ -1811,7 +1834,7 @@ export async function runAdvertisingRuleEvaluatorOnce(opts: { onLine?: (line: st
     buildCampaignRoasDecliningContexts(),
     buildRisingStarContexts(),
     // ── SK4 — SOV + Keyword Tracker keyword-bid-adjustment rules ────────
-    buildSovBidContexts(),
+    buildSovBidContexts({ notes: sovNotes }),
     buildKeywordRankBidContexts(),
   ])
 
@@ -1925,7 +1948,7 @@ export async function runAdvertisingRuleEvaluatorOnce(opts: { onLine?: (line: st
     durationMs: Date.now() - startedAt,
   }
   lastRunAt = new Date()
-  lastSummary = `fba=${fbaAge.length} prof=${profitability.length} cac=${cacSpike.length} under=${underperform.length} schedule=${scheduleContexts.length} evals=${totalEvaluations} matches=${totalMatches} capped=${totalCapped} failed=${totalFailed}${leverHeldNote(totalLeverHeld)} durationMs=${summary.durationMs}`
+  lastSummary = `fba=${fbaAge.length} prof=${profitability.length} cac=${cacSpike.length} under=${underperform.length} schedule=${scheduleContexts.length} evals=${totalEvaluations} matches=${totalMatches} capped=${totalCapped} failed=${totalFailed}${leverHeldNote(totalLeverHeld)} durationMs=${summary.durationMs}${sovShareNote(sovNotes)}`
   opts.onLine?.(lastSummary)
   return summary
 }

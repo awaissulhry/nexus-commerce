@@ -11,7 +11,7 @@ import { describe, it, expect } from 'vitest'
 import { buildCsv } from './csv'
 
 const row = (over: Record<string, unknown>) => ({
-  keyword: 'giacca moto', marketplace: 'IT', marketVolume: 1177, marketRank: 3,
+  keyword: 'test jacket', marketplace: 'IT', marketVolume: 1000, searchQueryScore: 3,
   impressionShare: 0.0117, asinsCompeting: 8, asOf: '2026-07-19', asOfAgeDays: 24,
   state: 'measured', measured: true, branded: false, ...over,
 }) as Parameters<typeof buildCsv>[0][number]
@@ -57,6 +57,12 @@ describe('buildCsv', () => {
     expect(csv).toContain('0.00%')
   })
 
+  it('exports a tiny measured share as "<0.01%", never a rounded 0.00% (free visibility numbers, 2026-10-10)', () => {
+    const csv = buildCsv([row({ state: 'measured', impressionShare: 0.00003 })], payload)
+    expect(csv).toContain('<0.01%')
+    expect(csv).not.toContain('0.00%')
+  })
+
   it('says "no earlier week" rather than leaving the Δ blank on a measured row', () => {
     const csv = buildCsv([row({ deltaPP: null })], payload)
     expect(csv).toContain('no earlier week')
@@ -78,7 +84,7 @@ describe('buildCsv', () => {
   })
 
   it('quotes a keyword containing a comma instead of splitting the row', () => {
-    const csv = buildCsv([row({ keyword: 'giacca moto, uomo' })], payload)
-    expect(csv).toContain('"giacca moto, uomo"')
+    const csv = buildCsv([row({ keyword: 'test jacket, men' })], payload)
+    expect(csv).toContain('"test jacket, men"')
   })
 })

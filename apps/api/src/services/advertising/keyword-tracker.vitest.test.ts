@@ -17,7 +17,11 @@ import { describe, it, expect, vi } from 'vitest'
 
 vi.mock('../../db.js', () => ({ default: {} }))
 
-const { resolveScope, chooseViewPeriod, projectCliff, nullsLast, KT_LOOKBACK_DAYS, SQP_COMPLETENESS_RATIO } = await import('./keyword-tracker.service.js')
+const {
+  resolveScope, chooseViewPeriod, projectCliff, nullsLast, KT_LOOKBACK_DAYS, SQP_COMPLETENESS_RATIO,
+  sqpShareFromCounts, sqpVolumeOf, ktTopOfSearchFact, likeForLikeMovement, KT_TOS_MAX_AGE_DAYS,
+} = await import('./keyword-tracker.service.js')
+const { weightedIS } = await import('./placement-grid.service.js')
 
 const D = (s: string) => new Date(`${s}T00:00:00.000Z`)
 
@@ -299,5 +303,119 @@ describe('nullsLast', () => {
   it('is stable when both sides are blank', () => {
     expect(nullsLast(null, null, 1)).toBe(0)
     expect(nullsLast(null, null, -1)).toBe(0)
+  })
+})
+
+/**
+ * B2 (2026-10-10) — every SQP share from Amazon's COUNTS. The stored share columns are NOT NULL DEFAULT 0, so a
+ * share Amazon never reported reads as a real 0 there; from the counts, "no total" is null.
+ */
+describe('sqpShareFromCounts', () => {
+  it('our count ÷ the query total', () => {
+    expect(sqpShareFromCounts(300, 10_000)).toBeCloseTo(0.03, 12)
+    expect(sqpShareFromCounts(0, 10_000)).toBe(0) // a real total and none of it: a real 0
+  })
+
+  it('null — never 0 — when Amazon reported no total to divide by', () => {
+    expect(sqpShareFromCounts(0, 0)).toBeNull()
+    expect(sqpShareFromCounts(5, 0)).toBeNull()
+    expect(sqpShareFromCounts(5, -1)).toBeNull()
+    expect(sqpShareFromCounts(5, null)).toBeNull()
+    expect(sqpShareFromCounts(null, 100)).toBeNull()
+  })
+
+  it('a tiny real share stays tiny, never rounded to 0', () => {
+    expect(sqpShareFromCounts(1, 2_000_000)).toBeGreaterThan(0)
+  })
+
+  it('clamped to 0..1', () => {
+    expect(sqpShareFromCounts(150, 100)).toBe(1)
+  })
+})
+
+describe('sqpVolumeOf — a stored 0 is "not reported" (review fix)', () => {
+  it('SQP only returns searched queries: 0, negative or missing is null; a real volume passes', () => {
+    expect(sqpVolumeOf(0)).toBeNull()
+    expect(sqpVolumeOf(null)).toBeNull()
+    expect(sqpVolumeOf(undefined)).toBeNull()
+    expect(sqpVolumeOf(-5)).toBeNull()
+    expect(sqpVolumeOf(1200)).toBe(1200)
+  })
+})
+
+/** B3 (2026-10-10) — the tracker's top-of-search scope fact. */
+describe('ktTopOfSearchFact', () => {
+  const NOW = Date.parse('2026-10-10T12:00:00Z')
+  const r = (campaignId: string, d: string, share: number, impressions: number | null) => ({ campaignId, date: D(d), share, impressions })
+
+  it('only readings at most 7 days old; impression-weighted; oldest, newest and the campaigns used', () => {
+    const fact = ktTopOfSearchFact([
+      r('c1', '2026-10-08', 0.4, 300), r('c1', '2026-10-07', 0.1, 100),
+      r('c1', '2026-09-20', 0.9, 1000), // 20 days old — not "now"
+      r('c2', '2026-10-09', 0.2, 100),
+    ], { campaignsInScope: 5, average: weightedIS, now: NOW })!
+    expect(fact.avgShare).toBeCloseTo((0.4 * 300 + 0.1 * 100 + 0.2 * 100) / 500, 12)
+    expect(fact).toMatchObject({
+      grain: 'campaign', campaignsWithReading: 2, campaignsInScope: 5, readings: 3,
+      oldest: '2026-10-07', newest: '2026-10-09', asOf: '2026-10-09', windowDays: KT_TOS_MAX_AGE_DAYS,
+    })
+    expect(fact.basis).toBe('campaign-level: the top-of-search impression share Amazon reported for 2 campaigns, averaged by Nexus (impression-weighted) over 3 campaign-day readings from 2026-10-07 to 2026-10-09; source: Amazon\'s placement report (3 readings)')
+    expect(fact.sources).toEqual({ placementReport: 3, campaignReport: 0 })
+  })
+
+  it('review fix — says where its readings came from: the placement report, the campaign report, or both', () => {
+    const fact = ktTopOfSearchFact([
+      { ...r('c1', '2026-10-08', 0.4, 300), source: 'placement' as const },
+      { ...r('c2', '2026-10-08', 0.2, 100), source: 'campaign' as const },
+    ], { campaignsInScope: 2, average: weightedIS, now: NOW })!
+    expect(fact.sources).toEqual({ placementReport: 1, campaignReport: 1 })
+    expect(fact.basis).toMatch(/; source: Amazon's placement report \(1 reading\) and campaign report \(1 reading\)$/)
+  })
+
+  it('a reading exactly 7 days old counts; 8 days does not', () => {
+    expect(ktTopOfSearchFact([r('c1', '2026-10-03', 0.3, 10)], { campaignsInScope: 1, average: weightedIS, now: NOW })?.readings).toBe(1)
+    expect(ktTopOfSearchFact([r('c1', '2026-10-02', 0.3, 10)], { campaignsInScope: 1, average: weightedIS, now: NOW })).toBeNull()
+  })
+
+  it('no recent reading is null — not an old one shown as now, and not 0', () => {
+    expect(ktTopOfSearchFact([], { campaignsInScope: 3, average: weightedIS, now: NOW })).toBeNull()
+  })
+
+  it('readings without impressions fall back to the plain mean, as the campaign list does', () => {
+    const fact = ktTopOfSearchFact([r('c1', '2026-10-08', 0.4, 0), r('c2', '2026-10-08', 0.2, null)], { campaignsInScope: 2, average: weightedIS, now: NOW })!
+    expect(fact.avgShare).toBeCloseTo(0.3, 12)
+  })
+})
+
+/**
+ * B2 (2026-10-10) — KT.10's like-for-like movement. The query's market columns repeat on every ASIN row, so summing
+ * them per (query, ASIN) pair multiplied them by the number of our ASINs and understated the share by that factor.
+ */
+describe('likeForLikeMovement', () => {
+  const row = (searchQuery: string, asin: string, total: number, ours: number, vol = 100) =>
+    ({ searchQuery, asin, searchQueryVolume: vol, impressionsTotal: total, impressionsBrand: ours })
+
+  it('each query total once, ours summed', () => {
+    const was = [row('q1', 'A', 1000, 10), row('q1', 'B', 1000, 10), row('q2', 'A', 500, 5), row('q3', 'A', 100, 1), row('q4', 'A', 100, 1)]
+    const now = [row('q1', 'A', 2000, 30, 200), row('q1', 'B', 2000, 10, 200), row('q2', 'A', 500, 5), row('q3', 'A', 100, 1), row('q4', 'A', 100, 1)]
+    const m = likeForLikeMovement(was, now)!
+    expect(m.pairs).toBe(5)
+    expect(m.sharePriorPct).toBeCloseTo((100 * 27) / 1700, 10)  // not 27 / 2,700
+    expect(m.shareNowPct).toBeCloseTo((100 * 47) / 2700, 10)    // not 47 / 4,700
+    expect(m.volumeDeltaPct).toBeCloseTo(((500 - 400) / 400) * 100, 10)
+    expect(m.ourImpressionsDeltaPct).toBeCloseTo(((47 - 27) / 27) * 100, 10)
+  })
+
+  it('only the pairs present in both weeks; fewer than five is no movement', () => {
+    const was = [row('q1', 'A', 1000, 10), row('q2', 'A', 1000, 10)]
+    const now = [row('q1', 'A', 1000, 10), row('q2', 'A', 1000, 10), row('q3', 'A', 1000, 10)]
+    expect(likeForLikeMovement(was, now)).toBeNull()
+  })
+
+  it('a zero total is no share, never 0 %', () => {
+    const rows = ['q1', 'q2', 'q3', 'q4', 'q5'].map((q) => row(q, 'A', 0, 0))
+    const m = likeForLikeMovement(rows, rows)!
+    expect(m.sharePriorPct).toBeNull()
+    expect(m.shareNowPct).toBeNull()
   })
 })

@@ -16,6 +16,10 @@
  *               when and why, so the map and the "why" can show it.
  *   fail closed a stored override that no longer validates (an unknown key, a value outside the bounds) is ignored and
  *               listed; the next level applies.
+ *   keyword     Lane 5 — one setting takes a value per keyword too (KEYWORD_VALUE_SETTINGS: tosTargetPct): a VALUE override
+ *               with ref `target:<AdTarget.id>`, at either scope, in the same AdsBrainOverride storage (no new column).
+ *               resolveKeywordValue reads it: keyword > campaign > product > default. resolveBrainSettings never mixes a
+ *               keyword's value into the campaign's or the product's.
  */
 import {
   BRAIN_LEVERS, BRAIN_SETTING_KEYS, DEFAULT_LEVEL, isLever, isLevel, isSetting, levelRefusal, lockRef, lockValueRefusal, ownsLever, settingDefaults,
@@ -25,6 +29,24 @@ import {
 export const OVERRIDE_KINDS = ['LEVEL', 'LOCK', 'EXCLUDE', 'VALUE'] as const
 export type OverrideKind = (typeof OVERRIDE_KINDS)[number]
 export const EXCLUDE_KEY = '*'
+
+/** Lane 5 — the settings a keyword may hold a value of its own for (a VALUE override with ref `target:<AdTarget.id>`). */
+export const KEYWORD_VALUE_SETTINGS = ['tosTargetPct'] as const satisfies readonly BrainSetting[]
+export type KeywordValueSetting = (typeof KEYWORD_VALUE_SETTINGS)[number]
+const KEYWORD_REF = /^target:([A-Za-z0-9_-]{1,64})$/
+/** The ref of one keyword's own value. */
+export const keywordValueRef = (targetId: string): string => `target:${targetId}`
+
+/** The AdTarget id a keyword value's ref names (`target:<AdTarget.id>`), or null when the ref is not one. Pure. */
+export const keywordRefTarget = (ref: unknown): string | null => (typeof ref === 'string' ? KEYWORD_REF.exec(ref.trim())?.[1] ?? null : null)
+
+/** A VALUE override's ref: '' (the product's or the campaign's value), or one keyword's of a keyword setting — or why not. */
+export function valueRef(key: BrainSetting, ref: unknown): { ref: string } | { refusal: string } {
+  const raw = typeof ref === 'string' ? ref.trim() : ''
+  if (!raw) return { ref: '' }
+  if (!(KEYWORD_VALUE_SETTINGS as readonly string[]).includes(key)) return { refusal: `${key} is set per product or per campaign, not per keyword (ref ${raw}); only ${KEYWORD_VALUE_SETTINGS.join(', ')} takes a keyword's own value (ref target:<AdTarget.id>)` }
+  return KEYWORD_REF.test(raw) ? { ref: raw } : { refusal: `a keyword's own value of ${key} names its keyword as target:<AdTarget.id>, not ${raw}` }
+}
 
 /** One AdsBrainOverride row, as the resolver reads it. */
 export interface OverrideRow {
@@ -73,9 +95,12 @@ export function validateIdentity(input: Omit<OverrideInput, 'value'>): { identit
     }
     case 'EXCLUDE':
       return input.key === EXCLUDE_KEY || !input.key ? { identity: { ...base, kind: 'EXCLUDE', key: EXCLUDE_KEY, ref: '' } } : { refusal: `an exclusion takes key "${EXCLUDE_KEY}", not ${input.key}` }
-    case 'VALUE':
+    case 'VALUE': {
       if (!isSetting(input.key)) return { refusal: `${input.key} is not a setting of the brain (settings: ${BRAIN_SETTING_KEYS.join(', ')})` }
-      return { identity: { ...base, kind: 'VALUE', key: input.key, ref: '' } }
+      // Lane 5 — a keyword's own value (ref target:<AdTarget.id>) for a keyword setting only.
+      const ref = valueRef(input.key, input.ref)
+      return 'refusal' in ref ? ref : { identity: { ...base, kind: 'VALUE', key: input.key, ref: ref.ref } }
+    }
     default:
       return { refusal: `the kind is ${OVERRIDE_KINDS.join(', ')}, not ${String(input.kind)}` }
   }
@@ -144,8 +169,9 @@ const who = describeProvenance
  * rows: only the open ones of this product × market (PRODUCT) and of this campaign (CAMPAIGN) count. A campaign
  * override belongs to its campaign: it applies whichever product the campaign is resolved under.
  */
-export function resolveBrainSettings(input: { productId: string; market: string; campaignId?: string | null; enrolled: boolean; overrides: readonly OverrideRow[] }): BrainSettings {
-  const campaignId = input.campaignId ?? null
+/** The open overrides that apply to this product × market (and campaign), validated again; the newest of one identity wins. */
+function liveOverrides(input: { productId: string; market: string; campaignId: string | null; overrides: readonly OverrideRow[] }): { live: Map<string, OverrideRow>; ignored: Array<{ overrideId: string; why: string }> } {
+  const { campaignId } = input
   const ignored: Array<{ overrideId: string; why: string }> = []
   // The open overrides that apply here, validated again (a row a later code change no longer accepts is ignored).
   const live = new Map<string, OverrideRow>()
@@ -159,6 +185,12 @@ export function resolveBrainSettings(input: { productId: string; market: string;
     if ('refusal' in checked) { ignored.push({ overrideId: o.id, why: checked.refusal }); continue }
     live.set(overrideIdentity(o), { ...o, ref: checked.override.ref }) // the newest of one identity wins
   }
+  return { live, ignored }
+}
+
+export function resolveBrainSettings(input: { productId: string; market: string; campaignId?: string | null; enrolled: boolean; overrides: readonly OverrideRow[] }): BrainSettings {
+  const campaignId = input.campaignId ?? null
+  const { live, ignored } = liveOverrides({ ...input, campaignId })
   const find = (scope: BrainScope, kind: OverrideKind, key: string, ref = '') => live.get(overrideIdentity({ scope, campaignId, kind, key, ref }))
 
   const exclusion = find('CAMPAIGN', 'EXCLUDE', EXCLUDE_KEY) ?? find('PRODUCT', 'EXCLUDE', EXCLUDE_KEY)
@@ -195,6 +227,24 @@ export function resolveBrainSettings(input: { productId: string; market: string;
     values[key] = row ? { value: row.value as SettingValue, ...provenanceOf(row) } : { value: defaults[key], ...DEFAULT }
   }
   return { productId: input.productId, market: input.market, campaignId, enrolled: input.enrolled, excluded, levers, values, ignored }
+}
+
+/** Lane 5 — a keyword setting's value with its grain: the keyword's own, the campaign's, the product's, or the default. */
+export type KeywordResolved = Resolved<SettingValue> & { grain: 'keyword' | 'campaign' | 'product' | 'default' }
+
+/**
+ * Lane 5 — one keyword's value of a keyword setting (KEYWORD_VALUE_SETTINGS): its own VALUE override (ref
+ * `target:<AdTarget.id>`; at its campaign's scope before the product's) > the campaign's > the product's > the default.
+ * A keyword's own empty value (null) is its choice too: it wins (off for that keyword). Pure.
+ */
+export function resolveKeywordValue(input: { productId: string; market: string; campaignId?: string | null; targetId: string; overrides: readonly OverrideRow[] }, key: KeywordValueSetting): KeywordResolved {
+  const campaignId = input.campaignId ?? null
+  const { live } = liveOverrides({ ...input, campaignId })
+  const ref = keywordValueRef(input.targetId)
+  const own = live.get(overrideIdentity({ scope: 'CAMPAIGN', campaignId, kind: 'VALUE', key, ref })) ?? live.get(overrideIdentity({ scope: 'PRODUCT', campaignId, kind: 'VALUE', key, ref }))
+  if (own) return { value: own.value as SettingValue, ...provenanceOf(own), grain: 'keyword' }
+  const v = resolveBrainSettings({ ...input, campaignId, enrolled: false }).values[key]
+  return { ...v, grain: v.source }
 }
 
 /**

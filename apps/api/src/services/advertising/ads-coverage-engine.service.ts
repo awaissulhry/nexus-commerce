@@ -17,10 +17,19 @@
  *   family daily cap hit → no ups today, decays still allowed
  *
  * ── What it reads, and why ──────────────────────────────────────────────────────────────────
- * ENABLED KeywordCoverageSets only — intent, never raw SQP. Share ground truth is weekly SQP
- * (the only page-one measurement that exists); spend/ACOS feedback is daily AD_TARGET grain.
- * The cadence asymmetry is embraced rather than hidden: steps are small and daily, verdicts
- * weekly, which is exactly how a slow-feedback controller should behave.
+ * ENABLED KeywordCoverageSets only — intent, never raw SQP. Share ground truth is Amazon's weekly
+ * Brand Analytics Search Query Performance: of the query's impressions in search results (Amazon
+ * counts every search-results impression; there is no page filter), the share the SET's own ASINs
+ * took — computed by Nexus as Σ the set's ASINs' impressions ÷ the query's total. Spend/ACOS feedback
+ * is daily AD_TARGET grain.
+ *
+ * A2 (2026-10-10) — the week is the one an SOV rule reads (`sqpWeekGate`, ads-sov-keyword-share.service.ts):
+ * WEEK rows only, a complete week, ended at most 14 days ago; else the share is unmeasured and the
+ * term holds, saying why. The share is the set's portfolio ASINs' only (it used to sum every ASIN of
+ * the business into one family's bid), and the share ladder steps a term at most ONCE per Brand
+ * Analytics week (it used to step +12 % every day on the same weekly reading); the ACoS cap and the
+ * waste guard, which read daily data, still act daily. Evidence: {metric:'sqp_brand_impression_share',
+ * week, ageDays} — not a 30-day window.
  *
  * ── What it will not do ─────────────────────────────────────────────────────────────────────
  *   · Write in OBSERVE mode. Every decision is logged as would-do to AdvertisingActionLog;
@@ -37,6 +46,7 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { allowChange, engineGuardNote, nothingHeld, openEngineGuard, type EngineGuardReport } from './ads-engine-guard.js'
 import { brainOwnedCampaignIds } from './bid-brain/live.js'
+import { sqpWeekEnd } from './keyword-rank-feed.service.js'
 
 export type CoverageEngineMode = 'off' | 'observe' | 'auto'
 
@@ -63,8 +73,14 @@ export const DEFAULT_MAX_CPC_CENTS = Number(process.env.NEXUS_COVERAGE_DEFAULT_M
 
 export interface LadderInput {
   currentBidCents: number
-  /** Weekly SQP share, 0..1, null when the term is unmeasured this week. */
+  /** Weekly SQP share of the set's ASINs, 0..1, null when the term is unmeasured this week. */
   share: number | null
+  /** A2 — the Amazon week the share is from (its start, YYYY-MM-DD), for the words. */
+  shareWeek?: string | null
+  /** A2 — why the share is unmeasured, in words (no usable week, no row for the set's ASINs, …). */
+  shareNote?: string | null
+  /** A2 — the share ladder already stepped (or logged the would-do of) this term on this week. */
+  shareSteppedThisWeek?: boolean
   /** Operator target, 0..100 (percent), null = "hold presence cheaply" (decay-only). */
   targetSharePct: number | null
   /** 30d term-level ACOS for the family's targets on this term; null = no sales yet. */
@@ -84,6 +100,14 @@ export interface LadderDecision {
   action: 'up' | 'down' | 'hold'
   nextBidCents: number
   reason: string
+  /** A2 — what the decision rests on: the family ACoS cap, the 30-day waste guard, the weekly share, or nothing. */
+  basis?: 'acos-cap' | 'waste' | 'share' | 'none'
+}
+
+/** A share as a percent with two decimals; a non-zero share under 0.01 % reads "<0.01%", never "0.00%". */
+export function sharePctText(share: number): string {
+  const pct = share * 100
+  return pct > 0 && pct < 0.01 ? '<0.01%' : `${pct.toFixed(2)}%`
 }
 
 /**
@@ -99,37 +123,42 @@ export function decideBidStep(i: LadderInput): LadderDecision {
   // 1. ACOS cap outranks everything: a family that set a cap meant it.
   if (i.familyAcosCapPct != null && i.acos30d != null && i.acos30d * 100 > i.familyAcosCapPct) {
     if (down < i.currentBidCents) {
-      return { action: 'down', nextBidCents: down, reason: `ACOS ${(i.acos30d * 100).toFixed(0)}% over the family cap ${i.familyAcosCapPct}%` }
+      return { action: 'down', nextBidCents: down, reason: `ACOS ${(i.acos30d * 100).toFixed(0)}% over the family cap ${i.familyAcosCapPct}% (30 days)`, basis: 'acos-cap' }
     }
-    return { action: 'hold', nextBidCents: i.currentBidCents, reason: 'ACOS over cap but bid already at the floor' }
+    return { action: 'hold', nextBidCents: i.currentBidCents, reason: 'ACOS over cap but bid already at the floor', basis: 'acos-cap' }
   }
 
   // 2. Waste guard: real spend, zero sales → step down even if share is short. Coverage that
   //    never converts is the failure mode the wasted-spend board prices every day.
   if (i.sales30dCents === 0 && i.spend30dCents >= 2_000) {
     if (down < i.currentBidCents) {
-      return { action: 'down', nextBidCents: down, reason: `€${(i.spend30dCents / 100).toFixed(0)} in 30d with no sales` }
+      return { action: 'down', nextBidCents: down, reason: `€${(i.spend30dCents / 100).toFixed(0)} in 30d with no sales`, basis: 'waste' }
     }
-    return { action: 'hold', nextBidCents: i.currentBidCents, reason: 'wasteful but already at the floor' }
+    return { action: 'hold', nextBidCents: i.currentBidCents, reason: 'wasteful but already at the floor', basis: 'waste' }
   }
 
   // 3. Share ladder — only when the operator set a target and the week is measured.
   if (i.targetSharePct != null && i.share != null) {
+    const share = `impression share ${sharePctText(i.share)} (the set's ASINs, Brand Analytics week of ${i.shareWeek ?? 'unknown'}, computed by Nexus)`
+    // A2 — one share step per Brand Analytics week: the weekly reading has already been acted on.
+    if (i.shareSteppedThisWeek) {
+      return { action: 'hold', nextBidCents: i.currentBidCents, reason: `${share}: already stepped on this week; the next share step waits for a newer Brand Analytics week`, basis: 'share' }
+    }
     const sharePct = i.share * 100
     if (sharePct < i.targetSharePct) {
       if (i.familyDailyCapBreached) {
-        return { action: 'hold', nextBidCents: i.currentBidCents, reason: `share ${sharePct.toFixed(2)}% below target ${i.targetSharePct}% but the family daily cap is spent` }
+        return { action: 'hold', nextBidCents: i.currentBidCents, reason: `${share} below target ${i.targetSharePct}% but the family daily cap is spent`, basis: 'share' }
       }
       if (up > i.currentBidCents) {
-        return { action: 'up', nextBidCents: up, reason: `share ${sharePct.toFixed(2)}% below target ${i.targetSharePct}%` }
+        return { action: 'up', nextBidCents: up, reason: `${share} below target ${i.targetSharePct}%`, basis: 'share' }
       }
-      return { action: 'hold', nextBidCents: i.currentBidCents, reason: `below target but at the ${ceiling}¢ ceiling` }
+      return { action: 'hold', nextBidCents: i.currentBidCents, reason: `${share} below target but at the ${ceiling}¢ ceiling`, basis: 'share' }
     }
     // At/above target: decay to find the cheapest holding bid.
     if (down < i.currentBidCents) {
-      return { action: 'down', nextBidCents: down, reason: `share ${sharePct.toFixed(2)}% holds target ${i.targetSharePct}% — decaying to find the floor` }
+      return { action: 'down', nextBidCents: down, reason: `${share} holds target ${i.targetSharePct}% — decaying to find the floor`, basis: 'share' }
     }
-    return { action: 'hold', nextBidCents: i.currentBidCents, reason: 'holding target at the floor bid' }
+    return { action: 'hold', nextBidCents: i.currentBidCents, reason: `${share}: holding target at the floor bid`, basis: 'share' }
   }
 
   // 4. No target set (or unmeasured week): do nothing loud. A controller with no setpoint
@@ -137,7 +166,8 @@ export function decideBidStep(i: LadderInput): LadderDecision {
   return {
     action: 'hold',
     nextBidCents: i.currentBidCents,
-    reason: i.targetSharePct == null ? 'no target share set for this term' : 'week unmeasured — no share ground truth',
+    reason: i.targetSharePct == null ? 'no target share set for this term' : `share unmeasured — ${i.shareNote ?? 'no share ground truth this week'}`,
+    basis: 'none',
   }
 }
 
@@ -151,9 +181,28 @@ export interface EngineTermDecision {
   adTargetId: string
   decision: LadderDecision
   currentBidCents: number
+  /** The set's ASINs' weekly Brand Analytics impression share for the term (0..1, computed by Nexus); null: unmeasured. */
   share: number | null
+  /** A2 — the Amazon week it is from (its start, YYYY-MM-DD) and whole days since that week ended; null: no usable week. */
+  shareWeek?: string | null
+  shareAgeDays?: number | null
   applied: boolean
   applyError: string | null
+}
+
+/** A2 — the evidence a coverage step or would-do carries: the weekly share's week and age, or the 30-day guard it obeyed. */
+export function coverageEvidence(a: { decision: LadderDecision; setId: string; term: string; share: number | null; targetSharePct: number | null; week: string | null; ageDays: number | null; acos30d: number | null }): Record<string, unknown> {
+  const base = { setId: a.setId, term: a.term }
+  if (a.decision.basis === 'acos-cap') return { ...base, metric: 'acos_30d', observed: a.acos30d != null ? `${(a.acos30d * 100).toFixed(0)}%` : 'none', windowDays: 30 }
+  if (a.decision.basis === 'waste') return { ...base, metric: 'spend_without_sales_30d', windowDays: 30 }
+  return {
+    ...base,
+    metric: 'sqp_brand_impression_share',
+    observed: a.share != null ? sharePctText(a.share) : 'unmeasured',
+    threshold: a.targetSharePct != null ? `${a.targetSharePct}%` : 'none',
+    week: a.week,
+    ageDays: a.ageDays,
+  }
 }
 
 export interface EngineRunSummary {
@@ -235,12 +284,40 @@ export async function runCoverageEngineOnce(opts: { previewSetId?: string } = {}
       familyDailyCapBreached = Number(today[0]?.c ?? 0) >= set.dailySpendCapCents
     }
 
-    // Newest measured SQP week for this marketplace — share ground truth.
-    const week = await prisma.$queryRawUnsafe<{ w: Date }[]>(`
-      SELECT MAX("startDate") AS w FROM "SearchQueryPerformance"
-      WHERE marketplace = $1 AND "impressionsBrand" > 0
-    `, set.marketplace)
-    const weekDate = week[0]?.w ?? null
+    // A2 — share ground truth: the week an SOV rule reads (WEEK rows, complete, ended ≤ 14 days ago), and on it the
+    // SET's own portfolio ASINs only (Σ their impressions ÷ the query's total, as the SOV share and the cockpit do).
+    const { sqpWeekGate, aggregateQueryShares } = await import('./ads-sov-keyword-share.service.js')
+    const period = await sqpWeekGate(set.marketplace)
+    const week = !period.refused && period.start ? period.start.toISOString().slice(0, 10) : null
+    const shareByTerm = new Map<string, number>()
+    let weekNote: string | null = period.refused ? (period.note ?? 'no usable Brand Analytics week') : null
+    const steppedOnWeek = new Set<string>()
+    if (week && period.start) {
+      const { familyIdentity } = await import('./ads-coverage-sets.service.js')
+      const { asins } = await familyIdentity(set.portfolioId)
+      const terms = [...new Set(set.terms.map((t) => t.term.trim().toLowerCase()))]
+      if (!asins.length) weekNote = 'the set\'s portfolio advertises no ASIN Nexus knows, so no share of its own can be read'
+      else if (terms.length) {
+        const sq = await prisma.$queryRaw<Array<{ searchQuery: string; impressionsBrand: number; impressionsTotal: number }>>`
+          SELECT "searchQuery", "impressionsBrand", "impressionsTotal" FROM "SearchQueryPerformance"
+           WHERE marketplace = ${set.marketplace} AND "reportPeriod" = 'WEEK' AND "startDate" = ${period.start}::date
+             AND asin = ANY(${asins}::text[]) AND LOWER(TRIM("searchQuery")) = ANY(${terms}::text[])`
+        for (const [q, a] of aggregateQueryShares(sq)) shareByTerm.set(q, a.sharePct)
+      }
+      // A2 — one share step per term per Brand Analytics week: what this set already stepped (or logged as a would-do)
+      // on this week. Steps on a week happen after it ended, so its end bounds the read.
+      const prior = await prisma.advertisingActionLog.findMany({
+        where: {
+          createdAt: { gte: sqpWeekEnd(period.start) },
+          OR: [{ actionType: 'coverage_engine_observe' }, { executionId: { startsWith: 'coverage-engine-' } }],
+        },
+        select: { evidence: true },
+      })
+      for (const r of prior) {
+        const e = r.evidence as { metric?: unknown; setId?: unknown; week?: unknown; term?: unknown } | null
+        if (e?.metric === 'sqp_brand_impression_share' && e.setId === set.id && e.week === week && typeof e.term === 'string') steppedOnWeek.add(e.term)
+      }
+    }
 
     for (const term of set.terms) {
       /**
@@ -280,25 +357,23 @@ export async function runCoverageEngineOnce(opts: { previewSetId?: string } = {}
         return aa - ba || Number(b.spend_c) - Number(a.spend_c) || Number(b.impressions) - Number(a.impressions)
       })[0]
 
-      // Weekly share for this term through the family lens (market once, ours summed).
-      let share: number | null = null
-      if (weekDate) {
-        const sq = await prisma.$queryRawUnsafe<{ m: bigint; o: bigint }[]>(`
-          SELECT MAX("impressionsTotal") AS m, SUM("impressionsBrand") AS o
-          FROM "SearchQueryPerformance"
-          WHERE marketplace = $1 AND "startDate" = $2 AND LOWER("searchQuery") = $3
-        `, set.marketplace, weekDate, term.term)
-        const m = Number(sq[0]?.m ?? 0)
-        share = m > 0 ? Number(sq[0]?.o ?? 0) / m : null
-      }
+      // Weekly share for this term through the set's own lens (market once, the set's ASINs summed).
+      const termKey = term.term.trim().toLowerCase()
+      const share = week ? shareByTerm.get(termKey) ?? null : null
+      const shareNote = weekNote ?? (share == null ? `the set's ASINs have no Brand Analytics row with a market total for this term in the week of ${week}` : null)
 
       const totalSpend = targets.reduce((a, t) => a + Number(t.spend_c), 0)
       const totalSales = targets.reduce((a, t) => a + Number(t.sales_c), 0)
+      const targetSharePct = term.targetSharePct != null ? Number(term.targetSharePct) : null
+      const acos30d = totalSales > 0 ? totalSpend / totalSales : null
       const decision = decideBidStep({
         currentBidCents: champion.bid,
         share,
-        targetSharePct: term.targetSharePct != null ? Number(term.targetSharePct) : null,
-        acos30d: totalSales > 0 ? totalSpend / totalSales : null,
+        shareWeek: week,
+        shareNote,
+        shareSteppedThisWeek: steppedOnWeek.has(term.term),
+        targetSharePct,
+        acos30d,
         familyAcosCapPct: set.acosCapPct != null ? Number(set.acosCapPct) : null,
         maxCpcCents: term.maxCpcCents,
         familyDailyCapBreached,
@@ -311,6 +386,7 @@ export async function runCoverageEngineOnce(opts: { previewSetId?: string } = {}
       else if (decision.action === 'down') summary.downs += 1
       else summary.holds += 1
 
+      const evidence = coverageEvidence({ decision, setId: set.id, term: term.term, share, targetSharePct, week, ageDays: week ? period.weekEndAgeDays : null, acos30d })
       let applied = false
       let applyError: string | null = null
       // 1d — one bid step per term: the term asks the guard once, before it. A step the dial holds (SUGGEST,
@@ -325,12 +401,7 @@ export async function runCoverageEngineOnce(opts: { previewSetId?: string } = {}
             patch: { bidCents: decision.nextBidCents },
             actor: 'automation:coverage-engine',
             reason: `Coverage engine: ${decision.reason}`,
-            evidence: {
-              metric: 'coverage_share',
-              observed: share != null ? `${(share * 100).toFixed(2)}%` : 'unmeasured',
-              threshold: term.targetSharePct != null ? `${term.targetSharePct}%` : 'none',
-              windowDays: 30,
-            } as never,
+            evidence: evidence as never,
             applyImmediately: true,
             changeSetId: changeSet,
           })
@@ -352,12 +423,7 @@ export async function runCoverageEngineOnce(opts: { previewSetId?: string } = {}
             payloadBefore: { bidCents: champion.bid },
             payloadAfter: { wouldSetBidCents: decision.nextBidCents, action: decision.action },
             amazonResponseStatus: 'SUCCESS',
-            evidence: {
-              metric: 'coverage_share',
-              observed: share != null ? `${(share * 100).toFixed(2)}%` : 'unmeasured',
-              threshold: term.targetSharePct != null ? `${term.targetSharePct}%` : 'none',
-              reason: decision.reason,
-            } as never,
+            evidence: { ...evidence, reason: decision.reason } as never,
           },
         }).catch(() => {})
       }
@@ -366,7 +432,7 @@ export async function runCoverageEngineOnce(opts: { previewSetId?: string } = {}
         setId: set.id, setName: set.name, term: term.term,
         campaignName: nameByCampaign.get(champion.campaign_id) ?? champion.campaign_id,
         adTargetId: champion.id, decision,
-        currentBidCents: champion.bid, share, applied, applyError,
+        currentBidCents: champion.bid, share, shareWeek: week, shareAgeDays: week ? period.weekEndAgeDays : null, applied, applyError,
       })
     }
   }

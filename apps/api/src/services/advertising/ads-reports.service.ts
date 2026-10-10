@@ -465,6 +465,8 @@ export interface IngestResult {
   jobId: string
   rowsIngested: number
   error?: string
+  /** Rows whose top-of-search share was not written: the report's unit was ambiguous (every value ≤ 1), the stored reading kept. */
+  tosAmbiguousRows?: number
 }
 
 interface ReportRow {
@@ -591,12 +593,47 @@ const strOrNull = (v: string | number | undefined | null): string | null =>
  * So there is now ONE definition and both writers call it. The `> 1` test is the
  * only discriminator available: a share cannot exceed 100%, so a value above 1
  * must be a percentage.
+ *
+ * 🔴 Lane 5 (2026-10-10, audit T1) — decided per VALUE, that test misreads a low
+ * share: a raw `0.8` that means 0.8 % (in a report of percentages) was stored as
+ * 80 %. The evidence above says which unit Amazon uses for topOfSearchImpressionShare:
+ * the campaign-day that read 62.5 raw here is the one the placement table holds as
+ * 0.6102 — 61.02 / 100 — so Amazon reports this column in PERCENT. The top-of-search
+ * columns therefore decide the unit ONCE PER REPORT (`impressionShareUnit`) and pass
+ * `'percent'` here; a report they cannot decide is not written at all. Without
+ * `unit` the old per-value rule stands (the other rate-shaped columns that call this,
+ * newToBrandPurchasesRate).
  */
-export function toImpressionShareFraction(v: unknown): number | null {
+export function toImpressionShareFraction(v: unknown, unit?: 'percent'): number | null {
   if (v == null || v === '') return null
   const n = Number(v)
   if (!Number.isFinite(n) || n < 0) return null
+  if (unit === 'percent') return n <= 100 ? n / 100 : null
   return n > 1 ? n / 100 : n
+}
+
+/**
+ * The unit of one report's top-of-search share column. `percent`: a value above 1 is in it, so the whole report is
+ * percentages (confirmed: Amazon reports this column in percent). `ambiguous`: every value is ≤ 1 — 0.8 can be 0.8 % or
+ * 80 % — so it is never guessed: the writers leave the field as it was for that report and count the rows.
+ */
+export type ImpressionShareUnit = 'percent' | 'ambiguous'
+
+/** True when a raw share value is a number Amazon sent (null, empty and invalid values are no reading). Pure. */
+export const hasShareValue = (v: unknown): boolean => v != null && v !== '' && Number.isFinite(Number(v)) && Number(v) >= 0
+
+/**
+ * Integration review fix (2026-10-10) — the unit of one report's impression-share column, decided once for the whole
+ * report: any value above 1 → `percent`; otherwise `ambiguous` (never a guessed `fraction`). Null, empty and invalid values
+ * do not vote. Pure.
+ */
+export function impressionShareUnit(values: Iterable<unknown>): ImpressionShareUnit {
+  for (const v of values) {
+    if (v == null || v === '') continue
+    const n = Number(v)
+    if (Number.isFinite(n) && n > 1) return 'percent'
+  }
+  return 'ambiguous'
 }
 
 export async function ingestCompletedJob(jobId: string): Promise<IngestResult> {
@@ -664,6 +701,9 @@ export async function ingestCompletedJob(jobId: string): Promise<IngestResult> {
     return { jobId, rowsIngested: 0, error: `parse: ${msg}` }
   }
 
+  // Lane 5 (audit T1) — the top-of-search share's unit is decided on the whole report, before any day is skipped below.
+  const tosUnit = impressionShareUnit(rows.map((r) => r.topOfSearchImpressionShare))
+
   // BB-13 — every night re-reads the last 8 / 15 days, so two pulls can hold the same day. The newer copy wins: rows of
   // a day a later-asked pull of the same report has already written are not written again (a stuck job that finishes
   // late must not put an older copy back).
@@ -681,8 +721,14 @@ export async function ingestCompletedJob(jobId: string): Promise<IngestResult> {
 
   // Dispatch on reportTypeId — each variant writes to a different table.
   let upserted = 0
+  let tosAmbiguousRows = 0
   if (job.reportTypeId === 'spCampaigns' || job.reportTypeId === 'sdCampaigns' || job.reportTypeId === 'sbCampaigns') {
-    upserted = await ingestCampaignRows(job, rows, marketplace, currencyCode)
+    upserted = await ingestCampaignRows(job, rows, marketplace, currencyCode, tosUnit)
+    // An ambiguous unit writes no top-of-search share (Sponsored Products carry the column): said, never silent.
+    if (job.adProduct === 'SPONSORED_PRODUCTS' && tosUnit === 'ambiguous') {
+      tosAmbiguousRows = rows.filter((r) => hasShareValue(r.topOfSearchImpressionShare)).length
+      if (tosAmbiguousRows) logger.info(`[ads-reports] top-of-search share: ambiguous unit: ${tosAmbiguousRows} rows kept as they were (every value of the report ≤ 1)`, { jobId, tosAmbiguousRows })
+    }
   } else if (job.reportTypeId === 'spSearchTerm' || job.reportTypeId === 'sbSearchTerm') {
     upserted = await ingestSearchTermRows(job, rows, marketplace, currencyCode)
   } else if (job.reportTypeId === PLACEMENT_REPORT_TYPE_ID) {
@@ -703,7 +749,7 @@ export async function ingestCompletedJob(jobId: string): Promise<IngestResult> {
     data: { rowsIngested: upserted, ingestedAt: new Date() },
   })
 
-  return { jobId, rowsIngested: upserted }
+  return { jobId, rowsIngested: upserted, ...(tosAmbiguousRows ? { tosAmbiguousRows } : {}) }
 }
 
 /**
@@ -735,6 +781,8 @@ async function ingestCampaignRows(
   rows: ReportRow[],
   marketplace: string,
   currencyCode: string,
+  /** Lane 5 (audit T1) — the report's top-of-search share unit, decided once for the whole report. */
+  tosUnit: ImpressionShareUnit = impressionShareUnit(rows.map((r) => r.topOfSearchImpressionShare)),
 ): Promise<number> {
   let upserted = 0
   // BB-13 — a ranged pull repeats each campaign once per day: look it up once.
@@ -814,8 +862,10 @@ async function ingestCampaignRows(
       unitsSameSku14d: intOrNull(r.unitsSoldSameSku14d),
       unitsSameSku30d: intOrNull(r.unitsSoldSameSku30d),
 
-      // Normalised, NOT raw — Amazon mixes percentages and fractions in one report.
-      topOfSearchIS: toImpressionShareFraction(r.topOfSearchImpressionShare),
+      // Normalised, NOT raw. Lane 5 (audit T1) + review fix: in the unit decided once for this whole report — percent
+      // (a value above 1 in it) divides by 100; an ambiguous report (every value ≤ 1) leaves the field as it was
+      // (`undefined`: not written), never a guess (a 0.8 % share stored as 80 %).
+      topOfSearchIS: tosUnit === 'percent' ? toImpressionShareFraction(r.topOfSearchImpressionShare, 'percent') : undefined,
 
       // ADM-A3 — null, never 0, when this ad product's report does not carry the column. The two
       // pre-existing NTB fields carry `@default(0)`, which is precisely how "we never asked" came

@@ -78,11 +78,14 @@ describe('buildSeries', () => {
 })
 
 describe('weekStart', () => {
-  it('buckets any day to the Monday of its ISO week — the bucket SQP startDate uses', () => {
-    // 2026-07-19 is a Sunday; 2026-07-13 is the Monday of that week
-    expect(weekStart(new Date('2026-07-15T00:00:00Z')).toISOString().slice(0, 10)).toBe('2026-07-13')
-    expect(weekStart(new Date('2026-07-13T00:00:00Z')).toISOString().slice(0, 10)).toBe('2026-07-13')
-    expect(weekStart(new Date('2026-07-19T23:59:00Z')).toISOString().slice(0, 10)).toBe('2026-07-13')
+  it('buckets any day to the Sunday its Brand Analytics week starts on — the bucket SQP startDate uses (Sunday → Saturday)', () => {
+    // 2026-07-12 is a Sunday, 2026-07-18 the Saturday of that week; 2026-07-19 starts the next one
+    expect(weekStart(new Date('2026-07-15T00:00:00Z')).toISOString().slice(0, 10)).toBe('2026-07-12')
+    expect(weekStart(new Date('2026-07-12T00:00:00Z')).toISOString().slice(0, 10)).toBe('2026-07-12')
+    expect(weekStart(new Date('2026-07-18T23:59:00Z')).toISOString().slice(0, 10)).toBe('2026-07-12')
+    expect(weekStart(new Date('2026-07-19T00:00:00Z')).toISOString().slice(0, 10)).toBe('2026-07-19')
+    // A week's spend and its share land on one point.
+    expect(new Date('2026-07-12T00:00:00Z').getUTCDay()).toBe(0)
   })
 })
 
@@ -119,5 +122,29 @@ describe('buildSeries · the completeness cap', () => {
   it('no cap means no exclusion, so existing callers are unaffected', () => {
     expect(buildSeries(rows, []).shareWeeksExcluded).toBe(0)
     expect(buildSeries(rows, []).lastShareWeek).toBe('2026-07-19')
+  })
+})
+
+/** B2 (2026-10-10) — shares come from the counts, and a week whose query totals were not reported has no reading. */
+describe('buildSeries · null shares', () => {
+  it('a row with neither share is no reading: the week stays absent, never a 0 % point', () => {
+    const s = buildSeries([{ week: '2026-07-19', share: null, clickShare: null, asin: 'A1' }], [])
+    expect(s.points).toEqual([])
+    expect(s.shareWeeks).toBe(0)
+  })
+
+  it('a null share never beats a real one, and never turns into 0', () => {
+    const s = buildSeries([
+      { week: '2026-07-19', share: null, clickShare: null, asin: 'A1' },
+      { week: '2026-07-19', share: 0.02, clickShare: null, asin: 'A2' },
+    ], [])
+    expect(s.points[0].share).toBe(0.02)
+    expect(s.points[0].clickShare).toBeNull()
+  })
+
+  it('a click share alone keeps the week, with no impression share', () => {
+    const s = buildSeries([{ week: '2026-07-19', share: null, clickShare: 0.05, asin: 'A1' }], [])
+    expect(s.points[0]).toMatchObject({ share: null, clickShare: 0.05 })
+    expect(s.shareWeeks).toBe(0)
   })
 })

@@ -6,6 +6,7 @@
  * and the grid cannot drift from what the export (RPT.4) will write.
  */
 import { getBackendUrl } from '@/lib/backend-url'
+import { sharePct } from '../campaigns/_grid/format'
 
 export type ColumnFormat = 'text' | 'date' | 'int' | 'money' | 'pct' | 'ratio' | 'hour'
 
@@ -123,7 +124,8 @@ export function formatCell(v: unknown, format: ColumnFormat, currency: string): 
     case 'money':
       return n.toLocaleString('en-GB', { style: 'currency', currency, maximumFractionDigits: 2 })
     case 'pct':
-      return `${(n * 100).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`
+      // The console's one share rule: a tiny non-zero value reads "<0.01%", never a rounded "0.00%".
+      return sharePct(n)
     case 'ratio':
       return n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     default:

@@ -46,7 +46,7 @@ interface Decision { id: string; at: string; cycle: string; module: string; acti
 
 const ROLE_TONE: Record<string, TagTone> = { AUTO: 'info', RESEARCH: 'neutral', PERF: 'positive', PAT: 'warning' }
 const ROLE_LABEL: Record<string, string> = { AUTO: 'Auto', RESEARCH: 'Research', PERF: 'Performance', PAT: 'Products' }
-const TARGET_LABEL: Record<string, string> = { IMPRESSION: 'Impression & Click', SALES: 'Sales', ROAS: 'ROAS', LIQUIDATE: 'Liquidate', RANK: 'Defend Rank' }
+const TARGET_LABEL: Record<string, string> = { IMPRESSION: 'Impression & Click', SALES: 'Sales', ROAS: 'ROAS', LIQUIDATE: 'Liquidate', RANK: 'Top-of-search (runs as Sales)' }
 const MODE_LABEL: Record<string, string> = { STRICT: 'Strict Control', SHARED: 'Shared Budget' }
 const STATUS_TONE: Record<string, TagTone> = { PROPOSED: 'info', APPLIED: 'positive', DENIED: 'danger', SKIPPED: 'neutral', ROLLED_BACK: 'warning' }
 

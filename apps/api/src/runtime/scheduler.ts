@@ -904,9 +904,10 @@ export async function startScheduler(): Promise<void> {
     // NEXUS_ENABLE_TOS_DEFENSE_CRON is on, since it writes live placement bids).
     const { startTosDefenseCron } = await import('../jobs/ads-tos-defense.job.js');
     // Apex B.1 — AMS SQS consumer (self-gated on NEXUS_AMS_SQS_QUEUE_URL + AWS creds).
-    // Apex E.1 — SQP competitive-intel ingest. Default ON; opt out with
-    // NEXUS_DISABLE_SQP_INGEST_CRON=1. (This comment used to name
-    // NEXUS_ENABLE_SQP_INGEST_CRON, which has no readers at all — see SQP.1.)
+    // Apex E.1 — SQP competitive-intel ingest. It runs only inside this block, so only while
+    // NEXUS_ENABLE_AMAZON_ADS_CRON is on (default OFF); with that on it runs unless
+    // NEXUS_DISABLE_SQP_INGEST_CRON=1 (the collect half: NEXUS_DISABLE_SQP_COLLECT_CRON=1).
+    // (This comment once named NEXUS_ENABLE_SQP_INGEST_CRON, which has no readers at all — see SQP.1.)
     const { startSqpIngestCron } = await import('../jobs/sqp-ingest.job.js');
     // SQP.2 — the collect half of the async split. sqp-ingest now only REQUESTS.
     const { startSqpCollectCron } = await import('../jobs/sqp-collect.job.js');

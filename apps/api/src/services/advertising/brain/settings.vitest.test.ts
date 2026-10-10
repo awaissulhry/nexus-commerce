@@ -18,7 +18,7 @@
  * Values are made up (public repo).
  */
 import { describe, expect, it } from 'vitest'
-import { describeProvenance, ownerBrakeOf, resolveBrainSettings, settingsPairRefusal, validateIdentity, validateOverride, type OverrideRow } from './settings.js'
+import { describeProvenance, keywordValueRef, ownerBrakeOf, resolveBrainSettings, resolveKeywordValue, settingsPairRefusal, validateIdentity, validateOverride, type OverrideRow } from './settings.js'
 
 let n = 0
 const row = (o: Partial<OverrideRow> & Pick<OverrideRow, 'scope' | 'kind' | 'key'>): OverrideRow => ({
@@ -178,5 +178,48 @@ describe('ownerBrakeOf and settingsPairRefusal (AB-1 review)', () => {
     const max = row({ scope: 'CAMPAIGN', campaignId: 'c-1', kind: 'VALUE', key: 'negativesPerEntityMax', value: 100 })
     expect(settingsPairRefusal(resolve([warn]).values)).toBeNull()
     expect(settingsPairRefusal(resolve([warn, max]).values, ' on campaign c-1')).toMatch(/^negativesPerEntityWarn \(950, the Owner's product override .*\) would be above negativesPerEntityMax \(100, the Owner's campaign override .*\) on campaign c-1/)
+  })
+})
+
+describe('Lane 5 — a keyword\'s own value of tosTargetPct (ref target:<AdTarget.id>)', () => {
+  const kw = (o: Partial<OverrideRow> = {}) => row({ scope: 'CAMPAIGN', campaignId: 'c-1', kind: 'VALUE', key: 'tosTargetPct', ref: keywordValueRef('t-1'), value: 50, ...o })
+  const value = (overrides: OverrideRow[], targetId = 't-1', campaignId: string | null = 'c-1') =>
+    resolveKeywordValue({ productId: 'p-1', market: 'IT', campaignId, targetId, overrides }, 'tosTargetPct')
+
+  it('only tosTargetPct takes a keyword ref, and only as target:<id>', () => {
+    expect(validateOverride({ scope: 'CAMPAIGN', campaignId: 'c-1', kind: 'VALUE', key: 'tosTargetPct', ref: 'target:t-1', value: 50 })).toEqual({ override: { scope: 'CAMPAIGN', campaignId: 'c-1', kind: 'VALUE', key: 'tosTargetPct', ref: 'target:t-1', value: 50 } })
+    expect(validateOverride({ scope: 'PRODUCT', kind: 'VALUE', key: 'tosTargetPct', ref: 'target:t-1', value: null })).toMatchObject({ override: { ref: 'target:t-1', value: null } })
+    expect(validateOverride({ scope: 'PRODUCT', kind: 'VALUE', key: 'paceTargetPct', ref: 'target:t-1', value: 80 })).toEqual({ refusal: expect.stringMatching(/paceTargetPct is set per product or per campaign, not per keyword/) })
+    expect(validateOverride({ scope: 'PRODUCT', kind: 'VALUE', key: 'tosTargetPct', ref: 'keyword:race jacket', value: 50 })).toEqual({ refusal: expect.stringMatching(/names its keyword as target:<AdTarget.id>/) })
+    expect(validateOverride({ scope: 'PRODUCT', kind: 'VALUE', key: 'tosTargetPct', value: 3 })).toEqual({ refusal: expect.stringMatching(/from 5 to 95 or empty/) })
+    // The product's and the campaign's value keep no ref.
+    expect(validateOverride({ scope: 'PRODUCT', kind: 'VALUE', key: 'tosTargetPct', value: 40 })).toMatchObject({ override: { ref: '' } })
+  })
+
+  it('keyword > campaign > product > the default (empty = off)', () => {
+    const product = row({ scope: 'PRODUCT', kind: 'VALUE', key: 'tosTargetPct', value: 30 })
+    const campaign = row({ scope: 'CAMPAIGN', campaignId: 'c-1', kind: 'VALUE', key: 'tosTargetPct', value: 40 })
+    expect(value([])).toMatchObject({ value: null, grain: 'default' })
+    expect(value([product])).toMatchObject({ value: 30, grain: 'product' })
+    expect(value([product, campaign])).toMatchObject({ value: 40, grain: 'campaign' })
+    const own = kw({ by: 'user:owner-2' })
+    expect(value([product, campaign, own])).toMatchObject({ value: 50, grain: 'keyword', by: 'user:owner-2', overrideId: own.id })
+    // A product-scope keyword value counts too; the campaign-scope one first.
+    expect(value([product, campaign, kw({ scope: 'PRODUCT', campaignId: null, value: 60 })])).toMatchObject({ value: 60, grain: 'keyword' })
+    expect(value([kw({ scope: 'PRODUCT', campaignId: null, value: 60 }), kw({ value: 55 })])).toMatchObject({ value: 55, grain: 'keyword' })
+    // A keyword's own empty value is its choice: off for that keyword.
+    expect(value([campaign, kw({ value: null })])).toMatchObject({ value: null, grain: 'keyword' })
+    // Another keyword, or another campaign's keyword row, takes the campaign's or the product's.
+    expect(value([product, campaign, own], 't-2')).toMatchObject({ value: 40, grain: 'campaign' })
+    expect(value([product, kw({ campaignId: 'c-9' })], 't-1')).toMatchObject({ value: 30, grain: 'product' })
+  })
+
+  it('a keyword\'s value never becomes the campaign\'s or the product\'s', () => {
+    const s = resolve([kw(), kw({ scope: 'PRODUCT', campaignId: null, value: 70 })])
+    expect(s.values.tosTargetPct).toMatchObject({ value: null, source: 'default' })
+    expect(s.ignored).toEqual([])
+    // A stored keyword ref on another setting is ignored and listed (fail closed).
+    const bad = row({ scope: 'PRODUCT', kind: 'VALUE', key: 'paceTargetPct', ref: 'target:t-1', value: 80 })
+    expect(resolve([bad]).ignored).toEqual([{ overrideId: bad.id, why: expect.stringMatching(/not per keyword/) }])
   })
 })

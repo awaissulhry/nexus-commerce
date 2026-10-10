@@ -138,8 +138,13 @@ export interface SovRow {
   marketplace: string
   /** whole-market searches for this query in the period. Not our impressions. */
   marketVolume: number | null
-  /** the QUERY's popularity rank in the marketplace (#1 = most searched). Not our position. */
-  marketRank: number | null
+  /**
+   * C6 (2026-10-10) — computed by Nexus: the LOWEST of Amazon's per-ASIN Search Query Scores among the
+   * ASINs holding a row on this query (lower = more searched among that ASIN's own queries). Amazon scores a
+   * query per ASIN, so this is not a market rank and not our position. (Was `marketRank`, labelled as the
+   * query's popularity rank in the marketplace.)
+   */
+  bestSearchQueryScore: number | null
   /** whole-market impressions for this query in the period — the denominator, stated */
   marketImpressions: number | null
   /** OUR impressions, summed over the scope's ASINs. `0` is a finding, `null` is an absence. */
@@ -392,20 +397,23 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
       select: { id: true, marketplace: true, name: true, isDefault: true, source: true, _count: { select: { terms: true } } },
       orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
     }),
-    prisma.searchQueryPerformance.groupBy({ by: ['startDate'], where: { marketplace: market }, _count: { _all: true } }),
+    // Free visibility numbers (2026-10-10) — WEEK rows only, in every read of this page: the table also takes MONTH and
+    // QUARTER rows (the manual ingest route accepts a period), and a month starting on a Sunday would otherwise join a
+    // week's gate, rows and Δ as one more "week" (the same rule as sqpWeekGate and the Keyword Tracker's row reads).
+    prisma.searchQueryPerformance.groupBy({ by: ['startDate'], where: { marketplace: market, reportPeriod: 'WEEK' }, _count: { _all: true } }),
     // SOV.1 — rows per period carrying a non-zero OUR-side impression count. A period where this is
     // 0 while `rows` is not is the pre-ACR.0.2 parser defect, and it must never become a Δ baseline.
     // `gt: 0` on a non-nullable Int with default 0 — no null branch to spell out.
     prisma.searchQueryPerformance.groupBy({
-      by: ['startDate'], where: { marketplace: market, impressionsBrand: { gt: 0 } }, _count: { _all: true },
+      by: ['startDate'], where: { marketplace: market, reportPeriod: 'WEEK', impressionsBrand: { gt: 0 } }, _count: { _all: true },
     }),
     // SOV.6 — distinct ASINs per period. The CAUSE of a rejected week is upstream and it is an ASIN
     // count, not a row count: 2026-08-02 carries 15 ASINs where 07-19 carried 25. Stating rows
     // without ASINs names the symptom and hides the reason.
     prisma.searchQueryPerformance.findMany({
-      where: { marketplace: market }, select: { startDate: true, asin: true }, distinct: ['startDate', 'asin'],
+      where: { marketplace: market, reportPeriod: 'WEEK' }, select: { startDate: true, asin: true }, distinct: ['startDate', 'asin'],
     }),
-    prisma.searchQueryPerformance.findFirst({ where: { marketplace: market }, orderBy: { startDate: 'desc' }, select: { startDate: true } }),
+    prisma.searchQueryPerformance.findFirst({ where: { marketplace: market, reportPeriod: 'WEEK' }, orderBy: { startDate: 'desc' }, select: { startDate: true } }),
     prisma.amazonAdsSearchTerm.findFirst({ where: { marketplace: market }, orderBy: { date: 'desc' }, select: { date: true } }),
     // The same classifier KT.2 stores its per-term flag with. Never a second definition of "brand".
     prisma.adKeywordProtection.findMany({
@@ -637,12 +645,12 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
 
   const [marketRows, priorRows] = await Promise.all([
     chosen.start
-      ? prisma.searchQueryPerformance.findMany({ where: { marketplace: market, startDate: chosen.start }, select: ROW_SELECT })
+      ? prisma.searchQueryPerformance.findMany({ where: { marketplace: market, reportPeriod: 'WEEK', startDate: chosen.start }, select: ROW_SELECT })
       : Promise.resolve([]),
     // The prior period is read through the SAME scope filter. A Δ between "this scope now" and
     // "the whole market last week" would be a different quantity wearing the same label.
     prior.start
-      ? prisma.searchQueryPerformance.findMany({ where: { marketplace: market, startDate: prior.start }, select: ROW_SELECT })
+      ? prisma.searchQueryPerformance.findMany({ where: { marketplace: market, reportPeriod: 'WEEK', startDate: prior.start }, select: ROW_SELECT })
       : Promise.resolve([]),
   ])
 
@@ -669,6 +677,7 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
     a.cartAdds += r.cartAddsBrand
     a.purchases += r.purchasesBrand
     a.vol = Math.max(a.vol, r.searchQueryVolume)
+    // Amazon's Search Query Score is PER ASIN (stored as `searchQueryRank`); the lowest across rows is a Nexus pick
     if (r.searchQueryRank != null) a.rank = a.rank == null ? r.searchQueryRank : Math.min(a.rank, r.searchQueryRank)
     if (r.asin) a.asins.add(r.asin)
     m.set(key, a)
@@ -746,7 +755,7 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
       const adSide = adSideOf(query)
       return {
         query, marketplace: market,
-        marketVolume: mine.vol, marketRank: mine.rank,
+        marketVolume: mine.vol, bestSearchQueryScore: mine.rank,
         marketImpressions: mine.total, ourImpressions: mine.brand,
         share,
         marketClicks: mine.clicksTotal, ourClicks: mine.clicksBrand,
@@ -776,7 +785,7 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
       // A not-covered row still knows the market's size — that is the whole point of separating it
       // from "never measured", which knows nothing.
       marketVolume: mkt ? mkt.vol : null,
-      marketRank: mkt ? mkt.rank : null,
+      bestSearchQueryScore: mkt ? mkt.rank : null,
       marketImpressions: mkt ? mkt.total : null,
       ourImpressions: null, share: null,
       marketClicks: mkt ? mkt.clicksTotal : null, ourClicks: null, clickShare: null,
@@ -934,7 +943,8 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
     const s = dir === 'asc' ? 1 : -1
     switch (sortKey) {
       case 'query': return s * a.query.localeCompare(b.query)
-      case 'rank': return s * ((a.marketRank ?? Number.MAX_SAFE_INTEGER) - (b.marketRank ?? Number.MAX_SAFE_INTEGER))
+      // `rank` stays the sort key's name for the client; it sorts by the lowest per-ASIN Search Query Score
+      case 'rank': return s * ((a.bestSearchQueryScore ?? Number.MAX_SAFE_INTEGER) - (b.bestSearchQueryScore ?? Number.MAX_SAFE_INTEGER))
       case 'share': return s * ((a.share ?? -1) - (b.share ?? -1))
       case 'clickShare': return s * ((a.clickShare ?? -1) - (b.clickShare ?? -1))
       case 'delta': return s * ((a.deltaPt ?? Number.NEGATIVE_INFINITY) - (b.deltaPt ?? Number.NEGATIVE_INFINITY))
@@ -1142,7 +1152,7 @@ export async function getSovRowDetail(args: {
       select: { productId: true, asin: true, adGroup: { select: { campaignId: true } } },
     }),
     prisma.searchQueryPerformance.findMany({
-      where: { marketplace: market, searchQuery: query },
+      where: { marketplace: market, reportPeriod: 'WEEK', searchQuery: query },
       select: {
         startDate: true, asin: true,
         impressionsTotal: true, impressionsBrand: true,
@@ -1197,7 +1207,7 @@ export async function getSovRowDetail(args: {
   // The all-zero parser weeks are flagged per MARKET period (a query's own zero week is real when
   // the market period parsed). One groupBy answers it for every period at once.
   const nonZero = await prisma.searchQueryPerformance.groupBy({
-    by: ['startDate'], where: { marketplace: market, impressionsBrand: { gt: 0 } }, _count: { _all: true },
+    by: ['startDate'], where: { marketplace: market, reportPeriod: 'WEEK', impressionsBrand: { gt: 0 } }, _count: { _all: true },
   })
   const nonZeroSet = new Set(nonZero.map((g) => +g.startDate))
   const share = (b: number, t: number): number | null => (t > 0 ? Math.max(0, Math.min(1, b / t)) : null)

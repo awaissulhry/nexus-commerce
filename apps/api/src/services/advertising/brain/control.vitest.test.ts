@@ -22,9 +22,9 @@ import { describe, expect, it, vi } from 'vitest'
 vi.mock('../../../db.js', () => ({ default: {} }))
 
 const {
-  controlUndoRequest, effectiveWord, leverDoes, leverMoves, limitRaise, overridesAfter, releasedLevers, settingRaise, shapeRefusal, SPEND_RATINGS, startLines, turnsAutoOf,
+  controlUndoRequest, effectiveWord, keywordWords, leverDoes, leverMoves, limitRaise, overridesAfter, releasedLevers, settingRaise, shapeRefusal, SPEND_RATINGS, startLines, turnsAutoOf,
 } = await import('./control.js')
-const { resolveBrainSettings } = await import('./settings.js')
+const { resolveBrainSettings, resolveKeywordValue } = await import('./settings.js')
 const { BRAIN_LEVERS, BRAIN_SETTING_KEYS } = await import('./levers.js')
 const { ADS_BRAIN_CONTROL_TOOLS } = await import('../../agents/tools/ads-brain-control.tools.js')
 
@@ -63,6 +63,30 @@ describe('shapeRefusal — each op names what it needs', () => {
     expect(shapeRefusal({ ...base, op: 'enroll', bids: 'keep' })).toMatch(/what op leave does/)
     expect(shapeRefusal({ ...base, op: 'set-level', lever: 'state', level: 'OFF', pauses: 'resume' })).toMatch(/pauses says what op leave does with the campaigns the brain's own pause holds/)
     expect(shapeRefusal({ ...base, op: 'leave', pauses: 'keep' })).toBeNull()
+  })
+  it('integration fix — a ref is never dropped: set-value takes one only for a keyword setting (tosTargetPct, target:<id>); every other setting and op refuses it', () => {
+    expect(shapeRefusal({ ...base, op: 'set-value', key: 'tosTargetPct', value: 40, ref: 'target:t-1' })).toBeNull()
+    expect(shapeRefusal({ ...base, op: 'set-value', key: 'tosTargetPct', reset: true, ref: 'target:t-1', campaignId: 'c1' })).toBeNull()
+    expect(shapeRefusal({ ...base, op: 'set-value', key: 'paceTargetPct', value: 80, ref: 'target:t-1' })).toMatch(/paceTargetPct is set per product or per campaign, not per keyword \(ref target:t-1\); only tosTargetPct takes a keyword's own value/)
+    expect(shapeRefusal({ ...base, op: 'set-value', key: 'tosTargetPct', value: 40, ref: 'keyword:jacket' })).toMatch(/names its keyword as target:<AdTarget.id>, not keyword:jacket/)
+    expect(shapeRefusal({ ...base, op: 'set-level', lever: 'bids', level: 'OBSERVE', ref: 'target:t-1' })).toMatch(/^set-level takes no ref \(target:t-1\)/)
+    expect(shapeRefusal({ ...base, op: 'enroll', ref: 'target:t-1' })).toMatch(/^enroll takes no ref/)
+    expect(shapeRefusal({ ...base, op: 'leave', ref: 'target:t-1' })).toMatch(/^leave takes no ref/)
+    expect(shapeRefusal({ ...base, op: 'exclude', campaignId: 'c1', ref: 'target:t-1' })).toMatch(/^exclude takes no ref \(target:t-1\) — exclude takes the whole campaign out of the brain \(to hold one thing, lock it\)/)
+    expect(shapeRefusal({ ...base, op: 'include', ref: 'hourCell:d1h14' })).toMatch(/^include takes no ref \(hourCell:d1h14\) — include takes the whole product back into the brain/)
+  })
+})
+
+describe('keywordWords — a keyword\'s value with what it follows', () => {
+  const kw = (rows: Row[]) => resolveKeywordValue({ productId: P, market: 'IT', campaignId: 'c1', targetId: 't-1', overrides: rows }, 'tosTargetPct')
+  it('its own value (who, when), else none of its own and whose it follows — never the campaign\'s value said as the keyword\'s', () => {
+    expect(keywordWords(kw([]))).toBe('null (no value of its own: the brain\'s default)')
+    const camp = row({ kind: 'VALUE', key: 'tosTargetPct', campaignId: 'c1', value: 30 })
+    expect(keywordWords(kw([camp]))).toMatch(/^30 \(no value of its own: the Owner's campaign override \(user:owner, 2026-10-0\d\)\)$/)
+    const own = row({ kind: 'VALUE', key: 'tosTargetPct', campaignId: 'c1', ref: 'target:t-1', value: 45 })
+    expect(keywordWords(kw([camp, own]))).toMatch(/^45 \(the keyword's own value, user:owner, 2026-10-0\d\)$/)
+    // The campaign's own value is not the keyword's: the resolver keeps them apart.
+    expect(resolver([camp, own])('c1').values.tosTargetPct.value).toBe(30)
   })
 })
 
@@ -204,6 +228,8 @@ describe('controlUndoRequest — the op that puts a choice back', () => {
     ['an include', { op: 'include', scope: 'PRODUCT', campaignId: null, kind: 'EXCLUDE', key: '*', ref: '', open: true, value: null }, { op: 'exclude' }],
     ['a value set', { op: 'set-value', scope: 'PRODUCT', campaignId: null, kind: 'VALUE', key: 'paceTargetPct', ref: '', open: true, value: 85 }, { op: 'set-value', key: 'paceTargetPct', value: 85 }],
     ['a value reset', { op: 'set-value', scope: 'PRODUCT', campaignId: null, kind: 'VALUE', key: 'longStopUntil', ref: '', open: false, value: null }, { op: 'set-value', key: 'longStopUntil', reset: true }],
+    ['a keyword\'s own value set (its ref kept)', { op: 'set-value', scope: 'CAMPAIGN', campaignId: 'c1', kind: 'VALUE', key: 'tosTargetPct', ref: 'target:t-1', open: false, value: null }, { op: 'set-value', key: 'tosTargetPct', ref: 'target:t-1', reset: true, campaignId: 'c1' }],
+    ['a keyword\'s own value replaced (its ref kept)', { op: 'set-value', scope: 'PRODUCT', campaignId: null, kind: 'VALUE', key: 'tosTargetPct', ref: 'target:t-1', open: true, value: 35 }, { op: 'set-value', key: 'tosTargetPct', ref: 'target:t-1', value: 35 }],
     ['an enrollment', { op: 'enroll', enrolled: false }, { op: 'leave', bids: 'keep', pauses: 'keep' }],
     ['a leave', { op: 'leave', enrolled: true, levels: { bids: 'AUTO', budgets: 'PROPOSE', hours: 'OBSERVE' } }, { op: 'enroll', levels: { budgets: 'PROPOSE', hours: 'OBSERVE' } }],
   ]

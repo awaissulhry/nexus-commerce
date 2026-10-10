@@ -23,6 +23,8 @@
  *   money      batch 2 fix — the money brain's brake where the product's budgets lever is PROPOSE or AUTO (money-brake.ts):
  *              hold_raises → a raise cap; cut_bids → MONEY (a step down a day); stop_weakest → STOP on its weakest
  *              campaigns (unless the Owner pins their bids), MONEY on the others
+ *   share      Lane 5 — a keyword with a target top-of-search impression share (share-load.ts: keyword > campaign >
+ *              product) carries it and its reading; every other keyword's facts are exactly as before
  */
 import type { TargetFacts, Overrides, DecisionLayer } from './decide.js'
 import type { Directive, LaneDirective, LaneName } from './recipe.js'
@@ -34,6 +36,7 @@ import { laneHeadroom } from '../rank-controller.js'
 import { MAX_MIN_BID_ENTRIES_PER_DAY } from '../rank-write-projection.js'
 import type { MoneyBrakeFact } from './money-brake.js'
 import { applyIntradayAll, type IntradayRun } from './intraday.js'
+import type { ShareFacts } from './share.js'
 
 export interface CampaignRow {
   id: string
@@ -169,6 +172,11 @@ export interface RunRows {
    * owned). In the facts only when `mode` is on; in shadow they are read and compared, never decided with (shadow.ts).
    */
   intraday?: IntradayRun
+  /**
+   * Lane 5 — per keyword with a target top-of-search impression share: the target, who set it, the reading and the last
+   * share move (share-load.ts). Absent (no target anywhere, or a between-slots tick): nothing changes.
+   */
+  share?: ReadonlyMap<string, ShareFacts>
 }
 
 /** BB-9 — one active BidDirective as the brain reads it; `label` names who asked ('rule "GALE IT — share of voice"'). */
@@ -492,6 +500,7 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
       ...(inputs.directives.length ? { directives: inputs.directives } : {}),
       ...(inputs.laneDirectives.length ? { laneDirectives: inputs.laneDirectives } : {}),
       ...(inputs.goal ? { goalBy: inputs.goal.by } : {}),
+      ...(run.share?.has(t.id) ? { share: run.share.get(t.id)! } : {}),
     })
   }
   // BB-17 — the intraday brakes, switched on: each owned campaign's in its keywords' facts (the stack measured as above:

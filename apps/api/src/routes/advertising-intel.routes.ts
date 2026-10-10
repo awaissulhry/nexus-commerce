@@ -295,22 +295,51 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
 
   // Apex E.1 — competitive intel: our SHARE per search query (Brand Analytics SQP).
   // Read the ingested SearchQueryPerformance, newest period first, biggest-volume
-  // queries first. Optional minShare / asin filters surface where we under-index.
+  // queries first. Optional minImpressionShare / asin filters surface where we under-index.
+  //
+  // 2026-10-10 (AUDIT B2, S1) — honest numbers. The stored share columns are NOT NULL, so a query Amazon reported no
+  // market count for reads a false 0 there; every share is now computed from the counts (null when the market count is
+  // 0). One period at a time (`reportPeriod`, default WEEK — a month's share is a different number from a week's), and
+  // `minImpressionShare` filters on the computed share in SQL, so a null never passes and a limit never drops matches.
   fastify.get('/advertising/search-query-performance', async (request, reply) => {
-    const q = request.query as { marketplace?: string; asin?: string; minImpressionShare?: string; limit?: string; days?: string }
-    const since = new Date(); since.setUTCDate(since.getUTCDate() - (q.days ? Number(q.days) : 90)); since.setUTCHours(0, 0, 0, 0)
-    const rows = await prisma.searchQueryPerformance.findMany({
-      where: {
-        startDate: { gte: since },
-        ...(q.marketplace ? { marketplace: q.marketplace } : {}),
-        ...(q.asin ? { asin: q.asin } : {}),
-        ...(q.minImpressionShare ? { impressionShare: { gte: Number(q.minImpressionShare) } } : {}),
-      },
-      orderBy: [{ startDate: 'desc' }, { searchQueryVolume: 'desc' }],
-      take: Math.min(2000, q.limit ? Number(q.limit) : 500),
-    })
+    const q = request.query as { marketplace?: string; asin?: string; minImpressionShare?: string; limit?: string; days?: string; reportPeriod?: string }
+    const { parseSqpPeriod, sqpRowShares } = await import('../services/advertising/sqp.service.js')
+    const period = parseSqpPeriod(q.reportPeriod)
+    if (!period) { reply.status(400); return { error: 'reportPeriod must be WEEK, MONTH or QUARTER (default WEEK)' } }
+    const minShare = q.minImpressionShare != null && q.minImpressionShare !== '' ? Number(q.minImpressionShare) : null
+    if (minShare != null && !Number.isFinite(minShare)) { reply.status(400); return { error: 'minImpressionShare must be a number (a fraction 0..1)' } }
+    const days = q.days && Number.isFinite(Number(q.days)) && Number(q.days) > 0 ? Number(q.days) : 90
+    const since = new Date(); since.setUTCDate(since.getUTCDate() - days); since.setUTCHours(0, 0, 0, 0)
+    const take = Math.min(2000, q.limit && Number.isFinite(Number(q.limit)) && Number(q.limit) > 0 ? Math.floor(Number(q.limit)) : 500)
+    const rows = await prisma.$queryRaw<Array<{
+      id: string; marketplace: string; reportPeriod: string; startDate: Date; searchQuery: string; asin: string | null
+      searchQueryVolume: number; searchQueryRank: number | null
+      impressionsTotal: number; impressionsBrand: number; clicksTotal: number; clicksBrand: number
+      cartAddsTotal: number; cartAddsBrand: number; purchasesTotal: number; purchasesBrand: number
+      sourceReportId: string | null; ingestedAt: Date; updatedAt: Date
+    }>>(Prisma.sql`
+      SELECT "id", "marketplace", "reportPeriod", "startDate", "searchQuery", "asin", "searchQueryVolume", "searchQueryRank",
+             "impressionsTotal", "impressionsBrand", "clicksTotal", "clicksBrand", "cartAddsTotal", "cartAddsBrand",
+             "purchasesTotal", "purchasesBrand", "sourceReportId", "ingestedAt", "updatedAt"
+        FROM "SearchQueryPerformance"
+       WHERE "startDate" >= ${since} AND "reportPeriod" = ${period}
+       ${q.marketplace ? Prisma.sql`AND "marketplace" = ${q.marketplace}` : Prisma.empty}
+       ${q.asin ? Prisma.sql`AND "asin" = ${q.asin}` : Prisma.empty}
+       ${minShare != null ? Prisma.sql`AND "impressionsTotal" > 0 AND LEAST(1, GREATEST(0, "impressionsBrand"::numeric / "impressionsTotal")) >= ${minShare}` : Prisma.empty}
+       ORDER BY "startDate" DESC, "searchQueryVolume" DESC
+       LIMIT ${take}
+    `)
+    const items = rows.map((r) => ({
+      ...r,
+      // 0 is never a real search volume for a query Amazon listed (it was searched): 0 here means not reported.
+      searchQueryVolume: r.searchQueryVolume > 0 ? r.searchQueryVolume : null,
+      ...sqpRowShares(r),
+    }))
     reply.header('Cache-Control', 'private, max-age=120')
-    return { items: rows, count: rows.length }
+    return {
+      items, count: items.length, reportPeriod: period,
+      note: 'Amazon Brand Analytics Search Query Performance, one row per search query × ASIN × period (startDate = the period\'s first day). *Total = the whole market\'s count for the query; *Brand = this ASIN\'s own count. The shares are computed by Nexus from those counts (fractions 0..1; null when Amazon reported no market count). searchQueryRank is Amazon\'s Search Query Score for this ASIN (lower = more searched among this ASIN\'s queries), not a marketplace rank. searchQueryVolume null = not reported.',
+    }
   })
 
   // Diagnostic: the last SQP report's real shape (top-level + first-row keys +

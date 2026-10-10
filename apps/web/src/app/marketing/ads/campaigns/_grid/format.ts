@@ -30,6 +30,23 @@ export const pct = (v: unknown, dp = 2): string => {
 }
 
 /**
+ * THE share formatter of the ads console (impression shares, market shares, top-of-search IS): a FRACTION in.
+ * Like `pct`, plus the floor that keeps a tiny non-zero share from rounding into a confident zero — 2 impressions of
+ * ~90,000 printed "0.00%", the identical string a real zero produces ([[reference_sov_zero_vs_rounding]]).
+ *   0.1234 → "12.34%" · 0.00002 → "<0.01%" · 0 → "0.00%" · null / '' / NaN → "—"
+ * `dp` decimals (2 by default); the floor is one unit of the last decimal shown ("<0.1%" at 1, "<1%" at 0).
+ */
+export const sharePct = (v: unknown, dp = 2): string => {
+  if (v == null || v === '') return '—'
+  const n = Number(v)
+  if (!Number.isFinite(n)) return '—'
+  const p = n * 100
+  const floor = 10 ** -dp
+  if (p > 0 && p < floor) return `<${floor.toFixed(dp)}%`
+  return `${p.toFixed(dp)}%`
+}
+
+/**
  * The sort/filter value of "spent money, no sales": worse than every real ACoS. Finite on
  * purpose — `a - b` of two of them is 0, never NaN, so a comparator stays a comparator.
  */

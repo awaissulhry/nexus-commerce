@@ -147,6 +147,32 @@ describe('AB-19 — the names the ads skills use are Nexus\'s', () => {
   })
 })
 
+describe('2026-10-10 — Amazon\'s visibility numbers: what Nexus has, what it does not, how to say them', () => {
+  for (const name of ['ads-daily-manager', 'ads-weekly-review', 'ads-strategy'] as const) {
+    it(`${name}: a short section in plain words`, () => {
+      const text = skill(name)
+      const start = text.indexOf("## Amazon's visibility numbers")
+      expect(start, name).toBeGreaterThan(-1)
+      const section = text.slice(start, text.indexOf('\n## ', start + 1)).trim()
+      expect(section.split('\n').length, name).toBeLessThanOrEqual(12)
+      // what Nexus has: grain, cadence, delay
+      expect(section).toMatch(/\*\*Top-of-search impression share\*\*: per campaign and day; per keyword where Nexus's keyword pass filled it — each reading names its grain\. 1–3 days late/)
+      expect(section).not.toMatch(/Never per keyword/)
+      expect(section).toMatch(/\*\*Brand Analytics Search Query Performance \(SQP\)\*\*: per search query and ASIN, weekly \(Sunday to Saturday\), about 5 days after the week ends/)
+      expect(section).toMatch(/\*\*Best Sellers Rank\*\*: per ASIN and category, every 3 hours \(`sales-rank`\)/)
+      // what it does not have, and never invents
+      expect(section).toMatch(/does not have: an organic or an ad \(sponsored\) keyword rank or position\. Amazon offers no source for either: never estimate, invent or buy one, and never call a share a rank or a position\./)
+      // how to say them
+      expect(section).toMatch(/its grain \(campaign, keyword, search query, ASIN\), its window \(a day, the week of …, 30 days\) and its date; "not reported" when there is none, never 0\./)
+      expect(section).toMatch(/says "computed by Nexus from Amazon's …"; only a value Amazon reports is Amazon's\./)
+    })
+  }
+
+  it('the daily run keeps them as words in its report, which Nexus fills with figures', () => {
+    expect(skill('ads-daily-manager')).toMatch(/In the run's report \(7\) they are words, never figures\./)
+  })
+})
+
 describe('AB-19 — public repository: no business figures in the ads skills', () => {
   it('no amount, no ASIN, no numbered id', () => {
     for (const name of ADS_SKILLS) {

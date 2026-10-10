@@ -40,7 +40,7 @@ export function BidBidderBand({ data, push }: BidSlotProps) {
       <span className="h10-bd1-k">Bidders, per live campaign:</span>
       {/* S6 made `?bidder=` a real filter, so every segment now reproduces its own number:
           the click lands on campaign grain filtered to exactly the set it counted. */}
-      <Button variant="quiet" size="xs" inline className="h10-bd1-seg click" title="A rank schedule owns these campaigns' bids on its own clock. Click to see them at campaign grain."
+      <Button variant="quiet" size="xs" inline className="h10-bd1-seg click" title="An hourly bid schedule owns these campaigns' bids on its own clock. Click to see them at campaign grain."
         onClick={() => push({ view: 'campaigns', bidder: 'schedule' })}>
         <b>{num(bidders.schedule)}</b> schedule
       </Button>

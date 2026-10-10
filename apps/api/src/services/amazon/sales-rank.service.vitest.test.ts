@@ -9,7 +9,8 @@ import { describe, it, expect, vi } from 'vitest'
 vi.mock('../../db.js', () => ({ default: {} }))
 
 import {
-  bestRankOf, chunk, parseSalesRanks, planAsins, sameRanks, shouldStore, summariseSalesRank, SALES_RANK_BATCH,
+  bestRankOf, chunk, parseSalesRanks, planAsins, sameRanks, shouldStore, summariseSalesRank, salesRankAge, SALES_RANK_BATCH,
+  SALES_RANK_STALE_HOURS,
   type AsinRanks, type StoredRead,
 } from './sales-rank.service.js'
 
@@ -124,16 +125,56 @@ describe('summariseSalesRank — the tool\'s answer', () => {
     asin, marketplace: 'IT', productId, ranks: ranks(sub, sub * 100), capturedAt: new Date(now.getTime() - hoursAgo * 3_600_000),
   })
 
-  it('per ASIN: newest ranks, change against ~24 h and ~7 d ago (positive = climbed), best rank per day', () => {
-    const out = summariseSalesRank([read('B0TEST0001', 4, 1), read('B0TEST0001', 9, 26), read('B0TEST0001', 6, 30), read('B0TEST0001', 20, 24 * 8)], now)
+  it('per ASIN: newest ranks, change against the read nearest ~24 h and ~7 d before it (positive = climbed), best rank per day', () => {
+    // Newest read 1 h ago → the comparison targets are 25 h and 169 h ago.
+    const out = summariseSalesRank([read('B0TEST0001', 4, 1), read('B0TEST0001', 9, 26), read('B0TEST0001', 6, 30), read('B0TEST0001', 20, 24 * 7 + 3)], now)
     const sub = out.asins[0].categories.find((c) => c.kind === 'subcategory')!
-    expect(sub).toMatchObject({ categoryId: '900001', rank: 4, rank24hAgo: 9, change24h: 5, rank7dAgo: 20, change7d: 16 })
+    expect(sub).toMatchObject({
+      categoryId: '900001', rank: 4,
+      rank24hAgo: 9, rank24hAgoAt: '2026-10-08T10:00:00.000Z', change24h: 5,
+      rank7dAgo: 20, rank7dAgoAt: '2026-10-02T09:00:00.000Z', change7d: 16,
+    })
     expect(sub.history).toEqual([
-      { date: '2026-10-01', best: 20 },
+      { date: '2026-10-02', best: 20 },
       { date: '2026-10-08', best: 6 },
       { date: '2026-10-09', best: 4 },
     ])
-    expect(out.asins[0]).toMatchObject({ asin: 'B0TEST0001', reads: 4, capturedAt: '2026-10-09T11:00:00.000Z' })
+    expect(out.asins[0]).toMatchObject({ asin: 'B0TEST0001', reads: 4, capturedAt: '2026-10-09T11:00:00.000Z', ageHours: 1, stale: false })
+  })
+
+  it('B2 + review fix: a gap (the newest read before then is more than 27 h older) → null, never a change against a much older read', () => {
+    // 24 h ago: the read 40 h ago still held (16 h older, inside a heartbeat); 7 days ago: the newest read before it is
+    // 30 h older — a gap, so no 7-day change.
+    const out = summariseSalesRank([read('B0TEST0001', 4, 1), read('B0TEST0001', 9, 40), read('B0TEST0001', 20, 24 * 8 + 6)], now)
+    const sub = out.asins[0].categories.find((c) => c.kind === 'subcategory')!
+    expect(sub).toMatchObject({ rank: 4, rank24hAgo: 9, change24h: 5, rank7dAgo: null, rank7dAgoAt: null, change7d: null })
+    const gap = summariseSalesRank([read('B0TEST0001', 4, 2), read('B0TEST0001', 9, 60)], now).asins[0].categories[0]
+    expect(gap).toMatchObject({ rank24hAgo: null, change24h: null })
+  })
+
+  it('review fix: a steady rank (stored once a day) gives change24h = 0 from a real older read, never a read after "24 h ago"', () => {
+    // Heartbeats 2 h and 31 h ago, the same rank: 24 h ago the 31-hour-old read still held (7 h older) — a real 0.
+    const steady = summariseSalesRank([read('B0TEST0001', 4, 2), read('B0TEST0001', 4, 31)], now).asins[0].categories[0]
+    expect(steady).toMatchObject({ rank: 4, rank24hAgo: 4, rank24hAgoAt: '2026-10-08T05:00:00.000Z', change24h: 0 })
+    // A read 20 h ago is AFTER "24 h ago": it is not the rank then.
+    const after = summariseSalesRank([read('B0TEST0001', 4, 2), read('B0TEST0001', 9, 20)], now).asins[0].categories[0]
+    expect(after).toMatchObject({ rank24hAgo: null, change24h: null })
+  })
+
+  it('B2: the newest read is never its own comparison (one read, or a second one only hours older → null, not 0)', () => {
+    const one = summariseSalesRank([read('B0TEST0001', 4, 20)], now).asins[0].categories[0]
+    expect(one).toMatchObject({ change24h: null, change7d: null })
+    const close = summariseSalesRank([read('B0TEST0001', 4, 1), read('B0TEST0001', 4, 3)], now).asins[0].categories[0]
+    expect(close).toMatchObject({ change24h: null, change7d: null })
+  })
+
+  it(`B1: a newest read older than ${SALES_RANK_STALE_HOURS} h is stale (Amazon reported no rank since, or the feed did not run)`, () => {
+    const out = summariseSalesRank([read('B0TEST0001', 4, SALES_RANK_STALE_HOURS + 3), read('B0TEST0002', 7, 2, 'p-2')], now)
+    expect(out.asins.find((a) => a.asin === 'B0TEST0001')).toMatchObject({ ageHours: SALES_RANK_STALE_HOURS + 3, stale: true })
+    expect(out.asins.find((a) => a.asin === 'B0TEST0002')).toMatchObject({ ageHours: 2, stale: false })
+    // The best per category says its own age too, so a stale #1 never reads as the rank now.
+    expect(out.bestPerCategory.find((b) => b.kind === 'subcategory')).toMatchObject({ asin: 'B0TEST0001', rank: 4, stale: true })
+    expect(salesRankAge(new Date(now.getTime() - SALES_RANK_STALE_HOURS * 3_600_000), now)).toEqual({ ageHours: SALES_RANK_STALE_HOURS, stale: false })
   })
 
   it('a family: the best ASIN per market and category now', () => {

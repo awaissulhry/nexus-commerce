@@ -1,25 +1,33 @@
 /**
- * AX2.6 — Share of Voice + impression-share intelligence.
+ * AX2.6 — our own search-term impression mix + overlap / outbid checks (historically "Share of Voice").
  *
- * Amazon's true "impression share" needs the topOfSearchImpressionShare /
- * search-term-impression-share report columns, which only populate under a
- * live report subscription. This service derives the genuinely-computable
- * signals from the search-term data we already ingest (AmazonAdsSearchTerm):
+ * 🔴 NOTHING HERE IS A SHARE OF VOICE OR A MARKET SHARE (2026-10-10, AUDIT B6 / T6). It reads only OUR search-term
+ * report (AmazonAdsSearchTerm) — no other advertiser's impressions are in it. Amazon's own shares are elsewhere:
+ * top-of-search impression share per campaign comes from the Ads API campaign report (its `topOfSearchImpressionShare`
+ * column, read by ads-tos-is-ingest and the campaign report on request — no subscription involved), and a query's
+ * market share comes from Brand Analytics Search Query Performance (share-of-voice.service.ts). Amazon reports no
+ * impression share per search term. (This header used to say the share columns "only populate under a live report
+ * subscription" — that was never true.)
  *
- *  - Within-account Share of Voice: each query's impressions as a share of
- *    all tracked impressions — the queries we dominate vs barely touch.
- *  - Cannibalization: queries where ≥2 of our own campaigns compete, with
- *    the leading campaign's internal share.
- *  - Lost-IS proxies (clearly labelled, not Amazon's metric):
+ * What it computes, all from our own search terms, all Nexus's own arithmetic:
+ *  - impressionMixPct (was `sovPct`): a query's impressions ÷ ALL our search-term impressions in the window and
+ *    scope — our own impression mix, a fraction 0..1 despite the name. Null when there are no impressions to divide by.
+ *  - Overlap: queries where ≥2 of our own campaigns compete, with the leading campaign's internal share.
+ *  - Heuristic flags (Nexus's, not Amazon's metric):
  *      • "outbid" — high CPC + low impressions relative to clicks → likely
  *        losing the auction; opportunity to raise the bid.
  *      • "weak-relevance" — high impressions + low CTR → we show but don't
  *        win the click; creative / match-type opportunity.
  *
- * Read-only; no writes. Powers the Share-of-Voice cockpit tab + CSV.
+ * Read-only; no writes. Read by GET /advertising/share-of-voice, the recommendations feed (outbid / overlap lines) and
+ * the SOV_BID rule's campaign concentration.
  */
 
 import prisma from '../../db.js'
+
+/** Said wherever `impressionMixPct` travels, so no reader takes it for a market share. */
+export const IMPRESSION_MIX_NOTE =
+  'impressionMixPct is our own impression mix (our search-term impressions only), not a market share: a query\'s impressions ÷ all our search-term impressions in this window and scope, a fraction 0..1. Computed by Nexus from our Amazon search-term report.'
 
 export interface SovRow {
   query: string
@@ -30,14 +38,20 @@ export interface SovRow {
   ctr: number | null
   cvr: number | null
   cpcCents: number | null
-  sovPct: number // share of total tracked impressions
+  /** Our own impression mix (fraction 0..1): this query's impressions ÷ all our search-term impressions in the window
+   *  and scope. NOT a market share or share of voice. Null when there were no impressions to divide by. */
+  impressionMixPct: number | null
   campaignCount: number // distinct campaigns competing for this query
-  topCampaignSharePct: number // leading campaign's share of the query's impressions
+  /** The leading campaign's share of this query's impressions (fraction 0..1). Null when the query had no impressions
+   *  to divide by — no reading, never 0 (a 0 would satisfy "Campaign Concentration < 60%"). */
+  topCampaignSharePct: number | null
   cannibalized: boolean
   flag: 'outbid' | 'weak-relevance' | null
 }
 export interface SovResult {
   windowDays: number
+  /** What impressionMixPct is (IMPRESSION_MIX_NOTE). */
+  note: string
   totalImpressions: number
   queries: number
   rows: SovRow[]
@@ -95,7 +109,7 @@ export async function analyzeShareOfVoice(opts: { windowDays?: number; marketpla
     const ctr = a.impr > 0 ? a.clicks / a.impr : null
     const cvr = a.clicks > 0 ? a.orders / a.clicks : null
     const cpcCents = a.clicks > 0 ? a.cost / a.clicks : null
-    const topShare = a.impr > 0 ? Math.max(...a.byCampaign.values()) / a.impr : 0
+    const topShare = a.impr > 0 ? Math.max(...a.byCampaign.values()) / a.impr : null
     const campaignCount = a.byCampaign.size
     const cannibalized = campaignCount >= 2
     // outbid: above-median CPC but below-median impressions among clicked queries.
@@ -109,13 +123,13 @@ export async function analyzeShareOfVoice(opts: { windowDays?: number; marketpla
     rows.push({
       query, impressions: a.impr, clicks: a.clicks, costCents: Math.round(a.cost), orders: a.orders,
       ctr, cvr, cpcCents: cpcCents != null ? Math.round(cpcCents) : null,
-      sovPct: totalImpressions > 0 ? a.impr / totalImpressions : 0,
+      impressionMixPct: totalImpressions > 0 ? a.impr / totalImpressions : null,
       campaignCount, topCampaignSharePct: topShare, cannibalized, flag,
     })
   }
   rows.sort((x, y) => y.impressions - x.impressions)
   return {
-    windowDays, totalImpressions, queries: rows.length,
+    windowDays, note: IMPRESSION_MIX_NOTE, totalImpressions, queries: rows.length,
     rows: rows.slice(0, limit),
     summary: { cannibalizedQueries, outbidQueries, weakRelevanceQueries },
   }

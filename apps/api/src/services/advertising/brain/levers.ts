@@ -148,6 +148,10 @@ export const BRAIN_SETTINGS = {
   pauseMinDays: { type: 'int', default: 3, min: 3, max: 60, scopes: BOTH, what: 'a stop expected to last at least this many days is a pause; a shorter one stays on low bids, never a pause (§2.4, D4)' },
   archiveDeadWeeks: { type: 'int', default: 4, min: 2, max: 52, scopes: BOTH, what: 'weeks without an impression before the brain pauses an enabled campaign — it never archives (Owner 2026-10-09)' },
   longStopUntil: { type: 'dayOrNull', default: null, scopes: BOTH, what: 'the Owner\'s long stop: the brain pauses through this day (YYYY-MM-DD, UTC) and resumes after it; empty = none (§2.4)' },
+  // Lane 5 (2026-10-10, D1 = A, D2 = A) — the bid brain holds each keyword at this top-of-search impression share
+  // (bid-brain/share.ts). Off (empty) by default: no target, no change. Per keyword too: a VALUE override with ref
+  // target:<AdTarget.id> (brain/settings.ts; keyword > campaign > product).
+  tosTargetPct: { type: 'intOrNull', default: null, min: 5, max: 95, scopes: BOTH, what: 'the top-of-search impression share the bid brain holds each keyword at, % — Amazon\'s daily share at keyword grain, else the campaign\'s on days it served that keyword alone, impression-weighted by Nexus over the reading days: more than 5 points below it the keyword bid rises one step (at most 10 %, never above the band top\'s bid, the highest bid or the top-of-search CPC ceiling), more than 5 points above it the bid falls one step; per keyword: a VALUE override with ref target:<AdTarget.id> (set-ads-brain set-value with that ref; keyword > campaign > product); empty = off' },
 } as const satisfies Record<string, SettingSpec>
 
 export type BrainSetting = keyof typeof BRAIN_SETTINGS

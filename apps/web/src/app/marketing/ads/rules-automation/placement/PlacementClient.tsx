@@ -80,7 +80,7 @@ import { useAdsSync } from '../_shared/adsBus'
 /** The four production Amazon Ads markets, plus the account-wide view the header already offers. */
 /**
  * "All markets" is renderable here and refused on the Keyword Tracker. That page's numbers —
- * market volume, market rank, impression share — are per-marketplace quantities with no honest
+ * market volume, Search Query Score, impression share — are per-marketplace quantities with no honest
  * sum. Everything on this grid is either a per-campaign fact (a campaign belongs to exactly one
  * market) or a EUR amount, and all four markets bill in EUR.
  */
@@ -499,7 +499,7 @@ export function PlacementClient() {
       n: f.unmanaged.n, of: f.unmanaged.of,
       label: 'governed by nothing',
       sub: `of ${num(f.unmanaged.of)} carrying a multiplier · ${num(f.unmanaged.live)} live, ${num(f.unmanaged.paused)} paused`,
-      tip: `Carries a multiplier and no rank schedule or plan steers it. The number that matters is the ${num(f.unmanaged.live)} live ones — a multiplier on a paused campaign spends nothing and is not a mistake to fix.`,
+      tip: `Carries a multiplier and no hourly bid schedule or plan steers it. The number that matters is the ${num(f.unmanaged.live)} live ones — a multiplier on a paused campaign spends nothing and is not a mistake to fix.`,
       tone: 'warn',
     },
     {
@@ -588,7 +588,7 @@ export function PlacementClient() {
               aria-label={`Edit ${LANE_LABEL[r.laneKey]} multiplier for ${r.name}`}
               title={r.owner === 'none'
                 ? 'Edit this multiplier. Nothing steers this campaign, so the value will stick.'
-                : `Edit this multiplier. ⚠ ${r.ownerLabel ?? 'A rank schedule'} steers this campaign and will snap it back within ~15 minutes.`}
+                : `Edit this multiplier. ⚠ ${r.ownerLabel ?? 'An hourly bid schedule'} steers this campaign and will snap it back within ~15 minutes.`}
               onClick={() => push({ edit: key })}
             ><Pencil size={11} aria-hidden /></button>
           </span>
@@ -674,15 +674,16 @@ export function PlacementClient() {
         )
       },
       sortValue: (r) => r.topOfSearchIS ?? nullLast,
-      filterValue: (r) => (r.topOfSearchIS ?? 0) * 100,
+      // NaN = no reading: the grid's filter never lets it match a range (a missing share is not 0 %).
+      filterValue: (r) => (r.topOfSearchIS != null ? r.topOfSearchIS * 100 : Number.NaN),
     },
     {
       key: 'owner', label: 'Owner', metric: false,
-      tip: 'What steers this campaign\'s placement: a rank schedule, a product rank plan, or nothing. “Nobody” is the most important value this column takes and today it is the most common — 144 campaigns carry a multiplier no engine will ever revisit.',
+      tip: 'What steers this campaign\'s placement: an hourly bid schedule, a product rank plan, or nothing. “Nobody” is the most important value this column takes and today it is the most common — many campaigns carry a multiplier no engine will ever revisit.',
       render: (r) => {
         if (r.owner === 'none') {
           return (
-            <span className="h10-plc-own none" title="No enabled rank schedule and no enabled product rank plan governs this campaign. Whatever multiplier it carries was set once — by a rule, a launch wizard, or by hand in Seller Central — and no engine will revisit it.">
+            <span className="h10-plc-own none" title="No enabled hourly bid schedule and no enabled product rank plan governs this campaign. Whatever multiplier it carries was set once — by a rule, a launch wizard, or by hand in Seller Central — and no engine will revisit it.">
               nobody
             </span>
           )
@@ -691,9 +692,9 @@ export function PlacementClient() {
           <a
             className={`h10-plc-own ${r.owner}`}
             href={`${RULES_BASE}/dayparting`}
-            title={`Governed by ${r.owner === 'plan' ? 'a product rank plan' : 'a rank schedule'}${r.ownerLabel ? ` — “${r.ownerLabel}”` : ''}. The plan behind the number lives on Rank & Dayparting.`}
+            title={`Governed by ${r.owner === 'plan' ? 'a product rank plan' : 'an hourly bid schedule'}${r.ownerLabel ? ` — “${r.ownerLabel}”` : ''}. The plan behind the number lives on Rank & Dayparting.`}
           >
-            {r.ownerLabel ?? (r.owner === 'plan' ? 'a rank plan' : 'a rank schedule')}
+            {r.ownerLabel ?? (r.owner === 'plan' ? 'a rank plan' : 'an hourly bid schedule')}
           </a>
         )
       },
@@ -1074,7 +1075,7 @@ function LaneEditor({ row, busy, onSave, onCancel }: {
         variant={needsAck ? 'warning' : 'success'} size="xs" className="go" disabled={!valid || busy || unchanged}
         title={
           unchanged ? 'Already at this value — writing it would add a ledger row and change nothing.'
-            : needsAck ? `⚠ ${row.ownerLabel ?? 'A rank schedule'} steers this campaign. The write will land and the engine will snap it back within ~15 minutes. Click again to do it anyway.`
+            : needsAck ? `⚠ ${row.ownerLabel ?? 'An hourly bid schedule'} steers this campaign. The write will land and the engine will snap it back within ~15 minutes. Click again to do it anyway.`
               : 'Save'
         }
         onClick={() => { if (needsAck) { setAckGoverned(true); return } if (valid && !unchanged) onSave(Math.round(pct)) }}

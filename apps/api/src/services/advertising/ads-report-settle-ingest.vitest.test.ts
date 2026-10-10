@@ -142,3 +142,28 @@ describe('search-term days read again', () => {
     })
   })
 })
+
+/**
+ * Integration review fix (2026-10-10) — the top-of-search share's unit, once per report. Amazon reports it in percent: a
+ * report with any value above 1 is percent (÷ 100, a 0.8 in it is 0.8 %); a report whose values are all ≤ 1 is
+ * ambiguous and writes nothing for that field — the stored reading stays, and the rows are counted.
+ */
+describe('top-of-search share — percent or ambiguous, never guessed', () => {
+  const tos = async (date: string) => (await db().amazonAdsDailyPerformance.findMany({
+    where: { entityType: 'CAMPAIGN', date: d(date) }, orderBy: { entityId: 'asc' }, select: { entityId: true, topOfSearchIS: true, clicks: true },
+  })).map((r) => [r.entityId, r.topOfSearchIS == null ? null : Number(r.topOfSearchIS), r.clicks])
+  const row = (campaignId: number, share: number | null, clicks = 10) => ({ ...campaignRow('2026-10-03', 80, 1, clicks), campaignId, topOfSearchImpressionShare: share })
+
+  it('a percent report divides by 100 (0.8 → 0.8 %); a later ambiguous report keeps the stored reading and counts its rows', async () => {
+    await inside(async () => {
+      const percent = await job('spCampaigns', '2026-10-03', '2026-10-03', '2026-10-04T01:15:00Z', [row(101, 62.5), row(102, 0.8)])
+      expect(await ingestCompletedJob(percent)).toEqual({ jobId: percent, rowsIngested: 2 })
+      expect(await tos('2026-10-03')).toEqual([['101', 0.625, 10], ['102', 0.008, 10]])
+
+      const ambiguous = await job('spCampaigns', '2026-10-03', '2026-10-03', '2026-10-05T01:15:00Z', [row(101, 0.4, 12), row(102, null, 12)])
+      expect(await ingestCompletedJob(ambiguous)).toEqual({ jobId: ambiguous, rowsIngested: 2, tosAmbiguousRows: 1 })
+      // The other columns took the newer pull; the share was not written (not 0.4, not 40 %, not null).
+      expect(await tos('2026-10-03')).toEqual([['101', 0.625, 12], ['102', 0.008, 12]])
+    })
+  })
+})

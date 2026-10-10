@@ -17,7 +17,7 @@ import { compareSortValues } from '@/design-system/grid/sortValues'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { pct, acosRank, acosFilterValue, acosSortNumber, NO_SALES_ACOS, NO_ACOS_SORT } from './format'
+import { pct, sharePct, acosRank, acosFilterValue, acosSortNumber, NO_SALES_ACOS, NO_ACOS_SORT } from './format'
 import { TargetAcosCell } from '../../_shared/RuleColumnCells'
 
 describe('pct — a fraction in, a percent out, no guessing (AM-4)', () => {
@@ -39,6 +39,31 @@ describe('pct — a fraction in, a percent out, no guessing (AM-4)', () => {
     expect(pct(undefined)).toBe('—')
     expect(pct('')).toBe('—')
     expect(pct('x')).toBe('—')
+  })
+})
+
+describe('sharePct — a tiny share is never a confident zero (free visibility numbers, 2026-10-10)', () => {
+  it('prints a non-zero share below 0.01 % as "<0.01%", never "0.00%"', () => {
+    expect(sharePct(2 / 90_000)).toBe('<0.01%')
+    expect(sharePct(0.00009)).toBe('<0.01%')
+    expect(sharePct(0.0000001)).toBe('<0.01%')
+  })
+  it('keeps ordinary shares and a real zero', () => {
+    expect(sharePct(0.1234)).toBe('12.34%')
+    expect(sharePct(0.0001)).toBe('0.01%')
+    expect(sharePct(1)).toBe('100.00%')
+    expect(sharePct(0)).toBe('0.00%')
+  })
+  it('says "—" for no reading — never 0', () => {
+    expect(sharePct(null)).toBe('—')
+    expect(sharePct(undefined)).toBe('—')
+    expect(sharePct('')).toBe('—')
+    expect(sharePct(Number.NaN)).toBe('—')
+  })
+  it('moves the floor with the decimals', () => {
+    expect(sharePct(0.0004, 1)).toBe('<0.1%')
+    expect(sharePct(0.004, 0)).toBe('<1%')
+    expect(sharePct(0.25, 0)).toBe('25%')
   })
 })
 

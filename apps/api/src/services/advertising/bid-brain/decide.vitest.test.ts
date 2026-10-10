@@ -12,8 +12,9 @@
  *   data       a thin keyword stays at its parent's bid until it has 2 orders; every decision says why
  */
 import { describe, expect, it } from 'vitest'
-import { decide, type TargetFacts } from './decide.js'
+import { decide, LOWERING_LAYERS, UNLOWERED_LAYERS, type TargetFacts } from './decide.js'
 import type { Evidence } from './estimator.js'
+import type { ShareFacts } from './share.js'
 
 const ev = (clicks: number, orders = 0, salesCents = 0, costCents = 0): Evidence => ({ clicks, orders, salesCents, costCents })
 /** The §7 worked example's rates (counts are synthetic: the repo is public): CR 0.87 %, AOV 81.15, CPC 30¢. */
@@ -239,5 +240,100 @@ describe('batch 2 fix — the money brain\'s brake in the bid decision (hold rai
 
   it('OBSERVE (no brake in the facts): every decision exactly as before', () => {
     for (const c of [5, 10, 14, 19, 33, 60]) expect(decide(example(c, { overrides: {} }))).toEqual(decide(example(c)))
+  })
+})
+
+/**
+ * Lane 5 (2026-10-10) — the share layer: a target top-of-search impression share (D1 = A: raise below, lower above, hold
+ * within ±5 points; the band top still cuts). In the worked example the band holds 15–22¢ and its top's bid is 22¢.
+ */
+describe('UNLOWERED_LAYERS — the bid a give-back returns to (integration review fix)', () => {
+  it('a share move is an unlowered decision (a floor after it gives back its bid), and no layer is both', () => {
+    expect(UNLOWERED_LAYERS).toContain('share')
+    expect(UNLOWERED_LAYERS.filter((l) => LOWERING_LAYERS.includes(l))).toEqual([])
+  })
+})
+
+describe('Lane 5 — the target top-of-search impression share', () => {
+  const BY = 'the Owner\'s keyword override (user:owner, 2026-10-09)'
+  const share = (pct: number, extra: Partial<ShareFacts> = {}): ShareFacts => ({
+    targetPct: 40, targetBy: BY, reading: { pct, grain: 'keyword', days: 2, impressions: 300, from: '2026-09-27', to: '2026-09-28' }, held: null, waiting: false, lastMove: null, ...extra,
+  })
+  const READ = 'top-of-search impression share 20% (computed by Nexus: the impression-weighted average of Amazon\'s daily shares, keyword grain, 2 reading days 2026-09-27 to 2026-09-28, 300 impressions)'
+  const whys: string[] = []
+  const run = (f: TargetFacts) => { const d = decide(f); whys.push(d.why); return d }
+
+  it('no target: every decision exactly as before', () => {
+    for (const c of [5, 10, 14, 19, 33, 60]) expect(decide(example(c, { share: null }))).toEqual(decide(example(c)))
+  })
+
+  it('below target − 5 points: one step up (≤ 10 %), even in band; the step recorded', () => {
+    const d = run(example(16, { share: share(20) }))
+    expect(d).toMatchObject({ action: 'write', layer: 'share', bidCents: 18, step: { dataDay: '2026-09-29', fromCents: 16, toCents: 18 } })
+    expect(d.why).toBe(`share: target top-of-search impression share 40% (${BY}): ${READ} is below the target by more than 5 points → raise ≤10%: 16¢ → 18¢ (expected ACoS ${d.expectedAcos != null ? `${Math.round(d.expectedAcos * 1000) / 10}%` : ''} at 16¢, band 18%–28%)`)
+  })
+
+  it('held to the band top\'s bid; at it, it holds and names the next lever (the placement %, only with the Owner\'s approval)', () => {
+    const near = run(example(21, { share: share(20) }))
+    expect(near).toMatchObject({ action: 'write', layer: 'share', bidCents: 22 })
+    expect(near.why).toMatch(/held to the bid where the expected ACoS meets the band top 28%, 22¢; the next lever is the top-of-search placement %, only with your approval of the painted hourly plan/)
+    const at = run(example(22, { share: share(20) }))
+    expect(at).toMatchObject({ action: 'hold', layer: 'share', bidCents: 22 })
+    expect(at.why).toMatch(/but 22¢ is at or above its cap \(the bid where the expected ACoS meets the band top 28%, 22¢\) — no raise; the next lever is the top-of-search placement %/)
+  })
+
+  it('held to the top-of-search lane: its CPC ceiling ÷ ((1 + plan %) × dynamic bidding)', () => {
+    const lanes = [{ lane: 'TOP_OF_SEARCH' as const, planPct: 100, maxCpcCents: 40 }]
+    const d = run(example(19, { share: share(20), lanes }))
+    expect(d).toMatchObject({ action: 'write', layer: 'share', bidCents: 20 })
+    expect(d.why).toMatch(/held to the top-of-search CPC ceiling 40¢ ÷ \(1 \+ 100 % placement\), 20¢/)
+  })
+
+  it('above target + 5 points: one step down; within ±5 points: hold', () => {
+    expect(run(example(16, { share: share(60) }))).toMatchObject({ action: 'write', layer: 'share', bidCents: 14, step: { fromCents: 16, toCents: 14 } })
+    const hold = run(example(14, { share: share(42) }))
+    expect(hold).toMatchObject({ action: 'hold', layer: 'share', bidCents: 14 })
+    expect(hold.why).toMatch(/is within 5 points of the target — no change/)
+  })
+
+  it('the band top wins: an ACoS above it goes to the goal (which lowers), the share\'s note said', () => {
+    const d = run(example(33, { share: share(20) }))
+    expect(d).toMatchObject({ action: 'write', layer: 'goal', bidCents: 25 })
+    expect(d.why).toMatch(/ · share: target top-of-search impression share 40% \(.+\): no share move — the band top wins \(expected ACoS .+ at 33¢, band 18%–28%\); top-of-search impression share 20%/)
+  })
+
+  it('a reading that does not count moves nothing: the goal decides as without a target, the why says why the share held', () => {
+    const held = share(20, { held: 'the newest reading day 2026-09-20 is 9 days old (at most 4)' })
+    const d = run(example(14, { share: held }))
+    const plain = decide(example(14))
+    expect(d).toMatchObject({ action: plain.action, layer: plain.layer, bidCents: plain.bidCents })
+    expect(d.why).toBe(`${plain.why} · share: target top-of-search impression share 40% (${BY}): no share move — the newest reading day 2026-09-20 is 9 days old (at most 4); ${READ}`)
+    const none = run(example(19, { share: share(20, { reading: null, held: 'no top-of-search impression share reading — none at keyword grain, nor at campaign grain on a day the campaign served this keyword alone, in the 14 days 2026-09-15 to 2026-09-28' }) }))
+    expect(none).toMatchObject({ action: 'hold', layer: 'band' })
+    expect(none.why).toMatch(/· share: .+: no share move — no top-of-search impression share reading/)
+  })
+
+  it('right after its own move it waits: no other layer moves the bid (the band top excepted)', () => {
+    const waiting = share(20, { waiting: true, held: 'waits for 2 reading days after its share move on 2026-09-28 (16¢ → 18¢) (0 so far)', reading: null, lastMove: { moveDay: '2026-09-28', dataDay: '2026-09-27', readingTo: '2026-09-26', fromCents: 16, toCents: 18 } })
+    const d = run(example(14, { share: waiting }))
+    expect(d).toMatchObject({ action: 'hold', layer: 'share', bidCents: 14 })
+    expect(d.why).toMatch(/^share: target top-of-search impression share 40% .+: waits for 2 reading days after its share move on 2026-09-28/)
+    expect(run(example(33, { share: waiting }))).toMatchObject({ layer: 'goal', action: 'write' })
+  })
+
+  it('the overrides, the limits and the raise cap decide first', () => {
+    expect(decide(example(16, { share: share(20), overrides: { pin: { by: 'a person' } } }))).toMatchObject({ layer: 'pin', action: 'hold' })
+    expect(decide(example(90, { share: share(20) }))).toMatchObject({ layer: 'limit', bidCents: 80 })
+    expect(decide(example(16, { share: share(20), brakes: ['campaign paused'] }))).toMatchObject({ layer: 'brake' })
+    const capped = run(example(16, { share: share(20), raiseCap: 'the campaign is held by user:owner' }))
+    expect(capped).toMatchObject({ action: 'hold', layer: 'share', bidCents: 16, step: null })
+    expect(capped.why).toMatch(/^share: raise held — the campaign is held by user:owner; 16¢ → 18¢ waits/)
+    // A lowering is never held by the raise cap.
+    expect(decide(example(16, { share: share(60), raiseCap: 'held' }))).toMatchObject({ action: 'write', layer: 'share', bidCents: 14 })
+  })
+
+  it('no line it writes calls the share a rank or a position', () => {
+    expect(whys.filter((w) => w.includes('share:')).length).toBeGreaterThan(8)
+    for (const w of whys) expect(w).not.toMatch(/rank|position/i)
   })
 })

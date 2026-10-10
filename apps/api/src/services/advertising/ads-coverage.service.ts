@@ -1,5 +1,8 @@
 /**
- * ACR.2.2 — the coverage scoreboard: how much of page one do we own, per keyword.
+ * ACR.2.2 — the coverage scoreboard: our share of search-results impressions (SQP), per keyword.
+ *
+ * S5 (2026-10-10): this said "page one". Brand Analytics counts every search-results impression of the query
+ * in the week, with no page filter, so the words are "share of search-results impressions (SQP)".
  *
  * The question this whole programme exists to answer, finally answerable because the SQP repair
  * (ACR.2.1) put our own impression counts back into the stored weeks.
@@ -31,9 +34,12 @@ export interface CoverageRow {
   marketImpressions: number
   /** null when the week is unmeasured — see the docblock. Never 0 in that case. */
   ourImpressions: number | null
-  /** Fraction 0..1 of page-one impressions we hold. null when unmeasured. */
+  /**
+   * Fraction 0..1 — our share of search-results impressions (SQP): our ASINs' impressions ÷ the query's total
+   * search-results impressions for the week, computed by Nexus from Amazon's counts. null when unmeasured.
+   */
   share: number | null
-  /** How many of OUR ASINs appear on this SERP. Context, not the objective. */
+  /** How many of OUR ASINs appear in this query's search results that week. Context, not the objective. */
   ourAsins: number
   /** Non-negative keyword targets we hold this exact term with, in this marketplace. */
   targets: number
@@ -42,12 +48,15 @@ export interface CoverageRow {
 
   // ── ACR.2.2b · position ────────────────────────────────────────────────────────────────────
   /**
-   * Amazon's own top-of-search impression share for the campaigns holding this term
-   * (impression-weighted, 30d). **null means UNMEASURED, never zero** — see `tosIsMeasured`
-   * on the board: `topOfSearchIS` is NULL on all 3,552 placement rows in every market, so this
-   * reads "—" everywhere until the fixed ingest lands a night.
+   * T5 (2026-10-10) — CAMPAIGN-LEVEL, not this keyword's: the top-of-search impression share Amazon reports per
+   * campaign and day, for the campaigns holding this term as a keyword, averaged by Nexus (impression-weighted)
+   * over the last 30 days. **null means UNMEASURED, never zero** — see `tosIsMeasured` on the board.
    */
   tosIS: number | null
+  /** T5 — the grain of `tosIS`: 'campaign' (campaigns holding this keyword) whenever there is a value, else null */
+  tosIsGrain: 'campaign' | null
+  /** T5 — how many of the campaigns holding this keyword carry a top-of-search reading in the window */
+  tosIsCampaigns: number
   /** Our paid SEARCH impressions in the window, split by page position. Detail-page ads excluded. */
   topImpressions: number
   restImpressions: number
@@ -119,6 +128,8 @@ export interface CoverageScoreboard {
    * "we never reach the top of the page".
    */
   tosIsMeasured: boolean
+  /** T5 — the words that go with every row's `tosIS`: its grain, its source and its window. */
+  tosIsBasis: string
   /** Pooled position-weighted score for the week, on the same denominator as `totals.share`. */
   pwTotal: number | null
   /** ACR Stage 5 — which ad products actually produced our presence. See `AdTypeMix`. */
@@ -128,7 +139,7 @@ export interface CoverageScoreboard {
 /**
  * ACR Stage 5 — presence attributed to the ad product that bought it.
  *
- * The scoreboard's `share` answers "how much of page one do we hold". It cannot answer "with
+ * The scoreboard's `share` answers "how much of the query's search-results impressions do we hold". It cannot answer "with
  * what", because it is computed from SQP's `impressionsBrand`, which is Amazon's brand-level
  * total with no ad-product dimension at all. Stacking — the whole point of Stage 5 — is only
  * measurable against our OWN performance data, so that is where this comes from.
@@ -164,6 +175,9 @@ export interface AdTypeMix {
 const MIN_MARKET_IMPRESSIONS = 1_000
 const HEADROOM_MIN_MARKET = 5_000
 const HEADROOM_MAX_SHARE = 0.005 // half a percent
+/** T5 — the words that go with a keyword row's `tosIS`. */
+export const COVERAGE_TOS_IS_BASIS = `campaign-level (campaigns holding this keyword): the top-of-search impression share Amazon `
+  + `reports per campaign and day, averaged by Nexus (impression-weighted) over the last ${COVERAGE_POSITION_WINDOW_DAYS} days; not the keyword's own share`
 
 /**
  * Measure the account's own rest-of-search:top-of-search CTR ratio.
@@ -236,7 +250,7 @@ export async function getCoverageScoreboard(args: {
   const weekRows = await prisma.$queryRawUnsafe<{ week: string; rows: bigint; ours: bigint }[]>(`
     SELECT "startDate"::text AS week, COUNT(*) AS rows, SUM("impressionsBrand") AS ours
     FROM "SearchQueryPerformance"
-    WHERE marketplace = $1
+    WHERE marketplace = $1 AND "reportPeriod" = 'WEEK'
     GROUP BY 1 ORDER BY 1 DESC
   `, marketplace)
 
@@ -260,6 +274,7 @@ export async function getCoverageScoreboard(args: {
       notes: [`No Search Query Performance data for ${marketplace}.`],
       positionWeight: await measurePositionWeight(marketplace),
       tosIsMeasured: false,
+      tosIsBasis: COVERAGE_TOS_IS_BASIS,
       pwTotal: null,
       // No SQP week means no board; the mix is a property of the board, so it is empty rather
       // than a set of zeroes that would read as "measured, and nothing ran".
@@ -300,18 +315,19 @@ export async function getCoverageScoreboard(args: {
               AND c.marketplace = $1 AND t.kind = 'KEYWORD'
               AND t."isNegative" = false ${campFilter}) AS targets
     FROM "SearchQueryPerformance" s
-    WHERE s.marketplace = $1 AND s."startDate" = $2::date ${asinFilter}
+    WHERE s.marketplace = $1 AND s."reportPeriod" = 'WEEK' AND s."startDate" = $2::date ${asinFilter}
     GROUP BY 1
-    HAVING SUM(s."impressionsTotal") >= ${MIN_MARKET_IMPRESSIONS}
-    ORDER BY SUM(s."impressionsTotal") DESC
+    -- the query's market total once (MAX), as in the select: a SUM over its ASIN rows multiplied it
+    HAVING MAX(s."impressionsTotal") >= ${MIN_MARKET_IMPRESSIONS}
+    ORDER BY MAX(s."impressionsTotal") DESC
     LIMIT ${limit}
   `, marketplace, week)
 
   /**
    * ── POSITION, per term ──────────────────────────────────────────────────────────────────────
    *
-   * SQP says how much of page one we hold. It does not say WHERE on page one, and a percentage
-   * point at the top is not worth a percentage point at the bottom. The only in-policy source
+   * SQP says how much of the query's search-results impressions we hold. It does not say WHERE on the
+   * page, and a percentage point at the top is not worth a percentage point further down. The only in-policy source
    * for position is our own placement report, which is per CAMPAIGN — so a term inherits the
    * placement mix of the campaigns that hold it as a keyword.
    *
@@ -319,12 +335,12 @@ export async function getCoverageScoreboard(args: {
    * placement mix, applied here to all fifty. It is directional, not per-keyword truth. What it
    * is not is invented: every input is a measured impression count from our own account.
    *
-   * `topOfSearchIS` is Amazon's authoritative answer to the same question and is carried
-   * alongside — currently NULL on every row in every market, so it reads UNMEASURED rather than
-   * being quietly replaced by the approximation.
+   * `topOfSearchIS` is carried alongside — T5: it is Amazon's per CAMPAIGN and day, so a keyword row inherits
+   * the impression-weighted average of the campaigns holding it and says so (`tosIsGrain: 'campaign'`). Where
+   * no holding campaign has a reading it reads UNMEASURED rather than being replaced by the approximation.
    */
   const placement = await prisma.$queryRawUnsafe<{
-    term: string; top_impr: bigint; rest_impr: bigint; is_num: string | null; is_den: bigint
+    term: string; top_impr: bigint; rest_impr: bigint; is_num: string | null; is_den: bigint; is_campaigns: bigint
   }[]>(`
     WITH held AS (
       -- Every (term, campaign) pair where we hold the term as a POSITIVE keyword. isNegative,
@@ -353,7 +369,8 @@ export async function getCoverageScoreboard(args: {
     )
     SELECT h.term,
            SUM(pl.top_impr) AS top_impr, SUM(pl.rest_impr) AS rest_impr,
-           SUM(pl.is_num) AS is_num, SUM(pl.is_den) AS is_den
+           SUM(pl.is_num) AS is_num, SUM(pl.is_den) AS is_den,
+           COUNT(DISTINCT h.ext) FILTER (WHERE pl.is_den > 0) AS is_campaigns
     FROM held h JOIN pl ON pl.ext = h.ext
     GROUP BY 1
   `, marketplace, String(COVERAGE_POSITION_WINDOW_DAYS), PLACEMENT_TOP, PLACEMENT_REST)
@@ -373,6 +390,7 @@ export async function getCoverageScoreboard(args: {
     const topMix = topMixOf(topImpressions, restImpressions)
     const isDen = Number(p?.is_den ?? 0)
     const tosIS = isDen > 0 ? Number(p!.is_num) / isDen : null
+    const tosIsCampaigns = tosIS != null ? Number(p?.is_campaigns ?? 0) : 0
 
     // Every branch that yields null says WHY. A blank cell an operator cannot explain is the
     // same failure as a zero that means "unmeasured" — it just fails more quietly.
@@ -388,6 +406,8 @@ export async function getCoverageScoreboard(args: {
       marketPurchases: Number(r.market_buys),
       ourPurchases: measured ? Number(r.our_buys) : null,
       tosIS,
+      tosIsGrain: tosIS != null ? 'campaign' : null,
+      tosIsCampaigns,
       topImpressions,
       restImpressions,
       topMix,
@@ -409,7 +429,7 @@ export async function getCoverageScoreboard(args: {
       SELECT MAX("impressionsTotal") AS m, SUM("impressionsBrand") AS o,
              MAX("purchasesTotal") AS mb, SUM("purchasesBrand") AS ob
       FROM "SearchQueryPerformance" s
-      WHERE marketplace = $1 AND "startDate" = $2::date ${asinFilter}
+      WHERE marketplace = $1 AND "reportPeriod" = 'WEEK' AND "startDate" = $2::date ${asinFilter}
       GROUP BY "searchQuery"
     ) x
   `, marketplace, week)
@@ -443,10 +463,10 @@ export async function getCoverageScoreboard(args: {
   }
   if (!tosIsMeasured) {
     notes.push(
-      'Amazon\u2019s own top-of-search impression share is UNMEASURED: `topOfSearchIS` is null on every ' +
-      'placement row in every market. The nightly ingest logged SUCCESS with errors=9 for twelve ' +
-      'consecutive nights on a 10-minute poll ceiling; the fix (45 minutes) is deployed and its first ' +
-      'run is the next 02:30. Until then the ToS-IS column reads \u201c\u2014\u201d, not 0%.')
+      `No campaign holding these keywords carries a top-of-search impression share in the last ${COVERAGE_POSITION_WINDOW_DAYS} days ` +
+      '(Amazon reports it per campaign and day). The ToS-IS column reads \u201c\u2014\u201d, not 0%.')
+  } else {
+    notes.push(`ToS-IS on a keyword row is ${COVERAGE_TOS_IS_BASIS}.`)
   }
   const positionedCount = rows.filter((r) => r.positionBasis === 'measured').length
   if (measured && positionedCount > 0) {
@@ -456,7 +476,7 @@ export async function getCoverageScoreboard(args: {
       `top-of-search one in this account \u2014 our own measured CTR ratio over ${positionWeight.windowDays} days, not an industry constant.`)
   }
   // ── ACR.2.4b — the board's own scope, stated on the board ──────────────────────────────────
-  // "Share of page one: 0.76%" reads as XAVIA's share. Measured 2026-08-05 it is GALE's:
+  // "Share of page one: X%" (now "share of search-results impressions") reads as the whole account's share. Measured 2026-08-05 it is one product family's:
   // SQP carries impressions for 10 of 250 advertised ASINs, and all ten are children of one
   // Amazon parent. Eleven whole families (AIREON, REGAL, VENTRA, MOSS, MISANO, AIRMESH…) have
   // no SQP row at all. The market denominator is the whole query market either way, so every
@@ -487,7 +507,7 @@ export async function getCoverageScoreboard(args: {
   const multiAsin = rows.filter((r) => r.ourAsins > 1).length
   if (measured && multiAsin > 0) {
     notes.push(
-      `${multiAsin} terms already show more than one of our ASINs on the same page. ` +
+      `${multiAsin} terms already show more than one of our ASINs in the same week's search results. ` +
       'Presence is not the constraint here; share is.',
     )
   }
@@ -539,7 +559,7 @@ export async function getCoverageScoreboard(args: {
     notes.push(
       `Every paid impression in the last ${COVERAGE_POSITION_WINDOW_DAYS} days came from one ad product. ` +
       `${dormant.join(' and ')} delivered nothing, so no slot stacking is happening — ` +
-      'SB and SD occupy page-one slots SP cannot bid on.',
+      'SB and SD occupy search-results slots SP cannot bid on.',
     )
   }
 
@@ -570,6 +590,7 @@ export async function getCoverageScoreboard(args: {
     notes,
     positionWeight,
     tosIsMeasured,
+    tosIsBasis: COVERAGE_TOS_IS_BASIS,
     pwTotal,
     adTypeMix,
   }

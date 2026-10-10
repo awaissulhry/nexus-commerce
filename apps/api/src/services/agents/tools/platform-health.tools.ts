@@ -55,7 +55,7 @@ const platformHealthChecks: AgentTool = {
   description:
     'Nexus\'s own daily health checks of this business\'s platform, worst first: whether every scheduled job ran and '
     + 'finished, the scheduler and worker restarts, each data feed\'s newest data per market (ads daily reports, search '
-    + 'terms and the other report feeds, Brand Analytics weeks and last night\'s report requests, Economics, keyword rank), '
+    + 'terms and the other report feeds, Brand Analytics weeks and last night\'s report requests, Economics, Keyword Tracker search volume (Brand Analytics, weekly; organic/sponsored rank have no Amazon source)), '
     + 'whether ad writes really reached Amazon (applied, refused by the write gate, failed, stuck), approved plan steps '
     + 'skipped or failed by reason, ads rules held at the graduation gate only by the connection, automation at AUTO '
     + 'that writes nothing, and the queue path. Each check: ok, warn, fail or unknown (could not measure — never ok), '

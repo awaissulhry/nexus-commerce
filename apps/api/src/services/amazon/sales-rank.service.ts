@@ -32,6 +32,13 @@ export const SALES_RANK_HEARTBEAT_HOURS = 24
 /** The read window of the tool: default and maximum, in days. */
 export const SALES_RANK_DEFAULT_DAYS = 14
 export const SALES_RANK_MAX_DAYS = 90
+/**
+ * 2026-10-10 (AUDIT B1) — the newest stored read of an ASIN is STALE past this many hours. A rank Amazon keeps
+ * reporting is stored at least once a day (the heartbeat, SALES_RANK_HEARTBEAT_HOURS) by a feed that runs every 3 hours,
+ * so a newest read older than 24 + 3 hours means Amazon reported no rank since (an ASIN with no rank writes nothing),
+ * or the feed did not run: the rank shown is then the LAST one Amazon reported, not the rank now.
+ */
+export const SALES_RANK_STALE_HOURS = 27
 
 const HOUR_MS = 3_600_000
 const DAY_MS = 86_400_000
@@ -268,20 +275,34 @@ const categoriesOf = (r: AsinRanks): CategoryRank[] => [
 const catKey = (c: { kind: string; categoryId: string }) => `${c.kind}:${c.categoryId}`
 const dayOf = (d: Date) => d.toISOString().slice(0, 10)
 
-/** The rank of a category in the newest read at or before `at` (reads sorted newest first), or null. */
+/**
+ * The rank of a category as it stood at `at`: the newest stored read at or before `at` (reads sorted newest first), when
+ * it is at most SALES_RANK_STALE_HOURS older than `at`. A rank is stored when it changes and at least once a day (the
+ * heartbeat, by a feed every 3 hours), so that read's rank still held at `at`. No read, or only an older one (a gap:
+ * Amazon reported no rank, or the feed did not run): null — no change can be said, never a 0.
+ * B2 (2026-10-10) and review fix: it once took the newest read before `at` however old (days-old "24 h ago"), then the
+ * read nearest to `at` within ±6 h / ±12 h — which missed a steady rank stored once a day, and could take a read from after
+ * `at`.
+ */
 function rankAt(reads: readonly StoredRead[], category: string, at: number): { rank: number; capturedAt: string } | null {
-  for (const r of reads) {
-    if (r.capturedAt.getTime() > at) continue
-    const hit = categoriesOf(r.ranks).find((c) => catKey(c) === category)
-    return hit ? { rank: hit.rank, capturedAt: r.capturedAt.toISOString() } : null
-  }
-  return null
+  const read = reads.find((r) => r.capturedAt.getTime() <= at)
+  if (!read || at - read.capturedAt.getTime() > SALES_RANK_STALE_HOURS * HOUR_MS) return null
+  const hit = categoriesOf(read.ranks).find((c) => catKey(c) === category)
+  return hit ? { rank: hit.rank, capturedAt: read.capturedAt.toISOString() } : null
+}
+
+/** Whole hours since the read, and whether it is past SALES_RANK_STALE_HOURS. Pure. */
+export function salesRankAge(capturedAt: Date, now: Date): { ageHours: number; stale: boolean } {
+  const ms = Math.max(0, now.getTime() - capturedAt.getTime())
+  return { ageHours: Math.floor(ms / HOUR_MS), stale: ms > SALES_RANK_STALE_HOURS * HOUR_MS }
 }
 
 /**
  * The answer of the sales-rank tool from the stored reads of one scope (one market or several): per ASIN its newest
- * ranks with their trend (now against ~24 hours and ~7 days ago: lower is better) and a per-day history (the best rank
- * of each day); per market and category, the best ASIN now. Pure.
+ * ranks, when they were read (capturedAt, ageHours, stale), their trend against the rank as it stood 24 hours and 7 days
+ * ago (rankAt: the newest read at or before then, at most SALES_RANK_STALE_HOURS older, else null; lower is better — and
+ * null when the newest read is stale, since the rank now is then unknown) and a per-day history (the best rank of each day); per market and category, the best ASIN
+ * in its newest read. Pure.
  */
 export function summariseSalesRank(reads: readonly StoredRead[], now: Date) {
   const sorted = [...reads].sort((a, b) => b.capturedAt.getTime() - a.capturedAt.getTime())
@@ -293,10 +314,11 @@ export function summariseSalesRank(reads: readonly StoredRead[], now: Date) {
   }
   const asins = [...byAsin.values()].map((list) => {
     const latest = list[0]
+    const { ageHours, stale } = salesRankAge(latest.capturedAt, now)
     const categories = categoriesOf(latest.ranks).map((c) => {
       const k = catKey(c)
-      const day = rankAt(list, k, now.getTime() - DAY_MS)
-      const week = rankAt(list, k, now.getTime() - 7 * DAY_MS)
+      const day = stale ? null : rankAt(list, k, now.getTime() - DAY_MS)
+      const week = stale ? null : rankAt(list, k, now.getTime() - 7 * DAY_MS)
       const history = new Map<string, number>()
       for (const r of list) {
         const hit = categoriesOf(r.ranks).find((x) => catKey(x) === k)
@@ -306,19 +328,19 @@ export function summariseSalesRank(reads: readonly StoredRead[], now: Date) {
       }
       return {
         kind: c.kind, categoryId: c.categoryId, title: c.title, rank: c.rank,
-        rank24hAgo: day?.rank ?? null, change24h: day ? day.rank - c.rank : null,
-        rank7dAgo: week?.rank ?? null, change7d: week ? week.rank - c.rank : null,
+        rank24hAgo: day?.rank ?? null, rank24hAgoAt: day?.capturedAt ?? null, change24h: day ? day.rank - c.rank : null,
+        rank7dAgo: week?.rank ?? null, rank7dAgoAt: week?.capturedAt ?? null, change7d: week ? week.rank - c.rank : null,
         history: [...history.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, best]) => ({ date, best })),
       }
     })
-    return { asin: latest.asin, marketplace: latest.marketplace, productId: latest.productId, capturedAt: latest.capturedAt.toISOString(), reads: list.length, categories }
+    return { asin: latest.asin, marketplace: latest.marketplace, productId: latest.productId, capturedAt: latest.capturedAt.toISOString(), ageHours, stale, reads: list.length, categories }
   })
-  const best = new Map<string, { marketplace: string; kind: string; categoryId: string; title: string; rank: number; asin: string; productId: string | null; capturedAt: string; change24h: number | null; change7d: number | null }>()
+  const best = new Map<string, { marketplace: string; kind: string; categoryId: string; title: string; rank: number; asin: string; productId: string | null; capturedAt: string; ageHours: number; stale: boolean; change24h: number | null; change7d: number | null }>()
   for (const a of asins) {
     for (const c of a.categories) {
       const k = `${a.marketplace}|${catKey(c)}`
       const cur = best.get(k)
-      if (!cur || c.rank < cur.rank) best.set(k, { marketplace: a.marketplace, kind: c.kind, categoryId: c.categoryId, title: c.title, rank: c.rank, asin: a.asin, productId: a.productId, capturedAt: a.capturedAt, change24h: c.change24h, change7d: c.change7d })
+      if (!cur || c.rank < cur.rank) best.set(k, { marketplace: a.marketplace, kind: c.kind, categoryId: c.categoryId, title: c.title, rank: c.rank, asin: a.asin, productId: a.productId, capturedAt: a.capturedAt, ageHours: a.ageHours, stale: a.stale, change24h: c.change24h, change7d: c.change7d })
     }
   }
   return {

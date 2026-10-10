@@ -27,18 +27,22 @@
  *     `isNegative` and is filtered explicitly.
  */
 import prisma from '../../db.js'
-import { chooseViewPeriod, periodCoverageByMarket, resolveScope, KT_COVERAGE_FLOOR, type KtScopeGraph } from './keyword-tracker.service.js'
+import { chooseViewPeriod, periodCoverageByMarket, resolveScope, sqpShareFromCounts, sqpVolumeOf, KT_COVERAGE_FLOOR, type KtScopeGraph } from './keyword-tracker.service.js'
 
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim()
 const iso = (d: Date | null | undefined) => (d ? new Date(d).toISOString().slice(0, 10) : null)
 const ageDays = (d: Date | null | undefined) =>
   d ? Math.max(0, Math.floor((Date.now() - new Date(d).getTime()) / 86_400_000)) : null
 
-/** Monday of the ISO week a date falls in — the bucket SQP itself uses for `startDate`. */
+/**
+ * Sunday of the Brand Analytics week a date falls in — the bucket SQP itself uses for `startDate` (Amazon's weeks run
+ * Sunday → Saturday, sqp.service.ts). Free visibility numbers (2026-10-10): this used to bucket by the ISO Monday, so
+ * spend was summed Monday → Sunday and dated the day after the share's Sunday — two points a day apart, never one week.
+ */
 export function weekStart(d: Date): Date {
   const t = new Date(d)
   t.setUTCHours(0, 0, 0, 0)
-  return new Date(+t - ((t.getUTCDay() + 6) % 7) * 86_400_000)
+  return new Date(+t - t.getUTCDay() * 86_400_000)
 }
 
 export interface KtTermPoint {
@@ -76,7 +80,8 @@ export interface KtTermSeries {
  * Pure, so both rules are testable without a database.
  */
 export function buildSeries(
-  shareRows: Array<{ week: string; share: number; clickShare: number; asin: string | null }>,
+  /** B2 — shares computed from the counts; null when Amazon reported no query total that week */
+  shareRows: Array<{ week: string; share: number | null; clickShare: number | null; asin: string | null }>,
   spendRows: Array<{ week: string; cents: number; clicks: number; orders: number }>,
   /**
    * 🔴 The gate's chosen period, capping the SHARE series.
@@ -95,10 +100,12 @@ export function buildSeries(
   let shareWeeksExcluded = 0
   for (const r of shareRows) {
     if (capShareAt && r.week > capShareAt) { shareWeeksExcluded++; continue }
+    // B2 — a row with neither share computable (no query totals) is no reading: the week stays ABSENT
+    if (r.share == null && r.clickShare == null) continue
     const p = byWeek.get(r.week) ?? { week: r.week, share: null, clickShare: null, asins: null, spendCents: null, clicks: null, orders: null }
     // the row the grid renders is our BEST ASIN's, so the series follows the same rule
-    p.share = Math.max(p.share ?? -1, r.share)
-    p.clickShare = Math.max(p.clickShare ?? -1, r.clickShare)
+    if (r.share != null) p.share = Math.max(p.share ?? -1, r.share)
+    if (r.clickShare != null) p.clickShare = Math.max(p.clickShare ?? -1, r.clickShare)
     byWeek.set(r.week, p)
     if (r.asin) {
       const s = asinsByWeek.get(r.week) ?? new Set<string>()
@@ -184,11 +191,14 @@ export async function getKeywordTerm(q: KeywordTermQuery) {
   const [shareHistory, spendHistory] = await Promise.all([
     prisma.searchQueryPerformance.findMany({
       where: {
-        marketplace: market, searchQuery: term,
+        // B2 — weekly rows only: a MONTH or QUARTER row would read as one more week of the series
+        marketplace: market, reportPeriod: 'WEEK', searchQuery: term,
         ...(scope.asinScoped ? { asin: { in: scope.asins } } : { asin: { in: scope.asins } }),
       },
+      // B2 — the COUNTS the shares are computed from; the stored share columns read 0 for "not reported"
       select: {
-        startDate: true, asin: true, impressionShare: true, clickShare: true,
+        startDate: true, asin: true,
+        impressionsBrand: true, impressionsTotal: true, clicksBrand: true, clicksTotal: true,
         cartAddShare: true, purchaseShare: true, purchasesBrand: true, cartAddsBrand: true,
         searchQueryVolume: true, searchQueryRank: true,
       },
@@ -200,9 +210,12 @@ export async function getKeywordTerm(q: KeywordTermQuery) {
     }),
   ])
 
+  /** B2 — every share from the counts: our ASIN's count ÷ the query's total that week, null when no total */
+  const shareOf = (r: (typeof shareHistory)[number]) => sqpShareFromCounts(r.impressionsBrand, r.impressionsTotal)
+  const clickShareOf = (r: (typeof shareHistory)[number]) => sqpShareFromCounts(r.clicksBrand, r.clicksTotal)
   const series = buildSeries(
     shareHistory.map((r) => ({
-      week: iso(r.startDate)!, share: Number(r.impressionShare), clickShare: Number(r.clickShare), asin: r.asin,
+      week: iso(r.startDate)!, share: shareOf(r), clickShare: clickShareOf(r), asin: r.asin,
     })),
     spendHistory.map((r) => ({
       week: iso(weekStart(r.date))!,
@@ -215,10 +228,13 @@ export async function getKeywordTerm(q: KeywordTermQuery) {
 
   // ── the header: this term in the week the GRID reads, so drawer and row agree ──
   const inChosen = chosen.start ? shareHistory.filter((r) => +r.startDate === +chosen.start!) : []
-  const best = inChosen.length
-    ? inChosen.reduce((a, b) => (Number(b.impressionShare) > Number(a.impressionShare) ? b : a))
-    : null
-  const bound = inChosen.reduce((a, r) => a + Number(r.impressionShare), 0)
+  // B2 — the best ASIN among rows whose share could be computed; with none, the header carries no share
+  const withShare = inChosen.filter((r) => shareOf(r) != null)
+  const best = withShare.length
+    ? withShare.reduce((a, b) => (shareOf(b)! > shareOf(a)! ? b : a))
+    : inChosen[0] ?? null
+  const bestShare = best && withShare.length ? shareOf(best) : null
+  const bound = withShare.reduce((a, r) => a + shareOf(r)!, 0)
 
   // ── our ASINs on this term, in that week ──
   const asinsInWeek = inChosen.filter((r) => r.asin)
@@ -300,12 +316,18 @@ export async function getKeywordTerm(q: KeywordTermQuery) {
     periodTruncated: chosen.truncated,
     header: best
       ? {
-        marketVolume: best.searchQueryVolume,
-        marketRank: best.searchQueryRank,
-        share: Number(best.impressionShare),
+        // Review fix — a stored 0 is "not reported" (SQP only returns searched queries): null, never 0.
+        marketVolume: sqpVolumeOf(best.searchQueryVolume),
+        /**
+         * C6 — Amazon's Search Query Score for this ASIN (lower = more searched among this ASIN's queries),
+         * for the best ASIN. Not a market rank, not our position. (Was `marketRank`.)
+         */
+        searchQueryScore: best.searchQueryRank,
+        /** 0..1 from the counts (best ASIN's impressions ÷ the query's total); null when Amazon reported no total */
+        share: bestShare,
         /** 🔴 an UPPER bound over our ASINs, never a total — impressions can overlap in one search */
-        shareBound: asinsInWeek.length > 1 ? bound : null,
-        bestAsin: best.asin,
+        shareBound: withShare.length > 1 ? bound : null,
+        bestAsin: bestShare != null ? best.asin : null,
         asinsOnQuery: new Set(asinsInWeek.map((r) => r.asin)).size,
       }
       : null,
@@ -315,12 +337,13 @@ export async function getKeywordTerm(q: KeywordTermQuery) {
         asin: r.asin!,
         sku: productByAsin.get(r.asin!)?.sku ?? null,
         name: productByAsin.get(r.asin!)?.name ?? null,
-        share: Number(r.impressionShare),
-        clickShare: Number(r.clickShare),
+        /** B2 — from the counts; null when Amazon reported no query total (never 0) */
+        share: shareOf(r),
+        clickShare: clickShareOf(r),
         /** is this ASIN actually advertised in the campaigns bidding this term? */
         advertisedOnTerm: advertisedAsins.has(r.asin!),
       }))
-      .sort((a, b) => b.share - a.share),
+      .sort((a, b) => (b.share ?? -1) - (a.share ?? -1)),
     bidCampaigns,
     bid: {
       campaigns: bidCampaigns.length,

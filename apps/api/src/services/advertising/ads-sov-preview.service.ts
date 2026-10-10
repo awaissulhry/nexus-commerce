@@ -123,7 +123,7 @@ export interface SovPreviewResult {
   /** Every positive target in the picked campaigns, including the kinds a SOV rule can never touch. */
   selectedTargets: number
   /** The SQP week each market was read from, and its age — the freshness the rows inherit. */
-  periods: Array<{ marketplace: string; week: string | null; ageDays: number | null; refused: boolean; reason: string }>
+  periods: Array<{ marketplace: string; week: string | null; ageDays: number | null; weekEndAgeDays: number | null; maxAgeDays: number; refused: boolean; reason: string; note?: string }>
   rows: SovPreviewRow[]
   untranslatable?: string[]
 }
@@ -173,8 +173,11 @@ export async function previewSovRule(draft: BudgetPreviewDraft): Promise<SovPrev
     marketplace: p.marketplace,
     week: p.start ? p.start.toISOString().slice(0, 10) : null,
     ageDays: p.ageDays,
+    weekEndAgeDays: p.weekEndAgeDays,
+    maxAgeDays: p.maxAgeDays,
     refused: p.refused,
     reason: p.reason,
+    ...(p.note ? { note: p.note } : {}),
   }))
   /**
    * 🔴 No picks is NOT "nothing" for a Share-of-Voice rule. The engine reads an empty picker as "no

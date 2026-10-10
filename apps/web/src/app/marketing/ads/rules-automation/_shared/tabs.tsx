@@ -168,7 +168,7 @@ export const RULES_TABS: RulesTab[] = [
     key: 'keyword-tracker',
     label: 'Keyword Tracker',
     routed: true,
-    subtitle: 'Rules that bid on organic and paid rank — what each one does, and whether it acts on its own',
+    subtitle: 'Rules that bid on weekly search volume (Amazon Brand Analytics) — organic and sponsored rank have no Amazon source — what each one does, and whether it acts on its own',
   },
 ]
 

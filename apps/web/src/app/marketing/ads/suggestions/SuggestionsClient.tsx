@@ -64,7 +64,7 @@ import {
 import { aiChangeText, aiHoverContent } from './_shared/aiText'
 import {
   ApproveHover, BufferInput, ImpactCell, ProposedCell, RuleCell, SourceCell, StakeCell,
-  impactScore, mCpc, mEur, mInt, mPct, prettyTrigger,
+  impactScore, mCpc, mEur, mInt, mPct, prettyTrigger, weeklyVolume,
 } from './_shared/rowCells'
 import { AiDecisionDrawer, SuggestionDrawer } from './_views/drawers'
 import { ApproveHoverCard } from './ApproveHoverCard'
@@ -848,11 +848,20 @@ function SuggestionsInner() {
     cvr: { key: 'cvr', label: 'CVR', metric: true, sortable: true, tip: metricTip('Conversion rate (orders ÷ clicks)'), sortValue: (s) => s.metrics?.cvr ?? null, render: (s) => mPct(s.metrics, 'cvr') },
     cpc: { key: 'cpc', label: 'CPC', metric: true, sortable: true, tip: metricTip('Average cost per click'), sortValue: (s) => s.metrics?.cpcCents ?? null, render: (s) => mCpc(s.metrics) },
     orders: { key: 'orders', label: 'PPC Orders', metric: true, sortable: true, tip: metricTip('Attributed orders'), sortValue: (s) => s.metrics?.orders ?? null, render: (s) => mInt(s.metrics, 'orders') },
+    /**
+     * Free visibility numbers (2026-10-10, F4) — the volume is ONE Brand Analytics week's searches, and the cell says which
+     * week (`searchVolumeWeekStart`). A volume without a week is of an unknown period, so it is not shown as weekly.
+     */
     volume: {
-      key: 'volume', label: 'Search Volume', metric: true, sortable: true,
-      tip: 'The whole market’s searches for this term (Brand Analytics, newest period). “—” = the feed does not cover this query — absence, not zero.',
-      sortValue: (s) => s.volume ?? null,
-      render: (s) => s.volume != null ? <span className="h10-sug-num">{s.volume.toLocaleString('en-IE')}</span> : dash('Not covered by the Brand Analytics feed'),
+      key: 'volume', label: 'Search volume / wk', metric: true, sortable: true,
+      tip: 'The whole market’s searches for this term in one week (Amazon Brand Analytics, the newest week Nexus holds), with the week it covers. “—” = no weekly reading for this query — absence, not zero.',
+      sortValue: (s) => weeklyVolume(s)?.volume ?? null,
+      render: (s) => {
+        const w = weeklyVolume(s)
+        return w
+          ? <><span className="h10-sug-num">{w.volume.toLocaleString('en-IE')}</span> <span className="h10-sug-when">(week of {w.week})</span></>
+          : dash('No weekly Brand Analytics reading for this query')
+      },
     },
     lookback: {
       key: 'lookback', label: 'Lookback Period', metric: false, sortable: true,
