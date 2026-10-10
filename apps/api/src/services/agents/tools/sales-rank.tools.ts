@@ -4,8 +4,8 @@
  * The sales-rank feed (services/amazon/sales-rank.service.ts, every 3 hours) stores Amazon's rank of every live Amazon
  * listing: per market, the rank in a sub-category (a browse node such as a jackets node) and in a whole department.
  * This tool answers it for one product family, one SKU or one ASIN: the best ASIN per category in its newest read, each
- * ASIN's newest ranks with when they were read (capturedAt, ageHours, stale) and the trend against the stored read
- * nearest to 24 hours and 7 days ago (within ±6 h / ±12 h, else null; null too when the newest read is stale — a lower
+ * ASIN's newest ranks with when they were read (capturedAt, ageHours, stale) and the trend against the rank as it stood
+ * 24 hours and 7 days ago (the newest read at or before then, at most 27 h older, else null; null too when the newest read is stale — a lower
  * rank is better, so a positive change is a climb) and the best rank of each day. A scope with no stored read says so, with when the feed last stored
  * anything at all. 2026-10-10 (AUDIT B1/B2): a newest read older than 27 h is `stale` — Amazon reported no rank since,
  * or the feed did not run — and is never presented as the rank now.
@@ -35,8 +35,8 @@ const salesRank: AgentTool = {
     + 'Items salesRanks) for every live Amazon listing: per market, the rank in each sub-category (a browse node) and in '
     + 'the whole department. Name a product (a family parent covers its variations), a SKU or an ASIN, optionally one '
     + 'market (IT, DE, …); name none for the business\'s 50 best-ranked ASINs in their newest reads (no daily history). Answers the best ASIN per category (bestPerCategory: rank, which ASIN, '
-    + 'capturedAt = when Nexus read it from Amazon, ageHours, stale, change against the stored read nearest to 24 h and 7 days ago — within ±6 h / ±12 h, '
-    + 'else null, and null when stale; a lower rank is better, so a positive change is a climb), and each ASIN\'s newest ranks (capturedAt, ageHours, stale; the reads compared, '
+    + 'capturedAt = when Nexus read it from Amazon, ageHours, stale, change against the rank as it stood 24 h and 7 days ago — the newest stored read at or before then, at most 27 h older '
+    + '(a rank is stored when it changes and once a day), else null, and null when stale; a lower rank is better, so a positive change is a climb), and each ASIN\'s newest ranks (capturedAt, ageHours, stale; the reads compared, '
     + 'rank24hAgoAt / rank7dAgoAt) with the best rank of each UTC day over the window (default 14 days, at most 90). stale = the newest read is older than '
     + '27 h: Amazon reported no rank since, or the feed did not run — the rank is the last one Amazon reported, not the rank now; say so. Stored reads only: a '
     + 'read is kept when a rank changed, plus one a day. Read only.',
@@ -103,7 +103,7 @@ const salesRank: AgentTool = {
           ? summary.asins.slice(0, OVERVIEW_ASINS).map((a) => ({ ...a, categories: a.categories.map(({ history: _history, ...c }) => ({ ...c, title: title(c.title) })) }))
           : summary.asins.map((a) => ({ ...a, categories: a.categories.map((c) => ({ ...c, title: title(c.title) })) })),
         ...(scope.overview && summary.asins.length > OVERVIEW_ASINS ? { more: summary.asins.length - OVERVIEW_ASINS } : {}),
-        note: `Amazon's Best Sellers Rank: 1 is the best seller. Each rank is the one in the ASIN's newest stored read, taken at capturedAt (UTC; ageHours old). stale = that read is older than ${service.SALES_RANK_STALE_HOURS} h: Amazon reported no rank since, or the feed did not run, so it is the last rank Amazon reported, not the rank now. change24h / change7d = the rank in the stored read nearest to 24 h / 7 days ago (rank24hAgoAt / rank7dAgoAt; within ±${service.SALES_RANK_DAY_TOLERANCE_HOURS} h / ±${service.SALES_RANK_WEEK_TOLERANCE_HOURS} h) minus the newest rank (positive = climbed); null when no read is that close or the newest read is stale — never 0 for "unknown". The feed reads Amazon ${SCHEDULE_WORDS}.`,
+        note: `Amazon's Best Sellers Rank: 1 is the best seller. Each rank is the one in the ASIN's newest stored read, taken at capturedAt (UTC; ageHours old). stale = that read is older than ${service.SALES_RANK_STALE_HOURS} h: Amazon reported no rank since, or the feed did not run, so it is the last rank Amazon reported, not the rank now. change24h / change7d = the rank as it stood 24 h / 7 days ago — the newest stored read at or before then (rank24hAgoAt / rank7dAgoAt), at most ${service.SALES_RANK_STALE_HOURS} h older (a rank is stored when it changes and once a day, so it still held then) — minus the newest rank (positive = climbed); null when there is a gap (no read that recent) or the newest read is stale — never 0 for "unknown". The feed reads Amazon ${SCHEDULE_WORDS}.`,
         ...(staleCount ? { staleAsins: staleCount } : {}),
       },
     }

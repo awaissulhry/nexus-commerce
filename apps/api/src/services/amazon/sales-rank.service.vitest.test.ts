@@ -142,11 +142,23 @@ describe('summariseSalesRank — the tool\'s answer', () => {
     expect(out.asins[0]).toMatchObject({ asin: 'B0TEST0001', reads: 4, capturedAt: '2026-10-09T11:00:00.000Z', ageHours: 1, stale: false })
   })
 
-  it('B2: no read within ±6 h of "24 h before" / ±12 h of "7 days before" → null, never a change against a much older read', () => {
-    // Before 2026-10-10 the 8-day-old read stood in for "7 days ago" and the 40-hour-old one for "24 hours ago".
+  it('B2 + review fix: a gap (the newest read before then is more than 27 h older) → null, never a change against a much older read', () => {
+    // 24 h ago: the read 40 h ago still held (16 h older, inside a heartbeat); 7 days ago: the newest read before it is
+    // 30 h older — a gap, so no 7-day change.
     const out = summariseSalesRank([read('B0TEST0001', 4, 1), read('B0TEST0001', 9, 40), read('B0TEST0001', 20, 24 * 8 + 6)], now)
     const sub = out.asins[0].categories.find((c) => c.kind === 'subcategory')!
-    expect(sub).toMatchObject({ rank: 4, rank24hAgo: null, rank24hAgoAt: null, change24h: null, rank7dAgo: null, change7d: null })
+    expect(sub).toMatchObject({ rank: 4, rank24hAgo: 9, change24h: 5, rank7dAgo: null, rank7dAgoAt: null, change7d: null })
+    const gap = summariseSalesRank([read('B0TEST0001', 4, 2), read('B0TEST0001', 9, 60)], now).asins[0].categories[0]
+    expect(gap).toMatchObject({ rank24hAgo: null, change24h: null })
+  })
+
+  it('review fix: a steady rank (stored once a day) gives change24h = 0 from a real older read, never a read after "24 h ago"', () => {
+    // Heartbeats 2 h and 31 h ago, the same rank: 24 h ago the 31-hour-old read still held (7 h older) — a real 0.
+    const steady = summariseSalesRank([read('B0TEST0001', 4, 2), read('B0TEST0001', 4, 31)], now).asins[0].categories[0]
+    expect(steady).toMatchObject({ rank: 4, rank24hAgo: 4, rank24hAgoAt: '2026-10-08T05:00:00.000Z', change24h: 0 })
+    // A read 20 h ago is AFTER "24 h ago": it is not the rank then.
+    const after = summariseSalesRank([read('B0TEST0001', 4, 2), read('B0TEST0001', 9, 20)], now).asins[0].categories[0]
+    expect(after).toMatchObject({ rank24hAgo: null, change24h: null })
   })
 
   it('B2: the newest read is never its own comparison (one read, or a second one only hours older → null, not 0)', () => {

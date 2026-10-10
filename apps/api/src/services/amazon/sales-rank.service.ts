@@ -39,12 +39,6 @@ export const SALES_RANK_MAX_DAYS = 90
  * or the feed did not run: the rank shown is then the LAST one Amazon reported, not the rank now.
  */
 export const SALES_RANK_STALE_HOURS = 27
-/**
- * 2026-10-10 (AUDIT B2) — how far from "24 hours ago" / "7 days ago" a comparison read may be. Outside it the change is
- * null, never a 0 or a change against a read days older than it says.
- */
-export const SALES_RANK_DAY_TOLERANCE_HOURS = 6
-export const SALES_RANK_WEEK_TOLERANCE_HOURS = 12
 
 const HOUR_MS = 3_600_000
 const DAY_MS = 86_400_000
@@ -282,21 +276,19 @@ const catKey = (c: { kind: string; categoryId: string }) => `${c.kind}:${c.categ
 const dayOf = (d: Date) => d.toISOString().slice(0, 10)
 
 /**
- * The rank of a category in the stored read NEAREST to `at`, within `toleranceMs` of it (reads sorted newest first; the
- * newest read itself is never its own comparison), or null — no read close enough means no change can be said.
- * B2 (2026-10-10): this used to take the newest read at or before `at` however old, so "~24 h ago" could be days ago,
- * and a newest read older than 24 h was compared with itself: a made-up "no change".
+ * The rank of a category as it stood at `at`: the newest stored read at or before `at` (reads sorted newest first), when
+ * it is at most SALES_RANK_STALE_HOURS older than `at`. A rank is stored when it changes and at least once a day (the
+ * heartbeat, by a feed every 3 hours), so that read's rank still held at `at`. No read, or only an older one (a gap:
+ * Amazon reported no rank, or the feed did not run): null — no change can be said, never a 0.
+ * B2 (2026-10-10) and review fix: it once took the newest read before `at` however old (days-old "24 h ago"), then the
+ * read nearest to `at` within ±6 h / ±12 h — which missed a steady rank stored once a day, and could take a read from after
+ * `at`.
  */
-function rankNear(reads: readonly StoredRead[], category: string, at: number, toleranceMs: number): { rank: number; capturedAt: string } | null {
-  let nearest: StoredRead | null = null
-  for (const r of reads.slice(1)) {
-    const d = Math.abs(r.capturedAt.getTime() - at)
-    if (d > toleranceMs) continue
-    if (!nearest || d < Math.abs(nearest.capturedAt.getTime() - at)) nearest = r
-  }
-  if (!nearest) return null
-  const hit = categoriesOf(nearest.ranks).find((c) => catKey(c) === category)
-  return hit ? { rank: hit.rank, capturedAt: nearest.capturedAt.toISOString() } : null
+function rankAt(reads: readonly StoredRead[], category: string, at: number): { rank: number; capturedAt: string } | null {
+  const read = reads.find((r) => r.capturedAt.getTime() <= at)
+  if (!read || at - read.capturedAt.getTime() > SALES_RANK_STALE_HOURS * HOUR_MS) return null
+  const hit = categoriesOf(read.ranks).find((c) => catKey(c) === category)
+  return hit ? { rank: hit.rank, capturedAt: read.capturedAt.toISOString() } : null
 }
 
 /** Whole hours since the read, and whether it is past SALES_RANK_STALE_HOURS. Pure. */
@@ -307,9 +299,9 @@ export function salesRankAge(capturedAt: Date, now: Date): { ageHours: number; s
 
 /**
  * The answer of the sales-rank tool from the stored reads of one scope (one market or several): per ASIN its newest
- * ranks, when they were read (capturedAt, ageHours, stale), their trend against the stored read nearest to ~24 hours
- * and ~7 days ago (within ±6 h / ±12 h, else null; lower is better — and null when the newest read is stale, since the
- * rank now is then unknown) and a per-day history (the best rank of each day); per market and category, the best ASIN
+ * ranks, when they were read (capturedAt, ageHours, stale), their trend against the rank as it stood 24 hours and 7 days
+ * ago (rankAt: the newest read at or before then, at most SALES_RANK_STALE_HOURS older, else null; lower is better — and
+ * null when the newest read is stale, since the rank now is then unknown) and a per-day history (the best rank of each day); per market and category, the best ASIN
  * in its newest read. Pure.
  */
 export function summariseSalesRank(reads: readonly StoredRead[], now: Date) {
@@ -325,8 +317,8 @@ export function summariseSalesRank(reads: readonly StoredRead[], now: Date) {
     const { ageHours, stale } = salesRankAge(latest.capturedAt, now)
     const categories = categoriesOf(latest.ranks).map((c) => {
       const k = catKey(c)
-      const day = stale ? null : rankNear(list, k, now.getTime() - DAY_MS, SALES_RANK_DAY_TOLERANCE_HOURS * HOUR_MS)
-      const week = stale ? null : rankNear(list, k, now.getTime() - 7 * DAY_MS, SALES_RANK_WEEK_TOLERANCE_HOURS * HOUR_MS)
+      const day = stale ? null : rankAt(list, k, now.getTime() - DAY_MS)
+      const week = stale ? null : rankAt(list, k, now.getTime() - 7 * DAY_MS)
       const history = new Map<string, number>()
       for (const r of list) {
         const hit = categoriesOf(r.ranks).find((x) => catKey(x) === k)
