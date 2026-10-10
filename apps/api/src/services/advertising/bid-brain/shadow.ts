@@ -77,7 +77,7 @@ import { responseSummaryWords } from './response.js'
 import { exploreSummaryWords } from './explore.js'
 import { probeSummaryWords } from './probe.js'
 import { loadShare } from './share-load.js'
-import { shareEvidence, type ShareFacts } from './share.js'
+import { shareEvidence, shareMoveApplied, type ShareFacts } from './share.js'
 
 export type BrainMode = 'off' | 'shadow' | 'live'
 
@@ -239,7 +239,7 @@ export async function shadowMarket(market: string, ctx: { runId: string; mode: B
       aim: dec(d.goal?.aim), bandLo: dec(d.goal?.lo), bandHi: dec(d.goal?.hi), expectedAcos: dec(d.expectedAcos), confidence: dec(d.confidence),
       dataDay: new Date(`${d.dataDay}T00:00:00Z`), lastWriter: last?.actor ?? null, lastWriteAt: last?.at ?? null, why: withNote(withNote(withNote(withNote(recipe.has(campaignId) ? `${d.why} · ${recipe.get(campaignId)}` : d.why, upgrades?.notes.get(d.targetId)), nowcast?.notes.get(d.targetId)), hourFactors.notes.get(campaignId)), intraday?.notes.get(d.targetId)),
       // The step the next run anchors on (nowcast.ts stepToStore): marked when the rows were read with the nowcast on.
-      evidence: { step: d.step, lastStep: stepToStore(d, run.lastSteps.get(d.targetId), !!rows.nowcast), clash: d.clash, placements: d.placements.length ? d.placements : undefined, sent: outcome, ...upgrades?.evidence.get(d.targetId), ...(shareOf.has(d.targetId) ? { share: shareEvidence(d, shareOf.get(d.targetId)!, runDay) } : {}) } as unknown as Prisma.InputJsonObject,
+      evidence: { step: d.step, lastStep: stepToStore(d, run.lastSteps.get(d.targetId), !!rows.nowcast), clash: d.clash, placements: d.placements.length ? d.placements : undefined, sent: outcome, ...upgrades?.evidence.get(d.targetId), ...(shareOf.has(d.targetId) ? { share: shareEvidence(d, shareOf.get(d.targetId)!, runDay, shareMoveApplied(owned.has(campaignId), outcome)) } : {}) } as unknown as Prisma.InputJsonObject,
       createdAt: ctx.now,
     }]
   })

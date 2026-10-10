@@ -194,19 +194,26 @@ export function shareMove(args: { currentCents: number; reading: Pick<ShareReadi
   return { dir: 'lower', cents: want, stepPct, capped: null }
 }
 
-/** The move the brain stores after a share write (evidence.share.lastMove); the previous one otherwise. Pure. */
-export function nextLastMove(d: { layer: string; action: string; currentCents: number; bidCents: number; dataDay: string }, share: ShareFacts, today: string): ShareMove | null {
-  if (d.layer !== 'share' || d.action !== 'write' || d.bidCents === d.currentCents) return share.lastMove
+/**
+ * The move the brain stores after a share write (evidence.share.lastMove); the previous one otherwise. Integration review
+ * fix — `applied`: the write went through (queued at Amazon) or the campaign is in shadow; a LIVE write the gate, the dial,
+ * the caps or the kill switch kept back is no move (the next run may still move). Pure.
+ */
+export function nextLastMove(d: { layer: string; action: string; currentCents: number; bidCents: number; dataDay: string }, share: ShareFacts, today: string, applied = true): ShareMove | null {
+  if (!applied || d.layer !== 'share' || d.action !== 'write' || d.bidCents === d.currentCents) return share.lastMove
   return { moveDay: today, dataDay: d.dataDay, readingTo: share.reading?.to ?? null, fromCents: d.currentCents, toCents: d.bidCents }
 }
 
 /** What a stored decision keeps of the share layer (BidBrainDecision.evidence.share). Pure. */
-export function shareEvidence(d: { layer: string; action: string; currentCents: number; bidCents: number; dataDay: string }, share: ShareFacts, today: string): Record<string, unknown> {
+export function shareEvidence(d: { layer: string; action: string; currentCents: number; bidCents: number; dataDay: string }, share: ShareFacts, today: string, applied = true): Record<string, unknown> {
   return {
     targetPct: share.targetPct, targetBy: share.targetBy, reading: share.reading, held: share.held, waiting: share.waiting,
-    lastMove: nextLastMove(d, share, today),
+    lastMove: nextLastMove(d, share, today, applied),
   }
 }
+
+/** Whether a decision's write took effect for the share layer's memory: a shadow campaign's always, a LIVE one's only when queued. Pure. */
+export const shareMoveApplied = (live: boolean, outcome: { sent: string } | undefined): boolean => !live || outcome?.sent === 'queued'
 
 /** A stored lastMove read back (null: none, or not well formed). Pure. */
 export function readLastMove(raw: unknown): ShareMove | null {

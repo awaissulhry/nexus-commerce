@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  nextLastMove, readingWords, readLastMove, shareEvidence, shareMove, sharePct, shareReadingOf, tosLaneCap,
+  nextLastMove, readingWords, readLastMove, shareEvidence, shareMove, shareMoveApplied, sharePct, shareReadingOf, tosLaneCap,
   type ShareDay, type ShareFacts, type ShareMove,
 } from './share.js'
 
@@ -113,6 +113,19 @@ describe('words and memory', () => {
     const ev = shareEvidence(write, share, TODAY)
     expect(readLastMove(JSON.parse(JSON.stringify(ev)).lastMove)).toEqual(ev.lastMove)
     expect(readLastMove({ moveDay: 'yesterday', fromCents: 1, toCents: 2 })).toBeNull()
+  })
+
+  it('review fix — a LIVE share write the gate, dial, caps or kill switch kept back is no move: the previous one stays', () => {
+    const previous: ShareMove = { moveDay: '2026-10-07', dataDay: '2026-10-05', readingTo: '2026-10-05', fromCents: 27, toCents: 30 }
+    const share: ShareFacts = { targetPct: 40, targetBy: 'the Owner\'s keyword override', reading: { pct: 20, grain: 'keyword', days: 2, impressions: 300, from: '2026-10-08', to: '2026-10-09' }, held: null, waiting: false, lastMove: previous }
+    const write = { layer: 'share', action: 'write', currentCents: 30, bidCents: 33, dataDay: '2026-10-08' }
+    // A shadow campaign records its move (nothing is sent in shadow); a LIVE one only when its write was queued.
+    expect(shareMoveApplied(false, undefined)).toBe(true)
+    expect(shareMoveApplied(true, { sent: 'queued' })).toBe(true)
+    for (const sent of ['refused', 'deferred', 'would-apply', 'unchanged']) expect(shareMoveApplied(true, { sent })).toBe(false)
+    expect(shareMoveApplied(true, undefined)).toBe(false)
+    expect(shareEvidence(write, share, TODAY, false).lastMove).toEqual(previous)
+    expect(shareEvidence(write, share, TODAY, true).lastMove).toMatchObject({ moveDay: TODAY, fromCents: 30, toCents: 33 })
   })
 
   it('no line of the reading ever calls a share a rank or a position', () => {
