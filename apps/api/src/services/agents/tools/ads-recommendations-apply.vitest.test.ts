@@ -222,7 +222,7 @@ describe('W3-1 — apply-ad-recommendations', { timeout: TIMEOUT }, () => {
     expect(answer.error).toMatch(/^Nothing was queued — /)
     expect(answer.error).toContain('bid:t-gone: its target is not found in this business')
     expect(answer.error).toContain('bid:t-low: no longer recommended — the data moved')
-    expect(answer.error).toContain('sov:outbid:helmet: share of voice is information, not a change')
+    expect(answer.error).toContain('sov:outbid:helmet: an sov line is one of Nexus\'s own search-term checks (likely outbid, overlapping campaigns — not Amazon\'s share of voice), information, not a change')
     // W4-9 — an autopilot id is carried out now; one this business does not have is refused as not found.
     expect(answer.error).toContain('autopilot:d1: not found in this business — an autopilot plan replaces its waiting decisions every 15 minutes')
     expect(answer.error).toContain('nonsense: not a recommendation id Nexus gives')

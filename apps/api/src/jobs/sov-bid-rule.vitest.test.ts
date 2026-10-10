@@ -26,6 +26,7 @@ vi.mock('../services/advertising/ads-sov-keyword-share.service.js', () => ({
 vi.mock('../services/advertising/ads-impression-share.service.js', () => ({ analyzeShareOfVoice: vi.fn(async () => ({ rows: [] })) }))
 
 import prisma from '../db.js'
+import { analyzeShareOfVoice } from '../services/advertising/ads-impression-share.service.js'
 import { buildSovBidContexts } from './advertising-rule-evaluator.job.js'
 import { evaluateConditions } from '../services/automation/conditions-tree.js'
 import { contextIdentity, ruleMatchesScope } from '../services/automation-rule-scope.js'
@@ -109,6 +110,20 @@ describe('SOV_BID — the live rule end to end', () => {
     expect(inScope.map((c) => c.adTarget.id)).toEqual(['t1', 't2', 't3'])
     const other = new Map<string, string | null>([['c-gale', '999']])
     expect(ctxs.filter((c) => ruleMatchesScope(scope, contextIdentity(c, new Map(), other)))).toEqual([])
+  })
+
+  it('Campaign Concentration: a query with no impressions (null) leaves topSharePct absent, never a 0 that "< 60 %" reads as low', async () => {
+    vi.mocked(analyzeShareOfVoice).mockImplementation(async (o) => ({
+      rows: o?.marketplace === 'IT' ? [{ query: 'giubbotto moto uomo', topCampaignSharePct: null }, { query: 'giacca moto estiva', topCampaignSharePct: 0.9 }] : [],
+    }) as never)
+    try {
+      const ctxs = await buildSovBidContexts()
+      expect('topSharePct' in ctxs.find((c) => c.adTarget.id === 't1')!.adTarget).toBe(false)
+      expect(ctxs.find((c) => c.adTarget.id === 't2')!.adTarget.topSharePct).toBe(0.9)
+      expect(evaluateConditions([{ field: 'adTarget.topSharePct', op: 'lt', value: 0.6 }] as never, ctxs.find((c) => c.adTarget.id === 't1') as never)).toBe(false)
+    } finally {
+      vi.mocked(analyzeShareOfVoice).mockImplementation(async () => ({ rows: [] }) as never)
+    }
   })
 
   it('A3 — asks for shares at most 14 days old, and every context says how old its share is', async () => {

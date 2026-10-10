@@ -32,4 +32,11 @@ describe('analyzeShareOfVoice — our own impression mix (B6)', () => {
     expect(r.totalImpressions).toBe(0)
     expect(r.rows[0].impressionMixPct).toBeNull()
   })
+
+  it('the leading campaign\'s share of a query with no impressions is null (no reading), never 0', async () => {
+    findMany.mockResolvedValue([term('test jacket', 'c1', 0, 2), term('test jacket', 'c2', 0, 1), term('test gloves', 'c1', 300), term('test gloves', 'c2', 100)])
+    const r = await analyzeShareOfVoice({ marketplace: 'IT' })
+    expect(r.rows.find((x) => x.query === 'test jacket')!.topCampaignSharePct).toBeNull()
+    expect(r.rows.find((x) => x.query === 'test gloves')!.topCampaignSharePct).toBeCloseTo(0.75, 10)
+  })
 })

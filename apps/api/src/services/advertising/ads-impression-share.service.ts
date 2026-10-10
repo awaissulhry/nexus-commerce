@@ -42,7 +42,9 @@ export interface SovRow {
    *  and scope. NOT a market share or share of voice. Null when there were no impressions to divide by. */
   impressionMixPct: number | null
   campaignCount: number // distinct campaigns competing for this query
-  topCampaignSharePct: number // leading campaign's share of the query's impressions
+  /** The leading campaign's share of this query's impressions (fraction 0..1). Null when the query had no impressions
+   *  to divide by — no reading, never 0 (a 0 would satisfy "Campaign Concentration < 60%"). */
+  topCampaignSharePct: number | null
   cannibalized: boolean
   flag: 'outbid' | 'weak-relevance' | null
 }
@@ -107,7 +109,7 @@ export async function analyzeShareOfVoice(opts: { windowDays?: number; marketpla
     const ctr = a.impr > 0 ? a.clicks / a.impr : null
     const cvr = a.clicks > 0 ? a.orders / a.clicks : null
     const cpcCents = a.clicks > 0 ? a.cost / a.clicks : null
-    const topShare = a.impr > 0 ? Math.max(...a.byCampaign.values()) / a.impr : 0
+    const topShare = a.impr > 0 ? Math.max(...a.byCampaign.values()) / a.impr : null
     const campaignCount = a.byCampaign.size
     const cannibalized = campaignCount >= 2
     // outbid: above-median CPC but below-median impressions among clicked queries.

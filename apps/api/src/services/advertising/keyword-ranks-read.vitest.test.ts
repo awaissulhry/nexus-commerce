@@ -33,6 +33,22 @@ describe('cleanKeywordRankImport — K1 / K2', () => {
     expect(r.refused[2].reason).toContain('not a number')
   })
 
+  it('a negative or non-numeric search volume is refused, never clamped to 0 or dropped; 0 and an absent one pass', () => {
+    const r = cleanKeywordRankImport([
+      { keyword: 'negative', marketplace: 'IT', searchVolume: -40, capturedAt: AT },
+      { keyword: 'junk', marketplace: 'IT', searchVolume: 'lots' as unknown as number, capturedAt: AT },
+    ])
+    expect(r.rows).toEqual([])
+    expect(r.refused.map((x) => x.keyword)).toEqual(['negative', 'junk'])
+    expect(r.refused[0].reason).toContain('searchVolume -40 is not a count of searches (0 or more)')
+    const ok = cleanKeywordRankImport([
+      { keyword: 'zero', marketplace: 'IT', searchVolume: 0, capturedAt: AT },
+      { keyword: 'none', marketplace: 'IT', organicRank: 3, capturedAt: AT },
+    ])
+    expect(ok.refused).toEqual([])
+    expect(ok.rows.map((x) => x.searchVolume)).toEqual([0, null])
+  })
+
   it('K2: capturedAt is required and must be a date — a missing one is not "now"', () => {
     const r = cleanKeywordRankImport([
       { keyword: 'no-date', marketplace: 'IT', organicRank: 5 },

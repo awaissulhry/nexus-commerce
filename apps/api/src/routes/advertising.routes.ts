@@ -6521,7 +6521,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { rows: clean, refused, skipped } = cleanKeywordRankImport(list)
     if (refused.length) {
       reply.status(400)
-      return { error: `${refused.length} row${refused.length === 1 ? '' : 's'} refused — nothing was stored. A rank is 1 or more, and every row needs capturedAt (when it was observed).`, refused }
+      return { error: `${refused.length} row${refused.length === 1 ? '' : 's'} refused — nothing was stored. A rank is 1 or more, a search volume 0 or more, and every row needs capturedAt (when it was observed).`, refused }
     }
     if (!clean.length) { reply.status(400); return { error: 'ranks[] required (each needs keyword + marketplace + capturedAt)' } }
     const res = await prisma.keywordRank.createMany({ data: clean })

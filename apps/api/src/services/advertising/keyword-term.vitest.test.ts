@@ -78,11 +78,14 @@ describe('buildSeries', () => {
 })
 
 describe('weekStart', () => {
-  it('buckets any day to the Monday of its ISO week — the bucket SQP startDate uses', () => {
-    // 2026-07-19 is a Sunday; 2026-07-13 is the Monday of that week
-    expect(weekStart(new Date('2026-07-15T00:00:00Z')).toISOString().slice(0, 10)).toBe('2026-07-13')
-    expect(weekStart(new Date('2026-07-13T00:00:00Z')).toISOString().slice(0, 10)).toBe('2026-07-13')
-    expect(weekStart(new Date('2026-07-19T23:59:00Z')).toISOString().slice(0, 10)).toBe('2026-07-13')
+  it('buckets any day to the Sunday its Brand Analytics week starts on — the bucket SQP startDate uses (Sunday → Saturday)', () => {
+    // 2026-07-12 is a Sunday, 2026-07-18 the Saturday of that week; 2026-07-19 starts the next one
+    expect(weekStart(new Date('2026-07-15T00:00:00Z')).toISOString().slice(0, 10)).toBe('2026-07-12')
+    expect(weekStart(new Date('2026-07-12T00:00:00Z')).toISOString().slice(0, 10)).toBe('2026-07-12')
+    expect(weekStart(new Date('2026-07-18T23:59:00Z')).toISOString().slice(0, 10)).toBe('2026-07-12')
+    expect(weekStart(new Date('2026-07-19T00:00:00Z')).toISOString().slice(0, 10)).toBe('2026-07-19')
+    // A week's spend and its share land on one point.
+    expect(new Date('2026-07-12T00:00:00Z').getUTCDay()).toBe(0)
   })
 })
 

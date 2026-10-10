@@ -34,11 +34,15 @@ const iso = (d: Date | null | undefined) => (d ? new Date(d).toISOString().slice
 const ageDays = (d: Date | null | undefined) =>
   d ? Math.max(0, Math.floor((Date.now() - new Date(d).getTime()) / 86_400_000)) : null
 
-/** Monday of the ISO week a date falls in — the bucket SQP itself uses for `startDate`. */
+/**
+ * Sunday of the Brand Analytics week a date falls in — the bucket SQP itself uses for `startDate` (Amazon's weeks run
+ * Sunday → Saturday, sqp.service.ts). Free visibility numbers (2026-10-10): this used to bucket by the ISO Monday, so
+ * spend was summed Monday → Sunday and dated the day after the share's Sunday — two points a day apart, never one week.
+ */
 export function weekStart(d: Date): Date {
   const t = new Date(d)
   t.setUTCHours(0, 0, 0, 0)
-  return new Date(+t - ((t.getUTCDay() + 6) % 7) * 86_400_000)
+  return new Date(+t - t.getUTCDay() * 86_400_000)
 }
 
 export interface KtTermPoint {

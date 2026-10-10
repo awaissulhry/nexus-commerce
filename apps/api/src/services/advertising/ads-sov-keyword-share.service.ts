@@ -327,8 +327,11 @@ export interface SovStrip extends SovStripCounts {
    * local rig rather than by reading the diff.
    */
   byMarket: Record<string, SovStripCounts>
-  /** A3 — `reason` and `note` say why a refused market is refused (no complete week, or too old). */
-  periods: Array<{ marketplace: string; week: string | null; ageDays: number | null; refused: boolean; reason: SovPeriodReason; note?: string }>
+  /**
+   * A3 — `reason` and `note` say why a refused market is refused (no complete week, or too old); `weekEndAgeDays` (days
+   * since the week ENDED) and `maxAgeDays` are the numbers the age limit compares.
+   */
+  periods: Array<{ marketplace: string; week: string | null; ageDays: number | null; weekEndAgeDays: number | null; maxAgeDays: number; refused: boolean; reason: SovPeriodReason; note?: string }>
 }
 
 export async function getSovStrip(): Promise<SovStrip> {
@@ -368,6 +371,8 @@ export async function getSovStrip(): Promise<SovStrip> {
       marketplace: p.marketplace,
       week: p.start ? p.start.toISOString().slice(0, 10) : null,
       ageDays: p.ageDays,
+      weekEndAgeDays: p.weekEndAgeDays,
+      maxAgeDays: p.maxAgeDays,
       refused: p.refused,
       reason: p.reason,
       ...(p.note ? { note: p.note } : {}),

@@ -1442,7 +1442,8 @@ export async function buildSovBidContexts() {
     const concentration = new Map<string, number>()
     for (const marketplace of shares.measuredMarkets) {
       const own = await analyzeShareOfVoice({ windowDays: 30, marketplace, limit: Number.MAX_SAFE_INTEGER })
-      for (const r of own.rows) concentration.set(sovShareKey(marketplace, r.query), r.topCampaignSharePct)
+      // A query with no impressions has no concentration (null): it stays out of the map, so the context leaves it absent.
+      for (const r of own.rows) if (r.topCampaignSharePct != null) concentration.set(sovShareKey(marketplace, r.query), r.topCampaignSharePct)
     }
 
     const targets = await prisma.adTarget.findMany({
@@ -1498,7 +1499,8 @@ export async function buildSovBidContexts() {
             id: t.id,
             /**
              * Fractions (0..1).
-             * · `sovPct` — Amazon's own share of THIS query's market that our ASINs took.
+             * · `sovPct` — the share of THIS query's market impressions our ASINs took, computed by Nexus from
+             *   Amazon's weekly Search Query Performance counts (not a number Amazon reports itself).
              * · `topSharePct` — our biggest campaign's share of the impressions WE took on it
              *   (cannibalisation). Null where we ran no ads on the query, which is a real state:
              *   a query can have a market share and no campaign concentration.

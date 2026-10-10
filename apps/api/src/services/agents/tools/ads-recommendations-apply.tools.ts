@@ -380,7 +380,7 @@ export async function planRecommendations(a: ApplyArgs): Promise<{ ok: true; tit
   const families = new Map(ids.map((id) => [id, familyOfRecommendationId(id)]))
   for (const [id, family] of families) {
     if (!family) problems.push(`${id}: not a recommendation id Nexus gives (take it from ad-recommendations)`)
-    else if (family === 'sov') problems.push(`${id}: share of voice is information, not a change — decide it with set-target-bid, graduate-keyword or create-negative-keyword`)
+    else if (family === 'sov') problems.push(`${id}: an sov line is one of Nexus's own search-term checks (likely outbid, overlapping campaigns — not Amazon's share of voice), information, not a change — decide it with set-target-bid, graduate-keyword or create-negative-keyword`)
   }
   const overrides = new Map<string, Override>()
   for (const o of a.overrides ?? []) {

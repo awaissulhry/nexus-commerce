@@ -42,8 +42,9 @@ function rankOf(v: unknown, label: string): { value: number | null } | { reason:
 
 /**
  * The rows an import stores, or why it is refused. Rows with no keyword or market are skipped, as before (they name
- * nothing); a row with a rank below 1, a rank that is not a number, or no valid `capturedAt` (when it was observed)
- * refuses the WHOLE import — nothing is half-stored, and the caller fixes and resends.
+ * nothing); a row with a rank below 1, a rank that is not a number, a search volume below 0 or not a number (it was
+ * clamped to 0 or dropped — a made-up reading), or no valid `capturedAt` (when it was observed) refuses the WHOLE
+ * import — nothing is half-stored, and the caller fixes and resends.
  */
 export function cleanKeywordRankImport(list: readonly KeywordRankImportRow[]): { rows: CleanKeywordRank[]; refused: KeywordRankImportRefusal[]; skipped: number } {
   const rows: CleanKeywordRank[] = []
@@ -57,6 +58,8 @@ export function cleanKeywordRankImport(list: readonly KeywordRankImportRow[]): {
     const sponsored = rankOf(r.sponsoredRank, 'sponsoredRank')
     if ('reason' in organic) reasons.push(organic.reason)
     if ('reason' in sponsored) reasons.push(sponsored.reason)
+    const volume = r.searchVolume == null || (r.searchVolume as unknown) === '' ? null : Number(r.searchVolume)
+    if (volume != null && (!Number.isFinite(volume) || volume < 0)) reasons.push(`searchVolume ${String(r.searchVolume).slice(0, 40)} is not a count of searches (0 or more)`)
     const at = typeof r.capturedAt === 'string' && r.capturedAt.trim() ? new Date(r.capturedAt) : null
     if (!at) reasons.push('capturedAt is required: when the rank was observed (an ISO date-time)')
     else if (Number.isNaN(at.getTime())) reasons.push(`capturedAt "${String(r.capturedAt).slice(0, 40)}" is not a date`)
@@ -67,7 +70,7 @@ export function cleanKeywordRankImport(list: readonly KeywordRankImportRow[]): {
       asin: r.asin?.trim() || null,
       organicRank: (organic as { value: number | null }).value,
       sponsoredRank: (sponsored as { value: number | null }).value,
-      searchVolume: r.searchVolume != null && Number.isFinite(Number(r.searchVolume)) ? Math.max(0, Math.round(Number(r.searchVolume))) : null,
+      searchVolume: volume != null ? Math.round(volume) : null,
       capturedAt: at!,
       source: (r.source?.trim() || 'manual').slice(0, 64),
     })
