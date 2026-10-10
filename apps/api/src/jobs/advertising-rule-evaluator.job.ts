@@ -1411,6 +1411,12 @@ async function buildRisingStarContexts() {
 // `< 1 %` matches 29.8 % of rows instead of 98.6 %.
 //
 // `adTarget.id` still lets `bid_apply` act on the target; nothing about the action changed.
+//
+// A3 (2026-10-10) — the share is at most SOV_SHARE_MAX_AGE_DAYS (14, the KEYWORD_RANK_BID limit) old, counted from
+// the end of its Amazon week. The gate used to take a complete week up to 56 days old. A market whose newest complete
+// week is older is refused like a truncated one: its keywords get NO context (a share is never null or 0 here), and
+// the market's `note` says why — in this tick's log line, the rule preview's `periods` and the SOV tab's census.
+// Every context carries `adTarget.shareAgeDays` (days since its week ended) and `adTarget.shareWeek` (its start).
 /**
  * Exported for verification, exactly as `buildCampaignBudgetContexts` above is: a probe that
  * re-implements the emitter to check it would be checking its own copy, which is how a verifier
@@ -1418,9 +1424,11 @@ async function buildRisingStarContexts() {
  */
 export async function buildSovBidContexts() {
   try {
-    const { keywordMarketShares, sovShareKey } = await import('../services/advertising/ads-sov-keyword-share.service.js')
+    const { keywordMarketShares, sovShareKey, SOV_SHARE_MAX_AGE_DAYS } = await import('../services/advertising/ads-sov-keyword-share.service.js')
     const { analyzeShareOfVoice } = await import('../services/advertising/ads-impression-share.service.js')
-    const shares = await keywordMarketShares()
+    const shares = await keywordMarketShares({ maxAgeDays: SOV_SHARE_MAX_AGE_DAYS })
+    const tooOld = shares.periods.filter((p) => p.reason === 'too-old')
+    if (tooOld.length) logger.info('[ads-rule-evaluator] SOV_BID: share not used in some markets', { why: tooOld.map((p) => p.note) })
     if (!shares.byKey.size) return []
 
     /**
@@ -1499,6 +1507,10 @@ export async function buildSovBidContexts() {
              *   `SOV_METRIC` in the same change, so nothing compares against undefined.
              */
             sovPct: s.sharePct,
+            // A3 — how old the share is: whole days since its Amazon week ended (never above SOV_SHARE_MAX_AGE_DAYS),
+            // and that week's start (YYYY-MM-DD).
+            shareAgeDays: s.shareAgeDays,
+            shareWeek: s.weekStart,
             // KT-P/C1 — absent where we ran no ads on the query in the window. As a null it read
             // as 0 and satisfied `Campaign Concentration < 60%`, which is the opposite of what a
             // missing concentration means (SOV-P measured 86 of 793 null, 4 matched).

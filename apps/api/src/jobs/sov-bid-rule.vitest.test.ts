@@ -19,6 +19,7 @@ vi.mock('../db.js', () => ({
   },
 }))
 vi.mock('../services/advertising/ads-sov-keyword-share.service.js', () => ({
+  SOV_SHARE_MAX_AGE_DAYS: 14,
   keywordMarketShares: h.shares,
   sovShareKey: (m: string | null | undefined, q: string | null | undefined) => `${m ?? ''}|${(q ?? '').trim().toLowerCase()}`,
 }))
@@ -41,7 +42,7 @@ const CONDITIONS = [
 ]
 const ACTIONS = [{ type: 'bid_apply', op: 'incPct', value: 10, maxEur: 0.8 }]
 
-const share = (marketplace: string, query: string, sharePct: number) => ({ marketplace, query, sharePct, impressionsBrand: 1, impressionsTotal: 10, asinRows: 1 })
+const share = (marketplace: string, query: string, sharePct: number) => ({ marketplace, query, sharePct, impressionsBrand: 1, impressionsTotal: 10, asinRows: 1, weekStart: '2026-09-27', shareAgeDays: 6 })
 const target = (id: string, text: string, campaignId: string, marketplace: string) => ({
   id, expressionValue: text, adGroup: { id: `ag-${id}`, campaign: { id: campaignId, marketplace } },
 })
@@ -108,6 +109,22 @@ describe('SOV_BID — the live rule end to end', () => {
     expect(inScope.map((c) => c.adTarget.id)).toEqual(['t1', 't2', 't3'])
     const other = new Map<string, string | null>([['c-gale', '999']])
     expect(ctxs.filter((c) => ruleMatchesScope(scope, contextIdentity(c, new Map(), other)))).toEqual([])
+  })
+
+  it('A3 — asks for shares at most 14 days old, and every context says how old its share is', async () => {
+    const ctxs = await buildSovBidContexts()
+    expect(h.shares).toHaveBeenCalledWith({ maxAgeDays: 14 })
+    for (const c of ctxs) expect(c.adTarget).toMatchObject({ shareAgeDays: 6, shareWeek: '2026-09-27' })
+  })
+
+  it('🔴 A3 — a market whose newest complete week is too old is refused by the gate: its keywords get no context, never a 0', async () => {
+    h.shares.mockResolvedValue({
+      byKey: new Map([['DE|motorradjacke', share('DE', 'motorradjacke', 0.03)]]),
+      periods: [{ marketplace: 'IT', reason: 'too-old', refused: true, note: 'IT: the newest complete Brand Analytics week (week of 2026-09-13) ended 20 days ago; shares older than 14 days are not used' }],
+      measuredMarkets: ['DE'],
+    })
+    const ctxs = await buildSovBidContexts()
+    expect(ctxs.map((c) => c.adTarget.id)).toEqual(['t4'])
   })
 
   it('no complete SQP week in any market → no context at all (the rule then matches nothing, by design)', async () => {

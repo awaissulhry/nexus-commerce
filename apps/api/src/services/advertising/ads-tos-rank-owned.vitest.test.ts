@@ -21,12 +21,13 @@ vi.mock('../../db.js', () => ({
   default: {
     campaign: { findUnique: h.campaignFindUnique, findMany: h.campaignFindMany },
     adTarget: { findMany: h.adTargetFindMany },
-    amazonAdsPlacementReport: { groupBy: h.placementGroupBy, aggregate: async () => ({ _sum: { costMicros: null } }) }, // 4d lane spend: none measured
+    amazonAdsPlacementReport: { groupBy: h.placementGroupBy, findMany: async () => [], aggregate: async () => ({ _sum: { costMicros: null } }) }, // 4d lane spend: none measured
     adSchedule: { findMany: h.schedules },
     productRankPlan: { findMany: h.plans },
     // 4e — contestedLanesByCampaign: no schedule events, no blend targets.
     rankScheduleEvent: { findMany: async () => [] },
     rankTarget: { findMany: async () => [] },
+    $queryRaw: async () => [], // A1 — no earlier Top-of-Search step on record
   },
 }))
 vi.mock('./ads-create.service.js', () => ({ updatePlacementBidding: h.updatePlacementBidding }))
@@ -142,7 +143,7 @@ describe('raise_bids_for_rank_defense — leaves a held campaign’s bids to Hou
 describe('defendTopOfSearch — the cron, `defend_top_of_search` and autopilot', () => {
   beforeEach(() => {
     // Top-of-search ACoS 10 % on both, well under the 25 % target, so both would be raised.
-    const row = (campaignId: string) => ({ campaignId, _sum: { impressions: 1000, clicks: 50, costMicros: 1_000_000n, sales7dCents: 1000, orders7d: 2 }, _avg: { topOfSearchIS: null } })
+    const row = (campaignId: string) => ({ campaignId, _sum: { impressions: 1000, clicks: 50, costMicros: 1_000_000n, sales7dCents: 1000, orders7d: 2 }, _max: { date: new Date(Date.now() - 10 * 86_400_000) } })
     h.placementGroupBy.mockResolvedValue([row('E-RANK'), row('E-FREE')])
     h.campaignFindMany.mockResolvedValue([
       { id: RANK, name: 'HELD', marketplace: 'IT', externalCampaignId: 'E-RANK', dynamicBidding: { placementBidding: [] }, status: 'ENABLED' },

@@ -4,7 +4,7 @@
  * or no measurement holds still.
  */
 import { describe, it, expect } from 'vitest'
-import { decideBidStep } from './ads-coverage-engine.service.js'
+import { coverageEvidence, decideBidStep, sharePctText } from './ads-coverage-engine.service.js'
 
 const base = {
   currentBidCents: 40,
@@ -87,5 +87,46 @@ describe('a controller with no setpoint or no measurement holds still', () => {
   it('a term with no ceiling still gets one — never unbounded (the ACR.1.4 rule)', () => {
     const d = decideBidStep({ ...base, maxCpcCents: null, currentBidCents: 115 })
     expect(d.nextBidCents).toBeLessThanOrEqual(120) // the default ceiling
+  })
+})
+
+// ── A2 (2026-10-10) — the words of the share ladder, and one share step per Brand Analytics week ────────────────────
+
+describe('A2 — the share ladder says which share it read, and steps once per week', () => {
+  it('names the share: the set\'s ASINs, the Brand Analytics week, computed by Nexus (no "page one")', () => {
+    const d = decideBidStep({ ...base, shareWeek: '2026-09-27' })
+    expect(d).toMatchObject({ action: 'up', basis: 'share' })
+    expect(d.reason).toBe("impression share 1.00% (the set's ASINs, Brand Analytics week of 2026-09-27, computed by Nexus) below target 3%")
+  })
+
+  it('🔴 already stepped on this week → holds until a newer week, whatever the gap', () => {
+    const d = decideBidStep({ ...base, shareWeek: '2026-09-27', shareSteppedThisWeek: true })
+    expect(d).toMatchObject({ action: 'hold', nextBidCents: 40, basis: 'share' })
+    expect(d.reason).toContain('already stepped on this week; the next share step waits for a newer Brand Analytics week')
+  })
+
+  it('the ACoS cap and the waste guard read daily data and still act daily', () => {
+    expect(decideBidStep({ ...base, acos30d: 0.55, shareSteppedThisWeek: true })).toMatchObject({ action: 'down', basis: 'acos-cap' })
+    expect(decideBidStep({ ...base, sales30dCents: 0, spend30dCents: 2_500, acos30d: null, shareSteppedThisWeek: true })).toMatchObject({ action: 'down', basis: 'waste' })
+  })
+
+  it('an unmeasured share says why', () => {
+    const d = decideBidStep({ ...base, share: null, shareNote: 'IT: the newest complete Brand Analytics week (week of 2026-09-13) ended 20 days ago; shares older than 14 days are not used' })
+    expect(d.reason).toBe('share unmeasured — IT: the newest complete Brand Analytics week (week of 2026-09-13) ended 20 days ago; shares older than 14 days are not used')
+  })
+
+  it('a tiny non-zero share reads "<0.01%", never "0.00%"', () => {
+    expect(sharePctText(0.00005)).toBe('<0.01%')
+    expect(sharePctText(0)).toBe('0.00%')
+    expect(sharePctText(0.1234)).toBe('12.34%')
+  })
+
+  it('evidence: the weekly share\'s week and age — no 30-day window — or the 30-day guard it obeyed', () => {
+    const share = decideBidStep({ ...base, shareWeek: '2026-09-27' })
+    expect(coverageEvidence({ decision: share, setId: 's1', term: 'giacca moto', share: 0.01, targetSharePct: 3, week: '2026-09-27', ageDays: 6, acos30d: 0.25 }))
+      .toEqual({ setId: 's1', term: 'giacca moto', metric: 'sqp_brand_impression_share', observed: '1.00%', threshold: '3%', week: '2026-09-27', ageDays: 6 })
+    const waste = decideBidStep({ ...base, sales30dCents: 0, spend30dCents: 2_500, acos30d: null })
+    expect(coverageEvidence({ decision: waste, setId: 's1', term: 't', share: null, targetSharePct: 3, week: null, ageDays: null, acos30d: null }))
+      .toEqual({ setId: 's1', term: 't', metric: 'spend_without_sales_30d', windowDays: 30 })
   })
 })

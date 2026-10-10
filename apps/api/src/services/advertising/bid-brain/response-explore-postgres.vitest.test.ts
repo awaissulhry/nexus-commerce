@@ -176,8 +176,8 @@ describe.skipIf(!concurrentDatabaseUrl())('BB-19 — the bid response (real Post
     const goalRows = rows.filter((r) => ['goal', 'band', 'limit'].includes(r.layer) && r.goalBidCents != null)
     expect(goalRows.length).toBeGreaterThan(0)
     for (const r of goalRows) {
-      expect(r.why, r.targetId).toMatch(/ · profit-best \d+¢ beside the goal's \d+¢ \(in band \d+¢.*ε [\d.]+ ± [\d.]+, 1 in the market; top-of-search share 62% → inelastic; budget capped; marginal ACoS [\d.]+% at \d+¢/)
-      expect(r.response, r.targetId).toMatchObject({ capped: true, epsFrom: '1 in the market; top-of-search share 62% → inelastic', goalBidCents: r.goalBidCents })
+      expect(r.why, r.targetId).toMatch(/ · profit-best \d+¢ beside the goal's \d+¢ \(in band \d+¢.*ε [\d.]+ ± [\d.]+, 1 in the market; campaign top-of-search IS 62% \(14 days\) → inelastic; budget capped; marginal ACoS [\d.]+% at \d+¢/)
+      expect(r.response, r.targetId).toMatchObject({ capped: true, epsFrom: '1 in the market; campaign top-of-search IS 62% (14 days) → inelastic', goalBidCents: r.goalBidCents })
       expect(typeof r.response!.bidCents).toBe('number')
       // A capped campaign's profit-best point never rises above today's bid, unless the Owner's band bottom holds it there.
       expect((r.response!.bestCents as number) <= r.currentCents || /held to the band bottom/.test(r.why), r.why).toBe(true)

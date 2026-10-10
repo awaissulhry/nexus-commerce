@@ -9,7 +9,7 @@
  *      and breaking that tie is the reason this whole section exists.
  */
 import { describe, it, expect } from 'vitest'
-import { aggregateQueryShares, sovShareKey } from './ads-sov-keyword-share.service.js'
+import { aggregateQueryShares, decideSqpWeek, SOV_SHARE_MAX_AGE_DAYS, sovShareKey } from './ads-sov-keyword-share.service.js'
 
 describe('aggregateQueryShares — Σ brand ÷ MAX total', () => {
   it('sums OUR impressions across ASIN rows and takes the market total ONCE', () => {
@@ -110,5 +110,38 @@ describe('sovShareKey — one join key, market-scoped', () => {
   it('a missing marketplace cannot collide with a real one', () => {
     expect(sovShareKey(null, 'q')).toBe('|q')
     expect(sovShareKey('IT', 'q')).toBe('IT|q')
+  })
+})
+
+// ── A2 / A3 (2026-10-10) — the week an engine may read: WEEK rows, complete, and at most 14 days since it ended ─────
+describe('decideSqpWeek — complete weeks only, at most SOV_SHARE_MAX_AGE_DAYS old (counted from the week\'s end)', () => {
+  const NOW = Date.parse('2026-10-10T12:00:00Z')
+  const wk = (start: string, rows = 500) => ({ start: new Date(`${start}T00:00:00Z`), rows })
+  // Sunday starts; a week ends at its start + 7 days (sqpWeekEnd).
+
+  it('the KEYWORD_RANK_BID limit: 14 days', () => expect(SOV_SHARE_MAX_AGE_DAYS).toBe(14))
+
+  it('reads the newest complete week, with its age from the week\'s end', () => {
+    const p = decideSqpWeek('IT', [wk('2026-09-27'), wk('2026-09-20'), wk('2026-09-13'), wk('2026-09-06')], { now: NOW })
+    expect(p).toMatchObject({ refused: false, reason: 'complete', ageDays: 13, weekEndAgeDays: 6, maxAgeDays: 14 })
+    expect(p.start?.toISOString().slice(0, 10)).toBe('2026-09-27')
+    expect(p).not.toHaveProperty('note')
+  })
+
+  it('a truncated newest week is passed over for the complete one before it (13 days old: still read)', () => {
+    const p = decideSqpWeek('IT', [wk('2026-09-27', 10), wk('2026-09-20'), wk('2026-09-13'), wk('2026-09-06')], { now: NOW })
+    expect(p).toMatchObject({ refused: false, weekEndAgeDays: 13 })
+    expect(p.start?.toISOString().slice(0, 10)).toBe('2026-09-20')
+  })
+
+  it('🔴 the newest complete week ended 20 days ago → refused as too old, and the note says so (it used to be read up to 56 days)', () => {
+    const p = decideSqpWeek('IT', [wk('2026-09-13'), wk('2026-09-06'), wk('2026-08-30')], { now: NOW })
+    expect(p).toMatchObject({ refused: true, reason: 'too-old', weekEndAgeDays: 20, queries: 0 })
+    expect(p.note).toBe('IT: the newest complete Brand Analytics week (week of 2026-09-13) ended 20 days ago; shares older than 14 days are not used')
+    expect(decideSqpWeek('IT', [wk('2026-09-13'), wk('2026-09-06'), wk('2026-08-30')], { now: NOW, maxAgeDays: 30 }).refused).toBe(false)
+  })
+
+  it('no week at all → refused, no-data', () => {
+    expect(decideSqpWeek('DE', [], { now: NOW })).toMatchObject({ refused: true, reason: 'no-data', start: null, weekEndAgeDays: null })
   })
 })

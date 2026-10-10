@@ -1,10 +1,15 @@
 /**
  * Apex D.2 — Top-of-Search defense cron.
  *
- * Every 30 min, nudges the PLACEMENT_TOP bid multiplier toward the target so
- * allowlisted campaigns hold the top sponsored slot when ROAS allows and ease
- * off when it doesn't (±STEP_PCT per run, ≤900%). This is the autonomous "always
- * stay on top of search" loop.
+ * Every 30 min, looks at the PLACEMENT_TOP bid multiplier of allowlisted campaigns and steps it (±STEP_PCT, ≤900%):
+ * toward a target top-of-search impression share only when NEXUS_TOS_TARGET_IS is set (a fraction, 0.5 = 50 %), else on
+ * top-of-search ACoS alone ("ACoS only: no target IS set"). The IS is the campaign's own, as Amazon reports it per day,
+ * impression-weighted over the settled days of the window that carry one.
+ *
+ * A1 (2026-10-10) — its numbers are campaign × settled day, so they change once a day: a campaign is stepped only when
+ * a settled day newer than the one its last step rested on exists (the other 47 runs of the day hold and say so), and
+ * under a target IS only with ≥ 5 days carrying Amazon's IS, the newest ≤ 3 days before the window's end
+ * (ads-top-of-search.service.ts). Held moves are counted on the run's line.
  *
  * SAFETY — triple-gated, because it writes live placement bids:
  *   1. NEXUS_ENABLE_TOS_DEFENSE_CRON (default OFF — operator opts in only when ready)
@@ -44,7 +49,7 @@ async function tosDefenseTick(): Promise<string> {
   const { leverHeldNote } = await import('../services/advertising/brain/engine-skips.js')
   const { defendTopOfSearch } = await import('../services/advertising/ads-top-of-search.service.js')
   const targetAcos = Number(process.env.NEXUS_TOS_TARGET_ACOS)
-  const targetIS = Number(process.env.NEXUS_TOS_TARGET_IS) // 0–1; when set, the loop holds this top-of-search impression share (ACOS-bounded)
+  const targetIS = Number(process.env.NEXUS_TOS_TARGET_IS) // a fraction 0–1; when set, the loop holds this top-of-search impression share (ACOS-bounded); unset or out of range = ACoS only
   // 1d — the account dial and this engine's caps, asked once per campaign before its one placement write. Under
   // SUGGEST and while stopped it writes nothing (it has no state of its own to give back, and a placement move is
   // never a suppression); the summary counts what it would move.
@@ -58,10 +63,21 @@ async function tosDefenseTick(): Promise<string> {
   })
   // 4m — campaigns Hourly Bids holds are left alone, and the run says so in words.
   const rankOwned = r.rankOwnedNote ? ` rank-owned=${r.skippedRankOwned} (${r.rankOwnedNote})` : ''
-  return `evaluated=${r.evaluated} changed=${r.changed} applied=${r.applied} skipped=${r.skippedNotAllowlisted}${rankOwned}${engineGuardNote(guard.report(), {
+  // A1 — what it held, and why, in words (nothing extra on a run that held nothing).
+  const held = tosHeldNote(r)
+  return `evaluated=${r.evaluated} changed=${r.changed} applied=${r.applied} skipped=${r.skippedNotAllowlisted}${rankOwned}${held}${engineGuardNote(guard.report(), {
     suggest: 'nothing is written',
     stopped: 'nothing is written; placement moves wait for Resume',
   })}${leverHeldNote(r.brainSkips?.counts, !!r.brainSkips?.unread)}`
+}
+
+/** A1 — the run line's hold counts; '' when nothing was held. Pure. */
+export function tosHeldNote(r: { heldNoNewDay?: number; heldNoUsableIS?: number }): string {
+  const parts = [
+    r.heldNoNewDay ? ` waiting-new-day=${r.heldNoNewDay} (no settled day newer than the one its last step rested on)` : '',
+    r.heldNoUsableIS ? ` held-no-usable-IS=${r.heldNoUsableIS} (a target IS is set, but Amazon's top-of-search IS is missing, on fewer than 5 settled days, or too old)` : '',
+  ]
+  return parts.join('')
 }
 
 export async function runTosDefenseCron(): Promise<void> {
@@ -88,7 +104,7 @@ export function startTosDefenseCron(): void {
     logger.info('top-of-search-defense cron NOT scheduled (NEXUS_ENABLE_TOS_DEFENSE_CRON off) — manual trigger still available')
     return
   }
-  // Every 30 min — well above the daily-grain data, so steps don't thrash.
+  // Every 30 min; A1 — a campaign moves at most once per new settled day, so the runs in between only hold.
   scheduledTask = cron.schedule('*/30 * * * *', async () => { await runTosDefenseCron() })
   logger.info('top-of-search-defense cron scheduled (*/30 * * * *)')
 }

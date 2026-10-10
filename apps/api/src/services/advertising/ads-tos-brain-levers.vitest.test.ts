@@ -13,11 +13,12 @@ const h = vi.hoisted(() => ({
 vi.mock('../../db.js', () => ({
   default: {
     campaign: { findUnique: h.campaignFindUnique, findMany: h.campaignFindMany },
-    amazonAdsPlacementReport: { groupBy: h.placementGroupBy, aggregate: async () => ({ _sum: { costMicros: null } }) },
+    amazonAdsPlacementReport: { groupBy: h.placementGroupBy, findMany: async () => [], aggregate: async () => ({ _sum: { costMicros: null } }) },
     adSchedule: { findMany: async () => [] },
     productRankPlan: { findMany: async () => [] },
     rankScheduleEvent: { findMany: async () => [] },
     rankTarget: { findMany: async () => [] },
+    $queryRaw: async () => [], // A1 — no earlier Top-of-Search step on record
     bidBrainEnrollment: { findMany: async () => [] }, // no bid brain campaign
   },
 }))
@@ -30,7 +31,7 @@ vi.mock('./brain/lever-owners.js', () => ({
 const { defendTopOfSearch, applyTopOfSearchRecommendations } = await import('./ads-top-of-search.service.js')
 
 const LOCKED = { kind: 'locked', productId: 'gale', market: 'IT', why: 'locked by the Owner\'s campaign override' }
-const row = (campaignId: string) => ({ campaignId, _sum: { impressions: 1000, clicks: 50, costMicros: 1_000_000n, sales7dCents: 1000, orders7d: 2 }, _avg: { topOfSearchIS: null } })
+const row = (campaignId: string) => ({ campaignId, _sum: { impressions: 1000, clicks: 50, costMicros: 1_000_000n, sales7dCents: 1000, orders7d: 2 }, _max: { date: new Date(Date.now() - 10 * 86_400_000) } })
 
 beforeEach(() => {
   vi.clearAllMocks()
