@@ -72,6 +72,8 @@ describe('shapeRefusal — each op names what it needs', () => {
     expect(shapeRefusal({ ...base, op: 'set-level', lever: 'bids', level: 'OBSERVE', ref: 'target:t-1' })).toMatch(/^set-level takes no ref \(target:t-1\)/)
     expect(shapeRefusal({ ...base, op: 'enroll', ref: 'target:t-1' })).toMatch(/^enroll takes no ref/)
     expect(shapeRefusal({ ...base, op: 'leave', ref: 'target:t-1' })).toMatch(/^leave takes no ref/)
+    expect(shapeRefusal({ ...base, op: 'exclude', campaignId: 'c1', ref: 'target:t-1' })).toMatch(/^exclude takes no ref \(target:t-1\) — exclude takes the whole campaign out of the brain \(to hold one thing, lock it\)/)
+    expect(shapeRefusal({ ...base, op: 'include', ref: 'hourCell:d1h14' })).toMatch(/^include takes no ref \(hourCell:d1h14\) — include takes the whole product back into the brain/)
   })
 })
 

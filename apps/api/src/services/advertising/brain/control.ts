@@ -423,7 +423,10 @@ export function shapeRefusal(input: ControlInput): string | null {
   if (op !== 'set-level' && op !== 'set-value' && input.reset) return `reset ends a level (set-level) or a value (set-value); ${op === 'lock' ? 'unlock ends a lock' : op === 'exclude' ? 'include ends an exclusion' : `op ${op} takes no reset`}`
   // Free visibility numbers (integration fix) — a ref is never dropped: an op that cannot take one refuses it, so a request
   // meant for one thing never lands silently on the whole lever, the campaign or the product.
-  if ((op === 'enroll' || op === 'leave' || op === 'set-level') && has(input.ref)) return `${op} takes no ref (${String(input.ref)}): a ref names one thing in a lock (lock, unlock) or one keyword's own value of ${KEYWORD_VALUE_SETTINGS.join(', ')} (set-value, ref target:<AdTarget.id>)`
+  if ((op === 'enroll' || op === 'leave' || op === 'set-level' || op === 'exclude' || op === 'include') && has(input.ref)) {
+    const whole = op === 'exclude' || op === 'include' ? ` — ${op} takes the whole ${input.campaignId ? 'campaign' : 'product'} ${op === 'exclude' ? 'out of' : 'back into'} the brain (to hold one thing, lock it)` : ''
+    return `${op} takes no ref (${String(input.ref)})${whole}: a ref names one thing in a lock (lock, unlock) or one keyword's own value of ${KEYWORD_VALUE_SETTINGS.join(', ')} (set-value, ref target:<AdTarget.id>)`
+  }
   switch (op) {
     case 'set-level':
       if (!has(input.lever)) return 'set-level names the lever (lever)'
@@ -437,7 +440,7 @@ export function shapeRefusal(input: ControlInput): string | null {
       return null
     case 'exclude':
     case 'include':
-      if (has(input.lever) || has(input.level) || has(input.ref)) return `${op} takes the whole ${input.campaignId ? 'campaign' : 'product'} ${op === 'exclude' ? 'out of' : 'back into'} the brain: no lever (to hold one lever, lock it)`
+      if (has(input.lever) || has(input.level)) return `${op} takes the whole ${input.campaignId ? 'campaign' : 'product'} ${op === 'exclude' ? 'out of' : 'back into'} the brain: no lever (to hold one lever, lock it)`
       if (input.value !== undefined) return `${op} takes no value`
       return null
     case 'set-value':
