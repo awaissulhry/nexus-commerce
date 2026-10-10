@@ -379,7 +379,7 @@ export function BidClient() {
     },
     {
       key: 'bidder', label: 'Bidder', metric: false,
-      tip: 'Who moves this campaign\'s bids: an hourly bid schedule, a target-ACoS goal, an operator in the last 60 days, or nobody. 41 of the 86 enabled campaigns have no bidder, 26 of them spent money last month, and their write gates are open.',
+      tip: 'Who moves this campaign\'s bids: an hourly bid schedule, a target-ACoS goal, an operator in the last 60 days, or nobody. Many enabled campaigns have no bidder, some of them spent money last month, and their write gates are open.',
       render: (r) => <BidderCell kind={r.bidder} name={r.bidderName} />,
       sortValue: (r) => `${r.bidder}:${r.bidderName ?? ''}`,
     },
@@ -1052,7 +1052,7 @@ function BandCell({ r }: { r: BidTargetRow }) {
 /** Who owns this campaign's bids. `none` is loud on purpose — it is the page's largest finding. */
 function BidderCell({ kind, name }: { kind: BidderKind; name: string | null }) {
   if (kind === 'none') {
-    return <span className="h10-bd-bidder none" title="No hourly bid schedule, no target-ACoS goal, and no operator has moved a bid in this campaign in 60 days. Nothing automated will change this bid. 41 of the 86 enabled campaigns are in this position and 26 of them spent money last month.">No bidder</span>
+    return <span className="h10-bd-bidder none" title="No hourly bid schedule, no target-ACoS goal, and no operator has moved a bid in this campaign in 60 days. Nothing automated will change this bid.">No bidder</span>
   }
   if (kind === 'schedule') {
     return <span className="h10-bd-bidder sched" title={`Bid by the hourly bid schedule “${name}”. It floors bids at 00:00 Rome and restores them at 08:00.`}>{name ?? 'Schedule'}</span>

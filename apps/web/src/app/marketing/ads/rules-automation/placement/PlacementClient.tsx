@@ -679,7 +679,7 @@ export function PlacementClient() {
     },
     {
       key: 'owner', label: 'Owner', metric: false,
-      tip: 'What steers this campaign\'s placement: an hourly bid schedule, a product rank plan, or nothing. “Nobody” is the most important value this column takes and today it is the most common — 144 campaigns carry a multiplier no engine will ever revisit.',
+      tip: 'What steers this campaign\'s placement: an hourly bid schedule, a product rank plan, or nothing. “Nobody” is the most important value this column takes and today it is the most common — many campaigns carry a multiplier no engine will ever revisit.',
       render: (r) => {
         if (r.owner === 'none') {
           return (

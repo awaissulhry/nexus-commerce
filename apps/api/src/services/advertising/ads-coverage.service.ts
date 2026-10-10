@@ -476,7 +476,7 @@ export async function getCoverageScoreboard(args: {
       `top-of-search one in this account \u2014 our own measured CTR ratio over ${positionWeight.windowDays} days, not an industry constant.`)
   }
   // ── ACR.2.4b — the board's own scope, stated on the board ──────────────────────────────────
-  // "Share of page one: 0.76%" (now "share of search-results impressions") reads as the whole account's share. Measured 2026-08-05 it is GALE's:
+  // "Share of page one: X%" (now "share of search-results impressions") reads as the whole account's share. Measured 2026-08-05 it is one product family's:
   // SQP carries impressions for 10 of 250 advertised ASINs, and all ten are children of one
   // Amazon parent. Eleven whole families (AIREON, REGAL, VENTRA, MOSS, MISANO, AIRMESH…) have
   // no SQP row at all. The market denominator is the whole query market either way, so every
