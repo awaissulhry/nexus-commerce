@@ -92,7 +92,7 @@ interface Row {
   query: string
   marketplace: string
   marketVolume: number | null
-  marketRank: number | null
+  bestSearchQueryScore: number | null
   marketImpressions: number | null
   ourImpressions: number | null
   /** 0..1, or null. null and 0 mean different things and are never rendered the same way. */
@@ -469,11 +469,11 @@ export function ShareOfVoiceClient() {
       filterValue: (r) => r.marketVolume ?? 0,
     },
     {
-      key: 'rank', label: 'Market rank',
-      tip: "The QUERY's popularity rank in this marketplace (#1 = most searched). Not our position in the results, which no Amazon API returns.",
-      render: (r) => (r.marketRank == null ? <span className="h10-sov-nd">—</span> : `#${num(r.marketRank)}`),
-      sortValue: (r) => r.marketRank ?? Number.MAX_SAFE_INTEGER,
-      filterValue: (r) => r.marketRank ?? 0,
+      key: 'rank', label: 'Search Query Score',
+      tip: "Amazon's Search Query Score is per ASIN (lower = more searched among that ASIN's queries); Nexus shows the lowest among our ASINs on this query. Not a market rank, and not our position in the results, which no Amazon API returns.",
+      render: (r) => (r.bestSearchQueryScore == null ? <span className="h10-sov-nd">—</span> : num(r.bestSearchQueryScore)),
+      sortValue: (r) => r.bestSearchQueryScore ?? Number.MAX_SAFE_INTEGER,
+      filterValue: (r) => r.bestSearchQueryScore ?? 0,
     },
     {
       key: 'share', label: 'Market impression share',

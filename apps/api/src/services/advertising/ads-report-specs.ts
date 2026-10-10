@@ -449,6 +449,48 @@ export function marketExpr(col: string): string {
   return `(CASE ${col} ${MARKET_CASE_BODY} ELSE UPPER(${col}) END)`
 }
 
+/**
+ * D3 (2026-10-10) — Top-of-search IS over a group of rows: the impression-weighted average, computed by Nexus,
+ * of the top-of-search impression share Amazon reports per campaign and day — the rule of placement-grid's
+ * `weightedIS` (the plain mean only when no reading carries impressions). Rows with no reported share are left
+ * out of both sides, never counted as 0. It was `MAX(...)`: the best single campaign-day in the range.
+ */
+function weightedTopOfSearchIsSql(t: string): string {
+  const has = `${t}."topOfSearchIS" IS NOT NULL`
+  return `CASE WHEN SUM(${t}."impressions") FILTER (WHERE ${has}) > 0`
+    + ` THEN SUM(${t}."topOfSearchIS" * ${t}."impressions") FILTER (WHERE ${has})::numeric / SUM(${t}."impressions") FILTER (WHERE ${has})`
+    + ` ELSE AVG(${t}."topOfSearchIS") END`
+}
+const TOS_IS_LABEL = 'Top-of-search IS (weighted avg, Nexus)'
+const TOS_IS_HELP = 'Weighted avg (Nexus) of Amazon’s daily campaign shares: Amazon reports the top-of-search impression share per '
+  + 'campaign and day; Nexus averages the days and campaigns in the row, weighted by impressions. Campaign level, not a '
+  + 'keyword’s share. Days with no reported share are left out, never counted as 0.'
+
+/**
+ * D2 (2026-10-10) — the rows the Search Query Performance report reads: weekly (`reportPeriod = 'WEEK'`) ASIN
+ * rows only, each carrying its query's market totals for that week as the MAX over the query's rows (`q…`), and
+ * the key of that (market, week, query) as `qKey`. The market columns repeat on every ASIN row of a query, so a
+ * plain SUM multiplied them by the number of our ASINs (volume ×N, every share ÷N); `onceSum` adds each
+ * (market, week, query) total ONCE, at any grouping and in the totals row.
+ */
+const SQP_FROM = `(SELECT s.*,
+    (s."marketplace" || '|' || s."startDate"::text || '|' || s."searchQuery") AS "qKey",
+    MAX(s."searchQueryVolume") OVER q AS "qVolume",
+    MAX(s."impressionsTotal") OVER q AS "qImpressions",
+    MAX(s."clicksTotal") OVER q AS "qClicks",
+    MAX(s."cartAddsTotal") OVER q AS "qCartAdds",
+    MAX(s."purchasesTotal") OVER q AS "qPurchases"
+  FROM "SearchQueryPerformance" s
+  WHERE s."asin" IS NOT NULL AND s."reportPeriod" = 'WEEK'
+  WINDOW q AS (PARTITION BY s."marketplace", s."startDate", s."searchQuery")) p`
+/** Σ over the distinct (market, week, query) keys in the group of that key's market total — each counted once. */
+const onceSum = (col: string) => `(SELECT SUM(e.value::numeric) FROM jsonb_each_text(jsonb_object_agg(p."qKey", p."${col}")) e)`
+const sqpShareSql = (ours: string, totalCol: string) =>
+  `CASE WHEN ${onceSum(totalCol)} > 0 THEN SUM(p."${ours}")::numeric / ${onceSum(totalCol)} END`
+const SQP_SHARE_HELP = (what: string) => `Computed by Nexus from Amazon’s weekly Brand Analytics counts: our ASINs’ ${what} ÷ the `
+  + `query’s total ${what}, each query’s weekly total counted once. Empty when Amazon reported no total, never 0%. Two of our `
+  + 'ASINs in one search both count, so a row over several ASINs is an upper bound.'
+
 /** Campaign name resolved by externalCampaignId ALONE — see the AF-series rule. */
 const CAMPAIGN_JOIN = 'LEFT JOIN "Campaign" c ON c."externalCampaignId" = p."entityId"'
 const CAMPAIGN_JOIN_BY_FIELD = (field: string) =>
@@ -492,9 +534,8 @@ function spcCampaignMetrics(t: string): Metric[] {
     m('ordersSameSku', 'Orders · same SKU', 'int', count('ordersSameSku7d')),
     m('unitsSameSku', 'Units · same SKU', 'int', count('unitsSameSku7d')),
 
-    // ── Amazon's own impression share, at campaign grain ────────────────────
-    m('topOfSearchIS', 'Top-of-search IS', 'pct', `MAX(${t}."topOfSearchIS")`,
-      'Amazon’s own top-of-search impression share for the campaign. MAX rather than AVG within a group: it is a campaign-day property, and averaging it across days would weight a quiet day like a busy one.'),
+    // ── Amazon's impression share, at campaign grain, averaged by Nexus (D3) ─
+    m('topOfSearchIS', TOS_IS_LABEL, 'pct', weightedTopOfSearchIsSql(t), TOS_IS_HELP),
 
     // ── the campaign's settings on that day ─────────────────────────────────
     m('budget', 'Budget', 'money', `MAX(${t}."campaignBudgetCents")::numeric / 100.0`,
@@ -680,11 +721,11 @@ export const REPORT_SPECS: Record<string, ReportSpec> = {
     metrics: [
       ...coreMetrics('p', { units: false }),
       {
-        id: 'topOfSearchIS', label: 'Top-of-search IS', kind: 'metric', format: 'pct', align: 'right',
-        // Amazon reports this per campaign-day on the TOP row only, so averaging
-        // it across placements would be meaningless — take the max within a group.
-        sql: 'MAX(p."topOfSearchIS")',
-        help: 'Amazon’s own top-of-search impression share. Recorded on the top-of-search row only.',
+        id: 'topOfSearchIS', label: TOS_IS_LABEL, kind: 'metric', format: 'pct', align: 'right',
+        // Amazon reports this per campaign-day on the TOP row only (the other placements carry none and are left
+        // out); D3 — impression-weighted over the campaign-days in the group, not the best single one (MAX).
+        sql: weightedTopOfSearchIsSql('p'),
+        help: `${TOS_IS_HELP} Recorded on the top-of-search row only.`,
       },
     ],
     defaultGroupBy: ['placement'],
@@ -718,7 +759,8 @@ export const REPORT_SPECS: Record<string, ReportSpec> = {
   sqp: {
     id: 'sqp',
     title: 'Search Query Performance',
-    from: '"SearchQueryPerformance" p',
+    // D2 — weekly ASIN rows with each query's market totals once-able; see SQP_FROM.
+    from: SQP_FROM,
     dateCol: 'p."startDate"',
     marketCol: marketExpr('p."marketplace"'),
     adProductCol: null,
@@ -731,17 +773,18 @@ export const REPORT_SPECS: Record<string, ReportSpec> = {
       dim('marketplace', 'Market', marketExpr('p."marketplace"')),
     ],
     metrics: [
-      { id: 'volume', label: 'Query volume', kind: 'metric', format: 'int', align: 'right', sql: 'SUM(p."searchQueryVolume")::bigint', help: 'Total searches for this query across the whole marketplace.' },
-      { id: 'impressionsTotal', label: 'Impressions (market)', kind: 'metric', format: 'int', align: 'right', sql: 'SUM(p."impressionsTotal")::bigint' },
+      // D2 — the market columns are each (market, week, query)'s MAX, added once per key (`onceSum`); our own
+      // columns are per-ASIN counts and SUM. Shares are recomputed from those counts, never averaged or read
+      // from the stored share columns.
+      { id: 'volume', label: 'Query volume', kind: 'metric', format: 'int', align: 'right', sql: `${onceSum('qVolume')}::bigint`, help: 'Amazon’s search volume for the query (Brand Analytics, weekly) across the whole marketplace, counted once per query, week and market and summed over the weeks in view.' },
+      { id: 'impressionsTotal', label: 'Impressions (market)', kind: 'metric', format: 'int', align: 'right', sql: `${onceSum('qImpressions')}::bigint`, help: 'The query’s total search-results impressions (Brand Analytics, weekly), counted once per query, week and market.' },
       { id: 'impressionsBrand', label: 'Impressions (ours)', kind: 'metric', format: 'int', align: 'right', sql: 'SUM(p."impressionsBrand")::bigint' },
-      // Shares are recomputed from the underlying counts, not averaged: averaging
-      // a stored share would weight a 10-impression week like a 10,000 one.
-      { id: 'impressionShare', label: 'Impression share', kind: 'metric', format: 'pct', align: 'right', sql: 'CASE WHEN SUM(p."impressionsTotal") > 0 THEN SUM(p."impressionsBrand")::numeric / SUM(p."impressionsTotal") END' },
+      { id: 'impressionShare', label: 'Impression share', kind: 'metric', format: 'pct', align: 'right', sql: sqpShareSql('impressionsBrand', 'qImpressions'), help: SQP_SHARE_HELP('impressions') },
       { id: 'clicksBrand', label: 'Clicks (ours)', kind: 'metric', format: 'int', align: 'right', sql: 'SUM(p."clicksBrand")::bigint' },
-      { id: 'clickShare', label: 'Click share', kind: 'metric', format: 'pct', align: 'right', sql: 'CASE WHEN SUM(p."clicksTotal") > 0 THEN SUM(p."clicksBrand")::numeric / SUM(p."clicksTotal") END' },
-      { id: 'cartAddShare', label: 'Cart-add share', kind: 'metric', format: 'pct', align: 'right', sql: 'CASE WHEN SUM(p."cartAddsTotal") > 0 THEN SUM(p."cartAddsBrand")::numeric / SUM(p."cartAddsTotal") END' },
+      { id: 'clickShare', label: 'Click share', kind: 'metric', format: 'pct', align: 'right', sql: sqpShareSql('clicksBrand', 'qClicks'), help: SQP_SHARE_HELP('clicks') },
+      { id: 'cartAddShare', label: 'Cart-add share', kind: 'metric', format: 'pct', align: 'right', sql: sqpShareSql('cartAddsBrand', 'qCartAdds'), help: SQP_SHARE_HELP('cart adds') },
       { id: 'purchasesBrand', label: 'Purchases (ours)', kind: 'metric', format: 'int', align: 'right', sql: 'SUM(p."purchasesBrand")::bigint' },
-      { id: 'purchaseShare', label: 'Purchase share', kind: 'metric', format: 'pct', align: 'right', sql: 'CASE WHEN SUM(p."purchasesTotal") > 0 THEN SUM(p."purchasesBrand")::numeric / SUM(p."purchasesTotal") END' },
+      { id: 'purchaseShare', label: 'Purchase share', kind: 'metric', format: 'pct', align: 'right', sql: sqpShareSql('purchasesBrand', 'qPurchases'), help: SQP_SHARE_HELP('purchases') },
     ],
     defaultGroupBy: ['searchQuery'],
     defaultColumns: ['searchQuery', 'volume', 'impressionsBrand', 'impressionShare', 'clickShare', 'purchasesBrand', 'purchaseShare'],

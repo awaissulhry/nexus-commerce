@@ -11,7 +11,7 @@ import { describe, it, expect } from 'vitest'
 import { buildCsv } from './csv'
 
 const row = (over: Record<string, unknown>) => ({
-  keyword: 'giacca moto', marketplace: 'IT', marketVolume: 1177, marketRank: 3,
+  keyword: 'giacca moto', marketplace: 'IT', marketVolume: 1177, searchQueryScore: 3,
   impressionShare: 0.0117, asinsCompeting: 8, asOf: '2026-07-19', asOfAgeDays: 24,
   state: 'measured', measured: true, branded: false, ...over,
 }) as Parameters<typeof buildCsv>[0][number]

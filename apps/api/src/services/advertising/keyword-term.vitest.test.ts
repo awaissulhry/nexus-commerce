@@ -121,3 +121,27 @@ describe('buildSeries · the completeness cap', () => {
     expect(buildSeries(rows, []).lastShareWeek).toBe('2026-07-19')
   })
 })
+
+/** B2 (2026-10-10) — shares come from the counts, and a week whose query totals were not reported has no reading. */
+describe('buildSeries · null shares', () => {
+  it('a row with neither share is no reading: the week stays absent, never a 0 % point', () => {
+    const s = buildSeries([{ week: '2026-07-19', share: null, clickShare: null, asin: 'A1' }], [])
+    expect(s.points).toEqual([])
+    expect(s.shareWeeks).toBe(0)
+  })
+
+  it('a null share never beats a real one, and never turns into 0', () => {
+    const s = buildSeries([
+      { week: '2026-07-19', share: null, clickShare: null, asin: 'A1' },
+      { week: '2026-07-19', share: 0.02, clickShare: null, asin: 'A2' },
+    ], [])
+    expect(s.points[0].share).toBe(0.02)
+    expect(s.points[0].clickShare).toBeNull()
+  })
+
+  it('a click share alone keeps the week, with no impression share', () => {
+    const s = buildSeries([{ week: '2026-07-19', share: null, clickShare: 0.05, asin: 'A1' }], [])
+    expect(s.points[0]).toMatchObject({ share: null, clickShare: 0.05 })
+    expect(s.shareWeeks).toBe(0)
+  })
+})
