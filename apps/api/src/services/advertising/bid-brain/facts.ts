@@ -26,11 +26,11 @@
  *   share      Lane 5 — a keyword with a target top-of-search impression share (share-load.ts: keyword > campaign >
  *              product) carries it and its reading; every other keyword's facts are exactly as before
  */
-import type { TargetFacts, Overrides, DecisionLayer } from './decide.js'
+import type { TargetFacts, Overrides, DecisionLayer, GiveBack } from './decide.js'
 import type { Directive, LaneDirective, LaneName } from './recipe.js'
 import { NO_EVIDENCE, type Evidence, type PoolNode } from './estimator.js'
 import { BRAIN_PHASES, type BrainPhase, type GoalInputs } from './goal.js'
-import { laneOf, planFacts, type PlanHour } from './plan-hour.js'
+import { hourWords, laneOf, planFacts, type PlanHour } from './plan-hour.js'
 import { stackCeiling } from './recipe.js'
 import { laneHeadroom } from '../rank-controller.js'
 import { MAX_MIN_BID_ENTRIES_PER_DAY } from '../rank-write-projection.js'
@@ -155,7 +155,7 @@ export interface RunRows {
   /** BB-8 — per campaign: what a playbook holds on it. */
   playbook?: ReadonlyMap<string, PlaybookFact>
   /** BB-8 — per keyword: the brain's last decision lowered it by an override; the bid of its last decision before. */
-  lowered?: ReadonlyMap<string, { layer: DecisionLayer; heldCents: number; beforeCents: number | null; wrote?: boolean; retryDataDay?: string | null; foundCents?: number | null }>
+  lowered?: ReadonlyMap<string, { layer: DecisionLayer; heldCents: number; beforeCents: number | null; wrote?: boolean; retryDataDay?: string | null; foundCents?: number | null; /** Bid-page fix 10-10 */ giveBack?: GiveBack | null }>
   /** BB-7 review — the campaigns the brain owns this run: a plan's floor mark on one is the brain's record. */
   owned?: ReadonlySet<string>
   /** BB-8 — per ad group: the revenue-weighted break-even ACoS of its products with usable profit data (a fraction). */
@@ -167,6 +167,11 @@ export interface RunRows {
    * (money-brake.ts). Absent: none (OBSERVE, OFF, no brake) — the bids decide as before.
    */
   moneyBrakes?: ReadonlyMap<string, MoneyBrakeFact>
+  /**
+   * Owner decision A (10-10) — per keyword: its newest decision held the bid below the brain's own because of the plan's
+   * hour (`evidence.beforeHour`): the bid it left, the bid it found, and the brain's own bid.
+   */
+  planHeld?: ReadonlyMap<string, { cents: number; fromCents: number; beforeCents: number }>
   /**
    * BB-17 — the intraday brakes of the campaigns the brain owns (intraday.ts; absent: NEXUS_BID_BRAIN_INTRADAY=off, or none
    * owned). In the facts only when `mode` is on; in shadow they are read and compared, never decided with (shadow.ts).
@@ -480,6 +485,9 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
       ratioCeiling,
       ...(plan?.lanes.length ? { lanes: plan.lanes } : {}),
       ...(plan ? { planNote: plan.note } : {}),
+      // Owner decision A (10-10) — whose ceiling this hour's lanes carry, and the bid the plan's hour last held it to.
+      ...(plan?.lanes.length && !plan.minBidHour ? { hourWords: hourWords(hour?.window) } : {}),
+      ...(run.planHeld?.get(t.id) ? { planHeld: run.planHeld.get(t.id)! } : {}),
       ...(heldWhy || run.spendGuard?.has(campaign.id) || moneyHold ? { raiseCap: [heldWhy, run.spendGuard?.get(campaign.id), moneyHold].filter(Boolean).join('; ') } : {}),
       listPriceCents: group.families.map((f) => m.prices.get(f)).find((p) => p != null && p > 0) ?? null,
       goal,
@@ -489,8 +497,7 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
         maxChangePct: s?.maxChangePct ?? null,
         campaignMinCents: campaign.minBidCents,
         campaignMaxCents: campaign.maxBidCents,
-        // BB-7 review — the plan's day ceiling binds in every hour of an owned campaign with a plan.
-        ...(hour?.dayMaxCpcCents != null ? { planCeilingCents: Math.floor(hour.dayMaxCpcCents / laneHeadroom(strategy.biddingStrategy, 'PLACEMENT_TOP')) } : {}),
+        // Owner decision A (10-10) — no day ceiling: this hour's plan ceiling holds the bid (its lanes, decide.ts holdToHour).
       },
       dataDay: m.dataDay,
       lastStep: run.lastSteps.get(t.id) ?? null,

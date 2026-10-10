@@ -54,13 +54,13 @@ import { logger } from '../../../utils/logger.js'
 import { publishEvent } from '../../../lib/events/publish.js'
 import { engineGuardNote, openEngineGuard, type EngineGuard, type EngineGuardReport } from '../ads-engine-guard.js'
 import { strategyMarket } from '../ads-strategy/bids.js'
-import { decide, type Decision, type TargetFacts } from './decide.js'
+import { decide, giveBackKey, type Decision, type TargetFacts } from './decide.js'
 import { applyLaneDirectives, laneWords, type LaneName } from './recipe.js'
 import { buildFacts, isPlanFloorMark, STRATEGY_HOLD_KIND, type CampaignRow, type MarketRows, type RunRows } from './facts.js'
 import { BRAIN_ACTOR, brainOwnedCampaignIds } from './live.js'
 import {
   placementReportWords, strategyReportWords, writeOwnedDecisions, writeOwnedPlacements, writeOwnedStrategies, writeReportWords,
-  type PlacementReport, type PlacementWrite, type StrategyReport, type StrategyWrite, type WriteReport,
+  type PlacementReport, type PlacementWrite, type StrategyReport, type StrategyWrite, type WriteOutcome, type WriteReport,
 } from './live-writer.js'
 import { laneOf, minBidLanes, type PlanHour } from './plan-hour.js'
 import { stampPlanReceipts } from './plans.js'
@@ -122,9 +122,15 @@ function count(rows: readonly Decision[], key: 'action' | 'layer'): Record<strin
   return acc
 }
 
-/** Whether a decision is worth a row: it changed since the keyword's last one, or it is the day's first. */
+/**
+ * Whether a decision is worth a row: it changed since the keyword's last one, or it is the day's first. Bid-page fix 10-10 —
+ * or it carries a give-back the last row did not (a run with evidence during a floor: the tick that lifts it reads it).
+ */
 export function rowKind(d: Decision, prev: PreviousDecision | undefined, now: Date): 'change' | 'snapshot' | null {
   if (!prev || prev.action !== d.action || prev.layer !== d.layer || prev.currentCents !== d.currentCents || prev.decidedCents !== d.bidCents) return 'change'
+  if (d.giveBack && giveBackKey(d.giveBack) !== (prev.giveBackKey ?? null)) return 'change'
+  // Owner decision A (10-10) — the brain's own bid the plan's hour holds it below changed: the next tick reads it.
+  if ((d.beforeHour ?? null) !== (prev.beforeHour ?? null) && (d.beforeHour != null || prev.beforeHour != null)) return 'change'
   return prev.createdAt.toISOString().slice(0, 10) !== now.toISOString().slice(0, 10) ? 'snapshot' : null
 }
 
@@ -222,9 +228,10 @@ export async function shadowMarket(market: string, ctx: { runId: string; mode: B
   // Lane 5 — each keyword's share facts, for its stored evidence (the run's UTC day is a share move's day).
   const shareOf = new Map<string, ShareFacts>(facts.flatMap((f) => (f.share ? [[f.targetId, f.share] as const] : [])))
   const runDay = ctx.now.toISOString().slice(0, 10)
-  const data = decisions.flatMap((d) => {
+  const data = decisions.flatMap((asked) => {
     // A light tick has no goal: its no_goal holds say nothing new and are not stored (the full run's decision stands).
-    if (rows.light && d.layer === 'no_goal') return []
+    if (rows.light && asked.layer === 'no_goal') return []
+    const d = storedDecision(asked, sent?.byTarget.get(asked.targetId))
     const prev = previous.get(d.targetId)
     const kind = rowKind(d, prev, ctx.now)
     if (!kind) return []
@@ -239,7 +246,7 @@ export async function shadowMarket(market: string, ctx: { runId: string; mode: B
       aim: dec(d.goal?.aim), bandLo: dec(d.goal?.lo), bandHi: dec(d.goal?.hi), expectedAcos: dec(d.expectedAcos), confidence: dec(d.confidence),
       dataDay: new Date(`${d.dataDay}T00:00:00Z`), lastWriter: last?.actor ?? null, lastWriteAt: last?.at ?? null, why: withNote(withNote(withNote(withNote(recipe.has(campaignId) ? `${d.why} · ${recipe.get(campaignId)}` : d.why, upgrades?.notes.get(d.targetId)), nowcast?.notes.get(d.targetId)), hourFactors.notes.get(campaignId)), intraday?.notes.get(d.targetId)),
       // The step the next run anchors on (nowcast.ts stepToStore): marked when the rows were read with the nowcast on.
-      evidence: { step: d.step, lastStep: stepToStore(d, run.lastSteps.get(d.targetId), !!rows.nowcast), clash: d.clash, placements: d.placements.length ? d.placements : undefined, sent: outcome, ...upgrades?.evidence.get(d.targetId), ...(shareOf.has(d.targetId) ? { share: shareEvidence(d, shareOf.get(d.targetId)!, runDay, shareMoveApplied(owned.has(campaignId), outcome)) } : {}) } as unknown as Prisma.InputJsonObject,
+      evidence: { step: d.step, lastStep: stepToStore(d, run.lastSteps.get(d.targetId), !!rows.nowcast), clash: d.clash, placements: d.placements.length ? d.placements : undefined, sent: outcome, giveBack: d.giveBack ?? undefined, beforeHour: d.beforeHour ?? undefined, restoreBefore: d.restoreBeforeCents ?? undefined, ...upgrades?.evidence.get(d.targetId), ...(shareOf.has(d.targetId) ? { share: shareEvidence(d, shareOf.get(d.targetId)!, runDay, shareMoveApplied(owned.has(campaignId), outcome)) } : {}) } as unknown as Prisma.InputJsonObject,
       createdAt: ctx.now,
     }]
   })
@@ -282,6 +289,22 @@ export function movesOf(decisions: readonly Decision[], campaignOf: (targetId: s
     } else if (d.bidCents < d.currentCents) out.lower++
   }
   return out
+}
+
+/**
+ * Review fix 10-10 (2) — the decision as it is stored: when only the give-back to the bid before was written (the dial or
+ * the caps held the goal's raise above it), what was written, with no step taken (a later run with evidence may take it).
+ * Pure.
+ */
+export function storedDecision(d: Decision, wrote: WriteOutcome | undefined): Decision {
+  // Re-review minor — a plan raise back to the brain's own bid that the dial or the caps held (or the gate refused): its own
+  // bid stays in memory, so the next tick asks again (planHeld: the bid it found, the own bid).
+  if ((wrote?.sent === 'deferred' || wrote?.sent === 'would-apply' || wrote?.sent === 'refused') && d.layer === 'plan_hour' && d.bidCents > d.currentCents && d.beforeHour == null) {
+    return { ...d, beforeHour: d.bidCents }
+  }
+  if (wrote?.sent !== 'queued' || !wrote.heldAt) return d
+  const at = wrote.heldAt.cents
+  return { ...d, bidCents: at, beforeHour: null, step: { dataDay: d.dataDay, fromCents: at, toCents: at }, why: `${d.why} · only the bid before it went back: the raise to ${d.bidCents}¢ waits (${wrote.heldAt.why})` }
 }
 
 /** BB-15 — a stored why with the nowcast's words after it (none: the why unchanged). */

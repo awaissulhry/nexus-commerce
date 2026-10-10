@@ -12,7 +12,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { laneHeadroom, type RankTargetSpec } from '../rank-controller.js'
-import { dayCeilingCents, planFacts, type PlanHour } from './plan-hour.js'
+import { hourWindow, hourWords, planFacts, type PlanHour } from './plan-hour.js'
 import { bidForAcos, limitRange, placementsFor, stackCeiling, type Lane } from './recipe.js'
 import { cpcRatio, laneCpcRatio } from './estimator.js'
 import { decide, type TargetFacts } from './decide.js'
@@ -45,14 +45,18 @@ describe('BB-7 — the plan hour as the brain\'s input', () => {
     expect(f.lanes).toEqual([{ lane: 'REST_OF_SEARCH', planPct: 40, maxCpcCents: 55, baseCeilingCents: 55, dynamic: 1 }])
   })
 
-  it('review 6 — the keyword bid holds the day\'s lowest ceiling of the plan; each hour\'s own ceiling caps its placements', () => {
-    expect(dayCeilingCents([spec({ maxCpcCents: 60 }), spec({ key: 'min', pause: true, maxCpcCents: 10 }), spec({ maxCpcCents: 45 }), null, spec({ maxCpcCents: null })])).toBe(45)
-    expect(dayCeilingCents([spec({ maxCpcCents: null })])).toBeNull()
-    const f = planFacts(hour(spec({ maxCpcCents: 60 }), { dayMaxCpcCents: 45 }), { biddingStrategy: 'LEGACY_FOR_SALES' }, flap)!
-    expect(f.lanes[0]).toMatchObject({ maxCpcCents: 60, baseCeilingCents: 45 })
-    // The base bid is held at 45¢ all day (not 60¢ this hour, 45¢ the next); the placement is capped by this hour's 60¢.
-    expect(limitRange({}, f.lanes)).toMatchObject({ upper: 45, upperFrom: "the top-of-search CPC ceiling (the day's lowest of the hourly plan)" })
+  it('Owner decision A (10-10) — the keyword bid holds THIS hour\'s ceiling (it was the day\'s lowest); the hour\'s window names it', () => {
+    const f = planFacts(hour(spec({ maxCpcCents: 60 }), { window: { fromHour: 14, toHour: 16 } }), { biddingStrategy: 'LEGACY_FOR_SALES' }, flap)!
+    expect(f.lanes[0]).toMatchObject({ maxCpcCents: 60, baseCeilingCents: 60 })
+    expect(limitRange({}, f.lanes)).toMatchObject({ upper: 60, upperFrom: 'the top-of-search CPC ceiling' })
     expect(placementsFor(40, f.lanes, { aim: 0.2, hi: 0.28 })[0]).toMatchObject({ pct: 50, held: 'the top-of-search CPC ceiling 60¢' })
+    // The run of hours with the same target around the hour (the plan's time zone), and its words.
+    const keys = [...Array(8).fill('min'), ...Array(6).fill('rest'), 'own', 'own', ...Array(8).fill('rest')]
+    expect(hourWindow(keys, 14)).toEqual({ fromHour: 14, toHour: 16 })
+    expect(hourWindow(keys, 9)).toEqual({ fromHour: 8, toHour: 14 })
+    expect(hourWindow(keys, 23)).toEqual({ fromHour: 16, toHour: 24 })
+    expect(hourWords({ fromHour: 14, toHour: 16 })).toBe('the plan at 14:00–16:00')
+    expect(hourWords(null)).toBe('the plan this hour')
   })
 
   it('a Min-bid hour floors every keyword (its own floor, else 2¢); base bid "suppress" is a Min-bid hour too', () => {
@@ -134,7 +138,9 @@ describe('C2 and the serving bid', () => {
   it('IT_Auto_Close at a 45¢ ceiling: the base bid is held at the ceiling and the 150 % top of search at what it allows', () => {
     const lanes: Lane[] = [{ lane: 'TOP_OF_SEARCH', planPct: 150, maxCpcCents: 45, dynamic: 1 }]
     const over = decide(facts({ currentCents: 50, lanes }))
-    expect(over).toMatchObject({ action: 'write', layer: 'limit', bidCents: 45 })
+    // Owner decision A (10-10) — the goal's own move, held to this hour's ceiling (not the brain's limits); its 62¢ remembered.
+    expect(over).toMatchObject({ action: 'write', layer: 'goal', bidCents: 45, beforeHour: 62 })
+    expect(over.why).toMatch(/62¢ held to 45¢ by the hourly plan's ceiling this hour$/)
     expect(over.placements).toEqual([{ lane: 'TOP_OF_SEARCH', planPct: 150, pct: 0, held: 'the top-of-search CPC ceiling 45¢' }])
     const under = decide(facts({ currentCents: 30, lanes }))
     expect(under.bidCents).toBeLessThanOrEqual(45)

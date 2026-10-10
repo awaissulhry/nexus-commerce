@@ -24,7 +24,7 @@ import type { RankTargetSpec } from '../rank-controller.js'
 const spec = (extra: Partial<RankTargetSpec> = {}): RankTargetSpec => ({
   key: 'top', placement: 'PLACEMENT_TOP', targetISPct: null, acosCapPct: null, maxCpcCents: 500, biasPct: 200, pause: false, allOut: false, ...extra,
 })
-const hourOf = (s: RankTargetSpec | null, extra: Partial<PlanHour> = {}): PlanHour => ({ scheduleId: 's1', name: 'IT TEST PLAN', key: s?.key ?? null, spec: s, event: null, dayMaxCpcCents: 500, ...extra })
+const hourOf = (s: RankTargetSpec | null, extra: Partial<PlanHour> = {}): PlanHour => ({ scheduleId: 's1', name: 'IT TEST PLAN', key: s?.key ?? null, spec: s, event: null, ...extra })
 
 const campaign = (id: string): CampaignRow => ({
   id, status: 'ENABLED', pinBids: false, pinnedBy: null, bidsSuppressedAt: null, bidsSuppressedFloorCents: null, bidsSuppressedBy: null,

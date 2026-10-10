@@ -152,13 +152,16 @@ function golden(withIntraday: 'shadow' | 'on' | null) {
   }
 }
 
+/** Bid-page fix 10-10 — a floor's give-back and a give-back's bid before are told beside the decision, not part of it: left out of the bytes (golden-flag-off). */
+const bytes = (g: unknown) => JSON.stringify(g, (key, value) => (key === 'giveBack' || key === 'restoreBeforeCents' ? undefined : value), 1)
+
 describe('BB-17 golden — the intraday brakes off and in shadow decide exactly as before', () => {
   it('off: the bytes recorded before BB-15', async () => {
-    await expect(JSON.stringify(golden(null), null, 1)).toMatchFileSnapshot('./__golden__/flag-off.json')
+    await expect(bytes(golden(null))).toMatchFileSnapshot('./__golden__/flag-off.json')
   })
 
   it('shadow, with brakes that would bite in the run: the same bytes', async () => {
-    await expect(JSON.stringify(golden('shadow'), null, 1)).toMatchFileSnapshot('./__golden__/flag-off.json')
+    await expect(bytes(golden('shadow'))).toMatchFileSnapshot('./__golden__/flag-off.json')
   })
 
   it('shadow: the comparison names and counts each keyword a brake would change, and changes none', () => {

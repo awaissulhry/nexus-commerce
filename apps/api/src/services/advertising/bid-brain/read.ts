@@ -3,7 +3,8 @@
  * BB-6 — a decision on a campaign the brain owns is LIVE (it was sent: `sent` says what became of it); the rest are
  * SHADOW. `owned` lists the campaigns the brain owns now; the diff counts the brain's own bid writes per day.
  *
- *   why      each keyword's newest decision with its one-line why (a keyword, a campaign, a product or a market)
+ *   why      each keyword's newest decision with its one-line why (a keyword, a campaign, a product or a market); bid-page
+ *            fix 10-10: a write it queued says what became of it NOW (applied, queued, sending, failed, cancelled, replaced)
  *   what-if  the same keywords decided again NOW with another target ACoS (and band): what the brain would set — not
  *            stored, not sent
  *   diff     per day: the brain against what today's writers set (agree, higher, lower, held by an override, braked)
@@ -106,13 +107,14 @@ async function whyView(args: BrainReadArgs, now: Date) {
      ORDER BY abs(latest."decidedCents" - latest."currentCents") DESC, latest."targetId"
      LIMIT ${limit}`)
   const words = await keywordWords(rows.map((r) => r.targetId as string))
+  const delivered = await deliveredNow(rows.map((r) => ({ targetId: r.targetId as string, sent: r.sent })))
   const decisions = rows.map((r) => ({
     targetId: r.targetId, keyword: words.get(r.targetId as string)?.keyword ?? null, campaignId: r.campaignId, market: r.marketplace,
     action: r.action, layer: r.layer, currentCents: r.currentCents, decidedCents: r.decidedCents, goalBidCents: r.goalBidCents,
     aimPct: pct(r.aim), bandLoPct: pct(r.bandLo), bandHiPct: pct(r.bandHi), expectedAcosPct: pct(r.expectedAcos),
     confidence: r.confidence == null ? null : Number(r.confidence), dataDay: (r.dataDay as Date).toISOString().slice(0, 10),
     decidedAt: (r.createdAt as Date).toISOString(), lastWriter: r.lastWriter, why: r.why,
-    mode: r.mode, ...(r.sent ? { sent: r.sent } : {}), ...(r.share ? { share: r.share } : {}),
+    mode: r.mode, ...(r.sent ? { sent: delivered.get(r.targetId as string) ?? r.sent } : {}), ...(r.share ? { share: r.share } : {}),
   }))
   const { owned, ownedButArchived } = await ownedNow()
   const live = decisions.some((d) => d.mode === 'LIVE')
@@ -122,10 +124,51 @@ async function whyView(args: BrainReadArgs, now: Date) {
       note: !decisions.length
         ? `No decision for this scope yet: ${SCHEDULE_WORDS}.`
         : live
-          ? 'LIVE decisions were sent through the bid write path (sent says what became of each: queued, refused, deferred by the caps, would-apply under SUGGEST); SHADOW decisions are what the brain WOULD set, next to the bid today\'s writers set (currentCents).'
+          ? 'LIVE decisions were sent through the bid write path (sent says what became of each now: applied — Amazon took it, queued, sending, failed, cancelled, replaced by a newer write before it was sent; or, when it was decided, refused, deferred by the caps, would-apply under SUGGEST); SHADOW decisions are what the brain WOULD set, next to the bid today\'s writers set (currentCents).'
           : 'Shadow decisions: what the bid brain WOULD set, next to the bid today\'s writers set (currentCents). Nothing was sent.',
     },
   }
+}
+
+/** Bid-page fix 10-10 — a queued write's delivery state (AdMutation, else its action log) as the word `sent` shows now. */
+const SENT_WORD: Record<string, string> = { PENDING: 'queued', IN_FLIGHT: 'sending', APPLIED: 'applied', FAILED: 'failed', CANCELLED: 'cancelled', SUPERSEDED: 'replaced' }
+
+/**
+ * Bid-page fix 10-10 — what became of a write the brain queued, now: the decision stores `sent: queued` when it sends it, and
+ * the why view showed "queued" for bids Amazon took long ago. The delivery state of its typed mutation (by its queue row),
+ * else of its action log (SUCCESS → applied, SKIPPED → cancelled); unknown → as stored. Pure.
+ */
+export function sentNow(sent: unknown, mutation: { state: string; lastError: string | null } | null, logStatus: string | null): unknown {
+  const s = sent as { sent?: unknown } | null
+  if (!s || typeof s !== 'object' || s.sent !== 'queued') return sent
+  // Review fix 10-10 (4) — the action log's status read as ads-changes reads it (opDeliveryState): SUCCESS is APPLIED, SKIPPED
+  // CANCELLED, every other status as it is (FAILED, CANCELLED, SUPERSEDED, PENDING) — a cancelled write never reads queued.
+  const fromLog = logStatus === 'SUCCESS' ? 'APPLIED' : logStatus === 'SKIPPED' ? 'CANCELLED' : logStatus
+  const state = mutation?.state ?? fromLog ?? null
+  if (!state || !SENT_WORD[state]) return sent
+  return { ...s, sent: SENT_WORD[state], delivery: state, ...(state === 'FAILED' && mutation?.lastError ? { error: mutation.lastError } : {}) }
+}
+
+/** Each decision's `sent` now, for the queued ones (two indexed reads: their mutations, then the action logs of the rest). */
+async function deliveredNow(list: ReadonlyArray<{ targetId: string; sent: unknown }>): Promise<Map<string, unknown>> {
+  const out = new Map<string, unknown>()
+  const queued = list.flatMap((r) => {
+    const s = r.sent as { sent?: unknown; outboundQueueId?: unknown; actionLogId?: unknown } | null
+    return s && s.sent === 'queued' ? [{ targetId: r.targetId, sent: s, queueId: typeof s.outboundQueueId === 'string' ? s.outboundQueueId : null, logId: typeof s.actionLogId === 'string' ? s.actionLogId : null }] : []
+  })
+  if (!queued.length) return out
+  const queueIds = queued.flatMap((q) => (q.queueId ? [q.queueId] : []))
+  const mutations = queueIds.length
+    ? await prisma.adMutation.findMany({
+      where: { entityType: 'AD_TARGET', entityId: { in: queued.map((q) => q.targetId) }, field: 'bid', outboundQueueId: { in: queueIds } },
+      select: { entityId: true, outboundQueueId: true, state: true, lastError: true },
+    })
+    : []
+  const byQueue = new Map(mutations.map((m) => [`${m.entityId}|${m.outboundQueueId}`, m]))
+  const logIds = queued.filter((q) => !(q.queueId && byQueue.has(`${q.targetId}|${q.queueId}`)) && q.logId).map((q) => q.logId!)
+  const logs = logIds.length ? new Map((await prisma.advertisingActionLog.findMany({ where: { id: { in: logIds } }, select: { id: true, amazonResponseStatus: true } })).map((l) => [l.id, l.amazonResponseStatus])) : new Map<string, string | null>()
+  for (const q of queued) out.set(q.targetId, sentNow(q.sent, (q.queueId && byQueue.get(`${q.targetId}|${q.queueId}`)) || null, q.logId ? logs.get(q.logId) ?? null : null))
+  return out
 }
 
 async function whatIfView(args: BrainReadArgs, now: Date) {

@@ -7,7 +7,9 @@
  *                  rank-defend writes nothing for the campaign; the plan's receipt says what it holds
  *   Min-bid hour   every serving keyword floored to the plan's 3¢ as the brain, and ONE entry recorded for the anti-flap;
  *                  a rerun in the same hour writes nothing and records no second entry
- *   after it       the next serving hour gives the bids back in one write each (not 25 % at a time from 3¢)
+ *   after it       the next serving hour gives the bids back in one write each (not 25 % at a time from 3¢); bid-page fix
+ *                  10-10: the product cycle's run inside the floor (with evidence) stores the give-back, and the tick that
+ *                  lifts the floor (no evidence) gives back the goal's bid, never "no evidence to pool"
  *   AB-2           a monthly-cap stop on an "up and down" campaign at 900 % top of search: the same tick sets every lane to
  *                  0 % and switches to down only (the campaign write, the gate asked) — 60¢ → 3¢; the lift gives the bids,
  *                  the lanes and the strategy back exactly; another engine may not touch the strategy; a campaign the brain
@@ -177,6 +179,16 @@ describe.skipIf(!concurrentDatabaseUrl())('BB-7 — an owned campaign\'s hourly 
     expect(zeroed.every((p) => p.percentage === 0)).toBe(true)
     const [zeroLog] = await rows<{ userId: string }>('SELECT "userId" FROM "AdvertisingActionLog" WHERE "entityId" = \'c-it\' AND "actionType" = \'update_placement_bidding\' ORDER BY "createdAt" DESC LIMIT 1')
     expect(zeroLog.userId).toBe(BRAIN_ACTOR)
+    // Bid-page fix 10-10 — the product cycle's bids step runs once a data day, with evidence, inside this floor: it writes
+    // nothing more and records no entry, and it stores the give-back the tick that lifts the floor uses.
+    const putsInFloor = amz.puts.length
+    await inside(() => runShadowOnce({ now: at(NOW, 4.5), mode: 'live', clockNow: at(NIGHT, 20), scope: { campaignIds: new Set(['c-it']), market: 'IT' } }))
+    expect(amz.puts).toHaveLength(putsInFloor)
+    expect(await entries()).toEqual([{ n: 1 }])
+    expect((await rows<{ n: number }>('SELECT count(*)::int n FROM "OutboundSyncQueue" WHERE "workspaceId" = $1', [W]))[0].n).toBe(queued)
+    const [inFloor] = await rows<{ layer: string; g: { fromCents: number; why: string } | null }>('SELECT layer, evidence -> \'giveBack\' g FROM "BidBrainDecision" WHERE "targetId" = \'t-it\' ORDER BY "createdAt" DESC LIMIT 1')
+    expect(inFloor.layer).toBe('min_bid_hour')
+    expect(inFloor.g).toMatchObject({ fromCents: before['t-it'], why: expect.stringMatching(/^goal: /) })
     ;(globalThis as { __bb7Before?: typeof before }).__bb7Before = before
   })
 
@@ -195,6 +207,9 @@ describe.skipIf(!concurrentDatabaseUrl())('BB-7 — an owned campaign\'s hourly 
     const [last] = await rows<{ layer: string; why: string }>('SELECT layer, why FROM "BidBrainDecision" WHERE "targetId" = \'t-it\' ORDER BY "createdAt" DESC LIMIT 1')
     expect(last.layer).toBe('restore')
     expect(last.why).toMatch(/back to/)
+    // Bid-page fix 10-10 — the bid given back is the goal's, decided with evidence during the floor: never "no evidence to pool".
+    expect(last.why).toMatch(/the goal as the run with evidence decided it during the floor/)
+    expect(last.why).not.toMatch(/no evidence to pool/)
     // The memory goes with the give-back, and the plan's floor mark with the last of it.
     expect(await rows('SELECT "suppressedFromBidCents" AS m FROM "AdTarget" WHERE id IN (\'t-it\', \'t-low\')')).toEqual([{ m: null }, { m: null }])
     expect(await rows('SELECT "bidsSuppressedAt" AS at FROM "Campaign" WHERE id = \'c-it\'')).toEqual([{ at: null }])
