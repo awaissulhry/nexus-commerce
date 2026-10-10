@@ -11,8 +11,9 @@
  *              serving move of ≥ 10 % with no other move of the keyword 3 days before or after, compared over matched days
  *              (3–7) with the clicks of the ad group's keywords that did not move (difference in differences):
  *                ε̂ = [ln(c_after ÷ c_before) − ln(x_after ÷ x_before)] ÷ ln(b_after ÷ b_before), Poisson variance (+½)
- *              Until ε is measured (posterior sd < 0.25), the campaign's top-of-search impression share leans it:
- *              ≥ 50 % → inelastic (× 0.7); < 15 % while the paid CPC is ≥ 0.9 × the bid → bid-limited (× 1.25)
+ *              Until ε is measured (posterior sd < 0.25), the campaign's top-of-search IS (Amazon's, per campaign and
+ *              day; impression-weighted over the last 14 settled days) leans it, once ≥ 7 of those days carry a reading
+ *              (A5): ≥ 50 % → inelastic (× 0.7); < 15 % while the paid CPC is ≥ 0.9 × the bid → bid-limited (× 1.25)
  *   profit     (v · BE − r̂ · b) · clicks(b) is highest at b* = ε/(1+ε) · v · BE ÷ r̂, where the marginal ACoS equals
  *              break-even (BE, the contribution margin share) and the average ACoS is BE · ε/(1+ε)
  *   mACoS      at any bid: ACoS(b) · (1 + ε)/ε — what the last euro of ad sales cost
@@ -68,8 +69,13 @@ export const TOS_BID_LIMITED_LEAN = 1.25
 export const CAPPED_SPEND_SHARE = 0.95
 export const CAPPED_MIN_DAYS = 3
 export const CAPPED_WINDOW_DAYS = 7
-/** The days of top-of-search share read. */
+/** The settled days of the campaign's top-of-search IS read. */
 export const TOS_WINDOW_DAYS = 14
+/**
+ * A5 (2026-10-10) — the fewest days of that window that must carry the campaign's top-of-search IS before it leans an
+ * unmeasured ε: one day of a campaign-level share used to lean every keyword of the campaign.
+ */
+export const TOS_MIN_DAYS = 7
 
 export interface Normal { mean: number; sd: number }
 export const EPS_PRIOR: Normal = Object.freeze({ mean: EPS_PRIOR_MEAN, sd: EPS_PRIOR_SD })
@@ -139,7 +145,7 @@ export interface EpsPosterior extends Normal {
   measured: boolean
   /** The campaign signal's lean (1: none). */
   lean: number
-  /** In words: "prior", "3 moves of its product", "top-of-search share 62% → inelastic". */
+  /** In words: "prior", "3 moves of its product", "campaign top-of-search IS 62% (14 days) → inelastic". */
   from: string
 }
 
@@ -187,7 +193,10 @@ export function productEps(eventsByProduct: ReadonlyMap<string | null, readonly 
 
 const NO_PROBES: ReadonlyMap<string | null, readonly EpsReading[]> = new Map()
 
-/** A campaign's signals: its top-of-search impression share (null: none read) and its budget-capped days. */
+/**
+ * A campaign's signals: its top-of-search IS (Amazon reports it per campaign and day; impression-weighted by Nexus over
+ * the window; null: none read), the days of the window that carry it, and its budget-capped days.
+ */
 export interface CampaignSignal {
   tosShare: number | null
   tosDays: number
@@ -198,12 +207,18 @@ export const isCapped = (s: CampaignSignal | null | undefined): boolean => !!s &
 
 const pct = (f: number) => `${Math.round(f * 1000) / 10}%`
 
-/** The lean of an unmeasured ε from the campaign's top-of-search share (and the keyword's paid CPC ÷ bid). */
+/**
+ * The lean of an unmeasured ε from the campaign's top-of-search IS (and the keyword's paid CPC ÷ bid). A5 — only with
+ * ≥ TOS_MIN_DAYS days carrying it; the words say it is the campaign's and over how many days.
+ */
 export function tosLean(signal: CampaignSignal | null | undefined, ratio: number): { lean: number; words: string | null } {
   const s = signal?.tosShare
   if (s == null || !Number.isFinite(s)) return { lean: 1, words: null }
-  if (s >= TOS_HIGH_SHARE) return { lean: TOS_INELASTIC_LEAN, words: `top-of-search share ${pct(s)} → inelastic` }
-  if (s < TOS_LOW_SHARE && ratio >= TOS_BID_LIMITED_RATIO) return { lean: TOS_BID_LIMITED_LEAN, words: `top-of-search share ${pct(s)} at CPC/bid ${ratio.toFixed(2)} → bid-limited` }
+  const days = signal?.tosDays ?? 0
+  if (!(days >= TOS_MIN_DAYS)) return { lean: 1, words: null }
+  const is = `campaign top-of-search IS ${pct(s)} (${days} days)`
+  if (s >= TOS_HIGH_SHARE) return { lean: TOS_INELASTIC_LEAN, words: `${is} → inelastic` }
+  if (s < TOS_LOW_SHARE && ratio >= TOS_BID_LIMITED_RATIO) return { lean: TOS_BID_LIMITED_LEAN, words: `${is} at CPC/bid ${ratio.toFixed(2)} → bid-limited` }
   return { lean: 1, words: null }
 }
 

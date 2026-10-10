@@ -108,7 +108,10 @@ export async function loadMoveEvents(m: { dataDay: string; targets: readonly Tar
   )
 }
 
-/** Per campaign: its top-of-search share over the last 14 settled days and its budget-capped days of the last 7. */
+/**
+ * Per campaign: its top-of-search IS (Amazon's, per campaign and day) impression-weighted over the last 14 settled days,
+ * the days of them that carry a reading (A5: under 7, it leans nothing), and its budget-capped days of the last 7.
+ */
 export async function loadCampaignSignals(campaignIds: readonly string[], dataDay: string): Promise<Map<string, CampaignSignal>> {
   const out = new Map<string, CampaignSignal>()
   if (!campaignIds.length) return out

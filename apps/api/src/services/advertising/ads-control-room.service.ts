@@ -554,7 +554,8 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
       masterOff?.why ?? `Trips at ${state.maxActionsPerHour ?? DEFAULT_MAX_ACTIONS_PER_HOUR} rule actions an hour, €${((state.maxHourlySpendCentsEur ?? DEFAULT_MAX_HOURLY_SPEND_CENTS) / 100).toFixed(0)} of ad spend in one hour, or when one engine passes its own hourly limit of changes (${breakerLimitsText()})`,
       null, 'exempt', { writesOnOwn: false, catalogId: 'A3' }),
 
-    lever('tos-defense', 'Top-of-Search defense', 'Nudges the top-of-search multiplier toward a target impression share',
+    // A1/C7 (2026-10-10) — what it really reads: a target IS only when NEXUS_TOS_TARGET_IS is set, else ACoS alone.
+    lever('tos-defense', 'Top-of-Search defense', 'Steps the top-of-search placement % at most once per new settled day: toward a target top-of-search impression share only when NEXUS_TOS_TARGET_IS is set (else on top-of-search ACoS only), reading the campaign\'s own top-of-search IS as Amazon reports it per day, over the last 30 settled days',
       'top-of-search-defense', 'every 30 min', 'honours', fromCatalog('tos-defense')),
 
     mk('write-delivery', 'Write delivery', 'Sends to Amazon the changes people, rules and engines already made, and retries failures',
@@ -563,7 +564,7 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
       masterOff?.why ?? 'The only path a change reaches Amazon by',
       `${allowlisted} of ${totalCampaigns} campaigns allowlisted`, 'gated', { writesOnOwn: false }),
 
-    lever('coverage-engine', 'Coverage engine', 'Holds each term of an enabled coverage set at its target share, inside its caps',
+    lever('coverage-engine', 'Coverage engine', 'Holds each term of an enabled coverage set at its target weekly impression share (Brand Analytics, the set\'s ASINs, computed by Nexus), one share step per week, inside its caps',
       'ads-coverage-engine', 'daily 07:10', 'honours',
       fromCatalog('coverage-engine', 'coverage sets', 'Switch on a coverage set to start it.')),
 

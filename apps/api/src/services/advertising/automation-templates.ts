@@ -261,14 +261,6 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
     maxExecutionsPerDay: 20, maxValueCentsEur: null, maxDailyAdSpendCentsEur: null, scopeMarketplace: null,
   },
   {
-    name: 'Top-of-Search rank defender',
-    description: 'When impression share drops (detected via low-impressions campaigns), raises all bids 25% to reclaim position. Guards high-value campaigns from being outbid by competitors without manual intervention.',
-    trigger: 'KEYWORD_ZERO_IMPRESSIONS',
-    conditions: [],
-    actions: [{ type: 'raise_bids_for_rank_defense', percent: 25 }, { type: 'set_placement_multiplier', placement: 'PLACEMENT_TOP', percentage: 50 }, { type: 'alert_operator', severity: 'warning', message: 'Impression loss detected — bids raised and ToS multiplier increased' }],
-    maxExecutionsPerDay: 5, maxValueCentsEur: null, maxDailyAdSpendCentsEur: null, scopeMarketplace: null,
-  },
-  {
     name: 'Profit protection (pause on margin breach)',
     description: 'When advertising spend exceeds net margin (you\'re losing money on every sale), immediately pauses the campaign. The bottom-line guardrail — ensures ads are always profitable.',
     trigger: 'AD_SPEND_PROFITABILITY_BREACH',
@@ -378,6 +370,24 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
   },
 ]
 
+/**
+ * C4 (2026-10-10, Amazon's visibility numbers honest everywhere) — templates retired because they could never do what
+ * they said. A retired template is never seeded again; a copy seeded earlier stays where it is (seeded switched off and
+ * in dry run — a person decides about it). Kept here whole, with why, so the proof (automation-templates-retired
+ * test) runs the exact rule through the evaluator.
+ */
+export const RETIRED_ADVERTISING_TEMPLATES: ReadonlyArray<AdvertisingRuleTemplate & { why: string }> = [
+  {
+    name: 'Top-of-Search rank defender',
+    description: 'When impression share drops (detected via low-impressions campaigns), raises all bids 25% to reclaim position. Guards high-value campaigns from being outbid by competitors without manual intervention.',
+    trigger: 'KEYWORD_ZERO_IMPRESSIONS',
+    conditions: [],
+    actions: [{ type: 'raise_bids_for_rank_defense', percent: 25 }, { type: 'set_placement_multiplier', placement: 'PLACEMENT_TOP', percentage: 50 }, { type: 'alert_operator', severity: 'warning', message: 'Impression loss detected — bids raised and ToS multiplier increased' }],
+    maxExecutionsPerDay: 5, maxValueCentsEur: null, maxDailyAdSpendCentsEur: null, scopeMarketplace: null,
+    why: 'It could never do what it said. Its trigger, KEYWORD_ZERO_IMPRESSIONS, is a keyword that spent and got no impressions in the settled window — not a drop in impression share (no impression-share signal reaches it, and Amazon gives no keyword rank). That trigger hands over a keyword with no campaign, so both of its write actions (raise_bids_for_rank_defense and set_placement_multiplier, which need a campaign) refuse with "No campaign.id" on every match; only its alert ran, and that alert said bids were raised.',
+  },
+]
+
 /** Maps old Italian template names → current English names for rename-on-reseed. */
 /**
  * ACR.7 — operator decision 2026-08-05: no emojis in rule names ("that makes it way less
@@ -397,7 +407,6 @@ const EMOJI_NAME_MAP: Record<string, string> = {
   '🗑️ Wasted keyword instant negate': 'Wasted keyword instant negate',
   '🎯 Auto match-type migration (broad → exact)': 'Auto match-type migration (broad → exact)',
   '🌐 Account-wide negative sync': 'Account-wide negative sync',
-  '📍 Top-of-Search rank defender': 'Top-of-Search rank defender',
   '💰 Profit protection (pause on margin breach)': 'Profit protection (pause on margin breach)',
   '🚀 Aggressive growth: raise bids on low-ACOS winners': 'Aggressive growth: raise bids on low-ACOS winners',
   '🏋️ Bulk bid floor protection': 'Bulk bid floor protection',

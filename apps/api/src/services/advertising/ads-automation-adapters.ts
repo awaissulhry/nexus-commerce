@@ -791,7 +791,8 @@ const A10: AutomationAdapter = {
 
 const A11: AutomationAdapter = {
   id: 'A11', key: 'ads-top-of-search', name: 'Top-of-search defense',
-  what: 'Nudges the top-of-search placement percentage toward a target impression share, allowlisted campaigns only.',
+  // A1/C7 (2026-10-10) — a target IS only when NEXUS_TOS_TARGET_IS is set; without it the defense decides on ACoS alone.
+  what: 'Steps the top-of-search placement percentage of allowlisted campaigns, at most once per new settled day: toward a target top-of-search impression share only when NEXUS_TOS_TARGET_IS is set, otherwise on top-of-search ACoS only. The share it reads is the campaign\'s own top-of-search IS as Amazon reports it per day, impression-weighted over the last 30 settled days; with a target set it holds when that share is on fewer than 5 days or its newest day is more than 3 days before the window\'s end.',
   area: 'amazon-ads', writesTo: ['amazon'], view: FEATURES.adsView, claude: 'switch', preview: 'saved',
   previewNote: 'The placement changes it would make now, as a dry run.',
   crons: ['top-of-search-defense'], schedule: '*/30 * * * *',
@@ -816,7 +817,7 @@ const A11: AutomationAdapter = {
 
 const A12: AutomationAdapter = {
   id: 'A12', key: 'ads-coverage', name: 'Coverage engine',
-  what: "A bid ladder holding each term of an enabled coverage set at its share, inside the set's caps.",
+  what: "A bid ladder holding each term of an enabled coverage set at its target share — the weekly Brand Analytics impression share of the set's ASINs for the query (computed by Nexus, from a complete week at most 14 days old) — one share step per week, inside the set's caps.",
   area: 'amazon-ads', writesTo: ['amazon'], view: FEATURES.adsView, claude: 'switch-tune', preview: 'saved',
   previewNote: "A saved coverage set's next run, with zero writes.",
   crons: ['ads-coverage-engine'], schedule: process.env.NEXUS_COVERAGE_ENGINE_SCHEDULE ?? '10 7 * * *',
