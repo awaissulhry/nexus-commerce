@@ -16,6 +16,10 @@ const h = vi.hoisted(() => ({
   pause: vi.fn(async (_a: Record<string, unknown>) => ({ ok: true, actionLogId: 'log-pause', error: null }) as Record<string, unknown>),
   retire: vi.fn(async (a: { adTargetIds: string[] }) => ({ outcomes: a.adTargetIds.map((id) => ({ adTargetId: id, kind: 'retired', actionLogId: `log-${id}` })) }) as Record<string, unknown>),
   order: [] as string[],
+  // Harvest fix B1 + B10 — the landing guard (its decision pinned in harvest-landing-guard.vitest.test.ts).
+  landing: vi.fn(async (_a: Record<string, unknown>) => ({ kind: 'create', serves: true, why: 'nothing there' }) as Record<string, unknown>),
+  enable: vi.fn(async (_id: string, _who: Record<string, unknown>) => ({ ok: true, actionLogId: 'log-on' }) as Record<string, unknown>),
+  serving: vi.fn(async (items: Array<{ adTargetId: string }>) => new Set(items.map((i) => i.adTargetId))),
 }))
 vi.mock('../../../db.js', () => ({
   default: {
@@ -30,6 +34,12 @@ vi.mock('../ads-write-gate.js', () => ({ checkAdsWriteGate: (ctx: Record<string,
 vi.mock('../ads-create.service.js', () => ({ createKeywordLocal: (a: Record<string, unknown>) => h.keyword(a), createTargetLocal: (a: Record<string, unknown>) => h.keyword(a) }))
 vi.mock('../ads-negative-kw.service.js', () => ({ writeNegativeKeyword: (a: Record<string, unknown>) => h.negative(a), writeNegativeProductTarget: (a: Record<string, unknown>) => h.negative(a) }))
 vi.mock('../../../utils/logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }))
+vi.mock('../harvest-landing-guard.js', async (original) => ({
+  ...(await original<object>()),
+  checkLanding: (a: Record<string, unknown>) => h.landing(a),
+  enableLanding: (id: string, who: Record<string, unknown>) => { h.order.push(`enable:${id}`); return h.enable(id, who) },
+  servingLandings: (items: Array<{ adTargetId: string }>) => h.serving(items),
+}))
 
 const { writePair, brainWho, outcomeData, undoHarvest } = await import('./harvest-write.js')
 const { HARVEST_ACTOR, JUDGE_AFTER_MS } = await import('./harvest.js')
@@ -38,7 +48,12 @@ const src = (adGroupId: string, over: Record<string, unknown> = {}) => ({ adGrou
 const pair = (over: Record<string, unknown> = {}) => ({ term: 'touring jacket', isAsin: false, destAdGroupId: 'g-exact', bidCents: 40, keywordTargetId: null, sources: [src('g-auto'), src('g-phrase')], ...over })
 const who = brainWho('test')
 
-beforeEach(() => { h.gate.mockClear(); h.keyword.mockClear(); h.negative.mockClear(); h.pause.mockClear(); h.retire.mockClear(); h.order = [] })
+beforeEach(() => {
+  h.gate.mockClear(); h.keyword.mockClear(); h.negative.mockClear(); h.pause.mockClear(); h.retire.mockClear(); h.order = []
+  h.landing.mockReset(); h.landing.mockResolvedValue({ kind: 'create', serves: true, why: 'nothing there' })
+  h.enable.mockReset(); h.enable.mockResolvedValue({ ok: true, actionLogId: 'log-on' })
+  h.serving.mockReset(); h.serving.mockImplementation(async (items: Array<{ adTargetId: string }>) => new Set(items.map((i) => i.adTargetId)))
+})
 
 describe('AB-11 — the pair: both halves or neither', () => {
   it('the gate is asked for the keyword and every source as the brain first; then the keyword; then each source negative exact', async () => {
@@ -90,6 +105,63 @@ describe('AB-11 — the pair: both halves or neither', () => {
     const data = outcomeData({ status: 'DONE', keyword: { targetId: 'k1', externalTargetId: 'AMZ-K1', existed: false }, sources: [], why: 'x', error: null }, now) as Record<string, unknown>
     expect(data).toMatchObject({ status: 'DONE', landedAt: now, verdict: 'WAITING', judgeAfter: new Date(now.getTime() + JUDGE_AFTER_MS) })
     expect(outcomeData({ status: 'DONE', keyword: null, sources: [], why: 'x', error: null }, now, new Date(0))).not.toHaveProperty('landedAt')
+  })
+})
+
+describe('harvest fix B1 + B10 — the pair lands only where the term serves', () => {
+  it('an archived keyword of the term (or a negative that blocks it) in the destination: HELD — nothing asked, nothing written', async () => {
+    h.landing.mockResolvedValue({ kind: 'hold', deniedAt: 'landing_archived', why: 'ad group "Exact" cannot take "touring jacket": the exact keyword "touring jacket" there is archived. Nothing was written there and the source is not negated' })
+    const o = await writePair(pair(), who)
+    expect(h.landing).toHaveBeenCalledWith({ adGroupId: 'g-exact', term: 'touring jacket', match: 'EXACT' })
+    expect(o).toMatchObject({ status: 'HELD', keyword: null, why: expect.stringMatching(/^held — ad group "Exact" cannot take/) })
+    expect(h.gate).not.toHaveBeenCalled()
+    expect(h.keyword).not.toHaveBeenCalled()
+    expect(h.negative).not.toHaveBeenCalled()
+    // The record says why it waits (heldBy), and the judging clock does not start.
+    const data = outcomeData(o, new Date('2026-10-09T05:25:00Z')) as Record<string, unknown>
+    expect(data).toMatchObject({ status: 'HELD', heldBy: expect.stringMatching(/archived/) })
+    expect(data).not.toHaveProperty('landedAt')
+  })
+
+  it('a destination that does not serve: HELD, nothing written (the brain never harvests into one)', async () => {
+    h.landing.mockResolvedValue({ kind: 'create', serves: false, why: 'nothing of "touring jacket" stands in ad group "Exact": it is created there; its campaign "Exact" is paused, so the source is not negated' })
+    const o = await writePair(pair(), who)
+    expect(o).toMatchObject({ status: 'HELD', why: expect.stringMatching(/never harvests into a destination that does not serve/) })
+    expect(h.keyword).not.toHaveBeenCalled()
+    expect(h.negative).not.toHaveBeenCalled()
+  })
+
+  it('a paused keyword of the term: switched on again as the brain (no create), then every source negative exact', async () => {
+    h.landing.mockResolvedValue({ kind: 'enable', targetId: 'k-paused', externalTargetId: 'AMZ-KP', serves: true, why: 'the exact keyword "touring jacket" stands paused in ad group "Exact": it is switched on again as the landing' })
+    const o = await writePair(pair(), { ...who, changeSetId: 'ap-9' })
+    expect(h.keyword).not.toHaveBeenCalled()
+    expect(h.enable).toHaveBeenCalledWith('k-paused', expect.objectContaining({ actor: HARVEST_ACTOR, manual: false, changeSetId: 'ap-9' }))
+    expect(h.order[0]).toBe('enable:k-paused')
+    expect(h.negative).toHaveBeenCalledTimes(2)
+    expect(o).toMatchObject({ status: 'DONE', keyword: { targetId: 'k-paused', externalTargetId: 'AMZ-KP', existed: true } })
+  })
+
+  it('the switch refused: REFUSED, nothing negated', async () => {
+    h.landing.mockResolvedValue({ kind: 'enable', targetId: 'k-paused', externalTargetId: 'AMZ-KP', serves: true, why: 'the exact keyword "touring jacket" stands paused in ad group "Exact": it is switched on again as the landing' })
+    h.enable.mockResolvedValue({ ok: false, why: 'brain_killed: the Owner stopped it' })
+    const o = await writePair(pair(), who)
+    expect(o).toMatchObject({ status: 'REFUSED', keyword: null, why: expect.stringMatching(/refused \(brain_killed/) })
+    expect(h.negative).not.toHaveBeenCalled()
+  })
+
+  it('a keyword that stands but no longer serves (paused, archived or blocked since): its owed negatives are not sent, and wait for the next run', async () => {
+    h.serving.mockResolvedValue(new Set())
+    const owed = [src('g-auto', { result: 'landed', negativeTargetId: 'n1' }), src('g-phrase', { result: 'failed', error: 'Amazon returned no id' })]
+    const o = await writePair(pair({ keywordTargetId: 'k1', sources: owed }), who)
+    expect(h.serving).toHaveBeenCalledWith([{ adTargetId: 'k1', term: 'touring jacket' }])
+    expect(h.landing).not.toHaveBeenCalled()
+    expect(h.negative).not.toHaveBeenCalled()
+    expect(o).toMatchObject({ status: 'HALF_DONE', why: expect.stringMatching(/no source is negated \(the term would serve nowhere\); retried by the next run/) })
+    expect(o.sources.map((x) => x.result)).toEqual(['landed', 'failed'])
+    // Serving again: the next run sends what is owed.
+    h.serving.mockImplementation(async (items: Array<{ adTargetId: string }>) => new Set(items.map((i) => i.adTargetId)))
+    expect(await writePair(pair({ keywordTargetId: 'k1', sources: o.sources }), who)).toMatchObject({ status: 'DONE' })
+    expect(h.negative).toHaveBeenCalledTimes(1)
   })
 })
 

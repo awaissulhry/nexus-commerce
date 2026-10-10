@@ -22,12 +22,19 @@
  *                   rule (D1 = B).
  *   undo            the pair put back as a pair (undoHarvest): the gate asked for both halves first, the source negatives
  *                   retired, then the keyword paused — never a keyword paused while a source still blocks the term.
+ *   landing         (harvest fix B1 + B10, harvest-landing-guard.ts) before anything is written: an archived keyword of the
+ *                   term or a negative that blocks it in the destination, or a destination that does not serve, holds the
+ *                   pair (HELD, nothing written, decided again by the next run); a paused keyword of the term there is
+ *                   switched on again as the landing instead of a create. A keyword that already stands is asked again
+ *                   before an owed source negative is sent: one paused, archived or blocked since sends none (the term
+ *                   would serve nowhere) — the negatives stay owed and the next run tries again.
  */
 import type { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
 import { logger } from '../../../utils/logger.js'
 import { checkAdsWriteGate } from '../ads-write-gate.js'
 import { createKeywordLocal, createTargetLocal } from '../ads-create.service.js'
+import { checkLanding, enableLanding, servingLandings } from '../harvest-landing-guard.js'
 import { writeNegativeKeyword, writeNegativeProductTarget } from '../ads-negative-kw.service.js'
 import { HARVEST_ACTOR, JUDGE_AFTER_MS, type HarvestStatus, type NewCampaignPlan, type SourcePlan } from './harvest.js'
 
@@ -127,6 +134,17 @@ export async function writePair(p: { term: string; isAsin: boolean; destAdGroupI
   const keywordPending = !p.keywordTargetId
   // A negative the gate or the Owner refused is named, not retried by the brain; a person's approval asks for it again.
   const owes = (s: SourceState) => s.action === 'negate' && s.result !== 'landed' && (p.retryRefused === true || s.result !== 'refused')
+  // Harvest fix B1 + B10 — the landing guard (see the header): nothing is written where the term could not serve.
+  const landing = keywordPending ? await checkLanding({ adGroupId: p.destAdGroupId, term: p.term, match: p.isAsin ? 'PRODUCT' : 'EXACT' }) : null
+  if (landing && (landing.kind === 'hold' || !landing.serves)) {
+    const why = landing.kind === 'hold' ? landing.why : `${landing.why}: the brain never harvests into a destination that does not serve`
+    return { status: 'HELD', keyword: null, sources: [...p.sources], why: `held — ${why}`, error: why }
+  }
+  if (!keywordPending && p.sources.some(owes) && !(await servingLandings([{ adTargetId: p.keywordTargetId!, term: p.term }])).size) {
+    const why = `the ${p.isAsin ? 'product target' : 'keyword'} is not enabled at Amazon in a serving ad group now, or a negative there blocks the term: no source is negated (the term would serve nowhere)`
+    const sources = p.sources.map((s) => (owes(s) ? { ...s, result: 'failed' as const, error: why } : s))
+    return { status: 'HALF_DONE', keyword: { targetId: p.keywordTargetId, externalTargetId: null, existed: true }, sources, why: `the keyword stands, but ${why}; retried by the next run`, error: why }
+  }
   const pre = await preflightPair({ ...p, keywordPending, sources: p.sources.filter(owes) }, who)
   if (!('ok' in pre)) {
     const why = `the write gate refuses the ${pre.half === 'keyword' ? 'keyword' : 'source negative'} (${pre.deniedAt}: ${pre.refusal})`
@@ -135,7 +153,15 @@ export async function writePair(p: { term: string; isAsin: boolean; destAdGroupI
     return { status: 'HALF_DONE', keyword: { targetId: p.keywordTargetId, externalTargetId: null, existed: true }, sources, why: `the keyword stands; ${why}`, error: why }
   }
   let keyword: PairOutcome['keyword'] = { targetId: p.keywordTargetId, externalTargetId: null, existed: true }
-  if (keywordPending) {
+  if (keywordPending && landing?.kind === 'enable') {
+    // A paused keyword of the term in the destination: switched on again as the landing; the sources only once that is accepted.
+    const on = await enableLanding(landing.targetId, { actor: who.actor, manual: who.manual, confirmOwnLimits: who.confirmOwnLimits, changeSetId: who.changeSetId, reason: `${who.reason} — ${landing.why}` })
+    if (!on.ok) {
+      const why = `${landing.why}, but that was refused (${on.why}): nothing was negated, nothing changed`
+      return { status: 'REFUSED', keyword: null, sources: [...p.sources], why, error: on.why }
+    }
+    keyword = { targetId: landing.targetId, externalTargetId: landing.externalTargetId, existed: true }
+  } else if (keywordPending) {
     const k = await addKeyword(p, who)
     if (!k.landed) {
       const why = `the ${p.isAsin ? 'product target' : 'keyword'} did not reach Amazon (${k.reason ?? 'no id came back'}): nothing was negated, nothing changed`
@@ -163,6 +189,7 @@ export function outcomeData(o: PairOutcome, now: Date, landedBefore: Date | null
   const stands = o.status === 'DONE' || o.status === 'HALF_DONE'
   return {
     status: o.status,
+    ...(o.status === 'HELD' ? { heldBy: o.error } : {}),
     sources: json(o.sources),
     ...(o.keyword?.targetId ? { keywordTargetId: o.keyword.targetId } : {}),
     ...(stands && !landedBefore ? { landedAt: now, judgeAfter: new Date(now.getTime() + JUDGE_AFTER_MS), verdict: 'WAITING' } : {}),

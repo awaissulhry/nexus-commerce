@@ -39,6 +39,19 @@ vi.mock('./ads-create.service.js', () => ({
   createTargetLocal: h.createTargetLocal,
 }))
 vi.mock('./harvest-destination.service.js', () => ({ resolveStoredDestinations: h.resolveStoredDestinations }))
+// Harvest fix B1 + B10 — the landing guard (harvest-landing-guard.ts) is pinned in its own tests: here every landing passes
+// (nothing of the term in the destination, serving), and every home serves, unless a test says otherwise.
+const landingGuard = vi.hoisted(() => ({
+  check: vi.fn(async (..._a: unknown[]) => ({ kind: 'create', serves: true, why: 'nothing there' }) as Record<string, unknown>),
+  enable: vi.fn(async (..._a: unknown[]) => ({ ok: true, actionLogId: 'log-on' }) as Record<string, unknown>),
+  serving: vi.fn(async (items: Array<{ adTargetId: string }>) => new Set(items.map((i) => i.adTargetId))),
+}))
+vi.mock('./harvest-landing-guard.js', async (original) => ({
+  ...(await original<object>()),
+  checkLanding: (...a: unknown[]) => landingGuard.check(...a),
+  enableLanding: (...a: unknown[]) => landingGuard.enable(...a),
+  servingLandings: (items: Array<{ adTargetId: string }>) => landingGuard.serving(items),
+}))
 vi.mock('../../db.js', () => ({
   default: {
     amazonAdsSearchTerm: { groupBy: vi.fn() },

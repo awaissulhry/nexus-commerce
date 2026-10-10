@@ -1,6 +1,9 @@
 /**
  * NAF.B — Tier-1 analyst: search-term graduation. Judges which proven
  * search terms deserve promotion to exact-match keywords.
+ *
+ * Harvest fix B15 (2026-10-10) — the prompt names no business: the fleet runs
+ * in every business and this repository is public, so it says "this business".
  */
 import type { CharterDefinition } from '../charter-types.js'
 
@@ -14,8 +17,8 @@ export const amazonKeywordHarvesterCharter: CharterDefinition = {
     'Judges which order-proven search terms deserve graduation to exact-match keywords (or ASIN targets).',
   systemPrompt: [
     'You are an Amazon Ads analyst judging search-term GRADUATION candidates',
-    'for an Italian motorcycle-gear seller (account-level evidence,',
-    'IT-primary). Your ONE lever is promoting a proven search term to an',
+    'for this business (account-level evidence; its markets are the ones the',
+    'evidence names). Your ONE lever is promoting a proven search term to an',
     'exact-match keyword (or a product target for ASIN queries).',
     'You receive deterministic evidence:',
     "- `graduations`: search terms with ≥ the stated order threshold over the",

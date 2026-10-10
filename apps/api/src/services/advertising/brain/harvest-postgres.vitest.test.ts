@@ -317,6 +317,10 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-11 — the harvest module (real Po
     expect(d.product.levers.harvest.effective).toBe('AUTO')
     expect(d.counts).toMatchObject({ UNDONE: 1, DONE: 1, REFUSED: 1 })
     expect(d.harvests.find((x: Data) => x.term === 'sport jacket')).toMatchObject({ status: 'DONE', destination: { kind: 'EXISTING', how: 'own', adGroupId: G('jk-exact') }, money: { bidCents: expect.any(Number) } })
+    // Harvest fix B11 — every stored row names the harvestId apply-brain-harvest takes.
+    const stored = await harvests()
+    expect(d.harvests.find((x: Data) => x.term === 'sport jacket').harvestId).toBe(stored['sport jacket'].id)
+    expect(d.harvests.every((x: Data) => typeof x.harvestId === 'string')).toBe(true)
     expect(d.gaps.waitingToJudge.map((x: Data) => x.term)).toEqual(['sport jacket'])
     const market = await inW(() => ADS_BRAIN_TOOLS[0].handler!({ view: 'harvest', market: 'IT' }, {} as never)) as { data: Data }
     expect(market.data.products.map((p: Data) => p.productId).sort()).toEqual([JACKET, GLOVE].sort())

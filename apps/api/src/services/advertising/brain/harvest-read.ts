@@ -3,7 +3,8 @@
  * Owner builds every screen, so this is the read API his page and Claude share). Read only: it changes nothing, in Nexus
  * or at Amazon, and stores nothing.
  *
- *   product × market  the product's harvests (AdsBrainHarvest): each term with its status (shadow, held, asked, written,
+ *   product × market  the product's harvests (AdsBrainHarvest): each term with its harvestId (what apply-brain-harvest
+ *                     asks for) and its status (shadow, held, asked, written,
  *                     half done, judged, put back), the level it was decided at, where it goes and how that was chosen,
  *                     every source and what became of its negative, the request a person decides, the judgement after the
  *                     attribution window + 72 h; the counts per status; the caps used today and this week; the gaps (half
@@ -34,6 +35,8 @@ const STATUS_ORDER: readonly string[] = ['UNDO_PROPOSED', 'HALF_DONE', 'PROPOSED
 
 type Json = Record<string, any>
 interface Row {
+  /** The stored harvest's id (apply-brain-harvest's harvestId); null for a dry run's decision (never stored). */
+  id: string | null
   term: string; isAsin: boolean; status: string; level: string; destinationKind: string; destHow: string | null; destCampaignId: string | null; destAdGroupId: string | null
   bidCents: number | null; keywordTargetId: string | null; landedAt: Date | null; sources: unknown; approvalId: string | null; undoApprovalId: string | null
   attempts: number; lastError: string | null; heldBy: string | null; why: string; evidence: unknown; judgeAfter: Date | null; judgedAt: Date | null; verdict: string | null
@@ -48,6 +51,8 @@ export function harvestView(r: Row) {
   const { money: _destMoney, ...destination } = dest
   const numbers = j?.numbers ? (({ money: _m, ...rest }: Json) => rest)(j.numbers) : null
   return {
+    // Harvest fix B11 — the id apply-brain-harvest asks for (null: a dry run's decision, not stored, cannot be asked for).
+    harvestId: r.id,
     term: r.term, ...(r.isAsin ? { asin: true } : {}), status: r.status, level: r.level,
     decidedAt: r.decidedAt?.toISOString() ?? null, since: r.changedAt?.toISOString() ?? null,
     destination: { ...destination, kind: r.destinationKind, how: r.destHow, campaignId: r.destCampaignId, adGroupId: r.destAdGroupId },
@@ -71,7 +76,7 @@ export function harvestView(r: Row) {
 function dryRow(d: HarvestDecision): Row {
   const dest = d.destination
   return {
-    term: d.term, isAsin: d.isAsin, status: d.act === 'none' ? 'HELD' : 'SHADOW', level: d.level ?? 'OBSERVE', destinationKind: dest.kind,
+    id: null, term: d.term, isAsin: d.isAsin, status: d.act === 'none' ? 'HELD' : 'SHADOW', level: d.level ?? 'OBSERVE', destinationKind: dest.kind,
     destHow: dest.kind === 'NONE' ? null : dest.how, destCampaignId: dest.kind === 'EXISTING' ? dest.campaignId : null, destAdGroupId: dest.kind === 'EXISTING' ? dest.adGroupId : null,
     bidCents: d.bid?.cents ?? null, keywordTargetId: null, landedAt: null, sources: d.sources, approvalId: null, undoApprovalId: null, attempts: 0, lastError: null,
     heldBy: d.heldBy, why: d.why, evidence: recordEvidence(d), judgeAfter: null, judgedAt: null, verdict: null, judgement: null, decidedAt: null, changedAt: null,
@@ -82,7 +87,7 @@ const sortRows = <T extends { status: string; term: string }>(rows: T[]) =>
   rows.sort((a, b) => STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status) || a.term.localeCompare(b.term))
 
 const ROW_SELECT = {
-  term: true, isAsin: true, status: true, level: true, destinationKind: true, destHow: true, destCampaignId: true, destAdGroupId: true, bidCents: true, keywordTargetId: true,
+  id: true, term: true, isAsin: true, status: true, level: true, destinationKind: true, destHow: true, destCampaignId: true, destAdGroupId: true, bidCents: true, keywordTargetId: true,
   landedAt: true, sources: true, approvalId: true, undoApprovalId: true, attempts: true, lastError: true, heldBy: true, why: true, evidence: true, judgeAfter: true,
   judgedAt: true, verdict: true, judgement: true, decidedAt: true, changedAt: true,
 } as const
@@ -169,9 +174,9 @@ export async function brainHarvest(args: { productId?: string; market?: string; 
       shown: Math.min(limit, all.length), of: all.length,
       harvests: all.slice(0, limit).map(harvestView),
       gaps: {
-        halfDone: all.filter((r) => r.status === 'HALF_DONE').map((r) => ({ term: r.term, owed: sourcesOf(r.sources).filter((s) => s.action === 'negate' && s.result !== 'landed').map((s) => ({ adGroupId: s.adGroupId, result: s.result ?? null, error: s.error ?? null })) })),
+        halfDone: all.filter((r) => r.status === 'HALF_DONE').map((r) => ({ harvestId: r.id, term: r.term, owed: sourcesOf(r.sources).filter((s) => s.action === 'negate' && s.result !== 'landed').map((s) => ({ adGroupId: s.adGroupId, result: s.result ?? null, error: s.error ?? null })) })),
         waitingToJudge: all.filter((r) => (r.status === 'DONE' || r.status === 'HALF_DONE') && (r.verdict == null || r.verdict === 'WAITING')).map((r) => ({ term: r.term, judgeAfter: r.judgeAfter?.toISOString() ?? null })),
-        worse: all.filter((r) => r.verdict === 'WORSE').map((r) => ({ term: r.term, status: r.status, undoRequest: r.undoApprovalId })),
+        worse: all.filter((r) => r.verdict === 'WORSE').map((r) => ({ harvestId: r.id, term: r.term, status: r.status, undoRequest: r.undoApprovalId })),
         waitingToGoLive: all.filter((r) => r.status === 'CAMPAIGN_BUILT').map((r) => ({ term: r.term, campaignId: r.destCampaignId, heldBy: r.heldBy })),
         inCooldown: all.filter((r) => r.changedAt && inCooldown({ status: r.status, changedAt: r.changedAt }, now)).map((r) => ({ term: r.term, status: r.status })),
       },
