@@ -80,7 +80,8 @@ export function PcWindowNote({ slug, days }: { slug: string; days?: number }) {
         from Amazon’s weekly Search Query Performance counts (our ASINs’ impressions ÷ the query’s total
         impressions) — read from the most recent <b>complete</b> week for each market, so its age is
         whenever Amazon last published one. A market with no complete week is
-        skipped entirely rather than measured on a partial one.{' '}
+        skipped entirely rather than measured on a partial one, and so is a market whose newest complete
+        week ended more than 14 days ago.{' '}
         <b>Campaign Concentration</b> is your biggest campaign’s share of the impressions <i>you</i>{' '}
         took on that term, over the last 30 days including the 2 most recent.{' '}
         Spend, Sales, Orders and ACOS cover {settledWindowText(30)}.{' '}

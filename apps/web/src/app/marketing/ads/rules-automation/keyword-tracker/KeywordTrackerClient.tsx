@@ -553,8 +553,8 @@ export function KeywordTrackerClient() {
         <div className="h10-kt-pick">
           <h3>Pick one market</h3>
           <p>
-            Market volume, market rank and impression share are per-marketplace numbers from Amazon
-            Brand Analytics. There is no honest way to add them together, so this grid needs one
+            Market volume, Amazon’s Search Query Score and impression share are per-marketplace numbers from
+            Amazon Brand Analytics. There is no honest way to add them together, so this grid needs one
             market rather than “all”.
           </p>
           <div className="h10-kt-pickrow">

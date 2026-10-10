@@ -269,7 +269,7 @@ export function BidTargetDrawer({ targetId, row, loading = false, onClose }: {
                   {row.bidder === 'none'
                     ? <em className="h10-bd3-off">Nobody. No schedule, no goal, and no operator has moved a bid in this campaign in 60 days.</em>
                     : row.bidder === 'schedule'
-                      ? <><b>{row.bidderName}</b> · <Link href="/marketing/ads/rules-automation/dayparting">rank schedule <ExternalLink size={11} aria-hidden /></Link></>
+                      ? <><b>{row.bidderName}</b> · <Link href="/marketing/ads/rules-automation/dayparting">hourly bid schedule <ExternalLink size={11} aria-hidden /></Link></>
                       : row.bidder === 'goal' ? <b>Target-ACoS goal</b> : <b>An operator, in the last 60 days</b>}
                 </span>
               </div>

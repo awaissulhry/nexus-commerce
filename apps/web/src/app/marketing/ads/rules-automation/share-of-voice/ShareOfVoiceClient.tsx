@@ -73,6 +73,7 @@ import { SovRowDrawer } from './SovRowDrawer'
 import { buildSovCsv, sovCsvFilename } from './sovExport'
 import { SovSavedViews } from './SovSavedViews'
 import { useAdsSync } from '../_shared/adsBus'
+import { sharePct } from '../../campaigns/_grid/format'
 
 /** The four production Amazon Ads markets. IE/NL/PL/SE/UK are sandbox and hold no listings. */
 /** How far back the view may reach for its ONE period, in weeks. See the service's `SOV_WEEKS`. */
@@ -231,7 +232,8 @@ const num = (n: number) => n.toLocaleString('en-IE')
  * back in one layer above the API that so carefully refuses to make it: "we are barely present" and
  * "we hold none of this market" are different findings and must never share a rendering.
  */
-const sharePct = (v: number) => (v > 0 && v * 100 < 0.005 ? '<0.01%' : `${(v * 100).toFixed(2)}%`)
+// Free visibility numbers (2026-10-10) — the console's one share formatter (`sharePct`, imported above): a tiny
+// non-zero share reads "<0.01%", and no reading reads "—" (never a substituted 0.00%).
 /**
  * 🔴 The SAME guard, on the Δ. A formatter can reintroduce a collapse the data layer refuses to
  * make, and this is the second place it would have: measured on prod, the smallest non-zero |Δ| is
@@ -346,7 +348,7 @@ export function ShareOfVoiceClient() {
   /**
    * 🔴 `market` is WRITTEN BACK when it defaults, unlike every other param.
    *
-   * Share is a per-market quantity — impression share, market volume and market rank are all
+   * Share is a per-market quantity — impression share, market volume and the Search Query Score are all
    * per-marketplace — so a link that does not name its market is ambiguous in a way a link with no
    * `?weeks=` is not. Writing it in means a copied URL says IT rather than meaning "whatever IT
    * happens to be the default on the day you open it".
@@ -523,7 +525,8 @@ export function ShareOfVoiceClient() {
           : <span className="h10-sov-nm muted" title={`Brand Analytics has never reported this query in ${r.marketplace}, at any period`}>never measured</span>
       },
       sortValue: (r) => sink(r.share ?? -1, r.lowConfidence),
-      filterValue: (r) => (r.share ?? 0) * 100,
+      // NaN = not measured: the grid's filter never lets it match a range (a null share is not 0 %).
+      filterValue: (r) => (r.share != null ? r.share * 100 : Number.NaN),
     },
     {
       key: 'delta', label: 'Δ vs prior week',
@@ -536,7 +539,7 @@ export function ShareOfVoiceClient() {
           return (
             <span
               className={`h10-sov-delta ${dir}${r.lowConfidence ? ' thin' : ''}`}
-              title={`${sharePct(r.priorShare ?? 0)} in the week of ${p?.prior?.asOf ? dayMonth(p.prior.asOf) : '—'} → ${sharePct(r.share ?? 0)} now`}
+              title={`${sharePct(r.priorShare)} in the week of ${p?.prior?.asOf ? dayMonth(p.prior.asOf) : '—'} → ${sharePct(r.share)} now`}
             >
               {deltaPt(r.deltaPt)}
             </span>
@@ -585,7 +588,7 @@ export function ShareOfVoiceClient() {
         )
       },
       sortValue: (r) => sink(r.clickShare ?? -1, r.lowConfidenceClicks),
-      filterValue: (r) => (r.clickShare ?? 0) * 100,
+      filterValue: (r) => (r.clickShare != null ? r.clickShare * 100 : Number.NaN),
     },
     {
       key: 'asins', label: 'ASINs competing',
@@ -738,14 +741,14 @@ export function ShareOfVoiceClient() {
 
       {!isMarket ? (
         // The shared header offers "All markets" on every ads page. Impression share, market volume
-        // and market rank are all per-marketplace quantities and there is no honest way to add them,
+        // and Amazon's Search Query Score are all per-marketplace quantities and there is no honest way to add them,
         // so this says so and hands back the four one-click routes out of it. The endpoint 400s with
         // `market_required` for the same reason.
         <div className="h10-sov-pick">
           <h3>Pick one market</h3>
           <p>
-            Market impression share, market volume and market rank are per-marketplace numbers from
-            Amazon Brand Analytics — and <i>veste moto homme</i> in France is a different row from
+            Market impression share, market volume and Amazon’s Search Query Score are per-marketplace
+            numbers from Amazon Brand Analytics — and <i>veste moto homme</i> in France is a different row from
             the same words in Germany. There is no honest way to add them together, so this grid
             needs one market rather than “all”.
           </p>
@@ -907,7 +910,7 @@ export function ShareOfVoiceClient() {
                     ? `The week of ${dayMonth(p.prior.asOf)} is comparable, but not one of the ${num(c?.measured ?? 0)} queries measured here has a row in it — Brand Analytics reports on a fixed ten ASINs per market and the queries they surface change week to week.`
                     : 'No earlier week is comparable: every older period is either too thin to use or carries a zero our-side count on every row.'}>
                   {sd && sd.queries > 0
-                    ? <>{sharePct(sd.priorShare ?? 0)} → {sharePct(sd.nowShare ?? 0)} on {num(sd.queries)} queries in both</>
+                    ? <>{sharePct(sd.priorShare)} → {sharePct(sd.nowShare)} on {num(sd.queries)} queries in both</>
                     : p.prior?.asOf
                       ? <>0 of {num(c?.measured ?? 0)} measured queries appear in both</>
                       : <>nothing to compare</>}

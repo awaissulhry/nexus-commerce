@@ -35,6 +35,7 @@ import { useAdsMarketplace, useSharedAdsMarket } from '../../_shell/MarketplaceC
 import { RulesTabs, rulesTabHeader } from '../_shared/tabs'
 import { RulesGrid } from '../_shared/RulesGrid'
 import { getBackendUrl } from '@/lib/backend-url'
+import { refusedSovMarkets } from '../_shared/sovWeekWords'
 
 
 interface SovStripCounts {
@@ -45,7 +46,7 @@ interface SovStripCounts {
 }
 interface SovStrip extends SovStripCounts {
   byMarket: Record<string, SovStripCounts>
-  periods: Array<{ marketplace: string; week: string | null; ageDays: number | null; refused: boolean }>
+  periods: Array<{ marketplace: string; week: string | null; ageDays: number | null; refused: boolean; reason?: string; weekEndAgeDays?: number | null; maxAgeDays?: number; note?: string }>
 }
 
 /**
@@ -95,7 +96,8 @@ export function SovRulesClient() {
   }, [])
 
   const shown = strip?.periods.filter((p) => (market === 'all' ? true : p.marketplace === market)) ?? []
-  const refused = shown.filter((p) => p.refused)
+  // A market refused as too old has a complete week: it is said with that week's age and the limit, never as "no complete week".
+  const refused = refusedSovMarkets(shown)
   /**
    * 🔴 The counts follow the market selector. Printing the account's totals beside one market's
    * week is a scope lie an operator has no way to detect: on `?market=DE` the strip read
@@ -133,7 +135,8 @@ export function SovRulesClient() {
           )}
           {/* A market the gate refused is the one thing a count cannot show: those keywords are not
               "unmeasured", they are deliberately not offered until Amazon publishes a whole week. */}
-          {refused.length > 0 && <> · <b>{refused.map((p) => p.marketplace).join('/')}</b> skipped — no complete week yet</>}
+          {refused.incomplete.length > 0 && <> · <b>{refused.incomplete.join('/')}</b> skipped — no complete week yet</>}
+          {refused.tooOld.map((t) => <span key={t.marketplace}> · <b>{t.marketplace}</b> skipped — {t.words}</span>)}
           {' '}· impression share of our ASINs, computed by Nexus from Amazon’s weekly Search Query Performance counts
         </p>
       )}

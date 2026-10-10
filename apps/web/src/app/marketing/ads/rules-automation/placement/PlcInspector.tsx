@@ -57,7 +57,7 @@ const LANE_WORD: Record<string, string> = {
 /** The actor string, humanised the way the console resolves it — prefix, never a second parser. */
 function who(actor: string | null): { word: string; title: string } {
   const a = actor ?? 'system'
-  if (a.startsWith('automation:rank-defend-')) return { word: 'rank schedule', title: a }
+  if (a.startsWith('automation:rank-defend-')) return { word: 'hourly bid schedule', title: a }
   if (a.startsWith('automation:rank-plan-')) return { word: 'rank plan', title: a }
   if (a.startsWith('automation:dayparting-')) return { word: 'dayparting', title: a }
   if (a.startsWith('automation:')) return { word: a.slice('automation:'.length), title: a }

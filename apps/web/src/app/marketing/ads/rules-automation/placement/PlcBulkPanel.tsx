@@ -317,7 +317,7 @@ export function PlcBulkPanel({ scope, lane, onClose, onDone }: {
                         the text node rendered as "…fifteen minutesthe engine…" because a JSX text
                         node that starts with a space and then wraps loses it. The sibling node two
                         lines up kept its space, which is what makes this one easy to miss. */}
-                    <b>{num(preview.counts.revertedByEngine)} of these are steered by a rank schedule.</b>{' '}
+                    <b>{num(preview.counts.revertedByEngine)} of these are steered by an hourly bid schedule.</b>{' '}
                     The write will land, and <b>within about fifteen minutes</b>{' '}
                     the engine will snap the multiplier back to its target&rsquo;s own value. To change
                     those for good, change the target on{' '}
@@ -340,7 +340,7 @@ export function PlcBulkPanel({ scope, lane, onClose, onDone }: {
                   { key: 'verdict', label: 'Verdict', render: (r) => (r.skip
                     ? <span className="skip" title={SKIP_WHY[r.skip]}>{SKIP_WORD[r.skip]}</span>
                     : r.revertedByEngine
-                      ? <span className="rev" title={`${r.ownerLabel ?? 'A rank schedule'} holds this campaign — the engine snaps the multiplier back to its target's value within ~15 minutes.`}>writes, then reverts</span>
+                      ? <span className="rev" title={`${r.ownerLabel ?? 'An hourly bid schedule'} holds this campaign — the engine snaps the multiplier back to its target's value within ~15 minutes.`}>writes, then reverts</span>
                       : <span className="go">writes</span>) },
                 ]}
               />

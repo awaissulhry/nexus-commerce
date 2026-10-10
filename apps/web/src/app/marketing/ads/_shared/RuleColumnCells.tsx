@@ -99,8 +99,8 @@ function ownerBits(bidder?: string | null, bidderName?: string | null, known?: b
   if (known === false || !bidder || bidder === 'none') return null
   if (bidder === 'schedule') {
     return {
-      cls: 'h10-rc-owner auto', Icon: Sparkles, text: bidderName ?? 'a rank schedule',
-      tip: `Bids here are held by a plan: ${bidderName ?? 'a rank schedule'}. It writes on its own cadence, and the plan usually covers several campaigns.`,
+      cls: 'h10-rc-owner auto', Icon: Sparkles, text: bidderName ?? 'an hourly bid schedule',
+      tip: `Bids here are held by a plan: ${bidderName ?? 'an hourly bid schedule'}. It writes on its own cadence, and the plan usually covers several campaigns.`,
     }
   }
   if (bidder === 'manual') {

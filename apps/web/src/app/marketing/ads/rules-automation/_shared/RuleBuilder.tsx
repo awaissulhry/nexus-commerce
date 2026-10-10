@@ -23,6 +23,7 @@ import { PLACEMENT_LANES } from './placementLanes'
 import { emitAdsChange } from './adsBus'
 import { ruleMarketOptions } from './campaignPicks'
 import { BID_FLOOR_EUR, criteriaProblems, normalizeDecimalText, readRuleNumbers } from './ruleBuilderValues'
+import { refusedSovMarkets } from './sovWeekWords'
 import { AUTOMATE_HELD_AT_CREATE, AUTOMATE_NEEDS_GATE, beltToSave, controlForRule, levelNote, levelRefusedNotice, levelToSend, noAnswerNotice, ruleLevel, saveFailed, saveRefusedNotice, scopeForSave, storedBelt, type RuleControl, type RuleLevel, type SaveNotice } from './ruleBuilderSave'
 import { Banner, Field, Listbox } from '@/design-system/components'
 import { Button, Checkbox, Input, Radio, RadioCard, Textarea, Toggle, ToolbarButton } from '@/design-system/primitives'
@@ -911,7 +912,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
       windowDays: number; selected: number; measurable: number; inScope: number; matched: number; noChange: number
       eligible: number; notEnabled: number; selectedTargets: number
       suppressedMatched: number; suppressedUnflaggedMatched: number; campaignSuppressedMatched: number
-      periods: Array<{ marketplace: string; week: string | null; ageDays: number | null; refused: boolean; reason: string }>
+      periods: Array<{ marketplace: string; week: string | null; ageDays: number | null; refused: boolean; reason: string; weekEndAgeDays?: number | null; maxAgeDays?: number; note?: string }>
     } | null
     /**
      * KT-P2 — the rank census, plus the two facts only this tab has to state: the state of the
@@ -2209,9 +2210,11 @@ export function RuleBuilder({ slug }: { slug: string }) {
                             setting, and its age is Amazon's to decide. */}
                         <span className="phour">
                           {preview.sov.periods.filter((x) => !x.refused).length > 0
-                            ? `Amazon’s week: ${preview.sov.periods.filter((x) => !x.refused).map((x) => `${x.marketplace} ${x.week}${x.ageDays != null ? ` (${x.ageDays}d old)` : ''}`).join(' · ')}.`
-                            : 'No market has a complete week of Amazon search-query data right now.'}
-                          {preview.sov.periods.some((x) => x.refused) ? ` ${preview.sov.periods.filter((x) => x.refused).map((x) => x.marketplace).join('/')} skipped — Amazon has not published a complete week, and a partial one would move bids on a denominator that is still being filled.` : ''}
+                            /* `ageDays` counts from the week's START (Sunday): said as "started N d ago", never as the data's age. */
+                            ? `Amazon’s week: ${preview.sov.periods.filter((x) => !x.refused).map((x) => `${x.marketplace} week of ${x.week}${x.ageDays != null ? ` (started ${x.ageDays} d ago)` : ''}`).join(' · ')}.`
+                            : 'No market has a usable complete week of Amazon search-query data right now.'}
+                          {refusedSovMarkets(preview.sov.periods).incomplete.length > 0 ? ` ${refusedSovMarkets(preview.sov.periods).incomplete.join('/')} skipped — Amazon has not published a complete week, and a partial one would move bids on a denominator that is still being filled.` : ''}
+                          {refusedSovMarkets(preview.sov.periods).tooOld.length > 0 ? ` ${refusedSovMarkets(preview.sov.periods).tooOld.map((t) => `${t.marketplace} skipped — ${t.words}`).join('; ')}: an older share does not move bids.` : ''}
                         </span>
                       </p>
                     )}
