@@ -300,6 +300,40 @@ describe.skipIf(!concurrentDatabaseUrl())('set-ads-brain — the Owner\'s contro
     expect((await inW(() => brainSettings(P1, 'IT')))!.values.portfolioCapLimitCents.value).toBe(800_000)
   })
 
+  it('set-value with a keyword ref (integration fix) — tosTargetPct stored as that keyword\'s own value, never the campaign\'s or the product\'s; a ref for another setting or op, an unknown keyword, a keyword outside the campaign named and a shared campaign\'s keyword without its campaign refused; undo and reset keep the ref', async () => {
+    const kw = `t-${C('a-live')}`
+    const ref = `target:${kw}`
+    expect((await preview({ op: 'set-value', productId: P, market: 'IT', key: 'paceTargetPct', value: 80, ref })).error).toMatch(/paceTargetPct is set per product or per campaign, not per keyword .* only tosTargetPct takes a keyword's own value/)
+    expect((await preview({ op: 'set-level', productId: P, market: 'IT', lever: 'bids', level: 'OBSERVE', ref })).error).toMatch(/set-level takes no ref/)
+    expect((await preview({ op: 'set-value', productId: P, market: 'IT', key: 'tosTargetPct', value: 40, ref: 'target:no-such-keyword' })).error).toMatch(/target:no-such-keyword is not a keyword of this business/)
+    expect((await preview({ op: 'set-value', productId: P, market: 'IT', campaignId: C('b-shadow'), key: 'tosTargetPct', value: 40, ref })).error).toMatch(/is in campaign Jacket a-live, not in campaign /)
+    expect((await preview({ op: 'set-value', productId: P, market: 'IT', key: 'tosTargetPct', value: 40, ref: `target:t-${C('e-shared')}` })).error).toMatch(/a shared campaign .* name the campaign/)
+    expect((await openOverrides()).filter((o) => o.key === 'tosTargetPct')).toEqual([])
+
+    const own = await ask({ op: 'set-value', productId: P, market: 'IT', campaignId: C('a-live'), key: 'tosTargetPct', value: 40, ref, why: 'test keyword target' })
+    expect(own.preview).toMatchObject({
+      needsCode: false,
+      change: { kind: 'VALUE', key: 'tosTargetPct', ref, from: 'null (no value of its own: the brain\'s default)', to: expect.stringMatching(/^40 \(the keyword's own value/) },
+      campaigns: [expect.objectContaining({ campaignId: C('a-live'), reached: true })],
+    })
+    expect(own.preview.summary).toMatch(/tosTargetPct of keyword "jacket a-live" \(exact, .*\) of campaign Jacket a-live: null .* → 40 .* It applies to that keyword only \(in Jacket a-live\)/)
+    expect(own.preview.raises).toEqual([expect.stringMatching(/^tosTargetPct null → 40: .* \(for keyword "jacket a-live"/)])
+    expect(await approve(own.approvalId)).toMatchObject({ ok: true, status: 'executed' })
+    expect((await openOverrides()).filter((o) => o.key === 'tosTargetPct')).toEqual([expect.objectContaining({ scope: 'CAMPAIGN', campaignId: C('a-live'), kind: 'VALUE', ref, value: 40 })])
+    expect((await inW(() => brainSettings(P1, 'IT')))!.values.tosTargetPct.value).toBeNull()
+    expect((await inW(() => brainSettings(P1, 'IT', C('a-live'))))!.values.tosTargetPct.value).toBeNull()
+
+    const change = await changeOf(own.approvalId)
+    expect(change.after).toMatchObject({ op: 'set-value', scope: 'CAMPAIGN', campaignId: C('a-live'), kind: 'VALUE', key: 'tosTargetPct', ref, open: true, value: 40 })
+    expect(await inW(() => tool.undo!.current(change))).toEqual(change.after)
+    expect(tool.undo!.request(change)).toEqual({ tool: TOOL, args: expect.objectContaining({ op: 'set-value', key: 'tosTargetPct', ref, reset: true, campaignId: C('a-live') }) })
+    // The reset ends that keyword's value only.
+    const reset = await ask({ op: 'set-value', productId: P, market: 'IT', campaignId: C('a-live'), key: 'tosTargetPct', ref, reset: true })
+    expect(reset.preview.change).toMatchObject({ ref, from: expect.stringMatching(/^40 \(the keyword's own value/), to: 'null (no value of its own: the brain\'s default)' })
+    expect(await approve(reset.approvalId)).toMatchObject({ ok: true, status: 'executed' })
+    expect((await openOverrides()).filter((o) => o.key === 'tosTargetPct')).toEqual([])
+  })
+
   it('the keyword bids — OBSERVE takes the LIVE campaign back to shadow (a normal approval, bids stay); AUTO puts it LIVE again (the code), the adopted and the excluded campaigns named as not reached', async () => {
     const obs = await ask({ op: 'set-level', productId: P, market: 'IT', lever: 'bids', level: 'OBSERVE' })
     expect(obs.preview).toMatchObject({ needsCode: false, bids: expect.arrayContaining([expect.objectContaining({ campaignId: C('a-live'), op: 'shadow' })]) })

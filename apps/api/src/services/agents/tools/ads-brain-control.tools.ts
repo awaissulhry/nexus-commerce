@@ -111,7 +111,11 @@ const describeOps =
   + 'one of the brain\'s settings (key, inside its bounds; per product, or per campaign where it means something for one '
   + 'campaign): the portfolio cap on or off, its % or amount, the pacing limit, pauseMinDays, longStopUntil, '
   + 'archiveDeadWeeks, hourPlanAsLimits, hourCellMovePct, the negatives warning and maximum, the strategy-switch approval '
-  + 'mode and the rest; reset: true goes back to the product\'s value or the default. op leave: the product out of the '
+  + 'mode and the rest; reset: true goes back to the product\'s value or the default. tosTargetPct (the top-of-search '
+  + 'impression share the bid brain holds a keyword at) also takes one keyword\'s own value: ref "target:<AdTarget.id>" '
+  + '(ad-targets lists the ids; the keyword\'s own value wins over its campaign\'s and its product\'s); any other setting '
+  + 'refuses a ref, and a keyword that is not in the product\'s campaign named is refused — never set wider instead. '
+  + 'op leave: the product out of the '
   + 'brain — every lever back to OFF, its levels and values ended, the Owner\'s locks and exclusions kept; bids says what '
   + 'happens to its own campaigns the bid brain runs: give-back (default: bids and placements back as they were when each '
   + 'went LIVE), shadow (bids stay where they are) or keep (the bid brain keeps running them one by one); every request the '
@@ -143,7 +147,7 @@ const setAdsBrain: AgentTool = {
     lever: z.enum(BRAIN_LEVERS).optional().describe('set-level / lock / unlock: the lever'),
     level: z.enum(BRAIN_LEVELS).optional().describe('set-level: OFF, OBSERVE (shadow), PROPOSE (asks a person) or AUTO (acts alone inside the caps — a big door)'),
     levels: z.object(Object.fromEntries(BRAIN_LEVERS.map((l) => [l, z.enum(BRAIN_LEVELS).optional()]))).optional().describe('enroll: the starting level per lever (a lever not named starts OBSERVE; bids follows its campaigns)'),
-    ref: z.string().trim().max(220).optional().describe('lock / unlock: one thing inside the lever ("hourCell:d1h14", "lane:TOP_OF_SEARCH", "term:<words>", "adGroup:<id>", "target:<id>"); empty = the whole lever'),
+    ref: z.string().trim().max(220).optional().describe('lock / unlock: one thing inside the lever ("hourCell:d1h14", "lane:TOP_OF_SEARCH", "term:<words>", "adGroup:<id>", "target:<id>"); empty = the whole lever. set-value of tosTargetPct only: one keyword\'s own value, "target:<AdTarget.id>" (with campaignId: at that campaign; without: the product\'s value for that keyword); empty = the product\'s or the campaign\'s value. Any other op or setting refuses a ref'),
     key: z.enum(BRAIN_SETTING_KEYS as [BrainSetting, ...BrainSetting[]]).optional().describe('set-value: the setting (ads-brain view map lists each with its value and source)'),
     value: z.union([z.number(), z.boolean(), z.string().max(64), z.null(), z.record(z.string(), z.number())]).optional()
       .describe('set-value: the setting\'s value (a whole number, true/false, a mode, a day YYYY-MM-DD, or null = empty where it takes one); lock: the Owner\'s own value of the whole lever ({ dailyBudgetCents }, { amountCents }, { TOP_OF_SEARCH: 50 }, a bidding strategy, ENABLED / PAUSED), or empty = as it is now'),

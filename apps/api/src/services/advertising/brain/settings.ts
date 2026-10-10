@@ -37,11 +37,14 @@ const KEYWORD_REF = /^target:([A-Za-z0-9_-]{1,64})$/
 /** The ref of one keyword's own value. */
 export const keywordValueRef = (targetId: string): string => `target:${targetId}`
 
+/** The AdTarget id a keyword value's ref names (`target:<AdTarget.id>`), or null when the ref is not one. Pure. */
+export const keywordRefTarget = (ref: unknown): string | null => (typeof ref === 'string' ? KEYWORD_REF.exec(ref.trim())?.[1] ?? null : null)
+
 /** A VALUE override's ref: '' (the product's or the campaign's value), or one keyword's of a keyword setting — or why not. */
-function valueRef(key: BrainSetting, ref: unknown): { ref: string } | { refusal: string } {
+export function valueRef(key: BrainSetting, ref: unknown): { ref: string } | { refusal: string } {
   const raw = typeof ref === 'string' ? ref.trim() : ''
   if (!raw) return { ref: '' }
-  if (!(KEYWORD_VALUE_SETTINGS as readonly string[]).includes(key)) return { refusal: `${key} is set per product or per campaign, not per keyword (ref ${raw}); per keyword: ${KEYWORD_VALUE_SETTINGS.join(', ')}` }
+  if (!(KEYWORD_VALUE_SETTINGS as readonly string[]).includes(key)) return { refusal: `${key} is set per product or per campaign, not per keyword (ref ${raw}); only ${KEYWORD_VALUE_SETTINGS.join(', ')} takes a keyword's own value (ref target:<AdTarget.id>)` }
   return KEYWORD_REF.test(raw) ? { ref: raw } : { refusal: `a keyword's own value of ${key} names its keyword as target:<AdTarget.id>, not ${raw}` }
 }
 
