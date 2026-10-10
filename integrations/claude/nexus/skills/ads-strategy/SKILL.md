@@ -17,6 +17,17 @@ The Nexus server's instructions hold the rules for every change — say which bu
 
 - **When something is missing.** If no Nexus tools are available, Nexus is not connected or its server is off (Claude Code: `/mcp`, choose Nexus, Authenticate; claude.ai: Customize › Connectors). If a tool is not offered, refuses, or says it is turned off for Claude, pass on the reason in plain words and carry on with the rest.
 
+## Amazon's visibility numbers
+
+What Nexus has from Amazon, free:
+- **Top-of-search impression share**: per campaign, per day, 1–3 days late (the Sponsored Products reports). Never per keyword: a keyword row that shows one carries the share of the campaigns holding it.
+- **Brand Analytics Search Query Performance (SQP)**: per search query and ASIN, weekly (Sunday to Saturday), about 5 days after the week ends: our impressions, clicks, cart adds and purchases against the query's totals, and the query's search volume.
+- **Best Sellers Rank**: per ASIN and category, every 3 hours (`sales-rank`).
+
+What it does not have: an organic or an ad (sponsored) keyword rank or position. Amazon offers no source for either: never estimate, invent or buy one, and never call a share a rank or a position.
+
+Say each with its grain (campaign, search query, ASIN), its window (a day, the week of …, 30 days) and its date; "not reported" when there is none, never 0. A value Nexus computes (a weighted average, a sum over ASINs) says "computed by Nexus from Amazon's …"; only a value Amazon reports is Amazon's. A goal for a share (a top-of-search share, an SQP share) is a goal for that number at its grain, never a rank.
+
 ## 1. Read what Nexus holds
 
 Amazon, per market:

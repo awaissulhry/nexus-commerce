@@ -138,8 +138,13 @@ export interface SovRow {
   marketplace: string
   /** whole-market searches for this query in the period. Not our impressions. */
   marketVolume: number | null
-  /** the QUERY's popularity rank in the marketplace (#1 = most searched). Not our position. */
-  marketRank: number | null
+  /**
+   * C6 (2026-10-10) — computed by Nexus: the LOWEST of Amazon's per-ASIN Search Query Scores among the
+   * ASINs holding a row on this query (lower = more searched among that ASIN's own queries). Amazon scores a
+   * query per ASIN, so this is not a market rank and not our position. (Was `marketRank`, labelled as the
+   * query's popularity rank in the marketplace.)
+   */
+  bestSearchQueryScore: number | null
   /** whole-market impressions for this query in the period — the denominator, stated */
   marketImpressions: number | null
   /** OUR impressions, summed over the scope's ASINs. `0` is a finding, `null` is an absence. */
@@ -669,6 +674,7 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
     a.cartAdds += r.cartAddsBrand
     a.purchases += r.purchasesBrand
     a.vol = Math.max(a.vol, r.searchQueryVolume)
+    // Amazon's Search Query Score is PER ASIN (stored as `searchQueryRank`); the lowest across rows is a Nexus pick
     if (r.searchQueryRank != null) a.rank = a.rank == null ? r.searchQueryRank : Math.min(a.rank, r.searchQueryRank)
     if (r.asin) a.asins.add(r.asin)
     m.set(key, a)
@@ -746,7 +752,7 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
       const adSide = adSideOf(query)
       return {
         query, marketplace: market,
-        marketVolume: mine.vol, marketRank: mine.rank,
+        marketVolume: mine.vol, bestSearchQueryScore: mine.rank,
         marketImpressions: mine.total, ourImpressions: mine.brand,
         share,
         marketClicks: mine.clicksTotal, ourClicks: mine.clicksBrand,
@@ -776,7 +782,7 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
       // A not-covered row still knows the market's size — that is the whole point of separating it
       // from "never measured", which knows nothing.
       marketVolume: mkt ? mkt.vol : null,
-      marketRank: mkt ? mkt.rank : null,
+      bestSearchQueryScore: mkt ? mkt.rank : null,
       marketImpressions: mkt ? mkt.total : null,
       ourImpressions: null, share: null,
       marketClicks: mkt ? mkt.clicksTotal : null, ourClicks: null, clickShare: null,
@@ -934,7 +940,8 @@ export async function getShareOfVoice(q: ShareOfVoiceQuery) {
     const s = dir === 'asc' ? 1 : -1
     switch (sortKey) {
       case 'query': return s * a.query.localeCompare(b.query)
-      case 'rank': return s * ((a.marketRank ?? Number.MAX_SAFE_INTEGER) - (b.marketRank ?? Number.MAX_SAFE_INTEGER))
+      // `rank` stays the sort key's name for the client; it sorts by the lowest per-ASIN Search Query Score
+      case 'rank': return s * ((a.bestSearchQueryScore ?? Number.MAX_SAFE_INTEGER) - (b.bestSearchQueryScore ?? Number.MAX_SAFE_INTEGER))
       case 'share': return s * ((a.share ?? -1) - (b.share ?? -1))
       case 'clickShare': return s * ((a.clickShare ?? -1) - (b.clickShare ?? -1))
       case 'delta': return s * ((a.deltaPt ?? Number.NEGATIVE_INFINITY) - (b.deltaPt ?? Number.NEGATIVE_INFINITY))

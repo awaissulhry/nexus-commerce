@@ -22,6 +22,17 @@ The Nexus server's instructions hold the rules for every change — say which bu
 - Live or sandbox is the server's switch: each change preview's `reach` says `live` or `sandbox` (sandbox = recorded in Nexus only). An Amazon sandbox preview skips the live checks (halt, connection, markets, allowlist, pins, spend ceiling, daily budget move, value cap), so it predicts nothing about live.
 - Amazon live ad writes happen only in IT, DE, FR and ES; any other Amazon market is refused at the live write gate. On Amazon, `liveWrites` in `ad-campaigns` is the campaign's live-write allowlist: a campaign off it takes no live change, and putting it on (`set-campaign-live-writes`) waits for a person, unless the business lets it run by its rule for a campaign Claude itself created. eBay has no allowlist: its live or sandbox is server-wide (`writes`).
 
+## Amazon's visibility numbers
+
+What Nexus has from Amazon, free:
+- **Top-of-search impression share**: per campaign, per day, 1–3 days late (the Sponsored Products reports). Never per keyword: a keyword row that shows one carries the share of the campaigns holding it.
+- **Brand Analytics Search Query Performance (SQP)**: per search query and ASIN, weekly (Sunday to Saturday), about 5 days after the week ends: our impressions, clicks, cart adds and purchases against the query's totals, and the query's search volume.
+- **Best Sellers Rank**: per ASIN and category, every 3 hours (`sales-rank`).
+
+What it does not have: an organic or an ad (sponsored) keyword rank or position. Amazon offers no source for either: never estimate, invent or buy one, and never call a share a rank or a position.
+
+Say each with its grain (campaign, search query, ASIN), its window (a day, the week of …, 30 days) and its date; "not reported" when there is none, never 0. A value Nexus computes (a weighted average, a sum over ASINs) says "computed by Nexus from Amazon's …"; only a value Amazon reports is Amazon's. A share that moved is explained as a share at its grain and week, never as a rank that moved.
+
 ## 1. Per market: read
 
 Ask which channel (`amazon`, the default, or `ebay`) and markets, or take every market with spend.

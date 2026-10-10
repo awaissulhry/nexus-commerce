@@ -395,9 +395,10 @@ export async function listAmazonCampaigns(q: AmazonCampaignListQuery) {
         // Average selling price = ad sales ÷ units sold. Null when units are unknown OR zero:
         // dividing by an unsold campaign invents a price no one paid.
         asp: saleUnits == null || saleUnits <= 0 ? null : salesCents / 100 / saleUnits,
-        // ADM-A2 — a FRACTION, impression-weighted across the days Amazon reported, and null
-        // when it reported none. `days` is what the cell prints beside it so a one-day share is
-        // never read as a week's.
+        // ADM-A2 — a FRACTION, null when Amazon reported none. E1 (2026-10-10): it is NOT Amazon's own figure
+        // for the window — it is the impression-weighted average, computed by Nexus, of the daily campaign
+        // shares Amazon reported (days it did not report are skipped, never 0). `days` is what the cell
+        // prints beside it so a one-day share is never read as a week's.
         topOfSearchIS: tosPts.length ? weightedIS(tosPts) : null,
         topOfSearchISDays: tosPts.length,
         // ADM-A3 — new-to-brand. Null (never 0) when this campaign's ad product does not publish

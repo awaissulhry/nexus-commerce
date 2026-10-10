@@ -19,9 +19,8 @@ import {
   type RdCampaignRuntime, type RdGroupRollUp, type RdCampaignRuntimeInput,
 } from './rank-runtime.js'
 import { pickActiveEvents } from '../../jobs/ad-rank-defend.job.js'
-import { analyzeTopOfSearch } from './ads-top-of-search.service.js'
 import { resolveMaxBaseBidByCampaign } from './ads-placement-manual.js'
-import { sqpImpressionShareForAsins } from './sqp.service.js'
+import { sqpShareForAsins } from './sqp.service.js'
 import type { ScheduleWindow } from './rank-controller.js'
 
 export type RdSignalKind = 'top-is' | 'sqp' | 'none-by-design' | 'no-signal' | 'no-coverage' | 'not-applicable'
@@ -72,6 +71,42 @@ export interface RdSignal {
  */
 
 
+/**
+ * B4 (2026-10-10) — the Rest-of-Search lane's signal from one SQP reading. The words say what the number is:
+ * a share computed by Nexus from Amazon's weekly Search Query Performance counts, for a named week — never a
+ * rank. The share itself is the SQP programme's (`sqpShareForAsins`); this only words it.
+ */
+export function sqpLaneSignal(
+  lane: string,
+  asinCount: number,
+  reading: { share: number | null; ageDays: number | null; weekStart: string | null; contributors: { withData: number; total: number } } | null,
+): RdSignal {
+  const age = reading?.ageDays ?? null
+  const week = reading?.weekStart ?? null
+  if (!reading || reading.share == null) {
+    return {
+      kind: 'no-signal', lane, valuePct: null, ageDays: age, rows: null, contributors: { withData: reading?.contributors.withData ?? 0, total: asinCount }, freshness: 'never',
+      staleReason: `These ASINs have SQP history, but ${week ? `the week of ${week}` : 'the latest week'} carries no query totals to take a share of.`,
+      label: 'no signal',
+      detail: `These ASINs have SQP history, but ${week ? `the week of ${week}` : 'the latest week'} carries no query totals to take a share of.`,
+    }
+  }
+  const withData = reading.contributors.withData
+  const f = classifySqpFreshness({ withData, total: asinCount, ageDays: age })
+  const words = sharePctWords(reading.share)
+  return {
+    kind: 'sqp', lane, valuePct: valuePctOf(reading.share), ageDays: age, rows: withData,
+    contributors: { withData, total: asinCount },
+    freshness: f.freshness,
+    staleReason: f.staleReason,
+    label: `SQP ${words}${week ? ` · week of ${week}` : ''}${f.thin ? ' · thin' : ''}`,
+    detail: `Impression share of this campaign's advertised ASINs on their search queries, computed by Nexus from Amazon's weekly `
+      + `Brand Analytics Search Query Performance counts (our ASINs' impressions ÷ the total impressions of those queries): ${words}`
+      + `${week ? `, week of ${week}` : ''}${age != null ? ` (started ${age} day${age === 1 ? '' : 's'} ago)` : ''}. A share, not a rank. `
+      + `Basis: ${withData} of ${asinCount} advertised ASINs.`,
+  }
+}
+
 export interface RdCampaignRow extends RdCampaignRuntime {
   campaignName: string
   marketplace: string | null
@@ -111,7 +146,83 @@ const nowInTz = (tz: string, at: Date): { day: number; hour: number } => {
   return { day: dayIdx < 0 ? 0 : dayIdx, hour }
 }
 
-const daysBetween = (a: Date, b: Date) => Math.max(0, Math.round((a.getTime() - b.getTime()) / 86_400_000))
+/** Whole days since a date (a report date is midnight UTC): read on 10 Oct at noon, a reading of 8 Oct is 2 days old. */
+const daysSince = (now: Date, d: Date) => Math.max(0, Math.floor((now.getTime() - d.getTime()) / 86_400_000))
+
+/** B4 — how far back the Top-of-Search lane reads a campaign's own daily shares. */
+export const TOP_IS_WINDOW_DAYS = 30
+const TOP_REPORT_PLACEMENT = 'Top of Search on-Amazon'
+
+/**
+ * A 0..1 share in words. A non-zero share below 0.01 % reads "<0.01%", never "0%" or "0.0%"; below 1 % it
+ * keeps two decimals, above it one.
+ */
+export function sharePctWords(v: number): string {
+  const pct = v * 100
+  if (pct > 0 && pct < 0.01) return '<0.01%'
+  return `${pct < 1 ? pct.toFixed(2) : pct.toFixed(1)}%`
+}
+
+/** A 0..1 share as the `valuePct` number: three significant digits, so a tiny real share never rounds to 0. */
+const valuePctOf = (v: number) => Number((v * 100).toPrecision(3))
+
+export interface TopIsReading {
+  /** 0..1 — computed by Nexus: the impression-weighted average of the shares Amazon reported for the campaign */
+  share: number
+  /** days with a reading in the window */
+  days: number
+  /** the campaign's OWN newest reading */
+  newest: Date
+}
+
+/**
+ * B4 — one campaign's Top-of-Search reading from its own daily rows: impression-weighted (placement-grid's
+ * `weightedIS`, passed in so this stays pure), the days that carry a reading, and its own newest date.
+ */
+export function topIsReadingOf(
+  rows: ReadonlyArray<{ date: Date; value: number; weight: number }>,
+  average: (points: Array<{ value: number; weight: number }>) => number | null,
+): TopIsReading | null {
+  const usable = rows.filter((r) => Number.isFinite(r.value))
+  if (!usable.length) return null
+  const share = average(usable.map((r) => ({ value: r.value, weight: Math.max(0, r.weight) })))
+  if (share == null) return null
+  const days = new Set(usable.map((r) => r.date.toISOString().slice(0, 10))).size
+  const newest = new Date(Math.max(...usable.map((r) => +r.date)))
+  return { share, days, newest }
+}
+
+/**
+ * B4 (2026-10-10) — the Top-of-Search lane's signal. Its age is the CAMPAIGN's own newest reading (it was the
+ * market's newest report, which says nothing about this campaign), and its label names the window, the
+ * weighting and the days behind it ("Top-IS 30-day avg X%" hid that it is an average at all).
+ */
+export function topLaneSignal(lane: string, reading: TopIsReading | null, dbNow: Date): RdSignal {
+  if (!reading) {
+    return {
+      kind: 'no-signal', lane, valuePct: null, ageDays: null, rows: null, contributors: null, freshness: 'never',
+      staleReason: `No top-of-search impression share was reported for this campaign in the last ${TOP_IS_WINDOW_DAYS} days.`,
+      label: 'no signal',
+      detail: `This campaign has a Top-of-Search lane but Amazon reported no top-of-search impression share for it in the last ${TOP_IS_WINDOW_DAYS} days.`,
+    }
+  }
+  const age = daysSince(dbNow, reading.newest)
+  const newest = reading.newest.toISOString().slice(0, 10)
+  const words = sharePctWords(reading.share)
+  const dayWord = `${reading.days} day${reading.days === 1 ? '' : 's'}`
+  // The Top lane is dense and near-daily — measured 861 of 1,413 rows carrying an IS value,
+  // 556 in the last 14 days — so age is the only axis that applies to it.
+  const topStale = age > 7
+  return {
+    kind: 'top-is', lane, valuePct: valuePctOf(reading.share), ageDays: age, rows: reading.days, contributors: null,
+    freshness: topStale ? 'stale' : 'fresh',
+    staleReason: topStale ? `This campaign's newest top-of-search share is from ${newest}, ${age} days ago; Amazon normally reports it within 1–3 days.` : null,
+    label: `Top-IS ${TOP_IS_WINDOW_DAYS}-day wtd avg ${words} (${dayWord})`,
+    detail: `The top-of-search impression share Amazon reported for this campaign (campaign level), averaged by Nexus `
+      + `(impression-weighted) over the ${dayWord} with a reading in the last ${TOP_IS_WINDOW_DAYS}: ${words}. `
+      + `Newest reading ${newest}, ${age} day${age === 1 ? '' : 's'} old.`,
+  }
+}
 
 export async function getRankRuntime(): Promise<RankRuntimePayload> {
   // ── the clock ─────────────────────────────────────────────────────────────────────────────
@@ -131,7 +242,7 @@ export async function getRankRuntime(): Promise<RankRuntimePayload> {
 
   const camps = await prisma.campaign.findMany({
     where: { id: { in: campIds } },
-    select: { id: true, name: true, marketplace: true, portfolioId: true, status: true, biddingStrategy: true, dynamicBidding: true },
+    select: { id: true, name: true, marketplace: true, portfolioId: true, status: true, biddingStrategy: true, dynamicBidding: true, externalCampaignId: true },
   })
   const campById = new Map(camps.map((c) => [c.id, c]))
 
@@ -180,26 +291,37 @@ export async function getRankRuntime(): Promise<RankRuntimePayload> {
 
   // ── signals, keyed to each row's ACTIVE lane ──────────────────────────────────────────────
   //
-  // Only the lanes actually in play are read. `analyzeTopOfSearch` groups over the whole
-  // marketplace (62 campaigns for IT+DE, not 33), so it is called once per market and memoised —
-  // per row it would be 33 full-marketplace aggregations per page load.
-  const topLaneMarkets = new Set<string>()
+  // Only the lanes actually in play are read. B4 — the Top lane reads each campaign's OWN daily shares
+  // over the last TOP_IS_WINDOW_DAYS days in one query (topIsReadingOf): impression-weighted, with the days
+  // behind it and its own newest date. It used `analyzeTopOfSearch`'s unweighted window mean and the
+  // market's newest report as every campaign's age.
+  const topExtByCampaign = new Map<string, string>()
   const restLaneCampaigns: string[] = []
   for (const { campaign, runtime } of runtimes) {
-    if (runtime.placement === 'PLACEMENT_TOP' && campaign?.marketplace) topLaneMarkets.add(campaign.marketplace)
+    if (runtime.placement === 'PLACEMENT_TOP' && campaign?.externalCampaignId) topExtByCampaign.set(runtime.campaignId, campaign.externalCampaignId)
     if (runtime.placement === 'PLACEMENT_REST_OF_SEARCH') restLaneCampaigns.push(runtime.campaignId)
   }
 
-  const topIsByCampaign = new Map<string, number | null>()
-  const topAgeByMarket = new Map<string, number | null>()
-  for (const m of topLaneMarkets) {
-    const tos = await analyzeTopOfSearch({ marketplace: m })
-    for (const r of tos.rows) topIsByCampaign.set(r.campaignId, r.topIS ?? null)
-    const newest = await prisma.amazonAdsPlacementReport.findFirst({
-      where: { marketplace: m, placement: 'Top of Search on-Amazon', topOfSearchIS: { not: null } },
-      orderBy: { date: 'desc' }, select: { date: true },
+  const topIsByCampaign = new Map<string, TopIsReading | null>()
+  if (topExtByCampaign.size) {
+    const since = new Date(+dbNow - TOP_IS_WINDOW_DAYS * 86_400_000)
+    since.setUTCHours(0, 0, 0, 0)
+    const rows = await prisma.amazonAdsPlacementReport.findMany({
+      where: {
+        campaignId: { in: [...new Set(topExtByCampaign.values())] }, placement: TOP_REPORT_PLACEMENT,
+        topOfSearchIS: { not: null }, date: { gte: since },
+      },
+      select: { campaignId: true, date: true, impressions: true, topOfSearchIS: true },
     })
-    topAgeByMarket.set(m, newest ? daysBetween(dbNow, newest.date) : null)
+    const byExt = new Map<string, Array<{ date: Date; value: number; weight: number }>>()
+    for (const r of rows) {
+      if (r.topOfSearchIS == null) continue
+      const list = byExt.get(r.campaignId) ?? []
+      list.push({ date: r.date, value: Number(r.topOfSearchIS), weight: r.impressions ?? 0 })
+      byExt.set(r.campaignId, list)
+    }
+    const { weightedIS } = await import('./placement-grid.service.js')
+    for (const [campaignId, ext] of topExtByCampaign) topIsByCampaign.set(campaignId, topIsReadingOf(byExt.get(ext) ?? [], weightedIS))
   }
 
   // ASINs per campaign — needed for the SQP lane and for "has this ASIN set EVER been covered".
@@ -222,28 +344,6 @@ export async function getRankRuntime(): Promise<RankRuntimePayload> {
     const seen = await prisma.searchQueryPerformance.groupBy({ by: ['asin'], where: { asin: { in: allAsins } }, _count: { _all: true } })
     for (const r of seen) if (r._count._all > 0) everCovered.add(r.asin)
   }
-  const sqpAgeByMarket = new Map<string, number | null>()
-  /** ASINs of `asins` present in the LATEST week the reader would pick for this market. */
-  const latestWeekAsins = new Map<string, Set<string>>()
-  async function contributorsForWeek(marketplace: string, asins: string[]): Promise<number> {
-    if (!asins.length) return 0
-    if (!latestWeekAsins.has(marketplace)) {
-      const newest = await prisma.searchQueryPerformance.findFirst({
-        where: { marketplace }, orderBy: { startDate: 'desc' }, select: { startDate: true },
-      })
-      const set = new Set<string>()
-      if (newest) {
-        const rows = await prisma.searchQueryPerformance.groupBy({
-          by: ['asin'], where: { marketplace, startDate: newest.startDate },
-        })
-        for (const r of rows) if (r.asin) set.add(r.asin)
-      }
-      latestWeekAsins.set(marketplace, set)
-    }
-    const present = latestWeekAsins.get(marketplace) as Set<string>
-    return asins.filter((a) => present.has(a)).length
-  }
-
   async function signalFor(runtime: RdCampaignRuntime, marketplace: string | null): Promise<RdSignal> {
     const lane = runtime.placement
     if (!lane || !runtime.activeTargetKey) {
@@ -252,54 +352,17 @@ export async function getRankRuntime(): Promise<RankRuntimePayload> {
     if (lane === 'PLACEMENT_PRODUCT_PAGE') {
       return { kind: 'none-by-design', lane, valuePct: null, ageDays: null, rows: null, contributors: null, freshness: 'none', staleReason: null, label: 'open loop', detail: 'Open loop by design — Amazon exposes no product-page impression share, so this lane cannot be closed.' }
     }
-    if (lane === 'PLACEMENT_TOP') {
-      const v = marketplace ? topIsByCampaign.get(runtime.campaignId) ?? null : null
-      const age = marketplace ? topAgeByMarket.get(marketplace) ?? null : null
-      if (v == null) return { kind: 'no-signal', lane, valuePct: null, ageDays: age, rows: null, contributors: null, freshness: 'never', staleReason: 'No Top-of-Search impression share has been reported for this campaign in the window.', label: 'no signal', detail: 'This campaign has a Top-of-Search lane but no impression-share measurement in the reporting window.' }
-      const pct = Math.round(v * 1000) / 10
-      // The Top lane is dense and near-daily — measured 861 of 1,413 rows carrying an IS value,
-      // 556 in the last 14 days — so age is the only axis that applies to it.
-      const topStale = age != null && age > 7
-      return {
-        kind: 'top-is', lane, valuePct: pct, ageDays: age, rows: null, contributors: null,
-        freshness: topStale ? 'stale' : 'fresh',
-        staleReason: topStale ? `The newest Top-of-Search report is ${age} days old; this lane is normally within a day or two.` : null,
-        label: `Top-IS ${pct}%${age != null ? ` · ${age}d` : ''}`,
-        detail: `Top-of-Search impression share ${pct}%${age != null ? `, newest report ${age} day${age === 1 ? '' : 's'} old` : ''}.`,
-      }
-    }
+    if (lane === 'PLACEMENT_TOP') return topLaneSignal(lane, topIsByCampaign.get(runtime.campaignId) ?? null, dbNow)
     // Rest of search — SQP, which is the lane with the onboarding problem.
     const asins = asinsByCampaign.get(runtime.campaignId) ?? []
     const covered = asins.some((a) => everCovered.has(a))
     if (!covered) {
       return { kind: 'no-coverage', lane, valuePct: null, ageDays: null, rows: 0, contributors: { withData: 0, total: asins.length }, freshness: 'never', staleReason: null, label: 'no coverage', detail: `None of this campaign's ${asins.length} advertised ASIN${asins.length === 1 ? ' has' : 's have'} ever appeared in Brand Analytics. That is an onboarding problem, not a stale feed — no recency guard would fix it.` }
     }
-    if (marketplace && !sqpAgeByMarket.has(marketplace)) {
-      const newest = await prisma.searchQueryPerformance.findFirst({ where: { marketplace }, orderBy: { startDate: 'desc' }, select: { startDate: true } })
-      sqpAgeByMarket.set(marketplace, newest ? daysBetween(dbNow, newest.startDate) : null)
-    }
-    const share = marketplace ? await sqpImpressionShareForAsins(marketplace, asins) : null
-    const age = marketplace ? sqpAgeByMarket.get(marketplace) ?? null : null
-    if (share == null) {
-      return { kind: 'no-signal', lane, valuePct: null, ageDays: age, rows: null, contributors: { withData: 0, total: asins.length }, freshness: 'never', staleReason: 'These ASINs have SQP history, but the latest week returned no usable impression share.', label: 'no signal', detail: 'These ASINs have SQP history but the latest week returned no usable impression share.' }
-    }
-    const sp = Math.round(share * 1000) / 10
-
-    // ── the BASIS ─────────────────────────────────────────────────────────────────────────────
-    // How many of this campaign's advertised ASINs actually appear in the week the reader chose?
-    // Read here rather than in `sqpImpressionShareForAsins`, which belongs to the SQP programme
-    // and is consumed by KT and SOV — this page must not change what that function returns.
-    // Mirrors the reader's own selection: latest `startDate` present for these ASINs in this market.
-    const withData = marketplace ? await contributorsForWeek(marketplace, asins) : 0
-    const f = classifySqpFreshness({ withData, total: asins.length, ageDays: age })
-    return {
-      kind: 'sqp', lane, valuePct: sp, ageDays: age, rows: withData,
-      contributors: { withData, total: asins.length },
-      freshness: f.freshness,
-      staleReason: f.staleReason,
-      label: `SQP ${sp}%${age != null ? ` · ${age}d` : ''}${f.thin ? ' · thin' : ''}`,
-      detail: `Brand impression share ${sp}% from the latest weekly SQP report${age != null ? `, ${age} days old` : ''}. Basis: ${withData} of ${asins.length} advertised ASINs.`,
-    }
+    // B4 — the family share, its week, its age and its basis all from ONE reading (`sqpShareForAsins`, the
+    // SQP programme's reader), so the label cannot pair a share with another week's age or basis.
+    const reading = marketplace ? await sqpShareForAsins(marketplace, asins, dbNow) : null
+    return sqpLaneSignal(lane, asins.length, reading)
   }
 
   const campaignRows: RdCampaignRow[] = []

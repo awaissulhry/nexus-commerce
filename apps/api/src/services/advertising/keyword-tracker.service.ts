@@ -229,8 +229,130 @@ export interface KtSqpRow {
   asin: string | null
   startDate: Date
   searchQueryVolume: number
+  /** Amazon's Search Query Score for this ASIN (stored in the column `searchQueryRank`). */
   searchQueryRank: number | null
-  impressionShare: number
+  /** 0..1 computed from the counts by `sqpShareFromCounts`; null when Amazon reported no query total. */
+  impressionShare: number | null
+}
+
+/**
+ * B2 (2026-10-10) — an SQP share, computed from Amazon's COUNTS: our ASIN's count ÷ the query's total
+ * for the week, clamped to 0..1. **Null when the total is not a positive number** — Amazon reported
+ * nothing to divide by — never 0. The stored share columns (`impressionShare`, `clickShare`, …) are not
+ * read for display: they are NOT NULL DEFAULT 0, so a share Amazon never reported reads as a real 0 there.
+ */
+export function sqpShareFromCounts(ours: number | null | undefined, total: number | null | undefined): number | null {
+  if (total == null || !Number.isFinite(total) || total <= 0) return null
+  if (ours == null || !Number.isFinite(ours)) return null
+  return Math.max(0, Math.min(1, ours / total))
+}
+
+/** B3 — how old a campaign's top-of-search reading may be and still count in the Keyword Tracker's scope fact. */
+export const KT_TOS_MAX_AGE_DAYS = 7
+
+export interface KtTopOfSearchFact {
+  /**
+   * 0..1 — computed by Nexus: the impression-weighted average of the top-of-search impression share Amazon
+   * reported per campaign and day, over the readings of the last `windowDays` days (the plain mean only when
+   * no reading carries impressions). Campaign-level: it is not any keyword's own share.
+   */
+  avgShare: number
+  grain: 'campaign'
+  /** campaigns whose readings were used */
+  campaignsWithReading: number
+  campaignsInScope: number
+  /** campaign-day readings used */
+  readings: number
+  /** dates of the oldest and newest reading used, YYYY-MM-DD */
+  oldest: string
+  newest: string
+  /** = `newest`; kept for the client shipped before B3 */
+  asOf: string
+  windowDays: number
+  /** the words to show beside it */
+  basis: string
+}
+
+/**
+ * B3 (2026-10-10) — the Keyword Tracker's top-of-search scope fact, from the scope's campaign-day readings.
+ * Only readings at most `maxAgeDays` old count (an older one is not "now"); they are averaged with the
+ * impression weighting the campaign list and placement grid use (`average` = placement-grid's `weightedIS`,
+ * passed in so this stays pure). Null when no campaign in scope has a reading that recent.
+ */
+export function ktTopOfSearchFact(
+  readings: ReadonlyArray<{ campaignId: string; date: Date; share: number; impressions: number | null }>,
+  opts: {
+    campaignsInScope: number
+    average: (points: Array<{ value: number; weight: number }>) => number | null
+    now?: number
+    maxAgeDays?: number
+  },
+): KtTopOfSearchFact | null {
+  const now = opts.now ?? Date.now()
+  const maxAgeDays = opts.maxAgeDays ?? KT_TOS_MAX_AGE_DAYS
+  const recent = readings.filter((r) => Number.isFinite(r.share)
+    && Math.floor((now - +r.date) / 86_400_000) <= maxAgeDays)
+  if (!recent.length) return null
+  const avgShare = opts.average(recent.map((r) => ({ value: r.share, weight: Math.max(0, r.impressions ?? 0) })))
+  if (avgShare == null) return null
+  const dates = recent.map((r) => +r.date)
+  const oldest = iso(new Date(Math.min(...dates)))!
+  const newest = iso(new Date(Math.max(...dates)))!
+  const campaigns = new Set(recent.map((r) => r.campaignId)).size
+  return {
+    avgShare,
+    grain: 'campaign',
+    campaignsWithReading: campaigns,
+    campaignsInScope: opts.campaignsInScope,
+    readings: recent.length,
+    oldest,
+    newest,
+    asOf: newest,
+    windowDays: maxAgeDays,
+    basis: `campaign-level: the top-of-search impression share Amazon reported for ${campaigns} campaign${campaigns === 1 ? '' : 's'}, `
+      + `averaged by Nexus (impression-weighted) over ${recent.length} campaign-day reading${recent.length === 1 ? '' : 's'} from ${oldest} to ${newest}`,
+  }
+}
+
+/**
+ * KT.10 — like-for-like market movement between two SQP weeks, over the (query, ASIN) pairs present in
+ * BOTH. B2 (2026-10-10): the query's market columns (`searchQueryVolume`, `impressionsTotal`) repeat on
+ * every ASIN row of the query, so each is taken ONCE per query (MAX) and our impressions are SUMMED —
+ * summing the repeated totals per pair understated every multi-ASIN share by the number of our ASINs.
+ */
+export function likeForLikeMovement(
+  was: ReadonlyArray<{ searchQuery: string; asin: string | null; searchQueryVolume: number | null; impressionsTotal: number | null; impressionsBrand: number | null }>,
+  now: ReadonlyArray<{ searchQuery: string; asin: string | null; searchQueryVolume: number | null; impressionsTotal: number | null; impressionsBrand: number | null }>,
+): { pairs: number; volumeDeltaPct: number | null; ourImpressionsDeltaPct: number | null; sharePriorPct: number | null; shareNowPct: number | null } | null {
+  const key = (r: { searchQuery: string; asin: string | null }) => `${r.searchQuery}\u0000${r.asin ?? ''}`
+  const nowKeys = new Set(now.map(key))
+  const wasKeys = new Set(was.map(key))
+  const both = [...wasKeys].filter((x) => nowKeys.has(x))
+  if (both.length < 5) return null   // fewer than five pairs is an anecdote, not a movement
+  const inBoth = new Set(both)
+  const totals = (rows: typeof was) => {
+    const perQuery = new Map<string, { vol: number; total: number }>()
+    let ours = 0
+    for (const r of rows) {
+      if (!inBoth.has(key(r))) continue
+      const q = perQuery.get(r.searchQuery) ?? { vol: 0, total: 0 }
+      q.vol = Math.max(q.vol, r.searchQueryVolume ?? 0)
+      q.total = Math.max(q.total, r.impressionsTotal ?? 0)
+      perQuery.set(r.searchQuery, q)
+      ours += r.impressionsBrand ?? 0
+    }
+    let vol = 0, total = 0
+    for (const q of perQuery.values()) { vol += q.vol; total += q.total }
+    return { vol, total, ours }
+  }
+  const w = totals(was), n = totals(now)
+  return {
+    pairs: both.length,
+    volumeDeltaPct: w.vol > 0 ? ((n.vol - w.vol) / w.vol) * 100 : null,
+    ourImpressionsDeltaPct: w.ours > 0 ? ((n.ours - w.ours) / w.ours) * 100 : null,
+    sharePriorPct: w.total > 0 ? (100 * w.ours) / w.total : null,
+    shareNowPct: n.total > 0 ? (100 * n.ours) / n.total : null,
+  }
 }
 
 /** Row counts per SQP period for one market, in any order. */
@@ -432,8 +554,17 @@ export interface KtRow {
   keyword: string
   marketplace: string
   marketVolume: number | null
-  marketRank: number | null
-  /** 0..1 — SQP impressionShare for our BEST ASIN on this query. Never a rank wearing a share's label. */
+  /**
+   * C6 — Amazon's Search Query Score for this ASIN (lower = more searched among this ASIN's queries), for the
+   * row's best ASIN. A per-ASIN score from Brand Analytics, not a market rank and not our position.
+   * (Was `marketRank`; stored in the column `searchQueryRank`.)
+   */
+  searchQueryScore: number | null
+  /**
+   * 0..1 — our BEST ASIN's impression share on this query, computed from Amazon's counts (that ASIN's
+   * impressions ÷ the query's total impressions for the week). Null when Amazon reported no total —
+   * including on a `measured` row — never 0. Never a rank wearing a share's label.
+   */
   impressionShare: number | null
   /** how many of OUR ASINs hold a row on this query in the period the row read */
   asinsCompeting: number
@@ -666,13 +797,16 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
       ? prisma.searchQueryPerformance.findMany({
         where: {
           marketplace: market,
+          // B2 — weekly rows only: a MONTH or QUARTER row can share a start date with a week.
+          reportPeriod: 'WEEK',
           startDate: chosen.start,
           searchQuery: { in: visibleTerms },
           ...(scope.asinScoped ? { asin: { in: scope.asins } } : {}),
         },
+        // B2 — the COUNTS, never the stored share column (0 there can mean "not reported").
         select: {
           searchQuery: true, asin: true, startDate: true,
-          searchQueryVolume: true, searchQueryRank: true, impressionShare: true,
+          searchQueryVolume: true, searchQueryRank: true, impressionsBrand: true, impressionsTotal: true,
         },
       })
       : Promise.resolve([]),
@@ -694,6 +828,7 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
       ? prisma.searchQueryPerformance.findMany({
         where: {
           marketplace: market,
+          reportPeriod: 'WEEK',
           startDate: { lt: chosen.start },
           searchQuery: { in: visibleTerms },
           ...(scope.asinScoped ? { asin: { in: scope.asins } } : {}),
@@ -701,7 +836,7 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
         // KT.10 — `searchQueryVolume` joins the select so the share Δ can carry its DENOMINATOR.
         // It is per (query, week) and independent of ASIN, so comparing it for the same term across
         // the same two periods the Δ already uses is like-for-like by construction.
-        select: { searchQuery: true, startDate: true, impressionShare: true, searchQueryVolume: true },
+        select: { searchQuery: true, startDate: true, impressionsBrand: true, impressionsTotal: true, searchQueryVolume: true },
       })
       : Promise.resolve([]),
     // KT.3 · spend on the exact query text, in the SAME week the share is measured
@@ -722,7 +857,11 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
   for (const r of sqpRows) {
     const k = norm(r.searchQuery)
     const list = byTerm.get(k) ?? []
-    list.push({ ...r, impressionShare: Number(r.impressionShare) })
+    list.push({
+      searchQuery: r.searchQuery, asin: r.asin, startDate: r.startDate,
+      searchQueryVolume: r.searchQueryVolume, searchQueryRank: r.searchQueryRank,
+      impressionShare: sqpShareFromCounts(r.impressionsBrand, r.impressionsTotal),
+    })
     byTerm.set(k, list)
   }
 
@@ -745,6 +884,7 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
         by: ['searchQuery'],
         where: {
           marketplace: market,
+          reportPeriod: 'WEEK',
           searchQuery: { in: blankTerms },
           ...(scope.asinScoped ? { asin: { in: scope.asins } } : {}),
         },
@@ -753,7 +893,7 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
       scope.asinScoped && chosen.start
         ? prisma.searchQueryPerformance.groupBy({
           by: ['searchQuery'],
-          where: { marketplace: market, startDate: chosen.start, searchQuery: { in: blankTerms } },
+          where: { marketplace: market, reportPeriod: 'WEEK', startDate: chosen.start, searchQuery: { in: blankTerms } },
         })
         : Promise.resolve([] as Array<{ searchQuery: string }>),
     ])
@@ -789,15 +929,21 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
     }
   }
 
-  /** newest period before the chosen one that holds each term, with that period's best-ASIN share */
-  const prior = new Map<string, { period: Date; share: number; volume: number }>()
+  /**
+   * newest period before the chosen one that holds each term, with that period's best-ASIN share —
+   * computed from the counts (B2); null when no ASIN row of that period carries a query total, and a
+   * null prior share anchors no Δ.
+   */
+  const prior = new Map<string, { period: Date; share: number | null; volume: number }>()
   for (const r of priorRows) {
     const k = norm(r.searchQuery)
-    const share = Number(r.impressionShare)
+    const share = sqpShareFromCounts(r.impressionsBrand, r.impressionsTotal)
     const volume = r.searchQueryVolume ?? 0
     const cur = prior.get(k)
     if (!cur || +r.startDate > +cur.period) prior.set(k, { period: r.startDate, share, volume })
-    else if (+r.startDate === +cur.period && share > cur.share) prior.set(k, { period: cur.period, share, volume })
+    else if (+r.startDate === +cur.period && share != null && (cur.share == null || share > cur.share)) {
+      prior.set(k, { period: cur.period, share, volume })
+    }
   }
   // ── KT.10 — what the MARKET did, like-for-like ────────────────────────────────────────────────
   //
@@ -825,22 +971,15 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
       where: { marketplace: market, reportPeriod: 'WEEK', startDate: { in: [chosen.start, prevStart] } },
       select: { startDate: true, searchQuery: true, asin: true, searchQueryVolume: true, impressionsTotal: true, impressionsBrand: true },
     })
-    const k = (r: (typeof rows)[number]) => `${r.searchQuery}|${r.asin ?? ''}`
-    const now = new Map(rows.filter((r) => +r.startDate === +chosen.start!).map((r) => [k(r), r]))
-    const was = new Map(rows.filter((r) => +r.startDate === +prevStart).map((r) => [k(r), r]))
-    const both = [...was.keys()].filter((x) => now.has(x))
-    if (both.length < 5) return null   // fewer than five pairs is an anecdote, not a movement
-    const sum = (m: typeof now, f: (r: (typeof rows)[number]) => number) =>
-      both.reduce((t, x) => t + (f(m.get(x)!) || 0), 0)
-    const volWas = sum(was, (r) => r.searchQueryVolume ?? 0), volNow = sum(now, (r) => r.searchQueryVolume ?? 0)
-    const impWas = sum(was, (r) => r.impressionsTotal ?? 0), impNow = sum(now, (r) => r.impressionsTotal ?? 0)
-    const ourWas = sum(was, (r) => r.impressionsBrand ?? 0), ourNow = sum(now, (r) => r.impressionsBrand ?? 0)
+    // B2 — each query's market total once (MAX over its ASIN rows), ours summed: see likeForLikeMovement.
+    const moved = likeForLikeMovement(
+      rows.filter((r) => +r.startDate === +prevStart),
+      rows.filter((r) => +r.startDate === +chosen.start!),
+    )
+    if (!moved) return null
     return {
-      priorPeriod: iso(prevStart), pairs: both.length,
-      volumeDeltaPct: volWas > 0 ? ((volNow - volWas) / volWas) * 100 : null,
-      ourImpressionsDeltaPct: ourWas > 0 ? ((ourNow - ourWas) / ourWas) * 100 : null,
-      sharePriorPct: impWas > 0 ? (100 * ourWas) / impWas : null,
-      shareNowPct: impNow > 0 ? (100 * ourNow) / impNow : null,
+      priorPeriod: iso(prevStart),
+      ...moved,
       /**
        * 🔴 Whether the newest period is SETTLED, because that decides how much weight this carries.
        * SQP.3 measured weeks frozen by ~25 days. Split by window: IT's 07-12 → 07-19 comparison (both
@@ -872,7 +1011,7 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
         : seen ? 'no-row-this-period' : 'never-measured'
       return {
         keyword: term, marketplace: market,
-        marketVolume: null, marketRank: null, impressionShare: null,
+        marketVolume: null, searchQueryScore: null, impressionShare: null,
         asinsCompeting: 0, asOf: null, asOfAgeDays: null,
         state,
         lastSeen: iso(seen), lastSeenAgeDays: ageDays(seen),
@@ -885,33 +1024,38 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
         measured: false, branded,
       }
     }
-    // our BEST ASIN on this query — the one whose share we would be defending
-    const best = inPeriod.reduce((a, b) => (b.impressionShare > a.impressionShare ? b : a))
+    // our BEST ASIN on this query — the one whose share we would be defending. B2: only rows whose share
+    // could be computed (a query total > 0) compete; with none, the row is measured but carries no share.
+    const withShare = inPeriod.filter((r): r is KtSqpRow & { impressionShare: number } => r.impressionShare != null)
+    const best = withShare.length
+      ? withShare.reduce((a, b) => (b.impressionShare > a.impressionShare ? b : a))
+      : inPeriod[0]
+    const bestShare = withShare.length ? best.impressionShare : null
     const p = prior.get(term) ?? null
     const covered = new Set(inPeriod.map((r) => r.asin).filter((x): x is string => !!x))
     // the SUM is an upper bound, not a total — two of our ASINs can share one impression
-    const bound = inPeriod.reduce((acc, r) => acc + r.impressionShare, 0)
+    const bound = withShare.reduce((acc, r) => acc + r.impressionShare, 0)
     return {
       keyword: term, marketplace: market,
       marketVolume: best.searchQueryVolume,
-      marketRank: best.searchQueryRank,
-      impressionShare: best.impressionShare,
+      searchQueryScore: best.searchQueryRank,
+      impressionShare: bestShare,
       asinsCompeting: covered.size,
       asOf: iso(chosen.start),
       asOfAgeDays: ageDays(chosen.start),
       state: 'measured',
       lastSeen: null, lastSeenAgeDays: null,
-      bestAsin: best.asin,
-      shareBound: covered.size > 1 ? bound : null,
+      bestAsin: bestShare != null ? best.asin : null,
+      shareBound: withShare.length > 1 ? bound : null,
       ad: groups
         ? {
           bidOnTerm: true,
           adAsins: adAsins.size,
           coveredAdAsins: [...covered].filter((a) => adAsins.has(a)).length,
-          bestAsinAdvertisesTerm: !!best.asin && adAsins.has(best.asin),
+          bestAsinAdvertisesTerm: bestShare != null && !!best.asin && adAsins.has(best.asin),
         }
         : null,
-      deltaPP: p ? (best.impressionShare - p.share) * 100 : null,
+      deltaPP: p && p.share != null && bestShare != null ? (bestShare - p.share) * 100 : null,
       // Same term, same two periods as the Δ above. Null when the prior period recorded no volume,
       // rather than a fabricated 0 % or an Infinity from dividing by nothing.
       marketDeltaPct: p && p.volume > 0 && best.searchQueryVolume != null
@@ -931,7 +1075,8 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
     const s = dir === 'asc' ? 1 : -1
     switch (sortKey) {
       case 'keyword': return s * a.keyword.localeCompare(b.keyword)
-      case 'rank': return s * ((a.marketRank ?? Number.MAX_SAFE_INTEGER) - (b.marketRank ?? Number.MAX_SAFE_INTEGER))
+      // `rank` stays the sort key's name for the client; it sorts by Amazon's Search Query Score
+      case 'rank': return s * ((a.searchQueryScore ?? Number.MAX_SAFE_INTEGER) - (b.searchQueryScore ?? Number.MAX_SAFE_INTEGER))
       case 'share': return s * ((a.impressionShare ?? -1) - (b.impressionShare ?? -1))
       case 'asins': return s * (a.asinsCompeting - b.asinsCompeting)
       case 'asOf': return s * ((a.asOf ? Date.parse(a.asOf) : 0) - (b.asOf ? Date.parse(b.asOf) : 0))
@@ -971,26 +1116,24 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
       && (scope.boundBy === 'market' || scope.campaignIds.includes(c.id)))
     .map((c) => c.externalCampaignId)
     .filter((x): x is string => !!x)
+  // B3 (2026-10-10) — only readings at most KT_TOS_MAX_AGE_DAYS old, impression-weighted, with the oldest
+  // and newest date and the campaigns used (ktTopOfSearchFact). It was a plain mean of each campaign's
+  // newest reading at ANY age, dated by the newest one alone.
+  const tosSince = new Date(); tosSince.setUTCHours(0, 0, 0, 0)
+  tosSince.setTime(+tosSince - KT_TOS_MAX_AGE_DAYS * 86_400_000)
   const tosRows = scopeExternalIds.length
     ? await prisma.amazonAdsPlacementReport.findMany({
-      where: { campaignId: { in: scopeExternalIds }, topOfSearchIS: { not: null } },
-      select: { campaignId: true, date: true, topOfSearchIS: true },
-      orderBy: { date: 'desc' },
+      where: { campaignId: { in: scopeExternalIds }, topOfSearchIS: { not: null }, date: { gte: tosSince } },
+      select: { campaignId: true, date: true, topOfSearchIS: true, impressions: true },
     })
     : []
-  const latestTos = new Map<string, { share: number; date: Date }>()
-  for (const r of tosRows) {
-    if (!latestTos.has(r.campaignId)) latestTos.set(r.campaignId, { share: Number(r.topOfSearchIS), date: r.date })
-  }
-  const tos = latestTos.size
-    ? {
-      /** impression-unweighted mean of each campaign's most recent reading */
-      avgShare: [...latestTos.values()].reduce((a, x) => a + x.share, 0) / latestTos.size,
-      campaignsWithReading: latestTos.size,
-      campaignsInScope: scopeExternalIds.length,
-      asOf: iso([...latestTos.values()].reduce((a, x) => (+x.date > +a.date ? x : a)).date),
-    }
-    : null
+  const { weightedIS } = await import('./placement-grid.service.js')
+  const tos = ktTopOfSearchFact(
+    tosRows.filter((r) => r.topOfSearchIS != null).map((r) => ({
+      campaignId: r.campaignId, date: r.date, share: Number(r.topOfSearchIS), impressions: r.impressions ?? null,
+    })),
+    { campaignsInScope: scopeExternalIds.length, average: weightedIS },
+  )
 
   // ── freshness, per source, for this market (probed in the batch above) ──
   const sqpIngested = sqpLatest
@@ -1028,7 +1171,7 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
   const coveredAsinsInWeek = chosen.start && scope.asins.length
     ? (await prisma.searchQueryPerformance.groupBy({
       by: ['asin'],
-      where: { marketplace: market, startDate: chosen.start, asin: { in: scope.asins } },
+      where: { marketplace: market, reportPeriod: 'WEEK', startDate: chosen.start, asin: { in: scope.asins } },
     })).filter((r) => r.asin).length
     : 0
 
@@ -1162,7 +1305,10 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
       newestAsOf: periodsUsed[0]?.start ?? null,
       oldestAsOf: periodsUsed[periodsUsed.length - 1]?.start ?? null,
     },
-    /** KT.3 — a scope fact for the reach line, never a column. See the block that builds it. */
+    /**
+     * KT.3 — a scope fact for the reach line, never a column: campaign-level, readings of the last
+     * KT_TOS_MAX_AGE_DAYS days only, impression-weighted by Nexus (B3). Null when none is that recent.
+     */
     topOfSearch: tos,
     /**
      * KT.5 — one health block, so the page can carry ONE line that is quiet when the feed is

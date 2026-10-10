@@ -35,7 +35,7 @@ export interface SovExportRow {
   query: string
   marketplace: string
   marketVolume: number | null
-  marketRank: number | null
+  bestSearchQueryScore: number | null
   marketImpressions: number | null
   ourImpressions: number | null
   share: number | null
@@ -177,7 +177,7 @@ export function buildSovCsv(rows: SovExportRow[], ctx: SovExportContext): string
   H.push('#')
 
   const cols = [
-    'query', 'market', 'market_volume', 'market_rank', 'market_impressions', 'our_impressions',
+    'query', 'market', 'market_volume', 'best_search_query_score', 'market_impressions', 'our_impressions',
     'share_pct', 'share_raw', 'state',
     'delta_pt', 'delta_raw', 'delta_state', 'prior_share_pct',
     'click_share_pct', 'click_share_raw', 'market_clicks', 'our_clicks',
@@ -186,7 +186,7 @@ export function buildSovCsv(rows: SovExportRow[], ctx: SovExportContext): string
     'branded', 'on_watchlist',
   ]
   const body = rows.map((r) => [
-    r.query, r.marketplace, r.marketVolume, r.marketRank, r.marketImpressions, r.ourImpressions,
+    r.query, r.marketplace, r.marketVolume, r.bestSearchQueryScore, r.marketImpressions, r.ourImpressions,
     // formatted AND raw: the formatted one is readable, the raw one is the only thing that
     // survives arithmetic without the rounding this page has twice been bitten by.
     r.state === 'measured' ? fmtPct(r.share) : '', r.state === 'measured' && r.share != null ? r.share : '',

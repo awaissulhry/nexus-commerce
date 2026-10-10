@@ -15,7 +15,8 @@
  *   level   the daily reports (AmazonAdsDailyPerformance, campaign rows, 7-day attribution) over the same days: the
  *           product's clicks, spend, orders and sales. The curve says WHEN; the level says HOW MUCH.
  *   lanes   the daily placement report (top of search, product pages, rest of search) of the product's campaigns, with
- *           Amazon's top-of-search impression share where it reports one.
+ *           the top-of-search impression share Amazon reports per campaign and day where it reports one — averaged by
+ *           Nexus (impression-weighted) over the campaigns and days with a reading, with how many of each and the newest.
  *   pools   product = its own campaigns (brain/ownership.ts; its shared ones only when it has none of its own) ·
  *           category = the market's Sponsored Products campaigns advertising a product filed under its primary category ·
  *           market = every Sponsored Products campaign of the market.
@@ -86,7 +87,17 @@ export const POOLS: readonly PoolName[] = ['product', 'category', 'market']
 export interface Totals { impressions: number; clicks: number; spendCents: number; orders: number; salesCents: number }
 /** One hour of one local day (summed over a pool's campaigns). */
 export interface HourCell extends Totals { day: string; hour: number }
-export interface LaneTotals extends Totals { lane: LaneName; topOfSearchSharePct: number | null }
+/**
+ * C2 (2026-10-10) — what stands behind `topOfSearchSharePct`: the campaigns and the days that carry a reading, and
+ * the newest one. The share is Amazon's per campaign and day; the average over them is Nexus's.
+ */
+export interface TopOfSearchShareBasis { campaigns: number; days: number; newest: string | null }
+export interface LaneTotals extends Totals {
+  lane: LaneName
+  /** percent; computed by Nexus — the impression-weighted average of Amazon's campaign-day shares (top of search only) */
+  topOfSearchSharePct: number | null
+  topOfSearchShareBasis?: TopOfSearchShareBasis | null
+}
 
 /** What the loader read for one product × market (or what a test makes up). */
 export interface ResearchFacts {
@@ -320,7 +331,7 @@ export interface HoursResearch {
   trend: { span: string | null; clicks: number | null; cpc: number | null; cr: number | null; marketCpc: number | null }
   /** The market's own day (its pool of every campaign): when shoppers click, what a click costs, when they buy. */
   marketDay: { campaigns: number; peakParts: number[]; quietParts: number[]; cpcHighPart: number | null; cpcLowPart: number | null; crBestPart: number | null; crWorstPart: number | null; crCurveSeen: boolean }
-  lanes: Array<{ lane: LaneName; clicksShare: number; spendShare: number; cpcCents: number | null; cr: number | null; acos: number | null; topOfSearchSharePct: number | null }>
+  lanes: Array<{ lane: LaneName; clicksShare: number; spendShare: number; cpcCents: number | null; cr: number | null; acos: number | null; topOfSearchSharePct: number | null; topOfSearchShareBasis: TopOfSearchShareBasis | null }>
   /** The share of the product's spend at top of search (0.5 when the placement report holds none — said so). */
   topOfSearchSpendShare: number
   topOfSearchShareKnown: boolean
@@ -496,6 +507,7 @@ export function researchHours(f: ResearchFacts): HoursResearch {
     lane: l.lane, clicksShare: laneTotal.clicks > 0 ? r4(l.clicks / laneTotal.clicks) : 0, spendShare: laneTotal.spendCents > 0 ? r4(l.spendCents / laneTotal.spendCents) : 0,
     cpcCents: l.clicks > 0 ? r2(l.spendCents / l.clicks) : null, cr: l.clicks > 0 ? r4(l.orders / l.clicks) : null, acos: l.salesCents > 0 ? r4(l.spendCents / l.salesCents) : null,
     topOfSearchSharePct: l.topOfSearchSharePct,
+    topOfSearchShareBasis: l.topOfSearchShareBasis ?? null,
   }))
   const tos = lanes.find((l) => l.lane === 'TOP_OF_SEARCH')
   const topOfSearchShareKnown = laneTotal.spendCents > 0
@@ -533,7 +545,7 @@ export function researchHours(f: ResearchFacts): HoursResearch {
     const restOrders = f.lanes.filter((l) => l.lane !== 'TOP_OF_SEARCH').reduce((s, l) => s + l.orders, 0)
     const restCr = laneTotal.clicks * restClicks > 0 ? restOrders / (laneTotal.clicks * restClicks) : null
     const tosShare = tos?.topOfSearchSharePct
-    summary.push(`Lanes (daily placement report, 7-day attribution): top of search ${pct(tos?.clicksShare ?? 0)} of clicks and ${pct(topOfSearchSpendShare)} of spend${tos?.cr != null && restCr ? `, converting ${times(tos.cr / restCr)} the other lanes` : ''}${tosShare != null ? `; Amazon's top-of-search impression share about ${Math.round(tosShare)} %` : ''}.`)
+    summary.push(`Lanes (daily placement report, 7-day attribution): top of search ${pct(tos?.clicksShare ?? 0)} of clicks and ${pct(topOfSearchSpendShare)} of spend${tos?.cr != null && restCr ? `, converting ${times(tos.cr / restCr)} the other lanes` : ''}${tosShare != null ? `; ${topOfSearchShareWords(tosShare, tos?.topOfSearchShareBasis ?? null)}` : ''}.`)
   } else {
     summary.push('No placement report for its campaigns in the window: the expected effect assumes half the spend is at top of search.')
   }
@@ -700,6 +712,21 @@ export async function loadCampaignHours(campaigns: readonly CampaignRef[], days:
   }
 }
 
+/**
+ * C2 (2026-10-10) — the top-of-search share in words: Amazon reports it per campaign and day; the number here is
+ * Nexus's impression-weighted average over the campaigns and days with a reading, so the sentence names them, the
+ * newest day, and the grain. A non-zero share below 0.01 % reads "<0.01 %", never "0 %".
+ */
+export function topOfSearchShareWords(sharePct: number, basis: TopOfSearchShareBasis | null): string {
+  const value = sharePct > 0 && sharePct < 0.01 ? '<0.01 %'
+    : sharePct < 1 ? `${sharePct.toFixed(2)} %`
+      : `${Math.round(sharePct)} %`
+  if (!basis) return `the top-of-search impression share Amazon reported for these campaigns (campaign level), averaged by Nexus: about ${value}`
+  const n = basis.campaigns, d = basis.days
+  return `the top-of-search impression share Amazon reported for ${n === 1 ? 'this campaign' : `these ${n} campaigns`} (campaign level), `
+    + `averaged by Nexus over ${d} day${d === 1 ? '' : 's'} with a reading${basis.newest ? `, newest ${basis.newest}` : ''}: about ${value}`
+}
+
 /** The cells of a set of campaigns summed per local day × hour (negative sums read as 0). */
 export function poolCells(byCampaign: ReadonlyMap<string, ReadonlyMap<string, HourCell>>, ids: Iterable<string>): HourCell[] {
   const sum = new Map<string, HourCell>()
@@ -714,7 +741,10 @@ export function poolCells(byCampaign: ReadonlyMap<string, ReadonlyMap<string, Ho
 }
 
 type DailyRow = { entityId: string; impressions: bigint; clicks: bigint; costMicros: bigint; orders: bigint; sales: bigint }
-type LaneRow = { placement: string; impressions: bigint; clicks: bigint; costMicros: bigint; orders: bigint; sales: bigint; tos: number | null }
+type LaneRow = {
+  placement: string; impressions: bigint; clicks: bigint; costMicros: bigint; orders: bigint; sales: bigint; tos: number | null
+  tos_campaigns: number | null; tos_days: number | null; tos_newest: string | null
+}
 
 /** The daily reports per campaign (7-day attribution) over the window's dates, by Amazon campaign id. */
 async function loadDaily(externalIds: readonly string[], days: readonly string[]): Promise<Map<string, Totals>> {
@@ -731,13 +761,19 @@ async function loadDaily(externalIds: readonly string[], days: readonly string[]
   return out
 }
 
-/** The daily placement report of the product's campaigns, per lane, with Amazon's top-of-search share (impression-weighted). */
-async function loadLanes(externalIds: readonly string[], days: readonly string[]): Promise<LaneTotals[]> {
+/**
+ * The daily placement report of the product's campaigns, per lane, with the top-of-search share Amazon reported per
+ * campaign and day, averaged by Nexus (impression-weighted), and its basis: campaigns and days with a reading, newest.
+ */
+export async function loadLanes(externalIds: readonly string[], days: readonly string[]): Promise<LaneTotals[]> {
   if (!externalIds.length || !days.length) return []
   const rows = await prisma.$queryRaw<LaneRow[]>(Prisma.sql`
     SELECT "placement", sum("impressions")::bigint AS impressions, sum("clicks")::bigint AS clicks, sum("costMicros")::bigint AS "costMicros",
            sum(COALESCE("orders7d", 0))::bigint AS orders, sum(COALESCE("sales7dCents", 0))::bigint AS sales,
-           (sum("topOfSearchIS" * "impressions") FILTER (WHERE "topOfSearchIS" IS NOT NULL) / NULLIF(sum("impressions") FILTER (WHERE "topOfSearchIS" IS NOT NULL), 0))::float AS tos
+           (sum("topOfSearchIS" * "impressions") FILTER (WHERE "topOfSearchIS" IS NOT NULL) / NULLIF(sum("impressions") FILTER (WHERE "topOfSearchIS" IS NOT NULL), 0))::float AS tos,
+           count(DISTINCT "campaignId") FILTER (WHERE "topOfSearchIS" IS NOT NULL)::int AS tos_campaigns,
+           count(DISTINCT "date") FILTER (WHERE "topOfSearchIS" IS NOT NULL)::int AS tos_days,
+           to_char(max("date") FILTER (WHERE "topOfSearchIS" IS NOT NULL), 'YYYY-MM-DD') AS tos_newest
       FROM "AmazonAdsPlacementReport"
      WHERE "campaignId" IN (${Prisma.join([...externalIds])}) AND "date" >= ${days[0]}::date AND "date" <= ${days[days.length - 1]}::date
      GROUP BY "placement"`)
@@ -747,9 +783,14 @@ async function loadLanes(externalIds: readonly string[], days: readonly string[]
     const lane = laneOf(placement)
     const cur = byLane.get(lane) ?? { lane, ...ZERO, topOfSearchSharePct: null }
     const tosPct = r.tos != null ? Number(r.tos) * (Number(r.tos) <= 1 ? 100 : 1) : null
+    const tosHere = lane === 'TOP_OF_SEARCH' && tosPct != null
     byLane.set(lane, {
       ...cur, ...add(cur, { impressions: Number(r.impressions), clicks: Number(r.clicks), spendCents: Number(r.costMicros) / 10_000, orders: Number(r.orders), salesCents: Number(r.sales) }),
-      topOfSearchSharePct: lane === 'TOP_OF_SEARCH' && tosPct != null ? Math.round(tosPct * 10) / 10 : cur.topOfSearchSharePct,
+      // three significant digits, so a tiny real share never rounds to 0
+      topOfSearchSharePct: tosHere ? Number(tosPct.toPrecision(3)) : cur.topOfSearchSharePct,
+      topOfSearchShareBasis: tosHere
+        ? { campaigns: Number(r.tos_campaigns ?? 0), days: Number(r.tos_days ?? 0), newest: r.tos_newest ?? null }
+        : cur.topOfSearchShareBasis ?? null,
     })
   }
   const order: LaneName[] = ['TOP_OF_SEARCH', 'REST_OF_SEARCH', 'PRODUCT_PAGE']

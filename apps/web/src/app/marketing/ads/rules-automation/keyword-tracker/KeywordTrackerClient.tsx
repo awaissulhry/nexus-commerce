@@ -78,7 +78,7 @@ interface Row {
   keyword: string
   marketplace: string
   marketVolume: number | null
-  marketRank: number | null
+  searchQueryScore: number | null
   impressionShare: number | null
   asinsCompeting: number
   asOf: string | null
@@ -315,11 +315,11 @@ export function KeywordTrackerClient() {
       filterValue: (r) => r.marketVolume ?? 0,
     },
     {
-      key: 'rank', label: 'Market rank',
-      tip: "The term's popularity rank in this marketplace (#1 = most searched). This is the QUERY's rank in the market — not our position in the results, which no Amazon API returns.",
-      render: (r) => (r.marketRank == null ? <span className="h10-kt-nd">—</span> : `#${num(r.marketRank)}`),
-      sortValue: (r) => r.marketRank ?? Number.MAX_SAFE_INTEGER,
-      filterValue: (r) => r.marketRank ?? 0,
+      key: 'rank', label: 'Search Query Score',
+      tip: "Amazon's Search Query Score for this ASIN (lower = more searched among this ASIN's queries), for the best ASIN. Not a market rank, and not our position in the results, which no Amazon API returns.",
+      render: (r) => (r.searchQueryScore == null ? <span className="h10-kt-nd">—</span> : num(r.searchQueryScore)),
+      sortValue: (r) => r.searchQueryScore ?? Number.MAX_SAFE_INTEGER,
+      filterValue: (r) => r.searchQueryScore ?? 0,
     },
     {
       key: 'share', label: 'Our best ASIN’s share',

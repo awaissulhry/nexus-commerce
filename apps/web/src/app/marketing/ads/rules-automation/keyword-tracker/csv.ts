@@ -22,7 +22,7 @@ export interface KtCsvRow {
   keyword: string
   marketplace: string
   marketVolume?: number | null
-  marketRank?: number | null
+  searchQueryScore?: number | null
   impressionShare?: number | null
   shareBound?: number | null
   bestAsin?: string | null
@@ -100,12 +100,12 @@ export function buildCsv(rows: KtCsvRow[], d: KtCsvPayload): string {
     ['exported rows', String(rows.length)],
     [],
   ]
-  const head = ['keyword', 'market', 'market volume', 'market rank', 'best ASIN share', 'share bound',
+  const head = ['keyword', 'market', 'market volume', 'search query score (best ASIN)', 'best ASIN share', 'share bound',
     'best ASIN', 'our ASINs on query', 'delta pp', 'gap days', 'prior share', 'prior week',
     'spend EUR (that week)', 'clicks', 'orders', 'as of', 'last seen', 'state', 'branded',
     'advertised ASINs on term', 'covered advertised ASINs']
   const body = rows.map((r) => [
-    r.keyword, r.marketplace, r.marketVolume ?? '', r.marketRank ?? '',
+    r.keyword, r.marketplace, r.marketVolume ?? '', r.searchQueryScore ?? '',
     shareCell(r), r.shareBound != null ? sharePct(r.shareBound) : '',
     r.bestAsin ?? '', r.asinsCompeting,
     r.deltaPP != null ? r.deltaPP.toFixed(2) : (rowState(r) === 'measured' ? 'no earlier week' : ''),
