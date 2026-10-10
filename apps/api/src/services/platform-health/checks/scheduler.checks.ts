@@ -9,7 +9,10 @@
  *               between its starts), the ticks it missed in the last 24 h (a gap past its cadence + grace), the runs that
  *               started and never ended (left RUNNING, or swept "stale" by cron-orphan-sweeper: the process died during
  *               the run), the jobs whose last run failed and the runs far slower than usual. Several jobs that went
- *               silent at the same time = the scheduler stopped then.
+ *               silent at the same time = the scheduler stopped then. C2 (2026-10-10): a job quiet by design
+ *               (utils/cron-quiet.ts) is not missed by its silence — a work-only job records a run only when its
+ *               data holds work, a brain step the product cycle took over is silent while the cycle runs, and a
+ *               windowed job (the settle catch-up runs 03–09 UTC) misses only the ticks it expects.
  *   processes   the scheduler's and the worker's heartbeat (lib/runtime-status): which instance is up, since when, under
  *               which deployment. Started again under the SAME deployment as the last watchdog run saw = a crash or an
  *               out-of-memory kill, not a deploy. Only the newest restart of a day is visible (a heartbeat keeps no
@@ -17,6 +20,7 @@
  */
 import prisma from '../../../db.js'
 import { HOUR, MINUTE, clockUtc, plural, withoutNumbers, type HealthCheck, type Verdict } from '../types.js'
+import { cronQuietRule, dueTicks, silenceExcused } from '../../../utils/cron-quiet.js'
 
 // ── cron-runs ─────────────────────────────────────────────────────────────────────────────────────────
 
@@ -146,24 +150,41 @@ export interface MissedStretch {
   cadenceMinutes: number
 }
 
-/** PURE. The ticks each regular job missed in the last 24 h (and a silence still running now, whatever its age). */
+/**
+ * PURE. The ticks each regular job missed in the last 24 h (and a silence still running now, whatever its age). C2 — a
+ * work-only job (utils/cron-quiet.ts) misses nothing by its silence, nor a covered one while the product cycle runs; an
+ * expected-ticks job misses only the ticks it expects.
+ */
 export function missedStretches(jobs: readonly CronJobStats[], now: Date): MissedStretch[] {
   const out: MissedStretch[] = []
   const windowStart = now.getTime() - 24 * HOUR
+  const lastAt = new Map(jobs.map((j) => [j.job, j.lastAt.getTime()]))
   for (const job of jobs) {
     if (!isRegular(job)) continue
+    if (silenceExcused(job.job, now.getTime(), (name) => lastAt.get(name) ?? null)) continue
+    const rule = cronQuietRule(job.job)
+    const quiet = rule?.kind === 'expected-ticks' ? rule : null
     const cadence = job.medianGapMs!
     const grace = graceFor(cadence)
+    const cadenceMinutes = Math.round(cadence / MINUTE)
     for (const gap of job.longGaps) {
       if (gap.gapMs <= cadence + grace || gap.at.getTime() <= windowStart) continue
       const previous = gap.at.getTime() - gap.gapMs
+      if (quiet) {
+        const due = dueTicks(job.job, previous, gap.at.getTime() - grace, cadence)
+        if (due.length) out.push({ job: job.job, firstMissedAt: new Date(due[0]), endedAt: gap.at, missed: due.length, cadenceMinutes })
+        continue
+      }
       out.push({
         job: job.job, firstMissedAt: new Date(previous + cadence), endedAt: gap.at,
         missed: Math.max(1, Math.round(gap.gapMs / cadence) - 1), cadenceMinutes: Math.round(cadence / MINUTE),
       })
     }
     const silentFor = now.getTime() - job.lastAt.getTime()
-    if (silentFor > cadence + grace) {
+    if (silentFor > cadence + grace && quiet) {
+      const due = dueTicks(job.job, job.lastAt.getTime(), now.getTime() - grace, cadence)
+      if (due.length) out.push({ job: job.job, firstMissedAt: new Date(due[0]), endedAt: null, missed: due.length, cadenceMinutes })
+    } else if (silentFor > cadence + grace) {
       out.push({
         job: job.job, firstMissedAt: new Date(job.lastAt.getTime() + cadence), endedAt: null,
         missed: Math.max(1, Math.floor((silentFor - grace) / cadence)), cadenceMinutes: Math.round(cadence / MINUTE),
@@ -261,6 +282,8 @@ export function judgeCronRuns(facts: CronFacts, now: Date): Verdict {
     evidence: {
       jobsSeen: facts.jobs.length,
       jobsJudged: judged,
+      // C2 — the jobs judged by the quiet-by-design list, and why (utils/cron-quiet.ts).
+      quietByDesign: facts.jobs.flatMap((j) => { const q = cronQuietRule(j.job); return q ? [{ job: j.job, kind: q.kind, reason: q.reason, ...(q.kind === 'covered' ? { by: q.by } : {}) }] : [] }),
       missed: stretches.slice(0, 40).map((s) => ({
         job: s.job, firstMissedAt: s.firstMissedAt.toISOString(), endedAt: s.endedAt?.toISOString() ?? null, missedRuns: s.missed, everyMinutes: s.cadenceMinutes,
       })),

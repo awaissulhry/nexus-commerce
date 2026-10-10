@@ -191,7 +191,10 @@ export type RankReleaseSummary = Omit<ReleaseReport, 'campaigns'> & { swept: num
 // BB-6 — `brainOwned`: campaigns of its plans and schedules the bid brain owns, left to the brain (one writer per campaign).
 // ONE BRAIN AB-6 — `leverHeld`: campaigns left because a product's brain owns (or the Owner holds) their placements or
 // ad-group default bids, per lever; `leverHoldsUnread`: who holds them could not be read (the write gate decided).
-export interface RankDefendSummary { evaluated: number; applied: number; decisions: RankDefendDecision[]; plans?: RankPlanRunSummary[]; guard?: EngineGuardReport; skipped?: string; release?: RankReleaseSummary; writes?: RankWriteCounts; keptServing?: number; holds?: BidHoldLog; brainOwned?: number; leverHeld?: LeverHeld; leverHoldsUnread?: boolean }
+// C1 (2026-10-10) — `paused`: campaigns of its plans and schedules that are not ENABLED (paused, archived, draft). Each is
+// decided as a hold and nothing is written to it; it stays held, and its hour is written at the first tick after it is
+// enabled again.
+export interface RankDefendSummary { evaluated: number; applied: number; decisions: RankDefendDecision[]; plans?: RankPlanRunSummary[]; guard?: EngineGuardReport; skipped?: string; release?: RankReleaseSummary; writes?: RankWriteCounts; keptServing?: number; holds?: BidHoldLog; brainOwned?: number; leverHeld?: LeverHeld; leverHoldsUnread?: boolean; paused?: number }
 
 interface CampRow { id: string; name: string; status: string; dynamicBidding: unknown; biddingStrategy?: string | null; bidsSuppressedAt?: Date | null; bidsSuppressedFloorCents?: number | null; bidsSuppressedBy?: string | null; deliveryReasons?: string[]; marketplace?: string | null }
 interface RankCampaignResult { decision: RankDefendDecision; applied: number; held: HeldBack; writes: RankWriteCounts; keptServing: boolean }
@@ -416,6 +419,29 @@ export async function recordMinBidEntry(campaignId: string, actor: string, floor
 }
 export const keptServingWords = (entries: number): string =>
   `kept serving: this campaign already entered Min bid ${entries === 1 ? 'once' : `${entries} times`} today (UTC) — a campaign is floored at most ${MAX_MIN_BID_ENTRIES_PER_DAY} times a day, so its bids stay as they are until tomorrow`
+
+/**
+ * C1 (2026-10-10) — a campaign that is not ENABLED (PAUSED, ARCHIVED, DRAFT) does not serve, so its hour is not written:
+ * no placement, no floor, no give-back. Every 15 minutes the engine moved the bids and placements of paused campaigns
+ * (SYNC.1 keeps them paused, rightly), and none of those writes could matter. Such a campaign stays held by its plan or
+ * schedule — the orphan sweep leaves it alone — and the first tick after it is enabled writes its hour.
+ */
+export const isServingStatus = (status: string | null | undefined): boolean => status === 'ENABLED'
+export function notServingWords(status: string | null | undefined): string {
+  const s = (status ?? 'unknown').toLowerCase()
+  if (s === 'paused') return 'campaign paused — nothing is written while it is paused; its hour is written at the first tick after it is enabled again'
+  // An archived Sponsored Products campaign never serves again: nothing is promised for later.
+  if (s === 'archived') return 'campaign archived — nothing is written to it: an archived campaign never serves again'
+  return `campaign ${s} (not enabled) — nothing is written while it is not enabled; its hour is written at the first tick after it is enabled again`
+}
+function notServingResult(camp: CampRow, key: string, spec: RankTargetSpec, planId: string | null): RankCampaignResult {
+  const cdb = (camp.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }
+  const currentPct = cdb.placementBidding?.find((x) => x.placement === spec.placement)?.percentage ?? 0
+  return {
+    decision: { campaignId: camp.id, campaignName: camp.name, targetKey: key, action: 'hold', reason: notServingWords(camp.status), currentPct, nextPct: currentPct, applied: false, planId },
+    applied: 0, held: nothingHeld(), writes: noWrites(), keptServing: false,
+  }
+}
 
 async function decideAndMaybeApply(
   camp: CampRow, key: string, spec: RankTargetSpec, planId: string | null,
@@ -754,6 +780,9 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
   }
   const campaigns = await prisma.campaign.findMany({ where: { id: { in: unionIds } }, select: { id: true, name: true, marketplace: true, status: true, externalCampaignId: true, dynamicBidding: true, biddingStrategy: true, acos: true, spend: true, bidsSuppressedAt: true, bidsSuppressedFloorCents: true, bidsSuppressedBy: true, deliveryReasons: true } })
   const campById = new Map(campaigns.map((c) => [c.id, c]))
+  // C1 — campaigns that do not serve (PAUSED, ARCHIVED, DRAFT): decided as a hold, never written, nothing given back.
+  // They stay in `governed`, so the orphan sweep leaves their floors alone too, and they are written once enabled.
+  const notServing = new Set(campaigns.filter((c) => !isServingStatus(c.status)).map((c) => c.id))
   // RTC — per-campaign (campaign-scope) target overrides for every campaign in play.
   const schedOverrides = new Map<string, TargetOverrideMap>()
   try {
@@ -807,24 +836,32 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
     const write = !dryRun && PLAN_ALLOW_APPLY && (!plan.manualOnly || !!opts.force)
     if (write && (!key || !targetByKey.get(key))) {
       const why = key ? `its plan names "${key}", which no longer exists` : 'its plan holds nothing at this hour'
-      for (const fc of famCamps) if (!leftAlone.has(fc.id)) idle.push({ campaignId: fc.id, actor: `automation:rank-plan-${plan.id}`, why })
+      for (const fc of famCamps) if (!leftAlone.has(fc.id) && !notServing.has(fc.id)) idle.push({ campaignId: fc.id, actor: `automation:rank-plan-${plan.id}`, why })
     }
     if (key) {
       const target = targetByKey.get(key)
       if (target) {
         // RD.5 — family pre-flight guards (once per plan, shared by every campaign):
         // retail-readiness (OOS/lost-buybox), family daily spend vs budget cap.
+        // C1 — a family none of whose campaigns serves writes nothing, so it reads none of them either.
         const famCampIds = famCamps.map((c) => c.id)
-        const readinessByCamp = await getReadiness(plan.marketplace)
-        const overBudget = plan.familyDailyBudgetCents != null && (await familySpendRecentCents(famCampIds)) >= plan.familyDailyBudgetCents
+        const anyServing = famCamps.some((c) => !notServing.has(c.id))
+        const readinessByCamp = anyServing ? await getReadiness(plan.marketplace) : new Map<string, string>()
+        const overBudget = anyServing && plan.familyDailyBudgetCents != null && (await familySpendRecentCents(famCampIds)) >= plan.familyDailyBudgetCents
         // RD.6 — self-competition: demote redundant family campaigns (lose a keyword/
         // auto contest and win none) to the plan baseline so we stop outbidding ourselves.
-        const sc = detectSelfCompetition(await loadFamilyTargeting(famCampIds, campById))
+        const sc = anyServing ? detectSelfCompetition(await loadFamilyTargeting(famCampIds, campById)) : { conflicts: [] as SelfCompetitionConflict[], demoted: new Set<string>() }
         planConflicts = sc.conflicts
         const baselineTarget = plan.defaultTargetKey ? targetByKey.get(plan.defaultTargetKey) : undefined
         for (const fc of famCamps) {
           if (leftAlone.has(fc.id)) continue
           const camp = campById.get(fc.id); if (!camp) continue
+          // C1 — listed in the plan's summary as a hold; nothing written.
+          if (notServing.has(fc.id)) {
+            const item: RankWork = { seq: work.length, camp, key, spec: toSpec(target), planId: plan.id, write, actor: `automation:rank-plan-${plan.id}`, notServing: true }
+            items.push(item); work.push(item)
+            continue
+          }
           const oos = readinessByCamp.get(fc.id) === 'pause'
           const demote = sc.demoted.has(fc.id) && !!baselineTarget && plan.defaultTargetKey !== key
           const useKey = demote ? plan.defaultTargetKey! : key
@@ -891,13 +928,15 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
     // Stamped even when the schedule resolves to nothing — "we looked, nothing was due"
     // is what distinguishes an idle schedule from a cron that has stopped running.
     receipts.set(s.id, key)
+    // C1 — a campaign that does not serve gets no give-back either: what was floored there stays until it is enabled.
+    const serving = !notServing.has(camp.id)
     // 2a — nothing is held, so what this schedule floored is given back (it used to stay floored until a window opened).
-    if (!key) { idle.push({ campaignId: camp.id, actor: `automation:rank-defend-${s.id}`, why: 'its schedule holds nothing at this hour' }); continue }
+    if (!key) { if (serving) idle.push({ campaignId: camp.id, actor: `automation:rank-defend-${s.id}`, why: 'its schedule holds nothing at this hour' }); continue }
     // A resolved key with no RankTarget behind it is a dangling reference (the target was
     // deleted after the schedule was authored). Nothing is held, so record nothing held.
     const target = targetByKey.get(key)
-    if (!target) { receipts.set(s.id, null); idle.push({ campaignId: camp.id, actor: `automation:rank-defend-${s.id}`, why: `its schedule names "${key}", which no longer exists` }); continue }
-    work.push({ seq: work.length, camp, key, spec: applyTargetOverrides(toSpec(target), s.targetOverrides as TargetOverrideMap), planId: null, write: !dryRun, actor: `automation:rank-defend-${s.id}` })
+    if (!target) { receipts.set(s.id, null); if (serving) idle.push({ campaignId: camp.id, actor: `automation:rank-defend-${s.id}`, why: `its schedule names "${key}", which no longer exists` }); continue }
+    work.push({ seq: work.length, camp, key, spec: applyTargetOverrides(toSpec(target), s.targetOverrides as TargetOverrideMap), planId: null, write: !dryRun, actor: `automation:rank-defend-${s.id}`, ...(serving ? {} : { notServing: true }) })
   }
 
   // 2a — a one-plan run does not know who else holds a campaign, nor does a run that could not resolve a plan's family:
@@ -908,11 +947,14 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
   const release = guard ? await giveBack(guard, idle, opts.onlyPlanId || familyUnknown ? null : governed, holds) : undefined
 
   // 2c — then every campaign, in RANK_WRITE_ORDER (restore → suppress → placement → base), loop order within a kind.
-  const entriesToday = await minBidEntriesToday([...new Set(work.map((w) => w.camp.id))], clockNow)
+  const entriesToday = await minBidEntriesToday([...new Set(work.filter((w) => !w.notServing).map((w) => w.camp.id))], clockNow)
   const order = new Map(work.map((w) => [w, RANK_WRITE_ORDER.indexOf(firstWriteIntent(w.camp, w.spec))]))
   const writes = noWrites()
   let keptServing = 0
+  let paused = 0
   for (const w of [...work].sort((a, b) => order.get(a)! - order.get(b)! || a.seq - b.seq)) {
+    // C1 — not serving: a hold, no permit asked, nothing written.
+    if (w.notServing) { w.result = notServingResult(w.camp, w.key, w.spec, w.planId); paused++; continue }
     // W1-6 — the campaign's market: that market's own "most actions per run" (the ads strategy) counts its changes too.
     const permit = w.write && guard ? guard.permit({ market: w.camp.marketplace }) : DRY_RUN
     const r = await decideAndMaybeApply(w.camp, w.key, w.spec, w.planId, { write: w.write, permit, actor: w.actor, maxBaseBidByCampaign, suppressRaise: w.suppressRaise, entriesToday: entriesToday.get(w.camp.id) ?? 0, holds })
@@ -942,12 +984,13 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
   }
 
   if (release) writes.restore += release.writes
-  return { evaluated: decisions.length, applied, decisions, plans: planSummaries, ...(guard ? { guard: guard.report(), writes, keptServing } : {}), ...(release ? { release } : {}), ...(holds.holds.length ? { holds } : {}), ...(brainOwned.size ? { brainOwned: brainOwned.size } : {}), ...(leverHolds.total() ? { leverHeld: leverHolds.counts() } : {}), ...(leverHolds.unread ? { leverHoldsUnread: true } : {}) }
+  return { evaluated: decisions.length, applied, decisions, plans: planSummaries, ...(guard ? { guard: guard.report(), writes, keptServing } : {}), ...(release ? { release } : {}), ...(holds.holds.length ? { holds } : {}), ...(brainOwned.size ? { brainOwned: brainOwned.size } : {}), ...(leverHolds.total() ? { leverHeld: leverHolds.counts() } : {}), ...(leverHolds.unread ? { leverHoldsUnread: true } : {}), ...(paused ? { paused } : {}) }
 }
 
 interface IdleCampaign { campaignId: string; actor: AdsActor; why: string }
 // 2c — one campaign's hour, resolved before the tick writes anything; `result` is filled when it runs.
-interface RankWork { seq: number; camp: CampRow; key: string; spec: RankTargetSpec; planId: string | null; write: boolean; actor: AdsActor; suppressRaise?: boolean; result?: RankCampaignResult }
+// C1 — `notServing`: the campaign is not ENABLED; it is listed as a hold and nothing is written.
+interface RankWork { seq: number; camp: CampRow; key: string; spec: RankTargetSpec; planId: string | null; write: boolean; actor: AdsActor; suppressRaise?: boolean; notServing?: boolean; result?: RankCampaignResult }
 
 /**
  * 2a — every live run, first (2c: before any new write): give back what this engine floored where nothing is due, then
@@ -990,7 +1033,7 @@ export function rankWritesNote(r: Pick<RankDefendSummary, 'writes' | 'keptServin
 /** 1c — the run's summary line: the counts, plus what the dial or the caps held back (nothing extra on a normal run). */
 export function rankDefendSummaryLine(r: RankDefendSummary): string {
   if (r.skipped) return `skipped: ${r.skipped}`
-  return `evaluated=${r.evaluated} applied=${r.applied}${rankWritesNote(r)}${engineGuardNote(r.guard)}${rankReleaseNote(r.release)}${holdNote(r.holds)}${r.brainOwned ? ` brain-owned=${r.brainOwned} (the bid brain runs them)` : ''}${leverHeldNote(r.leverHeld, r.leverHoldsUnread)}`
+  return `evaluated=${r.evaluated} applied=${r.applied}${r.paused ? ` paused=${r.paused} (not enabled: nothing written)` : ''}${rankWritesNote(r)}${engineGuardNote(r.guard)}${rankReleaseNote(r.release)}${holdNote(r.holds)}${r.brainOwned ? ` brain-owned=${r.brainOwned} (the bid brain runs them)` : ''}${leverHeldNote(r.leverHeld, r.leverHoldsUnread)}`
 }
 
 export async function runRankDefendCron(): Promise<void> {

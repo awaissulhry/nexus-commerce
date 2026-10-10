@@ -120,6 +120,47 @@ describe('cron-runs', () => {
     expect(judgeCronRuns({ jobs: [], unfinished: [] }, NOW).status).toBe('unknown')
   })
 
+  // C2 (2026-10-10) — jobs quiet by design (utils/cron-quiet.ts).
+  it('the settle catch-up\'s 18-hour night is not a miss; a missing 05:20 tick is', () => {
+    const night = job('ads-report-settle', HOUR, at('2026-10-07T06:20:00Z').getTime() - at('2026-10-07T05:20:04Z').getTime() + 30_000, {
+      longGaps: [{ at: at('2026-10-07T03:20:04Z'), gapMs: 18 * HOUR }],
+    })
+    expect(missedStretches([night], NOW)).toEqual([])
+    expect(judgeCronRuns({ jobs: [night], unfinished: [] }, NOW).status).toBe('ok')
+    const missed = job('ads-report-settle', HOUR, 17_000, { longGaps: [{ at: ago(17_000), gapMs: 2 * HOUR }] })
+    const stretches = missedStretches([missed], NOW)
+    expect(stretches).toHaveLength(1)
+    expect(stretches[0]).toMatchObject({ job: 'ads-report-settle', missed: 1, endedAt: ago(17_000) })
+    expect(stretches[0].firstMissedAt.toISOString()).toBe(new Date(ago(17_000).getTime() - HOUR).toISOString())
+  })
+
+  it('a work-only job silent for 40 h is not a miss; its failed last run is still named', () => {
+    const silent = job('fulfilment-conversion-confirm', 15 * MIN, 40 * HOUR)
+    expect(missedStretches([silent], NOW)).toEqual([])
+    expect(judgeCronRuns({ jobs: [silent, job('healthy-hourly', HOUR, 15 * MIN)], unfinished: [] }, NOW).status).toBe('ok')
+    const failed = judgeCronRuns({ jobs: [{ ...silent, lastStatus: 'FAILED', lastError: 'report pull refused' }], unfinished: [] }, NOW)
+    expect(failed.status).toBe('warn')
+    expect(failed.message).toMatch(/fulfilment-conversion-confirm/)
+    expect((failed.evidence.quietByDesign as Array<{ job: string; kind: string }>)[0]).toMatchObject({ job: 'fulfilment-conversion-confirm', kind: 'work-only' })
+  })
+
+  it('a brain step the product cycle took over: silent for 40 h is not a miss while the cycle runs; once the cycle stops it is', () => {
+    const state = job('ads-brain-state', HOUR, 40 * HOUR)
+    expect(missedStretches([state, job('ads-brain-cycle', HOUR, 30 * MIN)], NOW)).toEqual([])
+    const stopped = missedStretches([state, job('ads-brain-cycle', HOUR, 5 * HOUR)], NOW)
+    expect([...new Set(stopped.map((s) => s.job))].sort()).toEqual(['ads-brain-cycle', 'ads-brain-state'])
+  })
+
+  it('the bid brain\'s live tick: a 30-minute gap over 06:45 UTC (the full run) is not a miss; the same gap at 08:00 is', () => {
+    const over0645 = job('ads-bid-brain-live', 15 * MIN, 10 * MIN, { longGaps: [{ at: at('2026-10-06T07:00:05Z'), gapMs: 30 * MIN + 2_000 }] })
+    expect(missedStretches([over0645], NOW)).toEqual([])
+    const at0800 = job('ads-bid-brain-live', 15 * MIN, 10 * MIN, { longGaps: [{ at: at('2026-10-06T08:00:05Z'), gapMs: 30 * MIN + 2_000 }] })
+    expect(missedStretches([at0800], NOW)).toMatchObject([{ job: 'ads-bid-brain-live', missed: 1 }])
+    // Still silent: only the ticks it expects count.
+    const stillSilent = job('ads-bid-brain-live', 15 * MIN, NOW.getTime() - at('2026-10-07T05:30:03Z').getTime())
+    expect(missedStretches([stillSilent], NOW)).toMatchObject([{ endedAt: null, missed: 2 }]) // 05:45, 06:00 (06:15 inside the grace)
+  })
+
   it('clusters need several different jobs within 30 minutes', () => {
     const items = [{ j: 'a', t: at('2026-10-07T03:20:00Z') }, { j: 'b', t: at('2026-10-07T03:35:00Z') }, { j: 'c', t: at('2026-10-07T03:49:00Z') }, { j: 'd', t: at('2026-10-07T05:00:00Z') }]
     expect(clusters(items, (i) => i.t, (i) => i.j)).toEqual([{ at: at('2026-10-07T03:20:00Z'), jobs: ['a', 'b', 'c'] }])
@@ -175,6 +216,15 @@ describe('ads-daily-reports', () => {
   })
   it('no data and no live connection: could not measure', () => {
     expect(judgeDailyReports({ markets: [], liveMarkets: [] }, NOW).status).toBe('unknown')
+  })
+  it('C2 — a market not asked (no enabled campaign, no impression in 14 days) is ok and said so; IT with an enabled campaign 5 days late still fails', () => {
+    const dormant = judgeDailyReports({ markets: [{ market: 'IT', newestDay: '2026-10-06' }, { market: 'ES', newestDay: '2026-08-21' }], liveMarkets: ['IT', 'ES'], notAsked: ['ES'] }, NOW)
+    expect(dormant.status).toBe('ok')
+    expect(dormant.message).toMatch(/ES: not asked: no enabled campaign and no impression in 14 days/)
+    expect((dormant.evidence.markets as Array<{ market: string; notAsked?: string }>).find((m) => m.market === 'ES')?.notAsked).toMatch(/not asked/)
+    const late = judgeDailyReports({ markets: [{ market: 'IT', newestDay: '2026-10-02' }, { market: 'ES', newestDay: '2026-08-21' }], liveMarkets: ['IT', 'ES'], notAsked: ['ES'] }, NOW)
+    expect(late.status).toBe('fail')
+    expect(late.message).toMatch(/late in 1 market: IT newest day 2026-10-02/)
   })
 })
 
@@ -250,10 +300,20 @@ describe('economics-feed', () => {
 describe('keyword-rank-feed', () => {
   it('level with SQP → ok; three weeks behind → fail; no reading at all → warn', () => {
     const sqp = [{ market: 'IT', newestWeekStart: '2026-09-20' }]
-    expect(judgeKeywordRank({ sqp, readings: [{ market: 'IT', newestCapturedAt: '2026-09-26T00:00:00.000Z' }] }).status).toBe('ok')
-    expect(judgeKeywordRank({ sqp, readings: [{ market: 'IT', newestCapturedAt: '2026-09-05T00:00:00.000Z' }] }).status).toBe('fail')
-    expect(judgeKeywordRank({ sqp, readings: [] }).status).toBe('warn')
-    expect(judgeKeywordRank({ sqp: [], readings: [] }).status).toBe('unknown')
+    expect(judgeKeywordRank({ sqp, readings: [{ market: 'IT', newestCapturedAt: '2026-09-26T00:00:00.000Z' }] }, NOW).status).toBe('ok')
+    expect(judgeKeywordRank({ sqp, readings: [{ market: 'IT', newestCapturedAt: '2026-09-05T00:00:00.000Z' }] }, NOW).status).toBe('fail')
+    expect(judgeKeywordRank({ sqp, readings: [] }, NOW).status).toBe('warn')
+    expect(judgeKeywordRank({ sqp: [], readings: [] }, NOW).status).toBe('unknown')
+  })
+  it('C2 — FR whose newest SQP week is older than the feed reads (63 days) is ok and "not fed"; IT 20 days behind still fails', () => {
+    const sqp = [{ market: 'FR', newestWeekStart: '2026-08-02' }, { market: 'IT', newestWeekStart: '2026-09-20' }]
+    const fed = judgeKeywordRank({ sqp, readings: [{ market: 'IT', newestCapturedAt: '2026-09-26T00:00:00.000Z' }] }, NOW)
+    expect(fed.status).toBe('ok')
+    expect(fed.message).toMatch(/FR: not fed — its newest Brand Analytics week ended 2026-08-08, which the Brand Analytics check judges/)
+    const behind = judgeKeywordRank({ sqp, readings: [{ market: 'IT', newestCapturedAt: '2026-09-06T00:00:00.000Z' }] }, NOW)
+    expect(behind.status).toBe('fail')
+    expect(behind.message).toMatch(/IT newest reading 2026-09-06/)
+    expect(behind.message).not.toMatch(/FR has no reading/)
   })
 })
 

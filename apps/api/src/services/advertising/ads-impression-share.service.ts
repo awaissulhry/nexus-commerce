@@ -44,12 +44,18 @@ export interface SovResult {
   summary: { cannibalizedQueries: number; outbidQueries: number; weakRelevanceQueries: number }
 }
 
-export async function analyzeShareOfVoice(opts: { windowDays?: number; marketplace?: string; limit?: number } = {}): Promise<SovResult> {
+/**
+ * C5 (2026-10-10) — `campaignIds` (optional): only these campaigns' search terms (Amazon's campaign ids, as
+ * AmazonAdsSearchTerm keeps them) — the recommendations feed reads one market's enabled campaigns. Absent: every campaign,
+ * as before.
+ */
+export async function analyzeShareOfVoice(opts: { windowDays?: number; marketplace?: string; limit?: number; campaignIds?: readonly string[] } = {}): Promise<SovResult> {
   const windowDays = opts.windowDays ?? 30
   const limit = opts.limit ?? 200
   const since = new Date(Date.now() - windowDays * 86_400_000)
-  const where: { date: { gte: Date }; marketplace?: string } = { date: { gte: since } }
+  const where: { date: { gte: Date }; marketplace?: string; campaignId?: { in: string[] } } = { date: { gte: since } }
   if (opts.marketplace) where.marketplace = opts.marketplace
+  if (opts.campaignIds) where.campaignId = { in: [...opts.campaignIds] }
 
   const terms = await prisma.amazonAdsSearchTerm.findMany({
     where,

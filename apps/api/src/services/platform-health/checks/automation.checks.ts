@@ -9,7 +9,9 @@
  *                     connection, so no rule could ever reach AUTO, for weeks. Read through adsRuleGateStatus — the same
  *                     gate the Control Room shows and the level dial applies.
  *   ads-engines-idle  Amazon ads automations at AUTO that ran in the last 7 days and wrote nothing (automation-explain's
- *                     own verdicts: "never written", "not written in the window").
+ *                     own verdicts: "never written", "not written in the window"). C1 (2026-10-10): an engine whose last
+ *                     run says every campaign it evaluated is not enabled (the hourly bid plans' `paused=N` equal to
+ *                     `evaluated=N`) writes nothing by design, and is ok with that note.
  */
 import prisma from '../../../db.js'
 import { HOUR, plural, withoutNumbers, type HealthCheck, type Verdict } from '../types.js'
@@ -167,26 +169,55 @@ export const ruleGatesCheck: HealthCheck<RuleGateFacts> = {
 
 export interface EngineFacts {
   days: number
-  engines: Array<{ id: string; name: string; level: string | null; runs: number; writes: number | null; verdicts: string[]; lastEverAt: string | null }>
+  /** `lastSummary`: the newest run's summary line (CronRun), when it keeps one. */
+  engines: Array<{ id: string; name: string; level: string | null; runs: number; writes: number | null; verdicts: string[]; lastEverAt: string | null; lastSummary?: string | null }>
   unreadable: string[]
 }
 
 const IDLE = new Set(['never-written', 'not-written-in-window'])
 
+/** C1 — the words for an engine that writes nothing because every campaign it holds is paused or the brain's. */
+export const IDLE_BY_DESIGN = 'idle by design: every campaign its plans hold is paused or the brain\'s'
+
+/**
+ * PURE. C1 — whether a run's summary line says it wrote nothing by design: the hourly bid plans' line counts the
+ * campaigns it evaluated and, of those, the ones that are not enabled (`paused=N`, decided as a hold, never written).
+ * When the two are equal and at least one campaign is paused or the bid brain's, there was nothing it could write.
+ */
+export function idleByDesign(summary: string | null | undefined): boolean {
+  if (!summary) return false
+  const count = (key: string): number | null => {
+    const m = new RegExp(`(?:^|\\s)${key}=(\\d+)`).exec(summary)
+    return m ? Number(m[1]) : null
+  }
+  const evaluated = count('evaluated')
+  if (evaluated == null) return false
+  const paused = count('paused') ?? 0
+  const brainOwned = count('brain-owned') ?? 0
+  return evaluated === paused && (paused > 0 || brainOwned > 0)
+}
+
 export function judgeEngines(f: EngineFacts): Verdict {
   const auto = f.engines.filter((e) => e.level === 'AUTO')
-  const idle = auto.filter((e) => e.runs > 0 && e.verdicts.some((v) => IDLE.has(v)))
-  const ran = auto.filter((e) => e.runs > 0)
-  const evidence = { days: f.days, atAuto: auto.map((e) => ({ id: e.id, name: e.name, runs: e.runs, writes: e.writes, verdicts: e.verdicts, lastEverWrite: e.lastEverAt })), unreadable: f.unreadable }
+  const silent = auto.filter((e) => e.runs > 0 && e.verdicts.some((v) => IDLE.has(v)))
+  const byDesign = silent.filter((e) => idleByDesign(e.lastSummary))
+  const idle = silent.filter((e) => !byDesign.includes(e))
+  const ran = auto.filter((e) => e.runs > 0 && !byDesign.includes(e))
+  const evidence = {
+    days: f.days,
+    atAuto: auto.map((e) => ({ id: e.id, name: e.name, runs: e.runs, writes: e.writes, verdicts: e.verdicts, lastEverWrite: e.lastEverAt, ...(byDesign.includes(e) ? { note: IDLE_BY_DESIGN, lastRun: e.lastSummary } : {}) })),
+    unreadable: f.unreadable,
+  }
   if (!auto.length) {
     return { status: f.unreadable.length && !f.engines.length ? 'unknown' : 'ok', message: f.unreadable.length && !f.engines.length ? `Could not measure: ${f.unreadable.join(', ')}.` : 'No Amazon ads automation is at AUTO, so none is expected to write.', likelyCause: null, nextStep: null, evidence }
   }
+  const designNote = byDesign.length ? ` ${byDesign.map((e) => `${e.name} (${e.id})`).join('; ')} wrote nothing — ${IDLE_BY_DESIGN}.` : ''
   if (!idle.length) {
-    return { status: 'ok', message: `${plural(auto.length, 'Amazon ads automation')} at AUTO; each that ran in ${f.days} days also wrote.`, likelyCause: null, nextStep: null, evidence }
+    return { status: 'ok', message: `${plural(auto.length, 'Amazon ads automation')} at AUTO; each that ran in ${f.days} days also wrote${byDesign.length ? ', or had nothing it could write' : ''}.${designNote}`, likelyCause: null, nextStep: null, evidence }
   }
   return {
     status: idle.length >= 3 || (idle.length >= 2 && idle.length === ran.length) ? 'fail' : 'warn',
-    message: `${plural(idle.length, 'Amazon ads automation')} at AUTO ran in the last ${f.days} days and wrote nothing: ${idle.map((e) => `${e.name} (${e.id}, ${plural(e.runs, 'run')}${e.lastEverAt ? `, last write ${e.lastEverAt.slice(0, 10)}` : ', never written'})`).join('; ')}.`,
+    message: `${plural(idle.length, 'Amazon ads automation')} at AUTO ran in the last ${f.days} days and wrote nothing: ${idle.map((e) => `${e.name} (${e.id}, ${plural(e.runs, 'run')}${e.lastEverAt ? `, last write ${e.lastEverAt.slice(0, 10)}` : ', never written'})`).join('; ')}.${designNote}`,
     likelyCause: 'Each run is refused at the write gate, finds nothing in its reach, or counts writes that never left (an engine summary is not proof — see Amazon ad writes).',
     nextStep: 'Read automation-activity for each one: its refusals and the gate reasons say which; one that cannot write should be turned down until it can.',
     evidence,
@@ -213,6 +244,7 @@ export const enginesIdleCheck: HealthCheck<EngineFacts> = {
           id: adapter.id, name: adapter.name, level: activity.automation.level,
           runs: activity.runs?.total ?? 0, writes: activity.writes?.total ?? null,
           verdicts: activity.verdicts.map((v) => v.code), lastEverAt: activity.writes?.lastEverAt ?? null,
+          lastSummary: activity.runs?.last?.[0]?.summary ?? null,
         })
       } catch (error) {
         out.unreadable.push(`${adapter.id} (${error instanceof Error ? error.message.slice(0, 80) : 'unreadable'})`)

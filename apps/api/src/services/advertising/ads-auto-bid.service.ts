@@ -62,7 +62,7 @@ export const AUTO_BID_SCOPE_WORDS = 'it moves only bids where you set a target A
  * The target sources that are the Owner's: a number he set. `explicit` is a caller's own target (auto-bid passes none;
  * listed so the rule stays whole); `profit` and `flat` are worked out or assumed, never set by him.
  */
-const OWNER_TARGET_SOURCES: ReadonlySet<TargetAcosSource> = new Set<TargetAcosSource>(['explicit', 'campaign', 'strategy', 'account'])
+export const OWNER_TARGET_SOURCES: ReadonlySet<TargetAcosSource> = new Set<TargetAcosSource>(['explicit', 'campaign', 'strategy', 'account'])
 
 /** Who else holds a campaign's bids, for auto-bid (autoBidHolders). BB-6 — `bidBrain`: the bid brain owns it. */
 export type AutoBidHolder = 'pinned' | 'hourlyPlan' | 'goalPlan' | 'bidBrain'

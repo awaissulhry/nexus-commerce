@@ -14,6 +14,10 @@
  *
  * A settle is told from a mute by its `createdBy` (`request:<approvalId>`). A mute is never turned into a settle; a mute
  * replaces a settle. Nothing here reaches Amazon.
+ *
+ * C5 (2026-10-10) — a market mute the Owner holds: an AdsSuggestionMute row of the same scope with entity MARKETPLACE
+ * (entityId = the market code, 'DE') drops every line of that market from the running feed until he unmutes it
+ * (mute-ad-recommendations with markets). The rule suggestions already mute a market this way, in their own scope.
  */
 import { workspaceKey } from '@nexus/database/workspace-context'
 import prisma from '../../db.js'
@@ -22,6 +26,8 @@ import { settledBounds } from './ads-settled-window.js'
 
 export const RECOMMENDATION_SCOPE = 'recommendations'
 export const RECOMMENDATION_ENTITY = 'RECOMMENDATION'
+/** C5 — a market mute's entity (entityId = the market code). */
+export const MARKET_ENTITY = 'MARKETPLACE'
 const SETTLED_BY = 'request:'
 
 /** The categories of the feed, by the prefix of their ids (ads-recommendations.service.ts builds them). */
@@ -59,21 +65,63 @@ export function hidesNow(row: { createdBy: string | null; createdAt: Date }, now
 
 /**
  * What the feed drops now, as `RECOMMENDATION|<id>` keys: `hidden` (a mute, or a settle still in force) and `muted` (the
- * mutes alone: the Muted view lists them, and a settle is not a mute — it was carried out). As mutedKeys
- * (ads-suggestions.service.ts): a table that cannot be read logs and hides nothing this read, rather than failing the feed.
+ * mutes alone: the Muted view lists them, and a settle is not a mute — it was carried out). C5 — `mutedMarkets`: the
+ * markets the Owner muted. As mutedKeys (ads-suggestions.service.ts): a table that cannot be read logs and hides nothing
+ * this read, rather than failing the feed.
  */
-export async function recommendationMuteKeys(now = new Date()): Promise<{ hidden: Set<string>; muted: Set<string> }> {
+export async function recommendationMuteKeys(now = new Date()): Promise<{ hidden: Set<string>; muted: Set<string>; mutedMarkets: Set<string> }> {
   try {
     const rows = await prisma.adsSuggestionMute.findMany({
-      where: { scope: RECOMMENDATION_SCOPE, entityType: RECOMMENDATION_ENTITY },
-      select: { entityId: true, createdBy: true, createdAt: true },
+      where: { scope: RECOMMENDATION_SCOPE, entityType: { in: [RECOMMENDATION_ENTITY, MARKET_ENTITY] } },
+      select: { entityType: true, entityId: true, createdBy: true, createdAt: true },
     })
+    const ones = rows.filter((r) => r.entityType === RECOMMENDATION_ENTITY)
     const key = (r: { entityId: string }) => `${RECOMMENDATION_ENTITY}|${r.entityId}`
-    return { hidden: new Set(rows.filter((r) => hidesNow(r, now)).map(key)), muted: new Set(rows.filter((r) => !isSettle(r.createdBy)).map(key)) }
+    return {
+      hidden: new Set(ones.filter((r) => hidesNow(r, now)).map(key)),
+      muted: new Set(ones.filter((r) => !isSettle(r.createdBy)).map(key)),
+      mutedMarkets: new Set(rows.filter((r) => r.entityType === MARKET_ENTITY).map((r) => r.entityId)),
+    }
   } catch {
     logger.warn('[ads-recommendations] mute lookup failed — showing every recommendation this read')
-    return { hidden: new Set(), muted: new Set() }
+    return { hidden: new Set(), muted: new Set(), mutedMarkets: new Set() }
   }
+}
+
+/** C5 — whether each market is muted now ('muted' | 'shown'), with who muted it and when; in the order asked. */
+export async function marketMuteStates(markets: string[]): Promise<Array<{ market: string; state: 'muted' | 'shown'; by: string | null; at: string | null }>> {
+  const rows = markets.length
+    ? await prisma.adsSuggestionMute.findMany({
+      where: { scope: RECOMMENDATION_SCOPE, entityType: MARKET_ENTITY, entityId: { in: [...new Set(markets)] } },
+      select: { entityId: true, createdBy: true, createdAt: true },
+    })
+    : []
+  const byMarket = new Map(rows.map((r) => [r.entityId, r]))
+  return markets.map((market) => {
+    const row = byMarket.get(market)
+    return row ? { market, state: 'muted' as const, by: row.createdBy ?? null, at: row.createdAt.toISOString() } : { market, state: 'shown' as const, by: null, at: null }
+  })
+}
+
+const marketKeyOf = (market: string) => ({ scope_entityType_entityId: workspaceKey({ scope: RECOMMENDATION_SCOPE, entityType: MARKET_ENTITY, entityId: market }) })
+
+/** C5 — mute every suggestion of these markets until he unmutes them. */
+export async function muteMarkets(markets: string[], by: string, reason: string): Promise<number> {
+  for (const market of new Set(markets)) {
+    await prisma.adsSuggestionMute.upsert({
+      where: marketKeyOf(market),
+      create: { scope: RECOMMENDATION_SCOPE, entityType: MARKET_ENTITY, entityId: market, entityName: `every suggestion in ${market}`, marketplace: market, reason, createdBy: by },
+      update: { reason, createdBy: by, createdAt: new Date() },
+    })
+  }
+  return new Set(markets).size
+}
+
+/** C5 — offer these markets' suggestions again. */
+export async function unmuteMarkets(markets: string[]): Promise<number> {
+  if (!markets.length) return 0
+  const { count } = await prisma.adsSuggestionMute.deleteMany({ where: { scope: RECOMMENDATION_SCOPE, entityType: MARKET_ENTITY, entityId: { in: [...new Set(markets)] } } })
+  return count
 }
 
 export type MuteState = 'muted' | 'settled' | 'shown'
