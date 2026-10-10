@@ -7,6 +7,7 @@
  * and a second definition is how a headline and its own table end up disagreeing.
  */
 import { getBackendUrl } from '@/lib/backend-url'
+import { sharePct } from '../campaigns/_grid/format'
 
 export type Verdict = 'ahead' | 'behind' | 'level' | 'no-median' | 'no-value'
 
@@ -192,9 +193,11 @@ export function fetchMarketShare(
 export const fmtCount = (v: number | null | undefined): string =>
   (v == null ? '—' : v.toLocaleString('en-GB', { maximumFractionDigits: v < 10 && !Number.isInteger(v) ? 2 : 0 }))
 
-/** A 0..1 rate as a percentage. Two decimals, because these shares live under 2%. */
-export const fmtShare = (v: number | null | undefined, dp = 2): string =>
-  (v == null ? '—' : `${(v * 100).toFixed(dp)}%`)
+/**
+ * A 0..1 rate as a percentage. Two decimals, because these shares live under 2% — and a non-zero share below the last
+ * decimal reads "<0.01%", never "0.00%" (the console's one share rule, `sharePct`).
+ */
+export const fmtShare = (v: number | null | undefined, dp = 2): string => sharePct(v, dp)
 
 export const fmtRatio = (v: number | null | undefined): string =>
   (v == null ? '—' : v.toFixed(2))
@@ -209,7 +212,7 @@ export const fmtMoney = (v: number | null | undefined): string =>
  */
 export function fmtBenchmark(v: number | null | undefined, format: string): string {
   if (v == null) return '—'
-  if (format === 'pct') return `${(v * 100).toFixed(v < 0.1 ? 1 : 0)}%`
+  if (format === 'pct') return sharePct(v, v < 0.1 ? 1 : 0)
   if (format === 'ratio') return v.toFixed(2)
   return fmtCount(v)
 }

@@ -59,6 +59,20 @@ export const impactScore = (s: Suggestion): number => {
   return typeof s.proposedAction?.value === 'number' ? s.proposedAction.value : 0
 }
 
+/**
+ * Free visibility numbers (2026-10-10, F4) — a row's search volume as ONE Brand Analytics week: the searches and the
+ * week they cover ("27 Sep"), from `searchVolumeWeekStart`. null when either is missing — a volume with no week is of an
+ * unknown period and is never shown as a weekly number.
+ */
+export function weeklyVolume(s: Pick<Suggestion, 'volume' | 'searchVolume' | 'searchVolumeWeekStart'>): { volume: number; week: string } | null {
+  const volume = s.volume ?? s.searchVolume ?? null
+  const start = s.searchVolumeWeekStart
+  if (volume == null || !Number.isFinite(volume) || !start || !/^\d{4}-\d{2}-\d{2}$/.test(start)) return null
+  const d = new Date(`${start}T00:00:00Z`)
+  if (Number.isNaN(d.getTime())) return null
+  return { volume, week: d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) }
+}
+
 // Friendly trigger names for the provenance "signal" — fall back to a prettified raw value.
 export const TRIGGER_LABEL: Record<string, string> = {
   CAMPAIGN_PERFORMANCE_BUDGET: 'Budget performance', CAC_SPIKE: 'CAC spike', AD_SPEND_PROFITABILITY_BREACH: 'Ad-spend over profit',
@@ -67,7 +81,7 @@ export const TRIGGER_LABEL: Record<string, string> = {
   KEYWORD_ZERO_IMPRESSIONS: 'Zero impressions', KEYWORD_WASTED_SPEND: 'Wasted keyword spend', KEYWORD_RISING_STAR: 'Rising-star keyword',
   AD_TARGET_UNDERPERFORMING: 'Underperforming target', AD_GROUP_UNDERPERFORMING: 'Underperforming ad group',
   CAMPAIGN_NO_SALES: 'No-sales campaign', CVR_DROP: 'Conversion-rate drop', NEW_TO_BRAND_WINNER: 'New-to-brand winner',
-  CAMPAIGN_ROAS_DECLINING: 'Declining ROAS', SOV_BID: 'Share-of-voice signal', KEYWORD_RANK_BID: 'Keyword rank signal',
+  CAMPAIGN_ROAS_DECLINING: 'Declining ROAS', SOV_BID: 'Share-of-voice signal', KEYWORD_RANK_BID: 'Keyword Tracker (search volume)',
   SCHEDULE: 'Scheduled check',
 }
 /**

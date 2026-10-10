@@ -21,7 +21,7 @@ export const RULE_TYPES: RuleType[] = [
   { slug: 'budget-schedule', label: 'Budget Schedule', desc: 'Create a budget campaign schedule based on hourly performance data', tab: 'budget-schedules' },
   { slug: 'placement', label: 'Placement', desc: 'Adjust the placement value of the SP campaign based on placement data', tab: 'placement' },
   { slug: 'sov', label: 'SOV', desc: 'Create a keyword bid adjustment rule based on the SOV report.', tab: 'share-of-voice' },
-  { slug: 'keyword-tracker', label: 'Keyword Tracker', desc: 'Adjust keyword bids based on the product’s organic and paid rankings in the keyword tracker.', tab: 'keyword-tracker' },
+  { slug: 'keyword-tracker', label: 'Keyword Tracker', desc: 'Adjust keyword bids based on each keyword’s weekly search volume (Amazon Brand Analytics). Organic and sponsored rank have no Amazon source.', tab: 'keyword-tracker' },
 ]
 
 export const ruleTypeBySlug = (slug: string): RuleType | undefined => RULE_TYPES.find((r) => r.slug === slug)

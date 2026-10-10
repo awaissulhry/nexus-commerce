@@ -385,7 +385,7 @@ const ALL_COLS: ColDef[] = [
   { key: 'sameSkuOrders', label: 'SameSKU Orders' },
   { key: 'actBidHours', label: 'ActBid Hours' },
   { key: 'oobHours', label: 'OOB Hours' },
-  { key: 'topOfSearchIS', label: 'Top of search IS' },
+  { key: 'topOfSearchIS', label: 'Top of search IS (wtd avg)' },
 ]
 const COL_BY_KEY: Record<string, ColDef> = Object.fromEntries(ALL_COLS.map((c) => [c.key, c]))
 const ALL_KEYS = ALL_COLS.map((c) => c.key)
@@ -561,7 +561,7 @@ function renderCol(c: Camp, key: string): ReactNode {
       if (c.topOfSearchIS == null) return UNKNOWN
       const d = c.topOfSearchISDays ?? 0
       return (
-        <span title={`Mean of the daily top-of-search impression shares Amazon reported, over ${d} day${d === 1 ? '' : 's'} in this window. Days Amazon did not report are skipped rather than counted as zero.`}>
+        <span title={`Nexus impression-weighted average of Amazon's daily campaign top-of-search impression shares, over ${d} day${d === 1 ? '' : 's'} with a reading in this window. Days Amazon did not report are skipped rather than counted as zero.`}>
           {sharePct(c.topOfSearchIS)}
         </span>
       )
@@ -686,7 +686,7 @@ const COL_TIPS: Record<string, string> = {
   sameSkuOrders: 'Orders where the purchased ASIN/SKU was the same as the ASIN/SKU advertised.',
   actBidHours: 'Average hours ads were actually bidding (Actual bidding hours = Available bidding hours − Out of budget hours).',
   oobHours: 'Average Out of Budget Time.',
-  topOfSearchIS: 'Top-of-search impression share \u2014 the share of available top-of-search impressions your ads won. Shown as the mean of the daily shares Amazon reported inside the selected window; days it did not report are skipped, never counted as zero. Hover a cell for the number of days behind that row.',
+  topOfSearchIS: 'Top-of-search impression share \u2014 the share of available top-of-search impressions this campaign\u2019s ads won. Amazon reports it per campaign and day; this column is the Nexus impression-weighted average of those daily shares inside the selected window (computed by Nexus, not a number Amazon reports for the window); days it did not report are skipped, never counted as zero. Hover a cell for the number of days behind that row.',
   // ADM-H P3 — the newly-wired columns explain their own arithmetic, because every one of them
   // is a derivation an operator would otherwise have to guess at.
   saleUnits: 'Units sold, attributed to this campaign inside the selected window (the report\u2019s 7-day attribution). Reads "unknown" when Amazon reported no unit figure \u2014 which is not the same as selling none.',
@@ -1753,7 +1753,7 @@ export function CampaignsGrid() {
         const planHeld = owner?.bidder === 'schedule'
         const tip = lanes.length
           ? `${lanes.map(([l, v]) => `${l} +${v}%`).join(' · ')}\n${planHeld
-            ? `⚠ A rank schedule${owner?.bidderName ? ` (${owner.bidderName})` : ''} governs this campaign and rewrites these lanes every hour — this is a reading of right now, not a setting that holds.`
+            ? `⚠ An hourly bid schedule${owner?.bidderName ? ` (${owner.bidderName})` : ''} governs this campaign and rewrites these lanes every hour — this is a reading of right now, not a setting that holds.`
             : 'Nothing governs these lanes, so they hold until someone changes them.'}`
           : 'No placement multiplier on any lane: every placement bids the base bid.'
         return (
@@ -1761,7 +1761,7 @@ export function CampaignsGrid() {
             {lanes.length
               ? <span className="v">{lanes.map(([l, v]) => `${l} +${v}%`).join(' · ')}</span>
               : <span className="h10-rc-none">None</span>}
-            {planHeld && lanes.length > 0 && <i className="hourly" aria-label="Rewritten hourly by a rank schedule">⏱</i>}
+            {planHeld && lanes.length > 0 && <i className="hourly" aria-label="Rewritten hourly by an hourly bid schedule">⏱</i>}
             {hold
               ? <InfoTip tip={hold} />
               : <button type="button" className="h10-gearbtn" aria-label={`Edit bid multiplier for ${c.name}`} onClick={() => setMultiplierModal(c)}><Settings2 size={14} className="h10-gear" /></button>}

@@ -60,6 +60,7 @@ import { useMergedFilters } from '../_shared/useMergedFilters'
 import { WatchlistPanel } from './WatchlistPanel'
 import { TermDrawer } from './TermDrawer'
 import { buildCsv } from './csv'
+import { sharePct } from '../../campaigns/_grid/format'
 import { emitAdsChange, useAdsSync } from '../_shared/adsBus'
 
 /** The four production Amazon Ads markets. IE/NL/PL/SE/UK are sandbox and hold no listings. */
@@ -190,8 +191,8 @@ interface Payload {
 }
 
 const num = (n: number) => n.toLocaleString('en-IE')
-/** A share is 0..1 from SQP. Two decimals of a percent, because 0.7% and 0.04% are both real here. */
-const sharePct = (v: number) => `${(v * 100).toFixed(2)}%`
+/* A share is 0..1 from SQP, shown with two decimals of a percent (0.7% and 0.04% are both real here) through the
+   console's one share formatter, `sharePct`: a tiny non-zero share reads "<0.01%", no reading reads "—". */
 const eur = (cents: number) => `€${(cents / 100).toLocaleString('en-IE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const dayMonth = (iso: string) => {
   const d = new Date(`${iso}T00:00:00Z`)
@@ -339,7 +340,7 @@ export function KeywordTrackerClient() {
                   ? `This share comes from ${r.bestAsin}, which is in none of the ${r.ad!.adAsins} ASINs advertising this term (the feed covers ${r.ad!.coveredAdAsins} of them). It measures the term, not our advertising on it.`
                   : r.bestAsin ? `Our best ASIN on this query: ${r.bestAsin}` : undefined}
               >
-                {sharePct(r.impressionShare ?? 0)}
+                {sharePct(r.impressionShare)}
               </span>
               {r.shareBound != null && (
                 <i title={`Our ${r.asinsCompeting} ASINs on this query sum to ${sharePct(r.shareBound)}. That is an UPPER BOUND, not a total — two of our ASINs can appear in one search, so the parts overlap.`}>
@@ -365,7 +366,8 @@ export function KeywordTrackerClient() {
           : <span className="h10-kt-nm" title={`Brand Analytics has never reported this term in ${r.marketplace}, at any period`}>never measured</span>
       },
       sortValue: (r) => r.impressionShare ?? -1,
-      filterValue: (r) => (r.impressionShare ?? 0) * 100,
+      // NaN = not measured: the grid's filter never lets it match a range (a null share is not 0 %).
+      filterValue: (r) => (r.impressionShare != null ? r.impressionShare * 100 : Number.NaN),
     },
     /**
      * KT.3 — Δ in PERCENTAGE POINTS, carrying its gap.
@@ -388,7 +390,7 @@ export function KeywordTrackerClient() {
           <span className="h10-kt-delta">
             <span
               className={dir}
-              title={`${((r.priorShare ?? 0) * 100).toFixed(2)}% in the week of ${r.priorPeriod ? dayMonth(r.priorPeriod) : '—'} → ${((r.impressionShare ?? 0) * 100).toFixed(2)}% now. For share, up is better.`}
+              title={`${sharePct(r.priorShare)} in the week of ${r.priorPeriod ? dayMonth(r.priorPeriod) : '—'} → ${sharePct(r.impressionShare)} now. For share, up is better.`}
             >
               {r.deltaPP > 0 ? '+' : ''}{r.deltaPP.toFixed(2)}
             </span>
@@ -593,7 +595,7 @@ export function KeywordTrackerClient() {
                   scope the identical number on every row. Its date is a LAG (the IS column stops one
                   day behind the placement report it rides on), not an age. */}
               {data?.topOfSearch && (
-                <> · top-of-search impression share <b>{(data.topOfSearch.avgShare * 100).toFixed(2)}%</b>{' '}
+                <> · top-of-search impression share <b>{sharePct(data.topOfSearch.avgShare)}</b>{' '}
                 across the {num(data.topOfSearch.campaignsWithReading)} of{' '}
                 {num(data.topOfSearch.campaignsInScope)} campaigns with a reading
                 {data.topOfSearch.asOf ? ` (to ${dayMonth(data.topOfSearch.asOf)})` : ''}</>

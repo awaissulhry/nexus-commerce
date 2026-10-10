@@ -58,6 +58,10 @@ export interface Suggestion {
   suggested?: SuggestionSuggested
   /** SG.2f — market search volume (Brand Analytics, newest period); null = not covered */
   volume?: number | null
+  /** The same reading under the wave's contract name (2026-10-10); read only when `volume` is absent. */
+  searchVolume?: number | null
+  /** Free visibility numbers (2026-10-10) — the Brand Analytics WEEK the volume covers (its start, YYYY-MM-DD); null = no weekly reading */
+  searchVolumeWeekStart?: string | null
   /** SG.2f — the rule's performance window, from the engine's own table */
   lookback?: { label: string; why: string } | null
   /** SG.0 — the newest evaluation that still proposes this change */

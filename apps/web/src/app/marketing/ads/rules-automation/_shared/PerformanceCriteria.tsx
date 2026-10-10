@@ -76,9 +76,10 @@ export function PcWindowNote({ slug, days }: { slug: string; days?: number }) {
   if (slug === 'sov') {
     return (
       <p className="h10-pc-winnote">
-        <b>Share of Voice</b> is Amazon’s own measurement of how much of a search term’s market your
-        products took — read from the most recent <b>complete</b> weekly search-query report for each
-        market, so its age is whenever Amazon last published one. A market with no complete week is
+        <b>Share of Voice</b> is the impression share of our ASINs on a search term, computed by Nexus
+        from Amazon’s weekly Search Query Performance counts (our ASINs’ impressions ÷ the query’s total
+        impressions) — read from the most recent <b>complete</b> week for each market, so its age is
+        whenever Amazon last published one. A market with no complete week is
         skipped entirely rather than measured on a partial one.{' '}
         <b>Campaign Concentration</b> is your biggest campaign’s share of the impressions <i>you</i>{' '}
         took on that term, over the last 30 days including the 2 most recent.{' '}
@@ -118,7 +119,7 @@ export function PcWindowNote({ slug, days }: { slug: string; days?: number }) {
         one for the same product; a keyword observed only once has no change and is left alone rather
         than counted as “unchanged”.{' '}
         Spend and ACOS cover {settledWindowText(30)}.{' '}
-        🔴 <b>A keyword with no rank observation is skipped entirely.</b> It is not treated as ranking
+        🔴 <b>A keyword with no reading is skipped entirely.</b> It is not treated as ranking
         last, so a rule reading “Organic Rank &gt; 50” will not reach the keywords you have never
         ranked for — which are usually the ones such a rule is meant to find.
       </p>
@@ -193,6 +194,64 @@ const METRIC_LABEL: Record<string, string> = {
   'Search Volume': 'Search Volume (searches per week)',
 }
 const metricOption = (m: string) => ({ value: m, label: METRIC_LABEL[m] ?? m })
+/**
+ * Free visibility numbers (2026-10-10) — what the keyword feed can answer RIGHT NOW, per metric, from
+ * `GET /advertising/keyword-tracker/feed-health` → `feed.measured` (readings younger than `maxAgeDays`, and how many
+ * carry each field). The Brand Analytics feed fills `searchVolume` only; a rank count above 0 means a hand import.
+ */
+export interface KeywordFeedMeasured { maxAgeDays: number; freshRows: number; organicRank: number; sponsoredRank: number; searchVolume: number }
+/** Which `measured` count each keyword-feed metric reads. Rank Change is organic-only, so it exists exactly when organic rank does. */
+const RANK_METRIC_COUNT: Record<string, 'organicRank' | 'sponsoredRank'> = {
+  'Organic Rank': 'organicRank', 'Sponsored Rank': 'sponsoredRank', 'Rank Change': 'organicRank',
+}
+/**
+ * The rank metrics the feed holds NO fresh reading of, each with its reason in words. Empty while the census is unknown
+ * (`null`): an unanswered fetch is not an empty feed.
+ */
+export function unmeasuredRankMetrics(measured: KeywordFeedMeasured | null | undefined): Map<string, string> {
+  const out = new Map<string, string>()
+  if (!measured) return out
+  for (const [metric, count] of Object.entries(RANK_METRIC_COUNT)) {
+    if (measured[count] > 0) continue
+    const why = count === 'organicRank'
+      ? 'Amazon publishes no organic search position'
+      : 'Amazon’s search-term impression rank is in the advertising console only, not in its API'
+    out.set(metric, `No reading: ${why}, so only a hand import fills it, and no keyword has one from the last ${measured.maxAgeDays} days.`)
+  }
+  return out
+}
+/** The Keyword Tracker metric menu with every unmeasured rank HELD (listed with its reason, never chosen). */
+export function rankMetricOptions(measured: KeywordFeedMeasured | null | undefined): Array<{ value: string; label: string; heldReason?: string; note?: string }> {
+  const held = unmeasuredRankMetrics(measured)
+  return PC_METRICS_RANK.map((o) => {
+    const why = held.get(o.value)
+    return why ? { ...o, heldReason: why, note: 'No Amazon source — not measured' } : o
+  })
+}
+/**
+ * The Brand Analytics week of the feed's newest reading, from `newestCapturedAt` — which the feed sets to the END of the
+ * week (its Sunday start + 7 days, `keyword-rank-feed.service.ts`). "27 Sep – 3 Oct", and how many whole days ago the
+ * week ended. null without a reading.
+ */
+export function keywordFeedWeek(newestCapturedAt: string | null | undefined, now = new Date()): { label: string; ageDays: number } | null {
+  if (!newestCapturedAt) return null
+  const end = new Date(newestCapturedAt)
+  if (Number.isNaN(end.getTime())) return null
+  const day = 86_400_000
+  const fmt = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })
+  return { label: `${fmt(new Date(end.getTime() - 7 * day))} – ${fmt(new Date(end.getTime() - day))}`, ageDays: Math.max(0, Math.floor((now.getTime() - end.getTime()) / day)) }
+}
+/** Whether any rank (organic or sponsored) has a fresh reading; null while the census is unknown. */
+export const ranksMeasured = (measured: KeywordFeedMeasured | null | undefined): boolean | null =>
+  measured ? measured.organicRank > 0 || measured.sponsoredRank > 0 : null
+/** What one keyword-feed reading IS: a search-volume reading while no rank is measured, which is all the feed fills. */
+export const rankReadingNoun = (measured: KeywordFeedMeasured | null | undefined): string =>
+  ranksMeasured(measured) === false ? 'search-volume reading' : 'keyword reading'
+/** The metrics of `conditions` that read a rank the feed has no fresh reading of — a rule with any of them matches nothing. */
+export function blockedRankConditions(conditions: ReadonlyArray<Pick<Condition, 'metric'>>, measured: KeywordFeedMeasured | null | undefined): string[] {
+  const held = unmeasuredRankMetrics(measured)
+  return [...new Set(conditions.map((c) => c.metric).filter((m) => held.has(m)))]
+}
 const METRICS_PLACEMENT = ['ACOS', 'ROAS', 'Sales', 'Spend', 'Orders', 'CVR', 'CTR', 'CPC', 'Clicks', 'Impressions']
 // Mapped {value,label}[] forms — exported so RuleBuilder imports them drop-in (single source).
 export const PC_METRICS = METRICS_BASE.map((m) => ({ value: m, label: m }))
@@ -209,7 +268,8 @@ export const pcDefaultCondition = (slug: string): Condition =>
   slug === 'keyword-harvesting' ? { metric: 'PPC Orders', op: 'gte', value: '2' }
     : slug === 'placement' ? { metric: 'ACOS', op: 'gt', value: '', scope: 'campaign' }
       : slug === 'sov' ? { metric: 'Share of Voice', op: 'lt', value: '' }
-        : slug === 'keyword-tracker' ? { metric: 'Organic Rank', op: 'gt', value: '' }
+        // Search Volume, not Organic Rank: it is the one keyword-feed metric with an Amazon source (Brand Analytics, weekly).
+        : slug === 'keyword-tracker' ? { metric: 'Search Volume', op: 'gte', value: '' }
           : (slug === 'budget' || slug === 'bid') ? { metric: 'ACOS', op: 'gt', value: '' }
             : { metric: 'Sales', op: 'eq', value: '0' }
 export const pcDefaultGroup = (slug: string): CriteriaGroup => ({
