@@ -115,7 +115,8 @@ describe('MCP.3 — every tool describes its own arguments', () => {
     expect(described('ad-targets')).toEqual({ properties: ['campaignId', 'adGroupId', 'market', 'status', 'search', 'days', 'limit', 'cursor'], required: [] })
     expect(described('ad-search-terms')).toEqual({ properties: ['kind', 'campaignId', 'market', 'search', 'days', 'limit', 'cursor'], required: [] })
     expect(described('ad-changes')).toEqual({ properties: ['channel', 'campaignId', 'targetId', 'source', 'days', 'limit', 'cursor'], required: [] })
-    expect(described('ad-recommendations')).toEqual({ properties: ['channel', 'category', 'campaignId', 'market', 'days', 'limit', 'cursor'], required: [] })
+    // C5 — and which lines: the running scope (default) or all.
+    expect(described('ad-recommendations')).toEqual({ properties: ['channel', 'category', 'campaignId', 'market', 'days', 'scope', 'limit', 'cursor'], required: [] })
   })
 
   it('the model is offered every tool the person may use, each with its generated schema', () => {

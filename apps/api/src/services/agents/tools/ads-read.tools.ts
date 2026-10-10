@@ -1366,6 +1366,9 @@ const adRecommendations: AgentTool = {
     campaignId: campaignArg,
     market: marketArg,
     days: daysArg(30, 'the window the engines judge'),
+    // C5 (2026-10-10) — the engines' lines for what runs, or every line (read only).
+    scope: z.enum(['running', 'all']).default('running')
+      .describe('running (default): the engines\' lines for running campaigns only — a bid only toward a target ACoS you set, none on a lever a product\'s brain owns or you locked, share of voice per market, none in a market you muted; all: every line, each one the running scope leaves out saying why (outOfScope) — read only, apply-ad-recommendations carries out running lines'),
     limit: limitArg,
     cursor: cursorArg,
   }),
@@ -1380,7 +1383,11 @@ const adRecommendations: AgentTool = {
     + 'recommendation to pause is shown as information (noPause); an unsellable campaign is carried out by lowering its '
     + 'bids to the stop bid. Carry recommendations out by id with apply-ad-recommendations (one change plan), or mute '
     + 'them with mute-ad-recommendations (a rule\'s suggestion, an autopilot decision or a proposal: dismiss or restore); '
-    + 'one already carried out is not offered again until the data shows what the change did. Filter by category, '
+    + 'one already carried out is not offered again until the data shows what the change did. By default (scope running) '
+    + 'the engines\' lines are for running campaigns only: a bid toward a target ACoS you set, nothing on a lever a '
+    + 'product\'s brain owns or you locked (the brain\'s own views carry those), share of voice per market, nothing in a '
+    + 'market you muted (mute-ad-recommendations with markets); leftOut counts what it left out, by why, and scope all '
+    + 'lists every line with why it is left out (outOfScope). Filter by category, '
     + 'campaignId or market. The list '
     + 'is computed live: a row that moves between two pages may repeat.'
     + ' eBay (channel ebay): the eBay rules\' pending proposals (rate, bid, budget, negatives), each with its campaign, '
@@ -1388,7 +1395,7 @@ const adRecommendations: AgentTool = {
     + MONEY_WORDS + PAGING,
   handler: (args) => listTool('ad-recommendations', async () => {
     if ((args as { channel?: string }).channel === 'ebay') return ebayRecommendations(args, scopeOf('ad-recommendations', args))
-    const a = args as { category?: (typeof REC_CATEGORIES)[number]; campaignId?: string; market?: string; days: number; limit?: number; cursor?: string }
+    const a = args as { category?: (typeof REC_CATEGORIES)[number]; campaignId?: string; market?: string; days: number; scope?: 'running' | 'all'; limit?: number; cursor?: string }
     const size = pageSize(a.limit)
     const scope = scopeOf('ad-recommendations', args)
     if (a.campaignId && !(await campaignById(a.campaignId))) return { ok: false, error: 'Campaign not found' }
@@ -1398,7 +1405,7 @@ const adRecommendations: AgentTool = {
     const wantAutopilot = !a.category || a.category === 'autopilot'
     const wantTracker = !a.category || a.category === 'tracker'
     const [feed, suggestions, fresh, decisions, proposals] = await Promise.all([
-      wantEngine ? import('../../advertising/ads-recommendations.service.js').then((m) => m.buildRecommendations({ windowDays: a.days })) : Promise.resolve(null),
+      wantEngine ? import('../../advertising/ads-recommendations.service.js').then((m) => m.buildRecommendations({ windowDays: a.days, scope: a.scope ?? 'running' })) : Promise.resolve(null),
       wantRules
         ? pendingRuleSuggestions(500)
         : Promise.resolve([] as Awaited<ReturnType<typeof pendingRuleSuggestions>>),
@@ -1471,6 +1478,7 @@ const adRecommendations: AgentTool = {
         ...(change?.proposedBudgetCents != null ? { proposedBudgetCents: change.proposedBudgetCents } : {}),
         suggestedTool: SUGGESTED_TOOL[r.category] ?? null,
         ...(retail ? { noPause: RETAIL_STOP } : {}),
+        ...(r.outOfScope ? { outOfScope: r.outOfScope } : {}),
         _campaign: campaign,
       })
     }
@@ -1564,6 +1572,10 @@ const adRecommendations: AgentTool = {
         items: page.items,
         nextCursor: page.nextCursor,
         total: page.total,
+        // C5 — which engine lines: the running scope and what it left out (scope all lists them), and the markets muted.
+        ...(feed ? { scope: feed.scope ?? 'running' } : {}),
+        ...(feed?.leftOut?.total ? { leftOut: { ...feed.leftOut, see: 'counted over the engines\' whole feed, before this call\'s filters; scope all lists each with why (outOfScope)' } } : {}),
+        ...(feed?.mutedMarkets?.length ? { mutedMarkets: feed.mutedMarkets } : {}),
         ...(page.nextCursor ? { more: moreHint(page.items.length, page.total, page.cut, 'category, campaignId or market') } : {}),
       },
     }

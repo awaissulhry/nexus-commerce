@@ -11,6 +11,10 @@
  * clock once ran two hours late). A failure is logged, never thrown.
  * AB-14 — while the product cycle is on (NEXUS_ADS_BRAIN_CYCLE=on) it leaves the products the cycle runs: their state step
  * runs there, every hour (brain/cycle-switch.ts). Off (the default): as before.
+ * C3 (2026-10-10) — every tick first ends the brain's ownership of campaigns archived for a day (brain/archived-ownership.ts:
+ * a LIVE or HELD enrollment → SHADOW; the Owner's open CAMPAIGN overrides end only when Amazon accepted Nexus's archive;
+ * Nexus only, nothing sent to Amazon). It records a run only when it ended something, in the tick's own run line; a
+ * failure there is logged and never blocks the state step.
  * Cluster-safe through lib/cron/clustered.ts (hard rule 7); with business profiles on it runs once per business, inside
  * that business.
  */
@@ -29,12 +33,28 @@ export async function runBrainStateTick(at?: Date): Promise<void> {
     const { stateWatchProducts } = await import('../services/advertising/brain/state-load.js')
     const { withoutOrchestrated } = await import('../services/advertising/brain/cycle-switch.js')
     const now = at ?? await (await import('./ad-rank-defend.job.js')).dbNow()
+    const archived = await endArchivedOwnership(now)
     // AB-14 — a product the product cycle runs (NEXUS_ADS_BRAIN_CYCLE=on) gets its state step there, hourly: left here.
     const products = (await withoutOrchestrated(await stateWatchProducts())).kept
     // Nothing watched: the old decisions still go after 30 days (a product that left the brain leaves none behind).
-    if (!products.length) { await pruneStateDecisions(now); return }
-    await recordCronRun(BRAIN_STATE_JOB, async () => stateSummaryLine(await runStateBrainOnce({ now, products })))
+    if (!products.length) {
+      await pruneStateDecisions(now)
+      if (archived) await recordCronRun(BRAIN_STATE_JOB, async () => archived)
+      return
+    }
+    await recordCronRun(BRAIN_STATE_JOB, async () => `${stateSummaryLine(await runStateBrainOnce({ now, products }))}${archived ? ` · ${archived}` : ''}`)
   } catch (err) { logger.error('ads-brain state run failure', { error: err instanceof Error ? err.message : String(err) }) }
+}
+
+/** C3 — the archived campaigns' clean-up: its run words when it ended something, '' otherwise (a failure included). */
+async function endArchivedOwnership(now: Date): Promise<string> {
+  try {
+    const { endBrainOwnershipOfArchived, archivedOwnershipLine } = await import('../services/advertising/brain/archived-ownership.js')
+    return archivedOwnershipLine(await endBrainOwnershipOfArchived(now))
+  } catch (err) {
+    logger.warn('ads-brain archived-campaign clean-up failed — the state step runs as before', { error: err instanceof Error ? err.message : String(err) })
+    return ''
+  }
 }
 
 let task: ReturnType<typeof cron.schedule> | null = null

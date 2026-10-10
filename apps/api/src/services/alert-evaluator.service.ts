@@ -28,6 +28,7 @@
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { CRON_COMPLETED_STATUSES } from '../utils/cron-observability.js'
+import { cronQuietRule, dueTicks, silenceExcused } from '../utils/cron-quiet.js'
 import { sendEmail } from './email/transport.js'
 
 type Operator = (typeof ALERT_OPERATORS)[number]
@@ -124,6 +125,13 @@ export interface CronSuccessRow {
 
 const HOUR = 60 * 60 * 1000
 
+/**
+ * C2 (2026-10-10) — a job quiet by design (utils/cron-quiet.ts) is judged on what it is due to do: a work-only job (it
+ * records a run only when its data holds work) is never overdue by its silence, a brain step the product cycle took over
+ * is not while the cycle itself runs, and an expected-ticks job (a window of UTC hours, or slots recorded under another
+ * name) counts only the ticks it expects. Before this, the settle catch-up's night (it runs 03–09 UTC) and the brain
+ * steps whose products the cycle runs held "Critical cron stopped" on for days.
+ */
 export function detectOverdueCrons(rows: CronSuccessRow[], now: number): string[] {
   const byJob = new Map<string, number[]>()
   for (const r of rows) {
@@ -132,7 +140,11 @@ export function detectOverdueCrons(rows: CronSuccessRow[], now: number): string[
     byJob.set(r.jobName, arr)
   }
   const overdue: string[] = []
+  const lastOf = (job: string) => { const ts = byJob.get(job); return ts?.length ? Math.max(...ts) : null }
   for (const [jobName, tsList] of byJob) {
+    if (silenceExcused(jobName, now, lastOf)) continue
+    const rule = cronQuietRule(jobName)
+    const quiet = rule?.kind === 'expected-ticks' ? rule : null
     // Need enough history to trust the inferred cadence.
     if (tsList.length < 3) continue
     tsList.sort((a, b) => a - b)
@@ -145,6 +157,11 @@ export function detectOverdueCrons(rows: CronSuccessRow[], now: number): string[
     // tiny-interval cron can't trip on minor jitter). A daily cron (~24h median)
     // flags after ~72h; an hourly one after ~3h.
     const threshold = Math.max(medianGap * 3, medianGap + 2 * HOUR)
+    if (quiet) {
+      // The silence that counts is the ticks it was due at: as many of them as the threshold spans.
+      if (dueTicks(jobName, lastSuccess, now, medianGap).length * medianGap >= threshold) overdue.push(jobName)
+      continue
+    }
     if (now - lastSuccess > threshold) overdue.push(jobName)
   }
   return overdue
@@ -165,6 +182,21 @@ export async function overdueCronJobs(now: number = Date.now()): Promise<string[
 
 async function metricOverdueCrons(_ctx: MetricContext): Promise<number> {
   return (await overdueCronJobs()).length
+}
+
+/**
+ * C2 — what "Critical cron stopped" found, for the channels: the jobs by name, never only "overdueCrons = 3". Pure.
+ * Undefined when none is overdue.
+ */
+export function overdueCronsDetail(jobs: readonly string[]): AlertDetail | undefined {
+  if (!jobs.length) return undefined
+  const shown = jobs.slice(0, 12)
+  return {
+    status: 'fail',
+    message: `${jobs.length === 1 ? '1 scheduled job has' : `${jobs.length} scheduled jobs have`} not run for more than three times ${jobs.length === 1 ? 'its' : 'their'} usual interval: ${shown.join(', ')}${jobs.length > shown.length ? ` and ${jobs.length - shown.length} more` : ''}.`,
+    likelyCause: 'The scheduler skipped them (a restart or an out-of-memory kill: node-cron does not replay a missed time), or each was switched off or moved. Jobs quiet by design are not counted (utils/cron-quiet.ts).',
+    nextStep: 'Open the Sync Logs hub (cron status) for those jobs and the platform health check "Scheduled jobs"; press Run now for any that should have run.',
+  }
 }
 
 const METRIC_FNS: Record<string, (ctx: MetricContext) => Promise<number>> = {
@@ -519,11 +551,20 @@ export async function runAlertEvaluator(): Promise<EvalResult> {
       continue
     }
     try {
-      const value = await fn({
-        windowMs: rule.windowMinutes * 60 * 1000,
-        channel: rule.channel,
-      })
-      const outcome = await settleAlertRule(rule, value)
+      // C2 — the overdue-cron rule carries the jobs' names into every channel.
+      let value: number
+      let detail: AlertDetail | undefined
+      if (rule.metric === 'overdueCrons') {
+        const jobs = await overdueCronJobs()
+        value = jobs.length
+        detail = overdueCronsDetail(jobs)
+      } else {
+        value = await fn({
+          windowMs: rule.windowMinutes * 60 * 1000,
+          channel: rule.channel,
+        })
+      }
+      const outcome = await settleAlertRule(rule, value, detail ? { detail } : {})
       if (outcome === 'fired') result.rulesFired++
       else if (outcome === 'resolved') result.rulesResolved++
       else result.rulesUnchanged++

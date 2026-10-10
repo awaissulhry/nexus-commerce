@@ -40,9 +40,10 @@
  *   mute-ad-recommendations    Nexus only: mute or unmute engine recommendations by id (SG.9's third verb: the feed stops
  *                              offering one until it is unmuted). W4-9 — dismiss or restore a rule's suggestion and an
  *                              autopilot decision as their screens do (dismissSuggestion, dismissDecision), and a Keyword
- *                              Tracker proposal (the proposal's own DISMISSED status; its page has no dismiss). Undo:
- *                              the opposite op. It changes no spend, so a
- *                              business may let it run by its rule, inside how many it may change at once.
+ *                              Tracker proposal (the proposal's own DISMISSED status; its page has no dismiss). C5
+ *                              (2026-10-10) — `markets`: mute or unmute every engine line of a market (an
+ *                              AdsSuggestionMute MARKETPLACE row the Owner holds). Undo: the opposite op. It changes no
+ *                              spend, so a business may let it run by its rule, inside how many it may change at once.
  *
  * Nothing here calls Amazon: every write is a step's own change tool, through the mutation services and the write gate.
  */
@@ -53,8 +54,11 @@ import type { Recommendation } from '../../advertising/ads-recommendations.servi
 import {
   familyOfRecommendationId,
   isEngineFamily,
+  marketMuteStates,
+  muteMarkets,
   muteRecommendations,
   recommendationMuteStates,
+  unmuteMarkets,
   unmuteRecommendations,
   type MuteState,
   type RecommendationFamily,
@@ -82,10 +86,13 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 const list = (value: unknown): unknown[] => (Array.isArray(value) ? value : [])
 const obj = (value: unknown): Record<string, unknown> => (value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {})
 
-/** The feed, as ad-recommendations reads it. Imported where used: loading it registers rule-action handlers. */
-async function feedById(windowDays: number): Promise<Map<string, Recommendation>> {
+/**
+ * The feed, as ad-recommendations reads it. Imported where used: loading it registers rule-action handlers. C5 — `scope`
+ * running (the default: what apply carries out, and what a step's run re-checks) or all (every line he can read).
+ */
+async function feedById(windowDays: number, scope: 'running' | 'all' = 'running'): Promise<Map<string, Recommendation>> {
   const { buildRecommendations } = await import('../../advertising/ads-recommendations.service.js')
-  const feed = await buildRecommendations({ windowDays })
+  const feed = await buildRecommendations({ windowDays, scope })
   return new Map(feed.recommendations.map((r) => [r.id, r]))
 }
 
@@ -397,7 +404,15 @@ export async function planRecommendations(a: ApplyArgs): Promise<{ ok: true; tit
   const elsewhere = missing.length ? await notInBusiness(missing) : new Map<string, string>()
   problems.push(...elsewhere.values())
   const stale = missing.filter((id) => !elsewhere.has(id))
-  if (stale.length) for (const state of await recommendationMuteStates(stale)) problems.push(goneWords(state.id, state))
+  if (stale.length) {
+    const states = await recommendationMuteStates(stale)
+    // C5 — a shown line the running scope leaves out says why (scope all lists it): apply carries out running lines only.
+    const outside = states.some((s) => s.state === 'shown') ? await feedById(a.days, 'all') : new Map<string, Recommendation>()
+    for (const state of states) {
+      const why = state.state === 'shown' ? outside.get(state.id)?.outOfScope : undefined
+      problems.push(why ? `${state.id}: not in the running suggestions — ${why} (ad-recommendations scope all lists it; carry it out with its change tool if you want it)` : goneWords(state.id, state))
+    }
+  }
   if (ruleIds.length) {
     const { suggestionStatuses, suggestionSubjects } = await import('../../advertising/ads-suggestion-decide.service.js')
     const suggestionIds = ruleIds.map((id) => id.slice('rule:'.length))
@@ -562,11 +577,46 @@ const MUTE_LIMITS = z.object({
 const DECIDED: ReadonlySet<RecommendationFamily> = new Set<RecommendationFamily>(['rule', 'autopilot', 'tracker'])
 const KIND_WORDS: Record<string, string> = { rule: 'a rule\'s suggestion', autopilot: 'an autopilot decision', tracker: 'a Keyword Tracker proposal' }
 
+/** C5 — a market mute's item id ('market:DE'): a mute of every engine line of that market. */
+const MARKET_ITEM = 'market:'
+const marketOfItem = (id: string): string | null => (id.startsWith(MARKET_ITEM) ? id.slice(MARKET_ITEM.length) : null)
+
+/**
+ * C5 — the dry run of a market mute or unmute: each market from its state now to the one it gets, or every reason it is
+ * refused (a market this business runs no Amazon ad campaign in; one muted already, or not muted).
+ */
+async function marketPlan(markets: string[], op: MuteOp): Promise<{ items: MuteItem[]; problems: string[] }> {
+  const problems: string[] = []
+  if (op !== 'mute' && op !== 'unmute') return { items: [], problems: [`markets are muted (op mute) and unmuted (op unmute), not ${op === 'dismiss' ? 'dismissed' : 'restored'}`] }
+  const known = new Set((await prisma.campaign.findMany({ where: { marketplace: { in: markets } }, select: { marketplace: true }, distinct: ['marketplace'] })).map((c) => c.marketplace))
+  const items: MuteItem[] = []
+  for (const s of await marketMuteStates(markets)) {
+    if (!known.has(s.market)) problems.push(`${s.market}: this business runs no Amazon ad campaign in this market`)
+    else if (op === 'mute' && s.state === 'muted') problems.push(`${s.market}: its suggestions are muted already`)
+    else if (op === 'unmute' && s.state === 'shown') problems.push(`${s.market}: its suggestions are not muted`)
+    items.push({ id: `${MARKET_ITEM}${s.market}`, category: 'market', title: `every suggestion in ${s.market}`, from: s.state, to: op === 'mute' ? 'muted' : 'shown' })
+  }
+  return { items, problems }
+}
+
 /** The dry run of a mute: each id from its state now to the one it gets, or every reason it is refused. */
 async function mutePlan(args: Record<string, unknown>, frozen: readonly MuteItem[] = []): Promise<{ ok: true; op: MuteOp; items: MuteItem[] } | { ok: false; error: string }> {
-  const ids = (args.recommendationIds as string[]) ?? []
+  const ids = (args.recommendationIds as string[] | undefined) ?? []
+  const markets = (args.markets as string[] | undefined) ?? []
   const op = args.op as MuteOp
+  if (!ids.length && !markets.length) return { ok: false, error: 'Name the recommendationIds or the markets to change. Nothing was queued.' }
   if (new Set(ids).size !== ids.length) return { ok: false, error: 'Each recommendation may be named once. Nothing was queued.' }
+  if (new Set(markets).size !== markets.length) return { ok: false, error: 'Each market may be named once. Nothing was queued.' }
+  // C5 — the markets first: their items lead the preview, the ids' follow (all of them, or nothing, is queued).
+  const byMarket = markets.length ? await marketPlan(markets, op) : { items: [], problems: [] }
+  if (byMarket.problems.length) return { ok: false, error: `Nothing was queued — ${byMarket.problems.join('; ')}.` }
+  if (!ids.length) return { ok: true, op, items: byMarket.items }
+  const byId = await recommendationPlan(ids, op, args, frozen)
+  return byId.ok ? { ok: true, op, items: [...byMarket.items, ...byId.items] } : byId
+}
+
+/** The dry run of a mute by recommendation ids. */
+async function recommendationPlan(ids: string[], op: MuteOp, args: Record<string, unknown>, frozen: readonly MuteItem[]): Promise<{ ok: true; op: MuteOp; items: MuteItem[] } | { ok: false; error: string }> {
   const deciding = op === 'dismiss' || op === 'restore'
   const problems: string[] = []
   for (const id of ids) {
@@ -582,6 +632,8 @@ async function mutePlan(args: Record<string, unknown>, frozen: readonly MuteItem
   const states = await recommendationMuteStates(ids)
   const shown = states.filter((s) => s.state === 'shown').map((s) => s.id)
   const feed = op === 'mute' && shown.length ? await feedById(Number(args.days ?? 30)) : new Map<string, Recommendation>()
+  // C5 — a line only scope all lists (a paused campaign's, a muted market's) may be muted too: looked up there.
+  if (shown.some((id) => !feed.has(id))) for (const [id, rec] of await feedById(Number(args.days ?? 30), 'all')) if (!feed.has(id)) feed.set(id, rec)
   const items: MuteItem[] = []
   for (const s of states) {
     const rec = feed.get(s.id)
@@ -693,12 +745,16 @@ function decideWords(op: 'dismiss' | 'restore', items: MuteItem[]): string {
 }
 
 function mutePreview(op: MuteOp, items: MuteItem[]) {
-  const n = plural(items.length, 'recommendation')
-  const it = items.length === 1 ? 'it' : 'them'
+  // C5 — a market item mutes (or unmutes) every engine line of its market.
+  const markets = items.filter((i) => i.category === 'market').map((i) => marketOfItem(i.id))
+  const ones = items.filter((i) => i.category !== 'market')
+  const n = plural(ones.length, 'recommendation')
+  const what = [markets.length ? `every engine suggestion in ${markets.join(', ')}` : '', ones.length ? n : ''].filter(Boolean).join(' and ')
+  const it = !markets.length && ones.length === 1 ? 'it' : 'them'
   const summary = op === 'mute'
-    ? `Mutes ${n}: Nexus stops offering ${it} (on the Recommendations tab and to Claude) until unmuted. Nothing reaches Amazon.`
+    ? `Mutes ${what}: Nexus stops offering ${it} (on the Recommendations tab and to Claude) until unmuted. Nothing reaches Amazon.`
     : op === 'unmute'
-      ? `Unmutes ${n}: Nexus offers ${it} again while the engines still recommend ${it}. Nothing reaches Amazon.`
+      ? `Unmutes ${what}: Nexus offers ${it} again while the engines still recommend ${it}. Nothing reaches Amazon.`
       : `${op === 'dismiss' ? 'Dismisses' : 'Restores'} ${n} in Nexus: ${decideWords(op, items)}. Nothing reaches Amazon.`
   return {
     action: 'mute-ad-recommendations',
@@ -742,13 +798,18 @@ export const MUTE_UNDO: ToolUndo = {
     const after = change.after as MuteChange
     const ids = after.items.map((i) => i.id)
     if (after.op === 'dismiss' || after.op === 'restore') return { op: after.op, items: await decideStatesNow(ids) }
-    const now = await recommendationMuteStates(ids)
-    return { op: after.op, items: now.map((s) => ({ id: s.id, state: s.state })) }
+    // C5 — a market item's state is its market's mute.
+    const markets = ids.map(marketOfItem).filter((m): m is string => !!m)
+    const [byMarket, now] = await Promise.all([marketMuteStates(markets), recommendationMuteStates(ids.filter((id) => !marketOfItem(id)))])
+    const state = new Map<string, string>([...byMarket.map((m) => [`${MARKET_ITEM}${m.market}`, m.state] as const), ...now.map((s) => [s.id, s.state] as const)])
+    return { op: after.op, items: ids.map((id) => ({ id, state: state.get(id) ?? 'shown' })) }
   },
   request(change) {
     const after = change.after as MuteChange
     if (!after?.items?.length) return { refusal: 'This change names no recommendation.' }
-    return { tool: 'mute-ad-recommendations', args: { recommendationIds: after.items.map((i) => i.id), op: OPPOSITE[after.op] ?? 'unmute', why: `undo of an earlier ${after.op}` } }
+    const markets = after.items.map((i) => marketOfItem(i.id)).filter((m): m is string => !!m)
+    const ids = after.items.map((i) => i.id).filter((id) => !marketOfItem(id))
+    return { tool: 'mute-ad-recommendations', args: { ...(ids.length ? { recommendationIds: ids } : {}), ...(markets.length ? { markets } : {}), op: OPPOSITE[after.op] ?? 'unmute', why: `undo of an earlier ${after.op}` } }
   },
 }
 
@@ -784,7 +845,10 @@ const muteAdRecommendations: AgentTool = {
   title: 'Mute ad recommendations',
   category: 'advertising',
   input: z.object({
-    recommendationIds: z.array(ID).min(1).max(MAX_IDS).describe(`the recommendationIds from ad-recommendations, 1 to ${MAX_IDS}: bid:, neg:, grad:, budget:, sov:, retail: (mute, unmute); rule:, autopilot:, kt: (dismiss, restore)`),
+    recommendationIds: z.array(ID).min(1).max(MAX_IDS).optional().describe(`the recommendationIds from ad-recommendations, 1 to ${MAX_IDS}: bid:, neg:, grad:, budget:, sov:, retail: (mute, unmute); rule:, autopilot:, kt: (dismiss, restore). Name these, markets, or both`),
+    // C5 (2026-10-10) — a market mute the Owner holds: every engine line of the market, until he unmutes it.
+    markets: z.array(z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/, 'a two-letter market code, as IT or DE')).min(1).max(20).optional()
+      .describe('market codes (IT, DE …) whose every engine suggestion to mute (op mute) or offer again (op unmute) — ad-recommendations then leaves that market out of its running lines; scope all still lists them'),
     op: z.enum(['mute', 'unmute', 'dismiss', 'restore']).describe('mute: Nexus stops offering an engine\'s recommendation until it is unmuted; unmute: offer it again (also one a request already carried out); dismiss: a rule\'s suggestion or an autopilot decision is set aside as its screen dismisses it, a Keyword Tracker proposal is closed without a write; restore: a dismissed one waits again'),
     days: daysArg,
     why: whyArg.describe('why, in a sentence: kept with the mute'),
@@ -803,6 +867,9 @@ const muteAdRecommendations: AgentTool = {
   withinLimits(preview, limits) {
     const p = preview as { action?: string; op?: string; items?: unknown[] } | null
     if (p?.action !== 'mute-ad-recommendations' || !Array.isArray(p.items)) return 'there is no preview of this mute to check'
+    // C5 review — a market mute (or unmute) changes what every suggestion of a market shows: a person always decides it,
+    // it never runs by rule, whatever the limit.
+    if (p.items.some((i) => (i as { category?: unknown } | null)?.category === 'market')) return 'it mutes or unmutes every suggestion of a market: a person always decides that, it never runs by rule'
     const max = typeof limits.maxItems === 'number' ? limits.maxItems : 0
     return p.items.length <= max ? null : `it would ${p.op} ${plural(p.items.length, 'recommendation')}, more than the ${max} this business lets Claude ${p.op} at once without a person`
   },
@@ -810,7 +877,8 @@ const muteAdRecommendations: AgentTool = {
   description:
     'Mute or unmute recommendations of the Amazon ad engines by id (from ad-recommendations: bid:, neg:, grad:, budget:, '
     + 'sov:, retail:), or dismiss or restore a rule\'s suggestion (rule:), an autopilot plan\'s decision (autopilot:) or a '
-    + 'Keyword Tracker proposal (kt:) — in Nexus only, nothing reaches Amazon. A muted recommendation is not offered (on '
+    + 'Keyword Tracker proposal (kt:) — in Nexus only, nothing reaches Amazon. markets mutes (or unmutes) every engine '
+    + 'suggestion of a market at once: ad-recommendations leaves it out of its running lines until unmuted. A muted recommendation is not offered (on '
     + 'the Recommendations tab or to Claude) until it is unmuted; unmute also offers again one a request already carried '
     + 'out. A dismissed suggestion leaves the Suggestions queue and a dismissed autopilot decision the A.I. Bids tab (its '
     + 'plan does not propose it again for 7 days), as those screens dismiss them; a dismissed Keyword Tracker proposal is '
@@ -859,8 +927,16 @@ const muteAdRecommendations: AgentTool = {
       }
     }
     const ids = planned.items.map((i) => i.id)
-    if (planned.op === 'mute') await muteRecommendations(planned.items.map((i) => ({ id: i.id, label: i.title })), run.actor, run.reason)
-    else await unmuteRecommendations(ids)
+    // C5 — market items mute or unmute their market; the rest by id.
+    const markets = ids.map(marketOfItem).filter((m): m is string => !!m)
+    const ones = planned.items.filter((i) => !marketOfItem(i.id))
+    if (planned.op === 'mute') {
+      if (markets.length) await muteMarkets(markets, run.actor, run.reason)
+      if (ones.length) await muteRecommendations(ones.map((i) => ({ id: i.id, label: i.title })), run.actor, run.reason)
+    } else {
+      if (markets.length) await unmuteMarkets(markets)
+      if (ones.length) await unmuteRecommendations(ones.map((i) => i.id))
+    }
     return {
       ok: true,
       data: { op: planned.op, recommendations: ids.length, changeSetId: run.changeSetId, note: fresh.summary },

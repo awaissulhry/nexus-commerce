@@ -6,18 +6,23 @@
  * succeeds can bring back nothing, so these checks read the newest DATA each feed holds, per market — never only the
  * job's status — and, for SQP, what last night's request pass really asked Amazon for.
  *
- *   ads-daily-reports   AmazonAdsDailyPerformance newest day per market (dataAsOf): ≤ 2 days behind is normal
+ *   ads-daily-reports   AmazonAdsDailyPerformance newest day per market (dataAsOf): ≤ 2 days behind is normal. C2: a market
+ *                       the report creator does not ask for (no enabled Sponsored Products campaign and no impression in
+ *                       14 days: deliveringAdProducts) is "not asked", ok — its reports come back the day one is enabled
  *   ads-report-feeds    the other ads report feeds and the cross-feed contradictions (ads-pipeline-health.service.ts,
  *                       the same read as ads-overview's "data feeds health")
  *   sqp-feed            SearchQueryPerformance newest complete week per market, and last night's sqp-ingest outcome:
  *                       report requests created against failed or deferred (not sent)
  *   economics-feed      AmazonEconomicsDaily newest day per market, and the Data Kiosk queries of the last 48 h
- *   keyword-rank-feed   KeywordRank's newest Brand Analytics reading per market against the SQP week it is made from
+ *   keyword-rank-feed   KeywordRank's newest Brand Analytics reading per market against the SQP week it is made from. C2:
+ *                       a market whose newest SQP week ended before the feed's look-back is "not fed", ok (sqp-feed judges
+ *                       that week)
  *
  * Read only. Amounts are never read: these checks count rows and compare dates.
  */
 import prisma from '../../../db.js'
 import { DAY, HOUR, daysBehind, isoDay, plural, worst, type CheckStatus, type HealthCheck, type Verdict } from '../types.js'
+import { KEYWORD_RANK_FEED_LOOKBACK_DAYS, sqpWeekEnd } from '../../advertising/keyword-rank-feed.service.js'
 
 // ── ads-daily-reports ────────────────────────────────────────────────────────────────────────────────
 
@@ -26,7 +31,14 @@ export interface DailyReportFacts {
   markets: Array<{ market: string; newestDay: string }>
   /** Markets with an active production ads connection (sandbox connections are not expected to have data). */
   liveMarkets: string[]
+  /**
+   * C2 — markets whose Sponsored Products reports the report creator does not ask for: no ENABLED campaign and no
+   * impression in 14 days (ads-reports.service.ts deliveringAdProducts, the creator's own rule). Absent: not read.
+   */
+  notAsked?: string[]
 }
+
+const NOT_ASKED_WORDS = 'not asked: no enabled campaign and no impression in 14 days'
 
 /** ≤ this many days behind is normal: yesterday lands during the morning. */
 const DAILY_OK_DAYS = 2
@@ -38,19 +50,23 @@ export function judgeDailyReports(facts: DailyReportFacts, now: Date): Verdict {
   if (!all.length) {
     return { status: 'unknown', message: 'Could not measure: this business has no Amazon ads data in 60 days and no live ads connection.', likelyCause: null, nextStep: null, evidence: { markets: [] } }
   }
+  const notAsked = new Set(facts.notAsked ?? [])
   const rows = all.map((market) => {
     const newest = byMarket.get(market) ?? null
     const lag = daysBehind(newest, now)
-    const status: CheckStatus = newest == null ? 'fail' : lag! >= DAILY_FAIL_DAYS ? 'fail' : lag! > DAILY_OK_DAYS ? 'warn' : 'ok'
-    return { market, newestDay: newest, daysBehind: lag, live: facts.liveMarkets.includes(market), status }
+    const dormant = notAsked.has(market)
+    const status: CheckStatus = dormant ? 'ok' : newest == null ? 'fail' : lag! >= DAILY_FAIL_DAYS ? 'fail' : lag! > DAILY_OK_DAYS ? 'warn' : 'ok'
+    return { market, newestDay: newest, daysBehind: lag, live: facts.liveMarkets.includes(market), status, ...(dormant ? { notAsked: NOT_ASKED_WORDS } : {}) }
   })
   const late = rows.filter((r) => r.status !== 'ok')
+  const asked = rows.filter((r) => !r.notAsked)
+  const dormantNote = rows.length > asked.length ? ` ${rows.filter((r) => r.notAsked).map((r) => r.market).join(', ')}: ${NOT_ASKED_WORDS} — its reports come back the day a campaign there is enabled.` : ''
   const status = worst(rows.map((r) => r.status))
   return {
     status,
     message: late.length
-      ? `The daily ads report is late in ${plural(late.length, 'market')}: ${late.map((r) => (r.newestDay ? `${r.market} newest day ${r.newestDay} (${r.daysBehind} days behind)` : `${r.market} has no daily report in 60 days though its ads connection is live`)).join('; ')}. Normal is at most ${DAILY_OK_DAYS} days.`
-      : `The daily ads report is current in every market (${rows.map((r) => `${r.market} ${r.newestDay}`).join(', ')}).`,
+      ? `The daily ads report is late in ${plural(late.length, 'market')}: ${late.map((r) => (r.newestDay ? `${r.market} newest day ${r.newestDay} (${r.daysBehind} days behind)` : `${r.market} has no daily report in 60 days though its ads connection is live`)).join('; ')}. Normal is at most ${DAILY_OK_DAYS} days.${dormantNote}`
+      : `The daily ads report is current in every market it is asked for (${asked.map((r) => `${r.market} ${r.newestDay}`).join(', ') || 'none'}).${dormantNote}`,
     likelyCause: late.length ? 'The ads report jobs did not create, download or ingest that market\'s report: the report jobs failed, the market\'s ads connection lost access, or the scheduler skipped them.' : null,
     nextStep: late.length ? 'Read ads-overview for those markets (data feeds health) and the Scheduled jobs check; until the data is current, no bid or budget change should be made there.' : null,
     evidence: { markets: rows, okWithinDays: DAILY_OK_DAYS, failFromDays: DAILY_FAIL_DAYS },
@@ -71,10 +87,13 @@ export const dailyReportsCheck: HealthCheck<DailyReportFacts> = {
       }),
       prisma.amazonAdsConnection.findMany({ where: { isActive: true, mode: 'production' }, select: { marketplace: true } }),
     ])
-    return {
-      markets: rows.filter((r) => r._max.date).map((r) => ({ market: r.marketplace, newestDay: isoDay(r._max.date)! })),
-      liveMarkets: [...new Set(conns.map((c) => c.marketplace))],
-    }
+    const markets = rows.filter((r) => r._max.date).map((r) => ({ market: r.marketplace, newestDay: isoDay(r._max.date)! }))
+    const liveMarkets = [...new Set(conns.map((c) => c.marketplace))]
+    // C2 — the report creator's own rule for which markets it asks (Sponsored Products: the daily report's ad product).
+    const all = [...new Set([...markets.map((m) => m.market), ...liveMarkets])]
+    const { deliveringAdProducts } = await import('../../advertising/ads-reports.service.js')
+    const delivering = await deliveringAdProducts(all)
+    return { markets, liveMarkets, notAsked: all.filter((m) => !delivering.get(m)?.has('SPONSORED_PRODUCTS')) }
   },
   judge: judgeDailyReports,
 }
@@ -356,24 +375,33 @@ export interface KeywordRankFacts {
   readings: Array<{ market: string; newestCapturedAt: string }>
 }
 
-export function judgeKeywordRank(facts: KeywordRankFacts): Verdict {
+export function judgeKeywordRank(facts: KeywordRankFacts, now: Date): Verdict {
   if (!facts.sqp.length) {
     return { status: 'unknown', message: 'Could not measure: the keyword-rank feed is made from Brand Analytics weeks, and this business holds none in 180 days.', likelyCause: null, nextStep: null, evidence: { readings: facts.readings } }
   }
   const readings = new Map(facts.readings.map((r) => [r.market, r.newestCapturedAt]))
+  // C2 — the feed reads only the weeks that ended within its look-back (its own rule and week end): a market whose newest
+  // week ended before that is not fed, by design, not by a fault (the SQP check judges that week).
+  const fedSince = now.getTime() - KEYWORD_RANK_FEED_LOOKBACK_DAYS * DAY
   const markets = facts.sqp.map((s) => {
     const weekEnd = new Date(Date.parse(`${s.newestWeekStart}T00:00:00Z`) + 6 * DAY)
+    const notFed = sqpWeekEnd(new Date(`${s.newestWeekStart}T00:00:00Z`)).getTime() < fedSince
     const reading = readings.get(s.market) ?? null
     const behind = reading == null ? null : Math.max(0, Math.round((Date.parse(`${isoDay(weekEnd)}T00:00:00Z`) - Date.parse(`${isoDay(reading)}T00:00:00Z`)) / DAY))
-    const status: CheckStatus = reading == null ? 'warn' : behind! > 14 ? 'fail' : behind! > 7 ? 'warn' : 'ok'
-    return { market: s.market, sqpWeekEnd: isoDay(weekEnd), newestReading: reading ? isoDay(reading) : null, daysBehindSqp: behind, status }
+    const status: CheckStatus = notFed ? 'ok' : reading == null ? 'warn' : behind! > 14 ? 'fail' : behind! > 7 ? 'warn' : 'ok'
+    return {
+      market: s.market, sqpWeekEnd: isoDay(weekEnd), newestReading: reading ? isoDay(reading) : null, daysBehindSqp: behind, status,
+      ...(notFed ? { notFed: `not fed — its newest Brand Analytics week ended ${isoDay(weekEnd)}, which the Brand Analytics check judges` } : {}),
+    }
   })
   const behind = markets.filter((m) => m.status !== 'ok')
+  const fed = markets.filter((m) => !m.notFed)
+  const notFedNote = fed.length < markets.length ? ` ${markets.filter((m) => m.notFed).map((m) => `${m.market}: ${m.notFed}`).join('; ')}.` : ''
   return {
     status: worst(markets.map((m) => m.status)),
     message: behind.length
-      ? `The keyword-rank feed lags the Brand Analytics weeks Nexus holds: ${behind.map((m) => (m.newestReading ? `${m.market} newest reading ${m.newestReading}, SQP week ends ${m.sqpWeekEnd}` : `${m.market} has no reading although SQP holds the week ending ${m.sqpWeekEnd}`)).join('; ')}.`
-      : `The keyword-rank feed is level with Brand Analytics in every market (${markets.map((m) => `${m.market} ${m.newestReading}`).join(', ')}).`,
+      ? `The keyword-rank feed lags the Brand Analytics weeks Nexus holds: ${behind.map((m) => (m.newestReading ? `${m.market} newest reading ${m.newestReading}, SQP week ends ${m.sqpWeekEnd}` : `${m.market} has no reading although SQP holds the week ending ${m.sqpWeekEnd}`)).join('; ')}.${notFedNote}`
+      : `The keyword-rank feed is level with Brand Analytics in every market it feeds (${fed.map((m) => `${m.market} ${m.newestReading}`).join(', ') || 'none'}).${notFedNote}`,
     likelyCause: behind.length ? 'keyword-rank-feed did not run, or found no bid-on keyword in the newer weeks.' : null,
     nextStep: behind.length ? 'Read keyword-rank-feed\'s last run on the Sync Logs hub, and press Run now (it calls no Amazon API).' : null,
     evidence: { markets },
