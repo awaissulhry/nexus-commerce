@@ -133,6 +133,8 @@ describe('BB-15 golden — the brain with the nowcast off decides exactly as bef
       }),
       worked: workedExamples().map((f) => decide(f)),
     }
-    await expect(JSON.stringify(golden, null, 1)).toMatchFileSnapshot('./__golden__/flag-off.json')
+    // Bid-page fix 10-10 — a floor's give-back (decide.ts GiveBack) and a give-back's bid before (review fix 2) are told beside the decision, not part of what it decides:
+    // left out of the bytes (every field the golden holds is compared as before).
+    await expect(JSON.stringify(golden, (key, value) => (key === 'giveBack' || key === 'restoreBeforeCents' ? undefined : value), 1)).toMatchFileSnapshot('./__golden__/flag-off.json')
   })
 })

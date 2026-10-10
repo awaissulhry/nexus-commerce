@@ -525,7 +525,8 @@ describe('the flags: shadow decides exactly as before; on changes only the armed
     }
     // Probes were planned (the pipeline ran), and still nothing moved.
     expect(planned).toBeGreaterThan(0)
-    await expect(JSON.stringify(golden, null, 1)).toMatchFileSnapshot('./__golden__/flag-off.json')
+    // Bid-page fix 10-10 — a floor's give-back and a give-back's bid before are told beside the decision, not part of it: left out of the bytes.
+    await expect(JSON.stringify(golden, (key, value) => (key === 'giveBack' || key === 'restoreBeforeCents' ? undefined : value), 1)).toMatchFileSnapshot('./__golden__/flag-off.json')
   })
 
   it('on: an armed keyword becomes layer probe at its arm, the step from the center, the goal\'s why in brackets; the rest are the same objects', () => {

@@ -33,7 +33,7 @@ import { strategyMarket } from '../ads-strategy/bids.js'
 import { openStrategy } from '../ads-strategy/effective.js'
 import { MAX_WINDOW_DAYS, type Evidence } from './estimator.js'
 import { stockFactOf, type DirectiveRow, type AdGroupRow, type CampaignRow, type MarketRows, type PlaybookFact, type RunRows, type StockFact, type StrategyRead, type TargetRow } from './facts.js'
-import { LOWERING_LAYERS, UNLOWERED_LAYERS, type DecisionLayer } from './decide.js'
+import { giveBackKey, LOWERING_LAYERS, UNLOWERED_LAYERS, type DecisionLayer, type GiveBack } from './decide.js'
 import { readStockAdGroups } from '../ads-stock-risk.service.js'
 import { breakevenByProduct } from '../ads-target-acos.service.js'
 import { DEFAULT_STOP_BID_CENTS } from '../ads-strategy/fields.js'
@@ -413,21 +413,36 @@ async function loadPlaybookFacts(m: MarketRows, campaignIds: readonly string[], 
  * since its last decision no override lowered — its saved bid (`suppressedFromBidCents`) is then the brain's own record
  * (facts.ts), never a stop of someone else's.
  */
-async function loadLowered(previous: ReadonlyMap<string, PreviousDecision>): Promise<Map<string, { layer: DecisionLayer; heldCents: number; beforeCents: number | null; wrote: boolean; retryDataDay: string | null; foundCents: number | null }>> {
-  const out = new Map<string, { layer: DecisionLayer; heldCents: number; beforeCents: number | null; wrote: boolean; retryDataDay: string | null; foundCents: number | null }>()
+export async function loadLowered(previous: ReadonlyMap<string, PreviousDecision>): Promise<Map<string, { layer: DecisionLayer; heldCents: number; beforeCents: number | null; wrote: boolean; retryDataDay: string | null; foundCents: number | null; giveBack: GiveBack | null }>> {
+  const out = new Map<string, { layer: DecisionLayer; heldCents: number; beforeCents: number | null; wrote: boolean; retryDataDay: string | null; foundCents: number | null; giveBack: GiveBack | null }>()
   // A give-back that found no bid to go back to (a restore hold) still waits for one: it stays a candidate.
   const ids = [...previous].filter(([, p]) => (LOWERING_LAYERS as readonly string[]).includes(p.layer) || p.layer === 'restore').map(([id]) => id)
   if (!ids.length) return out
   // The bid before: a decision no override lowered (a give-back that wrote counts; one that held at the floor does not).
   // BB-21 — a LIVE probe's arm too: a Min-bid hour's give-back returns to the day's arm, not to the bid before the probe.
   // BB-20 — an explore or revive step too (batch 3 review): a brake after it steps from the explored bid, not from the one before.
-  // Lane 5 review fix — and a share move (decide.ts UNLOWERED_LAYERS).
+  // Lane 5 review fix — and a share move; bid-page fix 10-10 — the money brake's step down and the plan's hour move too
+  // (decide.ts UNLOWERED_LAYERS, the one list).
   const kept = [...UNLOWERED_LAYERS] as string[]
-  const rows = await prisma.$queryRaw<Array<{ targetId: string; decidedCents: number }>>(Prisma.sql`
-    SELECT DISTINCT ON (d."targetId") d."targetId", d."decidedCents" FROM "BidBrainDecision" d
-     WHERE d."targetId" = ANY(${ids}::text[]) AND (d.layer = ANY(${kept}::text[]) OR (d.layer = 'restore' AND d.action = 'write'))
+  // Review fix 10-10 (3) — a LIVE write that did not land (refused, deferred, would-apply) set no bid: it is skipped, and the
+  // newest decision whose bid landed is the bid before (its `currentCents` may be a floor: never the bid before).
+  const rows = await prisma.$queryRaw<Array<{ targetId: string; decidedCents: number; currentCents: number; layer: string; action: string; mode: string; sent: string | null; beforeHour: unknown; restoreBefore: unknown; failedLater: boolean }>>(Prisma.sql`
+    SELECT DISTINCT ON (d."targetId") d."targetId", d."decidedCents", d."currentCents", d.layer, d.action, d.mode, d.evidence -> 'sent' ->> 'sent' AS sent,
+           d.evidence -> 'beforeHour' AS "beforeHour", d.evidence -> 'restoreBefore' AS "restoreBefore", ${Prisma.raw(failedLaterSql('d'))} AS "failedLater"
+      FROM "BidBrainDecision" d
+     WHERE d."targetId" = ANY(${ids}::text[]) AND (d.layer = ANY(${kept}::text[]) OR (d.layer = 'restore' AND d.action = 'write')) AND ${landed('d')}
      ORDER BY d."targetId", d."createdAt" DESC`)
-  const before = new Map(rows.map((r) => [r.targetId, r.decidedCents]))
+  const before = new Map(rows.flatMap((r) => { const b = bidSetBy(r); return b != null ? [[r.targetId, b] as const] : [] }))
+  // Bid-page fix 10-10 — the newest give-back a run with evidence decided since that decision (the floor's own runs).
+  const memoRows = await prisma.$queryRaw<Array<{ targetId: string; giveBack: unknown }>>(Prisma.sql`
+    SELECT DISTINCT ON (d."targetId") d."targetId", d.evidence -> 'giveBack' AS "giveBack"
+      FROM "BidBrainDecision" d
+      LEFT JOIN (SELECT k."targetId", max(k."createdAt") AS at FROM "BidBrainDecision" k
+                  WHERE k."targetId" = ANY(${ids}::text[]) AND (k.layer = ANY(${kept}::text[]) OR (k.layer = 'restore' AND k.action = 'write')) AND ${landed('k')}
+                  GROUP BY k."targetId") last ON last."targetId" = d."targetId"
+     WHERE d."targetId" = ANY(${ids}::text[]) AND jsonb_typeof(d.evidence -> 'giveBack') = 'object' AND (last.at IS NULL OR d."createdAt" > last.at)
+     ORDER BY d."targetId", d."createdAt" DESC`)
+  const memo = new Map(memoRows.flatMap((r) => { const g = readGiveBack(r.giveBack); return g ? [[r.targetId, g] as const] : [] }))
   // Did the brain write a floor since the last decision no override lowered (a give-back that wrote counts as one)?
   const lowering = [...LOWERING_LAYERS] as string[]
   // Pre-go-live — and the bid its first floor found (that floor decision's currentCents): under auto-undo's pin the give-back
@@ -436,7 +451,7 @@ async function loadLowered(previous: ReadonlyMap<string, PreviousDecision>): Pro
     SELECT d."targetId", (array_agg(d."currentCents" ORDER BY d."createdAt") FILTER (WHERE d.layer = ANY(${lowering}::text[])))[1] AS found
       FROM "BidBrainDecision" d
       LEFT JOIN (SELECT k."targetId", max(k."createdAt") AS at FROM "BidBrainDecision" k
-                  WHERE k."targetId" = ANY(${ids}::text[]) AND k.layer = ANY(${kept}::text[])
+                  WHERE k."targetId" = ANY(${ids}::text[]) AND k.layer = ANY(${kept}::text[]) AND ${landed('k')}
                   GROUP BY k."targetId") last ON last."targetId" = d."targetId"
      WHERE d."targetId" = ANY(${ids}::text[]) AND d.action = 'write' AND (d.layer = ANY(${lowering}::text[]) OR d.layer = 'restore')
        AND (last.at IS NULL OR d."createdAt" > last.at)
@@ -449,9 +464,57 @@ async function loadLowered(previous: ReadonlyMap<string, PreviousDecision>): Pro
     const held = p.layer === 'restore' && p.action === 'write' ? p.currentCents : p.decidedCents
     // Pre-go-live — a give-back the gate refused: the data day it was refused on (its retry that day is not logged again).
     const retryDataDay = p.layer === 'restore' && p.action === 'write' && p.sent === 'refused' ? p.dataDay ?? null : null
-    out.set(id, { layer: p.layer as DecisionLayer, heldCents: held, beforeCents: before.get(id) ?? null, wrote: wrote.has(id), retryDataDay, foundCents: found.get(id) ?? null })
+    out.set(id, { layer: p.layer as DecisionLayer, heldCents: held, beforeCents: before.get(id) ?? null, wrote: wrote.has(id), retryDataDay, foundCents: found.get(id) ?? null, giveBack: memo.get(id) ?? null })
   }
   return out
+}
+
+/**
+ * Review fix 10-10 (3) — a decision whose bid landed (or set none): not a LIVE write that was refused, deferred by the caps
+ * or would-apply under SUGGEST. A give-back always counts (refused, it is the bid to give back again: bidSetBy). SQL, `a`
+ * the table's alias.
+ */
+const landed = (a: 'd' | 'k') => Prisma.raw(`NOT (${a}.action = 'write' AND ${a}.layer <> 'restore' AND ${a}.mode = 'LIVE' AND (COALESCE(${a}.evidence -> 'sent' ->> 'sent', 'queued') NOT IN ('queued', 'unchanged') OR ${failedLaterSql(a)}))`)
+
+/**
+ * Re-review minor — a queued write that failed later in the queue (FAILED, CANCELLED, replaced before it was sent): its
+ * typed mutation by its queue row says so. Such a write set no bid at Amazon either. SQL, `a` the table's alias.
+ */
+const failedLaterSql = (a: 'd' | 'k') => `EXISTS (SELECT 1 FROM "AdMutation" m WHERE m."entityType" = 'AD_TARGET' AND m."entityId" = ${a}."targetId" AND m.field = 'bid' AND m."outboundQueueId" = ${a}.evidence -> 'sent' ->> 'outboundQueueId' AND m.state IN ('FAILED', 'CANCELLED', 'SUPERSEDED'))`
+
+/**
+ * The bid a kept decision left (loadLowered reads only those whose bid landed): its decided bid; Owner decision A — the
+ * brain's own bid when the plan's hour held it below; review fix 10-10 (3) — a give-back that did not land: the bid before
+ * it (its goal raise never landed; without one recorded, the bid it asked for, given back again). Pure.
+ */
+export function bidSetBy(d: { decidedCents: number; currentCents: number; layer: string; action: string; mode: string; sent: string | null; beforeHour?: unknown; restoreBefore?: unknown; failedLater?: boolean }): number | null {
+  const num = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) && x > 0 ? x : null)
+  const unlanded = d.action === 'write' && d.mode === 'LIVE' && ((d.sent != null && d.sent !== 'queued' && d.sent !== 'unchanged') || d.failedLater === true)
+  // Any other write that did not land set no bid (the query leaves it out; null here too).
+  if (unlanded && d.layer !== 'restore') return null
+  // Owner decision A (10-10) — held below the brain's own bid by the plan's hour: the brain's own bid is the bid before.
+  const own = num(d.beforeHour)
+  if (own != null) return own
+  if (unlanded) return num(d.restoreBefore) ?? d.decidedCents
+  return d.decidedCents
+}
+
+/** Owner decision A (10-10) — each keyword whose newest decision the plan's hour held below the brain's own bid. Pure. */
+export function planHeldOf(previous: ReadonlyMap<string, PreviousDecision>): Map<string, { cents: number; fromCents: number; beforeCents: number }> {
+  const out = new Map<string, { cents: number; fromCents: number; beforeCents: number }>()
+  for (const [id, p] of previous) if (p.beforeHour != null) out.set(id, { cents: p.decidedCents, fromCents: p.currentCents, beforeCents: p.beforeHour })
+  return out
+}
+
+/** Bid-page fix 10-10 — a stored give-back (`evidence.giveBack`), checked; null when absent or malformed. Pure. */
+export function readGiveBack(v: unknown): GiveBack | null {
+  if (!v || typeof v !== 'object') return null
+  const g = v as Record<string, unknown>
+  const num = (x: unknown) => typeof x === 'number' && Number.isFinite(x)
+  if (typeof g.dataDay !== 'string' || !num(g.fromCents) || !num(g.cents) || typeof g.why !== 'string') return null
+  const s = g.step as Record<string, unknown> | null | undefined
+  const step = s && typeof s === 'object' && typeof s.dataDay === 'string' && num(s.fromCents) && num(s.toCents) ? { dataDay: s.dataDay, fromCents: s.fromCents as number, toCents: s.toCents as number } : null
+  return { dataDay: g.dataDay, fromCents: g.fromCents as number, cents: g.cents as number, goalBidCents: num(g.goalBidCents) ? (g.goalBidCents as number) : null, step, why: g.why }
 }
 
 /** Each ad group's break-even ACoS: its products' (with usable profit data), weighted by their revenue. */
@@ -487,6 +550,10 @@ export interface PreviousDecision {
   /** Pre-go-live — the data day it decided on, and what became of its write (`evidence.sent.sent`: queued, refused, …). */
   dataDay?: string
   sent?: string | null
+  /** Bid-page fix 10-10 — its give-back's identity (decide.ts giveBackKey); null: it carries none. */
+  giveBackKey?: string | null
+  /** Owner decision A (10-10) — the brain's own bid this hour's plan ceiling held it below (`evidence.beforeHour`); null: none. */
+  beforeHour?: number | null
 }
 
 /** Each keyword's newest bid write in the last 30 days (who and when). */
@@ -503,9 +570,10 @@ export async function lastBidWrites(targetIds: readonly string[], now: Date): Pr
 /** Each keyword's newest decision of the brain in the last 30 days. */
 export async function previousDecisions(targetIds: readonly string[], now: Date): Promise<Map<string, PreviousDecision>> {
   if (!targetIds.length) return new Map()
-  const rows = await prisma.$queryRaw<Array<{ targetId: string; action: string; layer: string; currentCents: number; decidedCents: number; createdAt: Date; lastStep: unknown; dataDay: string; sent: string | null }>>(Prisma.sql`
+  const rows = await prisma.$queryRaw<Array<{ targetId: string; action: string; layer: string; currentCents: number; decidedCents: number; createdAt: Date; lastStep: unknown; dataDay: string; sent: string | null; giveBack: unknown; beforeHour: unknown }>>(Prisma.sql`
     SELECT DISTINCT ON (d."targetId") d."targetId", d.action, d.layer, d."currentCents", d."decidedCents", d."createdAt", d.evidence -> 'lastStep' AS "lastStep",
-           to_char(d."dataDay", 'YYYY-MM-DD') AS "dataDay", d.evidence -> 'sent' ->> 'sent' AS sent
+           to_char(d."dataDay", 'YYYY-MM-DD') AS "dataDay", d.evidence -> 'sent' ->> 'sent' AS sent, d.evidence -> 'giveBack' AS "giveBack",
+           d.evidence -> 'beforeHour' AS "beforeHour"
       FROM "BidBrainDecision" d
      WHERE d."targetId" = ANY(${[...targetIds]}::text[]) AND d."createdAt" >= ${new Date(now.getTime() - 30 * 86_400_000)}
      ORDER BY d."targetId", d."createdAt" DESC`)
@@ -515,7 +583,7 @@ export async function previousDecisions(targetIds: readonly string[], now: Date)
     const lastStep = s && typeof s.dataDay === 'string' && typeof s.fromCents === 'number' && typeof s.toCents === 'number'
       ? { dataDay: s.dataDay, fromCents: s.fromCents, toCents: s.toCents, ...(s.nowcast === true ? { nowcast: true } : {}) }
       : null
-    return [r.targetId, { action: r.action, layer: r.layer, currentCents: r.currentCents, decidedCents: r.decidedCents, createdAt: r.createdAt, lastStep, dataDay: r.dataDay, sent: r.sent }]
+    return [r.targetId, { action: r.action, layer: r.layer, currentCents: r.currentCents, decidedCents: r.decidedCents, createdAt: r.createdAt, lastStep, dataDay: r.dataDay, sent: r.sent, giveBackKey: giveBackKey(readGiveBack(r.giveBack)), beforeHour: typeof r.beforeHour === 'number' && r.beforeHour > 0 ? r.beforeHour : null }]
   }))
 }
 
@@ -589,6 +657,7 @@ export async function loadRun(m: LoadedMarket, now: Date, opts: { owned?: Readon
       ...(moneyBrakes.size ? { moneyBrakes } : {}),
       owned: new Set(ownedHere),
       ...(intraday ? { intraday } : {}),
+      planHeld: planHeldOf(previous),
     },
     lastWrites,
     previous,

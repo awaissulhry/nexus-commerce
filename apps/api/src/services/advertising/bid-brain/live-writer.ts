@@ -51,7 +51,7 @@ export interface BrainWrite {
 
 /** What became of one decision the brain owns. */
 export type WriteOutcome =
-  | { sent: 'queued'; outboundQueueId: string | null; actionLogId: string | null }
+  | { sent: 'queued'; outboundQueueId: string | null; actionLogId: string | null; /** Review fix 10-10 (2) — only the give-back to the bid before was written: the goal's raise above it waits, and why. */ heldAt?: { cents: number; why: string } }
   | { sent: 'unchanged' }
   | { sent: 'refused'; reason: string }
   | { sent: 'would-apply'; why: string }
@@ -71,7 +71,8 @@ export interface WriteReport {
 // Batch 2 fix — the money brake's step down is a lowering too: taken exactly, and it passes the dial's SUGGEST as a floor
 // does (lowering spend never waits); it is not a floor the brain remembers to give back (shadow.ts FLOORING_LAYERS).
 // Batch 3 review — an intraday brake (BB-17) is a lowering as well: taken exactly, never waiting behind the dial or the caps.
-const FLOOR_LAYERS = new Set(['stop', 'stock', 'phase', 'min_bid_hour', 'money', 'intraday'])
+// Owner decision A (10-10) — the plan's hour ceiling lowering the bid (`plan_hour`) is a lowering too, taken exactly.
+const FLOOR_LAYERS = new Set(['stop', 'stock', 'phase', 'min_bid_hour', 'money', 'intraday', 'plan_hour'])
 
 /** A floor: a lowering decided by a stop, stock, the phase, a Min-bid hour or the money brake. Every other write is a forward move. */
 export function isFloorWrite(d: Pick<Decision, 'layer' | 'bidCents' | 'currentCents'>): boolean {
@@ -79,13 +80,23 @@ export function isFloorWrite(d: Pick<Decision, 'layer' | 'bidCents' | 'currentCe
 }
 
 /** The engine guard's kind of a decision's write: a floor, a give-back after one (restore), or a forward move. */
-export function writeKind(d: Pick<Decision, 'layer' | 'bidCents' | 'currentCents'>): ChangeKind {
-  return isFloorWrite(d) ? 'floor' : d.layer === 'restore' ? 'restore' : 'forward'
+export function writeKind(d: Pick<Decision, 'layer' | 'bidCents' | 'currentCents' | 'restoreBeforeCents'>): ChangeKind {
+  if (isFloorWrite(d)) return 'floor'
+  // Review fix 10-10 (2) — a give-back above the bid before it carries the goal's raise: a forward move (dial, caps).
+  if (d.layer === 'restore') return d.restoreBeforeCents != null && d.bidCents > d.restoreBeforeCents ? 'forward' : 'restore'
+  return 'forward'
 }
 
-/** A write the mutation layer must take exactly: a floor, or a give-back after one (no step clamp, no 5¢ lift). */
-export function isExactWrite(d: Pick<Decision, 'layer' | 'bidCents' | 'currentCents'>): boolean {
-  return writeKind(d) !== 'forward'
+/**
+ * A write the mutation layer must take exactly: a floor, or a give-back after one (no step clamp, no 5¢ lift). Owner
+ * decision A (10-10) — and the plan's hour moving the bid back up to the brain's own bid when its ceiling rises: the plan's
+ * move, not the brain's step (the step clamp would leave it stuck below after the first swing); the caps and the gate judge
+ * it as the raise it is.
+ */
+export function isExactWrite(d: Pick<Decision, 'layer' | 'bidCents' | 'currentCents' | 'restoreBeforeCents'>): boolean {
+  // A give-back above the bid before is exact too: decide() took the goal's step from the bid before (≤ the largest change);
+  // the mutation layer's step clamp would measure it from the floor (2¢ → 3¢), never the brain's step.
+  return writeKind(d) !== 'forward' || d.layer === 'plan_hour' || d.layer === 'restore'
 }
 
 /** The evidence one write carries: the run, the deciding layer, the data day, the aim and the why. */
@@ -114,13 +125,22 @@ export async function writeOwnedDecisions(writes: readonly BrainWrite[], ctx: { 
     const permit = ctx.guard.permit({ market: list[0].market })
     const held = nothingHeld()
     let changes = 0
-    for (const { decision: d } of list) {
+    for (const { decision: asked } of list) {
+      let d = asked
+      let heldAt: { cents: number; why: string } | null = null
       const kind = writeKind(d)
       if (!allowChange(true, permit, held, kind)) {
         const why = ctx.guard.posture === 'suggest' ? 'the account ads dial is SUGGEST' : permit.capped || permit.marketCapped ? 'the bid brain\'s caps for this run are used: it goes next run' : 'the account ads automation is stopped'
-        if (ctx.guard.posture === 'suggest') { out.wouldApply++; out.byTarget.set(d.targetId, { sent: 'would-apply', why }) }
-        else { out.deferred++; out.byTarget.set(d.targetId, { sent: 'deferred', why }) }
-        continue
+        // Review fix 10-10 (2) — a give-back carrying the goal's raise: the raise waits, the bid before still goes back.
+        const before = d.layer === 'restore' ? d.restoreBeforeCents ?? null : null
+        if (kind === 'forward' && before != null && before > d.currentCents && allowChange(true, permit, held, 'restore')) {
+          heldAt = { cents: before, why }
+          d = { ...d, bidCents: before, why: `${d.why} — only the bid before it goes back: the raise to ${d.bidCents}¢ waits (${why})` }
+        } else {
+          if (ctx.guard.posture === 'suggest') { out.wouldApply++; out.byTarget.set(d.targetId, { sent: 'would-apply', why }) }
+          else { out.deferred++; out.byTarget.set(d.targetId, { sent: 'deferred', why }) }
+          continue
+        }
       }
       try {
         const r = await updateAdTargetWithSync({
@@ -136,7 +156,7 @@ export async function writeOwnedDecisions(writes: readonly BrainWrite[], ctx: { 
           // give-back lands exactly too; the gate judges it as a raise (isSuppressionWrite: not every value goes down).
           ...(isExactWrite(d) ? { force: true } : {}),
         })
-        if (r.ok && r.outboundQueueId) { out.queued++; changes++; out.byTarget.set(d.targetId, { sent: 'queued', outboundQueueId: r.outboundQueueId, actionLogId: r.actionLogId }) }
+        if (r.ok && r.outboundQueueId) { out.queued++; changes++; out.byTarget.set(d.targetId, { sent: 'queued', outboundQueueId: r.outboundQueueId, actionLogId: r.actionLogId, ...(heldAt ? { heldAt } : {}) }) }
         else if (r.ok) { out.unchanged++; out.byTarget.set(d.targetId, { sent: 'unchanged' }) }
         else {
           const reason = r.error ?? 'refused by the bid write'

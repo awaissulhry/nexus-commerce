@@ -4,7 +4,7 @@
  */
 import prisma from '../../../db.js'
 import { resolveActiveTargetKey, type ScheduleWindow } from '../rank-controller.js'
-import { dayCeilingCents, type PlanHour } from './plan-hour.js'
+import { hourWindow, type PlanHour } from './plan-hour.js'
 
 /**
  * Each owned campaign's plan hour now (`clockNow`: the database clock, as rank-defend reads it). Campaigns without a
@@ -34,14 +34,14 @@ export async function loadPlanHours(campaignIds: readonly string[], clockNow: Da
     const windows = (ev ? ev.windows : s.windows) as ScheduleWindow[]
     const baseline = ev ? ev.defaultTargetKey : s.defaultTargetKey
     const key = resolveActiveTargetKey(windows, baseline, day, hour)
-    // BB-7 review — every hour of today in the plan's time zone: the keyword bid holds the day's lowest ceiling.
-    const dayKeys = Array.from({ length: 24 }, (_, h) => resolveActiveTargetKey(windows, baseline, day, h)).filter((k): k is string => !!k)
-    return { s, ev, key, dayKeys }
+    // Owner decision A (10-10) — the hours of today the current target runs: "held to 15¢ by the plan at 14:00–16:00".
+    const window = hourWindow(Array.from({ length: 24 }, (_, h) => resolveActiveTargetKey(windows, baseline, day, h) ?? null), hour)
+    return { s, ev, key, window }
   })
-  const keys = [...new Set(resolved.flatMap((r) => [r.key, ...r.dayKeys]).filter((k): k is string => !!k))]
+  const keys = [...new Set(resolved.map((r) => r.key).filter((k): k is string => !!k))]
   const targets = keys.length ? await prisma.rankTarget.findMany({ where: { key: { in: keys } } }) : []
   const targetByKey = new Map(targets.map((t) => [t.key, t]))
-  for (const { s, ev, key, dayKeys } of resolved) {
+  for (const { s, ev, key, window } of resolved) {
     if (out.has(s.campaignId)) continue
     const specOf = (k: string) => {
       const t = targetByKey.get(k)
@@ -54,7 +54,7 @@ export async function loadPlanHours(campaignIds: readonly string[], clockNow: Da
       key,
       spec: target ? specOf(key!) : null,
       event: ev?.name ?? null,
-      dayMaxCpcCents: dayCeilingCents([...new Set(dayKeys)].map(specOf)),
+      window,
     })
   }
   return out

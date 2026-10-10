@@ -11,6 +11,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { buildFacts, floorOverride, goalTarget, mergeFloors, type AdGroupRow, type CampaignRow, type MarketRows, type RunRows, type TargetRow } from './facts.js'
+import { hourCapOf } from './decide.js'
 
 const campaign = (id: string, extra: Partial<CampaignRow> = {}): CampaignRow => ({
   id, status: 'ENABLED', pinBids: false, pinnedBy: null, bidsSuppressedAt: null, bidsSuppressedFloorCents: null, bidsSuppressedBy: null,
@@ -154,24 +155,27 @@ describe('BB-7 review — whose saved bid, and whose floor mark', () => {
     expect(buildFacts(marked, run())[0].overrides?.minBidHour).toEqual({ floorCents: 3 })
     expect(buildFacts(marked, run({ owned: new Set(['c1']) }))[0].overrides?.minBidHour).toBeUndefined()
   })
-  it('the plan\'s day ceiling binds the keyword bid in an hour with no target too', () => {
-    const f = buildFacts(market(), run({ owned: new Set(['c1']), planHours: new Map([['c1', { scheduleId: 's1', name: 'P', key: null, spec: null, event: null, dayMaxCpcCents: 45 }]]) }))[0]
+  it('Owner decision A (10-10) — an hour with no target holds no ceiling (no day ceiling any more)', () => {
+    const f = buildFacts(market(), run({ owned: new Set(['c1']), planHours: new Map([['c1', { scheduleId: 's1', name: 'P', key: null, spec: null, event: null }]]) }))[0]
     expect(f.lanes).toBeUndefined()
-    expect(f.limits.planCeilingCents).toBe(45)
+    expect(f.limits.planCeilingCents).toBeUndefined()
+    expect(f.hourWords).toBeUndefined()
   })
 })
 
 describe('AB-2 — the bid stack as if no stop had happened', () => {
   it('a stop\'s memory (up and down, 300 % top of search) stands for the down only and the 0 % lanes it holds: the plan\'s ceiling ÷2, the ratio ceiling ×8', () => {
-    const hour = { scheduleId: 's1', name: 'P', key: 'k', spec: null, event: null, dayMaxCpcCents: 120 }
+    // Owner decision A (10-10) — this hour's ceiling (its lanes, with the strategy the stop saved), not the day's lowest.
+    const spec = { key: 'k', placement: 'PLACEMENT_TOP', targetISPct: null, acosCapPct: null, maxCpcCents: 120, biasPct: 0, pause: false, allOut: false }
+    const hour = { scheduleId: 's1', name: 'P', key: 'k', spec, event: null, window: { fromHour: 10, toHour: 12 } }
     const stopped = campaign('c1', { biddingStrategy: 'LEGACY_FOR_SALES', placements: [{ placement: 'PLACEMENT_TOP', percentage: 0 }], savedStrategy: 'AUTO_FOR_SALES', savedPlacements: [{ placement: 'PLACEMENT_TOP', percentage: 300 }] })
     const [f] = buildFacts(market({ campaigns: new Map([['c1', stopped]]) }), run({ planHours: new Map([['c1', hour]]) }))
-    expect(f.limits.planCeilingCents).toBe(60)
+    expect(hourCapOf(f)).toEqual({ cents: 60, words: 'the plan at 10:00–12:00' })
     expect(f.ratioCeiling).toBe(8)
     // No memory (every campaign the recipe never touched): read as it is, exactly as before.
     const plain = campaign('c1', { biddingStrategy: 'LEGACY_FOR_SALES', placements: [{ placement: 'PLACEMENT_TOP', percentage: 0 }] })
     const [g] = buildFacts(market({ campaigns: new Map([['c1', plain]]) }), run({ planHours: new Map([['c1', hour]]) }))
-    expect(g.limits.planCeilingCents).toBe(120)
+    expect(hourCapOf(g)).toEqual({ cents: 120, words: 'the plan at 10:00–12:00' })
     expect(g.ratioCeiling).toBe(1)
   })
 })

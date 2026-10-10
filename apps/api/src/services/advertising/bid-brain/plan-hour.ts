@@ -45,11 +45,11 @@ export interface PlanHour {
   /** The dated event that replaced the week, by name. */
   event: string | null
   /**
-   * BB-7 review — the lowest CPC ceiling of today's serving hours of the plan (null: none sets one). The keyword bid holds
-   * it all day, so a lower ceiling at one hour and a higher one at the next do not move the bids down and up; each hour's
-   * own ceiling still caps its placement %.
+   * Owner decision A (10-10) — the hours of today (the plan's time zone) the current target runs without a break, `toHour`
+   * exclusive: the keyword bid is held to THIS hour's ceiling (decide.ts holdToHour), named "the plan at 14:00–16:00".
+   * (Before: the day's lowest ceiling held it all day.)
    */
-  dayMaxCpcCents?: number | null
+  window?: { fromHour: number; toHour: number } | null
   /**
    * BB-22 — the learned hour factor this hour carries out (NEXUS_BID_BRAIN_HOUR_FACTORS=on, hour-factors-store.ts): the
    * spec's lanes are already the learned ones, inside the approved cell's limits; these words join the plan's note.
@@ -63,10 +63,29 @@ export interface PlanHour {
   approved?: RankTargetSpec | null
 }
 
-/** The lowest CPC ceiling among a day's serving targets (a Min-bid hour sets none). Pure. */
+/**
+ * The lowest CPC ceiling among a day's serving targets (a Min-bid hour sets none). Pure. Owner decision A (10-10) — no longer
+ * the keyword bid's ceiling (this hour's is, decide.ts holdToHour); the bidding-strategy check (brain/bidding-mode-load.ts)
+ * still reads it.
+ */
 export function dayCeilingCents(specs: ReadonlyArray<Pick<RankTargetSpec, 'pause' | 'bidMode' | 'maxCpcCents'> | null>): number | null {
   const caps = specs.filter((s): s is NonNullable<typeof s> => !!s && !isMinBidSpec(s) && s.maxCpcCents != null && s.maxCpcCents > 0).map((s) => s.maxCpcCents!)
   return caps.length ? Math.min(...caps) : null
+}
+
+/** Owner decision A (10-10) — the run of hours around `hour` with the same target (`keys`: the target of each hour 0–23). Pure. */
+export function hourWindow(keys: ReadonlyArray<string | null>, hour: number): { fromHour: number; toHour: number } {
+  let from = hour
+  while (from > 0 && keys[from - 1] === keys[hour]) from--
+  let to = hour + 1
+  while (to < 24 && keys[to] === keys[hour]) to++
+  return { fromHour: from, toHour: to }
+}
+
+/** "the plan at 14:00–16:00" — whose ceiling holds the keyword bid this hour (decide.ts holdToHour). Pure. */
+export function hourWords(w: { fromHour: number; toHour: number } | null | undefined): string {
+  const hh = (h: number) => `${String(h).padStart(2, '0')}:00`
+  return w ? `the plan at ${hh(w.fromHour)}–${hh(w.toHour)}` : 'the plan this hour'
 }
 
 const LANE_OF: Record<string, LaneName> = { [PLACEMENT_TOP]: 'TOP_OF_SEARCH', [PLACEMENT_PRODUCT]: 'PRODUCT_PAGE' }
@@ -122,8 +141,8 @@ export function planFacts(hour: PlanHour, campaign: { biddingStrategy?: string |
     lane: laneOf(p),
     planPct: Math.max(0, Math.min(900, Math.round(declared.get(p) ?? 0))),
     maxCpcCents: spec.maxCpcCents ?? null,
-    // The keyword bid's ceiling: the day's lowest (hour.dayMaxCpcCents), else this hour's.
-    baseCeilingCents: hour.dayMaxCpcCents ?? spec.maxCpcCents ?? null,
+    // Owner decision A (10-10) — the keyword bid's ceiling is this hour's (it was the day's lowest).
+    baseCeilingCents: spec.maxCpcCents ?? null,
     dynamic: laneHeadroom(campaign.biddingStrategy, p),
   }))
   const baseBidIgnored = setsBaseBid(spec)

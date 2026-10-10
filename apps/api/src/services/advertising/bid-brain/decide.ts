@@ -11,7 +11,10 @@
  *              brake's memory (the bid before it) holds whichever override is named first
  *   restore    BB-8 — no override applies any more, but the last decision was one that lowered the bid (a stop, stock, a
  *              phase floor, a Min-bid hour) and the bid still sits there: the bids go back as if the stop never happened —
- *              the goal decided from the bid before the stop (one step from it), else that bid, else the goal itself
+ *              the goal decided from the bid before the stop (one step from it), else that bid, else the goal itself.
+ *              Bid-page fix 10-10: a run with no evidence (the 15-minute tick that lifts a floor) gives back the bid a run
+ *              with evidence decided while the floor held (`giveBack`, from the same bid before) — the product cycle's bids
+ *              run once a data day, inside the plan's night floor; a limit that holds the bid given back is named
  *   goal       otherwise the recipe (recipe.ts) from the pooled estimate (estimator.ts) and the goal (goal.ts); it writes
  *              only when the expected ACoS at today's bid is outside the band and the bid moves by ≥ 2¢ and ≥ 5 %, and a
  *              bid outside a hard limit is always brought back inside it
@@ -35,6 +38,7 @@ import {
   bidForAcos,
   clampToRange,
   DEFAULT_MAX_CHANGE_PCT,
+  ENGINE_FLOOR_CENTS,
   expectedAcos,
   limitRange,
   MIN_WRITE_CENTS,
@@ -105,6 +109,19 @@ export interface TargetFacts {
   lanes?: readonly Lane[]
   /** BB-7 — the hourly plan and its hour in words, for the why ("hourly plan IT GALE JACKET: all-out"). */
   planNote?: string | null
+  /**
+   * Owner decision A (10-10) — whose ceiling this hour's lanes carry, in words ("the plan at 14:00–16:00"): the keyword bid
+   * is held to THIS hour's ceiling (holdToHour), not the day's lowest.
+   */
+  hourWords?: string | null
+  /**
+   * Owner decision A (10-10) — the brain's newest decision held the bid below its own because of the plan's hour: `cents`
+   * the bid it left, `fromCents` the bid it found (a write that did not land leaves that one), `beforeCents` the brain's own
+   * bid the hour held it from. Read only while the bid sits at one of the two.
+   */
+  planHeld?: { cents: number; fromCents: number; beforeCents: number } | null
+  /** Final review 10-10 — set by decide() when it decides from the brain's own bid: the bid that stands (internal). */
+  standingCents?: number | null
   /** BB-18 — the bid that served the window's clicks (absent: today's bid), so r̂ does not follow the bid's own moves. */
   servingCents?: number | null
   /** BB-18 — the most a click can cost against the base bid (recipe.ts stackCeiling); absent: 1. */
@@ -127,13 +144,34 @@ export interface TargetFacts {
    * found no bid to go back to (`restore`); `beforeCents` is the bid of its last decision no override lowered (null: none
    * in the decisions kept). Read only when no override applies.
    */
-  restore?: { layer: DecisionLayer; heldCents: number; beforeCents: number | null; retryDataDay?: string | null; foundCents?: number | null } | null
+  restore?: { layer: DecisionLayer; heldCents: number; beforeCents: number | null; retryDataDay?: string | null; foundCents?: number | null; giveBack?: GiveBack | null } | null
 }
+
+/**
+ * Bid-page fix 10-10 — the give-back a run WITH evidence decided while a floor held the keyword: the bid the goal sets when
+ * the floor lifts, decided from the bid before it (one step, inside the limits and the raise caps of that run). A run with
+ * no evidence (the 15-minute tick that lands the plan's hours) gives back this bid, when it was decided from the same bid
+ * before and for this data day or a newer one; else the bid before itself, as before. Never decided without evidence.
+ */
+export interface GiveBack {
+  dataDay: string
+  /** The bid before the floor it was decided from. */
+  fromCents: number
+  /** The bid to give back. */
+  cents: number
+  goalBidCents: number | null
+  step: { dataDay: string; fromCents: number; toCents: number } | null
+  why: string
+}
+
+/** A give-back's identity, so a run stores a decision whose give-back changed (shadow.ts rowKind). */
+export const giveBackKey = (g: Pick<GiveBack, 'dataDay' | 'fromCents' | 'cents'> | null | undefined): string | null => (g ? `${g.dataDay}|${g.fromCents}|${g.cents}` : null)
 
 /** BB-20 — `explore` / `revive`: an explore plan's pick replacing the goal's decision (explore.ts; NEXUS_BID_BRAIN_EXPLORE=on only). */
 /** BB-21 — `probe`: a LIVE switchback probe's arm replacing the goal's decision (probe.ts; NEXUS_BID_BRAIN_PROBES=on only). */
+/** Owner decision A (10-10) — `plan_hour`: a move only this hour's plan ceiling makes (down to it, or back up when it rises). */
 /** Lane 5 — `share`: the target top-of-search impression share (share.ts) moved or held the bid. */
-export type DecisionLayer = 'brake' | 'stop' | 'pin' | 'stock' | 'freeze' | 'phase' | 'min_bid_hour' | 'money' | 'intraday' | 'restore' | 'goal' | 'band' | 'limit' | 'no_goal' | 'explore' | 'revive' | 'probe' | 'share'
+export type DecisionLayer = 'brake' | 'stop' | 'pin' | 'stock' | 'freeze' | 'phase' | 'min_bid_hour' | 'money' | 'intraday' | 'restore' | 'goal' | 'band' | 'limit' | 'no_goal' | 'explore' | 'revive' | 'probe' | 'share' | 'plan_hour'
 
 /** BB-9 — a share floor (share of voice, rank, coverage) may reach the bid of this × the band top (design §2). */
 export const SHARE_FLOOR_HI_FACTOR = 1.25
@@ -146,7 +184,9 @@ export const LOWERING_LAYERS: readonly DecisionLayer[] = ['stop', 'stock', 'phas
  * BB-20/21 added explore, revive and probe; integration review fix (2026-10-10) — lane 5's share move too: a floor after a
  * share step gives back the share's bid, not the bid before it.
  */
-export const UNLOWERED_LAYERS: readonly DecisionLayer[] = ['goal', 'band', 'limit', 'no_goal', 'pin', 'freeze', 'probe', 'explore', 'revive', 'share']
+// Bid-page fix 10-10 — the money brake's step down (the newest bid the brain set: a floor after it gives back that bid, not
+// the one before the step) and the plan's hour move (Owner decision A) too.
+export const UNLOWERED_LAYERS: readonly DecisionLayer[] = ['goal', 'band', 'limit', 'no_goal', 'pin', 'freeze', 'probe', 'explore', 'revive', 'share', 'money', 'plan_hour']
 export type DecisionAction = 'write' | 'hold' | 'brake'
 
 export interface Decision {
@@ -171,6 +211,15 @@ export interface Decision {
   why: string
   /** Pre-go-live — a give-back retried on the data day it was refused: the write goes again, its refusal is not logged again. */
   quietRefusal?: boolean
+  /** Bid-page fix 10-10 — a floor decided with evidence: the bid the goal gives back when it lifts (GiveBack). */
+  giveBack?: GiveBack | null
+  /** Owner decision A (10-10) — this hour's plan ceiling holds the bid below the brain's own: that bid (planHeld next run). */
+  beforeHour?: number | null
+  /**
+   * Review fix 10-10 (2) — a give-back's bid before it: up to it the write is a give-back (live-writer.ts writeKind
+   * `restore`); a give-back above it carries the goal's raise, a forward move (the dial and the caps judge it).
+   */
+  restoreBeforeCents?: number | null
 }
 
 const OVERRIDE_ORDER = ['stop', 'pin', 'stock', 'freeze', 'phase', 'minBidHour', 'money', 'intraday'] as const
@@ -226,7 +275,8 @@ function goalBid(f: TargetFacts, opts: { noStep?: boolean } = {}): GoalBid | { r
   }
   // BB-7 — the hour's plan shapes the placements; the keyword bid stays the goal's (the day's lowest serving factor).
   if (f.planNote && f.lanes?.length) parts.push(f.planNote)
-  const range = limitRange(f.limits, f.lanes)
+  // Owner decision A (10-10) — the hourly plan's ceiling binds per hour, after the goal (holdToHour): not in its range.
+  const range = limitRange(f.limits)
   const topBid = bidForAcos(goal.hi, est.node.cr, aov, ratio)
   // BB-9 — a share floor (share of voice, rank) may reach hi × 1.25; the highest bid still holds it below (limits).
   const shareTop = bidForAcos(goal.hi * SHARE_FLOOR_HI_FACTOR, est.node.cr, aov, ratio)
@@ -252,10 +302,19 @@ function goalBid(f: TargetFacts, opts: { noStep?: boolean } = {}): GoalBid | { r
  * floor (`restore`). Cuts, stops and floors still go. The decision says what waited and why.
  */
 export function decide(f: TargetFacts): Decision {
-  const d = decideBid(f)
+  // Owner decision A (10-10) — decided from the brain's own bid (the one before this hour's plan held it), then held to
+  // this hour's ceiling (holdToHour); the raise cap below holds a plan raise too (the money brake's hold, a HELD campaign).
+  // A give-back that is due (the bid still at a floor) is decided from the bid as it is: the floor's memory decides it.
+  const due = !!f.restore && f.currentCents <= f.restore.heldCents
+  const own = due ? f.currentCents : ownBidOf(f)
+  const d = onlyLowers(holdToHour(decideBid(own !== f.currentCents ? { ...f, currentCents: own, standingCents: f.currentCents } : f), f, own), f, own, due)
   // BB-17 — an intraday brake's bid above today's is the give-back after another floor, up to the brake: no raise.
   if (!f.raiseCap || d.action !== 'write' || d.bidCents <= f.currentCents || d.layer === 'restore' || d.layer === 'intraday') return d
-  return { ...d, action: 'hold', bidCents: f.currentCents, step: null, why: `${d.layer.replace('_', '-')}: raise held — ${f.raiseCap}; ${f.currentCents}¢ → ${d.bidCents}¢ waits (${d.why})` }
+  // Owner decision A — a raise held while the plan's hour holds the bid keeps the brain's own bid in memory (planHeld).
+  // Re-review C — never above the own bid it had: a raise that was not written is no bid of the brain's (else each held run
+  // would ratchet it a step higher, and the plan would give back a bid past every step limit when the hold lifts).
+  const kept = own !== f.currentCents ? { beforeHour: Math.min(own, d.beforeHour ?? d.bidCents) } : {}
+  return { ...d, ...kept, action: 'hold', bidCents: f.currentCents, step: null, why: `${d.layer.replace('_', '-')}: raise held — ${f.raiseCap}; ${f.currentCents}¢ → ${d.bidCents}¢ waits (${d.why})` }
 }
 
 function decideBid(f: TargetFacts): Decision {
@@ -301,6 +360,11 @@ function decideBid(f: TargetFacts): Decision {
       return { ...base, ...known, action: 'hold', layer: 'pin', bidCents: f.currentCents, why: `pin: held by ${pin.by}${pin.until ? ` until ${pin.until}` : ''} — left alone` }
     }
     const bids: Array<{ key: OverrideKey; cents: number; words: string }> = []
+    // Final review 10-10 (2) — a brake bites from min(the brain's bid, this hour's plan ceiling), as hard as when the bid sat
+    // at the plan's ceiling (before the per-hour ceiling); a freeze holds the bid that stands.
+    const hourCap = hourCapOf(f)?.cents ?? null
+    const underHour = (cents: number) => (hourCap != null ? Math.min(cents, hourCap) : cents)
+    const stand = f.standingCents ?? f.currentCents
     // Batch 2 fix — the money step's base: the bid before this data day's step (a rerun never compounds), else the bid
     // before a floor the brain set (a Min-bid hour is not the base), else today's bid.
     let moneyStep: { dataDay: string; fromCents: number; toCents: number } | null = null
@@ -312,17 +376,25 @@ function decideBid(f: TargetFacts): Decision {
         if ('notBuyable' in s) bids.push({ key: k, cents: s.stopBidCents, words: `not buyable (${s.by}) → ${s.stopBidCents}¢` })
         else if (ok) {
           const factor = Math.min(1, Math.max(0.5, s.coverFactor))
-          bids.push({ key: k, cents: Math.max(ok.range.lower, Math.round(ok.cents * factor)), words: `low stock cover (${s.by}) → goal bid ×${factor}` })
+          bids.push({ key: k, cents: Math.max(ok.range.lower, Math.round(underHour(ok.cents) * factor)), words: `low stock cover (${s.by}) → goal bid ×${factor}` })
+        } else if (givingBack) {
+          // Review fix 10-10 — no goal this run (a tick with no evidence) while a floor lifts: the bid before it × the factor,
+          // never the whole bid back. (Mid-day with no evidence the cover waits for a run with one: the bid is not cut again.)
+          const factor = Math.min(1, Math.max(0.5, s.coverFactor))
+          const before0 = r0!.beforeCents ?? [r0!.foundCents, f.savedCents].find((c): c is number => c != null && c > 0) ?? null
+          const before = before0 != null ? underHour(before0) : null
+          if (before != null) bids.push({ key: k, cents: Math.max(limitRange(f.limits).lower, Math.round(before * factor)), words: `low stock cover (${s.by}) → the bid before it ${before}¢ ×${factor} (no goal this run)` })
         }
-      } else if (k === 'freeze') bids.push({ key: k, cents: ok ? Math.min(ok.cents, f.currentCents) : f.currentCents, words: `auto-undo freeze (${o.freeze!.by}): no raise` })
+      } else if (k === 'freeze') bids.push({ key: k, cents: ok ? Math.min(ok.cents, stand) : stand, words: `auto-undo freeze (${o.freeze!.by}): no raise` })
       else if (k === 'phase') bids.push({ key: k, cents: o.phase!.floorCents, words: `${o.phase!.by ?? 'phase not started'} → ${o.phase!.floorCents}¢` })
       else if (k === 'minBidHour') bids.push({ key: k, cents: o.minBidHour!.floorCents, words: `Min-bid hour${f.planNote ? ` (${f.planNote})` : ''} → ${o.minBidHour!.floorCents}¢` })
       else if (k === 'money') {
         const m = o.money!
         const sameDay = !!f.lastStep && f.lastStep.dataDay >= f.dataDay && f.lastStep.toCents === f.currentCents
         const before = givingBack ? r0!.beforeCents ?? [r0!.foundCents, f.savedCents].find((c): c is number => c != null && c > 0) ?? null : null
-        const anchor = sameDay ? f.lastStep!.fromCents : before ?? f.currentCents
-        const range = ok?.range ?? limitRange(f.limits, f.lanes)
+        // From the bid that stands (not the brain's own bid the plan held above it): the step bites where the bid is.
+        const anchor = underHour(sameDay ? f.lastStep!.fromCents : before ?? stand)
+        const range = ok?.range ?? limitRange(f.limits)
         let cents = clampToRange(Math.round(anchor * (1 - m.stepPct / 100)), range).cents
         // The goal asks lower only where it would move the bid itself: today's bid above the band (an in-band keyword holds).
         const goalLower = !!ok && expNow != null && expNow > ok.goal.hi && ok.cents < cents
@@ -343,7 +415,15 @@ function decideBid(f: TargetFacts): Decision {
       const others = bids.filter((b) => b !== lowest).map((b) => b.words)
       const why = `${layer.replace('_', '-')}: ${lowest.words}${others.length ? ` (also: ${others.join('; ')})` : ''}`
       const action: DecisionAction = lowest.cents !== f.currentCents ? 'write' : 'hold'
-      return { ...base, ...known, action, layer, bidCents: lowest.cents, placements: placements(lowest.cents), why, ...(lowest.key === 'money' && moneyStep ? { step: moneyStep } : {}) }
+      // Bid-page fix 10-10 — a floor decided with evidence also decides what the goal gives back when it lifts: the tick that
+      // lifts it reads no evidence (a product cycle's bids run once a day, inside the plan's night floor).
+      // Decided from the bid the give-back will start from: the floor's memory (as the restore below reads it), else the bid
+      // this floor finds as it lowers it now, else the bid another owner's floor saved — so a rerun on the same facts
+      // decides the same give-back.
+      const savedBefore = [f.savedCents].find((c): c is number => c != null && c > 0) ?? null
+      const memoBefore = givingBack ? r0!.beforeCents ?? [r0!.foundCents, f.savedCents].find((c): c is number => c != null && c > 0) ?? null : lowest.cents < f.currentCents ? f.currentCents : savedBefore
+      const giveBack = ok && (LOWERING_LAYERS as readonly string[]).includes(layer) ? giveBackOf(f, memoBefore) : null
+      return { ...base, ...known, action, layer, bidCents: lowest.cents, placements: placements(lowest.cents), why, ...(lowest.key === 'money' && moneyStep ? { step: moneyStep } : {}), ...(giveBack ? { giveBack } : {}) }
     }
     // BB-17 — the goal cuts at least as deep as the intraday brake would: its own decision goes (the brake applies on top
     // of it from the next run, its bid then the bid before).
@@ -365,7 +445,13 @@ function decideBid(f: TargetFacts): Decision {
       // anchor kept when it is for this data day or a newer one (ads-bid-window.ts movedThisDataDay reads `>=` too), so
       // a second Min-bid exit on the same data day lands where the first did and takes no new step (C3's slide).
       const keep = f.lastStep && f.lastStep.dataDay >= f.dataDay ? f.lastStep : null
-      const asIf = decide({ ...f, currentCents: beforeCents, lastStep: keep, restore: null, overrides: {}, brakes: [] })
+      // Bid-page fix 10-10 — no evidence this run (a between-slots tick): the give-back a run with evidence decided during the
+      // floor, from this same bid before and for this data day or a newer one; never one decided from another bid.
+      const memo = !ok && r.giveBack && r.giveBack.fromCents === beforeCents && r.giveBack.dataDay >= f.dataDay ? r.giveBack : null
+      // Its step lands where the bid lands (a limit of this hour may hold it lower), so the day's step is taken once.
+      const asIf = memo
+        ? { bidCents: memo.cents, step: memo.step ? { ...memo.step, toCents: clampToRange(memo.cents, limitRange(f.limits)).cents } : null, why: `the goal as the run with evidence decided it during the floor (data day ${memo.dataDay}): ${memo.why}` }
+        : decide({ ...f, currentCents: beforeCents, lastStep: keep, restore: null, overrides: {}, brakes: [], planHeld: null, standingCents: null })
       // BB-7 review — held inside today's limits (the strategy's highest bid, the campaign's bounds, the plan's day ceiling):
       // a between-slots tick has no goal, and the bid before may sit above a limit set since.
       // Under auto-undo's pin: back to the bid the floor found — the pinned one — exactly, no goal step. Pre-go-live — not
@@ -374,11 +460,38 @@ function decideBid(f: TargetFacts): Decision {
       // currentCents), else the bid the floor saved (AdTarget.suppressedFromBidCents; a stop's owner clears it on its lift).
       const found = [r.foundCents, f.savedCents].find((c): c is number => c != null && c > 0)
       const pinned = found ?? beforeCents
-      const cents = clampToRange(o.pin?.soft ? pinned : asIf.bidCents, limitRange(f.limits, f.lanes)).cents
-      const why = `${lifted} → back to ${cents}¢ from the ${f.currentCents}¢ it held (the bid before it: ${beforeCents}¢; ${asIf.why})`
+      const asked = o.pin?.soft ? pinned : asIf.bidCents
+      // Review fix 10-10 — this tick's own holds bind the give-back too (the give-back is exempt from the raise cap below):
+      // a raise cap (a HELD campaign, auto-undo's hold, the spend guard, the money brake's hold) or an intraday brake gives
+      // back at most the bid before it; a rule's ceiling (one set since the run with evidence too) and the intraday CPC cap
+      // still bind.
+      let wanted = asked
+      const holdWords: string[] = []
+      // The bid that stood: the bid the floor found (re-review B — the bid before may be the brain's own bid the plan's hour
+      // held below, which never stood), else the bid before. Under auto-undo's pin, the pinned one: the same bid.
+      const backTo = pinned
+      if (f.raiseCap && wanted > backTo) { wanted = backTo; holdWords.push(`no raise above the bid before it: ${f.raiseCap}`) }
+      if (o.intraday?.factor != null && o.intraday.factor < 1 && wanted > backTo) { wanted = backTo; holdWords.push(`no raise above the bid before it: ${o.intraday.by}`) }
+      for (const c of f.directives ?? []) if (c.kind === 'CEILING' && wanted > c.cents) { wanted = c.cents; holdWords.push(`held to ${c.cents}¢ by ${c.source}`) }
+      if (o.intraday?.capCents != null && o.intraday.capCents > 0 && wanted > o.intraday.capCents) { wanted = o.intraday.capCents; holdWords.push(`held to ${wanted}¢ by ${o.intraday.by}`) }
+      const holdStep = wanted !== asked ? { dataDay: f.dataDay, fromCents: backTo, toCents: wanted } : null
+      // Held below the brain's own bid by a raise cap: its own bid stays in memory (never above it: re-review C), so the plan
+      // gives it back when the hold lifts.
+      const innerOwn = (asIf as { beforeHour?: number | null }).beforeHour ?? null
+      const ownMemo = holdWords.length && Math.min(asked, beforeCents) > wanted
+        ? { beforeHour: Math.min(innerOwn ?? asked, beforeCents) }
+        // Final review 10-10 (3) — the give-back decided with the hour's lanes: the goal's own bid the hour held it below.
+        : innerOwn != null && innerOwn > wanted ? { beforeHour: innerOwn } : {}
+      const held = clampToRange(wanted, limitRange(f.limits))
+      const cents = held.cents
+      // Bid-page fix 10-10 — a limit that holds the bid given back is said (it was silent: "the bid before it: 20¢", back to 12¢).
+      const limitWords = held.held && cents !== wanted ? `; ${wanted}¢ held to ${held.held}` : ''
+      const heldBy = holdWords.length ? `; ${asked}¢ ${holdWords.join('; ')}` : ''
+      const why = `${lifted} → back to ${cents}¢ from the ${f.currentCents}¢ it held (the bid before it: ${beforeCents}¢${heldBy}${limitWords}; ${asIf.why})`
       return {
-        ...base, ...known, ...quiet, action: cents !== f.currentCents ? 'write' : 'hold', layer: 'restore', bidCents: cents,
-        step: asIf.step ?? keep ?? { dataDay: f.dataDay, fromCents: beforeCents, toCents: cents }, placements: placements(cents), why,
+        ...base, ...known, ...(memo ? { goalBidCents: memo.goalBidCents } : {}), ...quiet, action: cents !== f.currentCents ? 'write' : 'hold', layer: 'restore', bidCents: cents,
+        step: holdStep ?? asIf.step ?? keep ?? { dataDay: f.dataDay, fromCents: beforeCents, toCents: cents }, placements: placements(cents), why,
+        restoreBeforeCents: backTo, ...ownMemo,
       }
     }
     const g0 = ok ? goalBid(f, { noStep: true }) : null
@@ -443,6 +556,123 @@ function decideBid(f: TargetFacts): Decision {
 }
 
 /**
+ * Owner decision A (10-10) — this hour's plan ceiling for the keyword bid: the lowest of the hour's lanes' CPC ceilings ÷
+ * Amazon's dynamic bidding on the lane (recipe.ts limitRange's lane part). Null with no lane ceiling this hour.
+ */
+export function hourCapOf(f: Pick<TargetFacts, 'lanes' | 'hourWords'>): { cents: number; words: string } | null {
+  const upper = limitRange({}, f.lanes ?? []).upper
+  return upper != null ? { cents: upper, words: f.hourWords ?? 'the hourly plan\'s ceiling this hour' } : null
+}
+
+/** Owner decision A (10-10) — the brain's own bid: the one before the plan's hour held it, while the bid sits where that left it. */
+export function ownBidOf(f: Pick<TargetFacts, 'currentCents' | 'planHeld'>): number {
+  const h = f.planHeld
+  return h && (f.currentCents === h.cents || f.currentCents === h.fromCents) && h.beforeCents > 0 ? h.beforeCents : f.currentCents
+}
+
+
+/**
+ * Owner decision A (10-10) — the hourly plan's CPC ceiling binds PER HOUR. The decision is taken from the brain's own bid
+ * (`own`: the one before this hour held it, ownBidOf) inside every other limit; then its bid is held to this hour's
+ * ceiling: min(the brain's bid, this hour's ceiling). At an hour boundary the bid follows the hour — down when the ceiling
+ * drops, back up to the brain's own bid when it rises — never above that bid, so never above the goal, the Owner's caps,
+ * the highest bid or the money brake (each already holds the brain's bid; the raise cap holds a plan raise as any other);
+ * a brake and a pin (a person's own edit) are left as decided; every other bid is held to the hour — low stock cover too
+ * (re-review A) — and the ceiling never raises one (a floor below it stays the floor: the night's too).
+ *
+ *   plan's moves   a move only the hour makes (`plan_hour`) takes no goal step: the goal's step and its anchor (lastStep)
+ *                  stay the brain's own bid, so the day's step is never used up by the hour and the bid never sticks
+ *                  low after a swing. The dead zone holds (no write under 2¢ or 5 %); the write gate judges each write.
+ *   extra writes   at most one bid write per keyword per hour boundary where min(its own bid, the ceiling) changes: for a
+ *                  day whose serving hours climb and fall through N distinct ceilings once, at most 2·(N−1) writes per
+ *                  keyword (0 for a keyword whose own bid is at or below every ceiling of the day); with the day's
+ *                  lowest ceiling (before) it was 0.
+ */
+function holdToHour(d: Decision, f: TargetFacts, own: number): Decision {
+  const real = f.currentCents
+  if (d.layer === 'brake' || d.layer === 'pin') return own === real ? d : { ...d, currentCents: real, bidCents: real }
+  const cap = hourCapOf(f)
+  const want = d.bidCents
+  // Re-review A — only a brake and a pin pass the hour (above); the ceiling only ever lowers (never under the 5¢ engine
+  // floor, never above the bid decided).
+  const bid = cap && want > cap.cents ? Math.min(want, Math.max(cap.cents, ENGINE_FLOOR_CENTS)) : want
+  const held = bid < want
+  const heldWords = held ? `held to ${bid}¢ by ${cap!.words}` : ''
+  const lanes = applyLaneDirectives(f.lanes, f.laneDirectives)
+  const placed = d.placements.length && d.goal && lanes.length && bid !== want ? { placements: placementsFor(bid, lanes, d.goal) } : {}
+  // The brain's own bid is remembered for its own moves; a floor's (stop, stock, phase, Min-bid hour, intraday) is in the
+  // floor's memory (the give-back), not here.
+  const memo = held && !(LOWERING_LAYERS as readonly string[]).includes(d.layer) ? { beforeHour: Math.max(want, d.beforeHour ?? want) } : {}
+  if (own === real && !held) return d
+  // Final review 10-10 (1) — an override in force (a freeze, the money brake, low stock cover, an intraday brake, a stop …),
+  // even one that set no bid this run: nothing lifts the bid that stands; the brain's own bid stays in memory.
+  const o = f.overrides ?? {}
+  const anyHold = (['stop', 'stock', 'freeze', 'phase', 'minBidHour', 'money', 'intraday'] as const).some((k) => o[k] != null)
+  if (own !== real && anyHold && bid > real) {
+    return { ...d, ...placed, ...(own > real ? { beforeHour: own } : {}), currentCents: real, bidCents: real, action: 'hold', step: d.layer === 'goal' || d.layer === 'restore' ? d.step : null, why: `${d.why}; held at ${real}¢ while ${d.layer === 'no_goal' || d.layer === 'goal' || d.layer === 'band' ? 'an override is in force' : `the ${d.layer.replace('_', '-')} layer holds it`}` }
+  }
+  // A decision that leaves the brain's own bid (a hold at it): any move is the hour's own — the plan's move, in the dead zone.
+  // Final review 10-10 (1) — only when no override, hold or brake applies: an override's hold (a freeze, the money brake
+  // after its step, low stock cover) never becomes the plan's raise (onlyLowers keeps it at or below the bid that stands).
+  if (d.action === 'hold' && want === own && !OVERRIDE_LAYERS.has(d.layer)) {
+    const delta = Math.abs(bid - real)
+    // Re-review minor — the dead zone holds small raises only: a ceiling below the bid always pulls it down.
+    if (bid === real || (bid > real && (delta < MIN_WRITE_CENTS || delta < real * MIN_WRITE_SHARE))) {
+      return { ...d, ...placed, ...memo, currentCents: real, bidCents: real, action: 'hold', why: held ? `${d.why}; ${want}¢ ${heldWords}` : d.why }
+    }
+    const why = bid < real
+      ? `plan hour: ${heldWords} (the brain's own bid ${own}¢) — ${real}¢ → ${bid}¢`
+      : `plan hour: ${cap ? `${cap.words} allows ${cap.cents}¢` : 'no plan ceiling this hour'} — back to ${held ? `${bid}¢, ${heldWords}` : `the brain's own bid ${bid}¢`}; ${real}¢ → ${bid}¢`
+    return { ...d, ...placed, ...memo, currentCents: real, bidCents: bid, action: 'write', layer: 'plan_hour', why }
+  }
+  // The brain's own move (the goal, a limit, a give-back, the money brake …) held to the hour.
+  return { ...d, ...placed, ...memo, currentCents: real, bidCents: bid, action: bid !== real ? 'write' : 'hold', why: held ? `${d.why}; ${want}¢ ${heldWords}` : d.why }
+}
+
+/** Final review 10-10 — the override layers: each holds or lowers; none lifts the bid that stands (onlyLowers). */
+const OVERRIDE_LAYERS: ReadonlySet<string> = new Set(['stop', 'stock', 'freeze', 'phase', 'min_bid_hour', 'money', 'intraday'])
+
+/**
+ * Re-review D — an intraday brake (and the money brake's step down) only lowers: it is decided from the brain's own bid (the
+ * one before the plan's hour held it), so on a bid the plan holds lower it could ask a raise (own 16¢ × 0.9 = 14¢ over the 12¢ that stands). It never goes
+ * above the bid that stands — after another floor, the bid that stood before it (the floor found it) — and the brain's own
+ * bid stays in memory.
+ */
+function onlyLowers(d: Decision, f: TargetFacts, own: number, due: boolean): Decision {
+  // The money brake's step down is a brake too, and so is every override (final review 10-10 (1)): decided from the brain's
+  // own bid, none may lift the bid that stands.
+  if (!OVERRIDE_LAYERS.has(d.layer)) return d
+  // With no plan ceiling this hour and no plan hold in memory: as before the per-hour ceiling — except a brake's give-back
+  // after a floor, which may start from the brain's own bid (the bid before it) and so is held to the bid that stood. Under
+  // a plan, an override never lifts the bid that stands: the higher hour may give the own bid back only when nothing holds
+  // (low stock cover at a 40¢ hour would otherwise lift 11¢ → 13¢, above the day's lowest ceiling it held to before).
+  if (own === f.currentCents && hourCapOf(f) == null && !(due && (d.layer === 'intraday' || d.layer === 'money' || d.layer === 'stock'))) return d
+  const r = f.restore
+  const stood = due && r ? [r.foundCents, f.savedCents, r.beforeCents].find((c): c is number => c != null && c > 0) ?? f.currentCents : f.currentCents
+  if (d.bidCents <= stood) return d
+  const bid = stood
+  const memo = own > bid ? { beforeHour: Math.min(own, d.beforeHour ?? own) } : {}
+  // A step not written is no step (the next run takes it from the bid that stands).
+  const who = d.layer === 'money' ? 'the money brake' : d.layer === 'intraday' ? 'an intraday brake' : `the ${d.layer.replace('_', '-')} layer`
+  return { ...d, ...memo, bidCents: bid, action: bid !== f.currentCents ? 'write' : 'hold', step: null, why: `${d.why}; ${who} only lowers: ${due ? `back to the ${bid}¢ that stood` : `held at ${bid}¢`}` }
+}
+
+/**
+ * Bid-page fix 10-10 — the give-back after a floor, decided while the floor holds by a run with evidence: the restore's own
+ * "as if the stop never happened" (the goal from the bid before, the day's step kept, inside the limits and the raise cap)
+ * with the floor's hour taken out (its plan words and 0 % lanes: the hour that lifts it holds the bid to its own limits).
+ * Null with no bid before, or no goal from it.
+ */
+function giveBackOf(f: TargetFacts, beforeCents: number | null): GiveBack | null {
+  if (beforeCents == null || beforeCents <= 0) return null
+  const keep = f.lastStep && f.lastStep.dataDay >= f.dataDay ? f.lastStep : null
+  // Final review 10-10 (3) — with the hour's lanes (the share layer's top-of-search lane cap reads them).
+  const asIf = decide({ ...f, currentCents: beforeCents, lastStep: keep, restore: null, overrides: {}, brakes: [], planNote: null, planHeld: null, standingCents: null })
+  if (asIf.layer === 'no_goal') return null
+  return { dataDay: f.dataDay, fromCents: beforeCents, cents: asIf.bidCents, goalBidCents: asIf.goalBidCents, step: asIf.step, why: asIf.why }
+}
+
+/**
  * Lane 5 — the share layer for one keyword with a target (share.ts): a decision of its own (a move, a hold within the dead
  * zone or at a cap, the wait after its move), or a note for the goal's decision when the band top wins or the reading does
  * not count. Every line names the reading's grain, days, range and impressions (readingWords); never a word for a place.
@@ -492,11 +722,16 @@ function shareLayer(f: TargetFacts, ok: GoalBid, expNow: number | null, lanes: r
 function intradayBid(f: TargetFacts, b: NonNullable<Overrides['intraday']>): { cents: number; words: string } | { goal: Decision } | null {
   const r = f.restore
   const lowered = !!r && ((LOWERING_LAYERS as readonly string[]).includes(r.layer) || r.layer === 'restore') && f.currentCents <= r.heldCents
-  const before = lowered ? r!.beforeCents ?? [r!.foundCents, f.savedCents].find((c): c is number => c != null && c > 0) ?? f.currentCents : f.currentCents
+  const before0 = lowered ? r!.beforeCents ?? [r!.foundCents, f.savedCents].find((c): c is number => c != null && c > 0) ?? f.currentCents : f.currentCents
+  // Final review 10-10 (2) — the brake bites from min(the bid before, this hour's plan ceiling) — and, on a first bite, from
+  // the bid that stands (not the brain's own bid the plan held above it).
+  const cap = hourCapOf(f)?.cents ?? null
+  const standing = lowered ? before0 : Math.min(before0, f.standingCents ?? before0)
+  const before = cap != null ? Math.min(standing, cap) : standing
   let cents = before
   if (b.factor != null && b.factor > 0 && b.factor < 1) cents = Math.floor(before * b.factor)
   if (b.capCents != null && b.capCents > 0) cents = Math.min(cents, b.capCents)
-  cents = Math.min(before, Math.max(cents, limitRange(f.limits, f.lanes).lower))
+  cents = Math.min(before, Math.max(cents, limitRange(f.limits).lower))
   if (cents >= before) return null
   // What the goal decides from the bid before (as the give-back after a floor does): at or below the brake, it goes.
   const keep = f.lastStep && f.lastStep.dataDay >= f.dataDay ? f.lastStep : null
