@@ -12,7 +12,7 @@
  *   data       a thin keyword stays at its parent's bid until it has 2 orders; every decision says why
  */
 import { describe, expect, it } from 'vitest'
-import { decide, type TargetFacts } from './decide.js'
+import { decide, LOWERING_LAYERS, UNLOWERED_LAYERS, type TargetFacts } from './decide.js'
 import type { Evidence } from './estimator.js'
 import type { ShareFacts } from './share.js'
 
@@ -247,6 +247,13 @@ describe('batch 2 fix — the money brain\'s brake in the bid decision (hold rai
  * Lane 5 (2026-10-10) — the share layer: a target top-of-search impression share (D1 = A: raise below, lower above, hold
  * within ±5 points; the band top still cuts). In the worked example the band holds 15–22¢ and its top's bid is 22¢.
  */
+describe('UNLOWERED_LAYERS — the bid a give-back returns to (integration review fix)', () => {
+  it('a share move is an unlowered decision (a floor after it gives back its bid), and no layer is both', () => {
+    expect(UNLOWERED_LAYERS).toContain('share')
+    expect(UNLOWERED_LAYERS.filter((l) => LOWERING_LAYERS.includes(l))).toEqual([])
+  })
+})
+
 describe('Lane 5 — the target top-of-search impression share', () => {
   const BY = 'the Owner\'s keyword override (user:owner, 2026-10-09)'
   const share = (pct: number, extra: Partial<ShareFacts> = {}): ShareFacts => ({

@@ -35,7 +35,7 @@ vi.mock('../../../lib/queue.js', () => {
 })
 
 const { runShadowOnce } = await import('./shadow.js')
-const { loadMarket } = await import('./load.js')
+const { loadMarket, loadOverrideSources } = await import('./load.js')
 const { loadShare } = await import('./share-load.js')
 
 const W = `lane5_share_${randomBytes(4).toString('hex')}`
@@ -143,6 +143,20 @@ describe.skipIf(!concurrentDatabaseUrl())('Lane 5 — the target top-of-search i
     await database.pool.query('UPDATE "AmazonAdsDailyPerformance" SET "costMicros" = 5000000 WHERE "workspaceId" = $1 AND "entityType" = \'CAMPAIGN\'', [W])
     await reset()
     await endAll()
+  })
+
+  it('review fix — a floor after a share move gives back the share\'s bid, not the bid before it', async () => {
+    const base = { runId: 'run-gb', mode: 'LIVE', kind: 'bid', marketplace: 'IT', campaignId: 'c-gb', targetId: 't-gb', dataDay: daysAgo(1), why: 'test' }
+    const at = (hoursAgo: number) => new Date(NOW.getTime() - hoursAgo * HOUR)
+    await inside(async () => {
+      await database.client.bidBrainDecision.create({ data: { ...base, action: 'write', layer: 'goal', currentCents: 40, decidedCents: 40, createdAt: at(3) } })
+      await database.client.bidBrainDecision.create({ data: { ...base, action: 'write', layer: 'share', currentCents: 40, decidedCents: 44, createdAt: at(2) } })
+      await database.client.bidBrainDecision.create({ data: { ...base, action: 'write', layer: 'stop', currentCents: 44, decidedCents: 3, createdAt: at(1) } })
+    })
+    const previous = new Map([['t-gb', { action: 'write', layer: 'stop', currentCents: 44, decidedCents: 3, createdAt: at(1), lastStep: null }]])
+    const out = await inside(() => loadOverrideSources({ adGroups: new Map(), campaigns: new Map() } as never, { campaignIds: [], groupIds: [], strategy: new Map(), previous, marketplaces: [] }))
+    expect(out.lowered.get('t-gb')).toMatchObject({ layer: 'stop', heldCents: 3, beforeCents: 44, wrote: true })
+    await reset()
   })
 
   it('another business\'s override on a campaign id spelled the same is never read', async () => {

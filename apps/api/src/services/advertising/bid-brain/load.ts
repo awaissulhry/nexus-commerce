@@ -33,7 +33,7 @@ import { strategyMarket } from '../ads-strategy/bids.js'
 import { openStrategy } from '../ads-strategy/effective.js'
 import { MAX_WINDOW_DAYS, type Evidence } from './estimator.js'
 import { stockFactOf, type DirectiveRow, type AdGroupRow, type CampaignRow, type MarketRows, type PlaybookFact, type RunRows, type StockFact, type StrategyRead, type TargetRow } from './facts.js'
-import { LOWERING_LAYERS, type DecisionLayer } from './decide.js'
+import { LOWERING_LAYERS, UNLOWERED_LAYERS, type DecisionLayer } from './decide.js'
 import { readStockAdGroups } from '../ads-stock-risk.service.js'
 import { breakevenByProduct } from '../ads-target-acos.service.js'
 import { DEFAULT_STOP_BID_CENTS } from '../ads-strategy/fields.js'
@@ -421,7 +421,8 @@ async function loadLowered(previous: ReadonlyMap<string, PreviousDecision>): Pro
   // The bid before: a decision no override lowered (a give-back that wrote counts; one that held at the floor does not).
   // BB-21 — a LIVE probe's arm too: a Min-bid hour's give-back returns to the day's arm, not to the bid before the probe.
   // BB-20 — an explore or revive step too (batch 3 review): a brake after it steps from the explored bid, not from the one before.
-  const kept = ['goal', 'band', 'limit', 'no_goal', 'pin', 'freeze', 'probe', 'explore', 'revive']
+  // Lane 5 review fix — and a share move (decide.ts UNLOWERED_LAYERS).
+  const kept = [...UNLOWERED_LAYERS] as string[]
   const rows = await prisma.$queryRaw<Array<{ targetId: string; decidedCents: number }>>(Prisma.sql`
     SELECT DISTINCT ON (d."targetId") d."targetId", d."decidedCents" FROM "BidBrainDecision" d
      WHERE d."targetId" = ANY(${ids}::text[]) AND (d.layer = ANY(${kept}::text[]) OR (d.layer = 'restore' AND d.action = 'write'))

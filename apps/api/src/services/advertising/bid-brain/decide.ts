@@ -140,6 +140,13 @@ export const SHARE_FLOOR_HI_FACTOR = 1.25
 
 /** BB-8 — the override layers that lower a bid and whose end gives the bids back (`restore`). BB-17 — the intraday brakes too. */
 export const LOWERING_LAYERS: readonly DecisionLayer[] = ['stop', 'stock', 'phase', 'min_bid_hour', 'intraday']
+/**
+ * The layers whose decided bid no override lowered: the bid a give-back returns to is the newest of these (load.ts
+ * loadLowered), and a floor written after the newest of them is the brain's own (enrollment.ts floorsWithoutMemory).
+ * BB-20/21 added explore, revive and probe; integration review fix (2026-10-10) — lane 5's share move too: a floor after a
+ * share step gives back the share's bid, not the bid before it.
+ */
+export const UNLOWERED_LAYERS: readonly DecisionLayer[] = ['goal', 'band', 'limit', 'no_goal', 'pin', 'freeze', 'probe', 'explore', 'revive', 'share']
 export type DecisionAction = 'write' | 'hold' | 'brake'
 
 export interface Decision {
