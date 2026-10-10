@@ -13,8 +13,10 @@
  * defendTopOfSearch reads the same TOP rows.
  *
  * Lane 5 (2026-10-10, the free-visibility-numbers audit):
- *   T1  the unit is decided ONCE per report (any value above 1 → the whole report is percentages, else fractions:
- *       ads-reports.service.ts impressionShareUnit), never per value — a 0.8 % share was stored as 80 %.
+ *   T1  the unit is decided ONCE per report (ads-reports.service.ts impressionShareUnit), never per value — a 0.8 %
+ *       share was stored as 80 %. Review fix: Amazon reports this column in PERCENT, so a report with a value above 1
+ *       is percent and divides by 100; a report whose values are ALL ≤ 1 is ambiguous and writes nothing (the stored
+ *       reading stays; counted as rowsAmbiguous). Both passes use the same rule, so the two grains cannot disagree.
  *   T3  a campaign-day with a share but no TOP placement row is no longer lost: its AmazonAdsDailyPerformance CAMPAIGN
  *       row is updated instead. A placement row is never created (its impressions would be made up).
  *   T4  the window ends YESTERDAY in the account's time zone (today is not finished); it was "now", today included.
@@ -31,7 +33,7 @@ import { logger } from '../../utils/logger.js'
 import { fetchReport, type ClientContext } from './ads-api-client.js'
 // One definition of the percentage-vs-fraction normalisation, shared with the
 // campaign ingest. Two copies is how the two tables start disagreeing about a unit.
-import { impressionShareUnit, toImpressionShareFraction, type ImpressionShareUnit } from './ads-reports.service.js'
+import { hasShareValue, impressionShareUnit, toImpressionShareFraction, type ImpressionShareUnit } from './ads-reports.service.js'
 import { adsAccountTimeZone } from './ads-market-time.js'
 import { isoDayIn } from './ads-local-day.js'
 
@@ -63,6 +65,8 @@ export interface GrainCounts {
   rowsUpdated: number
   /** Rows whose share Amazon sent empty (or not a share): nothing written, never 0. */
   rowsNull: number
+  /** Rows with a share in a report of ambiguous unit (every value ≤ 1): nothing written, the stored reading kept as it was. */
+  rowsAmbiguous: number
   /** Rows with a share and no row of ours to update (never created), or without an id or a day. */
   rowsSkipped: number
 }
@@ -77,6 +81,8 @@ export interface TosIsIngestResult {
   campaignRowsUpdated: number
   /** Campaign grain: rows with no share (nothing written). */
   rowsNull: number
+  /** Campaign grain: rows with a share in a report of ambiguous unit — kept as they were. */
+  rowsAmbiguous: number
   /** Campaign grain: a share and neither row to update, or no id or day. */
   rowsSkipped: number
   /** KW — the keyword-grain pass (AD_TARGET rows), its failures apart: they never fail the campaign pass. */
@@ -100,8 +106,12 @@ export function tosWindow(now: Date, timeZone: string | null, windowDays: number
   return { startDate: shiftDay(today, -days), endDate: shiftDay(today, -1) }
 }
 
-/** One report row as the passes read it: its id, its day, and its share in the report's unit (null: none). Pure. */
-export function shareRowsOf(rows: readonly unknown[], idKey: 'campaignId' | 'keywordId'): { unit: ImpressionShareUnit; rows: Array<{ id: string | null; date: string | null; share: number | null }> } {
+/**
+ * One report row as the passes read it: its id, its day, its share as a fraction (null: none, or the report's unit is
+ * ambiguous) and whether Amazon sent a value at all (`ambiguous`: a value that is not written because the unit could not
+ * be decided). Pure.
+ */
+export function shareRowsOf(rows: readonly unknown[], idKey: 'campaignId' | 'keywordId'): { unit: ImpressionShareUnit; rows: Array<{ id: string | null; date: string | null; share: number | null; ambiguous: boolean }> } {
   const recs = rows.map((raw) => (raw && typeof raw === 'object' ? raw as Record<string, unknown> : {}))
   // T1 — the unit, once for the whole report.
   const unit = impressionShareUnit(recs.map((r) => r.topOfSearchImpressionShare))
@@ -110,12 +120,17 @@ export function shareRowsOf(rows: readonly unknown[], idKey: 'campaignId' | 'key
     rows: recs.map((r) => {
       const id = r[idKey] == null || r[idKey] === '' ? null : String(r[idKey])
       const date = String(r.date ?? '').slice(0, 10)
-      return { id, date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null, share: toImpressionShareFraction(r.topOfSearchImpressionShare, unit) }
+      const percent = unit === 'percent'
+      return {
+        id, date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null,
+        share: percent ? toImpressionShareFraction(r.topOfSearchImpressionShare, 'percent') : null,
+        ambiguous: !percent && hasShareValue(r.topOfSearchImpressionShare),
+      }
     }),
   }
 }
 
-const NO_COUNTS = (): GrainCounts => ({ rowsFetched: 0, withIS: 0, rowsUpdated: 0, rowsNull: 0, rowsSkipped: 0 })
+const NO_COUNTS = (): GrainCounts => ({ rowsFetched: 0, withIS: 0, rowsUpdated: 0, rowsNull: 0, rowsAmbiguous: 0, rowsSkipped: 0 })
 
 /** The campaign pass for one account: TOP placement rows, else (T3) the CAMPAIGN row. */
 async function campaignPass(ctx: ClientContext, window: { startDate: string; endDate: string }) {
@@ -138,6 +153,7 @@ async function campaignPass(ctx: ClientContext, window: { startDate: string; end
   for (const r of rows) {
     out.rowsFetched++
     if (!r.id || !r.date) { out.rowsSkipped++; continue }
+    if (r.ambiguous) { out.rowsAmbiguous++; continue }
     if (r.share === null) { out.rowsNull++; continue }
     out.withIS++
     const date = new Date(`${r.date}T00:00:00Z`)
@@ -173,6 +189,7 @@ async function keywordPass(ctx: ClientContext, window: { startDate: string; endD
   for (const r of rows) {
     out.rowsFetched++
     if (!r.id || !r.date) { out.rowsSkipped++; continue }
+    if (r.ambiguous) { out.rowsAmbiguous++; continue }
     if (r.share === null) { out.rowsNull++; continue }
     out.withIS++
     const res = await prisma.amazonAdsDailyPerformance.updateMany({
@@ -212,7 +229,7 @@ export async function ingestTopOfSearchIS(opts: { windowDays?: number; marketpla
   }))
 
   const out: TosIsIngestResult = {
-    profiles: conns.length, rowsFetched: 0, withIS: 0, rowsUpdated: 0, campaignRowsUpdated: 0, rowsNull: 0, rowsSkipped: 0,
+    profiles: conns.length, rowsFetched: 0, withIS: 0, rowsUpdated: 0, campaignRowsUpdated: 0, rowsNull: 0, rowsAmbiguous: 0, rowsSkipped: 0,
     keyword: { ...NO_COUNTS(), errors: [] }, windows: [], sample: [], errors: [],
   }
   const units: string[] = []
@@ -222,7 +239,7 @@ export async function ingestTopOfSearchIS(opts: { windowDays?: number; marketpla
     else {
       const c = p.campaign.ok
       out.rowsFetched += c.rowsFetched; out.withIS += c.withIS; out.rowsUpdated += c.rowsUpdated
-      out.campaignRowsUpdated += c.campaignRowsUpdated; out.rowsNull += c.rowsNull; out.rowsSkipped += c.rowsSkipped
+      out.campaignRowsUpdated += c.campaignRowsUpdated; out.rowsNull += c.rowsNull; out.rowsAmbiguous += c.rowsAmbiguous; out.rowsSkipped += c.rowsSkipped
       for (const s of c.sample) if (out.sample.length < 5) out.sample.push(s)
       if (c.rowsFetched) units.push(`${p.profileId} campaign=${c.unit}`)
     }
@@ -230,7 +247,7 @@ export async function ingestTopOfSearchIS(opts: { windowDays?: number; marketpla
     else {
       const k = p.keyword.ok
       out.keyword.rowsFetched += k.rowsFetched; out.keyword.withIS += k.withIS; out.keyword.rowsUpdated += k.rowsUpdated
-      out.keyword.rowsNull += k.rowsNull; out.keyword.rowsSkipped += k.rowsSkipped
+      out.keyword.rowsNull += k.rowsNull; out.keyword.rowsAmbiguous += k.rowsAmbiguous; out.keyword.rowsSkipped += k.rowsSkipped
       if (k.rowsFetched) units.push(`${p.profileId} keyword=${k.unit}`)
     }
   }
@@ -246,9 +263,14 @@ export async function ingestTopOfSearchIS(opts: { windowDays?: number; marketpla
       failed: out.keyword.errors.length, ofProfiles: out.profiles, errors: out.keyword.errors.slice(0, 5),
     })
   }
+  if (out.rowsAmbiguous || out.keyword.rowsAmbiguous) {
+    logger.info(`[tos-is-ingest] ambiguous unit: ${out.rowsAmbiguous + out.keyword.rowsAmbiguous} rows kept as they were (a report whose every value is ≤ 1 is not written)`, {
+      campaign: out.rowsAmbiguous, keyword: out.keyword.rowsAmbiguous,
+    })
+  }
   logger.info('[tos-is-ingest] done', {
     profiles: out.profiles, rowsFetched: out.rowsFetched, withIS: out.withIS, rowsUpdated: out.rowsUpdated,
-    campaignRowsUpdated: out.campaignRowsUpdated, rowsNull: out.rowsNull, rowsSkipped: out.rowsSkipped, errors: out.errors.length,
+    campaignRowsUpdated: out.campaignRowsUpdated, rowsNull: out.rowsNull, rowsAmbiguous: out.rowsAmbiguous, rowsSkipped: out.rowsSkipped, errors: out.errors.length,
     keyword: { ...out.keyword, errors: out.keyword.errors.length }, units, windows: out.windows.slice(0, 3),
   })
   return out
@@ -258,7 +280,8 @@ export async function ingestTopOfSearchIS(opts: { windowDays?: number; marketpla
 export function tosIsSummaryLine(r: TosIsIngestResult): string {
   const k = r.keyword
   const window = r.windows.length ? ` window=${r.windows[0].startDate}..${r.windows[0].endDate} (${r.windows[0].timeZone}${r.windows.length > 1 ? `, +${r.windows.length - 1} accounts` : ''})` : ''
+  const ambiguous = (n: number) => (n ? ` (ambiguous unit: ${n} rows kept as they were)` : '')
   return `profiles=${r.profiles}${window}`
-    + ` · campaign: rowsFetched=${r.rowsFetched} withIS=${r.withIS} rowsUpdated=${r.rowsUpdated} campaignRowsUpdated=${r.campaignRowsUpdated} rowsNull=${r.rowsNull} rowsSkipped=${r.rowsSkipped} errors=${r.errors.length}`
-    + ` · keyword: rowsFetched=${k.rowsFetched} withIS=${k.withIS} rowsUpdated=${k.rowsUpdated} rowsNull=${k.rowsNull} rowsSkipped=${k.rowsSkipped} errors=${k.errors.length}`
+    + ` · campaign: rowsFetched=${r.rowsFetched} withIS=${r.withIS} rowsUpdated=${r.rowsUpdated} campaignRowsUpdated=${r.campaignRowsUpdated} rowsNull=${r.rowsNull} rowsSkipped=${r.rowsSkipped} errors=${r.errors.length}${ambiguous(r.rowsAmbiguous)}`
+    + ` · keyword: rowsFetched=${k.rowsFetched} withIS=${k.withIS} rowsUpdated=${k.rowsUpdated} rowsNull=${k.rowsNull} rowsSkipped=${k.rowsSkipped} errors=${k.errors.length}${ambiguous(k.rowsAmbiguous)}`
 }

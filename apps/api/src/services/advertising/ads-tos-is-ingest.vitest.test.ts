@@ -1,7 +1,8 @@
 /**
  * Lane 5 (2026-10-10, the free-visibility-numbers audit) — the top-of-search impression share ingest.
  *
- *   T1  the unit is decided once per report (any value above 1 → the whole report is percentages), never per value
+ *   T1  the unit is decided once per report (any value above 1 → the whole report is percentages), never per value;
+ *       review fix: a report whose values are all ≤ 1 is ambiguous and writes nothing (counted), in both passes
  *   T3  a campaign-day with a share and no TOP placement row updates its CAMPAIGN daily row; nothing is ever created
  *   T4  the window ends yesterday in the account's time zone
  *   KW  the keyword-grain pass (spTargeting, grouped by targeting) only updates existing AD_TARGET rows, and its failure
@@ -35,17 +36,34 @@ describe('T1 — the unit, once per report', () => {
     ], 'campaignId')
     expect(unit).toBe('percent')
     expect(rows.map((r) => r.share)).toEqual([0.008, 0.45])
+    expect(rows.map((r) => r.ambiguous)).toEqual([false, false])
   })
 
-  it('a report with no value above 1 is fractions', () => {
-    expect(impressionShareUnit([0.8, 0.5, 1])).toBe('fraction')
-    expect(toImpressionShareFraction(0.8, 'fraction')).toBe(0.8)
-    expect(shareRowsOf([{ keywordId: 'k1', date: '2026-10-05', topOfSearchImpressionShare: 0.25 }], 'keywordId').rows[0]).toEqual({ id: 'k1', date: '2026-10-05', share: 0.25 })
+  it('a report with no value above 1 is AMBIGUOUS: never guessed — no share, the value flagged so the pass writes nothing', () => {
+    expect(impressionShareUnit([0.8, 0.5, 1])).toBe('ambiguous')
+    expect(impressionShareUnit([null, ''])).toBe('ambiguous')
+    expect(shareRowsOf([
+      { keywordId: 'k1', date: '2026-10-05', topOfSearchImpressionShare: 0.25 },
+      { keywordId: 'k2', date: '2026-10-05', topOfSearchImpressionShare: null },
+    ], 'keywordId').rows).toEqual([
+      { id: 'k1', date: '2026-10-05', share: null, ambiguous: true },
+      { id: 'k2', date: '2026-10-05', share: null, ambiguous: false },
+    ])
+  })
+
+  it('the two grains cannot disagree: one rule for both, so a value means the same in each report — or is written in neither', () => {
+    const camp = shareRowsOf([{ campaignId: 'c1', date: '2026-10-05', topOfSearchImpressionShare: 30 }, { campaignId: 'c2', date: '2026-10-05', topOfSearchImpressionShare: 0.5 }], 'campaignId')
+    const kwPercent = shareRowsOf([{ keywordId: 'k1', date: '2026-10-05', topOfSearchImpressionShare: 30 }, { keywordId: 'k2', date: '2026-10-05', topOfSearchImpressionShare: 0.5 }], 'keywordId')
+    expect(camp.rows.map((r) => r.share)).toEqual(kwPercent.rows.map((r) => r.share))
+    expect(camp.rows.map((r) => r.share)).toEqual([0.3, 0.005])
+    // The same 0.5 in a keyword report with nothing above 1: not written at all, rather than 50 % beside the campaign's 0.5 %.
+    const kwAmbiguous = shareRowsOf([{ keywordId: 'k2', date: '2026-10-05', topOfSearchImpressionShare: 0.5 }], 'keywordId')
+    expect(kwAmbiguous.rows[0]).toMatchObject({ share: null, ambiguous: true })
   })
 
   it('empty, negative or impossible values are no share (null, never 0); without a unit the old per-value rule stands', () => {
     expect(toImpressionShareFraction(null, 'percent')).toBeNull()
-    expect(toImpressionShareFraction('', 'fraction')).toBeNull()
+    expect(toImpressionShareFraction('', 'percent')).toBeNull()
     expect(toImpressionShareFraction(-1, 'percent')).toBeNull()
     expect(toImpressionShareFraction(120, 'percent')).toBeNull()
     expect(toImpressionShareFraction(62.5)).toBe(0.625)
@@ -76,7 +94,7 @@ describe('ingestTopOfSearchIS — both grains', () => {
     { campaignId: 'c-null', date: '2026-10-05', impressions: 10, topOfSearchImpressionShare: null },
   ]
   const targetingReport = [
-    { campaignId: 'c-top', adGroupId: 'g1', keywordId: 'k1', date: '2026-10-05', impressions: 300, topOfSearchImpressionShare: 0.3 },
+    { campaignId: 'c-top', adGroupId: 'g1', keywordId: 'k1', date: '2026-10-05', impressions: 300, topOfSearchImpressionShare: 30 },
     { campaignId: 'c-top', adGroupId: 'g1', keywordId: 'k2', date: '2026-10-05', impressions: 200, topOfSearchImpressionShare: null },
     { campaignId: 'c-top', adGroupId: 'g1', keywordId: 'k-new', date: '2026-10-05', impressions: 5, topOfSearchImpressionShare: 0.1 },
   ]
@@ -104,18 +122,33 @@ describe('ingestTopOfSearchIS — both grains', () => {
       { where: { profileId: 'p1', adProduct: 'SPONSORED_PRODUCTS', entityType: 'CAMPAIGN', entityId: 'c-none', date: new Date('2026-10-05T00:00:00Z') }, data: { topOfSearchIS: 0.12 } },
     ])
     const targetWrites = db.amazonAdsDailyPerformance.updateMany.mock.calls.map((c) => c[0]).filter((a) => a.where.entityType === 'AD_TARGET')
-    expect(targetWrites.map((a) => [a.where.entityId, a.data.topOfSearchIS])).toEqual([['k1', 0.3], ['k-new', 0.1]])
+    expect(targetWrites.map((a) => [a.where.entityId, a.data.topOfSearchIS])).toEqual([['k1', 0.3], ['k-new', 0.001]])
     // Nothing is ever created.
     expect(Object.keys(db.amazonAdsDailyPerformance)).toEqual(['updateMany'])
 
     expect(r).toMatchObject({
-      profiles: 1, rowsFetched: 4, withIS: 3, rowsUpdated: 1, campaignRowsUpdated: 1, rowsNull: 1, rowsSkipped: 1, errors: [],
-      keyword: { rowsFetched: 3, withIS: 2, rowsUpdated: 1, rowsNull: 1, rowsSkipped: 1, errors: [] },
+      profiles: 1, rowsFetched: 4, withIS: 3, rowsUpdated: 1, campaignRowsUpdated: 1, rowsNull: 1, rowsAmbiguous: 0, rowsSkipped: 1, errors: [],
+      keyword: { rowsFetched: 3, withIS: 2, rowsUpdated: 1, rowsNull: 1, rowsAmbiguous: 0, rowsSkipped: 1, errors: [] },
       windows: [{ profileId: 'p1', startDate: '2026-10-02', endDate: '2026-10-08', timeZone: 'Europe/Rome' }],
     })
     expect(tosIsSummaryLine(r)).toBe('profiles=1 window=2026-10-02..2026-10-08 (Europe/Rome)'
       + ' · campaign: rowsFetched=4 withIS=3 rowsUpdated=1 campaignRowsUpdated=1 rowsNull=1 rowsSkipped=1 errors=0'
       + ' · keyword: rowsFetched=3 withIS=2 rowsUpdated=1 rowsNull=1 rowsSkipped=1 errors=0')
+  })
+
+  it('an ambiguous keyword report (every value ≤ 1) writes no keyword share, beside a percent campaign report; counted and said', async () => {
+    const ambiguousTargets = [
+      { campaignId: 'c-top', adGroupId: 'g1', keywordId: 'k1', date: '2026-10-05', impressions: 300, topOfSearchImpressionShare: 0.3 },
+      { campaignId: 'c-top', adGroupId: 'g1', keywordId: 'k2', date: '2026-10-05', impressions: 200, topOfSearchImpressionShare: null },
+      { campaignId: 'c-top', adGroupId: 'g1', keywordId: 'k3', date: '2026-10-05', impressions: 5, topOfSearchImpressionShare: 0.1 },
+    ]
+    fetchReport.mockImplementation(async (_ctx: unknown, req: { reportTypeId?: string }) => (req.reportTypeId === 'spTargeting' ? ambiguousTargets : campaignReport.slice(0, 1)))
+    db.amazonAdsPlacementReport.updateMany.mockResolvedValue({ count: 1 })
+    db.amazonAdsDailyPerformance.updateMany.mockResolvedValue({ count: 1 })
+    const r = await ingestTopOfSearchIS({ now: new Date('2026-10-09T02:30:00Z') })
+    expect(db.amazonAdsDailyPerformance.updateMany.mock.calls.filter((c) => c[0].where.entityType === 'AD_TARGET')).toEqual([])
+    expect(r).toMatchObject({ rowsUpdated: 1, rowsAmbiguous: 0, keyword: { rowsFetched: 3, withIS: 0, rowsUpdated: 0, rowsNull: 1, rowsAmbiguous: 2 } })
+    expect(tosIsSummaryLine(r)).toMatch(/ · keyword: rowsFetched=3 withIS=0 rowsUpdated=0 rowsNull=1 rowsSkipped=0 errors=0 \(ambiguous unit: 2 rows kept as they were\)$/)
   })
 
   it('a failed keyword pass never fails the campaign pass (its error kept apart)', async () => {
