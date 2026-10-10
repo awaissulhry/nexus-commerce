@@ -27,7 +27,7 @@ vi.mock('../services/advertising/ads-impression-share.service.js', () => ({ anal
 
 import prisma from '../db.js'
 import { analyzeShareOfVoice } from '../services/advertising/ads-impression-share.service.js'
-import { buildSovBidContexts } from './advertising-rule-evaluator.job.js'
+import { buildSovBidContexts, sovShareNote } from './advertising-rule-evaluator.job.js'
 import { evaluateConditions } from '../services/automation/conditions-tree.js'
 import { contextIdentity, ruleMatchesScope } from '../services/automation-rule-scope.js'
 import { guardRule } from '../services/automation/automation-rule-guard.js'
@@ -138,8 +138,13 @@ describe('SOV_BID — the live rule end to end', () => {
       periods: [{ marketplace: 'IT', reason: 'too-old', refused: true, note: 'IT: the newest complete Brand Analytics week (week of 2026-09-13) ended 20 days ago; shares older than 14 days are not used' }],
       measuredMarkets: ['DE'],
     })
-    const ctxs = await buildSovBidContexts()
+    const notes: string[] = []
+    const ctxs = await buildSovBidContexts({ notes })
     expect(ctxs.map((c) => c.adTarget.id)).toEqual(['t4'])
+    // Review fix — the tick's own summary line says why IT matched nothing.
+    expect(notes).toEqual(['IT: the newest complete Brand Analytics week (week of 2026-09-13) ended 20 days ago; shares older than 14 days are not used'])
+    expect(sovShareNote(notes)).toBe(' · SOV_BID share not used: IT: the newest complete Brand Analytics week (week of 2026-09-13) ended 20 days ago; shares older than 14 days are not used')
+    expect(sovShareNote([])).toBe('')
   })
 
   it('no complete SQP week in any market → no context at all (the rule then matches nothing, by design)', async () => {
