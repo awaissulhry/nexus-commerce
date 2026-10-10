@@ -16,9 +16,12 @@ let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 export async function runTosIsIngestCron(): Promise<void> {
   try {
     await recordCronRun('tos-is-ingest', async () => {
-      const { ingestTopOfSearchIS } = await import('../services/advertising/ads-tos-is-ingest.service.js')
+      const { ingestTopOfSearchIS, tosIsSummaryLine } = await import('../services/advertising/ads-tos-is-ingest.service.js')
+      // Lane 5 (2026-10-10) — 7 days ending yesterday in each account's time zone; both grains counted (campaign rows
+      // updated / with no share / skipped, and the same for the keyword-grain pass). The keyword pass's failures are in
+      // its own count and never fail the run: only the campaign pass decides SUCCESS or FAILED, as before.
       const r = await ingestTopOfSearchIS({ windowDays: 7 })
-      const head = `profiles=${r.profiles} rowsFetched=${r.rowsFetched} withIS=${r.withIS} rowsUpdated=${r.rowsUpdated} errors=${r.errors.length}`
+      const head = tosIsSummaryLine(r)
       // ACR.0.2: a job whose every profile failed must not read as SUCCESS.
       //
       // This ran `profiles=9 … errors=9` — a 100% failure — for months under a green
@@ -28,7 +31,8 @@ export async function runTosIsIngestCron(): Promise<void> {
         throw new Error(`${head} — every profile failed: ${r.errors.slice(0, 3).join(' | ')}`)
       }
       // A partial failure stays SUCCESS (some profiles delivered) but still says what broke.
-      return r.errors.length ? `${head} — ${r.errors.slice(0, 3).join(' | ')}` : head
+      const kw = r.keyword.errors.length ? ` — keyword pass: ${r.keyword.errors.slice(0, 3).join(' | ')}` : ''
+      return r.errors.length ? `${head} — ${r.errors.slice(0, 3).join(' | ')}${kw}` : `${head}${kw}`
     })
   } catch (err) {
     logger.error('tos-is-ingest cron: failure', { error: err instanceof Error ? err.message : String(err) })

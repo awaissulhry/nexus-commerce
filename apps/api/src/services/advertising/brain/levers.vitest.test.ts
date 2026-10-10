@@ -131,3 +131,16 @@ describe('snapshots', () => {
       .toEqual({ bids: { takenAt: 't', by: 'user:owner', data: { enrolled: ['c-1'] } } })
   })
 })
+
+describe('Lane 5 — tosTargetPct', () => {
+  it('empty by default (off: no target, no change); 5–95 % per product or campaign', () => {
+    expect(settingDefaults().tosTargetPct).toBeNull()
+    expect(BRAIN_SETTINGS.tosTargetPct.scopes).toEqual(['PRODUCT', 'CAMPAIGN'])
+    expect(settingRefusal('tosTargetPct', 40, 'CAMPAIGN')).toBeNull()
+    expect(settingRefusal('tosTargetPct', null, 'PRODUCT')).toBeNull()
+    expect(settingRefusal('tosTargetPct', 4, 'PRODUCT')).toMatch(/from 5 to 95 or empty, not 4/)
+    expect(settingRefusal('tosTargetPct', 96, 'CAMPAIGN')).toMatch(/from 5 to 95/)
+    expect(settingRefusal('tosTargetPct', 40.5, 'PRODUCT')).toMatch(/whole number/)
+    expect(BRAIN_SETTINGS.tosTargetPct.what).not.toMatch(/rank|position/i)
+  })
+})

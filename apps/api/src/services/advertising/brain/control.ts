@@ -320,6 +320,8 @@ export const SPEND_RATINGS: Partial<Record<BrainSetting, Rating>> = {
   pauseMinDays: { when: 'never', words: 'a shorter stop stays on low bids instead of a pause' },
   archiveDeadWeeks: { when: 'never', words: 'a campaign without an impression is paused, never archived' },
   longStopUntil: { when: 'cleared-or-earlier', words: 'the Owner\'s long stop ends sooner: the brain resumes the campaigns sooner' },
+  // Lane 5 — a higher target raises keyword bids toward it (inside the band top); empty = off, the ACoS goal alone may then raise bids the share held lower.
+  tosTargetPct: { when: 'up-or-cleared', words: 'a higher target top-of-search impression share: the bid brain may raise keyword bids toward it, one step of at most 10 % per new reading, never above the band top\'s bid, the highest bid or the top-of-search CPC ceiling (empty = off: the ACoS goal alone may then raise bids the share held lower)' },
 }
 
 /**
