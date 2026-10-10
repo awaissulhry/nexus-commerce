@@ -167,7 +167,7 @@ interface Payload {
     oldestAsOf: string | null
   }
   /** KT.3 — a scope fact for the reach line. Campaign-grain, so never a column. */
-  topOfSearch?: { avgShare: number; campaignsWithReading: number; campaignsInScope: number; asOf: string | null } | null
+  topOfSearch?: { avgShare: number; campaignsWithReading: number; campaignsInScope: number; asOf: string | null; basis?: string } | null
   /** KT.5 — one health block behind the page's single new line */
   feed?: {
     nightsSilent: number
@@ -313,14 +313,15 @@ export function KeywordTrackerClient() {
       tip: 'Brand Analytics search-query volume: how many times the whole marketplace searched this term in the week this row reads. Not our impressions.',
       render: (r) => (r.marketVolume == null ? <span className="h10-kt-nd">—</span> : num(r.marketVolume)),
       sortValue: (r) => r.marketVolume ?? -1,
-      filterValue: (r) => r.marketVolume ?? 0,
+      // NaN = not reported: the grid's filter never lets it match a range (no volume is not a volume of 0).
+      filterValue: (r) => (r.marketVolume != null ? r.marketVolume : Number.NaN),
     },
     {
       key: 'rank', label: 'Search Query Score',
       tip: "Amazon's Search Query Score for this ASIN (lower = more searched among this ASIN's queries), for the best ASIN. Not a market rank, and not our position in the results, which no Amazon API returns.",
       render: (r) => (r.searchQueryScore == null ? <span className="h10-kt-nd">—</span> : num(r.searchQueryScore)),
       sortValue: (r) => r.searchQueryScore ?? Number.MAX_SAFE_INTEGER,
-      filterValue: (r) => r.searchQueryScore ?? 0,
+      filterValue: (r) => (r.searchQueryScore != null ? r.searchQueryScore : Number.NaN),
     },
     {
       key: 'share', label: 'Our best ASIN’s share',
@@ -595,7 +596,8 @@ export function KeywordTrackerClient() {
                   scope the identical number on every row. Its date is a LAG (the IS column stops one
                   day behind the placement report it rides on), not an age. */}
               {data?.topOfSearch && (
-                <> · top-of-search impression share <b>{sharePct(data.topOfSearch.avgShare)}</b>{' '}
+                <> · top-of-search impression share <b title={data.topOfSearch.basis}>{sharePct(data.topOfSearch.avgShare)}</b>,
+                computed by Nexus (impression-weighted average of Amazon’s campaign-level daily shares),{' '}
                 across the {num(data.topOfSearch.campaignsWithReading)} of{' '}
                 {num(data.topOfSearch.campaignsInScope)} campaigns with a reading
                 {data.topOfSearch.asOf ? ` (to ${dayMonth(data.topOfSearch.asOf)})` : ''}</>

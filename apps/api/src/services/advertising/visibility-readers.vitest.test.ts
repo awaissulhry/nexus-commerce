@@ -71,7 +71,7 @@ beforeAll(async () => {
       } as never })
     }
     const list = await db.keywordWatchlist.create({ data: { marketplace: 'IT', name: 'Watched', isDefault: true } })
-    for (const term of ['race jacket', 'winter gloves', 'rain suit']) await db.keywordWatchlistTerm.create({ data: { watchlistId: list.id, term } })
+    for (const term of ['race jacket', 'winter gloves', 'rain suit', 'storm jacket']) await db.keywordWatchlistTerm.create({ data: { watchlistId: list.id, term } })
 
     const sqp = (data: Record<string, unknown>) => db.searchQueryPerformance.create({ data: { marketplace: 'IT', reportPeriod: 'WEEK', ...data } as never })
     // W1 "race jacket": the stored share columns are deliberately WRONG — the readers must not read them.
@@ -88,6 +88,9 @@ beforeAll(async () => {
     // a MONTH row that starts on the same day as the week: a weekly view never reads it
     await sqp({ reportPeriod: 'MONTH', startDate: W1, searchQuery: 'race jacket', asin: 'ASIN-VIS-A', searchQueryVolume: 99_999,
       impressionsTotal: 99_999, impressionsBrand: 99_999, clicksTotal: 99_999, clicksBrand: 99_999 })
+    // W1 "storm jacket": a stored volume of 0 — SQP only returns searched queries, so it is "not reported" (review fix)
+    await sqp({ startDate: W1, searchQuery: 'storm jacket', asin: 'ASIN-VIS-A', searchQueryVolume: 0, impressionsTotal: 400, impressionsBrand: 4 })
+    await sqp({ startDate: W0, searchQuery: 'storm jacket', asin: 'ASIN-VIS-A', searchQueryVolume: 300, impressionsTotal: 300, impressionsBrand: 3 })
     // W0 — the prior week
     await sqp({ startDate: W0, searchQuery: 'race jacket', asin: 'ASIN-VIS-A', searchQueryVolume: 900, impressionsTotal: 8000, impressionsBrand: 160 })
     await sqp({ startDate: W0, searchQuery: 'race jacket', asin: 'ASIN-VIS-B', searchQueryVolume: 900, impressionsTotal: 8000, impressionsBrand: 80 })
@@ -154,6 +157,10 @@ describe('B2 / C6 / B3 — the Keyword Tracker', () => {
     expect(gloves.deltaPP).toBeNull()
     expect(gloves.searchQueryScore).toBe(7)
     expect(out.rows.find((r) => r.keyword === 'rain suit')!.state).toBe('never-measured')
+    // Review fix — a stored volume of 0 is not reported: no volume, and no −100 % market change from it.
+    const storm = out.rows.find((r) => r.keyword === 'storm jacket')!
+    expect(storm).toMatchObject({ state: 'measured', marketVolume: null, marketDeltaPct: null })
+    expect(race.marketVolume).toBe(1000)
   })
 
   it('the top-of-search scope fact: readings of the last 7 days only, impression-weighted, campaign-level, dated both ends', async () => {
@@ -180,6 +187,7 @@ describe('B2 / C6 / B3 — the Keyword Tracker', () => {
     expect(byWeek.get(iso(W1))!.share).toBeCloseTo(0.03, 10)
     expect(byWeek.get(iso(W0))!.share).toBeCloseTo(0.02, 10)
 
+    expect((await inside(() => getKeywordTerm({ market: 'IT', keyword: 'storm jacket' }))).header).toMatchObject({ marketVolume: null })
     const gloves = await inside(() => getKeywordTerm({ market: 'IT', keyword: 'winter gloves' }))
     expect(gloves.header).toMatchObject({ share: null, searchQueryScore: 7, bestAsin: null })
     expect(gloves.asins.map((a) => a.share)).toEqual([null])

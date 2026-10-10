@@ -19,7 +19,7 @@ vi.mock('../../db.js', () => ({ default: {} }))
 
 const {
   resolveScope, chooseViewPeriod, projectCliff, nullsLast, KT_LOOKBACK_DAYS, SQP_COMPLETENESS_RATIO,
-  sqpShareFromCounts, ktTopOfSearchFact, likeForLikeMovement, KT_TOS_MAX_AGE_DAYS,
+  sqpShareFromCounts, sqpVolumeOf, ktTopOfSearchFact, likeForLikeMovement, KT_TOS_MAX_AGE_DAYS,
 } = await import('./keyword-tracker.service.js')
 const { weightedIS } = await import('./placement-grid.service.js')
 
@@ -330,6 +330,16 @@ describe('sqpShareFromCounts', () => {
 
   it('clamped to 0..1', () => {
     expect(sqpShareFromCounts(150, 100)).toBe(1)
+  })
+})
+
+describe('sqpVolumeOf — a stored 0 is "not reported" (review fix)', () => {
+  it('SQP only returns searched queries: 0, negative or missing is null; a real volume passes', () => {
+    expect(sqpVolumeOf(0)).toBeNull()
+    expect(sqpVolumeOf(null)).toBeNull()
+    expect(sqpVolumeOf(undefined)).toBeNull()
+    expect(sqpVolumeOf(-5)).toBeNull()
+    expect(sqpVolumeOf(1200)).toBe(1200)
   })
 })
 

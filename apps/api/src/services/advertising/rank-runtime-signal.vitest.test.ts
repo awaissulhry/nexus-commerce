@@ -11,7 +11,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../db.js', () => ({ default: {} }))
 
-const { topIsReadingOf, topLaneSignal, sqpLaneSignal, sharePctWords, TOP_IS_WINDOW_DAYS } = await import('./rank-runtime.service.js')
+const { topIsReadingOf, topLaneSignal, sqpLaneSignal, sharePctWords, everCoveredIn, TOP_IS_WINDOW_DAYS } = await import('./rank-runtime.service.js')
 const { weightedIS, mergeTopOfSearchReadings, tosSourceWords } = await import('./placement-grid.service.js')
 
 const D = (s: string) => new Date(`${s}T00:00:00.000Z`)
@@ -39,6 +39,17 @@ describe('topIsReadingOf', () => {
     ], weightedIS, tosSourceWords)!
     expect(r.source).toBe('Amazon\'s placement report (1 reading) and campaign report (1 reading)')
     expect(topLaneSignal('PLACEMENT_TOP', r, NOW).detail).toMatch(/ Source: Amazon's placement report \(1 reading\) and campaign report \(1 reading\)\.$/)
+  })
+})
+
+describe('everCoveredIn — Brand Analytics coverage in the campaign\'s own market (review fix)', () => {
+  it('another market\'s weekly rows never cover a campaign; its own do; no market known covers nothing', () => {
+    const seen = [{ marketplace: 'DE', asin: 'ASIN-A' }, { marketplace: 'IT', asin: 'ASIN-B' }, { marketplace: 'IT', asin: null }]
+    expect(everCoveredIn(seen, 'IT', ['ASIN-A'])).toBe(false)
+    expect(everCoveredIn(seen, 'IT', ['ASIN-A', 'ASIN-B'])).toBe(true)
+    expect(everCoveredIn(seen, 'DE', ['ASIN-A'])).toBe(true)
+    expect(everCoveredIn(seen, null, ['ASIN-B'])).toBe(false)
+    expect(everCoveredIn(seen, 'IT', [])).toBe(false)
   })
 })
 

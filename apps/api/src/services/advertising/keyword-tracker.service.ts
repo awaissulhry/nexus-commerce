@@ -236,6 +236,14 @@ export interface KtSqpRow {
 }
 
 /**
+ * Review fix (2026-10-10) — a query's weekly search volume as Amazon reported it: SQP only returns queries that were
+ * searched, so a stored 0 is "not reported" (the column is NOT NULL DEFAULT 0), never a real zero — null. Pure.
+ */
+export function sqpVolumeOf(v: number | null | undefined): number | null {
+  return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null
+}
+
+/**
  * B2 (2026-10-10) — an SQP share, computed from Amazon's COUNTS: our ASIN's count ÷ the query's total
  * for the week, clamped to 0..1. **Null when the total is not a positive number** — Amazon reported
  * nothing to divide by — never 0. The stored share columns (`impressionShare`, `clickShare`, …) are not
@@ -1047,7 +1055,8 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
     const bound = withShare.reduce((acc, r) => acc + r.impressionShare, 0)
     return {
       keyword: term, marketplace: market,
-      marketVolume: best.searchQueryVolume,
+      // Review fix — a stored 0 is "not reported" (sqpVolumeOf), never a volume of 0.
+      marketVolume: sqpVolumeOf(best.searchQueryVolume),
       searchQueryScore: best.searchQueryRank,
       impressionShare: bestShare,
       asinsCompeting: covered.size,
@@ -1066,9 +1075,9 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
         }
         : null,
       deltaPP: p && p.share != null && bestShare != null ? (bestShare - p.share) * 100 : null,
-      // Same term, same two periods as the Δ above. Null when the prior period recorded no volume,
-      // rather than a fabricated 0 % or an Infinity from dividing by nothing.
-      marketDeltaPct: p && p.volume > 0 && best.searchQueryVolume != null
+      // Same term, same two periods as the Δ above. Null when either period recorded no volume (a stored 0 is
+      // "not reported"), rather than a fabricated 0 % or −100 %, or an Infinity from dividing by nothing.
+      marketDeltaPct: p && p.volume > 0 && sqpVolumeOf(best.searchQueryVolume) != null
         ? ((best.searchQueryVolume - p.volume) / p.volume) * 100
         : null,
       deltaGapDays: p ? Math.round((+chosen.start! - +p.period) / 86_400_000) : null,

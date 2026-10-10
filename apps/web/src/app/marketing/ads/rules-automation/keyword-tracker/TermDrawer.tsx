@@ -138,7 +138,7 @@ export function TermDrawer({
             {/* KT.5's vocabulary verbatim — one way of saying "as of" on this page, not two */}
             <p>
               {market}
-              {h && <> · volume <b>{num(h.marketVolume ?? 0)}</b> · <i title={"Amazon's Search Query Score for this ASIN (lower = more searched among this ASIN's queries)"}>Search Query Score</i> <b>{h.searchQueryScore != null ? num(h.searchQueryScore) : '—'}</b></>}
+              {h && <> · volume <b>{h.marketVolume != null ? num(h.marketVolume) : '—'}</b> · <i title={"Amazon's Search Query Score for this ASIN (lower = more searched among this ASIN's queries)"}>Search Query Score</i> <b>{h.searchQueryScore != null ? num(h.searchQueryScore) : '—'}</b></>}
               {h && <> · best ASIN’s share <b>{pct(h.share)}</b>{h.shareBound != null && <> <i title={`Our ${h.asinsOnQuery} ASINs on this query sum to ${pct(h.shareBound)} — an UPPER BOUND, not a total: two of our ASINs can appear in one search, so the parts overlap.`}>≤{pct(h.shareBound)}</i></>}</>}
               {data?.period && <> · week of <b>{dayMonth(data.period)}</b> ({data.periodAgeDays}d old)</>}
             </p>

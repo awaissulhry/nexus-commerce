@@ -149,6 +149,16 @@ const nowInTz = (tz: string, at: Date): { day: number; hour: number } => {
 /** Whole days since a date (a report date is midnight UTC): read on 10 Oct at noon, a reading of 8 Oct is 2 days old. */
 const daysSince = (now: Date, d: Date) => Math.max(0, Math.floor((now.getTime() - d.getTime()) / 86_400_000))
 
+/**
+ * Review fix (2026-10-10) — whether any of a campaign's ASINs was ever measured by Brand Analytics in ITS market (`seen`:
+ * the market × ASIN pairs of weekly SQP rows). Another market's rows never cover it; no market known covers nothing. Pure.
+ */
+export function everCoveredIn(seen: ReadonlyArray<{ marketplace: string; asin: string | null }>, marketplace: string | null, asins: readonly string[]): boolean {
+  if (!marketplace || !asins.length) return false
+  const mine = new Set(asins)
+  return seen.some((r) => r.marketplace === marketplace && !!r.asin && mine.has(r.asin))
+}
+
 /** B4 — how far back the Top-of-Search lane reads a campaign's own daily shares. */
 export const TOP_IS_WINDOW_DAYS = 30
 
@@ -336,11 +346,13 @@ export async function getRankRuntime(): Promise<RankRuntimePayload> {
       asinsByCampaign.set(cid, list)
     }
   }
-  const everCovered = new Set<string>()
+  // Review fix — "ever covered" per MARKET and on weekly rows: an ASIN Brand Analytics measured in another market, or only in
+  // a MONTH / QUARTER report, does not cover this campaign's weekly Rest-of-search signal (everCoveredIn).
+  let everSeen: Array<{ marketplace: string; asin: string | null }> = []
   const allAsins = [...new Set([...asinsByCampaign.values()].flat())]
   if (allAsins.length) {
-    const seen = await prisma.searchQueryPerformance.groupBy({ by: ['asin'], where: { asin: { in: allAsins } }, _count: { _all: true } })
-    for (const r of seen) if (r._count._all > 0) everCovered.add(r.asin)
+    const seen = await prisma.searchQueryPerformance.groupBy({ by: ['marketplace', 'asin'], where: { asin: { in: allAsins }, reportPeriod: 'WEEK' }, _count: { _all: true } })
+    everSeen = seen.filter((r) => r._count._all > 0).map((r) => ({ marketplace: r.marketplace, asin: r.asin }))
   }
   async function signalFor(runtime: RdCampaignRuntime, marketplace: string | null): Promise<RdSignal> {
     const lane = runtime.placement
@@ -353,9 +365,9 @@ export async function getRankRuntime(): Promise<RankRuntimePayload> {
     if (lane === 'PLACEMENT_TOP') return topLaneSignal(lane, topIsByCampaign.get(runtime.campaignId) ?? null, dbNow)
     // Rest of search — SQP, which is the lane with the onboarding problem.
     const asins = asinsByCampaign.get(runtime.campaignId) ?? []
-    const covered = asins.some((a) => everCovered.has(a))
+    const covered = everCoveredIn(everSeen, marketplace, asins)
     if (!covered) {
-      return { kind: 'no-coverage', lane, valuePct: null, ageDays: null, rows: 0, contributors: { withData: 0, total: asins.length }, freshness: 'never', staleReason: null, label: 'no coverage', detail: `None of this campaign's ${asins.length} advertised ASIN${asins.length === 1 ? ' has' : 's have'} ever appeared in Brand Analytics. That is an onboarding problem, not a stale feed — no recency guard would fix it.` }
+      return { kind: 'no-coverage', lane, valuePct: null, ageDays: null, rows: 0, contributors: { withData: 0, total: asins.length }, freshness: 'never', staleReason: null, label: 'no coverage', detail: `None of this campaign's ${asins.length} advertised ASIN${asins.length === 1 ? ' has' : 's have'} ever appeared in Brand Analytics' weekly report for ${marketplace ?? 'its market'}. That is an onboarding problem, not a stale feed — no recency guard would fix it.` }
     }
     // B4 — the family share, its week, its age and its basis all from ONE reading (`sqpShareForAsins`, the
     // SQP programme's reader), so the label cannot pair a share with another week's age or basis.

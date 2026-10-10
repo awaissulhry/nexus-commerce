@@ -27,7 +27,7 @@
  *     `isNegative` and is filtered explicitly.
  */
 import prisma from '../../db.js'
-import { chooseViewPeriod, periodCoverageByMarket, resolveScope, sqpShareFromCounts, KT_COVERAGE_FLOOR, type KtScopeGraph } from './keyword-tracker.service.js'
+import { chooseViewPeriod, periodCoverageByMarket, resolveScope, sqpShareFromCounts, sqpVolumeOf, KT_COVERAGE_FLOOR, type KtScopeGraph } from './keyword-tracker.service.js'
 
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim()
 const iso = (d: Date | null | undefined) => (d ? new Date(d).toISOString().slice(0, 10) : null)
@@ -316,7 +316,8 @@ export async function getKeywordTerm(q: KeywordTermQuery) {
     periodTruncated: chosen.truncated,
     header: best
       ? {
-        marketVolume: best.searchQueryVolume,
+        // Review fix — a stored 0 is "not reported" (SQP only returns searched queries): null, never 0.
+        marketVolume: sqpVolumeOf(best.searchQueryVolume),
         /**
          * C6 — Amazon's Search Query Score for this ASIN (lower = more searched among this ASIN's queries),
          * for the best ASIN. Not a market rank, not our position. (Was `marketRank`.)

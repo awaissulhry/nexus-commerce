@@ -468,14 +468,15 @@ export function ShareOfVoiceClient() {
       tip: 'Brand Analytics search-query volume: how many times the WHOLE marketplace searched this term in the week this grid renders. Not our impressions.',
       render: (r) => (r.marketVolume == null ? <span className="h10-sov-nd">—</span> : num(r.marketVolume)),
       sortValue: (r) => r.marketVolume ?? -1,
-      filterValue: (r) => r.marketVolume ?? 0,
+      // NaN = not reported: the grid's filter never lets it match a range (no volume is not a volume of 0).
+      filterValue: (r) => (r.marketVolume != null ? r.marketVolume : Number.NaN),
     },
     {
       key: 'rank', label: 'Search Query Score',
       tip: "Amazon's Search Query Score is per ASIN (lower = more searched among that ASIN's queries); Nexus shows the lowest among our ASINs on this query. Not a market rank, and not our position in the results, which no Amazon API returns.",
       render: (r) => (r.bestSearchQueryScore == null ? <span className="h10-sov-nd">—</span> : num(r.bestSearchQueryScore)),
       sortValue: (r) => r.bestSearchQueryScore ?? Number.MAX_SAFE_INTEGER,
-      filterValue: (r) => r.bestSearchQueryScore ?? 0,
+      filterValue: (r) => (r.bestSearchQueryScore != null ? r.bestSearchQueryScore : Number.NaN),
     },
     {
       key: 'share', label: 'Market impression share',
