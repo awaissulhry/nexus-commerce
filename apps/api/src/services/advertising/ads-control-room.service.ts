@@ -601,7 +601,7 @@ export async function getEngineLevers(): Promise<{ levers: EngineLever[]; global
   } else {
     for (const b of brainRows) {
       levers.push(mk(
-        b.def.key, b.def.name, b.def.what, b.def.cron, b.def.schedule, b.env.mode, b.env.why,
+        b.def.key, b.def.name, b.def.what, b.healthCron, b.def.schedule, b.env.mode, b.env.why,
         b.rows.total ? `${b.rows.auto} of ${b.rows.total} ${b.def.key === 'bid-brain' ? 'LIVE / HELD campaigns' : 'enrolled products'} acting now` : null,
         b.def.haltBehaviour,
         { writesOnOwn: b.def.writesOnOwn, rows: b.def.writesOnOwn ? b.rows : null, effective: { mode: b.effective.mode, reason: b.effective.why }, start: BRAIN_START, family: 'brain' },

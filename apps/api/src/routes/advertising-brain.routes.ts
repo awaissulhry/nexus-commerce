@@ -147,7 +147,11 @@ const advertisingBrainRoutes: FastifyPluginAsync = async (fastify) => {
     if ('error' in out) return reply.code(readRefusalStatus(out.error)).send({ error: out.error })
     let see: ((tool: string, value: unknown) => unknown | null) | null = null
     try { see = storedOutputOf(await requestPrincipal(request)) } catch (error) { if (!(error instanceof ToolAccessError)) throw error }
-    return withoutHiddenMoney(request, { ...out.data, requests: out.data.requests.map((r) => ({ ...r, preview: see ? see(r.tool, r.preview) : null })) }, BRAIN_VIEW_MONEY)
+    // The summary is written from the stored preview, so it goes only where the preview may go (money in its words).
+    return withoutHiddenMoney(request, { ...out.data, requests: out.data.requests.map((r) => {
+      const preview = see ? see(r.tool, r.preview) : null
+      return { ...r, preview, summary: preview === null ? null : r.summary }
+    }) }, BRAIN_VIEW_MONEY)
   })
 
   /**
@@ -165,7 +169,7 @@ const advertisingBrainRoutes: FastifyPluginAsync = async (fastify) => {
     const body = bodyOf(request)
     // Only the tool's own arguments are asked for and stored: `approve` and `code` never are.
     const shape = (def.input as unknown as { shape?: Record<string, unknown> }).shape ?? {}
-    const args = Object.fromEntries(Object.entries(body).filter(([key]) => key in shape && key !== 'approve' && key !== 'code'))
+    const args = Object.fromEntries(Object.entries(body).filter(([key]) => Object.prototype.hasOwnProperty.call(shape, key) && key !== 'approve' && key !== 'code'))
     const asked = await requestApproval(tool, args, person)
     if (!asked.ok || asked.mode !== 'queued' || !asked.approvalId) return reply.code(400).send({ error: asked.error ?? `Not queued: ${tool} answered without a request.` })
     const stepUp = (asked.preview as { stepUp?: unknown } | undefined)?.stepUp ?? null

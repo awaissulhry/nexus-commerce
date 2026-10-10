@@ -50,8 +50,13 @@ export const BRAIN_WRITERS: readonly BrainWriterDef[] = [
   { key: 'brain-cycle', name: 'Brain product cycle', what: 'Runs each enrolled product\'s levers in order once a settled data day (the writers above, each under its own row)', levers: [], cron: 'ads-brain-cycle', schedule: 'hourly at :55', writesOnOwn: false, haltBehaviour: 'exempt', runs: ['brain/cycle-run.ts'] },
 ]
 
+/** The writers whose step the product cycle runs while it is on: their own cron then records nothing (jobs return early). */
+const CYCLE_STEPS = new Set(['brain-money', 'brain-state', 'brain-negatives', 'brain-harvest', 'brain-hours', 'brain-structure'])
+
 export interface BrainEngineFact {
   def: BrainWriterDef
+  /** The cron whose runs show this row's health: the product cycle's for a step it runs while it is on. */
+  healthCron: string
   env: { mode: Mode; why: string }
   effective: { mode: Mode; why: string }
   rows: { total: number; auto: number }
@@ -132,6 +137,7 @@ export async function brainEngineFacts(now: Date = new Date()): Promise<BrainEng
     const bounded = lower(env.mode, effective.mode)
     return {
       def, env, rows,
+      healthCron: rt.cycleOn && CYCLE_STEPS.has(def.key) ? 'ads-brain-cycle' : def.cron,
       effective: bounded === effective.mode ? effective : { mode: bounded, why: `${env.why} (${effective.why})` },
     }
   })
