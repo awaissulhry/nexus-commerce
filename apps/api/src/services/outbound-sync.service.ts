@@ -891,7 +891,7 @@ export class OutboundSyncService {
     if (!productId && !itemId) return [];
     const region = queueItem.targetRegion ?? queueItem.payload?.market ?? queueItem.payload?.marketplace;
     const markets = region === 'GB' || region === 'UK' ? ['GB', 'UK'] : region ? [region] : null;
-    return prisma.channelListing.findMany({ where: {
+    const listings = await prisma.channelListing.findMany({ where: {
       channel,
       ...(itemId ? { externalListingId: itemId } : { productId }),
       ...(markets ? { marketplace: { in: markets } } : {}),
@@ -899,6 +899,13 @@ export class OutboundSyncService {
       // A shared ItemID writes every member: any held coordinate must hold it.
       ...(!itemId && queueItem.payload?.aliasKey !== undefined ? { aliasKey: queueItem.payload.aliasKey } : {}),
     } });
+    // 2026-10-12 (alias stock) — a sync hold is one row's, as the Matrix holds one product × coordinate and the row lane
+    // reads only its own listing. On a shared ItemID another row's sync hold — the family's parent row included, which
+    // no Matrix cell shows — does not hold this product's quantity (found: two alias parent rows left held by the link
+    // kept red and yellow at 10 on eBay while the pool held 0). Every other lock (selling paused, an intent, ended)
+    // still holds the whole item.
+    if (!itemId || !productId) return listings;
+    return listings.map((listing) => listing.productId === productId ? listing : { ...listing, syncPaused: false });
   }
 
   /**
