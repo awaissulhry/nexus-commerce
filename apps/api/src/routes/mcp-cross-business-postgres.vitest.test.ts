@@ -228,6 +228,13 @@ interface Seeded {
   brainDecisionId: string
   /** AB-11 — an ads brain harvest asked of a person, into the ad group (what apply-brain-harvest writes). */
   harvestId: string
+  /** Keyword Harvest page (HMCP) — a person's harvest that ran (harvest-history reads it by its id). */
+  harvestDoneId: string
+  /** HMCP — a builder harvest rule (harvest-rules, set-harvest-rules). */
+  harvestRuleId: string
+  /** HMCP — an automatic ad group of the product's own campaign in a real Amazon market (IT): a source of the Keyword
+   *  Harvest page's Sources view (harvest-sources, set-harvest-sources) and the product's harvest place (harvest-destinations). */
+  harvestSourceAdGroupId: string
   /** Health watchdog — one stored run of the daily platform checks (what platform-health-checks reads). */
   healthRunId: string
 }
@@ -487,6 +494,26 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
         decidedAt: new Date(), checkedAt: new Date(), changedAt: new Date(),
       },
     })
+    // Keyword Harvest page (HMCP) — a person's harvest that ran (harvest-history), a builder harvest rule (the Rules view), and
+    // the product's own automatic campaign in a real Amazon market (IT), the Sources view's source and its harvest place.
+    const harvestDone = await db.adsBrainHarvest.create({
+      data: {
+        productId: product.id, marketplace: 'IT', term: `${canary}-harvested`.toLowerCase(), status: 'DONE', level: 'PROPOSE', destinationKind: 'EXISTING', destHow: 'chosen',
+        destCampaignId: campaign.id, destAdGroupId: adGroup.id, bidCents: 40, sources: [], why: `${canary}-HARVESTED-WHY`, evidence: {}, digest: 'd', runId: `${mark}-HARVESTED-${RUN}`,
+        decidedAt: new Date(), checkedAt: new Date(), changedAt: new Date(), actorKind: 'PERSON',
+      } as never,
+    })
+    const harvestRule = await db.automationRule.create({
+      data: {
+        domain: 'advertising', name: `${canary}-HARVEST-RULE`, trigger: 'SCHEDULE', enabled: false, dryRun: true,
+        actions: [{ type: 'keyword-harvesting', mappings: [{ groups: [] }] }], conditions: [{ match: 'all', conditions: [{ metric: 'Orders', op: 'gte', value: '2' }] }],
+      } as never,
+    })
+    const harvestCampaign = await db.campaign.create({
+      data: { name: `${canary}-HARVEST-CAMPAIGN`, type: 'SP', adProduct: 'SPONSORED_PRODUCTS', targetingType: 'AUTO', dailyBudget: '10.00', startDate: new Date(), marketplace: 'IT', externalCampaignId: `${mark}-HV-CMP-${RUN}` } as never,
+    })
+    const harvestSource = await db.adGroup.create({ data: { campaignId: harvestCampaign.id, name: `${canary}-HARVEST-SOURCE`, externalAdGroupId: `${mark}-HV-AG-${RUN}` } })
+    await db.adProductAd.create({ data: { adGroupId: harvestSource.id, productId: product.id, sku } })
     // BB-4 — the shadow bid brain's newest decision on the target, in a market the brain runs in (IT), so a read with no
     // scope (every shadow market) would find it too: bid-brain names the target's keyword (the canary) and its why.
     const brainDecision = await db.bidBrainDecision.create({
@@ -758,6 +785,7 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
         matrixOp.id, photo.id,
         sourcePreset.id,
         adsRun.id,
+        harvestDone.id, harvestRule.id, harvestCampaign.id, harvestSource.id, harvestCampaign.externalCampaignId!, harvestSource.externalAdGroupId!,
         queuedWrite.id, buildRun.id,
         portfolio.id, portfolio.externalPortfolioId,
         judgement.id, brainDecision.id, brainDecision.runId, healthRunId,
@@ -824,6 +852,9 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
       judgementId: judgement.id,
       brainDecisionId: brainDecision.id,
       harvestId: harvest.id,
+      harvestDoneId: harvestDone.id,
+      harvestRuleId: harvestRule.id,
+      harvestSourceAdGroupId: harvestSource.id,
       healthRunId,
     }
   })
@@ -988,6 +1019,8 @@ const B_VALUES: Record<string, () => unknown> = {
   judgementId: () => seeded.b.judgementId,
   // AB-11 — apply-brain-harvest names an ads brain harvest.
   harvestId: () => seeded.b.harvestId,
+  // HMCP — a harvest candidate: a term of B's product in a real Amazon market (the engine reads IT, not the traceable code).
+  candidateId: () => `IT|${seeded.b.productId}|mcp8 probe`,
   // A14 — the eBay change tools name the eBay campaign, one of its ad groups and an eBay item id.
   ebayCampaignId: () => seeded.b.ebayCampaignId,
   ebayAdGroupId: () => seeded.b.ebayAdGroupId,
@@ -1169,7 +1202,18 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
   'add-ad-targets': { keywords: [{ text: 'mcp8 probe', matchType: 'EXACT', bidCents: 50 }] },
   'add-negative-targets': { keywords: [{ text: 'mcp8 probe' }], campaignIds: undefined, negatives: undefined },
   get 'retire-negatives'() { return { negativeIds: [seeded.b.targetId], negatives: undefined } },
-  get 'harvest-search-term'() { return { sourceAdGroupId: seeded.b.adGroupId, destAdGroupId: undefined, changeSetId: undefined, keywordId: undefined, negativeId: undefined } },
+  get 'harvest-search-term'() { return { sourceAdGroupId: seeded.b.adGroupId, candidateId: undefined, destAdGroupId: undefined, changeSetId: undefined, keywordId: undefined, negativeId: undefined } },
+  // Keyword Harvest page (HMCP) — the engine's tools in a real Amazon market (IT): the change set's undo of B's harvest
+  // (op undo names the record, whose term is the canary); the history of B's harvest that ran, by its id; a skip of a term
+  // of B's product; the Rules view on B's builder harvest rule (its history, its mode); the Sources view of IT, and a pause
+  // of B's source there.
+  'apply-harvest': { op: 'undo', items: undefined, newCampaigns: undefined, newPortfolios: undefined, planHash: undefined },
+  get 'harvest-history'() { return { harvestIds: [seeded.b.harvestDoneId] } },
+  get 'skip-harvest-terms'() { return { op: 'skip', ids: [`IT|${seeded.b.productId}|mcp8 probe`], period: '7d' } },
+  get 'harvest-rules'() { return { view: 'history', id: seeded.b.harvestRuleId, market: undefined, ruleId: undefined, actions: undefined, scopeMarketplace: undefined, scopePortfolioId: undefined, scopeCampaignId: undefined, scopeProductId: undefined } },
+  get 'set-harvest-rules'() { return { op: 'mode', ids: [seeded.b.harvestRuleId], mode: 'WATCH', rules: undefined } },
+  'harvest-sources': { market: 'IT' },
+  get 'set-harvest-sources'() { return { op: 'pause', market: 'IT', adGroupIds: [seeded.b.harvestSourceAdGroupId], ruleId: undefined } },
   'set-harvest-destination': { scope: 'campaign' },
   // B-1 — a copy reads its source campaign in the market it runs in (B's own); no portfolio (the loop would name an id).
   'replicate-ad-structure': { get sourceMarket() { return seeded.b.market }, portfolioId: undefined },
@@ -1796,7 +1840,7 @@ describe.skipIf(!concurrentDatabaseUrl())('MCP.8 — a Claude connection for one
           }
         }
       })
-      expect(problems).toEqual([])
+      expect(problems, problems.join("\n")).toEqual([])
       // Every tool offered was probed from A, read or change — by name, not by count: a tool the builder could not aim at
       // B (named in the test above) is named here too, so the gap reads as the tool, never as "160 to be 161".
       const unprobed = offered.filter((tool) => !probed.has(tool.name)).map((tool) => `${tool.name} (${tool.readOnly ? 'read' : 'change'})`)

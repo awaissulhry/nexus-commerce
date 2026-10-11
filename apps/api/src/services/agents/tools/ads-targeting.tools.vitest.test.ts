@@ -523,7 +523,7 @@ describe('add-ad-targets', () => {
 describe('harvest-search-term (HMCP: a door onto the harvest engine; ads-harvest-postgres.vitest.test.ts runs it end to end)', () => {
   it('names the term by where it ran, or by its candidateId; a term with no place to name is refused, not queued', async () => {
     expect((await preview('harvest-search-term', { query: 'warm jacket' })).error).toMatch(/^Not queued: name the term: candidateId \(harvest-candidates\), or query and sourceAdGroupId/)
-    expect((await preview('harvest-search-term', { query: 'warm jacket', sourceAdGroupId: 'nope' })).error).toMatch(/^Not queued: ad group nope is not an ad group of this business/)
+    expect((await preview('harvest-search-term', { query: 'warm jacket', sourceAdGroupId: 'nope' })).error).toMatch(/^Not queued: ad group nope was not found in this business/)
     expect((await preview('harvest-search-term', { candidateId: 'not a candidate' })).error).toMatch(/is not a candidate id/)
     expect((await preview('harvest-search-term', { op: 'undo' })).error).toMatch(/^Name the harvest to put back/)
   })

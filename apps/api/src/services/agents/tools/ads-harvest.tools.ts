@@ -64,6 +64,9 @@ const noMarkets = async () => 'error' in (await marketsOf('all'))
 /** A product named by id must be a live product of this business (a deleted one is not found, MCP.12). */
 const productRefusal = async (productId: string | undefined): Promise<ToolResult | null> =>
   productId && !(await isLiveProduct(productId)) ? { ok: false, error: PRODUCT_NOT_FOUND } : null
+/** The product a read was asked about, named in an answer that has no rows for it (its id, SKU and name). */
+const productNamed = async (productId: string | undefined) =>
+  productId ? { product: await prisma.product.findFirst({ where: { id: productId, deletedAt: null }, select: { id: true, sku: true, name: true } }) } : {}
 const STATES = ['all', ...ALL_STATES] as unknown as [string, ...string[]]
 const SORTS = /^-?(orders|acos|spend|clicks|cpc|term|state|product)$/
 /** The most rows a page of a harvest read holds (the page itself may ask for more). */
@@ -134,7 +137,7 @@ const harvestCandidatesTool: AgentTool = {
     const a = args as CandidatesArgs
     const gone = await productRefusal(a.productId)
     if (gone) return gone
-    if (await noMarkets()) return { ok: true, data: a.idsOnly ? { ids: [], total: 0, note: NO_MARKET } : { markets: [], rows: [], total: 0, note: NO_MARKET } }
+    if (await noMarkets()) return { ok: true, data: { ...(a.idsOnly ? { ids: [], total: 0 } : { markets: [], rows: [], total: 0 }), note: NO_MARKET, ...(await productNamed(a.productId)) } }
     const q = queryOf(a)
     if (a.idsOnly) {
       const got = await harvestCandidateIds(q)
@@ -232,8 +235,10 @@ const harvestHistoryTool: AgentTool = {
     const a = args as HistoryArgs
     const gone = await productRefusal(a.productId)
     if (gone) return gone
-    if (await noMarkets()) return { ok: true, data: { markets: [], rows: [], total: 0, note: NO_MARKET } }
-    const markets = await marketsOf(a.market ?? 'all')
+    // Harvests named by id are read whatever their market (the engine's own id read).
+    const named = !!a.harvestIds?.length
+    if (!named && (await noMarkets())) return { ok: true, data: { markets: [], rows: [], total: 0, note: NO_MARKET, ...(await productNamed(a.productId)) } }
+    const markets = named ? [] : await marketsOf(a.market ?? 'all')
     if ('error' in markets) return { ok: false, error: markets.error }
     const got = await harvestHistory({ market: markets, productId: a.productId ?? null, days: a.days, actor: a.actor ?? null, verdict: a.verdict ?? null, ids: a.harvestIds ?? null })
     if ('error' in got) return { ok: false, error: got.error }
@@ -317,12 +322,16 @@ async function decideSkip(raw: Record<string, unknown>): Promise<ToolResult> {
   if (!changing.length) return { ok: false, error: `Nothing to change: ${left.slice(0, 5).map((l) => `${termWords(l.id)} ${l.why}`).join('; ')}.` }
   // The engine's own check (M8): every product the ids name is a live product of this business, or nothing changes.
   const unknown = await unknownProducts(changing)
-  if (unknown.length) return { ok: false, error: `Not queued: product ${unknown[0]} was not found in this business: nothing is skipped.` }
+  // Said without echoing the id (a candidate id holds it): "not found" is all this business may learn of another's product.
+  if (unknown.length) return { ok: false, error: `Not queued: ${unknown.length === 1 ? 'a product it names was' : `${unknown.length} products it names were`} not found in this business: nothing is skipped.` }
   changing.sort()
   const period = a.op === 'skip' ? a.period! : null
   const to = a.op === 'skip' ? (period === 'forever' ? 'skipped for good' : `skipped ${PERIODS[period!]} days`) : 'shown'
   const changes: Record<string, { from: unknown; to: unknown }> = {}
-  for (const id of changing.slice(0, 20)) changes[termWords(id)] = { from: stateWords(states.get(id) ?? null), to }
+  // Each term named with its product (the approver reads which product's term it hides).
+  const products = new Map((await prisma.product.findMany({ where: { id: { in: [...new Set(changing.map((id) => parseCandidateId(id)?.productId).filter((x): x is string => !!x))] } }, select: { id: true, sku: true } })).map((x) => [x.id, x.sku]))
+  const label = (id: string) => { const c = parseCandidateId(id); const sku = c ? products.get(c.productId) : null; return sku ? `${termWords(id)} · ${sku}` : termWords(id) }
+  for (const id of changing.slice(0, 20)) changes[label(id)] = { from: stateWords(states.get(id) ?? null), to }
   const preview: SkipPreview & Record<string, unknown> = {
     action: HARVEST_READ_TOOLS.skip,
     op: a.op,

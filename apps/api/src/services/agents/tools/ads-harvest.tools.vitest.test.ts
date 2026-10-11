@@ -70,6 +70,16 @@ describe('HMCP round 2 — the Rules and Sources views', () => {
   })
 })
 
+describe('MCP.8 — a harvest tool aimed at another business\'s rows says "not found", never an input error, and never echoes the id', () => {
+  it('the refusals name no id the caller did not send whole', async () => {
+    const src = (await import('node:fs')).readFileSync(new URL('./ads-harvest.tools.ts', import.meta.url), 'utf8')
+    expect(src).toMatch(/a product it names was' : `\$\{unknown.length\} products it names were`\} not found in this business/)
+    const rules = (await import('node:fs')).readFileSync(new URL('./ads-harvest-rules.tools.ts', import.meta.url), 'utf8')
+    expect(rules).toMatch(/why: 'not found in this business \(no harvest rule with this id\)'/)
+    expect(rules).toMatch(/why: 'not found in this business' \}\)/)
+  })
+})
+
 describe('HMCP review fixes', () => {
   it('L2 — a graduation is re-checked on the engine plan it was approved on (basis), as harvest-search-term', async () => {
     const { MATERIAL_PREVIEW_FIELDS } = await import('../../agent-fleet/approval-inbox.service.js')
