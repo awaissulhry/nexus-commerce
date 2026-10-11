@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { MATRIX_CELL_KINDS, type MatrixCells } from '../matrix/contract'
-import { MATRIX_FULFILMENT_INLINE, MATRIX_NO_LISTING, MATRIX_NOT_A_COLUMN, MATRIX_UNCHANGED, matrixWrite } from './sheetWriter'
+import { MATRIX_FULFILMENT_INLINE, MATRIX_NO_LISTING, MATRIX_NOT_A_COLUMN, MATRIX_SALE_DATES_NOT_PASTED, MATRIX_UNCHANGED, matrixValueRefusal, matrixWrite } from './sheetWriter'
 
 function cellsOf(over: Partial<MatrixCells> = {}): MatrixCells {
   return {
@@ -83,5 +83,22 @@ describe('matrixWrite — what a Matrix cell edit sends, and why it sometimes se
     expect(matrixWrite(col('price'), cellsOf(), 105, -5)).toEqual({ send: false, reason: 'A price is zero or more' })
     expect(matrixWrite(col('syncMode'), cellsOf(), 'FOLLOW', 'Paused')).toEqual({ send: false, reason: 'Mode is Follow or Pinned' })
     expect(matrixWrite(col('salePrice'), cellsOf(), null, 89)).toEqual({ send: false, reason: 'A sale is a price, zero or more, with an optional window' })
+  })
+
+  it('a pasted price as the Matrix copies it ("€99.00") is a price write', () => {
+    expect(matrixWrite(col('price'), cellsOf(), 105, '€99.00')).toEqual({ send: true, cell: { rowId: 'r1', coordinateKey: 'AMAZON:IT', cell: 'price', value: 99, expectedVersion: 7 } })
+  })
+
+  it('matrixValueRefusal: null when the cell can hold the value, else the sentence a refused paste says', () => {
+    expect(matrixValueRefusal('price', '€105.00')).toBeNull()
+    expect(matrixValueRefusal('syncQty', '29')).toBeNull()
+    expect(matrixValueRefusal('salePrice', '—')).toBeNull()
+    expect(matrixValueRefusal('price', 'abc')).toBe('A price is zero or more')
+    expect(matrixValueRefusal('syncQty', null)).toBe('A quantity is a whole number, zero or more')
+    expect(matrixValueRefusal('price', '1,050')).toBe('"1,050" can be read two ways: write 1050 or 1.05')
+    expect(matrixValueRefusal('syncQty', '2.000')).toBe('"2.000" can be read two ways: write 2000 or 2')
+    expect(matrixValueRefusal('salePrice', '€89.00 · 12 Sep → —')).toBe(MATRIX_SALE_DATES_NOT_PASTED)
+    expect(matrixValueRefusal('syncMode', 'Paused')).toBe('Mode is Follow or Pinned')
+    expect(matrixValueRefusal('notAKind', 'x')).toBeNull()
   })
 })

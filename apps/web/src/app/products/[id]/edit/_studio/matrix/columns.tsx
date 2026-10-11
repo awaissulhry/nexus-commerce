@@ -457,6 +457,8 @@ export interface BuildMatrixColumnsOptions {
   rowMenuRef: MutableRefObject<(row: StudioRow) => MenuItemDef[]>
   /** The fulfilment select's CHOICE — the engine's setter routes it here and writes nothing (§3.4). */
   onPickFulfilment: (method: FulfilmentMethod, params: ICellRendererParams) => void
+  /** A typed, pasted or filled value a cell cannot hold — the engine's setter kept the old one; the page says why. */
+  onValueRefused?: (reason: string) => void
   rowsRef: MutableRefObject<StudioRow[]>
   /** The parent's chevron (`MatrixIdentity`): are the variants folded away, and the toggle. */
   variantsCollapsedRef?: MutableRefObject<boolean>
@@ -632,6 +634,7 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
           tracker,
           rowIdOf: rowId,
           onPickFulfilment,
+          onValueRefused: opts.onValueRefused,
           /* The app's copy table, verbatim (Appendix A) — the engine asks, the page supplies. */
           copy: MATRIX_COPY,
         }

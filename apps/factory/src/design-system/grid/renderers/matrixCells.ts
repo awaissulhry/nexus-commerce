@@ -322,10 +322,12 @@ export function matrixPushFailedLine(f: PushFailure, lane: 'stock' | 'price', no
   return `${f.reason} · last ${lane} push failed${where}${ago ? ` ${ago} ago` : ''}${f.final ? '' : ' · it is tried again by itself'}`
 }
 
+/** The text between a sale's price and its window — a paste reads it to know a copied sale carries dates. */
+export const MATRIX_SALE_WINDOW_MARK = ' · '
 /** `€89.00 · 12 Sep → 30 Sep` (Appendix A). An open-ended window prints only the side it has. */
 export function matrixSaleText(sale: SaleCell | null | undefined, currency: string): string {
   if (!sale || sale.value == null) return MATRIX_DASH
-  const window = sale.start || sale.end ? ` · ${matrixDay(sale.start)} → ${matrixDay(sale.end)}` : ''
+  const window = sale.start || sale.end ? `${MATRIX_SALE_WINDOW_MARK}${matrixDay(sale.start)} → ${matrixDay(sale.end)}` : ''
   return `${matrixMoney(sale.value, currency)}${window}`
 }
 
@@ -819,24 +821,61 @@ export function isSaleEditorValue(v: unknown): v is SaleEditorValue {
   return !!v && typeof v === 'object' && 'value' in v && 'start' in v && 'end' in v
 }
 
+/** One currency mark before or after a number — `€105.00`, `105,00 €`, `EUR 105` — taken off. */
+const withoutCurrency = (text: string): string => text.trim().replace(/^(?:[A-Z]{3}|[€£$])\s*/, '').replace(/\s*(?:[A-Z]{3}|[€£$])$/, '')
+
+/** `1,050` / `1.050`: ONE separator before exactly three digits — 1050 in one convention, 1.05 in the other. */
+export function matrixNumberTextAmbiguous(text: string): boolean {
+  return /^[+-]?[1-9]\d{0,2}[.,]\d{3}$/.test(withoutCurrency(text))
+}
+
+/**
+ * A number as people copy it: `105`, `105.50`, `105,50`, `€105.00` (what a Matrix Price cell copies), `1,050.00`,
+ * `1.050,00 €`, `EUR 105`, `1 050`. One currency mark before or after; spaces and `'` group thousands; with both `.` and
+ * `,` the last one is the decimal point; one kind repeated groups thousands. `undefined` when it is no number — and when it
+ * reads two ways (`matrixNumberTextAmbiguous`): a price 1000 times off must never be a guess.
+ */
+export function matrixNumberText(text: string): number | undefined {
+  let t = withoutCurrency(text).replace(/[\s\u00a0\u202f']/g, '')
+  if (!/^[+-]?\d[\d.,]*$/.test(t) || matrixNumberTextAmbiguous(t)) return undefined
+  const dot = t.lastIndexOf('.')
+  const comma = t.lastIndexOf(',')
+  if (dot >= 0 && comma >= 0) {
+    const [group, decimal] = dot > comma ? [',', '.'] : ['.', ',']
+    const whole = t.slice(0, t.lastIndexOf(decimal))
+    const fraction = t.slice(t.lastIndexOf(decimal) + 1)
+    if (!new RegExp(`^[+-]?\\d{1,3}(\\${group}\\d{3})*$`).test(whole) || !/^\d+$/.test(fraction)) return undefined
+    t = `${whole.split(group).join('')}.${fraction}`
+  } else if (dot >= 0 || comma >= 0) {
+    const sep = dot >= 0 ? '.' : ','
+    if (t.indexOf(sep) !== t.lastIndexOf(sep)) {
+      if (!new RegExp(`^[+-]?\\d{1,3}(\\${sep}\\d{3})+$`).test(t)) return undefined
+      t = t.split(sep).join('')
+    } else {
+      t = t.replace(sep, '.')
+    }
+  }
+  return /^[+-]?\d+(\.\d+)?$/.test(t) ? Number(t) : undefined
+}
+
 /**
  * Coerce what an editor, a paste or a fill handed the column into the value the kind stores, or
  * `undefined` when it cannot be stored — the setter then refuses (returns `false`) and AG keeps
  * the old value, which is the honest answer to `"abc"` in a quantity cell.
  *
- * Numbers arrive as numbers from AG's number editor and as STRINGS from a paste (`"5"`); both are
- * accepted. `''` on a number kind clears nothing here — a quantity has no "empty", so it refuses.
- * `syncQty` and `syncBuffer` are whole units; `price` keeps two decimals of intent as typed.
+ * Numbers arrive as numbers from AG's number editor and as STRINGS from a paste (`"5"`, `"€105.00"`, `"105,50"` —
+ * `matrixNumberText`); both are accepted. `''` on a number kind clears nothing here — a quantity has no "empty", so it
+ * refuses. `syncQty` and `syncBuffer` are whole units; `price` keeps two decimals of intent as typed.
  */
 export function matrixCoerceValue(kind: MatrixCellKind, value: unknown): unknown {
   switch (kind) {
     case 'syncQty':
     case 'syncBuffer': {
-      const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN
+      const n = typeof value === 'number' ? value : typeof value === 'string' ? matrixNumberText(value) ?? NaN : NaN
       return Number.isInteger(n) && n >= 0 ? n : undefined
     }
     case 'price': {
-      const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN
+      const n = typeof value === 'number' ? value : typeof value === 'string' ? matrixNumberText(value) ?? NaN : NaN
       return Number.isFinite(n) && n >= 0 ? n : undefined
     }
     case 'syncMode': {
@@ -850,6 +889,16 @@ export function matrixCoerceValue(kind: MatrixCellKind, value: unknown): unknown
     }
     case 'salePrice': {
       if (value == null) return { value: null, start: null, end: null }
+      /* A PASTE is text: `—` (an empty Sale cell's copy) or nothing is no sale; a price is the sale price. A copied
+         window (`€89.00 · 12 Sep → 20 Sep`) is refused: its days carry no year (`matrixDay`), and a guessed year would
+         send a wrong sale window to the channel. */
+      if (typeof value === 'string') {
+        const t = value.trim()
+        if (t === '' || t === MATRIX_DASH) return { value: null, start: null, end: null }
+        if (t.includes(MATRIX_SALE_WINDOW_MARK.trim())) return undefined
+        const n = matrixNumberText(t)
+        return n !== undefined && n >= 0 ? { value: n, start: null, end: null } : undefined
+      }
       if (isSaleEditorValue(value)) {
         const v = value.value == null ? null : Number(value.value)
         if (v != null && !(Number.isFinite(v) && v >= 0)) return undefined
@@ -899,9 +948,13 @@ export function matrixApplyValue(cells: MatrixCells | null | undefined, kind: Ma
       if (!cells.price) return false
       cells.price.value = v as number
       return true
-    case 'salePrice':
-      cells.sale = v as SaleCell
+    case 'salePrice': {
+      const next = v as SaleCell
+      /* A pasted PRICE keeps the cell's own window: the text carries no dates, and pasting a price must neither end a
+         sale's dates nor open one that never ends. */
+      cells.sale = typeof value === 'string' && next.value !== null && cells.sale ? { ...next, start: cells.sale.start, end: cells.sale.end } : next
       return true
+    }
     case 'fulfilment':
     case 'listing':
     case 'syncState':

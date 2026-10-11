@@ -42,8 +42,8 @@
 import type { GridApi } from 'ag-grid-community'
 
 import { CellSaveTracker, SAVED_FADE_MS } from './roundTrip'
-import { MATRIX_CELL_KINDS, MATRIX_CELL_LABELS, type CoordinateKey, type MatrixCells, type MatrixWriteCell, type MatrixWritableKind } from '../matrix/contract'
-import { matrixCoerceValue } from '../renderers/matrixCells'
+import { MATRIX_CELL_KINDS, MATRIX_CELL_LABELS, type CoordinateKey, type MatrixCellKind, type MatrixCells, type MatrixWriteCell, type MatrixWritableKind } from '../matrix/contract'
+import { matrixCoerceValue, matrixNumberTextAmbiguous, MATRIX_SALE_WINDOW_MARK } from '../renderers/matrixCells'
 import { sameValue } from './writeGate'
 
 /**
@@ -377,6 +377,22 @@ const MATRIX_NOT_A_VALUE: Readonly<Record<string, string>> = {
   syncMode: 'Mode is Follow or Pinned',
   salePrice: 'A sale is a price, zero or more, with an optional window',
 }
+export const MATRIX_SALE_DATES_NOT_PASTED = 'A sale with dates cannot be pasted (its dates show no year): paste the price, then set the dates in the cell'
+
+/**
+ * Why a `kind` cell cannot hold `value` — `null` when it can. The sentence `matrixWrite` refuses with, and the one a
+ * refused paste says (`matrixColumn`'s `onValueRefused`).
+ */
+export function matrixValueRefusal(kind: string, value: unknown): string | null {
+  if (!(MATRIX_CELL_KINDS as readonly string[]).includes(kind) || matrixCoerceValue(kind as MatrixCellKind, value) !== undefined) return null
+  if (typeof value === 'string' && kind !== 'syncMode' && matrixNumberTextAmbiguous(value)) {
+    const t = value.trim()
+    const decimal = Number(t.replace(/[^\d.,]/g, '').replace(',', '.'))
+    return `"${t}" can be read two ways: write ${t.replace(/\D/g, '')} or ${decimal}`
+  }
+  if (kind === 'salePrice' && typeof value === 'string' && value.includes(MATRIX_SALE_WINDOW_MARK.trim())) return MATRIX_SALE_DATES_NOT_PASTED
+  return MATRIX_NOT_A_VALUE[kind] ?? 'Not a value this cell can hold'
+}
 
 export function matrixWrite(
   column: MatrixWriteColumn,
@@ -392,7 +408,7 @@ export function matrixWrite(
   if (k === 'fulfilment') return { send: false, reason: MATRIX_FULFILMENT_INLINE }
   if (cell.writable[k] !== true) return { send: false, reason: cell.writeBlockedReason[k] ?? 'This cell cannot be changed here' }
   const value = matrixCoerceValue(k, after)
-  if (value === undefined) return { send: false, reason: MATRIX_NOT_A_VALUE[k] ?? 'Not a value this cell can hold' }
+  if (value === undefined) return { send: false, reason: matrixValueRefusal(k, after) ?? 'Not a value this cell can hold' }
   if (sameValue(matrixCoerceValue(k, before) ?? before, value)) return { send: false, reason: MATRIX_UNCHANGED }
   return {
     send: true,

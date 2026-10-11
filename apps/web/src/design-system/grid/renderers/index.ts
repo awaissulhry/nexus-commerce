@@ -90,7 +90,7 @@ export {
   MATRIX_CELL_COPY, MATRIX_CELL_CLASSES, MATRIX_FILLABLE_KINDS, MATRIX_DASH, MATRIX_OVERSOLD_SENTENCE,
   matrixCellState, matrixCellText, matrixCellTone, matrixCellToneFrom, matrixCellClasses, matrixCellTooltip,
   matrixCellEditable, matrixCellValue, matrixApplyValue, matrixCoerceValue, matrixCompare, matrixFillAllowed,
-  matrixFulfilmentOptions, matrixMoney, matrixDay, matrixAgo, matrixSaleText, matrixModeWord, matrixQueueWord, matrixQueueGlyph, matrixQtyText,
+  matrixFulfilmentOptions, matrixMoney, matrixDay, matrixAgo, matrixSaleText, MATRIX_SALE_WINDOW_MARK, matrixNumberText, matrixNumberTextAmbiguous, matrixModeWord, matrixQueueWord, matrixQueueGlyph, matrixQtyText,
   isMatrixCellKind, isSaleEditorValue, matrixGuardDiffers, matrixReportedDiffers,
   type MatrixCellState, type MatrixToneSource, type MatrixEditability, type SaleEditorValue,
 } from './matrixCells'
