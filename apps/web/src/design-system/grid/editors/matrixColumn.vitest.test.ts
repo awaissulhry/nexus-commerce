@@ -152,6 +152,22 @@ describe('matrixColumnDef — one ColDef per kind, every piece from the engine t
     expect(applyValue).toHaveBeenCalledTimes(1)
   })
 
+  it('a value the cell cannot hold says WHY through onValueRefused — a paste must not fail in silence (Owner 2026-10-12)', () => {
+    const r = row()
+    const onValueRefused = vi.fn()
+    expect(fn(def('price', { onValueRefused }).valueSetter)({ data: r, newValue: '€99.00', oldValue: 105 } as ValueSetterParams<Row>)).toBe(true)
+    expect(r.cells['AMAZON:IT']!.price!.value).toBe(99)
+    expect(onValueRefused).not.toHaveBeenCalled()
+    expect(fn(def('price', { onValueRefused }).valueSetter)({ data: r, newValue: '1,050', oldValue: 99 } as ValueSetterParams<Row>)).toBe(false)
+    expect(onValueRefused).toHaveBeenCalledWith('"1,050" can be read two ways: write 1050 or 1.05', r)
+    expect(r.cells['AMAZON:IT']!.price!.value).toBe(99)
+    /* A host `applyValue` gets the same guard, and the same sentence. */
+    const applyValue = vi.fn()
+    expect(fn(def('syncQty', { onValueRefused, applyValue }).valueSetter)({ data: r, newValue: 'abc', oldValue: 1 } as ValueSetterParams<Row>)).toBe(false)
+    expect(onValueRefused).toHaveBeenLastCalledWith('A quantity is a whole number, zero or more', r)
+    expect(applyValue).not.toHaveBeenCalled()
+  })
+
   it('the fulfilment setter routes the choice to onPickFulfilment, returns false, and mutates NOTHING', () => {
     const r = row()
     const onPickFulfilment = vi.fn()

@@ -59,6 +59,7 @@ import { SaleCellEditor } from './SaleCellEditor'
 import { selectEditor, SELECT_CELL_CLASS } from './SelectCellEditor'
 import { sheetClassRules } from './sheet'
 import { sheetValidationFor } from './sheetColumn'
+import { matrixValueRefusal } from './sheetWriter'
 import { sameValue } from './writeGate'
 
 export interface MatrixColumnOptions<T> {
@@ -83,6 +84,11 @@ export interface MatrixColumnOptions<T> {
    * default is `matrixApplyValue` on the object `cells(data)` returns, which IS the row's own.
    */
   applyValue?: (data: T, kind: MatrixCellKind, value: unknown) => void
+  /**
+   * A typed, pasted or filled value this cell cannot hold (`"abc"`, `"1,050"`, a sale with dates): the setter keeps the old
+   * value and AG fires nothing, so without this the refusal is silent. The reason is `matrixValueRefusal`'s sentence.
+   */
+  onValueRefused?: (reason: string, data: T) => void
   /** The sheet's formula wiring. When present, `price` opens the formula-aware editor (#775). Needs `rowIdOf`. */
   formula?: FormulaWiring<T>
   /** The copy table; the engine default is Appendix A verbatim. */
@@ -221,8 +227,13 @@ export function matrixColumnDef<T>(kind: MatrixCellKind, opts: MatrixColumnOptio
         if (method && opts.onPickFulfilment) opts.onPickFulfilment(method, p as unknown as ICellRendererParams)
         return false
       }
+      /* A value the cell cannot hold keeps the old one; the host is told why (a paste must not fail in silence). */
+      const refused = matrixValueRefusal(kind, p.newValue)
+      if (refused !== null) {
+        if (cells(p.data)) opts.onValueRefused?.(refused, p.data)
+        return false
+      }
       if (opts.applyValue) {
-        if (matrixCoerceValue(kind, p.newValue) === undefined) return false
         opts.applyValue(p.data, kind, p.newValue)
         return true
       }

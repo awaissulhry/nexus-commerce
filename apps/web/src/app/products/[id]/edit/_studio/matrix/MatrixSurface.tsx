@@ -92,13 +92,15 @@ import { useFamilyProjections } from '../variants/family/useFamilyProjections'
 import { matrixChip, matrixChips } from './chips'
 import { absentHint, absentLine, BASE_PRICE_COL, buildMatrixColumns, CASE_COL, caseViewOf, channelTone, drawnCells, FBA_COL, fbaUnitsOf, hasMatrixStatus, IDENTITY_COL, isMatrixStatusColId, matrixColId, matrixGroupKeyOf, matrixStatusColId, MATRIX_GROUP_TONES, notListedLine, parseMatrixColId, STOCK_COL } from './columns'
 import { SCOPE_PROGRESS_COLUMN } from '../sheet/progressColumns'
-import { MATRIX_CELL_LABELS, MATRIX_COPY, type CoordinateKey, type FulfilmentMethod, type MatrixCellKind, type MatrixCoordinate, type MatrixWriteOutcome } from './contract'
+import { MATRIX_CELL_LABELS, MATRIX_COPY, type CoordinateKey, type FulfilmentMethod, type MatrixCellKind, type MatrixCoordinate, type MatrixWriteCell, type MatrixWriteOutcome } from './contract'
 import { filterCoordinates, filterNote, visibleCoordinateKeys } from './filters'
 import { MatrixSelectionActions } from './MatrixSelectionActions'
 import { StockSourceDialog, type StockSourceSwitched, type StockSourceTarget } from './StockSourceDialog'
 import { sharingApi } from '@/app/settings/sharing/sharingApi'
 import { MatrixToolbar, type MatrixPageState } from './MatrixToolbar'
 import { useMatrix } from './useMatrix'
+import { isMatrixHistoryValue, matrixHistoryAfter, matrixHistoryBefore, matrixReplay } from './matrixUndo'
+import { SheetUndoHistory, undoShortcut, writeHistoryValues, type ApplyCellValues } from '../sheet/sheetUndo'
 import { clearsNothing, matrixStatusCell, publishCellsByPlace, savedBeforeMatrixCase, savedBeforeMatrixFrom, savedBeforeMatrixStatus } from './statusCells'
 import { FROM_LABEL, fromBefore, fromCellText, fromCellView, fromGroupKey, isMatrixFromColId, matrixFromColId } from './sellsFrom'
 import { SellsFromDialog, type SellsFromSaved, type SellsFromTarget } from './SellsFromDialog'
@@ -522,12 +524,82 @@ export function MatrixSurface({ productId }: { productId: string }) {
   }), [statusCellOf, statusPlaceOf, stageStatus, statusTracker])
   /* A new read (or a permission answer) repaints only the Status cells whose value changed (`equals`). */
   useEffect(() => { const api = getGridApi(); if (api && !api.isDestroyed() && statusColIds.length) api.refreshCells({ columns: statusColIds }) }, [publishActions.version, publishRead, statusColIds, getGridApi])
-  /* A fill, a paste or a range Delete is one Status operation: one write per value, one toast. */
-  const statusOperationProps = useMemo(() => ({
-    onFillStart: beginStatusOperation, onFillEnd: endStatusOperation,
-    onPasteStart: beginStatusOperation, onPasteEnd: endStatusOperation,
-    onCellSelectionDeleteStart: beginStatusOperation, onCellSelectionDeleteEnd: endStatusOperation,
-  }), [beginStatusOperation, endStatusOperation])
+  /* ── ⌘Z / ⌘⇧Z: the Matrix's own history — AG's forgets everything at each re-read (`matrixUndo.ts`) ───────────────── */
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- another product starts with nothing to undo
+  const history = useMemo(() => new SheetUndoHistory(), [productId])
+  /* The Matrix writes in flight: an undo waits for them, so it reads the cells they leave and sends at their version. */
+  const writesInFlight = useRef(new Set<Promise<unknown>>())
+  const writeMatrix = matrix.write
+  const sendCells = useCallback((cells: readonly MatrixWriteCell[]) => {
+    const sent = writeMatrix(cells)
+    writesInFlight.current.add(sent)
+    const done = () => { writesInFlight.current.delete(sent) }
+    void sent.then(done, done)
+    return sent
+  }, [writeMatrix])
+  const savedCellsOf = matrix.savedCellsOf
+  const applyHistory = useCallback<ApplyCellValues>((values, direction) => {
+    const api = getGridApi()
+    if (!api || api.isDestroyed()) return
+    /* Base price: back through the grid, as the Information page's undo does — one operation, one save. */
+    const shared = values.filter((v) => !isMatrixHistoryValue(v.value))
+    if (shared.length) {
+      writer.beginOperation()
+      try { writeHistoryValues(api, shared, direction) } finally { setTimeout(() => writer.endOperation(), 0) }
+    }
+    /* A Matrix cell: the write that puts it back as it was (or sends the edit again), all in one request. */
+    const cells = values.filter((v) => isMatrixHistoryValue(v.value))
+    if (cells.length === 0) return
+    void (async () => {
+      await Promise.all([...writesInFlight.current])
+      const out: MatrixWriteCell[] = []
+      for (const v of cells) {
+        const parsed = parseMatrixColId(v.colId)
+        if (!parsed || !isMatrixHistoryValue(v.value)) continue
+        const step = matrixReplay(parsed.kind, v.value, savedCellsOf(v.rowId, parsed.key), { rowId: v.rowId, coordinateKey: parsed.key })
+        if (step.kind === 'write') out.push(step.cell)
+        else if (step.kind === 'refuse') sayReason(step.reason, 'info')
+      }
+      if (out.length) await sendCells(out)
+    })()
+  }, [getGridApi, writer, savedCellsOf, sendCells, sayReason])
+  /** True when the key was ⌘Z / ⌘⇧Z and was handled. An open editor keeps its own text undo. */
+  const onUndoKey = useCallback((key: KeyboardEvent): boolean => {
+    const action = undoShortcut(key)
+    if (!action || (getGridApi()?.getEditingCells().length ?? 0) > 0) return false
+    key.preventDefault()
+    if (action === 'undo') history.undo(applyHistory)
+    else history.redo(applyHistory)
+    return true
+  }, [history, applyHistory, getGridApi])
+
+  /* A value a cell cannot hold (a paste of "abc" or "1,050", a sale with dates) keeps the old one, and the page says why —
+     once per paste or fill, with how many cells. A range Delete says nothing: it asked for no value. */
+  const refusedInOperation = useRef<{ verb: 'pasted' | 'filled' | null; reasons: Map<string, number> } | null>(null)
+  const onValueRefused = useCallback((reason: string) => {
+    const open = refusedInOperation.current
+    if (!open) { sayReason(reason, 'danger'); return }
+    if (open.verb) open.reasons.set(reason, (open.reasons.get(reason) ?? 0) + 1)
+  }, [sayReason])
+  const beginOperation = useCallback((verb: 'pasted' | 'filled' | null) => {
+    beginStatusOperation()
+    history.begin()
+    refusedInOperation.current ??= { verb, reasons: new Map() }
+  }, [beginStatusOperation, history])
+  const endOperation = useCallback(() => {
+    endStatusOperation()
+    history.end()
+    const open = refusedInOperation.current
+    refusedInOperation.current = null
+    if (open?.verb) for (const [reason, n] of open.reasons) sayReason(`${n} ${n === 1 ? 'cell was' : 'cells were'} not ${open.verb}: ${reason}`, 'danger')
+  }, [endStatusOperation, history, sayReason])
+  /* A fill, a paste or a range Delete is one operation: one Status write per value and one toast, one undo step. */
+  const operationProps = useMemo(() => ({
+    onFillStart: () => beginOperation('filled'), onFillEnd: endOperation,
+    onPasteStart: () => beginOperation('pasted'), onPasteEnd: endOperation,
+    onCellSelectionDeleteStart: () => beginOperation(null), onCellSelectionDeleteEnd: endOperation,
+  }), [beginOperation, endOperation])
 
   /* ── the bulk Edit's doors ──────────────────────────────────────────────────────────────────
      Read at every preview and Apply through refs: a write moves cells and versions while the dialog is open. */
@@ -686,9 +758,9 @@ export function MatrixSurface({ productId }: { productId: string }) {
       coordinates: visibleCoordinates, cellsOf: matrix.cellsOf, rowOf: matrix.rowOf, tracker,
       sheetColumns: sheet?.columns ?? [], locale: localeOrFirst, market: marketOrFirst,
       axesRef, rowMenuRef, onPickFulfilment, rowsRef, variantsCollapsedRef, onToggleVariants,
-      statusColumnOf, onOpenStock: stockDoor, onOpenFrom: fromDoor, onOpenCase: caseDoor, fbaPlansOf,
+      statusColumnOf, onOpenStock: stockDoor, onOpenFrom: fromDoor, onOpenCase: caseDoor, fbaPlansOf, onValueRefused,
     }),
-    [visibleCoordinates, matrix.cellsOf, matrix.rowOf, tracker, sheet?.columns, localeOrFirst, marketOrFirst, onPickFulfilment, onToggleVariants, statusColumnOf, stockDoor, fromDoor, caseDoor, fbaPlansOf],
+    [visibleCoordinates, matrix.cellsOf, matrix.rowOf, tracker, sheet?.columns, localeOrFirst, marketOrFirst, onPickFulfilment, onToggleVariants, statusColumnOf, stockDoor, fromDoor, caseDoor, fbaPlansOf, onValueRefused],
   )
   const defaultColDef = useMemo<ColDef<StudioRow>>(() => ({ sortable: true, resizable: true }), [])
   const rowSelection = useMemo(() => gridSelection<StudioRow>(), [])
@@ -707,8 +779,9 @@ export function MatrixSurface({ productId }: { productId: string }) {
       if (!writeGate({ colId, source: e.source, oldValue: e.oldValue, newValue: e.newValue }).write) return
       const parsed = parseMatrixColId(colId)
       if (!parsed) {
-        /* A SHARED column (`Base price`): the sheet's own write path. */
+        /* A SHARED column (`Base price`): the sheet's own write path. An undo's or redo's own write-back is not an edit. */
         if (!colId) return
+        if (e.source !== 'undo' && e.source !== 'redo') history.record({ rowId: e.data.id, colId, before: e.oldValue, after: e.newValue })
         writer.set(e.data.id, colId, e.newValue, { row: e.data })
         return
       }
@@ -726,9 +799,11 @@ export function MatrixSurface({ productId }: { productId: string }) {
         }
         return
       }
-      void matrix.write([decision.cell])
+      /* The history keeps the cell as the server last read it (its mode, its price source), not only its number. */
+      history.record({ rowId: e.data.id, colId: colId!, before: matrixHistoryBefore(matrix.savedCellsOf(e.data.id, parsed.key)), after: matrixHistoryAfter(decision.cell.value) })
+      void sendCells([decision.cell])
     },
-    [matrix, writer, tracker, getGridApi, sayReason],
+    [matrix, writer, tracker, getGridApi, sayReason, history, sendCells],
   )
 
   /* ── a held cell EXPLAINS itself on an open gesture (the sheet's `explainRefusal` rule) ──── */
@@ -794,6 +869,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
       return coord ? statusPlaceOf(target.row, coord) : null
     })) return
     const key = e.event as KeyboardEvent | undefined
+    if (key && onUndoKey(key)) return
     if (!key || key.altKey || key.ctrlKey || key.metaKey) return
     if ((key.key === 'Enter' || key.key === 'F2') && e.colDef?.colId === STOCK_COL && e.data && stockDoor) { stockDoor(e.data.id); return }
     if ((key.key === 'Enter' || key.key === 'F2') && openFromCell(e)) return
@@ -801,7 +877,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
     if ((key.key === 'Enter' || key.key === 'F2') && openFbaCell(e)) return
     const opens = key.key === 'Enter' || key.key === 'F2' || (key.key.length === 1 && key.key !== ' ')
     if (opens) explainHeld(e)
-  }, [explainHeld, clearStatusCells, getGridApi, statusPlaceOf, stockDoor, openFromCell, openCaseCell, openFbaCell])
+  }, [explainHeld, clearStatusCells, getGridApi, statusPlaceOf, stockDoor, openFromCell, openCaseCell, openFbaCell, onUndoKey])
 
   /* ── views: presets + saved views on the Matrix surface ─────────────────────────────────── */
 
@@ -1127,7 +1203,8 @@ export function MatrixSurface({ productId }: { productId: string }) {
               onDisplayedColumnsChanged={onDisplayedColumnsChanged}
               onGridPreDestroyed={onGridPreDestroyed}
               onCellValueChanged={onCellValueChanged}
-              {...statusOperationProps}
+              {...operationProps}
+              undoRedoCellEditing={false}
               onCellDoubleClicked={onCellDoubleClicked}
               onCellKeyDown={onCellKeyDown}
               onCellFocused={onCellFocused}

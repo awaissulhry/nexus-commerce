@@ -1,3 +1,16 @@
+## A Matrix cell takes a price pasted as it was copied, and a refused paste says why — 2026-10-12
+
+The Owner, on the Matrix page: copy works, paste does not. A Matrix Price cell copies `€105.00`, and the cell took only a
+bare number, so pasting it back did nothing and said nothing.
+- **`matrixNumberText`** (`renderers/matrixCells.ts`) reads a number as people copy it: `€105.00`, `105,50`, `1,050.00`,
+  `1.050,00 €`, `EUR 105`, `1 050`. `1,050` / `1.050` (1050 or 1.05) is refused, never guessed. `matrixCoerceValue` uses
+  it for Qty, Buffer and Price.
+- **Sale** takes pasted text: a price (the cell keeps its own dates), `—` or nothing (no sale). A copied sale with dates is
+  refused: its days show no year.
+- **`matrixValueRefusal(kind, value)`** (`editors/sheetWriter.ts`) is the sentence a refused value gets (`matrixWrite` uses
+  it too), and **`matrixColumnDef`'s `onValueRefused`** hands it to the host instead of refusing in silence.
+- Mirrored in Factory (`matrixCells.ts`, `sheetWriter.ts`, `matrixColumn.ts`, the `editors` and `renderers` barrels).
+
 ## A modal opened by a link stays light on a light page — 2026-10-11
 
 - **`lib/opens-dark.ts` `opensDark(el)`** now follows the body's own pin (`BODY_PINNED_BY`, `body:has(.h10-shell)` in

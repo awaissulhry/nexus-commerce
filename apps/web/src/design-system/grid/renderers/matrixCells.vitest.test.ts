@@ -40,6 +40,9 @@ import {
   matrixCompare,
   matrixFillAllowed,
   matrixMoney,
+  matrixNumberText,
+  matrixNumberTextAmbiguous,
+  MATRIX_SALE_WINDOW_MARK,
   matrixPushFailedLine,
   matrixQueueGlyph,
   type MatrixCellState,
@@ -434,6 +437,49 @@ describe('editability, the fill-safe value and the default mutation', () => {
     expect(matrixCoerceValue('salePrice', { value: -1, start: null, end: null })).toBeUndefined()
     expect(matrixCoerceValue('salePrice', 89)).toBeUndefined()
     expect(matrixCoerceValue('listing', 'listed')).toBeUndefined()
+  })
+  it('a paste reads what the Matrix copies: a Price cell copies "€105.00" and that pastes as 105 (Owner 2026-10-12)', () => {
+    const copied = matrixCellText('price', cells(), COORD)
+    expect(copied).toBe('€105.00')
+    expect(matrixCoerceValue('price', copied)).toBe(105)
+    expect(matrixCoerceValue('price', matrixMoney(1050, 'EUR'))).toBe(1050)
+    expect(matrixCoerceValue('price', matrixMoney(79.5, 'GBP'))).toBe(79.5)
+    const c = cells()
+    expect(matrixApplyValue(c, 'price', copied.replace('105', '99'))).toBe(true)
+    expect(c.price!.value).toBe(99)
+  })
+  it('matrixNumberText: the ways people write a number, and the ones it refuses', () => {
+    const read: Array<[string, number]> = [
+      ['105', 105], ['105.50', 105.5], ['105,50', 105.5], ['€105.00', 105], ['105,00 €', 105], ['EUR 105', 105], ['£79', 79],
+      ['1,050.00', 1050], ['1.050,00', 1050], ['1 050', 1050], ["1'050", 1050], ['1.050.000', 1050000], ['0,500', 0.5], [' 29 ', 29], ['-5', -5],
+    ]
+    for (const [text, n] of read) expect(matrixNumberText(text), text).toBe(n)
+    // `1,050` is 1050 in one convention and 1.05 in the other: a price 1000 times off is never a guess.
+    for (const text of ['1,050', '1.050', '€2,000', '', 'abc', '€', 'eur 105', '1,05,0', '105.00,5', '12a', '⏸ 5', '29 ∞'])
+      expect(matrixNumberText(text), text).toBeUndefined()
+    expect(matrixNumberTextAmbiguous('€1,050')).toBe(true)
+    expect(matrixNumberTextAmbiguous('0,500')).toBe(false)
+    expect(matrixNumberTextAmbiguous('1,050.00')).toBe(false)
+    // Quantities stay whole: a decimal quantity refuses, a grouped one reads.
+    expect(matrixCoerceValue('syncQty', '1.050.000')).toBe(1050000)
+    expect(matrixCoerceValue('syncQty', '5,5')).toBeUndefined()
+  })
+  it('a pasted sale: a price keeps the cell\'s own window, "—" removes the sale, a copied window is refused', () => {
+    const window = { start: '2026-09-12T00:00:00.000Z', end: '2026-09-30T00:00:00.000Z' }
+    const c = cells({ sale: { value: 89, ...window } })
+    expect(matrixApplyValue(c, 'salePrice', '€79.00')).toBe(true)
+    expect(c.sale).toEqual({ value: 79, ...window })
+    expect(matrixApplyValue(c, 'salePrice', MATRIX_DASH)).toBe(true)
+    expect(c.sale).toEqual({ value: null, start: null, end: null })
+    expect(matrixCoerceValue('salePrice', '105,50')).toEqual({ value: 105.5, start: null, end: null })
+    expect(matrixCoerceValue('salePrice', '')).toEqual({ value: null, start: null, end: null })
+    // Its days carry no year (`12 Sep`): a guessed year would send a wrong window to the channel.
+    const dated = matrixCellText('salePrice', cells({ sale: { value: 89, ...window } }), COORD)
+    expect(dated).toBe(`€89.00${MATRIX_SALE_WINDOW_MARK}12 Sep → 30 Sep`)
+    expect(matrixCoerceValue('salePrice', dated)).toBeUndefined()
+    const d = cells({ sale: { value: 89, ...window } })
+    expect(matrixApplyValue(d, 'salePrice', dated)).toBe(false)
+    expect(d.sale).toEqual({ value: 89, ...window })
   })
   it('the default mutation moves the VALUE only — a typed number on a Follow cell leaves mode and kind alone', () => {
     const c = cells()

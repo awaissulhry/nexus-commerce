@@ -76,6 +76,8 @@ export interface MatrixState {
   revert: (op: VerbOperation) => Promise<void>
   /** A row's cells on a coordinate, read at PAINT time. */
   cellsOf: (rowId: string, key: CoordinateKey) => MatrixCells | null
+  /** The same cells as the server last read them — never the grid's edited clone (⌘Z keeps what a cell WAS). */
+  savedCellsOf: (rowId: string, key: CoordinateKey) => MatrixCells | null
   rowOf: (rowId: string) => MatrixRowRead | null
 }
 
@@ -364,6 +366,8 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
 
   const cellsOf = useCallback((rowId: string, key: CoordinateKey): MatrixCells | null => byRow.current.get(rowId)?.cells[key] ?? null, [])
   const rowOf = useCallback((rowId: string): MatrixRowRead | null => byRow.current.get(rowId) ?? null, [])
+  const savedCellsOf = useCallback((rowId: string, key: CoordinateKey): MatrixCells | null =>
+    readRef.current?.rows.find((r) => r.id === rowId)?.cells[key] ?? null, [])
 
   const status: MatrixState['status'] = probe?.kind === 'error' ? 'error' : read ? 'ready' : 'loading'
   return {
@@ -377,6 +381,7 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
     applyVerbRun,
     revert,
     cellsOf,
+    savedCellsOf,
     rowOf,
   }
 }
