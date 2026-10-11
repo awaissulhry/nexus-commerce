@@ -5,7 +5,7 @@
  *
  *   rows      one row per OUR keyword or target (`kw:<AdTarget.id>`) and per SHOPPER'S search term in one ad group
  *             (`term:<market>|<external ad group id>|<term key>`: Amazon's search-term report names ad groups by their
- *             EXTERNAL id, so the row id does too — a local id there would join nothing, negatives-attention.service.ts)
+ *             EXTERNAL id, so the row id does too — a local id there would join nothing)
  *   window    late-order safe: clicks and spend from `since` to `clicksThrough` (3 days ago), orders and sales from `since`
  *             to today (a late order can only save a row); days a place was out of stock are left out of the clicks and
  *             spend only (an order on such a day still counts: only what can save a row is kept)
@@ -37,8 +37,6 @@ export const FIXED_KEYWORD_SPEND_BAR_CENTS = 3000
 /** Never stop in a place younger than this, nor a term harvested more recently than that (PLAN §2 never-list). */
 export const PLACE_MIN_AGE_DAYS = 14
 export const HARVEST_QUIET_DAYS = 30
-/** A writer of the row's state in this many days is its owner (Bid audit M2: who decides never contradicts the last change). */
-export const OWNER_RECENT_DAYS = 7
 /** How far back the last change is read. */
 export const LAST_CHANGE_DAYS = 30
 /** Rows per page. */
@@ -316,15 +314,6 @@ export function windowNumbers(days: readonly DayEvidence[], w: WasteWindow, outO
     },
     stockOutDays,
   }
-}
-
-/** 90 days to today, every day: the second line under the window's numbers. */
-export function d90Of(days: readonly DayEvidence[], now: Date): { clicks: number; orders: number; spendCents: number } {
-  const to = dayIndex(now)
-  const from = to - (D90_DAYS - 1)
-  let clicks = 0, orders = 0, spendCents = 0
-  for (const d of days) if (d.day >= from && d.day <= to) { clicks += d.clicks; orders += d.orders; spendCents += d.spendCents }
-  return { clicks, orders, spendCents }
 }
 
 /** Spend per week over the last SPARK_WEEKS weeks ending today, oldest first. */

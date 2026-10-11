@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { LIGHT_PINNED, opensDark } from './opens-dark'
+import { BODY_PINNED_BY, LIGHT_PINNED, opensDark } from './opens-dark'
 
 /** An element with (or without) a `.dark` ancestor and a light-pinned ancestor. */
 const el = (inDark: boolean, inLightPin: boolean) =>
@@ -19,5 +19,24 @@ describe('opensDark — a portalled surface follows the colours of the place it 
   })
   it('names the same light-pinned sections as the shared shell token pin', () => {
     for (const sel of ['.h10-shell', '.fleet-surface', '.fleet-portal']) expect(LIGHT_PINNED).toContain(sel)
+  })
+})
+
+describe('opensDark — opened with the focus on <body> (a deep link, a reload)', () => {
+  /** <body> (or <html>) under a dark theme, with or without a light-pinned shell in the page. */
+  const bodyOf = (shell: boolean, which: 'body' | 'html' = 'body') => {
+    const doc = {} as { body: unknown; documentElement: unknown }
+    const body = { ownerDocument: doc, closest: (sel: string) => (sel === '.dark' ? ({} as Element) : null), querySelector: (sel: string) => (shell && sel === BODY_PINNED_BY ? ({} as Element) : null) }
+    const html = { ownerDocument: doc, closest: (sel: string) => (sel === '.dark' ? ({} as Element) : null) }
+    doc.body = body
+    doc.documentElement = html
+    return (which === 'body' ? body : html) as unknown as Element
+  }
+  it('follows the body\'s pin: light when the page is a light-pinned shell', () => {
+    expect(opensDark(bodyOf(true))).toBe(false)
+    expect(opensDark(bodyOf(true, 'html'))).toBe(false)
+  })
+  it('dark when nothing in the page pins light', () => {
+    expect(opensDark(bodyOf(false))).toBe(true)
   })
 })

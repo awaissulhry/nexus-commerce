@@ -1,0 +1,25 @@
+/*
+ * The Negative Targeting builder's "Stop waste — may run alone" section (wave 4) — layout only; its look is the builder's
+ * own (`h10-rb-*`, the Advanced settings card). Off, the card is its switch alone: no rule under it, no space after it.
+ */
+.alone {
+  border-bottom: 0;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+/*
+ * Parts of the old builder that a Stop waste choice does not use (audit M2, S2): held in place, dimmed as the builder's
+ * own held parts are (`.h10-rb-sec.held`), with the reason beside them. An inactive control is outside the contrast rule.
+ */
+.unused {
+  opacity: .62;
+}
+.heldChip {
+  opacity: .45;
+  cursor: not-allowed;
+}
+/* The reason a held part gives, spaced from what it holds as from what comes before it. */
+.unusedNote {
+  margin: 0 0 12px;
+}

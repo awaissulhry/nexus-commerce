@@ -1,3 +1,11 @@
+## A modal opened by a link stays light on a light page — 2026-10-11
+
+- **`lib/opens-dark.ts` `opensDark(el)`** now follows the body's own pin (`BODY_PINNED_BY`, `body:has(.h10-shell)` in
+  the shared shell): a `Modal` opened while the focus is on <body> — a deep link, a reload, a detail opened after the
+  rule builder closes — drew dark on a light page on a dark OS (the Negative Targeting rule detail on a dark Mac). The
+  DS tooltips, info tips and hover cards were measured light on these pages already (their portals take the body's
+  pin). Identical in Factory's `lib/opens-dark.ts`.
+
 ## A light modal draws its native controls light — 2026-10-11
 
 - **`.nds-modal[data-nds-light] { color-scheme: light }`**: a light `Modal` on a dark OS drew its native controls dark

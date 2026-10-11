@@ -500,8 +500,6 @@ export async function applyWaste(body: z.infer<typeof APPLY_BODY>, person: UserP
 
 /** A rule's Ask-me card as the page's Waiting rows name it (NREAD: `suggestion:<AdsRuleSuggestion.id>`). */
 export const SUGGESTION_PREFIX = 'suggestion:'
-/** The cards the page decides: our keyword paused (and kept paused), a shopper's search term negated. */
-export const WASTE_CARD_ACTIONS = ['pause_target', 'add_negative_exact', 'add_negative_phrase'] as const
 
 /** Is this card one of the page's (a pause_target on a keyword or target, or a search term's negative)? */
 export async function isWasteCard(suggestionId: string): Promise<boolean> {

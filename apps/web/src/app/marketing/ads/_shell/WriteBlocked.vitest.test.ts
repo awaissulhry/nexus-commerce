@@ -17,8 +17,6 @@ const ads = join(dirname(fileURLToPath(import.meta.url)), '..')
 const src = (rel: string) => readFileSync(join(ads, rel), 'utf8')
 
 const CONTROLS: Array<{ file: string; button: RegExp }> = [
-  { file: 'rules-automation/negative-targeting/NegRemoval.tsx', button: /disabled=\{busy \|\| writeCount === 0 \|\| !!blocked\}/ },
-  { file: 'rules-automation/negative-targeting/NegWastefulWords.tsx', button: /disabled=\{busy \|\| !!targetBlocked\}/ },
   { file: 'rules-automation/keyword-tracker/BidAction.tsx', button: /disabled=\{loading \|\| !!blocked\}/ },
   { file: 'rules-automation/keyword-tracker/BidAction.tsx', button: /disabled=\{!p\.canPropose \|\| loading \|\| !!blocked\}/ },
   { file: 'campaigns/[id]/tabs/DetailsTab.tsx', button: /\|\| !!writeBlock\}/ },

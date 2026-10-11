@@ -14,7 +14,17 @@
  */
 export const LIGHT_PINNED = '.h10-shell, .fleet-surface, .fleet-portal, [data-nds-light]'
 
+/**
+ * The body's own pin (`body:has(.h10-shell)` in the shared shell): a surface opened while nothing inside the page holds
+ * the focus — a deep link or a reload opens a modal with the focus on <body> — follows it, as its portals do. Before
+ * this such a modal opened dark on a light page (2026-10-11, the Negative Targeting rule detail on a dark Mac).
+ */
+export const BODY_PINNED_BY = '.h10-shell'
+
 export function opensDark(el: Element | null | undefined): boolean {
   if (!el || !el.closest('.dark')) return false
-  return !el.closest(LIGHT_PINNED)
+  if (el.closest(LIGHT_PINNED)) return false
+  const doc = el.ownerDocument
+  if (doc && (el === doc.body || el === doc.documentElement) && doc.body?.querySelector(BODY_PINNED_BY)) return false
+  return true
 }

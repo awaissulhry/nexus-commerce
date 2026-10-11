@@ -1,9 +1,11 @@
 /**
  * Negative Targeting page — the stop-waste rules' pure half: one test with the page (the rule's numbers on the page's
- * formula), the two starters as engine rules, the body checks and the rule in one line. Pure; every value made up.
+ * formula), engine-native rules as saved before wave 4 (test-support), the starters and the rule in one line. Pure; every
+ * value made up.
  */
 import { describe, expect, it } from 'vitest'
-import { bodyOfRule, bodyProblems, ruleOfBody, STARTERS, wasteKindOf, wasteSentence } from './pure.js'
+import { STARTERS, wasteKindOf, wasteSentence } from './pure.js'
+import { ruleOfBody } from '../../../test-support/waste-engine-rule.js'
 import { stopWasteKindOf, stopWasteParamsOf, stopWasteShapeOf } from '../ads-graduation-stopwaste.js'
 import { barFor, productFactsOf, targetFrom, wasteTest } from '../waste/test.js'
 import { FIXED_KEYWORD_SPEND_BAR_CENTS, FIXED_TERM_SPEND_BAR_CENTS, KEYWORD_CPA_BAR, MIN_CLICKS_FLOOR, TERM_CPA_BAR, WASTE_WINDOW_DAYS } from '../waste/pure.js'
@@ -54,7 +56,7 @@ describe('one test with the page (review S2)', () => {
   })
 })
 
-describe('the two starters (born at Watch) as the engine rules they save', () => {
+describe('an engine-native stop-waste rule, as saved before wave 4: the gate still reads it', () => {
   it('keywords: TARGET_PERFORMANCE → pause_target, kept paused, daily, with its test; a stop-waste kind', () => {
     const r = ruleOfBody({ kind: 'PAUSE_KEYWORD', scope: { marketplace: 'IT' } })
     expect(r.trigger).toBe('TARGET_PERFORMANCE')
@@ -87,26 +89,6 @@ describe('the two starters (born at Watch) as the engine rules they save', () =>
     ])
   })
 
-  it('a saved rule reads back as the body it was saved from', () => {
-    const body = { kind: 'NEGATE_TERM' as const, name: 'Mine', scope: { adGroupId: 'ag-1', campaignId: 'c-1' }, windowDays: 30, minClicks: 25, cpaMultiple: 2, spendFloorCents: 900, match: 'EXACT' as const, level: 'CAMPAIGN' as const, runAt: '05:00' }
-    const r = ruleOfBody(body)
-    expect(bodyOfRule({ name: r.name, actions: r.actions, scope: body.scope })).toEqual(body)
-    expect(bodyOfRule({ name: 'x', actions: [{ type: 'pause_target' }], scope: {} })).toBeNull()
-  })
-})
-
-describe('the body checks', () => {
-  it('a scope is said out loud; one grain per branch; numbers in range', () => {
-    expect(bodyProblems({ kind: 'PAUSE_KEYWORD', scope: { marketplace: 'IT' } })).toEqual([])
-    expect(bodyProblems({ kind: 'PAUSE_KEYWORD', scope: { adGroupId: 'ag' } })).toEqual([])
-    expect(bodyProblems({ kind: 'PAUSE_KEYWORD' }).join(' ')).toMatch(/scope: name the market/)
-    expect(bodyProblems({ kind: 'PAUSE_KEYWORD', scope: { wholeAccount: true, marketplace: 'IT' } }).join(' ')).toMatch(/at once/)
-    expect(bodyProblems({ kind: 'PAUSE_KEYWORD', scope: { portfolioId: 'p', adGroupId: 'ag' } }).join(' ')).toMatch(/a portfolio and a campaign or ad group/)
-    expect(bodyProblems({ kind: 'PAUSE_KEYWORD', scope: { marketplace: 'IT' }, windowDays: 7 }).join(' ')).toMatch(/windowDays/)
-    expect(bodyProblems({ kind: 'PAUSE_KEYWORD', scope: { marketplace: 'IT' }, windowDays: 88 }).join(' ')).toMatch(/windowDays: a number from 14 to 87/)
-    expect(bodyProblems({ kind: 'PAUSE_KEYWORD', scope: { marketplace: 'IT' }, match: 'EXACT' }).join(' ')).toMatch(/for a search-term rule/)
-    expect(bodyProblems({ kind: 'NEGATE_TERM', scope: { marketplace: 'IT' }, runAt: '25:00' }).join(' ')).toMatch(/runAt/)
-  })
 })
 
 describe('the Rules view: kinds and words', () => {
@@ -121,10 +103,15 @@ describe('the Rules view: kinds and words', () => {
 
   it('a stop-waste rule in one line, without an amount; any other rule through the fallback', () => {
     const p = ruleOfBody({ kind: 'PAUSE_KEYWORD', scope: { marketplace: 'IT' } })
-    expect(wasteSentence(p, fallback)).toBe('Keywords: 0 orders, clicks ≥ 20, spend ≥ 2 × target cost per order (else a fixed bar), 60 d → pause, keep paused')
+    expect(wasteSentence(p, fallback)).toBe('Keywords: 0 orders, clicks ≥ 20, spend ≥ 2 × target cost per order (else a fixed bar), 60 d → pause keyword, keep it paused')
     const n = ruleOfBody({ kind: 'NEGATE_TERM', level: 'CAMPAIGN', scope: { marketplace: 'IT' } })
     expect(wasteSentence(n, fallback)).toBe('Search terms: 0 orders, clicks ≥ 20, spend ≥ 1.5 × target cost per order (else a fixed bar), 60 d → negative exact in the campaign')
     expect(wasteSentence({ actions: [{ type: 'negative-targeting' }], trigger: 'SEARCH_TERM_WASTING' }, fallback)).toBe('Search terms: spend, no sales → negative')
     expect(wasteSentence({ actions: [{ type: 'pause_target' }], trigger: 'KEYWORD_WASTED_SPEND' }, fallback)).toBe('fallback sentence')
+    // Wave 4 — a builder rule with "Stop waste — may run alone" on says its test and its verb.
+    const builderPause = [{ type: 'negative-targeting', stopWaste: { kind: 'PAUSE_KEYWORD', windowDays: 60, minClicks: 20, cpaMultiple: 2, spendFloorCents: 3000 } }]
+    expect(wasteSentence({ actions: builderPause }, fallback)).toBe('Keywords: 0 orders, clicks ≥ 20, spend ≥ 2 × target cost per order (else a fixed bar), 60 d → pause keyword, keep it paused')
+    const builderNeg = [{ type: 'negative-targeting', negationLevel: 'adgroup', stopWaste: { kind: 'NEGATE_TERM' } }]
+    expect(wasteSentence({ actions: builderNeg }, fallback)).toBe('Search terms: 0 orders, clicks ≥ 20, spend ≥ 1.5 × target cost per order (else a fixed bar), 60 d → negative exact')
   })
 })

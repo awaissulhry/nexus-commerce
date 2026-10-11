@@ -69,6 +69,8 @@ const asList = (actions: unknown) => (Array.isArray(actions) ? actions : []) as 
 export function stopWasteShapeOf(actions: unknown): StopWasteKind | null {
   const params = stopWasteParamsOf(actions)
   if (!params) return null
+  // Wave 4 (Owner 2026-10-11) — a Negative Targeting BUILDER rule with "Stop waste — may run alone" on.
+  if (asList(actions)[0]?.type === 'negative-targeting') return builderStopWasteShape(asList(actions)[0]!, params.kind)
   const writing = asList(actions).filter((a) => !!a && !NOTIFY.has(String(a.type ?? '')))
   if (writing.length !== 1 || writing[0] !== asList(actions)[0]) return null
   const a = writing[0]!
@@ -80,6 +82,48 @@ export function stopWasteShapeOf(actions: unknown): StopWasteKind | null {
   if (a.scope === 'CAMPAIGN' || levels.some((l) => l !== 'AD_GROUP')) return null
   if (a.negationLevel === 'campaign' || a.negationLevel === 'both') return null
   return 'NEGATE_TERM'
+}
+
+/**
+ * Wave 4 (Owner 2026-10-11: "the OLD negative-targeting builder exactly as it was, plus ONE small extra section") — the
+ * builder rule's shape. "Pause keyword, keep it paused": the adapter emits a pause that keeps the keyword paused, on the
+ * keywords of the mapped ad groups. "Negative exact": the rule creates negative exacts only — no phrase and no product
+ * target in any ad group of its Ad Group Mapping, E in every ad group it looks in — at ad-group level. Anything else asks.
+ * Pure.
+ */
+function builderStopWasteShape(a0: Record<string, unknown>, kind: StopWasteKind): StopWasteKind | null {
+  return builderShapeWhy(a0, kind) == null ? kind : null
+}
+
+/** Why a builder stop-waste rule asks first: the builder's own words (`autoHeldBy`, stopWasteSectionModel.ts). Pure. */
+export const BUILDER_SHAPE_WHY = {
+  level: 'Set Negation Level to Ad Group: a negative for the whole campaign always asks you.',
+  noGroup: 'Add an ad group to look in, in Ad Group Mapping.',
+  exactOnly: 'Negative exact only: tick E in every ad group it looks in, and no P or product target in its Ad Group Mapping — a phrase or a product target always asks you.',
+} as const
+
+function builderShapeWhy(a0: Record<string, unknown>, kind: StopWasteKind): string | null {
+  if (kind === 'PAUSE_KEYWORD') return null
+  if (String(a0.negationLevel ?? 'adgroup') !== 'adgroup') return BUILDER_SHAPE_WHY.level
+  const maps = Array.isArray(a0.mappings) ? (a0.mappings as Array<{ groups?: unknown }>) : []
+  const groups = maps.flatMap((m) => (Array.isArray(m?.groups) ? (m.groups as Array<{ look?: unknown; types?: { P?: unknown; E?: unknown; product?: unknown } }>) : []))
+    .filter((g) => !!g)
+  const looking = groups.filter((g) => g.look !== false)
+  if (!looking.length) return BUILDER_SHAPE_WHY.noGroup
+  if (groups.some((g) => g.types?.P === true || g.types?.product === true) || looking.some((g) => g.types?.E !== true)) return BUILDER_SHAPE_WHY.exactOnly
+  return null
+}
+
+/**
+ * Why a rule of the stop-waste family may not act alone (its shape), in the words a person reads; null when it may. A
+ * builder rule with the section on names what to change; any other rule gets NOT_PAGE_SHAPE. Pure.
+ */
+export function stopWasteShapeWhy(actions: unknown): string | null {
+  if (stopWasteShapeOf(actions) != null) return null
+  const params = stopWasteParamsOf(actions)
+  const a0 = asList(actions)[0]
+  if (params && a0?.type === 'negative-targeting') return builderShapeWhy(a0, params.kind) ?? NOT_PAGE_SHAPE
+  return NOT_PAGE_SHAPE
 }
 
 const CAP_WORDS = `at most ${STOP_WASTE_CAPS.pausesPerProductPerDay} keyword pauses and ${STOP_WASTE_CAPS.negativesPerProductPerDay} negatives per product a day`
@@ -117,8 +161,8 @@ export function capReason(kind: StopWasteKind, used: number, productName: string
     : `${productName} reached its ${cap} negatives for today: this negative waits for your yes.`
 }
 
-/** Why an Auto rule that is not the page's shape asks for every change (M1 + S1). */
-export const NOT_PAGE_SHAPE = 'Auto is only for rules made on this page: this rule asks first.'
+/** Why an Auto rule that is not the stop-waste shape asks for every change (M1 + S1; wave 4: the builder's section). */
+export const NOT_PAGE_SHAPE = 'Auto is only for a rule with "Stop waste — may run alone" on (negative exact, or pause keyword): this rule asks first.'
 
 /** What the never-list reads about one change (the gate loads it; tests build it). */
 export interface StopWasteFacts {
@@ -285,7 +329,7 @@ export async function openStopWasteGate(rules: readonly GateRule[], opts: { now?
   /** The page's stop-waste rules (they may act alone), and Auto rules of the family that are not the page's shape (they ask). */
   const kindOf = new Map<string, StopWasteKind>()
   const autoRules = new Map<string, GateRule>()
-  const notShaped = new Set<string>()
+  const notShaped = new Map<string, string>()
   for (const r of rules) {
     const family = stopWasteKindOf(producedActionTypes(r))
     if (!family) continue
@@ -294,7 +338,7 @@ export async function openStopWasteGate(rules: readonly GateRule[], opts: { now?
     if (shape === family) {
       kindOf.set(r.id, family)
       if (auto) autoRules.set(r.id, r)
-    } else if (auto) notShaped.add(r.id)
+    } else if (auto) notShaped.set(r.id, stopWasteShapeWhy(r.actions) ?? NOT_PAGE_SHAPE)
   }
   if (!autoRules.size && !notShaped.size) return null
 
@@ -447,7 +491,7 @@ export async function openStopWasteGate(rules: readonly GateRule[], opts: { now?
       const product = owner ? { key: owner.key, name: owner.name } : null
       const mine: Array<{ ruleId: string; key: string; n: number }> = []
       for (const id of ruleIds) {
-        if (notShaped.has(id)) { ask.push({ ruleId: id, why: NOT_PAGE_SHAPE }); continue }
+        if (notShaped.has(id)) { ask.push({ ruleId: id, why: notShaped.get(id)! }); continue }
         const rule = autoRules.get(id)
         if (!rule) { act.push(id); continue }
         const kind = kindOf.get(id)!

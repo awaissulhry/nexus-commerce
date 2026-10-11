@@ -3,11 +3,11 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  capReason, changesOf, negativeLevelOf, neverListReason, NOT_PAGE_SHAPE, placeOf, STOP_WASTE_AGES, STOP_WASTE_CAPS, stopWasteCeiling, stopWasteKindOf,
-  stopWasteParamsOf, stopWasteShapeOf, type StopWasteFacts,
+  BUILDER_SHAPE_WHY, capReason, changesOf, negativeLevelOf, neverListReason, NOT_PAGE_SHAPE, placeOf, STOP_WASTE_AGES, STOP_WASTE_CAPS, stopWasteCeiling,
+  stopWasteKindOf, stopWasteParamsOf, stopWasteShapeOf, stopWasteShapeWhy, type StopWasteFacts,
 } from './ads-graduation-stopwaste.js'
 import { graduationCeiling } from './ads-graduation.js'
-import { ruleOfBody } from './waste-rules/pure.js'
+import { ruleOfBody } from '../../test-support/waste-engine-rule.js'
 
 const PAUSE = ruleOfBody({ kind: 'PAUSE_KEYWORD', scope: { marketplace: 'IT' } }).actions
 const NEGATE = ruleOfBody({ kind: 'NEGATE_TERM', scope: { marketplace: 'IT' } }).actions
@@ -44,6 +44,35 @@ describe('the two stop-waste kinds', () => {
     expect(stopWasteShapeOf([...PAUSE, { type: 'notify' }])).toBe('PAUSE_KEYWORD')
   })
 
+  it('wave 4 — a Negative Targeting builder rule with "Stop waste — may run alone" on: its kind, or it asks', () => {
+    const group = (types: { P: boolean; E: boolean; product: boolean }, look = true) => ({ id: 'g1', look, types })
+    const builder = (kind: 'PAUSE_KEYWORD' | 'NEGATE_TERM', extra: Record<string, unknown> = {}) => [{
+      type: 'negative-targeting', negationLevel: 'adgroup', mappings: [{ groups: [group({ P: false, E: true, product: false })] }],
+      stopWaste: { kind, windowDays: 60, minClicks: 20, cpaMultiple: 1.5, spendFloorCents: 1500 }, ...extra,
+    }]
+    expect(stopWasteShapeOf(builder('NEGATE_TERM'))).toBe('NEGATE_TERM')
+    expect(stopWasteShapeOf(builder('PAUSE_KEYWORD'))).toBe('PAUSE_KEYWORD')
+    // A phrase or a product target ticked where it looks, a campaign-level negative, or no ad group: it asks.
+    expect(stopWasteShapeOf(builder('NEGATE_TERM', { mappings: [{ groups: [group({ P: true, E: true, product: false })] }] }))).toBeNull()
+    expect(stopWasteShapeOf(builder('NEGATE_TERM', { mappings: [{ groups: [group({ P: false, E: true, product: true })] }] }))).toBeNull()
+    expect(stopWasteShapeOf(builder('NEGATE_TERM', { negationLevel: 'both' }))).toBeNull()
+    expect(stopWasteShapeOf(builder('NEGATE_TERM', { mappings: [{ groups: [] }] }))).toBeNull()
+    // A group it does not look in still gets the targets ticked on it (the handler's destinations): a phrase there asks too.
+    expect(stopWasteShapeOf(builder('NEGATE_TERM', { mappings: [{ groups: [group({ P: false, E: true, product: false }), { ...group({ P: true, E: true, product: true }, false), id: 'g2' }] }] }))).toBeNull()
+    expect(stopWasteShapeOf(builder('NEGATE_TERM', { mappings: [{ groups: [group({ P: false, E: true, product: false }), { ...group({ P: false, E: true, product: false }, false), id: 'g2' }] }] }))).toBe('NEGATE_TERM')
+    // Audit M3 — why it asks, in the builder's own words; none when it may run alone.
+    expect(stopWasteShapeWhy(builder('NEGATE_TERM'))).toBeNull()
+    expect(stopWasteShapeWhy(builder('NEGATE_TERM', { mappings: [{ groups: [group({ P: true, E: true, product: false })] }] }))).toBe(BUILDER_SHAPE_WHY.exactOnly)
+    expect(stopWasteShapeWhy(builder('NEGATE_TERM', { negationLevel: 'campaign' }))).toBe(BUILDER_SHAPE_WHY.level)
+    expect(stopWasteShapeWhy(builder('NEGATE_TERM', { mappings: [] }))).toBe(BUILDER_SHAPE_WHY.noGroup)
+    expect(stopWasteShapeWhy([{ type: 'negative-targeting', mappings: [{ groups: [group({ P: false, E: true, product: false })] }] }])).toBe(NOT_PAGE_SHAPE)
+    // Without the section, an old builder rule is what it always was.
+    expect(stopWasteShapeOf([{ type: 'negative-targeting', mappings: [{ groups: [group({ P: false, E: true, product: false })] }] }])).toBeNull()
+    expect(graduationCeiling({ actionTypes: ['add_negative_exact'], hasKeywordProtections: true, actions: builder('NEGATE_TERM') }).maxLevel).toBe('AUTO')
+    expect(graduationCeiling({ actionTypes: ['pause_target'], hasKeywordProtections: true, actions: builder('PAUSE_KEYWORD') }).maxLevel).toBe('AUTO')
+    expect(graduationCeiling({ actionTypes: ['add_negative_exact'], hasKeywordProtections: true, actions: builder('NEGATE_TERM', { negationLevel: 'campaign' }) }).maxLevel).toBe('PROPOSE')
+  })
+
   it('the ceiling: the page\'s shape may be set to Auto, naming its caps; without its actions, or any other rule, below Auto', () => {
     expect(stopWasteCeiling(['pause_target'], PAUSE)).toMatchObject({ maxLevel: 'AUTO', blockedBy: [], reason: expect.stringMatching(/at most 10 keyword pauses and 20 negatives per product a day/) })
     expect(stopWasteCeiling(['pause_target'])).toBeNull()
@@ -60,7 +89,7 @@ describe('the two stop-waste kinds', () => {
     for (const held of [['enable_target'], ['add_negative_phrase'], ['pause_campaign'], ['sync_negatives_across_campaigns'], ['archive_keyword'], ['bid_apply', 'pause_target'], ['bid']]) {
       expect(graduationCeiling({ actionTypes: held, hasKeywordProtections: true, actions: PAUSE }).maxLevel, held.join('+')).toBe('PROPOSE')
     }
-    expect(NOT_PAGE_SHAPE).toBe('Auto is only for rules made on this page: this rule asks first.')
+    expect(NOT_PAGE_SHAPE).toBe('Auto is only for a rule with "Stop waste — may run alone" on (negative exact, or pause keyword): this rule asks first.')
   })
 })
 

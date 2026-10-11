@@ -29,6 +29,11 @@ import { AUTOMATE_HELD_AT_CREATE, AUTOMATE_NEEDS_GATE, beltToSave, controlForRul
 import { Banner, Field, Listbox, Modal } from '@/design-system/components'
 import { Button, Checkbox, Input, Radio, RadioCard, Textarea, Toggle, ToolbarButton } from '@/design-system/primitives'
 import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
+// Wave 4 (Owner 2026-10-11) — the negative-targeting builder's one extra section, "Stop waste — may run alone".
+import { StopWasteSection } from './builder/StopWasteSection'
+import { autoHeldBy, exactOnlyBlocks, HELD_TYPES_WHY, KIND_WORD as STOP_WASTE_WORD, PAUSE_UNUSED, rememberTypes, restoreTypes, windowWords, type StopWasteForm, type StopWasteKind } from './builder/stopWasteSectionModel'
+import swStyles from './builder/stopWasteSection.module.css'
+import { useStopWaste } from './builder/useStopWaste'
 
 // ── option catalogs (verbatim H10 copy where captured) ──
 const METRICS = PC_METRICS
@@ -522,6 +527,8 @@ const STEPS_FOR = (slug: string): Array<{ id: string; label: string }> => {
   // a THEN clause inside Criteria, applied to the selected campaigns.
   const sf = SETUP[slug]?.surface
   if (sf === 'campaign-budget' || sf === 'campaign-bid' || sf === 'campaign-placement' || sf === 'campaign-sov' || sf === 'campaign-rank') return [...head, ...tail]
+  // Wave 4 — the negative-targeting builder's one extra section, before Control (it decides what Automate may do).
+  if (slug === 'negative-targeting') return [...head, { id: 'search-terms', label: 'Search Terms' }, tail[0], { id: 'stop-waste', label: 'Stop Waste' }, tail[1]]
   return [...head, { id: 'search-terms', label: 'Search Terms' }, ...tail]
 }
 
@@ -682,6 +689,52 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
   const [protectConverting, setProtectConverting] = useState(true)
   const [protectDays, setProtectDays] = useState('30')
   const [negationLevel, setNegationLevel] = useState<'adgroup' | 'campaign' | 'both'>('adgroup')
+  // Wave 4 — "Stop waste — may run alone" (negative-targeting only; off by default, so an old rule saves as before).
+  const stopWaste = useStopWaste(isNegative)
+  /** A rule made by the rule engine with a stop-waste test: its section is shown as kept, read only. */
+  const [stopWasteLocked, setStopWasteLocked] = useState(false)
+  /**
+   * Audit M2 / S2 — what the section's action leaves unused. "Negative exact": exact negatives only, so the mapping's P and
+   * product targets are switched off and held. "Pause keyword, keep it paused": the target types, Search Terms, Negation
+   * Level and the two Control switches are held. Never on an engine rule (its section is read only).
+   */
+  const swKind = isNegative && stopWaste.on && !locked ? stopWaste.form.kind : null
+  const pauseUnused = swKind === 'PAUSE_KEYWORD'
+  /**
+   * Audit R-S1 — "Negative exact" put on in this draft (or a saved rule that is exact only already) holds the mapping's P
+   * and product; each row's ticks are remembered first and come back exactly when the section goes off. A saved rule with
+   * a phrase ticked is never changed by opening it: its P stays, and Automate says why it stays held.
+   */
+  const [exactHold, setExactHold] = useState(false)
+  const typesBefore = useRef(new Map<string, { P: boolean; product: boolean }>())
+  useEffect(() => {
+    if (!exactHold || swKind !== 'NEGATE_TERM') return
+    const next = exactOnlyBlocks(blocks)
+    if (next === blocks) return
+    typesBefore.current = rememberTypes(blocks, typesBefore.current)
+    setBlocks(next)
+  }, [exactHold, swKind, blocks])
+  /** The section's own moves: into "Negative exact" holds the ticks, out of it gives them back. */
+  const exactMove = (was: StopWasteForm, next: Pick<StopWasteForm, 'on' | 'kind'>) => {
+    const before = was.on && was.kind === 'NEGATE_TERM'
+    const after = next.on && next.kind === 'NEGATE_TERM'
+    if (!before && after) setExactHold(true)
+    if (before && !after) {
+      const remembered = typesBefore.current
+      typesBefore.current = new Map()
+      setExactHold(false)
+      if (remembered.size) setBlocks((bs) => restoreTypes(bs, remembered))
+    }
+  }
+  const sectionChange = (next: StopWasteForm) => { exactMove(stopWaste.form, next); stopWaste.change(next) }
+  const sectionKind = (k: StopWasteKind) => { exactMove(stopWaste.form, { on: stopWaste.form.on, kind: k }); stopWaste.pickKind(k) }
+  const heldTypes = swKind === 'PAUSE_KEYWORD' ? { keys: ['P', 'E', 'product'], reason: HELD_TYPES_WHY.PAUSE_KEYWORD }
+    : swKind === 'NEGATE_TERM' && exactHold ? { keys: ['P', 'product'], reason: HELD_TYPES_WHY.NEGATE_TERM } : null
+  /** S2 — a part held for "Pause keyword": dimmed and out of reach (`PAUSE_UNUSED` says why beside it). */
+  const unusedCls = (base: string) => (pauseUnused ? `${base} ${swStyles.unused}` : base)
+  const unusedAttrs = pauseUnused ? { inert: true, 'aria-disabled': true } : {}
+  // The DS Banner: it takes the builder's light pin (a dark OS left the old held note dark on the light page).
+  const unusedNote = pauseUnused ? <Banner tone="info" className={swStyles.unusedNote}>{PAUSE_UNUSED}</Banner> : null
   // ── Budget rule (campaign-budget surface) — inline picker + global lookback (B1/B3 fill) ──
   const [selCampaigns, setSelCampaigns] = useState<BudgetCampaign[]>([])
   // ── B5 guardrails (budget) ──
@@ -816,6 +869,8 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
     [{
           type: slug, control: beltToSave({ isEdit, initial: initialControl.current, chosen: control, stored: savedBelt.current }), dedupe, negateInSource, bid: { mode: bidMode, value: normalizeDecimalText(bidValue) }, filters: { brandExclude: brandExclude.split(/[\n,]/).map((t) => t.trim()).filter(Boolean), competitorOnly }, searchTerms, schedule: scheduleToSave({ frequency, everyN: normalizeDecimalText(everyN), interval, onDay, time, timezone }),
           ...(isNegative ? { protectConverting, protectDays: nums.values.protectDays, negationLevel } : {}),
+          // Wave 4 — the safe test the API reads (`stopWasteParamsOf`); absent while the section is off.
+          ...(isNegative && stopWaste.payload ? { stopWaste: stopWaste.payload } : {}),
           ...(isCampaign ? { campaigns: selCampaigns.map((c) => ({ id: c.id, name: c.name, marketplace: c.marketplace, adProduct: c.adProduct, targetingType: c.targetingType, dailyBudget: c.dailyBudget })) } : {}),
           // 4g — an EMPTY Max is the one null sent ("no cap"); a typed value is its number or holds Save.
           ...(isBudget ? { budgetFloor: nums.values.budgetFloor, budgetCeiling: nums.values.budgetCeiling } : {}),
@@ -827,7 +882,7 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
           // Keyword Harvest — an edit keeps Auto's mark; without it the engine treats the rule's Auto as asking.
           ...(isHarvest && savedHarvestAuto.current ? { harvestAuto: savedHarvestAuto.current } : {}),
         }]
-  ), [slug, isEdit, control, dedupe, negateInSource, bidMode, bidValue, brandExclude, competitorOnly, searchTerms, frequency, everyN, interval, onDay, time, timezone, isNegative, protectConverting, negationLevel, isCampaign, selCampaigns, isBudget, isPlacement, isBidLike, nums, isBid, lookbackDays, blocks])
+  ), [slug, isEdit, control, dedupe, negateInSource, bidMode, bidValue, brandExclude, competitorOnly, searchTerms, frequency, everyN, interval, onDay, time, timezone, isNegative, protectConverting, negationLevel, isCampaign, selCampaigns, isBudget, isPlacement, isBidLike, nums, isBid, lookbackDays, blocks, stopWaste.payload])
   /**
    * ── KT-P1 (2026-08-22) — the rank feed's own state, because a Keyword Tracker rule is inert
    * without it ───────────────────────────────────────────────────────────────────────────────
@@ -971,10 +1026,43 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
       readAt: string
     } | null
     error?: string
+    /** Wave 4 — the stop-waste preview (the engine's own test on this draft): its kind and what would ask. */
+    stopWaste?: { kind: 'PAUSE_KEYWORD' | 'NEGATE_TERM'; wouldChange: number; wouldAsk: number } | null
   } | null>(null)
   // Live, read-only preview — budget shows current→proposed daily budgets, harvest converting terms, negative wasting terms.
   const runPreview = useCallback(async () => {
     setPreview({ open: true, loading: true, terms: [] })
+    /**
+     * Wave 4 — "Stop waste — may run alone" on: what THIS draft would change now, by the engine's own test, its criteria
+     * and its Ad Group Mapping (POST /waste/rules/preview with the draft; nothing written). The candidate list below is
+     * not what such a rule does, so it is not shown for one.
+     */
+    if (isNegative && stopWaste.payload) {
+      try {
+        const r = await fetch(`${getBackendUrl()}/api/advertising/waste/rules/preview`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store',
+          body: JSON.stringify({ builder: { actions: previewActions(), conditions: previewConditions(), scopeMarketplace: scopeMarket && scopeMarket !== 'all' ? scopeMarket : null }, limit: 100 }),
+        })
+        const j = await r.json().catch(() => null)
+        if (!r.ok || !j) {
+          setPreview({ open: true, loading: false, terms: [], stopWaste: null, error: typeof j?.error === 'string' && j.error ? j.error : 'Preview is unavailable right now.' })
+          return
+        }
+        const kind = stopWaste.payload.kind
+        setPreview({
+          open: true, loading: false,
+          terms: (Array.isArray(j.sample) ? j.sample : []).map((x: { row?: { name?: string }; action?: string; alone?: boolean; asks?: string | null; test?: { clicks?: number; spendCents?: number } | null }) => ({
+            term: String(x.row?.name ?? ''), matchType: STOP_WASTE_WORD[kind].title,
+            clicks: x.test?.clicks, spend: typeof x.test?.spendCents === 'number' ? x.test.spendCents / 100 : undefined,
+            ...(x.alone === false && x.asks ? { refused: x.asks } : {}),
+          })),
+          stopWaste: { kind, wouldChange: Number(j.wouldChange) || 0, wouldAsk: Number(j.wouldAsk) || 0 },
+        })
+      } catch {
+        setPreview({ open: true, loading: false, terms: [], stopWaste: null, error: 'Preview is unavailable right now.' })
+      }
+      return
+    }
     if (isBudget) {
       /**
        * 🔴 BUD-PP — this used to be arithmetic in the browser: every picked campaign, `groups[0]`'s
@@ -1254,7 +1342,7 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
   // callback captured the market chosen when the form first rendered ('all'), so switching the
   // scope to FR still previewed the DE campaigns — a stale closure producing a confident wrong
   // answer, invisible to unit tests and to a direct API call. Found by driving the real form.
-  }, [groups, isHarvest, isBudget, isPlacement, isBidLike, isRank, selCampaigns, budgetFloor, budgetCeiling, placeFloor, placeCeiling, bidFloor, bidCeiling, scopeMarket, previewActions, previewConditions])
+  }, [groups, isHarvest, isBudget, isPlacement, isBidLike, isRank, selCampaigns, budgetFloor, budgetCeiling, placeFloor, placeCeiling, bidFloor, bidCeiling, scopeMarket, previewActions, previewConditions, isNegative, stopWaste.payload])
   // Esc closes the Preview modal
   useEffect(() => {
     if (!preview?.open) return
@@ -1329,7 +1417,9 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
    * destructive path look safe for as long as it did.
    */
   // 4g — and every number it sends can be read and is in range (`numbersValid`; each field names its problem).
-  const valid = numbersValid && (locked
+  /** Why Automate stays held with "Stop waste" on (the API's own shape check); null when this rule may run alone. */
+  const stopWasteHeld = isNegative && !locked ? autoHeldBy(stopWaste.form, { negationLevel, groups: blocks.flatMap((b) => b.groups) }) : null
+  const valid = numbersValid && stopWaste.ok && (locked
     ? ruleName.trim().length > 0 && (locked.level === 'meta' || conditionsFilled)
     : ruleName.trim().length > 0 && targetsValid && criteriaValid)
 
@@ -1493,6 +1583,8 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
           if (rule.maxWritesPerDay != null) setMaxWrites(String(rule.maxWritesPerDay))
           if (rule.maxExecutionsPerDay != null) setMaxExecs(String(rule.maxExecutionsPerDay))
           setLocked({ level: bv.editLevel === 'criteria' ? 'criteria' : 'meta', blockers: bv.blockers ?? [], actionSummary: bv.actionSummary ?? [] })
+          // Wave 4 — a stop-waste rule made before (the page's earlier editor, or Claude): its test shown, read only.
+          if (isNegative && Array.isArray(rule.actions) && rule.actions[0]?.stopWaste) { stopWaste.hydrate(rule.actions[0].stopWaste); setStopWasteLocked(true) }
           // An engine rule stores no schedule: it runs on every 15-minute tick.
           setFrequency(EVERY_TICK)
           setOpenedOnTick(true)
@@ -1517,6 +1609,7 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
         if (typeof a.protectConverting === 'boolean') setProtectConverting(a.protectConverting)
         if (a.protectDays != null) setProtectDays(String(a.protectDays))
         if (a.negationLevel) setNegationLevel(a.negationLevel)
+        if (isNegative) stopWaste.hydrate(a.stopWaste)
         if (isCampaign && Array.isArray(a.campaigns)) setSelCampaigns(a.campaigns.map((c: Record<string, unknown>) => ({ id: String(c.id), name: String(c.name ?? c.id), marketplace: (c.marketplace as string) ?? null, status: String(c.status ?? 'ENABLED').toUpperCase(), targetingType: String(c.targetingType ?? 'MANUAL'), adProduct: String(c.adProduct ?? 'SP'), dailyBudget: c.dailyBudget != null ? Number(c.dailyBudget) : null })))
         if (isBudget) {
           if (a.budgetFloor != null) setBudgetFloor(String(a.budgetFloor))
@@ -1550,6 +1643,8 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
         if (s.timezone) setTimezone(s.timezone)
         const maps = Array.isArray(a.mappings) ? a.mappings : []
         if (maps.length) setBlocks(maps.map((m: { groups?: Array<Partial<SelGroup>> }) => ({ id: ++_bid, groups: (Array.isArray(m.groups) ? m.groups : []).map((g) => ({ id: String(g.id), name: g.name ?? String(g.id), campaignId: g.campaignId ?? '', campaignName: g.campaignName ?? null, status: g.status ?? 'ENABLED', campaignStatus: null, adProduct: g.adProduct ?? null, portfolioId: g.portfolioId ?? null, look: g.look !== false, types: g.types ?? { P: true, E: true, product: false }, paused: g.paused === true })) })))
+        // R-S1 — a saved "Negative exact" rule that is exact only already opens held; one with a phrase ticked keeps it.
+        if (isNegative && a.stopWaste?.kind === 'NEGATE_TERM' && !maps.some((m: { groups?: Array<{ types?: { P?: boolean; product?: boolean } }> }) => (m.groups ?? []).some((g) => g.types?.P || g.types?.product))) setExactHold(true)
       } catch { /* ignore */ } finally { if (alive) setHydrated(true) }
     })()
     return () => { alive = false }
@@ -1591,6 +1686,8 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
     dedupe, negateInSource, bidMode, bidValue, brandExclude, competitorOnly, protectConverting, protectDays, negationLevel,
     budgetFloor, budgetCeiling, placeFloor, placeCeiling, bidFloor, isEdit || ceilingTouched.current ? bidCeiling : '',
     maxAdSpend, maxWrites, maxExecs, scopeMarket, lookbackDays, control,
+    // Wave 4 — the negative builder's "Stop waste" section (null while it is off, and for every other type).
+    stopWaste.on ? stopWaste.form : null,
   ])
   const baseline = useRef<string | null>(null)
   useEffect(() => { if (hydrated && baseline.current == null) baseline.current = snapshot }, [hydrated, snapshot])
@@ -1783,6 +1880,7 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
                   onToggleLook={(id) => toggleLook(block.id, id)}
                   onToggleType={(id, t) => toggleType(block.id, id, t)}
                   onRemoveBlock={() => removeBlock(block.id)}
+                  heldTypes={heldTypes}
                 />
               ))}
               {/* THE campaign selector — `_schedule/CampaignSection.tsx`, the same component the
@@ -1931,7 +2029,8 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
                   {(surface === 'search-terms' || (isBidLike && !isBid)) && (
                   <div className="h10-rb-lookback">
                     <label>Measurement window</label>
-                    <PcWindowNote slug={slug} />
+                    {/* Audit S1 — with Stop waste on the rule runs on the safe test's window: one window on the page. */}
+                    {isNegative && stopWaste.on ? <p className="h10-pc-winnote">{windowWords(stopWaste.form)}</p> : <PcWindowNote slug={slug} />}
                   </div>
                   )}
                 </div>
@@ -1974,7 +2073,8 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
             <section id="rb-search-terms" className="h10-rb-sec">
               <h2>Search Terms</h2>
               <p className="h10-rb-desc">Isolate specific search terms using the &ldquo;contains&rdquo; or &ldquo;does not contain&rdquo; operator.</p>
-              <div className="h10-rb-st">
+              {unusedNote}
+              <div className={unusedCls('h10-rb-st')} {...unusedAttrs}>
                 <div className="left">
                   <div className="strow">
                     <span className="l">Only suggest if search term:</span>
@@ -1998,7 +2098,7 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
                   </div>
                 </div>
               </div>
-              <div className="h10-rb-brand">
+              <div className={unusedCls('h10-rb-brand')} {...unusedAttrs}>
                 <div className="bl"><b>Brand &amp; competitor filters</b><span>{isHarvest ? 'Don’t harvest your own brand terms; optionally only harvest competitor ASINs.' : 'Never negate your own brand terms; optionally only negate competitor ASINs.'}</span></div>
                 <Textarea className="h10-rb-ta brand" value={brandExclude} onChange={(e) => setBrandExclude(e.target.value)} placeholder={isHarvest ? 'Brand terms to never harvest (one per line or comma-separated)' : 'Brand terms to never negate (one per line or comma-separated)'} aria-label="Brand terms to protect" />
                 <label className="h10-rb-compt"><Toggle checked={competitorOnly} aria-label="Only competitor ASINs" onChange={setCompetitorOnly} /> Only {isHarvest ? 'harvest' : 'negate'} competitor ASINs (exclude same-brand search terms)</label>
@@ -2112,8 +2212,9 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
                   </div>
                 </div>
                 )}
+                {isNegative && unusedNote}
                 {isNegative && (
-                <div className="advblock">
+                <div className={unusedCls('advblock')} {...unusedAttrs}>
                   <b>Negation Level</b>
                   {/* NEG-P2 — the landing rate is a measured fact, not a preference: ad-group
                       negatives confirm at Amazon ~99%; campaign-level ones have historically
@@ -2145,6 +2246,17 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
               </div>
             </section>
 
+            {/* ── Stop waste — may run alone (wave 4, negative-targeting only) ── */}
+            {isNegative && (
+              <StopWasteSection
+                form={stopWaste.form}
+                onChange={sectionChange}
+                onKind={sectionKind}
+                heldBy={stopWasteHeld}
+                readOnly={locked ? (stopWasteLocked ? 'Made by the rule engine: its test is shown as it is kept, and only its mode changes on the Rules page.' : 'Made by the rule engine: Stop waste is not set on it here.') : null}
+              />
+            )}
+
             {/* ── Control ── */}
             <section id="rb-control" className="h10-rb-sec">
               <h2>Control</h2>
@@ -2162,12 +2274,17 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
                 {/* HP4 — the graduation ceiling, stated BEFORE save (the bid builder's
                     pause-action HoverCard precedent): a structural rule cannot reach full
                     automation, and the radio must not promise it. */}
-                {isNegative && ' This rule CREATES things, and creation is held below full automation by policy: whichever you choose, its actions queue on the Suggestions page for your approval.'}
+                {isNegative && !stopWaste.on && ' This rule CREATES things, and creation is held below full automation by policy: whichever you choose, its actions queue on the Suggestions page for your approval.'}
+                {/* Wave 4 — with "Stop waste — may run alone" on, Automate may act alone inside the caps, or says why not. */}
+                {isNegative && stopWaste.on && (stopWasteHeld
+                  ? ` Stop waste is on, but Automate stays held: ${stopWasteHeld}`
+                  : ` With Stop waste on (${STOP_WASTE_WORD[stopWaste.form.kind].title}), Automate may act on its own inside its caps, once the rule has run long enough to earn it.`)}
                 {/* Keyword Harvest (2026-10-11, D2) — Automate harvests alone, inside its caps (the Manual card names the Keyword Harvest page). */}
                 {isHarvest && ' On Automate it harvests by itself, inside its caps.'}
               </p>
               <div className="h10-rb-card control">
-                {surface === 'search-terms' && (<div className="h10-rb-dedupe">
+                {pauseUnused && unusedNote}
+                {surface === 'search-terms' && (<div className={unusedCls('h10-rb-dedupe')} {...unusedAttrs}>
                   <Toggle checked={dedupe} aria-label="Do not suggest existing search terms" onChange={setDedupe} />
                   {/* NEG-P2 — one toggle, two truths: for a negative rule the duplicate being
                       skipped is an existing NEGATIVE at the chosen level, not a keyword. */}
@@ -2176,7 +2293,7 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
                     : 'Select to NOT suggest any search terms that already exist with the same match type in the campaigns from this rule group'}</span>
                 </div>)}
                 {isNegative && (
-                <div className="h10-rb-dedupe">
+                <div className={unusedCls('h10-rb-dedupe')} {...unusedAttrs}>
                   <Toggle checked={protectConverting} aria-label="Protect converting search terms" onChange={setProtectConverting} />
                   <span>Never create a negative for a term that <b>converted</b> (≥1 order) in the last <Input size="xs" fieldClassName="h10-rb-ninline" className="h10-rb-nincenter" inputMode="numeric" placeholder="30" value={protectDays} onChange={(e) => setProtectDays(e.target.value)} aria-label="Protection window in days" {...(nums.errors.protectDays ? { 'aria-invalid': true, 'aria-describedby': 'rb-protect-err' } : {})} /> days in any campaign — protects proven keywords from being blocked.</span>
                 </div>
@@ -2272,7 +2389,7 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
       {preview?.open && (
         <div className="h10-rb-prevback" onClick={() => setPreview(null)}>
           <div className={`h10-rb-prev${isRank ? ' ktp' : ''}`} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={isRank ? 'Keyword Tracker preview' : isSov ? 'Share of Voice preview' : isBidLike ? 'Bid preview' : isPlacement ? 'Placement preview' : isBudget ? 'Budget preview' : isHarvest ? 'Harvest preview' : 'Negative targeting preview'}>
-            <div className="ph"><b>{isSov ? 'Share of Voice Preview — current → proposed' : isBidLike ? 'Bid Preview — current → proposed' : isPlacement ? 'Placement Preview — current → proposed' : isBudget ? 'Budget Preview — current → proposed' : isHarvest ? 'Preview — converting search terms' : 'Preview — wasting search terms'}</b><ToolbarButton icon={<X size={18} />} label="Close" tooltip={false} onClick={() => setPreview(null)} /></div>
+            <div className="ph"><b>{isSov ? 'Share of Voice Preview — current → proposed' : isBidLike ? 'Bid Preview — current → proposed' : isPlacement ? 'Placement Preview — current → proposed' : isBudget ? 'Budget Preview — current → proposed' : isHarvest ? 'Preview — converting search terms' : preview.stopWaste?.kind === 'PAUSE_KEYWORD' ? 'Preview — keywords it would pause' : 'Preview — wasting search terms'}</b><ToolbarButton icon={<X size={18} />} label="Close" tooltip={false} onClick={() => setPreview(null)} /></div>
             <div className="psub">{isRank ? (preview?.rank && preview.rank.matched > 0
               ? `Live, read-only: the ${preview.rank.matched} keyword${preview.rank.matched === 1 ? '' : 's'} in your ${preview.rank.selected} selected campaign${preview.rank.selected === 1 ? '' : 's'} that ${preview.rank.matched === 1 ? 'matches' : 'match'} these criteria right now, and the bid each would get. Evaluated by the rule engine against the latest ${rankReadingNoun(preview.rank.feed.measured ?? rankFeed?.measured)} for each keyword.`
               : 'Live, read-only: the keywords that match these criteria right now, and the bid each would get.') : isSov ? (preview?.sov && preview.sov.matched > 0
@@ -2281,7 +2398,9 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
               ? `Live, read-only: the ${preview.place.matched} of ${preview.place.selected} selected campaigns that ${preview.place.matched === 1 ? 'matches' : 'match'} these criteria right now, and the placement modifier each would get. Evaluated by the rule engine over the last ${preview.place.windowDays} settled days.`
               : 'Live, read-only: the campaigns that match these criteria right now, and the placement modifier each would get.') : isBudget ? (preview?.budget && preview.budget.matched > 0
               ? `Live, read-only: the ${preview.budget.matched} of ${preview.budget.selected} selected campaigns that ${preview.budget.matched === 1 ? 'matches' : 'match'} these criteria right now, and the daily budget each would get. Evaluated by the rule engine over the last ${preview.budget.windowDays} settled days.`
-              : 'Live, read-only: the campaigns that match these criteria right now, and the daily budget each would get.') : isHarvest ? 'Live, read-only: search terms currently meeting your criteria that would be harvested.' : 'Live, read-only: search terms currently meeting your criteria that would be negated.'}</div>
+              : 'Live, read-only: the campaigns that match these criteria right now, and the daily budget each would get.') : isHarvest ? 'Live, read-only: search terms currently meeting your criteria that would be harvested.' : preview.stopWaste
+                ? `Live, read-only, by the safe test: ${preview.stopWaste.wouldChange} ${preview.stopWaste.kind === 'PAUSE_KEYWORD' ? (preview.stopWaste.wouldChange === 1 ? 'keyword it would pause' : 'keywords it would pause') : (preview.stopWaste.wouldChange === 1 ? 'search term it would negate' : 'search terms it would negate')} now${preview.stopWaste.wouldAsk ? ` — ${preview.stopWaste.wouldAsk} of them would ask you first, even on Automate` : ''}. Nothing is written.`
+                : 'Live, read-only: search terms currently meeting your criteria that would be negated.'}</div>
             <div className="pbody">
               {preview.loading ? <div className="pmsg">Loading…</div>
                 : preview.terms.length === 0 ? <div className="pmsg">{isBid ? (preview.error ? preview.error
@@ -2318,7 +2437,7 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
                   : !preview.budget || preview.budget.selected === 0 ? 'Add campaigns above to preview their new budgets.'
                   : preview.budget.measurable === 0 ? `${preview.budget.selected === 1 ? 'Your selected campaign has' : `None of your ${preview.budget.selected} selected campaigns has`} no ad spend in the last ${preview.budget.windowDays} settled days, so no budget rule can reach ${preview.budget.selected === 1 ? 'it' : 'them'} yet.`
                   : preview.budget.inScope === 0 ? `${preview.budget.measurable} of your selected campaigns ${preview.budget.measurable === 1 ? 'has' : 'have'} spend in the window, but none is in ${scopeMarket === 'all' ? 'the chosen market' : scopeMarket}.`
-                  : `No campaign matches these criteria right now — ${preview.budget.inScope} campaign${preview.budget.inScope === 1 ? ' was' : 's were'} measured over the last ${preview.budget.windowDays} settled days. The rule is still valid; it will act when one does.`) : isHarvest ? 'No converting search terms match the current criteria yet.' : 'No wasting search terms match the current criteria yet.'}</div>
+                  : `No campaign matches these criteria right now — ${preview.budget.inScope} campaign${preview.budget.inScope === 1 ? ' was' : 's were'} measured over the last ${preview.budget.windowDays} settled days. The rule is still valid; it will act when one does.`) : isHarvest ? 'No converting search terms match the current criteria yet.' : preview.error ? preview.error : preview.stopWaste?.kind === 'PAUSE_KEYWORD' ? 'No keyword fails the safe test now.' : 'No wasting search terms match the current criteria yet.'}</div>
                 : isRank
                   ? (<>
                     {/* 🔴 KT-P2 — every rank cell is null-safe by construction: the context OMITS an
@@ -2461,7 +2580,7 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
                   </>)
                   : isHarvest
                   ? (<div className="ptable"><div className="pthr"><span>Search Term</span><span>Orders</span><span>Spend</span></div>{preview.terms.map((t, i) => (<div className="ptr" key={i}><span className="term" title={t.term}>{t.term}</span><span>{t.orders ?? '—'}</span><span>{t.spend != null ? `€${t.spend.toFixed(2)}` : '—'}</span></div>))}</div>)
-                  : (<div className="ptable"><div className="pthr"><span>Search Term</span><span>Match</span><span>Clicks</span><span>Spend</span></div>{preview.terms.map((t, i) => (<div className="ptr" key={i}><span className="term" title={t.term}>{t.term}</span><span title={t.matchType}>{matchLabel(t.matchType)}</span><span>{t.clicks ?? '—'}</span><span>{t.spend != null ? `€${t.spend.toFixed(2)}` : '—'}</span></div>))}</div>)}
+                  : (<div className="ptable"><div className="pthr"><span>{preview.stopWaste?.kind === 'PAUSE_KEYWORD' ? 'Keyword' : 'Search Term'}</span><span>{preview.stopWaste ? 'Action' : 'Match'}</span><span>Clicks</span><span>Spend</span></div>{preview.terms.map((t, i) => (<div className="ptr" key={i}><span className="term" title={t.term}>{t.term}{t.refused ? <em className="pnote eng" title={t.refused}>asks you first</em> : null}</span><span title={t.matchType}>{matchLabel(t.matchType)}</span><span>{t.clicks ?? '—'}</span><span>{t.spend != null ? `€${t.spend.toFixed(2)}` : '—'}</span></div>))}</div>)}
             </div>
           </div>
         </div>
@@ -2545,10 +2664,12 @@ function inertOutside(root: HTMLElement): () => void {
 
 // ── one source→target mapping block (the H2 two-panel + multi-block chrome). Harvest can have
 //    several; Negative has one (isMulti false ⇒ no label / remove). ──
-function MappingBlock({ block, setup, index, isMulti, popOpen, onTogglePop, onClosePop, onAdd, onRemoveGroup, onToggleLook, onToggleType, onRemoveBlock }: {
+function MappingBlock({ block, setup, index, isMulti, popOpen, onTogglePop, onClosePop, onAdd, onRemoveGroup, onToggleLook, onToggleType, onRemoveBlock, heldTypes }: {
   block: MapBlock; setup: (typeof SETUP)[string]; index: number; isMulti: boolean; popOpen: boolean
   onTogglePop: () => void; onClosePop: () => void; onAdd: (items: AdGroupItem[]) => void
   onRemoveGroup: (id: string) => void; onToggleLook: (id: string) => void; onToggleType: (id: string, t: 'P' | 'E' | 'product') => void; onRemoveBlock: () => void
+  /** Wave 4 (negative builder, audit M2/S2) — target types the Stop waste section holds, and why (said on hover and to a screen reader). */
+  heldTypes?: { keys: readonly string[]; reason: string } | null
 }) {
   const groups = block.groups
   return (
@@ -2586,7 +2707,7 @@ function MappingBlock({ block, setup, index, isMulti, popOpen, onTogglePop, onCl
           ) : (
             <div className="h10-rb-agrows">{groups.map((g) => (
               <div className="agrow tgt" key={g.id}>
-                <span className="chips">{setup.matchTypes.map((m) => { const k = m.key as 'P' | 'E' | 'product'; return (<HoverCard key={m.key} text={m.tip} placement="above"><button type="button" className={`tchip ${g.types[k] ? 'on' : ''}`} aria-pressed={g.types[k]} onClick={() => onToggleType(g.id, k)}>{m.product ? <Package size={14} /> : m.key}</button></HoverCard>) })}</span>
+                <span className="chips">{setup.matchTypes.map((m) => { const k = m.key as 'P' | 'E' | 'product'; const held = heldTypes?.keys.includes(k) ? heldTypes.reason : null; return (<HoverCard key={m.key} text={held ?? m.tip} placement="above"><button type="button" className={`tchip ${g.types[k] ? 'on' : ''}${held ? ` ${swStyles.heldChip}` : ''}`} aria-pressed={g.types[k]} {...(held ? { 'aria-disabled': true, 'aria-description': held } : {})} onClick={() => { if (!held) onToggleType(g.id, k) }}>{m.product ? <Package size={14} /> : m.key}</button></HoverCard>) })}</span>
                 <ToolbarButton tone="danger" size="sm" className="agrm" icon={<X size={15} />} label={`Remove ${g.name}`} tooltip={false} onClick={() => onRemoveGroup(g.id)} />
               </div>
             ))}</div>

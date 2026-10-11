@@ -1,7 +1,7 @@
 /**
  * BSP.0 — the typed seam between this page's shell and its six sections.
  *
- * Same shape as `bid/slot-contract.ts` and `negative-targeting/slot-contract.ts`, for the same
+ * Same shape as `bid/slot-contract.ts`, for the same
  * reason: seven sessions add content to this page after this one, and each of them should be one
  * new file plus one import line. Nobody restructures the client, and nobody re-derives what scope
  * means.

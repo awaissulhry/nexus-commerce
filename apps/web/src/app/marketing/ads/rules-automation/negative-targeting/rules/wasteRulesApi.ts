@@ -1,19 +1,17 @@
 /**
  * Negative Targeting page, Rules view (2026-10-11) — every call the view makes. Reads: the stop-waste rules (list,
- * starters, preview, history), the stored rule (its verb and run time; a builder rule's own shape), the rows waiting for
- * a person, the places a rule may act on. Writes, each only after the person saved it in a review: a rule's mode,
- * archive / unarchive, a new rule, an edit of its fields, an Undo of one change, approve / reject of waiting asks.
- * Every refusal comes back in the server's own words (`refusalWords`, the Bid page's one helper). The stored rule and
- * the undo preview are the Bid page's own reads (`bid/rules/ruleApi.ts`).
+ * preview, history), the rows waiting for a person. Writes, each only after the person saved it in a review: a rule's
+ * mode, archive / unarchive, an Undo of one change, approve / reject of waiting asks. Rules are made and edited in the
+ * rule builder (wave 4). Every refusal comes back in the server's own words (`refusalWords`, the Bid page's one helper).
+ * The stored rule and the undo preview are the Bid page's own reads (`bid/rules/ruleApi.ts`).
  *
- * All under /api/advertising/waste (routes/advertising-waste.routes.ts), except the stored rule and the scope lists
- * (the rule builder's own reads) and the undo route every page shares (POST /advertising/changes/:id/undo).
+ * All under /api/advertising/waste (routes/advertising-waste.routes.ts), except the undo route every page shares
+ * (POST /advertising/changes/:id/undo) and a rule card's restore (POST /advertising/suggestions/:id/restore).
  */
 import { getBackendUrl } from '@/lib/backend-url'
 import { refusalWords } from '../../bid/rules/ruleChanges'
 import type { BidMode } from '../../bid/rules/bidRulesModel'
 import type { ArchiveAnswer, WaitingRow, WasteHistory, WastePreview, WasteRulesAnswer } from './wasteRulesModel'
-import type { ScopeAdGroup, ScopeCampaign, ScopeData, ScopePortfolio, Starter, WasteRuleBody } from './newRuleModel'
 
 const api = (path: string) => `${getBackendUrl()}/api/advertising${path}`
 const JSON_HEADERS = { 'Content-Type': 'application/json' }
@@ -46,13 +44,8 @@ export async function fetchWasteRules(market: string): Promise<WasteRulesAnswer>
   return readJson(await fetch(api(`/waste/rules?${q}`), { cache: 'no-store' }))
 }
 
-export async function fetchStarters(): Promise<Starter[]> {
-  const j = await readJson<{ starters?: Starter[] }>(await fetch(api('/waste/rules/starters'), { cache: 'no-store' }))
-  return Array.isArray(j.starters) ? j.starters : []
-}
-
-/** A saved rule's preview (`{ ruleId }`) or a draft's (`{ rule }`): what it would stop now. Writes nothing. */
-export async function fetchWastePreview(body: { ruleId: string } | { rule: WasteRuleBody }, limit = 50, signal?: AbortSignal): Promise<WastePreview> {
+/** A saved rule's preview: what it would stop now. Writes nothing. */
+export async function fetchWastePreview(body: { ruleId: string }, limit = 50, signal?: AbortSignal): Promise<WastePreview> {
   return readJson(await fetch(api('/waste/rules/preview'), { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ ...body, limit }), cache: 'no-store', signal }))
 }
 
@@ -70,18 +63,6 @@ export async function fetchWaitingRows(market: string): Promise<{ rows: WaitingR
   return { rows, total: typeof j.total === 'number' ? j.total : rows.length }
 }
 
-/** Every campaign and portfolio (the rule builder's own list): the places a rule may act on, with the markets. */
-export async function fetchScopeOptions(): Promise<Pick<ScopeData, 'campaigns' | 'portfolios'>> {
-  const j = await readJson<{ campaigns?: ScopeCampaign[]; portfolios?: ScopePortfolio[] }>(await fetch(api('/scope-options'), { cache: 'no-store' }))
-  return { campaigns: Array.isArray(j.campaigns) ? j.campaigns : [], portfolios: Array.isArray(j.portfolios) ? j.portfolios : [] }
-}
-
-/** The ad groups of one market, each with its campaign (the rule builder's own list). */
-export async function fetchAdGroups(market: string): Promise<ScopeAdGroup[]> {
-  const j = await readJson<{ items?: ScopeAdGroup[] }>(await fetch(api(`/ad-groups?marketplace=${encodeURIComponent(market)}&limit=5000`), { cache: 'no-store' }))
-  return Array.isArray(j.items) ? j.items : []
-}
-
 // ── writes ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export interface ModeResult { id: string; ok: boolean; level?: string; error?: string }
@@ -94,10 +75,6 @@ export async function saveModes(ids: readonly string[], mode: BidMode): Promise<
 
 export const archiveRule = (id: string) => send<ArchiveAnswer>(`/waste/rules/${encodeURIComponent(id)}/archive`, 'POST', {})
 export const unarchiveRule = (id: string) => send<ArchiveAnswer>(`/waste/rules/${encodeURIComponent(id)}/unarchive`, 'POST', {})
-
-export interface SavedRule { id: string; name: string; created: boolean; level: string; sentence: string }
-export const createRule = (body: WasteRuleBody) => send<SavedRule>('/waste/rules', 'POST', body)
-export const patchRule = (id: string, body: Partial<WasteRuleBody>) => send<SavedRule>(`/waste/rules/${encodeURIComponent(id)}`, 'PATCH', body)
 
 /** POST /changes/:id/undo — the server re-checks the window, whether it already went and whether it reached Amazon. */
 export async function undoChange(changeId: string): Promise<Outcome> {

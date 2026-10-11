@@ -190,6 +190,21 @@ export function scopeText(row: Pick<WasteRuleRow, 'scope' | 'market'>): string {
   return n > 1 ? `${path}${whole} · ${n} campaigns` : `${path}${whole}`
 }
 
+// ── a stop-waste rule's test and action, in chips' words ──────────────────────────────────────────────────────────
+
+/** What a stop-waste rule does, in the builder's words: "Pause keyword, keep it paused", "Negative exact", "Negative phrase · whole campaign". */
+export function verbWords(kind: WasteKind, f: { match?: 'EXACT' | 'PHRASE'; level?: 'AD_GROUP' | 'CAMPAIGN' } = {}): string {
+  if (kind === 'PAUSE_KEYWORD') return ACTION_WORD.PAUSE
+  return `Negative ${f.match === 'PHRASE' ? 'phrase' : 'exact'}${f.level === 'CAMPAIGN' ? ' · whole campaign' : ''}`
+}
+
+const multiple = (m: number) => `${Number.isInteger(m) ? m : m.toFixed(1)} ×`
+
+/** The test in chips' words (the builder's, no jargon): "0 orders", "≥ 20 clicks", "spend ≥ 2 × target cost per order", "60 d". */
+export function testWords(f: Pick<WasteTest, 'windowDays' | 'minClicks' | 'cpaMultiple'>): string[] {
+  return ['0 orders', `≥ ${f.minClicks} clicks`, `spend ≥ ${multiple(f.cpaMultiple)} target cost per order`, `${f.windowDays} d`]
+}
+
 // ── last 7 days ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export const LAST_WEEK = `Last ${WEEK}`
@@ -304,7 +319,7 @@ export function whoWord(c: Pick<WasteRuleChange, 'who'>, ownerId: string): strin
 
 export type WasteAction = 'PAUSE' | 'NEGATE_EXACT' | 'NEGATE_PHRASE' | 'NEGATE_ASIN'
 export const ACTION_WORD: Readonly<Record<WasteAction, string>> = {
-  PAUSE: 'Pause · keep paused',
+  PAUSE: 'Pause keyword, keep it paused',
   NEGATE_EXACT: 'Negative exact',
   NEGATE_PHRASE: 'Negative phrase',
   NEGATE_ASIN: 'Negative product',

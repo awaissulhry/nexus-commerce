@@ -185,10 +185,6 @@ createServer(async (req, res) => {
       const { listHarvestPathways } = await import('../src/services/advertising/harvest-pathways.service.js')
       return json(200, await listHarvestPathways())
     }
-    if (url === '/api/advertising/negatives/strip' && req.method === 'GET') {
-      const { getNegativesStrip } = await import('../src/services/advertising/negatives.service.js')
-      return json(200, await getNegativesStrip())
-    }
     // BUD-PP / PLC-P2 — the draft-rule preview, served from the real service (engine, dryRun, no
     // writes), dispatched on the draft's slug exactly as the route does.
     if (url === '/api/advertising/automation-rules/preview' && req.method === 'POST') {

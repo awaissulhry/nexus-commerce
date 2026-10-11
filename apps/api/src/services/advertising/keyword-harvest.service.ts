@@ -344,9 +344,8 @@ export interface HvCensus {
     repeatedValues: Array<{ salesCents: number; terms: number }>
   }
   /**
-   * D4 — the wasteful-term negatives belong to Negative Targeting, which already has
-   * `NegWastefulWords.tsx` stubbed for them. Stated here with a link out; never rendered in this
-   * grid.
+   * D4 — the wasteful-term negatives belong to the Negative Targeting page. Stated here with a
+   * link out; never rendered in this grid.
    */
   negativeCandidates: { count: number; spendCents: number }
   /** HV.3 — how the destination resolved across the whole candidate set, and the §4.1 coupling. */

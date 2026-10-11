@@ -203,6 +203,8 @@ export async function createAdsRule(body: AdsRuleCreateInput, actor: AdsActor, e
     if (bad.length) return refused(400, untranslatableBody(bad, true))
   }
   if (!ADS_RULE_TRIGGERS.has(body.trigger)) return refused(400, { error: `unknown trigger: ${body.trigger}` })
+  // Wave 4 — a Negative Targeting builder rule's trigger follows its "Stop waste" kind (the pause rides TARGET_PERFORMANCE).
+  const trigger = (await import('./ads-rule-adapter.service.js')).negativeBuilderTrigger(body.actions) ?? body.trigger
   // 4c — a scope it can never fire in (picks outside its market, a market with no connection, non-SP placement picks).
   const scopeProblems = await ruleScopeProblems(body)
   if (scopeProblems.length) return refused(400, invalidValuesBody(scopeProblems))
@@ -211,7 +213,7 @@ export async function createAdsRule(body: AdsRuleCreateInput, actor: AdsActor, e
       name: body.name,
       description: body.description ?? null,
       domain: 'advertising',
-      trigger: body.trigger,
+      trigger,
       conditions: (body.conditions ?? []) as object,
       actions: (body.actions ?? []) as object,
       // Safe defaults: every new advertising rule starts disabled +
@@ -319,6 +321,12 @@ export async function updateAdsRule(id: string, body: AdsRuleUpdateInput, actor:
     data.conditions = stored.conditions
   }
   if (body.actions !== undefined) data.actions = body.actions
+  // Wave 4 — as the create: a Negative Targeting builder rule's trigger follows its "Stop waste" kind, so switching the
+  // section to "Pause keyword" (or off again) moves the rule to the contexts that kind reads. Every other rule keeps its own.
+  if (body.actions !== undefined) {
+    const want = (await import('./ads-rule-adapter.service.js')).negativeBuilderTrigger(body.actions)
+    if (want && want !== existing.trigger) data.trigger = want
+  }
   /**
    * EA7 — run order. Clamped to 1..999 so a value cannot be set outside the band the UI shows,
    * and rejected rather than coerced if it is not a number: silently turning a typo into 0 would

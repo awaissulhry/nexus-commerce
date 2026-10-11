@@ -8,14 +8,15 @@
  * of a rule's fields and a new rule each open the DS `ReviewChangesModal` — one table Now → New, a counted Save, Done
  * with Undo.
  *
- * New rule: the two starters (one sentence with the live "would change N", where it acts down to one ad group, Watch ·
- * Ask me · Auto) → review → Done with Undo (archive) and Open. "Edit all": a stop-waste rule's fields (its Settings tab);
- * a rule made in a builder opens the shared `_shared/RuleBuilder`.
+ * New rule and Edit (Owner 2026-10-11, wave 4): the OLD rule builder, its negative-targeting type, exactly as it was, as
+ * a full page — with its one extra section, "Stop waste — may run alone". Opening it is a step in the history: Back
+ * closes it, a refresh keeps it. A rule made in another builder (a Bid rule that pauses) opens that builder.
  *
  * URL: `?rule=<id>&tab=<tab>` the open detail (open = push, Prev / Next and tabs = replace: `useDetailParam`) ·
- * `?archived=1` · `?q=` the search · `?builder=<slug>[&ruleId=<id>]` the builder.
+ * `?archived=1` · `?q=` the search · the builder: `?builder=new` (a new rule), `?ruleId=<id>` (edit a rule here),
+ * `?builder=<slug>&ruleId=<id>` (a rule made in another builder).
  *
- * Focus (audit M10): every review, the New rule dialog, the builder and the detail give the focus back to what opened
+ * Focus (audit M10): every review, the builder and the detail give the focus back to what opened
  * them — the control in the detail, the row's cell, or the toolbar button.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react'
@@ -37,12 +38,11 @@ import { useRouter, useSearchParams } from '@/lib/workspaces/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useDetailParam } from '../../../_shared/useDetailParam'
 import { emitAdsChange } from '../../_shared/adsBus'
-import { currencyOf, moneyText } from '../../bid/_shared/format'
 import { MODES, MODE_WORD, type BidMode } from '../../bid/rules/bidRulesModel'
 import { fetchSuggestions, fetchUndoPreview } from '../../bid/rules/ruleApi'
 import { useWasteReview } from '../waste/useWasteReview'
 import {
-  archiveRule, createRule, fetchWasteRules, patchRule, restoreSuggestion, saveModes, unarchiveRule, undoChange,
+  archiveRule, fetchWasteRules, restoreSuggestion, saveModes, unarchiveRule, undoChange,
 } from './wasteRulesApi'
 import {
   archiveWords, changeFromTo, isFiltered, isPseudo, plural, readError, visibleRows,
@@ -52,10 +52,8 @@ import {
   archivable, archiveLabel, archiveReviewChanges, modeConflicts, modeGroups, modeReviewChanges, modeUndoLabel, pickMode, pickModeFor,
   raiseAck, retidyModes, shownMode, unarchivable, unarchiveLabel, unarchiveReviewChanges, waitsOf, type ModeDraft,
 } from './wasteRuleChanges'
-import { bodyOf, fieldsPatch, fieldsReviewChanges, newRuleAck, newRuleReviewChange, type RuleFields } from './newRuleModel'
 import { RULE_PREFERENCE_COLUMNS, WasteRulesTable, type GridRow, type HandlersRef, type PanelTab, type RulesHandlers } from './WasteRulesTable'
 import { RuleDetailPending, WasteRuleModal } from './WasteRuleModal'
-import { NewWasteRule, type NewRuleDraft } from './NewWasteRule'
 import styles from './rules.module.css'
 
 /** The shared rule builder's contract with this view: `ruleId` absent = a new rule; `onClose` / `onSaved` replace its own navigation. */
@@ -87,7 +85,6 @@ const DEFAULT_PREFS: PreferencesValue = {
 const NO_CHOICES: number[] = []
 const NO_SORT: Array<{ value: string; label: string }> = []
 const SET_MODE_OPTIONS: ListboxPanelOption[] = MODES.map((m) => ({ value: m, label: MODE_WORD[m] }))
-const UNDO_TOAST_MS = 10_000
 const PANEL_TABS: readonly PanelTab[] = ['overview', 'preview', 'history', 'waiting', 'settings']
 const isPanelTab = (v: unknown): v is PanelTab => typeof v === 'string' && (PANEL_TABS as readonly string[]).includes(v)
 const WorkspaceLink = Link as unknown as EntityLinkComponent
@@ -98,11 +95,11 @@ type Task =
   | { kind: 'archive'; rows: WasteRuleRow[] }
   | { kind: 'unarchive'; rows: WasteRuleRow[] }
   | { kind: 'undo'; row: WasteRuleRow; change: WasteRuleChange }
-  | { kind: 'fields'; row: WasteRuleRow; before: RuleFields; after: RuleFields }
-  | { kind: 'create'; draft: NewRuleDraft }
 
-const TITLE: Record<Task['kind'], string | undefined> = { mode: undefined, archive: 'Archive', unarchive: 'Unarchive', undo: 'Undo a change', fields: 'Settings', create: 'New rule' }
-const DONE_VERB: Record<Task['kind'], string> = { mode: 'saved', archive: 'archived', unarchive: 'unarchived', undo: 'undone', fields: 'saved', create: 'created' }
+const TITLE: Record<Task['kind'], string | undefined> = { mode: undefined, archive: 'Archive', unarchive: 'Unarchive', undo: 'Undo a change' }
+const DONE_VERB: Record<Task['kind'], string> = { mode: 'saved', archive: 'archived', unarchive: 'unarchived', undo: 'undone' }
+/** The builder type this page makes and edits its rules in (the old builder, exactly as it was). */
+const NEG_SLUG = 'negative-targeting'
 
 /** The rules of one market, read once per market (and again after every save). */
 function useWasteRules(market: string) {
@@ -173,15 +170,19 @@ export function WasteRulesView({ market, viewSwitch }: {
   const offerUndo = useCallback((label: string, fn: () => Promise<Record<string, ReviewResult>>) => { setUndoLabel(label); setUndoBack(() => fn) }, [])
   const [frozen, setFrozen] = useState<ReviewChange[] | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
-  const [newOpen, setNewOpen] = useState(false)
-  const [created, setCreated] = useState<string | null>(null)
 
   const detail = useDetailParam({ key: 'rule', tabKey: 'tab' })
   const panelId = detail.id
   const panelTab: PanelTab = isPanelTab(detail.tab) ? detail.tab : 'overview'
   const showArchived = params.get('archived') === '1'
-  const builderSlug = params.get('builder')
+  // The builder page: a new rule, an edit here, or a rule made in another builder (its own slug).
+  const builderParam = params.get('builder')
   const builderRuleId = params.get('ruleId')
+  const builder: { slug: string; ruleId: string | null } | null = builderParam === 'new' ? { slug: NEG_SLUG, ruleId: null }
+    : builderParam ? { slug: builderParam, ruleId: builderRuleId }
+      : builderRuleId ? { slug: NEG_SLUG, ruleId: builderRuleId }
+        : null
+  const builderKey = builder ? `${builder.slug}:${builder.ruleId ?? 'new'}` : null
 
   // The search lives in the address too (a link can carry it; switching views keeps it).
   useEffect(() => {
@@ -307,7 +308,27 @@ export function WasteRulesView({ market, viewSwitch }: {
     } catch (e) { toast(`Not exported: ${(e as Error).message}`, 'danger') }
   }, [search, toast])
 
-  const openNew = useCallback(() => { remember(() => focusable(document.querySelector('[data-return="new"]'))); setNewOpen(true) }, [remember])
+  // ── the builder page: opening it is a step in the history (Back closes it); closing goes back over it ──────────────
+  const builderPushed = useRef(false)
+  /** What the focus goes back to once the builder has gone (the opener's `data-return`), and a rule to open then. */
+  const afterBuilder = useRef<{ focus: string | null; open: string | null }>({ focus: null, open: null })
+  const openBuilder = useCallback((patch: Record<string, string>, fallback: string) => {
+    const ret = (document.activeElement instanceof HTMLElement ? document.activeElement.closest('[data-return]') : null)?.getAttribute('data-return')
+    afterBuilder.current = { focus: `[data-return="${CSS.escape(ret ?? fallback)}"]`, open: null }
+    const next = new URLSearchParams(window.location.search)
+    for (const k of ['builder', 'ruleId']) next.delete(k)
+    for (const [k, v] of Object.entries(patch)) next.set(k, v)
+    router.push(`?${next.toString()}`, { scroll: false })
+    builderPushed.current = true
+  }, [router])
+  const openNew = useCallback(() => openBuilder({ builder: 'new' }, 'new'), [openBuilder])
+  const openEdit = useCallback((id: string, slug: string) => openBuilder(slug === NEG_SLUG ? { ruleId: id } : { builder: slug, ruleId: id }, 'editall'), [openBuilder])
+  /** Leave the builder: back over its step when this view pushed it, else (a refresh, a link) drop its keys. */
+  const leaveBuilder = useCallback((opened: string | null) => {
+    if (builderPushed.current) { builderPushed.current = false; router.back(); return }
+    if (!afterBuilder.current.focus && !afterBuilder.current.open) afterBuilder.current.focus = opened ? '[data-return="editall"]' : '[data-return="new"]'
+    setQuery({ builder: null, ruleId: null, ...(opened && !params.get('rule') ? { rule: opened, tab: 'overview' } : {}) })
+  }, [router, setQuery, params])
   const clearFilters = useCallback(() => { setSearch(''); setQuery({ archived: null, q: null }) }, [setQuery])
   const filtered = isFiltered(filter)
   // M4: a failed read says so (and offers Try again), never "No rules yet".
@@ -348,22 +369,13 @@ export function WasteRulesView({ market, viewSwitch }: {
     } catch (e) { setReview({ phase: 'failed', error: (e as Error).message }) }
   }, [remember]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  /** Close the review. A new rule's review that is done closes the New rule dialog too, and may open the rule. */
-  const closeTask = useCallback((openCreated = false) => {
+  /** Close the review. */
+  const closeTask = useCallback(() => {
     const t = task
     // A mode pick made in the detail is a question for this review only: Cancel (or Done) leaves no draft behind.
     if (t?.kind === 'mode' && panelId) setDraft((d) => { if (!(panelId in d)) return d; const n = { ...d }; delete n[panelId]; return n })
-    const made = t?.kind === 'create' && review.phase === 'done' ? created : null
     setTask(null); setReview({ phase: 'ready' }); setUndoBack(null); setProblems([]); setFrozen(null)
-    if (t?.kind === 'create' && review.phase === 'done') {
-      setNewOpen(false)
-      setCreated(null)
-      const b = backTarget()
-      focusBack.current = null
-      if (made && openCreated) detail.open(made, 'overview')
-      else requestAnimationFrame(() => (b ?? focusable(document.querySelector('[data-return="new"]')))?.focus())
-    }
-  }, [task, panelId, created, detail, review.phase, backTarget])
+  }, [task, panelId])
 
   const after = useCallback(async () => {
     emitAdsChange('ads.rule.changed')
@@ -388,16 +400,8 @@ export function WasteRulesView({ market, viewSwitch }: {
       const ft = changeFromTo(c)
       return [{ id: c.id, where: <EntityPath items={[c.portfolio, c.campaign, c.adGroup]} linkAs={WorkspaceLink} label="Where" />, what: `${ft.what} · ${c.target?.name ?? task.row.name}`, now: ft.to, next: ft.from }]
     }
-    if (task.kind === 'fields') {
-      const cur = currencyOf(task.row.market ?? (market !== 'all' ? market : null))
-      return fieldsReviewChanges(task.row.kind, task.before, task.after, (c) => moneyText(c, cur), task.row.name)
-    }
-    if (task.kind === 'create') {
-      const line = newRuleReviewChange({ kind: task.draft.kind, fields: task.draft.fields, where: task.draft.where, mode: task.draft.mode, wouldChange: task.draft.wouldChange })
-      return [{ ...line, where: <EntityPath items={task.draft.path} linkAs={WorkspaceLink} label="Where" /> }]
-    }
     return []
-  }, [task, draft, byId, frozen, market])
+  }, [task, draft, byId, frozen])
 
   // A mode review that holds nothing any more (its picks were taken back by the re-read) closes itself.
   const reviewing = !!task && (review.phase !== 'ready' || reviewChanges.length > 0)
@@ -500,45 +504,6 @@ export function WasteRulesView({ market, viewSwitch }: {
     } else if (task.kind === 'undo') {
       const out = task.change.changeId ? await undoChange(task.change.changeId) : { ok: false as const, words: 'This change has no undo' }
       results[task.change.id] = out.ok ? { ok: true, words: 'Undone' } : { ok: false, words: out.words, verb: 'undone' }
-    } else if (task.kind === 'fields') {
-      const patch = fieldsPatch(task.row.kind, task.before, task.after)
-      const out = await patchRule(task.row.id, patch)
-      for (const c of list) results[c.id] = out.ok ? { ok: true, words: 'Saved' } : { ok: false, words: out.words }
-      if (out.ok) {
-        const row = task.row
-        const back = fieldsPatch(row.kind, task.after, task.before)
-        offerUndo('Undo: old settings back', async () => {
-          const un = await patchRule(row.id, back)
-          const res: Record<string, ReviewResult> = {}
-          let words = 'Undone'
-          if (un.ok && row.mode.set === 'AUTO') {
-            const m = await saveModes([row.id], 'AUTO')
-            if (!(m.ok && m.results[0]?.ok)) words = `Undone · Auto refused: ${m.ok ? m.results[0]?.error ?? 'refused' : m.words}`
-          }
-          for (const c of list) res[c.id] = un.ok ? { ok: true, words } : { ok: false, words: un.words, verb: 'undone' }
-          return res
-        })
-      }
-    } else if (task.kind === 'create') {
-      const d = task.draft
-      const out = await createRule(bodyOf(d.kind, d.fields, d.scope))
-      if (!out.ok) {
-        results.new = { ok: false, words: out.words, verb: 'created' }
-      } else {
-        const id = out.body.id
-        setCreated(id)
-        let words = `Created at ${MODE_WORD.WATCH}`
-        if (d.mode === 'ASK') {
-          const m = await saveModes([id], 'ASK')
-          words = m.ok && m.results[0]?.ok ? `Created at ${MODE_WORD.ASK}` : `Created at ${MODE_WORD.WATCH} · ${MODE_WORD.ASK} refused: ${m.ok ? m.results[0]?.error ?? 'refused' : m.words}`
-        }
-        results.new = { ok: true, words, verb: 'created' }
-        offerUndo('Undo: archive it', async () => {
-          const a = await archiveRule(id)
-          if (a.ok) setCreated(null)
-          return { new: a.ok ? { ok: true, words: 'Undone: archived' } : { ok: false, words: a.words, verb: 'undone' } }
-        })
-      }
     }
     setReview({ phase: 'done', results })
     await after()
@@ -550,38 +515,80 @@ export function WasteRulesView({ market, viewSwitch }: {
     const back = await undoBack()
     setUndoing(false); setUndoBack(null)
     setReview((r) => (r.phase === 'done' ? { phase: 'done', results: { ...r.results, ...back } } : r))
+    // Its button is gone: the focus goes to Done (never to the page behind; audit R5).
+    requestAnimationFrame(() => Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((b) => b.textContent?.trim() === 'Done')?.focus())
     await after()
   }, [undoBack, undoing, after])
 
   const reviewTitle = task ? TITLE[task.kind] : undefined
   const reviewSummary = !task ? null
-    : task.kind === 'mode' || task.kind === 'fields' ? 'From the next run'
+    : task.kind === 'mode' ? 'From the next run'
       : task.kind === 'archive' ? 'Its runs and changes are kept'
-        : task.kind === 'create' ? 'Starts at Watch' + (task.draft.mode === 'ASK' ? ', then Ask me' : '')
-          : null
+        : null
   const saveLabel = !task ? undefined
     : task.kind === 'archive' ? archiveLabel(reviewChanges.length)
       : task.kind === 'unarchive' ? unarchiveLabel(reviewChanges.length)
         : task.kind === 'undo' ? 'Undo 1 change'
-          : task.kind === 'create' ? `Create at ${MODE_WORD[task.draft.mode]}`
-            : undefined
+          : undefined
   const raises = reviewChanges.filter((c) => c.raise).length
-  const ack = !raises ? undefined : task?.kind === 'create' ? newRuleAck(task.draft.kind) : raiseAck(raises)
+  const ack = !raises ? undefined : raiseAck(raises)
 
   // ── the builder ───────────────────────────────────────────────────────────────────────────────────────────────────
   const builderClose = useCallback(() => {
-    const id = builderRuleId
-    setQuery({ builder: null, ruleId: null })
     void load()
-    if (id) detail.open(id, 'settings')
-    else requestAnimationFrame(() => focusable(document.querySelector('[data-return="new"]'))?.focus())
-  }, [builderRuleId, setQuery, load, detail])
+    leaveBuilder(builder?.ruleId ?? null)
+  }, [load, leaveBuilder, builder?.ruleId])
+  /**
+   * Saved: the builder goes and the rule opens in its detail. A new rule's detail says "Rule created" with Undo (archive it
+   * again) — in the detail, where it can be reached (audit S3: a toast's Undo sat under the detail's backdrop); "Saved"
+   * is a toast.
+   */
+  const [created, setCreated] = useState<{ id: string; busy: boolean } | null>(null)
   const builderSaved = useCallback((id: string, kind: 'created' | 'updated') => {
-    setQuery({ builder: null, ruleId: null })
     void after()
-    detail.open(id, 'overview')
-    toast(kind === 'created' ? 'Rule created' : 'Saved', 'success', { duration: UNDO_TOAST_MS })
-  }, [setQuery, after, detail, toast])
+    afterBuilder.current = { focus: null, open: id }
+    leaveBuilder(null)
+    if (kind === 'created') setCreated({ id, busy: false })
+    else toast('Saved', 'success')
+  }, [after, leaveBuilder, toast])
+  const undoCreate = useCallback(async () => {
+    if (!created || created.busy) return
+    setCreated({ ...created, busy: true })
+    const out = await archiveRule(created.id)
+    if (out.ok) { setCreated(null); toast('Undone: the rule is archived', 'neutral'); detail.close(); void after() } else { setCreated({ ...created, busy: false }); toast(`Not undone: ${out.words}`, 'danger') }
+  }, [created, toast, detail, after])
+  // Once the builder has gone (closed, saved, or Back): open the saved rule, else give the focus back to its opener.
+  useEffect(() => {
+    if (builderKey) return
+    const next = afterBuilder.current
+    afterBuilder.current = { focus: null, open: null }
+    builderPushed.current = false
+    if (next.open) { detail.open(next.open, 'overview'); return }
+    if (!next.focus) return
+    // Up to 3 s, as the Bid page does (audit R18): the detail may mount twice after Back, so once placed the focus is held
+    // there while it would otherwise be lost (on the page, or a dialog that went); the first key or click ends it.
+    const selector = next.focus
+    const until = performance.now() + 3000
+    let quit = false
+    const stop = () => { quit = true }
+    document.addEventListener('keydown', stop, { capture: true, once: true })
+    document.addEventListener('pointerdown', stop, { capture: true, once: true })
+    const lost = () => {
+      const a = document.activeElement
+      return !a || a === document.body || (a instanceof HTMLElement && (a.classList.contains('nds-modal') || !!a.closest('[inert]') || !a.isConnected))
+    }
+    let placed = false
+    const attempt = () => {
+      if (quit) return
+      if (!placed || lost()) {
+        const el = focusable(document.querySelector(selector))
+        if (el && !el.closest('[inert]')) { el.focus(); placed = document.activeElement === el }
+      }
+      if (performance.now() < until) requestAnimationFrame(attempt)
+      else { document.removeEventListener('keydown', stop, { capture: true }); document.removeEventListener('pointerdown', stop, { capture: true }) }
+    }
+    requestAnimationFrame(attempt)
+  }, [builderKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── the detail ────────────────────────────────────────────────────────────────────────────────────────────────────
   /** The rows of the table in the order shown now: the Brain and Harvest first, then the grid's filter and sort. */
@@ -605,6 +612,20 @@ export function WasteRulesView({ market, viewSwitch }: {
     : searched ? <><b>{gridRows.length}</b> of <b>{total}</b></>
       : <><b>{total}</b> {total === 1 ? 'rule' : 'rules'}</>
   const lead = viewSwitch ? <span className={styles.line}>{viewSwitch}</span> : null
+
+  // The builder is a full page (Owner 2026-10-11): while it is open, nothing of the list is under it to reach by Tab.
+  if (builder) {
+    return (
+      <RuleBuilder
+        key={builderKey}
+        slug={builder.slug}
+        ruleId={builder.ruleId}
+        initialMarket={market !== 'all' ? market : undefined}
+        onClose={builderClose}
+        onSaved={builderSaved}
+      />
+    )
+  }
 
   return (
     <div className={styles.stack}>
@@ -680,7 +701,7 @@ export function WasteRulesView({ market, viewSwitch }: {
         )}
       </GridCard>
 
-      {panelId && !builderSlug && (panelRow ? (
+      {panelId && (panelRow ? (
         <WasteRuleModal
           row={panelRow}
           tab={panelTab}
@@ -695,14 +716,14 @@ export function WasteRulesView({ market, viewSwitch }: {
           undoHeld={undoHeld}
           decideHeld={decideHeld}
           reloadKey={reloadKey}
-          onClose={detail.close}
+          onClose={() => { setCreated(null); detail.close() }}
           onMode={(next) => { setDraft((d) => pickMode(d, panelRow, next)); void startModeReview(inPanel('mode')) }}
           onArchive={() => startArchive([panelRow], inPanel('archive'))}
           onUnarchive={() => startUnarchive([panelRow], inPanel('archive'))}
           onUndo={(c) => void startUndo(panelRow, c)}
           onDecide={(kind, asks) => { remember(inPanel('decide')); decide.ask({ kind: 'decide', decide: kind, waits: waitsOf(asks) }) }}
-          onSaveFields={(before, afterFields) => { remember(inPanel('fields')); setProblems([]); setUndoBack(null); setFrozen(null); setReview({ phase: 'ready' }); setTask({ kind: 'fields', row: panelRow, before, after: afterFields }) }}
-          onEditBuilder={(slug) => setQuery({ rule: null, tab: null, builder: slug, ruleId: panelRow.id })}
+          onEditBuilder={(slug) => openEdit(panelRow.id, slug)}
+          created={created?.id === panelRow.id ? { undo: () => void undoCreate(), busy: created.busy } : null}
         />
       ) : (
         <RuleDetailPending
@@ -714,16 +735,6 @@ export function WasteRulesView({ market, viewSwitch }: {
         />
       ))}
 
-      {newOpen && (
-        <NewWasteRule
-          market={market}
-          held={archiveHeld}
-          onClose={() => { setNewOpen(false); const b = backTarget(); focusBack.current = null; requestAnimationFrame(() => b?.focus()) }}
-          onReview={(d) => { setProblems([]); setUndoBack(null); setFrozen(null); setReview({ phase: 'ready' }); setCreated(null); setTask({ kind: 'create', draft: d }) }}
-          onBuilder={() => { setNewOpen(false); setQuery({ builder: 'negative-targeting', ruleId: null }) }}
-        />
-      )}
-
       {task && reviewing && (
         <ReviewChangesModal
           open
@@ -734,17 +745,14 @@ export function WasteRulesView({ market, viewSwitch }: {
           problems={problems}
           ackLabel={ack}
           doneVerb={DONE_VERB[task.kind]}
-          size={task.kind === 'create' || task.kind === 'fields' || task.kind === 'undo' ? 'xl' : 'lg'}
-          returnFocusTo={task.kind === 'create' ? () => focusable(document.querySelector('[data-return="new-review"]')) : backTarget}
+          size={task.kind === 'undo' ? 'xl' : 'lg'}
+          returnFocusTo={backTarget}
           saveLabel={saveLabel}
           onSave={() => void save()}
           onRetry={task.kind === 'mode' ? () => void startModeReview(draftedCell) : task.kind === 'undo' ? () => void startUndo(task.row, task.change) : undefined}
           onClose={() => closeTask()}
-          doneActions={review.phase === 'done' && (undoBack || (task.kind === 'create' && created)) ? (
-            <>
-              {undoBack && <Button size="sm" variant="secondary" aria-busy={undoing || undefined} onClick={() => { if (!undoing) void undoDone() }}>{undoing ? 'Undoing…' : undoLabel}</Button>}
-              {task.kind === 'create' && created && <Button size="sm" variant="secondary" onClick={() => closeTask(true)}>Open the rule</Button>}
-            </>
+          doneActions={review.phase === 'done' && undoBack ? (
+            <Button size="sm" variant="secondary" aria-busy={undoing || undefined} onClick={() => { if (!undoing) void undoDone() }}>{undoing ? 'Undoing…' : undoLabel}</Button>
           ) : undefined}
           onDone={() => closeTask()}
         />
@@ -789,15 +797,6 @@ export function WasteRulesView({ market, viewSwitch }: {
         />
       )}
 
-      {builderSlug && (
-        <RuleBuilder
-          slug={builderSlug}
-          ruleId={builderRuleId ?? null}
-          initialMarket={market !== 'all' ? market : undefined}
-          onClose={builderClose}
-          onSaved={builderSaved}
-        />
-      )}
     </div>
   )
 }

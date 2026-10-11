@@ -182,12 +182,6 @@
   white-space: nowrap;
 }
 
-.toastLine {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--nds-space-8);
-}
-
 /* ── the detail ───────────────────────────────────────────────────────────────────────────────────────────────── */
 
 .panelTitle {
@@ -230,57 +224,7 @@
   flex: 1 1 auto;
 }
 
-/* ── the New rule dialog and the Settings form ────────────────────────────────────────────────────────────────── */
-
-.choices {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--nds-space-8);
-}
-
-.choiceTitle {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--nds-space-6);
-}
-
-.sentence {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--nds-space-8);
-  min-width: 0;
-}
-
-.fields {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 220px));
-  gap: var(--nds-space-12);
-}
-
-.fieldsWide {
-  grid-column: 1 / -1;
-}
-
-.whereField {
-  flex: 1 1 240px;
-  min-width: 0;
-}
-
-.formRow {
-  display: flex;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  gap: var(--nds-space-12);
-  min-width: 0;
-}
-
 @media (max-width: 760px) {
-  .choices,
-  .fields {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .line {
     flex-wrap: wrap;
   }

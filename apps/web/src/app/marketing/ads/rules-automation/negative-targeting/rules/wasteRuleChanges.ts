@@ -10,7 +10,7 @@
 import type { ReviewChange, ReviewConflict } from '@/design-system/patterns'
 import { MODES, MODE_WORD, holdWord, modeRank, type BidMode } from '../../bid/rules/bidRulesModel'
 import type { Waiting } from '../waste/wasteModel'
-import { askWhat, isPseudo, isStopWaste, plural, scopeText, type WaitingAsk, type WasteRuleRow } from './wasteRulesModel'
+import { askWhat, isPseudo, isStopWaste, plural, type WaitingAsk, type WasteRuleRow } from './wasteRulesModel'
 
 // ── the mode draft ──────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -87,11 +87,6 @@ export function modeGroups(draft: ModeDraft): Array<{ mode: BidMode; ids: string
   return [...out].map(([mode, ids]) => ({ mode, ids }))
 }
 
-/** Ids → the mode each had before (for Undo), grouped as the save sends them. */
-export function undoGroups(previous: Readonly<Record<string, BidMode>>): Array<{ mode: BidMode; ids: string[] }> {
-  return modeGroups(previous)
-}
-
 // ── archive / unarchive ─────────────────────────────────────────────────────────────────────────────────────────────
 
 export const archivable = (rows: readonly WasteRuleRow[]): WasteRuleRow[] => rows.filter((r) => !isPseudo(r) && !r.archived)
@@ -110,14 +105,6 @@ export function unarchiveReviewChanges(rows: readonly WasteRuleRow[]): ReviewCha
 
 export const archiveLabel = (count: number): string => `Archive ${plural(count, 'rule')}`
 export const unarchiveLabel = (count: number): string => `Unarchive ${plural(count, 'rule')}`
-
-/** Why a bulk verb does not fit some ticked rows, said beside it ("1 is archived"); null when it fits them all. */
-export function bulkMisfit(rows: readonly WasteRuleRow[], verb: 'mode' | 'archive' | 'unarchive'): string | null {
-  const fit = verb === 'unarchive' ? unarchivable(rows) : archivable(rows)
-  const left = rows.length - fit.length
-  if (!left) return null
-  return verb === 'unarchive' ? `${left} not archived` : `${left} archived`
-}
 
 // ── a waiting ask decided on the page ───────────────────────────────────────────────────────────────────────────────
 
@@ -146,7 +133,3 @@ export function modeUndoLabel(previous: Readonly<Record<string, BidMode>>): stri
   const n = Object.keys(previous).length
   return modes.length === 1 ? `Undo: back to ${MODE_WORD[modes[0]]}` : `Undo: put ${n} back`
 }
-
-// ── a rule's scope line in a review ─────────────────────────────────────────────────────────────────────────────────
-
-export const reviewWhere = (row: WasteRuleRow): string => scopeText(row)

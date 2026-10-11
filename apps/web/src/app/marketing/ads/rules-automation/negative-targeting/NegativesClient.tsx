@@ -118,20 +118,26 @@ function NegativesPage() {
       onChange={(v) => setQuery({ view: v === 'wasting' ? null : v, show: null, sort: null, page: null, row: null, tab: null, rule: null })} />
   )
 
+  // The rule builder is a full page (Owner 2026-10-11): while it is open nothing of this page is under it (the Rules view
+  // stays mounted in place, so its own state — and the step it pushed in the history — is kept).
+  const building = view === 'rules' && !!(params.get('builder') || params.get('ruleId'))
+
   return (
     <div className="h10-rules-page">
-      <AdsPageHeader
-        {...rulesTabHeader('negative-targeting')}
-        markets={readMarkets}
-        market={market}
-        onMarketChange={(m) => setQuery({ market: m && m !== 'all' ? m : null, scope: null, page: null, row: null, tab: null })}
-        showDataSync={false}
-        showDateRange={false}
-        showChangeLog={false}
-      />
-      <RulesTabs active="negative-targeting" />
+      {!building && (
+        <AdsPageHeader
+          {...rulesTabHeader('negative-targeting')}
+          markets={readMarkets}
+          market={market}
+          onMarketChange={(m) => setQuery({ market: m && m !== 'all' ? m : null, scope: null, page: null, row: null, tab: null })}
+          showDataSync={false}
+          showDateRange={false}
+          showChangeLog={false}
+        />
+      )}
+      {!building && <RulesTabs active="negative-targeting" />}
       <div className={styles.page}>
-        <MetricStrip className={styles.tiles} metrics={metrics} />
+        {!building && <MetricStrip className={styles.tiles} metrics={metrics} />}
         {view === 'rules' ? (
           <WasteRulesView market={market ?? 'all'} viewSwitch={viewSwitch} />
         ) : (

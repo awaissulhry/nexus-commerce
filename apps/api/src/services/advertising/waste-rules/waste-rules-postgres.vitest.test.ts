@@ -11,10 +11,13 @@
  *              earlier), the rest ask with the cap's words; the never-list asks (young keyword, protected term, shared
  *              campaign); every change through the real pause handler and status path, as the rule
  *   negatives  the search-term test and the never-list for negatives (protected term, our own keyword there)
- *   scope      a rule saved on ONE ad group: stored with its campaign, born at Watch; the evaluator's pass and Simulate
- *              act on that ad group only; a mismatched campaign or a missing ad group refused
+ *   scope      a rule on ONE ad group: stored with its campaign, born at Watch; the evaluator's pass and Simulate act on
+ *              that ad group only; a mismatched campaign or a missing ad group refused
+ *   builder    wave 4 — a Negative Targeting builder rule with "Pause keyword, keep it paused": its trigger follows the kind, its
+ *              scope on the Rules view is its Ad Group Mapping (audit M1),
+ *              the keyword test on its mapped ad group only, a pause kept paused; switched back, the negative rule again
  *   reads      the rules list (the brain and Harvest first, read only; kind, test, ad-group grain, "Auto inside caps"),
- *              a rule's history with its undo handles, the preview of an unsaved body; another business sees nothing
+ *              a rule's history with its undo handles, the preview of the builder's unsaved draft; another business sees nothing
  *   writes     the mode through the level dial (Auto refused before the gate opens; the pseudo-rows refused); archive and
  *              restore; Claude's save of a keyword-pause rule (D4) — born OBSERVE, scoped to an ad group, never by rule
  *
@@ -54,10 +57,13 @@ vi.mock('../ads-cache.js', () => ({
 await import('../automation-action-handlers.js')
 const { buildStopWasteContexts } = await import('./contexts.js')
 const { applyMarketplaceScope, simulateOneRule, buildTargetPerformanceContexts } = await import('../../../jobs/advertising-rule-evaluator.job.js')
-const { saveWasteRule, setWasteRulesMode, setWasteRuleArchived } = await import('./write.js')
+const { setWasteRulesMode, setWasteRuleArchived } = await import('./write.js')
+const { ruleOfBody } = await import('../../../test-support/waste-engine-rule.js')
+const { adGroupScope, marketOfScope } = await import('./contexts.js')
+const { createAdsRule, updateAdsRule } = await import('../ads-rule-crud.service.js')
 const { listWasteRules, wasteRuleHistory } = await import('./read.js')
 const { previewWasteRule } = await import('./preview.js')
-const { openStopWasteGate, stopWasteParamsOf, NOT_PAGE_SHAPE } = await import('../ads-graduation-stopwaste.js')
+const { openStopWasteGate, NOT_PAGE_SHAPE, BUILDER_SHAPE_WHY } = await import('../ads-graduation-stopwaste.js')
 const { setAutonomy } = await import('../ads-automation-state.service.js')
 const { planAdRuleSave, applyAdRuleSave } = await import('../../automation/ad-rule-save.service.js')
 const { AUTOMATION_CHANGE_TOOLS } = await import('../../agents/tools/automation-change.tools.js')
@@ -79,6 +85,35 @@ const DAY = 86_400_000
 const daysAgo = (n: number) => { const d = new Date(); d.setUTCHours(0, 0, 0, 0); return new Date(d.getTime() - n * DAY) }
 const OLD = daysAgo(120)
 const ACTOR = 'user:owner' as never
+
+/**
+ * An engine-native stop-waste rule (the shape the page saved before wave 4, and Claude's save-ad-rule still makes), stored
+ * through the rules' own create service: its ad group with its campaign, a scope inside one market keeps that market,
+ * born Watch. The page saves no such rule any more (rules are made in the builder); older ones still run and read.
+ */
+async function engineRule(body: Parameters<typeof ruleOfBody>[0]): Promise<{ data: Data }> {
+  const grain = await adGroupScope(body.scope ?? {})
+  if (!grain.ok) throw new Error(grain.error)
+  const market = await marketOfScope(grain.scope)
+  const scope = market ? { ...grain.scope, marketplace: market } : grain.scope
+  const r = ruleOfBody({ ...body, scope })
+  const out = await createAdsRule({
+    name: r.name, trigger: r.trigger, conditions: r.conditions, actions: r.actions, maxExecutionsPerDay: 500, maxWritesPerDay: 50,
+    scopeMarketplace: scope.marketplace ?? undefined,
+  } as never, ACTOR, { scopePortfolioId: scope.portfolioId ?? null, scopeCampaignId: scope.campaignId ?? null, scopeProductId: scope.productId ?? null, enabled: true, dryRun: true, autonomyLevel: 'OBSERVE' })
+  const id = (out as { value: { rule: { id: string } } }).value.rule.id
+  if (scope.adGroupId) await database.pool.query('UPDATE "AutomationRule" SET "scopeAdGroupId" = $2 WHERE id = $1', [id, scope.adGroupId])
+  return { data: { id, scope } }
+}
+
+/** The Negative Targeting builder's rule (wave 4): the old builder's shape, with "Stop waste — may run alone" on or off. */
+const builderActions = (stopWaste: Data | null, groups: string[], extra: Data = {}) => [{
+  type: 'negative-targeting', control: 'manual', dedupe: true, negationLevel: 'adgroup', protectConverting: true, protectDays: 30,
+  filters: { brandExclude: [], competitorOnly: false }, searchTerms: [], schedule: { frequency: 'Daily', time: '06:00', timezone: 'cet' },
+  mappings: [{ groups: groups.map((id) => ({ id, name: id, look: true, types: { P: false, E: true, product: false } })) }],
+  ...(stopWaste ? { stopWaste } : {}), ...extra,
+}]
+const BUILDER_CRITERIA = [{ match: 'all', conditions: [{ metric: 'Orders', op: 'eq', value: '0' }] }]
 const WASTE = Array.from({ length: 12 }, (_, i) => `w${String(i + 1).padStart(2, '0')}`)
 type Data = Record<string, any>
 
@@ -190,22 +225,19 @@ describe.skipIf(!concurrentDatabaseUrl())('Negative Targeting — stop-waste rul
 
   let scoped: Data
   it('scope: a rule on ONE ad group is stored with its campaign and born at Watch; mismatches refused', async () => {
-    const out = await inW(() => saveWasteRule({ body: { kind: 'PAUSE_KEYWORD', name: 'NR broad only', scope: { adGroupId: G('jk-broad') } } }, ACTOR))
-    expect('data' in out).toBe(true)
-    scoped = (out as { data: Data }).data
+    scoped = (await inW(() => engineRule({ kind: 'PAUSE_KEYWORD', name: 'NR broad only', scope: { adGroupId: G('jk-broad') } }))).data
     // N4 — a scope inside one market stores that market, so every reader (the tab counts too) shows it there only.
-    expect(scoped).toMatchObject({ created: true, level: 'OBSERVE', scope: { adGroupId: G('jk-broad'), campaignId: C('jk-broad'), marketplace: 'IT' } })
+    expect(scoped).toMatchObject({ scope: { adGroupId: G('jk-broad'), campaignId: C('jk-broad'), marketplace: 'IT' } })
     const [rule] = await rows<Data>('SELECT trigger, "scopeMarketplace", "scopeAdGroupId", "scopeCampaignId", "autonomyLevel", enabled, "dryRun" FROM "AutomationRule" WHERE id = $1', [scoped.id])
     expect(rule).toEqual({ trigger: 'TARGET_PERFORMANCE', scopeMarketplace: 'IT', scopeAdGroupId: G('jk-broad'), scopeCampaignId: C('jk-broad'), autonomyLevel: 'OBSERVE', enabled: true, dryRun: true })
     // A rule on the jacket reaches IT and DE: it keeps no market of its own and is counted in each.
-    const both = await inW(() => saveWasteRule({ body: { kind: 'NEGATE_TERM', name: 'NR jacket everywhere', scope: { productId: JACKET } } }, ACTOR)) as { data: Data }
+    const both = await inW(() => engineRule({ kind: 'NEGATE_TERM', name: 'NR jacket everywhere', scope: { productId: JACKET } }))
     expect((await rows<Data>('SELECT "scopeMarketplace" FROM "AutomationRule" WHERE id = $1', [both.data.id]))[0].scopeMarketplace).toBeNull()
     for (const m of ['IT', 'DE']) expect((await inW(() => listWasteRules({ market: m }))).rules.map((r) => r.id)).toContain(both.data.id)
     expect((await inW(() => listWasteRules({ market: 'DE' }))).rules.map((r) => r.id)).not.toContain(scoped.id)
     await inW(() => setWasteRuleArchived(both.data.id, true, ACTOR))
-    expect((await rows<Data>('SELECT "actionType" FROM "AdvertisingActionLog" WHERE "entityId" = $1 ORDER BY "createdAt"', [scoped.id])).map((r) => r.actionType)).toEqual(['create_rule', 'update_rule'])
-    expect(await inW(() => saveWasteRule({ body: { kind: 'PAUSE_KEYWORD', scope: { adGroupId: G('jk-broad'), campaignId: C('jk-exact') } } }, ACTOR))).toMatchObject({ status: 400, error: expect.stringMatching(/belongs to campaign/) })
-    expect(await inW(() => saveWasteRule({ body: { kind: 'PAUSE_KEYWORD', scope: { adGroupId: 'nope' } } }, ACTOR))).toMatchObject({ status: 400, error: expect.stringMatching(/not found/) })
+    expect(await inW(() => adGroupScope({ adGroupId: G('jk-broad'), campaignId: C('jk-exact') }))).toMatchObject({ ok: false, error: expect.stringMatching(/belongs to campaign/) })
+    expect(await inW(() => adGroupScope({ adGroupId: 'nope' }))).toMatchObject({ ok: false, error: expect.stringMatching(/not found/) })
 
     // The evaluator's pass and Simulate act on that ad group only.
     const ctx = await inW(() => buildStopWasteContexts(PAUSE_PARAMS))
@@ -237,8 +269,7 @@ describe.skipIf(!concurrentDatabaseUrl())('Negative Targeting — stop-waste rul
   })
 
   it('D1: the page\'s Auto keyword-pause rule acts alone up to 10 pauses for the jacket today, then asks; the never-list asks', async () => {
-    const out = await inW(() => saveWasteRule({ body: { kind: 'PAUSE_KEYWORD', name: 'NR stop waste IT', scope: { marketplace: 'IT' } } }, ACTOR))
-    auto = (out as { data: Data }).data
+    auto = (await inW(() => engineRule({ kind: 'PAUSE_KEYWORD', name: 'NR stop waste IT', scope: { marketplace: 'IT' } }))).data
     // On Auto (the dial's gate is the Owner's click after 14 days; set here directly), and one pause made earlier today.
     await database.pool.query('UPDATE "AutomationRule" SET "autonomyLevel" = \'AUTO\', "dryRun" = false WHERE id = $1', [auto.id])
     await inW(() => (database.client as any).automationRuleExecution.create({ data: {
@@ -280,20 +311,26 @@ describe.skipIf(!concurrentDatabaseUrl())('Negative Targeting — stop-waste rul
     })
   })
 
-  it('preview: an unsaved body says what it would stop, what would ask and why — no amount in words, nothing written', async () => {
+  it('preview: the builder\'s unsaved draft says what it would stop, what would ask and why — no amount in words, nothing written', async () => {
     const before = await rows<Data>('SELECT (SELECT count(*)::int FROM "AutomationRuleExecution") e, (SELECT count(*)::int FROM "AdvertisingActionLog") l, (SELECT count(*)::int FROM "AutomationRule") r')
-    const out = await inW(() => previewWasteRule({ rule: { kind: 'PAUSE_KEYWORD', scope: { marketplace: 'IT' } } })) as { data: Data }
+    // Wave 4 — "Pause keyword, keep it paused" in IT, no ad group mapped: every IT keyword the test reaches.
+    const out = await inW(() => previewWasteRule({ builder: { actions: builderActions(PAUSE_PARAMS, []), conditions: BUILDER_CRITERIA, scopeMarketplace: 'IT' } })) as { data: Data }
     // The 9 keywords the Auto rule paused are no longer offered: 2 jacket keywords act alone; the skipped, Harvest's, the
     // young, protected, shared and unowned ones ask.
     expect(out.data).toMatchObject({ saved: false, engine: 'stop-waste', windowDays: 60, wouldChange: 8, wouldAsk: 6 })
     expect(out.data.sample[0]).toMatchObject({ action: 'PAUSE', alone: true, asks: null, adGroup: { id: expect.any(String) }, campaign: { id: expect.any(String) } })
     // No amount in words (a conversion rate in % is not money).
     expect(out.data.sample.every((s: Data) => !/€|\d+[.,]\d{2}(?!\d*\s*%)/.test(`${s.why} ${s.asks ?? ''}`))).toBe(true)
-    const one = await inW(() => previewWasteRule({ rule: { kind: 'NEGATE_TERM', scope: { adGroupId: G('jk-auto') } } })) as { data: Data }
+    // "Negative exact", the mapping looking in one ad group: its terms only.
+    const one = await inW(() => previewWasteRule({ builder: { actions: builderActions(NEGATE_PARAMS, [G('jk-auto')]), conditions: BUILDER_CRITERIA } })) as { data: Data }
     expect(one.data.sample.map((s: Data) => [s.row.name, s.action, s.alone])).toEqual(expect.arrayContaining([['cheap jacket', 'NEGATE_EXACT', true], ['giacca acme', 'NEGATE_EXACT', false]]))
-    // A campaign-wide negative is saved, but never acts alone (S1): every row asks.
-    const wide = await inW(() => previewWasteRule({ rule: { kind: 'NEGATE_TERM', level: 'CAMPAIGN', scope: { adGroupId: G('jk-auto') } } })) as { data: Data }
-    expect(wide.data.sample.every((s: Data) => !s.alone && s.asks === NOT_PAGE_SHAPE)).toBe(true)
+    expect(one.data.sample.every((s: Data) => s.adGroup?.id === G('jk-auto'))).toBe(true)
+    // A campaign-wide negative (or a phrase ticked) is saved, but never acts alone (S1): every row asks, saying what to change (M3).
+    const wide = await inW(() => previewWasteRule({ builder: { actions: builderActions(NEGATE_PARAMS, [G('jk-auto')], { negationLevel: 'campaign' }), conditions: BUILDER_CRITERIA } })) as { data: Data }
+    expect(wide.data.sample.length).toBeGreaterThan(0)
+    expect(wide.data.sample.every((s: Data) => !s.alone && s.asks === BUILDER_SHAPE_WHY.level)).toBe(true)
+    // The section off: nothing to preview here (the builder's own preview reads the candidates).
+    expect(await inW(() => previewWasteRule({ builder: { actions: builderActions(null, [G('jk-auto')]) } }))).toMatchObject({ status: 400 })
     expect(await rows('SELECT (SELECT count(*)::int FROM "AutomationRuleExecution") e, (SELECT count(*)::int FROM "AdvertisingActionLog") l, (SELECT count(*)::int FROM "AutomationRule") r')).toEqual(before)
     expect(await inW(() => previewWasteRule({ ruleId: 'brain' }))).toMatchObject({ status: 400 })
   })
@@ -326,22 +363,45 @@ describe.skipIf(!concurrentDatabaseUrl())('Negative Targeting — stop-waste rul
     expect(await inW2(() => wasteRuleHistory(auto.id, {}))).toMatchObject({ status: 404 })
   })
 
-  it('writes: the mode through the dial (Auto waits for its gate; the pseudo-rows refused), edits drop Auto to Ask me, archive and restore', async () => {
+  it('writes: the mode through the dial (Auto waits for its gate; the pseudo-rows refused), archive and restore', async () => {
     const mode = await inW(() => setWasteRulesMode([scoped.id, 'brain'], 'AUTO', ACTOR))
     expect(mode.data.results).toEqual([
       { id: scoped.id, ok: false, error: expect.stringMatching(/graduation gate/) },
       { id: 'brain', ok: false, error: expect.stringMatching(/never changed here/) },
     ])
     expect((await inW(() => setWasteRulesMode([scoped.id], 'ASK', ACTOR))).data.results).toEqual([{ id: scoped.id, ok: true, level: 'PROPOSE' }])
-    const edit = await inW(() => saveWasteRule({ id: auto.id, body: { minClicks: 25 } }, ACTOR)) as { data: Data }
-    expect(edit.data).toMatchObject({ created: false, level: 'PROPOSE' })
-    expect(stopWasteParamsOf((await rows<Data>('SELECT actions FROM "AutomationRule" WHERE id = $1', [auto.id]))[0].actions)).toMatchObject({ minClicks: 25 })
     const archived = await inW(() => setWasteRuleArchived(auto.id, true, ACTOR)) as { data: Data }
     expect(archived.data).toMatchObject({ id: auto.id, archived: true, already: false, level: 'OFF', expiredAsks: expect.any(Number) })
     expect((await rows<Data>('SELECT count(*)::int AS n FROM "AdsRuleSuggestion" WHERE "ruleId" = $1 AND status = \'pending\'', [auto.id]))[0].n).toBe(0)
     expect((await inW(() => listWasteRules({ market: 'IT' }))).rules.find((r) => r.id === auto.id)).toMatchObject({ archived: true, mode: { set: 'OFF' } })
     expect(await inW(() => setWasteRulesMode([auto.id], 'WATCH', ACTOR))).toMatchObject({ data: { results: [{ ok: false, error: expect.stringMatching(/archived/) }] } })
     expect(await inW(() => setWasteRuleArchived(auto.id, false, ACTOR))).toMatchObject({ data: { archived: false, level: 'OFF' } })
+  })
+
+  it('wave 4: a builder rule with "Pause keyword" rides the keyword test on its mapped ad group; off again, it is the negative rule it was', async () => {
+    const made = await inW(() => createAdsRule({
+      name: 'NR builder pause', trigger: 'SEARCH_TERM_WASTING', conditions: BUILDER_CRITERIA, actions: builderActions(PAUSE_PARAMS, [G('jk-broad')]),
+      scopeMarketplace: 'IT', maxExecutionsPerDay: 10,
+    } as never, ACTOR)) as { value: { rule: Data } }
+    const id = made.value.rule.id
+    // The trigger follows the kind: our keywords (TARGET_PERFORMANCE), whatever the builder sent.
+    expect((await rows<Data>('SELECT trigger FROM "AutomationRule" WHERE id = $1', [id]))[0].trigger).toBe('TARGET_PERFORMANCE')
+    await database.pool.query('UPDATE "AutomationRule" SET enabled = true, "autonomyLevel" = \'OBSERVE\' WHERE id = $1', [id])
+    const ctx = await inW(() => buildStopWasteContexts(PAUSE_PARAMS))
+    await inW(() => applyMarketplaceScope('TARGET_PERFORMANCE', ctx, false, (r) => r.id === id))
+    const runs = await rows<Data>('SELECT "triggerData", "dryRun", "actionResults" FROM "AutomationRuleExecution" WHERE "ruleId" = $1', [id])
+    expect(runs.length).toBeGreaterThan(0)
+    expect(runs.every((r) => r.dryRun && r.triggerData.adGroup.id === G('jk-broad'))).toBe(true)
+    expect(runs[0].actionResults[0]).toMatchObject({ type: 'pause_target', ok: true, output: { dryRun: true, wouldSet: 'PAUSED', keepPaused: { until: null } } })
+    // Audit M1 — the Rules view reads its scope from the mapping: one ad group, its campaign, not the whole market.
+    const row = (await inW(() => listWasteRules({ market: 'IT' }))).rules.find((r) => r.id === id)!
+    expect(row.scope).toMatchObject({ all: false, counts: { campaigns: 1, adGroups: 1 }, campaigns: [{ id: C('jk-broad') }], adGroup: { id: G('jk-broad') } })
+    // The section switched to "Negative exact", then off: the rule reads shoppers' search terms again.
+    await inW(() => updateAdsRule(id, { actions: builderActions(NEGATE_PARAMS, [G('jk-broad')]) as never }, ACTOR))
+    expect((await rows<Data>('SELECT trigger FROM "AutomationRule" WHERE id = $1', [id]))[0].trigger).toBe('SEARCH_TERM_WASTING')
+    await inW(() => updateAdsRule(id, { actions: builderActions(null, [G('jk-broad')]) as never }, ACTOR))
+    expect((await rows<Data>('SELECT trigger FROM "AutomationRule" WHERE id = $1', [id]))[0].trigger).toBe('SEARCH_TERM_WASTING')
+    await inW(() => setWasteRuleArchived(id, true, ACTOR))
   })
 
   it('D4: Claude may save a keyword-pause rule — born OBSERVE, on one ad group, and never saved by the business\'s rule', async () => {
