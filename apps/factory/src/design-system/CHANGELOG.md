@@ -1,3 +1,9 @@
+## A light modal draws its native controls light — 2026-10-11
+
+- **`.nds-modal[data-nds-light] { color-scheme: light }`**: a light `Modal` on a dark OS drew its native controls dark
+  (a review's tick box, scrollbars, date fields) because `color-scheme` came from the dark <html>. Negative Targeting
+  NFIX (rule-page audit). The rule is byte-identical in Factory's `components.css`.
+
 ## Scrolling strips: the scrollbar gets a band below the tabs, never over them — 2026-10-05
 
 Owner (the Publish window's market tabs): "the scrollbar appears above or is layered above the text or the tab buttons". A macOS overlay scrollbar takes no room and is drawn over the bottom of the scroll box — the labels, the active underline, the focus ring. Mirrored in Factory (`Tabs.tsx`, `ScopeBar.tsx`, `GridToolbar.tsx`, `MediaBoard.tsx`, `components/index.ts`, `grid.css`, the new hook and `lib/horizontal-overflow.ts`, the tab / scope / media-board rules, the catalog example).

@@ -23,6 +23,7 @@
  *   POST /advertising/waste/skip             { ids, days: 7 | 30 } or { ids, until (≤ 30 d) } → { skipped, undo } — Nexus only;
  *                                            { reopen: [skip ids] } (an unskip's undo) → { reopened, notReopened, undo }
  *   POST /advertising/waste/unskip           { ids } → { unskipped, undo: { body: { reopen } } | null }
+ *   GET  /advertising/waste/waiting/:id     NFIX — every step of a waiting request (a plan is approved together)
  *   POST /advertising/waste/waiting/decide   { decisions: [{ approvalId, decide: approve | reject, reason?, code? }] } →
  *                                            { results, failed } — each through the Approvals page's path; a rule's Ask-me
  *                                            card (`suggestion:<id>`) through the Suggestions page's own apply / dismiss (a
@@ -60,6 +61,7 @@ import { readRowDetail } from '../services/advertising/waste/row.js'
 import { readStopped } from '../services/advertising/waste/stopped.js'
 import { requestPrincipal, ToolAccessError, type UserPrincipal } from '../services/agents/call-tool.js'
 import { APPLY_BODY, DECIDE_BODY, PREVIEW_BODY, applyWaste, decideWaiting, previewWaste } from '../services/advertising/waste/write.js'
+import { waitingSteps } from '../services/advertising/waste/waiting-steps.js'
 import { MAX_SKIP_ROWS, reopenSkips, skipRows, unskipRows } from '../services/advertising/waste/skip.js'
 import { listWasteRules, wasteRuleHistory, WASTE_RULES_MONEY } from '../services/advertising/waste-rules/read.js'
 import { previewWasteRule } from '../services/advertising/waste-rules/preview.js'
@@ -265,6 +267,18 @@ export async function wasteWriteRoutes(fastify: FastifyInstance): Promise<void> 
     if (!parsed.success) return reply.code(400).send({ error: problemOf(parsed.error) })
     const out = await unskipRows({ ids: parsed.data.ids, by: actorOf(person) })
     if ('error' in out) return reply.code(400).send({ error: out.error })
+    return out
+  })
+
+  // NFIX — every step of a request that waits (a change plan is approved together: the review lists each one first).
+  fastify.get('/advertising/waste/waiting/:approvalId', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store')
+    const person = await personOf(request, reply)
+    if (!person) return
+    const id = String((request.params as { approvalId?: unknown }).approvalId ?? '').trim()
+    if (!id || id.length > 64) return reply.code(400).send({ error: 'approvalId: name the request' })
+    const out = await waitingSteps(id, person)
+    if (!out) return reply.code(404).send({ error: 'No request of the Negative Targeting page with this id.' })
     return out
   })
 

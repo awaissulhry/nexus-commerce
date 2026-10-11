@@ -14,7 +14,7 @@
  * or opens the campaign list; on Last 7 d it opens the detail where its chips point; on Waiting the asks; on ⋯ the menu.
  */
 import { memo } from 'react'
-import { Brain, Crosshair, ShieldAlert, ShieldCheck, Sprout, TextSearch } from 'lucide-react'
+import { ArrowUpRight, Brain, Crosshair, ShieldAlert, ShieldCheck, Sprout, TextSearch } from 'lucide-react'
 import { Button, Tag, Tooltip } from '@/design-system/primitives'
 import { EntityLinks, EntityPath, type EntityLinkComponent, type MenuItemDef } from '@/design-system/components'
 import {
@@ -25,7 +25,7 @@ import Link from '@/lib/workspaces/Link'
 import { relWords } from '../../bid/_shared/format'
 import { MODES, MODE_WORD, holdReason, holdWord, type BidRuleMode } from '../../bid/rules/bidRulesModel'
 import {
-  KIND_WORD, LAST_WEEK, WASTE_MODE_MEANS, heldStep, isInfoHold, isPseudo, last7Parts, last7Tab, last7Text, modeLock, ownerOf, partHolds, scopeCount,
+  KIND_WORD, LAST_WEEK, WASTE_MODE_MEANS, decidedElsewhere, harvestWaitingHref, heldStep, isInfoHold, isPseudo, last7Parts, last7Tab, last7Text, modeLock, ownerOf, partHolds, scopeCount,
   scopePath, scopeText,
   type WasteKind, type WasteRuleRow,
 } from './wasteRulesModel'
@@ -195,11 +195,20 @@ function last7Keys(p: KeyParams): boolean {
   return true
 }
 
-/** Waiting: how many asks wait for a person — a button that opens them in the detail; a dash when none. */
+/** Waiting: how many asks wait for a person — a button that opens them in the detail; a dash when none. Harvest's are
+ *  decided on the Keyword Harvest page: a link there with the count (NFIX). */
 const WaitingCell = memo(function WaitingCell({ data, context }: Cell) {
   if (!data) return null
   const r = data.row
   if (!r.waiting) return <span className={styles.muted} aria-label="Nothing waiting">—</span>
+  if (decidedElsewhere(r)) {
+    return (
+      <span onClickCapture={keepFromGrid}>
+        <Link href={harvestWaitingHref(r.market ?? context.current.market)} className="nds-entitylink" title="Decided on the Keyword Harvest page"
+          aria-label={`${r.waiting} waiting: decide them on the Keyword Harvest page`}>{r.waiting}<ArrowUpRight size={12} aria-hidden /></Link>
+      </span>
+    )
+  }
   return (
     <span onClickCapture={keepFromGrid}>
       <Button size="xs" variant="warning" onClick={() => context.current.open(r.id, 'waiting')} aria-label={`${r.waiting} waiting: open them`}>{r.waiting}</Button>
@@ -210,11 +219,11 @@ const WaitingCell = memo(function WaitingCell({ data, context }: Cell) {
 function waitingKeys(p: KeyParams): boolean {
   const target = p.event.target as HTMLElement | null
   if (!target || typeof target.closest !== 'function') return false
-  if (target.closest('button')) return true
+  if (target.closest('button, a[href]')) return true
   if (p.editing || p.event.key !== 'Enter' || !p.data || !p.context) return false
   if (p.event.type && p.event.type !== 'keydown') return true
   p.event.preventDefault()
-  p.context.current.open(p.data.id, p.data.row.waiting > 0 ? 'waiting' : 'overview')
+  p.context.current.open(p.data.id, p.data.row.waiting > 0 && !decidedElsewhere(p.data.row) ? 'waiting' : 'overview')
   return true
 }
 
@@ -225,9 +234,12 @@ function menuItems(g: GridRow): MenuItemDef[] {
   const r = g.row
   const open = (tab: PanelTab) => () => h.open(r.id, tab)
   if (isPseudo(r)) {
+    const waiting: MenuItemDef[] = r.waiting <= 0 ? []
+      : decidedElsewhere(r) ? [{ id: 'waiting', label: `Waiting · ${r.waiting} · Keyword Harvest`, href: harvestWaitingHref(r.market ?? h.market), description: 'Decided on the Keyword Harvest page' }]
+        : [{ id: 'waiting', label: `Waiting · ${r.waiting}`, onSelect: open('waiting') }]
     return [
       { id: 'open', label: 'Open', onSelect: open('overview') },
-      ...(r.waiting > 0 ? [{ id: 'waiting', label: `Waiting · ${r.waiting}`, onSelect: open('waiting') }] : []),
+      ...waiting,
       { id: 'history', label: 'History', onSelect: open('history') },
     ]
   }

@@ -726,3 +726,130 @@ describe('money', () => {
     }
   })
 })
+
+describe('NFIX — "Since" is the day a negative was added; "Waiting for you" lists every ask it counts', () => {
+  // Its own market (DE), made and removed here: the reads above never see it.
+  const DE = 'market=DE'
+  const ids = { approvals: ['appr-brain-de', 'appr-brain-old', 'appr-pause-de', 'appr-hv-de'], keys: ['de-1', 'de-2', 'de-3', 'de-old', 'de-written'] }
+  const sync = Array.from({ length: 12 }, (_, i) => `n-sync-${i}`)
+  const inA = <T>(fn: (c: any) => Promise<T>) => withWorkspace(business(A), () => fn(database.client as any))
+
+  beforeAll(async () => {
+    await inA(async (c) => {
+      await c.campaign.create({ data: { id: 'c-de', name: 'Test c-de', type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'DE', externalCampaignId: 'EXT-c-de', dailyBudget: '20.00', startDate: new Date('2026-01-01T00:00:00Z') } })
+      for (const [id, status] of [['g-de1', 'ENABLED'], ['g-de2', 'ENABLED'], ['g-de-paused', 'PAUSED']] as const) {
+        await c.adGroup.create({ data: { id, campaignId: 'c-de', name: `group ${id}`, externalAdGroupId: `EXT-${id}`, status } })
+      }
+      await c.adTarget.create({ data: { id: 'k-de', adGroupId: 'g-de2', kind: 'KEYWORD', expressionType: 'BROAD', expressionValue: 'de jacket', bidCents: 40, externalTargetId: 'EXT-k-de' } })
+      await c.adTarget.create({ data: { id: 'k-de-idle', adGroupId: 'g-de-paused', kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'de idle jacket', bidCents: 40, externalTargetId: 'EXT-k-de-idle' } })
+      const neg = (id: string, text: string, createdAt: Date) => c.adTarget.create({ data: { id, adGroupId: 'g-de1', kind: 'KEYWORD', expressionType: 'NEGATIVE_EXACT', expressionValue: text, bidCents: 0, isNegative: true, negativeLevel: 'AD_GROUP', externalTargetId: `EXT-${id}`, createdAt } })
+      // One sync stored twelve negatives at once today (a re-sync): none of them was added today.
+      const syncedAt = ago(0.1)
+      for (const [i, id] of sync.entries()) await neg(id, i === 0 ? 'de brain words' : `de synced ${i}`, syncedAt)
+      // The first of them: the Brain wrote it 3 days ago (that row is gone; the place, match and words find it).
+      await neg('n-single', 'de single', ago(4))
+      await neg('n-door', 'de door', ago(2))
+      await c.advertisingActionLog.create({ data: { userId: 'user:u1', actionType: 'create_negative_keyword', entityType: 'AD_TARGET', entityId: 'n-door', payloadBefore: {}, payloadAfter: { keywordText: 'de door' }, amazonResponseStatus: 'SUCCESS', createdAt: ago(2) } })
+      const brain = { productId: 'p-root', marketplace: 'DE', reasons: [], kind: 'KEYWORD', level: 'AD_GROUP', campaignId: 'c-de', mode: 'PROPOSE', why: 'made up', evidence: {}, digest: 'd', runId: 'run-de', dataDay: dayAgo(1), firstSeenAt: ago(1), checkedAt: ago(1), changedAt: ago(1), action: 'ADD', reason: 'waste' }
+      await c.adsBrainNegative.create({ data: { ...brain, key: 'de-written', match: 'EXACT', text: 'De Brain Words', adGroupId: 'g-de1', status: 'WRITTEN', adTargetId: 'n-gone-before', actedAt: ago(3), result: 'added at Amazon (made up)' } })
+      // A search term that wastes in g-de2: its row carries the Brain's ask for it.
+      for (const d of [10, 20]) {
+        await c.amazonAdsSearchTerm.create({ data: { profileId: 'P-DE', marketplace: 'DE', adProduct: 'SPONSORED_PRODUCTS', date: dayAgo(d), campaignId: 'EXT-c-de', adGroupId: 'EXT-g-de2', matchedKeywordId: 'EXT-k-de', matchType: 'BROAD', query: 'de wasted term', impressions: 400, clicks: 20, costMicros: 25_000_000n, currencyCode: 'EUR', orders7d: 0, sales7dCents: 0 } })
+      }
+      // The Brain's change plan for the day (one ask, three changes): a phrase piece no term row is, a negative's removal,
+      // and the wasting term — plus yesterday's plan, expired (its log rows still say PROPOSED).
+      const run = await c.agentRun.create({ data: { agentKey: 'ads-brain-negatives', trigger: 'schedule', status: 'done' } })
+      const plan = (id: string, expiresAt: Date, steps: Array<{ toolName: string; args: Record<string, unknown> }>) => c.agentApproval.create({
+        data: { id, agentRunId: run.id, toolName: 'submit-change-plan', riskTier: 'high', args: { title: 'made up', steps: steps.length }, status: 'pending', requestedAt: ago(0.2), expiresAt,
+          planSteps: { create: steps.map((s, i) => ({ position: i + 1, toolName: s.toolName, args: s.args })) } },
+      })
+      await plan('appr-brain-de', new Date(NOW + DAY), [
+        { toolName: 'add-negative-targets', args: { negatives: [{ adGroupId: 'g-de1', text: 'cheap de', matchType: 'NEGATIVE_PHRASE' }], why: 'Ads brain: ngram (made up)' } },
+        { toolName: 'retire-negatives', args: { negativeIds: ['n-single'], why: 'Ads brain: revive (made up)' } },
+        { toolName: 'add-negative-targets', args: { negatives: [{ adGroupId: 'g-de2', text: 'de wasted term', matchType: 'NEGATIVE_EXACT' }], why: 'Ads brain: waste (made up)' } },
+      ])
+      await plan('appr-brain-old', ago(0.5), [{ toolName: 'add-negative-targets', args: { negatives: [{ adGroupId: 'g-de1', text: 'old de', matchType: 'NEGATIVE_EXACT' }] } }])
+      for (const [key, match, text, approvalId] of [['de-1', 'PHRASE', 'cheap de', 'appr-brain-de'], ['de-2', 'EXACT', 'de single', 'appr-brain-de'], ['de-3', 'EXACT', 'de wasted term', 'appr-brain-de'], ['de-old', 'EXACT', 'old de', 'appr-brain-old']]) {
+        await c.adsBrainNegative.create({ data: { ...brain, key, match, text, adGroupId: 'g-de1', status: 'PROPOSED', approvalId, actedAt: ago(0.2) } })
+      }
+      // A person's pause of our keyword in a paused ad group, waiting.
+      const mine = await c.agentRun.create({ data: { agentKey: 'claude', trigger: 'manual', status: 'awaiting_approval', userId: 'u1' } })
+      await c.agentApproval.create({ data: { id: 'appr-pause-de', agentRunId: mine.id, toolName: 'pause-ads', riskTier: 'medium', args: { targetIds: ['k-de-idle'], why: 'made up' }, status: 'pending', requestedAt: ago(0.3), expiresAt: new Date(NOW + DAY) } })
+      // Harvest's asks (decided on the Keyword Harvest page): one still open, one whose request expired.
+      await c.agentApproval.create({ data: { id: 'appr-hv-de', agentRunId: run.id, toolName: 'apply-brain-harvest', riskTier: 'high', args: {}, status: 'pending', requestedAt: ago(0.2), expiresAt: new Date(NOW + DAY) } })
+      const hv = { productId: 'p-root', marketplace: 'DE', status: 'PROPOSED', level: 'PROPOSE', destinationKind: 'EXACT', sources: [], why: 'made up', evidence: {}, digest: 'd', runId: 'run-de', decidedAt: ago(1), checkedAt: ago(1), changedAt: ago(1) }
+      await c.adsBrainHarvest.create({ data: { ...hv, term: 'de harvest open', approvalId: 'appr-hv-de' } })
+      await c.adsBrainHarvest.create({ data: { ...hv, term: 'de harvest old', approvalId: 'appr-brain-old' } })
+    })
+  })
+
+  afterAll(async () => {
+    await inA(async (c) => {
+      await c.agentApproval.deleteMany({ where: { id: { in: ids.approvals } } })
+      await c.adsBrainNegative.deleteMany({ where: { marketplace: 'DE' } })
+      await c.adsBrainHarvest.deleteMany({ where: { marketplace: 'DE' } })
+      await c.amazonAdsSearchTerm.deleteMany({ where: { marketplace: 'DE' } })
+      await c.advertisingActionLog.deleteMany({ where: { entityId: 'n-door' } })
+      await c.adTarget.deleteMany({ where: { adGroup: { campaignId: 'c-de' } } })
+      await c.adGroup.deleteMany({ where: { campaignId: 'c-de' } })
+      await c.campaign.deleteMany({ where: { id: 'c-de' } })
+    })
+  })
+
+  it('Since: a record (its own, the Brain\'s by place and words) else first seen; a re-sync\'s crowd is unknown, with why', async () => {
+    const res = await get('stopped', `${DE}&pageSize=200`)
+    expect(res.statusCode, res.body).toBe(200)
+    const rows = byId(res.json().rows)
+    expect(rows.get('neg:n-sync-0')).toMatchObject({ since: ago(3).toISOString(), sinceSource: 'brain', sinceWhy: expect.stringMatching(/Brain's write/) })
+    for (const id of sync.slice(1)) {
+      expect(rows.get(`neg:${id}`)).toMatchObject({ since: null, sinceSource: null, spendBeforeCents: null })
+      expect(rows.get(`neg:${id}`).sinceWhy).toMatch(/^Added before Nexus kept a record: Nexus first saw it on .+, in one sync with 11 other negatives$/)
+    }
+    expect(rows.get('neg:n-door')).toMatchObject({ since: ago(2).toISOString(), sinceSource: 'record' })
+    expect(rows.get('neg:n-single')).toMatchObject({ since: ago(4).toISOString(), sinceSource: 'first-seen', sinceWhy: expect.stringMatching(/first saw it/) })
+    // Unknown days sort last; no row reads the re-sync's day.
+    const order = res.json().rows.map((r: Row) => r.since)
+    expect(order.slice(-11).every((s: string | null) => s === null)).toBe(true)
+    expect(order.filter((s: string | null) => s && Date.parse(s) > Date.parse(ago(1).toISOString()))).toEqual([])
+  })
+
+  it('Waiting: every ask is counted and listed — the Brain\'s too, where no wasting row carries it; an expired ask is neither', async () => {
+    const waiting = await rowsOf(`${DE}&show=waiting&pageSize=200`)
+    const rows = byId(waiting.rows)
+    expect(new Set(waiting.rows.map((r: Row) => r.waiting.approvalId))).toEqual(new Set(['appr-brain-de', 'appr-pause-de']))
+    expect(waiting.totals.waiting).toBe(2)
+    expect(waiting.total).toBe(4)
+    // The wasting term carries the Brain's ask on its own row.
+    expect(rows.get('term:DE|EXT-g-de2|de wasted term')).toMatchObject({ waiting: { approvalId: 'appr-brain-de', by: { id: 'brain', name: 'Brain' }, rows: 3, plan: { steps: 3, offPage: 0 } } })
+    // A single request is not a plan.
+    expect(rows.get('kw:k-de-idle').waiting.plan).toBeUndefined()
+    expect(rows.get('term:DE|EXT-g-de2|de wasted term').askOnly).toBeUndefined()
+    // A phrase piece, a negative's removal and a pause in a paused place: rows of their own, listed under Waiting only.
+    expect(rows.get('term:DE|EXT-g-de1|cheap de')).toMatchObject({ askOnly: true, kind: 'TERM', match: 'PHRASE', owner: { kind: 'BRAIN' }, verb: { action: 'NEGATE_PHRASE', where: 'adGroup' }, d: { clicks: 0 } })
+    expect(rows.get('term:DE|EXT-g-de1|cheap de').test.sentence).toBe('Asked by Brain: Ads brain: ngram (made up)')
+    expect(rows.get('neg:n-single')).toMatchObject({ askOnly: true, state: 'NEGATED', verb: { action: 'REMOVE_NEGATIVE', targetRowId: 'neg:n-single' }, waiting: { approvalId: 'appr-brain-de' } })
+    expect(rows.get('kw:k-de-idle')).toMatchObject({ askOnly: true, kind: 'KEYWORD', state: 'RUNNING', owner: { kind: 'PERSON' }, verb: { action: 'PAUSE' }, waiting: { approvalId: 'appr-pause-de' } })
+    // The same count in every view of the rows (Bid audit M1); the ask-only rows show nowhere else.
+    const all = await rowsOf(`${DE}&show=all&pageSize=200`)
+    expect(all.totals.waiting).toBe(2)
+    expect(all.rows.some((r: Row) => r.askOnly)).toBe(false)
+    expect((await rowsOf(`${DE}&show=wasting`)).totals.waiting).toBe(2)
+    expect((await get('rows/ids', `${DE}&show=waiting`)).json()).toMatchObject({ total: 4 })
+    // One row's record opens with its ask.
+    const one = await get(`row/${encodeURIComponent('term:DE|EXT-g-de1|cheap de')}`)
+    expect(one.statusCode, one.body).toBe(200)
+    expect(one.json().row).toMatchObject({ askOnly: true, waiting: { approvalId: 'appr-brain-de' } })
+    expect(one.json().runsIn.some((p: Row) => p.rowId === 'term:DE|EXT-g-de1|cheap de')).toBe(false)
+  })
+
+  it('the Rules view\'s Waiting is the same truth: the Brain row counts its asks the page lists, not its log\'s PROPOSED rows', async () => {
+    const res = await get('rules', DE)
+    expect(res.statusCode, res.body).toBe(200)
+    const brain = res.json().rules.find((r: Row) => r.id === 'brain')
+    const listed = new Set((await rowsOf(`${DE}&show=waiting&pageSize=200`)).rows.filter((r: Row) => r.waiting.by.id === 'brain').map((r: Row) => r.waiting.approvalId))
+    expect(brain.waiting).toBe(listed.size)
+    expect(brain.waiting).toBe(1)
+    // Harvest's: only the asks whose request is still open (the page links to the Keyword Harvest page's list).
+    expect(res.json().rules.find((r: Row) => r.id === 'harvest').waiting).toBe(1)
+  })
+})

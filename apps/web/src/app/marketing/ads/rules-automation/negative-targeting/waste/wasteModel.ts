@@ -15,7 +15,7 @@ import { CHANGE_STATE_TONE, CHANGE_STATE_WORD, type ChangeState, type ChangeTone
 import { dayWords, money } from '../../bid/_shared/format'
 import type {
   ActionGate, ApplyAnswer, Delivery, HistoryAction, Match, Owner, PreviewAnswer, PreviewStep, Ref, RowKind, RowState, StoppedRow, StoppedState,
-  StoppedTotals, VerbAction, WasteAction, WasteItem, WasteRow, WasteTotals, Where,
+  StoppedTotals, VerbAction, WaitingSteps, WasteAction, WasteItem, WasteRow, WasteTotals, Where,
 } from './wasteTypes'
 
 export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
@@ -181,6 +181,16 @@ export function verbSentence(action: WasteAction, where?: Where | null): string 
     case 'RELEASE': return 'End the lock: rules may turn it on again'
     case 'KEEP_UNTIL': return 'Keep it paused until a day, or always'
   }
+}
+
+/**
+ * NFIX — a stopped row's "Since" as the page shows it: the day, or "—" when it is not known; `hint` says how it is known
+ * or why not (the cell's hover, the record's note). A kept-paused keyword's hint is its lock's end.
+ */
+export function sinceView(r: Pick<StoppedRow, 'since' | 'sinceWhy' | 'keptPaused'>): { text: string; hint: string | undefined } {
+  const until = r.keptPaused?.until
+  const hint = until ? `Kept paused until ${dayWords(until)}` : r.keptPaused ? 'Kept paused, always' : r.sinceWhy ?? (r.since ? undefined : 'Not on record')
+  return { text: dayWords(r.since), hint }
 }
 
 const HISTORY: Readonly<Record<HistoryAction, string>> = {
@@ -456,10 +466,73 @@ export function waitingOf(rows: ReadonlyArray<Picked<WasteRow>>): Waiting[] {
     if (cur) { cur.places = Math.max(n, r.waiting.rows ?? 1); continue }
     out.set(r.waiting.approvalId, {
       rowId: r.id, approvalId: r.waiting.approvalId, text: r.text, by: r.waiting.by.name, places: Math.max(1, r.waiting.rows ?? 1),
-      what: r.verb.action === 'REMOVE_NEGATIVE' ? undefined : verbLabel(r.verb.action, r.verb.action === 'PAUSE' ? null : r.verb.where), place: pathOf(r),
+      // A clash row's Remove is not what its ask does (the ask pauses it); a row listed for its ask has the ask's verb.
+      what: r.verb.action === 'REMOVE_NEGATIVE' && !r.askOnly ? undefined : verbLabel(r.verb.action, r.verb.action === 'PAUSE' || r.verb.action === 'REMOVE_NEGATIVE' ? null : r.verb.where), place: pathOf(r),
     })
   }
   return [...out.values()]
+}
+
+/** NFIX — an ask that is a change plan, in words: "Plan · 2 steps (1 not on this page)"; null for a single request. */
+export function planWords(plan: { steps: number; offPage: number } | null | undefined): string | null {
+  if (!plan) return null
+  return `Plan · ${plural(plan.steps, 'step')}${plan.offPage ? ` (${plan.offPage} not on this page)` : ''}`
+}
+
+/**
+ * NFIX — the decide review's lines: one per change each request makes. A request that is one change on this page reads
+ * as the row did (its words, its place); a change plan — or a request holding a change this page does not show — lists
+ * EVERY step's every change (what, where, from → to), each noted as decided together with the rest of its request: the
+ * approvals service approves or rejects a request whole (no approve-one-step). `steps` null for a request: not read
+ * (a rule's card has none to read: it is one change).
+ */
+export interface DecideLine {
+  id: string
+  approvalId: string
+  what: string
+  /** The row's place (a single change), or the step's own place (a link). */
+  place?: Array<Ref | null>
+  whereLink?: { name: string; href: string | null }
+  now: string
+  next: string
+  note?: string
+  /** A change this page does not show (a bid, a price …) that runs with the rest of its request. */
+  offPage?: boolean
+}
+export function decideLines(waits: readonly Waiting[], steps: ReadonlyMap<string, WaitingSteps | null>, decide: 'approve' | 'reject'): DecideLine[] {
+  const done = decide === 'approve' ? 'Approved' : 'Rejected'
+  const together = decide === 'approve' ? 'Approved together' : 'Rejected together'
+  const out: DecideLine[] = []
+  for (const w of waits) {
+    const s = steps.get(w.approvalId) ?? null
+    const single = !s || (!s.plan && s.steps.length <= 1 && s.offPage === 0)
+    if (single) {
+      out.push({ id: w.approvalId, approvalId: w.approvalId, what: w.what ? `${w.what} · ${w.text}` : w.text, place: w.place, now: `Waiting · ${w.by}`, next: done, note: (w.places ?? 1) > 1 ? `${w.places} places` : undefined })
+      continue
+    }
+    const of = `${together} · ${plural(s.steps.length, 'step')} · ${w.by}`
+    for (const step of s.steps) {
+      const note = `${of}${step.onPage ? '' : ' · not on this page'}`
+      const base = { approvalId: w.approvalId, whereLink: step.where ?? undefined, offPage: !step.onPage || undefined }
+      if (step.hidden || !step.changes.length) {
+        out.push({ ...base, id: `${w.approvalId}#${step.step}`, what: step.summary && !step.hidden ? `${step.words} · ${step.summary}` : step.words, now: '—', next: done, note: step.hidden ? `${note} · ${step.hidden}` : note })
+        continue
+      }
+      step.changes.forEach((c, i) => out.push({ ...base, id: `${w.approvalId}#${step.step}.${i}`, what: `${step.words} · ${c.label}`, now: c.from ?? '—', next: c.to ?? done, note }))
+      const more = step.changeCount - step.changes.length
+      if (more > 0) out.push({ ...base, id: `${w.approvalId}#${step.step}.more`, what: `${step.words} · and ${plural(more, 'more change')}`, now: '—', next: done, note })
+    }
+  }
+  return out
+}
+
+/** The decide review's summary: what is decided whole, and how many changes are not on this page. */
+export function decideSummary(waits: readonly Waiting[], steps: ReadonlyMap<string, WaitingSteps | null>, decide: 'approve' | 'reject'): string | null {
+  const plans = waits.map((w) => steps.get(w.approvalId)).filter((s): s is WaitingSteps => !!s && (s.plan || s.steps.length > 1 || s.offPage > 0))
+  if (!plans.length) return null
+  const off = plans.reduce((n, s) => n + s.offPage, 0)
+  const verb = decide === 'approve' ? 'approved' : 'rejected'
+  return `${plans.length === 1 ? 'This request' : `${plans.length} requests`} ${plans.length === 1 ? 'is' : 'are'} ${verb} whole: every step below ${decide === 'approve' ? 'runs' : 'is dropped'} together${off ? `, ${plural(off, 'step')} not on this page included` : ''}.`
 }
 
 // ── the review ──────────────────────────────────────────────────────────────────────────────────────────────────────

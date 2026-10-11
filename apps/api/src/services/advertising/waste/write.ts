@@ -51,6 +51,7 @@ import { PLAN_TOOL } from '../../agents/tool-types.js'
 import { decideFleetApproval } from '../../agent-fleet/approval-inbox.service.js'
 import { isAsin } from '../ads-negation-policy.js'
 import { HOLD_SELECT, holdActive, holdStateOf, keepUntilOf, type HoldColumns } from './hold.js'
+import { WASTE_TOOLS } from './pure.js'
 
 export const WASTE_ACTIONS = ['PAUSE', 'NEGATE_EXACT', 'NEGATE_PHRASE', 'NEGATE_ASIN', 'TURN_ON', 'REMOVE_NEGATIVE', 'RELEASE', 'KEEP_UNTIL'] as const
 export type WasteAction = (typeof WASTE_ACTIONS)[number]
@@ -87,7 +88,8 @@ export const DECIDE_BODY = z.object({
 })
 
 /** The tools the page's writes are made of (and the requests its Waiting rows may be). */
-export const WASTE_TOOLS = ['pause-ads', 'enable-ads', 'add-negative-targets', 'retire-negatives', 'create-negative-keyword'] as const
+// NFIX — kept in pure.ts (the reads name a plan's steps that are not the page's without loading this file).
+export { WASTE_TOOLS }
 
 export interface Ref { id: string; name: string; href?: string }
 export interface Place { portfolio: Ref | null; campaign: Ref | null; adGroup: Ref | null }

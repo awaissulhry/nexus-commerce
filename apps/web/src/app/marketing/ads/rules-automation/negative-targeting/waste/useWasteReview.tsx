@@ -21,13 +21,13 @@ import type { ReviewChange, ReviewResult, ReviewState } from '@/design-system/pa
 import Link from '@/lib/workspaces/Link'
 import { dayWords, relWords } from '../../bid/_shared/format'
 import {
-  applyWaste, decideWaiting, previewWaste, restoreCard, skipRows, takeBackApproval, undoActionLog, undoChangeSet, unskipRows,
+  applyWaste, decideWaiting, previewWaste, readWaitingSteps, restoreCard, skipRows, takeBackApproval, undoActionLog, undoChangeSet, unskipRows,
 } from './wasteApi'
 import {
-  ackWords, appliedWords, deliveryView, doneLine, historyWord, isAsinText, isFinal, keepWord, landsWord, olderKeep, plural, previewSummary, saveWords,
-  shownSteps, stepStateWord, undoWords, unknownAction, verbLabel, type BulkPlan, type Waiting,
+  ackWords, appliedWords, decideLines, decideSummary, deliveryView, doneLine, historyWord, isAsinText, isFinal, keepWord, landsWord, olderKeep, plural, previewSummary, saveWords,
+  shownSteps, stepStateWord, undoWords, unknownAction, verbLabel, type BulkPlan, type DecideLine, type Waiting,
 } from './wasteModel'
-import type { ApplyAnswer, HistoryItem, PreviewAnswer, PreviewStep, Ref, WasteItem } from './wasteTypes'
+import type { ApplyAnswer, HistoryItem, PreviewAnswer, PreviewStep, Ref, WaitingSteps, WasteItem } from './wasteTypes'
 import styles from '../negatives.module.css'
 
 const WorkspaceLink = Link as unknown as EntityLinkComponent
@@ -64,6 +64,8 @@ export interface WasteReview {
   preview: PreviewAnswer | null
   /** What apply sends: the ask's items, or their older form when the server does not know KEEP_UNTIL yet. */
   sendItems: WasteItem[] | null
+  /** NFIX — a decide review's lines (every step of a request decided whole), for its results and its Undo. */
+  lines?: DecideLine[]
 }
 
 /** The authenticator code asked on top of the review (a turn-on of a kept-paused keyword raises spend). */
@@ -80,6 +82,25 @@ const where = (s: PreviewStep, item?: WasteItem): ReactNode => (campaignWide(s, 
 const stepText = (s: PreviewStep, texts?: Record<string, string>) => {
   const t = (texts?.[s.rowId] ?? '').trim() || (s.text ?? '').trim()
   return !t ? 'Auto target' : isAsinText(t) ? t.toUpperCase() : t
+}
+
+/** A decide line as the review table shows it: the row's place, or the step's own place as a link. */
+const decideChange = (l: DecideLine): ReviewChange => ({
+  id: l.id,
+  where: l.place ? <EntityPath items={l.place} linkAs={WorkspaceLink} label="Where" />
+    : l.whereLink ? (l.whereLink.href ? <Link href={l.whereLink.href} className="nds-entitylink">{l.whereLink.name}</Link> : l.whereLink.name) : undefined,
+  what: l.what,
+  now: l.now,
+  next: l.next,
+  note: l.note,
+})
+
+/** The decide review's words for what happens after (the request's own path; a rule's card comes back on Undo). */
+function decideWords(a: Extract<WasteAsk, { kind: 'decide' }>): string {
+  if (a.decide === 'approve') return 'Runs as you after a short window in which you can undo it.'
+  return a.waits.every((w) => isCard(w.approvalId)) ? 'Nothing is sent. Undo brings it back to waiting.'
+    : a.waits.some((w) => isCard(w.approvalId)) ? 'Nothing is sent. A rule\'s ask can come back to waiting; the others do not.'
+      : 'Nothing is sent. A rejected request does not come back.'
 }
 
 function previewChanges(steps: readonly PreviewStep[], a: Extract<WasteAsk, { kind: 'change' }>): ReviewChange[] {
@@ -140,6 +161,33 @@ export function useWasteReview({ market, after }: { market: string | null; after
     }
   }, [market]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  /**
+   * NFIX — every step of each request before it is decided: a change plan is approved (or rejected) whole by the
+   * approvals service, so the review lists all its steps — the ones this page does not show too — and says so. Not
+   * read: nothing can be decided (the review says why, with Try again).
+   */
+  const runDecideRead = useCallback(async (a: Extract<WasteAsk, { kind: 'decide' }>) => {
+    const ids = [...new Set(a.waits.map((w) => w.approvalId).filter((id) => !isCard(id)))]
+    try {
+      const read = await Promise.all(ids.map((id) => readWaitingSteps(id)))
+      const steps = new Map<string, WaitingSteps | null>(ids.map((id, i) => [id, read[i]]))
+      const lines = decideLines(a.waits, steps, a.decide)
+      const whole = decideSummary(a.waits, steps, a.decide)
+      patch(a, {
+        lines,
+        changes: lines.map(decideChange),
+        title: `Review ${plural(lines.length, 'change')}`,
+        summary: whole ? `${whole} ${decideWords(a)}` : decideWords(a),
+        // Counted: a request decided whole says how many changes go with it.
+        saveLabel: whole ? `${a.decide === 'approve' ? 'Approve' : 'Reject'} ${plural(lines.length, 'change')} together` : `${a.decide === 'approve' ? 'Approve' : 'Reject'} ${a.waits.length}`,
+        state: { phase: 'ready' },
+      })
+    } catch (e) {
+      const why = e instanceof Error ? e.message : String(e)
+      patch(a, { summary: `Not read — ${why}`, state: { phase: 'failed', error: `Every step of the request was not read — ${why}. Nothing was decided.` } })
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   const ask = useCallback((a: WasteAsk) => {
     setStepUp(null)
     const base = { ask: a, problems: [] as string[], undo: null, undoLabel: null, noUndo: null, undoing: false, preview: null, sendItems: null }
@@ -163,26 +211,20 @@ export function useWasteReview({ market, after }: { market: string | null; after
     }
     if (a.kind === 'decide') {
       const approve = a.decide === 'approve'
+      // Every step of each request is read first (a plan is decided whole); a rule's card is one change, shown at once.
+      const reading = a.waits.some((w) => !isCard(w.approvalId))
+      const lines = reading ? [] : decideLines(a.waits, new Map(), a.decide)
       setReview({
         ...base,
-        title: `Review ${plural(a.waits.length, 'change')}`,
-        changes: a.waits.map((w) => ({
-          id: w.approvalId,
-          where: w.place ? <EntityPath items={w.place} linkAs={WorkspaceLink} label="Where" /> : undefined,
-          what: w.what ? `${w.what} · ${w.text}` : w.text,
-          now: `Waiting · ${w.by}`,
-          next: approve ? 'Approved' : 'Rejected',
-          note: (w.places ?? 1) > 1 ? `${w.places} places` : undefined,
-        })),
-        state: { phase: 'ready' },
-        // A rule's card comes back on Undo (`/suggestions/:id/restore`); any other rejected request does not.
-        summary: approve ? 'Runs as you after a short window in which you can undo it.'
-          : a.waits.every((w) => isCard(w.approvalId)) ? 'Nothing is sent. Undo brings it back to waiting.'
-            : a.waits.some((w) => isCard(w.approvalId)) ? 'Nothing is sent. A rule\'s ask can come back to waiting; the others do not.'
-              : 'Nothing is sent. A rejected request does not come back.',
+        lines,
+        title: `Review ${plural(reading ? a.waits.length : lines.length, 'change')}`,
+        changes: lines.map(decideChange),
+        state: reading ? { phase: 'reading' } : { phase: 'ready' },
+        summary: reading ? 'Reading every step of each request…' : decideWords(a),
         saveLabel: `${approve ? 'Approve' : 'Reject'} ${a.waits.length}`,
         doneVerb: approve ? 'approved' : 'rejected',
       })
+      if (reading) void runDecideRead(a)
       return
     }
     const it = a.item
@@ -196,7 +238,7 @@ export function useWasteReview({ market, after }: { market: string | null; after
       saveLabel: 'Undo 1',
       doneVerb: 'undone',
     })
-  }, [runPreview])
+  }, [runPreview, runDecideRead])
 
   /** The apply and what it did, line by line; the Undo that fits its status. */
   const finishApply = useCallback(async (a: Extract<WasteAsk, { kind: 'change' }>, v: WasteReview, answer: ApplyAnswer) => {
@@ -326,17 +368,21 @@ export function useWasteReview({ market, after }: { market: string | null; after
       }
     } else if (a.kind === 'decide') {
       const out = await decideWaiting(a.waits.map((w) => ({ approvalId: w.approvalId, decide: a.decide })))
-      for (const r of out) results[r.approvalId] = { ok: r.ok, words: r.ok ? (a.decide === 'approve' ? 'Approved' : 'Rejected') : r.error ?? 'Not decided', verb: a.decide === 'approve' ? 'approved' : 'rejected' }
+      // A request is decided whole: each of its lines (every step of a plan) carries its result.
+      const linesOf = (approvalId: string) => { const ids = (v.lines ?? []).filter((l) => l.approvalId === approvalId).map((l) => l.id); return ids.length ? ids : [approvalId] }
+      const whole = (v.lines ?? []).some((l) => l.id !== l.approvalId)
+      for (const r of out) for (const id of linesOf(r.approvalId)) results[id] = { ok: r.ok, words: r.ok ? (a.decide === 'approve' ? 'Approved' : 'Rejected') : r.error ?? 'Not decided', verb: a.decide === 'approve' ? 'approved' : 'rejected' }
       // Back to waiting: an approve inside its window is taken back; a rejected rule card is restored. A rejected request
       // of any other kind does not come back (said only for those).
       const back = a.decide === 'approve'
         ? out.filter((r) => r.ok && r.executeAfter && !isCard(r.approvalId))
         : out.filter((r) => r.ok && isCard(r.approvalId))
       if (back.length) {
-        undoLabel = `Undo: back to waiting (${back.length})`
+        // The Undo covers each request whole: a plan goes back to waiting with every step.
+        undoLabel = whole ? `Undo: ${back.length === 1 ? 'the whole request' : `${back.length} requests, whole,`} back to waiting` : `Undo: back to waiting (${back.length})`
         undo = async () => {
           const res = await Promise.all(back.map((r) => (a.decide === 'approve' ? takeBackApproval(r.approvalId) : restoreCard(r.approvalId.slice(CARD.length)))))
-          return Object.fromEntries(back.map((r, i) => [r.approvalId, { ok: res[i].ok, words: res[i].ok ? 'Waiting again' : res[i].error ?? 'Not undone', verb: 'undone' }]))
+          return Object.fromEntries(back.flatMap((r, i) => linesOf(r.approvalId).map((id) => [id, { ok: res[i].ok, words: res[i].ok ? 'Waiting again' : res[i].error ?? 'Not undone', verb: 'undone' }])))
         }
       } else if (out.some((r) => r.ok)) {
         noUndo = a.decide === 'reject' ? 'A rejected request does not come back' : 'Undo it from the row\'s History'

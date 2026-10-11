@@ -535,6 +535,11 @@ a.nds-tab:hover { text-decoration: none; }
   border-radius: var(--nds-radius-3xl);
   box-shadow: var(--nds-shadow-modal);
 }
+/* A light modal is a light place on a dark OS too: its native controls (a tick box, a scrollbar, a date field) draw
+   light. `data-nds-light` is set by Modal when it opens light (lib/opens-dark.ts). */
+.nds-modal[data-nds-light] {
+  color-scheme: light;
+}
 .nds-modal.md {
   width: 560px;
 }

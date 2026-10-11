@@ -11,12 +11,15 @@
  *               it an id) · a negative switched off reads PAUSED
  *   show        kept · negated · turned-on · still-bought (a paused EXACT keyword whose words still spend in another
  *               place of the market, not blocked there: "Still bought elsewhere") · all (default)
- *   since       the hold's time, else the pause on record, else a negative's create record, else when Nexus first saw
- *               the row (`sinceSource` says which)
+ *   since       a keyword: the hold's time, else the pause on record, else unknown; a negative: when it was added
+ *               (since.ts — its create record, the Brain's write, Harvest's landing, else the day Nexus's sync first saw
+ *               it, unknown when that sync stored a crowd at once); `sinceSource` says which, `sinceWhy` says it in words
+ *               (always when unknown: "—" on the page with its why)
  *   spendBefore the 30 days before `since` (null when those days are older than Nexus keeps)
  */
 import { labelFor } from '../bid-grid.service.js'
 import { negativeKeptBy, NO_OWNER, ownerOfActor, refOfOwner } from './owner.js'
+import { NO_PAUSE_RECORD, type SinceSource } from './since.js'
 import {
   DAY_MS, keywordRowId, plainWords, romeDay, negativeMatch, negRowId, ownerMatches, pageOf, targetMatch, termKeyOf,
   type Match, type Owner, type Ref,
@@ -44,7 +47,9 @@ export interface StoppedRow {
   product: Ref | null
   owner: Owner
   since: string | null
-  sinceSource: 'hold' | 'record' | 'first-seen' | null
+  sinceSource: SinceSource | null
+  /** NFIX — how "Since" is known, or why it is not (null since): the page's hover. */
+  sinceWhy: string | null
   keptPaused: null | { by: Ref; at: string; until: string | null; reason: string | null }
   spendBeforeCents: number | null
   state: StoppedState
@@ -99,6 +104,7 @@ export function buildStoppedRows(f: WasteFacts, s: WasteScope & { root?: string 
       id: keywordRowId(t.id), kind: tm.rowKind, text, match: tm.match, level: null, market: refs.market, currency: refs.currency,
       portfolio: refs.portfolio, campaign: refs.campaign, adGroup: refs.adGroup, product: refs.product, owner,
       since: since?.toISOString() ?? null, sinceSource: hold ? 'hold' : pause ? 'record' : null,
+      sinceWhy: hold ? 'Kept paused on this day' : pause ? 'Paused on this day: the pause on record' : NO_PAUSE_RECORD,
       keptPaused: hold ? { by: holdRef(hold.by), at: hold.at.toISOString(), until: hold.until?.toISOString() ?? null, reason: plainWords(hold.reason) } : null,
       spendBeforeCents: f.keywords.get(t.id)?.spendBefore ?? null,
       state,
@@ -132,8 +138,8 @@ export function buildStoppedRows(f: WasteFacts, s: WasteScope & { root?: string 
     const into = runs(n) || s.idle ? rows : idle
     const state: StoppedState = blocksNow(f, n) ? 'NEGATED' : !n.externalTargetId ? 'NOT_AT_AMAZON' : 'PAUSED'
     const owner = ownerOfNegative(f, n)
-    const create = f.negativeCreates.get(n.id) ?? null
-    const since = create?.at ?? n.createdAt
+    // NFIX — when it was added, from the records its writers keep (never the day Nexus stored the row: since.ts).
+    const added = f.negativeAdded.get(n.id) ?? null
     const campaignLevel = n.negativeLevel === 'CAMPAIGN'
     const refs = placeRefs(f, n.adGroupId, { tab: 'ad-group-negative-keywords', value: n.expressionValue })
     const k = termKeyOf(n.expressionValue)
@@ -142,7 +148,7 @@ export function buildStoppedRows(f: WasteFacts, s: WasteScope & { root?: string 
       id: negRowId(n.id), kind: 'TERM', text: m === 'ASIN' ? n.expressionValue.toUpperCase() : n.expressionValue, match: m === 'ASIN' ? 'ASIN' : m,
       level: campaignLevel ? 'CAMPAIGN' : 'AD_GROUP', market: refs.market, currency: refs.currency,
       portfolio: refs.portfolio, campaign: refs.campaign, adGroup: campaignLevel ? null : refs.adGroup, product: refs.product, owner,
-      since: since.toISOString(), sinceSource: create ? 'record' : 'first-seen',
+      since: added?.at?.toISOString() ?? null, sinceSource: added?.source ?? null, sinceWhy: added?.why ?? null,
       keptPaused: null,
       spendBeforeCents: f.negativeSpendBefore.get(n.id) ?? null,
       state,

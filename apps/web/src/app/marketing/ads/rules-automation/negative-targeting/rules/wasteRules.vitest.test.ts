@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  autoLockOf, changeFromTo, heldStep, isPseudo, last7Parts, last7Tab, last7Text, modeLock, negativeWord, ownerOf, partHolds, previewParts, refusalWhy,
+  actionWord, autoLockOf, changeFromTo, decidedElsewhere, harvestWaitingHref, heldStep, isPseudo, last7Parts, last7Tab, last7Text, modeLock, negativeWord, ownerOf, partHolds, previewParts, refusalWhy,
   rowMatchesSearch, scopeCount, sharedWhy, scopeLevel, scopePath, scopeText, visibleRows, waitingAsksOf, waitingGap, whoWord,
   type WaitingRow, type WasteRuleRow,
 } from './wasteRulesModel'
@@ -271,5 +271,25 @@ describe('a new rule and its fields', () => {
     expect(scopeOfPick(data, '', 'm')).toBeNull()
     expect(pathOfPick(data, 'IT', 'g:g1').map((s) => s.name)).toEqual(['IT', 'Boots IT', 'Boots Auto', 'Auto group'])
     expect(pathOfPick(data, 'IT', 'g:g1')[3].href).toBe('/marketing/ads/campaigns/c1/ad-groups/g1')
+  })
+})
+
+describe('NFIX — Harvest\'s waiting is decided on the Keyword Harvest page: a link with the count, never a count without its list', () => {
+  const harvest = rule({ id: 'harvest', source: 'harvest', readOnly: true, waiting: 3, last7d: { runs: 0, asks: 2, applied: 0, written: 0, refused: 0, askedByCaps: 0 } })
+  it('links to that page\'s Waiting list in the market; the Brain and the rules stay here', () => {
+    expect(decidedElsewhere(harvest)).toBe(true)
+    expect(decidedElsewhere(rule({ id: 'brain', source: 'brain', readOnly: true }))).toBe(false)
+    expect(decidedElsewhere(rule())).toBe(false)
+    expect(harvestWaitingHref('it')).toBe('/marketing/ads/rules-automation/keyword-harvest?show=waiting&market=IT')
+    expect(harvestWaitingHref('all')).toBe('/marketing/ads/rules-automation/keyword-harvest?show=waiting')
+    expect(harvestWaitingHref(null)).toBe('/marketing/ads/rules-automation/keyword-harvest?show=waiting')
+  })
+  it('its asks are a word with where they are decided, never a Waiting tab here', () => {
+    expect(last7Parts(harvest)).toEqual([{ key: 'asks', text: '2 asked', hint: 'Decided on the Keyword Harvest page' }])
+    expect(last7Tab(harvest)).toBe('overview')
+    expect(last7Tab(rule({ waiting: 1 }))).toBe('waiting')
+  })
+  it('a removal the Brain asks for reads in words', () => {
+    expect(actionWord('REMOVE_NEGATIVE')).toBe('Remove negative')
   })
 })

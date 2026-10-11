@@ -5,6 +5,7 @@
  *   Where   Enter → the campaign · ⇧ Enter → the ad group (one link per line)
  *   Who     Enter → the owner's chip when it opens something (a rule)
  *   Verb    Enter or Space → the row's verb (a held verb says why on focus and does nothing)
+ *   Since   Enter → the focus on the day, so its reason shows (the DS tooltip, as on hover); Esc → back to the cell (NFIX)
  * Focus ON a link or a button keeps the control's own keys. Every other key stays the grid's; a cell with no control
  * lets Enter through (the view opens the record).
  */
@@ -61,4 +62,32 @@ export function verbKeys({ event, editing }: CellKeyParams): boolean {
   if (onControl(t)) return true
   if (editing || (event.key !== 'Enter' && event.key !== ' ') || typeof t.querySelector !== 'function') return false
   return press(event, t.querySelector('button'))
+}
+
+/** The Since cell's day (it carries its reason in the DS tooltip). */
+export const SINCE_DAY = '[data-since-day]'
+
+/**
+ * Since (NFIX): the cell is one Tab stop, so Enter puts the focus on its day — the DS tooltip then shows its reason, as
+ * on hover — and Esc gives the focus back to the cell. On the day, Enter and Space do nothing more; arrows and Tab stay
+ * the grid's.
+ */
+export function sinceKeys({ event, editing }: CellKeyParams): boolean {
+  const t = event.target as (KeyTarget & { focus?(): void }) | null
+  if (!t || typeof t.closest !== 'function') return false
+  if (t.closest(SINCE_DAY)) {
+    if (event.key === 'Enter' || event.key === ' ') return true
+    if (event.key !== 'Escape') return false
+    if (event.type && event.type !== 'keydown') return true
+    event.preventDefault?.()
+    ;(t.closest('.ag-cell') as { focus?(): void } | null)?.focus?.()
+    return true
+  }
+  if (editing || event.key !== 'Enter' || typeof t.querySelector !== 'function') return false
+  const day = t.querySelector(SINCE_DAY)
+  if (!day?.focus) return false
+  if (event.type && event.type !== 'keydown') return true
+  event.preventDefault?.()
+  day.focus()
+  return true
 }

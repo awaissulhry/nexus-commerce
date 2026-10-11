@@ -62,12 +62,21 @@ export interface WasteRow {
   spark?: number[]
   stockOutDays: number
   /** `rows`: how many rows this one ask covers (one ask, several places). */
-  waiting: null | { approvalId: string; by: Ref; at: string; expiresAt: string | null; rows?: number }
+  waiting: null | {
+    approvalId: string; by: Ref; at: string; expiresAt: string | null; rows?: number
+    /** NFIX — the ask is a change plan: its steps (approved together) and how many are not on this page. */
+    plan?: { steps: number; offPage: number }
+  }
   skipped: null | { until: string; by: string | null; at: string | null }
   stillServesIn: number
   lastChange: null | { action: string; at: string; by: Ref; changeId: string | null }
   /** A clash the Owner should see (the Clashes tile lists exactly these rows), with why in plain words. */
   clash?: null | { kind: 'TURNED_ON' | 'NEG_OVER_OWN_KEYWORD' | 'BLOCKS_SOLD'; label: string; negative?: ClashNegative | null }
+  /**
+   * NFIX — listed only for what waits on it (an ask no wasting row carries: a phrase piece, a negative's removal, a paused
+   * place). The server shows it under Waiting only; its verb is the ask's own.
+   */
+  askOnly?: true
 }
 
 /** The negative that blocks our own keyword (a clash): the fix is to remove it. */
@@ -132,7 +141,9 @@ export interface StoppedRow {
   product: Ref | null
   owner: Owner
   since: string | null
-  sinceSource: 'hold' | 'record' | 'first-seen' | null
+  sinceSource: 'hold' | 'record' | 'brain' | 'harvest' | 'first-seen' | null
+  /** NFIX — how "Since" is known, or why it is not (`since` null: the page shows "—" with this on hover). */
+  sinceWhy?: string | null
   keptPaused: null | { by: Ref; at: string; until: string | null; reason: string | null }
   spendBeforeCents?: number | null
   state: StoppedState
@@ -223,3 +234,21 @@ export interface ApplyAnswer {
 }
 
 export interface DecideResult { approvalId: string; decide: 'approve' | 'reject'; ok: boolean; status?: string; executeAfter?: string; code?: string; error?: string }
+
+/**
+ * NFIX — GET /waste/waiting/:id: every step of a request that waits. The approvals service decides a request whole: a
+ * change plan's steps are approved (or rejected) TOGETHER, the ones this page does not show included.
+ */
+export interface WaitingStep {
+  step: number
+  tool: string
+  words: string
+  onPage: boolean
+  status: string
+  where: { name: string; href: string | null } | null
+  changes: Array<{ label: string; from: string | null; to: string | null }>
+  changeCount: number
+  summary: string | null
+  hidden: string | null
+}
+export interface WaitingSteps { approvalId: string; status: string; plan: boolean; title: string | null; steps: WaitingStep[]; offPage: number }

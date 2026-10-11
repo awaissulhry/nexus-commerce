@@ -25,7 +25,7 @@ import { OwnerChip } from '../../_shared/OwnerChip'
 import { ClashMark, KindMark, MatchChip, SkippedMark, StateMark, WaitingMark } from './marks'
 import { readRow } from './wasteApi'
 import {
-  chipOwner, deliveryView, historyWord, isAsinText, moneyOr, NOT_KEPT, pathOf, plural, stoppedVerb, verbLabel, verbSentence, waitingOf, wasteVerb, xCpaText,
+  chipOwner, deliveryView, historyWord, isAsinText, moneyOr, NOT_KEPT, pathOf, planWords, plural, stoppedVerb, verbLabel, verbSentence, waitingOf, wasteVerb, xCpaText,
   type DetailTab,
 } from './wasteModel'
 import type { WasteAsk } from './useWasteReview'
@@ -272,7 +272,7 @@ function Overview({ row, ruleHref, onWhere, onOpen }: { row: WasteRow | StoppedR
   const cols = useNarrow() ? 2 : 3
   if (isStopped(row)) {
     const items = [
-      { label: 'Since', value: row.since ? `${dayWords(row.since)} · ${relWords(row.since)}` : '—' },
+      { label: 'Since', value: row.since ? `${dayWords(row.since)} · ${relWords(row.since)}` : '—', hint: row.sinceWhy ?? undefined },
       ...(row.keptPaused ? [
         { label: 'Kept by', value: row.keptPaused.by.name },
         { label: 'Until', value: row.keptPaused.until ? dayWords(row.keptPaused.until) : 'Always' },
@@ -342,7 +342,13 @@ function Overview({ row, ruleHref, onWhere, onOpen }: { row: WasteRow | StoppedR
         }] : []),
         ...(row.via ? [{ label: 'Bought by', value: row.via.href ? <Link href={row.via.href} className="nds-entitylink">{row.via.name}</Link> : row.via.name }] : []),
         ...(row.stillServesIn ? [{ label: 'Still spends in', value: <Button size="xs" variant="link" onClick={onWhere}>{plural(row.stillServesIn, 'other ad group')}</Button> }] : []),
-        ...(row.waiting ? [{ label: 'Waiting', value: `${row.waiting.by.name} · ${relWords(row.waiting.at)}${(row.waiting.rows ?? 1) > 1 ? ` · ${row.waiting.rows} places` : ''}`, hint: row.waiting.expiresAt ? `expires ${relWords(row.waiting.expiresAt)}` : undefined }] : []),
+        ...(row.waiting ? [{
+          label: 'Waiting',
+          value: `${row.waiting.by.name} · ${relWords(row.waiting.at)}${(row.waiting.rows ?? 1) > 1 ? ` · ${row.waiting.rows} places` : ''}`,
+          hint: [row.waiting.expiresAt ? `expires ${relWords(row.waiting.expiresAt)}` : null].filter(Boolean).join(' · ') || undefined,
+        }] : []),
+        // NFIX — an ask that is a change plan says so before Approve: its steps run (or are dropped) together.
+        ...(row.waiting?.plan ? [{ label: 'Part of', value: planWords(row.waiting.plan)!, hint: 'Approved or rejected together: Approve lists every step first' }] : []),
         ...(row.skipped ? [{ label: 'Skipped', value: `to ${dayWords(row.skipped.until)}` }] : []),
         ...(row.lastChange ? [{ label: 'Last change', value: `${row.lastChange.action} · ${relWords(row.lastChange.at)}`, hint: row.lastChange.by.name }] : []),
         ...(row.owner.kind === 'RULE' && row.owner.id ? [{ label: 'Rule', value: <Link href={ruleHref(row.owner.id)} className="nds-entitylink">{row.owner.name}</Link> }] : []),
