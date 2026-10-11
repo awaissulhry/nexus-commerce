@@ -147,6 +147,18 @@ describe('permission manifest ordering', () => {
     expect(permissionForRoute(method, path)).toBe(permission)
   })
 
+  // Bid page — the bid rules' list, history and preview (a POST that writes nothing) are reads; archive and unarchive
+  // change a rule. None of them falls to the /bid rule's ads.bids.edit.
+  it.each([
+    ['GET', '/api/advertising/bid-rules', 'ads.view'],
+    ['GET', '/api/advertising/bid-rules/:id/history', 'ads.view'],
+    ['POST', '/api/advertising/bid-rules/preview', 'ads.view'],
+    ['POST', '/api/advertising/bid-rules/:id/archive', 'ads.automation.manage'],
+    ['POST', '/api/advertising/bid-rules/:id/unarchive', 'ads.automation.manage'],
+  ])('Bid page: %s %s requires %s', (method, path, permission) => {
+    expect(permissionForRoute(method, path)).toBe(permission)
+  })
+
   // Ads wave 4a — which Amazon Ads accounts Nexus reads belongs with connecting the account; the spend switches next to
   // it keep ads.campaigns.manage (control).
   it.each([

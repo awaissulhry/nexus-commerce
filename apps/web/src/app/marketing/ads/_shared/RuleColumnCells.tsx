@@ -93,10 +93,14 @@ export const bidAlgoLabel = (v?: string | null): string =>
  * -campaign plan `Rank plan — GALE EXACT DE`). The other 31 name a cross-campaign grouping that
  * appears nowhere else on the row.
  */
-function ownerBits(bidder?: string | null, bidderName?: string | null, known?: boolean) {
+export function ownerBits(bidder?: string | null, bidderName?: string | null, known?: boolean) {
   // Nothing to report: no data, or a real "nobody owns these bids". Both stay silent in the cell
   // and are explained in the algorithm tooltip — see `quietReason`.
   if (known === false || !bidder || bidder === 'none') return null
+  // Bid page (2026-10-10) — the bid brain owns the campaign: the one writer of its bids (bid-grid's `brain`).
+  if (bidder === 'brain') {
+    return { cls: 'h10-rc-owner auto', Icon: Sparkles, text: 'Brain', tip: 'Bids here are set by the bid brain, the one writer on this campaign.' }
+  }
   if (bidder === 'schedule') {
     return {
       cls: 'h10-rc-owner auto', Icon: Sparkles, text: bidderName ?? 'an hourly bid schedule',
@@ -107,6 +111,16 @@ function ownerBits(bidder?: string | null, bidderName?: string | null, known?: b
     return { cls: 'h10-rc-owner', Icon: User, text: 'manual', tip: 'Bids here were last set by hand — no rule or plan owns them.' }
   }
   return { cls: 'h10-rc-owner', Icon: Shuffle, text: bidderName ?? bidder, tip: `Owned by ${bidderName ?? bidder}.` }
+}
+
+/**
+ * Who rewrites a campaign's placement lanes by the hour, in words; null when nothing does. An hourly bid schedule does, and the bid
+ * brain does on a campaign it owns (it sets the placement % hour by hour).
+ */
+export function placementGovernor(bidder?: string | null, bidderName?: string | null): string | null {
+  if (bidder === 'brain') return 'The bid brain'
+  if (bidder === 'schedule') return `An hourly bid schedule${bidderName ? ` (${bidderName})` : ''}`
+  return null
 }
 
 /** What a silent owner half means, for the algorithm tooltip. */

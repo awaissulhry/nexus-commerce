@@ -9,9 +9,15 @@ export interface KeyValueRootProps {
   'data-columns': KeyValueColumns
 }
 
-export function keyValueRootProps(opts: { columns?: KeyValueColumns; dense?: boolean; className?: string }): KeyValueRootProps {
+/**
+ * How the terms are written: `upper` (default, the CX.2 small caps: "CHANGES 7 D") or `sentence` (as given, sentence
+ * case: "Changes 7 d" — polish round 2, the Bid page's detail rail).
+ */
+export type KeyValueLabelCase = 'upper' | 'sentence'
+
+export function keyValueRootProps(opts: { columns?: KeyValueColumns; dense?: boolean; className?: string; labelCase?: KeyValueLabelCase }): KeyValueRootProps {
   return {
-    className: `nds-kv${opts.dense ? ' dense' : ''}${opts.className ? ` ${opts.className}` : ''}`,
+    className: `nds-kv${opts.dense ? ' dense' : ''}${opts.labelCase === 'sentence' ? ' sentence' : ''}${opts.className ? ` ${opts.className}` : ''}`,
     'data-columns': opts.columns ?? 1,
   }
 }

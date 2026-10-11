@@ -137,6 +137,11 @@ import { CountdownExample } from './CountdownExample'
 import { GridRowVerbsExample } from './GridRowVerbsExample'
 import { WeekHourGridExample } from './WeekHourGridExample'
 import { SwitchColumnExample } from './SwitchColumnExample'
+import { ModeColumnExample } from './ModeColumnExample'
+import { BidPartsExample } from './BidPartsExample'
+import { LinkTabsExample } from './LinkTabsExample'
+import { ReviewChangesModalExample } from './ReviewChangesModalExample'
+import { DetailModalExample } from './DetailModalExample'
 
 const ramps: Array<[string, Record<string, string>]> = [
   ['Blue', palette.blue],
@@ -845,6 +850,9 @@ export function TokenCatalog() {
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Scrolling tabs — the scrollbar's band</div>
           <ScrollingTabsExample />
 
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Link tabs — real links, the active tab from the route</div>
+          <LinkTabsExample />
+
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Pagination</div>
           <Pagination page={pg} pageCount={12} onPage={setPg} />
 
@@ -1047,6 +1055,8 @@ export function TokenCatalog() {
         <ChangeValueExample />
         <GridRowVerbsExample />
         <SwitchColumnExample />
+        <ModeColumnExample />
+        <BidPartsExample />
 
         <GridCard toolbar={<GridToolbar count={<><b>{GDS_ROWS.length}</b> campaigns</>} />}>
           <NexusGrid<GdsRow> density="cozy" domLayout="autoHeight" rowData={GDS_ROWS} getRowId={GDS_ROW_ID} columnDefs={GDS_COLS} rowSelection={gdsSelection} selectionColumnDef={GDS_SELECTION_COLUMN} pinnedBottomRowData={GDS_TOTALS} />
@@ -1095,6 +1105,8 @@ export function TokenCatalog() {
         <EmbeddedDrawerExample />
         <DrawerFooterExample />
         <StepUpModalExample />
+        <ReviewChangesModalExample />
+        <DetailModalExample />
 
         <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', marginBottom: 10 }}>PageHeader</div>
         <DSCard padded elevated>

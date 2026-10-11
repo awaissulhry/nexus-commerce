@@ -4498,38 +4498,9 @@
 .h10-kt-delta em.mkt.shrank { color: #92400e; background: #fffbeb; border-color: #fde68a; }  /* 7.31:1 on #fffbeb */
 .h10-kt-delta em.mkt.grew   { color: #065f46; background: #ecfdf5; border-color: #a7f3d0; }  /* 7.44:1 on #ecfdf5 */
 
-/* ════════════════════════════════════════════════════════════════════════════
-   S4 — the tab bar at eleven items (substrate spec §3, changes 2+3).
-   `h10-rt-*`, appended at EOF: the bar's base classes live in ads.css
-   (.h10-cd-tabs / .h10-rules-tabs) and are NOT restyled — the wrapper, the
-   cluster hairlines and the edge fades are additions around them.
-   ════════════════════════════════════════════════════════════════════════════ */
-
-/* The wrapper takes over the bar's 16px rhythm so the fades can sit flush on the
-   bar itself (an absolutely-positioned fade cannot cover a child's margin). */
-.h10-rt-wrap { position: relative; margin-bottom: 16px; }
-.h10-rt-wrap > .h10-rules-tabs { margin-bottom: 0; }
-
-/* Cluster hairline — Act ┊ Bid & Place ┊ Spend ┊ Terms. Sized and margined so its
-   vertical centre matches the label text (tabs carry 11px underline padding). */
-/* U10 — `.h10-rt-sep` (the four-cluster hairline) was DELETED with the `group` field it keyed off.
-   Under Helium 10's tab order the clusters interleave, so the rule that once marked four groups
-   would have painted eight stray dividers; H10's own bar has none. Nothing renders this class. */
-
-/* Edge fade: the scrollbar is hidden (ads.css:2063), so this is the only sign that
-   tabs continue off-screen. `.on` is set from scrollLeft; the 1px bottom inset
-   keeps the bar's underline visible through the fade. Page ground is #f4f6f9.
-   🔴 NO transition, deliberately: with `transition: opacity 120ms` the deployed fade sat at
-   computed opacity 0 while carrying `.on` — measured on prod 2026-08-15, and even an inline
-   `opacity: 1` read back as 0 until the transition was cleared. A stuck transition on a class
-   applied around first paint is not worth a 120ms nicety; the fade snaps and always shows. */
-.h10-rt-fade { position: absolute; top: 0; bottom: 1px; width: 34px; pointer-events: none; opacity: 0; }
-.h10-rt-fade.l { left: 0; background: linear-gradient(90deg, var(--nds-grey-50) 18%, rgba(244, 246, 249, 0)); }
-.h10-rt-fade.r { right: 0; background: linear-gradient(270deg, var(--nds-grey-50) 18%, rgba(244, 246, 249, 0)); }
-.h10-rt-fade.on { opacity: 1; }
-
-/* The bar is keyboard-scrollable (tabIndex=0); show where focus is when it is. */
-.h10-rules-tabs:focus-visible { outline: 2px solid var(--nds-blue-600); outline-offset: 2px; border-radius: 4px; }
+/* S4 — the tab bar's wrapper, edge fades and focus ring (`h10-rt-*`) were deleted when the bar moved to the DS link
+   `Tabs` (bid page programme, lane SHELL, 2026-10-10): the DS strip scrolls itself, keeps the tab you are on in view
+   and draws its scrollbar in a band below the labels. */
 
 /* ════════════════════════════════════════════════════════════════════════════
    AUTO.A2 — actors in the Automations grid: the kind segment row, engine and
@@ -4914,36 +4885,8 @@
 .h10-bd3-writes .nds-dg-td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .h10-bd3-writes .nds-dg-td b.bad { color: var(--nds-warning-strong); font-weight: 800; }
 
-/* ══ RA.SPINE S4b — the tab bar's three AA failures ════════════════════════════════════════════
-   Measured on prod 2026-08-16 at innerWidth 1380, composited against the REAL ground: the bar has
-   no background of its own, so its text sits on `.h10-shell`'s #f4f6f9, NOT on white. Trusting
-   getComputedStyle's declared colour against an assumed white ground is what hid these.
-
-     .h10-cd-tab.on              #1f6fde on #f4f6f9  = 4.42:1  at 14.5px/600  → needs 4.5  FAIL
-     .h10-cd-tabn                #6b7280 on #eef1f5  = 4.27:1  at 11.5px/700  → needs 4.5  FAIL
-     .h10-cd-tab.on .h10-cd-tabn #1f6fde on #e7f0fd  = 4.17:1  at 11.5px/700  → needs 4.5  FAIL
-
-   🔴 All three PRE-DATE S4 and none is a regression it introduced — S4 made them matter by putting
-   eleven tabs and five badges on every page in the section. They live in the shared `h10-cd-*`
-   family, which the campaign-detail tabs elsewhere in the ads console also use, so these overrides
-   are SCOPED to `.h10-rules-tabs` and change nothing outside these eleven pages. Fixing the shared
-   family is a console-wide change and belongs to whoever owns it.
-
-   Both replacements are colours this stylesheet ALREADY uses (#1a61c6 was `.h10-ar-lnk`,
-   now the DS `link` variant's own blue; #55606d = `.h10-ar-said`), so the palette gains nothing
-   and the DS ratchet sees no new hex.
-   #1a61c6 = 5.43:1 on the ground and 5.12:1 on the active badge; #55606d = 5.65:1 on #eef1f5.
-
-   No `!important`: each selector adds `.h10-rules-tabs` and therefore outranks the original by one
-   class, which holds regardless of which stylesheet loads first — these live in a different file
-   from the rules they override, so source order is not the lever here. */
-.h10-rules-tabs .h10-cd-tab.on { color: var(--nds-blue-700); border-bottom-color: var(--nds-blue-700); }
-.h10-rules-tabs .h10-cd-tabn { color: var(--nds-grey-600); }
-.h10-rules-tabs .h10-cd-tab.on .h10-cd-tabn { color: var(--nds-blue-700); }
-/* The focus ring is the one place #1f6fde still appears on this bar; at 2px solid on #f4f6f9 it is
-   a non-text indicator needing 3:1 (WCAG 1.4.11) and clears it at 4.42:1. Moved anyway so the bar
-   speaks one blue. */
-.h10-rules-tabs:focus-visible { outline-color: var(--nds-blue-700); }
+/* ══ RA.SPINE S4b — the old bar's three AA overrides (`.h10-rules-tabs .h10-cd-*`) were deleted with the bar
+   (2026-10-10). The DS `Tabs` ink is `--nds-text-link` / `--nds-text-2` on the tokens' own pairs. */
 
 /* ── FB.2 — the scope note (.h10-ra-note) + SG.1: MOVED to ads.css ────────────────────────────────
    The Suggestions page (outside this section's layout) renders ScopeNotes too, so the one

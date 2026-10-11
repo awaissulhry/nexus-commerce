@@ -302,6 +302,19 @@ describe('auto-undo — a whole run', { timeout: TIMEOUT }, () => {
     expect(await judgements()).toEqual([])
   })
 
+  it('a rule archived on the Bid page keeps its changes judged: the same answer as while it stood', async () => {
+    await inside(() => db().automationRule.update({ where: { id: 'aurulecut000000000000000' }, data: { domain: 'advertising-archived', enabled: false, autonomyLevel: 'OFF' } }))
+    try {
+      const out = await run(true)
+      expect(out.counts).toMatchObject({ judged: 5, worse: 3, wouldUndo: 3 })
+      expect(out.leftAlone.unknown ?? 0).toBe(0)
+      expect(out.items.find((i) => i.entity.id === 'au-cut')).toMatchObject({ origin: 'rule', by: 'rule "Trim weak bids"' })
+      expect(await judgements()).toEqual([])
+    } finally {
+      await inside(() => db().automationRule.update({ where: { id: 'aurulecut000000000000000' }, data: { domain: 'advertising', enabled: true, autonomyLevel: 'AUTO' } }))
+    }
+  })
+
   it('a failed brain levers\' pass never loses the bid pass: its answer and line stand, the failure said (batch 2 review fix)', async () => {
     vi.doMock('./brain/undo-run.js', () => ({ runBrainLeverUndo: async () => { throw new Error('test: the enrollment read failed') } }))
     try {

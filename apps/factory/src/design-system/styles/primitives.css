@@ -551,7 +551,8 @@
   outline: 2px solid var(--nds-text);
   outline-offset: 1px;
 }
-.nds-toggle:disabled {
+/* A HELD switch (aria-disabled) looks the same as a disabled one but keeps its focus, so it can say why. */
+.nds-toggle:is(:disabled, [aria-disabled="true"]) {
   opacity: 0.5;
   cursor: default;
 }

@@ -500,7 +500,7 @@ const lockView = (lock: { value: unknown } & Provenance) => ({ value: lock.value
 
 /**
  * Integration review fix (2026-10-10) — the Owner's own per-keyword values (set-ads-brain set-value with ref
- * target:<AdTarget.id>; today tosTargetPct) at one scope: a campaign's, or the product's in a market. Each with its key,
+ * target:<AdTarget.id>: tosTargetPct, targetAcosPct, maxBidCents — a max under its own money key) at one scope: a campaign's, or the product's in a market. Each with its key,
  * the keyword's ref, the value (null = off for that keyword), who set it, when and why. The resolved settings above never
  * show them (a keyword's value is not the campaign's or the product's). Pure.
  */
@@ -510,8 +510,12 @@ export function keywordValuesOf(overrides: readonly OverrideRow[], at: { scope: 
     .filter((o) => !o.endedAt && o.kind === 'VALUE' && typeof o.ref === 'string' && o.ref.startsWith('target:')
       && (at.scope === 'CAMPAIGN' ? o.scope === 'CAMPAIGN' && o.campaignId === at.campaignId : o.scope === 'PRODUCT' && o.productId === at.productId && o.marketplace === at.market))
     .sort((a, b) => a.key.localeCompare(b.key) || a.ref.localeCompare(b.ref))
-    .map((o) => ({ key: o.key, ref: o.ref, value: o.value ?? null, by: o.by, at: iso(o.createdAt), ...(o.reason ? { reason: o.reason } : {}) }))
+    // KAPI-B — a keyword's own max bid is ad-spend money: under its own money key (read-view.ts BRAIN_VIEW_MONEY), never `value`.
+    .map((o) => ({ key: o.key, ref: o.ref, ...(KEYWORD_MONEY_SETTINGS.has(o.key) ? { [o.key]: o.value ?? null } : { value: o.value ?? null }), by: o.by, at: iso(o.createdAt), ...(o.reason ? { reason: o.reason } : {}) }))
 }
+
+/** KAPI-B — the keyword settings whose value is ad-spend money (a max bid in cents): shown under their own key, a money key. */
+export const KEYWORD_MONEY_SETTINGS: ReadonlySet<string> = new Set(['maxBidCents'])
 
 /** MCP.12 — the words every tool uses for a product that is deleted (Product.deletedAt) or not in this business. */
 export const PRODUCT_NOT_FOUND = 'Product not found'

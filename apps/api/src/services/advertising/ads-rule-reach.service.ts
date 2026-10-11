@@ -36,7 +36,7 @@ export interface RuleReach {
 }
 
 /** One campaign's identity, as the evaluator would see it. */
-interface CampaignIdentity {
+export interface CampaignIdentity {
   id: string
   marketplace: string | null
   portfolioId: string | null
@@ -101,13 +101,14 @@ async function expandProducts(ids: string[]): Promise<Map<string, string[]>> {
   return out
 }
 
-type ReachRule = { id: string } & RuleScope & { scopeProductId?: string | null; actions?: unknown }
+export type ReachRule = { id: string } & RuleScope & { scopeProductId?: string | null; actions?: unknown }
 
 /**
  * The campaigns each rule's scope admits, by the evaluator's own matcher. One campaign load for the whole set — this is
- * called on a list endpoint, so a per-rule query would be 51 round trips.
+ * called on a list endpoint, so a per-rule query would be 51 round trips. Exported for the Bid page's rule list
+ * (bid-rules/read.ts), which needs the campaigns themselves, not only their count.
  */
-async function campaignsReachedBy(rules: ReachRule[]): Promise<{ total: number; byRule: Map<string, CampaignIdentity[]> }> {
+export async function campaignsReachedBy(rules: ReachRule[]): Promise<{ total: number; byRule: Map<string, CampaignIdentity[]> }> {
   const campaigns = await loadCampaigns()
   const productScoped = [...new Set(rules.map((r) => r.scopeProductId).filter((x): x is string => !!x))]
   const expanded = await expandProducts(productScoped)

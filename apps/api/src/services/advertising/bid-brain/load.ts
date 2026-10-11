@@ -21,6 +21,9 @@
  *   BB-17       the intraday brakes of the campaigns it owns (intraday-load.ts: today's Marketing Stream hours against the
  *               day's planned spend, the lanes' CPC against their 14-day median, the budget against the best hours) — in
  *               the facts only with NEXUS_BID_BRAIN_INTRADAY=on; shadow reads and compares them, off reads nothing
+ *   KAPI-B      each keyword's own goal and max and the Owner's lock of its bid (loadKeywordOwn: ONE query, on every run
+ *               and every 15-minute tick, so a new max acts at once); a person's bid of the last 60 days no longer holds a
+ *               keyword he handed back to the brain since (bid-grid.service.ts personBidTargetIds)
  */
 import { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
@@ -47,6 +50,9 @@ import { readSavedLanes } from './stop-recipe.js'
 import { LAG_AGES } from './lag-curve.js'
 import { curveWords, nowcastCurves } from './lag-curve-store.js'
 import { nowcastEvidence, nowcastMode, type NowcastEvidence, type NowcastGroup } from './nowcast.js'
+import { campaignProducts } from './intraday-load.js'
+import { describeProvenance, keywordRefTarget, resolveKeywordOwn, validateOverride, type OverrideRow, type Provenance } from '../brain/settings.js'
+import type { KeywordOwnFacts } from './facts.js'
 
 /** The markets the shadow decides for (Owner, 2026-10-07: shadow on IT and DE first). */
 export const SHADOW_MARKETS = ['IT', 'DE'] as const
@@ -598,11 +604,12 @@ export async function loadRun(m: LoadedMarket, now: Date, opts: { owned?: Readon
   const groupIds = [...m.adGroups.values()].filter((g) => campaignSet.has(g.campaignId)).map((g) => g.id)
   const groupSet = new Set(groupIds)
   const targetIds = m.targets.filter((t) => groupSet.has(t.adGroupId)).map((t) => t.id)
-  const [brakes, strategy, owner, personHeld, holds, enrollments, lastWrites, previous] = await Promise.all([
+  const [brakes, strategy, owner, personHeld, holds, enrollments, lastWrites, previous, keywordOwn] = await Promise.all([
     marketBrakes(m.newestReportAt, now),
     loadStrategy(m.market, groupIds, now),
     readOwnerTargets([]),
-    personBidTargetIds(),
+    // KAPI-B — a person's Manual hold holds the keyword; a hand-back (Auto) since his bid makes it the brain's again.
+    personBidTargetIds({ now }),
     prisma.bidHold.findMany({
       where: { campaignId: { in: campaignIds }, endedAt: null, OR: [{ until: null }, { until: { gt: now } }] },
       select: { campaignId: true, targetId: true, kind: true, by: true, until: true, reason: true, floorCents: true },
@@ -612,6 +619,10 @@ export async function loadRun(m: LoadedMarket, now: Date, opts: { owned?: Readon
       .then((rows) => rows.map((e) => (e.mode === 'HELD' && e.heldUntil && e.heldUntil <= now ? { ...e, mode: 'LIVE' } : e))),
     lastBidWrites(targetIds, now),
     previousDecisions(targetIds, now),
+    // KAPI-B — each keyword's own goal and max and the Owner's lock of its bid (one query; a tick too).
+    loadKeywordOwn(m.targets.filter((t) => groupSet.has(t.adGroupId)).map((t) => ({ id: t.id, adGroupId: t.adGroupId, campaignId: m.adGroups.get(t.adGroupId)!.campaignId, market: m.market })), {
+      productsOf: async (ids) => campaignProducts(m, ids),
+    }),
   ])
   const accountDefaultPct = typeof owner.accountDefaultPct === 'number' ? owner.accountDefaultPct : null
   // BB-5 — a TACoS target needs each family's total Amazon sales (read only when one is in force here).
@@ -658,6 +669,7 @@ export async function loadRun(m: LoadedMarket, now: Date, opts: { owned?: Readon
       owned: new Set(ownedHere),
       ...(intraday ? { intraday } : {}),
       planHeld: planHeldOf(previous),
+      ...(keywordOwn.size ? { keywordOwn } : {}),
     },
     lastWrites,
     previous,
@@ -684,3 +696,81 @@ export async function loadDirectives(campaignIds: readonly string[], now: Date =
   return out
 }
 
+
+// ── KAPI-B — each keyword's own goal, max and lock ──────────────────────────────────────────────────────────────────
+
+const OVERRIDE_SELECT = { id: true, productId: true, marketplace: true, scope: true, campaignId: true, kind: true, key: true, ref: true, value: true, by: true, reason: true, createdAt: true, endedAt: true } as const
+/** The keyword-only settings the brain reads per keyword (brain/levers.ts keywordOnly). */
+const KEYWORD_OWN_KEYS = ['targetAcosPct', 'maxBidCents', 'tosTargetPct'] as const
+
+/** One keyword as loadKeywordOwn reads it: its ad group, its campaign and its market's code. */
+export interface KeywordRef { id: string; adGroupId: string; campaignId: string; market: string | null }
+
+/** KAPI-B — what one keyword holds of its own, with each value's provenance (the Bid page shows who and when). */
+export interface KeywordOwnRead extends KeywordOwnFacts {
+  /** Each value's provenance (who set it, when, why), for a reader that shows them. */
+  provenance: { acos: Provenance | null; max: Provenance | null; tos: Provenance | null; lock: (Provenance & { ref: string }) | null }
+  /** The keyword's own top-of-search share target (the share layer reads it itself, share-load.ts: shown, not decided on here). */
+  tos?: { pct: number; by: string } | null
+}
+
+/** "the Owner's keyword value (user:x, 2026-10-10)" — a keyword's own value in words, for the why. Pure. */
+const ownWords = (p: Provenance): string => `${p.by ?? 'the Owner'}${p.at ? `, ${p.at.slice(0, 10)}` : ''}`
+
+/**
+ * KAPI-B — each keyword's own goal and max (brain/settings.ts targetAcosPct, maxBidCents — and, for a reader that shows
+ * it, its own tosTargetPct, which the share layer reads itself: a VALUE override with ref
+ * target:<AdTarget.id>, at its campaign's scope before its product's — the product being the one family its campaign
+ * advertises, as share-load.ts reads a keyword's tosTargetPct; a shared campaign has none, D2) and the Owner's lock of its
+ * bid (a LOCK of the bids lever whose ref names the keyword, target:<id>, or its ad group, adGroup:<id> — at its campaign's
+ * scope or any product's in its market: a brake is obeyed wherever it was set). ONE query; `productsOf` only when a
+ * product's keyword value is open. Stored rows that no longer validate are ignored (fail closed). A keyword with none of
+ * them is left out: with nothing set anywhere the map is empty and every fact stays as it was.
+ */
+export async function loadKeywordOwn(targets: readonly KeywordRef[], opts: { productsOf?: (campaignIds: string[]) => Promise<ReadonlyMap<string, string | null>> } = {}): Promise<Map<string, KeywordOwnRead>> {
+  const out = new Map<string, KeywordOwnRead>()
+  if (!targets.length) return out
+  const campaignIds = [...new Set(targets.map((t) => t.campaignId))]
+  const markets = [...new Set(targets.map((t) => t.market).filter((x): x is string => !!x))]
+  const refs = [...new Set([...targets.map((t) => `target:${t.id}`), ...targets.map((t) => `adGroup:${t.adGroupId}`)])]
+  const rows = await prisma.adsBrainOverride.findMany({
+    where: {
+      endedAt: null, ref: { in: refs },
+      OR: [{ kind: 'VALUE', key: { in: [...KEYWORD_OWN_KEYS] } }, { kind: 'LOCK', key: 'bids' }],
+      AND: [{ OR: [{ scope: 'CAMPAIGN', campaignId: { in: campaignIds } }, ...(markets.length ? [{ scope: 'PRODUCT', marketplace: { in: markets } }] : [])] }],
+    },
+    select: OVERRIDE_SELECT,
+  }) as OverrideRow[]
+  if (!rows.length) return out
+  const productOf = opts.productsOf && rows.some((r) => r.kind === 'VALUE' && r.scope === 'PRODUCT') ? await opts.productsOf(campaignIds) : new Map<string, string | null>()
+  const byRef = new Map<string, OverrideRow[]>()
+  for (const r of rows) byRef.set(r.ref, [...(byRef.get(r.ref) ?? []), r])
+  const iso = (d: Date | string) => (d instanceof Date ? d.toISOString() : String(d))
+  for (const t of targets) {
+    const own = byRef.get(`target:${t.id}`) ?? []
+    const values = own.filter((r) => r.kind === 'VALUE')
+    const input = { productId: productOf.get(t.campaignId) ?? '', market: t.market ?? '', campaignId: t.campaignId, targetId: t.id, overrides: values }
+    const acos = values.length ? resolveKeywordOwn(input, 'targetAcosPct') : null
+    const max = values.length ? resolveKeywordOwn(input, 'maxBidCents') : null
+    const tos = values.length ? resolveKeywordOwn(input, 'tosTargetPct') : null
+    // The Owner's lock of the keyword's bid, else of its ad group's bids: open, valid, at its campaign or in its market.
+    const locks = [...own, ...(byRef.get(`adGroup:${t.adGroupId}`) ?? [])]
+      .filter((r) => r.kind === 'LOCK' && (r.scope === 'CAMPAIGN' ? r.campaignId === t.campaignId : r.scope === 'PRODUCT' && r.marketplace === t.market))
+      .filter((r) => !('refusal' in validateOverride({ scope: r.scope as 'PRODUCT' | 'CAMPAIGN', campaignId: r.campaignId, kind: 'LOCK', key: r.key, ref: r.ref, value: r.value })))
+      .sort((a, b) => (keywordRefTarget(b.ref) ? 1 : 0) - (keywordRefTarget(a.ref) ? 1 : 0) || iso(b.createdAt).localeCompare(iso(a.createdAt)))
+    const lock = locks[0] ?? null
+    const lockProv = lock ? { source: lock.scope === 'CAMPAIGN' ? 'campaign' as const : 'product' as const, overrideId: lock.id, by: lock.by, at: iso(lock.createdAt), reason: lock.reason, ref: lock.ref } : null
+    const acosOk = acos && typeof acos.value === 'number' && Number.isFinite(acos.value) && acos.value > 0 ? acos : null
+    const maxOk = max && typeof max.value === 'number' && Number.isFinite(max.value) && max.value > 0 ? max : null
+    const tosOk = tos && typeof tos.value === 'number' && Number.isFinite(tos.value) && tos.value > 0 ? tos : null
+    if (!acosOk && !maxOk && !tosOk && !lock) continue
+    out.set(t.id, {
+      ...(acosOk ? { acos: { pct: acosOk.value as number, by: ownWords(acosOk) } } : {}),
+      ...(maxOk ? { max: { cents: maxOk.value as number, by: ownWords(maxOk) } } : {}),
+      ...(lock ? { lock: { by: `${keywordRefTarget(lock.ref) ? 'this keyword\'s bid' : 'its ad group\'s bids'} locked by ${describeProvenance(lockProv!)}${lock.reason ? ` ("${lock.reason}")` : ''}` } } : {}),
+      ...(tosOk ? { tos: { pct: tosOk.value as number, by: ownWords(tosOk) } } : {}),
+      provenance: { acos: acosOk, max: maxOk, tos: tosOk, lock: lockProv },
+    })
+  }
+  return out
+}

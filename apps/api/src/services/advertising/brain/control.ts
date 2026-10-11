@@ -52,8 +52,12 @@ import { createHash } from 'node:crypto'
 import prisma from '../../../db.js'
 import { inDatabaseTransaction } from '../../../lib/database-context.js'
 import { logger } from '../../../utils/logger.js'
+import { SPONSORED_PRODUCTS } from '@nexus/shared/ads-ad-product'
+import { marketLimitsOf } from '@nexus/shared/ads-market-limits'
 import { strategyMarket } from '../ads-strategy/bids.js'
+import { openStrategy } from '../ads-strategy/effective.js'
 import { LEVER_WORDS } from '../ads-write-gate.js'
+import { ENGINE_FLOOR_CENTS } from '../bid-brain/recipe.js'
 import { enrollmentFacts, enrollRefusal, giveBackPlan, PLANS_JOIN_THE_BRAIN, setEnrollment, stopMemoryOf, type EnrollMode } from '../bid-brain/enrollment.js'
 import { bidBrainMode } from '../bid-brain/shadow.js'
 import { adoptedBidsLevel, BrainRefusal, campaignsOf, endOverride, enrollProduct, openOverrides, planOverride, setOverride, type OverridePlan } from './enrollment.js'
@@ -63,7 +67,7 @@ import {
   type SettingValue,
 } from './levers.js'
 import { loadNativeRules, nativeAutoRefusal, nativeRuleLines } from './native-rules.js'
-import { productFamily } from './ownership.js'
+import { productFamily, resolveCampaignOwnership } from './ownership.js'
 import {
   describeProvenance, EXCLUDE_KEY, KEYWORD_VALUE_SETTINGS, keywordRefTarget, overrideIdentity, resolveBrainSettings, resolveKeywordValue, valueRef, type BrainSettings,
   type KeywordValueSetting, type LeverSettings, type OverrideInput, type OverrideKind, type OverrideRow, type Provenance,
@@ -322,6 +326,60 @@ export const SPEND_RATINGS: Partial<Record<BrainSetting, Rating>> = {
   longStopUntil: { when: 'cleared-or-earlier', words: 'the Owner\'s long stop ends sooner: the brain resumes the campaigns sooner' },
   // Lane 5 — a higher target raises keyword bids toward it (inside the band top); empty = off, the ACoS goal alone may then raise bids the share held lower.
   tosTargetPct: { when: 'up-or-cleared', words: 'a higher target top-of-search impression share: the bid brain may raise keyword bids toward it, one step of at most 10 % per new reading, never above the band top\'s bid, the highest bid or the top-of-search CPC ceiling (empty = off: the ACoS goal alone may then raise bids the share held lower)' },
+  // KAPI-B — a keyword's own goal and max: a higher goal lets the bid brain raise that keyword toward it; a higher max (or
+  // none) lets it raise the keyword further. Empty = the campaign's or product's goal / no max of its own, possibly higher.
+  targetAcosPct: { when: 'up-or-cleared', words: 'a higher goal for this keyword: the bid brain may raise its bid toward it, one step a data day inside every limit (empty = its campaign\'s or product\'s goal, which may be higher)' },
+  maxBidCents: { when: 'up-or-cleared', words: 'a higher max for this keyword: the bid brain may raise its bid up to it, never above the strategy\'s or the campaign\'s highest bid (empty = no max of its own)' },
+}
+
+/**
+ * KAPI-B — why a keyword's own max bid cannot be set in this market: below the market's Amazon minimum or the brain's 5¢
+ * engine floor (an engine never writes under it), or above Amazon's maximum; null when it can. A market Nexus has no
+ * checked limits row for keeps the setting's own bounds. Pure.
+ */
+export function keywordMaxRefusal(cents: number, market: string): string | null {
+  const bid = marketLimitsOf(market)?.adProducts[SPONSORED_PRODUCTS]?.bid ?? null
+  const floor = Math.max(ENGINE_FLOOR_CENTS, bid?.min ?? 0)
+  if (cents < floor) {
+    return bid && bid.min >= ENGINE_FLOOR_CENTS
+      ? `a keyword's max bid in ${market} is at least Amazon's minimum of ${bid.min}¢, not ${cents}¢`
+      : `a keyword's max bid is at least ${floor}¢ — the bid brain never bids below its ${ENGINE_FLOOR_CENTS}¢ engine floor${bid ? ` (Amazon's minimum in ${market} is ${bid.min}¢)` : ''} — not ${cents}¢`
+  }
+  if (bid && cents > bid.max) return `a keyword's max bid in ${market} is at most Amazon's maximum of ${bid.max}¢, not ${cents}¢`
+  return null
+}
+
+/** KAPI-B — a keyword's limits a person's own goal or max is set against (his own: the strategy's and the campaign's). */
+export interface KeywordLimits {
+  strategyMinCents: number | null
+  strategyMaxCents: number | null
+  campaignMinCents: number | null
+  campaignMaxCents: number | null
+  /** The goal in force without the keyword's own: the campaign's own target ACoS, else the strategy's (integer %). */
+  goalPct: number | null
+  goalFrom: string | null
+}
+
+/**
+ * KAPI-B — the normal warnings (code rule A: no code for a keyword's goal or max) when a keyword's own value goes past the
+ * Owner's own limits: a max above the strategy's or the campaign's highest bid (that limit still holds the brain), below
+ * a lowest bid (the max wins: it spends less), a goal above the goal in force. `words` names the keyword. Pure.
+ */
+export function keywordLimitWarnings(key: string, value: SettingValue, l: KeywordLimits, words: string): string[] {
+  if (typeof value !== 'number') return []
+  const out: string[] = []
+  if (key === 'maxBidCents') {
+    for (const [cap, from] of [[l.strategyMaxCents, 'the ads strategy\'s highest bid'], [l.campaignMaxCents, 'the campaign\'s highest bid']] as const) {
+      if (cap != null && cap > 0 && value > cap) out.push(`The max of ${value}¢ for ${words} is above ${from} (${cap}¢): that limit still holds the bid brain there.`)
+    }
+    for (const [low, from] of [[l.strategyMinCents, 'the ads strategy\'s lowest bid'], [l.campaignMinCents, 'the campaign\'s lowest bid']] as const) {
+      if (low != null && low > 0 && value < low) out.push(`The max of ${value}¢ for ${words} is below ${from} (${low}¢): the bid brain holds the bid at the max (the lower one: it spends less).`)
+    }
+  }
+  if (key === 'targetAcosPct' && l.goalPct != null && value > l.goalPct) {
+    out.push(`The goal of ${value} % for ${words} is above ${l.goalFrom ?? 'the goal in force'} (${l.goalPct} %): the bid brain may raise this keyword's bid toward it.`)
+  }
+  return out
 }
 
 /**
@@ -490,8 +548,36 @@ async function readCtx(input: ControlInput): Promise<Ctx | { refusal: string }> 
   return { input, root: family.root, market, name: row.name, sku: row.sku, own, shared, enrollment, overrides, ceiling: bidBrainMode() }
 }
 
+/**
+ * KAPI-B — the product a keyword's own value is set under when set-value names the keyword (ref target:<AdTarget.id>) and
+ * no productId: the one product family the keyword's campaign advertises alone (brain/ownership.ts, as set-ads-brain reads
+ * a product's campaigns; the Bid page's BidRow.brainProductId). A keyword of another market, of a shared campaign (D2) or of
+ * a campaign Nexus ties to no product: refused, with what to name instead. Whether that product is enrolled is the
+ * preview's to say.
+ */
+export async function keywordBrainProduct(targetId: string, market: string): Promise<{ productId: string } | { refusal: string }> {
+  const t = await prisma.adTarget.findFirst({ where: { id: targetId }, select: { adGroup: { select: { campaignId: true, campaign: { select: { marketplace: true } } } } } })
+  if (!t) return { refusal: `target:${targetId} is not a keyword of this business: ad-targets names each keyword's Nexus id` }
+  const campaignId = t.adGroup.campaignId
+  const code = marketCode(market)
+  if (code && strategyMarket(t.adGroup.campaign.marketplace) !== code) return { refusal: `target:${targetId} runs in ${strategyMarket(t.adGroup.campaign.marketplace) ?? 'another market'}, not in ${code}` }
+  const owner = (await resolveCampaignOwnership([campaignId])).get(campaignId)?.owner
+  if (owner?.kind === 'product') return { productId: owner.productId }
+  return owner?.kind === 'shared'
+    ? { refusal: `target:${targetId} is in a shared campaign (it advertises more than one product): no product's brain runs it (D2) — name the product (productId) and the campaign (campaignId ${campaignId})` }
+    : { refusal: `Nexus ties the campaign of target:${targetId} to no product: name the product (productId)` }
+}
+
 /** What any op previews: the facts read, then the op's own plan. */
 export async function previewControl(input: ControlInput): Promise<ControlOutcome> {
+  // KAPI-B — set-value of one keyword's own value may leave productId out: the keyword's campaign names its product.
+  if (!input.productId?.trim()) {
+    const targetId = input.op === 'set-value' ? keywordRefTarget(input.ref) : null
+    if (!targetId) return no('productId names the product (its Nexus id); only set-value of a keyword\'s own value (ref target:<AdTarget.id>) may leave it out')
+    const found = await keywordBrainProduct(targetId, input.market)
+    if ('refusal' in found) return no(found.refusal)
+    input = { ...input, productId: found.productId }
+  }
   const shape = shapeRefusal(input)
   if (shape) return no(shape)
   const ctx = await readCtx(input)
@@ -571,6 +657,11 @@ async function previewOverride(ctx: Ctx): Promise<ControlOutcome> {
       : `${leverWord(key as BrainLever)}${kind === 'LOCK' ? (ref ? ` (${ref}) lock` : ' lock') : ' level'}`
   const where = target ? `campaign ${target.name}` : campaignId ? `campaign ${campaignId}` : `${ctx.name} (${market})`
   if (plan.unchanged) return no(`Not queued: nothing would change — ${label} on ${where} is already ${fromWords}`)
+  // KAPI-B — a keyword's own max bid: inside the market's Amazon limits and never under the brain's 5¢ engine floor.
+  if (kind === 'VALUE' && key === 'maxBidCents' && change.op === 'set' && typeof valueAfter === 'number') {
+    const refusal = keywordMaxRefusal(valueAfter, market)
+    if (refusal) return no(refusal)
+  }
 
   // Every campaign the change reaches, and what it does there.
   const levers: BrainLever[] = kind === 'EXCLUDE' ? [...BRAIN_LEVERS] : kind === 'VALUE' ? [] : [key as BrainLever]
@@ -638,6 +729,10 @@ async function previewOverride(ctx: Ctx): Promise<ControlOutcome> {
   if (kind === 'VALUE') {
     const r = settingRaise(key, valueBefore as SettingValue, valueAfter as SettingValue)
     if (r) raises.push(keyword ? `${r} (for ${keyword.words} only)` : r)
+  }
+  // KAPI-B — a keyword's own goal or max past the Owner's own limits: the normal warning (code rule A: no code for these).
+  if (kind === 'VALUE' && keyword && change.op === 'set' && (key === 'maxBidCents' || key === 'targetAcosPct')) {
+    warnings.push(...keywordLimitWarnings(key, valueAfter as SettingValue, await keywordLimitsOf(market, keyword), keyword.words))
   }
   if (keyword && !keyword.campaign) warnings.push(`${keyword.words} no longer runs in a campaign of ${ctx.name} in ${market}: its own value is ended all the same.`)
   const released = releasedLevers(b, a, [{ campaignId: null, name: 'the product' }, ...own])
@@ -715,9 +810,12 @@ export function keywordWords(v: ReturnType<typeof resolveKeywordValue>): string 
  * Ending a value needs none of that: its keyword may be gone.
  */
 async function keywordOf(ctx: Ctx, all: readonly Camp[], targetId: string | null, op: 'set' | 'end', campaignId: string | null, key: string):
-  Promise<{ keyword: { targetId: string; words: string; campaign: Camp | null; campaignId: string | null } | null } | { refusal: string }> {
+  Promise<{ keyword: { targetId: string; words: string; campaign: Camp | null; campaignId: string | null; adGroupId: string | null; campaignBounds: { minBidCents: number | null; maxBidCents: number | null; ownTargetAcos: unknown } | null } | null } | { refusal: string }> {
   if (!targetId) return { keyword: null }
-  const t = await prisma.adTarget.findFirst({ where: { id: targetId }, select: { expressionType: true, expressionValue: true, adGroup: { select: { campaignId: true } } } })
+  const t = await prisma.adTarget.findFirst({
+    where: { id: targetId },
+    select: { expressionType: true, expressionValue: true, adGroup: { select: { id: true, campaignId: true, campaign: { select: { minBidCents: true, maxBidCents: true, dynamicBidding: true } } } } },
+  })
   const campaign = t ? all.find((c) => c.campaignId === t.adGroup.campaignId) ?? null : null
   const words = t ? `keyword "${t.expressionValue}" (${t.expressionType.toLowerCase()}, ${targetId})` : `keyword ${targetId}`
   if (op === 'set') {
@@ -726,7 +824,33 @@ async function keywordOf(ctx: Ctx, all: readonly Camp[], targetId: string | null
     if (campaignId && campaign.campaignId !== campaignId) return { refusal: `${words} is in campaign ${campaign.name}, not in campaign ${campaignId}: name its own campaign, or no campaignId for the product's value of this keyword` }
     if (!campaignId && campaign.owner === 'shared') return { refusal: `${words} is in ${campaign.name}, a shared campaign (it advertises another product too): the brain does not read a product's value there (D2) — name the campaign (campaignId ${campaign.campaignId}) to give the keyword its own value` }
   }
-  return { keyword: { targetId, words, campaign, campaignId: campaign?.campaignId ?? campaignId } }
+  const bounds = t?.adGroup.campaign ? { minBidCents: t.adGroup.campaign.minBidCents, maxBidCents: t.adGroup.campaign.maxBidCents, ownTargetAcos: (t.adGroup.campaign.dynamicBidding as { targetAcos?: unknown } | null)?.targetAcos } : null
+  return { keyword: { targetId, words, campaign, campaignId: campaign?.campaignId ?? campaignId, adGroupId: t?.adGroup.id ?? null, campaignBounds: bounds } }
+}
+
+/**
+ * KAPI-B — the Owner's own limits of one keyword (the ads strategy of its ad group, its campaign's bounds and own target
+ * ACoS), for the warnings of a keyword's own goal or max. A strategy that cannot be read leaves its side empty (no warning
+ * is better than a wrong one).
+ */
+async function keywordLimitsOf(market: string, keyword: { adGroupId: string | null; campaignBounds: { minBidCents: number | null; maxBidCents: number | null; ownTargetAcos: unknown } | null }): Promise<KeywordLimits> {
+  let values: { minBidCents: number | null; maxBidCents: number | null; targetAcosPct: number | null } | null = null
+  if (keyword.adGroupId) {
+    try {
+      const view = await openStrategy(market)
+      values = view.empty ? null : (await view.forAdGroups([keyword.adGroupId])).get(keyword.adGroupId)?.values ?? null
+    } catch (err) {
+      logger.warn('[brain/control] the ads strategy of a keyword could not be read for its limits\' warnings', { market, error: err instanceof Error ? err.message : String(err) })
+    }
+  }
+  const own = keyword.campaignBounds?.ownTargetAcos
+  const ownPct = typeof own === 'number' && Number.isFinite(own) && own > 0 && own <= 5 ? Math.round(own * 10_000) / 100 : null
+  return {
+    strategyMinCents: values?.minBidCents ?? null, strategyMaxCents: values?.maxBidCents ?? null,
+    campaignMinCents: keyword.campaignBounds?.minBidCents ?? null, campaignMaxCents: keyword.campaignBounds?.maxBidCents ?? null,
+    goalPct: ownPct ?? values?.targetAcosPct ?? null,
+    goalFrom: ownPct != null ? 'its campaign\'s own target ACoS' : values?.targetAcosPct != null ? 'the ads strategy\'s target ACoS' : null,
+  }
 }
 
 function openAt(rows: readonly OverrideRow[], input: Pick<OverrideInput, 'scope' | 'campaignId' | 'kind' | 'key'>, ref: string): OverrideRow | undefined {

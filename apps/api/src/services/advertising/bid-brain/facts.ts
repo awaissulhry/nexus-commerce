@@ -25,6 +25,11 @@
  *              campaigns (unless the Owner pins their bids), MONEY on the others
  *   share      Lane 5 — a keyword with a target top-of-search impression share (share-load.ts: keyword > campaign >
  *              product) carries it and its reading; every other keyword's facts are exactly as before
+ *   keyword    KAPI-B — a person's own goal and max for one keyword and the Owner's lock of its bid (load.ts
+ *              loadKeywordOwn): its own target ACoS is the goal, before a rule's GOAL directive and the campaign's or
+ *              product's target (the aim as set: no phase moves it); its own max goes into the limits (decide.ts holds
+ *              every layer under it); a LOCK of the bids lever naming the keyword or its ad group pins it (the brain leaves
+ *              it; a stop still comes first). A keyword with none of them has exactly the facts it had before
  */
 import type { TargetFacts, Overrides, DecisionLayer, GiveBack } from './decide.js'
 import type { Directive, LaneDirective, LaneName } from './recipe.js'
@@ -182,6 +187,21 @@ export interface RunRows {
    * share move (share-load.ts). Absent (no target anywhere, or a between-slots tick): nothing changes.
    */
   share?: ReadonlyMap<string, ShareFacts>
+  /**
+   * KAPI-B — per keyword with a goal, a max or a lock of its own (load.ts loadKeywordOwn). Absent (nothing set anywhere):
+   * nothing changes.
+   */
+  keywordOwn?: ReadonlyMap<string, KeywordOwnFacts>
+}
+
+/**
+ * KAPI-B — what a person set for one keyword itself, as the brain reads it: its own target ACoS and max bid (each with who
+ * set it and when, in words), and the Owner's lock of its bid (the keyword's, or its ad group's).
+ */
+export interface KeywordOwnFacts {
+  acos?: { pct: number; by: string } | null
+  max?: { cents: number; by: string } | null
+  lock?: { by: string } | null
 }
 
 /** BB-9 — one active BidDirective as the brain reads it; `label` names who asked ('rule "GALE IT — share of voice"'). */
@@ -387,7 +407,16 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
     }
     // BB-9 — a rule's inputs: its goal replaces the one in force for its scope (with the default band around it).
     const inputs = directiveInputs(run.directives?.get(campaign.id), t.id, goal.target?.kind === 'ACOS' ? goal.target.pct : null)
-    if (inputs.goal) {
+    // KAPI-B — a person's own goal for this keyword comes first: it beats a rule's GOAL directive and the campaign's or the
+    // product's target, with the default band around it and no phase moving the aim (the goal as he set it).
+    const own = run.keywordOwn?.get(t.id)
+    if (own?.acos) {
+      goal.target = { kind: 'ACOS', pct: own.acos.pct }
+      goal.acosFallbackPct = null
+      goal.band = null
+      goal.phase = null
+      delete goal.launchDay
+    } else if (inputs.goal) {
       goal.target = { kind: 'ACOS', pct: inputs.goal.pct }
       goal.acosFallbackPct = null
       goal.band = null
@@ -441,6 +470,8 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
     }
     const undoHold = holds.find((h) => h.kind === 'AUTO_UNDO')
     if (campaign.pinBids) overrides.pin = { by: campaign.pinnedBy ? `bids pinned by ${campaign.pinnedBy}` : 'pinned bids' }
+    // KAPI-B — the Owner's lock of this keyword's bid (or its ad group's): the brain leaves it, as a person's pin.
+    else if (own?.lock) overrides.pin = { by: own.lock.by }
     else if (hold) overrides.pin = { by: `${hold.kind === UNDO_PIN_KIND ? 'auto-undo pin' : `${hold.kind.toLowerCase()} hold`} by ${hold.by}`, until: day(hold.until), ...(hold.kind === UNDO_PIN_KIND ? { soft: true as const } : {}) }
     else if (run.personHeld.has(t.id)) overrides.pin = { by: 'a person (their bid of the last 60 days)' }
     const enrollment = run.enrollments.get(campaign.id)
@@ -498,6 +529,8 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
         campaignMinCents: campaign.minBidCents,
         campaignMaxCents: campaign.maxBidCents,
         // Owner decision A (10-10) — no day ceiling: this hour's plan ceiling holds the bid (its lanes, decide.ts holdToHour).
+        // KAPI-B — a person's own max for this keyword (absent: none).
+        ...(own?.max ? { keywordMaxCents: own.max.cents } : {}),
       },
       dataDay: m.dataDay,
       lastStep: run.lastSteps.get(t.id) ?? null,
@@ -506,7 +539,7 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
       restore: run.lowered?.get(t.id) ?? null,
       ...(inputs.directives.length ? { directives: inputs.directives } : {}),
       ...(inputs.laneDirectives.length ? { laneDirectives: inputs.laneDirectives } : {}),
-      ...(inputs.goal ? { goalBy: inputs.goal.by } : {}),
+      ...(own?.acos ? { goalOwn: own.acos.by } : inputs.goal ? { goalBy: inputs.goal.by } : {}),
       ...(run.share?.has(t.id) ? { share: run.share.get(t.id)! } : {}),
     })
   }

@@ -16,6 +16,10 @@
  *            rank-defend's and the stops' give-backs do (Owner decision S2), and it is forced too — the step clamp would
  *            bring a keyword back from a 2¢ floor 25 % a write; decide() already holds it inside the limits and the gate
  *            judges it as the raise it is. Every other move is forward
+ *   safety   KAPI-B — a cut down to a hard limit (a lowering `limit` write: the strategy's or the campaign's highest bid, a
+ *            rule's ceiling, a person's own max for the keyword; or any write a person's keyword max cut, `maxCut`) is
+ *            safety, like a floor: it lands at once and exactly — sent under the dial's SUGGEST (Ask me) and with the
+ *            run's caps used, as a give-back is, and forced, so the step clamp never stages it over several ticks
  *   once     decide() moves a keyword at most once per new settled data day (its lastStep anchor): a rerun on the same
  *            evidence asks nothing
  *   BB-7     the hourly plan's placement % of an owned campaign: one placement write per campaign when the hour's % (capped
@@ -79,9 +83,17 @@ export function isFloorWrite(d: Pick<Decision, 'layer' | 'bidCents' | 'currentCe
   return FLOOR_LAYERS.has(d.layer) && d.bidCents < d.currentCents
 }
 
+/**
+ * KAPI-B — a cut down to a hard limit: a lowering `limit` write, or a write a person's own keyword max cut below today's
+ * bid (decide.ts `maxCut`). Safety: never waits behind the dial or the caps, never stepped.
+ */
+export function isSafetyCut(d: Pick<Decision, 'layer' | 'bidCents' | 'currentCents' | 'maxCut'>): boolean {
+  return d.bidCents < d.currentCents && (d.layer === 'limit' || d.maxCut === true)
+}
+
 /** The engine guard's kind of a decision's write: a floor, a give-back after one (restore), or a forward move. */
-export function writeKind(d: Pick<Decision, 'layer' | 'bidCents' | 'currentCents' | 'restoreBeforeCents'>): ChangeKind {
-  if (isFloorWrite(d)) return 'floor'
+export function writeKind(d: Pick<Decision, 'layer' | 'bidCents' | 'currentCents' | 'restoreBeforeCents'> & Partial<Pick<Decision, 'maxCut'>>): ChangeKind {
+  if (isFloorWrite(d) || isSafetyCut(d)) return 'floor'
   // Review fix 10-10 (2) — a give-back above the bid before it carries the goal's raise: a forward move (dial, caps).
   if (d.layer === 'restore') return d.restoreBeforeCents != null && d.bidCents > d.restoreBeforeCents ? 'forward' : 'restore'
   return 'forward'
@@ -93,7 +105,7 @@ export function writeKind(d: Pick<Decision, 'layer' | 'bidCents' | 'currentCents
  * move, not the brain's step (the step clamp would leave it stuck below after the first swing); the caps and the gate judge
  * it as the raise it is.
  */
-export function isExactWrite(d: Pick<Decision, 'layer' | 'bidCents' | 'currentCents' | 'restoreBeforeCents'>): boolean {
+export function isExactWrite(d: Pick<Decision, 'layer' | 'bidCents' | 'currentCents' | 'restoreBeforeCents'> & Partial<Pick<Decision, 'maxCut'>>): boolean {
   // A give-back above the bid before is exact too: decide() took the goal's step from the bid before (≤ the largest change);
   // the mutation layer's step clamp would measure it from the floor (2¢ → 3¢), never the brain's step.
   return writeKind(d) !== 'forward' || d.layer === 'plan_hour' || d.layer === 'restore'
@@ -129,7 +141,9 @@ export async function writeOwnedDecisions(writes: readonly BrainWrite[], ctx: { 
       let d = asked
       let heldAt: { cents: number; why: string } | null = null
       const kind = writeKind(d)
-      if (!allowChange(true, permit, held, kind)) {
+      // KAPI-B — a cut down to a hard limit is safety: it goes wherever a give-back goes (under SUGGEST, past the caps).
+      const allowed = isSafetyCut(d) ? permit.restore || permit.floor : allowChange(true, permit, held, kind)
+      if (!allowed) {
         const why = ctx.guard.posture === 'suggest' ? 'the account ads dial is SUGGEST' : permit.capped || permit.marketCapped ? 'the bid brain\'s caps for this run are used: it goes next run' : 'the account ads automation is stopped'
         // Review fix 10-10 (2) — a give-back carrying the goal's raise: the raise waits, the bid before still goes back.
         const before = d.layer === 'restore' ? d.restoreBeforeCents ?? null : null

@@ -22,7 +22,7 @@ import { describe, expect, it, vi } from 'vitest'
 vi.mock('../../../db.js', () => ({ default: {} }))
 
 const {
-  controlUndoRequest, effectiveWord, keywordWords, leverDoes, leverMoves, limitRaise, overridesAfter, releasedLevers, settingRaise, shapeRefusal, SPEND_RATINGS, startLines, turnsAutoOf,
+  controlUndoRequest, effectiveWord, keywordLimitWarnings, keywordMaxRefusal, keywordWords, leverDoes, leverMoves, limitRaise, overridesAfter, releasedLevers, settingRaise, shapeRefusal, SPEND_RATINGS, startLines, turnsAutoOf,
 } = await import('./control.js')
 const { resolveBrainSettings, resolveKeywordValue } = await import('./settings.js')
 const { BRAIN_LEVERS, BRAIN_SETTING_KEYS } = await import('./levers.js')
@@ -67,7 +67,7 @@ describe('shapeRefusal — each op names what it needs', () => {
   it('integration fix — a ref is never dropped: set-value takes one only for a keyword setting (tosTargetPct, target:<id>); every other setting and op refuses it', () => {
     expect(shapeRefusal({ ...base, op: 'set-value', key: 'tosTargetPct', value: 40, ref: 'target:t-1' })).toBeNull()
     expect(shapeRefusal({ ...base, op: 'set-value', key: 'tosTargetPct', reset: true, ref: 'target:t-1', campaignId: 'c1' })).toBeNull()
-    expect(shapeRefusal({ ...base, op: 'set-value', key: 'paceTargetPct', value: 80, ref: 'target:t-1' })).toMatch(/paceTargetPct is set per product or per campaign, not per keyword \(ref target:t-1\); only tosTargetPct takes a keyword's own value/)
+    expect(shapeRefusal({ ...base, op: 'set-value', key: 'paceTargetPct', value: 80, ref: 'target:t-1' })).toMatch(/paceTargetPct is set per product or per campaign, not per keyword \(ref target:t-1\); only tosTargetPct, targetAcosPct, maxBidCents take a keyword's own value/)
     expect(shapeRefusal({ ...base, op: 'set-value', key: 'tosTargetPct', value: 40, ref: 'keyword:jacket' })).toMatch(/names its keyword as target:<AdTarget.id>, not keyword:jacket/)
     expect(shapeRefusal({ ...base, op: 'set-level', lever: 'bids', level: 'OBSERVE', ref: 'target:t-1' })).toMatch(/^set-level takes no ref \(target:t-1\)/)
     expect(shapeRefusal({ ...base, op: 'enroll', ref: 'target:t-1' })).toMatch(/^enroll takes no ref/)
@@ -243,5 +243,43 @@ describe('controlUndoRequest — the op that puts a choice back', () => {
   it('a record without its product, or without what it changed, cannot be put back', () => {
     expect(controlUndoRequest({ op: 'set-level' })).toEqual({ refusal: expect.stringMatching(/does not record the product/) })
     expect(undo({ op: 'set-level', kind: 'nothing' })).toEqual({ refusal: expect.stringMatching(/does not record what it changed/) })
+  })
+})
+
+describe('KAPI-B — a keyword\'s own goal and max (set-value, ref target:<id>): bounds per market, spend, the warnings past his own limits', () => {
+  it('shape: a keyword ref is taken for targetAcosPct and maxBidCents too', () => {
+    const base = { productId: 'p-1', market: 'IT' }
+    expect(shapeRefusal({ ...base, op: 'set-value', key: 'targetAcosPct', value: 25, ref: 'target:t-1' })).toBeNull()
+    expect(shapeRefusal({ ...base, op: 'set-value', key: 'maxBidCents', value: 40, ref: 'target:t-1', campaignId: 'c-1' })).toBeNull()
+    expect(shapeRefusal({ ...base, op: 'set-value', key: 'maxBidCents', reset: true, ref: 'target:t-1' })).toBeNull()
+  })
+
+  it('a max is at least the brain\'s 5¢ engine floor (Amazon\'s minimum in IT is 2¢) and at most Amazon\'s maximum; a market with no checked row keeps the setting\'s bounds', () => {
+    expect(keywordMaxRefusal(5, 'IT')).toBeNull()
+    expect(keywordMaxRefusal(40, 'DE')).toBeNull()
+    expect(keywordMaxRefusal(4, 'IT')).toMatch(/^a keyword's max bid is at least 5¢ — the bid brain never bids below its 5¢ engine floor \(Amazon's minimum in IT is 2¢\) — not 4¢/)
+    expect(keywordMaxRefusal(100_001, 'IT')).toMatch(/at most Amazon's maximum of 100000¢, not 100001¢/)
+    expect(keywordMaxRefusal(3, 'SE')).toMatch(/at least 5¢ — the bid brain never bids below its 5¢ engine floor — not 3¢/)
+    expect(keywordMaxRefusal(500, 'SE')).toBeNull()
+  })
+
+  it('spend: a higher goal or max (or none) may raise; a lower one does not', () => {
+    expect(settingRaise('targetAcosPct', 20, 25)).toMatch(/^targetAcosPct 20 → 25: a higher goal for this keyword/)
+    expect(settingRaise('targetAcosPct', 25, null)).toMatch(/empty = its campaign's or product's goal/)
+    expect(settingRaise('targetAcosPct', 25, 20)).toBeNull()
+    expect(settingRaise('maxBidCents', 40, 60)).toMatch(/^maxBidCents 40 → 60: a higher max for this keyword/)
+    expect(settingRaise('maxBidCents', null, 60)).toMatch(/higher max/)
+    expect(settingRaise('maxBidCents', 60, 40)).toBeNull()
+  })
+
+  it('warnings: a max above the strategy\'s or the campaign\'s highest bid, below a lowest bid; a goal above the goal in force — no code (code rule A)', () => {
+    const limits = { strategyMinCents: 10, strategyMaxCents: 80, campaignMinCents: null, campaignMaxCents: 60, goalPct: 20, goalFrom: 'the ads strategy\'s target ACoS' }
+    expect(keywordLimitWarnings('maxBidCents', 50, limits, 'keyword "race jacket"')).toEqual([])
+    expect(keywordLimitWarnings('maxBidCents', 70, limits, 'keyword "race jacket"')).toEqual(['The max of 70¢ for keyword "race jacket" is above the campaign\'s highest bid (60¢): that limit still holds the bid brain there.'])
+    expect(keywordLimitWarnings('maxBidCents', 90, limits, 'kw')).toHaveLength(2)
+    expect(keywordLimitWarnings('maxBidCents', 8, limits, 'kw')).toEqual([expect.stringMatching(/below the ads strategy's lowest bid \(10¢\): the bid brain holds the bid at the max/)])
+    expect(keywordLimitWarnings('targetAcosPct', 30, limits, 'kw')).toEqual(['The goal of 30 % for kw is above the ads strategy\'s target ACoS (20 %): the bid brain may raise this keyword\'s bid toward it.'])
+    expect(keywordLimitWarnings('targetAcosPct', 15, limits, 'kw')).toEqual([])
+    expect(keywordLimitWarnings('maxBidCents', null, limits, 'kw')).toEqual([])
   })
 })

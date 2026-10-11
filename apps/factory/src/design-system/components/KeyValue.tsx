@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { hasHint, keyValueRootProps, type KeyValueColumns } from '../lib/key-value'
+import { hasHint, keyValueRootProps, type KeyValueColumns, type KeyValueLabelCase } from '../lib/key-value'
 
 /**
  * KeyValue — a `<dl>` term/value grid (CX.2).
@@ -26,11 +26,13 @@ export interface KeyValueProps {
   className?: string
   /** Tightens the row gap for a compact card body. */
   dense?: boolean
+  /** `sentence`: the terms as written ("Changes 7 d"), not the default small caps ("CHANGES 7 D"). Default `upper`. */
+  labelCase?: KeyValueLabelCase
 }
 
-export function KeyValue({ items, columns, className, dense }: KeyValueProps) {
+export function KeyValue({ items, columns, className, dense, labelCase }: KeyValueProps) {
   return (
-    <dl {...keyValueRootProps({ columns, dense, className })}>
+    <dl {...keyValueRootProps({ columns, dense, className, labelCase })}>
       {items.map((item, i) => (
         <div key={i} className="nds-kv-item">
           <dt>{item.label}</dt>

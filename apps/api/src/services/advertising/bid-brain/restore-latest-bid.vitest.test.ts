@@ -39,7 +39,9 @@ describe('the limit that holds a bid given back is said', () => {
   it('the bid before is 20¢ and the strategy\'s highest bid 12¢: back to 12¢, and the why says the limit held it', () => {
     const d = decide(lightFacts(2, { restore: { layer: 'min_bid_hour', heldCents: 2, beforeCents: 20 }, limits: { maxBidCents: 12, maxChangePct: 25 } }))
     expect([d.action, d.layer, d.bidCents]).toEqual(['write', 'restore', 12])
-    expect(d.why).toMatch(/^restore: the min-bid_hour layer no longer applies → back to 12¢ from the 2¢ it held \(the bid before it: 20¢; 20¢ held to the strategy highest bid; /)
+    // KAPI-B — the give-back decided from the bid before meets the hard ceiling itself (hardCeilingOf, before no_goal): the
+    // limit that held it is named there.
+    expect(d.why).toMatch(/^restore: the min-bid_hour layer no longer applies → back to 12¢ from the 2¢ it held \(the bid before it: 20¢; limit: 20¢ is above the strategy highest bid \(12¢\) → 12¢ /)
   })
 
   it('Owner decision A — this hour\'s plan ceiling 12¢: back to 12¢, held by the plan at its hours, the brain\'s own 20¢ kept', () => {

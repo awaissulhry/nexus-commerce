@@ -252,6 +252,11 @@ export interface ListChangesOpts {
    * when both are supplied, so every current behaviour is byte-identical.
    */
   entityIds?: string[]
+  /**
+   * Bid page (2026-10-10) — only the changes these actors wrote, filtered in both queries (as a group scope is), so one
+   * writer's history is never the newest rows of every writer filtered afterwards. Absent: every actor, as before.
+   */
+  actors?: string[]
   campaignId?: string
   field?: string
   deliveryState?: string
@@ -376,6 +381,11 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
     }
   }
 
+  // A group's actors, or the actors asked; both: only the actors in both.
+  const actorsIn = opts.actors?.length
+    ? (groupActors ? opts.actors.filter((a) => groupActors!.includes(a)) : [...opts.actors])
+    : groupActors
+
   const to = opts.to ?? new Date()
   const from = opts.from ?? new Date(to.getTime() - 30 * 24 * 3600 * 1000)
   const limit = Math.max(1, Math.min(500, opts.limit ?? 100))
@@ -391,7 +401,7 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
         ...(opts.entityId ? { entityId: opts.entityId } : opts.entityIds?.length ? { entityId: { in: opts.entityIds } } : {}),
         ...(opts.campaignId ? { campaignId: opts.campaignId } : {}),
         ...(opts.field ? { field: opts.field } : {}),
-        ...(groupActors ? { changedBy: { in: groupActors } } : {}),
+        ...(actorsIn ? { changedBy: { in: actorsIn } } : {}),
       },
       orderBy: { changedAt: 'desc' },
       take: fetchN,
@@ -402,7 +412,7 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
         createdAt: { gte: from, lte: to },
         ...(opts.entityType ? { entityType: opts.entityType } : {}),
         ...(opts.entityId ? { entityId: opts.entityId } : opts.entityIds?.length ? { entityId: { in: opts.entityIds } } : {}),
-        ...(groupActors ? { userId: { in: groupActors } } : {}),
+        ...(actorsIn ? { userId: { in: actorsIn } } : {}),
       },
       orderBy: { createdAt: 'desc' },
       take: fetchN,

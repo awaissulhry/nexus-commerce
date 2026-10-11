@@ -6,8 +6,15 @@
  *             never the free-text actor): PERSON, or CLAUDE when the write names its request (its change set)
  *   replaces  the target's earlier open PERSON / CLAUDE hold ends when a newer one starts
  *   handBack  a request that hands the bid back (evidence.handBack): the target's open holds end, none starts
+ *   Manual    KAPI-B — a person's own switch of ONE keyword to Manual (POST /api/advertising/bids/:targetId/mode): a PERSON
+ *             hold with no end (`until` null: "until handed back"), kept by his later bids on it (a new person's hold
+ *             there keeps no end), until he switches it back to Auto
+ *   Auto      KAPI-B — his switch back: the keyword's open PIN / PERSON / CLAUDE holds end and a hand-back mark is stored
+ *             (a HANDBACK row, ended as it is written, so no open-hold read ever sees it); a person's bid of the last 60
+ *             days from before the mark no longer holds the keyword (bid-grid.service.ts personBidTargetIds: the brain,
+ *             auto-bid and the Bid page's owner read it)
  *
- * Only on a campaign the brain owns now (bid-brain/live.ts). It never fails the write that called it.
+ * Only on a campaign the brain owns now (bid-brain/live.ts). recordBrainHold never fails the write that called it.
  */
 import prisma from '../../../db.js'
 import { logger } from '../../../utils/logger.js'
@@ -35,6 +42,11 @@ export async function recordBrainHold(args: {
     const owned = await brainOwnedCampaignIds([args.campaignId])
     if (!owned.has(args.campaignId)) return null
     const now = args.now ?? new Date()
+    // KAPI-B — a keyword the person switched to Manual (an open PERSON hold with no end) stays Manual through his later bids.
+    const manual = args.handBack ? null : await prisma.bidHold.findFirst({
+      where: { campaignId: args.campaignId, targetId: args.targetId, endedAt: null, kind: 'PERSON', until: null },
+      select: { id: true },
+    })
     await prisma.bidHold.updateMany({
       where: { campaignId: args.campaignId, targetId: args.targetId, endedAt: null, kind: { in: ['PERSON', 'CLAUDE'] } },
       data: { endedAt: now, endedBy: args.actor },
@@ -45,7 +57,7 @@ export async function recordBrainHold(args: {
         campaignId: args.campaignId,
         targetId: args.targetId,
         kind: args.changeSetId ? 'CLAUDE' : 'PERSON',
-        until: new Date(now.getTime() + BRAIN_HOLD_DAYS * 86_400_000),
+        until: manual ? null : new Date(now.getTime() + BRAIN_HOLD_DAYS * 86_400_000),
         by: args.actor,
         reason: args.reason?.trim() ? args.reason.trim().slice(0, 500) : null,
       },
@@ -97,4 +109,48 @@ export async function recordStrategyHold(args: { campaignId: string; actor: stri
     logger.warn('[bid-brain] could not record a person\'s bidding-strategy hold', { campaignId: args.campaignId, error: err instanceof Error ? err.message : String(err) })
     return null
   }
+}
+
+// ── KAPI-B — one keyword's Auto / Manual (POST /api/advertising/bids/:targetId/mode) ──────────────────────────────────
+
+/** The hold kinds a person (or his approved Claude request) holds a bid with: what Auto ends (auto-undo's own pin stays). */
+export const PERSON_HOLD_KINDS = ['PIN', 'PERSON', 'CLAUDE'] as const
+/** KAPI-B — the mark a switch back to Auto leaves (a BidHold row ended as it is written: never an open hold). */
+export const HANDBACK_KIND = 'HANDBACK'
+
+/**
+ * KAPI-B — Manual: a PERSON hold with no end on one keyword of a campaign the brain owns (the caller checked). An open
+ * no-end PERSON hold already there: nothing changes (`already`). Any other open PERSON / CLAUDE hold of the keyword (a
+ * 60-day one) ends: the no-end hold replaces it. Returns the hold and the holds it ended, for the Undo.
+ */
+export async function holdKeywordManual(args: { campaignId: string; targetId: string; actor: string; reason?: string | null; now?: Date }): Promise<{ holdId: string; already: boolean; ended: string[] }> {
+  const now = args.now ?? new Date()
+  const open = await prisma.bidHold.findFirst({ where: { campaignId: args.campaignId, targetId: args.targetId, endedAt: null, kind: 'PERSON', until: null }, select: { id: true } })
+  if (open) return { holdId: open.id, already: true, ended: [] }
+  const replaced = await prisma.bidHold.findMany({ where: { campaignId: args.campaignId, targetId: args.targetId, endedAt: null, kind: { in: ['PERSON', 'CLAUDE'] } }, select: { id: true } })
+  if (replaced.length) await prisma.bidHold.updateMany({ where: { id: { in: replaced.map((h) => h.id) } }, data: { endedAt: now, endedBy: args.actor } })
+  const hold = await prisma.bidHold.create({
+    data: { campaignId: args.campaignId, targetId: args.targetId, kind: 'PERSON', until: null, by: args.actor, reason: args.reason?.trim() ? args.reason.trim().slice(0, 500) : 'Manual: the person bids this keyword himself', createdAt: now },
+    select: { id: true },
+  })
+  return { holdId: hold.id, already: false, ended: replaced.map((h) => h.id) }
+}
+
+/**
+ * KAPI-B — Auto: the keyword's open PIN / PERSON / CLAUDE holds end, and a hand-back mark is stored (HANDBACK, ended as it
+ * is written) so a person's bid of the last 60 days from before it no longer holds the keyword (personBidTargetIds).
+ * Returns the holds it ended (the Undo opens them again) and the mark.
+ */
+export async function handBackKeyword(args: { campaignId: string; targetId: string; actor: string; now?: Date }): Promise<{ ended: Array<{ id: string; kind: string; until: string | null }>; markId: string }> {
+  const now = args.now ?? new Date()
+  const open = await prisma.bidHold.findMany({
+    where: { campaignId: args.campaignId, targetId: args.targetId, endedAt: null, kind: { in: [...PERSON_HOLD_KINDS] } },
+    select: { id: true, kind: true, until: true },
+  })
+  if (open.length) await prisma.bidHold.updateMany({ where: { id: { in: open.map((h) => h.id) } }, data: { endedAt: now, endedBy: args.actor } })
+  const mark = await prisma.bidHold.create({
+    data: { campaignId: args.campaignId, targetId: args.targetId, kind: HANDBACK_KIND, until: now, by: args.actor, reason: 'Auto: handed back to the bid brain', endedAt: now, endedBy: args.actor, createdAt: now },
+    select: { id: true },
+  })
+  return { ended: open.map((h) => ({ id: h.id, kind: h.kind, until: h.until ? h.until.toISOString() : null })), markId: mark.id }
 }

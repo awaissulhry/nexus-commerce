@@ -2,14 +2,15 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Exercise the bar's scroll effect in Node with React's own rule for effects: run on mount, then whenever a dependency
 // is not Object.is-equal to the last render's (the previous run is cleaned up first). The strip is a stand-in 100 px
-// wide whose tabs are 60 px each, laid out in order: it records every scroll it is asked for.
+// wide whose tabs are 240 px each, laid out in order: it records every scroll it is asked for. (400 / 240 since polish
+// round 2: the edge fade, 56 px, needs a strip wider than two fades.)
 const harness = vi.hoisted(() => ({
   deps: [] as Array<readonly unknown[] | undefined>,
   cleanups: [] as Array<(() => void) | void>,
   at: 0,
   ref: { current: null as unknown },
   ids: [] as string[],
-  width: 60,
+  width: 240,
   scrollLeft: 0,
   scrolls: [] as number[],
   observers: [] as Array<{ callback: () => void; observed: number; live: boolean }>,
@@ -32,6 +33,8 @@ vi.mock('react', async importOriginal => ({
 // layout effect and an observer to a harness that counts the reveal's.
 const overflowMarks = vi.hoisted(() => ({ calls: 0 }))
 vi.mock('./useHorizontalOverflow', () => ({ useHorizontalOverflow: () => { overflowMarks.calls += 1 } }))
+// The edge marker (fade + arrows, polish round 2) is its own hook too, with its rules tested in `tabsScroll.vitest.test.ts`.
+vi.mock('./useStripEdges', () => ({ useStripEdges: () => {} }))
 vi.stubGlobal('CSS', { escape: (value: string) => value })
 vi.stubGlobal('ResizeObserver', class {
   entry: { callback: () => void; observed: number; live: boolean }
@@ -59,9 +62,11 @@ const tabRect = (id: string) => {
 
 describe('Tabs keeps the active tab in view', () => {
   beforeEach(() => {
-    harness.deps = []; harness.cleanups = []; harness.scrolls = []; harness.observers = []; harness.scrollLeft = 0; harness.width = 60
+    harness.deps = []; harness.cleanups = []; harness.scrolls = []; harness.observers = []; harness.scrollLeft = 0; harness.width = 240
     harness.ref.current = {
-      getBoundingClientRect: () => ({ left: 0, right: 100 }),
+      getBoundingClientRect: () => ({ left: 0, right: 400 }),
+      clientWidth: 400,
+      get scrollWidth() { return harness.ids.length * harness.width },
       get scrollLeft() { return harness.scrollLeft },
       set scrollLeft(value: number) { harness.scrollLeft = value; harness.scrolls.push(value) },
       querySelector: (selector: string) => {
@@ -76,23 +81,24 @@ describe('Tabs keeps the active tab in view', () => {
     render(tabs('DE', 'IT'), 'DE')
     expect(harness.scrolls).toEqual([])
     render(tabs('DE', 'IT'), 'IT')
-    expect(harness.scrolls).toEqual([20])
+    expect(harness.scrolls).toEqual([80])
   })
 
   it('scrolls again when tabs are added before the active one (listed markets chosen after the sheet\'s own, 390 px)', () => {
     render(tabs('IT'), 'IT')
     render(tabs('DE', 'ES', 'FR', 'IT'), 'IT')
-    expect(harness.scrolls).toEqual([140])
-    // One removed before it moves it again (here: back).
+    expect(harness.scrolls).toEqual([560])
+    // One removed before it moves it again (here: back) — to the new end, clear of the fade on the side that has more.
     render(tabs('DE', 'IT'), 'IT')
-    expect(harness.scrolls).toEqual([140, 60])
+    expect(harness.scrolls).toEqual([560, 80])
   })
 
   it('follows a label that grows after the tab was shown (the market\'s words arrive once it is checked)', () => {
     render(tabs('DE', 'IT'), 'IT')
-    expect(harness.scrolls).toEqual([20])
-    labelsGrow(90)
-    expect(harness.scrolls).toEqual([20, 80])
+    expect(harness.scrolls).toEqual([80])
+    labelsGrow(360)
+    // Wider than the room between the two edge fades, so it shows its start, clear of the start fade (56 px).
+    expect(harness.scrolls).toEqual([80, 304])
     expect(harness.observers.filter(o => o.live)).toHaveLength(1)
     expect(harness.observers[0].observed).toBe(2)
   })
@@ -101,8 +107,8 @@ describe('Tabs keeps the active tab in view', () => {
     render(tabs('DE', 'IT'), 'IT')
     render(tabs('DE', 'IT').map(tab => ({ ...tab, label: `${tab.id} · 12 changes` })), 'IT')
     render(tabs('DE', 'IT'), 'IT')
-    labelsGrow(60)
-    expect(harness.scrolls).toEqual([20])
+    labelsGrow(240)
+    expect(harness.scrolls).toEqual([80])
   })
 
   it('stops following the old tabs once they change (one observer at a time)', () => {

@@ -1,0 +1,8 @@
+/*
+ * FullName (2026-10-11) — layout only. The tooltip's anchor gives way like the name inside it, so the name keeps its
+ * ellipsis in a narrow cell instead of pushing the cell wider.
+ */
+.anchor {
+  min-width: 0;
+  max-width: 100%;
+}

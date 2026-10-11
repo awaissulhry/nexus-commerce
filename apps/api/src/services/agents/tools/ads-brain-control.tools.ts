@@ -112,9 +112,16 @@ const describeOps =
   + 'campaign): the portfolio cap on or off, its % or amount, the pacing limit, pauseMinDays, longStopUntil, '
   + 'archiveDeadWeeks, hourPlanAsLimits, hourCellMovePct, the negatives warning and maximum, the strategy-switch approval '
   + 'mode and the rest; reset: true goes back to the product\'s value or the default. tosTargetPct (the top-of-search '
-  + 'impression share the bid brain holds a keyword at) also takes one keyword\'s own value: ref "target:<AdTarget.id>" '
-  + '(ad-targets lists the ids; the keyword\'s own value wins over its campaign\'s and its product\'s); any other setting '
-  + 'refuses a ref, and a keyword that is not in the product\'s campaign named is refused — never set wider instead. '
+  + 'impression share the bid brain holds a keyword at, 5–95 %) also takes one keyword\'s own value: ref '
+  + '"target:<AdTarget.id>" (ad-targets lists the ids; the keyword\'s own value wins over its campaign\'s and its '
+  + 'product\'s). Two settings are one keyword\'s own only, always with that ref: targetAcosPct (the keyword\'s own target '
+  + 'ACoS, a whole percent 1–200: the bid brain aims the keyword at it, before a rule\'s goal and its campaign\'s or product\'s '
+  + 'target) and maxBidCents (the keyword\'s own max bid in cents, a whole number from 5 — the brain\'s 5¢ engine floor, '
+  + 'and never below the market\'s Amazon minimum — to Amazon\'s maximum, 100000 in the euro markets: the bid brain never '
+  + 'sets the keyword above it, on any tick and in any layer, and a cut down to it lands at once); each is a normal approval '
+  + '(no code), with a warning when it goes past the strategy\'s or the campaign\'s own limits. With ref target:<id> the '
+  + 'productId may be left out: the keyword\'s campaign names its product. Any other setting refuses a ref, and a keyword '
+  + 'that is not in the product\'s campaign named is refused — never set wider instead. '
   + 'op leave: the product out of the '
   + 'brain — every lever back to OFF, its levels and values ended, the Owner\'s locks and exclusions kept; bids says what '
   + 'happens to its own campaigns the bid brain runs: give-back (default: bids and placements back as they were when each '
@@ -141,16 +148,16 @@ const setAdsBrain: AgentTool = {
     + 'every setting with its source afterwards.',
   input: z.object({
     op: z.enum(CONTROL_OPS).describe('enroll · set-level · lock · unlock · exclude · include · set-value · leave (see the description)'),
-    productId: ID.describe('the product, its Nexus id (a variation names its parent\'s brain)'),
+    productId: ID.optional().describe('the product, its Nexus id (a variation names its parent\'s brain); required, except for set-value of a keyword\'s own value (ref target:<AdTarget.id>), where the keyword\'s campaign names its product'),
     market: z.string().trim().toUpperCase().min(2).max(20).describe('one Amazon market code, e.g. IT (business-overview lists them)'),
     campaignId: ID.optional().describe('set-level / lock / unlock / exclude / include / set-value: one campaign of the product instead of the whole product (its Nexus id, ad-campaigns)'),
     lever: z.enum(BRAIN_LEVERS).optional().describe('set-level / lock / unlock: the lever'),
     level: z.enum(BRAIN_LEVELS).optional().describe('set-level: OFF, OBSERVE (shadow), PROPOSE (asks a person) or AUTO (acts alone inside the caps — a big door)'),
     levels: z.object(Object.fromEntries(BRAIN_LEVERS.map((l) => [l, z.enum(BRAIN_LEVELS).optional()]))).optional().describe('enroll: the starting level per lever (a lever not named starts OBSERVE; bids follows its campaigns)'),
-    ref: z.string().trim().max(220).optional().describe('lock / unlock: one thing inside the lever ("hourCell:d1h14", "lane:TOP_OF_SEARCH", "term:<words>", "adGroup:<id>", "target:<id>"); empty = the whole lever. set-value of tosTargetPct only: one keyword\'s own value, "target:<AdTarget.id>" (with campaignId: at that campaign; without: the product\'s value for that keyword); empty = the product\'s or the campaign\'s value. Any other op or setting refuses a ref'),
+    ref: z.string().trim().max(220).optional().describe('lock / unlock: one thing inside the lever ("hourCell:d1h14", "lane:TOP_OF_SEARCH", "term:<words>", "adGroup:<id>", "target:<id>"); empty = the whole lever. set-value of tosTargetPct, targetAcosPct or maxBidCents: one keyword\'s own value, "target:<AdTarget.id>" (with campaignId: at that campaign; without: the product\'s value for that keyword); empty = the product\'s or the campaign\'s value of tosTargetPct (targetAcosPct and maxBidCents are a keyword\'s own only and always need the ref). Any other op or setting refuses a ref'),
     key: z.enum(BRAIN_SETTING_KEYS as [BrainSetting, ...BrainSetting[]]).optional().describe('set-value: the setting (ads-brain view map lists each with its value and source)'),
     value: z.union([z.number(), z.boolean(), z.string().max(64), z.null(), z.record(z.string(), z.number())]).optional()
-      .describe('set-value: the setting\'s value (a whole number, true/false, a mode, a day YYYY-MM-DD, or null = empty where it takes one); lock: the Owner\'s own value of the whole lever ({ dailyBudgetCents }, { amountCents }, { TOP_OF_SEARCH: 50 }, a bidding strategy, ENABLED / PAUSED), or empty = as it is now'),
+      .describe('set-value: the setting\'s value (a whole number, true/false, a mode, a day YYYY-MM-DD, or null = empty where it takes one; targetAcosPct 1–200, maxBidCents 5–100000 cents); lock: the Owner\'s own value of the whole lever ({ dailyBudgetCents }, { amountCents }, { TOP_OF_SEARCH: 50 }, a bidding strategy, ENABLED / PAUSED), or empty = as it is now'),
     reset: z.boolean().optional().describe('set-level / set-value: true ends the level or value set at this scope instead (the next one applies)'),
     bids: z.enum(LEAVE_BIDS).optional().describe('leave: give-back (default) puts each LIVE campaign\'s bids and placements back as they were when it went LIVE; shadow leaves them where they are; keep lets the bid brain keep running them one by one'),
     pauses: z.enum(LEAVE_PAUSES).optional().describe('leave: resume (default) switches each campaign the brain\'s own pause holds back on as the approver (a big door: the approver\'s code); keep leaves them paused'),
@@ -178,8 +185,10 @@ const setAdsBrain: AgentTool = {
   },
   // C6 — a step stands on the product's brain (and the campaign it names): a later step of the same plan on the same brain
   // takes its basis again after an earlier one ran.
-  planEntities: (args): PlanEntities => {
-    const productId = typeof args.productId === 'string' ? args.productId.trim() : ''
+  planEntities: (args, preview): PlanEntities => {
+    // KAPI-B — a keyword's own value set without productId stands on the brain its preview resolved.
+    const resolved = (preview as { brain?: { productId?: unknown } } | null)?.brain?.productId
+    const productId = typeof args.productId === 'string' && args.productId.trim() ? args.productId.trim() : typeof resolved === 'string' ? resolved : ''
     const market = typeof args.market === 'string' ? args.market.trim().toUpperCase() : ''
     const keys = [...(productId && market ? [`ads-brain:${productId}@${market}` as const] : []), ...(typeof args.campaignId === 'string' && args.campaignId.trim() ? [`campaign:${args.campaignId.trim()}` as const] : [])]
     return { reads: keys, writes: keys }

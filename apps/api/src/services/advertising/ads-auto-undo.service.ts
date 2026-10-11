@@ -53,6 +53,7 @@
 import { Prisma } from '@nexus/database'
 import { workspaceKey } from '@nexus/database/workspace-context'
 import prisma from '../../db.js'
+import { ARCHIVED_ADS_DOMAIN } from './bid-rules/pure.js'
 import { logger } from '../../utils/logger.js'
 import { normalizeMarketplaceCode } from '../../utils/marketplace-code.js'
 import { LEVELS, lowest, type AutomationLevel } from '../automation/automation-levels.js'
@@ -472,7 +473,8 @@ async function originFacts(rows: Candidate[]): Promise<OriginFacts & { forced: S
   const from = rows.length ? new Date(Math.min(...rows.map((r) => r.createdAt.getTime())) - DAY_MS) : new Date()
   const [approvals, rules, runs, queue] = await Promise.all([
     executionIds.length ? prisma.agentApproval.findMany({ where: { id: { in: executionIds } }, select: { id: true, decisionVia: true } }) : [],
-    ruleIds.length ? prisma.automationRule.findMany({ where: { id: { in: ruleIds }, domain: 'advertising' }, select: { id: true, name: true } }) : [],
+    // Bid page — an archived rule (bid-rules/pure.ts ARCHIVED_ADS_DOMAIN) keeps its changes, and auto-undo keeps watching them.
+    ruleIds.length ? prisma.automationRule.findMany({ where: { id: { in: ruleIds }, domain: { in: ['advertising', ARCHIVED_ADS_DOMAIN] } }, select: { id: true, name: true } }) : [],
     ruleIds.length ? prisma.automationRuleExecution.findMany({ where: { ruleId: { in: ruleIds }, dryRun: false, startedAt: { gte: from } }, select: { ruleId: true, startedAt: true, finishedAt: true, durationMs: true } }) : [],
     queued.length ? prisma.outboundSyncQueue.findMany({ where: { id: { in: queued } }, select: { id: true, payload: true } }) : [],
   ])

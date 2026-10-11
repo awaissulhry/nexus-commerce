@@ -144,3 +144,20 @@ describe('Lane 5 — tosTargetPct', () => {
     expect(BRAIN_SETTINGS.tosTargetPct.what).not.toMatch(/rank|position/i)
   })
 })
+
+describe('KAPI-B — a keyword\'s own goal and max', () => {
+  it('empty by default; keyword-only; a goal 1–200 %, a max from the 5¢ engine floor', async () => {
+    const { isKeywordOnlySetting } = await import('./levers.js')
+    expect(settingDefaults().targetAcosPct).toBeNull()
+    expect(settingDefaults().maxBidCents).toBeNull()
+    expect(isKeywordOnlySetting('targetAcosPct')).toBe(true)
+    expect(isKeywordOnlySetting('maxBidCents')).toBe(true)
+    expect(isKeywordOnlySetting('tosTargetPct')).toBe(false)
+    expect(isKeywordOnlySetting('nope')).toBe(false)
+    expect(settingRefusal('targetAcosPct', 25, 'CAMPAIGN')).toBeNull()
+    expect(settingRefusal('targetAcosPct', 201, 'CAMPAIGN')).toMatch(/from 1 to 200/)
+    expect(settingRefusal('maxBidCents', 5, 'PRODUCT')).toBeNull()
+    expect(settingRefusal('maxBidCents', 4, 'PRODUCT')).toMatch(/from 5 to 100000/)
+    expect(settingRefusal('maxBidCents', 40.5, 'PRODUCT')).toMatch(/whole number/)
+  })
+})

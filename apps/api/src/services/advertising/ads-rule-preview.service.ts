@@ -175,6 +175,12 @@ export async function runDraftPreview<C extends CampaignCtx>(
      * picks matches nothing, and its preview says so.
      */
     emptyPickMeansScope?: boolean
+    /**
+     * Bid page (2026-10-10) — the handler of each matched block's OWN action, when blocks may differ: a builder Bid rule's
+     * THEN is `bid_apply`, or `pause_target` / `enable_target` for Pause / Unpause (the adapter's translation), and the
+     * engine runs each with its own handler. Absent: every block runs `handler`, as before.
+     */
+    handlerOf?: (action: Record<string, unknown>) => string
   },
 ): Promise<DraftPreviewRun<C>> {
   const blank = (windowDays: number): DraftPreviewRun<C> => ({
@@ -267,7 +273,9 @@ export async function runDraftPreview<C extends CampaignCtx>(
   const settled = await Promise.all(hits.map(async ({ ctx, action }) => {
     try {
       const ent = opts.entityId ? opts.entityId(ctx) : { key: 'campaignId', value: ctx.campaign.id }
-      const res = await handler({ ...action, [ent.key]: ent.value }, ctx, { dryRun: true, ruleId: PREVIEW_RULE_ID })
+      const own = opts.handlerOf ? ACTION_HANDLERS[opts.handlerOf(action)] as typeof handler : handler
+      if (!own) return { ctx, action, res: { ok: false, error: `no handler for ${String(action.type ?? '')}` } }
+      const res = await own({ ...action, [ent.key]: ent.value }, ctx, { dryRun: true, ruleId: PREVIEW_RULE_ID })
       return { ctx, action, res }
     } catch (e) {
       logger.warn('[ADS-RULE-PREVIEW] handler dryRun threw', { handler: opts.handler, entity: opts.entityId ? opts.entityId(ctx).value : ctx.campaign?.id, error: String(e) })

@@ -126,11 +126,23 @@ describe('SwitchCell — it changes a draft, never the server', () => {
     expect(html({ id: 'b', name: 'JACKET-B', on: false }, ctx)).toMatch(/aria-checked="false".*>Off<.*Not saved/)
   })
 
-  it('a switch that cannot move is disabled and says why', () => {
-    const out = html({ id: 'c', name: 'JACKET-C', on: false, held: true }, { current: { onSwitch: () => {} } })
-    expect(out).toContain('disabled=""')
-    expect(out).toContain('title="Not advertised in this market"')
+  it('a switch that cannot move is HELD, never disabled: it keeps its focus, says why, and a click does nothing', () => {
+    const held = { id: 'c', name: 'JACKET-C', on: false, held: true }
+    const out = html(held, { current: { onSwitch: () => {} } })
+    // A disabled button takes no focus, so a keyboard user never heard why (check-silent-disabled.mjs).
+    expect(out).not.toContain('disabled=""')
+    expect(out).toContain('aria-disabled="true"')
     expect(out).toContain('aria-description="Not advertised in this market"')
+    // The reason is the switch's portal tooltip (hover and focus), not a title on the cell.
+    expect(out).toContain('class="nds-tooltip"')
+    expect(out).not.toContain('title=')
+    const onSwitch = vi.fn()
+    const inner = (SwitchCell as unknown as { type: (p: unknown) => ReactNode }).type
+    let tree: ReactNode = null
+    const Probe = () => { tree = inner(cellProps(held, { current: { onSwitch } })); return null }
+    renderToStaticMarkup(createElement(Probe))
+    expect(toggleOf(tree)!.props.onChange).toBeUndefined()
+    expect(onSwitch).not.toHaveBeenCalled()
   })
 
   it('without a handler (no permission) only the word; a group row draws nothing', () => {

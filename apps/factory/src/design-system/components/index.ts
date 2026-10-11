@@ -4,7 +4,8 @@ export { EmptyState, type EmptyStateProps } from './EmptyState'
 export { Field, type FieldProps } from './Field'
 // CX.2 — the `<dl>` term/value grid; the fourth local spelling of one was the trigger.
 export { KeyValue, type KeyValueProps, type KeyValueItem } from './KeyValue'
-export { Tabs, tabIds, tabPanelProps, type TabItem, type TabsProps } from './Tabs'
+export { Tabs, tabIds, tabPanelProps, type TabItem, type TabsProps, type TabLinkComponent } from './Tabs'
+export { activeTabFromPath } from './tabsRoute'
 export { Pagination, type PaginationProps } from './Pagination'
 export { ProgressBar, type ProgressBarProps } from './ProgressBar'
 export { SourceIndicator, type SourceIndicatorProps, type ValueSourceKind } from './SourceIndicator'
@@ -108,3 +109,8 @@ export { FileRow, type FileRowProps } from './FileRow'
 export { JobProgress, jobPercent, type JobProgressProps } from './JobProgress'
 // Sheet publish parity (2026-10-02) — a read-only record of steps; Stepper is wizard navigation.
 export { Timeline, type TimelineProps, type TimelineStep } from './Timeline'
+// Bid page DS lane (2026-10-10) — a small step chart (promoted from the parked BidSpark), and what a row works on as links.
+export { Sparkline, type SparklineProps } from './Sparkline'
+export { sparkGeometry, sparkSummary, sparkWords, SPARK_BOX, type SparkShape, type SparkValue, type SparkBox, type SparkGeometry } from './sparklineModel'
+export { EntityLinks, type EntityLinksProps, type EntityLinkComponent } from './EntityLinks'
+export { entityLinksView, entityLinksText, entityCountWords, compareEntityLinks, type EntityRef, type EntityNoun, type EntityLinksView } from './entityLinksModel'

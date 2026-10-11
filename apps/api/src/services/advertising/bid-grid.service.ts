@@ -54,6 +54,7 @@ import { microsToCents } from '../ads-core/metrics-math.js'
 // The ONE actor classifier. `AdvertisingActionLog.userId` holds an actor STRING, not an operator
 // id — see `bidderByCampaign` for the defect that cost.
 import { parseActor } from './ads-changes.service.js'
+import { brainOwnedCampaignIds } from './bid-brain/live.js'
 
 // Ads wave 4c (F3) — the markets come from the connections: `adsReadMarkets()` (ads-markets.service.ts).
 export const BID_MARKET_ALL = 'all'
@@ -206,7 +207,8 @@ export interface BidTargetRow {
   biddingStrategy: string | null
 }
 
-export type BidderKind = 'schedule' | 'goal' | 'manual' | 'none'
+/** Bid page (BAPI, 2026-10-10) — `brain`: the bid brain owns the campaign now (bid-brain/live.ts); first, as the gate reads it. */
+export type BidderKind = 'brain' | 'schedule' | 'goal' | 'manual' | 'none'
 
 export interface BidCampaignRow {
   id: string
@@ -481,12 +483,18 @@ const cmp = (a: number | string | null, b: number | string | null, sign: number)
  *
  * Exported for auto-bid (ads-auto-bid.service.ts), which leaves the bids a `schedule` owns; it reads a person's bid
  * edits per keyword (personBidTargetIds), not this campaign label. `personTargets`: that set when the caller read it.
+ *
+ * Bid page (BAPI, 2026-10-10) — `brain` first. Since BB-6 (2026-10-08) a campaign the bid brain owns has one bid writer,
+ * the brain: the hourly plans skip it, auto-bid leaves it and the write gate refuses every other automatic writer there.
+ * This read still said `schedule` (the enabled schedule left on the campaign), so Claude's ad-targets named the hourly
+ * plan where the brain map (brain/read-map.ts) said "the brain" — the same read the gate makes is used now.
  */
 export async function bidderByCampaign(personTargets?: ReadonlySet<string>): Promise<Map<string, { kind: BidderKind; name: string | null }>> {
-  const [schedules, campaigns, personBids] = await Promise.all([
+  const [schedules, campaigns, personBids, brainOwned] = await Promise.all([
     prisma.adSchedule.findMany({ where: { enabled: true }, select: { campaignId: true, name: true, group: { select: { name: true } } } }),
     prisma.campaign.findMany({ select: { id: true, dynamicBidding: true } }),
     personTargets ?? personBidTargetIds(),
+    brainOwnedCampaignIds(),
   ])
   // An operator's bid write names a TARGET; the bidder is a property of the CAMPAIGN, so resolve up.
   const manualTargetIds = [...personBids]
@@ -501,6 +509,7 @@ export async function bidderByCampaign(personTargets?: ReadonlySet<string>): Pro
 
   const out = new Map<string, { kind: BidderKind; name: string | null }>()
   for (const c of campaigns) {
+    if (brainOwned.has(c.id)) { out.set(c.id, { kind: 'brain', name: null }); continue }
     const sched = bySchedule.get(c.id)
     if (sched) { out.set(c.id, { kind: 'schedule', name: sched }); continue }
     // `dynamicBidding.targetAcos` is the correct field — `Campaign.targetAcosPct` is documented as a
@@ -527,11 +536,25 @@ export const PERSON_BID_HOLD_DAYS = 60
  * (`executionId`). The mark counts only when that request is one a PERSON decided (its AgentApproval decided, and not
  * by the business's rule — as the run itself tells them apart): a mark on any other write releases nothing. A hand-back
  * releases an earlier person's bid too; a person's later edit holds the bid again.
+ *
+ * KAPI-B — and the Bid page's own Auto / Manual of one keyword (POST /api/advertising/bids/:targetId/mode,
+ * bid-brain/brain-holds.ts): an open person's hold of the keyword (PIN / PERSON / CLAUDE; Manual is a PERSON hold with no
+ * end) holds it, whatever the writes say; a hand-back to Auto (its HANDBACK mark) newer than his newest bid releases that
+ * bid, and a later bid of his holds it again.
  */
-export async function personBidTargetIds(): Promise<Set<string>> {
-  const since = new Date(Date.now() - PERSON_BID_HOLD_DAYS * 86400_000)
-  const where = { actionType: 'AD_BID_UPDATE', createdAt: { gte: since } }
-  const [bidLogs, marked] = await Promise.all([
+export async function personBidTargetIds(opts: { targetIds?: readonly string[]; now?: Date } = {}): Promise<Set<string>> {
+  const now = opts.now ?? new Date()
+  const since = new Date(now.getTime() - PERSON_BID_HOLD_DAYS * 86400_000)
+  // Bid page (BAPI) — `targetIds`: only these bids' changes, through the [entityType, entityId, createdAt] index, and only
+  // the rows a person's path wrote (an automation actor is never a person's: parseActor below), so a page reads the few
+  // rows of its own bids, not every bid change of 60 days. Absent: every bid, as auto-bid and the bid brain read it.
+  const ids = opts.targetIds ? [...new Set(opts.targetIds)] : null
+  if (ids && !ids.length) return new Set()
+  const where = {
+    actionType: 'AD_BID_UPDATE', createdAt: { gte: since },
+    ...(ids ? { entityType: 'AD_TARGET', entityId: { in: ids }, NOT: { userId: { startsWith: 'automation:' } } } : {}),
+  }
+  const [bidLogs, marked, holds] = await Promise.all([
     prisma.advertisingActionLog.findMany({
       // No `userId` predicate in the query: the column cannot express "a human did this", so the
       // filtering happens in `parseActor` below where the vocabulary is actually understood.
@@ -541,6 +564,11 @@ export async function personBidTargetIds(): Promise<Set<string>> {
     prisma.advertisingActionLog.findMany({
       where: { ...where, executionId: { not: null }, evidence: { path: ['handBack'], equals: 'auto-bid' } },
       select: { id: true, executionId: true },
+    }),
+    // KAPI-B — an open person's hold of the keyword (Manual: a PERSON hold with no end).
+    prisma.bidHold.findMany({
+      where: { targetId: ids ? { in: ids } : { not: null }, endedAt: null, kind: { in: [...PERSON_HOLD_KINDS] }, OR: [{ until: null }, { until: { gt: now } }] },
+      select: { targetId: true },
     }),
   ])
   // Only a request a person decided hands a bid back: decided, and not by the business's rule (`decisionVia` 'auto') —
@@ -563,8 +591,23 @@ export async function personBidTargetIds(): Promise<Set<string>> {
     const seen = newest.get(l.entityId)
     if (!seen || at > seen.at || (at === seen.at && held)) newest.set(l.entityId, { at, held })
   }
-  return new Set([...newest].filter(([, v]) => v.held).map(([entityId]) => entityId))
+  const held = new Set([...newest].filter(([, v]) => v.held).map(([entityId]) => entityId))
+  // KAPI-B — a hand-back to Auto newer than his newest bid releases it (a later bid of his holds it again).
+  if (held.size) {
+    const marks = await prisma.bidHold.groupBy({ by: ['targetId'], where: { kind: HANDBACK_HOLD_KIND, targetId: { in: [...held] }, createdAt: { gte: since } }, _max: { createdAt: true } })
+    for (const m of marks) {
+      const at = m._max.createdAt?.getTime()
+      if (m.targetId && at != null && at > (newest.get(m.targetId)?.at ?? Infinity)) held.delete(m.targetId)
+    }
+  }
+  for (const h of holds) if (h.targetId) held.add(h.targetId)
+  return held
 }
+
+/** KAPI-B — the hold kinds a person holds one bid with (bid-brain/brain-holds.ts PERSON_HOLD_KINDS; a test keeps them equal). */
+export const PERSON_HOLD_KINDS = ['PIN', 'PERSON', 'CLAUDE'] as const
+/** KAPI-B — the mark a hand-back to Auto leaves (bid-brain/brain-holds.ts HANDBACK_KIND; a test keeps them equal). */
+export const HANDBACK_HOLD_KIND = 'HANDBACK'
 
 async function lastAuditedByTarget(): Promise<Map<string, { cents: number; at: Date }>> {
   const rows = await prisma.$queryRaw<Array<{ entityId: string; newValue: string | null; changedAt: Date }>>`
@@ -844,7 +887,7 @@ export async function getBidGrid(req: BidGridRequest): Promise<BidGridResult> {
     measured: all.filter((r) => r.measured).length,
     spendCents: all.reduce((s, r) => s + r.spendCents, 0),
     // S1 (additive)
-    bidders: { schedule: bidderCount('schedule'), goal: bidderCount('goal'), manual: bidderCount('manual'), none: bidderCount('none') },
+    bidders: { brain: bidderCount('brain'), schedule: bidderCount('schedule'), goal: bidderCount('goal'), manual: bidderCount('manual'), none: bidderCount('none') },
     noBidder: {
       campaigns: noBidderIds.length,
       spendCents: noBidderIds.reduce((s, id) => s + (byCampaign.get(id)?.spendCents ?? 0), 0),
