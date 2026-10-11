@@ -1,0 +1,36 @@
+/* The shared owner chip (2026-10-11) — layout and the focus ring only; the DS Pill keeps its own look. */
+
+.chip,
+.link {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  border-radius: var(--nds-radius-pill);
+  text-decoration: none;
+}
+
+.chip:focus-visible,
+.link:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 1px;
+}
+
+.pill {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.word {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

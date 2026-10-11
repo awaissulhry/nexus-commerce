@@ -321,6 +321,10 @@ async function reverseOne(
         reversal: true,
         changeSetId,
         ...(sbSd && (await wasSbSdWrite(log)) ? { allowSbSd: true } : {}), // W4-11
+        // Negative Targeting — the Undo of the very pause that set a kept-paused hold releases it (a person's Undo only: the
+        // lock honours a release for a person). Any other rollback — a bulk-sheet upload's, an older change's — that would
+        // switch a kept-paused keyword back on is refused by the lock in updateAdTargetWithSync, and says so.
+        ...(patch.status === 'ENABLED' && after.keptPaused === true ? { releaseKeptPaused: true } : {}),
         ...(opts.evidence ? { evidence: opts.evidence } : {}),
         ...(opts.askGate ? { askGate: true } : {}),
       })

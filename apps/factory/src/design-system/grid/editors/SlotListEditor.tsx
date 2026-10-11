@@ -38,6 +38,7 @@ import {
   SLOT_LIST_EDITOR_CLASS, bulletsEditorKey, listModeCommit, listModeItems, moveByKey, slotListValue, slotPositionOf, withTrailingEmpty,
   type SlotGroup,
 } from './slotList'
+import { opensDark } from '../../lib/opens-dark'
 
 /** What the column tells the editor. Namespaced (`slotList`) so AG's merge with a formula selector's params never collides. */
 export interface SlotListSettings {
@@ -194,7 +195,7 @@ export const SlotListEditor = forwardRef<unknown, SlotListEditorParams>(function
     )
   }
 
-  const dark = props.eGridCell?.closest('.dark') ? ' dark' : ''
+  const dark = opensDark(props.eGridCell) ? ' dark' : ''
   return (
     <div className={`${SLOT_LIST_EDITOR_CLASS} nds-readable${dark}`} data-slot-count={order.length} role="group"
       aria-label={label} style={{ width: box.width, maxWidth: box.width, maxHeight: box.height }} onKeyDownCapture={keyboard}>

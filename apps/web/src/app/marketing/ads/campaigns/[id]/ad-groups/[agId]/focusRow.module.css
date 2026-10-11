@@ -1,0 +1,12 @@
+/* The row the ad group page was opened on (?focus=): a tint and a rail, tokens only. Painted as inset shadows, so it
+   sits over the row's own background without addressing the grid engine's classes. */
+.focusRow {
+  box-shadow: inset 3px 0 0 var(--nds-warning), inset 0 0 0 100vmax var(--nds-warning-soft);
+}
+
+/* The Status cell: the kept-paused lock before the status pill. */
+.statusCell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}

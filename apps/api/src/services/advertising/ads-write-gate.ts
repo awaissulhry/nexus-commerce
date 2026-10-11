@@ -88,6 +88,9 @@ export type GateDeniedAt =
   // ONE BRAIN AB-15 — the Owner's kill switch stopped this lever of the brain (brain/kill-switch.ts): the brain's own actor on
   // it is refused, a lowering included; every other writer is judged as before.
   | 'brain_killed'
+  // Negative Targeting (2026-10-11) — a write that would switch a KEPT-PAUSED keyword or target back on (advertising/waste/
+  // hold.ts): refused by the mutation layer for every writer but a person who releases it (updateAdTargetWithSync).
+  | 'kept_paused'
 
 /**
  * 3A (Owner decided 2026-10-06) — the limits that are HIS: his campaign's bid and budget bounds and his bid policies

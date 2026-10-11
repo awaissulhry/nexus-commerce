@@ -244,7 +244,7 @@ export async function getGraduationBoard(now = new Date()): Promise<GraduationBo
       const actionTypes = (Array.isArray(r.actions) ? r.actions : [])
         .map((a) => String((a as { type?: unknown })?.type ?? '')).filter(Boolean)
       // BP.P1 — op-aware ceiling (a set/raise/lower Bid rule ≠ a Pause one); see the adapter.
-      return { r, actionTypes, ceiling: graduationCeiling({ actionTypes: producedActionTypes(r), hasKeywordProtections: protectionCount > 0 }) }
+      return { r, actionTypes, ceiling: graduationCeiling({ actionTypes: producedActionTypes(r), hasKeywordProtections: protectionCount > 0, actions: r.actions }) }
     })
     .filter((x) => resolveAutonomy(x.r) === 'PROPOSE')
 

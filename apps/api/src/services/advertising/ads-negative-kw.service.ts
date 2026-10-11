@@ -42,6 +42,13 @@
  *
  * `scripts/check-negative-write-path.mjs` holds the rest at zero: no client negative creator, no POST to a negative
  * endpoint and no `adTarget.create({ isNegative: true })` outside this file, the client, the policy and the syncs.
+ *
+ * Negative Targeting (2026-10-11, lane NWRITE) — the AUTHOR of every negative this door makes is stored on its row
+ * (`AdTarget.negativeOrigin`, negativeOriginOf): HARVEST · BRAIN_FUNNEL · BRAIN · PLAYBOOK · RULE · CLAUDE · PERSON, from the
+ * caller's actor and source (and, for an approved request, its approval's tool and door). The page and retire-negatives
+ * read it: a Harvest or Brain-funnel negative is never lifted without saying so. `createNegative` (push-only) records the
+ * row and its audit row too when its caller asks (`record`): the legacy rule path, the account-wide sync and the route
+ * used to leave neither (no row until the next sync, then "unattributed"; no undo).
  */
 
 import type { Prisma } from '@prisma/client'
@@ -53,7 +60,7 @@ import {
   createSbNegativeKeyword as sendSbNegativeKeyword, createSdNegativeTarget as sendSdNegativeTarget,
   type AdsRegion, type ClientContext,
 } from './ads-api-client.js'
-import { checkAdsWriteGate, ownLimitsSentence, type OwnLimit } from './ads-write-gate.js'
+import { BRAIN_HARVEST_ACTOR, checkAdsWriteGate, ownLimitsSentence, type OwnLimit } from './ads-write-gate.js'
 import { isPersonCreate } from './ads-mutation.service.js'
 import { assertNegativeWriteAllowed, isAsin, negativeKeywordTextProblem, protectedNegativeRefusal } from './ads-negation-policy.js'
 import { checkProtectConverting, normaliseNegTerm, type ProtectConvertingConfig } from './ads-protect-converting.js'
@@ -63,6 +70,97 @@ import { SPONSORED_BRANDS, SPONSORED_DISPLAY, adProductOf, type AdWrite } from '
 
 export type NegativeMatchType = 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE'
 export type NegativeScope = 'AD_GROUP' | 'CAMPAIGN'
+
+// ── Who made a negative (Negative Targeting, 2026-10-11) ─────────────────────────────────────────────────────────
+
+/** The authors a negative's row names (AdTarget.negativeOrigin). */
+export const NEGATIVE_ORIGINS = ['HARVEST', 'BRAIN_FUNNEL', 'BRAIN', 'PLAYBOOK', 'RULE', 'CLAUDE', 'PERSON'] as const
+export type NegativeOrigin = (typeof NEGATIVE_ORIGINS)[number]
+
+/** What a writer says about itself, from which the door decides the author. */
+export interface NegativeOriginSource {
+  /** Said outright by the caller (wins). */
+  origin?: NegativeOrigin | null
+  /** The actor: `user:<id>`, `automation:<ruleId>`, an engine's `automation:<name>`. */
+  userId?: string | null
+  evidence?: AdWriteEvidence | null
+  /** A launch's own negatives (a playbook build, the SP wizard, an AI goal, a single launch). */
+  creationFlow?: boolean
+  /** The approval this write runs for: its tool, the door its request came through, the run's agent. */
+  approval?: { toolName?: string | null; via?: string | null; agentKey?: string | null } | null
+}
+
+const textOf = (v: unknown): string => (typeof v === 'string' ? v : v != null && typeof v === 'object' ? JSON.stringify(v) : '')
+
+/**
+ * The author of a negative (pure), in this order: what the caller says; a harvest (any source naming a harvest — the brain's
+ * harvest writer, a rule's harvest, harvest-search-term, apply-brain-harvest) → HARVEST; the brain's match-type funnel →
+ * BRAIN_FUNNEL; the ads brain otherwise (its actor, its request "Ads brain: …", its run) → BRAIN; a launch or a playbook
+ * (creationFlow, isolation and playbook sync) → PLAYBOOK; any other automation actor → RULE; a request Claude (or the
+ * agent fleet) asked for → CLAUDE; a person → PERSON. Null: nothing to go on.
+ */
+export function negativeOriginOf(s: NegativeOriginSource): NegativeOrigin | null {
+  if (s.origin && (NEGATIVE_ORIGINS as readonly string[]).includes(s.origin)) return s.origin
+  const actor = (s.userId ?? '').trim()
+  const ev = (s.evidence ?? null) as Record<string, unknown> | null
+  const words = [ev?.metric, ev?.note, ev?.targetKey, ev?.source].map(textOf).filter(Boolean).join(' ')
+  const tool = s.approval?.toolName ?? ''
+  const agent = s.approval?.agentKey ?? ''
+  if (actor === BRAIN_HARVEST_ACTOR || /harvest/i.test(actor) || /harvest/i.test(words) || /harvest/i.test(tool) || /harvest/i.test(agent)) return 'HARVEST'
+  if (/match-type funnel/i.test(words)) return 'BRAIN_FUNNEL'
+  if (actor.startsWith('automation:ads-brain') || /\bads brain\b/i.test(words) || agent.startsWith('ads-brain')) return 'BRAIN'
+  if (s.creationFlow === true || /playbook/i.test(actor) || /playbook|\bisolation:/i.test(words) || /playbook/i.test(tool)) return 'PLAYBOOK'
+  if (actor.startsWith('automation:')) return 'RULE'
+  const via = s.approval?.via ?? null
+  if (via === 'claude' || via === 'fleet') return 'CLAUDE'
+  if (actor) return 'PERSON'
+  return null
+}
+
+/**
+ * The author of a negative this door is about to record: negativeOriginOf, reading the approval behind `changeSetId`
+ * (its tool, door and agent) only when the caller's own words do not settle it. Never throws: null when nothing tells.
+ */
+async function originFor(s: NegativeOriginSource & { changeSetId?: string | null }): Promise<NegativeOrigin | null> {
+  const first = negativeOriginOf(s)
+  if (first && first !== 'PERSON') return first
+  if (!s.changeSetId) return first
+  try {
+    const approval = await prisma.agentApproval.findUnique({ where: { id: s.changeSetId }, select: { toolName: true, agentRun: { select: { via: true, agentKey: true } } } })
+    if (!approval) return first
+    return negativeOriginOf({ ...s, approval: { toolName: approval.toolName, via: approval.agentRun?.via ?? null, agentKey: approval.agentRun?.agentKey ?? null } })
+  } catch {
+    return first
+  }
+}
+
+/**
+ * Who made each negative (Negative Targeting): its stored author, or — for a row made before 2026-10-11 — the brain's
+ * own records (its negatives log: the funnel or another reason; its harvest pairs' source negatives). Null: not known.
+ */
+export async function negativeOriginsOf(ids: readonly string[]): Promise<Map<string, NegativeOrigin | null>> {
+  const out = new Map<string, NegativeOrigin | null>()
+  if (!ids.length) return out
+  const rows = await prisma.adTarget.findMany({ where: { id: { in: [...ids] } }, select: { id: true, negativeOrigin: true } })
+  for (const r of rows) out.set(r.id, (NEGATIVE_ORIGINS as readonly string[]).includes(r.negativeOrigin ?? '') ? r.negativeOrigin as NegativeOrigin : null)
+  const unknown = ids.filter((id) => !out.get(id))
+  if (!unknown.length) return out
+  // The brain's own records, for rows made before the author was stored. A failed read leaves them not known (logged).
+  try {
+    const brain = await prisma.adsBrainNegative.findMany({ where: { adTargetId: { in: unknown }, action: 'ADD' }, select: { adTargetId: true, reason: true, reasons: true } })
+    for (const b of brain) if (b.adTargetId && !out.get(b.adTargetId)) out.set(b.adTargetId, b.reason === 'funnel' || b.reasons.includes('funnel') ? 'BRAIN_FUNNEL' : 'BRAIN')
+    const still = unknown.filter((id) => !out.get(id))
+    if (still.length) {
+      const harvests = await prisma.adsBrainHarvest.findMany({ select: { sources: true }, where: { status: { notIn: ['UNDONE'] } }, take: 5000 })
+      const sourceNegatives = new Set(harvests.flatMap((h) => (Array.isArray(h.sources) ? h.sources as Array<{ negativeTargetId?: unknown }> : []).map((x) => String(x?.negativeTargetId ?? ''))).filter(Boolean))
+      for (const id of still) if (sourceNegatives.has(id)) out.set(id, 'HARVEST')
+    }
+  } catch (error) {
+    logger.warn('[ads-negative-kw] the brain\'s records of who made a negative could not be read', { error: (error as Error).message })
+  }
+  for (const id of ids) if (!out.has(id)) out.set(id, null)
+  return out
+}
 
 export interface CreateNegativeArgs {
   profileId: string
@@ -87,6 +185,12 @@ export interface CreateNegativeArgs {
    * it when a product's brain owns the campaign's negatives. Absent: an unnamed automatic writer (a person passes by `manual`).
    */
   actor?: string | null
+  /**
+   * Negative Targeting (2026-10-11) — record the row and its audit row here, as writeNegativeKeyword does (the author
+   * stored), for a caller that kept neither: who adds it (`userId`), the measurement, the change set (undo finds it).
+   * Absent: push-only, as before (the n-gram page and the rules' builder path record their own).
+   */
+  record?: { userId?: string | null; evidence?: AdWriteEvidence | null; changeSetId?: string | null; origin?: NegativeOrigin | null } | null
 }
 
 export interface CreateNegativeResult {
@@ -99,6 +203,8 @@ export interface CreateNegativeResult {
   /** Set when the write gate (or 5b's checks before it) denied the call. */
   denied: { reason: string; deniedAt: string } | null
   rawResponse: unknown
+  /** Negative Targeting — with `record`: the local row (new, or the standing one); null when nothing was recorded. */
+  adTargetId?: string | null
 }
 
 /** 5b — what became of one negative. A refusal or a failure wrote nothing here. */
@@ -150,6 +256,8 @@ export interface WriteNegativeKeywordArgs {
    * own endpoint (POST /sb/negativeKeywords). Absent: Sponsored Products only, as before (the gate refuses SB/SD).
    */
   allowSbSd?: boolean
+  /** Negative Targeting — the author, said outright (negativeOriginOf decides it from the rest when absent). */
+  origin?: NegativeOrigin | null
 }
 
 export interface WriteNegativeProductTargetArgs {
@@ -172,6 +280,8 @@ export interface WriteNegativeProductTargetArgs {
    * to SD's own endpoint (POST /sd/negativeTargets). Absent: Sponsored Products only, as before.
    */
   allowSbSd?: boolean
+  /** Negative Targeting — the author, said outright (negativeOriginOf decides it from the rest when absent). */
+  origin?: NegativeOrigin | null
 }
 
 // ── Endpoint constants (legacy SP v3) ─────────────────────────────────
@@ -555,6 +665,8 @@ export async function mirrorNegativeRow(m: {
   expressionType: string
   expressionValue: string
   externalTargetId: string | null
+  /** Negative Targeting — the author stored on a NEW row (a standing one keeps its own). */
+  origin?: NegativeOrigin | null
 }): Promise<{ id: string; created: boolean }> {
   const where: Prisma.AdTargetWhereInput = m.kind === 'KEYWORD'
     ? standingNegativeWhere({ scope: m.level, adGroupId: m.adGroupId, campaignId: m.campaignId ?? '', keywordText: m.expressionValue, matchType: toNegativeMatch(m.expressionType) })
@@ -571,6 +683,7 @@ export async function mirrorNegativeRow(m: {
     data: {
       adGroupId: m.adGroupId, kind: m.kind, expressionType: m.expressionType, expressionValue: m.expressionValue,
       bidCents: 0, status: 'ENABLED', isNegative: true, negativeLevel: m.level, externalTargetId: m.externalTargetId,
+      ...(m.origin ? { negativeOrigin: m.origin } : {}),
     },
   })
   return { id: t.id, created: true }
@@ -599,10 +712,14 @@ export async function mirrorNegativeKeyword(input: {
   userId?: string | null
   evidence?: AdWriteEvidence | null
   changeSetId?: string | null
+  /** Negative Targeting — the author said outright, and a launch's own negative (both feed negativeOriginOf). */
+  origin?: NegativeOrigin | null
+  creationFlow?: boolean
 }): Promise<{ id: string; created: boolean }> {
   const row = await mirrorNegativeRow({
     adGroupId: input.adGroupId, campaignId: input.campaignId, kind: 'KEYWORD', level: input.scope,
     expressionType: input.matchType, expressionValue: input.keywordText, externalTargetId: input.externalTargetId,
+    origin: await originFor({ origin: input.origin, userId: input.userId, evidence: input.evidence, creationFlow: input.creationFlow, changeSetId: input.changeSetId }),
   })
   if (row.created) {
     await auditCreate('create_negative_keyword', row.id, {
@@ -662,6 +779,7 @@ export async function writeNegativeKeyword(args: WriteNegativeKeywordArgs): Prom
   const row = await mirrorNegativeKeyword({
     scope: args.scope, adGroupId: placement.adGroup!.id, campaignId: placement.campaign.id, keywordText: text, matchType,
     externalTargetId, mode: recordMode, userId: args.userId, evidence: args.evidence, changeSetId: args.changeSetId,
+    origin: args.origin, creationFlow: args.creationFlow,
   })
   return {
     outcome: sent.kind === 'draft' ? 'local' : 'created', mode: recordMode, externalTargetId, reachedAmazon: externalTargetId != null,
@@ -681,7 +799,10 @@ export async function writeNegativeProductTarget(args: WriteNegativeProductTarge
 
   const recordMode = sent.kind === 'sent' ? sent.mode : 'local'
   const externalTargetId = sent.kind === 'sent' ? sent.externalId : null
-  const row = await mirrorNegativeRow({ adGroupId: args.adGroupId, kind: 'PRODUCT', level: 'AD_GROUP', expressionType: 'ASIN', expressionValue: asin, externalTargetId })
+  const row = await mirrorNegativeRow({
+    adGroupId: args.adGroupId, kind: 'PRODUCT', level: 'AD_GROUP', expressionType: 'ASIN', expressionValue: asin, externalTargetId,
+    origin: await originFor({ origin: args.origin, userId: args.userId, evidence: args.evidence, creationFlow: args.creationFlow, changeSetId: args.changeSetId }),
+  })
   if (row.created) {
     await auditCreate('create_negative_product_target', row.id, { asin, externalId: externalTargetId, reachedAmazon: externalTargetId != null, mode: recordMode }, args.userId, args.evidence, args.changeSetId)
   }
@@ -748,16 +869,30 @@ export async function createNegative(args: CreateNegativeArgs): Promise<CreateNe
     case 'refused': return denied(sent.refusal)
     case 'exists':
       logger.info('[ads-negative-kw] already exists locally — skipping create', { profileId: args.profileId, keywordText: args.keywordText, matchType: args.matchType, scope: args.scope })
-      return { ok: true, mode, externalNegativeKeywordId: null, alreadyExisted: true, denied: null, rawResponse: { localDedup: true } }
+      return { ok: true, mode, externalNegativeKeywordId: null, alreadyExisted: true, denied: null, rawResponse: { localDedup: true }, ...(args.record ? { adTargetId: sent.adTargetId } : {}) }
     case 'threw': throw sent.error
     case 'draft': return { ok: false, mode, externalNegativeKeywordId: null, alreadyExisted: false, denied: null, rawResponse: { error: 'the campaign or ad group has no Amazon ids yet' } }
-    case 'sent':
+    case 'sent': {
       if (sent.errors.length) {
         logger.warn('[ads-negative-kw] Amazon returned per-item errors', { profileId: args.profileId, errors: sent.errors })
         return { ok: false, mode: 'live', externalNegativeKeywordId: null, alreadyExisted: false, denied: null, rawResponse: sent.rawResponse }
       }
       logger.info(`[ADS-${sent.mode === 'live' ? 'LIVE' : 'SANDBOX'}] createNegative`, { profileId: args.profileId, scope: args.scope, externalId: sent.externalId, keywordText: args.keywordText })
-      return { ok: true, mode: sent.mode, externalNegativeKeywordId: sent.externalId, alreadyExisted: false, denied: null, rawResponse: sent.mode === 'sandbox' ? { sandbox: true } : sent.rawResponse }
+      // Negative Targeting — the caller asked this door to keep the row and its audit row (the author stored), as
+      // writeNegativeKeyword does: a live create only once Amazon's id is known (a null id is not a negative that stands).
+      const recorded = args.record && placement.adGroup && (sent.mode === 'sandbox' || sent.externalId != null)
+        ? await mirrorNegativeKeyword({
+          scope: args.scope, adGroupId: placement.adGroup.id, campaignId: placement.campaign.id, keywordText: (args.keywordText ?? '').trim(),
+          matchType: toNegativeMatch(args.matchType), externalTargetId: sent.externalId, mode: sent.mode,
+          userId: args.record.userId ?? args.actor ?? null, evidence: args.record.evidence, changeSetId: args.record.changeSetId, origin: args.record.origin,
+        })
+        : null
+      return {
+        ok: true, mode: sent.mode, externalNegativeKeywordId: sent.externalId, alreadyExisted: false, denied: null,
+        rawResponse: sent.mode === 'sandbox' ? { sandbox: true } : sent.rawResponse,
+        ...(args.record ? { adTargetId: recorded?.id ?? null } : {}),
+      }
+    }
   }
 }
 

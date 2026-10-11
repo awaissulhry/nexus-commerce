@@ -1,0 +1,7 @@
+/* ListboxPanel option rows with a TEXT chip in the leading slot (Keyword Harvest DS lane, lead review 2026-10-11): the chip
+   ("Exact") sits on the label's FIRST line. Centred, it dropped between the lines of a label that wrapped at 390 px
+   ("Jacket IT Broad › Broad group") and lower still beside a note. Baseline alignment puts the chip's text on the
+   label's first-line baseline. Flags and icons (no text) keep the centred row: an SVG has no baseline of its own. */
+.nds-combo-pop button[role="option"]:has(> .nds-listbox-lead > .nds-tag) {
+  align-items: baseline;
+}

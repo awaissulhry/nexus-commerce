@@ -47,6 +47,7 @@ import { createPortal } from 'react-dom'
 import { ChevronDown } from 'lucide-react'
 
 import { usePopoverPosition } from '../../components/usePopoverPosition'
+import { opensDark } from '../../lib/opens-dark'
 
 /**
  * The same monotone overflow measurement, exposed for the SECOND priority R-LX-18 names: once the
@@ -281,7 +282,7 @@ export function GridToolbarFold({ label, count, mode = 'overflow', activeLabel, 
           trigger's scope, as `GridViewsMenu`'s prompt does, because `<body>` may sit outside it. */}
       {portalReady && createPortal(
         <div id={panelId} ref={panel} style={panelStyle}
-          className={`nds-toolbar-fold-panel${trigger.current?.closest('.dark') ? ' dark' : ''}`}
+          className={`nds-toolbar-fold-panel${opensDark(trigger.current) ? ' dark' : ''}`}
           role="group" aria-label={label} hidden={!open}>
           {children}
         </div>,

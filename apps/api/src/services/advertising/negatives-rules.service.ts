@@ -339,7 +339,7 @@ export async function getNegRules(req: NegRulesRequest): Promise<NegRulesPayload
 
   const rules: NegRuleRow[] = rulesOnTab.map((r) => {
     const types = actionTypesOf(r.actions)
-    const ceiling = graduationCeiling({ actionTypes: types, hasKeywordProtections: protections > 0 })
+    const ceiling = graduationCeiling({ actionTypes: types, hasKeywordProtections: protections > 0, actions: r.actions })
     const isAccountWide = !r.scopeMarketplace && !r.scopePortfolioId && !r.scopeCampaignId && !r.scopeProductId
     // 🔴 RESOLVED, never raw. The action object is what the handler reads.
     const firstNegAction = (Array.isArray(r.actions) ? (r.actions as Array<Record<string, unknown>>) : [])

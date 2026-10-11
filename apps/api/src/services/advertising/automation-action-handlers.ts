@@ -60,6 +60,7 @@ import {
   updateAdTargetWithSync,
   type AdsActor,
 } from './ads-mutation.service.js'
+import { HOLD_SELECT, actorNames, holdActive, keepUntilOf, keptPausedRefusal, logKeptPausedRefusal } from './waste/hold.js'
 import { suppressCampaignBids, restoreCampaignBids } from './ads-bid-suppression.service.js'
 import { bidExtraSpend, placementExtraSpend } from './ads-spend-estimate.js'
 
@@ -1377,8 +1378,8 @@ const makeAddNegativeHandler = (matchType: 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE')
             }
             // 5 — mirror the landed write locally, with its audit row (create_negative_keyword).
             const mirrored = level === 'AD_GROUP'
-              ? await mirrorNegativeKeywordLocal({ adGroupId: dst.id, keywordText: keyword, matchType, externalTargetId: res.externalNegativeKeywordId })
-              : await createNegativeKeywordCampaignLocal({ externalCampaignId: dst.campaign.externalCampaignId, keywordText: keyword, matchType: t, externalTargetId: res.externalNegativeKeywordId })
+              ? await mirrorNegativeKeywordLocal({ adGroupId: dst.id, keywordText: keyword, matchType, externalTargetId: res.externalNegativeKeywordId, userId: RULE_ACTOR(meta.ruleId) })
+              : await createNegativeKeywordCampaignLocal({ externalCampaignId: dst.campaign.externalCampaignId, keywordText: keyword, matchType: t, externalTargetId: res.externalNegativeKeywordId, userId: RULE_ACTOR(meta.ruleId) })
             if (mirrored?.created) noteNegative(meta, mirrored.id)
             confirmed += 1
             outcomes.push({ adGroupId: dst.id, matchType, level, externalTargetId: res.externalNegativeKeywordId, reachedAmazon: true })
@@ -1470,7 +1471,10 @@ const makeAddNegativeHandler = (matchType: 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE')
     if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, keyword, externalCampaignId, matchType, scope } }
     const { createNegative } = await import('./ads-negative-kw.service.js')
     const conn = await (await import('./ads-profile-resolver.js')).adsClientContextFor(marketplace) // CM-29 — the gate's resolver
-    const res = await createNegative({ profileId: conn?.profileId ?? '', externalCampaignId, externalAdGroupId, keywordText: keyword, matchType, scope, marketplace, actor: RULE_ACTOR(meta.ruleId) })
+    // Negative Targeting (2026-10-11) — the door records the row and its audit row (the rule as author), so the negative
+    // has a record and an undo (noted on an approved apply), not only Amazon's copy found by the next sync.
+    const res = await createNegative({ profileId: conn?.profileId ?? '', externalCampaignId, externalAdGroupId, keywordText: keyword, matchType, scope, marketplace, actor: RULE_ACTOR(meta.ruleId), record: { userId: RULE_ACTOR(meta.ruleId), evidence: ctxEvidence(context), changeSetId: meta.approval?.changeSetId ?? null } })
+    if (res.adTargetId && !res.alreadyExisted) noteNegative(meta, res.adTargetId)
     // A denied write used to be reported as `ok: true`. With the gate now reachable (above), a
     // refusal by the protected-terms whitelist is the expected outcome for a brand term — and it has
     // to land in the execution row as a failure, or the whitelist is invisible to whoever reads it.
@@ -1837,9 +1841,10 @@ ACTION_HANDLERS.sync_negatives_across_campaigns = async (action, context, meta):
     // local mirror was written anyway. Per-campaign outcomes are counted separately for the same
     // reason — one number over 74 attempts is how those 22 rows became invisible.
     try {
-      const r = await createNegative({ profileId: conn?.profileId ?? '', externalCampaignId: c.externalCampaignId!, keywordText: keyword, matchType: 'NEGATIVE_EXACT', scope: 'CAMPAIGN', marketplace, actor: RULE_ACTOR(meta.ruleId) })
+      // Negative Targeting (2026-10-11) — each campaign's negative recorded with its audit row (the rule as author) and noted.
+      const r = await createNegative({ profileId: conn?.profileId ?? '', externalCampaignId: c.externalCampaignId!, keywordText: keyword, matchType: 'NEGATIVE_EXACT', scope: 'CAMPAIGN', marketplace, actor: RULE_ACTOR(meta.ruleId), record: { userId: RULE_ACTOR(meta.ruleId), evidence: ctxEvidence(context), changeSetId: meta.approval?.changeSetId ?? null } })
       if (r.denied) { denied++; if (errors.length < 5) errors.push(`${c.externalCampaignId}: denied at ${r.denied.deniedAt} — ${r.denied.reason}`) }
-      else added++
+      else { added++; if (r.adTargetId && !r.alreadyExisted) noteNegative(meta, r.adTargetId) }
     }
     catch (e) { errors.push((e as Error).message) }
   }
@@ -2571,6 +2576,11 @@ ACTION_HANDLERS.bid_apply = async (action, context, meta): Promise<ActionResult>
  *
  * No `as never` on the write call: [[reference_as_never_hides_write_failures]] — twice measured,
  * a gate argument silently dropped for two months and an Apply button that always applied nothing.
+ *
+ * Negative Targeting (2026-10-11, PLAN D2) — a rule's pause KEEPS the target paused (advertising/waste/hold.ts): the hold
+ * is written with the pause (by the rule's actor; `keepUntil` an ISO date, absent = always; `keepPaused: false` on the
+ * action opts out), and the pause asks the gate first, so a refused pause leaves no hold (and no local change) behind.
+ * An enable never lifts a kept-paused target: it is skipped by name, and the refusal recorded like a gate refusal.
  */
 async function setTargetStatus(
   action: Record<string, unknown>,
@@ -2583,9 +2593,16 @@ async function setTargetStatus(
   if (!id) return { type, ok: false, error: 'No adTarget.id in context' }
   const t = await prisma.adTarget.findUnique({
     where: { id },
-    select: { status: true, adGroupId: true, adGroup: { select: { campaignId: true, campaign: { select: { marketplace: true } } } } },
+    select: { status: true, adGroupId: true, expressionValue: true, isNegative: true, ...HOLD_SELECT, adGroup: { select: { campaignId: true, campaign: { select: { id: true, marketplace: true } } } } },
   })
   if (!t) return { type, ok: false, error: 'AdTarget not found' }
+  // Negative Targeting — an enable never lifts a kept-paused target (the lock refuses it anyway): skipped by name, recorded.
+  if (status === 'ENABLED' && String(t.status) !== 'ENABLED' && !t.isNegative && holdActive(t)) {
+    const names = await actorNames([t.keptPausedBy, RULE_ACTOR(meta.ruleId)])
+    const why = keptPausedRefusal({ hold: t, fromStatus: String(t.status), toStatus: 'ENABLED', person: false, release: false, actor: RULE_ACTOR(meta.ruleId), names })
+    if (why && !meta.dryRun) await logKeptPausedRefusal({ marketplace: t.adGroup?.campaign?.marketplace, campaignId: t.adGroup?.campaignId, targetId: id, actor: RULE_ACTOR(meta.ruleId) }, why)
+    return { type, ok: true, output: { adTargetId: id, skipped: 'kept-paused', reason: why } }
+  }
   const allow = Array.isArray(action.campaignIds) ? (action.campaignIds as string[]) : []
   if (allow.length && t.adGroup?.campaignId && !allow.includes(t.adGroup.campaignId)) {
     return { type, ok: true, output: { skipped: 'campaign-not-selected', adTargetId: id } }
@@ -2598,18 +2615,27 @@ async function setTargetStatus(
     const held = await protectedStopSkip(type, id, t)
     if (held) return held
   }
-  if (meta.dryRun) return { type, ok: true, output: { dryRun: true, adTargetId: id, wouldSet: status, from: t.status } }
+  // Negative Targeting — a rule's pause keeps it paused (opt out: keepPaused false), until keepUntil when given.
+  let keep: { until: Date | null } | null = null
+  if (status === 'PAUSED' && action.keepPaused !== false) {
+    const until = keepUntilOf(action.keepUntil)
+    if ('refusal' in until) return { type, ok: false, error: until.refusal }
+    keep = { until: until.until }
+  }
+  if (meta.dryRun) return { type, ok: true, output: { dryRun: true, adTargetId: id, wouldSet: status, from: t.status, ...(keep ? { keepPaused: { until: keep.until?.toISOString() ?? null } } : {}) } }
+  const why = (action.reason as string | undefined) ?? `${type} via rule ${meta.ruleId}`
   const res = await updateAdTargetWithSync({
     adTargetId: id,
     patch: { status },
-    ...ruleWrite(meta, (action.reason as string | undefined) ?? `${type} via rule ${meta.ruleId}`),
+    ...ruleWrite(meta, why),
     evidence: ctxEvidence(context),
+    ...(keep ? { keepPaused: { until: keep.until, reason: why }, askGate: true } : {}),
   })
   return {
     type,
     ok: res.ok,
     error: res.error ?? undefined,
-    output: { adTargetId: id, status, from: t.status, outboundQueueId: res.outboundQueueId },
+    output: { adTargetId: id, status, from: t.status, outboundQueueId: res.outboundQueueId, ...(keep && res.ok ? { keptPaused: { until: keep.until?.toISOString() ?? null } } : {}) },
   }
 }
 

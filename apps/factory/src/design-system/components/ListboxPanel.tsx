@@ -39,8 +39,10 @@
  *
  * Requires `styles/components.css`.
  */
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Search } from 'lucide-react'
+import './listbox-actions.css'
+import './listbox-rows.css'
 import { groupOptions } from '../lib/group-options'
 import { searchOptions } from '../lib/option-search'
 import type { ListboxOption } from './Listbox'
@@ -64,6 +66,46 @@ const CLEAR_INDEX = -2
  * the word the operator types to find it; a note equal to `heldReason` is read once.
  */
 export type ListboxPanelOption = ListboxOption & { heldReason?: string; note?: string }
+
+/**
+ * A command UNDER the list (Keyword Harvest DS lane H1, 2026-10-10): "+ New campaign…", "+ New portfolio…". It is a
+ * BUTTON, not an option — it chooses no value, it starts something — so it sits outside the `listbox` and is announced
+ * as a button. ↑/↓ walk on from the last option into the actions; Tab moves list → action → action (the panel owns Tab
+ * here, because inside a DS `Modal` a portalled panel's Tab was taken back to the dialog's first control), and Tab off
+ * the last action / Shift+Tab off the list close the panel onto its trigger (`onCancel`), as the DS MultiSelect and
+ * Menu do — inside a Modal the focus never leaves the dialog while the list is open. Esc closes only the panel (it is
+ * marked as used, so a Modal around it stays open). Held like an option: reachable, says why, never runs.
+ */
+export interface ListboxPanelAction {
+  id: string
+  label: string
+  /** A decorative mark before the label (a Plus). */
+  icon?: ReactNode
+  onSelect: () => void
+  /** Why it cannot run now; it stays focusable and is never run. */
+  heldReason?: string
+}
+
+/** Marks an action row, so keys and scroll can tell it from an option. */
+const ACTION_ATTR = 'data-listbox-action'
+const ROWS = `button[role="option"], button[${ACTION_ATTR}]`
+/**
+ * Where Tab goes in a panel with actions (`at` = the focused action, -1 = anywhere in the list): the list is the first
+ * stop, the actions follow. Off either end the panel closes: forward without taking the key (the browser's Tab then
+ * moves on from the trigger the owner focused), backward taking it (the focus stays on the trigger).
+ */
+function actionTabMove(at: number, count: number, back: boolean): { kind: 'list' } | { kind: 'action'; index: number } | { kind: 'close'; prevent: boolean } {
+  if (back) return at < 0 ? { kind: 'close', prevent: true } : at === 0 ? { kind: 'list' } : { kind: 'action', index: at - 1 }
+  if (at < count - 1) return { kind: 'action', index: at + 1 }
+  return { kind: 'close', prevent: false }
+}
+
+/** The height of the sticky action rows at the panel's foot; 0 without them. */
+const footHeight = (host: HTMLElement): number => host.querySelector<HTMLElement>(':scope > .nds-listbox-actions')?.offsetHeight ?? 0
+const isActionTarget = (target: unknown): boolean => {
+  const el = target as { closest?: (sel: string) => unknown } | null | undefined
+  return !!el && typeof el.closest === 'function' && !!el.closest(`[${ACTION_ATTR}]`)
+}
 
 export interface ListboxPanelProps {
   options: ListboxPanelOption[]
@@ -145,6 +187,14 @@ export interface ListboxPanelProps {
    * keep the stored value. When supplied, Enter is the owner's, and the panel does not also commit it.
    */
   onKeyChoice?: (value: string | null) => void
+  /**
+   * Commands under the list (H1): see `ListboxPanelAction`. With actions the panel is a small `dialog` holding the
+   * `listbox` (its id and name move to that inner list) and a group of buttons; without them it is exactly as before.
+   * Not for a grid editor (`onKeyChoice`): there Tab ends the edit.
+   */
+  actions?: readonly ListboxPanelAction[]
+  /** The actions' group name for a screen reader. Default "Actions". */
+  actionsLabel?: string
 }
 
 const sameText = (a: string, b: string) => a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase()
@@ -153,7 +203,7 @@ export function ListboxPanel({
   options, value, onCommit, onCancel, query, searchable, searchPlaceholder = 'Search…',
   emptyLabel, autoFocus = true, style, className, panelRef,
   activeIndex, onActiveIndexChange, onMatchesChange, idPrefix, ariaLabel, optionTabIndex,
-  initialQuery, allowCustom, onKeyChoice,
+  initialQuery, allowCustom, onKeyChoice, actions, actionsLabel = 'Actions',
 }: ListboxPanelProps) {
   const [ownQuery, setOwnQuery] = useState(initialQuery ?? '')
   /**
@@ -209,7 +259,12 @@ export function ListboxPanel({
      cannot show instead of committing row 1 in its place (P0, 2026-09-30: an Amazon product type was overwritten so). */
   const active = controlled ? activeIndex : ownActive ?? (q && ownsSearch ? bestMatch : selectedIndex >= 0 ? selectedIndex : q ? 0 : -1)
   activeRef.current = active
-  const heldReason = (o: ListboxOption) => (o as ListboxPanelOption).heldReason
+  const acts = actions ?? []
+  // Options come first in the keys' index space; the actions follow them (H1). Without actions both are as before.
+  const lastRow = matches.length + acts.length - 1
+  const actionAt = (i: number) => (i >= matches.length ? acts[i - matches.length] : undefined)
+  const runAction = (a: ListboxPanelAction) => { if (!a.heldReason) a.onSelect() }
+  const heldReason =(o: ListboxOption) => (o as ListboxPanelOption).heldReason
   const noteOf = (o: ListboxOption) => (o as ListboxPanelOption).note?.trim() || undefined
   const descriptionOf = (o: ListboxOption) => {
     const held = heldReason(o)
@@ -249,17 +304,21 @@ export function ListboxPanel({
     // A searching panel moves its highlight with ↑/↓ while focus stays in the search field, so it is kept in view too.
     if (!controlled && !filtering) return
     const host = hostRef.current
-    const row = host?.querySelectorAll<HTMLElement>('button[role="option"]')[active === CLEAR_INDEX && showClear ? 0 : active + (showClear ? 1 : 0)]
+    const row = host?.querySelectorAll<HTMLElement>(ROWS)[active === CLEAR_INDEX && showClear ? 0 : active + (showClear ? 1 : 0)]
     if (!host || !row) return
     if (active === 0 || active === CLEAR_INDEX) { host.scrollTop = 0; return }
+    // An action row is sticky at the panel's foot: always in view.
+    if (actionAt(active)) return
     // The panel may be static inside a positioned editor. offsetTop belongs to that ancestor,
     // so measure within this scroll viewport instead of counting the editor's preceding tools.
     const top = row.getBoundingClientRect().top - host.getBoundingClientRect().top + host.scrollTop - host.clientTop
     const bottom = top + row.offsetHeight
     // The panel's own search field is sticky, so a row scrolled to the top edge would sit under it.
     const head = ownsSearch ? host.querySelector<HTMLElement>('.nds-combo-search')?.offsetHeight ?? 0 : 0
+    // The action rows are sticky at the foot (H1), so a row scrolled to the bottom edge would sit under them.
+    const foot = footHeight(host)
     if (top - head < host.scrollTop) host.scrollTop = top - head
-    else if (bottom > host.scrollTop + host.clientHeight) host.scrollTop = bottom - host.clientHeight
+    else if (bottom > host.scrollTop + host.clientHeight - foot) host.scrollTop = bottom - host.clientHeight + foot
   }, [controlled, filtering, ownsSearch, active, matchKey, showClear])
 
   // D18 — the selected value is scrolled into view, not merely highlighted. Measured 2026-09-02 on
@@ -272,8 +331,9 @@ export function ListboxPanel({
     if (!host || !sel) return
     const top = sel.getBoundingClientRect().top - host.getBoundingClientRect().top + host.scrollTop - host.clientTop
     const bottom = top + sel.offsetHeight
+    const foot = footHeight(host)
     if (top < host.scrollTop) host.scrollTop = top
-    else if (bottom > host.scrollTop + host.clientHeight) host.scrollTop = bottom - host.clientHeight
+    else if (bottom > host.scrollTop + host.clientHeight - foot) host.scrollTop = bottom - host.clientHeight + foot
     // mount only: re-running as the operator filters would fight their scrolling
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -307,52 +367,9 @@ export function ListboxPanel({
     )
   }
 
-  return (
-    <div
-      ref={(n) => {
-        hostRef.current = n
-        if (typeof panelRef === 'function') panelRef(n)
-        else if (panelRef) (panelRef as React.MutableRefObject<HTMLDivElement | null>).current = n
-      }}
-      style={style}
-      className={['nds-combo-pop', 'nds-listbox-pop', className].filter(Boolean).join(' ')}
-      id={idPrefix ? `${idPrefix}-listbox` : undefined}
-      role="listbox"
-      aria-label={ariaLabel}
-      tabIndex={-1}
-      onKeyDownCapture={onKeyChoice ? (e) => {
-        if ((e.key !== 'Enter' && e.key !== 'Tab') || e.nativeEvent.isComposing) return
-        // Not also a click: Enter on a focused option button would activate it and commit a second time (code review).
-        if (e.key === 'Enter') e.preventDefault()
-        const m = active >= 0 ? matches[active] : undefined
-        onKeyChoice(active === CLEAR_INDEX && showClear ? '' : m && !m.disabled && !heldReason(m) ? m.value : null)
-      } : undefined}
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') { e.preventDefault(); onCancel() }
-        else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-          e.preventDefault()
-          const n = moveActive((i) => {
-            if (e.key === 'ArrowUp') return i <= 0 && showClear ? CLEAR_INDEX : Math.max(i - 1, 0)
-            if (i === CLEAR_INDEX) return matches.length ? 0 : CLEAR_INDEX
-            return Math.min(i + 1, matches.length - 1)
-          })
-          // A short uncontrolled list draws no `.active` row, so the focus ring IS the highlight: move it.
-          if (!filtering && !controlled) hostRef.current?.querySelectorAll<HTMLElement>('button[role="option"]')[n === CLEAR_INDEX ? 0 : n + (showClear ? 1 : 0)]?.focus()
-        }
-        else if (e.key === 'Enter' && !onKeyChoice) {
-          if (active === CLEAR_INDEX && showClear) { e.preventDefault(); onCommit(''); return }
-          const m = matches[active]
-          if (m) { e.preventDefault(); if (!m.disabled && !heldReason(m)) onCommit(m.value) }
-        }
-      }}
-    >
-      {ownsSearch && (
-        <div className="nds-combo-search">
-          <Search size={13} aria-hidden />
-          <input autoFocus={autoFocus} value={ownQuery} onChange={(e) => { setOwnQuery(e.target.value); if (controlled) moveActive(() => 0); else setOwnActive(null) }}
-            placeholder={searchPlaceholder} aria-label="Search options" />
-        </div>
-      )}
+  // The options, the clear row and the empty line: the root's own children, or (with actions) the inner listbox's.
+  const list = (
+    <>
       {showClear && (
         <button type="button" role="option" aria-selected={!value} tabIndex={optionTabIndex}
           id={idPrefix ? `${idPrefix}-o${CLEAR_INDEX}` : undefined}
@@ -377,6 +394,101 @@ export function ListboxPanel({
             ]
           })()
         : matches.map((o, i) => renderOption(o, i))}
+    </>
+  )
+
+  return (
+    <div
+      ref={(n) => {
+        hostRef.current = n
+        if (typeof panelRef === 'function') panelRef(n)
+        else if (panelRef) (panelRef as React.MutableRefObject<HTMLDivElement | null>).current = n
+      }}
+      style={acts.length ? { ...style, ['--nds-listbox-actions' as string]: acts.length } : style}
+      className={['nds-combo-pop', 'nds-listbox-pop', className].filter(Boolean).join(' ')}
+      id={idPrefix && !acts.length ? `${idPrefix}-listbox` : undefined}
+      role={acts.length ? 'dialog' : 'listbox'}
+      aria-label={ariaLabel}
+      tabIndex={-1}
+      onKeyDownCapture={onKeyChoice ? (e) => {
+        if ((e.key !== 'Enter' && e.key !== 'Tab') || e.nativeEvent.isComposing) return
+        // An action row chooses no value: its own Enter runs it (H1).
+        if (e.key === 'Enter' && (isActionTarget(e.target) || actionAt(active))) return
+        // Not also a click: Enter on a focused option button would activate it and commit a second time (code review).
+        if (e.key === 'Enter') e.preventDefault()
+        const m = active >= 0 ? matches[active] : undefined
+        onKeyChoice(active === CLEAR_INDEX && showClear ? '' : m && !m.disabled && !heldReason(m) ? m.value : null)
+      } : undefined}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') { e.preventDefault(); onCancel() }
+        else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault()
+          const n = moveActive((i) => {
+            if (e.key === 'ArrowUp') return i <= 0 && showClear ? CLEAR_INDEX : Math.max(i - 1, 0)
+            if (i === CLEAR_INDEX) return lastRow >= 0 ? 0 : CLEAR_INDEX
+            return Math.min(i + 1, lastRow)
+          })
+          // A short uncontrolled list draws no `.active` row, so the focus ring IS the highlight: move it.
+          if (!filtering && !controlled) hostRef.current?.querySelectorAll<HTMLElement>(ROWS)[n === CLEAR_INDEX ? 0 : n + (showClear ? 1 : 0)]?.focus()
+        }
+        else if (e.key === 'Enter' && !onKeyChoice) {
+          // A focused action button runs itself (its click); a highlighted one is run here, the search field keeping focus.
+          if (isActionTarget(e.target)) return
+          const act = actionAt(active)
+          if (act) { e.preventDefault(); runAction(act); return }
+          if (active === CLEAR_INDEX && showClear) { e.preventDefault(); onCommit(''); return }
+          const m = matches[active]
+          if (m) { e.preventDefault(); if (!m.disabled && !heldReason(m)) onCommit(m.value) }
+        }
+        else if (e.key === 'Tab' && acts.length && !onKeyChoice && !e.nativeEvent?.isComposing) {
+          // Tab stops: the list (its search field, else its highlighted option), then each action. The panel moves the
+          // focus itself: inside a DS Modal a portalled panel's Tab went back to the dialog's first control while the
+          // list stayed open. Leaving it closes it (the DS MultiSelect and Menu rule): Tab off the last action → the
+          // owner closes it onto its trigger and the browser's Tab goes on to the next control (inside the Modal);
+          // Shift+Tab off the list → closed, the focus stays on the trigger.
+          const host = hostRef.current
+          if (!host) return
+          const buttons = Array.from(host.querySelectorAll<HTMLElement>(`button[${ACTION_ATTR}]`))
+          const at = buttons.findIndex((b) => b === e.target || b.contains(e.target as Node))
+          const move = actionTabMove(at, buttons.length, e.shiftKey)
+          if (move.kind === 'close') { if (move.prevent) e.preventDefault(); onCancel(); return }
+          const listStop = () => host.querySelector<HTMLElement>('.nds-combo-search input')
+            ?? host.querySelectorAll<HTMLElement>('button[role="option"]')[active >= 0 && active < matches.length ? active + (showClear ? 1 : 0) : 0]
+            ?? host.querySelector<HTMLElement>('button[role="option"]')
+          e.preventDefault()
+          ;(move.kind === 'list' ? listStop() : buttons[move.index])?.focus()
+        }
+      }}
+    >
+      {ownsSearch && (
+        <div className="nds-combo-search">
+          <Search size={13} aria-hidden />
+          <input autoFocus={autoFocus} value={ownQuery} onChange={(e) => { setOwnQuery(e.target.value); if (controlled) moveActive(() => 0); else setOwnActive(null) }}
+            placeholder={searchPlaceholder} aria-label="Search options" />
+        </div>
+      )}
+      {acts.length ? (
+        <div role="listbox" id={idPrefix ? `${idPrefix}-listbox` : undefined} aria-label={ariaLabel}>{list}</div>
+      ) : list}
+      {acts.length > 0 && (
+        <div className="nds-listbox-actions" role="group" aria-label={actionsLabel}>
+          {acts.map((a, k) => {
+            const i = matches.length + k
+            return (
+              <button key={a.id} type="button" data-listbox-action={a.id}
+                className={[(filtering || controlled) && i === active ? 'active' : '', a.heldReason ? 'held' : ''].filter(Boolean).join(' ') || undefined}
+                title={a.heldReason}
+                aria-disabled={a.heldReason ? true : undefined}
+                aria-description={a.heldReason}
+                onFocus={controlled ? undefined : () => { if (activeRef.current !== i) moveActive(() => i) }}
+                onClick={() => runAction(a)}>
+                {a.icon != null && <span className="nds-listbox-lead" aria-hidden>{a.icon}</span>}
+                <span className="nds-listbox-label">{a.label}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

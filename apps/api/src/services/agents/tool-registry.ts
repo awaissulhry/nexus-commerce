@@ -18,6 +18,7 @@ import { ADS_STRATEGY_TOOLS } from './tools/ads-strategy.tools.js'
 import { ADS_BID_BRAIN_TOOLS } from './tools/ads-bid-brain.tools.js'
 import { ADS_BID_BRAIN_ENROLLMENT_TOOLS } from './tools/ads-bid-brain-enrollment.tools.js'
 import { ADS_BRAIN_TOOLS } from './tools/ads-brain.tools.js'
+import { ADS_WASTE_TOOLS } from './tools/ads-waste.tools.js'
 import { ADS_BRAIN_HARVEST_TOOLS } from './tools/ads-brain-harvest.tools.js'
 import { ADS_BRAIN_KILL_TOOLS } from './tools/ads-brain-kill.tools.js'
 import { ADS_BRAIN_RETIRE_TOOLS } from './tools/ads-brain-retire.tools.js'
@@ -143,6 +144,8 @@ const ALL: AgentTool[] = [
   ...ADS_BID_BRAIN_ENROLLMENT_TOOLS,
   // One brain AB-3 — the brain's map: who owns each lever of each campaign, the clashes and what is not set up, read.
   ...ADS_BRAIN_TOOLS,
+  // Negative Targeting page (2026-10-11) — ad-waste: the page's reads (wasting rows, stopped, one row, history), same code.
+  ...ADS_WASTE_TOOLS,
   ...ADS_BRAIN_HARVEST_TOOLS,
   // One brain AB-15 — the kill switch per lever: stop one lever of the brain for one product or every product.
   ...ADS_BRAIN_KILL_TOOLS,

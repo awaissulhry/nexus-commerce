@@ -38,6 +38,7 @@ import { BRAIN_STATE_ACTOR, checkAdsWriteGate, entityBoundsDenial, logGateDeny, 
 import { brainLiveCeiling } from './bid-brain/live.js'
 import { queuedWriteLever } from './ads-authority-pins.js'
 import { NO_LIMITS, bidLimitsFor, limitSources, strategyWords, stepClamp, type StrategyBidLimits, type WriteSources } from './ads-strategy/bids.js'
+import { HOLD_ACTIONS, HOLD_SELECT, NO_HOLD, actorNames, holdActive, holdData, holderWords, holdOf, keptPausedRefusal, logKeptPausedRefusal, recordHoldChange, resolveTurnedOn, type HoldColumns, type KeepPausedAsk } from './waste/hold.js'
 
 // Conservative grace window. Operators have 5 min to cancel before
 // the worker actually calls Amazon. Override via env for testing.
@@ -238,6 +239,12 @@ export interface MutationOutcome {
    * and asks for his confirmation instead (`needsConfirmation`).
    */
   warnings?: string[]
+  /**
+   * Negative Targeting (2026-10-11) — the write was refused because the target is KEPT paused (waste/hold.ts): who holds
+   * it, since when, until when and why. A person's screen offers "confirm the release" (releaseKeptPaused) or Negative
+   * Targeting's Turn on.
+   */
+  keptPaused?: { by: string; byName: string; at: string; until: string | null; reason: string | null; needsRelease: true }
 }
 
 /** 3A — the answer to a person's write past his own limits: nothing written, his "Send anyway" decides. */
@@ -849,7 +856,14 @@ export async function putBackRefusedWrite(payload: {
   entityType: string
   entityId: string
   fieldChanges: FieldChange[]
-}): Promise<{ restored: string[]; kept: string[] }> {
+}, opts: {
+  /**
+   * Negative Targeting (review S4) — the queue row put back. A keyword's pause it carried that never reached Amazon (refused
+   * at dispatch, cancelled in its window, or rejected for good) leaves no kept-paused hold behind: a hold set with it (at or
+   * after the row's creation, a minute's margin) ends, its history row "kept_paused_ended".
+   */
+  queueId?: string | null
+} = {}): Promise<{ restored: string[]; kept: string[] }> {
   const columns = LOCAL_COLUMNS[payload.entityType as AdEntityType]
   const out = { restored: [] as string[], kept: [] as string[] }
   for (const c of dedupeFieldChanges(payload.fieldChanges ?? [])) {
@@ -872,8 +886,31 @@ export async function putBackRefusedWrite(payload: {
       case 'PORTFOLIO': n = (await prisma.amazonAdsPortfolio.updateMany({ where: where as Prisma.AmazonAdsPortfolioWhereInput, data: data as Prisma.AmazonAdsPortfolioUpdateManyMutationInput })).count; break
     }
     ;(n > 0 ? out.restored : out.kept).push(c.field)
+    // Negative Targeting (review S4) — the pause never reached Amazon: the hold it set ends with it.
+    if (n > 0 && payload.entityType === 'AD_TARGET' && c.field === 'status' && newValue === 'PAUSED' && oldValue === 'ENABLED') {
+      await endHoldOfUnsentPause(payload.entityId, opts.queueId ?? null)
+    }
   }
   return out
+}
+
+/**
+ * Negative Targeting (review S4) — a keyword's pause that never reached Amazon was put back to ENABLED: a kept-paused hold
+ * set with it (keptPausedAt at or after the queue row's creation, less a minute: the hold is written just before its row)
+ * ends, with its history row. An older hold — kept by an earlier pause — stays: Amazon still serves the keyword, which
+ * the sync shows. Never throws: the put-back already happened.
+ */
+async function endHoldOfUnsentPause(targetId: string, queueId: string | null): Promise<void> {
+  try {
+    const row = await prisma.adTarget.findUnique({ where: { id: targetId }, select: HOLD_SELECT })
+    if (!row?.keptPausedAt) return
+    const queued = queueId ? await prisma.outboundSyncQueue.findUnique({ where: { id: queueId }, select: { createdAt: true } }) : null
+    if (!queued || row.keptPausedAt.getTime() < queued.createdAt.getTime() - 60_000) return
+    const { endHold } = await import('./waste/hold.js')
+    await endHold({ targetId, hold: row, actor: 'automation:ads-sync-worker', why: 'the pause never reached Amazon (refused, cancelled or rejected), so there is nothing to keep paused' })
+  } catch (err) {
+    logger.warn('[kept-paused] could not end the hold of an unsent pause', { targetId, queueId, error: err instanceof Error ? err.message : String(err) })
+  }
 }
 
 /**
@@ -1758,6 +1795,32 @@ export interface AdTargetPatch {
   status?: 'ENABLED' | 'PAUSED' | 'ARCHIVED'
 }
 
+/**
+ * Negative Targeting (2026-10-11) — the hold written with no status change (waste/hold.ts), Nexus only, with its history
+ * row: `keepPaused` on a target already paused (a fresh hold, or a new end date on the one that holds), or a person's
+ * release that leaves it paused. Null when there is no such write (the caller answers "no changes").
+ */
+async function holdWithoutStatusChange(
+  args: { adTargetId: string; actor: AdsActor; changeSetId?: string | null; reason?: string | null; keepPaused?: KeepPausedAsk | null; patch: AdTargetPatch },
+  status: unknown, hold: HoldColumns, releasing: boolean,
+): Promise<MutationOutcome | null> {
+  const done = (actionLogId: string | null): MutationOutcome => ({ ok: true, outboundQueueId: null, bidHistoryIds: [], actionLogId, error: null })
+  if (args.keepPaused && String(status) === 'PAUSED') {
+    const fresh = !holdActive(hold)
+    const until = args.keepPaused.until ?? null
+    if (!fresh && (hold.keptPausedUntil?.getTime() ?? null) === (until?.getTime() ?? null)) return null
+    const after: HoldColumns = fresh ? holdData(args.actor, args.keepPaused) : { ...hold, keptPausedUntil: until }
+    await prisma.adTarget.update({ where: { id: args.adTargetId }, data: after })
+    return done(await recordHoldChange({ targetId: args.adTargetId, action: HOLD_ACTIONS.kept, actor: args.actor, before: hold, after, changeSetId: args.changeSetId, why: args.keepPaused.reason ?? args.reason }))
+  }
+  if (releasing && holdActive(hold)) {
+    await prisma.adTarget.update({ where: { id: args.adTargetId }, data: NO_HOLD })
+    await resolveTurnedOn(args.adTargetId) // review M3 — released: its open turn-on drift row closes
+    return done(await recordHoldChange({ targetId: args.adTargetId, action: HOLD_ACTIONS.released, actor: args.actor, before: hold, after: null, changeSetId: args.changeSetId, why: args.reason }))
+  }
+  return null
+}
+
 export async function updateAdTargetWithSync(args: {
   adTargetId: string
   patch: AdTargetPatch
@@ -1808,12 +1871,26 @@ export async function updateAdTargetWithSync(args: {
    * Absent: Sponsored Products only, as before.
    */
   allowSbSd?: boolean
+  /**
+   * Negative Targeting (2026-10-11) — KEEP it paused (waste/hold.ts): with a PAUSED status patch, the hold is written with
+   * the pause (by this actor, until `until` — null: always — and why). A target already paused gets the hold alone, a
+   * Nexus-only write. From then on no automatic writer may switch it back on (the lock below).
+   */
+  keepPaused?: KeepPausedAsk | null
+  /**
+   * Negative Targeting (2026-10-11) — a PERSON's explicit release of a kept-paused target (waste/hold.ts): lets a turn-on
+   * pass the lock and ends the hold; with no status change (it stays paused) it ends the hold alone. Honoured only for a
+   * person (isPersonEdit); anyone else's is refused by the lock as any turn-on.
+   */
+  releaseKeptPaused?: boolean
 }): Promise<MutationOutcome> {
   const person = isPersonEdit(args.manual, args.actor)
   const existing = await prisma.adTarget.findUnique({
     where: { id: args.adTargetId },
     select: {
       id: true,
+      ...HOLD_SELECT, // Negative Targeting — the kept-paused hold (the lock below)
+      expressionValue: true,
       externalTargetId: true,
       bidCents: true,
       suppressedFromBidCents: true, // 1e (CM-9)
@@ -1843,6 +1920,28 @@ export async function updateAdTargetWithSync(args: {
     : null
   const notSp = adProductRefused('AD_TARGET', args.adTargetId, args.actor, existing.adGroup?.campaign, sbSdWrite)
   if (notSp) return notSp
+
+  // Negative Targeting (PLAN D2) — THE kept-paused lock, in this one place every target write passes (waste/hold.ts): a
+  // write that switches a held target back on is refused for every writer but a person who releases it in so many words,
+  // and recorded like a gate refusal. Before anything else is judged, queued or written.
+  const hold: HoldColumns = { keptPausedAt: existing.keptPausedAt, keptPausedBy: existing.keptPausedBy, keptPausedUntil: existing.keptPausedUntil, keptPausedReason: existing.keptPausedReason }
+  const lockArgs = { hold, isNegative: existing.isNegative, fromStatus: existing.status, toStatus: args.patch.status, person, release: args.releaseKeptPaused === true, actor: args.actor }
+  if (keptPausedRefusal(lockArgs)) {
+    // The refusal in plain words (review M8): the holder's and the writer's names, Rome time, no ids.
+    const names = await actorNames([hold.keptPausedBy, args.actor])
+    const locked = keptPausedRefusal({ ...lockArgs, names })!
+    if (!args.quietRefusal) await logKeptPausedRefusal({ marketplace: existing.adGroup?.campaign?.marketplace, campaignId: existing.adGroup?.campaign?.id, targetId: args.adTargetId, actor: args.actor, changeSetId: args.changeSetId }, locked)
+    const h = holdOf(hold)!
+    return {
+      ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: locked,
+      keptPaused: { by: h.by, byName: holderWords(h.by, names, person ? args.actor : null), at: h.at.toISOString(), until: h.until?.toISOString() ?? null, reason: h.reason, needsRelease: true },
+    }
+  }
+  if (args.keepPaused && (args.patch.status !== 'PAUSED' || existing.isNegative)) {
+    return { ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: existing.isNegative ? 'keep_paused_not_for_a_negative' : 'keep_paused_needs_a_pause' }
+  }
+  // Released by a person: the turn-on (or the release alone) ends the hold.
+  const releasing = person && args.releaseKeptPaused === true && hold.keptPausedAt != null && args.patch.status !== 'PAUSED'
 
   // AX2.0 — Amazon has already told us this target does not exist. Enqueueing
   // again just recreates the dead write: this is the loop that produced 662
@@ -1929,6 +2028,9 @@ export async function updateAdTargetWithSync(args: {
   if (changes.length === 0) {
     // 1e (CM-9) — see keepPersonBidThroughRestore: a person confirming the bid the floor holds keeps it.
     await keepPersonBidThroughRestore('AD_TARGET', args.adTargetId, person && !args.reversal, args.patch.bidCents, existing.suppressedFromBidCents)
+    // Negative Targeting — a hold on a target already paused, or a person's release that leaves it paused: Nexus only.
+    const holdOnly = await holdWithoutStatusChange(args, existing.status, hold, releasing)
+    if (holdOnly) return holdOnly
     return { ok: true, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'no_changes' }
   }
   // 1e (CM-19) — a person's floor is Amazon's own minimum in the market (bidFloorRefusal); an engine's stays 5¢.
@@ -1980,6 +2082,11 @@ export async function updateAdTargetWithSync(args: {
   if (args.patch.bidCents != null) data.bidCents = args.patch.bidCents
   if (args.patch.status) data.status = args.patch.status
   if (replacesMemory) data.suppressedFromBidCents = args.patch.bidCents
+  // Negative Targeting — the hold is written with the pause it keeps (fresh: this pause is the one that keeps it, so its
+  // Undo releases it — also over a hold Amazon's turn-on left standing); a release ends it.
+  const keeping = args.keepPaused && args.patch.status === 'PAUSED' ? holdData(args.actor, args.keepPaused) : null
+  if (keeping) Object.assign(data, keeping)
+  if (releasing) Object.assign(data, NO_HOLD)
   await prisma.adTarget.update({ where: { id: args.adTargetId }, data })
 
   const outboundQueueId = await enqueueOutbound({
@@ -2014,6 +2121,8 @@ export async function updateAdTargetWithSync(args: {
     ...(args.patch.bidCents != null ? { bidCents: args.patch.bidCents } : {}),
     ...(args.patch.status ? { status: args.patch.status } : {}),
     ...(replacesMemory ? { suppressedFromBidCents: args.patch.bidCents } : {}),
+    // Negative Targeting — this pause set the hold: an Undo of it releases the hold (rollback.service.ts reverseOne).
+    ...(keeping ? { keptPaused: true } : {}),
   }
   const actionLogId = await writeAdvertisingActionLog({
     changeSetId: args.changeSetId ?? null,
@@ -2026,6 +2135,11 @@ export async function updateAdTargetWithSync(args: {
     payloadAfter,
     outboundQueueId,
   })
+  // Negative Targeting — the hold's own history row (kept / released), on the same change set.
+  if (keeping) await recordHoldChange({ targetId: args.adTargetId, action: HOLD_ACTIONS.kept, actor: args.actor, before: hold, after: keeping, changeSetId: args.changeSetId, why: args.keepPaused?.reason ?? args.reason })
+  if (releasing) await recordHoldChange({ targetId: args.adTargetId, action: HOLD_ACTIONS.released, actor: args.actor, before: hold, after: null, changeSetId: args.changeSetId, why: args.reason })
+  // Review M3 — a person decided (paused it again with a hold, or released it): its open turn-on drift row closes.
+  if (keeping || releasing) await resolveTurnedOn(args.adTargetId)
 
   // BID BRAIN BB-6 — a person's bid (or a request a person approved) on a campaign the brain owns becomes its hold; a
   // hand-back ends it. Inert unless the brain owns the campaign; never fails this write.
@@ -2264,7 +2378,7 @@ export async function cancelPendingMutation(outboundQueueId: string): Promise<{
   try {
     const payload = (await dispatchPayloadFromMutations(outboundQueueId).catch(() => null))
       ?? (row.payload as unknown as DispatchPayload | null)
-    if (payload?.entityType && payload.entityId) put = await putBackRefusedWrite(payload)
+    if (payload?.entityType && payload.entityId) put = await putBackRefusedWrite(payload, { queueId: outboundQueueId })
   } catch (err) {
     logger.warn('[ads-mutation] could not put back a cancelled write', {
       outboundQueueId, error: err instanceof Error ? err.message : String(err),

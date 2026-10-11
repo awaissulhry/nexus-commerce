@@ -34,7 +34,7 @@ const spy = async (action: { type: string }, _ctx: unknown, meta: { dryRun: bool
   seen.push({ type: action.type, dryRun: meta.dryRun })
   return { type: action.type, ok: true, output: { dryRun: meta.dryRun } }
 }
-for (const t of ['bid_apply', 'pause_target', 'add_negative_exact', 'mystery_action', 'auto_approve_recommendation']) ACTION_HANDLERS[t] = spy as never
+for (const t of ['bid_apply', 'pause_target', 'enable_target', 'add_negative_exact', 'add_negative_phrase', 'mystery_action', 'auto_approve_recommendation']) ACTION_HANDLERS[t] = spy as never
 
 const flush = () => new Promise((r) => setTimeout(r, 0))
 const AUTO = (actions: Array<Record<string, unknown>>, extra: Record<string, unknown> = {}) => ({
@@ -53,20 +53,49 @@ beforeEach(() => {
 })
 
 describe('run-time AUTO ceiling', () => {
-  it('an AUTO rule carrying pause_target is demoted: dry run, and it proposes instead of acting', async () => {
-    ruleFindUnique.mockResolvedValueOnce(AUTO([{ type: 'pause_target' }]))
+  it('an AUTO rule carrying enable_target is demoted: dry run, and it proposes instead of acting', async () => {
+    ruleFindUnique.mockResolvedValueOnce(AUTO([{ type: 'enable_target' }]))
     const r = await evaluateRule({ ruleId: 'rule-1', context })
     expect(r.status).toBe('DRY_RUN')
-    expect(seen).toEqual([{ type: 'pause_target', dryRun: true }])
+    expect(seen).toEqual([{ type: 'enable_target', dryRun: true }])
     expect(execData().dryRun).toBe(true)
     await flush()
     expect(genSuggestions).toHaveBeenCalledTimes(1)
   })
 
-  it('an AUTO rule that creates negatives is demoted', async () => {
+  it('an AUTO rule that creates negative phrases is demoted', async () => {
+    ruleFindUnique.mockResolvedValueOnce(AUTO([{ type: 'add_negative_phrase' }]))
+    expect((await evaluateRule({ ruleId: 'rule-1', context })).status).toBe('DRY_RUN')
+    expect(seen).toEqual([{ type: 'add_negative_phrase', dryRun: true }])
+  })
+
+  // Negative Targeting D1 (Owner 2026-10-10), review M1 — only the page's stop-waste rule (its test on the action, a pause
+  // kept paused, or a negative exact in the ad group) acts on Auto; each change is capped in the evaluator's pass.
+  it('D1 — the page\'s Auto stop-waste rule acts: a keyword pause kept paused, a negative exact in its ad group', async () => {
+    const PAUSE = { type: 'pause_target', keepPaused: true, stopWaste: { kind: 'PAUSE_KEYWORD' } }
+    const NEGATE = { type: 'add_negative_exact', scope: 'AD_GROUP', levels: ['AD_GROUP'], negative: { blocks: null }, stopWaste: { kind: 'NEGATE_TERM' } }
+    ruleFindUnique.mockResolvedValueOnce(AUTO([PAUSE]))
+    expect((await evaluateRule({ ruleId: 'rule-1', context })).status).toBe('SUCCESS')
+    ruleFindUnique.mockResolvedValueOnce(AUTO([NEGATE]))
+    expect((await evaluateRule({ ruleId: 'rule-1', context })).status).toBe('SUCCESS')
+    expect(seen).toEqual([{ type: 'pause_target', dryRun: false }, { type: 'add_negative_exact', dryRun: false }])
+  })
+
+  it('M1 — an existing Auto rule with only a pause or a negative exact but no stop-waste test is demoted, as before', async () => {
+    ruleFindUnique.mockResolvedValueOnce(AUTO([{ type: 'pause_target' }]))
+    expect((await evaluateRule({ ruleId: 'rule-1', context })).status).toBe('DRY_RUN')
     ruleFindUnique.mockResolvedValueOnce(AUTO([{ type: 'add_negative_exact' }]))
     expect((await evaluateRule({ ruleId: 'rule-1', context })).status).toBe('DRY_RUN')
-    expect(seen).toEqual([{ type: 'add_negative_exact', dryRun: true }])
+    // The page's shape, but campaign-wide (S1): demoted too.
+    ruleFindUnique.mockResolvedValueOnce(AUTO([{ type: 'add_negative_exact', scope: 'CAMPAIGN', levels: ['CAMPAIGN'], stopWaste: { kind: 'NEGATE_TERM' } }]))
+    expect((await evaluateRule({ ruleId: 'rule-1', context })).status).toBe('DRY_RUN')
+    // A builder rule whose translated block pauses (a Bid rule's THEN Pause): demoted.
+    translate.mockReturnValueOnce({ conditions: [], actions: [{ type: 'pause_target' }] })
+    ruleFindUnique.mockResolvedValueOnce(AUTO([{ type: 'bid', control: 'auto' }]))
+    expect((await evaluateRule({ ruleId: 'rule-1', context })).status).toBe('DRY_RUN')
+    expect(seen.every((x) => x.dryRun)).toBe(true)
+    await flush()
+    expect(genSuggestions).toHaveBeenCalledTimes(4)
   })
 
   it('an unclassified action is demoted (default-deny, as at set time)', async () => {
@@ -89,8 +118,8 @@ describe('run-time AUTO ceiling', () => {
     expect(execData().dryRun).toBe(false)
   })
 
-  it('judged on the TRANSLATED actions: a builder rule whose block pauses is demoted, one that bids acts', async () => {
-    translate.mockReturnValueOnce({ conditions: [], actions: [{ type: 'pause_target' }] })
+  it('judged on the TRANSLATED actions: a builder rule whose block turns a keyword on is demoted, one that bids acts', async () => {
+    translate.mockReturnValueOnce({ conditions: [], actions: [{ type: 'enable_target' }] })
     ruleFindUnique.mockResolvedValueOnce(AUTO([{ type: 'bid', control: 'auto' }]))
     expect((await evaluateRule({ ruleId: 'rule-1', context })).status).toBe('DRY_RUN')
     translate.mockReturnValueOnce({ conditions: [], actions: [{ type: 'bid_apply' }] })

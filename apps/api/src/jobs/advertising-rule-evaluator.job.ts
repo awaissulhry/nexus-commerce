@@ -499,7 +499,10 @@ export async function applyMarketplaceScope<C extends { marketplace: string | nu
     where: { domain: 'advertising', trigger, enabled: true },
     // D1 — `actions` joins the select so a BUDGET rule can be told apart from the rest. It is the
     // same test `loadBudgetRules` uses (an `adjust_ad_budget` action), kept as one definition.
-    select: { id: true, scopeMarketplace: true, scopePortfolioId: true, scopeCampaignId: true, scopeProductId: true, actions: true, lastEvaluatedAt: true },
+    select: { id: true, scopeMarketplace: true, scopePortfolioId: true, scopeCampaignId: true, scopeProductId: true, actions: true, lastEvaluatedAt: true,
+      // Negative Targeting (2026-10-11) — the ad-group grain, and the level D1's per-change gate reads.
+      // `conditions`: a builder rule's THEN (pause or bid) lives there, so the gate reads what it really produces.
+      scopeAdGroupId: true, enabled: true, dryRun: true, autonomyLevel: true, conditions: true },
   })
   /**
    * BP.P2 — the stored schedule is HONOURED. A builder rule carries
@@ -597,6 +600,13 @@ export async function applyMarketplaceScope<C extends { marketplace: string | nu
     }
   }
 
+  // Negative Targeting (2026-10-11) — a rule scoped to ONE ad group acts only on that ad group's contexts (Amazon's ad-group
+  // ids of search terms resolved once); and D1: an Auto stop-waste rule's change acts alone only inside its product's day
+  // caps and off the never-list, else it asks for that context (ads-graduation-stopwaste.ts). Nothing read when unused.
+  const { adGroupOfContext, adGroupIdentity } = await import('../services/advertising/waste-rules/contexts.js')
+  const groupOf = rules.some((r) => r.scopeAdGroupId != null) ? await adGroupIdentity(contexts) : null
+  const stopWasteGate = forceDryRun ? null : await (await import('../services/advertising/ads-graduation-stopwaste.js')).openStopWasteGate(rules)
+
   // ONE BRAIN AB-6 — the campaign of everything these contexts name and who holds those campaigns' levers, read once for
   // the pass and kept for all of it (withRulePass): a rule's own check then reads nothing; nothing at all unless the
   // brain's ceiling is live and a product is enrolled.
@@ -613,15 +623,22 @@ export async function applyMarketplaceScope<C extends { marketplace: string | nu
         scopeProductIds: expandedByRule.get(r.id) ?? null,
         // `?? null` is the "not assignment-governed" signal for every non-budget rule.
         assignedCampaignIds: assignedByRule.get(r.id) ?? null,
-      }, identity))
+      }, identity) && (r.scopeAdGroupId == null || (groupOf != null && r.scopeAdGroupId === adGroupOfContext(ctx, groupOf))))
       if (applicable.length === 0) continue
-      const results = await evaluateAllRulesForTrigger({
+      const split = stopWasteGate ? await stopWasteGate.split(applicable.map((r) => r.id), ctx) : { act: applicable.map((r) => r.id), ask: [] }
+      const results = split.act.length ? await evaluateAllRulesForTrigger({
         domain: 'advertising',
         trigger,
         context: ctx,
         forceDryRun,
-        ruleIds: applicable.map((r) => r.id),
-      })
+        ruleIds: split.act,
+      }) : []
+      if (stopWasteGate && results.length) await stopWasteGate.count(ctx, results)
+      // D1 — past its product's cap or on the never-list, the change asks (this context only, Ask me), and its run says why.
+      for (const a of split.ask) {
+        const asked = { ...ctx, stopWaste: { ...((ctx as { stopWaste?: object }).stopWaste ?? {}), asks: a.why } }
+        results.push(...await evaluateAllRulesForTrigger({ domain: 'advertising', trigger, context: asked, forceDryRun: true, ruleIds: [a.ruleId] }))
+      }
       evaluations += results.length
       matches += results.filter((r) => r.matched).length
       capped += results.filter((r) => r.status === 'CAP_EXCEEDED').length
@@ -1872,6 +1889,11 @@ export async function runAdvertisingRuleEvaluatorOnce(opts: { onLine?: (line: st
     [w, await buildHighAcosKeywordContexts(w)] as const))
   // 4f — builder Bid rules ride TARGET_PERFORMANCE, one pass per window in use (`targetPerformancePasses`).
   const targetPerformance = await targetPerformancePasses()
+  // Negative Targeting (2026-10-11) — a stop-waste rule (its action carries `stopWaste`) rides its own late-order-safe
+  // contexts, stock-out days left out (waste-rules/contexts.ts), and never its trigger's default pass.
+  const { isStopWasteRule, stopWastePasses } = await import('../services/advertising/waste-rules/contexts.js')
+  const stopWaste = await stopWastePasses()
+  const notStopWaste = (f?: (r: { id: string; actions: unknown }) => boolean) => (r: { id: string; actions: unknown }) => !isStopWasteRule(r.actions) && (f ? f(r) : true)
 
   // BUD-P3 · PLC-P5 — Budget and Placement rules that chose their own lookback (`campaignRuleWindow`).
   const budgetWindowRules = await prisma.automationRule.findMany({
@@ -1903,12 +1925,13 @@ export async function runAdvertisingRuleEvaluatorOnce(opts: { onLine?: (line: st
     ['KEYWORD_HIGH_ACOS', highAcosKeyword, (r) => bidRuleWindow(r.actions) == null],
     ...highAcosByWindow.map(([w, ctxs]): Pass => (
       ['KEYWORD_HIGH_ACOS', ctxs, (r) => bidRuleWindow(r.actions) === w])),
-    ...targetPerformance,
+    ...targetPerformance.map(([t, c, f]): Pass => [t, c, notStopWaste(f)]),
+    ...stopWaste,
     ['KEYWORD_SCALE_OPPORTUNITY', scaleOpportunity],
     ['AD_GROUP_UNDERPERFORMING', adGroupUnderperform],
     ['NEW_TO_BRAND_WINNER', newToBrandWinner],
     ['CAMPAIGN_NO_SALES', campaignNoSales],
-    ['SEARCH_TERM_WASTING', searchTermWasting],
+    ['SEARCH_TERM_WASTING', searchTermWasting, notStopWaste()],
     ['CAMPAIGN_ROAS_DECLINING', campaignRoasDeclining],
     ['KEYWORD_RISING_STAR', risingStar],
     ['SOV_BID', sovBid],
@@ -2021,6 +2044,7 @@ export async function simulateOneRule(ruleId: string): Promise<{
       scopeMarketplace: true, scopePortfolioId: true, scopeCampaignId: true, scopeProductId: true,
       // 4a — the picker list and the rule's own lookback live on the stored action.
       actions: true,
+      scopeAdGroupId: true,
     },
   })
   if (!rule || rule.domain !== 'advertising') return { ok: false, error: 'not_found' }
@@ -2080,7 +2104,13 @@ export async function simulateOneRule(ruleId: string): Promise<{
     const ownWindow = rule.trigger === 'KEYWORD_HIGH_ACOS' || rule.trigger === 'TARGET_PERFORMANCE' ? bidRuleWindow(rule.actions, rule.trigger)
       : rule.trigger === 'CAMPAIGN_PERFORMANCE_BUDGET' ? campaignRuleWindow(rule.actions)
         : null
-    contexts = ownWindow == null ? await build()
+    // Negative Targeting (2026-10-11) — a stop-waste rule is simulated on the late-order-safe contexts the tick gives it.
+    const { stopWasteParamsOf } = await import('../services/advertising/ads-graduation-stopwaste.js')
+    const { buildStopWasteContexts, TRIGGER_OF } = await import('../services/advertising/waste-rules/contexts.js')
+    const own = stopWasteParamsOf(rule.actions)
+    const stopWaste = own && TRIGGER_OF[own.kind] === rule.trigger ? own : null
+    contexts = stopWaste ? await buildStopWasteContexts(stopWaste)
+      : ownWindow == null ? await build()
       : rule.trigger === 'KEYWORD_HIGH_ACOS' ? await buildHighAcosKeywordContexts(ownWindow)
         : rule.trigger === 'TARGET_PERFORMANCE' ? await buildTargetPerformanceContexts(ownWindow)
           : await buildCampaignBudgetContexts(ownWindow)
@@ -2144,10 +2174,12 @@ export async function simulateOneRule(ruleId: string): Promise<{
     }
   }
 
+  const { adGroupOfContext, adGroupIdentity } = await import('../services/advertising/waste-rules/contexts.js')
+  const simGroupOf = rule.scopeAdGroupId != null ? await adGroupIdentity(contexts) : null
   const inScope = contexts.filter((ctx) => ruleMatchesScope(
     { ...rule, scopeProductIds: expandedProductIds, assignedCampaignIds },
     contextIdentity(ctx, extToLocal, localToPortfolio, simProductsByAdGroup, simProductsByCampaign),
-  ))
+  ) && (rule.scopeAdGroupId == null || (simGroupOf != null && rule.scopeAdGroupId === adGroupOfContext(ctx, simGroupOf))))
 
   /**
    * Register the ads action handlers before evaluating, because nothing else here guarantees it.

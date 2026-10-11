@@ -170,7 +170,7 @@ export async function listAdsRuleBoard() {
     const actionTypes = (Array.isArray(r.actions) ? r.actions : [])
       .map((a) => String((a as { type?: unknown })?.type ?? '')).filter(Boolean)
     const produced = producedActionTypes(r)
-    const ceiling = graduationCeiling({ actionTypes: produced, hasKeywordProtections: protectionCount > 0 })
+    const ceiling = graduationCeiling({ actionTypes: produced, hasKeywordProtections: protectionCount > 0, actions: r.actions })
     /**
      * 4e (review 4.7) — what the rule IS comes from what its translation writes, never from its stored type or trigger.
      * A builder rule stores its slug (`placement`), which no category claims, so every builder rule read "Other changes";

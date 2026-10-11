@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import type { Size } from '../primitives/size'
 import { createLayerStack, ownsKeys, returnFocusOrder, type ReturnFocusTarget } from './modalStack'
+import { opensDark } from '../lib/opens-dark'
 
 // Shared stack keeps background content out of keyboard and assistive-technology navigation. Bottom first: the last
 // dialog opened is on top, answers Esc and Tab, and everything else — the dialogs under it too — is inert (modalStack.ts).
@@ -133,7 +134,7 @@ export function Modal({
   const opener = useRef<HTMLElement | null>(null)
   if (open && !wasOpen.current && typeof document !== 'undefined') opener.current = document.activeElement as HTMLElement | null
   wasOpen.current = open
-  const dark = !!opener.current?.closest('.dark')
+  const dark = opensDark(opener.current)
   useEffect(() => {
     if (!open) return
     const dialog = modalRef.current
@@ -178,6 +179,8 @@ export function Modal({
         style={anchoredStyle}
         tabIndex={-1}
         className={['nds-modal', readable ? 'nds-readable' : '', dark ? 'dark' : '', size === 'sm' ? '' : size, className ?? ''].filter(Boolean).join(' ')}
+        // A light modal is a light place: a modal, menu or editor opened from inside it stays light too (lib/opens-dark).
+        data-nds-light={dark ? undefined : ''}
         role="dialog"
         aria-modal="true"
         aria-describedby={subtitle != null ? subtitleId : undefined}

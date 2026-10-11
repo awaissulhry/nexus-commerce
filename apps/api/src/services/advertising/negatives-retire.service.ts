@@ -106,6 +106,36 @@ export interface RetireRequest {
    * or Sponsored Display negative product target is archived at its own endpoint. Absent: Sponsored Products only.
    */
   allowSbSd?: boolean
+  /**
+   * Negative Targeting (2026-10-11, review S7) — never fight Harvest or the brain's funnel: a negative Harvest owns or the
+   * brain's match-type funnel keeps (ads-negative-kw.service.ts negativeOriginsOf) is refused here, for every caller, unless
+   *   force + why    a person's word, said and kept (retire-negatives force, the Negatives page's force);
+   *   undo           the caller undoes the very request that made it (undo-ad-change, a harvest's own undo);
+   *   systemDoor     the brain's own request through the system door (its plan's retire of its funnel negative).
+   * The brain's own writers (an `automation:ads-brain…` actor: duplicates, revives, the harvest pair's undo) pass as theirs.
+   */
+  owners?: { force?: boolean; why?: string | null; undo?: boolean; systemDoor?: boolean } | null
+}
+
+/** Negative Targeting — the owners whose negatives a retire refuses unless forced (review S7). */
+const HELD_ORIGINS = ['HARVEST', 'BRAIN_FUNNEL'] as const
+const HELD_WORDS: Record<(typeof HELD_ORIGINS)[number], string> = {
+  HARVEST: 'Harvest keeps it',
+  BRAIN_FUNNEL: 'The Brain keeps it',
+}
+
+/**
+ * Negative Targeting (review S7) — why this caller may not lift a negative of this owner (pure), or null. The brain's own
+ * writers, an undo of the request that made it, the brain's system door for its funnel, and a forced retire with a reason
+ * pass; everyone else is refused by the owner's name.
+ */
+export function heldOwnerRefusal(origin: string | null | undefined, actor: string, owners: RetireRequest['owners']): string | null {
+  if (!origin || !(HELD_ORIGINS as readonly string[]).includes(origin)) return null
+  if (actor.startsWith('automation:ads-brain')) return null
+  if (owners?.undo === true) return null
+  if (owners?.systemDoor === true && origin === 'BRAIN_FUNNEL') return null
+  if (owners?.force === true && (owners.why ?? '').trim()) return null
+  return `not lifted — ${HELD_WORDS[origin as (typeof HELD_ORIGINS)[number]]}. Lifting it fights its owner, who would add it again; a person lifts it only with force and a reason.`
 }
 
 export interface RetireResult {
@@ -183,6 +213,9 @@ export async function retireNegatives(req: RetireRequest): Promise<RetireResult>
   // not run the term-context read 72 times.
   const evidenceByTerm = new Map<string, AdWriteEvidence | null>()
   let gateRefused: string | null = null
+  // Negative Targeting (review S7) — each negative's owner, read once for the batch.
+  const { negativeOriginsOf } = await import('./ads-negative-kw.service.js')
+  const owners = await negativeOriginsOf(rows.map((r) => r.id))
 
   for (const row of rows) {
     const term = row.expressionValue
@@ -211,6 +244,13 @@ export async function retireNegatives(req: RetireRequest): Promise<RetireResult>
           ? `already retired here on ${row.retiredAt.toISOString().slice(0, 10)}`
           : 'already archived at Amazon — mirrored in by the sync, not retired through this product',
       })
+      continue
+    }
+
+    // Negative Targeting (review S7) — never fight Harvest or the brain's funnel (heldOwnerRefusal).
+    const held = heldOwnerRefusal(owners.get(row.id), req.actor, req.owners)
+    if (held) {
+      outcomes.push({ ...base, kind: 'refused', delivery: 'refused', reason: held })
       continue
     }
 

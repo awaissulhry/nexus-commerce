@@ -684,6 +684,8 @@ export async function graduateAdsRule(id: string, actor: AdsActor): Promise<Serv
   const ceiling = graduationCeiling({
     actionTypes: producedActionTypes(rule),
     hasKeywordProtections: protectionCount > 0,
+    // D1 — the Negative Targeting page's stop-waste shape is read from the actions themselves (ads-graduation-stopwaste.ts).
+    actions: rule.actions,
   })
   if (ceiling.maxLevel !== 'AUTO') {
     return refused(409, {
@@ -804,6 +806,8 @@ export async function adsRuleLevelRefusal(id: string, level: unknown): Promise<S
   const ceiling = graduationCeiling({
     actionTypes: producedActionTypes(rule),
     hasKeywordProtections: protectionCount > 0,
+    // D1 — the Negative Targeting page's stop-waste shape is read from the actions themselves (ads-graduation-stopwaste.ts).
+    actions: rule.actions,
   })
   // The ceiling is not overridable from here. A structural rule stays gated because of
   // what it does, not because of how much evidence has accumulated.

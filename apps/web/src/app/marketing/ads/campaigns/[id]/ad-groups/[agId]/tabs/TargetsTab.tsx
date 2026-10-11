@@ -9,7 +9,7 @@
  * per-target source, exactly as the campaign grids treat them. Edit Targets inline-edits
  * Status + Bid (PATCH /advertising/ad-targets/:id; status + bid sync to Amazon, deploy-gated).
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Button, Pill } from '@/design-system/primitives'
 import { Plus } from 'lucide-react'
 import { AddKeywordsTargetsModal } from './AddKeywordsTargetsModal'
@@ -24,6 +24,12 @@ import type { AdGroupDetailData } from '../AdGroupDetail'
 import { pillTone } from '../../../../../_shared/pillTone'
 import { Listbox, useToast } from '@/design-system/components'
 import { adsWriteMany, eachSummary, type EachResult, SEND_NOW } from '../../../../../_shared/adsWrite'
+import { LockGlyph } from '@/design-system/grid'
+import { isKeptPaused, keptPausedRefusals, keptPausedWords, withoutRefusals } from './keptPaused'
+import { useAuth } from '@/lib/auth/AuthProvider'
+import { KeptPausedConfirm } from './KeptPausedConfirm'
+import { focusText, isFocusRow, scrollToMarked } from '../focusRow'
+import focusStyles from '../focusRow.module.css'
 
 interface TargetRow {
   id: string
@@ -49,6 +55,11 @@ interface TargetRow {
   otherSales?: number | null
   otherSalesPct?: number | null
   lastSyncedAt?: string | null
+  // Negative Targeting (2026-10-11) — the kept-paused hold: no rule, Brain or plan turns it on; a person confirms.
+  keptPausedAt?: string | null
+  keptPausedBy?: string | null
+  keptPausedUntil?: string | null
+  keptPausedReason?: string | null
 }
 
 
@@ -75,8 +86,17 @@ const cpcOf = (r: TargetRow) => { const c = num(r.clicks); return c ? spendOf(r)
 const cvrOf = (r: TargetRow) => { const c = num(r.clicks); return c ? (num(r.ordersCount) / c) * 100 : 0 }
 const TYPE_LABEL: Record<string, string> = { EXACT: 'Exact', PHRASE: 'Phrase', BROAD: 'Broad', ASIN: 'Product', CATEGORY: 'Category', CATEGORY_REFINEMENT: 'Category' }
 
-export function TargetsTab({ adGroup, onRefresh }: { adGroup: AdGroupDetailData | null; onRefresh?: () => void }) {
+export function TargetsTab({ adGroup, onRefresh, focus }: { adGroup: AdGroupDetailData | null; onRefresh?: () => void; focus?: string | null }) {
   const rows = useMemo<TargetRow[]>(() => ((adGroup?.targets as TargetRow[] | undefined) ?? []).filter((t) => !t.isNegative), [adGroup])
+  const byId = useMemo(() => new Map(rows.map((r) => [r.id, r])), [rows])
+  // The person signed in: their own hold reads "You" (never a raw id, audit M8).
+  const me = useAuth().user?.id ?? null
+  // ?focus=<target id | words>: the search narrows to its words, the row is marked and scrolled into view.
+  const [focusSearch] = useState(() => focusText(focus, rows, (r) => r.id, (r) => r.expressionValue))
+  useEffect(() => { if (focus) scrollToMarked(focusStyles.focusRow) }, [focus])
+  // A turn-on the server refused because the keyword is kept paused: the person confirms the release, or not.
+  const [keptAsk, setKeptAsk] = useState<Array<{ id: string; text: string; reason: string }> | null>(null)
+  const [keptBusy, setKeptBusy] = useState(false)
   // CM-11 — every write's answer is read and shown (a bid under the floor, a bound, the write gate, a target Amazon no
   // longer has); a refused value was never written, so the refresh shows the old one again.
   const { toast } = useToast()
@@ -92,7 +112,7 @@ export function TargetsTab({ adGroup, onRefresh }: { adGroup: AdGroupDetailData 
   )
 
   const columns: GridColumn<TargetRow>[] = useMemo(() => [
-    { key: 'status', label: 'Status', metric: false, sortable: false, render: (r) => { const sp = STATUS_PILL[r.status] ?? { label: r.status, cls: '' }; return <Pill tone={pillTone(sp.cls)}>{sp.label}</Pill> }, total: '' },
+    { key: 'status', label: 'Status', metric: false, sortable: false, render: (r) => { const sp = STATUS_PILL[r.status] ?? { label: r.status, cls: '' }; return <span className={focusStyles.statusCell}>{isKeptPaused(r) && <span title={keptPausedWords(r, me)}><LockGlyph reason={keptPausedWords(r, me)} /></span>}<Pill tone={pillTone(sp.cls)}>{sp.label}</Pill></span> }, total: '' },
     { key: 'bid', label: 'Bid', render: (r) => eur(num(r.bidCents) / 100), sortValue: (r) => num(r.bidCents), filterValue: (r) => num(r.bidCents) / 100, total: '' },
     { key: 'spend', label: 'Spend', tip: METRIC_TIPS.spend, render: (r) => eur(spendOf(r)), sortValue: spendOf, filterValue: spendOf, total: (vr) => { const T = tot(vr); return eur(T.spend) } },
     { key: 'sales', label: 'Sales', tip: METRIC_TIPS.sales, render: (r) => eur(salesOf(r)), sortValue: salesOf, filterValue: salesOf, total: (vr) => { const T = tot(vr); return eur(T.sales) } },
@@ -148,9 +168,29 @@ export function TargetsTab({ adGroup, onRefresh }: { adGroup: AdGroupDetailData 
         return { id: e.id, path: `/api/advertising/ad-targets/${e.id}`, body }
       }))
       onRefresh?.()
-      report(res)
+      reportRest(askKept(res))
     },
-  }), [onRefresh, report])
+  }), [onRefresh, report, byId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Kept-paused refusals become the person's question ("Turn on anyway"); the rest are reported as before. */
+  /** The toast says only what is not already the person's question (audit S15: no "Nothing to change." under it). */
+  const reportRest = (res: EachResult) => { if (res.done.length || res.failed.length) report(res) }
+  const askKept = (res: EachResult): EachResult => {
+    const kept = keptPausedRefusals(res, byId, me)
+    if (!kept.length) return res
+    setKeptAsk(kept)
+    return withoutRefusals(res, new Set(kept.map((k) => k.id)))
+  }
+  const releaseKept = async () => {
+    if (!keptAsk || keptBusy) return
+    setKeptBusy(true)
+    try {
+      const res = await adsWriteMany(keptAsk.map((k) => ({ id: k.id, path: `/api/advertising/ad-targets/${k.id}`, body: { status: 'ENABLED', releaseKeptPaused: true, reason: 'Turned on anyway: a person released the kept-paused lock', ...SEND_NOW } })))
+      setKeptAsk(null)
+      onRefresh?.()
+      report(res)
+    } finally { setKeptBusy(false) }
+  }
 
   // Bulk actions (shown when targets are selected): Adjust Bid + Enable/Archive/Pause.
   const [bulkBusy, setBulkBusy] = useState(false)
@@ -161,7 +201,7 @@ export function TargetsTab({ adGroup, onRefresh }: { adGroup: AdGroupDetailData 
   const patchEach = async (ids: string[], body: Record<string, unknown>, clear: () => void) => {
     if (bulkBusy) return
     setBulkBusy(true)
-    try { const res = await bulkPatch('ad-targets', ids, body); clear(); onRefresh?.(); report(res) } finally { setBulkBusy(false) }
+    try { const res = await bulkPatch('ad-targets', ids, body); clear(); onRefresh?.(); if (body.status === 'ENABLED') reportRest(askKept(res)); else report(res) } finally { setBulkBusy(false) }
   }
 
   return (
@@ -177,6 +217,9 @@ export function TargetsTab({ adGroup, onRefresh }: { adGroup: AdGroupDetailData 
       columns={columns}
       filters={filters}
       showTotal
+      searchable={!!focusSearch}
+      initialSearch={focusSearch ?? undefined}
+      rowClassName={(r) => (isFocusRow(focus, r.id, r.expressionValue) ? focusStyles.focusRow : undefined)}
       defaultSort={{ key: 'spend', dir: 'desc' }}
       storageKey="h10-ag-targets-cols"
       exportable
@@ -195,6 +238,7 @@ export function TargetsTab({ adGroup, onRefresh }: { adGroup: AdGroupDetailData 
     {archiveAsk && <ArchiveConfirm count={archiveAsk.ids.length} noun={['keyword or target', 'keywords and targets']} busy={bulkBusy} onCancel={() => setArchiveAsk(null)}
       onConfirm={() => void patchEach(archiveAsk.ids, { status: 'ARCHIVED', reason: 'Bulk archive' }, archiveAsk.clear).then(() => setArchiveAsk(null))} />}
     {adjustBid && <AdjustBidModal count={adjustBid.ids.length} noun="target" bidLabel="Bid" onClose={() => setAdjustBid(null)} onApply={(bidEur) => patchEach(adjustBid.ids, { bidCents: Math.round(bidEur * 100), reason: 'Bulk adjust bid' }, adjustBid.clear).then(() => setAdjustBid(null))} />}
+    {keptAsk && <KeptPausedConfirm items={keptAsk} busy={keptBusy} onCancel={() => setKeptAsk(null)} onConfirm={() => void releaseKept()} />}
     {showAdd && adGroup && <AddKeywordsTargetsModal adGroupId={adGroup.id} adGroupName={adGroup.name} campaignName={adGroup.campaign?.name ?? ''} defaultBidEur={adGroup.defaultBidCents != null ? adGroup.defaultBidCents / 100 : 0.75} onClose={() => setShowAdd(false)} onAdded={() => onRefresh?.()} />}
     </>
   )

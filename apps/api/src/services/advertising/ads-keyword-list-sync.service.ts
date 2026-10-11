@@ -12,6 +12,9 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { liveCall, adsMode, type AdsRegion } from './ads-api-client.js'
 import { syncHoldBack, type SyncHoldBack } from './ads-sync-hold-back.js'
+// Negative Targeting (2026-10-11, PLAN D2; review M3) — a KEPT-PAUSED target Amazon reports ENABLED is never a silent
+// flip: waste/hold.ts keptPausedTurnedOn (the v1 export ingest asks the same, whichever reads it first).
+import { HOLD_SELECT, keptPausedTurnedOn } from './waste/hold.js'
 
 /** CM-16 — one log line per run when a pending edit held a column back or a row moved under the sync. */
 function logHoldBack(tag: string, hb: SyncHoldBack): void {
@@ -121,12 +124,14 @@ export async function syncTargetsForAdGroups(opts: { profileId: string; region: 
   const localRows = clauseIds.length && ags.length
     ? await prisma.adTarget.findMany({
         where: { adGroupId: { in: ags.map((g) => g.id) }, externalTargetId: { in: clauseIds }, isNegative: false },
-        select: { id: true, adGroupId: true, externalTargetId: true, updatedAt: true },
+        // Negative Targeting — with the kept-paused hold (keptPausedTurnedOn).
+        select: { id: true, adGroupId: true, externalTargetId: true, updatedAt: true, status: true, isNegative: true, expressionValue: true, ...HOLD_SELECT, adGroup: { select: { campaign: { select: { marketplace: true } } } } },
       })
     : []
   const rowsByKey = new Map<string, typeof localRows>()
   for (const r of localRows) { const k = `${r.adGroupId}|${r.externalTargetId}`; rowsByKey.set(k, [...(rowsByKey.get(k) ?? []), r]) }
   let updated = 0
+  let turnedOnElsewhere = 0
   for (const c of clauses) {
     if (!c.targetId || !c.adGroupId) continue
     const ag = agByExt.get(c.adGroupId)
@@ -135,6 +140,7 @@ export async function syncTargetsForAdGroups(opts: { profileId: string; region: 
     const bidCents = Number.isFinite(bidNum) && bidNum > 0 ? Math.round(bidNum * 100) : ag.defaultBidCents
     for (const row of rowsByKey.get(`${ag.id}|${c.targetId}`) ?? []) {
       try {
+        turnedOnElsewhere += await keptPausedTurnedOn(row, STATE_MAP(c.state), row.adGroup?.campaign?.marketplace ?? null)
         const data = await hb.without(row.id, row.updatedAt, { bidCents, status: STATE_MAP(c.state), lastSyncedAt: new Date(), lastSyncStatus: 'SUCCESS' as const, lastSyncError: null })
         const r = await prisma.adTarget.updateMany({ where: { id: row.id, updatedAt: row.updatedAt }, data })
         if (r.count) updated += r.count
@@ -151,7 +157,7 @@ export async function syncTargetsForAdGroups(opts: { profileId: string; region: 
     const seen = new Set(clauses.map((c) => c.targetId).filter((x): x is string => !!x))
     archived = await archiveMissingTargets([...agByExt.values()].map((g) => g.id), seen, { kind: { in: ['PRODUCT', 'AUTO', 'CATEGORY'] }, isNegative: false })
   }
-  logger.info('[target-list-sync] done', { clauses: clauses.length, updated, archived, adGroups: externalAdGroupIds.length })
+  logger.info('[target-list-sync] done', { clauses: clauses.length, updated, archived, adGroups: externalAdGroupIds.length, ...(turnedOnElsewhere ? { keptPausedTurnedOnElsewhere: turnedOnElsewhere } : {}) })
   return { updated, archived, clauses: clauses.length }
 }
 
@@ -178,6 +184,7 @@ export async function syncKeywordsForAdGroups(opts: { profileId: string; region:
   ]
   const hb = await syncHoldBack('AD_TARGET') // CM-16 — see ads-sync-hold-back.ts
   let upserted = 0
+  let turnedOnElsewhere = 0
   for (const r of rows) {
     if (!r.ext || !r.agExt) continue
     const localAg = agMap.get(r.agExt)
@@ -191,8 +198,13 @@ export async function syncKeywordsForAdGroups(opts: { profileId: string; region:
       lastSyncedAt: new Date(), lastSyncStatus: 'SUCCESS' as const, lastSyncError: null,
     }
     try {
-      const existing = await prisma.adTarget.findFirst({ where: { externalTargetId: r.ext, adGroupId: localAg }, select: { id: true, updatedAt: true } })
+      const existing = await prisma.adTarget.findFirst({
+        where: { externalTargetId: r.ext, adGroupId: localAg },
+        // Negative Targeting — with the kept-paused hold (keptPausedTurnedOn).
+        select: { id: true, updatedAt: true, status: true, isNegative: true, externalTargetId: true, expressionValue: true, ...HOLD_SELECT, adGroup: { select: { campaign: { select: { marketplace: true } } } } },
+      })
       if (existing) {
+        if (!r.neg) turnedOnElsewhere += await keptPausedTurnedOn(existing, data.status, existing.adGroup?.campaign?.marketplace ?? null)
         const w = await prisma.adTarget.updateMany({ where: { id: existing.id, updatedAt: existing.updatedAt }, data: await hb.without(existing.id, existing.updatedAt, data) })
         if (!w.count) { hb.raced++; continue }
       } else await prisma.adTarget.create({ data })
@@ -211,7 +223,7 @@ export async function syncKeywordsForAdGroups(opts: { profileId: string; region:
     // negatives come from a different list, so they're excluded from this snapshot's deletion scope).
     archived = await archiveMissingTargets([...agMap.values()], seenExt, { kind: 'KEYWORD', OR: [{ isNegative: false }, { negativeLevel: 'AD_GROUP' }] })
   }
-  logger.info('[kw-list-sync] done', { positives: pos.length, negatives: neg.length, upserted, archived, adGroups: externalAdGroupIds.length })
+  logger.info('[kw-list-sync] done', { positives: pos.length, negatives: neg.length, upserted, archived, adGroups: externalAdGroupIds.length, ...(turnedOnElsewhere ? { keptPausedTurnedOnElsewhere: turnedOnElsewhere } : {}) })
   return { positives: pos.length, negatives: neg.length, upserted, archived, adGroups: externalAdGroupIds.length, mode: adsMode() }
 }
 

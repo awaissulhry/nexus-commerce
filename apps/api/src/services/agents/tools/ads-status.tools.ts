@@ -28,6 +28,17 @@
  *                lets above ask (IRREVERSIBLE_AUTO): by default it runs nothing alone, raising its level and its limits
  *                takes two separate codes (claude-trust.service.ts), and the advice is to keep it at ask. No undo.
  *
+ * Negative Targeting (2026-10-11, PLAN D2) — "kept paused" (advertising/waste/hold.ts):
+ *   pause-ads    keepPaused: true (and keepUntil: a date, or null/absent = always) also KEEPS each keyword and product
+ *                target paused: from then on no rule, engine, the ads brain or Claude by rule may switch it back on (the lock
+ *                in updateAdTargetWithSync); one already paused gets the hold alone (Nexus only). keepPaused: false on one
+ *                that is kept paused ends its hold and leaves it paused — a person's decision, never by rule. Undo: enable-ads
+ *                with releaseKeepPaused (what it paused), or the hold ended (what it only kept).
+ *   enable-ads   a kept-paused keyword is refused by name unless asked with releaseKeepPaused: true — then the preview
+ *                says who keeps it and since when, it lifts the hold and lets it spend again, and only a person approves it
+ *                (never by rule). With releaseKeepPaused, one Amazon already serves (switched on outside Nexus) has its hold
+ *                ended alone: it runs as it is.
+ *
  * One request names at most 100 ads. An ad already where it is asked to go is left as it is (counted); an ad Nexus cannot
  * change (not found, not Sponsored Products, archived, a draft, not at Amazon, gone at Amazon, a negative, or — for an
  * enable — not paused by a Claude request, unless asked with includePeoplesPauses; paused by a rule still on, always)
@@ -49,6 +60,7 @@ import { resolveAutonomy } from '../../advertising/ads-autonomy.js'
 import { STATUS_CAMPAIGN_SELECT, adGroupStatuses, adGroupsForStatus, externalStatusChanges, highestServingBids, servingUnder } from '../../advertising/ads-status-lookup.service.js'
 import type { AgentTool, ToolChange, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
 import { BRAIN_STATE_ACTOR } from '../../advertising/ads-write-gate.js'
+import { HOLD_SELECT, holdOf, holdWords, keepUntilOf, type HoldColumns, type KeptPaused } from '../../advertising/waste/hold.js'
 
 /** The most ads one request names. */
 const MAX_ADS = 100
@@ -93,6 +105,12 @@ interface StatusArgs {
   buildRunId?: string
   /** enable-ads, W4-2 — also a pause no Claude request made (liftOf): approved only with the approver's code. */
   includePeoplesPauses?: boolean
+  /** pause-ads, Negative Targeting — keep each keyword and target paused (true), or end the hold of one kept paused (false). */
+  keepPaused?: boolean
+  /** pause-ads, Negative Targeting — the hold's end (an ISO date); null or absent: always. */
+  keepUntil?: string | null
+  /** enable-ads, Negative Targeting — a person's explicit release of a kept-paused keyword (it spends again). */
+  releaseKeepPaused?: boolean
 }
 
 
@@ -110,6 +128,8 @@ interface Ad {
   cannot: string | null
   /** W4-11 — the status write as the gate judges it for a Sponsored Brands / Display campaign (campaigns and targets). */
   write?: AdWrite | null
+  /** Negative Targeting — a keyword's or target's kept-paused hold as it holds now (waste/hold.ts); null: none. */
+  hold?: KeptPaused | null
 }
 
 /** An ad as a change record stores it: enough to name it again in an undo. */
@@ -119,6 +139,15 @@ interface StatusItem {
   status: string
   adGroupId?: string
   product?: string
+  /** Negative Targeting — this request set the kept-paused hold on it (pause-ads keepPaused). */
+  kept?: true
+  /** Negative Targeting — only its hold changed (it was paused already, or Amazon serves it already): no status write. */
+  holdOnly?: true
+  /** Negative Targeting — this request ended its hold (enable-ads releaseKeepPaused, pause-ads keepPaused: false). */
+  released?: true
+  /** Polish M3 — only the end of a hold that already held changed: the end it had before (ISO; null = Always). */
+  endOnly?: true
+  keptUntilBefore?: string | null
 }
 
 const CAMPAIGN_SELECT = STATUS_CAMPAIGN_SELECT
@@ -157,7 +186,7 @@ async function loadAds(a: StatusArgs, kind: Kind): Promise<{ ads: Ad[]; missing:
     targetIds.length
       ? prisma.adTarget.findMany({
         where: { id: { in: targetIds } },
-        select: { id: true, kind: true, expressionValue: true, status: true, isNegative: true, externalTargetId: true, orphanedAt: true, adGroupId: true, adGroup: { select: { campaign: { select: CAMPAIGN_SELECT } } } },
+        select: { id: true, kind: true, expressionValue: true, status: true, isNegative: true, externalTargetId: true, orphanedAt: true, adGroupId: true, ...HOLD_SELECT, adGroup: { select: { campaign: { select: CAMPAIGN_SELECT } } } },
       })
       : [],
     productAds.length
@@ -194,7 +223,7 @@ async function loadAds(a: StatusArgs, kind: Kind): Promise<{ ads: Ad[]; missing:
     const cannot = t.isNegative
       ? 'it is a negative keyword: it blocks a search term and serves no ad (undo-ad-change retires one Claude created)'
       : cannotChange(t.adGroup.campaign, String(t.status), t.externalTargetId, !!t.orphanedAt, write)
-    out.push({ level: 'target', id, label, status: String(t.status), campaign: campaignOf(t.adGroup.campaign), adGroupId: t.adGroupId, cannot, write })
+    out.push({ level: 'target', id, label, status: String(t.status), campaign: campaignOf(t.adGroup.campaign), adGroupId: t.adGroupId, cannot, write, hold: t.isNegative ? null : holdOf(t as HoldColumns) })
   }
   for (const p of productAds) {
     // The SKU first, then the ASIN: a seller's ad is named by its SKU. The same ad named twice is one ad.
@@ -209,7 +238,7 @@ async function loadAds(a: StatusArgs, kind: Kind): Promise<{ ads: Ad[]; missing:
   return { ads: out, missing }
 }
 
-const itemOf = (ad: Ad): StatusItem => ({ level: ad.level, id: ad.id, status: ad.status, ...(ad.level === 'productAd' ? { adGroupId: ad.adGroupId ?? '', product: ad.product ?? '' } : {}) })
+const itemOf = (ad: Ad, flags: Pick<StatusItem, 'kept' | 'holdOnly' | 'released' | 'endOnly' | 'keptUntilBefore'> = {}): StatusItem => ({ level: ad.level, id: ad.id, status: ad.status, ...(ad.level === 'productAd' ? { adGroupId: ad.adGroupId ?? '', product: ad.product ?? '' } : {}), ...flags })
 
 /** "a, b and 3 more". */
 function named(list: string[], shown = 3): string {
@@ -438,9 +467,13 @@ async function reachOf(ads: Ad[], kind: Kind): Promise<{ reach: StoredReach } | 
   return { reach: profiles.size ? { reach: 'live', profileId: [...profiles].sort().join(',') } : { reach: 'sandbox' } }
 }
 
-/** A request decided: its preview, and every ad it changes (all of them, not only the lines shown). */
-async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolContext, 'approvalId'> & Partial<Pick<ToolContext, 'via'>>): Promise<{ result: ToolResult; changing: Ad[] }> {
-  const refuse = (error: string) => ({ result: { ok: false, error } as ToolResult, changing: [] as Ad[] })
+/**
+ * A request decided: its preview, every ad whose status it changes (all of them, not only the lines shown), and —
+ * Negative Targeting — every keyword or target whose kept-paused hold alone it changes (`holdOnly`: kept paused from now
+ * while already paused, or its hold ended while it stays as it is). `keepUntil`: the hold's end a pause asks for.
+ */
+async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolContext, 'approvalId'> & Partial<Pick<ToolContext, 'via'>>): Promise<{ result: ToolResult; changing: Ad[]; holdOnly: Ad[]; keepUntil: Date | null }> {
+  const refuse = (error: string) => ({ result: { ok: false, error } as ToolResult, changing: [] as Ad[], holdOnly: [] as Ad[], keepUntil: null })
   let a = args as StatusArgs
   if (kind === 'archive' && a.buildRunId) {
     // PB-5a — the campaigns a playbook build made that are not archived yet (refused while the build runs). B-1 — or a
@@ -472,7 +505,33 @@ async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolC
   }
   const changing = ads.filter((ad) => from.includes(ad.status))
   const already = ads.filter((ad) => ad.status === to)
-  if (!changing.length) return refuse(`Nothing would change: ${named(already.map((ad) => ad.label))} ${already.length === 1 ? 'is' : 'are'} already ${STATUS_WORDS[to].toLowerCase()}.`)
+
+  // Negative Targeting (PLAN D2) — the kept-paused hold (advertising/waste/hold.ts).
+  const keepAsk = kind === 'pause' && typeof a.keepPaused === 'boolean' ? a.keepPaused : undefined
+  let keepUntil: Date | null = null
+  if (keepAsk === true) {
+    const until = keepUntilOf(a.keepUntil)
+    if ('refusal' in until) return refuse(`Not queued: ${until.refusal}.`)
+    keepUntil = until.until
+  } else if (kind === 'pause' && a.keepUntil != null) return refuse('Not queued: keepUntil is when a hold ends: ask with keepPaused: true.')
+  const isTarget = (ad: Ad) => ad.level === 'target'
+  const sameEnd = (h: KeptPaused | null | undefined) => (h?.until?.getTime() ?? null) === (keepUntil?.getTime() ?? null)
+  // pause-ads keepPaused — a keyword or target already paused gets the hold alone (a fresh one, or the new end).
+  const keepOnly = keepAsk === true ? already.filter((ad) => isTarget(ad) && !(ad.hold && sameEnd(ad.hold))) : []
+  // pause-ads keepPaused: false — one already paused and kept paused: its hold ends, it stays paused (a person decides).
+  const unkeep = keepAsk === false ? already.filter((ad) => isTarget(ad) && ad.hold) : []
+  // enable-ads — a kept-paused keyword is refused by name, unless a person releases it (releaseKeepPaused).
+  const release = kind === 'enable' && a.releaseKeepPaused === true
+  const heldOn = kind === 'enable' ? changing.filter((ad) => ad.hold) : []
+  if (heldOn.length && !release) {
+    return refuse(`Not queued: ${named(heldOn.map((ad) => `${ad.label} is ${holdWords(ad.hold!)}`))}. enable-ads switches a kept-paused keyword back on only when asked with `
+      + 'releaseKeepPaused: true: a person approves it (it spends again), never a rule.')
+  }
+  // enable-ads releaseKeepPaused — one Amazon serves already (switched on outside Nexus): its hold ends alone, it runs as it is.
+  const accept = release ? already.filter((ad) => isTarget(ad) && ad.hold) : []
+  const holdOnly = [...keepOnly, ...unkeep, ...accept]
+  const releases = heldOn.length + unkeep.length + accept.length
+  if (!changing.length && !holdOnly.length) return refuse(`Nothing would change: ${named(already.map((ad) => ad.label))} ${already.length === 1 ? 'is' : 'are'} already ${STATUS_WORDS[to].toLowerCase()}${keepAsk === true ? ' and kept paused' : ''}.`)
 
   // enable-ads — what a Claude request paused. W4-2 — asked with includePeoplesPauses, also a pause no Claude request made
   // (liftOf): approved only with the approver's code. Never a pause of a rule that is still on, or of an engine.
@@ -481,10 +540,26 @@ async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolC
   // at PROPOSE, auto-undo's put-back) with a normal approval; by anyone else, only as someone else's pause (the code).
   if (ctx.via === 'system') for (const [key, p] of pausedBy) if (p.by === 'brain') pausedBy.set(key, { ...p, own: true })
   const whoPaused = (ad: Ad): PausedBy => pausedBy.get(`${ad.level}:${ad.id}`) ?? { by: 'none', lastRecorded: null }
-  const notClaude = kind === 'enable' ? changing.filter((ad) => liftOf(whoPaused(ad)) !== 'free') : []
-  const blocked = notClaude.filter((ad) => liftOf(whoPaused(ad)) === 'refused')
+  /**
+   * Negative Targeting (review S5) — a KEPT-PAUSED keyword a person releases (releaseKeepPaused): asked through a page (the
+   * app door), the person's review IS the decision — free, whoever paused it, a rule still on included (the preview warns
+   * that the rule may pause it again). Asked by Claude, the code rule stands: someone else's pause, and now a rule's still
+   * on too, needs the approver's code (never by rule).
+   */
+  const lift = (ad: Ad): 'free' | 'code' | 'refused' => {
+    const base = liftOf(whoPaused(ad))
+    if (kind !== 'enable' || !release || !ad.hold) return base
+    if (ctx.via === 'app') return 'free'
+    return base === 'refused' ? 'code' : base
+  }
+  const notClaude = kind === 'enable' ? changing.filter((ad) => lift(ad) !== 'free') : []
+  const blocked = notClaude.filter((ad) => lift(ad) === 'refused')
   // The ads only the approver's authenticator code switches back on (needsCode).
-  const coded = notClaude.filter((ad) => liftOf(whoPaused(ad)) === 'code')
+  const coded = notClaude.filter((ad) => lift(ad) === 'code')
+  // Review S5 — a released keyword a rule that is still on paused: its next run may pause it again (and keep it paused).
+  const rulePausesAgain = kind === 'enable' && release
+    ? changing.filter((ad) => { const p = whoPaused(ad); return ad.hold && p.by === 'rule' && p.rule?.state === 'on' })
+    : []
   const include = kind === 'enable' && a.includePeoplesPauses === true
   if (notClaude.length && (!include || blocked.length)) {
     const said = (list: Ad[]) => named(list.map((ad) => `${ad.label}: ${pausedByWords(whoPaused(ad))}`))
@@ -494,7 +569,7 @@ async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolC
       + (coded.length ? ` To switch back on a pause no Claude request made, ask again with includePeoplesPauses: true: a person then approves it in Nexus${doorNeedsCode('enable-ads: includePeoplesPauses') ? ' with their authenticator code' : ''}, and it never runs by rule.` : '')
       + blockedWords)
   }
-  const needsCode = (ad: Ad) => kind === 'enable' && liftOf(whoPaused(ad)) === 'code'
+  const needsCode = (ad: Ad) => kind === 'enable' && lift(ad) === 'code'
 
   const reach = await reachOf(changing, kind)
   if ('refused' in reach) return refuse(reachRefusal(reach.refused))
@@ -505,10 +580,14 @@ async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolC
   ])
 
   // The facts the business's rule is judged on (strategy-bound): a campaign's status starts or stops its daily budget.
-  const items: KitItem[] = changing.map((ad) => ({
-    entity: { kind: ad.level, id: ad.id },
-    change: { field: 'status', from: ad.status, to, ...(ad.level === 'campaign' ? { dailyBudgetCents: ad.campaign.dailyBudgetCents } : {}) },
-  }))
+  const items: KitItem[] = [
+    ...changing.map((ad) => ({
+      entity: { kind: ad.level, id: ad.id },
+      change: { field: 'status', from: ad.status, to, ...(ad.level === 'campaign' ? { dailyBudgetCents: ad.campaign.dailyBudgetCents } : {}) },
+    }) as KitItem),
+    // Negative Targeting — a hold changed alone is Nexus only.
+    ...holdOnly.map((ad) => ({ entity: { kind: ad.level, id: ad.id }, change: { field: 'automation' }, nexusOnly: true }) as KitItem),
+  ]
   // AA-W2-6's kit: the limit facts, the note, and the write gate's answer as a run by rule (one write per campaign).
   // W4-11 — with each campaign's write as the gate judges it for an SB/SD campaign (its first ad's, as reachOf asks).
   const writes: RuleWrite[] = [...new Map(changing.map((ad) => [ad.campaign.id, ad])).values()].map(({ campaign: c, write }) => ({
@@ -534,7 +613,8 @@ async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolC
   const holdsWords = holds && (holds.adGroups || holds.targets || holds.productAds)
     ? [holds.adGroups ? plural(holds.adGroups, LEVEL_WORDS.adGroup) : '', holds.targets ? plural(holds.targets, LEVEL_WORDS.target) : '', holds.productAds ? plural(holds.productAds, LEVEL_WORDS.productAd) : ''].filter(Boolean).join(', ')
     : ''
-  const effect = kind === 'archive'
+  // Negative Targeting — a request that only changes holds says only that (holdEffect below).
+  const effect = !changing.length ? '' : kind === 'archive'
     ? `Archives ${plural(changing.length, ['ad', 'ads'])} at Amazon, for good (${countWords}): ${named(changing.map((ad) => ad.label))}. ${PERMANENT}`
       + (holdsWords ? ` With them, everything they hold stops for good: ${holdsWords}.` : '')
       + (budgetWords ? ` ${budgetWords} of daily budget stops spending.` : '')
@@ -554,16 +634,40 @@ async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolC
       + '. They serve again about an hour after Amazon takes the change.'
       + (already.length ? ` ${plural(already.length, ['ad', 'ads'])} already enabled ${already.length === 1 ? 'is' : 'are'} left as ${already.length === 1 ? 'it is' : 'they are'}.` : '')
 
+  // Negative Targeting — the hold, in words, after the status change it rides on.
+  const keptWords = keepUntil ? `until ${keepUntil.toISOString().slice(0, 10)}` : 'always'
+  const keeps = keepAsk === true ? changing.filter(isTarget).length + keepOnly.length : 0
+  const holdEffect = [
+    keeps ? ` Keeps ${plural(keeps, LEVEL_WORDS.target)} paused (${keptWords}): no rule, engine, the ads brain or Claude by rule switches ${keeps === 1 ? 'it' : 'them'} back on; only a person releases ${keeps === 1 ? 'it' : 'them'}, in a review that says ${keeps === 1 ? 'it spends' : 'they spend'} again.` : '',
+    keepOnly.length ? ` ${plural(keepOnly.length, LEVEL_WORDS.target)} already paused ${keepOnly.length === 1 ? 'is' : 'are'} kept paused from now (Nexus only: nothing is sent to Amazon).` : '',
+    keepAsk === true && changing.some((ad) => !isTarget(ad)) ? ' A campaign, an ad group or a product ad is paused without a hold: the hold is for keywords and product targets.' : '',
+    unkeep.length ? ` Ends the hold of ${plural(unkeep.length, LEVEL_WORDS.target)} kept paused (${named(unkeep.map((ad) => `${ad.label}: ${holdWords(ad.hold!)}`))}): ${unkeep.length === 1 ? 'it stays' : 'they stay'} paused, but rules, the ads brain and Claude may switch ${unkeep.length === 1 ? 'it' : 'them'} on again. A person decides it, never a rule.` : '',
+    heldOn.length ? ` Releases ${plural(heldOn.length, LEVEL_WORDS.target)} kept paused (${named(heldOn.map((ad) => `${ad.label}: ${holdWords(ad.hold!)}`))}): ${heldOn.length === 1 ? 'it spends' : 'they spend'} again. A person decides it, never a rule.` : '',
+    rulePausesAgain.length ? ` Warning: ${named(rulePausesAgain.map((ad) => `${ad.label}: the rule "${(whoPaused(ad) as RulePause).rule?.name ?? '?'}" that paused it is still on, and its next run may pause it again (and keep it paused)`))}; switch the rule off (or narrow it) to keep ${rulePausesAgain.length === 1 ? 'it' : 'them'} running.` : '',
+    accept.length ? ` Ends the hold of ${plural(accept.length, LEVEL_WORDS.target)} Amazon already serves (switched on outside Nexus: ${named(accept.map((ad) => ad.label))}): ${accept.length === 1 ? 'it runs' : 'they run'} as ${accept.length === 1 ? 'it is' : 'they are'} (Nexus only). A person decides it, never a rule.` : '',
+  ].join('')
+  const holdLine = (ad: Ad) => ({
+    label: ad.label,
+    marketplace: ad.campaign.marketplace,
+    fromLabel: ad.hold ? `${STATUS_WORDS[ad.status] ?? ad.status}, kept paused` : STATUS_WORDS[ad.status] ?? ad.status,
+    toLabel: keepAsk === true ? `${STATUS_WORDS[ad.status] ?? ad.status}, kept paused (${keptWords})` : `${STATUS_WORDS[ad.status] ?? ad.status} (hold ended)`,
+    ...(ad.hold ? { keptPaused: holdWords(ad.hold) } : {}),
+    holdOnly: true,
+    ...(keepAsk === true ? {} : { releasesHold: true }),
+  })
   const lines = changing.map((ad) => ({
     label: ad.label,
     marketplace: ad.campaign.marketplace,
     fromLabel: STATUS_WORDS[ad.status] ?? ad.status,
     toLabel: STATUS_WORDS[to],
+    ...(kind === 'pause' && keepAsk === true && isTarget(ad) ? { keepPaused: { until: keepUntil?.toISOString() ?? null } } : {}),
+    ...(kind === 'enable' && ad.hold ? { keptPaused: holdWords(ad.hold), releasesHold: true } : {}),
+    ...(rulePausesAgain.includes(ad) ? { warning: `the rule "${(whoPaused(ad) as RulePause).rule?.name ?? '?'}" that paused it is still on: its next run may pause it again (and keep it paused)` } : {}),
     ...(kind === 'enable' ? { pausedBy: pausedByWords(whoPaused(ad)) } : {}),
     // W4-2 — a pause no Claude request made: only the approver's code switches it back on.
     ...(needsCode(ad) ? { needsCode: true } : {}),
     ...(kind === 'enable' && bids.get(`${ad.level}:${ad.id}`) != null ? { highestBidCents: bids.get(`${ad.level}:${ad.id}`), currency: ad.campaign.currency } : {}),
-  }))
+  })).concat(holdOnly.map(holdLine) as never[])
   // Every ad named, its status, and (for an enable) the pause it lifts and the spend it restarts: a move on any of them
   // after approval is caught, not only on the lines shown. A Claude pause by its request (as before W4-2), any other by
   // who paused it and when.
@@ -574,17 +678,25 @@ async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolC
   const basis = createHash('sha256').update(ads.map((ad) => [
     ad.level, ad.id, ad.status,
     ...(kind === 'enable' && from.includes(ad.status) ? [pauseOf(ad), ad.level === 'campaign' ? ad.campaign.dailyBudgetCents : '', bids.get(`${ad.level}:${ad.id}`) ?? ''] : []),
-  ].join(':')).join('|')).digest('base64url').slice(0, 32)
+    // Negative Targeting — a hold set, moved or ended after approval moves the basis (absent: byte-identical as before).
+    ...(ad.hold ? [`hold=${ad.hold.at.toISOString()}|${ad.hold.until?.toISOString() ?? ''}`] : []),
+  ].join(':')).join('|') + (keepAsk === undefined ? '' : `|keep=${keepAsk}:${keepUntil?.toISOString() ?? ''}`)).digest('base64url').slice(0, 32)
 
   return {
     changing,
+    holdOnly,
+    keepUntil,
     result: {
       ok: true,
       preview: {
         action: TOOL[kind],
-        summary: effect,
+        summary: (effect + holdEffect).trim(),
         ...(one ? { campaign: { id: one.id, name: one.name, marketplace: one.marketplace } } : {}),
-        totals: { changing: changing.length, [kind === 'pause' ? 'alreadyPaused' : kind === 'enable' ? 'alreadyEnabled' : 'alreadyArchived']: already.length },
+        totals: { changing: changing.length, [kind === 'pause' ? 'alreadyPaused' : kind === 'enable' ? 'alreadyEnabled' : 'alreadyArchived']: already.length, ...(holdOnly.length ? { holdOnly: holdOnly.length } : {}) },
+        // Negative Targeting — how many it keeps paused, and how many kept-paused holds it ends (a person's decision, never a rule).
+        ...(keeps ? { keepsPaused: keeps, keepUntil: keepUntil?.toISOString() ?? null } : {}),
+        ...(releases ? { releasesKeptPaused: releases } : {}),
+        ...(rulePausesAgain.length ? { rulePausesAgain: rulePausesAgain.map((ad) => ({ label: ad.label, rule: (whoPaused(ad) as RulePause).rule?.name ?? null, ruleId: (whoPaused(ad) as RulePause).rule?.id ?? null })) } : {}),
         changes: lines.slice(0, LINES_SHOWN),
         ...(lines.length > LINES_SHOWN ? { moreChanges: lines.length - LINES_SHOWN } : {}),
         ...(holds ? { holds } : {}),
@@ -607,7 +719,7 @@ async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolC
           : {}),
         basis,
         reach: stored,
-        reachNote: reachNote(stored),
+        reachNote: changing.length ? reachNote(stored) : 'Nexus only: only a kept-paused hold changes, so nothing is sent to Amazon.',
         warning: kind === 'archive'
           ? `${PERMANENT} To stop an ad for a while, lower its bids (suppress-campaign) or pause it (pause-ads) instead.`
           : kind === 'pause'
@@ -615,7 +727,7 @@ async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolC
           : 'Spend resumes: these ads compete in auctions again with the bids and budgets shown.'
             + (coded.length ? ` ${coded.length === changing.length ? (coded.length === 1 ? 'No Claude request paused it' : 'No Claude request paused them') : `${coded.length} of them no Claude request paused`} (each line says who did): ${doorNeedsCode('enable-ads: includePeoplesPauses') ? 'approving needs the approver\'s authenticator code' : 'a person approves it, never a rule'}.` : ''),
         ...ruleFacts,
-        effect,
+        effect: (effect + holdEffect).trim(),
       },
     },
   }
@@ -671,6 +783,17 @@ function peoplesPauseRefusal(preview: unknown): string | null {
 }
 
 /**
+ * Negative Targeting (PLAN D2) — a request that ends a kept-paused hold (enable-ads releaseKeepPaused, pause-ads
+ * keepPaused: false) is a person's decision: never by the business's rule, whatever its level and limits.
+ */
+function holdReleaseRefusal(preview: unknown): string | null {
+  const n = (preview as { releasesKeptPaused?: unknown } | null)?.releasesKeptPaused
+  return typeof n === 'number' && n > 0
+    ? `it ends the kept-paused hold of ${plural(n, LEVEL_WORDS.target)}: only a person releases a kept-paused keyword, never a rule; a person decides`
+    : null
+}
+
+/**
  * enable-ads — a restart never brings back a bid above the ads strategy's highest bid where it lands: each ad's highest
  * bid serving again against the band of its scope (an ad group or a campaign takes the safer value across its products).
  */
@@ -722,16 +845,46 @@ function argsOf(items: StatusItem[]): Record<string, unknown> {
   }
 }
 
-/** C2 — undo of a pause asks enable-ads for the same ads, and the other way round. */
-function undoBy(tool: string, status: string, why: string): ToolUndo {
-  return {
-    current: statusesNow,
-    request(change) {
-      const items = (((change.before as { items?: StatusItem[] } | null)?.items) ?? []).filter((i) => i.status === status)
-      if (!items.length) return { refusal: 'This change does not record the ads it changed.' }
-      return { tool, args: { ...argsOf(items), why } }
-    },
-  }
+/**
+ * C2 + Negative Targeting — undo of a pause: enable-ads for what it paused (with releaseKeepPaused when it kept them
+ * paused: the release of its own hold); a request that only KEPT paused ones paused is undone by ending those holds
+ * (pause-ads keepPaused: false), and one that only ended holds by keeping them paused again.
+ */
+const PAUSE_UNDO: ToolUndo = {
+  current: statusesNow,
+  request(change) {
+    const items = ((change.before as { items?: StatusItem[] } | null)?.items) ?? []
+    const paused = items.filter((i) => i.status === 'ENABLED' && !i.holdOnly)
+    if (paused.length) return { tool: TOOL.enable, args: { ...argsOf(paused), ...(paused.some((i) => i.kept) ? { releaseKeepPaused: true } : {}), why: 'undo of a pause' } }
+    // Polish M3 — only the end of a hold changed: the old end back (one end per undo: the page's rows are one step each).
+    const ends = items.filter((i) => i.holdOnly && i.kept && i.endOnly)
+    if (ends.length) {
+      const before = ends[0].keptUntilBefore ?? null
+      const same = ends.filter((i) => (i.keptUntilBefore ?? null) === before)
+      return { tool: TOOL.pause, args: { ...argsOf(same), keepPaused: true, ...(before ? { keepUntil: before } : {}), why: `undo: kept paused ${before ? `until ${before.slice(0, 10)}` : 'always'} again` } }
+    }
+    const kept = items.filter((i) => i.holdOnly && i.kept)
+    if (kept.length) return { tool: TOOL.pause, args: { ...argsOf(kept), keepPaused: false, why: 'undo of a hold: they stay paused, no longer kept paused' } }
+    const ended = items.filter((i) => i.holdOnly && i.released)
+    if (ended.length) return { tool: TOOL.pause, args: { ...argsOf(ended), keepPaused: true, why: 'undo of a hold ended: kept paused again' } }
+    return { refusal: 'This change does not record the ads it changed.' }
+  },
+}
+
+/**
+ * C2 + Negative Targeting — undo of an enable: pause-ads for what it switched on (kept paused again when every one of
+ * them was released from a hold). A request that only ended the hold of ads Amazon already served has nothing to put
+ * back: they run as they did.
+ */
+const ENABLE_UNDO: ToolUndo = {
+  current: statusesNow,
+  request(change) {
+    const items = ((change.before as { items?: StatusItem[] } | null)?.items) ?? []
+    const enabled = items.filter((i) => i.status === 'PAUSED' && !i.holdOnly)
+    if (enabled.length) return { tool: TOOL.pause, args: { ...argsOf(enabled), ...(enabled.every((i) => i.released) ? { keepPaused: true } : {}), why: 'undo of an enable' } }
+    if (items.some((i) => i.holdOnly)) return { refusal: 'This change only ended the kept-paused hold of ads Amazon already served: there is nothing to put back. To keep one paused again, ask pause-ads with keepPaused: true.' }
+    return { refusal: 'This change does not record the ads it changed.' }
+  },
 }
 
 /** W4-2 — frozen who-paused facts in words, for a refusal: "a person in Nexus (user:…, 2026-10-07 09:00 UTC)". */
@@ -775,14 +928,19 @@ async function runApproved(kind: Kind, args: Record<string, unknown>, ctx: ToolC
     const { settleStoppedReplicates } = await import('../../advertising/ads-blueprint-apply.service.js')
     await settleStoppedReplicates({ applicationId: args.buildRunId })
   }
-  const { result: fresh, changing } = await decide(kind, args, ctx)
+  const { result: fresh, changing, holdOnly, keepUntil } = await decide(kind, args, ctx)
   // W4-2 — who paused each ad, as the approver saw it: a status change recorded since refuses it, in words.
   const moved = kind === 'enable' ? whoPausedMoved(ctx.approvedPreview, fresh, changing) : null
   if (moved) return notRun(moved)
   const refusal = recheck(ctx, fresh, kind === 'enable' ? ['totals', 'basis', 'whoPaused'] : ['totals', 'basis'])
   if (refusal) return notRun(refusal)
-  const p = fresh.preview as { reach: StoredReach; effect: string; needsCode?: number }
+  const p = fresh.preview as { reach: StoredReach; effect: string; needsCode?: number; releasesKeptPaused?: number }
   const coded = kind === 'enable' ? p.needsCode ?? 0 : 0
+  // Negative Targeting — ending a kept-paused hold is a person's decision: never by rule (withinLimits refuses it; this is
+  // the last door), and the mutation layer's lock honours the release only for a person (run.manual).
+  if ((p.releasesKeptPaused ?? 0) > 0 && ctx.decidedVia === 'auto') {
+    return notRun(`Not run: it ends the kept-paused hold of ${plural(p.releasesKeptPaused!, LEVEL_WORDS.target)}, which a person decides, never a rule. Ask for it again; a person approves it.`)
+  }
   // AA-W2-6 — a run the business's rule decided says so in the ads audit (approvedRun).
   const said = String(args.why ?? '').trim()
     || (kind === 'pause' ? 'a real pause' : kind === 'archive' ? 'archived for good' : coded ? 'switching back on what no Claude request paused, approved with the approver\'s authenticator code' : 'switching back on what Claude paused')
@@ -801,21 +959,50 @@ async function runApproved(kind: Kind, args: Record<string, unknown>, ctx: ToolC
   // A pause or an archive carries `letsGo`: it lets go of spend, so a halt does not hold it at Amazon's door either
   // (isLetGoWrite), and the worker sends an archive as Amazon's delete operation.
   const common = { actor: run.actor, reason: run.reason, changeSetId: run.changeSetId, manual: run.manual, ...(kind !== 'enable' ? { letsGo: true } : {}) }
+  // Negative Targeting — the hold a pause asks for (keepPaused), and the release an enable asks for (releaseKeepPaused).
+  const keep = kind === 'pause' && args.keepPaused === true ? { until: keepUntil, reason: said } : null
   const failed: string[] = []
+  const done = new Set<string>()
   for (const ad of changing) {
     let out: MutationOutcome
     // W4-11 — a Sponsored Brands / Display campaign's or keyword's / target's on/off state goes to its own endpoint.
     if (ad.level === 'campaign') out = await updateCampaignWithSync({ campaignId: ad.id, patch: { status: to }, ...common, confirmOwnLimits: run.confirmOwnLimits, allowSbSd: true })
     else if (ad.level === 'adGroup') out = await updateAdGroupWithSync({ adGroupId: ad.id, patch: { status: to }, ...common, confirmOwnLimits: run.confirmOwnLimits })
-    else if (ad.level === 'target') out = await updateAdTargetWithSync({ adTargetId: ad.id, patch: { status: to }, ...common, confirmOwnLimits: run.confirmOwnLimits, allowSbSd: true })
+    else if (ad.level === 'target') {
+      out = await updateAdTargetWithSync({
+        adTargetId: ad.id, patch: { status: to }, ...common, confirmOwnLimits: run.confirmOwnLimits, allowSbSd: true,
+        // A pause that keeps it paused asks the gate first: a refused pause leaves no hold behind (nothing written).
+        ...(keep ? { keepPaused: keep, askGate: true } : {}),
+        ...(kind === 'enable' && ad.hold ? { releaseKeptPaused: true } : {}),
+      })
+    }
     else out = await updateProductAdWithSync({ productAdId: ad.id, status: to, ...common })
     if (!out.ok) failed.push(`${ad.label} (${out.error ?? 'refused'})`)
+    else done.add(ad.id)
   }
-  const items = changing.map(itemOf)
+  // Negative Targeting — a hold changed alone (Nexus only): kept paused from now, or its hold ended.
+  for (const ad of holdOnly) {
+    const out = await updateAdTargetWithSync({
+      adTargetId: ad.id, patch: keep ? { status: 'PAUSED' } : {}, actor: run.actor, reason: run.reason, changeSetId: run.changeSetId, manual: run.manual,
+      ...(keep ? { keepPaused: keep } : { releaseKeptPaused: true }),
+    })
+    // A release no person made changes nothing: the lock's rule (a person releases a hold), said, not counted as done.
+    if (!out.ok || out.error === 'no_changes') failed.push(`${ad.label} (${out.ok ? 'only a person releases a kept-paused hold' : out.error ?? 'refused'})`)
+    else done.add(ad.id)
+  }
+  const items = [
+    ...changing.map((ad) => itemOf(ad, kind === 'pause' && keep && ad.level === 'target' ? { kept: true } : kind === 'enable' && ad.hold ? { released: true } : {})),
+    ...holdOnly.map((ad) => itemOf(ad, keep
+      // Polish M3 — a hold that already held changed only its end: its Undo puts the old end back.
+      ? { holdOnly: true, kept: true, ...(ad.hold ? { endOnly: true as const, keptUntilBefore: ad.hold.until?.toISOString() ?? null } : {}) }
+      : { holdOnly: true, released: true })),
+  ].filter((i) => done.has(i.id) || !failed.length)
   const change = { before: { changeSetId: run.changeSetId, items }, after: await statusesNow({ before: null, after: { items } }) }
-  const done = changing.length - failed.length
+  const ran = changing.filter((ad) => done.has(ad.id)).length
   const data = {
-    [kind === 'pause' ? 'paused' : kind === 'enable' ? 'enabled' : 'archived']: done,
+    [kind === 'pause' ? 'paused' : kind === 'enable' ? 'enabled' : 'archived']: ran,
+    ...(keep ? { keptPaused: changing.filter((ad) => ad.level === 'target' && done.has(ad.id)).length + holdOnly.filter((ad) => done.has(ad.id)).length } : {}),
+    ...(holdOnly.length && !keep ? { holdsEnded: holdOnly.filter((ad) => done.has(ad.id)).length } : {}),
     failed: failed.length,
     reach: p.reach,
     changeSetId: run.changeSetId,
@@ -823,7 +1010,7 @@ async function runApproved(kind: Kind, args: Record<string, unknown>, ctx: ToolC
   }
   if (failed.length) {
     const what = kind === 'pause' ? 'paused' : kind === 'enable' ? 'switched on' : 'archived'
-    return { ok: false, data, change, error: `Partly run: ${done} ${what}, ${failed.length} refused by the write — ${named(failed)}. The rest stays as it was${kind === 'archive' ? '' : '; undo-change puts back what ran'}.` }
+    return { ok: false, data, change, error: `Partly run: ${ran} ${what}, ${failed.length} refused by the write — ${named(failed)}. The rest stays as it was${kind === 'archive' ? '' : '; undo-change puts back what ran'}.` }
   }
   return { ok: true, data, change }
 }
@@ -842,8 +1029,21 @@ const STATUS_INPUT = z.object({
   })).max(MAX_ADS).optional().describe('product ads, each named by its ad group and the SKU or ASIN it advertises'),
   why: z.string().trim().max(300).optional().describe('why, in a sentence: shown to the person who approves it and kept in the ads audit'),
 })
+/** pause-ads, Negative Targeting — keep each keyword and product target paused (or end the hold of one kept paused). */
+const PAUSE_INPUT = STATUS_INPUT.extend({
+  keepPaused: z.boolean().optional()
+    .describe('true: also KEEP each keyword and product target paused — no rule, engine, the ads brain or Claude by rule may switch it '
+      + 'back on; only a person releases it (enable-ads releaseKeepPaused). One already paused gets the hold alone (Nexus only). false: '
+      + 'end the hold of one kept paused (it stays paused) — a person decides, never a rule. Absent: a plain pause'),
+  keepUntil: z.string().trim().max(40).nullable().optional()
+    .describe('with keepPaused: true — until when it is kept paused (an ISO date, e.g. 2026-12-31); null or absent: always'),
+})
 /** enable-ads, W4-2 — may also lift a pause no Claude request made, asked for in so many words. pause-ads takes no such option. */
 const ENABLE_INPUT = STATUS_INPUT.extend({
+  releaseKeepPaused: z.boolean().optional()
+    .describe('true: also switch on a keyword or product target that is KEPT paused (pause-ads keepPaused): the preview says who keeps '
+      + 'it and since when, the hold ends and it spends again; a person approves it, never a rule. One Amazon already serves (switched on '
+      + 'outside Nexus) has its hold ended alone. Default false: a kept-paused one is refused by name'),
   includePeoplesPauses: z.boolean().optional()
     .describe('true: also switch back on an ad no Claude request paused: a person, in Nexus or at Amazon (Seller Central), a writer Nexus '
       + "did not record, or a Nexus rule that is off or deleted now; the preview says who paused each and when, and approving needs the approver's "
@@ -859,7 +1059,7 @@ const ARCHIVE_INPUT = STATUS_INPUT.extend({
 const pauseAds: AgentTool = {
   name: TOOL.pause,
   title: 'Pause Amazon ads',
-  input: STATUS_INPUT,
+  input: PAUSE_INPUT,
   requires: [F.adsCampaignsManage, FIELDS.financialsAdspendView],
   category: 'advertising',
   riskTier: 'high',
@@ -871,8 +1071,8 @@ const pauseAds: AgentTool = {
   reversibility: 'full',
   maxClaudeTrust: 'auto',
   limits: STATUS_LIMITS,
-  withinLimits: (preview, limits) => ruleRefusal(preview, limits) ?? levelsRefusal(preview, limits),
-  undo: undoBy(TOOL.enable, 'ENABLED', 'undo of a pause'),
+  withinLimits: (preview, limits) => holdReleaseRefusal(preview) ?? ruleRefusal(preview, limits) ?? levelsRefusal(preview, limits),
+  undo: PAUSE_UNDO,
   description:
     `Pause Amazon Sponsored Products ads for real: campaigns, ad groups, keywords and product targets, or product ads, and Sponsored Brands / Display campaigns, keywords and targets (up to ${MAX_ADS} `
     + 'in one request). Only when a real pause is meant: a paused ad serves again about an hour after it is switched back '
@@ -882,7 +1082,10 @@ const pauseAds: AgentTool = {
     + 'holds, the daily budget that stops, where it lands (live at Amazon or sandbox) and each limit with where it comes '
     + 'from. Refused, and not queued, when an ad is not found, archived, a draft or not Sponsored Products, or when '
     + 'Amazon\'s write gate would refuse it (a halt does not block a pause: it only lets go). enable-ads (or undo-change) '
-    + 'switches them back on.',
+    + 'switches them back on. keepPaused: true KEEPS each keyword and product target paused (keepUntil: a date, or always): no rule, '
+    + 'engine, the ads brain or Claude by rule switches it back on, only a person releases it (enable-ads with releaseKeepPaused); '
+    + 'one already paused gets the hold alone, in Nexus only. keepPaused: false on one kept paused ends its hold and leaves it paused '
+    + '(a person decides, never a rule).',
   async handler(args, ctx) {
     return (await decide('pause', args, ctx)).result
   },
@@ -906,8 +1109,8 @@ const enableAds: AgentTool = {
   reversibility: 'full',
   maxClaudeTrust: 'auto',
   limits: STATUS_LIMITS,
-  withinLimits: (preview, limits) => peoplesPauseRefusal(preview) ?? ruleRefusal(preview, limits) ?? levelsRefusal(preview, limits) ?? restartBidRefusal(preview),
-  undo: undoBy(TOOL.pause, 'PAUSED', 'undo of an enable'),
+  withinLimits: (preview, limits) => peoplesPauseRefusal(preview) ?? holdReleaseRefusal(preview) ?? ruleRefusal(preview, limits) ?? levelsRefusal(preview, limits) ?? restartBidRefusal(preview),
+  undo: ENABLE_UNDO,
   description:
     `Switch paused Amazon Sponsored Products ads back on: campaigns, ad groups, keywords and product targets, or product ads, and Sponsored Brands / Display campaigns, keywords and targets `
     + `(up to ${MAX_ADS}). By default only what a Claude request paused (pause-ads). With includePeoplesPauses: true, also an `
@@ -920,7 +1123,9 @@ const enableAds: AgentTool = {
     + 'the highest bid that serve again, this month\'s forecast where a monthly cap is set, and where it lands. A person '
     + 'approves it in Nexus, unless the business lets it run by its rule inside its limits and the ads strategy (only what a '
     + 'Claude request paused). Refused, and not queued, when Amazon\'s write gate would refuse it (a halt stops an enable). '
-    + 'pause-ads (or undo-change) pauses them again.',
+    + 'pause-ads (or undo-change) pauses them again. A keyword or product target KEPT paused (pause-ads keepPaused, the Negative '
+    + 'Targeting page) is refused by name unless asked with releaseKeepPaused: true: the preview says who keeps it and since when, '
+    + 'the hold ends and it spends again, and a person approves it, never a rule.',
   async handler(args, ctx) {
     return (await decide('enable', args, ctx)).result
   },

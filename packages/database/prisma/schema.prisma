@@ -3491,6 +3491,21 @@ model AdTarget {
   retiredAt    DateTime?
   retireReason String?
 
+  /// Negative Targeting (2026-10-11) — "kept paused": a positive keyword or product target a person (or a rule's or
+  /// Claude's pause) asked to KEEP paused. While it holds (keptPausedUntil null = always, or a later time), no automatic
+  /// writer may switch it back on (ads-mutation.service.ts updateAdTargetWithSync, waste/hold.ts): only a person with an
+  /// explicit release. Who (an actor: `user:<id>` / `automation:<ruleId>`), since when, until when, why. All null = not held.
+  /// A held target Amazon reports ENABLED (Seller Central) keeps these columns: status ENABLED + keptPausedAt = turned on
+  /// elsewhere, alerted (ads-keyword-list-sync.service.ts).
+  keptPausedAt     DateTime?
+  keptPausedBy     String?
+  keptPausedUntil  DateTime?
+  keptPausedReason String?
+  /// Negative Targeting (2026-10-11) — who made this negative, stored by the one negative write door
+  /// (ads-negative-kw.service.ts negativeOriginOf): HARVEST | BRAIN_FUNNEL | BRAIN | PLAYBOOK | RULE | CLAUDE | PERSON.
+  /// Null: not known (made before 2026-10-11, or brought in by Amazon's sync).
+  negativeOrigin   String?
+
   @@index([adGroupId, status])
   @@index([externalTargetId])
   @@index([adGroupId, isNegative])
@@ -15588,6 +15603,11 @@ model AutomationRule {
   /// Scope stays an AND of dimensions. market × product is the pairing that earns its place:
   /// 106 of 250 advertised ASINs span more than one market, so "GALE in DE only" is a real scope.
   scopeProductId          String?
+  /// Negative Targeting page (2026-10-11) — the finest grain: ONE ad group (local AdGroup.id). The evaluator lets the
+  /// rule act only on contexts of that ad group (a keyword's own, or a search term's source ad group). A rule saved with
+  /// it also carries its ad group's campaign in scopeCampaignId, so every campaign-grain reader (reach, the graduation
+  /// gate's market) keeps working unchanged. null = no ad-group grain (every rule before this column).
+  scopeAdGroupId          String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -21135,6 +21155,28 @@ model AdsBrainRetirement {
   @@index([productId, marketplace, status])
   @@index([writer, targetId, status])
   @@index([status])
+  @@index([workspaceId])
+}
+
+/// Negative Targeting page (2026-10-11) — a waste row a person snoozed ("Skip", 7 or 30 days): hidden from the Wasting
+/// view until `until`, then back with fresh numbers. Nexus only: nothing changes at Amazon. Unskip (or its undo) ends it
+/// (`endedAt`, `endedBy`); the service ends a row's open skip before it starts a new one, so one stands per row at most.
+///   rowKey  the waste row id: 'kw:<AdTarget.id>' or 'term:<market>|<external ad group id>|<term key>'
+///   by      who skipped it (an actor: `user:<id>`)
+model AdsWasteSkip {
+  // Business ownership comes from verified database context.
+  workspaceId String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String    @id @default(cuid())
+  rowKey      String
+  until       DateTime
+  by          String
+  reason      String?
+  at          DateTime  @default(now())
+  endedAt     DateTime?
+  endedBy     String?
+
+  @@index([rowKey, endedAt])
+  @@index([until])
   @@index([workspaceId])
 }
 

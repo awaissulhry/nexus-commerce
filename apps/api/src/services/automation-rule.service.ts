@@ -609,7 +609,8 @@ async function adsRunTimeCeiling(actions: unknown): Promise<{ maxLevel: import('
     const { graduationCeiling } = await import('./advertising/ads-graduation.js')
     const actionTypes = (Array.isArray(actions) ? actions : [])
       .map((a) => String((a as { type?: unknown } | null)?.type ?? '')).filter(Boolean)
-    const verdict = graduationCeiling({ actionTypes, hasKeywordProtections: false })
+    // D1 — the actions themselves: only the Negative Targeting page's stop-waste shape may act on Auto (ads-graduation-stopwaste.ts).
+    const verdict = graduationCeiling({ actionTypes, hasKeywordProtections: false, actions })
     return { maxLevel: verdict.maxLevel, blockedBy: verdict.blockedBy }
   } catch (err) {
     logger.error('[automation-rule] AUTO ceiling could not be computed — proposing instead of acting', {

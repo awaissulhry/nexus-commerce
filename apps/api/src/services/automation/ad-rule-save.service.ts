@@ -14,6 +14,10 @@
  *
  * `planAdRuleSave` is the dry run (a pure read); `applyAdRuleSave` writes. Nothing here reaches a marketplace: a rule
  * acts only once a person turns it up.
+ *
+ * Negative Targeting (2026-10-11): an Amazon rule may be scoped to ONE ad group (`scope.adGroupId`, stored in
+ * AutomationRule.scopeAdGroupId; its campaign is set from it), and (D4) may pause a wasting keyword (`pause_target`) —
+ * such a save says so (`pausesKeywords`) and always waits for a person (save-ad-rule's limits refuse it by rule).
  */
 import prisma from '../../db.js'
 import { auditLogService } from '../audit-log.service.js'
@@ -73,6 +77,8 @@ export interface SavePlan {
    * are unchanged. Not its `updatedAt`: the rule evaluator moves that on every tick.
    */
   basis: string | null
+  /** D4 — the rule pauses keywords (pause_target): its save always waits for a person, whatever the business's limits. */
+  pausesKeywords?: boolean
   effect: string
   config: Omit<SavedRuleConfig, 'ruleId'> & { ruleId: string | null }
 }
@@ -83,11 +89,12 @@ const DOMAIN: Record<Exclude<RuleKind, 'ebay-ads'>, string> = { 'amazon-ads': 'a
 const KIND_NAME: Record<RuleKind, string> = { 'amazon-ads': 'Amazon ads rule', 'ebay-ads': 'eBay ads rule', marketing: 'marketing rule' }
 
 
-function scopeOfRule(r: { scopeMarketplace: string | null; scopePortfolioId?: string | null; scopeCampaignId?: string | null; scopeProductId?: string | null }): RuleScope {
+function scopeOfRule(r: { scopeMarketplace: string | null; scopePortfolioId?: string | null; scopeCampaignId?: string | null; scopeProductId?: string | null; scopeAdGroupId?: string | null }): RuleScope {
   const s: RuleScope = {}
   if (r.scopeMarketplace) s.marketplace = r.scopeMarketplace
   if (r.scopePortfolioId) s.portfolioId = r.scopePortfolioId
   if (r.scopeCampaignId) s.campaignId = r.scopeCampaignId
+  if (r.scopeAdGroupId) s.adGroupId = r.scopeAdGroupId
   if (r.scopeProductId) s.productId = r.scopeProductId
   return Object.keys(s).length ? s : { wholeAccount: true }
 }
@@ -135,8 +142,14 @@ function diff(before: Partial<SavedRuleConfig> | null, after: Partial<SavedRuleC
   return out
 }
 
+/** An ad-group scope as stored (its campaign set from it) — the advertising service's own read (waste-rules/contexts.ts). */
+export async function withAdGroupCampaign<S extends RuleScope>(scope: S): Promise<{ ok: true; scope: S } | { ok: false; error: string }> {
+  const { adGroupScope } = await import('../advertising/waste-rules/contexts.js')
+  return adGroupScope(scope)
+}
+
 /** Amazon scope ids that exist here, and the campaigns the scope reaches (the evaluator's own reach). */
-async function amazonReach(scope: RuleScope): Promise<{ ok: true; reach: SavePlan['reach'] } | { ok: false; error: string }> {
+export async function amazonReach(scope: RuleScope): Promise<{ ok: true; reach: SavePlan['reach'] } | { ok: false; error: string }> {
   if (scope.campaignId && !(await prisma.campaign.findUnique({ where: { id: scope.campaignId }, select: { id: true } }))) return { ok: false, error: `scope.campaignId ${scope.campaignId}: not found in this business` }
   if (scope.portfolioId && !(await prisma.amazonAdsPortfolio.findFirst({ where: { externalPortfolioId: scope.portfolioId }, select: { id: true } }))) return { ok: false, error: `scope.portfolioId ${scope.portfolioId}: not found in this business` }
   if (scope.productId && !(await prisma.product.findUnique({ where: { id: scope.productId }, select: { id: true } }))) return { ok: false, error: `scope.productId ${scope.productId}: not found in this business` }
@@ -178,15 +191,22 @@ export async function planAdRuleSave(input: SaveRuleInput): Promise<PlanAnswer> 
   const label = existing ? `${existing.config.name}: ` : ''
   if (problems.length) return { ok: false, error: `${label}Not saved — ${problems.join('; ')}.` }
 
-  const changes = diff(existing?.config ?? null, merged)
-  if (existing && !Object.keys(changes).length) return { ok: false, error: `${existing.config.name}: nothing to change — every field given is what the rule already holds.` }
-
   let reach: SavePlan['reach'] = null
   if (input.kind === 'amazon-ads') {
+    // An ad-group scope carries its campaign (set from the ad group), so every campaign-grain reader keeps working.
+    const grain = await withAdGroupCampaign(merged.scope)
+    if ('error' in grain) return { ok: false, error: `${label}Not saved — ${grain.error}.` }
+    // N4 — a scope inside one market stores that market (the Rules view, the tab counts and the evaluator then agree).
+    const { marketOfScope } = await import('../advertising/waste-rules/contexts.js')
+    const derived = await marketOfScope(grain.scope)
+    merged.scope = derived ? { ...grain.scope, marketplace: derived } : grain.scope
     const r = await amazonReach(merged.scope)
     if ('error' in r) return { ok: false, error: `${label}Not saved — ${r.error}.` }
     reach = r.reach
   }
+
+  const changes = diff(existing?.config ?? null, merged)
+  if (existing && !Object.keys(changes).length) return { ok: false, error: `${existing.config.name}: nothing to change — every field given is what the rule already holds.` }
 
   const from = existing?.level ?? null
   const to: AutomationLevel = !existing
@@ -208,6 +228,9 @@ export async function planAdRuleSave(input: SaveRuleInput): Promise<PlanAnswer> 
     const note = unsourcedRankNote(conditionFields(merged.conditions), await keywordRankFieldCensus())
     if (note) rankText = ` ${note}`
   }
+  // D4 — a rule that pauses keywords says so, and its save always waits for a person (save-ad-rule's limits).
+  const pausesKeywords = input.kind === 'amazon-ads' && (merged.actions ?? []).some((a) => String((a as { type?: unknown } | null)?.type ?? '') === 'pause_target')
+  const pauseText = pausesKeywords ? ' It pauses wasting keywords and keeps them paused: this save always waits for a person.' : ''
   const plan: SavePlan = {
     action: 'save-ad-rule',
     kind: input.kind,
@@ -219,7 +242,8 @@ export async function planAdRuleSave(input: SaveRuleInput): Promise<PlanAnswer> 
     scope: merged.scope,
     reach,
     basis: existing ? `rule:${basisOf({ config: existing.config, level: existing.level })}` : null,
-    effect: `${existing ? 'Changes' : 'Creates'} the ${KIND_NAME[input.kind]} "${merged.name}". ${says}${reachText}${rankText} Nothing reaches a marketplace from this save.`,
+    ...(pausesKeywords ? { pausesKeywords: true } : {}),
+    effect: `${existing ? 'Changes' : 'Creates'} the ${KIND_NAME[input.kind]} "${merged.name}". ${says}${reachText}${rankText}${pauseText} Nothing reaches a marketplace from this save.`,
     config: { ...merged, ruleId: existing?.config.ruleId ?? null },
   }
   return { ok: true, plan, before: existing?.config ?? null }
@@ -261,6 +285,13 @@ export async function applyAdRuleSave(input: SaveRuleInput, actorUserId: string 
       }, actor, plan.changes.scope ? extra : { note, ...(extra.autonomyLevel ? { autonomyLevel: extra.autonomyLevel, dryRun: true } : {}), ...(extra.trigger ? { trigger: extra.trigger } : {}) })
     if (isRefused(out)) return { ok: false, error: `Not saved — ${String(out.body.message ?? out.body.error)}` }
     ruleId = out.value.rule.id
+    // The ad-group grain is not a column the rule service writes: set here, with its own audit row, only when it moves.
+    const wantGroup = scope.adGroupId ?? null
+    if ((out.value.rule as { scopeAdGroupId?: string | null }).scopeAdGroupId !== wantGroup && (plan.mode === 'create' ? wantGroup != null : !!plan.changes.scope)) {
+      const beforeGroup = (out.value.rule as { scopeAdGroupId?: string | null }).scopeAdGroupId ?? null
+      await prisma.automationRule.update({ where: { id: ruleId }, data: { scopeAdGroupId: wantGroup } })
+      await crud.auditRule(actor, 'update_rule', ruleId, { scopeAdGroupId: beforeGroup }, { scopeAdGroupId: wantGroup }, `${c.name}: scopeAdGroupId (${note})`)
+    }
   } else if (input.kind === 'marketing') {
     const caps = c.caps ?? {}
     const data = {
