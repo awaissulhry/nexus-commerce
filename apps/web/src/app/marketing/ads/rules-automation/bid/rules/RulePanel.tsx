@@ -35,6 +35,7 @@ import {
 } from './bidRulesModel'
 import { fetchBrainDiff, fetchHistory, fetchPreview, fetchRuns, fetchStoredRule, type BrainDiffDay } from './ruleApi'
 import { runRollbackable, runSummary, runWord, settingGroups, type RunRow, type SettingGroup } from './ruleSettings'
+import type { NoticeWords } from './savedNotice'
 import { RefLinks, type PanelTab } from './RulesTable'
 import { WaitingTab } from './WaitingTab'
 import { PanelGrid, type PanelColumn } from '../_shared/PanelGrid'
@@ -95,6 +96,8 @@ export interface RulePanelProps {
   /** The brain: why Auto cannot be picked for a campaign (the server switch, the approver's permission), or null. */
   brainAutoHeld: string | null
   onBrainPick(pick: BrainPick): void
+  /** Just saved in the builder: "Rule created" with Undo, or "Saved", at the top of the detail (never a toast under it). */
+  notice?: { words: NoticeWords; busy: boolean; onUndo(): void; onDismiss(): void } | null
 }
 
 /** The rule's tabs; Waiting while the rule has asks waiting (its count on the tab), or while it is open. */
@@ -149,6 +152,16 @@ export function RulePanel(p: RulePanelProps) {
       returnFocusTo={p.returnFocusTo}
     >
       <div className={styles.panelBody}>
+        {p.notice && (
+          <Banner
+            tone={p.notice.words.tone}
+            title={p.notice.words.title}
+            action={p.notice.words.undo ? <span data-return="created-undo"><Button size="sm" variant="secondary" heldReason={p.notice.busy ? 'Undoing…' : p.archiveHeld} onClick={p.notice.onUndo}>Undo</Button></span> : undefined}
+            onDismiss={p.notice.onDismiss}
+          >
+            {p.notice.words.body}
+          </Banner>
+        )}
         {tab === 'overview' && <Overview {...p} />}
         {tab === 'waiting' && !brain && <WaitingTab row={p.row} market={p.market} phone={p.phone} reloadKey={p.reloadKey} decideHeld={p.decideHeld} onDecide={p.onDecide} />}
         {tab === 'preview' && !brain && <Preview row={p.row} market={p.market} reloadKey={p.reloadKey} />}
