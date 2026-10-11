@@ -1,6 +1,6 @@
 /**
  * Ads brain page A4 — the brain on the Control Room's engine board: one row per brain writer (family 'brain'), so the
- * board, the switchboard and the Levers drawer show the brain beside the engines it replaces.
+ * board and the Levers drawer show the brain beside the engines it replaces.
  *
  *   rows       bid-brain, brain-money, brain-state, brain-negatives, brain-harvest, brain-strategy write by themselves; their
  *              keys are ads-engine-actors.ts ENGINE_ACTORS keys, so each row's 7-day writes and activity come from the one

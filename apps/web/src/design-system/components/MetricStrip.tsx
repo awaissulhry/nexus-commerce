@@ -46,9 +46,13 @@ export function MetricStrip({ metrics, className }: MetricStripProps) {
               {m.accent != null && <span className="dot" style={{ background: m.accent }} />}
               {m.label}
             </div>
-            <div className="val">{m.value}</div>
-            {m.delta != null && <div className={`dlt ${m.delta.positive ? 'up' : 'down'}`}>{m.delta.value}</div>}
-            {m.hint != null && <div className="hint">{m.hint}</div>}
+            {/* The number and what follows it share the strip's second row (`.nds-metric-body`, components.css), so a
+                row of tiles keeps its numbers on one line whatever label wraps. */}
+            <div className="nds-metric-body">
+              <div className="val">{m.value}</div>
+              {m.delta != null && <div className={`dlt ${m.delta.positive ? 'up' : 'down'}`}>{m.delta.value}</div>}
+              {m.hint != null && <div className="hint">{m.hint}</div>}
+            </div>
           </>
         )
         // A tile that does something is a button, with the keyboard and the pressed state that

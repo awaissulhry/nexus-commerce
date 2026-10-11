@@ -13,8 +13,7 @@
  * undo and roll back are in its panel — nothing hands off to another page (no Change log, no Suggestions link).
  *
  * The header and the tab bar are the section's (`AdsPageHeader` → the DS `RulesHeader` the layout frames, lane SHELL).
- * The market picker writes `?market=`; the view is `?view=rules|bids`. The parked bid page (`BidClient.tsx` and its
- * section files) stays parked beside this file.
+ * The market picker writes `?market=`; the view is `?view=rules|bids`.
  */
 import { useCallback, useEffect, useState } from 'react'
 import { SegmentedControl } from '@/design-system/primitives'

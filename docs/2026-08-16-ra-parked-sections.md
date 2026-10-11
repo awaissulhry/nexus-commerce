@@ -43,6 +43,10 @@ bar · `_shared/RulesGrid` (`tabKey="bid"`). Everything below was unmounted in o
 Not parked (still live, still imported): `bid/types.ts`, `bid/bidState.ts` (+ its test),
 `bid/slot-contract.ts` — types and vocabulary the parked files import.
 
+**Removed 2026-10-11** (Bid page "nothing unnecessary" pass, lane USE-WEB): every `bid/` file in the table above, and
+`bid/types.ts`, `bid/bidState.ts` (+ its test) and `bid/slot-contract.ts` with them. Nothing rendered them since the Bid page
+rebuild (#545); the route mounts `bid/BidRulesClient.tsx` with its `rules/` and `bids/` views.
+
 **Prod verification, 2026-08-16** (D8: one click-through + one commit per unit). The page renders
 H10's shape with no horizontal overflow (card 1602 in a 1728 main); the grid loaded **18 bid rules**
 and the tab badge read 18 — badge and grid share `ruleBelongsToTab`, so they cannot disagree.

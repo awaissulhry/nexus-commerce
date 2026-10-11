@@ -24,8 +24,25 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* A numeric header's TEXT ends where its values end (Bid page design audit M5, 2026-10-11: "Bid now" ended 24px left of
+   its numbers, because the always-shown ⋮ took the right end of a right-aligned header). AG's own right-aligned header,
+   restated for the DS class (a column's `headerClass` replaces the `rightAligned` type's): the menu goes BEFORE the label,
+   and the label runs right-to-left, so a sort or filter icon sits on the text's left and never pushes its end. */
+.nds-ag-head-num .ag-cell-label-container {
+  flex-direction: row;
+}
 .nds-ag-head-num .ag-header-cell-label {
-  justify-content: flex-end;
+  flex-direction: row-reverse;
+  justify-content: flex-start;
+}
+.nds-ag-head-num .ag-header-label-icon,
+.nds-ag-head-num .ag-header-menu-icon {
+  margin-left: 0;
+  margin-right: var(--ag-spacing);
+}
+.nds-ag-head-num .ag-sort-indicator-icon {
+  padding-left: 0;
+  padding-right: var(--ag-spacing);
 }
 
 .nds-ag-ed {
@@ -599,7 +616,7 @@
 .nds-cell-mode-held { flex: none; display: inline-flex; color: var(--nds-warning-text); }
 .nds-cell-mode-lock { flex: none; display: inline-flex; }
 .nds-cell-mode-lock:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; border-radius: var(--nds-radius-xs); }
-/* sparkline (`sparklineColumn`) and entity links (`entityLinksColumn`), 2026-10-10: one line, never wrapping the row. */
+/* a sparkline in a cell (`Sparkline`) and entity links (`entityLinksColumn`), 2026-10-10: one line, never wrapping the row. */
 .nds-cell-spark { display: inline-flex; align-items: center; height: 100%; }
 .nds-cell-entitylinks { display: inline-flex; align-items: center; min-width: 0; max-width: 100%; }
 /* `WarnGlyph` / `PauseGlyphIcon` (2026-10-08): outline icons in their holder's ink, sitting on the text's middle. */
@@ -1102,6 +1119,13 @@
 /* overlays */
 /* AG wraps React overlays in a shrink-to-content flex item. Give the skeleton the grid width. */
 .nds-ag-wrap .ag-overlay-loading-wrapper > .ag-react-container:has(> .nds-grid-skel) { width: 100%; }
+/* The skeleton never covers the header (design audit M13, 2026-10-11): AG lays its loading overlay over the WHOLE grid,
+   header included, and centres it, so in an auto-height grid (a ~150px body) the 392px skeleton rose 98px above the
+   rows and its first bar crossed the column names. It is centred in the space UNDER the header row now, and when it is
+   taller than that space (`safe`) it starts right under the header, where the first row will land. A margin on AG's
+   container, not the wrapper's padding: AG writes `padding-top: 0` on the loading wrapper inline. */
+.nds-ag-wrap .ag-overlay-loading-wrapper:has(.nds-grid-skel) { align-items: safe center; }
+.nds-ag-wrap .ag-overlay-loading-wrapper > .ag-react-container:has(> .nds-grid-skel) { margin-top: var(--nds-grid-header-h, 0px); }
 /* 16px, matching the footstrip and the toolbar. The SKELETON's inset matters more than it looks:
    at 14px the first paint sat 2px left of where the real content lands, so every sheet load ended
    with a 2px jump. DS.2's four-edge measurement. */
@@ -1150,8 +1174,8 @@
   .nds-grid-footstrip:not(.nds-grid-sheet-status) { flex-wrap: wrap; row-gap: var(--nds-space-8); }
 }
 
-/* the toolbar's swapping halves (`../toolbars/GridSelectionActions`). The search field is 36px, an
-   `sm` button 28: the cluster holds the toolbar's height on the first tick and never wraps —
+/* the toolbar's swapping halves (`../toolbars/GridSelectionActions`). The search field and an `sm` button are both
+   28: the cluster holds the toolbar's height on the first tick and never wraps —
    labels hide under 1320px and the reach note under 1100px of the CARD (`GridCard` is the container). */
 .nds-grid-selbar { display: inline-flex; align-items: center; gap: 7px; flex-wrap: nowrap; white-space: nowrap; min-width: 0; min-height: var(--nds-grid-toolbar-slot-h); }
 /* The size of the count it sits beside (`.nds-toolbar .cnt`); without it the note took the page's 16px and read as another font (Owner, 2026-10-01). */
@@ -1159,9 +1183,15 @@
 .nds-grid-search { flex: 1; min-width: 220px; max-width: 340px; }
 /* The two halves share ONE height. A DS field is a 1px border + padding + a 19.5px line box = 35.5px;
    the cluster's floor was 36 — a half-pixel step on every tick (measured 64.5 → 65 on both surfaces).
-   Both sides now sit on the same floor, so the swap is exact by construction. */
-.nds-grid-search .nds-field { min-height: var(--nds-grid-toolbar-slot-h); box-sizing: border-box; }
-.nds-ag-wrap, .nds-gridcard { --nds-grid-toolbar-slot-h: 36px; }
+   Both sides now sit on the same floor, so the swap is exact by construction.
+   One control height per toolbar row (Bid page design audit M1/M2, 2026-10-11): the floor is the `sm` control tier,
+   28px, like the buttons, chips and switches beside it (`patterns.css`, `.nds-toolbar`) — it was 36, so the search box
+   stood 4px proud of every button above and below. 36 is the FORM tier. The field takes the slot's height whatever its
+   `size` (a default-size Input is 35.5 on its own) and its whole width: the slot grew to 330px while the field inside
+   stayed at its intrinsic 188, leaving a dead 53px gap before the next control. */
+.nds-grid-search .nds-field { width: 100%; height: var(--nds-grid-toolbar-slot-h); min-height: 0; box-sizing: border-box; }
+.nds-grid-search .nds-field > input { padding-top: 0; padding-bottom: 0; }
+.nds-ag-wrap, .nds-gridcard { --nds-grid-toolbar-slot-h: var(--nds-control-h-sm); }
 /* the toolbar's OVERFLOW rule (`../toolbars/GridToolbarFold`, LX.F2 / ruling R-LX-18). MEASURED on the
    real studio sheet, signed in, loaded state verified: the sheet toolbar's children summed 2150px on
    amazon·DE (scrollWidth 2266) against 1200/1360/1648/1968 of usable width at 1280/1440/1728/2048 — over
@@ -1236,6 +1266,12 @@
 @container (max-width: 640px) {
   .nds-grid-card > .nds-toolbar { flex-wrap: wrap; row-gap: var(--nds-space-8); }
   .nds-grid-card > .nds-toolbar > .nds-grid-selbar { flex: 1 0 100%; order: 3; flex-wrap: wrap; row-gap: var(--nds-space-6); }
+}
+/* A phone's card (Bid page design audit S5, 2026-10-11): the search takes its whole line. Wrapped beside the toolbar's
+   spacer it kept its 220px least width and the spacer the rest — the Rules search ended 10px short of the buttons under
+   it (333 vs 343), while the Bids one, beside a folded button, filled its line. */
+@container (max-width: 400px) {
+  .nds-grid-card > .nds-toolbar > .nds-grid-search { flex: 1 0 100%; max-width: none; }
 }
 
 /* ══ the SHEET host (`../hosts/GridSheet`) ═══════════════════════════════════════════════════
@@ -1479,7 +1515,7 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-text); o
    band needs no override; the `caps` pill now passes `size="md"`, the size `Pill` documents for a
    toolbar. `sm` looked right only because, with an icon, it rendered TALLER than `md`. */
 /* 🔴 The 40px band is bought by RE-SCOPING the shared slot height, not by overriding the field.
-   `--nds-grid-toolbar-slot-h` (36px above) exists so the search field and the selection cluster
+   `--nds-grid-toolbar-slot-h` (the base above, now 28px everywhere) exists so the search field and the selection cluster
    that replaces it sit on ONE floor — the comment there records a measured half-pixel step when
    they disagreed. Setting the variable on the sheet keeps that invariant exactly (both halves still
    read the same number) and changes only what the number is here. Overriding `.nds-field`'s height

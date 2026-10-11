@@ -5,6 +5,8 @@
  * counted Save, Done with Undo. This hook holds the review the view shows and saves each kind:
  *
  *   bid     a person's bid, sent now (PATCH ad-targets)            Undo: the bid before, sent again
+ *           one rule with Apply (the Owner's decision): whoever sets the bid, it goes; a keyword the brain runs at
+ *           Auto goes Manual with it (and back on Undo), a rule / plan / engine row says who may move it next
  *   undo    one change of the History, put back (the change feed)  —
  *   lock    the campaign's bids locked / unlocked (Nexus only)     Undo: the lock as it was
  *   apply   Amazon's suggested bid, one row or many (bulk-bid)     Undo: each change through the change feed
@@ -21,10 +23,10 @@ import type { ReviewChange, ReviewResult, ReviewState } from '@/design-system/pa
 import type { WriteResult } from '../../../_shared/adsWrite'
 import { money, relWords } from '../_shared/format'
 import { readCampaignLock, readOneBid, readWhy, saveGoalSetting, sendBid, sendBids, setBidLock, setKeywordMode, undoChange } from './bidsApi'
-import { AUTO_WORDS, modeChangeLine, ownerLabel, type BidGridRow } from './bidsModel'
-import type { BidAsk, DetailFeatures } from './BidDetail'
+import { AUTO_WORDS, modeChangeLine, type BidGridRow } from './bidsModel'
+import type { BidAsk } from './BidDetail'
 import { GOAL_KEYS, GOAL_LABEL, goalBody, goalChanges, goalHeld, goalRaises, goalValueWords, type GoalChange, type InheritedGoal } from './goalModel'
-import { applyHeld, applyLabel, applyPlan, applySummary, skipWords, type SuggestedCell } from './suggestedModel'
+import { applyHeld, applyLabel, applyPlan, applySummary, BRAIN_STOPS, movesNext, skipWords, type SuggestedCell } from './suggestedModel'
 
 export interface BidReview {
   ask: BidAsk
@@ -49,9 +51,8 @@ const resultWords = (r: WriteResult): string => (r.ok ? (r.outcome === 'queued' 
 const where = (r: BidGridRow) => `${r.campaign.name} · ${r.adGroup.name}`
 const bidWords = (cents: number | null | undefined, currency: string) => (typeof cents === 'number' ? money(cents, currency) : '—')
 
-export function useBidReview({ market, features, canGoal, cellOf, after, onSetGoal }: {
+export function useBidReview({ market, canGoal, cellOf, after, onSetGoal }: {
   market: string | null
-  features: DetailFeatures
   canGoal: boolean
   /** Amazon's suggested bid for a row (the view's read). */
   cellOf: (row: BidGridRow) => SuggestedCell
@@ -65,13 +66,20 @@ export function useBidReview({ market, features, canGoal, cellOf, after, onSetGo
   const patch = (a: BidAsk, next: Partial<BidReview>) => setReview((v) => (v && v.ask === a ? { ...v, ...next } : v))
   const fail = (a: BidAsk, e: unknown) => patch(a, { state: { phase: 'failed', error: e instanceof Error ? e.message : String(e) } })
 
+  /** "Set a goal instead" (the keyword the brain runs goes Manual otherwise): its Goal tab, when a goal may be set. */
+  const goalOffer = (row: BidGridRow) => (goalHeld(row, market, canGoal) ? null
+    : createElement(Button, { size: 'xs', variant: 'link', onClick: () => { setReview(null); onSetGoal(row) } }, 'Set a goal instead'))
+
   const ask = useCallback(async (a: BidAsk) => {
     const r = a.row
     const base = { ask: a, problems: [] as string[], undo: null, undoing: false, ackLabel: ACK, doneNote: undefined }
+    // A market Nexus only reads: the controls are held there; a review that opens anyway says why and saves nothing (A1).
+    const blocked = a.kind === 'apply' ? null : r.writeBlock ?? null
 
     if (a.kind === 'lock') {
       setReview({
         ...base,
+        problems: blocked ? [blocked] : [],
         changes: [{ id: r.campaign.id, where: r.campaign.name, what: 'Campaign bids locked', now: a.lock ? 'No' : 'Yes', next: a.lock ? 'Yes' : 'No', raise: !a.lock, note: a.lock ? 'Every bid of this campaign' : undefined }],
         state: { phase: 'reading' },
         summary: 'Nexus only: automation leaves a locked campaign\'s bids. Nothing is sent to Amazon.',
@@ -86,7 +94,7 @@ export function useBidReview({ market, features, canGoal, cellOf, after, onSetGo
         setReview((v) => v && v.ask === a ? {
           ...v,
           changes: v.changes.map((c) => ({ ...c, now: nowWord })),
-          problems: now.bidsLocked === a.lock ? [a.lock ? 'Its bids are locked already.' : 'Its bids are not locked.'] : [],
+          problems: blocked ? [blocked] : now.bidsLocked === a.lock ? [a.lock ? 'Its bids are locked already.' : 'Its bids are not locked.'] : [],
           state: { phase: 'ready' },
         } : v)
       } catch (e) { fail(a, e) }
@@ -98,15 +106,13 @@ export function useBidReview({ market, features, canGoal, cellOf, after, onSetGo
       const left = plan.lines.length - plan.send.length
       const leftWords = left ? ` ${left} left out: ${skipWords(plan.lines)}.` : ''
       const single = plan.send.length === 1 ? plan.send[0] : null
-      const goalOffer = single?.goesManual && features.goal && !goalHeld(single.row, market, canGoal)
-        ? createElement(Button, { size: 'xs', variant: 'link', onClick: () => { setReview(null); onSetGoal(single.row) } }, 'Set a goal instead')
-        : null
+      const offer = single?.goesManual ? goalOffer(single.row) : null
       setReview({
         ...base,
         changes: plan.send.map((l) => ({ id: l.row.targetId, where: where(l.row), what: l.row.text, now: bidWords(l.now, l.row.currency), next: bidWords(l.next, l.row.currency), note: l.note ?? undefined })),
         state: { phase: 'ready' },
         problems: plan.send.length ? [] : [applyHeld(plan) ?? 'Nothing to apply'],
-        summary: createElement('span', null, `${applySummary(plan)}${leftWords}`, goalOffer ? ' ' : null, goalOffer),
+        summary: createElement('span', null, `${applySummary(plan)}${leftWords}`, offer ? ' ' : null, offer),
         saveLabel: applyLabel(plan.send.length),
         doneVerb: 'sent',
       })
@@ -119,7 +125,7 @@ export function useBidReview({ market, features, canGoal, cellOf, after, onSetGo
         ...base,
         changes: [{ ...line, where: where(r), what: `${r.text} · ${line.what}` }],
         state: { phase: 'ready' },
-        problems: r.auto === a.next ? [`It is ${a.next === 'AUTO' ? AUTO_WORDS.on : AUTO_WORDS.off} already.`] : [],
+        problems: blocked ? [blocked] : r.auto === a.next ? [`It is ${a.next === 'AUTO' ? AUTO_WORDS.on : AUTO_WORDS.off} already.`] : [],
         summary: 'Nexus only: who moves this keyword\'s bid. Nothing is sent to Amazon.',
         saveLabel: `Switch to ${a.next === 'AUTO' ? AUTO_WORDS.on : AUTO_WORDS.off}`,
         doneVerb: 'switched',
@@ -145,7 +151,7 @@ export function useBidReview({ market, features, canGoal, cellOf, after, onSetGo
         ...base,
         changes: lines({}),
         state: needsInherited ? { phase: 'reading' } : { phase: 'ready' },
-        problems: held ? [held] : changes.length ? [] : ['Nothing changed.'],
+        problems: blocked ? [blocked] : held ? [held] : changes.length ? [] : ['Nothing changed.'],
         summary: 'Saved in Nexus: the brain follows it from its next run (every 15 min) and never bids above the max. Nothing is sent to Amazon now.',
         saveLabel: 'Save goal',
         doneVerb: 'saved',
@@ -159,14 +165,24 @@ export function useBidReview({ market, features, canGoal, cellOf, after, onSetGo
       return
     }
 
-    // A person's bid, or one change of the History put back: "Now" read again.
+    // A person's bid, or one change of the History put back: "Now" read again. A bid follows Apply's one rule: who moves
+    // it next is said on its line, and a keyword the brain runs at Auto goes Manual with it (A6).
     const next = a.kind === 'bid' ? a.nextCents : a.line.from
+    const bidSummary = (row: Pick<BidGridRow, 'owner' | 'auto'>) => {
+      const who = a.kind === 'bid' ? movesNext(row) : { note: null, goesManual: false }
+      const offer = who.goesManual ? goalOffer(r) : null
+      return {
+        note: a.kind === 'undo' ? `Undo · ${relWords(a.line.at)}` : who.note ?? undefined,
+        summary: who.goesManual ? createElement('span', null, `Sends to Amazon now. ${BRAIN_STOPS}.`, offer ? ' ' : null, offer) : 'Sends to Amazon now.',
+      }
+    }
+    const first = bidSummary(r)
     setReview({
       ...base,
-      changes: [{ id: r.targetId, where: where(r), what: r.text, now: bidWords(r.bidNow, r.currency), next: bidWords(next, r.currency), note: a.kind === 'undo' ? `Undo · ${relWords(a.line.at)}` : undefined }],
+      changes: [{ id: r.targetId, where: where(r), what: r.text, now: bidWords(r.bidNow, r.currency), next: bidWords(next, r.currency), note: first.note }],
       state: { phase: 'reading' },
-      problems: next == null ? ['The bid before this change is not known.'] : [],
-      summary: 'Sends to Amazon now.',
+      problems: blocked ? [blocked] : next == null ? ['The bid before this change is not known.'] : [],
+      summary: first.summary,
       saveLabel: a.kind === 'undo' ? 'Undo 1 change' : 'Send 1 bid',
       doneVerb: a.kind === 'undo' ? 'undone' : 'sent',
     })
@@ -177,13 +193,16 @@ export function useBidReview({ market, features, canGoal, cellOf, after, onSetGo
         ? [{ label: 'Bid now', was: money(r.bidNow, r.currency), now: money(fresh.bidNow, r.currency) }]
         : []
       const problems: string[] = []
+      if (blocked) problems.push(blocked)
       if (next == null) problems.push('The bid before this change is not known.')
-      if (a.kind === 'bid' && fresh.owner.kind !== 'PERSON' && fresh.owner.kind !== 'NONE') problems.push(`${ownerLabel(fresh.owner)} sets this bid now. Lock the campaign bids first.`)
       if (a.kind === 'bid' && fresh.bidNow === a.nextCents) problems.push('That is the bid now.')
       const before = typeof fresh.bidNow === 'number' ? fresh.bidNow : null
+      // Who sets it now (read again): its line and the summary follow the fresh owner.
+      const now = bidSummary({ owner: fresh.owner, auto: fresh.auto ?? r.auto })
       setReview((v) => v && v.ask === a ? {
         ...v,
-        changes: v.changes.map((c) => ({ ...c, now: bidWords(fresh.bidNow, r.currency) })),
+        changes: v.changes.map((c) => ({ ...c, now: bidWords(fresh.bidNow, r.currency), note: now.note })),
+        summary: now.summary,
         problems,
         state: { phase: 'ready', conflicts },
         undo: a.kind === 'bid' && before !== null ? async () => {
@@ -192,7 +211,7 @@ export function useBidReview({ market, features, canGoal, cellOf, after, onSetGo
         } : null,
       } : v)
     } catch (e) { fail(a, e) }
-  }, [market, features.goal, canGoal, cellOf, onSetGoal]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [market, canGoal, cellOf, onSetGoal]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const save = useCallback(async () => {
     const v = review
@@ -209,7 +228,23 @@ export function useBidReview({ market, features, canGoal, cellOf, after, onSetGo
           : await setBidLock(a.row.campaign.id, a.lock)
       const id = v.changes[0]?.id ?? 'change'
       results[id] = { ok: out.ok, words: a.kind === 'undo' && out.ok ? 'Undone' : resultWords(out) }
-      if (out.ok && a.kind === 'bid') undo = v.undo
+      // A keyword the brain runs at Auto goes Manual with a person's bid (Apply's rule), and back on Undo.
+      const manual = out.ok && a.kind === 'bid' && movesNext(a.row).goesManual && a.row.auto === 'AUTO'
+      if (manual) {
+        const m = await setKeywordMode(a.row.targetId, 'MANUAL')
+        if (!m.ok) results[id] = { ok: true, words: `${results[id].words} · still Auto: ${m.reason ?? 'not switched'}` }
+      }
+      if (out.ok && a.kind === 'bid' && v.undo) {
+        const sendBack = v.undo
+        undo = manual ? async () => {
+          const back = await sendBack()
+          if (back[id]?.ok) {
+            const m = await setKeywordMode(a.row.targetId, 'AUTO')
+            if (!m.ok) back[id] = { ok: true, words: `Undone · still Manual: ${m.reason ?? 'not switched'}` }
+          }
+          return back
+        } : sendBack
+      }
       if (out.ok && a.kind === 'lock') {
         undo = async () => {
           const back = await setBidLock(a.row.campaign.id, !a.lock)
@@ -223,7 +258,7 @@ export function useBidReview({ market, features, canGoal, cellOf, after, onSetGo
       for (const s of sent) {
         const line = plan.send.find((l) => l.row.targetId === s.targetId)
         let words = s.words
-        if (s.ok && line?.goesManual && features.auto) {
+        if (s.ok && line?.goesManual && line.row.auto === 'AUTO') {
           const m = await setKeywordMode(s.targetId, 'MANUAL')
           if (m.ok) manual.push(s.targetId)
           else words = `${words} · still Auto: ${m.reason ?? 'not switched'}`
@@ -288,7 +323,7 @@ export function useBidReview({ market, features, canGoal, cellOf, after, onSetGo
 
     setReview((cur) => (cur && cur.ask === a ? { ...cur, state: { phase: 'done', results }, undo, doneNote } : cur))
     await after()
-  }, [review, market, features.auto, cellOf, after])
+  }, [review, market, cellOf, after])
 
   const undoSaved = useCallback(async () => {
     const v = review

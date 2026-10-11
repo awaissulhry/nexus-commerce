@@ -28,6 +28,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { GridApi, GridState } from 'ag-grid-community'
 
 import { isColumnsViewPayload, type ColumnsViewPayload } from '../views/viewPayload'
+import { withPinning } from '../statePinning'
 import { savedViewRequest, type StoredSheetLayout, type WorkingLayoutWrite } from '../views/savedViewTransport'
 
 export const GRID_VIEW_SCHEMA = 1
@@ -208,7 +209,9 @@ export function useGridViews<TPage>({ surface, baseUrl, getPageState, applyPageS
       if (applyColumnsRef.current) applyColumnsRef.current(view.payload, view)
       else if (process.env.NODE_ENV !== 'production') console.error('[useGridViews] a columns view was applied without applyColumnsView:', view.name)
     } else {
-      apiRef.current?.setState(view.payload.gridState)
+      // A view that does not name its pins keeps the grid's: AG's setState resets a missing `columnPinning` to none.
+      const api = apiRef.current
+      if (api) api.setState(withPinning(view.payload.gridState, api.getState().columnPinning))
       applyRef.current(view.payload.page)
     }
     markActive(view.id)

@@ -7,12 +7,21 @@
   /* The scrolling strip keeps 4px inside its edges for the focus ring; the bar reaches 4px past the content on each
      side so the first label lines up with the page title (polish round 2: x 100 vs the title's 96). */
   margin-inline: calc(-1 * var(--nds-space-4));
+  /* …but its hairline ends where the content ends (design audit S7: it ran 4px past on each side). The mask hides only
+     the hairline's row in those 4px, so a focus ring there still shows: everything above the row is untouched. */
+  --hairline-at: 0px;
+  mask-image: linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor), linear-gradient(to right, transparent var(--nds-space-4), currentColor var(--nds-space-4), currentColor calc(100% - var(--nds-space-4)), transparent calc(100% - var(--nds-space-4)));
+  mask-size: 100% calc(100% - var(--hairline-at) - 1px), 100% var(--hairline-at), 100% 1px;
+  mask-position: top, bottom, left 0 bottom var(--hairline-at);
+  mask-repeat: no-repeat;
 }
 /* While the strip scrolls under an overlay scrollbar the DS keeps a band for the bar BELOW the hairline (13px under it,
    `components.css`, Owner 2026-10-05): that band is most of the 16px, so only the rest is added. The strip sits in the
    DS overflow frame (`.nds-tabs-scroller`), hence no `>`. */
 .tabs:has([data-overflows='overlay']) {
   margin-bottom: var(--nds-space-3);
+  /* The line sits above the scrollbar's band there (13px over the strip's bottom edge). */
+  --hairline-at: calc(var(--nds-space-14) - 1px);
 }
 /* A market Nexus only reads: its one-line banner under the header keeps the header's own gap above the tab strip
    (polish round 2, S13: the tabs touched it). */

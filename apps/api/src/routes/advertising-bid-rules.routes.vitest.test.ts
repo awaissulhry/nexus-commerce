@@ -188,7 +188,7 @@ describe('GET /api/advertising/bid-rules', () => {
       keywords: 1, tooEarly: 0, currency: 'EUR',
       before: { clicks: 10, orders: 1, spendCents: 400, salesCents: 1000, acosPct: 40 },
       after: { clicks: 10, orders: 1, spendCents: 200, salesCents: 1000, acosPct: 20 },
-      window: { lookbackDays: 30, maxDays: 14, minDays: 3 },
+      window: { settledThrough: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) },
     })
   })
 
@@ -204,7 +204,6 @@ describe('GET /api/advertising/bid-rules', () => {
     try {
       body = (await get('/api/advertising/bid-rules?market=IT')).json()
       expect(row(body, ids.r2).mode).toMatchObject({ set: 'AUTO', acts: 'WATCH', heldBy: { kind: 'allowlist', label: 'Campaigns locked' } })
-      expect(body.totals).toMatchObject({ auto: 0, held: 1 })
     } finally {
       await inA(() => db().adsAutomationState.update({ where: { id: 'singleton' }, data: { autonomy: 'SUGGEST' } }))
     }
@@ -304,7 +303,7 @@ describe('POST /api/advertising/bid-rules/preview', () => {
     const res = await post('/api/advertising/bid-rules/preview', builderBody(['c-it']))
     expect(res.statusCode, res.body).toBe(200)
     expect(res.json()).toMatchObject({
-      ruleId: null, saved: false, engine: 'draft', wouldChange: 1, brainInputs: 0, locked: 0, windowDays: 14,
+      ruleId: null, saved: false, wouldChange: 1, brainInputs: 0, locked: 0, windowDays: 14,
       sample: [{ target: { id: 't-it', name: 'race jacket' }, adGroup: { id: 'g-c-it' }, campaign: { id: 'c-it', name: 'Italy exact' }, fromCents: 45, toCents: 60, held: null, heldBy: null }],
       holds: [],
     })
@@ -332,7 +331,8 @@ describe('POST /api/advertising/bid-rules/preview', () => {
       campaigns: [{ id: 'c-off', name: 'Italy not allowlisted', href: '/marketing/ads/campaigns/c-off' }],
     }])
     const saved = (await post('/api/advertising/bid-rules/preview', { ruleId: ids.r1 })).json()
-    expect(saved).toMatchObject({ ruleId: ids.r1, saved: true, engine: 'draft', wouldChange: 1, locked: 1 })
+    // The builder's draft pipeline (it reads a lookback); a saved engine rule's Simulate reads none.
+    expect(saved).toMatchObject({ ruleId: ids.r1, saved: true, wouldChange: 1, locked: 1, windowDays: expect.any(Number) })
     const edited = (await post('/api/advertising/bid-rules/preview', { ruleId: ids.r1, ...builderBody(['c-it']) })).json()
     expect(edited).toMatchObject({ ruleId: ids.r1, saved: false, wouldChange: 1, locked: 0 })
     expect((await post('/api/advertising/bid-rules/preview', { conditions: [], actions: [{ type: 'bid_down', percent: 10 }] })).statusCode).toBe(400)
@@ -352,7 +352,8 @@ describe('POST /api/advertising/bid-rules/preview', () => {
   it('a saved engine rule previews through its Simulate', async () => {
     const res = await post('/api/advertising/bid-rules/preview', { ruleId: ids.r2 })
     expect(res.statusCode, res.body).toBe(200)
-    expect(res.json()).toMatchObject({ ruleId: ids.r2, saved: true, engine: 'simulate' })
+    // Simulate answers without the draft pipeline's lookback.
+    expect(res.json()).toMatchObject({ ruleId: ids.r2, saved: true, windowDays: null })
   })
 
   /** A saved engine rule on c-it's clicked keyword (TARGET_PERFORMANCE: t-it), previewed through its Simulate, then removed. */
@@ -368,7 +369,7 @@ describe('POST /api/advertising/bid-rules/preview', () => {
   }
 
   it('each bid action type, read by its own dry run: bid_down, bid_up, bid_apply, lower_bid_to_floor', async () => {
-    expect(await simulate([{ type: 'bid_down', percent: 20 }])).toMatchObject({ engine: 'simulate', wouldChange: 1, sample: [{ target: { id: 't-it' }, field: 'bid', fromCents: 45, toCents: 36, held: null }] })
+    expect(await simulate([{ type: 'bid_down', percent: 20 }])).toMatchObject({ windowDays: null, wouldChange: 1, sample: [{ target: { id: 't-it' }, field: 'bid', fromCents: 45, toCents: 36, held: null }] })
     expect(await simulate([{ type: 'bid_up', percent: 20 }])).toMatchObject({ wouldChange: 1, sample: [{ target: { id: 't-it' }, fromCents: 45, toCents: 54 }] })
     expect(await simulate([{ type: 'bid_apply', op: 'set', value: 0.5 }])).toMatchObject({ wouldChange: 1, sample: [{ target: { id: 't-it' }, fromCents: 45, toCents: 50 }] })
     expect(await simulate([{ type: 'lower_bid_to_floor' }])).toMatchObject({ wouldChange: 1, unsampled: 0, sample: [{ target: { id: 't-it' }, field: 'bid', fromCents: 45, toCents: 5, held: null }] })
@@ -378,7 +379,7 @@ describe('POST /api/advertising/bid-rules/preview', () => {
     // Every enabled keyword of c-it, counted by the handler without a list.
     expect(await simulate([{ type: 'raise_bids_for_rank_defense', percent: 20 }])).toMatchObject({ wouldChange: 3, unsampled: 3, sample: [] })
     expect(await simulate([{ type: 'pause_target' }])).toMatchObject({ wouldChange: 1, sample: [{ target: { id: 't-it' }, field: 'state', from: 'ENABLED', to: 'PAUSED', held: null }] })
-    expect(await simulate([{ type: 'enable_target' }])).toMatchObject({ wouldChange: 0, noChange: 1, sample: [] })
+    expect(await simulate([{ type: 'enable_target' }])).toMatchObject({ wouldChange: 0, brainInputs: 0, locked: 0, refused: 0, sample: [] })
     // The builder's Pause THEN runs pause_target's own handler, not bid_apply's.
     const pause = { ...builderBody(['c-it']), conditions: [{ conditions: [{ metric: 'Clicks', op: 'gte', value: '1' }], action: { op: 'pauseTarget' } }] }
     expect((await post('/api/advertising/bid-rules/preview', pause)).json()).toMatchObject({ wouldChange: 1, sample: [{ target: { id: 't-it' }, field: 'state', from: 'ENABLED', to: 'PAUSED' }] })
@@ -390,10 +391,11 @@ describe('POST /api/advertising/bid-rules/preview', () => {
     const { ACTION_HANDLERS } = await import('../services/automation-rule.service.js')
     await import('../services/advertising/ads-bid-optimizer.service.js')
     const real = ACTION_HANDLERS.bid_to_target_acos
-    ACTION_HANDLERS.bid_to_target_acos = async (action) => ({ type: action.type, ok: true, output: { dryRun: true, wouldChange: 7, sample: [{ targetId: 't-it', currentBidCents: 45, proposedBidCents: 36 }], brainOwned: 1 } })
+    let runs = 0
+    ACTION_HANDLERS.bid_to_target_acos = async (action) => { runs++; return { type: action.type, ok: true, output: { dryRun: true, wouldChange: 7, sample: [{ targetId: 't-it', currentBidCents: 45, proposedBidCents: 36 }], brainOwned: 1 } } }
     try {
       const body = await simulate([{ type: 'bid_to_target_acos', targetAcos: 0.2 }], 'SCHEDULE', { scopeMarketplace: null, scopeCampaignId: null })
-      expect(body.matched).toBe(2)
+      expect(runs).toBe(2)
       expect(body).toMatchObject({ wouldChange: 7, unsampled: 6, brainInputs: 1, sample: [{ target: { id: 't-it' }, field: 'bid', fromCents: 45, toCents: 36, held: null }] })
     } finally {
       ACTION_HANDLERS.bid_to_target_acos = real

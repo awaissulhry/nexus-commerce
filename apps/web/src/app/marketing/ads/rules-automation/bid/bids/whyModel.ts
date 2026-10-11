@@ -3,12 +3,14 @@
  * (`GET /api/advertising/automation/brain/bid-brain/why|what-if?targetId=…`, bid-brain/read.ts). Pure, tested in Node
  * (`whyModel.vitest.test.ts`).
  *
- * Words only, no jargon (audit §2): a decision is Up · Down · Hold · Brake and how long ago ("Down · 3 h ago"); the layer
- * that decided it shows only when it is not the usual goal ("Night floor", "Low stock"). Its numbers: Target bid · Target
- * ACoS · Range · Expected ACoS · Data to. Money keys may be absent (hidden from this person): a dash. Time and money
- * are the page's one helper (`_shared/format.ts`).
+ * Words only, no jargon (audit §2): a decision the brain made for real (it runs the keyword's campaign, `mode: LIVE`) is
+ * Up · Down · Hold · Brake and how long ago ("Down · 3 h ago"); one it only watched (`mode: SHADOW` — nothing was sent)
+ * says what it WOULD do ("Would lower to €0.40 · watching", use audit A2), never a change that happened. The layer that
+ * decided it shows only when it is not the usual goal ("Night floor", "Low stock"). Its numbers: Brain bid · Target ACoS ·
+ * Range · Expected ACoS · Data to — "Brain bid" is the one the rail and What if show (A7). Money keys may be absent
+ * (hidden from this person): a dash. Time and money are the page's one helper (`_shared/format.ts`).
  */
-import { dayWords, moneyText } from '../_shared/format'
+import { dayWords, money, moneyText } from '../_shared/format'
 
 export interface BrainDecision {
   targetId: string
@@ -95,15 +97,32 @@ export function actionWord(d: { action: string; currentCents?: number | null; de
   return { label: 'Hold', tone: 'neutral' }
 }
 
+/** The brain decided this for real: it runs the keyword's campaign and sent it. Otherwise it only watches. */
+export const isLiveDecision = (d: Pick<BrainDecision, 'mode'>): boolean => String(d.mode ?? '').toUpperCase() === 'LIVE'
+
+/** A watched decision as what it would do: "Would lower to €0.40", "Would raise to €0.55", "Would hold". */
+export function wouldWords(d: { action: string; currentCents?: number | null; decidedCents?: number | null }, currency: string): string {
+  const to = typeof d.decidedCents === 'number' ? money(d.decidedCents, currency) : null
+  const label = actionWord(d).label
+  if (label === 'Up') return to ? `Would raise to ${to}` : 'Would raise'
+  if (label === 'Down') return to ? `Would lower to ${to}` : 'Would lower'
+  if (label === 'Set') return to ? `Would set ${to}` : 'Would set'
+  if (label === 'Brake') return to ? `Would brake to ${to}` : 'Would brake'
+  return 'Would hold'
+}
+
 const pctText = (p: number | null | undefined) => (typeof p === 'number' && Number.isFinite(p) ? `${p} %` : '—')
 
 export interface Fact { label: string; value: string }
 
-/** The decision as label → number pairs, for a KeyValue. Nothing in words but the labels; no confidence score. */
-export function decisionFacts(d: BrainDecision, currency: string): Fact[] {
+/**
+ * The decision as label → number pairs, for a KeyValue. Nothing in words but the labels; no confidence score. `brainBid`:
+ * the row's Brain bid (the same number the rail and What if show); else the decision's own.
+ */
+export function decisionFacts(d: BrainDecision, currency: string, brainBid?: number | null): Fact[] {
   const range = typeof d.bandLoPct === 'number' || typeof d.bandHiPct === 'number' ? `${pctText(d.bandLoPct)} – ${pctText(d.bandHiPct)}` : '—'
   return [
-    { label: 'Target bid', value: moneyText(d.goalBidCents, currency) },
+    { label: 'Brain bid', value: moneyText(typeof brainBid === 'number' ? brainBid : d.goalBidCents, currency) },
     { label: 'Target ACoS', value: pctText(d.aimPct) },
     { label: 'Range', value: range },
     { label: 'Expected ACoS', value: pctText(d.expectedAcosPct) },

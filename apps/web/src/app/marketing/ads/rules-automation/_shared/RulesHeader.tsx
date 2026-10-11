@@ -14,7 +14,7 @@ import { ChevronDown, History, RefreshCw } from 'lucide-react'
 import Link from '@/lib/workspaces/Link'
 import { usePathname, useRouter } from '@/lib/workspaces/navigation'
 import { Button, Spinner } from '@/design-system/primitives'
-import { Banner, Listbox, Menu } from '@/design-system/components'
+import { Banner, Listbox, Menu, useNarrow } from '@/design-system/components'
 import { PageHeader } from '@/design-system/patterns'
 import { AdsHeaderFrame, type AdsHeaderProps } from '../../_shell/AdsPageHeader'
 import { DateRangePicker, lastCompleteDays } from '../../_shell/DateRangePicker'
@@ -31,6 +31,9 @@ export function RulesHeader({
 }: AdsHeaderProps) {
   const pathname = usePathname()
   const router = useRouter()
+  // A phone keeps Change log and the market on one row: Change log becomes its 28px icon (Bid page design audit S8,
+  // 2026-10-11 — the two stacked on two rows at 390, 114 and 168px wide).
+  const narrow = useNarrow()
   const ads = useAdsMarketplaceOptional()
   const changeLogHref = channel === 'ebay' ? '/marketing/ads/ebay/change-log' : '/marketing/ads/changelog'
   // The same window rule as the ads header: 7 complete days ending yesterday, unless the page holds the range.
@@ -68,9 +71,9 @@ export function RulesHeader({
         actions={(
           <>
             {showChangeLog && pathname !== changeLogHref && (
-              <Button asChild size="sm" variant="secondary">
-                <Link href={changeLogHref} title="Every change made to this account">
-                  <History size={14} aria-hidden /> Change log
+              <Button asChild size="sm" variant="secondary" className={narrow ? 'icon' : undefined}>
+                <Link href={changeLogHref} title="Every change made to this account" aria-label={narrow ? 'Change log' : undefined}>
+                  <History size={14} aria-hidden />{narrow ? null : ' Change log'}
                 </Link>
               </Button>
             )}

@@ -6,8 +6,9 @@
  * columns, a row opens the keyword's detail (why this bid · history with Undo · what if · goal; set the bid where nothing
  * automatic writes over it; lock or unlock the campaign's bids). Every change goes through the DS review first.
  *
- * Keyword Auto (KEYWORD-AUTO.md), each part only when the answer carries its field (never a made-up value):
- *   Auto       a switch per keyword (Manual = a person's hold with no end; Auto = handed back)
+ * Keyword Auto (KEYWORD-AUTO.md):
+ *   Auto       a switch per keyword (Manual = a person's hold with no end; Auto = handed back) — drawn only where an
+ *              engine runs some keyword in scope, like Goal; Brain bid only where the Brain sets some bid
  *   Suggested  Amazon's suggested bid per ad group, read lazily for the rows on screen; Apply per row or for the selected
  *              rows (one review, Undo through the change feed)
  *   Goal       the keyword's own target ACoS and max (its detail's Goal tab), saved in the brain's settings
@@ -19,6 +20,11 @@
  * The page's tiles above it show its totals (`onTotals`, after each read) and narrow it (`show`), so a tile and the table
  * never disagree (M1).
  *
+ * Every write is held, with the reason, on a bid whose market Nexus only reads (`useWriteBlockOf`, use audit A1). The
+ * search lives in the address (`?q=`, as on the Rules view). The person's columns stay theirs: a reload keeps them, and a
+ * column that leaves (a market without it) comes back as it was left (`_shared/columnChoices.ts`, A3); while the rows are
+ * read the table keeps the columns it had for this scope (design audit S10).
+ *
  * A row's detail is the DS `DetailModal` with its address: `?bid=<targetId>&tab=why|history|whatif|goal` — opening it is
  * a step in the history (Back closes it), a tab and ▲ / ▼ replace it; a copied address opens it. Esc closes it and the
  * focus goes back to the row's cell (the one on show after ▲ / ▼). A review opens ABOVE it.
@@ -29,33 +35,36 @@ import { Button, FilterChip, Input } from '@/design-system/primitives'
 import { Banner } from '@/design-system/components'
 import { GridToolbar, PreferencesModal, ReviewChangesModal, type PreferencesValue } from '@/design-system/patterns'
 import {
-  AG_SELECTION_COL, GRID_PAGE_SIZES, columnStateToPrefs, gridSelection, GridCard, GridLoadingOverlay, GridNoRowsOverlay, GridPager, GridSearchSlot,
+  AG_SELECTION_COL, GRID_PAGE_SIZES, columnStateToPrefs, gridSelection, GridCard, GridLoadingOverlay, GridNoRowsOverlay, GridPager, GridSearchSlot, GridToolbarFold,
   GridSelectionActions, GridViewsMenu, NexusGrid, prefsToColumnState, useGridState,
   type GridApi, type GridReadyEvent, type GridStateKey, type NexusGridProps, type PrefsBridgeOptions,
 } from '@/design-system/grid'
 import { usePermission } from '@/lib/auth/AuthProvider'
 import { useRouter, useSearchParams } from '@/lib/workspaces/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
-import { readBids, readWaitingTargets, type BidsScope } from './bidsApi'
-import { bidColumns, bidColumnSpecs, OwnerIcon, type BidColumnFeatures, type BidsCellContext, type BidsCellHandlers } from './bidsColumns'
+import { useWriteBlockOf } from '../../../_shell/WriteBlocked'
+import { useColumnChoices } from '../_shared/columnChoices'
+import { readBids, type BidsScope } from './bidsApi'
+import { bidColumns, bidColumnSpecs, NO_COLUMN_FEATURES, OwnerIcon, type BidColumnFeatures, type BidsCellContext, type BidsCellHandlers } from './bidsColumns'
 import {
-  autoHeld, bidsTotalsOf, countWords, emptyWords, featuresOf, gridRowOf, isBidFiltered, NO_BID_FILTER, otherWriters, ownerChips, rowMatches, showMatches,
+  autoHeld, bidsTotalsOf, countWords, emptyWords, gridRowOf, inScopeOf, isBidFiltered, NO_BID_FILTER, otherWriters, ownerChips, rowMatches, showMatches,
   type BidFilter, type BidGridRow, type BidsAnswer, type BidsShow, type BidsTotals, type OwnerFilter,
 } from './bidsModel'
-import { BidDetail, isBidTab, type BidPanelTab, type DetailFeatures } from './BidDetail'
+import { BidDetail, isBidTab, type BidPanelTab } from './BidDetail'
 import { inFlight, inFlightSince } from './liveModel'
 import { applyHeld, applyLabel, applyPlan, suggestedCellOf } from './suggestedModel'
-import { HeldButton } from './HeldButton'
 import { useBidReview } from './useBidReview'
 import { useBidsLive, useSuggested } from './useBidsLive'
 import styles from './bids.module.css'
+// The toolbar's lead, count, search and right group: the Rules view's own rules, so the two toolbars line up (audit M3).
+import page from '../bid.module.css'
 
 export interface BidsViewProps extends BidsScope {
   /** The page's [Rules | Bids] switch, drawn at the start of this view's toolbar. */
   viewSwitch?: ReactNode
   /** Bumped by the page's Refresh: the bids are read again. */
   refreshKey?: number
-  /** A tile's filter: bids changed in 7 d · bids two writers write ("Two writers") · bids with an ask waiting. Unset = all. */
+  /** A tile's filter: bids changed in 7 d · bids two writers write ("Two writers"). Unset = all. */
   show?: BidsShow
   /** Called after each read with the view's totals (never narrowed by its own filters), for the page's tiles. */
   onTotals?: (totals: BidsTotals) => void
@@ -90,8 +99,19 @@ function usePhone(): boolean {
   return phone
 }
 
-/** The bids and the waiting asks, read together. `waiting` null: the asks could not be read. */
-interface Read { answer: BidsAnswer; waiting: Set<string> | null }
+/** The columns a scope needed last time (Auto · Goal · Brain bid), so its table keeps them while its rows are read (S10). */
+const inScopeKey = (scopeKey: string) => `nexus.bid.inScope.${scopeKey}`
+function readInScope(scopeKey: string): BidColumnFeatures | null {
+  try {
+    const v = JSON.parse(window.localStorage.getItem(inScopeKey(scopeKey)) ?? 'null') as Partial<BidColumnFeatures> | null
+    return v && typeof v === 'object' ? { engine: v.engine === true, brain: v.brain === true } : null
+  } catch {
+    return null
+  }
+}
+function writeInScope(scopeKey: string, v: BidColumnFeatures): void {
+  try { window.localStorage.setItem(inScopeKey(scopeKey), JSON.stringify(v)) } catch { /* the next visit reads it again */ }
+}
 
 export function BidsView({ market = null, productId = null, campaignId = null, adGroupId = null, viewSwitch, refreshKey, show, onTotals }: BidsViewProps) {
   // The server's own gates (permissions-manifest.ts): a bid, a lock and an Undo · a bulk bid and a keyword's mode · a goal.
@@ -102,16 +122,28 @@ export function BidsView({ market = null, productId = null, campaignId = null, a
   const phone = usePhone()
   const scopeKey = `${market ?? ''}|${productId ?? ''}|${campaignId ?? ''}|${adGroupId ?? ''}`
 
-  const [read, setRead] = useState<Read | null>(null)
-  const [err, setErr] = useState<string | null>(null)
-  const [reading, setReading] = useState(true)
-  const [filter, setFilter] = useState<BidFilter>(NO_BID_FILTER)
-  const [version, setVersion] = useState(0)
-  const answer = read?.answer ?? null
-
-  // ── the detail's address: ?bid=<targetId>&tab=<tab> ──
   const router = useRouter()
   const params = useSearchParams()
+  const [answer, setAnswer] = useState<BidsAnswer | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+  const [reading, setReading] = useState(true)
+  const [filter, setFilter] = useState<BidFilter>(() => ({ ...NO_BID_FILTER, search: params.get('q') ?? '' }))
+  const [version, setVersion] = useState(0)
+
+  // The search lives in the address too (as on the Rules view: Rules → Bids → Rules keeps it; a link can carry it).
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      const q = new URLSearchParams(window.location.search)
+      const want = filter.search.trim() ? filter.search : null
+      if ((q.get('q') ?? null) === want) return
+      if (want) q.set('q', want); else q.delete('q')
+      const s = q.toString()
+      router.replace(s ? `?${s}` : '?', { scroll: false })
+    }, 250)
+    return () => window.clearTimeout(t)
+  }, [filter.search]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── the detail's address: ?bid=<targetId>&tab=<tab> ──
   const openId = params.get('bid')
   const tabParam = params.get('tab')
   const openTab: BidPanelTab = isBidTab(tabParam) ? tabParam : 'why'
@@ -154,35 +186,41 @@ export function BidsView({ market = null, productId = null, campaignId = null, a
   scopeRef.current = { market, productId, campaignId, adGroupId }
   const load = useCallback(async () => {
     setReading(true)
-    const scope = scopeRef.current
-    const [bids, waiting] = await Promise.allSettled([readBids(scope), readWaitingTargets(scope.market)])
-    setReading(false)
-    if (bids.status === 'rejected') {
-      setErr(bids.reason instanceof Error ? bids.reason.message : String(bids.reason))
+    try {
+      const next = await readBids(scopeRef.current)
+      setAnswer(next)
+      setErr(null)
+      return next
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e))
       return null
+    } finally {
+      setReading(false)
     }
-    const next: Read = { answer: bids.value, waiting: waiting.status === 'fulfilled' ? waiting.value : null }
-    setRead(next)
-    setErr(null)
-    return next
   }, [])
-  useEffect(() => { setRead(null); setErr(null); void load() }, [scopeKey, refreshKey, load])
+  useEffect(() => { setAnswer(null); setErr(null); void load() }, [scopeKey, refreshKey, load])
   const reload = useCallback(() => { setErr(null); void load() }, [load])
   const after = useCallback(async () => { await load(); setVersion((n) => n + 1) }, [load])
 
   // The page's tiles: the view's own totals after every read (a ref, so a new callback never reads again).
   const onTotalsRef = useRef(onTotals)
   onTotalsRef.current = onTotals
-  const totals = useMemo(() => (read ? bidsTotalsOf(read.answer, read.waiting) : null), [read])
+  const totals = useMemo(() => (answer ? bidsTotalsOf(answer) : null), [answer])
   useEffect(() => { if (totals) onTotalsRef.current?.(totals) }, [totals])
 
-  // ── what this answer carries (a column or control shows only with its field) ──
-  const rowFeatures = useMemo(() => featuresOf(answer?.rows ?? []), [answer])
+  // ── which columns the rows in scope need (never one that could only say "—"); while they are read, last time's ──
+  // Read before the grid is made, so its first columns are the scope's own (its saved order and picks apply whole).
+  const [remembered, setRemembered] = useState<BidColumnFeatures | null>(() => (typeof window === 'undefined' ? null : readInScope(scopeKey)))
+  const firstScope = useRef(scopeKey)
+  useEffect(() => { if (scopeKey !== firstScope.current) { firstScope.current = scopeKey; setRemembered(readInScope(scopeKey)) } }, [scopeKey])
+  const answered = useMemo(() => (answer ? inScopeOf(answer.rows) : null), [answer])
+  useEffect(() => { if (answered) writeInScope(scopeKey, answered) }, [answered]) // eslint-disable-line react-hooks/exhaustive-deps
+  const inScope = answered ?? remembered ?? NO_COLUMN_FEATURES
 
-  // ── rows ──
-  const base = useMemo(() => (answer?.rows ?? []).map((r) => gridRowOf(r, market)), [answer, market])
-  const waiting = read?.waiting ?? null
-  const filteredBase = useMemo(() => base.filter((r) => showMatches(r, show, waiting) && rowMatches(r, filter)), [base, show, waiting, filter])
+  // ── rows; a write to a market Nexus only reads is held on the row, with the reason (A1) ──
+  const blockOf = useWriteBlockOf()
+  const base = useMemo(() => (answer?.rows ?? []).map((r) => ({ ...gridRowOf(r, market), writeBlock: blockOf([market, r.market]) })), [answer, market, blockOf])
+  const filteredBase = useMemo(() => base.filter((r) => showMatches(r, show) && rowMatches(r, filter)), [base, show, filter])
 
   // ▲ / ▼ and the rows on screen: the table's rows in the order shown now (filtered, sorted — every page).
   const [order, setOrder] = useState<string[]>([])
@@ -199,18 +237,15 @@ export function BidsView({ market = null, productId = null, campaignId = null, a
     return [...new Set(open ? [open, ...groups] : groups)]
   }, [order, pager.page, pageSize, filteredBase, byIdBase, openId])
   const suggested = useSuggested({ adGroupIds: onScreenGroups, enabled: !!answer, resetKey: scopeKey })
-  const features: BidColumnFeatures & DetailFeatures = useMemo(
-    () => ({ suggested: suggested.supported === true, auto: rowFeatures.auto, goal: rowFeatures.goal }),
-    [suggested.supported, rowFeatures.auto, rowFeatures.goal],
-  )
+  const features = useMemo<BidColumnFeatures>(() => ({ engine: inScope.engine, brain: inScope.brain }), [inScope.engine, inScope.brain])
   const cellOf = useCallback((row: BidGridRow) => suggestedCellOf(suggested.states.get(row.adGroup.id), row.targetId), [suggested.states, suggested.version]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const all = useMemo(
-    () => base.map((r) => ({ ...r, suggested: features.suggested ? cellOf(r) : undefined, autoLock: features.auto ? autoHeld(r, canBids) : null })),
-    [base, features.suggested, features.auto, cellOf, canBids],
+    () => base.map((r) => ({ ...r, suggested: cellOf(r), autoLock: r.writeBlock ?? autoHeld(r, canBids) })),
+    [base, cellOf, canBids],
   )
   const byId = useMemo(() => new Map(all.map((r) => [r.targetId, r])), [all])
-  const shown = useMemo(() => all.filter((r) => showMatches(r, show, waiting) && rowMatches(r, filter)), [all, show, waiting, filter])
+  const shown = useMemo(() => all.filter((r) => showMatches(r, show) && rowMatches(r, filter)), [all, show, filter])
   const openRef = useRef<BidGridRow | null>(null)
   const openRow = openId ? byId.get(openId) ?? (openRef.current?.targetId === openId ? openRef.current : null) : null
   openRef.current = openRow
@@ -252,10 +287,12 @@ export function BidsView({ market = null, productId = null, campaignId = null, a
   })
   const bindState = useRef(gridState.bind)
   bindState.current = gridState.bind
+  const bindChoices = useColumnChoices('ads-bid-bids', gridState.initialState)
   const onGridReady = useCallback((e: GridReadyEvent<BidGridRow>) => {
     apiRef.current = e.api
     bindState.current(e.api)
-  }, [])
+    bindChoices(e.api as unknown as GridApi)
+  }, [bindChoices])
   const onPaginationChanged = useCallback((e: { api: GridApi<BidGridRow> }) => {
     setPager({ page: e.api.paginationGetCurrentPage() + 1, pageCount: Math.max(1, e.api.paginationGetTotalPages()) })
   }, [])
@@ -267,18 +304,18 @@ export function BidsView({ market = null, productId = null, campaignId = null, a
     setOrder((cur) => (cur.length === ids.length && cur.every((id, i) => id === ids[i]) ? cur : ids))
   }, [])
 
-  // Bulk: the selected rows (row checkboxes only where Apply suggested can go).
-  // Ticks on the phone too, so the bulk Apply is there (audit R20).
-  const selectable = features.suggested && canBids
+  // Bulk: the selected rows (row checkboxes only for a person who may send bids). Ticks on the phone too (audit R20).
+  const selectable = canBids
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const onSelectionChanged = useCallback<NonNullable<NexusGridProps<BidGridRow>['onSelectionChanged']>>((e) => setSelectedIds(e.api.getSelectedRows().map((r) => r.targetId)), [])
   const selected = useMemo(() => selectedIds.flatMap((id) => byId.get(id) ?? []), [selectedIds, byId])
-  // What the bulk Apply would send: held with the reason when nothing of the selection can go (audit R7).
+  // What the bulk Apply would send: held with the reason when nothing of the selection can go (audit R7) — a bid in a
+  // market Nexus only reads is left out with that reason (A1).
   const bulkPlan = useMemo(() => applyPlan(selected, cellOf), [selected, cellOf])
 
   /* ── the review (every change), above the detail when one is open ─────────────────────────── */
 
-  const { review, ask, save, undoSaved, close } = useBidReview({ market, features, canGoal, cellOf, after, onSetGoal: (row) => openDetail(row.targetId, 'goal') })
+  const { review, ask, save, undoSaved, close } = useBidReview({ market, canGoal, cellOf, after, onSetGoal: (row) => openDetail(row.targetId, 'goal') })
 
   const onRowClicked = useCallback<NonNullable<NexusGridProps<BidGridRow>['onRowClicked']>>((e) => {
     const target = (e.event?.target ?? null) as HTMLElement | null
@@ -327,9 +364,8 @@ export function BidsView({ market = null, productId = null, campaignId = null, a
   const noRowsParams = useMemo(() => {
     if (failed) return { title: 'Bids not read', message: err ?? '', action: { label: 'Try again', onClick: reload } }
     const words = emptyWords(show, isBidFiltered(filter), all.length > 0)
-    if (show === 'waiting' && !waiting && !isBidFiltered(filter)) return { title: 'Waiting asks not read', message: '', action: { label: 'Try again', onClick: reload } }
     return { title: words.title, message: '', action: words.clear ? { label: 'Clear filters', onClick: clear } : undefined }
-  }, [failed, err, reload, show, filter, all.length, waiting, clear])
+  }, [failed, err, reload, show, filter, all.length, clear])
 
   /* ── Customise, Reset (the toolbar and every header's ⋮ menu) ────────────────────────────── */
 
@@ -354,7 +390,8 @@ export function BidsView({ market = null, productId = null, campaignId = null, a
 
   const total = answer?.totals.bids ?? 0
   const setOwner = (key: OwnerFilter) => setFilter((f) => ({ ...f, owner: f.owner === key && key !== 'ALL' ? 'ALL' : key }))
-  const countText = failed ? null : answer ? countWords(shown.length, total, filtered) : 'Reading…'
+  const countText = failed ? 'Not read' : answer ? countWords(shown.length, total, filtered) : 'Reading…'
+  const activeChip = chips.find((c) => c.key === filter.owner && c.key !== 'ALL')?.label
   const pagerShown = !!answer && !failed && shown.length > PAGER_FROM
   const bulk = selectable && selected.length > 0
 
@@ -369,24 +406,24 @@ export function BidsView({ market = null, productId = null, campaignId = null, a
 
       <GridCard
         toolbar={bulk ? (
-          <GridToolbar count={<span className={styles.inline}>{viewSwitch}<span className={styles.count}>Selected <b>{selected.length}</b></span></span>}>
+          <GridToolbar count={<span className={page.lead}>{viewSwitch}<span className={page.count}>Selected <b>{selected.length}</b></span></span>}>
             <GridSelectionActions>
-              <HeldButton size="sm" variant="secondary" held={applyHeld(bulkPlan)} onClick={() => void ask({ kind: 'apply', row: selected[0], rows: selected })}>
+              <Button size="sm" variant="secondary" heldReason={applyHeld(bulkPlan)} onClick={() => void ask({ kind: 'apply', row: selected[0], rows: selected })}>
                 <Sparkles size={14} aria-hidden /> {bulkPlan.send.length ? `${applyLabel(bulkPlan.send.length)}…` : 'Apply suggested'}
-              </HeldButton>
+              </Button>
               <Button size="sm" variant="link" onClick={() => apiRef.current?.deselectAll()}>Clear</Button>
             </GridSelectionActions>
           </GridToolbar>
         ) : (
           <GridToolbar
             count={(
-              <span className={styles.inline}>
+              <span className={page.lead}>
                 {viewSwitch}
-                {countText && <span className={styles.count}>{countText}</span>}
+                <span className={page.count}>{countText}</span>
               </span>
             )}
             right={!phone ? (
-              <span className={styles.toolbarRight}>
+              <span className={page.toolbarRight}>
                 <GridViewsMenu views={gridState} />
                 <Button size="sm" variant="secondary" onClick={openCustomise}>
                   <SlidersHorizontal size={14} aria-hidden /> Customise
@@ -400,12 +437,16 @@ export function BidsView({ market = null, productId = null, campaignId = null, a
                 type="search"
                 aria-label="Search bids"
                 placeholder="Search"
+                fieldClassName={page.searchField}
                 leadingIcon={<Search size={14} aria-hidden />}
                 value={filter.search}
                 onChange={(e) => setFilter((f) => ({ ...f, search: e.target.value }))}
               />
             </GridSearchSlot>
+            {/* The owner chips stay on one line; when the toolbar runs out of room they fold into one "Who sets it" button
+                (the DS fold, M4: they wrapped 3 + 2 at 1024 and pushed the toolbar to 93 px). A phone always folds them. */}
             {chips.length > 0 && (
+              <GridToolbarFold label="Who sets it" activeLabel={activeChip} mode={phone ? 'always' : 'overflow'}>
               <span className={styles.chips} role="group" aria-label="Who sets it">
                 {chips.map((c) => (
                   <FilterChip
@@ -420,6 +461,7 @@ export function BidsView({ market = null, productId = null, campaignId = null, a
                   </FilterChip>
                 ))}
               </span>
+              </GridToolbarFold>
             )}
           </GridToolbar>
         )}
@@ -472,7 +514,6 @@ export function BidsView({ market = null, productId = null, campaignId = null, a
           canEdit={canEdit}
           canBids={canBids}
           canGoal={canGoal}
-          features={features}
           version={version}
           onAsk={(a) => void ask(a)}
           onClose={closeDetail}

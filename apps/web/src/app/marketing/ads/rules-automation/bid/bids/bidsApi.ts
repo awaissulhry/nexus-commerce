@@ -4,7 +4,6 @@
  * (`_shared/adsWrite.ts`: the server's own reason, and "Send anyway" past a person's own limits).
  *
  *   GET  /api/advertising/bids?market=&productId=&campaignId=&adGroupId=           the rows, each with its one owner
- *   GET  /api/advertising/suggestions?status=pending                                the asks waiting for a person (the tile)
  *   GET  /api/advertising/automation/brain/bid-brain/why?targetId=                  the brain's newest decision
  *   GET  /api/advertising/automation/brain/bid-brain/what-if?targetId=&targetAcosPct=
  *   GET  /api/advertising/changes?entityType=AD_TARGET&entityId=&field=bid          one bid's history, with the undo handle
@@ -46,18 +45,6 @@ export interface BidsScope { market?: string | null; productId?: string | null; 
 
 export const readBids = (scope: BidsScope): Promise<BidsAnswer> =>
   getJson<BidsAnswer>(`/api/advertising/bids${bidsQuery(scope)}`)
-
-/** The server's cap on one read of the suggestions list (advertising.routes.ts GET /suggestions). */
-const ASKS_LIMIT = 1000
-
-/** The keywords and targets with an ask waiting for a person (a rule at Ask me): their target ids. */
-export async function readWaitingTargets(market: string | null | undefined): Promise<Set<string>> {
-  const qs = new URLSearchParams({ status: 'pending', limit: String(ASKS_LIMIT) })
-  const m = market?.trim()
-  if (m && m.toLowerCase() !== 'all') qs.set('market', m.toUpperCase())
-  const a = await getJson<{ items?: Array<{ entityType?: string; entityId?: string }> }>(`/api/advertising/suggestions?${qs}`)
-  return new Set((a.items ?? []).filter((i) => i.entityType === 'AD_TARGET' && i.entityId).map((i) => i.entityId!))
-}
 
 /** One bid again, as it is now (the review's "Now"): read in its own ad group, archived or paused too. */
 export async function readOneBid(row: Pick<BidRow, 'targetId' | 'campaign' | 'adGroup'>): Promise<BidRow | null> {
@@ -105,16 +92,10 @@ export const setBidLock = (campaignId: string, locked: boolean): Promise<WriteRe
 
 // ── keyword Auto, suggested bids, goal, live (KEYWORD-AUTO.md) ─────────────────────────────────────────────────────
 
-/** One ad group's suggested bids; `missing` when the server has no such route yet (the column stays hidden). */
+/** One ad group's suggested bids, or why they could not be read. Never throws. */
 export async function readSuggested(adGroupId: string): Promise<SuggestedState> {
   try {
     const r = await fetch(`${getBackendUrl()}/api/advertising/bids/suggested?${new URLSearchParams({ adGroupId })}`, { cache: 'no-store' })
-    if (r.status === 404) {
-      const body = (await r.json().catch(() => null)) as { error?: unknown } | null
-      // A route that is not there answers Fastify's "Route … not found"; an ad group the server does not hold says so.
-      if (!body || typeof body.error !== 'string' || /route .* not found/i.test(body.error) || body.error === 'Not Found') return { kind: 'missing' }
-      return { kind: 'failed', error: body.error }
-    }
     if (!r.ok) {
       const body = (await r.json().catch(() => null)) as { error?: unknown } | null
       return { kind: 'failed', error: typeof body?.error === 'string' && body.error.trim() ? body.error.trim() : `HTTP ${r.status}` }
@@ -126,15 +107,13 @@ export async function readSuggested(adGroupId: string): Promise<SuggestedState> 
   }
 }
 
-/** Has anything moved in this scope? null when the route is not there (the view stops asking) or did not answer. */
-export async function readCursor(scope: BidsScope): Promise<{ cursor: BidsCursor | null; missing: boolean }> {
+/** Has anything moved in this scope? null when it did not answer (the next ask tries again). */
+export async function readCursor(scope: BidsScope): Promise<BidsCursor | null> {
   try {
     const r = await fetch(`${getBackendUrl()}/api/advertising/bids/cursor${bidsQuery(scope)}`, { cache: 'no-store' })
-    if (r.status === 404) return { cursor: null, missing: true }
-    if (!r.ok) return { cursor: null, missing: false }
-    return { cursor: cursorOf(await r.json()), missing: false }
+    return r.ok ? cursorOf(await r.json()) : null
   } catch {
-    return { cursor: null, missing: false }
+    return null
   }
 }
 

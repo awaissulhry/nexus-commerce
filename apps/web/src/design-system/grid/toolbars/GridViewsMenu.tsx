@@ -239,7 +239,8 @@ export function GridViewsMenu<TPage>({
     ...builtIn,
     ...(!headings && builtIn.length && savedItems.length ? [{ id: 'sep-presets', separator: true } as MenuItemDef] : []),
     ...savedItems,
-    { id: 'sep-1', separator: true },
+    // Only between views and the verbs: with no view listed it was a hairline above the first item (design audit M18).
+    ...(builtIn.length || savedItems.length ? [{ id: 'sep-1', separator: true } as MenuItemDef] : []),
     ...(onNewView && manage === 'full' ? [{ id: 'new', label: 'New view…', onSelect: onNewView }] : []),
     { id: 'save-new', label: 'Save as view…', onSelect: () => open({ mode: 'save' }) },
     ...(active && isTeammates(active)

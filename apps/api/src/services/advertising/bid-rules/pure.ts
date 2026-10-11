@@ -521,8 +521,8 @@ export function brainNextFullRun(now: Date): Date {
  * too early is still an effect with `keywords: 0` and its `tooEarly` count (no sides to compare yet).
  */
 export const EFFECT_LOOKBACK_DAYS = 30
-export const EFFECT_MAX_DAYS = 14
-export const EFFECT_MIN_DAYS = 3
+const EFFECT_MAX_DAYS = 14
+const EFFECT_MIN_DAYS = 3
 const DAY = 86_400_000
 
 export const utcDay = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
@@ -551,7 +551,8 @@ export function effectWindows(firstChange: ReadonlyMap<string, Date>, settledThr
 export interface PerfDay { targetId: string; date: Date; clicks: number; orders: number; spendCents: number; salesCents: number; currency: string }
 export interface EffectSide { clicks: number; orders: number; spendCents: number; salesCents: number; acosPct: number | null }
 export interface Effect {
-  window: { lookbackDays: number; maxDays: number; minDays: number; settledThrough: string; method: 'equal days before and after each keyword\'s first change' }
+  /** The newest settled day the after side reaches (the method: EFFECT above). */
+  window: { settledThrough: string }
   keywords: number
   tooEarly: number
   /** Keyword-days on each side (equal by construction). */
@@ -571,7 +572,7 @@ export function effectUnchanged(before: EffectSide, after: EffectSide): boolean 
 
 /** The effect over the kept keywords; null when it changed nothing in the lookback, the currencies differ, or both sides read the same. Pure. */
 export function effectOf(windows: readonly EffectWindow[], tooEarly: number, perf: readonly PerfDay[], settledThrough: Date): Effect | null {
-  const head = { lookbackDays: EFFECT_LOOKBACK_DAYS, maxDays: EFFECT_MAX_DAYS, minDays: EFFECT_MIN_DAYS, settledThrough: dayKey(utcDay(settledThrough)), method: 'equal days before and after each keyword\'s first change' as const }
+  const head = { settledThrough: dayKey(utcDay(settledThrough)) }
   // Every keyword it changed is too early to compare: no sides yet, but how many wait is said.
   if (!windows.length) return tooEarly > 0 ? { window: head, keywords: 0, tooEarly, days: 0, currency: null, before: side(), after: side() } : null
   const byTarget = new Map(windows.map((w) => [w.targetId, w]))
@@ -618,7 +619,6 @@ export interface ActionOutcome {
   counted: number
   /** Changes left to the bid brain (an input to it on its campaign, or a keyword the optimiser leaves to it). */
   brain: number
-  noChange: number
   refused: number
   /** Answers that do not depend on the context (an account-wide target ACoS run): counted once, whatever repeats it. */
   onceKey: string | null
@@ -644,7 +644,7 @@ const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFi
  * Pure.
  */
 export function actionOutcome(a: { type?: string; ok?: boolean; error?: string; output?: unknown }): ActionOutcome {
-  const out: ActionOutcome = { moves: [], counted: 0, brain: 0, noChange: 0, refused: 0, onceKey: null }
+  const out: ActionOutcome = { moves: [], counted: 0, brain: 0, refused: 0, onceKey: null }
   const o = (a.output && typeof a.output === 'object' ? a.output : {}) as Record<string, unknown>
   if (a.ok === false) { out.refused = 1; return out }
   if (o.bidBrain != null && typeof o.bidBrain === 'object') { out.brain = 1; return out }
@@ -652,7 +652,6 @@ export function actionOutcome(a: { type?: string; ok?: boolean; error?: string; 
     // Left to the brain: the bid brain's goal already in force (`bidBrain` words), an action it carries (rule-directives.ts
     // CARRIED_ACTIONS), or a lever a product's brain owns (brain/rule-skips.ts `brainSkip`).
     if (typeof o.bidBrain === 'string' || o.brainSkip != null || /bid brain/.test(String(o.skipped ?? ''))) out.brain = 1
-    else out.noChange = 1
     return out
   }
   const type = String(a.type ?? '')
@@ -666,26 +665,22 @@ export function actionOutcome(a: { type?: string; ok?: boolean; error?: string; 
       const n = num(o.wouldChange) ?? sample.length
       out.counted = Math.max(0, n - out.moves.length)
       out.brain = num(o.brainOwned) ?? 0
-      if (n === 0 && !out.brain) out.noChange = 1
       out.onceKey = `${type}:${n}:${sample.map((p) => String(p.targetId)).join(',')}`
       return out
     }
     case 'raise_bids_for_rank_defense': {
       out.counted = num(o.targets) ?? 0
-      if (!out.counted) out.noChange = 1
       return out
     }
     case 'lower_bid_to_floor': {
       const targetId = str(o.adTargetId)
       if (targetId && num(o.bidCents) != null) out.moves.push({ targetId, adGroupId: null, field: 'bid', fromCents: null, toCents: num(o.bidCents) })
-      else out.noChange = 1
       return out
     }
     case 'pause_target':
     case 'enable_target': {
       const targetId = str(o.adTargetId)
       if (targetId && str(o.wouldSet)) out.moves.push({ targetId, adGroupId: null, field: 'state', from: str(o.from), to: str(o.wouldSet) })
-      else out.noChange = 1
       return out
     }
     default: {
@@ -693,7 +688,7 @@ export function actionOutcome(a: { type?: string; ok?: boolean; error?: string; 
       const adGroup = o.target === 'ad_group'
       const targetId = str(o.adTargetId) ?? (!adGroup ? str(o.id) : null)
       const adGroupId = adGroup ? str(o.id) : null
-      if (!m || (!targetId && !adGroupId)) { out.noChange = 1; return out }
+      if (!m || (!targetId && !adGroupId)) return out
       out.moves.push({ targetId, adGroupId, field: 'bid', fromCents: Math.round(Number(m[1])), toCents: Math.round(Number(m[2])) })
       return out
     }

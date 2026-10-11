@@ -8,7 +8,7 @@
  *              decided with the code it is scheduled (the undo window), committed it runs as that person
  *   kill       op kill runs at once on the person's click (recorded, undoable); op end waits for approval and the code
  *   refusals   403 without ads.automation.manage (the manifest) or ai.run (the gate); 400 wrong arguments
- *   requests   GET …/brain/requests lists what waits on the brain; decide refuses an id the list does not hold (404)
+ *   requests   decide takes only a request that waits on the brain (requests-read.ts isBrainRequest), else 404
  *   double     the same Idempotency-Key twice asks once
  *
  * Values are made up (public repo).
@@ -56,6 +56,7 @@ let permissions = new Set<string>(OWNER)
 let app: FastifyInstance
 let userId = ''
 let secret = ''
+let isBrainRequest: (approvalId: string) => Promise<boolean>
 
 beforeAll(async () => {
   database = await formulaDatabase()
@@ -79,6 +80,7 @@ beforeAll(async () => {
   const { rbacHook } = await import('../lib/auth/rbac-hook.js')
   const { registerCommandIdempotency } = await import('../lib/command-idempotency.js')
   const { default: routes } = await import('./advertising-brain.routes.js')
+  ;({ isBrainRequest } = await import('../services/advertising/brain/requests-read.js'))
   app = Fastify()
   app.addHook('onRequest', (request, _reply, done) => {
     const r = request as unknown as Record<string, unknown>
@@ -146,9 +148,8 @@ describe('A5 — the brain\'s writes ask the gate as the person on the page', ()
     const end = (await post('/kill', { op: 'end', lever: 'budgets', productId: P, market: 'IT', why: 'a made-up restart', approve: true })).json()
     expect(end).toMatchObject({ status: 'pending', needsCode: true, approve: { ok: false, code: 'mfa_required' } })
     expect((await killRows('budgets'))[0].endedAt).toBeNull()
-    // It is on the brain's list of requests, asked by a person, needing the code.
-    const listed = (await app.inject({ method: 'GET', url: '/api/advertising/automation/brain/requests?market=IT' })).json()
-    expect(listed.requests).toEqual(expect.arrayContaining([expect.objectContaining({ approvalId: end.approvalId, tool: 'set-brain-kill-switch', askedBy: 'person', needsCode: true, status: 'pending', productId: P, market: 'IT', lever: 'budgets' })]))
+    // It waits on the brain (asked of it by a person), so the decide route takes it.
+    expect(await inA(() => isBrainRequest(end.approvalId))).toBe(true)
     // Rejected on the brain page: gone from the list, and a second decision is 404.
     expect((await post(`/requests/${end.approvalId}/decide`, { decision: 'reject' })).json()).toMatchObject({ ok: true, status: 'rejected' })
     expect((await post(`/requests/${end.approvalId}/decide`, { decision: 'reject' })).statusCode).toBe(404)
@@ -182,8 +183,8 @@ describe('A5 — the brain\'s writes ask the gate as the person on the page', ()
   })
 })
 
-describe('A5 — GET /requests: what the brain itself asked for', () => {
-  it('a lever log\'s request and a structure build are listed as asked by the brain, with their lever; expired ones are not; decided through the brain page', async () => {
+describe('A5 — decide: what the brain itself asked for', () => {
+  it('a lever log\'s request and a structure build wait on the brain; expired ones do not; decided through the brain page', async () => {
     const ids = await inA(async () => {
       const c = database.client
       const run = await c.agentRun.create({ data: { agentKey: 'ads-brain', trigger: 'schedule' } })
@@ -198,19 +199,13 @@ describe('A5 — GET /requests: what the brain itself asked for', () => {
       await c.adsBrainStructure.create({ data: { productId: P, marketplace: 'IT', kind: 'SKC', key: 'a5-skc', status: 'ASKED', level: 'PROPOSE', plan: {}, evidence: {}, why: 'made-up', digest: 'a5', runId: 'a5', decidedAt: at, checkedAt: at, changedAt: at, approvalId: build.id } })
       return { state: state.id, old: old.id, build: build.id }
     })
-    const listed = (await app.inject({ method: 'GET', url: `/api/advertising/automation/brain/requests?market=IT&productId=${P}` })).json()
-    const byId = Object.fromEntries(listed.requests.map((r: { approvalId: string }) => [r.approvalId, r]))
-    expect(byId[ids.state]).toMatchObject({ askedBy: 'brain', lever: 'state', tool: 'pause-ads', status: 'pending', productId: P, market: 'IT', summary: 'a made-up ask' })
-    expect(byId[ids.build]).toMatchObject({ askedBy: 'brain', lever: 'structure' })
-    expect(byId[ids.old]).toBeUndefined()
+    expect(await inA(() => isBrainRequest(ids.state))).toBe(true)
+    expect(await inA(() => isBrainRequest(ids.build))).toBe(true)
+    expect(await inA(() => isBrainRequest(ids.old))).toBe(false)
+    // An expired request is not the brain's to decide any more.
+    expect((await post(`/requests/${ids.old}/decide`, { decision: 'reject' })).statusCode).toBe(404)
     // Rejected through the brain page: it is the brain's, so the decide route takes it.
     expect((await post(`/requests/${ids.state}/decide`, { decision: 'reject', reason: 'not now' })).json()).toMatchObject({ ok: true, status: 'rejected' })
-    expect((await app.inject({ method: 'GET', url: '/api/advertising/automation/brain/requests?productId=no-such-product' })).statusCode).toBe(404)
-  })
-
-  it('the brain door (lane B1): a request it schedules reads as running alone at its time', async () => {
-    const { brainDoorRow } = await import('../services/advertising/brain/requests-read.js')
-    expect(brainDoorRow('2026-10-12T05:30:00.000Z')).toEqual({ runsAloneAt: '2026-10-12T05:30:00.000Z', words: 'runs alone at 2026-10-12 05:30 UTC unless a person stops it' })
-    expect(brainDoorRow(null).runsAloneAt).toBeNull()
+    expect(await inA(() => isBrainRequest(ids.state))).toBe(false)
   })
 })

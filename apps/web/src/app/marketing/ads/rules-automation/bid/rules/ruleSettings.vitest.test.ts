@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clauseWords, runRollbackable, runSummary, runWord, settingGroups, thenWords, type RunRow } from './ruleSettings'
+import { ATTRIBUTING_NOTE, clauseWords, lookBack, runRollbackable, runSummary, runWord, settingGroups, thenWords, type RunRow } from './ruleSettings'
 
 describe('a rule’s settings, grouped', () => {
   const stored = {
@@ -10,19 +10,23 @@ describe('a rule’s settings, grouped', () => {
     actions: [{ type: 'bid', control: 'manual', bidFloor: 0.05, bidCeiling: null, windowDays: 30, campaigns: [], schedule: { frequency: 'Daily', time: '06:00', timezone: 'cet' } }],
   }
 
-  it('a builder rule: its blocks, bids, scope, runs, limits, mode — in the page’s plain words', () => {
+  it('a builder rule: its blocks, bids, runs, limits, who made it — in the page’s plain words, nothing said twice (C-UI 7, 9)', () => {
     const groups = settingGroups(stored)
     const get = (id: string) => Object.fromEntries((groups.find((g) => g.id === id)?.items ?? []).map((i) => [i.label, i.value]))
     expect(get('when')).toEqual({ 'If → then': 'If ACoS > 35 % and clicks ≥ 10 → bid −15 %' })
     expect(get('bids')).toEqual({ Lowest: '€0.05', Highest: 'No max', Over: '30 d' })
-    expect(get('scope')).toMatchObject({ Market: 'IT', Campaigns: 'Whole market' })
+    // Market and campaigns are in the detail's header and Overview: not repeated here.
+    expect(groups.find((g) => g.id === 'scope')).toBeUndefined()
     expect(get('runs')).toMatchObject({ When: 'Daily · 06:00 · Rome' })
     // The engine never reads a bid rule's `dedupe`, so Settings never shows it.
     expect(get('runs')).not.toHaveProperty('Once a day')
     expect(get('caps')).toEqual({ 'Keywords a day': '10', 'Changes a day': 'No max', 'Most per run': 'No max', 'Ad spend a day': '€100.00' })
-    // One group, and no heading that repeats its own label; a person is "You".
-    expect(get('mode')).toEqual({ Mode: 'Ask me', Order: '100', Created: '10 Oct · You', Runs: '0' })
+    // Who made it and when; a person is "You". Not the mode (Overview), the constant order or the run count (History).
+    expect(get('made')).toEqual({ Created: '10 Oct · You' })
     expect(groups.map((g) => g.title)).not.toContain('Created')
+    expect(groups.find((g) => g.id === 'mode')).toBeUndefined()
+    // A builder bid rule reads settled days: no caveat.
+    expect(groups.find((g) => g.id === 'bids')!.items.find((i) => i.label === 'Over')!.note).toBeUndefined()
   })
 
   it('one block’s line is not repeated (the subtitle says it); bids are in the rule’s money', () => {
@@ -43,11 +47,20 @@ describe('a rule’s settings, grouped', () => {
     expect(thenWords({ op: 'mystery' })).toBe('mystery')
   })
 
-  it('an engine rule: trigger, conditions and actions as stored; switched off reads Off', () => {
+  it('an engine rule: trigger, the days it reads, conditions and actions as stored', () => {
     const groups = settingGroups({ id: 'r2', name: 'Rule B', trigger: 'KEYWORD_HIGH_ACOS', enabled: false, autonomyLevel: 'AUTO', conditions: [], actions: [{ type: 'bid_down', percent: 20 }] })
     const when = groups.find((g) => g.id === 'when')!.items
-    expect(when).toEqual([{ label: 'Trigger', value: 'keyword high acos' }, { label: 'Then', value: 'bid down 20 %' }])
-    expect(groups.find((g) => g.id === 'mode')!.items[0]).toEqual({ label: 'Mode', value: 'Off' })
+    expect(when).toEqual([{ label: 'Trigger', value: 'keyword high acos' }, { label: 'Over', value: '14 d' }, { label: 'Then', value: 'bid down 20 %' }])
+  })
+
+  it('says when a rule reads days Amazon is still attributing, the old Bid tab\'s warning (B5)', () => {
+    // A harvest action reads its own window, newest days included.
+    expect(lookBack({ trigger: 'SCHEDULE', actions: [{ type: 'harvest_and_negate', windowDays: 30 }] })).toEqual({ days: 30, note: ATTRIBUTING_NOTE })
+    // A settled window: no note. No window at all: no note either (a caveat about a number that is not there).
+    expect(lookBack({ trigger: 'KEYWORD_HIGH_ACOS', actions: [] })).toEqual({ days: 14 })
+    expect(lookBack({ trigger: 'SCHEDULE', actions: [{ type: 'pause_campaign' }] }).note).toBeUndefined()
+    const harvest = settingGroups({ id: 'r3', name: 'Rule C', trigger: 'SCHEDULE', conditions: [], actions: [{ type: 'harvest_and_negate', windowDays: 30 }] })
+    expect(harvest.find((g) => g.id === 'when')!.items.find((i) => i.label === 'Over')).toEqual({ label: 'Over', value: '30 d', note: ATTRIBUTING_NOTE })
   })
 })
 

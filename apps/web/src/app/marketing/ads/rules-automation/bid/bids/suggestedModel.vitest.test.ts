@@ -53,6 +53,11 @@ describe('Apply', () => {
     expect(applyPlan([row()], cellFor(40)).lines[0].skip).toBe('Already at the suggested bid')
     expect(applyPlan([row()], cellFor(3)).lines[0].skip).toBe('Under Nexus\'s €0.05 floor')
     expect(applyPlan([row()], () => ({ kind: 'loading' })).lines[0].skip).toBe('Still reading Amazon\'s suggested bid')
+    // A bid in a market Nexus only reads is left out with that reason (use audit A1); the bulk button says it when nothing goes.
+    const ro = { ...row(), writeBlock: 'Reading only: writes are off for this market' }
+    expect(applyPlan([ro], cellFor(55)).lines[0].skip).toBe('Reading only: writes are off for this market')
+    expect(applyHeld(applyPlan([ro], cellFor(55)))).toBe('Nothing to apply: Reading only: writes are off for this market')
+    expect(applyPlan([ro, row({ targetId: 't2' })], cellFor(55)).send.map((l) => l.row.targetId)).toEqual(['t2'])
     expect(applySummary({ send: [], manual: 0 })).toBe('Nothing to apply.')
   })
 

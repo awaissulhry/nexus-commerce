@@ -5,10 +5,9 @@
  *
  *   useBidsLive     asks the cursor every 5 s while a change is on its way (every 30 s once it has been on its way for
  *                   more than 5 minutes), every 60 s otherwise, never while the tab is hidden; calls `onMoved` only when
- *                   the cursor moved (the view reads its rows again, in place). Stops for good when the server has no
- *                   cursor route yet.
+ *                   the cursor moved (the view reads its rows again, in place).
  *   useSuggested    Amazon's suggested bids for the ad groups of the rows on screen, read lazily (a few at a time) and kept
- *                   for the view's life; `supported` turns false when the server has no such route (the column hides).
+ *                   for the view's life.
  *
  * The schedule and the words are pure (`liveModel.ts`, `suggestedModel.ts`).
  */
@@ -28,8 +27,7 @@ export function useBidsLive({ scope, scopeKey, enabled, inFlight, inFlightSince,
   /** Since when, by the rows (`liveModel.inFlightSince`, ms); the hook also counts from when it first saw one. */
   inFlightSince?: (firstSeen: number | null) => number | null
   onMoved: () => void
-}): { supported: boolean } {
-  const [supported, setSupported] = useState(true)
+}): void {
   const [hidden, setHidden] = useState(false)
   const [cursorBusy, setCursorBusy] = useState(false)
   const last = useRef<BidsCursor | null>(null)
@@ -47,8 +45,7 @@ export function useBidsLive({ scope, scopeKey, enabled, inFlight, inFlightSince,
   }, [])
 
   const ask = useCallback(async () => {
-    const { cursor, missing } = await readCursor(scopeRef.current)
-    if (missing) { setSupported(false); return }
+    const cursor = await readCursor(scopeRef.current)
     if (!cursor) return
     const moved = cursorMoved(last.current, cursor)
     last.current = cursor
@@ -70,7 +67,7 @@ export function useBidsLive({ scope, scopeKey, enabled, inFlight, inFlightSince,
     return pollDelay({ hidden: false, inFlight: busyRef.current, inFlightMs: since == null ? 0 : Date.now() - since }) ?? SLOW_MS
   }, [])
 
-  const active = supported && enabled && !hidden
+  const active = enabled && !hidden
   useEffect(() => {
     if (!active) return
     let stop = false
@@ -84,8 +81,6 @@ export function useBidsLive({ scope, scopeKey, enabled, inFlight, inFlightSince,
     void tick()
     return () => { stop = true; if (timer) clearTimeout(timer) }
   }, [active, busy, ask, nextDelay, scopeKey])
-
-  return { supported }
 }
 
 /** How many ad groups are read at once. */
@@ -97,10 +92,9 @@ export function useSuggested({ adGroupIds, enabled, resetKey }: {
   enabled: boolean
   /** A new scope or a save: read again. */
   resetKey: string
-}): { states: ReadonlyMap<string, SuggestedState>; version: number; supported: boolean | null; reread: (adGroupIds: readonly string[]) => void } {
+}): { states: ReadonlyMap<string, SuggestedState>; version: number; reread: (adGroupIds: readonly string[]) => void } {
   const cache = useRef(new Map<string, SuggestedState>())
   const [version, setVersion] = useState(0)
-  const [supported, setSupported] = useState<boolean | null>(null)
   const running = useRef(0)
   const queue = useRef<string[]>([])
 
@@ -113,10 +107,6 @@ export function useSuggested({ adGroupIds, enabled, resetKey }: {
       void readSuggested(id).then((state) => {
         running.current -= 1
         cache.current.set(id, state)
-        // The route is there unless the server says it is not: a failed read keeps the column, its cells say "not read"
-        // (audit R8: the column and the row ticks vanished with no word).
-        if (state.kind === 'missing') setSupported(false)
-        else setSupported((s) => s ?? true)
         setVersion((n) => n + 1)
         pump()
       })
@@ -138,11 +128,11 @@ export function useSuggested({ adGroupIds, enabled, resetKey }: {
 
   const key = adGroupIds.join('|')
   useEffect(() => {
-    if (!enabled || supported === false) return
+    if (!enabled) return
     want(adGroupIds, false)
     // `key` stands for the list (a new array each render).
-  }, [enabled, supported, key, resetKey, want]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [enabled, key, resetKey, want]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const reread = useCallback((ids: readonly string[]) => want(ids, true), [want])
-  return { states: cache.current, version, supported, reread }
+  return { states: cache.current, version, reread }
 }

@@ -7,7 +7,7 @@
  * The words of a rule's sentence live here too (the bid builder's metrics and THEN actions, short), so Settings reads the
  * rule the way the table's line does: "If ACoS > 35 % and clicks ≥ 10 → bid −15 %".
  */
-import { MODE_OF_LEVEL, MODE_WORD, plural, type RuleLevel } from './bidRulesModel'
+import { ruleLookback } from '@nexus/shared/ads-rule-window'
 import { currencySymbol, dayWords, money, periodWord } from '../_shared/format'
 
 // ── the words of a rule ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -98,7 +98,8 @@ export interface StoredRule {
   lastEvaluatedAt?: string | null
 }
 
-export interface SettingItem { label: string; value: string }
+/** One setting; `note` a caveat in plain words, shown on hover and focus beside the value (never a second line). */
+export interface SettingItem { label: string; value: string; note?: string }
 export interface SettingGroup { id: string; title: string; items: SettingItem[] }
 
 type Obj = Record<string, unknown>
@@ -129,6 +130,22 @@ const whoMade = (by: string | null | undefined): string => {
   if (b === 'user' || b.startsWith('user:')) return 'You'
   if (/^claude/i.test(b)) return 'Claude'
   return b
+}
+
+/** The old Bid tab's warning, back where a rule's look-back shows (use audit B5). */
+export const ATTRIBUTING_NOTE = 'Includes days Amazon is still attributing: sales of the newest days may still come in'
+
+/**
+ * The days a rule reads, and the caveat when they include days Amazon is still attributing — only for a rule that states a
+ * window (the old Bid tab's rule: a caveat about a number on a cell with no number contradicts itself).
+ */
+export function lookBack(rule: Pick<StoredRule, 'trigger' | 'actions'>): { days: number | null; note?: string } {
+  const actions = Array.isArray(rule.actions) ? (rule.actions as Obj[]) : []
+  const a0 = obj(actions[0])
+  const windowDays = Number(a0.windowDays)
+  const look = ruleLookback(str(rule.trigger), actions.map((a) => str(obj(a).type)), Number.isFinite(windowDays) && windowDays > 0 ? windowDays : null)
+  const statesAWindow = look.kind === 'window' || look.kind === 'compare'
+  return { days: look.days, ...(statesAWindow && !look.settled ? { note: ATTRIBUTING_NOTE } : {}) }
 }
 
 export interface SettingsContext {
@@ -162,26 +179,17 @@ export function settingGroups(rule: StoredRule, ctx: SettingsContext = {}): Sett
         items: conds.map((g, i) => ({ label: conds.length > 1 ? `Block ${i + 1}` : 'If → then', value: block(g) })),
       })
     }
+    const look = lookBack(rule)
     groups.push({
       id: 'bids',
       title: 'Bids',
       items: [
         { label: 'Lowest', value: amount(a0.bidFloor, currency) },
         { label: 'Highest', value: a0.bidCeiling == null || str(a0.bidCeiling) === '' ? NO_MAX : amount(a0.bidCeiling, currency) },
-        { label: 'Over', value: periodWord(Number(a0.windowDays) || 14) },
+        { label: 'Over', value: periodWord(look.days ?? (Number(a0.windowDays) || 14)), ...(look.note ? { note: look.note } : {}) },
       ],
     })
-    const campaigns = Array.isArray(a0.campaigns) ? (a0.campaigns as Obj[]) : Array.isArray(a0.campaignIds) ? (a0.campaignIds as unknown[]).map((id) => ({ id })) : []
-    groups.push({
-      id: 'scope',
-      title: 'Works on',
-      items: [
-        { label: 'Market', value: rule.scopeMarketplace || 'Every market' },
-        { label: 'Campaigns', value: campaigns.length ? plural(campaigns.length, 'campaign') : 'Whole market' },
-        ...(rule.scopePortfolioId ? [{ label: 'Portfolio', value: rule.scopePortfolioId }] : []),
-        ...(rule.scopeProductId ? [{ label: 'Product', value: rule.scopeProductId }] : []),
-      ],
-    })
+    // Its market and campaigns are in the detail's header and Overview: Settings does not repeat them (C-UI 7).
     const filters = obj(a0.filters)
     const brands = Array.isArray(filters.brandExclude) ? (filters.brandExclude as unknown[]).length : 0
     const terms = Array.isArray(a0.searchTerms) ? (a0.searchTerms as unknown[]).length : 0
@@ -198,21 +206,17 @@ export function settingGroups(rule: StoredRule, ctx: SettingsContext = {}): Sett
       ],
     })
   } else {
+    const look = lookBack(rule)
     groups.push({
       id: 'when',
       title: 'When → then',
       items: [
         { label: 'Trigger', value: str(rule.trigger).toLowerCase().replace(/_/g, ' ') || '—' },
+        ...(look.days != null ? [{ label: 'Over', value: periodWord(look.days), ...(look.note ? { note: look.note } : {}) }] : []),
         ...conds.map((c, i) => ({ label: `If ${i + 1}`, value: clauseWords(c, currency) })),
         ...actions.map((a, i) => ({ label: actions.length > 1 ? `Then ${i + 1}` : 'Then', value: str(a.type).replace(/_/g, ' ') + (a.percent != null ? ` ${str(a.percent)} %` : '') })),
       ],
     })
-    groups.push({ id: 'scope', title: 'Works on', items: [
-      { label: 'Market', value: rule.scopeMarketplace || 'Every market' },
-      ...(rule.scopePortfolioId ? [{ label: 'Portfolio', value: rule.scopePortfolioId }] : []),
-      ...(rule.scopeCampaignId ? [{ label: 'Campaign', value: rule.scopeCampaignId }] : []),
-      ...(rule.scopeProductId ? [{ label: 'Product', value: rule.scopeProductId }] : []),
-    ] })
     groups.push({ id: 'runs', title: 'Runs', items: [{ label: 'When', value: ctx.schedule || 'Every 15 min' }] })
   }
 
@@ -227,19 +231,14 @@ export function settingGroups(rule: StoredRule, ctx: SettingsContext = {}): Sett
     ],
   })
 
-  const level = (rule.enabled === false ? 'OFF' : (['OFF', 'OBSERVE', 'PROPOSE', 'AUTO'].includes(str(rule.autonomyLevel)) ? str(rule.autonomyLevel) : rule.dryRun === false ? 'AUTO' : 'PROPOSE')) as RuleLevel
-  // Mode, order and making in one group whose heading repeats none of its labels (audit R16: "Mode / MODE").
+  // Who made it and when. Not its mode (Overview's picker says it), its order (a constant the builder cannot set) or its
+  // run count (the History tab lists the runs): each said once on the page (C-UI 7, C-UI 9).
   const who = whoMade(rule.createdBy)
   groups.push({
-    id: 'mode',
-    title: 'Status',
-    items: [
-      { label: 'Mode', value: MODE_WORD[MODE_OF_LEVEL[level]] },
-      ...(rule.priority != null ? [{ label: 'Order', value: String(rule.priority) }] : []),
-      // "10 Oct · You": a person is "You" on the whole page (audit R10), Claude by its name.
-      { label: 'Created', value: [rule.createdAt ? dayWords(rule.createdAt) : null, who || null].filter(Boolean).join(' · ') || '—' },
-      { label: 'Runs', value: String(rule.evaluationCount ?? 0) },
-    ],
+    id: 'made',
+    title: 'Made',
+    // "10 Oct · You": a person is "You" on the whole page (audit R10), Claude by its name.
+    items: [{ label: 'Created', value: [rule.createdAt ? dayWords(rule.createdAt) : null, who || null].filter(Boolean).join(' · ') || '—' }],
   })
   return groups
 }

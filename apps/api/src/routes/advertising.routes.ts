@@ -1574,16 +1574,6 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
-  // ── RC4.5: cancel a staged (PENDING) Amazon write within its grace window ──
-  // Powers the staged-changes tray's per-change "Discard" + "Discard all".
-  fastify.post('/advertising/queued-mutations/:queueId/cancel', async (request, reply) => {
-    const { queueId } = request.params as { queueId: string }
-    const { cancelPendingMutation } = await import('../services/advertising/ads-mutation.service.js')
-    const r = await cancelPendingMutation(queueId)
-    if (!r.ok) { reply.status(r.error === 'not_found' ? 404 : 409); return { ok: false, error: r.error } }
-    return { ok: true }
-  })
-
   // ── RC4.6: change-history timeline for a campaign (manual + automation) ──
   // The audit trail behind the History tab + undo/redo. CampaignBidHistory is the
   // scalar before→after record; a keyword/target bid change is "undoable" because

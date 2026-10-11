@@ -5,7 +5,8 @@
 import { readFileSync } from 'node:fs'
 import { describe, it, expect } from 'vitest'
 import {
-  BID_FLOOR_EUR, criteriaProblems, normalizeDecimalText, readRuleNumbers, scheduleWindowValue,
+  BID_FLOOR_EUR, EVERY_TICK, RUN_FREQUENCIES, criteriaProblems, defaultBidCeiling, frequencyAsRun, frequencyReadsTime,
+  normalizeDecimalText, readRuleNumbers, scheduleToSave, scheduleWindowValue,
   type RuleNumberInputs, type RuleNumberShape,
 } from './ruleBuilderValues'
 
@@ -159,5 +160,63 @@ describe('scheduleWindowValue', () => {
   it('a value that cannot be read is never 0, and an empty one is an incomplete row, not an error', () => {
     expect(scheduleWindowValue('budget-schedule', { ...w, value: '12,5%' })).toMatchObject({ value: '12,5%' })
     expect(scheduleWindowValue('budget-schedule', { ...w, value: '' })).toEqual({ value: null, error: null })
+  })
+})
+
+describe('the schedule as the evaluator runs it (Owner 2026-10-11)', () => {
+  const evaluator = read('../../../../../../../api/src/services/advertising/ads-rule-schedule.ts')
+
+  it('knows exactly the frequencies scheduleIsDue reads', () => {
+    const handled = new Set([...evaluator.matchAll(/f === '([A-Za-z]+)'/g)].map((m) => m[1]))
+    expect([...handled].sort()).toEqual([...RUN_FREQUENCIES].sort())
+    // …and the evaluator still runs a rule with none, or an unknown one, on every tick.
+    expect(evaluator).toMatch(/if \(!schedule\) return true/)
+    expect(evaluator).toMatch(/if \(interval == null\) return true/)
+  })
+
+  it('opens a rule with no or an unknown frequency on "Every 15 min", never on Daily', () => {
+    expect(frequencyAsRun(undefined)).toBe(EVERY_TICK)
+    expect(frequencyAsRun(null)).toBe(EVERY_TICK)
+    expect(frequencyAsRun({})).toBe(EVERY_TICK)
+    expect(frequencyAsRun({ frequency: '' })).toBe(EVERY_TICK)
+    expect(frequencyAsRun({ frequency: 'daily' })).toBe(EVERY_TICK) // the evaluator compares the exact spelling
+    expect(frequencyAsRun({ frequency: 'Fortnightly' })).toBe(EVERY_TICK)
+    for (const f of RUN_FREQUENCIES) expect(frequencyAsRun({ frequency: f })).toBe(f)
+  })
+
+  it('saves "Every 15 min" as no frequency, and every other choice as itself', () => {
+    const rest = { everyN: '', interval: 'Weeks', onDay: 'Monday', time: '06:00', timezone: 'cet' }
+    const tick = scheduleToSave({ frequency: EVERY_TICK, ...rest })
+    expect('frequency' in tick).toBe(false)
+    expect(tick).toEqual(rest)
+    expect(scheduleToSave({ frequency: 'Daily', ...rest })).toEqual({ frequency: 'Daily', ...rest })
+    expect(scheduleToSave({ frequency: 'Hourly', ...rest })).toEqual({ frequency: 'Hourly', ...rest })
+  })
+
+  it('asks for a time only where the evaluator reads one', () => {
+    expect(frequencyReadsTime('Hourly')).toBe(false)
+    expect(frequencyReadsTime(EVERY_TICK)).toBe(false)
+    for (const f of ['Daily', 'Weekly', 'Monthly', 'Custom']) expect(frequencyReadsTime(f)).toBe(true)
+  })
+})
+
+describe('a new bid rule\'s highest bid (Owner 2026-10-11)', () => {
+  it('is 1.5 × the highest bid today, rounded to the cent', () => {
+    expect(defaultBidCeiling([40, 90, 63])).toBe('1.35')
+    expect(defaultBidCeiling([33])).toBe('0.50') // 49.5 → 50
+    expect(defaultBidCeiling([101])).toBe('1.52') // 151.5 → 152
+  })
+  it('is never below the lowest bid', () => {
+    expect(defaultBidCeiling([2])).toBe(BID_FLOOR_EUR.toFixed(2))
+    expect(defaultBidCeiling([40], 1)).toBe('1.00')
+  })
+  it('stays empty when no bid is known', () => {
+    expect(defaultBidCeiling([])).toBe('')
+    expect(defaultBidCeiling([0, Number.NaN, -5])).toBe('')
+  })
+  it('is a value the Max bid field accepts above its Min', () => {
+    const read = nums({ bidCeiling: defaultBidCeiling([40, 90]) })
+    expect(read.errors.bidCeiling).toBeUndefined()
+    expect(read.values.bidCeiling).toBe(1.35)
   })
 })

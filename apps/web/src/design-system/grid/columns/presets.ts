@@ -37,8 +37,6 @@ import {
   type ModeCellValue, type ModeStep,
 } from '../renderers/modeModel'
 import { SelectPanelEditor } from '../editors/SelectPanelEditor'
-import { SparklineCell, sparkValuesOf, type SparklineCellParams } from '../renderers/SparklineCell'
-import { sparkWords } from '../../components/sparklineModel'
 import { EntityLinksCell, entityRefsOf, type EntityLinksCellParams } from '../renderers/EntityLinksCell'
 import { entityLinksKeys } from '../renderers/entityLinksKeys'
 import { compareEntityLinks, entityLinksText } from '../../components/entityLinksModel'
@@ -196,32 +194,6 @@ export const switchColumn = <T,>(field: Field<T>, opts: SwitchColumnOptions<T>):
     getQuickFilterText: (p) => switchWord(p.value, words),
     comparator: (a, b) => Number(a === true) - Number(b === true),
     suppressKeyboardEvent: suppressSwitchKeys,
-  }
-}
-
-/* ── sparkline ────────────────────────────────────────────────────────────────────────────── */
-
-export interface SparklineColumnOptions<T> extends SparklineCellParams<T> {
-  header: string
-}
-
-/**
- * A small chart per row (bid page DS lane, 2026-10-10): the value at `field` is the readings, oldest first (`number[]`,
- * a null keeps its place). Step by default (a bid holds until it is changed). Not sortable; the CSV, clipboard and quick
- * filter read the words ("6 readings, low 0.10, high 0.40, now 0.30", or the empty words).
- */
-export const sparklineColumn = <T,>(field: Field<T>, opts: SparklineColumnOptions<T>): ColDef<T> => {
-  const { header, ...params } = opts
-  const words = (value: unknown) => sparkWords(sparkValuesOf(value), params.format, params.emptyLabel)
-  return {
-    field: fieldOf<T>(field),
-    headerName: header,
-    cellClass: 'nds-ag-cell',
-    cellRenderer: SparklineCell,
-    cellRendererParams: params,
-    sortable: false,
-    valueFormatter: (p) => words(p.value),
-    getQuickFilterText: (p) => words(p.value),
   }
 }
 

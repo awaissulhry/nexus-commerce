@@ -18,11 +18,15 @@
  *
  * Focus (audit M10): every review, the builder and the detail give the focus back to what opened them — the control in
  * the detail, the row's cell (the row now shown, after Prev / Next), or the toolbar button.
+ *
+ * A market Nexus only reads holds every write here — the mode, archive and restore, New rule and Edit all, approve and
+ * reject, Undo and roll back — each with the reason (the shell's `useWriteBlock`, use audit A1): the page's market, or on
+ * All markets the rule's own. The Brain's row is left out of a market where it decides nothing (C-UI 3).
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import dynamic from 'next/dynamic'
 import { Archive, Plus, Search, SlidersHorizontal } from 'lucide-react'
-import { Button, Input, Skeleton, Tooltip } from '@/design-system/primitives'
+import { Button, Input } from '@/design-system/primitives'
 import { Banner, Listbox, useToast, type ListboxPanelOption } from '@/design-system/components'
 import type { DetailNav } from '@/design-system/patterns'
 import { EditModeBar, GridToolbar, PreferencesModal, ReviewChangesModal, StepUpModal, type PreferencesValue, type ReviewChange, type ReviewResult, type ReviewState } from '@/design-system/patterns'
@@ -34,14 +38,16 @@ import { usePermission } from '@/lib/auth/AuthProvider'
 import { useRouter, useSearchParams } from '@/lib/workspaces/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitAdsChange } from '../../_shared/adsBus'
+import { useWriteBlock, useWriteBlockOf } from '../../../_shell/WriteBlocked'
+import { useColumnChoices } from '../_shared/columnChoices'
 import { whenWords } from '../_shared/format'
 import {
-  MODES, MODE_WORD, archiveWords, brainAskWords, brainPickChange, fieldWord, changeFromTo, holdReason, isBrain, isFiltered, isRulesTile,
+  MODES, MODE_WORD, archiveWords, brainAskWords, brainIdleHere, brainPickChange, fieldWord, changeFromTo, holdReason, isBrain, isFiltered, isRulesTile,
   plural, readError, visibleRows,
   type ArchiveAnswer, type BidMode, type BidRuleRow, type BrainPick, type RuleChange, type RulesFilter, type RulesTile,
 } from './bidRulesModel'
 import {
-  archivable, archiveLabel, archiveReviewChanges, modeConflicts, modeReviewChanges, pickMode, pickModeFor, raiseAck, restoreLabel,
+  archivable, archiveLabel, archiveReviewChanges, bulkModeOptions, modeConflicts, modeReviewChanges, pickMode, pickModeFor, raiseAck, restoreLabel,
   restoreReviewChanges, retidyModes, shownMode, type ModeDraft,
 } from './ruleChanges'
 import {
@@ -54,7 +60,7 @@ import {
   approveChanges, approveLabel, decideResults, rejectChanges, rejectLabel, type WaitingAsk,
 } from './waitingModel'
 import { RuleDetailPending, RulePanel, type AnyTab } from './RulePanel'
-import { RULE_PREFERENCE_COLUMNS, RulesTable, type GridRow, type HandlersRef, type PanelTab, type RulesHandlers } from './RulesTable'
+import { RulesTable, rulePreferenceColumns, type GridRow, type HandlersRef, type PanelTab, type RulesHandlers } from './RulesTable'
 import styles from '../bid.module.css'
 
 /**
@@ -76,20 +82,25 @@ const RuleBuilder = dynamic<BuilderProps>(
 )
 
 const PERSIST_KEYS: readonly GridStateKey[] = ['columnSizing', 'columnOrder', 'columnVisibility', 'sort']
-const BRIDGE: PrefsBridgeOptions = { columns: RULE_PREFERENCE_COLUMNS.map((c) => ({ key: c.key, locked: c.locked })) }
-const PREF_SPECS = RULE_PREFERENCE_COLUMNS.map((c) => ({ key: c.key, label: c.label, locked: c.locked }))
-const DEFAULT_PREFS: PreferencesValue = {
-  visibleColumns: RULE_PREFERENCE_COLUMNS.filter((c) => !c.hidden).map((c) => c.key),
-  lockedColumns: [],
-  stickyFirstColumn: true,
-  stickyLastColumn: true,
-  pageSize: 0,
-  sortBy: '',
-  sortDir: 'asc',
+/** Customise's columns, its bridge and its defaults, for one market or All markets (Market only on All). */
+function prefsFor(allMarkets: boolean) {
+  const cols = rulePreferenceColumns(allMarkets)
+  const bridge: PrefsBridgeOptions = { columns: cols.map((c) => ({ key: c.key, locked: c.locked })) }
+  const specs = cols.map((c) => ({ key: c.key, label: c.label, locked: c.locked }))
+  const defaults: PreferencesValue = {
+    visibleColumns: cols.filter((c) => !c.hidden).map((c) => c.key),
+    lockedColumns: [],
+    stickyFirstColumn: true,
+    stickyLastColumn: true,
+    pageSize: 0,
+    sortBy: '',
+    sortDir: 'asc',
+  }
+  return { bridge, specs, defaults }
 }
+const PREFS = { all: prefsFor(true), one: prefsFor(false) }
 const NO_CHOICES: number[] = []
 const NO_SORT: Array<{ value: string; label: string }> = []
-const SET_MODE_OPTIONS: ListboxPanelOption[] = MODES.map((m) => ({ value: m, label: MODE_WORD[m] }))
 const UNDO_TOAST_MS = 10_000
 
 interface PageState { show: RulesTile | null; archived: boolean }
@@ -167,10 +178,16 @@ export function RulesView({ market, data, viewSwitch, setQuery }: {
   const canCampaigns = usePermission('ads.campaigns.manage')
   const canAutomation = usePermission('ads.automation.manage')
   const canSecurity = usePermission('settings.security.manage')
-  const modeHeld = !canCampaigns ? 'Needs the ads campaigns permission' : !canAutomation ? 'Needs the ads automation permission' : null
-  const archiveHeld = canAutomation ? null : 'Needs the ads automation permission'
-  const undoHeld = canCampaigns ? null : 'Needs the ads campaigns permission'
-  const brainHeld = canAutomation ? null : 'Needs the ads automation permission'
+  // The page's market Nexus only reads: every write is held with that reason; on All markets each rule's own market.
+  const pageBlock = useWriteBlock([market])
+  const blockOf = useWriteBlockOf()
+  const modePerm = !canCampaigns ? 'Needs the ads campaigns permission' : !canAutomation ? 'Needs the ads automation permission' : null
+  const modeHeld = modePerm ?? pageBlock
+  const archiveHeld = canAutomation ? pageBlock : 'Needs the ads automation permission'
+  const undoHeld = canCampaigns ? pageBlock : 'Needs the ads campaigns permission'
+  const brainHeld = canAutomation ? pageBlock : 'Needs the ads automation permission'
+  const allMarkets = market === 'all'
+  const prefsSet = PREFS[allMarkets ? 'all' : 'one']
 
   const { answer, err, load } = data
   const [draft, setDraft] = useState<ModeDraft>({})
@@ -210,7 +227,8 @@ export function RulesView({ market, data, viewSwitch, setQuery }: {
   const setPaused = data.setPaused
   useEffect(() => { setPaused(!!task || !!builderKey) }, [setPaused, task, builderKey])
 
-  const rows = answer?.rules ?? []
+  // The Brain's row is left out where it decides nothing (C-UI 3); everything else is as read.
+  const rows = useMemo(() => (answer?.rules ?? []).filter((r) => !brainIdleHere(r, market)), [answer, market])
   const byId = useMemo(() => new Map(rows.map((r) => [r.id, r])), [rows])
   const filter: RulesFilter = { tile, search, archived: showArchived }
   const shown = useMemo(() => visibleRows(rows, filter), [rows, tile, search, showArchived]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -304,7 +322,9 @@ export function RulesView({ market, data, viewSwitch, setQuery }: {
     setProblems([]); setReview({ phase: 'ready' }); setUndoBack(null); setFrozen(null); setTask({ kind: 'restore', rows: list.filter((r) => r.archived), back })
   }, [remember])
   handlers.current = {
-    onMode: modeHeld ? undefined : (g, next) => { if ((MODES as readonly string[]).includes(next)) setDraft((d) => pickMode(d, g.row, next as BidMode)) },
+    // Without the permission the Mode cell only shows; in a market Nexus only reads it shows its lock with the reason (the
+    // row's `block`, A1) and takes no pick.
+    onMode: modePerm ? undefined : (g, next) => { if (!g.block && (MODES as readonly string[]).includes(next)) setDraft((d) => pickMode(d, g.row, next as BidMode)) },
     open,
     archive: (r) => startArchive([r], null, { kind: 'cell', rowId: r.id, col: 'actions' }),
     restore: (r) => startRestore([r], null, { kind: 'cell', rowId: r.id, col: 'actions' }),
@@ -313,11 +333,14 @@ export function RulesView({ market, data, viewSwitch, setQuery }: {
   }
   const context = handlers as HandlersRef
 
-  const gridRows = useMemo<GridRow[]>(() => shown.filter((r) => !isBrain(r)).map((r) => ({ id: r.id, row: r, mode: shownMode(r, draft), pending: !!draft[r.id], h: handlers })), [shown, draft])
+  const gridRows = useMemo<GridRow[]>(
+    () => shown.filter((r) => !isBrain(r)).map((r) => ({ id: r.id, row: r, mode: shownMode(r, draft), pending: !!draft[r.id], h: handlers, block: blockOf([market, r.market]) })),
+    [shown, draft, blockOf, market],
+  )
   const brainRow = useMemo<GridRow | null>(() => {
     const b = shown.find(isBrain)
-    return b ? { id: b.id, row: b, mode: b.mode, pending: false, h: handlers } : null
-  }, [shown])
+    return b ? { id: b.id, row: b, mode: b.mode, pending: false, h: handlers, block: pageBlock } : null
+  }, [shown, pageBlock])
   const selected = useMemo(() => selectedIds.flatMap((id) => byId.get(id) ?? []), [selectedIds, byId])
 
   const pageState = useRef<PageState>({ show: tile, archived: showArchived })
@@ -333,6 +356,7 @@ export function RulesView({ market, data, viewSwitch, setQuery }: {
   })
   const bindViews = useRef(views.bind)
   bindViews.current = views.bind
+  const bindChoices = useColumnChoices('ads-bid-rules', views.initialState)
   const markDirty = views.markDirty
   useEffect(() => { markDirty() }, [markDirty, tile, showArchived])
 
@@ -341,7 +365,8 @@ export function RulesView({ market, data, viewSwitch, setQuery }: {
     restoringLastUsed.current = true
     bindViews.current(e.api)
     restoringLastUsed.current = false
-  }, [])
+    bindChoices(e.api as unknown as GridApi)
+  }, [bindChoices])
   const onRowClicked = useCallback<NonNullable<NexusGridProps<GridRow>['onRowClicked']>>((e) => { if (e.data) open(e.data.id) }, [open])
   const onCellKeyDown = useCallback<NonNullable<NexusGridProps<GridRow>['onCellKeyDown']>>((e) => {
     const key = e.event as KeyboardEvent | null | undefined
@@ -356,32 +381,33 @@ export function RulesView({ market, data, viewSwitch, setQuery }: {
 
   // Customise: the DS dialog through the column-state bridge.
   const [prefsOpen, setPrefsOpen] = useState(false)
-  const [prefs, setPrefs] = useState<PreferencesValue>(DEFAULT_PREFS)
+  const [prefs, setPrefs] = useState<PreferencesValue>(prefsSet.defaults)
   const openCustomise = useCallback(() => {
     const api = apiRef.current
     if (!api || api.isDestroyed()) return
-    setPrefs((cur) => columnStateToPrefs(api.getColumnState(), cur, BRIDGE))
+    setPrefs((cur) => columnStateToPrefs(api.getColumnState(), cur, prefsSet.bridge))
     setPrefsOpen(true)
-  }, [])
+  }, [prefsSet])
   const applyPrefs = useCallback((next: PreferencesValue) => {
     const api = apiRef.current
     if (!api || api.isDestroyed()) return
-    api.applyColumnState({ state: prefsToColumnState(next, BRIDGE), applyOrder: true })
+    api.applyColumnState({ state: prefsToColumnState(next, prefsSet.bridge), applyOrder: true })
     setPrefs(next)
-  }, [])
-  const resetColumns = useCallback(() => { apiRef.current?.resetColumnState(); setPrefs(DEFAULT_PREFS) }, [])
+  }, [prefsSet])
+  const resetColumns = useCallback(() => { apiRef.current?.resetColumnState(); setPrefs(prefsSet.defaults) }, [prefsSet])
   const columnDialog = useMemo(() => ({ customise: openCustomise, reset: resetColumns }), [openCustomise, resetColumns])
 
   const openNew = useCallback(() => { remember({ kind: 'selector', selector: '[data-return="new"]' }); setQuery({ builder: 'new', ruleId: null }) }, [remember, setQuery])
   const clearFilters = useCallback(() => { setSearch(''); setQuery({ show: null, archived: null, q: null }) }, [setQuery])
   const filtered = isFiltered(filter)
-  // M4: a failed read says so (and offers Try again), never "No bid rules yet".
+  // M4: a failed read says so (and offers Try again), never "No bid rules yet". No second New rule here: the toolbar has
+  // it (C-UI 4).
   const noRowsParams = useMemo(() => (!answer && err
     ? { title: 'Rules not read', message: readError(err) ?? '', action: { label: 'Try again', onClick: () => void load() } }
     : filtered
       ? { title: 'No rule matches', message: '', action: { label: 'Clear filters', onClick: clearFilters } }
-      : { title: 'No bid rules yet', message: '', action: archiveHeld ? undefined : { label: 'New rule', onClick: openNew } }),
-  [answer, err, load, filtered, clearFilters, archiveHeld, openNew])
+      : { title: 'No bid rules yet', message: '' }),
+  [answer, err, load, filtered, clearFilters])
 
   // ── reviews ───────────────────────────────────────────────────────────────────────────────────────────────────────
   const panelBack = (): PanelState | null => (panelId ? { id: panelId, tab: panelTab } : null)
@@ -718,9 +744,14 @@ export function RulesView({ market, data, viewSwitch, setQuery }: {
     ? (err ? 'Not read' : 'Reading…')
     : searched ? <><b>{gridRows.length}</b> of <b>{total}</b></>
       : <><b>{total}</b> {total === 1 ? 'rule' : 'rules'}</>
-  const newButton = archiveHeld
-    ? <Tooltip label={archiveHeld} portal><Button size="sm" variant="primary" aria-disabled aria-description={archiveHeld}><Plus size={14} aria-hidden /> New rule</Button></Tooltip>
-    : <Button size="sm" variant="primary" onClick={openNew}><Plus size={14} aria-hidden /> New rule</Button>
+  const newButton = <Button size="sm" variant="primary" heldReason={archiveHeld} onClick={openNew}><Plus size={14} aria-hidden /> New rule</Button>
+  // The selection's writes: held by the permission, the page's market, or a ticked rule's market Nexus only reads.
+  const selBlock = selected.length ? blockOf([market, ...selected.map((r) => r.market)]) : null
+  const bulkModeHeld = modeHeld ?? selBlock
+  const bulkArchiveHeld = archiveHeld ?? selBlock
+  const bulkModes: ListboxPanelOption[] = bulkModeOptions(selected)
+  // The open rule's writes: its own market too (a rule in a market Nexus only reads, under All markets).
+  const panelBlock = panelRow && !isBrain(panelRow) ? blockOf([market, panelRow.market]) : pageBlock
 
   return (
     <div className={styles.stack}>
@@ -738,20 +769,18 @@ export function RulesView({ market, data, viewSwitch, setQuery }: {
 
       <GridCard
         toolbar={selected.length > 0 ? (
-          <GridToolbar count={<span className={styles.line}>{viewSwitch}<span className={styles.count}>Selected <b>{selected.length}</b></span></span>}>
+          <GridToolbar count={<span className={styles.lead}>{viewSwitch}<span className={styles.count}>Selected <b>{selected.length}</b></span></span>}>
             <GridSelectionActions>
-              {modeHeld
-                ? <Tooltip label={modeHeld} portal><Button size="sm" variant="secondary" aria-disabled aria-description={modeHeld}>Mode</Button></Tooltip>
-                : <Listbox size="sm" width={130} ariaLabel="Set mode of the selected rules" placeholder="Mode…" options={SET_MODE_OPTIONS} value="" onChange={(v) => { if ((MODES as readonly string[]).includes(v)) setDraft((d) => pickModeFor(d, selected, v as BidMode)) }} />}
-              {archiveHeld
-                ? <Tooltip label={archiveHeld} portal><Button size="sm" variant="secondary" aria-disabled aria-description={archiveHeld}><Archive size={14} aria-hidden /> Archive…</Button></Tooltip>
-                : <Button size="sm" variant="secondary" onClick={() => startArchive(selected)}><Archive size={14} aria-hidden /> Archive…</Button>}
+              {bulkModeHeld
+                ? <Button size="sm" variant="secondary" heldReason={bulkModeHeld}>Mode…</Button>
+                : <Listbox size="sm" width={130} ariaLabel="Set mode of the selected rules" placeholder="Mode…" options={bulkModes} value="" onChange={(v) => { if ((MODES as readonly string[]).includes(v)) setDraft((d) => pickModeFor(d, selected, v as BidMode)) }} />}
+              <Button size="sm" variant="secondary" heldReason={bulkArchiveHeld} onClick={() => startArchive(selected)}><Archive size={14} aria-hidden /> Archive…</Button>
               <Button size="sm" variant="link" onClick={() => apiRef.current?.deselectAll()}>Clear</Button>
             </GridSelectionActions>
           </GridToolbar>
         ) : (
           <GridToolbar
-            count={<span className={styles.line}>{viewSwitch}<span className={styles.count} aria-live="polite">{countText}</span></span>}
+            count={<span className={styles.lead}>{viewSwitch}<span className={styles.count} aria-live="polite">{countText}</span></span>}
             right={(
               <span className={styles.toolbarRight}>
                 <Button size="sm" variant="secondary" aria-pressed={showArchived} onClick={() => setQuery({ archived: showArchived ? null : '1' })}>
@@ -764,22 +793,19 @@ export function RulesView({ market, data, viewSwitch, setQuery }: {
             )}
           >
             <GridSearchSlot>
-              <Input size="sm" type="search" aria-label="Search rules" placeholder="Search" leadingIcon={<Search size={14} aria-hidden />} value={search} onChange={(e) => setSearch(e.target.value)} />
+              <Input size="sm" type="search" aria-label="Search rules" placeholder="Search" fieldClassName={styles.searchField} leadingIcon={<Search size={14} aria-hidden />} value={search} onChange={(e) => setSearch(e.target.value)} />
             </GridSearchSlot>
           </GridToolbar>
         )}
       >
-        {/* The first read: skeleton lines in the card, never an overlay over the header (NICE). */}
-        {!answer && !err ? (
-          <div className={styles.gridSkeleton} role="status" aria-label="Reading the rules">
-            <Skeleton height={14} /><Skeleton height={14} /><Skeleton height={14} /><Skeleton height={14} />
-          </div>
-        ) : (
-          <RulesTable
+        {/* The first read: the table's header with the loading lines under it, so loading looks like loaded (S10). */}
+        <RulesTable
             rows={gridRows}
             brain={brainRow}
             context={context}
             phone={phone}
+            allMarkets={allMarkets}
+            loading={!answer && !err}
             selectable={!modeHeld || !archiveHeld}
             noRowsParams={noRowsParams}
             initialState={views.initialState}
@@ -789,7 +815,6 @@ export function RulesView({ market, data, viewSwitch, setQuery }: {
             onCellKeyDown={onCellKeyDown}
             onSelectionChanged={onSelectionChanged}
           />
-        )}
       </GridCard>
 
       {panelId && !builderKey && (panelRow ? (
@@ -803,10 +828,11 @@ export function RulesView({ market, data, viewSwitch, setQuery }: {
           market={market}
           phone={phone}
           drafted={draft[panelRow.id] ?? null}
-          canMode={!modeHeld}
-          modeHeld={modeHeld}
-          archiveHeld={archiveHeld}
-          undoHeld={undoHeld}
+          canMode={!(modeHeld ?? panelBlock)}
+          modeHeld={modeHeld ?? panelBlock}
+          archiveHeld={archiveHeld ?? panelBlock}
+          editHeld={panelBlock}
+          undoHeld={undoHeld ?? panelBlock}
           reloadKey={reloadKey}
           onClose={closeDetail}
           onMode={(next) => { setDraft((d) => pickMode(d, panelRow, next)); void startModeReview(panelBack()) }}
@@ -815,7 +841,7 @@ export function RulesView({ market, data, viewSwitch, setQuery }: {
           onUndo={(c) => void startUndo(panelRow, c, panelBack())}
           onRollback={(run) => { remember({ kind: 'panel', key: 'runs' }); setProblems([]); setUndoBack(null); setFrozen(null); setReview({ phase: 'ready' }); setTask({ kind: 'rollback', row: panelRow, run, back: panelBack() }) }}
           onEditAll={() => { remember({ kind: 'panel', key: 'editall' }); setQuery({ rule: null, tab: null, builder: null, ruleId: panelRow.id }) }}
-          decideHeld={undoHeld}
+          decideHeld={undoHeld ?? panelBlock}
           onDecide={(kind, asks) => { remember({ kind: 'panel', key: 'decide' }); setProblems([]); setUndoBack(null); setFrozen(null); setReview({ phase: 'ready' }); setTask({ kind, row: panelRow, asks, back: panelBack() }) }}
           brainHeld={brainHeld}
           brainAutoHeld={brainAutoHeld}
@@ -871,8 +897,8 @@ export function RulesView({ market, data, viewSwitch, setQuery }: {
           onClose={() => setPrefsOpen(false)}
           value={prefs}
           onConfirm={applyPrefs}
-          allColumns={PREF_SPECS}
-          defaultVisible={DEFAULT_PREFS.visibleColumns}
+          allColumns={prefsSet.specs}
+          defaultVisible={prefsSet.defaults.visibleColumns}
           pageSizeChoices={NO_CHOICES}
           sortFieldOptions={NO_SORT}
           showSticky={false}

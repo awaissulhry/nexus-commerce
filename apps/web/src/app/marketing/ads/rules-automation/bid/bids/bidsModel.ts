@@ -73,13 +73,17 @@ export interface BidGoal {
   at?: string | null
 }
 
-/** The new fields this answer carries: a column or control shows only when its field is there (never fake data). */
-export interface BidFeatures { auto: boolean; goal: boolean; delivery: boolean }
-export const NO_FEATURES: BidFeatures = { auto: false, goal: false, delivery: false }
-
-export function featuresOf(rows: readonly BidRow[]): BidFeatures {
-  const has = (key: keyof BidRow) => rows.some((r) => Object.prototype.hasOwnProperty.call(r, key))
-  return { auto: has('auto'), goal: has('goal'), delivery: has('delivery') }
+/**
+ * What the rows in scope can show, so a column that could only say "—" is not drawn (the Owner: nothing unnecessary):
+ * `engine` — some keyword is run by an engine (Auto or Manual): the Auto and Goal columns; `brain` — the Brain sets some
+ * bid: the Brain bid column.
+ */
+export interface BidsInScope { engine: boolean; brain: boolean }
+export function inScopeOf(rows: readonly Pick<BidRow, 'auto' | 'owner'>[]): BidsInScope {
+  return {
+    engine: rows.some((r) => r.auto === 'AUTO' || r.auto === 'MANUAL'),
+    brain: rows.some((r) => r.owner.kind === 'BRAIN'),
+  }
 }
 
 /** The read's own totals (`GET /api/advertising/bids` → totals). */
@@ -166,9 +170,6 @@ export type OwnerTone = 'info' | 'success' | 'neutral'
 /** Automatic writers share one tone (the icon tells them apart); you are success; nothing is neutral. */
 export const ownerTone = (kind: OwnerKind): OwnerTone => (kind === 'PERSON' ? 'success' : kind === 'NONE' ? 'neutral' : 'info')
 
-/** The owners a direct bid edit may go to: nothing automatic writes over it. */
-export const editableOwner = (kind: OwnerKind): boolean => kind === 'PERSON' || kind === 'NONE'
-
 // ── Where a writer is opened (audit S9; Owner 2026-10-10: the Bid page does all its work itself) ─────────────────────
 
 const BID_PAGE = '/marketing/ads/rules-automation/bid'
@@ -176,6 +177,17 @@ const BID_PAGE = '/marketing/ads/rules-automation/bid'
 const marketParam = (market: string | null | undefined): string | null => {
   const m = market?.trim()
   return m && m.toLowerCase() !== 'all' ? m.toUpperCase() : null
+}
+
+/** The Hourly Bids page, on the keyword's campaign: where an hourly plan is seen and changed. */
+const HOURLY_PAGE = '/marketing/ads/rules-automation/dayparting'
+export function planHref(campaignId: string | null | undefined, market: string | null | undefined): string {
+  const qs = new URLSearchParams()
+  const m = marketParam(market)
+  if (m) qs.set('market', m)
+  if (campaignId) qs.set('campaign', campaignId)
+  const q = qs.toString()
+  return q ? `${HOURLY_PAGE}?${q}` : HOURLY_PAGE
 }
 
 /** A rule's detail on this page (the Rules view): `?rule=<id>&tab=overview`, in the view's market. */
@@ -189,12 +201,14 @@ export function rulePanelHref(ruleId: string, market: string | null | undefined)
 }
 
 /**
- * Where a writer opens, never on another page: a rule → its detail on this page (no `/w/<id>` prefix: the workspace
- * `Link` adds it); the Brain → the keyword's own Why tab (`why`); an hourly plan, an engine, you and nothing → their
- * words only (the hover line says who).
+ * Where a writer opens (no `/w/<id>` prefix: the workspace `Link` adds it): a rule → its detail on this page; an hourly
+ * plan → the Hourly Bids page on the keyword's campaign (a plan has its own page); the Brain → the keyword's own Why tab
+ * (`why`); an engine, you and nothing → their words only (the hover line says who).
  */
-export function writerHref(w: Pick<BidWriter, 'kind' | 'id'>, market: string | null | undefined): string | null {
-  return w.kind === 'RULE' && w.id ? rulePanelHref(w.id, market) : null
+export function writerHref(w: Pick<BidWriter, 'kind' | 'id'>, market: string | null | undefined, campaignId?: string | null): string | null {
+  if (w.kind === 'RULE') return w.id ? rulePanelHref(w.id, market) : null
+  if (w.kind === 'PLAN') return planHref(campaignId, market)
+  return null
 }
 
 /** The Brain opens the keyword's Why tab. */
@@ -203,8 +217,8 @@ export const opensWhy = (w: Pick<BidWriter, 'kind'>): boolean => w.kind === 'BRA
 /** A writer as the page draws it: its words, its icon kind, where it opens. */
 export interface WriterLink { key: string; kind: OwnerKind; name: string; hint: string; href: string | null; why: boolean }
 
-export function writerLinkOf(w: BidWriter, market: string | null | undefined): WriterLink {
-  return { key: `${w.kind}:${w.id ?? w.name}`, kind: w.kind, name: writerName(w), hint: soleHint(w), href: writerHref(w, market), why: opensWhy(w) }
+export function writerLinkOf(w: BidWriter, market: string | null | undefined, campaignId?: string | null): WriterLink {
+  return { key: `${w.kind}:${w.id ?? w.name}`, kind: w.kind, name: writerName(w), hint: soleHint(w), href: writerHref(w, market, campaignId), why: opensWhy(w) }
 }
 
 // ── Owner filter chips ───────────────────────────────────────────────────────────────────────────────────────────────
@@ -224,8 +238,6 @@ export function ownerChips(totals: Pick<BidTotals, 'bids' | 'owners'> | null, ac
     ...kinds.map((k) => ({ key: k, label: k === 'NONE' ? CHIP_NONE : OWNER_WORD[k], name: OWNER_NAME[k], count: totals.owners?.[k] ?? 0 })),
   ]
 }
-
-export const isOwnerFilter = (v: unknown): v is OwnerFilter => v === 'ALL' || (OWNER_KINDS as readonly unknown[]).includes(v)
 
 // ── Match ────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -274,17 +286,16 @@ export function rowMatches(row: BidRow, f: BidFilter): boolean {
 
 // ── What the page's tiles show (M1: the Bid page's tiles above this view filter it and read its totals) ─────────────
 
-export const BIDS_SHOWS = ['changed7d', 'contested', 'waiting'] as const
-/** A tile's filter: bids changed in 7 d · bids two writers write · bids with an ask waiting for a person. */
+export const BIDS_SHOWS = ['changed7d', 'contested'] as const
+/** A tile's filter: bids changed in 7 d · bids two writers write. */
 export type BidsShow = (typeof BIDS_SHOWS)[number]
 export const isBidsShow = (v: unknown): v is BidsShow => (BIDS_SHOWS as readonly unknown[]).includes(v)
 
-/** Does the row belong to the tile's filter? `waiting`: the target ids with an ask waiting (null = not read: none). */
-export function showMatches(row: BidRow, show: BidsShow | null | undefined, waiting: ReadonlySet<string> | null): boolean {
+/** Does the row belong to the tile's filter? */
+export function showMatches(row: BidRow, show: BidsShow | null | undefined): boolean {
   if (!show) return true
   if (show === 'changed7d') return row.changes7d > 0
-  if (show === 'contested') return isContested(row.owner)
-  return !!waiting?.has(row.targetId)
+  return isContested(row.owner)
 }
 
 /** The view's numbers, for the page's tiles (`onTotals`). Never narrowed by the view's own filters. */
@@ -295,20 +306,17 @@ export interface BidsTotals {
   changed7d: number
   /** Bids another writer writes too. */
   contested: number
-  /** Bids with an ask waiting for a person; null when the asks could not be read. */
-  waiting: number | null
   /** Bids per owner kind (the server's counts). */
   owners: Record<OwnerKind, number>
-  /** The read was capped: `contested` and `waiting` count the bids read. */
+  /** The read was capped: `contested` counts the bids read. */
   truncated: boolean
 }
 
-export function bidsTotalsOf(answer: BidsAnswer, waiting: ReadonlySet<string> | null): BidsTotals {
+export function bidsTotalsOf(answer: BidsAnswer): BidsTotals {
   return {
     bids: answer.totals.bids,
     changed7d: answer.totals.changed7d,
     contested: answer.rows.filter((r) => isContested(r.owner)).length,
-    waiting: waiting ? answer.rows.filter((r) => waiting.has(r.targetId)).length : null,
     owners: answer.totals.owners,
     truncated: answer.totals.truncated,
   }
@@ -319,7 +327,6 @@ export function emptyWords(show: BidsShow | null | undefined, filtered: boolean,
   if (filtered && any) return { title: 'No bid matches', clear: true }
   if (show === 'changed7d') return { title: `No bid changed in ${WEEK}`, clear: false }
   if (show === 'contested') return { title: 'No bid has two writers', clear: false }
-  if (show === 'waiting') return { title: 'Nothing waiting', clear: false }
   return { title: 'No live bids', clear: false }
 }
 
@@ -394,13 +401,13 @@ export function bidProblem(cents: number | null, currency: string): string | nul
 }
 
 /**
- * Why this person may not set this bid by hand, or null when they may. Only where nothing automatic writes over it
- * (You · nothing); the others are held with the way out.
+ * Why this person may not set this bid by hand, or null when they may. One rule with Apply suggested (the Owner's
+ * decision): a person's bid goes through the review whoever sets it; the review says what follows (the Brain's keyword
+ * goes Manual, a rule or a plan may move it again — `suggestedModel.movesNext`).
  */
-export function editHeldReason(row: Pick<BidRow, 'owner' | 'bidNow'>, canEdit: boolean): string | null {
+export function editHeldReason(row: Pick<BidRow, 'bidNow'>, canEdit: boolean): string | null {
   if (!canEdit) return 'Needs the ads campaigns permission'
   if (typeof row.bidNow !== 'number') return 'Bids are hidden for you'
-  if (!editableOwner(row.owner.kind)) return `${ownerLabel(row.owner)} sets this bid · lock the campaign bids first`
   return null
 }
 
@@ -438,7 +445,7 @@ export interface BidGridRow extends BidRow {
   campaigns: Ref[]
   adGroups: Ref[]
   currency: string
-  /** The owner's rule detail on this page; null for every other owner. */
+  /** Where the owner opens: a rule's detail on this page, an hourly plan's page; null for every other owner. */
   ownerHref: string | null
   /** The owner is the Brain: its chip opens the keyword's Why tab. */
   ownerWhy: boolean
@@ -450,6 +457,8 @@ export interface BidGridRow extends BidRow {
   autoLock?: string | null
   /** Amazon's suggested bid for this row (the view sets it from its ad group's read). */
   suggested?: SuggestedCell
+  /** Why no write may touch this bid: its market is one Nexus only reads (the view sets it); null = writes may go. */
+  writeBlock?: string | null
 }
 
 export function gridRowOf(row: BidRow, viewMarket: string | null | undefined): BidGridRow {
@@ -459,9 +468,9 @@ export function gridRowOf(row: BidRow, viewMarket: string | null | undefined): B
     campaigns: [row.campaign],
     adGroups: [row.adGroup],
     currency: rowCurrency(row, viewMarket),
-    ownerHref: writerHref(row.owner, viewMarket),
+    ownerHref: writerHref(row.owner, viewMarket, row.campaign.id),
     ownerWhy: opensWhy(row.owner),
-    others: otherWriters(row.owner).map((w) => writerLinkOf(w, viewMarket)),
+    others: otherWriters(row.owner).map((w) => writerLinkOf(w, viewMarket, row.campaign.id)),
     autoOn: row.auto === 'AUTO',
   }
 }
@@ -478,8 +487,9 @@ export function bidsQuery(scope: { market?: string | null; productId?: string | 
   return s ? `?${s}` : ''
 }
 
-/** The toolbar count: "70 bids", or "Showing 3 of 70 bids" while a filter narrows them. */
+/** The toolbar count: "70 bids", or "3 of 70" while a filter narrows them — short words in the Rules view's one width,
+ *  so the search box beside it never moves while you type (design audit M3). */
 export function countWords(shown: number, total: number, filtered: boolean): string {
   const noun = (n: number) => `${n.toLocaleString('en-IE')} ${n === 1 ? 'bid' : 'bids'}`
-  return filtered ? `Showing ${shown.toLocaleString('en-IE')} of ${noun(total)}` : noun(total)
+  return filtered ? `${shown.toLocaleString('en-IE')} of ${total.toLocaleString('en-IE')}` : noun(total)
 }

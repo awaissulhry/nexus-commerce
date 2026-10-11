@@ -237,6 +237,19 @@
   gap: 8px;
   flex-wrap: wrap;
 }
+/* The actions centre on the TITLE's line, not on the top of the block (Bid page design audit M9, 2026-10-11: "Bid" sat
+   5.2px below the centre of the 28px Change log and market picker). A title alone: the row centres them on it (the
+   title's line box and its glyphs share a centre in the DS face). With a subtitle under it: they drop by half the
+   title line less half a control, so they still sit on the title's first line (not on a phone, where they take a row of
+   their own under the block). With an eyebrow the block keeps its top. */
+.nds-pagehdr:not(:has(> div > .eyebrow, > div > .sub)) {
+  align-items: center;
+}
+@media (min-width: 761px) {
+  .nds-pagehdr:has(> div > .sub):not(:has(> div > .eyebrow)) > .nds-pagehdr-actions {
+    margin-top: calc((var(--nds-font-size-2xl) * 1.5 - var(--nds-control-h-sm)) / 2);
+  }
+}
 
 /* ── DetailHeader ────────────────────────────────────────────────── */
 .nds-detailhdr {
@@ -473,6 +486,11 @@
 .nds-toolbar .grow {
   flex: 1;
 }
+/* The right-hand group stays RIGHT when the bar wraps (Bid page design audit M4/S5, 2026-10-11): on one line the
+   spacer above takes the room and this margin is 0; on a line of its own the group would start at the left edge. */
+.nds-toolbar > .grow + * {
+  margin-inline-start: auto;
+}
 /* A field standing in a toolbar sits on the bar's control tier, like the buttons beside it. The
    `xs`/`sm` field tiers are FORM sizes (26 / 36 px); in a 40px bar next to 28px controls a 26px
    search box read as 1px short top and bottom (CT.1, 2026-09-04). Scoped to the toolbar so forms
@@ -483,6 +501,24 @@
 }
 .nds-toolbar .nds-field.xs > input,
 .nds-toolbar .nds-field.sm > input {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+/* ONE control height per toolbar row (Bid page design audit M1, 2026-10-11): the search box, the buttons, a segmented
+   switch and the filter chips all on the 28px `sm` tier. The Bid toolbar measured four heights side by side — search 36,
+   buttons 28, the Rules/Bids switch 27.2, the chips 23.8. A chip in a bar takes `FilterChip size="md"` (the toolbar
+   size it documents) without being asked; a switch fills the tier and centres its labels. Chips folded into a toolbar's
+   panel keep the filter-row size. */
+.nds-toolbar .nds-fchip:not(.nds-toolbar-fold-panel *) {
+  height: var(--nds-control-h-sm);
+  padding: 0 11px;
+}
+.nds-toolbar .nds-seg {
+  box-sizing: border-box;
+  height: var(--nds-control-h-sm);
+  align-items: stretch;
+}
+.nds-toolbar .nds-seg .nds-seg-opt {
   padding-top: 0;
   padding-bottom: 0;
 }
@@ -1002,6 +1038,14 @@
 .nds-review-table .nds-summary-table td:last-child {
   text-align: left;
 }
+/* The table's first and last words sit on the dialog's inset, like its title and its footer (Bid page design audit
+   S17, 2026-10-11: the review's table text stood 8px inside them — the cells' own padding). */
+.nds-review-table .nds-summary-table :is(th, td):first-child {
+  padding-left: 0;
+}
+.nds-review-table .nds-summary-table :is(th, td):last-child {
+  padding-right: 0;
+}
 
 /* ── DetailModal (bid page polish round 2, 2026-10-10): a row's detail in a centered dialog ── */
 .nds-detail-subtitle {
@@ -1301,6 +1345,20 @@
 .nds-prefs-pane .nds-prefs-pickset { flex: 1 1 auto; }
 .nds-prefs-pane .nds-prefs-picks { max-height: none; }
 .nds-prefs-pane .nds-prefs-avail { flex: 1 1 auto; }
+/* Two panes side by side share their header band and their bottom (Bid page design audit M19, 2026-10-11: the
+   Customise lists started 16px apart, because only the left pane has the filter row, and ended 17px apart, because each
+   list had its own cap). Each pane (`.nds-prefs-pair`) is its header and its list on the two rows of the panes' grid:
+   the header row is as tall as the taller header, so both lists start on one line; the list row is as tall as the
+   taller list, and the other stretches to it. One cap for both lists. Phone: the panes stack. */
+.nds-prefs-paired { grid-template-rows: auto minmax(0, 1fr); row-gap: 0; }
+.nds-prefs-pair { display: grid; grid-template-rows: subgrid; grid-row: span 2; gap: 0; min-width: 0; min-height: 0; }
+.nds-prefs-head { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.nds-prefs-tabbed .nds-prefs-head { gap: 12px; }
+.nds-prefs-pair > .nds-prefs-cols { max-height: 360px; }
+.nds-prefs-tabbed .nds-prefs-pair > .nds-prefs-cols { max-height: none; min-height: 0; }
+@media (max-width: 720px) {
+  .nds-prefs-pair + .nds-prefs-pair { margin-top: 18px; }
+}
 /* A drop zone: dashed until something lands, solid tint while a chip hovers over it. */
 .nds-prefs-zone {
   display: flex; flex-direction: column; gap: 6px;

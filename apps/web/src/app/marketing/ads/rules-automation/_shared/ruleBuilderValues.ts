@@ -62,8 +62,6 @@ export interface RuleNumberInputs {
   protectDays: string
   everyN: string
   harvestBid: string
-  /** The most a run may move, in euros (`maxValueCentsEur`; the Bid page's "Most per run"). Optional: only the bid surface shows it. */
-  maxValue?: string
 }
 export type RuleNumberKey = keyof RuleNumberInputs
 
@@ -78,8 +76,6 @@ export interface RuleNumberShape {
   harvest: boolean
   harvestBidMode: string
   customFrequency: boolean
-  /** The bid surface: its fields are named in the Bid page's words (Lowest bid, Highest bid, Keywords a day …) and it sends "Most per run". */
-  bidWords?: boolean
 }
 
 export interface RuleNumbers {
@@ -88,41 +84,30 @@ export interface RuleNumbers {
   /** Why Save is blocked, by field; only fields this rule sends. Empty = every number can be saved. */
   errors: Partial<Record<RuleNumberKey, string>>
   /** The three caps as the API takes them; `undefined` = not sent (blank, or failing its check — Save is held then). */
-  caps: { maxDailyAdSpendCentsEur?: number; maxWritesPerDay?: number; maxExecutionsPerDay?: number; maxValueCentsEur?: number }
-  /** "Most per run" was emptied on an edit: send null to clear it (only the bid surface sends this cap). */
-  clearsMaxValue: boolean
+  caps: { maxDailyAdSpendCentsEur?: number; maxWritesPerDay?: number; maxExecutionsPerDay?: number }
 }
 
 const WHOLE_FROM_ONE: DecimalRange = { min: 1, whole: true }
 
 /** Every number the rule builder sends besides the criteria, read and range-checked. */
-/** The field names the bid surface shows (audit §2: the Bid page's Settings words), and the shared builder's. */
-const FIELD_WORDS = {
-  shared: { bidFloor: 'Min bid', bidCeiling: 'Max bid', maxAdSpend: 'Max daily ad spend', maxWrites: 'Max writes per day', maxExecs: 'Max runs per day', maxValue: 'Max value per run' },
-  bid: { bidFloor: 'Lowest bid', bidCeiling: 'Highest bid', maxAdSpend: 'Ad spend a day', maxWrites: 'Changes a day', maxExecs: 'Keywords a day', maxValue: 'Most per run' },
-} as const
-
 export function readRuleNumbers(inp: RuleNumberInputs, shape: RuleNumberShape): RuleNumbers {
   const harvestRange: DecimalRange = shape.harvestBidMode === 'fixed' ? { min: HARVEST_BID_FLOOR_EUR } : DECIMAL_RANGE.increasePct
-  const w = shape.bidWords ? FIELD_WORDS.bid : FIELD_WORDS.shared
   const reads: Record<RuleNumberKey, FieldRead> = {
     budgetFloor: readField(inp.budgetFloor, 'Min daily budget', { min: BUDGET_FLOOR_EUR }, BUDGET_FLOOR_EUR),
     budgetCeiling: readField(inp.budgetCeiling, 'Max daily budget', DECIMAL_RANGE.money, null),
     placeFloor: readField(inp.placeFloor, 'Min placement modifier', DECIMAL_RANGE.placementPct, 0),
     placeCeiling: readField(inp.placeCeiling, 'Max placement modifier', DECIMAL_RANGE.placementPct, PLACEMENT_MAX_PCT),
-    bidFloor: readField(inp.bidFloor, w.bidFloor, { min: BID_FLOOR_EUR }, BID_FLOOR_EUR),
-    bidCeiling: readField(inp.bidCeiling, w.bidCeiling, DECIMAL_RANGE.money, null),
-    maxAdSpend: readField(inp.maxAdSpend, w.maxAdSpend, DECIMAL_RANGE.money, null),
-    maxWrites: readField(inp.maxWrites, w.maxWrites, WHOLE_FROM_ONE, null),
-    maxExecs: readField(inp.maxExecs, w.maxExecs, WHOLE_FROM_ONE, null),
-    maxValue: readField(inp.maxValue ?? '', w.maxValue, DECIMAL_RANGE.money, null),
+    bidFloor: readField(inp.bidFloor, 'Min bid', { min: BID_FLOOR_EUR }, BID_FLOOR_EUR),
+    bidCeiling: readField(inp.bidCeiling, 'Max bid', DECIMAL_RANGE.money, null),
+    maxAdSpend: readField(inp.maxAdSpend, 'Max daily ad spend', DECIMAL_RANGE.money, null),
+    maxWrites: readField(inp.maxWrites, 'Max writes per day', WHOLE_FROM_ONE, null),
+    maxExecs: readField(inp.maxExecs, 'Max runs per day', WHOLE_FROM_ONE, null),
     protectDays: readField(inp.protectDays, 'Protection window (days)', { min: 1, max: PROTECT_DAYS_MAX, whole: true }, PROTECT_DAYS_DEFAULT),
     everyN: readField(inp.everyN, 'The “Every” number', WHOLE_FROM_ONE, 1),
     // Custom bid must have a value (the engine refuses a blank one); a blank "CPC + %" is CPC + 0%.
     harvestBid: readField(inp.harvestBid, shape.harvestBidMode === 'fixed' ? 'Custom bid' : 'Percent above CPC', harvestRange, shape.harvestBidMode === 'fixed' ? null : 0, shape.harvestBidMode === 'fixed'),
   }
   const sent: RuleNumberKey[] = ['maxAdSpend', 'maxWrites', 'maxExecs']
-  if (shape.bidWords) sent.push('maxValue')
   if (!shape.locked) {
     if (shape.budget) sent.push('budgetFloor', 'budgetCeiling')
     if (shape.placement) sent.push('placeFloor', 'placeCeiling')
@@ -144,10 +129,9 @@ export function readRuleNumbers(inp: RuleNumberInputs, shape: RuleNumberShape): 
   }
   pair('budgetFloor', 'budgetCeiling', 'Min daily budget', 'Max daily budget')
   pair('placeFloor', 'placeCeiling', 'Min placement modifier', 'Max placement modifier')
-  pair('bidFloor', 'bidCeiling', w.bidFloor, w.bidCeiling)
+  pair('bidFloor', 'bidCeiling', 'Min bid', 'Max bid')
   const num = (k: RuleNumberKey) => (!reads[k].error && typeof reads[k].value === 'number' ? (reads[k].value as number) : undefined)
   const spend = num('maxAdSpend')
-  const maxValue = shape.bidWords ? num('maxValue') : undefined
   const values = Object.fromEntries(Object.entries(reads).map(([k, r]) => [k, r.value])) as Record<RuleNumberKey, number | string | null>
   return {
     values,
@@ -156,9 +140,7 @@ export function readRuleNumbers(inp: RuleNumberInputs, shape: RuleNumberShape): 
       maxDailyAdSpendCentsEur: spend != null ? Math.round(spend * 100) : undefined,
       maxWritesPerDay: num('maxWrites'),
       maxExecutionsPerDay: num('maxExecs'),
-      ...(maxValue != null ? { maxValueCentsEur: Math.round(maxValue * 100) } : {}),
     },
-    clearsMaxValue: !!shape.bidWords && (inp.maxValue ?? '').trim() === '',
   }
 }
 
@@ -230,4 +212,52 @@ export function scheduleWindowValue(
   const spec = scheduleType === 'budget-multiplier' ? MULTIPLIER_VALUE : SCHEDULE_VALUE[w.adj]
   const when = `${w.day} ${w.start && w.end ? `${w.start}–${w.end}` : '(all day)'}`
   return readField(w.value, `${when}: ${spec?.words ?? 'the value'}`, spec?.range ?? {}, null)
+}
+
+// ── the schedule as the evaluator runs it (Owner 2026-10-11, the old builder's real problems) ──────────────────────────
+
+/**
+ * A rule with no stored frequency, or one the evaluator does not know, runs on EVERY 15-minute tick
+ * (apps/api `ads-rule-schedule.ts` `scheduleIsDue`: "no schedule / unknown frequency → always due"). The builder showed
+ * such a rule as "Daily" and stored Daily on the next save, which made it run once a day instead. It now shows it as
+ * this option and saves no frequency, so it keeps running as it does.
+ */
+export const EVERY_TICK = 'Every 15 min'
+/** The frequencies `scheduleIsDue` reads, spelled as it compares them. */
+export const RUN_FREQUENCIES: readonly string[] = ['Daily', 'Weekly', 'Monthly', 'Custom', 'Hourly']
+/** The ones that fire at the stored time; Hourly (and every tick) read no time. */
+const TIMED_FREQUENCIES = new Set(['Daily', 'Weekly', 'Monthly', 'Custom'])
+
+/** The frequency a stored schedule really runs on, as the form's value. */
+export function frequencyAsRun(schedule: unknown): string {
+  const f = schedule && typeof schedule === 'object' ? (schedule as { frequency?: unknown }).frequency : undefined
+  return typeof f === 'string' && RUN_FREQUENCIES.includes(f) ? f : EVERY_TICK
+}
+
+/** Whether the evaluator reads the time for this frequency (it does not for Hourly or every tick). */
+export const frequencyReadsTime = (frequency: string): boolean => TIMED_FREQUENCIES.has(frequency)
+
+/** The schedule as it is saved: "Every 15 min" is no frequency at all, which is what the evaluator runs every tick. */
+export function scheduleToSave<S extends { frequency: string }>(s: S): Omit<S, 'frequency'> & { frequency?: string } {
+  if (s.frequency !== EVERY_TICK) return s
+  const rest: Partial<S> = { ...s }
+  delete rest.frequency
+  return rest as Omit<S, 'frequency'>
+}
+
+// ── a new bid rule's highest bid (Owner 2026-10-11) ────────────────────────────────────────────────────────────────────
+
+/**
+ * The highest bid a NEW bid rule starts with, as the field's text: 1.5 × the highest bid its campaigns carry today
+ * (the caller passes the market's bids when the campaigns have none), rounded to the cent, never below the lowest bid.
+ * Why: a rule that raises bids must never run uncapped — with the field empty, a "raise by %" or a computed action can
+ * lift a bid without limit. 1.5 × keeps every bid of today under the cap (a cap below a bid would LOWER it even on a
+ * raise) and lets the best keyword rise by half in one step, no further. The person can change it or clear it.
+ * No bid known (none in the market, or no permission to see them): empty, as before.
+ */
+export function defaultBidCeiling(bidsCents: readonly number[], floorEur: number = BID_FLOOR_EUR): string {
+  const bids = bidsCents.filter((b) => Number.isFinite(b) && b > 0)
+  if (!bids.length) return ''
+  const cents = Math.max(Math.round(Math.max(...bids) * 1.5), Math.round(floorEur * 100))
+  return (cents / 100).toFixed(2)
 }

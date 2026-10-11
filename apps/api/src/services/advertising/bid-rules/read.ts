@@ -94,10 +94,6 @@ export interface BidRuleRow {
 export interface BidRulesTotals {
   rules: number
   on: number
-  acting: number
-  auto: number
-  asking: number
-  held: number
   waiting: number
   bidsChanged7d: number
   clashes: number
@@ -588,10 +584,6 @@ export async function listBidRules(q: ListBidRulesQuery, opts: { now?: Date } = 
   const totals: BidRulesTotals = {
     rules: active.length,
     on: active.filter((r) => r.mode.set !== 'OFF').length,
-    acting: active.filter((r) => modeActs(r.mode)).length,
-    auto: active.filter((r) => r.mode.acts === 'AUTO').length,
-    asking: active.filter((r) => r.mode.acts === 'ASK').length,
-    held: active.filter((r) => r.mode.heldBy != null).length,
     waiting: active.reduce((n, r) => n + r.waiting, 0),
     bidsChanged7d: active.reduce((n, r) => n + r.changed7d.bids, 0) + brain.changed7d.bids,
     clashes,

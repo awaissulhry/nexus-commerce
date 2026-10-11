@@ -5,9 +5,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { ModeCell } from '../renderers/ModeCell'
 import { SelectPanelEditor } from '../editors/SelectPanelEditor'
 import { suppressModeKeys, type ModeCellValue } from '../renderers/modeModel'
-import { entityLinksColumn, modeColumn, sparklineColumn } from './presets'
+import { entityLinksColumn, modeColumn } from './presets'
 import { EntityLinksCell } from '../renderers/EntityLinksCell'
-import { SparklineCell } from '../renderers/SparklineCell'
 import { entityLinksKeys } from '../renderers/entityLinksKeys'
 
 /**
@@ -111,16 +110,9 @@ describe('ModeCell — what it draws', () => {
   })
 })
 
-describe('sparklineColumn and entityLinksColumn', () => {
-  interface K { id: string; bid: number[]; campaigns: Array<{ id: string; name: string; href?: string }> }
-  const spark = sparklineColumn<K>('bid', { header: 'Bid, 7 days', label: (r) => `Bid of ${r.id}` })
+describe('entityLinksColumn', () => {
+  interface K { id: string; campaigns: Array<{ id: string; name: string; href?: string }> }
   const links = entityLinksColumn<K>('campaigns', { header: 'Campaigns', noun: { one: 'campaign', many: 'campaigns' } })
-  it('the sparkline: its cell, not sortable, words for the CSV', () => {
-    expect(spark.cellRenderer).toBe(SparklineCell)
-    expect(spark.sortable).toBe(false)
-    expect((spark.valueFormatter as Fn)({ value: [1, 3, 2] })).toBe('3 readings, low 1, high 3, now 2')
-    expect((spark.valueFormatter as Fn)({ value: undefined })).toBe('No changes')
-  })
   it('the links: its cell, names for the CSV, sorted by how many, Enter answered in the cell', () => {
     expect(links.cellRenderer).toBe(EntityLinksCell)
     expect((links.valueFormatter as Fn)({ value: [{ id: '1', name: 'A' }, { id: '2', name: 'B' }] })).toBe('A, B')

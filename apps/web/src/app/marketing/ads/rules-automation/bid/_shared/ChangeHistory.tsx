@@ -13,7 +13,6 @@ import { Button, Tag, Tooltip } from '@/design-system/primitives'
 import { EntityLinks, type EntityLinkComponent } from '@/design-system/components'
 import { ChangeValue } from '@/design-system/grid'
 import Link from '@/lib/workspaces/Link'
-import { HeldButton } from '../bids/HeldButton'
 import { CHANGE_STATE_TONE, CHANGE_STATE_WORD, type ChangeState, type UndoView } from './delivery'
 import { relWords, whenWords } from './format'
 import { PanelGrid, type PanelColumn } from './PanelGrid'
@@ -67,9 +66,9 @@ function Status({ row, undoHeld, onUndo }: { row: HistoryRow; undoHeld: string |
       {row.who && <Who who={row.who} />}
       {row.state && <Tag tone={CHANGE_STATE_TONE[row.state]}>{CHANGE_STATE_WORD[row.state]}</Tag>}
       {row.undo?.kind === 'undo' && !undone && (
-        <HeldButton size="xs" variant="secondary" held={undoHeld} onClick={() => onUndo(row)} aria-label={row.undoLabel}>
+        <Button size="xs" variant="secondary" heldReason={undoHeld} onClick={() => onUndo(row)} aria-label={row.undoLabel}>
           <Undo2 size={13} aria-hidden /> Undo…
-        </HeldButton>
+        </Button>
       )}
       {row.undo?.kind === 'cant' && !undone && (
         <Tooltip label={row.undo.reason} portal><span tabIndex={0} className={styles.cant} aria-label={`${row.undo.word}: ${row.undo.reason}`}>{row.undo.word}</span></Tooltip>
@@ -96,7 +95,8 @@ export function ChangeHistory({ label, rows, keywords, phone, undoHeld, onUndo, 
   const columns: Array<PanelColumn<HistoryRow>> = [
     ...(phone && keywords ? [] : [when]),
     ...(keywords ? [{ key: 'kw', label: 'Keyword', flex: 1.4, render: (r: HistoryRow) => <KeywordCell target={r.target} campaign={r.campaign} adGroup={r.adGroup} when={phone ? relWords(r.at) : undefined} /> }] : []),
-    { key: 'change', label: 'Change', flex: 1, render: (r) => <ChangeValue changes={[{ label: r.change.label, from: r.change.from, to: r.change.to }]} hideLabels /> },
+    // Money on its numbers, as in the main table (design audit S4): right-aligned, tabular, the header over them.
+    { key: 'change', label: 'Change', flex: 1, numeric: true, render: (r) => <ChangeValue changes={[{ label: r.change.label, from: r.change.from, to: r.change.to }]} hideLabels /> },
     { key: 'status', label: statusLabel, flex: 1.4, render: (r) => <Status row={r} undoHeld={undoHeld} onUndo={onUndo} /> },
   ]
   return <PanelGrid ariaLabel={label} columns={columns} rows={rows} rowId={idOf} />

@@ -596,6 +596,23 @@ html:has(> body > .nds-backdrop) { overscroll-behavior: none; }
   font-size: var(--nds-font-size-md);
   font-weight: 700;
   color: var(--nds-text);
+  /* The title's first line is centred on the 28px controls beside it (Close, a detail's Prev / Next): the header tops
+     them all at its padding, and the 22.5px line sat 3.5px high against the buttons (Bid page design audit M9,
+     2026-10-11). Half the difference goes above the title; a longer title or a subtitle follows it down. */
+  margin-top: calc((var(--nds-control-h-sm) - 1lh) / 2);
+}
+/* A detail keeps its height and its place (its vertical position is another lane's): there the controls rise to the
+   title's line instead — the same centring, the header no taller. */
+.nds-modal.detail .nds-modal-h .t {
+  margin-top: 0;
+}
+.nds-modal.detail .nds-modal-x {
+  margin-top: calc((var(--nds-font-size-md) * 1.5 - var(--nds-control-h-sm)) / 2);
+}
+@media (min-width: 761px) {
+  .nds-modal.detail .nds-modal-h-actions {
+    margin-top: calc((var(--nds-font-size-md) * 1.5 - var(--nds-control-h-sm)) / 2);
+  }
 }
 .nds-modal-h .sub {
   margin-top: 3px;
@@ -666,6 +683,32 @@ html:has(> body > .nds-backdrop) { overscroll-behavior: none; }
 }
 .nds-modal-sh + .nds-modal-b {
   border-top: none;
+}
+/* A scrolling tab strip under the header starts its first LABEL on the dialog's inset, like the title, the body and the
+   footer (Bid page design audit M11, 2026-10-11: "Overview" stood 16px inside them — the strip's 4px focus-ring padding
+   plus the tab's 12px). The strip reaches 4px past the inset on each side (that padding still holds the first tab's
+   focus ring), the first tab drops its leading padding, and the hairline is drawn on the inset, not under the overhang. */
+.nds-modal-sh > .nds-tabs-scroller {
+  max-width: none;
+  margin-inline: calc(-1 * var(--nds-space-4));
+}
+.nds-modal-sh .nds-tabs.scrollable > .nds-tab:first-child {
+  padding-inline-start: 0;
+}
+.nds-modal-sh .nds-tabs.scrollable > .nds-tab:first-child::after {
+  left: 0;
+}
+.nds-modal-sh .nds-tabs.scrollable:not([data-overflows='overlay']) {
+  border-bottom-color: transparent;
+  background-image: linear-gradient(var(--nds-border-subtle), var(--nds-border-subtle));
+  background-repeat: no-repeat;
+  background-origin: border-box;
+  background-size: calc(100% - 2 * var(--nds-space-4)) 1px;
+  background-position: left var(--nds-space-4) bottom 0;
+}
+.nds-modal-sh .nds-tabs.scrollable[data-overflows='overlay'] {
+  background-size: calc(100% - 2 * var(--nds-space-4)) 1px;
+  background-position-x: var(--nds-space-4);
 }
 /* `detail` — a row's detail (bid page polish round 2, 2026-10-10; the Owner: no side drawer, a centered popup). Its
    height follows its content up to min(880px, the viewport less its margins) and the body scrolls beyond (run 3: a fixed
@@ -1383,15 +1426,31 @@ body.nds-drawer-resizing * {
 
 /* ── MetricStrip (KPI tiles) ─────────────────────────────────────── */
 .nds-metrics {
+  --nds-metrics-gap: 12px;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 12px;
+  gap: var(--nds-metrics-gap);
 }
 .nds-metric {
   background: var(--nds-surface);
   border: 1px solid var(--nds-border-subtle);
   border-radius: var(--nds-radius-2xl);
   padding: 14px 16px;
+}
+/* The numbers of a row of tiles share one line (Bid page design audit M10, 2026-10-11): one label that wrapped made its
+   number 9px lower than its neighbours', and a clickable tile (a <button>) centred its content while a plain one did
+   not — baselines 280.8 / 289.8 / 280.8 / 271.8 at 768, 18px apart at 390. In a strip each tile puts its label and its
+   body (number, delta, hint) on two rows of the strip (`subgrid`): a row's labels start on one line and its numbers sit
+   on one line, whatever wraps. The strip's gap runs between the two rows, so the label takes it back (6px, as before). */
+.nds-metrics > .nds-metric {
+  display: grid;
+  grid-row: span 2;
+  grid-template-rows: subgrid;
+  align-content: start;
+}
+.nds-metrics > .nds-metric > .lbl {
+  align-self: start;
+  margin-bottom: calc(var(--nds-space-6) - var(--nds-metrics-gap));
 }
 .nds-metric .lbl {
   font-size: var(--nds-font-size-sm);
@@ -1402,6 +1461,9 @@ body.nds-drawer-resizing * {
 .nds-metric .val {
   font-size: var(--nds-font-size-xl);
   font-weight: 800;
+  /* A figure has no descenders: the body's 1.5 line left ~5px of empty line under it, so the tile read 4.6px heavier at
+     the bottom (19.3 from the top edge to the label, 23.9 from the number to the bottom edge). */
+  line-height: 1.1;
   color: var(--nds-text);
   letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
@@ -1759,114 +1821,6 @@ body.nds-drawer-resizing * {
   height: 22px;
   border-radius: var(--nds-radius-xs);
 }
-
-/* ── WeekHourGrid (ads brain page D1, 2026-10-10) ─────────────────────────────────────────────────────────────────
-   A week × hour editor. Brush tones are the 7:1 status pairs (`--nds-<tone>-text` on `--nds-<tone>-soft`, measured by
-   check-nds-contrast); `accent` is the primary button's pair. Research shading mixes `--nds-primary` into the surface
-   in 6 steps, capped at 40 % so the lock glyph keeps 3:1 in both themes; a null is hatched (no data), never step 0.
-   `.is-side` (below 640 px of the grid's own width, set by the component) stands the week on its side: 7 day columns
-   fit 390 px. Every row is its own grid on the same template, so ARIA rows are the rows you see. */
-.nds-weekhour { display: flex; flex-direction: column; gap: var(--nds-space-8); min-width: 0; color: var(--nds-text); font-size: var(--nds-font-size-base); }
-.nds-weekhour-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8) var(--nds-space-16); }
-.nds-weekhour-ctl { display: inline-flex; align-items: center; gap: var(--nds-space-6); min-width: 0; }
-.nds-weekhour-lbl { font-size: var(--nds-font-size-sm); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-muted); white-space: nowrap; }
-.nds-weekhour-tz { margin-inline-start: auto; font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); white-space: nowrap; }
-.nds-weekhour-note { margin: 0; font-size: var(--nds-font-size-sm); color: var(--nds-text-2); }
-.nds-weekhour-brush { display: inline-flex; align-items: center; gap: var(--nds-space-5); }
-.nds-weekhour-kbd { margin-inline-start: var(--nds-space-2); }
-.nds-weekhour-scroll { min-width: 0; overflow-x: auto; }
-.nds-weekhour.is-side .nds-weekhour-scroll { overflow: visible; }
-.nds-weekhour.is-side.is-tight .nds-weekhour-scroll { overflow-x: auto; }
-.nds-weekhour-grid { display: flex; flex-direction: column; gap: 2px; user-select: none; -webkit-user-select: none; }
-.nds-weekhour-row { display: grid; grid-template-columns: 40px repeat(24, minmax(22px, 1fr)); gap: 2px; min-width: 616px; }
-.nds-weekhour.is-side .nds-weekhour-row { grid-template-columns: 44px repeat(7, minmax(36px, 1fr)); min-width: 310px; }
-.nds-weekhour-row.is-head { position: sticky; top: 0; z-index: 2; background: var(--nds-surface); }
-.nds-weekhour-colhead,
-.nds-weekhour-rowhead,
-.nds-weekhour-corner {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 0;
-  height: 22px;
-  border-radius: var(--nds-radius-xs);
-  font-size: var(--nds-font-size-micro);
-  font-weight: var(--nds-font-weight-bold);
-  font-variant-numeric: tabular-nums;
-  color: var(--nds-text-muted);
-}
-.nds-weekhour-rowhead { position: sticky; left: 0; z-index: 1; justify-content: flex-end; height: 24px; padding-inline-end: var(--nds-space-6); background: var(--nds-surface); }
-.nds-weekhour.is-edit :is(.nds-weekhour-colhead, .nds-weekhour-rowhead, .nds-weekhour-corner) { cursor: pointer; }
-.nds-weekhour.is-edit :is(.nds-weekhour-colhead, .nds-weekhour-rowhead, .nds-weekhour-corner):hover { color: var(--nds-text); background: var(--nds-surface-hover); }
-.nds-weekhour-cell {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 0;
-  height: 24px;
-  border-radius: var(--nds-radius-xs);
-  font-size: var(--nds-font-size-micro);
-  font-weight: var(--nds-font-weight-semibold);
-  line-height: 1;
-  outline: none;
-}
-.nds-weekhour.is-edit .nds-weekhour-cell { cursor: pointer; touch-action: none; }
-.nds-weekhour-cell:focus-visible { z-index: 1; outline: 2px solid var(--nds-text); outline-offset: 1px; }
-.nds-weekhour.is-edit .nds-weekhour-cell:hover { box-shadow: inset 0 0 0 1px var(--nds-text-2); }
-.nds-weekhour-cell.is-selected,
-.nds-weekhour.is-edit .nds-weekhour-cell.is-selected:hover { box-shadow: inset 0 0 0 2px var(--nds-text-strong), inset 0 0 0 3px var(--nds-surface); }
-:is(.nds-weekhour-cell, .nds-weekhour-swatch).is-changed::after {
-  content: '';
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 5px;
-  height: 5px;
-  border-radius: var(--nds-radius-full);
-  background: currentColor;
-}
-.nds-weekhour-mark { overflow: hidden; white-space: nowrap; }
-.nds-weekhour-lock { flex: none; }
-.nds-weekhour-swatch {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  width: 16px;
-  height: 16px;
-  border-radius: var(--nds-radius-xs);
-  font-size: var(--nds-font-size-micro);
-  font-weight: var(--nds-font-weight-semibold);
-  line-height: 1;
-}
-:is(.nds-weekhour-cell, .nds-weekhour-swatch).tone-base { color: var(--nds-text-2); background: var(--nds-surface); box-shadow: inset 0 0 0 1px var(--nds-border); }
-:is(.nds-weekhour-cell, .nds-weekhour-swatch).tone-neutral { color: var(--nds-text-strong); background: var(--nds-surface-sunken); }
-:is(.nds-weekhour-cell, .nds-weekhour-swatch).tone-info { color: var(--nds-info-text); background: var(--nds-info-soft); }
-:is(.nds-weekhour-cell, .nds-weekhour-swatch).tone-success { color: var(--nds-success-text); background: var(--nds-success-soft); }
-:is(.nds-weekhour-cell, .nds-weekhour-swatch).tone-warning { color: var(--nds-warning-text); background: var(--nds-warning-soft); }
-:is(.nds-weekhour-cell, .nds-weekhour-swatch).tone-danger { color: var(--nds-danger-text); background: var(--nds-danger-soft); }
-:is(.nds-weekhour-cell, .nds-weekhour-swatch).tone-accent { color: var(--nds-text-inverse); background: var(--nds-primary); }
-:is(.nds-weekhour-cell, .nds-weekhour-swatch).heat-0 { color: var(--nds-text); background: var(--nds-surface); box-shadow: inset 0 0 0 1px var(--nds-border); }
-:is(.nds-weekhour-cell, .nds-weekhour-swatch).heat-1 { color: var(--nds-text); background: color-mix(in srgb, var(--nds-primary) 8%, var(--nds-surface)); }
-:is(.nds-weekhour-cell, .nds-weekhour-swatch).heat-2 { color: var(--nds-text); background: color-mix(in srgb, var(--nds-primary) 16%, var(--nds-surface)); }
-:is(.nds-weekhour-cell, .nds-weekhour-swatch).heat-3 { color: var(--nds-text); background: color-mix(in srgb, var(--nds-primary) 24%, var(--nds-surface)); }
-:is(.nds-weekhour-cell, .nds-weekhour-swatch).heat-4 { color: var(--nds-text); background: color-mix(in srgb, var(--nds-primary) 32%, var(--nds-surface)); }
-:is(.nds-weekhour-cell, .nds-weekhour-swatch).heat-5 { color: var(--nds-text); background: color-mix(in srgb, var(--nds-primary) 40%, var(--nds-surface)); }
-:is(.nds-weekhour-cell, .nds-weekhour-swatch).is-nodata {
-  color: var(--nds-text);
-  background: repeating-linear-gradient(45deg, var(--nds-surface-sunken) 0 3px, var(--nds-surface) 3px 6px);
-  box-shadow: inset 0 0 0 1px var(--nds-border-subtle);
-}
-.nds-weekhour-ramp { display: inline-flex; gap: 1px; }
-.nds-weekhour-ramp .nds-weekhour-swatch { width: 10px; }
-.nds-weekhour-foot { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--nds-space-6) var(--nds-space-16); font-size: var(--nds-font-size-sm); color: var(--nds-text-2); }
-.nds-weekhour-legend { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-5) var(--nds-space-12); }
-.nds-weekhour-key { display: inline-flex; align-items: center; gap: var(--nds-space-5); min-width: 0; }
-.nds-weekhour-key > .nds-weekhour-lock { color: var(--nds-text-2); }
-.nds-weekhour-detail { flex: 1 1 260px; min-height: 18px; color: var(--nds-text); font-variant-numeric: tabular-nums; }
-.nds-weekhour-count { color: var(--nds-text-2); }
 
 /* ── DataGrid ────────────────────────────────────────────────────── */
 .nds-grid-prefsbar {

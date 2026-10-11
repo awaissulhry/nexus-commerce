@@ -9,14 +9,17 @@
  *   tabs     Why (the Brain's own decision) · History (every change with Undo) · What if (the Brain at another target
  *            ACoS) — a new tab joins `TABS`
  *   body     a rail that stays on every tab — the bid now, the Brain's bid, the trend, where it lives, its numbers, Set
- *            bid (only where nothing automatic writes over it: You · nothing) and Lock / Unlock campaign bids — and the
- *            tab beside it (under it on a phone)
+ *            bid (one rule with Apply suggested: whoever sets the bid, the review says what follows) and Lock / Unlock
+ *            campaign bids — and the tab beside it (under it on a phone)
+ *
+ * Every write control is held, with the reason, where the keyword's market is one Nexus only reads (`row.writeBlock`,
+ * set by the view from the shell's `useWriteBlockOf`, use audit A1).
  *
  * Nothing here writes: each action asks the view, which opens the DS review ABOVE this dialog. Time, money and what
  * became of a change are the page's one helper set (`_shared/format.ts`, `_shared/delivery.ts`).
  */
 import { useCallback, useEffect, useState } from 'react'
-import { Hand, Lock, LockOpen, PencilLine, Sparkles, Target } from 'lucide-react'
+import { Calculator, Hand, Lock, LockOpen, PencilLine, Sparkles, Target } from 'lucide-react'
 import { Button, FilterChip, Input, Pill, Tag } from '@/design-system/primitives'
 import { EntityLinks, Field, KeyValue, Sparkline } from '@/design-system/components'
 import { DetailModal, type DetailNav, type DetailModalProps } from '@/design-system/patterns'
@@ -28,11 +31,11 @@ import { acosText, AUTO_WORDS, autoHeld, bidProblem, editHeldReason, lastChangeW
 import { draftOf, GOAL_KEYS, GOAL_LABEL, goalChanges, goalHeld, goalText, parseGoal, type GoalDraft, type GoalValues } from './goalModel'
 import { suggestedWords } from './suggestedModel'
 import { NightFloorMark, OwnerChip, OwnerIcon, TREND_LABEL } from './bidsColumns'
-import { HeldButton } from './HeldButton'
 import { FullName } from '../_shared/FullName'
+import { TabEmpty } from '../_shared/TabEmpty'
 import { ChangeHistory, type HistoryRow, type WhoChip } from '../_shared/ChangeHistory'
 import { historyLines, whoHref, type FeedRow, type HistoryLine } from './historyModel'
-import { actionWord, decisionFacts, layerTag, parseAcosPct, type BrainDecision, type WhatIfDecision } from './whyModel'
+import { actionWord, decisionFacts, isLiveDecision, layerTag, parseAcosPct, wouldWords, type BrainDecision, type WhatIfDecision } from './whyModel'
 import styles from './bids.module.css'
 
 /** What the detail (and the table) asks the view to review and save. */
@@ -47,9 +50,6 @@ export type BidAsk =
   /** The keyword's own goal and max. */
   | { kind: 'goal'; row: BidGridRow; values: GoalValues }
 
-/** What the detail can do beyond the plain table: the keyword-Auto fields the answer carries. */
-export interface DetailFeatures { suggested: boolean; auto: boolean; goal: boolean }
-
 type Load<T> = { state: 'loading' } | { state: 'failed'; error: string } | { state: 'ready'; value: T }
 
 /** The detail's tabs. Every action on a bid stays here (Owner 2026-10-10): new tabs join this list. */
@@ -62,8 +62,8 @@ const TABS: Array<{ id: BidPanelTab; label: string }> = [
   { id: 'whatif', label: 'What if' },
   { id: 'goal', label: 'Goal' },
 ]
-/** The tabs this answer can fill: Goal only when the answer carries the keyword's goal. */
-export const tabsFor = (features: Pick<DetailFeatures, 'goal'>) => TABS.filter((t) => t.id !== 'goal' || features.goal)
+/** The tabs this keyword can fill: Goal only where an engine runs it (no engine: nothing would follow a goal). */
+export const tabsFor = (row: Pick<BidGridRow, 'auto'> | null) => TABS.filter((t) => t.id !== 'goal' || (!!row && row.auto !== undefined && row.auto !== 'NONE'))
 const NOUN = {
   portfolio: { one: 'portfolio', many: 'portfolios' },
   campaign: { one: 'campaign', many: 'campaigns' },
@@ -107,25 +107,42 @@ function NotRead({ what, error, onRetry }: { what: string; error: string; onRetr
   )
 }
 
+/** The words for a watched decision's tag: the brain decides, it does not set this bid. */
+const WATCHING_HINT = 'The brain only watches this keyword: it decides and records, it does not set this bid'
+
 function WhyTab({ row, version }: { row: BidGridRow; version: number }) {
   const [why, again] = useLoad<BrainDecision | null>(() => readWhy(row.targetId), `${row.targetId}:${version}`)
   if (why.state === 'loading') return <Muted>Reading…</Muted>
   if (why.state === 'failed') return <NotRead what="Why" error={why.error} onRetry={again} />
   const d = why.value
-  if (!d) return <Muted>—</Muted>
+  if (!d) return <TabEmpty icon={<OwnerIcon kind="BRAIN" size={20} />} title="The brain has not decided this keyword" />
   const act = actionWord(d)
   const tag = layerTag(d.layer)
+  const live = isLiveDecision(d)
+  const when = <span className={styles.muted} title={whenWords(d.decidedAt)}>{relWords(d.decidedAt)}</span>
   return (
     <div className={styles.why}>
-      <span className={styles.row}>
-        <Pill tone={act.tone} size="sm">{act.label}</Pill>
-        {tag && <Tag tone="neutral">{tag}</Tag>}
-        <span className={styles.muted} title={whenWords(d.decidedAt)}>{relWords(d.decidedAt)}</span>
-      </span>
-      {typeof d.currentCents === 'number' && typeof d.decidedCents === 'number' && (
-        <ChangeValue changes={[{ label: 'Bid', from: money(d.currentCents, row.currency), to: money(d.decidedCents, row.currency) }]} />
+      {live ? (
+        <>
+          <span className={styles.row}>
+            <Pill tone={act.tone} size="sm">{act.label}</Pill>
+            {tag && <Tag tone="neutral">{tag}</Tag>}
+            {when}
+          </span>
+          {typeof d.currentCents === 'number' && typeof d.decidedCents === 'number' && (
+            <ChangeValue changes={[{ label: 'Bid', from: money(d.currentCents, row.currency), to: money(d.decidedCents, row.currency) }]} />
+          )}
+        </>
+      ) : (
+        // Watching (use audit A2): what it WOULD do, never a change that happened — History and Bid now say what did.
+        <span className={styles.row}>
+          <span className={styles.strong}>{wouldWords(d, row.currency)}</span>
+          <span title={WATCHING_HINT} aria-label={`Watching: ${WATCHING_HINT}`} role="img"><Tag tone="neutral">Watching</Tag></span>
+          {tag && <Tag tone="neutral">{tag}</Tag>}
+          {when}
+        </span>
       )}
-      <KeyValue labelCase="sentence" columns={2} dense items={decisionFacts(d, row.currency)} />
+      <KeyValue labelCase="sentence" columns={2} dense items={decisionFacts(d, row.currency, row.brainAim)} />
     </div>
   )
 }
@@ -146,6 +163,7 @@ function historyRows(lines: readonly HistoryLine[], row: BidGridRow, market: str
 }
 
 function HistoryTab({ row, market, version, canEdit, onUndo, onWhy }: { row: BidGridRow; market: string | null; version: number; canEdit: boolean; onUndo: (line: HistoryLine) => void; onWhy: () => void }) {
+  const undoHeld = canEdit ? row.writeBlock ?? null : 'Needs the ads campaigns permission'
   const [feed, again] = useLoad<FeedRow[]>(() => readHistory(row.targetId), `${row.targetId}:${version}`)
   const [raw, setRaw] = useState(false)
   if (feed.state === 'loading') return <Muted>Reading…</Muted>
@@ -165,7 +183,7 @@ function HistoryTab({ row, market, version, canEdit, onUndo, onWhy }: { row: Bid
       {shown.lines.length === 0 ? <Muted>No change in 30 d</Muted> : (
         <ChangeHistory
           label={`Bid history of ${row.text}`} rows={historyRows(shown.lines, row, market, onWhy)} keywords={false} phone={false}
-          undoHeld={canEdit ? null : 'Needs the ads campaigns permission'}
+          undoHeld={undoHeld}
           onUndo={(r) => { const l = byId.get(r.id); if (l) onUndo(l) }}
         />
       )}
@@ -193,29 +211,32 @@ function WhatIfTab({ row }: { row: BidGridRow }) {
             <Input size="sm" fieldClassName={styles.field} inputMode="decimal" placeholder="20" suffix="%" value={text} onChange={(e) => setText(e.target.value)} />
           </Field>
         </span>
-        <HeldButton size="sm" variant="secondary" type="submit" held={pct == null ? 'Type a target ACoS from 1 to 500 %' : answer?.state === 'loading' ? 'Reading…' : null}>
+        <Button size="sm" variant="secondary" type="submit" heldReason={pct == null ? 'Type a target ACoS from 1 to 500 %' : answer?.state === 'loading' ? 'Reading…' : null}>
           Check
-        </HeldButton>
+        </Button>
       </form>
       {answer?.state === 'failed' && <NotRead what="What if" error={answer.error} onRetry={() => void check()} />}
-      {answer?.state === 'ready' && !d && <Muted>—</Muted>}
-      {d && act && (
-        <>
+      {/* The answer stands in the room the rail leaves beside it (design audit S2: 355 px stood empty under the form). */}
+      {d && act ? (
+        <div className={styles.stage}>
           <span className={styles.row}>
             <Pill tone={act.tone} size="sm">{act.label}</Pill>
             {tag && <Tag tone="neutral">{tag}</Tag>}
           </span>
           <KeyValue
             labelCase="sentence"
-            columns={2}
+            columns={3}
             dense
             items={[
               { label: 'Now', value: moneyText(d.currentCents, row.currency) },
-              { label: 'Brain today', value: moneyText(d.decidedCents, row.currency) },
+              // The one Brain bid of this detail: the rail's and Why's (use audit A7), not a second number read again.
+              { label: 'Brain bid', value: moneyText(row.brainAim, row.currency) },
               { label: `At ${pct} %`, value: <strong>{moneyText(d.whatIfCents, row.currency)}</strong> },
             ]}
           />
-        </>
+        </div>
+      ) : answer?.state !== 'failed' && (
+        <TabEmpty icon={<Calculator size={20} aria-hidden />} title={answer?.state === 'ready' ? 'The brain has no answer for this keyword' : 'The brain\'s bid at another target ACoS'} />
       )}
     </div>
   )
@@ -230,18 +251,15 @@ function GoalTab({ row, market, canGoal, onAsk }: { row: BidGridRow; market: str
   // Another keyword, or its goal changed (a save, a live read): the boxes start from it again.
   const goalKey = `${row.targetId}:${row.goal?.acosPct ?? ''}:${row.goal?.maxCents ?? ''}:${row.goal?.tosPct ?? ''}`
   useEffect(() => { setDraft(draftOf(row.goal)) }, [goalKey]) // eslint-disable-line react-hooks/exhaustive-deps
-  const held = goalHeld(row, market, canGoal)
+  const held = row.auto === 'NONE' ? goalHeld(row, market, canGoal) : row.writeBlock ?? goalHeld(row, market, canGoal)
   const { values, problems } = parseGoal(draft)
   const changes = goalChanges(row.goal, values)
   const first = GOAL_KEYS.map((k) => problems[k]).find(Boolean) ?? null
   const set = (key: keyof GoalDraft) => (e: { target: { value: string } }) => setDraft((d) => ({ ...d, [key]: e.target.value }))
   const by = row.goal?.by ? writerName({ kind: row.goal.by.kind, name: row.goal.by.name, id: row.goal.by.id ?? null }) : null
+  const own = goalText(row.goal, row.currency)
   return (
     <div className={styles.why}>
-      <span className={styles.row}>
-        <span>{goalText(row.goal, row.currency)}</span>
-        {by && <span className={styles.muted} title={row.goal?.at ? whenWords(row.goal.at) : undefined}>{by}{row.goal?.at ? ` · ${relWords(row.goal.at)}` : ''}</span>}
-      </span>
       {held && row.auto === 'NONE' ? <Muted>{held}</Muted> : (
         <form className={styles.goalForm} onSubmit={(e) => { e.preventDefault(); if (!held && !first && changes.length) onAsk({ kind: 'goal', row, values }) }}>
           <span className={styles.goalBox}>
@@ -259,11 +277,17 @@ function GoalTab({ row, market, canGoal, onAsk }: { row: BidGridRow; market: str
               <Input size="sm" fieldClassName={styles.field} inputMode="numeric" placeholder="—" suffix="%" value={draft.tos} onChange={set('tos')} />
             </Field>
           </span>
-          <HeldButton size="sm" variant="primary" type="submit" held={held ?? first ?? (changes.length ? null : 'Nothing changed')}>
+          <Button size="sm" variant="primary" type="submit" heldReason={held ?? first ?? (changes.length ? null : 'Nothing changed')}>
             <Target size={14} aria-hidden /> Review goal
-          </HeldButton>
+          </Button>
         </form>
       )}
+      {/* The goal that stands, in the room the rail leaves beside the form (design audit S2). */}
+      <TabEmpty
+        icon={<Target size={20} aria-hidden />}
+        title={own === '—' ? 'No goal of its own' : own}
+        description={own === '—' ? 'Its campaign\'s or product\'s applies' : by ? `${by}${row.goal?.at ? ` · ${relWords(row.goal.at)}` : ''}` : undefined}
+      />
     </div>
   )
 }
@@ -277,27 +301,28 @@ function SuggestedLine({ row, canBids, onAsk }: { row: BidGridRow; canBids: bool
       <span className={styles.inline} title={w.hint}><Sparkles size={14} aria-hidden className="nds-cell-glyph" /> Suggested {w.text}</span>
       {w.mid !== null && <span className={styles.muted}>{w.hint}</span>}
       {differs && (
-        <HeldButton size="sm" variant="secondary" held={canBids ? null : 'Needs the ads bids permission'} onClick={() => onAsk({ kind: 'apply', row, rows: [row] })}>Apply</HeldButton>
+        <Button size="sm" variant="secondary" heldReason={row.writeBlock ?? (canBids ? null : 'Needs the ads bids permission')} onClick={() => onAsk({ kind: 'apply', row, rows: [row] })}>Apply</Button>
       )}
     </span>
   )
 }
 
 /** The rail: what stays in view on every tab, and the two actions on the bid. */
-function BidRail({ row, market, canEdit, canBids, features, version, onAsk }: { row: BidGridRow; market: string | null; canEdit: boolean; canBids: boolean; features: DetailFeatures; version: number; onAsk: (ask: BidAsk) => void }) {
+function BidRail({ row, market, canEdit, canBids, version, onAsk }: { row: BidGridRow; market: string | null; canEdit: boolean; canBids: boolean; version: number; onAsk: (ask: BidAsk) => void }) {
   const [bidText, setBidText] = useState('')
   // Another keyword, or a save (the view bumps `version`): the box starts empty again.
   useEffect(() => { setBidText('') }, [row.targetId, version])
   const [lock] = useLoad<CampaignLock | null>(() => readCampaignLock(row.campaign, market), `${row.campaign.id}:${market ?? ''}:${version}`)
 
-  const editHeld = editHeldReason(row, canEdit)
+  const editHeld = row.writeBlock ?? editHeldReason(row, canEdit)
   const typed = parseBid(bidText)
   const problem = bidProblem(typed, row.currency)
   const same = typed !== null && typed === row.bidNow
   const lockHeld = !canEdit ? 'Needs the ads campaigns permission'
-    : lock.state === 'loading' ? 'Reading the campaign\'s lock…'
-      : lock.state === 'failed' || !lock.value ? 'The campaign\'s lock could not be read'
-        : null
+    : row.writeBlock ? row.writeBlock
+      : lock.state === 'loading' ? 'Reading the campaign\'s lock…'
+        : lock.state === 'failed' || !lock.value ? 'The campaign\'s lock could not be read'
+          : null
   const locked = lock.state === 'ready' && !!lock.value?.bidsLocked
   const last = lastChangeWords(row.lastChange, row.currency)
 
@@ -330,37 +355,36 @@ function BidRail({ row, market, canEdit, canBids, features, version, onAsk }: { 
             <Input size="sm" fieldClassName={styles.field} prefix={currencySymbol(row.currency)} inputMode="decimal" aria-label="New bid" placeholder={typeof row.bidNow === 'number' ? (row.bidNow / 100).toFixed(2) : ''} value={bidText} onChange={(e) => setBidText(e.target.value)} />
           </span>
         )}
-        <HeldButton size="sm" variant="primary" type="submit" held={editHeld ?? (bidText.trim() === '' ? 'Type a bid' : problem ?? (same ? 'That is the bid now' : null))}>
+        <Button size="sm" variant="primary" type="submit" heldReason={editHeld ?? (bidText.trim() === '' ? 'Type a bid' : problem ?? (same ? 'That is the bid now' : null))}>
           <PencilLine size={14} aria-hidden /> Set bid
-        </HeldButton>
+        </Button>
         {locked ? (
-          <HeldButton size="sm" variant="secondary" type="button" held={lockHeld} onClick={() => onAsk({ kind: 'lock', row, lock: false })} title="Give every bid of this campaign back to automation">
+          <Button size="sm" variant="secondary" type="button" heldReason={lockHeld} onClick={() => onAsk({ kind: 'lock', row, lock: false })} title="Give every bid of this campaign back to automation">
             <LockOpen size={14} aria-hidden /> Unlock campaign bids
-          </HeldButton>
+          </Button>
         ) : (
-          <HeldButton size="sm" variant="secondary" type="button" held={lockHeld} onClick={() => onAsk({ kind: 'lock', row, lock: true })} title="Every bid of this campaign: automation leaves them">
+          // Kept where nothing sets the bid too: the lock also keeps out a writer added later (use audit, kept on purpose).
+          <Button size="sm" variant="secondary" type="button" heldReason={lockHeld} onClick={() => onAsk({ kind: 'lock', row, lock: true })} title="Every bid of this campaign: automation leaves them, also a writer added later">
             <Lock size={14} aria-hidden /> Lock campaign bids
-          </HeldButton>
+          </Button>
         )}
       </form>
 
-      {(features.suggested || features.auto) && (
-        <div className={styles.actions}>
-          {features.suggested && <SuggestedLine row={row} canBids={canBids} onAsk={onAsk} />}
-          {/* No engine runs the campaign: nothing to switch, so no button (audit R1; the Goal tab says why). */}
-          {features.auto && row.auto && row.auto !== 'NONE' && (
-            <HeldButton
-              size="sm"
-              variant="secondary"
-              held={autoHeld(row, canBids)}
-              onClick={() => onAsk({ kind: 'mode', row, next: row.auto === 'AUTO' ? 'MANUAL' : 'AUTO' })}
-              title={row.auto === 'AUTO' ? 'You hold this bid: automation leaves it until you switch it back' : 'The engine moves this bid again'}
-            >
-              <Hand size={14} aria-hidden /> {row.auto === 'AUTO' ? `Switch to ${AUTO_WORDS.off}` : `Switch to ${AUTO_WORDS.on}`}
-            </HeldButton>
-          )}
-        </div>
-      )}
+      <div className={styles.actions}>
+        <SuggestedLine row={row} canBids={canBids} onAsk={onAsk} />
+        {/* No engine runs the campaign: nothing to switch, so no button (audit R1; the Goal tab says why). */}
+        {row.auto && row.auto !== 'NONE' && (
+          <Button
+            size="sm"
+            variant="secondary"
+            heldReason={row.writeBlock ?? autoHeld(row, canBids)}
+            onClick={() => onAsk({ kind: 'mode', row, next: row.auto === 'AUTO' ? 'MANUAL' : 'AUTO' })}
+            title={row.auto === 'AUTO' ? 'You hold this bid: automation leaves it until you switch it back' : 'The engine moves this bid again'}
+          >
+            <Hand size={14} aria-hidden /> {row.auto === 'AUTO' ? `Switch to ${AUTO_WORDS.off}` : `Switch to ${AUTO_WORDS.on}`}
+          </Button>
+        )}
+      </div>
 
       {/* One per line: a long campaign or ad group name reads in full here (the table's cell may cut it). */}
       <KeyValue
@@ -392,7 +416,7 @@ function BidRail({ row, market, canEdit, canBids, features, version, onAsk }: { 
  * The keyword's detail. `row` null while the bids are read (`loading`) or when the address names a bid this view does not
  * hold (`missing`). `nav`: the table's rows in the order shown now, for ▲ / ▼ and K / J.
  */
-export function BidDetail({ row, missing, loading, onRetry, tab, onTab, nav, market, canEdit, canBids, canGoal, features, version, onAsk, onClose, returnFocusTo }: {
+export function BidDetail({ row, missing, loading, onRetry, tab, onTab, nav, market, canEdit, canBids, canGoal, version, onAsk, onClose, returnFocusTo }: {
   row: BidGridRow | null
   /** The address names a bid this view does not hold. */
   missing: boolean
@@ -408,7 +432,6 @@ export function BidDetail({ row, missing, loading, onRetry, tab, onTab, nav, mar
   canBids: boolean
   /** May set a keyword's goal (the brain's settings: ads automation). */
   canGoal: boolean
-  features: DetailFeatures
   /** Bumped by the view after a save: the detail reads its history and the lock again. */
   version: number
   onAsk: (ask: BidAsk) => void
@@ -416,6 +439,8 @@ export function BidDetail({ row, missing, loading, onRetry, tab, onTab, nav, mar
   returnFocusTo?: DetailModalProps['returnFocusTo']
 }) {
   const shownMarket = row ? row.market ?? (market && market !== 'all' ? market : null) : null
+  const tabs = tabsFor(row)
+  const shownTab = tabs.some((t) => t.id === tab) ? tab : 'why'
   return (
     <DetailModal
       open
@@ -423,8 +448,8 @@ export function BidDetail({ row, missing, loading, onRetry, tab, onTab, nav, mar
       title={row?.text ?? 'Bid'}
       subtitle={row ? [matchWord(row.match), shownMarket].filter((w) => w && w !== '—').join(' · ') : undefined}
       meta={row ? <OwnerChip row={row} onWhy={() => onTab('why')} /> : undefined}
-      tabs={tabsFor(features)}
-      activeTab={tab === 'goal' && !features.goal ? 'why' : tab}
+      tabs={tabs}
+      activeTab={shownTab}
       onTabChange={(id) => { if (isBidTab(id)) onTab(id) }}
       tabsLabel="Keyword"
       nav={nav}
@@ -435,12 +460,12 @@ export function BidDetail({ row, missing, loading, onRetry, tab, onTab, nav, mar
     >
       {row && (
         <div className={styles.detail}>
-          <BidRail row={row} market={market} canEdit={canEdit} canBids={canBids} features={features} version={version} onAsk={onAsk} />
+          <BidRail row={row} market={market} canEdit={canEdit} canBids={canBids} version={version} onAsk={onAsk} />
           <section className={styles.detailMain}>
-            {tab === 'why' && <WhyTab row={row} version={version} />}
-            {tab === 'history' && <HistoryTab row={row} market={market} version={version} canEdit={canEdit} onUndo={(line) => onAsk({ kind: 'undo', row, line })} onWhy={() => onTab('why')} />}
-            {tab === 'whatif' && <WhatIfTab row={row} />}
-            {tab === 'goal' && (features.goal ? <GoalTab row={row} market={market} canGoal={canGoal} onAsk={onAsk} /> : <WhyTab row={row} version={version} />)}
+            {shownTab === 'why' && <WhyTab row={row} version={version} />}
+            {shownTab === 'history' && <HistoryTab row={row} market={market} version={version} canEdit={canEdit} onUndo={(line) => onAsk({ kind: 'undo', row, line })} onWhy={() => onTab('why')} />}
+            {shownTab === 'whatif' && <WhatIfTab row={row} />}
+            {shownTab === 'goal' && <GoalTab row={row} market={market} canGoal={canGoal} onAsk={onAsk} />}
           </section>
         </div>
       )}

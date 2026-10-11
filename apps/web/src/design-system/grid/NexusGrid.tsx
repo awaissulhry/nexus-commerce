@@ -32,6 +32,7 @@ import type { ColDef, ColumnPinnedEvent, DefaultMenuItem, FirstDataRenderedEvent
 import { gridDensity, gridGeometry, type GridDensityName } from '../tokens/grid'
 import { compareSortValues, type SortValue } from './sortValues'
 import { plainFirstGuess, plainGridHeight } from './plainGrid'
+import { declaredPinning, withPinning } from './statePinning'
 import { fillHandleHit } from './editors/openGesture'
 import { registerGridModules } from './modules'
 import { workspaceGridTheme } from './theme/theme'
@@ -389,6 +390,15 @@ export function NexusGrid<T>({
       if (data && data.length) api.setGridOption(key, [...data])
     }
   }, [rowHeight, headerHeight, getRowHeight])
+  // A restored state that does not name its pins keeps the pins the column definitions declare: AG resets a missing
+  // `columnPinning` to none (design audit M14 — the ⋯ column fell outside the card after a reload). `statePinning.ts`.
+  // AG reads `initialState` once, so it is worked out from the definitions the grid starts with.
+  const initialState = useMemo(
+    () => withPinning(agProps.initialState, declaredPinning(agProps.columnDefs)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- read once with the definitions of the first render, as AG does
+    [agProps.initialState],
+  )
+
   // The DS grid's checkbox column measures 43px (`gridGeometry.selectColW`); AG's default is 50.
   const mergedSelectionColumnDef = useMemo(
     () => ({
@@ -519,6 +529,7 @@ export function NexusGrid<T>({
           // itself below the fold. Against the document, AG fits them to the window.
           popupParent={typeof document !== 'undefined' ? document.body : undefined}
           {...agProps}
+          initialState={initialState}
         />
         </GridEmptyCellsContext.Provider>
       </div>

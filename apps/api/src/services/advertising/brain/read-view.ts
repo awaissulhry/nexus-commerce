@@ -1,10 +1,11 @@
 /**
  * Ads brain page A1 — ONE place that answers a brain read, for Claude and for the page alike.
  *
- * Claude's `ads-brain` and `bid-brain` tools (agents/tools/ads-brain.tools.ts, ads-bid-brain.tools.ts) and the brain's
- * web routes (routes/advertising-brain.routes.ts) both import from here: the input each view takes (zod, with the words
- * Claude reads), the keys that are ad-spend money (hidden whole from a person without financials.adspend.view), and the
- * dispatch to the view's own read function. So the page and Claude always read the same thing.
+ * Claude's `ads-brain` and `bid-brain` tools (agents/tools/ads-brain.tools.ts, ads-bid-brain.tools.ts) and the bid-brain
+ * web route (routes/advertising-brain.routes.ts, the Bid page's why, what-if and diff) import from here: the input each
+ * view takes (zod, with the words Claude reads), the keys that are ad-spend money (hidden whole from a person without
+ * financials.adspend.view), and the dispatch to the view's own read function. So the page and Claude always read the same
+ * thing.
  *
  * Read only: nothing here writes, in Nexus or at Amazon. No view takes a clock from its caller: `now` is never an input.
  */
@@ -28,7 +29,7 @@ import { brainProof } from './proof-read.js'
 import { PROOF_WEEKS_DEFAULT, PROOF_WEEKS_MAX, PROOF_WEEKS_MIN } from './proof.js'
 import { BRAIN_VIEWS as BID_BRAIN_VIEWS, readBidBrain, type BrainReadArgs } from '../bid-brain/read.js'
 
-export { BRAIN_MAP_VIEWS, BID_BRAIN_VIEWS }
+export { BID_BRAIN_VIEWS }
 
 /** A money permission (agents/tool-types.ts FieldPermission, without importing the agents layer). */
 type MoneyPermission = (typeof FIELDS)[keyof typeof FIELDS]
@@ -54,7 +55,7 @@ export const BRAIN_VIEW_MONEY: MoneyKeys = Object.fromEntries(
   ['portfolioCapCents', 'dailyBudgetCents', 'amountCents', 'money', 'maxBidCents'].map((key) => [key, FIELDS.financialsAdspendView]),
 )
 
-/** The `ads-brain` input: every view's arguments, with the words Claude reads (the route parses its query with it). */
+/** The `ads-brain` input: every view's arguments, with the words Claude reads. */
 export const BRAIN_VIEW_INPUT = z.object({
   view: z.enum(BRAIN_MAP_VIEWS).default('map')
     .describe('retire: what retire-ads-writers would switch off for a product once every lever is AUTO or the Owner\'s choice (and what stays, each with why), what is retired now; proof: the A/B proof — each brain product against a matched comparison product, ad profit, ACoS, TACoS and orders with 95 % intervals, or not enough data yet. structure: a product\'s structure proposals — single-keyword campaigns, splits of shared campaigns, the move into its portfolio — decided now beside what the brain stored, with each request and whether a go-live is inside the caps; or a market\'s. map (default): who owns each lever of each campaign today; clashes: two automatic writers on one campaign\'s lever, and the known gaps; setup: what is not set up or held off, with the fix; money: a product\'s money plan in shadow — envelope, pace, brake, portfolio cap, campaign budgets, the off-Amazon lane — or a market\'s split; terms: a product\'s term ledger in shadow — one decision per search term, the market arbiter\'s leads, the clashes it removes — or a market\'s ledgers; state: each campaign\'s pause or resume decided now (it never archives), with its cause and horizon, beside what the brain logged; hours: one product\'s hourly research and painted plan with its approval (market and productId); negatives: a product\'s negatives — the day\'s adds, retirements and revives with their level and outcome, every campaign and ad group against the limit — or a market\'s logs; harvest: a product\'s harvests — destination, sources and their negatives, start bid, the request a person decides, the judgement after the attribution window + 72 h — or a market\'s; report: the day\'s product report the product cycle stored — what each lever did or would do in shadow, ad sales against spend, what waits for the Owner, clashes, his locks — or a market\'s newest reports; bidding: each campaign\'s Amazon bidding strategy decided now (fixed, down only, up and down) with its rule, its switchback test and the approval clock (N4), or a market\'s tests and requests'),
@@ -90,8 +91,8 @@ export interface BrainViewArgs {
 
 /**
  * One brain view: the view's own read function (map when the view is not named). `opts.now` is the clock of the views that
- * read one (default: each view's own, the database's or the process's); a second parameter, so neither the tool's input
- * nor a route's query can set it — tests pin it.
+ * read one (default: each view's own, the database's or the process's); a second parameter, so the tool's input cannot
+ * set it — tests pin it.
  */
 export async function readBrainView(a: BrainViewArgs, opts: { now?: Date } = {}): Promise<ViewAnswer> {
   const clock = opts.now ? { now: opts.now } : {}

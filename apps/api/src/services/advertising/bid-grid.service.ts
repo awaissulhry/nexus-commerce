@@ -1059,9 +1059,3 @@ export async function getBidCursor(campaignIds: string[] | null, noCampaigns = f
     n,
   }
 }
-
-/** The cursor endpoint's own scope resolution, so the poll and the grid agree about the row set. */
-export async function getBidCursorForRequest(req: Pick<BidGridRequest, 'market' | 'line' | 'portfolio' | 'campaign'>): Promise<BidCursor> {
-  const scope = await resolveScope({ ...req } as BidGridRequest)
-  return getBidCursor(scope.campaignIds, scope.campaignIds != null && scope.campaignIds.length === 0)
-}

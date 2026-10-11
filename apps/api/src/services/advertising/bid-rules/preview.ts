@@ -72,8 +72,6 @@ export interface PreviewResult {
   saved: boolean
   /** The body in one line, as the rules list says it: "If ACoS > 20 % over 14 d → bid toward 20 %". */
   sentence: string
-  /** Which engine answered: the builder's draft pipeline or the saved rule's Simulate. */
-  engine: 'draft' | 'simulate'
   /** Changes the rule itself would make now: the listed ones that would go through, plus `unsampled`. */
   wouldChange: number
   /** Changes a handler counted without listing them (rank defense's keywords, target ACoS beyond its sample of 5). */
@@ -87,8 +85,6 @@ export interface PreviewResult {
    * `brainInputs`, the others add up to `locked`.
    */
   holds: Array<Hold & { held: PreviewHeld; count: number; campaigns: Ref[] }>
-  matched: number
-  noChange: number
   refused: number
   /** The rule's daily match cap is used today: a Simulate stops there (no change shown past it). */
   capped: boolean
@@ -129,10 +125,8 @@ export async function previewBidRuleBody(body: PreviewBody): Promise<PreviewAnsw
   const slug = String((draft.actions[0] as { type?: unknown } | undefined)?.type ?? '')
 
   const outcomes: ActionOutcome[] = []
-  let matched = 0
   let capped = false
   let windowDays: number | null = null
-  let engine: PreviewResult['engine'] = 'draft'
   let note: string | null = null
 
   if (slug === 'bid') {
@@ -154,19 +148,16 @@ export async function previewBidRuleBody(body: PreviewBody): Promise<PreviewAnsw
       return { error: run.untranslatable?.length ? `The rule reads metrics the engine cannot: ${run.untranslatable.join(', ')}.` : `The rule could not be previewed (${run.error ?? 'unknown'}).`, status: 400 }
     }
     windowDays = run.census.windowDays
-    matched = run.census.matched
     if (!Array.isArray(draft.conditions) || draft.conditions.length === 0) note = 'No criteria'
     for (const { action, res } of run.settled) outcomes.push(actionOutcome({ type: String(action.type ?? ''), ...(res ?? { ok: false, error: 'the handler threw' }) }))
   } else {
     if (!rule || edited) return { error: 'Only a rule from the bid builder previews unsaved changes; save this rule, then preview it.', status: 400 }
-    engine = 'simulate'
     const { simulateOneRule } = await import('../../../jobs/advertising-rule-evaluator.job.js')
     const out = await simulateOneRule(rule.id)
     if (!out.ok) return { error: `The rule could not be simulated (${out.error ?? 'unknown'}).`, status: out.error === 'not_found' ? 404 : 400 }
     for (const r of out.results ?? []) {
       if (r.status === 'CAP_EXCEEDED') { capped = true; continue }
       if (!r.matched) continue
-      matched++
       for (const a of r.actions) outcomes.push(actionOutcome(a))
     }
   }
@@ -175,12 +166,11 @@ export async function previewBidRuleBody(body: PreviewBody): Promise<PreviewAnsw
   const seen = new Set<string>()
   const once = new Set<string>()
   let moves: Move[] = []
-  let unsampled = 0, brainAsked = 0, noChange = 0, refused = 0
+  let unsampled = 0, brainAsked = 0, refused = 0
   for (const o of outcomes) {
     if (o.onceKey) { if (once.has(o.onceKey)) continue; once.add(o.onceKey) }
     unsampled += o.counted
     brainAsked += o.brain
-    noChange += o.noChange
     refused += o.refused
     for (const m of o.moves) {
       const key = `${m.targetId ?? ''}:${m.adGroupId ?? ''}:${m.field}`
@@ -197,9 +187,7 @@ export async function previewBidRuleBody(body: PreviewBody): Promise<PreviewAnsw
     // lower_bid_to_floor says only the floor: the bid now is the keyword's.
     if (m.field === 'bid' && m.fromCents == null && m.targetId) m.fromCents = book.targets.get(m.targetId)?.bidCents ?? null
   }
-  const before = moves.length
   moves = moves.filter((m) => m.field !== 'bid' || m.fromCents == null || m.fromCents !== m.toCents)
-  noChange += before - moves.length
 
   // A saved rule's own scope below the market (one campaign, a product line) — the evaluator's matcher, as the tick runs it.
   if (rule && (rule.scopeCampaignId || rule.scopeProductId)) {
@@ -231,7 +219,6 @@ export async function previewBidRuleBody(body: PreviewBody): Promise<PreviewAnsw
       saved: !!rule && !edited,
       // A builder body reads its blocks; a saved engine rule its conditions or its trigger (an unsaved one is refused above).
       sentence: ruleSentence({ trigger: rule?.trigger ?? null, conditions: draft.conditions, actions: draft.actions }),
-      engine,
       wouldChange: samples.filter((s) => s.held == null).length + unsampled,
       unsampled,
       brainInputs: samples.filter((s) => s.held === 'brain').length + brainAsked,
@@ -243,8 +230,6 @@ export async function previewBidRuleBody(body: PreviewBody): Promise<PreviewAnsw
           return { ...PREVIEW_HOLDS[held](), held, count: here.length + (held === 'brain' ? brainAsked : 0), campaigns }
         })
         .filter((h) => h.count > 0),
-      matched,
-      noChange,
       refused,
       capped,
       windowDays,
