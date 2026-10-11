@@ -43,6 +43,25 @@ describe('W1.5-QUEUE every push consults the shared lock', () => {
     expect(await service.syncSharedTradingQuantity({ id: 'q', externalListingId: 'ITEM', payload: { pushVia: 'TRADING', itemId: 'ITEM', market: 'GB', channelConnectionId: 'owner' } })).toMatchObject({ errorCode: 'PUSH_SYNC_PAUSED' })
     expect(m.many).toHaveBeenCalledWith({ where: { channel: 'EBAY', externalListingId: 'ITEM', marketplace: { in: ['GB', 'UK'] }, channelConnectionId: 'owner' } })
   })
+  // 2026-10-12 (alias stock) — a sync hold is one row's: a held parent row (or another variant's) on the shared ItemID no
+  // longer holds this product's quantity; this product's own hold and every selling lock still do.
+  const sharedRow = { id: 'q', productId: 'red', externalListingId: 'ITEM', payload: { pushVia: 'TRADING', itemId: 'ITEM', market: 'IT', productId: 'red', updates: [{ sku: 'RED', quantity: 0 }] } }
+  for (const path of ['syncToEbay', 'syncSharedTradingQuantity']) {
+    it(`${path}: another row's sync hold on the shared ItemID (the parent row) does not hold this product`, async () => {
+      m.many.mockResolvedValue([{ productId: 'parent', syncPaused: true }, { productId: 'white', syncPaused: true }, { productId: 'red', syncPaused: false }])
+      const result = await service[path](sharedRow)
+      expect(result.errorCode?.startsWith('PUSH_') ?? false).toBe(false)
+      expect(m.many).toHaveBeenCalled()
+    })
+    it(`${path}: this product's own sync hold on the shared ItemID still holds it`, async () => {
+      m.many.mockResolvedValue([{ productId: 'parent', syncPaused: false }, { productId: 'red', syncPaused: true }])
+      expect(await service[path](sharedRow)).toMatchObject({ success: false, retryable: false, errorCode: 'PUSH_SYNC_PAUSED' })
+    })
+    it(`${path}: a selling lock on another row (the parent's Pause offer) still holds the whole item`, async () => {
+      m.many.mockResolvedValue([{ productId: 'parent', syncPaused: false, offerClosedAt: new Date() }, { productId: 'red', syncPaused: false }])
+      expect(await service[path](sharedRow)).toMatchObject({ success: false, retryable: false, errorCode: 'PUSH_OFFER_CLOSED' })
+    })
+  }
   // Build shape v2 (P13) — a Pause offer from the product sheet (eBay, Shopify, Etsy: quantity 0 / Etsy inactive, then
   // the hold) gets no quantity from the stock sync: every quantity push to it is refused, in words that say where to resume.
   it.each([['syncToEbay', 'EBAY'], ['syncToShopify', 'SHOPIFY'], ['syncToEtsy', 'ETSY']])('%s sends no quantity to a listing paused from the product sheet', async (path, channel) => {
