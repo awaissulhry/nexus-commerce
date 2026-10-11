@@ -7,8 +7,8 @@
  * DS `ReviewChangesModal` — one table Now → New, a counted Save, Done with Undo.
  *
  * ONE way to make and edit a bid rule (Owner 2026-10-10): the bid builder, mounted on this page — "+ New rule" opens it
- * empty (`?builder=new`), "Edit all" on a rule (`?ruleId=<id>`). A save opens the rule's panel with a toast ("Rule
- * created · Undo" archives it again; "Saved").
+ * empty (`?builder=new`), "Edit all" on a rule (`?ruleId=<id>`). A save opens the rule's panel, which says so at its top
+ * ("Rule created" with Undo, which archives it again; "Saved") — never a toast, whose Undo sat under the detail's backdrop.
  *
  * URL: `?rule=<id>&tab=<tab>` the open panel · `?show=on|changed|waiting` a tile · `?archived=1` · `?q=` the search ·
  * `?builder=new` / `?ruleId=<id>` the builder (an old `?new=1` lands on `?builder=new`).
@@ -61,6 +61,7 @@ import {
 } from './waitingModel'
 import { RuleDetailPending, RulePanel, type AnyTab } from './RulePanel'
 import { RulesTable, rulePreferenceColumns, type GridRow, type HandlersRef, type PanelTab, type RulesHandlers } from './RulesTable'
+import { followNotice, noticeWords, savedNotice, type SavedNotice } from './savedNotice'
 import styles from '../bid.module.css'
 
 /**
@@ -101,7 +102,6 @@ function prefsFor(allMarkets: boolean) {
 const PREFS = { all: prefsFor(true), one: prefsFor(false) }
 const NO_CHOICES: number[] = []
 const NO_SORT: Array<{ value: string; label: string }> = []
-const UNDO_TOAST_MS = 10_000
 
 interface PageState { show: RulesTile | null; archived: boolean }
 /** The rule whose detail a task came from (the review stacks on it; a mode pick made there is that review's only). */
@@ -659,6 +659,25 @@ export function RulesView({ market, data, viewSwitch, setQuery }: {
 
   // ── the builder ───────────────────────────────────────────────────────────────────────────────────────────────────
   const builderClosedHere = useRef(false)
+  /** What the rule's detail says after a save ("Rule created" with Undo, or "Saved"): at its top, never a toast. */
+  const [notice, setNotice] = useState<SavedNotice | null>(null)
+  const noticeSeen = useRef(false)
+  useEffect(() => {
+    const f = followNotice(notice, noticeSeen.current, panelId)
+    noticeSeen.current = f.seen
+    if (!f.keep && notice) setNotice(null)
+  }, [notice, panelId])
+  const undoCreate = useCallback(async () => {
+    if (!notice || notice.kind !== 'created' || notice.busy) return
+    const id = notice.id
+    setNotice({ ...notice, busy: true, error: null })
+    const out = await archiveRule(id)
+    if (!out.ok) { setNotice((n) => (n?.id === id ? { ...n, busy: false, error: out.words } : n)); return }
+    setNotice(null)
+    toast('Undone: the rule is archived', 'neutral')
+    setQuery({ rule: null, tab: null })
+    void after()
+  }, [notice, toast, setQuery, after])
   /** The builder has gone: a save opens the rule (and says so), a close goes back where it was opened. */
   const afterBuilder = useCallback((was: string, saved: { id: string; kind: 'created' | 'updated' } | null) => {
     const editedId = was.startsWith('edit:') ? was.slice(5) : null
@@ -667,15 +686,7 @@ export function RulesView({ market, data, viewSwitch, setQuery }: {
     if (saved) {
       focusBack.current = null
       setQuery({ builder: null, ruleId: null, new: null, rule: saved.id, tab: 'overview' })
-      if (saved.kind === 'created') {
-        const undoCreate = async () => {
-          const out = await archiveRule(saved.id)
-          if (out.ok) { toast('Undone: the rule is archived', 'neutral'); setQuery({ rule: null, tab: null }); void after() } else toast(`Not undone: ${out.words}`, 'danger')
-        }
-        toast(<span className={styles.toastLine}>Rule created <Button size="xs" variant="link" onClick={() => void undoCreate()}>Undo</Button></span>, 'success', { duration: UNDO_TOAST_MS })
-      } else {
-        toast('Saved', 'success')
-      }
+      setNotice(savedNotice(saved.id, saved.kind))
       return
     }
     // Back to "Edit all" in the rule's detail — never to the builder's own control that held the focus (it is still on the
@@ -687,7 +698,7 @@ export function RulesView({ market, data, viewSwitch, setQuery }: {
       if (b?.el && b.el.closest('.h10-rb')) focusBack.current = { el: null, then: b.then }
     }
     restoreFocus()
-  }, [load, setQuery, toast, after, remember, restoreFocus])
+  }, [load, setQuery, restoreFocus])
   const prevBuilder = useRef(builderKey)
   useEffect(() => {
     const was = prevBuilder.current
@@ -846,6 +857,10 @@ export function RulesView({ market, data, viewSwitch, setQuery }: {
           brainHeld={brainHeld}
           brainAutoHeld={brainAutoHeld}
           onBrainPick={(pick) => { remember({ kind: 'panel', key: `brain:${pick.id}` }); setProblems([]); setUndoBack(null); setFrozen(null); setReview({ phase: 'ready' }); setTask({ kind: 'brain', row: panelRow, pick, back: panelBack() }) }}
+          notice={notice?.id === panelRow.id ? {
+            words: noticeWords(notice), busy: notice.busy, onUndo: () => void undoCreate(),
+            onDismiss: () => { setNotice(null); requestAnimationFrame(() => focusIn(document.querySelector('[data-drawer-heading]'))) },
+          } : null}
         />
       ) : (
         <RuleDetailPending

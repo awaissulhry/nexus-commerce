@@ -20,6 +20,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { CampaignSection, type SchedCampaign } from '../_schedule/CampaignSection'
 import { type Condition, type KeywordFeedMeasured, PC_OPERATORS, PC_METRIC_UNIT, PC_METRICS, PC_METRICS_BID, PC_METRICS_BUDGET, PC_METRICS_SOV, PC_METRICS_RANK, PC_METRICS_PLACEMENT, blockedRankConditions, pcDefaultCondition, pcDefaultGroup, pcWindowLabel, PC_TRUTH_EXCLUDE, PcWindowNote, rankMetricOptions, rankReadingNoun, ranksMeasured } from './PerformanceCriteria'
 import { PLACEMENT_LANES } from './placementLanes'
+import { guardLeaving } from './leaveGuard'
 import { emitAdsChange } from './adsBus'
 import { ruleMarketOptions } from './campaignPicks'
 import { BID_FLOOR_EUR, EVERY_TICK, criteriaProblems, defaultBidCeiling, frequencyAsRun, frequencyReadsTime, normalizeDecimalText, readRuleNumbers, scheduleToSave } from './ruleBuilderValues'
@@ -1580,15 +1581,26 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
   const [confirmLeave, setConfirmLeave] = useState(false)
   /** Discard was chosen: leave once the question has closed (its own focus and inert hand-back run first). */
   const leaveAfterConfirm = useRef(false)
+  /** The question was opened by browser Back: Discard goes back (see leaveGuard.ts). */
+  const leaveByBack = useRef(false)
   useEffect(() => {
-    if (confirmLeave || !leaveAfterConfirm.current) return
+    if (confirmLeave) return
+    const back = leaveByBack.current
+    leaveByBack.current = false
+    if (!leaveAfterConfirm.current) return
     leaveAfterConfirm.current = false
-    close()
+    if (back) { releaseBackground.current?.(); window.history.back() } else close()
   }, [confirmLeave, close])
   const requestClose = useCallback(() => {
     if (dirty && !leftClean.current && !creating) setConfirmLeave(true)
     else close()
   }, [dirty, creating, close])
+  // Browser Back and a tab close / reload ask too while something is not saved (2026-10-11).
+  const mustAsk = dirty && !leftClean.current && !creating
+  useEffect(() => {
+    if (!mustAsk) return
+    return guardLeaving(window, () => !leftClean.current, () => { leaveByBack.current = true; setConfirmLeave(true) })
+  }, [mustAsk])
   const rootRef = useRef<HTMLDivElement>(null)
   /**
    * The builder covers the whole screen, so the page under it is inert while it is open (keyboard and screen reader

@@ -103,12 +103,6 @@
   white-space: nowrap;
 }
 
-.toastLine {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--nds-space-8);
-}
-
 /* ── grid cells: two lines (the name and its one line; what it works on and, under the pencil, what it changed) ── */
 
 .two {
