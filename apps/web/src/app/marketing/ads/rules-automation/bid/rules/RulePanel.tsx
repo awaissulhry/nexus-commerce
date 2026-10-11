@@ -11,11 +11,15 @@
  *
  * The detail never writes. A mode pick, an archive, a restore, an Undo, a run's roll back or a decision on asks asks the
  * PAGE, which reviews it in the DS `ReviewChangesModal` stacked ON TOP of this detail; when the review closes the focus
- * goes back to the control that opened it, inside this detail (audit M10). "Edit all" opens the bid builder.
+ * goes back to the control that opened it, inside this detail (audit M10). "Edit all" opens the bid builder. Each write
+ * control is held with its reason (a permission, or a market Nexus only reads — the page passes the held words, A1).
+ *
+ * Overview says what the table cannot: the mode with its holds, when it runs, what it works on and what it changed — not
+ * the Effect again (its own tab says it, C-UI 5), and no "Changed" block that would only show dashes (C-UI 6).
  */
-import { forwardRef, useEffect, useMemo, useState, type ComponentProps, type ReactNode } from 'react'
-import { Brain, RotateCw, Undo2 } from 'lucide-react'
-import { Button, SegmentedControl, Skeleton, Tag, ToolbarButton, Tooltip } from '@/design-system/primitives'
+import { forwardRef, useEffect, useMemo, useState, type ComponentProps } from 'react'
+import { Activity, Brain, CircleCheck, Inbox, RotateCw, Undo2 } from 'lucide-react'
+import { Button, InfoTip, SegmentedControl, Skeleton, Tag, ToolbarButton, Tooltip } from '@/design-system/primitives'
 import {
   Banner, Disclosure, EntityLinks, KeyValue, Listbox, type EntityLinkComponent, type ListboxPanelOption, type TabLinkComponent,
 } from '@/design-system/components'
@@ -24,7 +28,7 @@ import { ChangeValue } from '@/design-system/grid'
 import { currencyOf, dayWords, money, periodWord, relWords, whenWords } from '../_shared/format'
 import { changeStateView, undoView } from '../_shared/delivery'
 import {
-  BRAIN_LOCK, BRAIN_STEP_MEANS, LAST_WEEK, brainStepOf, MODES, MODE_MEANS, MODE_WORD, REF_HEADER, autoLockOf, changeFromTo, effectView, effectWindow, fieldWord,
+  BRAIN_LOCK, BRAIN_STEP_MEANS, LAST_WEEK, brainStepOf, MODES, MODE_MEANS, MODE_WORD, REF_HEADER, autoLockOf, changeFromTo, fieldWord,
   heldStep, holdReason, holdsOf, isBrain, last7Parts, marketMoney, nextRunView, noEffectWords, plural, previewParts, readError,
   sampleFromTo, sampleHold, whoWord, worksOn,
   type BidMode, type BidRuleRow, type BrainPick, type BrainStep, type Effect, type PreviewResult, type PreviewSample, type RefKind, type RuleChange, type RuleHistory,
@@ -35,6 +39,7 @@ import { RefLinks, type PanelTab } from './RulesTable'
 import { WaitingTab } from './WaitingTab'
 import { PanelGrid, type PanelColumn } from '../_shared/PanelGrid'
 import { ChangeHistory, KeywordCell, type HistoryRow } from '../_shared/ChangeHistory'
+import { TabEmpty } from '../_shared/TabEmpty'
 import type { WaitingAsk } from './waitingModel'
 import Link from '@/lib/workspaces/Link'
 import styles from '../bid.module.css'
@@ -70,6 +75,8 @@ export interface RulePanelProps {
   canMode: boolean
   modeHeld: string | null
   archiveHeld: string | null
+  /** Why "Edit all" cannot open the builder here (a market Nexus only reads), or null. */
+  editHeld: string | null
   undoHeld: string | null
   /** Bumped after a saved change, so the open tab reads again. */
   reloadKey: number
@@ -113,11 +120,11 @@ export function RulePanel(p: RulePanelProps) {
     <>
       <span data-return="archive">
         {p.row.archived
-          ? <HeldButton reason={p.archiveHeld} onClick={p.onRestore}>Restore…</HeldButton>
-          : <HeldButton reason={p.archiveHeld} variant="danger-outline" onClick={p.onArchive}>Archive…</HeldButton>}
+          ? <Button size="sm" variant="secondary" heldReason={p.archiveHeld} onClick={p.onRestore}>Restore…</Button>
+          : <Button size="sm" variant="danger-outline" heldReason={p.archiveHeld} onClick={p.onArchive}>Archive…</Button>}
       </span>
       <span className="grow" />
-      <span data-return="editall"><Button size="sm" variant="secondary" onClick={p.onEditAll}>Edit all</Button></span>
+      <span data-return="editall"><Button size="sm" variant="secondary" heldReason={p.editHeld} onClick={p.onEditAll}>Edit all</Button></span>
     </>
   )
   const meta = (
@@ -169,12 +176,6 @@ export function RuleDetailPending({ loading, error, onRetry, onClose, returnFocu
   return (
     <DetailModal open onClose={onClose} title="Rule" loading={loading} error={error ?? undefined} onRetry={onRetry} returnFocusTo={returnFocusTo} />
   )
-}
-
-/** A button that may be held: held, it keeps its focus, says why on hover and focus, and does nothing (never `disabled`). */
-function HeldButton({ reason, onClick, variant = 'secondary', label, children }: { reason: string | null; onClick(): void; variant?: 'secondary' | 'danger-outline'; label?: string; children: ReactNode }) {
-  if (!reason) return <Button size="sm" variant={variant} onClick={onClick} aria-label={label}>{children}</Button>
-  return <Tooltip label={reason} portal><Button size="sm" variant={variant} aria-disabled aria-description={reason} aria-label={label}>{children}</Button></Tooltip>
 }
 
 /** A chip whose meaning is on hover and focus (a hold: its label, and its reason). */
@@ -249,8 +250,8 @@ function Overview(p: RulePanelProps) {
   const auto = autoLockOf(r)
   const acts = r.mode.acts !== r.mode.set
   const parts = last7Parts(r)
-  const effect = effectView(r.effect)
   const next = nextRunView(r)
+  const changedAny = r.changed7d.bids > 0 || KINDS.some((k) => r.changed7d[k].length > 0)
   return (
     <div className={styles.stack}>
       <KeyValue
@@ -278,22 +279,16 @@ function Overview(p: RulePanelProps) {
           {!parts.length && !r.waiting && <span className={styles.muted}>{r.last7d.runs ? `${plural(r.last7d.runs, 'run')}, nothing changed` : 'No runs'}</span>}
         </div>
       </section>
-      {!isBrain(r) || r.effect ? (
-        <section className={styles.section} aria-label="Effect">
-          <h3 className={styles.h}>Effect{r.effect && r.effect.keywords > 0 ? <span className={styles.hNote}>{effectWindow(r.effect)}</span> : null}</h3>
-          <div className={styles.chips}>
-            {effect ? <Button size="xs" variant="tonal" onClick={() => p.onTab('effect')} aria-label={`${effect.text}: open Effect`}>{effect.text}</Button> : <span className={styles.muted}>{noEffectWords(r)}</span>}
-          </div>
-        </section>
-      ) : null}
       <section className={styles.section} aria-label="Works on">
         <h3 className={styles.h}>Works on{r.scope.all && !isBrain(r) ? <Tag>Whole market</Tag> : null}{r.scope.product ? <Tag>{r.scope.product.name}</Tag> : null}</h3>
         <Refs row={r} set="scope" />
       </section>
-      <section className={styles.section} aria-label={`Changed · ${LAST_WEEK.toLowerCase()}`}>
-        <h3 className={styles.h}>Changed · {LAST_WEEK.toLowerCase()} {r.changed7d.bids > 0 && <Tag>{plural(r.changed7d.bids, 'bid')} · {plural(r.changed7d.keywords, 'keyword')}</Tag>}</h3>
-        <Refs row={r} set="changed" />
-      </section>
+      {changedAny && (
+        <section className={styles.section} aria-label={`Changed · ${LAST_WEEK.toLowerCase()}`}>
+          <h3 className={styles.h}>Changed · {LAST_WEEK.toLowerCase()} {r.changed7d.bids > 0 && <Tag>{plural(r.changed7d.bids, 'bid')} · {plural(r.changed7d.keywords, 'keyword')}</Tag>}</h3>
+          <Refs row={r} set="changed" />
+        </section>
+      )}
     </div>
   )
 }
@@ -321,7 +316,7 @@ function SampleTable({ rows, market }: { rows: PreviewSample[]; market: string |
   const columns: Array<PanelColumn<PreviewSample>> = [
     { key: 'kw', label: 'Keyword', render: (s) => <KeywordCell target={s.target} campaign={s.campaign} adGroup={s.adGroup} /> },
     {
-      key: 'change', label: 'Change', render: (s) => {
+      key: 'change', label: 'Change', numeric: true, render: (s) => {
         const hold = sampleHold(s)
         return (
           <span className={styles.chips}>
@@ -351,7 +346,7 @@ function Preview({ row, market, reloadKey }: { row: BidRuleRow; market: string; 
       {!data && !error && <Loading />}
       {data && data.note && <Banner tone="info" title={data.note} />}
       {data && data.sample.length > 0 && <SampleTable rows={data.sample} market={marketOf(row, market)} />}
-      {data && !data.sample.length && !data.note && <p className={styles.muted}>Nothing would change now.</p>}
+      {data && !data.sample.length && !data.note && <TabEmpty icon={<CircleCheck size={20} aria-hidden />} title="Nothing would change now" />}
     </div>
   )
 }
@@ -404,11 +399,12 @@ function History(p: RulePanelProps) {
   )
 }
 
+/** The rule's runs with their roll back — open from the start when it has run (use audit B6: Roll back sat folded away). */
 function Runs({ row, reloadKey, onRollback, undoHeld }: { row: BidRuleRow; reloadKey: number; onRollback(run: RunRow): void; undoHeld: string | null }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(() => !!row.lastRunAt || row.last7d.runs > 0)
   return (
     <span data-return="runs" className={styles.stack}>
-      <Disclosure summary="Runs" onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
+      <Disclosure summary="Runs" open={open} onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}>
         {open && <RunList row={row} reloadKey={reloadKey} onRollback={onRollback} undoHeld={undoHeld} />}
       </Disclosure>
     </span>
@@ -427,7 +423,7 @@ function RunList({ row, reloadKey, onRollback, undoHeld }: { row: BidRuleRow; re
       key: 'sum', label: 'Changed', render: (x) => (
         <span className={styles.chips}>
           <span className={styles.wrap}>{runSummary(x)}</span>
-          {runRollbackable(x) && <HeldButton reason={undoHeld} onClick={() => onRollback(x)}><Undo2 size={13} aria-hidden /> Roll back…</HeldButton>}
+          {runRollbackable(x) && <Button size="sm" variant="secondary" heldReason={undoHeld} onClick={() => onRollback(x)}><Undo2 size={13} aria-hidden /> Roll back…</Button>}
         </span>
       ),
     },
@@ -439,7 +435,7 @@ function RunList({ row, reloadKey, onRollback, undoHeld }: { row: BidRuleRow; re
 
 function EffectTab({ row, market }: { row: BidRuleRow; market: string }) {
   const e: Effect | null = row.effect
-  if (!e || e.keywords <= 0) return <p className={styles.muted}>{noEffectWords(row)}</p>
+  if (!e || e.keywords <= 0) return <TabEmpty icon={<Activity size={20} aria-hidden />} title="No effect yet" description={noEffectWords(row)} />
   const m = marketOf(row, market)
   const cash = (cents: number | undefined) => (cents == null ? '—' : e.currency ? money(cents, e.currency) : marketMoney(cents, m))
   const line = (label: string, a: string, b: string) => ({ label, value: <ChangeValue changes={[{ label, from: a, to: b }]} hideLabels /> })
@@ -481,7 +477,12 @@ function Settings({ row, market, reloadKey }: { row: BidRuleRow; market: string;
         <section key={g.id} className={styles.section} aria-label={g.title}>
           <h3 className={styles.h}>{g.title}</h3>
           {/* One column count in every section, so the second item of each sits at the same place (audit R16). */}
-          <KeyValue labelCase="sentence" dense columns={3} items={g.items.map((i) => ({ label: i.label, value: i.value }))} />
+          <KeyValue
+            labelCase="sentence"
+            dense
+            columns={3}
+            items={g.items.map((i) => ({ label: i.label, value: i.note ? <span className={styles.line}>{i.value}<InfoTip tip={i.note} /></span> : i.value }))}
+          />
         </section>
       ))}
     </div>
@@ -533,7 +534,7 @@ function BrainCampaigns({ row, market, reloadKey, held, autoHeld, onPick }: {
       {error && <NotRead what="Campaigns" error={error} onRetry={reload} />}
       {!data && !error && <Loading />}
       {data && row.scope.campaigns.length > 0 && <PanelGrid ariaLabel="The Brain's campaigns" columns={columns} rows={row.scope.campaigns} rowId={idOf} />}
-      {data && !row.scope.campaigns.length && <p className={styles.muted}>No campaigns in {LAST_WEEK.toLowerCase()}.</p>}
+      {data && !row.scope.campaigns.length && <TabEmpty icon={<Inbox size={20} aria-hidden />} title={`No campaigns in ${LAST_WEEK.toLowerCase()}`} />}
     </div>
   )
 }
@@ -559,7 +560,7 @@ function Clashes({ market }: { market: string }) {
       {error && <NotRead what="Clashes" error={error} onRetry={reload} />}
       {!data && !error && <Loading />}
       {data && data.days.length > 0 && <PanelGrid ariaLabel="Clashes by day" columns={columns} rows={days} rowId={dayOf} />}
-      {data && !data.days.length && <p className={styles.muted}>No days in {LAST_WEEK.toLowerCase()}.</p>}
+      {data && !data.days.length && <TabEmpty icon={<Inbox size={20} aria-hidden />} title={`No days in ${LAST_WEEK.toLowerCase()}`} />}
     </div>
   )
 }

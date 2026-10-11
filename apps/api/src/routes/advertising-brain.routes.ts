@@ -1,53 +1,37 @@
 /**
- * Ads brain page A1 — the brain's read views over HTTP: the same answers Claude's `ads-brain` and `bid-brain` tools
- * give, through the same code (services/advertising/brain/read-view.ts: the input, the money keys and the dispatch).
+ * The brain's doors the Bid page calls (built for the Ads brain page, A1 / A5; the page itself was shelved 2026-10-10).
  *
- *   GET /api/advertising/automation/brain/views/:view       an ads-brain view — map, clashes, setup, money, terms, state,
- *                                                            hours, negatives, harvest, report, structure, bidding, retire,
- *                                                            proof — with the tool's arguments as query (market, productId,
- *                                                            campaignId, days, state, status, limit, day, weeks, since)
  *   GET /api/advertising/automation/brain/bid-brain/:view   a bid-brain view — why, what-if, diff, calibration,
  *                                                            hour-factors, probes — with the tool's arguments as query
  *                                                            (market, campaignId, targetId, productId, targetAcosPct,
- *                                                            bandLoPct, bandHiPct, days, limit)
+ *                                                            bandLoPct, bandHiPct, days, limit): the same answer Claude's
+ *                                                            `bid-brain` tool gives, through the same code
+ *                                                            (services/advertising/brain/read-view.ts). Read only.
  *
- *   GET /api/advertising/automation/brain/switchboard        A3 — what is on, in one answer: the server switches (by name),
- *                                                            the account dial and halt, the engine board, the brain's kills
- *                                                            and each enrolled product's levers — level, source, lock, and
- *                                                            whether the brain acts, asks, watches or does nothing now (query
- *                                                            market, productId; brain/switchboard.ts)
- *
- *   GET /api/advertising/automation/brain/requests           A5 — the requests that wait on the brain (query market,
- *                                                            productId): asked by the brain, or of it, with when they expire
- *                                                            or run and whether approving takes a code
- *                                                            (brain/requests-read.ts); previews filtered for the reader
- *
- * The reads are read only: nothing is asked, saved or sent.
- *
- * A5 — the writes never change anything directly. Each asks the approval gate for the same tool Claude uses
+ * The writes never change anything directly. Each asks the approval gate for the same tool Claude uses
  * (requestApproval: a request through the page's door, `via: 'app'`, dry-run as this person — their permissions and ai.run)
  * and answers 202 with the request:
  *
  *   POST …/brain/control                     set-ads-brain (enroll, set-level, lock, unlock, exclude, include, set-value, leave)
  *   POST …/brain/kill                        set-brain-kill-switch: op kill runs AT ONCE on the person's click, like the halt
  *                                            (still a request, recorded and undoable: decideApproval runs it now, 200);
- *                                            op end is a request that needs the approver's code
+ *                                            op end is a request that needs the approver's code. The only web door that
+ *                                            stops the brain at once (no page calls it yet: kept on purpose, 2026-10-11)
  *   POST …/brain/bid-brain/enrollment        set-bid-brain-enrollment
- *   POST …/brain/hours/apply                 apply-brain-hourly-plan
- *   POST …/brain/harvest/apply               apply-brain-harvest
- *   POST …/brain/retire                      retire-ads-writers
- *   POST …/brain/requests/:approvalId/decide approve or reject a request the requests list holds (else 404), through the
- *                                            Approvals page's own path (decideFleetApproval: the 20-second undo window; a
- *                                            request that raises takes settings.security.manage and the code)
+ *   POST …/brain/requests/:approvalId/decide approve or reject a request the brain's list holds (brain/requests-read.ts
+ *                                            isBrainRequest, else 404), through the Approvals page's own path
+ *                                            (decideFleetApproval: the 20-second undo window; a request that raises takes
+ *                                            settings.security.manage and the code)
  *
  * Body: the tool's own arguments (anything else is dropped), and optionally `approve: true` with `code` — the same person
  * asks and approves in one click (decideFleetApproval). `approve` and `code` are never stored with the request. The answer:
  * { approvalId, status, expiresAt, executeAfter?, tool, preview (filtered), needsCode, stepUp?, approve? }; a failed approve
  * leaves the request waiting. 400 the tool's refusal or wrong arguments · 403 no signed-in person or a missing permission ·
- * 409 already decided. Idempotency-Key honoured (COMMAND_SCOPES). The writes need ads.automation.manage (the manifest). ads.view, named in the permission manifest. The workspace is the request's
- * (the global workspace hook): another business's ids read as not found. The views' money keys are stripped for a person
- * without financials.adspend.view, under the same switch as the response filter (field-filter.ts), as the playbook
- * routes strip theirs. Answers are never cached (Cache-Control: no-store): a brain view is decided at the time it is read.
+ * 409 already decided. Idempotency-Key honoured (COMMAND_SCOPES). The writes need ads.automation.manage, the reads ads.view
+ * (the permission manifest). The workspace is the request's (the global workspace hook): another business's ids read as not
+ * found. The views' money keys are stripped for a person without financials.adspend.view, under the same switch as the
+ * response filter (field-filter.ts). Answers are never cached (Cache-Control: no-store): a brain view is decided at the
+ * time it is read.
  *
  * Errors: an unknown view 404 naming the views; arguments the view does not take 400; a refusal in words 404 when it
  * names something not in this business (a product, a campaign, a keyword), else 400. No Prisma here
@@ -58,21 +42,13 @@ import { z } from 'zod'
 import { financialPayloadCopy } from '../lib/auth/field-filter.js'
 import type { ResolvedPermissions } from '../lib/auth/rbac.js'
 import {
-  BID_BRAIN_MONEY, BID_BRAIN_VIEW_INPUT, BID_BRAIN_VIEWS, BRAIN_MAP_VIEWS, BRAIN_VIEW_INPUT, BRAIN_VIEW_MONEY,
-  readBidBrainView, readBrainView, readRefusalStatus, type ViewAnswer,
+  BID_BRAIN_MONEY, BID_BRAIN_VIEW_INPUT, BID_BRAIN_VIEWS, BRAIN_VIEW_MONEY, readBidBrainView, readRefusalStatus, type ViewAnswer,
 } from '../services/advertising/brain/read-view.js'
-import { brainSwitchboard } from '../services/advertising/brain/switchboard.js'
-import { brainRequests, isBrainRequest } from '../services/advertising/brain/requests-read.js'
-import { missingPermissions, permissionMessage, requestPrincipal, storedOutputOf, ToolAccessError, type UserPrincipal } from '../services/agents/call-tool.js'
+import { isBrainRequest } from '../services/advertising/brain/requests-read.js'
+import { missingPermissions, permissionMessage, requestPrincipal, ToolAccessError, type UserPrincipal } from '../services/agents/call-tool.js'
 import { decideApproval, requestApproval } from '../services/agents/approval-gate.service.js'
 import { getTool } from '../services/agents/tool-registry.js'
 import { decideFleetApproval } from '../services/agent-fleet/approval-inbox.service.js'
-
-/** The scope of the requests list: one market and/or one product, both optional. */
-const REQUESTS_QUERY = z.object({
-  market: z.string().trim().toUpperCase().min(2).max(20).optional(),
-  productId: z.string().trim().min(1).max(64).optional(),
-})
 
 /** A decision on a request: approve (with the code when it raises) or reject (the person's words optional). */
 const DECIDE_BODY = z.object({
@@ -99,12 +75,6 @@ async function personOf(request: FastifyRequest, reply: FastifyReply): Promise<U
 
 /** A refused decision's HTTP status: its own (a code problem), 403 forbidden, else 409 (gone, decided, taken). */
 const decideStatus = (out: { code?: string; httpStatus?: number }) => out.httpStatus ?? (out.code === 'forbidden' ? 403 : out.code ? 400 : 409)
-
-/** The switchboard's scope: one market and/or one product, both optional. */
-const SWITCHBOARD_QUERY = z.object({
-  market: z.string().trim().toUpperCase().min(2).max(20).optional(),
-  productId: z.string().trim().min(1).max(64).optional(),
-})
 
 const NO_PERMISSIONS: ResolvedPermissions = { isOwner: false, permissions: new Set() }
 
@@ -135,24 +105,7 @@ const advertisingBrainRoutes: FastifyPluginAsync = async (fastify) => {
       return withoutHiddenMoney(request, out.data, money)
     }
 
-  fastify.get('/advertising/automation/brain/views/:view', read(BRAIN_MAP_VIEWS, BRAIN_VIEW_INPUT, BRAIN_VIEW_MONEY, readBrainView))
   fastify.get('/advertising/automation/brain/bid-brain/:view', read(BID_BRAIN_VIEWS, BID_BRAIN_VIEW_INPUT, BID_BRAIN_MONEY, readBidBrainView))
-
-  // A5 row 17 — the requests that wait on the brain; each preview as this person may see it (nothing of a tool they may not use).
-  fastify.get('/advertising/automation/brain/requests', async (request, reply) => {
-    reply.header('Cache-Control', 'no-store')
-    const parsed = REQUESTS_QUERY.safeParse(request.query ?? {})
-    if (!parsed.success) return reply.code(400).send({ error: problemOf(parsed.error) })
-    const out = await brainRequests(parsed.data)
-    if ('error' in out) return reply.code(readRefusalStatus(out.error)).send({ error: out.error })
-    let see: ((tool: string, value: unknown) => unknown | null) | null = null
-    try { see = storedOutputOf(await requestPrincipal(request)) } catch (error) { if (!(error instanceof ToolAccessError)) throw error }
-    // The summary is written from the stored preview, so it goes only where the preview may go (money in its words).
-    return withoutHiddenMoney(request, { ...out.data, requests: out.data.requests.map((r) => {
-      const preview = see ? see(r.tool, r.preview) : null
-      return { ...r, preview, summary: preview === null ? null : r.summary }
-    }) }, BRAIN_VIEW_MONEY)
-  })
 
   /**
    * A5 rows 19–24 — ask the gate for a brain tool as this person; `atOnce` (op kill) approves and runs it now as the same
@@ -190,31 +143,19 @@ const advertisingBrainRoutes: FastifyPluginAsync = async (fastify) => {
   // Lead decision — a kill runs at once on a person's click, like the halt; ending one goes through approval and the code.
   fastify.post('/advertising/automation/brain/kill', ask('set-brain-kill-switch', (args) => args.op === 'kill'))
   fastify.post('/advertising/automation/brain/bid-brain/enrollment', ask('set-bid-brain-enrollment'))
-  fastify.post('/advertising/automation/brain/hours/apply', ask('apply-brain-hourly-plan'))
-  fastify.post('/advertising/automation/brain/harvest/apply', ask('apply-brain-harvest'))
-  fastify.post('/advertising/automation/brain/retire', ask('retire-ads-writers'))
 
-  // A5 row 25 — decide a request the brain's list holds (structure builds and every other brain request), else 404.
+  // A5 row 25 — decide a request the brain's list holds (structure builds and every other brain request), else 404: the Bid
+  // page's Waiting tab (ruleApi.ts decideBrainRequest).
   fastify.post('/advertising/automation/brain/requests/:approvalId/decide', async (request, reply) => {
     const person = await personOf(request, reply)
     if (!person) return
     const parsed = DECIDE_BODY.safeParse(request.body ?? {})
     if (!parsed.success) return reply.code(400).send({ error: problemOf(parsed.error) })
     const { approvalId } = request.params as { approvalId: string }
-    if (!(await isBrainRequest(approvalId))) return reply.code(404).send({ error: 'No request of the ads brain waits with this id (GET …/brain/requests lists them).' })
+    if (!(await isBrainRequest(approvalId))) return reply.code(404).send({ error: 'No request of the ads brain waits with this id.' })
     const out = await decideFleetApproval({ id: approvalId, decision: parsed.data.decision, actor: person, code: parsed.data.code, reason: parsed.data.reason })
     if (!out.ok) return reply.code(decideStatus(out)).send(out)
     return withoutHiddenMoney(request, { approvalId, ...out }, BRAIN_VIEW_MONEY)
-  })
-
-  // A3 — the switchboard. A lock's value is ad-spend money (BRAIN_VIEW_MONEY), hidden as on every brain view.
-  fastify.get('/advertising/automation/brain/switchboard', async (request, reply) => {
-    reply.header('Cache-Control', 'no-store')
-    const parsed = SWITCHBOARD_QUERY.safeParse(request.query ?? {})
-    if (!parsed.success) return reply.code(400).send({ error: problemOf(parsed.error) })
-    const out = await brainSwitchboard(parsed.data)
-    if ('error' in out) return reply.code(readRefusalStatus(out.error)).send({ error: out.error })
-    return withoutHiddenMoney(request, out.data, BRAIN_VIEW_MONEY)
   })
 }
 

@@ -2,9 +2,9 @@
  * ADS AUTONOMY W3-2 — cancel an Amazon ad write Nexus queued and has not sent yet, for Claude's cancel-queued-ad-write.
  *
  * Every ad write waits in the outbound queue for its grace window (holdUntil, 5 minutes unless sent at once) before the
- * worker sends it; the staged-changes tray's Discard cancels it there (POST /advertising/queued-mutations/:id/cancel).
- * This is the same cancel (`cancelPendingMutation`, ads-mutation.service.ts): only a row still PENDING inside its window,
- * compare-and-set, and Nexus puts each field back where it still holds the cancelled value. Nothing reaches Amazon.
+ * worker sends it. This is the queue's own cancel (`cancelPendingMutation`, ads-mutation.service.ts): only a row still
+ * PENDING inside its window, compare-and-set, and Nexus puts each field back where it still holds the cancelled value.
+ * Nothing reaches Amazon.
  *
  *   one write    by its queue row (`outboundQueueId`: the staged tray, approval-status)
  *   a request    every write still waiting of one change set (`changeSetId`: a Claude request's approval id)

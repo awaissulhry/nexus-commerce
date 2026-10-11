@@ -12,6 +12,7 @@
  * its reason, Reject still offered), more asks than the server lists in one read (said).
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Inbox } from 'lucide-react'
 import { Button, Skeleton, Tag, Tooltip } from '@/design-system/primitives'
 import { Banner, EntityLinks, type EntityLinkComponent } from '@/design-system/components'
 import { ChangeValue } from '@/design-system/grid'
@@ -23,6 +24,7 @@ import {
   ruleApproveHeld, waitingOf, type WaitingAsk,
 } from './waitingModel'
 import { PanelGrid, type PanelColumn, type PanelSelection } from '../_shared/PanelGrid'
+import { TabEmpty } from '../_shared/TabEmpty'
 import styles from '../bid.module.css'
 
 const WorkspaceLink = Link as unknown as EntityLinkComponent
@@ -73,8 +75,10 @@ export function WaitingTab({ row, market, phone, reloadKey, decideHeld, onDecide
   const aHeld = approveHeld(counts, decideHeld)
   const rHeld = rejectHeld(counts, decideHeld)
 
+  // The keyword and its campaign take the room; the change keeps the width its words need (design audit S4: the keyword
+  // was cut to "SEED Jacket | IT | Phr…" while "Now → asked" used 95 of 356 px).
   const keyword: PanelColumn<WaitingAsk> = {
-    key: 'kw', label: 'Keyword', render: (a) => (
+    key: 'kw', label: 'Keyword', flex: 2, render: (a) => (
       <span className={styles.two}>
         <span className={styles.line}><span className={styles.ellipsis} title={a.keyword}>{a.keyword}</span>{a.match && <Tag>{a.match}</Tag>}</span>
         <span className={styles.subline}>
@@ -85,7 +89,8 @@ export function WaitingTab({ row, market, phone, reloadKey, decideHeld, onDecide
     ),
   }
   const change: PanelColumn<WaitingAsk> = {
-    key: 'change', label: 'Now → asked', render: (a) => (
+    // Money on its numbers on a desktop (design audit S4); a phone stacks the reason under it, so it stays left.
+    key: 'change', label: 'Now → asked', ...(phone ? {} : { width: 190, numeric: true }), render: (a) => (
       <span className={styles.two}>
         <span className={styles.chips}>
           <ChangeValue changes={[{ label: a.what, from: a.now, to: a.next }]} hideLabels />
@@ -112,8 +117,8 @@ export function WaitingTab({ row, market, phone, reloadKey, decideHeld, onDecide
   return (
     <div className={styles.stack}>
       <div className={styles.chips} data-return="decide">
-          <Decide label={approveLabel(counts.approve.length)} held={aHeld} variant="primary" onClick={() => onDecide('approve', counts.approve)} />
-          <Decide label={rejectLabel(counts.reject.length)} held={rHeld} variant="secondary" onClick={() => onDecide('reject', counts.reject)} />
+          <Button size="sm" variant="primary" heldReason={aHeld} onClick={() => onDecide('approve', counts.approve)}>{approveLabel(counts.approve.length)}</Button>
+          <Button size="sm" variant="secondary" heldReason={rHeld} onClick={() => onDecide('reject', counts.reject)}>{rejectLabel(counts.reject.length)}</Button>
           {counts.held.length > 0 && counts.approve.length > 0 && (
             <Tooltip label={counts.held[0].held ?? ''} portal>
               <span tabIndex={0} aria-label={`${counts.held.length} can’t be approved: ${counts.held[0].held ?? ''}`}><Tag tone="warning">{counts.held.length} can’t be approved</Tag></span>
@@ -137,13 +142,7 @@ export function WaitingTab({ row, market, phone, reloadKey, decideHeld, onDecide
           selection={selection}
         />
       )}
-      {data && !asks.length && !err && <p className={styles.muted}>Nothing waiting.</p>}
+      {data && !asks.length && !err && <TabEmpty icon={<Inbox size={20} aria-hidden />} title="Nothing waiting" />}
     </div>
   )
-}
-
-/** Approve / Reject: held with its reason (focusable, says why, does nothing), never `disabled`. */
-function Decide({ label, held, variant, onClick }: { label: string; held: string | null; variant: 'primary' | 'secondary'; onClick(): void }) {
-  if (!held) return <Button size="sm" variant={variant} onClick={onClick}>{label}</Button>
-  return <Tooltip label={held} portal><Button size="sm" variant={variant} aria-disabled aria-description={held}>{label}</Button></Tooltip>
 }

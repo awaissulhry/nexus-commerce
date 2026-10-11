@@ -294,8 +294,8 @@ describe('actionOutcome — each bid action type\'s own dry-run shape', () => {
     expect(actionOutcome({ type: 'lower_bid_to_floor', ok: true, output: { dryRun: true, adTargetId: 't1', bidCents: 5 } })).toMatchObject({ moves: [{ targetId: 't1', field: 'bid', fromCents: null, toCents: 5 }], counted: 0 })
   })
   it('raise_bids_for_rank_defense: its targets, counted', () => {
-    expect(actionOutcome({ type: 'raise_bids_for_rank_defense', ok: true, output: { dryRun: true, targets: 3, raisePct: 20 } })).toMatchObject({ moves: [], counted: 3, noChange: 0 })
-    expect(actionOutcome({ type: 'raise_bids_for_rank_defense', ok: true, output: { dryRun: true, targets: 0, raisePct: 20 } })).toMatchObject({ counted: 0, noChange: 1 })
+    expect(actionOutcome({ type: 'raise_bids_for_rank_defense', ok: true, output: { dryRun: true, targets: 3, raisePct: 20 } })).toMatchObject({ moves: [], counted: 3 })
+    expect(actionOutcome({ type: 'raise_bids_for_rank_defense', ok: true, output: { dryRun: true, targets: 0, raisePct: 20 } })).toMatchObject({ moves: [], counted: 0, brain: 0, refused: 0 })
   })
   it('bid_to_target_acos: its number, its sample, the keywords it leaves to the brain, counted once', () => {
     const o = actionOutcome({ type: 'bid_to_target_acos', ok: true, output: { dryRun: true, wouldChange: 7, sample: [{ targetId: 't1', currentBidCents: 40, proposedBidCents: 30 }, { targetId: 't2', currentBidCents: 20, proposedBidCents: 25 }], brainOwned: 2 } })
@@ -305,12 +305,12 @@ describe('actionOutcome — each bid action type\'s own dry-run shape', () => {
   it('pause_target and enable_target: the state from → to', () => {
     expect(move(actionOutcome({ type: 'pause_target', ok: true, output: { dryRun: true, adTargetId: 't1', wouldSet: 'PAUSED', from: 'ENABLED' } }))).toEqual({ targetId: 't1', adGroupId: null, field: 'state', from: 'ENABLED', to: 'PAUSED' })
     expect(move(actionOutcome({ type: 'enable_target', ok: true, output: { dryRun: true, adTargetId: 't1', wouldSet: 'ENABLED', from: 'PAUSED' } }))).toMatchObject({ field: 'state', to: 'ENABLED' })
-    expect(actionOutcome({ type: 'pause_target', ok: true, output: { adTargetId: 't1', noChange: true, status: 'PAUSED' } })).toMatchObject({ moves: [], noChange: 1 })
+    expect(actionOutcome({ type: 'pause_target', ok: true, output: { adTargetId: 't1', noChange: true, status: 'PAUSED' } })).toMatchObject({ moves: [], counted: 0, brain: 0, refused: 0 })
   })
   it('a brain input, a lever left to the brain, a skip and a refusal', () => {
     expect(actionOutcome({ type: 'bid_down', ok: true, output: { dryRun: true, campaignId: 'c1', wouldChange: 'a bid brain input: a ceiling', bidBrain: { directives: 1, sample: [] } } })).toMatchObject({ moves: [], brain: 1 })
-    expect(actionOutcome({ type: 'pause_target', ok: true, output: { skipped: 'brain-lever', brainSkip: { lever: 'state' } } })).toMatchObject({ brain: 1, noChange: 0 })
-    expect(actionOutcome({ type: 'bid_apply', ok: true, output: { skipped: 'suppressed_flag', adTargetId: 't1' } })).toMatchObject({ noChange: 1 })
+    expect(actionOutcome({ type: 'pause_target', ok: true, output: { skipped: 'brain-lever', brainSkip: { lever: 'state' } } })).toMatchObject({ moves: [], brain: 1 })
+    expect(actionOutcome({ type: 'bid_apply', ok: true, output: { skipped: 'suppressed_flag', adTargetId: 't1' } })).toMatchObject({ moves: [], counted: 0, brain: 0, refused: 0 })
     expect(actionOutcome({ type: 'bid_apply', ok: false, error: 'no sales' })).toMatchObject({ refused: 1 })
   })
 })

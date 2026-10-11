@@ -138,7 +138,9 @@
 /* BP.P3 — 13.5px base pins every `font: inherit` control to the console's content scale instead
    of the shell's 16px root (the operator's typography report: the builder ran 16px chrome against
    a 13–14px console; family was already Inter). Elements below state their own sizes on top. */
-.h10-rb { position: fixed; inset: 0; z-index: 130; background: var(--nds-white); display: flex; flex-direction: column; font-size: 13.5px; }
+/* 2026-10-11 — pinned light with `data-nds-light` on the root: ads pages are light-only, and on a dark OS its radios and
+   popups drew dark. */
+.h10-rb { position: fixed; inset: 0; z-index: 130; background: var(--nds-white); display: flex; flex-direction: column; font-size: 13.5px; color-scheme: light; }
 
 .h10-rb-top { display: flex; align-items: center; justify-content: space-between; height: 56px; flex: 0 0 56px; padding: 0 18px; border-bottom: 1px solid var(--nds-grey-150); }
 .h10-rb-top .l { display: flex; align-items: center; gap: 12px; }
@@ -5766,3 +5768,40 @@
    this is the one raw input left in this half; the border it used to carry as an inline #d8dde4
    is `--nds-border` here, which is the same colour named rather than written out. */
 .h10-rte-color { width: 26px; height: 22px; padding: 0; border: 1px solid var(--nds-border); border-radius: 4px; }
+
+/* ── The rule builder on a phone (Owner 2026-10-11, one of the old builder's four real problems) ──────────────────────
+   `.h10-rb.rule` = the shared RuleBuilder, every rule type it draws (bid, keyword harvesting, negative targeting, SOV,
+   keyword tracker, budget, placement); the schedule and rank-goal builders carry their own classes. Below 720 px the
+   columns stack and every control fits the screen; the desktop and 1024 px+ layout is untouched. The step list is a
+   scroll-spy shortcut to sections that are all on the page, so a phone scrolls instead. */
+.h10-rb.rule:focus { outline: none; } /* the builder takes the focus when it opens; its controls show theirs */
+@media (max-width: 720px) {
+  .h10-rb.rule .h10-rb-top { height: auto; min-height: 56px; flex: 0 0 auto; flex-wrap: wrap; gap: 8px; padding: 8px 12px; }
+  .h10-rb.rule .h10-rb-top .l { min-width: 0; flex: 1 1 auto; gap: 8px; }
+  .h10-rb.rule .h10-rb-top b { font-size: 14px; }
+  .h10-rb.rule .h10-rb-top .r { flex-wrap: wrap; gap: 8px; margin-left: auto; }
+  .h10-rb.rule .h10-rb-body { flex-direction: column; align-items: stretch; overflow-x: hidden; }
+  .h10-rb.rule .h10-rb-nav { display: none; }
+  .h10-rb.rule .h10-rb-wrap { max-width: none; padding: 20px 16px 48px; }
+  .h10-rb.rule .h10-rb-setuphd,
+  .h10-rb.rule .h10-rb-crit-hd { flex-wrap: wrap; }
+  .h10-rb.rule .h10-rb-camps,
+  .h10-rb.rule .h10-rb-st,
+  .h10-rb.rule .h10-rb-twocol { grid-template-columns: minmax(0, 1fr); }
+  .h10-rb.rule .h10-rb-twocol .col:first-child { border-right: 0; border-bottom: 1px solid var(--nds-grey-150); }
+  .h10-rb.rule .h10-rb-card-h { flex-wrap: wrap; gap: 8px; padding: 12px 14px; }
+  .h10-rb.rule .h10-rb-conds { padding: 6px 14px 14px; }
+  .h10-rb.rule .h10-rb-conds .cond { flex-wrap: wrap; gap: 8px; }
+  .h10-rb.rule .h10-rb-conds:has(.cond.then)::before { display: none; }
+  .h10-rb.rule .h10-rb-addand,
+  .h10-rb.rule .h10-rb-noise { margin-left: 0; }
+  .h10-rb.rule .nds-listbox { max-width: 100%; }
+  .h10-rb.rule .h10-rb-val,
+  .h10-rb.rule .h10-rb-num { max-width: 100%; }
+  .h10-rb.rule .h10-rb-card.adv { padding: 16px; }
+  .h10-rb.rule .h10-rb-card.adv .freqrow.fields > .nds-field-w { max-width: 100%; }
+  .h10-rb.rule .h10-rb-card.control { padding: 12px 14px; }
+  .h10-rb.rule .h10-rb-foot { flex-wrap: wrap; gap: 8px; }
+  .h10-rb.rule .h10-rb-agpop { width: min(470px, calc(100vw - 32px)); }
+  .h10-rb.rule .h10-rb-prev .pbody { overflow-x: auto; }
+}

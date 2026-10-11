@@ -10,7 +10,6 @@
  * are the steps (Rule Name · {Setup} · Criteria · Search Terms · Advanced Settings · Control).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { useSearchParams } from 'next/navigation'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { X, Plus, Trash2, Copy, MousePointerClick, Check, Search, Info, ChevronDown, Package, Eye, LayoutTemplate, Lock, AlertTriangle} from 'lucide-react'
@@ -23,20 +22,12 @@ import { type Condition, type KeywordFeedMeasured, PC_OPERATORS, PC_METRIC_UNIT,
 import { PLACEMENT_LANES } from './placementLanes'
 import { emitAdsChange } from './adsBus'
 import { ruleMarketOptions } from './campaignPicks'
-import { BID_FLOOR_EUR, criteriaProblems, normalizeDecimalText, readRuleNumbers } from './ruleBuilderValues'
+import { BID_FLOOR_EUR, EVERY_TICK, criteriaProblems, defaultBidCeiling, frequencyAsRun, frequencyReadsTime, normalizeDecimalText, readRuleNumbers, scheduleToSave } from './ruleBuilderValues'
 import { refusedSovMarkets } from './sovWeekWords'
-import { AUTOMATE_HELD_AT_CREATE, AUTOMATE_NEEDS_GATE, beltToSave, bidModeOf, controlForRule, levelNote, levelRefusedNotice, levelToSend, modeRefusedNotice, modeSavePlan, noAnswerNotice, ruleLevel, saveFailed, saveRefusedNotice, scopeForSave, storedBelt, type BidMode, type RuleControl, type RuleLevel, type SaveNotice } from './ruleBuilderSave'
-import { Banner, Field, Listbox } from '@/design-system/components'
-import { Button, Checkbox, InfoTip, Input, Radio, RadioCard, Tag, Textarea, Toggle, ToolbarButton, Tooltip } from '@/design-system/primitives'
+import { AUTOMATE_HELD_AT_CREATE, AUTOMATE_NEEDS_GATE, beltToSave, controlForRule, levelNote, levelRefusedNotice, levelToSend, noAnswerNotice, ruleLevel, saveFailed, saveRefusedNotice, scopeForSave, storedBelt, type RuleControl, type RuleLevel, type SaveNotice } from './ruleBuilderSave'
+import { Banner, Field, Listbox, Modal } from '@/design-system/components'
+import { Button, Checkbox, Input, Radio, RadioCard, Textarea, Toggle, ToolbarButton } from '@/design-system/primitives'
 import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
-import { currencyOf, currencySymbol } from '../bid/_shared/format'
-import {
-  BID_ACTION_ORDER, BID_ACTION_WORDS, BID_OPERATORS, EVERY_TICK, FREQUENCY_NOTE, NEW_BID_MODE, bidMetricWord, bidModeHeld, bidPreviewBlockers,
-  BID_STARTS, bidPreviewBody, centsToInput, defaultMaxBidCents, isTimedFrequency, nameOrSentence, readBidPreview, scheduleAsRun, type BidStart,
-} from './bidRuleBuilder'
-const BID_STARTS_NAMES = new Set(BID_STARTS.map((st) => st.name))
-import { BidModePicker, BidPreviewPanel, BidStarts, DiscardConfirm, OverField, type BidPreviewState } from './BidBuilderParts'
-import bidStyles from './ruleBuilderBid.module.css'
 
 // ── option catalogs (verbatim H10 copy where captured) ──
 const METRICS = PC_METRICS
@@ -49,15 +40,8 @@ const OPERATORS = PC_OPERATORS
 // P2.1 — the Lookback/Exclude selects are gone: nothing ever read their value (each trigger
 // evaluates over its own fixed window). `PcWindowNote` states the real window instead.
 const FREQUENCY = ['Custom', 'Daily', 'Weekly', 'Monthly', 'Hourly'].map((f) => ({ value: f, label: f }))
-/**
- * 2026-10-10 — the frequencies as the evaluator runs them (bidRuleBuilder `scheduleAsRun`): a stored rule with no or an
- * unknown frequency runs every 15 minutes, so it opens on "Every 15 min" rather than on a "Daily" it does not keep. The
- * bid surface always offers it, with a note on each saying what it really does.
- */
-const frequencyOptions = (bidWords: boolean, current: string) => [
-  ...FREQUENCY.map((f) => (bidWords ? { ...f, note: FREQUENCY_NOTE[f.value] } : f)),
-  ...(bidWords || current === EVERY_TICK ? [{ value: EVERY_TICK, label: EVERY_TICK, ...(bidWords ? { note: FREQUENCY_NOTE[EVERY_TICK] } : {}) }] : []),
-]
+/** 2026-10-11 — plus "Every 15 min" for a rule that runs on every tick (stored with no frequency; ruleBuilderValues). */
+const FREQUENCY_WITH_TICK = [...FREQUENCY, { value: EVERY_TICK, label: EVERY_TICK }]
 // BP.P4 — the Bid rule's lookback options (H10 offers Previous Day…90; ours start at 7 because
 // the two settling days are always excluded and a sub-week window over settled data is noise).
 const LOOKBACK_DAYS = ['7', '14', '30', '60', '90'].map((d) => ({ value: d, label: `Last ${d} Days` }))
@@ -339,8 +323,6 @@ const BID_ACTIONS: Array<{ value: string; label: string; unit: ActionUnit }> = [
    * rule silently bidding the median on half its targets would be its own quiet defect.
    */
 ]
-/** 2026-10-10 — the same eleven actions in the bid surface's words, the common ones first (bidRuleBuilder). */
-const BID_ACTIONS_WORDS = BID_ACTION_ORDER.flatMap((op) => (BID_ACTIONS.some((a) => a.value === op) ? [{ value: op, label: BID_ACTION_WORDS[op] ?? op }] : []))
 // Placement rule THEN — set/raise/lower a placement bid modifier (% only). H10 labels are bare
 // ("Set to", not "Set to(%)") — the % is shown as the value-field suffix (frame 02:58–03:17).
 // 🔴 4i (review 5.14) — Increase/Decrease are RELATIVE (`current × (1 ± v/100)`, automation-action-handlers.ts):
@@ -359,8 +341,6 @@ const PLACEMENTS = PLACEMENT_LANES.map((l) => ({ value: l.value as string, label
 // IF placement-scope (which placement's metric to evaluate) — Campaign-wide or a single placement.
 const PLACEMENT_SCOPES = [{ value: 'campaign', label: 'Campaign' }, ...PLACEMENTS]
 const METRICS_PLACEMENT = PC_METRICS_PLACEMENT
-/** 2026-10-10 — the bid surface's metric and action lists in plain words (same values, so stored rules read unchanged). */
-const METRICS_BID_WORDS = PC_METRICS_BID.map((m) => ({ value: m.value, label: bidMetricWord(m.value) }))
 /**
  * C1 — `'none'` joins the unit vocabulary for an action that takes NO value.
  *
@@ -406,15 +386,6 @@ const TIMEZONES = [
   { value: 'utc', label: 'UTC - Coordinated Universal Time' },
   { value: 'cet', label: 'CET/CEST - Central European Time, Rome' },
 ]
-/** The same four zones in the bid surface's words (the evaluator reads only these four; any other key runs on Rome). */
-const TIMEZONES_BID = [
-  { value: 'cet', label: 'Rome' },
-  { value: 'utc', label: 'UTC' },
-  { value: 'est', label: 'New York' },
-  { value: 'pst', label: 'Los Angeles' },
-]
-/** The bid surface's 24 hours: "06:00". */
-const TIMES_BID = Array.from({ length: 24 }, (_, h) => { const hh = `${String(h).padStart(2, '0')}:00`; return { value: hh, label: hh } })
 // target match types — the maroon P / E / 📦 circles in the "What targets" header.
 // Glyphs are identical for both rule types (the 3rd is a package/Product-ASIN icon, not "M");
 // only the hover copy differs (negative vs positive).
@@ -536,48 +507,34 @@ function AtomMark({ size = 20 }: { size?: number }) {
 }
 
 const STEPS_FOR = (slug: string): Array<{ id: string; label: string }> => {
-  // 2026-10-10 — the bid builder in the Bid page's words (audit §2): one section per thing a person decides.
-  if (slug === 'bid') {
-    return [
-      { id: 'rule-name', label: 'Name' },
-      { id: 'setup', label: 'Campaigns' },
-      { id: 'criteria', label: 'Rule' },
-      { id: 'advanced', label: 'Limits' },
-      { id: 'schedule', label: 'When' },
-      { id: 'control', label: 'Mode' },
-    ]
-  }
   const setupLabel = SETUP[slug]?.nav ?? 'Rule Setup'
   const head = [
-    { id: 'rule-name', label: 'Rule name' },
+    { id: 'rule-name', label: 'Rule Name' },
     { id: 'setup', label: setupLabel },
     { id: 'criteria', label: 'Criteria' },
   ]
   const tail = [
-    { id: 'advanced', label: 'Advanced settings' },
+    { id: 'advanced', label: 'Advanced Settings' },
     { id: 'control', label: 'Control' },
   ]
   // Campaign-scoped rules (Budget · Bid · Placement) have no Search Terms step — their action is
   // a THEN clause inside Criteria, applied to the selected campaigns.
   const sf = SETUP[slug]?.surface
   if (sf === 'campaign-budget' || sf === 'campaign-bid' || sf === 'campaign-placement' || sf === 'campaign-sov' || sf === 'campaign-rank') return [...head, ...tail]
-  return [...head, { id: 'search-terms', label: 'Search terms' }, ...tail]
+  return [...head, { id: 'search-terms', label: 'Search Terms' }, ...tail]
 }
 
+/**
+ * 2026-10-11 (Owner: the old builder back, exactly as it was) — the only addition: a page may mount it (the Bid page's
+ * `?builder=new` / `?ruleId=<id>`, the Negative Targeting page). Without props it is the route page it always was.
+ */
 export interface RuleBuilderProps {
   slug: string
-  /**
-   * The rule to edit. Absent: the address's `?ruleId=` (the builder route, as before). `null`: a NEW rule whatever the
-   * address says — for a page whose own address carries other ids.
-   */
+  /** The rule to edit. Absent: the address's `?ruleId=`. `null`: a new rule whatever the address says. */
   ruleId?: string | null
-  /** A new rule's market ('IT'). Absent: every market, as the route opens. Ignored on an edit (the rule's own market). */
+  /** A new rule's market ('IT'). Absent: All markets. Ignored on an edit (the rule's own market). */
   initialMarket?: string
-  /**
-   * Mounted by a page: closing (✕, Cancel, Esc — after a confirm when something is not saved) calls this instead of going
-   * to the rule's tab, and the builder draws itself as a layer above the page (a dialog portalled to the body). The page
-   * puts the focus back on what opened it.
-   */
+  /** Mounted by a page: Close and Cancel call this instead of going to the rule's tab; the page puts the focus back. */
   onClose?(): void
   /** Mounted by a page: a save that fully landed calls this instead of going to the rule's tab. */
   onSaved?(id: string, kind: 'created' | 'updated'): void
@@ -588,6 +545,8 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
   const urlRuleId = useSearchParams().get('ruleId')
   const ruleId = ruleIdProp === undefined ? urlRuleId : ruleIdProp
   const isEdit = !!ruleId
+  /** The edit has read the stored rule (or failed to): the "unsaved changes" baseline is taken after it. */
+  const [hydrated, setHydrated] = useState(!ruleId)
   /**
    * EA5 — set when the rule being edited is ENGINE-NATIVE, with HOW MUCH of it may be written
    * back. Non-null does NOT mean read-only:
@@ -632,19 +591,17 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
   // rule's OWN tab, where the rule the operator just made is actually visible. `tab: 'rules'`
   // routes at /apply-rules (the one key≠path pair in tabs.tsx).
   const ownTab = rt?.tab && rt.tab !== 'rules' ? rt.tab : 'apply-rules'
-  const leave = useCallback(() => (onClose ? onClose() : router.push(`/marketing/ads/rules-automation/${ownTab}`)), [onClose, router, ownTab])
-  /** The bid surface (2026-10-10): the Bid page's words, the live preview, the four steps, the default highest bid. */
-  const bidWords = slug === 'bid'
+  /** The page under the builder, made inert while it is open (see the layer effect below); given back before leaving. */
+  const releaseBackground = useRef<(() => void) | null>(null)
+  const close = useCallback(() => {
+    // Back first, so the page can put the focus on what opened the builder.
+    releaseBackground.current?.()
+    if (onClose) onClose()
+    else router.push(`/marketing/ads/rules-automation/${ownTab}`)
+  }, [onClose, router, ownTab])
 
   const [ruleName, setRuleName] = useState('')
-  /**
-   * 2026-10-10 — a NEW bid rule opens on the first start ("Bid toward ACoS"), as the Bid page dialog did: every choice has
-   * a default, so the preview shows what it would do at once. Its name stays empty (the sentence is the placeholder and
-   * the name it saves with); the starts above the rule swap it in one click.
-   */
-  const [groups, setGroups] = useState<CriteriaGroup[]>(() => (slug === 'bid' && !ruleId
-    ? [{ ...newGroup(slug), conditions: BID_STARTS[0].conditions.map((c) => ({ ...c })), budgetOp: BID_STARTS[0].action.op, budgetValue: BID_STARTS[0].action.value }]
-    : [newGroup(slug)]))
+  const [groups, setGroups] = useState<CriteriaGroup[]>(() => [newGroup(slug)])
   const [searchMode, setSearchMode] = useState<'contains' | 'not'>('contains')
   const [searchText, setSearchText] = useState('')
   const [searchTerms, setSearchTerms] = useState<Array<{ term: string; op: 'contains' | 'not' }>>([])
@@ -655,6 +612,8 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
     setSearchText('')
   }
   const [frequency, setFrequency] = useState('Daily')
+  /** The rule opened on "Every 15 min" (stored with no frequency): the option stays offered after a change. */
+  const [openedOnTick, setOpenedOnTick] = useState(false)
   const [everyN, setEveryN] = useState('')
   const [interval, setInterval] = useState('Weeks')
   const [onDay, setOnDay] = useState('Monday')
@@ -664,18 +623,6 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
   const [timezone, setTimezone] = useState('cet')
   const [dedupe, setDedupe] = useState(true)
   const [control, setControl] = useState<RuleControl | null>('manual')
-  /**
-   * 2026-10-10 — the bid surface's four steps (Off · Watch · Ask me · Auto) in place of Manual / Automate. A new rule
-   * starts on Ask me, which is what the create path has always stored (PROPOSE, Manual belt). `initialMode` is the step
-   * an edit opened on and `initialActs` the one it acts on (Auto with the Manual belt asks); `autoLocked` is the bid rules
-   * list's reason why this rule cannot reach Auto yet.
-   */
-  const [mode, setMode] = useState<BidMode>(NEW_BID_MODE)
-  const initialMode = useRef<BidMode | null>(null)
-  const initialActs = useRef<BidMode | null>(null)
-  const [autoLocked, setAutoLocked] = useState<{ label: string; reason?: string } | null>(null)
-  /** The edit has read the stored rule (or failed to): the "unsaved changes" baseline is taken after it. */
-  const [hydrated, setHydrated] = useState(!ruleId)
   /**
    * BP.P1 — what the Control radio said when an EDIT opened. Saving re-arms the rule's level only
    * when the operator CHANGED the radio this session: a name edit on a rule someone deliberately
@@ -745,9 +692,6 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
   const [maxAdSpend, setMaxAdSpend] = useState('100')
   const [maxWrites, setMaxWrites] = useState('')
   const [maxExecs, setMaxExecs] = useState('10')
-  /** "Most per run" (`maxValueCentsEur`), bid surface only; empty = none. `storedMaxValue` = what an edit opened with. */
-  const [maxValue, setMaxValue] = useState('')
-  const storedMaxValue = useRef<number | null>(null)
   const [scopeMarket, setScopeMarket] = useState(() => (!ruleId && initialMarket ? initialMarket : 'all'))
   // Ads wave 4c — the markets a rule can act in, from the connections.
   const adsMarkets = useAdsMarketplace()
@@ -761,8 +705,10 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
   //    never writes a lower bid, so a lower Min was a promise the engine did not keep. ──
   const [bidFloor, setBidFloor] = useState(String(BID_FLOOR_EUR))
   const [bidCeiling, setBidCeiling] = useState('')
-  /** The person typed in the highest bid: the default (bidRuleBuilder `defaultMaxBidCents`) no longer follows the scope. */
+  /** The person typed in the Max bid: the default below no longer follows the market and the campaigns. */
   const ceilingTouched = useRef(false)
+  /** A new bid rule's market's bids today (cents, by campaign), for that default; null until read. */
+  const [marketBids, setMarketBids] = useState<Array<{ campaignId: string; cents: number }> | null>(null)
   /**
    * BP.P4 — the Bid rule's own lookback (H10 carries one per criteria card; ours is per RULE —
    * one evaluation window — and says so). Stored as `actions[0].windowDays`, clamped 7–90 by
@@ -791,7 +737,7 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
     return () => { alive = false }
   }, [isCampaign, isHarvest, isNegative, slug])
   // Bid keeps lookback per-criteria (group[0] is canonical for the template); Budget keeps its global lookback.
-  const tmplPayload = () => ({ conditions: groups.map((g) => ({ conditions: g.conditions, action: { op: g.budgetOp ?? 'set', value: g.budgetValue ?? '' } })), lookback: pcWindowLabel(slug), exclude: PC_TRUTH_EXCLUDE, schedule: { frequency, everyN, interval, onDay, time, timezone } })
+  const tmplPayload = () => ({ conditions: groups.map((g) => ({ conditions: g.conditions, action: { op: g.budgetOp ?? 'set', value: g.budgetValue ?? '' } })), lookback: pcWindowLabel(slug), exclude: PC_TRUTH_EXCLUDE, schedule: scheduleToSave({ frequency, everyN, interval, onDay, time, timezone }) })
   const saveTemplate = async () => {
     const name = tmplName.trim(); if (!name) return
     try {
@@ -846,9 +792,9 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
    * on an edit as "remove the spend cap". See ruleBuilderValues.ts.
    */
   const nums = useMemo(() => readRuleNumbers(
-    { budgetFloor, budgetCeiling, placeFloor, placeCeiling, bidFloor, bidCeiling, maxAdSpend, maxWrites, maxExecs, protectDays, everyN, harvestBid: bidValue, maxValue },
-    { locked: locked != null, budget: isBudget, placement: isPlacement, bidLike: isBidLike, negative: isNegative, harvest: isHarvest, harvestBidMode: bidMode, customFrequency: frequency === 'Custom', bidWords },
-  ), [budgetFloor, budgetCeiling, placeFloor, placeCeiling, bidFloor, bidCeiling, maxAdSpend, maxWrites, maxExecs, protectDays, everyN, bidValue, maxValue, locked, isBudget, isPlacement, isBidLike, isNegative, isHarvest, bidMode, frequency, bidWords])
+    { budgetFloor, budgetCeiling, placeFloor, placeCeiling, bidFloor, bidCeiling, maxAdSpend, maxWrites, maxExecs, protectDays, everyN, harvestBid: bidValue },
+    { locked: locked != null, budget: isBudget, placement: isPlacement, bidLike: isBidLike, negative: isNegative, harvest: isHarvest, harvestBidMode: bidMode, customFrequency: frequency === 'Custom' },
+  ), [budgetFloor, budgetCeiling, placeFloor, placeCeiling, bidFloor, bidCeiling, maxAdSpend, maxWrites, maxExecs, protectDays, everyN, bidValue, locked, isBudget, isPlacement, isBidLike, isNegative, isHarvest, bidMode, frequency])
   // The criteria's numbers: a locked rule's 'meta' save sends no criteria, and a locked save never sends the THEN side.
   const critProblems = useMemo(() => groups.map((g) => criteriaProblems(
     locked?.level === 'meta' ? [] : g.conditions,
@@ -862,12 +808,9 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
   const previewConditions = useCallback(() => (
     groups.map((g) => ({ match: 'all', lookback: pcWindowLabel(slug), exclude: PC_TRUTH_EXCLUDE, conditions: sentConditions(g), ...(isCampaign ? { action: { op: g.budgetOp ?? 'set', value: normalizeDecimalText(g.budgetValue ?? ''), ...(isPlacement ? { placeTarget: g.placeTarget ?? 'tos' } : {}) } } : {}) }))
   ), [groups, slug, isCampaign, isPlacement, sentConditions])
-  /** The bid surface's step, planned: the level to set, the belt to store, and in which order (ruleBuilderSave `modeSavePlan`). */
-  // `hydrated` re-plans once the edit has read the rule (the plan reads its refs).
-  const modePlan = useMemo(() => modeSavePlan({ isEdit, initial: initialMode.current, chosen: mode, stored: savedBelt.current }), [isEdit, mode, hydrated])
   const previewActions = useCallback(() => (
     [{
-          type: slug, control: bidWords ? modePlan.belt : beltToSave({ isEdit, initial: initialControl.current, chosen: control, stored: savedBelt.current }), dedupe, negateInSource, bid: { mode: bidMode, value: normalizeDecimalText(bidValue) }, filters: { brandExclude: brandExclude.split(/[\n,]/).map((t) => t.trim()).filter(Boolean), competitorOnly }, searchTerms, schedule: { frequency, everyN: normalizeDecimalText(everyN), interval, onDay, time, timezone },
+          type: slug, control: beltToSave({ isEdit, initial: initialControl.current, chosen: control, stored: savedBelt.current }), dedupe, negateInSource, bid: { mode: bidMode, value: normalizeDecimalText(bidValue) }, filters: { brandExclude: brandExclude.split(/[\n,]/).map((t) => t.trim()).filter(Boolean), competitorOnly }, searchTerms, schedule: scheduleToSave({ frequency, everyN: normalizeDecimalText(everyN), interval, onDay, time, timezone }),
           ...(isNegative ? { protectConverting, protectDays: nums.values.protectDays, negationLevel } : {}),
           ...(isCampaign ? { campaigns: selCampaigns.map((c) => ({ id: c.id, name: c.name, marketplace: c.marketplace, adProduct: c.adProduct, targetingType: c.targetingType, dailyBudget: c.dailyBudget })) } : {}),
           // 4g — an EMPTY Max is the one null sent ("no cap"); a typed value is its number or holds Save.
@@ -878,7 +821,7 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
           ...((isBudget || isPlacement) ? { windowDays: Math.max(7, Math.min(90, Math.round(Number(lookbackDays)) || 7)) } : {}),
           mappings: blocks.map((b) => ({ groups: b.groups.map((g) => ({ id: g.id, name: g.name, campaignId: g.campaignId, campaignName: g.campaignName, status: g.status, adProduct: g.adProduct, portfolioId: g.portfolioId, look: g.look, types: g.types, ...(g.paused ? { paused: true } : {}) })) })),
         }]
-  ), [slug, isEdit, control, bidWords, modePlan, dedupe, negateInSource, bidMode, bidValue, brandExclude, competitorOnly, searchTerms, frequency, everyN, interval, onDay, time, timezone, isNegative, protectConverting, negationLevel, isCampaign, selCampaigns, isBudget, isPlacement, isBidLike, nums, isBid, lookbackDays, blocks])
+  ), [slug, isEdit, control, dedupe, negateInSource, bidMode, bidValue, brandExclude, competitorOnly, searchTerms, frequency, everyN, interval, onDay, time, timezone, isNegative, protectConverting, negationLevel, isCampaign, selCampaigns, isBudget, isPlacement, isBidLike, nums, isBid, lookbackDays, blocks])
   /**
    * ── KT-P1 (2026-08-22) — the rank feed's own state, because a Keyword Tracker rule is inert
    * without it ───────────────────────────────────────────────────────────────────────────────
@@ -1316,51 +1259,34 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const [active, setActive] = useState('rule-name')
-  /** Set after the first paint: a builder opened as a layer then moves into its portal (a new DOM tree). */
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => { setMounted(true) }, [])
 
-  /**
-   * Where the readable part of the pane starts: its top, or — when the bid surface's live preview is a bar stuck across the
-   * top of the form (below 1500 px) — the bar's bottom.
-   */
-  const paneTop = useCallback((el: HTMLElement): number => {
-    const top = el.getBoundingClientRect().top
-    const bar = el.querySelector<HTMLElement>('aside[aria-label="Preview"]')?.getBoundingClientRect()
-    return bar && bar.width > el.clientWidth / 2 && bar.top <= top + 1 ? bar.bottom : top
-  }, [])
-
-  // scroll-spy: the section whose top is nearest above the fold is "active"; at the very end, the last one.
-  // Lane FINAL (2026-10-11): measured from the pane (not `offsetTop`), and attached again once a builder opened as a layer
-  // has moved into its portal (`mounted`) — the listener sat on the first, replaced node, so the nav stayed on "Name".
+  // scroll-spy: the section whose top is nearest above the fold is "active"
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
     const onScroll = () => {
-      const line = paneTop(el) + 80
+      const top = el.scrollTop + 140
       let cur = steps[0].id
       for (const s of steps) {
         const node = document.getElementById(`rb-${s.id}`)
-        if (node && node.getBoundingClientRect().top <= line) cur = s.id
+        if (node && node.offsetTop <= top) cur = s.id
       }
-      if (el.scrollTop > 0 && el.scrollTop + el.clientHeight >= el.scrollHeight - 2) cur = steps[steps.length - 1].id
       setActive(cur)
     }
     el.addEventListener('scroll', onScroll, { passive: true })
     onScroll()
     return () => el.removeEventListener('scroll', onScroll)
-  }, [steps, mounted, paneTop])
+  }, [steps])
 
   const goto = (id: string) => {
     /**
-     * BP.P3 — instant, not a smooth scroll: the smooth animation was cancelled by the scroll-spy's re-render churn (see the
-     * `steps` memo above) — clicking a step moved the pane ~6px and stopped. Lane FINAL: the section lands 24 px under
-     * the readable top, so a preview bar stuck on top never covers it.
+     * BP.P3 — instant `scrollIntoView`, not a smooth `scrollTo`. Two defects lived here:
+     * `node.offsetTop` is measured from `.h10-rb` (the offset parent), not from the scroll
+     * container, so the target landed ~56px low; and the smooth animation was cancelled by
+     * the scroll-spy's re-render churn (see the `steps` memo above) — clicking a step moved
+     * the pane ~6px and stopped. `.h10-rb-sec` carries `scroll-margin-top: 24px` for the gap.
      */
-    const el = scrollRef.current
-    const node = document.getElementById(`rb-${id}`)
-    if (!el || !node) return
-    el.scrollTop += node.getBoundingClientRect().top - paneTop(el) - 24
+    document.getElementById(`rb-${id}`)?.scrollIntoView({ block: 'start' })
   }
 
   // criteria mutations
@@ -1382,13 +1308,7 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
   const thenActions = isPlacement ? PLACEMENT_ACTIONS : isBidLike ? BID_ACTIONS : BUDGET_ACTIONS
   const criteriaValid = conditionsFilled && groups.every((g) =>
     !isCampaign || actionUnit(thenActions, g.budgetOp) === 'none' || (g.budgetValue ?? '').trim() !== '')
-  /**
-   * 2026-10-10 — a bid rule with no campaign picked and one market chosen works on that WHOLE market, new campaigns too
-   * (the evaluator's empty picker, as the preview runs it). The Bid page's dialog made rules that way, so the builder
-   * must be able to save them; without a market it still needs campaigns.
-   */
-  const wholeMarket = bidWords && selCampaigns.length === 0 && scopeMarket !== 'all'
-  const targetsValid = isCampaign ? selCampaigns.length > 0 || wholeMarket : adGroupCount > 0
+  const targetsValid = isCampaign ? selCampaigns.length > 0 : adGroupCount > 0
   /**
    * 🔴 EA5 — an ENGINE-NATIVE rule is valid on its name and its IF rows alone.
    *
@@ -1403,48 +1323,9 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
    * destructive path look safe for as long as it did.
    */
   // 4g — and every number it sends can be read and is in range (`numbersValid`; each field names its problem).
-  // ── the bid surface's live preview (2026-10-10): the engine's dry run of the UNSAVED rule, a moment after each change ──
-  const [bidPreview, setBidPreview] = useState<BidPreviewState>({ phase: 'blocked', blockers: [] })
-  const [previewTry, setPreviewTry] = useState(0)
-  const previewSeq = useRef(0)
-  const previewBlockers = useMemo(() => (bidWords ? bidPreviewBlockers({
-    conditionsFilled: locked?.level === 'meta' || conditionsFilled,
-    thenFilled: locked != null || criteriaValid || !conditionsFilled,
-    numbersValid,
-    campaigns: selCampaigns.length,
-    scopeMarket,
-    locked: locked != null,
-  }) : []), [bidWords, locked, conditionsFilled, criteriaValid, numbersValid, selCampaigns.length, scopeMarket])
-  const previewKey = useMemo(() => {
-    if (!bidWords || !hydrated || previewBlockers.length) return null
-    return JSON.stringify(bidPreviewBody({ ruleId: ruleId ?? null, locked: locked != null, actions: previewActions(), conditions: previewConditions(), scopeMarket }))
-  }, [bidWords, hydrated, previewBlockers, ruleId, locked, previewActions, previewConditions, scopeMarket])
-  useEffect(() => {
-    if (!bidWords) return
-    if (!previewKey) { setBidPreview({ phase: 'blocked', blockers: previewBlockers }); return }
-    const mine = ++previewSeq.current
-    setBidPreview((p) => ({ phase: 'loading', last: p.phase === 'ready' ? p.data : p.phase === 'loading' ? p.last : null }))
-    const t = window.setTimeout(async () => {
-      try {
-        const r = await fetch(`${getBackendUrl()}/api/advertising/bid-rules/preview`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: previewKey, cache: 'no-store' })
-        const j = await r.json().catch(() => null)
-        if (mine !== previewSeq.current) return
-        const data = r.ok ? readBidPreview(j) : null
-        if (data) setBidPreview({ phase: 'ready', data })
-        else setBidPreview({ phase: 'failed', error: typeof j?.error === 'string' && j.error.trim() ? j.error.trim() : `HTTP ${r.status}` })
-      } catch (e) {
-        if (mine === previewSeq.current) setBidPreview({ phase: 'failed', error: `No answer: ${(e as Error).message}` })
-      }
-    }, 600)
-    return () => window.clearTimeout(t)
-  }, [bidWords, previewKey, previewBlockers, previewTry])
-  /** The rule's sentence from the server, as the rules list says it: a bid rule with no typed name saves with it. */
-  const previewSentence = bidPreview.phase === 'ready' ? bidPreview.data.sentence : bidPreview.phase === 'loading' ? bidPreview.last?.sentence ?? null : null
-  const nameToSave = bidWords ? nameOrSentence(ruleName, previewSentence) : ruleName.trim()
-
   const valid = numbersValid && (locked
-    ? nameToSave.length > 0 && (locked.level === 'meta' || conditionsFilled)
-    : nameToSave.length > 0 && targetsValid && criteriaValid)
+    ? ruleName.trim().length > 0 && (locked.level === 'meta' || conditionsFilled)
+    : ruleName.trim().length > 0 && targetsValid && criteriaValid)
 
   // ── create the rule (POST /advertising/automation-rules — starts disabled + dry-run) ──
   const submit = useCallback(async () => {
@@ -1469,42 +1350,9 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
        * 'meta' also omits `conditions`: one of them has no builder metric and is not on screen,
        * so writing the visible ones back would silently delete it.
        */
-      // 2026-10-10 — "Most per run" (bid surface): its number, or null when an edit emptied a stored one.
-      const valueCap = bidWords
-        ? (nums.caps.maxValueCentsEur != null ? { maxValueCentsEur: nums.caps.maxValueCentsEur } : isEdit && nums.clearsMaxValue && storedMaxValue.current != null ? { maxValueCentsEur: null } : {})
-        : {}
-      /**
-       * 2026-10-10 — the bid surface's step. Going DOWN on an edit, the level is set BEFORE the rule saves (the new belt
-       * may be looser, and the old level must not run with it); otherwise after. A refused level keeps the step the rule
-       * had, says so in the server's words, and (going up) puts the old belt back.
-       */
-      const plan = bidWords ? modePlan : null
-      const setLevel = async (level: RuleLevel, id: string): Promise<boolean> => {
-        let res: Response
-        let lj: unknown
-        try {
-          res = await fetch(`${getBackendUrl()}/api/advertising/autonomy/rules/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ level }) })
-          lj = await res.json().catch(() => ({}))
-        } catch {
-          setSaveNotice(noAnswerNotice('level', { isEdit, existing: true }))
-          return false
-        }
-        if (saveFailed(res.ok, lj)) {
-          setSaveNotice(modeRefusedNotice({ isEdit, stays: isEdit ? initialMode.current ?? 'OFF' : 'OFF', status: res.status, body: lj }))
-          if (isEdit) setMode(initialMode.current ?? NEW_BID_MODE)
-          return false
-        }
-        emitAdsChange('ads.rule.changed')
-        return true
-      }
-      if (plan?.level && plan.levelFirst && saveId) {
-        if (!(await setLevel(plan.level, saveId))) return
-        initialMode.current = mode
-        initialActs.current = mode
-      }
       let partial: Record<string, unknown> | null = null
       if (locked) {
-        partial = { name: nameToSave, ...valueCap }
+        partial = { name: ruleName.trim() }
         if (locked.level === 'criteria') {
           partial.conditions = groups.map((g) => ({ match: 'all', lookback: pcWindowLabel(slug), exclude: PC_TRUTH_EXCLUDE, conditions: sentConditions(g) }))
         }
@@ -1517,8 +1365,7 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
         if (scopeMarket !== initialScope.current) partial.scopeMarketplace = scopeForSave(scopeMarket)
       }
       const payload = partial ?? {
-        ...valueCap,
-        name: nameToSave,
+        name: ruleName.trim(),
         description: `${rt?.label ?? 'Rule'} — ${isEdit ? 'edited' : 'created'} in Rule Builder`,
         trigger: TRIGGER_BY_SLUG[slug] ?? 'SCHEDULE',
         // P2.1 — lookback/exclude store the TRUTH (the trigger's fixed window), never a select's
@@ -1560,23 +1407,6 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
        * "Automate". On an edit, a refused level (the gate, the ceiling, a contested placement lane)
        * is shown with the server's sentence and the radio goes back to the level the rule has.
        */
-      if (plan) {
-        if (savedId && plan.level && !plan.levelFirst && !(await setLevel(plan.level, savedId))) {
-          // Going up and refused: the rule saved with the new belt; put the stored one back so it says what it does.
-          const stored = savedBelt.current
-          if (isEdit && !partial && stored && stored !== plan.belt) {
-            const back = (payload.actions as Array<Record<string, unknown>>).map((a, i) => (i === 0 ? { ...a, control: stored } : a))
-            await fetch(`${getBackendUrl()}/api/advertising/automation-rules/${savedId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actions: back }) }).catch(() => null)
-            savedBelt.current = stored
-          }
-          return
-        }
-        if (savedId && isEdit) { initialMode.current = mode; initialActs.current = mode }
-        leftClean.current = true
-        if (onSaved && savedId) onSaved(savedId, ruleId ? 'updated' : 'created')
-        else router.push(`/marketing/ads/rules-automation/${ownTab}`)
-        return
-      }
       const level = levelToSend({ isEdit, initial: initialControl.current, chosen: control })
       if (savedId && level) {
         let res: Response
@@ -1598,12 +1428,13 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
         emitAdsChange('ads.rule.changed')
       }
       leftClean.current = true
+      releaseBackground.current?.()
       if (onSaved && savedId) onSaved(savedId, ruleId ? 'updated' : 'created')
       else router.push(`/marketing/ads/rules-automation/${ownTab}`)
     } catch {
       setSaveNotice(saved ? noAnswerNotice('level', { isEdit, existing: true }) : noAnswerNotice('save', { isEdit, existing: saveId != null }))
     } finally { setCreating(false) }
-  }, [valid, creating, rankBlocked, locked, nameToSave, rt, slug, groups, control, storedLevel, createdId, nums, sentConditions, scopeMarket, previewConditions, previewActions, isEdit, ruleId, router, ownTab, bidWords, modePlan, mode, onSaved])
+  }, [valid, creating, rankBlocked, locked, ruleName, rt, slug, groups, control, storedLevel, createdId, nums, sentConditions, scopeMarket, previewConditions, previewActions, isEdit, ruleId, router, ownTab, onSaved])
 
   // ── edit mode: load an existing rule's stored JSON back into the builder ──
   useEffect(() => {
@@ -1626,12 +1457,6 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
         initialControl.current = ctl
         savedBelt.current = storedBelt(rule)
         initialScope.current = rule.scopeMarketplace || 'all'
-        // 2026-10-10 — the bid surface's step, as set and as it acts; and what it may store as "Most per run".
-        const bm = bidModeOf(rule)
-        initialMode.current = bm.set
-        initialActs.current = bm.acts
-        setMode(bm.set)
-        if (typeof rule.maxValueCentsEur === 'number') { storedMaxValue.current = rule.maxValueCentsEur; setMaxValue(centsToInput(rule.maxValueCentsEur)) }
 
         /**
          * EA4 — an ENGINE-NATIVE rule arrives with `builderView`, translated server-side by the
@@ -1651,8 +1476,9 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
           if (rule.maxWritesPerDay != null) setMaxWrites(String(rule.maxWritesPerDay))
           if (rule.maxExecutionsPerDay != null) setMaxExecs(String(rule.maxExecutionsPerDay))
           setLocked({ level: bv.editLevel === 'criteria' ? 'criteria' : 'meta', blockers: bv.blockers ?? [], actionSummary: bv.actionSummary ?? [] })
-          // An engine rule stores no schedule: it runs on every 15-minute tick (ads-rule-schedule.ts), so it says that.
+          // An engine rule stores no schedule: it runs on every 15-minute tick.
           setFrequency(EVERY_TICK)
+          setOpenedOnTick(true)
           return
         }
 
@@ -1695,204 +1521,141 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
         }
         if (Array.isArray(a.searchTerms)) setSearchTerms(a.searchTerms)
         const s = a.schedule ?? {}
-        /**
-         * 2026-10-10 — open on what the evaluator RUNS (ads-rule-schedule.ts scheduleIsDue), never on what it ignores: no
-         * or an unknown frequency runs every 15 minutes (it showed "Daily"), and a zone other than the four it reads runs
-         * on Rome (a stored "gmt" showed as London). Saving then stores what is shown, which is what runs.
-         */
-        const run = scheduleAsRun(a.schedule ?? null)
-        setFrequency(run.frequency)
-        setTimezone(run.timezone)
+        // 2026-10-11 — no or an unknown frequency runs every 15 minutes: shown so, and saved with none (ruleBuilderValues).
+        const runs = frequencyAsRun(a.schedule)
+        setFrequency(runs)
+        setOpenedOnTick(runs === EVERY_TICK)
         if (s.everyN != null) setEveryN(String(s.everyN))
         if (s.interval) setInterval(s.interval)
         if (s.onDay) setOnDay(s.onDay)
         if (s.time) setTime(s.time)
+        if (s.timezone) setTimezone(s.timezone)
         const maps = Array.isArray(a.mappings) ? a.mappings : []
         if (maps.length) setBlocks(maps.map((m: { groups?: Array<Partial<SelGroup>> }) => ({ id: ++_bid, groups: (Array.isArray(m.groups) ? m.groups : []).map((g) => ({ id: String(g.id), name: g.name ?? String(g.id), campaignId: g.campaignId ?? '', campaignName: g.campaignName ?? null, status: g.status ?? 'ENABLED', campaignStatus: null, adProduct: g.adProduct ?? null, portfolioId: g.portfolioId ?? null, look: g.look !== false, types: g.types ?? { P: true, E: true, product: false }, paused: g.paused === true })) })))
       } catch { /* ignore */ } finally { if (alive) setHydrated(true) }
     })()
     return () => { alive = false }
   }, [ruleId, slug, isBudget, isBidLike, isPlacement, isCampaign])
-  /**
-   * 2026-10-10 — why this bid rule cannot reach Auto yet, from the bid rules list (its `mode.autoLocked`, the level
-   * route's own answer), so the Auto step says why on hover and focus instead of refusing after Save.
-   */
-  useEffect(() => {
-    if (!bidWords || !ruleId) return
-    let alive = true
-    fetch(`${getBackendUrl()}/api/advertising/bid-rules`, { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => {
-        const row = Array.isArray(j?.rules) ? (j.rules as Array<{ id?: unknown; mode?: { autoLocked?: { label?: unknown; reason?: unknown } | null } }>).find((x) => x.id === ruleId) : null
-        const al = row?.mode?.autoLocked
-        if (alive && al && typeof al.label === 'string') setAutoLocked({ label: al.label, ...(typeof al.reason === 'string' ? { reason: al.reason } : {}) })
-      })
-      .catch(() => { /* the level route still answers on save */ })
-    return () => { alive = false }
-  }, [bidWords, ruleId])
 
   /**
-   * 2026-10-10 — a NEW bid rule starts with a highest bid (audit S14), derived from the bids its reach carries today
-   * (bidRuleBuilder `defaultMaxBidCents` says the rule and why). It follows the market and the campaigns until the person
-   * types in the field; an edit keeps what is stored.
+   * 2026-10-11 (Owner: the old builder's real problems) — a NEW bid rule starts with a Max bid: 1.5 × the highest bid
+   * its campaigns carry today, else its market's (ruleBuilderValues `defaultBidCeiling` says why: a raise must never
+   * run uncapped). It follows the market and the campaigns until the person types in the field; an edit keeps what is
+   * stored. Templates leave the field alone, so a template applied to a new rule keeps the default.
    */
   useEffect(() => {
-    if (!bidWords || isEdit || ceilingTouched.current) return
+    if (!isBid || isEdit) return
     let alive = true
-    const floorCents = Math.round((typeof nums.values.bidFloor === 'number' ? nums.values.bidFloor : BID_FLOOR_EUR) * 100)
     const qs = scopeMarket !== 'all' ? `?market=${encodeURIComponent(scopeMarket)}` : ''
     fetch(`${getBackendUrl()}/api/advertising/bids${qs}`, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
-        if (!alive || ceilingTouched.current) return
+        if (!alive) return
         const rows = (Array.isArray(j?.rows) ? j.rows : []) as Array<{ bidNow?: unknown; campaign?: { id?: unknown } | null }>
-        const picked = new Set(selCampaigns.map((c) => c.id))
-        const bidsOf = (list: typeof rows) => list.flatMap((r) => (typeof r.bidNow === 'number' ? [r.bidNow] : []))
-        const inPicked = picked.size ? bidsOf(rows.filter((r) => picked.has(String(r.campaign?.id ?? '')))) : []
-        setBidCeiling(centsToInput(defaultMaxBidCents(inPicked.length ? inPicked : bidsOf(rows), floorCents)))
+        setMarketBids(rows.flatMap((r) => (typeof r.bidNow === 'number' ? [{ campaignId: String(r.campaign?.id ?? ''), cents: r.bidNow }] : [])))
       })
-      .catch(() => { if (alive && !ceilingTouched.current) setBidCeiling(centsToInput(defaultMaxBidCents([], floorCents))) })
+      .catch(() => { if (alive) setMarketBids([]) })
     return () => { alive = false }
-  // The floor is read once per scope change; typing a floor does not re-read the bids.
-  }, [bidWords, isEdit, scopeMarket, selCampaigns])
+  }, [isBid, isEdit, scopeMarket])
+  useEffect(() => {
+    if (!isBid || isEdit || ceilingTouched.current || marketBids == null) return
+    const picked = new Set(selCampaigns.map((c) => c.id))
+    const inPicked = marketBids.filter((b) => picked.has(b.campaignId)).map((b) => b.cents)
+    const floor = typeof nums.values.bidFloor === 'number' ? nums.values.bidFloor : BID_FLOOR_EUR
+    setBidCeiling(defaultBidCeiling(inPicked.length ? inPicked : marketBids.map((b) => b.cents), floor))
+  // The floor is read when the bids or the campaigns change; typing a floor does not move the default.
+  }, [isBid, isEdit, marketBids, selCampaigns])
 
-  // ── leaving: Esc, ✕ and Cancel ask first when something is not saved (2026-10-10) ──
+  // ── leaving (2026-10-11): Close, Cancel and Esc ask first when something is not saved ──
   const snapshot = JSON.stringify([
     ruleName, groups.map((g) => [g.conditions, g.budgetOp, g.budgetValue, g.placeTarget]), selCampaigns.map((c) => c.id),
     blocks.map((b) => b.groups.map((g) => [g.id, g.look, g.types])), searchTerms, frequency, everyN, interval, onDay, time, timezone,
     dedupe, negateInSource, bidMode, bidValue, brandExclude, competitorOnly, protectConverting, protectDays, negationLevel,
     budgetFloor, budgetCeiling, placeFloor, placeCeiling, bidFloor, isEdit || ceilingTouched.current ? bidCeiling : '',
-    maxAdSpend, maxWrites, maxExecs, maxValue, scopeMarket, lookbackDays, control, mode,
+    maxAdSpend, maxWrites, maxExecs, scopeMarket, lookbackDays, control,
   ])
   const baseline = useRef<string | null>(null)
-  const rootRef = useRef<HTMLDivElement>(null)
   useEffect(() => { if (hydrated && baseline.current == null) baseline.current = snapshot }, [hydrated, snapshot])
   const dirty = baseline.current != null && snapshot !== baseline.current
   const [confirmLeave, setConfirmLeave] = useState(false)
-  /** Where the focus was when the confirm opened, and whether the person chose to leave. */
-  const focusBeforeConfirm = useRef<HTMLElement | null>(null)
+  /** Discard was chosen: leave once the question has closed (its own focus and inert hand-back run first). */
   const leaveAfterConfirm = useRef(false)
-  const confirmWasOpen = useRef(false)
+  useEffect(() => {
+    if (confirmLeave || !leaveAfterConfirm.current) return
+    leaveAfterConfirm.current = false
+    close()
+  }, [confirmLeave, close])
+  const requestClose = useCallback(() => {
+    if (dirty && !leftClean.current && !creating) setConfirmLeave(true)
+    else close()
+  }, [dirty, creating, close])
+  const rootRef = useRef<HTMLDivElement>(null)
   /**
-   * After the confirm closes (its own focus return has run by now): Discard leaves — so the page's onClose puts the focus
-   * on what opened the builder, and nothing takes it back after. Keep editing goes back to the control the person was
-   * on. Above a page's open dialog, the DS stack leaves everything but ITS top dialog inert, this layer included though
-   * it covers that dialog, so the layer first takes itself back.
+   * The builder covers the whole screen, so the page under it is inert while it is open (keyboard and screen reader
+   * stay in the builder) and the focus starts on it. Given back when it closes — before the page's onClose, so the page
+   * can put the focus on what opened it.
    */
   useEffect(() => {
-    if (confirmLeave) { confirmWasOpen.current = true; return }
-    if (!confirmWasOpen.current) return
-    confirmWasOpen.current = false
-    if (leaveAfterConfirm.current) { leaveAfterConfirm.current = false; leave(); return }
     const root = rootRef.current
-    if (onClose && root?.inert) root.inert = false
-    const back = focusBeforeConfirm.current
-    if (back?.isConnected && root?.contains(back)) back.focus()
-  }, [confirmLeave, onClose, leave])
-  const requestClose = useCallback(() => {
-    if (dirty && !leftClean.current && !creating) {
-      focusBeforeConfirm.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
-      setConfirmLeave(true)
-    } else leave()
-  }, [dirty, creating, leave])
+    if (!root) return
+    releaseBackground.current = inertOutside(root)
+    root.focus()
+    return () => { releaseBackground.current?.(); releaseBackground.current = null }
+  }, [])
+  /**
+   * A layer of the builder's own (a template, the preview, the ad group picker, the question) answers its keys first.
+   * Read when the key goes DOWN (capture): the template's own Esc closes it before this listener runs, and the key
+   * must not then close the builder too.
+   */
+  const layerOpen = useRef(false)
+  layerOpen.current = !!(confirmLeave || tmpl || preview?.open || openPop != null)
+  const requestCloseRef = useRef(requestClose)
+  requestCloseRef.current = requestClose
   useEffect(() => {
+    let layerAtKeydown = false
+    const onKeyCapture = () => { layerAtKeydown = layerOpen.current }
     const onKey = (e: KeyboardEvent) => {
-      if ((e.key !== 'Escape' && e.key !== 'Tab') || e.defaultPrevented || confirmLeave || tmpl || preview?.open || openPop != null) return
-      // Only when the builder is the top layer: a dialog above it (a review, a picker) answers first.
-      const dialogs = document.querySelectorAll('[aria-modal="true"]')
-      const top = dialogs[dialogs.length - 1]
-      if (top && top !== rootRef.current) return
-      if (e.key === 'Escape') { e.preventDefault(); requestClose(); return }
-      /**
-       * 2026-10-10 — Tab stays inside the builder. It covers the whole screen, yet Tab walked on into the page under it
-       * (the app's menu, Ask AI) — controls nobody can see. A picker's own list (portalled outside) keeps its keys.
-       */
+      if ((e.key !== 'Escape' && e.key !== 'Tab') || e.defaultPrevented || layerAtKeydown || layerOpen.current) return
+      if (e.key === 'Escape') { e.preventDefault(); requestCloseRef.current(); return }
+      // Tab stays in the builder. A picker's own list (portalled outside it) keeps its keys.
       const root = rootRef.current
       const active = document.activeElement as HTMLElement | null
       if (!root || (active && active !== document.body && !root.contains(active))) return
       const all = Array.from(root.querySelectorAll<HTMLElement>('button, a[href], input, select, textarea, [tabindex]'))
-        .filter((el) => el.tabIndex >= 0 && !el.matches(':disabled') && !el.closest('[inert], [hidden]') && el.getClientRects().length > 0)
+        .filter((el) => el !== root && el.tabIndex >= 0 && !el.matches(':disabled') && !el.closest('[inert], [hidden]') && el.getClientRects().length > 0)
       if (!all.length) return
       const first = all[0]
       const last = all[all.length - 1]
-      if (e.shiftKey && (active === first || !root.contains(active))) { e.preventDefault(); last.focus() }
+      if (e.shiftKey && (active === first || active === root || !root.contains(active))) { e.preventDefault(); last.focus() }
       else if (!e.shiftKey && (active === last || !root.contains(active))) { e.preventDefault(); first.focus() }
     }
+    window.addEventListener('keydown', onKeyCapture, true)
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [confirmLeave, tmpl, preview?.open, openPop, requestClose])
+    return () => { window.removeEventListener('keydown', onKeyCapture, true); window.removeEventListener('keydown', onKey) }
+  }, [])
 
-  /** Mounted by a page, the builder is a layer portalled to the body (client only), and the focus starts in it. */
-  useEffect(() => {
-    if (!onClose || !mounted) return
-    const root = rootRef.current
-    ;(root?.querySelector<HTMLElement>('#rb-name-input') ?? root?.querySelector<HTMLElement>('input, button'))?.focus()
-  }, [onClose, mounted])
-  /** A wide screen shows the preview's bids beside the form; below 1500 px the preview is a bar on top and folds them. */
-  const [wide, setWide] = useState(true)
-  useEffect(() => {
-    if (!bidWords || typeof window === 'undefined' || !window.matchMedia) return
-    const mq = window.matchMedia('(min-width: 1500px)')
-    const on = () => setWide(mq.matches)
-    on()
-    mq.addEventListener('change', on)
-    return () => mq.removeEventListener('change', on)
-  }, [bidWords])
-  /** The market's money for the bid fields and the preview: "€", "£". */
-  const bidCurrency = currencyOf(scopeMarket !== 'all' ? scopeMarket : null)
-  const money = bidWords ? currencySymbol(bidCurrency) : '€'
-  const applyStart = (st: BidStart) => {
-    setGroups([{ id: _cid++, conditions: st.conditions.map((c) => ({ ...c })), lookback: pcWindowLabel(slug), exclude: PC_TRUTH_EXCLUDE, budgetOp: st.action.op, budgetValue: st.action.value }])
-    setLookbackDays(String(st.windowDays))
-    if (!ruleName.trim() || BID_STARTS_NAMES.has(ruleName.trim())) setRuleName(st.name)
-  }
-
-  /** The bid step as the DS reads it: as set and as it acts while unchanged; a new pick acts as picked once saved. */
-  const modeReading = mode === initialMode.current && initialActs.current
-    ? { set: mode, acts: initialActs.current, heldBy: initialActs.current !== mode ? { label: 'Rule asks first' } : null }
-    : { set: mode, acts: mode, heldBy: null }
-  const heldStep = (step: string) => bidModeHeld(step, { isEdit, initial: initialMode.current, ops: groups.map((g) => g.budgetOp ?? ''), autoLocked })
-  /** 2026-10-10 — sentence case everywhere; the bid surface in the Bid page's words. */
-  const title = bidWords ? (isEdit ? 'Edit bid rule' : 'New bid rule') : `${isEdit ? 'Edit' : 'Create'} rule - ${rt?.label ?? 'Rule'}`
-  const saveWord = creating ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save' : 'Create rule')
-  /** Why Create / Save is held, said on the button (never a silent disabled control). */
-  const heldWhy = !valid && !creating && bidWords
-    ? (!nameToSave ? 'Name it' : !targetsValid ? 'Pick a market or campaigns' : !criteriaValid ? 'Fill every condition and the action' : 'Fix the numbers')
-    : null
-  /**
-   * Create / Save, at the top and at the foot. `held` is NOT `disabled`: a disabled button takes no focus, answers no
-   * click and shows no tooltip, so the reason it refuses would land where nobody can read it. The bid surface says why
-   * on hover and focus (2026-10-10).
-   */
-  const saveCore = (
-    <Button
-      variant="primary"
-      className={rankBlocked ? 'h10-rb-create held' : undefined}
-      disabled={!rankBlocked && !heldWhy && (!valid || creating)}
-      {...(rankBlocked ? { 'aria-disabled': true, 'aria-describedby': 'rb-rank-held' } : heldWhy ? { 'aria-disabled': true, 'aria-description': heldWhy } : {})}
-      onClick={rankBlocked ? () => setRankHeldNote(true) : heldWhy ? undefined : submit}
-    >{saveWord}</Button>
-  )
-  const saveButton = heldWhy ? <Tooltip label={heldWhy} portal>{saveCore}</Tooltip> : saveCore
-  const tree = (
-    <div
-      ref={rootRef}
-      className={`h10-rb ${bidStyles.root}${bidWords ? ` ${bidStyles.bid}` : ''}${onClose ? ` ${bidStyles.layer}` : ''}`}
-      {...(onClose ? { role: 'dialog', 'aria-modal': true, 'aria-label': title } : {})}
-    >
+  return (
+    // 2026-10-11 — pinned light (ads pages are light-only): on a dark OS its popups and radios drew dark.
+    <div ref={rootRef} className="h10-rb rule" data-nds-light="" role="dialog" aria-modal="true" aria-label={`${isEdit ? 'Edit' : 'Create'} Rule - ${rt?.label ?? 'Rule'}`} tabIndex={-1}>
       {/* top bar */}
       <header className="h10-rb-top">
         <div className="l">
           <ToolbarButton className="x" icon={<X size={19} />} label="Close" tooltip={false} onClick={requestClose} />
-          {!bidWords && <AtomMark size={20} />}
-          <b>{title}</b>
+          <AtomMark size={20} />
+          <b>{isEdit ? 'Edit' : 'Create'} Rule - {rt?.label ?? 'Rule'}</b>
         </div>
         <div className="r">
           {/* BP (2026-08-21) — H10's "Learn" video pill was here as a dead placeholder (no
-              handler since the builder shipped); the operator chose removal over wiring it.
-              2026-10-10 — the bid surface previews live, always on screen: no button. */}
-          {!bidWords && <button type="button" className="learn" onClick={runPreview}><Eye size={15} /> Preview</button>}
-          {saveButton}
+              handler since the builder shipped); the operator chose removal over wiring it. */}
+          <button type="button" className="learn" onClick={runPreview}><Eye size={15} /> Preview</button>
+          <Button
+            variant="primary"
+            /* `held` is NOT `disabled` — see the footer copy of this button. */
+            className={rankBlocked ? 'h10-rb-create held' : undefined}
+            disabled={!rankBlocked && (!valid || creating)}
+            {...(rankBlocked ? { 'aria-disabled': true, 'aria-describedby': 'rb-rank-held' } : {})}
+            onClick={rankBlocked ? () => setRankHeldNote(true) : submit}
+          >{creating ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save Changes' : 'Create Rule')}</Button>
         </div>
       </header>
 
@@ -1940,30 +1703,20 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
             )}
             {/* ── Rule Name ── */}
             <section id="rb-rule-name" className="h10-rb-sec">
-              <h2>{bidWords ? 'Name' : 'Rule name'}</h2>
-              {/* 2026-10-10 — a bid rule left unnamed saves with its sentence (the placeholder shows it). */}
-              <Input id="rb-name-input" fieldClassName="h10-rb-input rn" value={ruleName} onChange={(e) => setRuleName(e.target.value)} placeholder={bidWords ? (previewSentence ?? 'Name') : 'Enter a rule name'} aria-label="Rule name" />
+              <h2>Rule Name</h2>
+              <Input fieldClassName="h10-rb-input rn" value={ruleName} onChange={(e) => setRuleName(e.target.value)} placeholder="Enter a rule name" aria-label="Rule name" />
             </section>
 
             {/* ── Negative Rule Setup ── */}
             <section id="rb-setup" className="h10-rb-sec">
               <div className="h10-rb-setuphd">
-                <h2>{bidWords ? 'Campaigns' : setup.sectionTitle ?? steps[1].label}</h2>
+                <h2>{setup.sectionTitle ?? steps[1].label}</h2>
                 {setup.mapping && <div className="maprow">
                   <Button variant="primary" onClick={addBlock}><Plus size={14} /> Ad Group Mapping</Button>
                   <button type="button" className="chevbtn" aria-label={setupCollapsed ? 'Expand' : 'Collapse'} aria-expanded={!setupCollapsed} onClick={() => setSetupCollapsed((v) => !v)}><ChevronDown size={18} className={`chev ${setupCollapsed ? 'up' : ''}`} /></button>
                 </div>}
               </div>
-              {!bidWords && <p className="h10-rb-desc">{setup.desc}</p>}
-              {/* 2026-10-10 — the bid rule's market sits with its campaigns: the picker lists only that market's, and
-                  with none picked the rule works on the whole market (new campaigns too). */}
-              {bidWords && (
-                <div className={`${bidStyles.row} ${bidStyles.starts}`}>
-                  <span className={bidStyles.label}>Market</span>
-                  <Listbox width={170} options={ruleMarketOptions(scopeMarket, adsMarkets.writeMarkets, adsMarkets.readMarkets)} value={scopeMarket} onChange={setScopeMarket} ariaLabel="Market" />
-                  {wholeMarket ? <Tag tone="info">{`Whole ${scopeMarket} market`}</Tag> : selCampaigns.length === 0 ? <Tag tone="warning">Pick a market or campaigns</Tag> : null}
-                </div>
-              )}
+              <p className="h10-rb-desc">{setup.desc}</p>
               {setup.banner && <div className="h10-rb-banner"><Info size={16} /><span>{setup.banner}</span></div>}
               {/* 🔴 KT-P1 — the feed, stated before the operator fills in a rule that cannot run.
                   Numbers are live (`/keyword-tracker/feed-health`); nothing here is a constant. */}
@@ -2022,16 +1775,14 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
                 visible and delete the rest. */}
             <section id="rb-criteria" className={`h10-rb-sec${locked?.level === 'meta' ? ' held' : ''}`} {...(locked?.level === 'meta' ? { inert: '' as unknown as boolean, 'aria-disabled': true } : {})}>
               <div className="h10-rb-crit-hd">
-                <div className="t">{bidWords ? <h2>Rule</h2> : <><h2>Criteria</h2><p className="h10-rb-desc">Set up the performance criteria and actions</p></>}</div>
-                {(isCampaign || isHarvest || isNegative) && <button type="button" className="h10-rb-tmpl" onClick={() => setTmpl({ mode: 'apply' })}><LayoutTemplate size={15} /> {bidWords ? 'Templates' : 'Apply template'}</button>}
+                <div className="t"><h2>Criteria</h2><p className="h10-rb-desc">Set up the performance criteria and actions</p></div>
+                {(isCampaign || isHarvest || isNegative) && <button type="button" className="h10-rb-tmpl" onClick={() => setTmpl({ mode: 'apply' })}><LayoutTemplate size={15} /> Apply Template</button>}
               </div>
-              {/* 2026-10-10 — the Bid page dialog's best idea: start from a ready rule, then edit it here. */}
-              {bidWords && !isEdit && !locked && <BidStarts onApply={applyStart} />}
 
               {groups.map((g, gi) => (
                 <div className="h10-rb-card crit" key={g.id}>
                   <div className="h10-rb-card-h">
-                    <b>{bidWords ? `Block ${gi + 1}` : `Criteria ${gi + 1}`}</b>
+                    <b>Criteria {gi + 1}</b>
                     <span className="acts">
                       <ToolbarButton size="sm" icon={<Copy size={15} />} label="Duplicate criteria" tooltip={false} onClick={() => dupGroup(g.id)} />
                       <ToolbarButton tone="danger" size="sm" icon={<Trash2 size={15} />} label="Delete criteria" tooltip={false} onClick={() => delGroup(g.id)} />
@@ -2040,7 +1791,7 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
                   <div className="h10-rb-conds">
                     {g.conditions.map((c, i) => (
                       <div className="cond" key={i}>
-                        <span className={`pill ${i === 0 ? 'if' : 'and'}`}>{bidWords ? (i === 0 ? 'If' : 'and') : i === 0 ? 'IF' : 'AND'}</span>
+                        <span className={`pill ${i === 0 ? 'if' : 'and'}`}>{i === 0 ? 'IF' : 'AND'}</span>
                         {/* PLC-P7 — the lane a condition MEASURES, and it is read now.
                             `translateConditions` took metric/op/value only and the context carried
                             no per-lane fields, so "IF Top of Search · ACoS > 40%" evaluated the
@@ -2050,12 +1801,12 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
                             opens the note below, because lane data is thinner than campaign data
                             and the window is usually why a lane rule matches nothing. */}
                         {isPlacement && <Listbox width={190} options={PLACEMENT_SCOPES} value={c.scope ?? 'campaign'} onChange={(v) => { setCond(g.id, i, { scope: v }); if (v !== 'campaign') setScopeNote(g.id) }} ariaLabel="Placement scope" />}
-                        <Listbox width={bidWords ? 170 : isPlacement ? 220 : 300} options={isPlacement ? METRICS_PLACEMENT : isBudget ? METRICS_BUDGET : isSov ? METRICS_SOV : isRank ? rankMetricMenu : isBid ? METRICS_BID_WORDS : METRICS} value={c.metric} onChange={(v) => setCond(g.id, i, { metric: v })} ariaLabel="Metric" />
-                        <Listbox width={bidWords ? 80 : 300} options={bidWords ? [...BID_OPERATORS] : OPERATORS} value={c.op} onChange={(v) => setCond(g.id, i, { op: v })} ariaLabel="Operator" />
+                        <Listbox width={isPlacement ? 220 : 300} options={isPlacement ? METRICS_PLACEMENT : isBudget ? METRICS_BUDGET : isSov ? METRICS_SOV : isRank ? rankMetricMenu : isBid ? PC_METRICS_BID : METRICS} value={c.metric} onChange={(v) => setCond(g.id, i, { metric: v })} ariaLabel="Metric" />
+                        <Listbox width={300} options={OPERATORS} value={c.op} onChange={(v) => setCond(g.id, i, { op: v })} ariaLabel="Operator" />
                         {(() => { const u = METRIC_UNIT[c.metric] ?? ''; return (
                           <Input
                             fieldClassName={`h10-rb-val ${u === 'pct' ? 'hassf' : ''}`}
-                            prefix={u === 'eur' ? money : undefined}
+                            prefix={u === 'eur' ? '€' : undefined}
                             suffix={u === 'pct' ? '%' : undefined}
                             inputMode="decimal" value={c.value} onChange={(e) => setCond(g.id, i, { value: e.target.value })} aria-label="Value"
                             {...(critProblems[gi]?.conditions[i] ? { 'aria-invalid': true, 'aria-describedby': `rb-crit-err-${g.id}` } : {})}
@@ -2074,7 +1825,7 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
                         <span>A lane-scoped condition is measured from Amazon&rsquo;s <b>placement report</b> — that one lane&rsquo;s own impressions, clicks, spend and sales — not the campaign&rsquo;s totals. Lane data is thinner: over 7 settled days, few campaign-and-lane combinations carry 20 or more clicks, and over 30 days more of them do. A lane with no data in the window is <b>not measured as zero</b> — it is left alone. Widen the <b>Lookback period</b> in Advanced Settings if a lane rule matches nothing.</span>
                       </p>
                     )}
-                    <button type="button" className="h10-rb-addand" onClick={() => addCondition(g.id)}><Plus size={13} /> {bidWords ? 'and' : 'AND'}</button>
+                    <button type="button" className="h10-rb-addand" onClick={() => addCondition(g.id)}><Plus size={13} /> AND</button>
                     {/* W5 (2026-08-20) — Pacvue's "noise guard", as one-click AND conditions.
                         Every rules platform in the research ships a minimum-evidence bar (min
                         clicks / spend / impressions) so a rule cannot act on statistically thin
@@ -2087,13 +1838,13 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
                       const opts = new Set((isPlacement ? METRICS_PLACEMENT : isBudget ? METRICS_BUDGET : isSov ? METRICS_SOV : isRank ? METRICS_RANK : isBid ? PC_METRICS_BID : METRICS).map((o) => o.value))
                       const guards = [
                         { metric: 'Clicks', value: '10', label: 'Clicks ≥ 10' },
-                        { metric: 'Spend', value: '5', label: `Spend ≥ ${money}5` },
+                        { metric: 'Spend', value: '5', label: 'Spend ≥ €5' },
                         { metric: 'Impressions', value: '500', label: 'Impressions ≥ 500' },
                       ].filter((gd) => opts.has(gd.metric) && !g.conditions.some((c) => c.metric === gd.metric))
                       if (guards.length === 0) return null
                       return (
                         <div className="h10-rb-noise">
-                          <span className="lbl" title="A minimum-evidence bar: the rule only acts once the data is thick enough to mean something. Each button adds an ordinary AND condition you can edit or remove.">{bidWords ? 'At least' : 'Noise guard'}</span>
+                          <span className="lbl" title="A minimum-evidence bar: the rule only acts once the data is thick enough to mean something. Each button adds an ordinary AND condition you can edit or remove.">Noise guard</span>
                           {guards.map((gd) => (
                             <button key={gd.metric} type="button" onClick={() => setGroups((gs) => gs.map((x) => x.id === g.id ? { ...x, conditions: [...x.conditions, { metric: gd.metric, op: 'gte', value: gd.value }] } : x))}>
                               <Plus size={11} aria-hidden /> {gd.label}
@@ -2104,16 +1855,16 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
                     })()}
                     {isCampaign && (() => { const actions = isPlacement ? PLACEMENT_ACTIONS : isBidLike ? BID_ACTIONS : BUDGET_ACTIONS; const u = actionUnit(actions, g.budgetOp); return (
                       <div className="cond then">
-                        <span className="pill then">{bidWords ? 'Then' : 'THEN'}</span>
+                        <span className="pill then">THEN</span>
                         {isPlacement && <Listbox width={190} options={PLACEMENTS} value={g.placeTarget ?? 'tos'} onChange={(v) => setBudgetAct(g.id, { placeTarget: v })} ariaLabel="Placement target" />}
-                        <Listbox width={bidWords ? 200 : isPlacement ? 250 : 300} options={bidWords ? BID_ACTIONS_WORDS : actions} value={g.budgetOp ?? 'set'} onChange={(v) => setBudgetAct(g.id, { budgetOp: v })} ariaLabel={isPlacement ? 'Placement action' : isBidLike ? 'Bid action' : 'Budget action'} />
+                        <Listbox width={isPlacement ? 250 : 300} options={actions} value={g.budgetOp ?? 'set'} onChange={(v) => setBudgetAct(g.id, { budgetOp: v })} ariaLabel={isPlacement ? 'Placement action' : isBidLike ? 'Bid action' : 'Budget action'} />
                         {/* C1 — a computed action ('none') has no number to take, so the box is
                             not rendered rather than rendered empty or disabled. A disabled input
                             beside a chosen action reads as "you forgot something". */}
                         {u !== 'none' && (
                         <Input
                           fieldClassName={`h10-rb-val ${u === 'pct' ? 'hassf' : ''}`}
-                          prefix={u === 'eur' ? money : undefined}
+                          prefix={u === 'eur' ? '€' : undefined}
                           suffix={u === 'pct' ? '%' : undefined}
                           inputMode="decimal" value={g.budgetValue ?? ''} onChange={(e) => setBudgetAct(g.id, { budgetValue: e.target.value })}
                           {...(critProblems[gi]?.then ? { 'aria-invalid': true, 'aria-describedby': `rb-crit-err-${g.id}` } : {})} /* 🔴 `targetAcos` FIRST: it is the one bid action whose input is not a bid. Ordered after
@@ -2156,18 +1907,15 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
                   )}
                 </div>
               ))}
-              <Button variant={bidWords ? 'secondary' : 'primary'} className="addcrit" onClick={addGroup}><Plus size={14} /> {bidWords ? 'Add block' : 'Criteria'}</Button>
+              <Button variant="primary" className="addcrit" onClick={addGroup}><Plus size={14} /> Criteria</Button>
               {/* BP.P4b — multi-block selection is real now, and its law is stated where the
                   blocks are made: first matched block acts. */}
               {isCampaign && groups.length > 1 && (
-                <p className="h10-rb-blocknote">{bidWords ? 'Blocks run in order: on each keyword, the first that matches acts.' : `Criteria blocks are checked in order — on each ${isBidLike ? 'keyword' : 'campaign'}, the first block whose conditions match acts; the rest are skipped.`}</p>
+                <p className="h10-rb-blocknote">Criteria blocks are checked in order — on each {isBidLike ? 'keyword' : 'campaign'}, the first block whose conditions match acts; the rest are skipped.</p>
               )}
-              {/* 2026-10-10 — the bid rule's window as "Over 7 d · 14 d · …", with the note the old Lookback column
-                  carried (audit §5: the newest days are left out while Amazon still adds their sales). */}
-              {bidWords && <OverField value={lookbackDays} onChange={setLookbackDays} />}
               {/* BP.P4 — the Bid rule's lookback, honoured by the engine (per-window context
                   passes + computed ops). One window per rule, stated as such. */}
-              {isBid && !bidWords && (
+              {isBid && (
                 <div className="h10-rb-lookback rulewide">
                   <label>Lookback period</label>
                   <div className="lbrow">
@@ -2195,7 +1943,7 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
             {/* ── Search Terms (term-based surfaces only; Budget has none) ── */}
             {surface === 'search-terms' && (
             <section id="rb-search-terms" className="h10-rb-sec">
-              <h2>Search terms</h2>
+              <h2>Search Terms</h2>
               <p className="h10-rb-desc">Isolate specific search terms using the &ldquo;contains&rdquo; or &ldquo;does not contain&rdquo; operator.</p>
               <div className="h10-rb-st">
                 <div className="left">
@@ -2229,48 +1977,9 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
             </section>
             )}
 
-            {/* ── Limits and When (bid surface, 2026-10-10): the Bid page's Settings words (audit §2), no paragraphs ── */}
-            {bidWords && (<>
-            <section id="rb-advanced" className="h10-rb-sec">
-              <h2>Limits</h2>
-              <div className={bidStyles.fieldGrid}>
-                {!locked && <Field label="Lowest bid" info={<InfoTip tip={`A rule never sets a bid below this (never below ${money}${BID_FLOOR_EUR}).`} />} error={nums.errors.bidFloor}><Input fieldClassName="h10-rb-val bidv" prefix={money} inputMode="decimal" placeholder={String(BID_FLOOR_EUR)} value={bidFloor} onChange={(e) => setBidFloor(e.target.value)} /></Field>}
-                {!locked && <Field label="Highest bid" info={<InfoTip tip="A rule never sets a bid above this. A new rule starts at 1.5 × the highest bid in its campaigns today." />} error={nums.errors.bidCeiling}><Input fieldClassName="h10-rb-val bidv" prefix={money} inputMode="decimal" placeholder="No max" value={bidCeiling} onChange={(e) => { ceilingTouched.current = true; setBidCeiling(e.target.value) }} /></Field>}
-                <Field label="Keywords a day" info={<InfoTip tip="The most keywords it acts on in a day (UTC). Empty: 10." />} error={nums.errors.maxExecs}><Input fieldClassName="h10-rb-val bidv" inputMode="numeric" placeholder="10" value={maxExecs} onChange={(e) => setMaxExecs(e.target.value)} /></Field>
-                <Field label="Changes a day" info={<InfoTip tip="After this many changes in a day it asks you instead. Empty: no limit." />} error={nums.errors.maxWrites}><Input fieldClassName="h10-rb-val bidv" inputMode="numeric" placeholder="No max" value={maxWrites} onChange={(e) => setMaxWrites(e.target.value)} /></Field>
-                <Field label="Most per run" info={<InfoTip tip="The most one run may change, in money. Empty: no limit." />} error={nums.errors.maxValue}><Input fieldClassName="h10-rb-val bidv" prefix={money} inputMode="decimal" placeholder="No max" value={maxValue} onChange={(e) => setMaxValue(e.target.value)} /></Field>
-                <Field label="Ad spend a day" info={<InfoTip tip="The extra spend its changes may add in a day. Empty: 100." />} error={nums.errors.maxAdSpend}><Input fieldClassName="h10-rb-val bidv" prefix={money} inputMode="decimal" placeholder="100" value={maxAdSpend} onChange={(e) => setMaxAdSpend(e.target.value)} /></Field>
-              </div>
-            </section>
-            {/* When — only what the evaluator reads (bidRuleBuilder `scheduleAsRun`): a time and a zone for the timed
-                frequencies, a day only for "Custom" in weeks. An engine rule runs every 15 min and stores no schedule. */}
-            <section id="rb-schedule" className={`h10-rb-sec${locked ? ' held' : ''}`} {...(locked ? { inert: '' as unknown as boolean, 'aria-disabled': true } : {})}>
-              <h2>When</h2>
-              <div className={bidStyles.row}>
-                <Listbox width={170} options={frequencyOptions(true, frequency)} value={frequency} onChange={setFrequency} ariaLabel="When" />
-                {frequency === 'Custom' && (<>
-                  <span className={bidStyles.label}>Every</span>
-                  <Input fieldClassName="h10-rb-num" inputMode="numeric" placeholder="1" value={everyN} onChange={(e) => setEveryN(e.target.value)} aria-label="Every (number)"
-                    {...(nums.errors.everyN ? { 'aria-invalid': true, 'aria-describedby': 'rb-everyn-err' } : {})} />
-                  <Listbox width={120} options={INTERVAL} value={interval} onChange={setInterval} ariaLabel="Interval" />
-                  {interval === 'Weeks' && (<>
-                    <span className={bidStyles.label}>on</span>
-                    <Listbox width={140} options={DAYS} value={onDay} onChange={setOnDay} ariaLabel="Day of week" />
-                  </>)}
-                </>)}
-                {isTimedFrequency(frequency) && (<>
-                  <span className={bidStyles.label}>at</span>
-                  <Listbox width={100} options={TIMES_BID} value={time} onChange={setTime} ariaLabel="Time" />
-                  <Listbox width={150} options={TIMEZONES_BID} value={timezone} onChange={setTimezone} ariaLabel="Time zone" />
-                </>)}
-              </div>
-              {nums.errors.everyN && <div className="h10-rb-numerr adv" id="rb-everyn-err"><Banner tone="danger">{nums.errors.everyN}</Banner></div>}
-            </section>
-            </>)}
-            {!bidWords && (<>
             {/* ── Advanced Settings ── */}
             <section id="rb-advanced" className="h10-rb-sec">
-              <h2>Advanced settings</h2>
+              <h2>Advanced Settings</h2>
               <div className="h10-rb-card adv">
                 {advLookback && (
                 <div className="advblock">
@@ -2297,7 +2006,7 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
                       due), so the copy states the one deviation: a fresh rule's first check. */}
                   <p>Set how often the rule should check the criteria. The first check runs within 15 minutes of creating the rule; after that, on this schedule.</p>
                   <div className="freqrow">
-                    <Listbox width={150} options={frequencyOptions(false, frequency)} value={frequency} onChange={setFrequency} ariaLabel="Frequency" />
+                    <Listbox width={150} options={openedOnTick || frequency === EVERY_TICK ? FREQUENCY_WITH_TICK : FREQUENCY} value={frequency} onChange={setFrequency} ariaLabel="Frequency" />
                     {frequency === 'Custom' && (<>
                       <span className="lbl">Every</span>
                       <Input fieldClassName="h10-rb-num" inputMode="numeric" placeholder="1" value={everyN} onChange={(e) => setEveryN(e.target.value)} aria-label="Every (number)"
@@ -2308,19 +2017,19 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
                         <Listbox width={150} options={DAYS} value={onDay} onChange={setOnDay} ariaLabel="Day of week" />
                       </>)}
                     </>)}
-                    {/* 2026-10-10 — Hourly and "Every 15 min" read no time (ads-rule-schedule.ts), so none is shown. */}
-                    {isTimedFrequency(frequency) && <span className="at">at</span>}
-                    {isTimedFrequency(frequency) && <Listbox width={200} options={TIMES} value={time} onChange={setTime} ariaLabel="Time" />}
+                    {/* 2026-10-11 — Hourly and every tick read no time (ads-rule-schedule.ts), so none is asked. */}
+                    {frequencyReadsTime(frequency) && (<>
+                    <span className="at">at</span>
+                    <Listbox width={200} options={TIMES} value={time} onChange={setTime} ariaLabel="Time" />
+                    </>)}
                   </div>
                   {nums.errors.everyN && <div className="h10-rb-numerr adv" id="rb-everyn-err"><Banner tone="danger">{nums.errors.everyN}</Banner></div>}
                 </div>
-                {isTimedFrequency(frequency) && (
                 <div className="advblock">
                   <b>Timezone</b>
                   <p>Select the timezone for this rule</p>
                   <Listbox width={430} options={TIMEZONES} value={timezone} onChange={setTimezone} ariaLabel="Timezone" />
                 </div>
-                )}
                 {isBudget && (
                 <div className="advblock">
                   <b>Budget Guardrails</b>
@@ -2370,7 +2079,7 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
                   <p>Hard limits on the keyword bid so automation can never run a bid away. A rule never sets a bid below €0.05, so the Min starts there.</p>
                   <div className="freqrow fields">
                     <Field label="Min" error={nums.errors.bidFloor}><Input fieldClassName="h10-rb-val bidv" prefix="€" inputMode="decimal" placeholder={String(BID_FLOOR_EUR)} value={bidFloor} onChange={(e) => setBidFloor(e.target.value)} aria-label="Min bid" /></Field>
-                    <Field label="Max" error={nums.errors.bidCeiling}><Input fieldClassName="h10-rb-val bidv" prefix="€" inputMode="decimal" placeholder="No cap" value={bidCeiling} onChange={(e) => setBidCeiling(e.target.value)} aria-label="Max bid" /></Field>
+                    <Field label="Max" error={nums.errors.bidCeiling}><Input fieldClassName="h10-rb-val bidv" prefix="€" inputMode="decimal" placeholder="No cap" value={bidCeiling} onChange={(e) => { ceilingTouched.current = true; setBidCeiling(e.target.value) }} aria-label="Max bid" /></Field>
                   </div>
                 </div>
                 )}
@@ -2407,16 +2116,6 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
               </div>
             </section>
 
-            </>)}
-
-            {/* ── Mode (bid surface, 2026-10-10): the Owner's four steps; a step that cannot be picked says why ── */}
-            {bidWords && (
-            <section id="rb-control" className="h10-rb-sec">
-              <h2>Mode</h2>
-              <BidModePicker value={mode} reading={modeReading} held={heldStep} onChange={setMode} />
-            </section>
-            )}
-            {!bidWords && (<>
             {/* ── Control ── */}
             <section id="rb-control" className="h10-rb-sec">
               <h2>Control</h2>
@@ -2478,7 +2177,6 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
                 />
               </div>
             </section>
-            </>)}
 
             {/* KT-P1 — a held control that has been clicked must answer it.
                 🔴 ABOVE the footer, not inside it. Rendered as a flex item in `.h10-rb-foot`
@@ -2524,20 +2222,19 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
             <div className="h10-rb-foot">
               <Button variant="quiet" onClick={requestClose}>Cancel</Button>
               <span className="grow" />
-              {(isCampaign || isHarvest || isNegative) && <Button variant="quiet" disabled={!valid} onClick={() => setTmpl({ mode: 'save' })}>Save as template</Button>}
-              {saveButton}
+              {(isCampaign || isHarvest || isNegative) && <Button variant="quiet" disabled={!valid} onClick={() => setTmpl({ mode: 'save' })}>Save Template</Button>}
+              <Button
+                variant="primary"
+                /* `held` is NOT `disabled`: a disabled button takes no focus, answers no click and
+                   shows no tooltip, so the reason it refuses would land where nobody can read it. */
+                className={rankBlocked ? 'h10-rb-create held' : undefined}
+                disabled={!rankBlocked && (!valid || creating)}
+                {...(rankBlocked ? { 'aria-disabled': true, 'aria-describedby': 'rb-rank-held' } : {})}
+                onClick={rankBlocked ? () => setRankHeldNote(true) : submit}
+              >{creating ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save Changes' : 'Create Rule')}</Button>
             </div>
           </div>
         </main>
-        {bidWords && (
-          <BidPreviewPanel
-            state={bidPreview}
-            currency={bidCurrency}
-            ceilingEmpty={!locked && bidCeiling.trim() === ''}
-            wide={wide}
-            onRetry={() => setPreviewTry((n) => n + 1)}
-          />
-        )}
       </div>
       {preview?.open && (
         <div className="h10-rb-prevback" onClick={() => setPreview(null)}>
@@ -2773,11 +2470,44 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
           </div>
         </div>
       )}
-      <DiscardConfirm open={confirmLeave} isEdit={isEdit} onKeep={() => setConfirmLeave(false)} onDiscard={() => { leftClean.current = true; leaveAfterConfirm.current = true; setConfirmLeave(false) }} />
+      {/* 2026-10-11 — leaving with unsaved changes asks first (the DS Modal; never a browser dialog). */}
+      <Modal
+        open={confirmLeave}
+        onClose={() => setConfirmLeave(false)}
+        size="sm"
+        title="Discard changes?"
+        footer={<>
+          <span className="grow" />
+          <Button onClick={() => setConfirmLeave(false)} data-autofocus>Keep editing</Button>
+          <Button variant="danger" onClick={() => { leftClean.current = true; leaveAfterConfirm.current = true; setConfirmLeave(false) }}>Discard</Button>
+        </>}
+      >
+        Your changes are not saved.
+      </Modal>
     </div>
   )
-  // Mounted by a page: a layer of its own in the body, above whatever the page had open.
-  return onClose && mounted ? createPortal(tree, document.body) : tree
+}
+
+/**
+ * Everything on the page outside `root` made inert — each sibling along its ancestors up to <body> — so the keyboard
+ * and a screen reader stay in the builder that covers the screen. Returns the hand-back (once; it restores what each
+ * element had). A list portalled to <body> after this ran (a picker's options) is not touched.
+ */
+function inertOutside(root: HTMLElement): () => void {
+  const changed: Array<[HTMLElement, boolean]> = []
+  for (let node: HTMLElement = root; node.parentElement && node !== document.body; node = node.parentElement) {
+    for (const sibling of Array.from(node.parentElement.children)) {
+      if (sibling === node || !(sibling instanceof HTMLElement)) continue
+      changed.push([sibling, sibling.inert])
+      sibling.inert = true
+    }
+  }
+  let done = false
+  return () => {
+    if (done) return
+    done = true
+    for (const [element, was] of changed) element.inert = was
+  }
 }
 
 // ── one source→target mapping block (the H2 two-panel + multi-block chrome). Harvest can have

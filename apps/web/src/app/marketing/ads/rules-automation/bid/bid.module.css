@@ -3,12 +3,13 @@
  * only, like the rest of the ads console (_shared/shared-shell.css).
  */
 
+/* The tab bar's 16px from its hairline to the content (rulesFrame `.tabs`) is the whole gap above the tiles; 12px from
+   the tiles to the card (design audit S6: it was 28 / 12). */
 .page {
   display: flex;
   flex-direction: column;
   gap: var(--nds-space-12);
   min-width: 0;
-  margin-top: var(--nds-space-12);
 }
 
 .stack {
@@ -18,20 +19,58 @@
   min-width: 0;
 }
 
-.toolbarRight {
-  display: flex;
-  flex-wrap: wrap;
+/* ── the toolbar, ONE set of rules for both views (Rules and Bids) ─────────────────────────────────────────────────
+   The lead is the [Rules | Bids] switch, then the count in one width ("4 rules", "3 of 4", "70 bids", "Reading…", "Not
+   read"), so the search box after it starts at the same x on Rules, on Bids and while either reads (design audit M3: it
+   jumped 22 px, 16 px while reading). */
+.lead {
+  display: inline-flex;
   align-items: center;
   gap: var(--nds-space-8);
+  min-width: 0;
 }
 
-/* The count beside the switch keeps one width ("4 rules", "3 of 4"), so the search box never moves — and sits where the
-   Bids view's does. */
 .count {
   display: inline-block;
   min-width: 8ch;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+  /* The words end where the slot ends, so the search keeps the bar's 8px after them ("70 bids", "4 rules") instead of
+     the slot's slack (design audit NEW1: 26.5 / 30.6 px), and the search still never moves. */
+  text-align: right;
+}
+
+/* The search fills its slot up to the slot's least width (the DS `.nds-grid-search`, 220 px). The slot grows into free
+   room; a field of its own fixed width left a 53 px dead gap after it on Bids (M2), and one that followed the slot changed
+   width between the views and when the chips arrived. Capped at the least width, it is one size on Rules, on Bids and
+   while either reads, and the chips start 8 px after it. On a phone's card it fills its line. */
+.searchField {
+  width: 100%;
+  max-width: 220px;
+}
+
+@container (max-width: 400px) {
+  .searchField {
+    max-width: none;
+  }
+}
+
+/* The right-hand group: one line beside the search, never stacked (M4: Views over Customise at 1024); when the card is so
+   narrow that the toolbar itself wraps (GridCard's 640 px rule), it takes its own line and stays at the right (S5). */
+.toolbarRight {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--nds-space-8);
+  margin-left: auto;
+}
+
+@container (max-width: 640px) {
+  .toolbarRight {
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+  }
 }
 
 /* ── the rules table ─────────────────────────────────────────────────────────────────────────────────────────────── */
@@ -41,15 +80,7 @@
   cursor: pointer;
 }
 
-/* The first read: lines under the header, never over it. */
-.gridSkeleton {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-16);
-  padding: var(--nds-space-16);
-}
-
-/* The Mode cell: the DS picker, then a shield when part of its campaigns are held. */
+/* The Mode cell: the DS picker, then the shield's slot (12 px, in every row, so the chevron never moves — M8). */
 .modeCell {
   display: flex;
   align-items: center;
@@ -61,6 +92,7 @@
 .partHold {
   flex: none;
   display: inline-flex;
+  width: 12px;
   color: var(--nds-warning-text);
 }
 
@@ -155,6 +187,26 @@
   min-width: 0;
 }
 
+/* Last 7 d: the chips on one line, never wrapped (M7); what does not fit is the "+n" chip. */
+.chipLine {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.more {
+  display: inline-flex;
+  flex: none;
+  border-radius: var(--nds-radius-pill);
+}
+
+.more:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 1px;
+}
+
 .muted {
   color: var(--nds-text-2);
 }
@@ -188,9 +240,21 @@
 
 .panelBody {
   display: flex;
+  flex: 1 0 auto;
   flex-direction: column;
   gap: var(--nds-space-12);
   min-width: 0;
+}
+
+/* A tab's own stack fills the body too, so an empty state at its end can centre in the room left (M12). */
+.panelBody > .stack:last-child {
+  flex: 1 0 auto;
+}
+
+/* A tab with nothing to show: the DS EmptyState, centred in what is left of the tab. */
+.tabEmpty {
+  flex: 1 0 auto;
+  justify-content: center;
 }
 
 .section {
@@ -211,21 +275,44 @@
   color: var(--nds-text-2);
 }
 
-/* The window a heading's numbers cover, beside it ("1 keyword · 9 d before/after · ends 3 Oct"). */
-.hNote {
-  font-weight: var(--nds-font-weight-normal);
-}
-
 .modeWord {
   font-weight: var(--nds-font-weight-semibold);
 }
 
-@media (max-width: 639px) {
-  /* Four tiles in two rows of two, so the table starts on the first screen (audit M8). */
-  .page .tiles {
+/* ── the tiles (design audit M10): one line for the four numbers at every width ───────────────────────────────────
+   A size container, so the strip follows its own width: four across while every label fits one line, 2 × 2 below
+   (on a phone too, so the table starts on the first screen, audit M8), and in a phone's narrow tiles every label box
+   holds two lines (a one-line label centred in it), so the numbers still share one line. The number's box is its glyphs
+   (line-height 1.1): the 1.5 line put 4.8 px more under the number than above the label. */
+.tilesBox {
+  container-type: inline-size;
+  min-width: 0;
+}
+
+.tileLabel {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.tileValue {
+  display: block;
+  line-height: 1.1;
+}
+
+@container (max-width: 719px) {
+  .tilesBox .tiles {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
 
+@container (max-width: 339px) {
+  .tileLabel {
+    min-height: 2lh;
+  }
+}
+
+@media (max-width: 639px) {
   .line {
     flex-wrap: wrap;
   }

@@ -16,9 +16,9 @@
  *     )}
  *   </GridToolbar>
  *
- * The search field is 36px tall; `sm` buttons are 28. Without a floor the toolbar dropped 8px on the
+ * The search field and `sm` buttons are both 28 (the toolbar tier; it was 36 before 2026-10-11). Without a floor the toolbar dropped 8px on the
  * first tick and rose again on Clear — measured on /products/next, then again in the lab when the
- * rule lived only in the page's stylesheet. It lives here now (`.nds-grid-selbar`, `min-height: 36px`,
+ * rule lived only in the page's stylesheet. It lives here now (`.nds-grid-selbar`, `min-height` = the slot height,
  * `flex-wrap: nowrap`). The cluster never wraps: the card is a size container (`GridCard`), and under
  * 1320px the button LABELS hide (`SelectionLabel`), under 1100px the reach note hides
  * (`SelectionNote`) — a narrow button beats a second line.

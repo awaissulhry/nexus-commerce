@@ -104,14 +104,12 @@ export { EntityPathCell, entityPathOf, type EntityPathCellParams } from './rende
 export { entityPathKeys } from './renderers/entityPathKeys'
 export {
   gridSelection, selectionColumn, integerColumn, moneyColumn, euroColumn, percentColumn, deltaColumn, dateColumn, statusColumn, textColumn,
-  stockColumn, lockedColumn, holdColumn, actionsColumn, changeColumn, switchColumn, modeColumn, sparklineColumn, type GridSelectionOptions, type ActionsColumnOptions, type SwitchColumnOptions,
-  entityLinksColumn, type ModeColumnOptions, type SparklineColumnOptions, type EntityLinksColumnOptions,
+  stockColumn, lockedColumn, holdColumn, actionsColumn, changeColumn, switchColumn, modeColumn, type GridSelectionOptions, type ActionsColumnOptions, type SwitchColumnOptions,
+  entityLinksColumn, type ModeColumnOptions, type EntityLinksColumnOptions,
 } from './columns/presets'
 // Bid page DS lane (2026-10-10) — what a row works on: one → a link, several → a count that opens a list of links.
 export { EntityLinksCell, entityRefsOf, type EntityLinksCellParams } from './renderers/EntityLinksCell'
 export { entityLinksKeys } from './renderers/entityLinksKeys'
-// Bid page DS lane (2026-10-10) — a small step chart per row (the DS `Sparkline`).
-export { SparklineCell, sparkValuesOf, type SparklineCellParams } from './renderers/SparklineCell'
 // Bid page DS lane (2026-10-10) — a step choice (Off · Watch · Ask me · Auto) that only changes a draft, with a held mark
 // when something holds the row lower than it is set.
 export { ModeCell, modeHandlerOf, type ModeCellParams, type ModeHandlers } from './renderers/ModeCell'

@@ -26,7 +26,7 @@ export const AUTOMATE_HELD_AT_CREATE = `Held: a new rule starts on Manual. It ca
 /** On an edit of a rule that is not on Automate yet: the save asks, and a refusal names what is missing. */
 export const AUTOMATE_NEEDS_GATE = `Allowed only after the rule passes the graduation gate (${GATE_EVIDENCE}). If it has not, saving says what is still missing and keeps the mode it has.`
 
-export interface StoredRule {
+interface StoredRule {
   enabled?: unknown
   autonomyLevel?: unknown
   dryRun?: unknown
@@ -160,72 +160,5 @@ export function noAnswerNotice(stage: 'save' | 'level', s: { isEdit: boolean; ex
       ? 'This page cannot tell whether your changes were saved. Reopen the rule to check before saving again.'
       : 'This page cannot tell whether the rule was created. Check the rule list before creating it again.',
     problems: [],
-  }
-}
-
-// ── the bid builder's four steps (2026-10-10) ────────────────────────────────────────────────────────────────────────
-
-/** The Owner's four steps. Watch is the stored OBSERVE, Ask me PROPOSE. */
-export type BidMode = 'OFF' | 'WATCH' | 'ASK' | 'AUTO'
-export const LEVEL_OF_MODE: Readonly<Record<BidMode, RuleLevel>> = { OFF: 'OFF', WATCH: 'OBSERVE', ASK: 'PROPOSE', AUTO: 'AUTO' }
-export const MODE_OF_LEVEL: Readonly<Record<RuleLevel, BidMode>> = { OFF: 'OFF', OBSERVE: 'WATCH', PROPOSE: 'ASK', AUTO: 'AUTO' }
-const MODE_RANK: Readonly<Record<BidMode, number>> = { OFF: 0, WATCH: 1, ASK: 2, AUTO: 3 }
-
-/**
- * The step a stored rule is SET to, and the one it ACTS on. They differ in one case the builder can see: Auto with the
- * Manual belt asks first (evaluateRule proposes whenever the belt is Manual) — the Bid page's "Rule asks first".
- */
-export function bidModeOf(rule: StoredRule): { set: BidMode; acts: BidMode } {
-  const set = MODE_OF_LEVEL[ruleLevel(rule)]
-  return { set, acts: set === 'AUTO' && storedBelt(rule) === 'manual' ? 'ASK' : set }
-}
-
-/** The belt each step stores: Ask me asks (Manual); Watch and Auto Automate (a Manual belt would make Watch ask). */
-export function beltForMode(mode: BidMode, stored: RuleControl | null): RuleControl {
-  if (mode === 'ASK') return 'manual'
-  if (mode === 'OFF') return stored ?? 'manual'
-  return 'automate'
-}
-
-export interface ModeSavePlan {
-  /** The level to set through the one level route after (or before) the rule saves; null = leave it. */
-  level: RuleLevel | null
-  /** The belt the rule's actions store. */
-  belt: RuleControl
-  /**
-   * Set the level BEFORE the rule is saved. True when the step goes DOWN: the new belt may be looser (Auto with the
-   * Manual belt → Watch stores Automate), and for a moment the old, higher level would run with it. Going up, the rule
-   * (and its belt) saves first and the level after, so a refused level leaves the rule where it was.
-   */
-  levelFirst: boolean
-}
-
-/**
- * What a save does with the step. A new rule is born Off (the create route stores `enabled: false`), so it gets its
- * level after it exists — never Auto (D-R1: the graduation gate needs 14 days first; Auto falls back to Ask me), and Off
- * needs no level. An edit sets a level only when the step changed, so a rename never switches a rule on or off.
- */
-export function modeSavePlan(s: { isEdit: boolean; initial: BidMode | null; chosen: BidMode; stored: RuleControl | null }): ModeSavePlan {
-  if (!s.isEdit) {
-    const chosen = s.chosen === 'AUTO' ? 'ASK' : s.chosen
-    return { level: chosen === 'OFF' ? null : LEVEL_OF_MODE[chosen], belt: beltForMode(chosen, null), levelFirst: false }
-  }
-  if (s.chosen === s.initial) return { level: null, belt: s.stored ?? beltForMode(s.chosen, null), levelFirst: false }
-  return {
-    level: LEVEL_OF_MODE[s.chosen],
-    belt: beltForMode(s.chosen, s.stored),
-    levelFirst: s.initial != null && MODE_RANK[s.chosen] < MODE_RANK[s.initial],
-  }
-}
-
-/** The step's word, for the notices. */
-export const BID_MODE_WORD: Readonly<Record<BidMode, string>> = { OFF: 'Off', WATCH: 'Watch', ASK: 'Ask me', AUTO: 'Auto' }
-
-/** The rule saved, but its step did not change (the bid builder's words). */
-export function modeRefusedNotice(s: { isEdit: boolean; stays: BidMode; status: number; body: unknown }): SaveNotice {
-  return {
-    tone: 'warning',
-    title: s.isEdit ? `Saved, but the mode is still ${BID_MODE_WORD[s.stays]}` : `Created, but it is ${BID_MODE_WORD[s.stays]}`,
-    ...refusalFrom(s.status, s.body),
   }
 }

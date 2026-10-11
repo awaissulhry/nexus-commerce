@@ -9,7 +9,7 @@
  * A level alone does not say it: AUTO on a lever still watches under a shadow server switch, before its shadow days are
  * run, while its N4 approval clock runs, under the Owner's kill switch or a halted account. brainLeverState combines the
  * resolved level (brain/settings.ts) with each of those and with the lever's real writer, one row per lever. The map
- * (read-map.ts), the switchboard and the Control Room's brain rows read it, so they never disagree.
+ * (read-map.ts) and the Control Room's brain rows read it, so they never disagree.
  *
  * Pure: brainLeverState imports nothing but the lever list. What it needs from the server, the account and the database
  * is read by loadLeverRuntime / loadLeverFacts (lazy imports, so this module stays a leaf), and each lever's own gate is
@@ -212,7 +212,7 @@ export function leverFactsOf(facts: ReadonlyMap<string, ProductLeverFacts>, prod
   return facts.get(productKey(productId, market)) ?? { enrolledAt: null, negativesLevels: [], strategyClockSince: null }
 }
 
-// ── The levers' own gates and every lever of a product (wave 2: shared by the map, the switchboard, the engine board) ──
+// ── The levers' own gates and every lever of a product (wave 2: shared by the map and the engine board) ──
 
 /** The negatives' shadow gate and N4 of one product (or one of its campaigns), each decided by its lever's own code. */
 export interface LeverGates {

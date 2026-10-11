@@ -29,7 +29,7 @@ import {
   type HvDestGrain, type HvCreateType,
 } from '../services/advertising/harvest-destination.service.js'
 import {
-  getBidGrid, getBidCursorForRequest, BID_MARKET_ALL, BID_BANDS,
+  getBidGrid, BID_MARKET_ALL, BID_BANDS,
   type BidBand, type BidMeasured, type BidStatusFilter, type BidView,
 } from '../services/advertising/bid-grid.service.js'
 import {
@@ -1469,32 +1469,6 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
-  // ── BID.S0 — the poll cursor ────────────────────────────────────────
-  //
-  // Three cheap aggregates, ~100 bytes, meant to be hit every 45 s by every open tab. The grid read
-  // is not. Separate endpoint rather than a `?cursorOnly=1` on the one above so it cannot
-  // accidentally acquire the expensive parts of that handler later.
-  //
-  // 🔴 It reports `AdTarget.updatedAt`, not just the audit log, because the hourly inbound resync
-  // moves the bid and writes no audit row — measured 1h53m of drift between the two on 2026-08-12.
-  // See the service header. Not SSE: that bus carries 0.21% of writes.
-  fastify.get('/advertising/bid-grid/cursor', async (request, reply) => {
-    const q = (request.query ?? {}) as Record<string, string | undefined>
-    const raw = (q.market ?? '').trim()
-    const market = raw.toLowerCase() === BID_MARKET_ALL ? BID_MARKET_ALL : raw.toUpperCase()
-    const readMarkets = await adsReadMarkets()
-    if (market !== BID_MARKET_ALL && !readMarkets.includes(market)) {
-      reply.status(400)
-      return { error: `market is required and must be one of ${readMarkets.join('/')} or "all"`, code: 'market_required' }
-    }
-    const out = await getBidCursorForRequest({
-      market, line: q.line || null, portfolio: q.portfolio || null, campaign: q.campaign || null,
-    })
-    // No cache at all: a cached cursor is a cursor that cannot detect a change, which is its only job.
-    reply.header('Cache-Control', 'no-store')
-    return out
-  })
-
   // ── BUD.1 — the Budget Rules page's one read ────────────────────────
   //
   // Here rather than in advertising.routes.ts for the reason KT.1, NEG.1, HV.1, BID.S0 and SOV.0
@@ -2772,63 +2746,6 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
       },
     }).catch(() => { /* an audit row must never fail the write it describes */ })
     return { ok: true, targetAcos: b.targetAcos ?? null }
-  })
-
-  /**
-   * BID.S4 — the staged tray's account-wide read.
-   *
-   * `GET /advertising/campaigns/:id/pending-writes` answers this per campaign, which is one
-   * request per campaign for an account-wide tray. This is its bulk sibling for the GRACE WINDOW:
-   * every PENDING Amazon-bound queue row, flattened to one item per field change, with entity and
-   * campaign names resolved server-side. Cancellation stays on the existing
-   * `POST /advertising/queued-mutations/:queueId/cancel` — this route only reads.
-   */
-  fastify.get('/advertising/staged-writes', async (request, reply) => {
-    const q = request.query as { field?: string }
-    reply.header('Cache-Control', 'no-store')
-    const rows = await prisma.outboundSyncQueue.findMany({
-      where: { targetChannel: 'AMAZON', syncStatus: 'PENDING' },
-      select: { id: true, payload: true, holdUntil: true, createdAt: true },
-      orderBy: { createdAt: 'desc' },
-      take: 500,
-    })
-    type Staged = {
-      queueId: string; entityType: string | null; entityId: string
-      field: string; oldValue: string | null; newValue: string | null
-      holdUntil: Date | null; createdAt: Date
-    }
-    const flat: Staged[] = []
-    for (const r of rows) {
-      const p = (r.payload ?? {}) as { entityType?: string; entityId?: string; fieldChanges?: Array<{ field: string; oldValue: string | null; newValue: string | null }> }
-      if (!p.entityId) continue
-      for (const c of p.fieldChanges ?? []) {
-        if (q.field && c.field !== q.field) continue
-        flat.push({ queueId: r.id, entityType: p.entityType ?? null, entityId: p.entityId, field: c.field, oldValue: c.oldValue, newValue: c.newValue, holdUntil: r.holdUntil, createdAt: r.createdAt })
-      }
-    }
-    const targetIds = [...new Set(flat.filter((f) => f.entityType === 'AD_TARGET' || f.entityType == null).map((f) => f.entityId))]
-    const campaignIds = [...new Set(flat.filter((f) => f.entityType === 'CAMPAIGN').map((f) => f.entityId))]
-    const [targets, camps] = await Promise.all([
-      targetIds.length ? prisma.adTarget.findMany({ where: { id: { in: targetIds } }, select: { id: true, expressionValue: true, expressionType: true, kind: true, adGroup: { select: { campaign: { select: { id: true, name: true } } } } } }) : [],
-      campaignIds.length ? prisma.campaign.findMany({ where: { id: { in: campaignIds } }, select: { id: true, name: true } }) : [],
-    ])
-    const { labelFor } = await import('../services/advertising/bid-grid.service.js')
-    const targetById = new Map(targets.map((t) => [t.id, t] as const))
-    const campById = new Map(camps.map((c) => [c.id, c] as const))
-    return {
-      // The server's clock rides along so the client's countdown is skew-proof.
-      now: new Date().toISOString(),
-      items: flat.map((f) => {
-        const t = targetById.get(f.entityId)
-        const camp = f.entityType === 'CAMPAIGN' ? campById.get(f.entityId) : t?.adGroup?.campaign
-        return {
-          ...f,
-          entityName: t ? labelFor(t.expressionValue, t.kind, t.expressionType).label : campById.get(f.entityId)?.name ?? f.entityId,
-          campaignId: camp?.id ?? null,
-          campaignName: camp?.name ?? null,
-        }
-      }),
-    }
   })
 
   /**

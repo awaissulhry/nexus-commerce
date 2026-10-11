@@ -1144,6 +1144,20 @@
 .nds-prefs-pane .nds-prefs-pickset { flex: 1 1 auto; }
 .nds-prefs-pane .nds-prefs-picks { max-height: none; }
 .nds-prefs-pane .nds-prefs-avail { flex: 1 1 auto; }
+/* Two panes side by side share their header band and their bottom (Bid page design audit M19, 2026-10-11: the
+   Customise lists started 16px apart, because only the left pane has the filter row, and ended 17px apart, because each
+   list had its own cap). Each pane (`.nds-prefs-pair`) is its header and its list on the two rows of the panes' grid:
+   the header row is as tall as the taller header, so both lists start on one line; the list row is as tall as the
+   taller list, and the other stretches to it. One cap for both lists. Phone: the panes stack. */
+.nds-prefs-paired { grid-template-rows: auto minmax(0, 1fr); row-gap: 0; }
+.nds-prefs-pair { display: grid; grid-template-rows: subgrid; grid-row: span 2; gap: 0; min-width: 0; min-height: 0; }
+.nds-prefs-head { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.nds-prefs-tabbed .nds-prefs-head { gap: 12px; }
+.nds-prefs-pair > .nds-prefs-cols { max-height: 360px; }
+.nds-prefs-tabbed .nds-prefs-pair > .nds-prefs-cols { max-height: none; min-height: 0; }
+@media (max-width: 720px) {
+  .nds-prefs-pair + .nds-prefs-pair { margin-top: 18px; }
+}
 /* A drop zone: dashed until something lands, solid tint while a chip hovers over it. */
 .nds-prefs-zone {
   display: flex; flex-direction: column; gap: 6px;

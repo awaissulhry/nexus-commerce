@@ -9,12 +9,12 @@
  * in the row's own currency (`_shared/format.ts`); a money key the server left out (no ad-spend permission) reads as a
  * dash. Every header has the grid's ⋮ menu (sort, pin, size, Customise, Reset), as on the Rules table.
  *
- * Keyword Auto (KEYWORD-AUTO.md): Auto (a switch per keyword), Suggested (Amazon's median, the range and its age on hover,
- * Apply) and Goal (the keyword's own target ACoS and max) show only when the answer carries their fields
- * (`BidColumnFeatures`); without them the table is as before — never a made-up value.
+ * Keyword Auto (KEYWORD-AUTO.md): Suggested (Amazon's median, the range and its age on hover, Apply) is always there;
+ * Auto (a switch per keyword) and Goal (the keyword's own target ACoS and max) only where some row in scope is run by an
+ * engine, and Brain bid only where the Brain sets some bid (`BidColumnFeatures`) — never a column that could only say "—".
  */
 import { memo, type ReactNode } from 'react'
-import { ArrowDownRight, ArrowUpRight, Brain, CircleSlash, Clock, Gauge, ListChecks, Moon, MousePointerClick, Pause, ShoppingCart, User } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, Brain, CircleSlash, Clock, Gauge, ListChecks, Moon, MousePointerClick, Pause, Send, ShoppingCart, User } from 'lucide-react'
 import { Button, Pill, Tag } from '@/design-system/primitives'
 import { DetailPopover, EntityLinks, Sparkline, sparkWords, type EntityLinkComponent } from '@/design-system/components'
 import { entityLinksColumn, integerColumn, keepFromGrid, switchColumn, type ColDef, type ICellRendererParams } from '@/design-system/grid'
@@ -23,7 +23,7 @@ import { CHANGE_STATE_TONE, CHANGE_STATE_WORD } from '../_shared/delivery'
 import { money, moneyText, WEEK } from '../_shared/format'
 import {
   acosText, aimDirection, AUTO_WORDS, contestedMark, floorGivesBack, lastChangeWords, matchWord, ownerHint, ownerLabel, ownerTone, ownerWords, resultsWords,
-  type BidGridRow, type OwnerKind, type WriterLink,
+  type BidGridRow, type BidsInScope, type OwnerKind, type WriterLink,
 } from './bidsModel'
 import { FullName } from '../_shared/FullName'
 import { goalText } from './goalModel'
@@ -184,9 +184,10 @@ const placeWords = (r: BidGridRow): string =>
 /** The Auto cell when no engine runs the campaign: a muted dash; the reason on hover and on keyboard focus. */
 const AutoNoneCell = memo(function AutoNoneCell({ data, eGridCell }: Cell) {
   if (!data) return null
-  const why = data.autoWhy?.trim() || 'No engine runs this campaign'
-  return <FullName full={why} cell={eGridCell} always label={`No engine: ${why}`} className={`nds-cell-muted ${styles.reasonMark}`}>—</FullName>
+  const why = data.autoWhy?.trim() || NO_ENGINE
+  return <FullName full={why} cell={eGridCell} always label={why} className={`nds-cell-muted ${styles.reasonMark}`}>—</FullName>
 })
+const NO_ENGINE = 'No engine runs this campaign'
 
 const MatchCell = memo(function MatchCell({ data }: Cell) {
   if (!data) return null
@@ -203,12 +204,16 @@ const OwnerCell = memo(function OwnerCell({ data, eGridCell, context }: Cell) {
   )
 })
 
-const BidNowCell = memo(function BidNowCell({ data }: Cell) {
+/** The bid now; the newest change's state beside it (on a phone a mark with its word on hover, so the value keeps its room). */
+const BidNowCell = memo(function BidNowCell({ data, compact }: Cell & { compact?: boolean }) {
   if (!data) return null
   const chip = deliveryChip(data)
+  const said = chip ? `The newest change: ${CHANGE_STATE_WORD[chip]}` : ''
   return (
     <span className={styles.money}>
-      {chip && <span title={`The newest change: ${CHANGE_STATE_WORD[chip]}`}><Tag tone={CHANGE_STATE_TONE[chip]}>{CHANGE_STATE_WORD[chip]}</Tag></span>}
+      {chip && (compact
+        ? <span className={styles.mark} role="img" aria-label={said} title={said}><Send size={12} strokeWidth={2.25} className="nds-cell-glyph nds-cell-muted" aria-hidden /></span>
+        : <span title={said}><Tag tone={CHANGE_STATE_TONE[chip]}>{CHANGE_STATE_WORD[chip]}</Tag></span>)}
       <NightFloorMark row={data} />
       <span title={typeof data.bidNow === 'number' ? undefined : 'Hidden'}>{moneyText(data.bidNow, data.currency)}</span>
     </span>
@@ -226,7 +231,7 @@ const SuggestedCell = memo(function SuggestedCell({ data, context }: Cell) {
     <span className={styles.suggested} onClickCapture={keepFromGrid}>
       <span className={w.mid === null ? 'nds-cell-muted' : undefined} title={w.hint} aria-label={w.mid === null ? w.hint : `${w.text}: ${w.hint}`}>{w.text}</span>
       {differs && apply && (
-        <Button size="xs" variant="secondary" data-cell-action="" title={`Set the bid to ${w.text}`} aria-label={`Apply ${w.text} to ${data.text}`} onClick={() => apply(data)}>Apply</Button>
+        <Button size="xs" variant="secondary" data-cell-action="" heldReason={data.writeBlock} title={`Set the bid to ${w.text}`} aria-label={`Apply ${w.text} to ${data.text}`} onClick={() => apply(data)}>Apply</Button>
       )}
     </span>
   )
@@ -236,8 +241,8 @@ const SuggestedCell = memo(function SuggestedCell({ data, context }: Cell) {
 const GoalCell = memo(function GoalCell({ data, eGridCell }: Cell) {
   if (!data) return null
   if (data.auto === 'NONE') {
-    const why = data.autoWhy?.trim() || 'No engine runs this campaign'
-    return <FullName full={why} cell={eGridCell} always label={`No engine: ${why}`} className={`nds-cell-muted ${styles.reasonMark}`}>—</FullName>
+    const why = data.autoWhy?.trim() || NO_ENGINE
+    return <FullName full={why} cell={eGridCell} always label={why} className={`nds-cell-muted ${styles.reasonMark}`}>—</FullName>
   }
   const text = goalText(data.goal, data.currency)
   return <span className={text === '—' ? 'nds-cell-muted' : styles.ellipsis} title={text === '—' ? 'No goal of its own: its campaign\'s or product\'s applies' : text}>{text}</span>
@@ -277,15 +282,17 @@ const LastChangeCell = memo(function LastChangeCell({ data }: Cell) {
   )
 })
 
-/** Clicks · orders · ACoS of 7 d, as icons and numbers; the hover line names them. */
+/** Clicks · orders · ACoS of 7 d, as icons and numbers; the hover line names them. Each number sits right-aligned in a
+ *  slot of fixed width (clicks 3 ch, orders 2 ch, ACoS 5.5 ch: "12.5 %"), so the icons and the ACoS stand in one place down the
+ *  column — they moved 8–9 px between a 1- and a 2-digit row (design audit M6). */
 const ResultsCell = memo(function ResultsCell({ data }: Cell) {
   if (!data) return null
   const w = resultsWords(data.d7, data.currency)
   return (
     <span className={styles.results} title={w.title} aria-label={w.title} role="img">
-      <span className={styles.inline}><MousePointerClick size={12} strokeWidth={2.25} className="nds-cell-glyph nds-cell-muted" aria-hidden />{w.clicks}</span>
-      <span className={styles.inline}><ShoppingCart size={12} strokeWidth={2.25} className="nds-cell-glyph nds-cell-muted" aria-hidden />{w.orders}</span>
-      <span className={typeof data.d7.acosPct === 'number' ? undefined : 'nds-cell-muted'}>{w.acos}</span>
+      <span className={styles.inline}><MousePointerClick size={12} strokeWidth={2.25} className="nds-cell-glyph nds-cell-muted" aria-hidden /><span className={styles.slot3}>{w.clicks}</span></span>
+      <span className={styles.inline}><ShoppingCart size={12} strokeWidth={2.25} className="nds-cell-glyph nds-cell-muted" aria-hidden /><span className={styles.slot2}>{w.orders}</span></span>
+      <span className={`${styles.slotAcos}${typeof data.d7.acosPct === 'number' ? '' : ' nds-cell-muted'}`}>{w.acos}</span>
     </span>
   )
 })
@@ -319,33 +326,34 @@ const MaxCpcCell = memo(function MaxCpcCell({ data }: Cell) {
 /** The trend's accessible name and hover line. */
 export const TREND_LABEL = `Bid · ${WEEK}`
 
-/**
- * Every column, once: its id, the words Customise shows, and whether it starts hidden or is locked in place. Match sits
- * under the keyword, and Portfolio and Changes 7 d start hidden, so the keyword, campaign, ad group and rule names have
- * room at 1440 px (audit S10); Customise shows them, and the keyword's panel always lists its portfolio and changes.
- */
+/** One column: its id, the words Customise shows, and whether it starts hidden or is locked in place. */
 export type BidColumnSpec = { key: string; label: string; locked?: boolean; hidden?: boolean }
 
-/** The keyword-Auto columns the answer can carry (KEYWORD-AUTO.md): each shows only when its field is there. */
-export interface BidColumnFeatures { suggested: boolean; auto: boolean; goal: boolean }
-export const NO_COLUMN_FEATURES: BidColumnFeatures = { suggested: false, auto: false, goal: false }
+/** What the rows in scope need (`bidsModel.inScopeOf`): an engine runs some keyword · the Brain sets some bid. */
+export type BidColumnFeatures = BidsInScope
+export const NO_COLUMN_FEATURES: BidColumnFeatures = { engine: false, brain: false }
 
-/** `quiet`: starts hidden once this many keyword-Auto columns need its room (Trend first, then Last change, then Brain bid). */
-const ALL_SPECS: ReadonlyArray<BidColumnSpec & { feature?: keyof BidColumnFeatures; quiet?: 1 | 2 | 3 }> = [
+/**
+ * Every column, once (the Owner's Bids view): Keyword · Campaign / Ad group · Who sets it · Auto · Bid now · Suggested ·
+ * Goal · Brain bid · Last change · Results 7 d. Auto and Goal are drawn only where an engine runs some keyword, Brain bid
+ * only where the Brain sets some bid. Match (it sits under the keyword), Portfolio, Changes 7 d, Trend, the single 7 d
+ * numbers and Max CPC start hidden — Customise shows them, and the keyword's detail lists them.
+ */
+const ALL_SPECS: ReadonlyArray<BidColumnSpec & { needs?: keyof BidColumnFeatures }> = [
   { key: 'keyword', label: 'Keyword', locked: true },
   { key: 'match', label: 'Match', hidden: true },
   { key: 'portfolio', label: 'Portfolio', hidden: true },
   { key: 'campaign', label: 'Campaign · Ad group' },
   { key: 'owner', label: 'Who sets it' },
-  { key: 'auto', label: 'Auto', feature: 'auto' },
+  { key: 'auto', label: 'Auto', needs: 'engine' },
   { key: 'bidNow', label: 'Bid now' },
-  { key: 'suggested', label: 'Suggested', feature: 'suggested' },
-  { key: 'goal', label: 'Goal', feature: 'goal' },
-  { key: 'brainAim', label: 'Brain bid', quiet: 3 },
-  { key: 'lastChange', label: 'Last change', quiet: 2 },
+  { key: 'suggested', label: 'Suggested' },
+  { key: 'goal', label: 'Goal', needs: 'engine' },
+  { key: 'brainAim', label: 'Brain bid', needs: 'brain' },
+  { key: 'lastChange', label: 'Last change' },
   { key: 'changes7d', label: `Changes ${WEEK}`, hidden: true },
   { key: 'results', label: `Results ${WEEK}` },
-  { key: 'spark', label: `Trend ${WEEK}`, quiet: 1 },
+  { key: 'spark', label: `Trend ${WEEK}`, hidden: true },
   { key: 'clicks', label: `Clicks ${WEEK}`, hidden: true },
   { key: 'orders', label: `Orders ${WEEK}`, hidden: true },
   { key: 'acos', label: `ACoS ${WEEK}`, hidden: true },
@@ -353,89 +361,89 @@ const ALL_SPECS: ReadonlyArray<BidColumnSpec & { feature?: keyof BidColumnFeatur
   { key: 'maxCpc', label: 'Max CPC', hidden: true },
 ]
 
-/**
- * Every column, once: its id, the words Customise shows, and whether it starts hidden or is locked in place. Match sits
- * under the keyword, and Portfolio and Changes 7 d start hidden, so the names have room at 1440 px (audit S10). Each
- * keyword-Auto column that is there (Auto · Suggested · Goal) takes the room of one quiet column: Trend, then Last change,
- * then Brain bid start hidden. Customise shows them, and the keyword's detail always lists them.
- */
 export function bidColumnSpecs(features: BidColumnFeatures = NO_COLUMN_FEATURES): BidColumnSpec[] {
-  const extra = [features.suggested, features.auto, features.goal].filter(Boolean).length
-  return ALL_SPECS
-    .filter((c) => !c.feature || features[c.feature])
-    .map(({ feature: _f, quiet, ...c }) => (quiet && extra >= quiet ? { ...c, hidden: true } : c))
+  return ALL_SPECS.filter((c) => !c.needs || features[c.needs]).map(({ needs: _n, ...c }) => c)
 }
 
-/** The plain table's columns (no keyword-Auto fields). */
+/** The table's columns where no engine and no Brain runs a keyword. */
 export const BID_COLUMN_SPECS: ReadonlyArray<BidColumnSpec> = bidColumnSpecs()
 
 const LABEL: Record<string, string> = Object.fromEntries(ALL_SPECS.map((c) => [c.key, c.label]))
-/** On a phone the three that matter come first: the keyword, its bid, who sets it; the rest scroll. */
+/** On a phone the three that matter come first: the keyword, its bid, who sets it; the rest scroll. A phone's grid is
+ *  about 264 px wide (the app's rail and padding): the row tick 43 + keyword 116 + bid 100 fit it, the bid's header whole. */
 const PHONE_FIRST = ['keyword', 'bidNow', 'owner']
 const PORTFOLIO_NOUN = { one: 'portfolio', many: 'portfolios' }
 const CAMPAIGN_NOUN = { one: 'campaign', many: 'campaigns' }
 const AD_GROUP_NOUN = { one: 'ad group', many: 'ad groups' }
-const numeric = { type: 'rightAligned', headerClass: 'nds-ag-head-num' } as const
+/**
+ * A numbers column: right-aligned, tabular figures, and its header's words end where its numbers end — the ⋮ menu goes
+ * BEFORE the words: AG's own right-aligned header, which the DS mark `nds-ag-head-num` replaced (it kept the menu at the
+ * right end, so the words ended 24 px left of the numbers: "Bid now" 923 vs 947, design audit M5). Not both: the DS mark's
+ * `flex-end` on AG's reversed label would push the words to the left.
+ */
+const NUM_HEAD = 'ag-right-aligned-header'
+const numeric = { type: 'rightAligned', headerClass: NUM_HEAD }
 const num = ['nds-ag-cell', 'nds-ag-num']
 
 /** A money cell's words for the CSV and the clipboard, in the row's own currency. */
 const moneyOf = (p: { value: unknown; data?: BidGridRow }) => moneyText(p.value as number | null, p.data?.currency ?? 'EUR')
 
 /**
- * The columns. Every width holds its header with the ⋮ menu and its widest value, so nothing is cut at 1440 px; the
- * campaign and ad group share what is left (flex). A phone gets a narrow pinned keyword with its bid and owner beside it.
- * Built once per phone flag by the view (useMemo), so the grid sees a stable array.
+ * The columns. Every width holds its header with the ⋮ menu and its value (a longer name ends in "…" and shows whole on
+ * hover and focus); with every column of the Owner's view and the row ticks (43 px) they fit the 1440 px card (1312 px),
+ * and the campaign and ad group take what is left (flex). A phone gets a narrow pinned keyword with its bid and owner
+ * beside it. A column that starts hidden says so with `initialHide`, never `hide`: the view builds new definitions when
+ * the rows in scope change, and `hide` would put every column back to its default over the person's own pick (use audit
+ * A3). Built once per phone flag and scope by the view (useMemo), so the grid sees a stable array.
  */
 export function bidColumns(phone: boolean, features: BidColumnFeatures = NO_COLUMN_FEATURES): ColDef<BidGridRow>[] {
   const specs = bidColumnSpecs(features)
   const shown = new Set(specs.map((c) => c.key))
   const hidden = new Set(specs.filter((c) => c.hidden).map((c) => c.key))
-  // With the keyword-Auto columns (and the row checkboxes, 43 px) the names share less room.
-  const rich = features.suggested || features.auto || features.goal
   const cols: ColDef<BidGridRow>[] = [
-    { colId: 'keyword', headerName: LABEL.keyword, valueGetter: (p) => p.data?.text ?? '', cellRenderer: KeywordCell, pinned: 'left', width: phone ? 140 : rich ? 180 : 196, cellClass: 'nds-ag-cell' },
+    { colId: 'keyword', headerName: LABEL.keyword, valueGetter: (p) => p.data?.text ?? '', cellRenderer: KeywordCell, pinned: 'left', width: phone ? 116 : 128, cellClass: 'nds-ag-cell' },
     { colId: 'match', headerName: LABEL.match, valueGetter: (p) => matchWord(p.data?.match), cellRenderer: MatchCell, width: 124, cellClass: 'nds-ag-cell' },
     { ...entityLinksColumn<BidGridRow>('portfolios', { header: LABEL.portfolio, noun: PORTFOLIO_NOUN, linkAs: Link }), colId: 'portfolio', flex: 2, minWidth: 130 },
     {
-      colId: 'campaign', headerName: LABEL.campaign, flex: 1, minWidth: rich ? 210 : 260, cellClass: 'nds-ag-cell', cellRenderer: PlaceCell,
+      colId: 'campaign', headerName: LABEL.campaign, flex: 1, minWidth: 172, cellClass: 'nds-ag-cell', cellRenderer: PlaceCell,
       valueGetter: (p) => (p.data ? `${p.data.campaign.name} · ${p.data.adGroup.name}` : ''),
       suppressKeyboardEvent: placeCellKeys as ColDef<BidGridRow>['suppressKeyboardEvent'],
       headerTooltip: 'Enter: the campaign · Shift+Enter: the ad group',
     },
     {
       colId: 'owner', headerName: LABEL.owner, valueGetter: (p) => (p.data ? ownerWords(p.data.owner) : ''), getQuickFilterText: (p) => (p.data ? ownerWords(p.data.owner) : ''),
-      cellRenderer: OwnerCell, width: rich ? 172 : 196, cellClass: 'nds-ag-cell', suppressKeyboardEvent: ownerCellKeys as ColDef<BidGridRow>['suppressKeyboardEvent'],
-      headerTooltip: 'A rule opens its detail; the Brain opens Why. +N: others that set it too',
+      cellRenderer: OwnerCell, width: 136, cellClass: 'nds-ag-cell', suppressKeyboardEvent: ownerCellKeys as ColDef<BidGridRow>['suppressKeyboardEvent'],
+      headerTooltip: 'A rule opens its detail, an hourly plan its page, the Brain opens Why. +N: others that set it too',
     },
     {
       ...switchColumn<BidGridRow>('autoOn', { header: LABEL.auto, label: (r) => `Auto for ${r.text}`, words: AUTO_WORDS, disabledReason: (r) => r.autoLock ?? null }),
       // No engine runs its campaign: a muted dash with the reason on hover and focus, never "Manual" (audit R1).
       cellRendererSelector: (p) => (p.data?.auto === 'NONE' ? { component: AutoNoneCell } : undefined),
-      colId: 'auto', width: 112, headerTooltip: 'Auto: the engine moves this bid · Manual: you hold it · —: no engine runs its campaign',
+      colId: 'auto', width: 92, headerTooltip: 'Auto: the engine moves this bid · Manual: you hold it · —: no engine runs its campaign',
     },
-    { colId: 'bidNow', headerName: LABEL.bidNow, valueGetter: (p) => p.data?.bidNow ?? null, valueFormatter: moneyOf, cellRenderer: BidNowCell, width: features.auto || features.suggested || features.goal ? 128 : 104, cellClass: num, ...numeric },
+    { colId: 'bidNow', headerName: LABEL.bidNow, valueGetter: (p) => p.data?.bidNow ?? null, valueFormatter: moneyOf, cellRenderer: BidNowCell, cellRendererParams: { compact: phone }, width: phone ? 100 : 116, cellClass: num, ...numeric },
     {
-      colId: 'suggested', headerName: LABEL.suggested, width: 150, cellClass: num, ...numeric, cellRenderer: SuggestedCell,
+      colId: 'suggested', headerName: LABEL.suggested, width: 116, cellClass: num, ...numeric, cellRenderer: SuggestedCell,
       valueGetter: (p) => (p.data?.suggested?.kind === 'bid' ? p.data.suggested.bid.mid ?? null : null),
       valueFormatter: (p) => (p.data ? suggestedWords(p.data.suggested ?? { kind: 'loading' }, p.data.currency).text : ''),
       suppressKeyboardEvent: actionCellKeys as ColDef<BidGridRow>['suppressKeyboardEvent'],
       headerTooltip: 'Amazon\'s suggested bid: the median; the range on hover. Apply sets it',
     },
     {
-      colId: 'goal', headerName: LABEL.goal, width: 150, cellClass: 'nds-ag-cell', cellRenderer: GoalCell,
+      colId: 'goal', headerName: LABEL.goal, width: 96, cellClass: 'nds-ag-cell', cellRenderer: GoalCell,
       valueGetter: (p) => (p.data ? goalText(p.data.goal, p.data.currency) : ''),
       headerTooltip: 'This keyword\'s own target ACoS and max bid. Opens its Goal tab',
     },
-    { colId: 'brainAim', headerName: LABEL.brainAim, valueGetter: (p) => p.data?.brainAim ?? null, valueFormatter: moneyOf, cellRenderer: AimCell, width: 112, cellClass: num, ...numeric, headerTooltip: 'The bid the Brain\'s goal asks for' },
+    { colId: 'brainAim', headerName: LABEL.brainAim, valueGetter: (p) => p.data?.brainAim ?? null, valueFormatter: moneyOf, cellRenderer: AimCell, width: 104, cellClass: num, ...numeric, headerTooltip: 'The bid the Brain\'s goal asks for' },
     {
       colId: 'lastChange', headerName: LABEL.lastChange, valueGetter: (p) => (p.data?.lastChange ? Date.parse(p.data.lastChange.at) : null),
-      valueFormatter: (p) => (p.data ? lastChangeWords(p.data.lastChange, p.data.currency)?.text ?? '—' : ''), cellRenderer: LastChangeCell, width: 164, cellClass: 'nds-ag-cell',
+      valueFormatter: (p) => (p.data ? lastChangeWords(p.data.lastChange, p.data.currency)?.text ?? '—' : ''), cellRenderer: LastChangeCell, width: 146, cellClass: 'nds-ag-cell',
       headerTooltip: 'The night floor and its morning give-back are left out',
     },
-    { ...integerColumn<BidGridRow>('changes7d'), colId: 'changes7d', headerName: LABEL.changes7d, width: 128 },
+    { ...integerColumn<BidGridRow>('changes7d'), colId: 'changes7d', headerName: LABEL.changes7d, width: 128, headerClass: NUM_HEAD },
     {
       colId: 'results', headerName: LABEL.results, valueGetter: (p) => p.data?.d7.clicks ?? null, valueFormatter: (p) => (p.data ? resultsWords(p.data.d7, p.data.currency).title : ''),
-      cellRenderer: ResultsCell, width: 148, cellClass: 'nds-ag-cell', headerTooltip: `Clicks · orders · ACoS, ${WEEK}`,
+      cellRenderer: ResultsCell, width: 162, cellClass: 'nds-ag-cell', headerTooltip: `Clicks · orders · ACoS, ${WEEK}`,
     },
     {
       colId: 'spark', headerName: LABEL.spark, valueGetter: (p) => p.data?.spark ?? null, sortable: false, cellRenderer: TrendCell, width: 112, cellClass: 'nds-ag-cell',
@@ -443,13 +451,13 @@ export function bidColumns(phone: boolean, features: BidColumnFeatures = NO_COLU
       getQuickFilterText: () => '',
       headerTooltip: 'The bid at this hour on each of the last 7 days',
     },
-    { ...integerColumn<BidGridRow>('d7.clicks'), colId: 'clicks', headerName: LABEL.clicks, width: 116 },
-    { ...integerColumn<BidGridRow>('d7.orders'), colId: 'orders', headerName: LABEL.orders, width: 120 },
+    { ...integerColumn<BidGridRow>('d7.clicks'), colId: 'clicks', headerName: LABEL.clicks, width: 116, headerClass: NUM_HEAD },
+    { ...integerColumn<BidGridRow>('d7.orders'), colId: 'orders', headerName: LABEL.orders, width: 120, headerClass: NUM_HEAD },
     { colId: 'acos', headerName: LABEL.acos, valueGetter: (p) => p.data?.d7.acosPct ?? null, valueFormatter: (p) => acosText(p.value as number | null), cellRenderer: AcosCell, width: 112, cellClass: num, ...numeric },
     { colId: 'spend', headerName: LABEL.spend, valueGetter: (p) => p.data?.d7.spend ?? null, valueFormatter: moneyOf, cellRenderer: SpendCell, width: 116, cellClass: num, ...numeric },
     { colId: 'maxCpc', headerName: LABEL.maxCpc, valueGetter: (p) => p.data?.maxCpc ?? null, valueFormatter: moneyOf, cellRenderer: MaxCpcCell, width: 112, cellClass: num, ...numeric, headerTooltip: 'The bid with its highest placement, this hour' },
   ]
-  const shaped = cols.filter((c) => shown.has(c.colId as string)).map((c) => (hidden.has(c.colId as string) ? { ...c, hide: true } : c))
+  const shaped = cols.filter((c) => shown.has(c.colId as string)).map((c) => (hidden.has(c.colId as string) ? { ...c, initialHide: true } : c))
   if (!phone) return shaped
   const first = PHONE_FIRST.map((id) => shaped.find((c) => c.colId === id)!)
   return [...first, ...shaped.filter((c) => !PHONE_FIRST.includes(c.colId as string))]

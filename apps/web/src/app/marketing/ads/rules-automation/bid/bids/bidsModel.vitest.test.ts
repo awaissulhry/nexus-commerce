@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   acosText, aimDirection, bidProblem, bidsQuery, bidsTotalsOf, contestedMark, countWords, editHeldReason, emptyWords, floorGivesBack, gridRowOf, isBidsShow,
-  isContested, isOwnerFilter, lastChangeWords, matchWord, NO_BID_FILTER, otherWriters, ownerChips, ownerHint, ownerLabel, ownerTone, ownerWords, parseBid,
-  resultsWords, rowCurrency, rowMatches, rulePanelHref, showMatches, writerHref, writerName, featuresOf, autoHeld, modeChangeLine,
+  isContested, lastChangeWords, matchWord, NO_BID_FILTER, otherWriters, ownerChips, ownerHint, ownerLabel, ownerTone, ownerWords, parseBid,
+  planHref, resultsWords, rowCurrency, rowMatches, rulePanelHref, showMatches, writerHref, writerName, inScopeOf, autoHeld, modeChangeLine,
   type BidRow, type BidTotals,
 } from './bidsModel'
 
@@ -67,8 +67,6 @@ describe('who sets it', () => {
 
   it('keeps the chosen owner\'s chip at 0 so it can be cleared', () => {
     expect(ownerChips(totals({ BRAIN: 3 }), 'RULE').map((c) => c.key)).toEqual(['ALL', 'BRAIN', 'RULE'])
-    expect(isOwnerFilter('PLAN')).toBe(true)
-    expect(isOwnerFilter('plan')).toBe(false)
   })
 })
 
@@ -86,9 +84,9 @@ describe('a bid two writers write', () => {
     expect(ownerHint(owner)).toBe('Hourly plan “Jacket hours” sets this bid · also: Engine, Cut losers')
   })
 
-  it('opens a rule\'s detail on this page and the Brain\'s Why tab, never another page', () => {
+  it('opens a rule\'s detail on this page, an hourly plan\'s page on the keyword\'s campaign, and the Brain\'s Why tab (A8)', () => {
     const g = gridRowOf(row({ owner }), 'it')
-    expect(g.ownerHref).toBeNull() // an hourly plan: its words only
+    expect(g.ownerHref).toBe('/marketing/ads/rules-automation/dayparting?market=IT&campaign=c1') // a plan has its own page
     expect(g.ownerWhy).toBe(false)
     expect(g.others.map((w) => [w.name, w.href, w.why])).toEqual([
       ['Engine', null, false],
@@ -97,7 +95,8 @@ describe('a bid two writers write', () => {
     expect(writerHref({ kind: 'BRAIN', id: 'brain' }, 'all')).toBeNull()
     expect(gridRowOf(row(), 'IT').ownerWhy).toBe(true)
     expect(writerHref({ kind: 'ENGINE', id: 'auto-bid' }, 'IT')).toBeNull()
-    expect(writerHref({ kind: 'PLAN', id: 'g1' }, 'IT')).toBeNull()
+    expect(writerHref({ kind: 'PLAN', id: 'g1' }, 'IT', 'c9')).toBe('/marketing/ads/rules-automation/dayparting?market=IT&campaign=c9')
+    expect(planHref(null, 'all')).toBe('/marketing/ads/rules-automation/dayparting')
     expect(writerHref({ kind: 'PERSON', id: 'you' }, 'IT')).toBeNull()
     expect(writerHref({ kind: 'NONE', id: null }, 'IT')).toBeNull()
     expect(writerHref({ kind: 'RULE', id: null }, 'IT')).toBeNull()
@@ -139,7 +138,7 @@ describe('filter and search', () => {
 
   it('counts what it shows against the total', () => {
     expect(countWords(70, 70, false)).toBe('70 bids')
-    expect(countWords(3, 70, true)).toBe('Showing 3 of 70 bids')
+    expect(countWords(3, 70, true)).toBe('3 of 70')
     expect(countWords(1, 1, false)).toBe('1 bid')
   })
 })
@@ -208,11 +207,11 @@ describe('a direct bid', () => {
     expect(bidProblem(15, 'EUR')).toBeNull()
   })
 
-  it('lets you set a bid only where nothing automatic writes over it, and says why not', () => {
+  it('lets you set a bid whoever sets it (one rule with Apply suggested, A6); only the permission and hidden bids hold it', () => {
     expect(editHeldReason(row({ owner: { kind: 'PERSON', name: 'You', id: 'you' } }), true)).toBeNull()
     expect(editHeldReason(row({ owner: { kind: 'NONE', name: 'Nobody', id: null } }), true)).toBeNull()
-    expect(editHeldReason(row(), true)).toBe('Brain sets this bid · lock the campaign bids first')
-    expect(editHeldReason(row({ owner: { kind: 'RULE', name: 'Cut losers', id: 'r1' } }), true)).toBe('Cut losers sets this bid · lock the campaign bids first')
+    expect(editHeldReason(row(), true)).toBeNull()
+    expect(editHeldReason(row({ owner: { kind: 'RULE', name: 'Cut losers', id: 'r1' } }), true)).toBeNull()
     expect(editHeldReason(row({ owner: { kind: 'NONE', name: 'Nobody', id: null } }), false)).toBe('Needs the ads campaigns permission')
     expect(editHeldReason(row({ owner: { kind: 'NONE', name: 'Nobody', id: null }, bidNow: undefined }), true)).toBe('Bids are hidden for you')
   })
@@ -243,38 +242,35 @@ describe('the page\'s tiles (M1): what they show and the numbers they read', () 
     row({ targetId: 'b', owner: { kind: 'PLAN', name: 'Jacket hours', id: 'g1', contested: true, alsoWrites: [{ kind: 'ENGINE', name: 'Auto-bid', id: 'auto-bid' }] } }),
     row({ targetId: 'c' }),
   ]
-  const waiting = new Set(['c', 'elsewhere'])
-
-  it('narrows the rows to the tile: changed in 7 d, two writers, an ask waiting', () => {
-    expect(rows.filter((r) => showMatches(r, 'changed7d', waiting)).map((r) => r.targetId)).toEqual(['a'])
-    expect(rows.filter((r) => showMatches(r, 'contested', waiting)).map((r) => r.targetId)).toEqual(['b'])
-    expect(rows.filter((r) => showMatches(r, 'waiting', waiting)).map((r) => r.targetId)).toEqual(['c'])
-    expect(rows.filter((r) => showMatches(r, 'waiting', null))).toEqual([]) // asks not read: nothing is claimed
-    expect(rows.filter((r) => showMatches(r, undefined, null))).toHaveLength(3)
+  it('narrows the rows to the tile: changed in 7 d, two writers (no filter nobody can pick, C-UI 10)', () => {
+    expect(rows.filter((r) => showMatches(r, 'changed7d')).map((r) => r.targetId)).toEqual(['a'])
+    expect(rows.filter((r) => showMatches(r, 'contested')).map((r) => r.targetId)).toEqual(['b'])
+    expect(rows.filter((r) => showMatches(r, undefined))).toHaveLength(3)
     expect(isBidsShow('contested')).toBe(true)
+    expect(isBidsShow('waiting')).toBe(false)
     expect(isBidsShow('on')).toBe(false)
   })
 
-  it('reports the read\'s totals, never narrowed by a filter: the server\'s changed count, clashes and asks of the rows', () => {
-    const t = bidsTotalsOf({ rows, totals: { ...totals({ BRAIN: 2, PLAN: 1 }), changed7d: 1 } }, waiting)
-    expect(t).toEqual({ bids: 3, changed7d: 1, contested: 1, waiting: 1, owners: { BRAIN: 2, RULE: 0, PLAN: 1, PERSON: 0, ENGINE: 0, NONE: 0 }, truncated: false })
-    expect(bidsTotalsOf({ rows, totals: totals({ BRAIN: 3 }) }, null).waiting).toBeNull()
+  it('reports the read\'s totals, never narrowed by a filter: the server\'s changed count and the rows\' clashes', () => {
+    const t = bidsTotalsOf({ rows, totals: { ...totals({ BRAIN: 2, PLAN: 1 }), changed7d: 1 } })
+    expect(t).toEqual({ bids: 3, changed7d: 1, contested: 1, owners: { BRAIN: 2, RULE: 0, PLAN: 1, PERSON: 0, ENGINE: 0, NONE: 0 }, truncated: false })
   })
 
   it('says why the table is empty: a filter, a tile, or no bids', () => {
     expect(emptyWords(undefined, true, true)).toEqual({ title: 'No bid matches', clear: true })
     expect(emptyWords('changed7d', false, true).title).toBe('No bid changed in 7 d')
     expect(emptyWords('contested', false, true).title).toBe('No bid has two writers')
-    expect(emptyWords('waiting', false, true).title).toBe('Nothing waiting')
     expect(emptyWords(undefined, false, false)).toEqual({ title: 'No live bids', clear: false })
   })
 })
 
-describe('keyword Auto (shown only when the answer carries it)', () => {
-  it('knows which new fields the answer carries, never guessing', () => {
-    expect(featuresOf([row()])).toEqual({ auto: false, goal: false, delivery: false })
-    expect(featuresOf([row({ auto: 'AUTO', goal: null, delivery: null })])).toEqual({ auto: true, goal: true, delivery: true })
-    expect(featuresOf([])).toEqual({ auto: false, goal: false, delivery: false })
+describe('keyword Auto', () => {
+  it('knows which columns the rows in scope need: an engine runs a keyword (Auto · Goal), the Brain sets a bid (C-UI 1)', () => {
+    const none = { kind: 'NONE' as const, name: 'Nobody', id: null }
+    expect(inScopeOf([row({ owner: none, auto: 'NONE' })])).toEqual({ engine: false, brain: false })
+    expect(inScopeOf([row({ owner: none, auto: 'MANUAL' })])).toEqual({ engine: true, brain: false })
+    expect(inScopeOf([row({ auto: 'AUTO' })])).toEqual({ engine: true, brain: true })
+    expect(inScopeOf([])).toEqual({ engine: false, brain: false })
   })
 
   it('switches only where an engine runs the keyword, and says why not', () => {

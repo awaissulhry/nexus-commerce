@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { actionWord, decisionFacts, decisionFor, layerTag, layerWord, parseAcosPct, type BrainDecision } from './whyModel'
+import { actionWord, decisionFacts, decisionFor, isLiveDecision, layerTag, layerWord, parseAcosPct, wouldWords, type BrainDecision } from './whyModel'
 
 const decision = (over: Partial<BrainDecision> = {}): BrainDecision => ({
   targetId: 't1',
@@ -45,7 +45,7 @@ describe('the brain\'s decision in words', () => {
 
   it('lists its numbers in plain words, no confidence score, with dashes for what is hidden', () => {
     expect(decisionFacts(decision(), 'EUR')).toEqual([
-      { label: 'Target bid', value: '€1.20' },
+      { label: 'Brain bid', value: '€1.20' },
       { label: 'Target ACoS', value: '20 %' },
       { label: 'Range', value: '15 % – 25 %' },
       { label: 'Expected ACoS', value: '18.5 %' },
@@ -53,8 +53,19 @@ describe('the brain\'s decision in words', () => {
     ])
     expect(decisionFacts(decision(), 'GBP')[0].value).toBe('£1.20')
     const hidden = decisionFacts(decision({ goalBidCents: undefined, aimPct: undefined, bandLoPct: undefined, bandHiPct: undefined }), 'EUR')
-    expect(hidden).toContainEqual({ label: 'Target bid', value: '—' })
+    expect(hidden).toContainEqual({ label: 'Brain bid', value: '—' })
     expect(hidden).toContainEqual({ label: 'Range', value: '—' })
+    // One Brain bid in the detail (A7): the row's, when it has one.
+    expect(decisionFacts(decision(), 'EUR', 45)[0]).toEqual({ label: 'Brain bid', value: '€0.45' })
+  })
+
+  it('a watched decision says what it WOULD do, never a change that happened (A2)', () => {
+    expect(isLiveDecision({ mode: 'LIVE' })).toBe(true)
+    expect(isLiveDecision({ mode: 'SHADOW' })).toBe(false)
+    expect(wouldWords({ action: 'write', currentCents: 50, decidedCents: 40 }, 'EUR')).toBe('Would lower to €0.40')
+    expect(wouldWords({ action: 'write', currentCents: 40, decidedCents: 55 }, 'EUR')).toBe('Would raise to €0.55')
+    expect(wouldWords({ action: 'hold', currentCents: 40, decidedCents: 40 }, 'EUR')).toBe('Would hold')
+    expect(wouldWords({ action: 'brake', currentCents: 40, decidedCents: 10 }, 'GBP')).toBe('Would brake to £0.10')
   })
 
   it('finds the keyword\'s decision in a view\'s answer', () => {

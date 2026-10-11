@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
-  BRAIN_ID, NO_RULES_FILTER, allAdGroups, brainAskWords, brainPickChange, brainStepOf, archiveWords, autoLockOf, holdReason, holdWord, changeFromTo, sampleFromTo, sampleHold, effectView,
-  effectWindow, heldStep, holdsOf, last7Parts, last7Tab, last7Text, marketMoney, modeLock, nextRunView, noEffectWords, partHolds, previewParts,
+  BRAIN_ID, LAST7_ROOM_ONE_MARKET, allAdGroups, brainAskWords, brainPickChange, brainStepOf, archiveWords, autoLockOf, holdReason, holdWord, changeFromTo, sampleFromTo, sampleHold, effectView,
+  effectWindow, heldStep, holdsOf, last7Fit, last7Parts, last7Tab, last7Text, marketMoney, modeLock, nextRunView, noEffectWords, partHolds, previewParts,
   readError, rowMatchesSearch, rowMatchesTile, visibleRows, whoWord, worksOn,
   type BidRuleRow, type Effect, type RuleChange,
 } from './bidRulesModel'
 import {
-  archiveReviewChanges, beltFor, canChangeBids, modeConflicts, modeReviewChanges, modeSteps, pickMode, pickModeFor, raiseAck, refusalWords,
+  archiveReviewChanges, beltFor, bulkModeOptions, canChangeBids, modeConflicts, modeReviewChanges, modeSteps, pickMode, pickModeFor, raiseAck, refusalWords,
   restoreReviewChanges, retidyModes, shownMode, withBelt,
 } from './ruleChanges'
 
@@ -45,8 +45,9 @@ describe('rules table words', () => {
 
   it('archived rules show only when asked for; the brain stays first', () => {
     const rows = [brain, row(), row({ id: 'r2', archived: true })]
-    expect(visibleRows(rows, NO_RULES_FILTER).map((r) => r.id)).toEqual([BRAIN_ID, 'r1'])
-    expect(visibleRows(rows, { ...NO_RULES_FILTER, archived: true }).map((r) => r.id)).toEqual(['r2'])
+    const none = { tile: null, search: '', archived: false }
+    expect(visibleRows(rows, none).map((r) => r.id)).toEqual([BRAIN_ID, 'r1'])
+    expect(visibleRows(rows, { ...none, archived: true }).map((r) => r.id)).toEqual(['r2'])
   })
 
   it('works on: the true total and how many the list leaves out (M5); ad groups of a rule bound to none are All', () => {
@@ -78,9 +79,29 @@ describe('rules table words', () => {
     expect(last7Text(row())).toBe('No runs')
   })
 
+  it('last 7 d fits one line (design audit M7): the asks that wait first, then what fits, the rest as "+n"', () => {
+    // The seed rule that wrapped onto two lines: 2 bids · 3 asked · 1 applied · 2 waiting.
+    const r = row({ waiting: 2, last7d: { runs: 4, asks: 3, applied: 1, written: 2, brainInputs: 0, refused: 0 }, changed7d: { ...row().changed7d, bids: 2 } })
+    // One market: the column has the Market column's room too.
+    const fit = last7Fit(r, LAST7_ROOM_ONE_MARKET)
+    expect(fit.shown.map((i) => i.text)).toEqual(['2 waiting', '2 bids'])
+    expect(fit.hidden.map((i) => i.text)).toEqual(['3 asked', '1 applied'])
+    expect(fit.shown[0].waiting).toBe(true)
+    // All markets (the narrower column): the asks that wait, and the rest as "+3".
+    expect(last7Fit(r).shown.map((i) => i.text)).toEqual(['2 waiting'])
+    expect(last7Fit(r).hidden).toHaveLength(3)
+    // Room for everything: no "+n".
+    expect(last7Fit(r, 400).hidden).toEqual([])
+    // One long chip still shows, alone.
+    const long = row({ last7d: { ...row().last7d, asks: 1 } })
+    expect(last7Fit(long).shown.map((i) => i.text)).toEqual(['1 asked · none waiting'])
+    expect(last7Fit(long, 10).shown).toHaveLength(1)
+    expect(last7Fit(row()).shown).toEqual([])
+  })
+
   it('effect: ACoS before → after (lower is better), else orders; nothing when the same, too early or none (S8)', () => {
     const e: Effect = {
-      window: { lookbackDays: 30, maxDays: 14, minDays: 3, settledThrough: '2026-10-03' }, keywords: 2, tooEarly: 1, days: 20,
+      window: { settledThrough: '2026-10-03' }, keywords: 2, tooEarly: 1, days: 20,
       currency: 'EUR', before: { clicks: 40, orders: 2, acosPct: 30 }, after: { clicks: 50, orders: 3, acosPct: 22.5 },
     }
     expect(effectView(e)).toMatchObject({ text: 'ACoS 30 → 22.5 %', tone: 'success' })
@@ -106,8 +127,10 @@ describe('rules table words', () => {
     expect(holdReason({ kind: 'allowlist', label: '2 campaigns locked' })).toBe('2 campaigns locked')
     expect(heldStep(row(), 'AUTO')).toBe('A new rule runs 14 days first.')
     expect(heldStep(row(), 'WATCH')).toBeNull()
-    // From Off, Auto is not the next step.
+    // From Off, Auto is not the next step — also when the answer sends no Auto hold for an Off rule (use audit A5).
     expect(heldStep(row({ mode: { ...row().mode, set: 'OFF', acts: 'OFF' } }), 'AUTO')).toBe('Pick Watch or Ask me first')
+    expect(heldStep(row({ mode: { ...row().mode, set: 'OFF', acts: 'OFF', autoLocked: null } }), 'AUTO')).toBe('Pick Watch or Ask me first')
+    expect(heldStep(row({ mode: { ...row().mode, autoLocked: null } }), 'AUTO')).toBeNull()
     // The chip: the server's label as it is when it starts with Auto; an archived rule shows none.
     expect(autoLockOf(row())?.label).toBe('Auto from 24 Oct')
     expect(autoLockOf(row({ mode: { ...row().mode, autoLocked: { kind: 'graduation', label: 'No match yet' } } }))?.label).toBe('Auto: No match yet')
@@ -135,7 +158,7 @@ describe('rules table words', () => {
     const now = Date.parse('2026-10-10T12:00:00Z')
     expect(nextRunView({ nextRunAt: '2026-10-10T12:20:00Z', firstRunAt: null, thenRunAt: null, schedule: 'Daily · 06:00 · Rome' }, now)).toEqual({ value: 'in 20 min', hint: '10 Oct, 14:20 · Daily · 06:00 · Rome' })
     expect(nextRunView({ nextRunAt: '2026-10-10T12:20:00Z', firstRunAt: '2026-10-10T12:20:00Z', thenRunAt: '2026-10-11T04:00:00Z', schedule: 'Daily · 06:00 · Rome' }, now))
-      .toEqual({ value: 'in 20 min', hint: 'First 10 Oct, 14:20 and 11 Oct, 06:00, then daily 06:00 · Rome' })
+      .toEqual({ value: 'in 20 min', hint: 'First 10 Oct, 14:20, then daily 06:00 · Rome' }) // its schedule's run is not said twice (C-UI 8)
     // Two first runs on one day: the day once (audit R14).
     expect(nextRunView({ nextRunAt: '2026-10-10T23:30:00Z', firstRunAt: '2026-10-10T23:30:00Z', thenRunAt: '2026-10-11T11:30:00Z', schedule: 'Daily · 06:00 · Rome' }, now).hint)
       .toBe('First 11 Oct, 01:30 and 13:30, then daily 06:00 · Rome')
@@ -177,7 +200,7 @@ describe('rules table words', () => {
   })
 
   it('preview: the count and what happens to the rest', () => {
-    const base = { ruleId: null, saved: false, engine: 'draft' as const, wouldChange: 6, unsampled: 2, brainInputs: 2, locked: 1, matched: 9, noChange: 0, refused: 0, capped: false, windowDays: 14, sample: [], note: null }
+    const base = { ruleId: null, saved: false, wouldChange: 6, unsampled: 2, brainInputs: 2, locked: 1, refused: 0, capped: false, windowDays: 14, sample: [], note: null }
     expect(previewParts(base).map((p) => p.text)).toEqual(['6 bids', '2 not listed', '2 to Brain', '1 locked'])
     expect(previewParts({ ...base, capped: true }).map((p) => p.text)).toContain('Daily limit reached')
     // A held change: the server's words, else the page's for its kind.
@@ -200,14 +223,24 @@ describe('rules table words', () => {
 describe('mode draft and review', () => {
   const rows = new Map([['r1', row()], ['r2', row({ id: 'r2', name: 'Rule B', mode: { set: 'AUTO', acts: 'ASK', heldBy: { kind: 'dial', label: 'Account: Ask me' }, also: [], autoLocked: null } })]])
 
-  it('a pick back to the set mode leaves the draft; the brain and archived never enter it', () => {
-    let d = pickMode({}, row(), 'AUTO')
+  it('a pick back to the set mode leaves the draft; the brain, archived rules and a held step never enter it (A4, A5)', () => {
+    const free = row({ mode: { ...row().mode, autoLocked: null } })
+    let d = pickMode({}, free, 'AUTO')
     expect(d).toEqual({ r1: 'AUTO' })
-    d = pickMode(d, row(), 'ASK')
+    d = pickMode(d, free, 'ASK')
     expect(d).toEqual({})
+    // Auto held by its gate ("Auto from 24 Oct"), and Auto from Off: the server would refuse the save.
+    expect(pickMode({}, row(), 'AUTO')).toEqual({})
+    expect(pickMode({}, row({ mode: { ...row().mode, set: 'OFF', acts: 'OFF', autoLocked: null } }), 'AUTO')).toEqual({})
     expect(pickMode({}, brain, 'AUTO')).toEqual({})
     expect(pickMode({}, row({ archived: true }), 'OFF')).toEqual({})
     expect(pickModeFor({}, [row(), rows.get('r2')!, brain], 'WATCH')).toEqual({ r1: 'WATCH', r2: 'WATCH' })
+    // The bulk Auto: a held rule keeps its mode; the list says so, or holds Auto when no ticked rule may take it.
+    const two = [row(), row({ id: 'r3', mode: { ...row().mode, autoLocked: null } })]
+    expect(pickModeFor({}, two, 'AUTO')).toEqual({ r3: 'AUTO' })
+    expect(bulkModeOptions(two).find((o) => o.value === 'AUTO')).toEqual({ value: 'AUTO', label: 'Auto', note: '1 rule keeps its mode: A new rule runs 14 days first.' })
+    expect(bulkModeOptions([row()]).find((o) => o.value === 'AUTO')).toMatchObject({ heldReason: 'A new rule runs 14 days first.' })
+    expect(bulkModeOptions([row()]).find((o) => o.value === 'WATCH')).toEqual({ value: 'WATCH', label: 'Watch' })
   })
 
   it('the review: Now → New, only a pick that can change bids needs the tick (S1), the held state is noted', () => {

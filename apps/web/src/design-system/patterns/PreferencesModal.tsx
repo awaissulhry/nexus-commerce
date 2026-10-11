@@ -396,10 +396,12 @@ export function usePreferencesPanes({
       .filter((section) => section.columns.length > 0)
   }, [pickSections, needle, attributeGroups])
 
-  const totalCount = (attributeGroups ? allColumns.filter((c) => !c.locked) : allColumns).filter((c) => !c.uncounted).length
+  // One count on both panes (Bid page use audit A11: "19 columns" beside "In view · 7 of 18"): the columns a person can
+  // pick, as "In view" counts them — a structural (locked) column is listed under its heading but never counted.
+  const totalCount = allColumns.filter((c) => !c.locked && !c.uncounted).length
   const matchCount = useMemo(
-    () => filteredSections.reduce((n, s) => n + s.columns.filter((c) => (!attributeGroups || !c.locked) && !c.uncounted).length, 0),
-    [filteredSections, attributeGroups],
+    () => filteredSections.reduce((n, s) => n + s.columns.filter((c) => !c.locked && !c.uncounted).length, 0),
+    [filteredSections],
   )
   // Only worth its row on a list long enough to get lost in. One rule in the DS rather than a prop
   // each caller answers differently — "shared" has to mean the same dialog, not a configurable one.
@@ -633,11 +635,10 @@ export function usePreferencesPanes({
           )}
     </>
   )
-  const pickList = (
+  // The CHOOSING half: every column the grid has, grouped, each a tick — its header (title, hint, quick picks, filter,
+  // select-all) and its list, apart, so a two-pane layout can put both headers in one band and both lists on one line.
+  const pickHead = (
     <>
-          {/* The CHOOSING half: every column the grid has, grouped, each a tick. */}
-          {(
-            <div className="nds-prefs-set nds-prefs-pickset">
               <legend>{listLabel}</legend>
               <p className="nds-prefs-help">{listHint ?? 'Tick a column to add it to the view.'}</p>
               {quickPicks.length > 0 && (
@@ -719,6 +720,9 @@ export function usePreferencesPanes({
                   </div>
                 )
               })()}
+    </>
+  )
+  const pickBox = (
               <div className="nds-prefs-cols nds-prefs-picks">
                 {needle && filteredSections.length === 0 && (
                   <p className="nds-prefs-help nds-prefs-nomatch">No column matches “{query.trim()}”.</p>
@@ -797,10 +801,8 @@ export function usePreferencesPanes({
                   )
                 })}
               </div>
-            </div>
-          )}
-    </>
   )
+  const pickList = <div className="nds-prefs-set nds-prefs-pickset">{pickHead}{pickBox}</div>
   const selectionBox = (keys: readonly string[], label: string) => {
     const eligible = keys.filter((key) => selectableKeys.has(key))
     const count = eligible.filter((key) => selected.has(key)).length
@@ -1031,8 +1033,7 @@ export function usePreferencesPanes({
       {needle && !matchingShown.length && <p className="nds-prefs-nomatch nds-prefs-help">No columns in view match “{query.trim()}”.</p>}
     </div>)}
   </>
-  const inView = (
-    <>
+  const viewHead = (
           <div className="nds-prefs-set">
             <legend>
               In view
@@ -1044,14 +1045,14 @@ export function usePreferencesPanes({
             </legend>
             <p className="nds-prefs-help">{attributeGroups ? 'Select columns to move or edit together. Drag groups or columns to reorder.' : 'Drag to reorder · ✕ removes a column from the view.'}</p>
           </div>
-          {attributeGroups ? groupedInView : withDrag(
+  )
+  const viewBox = attributeGroups ? groupedInView : withDrag(
             <div className={['nds-prefs-cols', drag ? 'is-sorting' : ''].filter(Boolean).join(' ')}>
               <SortableContext items={shownColumns.map((c) => dragId('flat', c.key))} strategy={verticalListSortingStrategy}>
                 {shownColumns.map((c) => renderViewRow(c, shownColumns, 'flat'))}
               </SortableContext>
-            </div>)}
-    </>
-  )
+            </div>)
+  const inView = <>{viewHead}{viewBox}</>
 
   // ── Grouping tab: two drop zones, AG's Columns-panel idea rendered by the DS ────────────
   const groups = draft.rowGroups ?? []
@@ -1175,7 +1176,7 @@ export function usePreferencesPanes({
   const groupingCount = groups.length + Object.keys(aggs).length
   const hasDisplay = pageSizeChoices.length > 0 || showSticky || sortFieldOptions.length > 0 || workspaceSlot != null
 
-  return { pickList, inView, groupingTab, displaySections, resetValue, resetInteraction, resetSelection, tabbed, hasDisplay, hasLeftPanel, groupingCount }
+  return { pickList, pickHead, pickBox, inView, viewHead, viewBox, groupingTab, displaySections, resetValue, resetInteraction, resetSelection, tabbed, hasDisplay, hasLeftPanel, groupingCount }
 }
 
 export function PreferencesModal({
@@ -1215,7 +1216,7 @@ export function PreferencesModal({
   const [viewError, setViewError] = useState<string | null>(null)
   const busyRef = useRef(false)
   const wasOpen = useRef(false)
-  const { pickList, inView, groupingTab, displaySections, resetValue, resetInteraction, resetSelection, tabbed, hasDisplay, hasLeftPanel, groupingCount } = usePreferencesPanes({
+  const { pickList, pickHead, pickBox, inView, viewHead, viewBox, groupingTab, displaySections, resetValue, resetInteraction, resetSelection, tabbed, hasDisplay, hasLeftPanel, groupingCount } = usePreferencesPanes({
     value: draft, onChange: (next) => { if (!busyRef.current) setDraft(next) }, allColumns, defaultVisible, sortFieldOptions, pageSizeChoices, showSticky, groupByOptions, aggregationOptions, listLabel, listHint, workspaceSlot, quickPicks, groupToggles, inViewCount, attributeGroups, bulkPick,
   })
   useEffect(() => {
@@ -1318,12 +1319,23 @@ export function PreferencesModal({
               ...(hasDisplay ? [{ id: 'display', label: 'Display' }] : []),
             ]}
           />
-          {tab === 'columns' && (
-            <div className={`nds-prefs nds-prefs-tabbed${attributeGroups ? ' nds-prefs-attributes' : ''}`}>
+          {tab === 'columns' && (attributeGroups ? (
+            <div className="nds-prefs nds-prefs-tabbed nds-prefs-attributes">
               <div className="nds-prefs-pane">{pickList}</div>
               <div className="nds-prefs-pane">{inView}</div>
             </div>
-          )}
+          ) : (
+            <div className="nds-prefs nds-prefs-tabbed nds-prefs-paired">
+              <div className="nds-prefs-pane nds-prefs-pair">
+                <div className="nds-prefs-head"><div className="nds-prefs-set nds-prefs-pickset">{pickHead}</div></div>
+                {pickBox}
+              </div>
+              <div className="nds-prefs-pane nds-prefs-pair">
+                <div className="nds-prefs-head">{viewHead}</div>
+                {viewBox}
+              </div>
+            </div>
+          ))}
           {tab === 'grouping' && groupingTab}
           {tab === 'display' && (
             <div className="nds-prefs nds-prefs-tabbed single">
@@ -1331,8 +1343,8 @@ export function PreferencesModal({
             </div>
           )}
         </>
-      ) : (
-        <div className={`nds-prefs${hasLeftPanel ? '' : ' single'}${attributeGroups ? ' nds-prefs-attributes' : ''}`}>
+      ) : attributeGroups ? (
+        <div className={`nds-prefs${hasLeftPanel ? '' : ' single'} nds-prefs-attributes`}>
           {hasLeftPanel && (
             <div className="nds-prefs-col">
               {displaySections}
@@ -1340,6 +1352,24 @@ export function PreferencesModal({
             </div>
           )}
           <div className="nds-prefs-col">{inView}</div>
+        </div>
+      ) : (
+        // The two panes share one header band and one bottom line: each pane is its header and its list, on the rows of
+        // the panes' grid (`.nds-prefs-paired`, patterns.css) — the Bid page's lists started 16px and ended 17px apart.
+        <div className={`nds-prefs nds-prefs-paired${hasLeftPanel ? '' : ' single'}`}>
+          {hasLeftPanel && (
+            <div className="nds-prefs-col nds-prefs-pair">
+              <div className="nds-prefs-head">
+                {displaySections}
+                <div className="nds-prefs-set nds-prefs-pickset">{pickHead}</div>
+              </div>
+              {pickBox}
+            </div>
+          )}
+          <div className="nds-prefs-col nds-prefs-pair">
+            <div className="nds-prefs-head">{viewHead}</div>
+            {viewBox}
+          </div>
         </div>
       )}
       </fieldset>

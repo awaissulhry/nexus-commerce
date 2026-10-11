@@ -10,19 +10,15 @@
   min-width: 0;
 }
 
+/* The owner chips: one line in the toolbar (they never shrink, so a toolbar that runs out of room folds them into one
+   button — GridToolbarFold — instead of wrapping them 3 + 2, audit M4); inside the fold's panel they wrap to its width. */
 .chips {
   display: flex;
+  flex: none;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--nds-space-6);
-  min-width: 0;
-}
-
-.toolbarRight {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--nds-space-8);
+  max-width: 100%;
 }
 
 .inline {
@@ -118,10 +114,6 @@
   height: 100%;
 }
 
-.count {
-  white-space: nowrap;
-}
-
 .mark {
   display: inline-flex;
   align-items: center;
@@ -167,8 +159,29 @@
 .results {
   display: inline-flex;
   align-items: center;
-  gap: var(--nds-space-10);
+  gap: var(--nds-space-8);
   font-variant-numeric: tabular-nums;
+}
+
+/* Results 7 d: each number right-aligned in a slot of fixed width (M6). */
+.slot2,
+.slot3,
+.slotAcos {
+  display: inline-block;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.slot2 {
+  min-width: 2ch;
+}
+
+.slot3 {
+  min-width: 3ch;
+}
+
+.slotAcos {
+  min-width: 5.5ch;
 }
 
 .moon {
@@ -189,10 +202,12 @@
 
 /* ── the keyword's detail (DS DetailModal): a rail that stays on every tab, the tab beside it ─────────────── */
 
+/* The tab beside the rail is as tall as the rail, so a short tab (What if, Goal) centres its answer in the room left
+   instead of leaving it empty under the form (design audit S2). */
 .detail {
   display: grid;
   grid-template-columns: 360px minmax(0, 1fr);
-  align-items: start;
+  align-items: stretch;
   gap: var(--nds-space-24);
   min-width: 0;
 }
@@ -205,7 +220,27 @@
 }
 
 .detailMain {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
+}
+
+.detailMain > .why {
+  flex: 1 0 auto;
+}
+
+/* What if's answer, centred in the room the rail leaves beside the form. */
+.stage {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--nds-space-12);
+}
+
+.strong {
+  font-weight: var(--nds-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Phone (the DS sheet, breakpoint.sm): one column — the tab first (right under the tab row), the rail after it. */
@@ -264,25 +299,6 @@
   width: 140px;
 }
 
-/* A rule's name in the History table: a flex box, so the DS link's own "…" applies and it never runs into Status. */
-.whoCell {
-  display: flex;
-  min-width: 0;
-  max-width: 160px;
-}
-
-/* "Can't undo": plain muted words that take focus, so the reason is heard (a tooltip on hover and focus). */
-.cant {
-  color: var(--nds-text-2);
-  white-space: nowrap;
-  border-radius: var(--nds-radius-xs);
-}
-
-.cant:focus-visible {
-  outline: 2px solid var(--nds-primary);
-  outline-offset: 1px;
-}
-
 /* The DS field fills its box (its input otherwise keeps the browser's 20-character width). */
 .field {
   width: 100%;
@@ -299,16 +315,4 @@
   display: flex;
   flex-direction: column;
   gap: var(--nds-space-12);
-}
-
-.footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--nds-space-8);
-  width: 100%;
-}
-
-.grow {
-  flex: 1;
 }

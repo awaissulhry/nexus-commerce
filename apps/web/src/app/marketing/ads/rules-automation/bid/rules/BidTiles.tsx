@@ -51,7 +51,7 @@ export function BidTiles({ view, totals, bids, tile, bidsShow, onQuery, onWaitin
     ? { label: 'Waiting for you', value: t.waiting, accent: 'var(--nds-warning)', onClick: onWaiting, active: view === 'rules' && tile === 'waiting' }
     : { label: 'Waiting for you', value: t ? t.waiting : '—', accent: 'var(--nds-border-strong)' }
 
-  const metrics: Metric[] = view === 'bids'
+  const metrics: Metric[] = (view === 'bids'
     ? [
       rulesOn,
       bids
@@ -69,6 +69,11 @@ export function BidTiles({ view, totals, bids, tile, bidsShow, onQuery, onWaitin
       t && t.clashes > 0
         ? { label: RULE_CLASHES_LABEL, value: t.clashes, accent: 'var(--nds-danger)', onClick: () => onQuery({ view: null, show: null, rule: BRAIN_ID, tab: 'clashes' }) }
         : { label: RULE_CLASHES_LABEL, value: t ? t.clashes : '—', accent: 'var(--nds-border-strong)' },
-    ]
-  return <MetricStrip className={styles.tiles} metrics={metrics} />
+    ]).map((m) => ({ ...m, label: <span className={styles.tileLabel}>{glue(String(m.label))}</span>, value: <span className={styles.tileValue}>{m.value}</span> }))
+  // The box is a size container: the strip goes 2 × 2 when four labels would wrap, and on a phone every label keeps two
+  // lines, so the four numbers always share one line (design audit M10).
+  return <div className={styles.tilesBox}><MetricStrip className={styles.tiles} metrics={metrics} /></div>
 }
+
+/** A tile's words with the unit glued to its number and to its "·", so "7 d" never breaks (M10: an orphan "d" at 768). */
+const glue = (label: string): string => label.replace(/ · /g, '\u00a0·\u00a0').replace(/(\d) d\b/g, '$1\u00a0d')

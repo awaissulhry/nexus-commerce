@@ -27,7 +27,7 @@ export interface RefCounts { portfolios: number; campaigns: number; adGroups?: n
 
 export interface EffectSide { clicks: number; orders: number; spendCents?: number; salesCents?: number; acosPct?: number | null }
 export interface Effect {
-  window: { lookbackDays: number; maxDays: number; minDays: number; settledThrough: string; method?: string }
+  window: { settledThrough: string }
   keywords: number
   tooEarly: number
   days: number
@@ -61,7 +61,7 @@ export interface BidRuleRow {
 }
 
 export interface BidRulesTotals {
-  rules: number; on: number; acting: number; auto: number; asking: number; held: number; waiting: number
+  rules: number; on: number; waiting: number
   bidsChanged7d: number; clashes: number; archived: number; otherMarkets: number
 }
 
@@ -118,12 +118,15 @@ export function autoLockOf(row: BidRuleRow): Hold | null {
   return { ...h, label: /^auto\b/i.test(label) ? label : `Auto: ${label}` }
 }
 
-/** Why a step cannot be picked for this row (the mode list's held line), or null. */
+/**
+ * Why a step cannot be picked for this row (the mode list's held line), or null. From Off, Auto is never a step to take at
+ * once — whatever the answer says about Auto's own hold (the API sends none for an Off rule: use audit A5, the save would
+ * be refused) — so the plain next step says so.
+ */
 export function heldStep(row: BidRuleRow, step: string): string | null {
-  if (step !== 'AUTO' || row.mode.set === 'AUTO' || !row.mode.autoLocked) return null
-  // From Off, Auto is not a step to take at once: the plain next step says so.
+  if (step !== 'AUTO' || row.mode.set === 'AUTO') return null
   if (row.mode.set === 'OFF') return 'Pick Watch or Ask me first'
-  return holdReason(row.mode.autoLocked)
+  return row.mode.autoLocked ? holdReason(row.mode.autoLocked) : null
 }
 
 /** Why the whole mode picker is locked for this row, or null (it may change). One wording in the table and the panel. */
@@ -159,6 +162,17 @@ export function brainAskWords(a: { executeAfter?: string | null }, now = Date.no
   return a.executeAfter && Date.parse(a.executeAfter) > now ? `Approved · runs ${relWords(a.executeAfter, now)}` : 'Approved'
 }
 
+/**
+ * The Brain's row has nothing to say in this market: it decides in none of its campaigns here, ran no time, changed and
+ * held nothing (FR, ES, UK and the markets Nexus only reads — it decides in IT and DE). The page leaves it out there
+ * rather than show "Watch" with five dashes and empty tabs (use audit C-UI 3). On All markets it always shows.
+ */
+export function brainIdleHere(row: BidRuleRow, market: string): boolean {
+  if (!isBrain(row) || market === 'all') return false
+  return !row.scope.campaigns.length && !row.last7d.runs && !row.changed7d.bids && !row.last7d.brainInputs
+    && !row.last7d.written && !row.lastRunAt && !row.effect
+}
+
 // ── tiles, search ───────────────────────────────────────────────────────────────────────────────────────────────────
 
 export type RulesTile = 'on' | 'changed' | 'waiting'
@@ -186,7 +200,6 @@ export function rowMatchesSearch(row: BidRuleRow, search: string): boolean {
 }
 
 export interface RulesFilter { tile: RulesTile | null; search: string; archived: boolean }
-export const NO_RULES_FILTER: RulesFilter = { tile: null, search: '', archived: false }
 
 /** The rows on screen: the brain always first while it matches; archived rules only when asked for. */
 export function visibleRows(rows: readonly BidRuleRow[], f: RulesFilter): BidRuleRow[] {
@@ -246,6 +259,39 @@ export function last7Parts(row: BidRuleRow): Part[] {
   if (l.brainInputs > 0) parts.push({ key: 'brain', text: `${l.brainInputs} to Brain`, tone: 'info' })
   if (l.refused > 0) parts.push({ key: 'refused', text: `${l.refused} refused`, tone: 'warning' })
   return parts
+}
+
+/** One chip of the Last 7 d cell: the asks that wait (a warning button that opens them), or one of `last7Parts`. */
+export type Last7Item = { key: string; text: string; waiting?: true; part?: Part }
+
+/** The room the Last 7 d cell gives its chips: the column's least width (RulesTable: 170 on All markets, where the
+ *  Market column takes its share; 254 on one market) less the cell's padding. */
+export const LAST7_ROOM = 140
+export const LAST7_ROOM_ONE_MARKET = 224
+const CHIP_GAP = 4
+/** About how wide a small chip draws its words: 12 px semibold is ~6.4 px a character, plus its padding and border. */
+const chipWidth = (text: string) => 16 + Math.ceil(text.length * 6.4)
+
+/**
+ * The Last 7 d cell on ONE line (design audit M7: four chips wrapped onto two lines and crossed the row lines). The asks
+ * that wait come first (the one call to act), then the parts in their order, as many as fit `room`; the rest become one
+ * "+n" chip that names them on hover (the whole line is also the cell's title). At least one chip always shows.
+ */
+export function last7Fit(row: BidRuleRow, room = LAST7_ROOM): { shown: Last7Item[]; hidden: Last7Item[] } {
+  const items: Last7Item[] = [
+    ...(row.waiting > 0 ? [{ key: 'waiting', text: `${row.waiting} waiting`, waiting: true as const }] : []),
+    ...last7Parts(row).map((part) => ({ key: part.key, text: part.text, part })),
+  ]
+  let used = 0
+  let count = 0
+  for (let i = 0; i < items.length; i += 1) {
+    const left = items.length - i - 1
+    const need = (count ? used + CHIP_GAP : 0) + chipWidth(items[i].text) + (left ? CHIP_GAP + chipWidth(`+${left}`) : 0)
+    if (count && need > room) break
+    used = (count ? used + CHIP_GAP : 0) + chipWidth(items[i].text)
+    count += 1
+  }
+  return { shown: items.slice(0, count), hidden: items.slice(count) }
 }
 
 /** Where Enter on the Last 7 d cell goes: the asks while some wait, else the first chip's tab, else the Overview. */
@@ -315,9 +361,13 @@ export function nextRunView(row: Pick<BidRuleRow, 'nextRunAt' | 'firstRunAt' | '
   if (!row.nextRunAt) return { value: '—', hint: row.schedule ?? null }
   if (!row.firstRunAt) return { value: relWords(row.nextRunAt, now), hint: [whenWords(row.nextRunAt), row.schedule ?? null].filter(Boolean).join(' · ') }
   // A rule that has not run yet: its first runs, then its schedule, in one sentence (audit R14: "First 01:30 and 13:30,
-  // then daily 06:00" — the evaluator's first runs beside "Daily 06:00" read as a contradiction when listed apart).
+  // then daily 06:00" — the evaluator's first runs beside "Daily 06:00" read as a contradiction when listed apart). The
+  // run after the first that is simply its schedule's is not said twice (use audit C-UI 8: "… and 12 Oct, 06:00, then
+  // daily 06:00").
   const a = whenWords(row.nextRunAt)
-  const b = row.thenRunAt ? whenWords(row.thenRunAt) : null
+  const scheduleTime = /\b(\d{2}:\d{2})\b/.exec(row.schedule ?? '')?.[1] ?? null
+  const thenWords = row.thenRunAt ? whenWords(row.thenRunAt) : null
+  const b = thenWords && !(scheduleTime && thenWords.endsWith(scheduleTime)) ? thenWords : null
   const sameDay = !!b && a.split(', ')[0] === b.split(', ')[0]
   const firsts = b ? `First ${a} and ${sameDay ? b.split(', ')[1] : b}` : `First ${a}`
   const then = row.schedule ? `, then ${row.schedule.replace(/^\S/, (c) => c.toLowerCase()).replace(/^(\w+) · (\d{2}:\d{2})/, '$1 $2')}` : ''
@@ -390,15 +440,12 @@ export interface PreviewSample {
 export interface PreviewResult {
   ruleId: string | null
   saved: boolean
-  engine: 'draft' | 'simulate'
   /** What the rule itself would change: the listed ones that go through, plus `unsampled`. */
   wouldChange: number
   /** Counted by a handler without being listed. */
   unsampled?: number
   brainInputs: number
   locked: number
-  matched: number
-  noChange: number
   refused: number
   capped: boolean
   windowDays: number | null

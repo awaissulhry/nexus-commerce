@@ -3,7 +3,7 @@
 import { useMemo } from 'react'
 
 import { EntityLinks, Sparkline, type EntityRef } from '../components'
-import { GridCard, GridToolbar, NexusGrid, entityLinksColumn, sparklineColumn, textColumn, type ColDef } from '../grid'
+import { GridCard, GridToolbar, NexusGrid, entityLinksColumn, textColumn, type ColDef } from '../grid'
 
 /*
  * 2026-10-10 — bid page DS lane: a small step chart and the links to what a row works on. Made-up rows and numbers.
@@ -19,11 +19,11 @@ import { GridCard, GridToolbar, NexusGrid, entityLinksColumn, sparklineColumn, t
 const eur = (n: number) => `€${n.toFixed(2)}`
 const camp = (id: string, name: string): EntityRef => ({ id, name, href: `/design-system#bid-parts-example` })
 
-interface Row { id: string; keyword: string; campaigns: EntityRef[]; bid: Array<number | null> }
+interface Row { id: string; keyword: string; campaigns: EntityRef[] }
 const ROWS: Row[] = [
-  { id: 'a', keyword: 'leather jacket', campaigns: [camp('c1', 'Jacket Exact')], bid: [0.4, 0.4, 0.2, 0.4, 0.2, 0.3, 0.3] },
-  { id: 'b', keyword: 'jacket men', campaigns: [camp('c1', 'Jacket Exact'), camp('c2', 'Jacket Phrase'), camp('c3', 'Jacket Broad')], bid: [0.1, 0.1, 0.2, null, 0.3] },
-  { id: 'c', keyword: 'rain jacket', campaigns: [], bid: [] },
+  { id: 'a', keyword: 'leather jacket', campaigns: [camp('c1', 'Jacket Exact')] },
+  { id: 'b', keyword: 'jacket men', campaigns: [camp('c1', 'Jacket Exact'), camp('c2', 'Jacket Phrase'), camp('c3', 'Jacket Broad')] },
+  { id: 'c', keyword: 'rain jacket', campaigns: [] },
 ]
 const ROW_ID = (p: { data: Row }) => p.data.id
 
@@ -31,7 +31,6 @@ export function BidPartsExample() {
   const cols = useMemo<ColDef<Row>[]>(() => [
     { colId: 'keyword', headerName: 'Keyword', width: 150, ...textColumn<Row>('keyword') },
     { colId: 'campaigns', width: 170, ...entityLinksColumn<Row>('campaigns', { header: 'Campaigns', noun: { one: 'campaign', many: 'campaigns' }, listLabel: (r) => `Campaigns of ${r.keyword}` }) },
-    { colId: 'bid', width: 120, ...sparklineColumn<Row>('bid', { header: 'Bid, 7 days', label: (r) => `Bid of ${r.keyword}, 7 days`, format: eur }) },
   ], [])
   return (
     <section id="bid-parts-example" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--nds-space-12)', maxWidth: 560 }}>

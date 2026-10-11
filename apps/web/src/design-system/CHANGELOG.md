@@ -1,3 +1,29 @@
+## Removed: WeekHourGrid and sparklineColumn, nothing rendered them — 2026-10-11
+
+Bid page "nothing unnecessary" pass (lane USE-WEB; the Owner: "there must not be anything unnecessary").
+
+- **`WeekHourGrid` + `weekHourModel.ts`** (added 2026-10-10 for the shelved ads Brain page): removed with its test, the
+  catalog example (`#week-hour-grid-example`), the `.nds-weekhour*` styles and the barrel lines. Mirrored in Factory
+  (component, model, barrel). Bring it back from git history (#541) with the first page that uses it.
+- **`sparklineColumn` + `SparklineCell`** (grid): removed with their test case and the catalog column. No page used them;
+  a cell draws `Sparkline` itself when it needs the row's own currency (the Bid page's Trend). `.nds-cell-spark` stays.
+
+## Aligned and balanced: one toolbar tier, numeric headers on their numbers, titles on their buttons, tiles on one line, a restore keeps its pins — 2026-10-11
+
+Bid page design review, lane DESIGN-DS (`~/nexus-archive/2026-10-10-ads-pages/01-bid/audit/AUDIT-DESIGN.md`; the Owner: "Everything must be properly aligned and properly balanced"). Shared parts, so every page that uses them changes the same way. Mirrored in Factory: `grid/theme/grid.css`, `components/MetricStrip.tsx`, `patterns/PreferencesModal.tsx` (identical there) and the paired-Customise rules in Factory's `patterns.css`; the other CSS rules are web only.
+
+- **One control height per toolbar row** (M1/M2): the grid toolbar's search slot is the 28px `sm` tier (`--nds-grid-toolbar-slot-h`, was 36 — the form tier); the field fills its slot (`width: 100%`; the slot grew while the field stayed 188px, a dead 53px gap) and takes the slot's height whatever its `size`. In any `.nds-toolbar` a `FilterChip` takes the `md` (28px) size and a `SegmentedControl` fills 28px (they measured 23.8 and 27.2). A grid card's toolbar is 57px tall instead of 65.
+- **The right-hand group stays right when a toolbar wraps** (M4/S5): the item after `.grow` keeps `margin-inline-start: auto`.
+- **A numeric header's text ends where its values end** (M5): `.nds-ag-head-num` restates AG's right-aligned header (a column's `headerClass` replaces the `rightAligned` type's) — the ⋮ menu before the label, sort and filter icons on the text's left. "Bid now" ended 24px left of its numbers; now 0. Every numeric column on every grid.
+- **Titles centred on their 28px buttons** (M9): `PageHeader` centres its actions on a one-line title (with a subtitle, on the title's line); `Modal`'s title line is centred on Close and header actions (a `detail` keeps its height: there the controls rise to the title's line instead).
+- **`DetailModal` tab labels on the dialog's inset** (M11): a scrolling tab strip in `Modal subheader` reaches 4px past the inset (its focus-ring padding), the first tab has no leading padding and the hairline is drawn on the inset — "Overview" at 24px (phone sheet 16) instead of 40 (32). No change to the dialog's position or height.
+- **`MetricStrip`: a row's numbers share one line** (M10): each tile lays its label and its body (number, delta, hint — now wrapped in `.nds-metric-body`) on two rows of the strip (`subgrid`), so a wrapped label or a hint no longer moves one number; the number's line is 1.1 (a figure has no descenders), so top and bottom are balanced (19.3 / 19.1 instead of 19.3 / 23.9) and a tile is ~9px shorter.
+- **The loading skeleton never covers the header** (M13): it is centred in the space under the header row and, when taller than that space, starts right under it (AG lays its loading overlay over the whole grid).
+- **A restored grid state keeps its pins** (M14, `grid/statePinning.ts`, tested): AG resets a missing `columnPinning` to none, so a surface that remembers widths but not pins (the Bid rules) lost its pinned Rule and ⋯ columns on every reload — ⋯ was drawn outside the card at 1280. `NexusGrid` fills a missing `columnPinning` from the pins the column definitions declare; applying a saved view keeps the grid's current pins.
+- **Views menu: no empty divider** (M18): the line under the views is drawn only when a view is listed.
+- **Customise: the two lists share their top and their bottom** (M19): each pane is its header and its list on two rows of the panes' grid (`.nds-prefs-paired` / `.nds-prefs-pair` / `.nds-prefs-head`), one 360px cap for both lists; the attribute-group layout (the product sheet, /products) is unchanged. `usePreferencesPanes` also returns `pickHead`, `pickBox`, `viewHead`, `viewBox`.
+- **Review table text on the dialog's inset** (S17): the first and last cells of a review's table drop their side padding.
+
 ## A light modal draws its native controls light — 2026-10-11
 
 - **`.nds-modal[data-nds-light] { color-scheme: light }`**: a light `Modal` on a dark OS drew its native controls dark

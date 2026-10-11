@@ -24,7 +24,7 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { Plus, Check, Search, Trash2, X, ChevronLeft, ChevronRight } from 'lucide-react'
-import { Button, Input, Radio, Tag, ToolbarButton, Tooltip } from '@/design-system/primitives'
+import { Button, Input, Radio, Tag, ToolbarButton } from '@/design-system/primitives'
 
 import { searchOptions } from '@/lib/option-search'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -64,20 +64,13 @@ export const toCampaign = (it: Record<string, unknown>): SchedCampaign => ({
   placements: (it.placements as SchedCampaign['placements']) ?? undefined,
 })
 
-/** The badges in words (re-audit R17: "A", "M", "SP" were not explained). */
-const TARGETING_WORD = { AUTO: 'Auto targeting', MANUAL: 'Manual targeting' } as const
-const PRODUCT_WORD: Readonly<Record<string, string>> = { SP: 'Sponsored Products', SB: 'Sponsored Brands', SD: 'Sponsored Display' }
-const badges = (c: SchedCampaign) => {
-  const targeting = TARGETING_WORD[c.targetingType === 'AUTO' ? 'AUTO' : 'MANUAL']
-  const product = PRODUCT_WORD[c.adProduct] ?? c.adProduct
-  return (<>
-    <Tooltip label={targeting} portal><span className={`cp-badge ${c.targetingType === 'AUTO' ? 'auto' : 'manual'}`} role="img" aria-label={targeting}>{c.targetingType === 'AUTO' ? 'A' : 'M'}</span></Tooltip>
-    <Tooltip label={product} portal><span className="cp-badge prod" role="img" aria-label={product}>{c.adProduct}</span></Tooltip>
-  </>)
-}
+const badges = (c: SchedCampaign) => (<>
+  <span className={`cp-badge ${c.targetingType === 'AUTO' ? 'auto' : 'manual'}`} title={c.targetingType === 'AUTO' ? 'Auto' : 'Manual'}>{c.targetingType === 'AUTO' ? 'A' : 'M'}</span>
+  <span className="cp-badge prod" title={c.adProduct}>{c.adProduct}</span>
+</>)
 const statusText = (s: string) => (s === 'ENABLED' ? 'Enabled' : s === 'PAUSED' ? 'Paused' : 'Archived')
 
-const TABS = ['All campaigns', 'Portfolios', 'Products']
+const TABS = ['All Campaigns', 'Portfolios', 'Products']
 
 /** A product line and the campaigns it reaches — `/advertising/scope-options`'s own shape. */
 interface ProductLine { id: string; sku: string; name: string; variations: number; campaigns: string[] }
@@ -100,7 +93,7 @@ export function CampaignSection({ selected, onAdd, onAddMany, onRemove, onClear,
   /** 4i (review 4.7) — the ad types the rule can act on: ['SP'] for a Placement rule. Absent = every type. */
   adProducts?: readonly string[]
 }) {
-  const [tab, setTab] = useState('All campaigns')
+  const [tab, setTab] = useState('All Campaigns')
   const [all, setAll] = useState<SchedCampaign[]>([])
   const [portfolios, setPortfolios] = useState<Array<{ id: string; name: string }>>([])
   const [lines, setLines] = useState<ProductLine[]>([])
@@ -256,12 +249,12 @@ export function CampaignSection({ selected, onAdd, onAddMany, onRemove, onClear,
             leadingIcon={<Search size={16} />}
             value={q}
             onChange={(e) => { setQ(e.target.value); setPage(1) }}
-            placeholder={tab === 'Products' ? 'Search for a product title or SKU' : 'Search for campaigns'}
+            placeholder={tab === 'Products' ? 'Search for a product title or SKU' : 'Search for Campaigns'}
             aria-label={tab === 'Products' ? 'Search for a product title or SKU' : 'Search for campaigns'}
           />
         </div>
         <div className="cp-statusrow">
-          <span className="lbl">Campaign status</span>
+          <span className="lbl">Campaign Status:</span>
           {(['all', 'enabled', 'paused'] as const).map((s) => (
             <Radio key={s} className="rad" name="schedcpstatus" checked={status === s} onChange={() => { setStatus(s); setPage(1) }} label={s[0].toUpperCase() + s.slice(1)} />
           ))}
@@ -270,9 +263,9 @@ export function CampaignSection({ selected, onAdd, onAddMany, onRemove, onClear,
           {/* On Products, "Add All" means every campaign of the products currently listed — the
               campaign-level `addable` would not match what the list is showing. */}
           {tab === 'Products' ? (
-            <Button variant="primary" disabled={!productAddable.length} onClick={() => onAddMany(productAddable)}>Add all</Button>
+            <Button variant="primary" disabled={!productAddable.length} onClick={() => onAddMany(productAddable)}>Add All</Button>
           ) : (
-            <Button variant="primary" disabled={!addable.length} onClick={() => onAddMany(addable)}>Add all</Button>
+            <Button variant="primary" disabled={!addable.length} onClick={() => onAddMany(addable)}>Add All</Button>
           )}
         </div>
         <div className="cp-list">
@@ -305,7 +298,7 @@ export function CampaignSection({ selected, onAdd, onAddMany, onRemove, onClear,
             : pageItems.length === 0 ? <div className="cp-msg">No campaigns match.</div>
             : pageItems.map(row)}
         </div>
-        {tab === 'All campaigns' && (
+        {tab === 'All Campaigns' && (
         <div className="cp-pager">
           <ToolbarButton variant="boxed" className="pg" icon={<ChevronLeft size={16} />} label="Previous page" tooltip={false} disabled={pg <= 1} onClick={() => setPage(pg - 1)} />
           <span className="pgn">{pg}</span>
@@ -316,12 +309,12 @@ export function CampaignSection({ selected, onAdd, onAddMany, onRemove, onClear,
       </div>
       <div className="cp-right">
         <div className="cp-rhead">
-          <b>{selected.length} campaign{selected.length === 1 ? '' : 's'} added</b>
-          <button type="button" className="cp-removeall" disabled={!selected.length} onClick={onClear}><Trash2 size={14} /> Remove all</button>
+          <b>{selected.length} Campaign{selected.length === 1 ? '' : 's'} Added</b>
+          <button type="button" className="cp-removeall" disabled={!selected.length} onClick={onClear}><Trash2 size={14} /> Remove All</button>
         </div>
         <div className="cp-colhdr">Campaign</div>
         {selected.length === 0 ? (
-          <div className="cp-empty"><span className="cp-illus"><Search size={26} /></span>No campaigns added</div>
+          <div className="cp-empty"><span className="cp-illus"><Search size={26} /></span>No Campaigns Added</div>
         ) : (
           <div className="cp-alist">
             {selected.map((c) => (

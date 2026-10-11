@@ -7,7 +7,8 @@
  * ad-spend permission (absent = hidden). `unavailable` is Amazon's (or the server's) reason in words: the page says "—"
  * with it, never a number of its own.
  *
- * Apply is a bid change through the review. What it means depends on who runs the keyword (Owner decision):
+ * Apply is a bid change through the review, and so is Set bid (one rule for both, the Owner's decision). What it means
+ * depends on who runs the keyword:
  *   the Brain, at Auto   the keyword goes Manual: "The brain stops moving this keyword until you switch it back to Auto";
  *                        the review offers "Set a goal instead"
  *   a rule, a plan, an engine   allowed; the line says it may move it again
@@ -21,12 +22,11 @@ import { MIN_BID_CENTS, ownerLabel, writerName, type BidGridRow } from './bidsMo
 export interface SuggestedBid { targetId: string; low?: number | null; mid?: number | null; high?: number | null; theme?: string | null }
 export interface SuggestedAnswer { fetchedAt: string | null; rows: SuggestedBid[]; unavailable: string | null }
 
-/** One ad group's read, as the view holds it. `missing`: the server has no such route yet (the column stays hidden). */
+/** One ad group's read, as the view holds it. */
 export type SuggestedState =
   | { kind: 'loading' }
   | { kind: 'ready'; answer: SuggestedAnswer }
   | { kind: 'failed'; error: string }
-  | { kind: 'missing' }
 
 /** One keyword's suggestion out of its ad group's read. */
 export type SuggestedCell =
@@ -36,7 +36,6 @@ export type SuggestedCell =
 
 export function suggestedCellOf(state: SuggestedState | undefined, targetId: string): SuggestedCell {
   if (!state || state.kind === 'loading') return { kind: 'loading' }
-  if (state.kind === 'missing') return { kind: 'none', reason: 'Not available here yet' }
   if (state.kind === 'failed') return { kind: 'none', reason: `Suggested bid not read: ${state.error}` }
   if (state.answer.unavailable) return { kind: 'none', reason: state.answer.unavailable }
   const bid = state.answer.rows.find((r) => r.targetId === targetId)
@@ -90,7 +89,8 @@ export function applyPlan(rows: readonly BidGridRow[], cellOf: (row: BidGridRow)
     const now = cents(row.bidNow) ? row.bidNow : null
     const next = cell.kind === 'bid' && cents(cell.bid.mid) ? Math.round(cell.bid.mid) : null
     const who = movesNext(row)
-    const skip = cell.kind === 'loading' ? 'Still reading Amazon\'s suggested bid'
+    const skip = row.writeBlock ? row.writeBlock
+      : cell.kind === 'loading' ? 'Still reading Amazon\'s suggested bid'
       : now === null ? 'Bids are hidden for you'
         : next === null ? (cell.kind === 'none' ? cell.reason : 'Amazon suggests no bid for this keyword')
           : next < MIN_BID_CENTS ? `Under Nexus's ${money(MIN_BID_CENTS, row.currency)} floor`

@@ -135,7 +135,6 @@ import { WorkspaceSubheaderExample } from './WorkspaceSubheaderExample'
 import { ChangeValueExample } from './ChangeValueExample'
 import { CountdownExample } from './CountdownExample'
 import { GridRowVerbsExample } from './GridRowVerbsExample'
-import { WeekHourGridExample } from './WeekHourGridExample'
 import { SwitchColumnExample } from './SwitchColumnExample'
 import { ModeColumnExample } from './ModeColumnExample'
 import { BidPartsExample } from './BidPartsExample'
@@ -1031,10 +1030,6 @@ export function TokenCatalog() {
           <DSCard padded elevated>
             <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', marginBottom: 10 }}>Heatmap · dayparting</div>
             <Heatmap data={HEAT_DATA} rowLabels={DAYS} colLabels={HOURS} format={(v) => `${v}`} />
-          </DSCard>
-          <DSCard padded elevated>
-            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', marginBottom: 10 }}>WeekHourGrid · a week × hour editor with locks</div>
-            <WeekHourGridExample />
           </DSCard>
         </div>
       </section>

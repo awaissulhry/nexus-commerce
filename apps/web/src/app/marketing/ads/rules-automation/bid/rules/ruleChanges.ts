@@ -14,7 +14,7 @@
  */
 import type { ReviewChange, ReviewConflict } from '@/design-system/patterns'
 import {
-  LEVEL_OF_MODE, MODE_WORD, holdWord, isBrain, modeRank, plural,
+  LEVEL_OF_MODE, MODE_WORD, heldStep, holdWord, isBrain, modeRank, plural,
   type BidMode, type BidRuleRow, type RuleLevel,
 } from './bidRulesModel'
 
@@ -23,18 +23,35 @@ import {
 /** rule id → the mode the person picked (only rules whose pick differs from what is set). */
 export type ModeDraft = Readonly<Record<string, BidMode>>
 
-/** The draft after a pick: a pick back to the set mode drops the rule from the draft. The brain and archived rules never enter it. */
+/**
+ * The draft after a pick: a pick back to the set mode drops the rule from the draft. The brain, archived rules and a step
+ * the rule holds (Auto before its gate, Auto from Off — `heldStep`) never enter it: the server would refuse the save
+ * (use audit A4, A5).
+ */
 export function pickMode(draft: ModeDraft, row: BidRuleRow, next: BidMode): ModeDraft {
-  if (isBrain(row) || row.archived) return draft
+  if (isBrain(row) || row.archived || heldStep(row, next)) return draft
   const out: Record<string, BidMode> = { ...draft }
   if (next === row.mode.set) delete out[row.id]
   else out[row.id] = next
   return out
 }
 
-/** The same pick for many rules (the selection's "Mode"). */
+/** The same pick for many rules (the selection's "Mode"); a rule that holds the step keeps its mode. */
 export function pickModeFor(draft: ModeDraft, rows: readonly BidRuleRow[], next: BidMode): ModeDraft {
   return rows.reduce((d, r) => pickMode(d, r, next), draft)
+}
+
+/**
+ * The selection's mode list: a step none of the ticked rules may take is held with the first one's reason; one that only
+ * some may take says how many keep their mode (A4: "Auto" offered beside "Auto from 24 Oct").
+ */
+export function bulkModeOptions(rows: readonly BidRuleRow[]): Array<{ value: BidMode; label: string; note?: string; heldReason?: string }> {
+  const live = rows.filter((r) => !isBrain(r) && !r.archived)
+  return (['OFF', 'WATCH', 'ASK', 'AUTO'] as const).map((m) => {
+    const held = live.map((r) => heldStep(r, m)).filter((w): w is string => !!w)
+    if (live.length && held.length === live.length) return { value: m, label: MODE_WORD[m], note: held[0], heldReason: held[0] }
+    return held.length ? { value: m, label: MODE_WORD[m], note: `${plural(held.length, 'rule')} ${held.length === 1 ? 'keeps its' : 'keep their'} mode: ${held[0]}` } : { value: m, label: MODE_WORD[m] }
+  })
 }
 
 /** Keep only picks that still differ from what is set now (after a re-read or a save). */
