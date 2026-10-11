@@ -438,10 +438,11 @@ export const ENTRIES: Entry[] = [
   P(F.adsCampaignsManage, (m, p) => m.toUpperCase() === 'POST' && /^\/api\/advertising\/harvest\/(apply|undo|skip|unskip|waiting\/decide)$/.test(p)),
   P(F.adsAutomationManage, (m, p) => m.toUpperCase() === 'POST' && /^\/api\/advertising\/harvest\/(rules\/mode|rules\/[^/]+\/(archive|unarchive)|sources\/(assign|detach|pause|resume))$/.test(p)),
   // Negative Targeting page, RULES block (routes/advertising-waste.routes.ts): the list, a rule's history, the starters and
-  // the preview of a rule body (a POST that writes nothing) are reads (ads.view); saving, editing, the mode, archive and
-  // unarchive change a rule (ads.automation.manage). Named on their own so no wider /advertising rule catches them.
+  // the preview of a rule or the builder's draft (a POST that writes nothing) are reads (ads.view); the mode, archive and
+  // unarchive change a rule (ads.automation.manage) — rules are made and edited in the rule builder (automation-rules).
+  // Named on their own so no wider /advertising rule catches them.
   P(F.adsView, (m, p) => (isRead(m) && /^\/api\/advertising\/waste\/rules(\/starters|\/[^/]+\/history)?$/.test(p)) || (m.toUpperCase() === 'POST' && p === '/api/advertising/waste/rules/preview')),
-  P(F.adsAutomationManage, (m, p) => !isRead(m) && /^\/api\/advertising\/waste\/rules(\/mode|\/[^/]+(\/(archive|unarchive))?)?$/.test(p)),
+  P(F.adsAutomationManage, (m, p) => !isRead(m) && /^\/api\/advertising\/waste\/rules\/(mode|[^/]+\/(archive|unarchive))$/.test(p)),
   // R4 — undoing approved asks of a bid rule puts bids back (as the rule): ads.bids.edit, named on its own.
   P(F.adsBidsEdit, (m, p) => m.toUpperCase() === 'POST' && /^\/api\/advertising\/bid-rules\/[^/]+\/asks\/undo$/.test(p)),
   // Bid page — every bid with its one owner (routes/advertising-bids.routes.ts): a read, ads.view; its money keys are

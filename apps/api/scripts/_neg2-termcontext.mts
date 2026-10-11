@@ -1,5 +1,5 @@
 /**
- * NEG.2 — `GET /advertising/negatives/term-context`, asserted. READ-ONLY.
+ * NEG.2 — `getTermContext` (negatives.service.ts; its route went with the old Negatives page, the retire path reads it), asserted. READ-ONLY.
  *
  * Four terms, chosen because each breaks a different way. The one that matters is
  * `saponette moto`: it is the ONLY term in the account with a live ad-group overlap, so it is the

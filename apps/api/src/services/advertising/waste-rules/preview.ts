@@ -1,12 +1,13 @@
 /**
- * Negative Targeting page (2026-10-11) — POST /advertising/waste/rules/preview: what a waste rule would stop NOW, for a
- * body that is saved or not. Nothing is written: no rule, no run row, no counter, no suggestion, no pause, no negative.
+ * Negative Targeting page (2026-10-11) — POST /advertising/waste/rules/preview: what a waste rule would stop NOW, saved or
+ * the builder's unsaved draft. Nothing is written: no rule, no run row, no counter, no suggestion, no pause, no negative.
  *
- *   · a stop-waste rule (a page body, or a saved rule whose action carries `stopWaste`): the contexts the tick gives it
- *     (waste-rules/contexts.ts: late-order safe, stock-out days left out, only rows that pass the test), its scope as the
- *     evaluator reads it (market, portfolio, campaign, ONE ad group, product), its conditions, then D1's gate as if it
- *     were on Auto (ads-graduation-stopwaste.ts): a row on the never-list, or past its product's day cap, would ask
- *     instead of acting alone (`alone: false` and why);
+ *   · a stop-waste rule (the builder's draft with "Stop waste — may run alone" on, or a saved rule whose action carries
+ *     `stopWaste`): the contexts the tick gives it (waste-rules/contexts.ts: late-order safe, stock-out days left out, only
+ *     rows that pass the test), its scope as the evaluator reads it (market, portfolio, campaign, ONE ad group, product),
+ *     its conditions as the engine runs them (a builder rule's criteria through the adapter, and its Ad Group Mapping), then
+ *     D1's gate as if it were on Auto (ads-graduation-stopwaste.ts): a row on the never-list, or past its product's day
+ *     cap, would ask instead of acting alone (`alone: false` and why);
  *   · any other saved waste rule (a Bid rule with THEN Pause, a Negative Targeting builder rule, an engine rule): its
  *     Simulate (the evaluator's simulateOneRule — every handler in a dry run), each would-be change read back. Its unsaved
  *     edits cannot be previewed: refused.
@@ -18,7 +19,7 @@ import { openStopWasteGate, stopWasteParamsOf, type StopWasteParams } from '../a
 import { ruleSentence } from '../bid-rules/pure.js'
 import { RefBook, type Ref } from '../bid-rules/read.js'
 import { adGroupIdentity, adGroupOfContext, buildStopWasteContexts } from './contexts.js'
-import { bodyProblems, ruleOfBody, wasteSentence, type StopWasteEvidence, type WasteRuleBody, type WasteScope } from './pure.js'
+import { wasteSentence, type StopWasteEvidence, type WasteScope } from './pure.js'
 import { findWasteRule, PSEUDO_ROWS } from './read.js'
 
 export type PreviewAction = 'PAUSE' | 'NEGATE_EXACT' | 'NEGATE_PHRASE' | 'NEGATE_ASIN' | 'TURN_ON'
@@ -57,47 +58,68 @@ export type PreviewAnswer = { data: WastePreview } | { error: string; status: 40
 
 const ACTION_OF: Record<string, PreviewAction> = { pause_target: 'PAUSE', enable_target: 'TURN_ON', add_negative_exact: 'NEGATE_EXACT', add_negative_phrase: 'NEGATE_PHRASE' }
 
-export async function previewWasteRule(body: { ruleId?: string; rule?: Partial<WasteRuleBody>; limit?: number }): Promise<PreviewAnswer> {
+/** A Negative Targeting builder rule as the builder holds it (unsaved): its actions and criteria as it would save them. */
+export interface BuilderDraft { actions: unknown; conditions?: unknown; scopeMarketplace?: string | null }
+
+/**
+ * A rule as the stop-waste preview runs it: its stored actions (the test, the shape the gate judges), the condition
+ * blocks the engine evaluates (a builder rule's criteria translated by the adapter, first matching block acts), and the
+ * ad groups a builder rule's mapping looks in (a negative is only made there). An error names what cannot run.
+ */
+interface EngineView { actions: unknown; conditions: unknown; trigger: string; blocks: unknown[]; look: string[] }
+async function engineView(rule: { actions: unknown; conditions?: unknown; trigger?: string | null }): Promise<EngineView | { error: string }> {
+  const { isBuilderShapedAdsRule, maybeTranslateAdsRule, builderLookAdGroupIds, negativeBuilderTrigger } = await import('../ads-rule-adapter.service.js')
+  if (!isBuilderShapedAdsRule(rule)) return { actions: rule.actions, conditions: rule.conditions ?? null, trigger: String(rule.trigger ?? ''), blocks: [rule.conditions ?? null], look: [] }
+  const t = maybeTranslateAdsRule({ id: 'preview', actions: rule.actions, conditions: rule.conditions })
+  if (!t) return { error: 'This rule cannot be previewed here.' }
+  if (t.untranslatable?.length) return { error: `No engine signal for: ${t.untranslatable.join(', ')}` }
+  const a0 = (Array.isArray(rule.actions) ? rule.actions[0] : null) as Record<string, unknown> | null
+  return {
+    actions: rule.actions,
+    conditions: rule.conditions ?? null,
+    trigger: negativeBuilderTrigger(rule.actions) ?? String(rule.trigger ?? ''),
+    blocks: (t.blocks ?? [{ conditions: t.conditions }]).map((b) => b.conditions),
+    look: builderLookAdGroupIds(a0),
+  }
+}
+
+export async function previewWasteRule(body: { ruleId?: string; builder?: BuilderDraft; limit?: number }): Promise<PreviewAnswer> {
   const limit = Math.min(100, Math.max(1, Math.round(Number(body.limit ?? 20)) || 20))
+  // Wave 4 — the builder's own draft, with "Stop waste — may run alone" on: what it would change now.
+  if (body.builder) {
+    if (!stopWasteParamsOf(body.builder.actions)) return { error: 'Turn "Stop waste — may run alone" on to preview what it would change.', status: 400 }
+    const view = await engineView(body.builder)
+    if ('error' in view) return { error: view.error, status: 400 }
+    return { data: await stopWastePreview(null, false, view, { marketplace: body.builder.scopeMarketplace ?? null }, limit) }
+  }
   if (body.ruleId && PSEUDO_ROWS.has(body.ruleId)) return { error: 'The brain and Harvest have no rule body to preview: their own pages show what they would do.', status: 400 }
   const saved = body.ruleId ? await findWasteRule(body.ruleId) : null
   if (body.ruleId && !saved) return { error: `No waste rule ${body.ruleId} in this business.`, status: 404 }
-  const savedScope: WasteScope | null = saved ? {
+  if (!saved) return { error: 'Send a saved ruleId, or the builder\'s draft.', status: 400 }
+  const savedScope: WasteScope = {
     marketplace: saved.scopeMarketplace, portfolioId: saved.scopePortfolioId, campaignId: saved.scopeCampaignId, adGroupId: saved.scopeAdGroupId, productId: saved.scopeProductId,
-  } : null
-  const savedParams = saved ? stopWasteParamsOf(saved.actions) : null
-
-  if (body.rule || savedParams) {
-    // A body (new, or an edit of a saved stop-waste rule over its own settings), or a saved stop-waste rule as stored.
-    let rule: { actions: unknown; conditions: unknown; trigger: string }
-    let scope: WasteScope
-    if (body.rule) {
-      const from = saved && savedParams ? { kind: savedParams.kind, scope: savedScope ?? {}, windowDays: savedParams.windowDays, minClicks: savedParams.minClicks, cpaMultiple: savedParams.cpaMultiple, spendFloorCents: savedParams.spendFloorCents } : {}
-      if (saved && !savedParams) return { error: 'Only a stop-waste rule previews unsaved changes here; save this rule, then preview it.', status: 400 }
-      const merged = { ...from, ...body.rule } as WasteRuleBody
-      const problems = bodyProblems(merged)
-      if (problems.length) return { error: problems.join('; '), status: 400 }
-      const r = ruleOfBody(merged)
-      rule = { actions: r.actions, conditions: r.conditions, trigger: r.trigger }
-      scope = merged.scope ?? {}
-    } else {
-      rule = { actions: saved!.actions, conditions: saved!.conditions, trigger: saved!.trigger }
-      scope = savedScope!
-    }
-    return { data: await stopWastePreview(saved?.id ?? null, !!saved && !body.rule, rule, scope, limit) }
   }
-  if (!saved) return { error: 'Send a rule body (kind, scope, test) or a saved ruleId.', status: 400 }
+  if (stopWasteParamsOf(saved.actions)) {
+    // A stop-waste rule as stored (made on the page before, saved by Claude, or a builder rule with the section on).
+    const view = await engineView(saved)
+    if ('error' in view) return { error: view.error, status: 400 }
+    return { data: await stopWastePreview(saved.id, true, view, savedScope, limit) }
+  }
   return { data: await simulatePreview(saved.id, { actions: saved.actions, conditions: saved.conditions, trigger: saved.trigger }, limit) }
 }
 
 /** A stop-waste rule's preview: its own contexts, its scope, its conditions, then D1's gate as if on Auto. */
-async function stopWastePreview(ruleId: string | null, saved: boolean, rule: { actions: unknown; conditions: unknown; trigger: string }, scope: WasteScope, limit: number): Promise<WastePreview> {
+async function stopWastePreview(ruleId: string | null, saved: boolean, rule: EngineView, scope: WasteScope, limit: number): Promise<WastePreview> {
   const params = stopWasteParamsOf(rule.actions) as StopWasteParams
   const contexts = await buildStopWasteContexts(params)
   const inScope = await scopeFilter(contexts, scope)
   const { evaluateConditions } = await import('../../automation/conditions-tree.js')
-  const matched = inScope.filter((ctx) => evaluateConditions((rule.conditions ?? null) as never, ctx))
-  const gate = await openStopWasteGate([{ id: 'preview', actions: rule.actions, conditions: rule.conditions }], { asIfAuto: true })
+  // The engine's selection: the first block whose conditions match acts (a builder rule's criteria blocks are an OR).
+  const passes = inScope.filter((ctx) => rule.blocks.some((b) => evaluateConditions((b ?? null) as never, ctx)))
+  // A builder rule's negative is only made in the ad groups its mapping looks in (the pause's are a condition already).
+  const lookIds = params.kind === 'NEGATE_TERM' && rule.look.length ? await adGroupIdentity(passes) : null
+  const matched = lookIds ? passes.filter((ctx) => rule.look.includes(adGroupOfContext(ctx, lookIds) ?? '')) : passes
+  const gate = await openStopWasteGate([{ id: 'preview', actions: rule.actions, conditions: rule.conditions, trigger: rule.trigger }], { asIfAuto: true })
   const a0 = (Array.isArray(rule.actions) ? rule.actions[0] : {}) as { type?: string }
   const book = new RefBook()
   const ids = await adGroupIdentity(matched)

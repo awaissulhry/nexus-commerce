@@ -1,21 +1,18 @@
 /**
- * Negative Targeting page, Rules view (2026-10-11) — the pure rules of the table, the draft, the waiting asks, the new
- * rule and its fields. Names and numbers are made up.
+ * Negative Targeting page, Rules view (2026-10-11) — the pure rules of the table, the draft, the waiting asks and a
+ * stop-waste rule's words. Names and numbers are made up.
  */
 import { describe, expect, it } from 'vitest'
 import {
   actionWord, autoLockOf, changeFromTo, decidedElsewhere, harvestWaitingHref, heldStep, isPseudo, last7Parts, last7Tab, last7Text, modeLock, negativeWord, ownerOf, partHolds, previewParts, refusalWhy,
-  rowMatchesSearch, scopeCount, sharedWhy, scopeLevel, scopePath, scopeText, visibleRows, waitingAsksOf, waitingGap, whoWord,
+  rowMatchesSearch, scopeCount, sharedWhy, scopeLevel, scopePath, scopeText, testWords, verbWords, visibleRows, waitingAsksOf, waitingGap, whoWord,
   type WaitingRow, type WasteRuleRow,
 } from './wasteRulesModel'
 import {
-  archiveReviewChanges, bulkMisfit, canStop, modeConflicts, modeGroups, modeReviewChanges, modeUndoLabel, pickMode, pickModeFor, retidyModes, waitsOf,
+  archiveReviewChanges, canStop, modeConflicts, modeGroups, modeReviewChanges, modeUndoLabel, pickMode, pickModeFor, retidyModes, waitsOf,
   shownMode, unarchiveReviewChanges,
 } from './wasteRuleChanges'
-import {
-  WHOLE_MARKET, bodyOf, fieldProblems, fieldsOfSaved, fieldsOfStarter, fieldsPatch, fieldsReviewChanges, marketsOf, newRuleReviewChange, pathOfPick,
-  scopeOfPick, scopeOptions, testWords, verbWords, type ScopeData, type Starter,
-} from './newRuleModel'
+import { negativeBuilderSettings } from './negativeSettings'
 
 const ref = (id: string, name = id) => ({ id, name, href: `/x/${id}` })
 const mode = (set: 'OFF' | 'WATCH' | 'ASK' | 'AUTO', extra: Partial<WasteRuleRow['mode']> = {}): WasteRuleRow['mode'] => ({ set, acts: set, heldBy: null, also: [], autoLocked: null, ...extra })
@@ -202,75 +199,19 @@ describe('the mode draft', () => {
     expect(retidyModes({ r1: 'ASK' }, fresh)).toEqual({})
     expect(shownMode(rule(), { r1: 'AUTO' })).toMatchObject({ set: 'AUTO', acts: 'AUTO', heldBy: null })
   })
-  it('archive and unarchive lines; a bulk verb says what does not fit', () => {
+  it('archive and unarchive lines', () => {
     expect(archiveReviewChanges([brain(), rule({ waiting: 2 })])).toEqual([{ id: 'r1', where: 'Stop waste — terms', what: 'Rule', now: 'Watch', next: 'Archived', note: '2 waiting asks expire' }])
     expect(unarchiveReviewChanges([rule({ archived: true })])[0]).toMatchObject({ now: 'Archived', next: 'Off' })
-    expect(bulkMisfit([rule(), rule({ id: 'x', archived: true })], 'archive')).toBe('1 archived')
-    expect(bulkMisfit([rule({ archived: true })], 'unarchive')).toBeNull()
   })
 })
 
-describe('a new rule and its fields', () => {
-  const starter: Starter = { id: 's', kind: 'NEGATE_TERM', name: 'Stop waste — search terms', windowDays: 60, minClicks: 20, cpaMultiple: 1.5, spendFloorCents: 1500, match: 'EXACT', level: 'AD_GROUP', says: '…' }
-  it('starts from the starter; the body the API takes', () => {
-    const f = fieldsOfStarter(starter)
-    expect(f).toMatchObject({ windowDays: 60, minClicks: 20, cpaMultiple: 1.5, spendFloorCents: 1500, match: 'EXACT', level: 'AD_GROUP', runAt: '06:00' })
-    expect(bodyOf('NEGATE_TERM', f, { marketplace: 'IT', adGroupId: 'g1', campaignId: 'c1' })).toEqual({
-      kind: 'NEGATE_TERM', name: 'Stop waste — search terms', scope: { marketplace: 'IT', adGroupId: 'g1', campaignId: 'c1' },
-      windowDays: 60, minClicks: 20, cpaMultiple: 1.5, spendFloorCents: 1500, match: 'EXACT', level: 'AD_GROUP', runAt: '06:00',
-    })
-    const pause = bodyOf('PAUSE_KEYWORD', { ...f, spendFloorCents: null }, null)
-    expect(pause).not.toHaveProperty('match')
-    expect(pause).not.toHaveProperty('spendFloorCents')
-  })
-  it('the API\'s bounds', () => {
-    const f = fieldsOfStarter(starter)
-    expect(fieldProblems(f)).toEqual({})
-    expect(Object.keys(fieldProblems({ ...f, windowDays: 7, minClicks: 0, cpaMultiple: 20, runAt: '25:00', name: ' ' }))).toEqual(['name', 'windowDays', 'minClicks', 'cpaMultiple', 'runAt'])
-  })
-  it('a saved rule\'s verb and run time come from its stored action; the patch holds only what changed', () => {
-    const saved = fieldsOfSaved({ name: 'A', test: { windowDays: 30, minClicks: 10, cpaMultiple: 2 } }, [{ type: 'add_negative_phrase', scope: 'CAMPAIGN', schedule: { time: '07:30' } }])
-    expect(saved).toMatchObject({ match: 'PHRASE', level: 'CAMPAIGN', runAt: '07:30', spendFloorCents: null })
-    expect(fieldsPatch('NEGATE_TERM', saved, { ...saved, minClicks: 15, match: 'EXACT' })).toEqual({ minClicks: 15, match: 'EXACT' })
-    expect(fieldsPatch('PAUSE_KEYWORD', saved, { ...saved, match: 'EXACT' })).toEqual({})
-    const lines = fieldsReviewChanges('NEGATE_TERM', saved, { ...saved, minClicks: 15, level: 'AD_GROUP' }, () => '—', 'A')
-    expect(lines.map((l) => [l.what, l.now, l.next])).toEqual([['Clicks at least', '10', '15'], ['Does', 'Negative phrase · campaign', 'Negative phrase · ad group']])
-  })
-  it('words', () => {
-    expect(verbWords('PAUSE_KEYWORD', { match: 'EXACT', level: 'AD_GROUP' })).toBe('Pause · keep paused')
-    expect(testWords({ windowDays: 60, minClicks: 20, cpaMultiple: 1.5 })).toEqual(['0 orders', '≥ 20 clicks', '≥ 1.5× CPA', '60 d'])
-    const line = newRuleReviewChange({ kind: 'PAUSE_KEYWORD', fields: fieldsOfStarter({ ...starter, kind: 'PAUSE_KEYWORD', name: 'K' }), where: 'IT', mode: 'ASK', wouldChange: 3 })
-    expect(line).toMatchObject({ what: 'K · Pause · keep paused', now: '—', next: 'Ask me', raise: true, note: '3 keywords now' })
-    expect(newRuleReviewChange({ kind: 'NEGATE_TERM', fields: fieldsOfStarter(starter), where: 'IT', mode: 'WATCH', wouldChange: 0 })).toMatchObject({ raise: false, note: 'Nothing would change now' })
-  })
-
-  const data: ScopeData = {
-    campaigns: [
-      { id: 'c1', name: 'Boots Auto', marketplace: 'IT', portfolioId: 'pf1', status: 'ENABLED' },
-      { id: 'c2', name: 'Boots Old', marketplace: 'IT', portfolioId: 'pf1', status: 'ARCHIVED' },
-      { id: 'c3', name: 'Stiefel', marketplace: 'DE', portfolioId: null, status: 'PAUSED' },
-    ],
-    portfolios: [{ externalPortfolioId: 'pf1', name: 'Boots IT' }, { externalPortfolioId: 'pf9', name: 'Elsewhere' }],
-    adGroups: [
-      { id: 'g1', name: 'Auto group', status: 'ENABLED', campaignId: 'c1', campaignName: 'Boots Auto', campaignStatus: 'ENABLED', marketplace: 'IT', portfolioId: 'pf1' },
-      { id: 'g2', name: 'Old group', status: 'ENABLED', campaignId: 'c2', campaignName: 'Boots Old', campaignStatus: 'ARCHIVED', marketplace: 'IT', portfolioId: 'pf1' },
-    ],
-  }
-  it('the places of one market, grouped; archived ones left out', () => {
-    expect(marketsOf(data)).toEqual(['DE', 'IT'])
-    expect(scopeOptions(data, 'IT').map((o) => [o.value, o.group])).toEqual([['m', 'Market'], ['p:pf1', 'Portfolio'], ['c:c1', 'Campaign'], ['g:g1', 'Ad group']])
-    expect(scopeOptions(data, 'DE').find((o) => o.value === 'c:c3')?.note).toBe('Paused')
-    // the search reads the ad group's own name and its campaign's
-    expect(scopeOptions(data, 'IT').find((o) => o.value === 'g:g1')?.searchText).toBe('Auto group Boots Auto')
-  })
-  it('a pick as the API\'s scope and as a path', () => {
-    expect(scopeOfPick(data, 'IT', WHOLE_MARKET)).toEqual({ marketplace: 'IT' })
-    expect(scopeOfPick(data, 'IT', 'p:pf1')).toEqual({ marketplace: 'IT', portfolioId: 'pf1' })
-    expect(scopeOfPick(data, 'IT', 'g:g1')).toEqual({ marketplace: 'IT', campaignId: 'c1', adGroupId: 'g1' })
-    expect(scopeOfPick(data, 'IT', 'g:nope')).toBeNull()
-    expect(scopeOfPick(data, '', 'm')).toBeNull()
-    expect(pathOfPick(data, 'IT', 'g:g1').map((s) => s.name)).toEqual(['IT', 'Boots IT', 'Boots Auto', 'Auto group'])
-    expect(pathOfPick(data, 'IT', 'g:g1')[3].href).toBe('/marketing/ads/campaigns/c1/ad-groups/g1')
+describe('a stop-waste rule in chips\' words', () => {
+  it('its action and its test', () => {
+    // Audit S4 — one wording, the builder's; no jargon.
+    expect(verbWords('PAUSE_KEYWORD')).toBe('Pause keyword, keep it paused')
+    expect(verbWords('NEGATE_TERM')).toBe('Negative exact')
+    expect(verbWords('NEGATE_TERM', { match: 'PHRASE', level: 'CAMPAIGN' })).toBe('Negative phrase · whole campaign')
+    expect(testWords({ windowDays: 60, minClicks: 20, cpaMultiple: 1.5 })).toEqual(['0 orders', '≥ 20 clicks', 'spend ≥ 1.5 × target cost per order', '60 d'])
   })
 })
 
@@ -291,5 +232,54 @@ describe('NFIX — Harvest\'s waiting is decided on the Keyword Harvest page: a 
   })
   it('a removal the Brain asks for reads in words', () => {
     expect(actionWord('REMOVE_NEGATIVE')).toBe('Remove negative')
+  })
+})
+
+describe('audit M4 — a negative builder rule\'s settings, in its own words', () => {
+  const stored = {
+    id: 'r1', name: 'Mine', trigger: 'SEARCH_TERM_WASTING', maxExecutionsPerDay: 10, maxWritesPerDay: null, maxDailyAdSpendCentsEur: 10000,
+    createdAt: '2026-10-11T08:00:00Z', createdBy: 'user:anonymous',
+    conditions: [{ conditions: [{ metric: 'Sales', op: 'eq', value: '0' }, { metric: 'Clicks', op: 'gte', value: '5' }] }],
+    actions: [{
+      type: 'negative-targeting', negationLevel: 'adgroup', dedupe: true, protectConverting: true, protectDays: 30,
+      searchTerms: [{ term: 'kids', op: 'not' }], filters: { brandExclude: ['acme'], competitorOnly: false },
+      mappings: [{ groups: [{ id: 'g1', name: 'Seed broad group', campaignName: 'Seed IT', look: true, types: { P: false, E: true, product: false } }] }],
+    }],
+  }
+  it('criteria, mapping, filters, negatives, runs, limits and who made it — no raw slug, no "?"', () => {
+    const groups = negativeBuilderSettings(stored, { currency: 'EUR', schedule: 'Daily · 06:00' })!
+    const text = JSON.stringify(groups)
+    expect(groups.map((g) => g.title)).toEqual(['Criteria', 'Ad Group Mapping', 'Search terms', 'Negatives', 'Runs', 'Limits', 'Made'])
+    expect(groups[0].items).toEqual([{ label: 'If', value: 'Sales = €0 and Clicks ≥ 5' }])
+    expect(groups[1].items).toEqual([{ label: 'Seed broad group · Seed IT', value: 'Looks for search terms · creates a negative exact' }])
+    expect(groups[2].items).toContainEqual({ label: 'Does not contain', value: '"kids"' })
+    expect(groups[5].items[0]).toEqual({ label: 'Matches a day', value: '10' })
+    expect(text).not.toMatch(/negative-targeting|"\?|IF 1/)
+  })
+  it('any other rule: null (the Bid page\'s reader reads it)', () => {
+    expect(negativeBuilderSettings({ ...stored, actions: [{ type: 'bid' }] })).toBeNull()
+    expect(negativeBuilderSettings({ ...stored, actions: [{ type: 'add_negative_exact' }] })).toBeNull()
+  })
+})
+
+describe('audit R-M1 — a "Pause keyword, keep it paused" rule\'s settings: only what it uses', () => {
+  const pause = {
+    id: 'p1', name: 'Pause', trigger: 'TARGET_PERFORMANCE', maxExecutionsPerDay: 10, maxWritesPerDay: null, maxDailyAdSpendCentsEur: null,
+    conditions: [{ conditions: [{ metric: 'Clicks', op: 'gte', value: '20' }] }],
+    actions: [{
+      type: 'negative-targeting', negationLevel: 'adgroup', dedupe: true, protectConverting: true, searchTerms: [{ term: 'kids', op: 'not' }],
+      stopWaste: { kind: 'PAUSE_KEYWORD', windowDays: 60, minClicks: 20, cpaMultiple: 2 },
+      mappings: [{ groups: [
+        { id: 'g1', name: 'Seed exact group', campaignName: 'Seed IT', look: true, types: { P: true, E: true, product: false } },
+        { id: 'g2', name: 'Not looked in', campaignName: 'Seed IT', look: false, types: { P: false, E: true, product: false } },
+      ] }],
+    }],
+  }
+  it('its criteria, where it pauses (campaign › ad group it looks in), runs, limits in keywords, made — no target, filter or negation', () => {
+    const groups = negativeBuilderSettings(pause, { schedule: 'Daily · 06:00' })!
+    expect(groups.map((g) => g.title)).toEqual(['Criteria', 'Where it pauses', 'Runs', 'Limits', 'Made'])
+    expect(groups[1].items).toEqual([{ label: 'Ad group', value: 'Seed IT › Seed exact group' }])
+    expect(groups[3].items[0]).toEqual({ label: 'Keywords a day', value: '10' })
+    expect(JSON.stringify(groups)).not.toMatch(/negative exact|Search terms|Negation|kids|Brand/)
   })
 })

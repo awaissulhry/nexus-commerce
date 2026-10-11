@@ -167,7 +167,8 @@ interface BuilderCond {
   scope?: string
 }
 interface BuilderGroup { conditions?: BuilderCond[]; action?: { op?: string; value?: string | number; placeTarget?: string } }
-interface EngineLeaf { field: string; op: string; value: number }
+/** A condition leaf the evaluator reads: a metric against a number, or (wave 4) `adGroup.id` `in` the ad groups a rule looks in. */
+interface EngineLeaf { field: string; op: string; value: number | string[] }
 
 const num = (v: unknown): number => Number(v) || 0
 
@@ -433,6 +434,53 @@ export const BUILDER_SLUG_ACTIONS: Record<string, string[]> = {
   'negative-targeting': ['add_negative_exact'],
   'keyword-harvesting': ['promote_to_exact', 'add_negative_exact'],
   'dayparting-schedule': ['dayparting_apply'],
+}
+
+/** Wave 4 — the kind of a Negative Targeting builder rule's "Stop waste — may run alone" section, or null when it is off. */
+export function builderStopWasteKind(a0: Record<string, unknown> | null | undefined): 'PAUSE_KEYWORD' | 'NEGATE_TERM' | null {
+  const k = (a0?.stopWaste as { kind?: unknown } | undefined)?.kind
+  return k === 'PAUSE_KEYWORD' || k === 'NEGATE_TERM' ? k : null
+}
+
+/**
+ * Wave 4 — the trigger a Negative Targeting builder rule rides: "Pause keyword, keep it paused" reads our keywords
+ * (TARGET_PERFORMANCE), every other negative rule shoppers' search terms (SEARCH_TERM_WASTING). Null for any other rule.
+ */
+export function negativeBuilderTrigger(actions: unknown): 'TARGET_PERFORMANCE' | 'SEARCH_TERM_WASTING' | null {
+  const a0 = Array.isArray(actions) ? (actions[0] as Record<string, unknown> | undefined) : undefined
+  if (a0?.type !== 'negative-targeting') return null
+  return builderStopWasteKind(a0) === 'PAUSE_KEYWORD' ? 'TARGET_PERFORMANCE' : 'SEARCH_TERM_WASTING'
+}
+
+/** The Nexus ad-group ids a builder rule's Ad Group Mapping looks in (every block, ticked "look"), deduped. */
+export function builderLookAdGroupIds(a0: Record<string, unknown> | null | undefined): string[] {
+  const maps = Array.isArray(a0?.mappings) ? (a0!.mappings as Array<{ groups?: unknown }>) : []
+  const ids = maps.flatMap((m) => (Array.isArray(m?.groups) ? (m.groups as Array<{ id?: unknown; look?: unknown }>) : []))
+    .filter((g) => g && g.look !== false && g.id != null).map((g) => String(g.id))
+  return [...new Set(ids)]
+}
+
+/**
+ * Wave 4 (audit M1) — where a Negative Targeting BUILDER rule works: its Ad Group Mapping. `adGroupIds` are the ad groups
+ * it looks in or creates a target in, `campaignIds` their campaigns, `lookAdGroupIds` the ones it reads search terms in.
+ * The handler skips every other ad group (`source-ad-group-not-in-mappings`), so this, not the scope columns, is the
+ * rule's scope on the page. Null for any other rule, and for a mapping with no ad group (the rule then reads its market).
+ * Pure.
+ */
+export function negativeBuilderPlaces(actions: unknown): { adGroupIds: string[]; campaignIds: string[]; lookAdGroupIds: string[] } | null {
+  const a0 = Array.isArray(actions) ? (actions[0] as Record<string, unknown> | undefined) : undefined
+  if (!a0 || a0.type !== 'negative-targeting' || !Array.isArray(a0.mappings)) return null
+  const groups = (a0.mappings as Array<{ groups?: unknown }>)
+    .flatMap((m) => (Array.isArray(m?.groups) ? (m.groups as Array<{ id?: unknown; campaignId?: unknown; look?: unknown; types?: Record<string, unknown> }>) : []))
+    .filter((g) => g && g.id != null)
+  const working = groups.filter((g) => g.look !== false || Object.values(g.types ?? {}).some((v) => v === true))
+  if (!working.length) return null
+  const uniq = (xs: unknown[]) => [...new Set(xs.filter((x) => x != null && x !== '').map(String))]
+  return {
+    adGroupIds: uniq(working.map((g) => g.id)),
+    campaignIds: uniq(working.map((g) => g.campaignId)),
+    lookAdGroupIds: uniq(groups.filter((g) => g.look !== false).map((g) => g.id)),
+  }
 }
 
 /**
@@ -879,6 +927,30 @@ export function maybeTranslateAdsRule(rule: { id: string; actions?: unknown; con
    * reuse BP.P4b's evaluator selection (first matching block acts; the actions are identical
    * across blocks, so first-match IS the OR).
    */
+  if (slug === 'negative-targeting' && builderStopWasteKind(a0) === 'PAUSE_KEYWORD') {
+    /**
+     * Wave 4 (Owner 2026-10-11) — "Stop waste — may run alone" with "Pause keyword, keep it paused": our own keywords that
+     * waste are paused and kept paused (the pause handler's lock). The evaluator gives the rule the stop-waste keyword
+     * contexts (TARGET_PERFORMANCE shape, its trigger); the builder's criteria read the keyword's own numbers, and the
+     * ad groups the mapping looks in bound where a keyword may be paused.
+     */
+    const unmappedAll: string[] = []
+    const look = builderLookAdGroupIds(a0)
+    const actions: Array<Record<string, unknown>> = [{ type: 'pause_target', keepPaused: true, reason: `Negative rule ${rule.id} — keyword paused, kept paused` }]
+    const blocks: NonNullable<TranslatedRule['blocks']> = []
+    for (const g of groups.length ? groups : [{} as BuilderGroup]) {
+      const { leaves, unmapped } = translateConditions([g], ADTARGET_METRIC, rule.id)
+      unmappedAll.push(...unmapped)
+      blocks.push({ conditions: look.length ? [...leaves, { field: 'adGroup.id', op: 'in', value: look }] : leaves, actions })
+    }
+    return {
+      conditions: blocks[0].conditions,
+      actions,
+      blocks,
+      ...(unmappedAll.length ? { untranslatable: unmappedAll } : {}),
+    }
+  }
+
   if (slug === 'negative-targeting') {
     /**
      * NEG-P1 — the WHOLE form rides into execution, exactly HP1's move one tab over. The stored

@@ -22,8 +22,8 @@ import { normalizeMarketplaceCode } from '../../../utils/marketplace-code.js'
 import { marketLimitsOf } from '@nexus/shared/ads-market-limits'
 import { resolveAutonomy, type AutonomyLevel } from '../ads-autonomy.js'
 import { graduationCeiling } from '../ads-graduation.js'
-import { NOT_PAGE_SHAPE, stopWasteKindOf, stopWasteParamsOf, stopWasteShapeOf, STOP_WASTE_CAPS, type StopWasteParams } from '../ads-graduation-stopwaste.js'
-import { producedActionTypes } from '../ads-rule-adapter.service.js'
+import { stopWasteKindOf, stopWasteParamsOf, stopWasteShapeOf, stopWasteShapeWhy, STOP_WASTE_CAPS, type StopWasteParams } from '../ads-graduation-stopwaste.js'
+import { negativeBuilderPlaces, producedActionTypes } from '../ads-rule-adapter.service.js'
 import { campaignsReachedBy, type ReachRule } from '../ads-rule-reach.service.js'
 import { ruleStoredSchedule } from '../ads-rule-schedule.js'
 import {
@@ -136,9 +136,11 @@ export const WASTE_HOLDS = {
       : `Alone it adds at most ${STOP_WASTE_CAPS.negativesPerProductPerDay} negatives per product a day; past that, or for a row it must never stop alone, it asks you.`,
   }),
   noProtectedTerms: (): Hold => ({ kind: 'gate', label: 'No protected terms', reason: 'No protected term is set for this market: every negative waits for your yes until your brand terms are protected.' }),
-  alwaysAsks: (blockedBy: readonly string[], notPageShape = false): Hold => ({
+  /** `notPageShape`: why a rule of the stop-waste family is not the shape that may act alone (`stopWasteShapeWhy`). */
+  alwaysAsks: (blockedBy: readonly string[], notPageShape: string | null = null): Hold => ({
     kind: 'graduation', label: 'Asks first',
-    reason: notPageShape ? NOT_PAGE_SHAPE
+    reason: notPageShape
+      ? notPageShape
       : blockedBy.includes('enable_target') ? 'Turning a keyword back on always waits for your yes.'
       : blockedBy.includes('add_negative_phrase') ? 'A negative phrase blocks every search that contains it, so it always waits for your yes.'
         : 'One of its actions always waits for your yes.',
@@ -154,7 +156,7 @@ export const WASTE_HOLDS = {
 } as const
 
 /** Rewrite the Bid page's bid words for a waste rule (its holds are about pauses and negatives, not bids). Pure. */
-export function wasteMode(m: BidRuleMode, kind: StopWasteKind, extra: { ceilingBlockedBy: string[]; stopWaste: boolean; notPageShape?: boolean; noProtectedTerms: boolean; locked: { n: number; names: string[]; all: boolean } }): BidRuleMode {
+export function wasteMode(m: BidRuleMode, kind: StopWasteKind, extra: { ceilingBlockedBy: string[]; stopWaste: boolean; notPageShape?: string | null; noProtectedTerms: boolean; locked: { n: number; names: string[]; all: boolean } }): BidRuleMode {
   const words = (h: Hold): Hold => {
     if (h.kind === 'graduation' && h.label === 'Always asks') return WASTE_HOLDS.alwaysAsks(extra.ceilingBlockedBy, extra.notPageShape)
     if (h.kind === 'allowlist') return extra.locked.all ? WASTE_HOLDS.allLocked(extra.locked.names) : WASTE_HOLDS.locked(extra.locked.n, extra.locked.names)
@@ -197,6 +199,22 @@ export function negativesOfRun(actionResults: unknown): Array<{ externalTargetId
   return out
 }
 
+/**
+ * Wave 4 (audit M1) — each Negative Targeting builder rule's Ad Group Mapping (`negativeBuilderPlaces`), its campaigns read
+ * from the ad groups themselves (an older rule stored no campaign on its mapping). Rules without a mapping are absent.
+ */
+async function mappedPlaces(rules: ReadonlyArray<{ id: string; actions: unknown }>): Promise<Map<string, { adGroupIds: string[]; campaignIds: Set<string> }>> {
+  const raw = new Map(rules.flatMap((r) => { const p = negativeBuilderPlaces(r.actions); return p ? [[r.id, p] as const] : [] }))
+  const ids = [...new Set([...raw.values()].flatMap((p) => p.adGroupIds))]
+  const groups = ids.length ? await prisma.adGroup.findMany({ where: { id: { in: ids } }, select: { id: true, campaignId: true } }) : []
+  const campaignOf = new Map(groups.map((g) => [g.id, g.campaignId]))
+  return new Map([...raw].map(([id, p]) => [id, {
+    adGroupIds: p.adGroupIds,
+    // The ad groups' own campaigns; the mapping's stored ones only when an ad group is no longer here.
+    campaignIds: new Set([...p.adGroupIds.map((g) => campaignOf.get(g) ?? ''), ...(p.adGroupIds.every((g) => campaignOf.has(g)) ? [] : p.campaignIds)].filter(Boolean)),
+  }]))
+}
+
 /** GET /advertising/waste/rules — every waste rule of this business (the pseudo-rows first), in the market asked or every market. */
 export async function listWasteRules(q: { market?: string | null; channel?: string | null }, opts: { now?: Date } = {}): Promise<{ channel: 'AMAZON' | 'EBAY'; market: string | null; rules: WasteRuleRow[]; totals: WasteRulesTotals; note: string | null }> {
   const now = opts.now ?? new Date()
@@ -213,8 +231,16 @@ export async function listWasteRules(q: { market?: string | null; channel?: stri
   // S13 — a rule's market: its own, else the one market every campaign its scope reaches is in (a rule on one IT campaign is
   // an IT rule, shown only in IT); a whole-account rule, or one whose scope spans markets, shows in every market it reaches.
   const reached = await campaignsReachedBy(all.map((x) => x.r) as unknown as ReachRule[])
-  const marketsOf = new Map(all.map(({ r }) => [r.id, new Set((reached.byRule.get(r.id) ?? []).filter((c) => c.status !== 'ARCHIVED').map((c) => normMarket(c.marketplace)).filter((m): m is string => !!m))]))
-  const narrow = (r: WasteRuleRecord) => !!(r.scopePortfolioId || r.scopeCampaignId || r.scopeAdGroupId || r.scopeProductId)
+  // Wave 4 (audit M1) — a Negative Targeting builder rule works in its Ad Group Mapping (the handler skips every other ad
+  // group): its scope is those ad groups and their campaigns, inside what its scope columns admit.
+  const places = await mappedPlaces(all.map((x) => x.r))
+  const reachedOf = (r: WasteRuleRecord) => {
+    const camps = reached.byRule.get(r.id) ?? []
+    const p = places.get(r.id)
+    return p ? camps.filter((c) => p.campaignIds.has(c.id)) : camps
+  }
+  const marketsOf = new Map(all.map(({ r }) => [r.id, new Set(reachedOf(r).filter((c) => c.status !== 'ARCHIVED').map((c) => normMarket(c.marketplace)).filter((m): m is string => !!m))]))
+  const narrow = (r: WasteRuleRecord) => !!(r.scopePortfolioId || r.scopeCampaignId || r.scopeAdGroupId || r.scopeProductId || places.has(r.id))
   const ruleMarket = (r: WasteRuleRecord) => normMarket(r.scopeMarketplace) ?? (narrow(r) && marketsOf.get(r.id)?.size === 1 ? [...marketsOf.get(r.id)!][0] : null)
   const inMarket = (r: WasteRuleRecord) => !market || (r.scopeMarketplace ? normMarket(r.scopeMarketplace) === market : !narrow(r) || !!marketsOf.get(r.id)?.has(market))
   const rules = all.filter((x) => inMarket(x.r))
@@ -257,13 +283,13 @@ export async function listWasteRules(q: { market?: string | null; channel?: stri
   }
   const reachOf = new Map<string, string[]>()
   for (const { r } of rules) {
-    reachOf.set(r.id, (reached.byRule.get(r.id) ?? []).filter((c) => c.status !== 'ARCHIVED' && (!market || normMarket(c.marketplace) === market)).map((c) => c.id))
+    reachOf.set(r.id, reachedOf(r).filter((c) => c.status !== 'ARCHIVED' && (!market || normMarket(c.marketplace) === market)).map((c) => c.id))
   }
   const book = new RefBook()
   await book.load({
     campaigns: [...reachOf.values()].flat(),
     targets: writes.map((w) => w.entityId),
-    adGroups: [...rules.map((x) => x.r.scopeAdGroupId ?? ''), ...[...negs.values()].flat().map((n) => n.adGroupId ?? '')],
+    adGroups: [...rules.map((x) => x.r.scopeAdGroupId ?? ''), ...rules.flatMap((x) => places.get(x.r.id)?.adGroupIds ?? []), ...[...negs.values()].flat().map((n) => n.adGroupId ?? '')],
     portfolios: rules.map((x) => x.r.scopePortfolioId ?? ''),
   })
   const liveMarkets = await writableMarkets([...book.campaigns.values()].map((c) => c.marketplace))
@@ -295,7 +321,7 @@ export async function listWasteRules(q: { market?: string | null; channel?: stri
       campaigns: split, autoGate: gates.get(r.id) ?? null,
     }), kind, {
       ceilingBlockedBy: ceiling.blockedBy, stopWaste: stopWasteShapeOf(r.actions) != null,
-      notPageShape: stopWasteKindOf(produced) != null && stopWasteShapeOf(r.actions) == null,
+      notPageShape: stopWasteKindOf(produced) != null ? stopWasteShapeWhy(r.actions) : null,
       noProtectedTerms: !protectedIn(normMarket(r.scopeMarketplace) ?? market),
       locked: { n: split.locked, names: split.names?.locked ?? [], all: split.open === 0 },
     })
@@ -305,8 +331,11 @@ export async function listWasteRules(q: { market?: string | null; channel?: stri
     const touchedGroups = new Set([...[...pausedTargets].map((t) => book.targets.get(t)?.adGroupId ?? ''), ...myNegs.map((n) => n.adGroupId ?? '')].filter(Boolean))
     const touchedCampaigns = new Set([...touchedGroups].map((g) => book.campaignOfAdGroup(g) ?? '').filter(Boolean))
     const changed = book.refSet(touchedCampaigns, touchedGroups)
-    const picks = r.scopeCampaignId || r.scopePortfolioId || r.scopeProductId || r.scopeAdGroupId
-    const scope = book.refSet(reach, r.scopeAdGroupId ? [r.scopeAdGroupId] : [])
+    const mapped = places.get(r.id)
+    const picks = r.scopeCampaignId || r.scopePortfolioId || r.scopeProductId || r.scopeAdGroupId || mapped
+    const inReach = new Set(reach)
+    const groupsOfScope = mapped ? mapped.adGroupIds.filter((g) => inReach.has(book.campaignOfAdGroup(g) ?? '')) : r.scopeAdGroupId ? [r.scopeAdGroupId] : []
+    const scope = book.refSet(reach, groupsOfScope)
     const byReason = refusals.get(r.id)?.byReason ?? {}
     return {
       id: r.id, kind, source: 'rule' as const, readOnly: false, name: r.name,
@@ -315,7 +344,8 @@ export async function listWasteRules(q: { market?: string | null; channel?: stri
       scope: {
         ...scope, all: !picks,
         product: r.scopeProductId ? { id: r.scopeProductId, name: r.scopeProductId, href: `/products/${encodeURIComponent(r.scopeProductId)}` } : null,
-        adGroup: r.scopeAdGroupId ? book.adGroupRef(r.scopeAdGroupId) ?? { id: r.scopeAdGroupId, name: r.scopeAdGroupId } : null,
+        adGroup: r.scopeAdGroupId ? book.adGroupRef(r.scopeAdGroupId) ?? { id: r.scopeAdGroupId, name: r.scopeAdGroupId }
+          : groupsOfScope.length === 1 ? book.adGroupRef(groupsOfScope[0]!) : null,
       },
       changed7d: { ...changed, paused: pausedTargets.size, negated: myNegs.length },
       last7d: {
@@ -379,7 +409,7 @@ async function autoGates(rules: readonly WasteRuleRecord[], now: Date): Promise<
       refusal = isRefused(asked) ? asked.body as typeof refusal : null
     }
     const hold = autoGateHold(refusal, r.createdAt, { observationDays: GRADUATION_GATE.observationDays, evaluations: { have: r.evaluationCount, need: GRADUATION_GATE.evaluations } })
-    const notShaped = stopWasteKindOf(producedActionTypes(r)) != null && stopWasteShapeOf(r.actions) == null
+    const notShaped = stopWasteKindOf(producedActionTypes(r)) != null ? stopWasteShapeWhy(r.actions) : null
     out.set(r.id, hold && hold.label === 'Always asks' ? WASTE_HOLDS.alwaysAsks(ceiling.blockedBy, notShaped) : hold)
   }))
   return out

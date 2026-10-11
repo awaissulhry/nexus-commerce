@@ -4,8 +4,8 @@
  * FB.2 — what the server said about this scope, in one place, on all eleven pages.
  *
  * Four different sentences used to live in four different shapes: `h10-bd-note` inside the Bid and
- * Budget bars, `h10-plc-note` inside Placement's, and `h10-kt-blind` / `h10-ng-blind` /
- * `h10-sov-blind` OUTSIDE the bar entirely on the three pages that carry the portfolio blind spot.
+ * Budget bars, `h10-plc-note` inside Placement's, and `h10-kt-blind` / `h10-sov-blind` (and the old
+ * Negatives page's) OUTSIDE the bar entirely on the pages that carry the portfolio blind spot.
  * Merging the bars forced a choice of home, and the answer is inside it, under the controls: these
  * are facts about the grain currently being used, not about the page.
  *

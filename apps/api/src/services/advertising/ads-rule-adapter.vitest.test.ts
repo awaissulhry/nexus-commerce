@@ -9,7 +9,7 @@
  *      behaviour dropped the condition, and a dropped AND-condition makes a rule LOOSER.
  */
 import { describe, it, expect } from 'vitest'
-import { maybeTranslateAdsRule, listUntranslatableMetrics, BUILDER_SLUG_ACTIONS, isBuilderShapedAdsRule, engineRuleToBuilderView, conditionsForStorage, producedActionTypes, builderScopeCampaignIds } from './ads-rule-adapter.service.js'
+import { maybeTranslateAdsRule, listUntranslatableMetrics, BUILDER_SLUG_ACTIONS, isBuilderShapedAdsRule, engineRuleToBuilderView, conditionsForStorage, producedActionTypes, builderScopeCampaignIds, builderLookAdGroupIds, builderStopWasteKind, negativeBuilderPlaces, negativeBuilderTrigger } from './ads-rule-adapter.service.js'
 import { ADS_TRIGGER_FIELDS } from '../automation/ads-trigger-fields.js'
 
 // 4b — each block carries a THEN value, as the builder always sends one: a blank THEN now refuses the rule.
@@ -665,5 +665,60 @@ describe('4a — builderScopeCampaignIds: the campaigns a builder rule\'s picker
   it('the picks it binds are the same list the handler enforces (`campaignIds` on the translated action)', () => {
     const t = maybeTranslateAdsRule({ id: 'r', actions: picked('placement', ['c1']), conditions: [] })!
     expect((t.actions[0] as { campaignIds: string[] }).campaignIds).toEqual(builderScopeCampaignIds(picked('placement', ['c1'])))
+  })
+})
+
+describe('wave 4 — a Negative Targeting builder rule with "Stop waste — may run alone" on', () => {
+  const mapping = [{ groups: [{ id: 'ag-1', look: true, types: { P: false, E: true, product: false } }, { id: 'ag-2', look: false, types: { P: false, E: true, product: false } }] }]
+  const criteria = [{ match: 'all', conditions: [{ metric: 'Sales', op: 'eq', value: '0' }, { metric: 'Clicks', op: 'gte', value: '5' }] }]
+  const builder = (stopWaste: Record<string, unknown> | null) => ({
+    id: 'nb', conditions: criteria,
+    actions: [{ type: 'negative-targeting', negationLevel: 'adgroup', mappings: mapping, ...(stopWaste ? { stopWaste } : {}) }],
+  })
+
+  it('"Pause keyword, keep it paused": the keyword\'s own numbers, the mapped ad groups, a pause that keeps it paused', () => {
+    const t = maybeTranslateAdsRule(builder({ kind: 'PAUSE_KEYWORD' }))!
+    expect(t.untranslatable).toBeUndefined()
+    expect(t.actions).toEqual([{ type: 'pause_target', keepPaused: true, reason: 'Negative rule nb — keyword paused, kept paused' }])
+    expect(t.conditions).toEqual([
+      { field: 'adTarget.salesCents', op: 'eq', value: 0 },
+      { field: 'adTarget.clicks', op: 'gte', value: 5 },
+      { field: 'adGroup.id', op: 'in', value: ['ag-1'] },
+    ])
+    expect(producedActionTypes(builder({ kind: 'PAUSE_KEYWORD' }))).toEqual(['pause_target'])
+    expect(negativeBuilderTrigger(builder({ kind: 'PAUSE_KEYWORD' }).actions)).toBe('TARGET_PERFORMANCE')
+  })
+
+  it('"Negative exact", or the section off: the negative rule exactly as before, on search terms', () => {
+    for (const sw of [{ kind: 'NEGATE_TERM' }, null]) {
+      const t = maybeTranslateAdsRule(builder(sw))!
+      expect(t.actions[0]).toMatchObject({ type: 'add_negative_exact', scope: 'AD_GROUP', levels: ['AD_GROUP'] })
+      expect(t.conditions).toEqual([{ field: 'searchTerm.salesCents', op: 'eq', value: 0 }, { field: 'searchTerm.clicks', op: 'gte', value: 5 }])
+      expect(negativeBuilderTrigger(builder(sw).actions)).toBe('SEARCH_TERM_WASTING')
+    }
+    expect(negativeBuilderTrigger([{ type: 'bid' }])).toBeNull()
+    expect(negativeBuilderTrigger([{ type: 'pause_target', stopWaste: { kind: 'PAUSE_KEYWORD' } }])).toBeNull()
+  })
+
+  it('the kind and the ad groups it looks in', () => {
+    expect(builderStopWasteKind({ stopWaste: { kind: 'NEGATE_TERM' } })).toBe('NEGATE_TERM')
+    expect(builderStopWasteKind({ stopWaste: { kind: 'other' } })).toBeNull()
+    expect(builderStopWasteKind({})).toBeNull()
+    expect(builderLookAdGroupIds({ mappings: [...mapping, { groups: [{ id: 'ag-1' }, { id: 'ag-3' }] }] })).toEqual(['ag-1', 'ag-3'])
+    expect(builderLookAdGroupIds(null)).toEqual([])
+  })
+})
+
+describe('wave 4 (audit M1) — a negative builder rule works in its Ad Group Mapping', () => {
+  it('the ad groups it looks in or creates in, their campaigns; null for any other rule or an empty mapping', () => {
+    const actions = [{ type: 'negative-targeting', mappings: [{ groups: [
+      { id: 'g1', campaignId: 'c1', look: true, types: { P: false, E: true, product: false } },
+      { id: 'g2', campaignId: 'c2', look: false, types: { P: false, E: true, product: false } },
+      { id: 'g3', campaignId: 'c3', look: false, types: { P: false, E: false, product: false } },
+    ] }] }]
+    expect(negativeBuilderPlaces(actions)).toEqual({ adGroupIds: ['g1', 'g2'], campaignIds: ['c1', 'c2'], lookAdGroupIds: ['g1'] })
+    expect(negativeBuilderPlaces([{ type: 'negative-targeting', mappings: [{ groups: [] }] }])).toBeNull()
+    expect(negativeBuilderPlaces([{ type: 'bid' }])).toBeNull()
+    expect(negativeBuilderPlaces([{ type: 'add_negative_exact' }])).toBeNull()
   })
 })

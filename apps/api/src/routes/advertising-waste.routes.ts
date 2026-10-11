@@ -39,10 +39,9 @@
  *                                                       brain (negatives lever) and Harvest (source negatives) first, read
  *                                                       only; then every rule that pauses or unpauses a keyword or adds
  *                                                       negatives: the Bid rules' row shape + kind, source, test, ad group
- *   GET   /advertising/waste/rules/starters               the two starters (PLAN §2 defaults; a new rule is born at Watch)
- *   POST  /advertising/waste/rules                        save a new stop-waste rule → 201 { id, name, created, level, scope }
- *   PATCH /advertising/waste/rules/:id                    edit one (fields left out keep the rule's own; Auto → Ask me)
- *   POST  /advertising/waste/rules/preview                { ruleId? | rule?, limit? } → { wouldChange, wouldAsk, sample:
+ *   GET   /advertising/waste/rules/starters               the two stop-waste starters (PLAN §2 defaults): the builder's
+ *                                                       "Stop waste — may run alone" section opens on them
+ *   POST  /advertising/waste/rules/preview                { ruleId? | builder?, limit? } → { wouldChange, wouldAsk, sample:
  *                                                       [{ row, campaign, adGroup, action, why, alone, asks, test }],
  *                                                       refused: [{ row, why }] } — writes nothing
  *   GET   /advertising/waste/rules/:id/history?days=&market=&limit=   its changes, each with `changeId` for the undo route
@@ -65,7 +64,7 @@ import { waitingSteps } from '../services/advertising/waste/waiting-steps.js'
 import { MAX_SKIP_ROWS, reopenSkips, skipRows, unskipRows } from '../services/advertising/waste/skip.js'
 import { listWasteRules, wasteRuleHistory, WASTE_RULES_MONEY } from '../services/advertising/waste-rules/read.js'
 import { previewWasteRule } from '../services/advertising/waste-rules/preview.js'
-import { saveWasteRule, setWasteRuleArchived, setWasteRulesMode } from '../services/advertising/waste-rules/write.js'
+import { setWasteRuleArchived, setWasteRulesMode } from '../services/advertising/waste-rules/write.js'
 import { STARTERS } from '../services/advertising/waste-rules/pure.js'
 import type { AdsActor } from '../services/advertising/ads-mutation.service.js'
 
@@ -308,27 +307,13 @@ const RULES_HISTORY_QUERY = z.object({
   days: z.coerce.number().int().min(1).max(90).default(7),
   limit: z.coerce.number().int().min(1).max(500).default(200),
 })
-const RULES_SCOPE = z.object({
-  marketplace: z.string().trim().min(2).max(20).nullable().optional(),
-  portfolioId: RULES_ID.nullable().optional(),
-  campaignId: RULES_ID.nullable().optional(),
-  adGroupId: RULES_ID.nullable().optional(),
-  productId: RULES_ID.nullable().optional(),
-  wholeAccount: z.boolean().optional(),
+/** Wave 4 — the Negative Targeting builder's unsaved draft (its actions and criteria as it would save them). */
+const BUILDER_DRAFT = z.object({
+  actions: z.array(z.record(z.string(), z.unknown())).min(1).max(5),
+  conditions: z.array(z.unknown()).max(20).optional(),
+  scopeMarketplace: z.string().trim().min(2).max(20).nullable().optional(),
 }).strict()
-const RULE_BODY = z.object({
-  kind: z.enum(['PAUSE_KEYWORD', 'NEGATE_TERM']).optional(),
-  name: z.string().trim().min(1).max(120).optional(),
-  scope: RULES_SCOPE.optional(),
-  windowDays: z.number().int().min(14).max(90).optional(),
-  minClicks: z.number().int().min(1).max(10_000).optional(),
-  cpaMultiple: z.number().min(0.5).max(10).optional(),
-  spendFloorCents: z.number().int().min(1).max(10_000_000).optional(),
-  match: z.enum(['EXACT', 'PHRASE']).optional(),
-  level: z.enum(['AD_GROUP', 'CAMPAIGN']).optional(),
-  runAt: z.string().trim().max(5).optional(),
-}).strict()
-const RULES_PREVIEW_BODY = z.object({ ruleId: RULES_ID.optional(), rule: RULE_BODY.optional(), limit: z.coerce.number().int().min(1).max(100).optional() }).strict()
+const RULES_PREVIEW_BODY = z.object({ ruleId: RULES_ID.optional(), builder: BUILDER_DRAFT.optional(), limit: z.coerce.number().int().min(1).max(100).optional() }).strict()
 const RULES_MODE_BODY = z.object({ ids: z.array(RULES_ID).min(1).max(100), mode: z.enum(['OFF', 'WATCH', 'ASK', 'AUTO']) }).strict()
 
 /** The rules' answer without the money keys this person may not see (the test's bars too). */
@@ -367,30 +352,6 @@ export async function wasteRulesRoutes(fastify: FastifyInstance): Promise<void> 
     const parsed = RULES_MODE_BODY.safeParse(request.body ?? {})
     if (!parsed.success) return reply.code(400).send({ error: problemOf(parsed.error) })
     return (await setWasteRulesMode(parsed.data.ids, parsed.data.mode, actorOf(person) as AdsActor)).data
-  })
-
-  fastify.post('/advertising/waste/rules', async (request, reply) => {
-    reply.header('Cache-Control', 'no-store')
-    const person = await personOf(request, reply)
-    if (!person) return
-    const parsed = RULE_BODY.safeParse(request.body ?? {})
-    if (!parsed.success) return reply.code(400).send({ error: problemOf(parsed.error) })
-    if (!parsed.data.kind) return reply.code(400).send({ error: 'kind: PAUSE_KEYWORD or NEGATE_TERM' })
-    const out = await saveWasteRule({ body: parsed.data as never }, actorOf(person) as AdsActor)
-    if ('error' in out) return reply.code(out.status).send({ error: out.error })
-    return reply.code(201).send(out.data)
-  })
-
-  fastify.patch('/advertising/waste/rules/:id', async (request, reply) => {
-    reply.header('Cache-Control', 'no-store')
-    const person = await personOf(request, reply)
-    if (!person) return
-    const { id: ruleId } = request.params as { id: string }
-    const parsed = RULE_BODY.safeParse(request.body ?? {})
-    if (!parsed.success) return reply.code(400).send({ error: problemOf(parsed.error) })
-    const out = await saveWasteRule({ id: ruleId, body: parsed.data as never }, actorOf(person) as AdsActor)
-    if ('error' in out) return reply.code(out.status).send({ error: out.error })
-    return out.data
   })
 
   fastify.get('/advertising/waste/rules/:id/history', async (request, reply) => {

@@ -21,7 +21,6 @@
 import { classifyActor, engineLabel } from '../ads-engine-actors.js'
 import type { Owner, Ref } from './pure.js'
 
-export const BRAIN_REF: Ref = { id: 'brain', name: 'Brain' }
 export const HARVEST_OWNER: Owner = { kind: 'HARVEST', name: 'Harvest', id: 'harvest' }
 export const NO_OWNER: Owner = { kind: 'NONE', name: '—', id: null }
 const UNKNOWN: Owner = { kind: 'NONE', name: 'Unknown', id: null }

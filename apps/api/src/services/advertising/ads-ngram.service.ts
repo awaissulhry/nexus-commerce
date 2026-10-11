@@ -18,8 +18,8 @@ export interface NgramRow {
    * yields the 2-gram `moto protezioni` even though those words are not adjacent in the query.
    * For a 1-gram the two counts agree; for a 2-gram this over-reports by up to 4.7×.
    *
-   * Anything offering an ACTION must count contiguous token matches itself — see
-   * `negatives-ngrams.service.ts`, which does, and puts that number on the row instead.
+   * Anything offering an ACTION must count contiguous token matches itself, and put that number on
+   * the row instead (the old Negatives page's wasteful-words read did).
    */
   terms: number
   impressions: number; clicks: number; costCents: number; orders: number; salesCents: number
@@ -40,7 +40,7 @@ const STOP = new Set(['the', 'a', 'an', 'and', 'or', 'for', 'of', 'to', 'in', 'd
  *
  * `campaignIds`/`adGroupIds` are **EXTERNAL** Amazon ids, because that is what
  * `AmazonAdsSearchTerm` stores. Passing local ids returns zero rows forever and looks exactly like
- * a quiet account — the caller maps them (see `negatives-ngrams.service.ts`).
+ * a quiet account — the caller maps them.
  */
 export interface NgramScope {
   windowDays?: number

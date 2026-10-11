@@ -10,10 +10,11 @@
  *
  * The detail never writes. A mode pick, an archive, an unarchive, an Undo, a decision on waiting asks, an edit of its
  * fields asks the VIEW, which reviews it in the DS `ReviewChangesModal` stacked ON TOP of this detail; when the review
- * closes the focus goes back to the control that opened it (`data-return`). "Edit all": a stop-waste rule's fields are
- * its Settings tab (the builder cannot carry its test); a rule made in a builder opens that builder.
+ * closes the focus goes back to the control that opened it (`data-return`). "Edit all" opens the rule builder as a page
+ * (Owner 2026-10-11, wave 4): the old negative-targeting builder, with its "Stop waste — may run alone" section; a rule
+ * made in another builder (a Bid rule that pauses) opens that one. The Settings tab only shows.
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { RotateCw, Undo2 } from 'lucide-react'
 import { Button, SegmentedControl, Tag, ToolbarButton, Tooltip } from '@/design-system/primitives'
 import {
@@ -28,14 +29,13 @@ import { changeStateView, undoView } from '../../bid/_shared/delivery'
 import { MODES, MODE_WORD, holdReason, holdsOf, nextRunView, type BidMode } from '../../bid/rules/bidRulesModel'
 import { fetchStoredRule } from '../../bid/rules/ruleApi'
 import { settingGroups, type SettingGroup, type StoredRule } from '../../bid/rules/ruleSettings'
+import { negativeBuilderSettings } from './negativeSettings'
 import { fetchWasteHistory, fetchWastePreview } from './wasteRulesApi'
 import {
   KIND_WORD, LAST_WEEK, WASTE_MODE_MEANS, actionWord, autoLockOf, changeFromTo, decidedElsewhere, harvestWaitingHref, heldStep, isPseudo, isStopWaste, last7Parts, ownerOf, plural,
-  previewParts, refusalWhy, sharedWhy, scopeCount, scopePath, whoWord,
+  previewParts, refusalWhy, sharedWhy, scopeCount, scopePath, testWords, verbWords, whoWord,
   type PreviewItem, type WaitingAsk, type WasteHistory, type WastePreview, type WasteRuleChange, type WasteRuleRow,
 } from './wasteRulesModel'
-import { fieldProblems, fieldsOfSaved, fieldsPatch, testWords, verbWords, type RuleFields } from './newRuleModel'
-import { RuleFieldsForm } from './RuleFieldsForm'
 import { RuleMark, type PanelTab } from './WasteRulesTable'
 import { WasteWaitingTab } from './WasteWaitingTab'
 import { HintTag, Loading, NotRead } from './parts'
@@ -52,7 +52,10 @@ const REF_HEADER = { portfolios: 'Portfolios', campaigns: 'Campaigns', adGroups:
 type RefKind = keyof typeof NOUN
 
 
-/** Which builder made a rule (its first action's type), so "Edit all" opens that one; null: the engine made it. */
+/**
+ * Which builder "Edit all" opens: the one that made the rule (its first action's type). Null: the rule engine (or Claude)
+ * made it, and only its mode changes here (audit M5: an engine rule opened in a builder that could not save it whole).
+ */
 export function builderSlugOf(actions: unknown): string | null {
   const a0 = Array.isArray(actions) ? (actions[0] as { type?: unknown } | undefined) : undefined
   const t = typeof a0?.type === 'string' ? a0.type : ''
@@ -83,10 +86,13 @@ export interface WasteRuleModalProps {
   onUnarchive(): void
   onUndo(change: WasteRuleChange): void
   onDecide(kind: 'approve' | 'reject', asks: WaitingAsk[]): void
-  /** A stop-waste rule's fields changed: the view reviews and saves them. */
-  onSaveFields(before: RuleFields, after: RuleFields): void
-  /** A rule made in a builder: open that builder on it. */
+  /** Open the rule builder page on this rule (its builder type). */
   onEditBuilder(slug: string): void
+  /**
+   * Audit S3 — the rule was just made in the builder: the detail says so, with Undo (archive it again). In the detail,
+   * not a toast, which sat under the detail's backdrop where no click or Tab could reach it.
+   */
+  created?: { undo(): void; busy: boolean } | null
 }
 
 const ruleTabs = (row: WasteRuleRow, open: PanelTab): Array<{ id: PanelTab; label: string; count?: number }> => {
@@ -124,13 +130,9 @@ export function WasteRuleModal(p: WasteRuleModalProps) {
   const slug = stored.data ? builderSlugOf(stored.data.actions) : null
   const editHeld = r.archived ? 'Archived: unarchive it first'
     : p.modeHeld ? p.modeHeld
-      : isStopWaste(r) ? null
-        : !stored.data ? (stored.error ? 'Its settings were not read' : 'Reading its settings…')
-          : slug ? null : 'Made by the rule engine: only its mode changes here'
-  const editAll = () => {
-    if (isStopWaste(r)) { p.onTab('settings'); requestAnimationFrame(() => document.querySelector<HTMLElement>('[data-fields] input')?.focus()); return }
-    if (slug) p.onEditBuilder(slug)
-  }
+      : !stored.data ? (stored.error ? 'Its settings were not read' : 'Reading its settings…')
+        : slug ? null : 'Made by the rule engine: only its mode changes here'
+  const editAll = () => { if (slug) p.onEditBuilder(slug) }
 
   const footer = owner ? (
     <>
@@ -172,6 +174,11 @@ export function WasteRuleModal(p: WasteRuleModalProps) {
       returnFocusTo={p.returnFocusTo}
     >
       <div className={styles.panelBody}>
+        {p.created && (
+          <Banner tone="success" title="Rule created" action={<Button size="sm" variant="secondary" heldReason={p.created.busy ? 'Undoing…' : null} onClick={p.created.undo}>Undo</Button>}>
+            Undo archives it again.
+          </Banner>
+        )}
         {tab === 'overview' && <Overview {...p} />}
         {tab === 'preview' && !pseudo && <PreviewTab row={r} reloadKey={p.reloadKey} />}
         {tab === 'history' && <HistoryTab {...p} />}
@@ -272,7 +279,7 @@ function Overview(p: WasteRuleModalProps) {
           <div className={styles.chips}>
             {testWords(r.test).map((w) => <Tag key={w}>{w}</Tag>)}
             {typeof r.test.spendFloorCents === 'number' && <HintTag label={`else ≥ ${money(r.test.spendFloorCents, currency)}`} hint="The spend bar for a product with no target cost per order" />}
-            <Tag tone="info">{r.kind === 'PAUSE_KEYWORD' ? verbWords(r.kind, { match: 'EXACT', level: 'AD_GROUP' }) : r.sentence.split('→').pop()?.trim() || 'Negative'}</Tag>
+            <Tag tone="info">{r.kind === 'PAUSE_KEYWORD' ? verbWords(r.kind) : r.sentence.split('→').pop()?.trim() || 'Negative'}</Tag>
           </div>
         </section>
       )}
@@ -418,7 +425,7 @@ function HistoryTab(p: WasteRuleModalProps) {
 // ── settings ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 /** The Bid page's settings in this page's words: "Works on" is the path above (never raw ids), If · Then, no Order. */
-const SETTING_WORD: Readonly<Record<string, string>> = { Trigger: 'If', 'When → then': 'If → then' }
+const SETTING_WORD: Readonly<Record<string, string>> = { Trigger: 'If', 'When → then': 'If → then', 'Keywords a day': 'Matches a day' }
 function plainSettings(groups: SettingGroup[]): SettingGroup[] {
   return groups
     .filter((g) => g.id !== 'scope')
@@ -429,9 +436,10 @@ function plainSettings(groups: SettingGroup[]): SettingGroup[] {
 function SettingsTab(p: WasteRuleModalProps & { stored: StoredRule | null; storedError: string | null; onRetry(): void }) {
   const r = p.row
   const currency = currencyOf(marketOf(r, p.market))
-  if (isStopWaste(r) && r.test) return <StopWasteSettings {...p} currency={currency} />
   // The stored rule's groups, with "Works on" as the path (links), never its raw ids.
-  const groups: SettingGroup[] | null = p.stored ? plainSettings(settingGroups(p.stored, { sentence: r.sentence, currency, schedule: r.schedule ?? null })) : null
+  // Audit M4 — a Negative Targeting builder rule reads in its own words (negativeSettings.ts); any other, the Bid page's.
+  const ctx = { sentence: r.sentence, currency, schedule: r.schedule ?? null }
+  const groups: SettingGroup[] | null = p.stored ? negativeBuilderSettings(p.stored, ctx) ?? plainSettings(settingGroups(p.stored, ctx)) : null
   if (r.archived) return <p className={styles.muted}>Archived: unarchive it to read its settings.</p>
   return (
     <div className={styles.stack}>
@@ -443,46 +451,26 @@ function SettingsTab(p: WasteRuleModalProps & { stored: StoredRule | null; store
           <EntityPath items={scopePath(r)} linkAs={WorkspaceLink} label={`Where ${r.name} acts`} />
         </section>
       )}
+      {/* Wave 4 — the rule's "Stop waste — may run alone" test (the builder's section), when it carries one. */}
+      {isStopWaste(r) && r.test && (
+        <section className={styles.section} aria-label="Stop waste">
+          <h3 className={styles.h}>Stop waste — may run alone</h3>
+          <KeyValue dense columns={3} items={[
+            { label: 'Action', value: r.kind === 'PAUSE_KEYWORD' ? 'Pause keyword, keep it paused' : 'Negative exact' },
+            { label: 'Window', value: `${r.test.windowDays} d` },
+            { label: 'Clicks at least', value: String(r.test.minClicks) },
+            { label: 'Spend at least', value: testWords(r.test)[2].replace(/^spend ≥ /, '') },
+            { label: 'Without a target', value: typeof r.test.spendFloorCents === 'number' ? money(r.test.spendFloorCents, currency) : <HintTag label="Default" hint="The amount needs the ad spend permission" /> },
+            { label: 'Test', value: '0 orders · late orders count · days out of stock left out' },
+          ]} />
+        </section>
+      )}
       {groups && groups.map((g) => (
         <section key={g.id} className={styles.section} aria-label={g.title}>
           <h3 className={styles.h}>{g.title}</h3>
           <KeyValue dense columns={g.items.length > 2 ? 3 : 2} items={g.items.map((i) => ({ label: i.label, value: i.value }))} />
         </section>
       ))}
-    </div>
-  )
-}
-
-/** A stop-waste rule's own fields: edited here, reviewed by the view (PATCH /waste/rules/:id), Done with Undo. */
-function StopWasteSettings(p: WasteRuleModalProps & { stored: StoredRule | null; storedError: string | null; onRetry(): void; currency: string }) {
-  const r = p.row
-  const test = r.test!
-  const base = useMemo(() => fieldsOfSaved({ name: r.name, test }, p.stored?.actions), [r.name, test, p.stored])
-  const [draft, setDraft] = useState<RuleFields>(base)
-  // A re-read (after a save, or the stored rule arriving) starts the form from what is saved.
-  const baseKey = JSON.stringify(base)
-  const last = useRef(baseKey)
-  useEffect(() => { if (last.current !== baseKey) { last.current = baseKey; setDraft(base) } }, [baseKey, base])
-  const changed = Object.keys(fieldsPatch(r.kind, base, draft)).length
-  const problems = Object.keys(fieldProblems(draft)).length
-  const held = r.archived ? 'Archived: unarchive it first'
-    : p.modeHeld ? p.modeHeld
-      : !p.stored && !p.storedError ? 'Reading its settings…'
-        : problems ? 'Fix the fields first'
-          : !changed ? 'Nothing changed' : null
-  return (
-    <div className={styles.stack}>
-      {p.storedError && <NotRead what="Its run time and verb" error={p.storedError} onRetry={p.onRetry} />}
-      <div data-fields>
-        <RuleFieldsForm kind={r.kind} value={draft} onChange={setDraft} currency={p.currency} idPrefix={`rule-${r.id}`} />
-      </div>
-      <div className={styles.lineBetween}>
-        <span className={styles.chips}>{r.mode.set === 'AUTO' && <HintTag label="Back to Ask me" hint="A changed rule earns Auto again: it asks until you turn it back up" tone="warning" />}</span>
-        <span className={styles.chips} data-return="fields">
-          {changed > 0 && <Button size="sm" variant="quiet" onClick={() => setDraft(base)}>Discard</Button>}
-          <Button size="sm" variant="primary" heldReason={held} onClick={() => p.onSaveFields(base, draft)}>{changed ? `Review ${plural(changed, 'change')}…` : 'Review…'}</Button>
-        </span>
-      </div>
     </div>
   )
 }

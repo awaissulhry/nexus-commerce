@@ -21,7 +21,8 @@ describe('the Keyword Harvest rule builder is the shared one', () => {
     expect(builder).toContain("description={isHarvest ? 'Manually approve each harvest on the Keyword Harvest page' : 'Manually approve rule actions on the Suggestions page'}")
     expect(builder).toContain("{isHarvest && ' On Automate it harvests by itself, inside its caps.'}")
     // The Suggestions sentence about creation stays the Negatives page's own.
-    expect(builder).toContain("{isNegative && ' This rule CREATES things")
+    // (Negatives wave 4: the sentence hides while its "Stop waste — may run alone" section is on.)
+    expect(builder).toContain("{isNegative && !stopWaste.on && ' This rule CREATES things")
     expect(builder).not.toContain('(isHarvest || isNegative) && \' This rule CREATES things')
   })
 

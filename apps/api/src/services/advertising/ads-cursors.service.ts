@@ -270,42 +270,7 @@ export async function getHarvestCursor(scope: { market: string; campaign?: strin
   }
 }
 
-// ── 5 · Negative Targeting ──────────────────────────────────────────────────────────────────────
-export interface NegCursor {
-  /** 🔴 First, not third. On Bid, `n` guards against creates and deletes the timestamps miss; here
-   *  creates and deletes ARE the page's main event, and the ingest re-stamp makes every timestamp
-   *  on this table a liar. */
-  n: number
-  atAmazon: number
-  /** archived / paused — a retire is a state, not a deletion */
-  inert: number
-  /** the only honest timestamp on AdTarget for this page: OUR decision, never the ingest's.
-   *  `updatedAt` is disqualified by the schema's own comment. */
-  retiredAt: string | null
-  protN: number
-  protAt: string | null
-}
-
-export async function getNegativesCursor(scope: { market: string; campaign?: string | null }): Promise<NegCursor> {
-  const market = scope.market && scope.market !== 'all' ? scope.market.toUpperCase() : null
-  const campFilter = market || scope.campaign
-    ? { adGroup: { campaign: { ...(market ? { marketplace: market } : {}), ...(scope.campaign ? { id: scope.campaign } : {}) } } }
-    : {}
-  const [byStatus, atAmazon, retired, prot] = await Promise.all([
-    prisma.adTarget.groupBy({ by: ['status'], where: { isNegative: true, ...campFilter }, _count: { _all: true } }),
-    prisma.adTarget.count({ where: { isNegative: true, NOT: { externalTargetId: null }, ...campFilter } }),
-    prisma.adTarget.aggregate({ where: { isNegative: true, ...campFilter }, _max: { retiredAt: true } }),
-    prisma.adKeywordProtection.aggregate({ _max: { updatedAt: true }, _count: { _all: true } }),
-  ])
-  const n = byStatus.reduce((s, g) => s + g._count._all, 0)
-  const inert = byStatus.filter((g) => g.status !== 'ENABLED').reduce((s, g) => s + g._count._all, 0)
-  return {
-    n, atAmazon, inert,
-    retiredAt: retired._max.retiredAt?.toISOString() ?? null,
-    protN: prot._count._all,
-    protAt: prot._max.updatedAt?.toISOString() ?? null,
-  }
-}
+// ── 5 · Negative Targeting — gone (wave 4, 2026-10-11) with the old Negatives page and its routes.
 
 /**
  * ── 6 · Budget Pacing & Schedules — NO CURSOR, deliberately ─────────────────────────────────────

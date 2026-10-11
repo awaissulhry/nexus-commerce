@@ -9,8 +9,8 @@
  *                rows only from places that run (campaign and ad group ENABLED): a paused campaign's keywords "ENABLED"
  *                are noise (4-neg-live.md §5.1), archived duplicates never show
  *   products     the brain's campaign ownership (brain/ownership.ts): one family, several (shared), or none
- *   search terms AmazonAdsSearchTerm by EXTERNAL campaign and ad-group ids (a local id there joins nothing:
- *                negatives-attention.service.ts), summed in SQL per term, ad group and keyword that bought it (`via` =
+ *   search terms AmazonAdsSearchTerm by EXTERNAL campaign and ad-group ids (a local id there joins nothing),
+ *                summed in SQL per term, ad group and keyword that bought it (`via` =
  *                matchedKeywordId / matchedTargetId → our AdTarget.externalTargetId): the 30/60/90-day windows, 90 days
  *                and 8 weeks of spend — never shipped per day
  *   keywords     AmazonAdsDailyPerformance AD_TARGET summed in SQL per target; none at all → "no data" (d: null)
@@ -33,7 +33,7 @@ import { labelFor } from '../bid-grid.service.js'
 import { estimate } from '../bid-brain/estimator.js'
 import { LEGACY_WORKSPACE_ID, workspaceContext } from '@nexus/database/workspace-context'
 import { resolveAutonomy } from '../ads-autonomy.js'
-import { producedActionTypes } from '../ads-rule-adapter.service.js'
+import { negativeBuilderPlaces, producedActionTypes } from '../ads-rule-adapter.service.js'
 import { resolveAssignedCampaignIds } from '../ads-rule-scope-resolver.js'
 import { expandProductScope } from '../ads-scope-reach.js'
 import { strategyMarket } from '../ads-strategy/bids.js'
@@ -202,7 +202,11 @@ export interface WaitItem {
   text: string | null
   why: string | null
 }
-interface RuleFact { id: string; name: string; kind: 'pause' | 'negate'; scopeMarketplace: string | null; scopePortfolioId: string | null; scopeCampaignId: string | null; scopeProductId: string | null; scopeAdGroupId: string | null }
+interface RuleFact {
+  id: string; name: string; kind: 'pause' | 'negate'; scopeMarketplace: string | null; scopePortfolioId: string | null; scopeCampaignId: string | null; scopeProductId: string | null; scopeAdGroupId: string | null
+  /** Wave 4 (audit M1) — a Negative Targeting builder rule reads search terms only in these ad groups (its Ad Group Mapping). */
+  lookAdGroupIds: string[] | null
+}
 
 export interface WasteFacts {
   now: Date
@@ -789,7 +793,7 @@ export async function loadWasteFacts(market: string, now: Date = new Date(), foc
   const acting = ruleRows.filter((r) => ['PROPOSE', 'AUTO'].includes(resolveAutonomy(r)))
   const rules: RuleFact[] = acting.flatMap((r) => {
     const kind = ruleKind(r)
-    return kind ? [{ id: r.id, name: r.name, kind, scopeMarketplace: r.scopeMarketplace, scopePortfolioId: r.scopePortfolioId, scopeCampaignId: r.scopeCampaignId, scopeProductId: r.scopeProductId, scopeAdGroupId: r.scopeAdGroupId }] : []
+    return kind ? [{ id: r.id, name: r.name, kind, scopeMarketplace: r.scopeMarketplace, scopePortfolioId: r.scopePortfolioId, scopeCampaignId: r.scopeCampaignId, scopeProductId: r.scopeProductId, scopeAdGroupId: r.scopeAdGroupId, lookAdGroupIds: negativeBuilderPlaces(r.actions)?.lookAdGroupIds ?? null }] : []
   })
   const [ruleAssigned, ruleProductScope] = await Promise.all([
     rules.length ? resolveAssignedCampaignIds(acting.filter((r) => rules.some((x) => x.id === r.id))) : Promise.resolve(new Map<string, string[]>()),
@@ -1015,7 +1019,7 @@ function rulesOn(f: WasteFacts, adGroupId: string, kind: 'pause' | 'negate'): Ar
 function rulesReaching(f: WasteFacts, adGroupId: string, kind: 'pause' | 'negate'): Array<{ id: string; name: string }> {
   const g = f.adGroups.get(adGroupId)!
   const c = f.campaigns.get(g.campaignId)!
-  return f.rules.filter((r) => r.kind === kind && (!r.scopeAdGroupId || r.scopeAdGroupId === adGroupId) && ruleMatchesScope({
+  return f.rules.filter((r) => r.kind === kind && (!r.scopeAdGroupId || r.scopeAdGroupId === adGroupId) && (!r.lookAdGroupIds || r.lookAdGroupIds.includes(adGroupId)) && ruleMatchesScope({
     scopeMarketplace: r.scopeMarketplace ? marketCode(r.scopeMarketplace) : null,
     scopePortfolioId: r.scopePortfolioId,
     scopeCampaignId: r.scopeCampaignId,
