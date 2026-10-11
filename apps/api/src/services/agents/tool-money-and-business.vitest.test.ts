@@ -365,6 +365,8 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'ad-campaigns': () => ({}),
   'ad-targets': (ids) => ({ campaignId: ids.campaignId, status: 'all' }),
   'ad-search-terms': (ids) => ({ campaignId: ids.campaignId }),
+  // Negative Targeting (#546): every view of the page's read, in the seeded campaign; money stripped, one business.
+  'ad-waste': (ids) => ({ view: 'rows', show: 'all', campaignId: ids.campaignId }),
   'ad-changes': (ids) => ({ campaignId: ids.campaignId }),
   'ad-recommendations': (ids) => ({ campaignId: ids.campaignId }),
   // T4 — an eBay campaign's keywords: bids and fees are money.
