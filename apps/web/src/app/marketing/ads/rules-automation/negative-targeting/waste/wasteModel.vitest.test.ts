@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
-  ackWords, appliedWords, chipOwner, doneLine, isFinal, keepWord, olderKeep, shownSteps, unknownAction, detailTabOf, emptyWords, idKind, kindOf, landsWord, listSearch, previewSummary, saveWords, scopeOf, scopeOptions, scopeParams,
-  skipIds, sortOf, sortParam, spendHint, verbLabel, waitingCount, stateSentence, stoppedBulkPlan, stoppedShowOf, stoppedVerb, termOfId, tileQuery, tilesOf, undoWords, viewOf, waitingOf,
+  ackWords, appliedWords, chipOwner, decideLines, decideSummary, planWords, doneLine, isFinal, keepWord, olderKeep, shownSteps, unknownAction, detailTabOf, emptyWords, idKind, kindOf, landsWord, listSearch, previewSummary, saveWords, scopeOf, scopeOptions, scopeParams,
+  sinceView, skipIds, sortOf, sortParam, spendHint, verbLabel, waitingCount, stateSentence, stoppedBulkPlan, stoppedShowOf, stoppedVerb, termOfId, tileQuery, tilesOf, undoWords, viewOf, waitingOf,
   wasteBulkCounts, wasteBulkPlan, wastingShowOf, wasteVerb, xCpaText,
 } from './wasteModel'
-import type { PreviewStep, StoppedRow, StoppedTotals, WasteRow, WasteTotals } from './wasteTypes'
+import type { PreviewStep, StoppedRow, StoppedTotals, WaitingSteps, WasteRow, WasteTotals } from './wasteTypes'
 
 const ref = (id: string, name = id) => ({ id, name, href: `/x/${id}` })
 
@@ -294,5 +294,76 @@ describe('polish round 1 (audit 2026-10-11)', () => {
       { rowId: 'kw:k1', action: 'KEEP_UNTIL', keepUntil: '2026-12-01' },
       { rowId: 'kw:k2', action: 'KEEP_UNTIL', keepUntil: '2026-12-01' },
     ])
+  })
+})
+
+describe('NFIX — Since and the asks the page lists for what waits', () => {
+  it('Since: the day, or "—" with why it is not known; a kept-paused keyword names its lock\'s end', () => {
+    expect(sinceView(stopped({ sinceWhy: 'Added on this day: the Brain\'s write' }))).toEqual({ text: '1 Oct', hint: 'Added on this day: the Brain\'s write' })
+    const unknown = sinceView(stopped({ since: null, sinceSource: null, sinceWhy: 'Added before Nexus kept a record: Nexus first saw it on 11 Oct 2026, in one sync with 311 other negatives' }))
+    expect(unknown).toEqual({ text: '—', hint: 'Added before Nexus kept a record: Nexus first saw it on 11 Oct 2026, in one sync with 311 other negatives' })
+    // An older answer with no words still says why there is no day.
+    expect(sinceView(stopped({ since: null, sinceSource: null }))).toEqual({ text: '—', hint: 'Not on record' })
+    expect(sinceView(stopped({ id: 'kw:k1', keptPaused: { by: ref('u1', 'You'), at: '2026-10-01T10:00:00.000Z', until: null, reason: null } })).hint).toBe('Kept paused, always')
+  })
+
+  it('a row listed only for its ask decides with the ask\'s own verb (a removal too); a clash row\'s Remove is not its ask', () => {
+    const waiting = { approvalId: 'plan1', by: ref('brain', 'Brain'), at: '2026-10-11T05:30:00.000Z', expiresAt: null, rows: 3 }
+    const removal = term({ id: 'neg:n1', state: 'NEGATED', verb: { action: 'REMOVE_NEGATIVE', where: 'adGroup', held: null, targetRowId: 'neg:n1' }, waiting, askOnly: true })
+    expect(waitingOf([removal])).toMatchObject([{ approvalId: 'plan1', what: 'Remove negative', by: 'Brain', places: 3 }])
+    const clash = row({ verb: { action: 'REMOVE_NEGATIVE', where: 'adGroup', held: null, targetRowId: 'neg:n2' }, waiting: { ...waiting, approvalId: 'pause1', rows: 1 } })
+    expect(waitingOf([clash])[0].what).toBeUndefined()
+    const phrase = term({ id: 'term:IT|G|cheap', text: 'cheap', match: 'PHRASE', test: { ...row().test, met: false }, verb: { action: 'NEGATE_PHRASE', where: 'adGroup', held: null }, waiting, askOnly: true })
+    expect(waitingOf([phrase])[0].what).toBe('Negative phrase')
+    // Its verb is the ask's: a quiet button that opens the ask (the view opens the record for any waiting row).
+    expect(wasteVerb(phrase)).toMatchObject({ action: 'NEGATE_PHRASE', primary: false })
+  })
+})
+
+describe('NFIX — a request is decided whole: the review lists every step of a change plan', () => {
+  const wait = (approvalId: string, over: Partial<Parameters<typeof decideLines>[0][number]> = {}) => ({ rowId: 'term:IT|G|cheap', approvalId, text: 'cheap', by: 'Brain', what: 'Negative phrase', place: [ref('pf1'), ref('c1'), ref('g1')], places: 1, ...over })
+  const step = (n: number, tool: string, onPage: boolean, changes: Array<{ label: string; from: string | null; to: string | null }>, over: Partial<WaitingSteps['steps'][number]> = {}) => ({
+    step: n, tool, words: tool, onPage, status: 'pending', where: { name: 'Boots exact', href: '/marketing/ads/campaigns/c1' }, changes, changeCount: changes.length, summary: null, hidden: null, ...over,
+  })
+  const plan: WaitingSteps = {
+    approvalId: 'plan1', status: 'pending', plan: true, title: 'made up', offPage: 1,
+    steps: [
+      step(1, 'Add negatives', true, [{ label: 'Negative phrase "cheap" (ad group "g1")', from: null, to: 'Added' }]),
+      step(2, 'Change a target\'s bid', false, [{ label: 'Bid', from: '0.40', to: '0.50' }], { changeCount: 3 }),
+      step(3, 'Remove negatives', true, [], { hidden: 'Its details need the permissions of Remove negatives.' }),
+    ],
+  }
+
+  it('every step\'s every change — the ones this page does not show too — each noted as approved together', () => {
+    const lines = decideLines([wait('plan1')], new Map([['plan1', plan]]), 'approve')
+    expect(lines.map((l) => [l.id, l.what, l.now, l.next])).toEqual([
+      ['plan1#1.0', 'Add negatives · Negative phrase "cheap" (ad group "g1")', '—', 'Added'],
+      ['plan1#2.0', 'Change a target\'s bid · Bid', '0.40', '0.50'],
+      ['plan1#2.more', 'Change a target\'s bid · and 2 more changes', '—', 'Approved'],
+      ['plan1#3', 'Remove negatives', '—', 'Approved'],
+    ])
+    expect(lines.every((l) => l.approvalId === 'plan1' && l.note?.startsWith('Approved together · 3 steps · Brain'))).toBe(true)
+    expect(lines[1]).toMatchObject({ offPage: true, whereLink: { name: 'Boots exact' }, note: expect.stringMatching(/not on this page$/) })
+    expect(lines[3].note).toMatch(/Its details need the permissions/)
+    expect(decideSummary([wait('plan1')], new Map([['plan1', plan]]), 'approve')).toBe('This request is approved whole: every step below runs together, 1 step not on this page included.')
+    expect(decideLines([wait('plan1')], new Map([['plan1', plan]]), 'reject')[0].note).toMatch(/^Rejected together/)
+  })
+
+  it('a request that is one change on this page (or a rule\'s card, not read) reads as its row did', () => {
+    const single: WaitingSteps = { approvalId: 'one', status: 'pending', plan: false, title: null, offPage: 0, steps: [step(1, 'Pause', true, [{ label: 'Keyword', from: 'Enabled', to: 'Paused' }])] }
+    const steps = new Map<string, WaitingSteps | null>([['one', single]])
+    expect(decideLines([wait('one', { what: 'Pause', text: 'rain jacket' }), wait('suggestion:c1', { what: undefined, text: 'kids', places: 2 })], steps, 'approve')).toEqual([
+      expect.objectContaining({ id: 'one', what: 'Pause · rain jacket', now: 'Waiting · Brain', next: 'Approved' }),
+      expect.objectContaining({ id: 'suggestion:c1', what: 'kids', note: '2 places' }),
+    ])
+    expect(decideSummary([wait('one')], steps, 'approve')).toBeNull()
+  })
+})
+
+describe('NFIX — an ask that is a change plan says so (the record and the row\'s mark)', () => {
+  it('names its steps and how many are not on this page; a single request says nothing', () => {
+    expect(planWords({ steps: 2, offPage: 1 })).toBe('Plan · 2 steps (1 not on this page)')
+    expect(planWords({ steps: 3, offPage: 0 })).toBe('Plan · 3 steps')
+    expect(planWords(undefined)).toBeNull()
   })
 })

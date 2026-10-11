@@ -49,6 +49,9 @@ export const MAX_IDS = 5000
 
 export interface Ref { id: string; name: string; href?: string }
 
+/** The tools whose requests this page decides (a pause, its release, a negative, its removal), alone or in a change plan. */
+export const WASTE_TOOLS = ['pause-ads', 'enable-ads', 'add-negative-targets', 'retire-negatives', 'create-negative-keyword'] as const
+
 export type RowKind = 'KEYWORD' | 'TARGET' | 'TERM'
 export type Match = 'EXACT' | 'PHRASE' | 'BROAD' | 'AUTO' | 'ASIN' | 'CATEGORY'
 /** TURNED_ON_ELSEWHERE: kept paused (NWRITE's hold), but Amazon serves it — someone switched it on outside Nexus. */
@@ -115,11 +118,22 @@ export interface WasteRow {
   spark: number[]
   stockOutDays: number
   /** What waits for a person: one ask (approval or rule card) may cover several rows (`rows`). */
-  waiting: null | { approvalId: string; by: Ref; at: string; expiresAt: string | null; rows: number }
+  waiting: null | {
+    approvalId: string; by: Ref; at: string; expiresAt: string | null; rows: number
+    /** NFIX — the ask is a change plan: its steps (decided whole) and how many are not on this page. */
+    plan?: { steps: number; offPage: number }
+  }
   skipped: null | { until: string; by: string | null; at: string | null }
   /** TERM: other live ad groups where the term still served in the window, not blocked there; KEYWORD: where its text did. */
   stillServesIn: number
   lastChange: null | { action: string; at: string; by: Ref; changeId: string | null }
+  /**
+   * NFIX (2026-10-11) — a row that is listed ONLY because something waits on it here (the Brain's, a rule's, Claude's or a
+   * person's ask): a negative that would land where the term has no row of its own (a phrase piece, a term the place never
+   * bought, a paused place), a negative removal, a pause in a place that does not run. It shows under "Waiting" only and
+   * counts only there (the tile counts every ask it lists: no count without a list). Absent on every other row.
+   */
+  askOnly?: true
   /** A clash the Owner should see (the Clashes tile lists exactly these rows), with why in plain words; null: none. */
   clash: null | {
     kind: ClashKind
@@ -392,6 +406,8 @@ export type SortKey = (typeof SORT_KEYS)[number]
 export const isWasting = (r: Pick<WasteRow, 'test' | 'state' | 'skipped'>) => r.test.met && (r.state === 'RUNNING' || r.state === 'PROTECTED') && !r.skipped
 
 export function showMatches(r: WasteRow, show: ShowFilter): boolean {
+  // A row listed only for what waits on it shows under Waiting, never as a keyword or term "with numbers" (All).
+  if (r.askOnly) return show === 'waiting' && r.waiting != null
   if (show === 'wasting') return isWasting(r)
   if (show === 'waiting') return r.waiting != null
   if (show === 'skipped') return r.skipped != null
@@ -481,6 +497,12 @@ export function totalsOf(rows: readonly WasteRow[], show: ShowFilter, extra: { n
   // counted once (on the keyword), never twice.
   const wastingKeywords = new Set(rows.filter((r) => r.kind !== 'TERM' && isWasting(r)).map((r) => r.id.slice(3)))
   for (const r of rows) {
+    // A row listed only for its ask counts that ask (and the kind split under Waiting), nothing else.
+    if (r.askOnly) {
+      if (r.waiting) asks.add(r.waiting.approvalId)
+      if (showMatches(r, show)) { if (r.kind === 'TERM') terms++; else keywords++ }
+      continue
+    }
     if (isWasting(r)) {
       wasting++
       if (!(r.kind === 'TERM' && r.via && wastingKeywords.has(r.via.id))) byCurrency[r.currency] = (byCurrency[r.currency] ?? 0) + (r.d?.spendCents ?? 0)

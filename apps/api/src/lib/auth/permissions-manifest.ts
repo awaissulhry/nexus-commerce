@@ -441,7 +441,8 @@ export const ENTRIES: Entry[] = [
   P(F.adsView, (m, p) => isRead(m) && p === '/api/advertising/bids'),
   // Negative Targeting page (2026-10-11) — the waste reads (routes/advertising-waste.routes.ts READ block): rows, rows/ids,
   // stopped, one row, history. Reads, ads.view; money keys stripped without financials.adspend.view. Named on their own.
-  P(F.adsView, (m, p) => isRead(m) && /^\/api\/advertising\/waste\/(rows(\/ids)?|stopped|history|row\/[^/]+)$/.test(p)),
+  // NFIX — a waiting request's every step (GET waiting/:id), before a person decides it on the page.
+  P(F.adsView, (m, p) => isRead(m) && /^\/api\/advertising\/waste\/(rows(\/ids)?|stopped|history|row\/[^/]+|waiting\/[^/]+)$/.test(p)),
   // KAPI-B — one keyword's Auto / Manual (routes/advertising-bid-mode.routes.ts): a hold of its bid or the hand-back,
   // ads.bids.edit, named on its own so no reorder of the broader rules below can hand it another permission.
   P(F.adsBidsEdit, (m, p) => m.toUpperCase() === 'POST' && /^\/api\/advertising\/bids\/[^/]+\/mode$/.test(p)),

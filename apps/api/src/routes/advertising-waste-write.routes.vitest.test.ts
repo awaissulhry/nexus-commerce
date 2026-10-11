@@ -299,6 +299,66 @@ describe('POST /advertising/waste/waiting/decide — through the Approvals page\
   })
 })
 
+describe('GET /advertising/waste/waiting/:id — every step of a request, before it is decided here (NFIX)', () => {
+  it('a mixed change plan lists each step — the page\'s and the others — as approved together; another kind of request is 404', async () => {
+    const { queuePlan } = await import('../services/agents/change-plan.service.js')
+    const person = { kind: 'user' as const, userId, label: 'Nora Negative', via: 'claude' as const, workspace: business(A), permissions: { isOwner: false, permissions: new Set<string>(OWNER) } }
+    const run = await inA(() => database.client.agentRun.create({ data: { agentKey: 'claude', trigger: 'manual', status: 'awaiting_approval', via: 'claude' } }))
+    const asked = await inA(() => queuePlan({ title: 'A made-up mixed plan', steps: [
+      { tool: 'pause-ads', args: { targetIds: ['t-low'], keepPaused: true, why: 'made up' } },
+      { tool: 'set-target-bid', args: { targetId: 't-it', proposedBidCents: 50, why: 'made up' } },
+    ] }, person as never, run.id))
+    expect(asked, JSON.stringify(asked)).toMatchObject({ ok: true, mode: 'queued' })
+    const id = (asked as Row).approvalId as string
+    try {
+      const res = await app.inject({ method: 'GET', url: `/api/advertising/waste/waiting/${id}` })
+      expect(res.statusCode, res.body).toBe(200)
+      const body = res.json()
+      expect(body).toMatchObject({ approvalId: id, plan: true, status: 'pending', title: 'A made-up mixed plan', offPage: 1 })
+      expect(body.steps.map((x: Row) => [x.step, x.tool, x.onPage])).toEqual([[1, 'pause-ads', true], [2, 'set-target-bid', false]])
+      expect(body.steps[0].words).toBe('Pause')
+      // The step this page does not show is listed with what it changes, from → to.
+      expect(body.steps[1].changes.length).toBeGreaterThan(0)
+      expect(body.steps[1].changes.some((c: Row) => c.from != null && c.to != null)).toBe(true)
+      expect(res.body).not.toMatch(/set-target-bid"[^,]*"words":"set-target-bid/)
+      // A request of another kind is not this page's.
+      const other = await inA(() => database.client.agentApproval.create({ data: { agentRunId: run.id, toolName: 'set-price', riskTier: 'high', args: {}, status: 'pending' } }))
+      expect((await app.inject({ method: 'GET', url: `/api/advertising/waste/waiting/${other.id}` })).statusCode).toBe(404)
+      await inA(() => database.client.agentApproval.delete({ where: { id: other.id } }))
+    } finally {
+      await inA(() => database.client.agentApproval.updateMany({ where: { id, status: 'pending' }, data: { status: 'rejected', reason: 'test cleanup' } }))
+    }
+  })
+})
+
+describe('a plan step with no stored preview still names its words and its place (NFIX)', () => {
+  it('reads them from the step\'s own arguments: a negative, a removal, a pause', async () => {
+    const run = await inA(() => database.client.agentRun.create({ data: { agentKey: 'ads-brain-negatives', trigger: 'schedule', status: 'done' } }))
+    const ap = await inA(() => database.client.agentApproval.create({ data: {
+      agentRunId: run.id, toolName: 'submit-change-plan', riskTier: 'high', args: { title: 'made up', steps: 3 }, status: 'pending', expiresAt: new Date(Date.now() + 86_400_000),
+      planSteps: { create: [
+        { position: 1, toolName: 'add-negative-targets', args: { negatives: [{ adGroupId: 'g-c-it', text: 'cheap made up', matchType: 'NEGATIVE_PHRASE' }, { campaignId: 'c-it', text: 'free made up' }] } },
+        { position: 2, toolName: 'retire-negatives', args: { negativeIds: ['t-neg'] } },
+        { position: 3, toolName: 'pause-ads', args: { targetIds: ['t-low'] } },
+      ] },
+    } }))
+    try {
+      const res = await app.inject({ method: 'GET', url: `/api/advertising/waste/waiting/${ap.id}` })
+      expect(res.statusCode, res.body).toBe(200)
+      const [add, retire, pause] = res.json().steps as Row[]
+      expect(add).toMatchObject({ where: null, changeCount: 2 })
+      expect(add.changes).toEqual([
+        { label: 'Negative phrase "cheap made up" · Italy exact › group c-it', from: null, to: 'Added' },
+        { label: 'Negative exact "free made up" · Italy exact · whole campaign', from: null, to: 'Added' },
+      ])
+      expect(retire).toMatchObject({ where: { name: 'Italy exact › group c-it', href: '/marketing/ads/campaigns/c-it/ad-groups/g-c-it' }, changes: [{ label: 'Negative exact "free"', from: 'Standing', to: 'Removed' }] })
+      expect(pause).toMatchObject({ where: { name: 'Italy exact › group c-it' }, changes: [{ label: 'cheap boots', from: 'Running', to: 'Paused' }] })
+    } finally {
+      await inA(() => database.client.agentApproval.delete({ where: { id: ap.id } }))
+    }
+  })
+})
+
 describe('rule cards and the campaign screen\'s release', () => {
   const RULE = 'cnegwasterule000000000001'
   it('a rule\'s Ask-me cards: approve applies the pause and keeps it paused, reject dismisses, another card is 404', async () => {

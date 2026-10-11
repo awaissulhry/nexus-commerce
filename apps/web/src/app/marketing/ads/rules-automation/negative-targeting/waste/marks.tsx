@@ -17,7 +17,7 @@ import { Tooltip } from '@/design-system/primitives'
 import { useTooltipsDisabled } from '@/design-system/primitives/Tooltip'
 import { IdentityChip, WarnGlyph } from '@/design-system/grid'
 import { dayWords, relWords } from '../../bid/_shared/format'
-import { kindWord, matchChip, matchWord, stateSentence, type AnyState } from './wasteModel'
+import { kindWord, matchChip, matchWord, planWords, stateSentence, type AnyState } from './wasteModel'
 import type { Match, RowKind, StoppedRow } from './wasteTypes'
 import styles from '../negatives.module.css'
 
@@ -72,9 +72,10 @@ export function StateMark({ row, focusable = false }: { row: { state: AnyState; 
   }
 }
 
-/** Waiting for a person: by whom, and when it expires. */
-export function WaitingMark({ waiting }: { waiting: { by: { name: string }; at: string; expiresAt: string | null } }) {
-  const label = `Waiting for you · asked by ${waiting.by.name} ${relWords(waiting.at)}${waiting.expiresAt ? ` · expires ${relWords(waiting.expiresAt)}` : ''}`
+/** Waiting for a person: by whom, when it expires, and a plan's steps (decided together, NFIX). */
+export function WaitingMark({ waiting }: { waiting: { by: { name: string }; at: string; expiresAt: string | null; plan?: { steps: number; offPage: number } } }) {
+  const plan = planWords(waiting.plan)
+  const label = `Waiting for you · asked by ${waiting.by.name} ${relWords(waiting.at)}${waiting.expiresAt ? ` · expires ${relWords(waiting.expiresAt)}` : ''}${plan ? ` · ${plan}, approved together` : ''}`
   return <Mark label={label} tone="warn"><Hourglass {...G} className="nds-cell-glyph" /></Mark>
 }
 

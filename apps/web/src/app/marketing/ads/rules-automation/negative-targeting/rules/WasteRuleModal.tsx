@@ -30,7 +30,7 @@ import { fetchStoredRule } from '../../bid/rules/ruleApi'
 import { settingGroups, type SettingGroup, type StoredRule } from '../../bid/rules/ruleSettings'
 import { fetchWasteHistory, fetchWastePreview } from './wasteRulesApi'
 import {
-  KIND_WORD, LAST_WEEK, WASTE_MODE_MEANS, actionWord, autoLockOf, changeFromTo, heldStep, isPseudo, isStopWaste, last7Parts, ownerOf, plural,
+  KIND_WORD, LAST_WEEK, WASTE_MODE_MEANS, actionWord, autoLockOf, changeFromTo, decidedElsewhere, harvestWaitingHref, heldStep, isPseudo, isStopWaste, last7Parts, ownerOf, plural,
   previewParts, refusalWhy, sharedWhy, scopeCount, scopePath, whoWord,
   type PreviewItem, type WaitingAsk, type WasteHistory, type WastePreview, type WasteRuleChange, type WasteRuleRow,
 } from './wasteRulesModel'
@@ -90,7 +90,8 @@ export interface WasteRuleModalProps {
 }
 
 const ruleTabs = (row: WasteRuleRow, open: PanelTab): Array<{ id: PanelTab; label: string; count?: number }> => {
-  const waiting = row.waiting > 0 || open === 'waiting' ? [{ id: 'waiting' as const, label: 'Waiting', count: row.waiting }] : []
+  // Harvest's waiting harvests are decided on the Keyword Harvest page: no Waiting tab here (its Overview links there).
+  const waiting = !decidedElsewhere(row) && (row.waiting > 0 || open === 'waiting') ? [{ id: 'waiting' as const, label: 'Waiting', count: row.waiting }] : []
   if (isPseudo(row)) return [{ id: 'overview', label: 'Overview' }, ...waiting, { id: 'history', label: 'History' }]
   return [{ id: 'overview', label: 'Overview' }, { id: 'preview', label: 'Preview' }, { id: 'history', label: 'History' }, ...waiting, { id: 'settings', label: 'Settings' }]
 }
@@ -174,7 +175,7 @@ export function WasteRuleModal(p: WasteRuleModalProps) {
         {tab === 'overview' && <Overview {...p} />}
         {tab === 'preview' && !pseudo && <PreviewTab row={r} reloadKey={p.reloadKey} />}
         {tab === 'history' && <HistoryTab {...p} />}
-        {tab === 'waiting' && <WasteWaitingTab row={r} market={p.market} phone={p.phone} reloadKey={p.reloadKey} decideHeld={p.decideHeld} onDecide={p.onDecide} />}
+        {tab === 'waiting' && !decidedElsewhere(r) && <WasteWaitingTab row={r} market={p.market} phone={p.phone} reloadKey={p.reloadKey} decideHeld={p.decideHeld} onDecide={p.onDecide} />}
         {tab === 'settings' && !pseudo && <SettingsTab {...p} stored={stored.data} storedError={stored.error} onRetry={stored.reload} />}
       </div>
     </DetailModal>
@@ -281,7 +282,9 @@ function Overview(p: WasteRuleModalProps) {
           {parts.map((x) => (x.tab
             ? <Button key={x.key} size="xs" variant="tonal" onClick={() => p.onTab(x.tab!)} aria-label={`${x.text}: open ${x.tab === 'waiting' ? 'Waiting' : 'History'}`}>{x.text}</Button>
             : x.hint ? <HintTag key={x.key} label={x.text} hint={x.hint} tone={x.tone ?? 'neutral'} /> : <Tag key={x.key} tone={x.tone ?? 'neutral'}>{x.text}</Tag>))}
-          {r.waiting > 0 && <Button size="xs" variant="warning" onClick={() => p.onTab('waiting')} aria-label={`${r.waiting} waiting: open them`}>{r.waiting} waiting</Button>}
+          {r.waiting > 0 && (decidedElsewhere(r)
+            ? <Link href={harvestWaitingHref(r.market ?? p.market)} className="nds-entitylink" aria-label={`${r.waiting} waiting: decide them on the Keyword Harvest page`}>{r.waiting} waiting · Keyword Harvest</Link>
+            : <Button size="xs" variant="warning" onClick={() => p.onTab('waiting')} aria-label={`${r.waiting} waiting: open them`}>{r.waiting} waiting</Button>)}
           {!parts.length && !r.waiting && <span className={styles.muted}>{r.last7d.runs ? `${plural(r.last7d.runs, 'run')}, nothing stopped` : 'No runs'}</span>}
         </div>
       </section>

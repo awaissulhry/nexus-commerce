@@ -55,6 +55,18 @@ export interface WasteRulesTotals {
 export interface WasteRulesAnswer { channel: string; market: string | null; rules: WasteRuleRow[]; totals: WasteRulesTotals; note: string | null }
 
 export const isPseudo = (row: Pick<WasteRuleRow, 'source' | 'readOnly'>): boolean => row.source !== 'rule' || row.readOnly
+
+/**
+ * NFIX — Harvest's waiting harvests are decided on the Keyword Harvest page (its own page), never here: its Waiting is a
+ * link there with the count (or "—"), and its detail has no Waiting tab — no count on this page without its list.
+ */
+export const decidedElsewhere = (row: Partial<Pick<WasteRuleRow, 'source'>>): boolean => row.source === 'harvest'
+export const HARVEST_PAGE = '/marketing/ads/rules-automation/keyword-harvest'
+/** The Keyword Harvest page's "Waiting for you" list, in this market. */
+export function harvestWaitingHref(market: string | null | undefined): string {
+  const m = (market ?? '').trim()
+  return `${HARVEST_PAGE}?show=waiting${m && m.toLowerCase() !== 'all' ? `&market=${encodeURIComponent(m.toUpperCase())}` : ''}`
+}
 export const isStopWaste = (row: Pick<WasteRuleRow, 'test'>): boolean => row.test != null
 
 // ── who owns a row ──────────────────────────────────────────────────────────────────────────────────────────────────
@@ -189,12 +201,13 @@ const n = (count: number, one: string, many = `${one}s`) => `${count} ${count ==
 export const plural = n
 
 /** The cell's chips, most telling first: keywords paused and negatives added (History), asks (Waiting), refusals. */
-export function last7Parts(row: Pick<WasteRuleRow, 'changed7d' | 'last7d'>): Part[] {
+export function last7Parts(row: Pick<WasteRuleRow, 'changed7d' | 'last7d'> & Partial<Pick<WasteRuleRow, 'source'>>): Part[] {
   const l = row.last7d
   const parts: Part[] = []
   if (row.changed7d.paused > 0) parts.push({ key: 'paused', text: `${row.changed7d.paused} paused`, tab: 'history' })
   if (row.changed7d.negated > 0) parts.push({ key: 'negated', text: n(row.changed7d.negated, 'negative'), tab: 'history' })
-  if (l.asks > 0) parts.push({ key: 'asks', text: `${l.asks} asked`, tab: 'waiting' })
+  // Harvest's asks are decided on its own page: here a word, never a tab with nothing to list (NFIX).
+  if (l.asks > 0) parts.push(decidedElsewhere(row) ? { key: 'asks', text: `${l.asks} asked`, hint: 'Decided on the Keyword Harvest page' } : { key: 'asks', text: `${l.asks} asked`, tab: 'waiting' })
   if (l.applied > 0) parts.push({ key: 'applied', text: `${l.applied} approved`, tab: 'history' })
   if (l.askedByCaps > 0) parts.push({ key: 'caps', text: `${l.askedByCaps} over cap`, tone: 'info', hint: 'Past its daily cap these were asked, not done alone' })
   if (l.refused > 0) parts.push({ key: 'refused', text: `${l.refused} refused`, tone: 'warning' })
@@ -210,8 +223,8 @@ export function last7Text(row: Pick<WasteRuleRow, 'changed7d' | 'last7d'>): stri
 }
 
 /** Where Enter on the Last 7 d cell goes: the waiting asks while some wait, else the first chip's tab, else the Overview. */
-export function last7Tab(row: Pick<WasteRuleRow, 'changed7d' | 'last7d' | 'waiting'>): 'waiting' | 'history' | 'overview' {
-  if (row.waiting > 0) return 'waiting'
+export function last7Tab(row: Pick<WasteRuleRow, 'changed7d' | 'last7d' | 'waiting'> & Partial<Pick<WasteRuleRow, 'source'>>): 'waiting' | 'history' | 'overview' {
+  if (row.waiting > 0 && !decidedElsewhere(row)) return 'waiting'
   return last7Parts(row).find((p) => p.tab)?.tab ?? 'overview'
 }
 
@@ -296,7 +309,7 @@ export const ACTION_WORD: Readonly<Record<WasteAction, string>> = {
   NEGATE_PHRASE: 'Negative phrase',
   NEGATE_ASIN: 'Negative product',
 }
-export const actionWord = (a: string | null | undefined): string => (a && a in ACTION_WORD ? ACTION_WORD[a as WasteAction] : a ?? '—')
+export const actionWord = (a: string | null | undefined): string => (a && a in ACTION_WORD ? ACTION_WORD[a as WasteAction] : a === 'REMOVE_NEGATIVE' ? 'Remove negative' : a ?? '—')
 
 export interface PreviewItem {
   row: Ref

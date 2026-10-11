@@ -80,7 +80,7 @@ const NO_PAGE_STATE = (): Record<string, never> => ({})
 const IGNORE_PAGE_STATE = () => {}
 const SELECTION = gridSelection<AnyRow>({ selectAll: 'currentPage' }) as NexusGridProps<AnyRow>['rowSelection']
 /** Cells that answer Enter themselves (a link, a list, a button): Enter there never opens the record. */
-const OWN_KEY_COLUMNS = new Set(['where', 'product', 'owner', 'actions'])
+const OWN_KEY_COLUMNS = new Set(['where', 'product', 'owner', 'actions', 'since'])
 /** All · ours · shoppers': icons, the words on hover and for a screen reader. */
 const KIND_OPTIONS = [
   { value: 'all', label: 'All' },

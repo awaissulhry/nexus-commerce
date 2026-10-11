@@ -32,6 +32,7 @@ import {
 } from '../bid-rules/pure.js'
 import { BID_RULES_MONEY, RefBook, ruleActors, writableMarkets, type Ref, type RefCounts, type RefSet } from '../bid-rules/read.js'
 import { wasteKindOf, wasteSentence, type StopWasteKind } from './pure.js'
+import { waitingAsksByAsker } from '../waste/read.js'
 
 /** Ad-spend money of the waste rules' answers (the Bid page's keys, and the stop-waste test's bars): hidden without financials.adspend.view. */
 export const WASTE_RULES_MONEY: Readonly<Record<string, string>> = {
@@ -229,7 +230,8 @@ export async function listWasteRules(q: { market?: string | null; channel?: stri
     }) : Promise.resolve([]),
     ids.length ? prisma.adsRuleSuggestion.groupBy({ by: ['ruleId'], where: { ruleId: { in: ids }, createdAt: { gte: weekAgo } }, _count: { _all: true } }) : Promise.resolve([]),
     ids.length ? prisma.adsRuleSuggestion.groupBy({ by: ['ruleId'], where: { ruleId: { in: ids }, status: 'applied', decidedAt: { gte: weekAgo } }, _count: { _all: true } }) : Promise.resolve([]),
-    ids.length ? prisma.adsRuleSuggestion.groupBy({ by: ['ruleId'], where: { ruleId: { in: ids }, status: 'pending' }, _count: { _all: true } }) : Promise.resolve([]),
+    // NFIX — what waits is read from the page's own rows (the tile's): one truth for the tile, each rule and the Brain.
+    waitingAsksByAsker({ market }, now),
     (await import('../../automation-refusals.service.js')).refusalCountsByActor(WEEK_DAYS),
     ids.length ? prisma.advertisingActionLog.findMany({
       where: { userId: { in: ids.flatMap(ruleActors) }, createdAt: { gte: weekAgo }, entityType: 'AD_TARGET' },
@@ -240,7 +242,7 @@ export async function listWasteRules(q: { market?: string | null; channel?: stri
   const count = (rows: Array<{ ruleId: string; _count: { _all: number } }>) => new Map(rows.map((r) => [r.ruleId, r._count._all]))
   const asksBy = count(asks as never)
   const appliedBy = count(applied as never)
-  const waitingBy = count(waiting as never)
+  const waitingBy = new Map([...waiting].map(([by, asks]) => [by, asks.size]))
 
   // The live negatives each rule's runs landed this week (the record of a rule's negatives: see the file's note).
   const negs = new Map<string, ReturnType<typeof negativesOfRun>>()
@@ -338,7 +340,7 @@ export async function listWasteRules(q: { market?: string | null; channel?: stri
     for (const row of rows) if (row.scope.product) row.scope.product.name = named.get(row.scope.product.id) ?? row.scope.product.id
   }
 
-  const pseudo = await pseudoRows({ market, now, book })
+  const pseudo = await pseudoRows({ market, now, book, brainWaiting: waitingBy.get(BRAIN_ROW_ID) ?? 0 })
   const active = rows.filter((r) => !r.archived)
   const totals: WasteRulesTotals = {
     rules: active.length,
@@ -394,16 +396,22 @@ const highest = (modes: Iterable<string | null | undefined>): BidMode => {
 }
 const plainMode = (m: BidMode): BidRuleMode => ({ set: m, acts: m, heldBy: null, also: [], autoLocked: null })
 
-async function pseudoRows(a: { market: string | null; now: Date; book: RefBook }): Promise<WasteRuleRow[]> {
+async function pseudoRows(a: { market: string | null; now: Date; book: RefBook; brainWaiting: number }): Promise<WasteRuleRow[]> {
   const weekAgo = new Date(a.now.getTime() - WEEK_DAYS * DAY)
   const marketWhere = a.market ? { marketplace: a.market } : {}
-  const [negLatest, negWeek, negWaiting, hvLatest, hvWeek, hvWaiting] = await Promise.all([
+  const [negLatest, negWeek, hvLatest, hvWeek, hvWaiting] = await Promise.all([
     prisma.adsBrainNegative.findFirst({ where: marketWhere, orderBy: { checkedAt: 'desc' }, select: { runId: true, checkedAt: true } }),
     prisma.adsBrainNegative.findMany({ where: { ...marketWhere, checkedAt: { gte: weekAgo } }, select: { runId: true, status: true, action: true, campaignId: true, adGroupId: true, actedAt: true } }),
-    prisma.adsBrainNegative.count({ where: { ...marketWhere, status: 'PROPOSED' } }),
     prisma.adsBrainHarvest.findFirst({ where: marketWhere, orderBy: { updatedAt: 'desc' }, select: { updatedAt: true } }),
     prisma.adsBrainHarvest.findMany({ where: { ...marketWhere, updatedAt: { gte: weekAgo } }, select: { status: true, level: true, sources: true, destCampaignId: true } }),
-    prisma.adsBrainHarvest.count({ where: { ...marketWhere, status: { in: ['PROPOSED', 'CAMPAIGN_PROPOSED'] } } }),
+    // NFIX — harvests that still wait for a person: asked, and their request still open (not decided, not expired).
+    prisma.adsBrainHarvest.findMany({ where: { ...marketWhere, status: { in: ['PROPOSED', 'CAMPAIGN_PROPOSED'] }, approvalId: { not: null } }, select: { approvalId: true } })
+      .then(async (rows) => {
+        const ids = [...new Set(rows.map((r) => r.approvalId!))]
+        if (!ids.length) return 0
+        const open = new Set((await prisma.agentApproval.findMany({ where: { id: { in: ids }, status: 'pending', OR: [{ expiresAt: null }, { expiresAt: { gt: a.now } }] }, select: { id: true } })).map((x) => x.id))
+        return rows.filter((r) => open.has(r.approvalId!)).length
+      }),
   ])
   const newestRun = negLatest ? await prisma.adsBrainNegative.findMany({ where: { ...marketWhere, runId: negLatest.runId }, select: { mode: true } }) : []
   const written = negWeek.filter((n) => n.status === 'WRITTEN' && n.action === 'ADD' && n.actedAt && n.actedAt >= weekAgo)
@@ -420,7 +428,9 @@ async function pseudoRows(a: { market: string | null; now: Date; book: RefBook }
       runs: new Set(negWeek.map((n) => n.runId)).size, asks: negWeek.filter((n) => n.status === 'PROPOSED').length, applied: 0,
       written: written.length, refused: negWeek.filter((n) => n.status === 'REFUSED' || n.status === 'FAILED').length, askedByCaps: 0,
     },
-    waiting: negWaiting, lastRunAt: negLatest?.checkedAt.toISOString() ?? null, nextRunAt: null, firstRunAt: null, thenRunAt: null,
+    // NFIX — the Brain's asks waiting on this page (approvals still open, each listed in its Waiting tab), not its log's
+    // PROPOSED rows (one change plan holds many; an expired or decided plan left them PROPOSED until the next run).
+    waiting: a.brainWaiting, lastRunAt: negLatest?.checkedAt.toISOString() ?? null, nextRunAt: null, firstRunAt: null, thenRunAt: null,
     schedule: 'Every day', archived: false,
   }
   const landedSources = (s: unknown) => (Array.isArray(s) ? s as Array<{ action?: unknown; result?: unknown }> : []).filter((x) => x.action === 'negate' && x.result === 'landed').length
@@ -432,6 +442,7 @@ async function pseudoRows(a: { market: string | null; now: Date; book: RefBook }
     scope: { ...a.book.refSet(new Set(hvWeek.map((h) => h.destCampaignId ?? '').filter(Boolean))), all: false, product: null, adGroup: null },
     changed7d: { portfolios: [], campaigns: [], adGroups: [], counts: { portfolios: 0, campaigns: 0, adGroups: 0 }, paused: 0, negated: hvNegated },
     last7d: { runs: 0, asks: hvWeek.filter((h) => h.status === 'PROPOSED').length, applied: 0, written: hvNegated, refused: hvWeek.filter((h) => h.status === 'REFUSED' || h.status === 'FAILED').length, askedByCaps: 0 },
+    // NFIX — decided on the Keyword Harvest page (this page links there with the count: harvestWaitingHref, web).
     waiting: hvWaiting, lastRunAt: hvLatest?.updatedAt.toISOString() ?? null, nextRunAt: null, firstRunAt: null, thenRunAt: null,
     schedule: 'With each harvest', archived: false,
   }

@@ -16,6 +16,8 @@
  */
 import { memo } from 'react'
 import { EntityPath, Sparkline, entityPathText } from '@/design-system/components'
+import { Tooltip } from '@/design-system/primitives'
+import { useTooltipsDisabled } from '@/design-system/primitives/Tooltip'
 import type { EntityLinkComponent } from '@/design-system/components'
 import {
   actionsColumn, integerColumn, keepFromGrid, type ColDef, type ICellRendererParams, type RowVerb,
@@ -24,9 +26,9 @@ import Link from '@/lib/workspaces/Link'
 import { dayWords, money } from '../../bid/_shared/format'
 import { OwnerChip } from '../../_shared/OwnerChip'
 import { ClashMark, KindMark, MatchChip, SkippedMark, StateMark, WaitingMark } from './marks'
-import { ownerKeys, placeKeys, verbKeys } from './cellKeys'
+import { ownerKeys, placeKeys, sinceKeys, verbKeys } from './cellKeys'
 import {
-  acosText, chipOwner, moneyOr, pathOf, plural, productWords, stateWord, stoppedVerb, wasteVerb, xCpaText, type RowVerbView,
+  acosText, chipOwner, moneyOr, pathOf, plural, productWords, sinceView, stateWord, stoppedVerb, wasteVerb, xCpaText, type RowVerbView,
 } from './wasteModel'
 import type { Ref, StoppedRow, WasteRow } from './wasteTypes'
 import styles from '../negatives.module.css'
@@ -143,10 +145,21 @@ const StoppedStateCell = memo(function StoppedStateCell({ data }: Cell<StoppedGr
   return <span className={styles.marks}><StateMark row={data} /></span>
 })
 
+/**
+ * NFIX — the day it was added (or kept), "—" when no record says; how it is known, or why not, in the DS tooltip on hover
+ * and on keyboard focus (Enter on the cell focuses the day: `sinceKeys`), and for a screen reader in the cell's words.
+ */
 const SinceCell = memo(function SinceCell({ data }: Cell<StoppedGridRow>) {
+  const quiet = useTooltipsDisabled()
   if (!data) return null
-  const until = data.keptPaused?.until
-  return <span title={until ? `Kept paused until ${dayWords(until)}` : data.keptPaused ? 'Kept paused, always' : undefined}>{dayWords(data.since)}</span>
+  const v = sinceView(data)
+  if (!v.hint) return <span>{v.text}</span>
+  const day = (
+    <span data-since-day="" tabIndex={-1} title={quiet ? v.hint : undefined}>
+      {v.text}<span className="nds-vh">{data.since ? '. ' : ': not known. '}{v.hint}</span>
+    </span>
+  )
+  return quiet ? day : <Tooltip label={v.hint} portal>{day}</Tooltip>
 })
 
 const SpendBeforeCell = memo(function SpendBeforeCell({ data }: Cell<StoppedGridRow>) {
@@ -291,7 +304,7 @@ export function stoppedColumns(phone: boolean): ColDef<StoppedGridRow>[] {
   if (phone) {
     const phoneCols: ColDef<StoppedGridRow>[] = [
       { colId: 'term', headerName: L.term, valueGetter: (p) => p.data?.text ?? '', cellRenderer: PhoneTermCell, flex: 1, minWidth: 120, cellClass: 'nds-ag-cell' },
-      { colId: 'since', headerName: L.since, valueGetter: (p) => p.data?.since ?? null, cellRenderer: SinceCell, width: 72, cellClass: 'nds-ag-cell' },
+      { colId: 'since', headerName: L.since, valueGetter: (p) => p.data?.since ?? null, cellRenderer: SinceCell, width: 72, cellClass: 'nds-ag-cell', suppressKeyboardEvent: sinceKeys as ColDef<StoppedGridRow>['suppressKeyboardEvent'] },
       { colId: 'state', headerName: '', valueGetter: (p) => (p.data ? stateWord(p.data.state) : ''), cellRenderer: StoppedStateCell, width: 52, cellClass: 'nds-ag-cell', headerTooltip: 'State' },
     ]
     return phoneCols.map((c) => ({ ...c, ...H }))
@@ -301,7 +314,7 @@ export function stoppedColumns(phone: boolean): ColDef<StoppedGridRow>[] {
     { colId: 'where', headerName: L.where, valueGetter: (p) => (p.data ? entityPathText(p.data.path) : ''), cellRenderer: WhereCell, flex: 1, minWidth: 240, cellClass: 'nds-ag-cell', suppressKeyboardEvent: placeKeys as ColDef<StoppedGridRow>['suppressKeyboardEvent'], headerTooltip: 'Campaign, then its ad group (or the whole campaign); the portfolio on hover. Enter: the campaign · Shift+Enter: the ad group' },
     { colId: 'product', headerName: L.product, valueGetter: (p) => (p.data ? productWords(p.data) : ''), cellRenderer: ProductCell, width: 132, cellClass: 'nds-ag-cell' },
     { colId: 'owner', headerName: L.owner, valueGetter: (p) => (p.data ? chipOwner(p.data.owner).hint : ''), cellRenderer: OwnerCell, width: 116, cellClass: 'nds-ag-cell', suppressKeyboardEvent: ownerKeys as ColDef<StoppedGridRow>['suppressKeyboardEvent'] },
-    { colId: 'since', headerName: L.since, valueGetter: (p) => p.data?.since ?? null, cellRenderer: SinceCell, width: 92, cellClass: 'nds-ag-cell', valueFormatter: (p) => dayWords(p.value as string | null) },
+    { colId: 'since', headerName: L.since, valueGetter: (p) => p.data?.since ?? null, cellRenderer: SinceCell, width: 92, cellClass: 'nds-ag-cell', valueFormatter: (p) => dayWords(p.value as string | null), suppressKeyboardEvent: sinceKeys as ColDef<StoppedGridRow>['suppressKeyboardEvent'], headerTooltip: 'When it was added or paused, from the record that says so. Enter: how it is known' },
     { colId: 'spendBefore', headerName: L.spendBefore, valueGetter: (p) => p.data?.spendBeforeCents ?? null, valueFormatter: moneyOf, cellRenderer: SpendBeforeCell, width: 124, cellClass: num, ...numeric, headerTooltip: 'Spend in the 30 days before it stopped' },
     { colId: 'state', headerName: L.state, valueGetter: (p) => (p.data ? stateWord(p.data.state) : ''), cellRenderer: StoppedStateCell, width: 80, cellClass: 'nds-ag-cell' },
     { ...integerColumn<StoppedGridRow>('stillServesIn'), colId: 'stillServes', headerName: L.stillServes, width: 128, headerTooltip: 'Other ad groups where these words still spend' },

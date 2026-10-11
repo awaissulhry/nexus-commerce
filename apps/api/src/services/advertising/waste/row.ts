@@ -70,7 +70,7 @@ export async function readRowDetail(id: string, now: Date = new Date()): Promise
 
   // Where the words run and where they are blocked, across the market's places that run.
   const market = buildWasteRows(f, {})
-  const runsIn = market.filter((r) => (r.state === 'RUNNING' || r.state === 'PROTECTED' || r.state === 'TURNED_ON_ELSEWHERE') && (r.kind === 'TERM' ? termKeyOf(r.text) === at.key : termKeyOf(r.text) === at.key))
+  const runsIn = market.filter((r) => !r.askOnly && (r.state === 'RUNNING' || r.state === 'PROTECTED' || r.state === 'TURNED_ON_ELSEWHERE') && (r.kind === 'TERM' ? termKeyOf(r.text) === at.key : termKeyOf(r.text) === at.key))
     .map((r) => placeOf(f, r))
   const blockedIn: Place[] = []
   const seen = new Set<string>()
@@ -80,7 +80,7 @@ export async function readRowDetail(id: string, now: Date = new Date()): Promise
       if (seen.has(n.id)) continue
       seen.add(n.id)
       const refs = placeRefs(f, n.adGroupId, { tab: 'ad-group-negative-keywords', value: n.expressionValue })
-      const termHere = market.find((r) => r.kind === 'TERM' && r.adGroup.id === g.id && termKeyOf(r.text) === at.key)
+      const termHere = market.find((r) => !r.askOnly && r.kind === 'TERM' && r.adGroup.id === g.id && termKeyOf(r.text) === at.key)
       const m = negativeMatch(n.kind, n.expressionType)
       blockedIn.push({
         portfolio: refs.portfolio, campaign: refs.campaign, adGroup: n.negativeLevel === 'CAMPAIGN' ? null : refs.adGroup,

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ownerKeys, placeKeys, verbKeys } from './cellKeys'
+import { ownerKeys, placeKeys, SINCE_DAY, sinceKeys, verbKeys } from './cellKeys'
 
 const el = (opts: { onControl?: boolean; buttons?: Array<{ disabled?: boolean }>; links?: number } = {}) => {
   const clicks: string[] = []
@@ -38,5 +38,33 @@ describe('cell keys (audit S4)', () => {
     expect(ownerKeys({ event: { key: 'Enter', type: 'keydown', target: o.target }, editing: false })).toBe(true)
     expect(o.clicks).toEqual(['link0'])
     expect(ownerKeys({ event: { key: 'Enter', type: 'keydown', target: el().target }, editing: false })).toBe(false)
+  })
+})
+
+describe('Since (NFIX): its reason on keyboard focus, as on hover', () => {
+  const cell = () => {
+    const log: string[] = []
+    const day = { focus: () => log.push('day'), click: () => log.push('click') }
+    const agCell = { focus: () => log.push('cell') }
+    return {
+      log,
+      onCell: { closest: () => null, querySelector: (sel: string) => (sel === SINCE_DAY ? day : null) },
+      onDay: { closest: (sel: string) => (sel === SINCE_DAY ? day : sel === '.ag-cell' ? agCell : null) },
+      bare: { closest: () => null, querySelector: () => null },
+    }
+  }
+  it('Enter on the cell puts the focus on the day (its tooltip opens); Esc gives it back to the cell', () => {
+    const c = cell()
+    expect(sinceKeys({ event: { key: 'Enter', type: 'keydown', target: c.onCell, preventDefault: vi.fn() }, editing: false })).toBe(true)
+    expect(sinceKeys({ event: { key: 'Escape', type: 'keydown', target: c.onDay, preventDefault: vi.fn() }, editing: false })).toBe(true)
+    expect(c.log).toEqual(['day', 'cell'])
+  })
+  it('on the day Enter does nothing more; arrows and Tab stay the grid\'s; a cell with no reason lets Enter through', () => {
+    const c = cell()
+    expect(sinceKeys({ event: { key: 'Enter', type: 'keydown', target: c.onDay }, editing: false })).toBe(true)
+    expect(sinceKeys({ event: { key: 'ArrowDown', type: 'keydown', target: c.onDay }, editing: false })).toBe(false)
+    expect(sinceKeys({ event: { key: 'Tab', type: 'keydown', target: c.onDay }, editing: false })).toBe(false)
+    expect(sinceKeys({ event: { key: 'Enter', type: 'keydown', target: c.bare }, editing: false })).toBe(false)
+    expect(c.log).toEqual([])
   })
 })

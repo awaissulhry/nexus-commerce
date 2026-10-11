@@ -1,3 +1,9 @@
+## A light modal draws its native controls light — 2026-10-11
+
+- **`.nds-modal[data-nds-light] { color-scheme: light }`**: a light `Modal` on a dark OS drew its native controls dark
+  (a review's tick box, scrollbars, date fields) because `color-scheme` came from the dark <html>. Negative Targeting
+  NFIX (rule-page audit). The rule is byte-identical in Factory's `components.css`.
+
 ## Popups stay light on a light page under a dark OS — 2026-10-11
 
 - **`lib/opens-dark.ts` `opensDark(el)`**: a portalled surface (Modal, the formula and slot-list cell editors, the

@@ -16,7 +16,7 @@
  */
 import { getBackendUrl } from '@/lib/backend-url'
 import { listSearch, type ListQuery } from './wasteModel'
-import type { ApplyAnswer, DecideResult, IdsAnswer, PreviewAnswer, RowDetail, RowsAnswer, StoppedAnswer, StoppedRow, WasteItem, WasteRow } from './wasteTypes'
+import type { ApplyAnswer, DecideResult, IdsAnswer, PreviewAnswer, RowDetail, RowsAnswer, StoppedAnswer, StoppedRow, WaitingSteps, WasteItem, WasteRow } from './wasteTypes'
 
 const WASTE = '/api/advertising/waste'
 
@@ -102,6 +102,11 @@ export async function unskipRows(ids: readonly string[]): Promise<UnskipAnswer> 
     const r = await post(`${WASTE}/unskip`, { ids })
     return r.status === 200 ? { ok: true, ...(r.body as object) } : { ok: false, error: errorOf(r.body, r.status) }
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : 'No answer from the server.' } }
+}
+
+/** NFIX — every step of a waiting request (a change plan is decided whole): what, where, from → to. */
+export function readWaitingSteps(approvalId: string, signal?: AbortSignal): Promise<WaitingSteps> {
+  return getJson<WaitingSteps>(`${WASTE}/waiting/${encodeURIComponent(approvalId)}`, signal)
 }
 
 /** Approve or reject waiting requests, each through the Approvals page's path. Never throws: a result per request. */
