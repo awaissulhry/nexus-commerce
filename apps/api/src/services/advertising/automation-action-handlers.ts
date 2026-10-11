@@ -1061,6 +1061,25 @@ ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<Act
     }
   }
   const bid = typeof action.graduationBidEur === 'number' ? { bidEur: action.graduationBidEur } : {}
+  // D2 (Owner 2026-10-10; HCORE review H3 + M7) — the rule's AUTOMATIC run (no card a person accepted) harvests on the one
+  // engine, inside its caps: the one bar, the one start bid, every source and the funnel blocks, one record per term
+  // (harvest/rule-run.ts). Its keyword and product-target graduations never take the legacy path below on Auto.
+  const automatic = !items && !meta.operatorApproved && !meta.approval
+  let engine: import('./harvest/rule-run.js').RuleRunOutcome | null = null
+  if (automatic && (graduations.length || productGraduations.length)) {
+    const { runRuleHarvest } = await import('./harvest/rule-run.js')
+    const matchOf = (ext: string): 'EXACT' | 'PHRASE' => { const l = planList(plan?.[ext], 'graduate'); return l.includes('EXACT') || !l.includes('PHRASE') ? 'EXACT' : 'PHRASE' }
+    engine = await runRuleHarvest({
+      ruleId: meta.ruleId,
+      terms: [...graduations, ...productGraduations].map((g) => {
+        const match = matchOf(g.externalAdGroupId)
+        const to = destinations?.[isAsin(g.query) ? 'PRODUCT' : match]
+        return { query: g.query, externalAdGroupId: g.externalAdGroupId, match, ...(typeof to === 'string' && to ? { toAdGroupId: to } : {}) }
+      }),
+    })
+    graduations = []
+    productGraduations = []
+  }
   const result = await applyHarvest({
     negatives,
     graduations: graduations.map((g) => ({ ...g, ...bid })),
@@ -1078,11 +1097,12 @@ ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<Act
   const blocked = result.negativeOutcomes.filter((o) => o.refusal?.deniedAt === 'own_keyword').map((o) => ({ query: o.query, why: o.reason }))
   return {
     type: action.type,
-    ok: result.errors.length === 0 || result.negativesAdded + result.keywordsGraduated + result.productsGraduated + result.productNegativesAdded + result.isolationNegativesAdded > 0,
+    ok: result.errors.length === 0 || result.negativesAdded + result.keywordsGraduated + result.productsGraduated + result.productNegativesAdded + result.isolationNegativesAdded + (engine?.harvested ?? 0) > 0,
     output: {
       mode,
       negativesAdded: result.negativesAdded,
-      keywordsGraduated: result.keywordsGraduated,
+      keywordsGraduated: result.keywordsGraduated + (engine?.harvested ?? 0),
+      ...(engine ? { engine: { harvested: engine.harvested, capped: engine.capped, held: engine.held.length, topHeld: engine.held.slice(0, 5), harvestIds: engine.items.map((i) => i.harvestId).filter(Boolean).slice(0, 50) } } : {}),
       isolationNegativesAdded: result.isolationNegativesAdded,
       productsGraduated: result.productsGraduated,
       productNegativesAdded: result.productNegativesAdded,
@@ -1640,6 +1660,22 @@ ACTION_HANDLERS.promote_to_exact = async (action, context, meta): Promise<Action
       : false
     const filt = termPassesFilters(query, wire.filters, isOwnAsin)
     if (filt.pass === false) return { type: action.type, ok: true, output: { skipped: 'term-filter', reason: filt.reason, query } }
+  }
+
+  // D2 (Owner 2026-10-10; HCORE review H3 + M7) — the rule's AUTOMATIC run (not a card a person approved) harvests this term
+  // on the one engine, inside its caps (harvest/rule-run.ts): the one bar, the one start bid, every source and the funnel
+  // blocks, only the product's own campaigns, never from a paused source, one record. The legacy creation below runs only
+  // for a run a person approved (and for the dry run that proposes it).
+  if (!meta.dryRun && !meta.operatorApproved && !meta.approval) {
+    const mappedTo = blocks === 'account-wide' ? null : blocks.flatMap((b) => b.create).find((c) => c.types.includes(asin ? 'ASIN' : 'EXACT')) ?? blocks.flatMap((b) => b.create).find((c) => !asin && c.types.includes('PHRASE')) ?? null
+    const match: 'EXACT' | 'PHRASE' = !asin && mappedTo && !mappedTo.types.includes('EXACT') && mappedTo.types.includes('PHRASE') ? 'PHRASE' : 'EXACT'
+    const { runRuleHarvest } = await import('./harvest/rule-run.js')
+    const ran = await runRuleHarvest({ ruleId: meta.ruleId, terms: [{ query, externalAdGroupId: srcExternalAdGroupId, match, ...(mappedTo ? { toAdGroupId: mappedTo.adGroupId } : {}) }] })
+    return {
+      type: action.type,
+      ok: ran.harvested > 0 || ran.held.length > 0,
+      output: { query, sourceAdGroupId: src.id, engine: { harvested: ran.harvested, capped: ran.capped, held: ran.held, harvestIds: ran.items.map((i) => i.harvestId).filter(Boolean) }, ...(ran.harvested ? {} : { noChange: true }) },
+    }
   }
 
   // 3 — the creation set: mapped destinations × ticked types; account-wide lands where 5d's rule says, or refuses

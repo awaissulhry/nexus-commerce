@@ -522,13 +522,15 @@ export function resolveDestination(args: {
   } else if (!chosen && source === 'none') {
     negateReason = `No destination exists, so nothing would be promoted and nothing negated. There is no manual ${createType.toLowerCase()} ad group advertising this product in ${graph.adGroups.get(sourceAdGroupId ?? '')?.marketplace ?? 'this market'}.`
   } else if (!chosen) {
-    negateReason = `No — no destination is set, so the keyword would be created back in “${sourceAdGroupName}”, the ad group that discovered it. applyHarvest negates the source only when the keyword lands elsewhere, so that ad group would keep competing for this term.`
+    // B13 (2026-10-10) — since AB-11 a term with no destination is refused, never created back in its source.
+    negateReason = `No — no destination is set, so nothing is promoted: a keyword is never created back in “${sourceAdGroupName}”, the ad group that discovered it. Pick an ad group or a new campaign, and its source is negated with it.`
   } else if (!landsElsewhere) {
     negateReason = `No — the destination IS “${sourceAdGroupName}”, the ad group that discovered it. applyHarvest negates the source only when the keyword lands elsewhere.`
   } else if (!negateFlag) {
     negateReason = `No — the keyword would be created in “${chosen.adGroupName}”, but this scope's destination has negate-at-source switched off, so “${sourceAdGroupName}” would keep competing for this term.`
   } else {
-    negateReason = `Yes — the keyword would be created in “${chosen.adGroupName}”, so “${sourceAdGroupName}” gets a negative-exact for this term in the same transaction.`
+    // B13 — the writes are sequential, not one transaction: the source is negated only once the keyword stands.
+    negateReason = `Yes — the keyword would be created in “${chosen.adGroupName}”, so “${sourceAdGroupName}” gets a negative-exact for this term in the same change set, once the keyword stands.`
   }
 
   // ── destination-relative status ─────────────────────────────────────────────────────────────

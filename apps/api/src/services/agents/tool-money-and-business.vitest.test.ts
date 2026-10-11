@@ -150,6 +150,9 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'plan-fba-shipment': 'a Send to FBA plan needs an Amazon account selling in the market, a warehouse with its address and the SKU\'s Amazon listing, none of which this seed has (fba-plan-tools test)',
   'set-bid-brain-enrollment': 'a campaign goes LIVE under the bid brain only from the live-write allowlist, which the seeded campaign is not on (bid-brain/live-postgres test)',
   'retire-ads-writers': 'a retirement needs a product enrolled in the brain with every lever AUTO or the Owner\'s choice under the live server switch, which this seed has not (brain/retire-postgres test)',
+  'harvest-destinations': 'a product\'s harvest places are its own Sponsored Products campaigns, and the seeded campaign carries no ad product, so the product owns none here (tools/ads-harvest-postgres test)',
+  'set-harvest-rules': 'the seeded rule is not a harvest rule, so there is nothing to archive (tools/ads-harvest-postgres test)',
+  'set-harvest-sources': 'the seeded ad group feeds no terms to harvest (a manual campaign with no ad product), so it is no source (tools/ads-harvest-postgres test)',
 }
 
 /**
@@ -267,6 +270,19 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'undo-ad-change': () => ({ changeSetId: 'none' }),
   'undo-worse-ad-change': () => ({ judgementId: 'none' }),
   'apply-brain-harvest': () => ({ harvestId: 'none' }),
+  // Keyword Harvest page (lane HCORE) — a candidate of no product of this business: refused, nothing read of another.
+  'apply-harvest': () => ({ items: [{ candidateId: 'IT|none|touring jacket' }] }),
+  // Keyword Harvest page (lane HMCP) — the page's reads on the engine (money only under its money keys) and its skip
+  // (Nexus only, names no money): the seeded product's candidates, history and places; a skip of one of its terms.
+  'harvest-candidates': () => ({ market: 'IT' }),
+  'harvest-history': () => ({ market: 'IT' }),
+  'harvest-destinations': (ids) => ({ market: 'IT', productId: ids.productId }),
+  'skip-harvest-terms': (ids) => ({ ids: [`IT|${ids.productId}|money jacket`], period: '7d' }),
+  // HMCP round 2 — the Rules and Sources views (reads), the archive of a rule and a source pause (Nexus only, no money).
+  'harvest-rules': () => ({ view: 'list' }),
+  'harvest-sources': () => ({ market: 'IT' }),
+  'set-harvest-rules': (ids) => ({ op: 'archive', ids: [ids.automationRuleId] }),
+  'set-harvest-sources': (ids) => ({ op: 'pause', market: 'IT', adGroupIds: [ids.adGroupId] }),
   // AB-15 — the kill switch of one lever of the seeded product (Nexus only; nothing seeded is money).
   'set-brain-kill-switch': (ids) => ({ op: 'kill', lever: 'budgets', productId: ids.productId, market: 'IT', why: 'test stop' }),
   // AB-20 — the duplicate writers of the seeded product (Nexus only; it is not enrolled, so a refusal naming it either way).

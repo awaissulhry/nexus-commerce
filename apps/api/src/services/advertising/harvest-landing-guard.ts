@@ -293,3 +293,41 @@ export async function servingLandings(items: ReadonlyArray<{ adTargetId: string;
   }
   return out
 }
+
+/**
+ * HARVEST ENGINE (Keyword Harvest page) — the same decision (decideLanding) for many (ad group, term, match) at once, for a
+ * read or a preview over many terms: the facts read in a fixed number of reads (the ad groups, the positives of these
+ * texts, the standing negatives, the unconfirmed switches) instead of three per pair. Keyed by landingPairKey.
+ */
+export const landingPairKey = (adGroupId: string, term: string, match: LandingMatch) => `${adGroupId}\u0000${match}\u0000${landingKey(term, match === 'PRODUCT')}`
+
+export async function landingDecisionsMany(pairs: ReadonlyArray<{ adGroupId: string; term: string; match: LandingMatch }>): Promise<Map<string, LandingDecision>> {
+  const out = new Map<string, LandingDecision>()
+  if (!pairs.length) return out
+  const groupIds = [...new Set(pairs.map((p) => p.adGroupId))]
+  const groups = new Map((await prisma.adGroup.findMany({ where: { id: { in: groupIds } }, select: { id: true, name: true, status: true, campaign: { select: { id: true, name: true, status: true, bidsSuppressedAt: true } } } })).map((g) => [g.id, g]))
+  const texts = [...new Set(pairs.flatMap((p) => [p.term.trim(), p.term.trim().toUpperCase()]))]
+  const [positives, negatives] = await Promise.all([
+    prisma.adTarget.findMany({
+      where: { adGroupId: { in: groupIds }, isNegative: false, kind: { in: ['KEYWORD', 'PRODUCT'] }, expressionValue: { in: texts, mode: 'insensitive' } },
+      select: { id: true, adGroupId: true, kind: true, expressionType: true, expressionValue: true, status: true, externalTargetId: true },
+    }),
+    standingNegatives(groupIds, [...new Set([...groups.values()].map((g) => g.campaign?.id).filter((x): x is string => !!x))], ['KEYWORD', 'PRODUCT']),
+  ])
+  const unconfirmed = await unconfirmedSwitches(positives.filter((t) => String(t.status) === 'ENABLED').map((t) => t.id))
+  for (const p of pairs) {
+    const g = groups.get(p.adGroupId)
+    const product = p.match === 'PRODUCT'
+    const key = landingKey(p.term, product)
+    const existing = positives.filter((t) => t.adGroupId === p.adGroupId && landingKey(t.expressionValue, product) === key
+      && (product ? t.kind === 'PRODUCT' : t.kind === 'KEYWORD' && (t.expressionType === p.match || t.expressionType === `_${p.match}`)))
+    const facts: LandingFacts = {
+      term: p.term.trim(), match: p.match,
+      adGroup: g && g.campaign ? { id: g.id, name: g.name, status: String(g.status), campaign: { id: g.campaign.id, name: g.campaign.name, status: String(g.campaign.status), suppressed: !!g.campaign.bidsSuppressedAt } } : null,
+      existing: existing.map((t) => ({ id: t.id, status: String(t.status), externalTargetId: t.externalTargetId, confirmed: !unconfirmed.has(t.id), ...(unconfirmed.has(t.id) ? { unconfirmed: unconfirmed.get(t.id)! } : {}) })),
+      negatives: g?.campaign ? negatives.filter((n) => (n.level === 'CAMPAIGN' ? n.campaignId === g.campaign!.id : n.adGroupId === g.id) && (product ? n.match === 'PRODUCT' : n.match !== 'PRODUCT')).map(({ text, match, level }) => ({ text, match, level })) : [],
+    }
+    out.set(landingPairKey(p.adGroupId, p.term, p.match), decideLanding(facts))
+  }
+  return out
+}

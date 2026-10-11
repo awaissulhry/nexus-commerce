@@ -128,6 +128,20 @@ describe('A11 — create-ad-campaign: the plan, and what refuses it', () => {
     expect((await sql<{ n: number }>('SELECT count(*)::int AS n FROM "AgentApproval"'))[0].n).toBe(0)
   })
 
+  it('HARVEST ENGINE — born in a portfolio: one of this market\'s at Amazon; a Nexus-only, unknown or other market\'s portfolio refused', async () => {
+    await inside(async () => {
+      await database.client.amazonAdsPortfolio.create({ data: { profileId: 'P-IT-TEST', externalPortfolioId: 'pf-it-jackets', name: 'Jackets IT' } })
+      await database.client.amazonAdsPortfolio.create({ data: { profileId: 'P-UK-TEST', externalPortfolioId: 'pf-uk-only', name: 'UK only' } })
+      await database.client.campaign.update({ where: { id: 'c-uk' }, data: { portfolioId: 'pf-uk-only' } })
+    })
+    const r = await preview('create-ad-campaign', plan({ portfolioId: 'pf-it-jackets' }))
+    expect(r.preview).toMatchObject({ plan: { portfolio: { id: 'pf-it-jackets', name: 'Jackets IT' } }, effect: expect.stringContaining('in the portfolio "Jackets IT"') })
+    expect((await preview('create-ad-campaign', plan())).preview).toMatchObject({ plan: { portfolio: null } })
+    expect((await preview('create-ad-campaign', plan({ portfolioId: 'nope' }))).error).toBe('Portfolio not found: nope (ad-portfolios lists them).')
+    expect((await preview('create-ad-campaign', plan({ portfolioId: 'local-pf-x' }))).error).toMatch(/lives in Nexus only/)
+    expect((await preview('create-ad-campaign', plan({ portfolioId: 'pf-uk-only' }))).error).toMatch(/holds campaigns of UK: a portfolio belongs to one market/)
+  })
+
   it('live: where it lands at Amazon, or refused and not queued where the gate refuses', async () => {
     vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'live')
     expect((await preview('create-ad-campaign', plan())).preview).toMatchObject({ reach: { reach: 'live', profileId: 'P-IT-TEST' }, reachNote: expect.stringMatching(/^live: after approval it is sent to Amazon/) })

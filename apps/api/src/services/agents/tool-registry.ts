@@ -20,6 +20,11 @@ import { ADS_BID_BRAIN_ENROLLMENT_TOOLS } from './tools/ads-bid-brain-enrollment
 import { ADS_BRAIN_TOOLS } from './tools/ads-brain.tools.js'
 import { ADS_WASTE_TOOLS } from './tools/ads-waste.tools.js'
 import { ADS_BRAIN_HARVEST_TOOLS } from './tools/ads-brain-harvest.tools.js'
+// Keyword Harvest page (lane HCORE) — the one harvest change set (apply-harvest), the page's and Claude's alike.
+import { HARVEST_ENGINE_TOOLS } from '../advertising/harvest/tool.js'
+// Keyword Harvest page (lane HMCP) — the page's reads (candidates, destinations, history) and its skip, on the same engine.
+import { ADS_HARVEST_TOOLS } from './tools/ads-harvest.tools.js'
+import { ADS_HARVEST_RULE_TOOLS } from './tools/ads-harvest-rules.tools.js'
 import { ADS_BRAIN_KILL_TOOLS } from './tools/ads-brain-kill.tools.js'
 import { ADS_BRAIN_RETIRE_TOOLS } from './tools/ads-brain-retire.tools.js'
 import { ADS_PLAYBOOK_TOOLS } from './tools/ads-playbook.tools.js'
@@ -147,6 +152,9 @@ const ALL: AgentTool[] = [
   // Negative Targeting page (2026-10-11) — ad-waste: the page's reads (wasting rows, stopped, one row, history), same code.
   ...ADS_WASTE_TOOLS,
   ...ADS_BRAIN_HARVEST_TOOLS,
+  ...HARVEST_ENGINE_TOOLS,
+  ...ADS_HARVEST_TOOLS,
+  ...ADS_HARVEST_RULE_TOOLS,
   // One brain AB-15 — the kill switch per lever: stop one lever of the brain for one product or every product.
   ...ADS_BRAIN_KILL_TOOLS,
   // One brain AB-20 — the duplicate writers of a product switched off once its brain runs every lever, and given back.

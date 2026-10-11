@@ -19,14 +19,56 @@
  * The search field and `sm` buttons are both 28 (the toolbar tier; it was 36 before 2026-10-11). Without a floor the toolbar dropped 8px on the
  * first tick and rose again on Clear — measured on /products/next, then again in the lab when the
  * rule lived only in the page's stylesheet. It lives here now (`.nds-grid-selbar`, `min-height` = the slot height,
- * `flex-wrap: nowrap`). The cluster never wraps: the card is a size container (`GridCard`), and under
- * 1320px the button LABELS hide (`SelectionLabel`), under 1100px the reach note hides
- * (`SelectionNote`) — a narrow button beats a second line.
+ * `flex-wrap: nowrap`). The cluster never wraps: when it does not fit on its line, the reach note hides first
+ * (`SelectionNote`), then the button LABELS (`SelectionLabel`) — a narrow button beats a second line.
+ *
+ * MEASURED, not a fixed card width (Keyword Harvest audit S1, 2026-10-11). It was `@container (max-width: 1320px)`:
+ * a 1312 px card showed icons only with 600 px of the bar empty, and the counts on the buttons ("Harvest 54") never
+ * showed. Now the cluster tries the full form, then without the note, then icons — before paint, on every render
+ * and whenever the toolbar's width changes — and keeps the first form that fits (`selectionBarFit`).
  */
-import { memo, type ReactNode } from 'react'
+import { memo, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
+
+/** The forms the cluster can take, fullest first: `data-fit` on `.nds-grid-selbar` (grid.css hides by it). */
+export const SELECTION_BAR_FITS = ['', 'no-note', 'no-note icons'] as const
+export type SelectionBarFit = (typeof SELECTION_BAR_FITS)[number]
+
+/** The first form that does not overflow; the last one when none fits (icons, wrapping as the host allows). Pure. */
+export function selectionBarFit(overflowsAs: (fit: SelectionBarFit) => boolean): SelectionBarFit {
+  for (const fit of SELECTION_BAR_FITS) if (!overflowsAs(fit)) return fit
+  return SELECTION_BAR_FITS[SELECTION_BAR_FITS.length - 1]
+}
+
+/**
+ * Apply the fit to a cluster in the page. While it measures, the cluster is held on one line (`data-measure`): a phone
+ * card lets it wrap onto lines of its own (grid.css), and "fits" means fits on ONE line there too.
+ */
+export function fitSelectionBar(el: HTMLElement | null): void {
+  if (!el) return
+  const bar = el.parentElement
+  el.setAttribute('data-measure', '')
+  const fit = selectionBarFit((form) => {
+    el.setAttribute('data-fit', form)
+    return el.scrollWidth > el.clientWidth + 1 || (!!bar && bar.scrollWidth > bar.clientWidth + 1)
+  })
+  el.setAttribute('data-fit', fit)
+  el.removeAttribute('data-measure')
+}
 
 export const GridSelectionActions = memo(function GridSelectionActions({ children }: { children: ReactNode }) {
-  return <span className="nds-grid-selbar">{children}</span>
+  const ref = useRef<HTMLSpanElement>(null)
+  // Before paint, whenever the buttons change (a count, a held verb): no frame shows the wrong form.
+  useLayoutEffect(() => { fitSelectionBar(ref.current) })
+  // And when the toolbar's width changes (a resize, a side panel).
+  useEffect(() => {
+    const el = ref.current
+    const host = el?.parentElement
+    if (!el || !host || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => fitSelectionBar(el))
+    observer.observe(host)
+    return () => observer.disconnect()
+  }, [])
+  return <span ref={ref} className="nds-grid-selbar">{children}</span>
 })
 
 /** A button's text, hidden on a narrow card so the icon-only button keeps the row on one line. */

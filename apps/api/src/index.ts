@@ -78,6 +78,7 @@ import advertisingStrategyRoutes from "./routes/advertising-strategy.routes.js";
 import advertisingPlaybookRoutes from "./routes/advertising-playbook.routes.js";
 import advertisingBrainRoutes from "./routes/advertising-brain.routes.js";
 import advertisingBidRulesRoutes from "./routes/advertising-bid-rules.routes.js";
+import advertisingHarvestRoutes from "./routes/advertising-harvest.routes.js";
 import advertisingBidsRoutes from "./routes/advertising-bids.routes.js";
 import advertisingWasteRoutes from "./routes/advertising-waste.routes.js";
 import advertisingBidModeRoutes from "./routes/advertising-bid-mode.routes.js";
@@ -650,6 +651,7 @@ app.register(advertisingStrategyRoutes, { prefix: '/api' });
 app.register(advertisingPlaybookRoutes, { prefix: '/api' });
 app.register(advertisingBrainRoutes, { prefix: '/api' }); // ads brain page A1 — the brain's read views (same code as Claude's ads-brain / bid-brain)
 app.register(advertisingBidRulesRoutes, { prefix: '/api' }); // Bid page — bid rules with their honest mode, history, preview of an unsaved rule, archive
+app.register(advertisingHarvestRoutes, { prefix: '/api' }); // Keyword Harvest page — the one harvest engine: candidates, destinations, preview, apply (one approval), skip, history, undo, rules, sources
 app.register(advertisingBidsRoutes, { prefix: '/api' }); // Bid page — every bid with its one owner (GET /advertising/bids)
 app.register(advertisingWasteRoutes, { prefix: '/api' }); // Negative Targeting page — /advertising/waste (reads, writes through the MCP tools, rules)
 app.register(advertisingBidModeRoutes, { prefix: '/api' }); // Bid page — one keyword's Auto / Manual (POST /advertising/bids/:targetId/mode)

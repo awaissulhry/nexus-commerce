@@ -16,20 +16,18 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 
-import { Button, Checkbox, Tag, Tooltip } from '../primitives'
-import { Banner } from '../components/Banner'
-import { MetricStrip, type Metric } from '../components/MetricStrip'
+import { Button, Tooltip } from '../primitives'
+import { type Metric } from '../components/MetricStrip'
 import { Modal, type ModalProps } from '../components/Modal'
-import { SummaryTable } from '../components/SummaryTable'
-import {
-  ackWords, doneSummary, raiseCount, resultWords, reviewColumns, reviewNote, reviewTitle, saveButtonWords, saveHeldReason,
-  type ReviewChange, type ReviewState,
-} from './reviewChangesModel'
+import { ReviewChangesPanel, type ReviewChangesPanelProps } from './ReviewChangesPanel'
+import { raiseCount, reviewTitle, saveButtonWords, saveHeldReason, type ReviewState } from './reviewChangesModel'
+import type { ReviewGroup, ReviewPanelChange } from './reviewChangesPanelModel'
 
 export interface ReviewChangesModalProps {
   open: boolean
   onClose: () => void
-  changes: readonly ReviewChange[]
+  /** A `ReviewChange`; with `groups`, each may name its tab in `group`. */
+  changes: readonly ReviewPanelChange[]
   /** Default `{ phase: 'ready' }`. */
   state?: ReviewState
   /** Default "Review 3 changes". */
@@ -54,17 +52,23 @@ export interface ReviewChangesModalProps {
   doneActions?: ReactNode
   /** Done (default: `onClose`). */
   onDone?: () => void
-  size?: 'lg' | 'xl' | 'xxl'
+  /** `detail` = the DS detail size: a full-screen sheet on a phone, like the Harvest window (passed to `Modal`). */
+  size?: 'lg' | 'xl' | 'xxl' | 'detail'
   /** The verb the Done line counts a result under when the result names none: "archived" for an archive ("1 archived").
    *  Default "saved". A result whose words start "Undone" / "Archived" / "Restored" counts as that by itself. */
   doneVerb?: string
   /** See `Modal`: default the element that opened the review (inside a detail modal, the detail gets it back). */
   returnFocusTo?: ModalProps['returnFocusTo']
+  /** The table in tabs ("Keywords", "Negatives"); each change names its tab in `group`. Passed to `ReviewChangesPanel`
+   *  (Keyword Harvest polish, 2026-10-11: the Terms review had to hand-build Modal + panel to get them). */
+  groups?: readonly ReviewGroup[]
+  /** The host's own Done line when counting the results cannot say it ("Asked · waits for approval"). Passed through. */
+  doneLine?: ReviewChangesPanelProps['doneLine']
 }
 
 export function ReviewChangesModal({
   open, onClose, changes, state = { phase: 'ready' }, title, summary, metrics, problems = [], ackLabel, saveLabel,
-  onSave, onRetry, onUndo, undoing = false, doneActions, onDone, size = 'lg', doneVerb = 'saved', returnFocusTo,
+  onSave, onRetry, onUndo, undoing = false, doneActions, onDone, size = 'lg', doneVerb = 'saved', returnFocusTo, groups, doneLine,
 }: ReviewChangesModalProps) {
   const [ack, setAck] = useState(false)
   useEffect(() => { if (open) setAck(false) }, [open])
@@ -85,15 +89,6 @@ export function ReviewChangesModal({
   const raises = raiseCount(changes)
   const saving = state.phase === 'saving'
   const held = saveHeldReason({ state, count, problems: problems.length, raises, ack })
-  const result = done ? doneSummary(changes, state.results, doneVerb) : null
-  const columns = reviewColumns(changes, done)
-  const hasWhere = columns[0] === 'Where'
-  const hasLast = columns[columns.length - 1] !== 'New'
-  const rows = changes.map((c) => {
-    const r = done ? state.results[c.id] : undefined
-    const last = done ? (r ? <Tag tone={r.ok ? 'success' : 'danger'}>{resultWords(c, r)}</Tag> : '—') : reviewNote(c)
-    return { id: c.id, cells: [...(hasWhere ? [c.where ?? ''] : []), c.what, c.now, c.next, ...(hasLast ? [last] : [])] }
-  })
 
   const save = (
     <Button variant="primary" aria-disabled={held ? true : undefined} aria-description={held ?? undefined} onClick={held ? undefined : onSave}>
@@ -125,32 +120,11 @@ export function ReviewChangesModal({
       subtitle={summary}
       footer={footer}
     >
-      <div className="nds-review">
-        {result && <p className={`nds-review-line ${result.tone}`} role="status">{result.line}</p>}
-        {state.phase === 'reading' && <p className="nds-review-line" role="status">Reading today&apos;s values, so “Now” is true. Save waits for it.</p>}
-        {state.phase === 'failed' && (
-          <Banner tone="danger" title="Save is held" action={onRetry ? <Button size="sm" onClick={onRetry}>Try again</Button> : undefined}>
-            {state.error} Nexus reads them again before it saves, so it never overwrites a value it has not shown you.
-          </Banner>
-        )}
-        {state.phase === 'ready' && !!state.conflicts?.length && (
-          <Banner tone="warning" title="Changed since you opened this page">
-            <ul className="nds-review-list">{state.conflicts.map((c, i) => <li key={i}>{c.label}: was {c.was}, now {c.now}</li>)}</ul>
-          </Banner>
-        )}
-        {!done && problems.length > 0 && (
-          <Banner tone="danger" title="Fix these before you save">
-            <ul className="nds-review-list">{problems.map((p, i) => <li key={i}>{p}</li>)}</ul>
-          </Banner>
-        )}
-        {!done && metrics && metrics.length > 0 && <MetricStrip metrics={metrics} />}
-        <div className="nds-review-table">
-          <SummaryTable label={done ? `What was ${doneVerb}` : title ?? reviewTitle(count)} columns={columns} rows={rows} />
-        </div>
-        {!done && raises > 0 && (
-          <Checkbox checked={ack} disabled={saving} onChange={(e) => setAck(e.target.checked)} label={ackLabel ?? ackWords(raises)} />
-        )}
-      </div>
+      {/* The body is the shared panel (lane HTO, 2026-10-11): a window whose review is a step renders the same panel. */}
+      <ReviewChangesPanel
+        changes={changes} state={state} label={title ?? reviewTitle(count)} metrics={metrics} problems={problems}
+        ackLabel={ackLabel} ack={ack} onAckChange={setAck} onRetry={onRetry} doneVerb={doneVerb} groups={groups} doneLine={doneLine}
+      />
     </Modal>
   )
 }

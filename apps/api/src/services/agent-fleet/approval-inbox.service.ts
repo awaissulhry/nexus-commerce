@@ -638,6 +638,9 @@ export async function commitScheduledApproval(
   if (ap.executeAfter && ap.executeAfter > new Date()) {
     return { ok: false, error: 'still inside the undo window' }
   }
+  // HMCP — a harvest asked before the harvest engine never runs (it is not the change set the tools run now): closed once,
+  // with its reason, never handed back on a new clock to be approved again.
+  if (preEngineHarvest(ap.toolName, ap.args, ap.preview)) return closePreEngineHarvest(id, 'scheduled', ap.args, ap.decidedBy)
 
   // C5 — a change the business's rule scheduled runs by that rule only while the rule still allows it: a Pause, a
   // lowered level or tightened limits inside the window hand it to a person instead (W1-8: so does the ads strategy
@@ -856,6 +859,13 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   /* ONE BRAIN AB-11 — the ads brain's harvest: the term, its destination, the start bid, the sources still owed (or what
      an undo puts back), and where it lands. */
   'apply-brain-harvest': ['basis', 'reach'],
+  // Keyword Harvest page (lane HCORE) — a harvest change set: its plan's fingerprint (planHash) and where it lands.
+  'apply-harvest': ['basis', 'reach'],
+  // Keyword Harvest page (lane HMCP) — a skip or unskip of harvest terms (Nexus only): which terms, as each stood.
+  'skip-harvest-terms': ['basis'],
+  // HMCP round 2 — the Rules view's mode and archive, and the Sources view's changes (Nexus only): which rules or ad groups, as each stood.
+  'set-harvest-rules': ['basis'],
+  'set-harvest-sources': ['basis'],
   /* ONE BRAIN AB-15 — the kill switch of one lever: which op, which lever and whose, and the kill it stands on (basis). */
   'set-brain-kill-switch': ['op', 'kill', 'basis'],
   /* ONE BRAIN AB-20 — the duplicate writers of one product: which op, exactly what is switched off (or on again) and the
@@ -872,7 +882,8 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'set-harvest-destination': ['basis'],
   // A5 — executable too: the ad group it goes to, the destination and starting bid, where it lands.
   'create-negative-keyword': ['matchType', 'scope', 'alreadyNegated', 'adGroup', 'reach'],
-  'graduate-keyword': ['suggestedBidCents', 'destination', 'destinationAdGroup', 'alreadyExact', 'reach'],
+  // HMCP — and the harvest engine's plan it asks for (a moved source or funnel block hands it back, as harvest-search-term).
+  'graduate-keyword': ['basis', 'suggestedBidCents', 'destination', 'destinationAdGroup', 'alreadyExact', 'reach'],
 
   /* NAF.AQ.2 — the four tools that CAN execute, and which had no material
      fields at all. The protection was inverted exactly as `TOOL_CARDS` was
@@ -1390,6 +1401,62 @@ export async function expirePreSwitchAdRequests(): Promise<number> {
   return expired.count
 }
 
+/**
+ * HMCP (2026-10-11) — harvest-search-term and graduate-keyword now ask the harvest engine for its one change set (the
+ * keyword, the negative in every source of the product, the funnel blocks). A request of either made BEFORE that carries
+ * the older preview (one source, no engine plan): it describes a change the tools no longer run, so it never runs. It is
+ * closed once with its reason — by this sweep while it waits, or at its commit when a person approved it first — and never
+ * handed back on a new 24-hour clock. A legacy undo (`legacy: true`) is today's own preview and runs.
+ */
+const HARVEST_ALIAS_NAMES: ReadonlySet<string> = new Set(['harvest-search-term', 'graduate-keyword'])
+export const PRE_ENGINE_HARVEST_REASON = 'not run — asked before the harvest engine (2026-10-11): it no longer describes the change set the harvest tools run. Ask for the harvest again (apply-harvest) to see every write it makes.'
+/** The same for an undo asked before the engine: the undo is asked again (undo-change of the harvest), not the harvest. */
+export const PRE_ENGINE_UNDO_REASON = 'not run — an undo asked before the harvest engine (2026-10-11): it no longer describes what the undo writes now. Ask for the undo again (undo-change of the harvest) to see it.'
+const preEngineReason = (args: unknown) => ((args as { op?: unknown } | null)?.op === 'undo' ? PRE_ENGINE_UNDO_REASON : PRE_ENGINE_HARVEST_REASON)
+
+export function preEngineHarvest(toolName: string, args: unknown, preview: unknown): boolean {
+  if (!HARVEST_ALIAS_NAMES.has(toolName)) return false
+  const p = (preview ?? {}) as { engine?: unknown; legacy?: unknown }
+  return p.engine !== 'apply-harvest' && p.legacy !== true
+}
+
+/**
+ * Close one pre-engine request: expired with its reason, the approval it carried cleared (it was never acted on), and a
+ * control-history row that says so and who had approved it — never handed back on a new clock.
+ */
+async function closePreEngineHarvest(id: string, from: 'pending' | 'scheduled', args: unknown, decidedBy: string | null = null): Promise<{ ok: false; error: string }> {
+  const reason = preEngineReason(args)
+  const closed = await prisma.agentApproval.updateMany({
+    where: { id, status: from },
+    data: { status: 'expired', executeAfter: null, decidedBy: null, decidedByUserId: null, decidedAt: null, decisionVia: null, reason },
+  })
+  if (closed.count) {
+    await recordControlChange({
+      charterKey: await charterKeyOf(id),
+      action: 'stale_refused',
+      from: { approvalId: id, status: from, ...(decidedBy ? { approvedBy: decidedBy } : {}) },
+      to: { approvalId: id, status: 'expired' },
+      note: reason,
+      actor: from === 'scheduled' ? (decidedBy ?? 'unattributed') : 'system:approval-sweep',
+    }).catch(() => undefined)
+  }
+  return { ok: false, error: reason }
+}
+
+/** The sweep's half of the rule above: every waiting pre-engine harvest request, closed once. */
+export async function expirePreEngineHarvestRequests(): Promise<number> {
+  const rows = await prisma.agentApproval.findMany({
+    where: { status: 'pending', toolName: { in: [...HARVEST_ALIAS_NAMES] } },
+    select: { id: true, toolName: true, args: true, preview: true },
+  })
+  let closed = 0
+  for (const r of rows.filter((x) => preEngineHarvest(x.toolName, x.args, x.preview))) {
+    await closePreEngineHarvest(r.id, 'pending', r.args)
+    if ((await prisma.agentApproval.count({ where: { id: r.id, status: 'expired' } })) > 0) closed++
+  }
+  return closed
+}
+
 export async function runApprovalMaintenance(): Promise<{
   expired: number
   committed: number
@@ -1403,7 +1470,7 @@ export async function runApprovalMaintenance(): Promise<{
     where: { status: 'pending', expiresAt: { not: null, lt: now } },
     data: { status: 'expired' },
   })
-  const expired = { count: expiredByClock.count + (await expirePreSwitchAdRequests()) }
+  const expired = { count: expiredByClock.count + (await expirePreSwitchAdRequests()) + (await expirePreEngineHarvestRequests()) }
 
   const due = await prisma.agentApproval.findMany({
     where: { status: 'scheduled', executeAfter: { not: null, lte: now } },

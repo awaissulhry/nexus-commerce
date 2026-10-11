@@ -165,9 +165,9 @@ beforeAll(async () => {
 afterAll(async () => { vi.unstubAllEnvs(); await database?.close() }, 30_000)
 beforeEach(() => { vi.unstubAllEnvs() })
 
-const TOOLS = ['add-ad-targets', 'add-negative-targets', 'retire-negatives', 'harvest-search-term', 'set-harvest-destination'] as const
+const TOOLS = ['add-ad-targets', 'add-negative-targets', 'retire-negatives', 'set-harvest-destination'] as const
 
-describe('the five tools as the contract holds them', () => {
+describe('the four tools as the contract holds them (harvest-search-term asks the harvest engine)', () => {
   it('strategy-bound, alwaysAsk, ceiling auto, at ask by default; the default limits run nothing alone', () => {
     for (const name of TOOLS) {
       const tool = getTool(name)!
@@ -178,15 +178,24 @@ describe('the five tools as the contract holds them', () => {
     }
     expect(getTool('set-harvest-destination')!.openWorld).toBe(false)
     expect(Object.fromEntries(TOOLS.map((name) => [name, getTool(name)!.reversibility]))).toEqual({
-      'add-ad-targets': 'partial', 'add-negative-targets': 'full', 'retire-negatives': 'partial', 'harvest-search-term': 'partial', 'set-harvest-destination': 'full',
+      'add-ad-targets': 'partial', 'add-negative-targets': 'full', 'retire-negatives': 'partial', 'set-harvest-destination': 'full',
     })
     // The single-term tools name their list forms.
     expect(getTool('create-negative-keyword')!.description).toMatch(/add-negative-targets/)
-    expect(getTool('graduate-keyword')!.description).toMatch(/harvest-search-term.*add-ad-targets/)
+    // HMCP (2026-10-11) — the two older harvest names are doors onto the harvest engine: always a person, as apply-harvest.
+    for (const name of ['harvest-search-term', 'graduate-keyword']) {
+      const tool = getTool(name)!
+      expect(tool, name).toMatchObject({ maxClaudeTrust: 'ask', reversibility: 'partial', openWorld: true })
+      expect(tool.strategyBound, name).toBeUndefined()
+      expect(tool.limits, name).toBeUndefined()
+      expect(tool.description, name).toMatch(/same change set as apply-harvest/)
+      expect(tool.description, name).toMatch(/Claude cannot approve it/)
+    }
   })
 
   it('the kinds of ad action the strategy narrows: a harvest is a negative too, unless it negates nothing; its undo a retire', () => {
-    expect(TOOLS.map((name) => actionOfTool(name))).toEqual(['targeting', 'negative', 'retire', 'harvest', 'harvest'])
+    expect(TOOLS.map((name) => actionOfTool(name))).toEqual(['targeting', 'negative', 'retire', 'harvest'])
+    expect(actionOfTool('harvest-search-term')).toBe('harvest')
     expect(actionsOfTool('harvest-search-term', {})).toEqual(['harvest', 'negative'])
     expect(actionsOfTool('harvest-search-term', { negateSource: false })).toEqual(['harvest'])
     expect(actionsOfTool('harvest-search-term', { op: 'undo' })).toEqual(['harvest', 'retire'])
@@ -244,8 +253,6 @@ describe('add-negative-targets', () => {
     })
     expect((await preview('add-negative-targets', { adGroupIds: ['g-a3'], keywords: [{ text: 'late winner' }] })).error)
       .toMatch(/^Not queued: a negative there would block a search term that converts — "late winner" in ad group "group g-a3" .*: 1 order over the last 90 days/)
-    expect((await preview('harvest-search-term', { query: 'late winner', sourceAdGroupId: 'g-a3', destAdGroupId: 'g-a2' })).error)
-      .toMatch(/^Not queued: "late winner" converts where it runs — .*1 order over the last 90 days/)
     // Older than the 90 days kept: not read.
     await inside(() => term('c-a', 'g-a3', 'ancient winner', { impressions: 40, clicks: 3, costCents: 150, orders: 1 }, new Date(Date.now() - 120 * 86_400_000)))
     expect((await preview('add-negative-targets', { adGroupIds: ['g-a3'], keywords: [{ text: 'ancient winner' }] })).ok).toBe(true)
@@ -513,111 +520,12 @@ describe('add-ad-targets', () => {
   })
 })
 
-describe('harvest-search-term', () => {
-  it('rule 2 — a term that converts in its source is never negated there (harvested away); without the negative it is harvested', async () => {
-    const converting = await preview('harvest-search-term', { query: 'blue jacket', sourceAdGroupId: 'g-a1', destAdGroupId: 'g-a3' })
-    expect(converting.error).toMatch(/^Not queued: "blue jacket" converts where it runs — "blue jacket" in ad group "group g-a1" .*: 3 orders over the last 90 days — so negating it there would harvest a winner away/)
-    const kept = await preview('harvest-search-term', { query: 'blue jacket', sourceAdGroupId: 'g-a1', destAdGroupId: 'g-a3', negateSource: false })
-    expect(kept.ok, kept.error).toBe(true)
-    expect(kept.preview).toMatchObject({ negateSource: 'none', bidCents: 75, changes: [{ label: 'exact keyword "blue jacket" · ad group "group g-a3" (campaign "Test c-a")' }] })
-  })
-
-  it('refuses a term that did not run there, one at home already for the same product, a destination that is its own source', async () => {
-    expect((await preview('harvest-search-term', { query: 'never ran', sourceAdGroupId: 'g-a1', destAdGroupId: 'g-a3' })).error).toMatch(/did not run in ad group "group g-a1" .*To add a keyword of your own, ask add-ad-targets/)
-    expect((await preview('harvest-search-term', { query: 'green jacket', sourceAdGroupId: 'g-a1', destAdGroupId: 'g-a3', negateSource: false })).error).toMatch(/already lives in Test c-a › group g-a2, which advertises the same product.*a winner stays where it is/)
-    expect((await preview('harvest-search-term', { query: 'red jacket', sourceAdGroupId: 'g-a1', destAdGroupId: 'g-a1' })).error).toMatch(/lands in ad group "group g-a1" .*the ad group the term ran in: a negative there would block it/)
-  })
-
-  it('no destination named: the Owner\'s destination stored for the product line is taken, with his negate-at-source; one in another market or gone is refused by name (batch 2 re-review fixes)', async () => {
-    const line = (await inside(() => database.client.product.findFirstOrThrow({ where: { sku: 'TEST-W45-ONE' } }))).id
-    // Without it, the resolver's only exact ad group of product one (g-a2, by its keyword) would be taken.
-    await inside(() => database.client.adsHarvestDestination.create({ data: { scopeGrain: 'line', scopeId: line, matchType: 'EXACT', adGroupId: 'g-a3', negateAtSource: false, updatedBy: 'test' } }))
-    try {
-      const r = await preview('harvest-search-term', { query: 'blue jacket', sourceAdGroupId: 'g-a1' })
-      expect(r.ok, r.error).toBe(true)
-      expect(r.preview).toMatchObject({ negateSource: 'none', changes: [{ label: 'exact keyword "blue jacket" · ad group "group g-a3" (campaign "Test c-a")' }] })
-      await inside(() => database.client.adsHarvestDestination.updateMany({ where: { scopeGrain: 'line' }, data: { adGroupId: 'g-c-uk' } }))
-      expect((await preview('harvest-search-term', { query: 'blue jacket', sourceAdGroupId: 'g-a1' })).error)
-        .toMatch(/^Not queued: The harvest destination stored for this match type \(at the line grain\), “group c-uk”, is in UK, but this search term is from IT, so nothing was created\..* Or name one \(destAdGroupId\)\.$/)
-      await inside(() => database.client.adsHarvestDestination.updateMany({ where: { scopeGrain: 'line' }, data: { adGroupId: 'g-no-such-group' } }))
-      expect((await preview('harvest-search-term', { query: 'blue jacket', sourceAdGroupId: 'g-a1' })).error)
-        .toMatch(/^Not queued: The harvest destination stored for this match type \(at the line grain\) no longer exists, so nothing was created/)
-    } finally { await inside(() => database.client.adsHarvestDestination.deleteMany({ where: { scopeGrain: 'line' } })) }
-  })
-
-  it('one step: the keyword, then the source negative, both on the change set; like graduate-keyword it needs no code; undo puts both back', async () => {
-    const r = await preview('harvest-search-term', { query: 'wool jacket', sourceAdGroupId: 'g-a1', destAdGroupId: 'g-a3' })
-    expect(r.preview).toMatchObject({ negateSource: 'add', bidCents: 120, raises: ['exact keyword "wool jacket" at EUR 1.20'], limitFacts: { action: 'harvest', this: { items: 2, raises: 1, cuts: 1 } } })
-    expect(r.preview).not.toHaveProperty('stepUp')
-    // The code table decides the code: its line flipped ('harvest-search-term'), the card asks for it.
-    __codeRuleTest.flip('harvest-search-term')
-    try {
-      expect(((await preview('harvest-search-term', { query: 'wool jacket', sourceAdGroupId: 'g-a1', destAdGroupId: 'g-a3' })).preview).stepUp, 'harvest-search-term').toMatchObject({ needs: expect.stringContaining('settings.security.manage') })
-    } finally { __codeRuleTest.reset() }
-    const asked = await ask('harvest-search-term', { query: 'wool jacket', sourceAdGroupId: 'g-a1', destAdGroupId: 'g-a3' })
-    // A report arrives before it is approved: the term's cost per click moves (to EUR 2.10). The bid it worked out is frozen
-    // in the approval, so the request is not stale, and it runs at the EUR 1.20 the person approved.
-    await inside(() => term('c-a', 'g-a1', 'wool jacket', { impressions: 100, clicks: 10, costCents: 3_000, orders: 0 }))
-    expect((await preview('harvest-search-term', { query: 'wool jacket', sourceAdGroupId: 'g-a1', destAdGroupId: 'g-a3' })).preview.bidCents).toBe(210)
-    const done = await approve(asked.approvalId!)
-    expect(done).toMatchObject({ ok: true, status: 'executed', result: { keyword: { bidCents: 120, reachedAmazon: true }, sourceNegative: { targetId: expect.any(String) } } })
-    const keywordId = done.result.keyword.targetId as string
-    const negativeId = done.result.sourceNegative.targetId as string
-    expect(await target(keywordId)).toMatchObject({ adGroupId: 'g-a3', expressionValue: 'wool jacket', expressionType: 'EXACT', bidCents: 120, isNegative: false })
-    expect(await target(negativeId)).toMatchObject({ adGroupId: 'g-a1', expressionValue: 'wool jacket', isNegative: true })
-    expect((await writesOf(asked.approvalId!)).map((w) => w.entityId)).toEqual([keywordId, negativeId])
-    const undo = await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))
-    expect(undo).toMatchObject({ request: { tool: 'harvest-search-term', args: { op: 'undo', changeSetId: asked.approvalId, keywordId, negativeId } } })
-    const undoPreview = await preview('harvest-search-term', undo.request!.args)
-    expect(undoPreview.preview).toMatchObject({ op: 'undo', raises: ['negative "wool jacket" · ad group "group g-a1" (campaign "Test c-a") retired (the term shows these ads there again)'], effect: expect.stringMatching(/from EUR 1\.20 to the stop bid.*the negative "wool jacket" .* retired, so the term runs there again/) })
-    expect(judge('harvest-search-term', undoPreview.preview, { maxItems: 5, markets: ['IT'], maxStartBidCents: 500 })).toMatch(/an undo of a harvest lifts the negative it made/)
-    const undoAsked = await ask('harvest-search-term', undo.request!.args)
-    expect(await approve(undoAsked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { lowered: true, retired: true } })
-    expect((await target(keywordId))?.bidCents).toBe(5)
-    // Sandbox: Amazon never had the negative, so its retire removes Nexus's row (live, it would be archived at Amazon).
-    expect(await target(negativeId)).toBeNull()
-    // Put back once: asked for directly, the harvest's change is marked undone, so it is never put back twice.
-    expect((await inside(() => database.client.agentChange.findFirstOrThrow({ where: { approvalId: asked.approvalId!, toolName: 'harvest-search-term' } }))).undoneAt).not.toBeNull()
-    expect((await preview('harvest-search-term', undo.request!.args)).error).toMatch(/it was undone already/)
-  })
-
-  it('op undo puts back only a harvest this tool made: the change set must be its request, the ids its keyword and negative', async () => {
-    const asked = await ask('harvest-search-term', { query: 'cheap jacket', sourceAdGroupId: 'g-a1', destAdGroupId: 'g-a2' })
-    const done = await approve(asked.approvalId!)
-    expect(done).toMatchObject({ ok: true, status: 'executed' })
-    const keywordId = done.result.keyword.targetId as string
-    const negativeId = done.result.sourceNegative.targetId as string
-    // Another tool's change set (here a negatives request), naming a negative of it: refused, not queued.
-    const other = await ask('add-negative-targets', { adGroupIds: ['g-a3'], keywords: [{ text: 'other socks' }] })
-    expect(await approve(other.approvalId!)).toMatchObject({ ok: true, status: 'executed' })
-    const otherNegative = (await sql<{ id: string }>(`SELECT id FROM "AdTarget" WHERE "isNegative" AND "expressionValue" = 'other socks'`))[0]!.id
-    expect((await preview('harvest-search-term', { op: 'undo', changeSetId: other.approvalId!, keywordId: 'k-navy', negativeId: otherNegative })).error)
-      .toMatch(new RegExp(`^Not queued: ${other.approvalId} is no harvest-search-term request that made the keyword k-navy in this business`))
-    // Its own change set, but another keyword or another negative: refused.
-    expect((await preview('harvest-search-term', { op: 'undo', changeSetId: asked.approvalId!, keywordId: 'k-navy', negativeId })).error).toMatch(/is no harvest-search-term request that made the keyword k-navy/)
-    expect((await preview('harvest-search-term', { op: 'undo', changeSetId: asked.approvalId!, keywordId, negativeId: otherNegative })).error).toMatch(new RegExp(`that harvest made the negative ${negativeId}, so op undo names exactly that one`))
-    expect((await preview('harvest-search-term', { op: 'undo', changeSetId: asked.approvalId!, keywordId })).error).toMatch(/so op undo names exactly that one/)
-    expect((await preview('harvest-search-term', { op: 'undo', changeSetId: asked.approvalId!, keywordId, negativeId })).ok).toBe(true)
-    expect(await target(otherNegative)).toMatchObject({ isNegative: true, status: 'ENABLED' })
-  })
-
-  it('a keyword already in the destination with that match type — archived, or only in Nexus — is refused, not queued', async () => {
-    await inside(async () => {
-      await database.client.adTarget.create({ data: { id: 'k-arch', adGroupId: 'g-a2', kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'wool jacket', bidCents: 40, status: 'ARCHIVED', externalTargetId: 'EXT-k-arch' } })
-      await database.client.adTarget.create({ data: { id: 'k-local', adGroupId: 'g-b1', kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'red jacket', bidCents: 40 } })
-    })
-    expect((await preview('harvest-search-term', { query: 'Wool Jacket', sourceAdGroupId: 'g-a1', destAdGroupId: 'g-a2', negateSource: false })).error)
-      .toMatch(/^Not queued: exact keyword "Wool Jacket" is already in ad group "group g-a2" \(campaign "Test c-a"\), archived/)
-    expect((await preview('harvest-search-term', { query: 'red jacket', sourceAdGroupId: 'g-a1', destAdGroupId: 'g-b1', negateSource: false })).error)
-      .toMatch(/^Not queued: exact keyword "red jacket" is already in ad group "group g-b1" \(campaign "Test c-b"\), in Nexus only \(it never reached Amazon\)/)
-    expect(await target('k-arch')).toMatchObject({ status: 'ARCHIVED' })
-  })
-
-  it('the proven handover in a harvest: said, and refused by rule (the same rules as add-negative-targets)', () => {
-    const handover = { action: 'harvest-search-term', op: 'harvest', market: 'IT', handovers: [{ key: 'source', term: 'x', place: 'ad group "a"', home: 'ad group "b"' }] }
-    expect(judge('harvest-search-term', handover, { maxItems: 5, markets: ['IT'], maxStartBidCents: 500 })).toMatch(/closes a converting term's old place \(the proven handover\): a person decides a winner's move/)
-    expect(getTool('harvest-search-term')!.description).toMatch(/the proven handover, said on the card; a person decides it, never a rule/)
-    expect(getTool('harvest-search-term')!.description).toMatch(/a source negative in an ad group of another product is refused/)
+describe('harvest-search-term (HMCP: a door onto the harvest engine; ads-harvest-postgres.vitest.test.ts runs it end to end)', () => {
+  it('names the term by where it ran, or by its candidateId; a term with no place to name is refused, not queued', async () => {
+    expect((await preview('harvest-search-term', { query: 'warm jacket' })).error).toMatch(/^Not queued: name the term: candidateId \(harvest-candidates\), or query and sourceAdGroupId/)
+    expect((await preview('harvest-search-term', { query: 'warm jacket', sourceAdGroupId: 'nope' })).error).toMatch(/^Not queued: ad group nope is not an ad group of this business/)
+    expect((await preview('harvest-search-term', { candidateId: 'not a candidate' })).error).toMatch(/is not a candidate id/)
+    expect((await preview('harvest-search-term', { op: 'undo' })).error).toMatch(/^Name the harvest to put back/)
   })
 })
 
@@ -634,9 +542,6 @@ describe('set-harvest-destination', () => {
     expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { set: true } })
     const stored = await sql<{ adGroupId: string; negateAtSource: boolean; updatedBy: string }>(`SELECT "adGroupId", "negateAtSource", "updatedBy" FROM "AdsHarvestDestination" WHERE "scopeGrain" = 'adGroup' AND "scopeId" = 'g-a1'`)
     expect(stored).toEqual([{ adGroupId: 'g-a2', negateAtSource: false, updatedBy: 'user:u-approver' }])
-    // A harvest from that source with no destination named lands there, and keeps the source as the destination says.
-    const h = await preview('harvest-search-term', { query: 'warm jacket', sourceAdGroupId: 'g-a1' })
-    expect(h.preview).toMatchObject({ destinationAdGroup: { id: 'g-a2', why: 'the harvest destination stored for this source' }, negateSource: 'none' })
     expect((await preview('set-harvest-destination', { scope: 'adGroup', scopeId: 'g-a1', adGroupId: 'g-a2', negateAtSource: false })).error).toMatch(/^Nothing would change/)
     const undo = await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))
     expect(undo).toMatchObject({ request: { tool: 'set-harvest-destination', args: { scope: 'adGroup', scopeId: 'g-a1', matchType: 'EXACT', remove: true } } })

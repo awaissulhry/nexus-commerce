@@ -89,3 +89,27 @@ export function detailBodyState(args: { loading?: boolean; error?: unknown }): '
 export function nextTallest(prev: number, content: number, room: number): number {
   return Math.max(prev, Math.min(content, room))
 }
+
+/** The slice of an element `onlyEmptyState` reads, so it is tested in Node. */
+export interface EmptyCheckNode {
+  classList: { contains(name: string): boolean }
+  children: ArrayLike<EmptyCheckNode>
+  textContent: string | null
+}
+export const EMPTY_STATE_CLASS = 'nds-empty'
+
+/**
+ * Is the body's content ONE DS EmptyState and nothing else — possibly inside wrappers that hold nothing else (a tab's
+ * panel, a stack)? Then `DetailModal` centres it in the kept-tall body (audit M12, 2026-10-11: "No effect yet" sat 32 px
+ * under the tabs with 187–240 px empty below). Normal content is never moved.
+ */
+export function onlyEmptyState(root: EmptyCheckNode | null | undefined): boolean {
+  let node = root
+  while (node) {
+    if (node.children.length !== 1) return false
+    const only = node.children[0]
+    if (only.classList.contains(EMPTY_STATE_CLASS)) return (root!.textContent ?? '').trim() === (only.textContent ?? '').trim()
+    node = only
+  }
+  return false
+}

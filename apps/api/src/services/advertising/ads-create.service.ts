@@ -199,6 +199,13 @@ export interface NewCampaign {
   dryRun?: boolean
   /** PB-5 — the approval this create runs for: its AdvertisingActionLog row carries it (executionId). Absent: no change set. */
   changeSetId?: string | null
+  /**
+   * HARVEST ENGINE (B17, 2026-10-10) — a person approved this create (his approval, or his own click): the write gate hears
+   * it as his (`manual`, the actor), so a limit of his own — the per-write value cap on a daily budget above it — warns
+   * and, with `confirmOwnLimits` (his approval is his "Send anyway"), goes, instead of refusing what he approved.
+   */
+  manual?: boolean
+  confirmOwnLimits?: boolean
 }
 
 /**
@@ -273,7 +280,11 @@ async function createCampaignOnce(input: NewCampaign): Promise<CampaignCreateRes
     const budgetCents = Math.round(input.dailyBudgetEur * 100)
     // AB-5 — the structure lever, named. A new campaign advertises nothing yet, so no product's brain owns it and the gate
     // judges no owner here (no campaign is named); its builders check the brain themselves (AB-6, AB-16).
-    const gate = await checkAdsWriteGate({ marketplace: input.marketplace, payloadValueCents: budgetCents, dimension: 'structure', ...(input.type === 'SP' ? { field: 'dailyBudget', intendedValueCents: budgetCents } : {}) })
+    const gate = await checkAdsWriteGate({
+      marketplace: input.marketplace, payloadValueCents: budgetCents, dimension: 'structure', ...(input.type === 'SP' ? { field: 'dailyBudget', intendedValueCents: budgetCents } : {}),
+      // B17 — a person's approved create is judged as his (see NewCampaign.manual).
+      ...(input.manual ? { manual: true, ...(input.userId ? { actor: input.userId } : {}), ...(input.confirmOwnLimits ? { confirmOwnLimits: true } : {}) } : {}),
+    } as Parameters<typeof checkAdsWriteGate>[0])
     if (gate.allowed || input.dryRun) {
       const common = { name: input.name, dailyBudget: input.dailyBudgetEur, state, portfolioId: input.portfolioId, dryRun: input.dryRun }
       // CC-26 — SB and SD send a start date: the day in the account's own time zone, not the UTC day.

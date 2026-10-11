@@ -165,6 +165,17 @@ describe('CM-33 — the create dedupe is atomic', () => {
     expect(await inside(() => db().campaign.count({ where: { name: { equals: 'cm33 launch', mode: 'insensitive' } } }))).toBe(1)
   })
 
+  it('B17 (harvest engine) — a person\'s approved campaign above the per-write cap goes; without his approval it is refused as before', async () => {
+    const { createCampaignLocal } = await svc()
+    const before = amz.creates.filter((c) => c.resource === 'campaigns').length
+    const refused = await inside(() => createCampaignLocal({ name: 'B17 big budget rule', type: 'SP', marketplace: 'IT', targetingType: 'MANUAL', dailyBudgetEur: 600, userId: 'automation:r1' }))
+    expect(refused.externalCampaignId).toBeNull()
+    expect(refused.reason).toMatch(/exceeds cap|value_cap|NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS/)
+    const approved = await inside(() => createCampaignLocal({ name: 'B17 big budget person', type: 'SP', marketplace: 'IT', targetingType: 'MANUAL', dailyBudgetEur: 600, userId: 'user:owner', manual: true, confirmOwnLimits: true }))
+    expect(approved.externalCampaignId).toMatch(/^AMZ-/)
+    expect(amz.creates.filter((c) => c.resource === 'campaigns').length).toBe(before + 1)
+  })
+
   it('the claim is let go after each create, and another match type of the same text is a different create', async () => {
     const { createKeywordLocal } = await svc()
     const r = await inside(() => createKeywordLocal({ adGroupId: 'g-c-it', keywordText: 'cm33 twice', matchType: 'PHRASE', bidEur: 0.4 }))

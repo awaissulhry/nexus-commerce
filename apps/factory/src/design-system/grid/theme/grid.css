@@ -1175,8 +1175,8 @@
 }
 
 /* the toolbar's swapping halves (`../toolbars/GridSelectionActions`). The search field and an `sm` button are both
-   28: the cluster holds the toolbar's height on the first tick and never wraps —
-   labels hide under 1320px and the reach note under 1100px of the CARD (`GridCard` is the container). */
+   28: the cluster holds the toolbar's height on the first tick and never wraps — when it does not fit,
+   the reach note hides, then the labels (measured by `GridSelectionActions`, `data-fit` below). */
 .nds-grid-selbar { display: inline-flex; align-items: center; gap: 7px; flex-wrap: nowrap; white-space: nowrap; min-width: 0; min-height: var(--nds-grid-toolbar-slot-h); }
 /* The size of the count it sits beside (`.nds-toolbar .cnt`); without it the note took the page's 16px and read as another font (Owner, 2026-10-01). */
 .nds-grid-selbar-note { color: var(--nds-grid-muted-fg); font-size: var(--nds-font-size-sm-plus); }
@@ -1252,16 +1252,20 @@
 }
 .nds-toolbar-fold-panel[hidden] { display: none !important; }
 
-@container (max-width: 1320px) { .nds-grid-selbar-lbl { display: none; } }
-@container (max-width: 1100px) { .nds-grid-selbar-note { display: none; } }
+/* MEASURED, not a card width (Keyword Harvest audit S1, 2026-10-11 — it was `@container (max-width: 1320px)` for the labels
+   and 1100px for the note: a 1312 px card showed icons only with 600 px of the bar empty). `GridSelectionActions` sets
+   `data-fit` to the fullest form that fits on one line: the note goes first, then the labels. */
+.nds-grid-selbar[data-measure] { flex-wrap: nowrap !important; }
+.nds-grid-selbar[data-fit~="no-note"] .nds-grid-selbar-note { display: none; }
+.nds-grid-selbar[data-fit~="icons"] .nds-grid-selbar-lbl { display: none; }
 /* A PAGE card at phone width (sheet publish parity, 2026-10-04): the toolbar wraps, and the selection cluster takes a
    line of its own under the count and the right-hand controls and wraps its buttons. Measured on /products at 390 px
    (the card is 216 px there) with two rows ticked: the no-wrap toolbar kept Customise, Views, Export and the Live pill
    at their width, so `.nds-grid-selbar` (`min-width: 0`) shrank to 0 px and its seven buttons overflowed from x=264
    to x=584, under Customise and past the card's clipped edge — not one could be hit (`elementFromPoint`), and Views,
    Export and the pill were clipped off as well, ticked or not. Now every control is on screen and hit-testable. A
-   second line beats a hidden button here; above 640 px nothing changes (the cluster never wraps, labels hide at
-   1320 px). Scoped to `.nds-grid-card` (`GridCard`, /products): the studio sheet's toolbar has its own fixed height
+   second line beats a hidden button here; above 640 px nothing changes (the cluster never wraps; labels hide only when
+   they do not fit on one line, measured). Scoped to `.nds-grid-card` (`GridCard`, /products): the studio sheet's toolbar has its own fixed height
    and fold. */
 @container (max-width: 640px) {
   .nds-grid-card > .nds-toolbar { flex-wrap: wrap; row-gap: var(--nds-space-8); }

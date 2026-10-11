@@ -636,6 +636,8 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
   /** 4h — the edited rule's level when it opened, and its stored Manual/Automate belt (kept unless the radio changes). */
   const [storedLevel, setStoredLevel] = useState<RuleLevel | null>(null)
   const savedBelt = useRef<RuleControl | null>(null)
+  /** Keyword Harvest (2026-10-11): Auto's mark from the harvest mode route (`actions[0].harvestAuto`), kept on an edit. */
+  const savedHarvestAuto = useRef<unknown>(null)
   // ── ad-group mapping blocks (H3): Harvest can hold multiple source→target mappings; Negative
   //    always has one. Each block carries its own selected ad groups + per-group target types. ──
   const [blocks, setBlocks] = useState<MapBlock[]>([{ id: 1, groups: [] }])
@@ -664,7 +666,8 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
     if (saveNotice) saveNoteRef.current?.scrollIntoView({ behavior: 'auto', block: 'center' })
   }, [saveNotice])
   // ── H7 best-in-class (beyond the recording) ──
-  const [negateInSource, setNegateInSource] = useState(false)
+  // Keyword Harvest D3 (2026-10-11) — "block where found" starts ON for a new harvest rule; a stored rule keeps its own.
+  const [negateInSource, setNegateInSource] = useState(isHarvest && !ruleId)
   /**
    * HP1 — H10's four bid modes, all REAL now (`resolveHarvestBidEur` in the engine): the term's
    * own CPC (default — the going rate, Scale Insights' model), CPC + %, the destination ad
@@ -821,6 +824,8 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
           ...(isBid ? { windowDays: Math.max(7, Math.min(90, Math.round(Number(lookbackDays)) || 14)) } : {}),
           ...((isBudget || isPlacement) ? { windowDays: Math.max(7, Math.min(90, Math.round(Number(lookbackDays)) || 7)) } : {}),
           mappings: blocks.map((b) => ({ groups: b.groups.map((g) => ({ id: g.id, name: g.name, campaignId: g.campaignId, campaignName: g.campaignName, status: g.status, adProduct: g.adProduct, portfolioId: g.portfolioId, look: g.look, types: g.types, ...(g.paused ? { paused: true } : {}) })) })),
+          // Keyword Harvest — an edit keeps Auto's mark; without it the engine treats the rule's Auto as asking.
+          ...(isHarvest && savedHarvestAuto.current ? { harvestAuto: savedHarvestAuto.current } : {}),
         }]
   ), [slug, isEdit, control, dedupe, negateInSource, bidMode, bidValue, brandExclude, competitorOnly, searchTerms, frequency, everyN, interval, onDay, time, timezone, isNegative, protectConverting, negationLevel, isCampaign, selCampaigns, isBudget, isPlacement, isBidLike, nums, isBid, lookbackDays, blocks])
   /**
@@ -1413,10 +1418,21 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
         let res: Response
         let lj: unknown
         try {
-          res = await fetch(`${getBackendUrl()}/api/advertising/autonomy/rules/${savedId}`, {
-            method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ level }),
-          })
-          lj = await res.json().catch(() => ({}))
+          if (isHarvest) {
+            // Keyword Harvest (2026-10-11) — through the harvest mode route, as the Keyword Harvest page sets it: Manual =
+            // Ask me, Automate = Auto (its gate, its caps, and the mark the engine reads), so the Rules view shows it.
+            res = await fetch(`${getBackendUrl()}/api/advertising/harvest/rules/mode`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [savedId], mode: level === 'AUTO' ? 'AUTO' : 'ASK' }),
+            })
+            const mj = await res.json().catch(() => ({})) as { results?: Array<{ ok?: boolean; error?: string }> }
+            const r0 = mj?.results?.[0]
+            lj = res.ok && !r0?.ok ? { error: r0?.error ?? 'The mode was not changed.', message: r0?.error } : mj
+          } else {
+            res = await fetch(`${getBackendUrl()}/api/advertising/autonomy/rules/${savedId}`, {
+              method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ level }),
+            })
+            lj = await res.json().catch(() => ({}))
+          }
         } catch {
           setSaveNotice(noAnswerNotice('level', { isEdit, existing: true }))
           return
@@ -1489,6 +1505,7 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
         setDedupe(a.dedupe !== false)
         // HP1 — these four were never hydrated, so an edit-save silently reset them to defaults.
         if (typeof a.negateInSource === 'boolean') setNegateInSource(a.negateInSource)
+        if (isHarvest) savedHarvestAuto.current = a.harvestAuto ?? null
         if (a.bid != null) {
           const b = a.bid as { mode?: string; value?: unknown }
           setBidMode(b.mode === 'fixed' ? 'fixed' : b.mode === 'cpcPlus' ? 'cpcPlus' : b.mode === 'adGroupDefault' ? 'adGroupDefault' : 'cpc')
@@ -2138,12 +2155,16 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
                 {/* 4h (review 4.5) — a new rule starts on Manual (D-R1); Automate is held below and says why. */}
                 {isEdit
                   ? ' Changing the mode here applies when you save.'
-                  : ' A new rule starts on Manual and is live as soon as you create it: every action queues on the Suggestions page for your approval.'}
+                  : isHarvest
+                    ? ' A new rule starts on Manual and is live as soon as you create it: every harvest waits on the Keyword Harvest page for your approval.'
+                    : ' A new rule starts on Manual and is live as soon as you create it: every action queues on the Suggestions page for your approval.'}
                 {isEdit && control == null && storedLevel && ` ${levelNote(storedLevel)}`}
                 {/* HP4 — the graduation ceiling, stated BEFORE save (the bid builder's
                     pause-action HoverCard precedent): a structural rule cannot reach full
                     automation, and the radio must not promise it. */}
-                {(isHarvest || isNegative) && ' This rule CREATES things, and creation is held below full automation by policy: whichever you choose, its actions queue on the Suggestions page for your approval.'}
+                {isNegative && ' This rule CREATES things, and creation is held below full automation by policy: whichever you choose, its actions queue on the Suggestions page for your approval.'}
+                {/* Keyword Harvest (2026-10-11, D2) — Automate harvests alone, inside its caps (the Manual card names the Keyword Harvest page). */}
+                {isHarvest && ' On Automate it harvests by itself, inside its caps.'}
               </p>
               <div className="h10-rb-card control">
                 {surface === 'search-terms' && (<div className="h10-rb-dedupe">
@@ -2171,7 +2192,7 @@ export function RuleBuilder({ slug, ruleId: ruleIdProp, initialMarket, onClose, 
                   variant="row" className="h10-rb-ctrl"
                   name="control" checked={control === 'manual'} selected={control === 'manual'}
                   onChange={() => setControl('manual')}
-                  title="Manual" description="Manually approve rule actions on the Suggestions page"
+                  title="Manual" description={isHarvest ? 'Manually approve each harvest on the Keyword Harvest page' : 'Manually approve rule actions on the Suggestions page'}
                 />
                 {/* 4h (review 4.5) — HELD on a new rule, not disabled: it stays focusable and its own
                     description is the reason (the silent-disabled rule). A click selects nothing. */}

@@ -55,7 +55,9 @@ describe('the two stop-waste kinds', () => {
     expect(graduationCeiling({ actionTypes: ['pause_target'], hasKeywordProtections: true }).maxLevel).toBe('PROPOSE')
     expect(graduationCeiling({ actionTypes: ['add_negative_exact'], hasKeywordProtections: true, actions: [{ type: 'add_negative_exact' }] }).maxLevel).toBe('PROPOSE')
     expect(graduationCeiling({ actionTypes: ['negative-targeting'], hasKeywordProtections: true, actions: [{ type: 'negative-targeting' }] }).maxLevel).toBe('PROPOSE')
-    for (const held of [['enable_target'], ['add_negative_phrase'], ['pause_campaign'], ['sync_negatives_across_campaigns'], ['harvest_and_negate'], ['promote_to_exact'], ['archive_keyword'], ['bid_apply', 'pause_target'], ['bid']]) {
+    // harvest_and_negate / promote_to_exact are left out: a harvest rule may reach Auto inside its caps (Keyword Harvest
+    // D2, Owner 2026-10-10; ads-graduation.vitest.test.ts holds it), so they are not "any other rule" here.
+    for (const held of [['enable_target'], ['add_negative_phrase'], ['pause_campaign'], ['sync_negatives_across_campaigns'], ['archive_keyword'], ['bid_apply', 'pause_target'], ['bid']]) {
       expect(graduationCeiling({ actionTypes: held, hasKeywordProtections: true, actions: PAUSE }).maxLevel, held.join('+')).toBe('PROPOSE')
     }
     expect(NOT_PAGE_SHAPE).toBe('Auto is only for rules made on this page: this rule asks first.')

@@ -473,6 +473,7 @@
     "AdsBrainTerm",
     "AdsBrainTermLead",
     "AdsBrainHarvest",
+    "AdsHarvestSourcePause",
     "AdsBrainStateDecision",
     "AdsBrainNegative",
     "AdsBrainCycle",

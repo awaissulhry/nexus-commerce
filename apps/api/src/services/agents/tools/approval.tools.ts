@@ -243,6 +243,8 @@ const AD_CHANGE_TOOLS = new Set([
   // W4-5 — targets, negatives and a harvest are created at once (approval-status counts them and how many Amazon holds); a
   // retire is one queued archive per negative. (set-harvest-destination is Nexus only: no ad write to follow.)
   'add-ad-targets', 'add-negative-targets', 'harvest-search-term', 'retire-negatives',
+  // Keyword Harvest page (HMCP) — the harvest engine's change set (its keywords and blocks, created at once).
+  'apply-harvest',
   // W4-6 — a new ad group and product ads (created at once, not queued: approval-status counts them and how much of them
   // Amazon holds); an ad group's default bid or name (queued), or its bids stopped or given back (sent at once).
   'create-ad-group', 'add-product-ads', 'set-ad-group',
@@ -379,14 +381,16 @@ export async function adDeliveryOf(approvalId: string, toolName: string, preview
     if (ids.length) out.created = { total: ids.length, atAmazon: reach === 'live' ? ids.filter(Boolean).length : 0 }
     return out
   }
-  // W4-5 — what the list tools and a harvest created (a harvest's undo op creates nothing).
-  const made = after as { targets?: Array<{ targetId?: unknown }>; keyword?: { targetId?: unknown } | null; negative?: { targetId?: unknown } | null } | null
-  const createdIds = toolName === 'create-negative-keyword' || toolName === 'add-negative-targets'
+  // W4-5 — what the list tools and a harvest created (a harvest's undo op creates nothing). HMCP — the harvest engine's
+  // change set (apply-harvest, and harvest-search-term / graduate-keyword since they ask for it): its keywords and blocks.
+  const made = after as { targets?: Array<{ targetId?: unknown }>; keyword?: { targetId?: unknown } | null; negative?: { targetId?: unknown } | null; harvestIds?: unknown; keywords?: unknown; negatives?: unknown } | null
+  const engineMade = Array.isArray(made?.harvestIds) ? [...(Array.isArray(made?.keywords) ? made.keywords : []), ...(Array.isArray(made?.negatives) ? made.negatives : [])].map(String).filter(Boolean) : null
+  const createdIds = engineMade ?? (toolName === 'create-negative-keyword' || toolName === 'add-negative-targets'
     ? (after?.negatives ?? []).map((n) => String(n.targetId ?? '')).filter(Boolean)
     : toolName === 'graduate-keyword' && typeof after?.targetId === 'string' ? [after.targetId]
       : toolName === 'add-ad-targets' ? (made?.targets ?? []).map((t) => String(t.targetId ?? '')).filter(Boolean)
         : toolName === 'harvest-search-term' ? [made?.keyword?.targetId, made?.negative?.targetId].filter((id): id is string => typeof id === 'string')
-          : []
+          : [])
   if (createdIds.length) {
     const atAmazon = reach === 'live'
       ? await prisma.adTarget.count({ where: { id: { in: createdIds }, externalTargetId: { not: null } } })

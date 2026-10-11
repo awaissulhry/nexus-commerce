@@ -4,9 +4,10 @@
  * isNegative-only existing-negative reads); hard denials return ok:false so the approval gate never queues them.
  *
  * MCP full control A5 — `create-negative-keyword` (ad-group negatives only, through the one negative write service, which
- * binds the campaign's allowlist) and `graduate-keyword` (into the named or resolved harvest destination) execute too, with the same rules;
- * a negative is undone by undo-ad-change retiring it, a graduation by lowering the keyword to the floor (d3: never
- * paused or archived).
+ * binds the campaign's allowlist) executes too, with the same rules; a negative is undone by undo-ad-change retiring it.
+ * Keyword Harvest page rebuild (lane HMCP, 2026-10-11) — `graduate-keyword` is a door onto the ONE harvest engine
+ * (ads-harvest-alias.ts): the same change set, approval, run and undo as apply-harvest (the keyword, the negative exact in
+ * every source of the product, the funnel blocks; undo lifts the blocks, then pauses the keyword); always a person.
  *
  * MCP full control A4 — `set-target-bid` executes once a person approves it: the A3 guards in its dry run and again in
  * `execute` (ads-change-kit.ts): live reach (a refusal is not queued; a changed answer is not run), the suppression
@@ -17,11 +18,9 @@
  * ADS AUTONOMY AA-W2-6 — `set-target-bid` is strategy-bound: its dry run carries the limit facts of the bid that lands
  * (the ads strategy of the target's ad group, Claude's limits, today's runs by rule) and the write gate's answer as a
  * run by rule, so the business may let it run by its rule inside them (ads-change-kit.ts `ruleFactsFor`, `ruleRefusal`).
- * AA-W2-7 — `create-negative-keyword` and `graduate-keyword` too: a negative runs by rule only for a term whose record
- * over the strategy's window meets its "Negate a search term when" group where it lands (exact negatives only, unless
- * the business allows phrase); a graduation only for a term that meets the "Harvest a search term when" group where it
- * converted, at a starting bid inside the destination's bid band and Claude's limit. Protected terms and protected
- * products' ASINs are never negated by rule.
+ * AA-W2-7 — `create-negative-keyword` too: a negative runs by rule only for a term whose record over the strategy's
+ * window meets its "Negate a search term when" group where it lands (exact negatives only, unless the business allows
+ * phrase). Protected terms and protected products' ASINs are never negated by rule.
  *
  * ADS AUTONOMY W3-1 — all three take an optional `source` (ads-change-source.ts): the engine recommendation the change
  * carries out (apply-ad-recommendations sets it). It must name this change's own recommendation; it is kept in the
@@ -41,21 +40,20 @@ import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import { updateAdTargetWithSync } from '../../advertising/ads-mutation.service.js'
 import { writeNegativeKeyword } from '../../advertising/ads-negative-kw.service.js'
-import { createKeywordLocal } from '../../advertising/ads-create.service.js'
 import { adsProfileFor } from '../../advertising/ads-profile-resolver.js'
-import { adGroupCampaigns, adGroupExternalIds, adGroupsByExternalId } from '../../advertising/ads-entity-lookup.service.js'
-import { loadDestinationGraph, resolveDestination, resolveStoredDestinations, sourceLines, storedDestinationRefusal } from '../../advertising/harvest-destination.service.js'
+import { adGroupCampaigns, adGroupsByExternalId, adGroupsOfCampaign } from '../../advertising/ads-entity-lookup.service.js'
+import { targetingAdGroups } from '../../advertising/ads-targeting-lookup.service.js'
 import { clampBidsByCeiling } from '../../advertising/ads-cpc-ceiling.js'
 import { amountLabel, campaignCurrency, checkLiveReach, suppressionOf } from './ads-tool-guards.js'
 import { afterwardsArg, afterwardsNote, afterwardsOf, alsoChangedBy, approvedRun, bidStepOf, handBackEvidence, handBackRefusal, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, adWriteRefusalOf, bidWriteOf, stepClampWords, storedReach, withStepPast, type BidAfterwards, type StoredReach } from './ads-change-kit.js'
 import { adKitLimits, LIMIT_FACTS_MONEY, limitFactsOf, STEP_PCT_LIMITS, type LimitFacts, type ScopeFacts } from './ads-autonomy-kit.js'
 import { bidLimitsFor } from '../../advertising/ads-strategy/bids.js'
-import { harvestForScope } from '../../advertising/ads-strategy/terms.js'
+import { HARVEST_MONEY } from '../../advertising/harvest/constants.js'
 import { DEFAULT_MIN_ORDERS, DEFAULT_WINDOW_DAYS, meetsHarvest } from '../../advertising/ads-harvest.service.js'
 import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
-import { sameProductHome } from '../../advertising/ads-winner-lock.js'
 import { notOfferedRefusal, recommendationIdFor, settleSources, sourceArg, sourceOf, sourcePreview, sourceRefusal, sourcesRecord, unsettleChange, withSource } from './ads-change-source.js'
-import type { AgentTool, FieldPermission, ToolResult, ToolUndo } from '../tool-types.js'
+import { ALIAS, aliasExecute, aliasPreview, aliasUndo, candidateInCampaign, type EngineItem } from './ads-harvest-alias.js'
+import type { AgentTool, FieldPermission, ToolChange, ToolResult, ToolUndo } from '../tool-types.js'
 
 const BID_FLOOR_CENTS = 5
 const METRIC_WINDOW_DAYS = 60
@@ -474,261 +472,113 @@ const createNegativeKeyword: AgentTool = {
 /** A5 — the starting facts an approved negative must still find. */
 const NEGATIVE_MATERIAL = ['matchType', 'scope', 'alreadyNegated', 'adGroup', 'reach'] as const
 
-/** A5 — where a graduated keyword goes: the ad group named, else the harvest destination the account resolves. */
-async function destinationAdGroup(args: Record<string, unknown>, query: string, source: CampaignRow, dest: CampaignRow, destNamed: boolean): Promise<{ id: string; name: string; externalAdGroupId: string | null; campaignId: string; why: string } | { refusal: string }> {
-  const named = typeof args.destExternalAdGroupId === 'string' ? args.destExternalAdGroupId.trim() : ''
-  if (named) {
-    const group = await adGroupInCampaign(named, dest.id)
-    return group ? { ...group, campaignId: dest.id, why: 'named in the request' } : { refusal: `ad group ${named} not found in ${dest.name}` }
+// ── graduate-keyword (Keyword Harvest page rebuild, lane HMCP: a door onto the harvest engine) ─────────────────
+
+const GRADUATE_INPUT = z.object({
+  query: z.string().trim().min(1).describe('the search term to harvest (query in ad-search-terms)'),
+  sourceExternalCampaignId: z.string().min(1).describe('Amazon campaign id it converted in: it names the product whose own campaigns the term goes into (every ad group of that product where it ran is a source)'),
+  sourceExternalAdGroupId: z.string().optional().describe('Amazon ad group id it converted in (checked to be in that campaign; needed with source)'),
+  destExternalCampaignId: z.string().min(1).optional().describe('campaign to add it to (Amazon id): its one serving ad group, unless destExternalAdGroupId names one (default: the suggested place)'),
+  destExternalAdGroupId: z.string().optional().describe('ad group to add it to (Amazon id; one of the product\'s own: harvest-destinations) (default: the suggested place)'),
+  bidCents: z.coerce.number().int().min(2).max(10_000).optional().describe('start bid in minor units of the market\'s currency (default: the bid brain\'s goal bid, else the term\'s cost per click inside the strategy\'s bid limits)'),
+  negateSource: z.boolean().optional().describe('false leaves the sources running; true blocks them even where the Owner\'s saved harvest place says not to (default: the negative exact in every source, unless his saved place says not to)'),
+  funnel: z.boolean().optional().describe('false leaves the funnel blocks out (default: negative exact in the product\'s phrase, broad and auto ad groups)'),
+  why: z.string().trim().max(300).optional().describe('why, in a sentence: shown to the person who approves it and kept in the ads audit'),
+  source: sourceArg,
+})
+type GraduateArgs = z.infer<typeof GRADUATE_INPUT>
+
+/** The engine's change set a graduation is: the candidate its source campaign names, and the place it names. */
+async function graduationEngineArgs(a: GraduateArgs): Promise<{ args: { op: 'harvest'; items: EngineItem[]; why?: string }; source: CampaignRow; destGroupWhy: string | null } | { refusal: string }> {
+  const query = a.query.trim()
+  const changeSource = sourceOf(a.source)
+  const sourceGroupId = a.sourceExternalAdGroupId?.trim() ?? ''
+  // W3-1 — a source names this term's own graduation recommendation (the ad group it converted in), or it is refused.
+  const wrongSource = sourceRefusal(changeSource, recommendationIdFor.graduate(sourceGroupId, query))
+  if (wrongSource) return { refusal: wrongSource }
+  const source = await campaignByExternalId(a.sourceExternalCampaignId)
+  if (!source) return { refusal: `campaign ${a.sourceExternalCampaignId} not found` }
+  if (sourceGroupId && !(await adGroupInCampaign(sourceGroupId, source.id))) return { refusal: `the source's ad group ${sourceGroupId} is not in campaign ${source.name}, where the term converted` }
+  if (changeSource) {
+    if (!sourceGroupId) return { refusal: 'a graduation that carries a recommendation names the ad group the term converted in (sourceExternalAdGroupId)' }
+    const notOffered = await notOfferedRefusal(changeSource)
+    if (notOffered) return { refusal: notOffered }
   }
-  const sourceGroupExt = typeof args.sourceExternalAdGroupId === 'string' ? args.sourceExternalAdGroupId.trim() : ''
-  if (!sourceGroupExt) return { refusal: 'Name the ad group to add the keyword to (destExternalAdGroupId), or the ad group it converted in (sourceExternalAdGroupId) so the harvest destination can be resolved.' }
-  const sourceGroup = await adGroupInCampaign(sourceGroupExt, source.id)
-  if (!sourceGroup) return { refusal: `ad group ${sourceGroupExt} not found in ${source.name}` }
-  // Batch 2 review fixes — the whole chain, the portfolio and the product line included (where the Owner stores his
-  // destinations); his stored one gone or in another market refuses by name, never the resolver's pick.
-  const line = (await sourceLines([sourceGroup.id])).get(sourceGroup.id) ?? null
-  const [graph, stored] = await Promise.all([
-    loadDestinationGraph(),
-    resolveStoredDestinations({ market: source.marketplace ?? 'all', line, portfolio: source.portfolioId ?? null, campaign: source.id, adGroup: sourceGroup.id }),
-  ])
-  const resolved = resolveDestination({ graph, stored, sourceAdGroupId: sourceGroup.id, sourceAdGroupName: sourceGroup.name, term: query, kind: 'keyword', createType: 'EXACT' })
-  const storedNo = storedDestinationRefusal({ stored, createType: 'EXACT', resolved, graph, sourceMarket: source.marketplace ?? null })
-  if (storedNo) return { refusal: `${storedNo} Or name one: destExternalAdGroupId.` }
-  if (!resolved.chosen) {
-    return { refusal: `No destination ad group is decided for this term (${resolved.source === 'resolved-ambiguous' ? `${resolved.shortlist.length} could take it` : resolved.source === 'resolved-paused' ? `the only one that could take it does not serve: ${resolved.refusal}` : 'none fits'}). Name one: destExternalAdGroupId.` }
+  const cand = await candidateInCampaign(source.id, query)
+  if ('refusal' in cand) return cand
+  // The place named, by Amazon's ids: an ad group, or a campaign's one serving ad group.
+  let to: { adGroupId: string } | undefined
+  let destGroupWhy: string | null = null
+  const destGroupExt = a.destExternalAdGroupId?.trim() ?? ''
+  const destCampaignExt = a.destExternalCampaignId?.trim() ?? ''
+  if (destGroupExt) {
+    const g = (await adGroupsByExternalId([destGroupExt])).get(destGroupExt)
+    if (!g) return { refusal: `ad group ${destGroupExt} not found` }
+    if (destCampaignExt) {
+      const dest = await campaignByExternalId(destCampaignExt)
+      if (!dest || (await adGroupCampaigns([g.id])).get(g.id)?.id !== dest.id) return { refusal: `ad group ${destGroupExt} is not in campaign ${destCampaignExt}` }
+    }
+    to = { adGroupId: g.id }
+    destGroupWhy = 'named in the request'
+  } else if (destCampaignExt && destCampaignExt !== a.sourceExternalCampaignId) {
+    const dest = await campaignByExternalId(destCampaignExt)
+    if (!dest) return { refusal: `campaign ${destCampaignExt} not found` }
+    const groups = (await targetingAdGroups((await adGroupsOfCampaign(dest.id)).map((g) => g.id))).filter((g) => String(g.status) !== 'ARCHIVED')
+    const serving = groups.filter((g) => String(g.status) === 'ENABLED')
+    const one = serving.length === 1 ? serving[0] : groups.length === 1 ? groups[0] : null
+    if (!one) return { refusal: `campaign ${dest.name} has ${groups.length} ad groups: name the one (destExternalAdGroupId), or leave the place to the engine` }
+    to = { adGroupId: one.id }
+    destGroupWhy = `the one ad group of the campaign named`
   }
-  if (destNamed && resolved.chosen.campaignId !== dest.id) {
-    return { refusal: `The harvest destination for this term is in ${resolved.chosen.campaignName}, not ${dest.name}: name the ad group (destExternalAdGroupId).` }
+  const item: EngineItem = {
+    candidateId: cand.candidateId, match: 'EXACT',
+    ...(to ? { to } : {}),
+    ...(a.bidCents != null ? { bidCents: a.bidCents } : {}),
+    ...(a.negateSource != null ? { negateSource: a.negateSource } : {}),
+    ...(a.funnel != null ? { funnel: a.funnel } : {}),
   }
-  const ext = (await adGroupExternalIds([resolved.chosen.adGroupId])).get(resolved.chosen.adGroupId) ?? null
-  return { id: resolved.chosen.adGroupId, name: resolved.chosen.adGroupName, externalAdGroupId: ext, campaignId: resolved.chosen.campaignId, why: resolved.source === 'stored' ? 'the harvest destination stored for this scope' : 'the only ad group the harvest resolver offers' }
+  return { args: { op: 'harvest', items: [item], ...(a.why ? { why: a.why } : {}) }, source, destGroupWhy }
 }
 
-/**
- * AA-W2-7 — graduate-keyword's Claude limits: the kit's, and the highest starting bid a new keyword may get by rule. A
- * new keyword adds spend, so by default (0) every graduation waits for a person.
- */
-const GRADUATE_LIMITS = adKitLimits({ maxItems: 1 }, {
-  maxStartBidCents: z.number().int().min(0).max(100_000).default(0)
-    .describe('the highest starting bid, in minor units of the campaign\'s currency, a new keyword may get without a person; 0 = every new keyword waits for a person'),
-})
-
-/**
- * A5 — the keyword a graduate-keyword request would create, and what the approver must see — or why not. `rule` (the
- * dry run, not `execute`): AA-W2-7 — also the facts its limits are judged on when it may run by rule.
- */
-async function graduationPreview(args: Record<string, unknown>, opts: { rule?: { approvalId?: string | null } } = {}): Promise<ToolResult> {
-  const query = String(args.query ?? '').trim()
-  const sourceExternalCampaignId = String(args.sourceExternalCampaignId ?? '')
-  if (!query || !sourceExternalCampaignId) {
-    return { ok: false, error: 'query and sourceExternalCampaignId are required' }
-  }
-  // W3-1 — a source names this term's own graduation recommendation (the ad group it converted in), or it is refused.
-  const changeSource = sourceOf(args.source)
-  const sourceGroupId = typeof args.sourceExternalAdGroupId === 'string' ? args.sourceExternalAdGroupId.trim() : ''
-  const wrongSource = sourceRefusal(changeSource, recommendationIdFor.graduate(sourceGroupId, query))
-  if (wrongSource) return { ok: false, error: `Not queued: ${wrongSource}.` }
-  const destNamed = typeof args.destExternalCampaignId === 'string' && args.destExternalCampaignId.trim() !== ''
-  const source = await campaignByExternalId(sourceExternalCampaignId)
-  if (!source) return { ok: false, error: `campaign ${sourceExternalCampaignId} not found` }
-  // W3-1 — a graduation that carries a recommendation names the ad group it converted in, of that campaign, and the
-  // feed offers that recommendation now: the source cannot ride on a term it did not judge.
-  if (changeSource) {
-    if (!sourceGroupId) return { ok: false, error: 'Not queued: a graduation that carries a recommendation names the ad group the term converted in (sourceExternalAdGroupId).' }
-    if (!(await adGroupInCampaign(sourceGroupId, source.id))) return { ok: false, error: `Not queued: the source's ad group ${sourceGroupId} is not in campaign ${source.name}, where the term converted.` }
-    const notOffered = await notOfferedRefusal(changeSource)
-    if (notOffered) return { ok: false, error: `Not queued: ${notOffered}.` }
-  }
-  const destExternalCampaignId = String(args.destExternalCampaignId ?? sourceExternalCampaignId)
-  let campaign = destNamed ? await campaignByExternalId(destExternalCampaignId) : source
-  if (!campaign) return { ok: false, error: `campaign ${destExternalCampaignId} not found` }
-
-  // 4A (Owner decided 2026-10-06) — a pin does not stop it: it runs only once a person approves it, as his own click.
-
-  const existingIn = async (externalCampaignId: string) => prisma.adTarget.findMany({
-    where: {
-      isNegative: false,
-      kind: 'KEYWORD',
-      expressionType: 'EXACT',
-      expressionValue: { equals: query, mode: 'insensitive' },
-      adGroup: { campaign: { externalCampaignId } },
-    },
-    select: { expressionValue: true },
-    take: 1,
-  })
-  if ((await existingIn(destExternalCampaignId)).length > 0) {
-    return { ok: false, error: `an EXACT keyword for "${query}" already exists in the destination campaign` }
-  }
-
-  const group = await destinationAdGroup(args, query, source, campaign, destNamed)
-  if ('refusal' in group) return { ok: false, error: group.refusal }
-  if (group.campaignId !== campaign.id) {
-    // The resolver chose an ad group of another campaign (the request named none): that campaign is the destination.
-    const resolvedCampaign = await prisma.campaign.findFirst({ where: { id: group.campaignId }, select: { externalCampaignId: true } })
-    campaign = resolvedCampaign?.externalCampaignId ? await campaignByExternalId(resolvedCampaign.externalCampaignId) : null
-    if (!campaign) return { ok: false, error: 'the resolved destination campaign was not found' }
-    if ((await existingIn(resolvedCampaign!.externalCampaignId!)).length > 0) {
-      return { ok: false, error: `an EXACT keyword for "${query}" already exists in the destination campaign` }
+/** What an approver of a graduation reads on its card (and the fleet re-checks): the keyword, its place, its bid. */
+function graduationCard(query: string, destGroupWhy: string | null) {
+  return (preview: Record<string, unknown>) => {
+    const item = (Array.isArray(preview.items) ? preview.items[0] : null) as { market?: string; bidCents?: number | null; destination?: { kind: string; adGroup?: { id: string; name: string }; campaign?: { id: string; name: string }; key?: string; name?: string; how?: string } | null } | null
+    const d = item?.destination
+    return {
+      query,
+      suggestedBidCents: item?.bidCents ?? null,
+      destination: d?.kind === 'existing' ? { id: d.campaign?.id ?? null, name: d.campaign?.name ?? null, marketplace: item?.market ?? null } : { id: d?.key ? `new:${d.key}` : null, name: d?.name ?? null, marketplace: item?.market ?? null },
+      destinationAdGroup: d?.kind === 'existing' ? { id: d.adGroup?.id ?? null, name: d.adGroup?.name ?? null, why: destGroupWhy ?? d.how ?? null } : null,
+      alreadyExact: false,
     }
   }
-  const notSp = spOnlyRefusal(campaign)
-  if (notSp) return { ok: false, error: notSp }
-  // PB-6a (L2) — winners stay: a term already at home for its product (the products of the ad group it converted in that
-  // the destination advertises, with their sibling variants) is never created again elsewhere.
-  const sourceGroupExt = typeof args.sourceExternalAdGroupId === 'string' ? args.sourceExternalAdGroupId.trim() : ''
-  const sourceGroup = sourceGroupExt ? await adGroupInCampaign(sourceGroupExt, source.id) : null
-  const home = await sameProductHome(query, { destAdGroupId: group.id, source: { adGroupId: sourceGroup?.id ?? null, campaignId: source.id }, marketplace: campaign.marketplace })
-  if (home) {
-    return { ok: false, error: `"${query}" already lives as an exact keyword in ${home.campaign} › ${home.adGroup}, which advertises the same product, so it is not created again: a winner stays where it is.` }
-  }
+}
 
-  const metrics = await termMetrics(query, sourceExternalCampaignId)
-  // The applyHarvest bid formula: observed CPC, floored (cents).
-  const suggestedBidCents =
-    args.bidCents != null && Number.isFinite(Number(args.bidCents))
-      ? Math.max(BID_FLOOR_CENTS, Math.round(Number(args.bidCents)))
-      : metrics.clicks > 0
-        ? Math.max(BID_FLOOR_CENTS, Math.round(metrics.costCents / metrics.clicks))
-        : 50
-  const reach = await checkLiveReach({
-    campaignId: campaign.id,
-    marketplace: campaign.marketplace,
-    changes: [{ field: 'bid', valueCents: suggestedBidCents }],
-  })
-  if (reach.reach === 'refused') return { ok: false, error: reachRefusal(reach) }
-  const stored = storedReach(reach)
-  const currency = campaignCurrency(campaign)
-  const bound = await alsoChangedBy(campaign.id)
-  const rule = opts.rule
-    ? await graduationRuleFacts({ query, source, sourceExternalCampaignId, sourceExternalAdGroupId: typeof args.sourceExternalAdGroupId === 'string' ? args.sourceExternalAdGroupId.trim() : '', destination: campaign, group, suggestedBidCents, approvalId: opts.rule.approvalId })
-    : null
-  return {
-    ok: true,
-    preview: {
-      action: 'graduate-keyword',
-      query,
-      destination: { id: campaign.id, name: campaign.name, marketplace: campaign.marketplace },
-      destinationAdGroup: { id: group.id, name: group.name, externalAdGroupId: group.externalAdGroupId, why: group.why },
-      currency,
-      suggestedBidCents,
-      metrics,
-      alreadyExact: false,
-      reach: stored,
-      reachNote: reachNote(stored),
-      alsoChangedBy: bound.automations,
-      ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
-      ...(rule ?? {}),
-      ...sourcePreview(changeSource),
-      effect: `Creates an EXACT keyword "${query}" at ${amountLabel(suggestedBidCents, currency)} in ${campaign.name} › ${group.name}; the term produced ${metrics.orders} orders on ${amountLabel(metrics.costCents, currency)} spend (last ${metrics.windowDays}d). The source ad group is not negated here.`,
-    },
-  }
+/** What an older graduation (before the engine) holds now, in the shape of its `after` (its undo guard). */
+async function legacyGraduationNow(change: ToolChange): Promise<unknown> {
+  const targetId = String((change.after as { targetId?: unknown } | null)?.targetId ?? '')
+  const t = await prisma.adTarget.findFirst({ where: { id: targetId }, select: { bidCents: true } })
+  return { targetId, bidCents: t?.bidCents ?? null }
 }
 
 /**
- * AA-W2-7 — what a graduation's dry run adds when it may run by rule: the kit's facts of the new keyword where it lands
- * (the destination ad group's strategy and bid band, today; a new keyword counts as a raise), the write gate's answer as
- * a run by rule, and the term's record where it converted against the strategy's "Harvest a search term when" group
- * there (its ad group when named, else its campaign: the stricter group across the campaign's ad groups).
+ * C2 — undo of a graduation: the engine's (apply-harvest op undo: its blocks lifted, then its keyword paused); one made
+ * before the engine, the same way through harvest-search-term op undo. The recommendation it settled is offered again.
  */
-async function graduationRuleFacts(input: {
-  query: string; source: CampaignRow; sourceExternalCampaignId: string; sourceExternalAdGroupId: string
-  destination: CampaignRow; group: { id: string; externalAdGroupId: string | null }; suggestedBidCents: number
-  approvalId?: string | null
-}) {
-  const facts = await ruleFactsFor({
-    tool: 'graduate-keyword',
-    limits: GRADUATE_LIMITS,
-    // The new keyword is the term where it lands: its ad group's strategy and band, and one entity per term (C6).
-    items: [{
-      entity: { kind: 'searchTerm', query: input.query, externalCampaignId: input.destination.externalCampaignId ?? '', externalAdGroupId: input.group.externalAdGroupId },
-      change: { field: 'bid', fromCents: null, toCents: input.suggestedBidCents },
-    }],
-    writes: [{ label: `campaign "${input.destination.name}"`, campaignId: input.destination.id, adGroupId: input.group.id, marketplace: input.destination.marketplace, changes: [{ field: 'bid', valueCents: input.suggestedBidCents }] }],
-    approvalId: input.approvalId,
-  })
-  const sourceGroup = input.sourceExternalAdGroupId ? await adGroupInCampaign(input.sourceExternalAdGroupId, input.source.id) : null
-  const harvest = input.source.marketplace
-    ? await harvestForScope(input.source.marketplace, sourceGroup ? { adGroupId: sourceGroup.id } : { campaignIds: [input.source.id] })
-    : null
-  const where = sourceGroup ? `ad group "${sourceGroup.name}"` : `campaign "${input.source.name}"`
-  const ruleHarvest: RuleHarvest | null = harvest
-    ? { harvestMinOrders: harvest.group.minOrders, harvestMinClicks: harvest.group.minClicks, harvestMaxAcosPct: harvest.group.maxAcosPct, harvestWindowDays: harvest.group.windowDays, at: where, from: strategyWords(harvest.source) }
-    : null
-  const ruleRecord = harvest
-    ? await termRecord(input.query, { externalCampaignId: input.sourceExternalCampaignId, externalAdGroupId: sourceGroup ? input.sourceExternalAdGroupId : null }, harvest.group.windowDays)
-    : null
-  const limitsNote = [...facts.limitsNote]
-  if (ruleHarvest && ruleRecord) {
-    const currency = campaignCurrency(input.source)
-    limitsNote.push(`Harvest a search term when: at least ${ruleHarvest.harvestMinOrders} orders and ${ruleHarvest.harvestMinClicks} clicks${ruleHarvest.harvestMaxAcosPct != null ? `, ACoS at most ${ruleHarvest.harvestMaxAcosPct} %` : ''}, over ${ruleHarvest.harvestWindowDays} days (${ruleHarvest.from}); this term in its ${where}: ${recordWords(ruleRecord, currency)}.`)
-  }
-  return { ...facts, limitsNote, ruleHarvest, ruleRecord }
-}
+export const GRADUATE_UNDO: ToolUndo = aliasUndo(legacyGraduationNow, unsettleChange)
 
-/**
- * AA-W2-7 — graduate-keyword's own check, after the common ones (pure): the starting bid within Claude's limit, and the
- * term's record where it converted meets the strategy's harvest group there (the harvest engine's bar, meetsHarvest: no
- * sales is no ACoS). No group there: a person decides.
- */
-function graduationRuleRefusal(preview: unknown, limits: Record<string, unknown>): string | null {
-  const p = preview as { query?: string; suggestedBidCents?: number; currency?: string; ruleHarvest?: RuleHarvest | null; ruleRecord?: TermRecord | null }
-  const currency = p.currency ?? 'EUR'
-  const max = typeof limits.maxStartBidCents === 'number' ? limits.maxStartBidCents : 0
-  const bid = Number(p.suggestedBidCents)
-  if (!(bid <= max)) {
-    return `its starting bid ${amountLabel(bid, currency)} is above the ${amountLabel(max, currency)} this tool's limits let a new keyword start at without a person${max === 0 ? ' (0: every new keyword waits for a person)' : ''}; a person decides`
-  }
-  const h = p.ruleHarvest
-  if (!h) return `the ads strategy sets no "Harvest a search term when" group where "${p.query}" converted: a keyword is added by rule only for a term that meets one; a person decides`
-  const r = p.ruleRecord
-  if (!r || r.windowDays !== h.harvestWindowDays) return `the term's record over the strategy's ${h.harvestWindowDays} days was not read for this preview; a person decides`
-  const acos = r.salesCents > 0 ? Math.round((r.spendCents / r.salesCents) * 10_000) / 100 : null
-  const short = [
-    r.orders < h.harvestMinOrders ? `fewer than ${h.harvestMinOrders} orders` : null,
-    r.clicks < h.harvestMinClicks ? `fewer than ${h.harvestMinClicks} clicks` : null,
-    h.harvestMaxAcosPct != null && acos != null && acos > h.harvestMaxAcosPct ? `an ACoS of ${acos} %, above ${h.harvestMaxAcosPct} %` : null,
-  ].filter((x): x is string => !!x)
-  if (!short.length) return null
-  return `"${p.query}" has ${recordWords(r, currency)} in its ${h.at}: ${short.join(', ')}, so it does not meet "Harvest a search term when" (${h.from}); a person decides`
-}
-
-/** A5 — the starting facts an approved graduation must still find. */
-const GRADUATION_MATERIAL = ['suggestedBidCents', 'destination', 'destinationAdGroup', 'alreadyExact', 'reach'] as const
-
-/**
- * C2 — undo of a graduation: the keyword stays at Amazon (Nexus never pauses or archives an ad, d3); its bid goes down
- * to the 5¢ floor through set-target-bid, which stops it winning auctions. Partly reversible: it was live meanwhile.
- */
-export const GRADUATE_UNDO: ToolUndo = {
-  async current(change) {
-    const targetId = String((change.after as { targetId?: unknown } | null)?.targetId ?? '')
-    const t = await prisma.adTarget.findFirst({ where: { id: targetId }, select: { bidCents: true } })
-    return { targetId, bidCents: t?.bidCents ?? null }
-  },
-  request(change) {
-    const targetId = (change.after as { targetId?: unknown } | null)?.targetId
-    if (typeof targetId !== 'string' || !targetId) return { refusal: 'This change does not name the keyword it created.' }
-    return { tool: 'set-target-bid', args: { targetId, proposedBidCents: BID_FLOOR_CENTS, why: 'undo of a graduation: the keyword stays (Nexus never pauses or archives), its bid goes to the floor' } }
-  },
-  undone: unsettleChange,
+const parseGraduate = (raw: Record<string, unknown>): GraduateArgs | { error: string } => {
+  const parsed = GRADUATE_INPUT.safeParse(raw)
+  return parsed.success ? parsed.data : { error: parsed.error.issues.map((i) => `${i.path.join('.') || 'arguments'}: ${i.message}`).join('; ') }
 }
 
 const graduateKeyword: AgentTool = {
-  name: 'graduate-keyword',
+  name: ALIAS.graduate,
   title: 'Add an exact keyword',
-  input: z.object({
-    query: z.string().trim().min(1).describe('the search term to promote'),
-    sourceExternalCampaignId: z.string().min(1).describe('Amazon campaign id it converted in'),
-    sourceExternalAdGroupId: z.string().optional().describe('Amazon ad group id it converted in (resolves the destination when none is named)'),
-    destExternalCampaignId: z.string().min(1).optional().describe('campaign to add it to (default: the source, or the resolved destination\'s)'),
-    destExternalAdGroupId: z.string().optional().describe('ad group to add it to (default: the harvest destination the account resolves)'),
-    bidCents: z.coerce.number().positive().optional().describe('starting bid in minor units of the campaign\'s currency (default: its cost per click)'),
-    why: z.string().trim().max(300).optional().describe('why, in a sentence: shown to the person who approves it and kept in the ads audit'),
-    source: sourceArg,
-  }),
+  input: GRADUATE_INPUT,
   requires: [F.adsCampaignsManage, FIELDS.financialsAdspendView],
-  restrictedFields: LIMIT_FACTS_MONEY as Readonly<Record<string, FieldPermission>>,
+  restrictedFields: { ...(HARVEST_MONEY as Readonly<Record<string, FieldPermission>>), suggestedBidCents: FIELDS.financialsAdspendView },
   category: 'advertising',
   riskTier: 'high',
   readOnly: false,
@@ -736,67 +586,44 @@ const graduateKeyword: AgentTool = {
   // A5 — an approved keyword is created at Amazon at once (no cancel window).
   openWorld: true,
   reversibility: 'partial',
-  // AA-W2-7 — the business may let it run by its rule, only for a term that meets the ads strategy's harvest group.
-  maxClaudeTrust: 'auto',
-  strategyBound: 'amazon-ads',
-  limits: GRADUATE_LIMITS,
-  withinLimits: (preview, limits) => ruleRefusal(preview, limits) ?? graduationRuleRefusal(preview, limits),
+  // The harvest engine's ceiling (apply-harvest): always a person.
+  maxClaudeTrust: 'ask',
   undo: GRADUATE_UNDO,
   description:
-    'Promote a converting search term to an EXACT keyword in an Amazon Sponsored Products ad group (the one named, or '
-    + 'the harvest destination the account resolves). Nothing changes until a person approves it: in Nexus, or the '
-    + 'person who asked confirms it in Claude with their authenticator code when the business set it so — unless the '
-    + 'business lets it run by its rule: only for a term whose record meets the ads strategy\'s "Harvest a search term '
-    + 'when" group where it converted, at a starting bid inside its limits and the destination\'s bid band (by default '
-    + 'every new keyword waits for a person). The preview '
-    + 'shows the starting bid in the campaign\'s currency (default: the term\'s cost per click), the term\'s record, '
-    + 'whether it lands live at Amazon or in sandbox, and each limit with where it comes from. Refused, and not queued, '
-    + 'when the exact keyword exists, or when Amazon\'s write gate would refuse it. The source ad group is not negated. '
-    + 'Undo lowers the keyword to the 5-cent floor (it is never paused or archived). harvest-search-term does this and the '
-    + 'source negative in one step; add-ad-targets adds many keywords and product or category targets to one ad group.',
+    'Harvest a converting Amazon Sponsored Products search term as an EXACT keyword, named by Amazon\'s ids of the campaign '
+    + '(and ad group) it converted in — the same change set as apply-harvest, from the same harvest engine as the Keyword '
+    + 'Harvest page (the engines\' graduation recommendations and the agent fleet ask with this name): the keyword in the ad '
+    + 'group named (destExternalAdGroupId, or a campaign\'s one ad group) or its suggested place, at the start bid named or '
+    + 'the bid brain\'s goal bid; AND the negative exact in EVERY ad group of the product where the term ran (negateSource '
+    + 'false leaves them running; the Owner\'s saved negateAtSource=false wins unless the request says true); AND the funnel '
+    + 'blocks (negative exact in the product\'s phrase, broad and auto ad groups; funnel false leaves them out) — one '
+    + 'approval. Nothing changes until a person approves it in Nexus; it never runs by rule, and Claude cannot approve it. '
+    + 'Refused, and not queued, when the term has no product of its own there, is a keyword of the product already, is '
+    + 'harvested or waiting already, or Amazon\'s write gate would refuse it. Undo (undo-change) lifts the blocks it added, '
+    + 'then pauses its keyword (never archived). For several terms, a phrase keyword, a new campaign or a new portfolio: '
+    + 'apply-harvest.',
   async handler(args, ctx) {
-    return graduationPreview(args, { rule: { approvalId: ctx.approvalId } })
+    const a = parseGraduate(args)
+    if ('error' in a) return { ok: false, error: a.error }
+    const e = await graduationEngineArgs(a)
+    if ('refusal' in e) return { ok: false, error: `Not queued: ${e.refusal}.` }
+    const changeSource = sourceOf(a.source)
+    return aliasPreview(ALIAS.graduate, e.args, ctx, { query: a.query, sourceExternalCampaignId: a.sourceExternalCampaignId, candidateId: e.args.items[0].candidateId }, (p) => ({
+      ...graduationCard(a.query.trim(), e.destGroupWhy)(p),
+      currency: campaignCurrency(e.source),
+      ...sourcePreview(changeSource),
+    }))
   },
   async execute(args, ctx) {
-    const fresh = await graduationPreview(args)
-    const refusal = recheck(ctx, fresh, GRADUATION_MATERIAL)
-    if (refusal) return notRun(refusal)
-    const p = fresh.preview as { query: string; suggestedBidCents: number; destinationAdGroup: { id: string }; reach: StoredReach; effect: string }
-    const run = approvedRun(ctx, String(args.why ?? '') || p.effect)
-    if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
-    const made = await createKeywordLocal({
-      adGroupId: p.destinationAdGroup.id,
-      keywordText: p.query,
-      matchType: 'EXACT',
-      bidEur: p.suggestedBidCents / 100,
-      userId: run.actor,
-      evidence: withSource({ metric: 'claudeRequest', note: run.reason }, sourceOf(args.source)),
-      manual: run.manual, // 4A
-      confirmOwnLimits: run.confirmOwnLimits, // 4A
-    })
-    if (made.existed) return notRun(`Not run: an EXACT keyword for "${p.query}" appeared in that ad group meanwhile. Nothing changed.`)
-    await settleSources([sourceOf(args.source)], run.changeSetId)
-    const live = p.reach.reach === 'live'
-    const reachedAmazon = live && made.externalTargetId != null && !made.denied && !made.pushError
-    return {
-      ok: true,
-      data: {
-        targetId: made.id,
-        bidCents: p.suggestedBidCents,
-        reach: p.reach,
-        reachedAmazon,
-        changeSetId: run.changeSetId,
-        note: !live
-          ? 'Sandbox: recorded in Nexus only; nothing reached Amazon.'
-          : reachedAmazon
-            ? 'Created at Amazon.'
-            : `Created in Nexus only: ${made.denied ? `Amazon's write gate refused it (${made.denied.reason})` : made.pushError ? `Amazon's answer was an error (${made.pushError})` : 'Amazon returned no id for it'}.`,
-      },
-      change: {
-        before: { changeSetId: run.changeSetId, keyword: null, ...sourcesRecord([sourceOf(args.source)]) },
-        after: { targetId: made.id, bidCents: p.suggestedBidCents },
-      },
-    }
+    const a = parseGraduate(args)
+    if ('error' in a) return notRun(`Not run: ${a.error}.`)
+    const e = await graduationEngineArgs(a)
+    if ('refusal' in e) return notRun(`Not run: ${e.refusal}.`)
+    const out = await aliasExecute(e.args, ctx)
+    if (!out.ok || !out.change) return out
+    const changeSource = sourceOf(a.source)
+    await settleSources([changeSource], ctx.approvalId)
+    return { ...out, change: { ...out.change, before: { ...(out.change.before as Record<string, unknown>), ...sourcesRecord([changeSource]) } } }
   },
 }
 

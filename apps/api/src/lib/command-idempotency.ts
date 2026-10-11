@@ -96,6 +96,9 @@ const COMMAND_SCOPES: Record<string, string> = {
   '/api/advertising/automation/brain/bid-brain/enrollment': 'brain-bid-enrollment',
   // Bid page R4 — one Undo of approved asks per click: a resend replays its answer, never puts back twice.
   '/api/advertising/bid-rules/:id/asks/undo': 'bid-ask-undo',
+  // Keyword Harvest page (lane HCORE) — a harvest change set and its undo: one apply-harvest request each.
+  '/api/advertising/harvest/apply': 'harvest-apply',
+  '/api/advertising/harvest/undo': 'harvest-undo',
   '/api/advertising/automation/brain/requests/:approvalId/decide': 'brain-request-decide',
   // Negative Targeting page (lane NWRITE) — one request (or one decision, one skip) per press, even when the answer is
   // lost and the page sends it again: a double click never asks twice, approves twice or skips twice.

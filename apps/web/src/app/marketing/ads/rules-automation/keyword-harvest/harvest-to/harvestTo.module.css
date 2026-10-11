@@ -1,0 +1,179 @@
+/*
+ * "Harvest to…" window (Keyword Harvest page, lane HTO, 2026-10-11) — layout only, design-system tokens only. Every
+ * control is the design system's own; light only, like the rest of the ads console.
+ */
+
+.body {
+  min-width: 0;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+/* To: the picker takes the row; "Each its own place" sits after it and wraps under it on a phone. */
+.toRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.grow {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+/* The new campaign's fields (one Portfolio field: a list, or a new portfolio's name + its monthly cap): side by side on a
+   desktop, the name taking the room; one under the other on a phone. */
+.fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--nds-space-12);
+  min-width: 0;
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+}
+
+.fields > * {
+  flex: 1 1 150px;
+  min-width: 0;
+}
+
+.fields > .wide {
+  flex: 3 1 260px;
+}
+
+/* "New campaign: <why>" under To (M7): a held new campaign said up front, the fix as a link. */
+.hold {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+  margin: calc(-1 * var(--nds-space-6)) 0 0;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fix {
+  color: var(--nds-text-link);
+}
+
+/* "Block where found" sits beside As, on its control line; a saved setting's why under it. */
+.check {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: var(--nds-space-2);
+  min-height: 100%;
+}
+
+/* As and In source share a row. */
+.pair {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--nds-space-12) var(--nds-space-24);
+  min-width: 0;
+}
+
+/* "All to €x · Set   CPC + x % · Set" above the table. */
+.bulk {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.bulkPair {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.bulkInput {
+  width: 72px;
+}
+
+/* The term cell: the term on one line (a held chip after it), and on a phone its numbers or its place on a 2nd line. */
+.term {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.termLine {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.ellipsis {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip {
+  flex: none;
+  display: inline-flex;
+}
+
+.sub {
+  min-width: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-xs-plus);
+}
+
+.leftOut {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+.muted {
+  margin: 0;
+  color: var(--nds-text-2);
+}
+
+.bid {
+  width: 72px;
+}
+
+/* The term table (a DS table in the review's own box: columns size to their words, a wide table scrolls inside it). */
+.terms {
+  min-width: 0;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* A review row's place: bounded, so a long path is cut in its middle (the whole path on hover and focus) instead of
+   pushing What / New / Note out of the window. */
+.where {
+  display: block;
+  min-width: 0;
+  max-width: 400px;
+}
+
+@media (max-width: 760px) {
+  .where {
+    max-width: 200px;
+  }
+}

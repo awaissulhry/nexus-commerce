@@ -197,9 +197,12 @@ describe('W3-1 — apply-ad-recommendations', { timeout: TIMEOUT }, () => {
     expect(await bidOf('t-it')).toBe(45)
   })
 
-  it('a graduation starts at the term\'s cost per click, frozen; an override is the value that lands and the one judged', async () => {
+  it('a graduation asks the harvest engine at its one start bid (none frozen here; an override is); a bid override is the value that lands and the one judged', async () => {
     const planned = await inside(() => planRecommendations({ recommendationIds: ['grad:EXT-g-c-it:race jacket xl'], days: 30, why: 'test graduation' }))
-    expect(planned).toMatchObject({ ok: true, steps: [{ tool: 'graduate-keyword', args: { query: 'race jacket xl', sourceExternalCampaignId: 'EXT-c-it', sourceExternalAdGroupId: 'EXT-g-c-it', bidCents: 65, source: { id: 'grad:EXT-g-c-it:race jacket xl' } } }] })
+    expect(planned).toMatchObject({ ok: true, steps: [{ tool: 'graduate-keyword', args: { query: 'race jacket xl', sourceExternalCampaignId: 'EXT-c-it', sourceExternalAdGroupId: 'EXT-g-c-it', source: { id: 'grad:EXT-g-c-it:race jacket xl' } } }] })
+    expect((planned as { steps: Array<{ args: Record<string, unknown> }> }).steps[0].args).not.toHaveProperty('bidCents')
+    const own = await inside(() => planRecommendations({ recommendationIds: ['grad:EXT-g-c-it:race jacket xl'], overrides: [{ id: 'grad:EXT-g-c-it:race jacket xl', proposedBidCents: 45 }], days: 30, why: 'test graduation' }))
+    expect(own).toMatchObject({ ok: true, steps: [{ tool: 'graduate-keyword', args: { bidCents: 45 } }] })
     const { isError, answer } = await call('apply-ad-recommendations', { recommendationIds: ['bid:t-bb'], overrides: [{ id: 'bid:t-bb', proposedBidCents: 50 }], why: 'a bid of my own' })
     expect(isError, JSON.stringify(answer)).toBe(false)
     const [step] = await stepsOf(answer.approvalId) as Array<{ toolName: string; args: Answer; preview: Answer }>
