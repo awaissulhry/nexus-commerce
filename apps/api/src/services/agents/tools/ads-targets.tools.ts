@@ -14,51 +14,46 @@
  *                            (both buy it), never by rule once accepted — as build-sp-wizard-campaigns. Another
  *                            product buying the same words is allowed (rule 3). Undo: bulk-ad-bid-change lowers each to
  *                            the stop bid (they stay at Amazon: Nexus never archives in an undo).
- *   harvest-search-term      a search term made a keyword (an ASIN: a product target) in the harvest destination, and an
- *                            exact negative of it in the ad group it ran in, ONE step — graduate-keyword and
- *                            create-negative-keyword together. The keyword is created first; the source is negated only
- *                            once it stands. Never "harvested away": a term that converts in its source is not negated
- *                            there (the Owner's rule 2: ask with negateSource false — it keeps running there too; once its
- *                            new home wins, add-negative-targets closes the old place, the proven handover). A term at
- *                            home already for the same product is not created again (PB-6a L2). It behaves exactly like
- *                            graduate-keyword for spend (the money family rule: a lever an older tool has without the
- *                            code): no code, by rule only inside its limits. Undo: its own op undo — the keyword to the
- *                            stop bid and the source negative retired, both by this tool.
+ *   harvest-search-term      (Keyword Harvest page rebuild, lane HMCP, 2026-10-11) one search term harvested by the ONE
+ *                            harvest engine, named by where it ran (or its candidateId): the same change set, preview,
+ *                            approval, run and undo as apply-harvest (ads-harvest-alias.ts) — the keyword, the negative in
+ *                            every ad group of the product where it ran, the funnel blocks; always a person (ceiling ask).
+ *                            Its own older rules (one source, never negating a converting source, the 60-day CPC bid, the
+ *                            stop-bid undo) are gone. Undo: the engine's (blocks lifted, then the keyword paused).
  *   set-harvest-destination  where a harvest lands for a scope (an ad group, a campaign, a portfolio, a line, a market or the
  *                            account) and a match type — the Keyword Harvest page's own stored destination
  *                            (harvest-destination.service.ts saveHarvestDestination, deleteHarvestDestination). Nexus only:
- *                            nothing is sent to Amazon; the harvest rules, harvest-search-term and graduate-keyword read
- *                            it. Undo: the destination it replaced, set again (or removed).
+ *                            nothing is sent to Amazon; the harvest engine reads it for every harvest (the page,
+ *                            apply-harvest, harvest-search-term, graduate-keyword, the rules, the brain). Undo: the
+ *                            destination it replaced, set again (or removed).
  *
- * Every one follows ads-change-kit.ts — previewed first; refused, and not queued, when the write gate would refuse it
- * (set-harvest-destination is Nexus only: no gate is asked, its basis is compared again in `execute`); run only as an
- * approved request, as the approver, with changeSetId = the approval on every write and every row it makes; re-checked
- * in `execute` — and is strategy-bound (ads-autonomy-kit.ts): by default nothing runs alone (maxItems 0, no market).
+ * add-ad-targets and set-harvest-destination follow ads-change-kit.ts — previewed first; refused, and not queued, when the
+ * write gate would refuse it (set-harvest-destination is Nexus only: no gate is asked, its basis is compared again in
+ * `execute`); run only as an approved request, as the approver, with changeSetId = the approval on every write and every
+ * row it makes; re-checked in `execute` — and are strategy-bound (ads-autonomy-kit.ts): by default nothing runs alone
+ * (maxItems 0, no market). harvest-search-term follows the harvest engine (harvest/tool.ts).
  */
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import prisma from '../../../db.js'
 import { createKeywordLocal, createTargetLocal } from '../../advertising/ads-create.service.js'
-import { adGroupPlaces, targetingAdGroups, TARGETING_CAMPAIGN_SELECT, type TargetingGroup } from '../../advertising/ads-targeting-lookup.service.js'
-import { updateAdTargetWithSync } from '../../advertising/ads-mutation.service.js'
-import { writeNegativeKeyword, writeNegativeProductTarget } from '../../advertising/ads-negative-kw.service.js'
-import { isAsin, protectedNegativeRefusal } from '../../advertising/ads-negation-policy.js'
+import { adGroupPlaces, targetingAdGroups, type TargetingGroup } from '../../advertising/ads-targeting-lookup.service.js'
+import { isAsin } from '../../advertising/ads-negation-policy.js'
 import { normaliseNegTerm } from '../../advertising/ads-protect-converting.js'
-import { familyAdGroups, negativeBlocksTerm, positivesIn, productFamilyOf, sameProductHome } from '../../advertising/ads-winner-lock.js'
-import { meetsHarvest, searchTermTotals } from '../../advertising/ads-harvest.service.js'
-import { harvestForScope } from '../../advertising/ads-strategy/terms.js'
-import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
+import { familyAdGroups, negativeBlocksTerm, positivesIn, productFamilyOf } from '../../advertising/ads-winner-lock.js'
 import {
-  HV_DEST_ACCOUNT, deleteHarvestDestination, loadDestinationGraph, resolveDestination, resolveStoredDestinations, saveHarvestDestination, sourceLines, storedDestinationRefusal, storedHarvestDestination,
+  HV_DEST_ACCOUNT, deleteHarvestDestination, saveHarvestDestination, storedHarvestDestination,
   type HvCreateType, type HvDestGrain,
 } from '../../advertising/harvest-destination.service.js'
+import { HARVEST_MONEY } from '../../advertising/harvest/constants.js'
 import { STEP_UP_NEEDS, type StepUp } from '../step-up-approval.js'
 import { addsSpendWords, DAY_TO_DAY_NO_CODE, needsCode } from './ads-code-rule.js'
-import { alsoChangedBy, approvedRun, BY_RULE_WORDS, canonical, gateRefusal, notRun, reachNote, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, STOP_MIN_CENTS, type RuleWrite, type StoredReach } from './ads-change-kit.js'
-import { adKitLimits, LIMIT_FACTS_MONEY, limitFactsOf, type KitItem } from './ads-autonomy-kit.js'
+import { alsoChangedBy, approvedRun, BY_RULE_WORDS, gateRefusal, notRun, reachNote, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, STOP_MIN_CENTS, type RuleWrite, type StoredReach } from './ads-change-kit.js'
+import { adKitLimits, LIMIT_FACTS_MONEY, type KitItem } from './ads-autonomy-kit.js'
 import { amountLabel, campaignCurrency } from './ads-tool-guards.js'
-import { convertingWords, fingerprint, named, otherProductWords, placeWords, plural, productRootsOf, reachOver, spendGate, termRulesFor, type Handover } from './ads-targeting-kit.js'
-import { PLAN_TOOL, type AgentTool, type FieldPermission, type ToolChange, type ToolContext, type ToolResult, type ToolUndo } from '../tool-types.js'
+import { fingerprint, named, placeWords, plural, reachOver, spendGate } from './ads-targeting-kit.js'
+import { aliasExecute, aliasPreview, aliasUndo, aliasUndoExecute, aliasUndoPreview, candidateInAdGroup, namedCandidate, type EngineItem } from './ads-harvest-alias.js'
+import type { AgentTool, FieldPermission, ToolChange, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
 
 const TOOL = { add: 'add-ad-targets', harvest: 'harvest-search-term', destination: 'set-harvest-destination' } as const
 /** The most targets one request adds (the tool contract's bound for a list), as ONE step. */
@@ -66,15 +61,12 @@ const MAX_TARGETS = 250
 /** At most this many lines are listed in a preview; the rest are counted. */
 const LINES_SHOWN = 20
 /**
- * The floor a target born at the floor starts at: the lowest bid a Claude bid change takes (set-target-bid,
- * graduate-keyword's undo), so set-target-bid or bulk-ad-bid-change can raise it later (a bid at 3 cents or less without
+ * The floor a target born at the floor starts at: the lowest bid a Claude bid change takes (set-target-bid), so set-target-bid or bulk-ad-bid-change can raise it later (a bid at 3 cents or less without
  * a no-pause memory is never raised by them: ads-tool-guards.ts suppressionOf).
  */
 const FLOOR_CENTS = STOP_MIN_CENTS
 /** Amazon's most words in a keyword. */
 const KEYWORD_MAX_WORDS = 10
-/** A harvest's record of its term in its source, and its own starting bid: graduate-keyword's window (METRIC_WINDOW_DAYS). */
-const RECORD_WINDOW_DAYS = 60
 
 const ID = z.string().trim().min(1).max(64)
 const ASIN = z.string().trim().toUpperCase().regex(/^B0[A-Z0-9]{8}$/, 'an ASIN is B0 and 8 letters or digits')
@@ -459,371 +451,49 @@ const addAdTargets: AgentTool = {
 
 const HARVEST_INPUT = z.object({
   op: z.enum(['harvest', 'undo']).default('harvest')
-    .describe('harvest (default): the term made a keyword in its destination, and negated in the ad group it ran in; undo: put back a harvest this tool made (its keyword lowered to the stop bid, its source negative retired)'),
+    .describe('harvest (default): the term harvested as ONE change set — the keyword, its negative in every ad group of the product where it ran, the funnel blocks; undo: put back a harvest this tool made before the harvest engine (its negative retired, then its keyword paused). A harvest of the engine is put back by apply-harvest op undo'),
   query: z.string().trim().min(1).max(80).optional().describe('harvest: the search term (query in ad-search-terms); an ASIN becomes a product target'),
-  sourceAdGroupId: ID.optional().describe('harvest: the ad group it ran in (adGroupId in ad-search-terms)'),
-  destAdGroupId: ID.optional().describe('harvest: the ad group the keyword goes into (Nexus id); default: the harvest destination stored for the source (set-harvest-destination), else the only one the harvest resolver offers'),
-  matchType: MATCH.optional().describe('harvest: the new keyword\'s match type (default EXACT; an ASIN is a product target)'),
-  bidCents: BID.optional().describe("harvest: its starting bid in minor units of the campaign's currency (default: the term's cost per click in its source over the last 60 days, at least 5)"),
+  sourceAdGroupId: ID.optional().describe('harvest: an ad group it ran in (adGroupId in ad-search-terms): it names the product whose own campaigns the term goes into; every ad group of that product where it ran is a source'),
+  candidateId: z.string().trim().min(5).max(300).optional().describe('harvest: the term as harvest-candidates names it (market|productId|term), instead of query and sourceAdGroupId'),
+  destAdGroupId: ID.optional().describe('harvest: the ad group the keyword goes into (Nexus id, one of the product\'s own: harvest-destinations); default: the suggested place'),
+  matchType: z.enum(['EXACT', 'PHRASE']).optional().describe('harvest: the keyword\'s match type (default EXACT; an ASIN is a product target)'),
+  bidCents: BID.optional().describe("harvest: its start bid in minor units of the market's currency (default: the bid brain's goal bid, else the term's cost per click inside the strategy's bid limits)"),
   negateSource: z.boolean().optional()
-    .describe('harvest: an exact negative of the term in the ad group it ran in (default true, or the stored destination\'s own choice). A term that converts there is never negated: ask with false and it keeps running there too'),
-  changeSetId: ID.optional().describe('undo: the approvalId of the harvest to put back'),
-  keywordId: ID.optional().describe('undo: the keyword (or product target) that harvest created'),
-  negativeId: ID.optional().describe('undo: the source negative that harvest created, when it made one'),
+    .describe('harvest: false leaves the sources running; true blocks them even where the Owner\'s saved harvest place says not to (default: the negative in every source, unless his saved place says not to)'),
+  funnel: z.boolean().optional().describe('harvest: false leaves the funnel blocks out (default: exact → negative exact in the product\'s phrase, broad and auto ad groups; phrase → negative phrase in broad and auto)'),
+  changeSetId: ID.optional().describe('undo: the approvalId of the harvest to put back (undo-change fills it in)'),
+  keywordId: ID.optional().describe('undo: the keyword (or product target) that harvest made'),
+  negativeId: ID.optional().describe('undo: a harvest made before the harvest engine — the one source negative it made'),
   why: whyArg,
 })
 type HarvestArgs = z.infer<typeof HARVEST_INPUT>
 
-/**
- * harvest-search-term's code decision, in ONE place: the Owner's code rule (ads-code-rule.ts) makes a harvest a day-to-day
- * change — its keyword is graduate-keyword's lever, and its source negative only lowers spend. Its undo lifts only the
- * negative this tool's own harvest made, as undo-ad-change retires what a request made. Every raise is in `raises` either
- * way, and a person's approval sends it.
- */
-function harvestStepUp(op: 'harvest' | 'undo', raises: boolean): { stepUp?: StepUp } {
-  // Nothing that adds spend (an undo that lifts no negative), nothing to approve with a code.
-  if (!raises || !needsCode('harvest-search-term')) return {}
-  return { stepUp: { what: op === 'harvest' ? 'adds a harvested keyword that starts spending' : 'lifts the negative a harvest made', raises: ['Spend'], needs: STEP_UP_NEEDS, how: ADD_HOW } }
+/** The engine's change set this request is: the candidate it names, and the choices it makes. */
+async function harvestEngineArgs(a: HarvestArgs): Promise<{ args: { op: 'harvest'; items: EngineItem[]; why?: string } } | { refusal: string }> {
+  const cand = a.candidateId
+    ? namedCandidate(a.candidateId)
+    : a.query && a.sourceAdGroupId
+      ? await candidateInAdGroup(a.sourceAdGroupId, a.query)
+      : { refusal: 'name the term: candidateId (harvest-candidates), or query and sourceAdGroupId (ad-search-terms)' }
+  if ('refusal' in cand) return cand
+  const item: EngineItem = {
+    candidateId: cand.candidateId,
+    ...(a.destAdGroupId ? { to: { adGroupId: a.destAdGroupId } } : {}),
+    ...(a.matchType ? { match: a.matchType } : {}),
+    ...(a.bidCents != null ? { bidCents: a.bidCents } : {}),
+    ...(a.negateSource != null ? { negateSource: a.negateSource } : {}),
+    ...(a.funnel != null ? { funnel: a.funnel } : {}),
+  }
+  return { args: { op: 'harvest', items: [item], ...(a.why ? { why: a.why } : {}) } }
 }
 
-/**
- * harvest-search-term's Claude limits — as graduate-keyword's and create-negative-keyword's together: the highest
- * starting bid a keyword may get by rule (0: every harvest waits for a person) and the markets (none by default).
- */
-const HARVEST_LIMITS = adKitLimits({ maxItems: 0 }, {
-  maxStartBidCents: z.number().int().min(0).max(100_000).default(0)
-    .describe("the highest starting bid, in minor units of the campaign's currency, a harvested keyword may get by rule; 0 = every harvest waits for a person"),
-  markets: marketsLimit,
-})
-
-interface HarvestPlan {
-  query: string
-  product: boolean
-  match: Match
-  source: GroupRow
-  dest: GroupRow
-  bidCents: number
-  negate: 'add' | 'standing' | 'none'
-  why: string
-}
-
-/** The term's record in its source over the window (search-term report). */
-async function sourceRecord(query: string, g: GroupRow, windowDays = RECORD_WINDOW_DAYS) {
-  const all = g.externalAdGroupId ? [...(await searchTermTotals(windowDays, [g.externalAdGroupId])).values()] : []
-  const key = isAsin(query) ? query.trim().toUpperCase() : normaliseNegTerm(query)
-  const hit = all.filter((t) => (isAsin(t.query) ? t.query.trim().toUpperCase() : normaliseNegTerm(t.query)) === key)
-  return { windowDays, impressions: hit.reduce((n, t) => n + t.impressions, 0), clicks: hit.reduce((n, t) => n + t.clicks, 0), spendCents: hit.reduce((n, t) => n + t.costCents, 0), orders: hit.reduce((n, t) => n + t.orders, 0), salesCents: hit.reduce((n, t) => n + t.salesCents, 0) }
-}
-
-async function decideHarvest(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'approvalId'>, opts: { rule: boolean }): Promise<{ result: ToolResult; plan?: HarvestPlan }> {
-  const refuse = (error: string) => ({ result: { ok: false, error } as ToolResult })
+const parseHarvest = (raw: Record<string, unknown>): HarvestArgs | { error: string } => {
   const parsed = HARVEST_INPUT.safeParse(raw)
-  if (!parsed.success) return refuse(parsed.error.issues.map((i) => `${i.path.join('.') || 'arguments'}: ${i.message}`).join('; '))
-  const a: HarvestArgs = parsed.data
-  if (a.op === 'undo') return { result: await undoPreview(a, ctx, opts) }
-  if (!a.query || !a.sourceAdGroupId) return refuse('Name the search term (query) and the ad group it ran in (sourceAdGroupId; ad-search-terms gives both).')
-  const query = a.query
-  const product = isAsin(query)
-  if (product && a.matchType && a.matchType !== 'EXACT') return refuse(`"${query}" is an ASIN: it becomes a product target, which has no match type.`)
-  const match: Match = product ? 'EXACT' : a.matchType ?? 'EXACT'
-  const source = await groupById(a.sourceAdGroupId)
-  if (!source) return refuse(`Not queued: ad group ${a.sourceAdGroupId} was not found in this business.`)
-  const sourceCannot = groupRefusal(source, false)
-  if (sourceCannot) return refuse(`Not queued: ${placeWords(source)}: ${sourceCannot}.`)
-  const record = await sourceRecord(query, source)
-  if (!record.impressions && !record.clicks) {
-    return refuse(`Not queued: "${query}" did not run in ${placeWords(source)} over the last ${RECORD_WINDOW_DAYS} days: there is nothing to harvest. To add a keyword of your own, ask add-ad-targets.`)
-  }
-
-  // Where it lands: the ad group named, else the harvest destination the account resolves (graduate-keyword's way).
-  let dest: GroupRow | null
-  let destWhy: string
-  let storedNegate: boolean | null = null
-  if (a.destAdGroupId) {
-    dest = await groupById(a.destAdGroupId)
-    if (!dest) return refuse(`Not queued: ad group ${a.destAdGroupId} was not found in this business.`)
-    destWhy = 'named in the request'
-  } else {
-    // Batch 2 review fixes — the whole chain, the portfolio and the product line included (where the Owner stores his
-    // destinations); his stored one gone or in another market refuses by name, never the resolver's pick.
-    const line = (await sourceLines([source.id])).get(source.id) ?? null
-    const [graph, stored] = await Promise.all([
-      loadDestinationGraph(),
-      resolveStoredDestinations({ market: source.campaign.marketplace ?? 'all', line, portfolio: source.campaign.portfolioId ?? null, campaign: source.campaign.id, adGroup: source.id }),
-    ])
-    const createType: HvCreateType = product ? 'PRODUCT' : match
-    const resolved = resolveDestination({ graph, stored, sourceAdGroupId: source.id, sourceAdGroupName: source.name, term: query, kind: product ? 'product' : 'keyword', createType })
-    const storedNo = storedDestinationRefusal({ stored, createType, resolved, graph, sourceMarket: source.campaign.marketplace ?? null })
-    if (storedNo) return refuse(`Not queued: ${storedNo} Or name one (destAdGroupId).`)
-    if (!resolved.chosen) {
-      return refuse(`Not queued: no destination ad group is decided for "${query}" (${resolved.source === 'resolved-ambiguous' ? `${resolved.shortlist.length} could take it` : resolved.source === 'resolved-paused' ? `the only one that could take it does not serve: ${resolved.refusal}` : 'none fits'}). Name one (destAdGroupId), or store one with set-harvest-destination.`)
-    }
-    dest = await groupById(resolved.chosen.adGroupId)
-    if (!dest) return refuse('Not queued: the resolved destination ad group was not found.')
-    destWhy = resolved.source === 'stored' ? 'the harvest destination stored for this source' : 'the only ad group the harvest resolver offers'
-    if (resolved.source === 'stored') storedNegate = stored.get(createType)?.negateAtSource ?? null
-  }
-  const destCannot = groupRefusal(dest, true)
-  if (destCannot) return refuse(`Not queued: ${placeWords(dest)}: ${destCannot}.`)
-  const negateAsked = a.negateSource ?? storedNegate ?? true
-  if (negateAsked && dest.id === source.id) return refuse(`Not queued: the keyword lands in ${placeWords(source)}, the ad group the term ran in: a negative there would block it. Ask with negateSource: false, or name another destination.`)
-
-  // Already there (enabled, paused, archived or only in Nexus: the create service would find that row and write nothing),
-  // or at home for the same product elsewhere: a winner stays where it is (PB-6a L2).
-  const kind = product ? 'PRODUCT' : 'KEYWORD'
-  const there = await prisma.adTarget.findMany({
-    where: { adGroupId: dest.id, isNegative: false, kind, expressionValue: { equals: query, mode: 'insensitive' } },
-    select: { expressionType: true, status: true, externalTargetId: true },
-  })
-  const already = there.find((t) => product || storedMatch(t.expressionType) === match)
-  if (already) {
-    const state = String(already.status) === 'ARCHIVED' ? 'archived (Amazon never switches it on again, and Nexus does not add the same one again here)' : !already.externalTargetId ? 'in Nexus only (it never reached Amazon)' : String(already.status).toLowerCase()
-    return refuse(`Not queued: ${targetWords({ kind, value: query, match: product ? null : match })} is already in ${placeWords(dest)}, ${state}.`)
-  }
-  const home = await sameProductHome(query, { destAdGroupId: dest.id, source: { adGroupId: source.id, campaignId: source.campaign.id }, marketplace: dest.campaign.marketplace })
-  if (home) return refuse(`Not queued: "${query}" already lives in ${home.campaign} › ${home.adGroup}, which advertises the same product, so it is not created again: a winner stays where it is.`)
-
-  // The source negative — the same rules as add-negative-targets: never harvesting a winner away (rule 2; the proven
-  // handover, said and a person's decision), never in another product's ad group (rule 3).
-  let negate: HarvestPlan['negate'] = 'none'
-  let handovers: Handover[] = []
-  if (negateAsked) {
-    const standing = await prisma.adTarget.findFirst({
-      where: { adGroupId: source.id, isNegative: true, status: { not: 'ARCHIVED' }, kind, expressionValue: { equals: query, mode: 'insensitive' }, ...(product ? {} : { expressionType: { in: ['NEGATIVE_EXACT', 'EXACT'] } }) },
-      select: { id: true },
-    })
-    if (standing) negate = 'standing'
-    else {
-      const protectedHit = product ? null : await protectedNegativeRefusal({ text: query, matchType: 'NEGATIVE_EXACT', marketplace: source.campaign.marketplace, campaignId: source.campaign.id })
-      if (protectedHit && !protectedHit.protectedProduct) return refuse(`Not queued: ${protectedHit.reason.replace(/\.$/, '')}. Ask with negateSource: false to harvest it without the source negative.`)
-      const destRoots = (await productRootsOf([dest.id])).get(dest.id)?.roots ?? new Set<string>()
-      const rules = await termRulesFor([{ key: 'source', text: query, match: product ? 'PRODUCT' : 'EXACT', adGroupIds: [source.id] }], { product: destRoots.size === 1 ? { root: [...destRoots][0], label: 'the destination\'s product' } : null })
-      if (rules.converting.length) {
-        return refuse(`Not queued: "${query}" converts where it runs — ${convertingWords(rules.converting)} over the last ${rules.windowDays} days — so negating it there would harvest a winner away from where it wins (the Owner's rule 2). `
-          + 'Ask with negateSource: false: the keyword is added and the term keeps running in its source too; once the new keyword wins, add-negative-targets closes the old place (the proven handover).')
-      }
-      if (rules.otherProducts.length) {
-        return refuse(`Not queued: the source negative would land in another product's ad group — ${otherProductWords(rules.otherProducts)} (the Owner's rule 3: products may share keywords). Ask with negateSource: false, or ask add-negative-targets for that negative with allowOtherProducts.`)
-      }
-      handovers = rules.handovers
-      negate = 'add'
-    }
-  }
-
-  // The starting bid: the one asked, else the harvest's own (the term's cost per click in its source), never below 5. A
-  // bid it worked out itself moves with every report: an approval's re-check keeps the one the person approved (frozen).
-  const frozen = a.bidCents == null ? await approvedBid(ctx.approvalId ?? null, raw) : null
-  const bidCents = a.bidCents ?? frozen ?? (record.clicks > 0 ? Math.max(FLOOR_CENTS, Math.round(record.spendCents / record.clicks)) : 50)
-  const writes: Array<RuleWrite & { label: string }> = [
-    { campaignId: dest.campaign.id, adGroupId: dest.id, marketplace: dest.campaign.marketplace, changes: [{ field: 'bid', valueCents: bidCents }], label: `campaign "${dest.campaign.name}"` },
-    ...(negate === 'add' ? [{ campaignId: source.campaign.id, marketplace: source.campaign.marketplace, changes: [{ field: 'negativeKeyword', valueCents: null }], isNegation: true, keywordText: query, label: `campaign "${source.campaign.name}"` }] : []),
-  ]
-  const reached = await reachOver(writes)
-  if ('refused' in reached) return refuse(`Not queued: ${reached.label}: ${gateRefusal(reached.refused)}`)
-  const stored = reached.reach
-  const currency = campaignCurrency(dest.campaign)
-  const bound = await alsoChangedBy(dest.campaign.id)
-  const plan: HarvestPlan = { query, product, match, source, dest, bidCents, negate, why: destWhy }
-  const rule = opts.rule ? await harvestRuleFacts(plan, writes, ctx.approvalId ?? null) : null
-  const created = targetWords({ kind, value: query, match: product ? null : match })
-  const sourceCurrency = campaignCurrency(source.campaign)
-  const effect = `Harvests "${query}": a ${created} at ${amountLabel(bidCents, currency)} in ${placeWords(dest)} (${destWhy}); in ${placeWords(source)} it had ${record.clicks} click${record.clicks === 1 ? '' : 's'}, ${record.orders} order${record.orders === 1 ? '' : 's'} on ${amountLabel(record.spendCents, sourceCurrency)} over the last ${RECORD_WINDOW_DAYS} days. `
-    + (negate === 'add' ? `Then an exact negative of it in ${placeWords(source)}, so that ad group stops bidding for it — only once the keyword stands.`
-      : negate === 'standing' ? `${placeWords(source)} negates it already: no negative is added.`
-        : `${placeWords(source)} is not negated: the term keeps running there too.`)
-    + (handovers.length ? ` It converts there, but its own exact keyword wins elsewhere for the same product (the proven handover): ${named(handovers.map((h) => `in ${h.home}`))} — a person decides that, never a rule.` : '')
-  return {
-    plan,
-    result: {
-      ok: true,
-      preview: {
-        action: TOOL.harvest,
-        op: 'harvest',
-        query,
-        currency,
-        source: { adGroupId: source.id, name: source.name, campaign: source.campaign.name, marketplace: source.campaign.marketplace },
-        destinationAdGroup: { id: dest.id, name: dest.name, campaign: dest.campaign.name, why: destWhy },
-        campaign: { id: dest.campaign.id, name: dest.campaign.name, marketplace: dest.campaign.marketplace },
-        changes: [
-          { label: `${created} · ${placeWords(dest)}`, fromLabel: 'none', toLabel: `at ${amountLabel(bidCents, currency)}` },
-          ...(negate === 'add' ? [{ label: `negative exact "${query}" · ${placeWords(source)}`, fromLabel: 'none', toLabel: product ? 'negative product target' : 'negative exact' }] : []),
-        ],
-        bidCents,
-        record,
-        negateSource: negate,
-        // Rule 2 — a converting source closed because its own exact keyword wins elsewhere: a person's decision, never a rule.
-        handovers,
-        // A new keyword adds spend: listed; the code is harvestStepUp's (none: a day-to-day change, as graduate-keyword).
-        raises: [`${created} at ${amountLabel(bidCents, currency)}`],
-        ...harvestStepUp('harvest', true),
-        alsoChangedBy: bound.automations,
-        ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
-        // The term, its source and destination, the bid asked for and the negative plan (a bid worked out from the report is
-        // frozen in the approval instead: it moves with every report).
-        basis: fingerprint({ query: normaliseNegTerm(query), match, source: source.id, dest: dest.id, bidCents: a.bidCents ?? null, negate, handovers: handovers.map((h) => h.home) }),
-        reach: stored,
-        reachNote: reachNote(stored),
-        effect,
-        undoNote: 'Undo (undo-change) asks this tool for op undo: the keyword lowered to the stop bid (it stays at Amazon) and the source negative retired, so the term runs there again.',
-        ...(rule ?? {}),
-      },
-    },
-  }
+  return parsed.success ? parsed.data : { error: parsed.error.issues.map((i) => `${i.path.join('.') || 'arguments'}: ${i.message}`).join('; ') }
 }
 
-/**
- * The starting bid an approval of this harvest froze, when the request named none (its cost per click then): Nexus re-runs
- * the dry run before an approved request runs (approval-inbox previewStaleness; a plan's step: its own preview), naming
- * the approval. Null for a new request, or when the approval holds none.
- */
-async function approvedBid(approvalId: string | null, raw: Record<string, unknown>): Promise<number | null> {
-  if (!approvalId) return null
-  const ap = await prisma.agentApproval.findUnique({ where: { id: approvalId }, select: { toolName: true, preview: true } })
-  const bidOf = (preview: unknown) => {
-    const b = (preview as { op?: unknown; bidCents?: unknown } | null)?.bidCents
-    return typeof b === 'number' && Number.isFinite(b) ? b : null
-  }
-  if (ap?.toolName === TOOL.harvest) return bidOf(ap.preview)
-  if (ap?.toolName !== PLAN_TOOL) return null
-  // The step whose arguments are these (each read as the tool reads them, defaults filled).
-  const asRead = (value: unknown) => { const parsed = HARVEST_INPUT.safeParse(value); return parsed.success ? canonical(parsed.data) : null }
-  const wanted = asRead(raw)
-  const steps = await prisma.agentPlanStep.findMany({ where: { approvalId, toolName: TOOL.harvest }, select: { args: true, preview: true } })
-  const step = wanted ? steps.find((x) => asRead(x.args) === wanted) : undefined
-  return step ? bidOf(step.preview) : null
-}
-
-/**
- * By rule — graduate-keyword's facts (AA-W2-7) for the keyword, create-negative-keyword's for the source negative: the
- * kit's facts of both, the gate as a rule's write, and the term's record where it ran against the ads strategy's
- * "Harvest a search term when" group there.
- */
-async function harvestRuleFacts(plan: HarvestPlan, writes: RuleWrite[], approvalId: string | null) {
-  const items: KitItem[] = [
-    { entity: termEntity(plan.query, plan.dest), change: { field: 'bid', fromCents: null, toCents: plan.bidCents } },
-    ...(plan.negate === 'add' ? [{ entity: termEntity(plan.query, plan.source), change: { field: 'negative' as const, term: plan.query, matchType: plan.product ? null : 'NEGATIVE_EXACT' } }] : []),
-  ]
-  const facts = await ruleFactsFor({ tool: TOOL.harvest, limits: HARVEST_LIMITS, items, writes, approvalId })
-  const harvest = plan.source.campaign.marketplace ? await harvestForScope(plan.source.campaign.marketplace, { adGroupId: plan.source.id }) : null
-  const ruleHarvest = harvest
-    ? { harvestMinOrders: harvest.group.minOrders, harvestMinClicks: harvest.group.minClicks, harvestMaxAcosPct: harvest.group.maxAcosPct, harvestWindowDays: harvest.group.windowDays, from: strategyWords(harvest.source) }
-    : null
-  const ruleRecord = harvest ? await sourceRecord(plan.query, plan.source, harvest.group.windowDays) : null
-  return { ...facts, ruleHarvest, ruleRecord }
-}
-
-/** harvest-search-term's own checks, before the common ones (pure): never its undo by rule, the markets, the bid within its limit. */
-function harvestRefusal(preview: unknown, limits: Record<string, unknown>): string | null {
-  const p = (preview ?? {}) as {
-    action?: string; op?: string; query?: string; bidCents?: number; currency?: string; campaign?: { marketplace?: string | null }
-    ruleHarvest?: { harvestMinOrders: number; harvestMinClicks: number; harvestMaxAcosPct: number | null; harvestWindowDays: number; from: string } | null
-    ruleRecord?: { windowDays: number; clicks: number; spendCents: number; orders: number; salesCents: number } | null
-  }
-  if (p.action !== TOOL.harvest) return 'there is no preview of this harvest to check; a person decides'
-  if (p.op === 'undo') return 'an undo of a harvest lifts the negative it made, which no run by rule judges; a person decides'
-  if (Array.isArray((p as { handovers?: unknown }).handovers) && ((p as { handovers: unknown[] }).handovers.length)) return 'it closes a converting term\'s old place (the proven handover): a person decides a winner\'s move'
-  const markets = (limits.markets as string[] | undefined) ?? []
-  if (!markets.length) return 'this business names no market where a harvest may run by rule (markets is empty); a person decides'
-  if (!p.campaign?.marketplace || !markets.includes(p.campaign.marketplace)) return `this business lets a harvest run by rule only in ${markets.join(', ')}; a person decides`
-  const currency = p.currency ?? 'EUR'
-  const max = typeof limits.maxStartBidCents === 'number' ? limits.maxStartBidCents : 0
-  if (!((p.bidCents ?? Number.POSITIVE_INFINITY) <= max)) return `its starting bid ${amountLabel(p.bidCents ?? 0, currency)} is above the ${amountLabel(max, currency)} this tool's limits let a harvested keyword start at by rule${max === 0 ? ' (0: every harvest waits for a person)' : ''}; a person decides`
-  return null
-}
-
-/** After the common checks — as graduate-keyword (AA-W2-7): the term's record where it ran meets the strategy's harvest bar. */
-function harvestBarRefusal(preview: unknown, _limits: Record<string, unknown>): string | null {
-  const p = (preview ?? {}) as {
-    query?: string; currency?: string
-    ruleHarvest?: { harvestMinOrders: number; harvestMinClicks: number; harvestMaxAcosPct: number | null; harvestWindowDays: number; from: string } | null
-    ruleRecord?: { windowDays: number; clicks: number; spendCents: number; orders: number; salesCents: number } | null
-  }
-  const currency = p.currency ?? 'EUR'
-  const h = p.ruleHarvest
-  if (!h) return `the ads strategy sets no "Harvest a search term when" group where "${p.query}" ran: a harvest runs by rule only for a term that meets one; a person decides`
-  const r = p.ruleRecord
-  if (!r || r.windowDays !== h.harvestWindowDays) return `the term's record over the strategy's ${h.harvestWindowDays} days was not read for this preview; a person decides`
-  if (!meetsHarvest({ orders: r.orders, clicks: r.clicks, costCents: r.spendCents, salesCents: r.salesCents }, { minOrders: h.harvestMinOrders, minClicks: h.harvestMinClicks, maxAcosPct: h.harvestMaxAcosPct })) {
-    return `"${p.query}" has ${r.clicks} clicks and ${r.orders} orders on ${amountLabel(r.spendCents, currency)} over ${r.windowDays} days, which does not meet "Harvest a search term when" (${h.from}); a person decides`
-  }
-  return null
-}
-
-/** The undo of a harvest, judged: what is left of what it made, as its preview. */
-async function undoPreview(a: HarvestArgs, ctx: Pick<ToolContext, 'approvalId'>, opts: { rule: boolean }): Promise<ToolResult> {
-  if (!a.changeSetId || !a.keywordId) return { ok: false, error: 'Name the harvest to put back: changeSetId (its approvalId) and keywordId (and negativeId, when it made one) — undo-change fills them in.' }
-  // Only a harvest this tool made: its recorded change (a request's, or a plan step's) names exactly this keyword and this
-  // negative. Any other change set — a plan of other tools, a playbook build or sync, an import — is not a harvest, and
-  // its negatives are never lifted here (retire-negatives does that, a request of its own).
-  const recorded = await prisma.agentChange.findMany({ where: { approvalId: a.changeSetId, toolName: TOOL.harvest }, select: { id: true, after: true, undoneAt: true } })
-  const afterOf = (c: { after: unknown }) => (c.after ?? {}) as { op?: unknown; keyword?: { targetId?: unknown } | null; negative?: { targetId?: unknown } | null }
-  const change = recorded.find((c) => afterOf(c).op === 'harvest' && afterOf(c).keyword?.targetId === a.keywordId)
-  if (!change) return { ok: false, error: `Not queued: ${a.changeSetId} is no harvest-search-term request that made the keyword ${a.keywordId} in this business: op undo puts back only a harvest this tool made (undo-change names it).` }
-  const recordedNegative = typeof afterOf(change).negative?.targetId === 'string' ? (afterOf(change).negative!.targetId as string) : null
-  if ((a.negativeId ?? null) !== recordedNegative) {
-    return { ok: false, error: `Not queued: that harvest ${recordedNegative ? `made the negative ${recordedNegative}` : 'made no negative'}, so op undo names ${recordedNegative ? 'exactly that one' : 'none'} (undo-change fills it in).` }
-  }
-  if (change.undoneAt) return { ok: false, error: `Nothing of harvest ${a.changeSetId} is left to put back: it was undone already.` }
-  const ids = [a.keywordId, ...(a.negativeId ? [a.negativeId] : [])]
-  const rows = await prisma.adTarget.findMany({ where: { id: { in: ids } }, select: { id: true, isNegative: true, status: true, bidCents: true, kind: true, expressionValue: true, suppressedFromBidCents: true, adGroup: { select: { id: true, name: true, campaign: { select: TARGETING_CAMPAIGN_SELECT } } } } })
-  const byId = new Map(rows.map((r) => [r.id, r]))
-  const keyword = byId.get(a.keywordId)
-  if (!keyword || keyword.isNegative) return { ok: false, error: `Not queued: the keyword ${a.keywordId} that harvest made is no longer in Nexus.` }
-  const negative = a.negativeId ? byId.get(a.negativeId) : undefined
-  if (a.negativeId && (!negative || !negative.isNegative)) return { ok: false, error: `Not queued: the negative ${a.negativeId} that harvest made is no longer in Nexus.` }
-  const lower = keyword.bidCents > FLOOR_CENTS && keyword.suppressedFromBidCents == null && String(keyword.status) !== 'ARCHIVED'
-  const lift = !!negative && String(negative.status) !== 'ARCHIVED'
-  if (!lower && !lift) return { ok: false, error: `Nothing of harvest ${a.changeSetId} is left to put back: its keyword sits at or below the ${FLOOR_CENTS}-cent floor (or is archived) and ${negative ? 'its negative is retired' : 'it made no negative'}.` }
-  const campaignOfKeyword = keyword.adGroup.campaign
-  const writes: Array<RuleWrite & { label: string }> = [
-    ...(lower ? [{ campaignId: campaignOfKeyword.id, adGroupId: keyword.adGroup.id, marketplace: campaignOfKeyword.marketplace, changes: [{ field: 'bid', valueCents: FLOOR_CENTS }], isSuppression: true, label: `campaign "${campaignOfKeyword.name}"` }] : []),
-    ...(lift ? [{ campaignId: negative!.adGroup.campaign.id, marketplace: negative!.adGroup.campaign.marketplace, changes: [{ field: 'status', valueCents: null }], label: `campaign "${negative!.adGroup.campaign.name}"` }] : []),
-  ]
-  const reached = await reachOver(writes)
-  if ('refused' in reached) return { ok: false, error: `Not queued: ${reached.label}: ${gateRefusal(reached.refused)}` }
-  const currency = campaignCurrency(campaignOfKeyword)
-  const facts = opts.rule
-    ? await ruleFactsFor({
-      tool: TOOL.harvest, limits: HARVEST_LIMITS, writes, approvalId: ctx.approvalId ?? null,
-      items: [
-        ...(lower ? [{ entity: { kind: 'target' as const, id: keyword.id }, change: { field: 'bid' as const, fromCents: keyword.bidCents, toCents: FLOOR_CENTS } }] : []),
-        ...(lift ? [{ entity: { kind: 'target' as const, id: negative!.id }, change: { field: 'retire' as const, term: negative!.expressionValue } }] : []),
-      ],
-    })
-    : null
-  const effect = `Puts back harvest ${a.changeSetId}: `
-    + [lower ? `"${keyword.expressionValue}" in ${placeWords(keyword.adGroup)} from ${amountLabel(keyword.bidCents, currency)} to the stop bid (at least ${amountLabel(FLOOR_CENTS, currency)}; it stays at Amazon)` : '',
-      lift ? `the negative "${negative!.expressionValue}" in ${placeWords(negative!.adGroup)} retired, so the term runs there again` : ''].filter(Boolean).join(', and ')
-    + '.'
-  return {
-    ok: true,
-    preview: {
-      action: TOOL.harvest,
-      op: 'undo',
-      undoes: a.changeSetId,
-      undoesChangeId: change.id,
-      campaign: { id: campaignOfKeyword.id, name: campaignOfKeyword.name, marketplace: campaignOfKeyword.marketplace },
-      currency,
-      changes: [
-        ...(lower ? [{ label: `"${keyword.expressionValue}" · ${placeWords(keyword.adGroup)}`, fromLabel: amountLabel(keyword.bidCents, currency), toLabel: 'the stop bid' }] : []),
-        ...(lift ? [{ label: `negative "${negative!.expressionValue}" · ${placeWords(negative!.adGroup)}`, fromLabel: 'Standing', toLabel: 'Retired' }] : []),
-      ],
-      // Lifting the negative lets the term show the source's ads again: a raise, listed; the code is harvestStepUp's (none:
-      // a day-to-day change; it lifts only the negative this tool's own harvest made, as undo-ad-change retires what a
-      // request made).
-      raises: lift ? [`negative "${negative!.expressionValue}" · ${placeWords(negative!.adGroup)} retired (the term shows these ads there again)`] : [],
-      ...harvestStepUp('undo', !!lift),
-      basis: fingerprint({ change: change.id, keyword: [keyword.id, keyword.bidCents, String(keyword.status)], negative: negative ? [negative.id, String(negative.status)] : null }),
-      reach: reached.reach,
-      reachNote: reachNote(reached.reach),
-      effect,
-      ...(facts ?? {}),
-    },
-  }
-}
-
-/** What a harvest's record holds now (the undo guard compares it with `after`). */
-async function harvestNow(change: ToolChange): Promise<unknown> {
+/** What an older harvest (made before the engine) holds now, in the shape of its `after` (its undo guard). */
+async function legacyHarvestNow(change: ToolChange): Promise<unknown> {
   const after = (change.after ?? {}) as { op?: unknown; keyword?: { targetId?: unknown }; negative?: { targetId?: unknown } | null }
   if (after.op === 'undo') return change.after
   const ids = [after.keyword?.targetId, after.negative?.targetId].filter((id): id is string => typeof id === 'string')
@@ -836,150 +506,57 @@ async function harvestNow(change: ToolChange): Promise<unknown> {
   }
 }
 
-/** C2 — undo of a harvest: this tool's own op undo (the keyword to the stop bid, the source negative retired). */
-export const HARVEST_UNDO: ToolUndo = {
-  current: harvestNow,
-  request(change) {
-    const after = (change.after ?? {}) as { op?: unknown; keyword?: { targetId?: unknown }; negative?: { targetId?: unknown } | null }
-    const before = (change.before ?? {}) as { changeSetId?: unknown }
-    if (after.op === 'undo') return { refusal: 'An undo of a harvest is not put back: ask harvest-search-term for the harvest again.' }
-    if (typeof before.changeSetId !== 'string' || typeof after.keyword?.targetId !== 'string') return { refusal: 'This change does not name the harvest it made.' }
-    return {
-      tool: TOOL.harvest,
-      args: {
-        op: 'undo', changeSetId: before.changeSetId, keywordId: after.keyword.targetId,
-        ...(typeof after.negative?.targetId === 'string' ? { negativeId: after.negative.targetId } : {}),
-        why: 'undo of a harvest: its keyword to the stop bid, its source negative retired',
-      },
-    }
-  },
-}
+/** C2 — undo of a harvest: the engine's (apply-harvest op undo); one made before the engine, this tool's op undo. */
+export const HARVEST_UNDO: ToolUndo = aliasUndo(legacyHarvestNow)
 
 const harvestSearchTerm: AgentTool = {
   name: TOOL.harvest,
   title: 'Harvest a search term',
   input: HARVEST_INPUT,
   requires: [F.adsCampaignsManage, FIELDS.financialsAdspendView],
-  restrictedFields: LIMIT_FACTS_MONEY as Readonly<Record<string, FieldPermission>>,
+  restrictedFields: HARVEST_MONEY as Readonly<Record<string, FieldPermission>>,
   category: 'advertising',
   riskTier: 'high',
   readOnly: false,
   alwaysAsk: true,
-  strategyBound: 'amazon-ads',
   requiresApprovalDefault: true,
   openWorld: true,
-  // Undo lowers the keyword to the stop bid (it stays at Amazon, and it served meanwhile) and retires the negative.
+  // Undo lifts the blocks and pauses the keyword (it served meanwhile; it stays at Amazon).
   reversibility: 'partial',
-  maxClaudeTrust: 'auto',
-  limits: HARVEST_LIMITS,
-  withinLimits: (preview, limits) => harvestRefusal(preview, limits) ?? ruleRefusal(preview, limits) ?? harvestBarRefusal(preview, limits),
+  // The harvest engine's ceiling (apply-harvest): always a person.
+  maxClaudeTrust: 'ask',
   undo: HARVEST_UNDO,
   description:
-    'Harvest an Amazon Sponsored Products search term in ONE step: a keyword (EXACT by default; an ASIN becomes a product '
-    + 'target) in its destination ad group — the one named, else the harvest destination stored for its source '
-    + '(set-harvest-destination), else the only one the harvest resolver offers — and, once that keyword stands, an exact '
-    + 'negative of the term in the ad group it ran in, so that ad group stops bidding for it (negateSource, default true). '
-    + 'graduate-keyword and create-negative-keyword are the same two moves alone. A term that converts in its source (an '
-    + 'order on any of the 90 days Nexus keeps) is never negated there (the Owner\'s rule: winners stay where they win) — '
-    + 'unless its own exact keyword already wins and serves elsewhere for the same product (the proven handover, said on the '
-    + 'card; a person decides it, never a rule); otherwise ask with negateSource false, and once the new keyword wins, '
-    + 'add-negative-targets closes the old place. A term already at home for the same product is not created again; a '
-    + 'source negative in an ad group of another product is refused. The starting bid is the '
-    + 'term\'s cost per click in its source unless named; like graduate-keyword it is a day-to-day change: listed in '
-    + 'raises, and a person\'s approval sends it with no authenticator code. '
-    + `${BY_RULE_WORDS} (by default it does not: maxItems 0, no market; then only for a term that meets the ads strategy's `
-    + '"Harvest a search term when" group). Refused, and not queued, when the term did not run in its source, no '
-    + 'destination is decided, the keyword is there already, or Amazon\'s write gate would refuse it. Undo (undo-change, or '
-    + 'op undo) lowers the keyword to the stop bid and retires the source negative.',
+    'Harvest ONE Amazon Sponsored Products search term by where it ran (query and sourceAdGroupId from ad-search-terms) '
+    + 'or by its candidateId (harvest-candidates) — the same change set as apply-harvest, from the same harvest engine as '
+    + 'the Keyword Harvest page: the keyword (EXACT by default, or PHRASE; an ASIN becomes a product target) in the ad group '
+    + 'named (destAdGroupId, one of the product\'s own: harvest-destinations) or its suggested place, at the start bid named '
+    + 'or the bid brain\'s goal bid; AND the negative in EVERY ad group of the product where the term ran (negateSource '
+    + 'false leaves them running; the Owner\'s saved negateAtSource=false wins unless the request says true); AND the '
+    + 'funnel blocks (exact → negative exact in the product\'s phrase, broad and auto ad groups; phrase → negative phrase '
+    + 'in broad and auto; funnel false leaves them out) — one approval; the negatives are written only once the keyword '
+    + 'stands. For several terms, a new campaign or a new portfolio, ask apply-harvest (one change set for all of them). '
+    + 'Nothing changes until a person approves it in Nexus; it never runs by rule, and Claude cannot approve it. Refused, '
+    + 'and not queued, when the term has no product of its own there, is harvested or waiting already, the place cannot '
+    + 'take it, or Amazon\'s write gate would refuse it. Judged after the attribution window + 72 hours (harvest-history). '
+    + 'Undo (undo-change, or apply-harvest op undo with its harvestIds) lifts the blocks it added, then pauses its keyword (never archived).',
   async handler(args, ctx) {
-    return (await decideHarvest(args, ctx, { rule: true })).result
+    const a = parseHarvest(args)
+    if ('error' in a) return { ok: false, error: a.error }
+    if (a.op === 'undo') return aliasUndoPreview(a, ctx)
+    const e = await harvestEngineArgs(a)
+    if ('refusal' in e) return { ok: false, error: `Not queued: ${e.refusal}.` }
+    return aliasPreview(TOOL.harvest, e.args, ctx, { query: a.query ?? null, sourceAdGroupId: a.sourceAdGroupId ?? null, candidateId: e.args.items[0].candidateId })
   },
   async execute(args, ctx) {
-    const { result: fresh, plan } = await decideHarvest(args, ctx, { rule: false })
-    const refusal = recheck(ctx, fresh, HARVEST_MATERIAL)
-    if (refusal) return notRun(refusal)
-    const p = fresh.preview as { op: 'harvest' | 'undo'; reach: StoredReach; effect: string; undoes?: string; undoesChangeId?: string; handovers?: unknown[] }
-    // The code, as harvestStepUp decided it on this fresh preview (none: a day-to-day change, as graduate-keyword).
-    const gate = await spendGate(ctx, fresh.preview)
-    if ('refusal' in gate) return notRun(gate.refusal)
-    if (p.op === 'undo') {
-      // Lifting the negative a harvest made is a person's decision, never a rule's (withinLimits refuses it; the last door).
-      if (ctx.decidedVia === 'auto') return notRun('Not run: an undo of a harvest lifts the negative it made, which a person decides, never a rule. Ask for it again; a person approves it.')
-      return runUndo(args as HarvestArgs, ctx, p)
-    }
-    // A winner's old place closed (the proven handover) is a person's decision, never a rule's (the last door).
-    if (ctx.decidedVia === 'auto' && p.handovers?.length) return notRun('Not run: it closes a converting term\'s old place (the proven handover), which a person decides, never a rule. Ask for it again; a person approves it.')
-    const run = approvedRun(ctx, String(args.why ?? '') || p.effect)
-    if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
-    const h = plan!
-    // 1 — the keyword, through the destination ad group's own create (nothing written unless Amazon took it).
-    const common = { adGroupId: h.dest.id, bidEur: h.bidCents / 100, userId: run.actor, manual: run.manual, confirmOwnLimits: run.confirmOwnLimits, changeSetId: run.changeSetId, requireAmazon: true }
-    const kw = h.product
-      ? await createTargetLocal({ ...common, kind: 'PRODUCT', value: h.query })
-      : await createKeywordLocal({ ...common, keywordText: h.query, matchType: h.match, evidence: { metric: 'claudeRequest', note: run.reason } })
-    if (!kw.id || (kw.outcome !== 'created' && kw.outcome !== 'local')) {
-      return notRun(`Not run: the ${h.product ? 'product target' : 'keyword'} was not created — ${kw.reason ?? kw.outcome ?? 'refused'}. The source was not negated. Nothing changed.`)
-    }
-    // 2 — the source negative, only once the keyword stands.
-    let negative: { targetId: string } | null = null
-    let negativeProblem: string | null = null
-    if (h.negate === 'add') {
-      const evidence = { metric: 'claudeRequest', note: run.reason }
-      const out = h.product
-        ? await writeNegativeProductTarget({ adGroupId: h.source.id, asin: h.query, userId: run.actor, evidence, manual: run.manual, confirmOwnLimits: run.confirmOwnLimits, changeSetId: run.changeSetId })
-        : await writeNegativeKeyword({ scope: 'AD_GROUP', adGroupId: h.source.id, keywordText: h.query, matchType: 'NEGATIVE_EXACT', userId: run.actor, evidence, manual: run.manual, changeSetId: run.changeSetId })
-      if ((out.outcome === 'created' || out.outcome === 'local') && out.adTargetId) negative = { targetId: out.adTargetId }
-      else if (out.outcome !== 'already_existed') negativeProblem = out.refusal?.reason ?? out.error ?? 'refused'
-    }
-    const data = {
-      keyword: { targetId: kw.id, bidCents: h.bidCents, reachedAmazon: kw.externalTargetId != null },
-      sourceNegative: negative ? { targetId: negative.targetId } : h.negate === 'standing' ? 'already there' : h.negate === 'none' ? 'not asked' : null,
-      ...(negativeProblem ? { partial: true, problem: `The keyword was added, but the source negative was not: ${negativeProblem}. The term keeps running in its source; ask add-negative-targets for it once that is fixed.` } : {}),
-      reach: p.reach,
-      changeSetId: run.changeSetId,
-      note: p.reach.reach === 'live' ? 'Created at Amazon at once (no cancel window).' : 'Sandbox: recorded in Nexus only; nothing reached Amazon.',
-    }
-    const change = { before: { changeSetId: run.changeSetId, op: 'harvest', query: h.query, sourceAdGroupId: h.source.id, destAdGroupId: h.dest.id, keyword: null, negative: null }, after: { op: 'harvest', keyword: { targetId: kw.id }, negative } }
-    return { ok: true, data, change: { before: change.before, after: await harvestNow(change) } }
+    const a = parseHarvest(args)
+    if ('error' in a) return notRun(`Not run: ${a.error}.`)
+    if (a.op === 'undo') return aliasUndoExecute(a, ctx)
+    const e = await harvestEngineArgs(a)
+    if ('refusal' in e) return notRun(`Not run: ${e.refusal}.`)
+    return aliasExecute(e.args, ctx)
   },
 }
-
-/** The undo op, run as the approver: the keyword lowered to the stop bid, the negative retired — both on this change set. */
-async function runUndo(a: HarvestArgs, ctx: ToolContext, p: { reach: StoredReach; effect: string; undoes?: string; undoesChangeId?: string }): Promise<ToolResult> {
-  const run = approvedRun(ctx, String(a.why ?? '') || p.effect)
-  if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
-  const keyword = await prisma.adTarget.findUnique({ where: { id: a.keywordId! }, select: { id: true, bidCents: true, status: true, suppressedFromBidCents: true } })
-  const problems: string[] = []
-  let lowered = false
-  if (keyword && keyword.bidCents > FLOOR_CENTS && keyword.suppressedFromBidCents == null && String(keyword.status) !== 'ARCHIVED') {
-    // A stop: one lowering move to the floor (the largest change per action does not apply), never a raise.
-    const out = await updateAdTargetWithSync({ adTargetId: keyword.id, patch: { bidCents: FLOOR_CENTS }, stop: true, actor: run.actor, reason: run.reason, changeSetId: run.changeSetId, manual: run.manual, confirmOwnLimits: run.confirmOwnLimits })
-    if (out.ok) lowered = true
-    else problems.push(`the keyword's bid (${out.error ?? 'refused'})`)
-  }
-  let retired = false
-  if (a.negativeId) {
-    const { retireNegatives } = await import('../../advertising/negatives-retire.service.js')
-    // Negative Targeting (review S7) — this harvest's own undo lifts its own source negative.
-    const out = await retireNegatives({ adTargetIds: [a.negativeId], actor: run.actor, retireReason: run.reason, changeSetId: run.changeSetId, manual: run.manual, owners: { undo: true } })
-    const o = out.outcomes[0]
-    if (o && (o.kind === 'retired' || o.kind === 'removed_local')) retired = true
-    else if (o && o.kind !== 'skipped') problems.push(`the source negative (${o.reason ?? o.kind})`)
-  }
-  if (!lowered && !retired) return notRun(`Not run: nothing was put back — ${problems.join('; ') || 'nothing was left to put back'}.`)
-  // Asked for directly (not through undo-change, which claims the change and has the record mark it undone with its
-  // event), the harvest it put back is marked undone here, so it is not put back twice. A claimed change is left to the
-  // record.
-  if (p.undoesChangeId) await prisma.agentChange.updateMany({ where: { id: p.undoesChangeId, undoneAt: null, undoneByApprovalId: null }, data: { undoneAt: new Date(), undoneByApprovalId: run.changeSetId } })
-  return {
-    ok: true,
-    data: { lowered, retired, ...(problems.length ? { partial: true, problem: `Not put back: ${problems.join('; ')}.` } : {}), reach: p.reach, changeSetId: run.changeSetId },
-    change: { before: { changeSetId: run.changeSetId, op: 'undo', undoes: p.undoes ?? null }, after: { op: 'undo', undoes: p.undoes ?? null, lowered, retired } },
-  }
-}
-
-/** harvest-search-term's material fields: the term, its source and destination, the bid and the negative plan, where it lands. */
-const HARVEST_MATERIAL = ['basis', 'reach'] as const
 
 // ── set-harvest-destination ───────────────────────────────────────────────────────────────────────
 
@@ -989,7 +566,7 @@ const DESTINATION_INPUT = z.object({
   scopeId: z.string().trim().min(1).max(64).optional().describe('the source ad group or campaign (Nexus id), the portfolio (Amazon id), the product line, or the market code; none for the account'),
   matchType: z.enum(['EXACT', 'PHRASE', 'BROAD', 'PRODUCT']).default('EXACT').describe('the kind of target a harvest creates there (default EXACT; PRODUCT: an ASIN)'),
   adGroupId: ID.optional().describe('the destination ad group (Nexus id) of a manual campaign; leave out with remove'),
-  negateAtSource: z.boolean().optional().describe('whether a harvest landing there negates the term in its source (default true; a converting term is never negated by harvest-search-term)'),
+  negateAtSource: z.boolean().optional().describe('whether a harvest landing there negates the term in every source of the product (default true, the Owner\'s 10-08 standard; false keeps the sources running — a harvest request may still switch it)'),
   remove: z.boolean().optional().describe('true: remove the stored destination at this scope (the harvest then resolves one, or asks)'),
   why: whyArg,
 })
@@ -1056,7 +633,7 @@ async function decideDestination(raw: Record<string, unknown>, ctx: Pick<ToolCon
   // Nexus only: no write for the gate to judge (the harvests that read it are judged when they write).
   const facts = opts.rule && kit.length ? await ruleFactsFor({ tool: TOOL.destination, limits: DESTINATION_LIMITS, items: kit, writes: [], approvalId: ctx.approvalId ?? null }) : null
   const effect = `${a.remove ? 'Removes' : from ? 'Changes' : 'Sets'} where a harvested ${a.matchType === 'PRODUCT' ? 'product target' : `${a.matchType.toLowerCase()} keyword`} lands for ${scopeWords}: ${describe(from)} → ${describe(to)}. `
-    + 'Nexus only: nothing is sent to Amazon. The harvest rules, harvest-search-term and graduate-keyword read it the next time they harvest from there.'
+    + 'Nexus only: nothing is sent to Amazon. The harvest engine reads it the next time a harvest from there is planned (apply-harvest, the Keyword Harvest page, the rules, the brain).'
   return {
     ok: true,
     preview: {
@@ -1133,9 +710,11 @@ const setHarvestDestination: AgentTool = {
   description:
     'Set where a harvested search term lands for a scope — a source ad group, its campaign, a portfolio, a product line, a '
     + 'market or the whole account (the most exact one wins) — and a match type (EXACT, PHRASE, BROAD, or PRODUCT for '
-    + 'ASINs): the destination ad group of a manual campaign, and whether the source is negated once it lands; or remove '
-    + 'the one stored there. The Keyword Harvest page\'s own stored destination. Nexus only: nothing is sent to Amazon; the '
-    + `harvest rules, harvest-search-term and graduate-keyword read it the next time they harvest. ${BY_RULE_WORDS} (by `
+    + 'ASINs): the destination ad group of a manual campaign, and whether a harvest landing there negates the term in '
+    + 'every source of the product (negateAtSource, default true; false keeps the sources running); or remove the one '
+    + 'stored there. The Keyword Harvest page\'s own stored destination. Nexus only: nothing is sent to Amazon; the harvest '
+    + 'engine reads it for every harvest (harvest-candidates shows it as the suggested place: apply-harvest, '
+    + `harvest-search-term, graduate-keyword, the rules and the brain). ${BY_RULE_WORDS} (by `
     + 'default it does not: maxItems 0, no market). The preview shows the destination from → to. Undo (undo-change) sets '
     + 'the one it replaced again.',
   async handler(args, ctx) {

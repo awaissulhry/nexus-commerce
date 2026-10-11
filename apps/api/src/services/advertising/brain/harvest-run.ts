@@ -54,6 +54,20 @@ export interface HarvestRunSummary {
   pending: { synced: number; completed: number; retried: number; judged: number; undoProposed: number }
   skipped: Array<{ productId: string; market: string; why: string }>
   pruned: number
+  /** HARVEST ENGINE — every other actor's harvests judged in this run (better, worse, too early). */
+  judgedOthers?: { judged: number; better: number; worse: number; waiting: number }
+}
+
+/** HARVEST ENGINE — judge the page's, Claude's and the rules' harvests (harvest/judge.ts); never fails the run. */
+async function judgeOthers(now: Date) {
+  try {
+    const { judgeDueHarvests } = await import('../harvest/judge.js')
+    const out = await judgeDueHarvests(now)
+    return out.judged ? out : null
+  } catch (error) {
+    logger.warn('[ads-brain-harvest] judging the other harvests failed', { error: error instanceof Error ? error.message : String(error) })
+    return null
+  }
 }
 
 const blank = (): Pick<HarvestRunSummary, 'decided' | 'acted' | 'pending'> => ({
@@ -102,9 +116,11 @@ export async function storeDecision(args: { productId: string; market: string; d
   }
   const data = {
     ...content, sources: json(content.sources), evidence: json(content.evidence), digest, runId, decidedAt: now, checkedAt: now, changedAt: now,
-    // A new cycle of this term: nothing of an earlier one carries over.
+    // A new cycle of this term: nothing of an earlier one carries over — the brain's own (M6: another actor's identity,
+    // change set, match, funnel ids, new campaign and stage are reset, never inherited).
     approvalId: null, undoApprovalId: null, keywordTargetId: null, landedAt: null, attempts: 0, lastError: null,
     judgeAfter: null, judgedAt: null, verdict: null, judgement: Prisma.DbNull,
+    actorKind: 'BRAIN', actorId: null, changeSetId: null, match: 'EXACT', funnel: Prisma.DbNull, newCampaign: Prisma.DbNull, stage: null,
   }
   const row = was
     ? await prisma.adsBrainHarvest.update({ where: { id: was.id }, data, select: { id: true } })
@@ -180,8 +196,10 @@ async function liveNow(campaignId: string | null, keywordTargetId: string | null
 
 /** What earlier runs started (see the header, step 1). */
 async function pendingWork(productId: string, market: string, facts: HarvestProductFacts, now: Date, s: ReturnType<typeof blank>) {
+  // H4 (HCORE review) — the brain completes, retries, judges and undoes ITS OWN harvests only: a person's, Claude's or a
+  // rule's record is never written, re-judged or put back by the brain (the engine judges them; a person undoes them).
   const records = await prisma.adsBrainHarvest.findMany({
-    where: { productId, marketplace: market, status: { in: ['PROPOSED', 'CAMPAIGN_PROPOSED', 'CAMPAIGN_BUILT', 'UNDO_PROPOSED', 'HALF_DONE', 'WRITING', 'DONE'] } },
+    where: { productId, marketplace: market, actorKind: 'BRAIN', status: { in: ['PROPOSED', 'CAMPAIGN_PROPOSED', 'CAMPAIGN_BUILT', 'UNDO_PROPOSED', 'HALF_DONE', 'WRITING', 'DONE'] } },
   })
   if (!records.length) return
   const level = facts.ctx.levers.harvest
@@ -219,7 +237,19 @@ async function pendingWork(productId: string, market: string, facts: HarvestProd
     }
     if (r.status === 'CAMPAIGN_BUILT') {
       const notLive = await liveNow(r.destCampaignId, r.keywordTargetId)
-      if (notLive) { if (r.heldBy !== `waiting: ${notLive}`) await update({ heldBy: `waiting: ${notLive}` }); continue }
+      if (notLive) {
+        // HARVEST ENGINE (D1 = B) — the brain asks for its harvest campaign's go-live itself: one normal approval inside the
+        // caps (brain/structure-golive.ts counts it as brain-built: harvest-golive.ts). Asked once; a decided one is not
+        // asked again by the brain (a person can still start it by hand).
+        const nc = ((r as { newCampaign?: unknown }).newCampaign ?? {}) as { goLiveApprovalId?: string }
+        if (mayWrite && r.destCampaignId && !nc.goLiveApprovalId) {
+          const { askPerson, goLiveRequest } = await import('./structure-run.js')
+          const asked = await askPerson(goLiveRequest({ kind: 'SKC', builder: null, term: null, productId, marketplace: market, builtCampaignIds: [r.destCampaignId], label: `the harvest campaign for "${r.term}"` }), `harvest go-live ${r.id}`)
+          if ('approvalId' in asked) { await update({ newCampaign: json({ ...nc, goLiveApprovalId: asked.approvalId }), heldBy: `waiting: ${notLive} — its go-live is asked (request ${asked.approvalId})` }); continue }
+        }
+        if (r.heldBy !== `waiting: ${notLive}` && !String(r.heldBy ?? '').startsWith(`waiting: ${notLive} — its go-live`)) await update({ heldBy: `waiting: ${notLive}` })
+        continue
+      }
       if (!mayWrite) { if (r.heldBy !== why) await update({ heldBy: why }); continue }
       if (await claimHarvest(r.id, ['CAMPAIGN_BUILT'], now)) {
         await executeClaimedPair(r.id, brainWho(`Ads brain harvest of "${r.term}": the new campaign is live, its sources negated`, r.approvalId), now)
@@ -268,7 +298,8 @@ async function pendingWork(productId: string, market: string, facts: HarvestProd
 /** Delete shadow and held rows no run checked for 30 days, and ended ones older than 90 days. */
 export async function pruneHarvests(now: Date): Promise<number> {
   const [a, b] = await Promise.all([
-    prisma.adsBrainHarvest.deleteMany({ where: { status: { in: ['SHADOW', 'HELD'] }, checkedAt: { lt: new Date(now.getTime() - HARVEST_DAYS_KEPT * DAY) } } }),
+    // HARVEST ENGINE — a row that holds a person's skip stays while the skip stands (for good, or until its date).
+    prisma.adsBrainHarvest.deleteMany({ where: { status: { in: ['SHADOW', 'HELD'] }, checkedAt: { lt: new Date(now.getTime() - HARVEST_DAYS_KEPT * DAY) }, skippedForGood: false, OR: [{ skippedUntil: null }, { skippedUntil: { lt: now } }] } }),
     prisma.adsBrainHarvest.deleteMany({ where: { status: { in: ['DECLINED', 'REFUSED', 'FAILED', 'UNDONE'] }, changedAt: { lt: new Date(now.getTime() - ENDED_DAYS_KEPT * DAY) } } }),
   ])
   return a.count + b.count
@@ -278,7 +309,10 @@ export async function pruneHarvests(now: Date): Promise<number> {
 export async function runHarvestOnce(opts: { now?: Date; due?: HarvestDue } = {}): Promise<HarvestRunSummary> {
   const now = opts.now ?? new Date()
   const due = opts.due ?? await harvestDue()
-  if (!due.due) return { ran: false, why: due.why, products: 0, markets: [], ...blank(), skipped: [], pruned: await pruneHarvests(now) }
+  // HARVEST ENGINE — every other actor's harvests (a person's, Claude's, a rule's) are judged here too, after their window
+  // + 72 h, whatever the brain has enrolled: the verdict only (nothing at Amazon, no undo asked).
+  const others = await judgeOthers(now)
+  if (!due.due) return { ran: false, why: due.why, products: 0, markets: [], ...blank(), skipped: [], pruned: await pruneHarvests(now), ...(others ? { judgedOthers: others } : {}) }
   const runId = randomUUID()
   const s = blank()
   const skipped: HarvestRunSummary['skipped'] = []
@@ -304,7 +338,7 @@ export async function runHarvestOnce(opts: { now?: Date; due?: HarvestDue } = {}
     }
   }
   const pruned = await pruneHarvests(now)
-  const summary: HarvestRunSummary = { ran: true, why: due.why, runId, products, markets: [...byMarket.keys()].sort(), ...s, skipped, pruned }
+  const summary: HarvestRunSummary = { ran: true, why: due.why, runId, products, markets: [...byMarket.keys()].sort(), ...s, skipped, pruned, ...(others ? { judgedOthers: others } : {}) }
   logger.info('[ads-brain-harvest] run', { runId, products, markets: summary.markets, decided: s.decided, acted: s.acted, pending: s.pending, skipped: skipped.length, pruned })
   return summary
 }

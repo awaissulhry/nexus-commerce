@@ -268,6 +268,9 @@ describe('AB-11 — the size-scaled threshold, the levels and the caps', () => {
     expect(decideHarvests([many[0]], productFacts({ records: refused }), NOW, 60).map((d) => d.term)).toEqual(['alpha jacket'])
     const today = new Map([['alpha jacket', { term: 'alpha jacket', status: 'FAILED' as const, changedAt: new Date(NOW.getTime() - 3_600_000), landedAt: null }]])
     expect(decideHarvests([many[0]], productFacts({ records: today }), NOW, 60)).toEqual([])
+    // HARVEST ENGINE — a term a person skipped on the Keyword Harvest page is not decided while the skip stands.
+    const skipped = new Map([['alpha jacket', { term: 'alpha jacket', status: 'HELD' as const, changedAt: NOW, landedAt: null, skipped: true }]])
+    expect(decideHarvests([many[0]], productFacts({ records: skipped }), NOW, 60)).toEqual([])
   })
 
   it('the ledger\'s own holds stand (the lever, the Owner\'s term lock); a sibling\'s lead is never harvested', () => {

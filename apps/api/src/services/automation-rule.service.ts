@@ -600,17 +600,27 @@ async function recordLeverHeld(rule: { id: string; name: string }, actionResults
 
 /**
  * 1f — the graduation ceiling of the actions an advertising rule is about to run (`ads-graduation.ts`, the
- * function the set-time check uses). `hasKeywordProtections: false` is the stricter answer and costs no
- * query; the ceiling of a negation is PROPOSE either way today, and only `blockedBy` is reported.
+ * function the set-time check uses), with the business's protected terms counted as the set-time check counts them
+ * (R2: a D2 harvest rule on Auto acts inside its caps only with them; the ceiling of a negation is PROPOSE either way).
  * Fails CLOSED: a ceiling that cannot be computed proposes rather than acts.
  */
-async function adsRunTimeCeiling(actions: unknown): Promise<{ maxLevel: import('./advertising/ads-autonomy.js').AutonomyLevel; blockedBy: string[] }> {
+async function adsRunTimeCeiling(actions: unknown, opts: { harvestAutoConfirmed?: boolean } = {}): Promise<{ maxLevel: import('./advertising/ads-autonomy.js').AutonomyLevel; blockedBy: string[] }> {
   try {
     const { graduationCeiling } = await import('./advertising/ads-graduation.js')
     const actionTypes = (Array.isArray(actions) ? actions : [])
       .map((a) => String((a as { type?: unknown } | null)?.type ?? '')).filter(Boolean)
     // D1 — the actions themselves: only the Negative Targeting page's stop-waste shape may act on Auto (ads-graduation-stopwaste.ts).
-    const verdict = graduationCeiling({ actionTypes, hasKeywordProtections: false, actions })
+    let verdict = graduationCeiling({ actionTypes, hasKeywordProtections: false, actions })
+    // R2 (Keyword Harvest release review) — the business's protected terms are counted as the set-time check counts them
+    // (ads-rule-crud.service.ts adsRuleLevelRefusal), only for actions whose ceiling they lift (D2's harvest rule: Auto
+    // inside its caps once protected terms exist). A count that fails falls into the catch below: it proposes.
+    // Release safety (Keyword Harvest re-review): the lift applies only to a harvest rule a person set to Auto through the
+    // harvest path after this release (its `harvestAuto` mark, harvest/rule-reach.ts). Every other harvest rule at Auto —
+    // legacy rows, a level saved another way — keeps asking exactly as before.
+    if (verdict.maxLevel !== 'AUTO' && opts.harvestAutoConfirmed === true) {
+      const withProtections = graduationCeiling({ actionTypes, hasKeywordProtections: true, actions })
+      if (withProtections.maxLevel === 'AUTO' && await prisma.adKeywordProtection.count({ where: { mode: 'WHITELIST' } }) > 0) verdict = withProtections
+    }
     return { maxLevel: verdict.maxLevel, blockedBy: verdict.blockedBy }
   } catch (err) {
     logger.error('[automation-rule] AUTO ceiling could not be computed — proposing instead of acting', {
@@ -663,9 +673,13 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
   // EA3 — capture the builder's per-rule control BEFORE translation overwrites the actions:
   // control='manual' forces propose-only (suggest), never auto-applies, even once graduated live.
   let adsManualSuggest = false
+  // Release safety — a harvest rule's Auto is its own only once a person picked it through the harvest path (its mark,
+  // read here before the translation replaces the stored action).
+  let harvestAutoConfirmed = false
   if (rule.domain === 'advertising') {
-    const a0 = (Array.isArray(rule.actions) ? rule.actions[0] : null) as { control?: string } | null
+    const a0 = (Array.isArray(rule.actions) ? rule.actions[0] : null) as { control?: string; harvestAuto?: { confirmedAt?: unknown } | null } | null
     adsManualSuggest = a0?.control === 'manual'
+    harvestAutoConfirmed = typeof a0?.harvestAuto?.confirmedAt === 'string' && !!a0.harvestAuto.confirmedAt
     const { maybeTranslateAdsRule } = await import('./advertising/ads-rule-adapter.service.js')
     const translated = maybeTranslateAdsRule(rule as { id: string; actions?: unknown; conditions?: unknown })
     // P2.1 — a builder rule with an untranslatable condition FAILS CLOSED. The adapter used to
@@ -942,7 +956,7 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
   // translation above picked this context's block), by the same function the set-time check uses.
   // A demotion, not a refusal: the rule still evaluates and PROPOSES, so a person gets the suggestion.
   if (level === 'AUTO' && rule.domain === 'advertising' && !args.noPersist) {
-    const ceiling = await adsRunTimeCeiling(rule.actions)
+    const ceiling = await adsRunTimeCeiling(rule.actions, { harvestAutoConfirmed })
     if (ceiling.maxLevel !== 'AUTO') {
       logger.warn('[automation-rule] action above its AUTO ceiling — execution demoted', {
         ruleId: rule.id, ruleName: rule.name, to: ceiling.maxLevel, blockedBy: ceiling.blockedBy,

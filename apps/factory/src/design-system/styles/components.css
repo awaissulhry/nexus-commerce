@@ -662,18 +662,15 @@ a.nds-tab:hover { text-decoration: none; }
 .nds-modal-sh + .nds-modal-b {
   border-top: none;
 }
-/* `detail` — a row's detail (bid page polish round 2, 2026-10-10; the Owner: no side drawer, a centered popup). Its
-   height follows its content up to min(880px, the viewport less its margins) and the body scrolls beyond (run 3: a fixed
-   880px left a 3-line Overview in a mostly empty dialog). It hangs from a fixed top, so a taller or shorter tab moves only
-   its bottom edge, never the header or the tabs; `DetailModal` also keeps the tallest body seen while it is open, so
-   going back to a shorter tab or the next row does not shrink it. */
-.nds-backdrop.detail {
-  align-items: flex-start;
-  padding-top: clamp(20px, 6vh, 64px);
-}
+/* `detail` — a row's detail (bid page polish round 2, 2026-10-10; the Owner: no side drawer, a centered popup). CENTRED
+   in the viewport by the backdrop like every Modal (the Owner, 2026-10-11, on the Harvest term window: "the pop-up modal
+   is supposed to be centered"; run 3 hung it from a fixed top, so it sat high over an empty lower half). Its height
+   follows its content up to min(880px, the viewport less the backdrop's 20px margins) and the body scrolls beyond;
+   `DetailModal` keeps the tallest body seen while it is open, so a shorter tab, "Reading…" or the next row never shrinks
+   it — it only ever grows, and centred it grows evenly above and below. */
 .nds-modal.detail {
   width: 1160px;
-  max-height: min(880px, calc(100dvh - clamp(20px, 6vh, 64px) - 20px));
+  max-height: min(880px, calc(100dvh - 40px));
 }
 .nds-modal.detail:focus {
   outline: none;
@@ -690,8 +687,9 @@ a.nds-tab:hover { text-decoration: none; }
 .nds-modal.detail .nds-modal-f {
   padding: 12px 24px;
 }
-/* Phone (`breakpoint.sm` = 760px, tokens/breakpoints.ts): a full-screen sheet. The header's controls take a line of
-   their own under the title; Close stays beside the title. */
+/* Phone (`breakpoint.sm` = 760px, tokens/breakpoints.ts): a full-screen sheet. The header's controls flow into the
+   header row (`display: contents`): Prev / Next stay on the title row before Close, the title truncates, and a detail's
+   own actions take a line of their own (patterns.css, audit S3 2026-10-11). Close is a 44 px touch target. */
 @media (max-width: 760px) {
   .nds-backdrop.detail {
     padding: 0;
@@ -707,10 +705,34 @@ a.nds-tab:hover { text-decoration: none; }
     flex-wrap: wrap;
     padding: 12px 16px 8px;
   }
+  /* The title block and the controls flow into ONE wrapping row: the title (truncating), Prev / Next and Close on the
+     first line, the subtitle across the full width under it, a detail's own actions after that. */
+  .nds-modal.detail .nds-modal-h {
+    row-gap: 4px;
+    column-gap: 8px;
+  }
+  .nds-modal.detail .nds-modal-hl,
   .nds-modal.detail .nds-modal-h-actions {
-    order: 3;
+    display: contents;
+  }
+  .nds-modal.detail .nds-modal-h .t {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .nds-modal.detail .nds-modal-h .sub {
+    order: 2;
     flex-basis: 100%;
-    justify-content: flex-start;
+    margin-top: 0;
+  }
+  /* 44 px to touch, but laid out as the title's line: the negative block margins keep the row as tall as the title, the
+     glyph centred on it (audit M9's alignment), the hit area reaching into the header's padding. */
+  .nds-modal.detail .nds-modal-x {
+    width: 44px;
+    height: 44px;
+    margin: -12px -8px -12px 0;
   }
   .nds-modal.detail .nds-modal-sh {
     padding: 0 16px;

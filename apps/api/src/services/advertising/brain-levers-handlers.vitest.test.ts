@@ -7,6 +7,11 @@
  *   add_negative_* (mapped)           a held destination gets no negative
  *   dayparting_apply                  a bid brain campaign and one whose ad-group default bids are held are left whole
  * And for each: nothing enrolled (production today) → exactly as before, no `brainSkips` key, no extra query.
+ *
+ * HARVEST ENGINE (D2, H3 + M7) — a harvest rule's AUTOMATIC run (no person approved it) goes through the engine
+ * (harvest/rule-run.ts), whose plan leaves a campaign the brain runs to the brain (harvest/plan.vitest.test.ts). The
+ * handler's own harvest path below is the one a person's approved suggestion takes (`operatorApproved`): its holds are
+ * checked there.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -167,7 +172,7 @@ describe('harvest_and_negate', () => {
 
   it('the negate half and the harvest half each leave a source campaign whose lever is held', async () => {
     h.campaignLeverOwners.mockResolvedValue(holds({ 'c-gale': { negatives: OWNED, harvest: LOCKED } }))
-    const r = await run('harvest_and_negate', {}, {})
+    const r = await run('harvest_and_negate', {}, {}, { operatorApproved: true })
     const applied = h.applyHarvest.mock.calls[0][0] as { negatives: Array<{ query: string }>; graduations: Array<{ query: string }> }
     expect(applied.negatives.map((n) => n.query)).toEqual(['waste b'])
     expect(applied.graduations.map((g) => g.query)).toEqual(['winner b'])
@@ -183,7 +188,7 @@ describe('harvest_and_negate', () => {
 
   it('nothing enrolled: every term as before, no ad group query, no brainSkips', async () => {
     h.anyBrainEnrolled.mockResolvedValue(false)
-    const r = await run('harvest_and_negate', {}, {})
+    const r = await run('harvest_and_negate', {}, {}, { operatorApproved: true })
     const applied = h.applyHarvest.mock.calls[0][0] as { negatives: unknown[]; graduations: unknown[] }
     expect(applied.negatives).toHaveLength(2)
     expect(applied.graduations).toHaveLength(2)
@@ -208,7 +213,7 @@ describe('promote_to_exact — its destinations and its isolation negative', () 
 
   it('a destination whose harvest a product\'s brain owns gets no keyword; the other as before', async () => {
     h.campaignLeverOwners.mockResolvedValue(holds({ 'c-gale-exact': { harvest: OWNED } }))
-    const r = await run('promote_to_exact', ACT, CTX)
+    const r = await run('promote_to_exact', ACT, CTX, { operatorApproved: true })
     expect(h.createKeywordLocal).toHaveBeenCalledTimes(1)
     expect(h.createKeywordLocal.mock.calls[0][0]).toMatchObject({ adGroupId: 'dst2' })
     expect(r.output!.outcomes).toContainEqual(expect.objectContaining({ adGroupId: 'dst1', skipped: 'brain-lever' }))
@@ -217,7 +222,7 @@ describe('promote_to_exact — its destinations and its isolation negative', () 
 
   it('the source\'s negatives held: no isolation negative, said', async () => {
     h.campaignLeverOwners.mockResolvedValue(holds({ 'c-src': { negatives: LOCKED } }))
-    const r = await run('promote_to_exact', ACT, CTX)
+    const r = await run('promote_to_exact', ACT, CTX, { operatorApproved: true })
     expect(h.writeNegativeKeyword).not.toHaveBeenCalled()
     expect(r.output!.isolation).toMatchObject({ adGroupId: 'src1', attempted: false, skipped: 'brain-lever' })
     expect(r.output!.brainSkips).toMatchObject({ counts: { ownerLock: { negatives: 1 } } })
@@ -225,7 +230,7 @@ describe('promote_to_exact — its destinations and its isolation negative', () 
 
   it('nothing enrolled: both destinations as before, no brainSkips', async () => {
     h.anyBrainEnrolled.mockResolvedValue(false)
-    const r = await run('promote_to_exact', ACT, CTX)
+    const r = await run('promote_to_exact', ACT, CTX, { operatorApproved: true })
     expect(h.createKeywordLocal).toHaveBeenCalledTimes(2)
     expect(r.output).not.toHaveProperty('brainSkips')
   })

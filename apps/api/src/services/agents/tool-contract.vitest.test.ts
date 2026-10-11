@@ -95,9 +95,10 @@ const AD_STRATEGY_AUTO: readonly string[] = [
   // approver's code.
   'set-monthly-ad-budget', 'set-budget-schedule', 'set-budget-pool', 'restore-budget-baselines',
   // W4-5 — targets (the targeting kind: at a bid with the approver's code), negatives in the list form (the negative kind),
-  // a retire (the retire kind: the code), a harvest (harvest and negative kinds) and a harvest destination (Nexus only):
-  // by default never by rule (maxItems 0, no market); another product's place and a winner's old place never by rule.
-  'add-ad-targets', 'add-negative-targets', 'retire-negatives', 'harvest-search-term', 'set-harvest-destination',
+  // a retire (the retire kind: the code) and a harvest destination (Nexus only): by default never by rule (maxItems 0, no
+  // market); another product's place never by rule. (harvest-search-term left the list 2026-10-11: it asks for the harvest
+  // engine's change set, always a person, as apply-harvest.)
+  'add-ad-targets', 'add-negative-targets', 'retire-negatives', 'set-harvest-destination',
   // W4-6 — a new ad group (the create kind, born at the floor unless startLive, which needs the approver's code) and
   // product ads (the create kind, the approver's code), by default never by rule (maxItems 0); one ad group's default
   // bid and name (bid), its stop (stop) and the give-back of its floor (restore: the approver's code, never by rule).
@@ -441,11 +442,14 @@ describe('C1 — every registered tool keeps the contract', () => {
       'fix-parent': { before: { productId: 'p1', action: 'move', parentId: 'p0', isParent: false }, after: { productId: 'p1', parentId: 'p2', isParent: false } },
       // A4 — a bid change puts the old bid back through set-target-bid itself.
       'set-target-bid': { before: { targetId: 't1', bidCents: 45, changeSetId: 'ap1' }, after: { targetId: 't1', bidCents: 52 } },
-      // A5 — a negative is retired by undo-ad-change; a graduated keyword goes to the floor through set-target-bid.
+      // A5 — a negative is retired by undo-ad-change. A graduation made before the harvest engine (HMCP, 2026-10-11) is put
+      // back the engine's way through harvest-search-term op undo (one the engine made: apply-harvest op undo, see
+      // ads-harvest.tools.vitest.test.ts).
       'create-negative-keyword': { before: { changeSetId: 'ap1', negatives: [] }, after: { negatives: [{ targetId: 't9' }] } },
       'graduate-keyword': { before: { changeSetId: 'ap1', keyword: null }, after: { targetId: 't9', bidCents: 37 } },
       // W4-5 — targets added are lowered to the stop bid (they stay); negatives added are retired by undo-ad-change; a retire
-      // adds the same negatives again; a harvest is put back by its own op undo; a destination is set back through itself.
+      // adds the same negatives again; a harvest made before the harvest engine is put back by its own op undo (one the
+      // engine made: apply-harvest op undo); a destination is set back through itself.
       'add-ad-targets': { before: { changeSetId: 'ap1', adGroupId: 'g1', targets: [] }, after: { targets: [{ targetId: 't1', bidCents: 45 }, { targetId: 't2', bidCents: 5 }] } },
       'add-negative-targets': { before: { changeSetId: 'ap1', negatives: [] }, after: { negatives: [{ targetId: 'n1' }] } },
       'retire-negatives': {
@@ -717,6 +721,12 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-ads-report-time': { before: { expected: { time: '08:00', timeZone: 'Europe/Rome' } }, after: { expected: { time: '08:30', timeZone: 'Europe/Rome' } } },
       // AB-11 — an ads brain harvest put back by its own op undo (the keyword paused, the source negatives retired).
       'apply-brain-harvest': { before: { changeSetId: 'ap1', op: 'harvest', harvestId: 'h1', keyword: null, negatives: [] }, after: { op: 'harvest', harvestId: 'h1', keywordTargetId: 't1', negatives: ['n1'] } },
+      'apply-harvest': { before: { changeSetId: 'ap1', op: 'harvest', harvestIds: [], keywords: [], negatives: [] }, after: { op: 'harvest', harvestIds: ['h1'], keywords: ['t1'], negatives: ['n1'] } },
+      // HMCP — a skip of harvest terms is shown again by its undo (an unskip skipped again).
+      // HMCP round 2 — a harvest rule's mode is set back by its undo (an archive unarchived); a source change is put back by the opposite op.
+      'set-harvest-rules': { before: { op: 'mode', rules: [{ id: 'r1', mode: 'ASK', archived: false }] }, after: { op: 'mode', rules: [{ id: 'r1', mode: 'WATCH', archived: false }] } },
+      'set-harvest-sources': { before: { op: 'pause', market: 'IT', ids: ['g1'] }, after: { op: 'pause', market: 'IT', ids: ['g1'], state: { g1: { rules: [], paused: true } } } },
+      'skip-harvest-terms': { before: { op: 'skip', ids: ['IT|p1|test term'], state: { 'IT|p1|test term': null } }, after: { op: 'skip', ids: ['IT|p1|test term'], state: { 'IT|p1|test term': { until: null, forGood: true } } } },
       // AB-15 — a kill switch is ended by its undo, and an ended one set again.
       'set-brain-kill-switch': { before: { op: 'kill', lever: 'budgets', productId: 'p1', market: 'IT', killed: false, reason: null }, after: { op: 'kill', lever: 'budgets', productId: 'p1', market: 'IT', killed: true, reason: 'test stop' } },
       // AB-20 — a retirement of a product's duplicate writers is given back by its undo (and a give-back retired again).

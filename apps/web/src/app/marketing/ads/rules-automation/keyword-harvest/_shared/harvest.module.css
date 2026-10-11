@@ -1,0 +1,19 @@
+/*
+ * Keyword Harvest page frame (2026-10-11) — layout only, design-system tokens only. Light only, like the rest of the ads
+ * console (_shared/shared-shell.css).
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+  margin-top: var(--nds-space-12);
+}
+
+@media (max-width: 639px) {
+  /* Four tiles in two rows of two, so the table starts on the first screen (audit M8). */
+  .page .tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

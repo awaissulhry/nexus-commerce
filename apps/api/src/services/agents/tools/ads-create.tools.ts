@@ -62,6 +62,7 @@ const input = z.object({
   negativeKeywords: z.array(negativeArg).max(LIST_MAX).optional().describe('searches it never shows on, at most 250'),
   adGroupName: z.string().trim().min(1).max(128).optional().describe('the ad group\'s name (default: "<name> Ad Group")'),
   biddingStrategy: z.enum(['down', 'fixed']).default('down').describe('Amazon bidding: down = dynamic bids, down only (lowers a bid when a sale is unlikely); fixed = the bid as set'),
+  portfolioId: z.string().trim().min(1).max(64).optional().describe('the portfolio it is born in (Amazon\'s portfolio id, from ad-portfolios; default: none)'),
   why: z.string().trim().max(300).optional().describe('why, in a sentence: shown to the person who approves it and kept in the ads audit'),
 })
 type Args = z.infer<typeof input>
@@ -79,6 +80,8 @@ interface Plan {
   keywords: Array<{ text: string; matchType: 'EXACT' | 'PHRASE' | 'BROAD'; bidCents: number }>
   productTargets: Array<{ asin: string; bidCents: number }>
   negativeKeywords: Array<{ text: string; matchType: 'EXACT' | 'PHRASE' }>
+  /** HARVEST ENGINE (Keyword Harvest page) — the portfolio it is born in; null: none. */
+  portfolio: { id: string; name: string } | null
 }
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
@@ -140,6 +143,17 @@ async function createPreview(raw: Record<string, unknown>, ctx: Pick<ToolContext
   const taken = await prisma.campaign.findFirst({ where: { marketplace: a.market, name: { equals: a.name, mode: 'insensitive' } }, select: { id: true } })
   if (taken) return { ok: false, error: `${a.market} already has a campaign named "${a.name}" (${taken.id}): give the new one another name.` }
 
+  // HARVEST ENGINE — the portfolio it is born in: one of this business's, at Amazon (not Nexus-only), of this market.
+  let portfolio: Plan['portfolio'] = null
+  if (a.portfolioId) {
+    if (a.portfolioId.startsWith('local-pf-')) return { ok: false, error: `The portfolio ${a.portfolioId} lives in Nexus only (Amazon never took it): a campaign cannot be born in it.` }
+    const pf = await prisma.amazonAdsPortfolio.findFirst({ where: { externalPortfolioId: a.portfolioId }, select: { externalPortfolioId: true, name: true } })
+    if (!pf) return { ok: false, error: `Portfolio not found: ${a.portfolioId} (ad-portfolios lists them).` }
+    const elsewhere = await prisma.campaign.findFirst({ where: { portfolioId: a.portfolioId, marketplace: { not: a.market } }, select: { marketplace: true } })
+    if (elsewhere) return { ok: false, error: `The portfolio "${pf.name}" holds campaigns of ${elsewhere.marketplace}: a portfolio belongs to one market, pick one of ${a.market}.` }
+    portfolio = { id: pf.externalPortfolioId, name: pf.name }
+  }
+
   const plan: Plan = {
     market: a.market,
     name: a.name,
@@ -153,6 +167,7 @@ async function createPreview(raw: Record<string, unknown>, ctx: Pick<ToolContext
     keywords: keywords.map((k) => ({ text: k.text, matchType: k.matchType, bidCents: k.bidCents ?? a.defaultBidCents })),
     productTargets: productTargets.map((asin) => ({ asin, bidCents: a.defaultBidCents })),
     negativeKeywords: negativeKeywords.map((n) => ({ text: n.text, matchType: n.matchType })),
+    portfolio,
   }
   // Amazon refuses a bid above the daily budget.
   const highest = Math.max(plan.adGroup.defaultBidCents, ...plan.keywords.map((k) => k.bidCents))
@@ -192,7 +207,7 @@ async function createPreview(raw: Record<string, unknown>, ctx: Pick<ToolContext
       reach: stored,
       reachNote: reachNote(stored),
       effect: `Creates the Sponsored Products campaign "${plan.name}" in ${plan.market}: a daily budget of ${amountLabel(plan.dailyBudgetCents, currency)}, `
-        + `one ad group, ${plural(plan.products.length, 'product')} and ${targeting}${plan.negativeKeywords.length ? `, ${plural(plan.negativeKeywords.length, 'negative keyword')}` : ''}. `
+        + `one ad group, ${plural(plan.products.length, 'product')} and ${targeting}${plan.negativeKeywords.length ? `, ${plural(plan.negativeKeywords.length, 'negative keyword')}` : ''}${plan.portfolio ? `, in the portfolio "${plan.portfolio.name}"` : ''}. `
         + `It is born with every bid at the ${floor}-cent floor (suppressed, not paused) and off the live-write allowlist, so it spends next to nothing until a person approves restore-campaign.`,
       nextSteps: [
         'set-campaign-live-writes (enabled: true): only an allowlisted campaign takes an approved change live (a big door: the approver\'s authenticator code)',
@@ -305,6 +320,7 @@ const createAdCampaign: AgentTool = {
       keywords: plan.keywords.map((k) => ({ text: k.text, matchType: k.matchType, bidEur: k.bidCents / 100 })),
       productTargets: plan.productTargets.map((t) => ({ asin: t.asin })),
       negKeywords: plan.negativeKeywords,
+      ...(plan.portfolio ? { portfolioId: plan.portfolio.id } : {}),
     }, run.actor, { bornSuppressed: { floorCents: SUPPRESSION_FLOOR_CENTS, by }, currency: plan.currency })
 
     const made = await prisma.campaign.findFirst({

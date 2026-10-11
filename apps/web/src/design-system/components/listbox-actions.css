@@ -13,3 +13,6 @@
 .nds-combo-pop:has(> .nds-listbox-actions) {
   scroll-padding-bottom: calc(var(--nds-listbox-actions, 1) * var(--nds-combo-row-h) + 10px);
 }
+/* A HELD action carries its reason as a line under the label, as a held option does (re-audit N-S4): its icon stays on
+   the label's line instead of floating between the two. */
+.nds-listbox-actions > button.has-note > .nds-listbox-lead { align-self: flex-start; margin-top: 2px; }

@@ -1,6 +1,7 @@
 /**
- * ADS AUTONOMY AA-W2-7 — create-negative-keyword and graduate-keyword may run by the business's rule, only for a search
- * term whose record over the ads strategy's window meets its group where it lands, inside Claude's limits. Through
+ * ADS AUTONOMY AA-W2-7 — create-negative-keyword may run by the business's rule, only for a search term whose record over
+ * the ads strategy's window meets its group where it lands, inside Claude's limits (graduate-keyword did too until
+ * 2026-10-11: it now asks the harvest engine, always a person). Through
  * Claude's own door (runToolForClaude → the gate → the sweep's commit) on PGlite with the production schema and
  * business policies, business profiles ON. The ads write gate is the real one (sandbox); the job queue is a stub, so
  * nothing leaves the process. Values are made up (public repo).
@@ -9,9 +10,6 @@
  *              runs by rule as an exact negative; one that does not, a phrase negative (until allowed), a term where
  *              the strategy sets no negate group, and a term that meets the harvest group (harvest first, whatever the
  *              negate group's most orders) wait for a person; a protected product's ASIN is never negated
- *   harvest    a term that meets "Harvest a search term when" where it converted runs by rule once the business sets a
- *              starting-bid limit (0 by default: every new keyword waits); an ACoS above the group's ceiling, and a
- *              starting bid above the destination's bid band, wait for a person
  *   audit      the write names the request and says the rule decided it
  */
 import { randomUUID } from 'node:crypto'
@@ -229,39 +227,5 @@ describe('AA-W2-7 — create-negative-keyword runs by rule for a term the strate
   })
 })
 
-const graduate = (query: string, extra: Record<string, unknown> = {}) =>
-  ({ query, sourceExternalCampaignId: 'EXT-c-it', sourceExternalAdGroupId: 'EXT-g-c-it', destExternalAdGroupId: 'EXT-g-c-it', ...extra })
-
-describe('AA-W2-7 — graduate-keyword runs by rule for a term the strategy harvests', { timeout: TIMEOUT }, () => {
-  it('waits by default (no starting bid runs alone); with a starting-bid limit it runs by rule, and the audit says so', async () => {
-    await atAuto('graduate-keyword')
-    expect(await call('graduate-keyword', graduate('pelle nera', { bidCents: 37 }))).toMatchObject({
-      status: 'waiting_for_approval', trust: { why: expect.stringMatching(/^its starting bid EUR 0\.37 is above the EUR 0\.00 this tool's limits let a new keyword start at without a person \(0: every new keyword waits for a person\)/) },
-    })
-    await inside(() => db().agentTool.updateMany({ where: { name: 'graduate-keyword' }, data: { claudeLimits: { maxStartBidCents: 60 } } }))
-    const asked = await call('graduate-keyword', graduate('pelle nera', { bidCents: 37, why: 'a test graduation' }))
-    expect(asked).toMatchObject({ status: 'runs_by_rule' })
-    expect((await approvalOf(asked.approvalId)).preview).toMatchObject({
-      suggestedBidCents: 37, ruleGate: null,
-      ruleHarvest: { harvestMinOrders: 2, harvestMinClicks: 5, harvestMaxAcosPct: 30, harvestWindowDays: 30, at: 'ad group "group c-it"' },
-      ruleRecord: { windowDays: 30, clicks: 30, orders: 3, spendCents: 1500, salesCents: 9000 },
-      limitFacts: { tool: 'graduate-keyword', action: 'harvest', this: { items: 1, raises: 1, highestNewBidCents: 37 } },
-    })
-    await windowClosed(asked.approvalId)
-    expect(await inside(() => commitScheduledApproval(asked.approvalId))).toMatchObject({ ok: true, status: 'executed' })
-    const made = await inside(() => db().adTarget.findFirstOrThrow({ where: { isNegative: false, expressionType: 'EXACT', expressionValue: 'pelle nera', adGroupId: 'g-c-it' } }))
-    expect(made.bidCents).toBe(37)
-    const [log] = await inside(() => db().advertisingActionLog.findMany({ where: { entityId: made.id, actionType: 'create_keyword' } }))
-    expect(JSON.stringify(log?.evidence)).toContain(`Claude request ${asked.approvalId} (run by rule): a test graduation`)
-  })
-
-  it('an ACoS above the group\'s ceiling, and a starting bid above the band, wait for a person', async () => {
-    await atAuto('graduate-keyword', { maxStartBidCents: 200 })
-    expect(await call('graduate-keyword', graduate('pelle rossa', { bidCents: 40 }))).toMatchObject({
-      status: 'waiting_for_approval', trust: { why: expect.stringMatching(/^"pelle rossa" has 12 clicks, EUR 40\.00 spent, 2 orders over the last 30 days in its ad group "group c-it": an ACoS of 66\.67 %, above 30 %, so it does not meet "Harvest a search term when"/) },
-    })
-    expect(await call('graduate-keyword', graduate('pelle verde', { bidCents: 150 }))).toMatchObject({
-      status: 'waiting_for_approval', trust: { why: expect.stringMatching(/^1 of 1 item is outside the ads strategy — search term "pelle verde": the new bid EUR 1\.50 is above the highest bid EUR 1\.00/) },
-    })
-  })
-})
+// HMCP (2026-10-11) — graduate-keyword left the by-rule class: it asks for the harvest engine's change set, always a person
+// (as apply-harvest); its ceiling is held in ads-targeting.tools.vitest.test.ts and the contract test.

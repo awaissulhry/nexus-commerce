@@ -9977,10 +9977,33 @@ CREATE TABLE "AdsBrainHarvest" (
     "decidedAt" TIMESTAMP(3) NOT NULL,
     "checkedAt" TIMESTAMP(3) NOT NULL,
     "changedAt" TIMESTAMP(3) NOT NULL,
+    "actorKind" TEXT NOT NULL DEFAULT 'BRAIN',
+    "actorId" TEXT,
+    "changeSetId" TEXT,
+    "match" TEXT NOT NULL DEFAULT 'EXACT',
+    "funnel" JSONB,
+    "newCampaign" JSONB,
+    "stage" TEXT,
+    "skippedUntil" TIMESTAMP(3),
+    "skippedForGood" BOOLEAN NOT NULL DEFAULT false,
+    "skippedBy" TEXT,
+    "skippedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "AdsBrainHarvest_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AdsHarvestSourcePause" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "adGroupId" TEXT NOT NULL,
+    "pausedBy" TEXT NOT NULL,
+    "reason" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "AdsHarvestSourcePause_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -16105,10 +16128,19 @@ CREATE INDEX "AdsBrainHarvest_status_judgeAfter_idx" ON "AdsBrainHarvest"("statu
 CREATE INDEX "AdsBrainHarvest_checkedAt_idx" ON "AdsBrainHarvest"("checkedAt");
 
 -- CreateIndex
+CREATE INDEX "AdsBrainHarvest_changeSetId_idx" ON "AdsBrainHarvest"("changeSetId");
+
+-- CreateIndex
 CREATE INDEX "AdsBrainHarvest_workspaceId_idx" ON "AdsBrainHarvest"("workspaceId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "AdsBrainHarvest_workspaceId_productId_marketplace_term_key" ON "AdsBrainHarvest"("workspaceId", "productId", "marketplace", "term");
+
+-- CreateIndex
+CREATE INDEX "AdsHarvestSourcePause_workspaceId_idx" ON "AdsHarvestSourcePause"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AdsHarvestSourcePause_workspaceId_adGroupId_key" ON "AdsHarvestSourcePause"("workspaceId", "adGroupId");
 
 -- CreateIndex
 CREATE INDEX "AdsBrainStructure_productId_marketplace_status_idx" ON "AdsBrainStructure"("productId", "marketplace", "status");

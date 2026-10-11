@@ -107,7 +107,9 @@ describe('PB-6b — rule 3 for a compiled harvest rule', () => {
       homeScope: [g.auto, g['broad-category'], g['exact-category'], g['exact-brand']],
       sources: [{ adGroupId: g.auto, campaignId: 'c-auto', harvestFrom: true, graduate: ['EXACT'], negate: ['EXACT'], graduateProduct: false, negateProduct: true, negateOnLanding: false, negateSource: true, destinations: { EXACT: g['exact-category'] } }],
     }
-    const run = (dryRun: boolean) => inA(() => (ACTION_HANDLERS.harvest_and_negate as (a: unknown, c: unknown, m: unknown) => Promise<{ ok: boolean; output?: Json }>)(action, {}, { dryRun, ruleId: 'rule-pb6b-scope' }))
+    // The run a person approved (`operatorApproved`): the handler's own path. An AUTOMATIC run harvests on the one engine
+    // (HARVEST ENGINE D2, harvest/rule-run.ts), which holds a term whose source campaign advertises several products.
+    const run = (dryRun: boolean) => inA(() => (ACTION_HANDLERS.harvest_and_negate as (a: unknown, c: unknown, m: unknown) => Promise<{ ok: boolean; output?: Json }>)(action, {}, { dryRun, ruleId: 'rule-pb6b-scope', ...(dryRun ? {} : { operatorApproved: true }) }))
     const dry = await run(true)
     expect(dry.output?.items).toEqual([{ kind: 'graduation', query: 'test x', externalAdGroupId: 'EAG-auto', step: 'create' }])
     const live = await run(false)

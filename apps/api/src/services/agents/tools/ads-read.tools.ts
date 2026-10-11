@@ -6,7 +6,8 @@
  *                       dial and the data pipeline's health
  *   ad-campaigns        the campaigns with their settings, guards and window metrics
  *   ad-targets          the targets (keywords, product and auto targets) with their bids and window metrics
- *   ad-search-terms     the search terms that spent with no order, and the ones that convert
+ *   ad-search-terms     the search terms that spent with no order, and the ones that convert (a first look: a converting
+ *                       term is harvested through harvest-candidates and apply-harvest, the Keyword Harvest page's engine)
  *   ad-changes          what changed on the account, who changed it, whether it reached Amazon, and its undo handle
  *   ad-recommendations  the engines' recommendations and the rules' pending suggestions; W4-9 — and the autopilot plans'
  *                       waiting decisions (the A.I. Bids tab) and the Keyword Tracker's waiting bid proposals
@@ -64,6 +65,9 @@ import { primeSettledWindow } from '../../advertising/ads-settled-facts.js'
 import { adsProfileFor } from '../../advertising/ads-profile-resolver.js'
 import { getBidGrid, type BidTargetRow } from '../../advertising/bid-grid.service.js'
 import { previewHarvest, type HarvestCandidate } from '../../advertising/ads-harvest.service.js'
+import { strategyMarket } from '../../advertising/ads-strategy/bids.js'
+import { resolveCampaignOwnership } from '../../advertising/brain/ownership.js'
+import { candidateIdOf, normTerm } from '../../advertising/harvest/ids.js'
 import { bidsNotAtAmazon, listChanges, type ChangeRow, type ChangeSource } from '../../advertising/ads-changes.service.js'
 // Imported where it is used: loading the recommendations engine registers rule-action handlers (bid optimiser,
 // pacing, top-of-search) — a side effect the tool registry must not have in every process that lists tools.
@@ -1033,7 +1037,7 @@ const adSearchTerms: AgentTool = {
   restrictedFields: AD_MONEY,
   input: z.object({
     kind: z.preprocess(lower, z.enum(TERM_KINDS)).default('all')
-      .describe('wasteful = spent at least 15.00 with no order (negative keyword candidates); converting = 2 or more orders (graduation candidates); all = both (default)'),
+      .describe('wasteful = spent at least 15.00 with no order (negative keyword candidates); converting = 2 or more orders (a first look only: the harvest bar, place and state are harvest-candidates); all = both (default)'),
     campaignId: campaignArg,
     market: marketArg,
     search: z.string().trim().min(1).max(100).optional().describe('only search terms that contain this text'),
@@ -1043,8 +1047,11 @@ const adSearchTerms: AgentTool = {
   }),
   description:
     'What shoppers typed that triggered the Amazon ads, from the search-term report, in two lists: wasteful terms '
-    + '(spent with no order: candidates for create-negative-keyword) by spend, then converting terms (candidates for '
-    + 'graduate-keyword) by orders. Per term: the search term itself (keywordText / query for those tools), whether it '
+    + '(spent with no order: candidates for create-negative-keyword) by spend, then converting terms (2 or more orders) by '
+    + 'orders. A converting term is harvested through the harvest engine, never from here: harvest-candidates lists it with '
+    + 'the bar it must pass (the ads strategy\'s, else the brain\'s test), where it would go, its start bid and its state, '
+    + 'and apply-harvest asks for the harvest (its candidateId is on the row when the campaign belongs to one product). '
+    + 'Per term: the search term itself (keywordText / query for those tools), whether it '
     + 'is an ASIN (a product target), the campaign (Nexus campaignId and Amazon externalCampaignId) and ad group it ran '
     + 'in, market, currency, and impressions, clicks, orders, spend, sales and ACoS over the window. Filter by kind, '
     + 'campaignId, market or text. The list is ranked live: a term that moves between two pages may repeat.'
@@ -1079,6 +1086,14 @@ const adSearchTerms: AgentTool = {
     const idOf = (t: Term) => shortId(`${t.kind}|${t.externalCampaignId}|${t.externalAdGroupId}|${t.query}`)
     const page = rankedPage(terms, idOf, size, scope, a.cursor)
     const groupByExternal = await adGroupsByExternalId(page.items.map((t) => t.externalAdGroupId))
+    // Keyword Harvest page rebuild (lane HMCP) — a converting term's harvest candidate (the product that owns its campaign).
+    const convertingCampaigns = [...new Set(page.items.filter((t) => t.kind === 'converting').map((t) => index.byExternal.get(t.externalCampaignId)?.id).filter((id): id is string => !!id))]
+    const owners = convertingCampaigns.length ? await resolveCampaignOwnership(convertingCampaigns) : new Map()
+    const candidateOf = (t: Term): string | null => {
+      const own = owners.get(index.byExternal.get(t.externalCampaignId)?.id ?? '')
+      const market = strategyMarket(own?.market ?? null)
+      return own?.owner.kind === 'product' && market ? candidateIdOf(market, own.owner.productId, normTerm(t.query)) : null
+    }
     const items = page.items.map((t) => {
       const c = index.byExternal.get(t.externalCampaignId)
       const g = groupByExternal.get(t.externalAdGroupId)
@@ -1100,7 +1115,8 @@ const adSearchTerms: AgentTool = {
           salesCents: t.salesCents,
           acos: ratio(t.costCents, t.salesCents),
         },
-        suggestedTool: t.isAsin ? null : t.kind === 'wasteful' ? 'create-negative-keyword' : 'graduate-keyword',
+        suggestedTool: t.kind === 'wasteful' ? (t.isAsin ? null : 'create-negative-keyword') : 'harvest-candidates',
+        ...(t.kind === 'converting' ? { candidateId: candidateOf(t) } : {}),
       }
     })
     return {
@@ -1114,7 +1130,7 @@ const adSearchTerms: AgentTool = {
           provisionalFrom: addDays(new Date().toISOString().slice(0, 10), -(PROVISIONAL_DAYS - 1)),
           note: PROVISIONAL_NOTE,
         },
-        thresholds: { wasteful: 'spent at least 1500 minor units (15.00) with no order', converting: '2 or more orders' },
+        thresholds: { wasteful: 'spent at least 1500 minor units (15.00) with no order', converting: '2 or more orders (a first look: harvest-candidates holds the harvest bar)' },
         items,
         nextCursor: page.nextCursor,
         total: page.total,

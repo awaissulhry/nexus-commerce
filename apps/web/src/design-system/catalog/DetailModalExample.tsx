@@ -1,9 +1,10 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import { Activity } from 'lucide-react'
 
 import { Button, Input, Tag } from '../primitives'
-import { Field, KeyValue, type TabItem } from '../components'
+import { EmptyState, Field, KeyValue, type TabItem } from '../components'
 import { DetailModal, ReviewChangesModal, type ReviewState } from '../patterns'
 import { NexusGrid, textColumn, type ColDef } from '../grid'
 
@@ -19,6 +20,9 @@ import { NexusGrid, textColumn, type ColDef } from '../grid'
  *  - History is a `plain` grid: no ⋮ on its headers, columns to the edge, no empty band under its three rows.
  *  - The dialog is as tall as its tab (Overview is short); Settings grows it, going back keeps that height (no jump);
  *    the header never moves. Overview's labels are sentence case (`KeyValue labelCase="sentence"`).
+ *  - Centred in the viewport (2026-10-11); it only grows, evenly around the centre. Effect is ONLY an EmptyState: after
+ *    Settings it sits in the middle of the kept-tall body (audit M12), never under the tabs. Phone: ▲ / ▼ on the title
+ *    row (audit S3), the title truncating, 44 px to touch.
  */
 interface Rule { id: string; name: string; line: string; mode: string; fails?: boolean }
 const RULES: Rule[] = [
@@ -45,6 +49,7 @@ const historyRowId = (p: { data: Change }) => p.data.id
 const TABS: TabItem[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'history', label: 'History', count: 3 },
+  { id: 'effect', label: 'Effect' },
   { id: 'settings', label: 'Settings' },
 ]
 
@@ -100,6 +105,7 @@ export function DetailModalExample() {
           <KeyValue labelCase="sentence" items={[{ label: 'Mode', value: rule?.mode }, { label: 'Runs', value: 'Daily · 06:00' }, { label: 'Bids changed · 7 d', value: '4' }]} />
         )}
         {tab === 'history' && <NexusGrid<Change> plain rowData={HISTORY} columnDefs={HISTORY_COLUMNS} getRowId={historyRowId} />}
+        {tab === 'effect' && <EmptyState icon={<Activity size={18} aria-hidden />} title="No effect yet" description="No bid changes to compare" />}
         {tab === 'settings' && (
           <div style={{ display: 'grid', gap: 'var(--nds-space-8)' }}>
             <Field label="Note" hint="Type J or K here: it stays a letter.">

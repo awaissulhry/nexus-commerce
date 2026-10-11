@@ -34,10 +34,7 @@
 import type { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
 import { logger } from '../../../utils/logger.js'
-import { checkAdsWriteGate } from '../ads-write-gate.js'
-import { createKeywordLocal, createTargetLocal } from '../ads-create.service.js'
-import { checkLanding, enableLanding, servingLandings, switchOnBid } from '../harvest-landing-guard.js'
-import { writeNegativeKeyword, writeNegativeProductTarget } from '../ads-negative-kw.service.js'
+import { blocksOf, undoHarvestWrite, writeHarvest, type UndoOutcome } from '../harvest/write.js'
 import { HARVEST_ACTOR, JUDGE_AFTER_MS, type HarvestStatus, type NewCampaignPlan, type SourcePlan } from './harvest.js'
 
 /** The tool a person approves for a pair or its undo (services/agents/tools/ads-brain-harvest.tools.ts). */
@@ -47,15 +44,9 @@ export const CAMPAIGN_TOOL = 'create-ad-campaign'
 /** A WRITING claim older than this was left by a run that died: it is taken up again (the writes are idempotent). */
 export const WRITING_LEASE_MS = 30 * 60_000
 
-/** Who writes, and for which approval. */
-export interface Who {
-  actor: string
-  /** A person's approval (passes the allowlist and pins, as his own click); false for the brain. */
-  manual: boolean
-  confirmOwnLimits?: boolean
-  changeSetId: string | null
-  reason: string
-}
+/** Who writes, and for which approval (the engine's: harvest/write.ts). */
+export type { Who, UndoOutcome } from '../harvest/write.js'
+import type { Who } from '../harvest/write.js'
 
 export const brainWho = (reason: string, changeSetId: string | null = null): Who => ({ actor: HARVEST_ACTOR, manual: false, changeSetId, reason })
 
@@ -78,121 +69,14 @@ export interface PairOutcome {
   error: string | null
 }
 
-/** The gate's answer for each half, as the writer that will run it (nothing is written). */
-export async function preflightPair(p: { term: string; isAsin: boolean; destAdGroupId: string | null; bidCents: number | null; keywordPending: boolean; sources: readonly SourceState[] }, who: Who): Promise<{ ok: true } | { half: 'keyword' | 'negative'; adGroupId: string; refusal: string; deniedAt: string }> {
-  const ids = [...new Set([...(p.keywordPending && p.destAdGroupId ? [p.destAdGroupId] : []), ...p.sources.map((s) => s.adGroupId)])]
-  const groups = new Map((ids.length ? await prisma.adGroup.findMany({ where: { id: { in: ids } }, select: { id: true, campaignId: true, campaign: { select: { marketplace: true, adProduct: true } } } }) : []).map((g) => [g.id, g]))
-  const person = who.manual ? { manual: true, ...(who.confirmOwnLimits ? { confirmOwnLimits: true } : {}) } : {}
-  if (p.keywordPending && p.destAdGroupId) {
-    const g = groups.get(p.destAdGroupId)
-    if (!g) return { half: 'keyword', adGroupId: p.destAdGroupId, deniedAt: 'not_found', refusal: `the destination ad group ${p.destAdGroupId} is no longer in Nexus` }
-    const bid = p.bidCents ?? 0
-    const gate = await checkAdsWriteGate({
-      marketplace: g.campaign.marketplace, campaignId: g.campaignId, adGroupId: g.id, field: 'bid', fields: ['bid'], intendedValueCents: bid, payloadValueCents: bid,
-      adProduct: g.campaign.adProduct, dimension: 'keywords', actor: who.actor, ...person,
-    } as never)
-    if (gate.allowed === false) return { half: 'keyword', adGroupId: g.id, deniedAt: gate.deniedAt, refusal: gate.reason }
-  }
-  for (const s of p.sources) {
-    if (s.action !== 'negate' || s.result === 'landed') continue
-    const g = groups.get(s.adGroupId)
-    if (!g) return { half: 'negative', adGroupId: s.adGroupId, deniedAt: 'not_found', refusal: `the source ad group ${s.adGroupId} is no longer in Nexus` }
-    const gate = await checkAdsWriteGate({
-      marketplace: g.campaign.marketplace, campaignId: g.campaignId, payloadValueCents: 0, isNegation: true,
-      keywordText: p.isAsin ? p.term.toUpperCase() : p.term, ...(p.isAsin ? {} : { negativeMatchType: 'NEGATIVE_EXACT' }),
-      adProduct: g.campaign.adProduct, dimension: 'negatives', actor: who.actor, ...person,
-    } as never)
-    if (gate.allowed === false) return { half: 'negative', adGroupId: g.id, deniedAt: gate.deniedAt, refusal: gate.reason }
-  }
-  return { ok: true }
-}
-
-/** The keyword (or product target) in the destination; its result as the record keeps it. */
-async function addKeyword(p: { term: string; isAsin: boolean; destAdGroupId: string; bidCents: number }, who: Who) {
-  const common = { adGroupId: p.destAdGroupId, bidEur: p.bidCents / 100, userId: who.actor, manual: who.manual, confirmOwnLimits: who.confirmOwnLimits, changeSetId: who.changeSetId, requireAmazon: true }
-  const made = p.isAsin
-    ? await createTargetLocal({ ...common, kind: 'PRODUCT', value: p.term.toUpperCase() })
-    : await createKeywordLocal({ ...common, keywordText: p.term, matchType: 'EXACT', evidence: { metric: 'brainHarvest', note: who.reason } as never })
-  const outcome = (made as { outcome?: string }).outcome
-  const landed = !!made.id && !!made.externalTargetId && (outcome === 'created' || outcome === 'already_existed' || outcome == null)
-  const reason = (made as { reason?: string | null }).reason ?? (made as { denied?: { reason?: string } }).denied?.reason ?? (made as { pushError?: string }).pushError ?? null
-  return { landed, targetId: made.id, externalTargetId: made.externalTargetId, existed: outcome === 'already_existed' || (made as { existed?: boolean }).existed === true, refused: outcome === 'refused' || outcome === 'needs_confirmation', reason }
-}
-
-/** One source negative: negative exact (an ASIN: a negative product target) in the source ad group. */
-async function negateSource(term: string, isAsin: boolean, s: SourceState, who: Who): Promise<SourceState> {
-  const out = isAsin
-    ? await writeNegativeProductTarget({ adGroupId: s.adGroupId, asin: term.toUpperCase(), userId: who.actor, manual: who.manual, confirmOwnLimits: who.confirmOwnLimits, changeSetId: who.changeSetId, evidence: { metric: 'brainHarvest', note: who.reason } as never })
-    : await writeNegativeKeyword({ scope: 'AD_GROUP', adGroupId: s.adGroupId, keywordText: term, matchType: 'EXACT', userId: who.actor, manual: who.manual, changeSetId: who.changeSetId, evidence: { metric: 'brainHarvest', note: who.reason } as never })
-  if ((out.outcome === 'created' || out.outcome === 'local' || out.outcome === 'already_existed') && out.adTargetId) return { ...s, negativeTargetId: out.adTargetId, result: 'landed', error: null }
-  if (out.outcome === 'refused') return { ...s, result: 'refused', error: `${out.refusal?.deniedAt ?? 'refused'}: ${out.refusal?.reason ?? 'refused'}` }
-  return { ...s, result: 'failed', error: out.error ?? 'the negative did not reach Amazon' }
-}
-
 /**
  * Write a pair (or what is left of it): the gate asked for both halves first, then the keyword (when it is not there
- * yet), then each source negative still owed. Pure of the record: the caller stores the outcome.
+ * yet), then each source negative still owed. Pure of the record: the caller stores the outcome. HARVEST ENGINE — the
+ * engine's one writer (harvest/write.ts writeHarvest): EXACT, no funnel blocks (the brain's negatives lever owns those).
  */
 export async function writePair(p: { term: string; isAsin: boolean; destAdGroupId: string; bidCents: number; keywordTargetId: string | null; sources: readonly SourceState[]; retryRefused?: boolean }, who: Who): Promise<PairOutcome> {
-  const keywordPending = !p.keywordTargetId
-  // A negative the gate or the Owner refused is named, not retried by the brain; a person's approval asks for it again.
-  const owes = (s: SourceState) => s.action === 'negate' && s.result !== 'landed' && (p.retryRefused === true || s.result !== 'refused')
-  // Harvest fix B1 + B10 — the landing guard (see the header): nothing is written where the term could not serve.
-  const landing = keywordPending ? await checkLanding({ adGroupId: p.destAdGroupId, term: p.term, match: p.isAsin ? 'PRODUCT' : 'EXACT' }) : null
-  if (landing && (landing.kind === 'hold' || (landing.kind !== 'enable' && !landing.serves))) {
-    const why = landing.kind === 'hold' ? landing.why : `${landing.why}: the brain never harvests into a destination that does not serve`
-    return { status: 'HELD', keyword: null, sources: [...p.sources], why: `held — ${why}`, error: why }
-  }
-  if (!keywordPending && p.sources.some(owes) && !(await servingLandings([{ adTargetId: p.keywordTargetId!, term: p.term }])).size) {
-    const why = `the ${p.isAsin ? 'product target' : 'keyword'} is not enabled at Amazon (or its switch-on is not confirmed yet) in a serving ad group now, or a negative there blocks the term: no source is negated (the term would serve nowhere)`
-    const sources = p.sources.map((s) => (owes(s) ? { ...s, result: 'failed' as const, error: why } : s))
-    // Not serving now: no landing, so the judging clock does not start here (a pair that landed before keeps its own).
-    return { status: 'HALF_DONE', keyword: { targetId: p.keywordTargetId, externalTargetId: null, existed: true, confirmed: false }, sources, why: `the keyword stands, but ${why}; retried by the next run`, error: why }
-  }
-  const pre = await preflightPair({ ...p, keywordPending, sources: p.sources.filter(owes) }, who)
-  if (!('ok' in pre)) {
-    const why = `the write gate refuses the ${pre.half === 'keyword' ? 'keyword' : 'source negative'} (${pre.deniedAt}: ${pre.refusal})`
-    if (keywordPending) return { status: 'REFUSED', keyword: null, sources: [...p.sources], why: `nothing was written — ${why}; the pair is written whole or not at all`, error: why }
-    const sources = p.sources.map((s) => (s.adGroupId === pre.adGroupId && owes(s) ? { ...s, result: 'refused' as const, error: `${pre.deniedAt}: ${pre.refusal}` } : s))
-    return { status: 'HALF_DONE', keyword: { targetId: p.keywordTargetId, externalTargetId: null, existed: true }, sources, why: `the keyword stands; ${why}`, error: why }
-  }
-  let keyword: PairOutcome['keyword'] = { targetId: p.keywordTargetId, externalTargetId: null, existed: true }
-  if (keywordPending && landing?.kind === 'enable') {
-    // A paused keyword of the term in the destination: switched on again at the start bid (the bid the request showed).
-    // No landing yet: every source stays owed until Amazon confirmed the switch (the next run, servingLandings above).
-    const sw = await switchOnBid({ targetId: landing.targetId, wantCents: p.bidCents, who })
-    const on = await enableLanding(landing.targetId, sw.cents, { actor: who.actor, manual: who.manual, confirmOwnLimits: who.confirmOwnLimits, changeSetId: who.changeSetId, reason: `${who.reason} — ${landing.why}` })
-    if (!on.ok) {
-      const why = `${landing.why} — but the switch was refused (${on.why}): nothing was negated, nothing changed`
-      return { status: 'REFUSED', keyword: null, sources: [...p.sources], why, error: on.why }
-    }
-    const kw = { targetId: landing.targetId, externalTargetId: landing.externalTargetId, existed: true, confirmed: false, bidCents: on.bidCents }
-    const wait = 'waiting for Amazon to confirm the switch-on: sent by the next run'
-    const sources = p.sources.map((s) => (owes(s) ? { ...s, result: 'failed' as const, error: wait } : s))
-    const owedNow = sources.filter((s) => s.action === 'negate' && s.result !== 'landed').length
-    return owedNow
-      ? { status: 'HALF_DONE', keyword: kw, sources, why: `the paused ${p.isAsin ? 'product target' : 'keyword'} was switched on again${sw.held ? ` (its bid ${sw.held})` : ''}; ${owedNow === 1 ? 'its source negative waits' : `its ${owedNow} source negatives wait`} for Amazon to confirm the switch-on: sent by the next run`, error: wait }
-      : { status: 'DONE', keyword: kw, sources, why: `the paused ${p.isAsin ? 'product target' : 'keyword'} was switched on again${sw.held ? ` (its bid ${sw.held})` : ''}; no source to negate`, error: null }
-  } else if (keywordPending && landing?.kind === 'landed') {
-    // An enabled keyword of the term already runs there: it is the keyword (the row the guard found, never another).
-    keyword = { targetId: landing.targetId, externalTargetId: landing.externalTargetId, existed: true }
-  } else if (keywordPending) {
-    const k = await addKeyword(p, who)
-    if (!k.landed) {
-      const why = `the ${p.isAsin ? 'product target' : 'keyword'} did not reach Amazon (${k.reason ?? 'no id came back'}): nothing was negated, nothing changed`
-      return { status: k.refused ? 'REFUSED' : 'FAILED', keyword: null, sources: [...p.sources], why, error: k.reason ?? 'not created' }
-    }
-    keyword = { targetId: k.targetId, externalTargetId: k.externalTargetId, existed: k.existed }
-  }
-  const sources: SourceState[] = []
-  for (const s of p.sources) sources.push(owes(s) ? await negateSource(p.term, p.isAsin, s, who) : s)
-  const owed = sources.filter((s) => s.action === 'negate' && s.result !== 'landed')
-  if (!owed.length) {
-    const landed = sources.filter((s) => s.action === 'negate').length
-    return { status: 'DONE', keyword, sources, why: `${keywordPending ? `the ${p.isAsin ? 'product target' : 'keyword'} landed` : 'the keyword stands'}${landed ? ` and its ${landed === 1 ? 'source is' : `${landed} sources are`} negated exact` : ''}: one change set, whole`, error: null }
-  }
-  const errors = owed.map((s) => `ad group ${s.adGroupId}: ${s.error ?? 'not landed'}`).join('; ')
-  return { status: 'HALF_DONE', keyword, sources, why: `the keyword stands, ${owed.length === 1 ? 'one source negative' : `${owed.length} source negatives`} did not land (${errors}): ${owed.some((s) => s.result === 'failed') ? 'retried by the next run' : 'refused — named, not retried'}`, error: errors }
+  const o = await writeHarvest({ term: p.term, isAsin: p.isAsin, match: 'EXACT', destAdGroupId: p.destAdGroupId, bidCents: p.bidCents, keywordTargetId: p.keywordTargetId, sources: p.sources, funnel: [], retryRefused: p.retryRefused, metric: 'brainHarvest', noServeWords: 'the brain never harvests into a destination that does not serve' }, who)
+  return { status: o.status, keyword: o.keyword, sources: o.sources as SourceState[], why: o.why, error: o.error }
 }
 
 /**
@@ -254,21 +138,6 @@ export async function executeClaimedPair(id: string, who: Who, now: Date, opts: 
 
 // ── Undo ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-export interface UndoOutcome {
-  paused: boolean
-  retired: number
-  problems: string[]
-  /** Nothing of the harvest stands any more: the keyword not enabled and no source negative standing. */
-  complete: boolean
-  /**
-   * Batch 2 re-review fix — the halves of the pair already back before this call (a source negative no longer standing, the
-   * keyword no longer enabled): above 0 with `complete` false, the pair is half put back (auto-undo keeps it open).
-   */
-  alreadyBack: number
-  /** The action-log rows the undo wrote (the keyword's pause first, then each retire). */
-  actionLogIds: string[]
-}
-
 /**
  * Put a harvest back AS A PAIR (batch 2 fix; Owner 10-08: the safety net restores the source): every source negative it
  * made retired, so the term runs where it ran before, then the new keyword paused (it stays at Amazon). Both halves are
@@ -279,54 +148,10 @@ export interface UndoOutcome {
  */
 export async function undoHarvest(id: string, who: Who): Promise<UndoOutcome> {
   const r = await prisma.adsBrainHarvest.findUniqueOrThrow({ where: { id } })
-  const negatives = sourcesOf(r.sources).map((s) => s.negativeTargetId).filter((x): x is string => !!x)
-  const ids = [...(r.keywordTargetId ? [r.keywordTargetId] : []), ...negatives]
-  const rows = ids.length
-    ? await prisma.adTarget.findMany({ where: { id: { in: ids } }, select: { id: true, isNegative: true, status: true, adGroup: { select: { campaignId: true, campaign: { select: { name: true, marketplace: true, adProduct: true } } } } } })
-    : []
-  const keyword = rows.find((t) => t.id === r.keywordTargetId && !t.isNegative && String(t.status) === 'ENABLED') ?? null
-  const standing = rows.filter((t) => t.isNegative && String(t.status) !== 'ARCHIVED')
-  const alreadyBack = negatives.filter((n) => !standing.some((t) => t.id === n)).length + (r.keywordTargetId && !keyword ? 1 : 0)
-  const out: UndoOutcome = { paused: false, retired: 0, problems: [], complete: false, actionLogIds: [], alreadyBack }
-  if (!keyword && !standing.length) return { ...out, complete: true }
-
-  // Both halves asked of the gate first, as the writer that will run them (nothing is written).
-  const person = who.manual ? { manual: true, ...(who.confirmOwnLimits ? { confirmOwnLimits: true } : {}) } : {}
-  const halves = [
-    ...standing.map((t) => ({ half: 'the source negative', t, ctx: { dimension: 'negatives' } })),
-    ...(keyword ? [{ half: 'the keyword\'s pause', t: keyword, ctx: { isSuppression: true } }] : []),
-  ]
-  for (const { half, t, ctx } of halves) {
-    const g = t.adGroup
-    const gate = await checkAdsWriteGate({
-      marketplace: g?.campaign.marketplace ?? null, campaignId: g?.campaignId ?? null, payloadValueCents: 0, field: 'status', fields: ['status'],
-      adProduct: g?.campaign.adProduct ?? null, actor: who.actor, ...ctx, ...person,
-    } as never)
-    if (gate.allowed === false) {
-      return { ...out, problems: [`nothing was put back — the write gate refuses ${half} in campaign "${g?.campaign.name ?? '?'}" (${gate.deniedAt}: ${gate.reason}): the undo is written whole or not at all`] }
-    }
-  }
-
-  // 1. The source negatives retired: the term runs where it ran before.
-  if (standing.length) {
-    const { retireNegatives } = await import('../negatives-retire.service.js')
-    // Negative Targeting (review S7) — the brain harvest's own undo lifts its own source negatives (approved by a person too).
-    const res = await retireNegatives({ adTargetIds: standing.map((t) => t.id), actor: who.actor as never, retireReason: who.reason, changeSetId: who.changeSetId, manual: who.manual, owners: { undo: true } })
-    for (const o of res.outcomes) {
-      if (o.kind === 'retired' || o.kind === 'removed_local') { out.retired++; if (o.actionLogId) out.actionLogIds.push(o.actionLogId) }
-      else if (o.kind !== 'skipped') out.problems.push(`a source negative was not retired (${o.reason ?? o.kind})`)
-    }
-  }
-  // 2. The keyword paused, only once every source runs the term again (never left without a home).
-  if (keyword && out.problems.length) out.problems.push('the keyword was left running: a source still blocks the term, so pausing it now would leave the term without a home — send the undo again')
-  else if (keyword) {
-    const { updateAdTargetWithSync } = await import('../ads-mutation.service.js')
-    const res = await updateAdTargetWithSync({ adTargetId: keyword.id, patch: { status: 'PAUSED' }, actor: who.actor as never, reason: who.reason, changeSetId: who.changeSetId, manual: who.manual, letsGo: true, askGate: true })
-    if (res.ok) { out.paused = true; if (res.actionLogId) out.actionLogIds.unshift(res.actionLogId) }
-    else out.problems.push(`the keyword was not paused (${res.error ?? 'refused'}): the term runs in its sources and its exact keyword until the undo is sent again`)
-  }
-  out.complete = !out.problems.length
-  return out
+  // HARVEST ENGINE — the engine's one undo (harvest/write.ts undoHarvestWrite): its funnel blocks too (the page's and
+  // Claude's harvests), and the keyword paused only when this harvest made or enabled it (one that stood before stays).
+  const before = ((r.evidence ?? {}) as { keywordBefore?: string }).keywordBefore
+  return undoHarvestWrite({ keywordTargetId: r.keywordTargetId, pauseKeyword: before !== 'stood', blocks: [...sourcesOf(r.sources), ...blocksOf((r as { funnel?: unknown }).funnel)] }, who)
 }
 
 // ── Requests a person decides ───────────────────────────────────────────────────────────────────────────────────
@@ -372,6 +197,8 @@ export async function proposeCampaign(market: string, plan: NewCampaignPlan, why
   return ask(CAMPAIGN_TOOL, {
     market, name: plan.name, skus: plan.skus, dailyBudgetCents: plan.dailyBudgetCents, defaultBidCents: plan.defaultBidCents,
     ...(plan.keywords.length ? { keywords: plan.keywords } : { productTargets: plan.productTargets }),
+    // HARVEST ENGINE (10-08 N2: one portfolio per product) — the new campaign is born in the product's portfolio.
+    ...(plan.portfolioId ? { portfolioId: plan.portfolioId } : {}),
     biddingStrategy: 'down',
     why: why.slice(0, 300),
   })

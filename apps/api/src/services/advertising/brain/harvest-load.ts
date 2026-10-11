@@ -114,8 +114,9 @@ export async function loadHarvestMarket(market: string, due: readonly DueProduct
     }) as Promise<OverrideRow[]>,
     prisma.adsPlaybook.findMany({ where: { channel: 'AMAZON', market, level: 'PRODUCT', scopeId: { in: roots } }, select: { id: true, scopeId: true } }),
     prisma.adsHarvestDestination.findMany({ where: { matchType: { in: ['EXACT', 'PRODUCT'] } }, select: { scopeGrain: true, scopeId: true, matchType: true, adGroupId: true, negateAtSource: true } }),
-    prisma.adsBrainHarvest.findMany({ where: { marketplace: market, productId: { in: roots } }, select: { productId: true, term: true, status: true, destinationKind: true, decidedAt: true, changedAt: true, landedAt: true } }),
-    prisma.adsBrainHarvest.count({ where: { marketplace: market, destinationKind: 'NEW_CAMPAIGN', decidedAt: { gte: weekAgo }, status: { in: [...TOOK] } } }),
+    prisma.adsBrainHarvest.findMany({ where: { marketplace: market, productId: { in: roots } }, select: { productId: true, term: true, status: true, destinationKind: true, decidedAt: true, changedAt: true, landedAt: true, skippedUntil: true, skippedForGood: true, actorKind: true } }),
+    // L5 (HCORE review) — the brain's caps count the brain's own harvests (a person's page harvests never use them up).
+    prisma.adsBrainHarvest.count({ where: { marketplace: market, actorKind: 'BRAIN', destinationKind: 'NEW_CAMPAIGN', decidedAt: { gte: weekAgo }, status: { in: [...TOOK] } } }),
     groupIds.length ? prisma.adProductAd.findMany({ where: { adGroupId: { in: groupIds }, productId: { not: null } }, select: { adGroupId: true, productId: true, sku: true } }) : Promise.resolve([]),
     prisma.adsBrainBudgetDecision.findMany({ where: { marketplace: market, productId: { in: roots }, envelopeCents: { not: null } }, orderBy: { createdAt: 'desc' }, select: { productId: true, envelopeCents: true, month: true, createdAt: true }, take: 50 }),
     prisma.campaign.findMany({ where: { adProduct: 'SPONSORED_PRODUCTS' }, select: { name: true, marketplace: true } }),
@@ -129,6 +130,8 @@ export async function loadHarvestMarket(market: string, due: readonly DueProduct
   ])
   // AB-16 — the structure lever's new campaigns this week and its standing single-keyword campaigns: the same caps.
   const structureUsed = await structureCampaignsUsed(market, roots, weekAgo)
+  // HARVEST ENGINE — the source ad groups a person paused harvesting from (the Keyword Harvest page's Sources view).
+  const paused = new Set(groupIds.length ? (await prisma.adsHarvestSourcePause.findMany({ where: { adGroupId: { in: groupIds } }, select: { adGroupId: true } })).map((p) => p.adGroupId) : [])
   const links = playbooks.length
     ? await prisma.adsPlaybookLink.findMany({ where: { playbookId: { in: playbooks.map((p) => p.id) }, kind: 'slot' }, select: { playbookId: true, key: true, refId: true, adGroupId: true } })
     : []
@@ -196,20 +199,28 @@ export async function loadHarvestMarket(market: string, due: readonly DueProduct
     }
     const mine = records.filter((r) => r.productId === root)
     const recordMap = new Map<string, HarvestRecordLite>()
-    for (const r of mine) if (isHarvestStatus(r.status)) recordMap.set(r.term, { term: r.term, status: r.status, changedAt: r.changedAt, landedAt: r.landedAt })
+    for (const r of mine) {
+      if (!isHarvestStatus(r.status)) continue
+      const skipped = r.skippedForGood || (r.skippedUntil != null && r.skippedUntil.getTime() > now.getTime())
+      recordMap.set(r.term, { term: r.term, status: r.status, changedAt: r.changedAt, landedAt: r.landedAt, ...(skipped ? { skipped: true } : {}) })
+    }
     const today = startOfUtcDay(now)
+    const brains = mine.filter((r) => r.actorKind === 'BRAIN')
     const used = {
-      keywordsToday: mine.filter((r) => r.decidedAt >= today && (TOOK as readonly string[]).includes(r.status)).length,
-      campaignsThisWeek: mine.filter((r) => r.destinationKind === 'NEW_CAMPAIGN' && r.decidedAt >= weekAgo && (TOOK as readonly string[]).includes(r.status)).length + (structureUsed.byProduct.get(root)?.week ?? 0),
+      keywordsToday: brains.filter((r) => r.decidedAt >= today && (TOOK as readonly string[]).includes(r.status)).length,
+      campaignsThisWeek: brains.filter((r) => r.destinationKind === 'NEW_CAMPAIGN' && r.decidedAt >= weekAgo && (TOOK as readonly string[]).includes(r.status)).length + (structureUsed.byProduct.get(root)?.week ?? 0),
       marketCampaignsThisWeek: marketCampaigns + structureUsed.market,
-      skcs: mine.filter((r) => r.destinationKind === 'NEW_CAMPAIGN' && (CAMPAIGN_STANDING as readonly string[]).includes(r.status)).length + (structureUsed.byProduct.get(root)?.skcs ?? 0),
+      skcs: brains.filter((r) => r.destinationKind === 'NEW_CAMPAIGN' && (CAMPAIGN_STANDING as readonly string[]).includes(r.status)).length + (structureUsed.byProduct.get(root)?.skcs ?? 0),
     }
     const decisions = decided.byProduct.get(root) ?? []
     const candidates: HarvestCandidateFacts[] = decisions.filter((x) => x.state === 'HARVEST_CANDIDATE').map((decision) => {
       const sources = [...(p.terms.get(decision.term)?.sources ?? new Map<string, number>())].filter(([id]) => own.has(id)).map(([adGroupId, clicks]) => ({ adGroupId, clicks }))
       const top = [...sources].sort((a, b) => b.clicks - a.clicks || a.adGroupId.localeCompare(b.adGroupId))[0]?.adGroupId ?? null
-      return { decision, sources, stored: storedFor(top, isAsin(decision.term)) }
+      return { decision, sources, stored: storedFor(top, isAsin(decision.term)), top }
     })
+      // HARVEST ENGINE — no harvest takes a term from a source a person paused (its main source: the most clicks).
+      .filter((c) => !c.top || !paused.has(c.top))
+      .map(({ top: _top, ...c }) => c)
     // A new campaign: the SKUs its own campaigns advertise, the first budget, the names taken.
     const skus = [...new Set(productAds.filter((a) => own.has(a.adGroupId)).map((a) => a.sku ?? productById.get(a.productId!)?.sku ?? null).filter((s): s is string => !!s))].sort().slice(0, 250)
     const pct = Number(d.settings.values.firstBudgetPctOfEnvelope.value ?? 10)
@@ -239,12 +250,21 @@ export async function loadHarvestMarket(market: string, due: readonly DueProduct
         marketCampaignsPerWeek: MARKET_NEW_CAMPAIGNS_PER_WEEK,
       },
       ceiling: harvestCeiling(),
-      newCampaign: skus.length ? { skus, dailyBudgetCents, budgetWhy, productLabel: rootRow?.name ?? rootRow?.sku ?? root, takenNames } : null,
+      newCampaign: skus.length ? { skus, dailyBudgetCents, budgetWhy, productLabel: rootRow?.name ?? rootRow?.sku ?? root, takenNames, portfolioId: portfolioOf(own) } : null,
       newCampaignRefusal: skus.length ? null : 'its own campaigns advertise no SKU Nexus knows',
     }
     out.products.set(root, { facts, candidates, decisions })
   }
   return out
+}
+
+/** HARVEST ENGINE (10-08 N2) — the product's portfolio: the one most of its own campaigns sit in (Amazon's id), else null. */
+export function portfolioOf(groups: ReadonlyMap<string, { campaignId: string; portfolioId?: string | null }>): string | null {
+  const byCampaign = new Map<string, string | null>()
+  for (const g of groups.values()) byCampaign.set(g.campaignId, g.portfolioId ?? null)
+  const tally = new Map<string, number>()
+  for (const p of byCampaign.values()) if (p && !p.startsWith('local-pf-')) tally.set(p, (tally.get(p) ?? 0) + 1)
+  return [...tally].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] ?? null
 }
 
 /** Ended harvests still inside the cooldown (the decision skips them): for the read view. */

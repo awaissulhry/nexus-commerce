@@ -12,7 +12,8 @@
  *                                bid:     all of them → ONE bulk-ad-bid-change (one run of the daily cap); one alone →
  *                                         set-target-bid
  *                                neg:     create-negative-keyword (an exact negative in the ad group it spent in)
- *                                grad:    graduate-keyword, at the harvest's own starting bid (the term's cost per click)
+ *                                grad:    graduate-keyword: the harvest engine's change set (the keyword, its negative in every
+ *                                         source of the product, the funnel blocks) at the engine's start bid
  *                                budget:  set-campaign-budget
  *                                retail:  suppress-campaign — every bid to the stop bid (stock problems lower bids; Nexus
  *                                         never pauses), put back by restore-campaign
@@ -452,10 +453,11 @@ export async function planRecommendations(a: ApplyArgs): Promise<{ ok: true; tit
   }
   for (const r of of('graduate')) {
     const term = harvestOf(r)!
-    // The harvest's own starting bid (applyHarvest): the term's cost per click over the window it was judged on.
+    // Keyword Harvest page rebuild (lane HMCP) — graduate-keyword asks the harvest engine for the change set (the keyword,
+    // its negative in every source of the product, the funnel blocks); its start bid is the engine's one start bid (the
+    // bid brain's goal bid), unless the person set one.
     const own = overrides.get(r.id)?.proposedBidCents
-    const bidCents = own ?? (term.clicks > 0 ? Math.max(BID_FLOOR_CENTS, Math.round(term.costCents / term.clicks)) : null)
-    steps.push({ tool: 'graduate-keyword', args: { query: term.query, sourceExternalCampaignId: term.externalCampaignId, sourceExternalAdGroupId: term.externalAdGroupId, ...(bidCents != null ? { bidCents } : {}), why, source: source(r.id) } })
+    steps.push({ tool: 'graduate-keyword', args: { query: term.query, sourceExternalCampaignId: term.externalCampaignId, sourceExternalAdGroupId: term.externalAdGroupId, ...(own != null ? { bidCents: Math.max(BID_FLOOR_CENTS, Math.round(own)) } : {}), why, source: source(r.id) } })
   }
   for (const r of of('budget')) {
     const change = firstChange(r)!
@@ -520,7 +522,7 @@ const applyAdRecommendations: AgentTool = {
     `Carry out the Amazon ad engines' recommendations by id (from ad-recommendations; up to ${MAX_IDS}) as ONE change plan. `
     + 'Each id becomes the change tool that does it, with the value the engine recommended (or your override) fixed in the '
     + 'request: bid ids → one bulk-ad-bid-change (set-target-bid for one), neg → create-negative-keyword (exact, in the ad '
-    + 'group it spent in), grad → graduate-keyword at the term\'s cost per click, budget → set-campaign-budget, retail → '
+    + 'group it spent in), grad → graduate-keyword (the harvest engine\'s one change set, at its start bid), budget → set-campaign-budget, retail → '
     + 'suppress-campaign (bids to the stop bid: Nexus never pauses; restore-campaign puts them back), rule → one '
     + 'decide-automation-suggestions (a value of your own is the one its limits judge). An autopilot plan\'s decision '
     + '(autopilot:), its values fixed now: a bid decision → the bids the plan\'s optimizer computes now at the plan\'s '

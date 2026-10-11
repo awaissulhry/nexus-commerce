@@ -1,0 +1,21 @@
+/*
+ * Keyword Harvest page, Sources view (2026-10-11) — layout only, design-system tokens only. A long name gets a second
+ * line before it is cut (re-audit S14): product titles and a single rule's name.
+ */
+.clamp2 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.3;
+  min-width: 0;
+}
+
+.cell {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  min-width: 0;
+}

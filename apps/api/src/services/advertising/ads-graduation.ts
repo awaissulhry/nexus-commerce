@@ -102,6 +102,27 @@ const STRUCTURAL_ACTIONS = new Set([
   'create_amazon_promotion',
 ])
 
+/**
+ * D2 (Owner 2026-10-10, Keyword Harvest page) — the harvest family: a harvest rule may run on Auto, INSIDE ITS CAPS
+ * (HARVEST_RULE_CAPS, enforced where its harvest writes: ads-harvest.service.ts applyHarvest): at most so many new
+ * keywords a day per rule, only into the product's own campaigns (never a shared or another product's campaign), and
+ * never a new campaign (a new campaign is always a person's: the Keyword Harvest page or an approved request). Its source
+ * negatives keep the negation family's precondition: protected terms written down first.
+ * The builder's keyword-harvesting slug expands to promote_to_exact + add_negative_exact (its source block): the same
+ * family when they come together.
+ */
+const HARVEST_ACTIONS = new Set(['harvest_and_negate', 'promote_to_exact'])
+
+/** D2 — the caps a harvest rule runs inside on Auto (Owner 2026-10-10). */
+export const HARVEST_RULE_CAPS = Object.freeze({
+  /** New keywords (and product targets) one rule creates a day (UTC), across its products. */
+  keywordsPerDay: Math.max(0, Number(process.env.NEXUS_HARVEST_RULE_KEYWORDS_PER_DAY ?? 10) || 0),
+  /** New campaigns a rule may create a week: none (a new campaign is a person's). */
+  campaignsPerWeek: 0,
+  /** Only into the product's own campaigns (brain/ownership.ts: a campaign that advertises that product alone). */
+  ownCampaignsOnly: true,
+})
+
 /** Actions that only tell someone something. Harmless at any level. */
 const NOTIFY_ACTIONS = new Set(['notify', 'alert_operator', 'log_only'])
 
@@ -153,6 +174,34 @@ export function graduationCeiling(input: GraduationInput): GraduationVerdict {
   if (stopWaste) return stopWaste
 
   const structural = acts.filter((t) => STRUCTURAL_ACTIONS.has(t))
+  // D2 — a harvest rule (only harvest actions, with the builder's source block) may reach Auto inside its caps.
+  const harvestFamily = structural.some((t) => HARVEST_ACTIONS.has(t))
+    && structural.every((t) => HARVEST_ACTIONS.has(t) || t === 'add_negative_exact')
+    && acts.every((t) => HARVEST_ACTIONS.has(t) || t === 'add_negative_exact')
+  if (harvestFamily) {
+    // A harvest_and_negate rule that also blocks terms that waste spend (no `mode: 'harvest'`): only its harvest half is
+    // D2's; the blocking half has no Auto of its own here, so the rule asks.
+    const wasteHalf = (Array.isArray(input.actions) ? input.actions : []).some((a) => (a as { type?: unknown } | null)?.type === 'harvest_and_negate' && (a as { mode?: unknown }).mode !== 'harvest')
+    if (wasteHalf) {
+      return {
+        maxLevel: 'PROPOSE',
+        reason: 'It also blocks terms that waste spend: only a rule that adds keywords alone runs on Auto (D2); this one asks.',
+        blockedBy: ['harvest_and_negate'],
+      }
+    }
+    if (!input.hasKeywordProtections) {
+      return {
+        maxLevel: 'PROPOSE',
+        reason: 'Harvests and blocks the source, and no protected terms are configured — add a whitelist first, or a brand term can be blocked with nothing to stop it.',
+        blockedBy: structural,
+      }
+    }
+    return {
+      maxLevel: 'AUTO',
+      reason: `Harvests inside its caps on Auto: at most ${HARVEST_RULE_CAPS.keywordsPerDay} new keywords a day, only into the product's own campaigns, never a new campaign (D2).`,
+      blockedBy: [],
+    }
+  }
   if (structural.length > 0) {
     // The negation family is the one case with a precondition rather than a hard ceiling:
     // negating is reversible IF the terms you must never negate are written down first.

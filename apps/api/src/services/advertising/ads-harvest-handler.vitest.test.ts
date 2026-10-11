@@ -54,6 +54,8 @@ vi.mock('./harvest-landing-guard.js', async (original) => ({
   servingLandings: (items: Array<{ adTargetId: string }>) => landingGuard.serving(items),
   switchOnBid: (a: { wantCents: number }) => landingGuard.switchBid(a),
 }))
+const engineRun = vi.hoisted(() => ({ run: vi.fn(async (_a: { ruleId: string; terms: unknown[] }) => ({ harvested: 1, held: [] as unknown[], capped: 0, items: [] as unknown[] })) }))
+vi.mock('./harvest/rule-run.js', () => ({ runRuleHarvest: (a: { ruleId: string; terms: unknown[] }) => engineRun.run(a) }))
 vi.mock('../../db.js', () => ({
   default: {
     amazonAdsSearchTerm: { groupBy: vi.fn() },
@@ -74,7 +76,9 @@ import { ACTION_HANDLERS } from '../automation-rule.service.js'
 import './automation-action-handlers.js'
 
 const db = vi.mocked(prisma, true)
-const meta = { dryRun: false, ruleId: 'rule-hp1' }
+// HCORE review H3 + M7 — the legacy writer below runs for a rule run a PERSON approved (an accepted card); a rule's
+// AUTOMATIC run harvests on the one engine instead (harvest/rule-run.ts), pinned at the end of this file.
+const meta = { dryRun: false, ruleId: 'rule-hp1', operatorApproved: true }
 const promote = (action: Record<string, unknown>, context: Record<string, unknown>) =>
   (ACTION_HANDLERS.promote_to_exact as (a: unknown, c: unknown, m: unknown) => Promise<{ ok: boolean; error?: string; output?: Record<string, unknown> }>)(action, context, meta)
 
@@ -401,6 +405,18 @@ describe('HP1 — negate-in-source respects the same mapping', () => {
  * with its own numbers: one source (src1 = EXT-SRC, automatic), EXACT lands in dst1. Two search terms: a converting one
  * (3 orders, CPC 0.80) and a wasting one (0 orders, 20.00 spent).
  */
+describe('HCORE H3 + M7 — promote_to_exact on Auto harvests on the one engine', () => {
+  it('an automatic run sends the term to the engine (its mapped exact destination named), never the legacy create', async () => {
+    db.adGroup.findFirst.mockResolvedValue({ id: 'src1', externalAdGroupId: 'EXT-SRC', campaignId: 'c1', name: 'Auto', campaign: AUTO_SP } as never)
+    engineRun.run.mockClear()
+    const action = { type: 'promote_to_exact', harvest: { blocks: [{ look: ['src1'], create: [{ adGroupId: 'dst1', types: ['EXACT'] }] }], filters: { containsAny: [], notContains: [], brandExclude: [], competitorOnly: false }, dedupe: true } }
+    const r = await (ACTION_HANDLERS.promote_to_exact as (a: unknown, c: unknown, m: unknown) => Promise<{ ok: boolean; output?: Record<string, unknown> }>)(action, CTX, { dryRun: false, ruleId: 'rule-hp1' })
+    expect(engineRun.run).toHaveBeenCalledWith({ ruleId: 'rule-hp1', terms: [{ query: 'giacca moto uomo', externalAdGroupId: 'EXT-SRC', match: 'EXACT', toAdGroupId: 'dst1' }] })
+    expect(h.createKeywordLocal).not.toHaveBeenCalled()
+    expect(r.output).toMatchObject({ engine: { harvested: 1 } })
+  })
+})
+
 describe('PB-6a — harvest_and_negate keeps winners and runs only its own half', () => {
   const harvest = (action: Record<string, unknown>, m: Record<string, unknown> = meta) =>
     (ACTION_HANDLERS.harvest_and_negate as (a: unknown, c: unknown, m: unknown) => Promise<{ ok: boolean; output?: Record<string, any> }>)(action, {}, m)
@@ -425,6 +441,18 @@ describe('PB-6a — harvest_and_negate keeps winners and runs only its own half'
       args.where.id ? GROUPS.filter((g) => args.where.id!.in.includes(g.id))
         : args.where.externalAdGroupId ? GROUPS.filter((g) => args.where.externalAdGroupId!.in.includes(g.externalAdGroupId)) : [],
     )) as never)
+  })
+
+  it('HCORE H3 + M7 — the rule\'s AUTOMATIC run (no card, no person) harvests on the one engine: no legacy create; the negatives half stays', async () => {
+    engineRun.run.mockClear()
+    const r = await harvest({ ...RULE, mode: 'harvest' }, { dryRun: false, ruleId: 'rule-hp1' })
+    expect(h.createKeywordLocal).not.toHaveBeenCalled()
+    expect(engineRun.run).toHaveBeenCalledWith({ ruleId: 'rule-hp1', terms: [{ query: 'giacca moto uomo', externalAdGroupId: 'EXT-SRC', match: 'EXACT', toAdGroupId: 'dst1' }] })
+    expect(r.output).toMatchObject({ keywordsGraduated: 1, engine: { harvested: 1, capped: 0 } })
+    // A card a person approved keeps its own (legacy) path: the engine is not asked.
+    engineRun.run.mockClear()
+    await harvest({ ...RULE, mode: 'harvest' })
+    expect(engineRun.run).not.toHaveBeenCalled()
   })
 
   it('mode "harvest" graduates only; mode "negative" negates only (each stored rule ran both halves before)', async () => {

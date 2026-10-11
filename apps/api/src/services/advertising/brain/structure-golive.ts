@@ -58,6 +58,11 @@ export async function structureGoLive(campaignIds: readonly string[]): Promise<S
     })
     const rowOf = new Map<string, (typeof rows)[number]>()
     for (const r of rows) for (const id of r.builtCampaignIds) if (ids.includes(id)) rowOf.set(id, r)
+    // HARVEST ENGINE (D1 = B) — a new campaign the brain's harvest built is brain-built too (brain/harvest-golive.ts).
+    if (ids.some((id) => !rowOf.has(id))) {
+      const { harvestBuiltRows } = await import('./harvest-golive.js')
+      for (const r of await harvestBuiltRows(ids.filter((id) => !rowOf.has(id)))) for (const id of r.builtCampaignIds) rowOf.set(id, r as (typeof rows)[number])
+    }
     if (ids.some((id) => !rowOf.has(id))) return null
     const pairs = ids.map((id) => ({ campaignId: id, row: rowOf.get(id)!, productId: productOf(rowOf.get(id)!, id) }))
     const products = [...new Set(pairs.map((p) => p.productId))]

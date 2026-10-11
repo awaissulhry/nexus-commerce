@@ -174,7 +174,11 @@ export interface StoredDestinationFact {
 export interface SlotFact { key: string; campaignId: string; adGroupId: string | null }
 
 /** A harvest the product already has (AdsBrainHarvest), as the decision reads it. */
-export interface HarvestRecordLite { term: string; status: HarvestStatus; changedAt: Date; landedAt: Date | null }
+export interface HarvestRecordLite {
+  term: string; status: HarvestStatus; changedAt: Date; landedAt: Date | null
+  /** HARVEST ENGINE — a person skipped the term (until a later date, or for good): the brain does not decide it meanwhile. */
+  skipped?: boolean
+}
 
 /** One candidate: the ledger's decision and the ad groups of the product where the term ran (clicks per ad group). */
 export interface HarvestCandidateFacts {
@@ -194,6 +198,8 @@ export interface NewCampaignFacts {
   productLabel: string
   /** Names already taken in the market (a new campaign's name must be new there). */
   takenNames: ReadonlySet<string>
+  /** HARVEST ENGINE (10-08 N2 / D1 = B) — the product's portfolio (the one its own campaigns sit in): the new campaign is born in it. */
+  portfolioId?: string | null
 }
 
 export interface HarvestProductFacts {
@@ -245,6 +251,8 @@ export interface NewCampaignPlan {
   keywords: Array<{ text: string; matchType: 'EXACT'; bidCents: number }>
   productTargets: string[]
   budgetWhy: string
+  /** The product's portfolio the campaign is born in (Amazon's id); null: the product has none. */
+  portfolioId?: string | null
 }
 
 /** What this run does with a decision: log it (shadow), ask a person, write it (AUTO), or nothing (held). */
@@ -457,6 +465,8 @@ export function decideHarvests(candidates: readonly HarvestCandidateFacts[], fac
     const d = c.decision
     const record = facts.records.get(d.term)
     if (record && STANDING_STATUSES.includes(record.status)) continue
+    // HARVEST ENGINE — a person skipped it (the Keyword Harvest page): not decided while the skip stands.
+    if (record?.skipped) continue
     if (record && ENDED_STATUSES.includes(record.status) && now.getTime() - record.changedAt.getTime() < cooldownDays(record.status) * 86_400_000) continue
     const evidence = harvestEvidence(d, windowDays)
     const held = (why: string, heldBy: string, destination: HarvestDestinationPlan = { kind: 'NONE', why: heldBy }, sources: SourcePlan[] = [], bid: HarvestDecision['bid'] = null, level: Level | null = null): HarvestDecision =>
@@ -516,6 +526,7 @@ export function decideHarvests(candidates: readonly HarvestCandidateFacts[], fac
       skus: nc.skus, dailyBudgetCents: nc.dailyBudgetCents, defaultBidCents: bid.cents,
       keywords: d.isAsin ? [] : [{ text: d.term, matchType: 'EXACT', bidCents: bid.cents }],
       productTargets: d.isAsin ? [d.term.toUpperCase()] : [], budgetWhy: nc.budgetWhy,
+      portfolioId: nc.portfolioId ?? null,
     }
     const destination: HarvestDestinationPlan = { kind: 'NEW_CAMPAIGN', how: 'new', why: `${chosen.why}: a new campaign "${plan.name}" through create-ad-campaign (the Single Campaign builder's own launch: born at the floor, off the live-write allowlist), approved by a person (D1 = B)`, plan }
     const sources = sourcePlans(c, null, facts)

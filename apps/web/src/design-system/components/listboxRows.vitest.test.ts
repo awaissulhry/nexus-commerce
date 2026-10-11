@@ -14,6 +14,9 @@ describe('ListboxPanel rows with a text chip', () => {
     const css = web('components/listbox-rows.css')
     expect(css).toMatch(/button\[role="option"\]:has\(> \.nds-listbox-lead > \.nds-tag\)\s*\{\s*align-items:\s*baseline;/)
   })
+  it('the trigger\'s label starts right after a leading chip (S6), not centred between the chip and the chevron', () => {
+    expect(web('components/listbox-rows.css')).toMatch(/\.nds-listbox-btn > \.nds-listbox-lead \+ span \{ flex: 1 1 auto; min-width: 0; \}/)
+  })
   it('the panel loads the rule, and Factory carries the same files', () => {
     expect(web('components/ListboxPanel.tsx')).toContain("import './listbox-rows.css'")
     expect(factory('components/listbox-rows.css')).toBe(web('components/listbox-rows.css'))

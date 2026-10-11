@@ -6344,6 +6344,15 @@
     },
     "relations": []
   },
+  "AdsHarvestSourcePause": {
+    "scalar": {},
+    "compound": {
+      "ad_group": [
+        "adGroupId"
+      ]
+    },
+    "relations": []
+  },
   "AdsBrainRetirement": {
     "scalar": {},
     "compound": {},

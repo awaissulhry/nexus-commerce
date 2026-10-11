@@ -53,6 +53,9 @@ export {
   reviewTitle, saveWords, saveButtonWords, saveHeldReason, raiseCount, ackWords, reviewColumns, reviewNote, doneSummary, resultVerb,
   type ReviewChange, type ReviewResult, type ReviewConflict, type ReviewState,
 } from './reviewChangesModel'
+// Keyword Harvest page, lane HTO (2026-10-11) — the review body without the Modal: a review that is a STEP inside a window.
+export { ReviewChangesPanel, type ReviewChangesPanelProps } from './ReviewChangesPanel'
+export type { ReviewPanelChange, ReviewPanelResult, ReviewGroup } from './reviewChangesPanelModel'
 // Bid page polish round 2 (2026-10-10) — a row's detail in a centered dialog: tabs, Prev / Next (K / J), stacked reviews.
 export { DetailModal, type DetailModalProps, type DetailNav } from './DetailModal'
 export {

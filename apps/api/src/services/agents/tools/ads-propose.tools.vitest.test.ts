@@ -9,8 +9,8 @@
  * once approved it writes as the approver with changeSetId = the approval, records the change, and undo-change puts the
  * old bid back; a moved bid, a changed reach and a request made before the switch are never run.
  * create-negative-keyword (A5): ad-group negatives only, created as the approver, undone by undo-ad-change retiring
- * them; createNegative binds the live-write allowlist when it is given the campaign. graduate-keyword (A5): into the
- * named or the resolved harvest destination, created as the approver, undone by lowering it to the floor (d3).
+ * them; createNegative binds the live-write allowlist when it is given the campaign. graduate-keyword (HMCP): a door onto
+ * the harvest engine (ads-harvest-postgres.vitest.test.ts); here only its refusals.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
@@ -291,104 +291,26 @@ describe('A5 — create-negative-keyword: ad-group negatives only, executed once
   })
 })
 
-describe('A5 — graduate-keyword: into the named or resolved ad group, executed once approved, undone to the floor', () => {
-  it('previews the suggested bid from real cost and clicks, the ad group, where it lands', async () => {
-    const r = await preview('graduate-keyword', { query: 'giacca pelle', sourceExternalCampaignId: 'EXT-c-it', destExternalAdGroupId: 'EXT-g-c-it' })
-    expect(r.ok, r.error).toBe(true)
-    expect(r.preview).toMatchObject({ query: 'giacca pelle', suggestedBidCents: 168, destination: { id: 'c-it' }, destinationAdGroup: { id: 'g-c-it', why: 'named in the request' }, currency: 'EUR', reach: { reach: 'sandbox' } })
-  })
-
-  it('without a named ad group it takes the stored harvest destination — another campaign of the market; one gone or in another market is refused by name (batch 2 re-review fix)', async () => {
-    await inside(() => database.client.adsHarvestDestination.create({ data: { scopeGrain: 'campaign', scopeId: 'c-it', matchType: 'EXACT', adGroupId: 'g-c-pin', updatedBy: 'test' } }))
-    const r = await preview('graduate-keyword', { query: 'giacca pelle', sourceExternalCampaignId: 'EXT-c-it', sourceExternalAdGroupId: 'EXT-g-c-it' })
-    expect(r.preview).toMatchObject({ destination: { id: 'c-pin' }, destinationAdGroup: { id: 'g-c-pin', externalAdGroupId: 'EXT-g-c-pin', why: 'the harvest destination stored for this scope' }, currency: 'EUR' })
-    // A named destination campaign that is not where the stored destination is: refused, name the ad group.
-    expect((await preview('graduate-keyword', { query: 'giacca pelle', sourceExternalCampaignId: 'EXT-c-it', sourceExternalAdGroupId: 'EXT-g-c-it', destExternalCampaignId: 'EXT-c-it' })).error)
-      .toMatch(/harvest destination for this term is in Italy pinned/)
-    // His stored destination in another market, or gone: refused by name, never the resolver's own pick.
-    await inside(() => database.client.adsHarvestDestination.updateMany({ data: { adGroupId: 'g-c-uk' } }))
-    expect((await preview('graduate-keyword', { query: 'giacca pelle', sourceExternalCampaignId: 'EXT-c-it', sourceExternalAdGroupId: 'EXT-g-c-it' })).error)
-      .toMatch(/^The harvest destination stored for this match type \(at the campaign grain\), “group c-uk”, is in UK, but this search term is from IT, so nothing was created\..* Or name one: destExternalAdGroupId\./)
-    await inside(() => database.client.adsHarvestDestination.updateMany({ data: { adGroupId: 'g-no-such-group' } }))
-    expect((await preview('graduate-keyword', { query: 'giacca pelle', sourceExternalCampaignId: 'EXT-c-it', sourceExternalAdGroupId: 'EXT-g-c-it' })).error)
-      .toMatch(/^The harvest destination stored for this match type \(at the campaign grain\) no longer exists, so nothing was created/)
-    await inside(() => database.client.adsHarvestDestination.deleteMany({}))
-  })
-
-  it('the destination stored for the source\'s product line is taken (batch 2 re-review fix: the line grain, as the Keyword Harvest page and the brain read it)', async () => {
-    const line = await inside(() => database.client.product.create({ data: { sku: 'TEST-B2RF-LINE', name: 'Test line', basePrice: '10.00', amazonAsin: 'B0TESTLINE' } }))
-    await inside(async () => {
-      await database.client.adProductAd.create({ data: { adGroupId: 'g-c-it', productId: line.id, asin: 'B0TESTLINE' } })
-      await database.client.adsHarvestDestination.create({ data: { scopeGrain: 'line', scopeId: line.id, matchType: 'EXACT', adGroupId: 'g-c-pin', updatedBy: 'test' } })
-    })
-    try {
-      const r = await preview('graduate-keyword', { query: 'giacca pelle', sourceExternalCampaignId: 'EXT-c-it', sourceExternalAdGroupId: 'EXT-g-c-it' })
-      expect(r.preview, r.error).toMatchObject({ destination: { id: 'c-pin' }, destinationAdGroup: { id: 'g-c-pin', why: 'the harvest destination stored for this scope' } })
-    } finally {
-      await inside(async () => {
-        await database.client.adsHarvestDestination.deleteMany({})
-        await database.client.adProductAd.deleteMany({ where: { asin: 'B0TESTLINE' } })
-      })
-    }
-  })
-
-  it('refuses no ad group to go to, an existing exact keyword, a non-SP destination (a pin no longer, 4A)', async () => {
-    expect((await preview('graduate-keyword', { query: 'giacca pelle', sourceExternalCampaignId: 'EXT-c-it' })).error).toMatch(/^Name the ad group to add the keyword to/)
-    // 4A — a pin no longer refuses a request a person approves.
-    expect((await preview('graduate-keyword', { query: 'giacca pelle', sourceExternalCampaignId: 'EXT-c-it', destExternalCampaignId: 'EXT-c-pin', destExternalAdGroupId: 'EXT-g-c-pin' })).ok).toBe(true)
-    expect((await preview('graduate-keyword', { query: 'race jacket', sourceExternalCampaignId: 'EXT-c-it', destExternalAdGroupId: 'EXT-g-c-it' })).error).toMatch(/already exists/)
-    expect((await preview('graduate-keyword', { query: 'x', sourceExternalCampaignId: 'EXT-c-it', destExternalCampaignId: 'EXT-c-sb', destExternalAdGroupId: 'EXT-g-c-sb' })).error).toMatch(/not a Sponsored Products campaign/)
-  })
-
-  it('approved, it creates the EXACT keyword as the approver; undo lowers it to the floor, never pausing it', async () => {
-    const asked = await ask('graduate-keyword', { query: 'pelle nera', sourceExternalCampaignId: 'EXT-c-it', destExternalAdGroupId: 'EXT-g-c-it', bidCents: 37 })
-    const done = await approve(asked.approvalId!)
-    expect(done).toMatchObject({ ok: true, status: 'executed', result: { bidCents: 37, reachedAmazon: false } })
-    const targetId = (done.result as Row).targetId as string
-    expect((await sql('SELECT "expressionType", "bidCents", "isNegative", status FROM "AdTarget" WHERE id = $1', [targetId]))[0])
-      .toEqual({ expressionType: 'EXACT', bidCents: 37, isNegative: false, status: 'ENABLED' })
-    expect((await sql('SELECT "userId" FROM "AdvertisingActionLog" WHERE "entityId" = $1 AND "actionType" = $2', [targetId, 'create_keyword']))[0]).toEqual({ userId: 'user:u-approver' })
-    const undo = await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))
-    expect(undo).toMatchObject({ request: { tool: 'set-target-bid', args: { targetId, proposedBidCents: 5 } } })
-    expect(getTool('graduate-keyword')!.reversibility).toBe('partial')
-  })
-})
-
 /**
- * PB-6a (L2) — winners stay: graduate-keyword refuses a term that already lives as an exact keyword for the SAME product
- * (an ad group in the market advertising what the destination advertises), and never refuses one another product holds:
- * two products may buy the same keyword (the Owner's rule 3). Made-up ASINs.
+ * HMCP (2026-10-11) — graduate-keyword is a door onto the harvest engine: the same change set as apply-harvest (the
+ * keyword, the negative exact in every source of the product, the funnel blocks), always a person, undone by the engine
+ * (blocks lifted, keyword paused). ads-harvest-postgres.vitest.test.ts runs it end to end on a real PostgreSQL; here, the
+ * refusals that name what is wrong before the engine plans anything. The engine keeps one owner per term (its AT_HOME).
  */
-describe('PB-6a — graduate-keyword never creates a winner twice for one product', () => {
-  it('refuses a term at home for the same product; allows a term another product holds', async () => {
-    await inside(async () => {
-      for (const [adGroupId, asin] of [['g-c-it', 'B0TESTSAME'], ['g-c-pin', 'B0TESTSAME'], ['g-c-off', 'B0TESTOTHR']]) {
-        await database.client.adProductAd.create({ data: { adGroupId, asin } })
-      }
-    })
-    const same = await preview('graduate-keyword', { query: 'Pinned Jacket', sourceExternalCampaignId: 'EXT-c-it', destExternalAdGroupId: 'EXT-g-c-it' })
-    expect(same.ok).toBe(false)
-    expect(same.error).toMatch(/already lives as an exact keyword in Italy pinned › group c-pin, which advertises the same product/)
-    const other = await preview('graduate-keyword', { query: 'winter jacket', sourceExternalCampaignId: 'EXT-c-it', destExternalAdGroupId: 'EXT-g-c-it' })
-    expect(other.ok, other.error).toBe(true)
-
-    // A destination shared with another product: only the product the term converted for counts (nit b). The term
-    // converted in c-pin (the SAME product only); c-it also advertises the other product, whose ad group holds it.
-    await inside(() => database.client.adProductAd.create({ data: { adGroupId: 'g-c-it', asin: 'B0TESTOTHR' } }))
-    const shared = await preview('graduate-keyword', { query: 'winter jacket', sourceExternalCampaignId: 'EXT-c-pin', sourceExternalAdGroupId: 'EXT-g-c-pin', destExternalCampaignId: 'EXT-c-it', destExternalAdGroupId: 'EXT-g-c-it' })
-    expect(shared.ok, shared.error).toBe(true)
-    await inside(() => database.client.adProductAd.deleteMany({ where: { asin: { in: ['B0TESTSAME', 'B0TESTOTHR'] } } }))
+describe('HMCP — graduate-keyword asks the harvest engine', () => {
+  it('refuses an unknown campaign, a campaign that advertises no product, a source ad group of another campaign', async () => {
+    expect((await preview('graduate-keyword', { query: 'giacca pelle', sourceExternalCampaignId: 'EXT-nope' })).error).toBe('Not queued: campaign EXT-nope not found.')
+    expect((await preview('graduate-keyword', { query: 'giacca pelle', sourceExternalCampaignId: 'EXT-c-it' })).error).toMatch(/^Not queued: campaign "[^"]+" advertises no product Nexus can tie to one product family/)
+    expect((await preview('graduate-keyword', { query: 'giacca pelle', sourceExternalCampaignId: 'EXT-c-it', sourceExternalAdGroupId: 'EXT-g-c-pin' })).error).toMatch(/is not in campaign/)
   })
 
-  it('a sibling variant of one parent is the same product: its exact keyword is a home', async () => {
-    await inside(async () => {
-      const parent = await database.client.product.create({ data: { sku: 'TEST-PB6A-PARENT', name: 'Test parent', basePrice: '10.00', isParent: true } })
-      const [kid1, kid2] = await Promise.all(['1', '2'].map((n) => database.client.product.create({ data: { sku: `TEST-PB6A-KID${n}`, name: `Test kid ${n}`, basePrice: '10.00', parentId: parent.id, amazonAsin: `B0TESTKID${n}` } })))
-      await database.client.adProductAd.create({ data: { adGroupId: 'g-c-it', productId: kid1.id, asin: 'B0TESTKID1' } })
-      await database.client.adProductAd.create({ data: { adGroupId: 'g-c-pin', productId: kid2.id, asin: 'B0TESTKID2' } })
-    })
-    const sibling = await preview('graduate-keyword', { query: 'pinned jacket', sourceExternalCampaignId: 'EXT-c-it', destExternalAdGroupId: 'EXT-g-c-it' })
-    expect(sibling.error).toMatch(/already lives as an exact keyword in Italy pinned › group c-pin/)
-    await inside(() => database.client.adProductAd.deleteMany({ where: { asin: { in: ['B0TESTKID1', 'B0TESTKID2'] } } }))
+  it('a recommendation it carries must be this term\'s own graduation', async () => {
+    const r = await preview('graduate-keyword', { query: 'giacca pelle', sourceExternalCampaignId: 'EXT-c-it', sourceExternalAdGroupId: 'EXT-g-c-it', source: { kind: 'recommendation', id: 'grad:EXT-g-c-it:another term' } })
+    expect(r.error).toMatch(/^Not queued: /)
+  })
+
+  it('declares the engine\'s contract: open world, partly reversible, always a person, the fleet\'s material card fields', () => {
+    expect(getTool('graduate-keyword')).toMatchObject({ readOnly: false, openWorld: true, reversibility: 'partial', maxClaudeTrust: 'ask' })
+    expect(getTool('graduate-keyword')!.strategyBound).toBeUndefined()
   })
 })

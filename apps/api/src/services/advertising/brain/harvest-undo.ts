@@ -32,7 +32,9 @@ const obj = (v: unknown): Obj => (v !== null && typeof v === 'object' && !Array.
 export const harvestUndo: HarvestUndoProvider = {
   async judged(since: Date): Promise<HarvestUndoFact[]> {
     const rows = await prisma.adsBrainHarvest.findMany({
-      where: { verdict: 'WORSE', judgedAt: { gte: since }, status: { in: ['DONE', 'HALF_DONE', 'UNDO_PROPOSED'] }, keywordTargetId: { not: null } },
+      // H4 (HCORE review) — auto-undo acts on the BRAIN's own harvests only: a person's, Claude's or a rule's harvest is
+      // judged and shown on the Keyword Harvest page, and put back only by a person (its Undo).
+      where: { actorKind: 'BRAIN', verdict: 'WORSE', judgedAt: { gte: since }, status: { in: ['DONE', 'HALF_DONE', 'UNDO_PROPOSED'] }, keywordTargetId: { not: null } },
       select: { id: true, productId: true, marketplace: true, destCampaignId: true, term: true, landedAt: true, judgedAt: true, judgement: true },
       orderBy: [{ judgedAt: 'asc' }, { id: 'asc' }],
       take: 500,
@@ -48,8 +50,9 @@ export const harvestUndo: HarvestUndoProvider = {
 
   async undo(id, run) {
     try {
-      const before = await prisma.adsBrainHarvest.findUnique({ where: { id }, select: { status: true } })
+      const before = await prisma.adsBrainHarvest.findUnique({ where: { id }, select: { status: true, actorKind: true } })
       if (!before) return { ok: false, reason: `harvest ${id} is no longer in Nexus` }
+      if (before.actorKind && before.actorKind !== 'BRAIN') return { ok: false, reason: 'it is not the brain\'s harvest: only a person puts it back' }
       if (before.status === 'UNDONE') return { ok: false, reason: 'it was put back already (a person\'s approved undo ran first)' }
       const { HARVEST_TOOL, undoHarvest } = await import('./harvest-write.js')
       const out = await undoHarvest(id, { actor: run.actor, manual: false, changeSetId: null, reason: run.reason.slice(0, 480) })

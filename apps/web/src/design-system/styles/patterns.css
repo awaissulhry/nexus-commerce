@@ -1089,13 +1089,29 @@
   margin: 0;
   color: var(--nds-text-2);
 }
-/* Phone (`breakpoint.sm`): the header's controls have a line of their own; Prev / Next sit at its right end. */
+/* Content that is ONLY a DS EmptyState (`onlyEmptyState`, audit M12): centred in the kept-tall body, not hung under the
+   tabs. Normal content keeps its place at the top. */
+.nds-detail-body[data-only-empty] {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+/* Phone (`breakpoint.sm`): Prev / Next sit on the TITLE row, before Close (audit S3, 2026-10-11: on their own row the
+   header was 128–131 px of 844); the title truncates to make room. The host's own `actions` keep a line of their own
+   under the title (components.css lets the header's controls flow into the header row). Touch targets are 44 px. */
 @media (max-width: 760px) {
-  .nds-detail-nav {
-    margin-left: auto;
+  .nds-detail-actions {
+    order: 3;
+    flex-basis: 100%;
   }
   .nds-detail-actions + .nds-detail-nav {
+    padding-left: 0;
     border-left: none;
+  }
+  .nds-detail-nav .nds-btn {
+    min-width: 44px;
+    min-height: 44px;
+    margin-block: -12px;
   }
 }
 

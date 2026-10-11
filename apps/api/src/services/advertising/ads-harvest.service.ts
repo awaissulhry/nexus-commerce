@@ -330,7 +330,7 @@ export interface HarvestOutcome {
  * One negative write, as it actually resolved. `externalTargetId` is the only proof it landed. `existed`: it already
  * stood (nothing was added, so it is not counted).
  */
-type NegRow = { matchType: string; externalTargetId: string | null; existed?: boolean; denied?: { deniedAt: string; reason: string } }
+type NegRow = { matchType: string; externalTargetId: string | null; existed?: boolean; denied?: { deniedAt: string; reason: string }; /** HCORE M1 — the negative's row (the harvest record lists it, so an Undo lifts it). */ adTargetId?: string | null }
 
 /**
  * 🔴 HV.8a — the wasteful half of the write, reported per candidate.
@@ -940,7 +940,7 @@ export async function applyHarvest(args: {
       const r = await writeNegativeProductTarget({ adGroupId: ag.id, asin: query.trim(), userId: args.userId })
       if (r.refusal) return [{ matchType: 'PRODUCT', externalTargetId: null, denied: { deniedAt: r.refusal.deniedAt, reason: r.refusal.reason } }]
       if (r.outcome === 'failed') throw new Error(r.error ?? 'the negative product target was not created')
-      return [{ matchType: 'PRODUCT', externalTargetId: r.externalTargetId, existed: r.outcome === 'already_existed' }]
+      return [{ matchType: 'PRODUCT', externalTargetId: r.externalTargetId, existed: r.outcome === 'already_existed', adTargetId: r.adTargetId ?? null }]
     }
     const out: NegRow[] = []
     for (const nm of negMatches) {
@@ -953,7 +953,7 @@ export async function applyHarvest(args: {
       })
       if (r.refusal) { out.push({ matchType: nm, externalTargetId: null, denied: { deniedAt: r.refusal.deniedAt, reason: r.refusal.reason } }); continue }
       if (r.outcome === 'failed') throw new Error(r.error ?? 'the negative was not created')
-      out.push({ matchType: nm, externalTargetId: r.externalTargetId, existed: r.outcome === 'already_existed' })
+      out.push({ matchType: nm, externalTargetId: r.externalTargetId, existed: r.outcome === 'already_existed', adTargetId: r.adTargetId ?? null })
     }
     return out
   }
@@ -997,6 +997,14 @@ export async function applyHarvest(args: {
     }
   }
 
+  // D2 (Owner 2026-10-10) — a rule's automatic harvest runs inside its caps (harvest/rule-caps.ts: keywords a day, the
+  // product's own campaigns only, never from a paused source), and every keyword that lands keeps one harvest record.
+  const ruleCaps = (args.graduations?.length || args.productGraduations?.length)
+    // HCORE H3 — a rule's AUTOMATIC run harvests on the engine (harvest/rule-run.ts) and never reaches here; this path is a
+    // person's (a promote, an accepted card, a recommendation): not capped, its record kept.
+    ? await (await import('./harvest/rule-caps.js')).ruleHarvestGuard(args.rule ? args.userId : undefined, { caps: false }).catch(() => null)
+    : null
+
   for (const g of args.graduations ?? []) {
     try {
       // Source local ad group the term came from (by external id) — fallback destination + lets us
@@ -1026,6 +1034,9 @@ export async function applyHarvest(args: {
         if (g.step === 'handover') { refusal ??= { deniedAt: 'step_changed', why: STEP_CHANGED }; continue }
         const bid = await startBid(bands, g, row, step.adGroupId, !!args.rule)
         if ('why' in bid) { refusal ??= bid; result.errors.push(`grad "${g.query}" (${gm}): ${bid.why}`); continue }
+        // D2 — a rule's automatic harvest runs inside its caps (harvest/rule-caps.ts), before anything is asked or written.
+        const capped = ruleCaps ? await ruleCaps.refusal({ sourceAdGroupId: srcAg?.id ?? null, destAdGroupId: step.adGroupId }) : null
+        if (capped) { refusal ??= capped; result.errors.push(`grad "${g.query}" (${gm}): ${capped.why}`); continue }
         // Harvest fix B1 + B10 — the landing guard first: an archived keyword of the term or a negative that blocks it there
         // holds this destination (nothing written, the source never negated); a paused one is switched on again as the landing.
         const landing = await checkLanding({ adGroupId: step.adGroupId, term: g.query, match: landingMatchOf(gm, asin) })
@@ -1055,6 +1066,7 @@ export async function applyHarvest(args: {
         }
         const existed = landing.kind !== 'create' || (!asin && (k as { existed?: boolean }).existed === true)
         made.push({ matchType: gm, destAdGroupId: step.adGroupId, targetId: k.id, externalTargetId: k.externalTargetId, existed, ...(step.intent ? { intent: step.intent } : {}), serves, landing: why })
+        if (k.externalTargetId && (!existed || landing.kind === 'enable')) ruleCaps?.created()
         if (k.id) remember({ adTargetId: k.id, adGroupId: step.adGroupId, text: g.query, match: asin ? 'PRODUCT' : homeMatch(gm), live: k.externalTargetId != null })
         if (k.id && k.externalTargetId != null && serves) lock.serving.add(k.id)
       }
@@ -1079,6 +1091,8 @@ export async function applyHarvest(args: {
       const closeSource = (landedElsewhere && negateOnLanding) || !!proven
       const sourceNegates = asin ? ['PRODUCT'] : planList(row, 'negate')
       let negOutcome: HarvestOutcome['negative'] = null
+      // HCORE M1 — the source negatives that landed now, for the harvest record (an Undo lifts exactly these).
+      let landedNegatives: Array<{ adTargetId: string | null; matchType: string }> = []
       // The §4.1 sentence. HV.3 renders the same wording before the write; this records it after.
       let negateReason = proven
         ? homeWords(proven, srcAg, true)
@@ -1102,6 +1116,7 @@ export async function applyHarvest(args: {
           const rows = await negate(negScope, g.externalCampaignId, g.externalAdGroupId, g.query, sourceNegates)
           const landed = rows.filter((r) => r.externalTargetId != null)
           const denied = rows.find((r) => r.denied)
+          landedNegatives = landed.map((r) => ({ adTargetId: r.adTargetId ?? null, matchType: r.matchType }))
           result.isolationNegativesAdded += landed.filter((r) => !r.existed).length
           negOutcome = { attempted: true, scope: negScope, targetId: null, externalTargetId: landed[0]?.externalTargetId ?? null, reachedAmazon: landed.length > 0, ...(denied?.denied ? { refusal: denied.denied } : {}) }
           if (denied?.denied) negateReason = `${made.length ? 'The keyword was created' : 'The term is at home'}, but the negative was refused at ${denied.denied.deniedAt}: ${denied.denied.reason}`
@@ -1119,6 +1134,13 @@ export async function applyHarvest(args: {
           result.errors.push(`iso-neg "${g.query}": ${(e as Error).message}`)
         }
       }
+
+      // HARVEST ENGINE — one harvest record per landed keyword, for every actor (judged after window + 72 h, undoable).
+      // HCORE M1 — the record lists the source negatives that landed (at the landing, or at a later handover), so its
+      // Undo lifts them before it pauses the keyword; a handover adds its negative to the record the landing kept.
+      const recorded = made.find((m) => m.externalTargetId != null && !m.existed && m.targetId)
+      if (ruleCaps && recorded) await ruleCaps.record({ query: g.query, matchType: recorded.matchType, sourceAdGroupId: srcAg?.id ?? null, destAdGroupId: recorded.destAdGroupId, keywordTargetId: recorded.targetId, bidCents: g.bidEur != null ? Math.round(g.bidEur * 100) : null, negatives: landedNegatives })
+      else if (ruleCaps && landedNegatives.length) await ruleCaps.recordHandover({ query: g.query, sourceAdGroupId: srcAg?.id ?? null, negatives: landedNegatives })
 
       // 🔴 One outcome row per candidate. `reachedAmazon` is the external id, never the call.
       const first = made[0]
