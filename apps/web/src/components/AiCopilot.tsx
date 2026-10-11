@@ -100,17 +100,18 @@ export default function AiCopilot({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          /* Position comes from --nds-fab-inset (DS token, default 24px = the old bottom-6/right-6) so a
-             surface that owns its bottom-right corner can lift the button clear of its own chrome. The
-             footprint is published as --nds-fab-reserve-inline/-block for surfaces that reserve instead.
+          /* The DS launcher (`.nds-fab`, components.css; polish round 2, M7): position from --nds-fab-inset, its
+             footprint published as --nds-fab-reserve-inline/-block for surfaces that reserve room instead (the
+             shell's page end, the DS sticky action bar). Below `breakpoint.sm` it is a 44px icon at a 12px inset and
+             the reserves shrink with it. Its name stays "Ask AI" when only the icon shows.
              DS.1 2026-09-01: measured covering 104x19px of the studio sheet's keyboard-hint strip. */
-          style={{ bottom: 'var(--nds-fab-inset, 24px)', right: 'var(--nds-fab-inset, 24px)' }}
           /* The marker `grid.css` reads to reserve this button's footprint ONLY while it is on screen
              (`:root:has([data-nds-fab])`), so a surface without it keeps its full width. */
           data-nds-fab=""
-          className="fixed z-40 h-12 px-4 rounded-full bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 shadow-lg inline-flex items-center gap-2 hover:opacity-90"
+          aria-label="Ask AI"
+          className="nds-fab"
         >
-          <Sparkles className="w-4 h-4" /> Ask AI
+          <Sparkles size={16} aria-hidden /> <span className="nds-fab-label">Ask AI</span>
         </button>
       )}
 

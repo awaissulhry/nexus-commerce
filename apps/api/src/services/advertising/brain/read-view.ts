@@ -50,7 +50,8 @@ const PCT = z.coerce.number().min(1).max(500)
  * candidate money, first budgets and judged ACoS too. AB-17 — the bidding view's stack cents and its tests' figures too.
  */
 export const BRAIN_VIEW_MONEY: MoneyKeys = Object.fromEntries(
-  ['portfolioCapCents', 'dailyBudgetCents', 'amountCents', 'money'].map((key) => [key, FIELDS.financialsAdspendView]),
+  // KAPI-B — maxBidCents: a keyword's own max bid (the map's keywordValues, and the settings list's own key).
+  ['portfolioCapCents', 'dailyBudgetCents', 'amountCents', 'money', 'maxBidCents'].map((key) => [key, FIELDS.financialsAdspendView]),
 )
 
 /** The `ads-brain` input: every view's arguments, with the words Claude reads (the route parses its query with it). */

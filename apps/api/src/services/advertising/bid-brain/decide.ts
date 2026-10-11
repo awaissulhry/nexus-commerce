@@ -24,6 +24,13 @@
  *              top's bid, the highest limit and the top-of-search lane), lowers one step above target + 5, holds within;
  *              right after its own move it waits; a reading that does not count moves nothing and the goal decides, the
  *              why saying why the share held. The overrides, the brakes and the raise cap decide before it.
+ *   KAPI-B     a person's own goal and max for one keyword (brain/settings.ts targetAcosPct, maxBidCents; facts.ts): the
+ *              goal is the keyword's (`goalOwn`, before a rule's); the max is a hard limit ("Your max for this keyword")
+ *              that binds every layer — holdToKeywordMax after everything else, so no give-back, restore, floor, plan
+ *              hour, intraday brake, share move or remembered bid lands above it (a brake and a pin write nothing). The
+ *              hard ceilings (the strategy's and the campaign's highest bid, the keyword's max, a rule's ceiling) bring a
+ *              bid down even with no goal (hardCeilingOf, before `no_goal`): a 15-minute tick reads no evidence, so a new
+ *              max acts on the next tick, not the next run with evidence.
  *
  * Idempotent: the same facts give the same decision. The step is taken from the bid before the brain's first step on
  * the newest data day (`lastStep`), so a rerun on unchanged evidence never compounds (C3: 33→25→19→14¢ in six hours).
@@ -40,6 +47,7 @@ import {
   DEFAULT_MAX_CHANGE_PCT,
   ENGINE_FLOOR_CENTS,
   expectedAcos,
+  KEYWORD_MAX_WORDS,
   limitRange,
   MIN_WRITE_CENTS,
   MIN_WRITE_SHARE,
@@ -103,6 +111,8 @@ export interface TargetFacts {
   laneDirectives?: readonly LaneDirective[]
   /** BB-9 — the goal is a rule's (a GOAL directive): who set it, for the "why". */
   goalBy?: string | null
+  /** KAPI-B — the goal is the keyword's own (a person's targetAcosPct for it): who set it and when, for the "why". */
+  goalOwn?: string | null
   /** The hourly plan's lowest serving factor of the day (1 without a plan; BB-7). */
   hourFactor?: number
   /** BB-7 — the campaign's placement lanes this hour, as its hourly plan shapes them (absent: no plan, placements untouched). */
@@ -220,6 +230,11 @@ export interface Decision {
    * `restore`); a give-back above it carries the goal's raise, a forward move (the dial and the caps judge it).
    */
   restoreBeforeCents?: number | null
+  /**
+   * KAPI-B — a person's own max for the keyword cut this bid below today's (holdToKeywordMax): a safety cut, like a lowering
+   * `limit` write — the live writer sends it at once and exactly (never behind the dial's Ask me, never stepped).
+   */
+  maxCut?: true
 }
 
 const OVERRIDE_ORDER = ['stop', 'pin', 'stock', 'freeze', 'phase', 'minBidHour', 'money', 'intraday'] as const
@@ -257,7 +272,7 @@ function goalBid(f: TargetFacts, opts: { noStep?: boolean } = {}): GoalBid | { r
   const aov = est.node.aovCents
   if (aov == null || aov <= 0) return { reason: 'no order value known (no sales and no listing price)' }
   const ratio = laneCpcRatio(f.chain[0].evidence, f.servingCents ?? f.currentCents, f.parentCpcRatio, f.ratioCeiling ?? 1)
-  const parts: string[] = [`${goalWords(goal)}${f.goalBy ? ` (the goal of ${f.goalBy})` : ''}${goal.notes.length ? `; ${goal.notes.join('; ')}` : ''}`]
+  const parts: string[] = [`${goalWords(goal)}${f.goalOwn ? ` (Your goal for this keyword, ${f.goalOwn})` : f.goalBy ? ` (the goal of ${f.goalBy})` : ''}${goal.notes.length ? `; ${goal.notes.join('; ')}` : ''}`]
   parts.push(`CR ${pct2(est.node.cr)} (${est.basis.level}, ${n0(est.basis.clicks)} clicks) × AOV ${money(aov)} ÷ CPC/bid ${ratio.toFixed(2)}${ratio > 1 ? ' (placements lift the paid CPC above the bid)' : ''}`)
 
   let want = bidForAcos(goal.aim, est.node.cr, aov, ratio)
@@ -302,6 +317,50 @@ function goalBid(f: TargetFacts, opts: { noStep?: boolean } = {}): GoalBid | { r
  * floor (`restore`). Cuts, stops and floors still go. The decision says what waited and why.
  */
 export function decide(f: TargetFacts): Decision {
+  return holdToKeywordMax(decideHeld(f), f)
+}
+
+/**
+ * KAPI-B — a person's own max bid for this keyword binds every layer the brain decides — a goal, a limit, a give-back
+ * (restore), a floor (stop, stock, phase, Min-bid hour), the money and intraday brakes, a freeze, the plan's hour, the share
+ * layer — and every bid the brain remembers for later (a give-back decided during a floor, its own bid the plan's hour held
+ * below): none lands above it. A brake and a pin are left as decided: nothing is written there (a person holds a pinned
+ * bid). A hold above the max becomes the write down to it — layer `limit`, unless an override or a give-back held it (that
+ * layer is kept, so its memory stays). Pure.
+ */
+export function holdToKeywordMax(d: Decision, f: Pick<TargetFacts, 'limits'>): Decision {
+  const max = f.limits?.keywordMaxCents
+  if (max == null || !(max > 0) || d.layer === 'brake' || d.layer === 'pin') return d
+  let out = d
+  if (out.giveBack && out.giveBack.cents > max) {
+    const g = out.giveBack
+    out = { ...out, giveBack: { ...g, cents: max, step: g.step ? { ...g.step, toCents: Math.min(g.step.toCents, max) } : null, why: `${g.why}; held to ${max}¢ by ${KEYWORD_MAX_WORDS}` } }
+  }
+  if (out.beforeHour != null && out.beforeHour > max) out = { ...out, beforeHour: max }
+  // A bid already held to the max inside a layer (the goal's limits, a freeze or low stock from the goal's bid) that lands
+  // on it from above is a cut to the max too.
+  if (out.bidCents <= max) return out.action === 'write' && out.bidCents === max && max < out.currentCents ? { ...out, maxCut: true } : out
+  const keep = OVERRIDE_LAYERS.has(out.layer) || out.layer === 'restore' || out.action === 'write'
+  const step = out.step ? { ...out.step, toCents: max } : null
+  const action: DecisionAction = max !== out.currentCents ? 'write' : 'hold'
+  const cut = max < out.currentCents ? { maxCut: true as const } : {}
+  if (keep) return { ...out, ...cut, action, bidCents: max, step, why: `${out.why}; ${out.bidCents}¢ held to ${max}¢ by ${KEYWORD_MAX_WORDS}` }
+  return { ...out, ...cut, action, layer: 'limit', bidCents: max, step, why: `limit: ${out.currentCents}¢ is above ${KEYWORD_MAX_WORDS} (${max}¢) → ${max}¢ (${out.why})` }
+}
+
+/**
+ * KAPI-B — the hard ceilings that bring a bid down even with no goal (a 15-minute tick reads no evidence; a keyword with no
+ * target or no order value): the strategy's and the campaign's highest bid, a person's own max for the keyword (limitRange)
+ * and a rule's ceiling. The lowest wins; null with none.
+ */
+export function hardCeilingOf(f: Pick<TargetFacts, 'limits' | 'directives'>): { cents: number; from: string } | null {
+  const r = limitRange(f.limits)
+  let best = r.upper != null ? { cents: r.upper, from: r.upperFrom ?? 'the highest bid' } : null
+  for (const d of f.directives ?? []) if (d.kind === 'CEILING' && d.cents > 0 && (!best || d.cents < best.cents)) best = { cents: d.cents, from: `the ceiling of ${d.source}` }
+  return best
+}
+
+function decideHeld(f: TargetFacts): Decision {
   // Owner decision A (10-10) — decided from the brain's own bid (the one before this hour's plan held it), then held to
   // this hour's ceiling (holdToHour); the raise cap below holds a plan raise too (the money brake's hold, a HELD campaign).
   // A give-back that is due (the bid still at a floor) is decided from the bid as it is: the floor's memory decides it.
@@ -510,7 +569,19 @@ function decideBid(f: TargetFacts): Decision {
   }
 
   // ── The goal. ──
-  if (!ok) return { ...base, ...known, action: 'hold', layer: 'no_goal', bidCents: f.currentCents, why: `no goal: ${(g as { reason: string }).reason} — left alone` }
+  if (!ok) {
+    // KAPI-B — a hard ceiling brings the bid down even with no goal (a tick with no evidence): a new max acts at once.
+    const hard = hardCeilingOf(f)
+    // The lowest bid wins over a ceiling below it, as on the goal path (clampToRange): a rule ceiling under the strategy's
+    // lowest bid must not cut on a tick for the next run with evidence to lift it back (a flip-flop every 6 h).
+    const low = limitRange(f.limits)
+    const cents = hard ? Math.max(hard.cents, low.lower) : f.currentCents
+    if (hard && cents < f.currentCents) {
+      const held = cents > hard.cents ? `, held at ${low.lowerFrom} (${cents}¢)` : ''
+      return { ...base, ...known, action: 'write', layer: 'limit', bidCents: cents, why: `limit: ${f.currentCents}¢ is above ${hard.from} (${hard.cents}¢) → ${cents}¢${held} (no goal: ${(g as { reason: string }).reason})` }
+    }
+    return { ...base, ...known, action: 'hold', layer: 'no_goal', bidCents: f.currentCents, why: `no goal: ${(g as { reason: string }).reason} — left alone` }
+  }
   const recipe = ok.parts.join('; ')
   const outside = clampToRange(f.currentCents, ok.range)
   if (outside.held && outside.cents !== f.currentCents) {

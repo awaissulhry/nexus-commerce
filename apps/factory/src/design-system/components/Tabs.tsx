@@ -1,7 +1,11 @@
 'use client'
 
-import { useCallback, useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useRef, type ComponentType, type FocusEvent, type KeyboardEvent, type MouseEventHandler, type ReactNode, type RefObject } from 'react'
+import NextLink from 'next/link'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useHorizontalOverflow } from './useHorizontalOverflow'
+import { revealDelta, stripStep } from './tabsScroll'
+import { useStripEdges } from './useStripEdges'
 
 export interface TabItem {
   id: string
@@ -16,7 +20,23 @@ export interface TabItem {
   /** 9.3 — a tab that cannot be entered yet. Carries `disabled` + `aria-disabled` so the
    *  reason is reachable; never the only signal (the label should say why). */
   disabled?: boolean
+  /**
+   * Link tabs (bid page DS lane, 2026-10-10): the tab is a real link to this route — open in a new tab, middle-click and
+   * a copied address all work. When any tab has an `href` the bar is a `<nav>` of links with `aria-current="page"` on
+   * the active one (`activeTabFromPath` finds it from the route), not a tablist: a link goes to another page, it does
+   * not show a panel. A tab with no `href` (or disabled) in a link bar stays focusable, `aria-disabled`, and goes nowhere.
+   */
+  href?: string
 }
+
+/** The host's link for link tabs. The web app passes its workspace `Link` (it keeps `/w/<id>`); default Next's `Link`. */
+export type TabLinkComponent = ComponentType<{
+  href: string
+  className?: string
+  children?: ReactNode
+  onClick?: MouseEventHandler<HTMLAnchorElement>
+  'aria-current'?: 'page'
+}>
 
 /**
  * Ids for the `tab` ↔ `tabpanel` pairing, so a caller can label its panel with the same base.
@@ -47,7 +67,10 @@ export interface TabsProps {
   ariaLabel?: string
   tabs: TabItem[]
   active: string
-  onChange: (id: string) => void
+  /** Button tabs: the tab the person chose. Link tabs: optional, told on a click before the link is followed. */
+  onChange?: (id: string) => void
+  /** Link tabs only: the link component (default Next's `Link`). */
+  linkAs?: TabLinkComponent
   className?: string
   /**
    * SG.1 — 'lg' is the PAGE-level tab bar (H10's Suggestions/Analytics tabs: larger bolder
@@ -64,10 +87,21 @@ export interface TabsProps {
    */
   size?: 'sm' | 'md' | 'lg'
   /**
+   * `lg` only (polish round 2, 2026-10-10): a section bar with many tabs — 13.5px labels, 16px apart — so the eleven
+   * Rules & Automation tabs fit at 1440. The look is the `lg` bar's; only the size and the gap shrink.
+   */
+  dense?: boolean
+  /**
    * Keep long labels within a narrow container; the active tab scrolls into view — when it changes, when tabs are
    * added or removed around it, and when a label grows (each moves it out of view on a phone). Only the strip scrolls.
    * While it scrolls, the scrollbar sits in a band BELOW the tabs, never over a label, the active underline or a focus
    * ring (Owner 2026-10-05); a strip that fits keeps its exact layout.
+   *
+   * Polish round 2 (audit M6): each edge with more tabs beyond it fades out and shows an arrow that scrolls that way
+   * (a pointer affordance: it takes no focus and is hidden from screen readers, which hear every tab). A tab that takes
+   * the focus is brought wholly into view clear of the fade, and when the focus leaves the strip the tab you are on is
+   * brought back, so the strip is never left scrolled with a cut label. Rules: `tabsScroll.ts`. The strip is wrapped
+   * in `.nds-tabs-scroller` (it holds the arrows); `className` stays on the strip.
    */
   overflow?: 'scroll'
   /**
@@ -81,18 +115,19 @@ export interface TabsProps {
 }
 
 /**
- * Scroll the strip — only the strip, never the page around it — so the tab is wholly in view (a tab wider than the
- * strip shows its start). A tab already in view does not move it.
+ * Scroll the strip — only the strip, never the page around it — so the tab is wholly in view, clear of the edge fade
+ * (a tab wider than the strip shows its start). A tab already in view does not move it.
  */
 function revealInStrip(list: HTMLElement, tab: HTMLElement) {
-  const strip = list.getBoundingClientRect(), box = tab.getBoundingClientRect()
-  if (box.left < strip.left) list.scrollLeft -= strip.left - box.left
-  else if (box.right > strip.right) list.scrollLeft += Math.min(box.right - strip.right, box.left - strip.left)
+  const delta = revealDelta(list.getBoundingClientRect(), tab.getBoundingClientRect(), list)
+  if (delta) list.scrollLeft += delta
 }
 
 /** Underline tab bar (active = primary text + primary indicator). Controlled. */
-export function Tabs({ ariaLabel, tabs, active, onChange, className, size = 'md', idBase, overflow }: TabsProps) {
-  const listRef = useRef<HTMLDivElement>(null)
+export function Tabs({ ariaLabel, tabs, active, onChange, linkAs, className, size = 'md', dense = false, idBase, overflow }: TabsProps) {
+  const listRef = useRef<HTMLElement>(null)
+  const frameRef = useRef<HTMLDivElement>(null)
+  const links = tabs.some((t) => t.href)
   const autoBase = useId()
   const base = idBase ?? autoBase
   // The tab ids in order, as one value: a tab added before the active one (a market chosen by itself) pushes it along.
@@ -113,9 +148,32 @@ export function Tabs({ ariaLabel, tabs, active, onChange, className, size = 'md'
     // out again: follow every tab's size while these tabs are shown.
     if (typeof ResizeObserver === 'undefined') return
     const observer = new ResizeObserver(reveal)
-    list.querySelectorAll<HTMLElement>('[role="tab"]').forEach((tab) => observer.observe(tab))
+    list.querySelectorAll<HTMLElement>('[data-tab-id]').forEach((tab) => observer.observe(tab))
     return () => observer.disconnect()
   }, [active, overflow, tabKey])
+
+  // The overflow marker: each edge with more tabs beyond it is marked on the frame (`useStripEdges`), which the CSS
+  // turns into a fade and an arrow.
+  useStripEdges(listRef, frameRef, overflow === 'scroll', tabKey)
+
+  const scrollStrip = useCallback((dir: -1 | 1) => {
+    const list = listRef.current
+    if (!list) return
+    const still = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    list.scrollBy({ left: dir * stripStep(list.clientWidth), behavior: still ? 'auto' : 'smooth' })
+  }, [])
+  // A tab that takes the focus comes wholly into view; when the focus leaves the strip, the tab you are on comes back.
+  const onFocus = useCallback((e: FocusEvent<HTMLElement>) => {
+    const list = listRef.current
+    const tab = (e.target as HTMLElement).closest<HTMLElement>('[data-tab-id]')
+    if (overflow === 'scroll' && list && tab) revealInStrip(list, tab)
+  }, [overflow])
+  const onBlur = useCallback((e: FocusEvent<HTMLElement>) => {
+    const list = listRef.current
+    if (overflow !== 'scroll' || !list || list.contains(e.relatedTarget as Node | null)) return
+    const tab = list.querySelector<HTMLElement>(`[data-tab-id="${CSS.escape(active)}"]`)
+    if (tab) revealInStrip(list, tab)
+  }, [overflow, active])
 
   /**
    * Arrow-key selection, the ARIA tablist pattern.
@@ -123,10 +181,23 @@ export function Tabs({ ariaLabel, tabs, active, onChange, className, size = 'md'
    * With a roving tabindex the whole bar is ONE tab stop and ←/→/Home/End move within it — which is
    * what a keyboard user expects of a tablist, and what this component did not do. Disabled tabs are
    * skipped rather than trapping focus on a control that cannot act.
+   *
+   * Link tabs: every link is a Tab stop, as links are; the arrows only MOVE the focus between them (Enter follows).
    */
   const onKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLDivElement>) => {
+    (e: KeyboardEvent<HTMLElement>) => {
       if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft' && e.key !== 'Home' && e.key !== 'End') return
+      if (links) {
+        const items = [...(listRef.current?.querySelectorAll<HTMLElement>('[data-tab-id]') ?? [])]
+        if (items.length < 2) return
+        e.preventDefault()
+        const from = items.indexOf(document.activeElement as HTMLElement)
+        const at = from < 0 ? Math.max(0, tabs.findIndex((t) => t.id === active)) : from
+        const next = e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1
+          : e.key === 'ArrowRight' ? (at + 1) % items.length : (at - 1 + items.length) % items.length
+        items[next]?.focus()
+        return
+      }
       const usable = tabs.filter((t) => !t.disabled)
       if (usable.length < 2) return
       e.preventDefault()
@@ -138,19 +209,63 @@ export function Tabs({ ariaLabel, tabs, active, onChange, className, size = 'md'
         : (at - 1 + usable.length) % usable.length
       const target = usable[next]
       if (!target) return
-      onChange(target.id)
+      onChange?.(target.id)
       listRef.current?.querySelector<HTMLButtonElement>(`[data-tab-id="${CSS.escape(target.id)}"]`)?.focus()
     },
-    [tabs, active, onChange],
+    [tabs, active, onChange, links],
   )
 
-  return (
+  const barClass = ['nds-tabs', size === 'md' ? '' : size, dense && size === 'lg' ? 'dense' : '', overflow === 'scroll' ? 'scrollable' : '', className ?? ''].filter(Boolean).join(' ')
+  /** The arrows and the frame that holds them, for a strip that scrolls; any other strip renders exactly as before. */
+  const framed = (bar: ReactNode) => overflow !== 'scroll' ? bar : (
+    <div className="nds-tabs-scroller" ref={frameRef}>
+      {bar}
+      {([-1, 1] as const).map((dir) => (
+        <button key={dir} type="button" className={`nds-tabs-more ${dir < 0 ? 'start' : 'end'}`} tabIndex={-1} aria-hidden="true"
+          onMouseDown={(e) => e.preventDefault()} onClick={() => scrollStrip(dir)}>
+          {dir < 0 ? <ChevronLeft size={16} aria-hidden /> : <ChevronRight size={16} aria-hidden />}
+        </button>
+      ))}
+    </div>
+  )
+  const inner = (t: TabItem) => (
+    <>
+      {t.icon ? <span className="nds-tab-ic" aria-hidden>{t.icon}</span> : null}
+      {t.label}
+      {t.badge ? <span className="nds-tab-badge">{t.badge}</span> : null}
+      {t.count != null ? <span className="nds-tab-count">{t.count}</span> : null}
+    </>
+  )
+
+  if (links) {
+    const Link = linkAs ?? NextLink
+    return framed(
+      <nav className={barClass} aria-label={ariaLabel} ref={listRef} onKeyDown={onKeyDown} onFocus={onFocus} onBlur={onBlur}>
+        {tabs.map((t) => {
+          const on = t.id === active
+          if (!t.href || t.disabled) {
+            return <span key={t.id} data-tab-id={t.id} className="nds-tab" role="link" aria-disabled="true" tabIndex={0}>{inner(t)}</span>
+          }
+          return (
+            <Link key={t.id} href={t.href} data-tab-id={t.id} className={on ? 'nds-tab on' : 'nds-tab'} aria-current={on ? 'page' : undefined}
+              onClick={onChange ? () => onChange(t.id) : undefined}>
+              {inner(t)}
+            </Link>
+          )
+        })}
+      </nav>,
+    )
+  }
+
+  return framed(
     <div
-      className={['nds-tabs', size === 'md' ? '' : size, overflow === 'scroll' ? 'scrollable' : '', className ?? ''].filter(Boolean).join(' ')}
+      className={barClass}
       role="tablist"
       aria-label={ariaLabel}
-      ref={listRef}
+      ref={listRef as RefObject<HTMLDivElement>}
       onKeyDown={onKeyDown}
+      onFocus={onFocus}
+      onBlur={onBlur}
     >
       {tabs.map((t) => (
         <button
@@ -166,14 +281,11 @@ export function Tabs({ ariaLabel, tabs, active, onChange, className, size = 'md'
           className={['nds-tab', t.id === active ? 'on' : ''].filter(Boolean).join(' ')}
           disabled={t.disabled}
           aria-disabled={t.disabled || undefined}
-          onClick={() => { if (!t.disabled) onChange(t.id) }}
+          onClick={() => { if (!t.disabled) onChange?.(t.id) }}
         >
-          {t.icon ? <span className="nds-tab-ic" aria-hidden>{t.icon}</span> : null}
-          {t.label}
-          {t.badge ? <span className="nds-tab-badge">{t.badge}</span> : null}
-          {t.count != null ? <span className="nds-tab-count">{t.count}</span> : null}
+          {inner(t)}
         </button>
       ))}
-    </div>
+    </div>,
   )
 }

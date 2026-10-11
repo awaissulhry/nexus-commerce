@@ -91,7 +91,11 @@ const BOTH: readonly BrainScope[] = ['PRODUCT', 'CAMPAIGN']
 
 type SettingSpec =
   | { type: 'int'; default: number; min: number; max: number; scopes: readonly BrainScope[]; what: string }
-  | { type: 'intOrNull'; default: null; min: number; max: number; scopes: readonly BrainScope[]; what: string }
+  /**
+   * KAPI-B — `keywordOnly`: the setting is one keyword's own value only (a VALUE override with ref target:<AdTarget.id>):
+   * a product's or a campaign's value of it is refused (brain/settings.ts valueRef), so its default always applies there.
+   */
+  | { type: 'intOrNull'; default: null; min: number; max: number; scopes: readonly BrainScope[]; what: string; keywordOnly?: true }
   | { type: 'boolean'; default: boolean; scopes: readonly BrainScope[]; what: string }
   | { type: 'enum'; default: string; values: readonly string[]; scopes: readonly BrainScope[]; what: string }
   /** AB-12 — a calendar day (YYYY-MM-DD, UTC) or empty. */
@@ -152,7 +156,15 @@ export const BRAIN_SETTINGS = {
   // (bid-brain/share.ts). Off (empty) by default: no target, no change. Per keyword too: a VALUE override with ref
   // target:<AdTarget.id> (brain/settings.ts; keyword > campaign > product).
   tosTargetPct: { type: 'intOrNull', default: null, min: 5, max: 95, scopes: BOTH, what: 'the top-of-search impression share the bid brain holds each keyword at, % — Amazon\'s daily share at keyword grain, else the campaign\'s on days it served that keyword alone, impression-weighted by Nexus over the reading days: more than 5 points below it the keyword bid rises one step (at most 10 %, never above the band top\'s bid, the highest bid or the top-of-search CPC ceiling), more than 5 points above it the bid falls one step; per keyword: a VALUE override with ref target:<AdTarget.id> (set-ads-brain set-value with that ref; keyword > campaign > product); empty = off' },
+  // KAPI-B (2026-10-10, Bid page "keyword Auto + goal + max bid") — a person's own goal and max for ONE keyword in one ad
+  // group: per keyword only (ref target:<AdTarget.id>); a campaign's goal is its own target ACoS, a product's its ads
+  // strategy. The bid brain reads both on its next tick (bid-brain/facts.ts, decide.ts).
+  targetAcosPct: { type: 'intOrNull', default: null, min: 1, max: 200, scopes: BOTH, keywordOnly: true, what: 'this keyword\'s own target ACoS, % — the bid brain aims this keyword at it (a default band around it), before a rule\'s goal and before its campaign\'s or product\'s target; per keyword only (ref target:<AdTarget.id>); empty = the campaign\'s or the product\'s goal' },
+  maxBidCents: { type: 'intOrNull', default: null, min: 5, max: 100_000, scopes: BOTH, keywordOnly: true, what: 'this keyword\'s own max bid, in cents of the market\'s currency — the bid brain never sets the keyword above it, on any tick and in any layer (a give-back, the hourly plan, a floor, a test bid); at least the market\'s Amazon minimum and the brain\'s 5¢ engine floor; per keyword only (ref target:<AdTarget.id>); empty = no max of its own (the strategy\'s and the campaign\'s highest bid still hold)' },
 } as const satisfies Record<string, SettingSpec>
+
+/** KAPI-B — the settings a keyword alone may hold (a product's or a campaign's value of them is refused). */
+export const isKeywordOnlySetting = (key: string): boolean => isSetting(key) && (BRAIN_SETTINGS[key] as SettingSpec & { keywordOnly?: true }).keywordOnly === true
 
 export type BrainSetting = keyof typeof BRAIN_SETTINGS
 export type SettingValue = number | boolean | string | null

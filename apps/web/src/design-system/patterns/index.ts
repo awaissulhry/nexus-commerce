@@ -47,3 +47,15 @@ export { emitPrefsChanged, onPrefsChanged } from './prefs-bus'
 export { WorkspaceSubheader, type WorkspaceSubheaderProps, type WorkspaceNavItem, type WorkspaceNavGroup } from './WorkspaceSubheader'
 // Ads autonomy W1-4 (2026-10-06) — the fresh authenticator code before a raise; promoted from Settings › AI › Claude.
 export { StepUpModal, type StepUpModalProps } from './StepUpModal'
+// Bid page DS lane (2026-10-10) — the ONE review of a draft: one summary line, one table old → new, a counted Save, Done with Undo.
+export { ReviewChangesModal, type ReviewChangesModalProps } from './ReviewChangesModal'
+export {
+  reviewTitle, saveWords, saveButtonWords, saveHeldReason, raiseCount, ackWords, reviewColumns, reviewNote, doneSummary, resultVerb,
+  type ReviewChange, type ReviewResult, type ReviewConflict, type ReviewState,
+} from './reviewChangesModel'
+// Bid page polish round 2 (2026-10-10) — a row's detail in a centered dialog: tabs, Prev / Next (K / J), stacked reviews.
+export { DetailModal, type DetailModalProps, type DetailNav } from './DetailModal'
+export {
+  detailPosition, detailNavHeld, detailNavLabel, detailNavKey, detailBodyState, DETAIL_NAV_KEYS,
+  type DetailPosition, type DetailDirection, type KeyTargetKind,
+} from './detailModalModel'

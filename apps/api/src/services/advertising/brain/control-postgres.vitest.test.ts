@@ -303,7 +303,7 @@ describe.skipIf(!concurrentDatabaseUrl())('set-ads-brain — the Owner\'s contro
   it('set-value with a keyword ref (integration fix) — tosTargetPct stored as that keyword\'s own value, never the campaign\'s or the product\'s; a ref for another setting or op, an unknown keyword, a keyword outside the campaign named and a shared campaign\'s keyword without its campaign refused; undo and reset keep the ref', async () => {
     const kw = `t-${C('a-live')}`
     const ref = `target:${kw}`
-    expect((await preview({ op: 'set-value', productId: P, market: 'IT', key: 'paceTargetPct', value: 80, ref })).error).toMatch(/paceTargetPct is set per product or per campaign, not per keyword .* only tosTargetPct takes a keyword's own value/)
+    expect((await preview({ op: 'set-value', productId: P, market: 'IT', key: 'paceTargetPct', value: 80, ref })).error).toMatch(/paceTargetPct is set per product or per campaign, not per keyword .* only tosTargetPct, targetAcosPct, maxBidCents take a keyword's own value/)
     expect((await preview({ op: 'set-level', productId: P, market: 'IT', lever: 'bids', level: 'OBSERVE', ref })).error).toMatch(/set-level takes no ref/)
     expect((await preview({ op: 'set-value', productId: P, market: 'IT', key: 'tosTargetPct', value: 40, ref: 'target:no-such-keyword' })).error).toMatch(/target:no-such-keyword is not a keyword of this business/)
     expect((await preview({ op: 'set-value', productId: P, market: 'IT', campaignId: C('b-shadow'), key: 'tosTargetPct', value: 40, ref })).error).toMatch(/is in campaign Jacket a-live, not in campaign /)

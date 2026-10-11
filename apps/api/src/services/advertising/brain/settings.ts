@@ -20,9 +20,12 @@
  *               with ref `target:<AdTarget.id>`, at either scope, in the same AdsBrainOverride storage (no new column).
  *               resolveKeywordValue reads it: keyword > campaign > product > default. resolveBrainSettings never mixes a
  *               keyword's value into the campaign's or the product's.
+ *               KAPI-B — a person's own goal and max of one keyword (targetAcosPct, maxBidCents) the same way, keyword-only
+ *               (levers.ts keywordOnly): resolveKeywordOwn reads the keyword's own value alone (the campaign's scope before
+ *               the product's), null when it has none.
  */
 import {
-  BRAIN_LEVERS, BRAIN_SETTING_KEYS, DEFAULT_LEVEL, isLever, isLevel, isSetting, levelRefusal, lockRef, lockValueRefusal, ownsLever, settingDefaults,
+  BRAIN_LEVERS, BRAIN_SETTING_KEYS, DEFAULT_LEVEL, isKeywordOnlySetting, isLever, isLevel, isSetting, levelRefusal, lockRef, lockValueRefusal, ownsLever, settingDefaults,
   settingRefusal, type BrainLever, type BrainLevel, type BrainScope, type BrainSetting, type SettingValue,
 } from './levers.js'
 
@@ -30,8 +33,12 @@ export const OVERRIDE_KINDS = ['LEVEL', 'LOCK', 'EXCLUDE', 'VALUE'] as const
 export type OverrideKind = (typeof OVERRIDE_KINDS)[number]
 export const EXCLUDE_KEY = '*'
 
-/** Lane 5 — the settings a keyword may hold a value of its own for (a VALUE override with ref `target:<AdTarget.id>`). */
-export const KEYWORD_VALUE_SETTINGS = ['tosTargetPct'] as const satisfies readonly BrainSetting[]
+/**
+ * Lane 5 — the settings a keyword may hold a value of its own for (a VALUE override with ref `target:<AdTarget.id>`).
+ * KAPI-B — and a person's own goal and max for one keyword (targetAcosPct, maxBidCents): those two are keyword-only
+ * (levers.ts keywordOnly), so a product's or a campaign's value of them is refused.
+ */
+export const KEYWORD_VALUE_SETTINGS = ['tosTargetPct', 'targetAcosPct', 'maxBidCents'] as const satisfies readonly BrainSetting[]
 export type KeywordValueSetting = (typeof KEYWORD_VALUE_SETTINGS)[number]
 const KEYWORD_REF = /^target:([A-Za-z0-9_-]{1,64})$/
 /** The ref of one keyword's own value. */
@@ -43,8 +50,9 @@ export const keywordRefTarget = (ref: unknown): string | null => (typeof ref ===
 /** A VALUE override's ref: '' (the product's or the campaign's value), or one keyword's of a keyword setting — or why not. */
 export function valueRef(key: BrainSetting, ref: unknown): { ref: string } | { refusal: string } {
   const raw = typeof ref === 'string' ? ref.trim() : ''
-  if (!raw) return { ref: '' }
-  if (!(KEYWORD_VALUE_SETTINGS as readonly string[]).includes(key)) return { refusal: `${key} is set per product or per campaign, not per keyword (ref ${raw}); only ${KEYWORD_VALUE_SETTINGS.join(', ')} takes a keyword's own value (ref target:<AdTarget.id>)` }
+  // KAPI-B — a keyword-only setting (a person's own goal or max of one keyword) names its keyword, always.
+  if (!raw) return isKeywordOnlySetting(key) ? { refusal: `${key} is set per keyword only: name the keyword as ref target:<AdTarget.id> (a campaign's goal is its own target ACoS, a product's is its ads strategy)` } : { ref: '' }
+  if (!(KEYWORD_VALUE_SETTINGS as readonly string[]).includes(key)) return { refusal: `${key} is set per product or per campaign, not per keyword (ref ${raw}); only ${KEYWORD_VALUE_SETTINGS.join(', ')} take a keyword's own value (ref target:<AdTarget.id>)` }
   return KEYWORD_REF.test(raw) ? { ref: raw } : { refusal: `a keyword's own value of ${key} names its keyword as target:<AdTarget.id>, not ${raw}` }
 }
 
@@ -238,13 +246,23 @@ export type KeywordResolved = Resolved<SettingValue> & { grain: 'keyword' | 'cam
  * A keyword's own empty value (null) is its choice too: it wins (off for that keyword). Pure.
  */
 export function resolveKeywordValue(input: { productId: string; market: string; campaignId?: string | null; targetId: string; overrides: readonly OverrideRow[] }, key: KeywordValueSetting): KeywordResolved {
+  const own = resolveKeywordOwn(input, key)
+  if (own) return own
+  const v = resolveBrainSettings({ ...input, campaignId: input.campaignId ?? null, enrolled: false }).values[key]
+  return { ...v, grain: v.source }
+}
+
+/**
+ * KAPI-B — one keyword's OWN value of a keyword setting: its VALUE override with ref `target:<AdTarget.id>` at its
+ * campaign's scope, else at its product's (in this market), validated again (fail closed); null when it has none of its
+ * own. An empty value (null) the keyword holds is its own too (the caller reads it as none). Pure.
+ */
+export function resolveKeywordOwn(input: { productId: string; market: string; campaignId?: string | null; targetId: string; overrides: readonly OverrideRow[] }, key: KeywordValueSetting): (Resolved<SettingValue> & { grain: 'keyword' }) | null {
   const campaignId = input.campaignId ?? null
   const { live } = liveOverrides({ ...input, campaignId })
   const ref = keywordValueRef(input.targetId)
   const own = live.get(overrideIdentity({ scope: 'CAMPAIGN', campaignId, kind: 'VALUE', key, ref })) ?? live.get(overrideIdentity({ scope: 'PRODUCT', campaignId, kind: 'VALUE', key, ref }))
-  if (own) return { value: own.value as SettingValue, ...provenanceOf(own), grain: 'keyword' }
-  const v = resolveBrainSettings({ ...input, campaignId, enrolled: false }).values[key]
-  return { ...v, grain: v.source }
+  return own ? { value: own.value as SettingValue, ...provenanceOf(own), grain: 'keyword' } : null
 }
 
 /**

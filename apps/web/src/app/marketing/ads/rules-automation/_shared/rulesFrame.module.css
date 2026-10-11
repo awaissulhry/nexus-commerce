@@ -1,0 +1,21 @@
+/* Bid page programme, lane SHELL (2026-10-10) — the Rules & Automation frame: layout only.
+   The header is the DS `PageHeader` and the bar the DS `Tabs` (lg, scrolling); neither is restyled here.
+   16px from the bar's hairline to the page's content, as the old bar had. */
+.tabs {
+  min-width: 0;
+  margin-bottom: var(--nds-space-16);
+  /* The scrolling strip keeps 4px inside its edges for the focus ring; the bar reaches 4px past the content on each
+     side so the first label lines up with the page title (polish round 2: x 100 vs the title's 96). */
+  margin-inline: calc(-1 * var(--nds-space-4));
+}
+/* While the strip scrolls under an overlay scrollbar the DS keeps a band for the bar BELOW the hairline (13px under it,
+   `components.css`, Owner 2026-10-05): that band is most of the 16px, so only the rest is added. The strip sits in the
+   DS overflow frame (`.nds-tabs-scroller`), hence no `>`. */
+.tabs:has([data-overflows='overlay']) {
+  margin-bottom: var(--nds-space-3);
+}
+/* A market Nexus only reads: its one-line banner under the header keeps the header's own gap above the tab strip
+   (polish round 2, S13: the tabs touched it). */
+.readOnly {
+  margin-bottom: var(--nds-space-18);
+}

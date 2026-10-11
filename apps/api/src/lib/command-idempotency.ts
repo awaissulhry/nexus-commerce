@@ -94,6 +94,8 @@ const COMMAND_SCOPES: Record<string, string> = {
   '/api/advertising/automation/brain/control': 'brain-control',
   '/api/advertising/automation/brain/kill': 'brain-kill',
   '/api/advertising/automation/brain/bid-brain/enrollment': 'brain-bid-enrollment',
+  // Bid page R4 — one Undo of approved asks per click: a resend replays its answer, never puts back twice.
+  '/api/advertising/bid-rules/:id/asks/undo': 'bid-ask-undo',
   '/api/advertising/automation/brain/hours/apply': 'brain-hours-apply',
   '/api/advertising/automation/brain/harvest/apply': 'brain-harvest-apply',
   '/api/advertising/automation/brain/retire': 'brain-retire',

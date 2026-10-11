@@ -370,4 +370,22 @@ describe('keywordValuesOf — the Owner\'s own per-keyword values (integration r
     ])
     expect(keywordValuesOf(rows, { scope: 'PRODUCT', productId: 'p1', market: 'IT' }).map((v) => [v.ref, v.value])).toEqual([['target:t-9', 30]])
   })
+
+  it('KAPI-B — a keyword\'s own max bid sits under its own money key (never `value`): hidden without financials.adspend.view; its goal is shown', async () => {
+    const { financialPayloadCopy } = await import('../../../lib/auth/field-filter.js')
+    const { BRAIN_VIEW_MONEY } = await import('./read-view.js')
+    const { FIELDS } = await import('@nexus/shared/permissions')
+    const rows = [row({ key: 'maxBidCents', value: 40 }), row({ key: 'targetAcosPct', value: 25 })]
+    const kw = keywordValuesOf(rows, { scope: 'CAMPAIGN', campaignId: 'c1' })
+    expect(kw).toEqual([
+      { key: 'maxBidCents', ref: 'target:t-1', maxBidCents: 40, by: 'user:owner', at: '2026-10-09T08:00:00.000Z' },
+      { key: 'targetAcosPct', ref: 'target:t-1', value: 25, by: 'user:owner', at: '2026-10-09T08:00:00.000Z' },
+    ])
+    const view = { campaigns: [{ keywordValues: kw }] }
+    expect(financialPayloadCopy(view, { isOwner: false, permissions: new Set() }, BRAIN_VIEW_MONEY).campaigns[0].keywordValues).toEqual([
+      { key: 'maxBidCents', ref: 'target:t-1', by: 'user:owner', at: '2026-10-09T08:00:00.000Z' },
+      { key: 'targetAcosPct', ref: 'target:t-1', value: 25, by: 'user:owner', at: '2026-10-09T08:00:00.000Z' },
+    ])
+    expect(financialPayloadCopy(view, { isOwner: false, permissions: new Set([FIELDS.financialsAdspendView]) }, BRAIN_VIEW_MONEY)).toEqual(view)
+  })
 })

@@ -194,3 +194,42 @@ describe('Lane 5 — the target top-of-search impression share in the facts', ()
     expect(after.map((f) => f.targetId)).toEqual(['t1', 't2'])
   })
 })
+
+describe('KAPI-B — a person\'s own goal, max and lock of one keyword (run.keywordOwn)', () => {
+  const ruleGoal = new Map([['c1', [{ targetId: 't1', lane: null, kind: 'GOAL', valueCents: null, valuePct: 15, label: 'rule "lower goal"' }]]])
+
+  it('its own target ACoS is the goal: before a rule\'s GOAL directive and the strategy\'s target, the aim as set (no phase), the default band', () => {
+    const own = new Map([['t1', { acos: { pct: 30, by: 'user:owner, 2026-10-10' } }]])
+    const launch = run({ strategy: new Map([['g1', { target: { kind: 'ACOS', pct: 20 }, acosPct: 20, band: { loPct: 18, hiPct: 28 }, goal: 'LAUNCH', launchDay: 3, minBidCents: null, maxBidCents: 80, maxChangePct: 25 }]]) })
+    const [t1, t2] = buildFacts(market(), { ...launch, directives: ruleGoal, keywordOwn: own })
+    expect(t1.goal).toMatchObject({ target: { kind: 'ACOS', pct: 30 }, acosFallbackPct: null, band: null, phase: null })
+    expect(t1.goal.launchDay).toBeUndefined()
+    expect(t1.goalOwn).toBe('user:owner, 2026-10-10')
+    expect(t1.goalBy).toBeUndefined()
+    // Another keyword keeps the strategy's goal and phase.
+    expect(t2.goal).toMatchObject({ target: { kind: 'ACOS', pct: 20 }, phase: 'LAUNCH' })
+    // Without its own goal, the rule's GOAL is the keyword's, as before.
+    const [ruled] = buildFacts(market(), { ...run(), directives: ruleGoal })
+    expect(ruled.goal.target).toEqual({ kind: 'ACOS', pct: 15 })
+    expect(ruled.goalBy).toBe('rule "lower goal"')
+  })
+
+  it('its own max goes into the limits; a keyword with none has exactly the facts it had', () => {
+    const own = new Map([['t1', { max: { cents: 40, by: 'user:owner, 2026-10-10' } }]])
+    const [t1, t2] = buildFacts(market(), run({ keywordOwn: own }))
+    expect(t1.limits).toMatchObject({ maxBidCents: 80, keywordMaxCents: 40 })
+    expect(t2.limits).not.toHaveProperty('keywordMaxCents')
+    expect(buildFacts(market(), run({ keywordOwn: new Map() }))).toEqual(buildFacts(market(), run()))
+  })
+
+  it('the Owner\'s lock of its bid pins it (the brain leaves it; a stop still comes first) — before auto-undo\'s soft pin', () => {
+    const own = new Map([['t1', { lock: { by: 'this keyword\'s bid locked by the Owner\'s campaign override (user:owner, 2026-10-10)' } }]])
+    const undo = [{ campaignId: 'c1', targetId: 't1', kind: 'UNDO_PIN', by: 'auto-undo', until: null }]
+    const [t1, t2] = buildFacts(market(), run({ keywordOwn: own, holds: undo }))
+    expect(t1.overrides?.pin).toEqual({ by: 'this keyword\'s bid locked by the Owner\'s campaign override (user:owner, 2026-10-10)' })
+    expect(t2.overrides?.pin ?? null).toBeNull()
+    // The campaign's pinned bids keep their words first.
+    const pinned = market({ campaigns: new Map([['c1', campaign('c1', { pinBids: true, pinnedBy: 'user:x' })], ['c2', campaign('c2', { allowlisted: false })]]) })
+    expect(buildFacts(pinned, run({ keywordOwn: own }))[0].overrides?.pin).toEqual({ by: 'bids pinned by user:x' })
+  })
+})

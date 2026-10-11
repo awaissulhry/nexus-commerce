@@ -28,6 +28,7 @@ import {
   type AdsActor,
 } from './ads-mutation.service.js'
 import { NON_CHANGE_ACTION_TYPES } from './ads-engine-actors.js'
+import type { AdWriteEvidence } from './ads-evidence.js'
 
 const ROLLBACK_WINDOW_MS = 24 * 60 * 60 * 1000
 /** Surfaced to the UI so the button can explain itself rather than no-op. */
@@ -187,6 +188,12 @@ async function reverseOne(
    * caller sends at once, as before. A placement write has no queue: it goes at once either way.
    */
   hold = false,
+  /**
+   * Bid page R4 — what reverseRuleWrite asks of a keyword's or ad group's reversal, and nothing else does: `evidence` on its
+   * action log row (`undoOf`: the row it puts back), and `askGate` — the write gate asked before Nexus writes its copy, so
+   * a refusal (the halt, a locked campaign, the brain running the campaign now) writes nothing and says why. Absent: as before.
+   */
+  opts: { evidence?: AdWriteEvidence | null; askGate?: boolean } = {},
 ): Promise<{ ok: boolean; reason?: string; skipped?: boolean; actionLogId?: string | null }> {
   // Refuse to invert anything that never made it past the gate / queue
   // — there's nothing to undo on the Amazon side, and re-applying the
@@ -292,6 +299,8 @@ async function reverseOne(
         manual,
         reversal: true,
         changeSetId,
+        ...(opts.evidence ? { evidence: opts.evidence } : {}),
+        ...(opts.askGate ? { askGate: true } : {}),
       })
       if (result.ok) await restoreFloorMemory(log, before)
       return result.ok ? { ok: true, actionLogId: result.actionLogId ?? null } : { ok: false, reason: result.error ?? 'unknown' }
@@ -312,6 +321,8 @@ async function reverseOne(
         reversal: true,
         changeSetId,
         ...(sbSd && (await wasSbSdWrite(log)) ? { allowSbSd: true } : {}), // W4-11
+        ...(opts.evidence ? { evidence: opts.evidence } : {}),
+        ...(opts.askGate ? { askGate: true } : {}),
       })
       if (result.ok) await restoreFloorMemory(log, before)
       return result.ok ? { ok: true, actionLogId: result.actionLogId ?? null } : { ok: false, reason: result.error ?? 'unknown' }
@@ -514,6 +525,69 @@ export async function reverseJudgedWrite(args: {
   const r = await reverseOne(log as never, args.actor, args.reason, args.manual === true, args.changeSetId ?? null, false, true)
   if (!r.ok || r.skipped) return { ok: false, reason: r.reason ?? 'the undo was refused' }
   await prisma.advertisingActionLog.update({ where: { id: log.id }, data: { rolledBackAt: new Date(), rollbackReason: args.reason } }).catch(() => {})
+  return { ok: true, actionLogId: r.actionLogId ?? null }
+}
+
+/**
+ * Bid page R4 (2026-10-11) — put back ONE write a rule's approved ask made, AS THE RULE (bid-rules/ask-undo.ts). The ask was
+ * the rule's decision a person agreed to, and its write carries the rule's actor; so does its undo: the bid (or state) it
+ * replaced goes back through reverseOne with `automation:<ruleId>`, never a person's actor and never `manual`. It is
+ * therefore no person's write anywhere: no BidHold (bid-brain/brain-holds.ts recordBrainHold reads only a person's write),
+ * not a person's bid of the last 60 days (bid-grid.service.ts personBidTargetIds), not "You" as a bid's owner. The shared
+ * Undo route and every other caller are unchanged: this is its own entry, with its own checks:
+ *   · only the rule's own write (its actor), not undone yet, inside the undo window of its kind (rollbackWindowMsFor);
+ *   · it still stands (judgedWriteStands, as auto-undo): a later change on the keyword, or a value that moved, refuses it —
+ *     putting the old value back would overwrite a newer decision;
+ *   · the largest change of one step (the campaign's and the ads strategy's, the clamp every automatic bid write takes)
+ *     must allow the way back whole: otherwise refused, never written part of the way;
+ *   · the write gate is asked before Nexus writes its copy (askGate): a refusal writes nothing and says why.
+ * Its action log row carries `evidence.undoOf` (the row it puts back), and the row it puts back is marked undone, so the
+ * Bid page folds the two away (bid-owner.ts withoutUndonePairs): the owner is again the one before the approval.
+ */
+export async function reverseRuleWrite(args: { actionLogId: string; ruleId: string; reason: string; now?: Date }): Promise<
+  /** `nothing`: why nothing had to be put back (the change never reached Amazon and the value is back, or it changed nothing). */
+  { ok: true; actionLogId: string | null; nothing?: string } | { ok: false; reason: string }
+> {
+  const log = await prisma.advertisingActionLog.findUnique({ where: { id: args.actionLogId } })
+  if (!log) return { ok: false, reason: 'That change no longer exists.' }
+  const actor = `automation:${args.ruleId}` as AdsActor
+  if (log.userId !== actor && log.userId !== `automation:${actor}`) return { ok: false, reason: 'This change was not written by this rule, so it is not undone as the rule.' }
+  if (log.rolledBackAt) return { ok: false, reason: 'It was undone already.' }
+  const now = args.now ?? new Date()
+  // A write that never reached Amazon (cancelled before it was sent — an archive cancels the rule's queued writes —, refused,
+  // replaced, failed) whose value Nexus already holds again: nothing to put back.
+  if (log.amazonResponseStatus !== 'SUCCESS' && log.amazonResponseStatus !== 'PENDING') {
+    const before = (log.payloadBefore ?? {}) as Record<string, unknown>
+    const back = log.entityType === 'AD_TARGET'
+      ? await prisma.adTarget.findUnique({ where: { id: log.entityId }, select: { bidCents: true, status: true } })
+      : null
+    if (back && (before.bidCents == null || back.bidCents === before.bidCents) && (before.status == null || back.status === before.status)) {
+      return { ok: true, actionLogId: null, nothing: `Its change never reached Amazon (${String(log.amazonResponseStatus ?? 'not sent').toLowerCase()}) and the value is already back, so nothing had to be put back.` }
+    }
+  }
+  if (now.getTime() - log.createdAt.getTime() > rollbackWindowMsFor(log.actionType)) {
+    return { ok: false, reason: `Older than the ${rollbackWindowLabel(log.actionType)} undo window for this kind of change: Amazon's own state has usually moved on since. Nothing was written.` }
+  }
+  const moved = await judgedWriteStands(log)
+  if (moved) return { ok: false, reason: `Not put back: ${moved}, and putting the old value back would overwrite that. Nothing was written.` }
+  const before = (log.payloadBefore ?? {}) as Record<string, unknown>
+  const after = (log.payloadAfter ?? {}) as Record<string, unknown>
+  if (log.entityType === 'AD_TARGET' && typeof before.bidCents === 'number' && before.bidCents !== after.bidCents) {
+    const t = await prisma.adTarget.findUnique({ where: { id: log.entityId }, select: { bidCents: true, adGroupId: true, adGroup: { select: { campaign: { select: { id: true, marketplace: true, dynamicBidding: true } } } } } })
+    const c = t?.adGroup?.campaign
+    if (t && c) {
+      const { bidLimitsFor, stepClamp } = await import('./ads-strategy/bids.js')
+      const step = stepClamp(t.bidCents, before.bidCents, c.dynamicBidding, await bidLimitsFor({ marketplace: c.marketplace, adGroupId: t.adGroupId, campaignId: c.id }))
+      if (step.cents !== before.bidCents) {
+        const whose = step.by === 'strategy' ? 'the ads strategy' : 'the campaign'
+        return { ok: false, reason: `Not put back: the largest change of one step (${step.pct != null ? `${step.pct} %, ` : ''}${whose}) holds the way back from ${t.bidCents}¢ to ${before.bidCents}¢ at ${step.cents}¢. Nothing was written; change the bid by hand if you want it back.` }
+      }
+    }
+  }
+  const r = await reverseOne(log as never, actor, args.reason, false, null, false, false, { evidence: { undoOf: log.id }, askGate: true })
+  if (r.ok && r.skipped) return { ok: true, actionLogId: null, nothing: 'The approval changed nothing, so nothing had to be put back.' }
+  if (!r.ok) return { ok: false, reason: r.reason ?? 'the undo was refused' }
+  await prisma.advertisingActionLog.update({ where: { id: log.id }, data: { rolledBackAt: now, rollbackReason: args.reason } })
   return { ok: true, actionLogId: r.actionLogId ?? null }
 }
 

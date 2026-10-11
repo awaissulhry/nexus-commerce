@@ -6,8 +6,10 @@
  * It NEVER writes. A flip is handed to the grid's `context.current.onSwitch(row, next, field)`: the page changes its
  * DRAFT, and the page's `EditModeBar` + review dialog save it. While the draft holds a change the cell shows "Not
  * saved". Without a handler (no permission) it draws only the word — the `AllowedCell` precedent
- * (`control-room/CampaignLimitsGrid.tsx`). A switch that cannot move is disabled with its reason as title and
- * `aria-description`.
+ * (`control-room/CampaignLimitsGrid.tsx`). A switch that cannot move is HELD, never `disabled` (bid page DS lane,
+ * 2026-10-10): `aria-disabled`, its reason as `aria-description` and a portal tooltip, a click does nothing. A disabled
+ * button takes no focus, so a keyboard user never heard why (`scripts/check-silent-disabled.mjs`, the U13 rule); Space or
+ * Enter on a held switch's cell puts the focus on the switch, which shows and announces the reason.
  *
  * Keyboard: Space and Enter on the focused CELL flip it (AG would otherwise select the row on Space); the column's
  * `suppressKeyboardEvent` keeps AG out of it, and the cell listens on its own `eGridCell`. A click in the cell is
@@ -18,6 +20,7 @@ import type { ICellRendererParams } from 'ag-grid-community'
 
 import { Tag } from '../../primitives/Tag'
 import { Toggle } from '../../primitives/Toggle'
+import { Tooltip } from '../../primitives/Tooltip'
 import { keepFromGrid } from './rowVerbs'
 
 export interface SwitchWords { on: string; off: string }
@@ -33,7 +36,7 @@ export interface SwitchCellParams<T = unknown> {
   /** Accessible name of the switch: "Keep JACKET-A under the brain". */
   label: (row: T) => string
   words?: SwitchWords
-  /** null = it may move; a sentence = disabled, and why. */
+  /** null = it may move; a sentence = held (focusable, does nothing), and why. */
   disabledReason?: (row: T) => string | null
   /** The draft holds a change for this row: "Not saved". */
   pending?: (row: T) => boolean
@@ -73,7 +76,10 @@ function SwitchCellView<T>(p: Props<T>) {
   const on = p.value === true
   const reason = row && p.disabledReason ? p.disabledReason(row) : null
   const flip = useRef<(() => void) | null>(null)
-  flip.current = row && handler && !reason ? () => handler(row, !on, p.field) : null
+  // A held switch answers the key by taking the focus: its tooltip and description say why it cannot move.
+  flip.current = !row || !handler ? null
+    : reason ? () => p.eGridCell?.querySelector<HTMLElement>('[role="switch"]')?.focus()
+    : () => handler(row, !on, p.field)
 
   useEffect(() => {
     const cell = p.eGridCell
@@ -90,16 +96,19 @@ function SwitchCellView<T>(p: Props<T>) {
   if (!row) return null
   const word = switchWord(p.value, p.words)
   if (!handler) return <span className="nds-cell-switch">{word}</span>
+  const toggle = (
+    <Toggle
+      size="xs"
+      checked={on}
+      aria-disabled={reason ? true : undefined}
+      aria-label={p.label(row)}
+      aria-description={reason ?? undefined}
+      onChange={reason ? undefined : (next) => handler(row, next, p.field)}
+    />
+  )
   return (
-    <span className="nds-cell-switch" onClickCapture={keepFromGrid} title={reason ?? undefined}>
-      <Toggle
-        size="xs"
-        checked={on}
-        disabled={!!reason}
-        aria-label={p.label(row)}
-        aria-description={reason ?? undefined}
-        onChange={(next) => handler(row, next, p.field)}
-      />
+    <span className="nds-cell-switch" onClickCapture={keepFromGrid}>
+      {reason ? <Tooltip label={reason} portal>{toggle}</Tooltip> : toggle}
       <span>{word}</span>
       {p.pending?.(row) && <Tag tone="info">Not saved</Tag>}
     </span>

@@ -30,3 +30,11 @@ describe('hasHint — when the dd gets a sub-line', () => {
     expect(hasHint(false)).toBe(false)
   })
 })
+
+describe('keyValueRootProps — label case (polish round 2)', () => {
+  it('small caps by default; sentence case on request', () => {
+    expect(keyValueRootProps({}).className).toBe('nds-kv')
+    expect(keyValueRootProps({ labelCase: 'upper' }).className).toBe('nds-kv')
+    expect(keyValueRootProps({ labelCase: 'sentence', dense: true, className: 'x' }).className).toBe('nds-kv dense sentence x')
+  })
+})

@@ -577,6 +577,31 @@
 .nds-cell-lock-glyph { flex: none; color: var(--nds-grid-muted-fg); }
 /* switch (`switchColumn`, 2026-10-10): the toggle, its word and the "Not saved" tag on one line, never wrapping the row. */
 .nds-cell-switch { display: inline-flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; }
+/* mode (`modeColumn`, bid page 2026-10-10): meter · word · held mark · lock · "Not saved" · chevron on one line. The
+   meter has one bar per step above Off: filled up to the step that ACTS, an outline (warning ink, 3:1) up to the step
+   that is SET when something holds the row lower, the rest the resting border. Heights rise with the step (inline %). */
+.nds-cell-mode { display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; white-space: nowrap; cursor: pointer; container-type: inline-size; }
+.nds-cell-mode.is-readonly { cursor: default; }
+/* The step word is the value: it never shrinks (polish round 2, S10 — a draft read "W.. Not saved"). */
+.nds-cell-mode-word { flex: none; }
+.nds-cell-mode-draft { flex: none; display: inline-flex; align-items: center; }
+.nds-cell-mode-dot { display: none; width: 8px; height: 8px; border-radius: var(--nds-radius-full); background: var(--nds-primary); }
+/* Too narrow for the word AND the "Not saved" tag (meter + "Ask me" + tag + chevron ≈ 170px): the tag becomes a dot,
+   named "Not saved" (tooltip and screen reader). */
+@container (max-width: 180px) {
+  .nds-cell-mode-draft .nds-tag { display: none; }
+  .nds-cell-mode-dot { display: inline-block; }
+}
+.nds-cell-mode-meter { flex: none; display: inline-flex; align-items: flex-end; gap: 2px; height: 12px; }
+.nds-cell-mode-meter > span { width: 4px; border-radius: var(--nds-radius-xs); background: var(--nds-border-strong); }
+.nds-cell-mode-meter > .is-on { background: var(--nds-primary); }
+.nds-cell-mode-meter > .is-held { background: transparent; box-shadow: inset 0 0 0 1px var(--nds-warning-strong); }
+.nds-cell-mode-held { flex: none; display: inline-flex; color: var(--nds-warning-text); }
+.nds-cell-mode-lock { flex: none; display: inline-flex; }
+.nds-cell-mode-lock:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; border-radius: var(--nds-radius-xs); }
+/* sparkline (`sparklineColumn`) and entity links (`entityLinksColumn`), 2026-10-10: one line, never wrapping the row. */
+.nds-cell-spark { display: inline-flex; align-items: center; height: 100%; }
+.nds-cell-entitylinks { display: inline-flex; align-items: center; min-width: 0; max-width: 100%; }
 /* `WarnGlyph` / `PauseGlyphIcon` (2026-10-08): outline icons in their holder's ink, sitting on the text's middle. */
 .nds-cell-glyph { flex: none; display: inline-block; vertical-align: -2px; }
 

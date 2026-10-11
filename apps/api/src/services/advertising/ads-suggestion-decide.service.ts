@@ -15,6 +15,7 @@
  * protocol-level (404/409/422/423); a REFUSAL is not one of them — see applySuggestion.
  */
 import prisma from '../../db.js'
+import { ARCHIVED_ADS_DOMAIN } from './bid-rules/pure.js'
 import { isTargetAcosBidCard, muteSuggestion, parseWouldChange, unmuteSuggestion, type DecideResult } from './ads-suggestions.service.js'
 import { done, refused, type ServiceOutcome } from '../automation/service-outcome.js'
 
@@ -77,6 +78,10 @@ export async function staleRuleSentence(sug: { ruleId: string; ruleName: string 
   const rule = await prisma.automationRule.findUnique({
     where: { id: sug.ruleId }, select: { id: true, name: true, domain: true, enabled: true, dryRun: true, autonomyLevel: true },
   })
+  // Bid page — an archived rule is kept (bid-rules/pure.ts ARCHIVED_ADS_DOMAIN): say archived, never deleted.
+  if (rule?.domain === ARCHIVED_ADS_DOMAIN) {
+    return `This change can no longer be applied: ${rule.name} is archived. Restore it on the Bid page; if the change still holds, it will propose it again.`
+  }
   if (!rule || rule.domain !== 'advertising') {
     return `This change can no longer be applied: the rule that proposed it${sug.ruleName ? ` (${sug.ruleName})` : ''} was deleted. Dismiss it.`
   }

@@ -966,6 +966,95 @@
   color: var(--nds-text-2);
 }
 
+/* ── ReviewChangesModal (bid page DS lane, 2026-10-10): one line, one table, the tick ───────────── */
+.nds-review {
+  display: grid;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+.nds-review-line {
+  margin: 0;
+  color: var(--nds-text-2);
+}
+/* The Done line in its tone's TEXT ink (7:1), never the bright fill as text. */
+.nds-review-line.success { color: var(--nds-success-text); font-weight: 600; }
+.nds-review-line.warning { color: var(--nds-warning-text); font-weight: 600; }
+.nds-review-line.danger { color: var(--nds-danger-text); font-weight: 600; }
+.nds-review-list {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+}
+/* The one table: a review's last column is words (a note, a result), not a number — it reads from the left, and
+   columns size to their words so none breaks mid-word. On a phone a table wider than the dialog scrolls sideways
+   inside its own box instead (measured at 390 px: equal fixed columns broke "automation" into "automa / tion"). */
+.nds-review-table {
+  min-width: 0;
+  overflow-x: auto;
+}
+.nds-review-table .nds-summary-table {
+  table-layout: auto;
+}
+.nds-review-table .nds-summary-table th,
+.nds-review-table .nds-summary-table td {
+  overflow-wrap: break-word;
+}
+.nds-review-table .nds-summary-table th:last-child,
+.nds-review-table .nds-summary-table td:last-child {
+  text-align: left;
+}
+
+/* ── DetailModal (bid page polish round 2, 2026-10-10): a row's detail in a centered dialog ── */
+.nds-detail-subtitle {
+  display: block;
+}
+.nds-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+.nds-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.nds-detail-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.nds-detail-actions + .nds-detail-nav {
+  padding-left: 8px;
+  border-left: 1px solid var(--nds-border-subtle);
+}
+/* "12 of 128" keeps its width while the number changes, so ▼ does not move under the pointer. */
+.nds-detail-pos {
+  min-width: 64px;
+  text-align: center;
+  white-space: nowrap;
+  font-size: var(--nds-font-size-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--nds-text-2);
+}
+.nds-detail-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--nds-text-2);
+}
+/* Phone (`breakpoint.sm`): the header's controls have a line of their own; Prev / Next sit at its right end. */
+@media (max-width: 760px) {
+  .nds-detail-nav {
+    margin-left: auto;
+  }
+  .nds-detail-actions + .nds-detail-nav {
+    border-left: none;
+  }
+}
+
 /* ── Sticky action bar (BulkActionBar / EditModeBar) ─────────────── */
 .nds-actionbar {
   position: sticky;
@@ -981,6 +1070,13 @@
   border-radius: var(--nds-radius-xl);
   padding: 11px 16px;
   box-shadow: var(--nds-shadow-card);
+}
+/* While the global Ask AI button is on screen (`data-nds-fab`), the sticky bar never sits under it: when it sticks to the
+   bottom it rides just above the button's footprint (polish round 2, M7) — once here, for every BulkActionBar and
+   EditModeBar, where ads.css padded each of its own bars. In the page's flow (not stuck) nothing moves: its buttons stay
+   at its right edge. */
+:root:has([data-nds-fab]) .nds-actionbar {
+  bottom: calc(var(--nds-fab-reserve-block) + var(--nds-space-4));
 }
 .nds-actionbar .lbl {
   flex: 1 1 14rem;

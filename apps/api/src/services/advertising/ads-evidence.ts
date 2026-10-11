@@ -68,6 +68,12 @@ export interface AdWriteEvidence {
    * from the action log itself (ads-budget-giveback.ts).
    */
   giveBackOf?: string
+  /**
+   * Bid page R4 — on the undo of a rule's approved ask (rollback.service.ts reverseRuleWrite, written as the rule): the
+   * action log row it puts back. The Bid page folds the two away (bid-owner.ts withoutUndonePairs). A record for the
+   * reader only: no gate trusts it.
+   */
+  undoOf?: string
   /** 3A (Owner decided 2026-10-06) — "sent past <limit> by <person>": a person confirmed this write past his own limits. */
   sentPastOwnLimits?: string
   /**

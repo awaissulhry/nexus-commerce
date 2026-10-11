@@ -18,7 +18,7 @@
  * Values are made up (public repo).
  */
 import { describe, expect, it } from 'vitest'
-import { describeProvenance, keywordValueRef, ownerBrakeOf, resolveBrainSettings, resolveKeywordValue, settingsPairRefusal, validateIdentity, validateOverride, type OverrideRow } from './settings.js'
+import { describeProvenance, keywordValueRef, ownerBrakeOf, resolveBrainSettings, resolveKeywordOwn, resolveKeywordValue, settingsPairRefusal, validateIdentity, validateOverride, type OverrideRow } from './settings.js'
 
 let n = 0
 const row = (o: Partial<OverrideRow> & Pick<OverrideRow, 'scope' | 'kind' | 'key'>): OverrideRow => ({
@@ -221,5 +221,35 @@ describe('Lane 5 — a keyword\'s own value of tosTargetPct (ref target:<AdTarge
     // A stored keyword ref on another setting is ignored and listed (fail closed).
     const bad = row({ scope: 'PRODUCT', kind: 'VALUE', key: 'paceTargetPct', ref: 'target:t-1', value: 80 })
     expect(resolve([bad]).ignored).toEqual([{ overrideId: bad.id, why: expect.stringMatching(/not per keyword/) }])
+  })
+})
+
+describe('KAPI-B — a person\'s own goal and max of one keyword (targetAcosPct, maxBidCents: keyword-only)', () => {
+  const kw = (o: Partial<OverrideRow> & Pick<OverrideRow, 'key'>) => row({ scope: 'CAMPAIGN', campaignId: 'c-1', kind: 'VALUE', ref: keywordValueRef('t-1'), value: 30, ...o })
+  const own = (overrides: OverrideRow[], key: 'targetAcosPct' | 'maxBidCents', targetId = 't-1') => resolveKeywordOwn({ productId: 'p-1', market: 'IT', campaignId: 'c-1', targetId, overrides }, key)
+
+  it('takes a keyword ref only: a product\'s or a campaign\'s value of them is refused, with why', () => {
+    expect(validateOverride({ scope: 'CAMPAIGN', campaignId: 'c-1', kind: 'VALUE', key: 'targetAcosPct', ref: 'target:t-1', value: 25 })).toMatchObject({ override: { key: 'targetAcosPct', ref: 'target:t-1', value: 25 } })
+    expect(validateOverride({ scope: 'PRODUCT', kind: 'VALUE', key: 'maxBidCents', ref: 'target:t-1', value: 40 })).toMatchObject({ override: { key: 'maxBidCents', ref: 'target:t-1', value: 40 } })
+    for (const key of ['targetAcosPct', 'maxBidCents']) {
+      expect(validateOverride({ scope: 'PRODUCT', kind: 'VALUE', key, value: 30 })).toEqual({ refusal: expect.stringMatching(new RegExp(`^${key} is set per keyword only: name the keyword as ref target:<AdTarget.id>`)) })
+      expect(validateOverride({ scope: 'CAMPAIGN', campaignId: 'c-1', kind: 'VALUE', key, value: 30 })).toEqual({ refusal: expect.stringMatching(/per keyword only/) })
+    }
+    // Bounds: a goal 1–200 %, a max from the 5¢ engine floor.
+    expect(validateOverride({ scope: 'CAMPAIGN', campaignId: 'c-1', kind: 'VALUE', key: 'targetAcosPct', ref: 'target:t-1', value: 0 })).toEqual({ refusal: expect.stringMatching(/from 1 to 200 or empty/) })
+    expect(validateOverride({ scope: 'CAMPAIGN', campaignId: 'c-1', kind: 'VALUE', key: 'maxBidCents', ref: 'target:t-1', value: 4 })).toEqual({ refusal: expect.stringMatching(/from 5 to 100000 or empty/) })
+    expect(validateOverride({ scope: 'CAMPAIGN', campaignId: 'c-1', kind: 'VALUE', key: 'maxBidCents', ref: 'target:t-1', value: null })).toMatchObject({ override: { value: null } })
+  })
+
+  it('the keyword\'s own value alone: its campaign\'s scope before its product\'s, null with none; never the campaign\'s or the product\'s', () => {
+    expect(own([], 'maxBidCents')).toBeNull()
+    expect(own([kw({ key: 'maxBidCents', scope: 'PRODUCT', campaignId: null, value: 60 })], 'maxBidCents')).toMatchObject({ value: 60, grain: 'keyword', source: 'product' })
+    expect(own([kw({ key: 'maxBidCents', scope: 'PRODUCT', campaignId: null, value: 60 }), kw({ key: 'maxBidCents', value: 45 })], 'maxBidCents')).toMatchObject({ value: 45, source: 'campaign' })
+    expect(own([kw({ key: 'maxBidCents', value: 45 })], 'targetAcosPct')).toBeNull()
+    expect(own([kw({ key: 'maxBidCents', value: 45 })], 'maxBidCents', 't-2')).toBeNull()
+    // A stored row a later check refuses (a max under the engine floor) is ignored: fail closed.
+    expect(own([kw({ key: 'maxBidCents', value: 3 })], 'maxBidCents')).toBeNull()
+    // The resolved settings of the campaign and the product never carry a keyword's value.
+    expect(resolve([kw({ key: 'targetAcosPct', value: 25 })]).values.targetAcosPct).toMatchObject({ value: null, source: 'default' })
   })
 })

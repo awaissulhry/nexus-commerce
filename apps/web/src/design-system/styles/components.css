@@ -252,6 +252,10 @@ button.nds-source-indicator.nds-source-indicator:hover { background: var(--nds-s
    why, so hue is never the only carrier. */
 .nds-tab:is(:disabled, [aria-disabled="true"]) { opacity: .45; cursor: not-allowed; }
 .nds-tab:is(:disabled, [aria-disabled="true"]):hover { color: inherit; }
+/* Link tabs (bid page DS lane, 2026-10-10): `Tabs` with hrefs draws anchors (and a held span for a tab that goes
+   nowhere) inside a `<nav>`. They wear the button tab exactly: same box, no underline, the same hover and active ink. */
+a.nds-tab, span.nds-tab { display: inline-block; text-decoration: none; }
+a.nds-tab:hover { text-decoration: none; }
 
 .nds-tabs.lg {
   gap: 28px;
@@ -350,6 +354,68 @@ button.nds-source-indicator.nds-source-indicator:hover { background: var(--nds-s
 .nds-tabs.lg .nds-tab.on .nds-tab-count {
   background: var(--nds-primary-soft);
   color: var(--nds-text-link);
+}
+/* `dense` (polish round 2, 2026-10-10, audit M6): the lg bar with many tabs — the eleven Rules & Automation tabs
+   measured 1481px in 1314 at 1440 (14.5px, 28px apart); at 13.5px and 16px apart they take ~1290, so they fit with
+   a count on every counted tab. */
+.nds-tabs.lg.dense {
+  gap: 16px;
+}
+.nds-tabs.lg.dense .nds-tab {
+  font-size: var(--nds-font-size-base-plus);
+}
+/* The overflow marker of a scrolling strip (`overflow="scroll"`, polish round 2, audit M6: a tab hidden past the edge
+   with no sign of it). Each edge with more tabs beyond it (`data-more-start` / `-end`, set by Tabs) fades the labels out
+   and shows an arrow that scrolls that way (the labels are clear under the 28px arrow and fade in over the next 28px —
+   `TAB_FADE` = 56). The arrows are for a pointer — no focus, hidden from screen readers; the
+   keyboard moves between tabs and the strip follows. Rules in `components/tabsScroll.ts`. */
+.nds-tabs-scroller {
+  position: relative;
+  min-width: 0;
+  max-width: 100%;
+}
+.nds-tabs-more {
+  display: none;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 1;
+  width: 28px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: var(--nds-radius-sm);
+  background: none;
+  color: var(--nds-text-2);
+  cursor: pointer;
+}
+.nds-tabs-more:hover {
+  background: var(--nds-surface-hover);
+  color: var(--nds-text);
+}
+.nds-tabs-more.start {
+  left: 0;
+}
+.nds-tabs-more.end {
+  right: 0;
+}
+.nds-tabs-scroller[data-more-start] > .nds-tabs-more.start,
+.nds-tabs-scroller[data-more-end] > .nds-tabs-more.end {
+  display: inline-flex;
+}
+/* The band under an overlay scrollbar is not the tabs: the arrows end above it. */
+.nds-tabs-scroller:has(> .nds-tabs[data-overflows='overlay']) > .nds-tabs-more {
+  bottom: calc(var(--nds-space-4) + var(--nds-space-14));
+}
+.nds-tabs-scroller[data-more-start] > .nds-tabs {
+  mask-image: linear-gradient(to right, transparent 28px, black 56px);
+}
+.nds-tabs-scroller[data-more-end] > .nds-tabs {
+  mask-image: linear-gradient(to left, transparent 28px, black 56px);
+}
+.nds-tabs-scroller[data-more-start][data-more-end] > .nds-tabs {
+  mask-image: linear-gradient(to right, transparent 28px, black 56px, black calc(100% - 56px), transparent calc(100% - 28px));
 }
 .nds-tab-badge {
   display: inline-flex;
@@ -572,6 +638,141 @@ html:has(> body > .nds-backdrop) { overscroll-behavior: none; }
   justify-content: flex-end;
   gap: 8px;
   padding: 12px 18px;
+}
+
+/* The header's title block takes the room, so `headerActions` and Close sit at the right edge (a long title wraps
+   inside it instead of pushing Close out). */
+.nds-modal-hl {
+  flex: 1;
+  min-width: 0;
+}
+.nds-modal-h-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+/* `subheader`: a row fixed under the header (a detail's tabs). The body's top rule would double the tabs' own line. */
+.nds-modal-sh {
+  flex-shrink: 0;
+  min-width: 0;
+  padding: 0 18px;
+}
+.nds-modal-sh + .nds-modal-b {
+  border-top: none;
+}
+/* `detail` — a row's detail (bid page polish round 2, 2026-10-10; the Owner: no side drawer, a centered popup). Its
+   height follows its content up to min(880px, the viewport less its margins) and the body scrolls beyond (run 3: a fixed
+   880px left a 3-line Overview in a mostly empty dialog). It hangs from a fixed top, so a taller or shorter tab moves only
+   its bottom edge, never the header or the tabs; `DetailModal` also keeps the tallest body seen while it is open, so
+   going back to a shorter tab or the next row does not shrink it. */
+.nds-backdrop.detail {
+  align-items: flex-start;
+  padding-top: clamp(20px, 6vh, 64px);
+}
+.nds-modal.detail {
+  width: 1160px;
+  max-height: min(880px, calc(100dvh - clamp(20px, 6vh, 64px) - 20px));
+}
+.nds-modal.detail:focus {
+  outline: none;
+}
+.nds-modal.detail .nds-modal-h {
+  padding: 18px 24px 10px;
+}
+.nds-modal.detail .nds-modal-sh {
+  padding: 0 24px;
+}
+.nds-modal.detail .nds-modal-b {
+  padding: 16px 24px;
+}
+.nds-modal.detail .nds-modal-f {
+  padding: 12px 24px;
+}
+/* Phone (`breakpoint.sm` = 760px, tokens/breakpoints.ts): a full-screen sheet. The header's controls take a line of
+   their own under the title; Close stays beside the title. */
+@media (max-width: 760px) {
+  .nds-backdrop.detail {
+    padding: 0;
+    align-items: stretch;
+  }
+  .nds-modal.detail {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    border-radius: 0;
+  }
+  .nds-modal.detail .nds-modal-h {
+    flex-wrap: wrap;
+    padding: 12px 16px 8px;
+  }
+  .nds-modal.detail .nds-modal-h-actions {
+    order: 3;
+    flex-basis: 100%;
+    justify-content: flex-start;
+  }
+  .nds-modal.detail .nds-modal-sh {
+    padding: 0 16px;
+  }
+  .nds-modal.detail .nds-modal-b {
+    padding: 12px 16px;
+  }
+  .nds-modal.detail .nds-modal-f {
+    padding: 10px 16px;
+  }
+}
+
+/* ── The global Ask AI launcher (`components/AiCopilot.tsx`) ── polish round 2, 2026-10-10, audit M7.
+   Moved off Tailwind into the DS so its footprint, its phone size and the reserves that keep page controls clear of it
+   live together. z 40 (the old `z-40`): above the page and its sticky bars (`--nds-z-actionbar`), BELOW the rail, the
+   top bar and every modal backdrop and drawer (`--nds-z-overlay` 1400) — an open dialog dims it and makes it inert.
+   Light: the dark pill; dark: the light one (`--nds-text` on `--nds-text-inverse`), as before. */
+.nds-fab {
+  position: fixed;
+  right: var(--nds-fab-inset);
+  bottom: var(--nds-fab-inset);
+  z-index: 40;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 48px;
+  padding: 0 16px;
+  border: none;
+  border-radius: var(--nds-radius-full);
+  background: var(--nds-text);
+  color: var(--nds-text-inverse);
+  box-shadow: var(--nds-shadow-pop);
+  font: inherit;
+  font-size: var(--nds-font-size-md);
+  font-weight: 500;
+  cursor: pointer;
+}
+.nds-fab:hover {
+  opacity: 0.9;
+}
+.nds-fab:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 2px;
+}
+/* Phone (`breakpoint.sm`): a 44px round icon at a 12px inset, so it covers a corner and not a toolbar ("+ New rule" sat
+   under the 104px pill at 390). The published footprint shrinks with it, so every reserve follows. */
+@media (max-width: 760px) {
+  /* `:root:root`: tokens.css (imported by ~195 files) may load after this sheet and re-declare `:root`. */
+  :root:root {
+    --nds-fab-inset: 12px;
+    --nds-fab-reserve-inline: 64px;
+    --nds-fab-reserve-block: 64px;
+  }
+  .nds-fab {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+  }
+  .nds-fab-label {
+    display: none;
+  }
 }
 
 /* ── Drawer (right) ──────────────────────────────────────────────── */
@@ -2791,6 +2992,8 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
   margin: 0; font-size: var(--nds-font-size-xs); font-weight: 600; letter-spacing: .04em;
   text-transform: uppercase; color: var(--nds-text-2);
 }
+/* `labelCase="sentence"` (polish round 2): the term as written, in sentence case ("Changes 7 d"). */
+.nds-kv.sentence dt { text-transform: none; letter-spacing: 0; font-size: var(--nds-font-size-sm); }
 .nds-kv dd { margin: 0; font-size: var(--nds-font-size-base); color: var(--nds-text); overflow-wrap: anywhere; }
 .nds-kv-hint { display: block; margin-top: 1px; font-size: var(--nds-font-size-xs-plus); color: var(--nds-text-2); }
 @media (max-width: 640px) {
@@ -3507,3 +3710,29 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
 
 /* ── Countdown (approvals grid G7, 2026-10-05) — the time left, ticking. Figures keep their width as they change. */
 .nds-countdown { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ── Sparkline (bid page DS lane, 2026-10-10) — a small chart, tokens only. The line is currentColor (the primary by
+   default); nothing to draw is a dotted rule in the muted ink, never a blank or a flat line. */
+.nds-spark { display: inline-flex; align-items: center; flex: none; vertical-align: middle; color: var(--nds-primary); }
+.nds-spark svg { display: block; overflow: visible; }
+.nds-spark-line { fill: none; stroke: currentColor; stroke-width: 1.5px; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.nds-spark-dot { fill: currentColor; }
+.nds-spark.is-empty { color: var(--nds-text-muted); }
+.nds-spark-empty { stroke: currentColor; stroke-width: 1px; stroke-dasharray: 2 3; vector-effect: non-scaling-stroke; }
+
+/* ── EntityLinks (bid page DS lane, 2026-10-10) — one thing: its name as a link; several: a count that opens a list. */
+.nds-entitylinks { display: inline-flex; align-items: center; min-width: 0; max-width: 100%; }
+.nds-entitylinks.is-none { color: var(--nds-text-muted); }
+.nds-entitylink { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--nds-text-link); text-decoration: none; }
+.nds-entitylink:hover { text-decoration: underline; }
+.nds-entitylink:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 1px; border-radius: var(--nds-radius-xs); }
+.nds-entitylink.is-plain { color: var(--nds-text); }
+.nds-entitylink.is-plain:hover { text-decoration: none; }
+/* The count reads as a chip and a control (it opens the list): the link ink on the info wash, a chevron-free pill. */
+.nds-detailpop-trigger.nds-entitylinks-count { padding: 0 var(--nds-space-8); min-height: 20px; border-radius: var(--nds-radius-pill);
+  background: var(--nds-info-soft); color: var(--nds-info-text); font-size: var(--nds-font-size-sm); font-weight: 600; white-space: nowrap; }
+.nds-detailpop-trigger.nds-entitylinks-count:hover { text-decoration: underline; }
+.nds-entitylinks-list { list-style: none; margin: 0; padding: 0; min-height: 0; flex: 1 1 auto; overflow-y: auto; display: grid; gap: var(--nds-space-4); }
+.nds-entitylinks-list > li { display: flex; min-width: 0; min-height: 24px; align-items: center; }
+/* A capped list (`total`, polish round 2): what the count holds beyond the links, muted, last. */
+.nds-entitylinks-list > li.nds-entitylinks-more { color: var(--nds-text-2); font-size: var(--nds-font-size-sm); }

@@ -79,6 +79,9 @@ interface ProductTool { tool: AgentTool; key: 'productId' | 'products' | 'produc
  */
 const CREATE_OR_EDIT = new Set([
   'save-price-rule',
+  // KAPI-B — set-ads-brain's productId is optional only for set-value of one keyword's own value (ref target:<id>: its
+  // campaign names the product); given a product, the change is about that product's brain.
+  'set-ads-brain',
   // Ads autonomy W1-3 — a strategy row's scope: given a product, the change is about that product's row.
   'set-ads-strategy',
   // Ads playbook PB-3 — a playbook row's scope: given a product, the change is about that product's row.

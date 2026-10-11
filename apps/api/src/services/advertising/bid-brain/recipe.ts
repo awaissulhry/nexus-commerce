@@ -9,7 +9,8 @@
  *   step       at most maxChangePct × confidence from the day's anchor — the bid before the first step on this data
  *              day — so a rerun on the same evidence lands on the same bid (no `current × ratio` compounding)
  *   limits     strategy lowest/highest bid, the campaign's own bounds, the 5¢ engine floor, and a lane ceiling: the
- *              base bid never exceeds a lane's max CPC (C2: a plan asked for a bid no one could set)
+ *              base bid never exceeds a lane's max CPC (C2: a plan asked for a bid no one could set); KAPI-B — a person's
+ *              own max for the keyword ("Your max for this keyword")
  *   BB-18      the bid stack: Amazon charges up to base × (1 + placement %) × its dynamic bidding (up to ×2 at the top of
  *              search, ×1.5 elsewhere, for "up and down"; ×1 otherwise) — so a lane's ceiling holds base × dynamic at
  *              0 % placement, and base × (1 + p) × dynamic with its placement %
@@ -41,7 +42,15 @@ export interface BidLimits {
    * Amazon's top-of-search dynamic bidding): it binds in every hour, one with no target or a kept-serving Min-bid hour too.
    */
   planCeilingCents?: number | null
+  /**
+   * KAPI-B — a person's own max bid for this keyword (brain/settings.ts maxBidCents, ref target:<AdTarget.id>): the brain
+   * never sets the keyword above it, on any tick and in any layer (decide.ts holdToKeywordMax); named KEYWORD_MAX_WORDS.
+   */
+  keywordMaxCents?: number | null
 }
+
+/** KAPI-B — how a limit, a why and the Bid page name a person's own max bid for one keyword. */
+export const KEYWORD_MAX_WORDS = 'Your max for this keyword'
 
 /**
  * A rule's bid action as an input (BB-9): a ceiling or a floor on this target. A SHARE_FLOOR (share of voice, rank) is a
@@ -153,6 +162,7 @@ export function limitRange(limits: BidLimits, lanes: readonly Lane[] = []): { lo
     [limits.maxBidCents, 'the strategy highest bid'],
     [limits.campaignMaxCents, "the campaign's highest bid"],
     [limits.planCeilingCents, "the hourly plan's lowest CPC ceiling today"],
+    [limits.keywordMaxCents, KEYWORD_MAX_WORDS],
     // BB-18 — at 0 % placement Amazon can still add its dynamic bidding: the base bid × that stays within the ceiling.
     ...lanes.map((l): [number | null | undefined, string] => {
       const cap = l.baseCeilingCents ?? l.maxCpcCents

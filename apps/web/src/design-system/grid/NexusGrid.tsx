@@ -25,12 +25,13 @@
  * Everything else is AG's. `columnDefs`, `treeData`, `getDataPath`, `masterDetail`, `sideBar`,
  * `rowSelection`, `cellSelection`, `initialState` — pass them straight through.
  */
-import { useCallback, useEffect, useMemo, useRef, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { AgGridReact, type AgGridReactProps } from 'ag-grid-react'
-import type { ColDef, ColumnPinnedEvent, DefaultMenuItem, GetMainMenuItems, GridApi, GridReadyEvent, MenuItemDef, NewColumnsLoadedEvent } from 'ag-grid-community'
+import type { ColDef, ColumnPinnedEvent, DefaultMenuItem, FirstDataRenderedEvent, GetMainMenuItems, GridApi, GridReadyEvent, GridSizeChangedEvent, MenuItemDef, ModelUpdatedEvent, NewColumnsLoadedEvent } from 'ag-grid-community'
 
 import { gridDensity, gridGeometry, type GridDensityName } from '../tokens/grid'
 import { compareSortValues, type SortValue } from './sortValues'
+import { plainFirstGuess, plainGridHeight } from './plainGrid'
 import { fillHandleHit } from './editors/openGesture'
 import { registerGridModules } from './modules'
 import { workspaceGridTheme } from './theme/theme'
@@ -142,7 +143,22 @@ export interface NexusGridProps<T> extends AgGridReactProps<T> {
    * See `renderers/emptyCells.ts`.
    */
   emptyCells?: GridEmptyCells
+  /**
+   * A small table inside a modal or a panel (polish round 2, 2026-10-10, audit S11: a ⋮ on every header, an empty last
+   * column and an empty band under the last row were clutter in the rule's History, Preview and Runs tables):
+   *  - no header menu button and no header right-click menu (sorting by a header click stays);
+   *  - the columns fill the width (AG's `fitGridWidth`, again whenever the grid's width changes), so there is no empty
+   *    column after the last one; a column's own `width` / `minWidth` / `maxWidth` / `flex` still count;
+   *  - the grid is exactly as tall as its header and rows, measured after AG sizes them (two-line cells included), up to
+   *    `plainMaxHeight` (default 480px), and scrolls inside beyond it — no empty band under a one-row table (AG's
+   *    `autoHeight` keeps 150px for its overlay, run 3), no clipped row. With no rows it keeps room for the overlay.
+   * Anything the caller states itself (`defaultColDef`, `autoSizeStrategy`, `domLayout`, which turns the sizing off) wins.
+   */
+  plain?: boolean
+  /** `plain` only: the tallest the grid grows before it scrolls inside (px). Default 480. */
+  plainMaxHeight?: number
 }
+
 
 /** AG's own icon markup, so a custom item sits in the menu like a built-in one. */
 const agIcon = (name: string) => `<span class="ag-icon ag-icon-${name}" unselectable="on" role="presentation"></span>`
@@ -161,6 +177,8 @@ export function NexusGrid<T>({
   columnDialog,
   pinSides,
   emptyCells = 'dash',
+  plain = false,
+  plainMaxHeight = 480,
   defaultColDef,
   selectionColumnDef,
   onColumnPinned,
@@ -181,8 +199,13 @@ export function NexusGrid<T>({
      straight to AG by the spread and never reach this call. ONE host path for "a double-click on
      this cell", wherever in the cell it landed. */
   onCellDoubleClicked,
+  onGridSizeChanged,
+  onFirstDataRendered,
+  onModelUpdated,
   ...agProps
 }: NexusGridProps<T>) {
+  // `plain` sizes the grid to its rows unless the caller chose a layout (run 3: AG's autoHeight kept a 150px band).
+  const fitRows = plain && agProps.domLayout === undefined
   const themeMode = useAgThemeMode()
   const contextDensity = useGridDensity()
   const density = densityProp ?? contextDensity
@@ -238,6 +261,35 @@ export function NexusGrid<T>({
    * without this the totals row kept its Spacious 46px after a switch to Compact.
    */
   const apiRef = useRef<GridApi<T> | null>(null)
+  /**
+   * `plain`: the height of exactly its header and rows, as AG drew them — measured after the first data render, after
+   * every model update (rows added, removed, re-sized by two-line cells) and after a width change (cells re-wrap).
+   */
+  const [fitHeight, setFitHeight] = useState<number | null>(null)
+  const measureRows = useCallback((api: GridApi<T>) => {
+    const wrap = wrapRef.current
+    if (!fitRows || api.isDestroyed() || !wrap) return
+    let rowsH = 0
+    const count = api.getDisplayedRowCount()
+    for (let i = 0; i < count; i++) rowsH += api.getDisplayedRowAtIndex(i)?.rowHeight ?? 0
+    // An element AG keeps hidden or overlaid (a horizontal scrollbar it does not need, an overlay scrollbar) takes no room.
+    const px = (sel: string) => {
+      const el = wrap.querySelector<HTMLElement>(sel)
+      return !el || el.matches('.ag-hidden, .ag-invisible, .ag-scrollbar-invisible') ? 0 : el.offsetHeight
+    }
+    const next = plainGridHeight({
+      header: px('.ag-header') || headerHeight,
+      rows: rowsH,
+      extra: px('.ag-floating-top') + px('.ag-floating-bottom') + px('.ag-body-horizontal-scroll'),
+      // No rows: room for AG's "No rows" overlay (two rows' worth), never a sliver. With rows, exactly the rows.
+      min: count === 0 ? headerHeight + 2 * rowHeight + 2 : 0,
+      max: plainMaxHeight,
+    })
+    setFitHeight((h) => (h === next ? h : next))
+  }, [fitRows, headerHeight, rowHeight, plainMaxHeight])
+  const handleFirstDataRendered = useCallback((e: FirstDataRenderedEvent<T>) => { measureRows(e.api); onFirstDataRendered?.(e) }, [measureRows, onFirstDataRendered])
+  const handleModelUpdated = useCallback((e: ModelUpdatedEvent<T>) => { measureRows(e.api); onModelUpdated?.(e) }, [measureRows, onModelUpdated])
+
   const handleGridReady = useCallback(
     (e: GridReadyEvent<T>) => {
       apiRef.current = e.api
@@ -380,16 +432,26 @@ export function NexusGrid<T>({
       suppressHeaderFilterButton: true,
       // The caller's defaults win — this only supplies what it has not stated.
       comparator: blankSafeComparator,
+      // `plain`: no header menus in a small table (polish round 2, S11).
+      ...(plain ? { suppressHeaderMenuButton: true, suppressHeaderContextMenu: true } : {}),
       ...defaultColDef,
     }),
-    [defaultColDef],
+    [defaultColDef, plain],
   )
+  // `plain`: the columns keep filling the width as the modal or panel around the grid changes size.
+  const handleGridSizeChanged = useCallback((e: GridSizeChangedEvent<T>) => {
+    if (plain && !agProps.autoSizeStrategy && e.clientWidth > 0) e.api.sizeColumnsToFit()
+    measureRows(e.api)
+    onGridSizeChanged?.(e)
+  }, [plain, agProps.autoSizeStrategy, onGridSizeChanged, measureRows])
 
   const wrapStyle = useMemo<CSSProperties>(
     () => ({
       // An auto-height grid sizes itself to its rows and hands scrolling to the page; a fixed
       // wrapper height would clip it. Only the normal layout is bounded.
-      height: agProps.domLayout === 'autoHeight' || fill ? undefined : height,
+      height: agProps.domLayout === 'autoHeight' || fill ? undefined
+        : fitRows ? fitHeight ?? plainFirstGuess(headerHeight, rowHeight, Array.isArray(agProps.rowData) ? agProps.rowData.length : 0, plainMaxHeight)
+          : height,
       width: '100%',
       // The theme's header partition is 30% of the HEADER ROW (`theme/theme.ts`), and a theme
       // param cannot know the row's height — a spanning cell under a column-group strip is taller
@@ -412,7 +474,7 @@ export function NexusGrid<T>({
        */
       ['--ag-row-height' as string]: `${rowHeight}px`,
     }),
-    [agProps.domLayout, height, fill, headerHeight, rowHeight],
+    [agProps.domLayout, height, fill, headerHeight, rowHeight, fitRows, fitHeight, plainMaxHeight, agProps.rowData],
   )
 
   return (
@@ -446,6 +508,10 @@ export function NexusGrid<T>({
           selectionColumnDef={mergedSelectionColumnDef}
           onColumnPinned={handleColumnPinned}
           onCellDoubleClicked={onCellDoubleClicked}
+          onGridSizeChanged={handleGridSizeChanged}
+          onFirstDataRendered={handleFirstDataRendered}
+          onModelUpdated={handleModelUpdated}
+          autoSizeStrategy={plain ? { type: 'fitGridWidth' } : undefined}
           // Popups (header menus, dialogs, tooltips) go on the document, not inside the grid. AG
           // fits a popup to its popup parent's box; under `autoHeight` that box is the whole
           // grid and can run past the viewport, so a header menu opened low on the page ended

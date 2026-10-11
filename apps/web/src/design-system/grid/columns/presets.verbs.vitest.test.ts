@@ -15,6 +15,14 @@ describe('actionsColumn shapes (G2)', () => {
     expect(edit.pinned).toBe('right')
   })
 
+  it('pinned: false really unpins — AG keeps a pin a definition leaves out, so it says null (M8, phones)', () => {
+    const unpinned = actionsColumn({ items: () => [], pinned: false })
+    expect(unpinned.pinned).toBeNull()
+    expect(unpinned.lockPinned).toBeUndefined()
+    expect(unpinned.lockPosition).toBe('right')
+    expect(actionsColumn({ items: () => [] }).lockPinned).toBe(true)
+  })
+
   it('two verbs or a per-row function: 200 wide, and the cell controls keep their keys (Tab walks the verbs)', () => {
     const two = actionsColumn<{ id: string }>({ primary: [{ label: 'Approve' }, { label: 'Reject' }] })
     expect(two.width).toBe(200)

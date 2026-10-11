@@ -98,8 +98,21 @@ export { cellDetailKeys, CELL_DETAIL_TRIGGER, type CellDetailKeyParams } from '.
 export { landOnCell, collapsedAncestors, LANDING_CLASS, LANDING_MS, type LandOptions, type LandingGridApi, type LandingRowNode } from './landOnCell'
 export {
   gridSelection, selectionColumn, integerColumn, moneyColumn, euroColumn, percentColumn, deltaColumn, dateColumn, statusColumn, textColumn,
-  stockColumn, lockedColumn, holdColumn, actionsColumn, changeColumn, switchColumn, type GridSelectionOptions, type ActionsColumnOptions, type SwitchColumnOptions,
+  stockColumn, lockedColumn, holdColumn, actionsColumn, changeColumn, switchColumn, modeColumn, sparklineColumn, type GridSelectionOptions, type ActionsColumnOptions, type SwitchColumnOptions,
+  entityLinksColumn, type ModeColumnOptions, type SparklineColumnOptions, type EntityLinksColumnOptions,
 } from './columns/presets'
+// Bid page DS lane (2026-10-10) — what a row works on: one → a link, several → a count that opens a list of links.
+export { EntityLinksCell, entityRefsOf, type EntityLinksCellParams } from './renderers/EntityLinksCell'
+export { entityLinksKeys } from './renderers/entityLinksKeys'
+// Bid page DS lane (2026-10-10) — a small step chart per row (the DS `Sparkline`).
+export { SparklineCell, sparkValuesOf, type SparklineCellParams } from './renderers/SparklineCell'
+// Bid page DS lane (2026-10-10) — a step choice (Off · Watch · Ask me · Auto) that only changes a draft, with a held mark
+// when something holds the row lower than it is set.
+export { ModeCell, modeHandlerOf, type ModeCellParams, type ModeHandlers } from './renderers/ModeCell'
+export {
+  MODE_STEPS, readMode, modeIndex, modeWord, isModeHeld, modeHeldSentence, modeBars, modeCellText, modeOptions, compareModes,
+  suppressModeKeys, modeCellKey, type ModeStep, type ModeHold, type ModeCellValue, type ModeReading, type ModeBar, type ModeOption,
+} from './renderers/modeModel'
 // Ads brain page D2 (2026-10-10) — an on/off column that only changes a draft; Space on it never selects the row.
 export { SwitchCell, switchWord, switchHandlerOf, suppressSwitchKeys, switchKeyFlips, SWITCH_WORDS, type SwitchCellParams, type SwitchHandlers, type SwitchWords } from './renderers/SwitchCell'
 // Approvals grid (2026-10-05) — G1 before → after (a plain component + the cell), G2 up to two visible verbs per row

@@ -48,6 +48,7 @@ import { sbAdCreatePath, sbAdTypeSpec } from '../ads-core/sb-ad-types.js'
 import { assertNegativeWriteAllowed } from './ads-negation-policy.js'
 import type { SdExpression } from './sd-target-expression.js'
 import { compactDayIn, isoDayIn } from './ads-local-day.js'
+import { autoClauseFromSpelling } from '../ads-core/ads-blueprint.js'
 
 export type AdsMode = 'sandbox' | 'live'
 
@@ -323,11 +324,17 @@ export class AmazonAdsQuotaError extends Error {
  *
  * `POST /reporting/reports` is deliberately NOT included: it creates a report job, so it
  * stays fail-closed with the writes.
+ *
+ * KAPI-S (2026-10-10) — Amazon's suggested bids (`POST /sp/targets/bid/recommendations`) only answer, so they are a
+ * read here too: the read budget, and open on a quota-store outage. The same list as the gateway's ADS_READ_POSTS
+ * (gateway/ads.ts, imported lazily by fetchWithRetry, so it is not imported here); a test holds the two equal.
  */
+export const ADS_READ_ONLY_POSTS: ReadonlySet<string> = new Set(['/sp/targets/bid/recommendations'])
+
 export function isMutatingCall(method: string, path: string): boolean {
   if (method === 'GET') return false
   const pathname = path.split('?')[0]
-  return !(method === 'POST' && pathname.endsWith('/list'))
+  return !(method === 'POST' && (pathname.endsWith('/list') || ADS_READ_ONLY_POSTS.has(pathname)))
 }
 
 /** One unit per OUTBOUND REQUEST, including each retry — Amazon counts them all. */
@@ -1349,21 +1356,244 @@ export async function listCampaignBudgetRules(ctx: ClientContext, externalCampai
   return parsed.rules
 }
 
-// ── Apex C.1 — Amazon theme-based bid recommendations ──────────────────────
-// POST /sp/targets/bid/recommendations returns themed bid candidates per
-// targeting expression (theme = CONVERSION_OPPORTUNITIES | SPECIAL_DAYS …),
-// each with a suggested bid + a low/high range. This is Amazon's OWN
-// recommendation — we surface it alongside the operator's own-CPC suggestion
-// (ads-bid-suggest) so they can compare. Read-only (no write-gate).
+// ── Amazon's suggested bid: theme-based bid recommendations (Sponsored Products, v5) ──────────────────────────────────
 //
-// The exact v5 response field names are not yet pinned to the live spec, so the
-// live parse is defensive and the raw payload is logged for refinement; any
-// error degrades to an empty result (caller falls back to own-CPC). Sandbox
-// returns [] rather than a fabricated number — honest by construction.
-export type AdsBidTheme = 'CONVERSION_OPPORTUNITIES' | 'SPECIAL_DAYS' | string
+// POST /sp/targets/bid/recommendations answers Amazon's OWN suggested bid for the targets of one existing ad group. It
+// reads and changes nothing, so the gateway counts it as a read (gateway/ads.ts adsKind). Checked against Amazon's own
+// contract (SponsoredProducts_prod_3p.json, operation GetThemeBasedBidRecommendationForAdGroup_v1, read 2026-10-10) and
+// its quick-start guide ("Theme-based bid suggestions"):
+//
+//   media type  application/vnd.spthemebasedbidrecommendation.v5+json, the same for Content-Type and Accept (v3 was shut
+//               off 2025-05-15; v4 still answers, v5 is the newest)
+//   request     BIDS_FOR_EXISTING_AD_GROUP takes campaignId, adGroupId, recommendationType and targetingExpressions (at
+//               most 100: maxItems) — and no `bidding` block: that block belongs to BIDS_FOR_NEW_AD_GROUP only. The ad
+//               group's own bidding strategy applies. includeAnalysis is left out (default false; US only).
+//   types       a keyword: KEYWORD_EXACT_MATCH / KEYWORD_PHRASE_MATCH / KEYWORD_BROAD_MATCH with the keyword as value; an ASIN
+//               target: PAT_ASIN with the ASIN as value; an auto group: CLOSE_MATCH / LOOSE_MATCH / SUBSTITUTES /
+//               COMPLEMENTS with no value. Categories, refinements, audiences and expanded ASINs are not asked here.
+//   response    { bidRecommendations: [ (at most 2: the standing theme and an event's) { theme, bidRecommendationsFor-
+//               TargetingExpressions: [ { targetingExpression: { type, value }, bidValues: [ (at most 3) { suggestedBid } ]
+//               } ] } ] }. theme is one of CONVERSION_OPPORTUNITIES, PRIME_DAY, FALL_PRIME_DEAL_EVENT, BFCM_HOLIDAY. The
+//               amounts are in the market's money, as decimals; the contract's own example writes them as strings ("1.5"),
+//               so both are read.
+//   low/mid/high  the guide: "three suggested bids for each keyword … associated with each of the low, median, and high
+//               bids, respectively", and v5's analysis pairs the same three with SUGGESTED_LOWER / SUGGESTED /
+//               SUGGESTED_UPPER. Read as: sorted, low = the smallest, high = the largest, mid = the middle one — none
+//               when the count is even (never made up).
+//   theme       CONVERSION_OPPORTUNITIES (Amazon's standing suggestion) first; an event's theme only where it is the one
+//               with an answer.
+// Sandbox mode asks nothing and answers nothing: there is no Amazon number to show, and none is invented.
 
+export type AdsBidTheme = 'CONVERSION_OPPORTUNITIES' | 'PRIME_DAY' | 'FALL_PRIME_DEAL_EVENT' | 'BFCM_HOLIDAY' | string
+
+/** The targeting expression types this client asks Amazon about (Amazon's TargetingExpressionV4 type). */
+export type ThemeExpressionType =
+  | 'KEYWORD_EXACT_MATCH' | 'KEYWORD_PHRASE_MATCH' | 'KEYWORD_BROAD_MATCH' | 'PAT_ASIN'
+  | 'CLOSE_MATCH' | 'LOOSE_MATCH' | 'SUBSTITUTES' | 'COMPLEMENTS'
+
+export interface ThemeExpression { type: ThemeExpressionType; value?: string }
+
+/** One target as Nexus stores it (AdTarget expressionValue / expressionType / kind), or as a caller names it. */
+export interface ThemeBidTargetInput { expression: string; matchType: string; kind?: string | null }
+
+/** Amazon's suggested bid for one targeting expression, in cents of the market's money; null where Amazon gave none. */
+export interface ThemeBidSuggestion {
+  type: string
+  value: string | null
+  theme: AdsBidTheme
+  lowCents: number | null
+  midCents: number | null
+  highCents: number | null
+}
+
+/** The most targeting expressions one call may carry (the contract's maxItems). */
+export const THEME_BID_MAX_EXPRESSIONS = 100
+export const THEME_BID_MEDIA_TYPE = 'application/vnd.spthemebasedbidrecommendation.v5+json'
+const THEME_BID_PATH = '/sp/targets/bid/recommendations'
+const STANDING_THEME = 'CONVERSION_OPPORTUNITIES'
+
+/** The spellings of "this ASIN" a stored product target carries (v1 sync: PRODUCT_EXACT, or ASIN by default). */
+const ASIN_SAME_AS_TYPES: ReadonlySet<string> = new Set(['ASIN', 'ASIN_SAME_AS', 'ASINSAMEAS', 'PRODUCT_EXACT'])
+
+/** A bare ASIN out of a stored value (`B0…`, `asin="B0…"`); null when it is no ASIN. */
+function asinOf(value: string): string | null {
+  const bare = value.trim().replace(/^asin(?:SameAs)?\s*=\s*/i, '').replace(/^["']|["']$/g, '').trim()
+  return /^[A-Z0-9]{10}$/i.test(bare) ? bare.toUpperCase() : null
+}
+
+/**
+ * The expression Amazon is asked about for one target, or null when Amazon is not asked (a category, a refinement, an
+ * audience, an expanded ASIN, an empty keyword). An auto group first (its type spelling, or an AUTO target's value),
+ * then an ASIN target, then a keyword by its match type — `PRODUCT_EXACT` is an ASIN target, never an exact keyword.
+ */
+export function themeExpressionOf(t: ThemeBidTargetInput): ThemeExpression | null {
+  const kind = (t.kind ?? '').trim().toUpperCase()
+  const match = (t.matchType ?? '').trim().toUpperCase()
+  const auto = autoClauseFromSpelling(match) ?? (kind === 'AUTO' ? autoClauseFromSpelling(t.expression) : null)
+  if (auto) return { type: auto }
+  if (kind === 'AUTO') return null
+  if (kind === 'PRODUCT' || ASIN_SAME_AS_TYPES.has(match)) {
+    // A product target of another kind (an expanded ASIN, a category on a product row) is not asked.
+    if (match && !ASIN_SAME_AS_TYPES.has(match)) return null
+    const asin = asinOf(t.expression ?? '')
+    return asin ? { type: 'PAT_ASIN', value: asin } : null
+  }
+  if (kind && kind !== 'KEYWORD') return null
+  const keyword = (t.expression ?? '').trim()
+  if (!keyword) return null
+  if (match.includes('EXACT')) return { type: 'KEYWORD_EXACT_MATCH', value: keyword }
+  if (match.includes('PHRASE')) return { type: 'KEYWORD_PHRASE_MATCH', value: keyword }
+  if (match.includes('BROAD')) return { type: 'KEYWORD_BROAD_MATCH', value: keyword }
+  return null
+}
+
+/** One expression's join key: its type and its value (trimmed, lower case, single spaces); auto groups have no value. */
+export function themeExpressionKey(e: { type: string; value?: string | null }): string {
+  return `${e.type.trim().toUpperCase()}|${(e.value ?? '').trim().toLowerCase().replace(/\s+/g, ' ')}`
+}
+
+const themeObject = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {})
+
+/** A suggested bid (decimal money, a number or a numeric string) in cents; null when it is no positive amount. */
+function suggestedCents(v: unknown): number | null {
+  if (typeof v !== 'number' && typeof v !== 'string') return null
+  const n = typeof v === 'string' ? (v.trim() ? Number(v) : NaN) : v
+  return Number.isFinite(n) && n > 0 ? Math.round(n * 100) : null
+}
+
+/** low / mid / high of the amounts: smallest, middle (none for an even count), largest. */
+export function suggestedRange(amounts: readonly number[]): { lowCents: number | null; midCents: number | null; highCents: number | null } {
+  const sorted = [...amounts].sort((a, b) => a - b)
+  const n = sorted.length
+  if (!n) return { lowCents: null, midCents: null, highCents: null }
+  return { lowCents: sorted[0], midCents: n % 2 === 1 ? sorted[(n - 1) / 2] : null, highCents: sorted[n - 1] }
+}
+
+/** The better of two answers for one expression: one with a number, then the standing theme; a tie keeps the first. */
+function themeRank(s: ThemeBidSuggestion): number {
+  const answered = s.lowCents != null || s.midCents != null || s.highCents != null
+  return (answered ? 0 : 2) + (s.theme === STANDING_THEME ? 0 : 1)
+}
+
+/**
+ * Amazon's answer, read to the documented v5 shape: each theme's bidRecommendationsForTargetingExpressions, each with
+ * its targetingExpression and bidValues. Keyed by themeExpressionKey. An answer without a bidRecommendations list is not
+ * understood (an error in words), never an empty success.
+ */
+export function parseThemeBidRecommendations(res: unknown): { suggestions: Map<string, ThemeBidSuggestion> } | { error: string } {
+  const themes = themeObject(res).bidRecommendations
+  if (!Array.isArray(themes)) return { error: 'Amazon\'s answer carries no bidRecommendations list' }
+  const suggestions = new Map<string, ThemeBidSuggestion>()
+  for (const rawTheme of themes) {
+    const t = themeObject(rawTheme)
+    const theme = typeof t.theme === 'string' && t.theme.trim() ? t.theme.trim().toUpperCase() : 'UNKNOWN'
+    const list = t.bidRecommendationsForTargetingExpressions
+    if (!Array.isArray(list)) continue
+    for (const raw of list) {
+      const r = themeObject(raw)
+      const e = themeObject(r.targetingExpression)
+      const type = typeof e.type === 'string' ? e.type.trim().toUpperCase() : ''
+      if (!type) continue
+      const value = typeof e.value === 'string' && e.value.trim() ? e.value.trim() : null
+      const amounts = (Array.isArray(r.bidValues) ? r.bidValues : [])
+        .map((b) => suggestedCents(themeObject(b).suggestedBid))
+        .filter((c): c is number => c != null)
+      const next: ThemeBidSuggestion = { type, value, theme, ...suggestedRange(amounts) }
+      const key = themeExpressionKey(next)
+      const prev = suggestions.get(key)
+      if (!prev || themeRank(next) < themeRank(prev)) suggestions.set(key, next)
+    }
+  }
+  return { suggestions }
+}
+
+/** Why Amazon gave no suggested bid, in plain words (the status and Amazon's own `details` where it sent them). */
+export function themeBidFailureReason(err: unknown): string {
+  if (err instanceof AmazonAdsQuotaError) return `Nexus's Amazon Ads allowance for this region is used up for now. Try again in ${err.retryAfterSec} s.`
+  if (err instanceof AmazonAnswerNotUnderstood) return `Amazon answered, but not in the form Nexus reads (${err.message}).`
+  const e = err as { statusCode?: unknown; body?: unknown; message?: unknown }
+  const status = typeof e.statusCode === 'number' ? e.statusCode : null
+  let details = ''
+  if (typeof e.body === 'string' && e.body.trim()) {
+    try {
+      const b = themeObject(JSON.parse(e.body))
+      details = String(b.details ?? b.message ?? b.code ?? '').trim()
+    } catch { details = '' }
+  }
+  const said = details ? `: ${details.slice(0, 160)}` : ''
+  if (status === 401 || status === 403) return `Amazon refused the Ads sign-in (HTTP ${status}). Reconnect Amazon Ads for this market.`
+  if (status === 422) return `Amazon gives no suggested bid for this ad group (HTTP 422${said}).`
+  if (status === 429) return 'Amazon is busy (too many requests). Try again in a few minutes.'
+  if (status === 406 || status === 415) return `Amazon did not take the request's format (HTTP ${status}).`
+  if (status != null && status >= 500) return `Amazon had an error (HTTP ${status}). Try again later.`
+  if (status != null) return `Amazon refused the request (HTTP ${status}${said}).`
+  const message = typeof e.message === 'string' ? e.message : String(err)
+  return `Amazon could not be reached: ${message.slice(0, 160)}`
+}
+
+/** What Amazon said for one ad group's expressions, batch by batch. */
+export interface ThemeBidFetch {
+  /** Sandbox mode: nothing was asked. */
+  sandbox: boolean
+  /** By themeExpressionKey; an expression Amazon did not answer is missing. */
+  suggestions: Map<string, ThemeBidSuggestion>
+  /** Expressions asked (each once). */
+  asked: number
+  /** The calls Amazon did not answer: how many expressions each carried, and why in words. */
+  failures: Array<{ expressions: number; reason: string }>
+}
+
+/**
+ * Amazon's suggested bids for the expressions of one existing ad group: each expression once, at most 100 per call
+ * (the contract's maxItems), one call after the other, each through liveCall and so the channel gateway. A call that
+ * fails is said in `failures` with its reason; the others still count.
+ */
+export async function fetchThemeBidRecommendations(
+  ctx: ClientContext,
+  input: { externalCampaignId: string; externalAdGroupId: string; expressions: readonly ThemeExpression[] },
+): Promise<ThemeBidFetch> {
+  const unique = [...new Map(input.expressions.map((e) => [themeExpressionKey(e), e])).values()]
+  const out: ThemeBidFetch = { sandbox: false, suggestions: new Map(), asked: unique.length, failures: [] }
+  if (!unique.length) return out
+  if (adsMode() === 'sandbox') {
+    logger.debug('[ADS-SANDBOX] fetchThemeBidRecommendations', { adGroupId: input.externalAdGroupId, n: unique.length })
+    return { ...out, sandbox: true, asked: 0 }
+  }
+  for (let i = 0; i < unique.length; i += THEME_BID_MAX_EXPRESSIONS) {
+    const batch = unique.slice(i, i + THEME_BID_MAX_EXPRESSIONS)
+    try {
+      const res = await liveCall<unknown>({
+        ...ctx,
+        method: 'POST',
+        path: THEME_BID_PATH,
+        body: {
+          campaignId: input.externalCampaignId,
+          adGroupId: input.externalAdGroupId,
+          recommendationType: 'BIDS_FOR_EXISTING_AD_GROUP',
+          targetingExpressions: batch.map((e) => (e.value === undefined ? { type: e.type } : { type: e.type, value: e.value })),
+        },
+        contentType: THEME_BID_MEDIA_TYPE,
+        acceptHeader: THEME_BID_MEDIA_TYPE,
+      })
+      const parsed = parseThemeBidRecommendations(res)
+      if ('error' in parsed) throw new AmazonAnswerNotUnderstood(parsed.error)
+      for (const e of batch) {
+        const key = themeExpressionKey(e)
+        const s = parsed.suggestions.get(key)
+        if (s) out.suggestions.set(key, s)
+      }
+    } catch (err) {
+      const reason = themeBidFailureReason(err)
+      logger.warn('[ads-api] Amazon\'s suggested bids were not read', { adGroupId: input.externalAdGroupId, expressions: batch.length, reason })
+      out.failures.push({ expressions: batch.length, reason })
+    }
+  }
+  return out
+}
+
+/** One answer for the AX2.10 blend (POST /advertising/bid-suggestions): the caller's words, Amazon's middle and range. */
 export interface ThemeBidRecommendation {
-  expression: string  // keyword text or ASIN
+  expression: string  // keyword text or ASIN, as the caller sent it
   matchType: string   // caller's match type, echoed back for join
   theme: AdsBidTheme
   suggestedBidCents: number
@@ -1371,15 +1601,11 @@ export interface ThemeBidRecommendation {
   rangeHighCents: number | null
 }
 
-function amazonExprType(matchType: string): string {
-  const m = (matchType || '').toUpperCase()
-  if (m.includes('EXACT')) return 'KEYWORD_EXACT_MATCH'
-  if (m.includes('PHRASE')) return 'KEYWORD_PHRASE_MATCH'
-  if (m.includes('BROAD')) return 'KEYWORD_BROAD_MATCH'
-  if (m.includes('ASIN') || m.includes('PRODUCT')) return 'ASIN_SAME_AS'
-  return 'KEYWORD_BROAD_MATCH'
-}
-
+/**
+ * The AX2.10 blend's read (routes/advertising.routes.ts): Amazon's suggestion per keyword, [] when Amazon gave none or
+ * failed (the caller keeps its own-CPC suggestion). `biddingStrategy` is not sent: an existing ad group's own strategy
+ * applies, and the contract has no bidding block for it.
+ */
 export async function getThemeBidRecommendations(
   ctx: ClientContext,
   input: {
@@ -1389,79 +1615,18 @@ export async function getThemeBidRecommendations(
     biddingStrategy?: string
   },
 ): Promise<ThemeBidRecommendation[]> {
-  if (input.targets.length === 0) return []
-  if (adsMode() === 'sandbox') {
-    logger.debug('[ADS-SANDBOX] getThemeBidRecommendations', { adGroupId: input.externalAdGroupId, n: input.targets.length })
-    return [] // honest: no synthetic Amazon number in sandbox
-  }
-  const body = {
-    campaignId: input.externalCampaignId,
-    adGroupId: input.externalAdGroupId,
-    recommendationType: 'BIDS_FOR_EXISTING_AD_GROUP',
-    targetingExpressions: input.targets.map((t) => ({ type: amazonExprType(t.matchType), value: t.expression })),
-    ...(input.biddingStrategy ? { bidding: { strategy: input.biddingStrategy } } : {}),
-  }
-  try {
-    const res = await liveCall<unknown>({
-      ...ctx,
-      method: 'POST',
-      path: '/sp/targets/bid/recommendations',
-      body,
-      contentType: 'application/vnd.spthemebasedbidrecommendation.v4+json',
-      acceptHeader: 'application/vnd.spthemebasedbidrecommendation.v4+json',
-    })
-    return parseThemeBidRecommendations(res, input.targets)
-  } catch (err) {
-    logger.warn('[ads-api] getThemeBidRecommendations failed — degrading to own-CPC', {
-      adGroupId: input.externalAdGroupId,
-      error: err instanceof Error ? err.message : String(err),
-    })
-    return []
-  }
-}
-
-// Defensive parser — tolerates shape drift. Amazon returns bid amounts in the
-// marketplace currency (decimal units); we convert to integer cents. Joins each
-// recommendation back to the requested target by expression value (order-
-// preserving fallback when values are absent). Logs the raw payload once so the
-// exact live shape can be confirmed and this tightened.
-function parseThemeBidRecommendations(
-  res: unknown,
-  requested: Array<{ expression: string; matchType: string }>,
-): ThemeBidRecommendation[] {
-  const eurToCents = (n: unknown): number | null => {
-    const v = Number(n)
-    return Number.isFinite(v) && v > 0 ? Math.round(v * 100) : null
-  }
-  const out: ThemeBidRecommendation[] = []
-  const root = res as { bidRecommendations?: unknown[] } | undefined
-  const rows = Array.isArray(root?.bidRecommendations) ? root!.bidRecommendations! : Array.isArray(res) ? (res as unknown[]) : []
-  if (rows.length === 0) {
-    logger.info('[ads-api] theme bid rec: empty/unrecognised payload', { sample: JSON.stringify(res)?.slice(0, 500) })
-    return []
-  }
-  rows.forEach((raw, i) => {
-    const r = raw as Record<string, unknown>
-    const expr = (r.value as string) ?? (r.expressionValue as string) ?? requested[i]?.expression
-    if (!expr) return
-    // Amazon nests themed suggestions a few ways across versions — try the common ones.
-    const suggestions = (r.bidRecommendationsForTargetingExpressions ?? r.suggestedBids ?? r.bidValues ?? [r]) as unknown[]
-    for (const s of Array.isArray(suggestions) ? suggestions : [suggestions]) {
-      const sv = s as Record<string, unknown>
-      const mid = eurToCents(sv.suggestedBid ?? sv.recommendedBid ?? (sv.bidValue as Record<string, unknown>)?.suggested ?? sv.value)
-      if (mid == null) continue
-      out.push({
-        expression: expr,
-        matchType: requested[i]?.matchType ?? '',
-        theme: (sv.theme as string) ?? (r.theme as string) ?? 'CONVERSION_OPPORTUNITIES',
-        suggestedBidCents: mid,
-        rangeLowCents: eurToCents(sv.rangeStart ?? sv.lowerBound ?? (sv.bidValue as Record<string, unknown>)?.rangeStart),
-        rangeHighCents: eurToCents(sv.rangeEnd ?? sv.upperBound ?? (sv.bidValue as Record<string, unknown>)?.rangeEnd),
-      })
-      break // one (preferred-theme) suggestion per expression is enough for the UI
-    }
+  const asked = input.targets.flatMap((t) => {
+    const e = themeExpressionOf(t)
+    return e ? [{ t, e }] : []
   })
-  return out
+  if (!asked.length) return []
+  const got = await fetchThemeBidRecommendations(ctx, { externalCampaignId: input.externalCampaignId, externalAdGroupId: input.externalAdGroupId, expressions: asked.map((a) => a.e) })
+  return asked.flatMap(({ t, e }) => {
+    const s = got.suggestions.get(themeExpressionKey(e))
+    return s && s.midCents != null
+      ? [{ expression: t.expression, matchType: t.matchType, theme: s.theme, suggestedBidCents: s.midCents, rangeLowCents: s.lowCents, rangeHighCents: s.highCents }]
+      : []
+  })
 }
 
 export interface CampaignPatch {

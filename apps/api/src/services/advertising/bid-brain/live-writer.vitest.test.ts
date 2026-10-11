@@ -23,7 +23,7 @@ vi.mock('../../../db.js', () => ({
 }))
 vi.mock('../../../utils/logger.js', () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }))
 
-const { writeOwnedDecisions, isFloorWrite, writeEvidence, writeKind, writeReportWords } = await import('./live-writer.js')
+const { writeOwnedDecisions, isFloorWrite, isSafetyCut, writeEvidence, writeKind, writeReportWords } = await import('./live-writer.js')
 const { makeEngineGuard } = await import('../ads-engine-guard.js')
 const { brainLiveCeiling, BRAIN_ACTOR } = await import('./live.js')
 const { BRAIN_HOLD_DAYS } = await import('./brain-holds.js')
@@ -156,5 +156,36 @@ describe('the ceiling, the hold days and the enrollment modes', () => {
     expect(nextMode('shadow', 'HELD')).toEqual({ to: 'SHADOW' })
     expect(nextMode('give-back', 'LIVE')).toEqual({ to: 'SHADOW' })
     expect(nextMode('give-back', null)).toMatchObject({ refusal: expect.stringMatching(/nothing to give back/) })
+  })
+})
+
+describe('KAPI-B — a cut down to a hard limit (a person\'s keyword max) lands at once: safety', () => {
+  const cut = decision({ targetId: 'tc', layer: 'limit', currentCents: 45, bidCents: 20, why: 'limit: 45¢ is above Your max for this keyword (20¢) → 20¢' })
+  it('a lowering limit write and a write the keyword max cut are safety; a limit raise and a goal cut are not', () => {
+    expect(isSafetyCut(cut)).toBe(true)
+    expect(isSafetyCut(decision({ layer: 'freeze', currentCents: 30, bidCents: 20, maxCut: true }))).toBe(true)
+    expect(isSafetyCut(decision({ layer: 'limit', currentCents: 3, bidCents: 10 }))).toBe(false)
+    expect(isSafetyCut(decision({ layer: 'goal', currentCents: 30, bidCents: 25 }))).toBe(false)
+    expect(writeKind(cut)).toBe('floor')
+  })
+
+  it('sent exactly (forced: never stepped over several ticks), under SUGGEST (Ask me) and with the run\'s caps used', async () => {
+    const s = await writeOwnedDecisions([
+      { campaignId: 'c1', market: 'IT', decision: decision() },
+      { campaignId: 'c1', market: 'IT', decision: cut },
+    ], { runId: 'r', guard: guard('suggest') })
+    expect(s).toMatchObject({ wouldApply: 1, queued: 1 })
+    expect(update).toHaveBeenCalledTimes(1)
+    expect(update.mock.calls[0][0]).toMatchObject({ adTargetId: 'tc', patch: { bidCents: 20 }, force: true })
+    update.mockClear()
+    const g = guard('auto', 1)
+    const c = await writeOwnedDecisions([
+      { campaignId: 'c1', market: 'IT', decision: decision() },
+      { campaignId: 'c2', market: 'IT', decision: decision({ targetId: 't9' }) },
+      { campaignId: 'c3', market: 'IT', decision: { ...cut, targetId: 'tc3', maxCut: true, layer: 'goal' as Decision['layer'] } },
+    ], { runId: 'r', guard: g })
+    expect(c).toMatchObject({ queued: 2, deferred: 1 })
+    expect(c.byTarget.get('tc3')).toMatchObject({ sent: 'queued' })
+    expect(update.mock.calls.find((x) => x[0].adTargetId === 'tc3')![0]).toMatchObject({ patch: { bidCents: 20 }, force: true })
   })
 })

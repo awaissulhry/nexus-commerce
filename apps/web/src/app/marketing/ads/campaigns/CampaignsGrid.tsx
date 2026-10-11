@@ -13,7 +13,7 @@ import './campaigns-ds.css'
 import { Listbox, Modal, Pagination, SummaryTable } from '@/design-system/components'
 import Link from '@/lib/workspaces/Link'
 import { Settings2, Download, Wand2, Plus, ChevronDown, Library, Book, Search, Trash2, ListChecks, Pencil, Bot } from 'lucide-react'
-import { TargetAcosCell, MinMaxBidCell, MinMaxBudgetCell, BudgetUtilCell, UsageHoursCell, BidAutomationCell, BidRuleCell, BidAlgoMenu, BID_ALGOS, type BudgetUsageState } from '../_shared/RuleColumnCells'
+import { TargetAcosCell, MinMaxBidCell, MinMaxBudgetCell, BudgetUtilCell, UsageHoursCell, BidAutomationCell, BidRuleCell, BidAlgoMenu, placementGovernor, BID_ALGOS, type BudgetUsageState } from '../_shared/RuleColumnCells'
 import { RangePopover, ValuePopover, anchorFromEvent, type PopAnchor } from '../_shared/RuleColumnEditors'
 import { atMinimumNote, nextDailyBudget, readBudgetChange, readDailyBudget, readTargetAcosPercent, summariseBudgetChange } from '../_shared/budgetInput'
 import { CampaignNameCell, StatusCell, BiddingStrategyCell, StrategyModal, AutomationCell, AmazonDeliveryCell, STATUS_PILL, STRAT_LABEL } from '../_shared/CampaignRowCells'
@@ -1750,10 +1750,12 @@ export function CampaignsGrid() {
         const p = c.placements
         const lanes = p ? ([['Top', p.tos], ['PDP', p.pdp], ['Rest', p.ros]] as const).filter(([, v]) => v != null && v !== 0) : []
         const owner = bidOwners?.get(c.id)
-        const planHeld = owner?.bidder === 'schedule'
+        // An hourly bid schedule, or the bid brain on a campaign it owns, rewrites the lanes by the hour.
+        const governor = placementGovernor(owner?.bidder, owner?.bidderName)
+        const planHeld = governor != null
         const tip = lanes.length
           ? `${lanes.map(([l, v]) => `${l} +${v}%`).join(' · ')}\n${planHeld
-            ? `⚠ An hourly bid schedule${owner?.bidderName ? ` (${owner.bidderName})` : ''} governs this campaign and rewrites these lanes every hour — this is a reading of right now, not a setting that holds.`
+            ? `⚠ ${governor} governs this campaign and rewrites these lanes every hour — this is a reading of right now, not a setting that holds.`
             : 'Nothing governs these lanes, so they hold until someone changes them.'}`
           : 'No placement multiplier on any lane: every placement bids the base bid.'
         return (
@@ -1761,7 +1763,7 @@ export function CampaignsGrid() {
             {lanes.length
               ? <span className="v">{lanes.map(([l, v]) => `${l} +${v}%`).join(' · ')}</span>
               : <span className="h10-rc-none">None</span>}
-            {planHeld && lanes.length > 0 && <i className="hourly" aria-label="Rewritten hourly by an hourly bid schedule">⏱</i>}
+            {planHeld && lanes.length > 0 && <i className="hourly" aria-label={`Rewritten hourly by ${governor === 'The bid brain' ? 'the bid brain' : 'an hourly bid schedule'}`}>⏱</i>}
             {hold
               ? <InfoTip tip={hold} />
               : <button type="button" className="h10-gearbtn" aria-label={`Edit bid multiplier for ${c.name}`} onClick={() => setMultiplierModal(c)}><Settings2 size={14} className="h10-gear" /></button>}

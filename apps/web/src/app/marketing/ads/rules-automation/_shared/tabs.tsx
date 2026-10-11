@@ -15,9 +15,15 @@
  * index. Nothing else in the bar changes.
  */
 import Link from '@/lib/workspaces/Link'
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { usePathname, useSearchParams } from '@/lib/workspaces/navigation'
+import { useMemo, type ComponentProps } from 'react'
+import { Tabs, activeTabFromPath, type TabLinkComponent } from '@/design-system/components'
+import { useAdsMarketplaceOptional } from '../../_shell/MarketplaceContext'
+import { ALL_MARKETS, pageMarket } from '../../_shell/adsMarkets'
 import { RULE_TYPES } from './ruleTypes'
-import { useRulesTabCounts } from './tabCountsContext'
+import { rulesTabCounts, rulesTabItems } from './rulesFrame'
+import { useRulesTabRules } from './tabCountsContext'
+import styles from './rulesFrame.module.css'
 
 export interface RulesTab {
   key: string
@@ -282,128 +288,43 @@ export function rulesTabHref(tab: RulesTab): string {
 }
 
 /**
- * The sticky tab bar, shared by the index and every routed tab page so the row is identical
- * wherever you are. Links (not buttons) so middle-click / cmd-click / back all behave.
+ * A tab follows its link without scrolling the page to the top — the bar sits at the top of every page, and a tab
+ * changes only what is under it (as the bar did before the design system).
  */
-export function RulesTabs({ active }: { active: string }) {
-  // Counts in the tab labels, so the information architecture does the prioritising: you see
-  // where the work is before clicking anything. Computed from RULE_TAB_ACTION_TYPES — the same
-  // map the lists filter by — so a label can never claim a number its tab won't show.
-  //
-  // Only the tabs in RULE_TAB_ACTION_TYPES (seven today) get a count. The rest genuinely have no
-  // number to state here, and a blank is honest where a 0 would read as "nothing to do".
-  //
-  // S4 — read from the layout's provider (one fetch per session) instead of fetching here on
-  // every page mount. Null when the provider's fetch failed or has not landed: badge-less labels.
-  const counts = useRulesTabCounts()
+const TabLink: TabLinkComponent = (props) => <Link {...(props as ComponentProps<typeof Link>)} scroll={false} />
 
-  /**
-   * 🔴 PLC.0 — at eleven items the bar overflows and the ACTIVE tab can be off-screen.
-   *
-   * Measured on production 2026-08-12 at innerWidth 1380, standing on /placement:
-   * `scrollWidth 1642` against `clientWidth 1254` — **388px of overflow** — with the active
-   * "Placement" tab at L=1355 against a bar ending at 1350. So the page you are on is the one tab
-   * you cannot see, and `.h10-rules-tabs` hides its scrollbar (`ads.css:2063`), so there is no
-   * affordance saying more tabs exist. The last three routed pages are all in that dead zone.
-   *
-   * This scrolls the container, never `scrollIntoView`: the shell scrolls
-   * `main.flex-1.overflow-auto`, and an element-level scroll walks up to it and jumps the whole
-   * page on load. Setting `scrollLeft` on this div cannot move anything but this div.
-   *
-   * Deliberately the minimum. The edge fade, the four clusters and keyboard scrolling are the
-   * substrate's S6 and are a design change to a bar eleven pages share; making the active tab
-   * visible is a correctness fix, and it fixes it for all eleven at once.
-   */
-  const barRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    let cancelled = false
-    const bring = () => {
-      const bar = barRef.current
-      if (cancelled || !bar) return
-      const el = bar.querySelector<HTMLElement>('[aria-selected="true"]')
-      if (!el || bar.scrollWidth <= bar.clientWidth) return
-      // 🔴 Rects, not `offsetLeft`. `.h10-rules-tabs` is not positioned, so the active tab's
-      // offsetParent is an ancestor further up and `offsetLeft` is measured from THAT — the first
-      // version scrolled 78px where 388 were needed and left the tab clipped. A rect delta is
-      // relative to nothing and cannot be wrong.
-      const barRect = bar.getBoundingClientRect()
-      const elRect = el.getBoundingClientRect()
-      const overRight = elRect.right - barRect.right
-      const overLeft = barRect.left - elRect.left
-      if (overRight > 0) bar.scrollLeft += overRight + 24
-      else if (overLeft > 0) bar.scrollLeft -= overLeft + 24
-    }
-    bring()
-    /**
-     * 🔴 …and measuring ONCE on mount is not enough, which is the second thing prod taught this.
-     *
-     * The second version computed the right number and still left `scrollLeft` at 0. The bundle was
-     * current and the math checked out when run by hand — the effect was simply measuring a
-     * narrower bar than the one that ends up on screen. `counts` arrives from a fetch and adds five
-     * badges worth ~200px; at mount, without them, "Placement" ends at ~1257 inside a bar ending at
-     * 1350 and genuinely fits, so `bring()` correctly does nothing. The badges then land and push
-     * it to 1457.
-     *
-     * So it re-runs when the counts land (the dependency) and when the font swaps — the other thing
-     * that silently widens a row of text after it was measured. Deliberately not `requestAnimation-
-     * Frame`: rAF does not fire in a background tab, and a tab restored from the background is
-     * exactly when a bar has been laid out without ever being painted.
-     */
-    const fonts = (document as Document & { fonts?: { ready?: Promise<unknown> } }).fonts
-    if (fonts?.ready) void fonts.ready.then(bring)
-    return () => { cancelled = true }
-  }, [active, counts])
-
-  /**
-   * S4 — the edge fade (substrate spec §3 change 2). The bar hides its scrollbar, so at eleven
-   * items the only sign that more tabs exist off-screen is this: a fade on the edge that has
-   * hidden content, gone when that side is fully scrolled. State, not CSS-only, because the fade
-   * must react to scrollLeft; recomputed on scroll, on resize, and when the count badges land
-   * (they widen the row ~200px after mount — the same late-width trap `bring()` documents above).
-   */
-  const [fade, setFade] = useState<{ l: boolean; r: boolean }>({ l: false, r: false })
-  useEffect(() => {
-    const bar = barRef.current
-    if (!bar) return
-    const update = () => {
-      const l = bar.scrollLeft > 2
-      const r = bar.scrollLeft + bar.clientWidth < bar.scrollWidth - 2
-      setFade((p) => (p.l === l && p.r === r ? p : { l, r }))
-    }
-    update()
-    bar.addEventListener('scroll', update, { passive: true })
-    window.addEventListener('resize', update)
-    return () => {
-      bar.removeEventListener('scroll', update)
-      window.removeEventListener('resize', update)
-    }
-  }, [counts])
-
+/**
+ * Bid page programme, lane SHELL (2026-10-10) — the eleven tabs as DS link `Tabs`, shared by every tab page so the bar
+ * is the same wherever you are.
+ *
+ * · Real links (`<nav>` with `aria-current="page"`): open in a new tab, middle-click, back and a copied address work.
+ * · The tab you are on comes from the ROUTE (`activeTabFromPath`); `active` is only a fallback for a page whose path
+ *   no tab names. A page's own sub-path (`/bid/…`) keeps its tab.
+ * · A count where the counts provider has one (the tabs that list rules): from the layout's one read, refreshed when a
+ *   rule changes (`tabCounts.tsx`), counted for the market the header shows (polish round 2, S12). Nothing to count
+ *   (0, or a tab that is not counted) is no pill, on every tab alike; a failed read keeps every label.
+ * · `dense` (polish round 2, M6): the eleven tabs fit at 1440 (13.5px labels, 16px apart). Narrower, the strip
+ *   scrolls sideways inside itself, the tab you are on in view, with a fade and an arrow at each edge that has more
+ *   (`overflow="scroll"`); the scrollbar stays in a band below the labels.
+ * · Keyboard: every tab is a Tab stop; ←/→/Home/End move between them; Enter follows.
+ */
+export function RulesTabs({ active }: { active?: string }) {
+  const rules = useRulesTabRules()
+  const pathname = usePathname()
+  const params = useSearchParams()
+  const ads = useAdsMarketplaceOptional()
+  // The market the header shows, read the way the pages read it (AM-28 `useSharedAdsMarket`): the address's `?market=`
+  // wins, else the shared choice. The counts follow it (polish round 2, S12).
+  const market = ads ? pageMarket(params?.get('market') ?? null, { read: ads.readMarkets, shared: ads.scopeMarket, allowAll: true }) : ALL_MARKETS
+  const counts = useMemo(
+    () => (rules ? rulesTabCounts(rules, Object.keys(RULE_TAB_ACTION_TYPES), ruleBelongsToTab, market) : null),
+    [rules, market],
+  )
+  const items = useMemo(() => rulesTabItems(RULES_TABS, counts, rulesTabHref), [counts])
+  const current = activeTabFromPath(items, pathname) ?? active ?? ''
   return (
-    <div className="h10-rt-wrap">
-      {/* tabIndex: the scrollbar is hidden, so the keyboard's only way to reach the overflow is
-          focusing the bar and using the arrow keys — native scroll on a focusable container. */}
-      <div ref={barRef} className="h10-cd-tabs h10-rules-tabs" role="tablist" aria-label="Rule types" tabIndex={0}>
-        {RULES_TABS.map((t) => {
-          const n = counts?.[t.key]
-          return (
-            <Fragment key={t.key}>
-              <Link
-                href={rulesTabHref(t)}
-                role="tab"
-                aria-selected={t.key === active}
-                className={`h10-cd-tab ${t.key === active ? 'on' : ''}`}
-                scroll={false}
-              >
-                {t.label}
-                {n != null && <span className="h10-cd-tabn">{n}</span>}
-              </Link>
-            </Fragment>
-          )
-        })}
-      </div>
-      <span className={`h10-rt-fade l${fade.l ? ' on' : ''}`} aria-hidden="true" />
-      <span className={`h10-rt-fade r${fade.r ? ' on' : ''}`} aria-hidden="true" />
+    <div className={styles.tabs}>
+      <Tabs size="lg" dense overflow="scroll" ariaLabel="Rules and automation" tabs={items} active={current} linkAs={TabLink} />
     </div>
   )
 }

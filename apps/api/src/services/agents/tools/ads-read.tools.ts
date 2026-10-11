@@ -915,7 +915,7 @@ const adTargets: AgentTool = {
     + 'campaign\'s ad product), '
     + 'text, kind, match type, status, live now (target and campaign enabled), bid, the bid it held before a no-pause '
     + 'suppression (suppressedFromBidCents; a suppressed bid is not raised), the campaign\'s bid bounds, effective max '
-    + 'CPC, who owns its bids (schedule, goal, manual or none), and impressions, clicks, orders, spend, sales, CPC and '
+    + 'CPC, who owns its bids (brain, schedule, goal, manual or none), and impressions, clicks, orders, spend, sales, CPC and '
     + 'ACoS over the window. The bid is Nexus\'s copy: when it has not reached Amazon yet (a write queued or being sent, '
     + 'or one that failed), bidNotAtAmazon says so, with the bid Amazon still has (amazonBidCents) and, for a failed '
     + 'one, why; null when Amazon has the bid shown. Filter by campaignId, adGroupId, market, status or text.' + MONEY_WORDS + PAGING,

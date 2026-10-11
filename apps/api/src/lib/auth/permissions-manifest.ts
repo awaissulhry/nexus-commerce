@@ -424,6 +424,19 @@ export const ENTRIES: Entry[] = [
   // A5 — the brain's writes (each a request through the approval gate, which checks the tool's own permissions and ai.run):
   // ads.automation.manage, named on its own so the /bid rule below can never catch …/brain/bid-brain/enrollment.
   P(F.adsAutomationManage, (m, p) => !isRead(m) && p.startsWith('/api/advertising/automation/brain/')),
+  // Bid page (2026-10-10) — the bid rules (routes/advertising-bid-rules.routes.ts): the list, a rule's history and the preview
+  // of a rule body (a POST that writes nothing) are reads (ads.view); archive and unarchive change a rule
+  // (ads.automation.manage). Named on their own so the /bid rule below can never hand them ads.bids.edit.
+  P(F.adsView, (m, p) => (isRead(m) && /^\/api\/advertising\/bid-rules(\/[^/]+\/history)?$/.test(p)) || (m.toUpperCase() === 'POST' && p === '/api/advertising/bid-rules/preview')),
+  P(F.adsAutomationManage, (m, p) => m.toUpperCase() === 'POST' && /^\/api\/advertising\/bid-rules\/[^/]+\/(archive|unarchive)$/.test(p)),
+  // R4 — undoing approved asks of a bid rule puts bids back (as the rule): ads.bids.edit, named on its own.
+  P(F.adsBidsEdit, (m, p) => m.toUpperCase() === 'POST' && /^\/api\/advertising\/bid-rules\/[^/]+\/asks\/undo$/.test(p)),
+  // Bid page — every bid with its one owner (routes/advertising-bids.routes.ts): a read, ads.view; its money keys are
+  // stripped for a person without financials.adspend.view. Named on its own, before the /bid rule below.
+  P(F.adsView, (m, p) => isRead(m) && p === '/api/advertising/bids'),
+  // KAPI-B — one keyword's Auto / Manual (routes/advertising-bid-mode.routes.ts): a hold of its bid or the hand-back,
+  // ads.bids.edit, named on its own so no reorder of the broader rules below can hand it another permission.
+  P(F.adsBidsEdit, (m, p) => m.toUpperCase() === 'POST' && /^\/api\/advertising\/bids\/[^/]+\/mode$/.test(p)),
   P(F.adsView, (m, p) => isRead(m) && pfx('/api/advertising')(m, p)),
   // Ads wave 4a — which Amazon Ads accounts Nexus reads is part of connecting the account (ads.connect, as the
   // /api/amazon-ads/auth sign-in): named on its own so it never falls through to ads.campaigns.manage below.

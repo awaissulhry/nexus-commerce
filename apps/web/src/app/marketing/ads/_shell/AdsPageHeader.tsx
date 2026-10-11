@@ -12,7 +12,7 @@
  * CBN.2f — the date control is the full DateRangePicker (its range is local to the
  * header for now; lift it when the campaigns list endpoint becomes date-aware).
  */
-import { useState, type ReactNode } from 'react'
+import { createContext, useContext, useState, type ComponentType, type ReactNode } from 'react'
 import Link from '@/lib/workspaces/Link'
 import { usePathname } from '@/lib/workspaces/navigation'
 import { RefreshCw, ChevronDown, History } from 'lucide-react'
@@ -32,7 +32,23 @@ export interface HeaderAction { label: string; href?: string; onClick?: () => vo
  *  Rules & Automation page's "+ Rule"). When set, `actions` is ignored. */
 export interface HeaderPrimary { label: string; icon?: ReactNode; href?: string; onClick?: () => void }
 
-export function AdsPageHeader({
+/** The header's props, so a section that draws its own header (below) takes exactly the same ones. */
+export type AdsHeaderProps = Parameters<typeof DefaultAdsHeader>[0]
+
+/**
+ * Bid page programme, lane SHELL (2026-10-10) — a section that draws its own header in the design system puts it here,
+ * from its layout (Rules & Automation: `rules-automation/_shared/RulesHeader.tsx`). Its pages keep calling
+ * `AdsPageHeader` with the same props and get that header; with no provider (every other ads page) this is the header
+ * below, unchanged.
+ */
+export const AdsHeaderFrame = createContext<ComponentType<AdsHeaderProps> | null>(null)
+
+export function AdsPageHeader(props: AdsHeaderProps) {
+  const Frame = useContext(AdsHeaderFrame)
+  return Frame ? <Frame {...props} /> : <DefaultAdsHeader {...props} />
+}
+
+function DefaultAdsHeader({
   title, subtitle, markets, market, onMarketChange, onDataSync, syncing, actions, onDateRange, dateRange,
   showDataSync = true, showDateRange = true, showMarket = true, showChangeLog = false, primaryAction, channel = 'amazon',
   allowAllMarkets = true, marketValues, onMarketValuesChange, dataSyncLabel = 'Refresh view', dataSyncTip, marketNotYet, dateRangeNotYet,

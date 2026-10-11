@@ -1,0 +1,249 @@
+/*
+ * The rule builder (2026-10-10) — the bid surface's live preview, starts and mode, and the builder's phone layout.
+ * Layout and domain content only, design-system tokens only; every control is the design system's own. Light only, like
+ * the rest of the ads console. The builder's own look stays in rules-automation.css (`h10-rb-*`); the `:global` rules
+ * below only lay it out at phone width and beside the preview, for every rule type alike.
+ */
+
+/* ── the builder as a layer above a page (mounted with onClose): the modal layer, so the order in the body decides —
+   above a dialog that was open before it, under the confirm it opens itself ── */
+.layer {
+  z-index: var(--nds-z-overlay);
+}
+
+/* ── the live preview: a column at the right on a wide screen, a block on top on a narrow one ── */
+.preview {
+  position: sticky;
+  top: 0;
+  flex: 0 0 380px;
+  align-self: flex-start;
+  box-sizing: border-box;
+  max-height: 100%;
+  overflow-y: auto;
+  padding: calc(var(--nds-space-48) + var(--nds-space-24)) var(--nds-space-24) var(--nds-space-24) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  padding: var(--nds-space-14) var(--nds-space-16);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-xl);
+  background: var(--nds-surface);
+  box-shadow: var(--nds-shadow-card);
+  min-width: 0;
+}
+
+.sentence {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.count {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nds-space-6);
+  flex-wrap: wrap;
+  font-size: var(--nds-font-size-base);
+  color: var(--nds-text);
+}
+
+.label {
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+}
+
+.big {
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-bold);
+  color: var(--nds-text-strong);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.focusable {
+  display: inline-flex;
+  border-radius: var(--nds-radius-pill);
+}
+
+.focusable:focus-visible {
+  outline: none;
+  box-shadow: var(--nds-focus-ring);
+}
+
+.two {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.sub {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+  overflow-wrap: anywhere;
+}
+
+.empty {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+.table {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+/* ── one line of controls: starts, Over, the mode ── */
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.starts {
+  margin: 0 0 var(--nds-space-16);
+}
+
+.over {
+  margin: var(--nds-space-12) 0 0;
+}
+
+.fieldGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--nds-space-12);
+  max-width: 820px;
+}
+
+.modeRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-10);
+}
+
+.means {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+/* ── the bid builder: a narrower step list, so the form and the preview both fit at 1440 ── */
+.bid :global(.h10-rb-nav) {
+  flex-basis: 200px;
+  padding-left: var(--nds-space-24);
+  padding-right: var(--nds-space-12);
+}
+
+/* ── the bid builder from 1101 to 1499 px (a 1440 screen): the live preview sits as a sticky bar on top of the form, so
+   the campaign picker has the whole width beside the step list (lane FINAL, 2026-10-11). Only the bid surface has a
+   preview, so the other rule types keep their layout. ── */
+@media (min-width: 1101px) and (max-width: 1499px) {
+  .bid :global(.h10-rb-body) {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr);
+    /* max-content: the preview keeps its height (a scroll box would let an auto row shrink under the long form). */
+    grid-template-rows: max-content auto;
+    align-items: start;
+  }
+
+  .bid :global(.h10-rb-nav) {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+
+  .bid :global(.h10-rb-main) {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .bid .preview {
+    grid-column: 2;
+    grid-row: 1;
+    z-index: var(--nds-z-sticky);
+    max-height: none;
+    overflow-y: visible;
+    padding: var(--nds-space-16) var(--nds-space-32) var(--nds-space-10) var(--nds-space-12);
+    background: var(--nds-bg);
+    border-bottom: 1px solid var(--nds-border);
+  }
+
+  .bid .card {
+    box-shadow: none;
+  }
+
+  .bid :global(.h10-rb-wrap) {
+    padding-top: var(--nds-space-24);
+  }
+}
+
+/* ── the builder beside the preview, and on a phone (every rule type) ── */
+@media (max-width: 1100px) {
+  .root :global(.h10-rb-body) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .root :global(.h10-rb-nav) {
+    display: none;
+  }
+
+  .preview {
+    order: -1;
+    flex: 0 0 auto;
+    width: 100%;
+    max-height: none;
+    z-index: var(--nds-z-sticky);
+    padding: var(--nds-space-10) var(--nds-space-16);
+    background: var(--nds-bg);
+    border-bottom: 1px solid var(--nds-border);
+  }
+
+  .card {
+    box-shadow: none;
+  }
+
+  .root :global(.h10-rb-wrap) {
+    padding: var(--nds-space-20) var(--nds-space-16) var(--nds-space-48);
+  }
+}
+
+@media (max-width: 720px) {
+  .root :global(.h10-rb-top) {
+    padding: 0 var(--nds-space-8);
+  }
+
+  .root :global(.h10-rb-conds .cond) {
+    flex-wrap: wrap;
+  }
+
+  .root :global(.h10-rb-camps) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .root :global(.h10-rb-input.rn) {
+    width: 100%;
+  }
+
+  .preview {
+    padding: var(--nds-space-8) var(--nds-space-12);
+  }
+}

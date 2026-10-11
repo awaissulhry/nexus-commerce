@@ -13,7 +13,7 @@ import {
  *  - a click on a switch flips it, shows "Not saved" and the bar counts the change; nothing is saved until "Save";
  *    the click never ticks or opens the row;
  *  - arrow to a switch cell and press Space (or Enter): the switch flips, the row's tick box does NOT change;
- *  - "Product D" cannot move: disabled, its reason on hover and read by a screen reader;
+ *  - "Product D" cannot move: held (focusable), its reason on hover; Space on its cell focuses it and shows why;
  *  - Discard puts every switch back; sorting the column puts Off before On; Customise lists "Brain". Light and dark.
  */
 interface Row { id: string; name: string; market: string; brain: boolean; held?: string }
@@ -72,6 +72,7 @@ export function SwitchColumnExample() {
           columnDefs={cols}
           context={handlers}
           rowSelection={gridSelection<Row>()}
+          suppressCellFocus={false}
         />
       </GridCard>
       {count > 0 && (

@@ -1,0 +1,314 @@
+/*
+ * Bid page, Bids view — layout only, design-system tokens only. The controls are the design system's own.
+ * Light only, like the rest of the ads console (Operator decision 2026-08-05, _shared/shared-shell.css).
+ */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.toolbarRight {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.chip {
+  display: inline-flex;
+  min-width: 0;
+}
+
+/* The owner's chip as a link to where it is set: layout and the focus ring only (the Pill keeps its own look). */
+.chipLink {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  border-radius: var(--nds-radius-pill);
+  text-decoration: none;
+}
+
+.chipLink:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 1px;
+}
+
+/* A long rule name fits its cell: the pill may shrink and its words end in "…". */
+.pillFit {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.ellipsis {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Campaign over ad group, each a link with the column's room (the Rules table's two-line cells). */
+.two {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  height: 100%;
+  line-height: 1.3;
+}
+
+.sub {
+  display: flex;
+  min-width: 0;
+  font-size: var(--nds-font-size-sm);
+}
+
+.subMuted {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+/* Suggested: the median, then Apply. */
+.suggested {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--nds-space-8);
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Who sets it: the chip, then "+N". */
+.ownerCell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.cellFill {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.count {
+  white-space: nowrap;
+}
+
+.mark {
+  display: inline-flex;
+  align-items: center;
+}
+
+.keyword {
+  font-weight: var(--nds-font-weight-semibold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The campaign · ad group block inside its whole-name tooltip: it keeps the cell's width, so its links still end in "…". */
+.fill {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
+}
+
+/* A dash whose reason is its tooltip (no engine runs the campaign): it takes the focus from its cell like a name. */
+.reasonMark {
+  border-radius: var(--nds-radius-xs);
+}
+
+/* A name that took the focus from its cell (FullName) shows the ring where the cell's was. */
+.keyword:focus-visible,
+.fill:focus-visible,
+.reasonMark:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 1px;
+  border-radius: var(--nds-radius-xs);
+}
+
+.money {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--nds-space-4);
+  width: 100%;
+}
+
+.results {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-10);
+  font-variant-numeric: tabular-nums;
+}
+
+.moon {
+  color: var(--nds-info-strong);
+}
+
+.up {
+  color: var(--nds-success-strong);
+}
+
+.down {
+  color: var(--nds-warning-strong);
+}
+
+.muted {
+  color: var(--nds-text-2);
+}
+
+/* ── the keyword's detail (DS DetailModal): a rail that stays on every tab, the tab beside it ─────────────── */
+
+.detail {
+  display: grid;
+  grid-template-columns: 360px minmax(0, 1fr);
+  align-items: start;
+  gap: var(--nds-space-24);
+  min-width: 0;
+}
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.detailMain {
+  min-width: 0;
+}
+
+/* Phone (the DS sheet, breakpoint.sm): one column — the tab first (right under the tab row), the rail after it. */
+@media (max-width: 760px) {
+  .detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .detailMain {
+    order: -1;
+  }
+}
+
+.hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-12);
+}
+
+.big {
+  font-size: var(--nds-font-size-xl);
+  font-weight: var(--nds-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--nds-space-8);
+}
+
+.bidInput {
+  display: inline-flex;
+  flex: none;
+  width: 120px;
+}
+
+.goalForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--nds-space-12);
+}
+
+.goalBox {
+  display: inline-flex;
+  flex: none;
+  width: 140px;
+}
+
+.acosInput {
+  display: inline-flex;
+  flex: none;
+  width: 140px;
+}
+
+/* A rule's name in the History table: a flex box, so the DS link's own "…" applies and it never runs into Status. */
+.whoCell {
+  display: flex;
+  min-width: 0;
+  max-width: 160px;
+}
+
+/* "Can't undo": plain muted words that take focus, so the reason is heard (a tooltip on hover and focus). */
+.cant {
+  color: var(--nds-text-2);
+  white-space: nowrap;
+  border-radius: var(--nds-radius-xs);
+}
+
+.cant:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 1px;
+}
+
+/* The DS field fills its box (its input otherwise keeps the browser's 20-character width). */
+.field {
+  width: 100%;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.why {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--nds-space-8);
+  width: 100%;
+}
+
+.grow {
+  flex: 1;
+}
