@@ -3633,41 +3633,44 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       })
     }
     const profileId = resolved.profileId
-    const { createNegative } = await import(
-      '../services/advertising/ads-negative-kw.service.js'
-    )
-    const result = await createNegative({
-      profileId,
+    // Negative Targeting (2026-10-11) — through the one negative write door's full path (writeNegativeKeyword), not the
+    // push-only wrapper: the row and its audit row are written now, with this person as the author (negativeOrigin
+    // PERSON), so the negative has a record (who, when) before the next sync, and the same checks run as before.
+    const { writeNegativeKeyword } = await import('../services/advertising/ads-negative-kw.service.js')
+    const result = await writeNegativeKeyword({
+      scope: body.scope,
       externalCampaignId: body.externalCampaignId,
-      externalAdGroupId: body.externalAdGroupId,
+      ...(body.scope === 'AD_GROUP' ? { externalAdGroupId: body.externalAdGroupId } : {}),
       keywordText: body.keywordText,
       matchType: body.matchType,
-      scope: body.scope,
-      marketplace: body.marketplace,
+      profileId,
+      userId: personActor(request),
       manual: true, // 1e — a person's own add from a screen (isPersonCreate)
     })
-    if (result.denied) {
+    if (result.outcome === 'refused') {
       return reply.code(403).send({
         error: 'write_gate_denied',
-        reason: result.denied.reason,
-        deniedAt: result.denied.deniedAt,
+        reason: result.refusal?.reason ?? 'refused',
+        deniedAt: result.refusal?.deniedAt ?? 'refused',
       })
     }
-    if (!result.ok) {
+    if (result.outcome === 'failed') {
       // CM-8 — Amazon's own words for the screen, beside the raw answer.
       const said = v3ErrorText(result.rawResponse)
-      const why = (result.rawResponse as { error?: unknown } | null)?.error
       return reply.code(502).send({
         error: 'amazon_rejected',
-        reason: said ? `Amazon refused it: ${said}` : typeof why === 'string' ? why : 'Amazon did not take it, and gave no reason.',
+        reason: said ? `Amazon refused it: ${said}` : result.error ?? 'Amazon did not take it, and gave no reason.',
         details: result.rawResponse,
       })
     }
+    // CM-8 — kept in Nexus only (the campaign or ad group is not on Amazon yet): 202, the launch repair sends it later.
+    if (result.outcome === 'local') reply.code(202)
     return {
       ok: true,
-      alreadyExisted: result.alreadyExisted,
+      alreadyExisted: result.outcome === 'already_existed',
       mode: result.mode,
-      externalNegativeKeywordId: result.externalNegativeKeywordId,
+      externalNegativeKeywordId: result.externalTargetId,
+      adTargetId: result.adTargetId,
     }
   })
 
@@ -9120,6 +9123,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       applyImmediately?: boolean
       /** 3A — "Send anyway" past his own limits (his CPC ceiling included). */
       confirmOwnLimits?: boolean
+      /**
+       * Negative Targeting (2026-10-11) — the person's explicit release of a KEPT-PAUSED keyword or target (waste/hold.ts):
+       * his turn-on passes the lock and ends the hold. Without it a turn-on of a kept-paused one is 409 with `keptPaused`
+       * (who holds it, since when): the screen asks him to confirm the release, or to turn it on from Negative Targeting.
+       */
+      releaseKeptPaused?: boolean
     }
     // CPC ceiling: his own setting. 3A — a bid above it is not clamped behind his back: it needs his "Send anyway",
     // and with it the bid goes as he set it.
@@ -9141,12 +9150,14 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const result = await updateAdTargetWithSync({
       adTargetId: id,
       patch: { bidCents: body.bidCents, status: body.status },
-      actor: actorFromHeaders(request.headers as Record<string, unknown>),
+      // Review S15 — the signed-in person (the header only when there is none), so a refusal and the write name him.
+      actor: personActor(request),
       reason: body.reason ?? null,
       applyImmediately: body.applyImmediately ?? false,
       manual: true, // 1e — a person's own edit from a screen (isPersonEdit)
       askGate: true, // CM-10
       confirmOwnLimits: body.confirmOwnLimits === true, // 3A
+      ...(body.releaseKeptPaused === true ? { releaseKeptPaused: true } : {}), // Negative Targeting — a person's own release
       ...(cpcPast.length ? { evidence: { sentPastOwnLimits: `sent past your CPC ceiling by ${actorFromHeaders(request.headers as Record<string, unknown>)}: ${cpcPast.map((l) => l.reason).join('; ')}` } } : {}),
     })
     if (!result.ok && result.error === 'not_found') {
@@ -9155,6 +9166,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
     if (!result.ok && result.error === 'bid_below_floor_5_cents') {
       reply.code(400)
+      return result
+    }
+    // Negative Targeting — kept paused: 409, his "confirm the release" sends the same body with releaseKeptPaused.
+    if (!result.ok && result.keptPaused) {
+      reply.code(409)
       return result
     }
     if (ownLimitsReply(reply, result)) return result

@@ -20,6 +20,7 @@ import { acceptNumberEdit, NUMBER_ONLY_MESSAGE, numberCommitText, numberStart } 
 import { assignRefColours, colourFor } from './formulaPalette'
 import { errorMarkAt, functionHint, previewLine, unknownRefNames, type FormulaFunctionDoc, type FormulaPreviewResponse } from './formulaPreview'
 import { callAt, refsOf, tokenizeForDisplay, type Token } from './formulaTokens'
+import { opensDark } from '../../lib/opens-dark'
 
 /**
  * 2026-09-26 (Owner: cell editor OPTION A) — what a cell carries besides its value. Each part shows an icon in the editor
@@ -419,7 +420,7 @@ export const FormulaCellEditor = forwardRef<unknown, FormulaEditorParams>(functi
   }
   const hasContext = !!(context.aiDraft || context.history || context.inherited)
   return (
-    <div className={`nds-formula-editor nds-readable${props.eGridCell?.closest('.dark') ? ' dark' : ''}`} data-completions={open} data-formula={formula}
+    <div className={`nds-formula-editor nds-readable${opensDark(props.eGridCell) ? ' dark' : ''}`} data-completions={open} data-formula={formula}
       style={{ width: box.width, maxWidth: box.width }} onKeyDownCapture={keyboard}>
       <div className="nds-formula-body">
         <div className="nds-formula-line">
@@ -578,7 +579,7 @@ type FallbackEditor = { component: unknown; params?: Record<string, unknown>; po
 function FormulaAwareEditor(props: FormulaEditorParams & { fallback: FallbackEditor }) {
   const [draft, setDraft] = useState<string | null>(null)
   if (draft !== null) return <FormulaCellEditor {...props} initialText={draft} />
-  return <div className={props.eGridCell?.closest('.dark') ? 'dark' : undefined} onChangeCapture={e => {
+  return <div className={opensDark(props.eGridCell) ? 'dark' : undefined} onChangeCapture={e => {
     const target = e.target
     if ((target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) && isFormulaDraft(target.value)) {
       e.stopPropagation()

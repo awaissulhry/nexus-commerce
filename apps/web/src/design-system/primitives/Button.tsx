@@ -1,6 +1,7 @@
 import { cloneElement, forwardRef, isValidElement } from 'react'
-import type { ButtonHTMLAttributes, ReactElement, ReactNode } from 'react'
+import type { ButtonHTMLAttributes, MouseEvent, ReactElement, ReactNode } from 'react'
 import type { Tone } from './tone'
+import { Tooltip } from './Tooltip'
 
 export type ButtonVariant =
   | 'primary'
@@ -109,6 +110,16 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
    * Every call site that genuinely submits says so with `type="submit"`.
    */
   children?: ReactNode
+  /**
+   * HELD: why this action cannot run now ("Pick terms of one product first"). Null / undefined = it runs.
+   *
+   * Never `disabled` (Keyword Harvest DS lane H5, 2026-10-10): a disabled button takes no focus, so its reason is never
+   * heard (`scripts/check-silent-disabled.mjs`). Held, the button keeps its focus and its look of a held control
+   * (`aria-disabled`, `primitives.css`), says why on hover AND focus (a portal `Tooltip`) and to a screen reader
+   * (`aria-description`), and a click or Enter does nothing — it never submits a form either. It wins over `disabled`.
+   * Replaces three page copies (Bid `HeldButton`, the rule panel's, the review dialog's held Save).
+   */
+  heldReason?: string | null
 }
 
 /**
@@ -116,12 +127,27 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
  * tokenized. Requires `styles/primitives.css`.
  */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = 'secondary', size = 'md', type = 'button', active, tone, inline, block, wrap, muted, asChild, className, children, ...rest },
+  { variant = 'secondary', size = 'md', type = 'button', active, tone, inline, block, wrap, muted, asChild, heldReason, className, children, ...rest },
   ref,
 ) {
   const cls = ['nds-btn', variant === 'secondary' ? '' : variant, size === 'md' ? '' : size, active ? 'on' : '', active && tone && tone !== 'neutral' ? tone : '', block ? 'block' : '', muted ? 'muted' : '', inline ? 'inline' : '', wrap ? 'wrap' : '', className ?? '']
     .filter(Boolean)
     .join(' ')
+  if (heldReason) {
+    // Held: focusable, announced with its reason, and inert to a click (a link child does not navigate).
+    const held = { ...rest }
+    delete held.onClick
+    delete held.disabled
+    const stop = (e: MouseEvent<HTMLElement>) => e.preventDefault()
+    const heldProps = { ...held, 'aria-disabled': true as const, 'aria-description': heldReason, onClick: stop }
+    const control = asChild && isValidElement(children)
+      ? cloneElement(children as ReactElement<{ className?: string }>, {
+          ...heldProps,
+          className: [cls, (children as ReactElement<{ className?: string }>).props.className].filter(Boolean).join(' '),
+        })
+      : <button ref={ref} type="button" className={cls} {...heldProps}>{children}</button>
+    return <Tooltip label={heldReason} portal>{control}</Tooltip>
+  }
   if (asChild && isValidElement(children)) {
     const child = children as ReactElement<{ className?: string }>
     return cloneElement(child, {

@@ -14,6 +14,8 @@ import { num, eur, int, METRIC_TIPS, acosRank, acosFilterValue } from '../../../
 import { pickMetricFilters } from '../../../../_grid/filters'
 import { SearchTermActionModal } from '../../../tabs/SearchTermActionModal'
 import type { AdGroupDetailData } from '../AdGroupDetail'
+import { isFocusRow, scrollToMarked } from '../focusRow'
+import focusStyles from '../focusRow.module.css'
 
 interface STRow {
   query: string; matchType?: string | null
@@ -24,7 +26,7 @@ const titleCase = (s?: string | null) => (s ? s.toLowerCase().replace(/_/g, ' ')
 const spendOf = (r: STRow) => num(r.costUnits)
 const salesOf = (r: STRow) => num(r.salesCents) / 100
 
-export function AgSearchTermsTab({ adGroup, dateRange }: { adGroup: AdGroupDetailData | null; dateRange: { start: Date; end: Date } }) {
+export function AgSearchTermsTab({ adGroup, dateRange, focus }: { adGroup: AdGroupDetailData | null; dateRange: { start: Date; end: Date }; focus?: string | null }) {
   const ext = adGroup?.externalAdGroupId ?? null
   const [rows, setRows] = useState<STRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -33,6 +35,9 @@ export function AgSearchTermsTab({ adGroup, dateRange }: { adGroup: AdGroupDetai
   const rid = (r: STRow) => `${r.query}|${r.matchType ?? ''}`
   const selectedTerms = useMemo(() => Array.from(new Set(rows.filter((r) => selected.has(rid(r))).map((r) => r.query))), [rows, selected])
   const agList = useMemo(() => (adGroup ? [{ id: adGroup.id, name: adGroup.name }] : []), [adGroup])
+  // ?focus=<search term>: narrowed to its words, marked, scrolled into view once the report is read.
+  const focusSearch = (focus ?? '').trim() || null
+  useEffect(() => { if (focusSearch && !loading) scrollToMarked(focusStyles.focusRow) }, [focusSearch, loading])
 
   useEffect(() => {
     if (!ext) { setLoading(false); setRows([]); return }
@@ -83,6 +88,9 @@ export function AgSearchTermsTab({ adGroup, dateRange }: { adGroup: AdGroupDetai
         columns={columns}
         filters={filters}
         showTotal
+        searchable={!!focusSearch}
+        initialSearch={focusSearch ?? undefined}
+        rowClassName={(r) => (isFocusRow(focusSearch, rid(r), r.query) ? focusStyles.focusRow : undefined)}
         storageKey="h10-ag-searchterms-cols"
         exportable
         selected={selected}
@@ -93,7 +101,7 @@ export function AgSearchTermsTab({ adGroup, dateRange }: { adGroup: AdGroupDetai
         </>}
         emptyLabel="No search-term data for this ad group in the selected date range."
       />
-      {action && <SearchTermActionModal mode={action} terms={selectedTerms} adGroups={agList} externalCampaignId={adGroup?.campaign?.externalCampaignId ?? null} marketplace={adGroup?.campaign?.marketplace ?? null} onClose={() => setAction(null)} onDone={() => setSelected(new Set())} />}
+      {action && <SearchTermActionModal mode={action} terms={selectedTerms} adGroups={agList} externalCampaignId={adGroup?.campaign?.externalCampaignId ?? null} marketplace={adGroup?.campaign?.marketplace ?? null} negativeAdGroup={adGroup ? { externalAdGroupId: adGroup.externalAdGroupId ?? null, name: adGroup.name } : null} onClose={() => setAction(null)} onDone={() => setSelected(new Set())} />}
     </>
   )
 }

@@ -310,7 +310,8 @@ export async function undoHarvest(id: string, who: Who): Promise<UndoOutcome> {
   // 1. The source negatives retired: the term runs where it ran before.
   if (standing.length) {
     const { retireNegatives } = await import('../negatives-retire.service.js')
-    const res = await retireNegatives({ adTargetIds: standing.map((t) => t.id), actor: who.actor as never, retireReason: who.reason, changeSetId: who.changeSetId, manual: who.manual })
+    // Negative Targeting (review S7) — the brain harvest's own undo lifts its own source negatives (approved by a person too).
+    const res = await retireNegatives({ adTargetIds: standing.map((t) => t.id), actor: who.actor as never, retireReason: who.reason, changeSetId: who.changeSetId, manual: who.manual, owners: { undo: true } })
     for (const o of res.outcomes) {
       if (o.kind === 'retired' || o.kind === 'removed_local') { out.retired++; if (o.actionLogId) out.actionLogIds.push(o.actionLogId) }
       else if (o.kind !== 'skipped') out.problems.push(`a source negative was not retired (${o.reason ?? o.kind})`)

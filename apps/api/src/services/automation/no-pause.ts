@@ -7,6 +7,11 @@
  * enable-ads, archive-ads on Amazon), never a rule's action. The rule guard (R9) refuses them at save; a preview (R8)
  * already says a rule carrying one "would be refused when saved", and names the substitute. `pause_target` is the Owner's
  * own exception for HIS rules, not for Claude's.
+ *
+ * Negative Targeting D4 (Owner GO 2026-10-10, MCP parity) — Claude MAY save a rule that pauses a wasting KEYWORD
+ * (`pause_target`, kept paused): the save is still a request a person approves (save-ad-rule never runs it by rule) and
+ * the rule is born OBSERVE (Watch). `refusedActionsOf(types, { keywordPause: true })` is the save's reading; every other
+ * reader (applying a suggestion, an eBay proposal) keeps refusing it, and every other pause stays refused everywhere.
  */
 
 /** Refused for a rule Claude saves, each with why and what to use instead. */
@@ -27,11 +32,18 @@ export interface RefusedAction {
   instead: string
 }
 
-/** The actions of a rule (engine types, or a builder rule's produced types) that a Claude rule may not carry. */
-export function refusedActionsOf(actionTypes: readonly string[]): RefusedAction[] {
+/** The actions a rule may produce that a rule SAVED by Claude may carry although they pause (D4): a keyword's own pause. */
+export const KEYWORD_PAUSE_TYPES: ReadonlySet<string> = new Set(['pause_target'])
+
+/**
+ * The actions of a rule (engine types, or a builder rule's produced types) that a Claude rule may not carry.
+ * `keywordPause`: the save's reading (D4) — a keyword pause is allowed; everything else that pauses is still refused.
+ */
+export function refusedActionsOf(actionTypes: readonly string[], opts: { keywordPause?: boolean } = {}): RefusedAction[] {
   const seen = new Set<string>()
   const out: RefusedAction[] = []
   for (const type of actionTypes) {
+    if (opts.keywordPause && KEYWORD_PAUSE_TYPES.has(type)) continue
     // Every pause_* is a pause, named or not.
     const rule = REFUSED[type] ?? (type.startsWith('pause_') ? REFUSED.pause_campaign : undefined)
     if (rule && !seen.has(type)) {
@@ -44,7 +56,7 @@ export function refusedActionsOf(actionTypes: readonly string[]): RefusedAction[
 
 /** The sentence a preview carries when a rule could not be saved by Claude. Null when nothing is refused. */
 export function refusedWhenSaved(actionTypes: readonly string[]): { refusedWhenSaved: true; actions: RefusedAction[]; says: string } | null {
-  const actions = refusedActionsOf(actionTypes)
+  const actions = refusedActionsOf(actionTypes, { keywordPause: true })
   if (!actions.length) return null
   return {
     refusedWhenSaved: true,

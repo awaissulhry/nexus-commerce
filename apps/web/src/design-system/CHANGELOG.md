@@ -1,3 +1,11 @@
+## Popups stay light on a light page under a dark OS — 2026-10-11
+
+- **`lib/opens-dark.ts` `opensDark(el)`**: a portalled surface (Modal, the formula and slot-list cell editors, the
+  Views prompt, the toolbar fold) draws dark only when its opener has a `.dark` ancestor AND no light-pinned ancestor
+  (`.h10-shell`, `.fleet-surface`, `.fleet-portal`, `[data-nds-light]` — the same list as the shared-shell token pin).
+  Before, they copied `.dark` from <html>, so on a dark OS every popup on the light-only ads pages opened dark. A light
+  `Modal` carries `data-nds-light`, so a review stacked on it stays light too. Mirrored in Factory.
+
 ## ReviewChangesModal: focus on Done, no repeated word — 2026-10-11
 
 Bid page final lane (re-audit R5 and a NICE item). Web only (no Factory copy of this pattern).
@@ -26,6 +34,16 @@ Bid page polish round 2, lane DS run 2 (audit M6, M7, M8, S10, S11, S12, S13, NI
 - **`ModeCell`**: the step word never shrinks (S10, "W.. Not saved"); in a cell too narrow for the word and the "Not saved" tag (a container query, under 180px of content) the tag becomes a dot named "Not saved".
 - **`NexusGrid plain`** (S11): a small table in a modal or panel — no header menu button or header right-click menu, the columns fill the width (`fitGridWidth`, again when the grid resizes), and the grid is as tall as its rows (`domLayout="autoHeight"`) so no empty band sits under a short table. Anything the caller states (`defaultColDef`, `autoSizeStrategy`, `domLayout`) wins. Catalog: the DetailModal example's History tab.
 - **`EntityLinks total` / `entityLinksColumn({ total })`**: the true count when the list is capped — the chip says "153 campaigns" over 100 links, the list ends "53 more not listed", the screen reader hears the same, and the column sorts by it. `entityMoreWords` exported from the model.
+
+## Keyword Harvest parts: commands under a list, a held Button, walking the rows, a path of links, one phone breakpoint — 2026-10-10
+
+Keyword Harvest page, lane HDS (`~/nexus-archive/2026-10-10-ads-pages/02-harvest/`, design report 6 gaps H1, H4–H7). Mirrored in Factory: `primitives/Button.tsx`, `components/Listbox.tsx`, `components/ListboxPanel.tsx`, `components/index.ts` and the new `listbox-actions.css`, `useNarrow.ts`, `EntityPath.tsx`, `entityPathModel.ts`, `entity-path.css`. Web only: the grid parts, the catalog (`HarvestPartsExample`) and the tests.
+
+- **`ListboxPanel` / `Listbox` `actions`** (H1): `{ id, label, icon?, onSelect, heldReason? }[]` — commands under the list ("+ New campaign…"). Buttons, not options: with actions the panel is a small `dialog` that holds the `listbox` and a group of buttons (the trigger says `aria-haspopup="dialog"`); without them nothing changes. ↓ walks on from the last option into the actions, Enter runs the one it is on (from the search field too); Tab goes list → action → action and Shift+Tab back (the panel moves the focus itself: inside a DS `Modal` a portalled panel's Tab was taken back to the dialog); Tab off the last action, or Shift+Tab off the list, closes the panel onto its trigger — the DS `MultiSelect` / `Menu` rule — so inside a Modal the focus goes on to the next control in the dialog, never out of it while the list is open. Esc closes only the panel. An option whose leading node is a text chip (`Tag`) aligns it with the label's FIRST line (`listbox-rows.css`, baseline; flags and icons stay centred), so a wrapped label or a note under it no longer pulls the chip down. Sticky at the panel's foot, so a long list never hides them. `Listbox` closes, returns the focus to its trigger, then runs the action. A held action is focusable, says why, never runs. Not for grid editors (`onKeyChoice`).
+- **`Button heldReason`** (H5): held = focusable, `aria-disabled`, the reason as `aria-description` and a portal tooltip on hover and focus, a click does nothing (never a submit; an `asChild` link does not navigate). Wins over `disabled`. Replaces three page copies (adopt them when their pages are touched).
+- **`grid/recordNav.ts`** (H6): `displayedRowIds(api)` — the ids as shown, after filter and sort, every page (for a `DetailModal`'s `nav.ids`); `revealRow(api, id, { colId?, focus? })` — turns to the row's page, scrolls to it and puts the cursor on its cell (again once the cell is drawn, unless the focus moved elsewhere); `cellOf(api, id)` — the row's cell for `returnFocusTo`, revealed first.
+- **`EntityPath`** + **`entityPathColumn`** (H7): Portfolio › Campaign › Ad group on one line, each step a link (`href`, `linkAs`), a missing step left out, an empty path a dash. Too long, the MIDDLE step is cut first (down to a few letters), then the ends — nothing is clipped away, measured down to a ≈ 90 px phone cell; the whole path shows on hover and focus. CSV, clipboard and filters read "A › B › C". In the grid (its own file, `grid/columns/entityPathColumn.ts`): Enter steps onto the last link (one link: follows it), ←/→ walk, Esc returns to the cell.
+- **`useNarrow()`** (H4): one phone breakpoint — `NARROW_QUERY` = `mediaQuery.belowSm` (760 px), the DS `DetailModal`'s sheet breakpoint, so a page and the modal it opens agree. The four page `usePhone` copies (639 px) are left as they are.
 
 ## DetailModal: a row's detail in a centered dialog; modals stack; focus goes back to the opener; Done says Undone / Archived — 2026-10-10
 

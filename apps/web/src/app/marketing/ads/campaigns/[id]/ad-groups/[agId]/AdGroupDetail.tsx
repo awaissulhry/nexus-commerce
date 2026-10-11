@@ -62,6 +62,9 @@ function AdGroupDetailView({ campaignId, adGroupId }: { campaignId: string; adGr
   const search = useSearchParams()
   const tabParam = (search.get('tab') ?? 'targets') as TabKey
   const activeTab: TabKey = TABS.some((t) => t.key === tabParam) ? tabParam : 'targets'
+  // Negative Targeting (2026-10-11) — `?focus=<target id | words>`: the tab opens ON that row (narrowed to its words,
+  // marked, scrolled into view). Its own tab only: a tab change drops it (`setTab`).
+  const focus = search.get('focus')
 
   const [ag, setAg] = useState<AdGroupDetailData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -91,6 +94,7 @@ function AdGroupDetailView({ campaignId, adGroupId }: { campaignId: string; adGr
   const setTab = (key: TabKey) => {
     const sp = new URLSearchParams(Array.from(search.entries()))
     if (key === 'targets') sp.delete('tab'); else sp.set('tab', key)
+    sp.delete('focus')
     const q = sp.toString()
     router.replace(`/marketing/ads/campaigns/${campaignId}/ad-groups/${adGroupId}${q ? `?${q}` : ''}`, { scroll: false })
   }
@@ -140,13 +144,13 @@ function AdGroupDetailView({ campaignId, adGroupId }: { campaignId: string; adGr
           : loading && !ag
             ? <TabSkeleton loading />
             : activeTab === 'targets'
-              ? <TargetsTab adGroup={ag} onRefresh={() => void load()} />
+              ? <TargetsTab adGroup={ag} onRefresh={() => void load()} focus={focus} />
               : activeTab === 'search-terms'
-                ? <AgSearchTermsTab adGroup={ag} dateRange={dateRange} />
+                ? <AgSearchTermsTab adGroup={ag} dateRange={dateRange} focus={focus} />
                 : activeTab === 'ad-group-negative-targets'
-                  ? <AgNegativesTab adGroup={ag} mode="targets" onRefresh={() => void load()} />
+                  ? <AgNegativesTab adGroup={ag} mode="targets" onRefresh={() => void load()} focus={focus} />
                   : activeTab === 'ad-group-negative-keywords'
-                    ? <AgNegativesTab adGroup={ag} mode="keywords" onRefresh={() => void load()} />
+                    ? <AgNegativesTab adGroup={ag} mode="keywords" onRefresh={() => void load()} focus={focus} />
                     : activeTab === 'ads'
                       ? <AgAdsTab adGroup={ag} onRefresh={() => void load()} />
                       : <TabSkeleton loading={loading} />}

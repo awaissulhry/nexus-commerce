@@ -38,6 +38,7 @@ import type { GridStateApi } from '../hooks/useGridState'
 import type { SavedGridView } from '../hooks/useGridViews'
 import { isColumnsViewPayload } from '../views/viewPayload'
 import type { GridViewPreset } from '../views/presets'
+import { opensDark } from '../../lib/opens-dark'
 
 export interface GridViewsMenuProps<TPage> {
   views: Pick<GridStateApi<TPage>, 'views' | 'activeId' | 'save' | 'apply' | 'remove' | 'rename' | 'duplicate' | 'setDefault' | 'clearDefault'>
@@ -290,7 +291,7 @@ export function GridViewsMenu<TPage>({
     return void run('View duplicated', () => views.duplicate(prompt.view as SavedGridView<TPage>, trimmed))
   }
   const promptPanel = prompt && typeof document !== 'undefined' ? createPortal(
-    <div ref={popRef} style={promptStyle} className={`nds-view-prompt${anchorRef.current?.closest('.dark') ? ' dark' : ''}`}
+    <div ref={popRef} style={promptStyle} className={`nds-view-prompt${opensDark(anchorRef.current) ? ' dark' : ''}`}
       role="dialog" aria-label={prompt.mode === 'delete' ? `Delete view ${prompt.view.name}` : verb}
       onKeyDown={event => {
         if (event.key === 'Escape' && !busy) { event.preventDefault(); event.stopPropagation(); closePrompt() }

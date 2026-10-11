@@ -20,6 +20,12 @@
  *                         that (allowRetire). Undo adds the
  *                         same negatives again (new ones: Amazon never switches an archived one on again).
  *
+ * Negative Targeting (2026-10-11, lane NWRITE) — every negative names its author (ads-negative-kw.service.ts
+ * negativeOriginsOf: Harvest, the brain's funnel, the brain, the playbook, a rule, Claude, a person). retire-negatives
+ * REFUSES a Harvest negative (it sends a harvested search to its new keyword) or a Brain-funnel negative (the Owner's
+ * match-type structure, kept always) unless asked with force: true and a why — a person's decision, never a rule — and
+ * its preview names each negative's owner. The brain's own requests (the system door) may lift its own funnel negatives.
+ *
  * Both follow ads-change-kit.ts — previewed first; refused, and not queued, when the write gate would refuse it; run only
  * as an approved request, as the approver, with changeSetId = the approval on every write and every row it makes;
  * re-checked in `execute` — and both are strategy-bound (ads-autonomy-kit.ts): by default nothing runs alone (maxItems 0,
@@ -28,7 +34,7 @@
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import prisma from '../../../db.js'
-import { writeNegativeKeyword, writeNegativeProductTarget } from '../../advertising/ads-negative-kw.service.js'
+import { negativeOriginsOf, writeNegativeKeyword, writeNegativeProductTarget, type NegativeOrigin } from '../../advertising/ads-negative-kw.service.js'
 import { isAsin, negativeKeywordTextProblem, protectedNegativeRefusal } from '../../advertising/ads-negation-policy.js'
 import { blockedPositive, blockedWords, positivesIn } from '../../advertising/ads-winner-lock.js'
 import { normaliseNegTerm } from '../../advertising/ads-protect-converting.js'
@@ -654,9 +660,25 @@ const RETIRE_INPUT = z.object({
     matchType: NEG_MATCH.optional().describe('its match (default: either)'),
     asin: ASIN.optional().describe('or a negative product target: its ASIN'),
   })).max(MAX_RETIRE).optional().describe('or each by its place and text: the negative standing there'),
+  force: z.boolean().optional()
+    .describe('true: also lift a negative Harvest owns (it sends a harvested search to its new keyword) or the ads brain keeps always '
+      + '(its match-type funnel) — refused otherwise, naming the owner. Needs why (the reason, kept in the audit); a person decides it, never a rule'),
   why: whyArg,
 })
 type RetireArgs = z.infer<typeof RETIRE_INPUT>
+
+/** Negative Targeting — each author in words, as the preview and the page name it. */
+const OWNER_WORDS: Record<NegativeOrigin, string> = {
+  HARVEST: 'Harvest keeps it',
+  BRAIN_FUNNEL: 'The Brain keeps it',
+  BRAIN: 'the ads brain added it',
+  PLAYBOOK: 'the playbook added it',
+  RULE: 'a Nexus rule added it',
+  CLAUDE: 'a Claude request added it',
+  PERSON: 'a person added it',
+}
+/** The owners whose negatives a retire lifts only with force (a person's word). */
+const HELD_OWNERS: readonly NegativeOrigin[] = ['HARVEST', 'BRAIN_FUNNEL']
 
 /** retire-negatives' Claude limits: by default nothing runs alone (maxItems 0, allowRetire off, no market). */
 const RETIRE_LIMITS = adKitLimits({ maxItems: 0 }, {
@@ -683,6 +705,8 @@ interface Retiring {
   place: string
   atAmazon: boolean
   madeBy: string
+  /** Negative Targeting — who made it (AdTarget.negativeOrigin, or the brain's records); null: not known. */
+  owner: NegativeOrigin | null
   /**
    * W4-11 — retiring it is for good: a Sponsored Brands negative keyword Amazon holds. Amazon's createNegativeKeywords
    * (SB 3.0): a negative keyword "can not be recreated for a campaign if [it] has previously been associated with a
@@ -691,7 +715,7 @@ interface Retiring {
   final: boolean
 }
 
-const retiringOf = (r: NegRow, madeBy: string): Retiring => {
+const retiringOf = (r: NegRow, madeBy: string, owner: NegativeOrigin | null = null): Retiring => {
   const kind = String(r.kind) === 'PRODUCT' ? 'PRODUCT' : 'KEYWORD'
   const level: Level = r.negativeLevel === 'CAMPAIGN' ? 'CAMPAIGN' : 'AD_GROUP'
   const sbKeyword = kind === 'KEYWORD' && adProductOf({ adProduct: r.adGroup.campaign.adProduct, type: r.adGroup.campaign.type == null ? null : String(r.adGroup.campaign.type) }) === SPONSORED_BRANDS
@@ -699,7 +723,7 @@ const retiringOf = (r: NegRow, madeBy: string): Retiring => {
     id: r.id, kind, text: r.expressionValue, match: kind === 'PRODUCT' ? null : /PHRASE/.test(r.expressionType) ? 'NEGATIVE_PHRASE' : 'NEGATIVE_EXACT',
     level, adGroupId: r.adGroupId, campaign: campaignOf(r.adGroup.campaign),
     place: level === 'CAMPAIGN' ? `campaign "${r.adGroup.campaign.name}" (every ad group)` : placeWords(r.adGroup),
-    atAmazon: !!r.externalTargetId, madeBy, final: sbKeyword && !!r.externalTargetId,
+    atAmazon: !!r.externalTargetId, madeBy, owner, final: sbKeyword && !!r.externalTargetId,
   }
 }
 
@@ -780,7 +804,8 @@ async function retiringFor(a: RetireArgs): Promise<{ list: Retiring[] } | { refu
   }
   if (cannot.length) return { refusal: `Not queued: ${named(cannot)}.` }
   const madeBy = await madeByOf(unique.map((r) => r.id))
-  return { list: unique.map((r) => retiringOf(r, madeBy.get(r.id)!)) }
+  const owners = await negativeOriginsOf(unique.map((r) => r.id))
+  return { list: unique.map((r) => retiringOf(r, madeBy.get(r.id)!, owners.get(r.id) ?? null)) }
 }
 
 /**
@@ -806,13 +831,22 @@ function retireStepUp(atAmazon: number): { stepUp?: StepUp; noCode?: string } {
 const RETIRE_HOW = 'A person with settings.security.manage approves it in Nexus with their authenticator code, or the person who asked confirms it '
   + 'in Claude with theirs when the business set retire-negatives to confirm in Claude. By rule only where the business allows a retire (allowRetire).'
 
-async function decideRetire(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'approvalId'>, opts: { rule: boolean }): Promise<{ result: ToolResult; list: Retiring[] }> {
+async function decideRetire(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'approvalId'> & Partial<Pick<ToolContext, 'via'>>, opts: { rule: boolean }): Promise<{ result: ToolResult; list: Retiring[] }> {
   const refuse = (error: string) => ({ result: { ok: false, error } as ToolResult, list: [] as Retiring[] })
   const parsed = RETIRE_INPUT.safeParse(raw)
   if (!parsed.success) return refuse(parsed.error.issues.map((i) => `${i.path.join('.') || 'arguments'}: ${i.message}`).join('; '))
   const found = await retiringFor(parsed.data)
   if ('refusal' in found) return refuse(found.refusal)
   const list = found.list
+  // Negative Targeting — never fight Harvest or the brain's funnel: refused by owner unless forced with a reason. The
+  // brain's own requests (the system door) may lift its own funnel negatives.
+  const held = list.filter((r) => r.owner && HELD_OWNERS.includes(r.owner) && !(ctx.via === 'system' && r.owner === 'BRAIN_FUNNEL'))
+  const forced = parsed.data.force === true
+  if (forced && !parsed.data.why?.trim()) return refuse('Not queued: force lifts a negative Harvest or the ads brain owns: say why (the reason is kept in the audit).')
+  if (held.length && !forced) {
+    return refuse(`Not queued: ${named(held.map((r) => `${negativeWords(r)} · ${r.place}: ${OWNER_WORDS[r.owner!]}`))}. Lifting ${held.length === 1 ? 'it' : 'them'} fights `
+      + `${held.length === 1 ? 'its owner, who would add it' : 'their owners, who would add them'} again. To lift ${held.length === 1 ? 'it' : 'them'} anyway, ask again with force: true and why — a person decides it, never a rule.`)
+  }
   const atAmazon = list.filter((r) => r.atAmazon)
   // Where it lands: only the negatives Amazon holds are archived there (a status write per negative, through the queue).
   const byCampaign = new Map<string, Retiring>()
@@ -832,6 +866,9 @@ async function decideRetire(raw: Record<string, unknown>, ctx: Pick<ToolContext,
   const bound = await boundTo([...new Set(list.map((r) => r.campaign.id))])
   const lines = list.map((r) => ({
     targetId: r.id, label: `${negativeWords(r)} · ${r.place}`, marketplace: r.campaign.marketplace, madeBy: r.madeBy,
+    // Negative Targeting — its owner, and whether this retire lifts it past that owner (force).
+    owner: r.owner ? { kind: r.owner, name: OWNER_WORDS[r.owner] } : null,
+    ...(held.some((h) => h.id === r.id) ? { forced: true } : {}),
     fromLabel: 'Standing (blocks the search)', toLabel: r.atAmazon ? 'Retired: archived at Amazon' : 'Removed from Nexus (Amazon never had it)',
   }))
   const local = list.length - atAmazon.length
@@ -840,6 +877,7 @@ async function decideRetire(raw: Record<string, unknown>, ctx: Pick<ToolContext,
   const anew = atAmazon.length - final.length
   const markets = [...new Set(list.map((r) => r.campaign.marketplace).filter((m): m is string => !!m))].sort()
   const effect = `Retires ${plural(list.length, 'negative')} (${named(lines.map((l) => l.label))}).`
+    + (held.length ? ` Lifted past ${held.length === 1 ? 'its owner' : 'their owners'} (force): ${named(held.map((r) => `${negativeWords(r)} · ${r.place}: ${OWNER_WORDS[r.owner!]}`))} — ${held.length === 1 ? 'that owner may add it' : 'those owners may add them'} again.` : '')
     + (atAmazon.length ? ` ${plural(atAmazon.length, 'is', 'are')} archived at Amazon: the searches ${atAmazon.length === 1 ? 'it blocks' : 'they block'} can show these ads again, so spend can rise${retireStepUp(atAmazon.length).stepUp ? ': approving it needs the approver\'s authenticator code' : ' (a day-to-day change: a person\'s approval sends it, with no authenticator code)'}. Amazon never switches an archived negative on again.` : '')
     + (anew ? ` To block ${anew === 1 ? 'that search' : 'those searches'} again, a new negative is added.` : '')
     + (final.length ? ` For good: ${named(final.map((r) => `${negativeWords(r)} · ${r.place}`))} — ${FINAL_WORDS}, so ${final.length === 1 ? 'that search' : 'those searches'} cannot be blocked there again, not even by an undo.` : '')
@@ -859,8 +897,11 @@ async function decideRetire(raw: Record<string, unknown>, ctx: Pick<ToolContext,
         ...retireStepUp(atAmazon.length),
         alsoChangedBy: bound.automations,
         ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
-        // Every negative named, with its status, whether Amazon holds it and who made it: a move of any is caught.
-        basis: fingerprint(list.map((r) => [r.id, r.atAmazon, r.madeBy, r.final])),
+        // Every negative named, with its status, whether Amazon holds it and who made it: a move of any is caught. Negative
+        // Targeting — a held owner (Harvest, the brain's funnel) is part of it (absent: the basis as before).
+        basis: fingerprint(list.map((r) => [r.id, r.atAmazon, r.madeBy, r.final, ...(r.owner && HELD_OWNERS.includes(r.owner) ? [r.owner] : [])])),
+        // Negative Targeting — how many it lifts past their owner (force): a person's decision, never a rule.
+        ...(held.length ? { forcedPastOwner: held.length, forceWhy: parsed.data.why ?? null } : {}),
         reach: stored,
         reachNote: atAmazon.length ? reachNote(stored) : 'Nexus only: none of these negatives is at Amazon, so nothing is sent there.',
         warning: atAmazon.length
@@ -882,8 +923,10 @@ async function decideRetire(raw: Record<string, unknown>, ctx: Pick<ToolContext,
 
 /** retire-negatives' own checks, before the common ones (pure): a retire runs by rule only where the business allows it. */
 function retireRefusal(preview: unknown, limits: Record<string, unknown>): string | null {
-  const p = (preview ?? {}) as { action?: string; market?: string; markets?: string[] }
+  const p = (preview ?? {}) as { action?: string; market?: string; markets?: string[]; forcedPastOwner?: number }
   if (p.action !== TOOL.retire) return 'there is no preview of this retire to check; a person decides'
+  // Negative Targeting — lifting a Harvest or Brain-funnel negative past its owner is a person's word, never a rule.
+  if ((p.forcedPastOwner ?? 0) > 0) return 'it lifts a negative Harvest or the ads brain owns (force): a person decides, never a rule'
   if (limits.allowRetire !== true) return 'lifting a negative lets the searches it blocked show the ads again (spend can rise); this tool\'s limits do not let a retire run by rule (allowRetire is off); a person decides'
   const markets = (limits.markets as string[] | undefined) ?? []
   const where = p.market ? [p.market] : p.markets ?? []
@@ -964,7 +1007,9 @@ const retireNegatives: AgentTool = {
     + 'person\'s approval sends it with no authenticator code. '
     + 'It may run by the business\'s rule only where the business allows a retire (allowRetire, off by default), in a market it names, inside its limits and the ads strategy. Refused, and not queued, when a '
     + 'negative is not found, is not a negative, is retired already, or when Amazon\'s write gate would refuse it. Undo '
-    + '(undo-change) adds the same negatives again where they stood (not a Sponsored Brands negative keyword).',
+    + '(undo-change) adds the same negatives again where they stood (not a Sponsored Brands negative keyword). The preview names each '
+    + 'negative\'s owner (Harvest, the ads brain\'s funnel, the brain, the playbook, a rule, Claude, a person); one Harvest owns or the '
+    + 'brain\'s funnel keeps is refused, naming it, unless asked with force: true and why (a person decides, never a rule).',
   async handler(args, ctx) {
     return (await decideRetire(args, ctx, { rule: true })).result
   },
@@ -972,7 +1017,9 @@ const retireNegatives: AgentTool = {
     const { result: fresh, list } = await decideRetire(args, ctx, { rule: false })
     const refusal = recheck(ctx, fresh, RETIRE_MATERIAL)
     if (refusal) return notRun(refusal)
-    const p = fresh.preview as { reach: StoredReach; effect: string; totals: { atAmazon: number } }
+    const p = fresh.preview as { reach: StoredReach; effect: string; totals: { atAmazon: number }; forcedPastOwner?: number }
+    // Negative Targeting — past an owner (force) only on a person's approval: never a run the business's rule decided.
+    if ((p.forcedPastOwner ?? 0) > 0 && ctx.decidedVia === 'auto') return notRun('Not run: it lifts a negative Harvest or the ads brain owns, which a person decides, never a rule. Ask for it again; a person approves it.')
     // The code, as retireStepUp decided it on this fresh preview (none under the Owner's code rule).
     const gate = await spendGate(ctx, fresh.preview)
     if ('refusal' in gate) return notRun(gate.refusal)
@@ -982,7 +1029,10 @@ const retireNegatives: AgentTool = {
     // removed; every write and audit row on this change set; a person's approval is his own click (4A).
     const { retireNegatives: retire } = await import('../../advertising/negatives-retire.service.js')
     // W4-11 — allowSbSd: an SB negative keyword or SD negative product target is archived at its own endpoint.
-    const out = await retire({ adTargetIds: list.map((r) => r.id), actor: run.actor, retireReason: run.reason, changeSetId: run.changeSetId, manual: run.manual, allowSbSd: true })
+    // Negative Targeting (review S7) — the service refuses a held owner too; the tool's own check above decided it: force with
+    // why (a person's word), or the brain's own request through the system door.
+    const owners = { force: args.force === true, why: typeof args.why === 'string' ? args.why : null, systemDoor: ctx.via === 'system' }
+    const out = await retire({ adTargetIds: list.map((r) => r.id), actor: run.actor, retireReason: run.reason, changeSetId: run.changeSetId, manual: run.manual, allowSbSd: true, owners })
     const done = out.outcomes.filter((o) => o.kind === 'retired' || o.kind === 'removed_local')
     const notDone = out.outcomes.filter((o) => o.kind === 'refused' || o.kind === 'failed')
     if (!done.length) return notRun(`Not run: no negative was retired — ${named(notDone.map((o) => `"${o.term}" (${o.reason ?? o.kind})`))}. Nothing changed.`)

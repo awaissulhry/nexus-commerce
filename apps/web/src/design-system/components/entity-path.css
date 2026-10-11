@@ -1,0 +1,16 @@
+/* EntityPath (Keyword Harvest DS lane H7, 2026-10-10): Portfolio › Campaign › Ad group on one line, each step a link
+   (`.nds-entitylink` gives the ink and the ellipsis). Cut in the MIDDLE: the middle steps give up their width first
+   (down to a few letters), then the first and last share the cut. The whole path shows on hover and focus. */
+.nds-entitypath-tip { min-width: 0; max-width: 100%; }
+.nds-entitypath { display: inline-flex; align-items: center; min-width: 0; max-width: 100%; white-space: nowrap; overflow: hidden; }
+/* The line clips (a very narrow box), so a step's focus ring is drawn inside it. */
+.nds-entitypath > .nds-entitylink:focus-visible { outline-offset: -2px; }
+.nds-entitypath.is-none { color: var(--nds-text-muted); }
+.nds-entitypath-step { flex: 0 1 auto; }
+/* The middle takes the cut first, down to a few letters; only then do the ends shrink (a phone-narrow cell, ≈ 90 px at
+   390: every step is cut, none is clipped away). Its weight is a million to the ends' 1, so their share of the cut
+   rounds to nothing until it stops at its minimum: at 1000 they still lost a sub-pixel and drew an ellipsis on a name
+   that fitted (measured in the catalog grid), and a fractional end weight never shrinks them at all (flex factors that
+   sum to less than 1 hand out only that fraction of the cut). */
+.nds-entitypath-step.is-middle { flex-shrink: 1000000; min-width: 2em; }
+.nds-entitypath-sep { flex: none; width: 1.25em; text-align: center; color: var(--nds-text-muted); }

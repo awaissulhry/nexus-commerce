@@ -8,7 +8,7 @@
  * Date Added. Edit + bulk Enable/Archive/Pause via PATCH /advertising/ad-targets/:id.
  * (The "+ Negative" creation flow is ad-group-scoped follow-up; the grid + edit ship now.)
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Button, Pill } from '@/design-system/primitives'
 import { Plus } from 'lucide-react'
 import { adsWriteMany, eachSummary, NOT_ON_AMAZON_TIP, type EachResult, SEND_NOW } from '../../../../../_shared/adsWrite'
@@ -19,6 +19,8 @@ import { bulkPatch } from '../../../../_grid/bulkActions'
 import { AddNegativeTargetsModal } from './AddNegativeTargetsModal'
 import { AddNegativeKeywordsAgModal } from './AddNegativeKeywordsAgModal'
 import type { AdGroupDetailData } from '../AdGroupDetail'
+import { focusText, isFocusRow, scrollToMarked } from '../focusRow'
+import focusStyles from '../focusRow.module.css'
 import { pillTone } from '../../../../../_shared/pillTone'
 import { Listbox, useToast } from '@/design-system/components'
 
@@ -27,7 +29,7 @@ interface NegRow { id: string; text: string; matchType: string; status: string; 
 const titleCase = (s?: string | null) => (s ? s.toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : '—')
 const fmtDate = (s?: string | null) => (s ? new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—')
 
-export function AgNegativesTab({ adGroup, onRefresh, mode }: { adGroup: AdGroupDetailData | null; onRefresh?: () => void; mode: 'targets' | 'keywords' }) {
+export function AgNegativesTab({ adGroup, onRefresh, mode, focus }: { adGroup: AdGroupDetailData | null; onRefresh?: () => void; mode: 'targets' | 'keywords'; focus?: string | null }) {
   const rows = useMemo<NegRow[]>(() => {
     const all = (adGroup?.targets as NegT[] | undefined) ?? []
     return all
@@ -36,6 +38,9 @@ export function AgNegativesTab({ adGroup, onRefresh, mode }: { adGroup: AdGroupD
       .map((t) => ({ id: t.id, text: t.expressionValue, matchType: t.expressionType ?? '', status: t.status, createdAt: t.createdAt, onAmazon: t.externalTargetId !== null }))
   }, [adGroup, mode])
   const noun = mode === 'keywords' ? 'Keyword' : 'Target'
+  // ?focus=<negative id | words>: narrowed to its words, marked, scrolled into view.
+  const [focusSearch] = useState(() => focusText(focus, rows, (r) => r.id, (r) => r.text))
+  useEffect(() => { if (focus) scrollToMarked(focusStyles.focusRow) }, [focus])
   const [bulkBusy, setBulkBusy] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
   // CM-11 — every write's answer is read and shown, with the server's reason for what did not change.
@@ -81,6 +86,9 @@ export function AgNegativesTab({ adGroup, onRefresh, mode }: { adGroup: AdGroupD
       renderFirst={(r) => <div className="nmw"><span className="t" title={r.text}>{r.text}</span></div>}
       firstSortValue={(r) => r.text.toLowerCase()}
       columns={columns}
+      searchable={!!focusSearch}
+      initialSearch={focusSearch ?? undefined}
+      rowClassName={(r) => (isFocusRow(focus, r.id, r.text) ? focusStyles.focusRow : undefined)}
       editMode={editMode}
       selectionActions={(ids, clear) => (
         <span className="h10-bulkrow">

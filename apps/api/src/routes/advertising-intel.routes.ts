@@ -530,7 +530,7 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
   // `ads.campaigns.manage`, not `ads.view`. That is the correct authority for a write that reaches
   // Amazon and it is deliberately NOT widened.
   fastify.post('/advertising/negatives/retire', async (request, reply) => {
-    const body = (request.body ?? {}) as { adTargetIds?: unknown; reason?: unknown; confirm?: unknown }
+    const body = (request.body ?? {}) as { adTargetIds?: unknown; reason?: unknown; confirm?: unknown; force?: unknown }
     const ids = Array.isArray(body.adTargetIds) ? body.adTargetIds.map(String).filter(Boolean) : []
     if (ids.length === 0) {
       reply.status(400)
@@ -548,10 +548,14 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     }
     const userId = (request as { authUser?: { id?: string } }).authUser?.id ?? 'anonymous'
     const { retireNegatives } = await import('../services/advertising/negatives-retire.service.js')
+    const reason = typeof body.reason === 'string' && body.reason.trim() ? body.reason.trim().slice(0, 500) : null
     const out = await retireNegatives({
       adTargetIds: ids,
       actor: `user:${userId}` as never,
-      retireReason: typeof body.reason === 'string' && body.reason.trim() ? body.reason.trim().slice(0, 500) : null,
+      retireReason: reason,
+      // Negative Targeting (review S7) — a negative Harvest owns or the brain's funnel keeps is refused by its owner's name,
+      // unless the person sends force: true with a reason.
+      owners: { force: body.force === true, why: reason },
     })
     // 🔴 Always 200 with per-row outcomes, never a single pass/fail status. 72 writes have 72
     // independent failure modes, and an HTTP status cannot carry five outcome classes.

@@ -960,7 +960,8 @@ async function runUndo(a: HarvestArgs, ctx: ToolContext, p: { reach: StoredReach
   let retired = false
   if (a.negativeId) {
     const { retireNegatives } = await import('../../advertising/negatives-retire.service.js')
-    const out = await retireNegatives({ adTargetIds: [a.negativeId], actor: run.actor, retireReason: run.reason, changeSetId: run.changeSetId, manual: run.manual })
+    // Negative Targeting (review S7) — this harvest's own undo lifts its own source negative.
+    const out = await retireNegatives({ adTargetIds: [a.negativeId], actor: run.actor, retireReason: run.reason, changeSetId: run.changeSetId, manual: run.manual, owners: { undo: true } })
     const o = out.outcomes[0]
     if (o && (o.kind === 'retired' || o.kind === 'removed_local')) retired = true
     else if (o && o.kind !== 'skipped') problems.push(`the source negative (${o.reason ?? o.kind})`)

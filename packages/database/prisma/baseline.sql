@@ -1437,6 +1437,11 @@ CREATE TABLE "AdTarget" (
     "orphanReason" TEXT,
     "retiredAt" TIMESTAMP(3),
     "retireReason" TEXT,
+    "keptPausedAt" TIMESTAMP(3),
+    "keptPausedBy" TEXT,
+    "keptPausedUntil" TIMESTAMP(3),
+    "keptPausedReason" TEXT,
+    "negativeOrigin" TEXT,
 
     CONSTRAINT "AdTarget_pkey" PRIMARY KEY ("id")
 );
@@ -7142,6 +7147,7 @@ CREATE TABLE "AutomationRule" (
     "scopePortfolioId" TEXT,
     "scopeCampaignId" TEXT,
     "scopeProductId" TEXT,
+    "scopeAdGroupId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "createdBy" TEXT,
@@ -10108,6 +10114,21 @@ CREATE TABLE "AdsBrainRetirement" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "AdsBrainRetirement_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AdsWasteSkip" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "rowKey" TEXT NOT NULL,
+    "until" TIMESTAMP(3) NOT NULL,
+    "by" TEXT NOT NULL,
+    "reason" TEXT,
+    "at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "endedAt" TIMESTAMP(3),
+    "endedBy" TEXT,
+
+    CONSTRAINT "AdsWasteSkip_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -16160,6 +16181,15 @@ CREATE INDEX "AdsBrainRetirement_status_idx" ON "AdsBrainRetirement"("status");
 
 -- CreateIndex
 CREATE INDEX "AdsBrainRetirement_workspaceId_idx" ON "AdsBrainRetirement"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "AdsWasteSkip_rowKey_endedAt_idx" ON "AdsWasteSkip"("rowKey", "endedAt");
+
+-- CreateIndex
+CREATE INDEX "AdsWasteSkip_until_idx" ON "AdsWasteSkip"("until");
+
+-- CreateIndex
+CREATE INDEX "AdsWasteSkip_workspaceId_idx" ON "AdsWasteSkip"("workspaceId");
 
 -- CreateIndex
 CREATE INDEX "AdWriteRefusal_deniedAt_createdAt_idx" ON "AdWriteRefusal"("deniedAt", "createdAt");

@@ -25,6 +25,7 @@
 
 import type { AutonomyLevel } from './ads-autonomy.js'
 import { BUILDER_SLUG_ACTIONS } from './ads-rule-adapter.service.js'
+import { stopWasteCeiling } from './ads-graduation-stopwaste.js'
 
 /**
  * Actions that move a number the engine can move back. Reversible, bounded by the write
@@ -109,6 +110,11 @@ export interface GraduationInput {
   actionTypes: string[]
   /** True when at least one protected term exists — see the negation gate below. */
   hasKeywordProtections: boolean
+  /**
+   * The rule's actions (as stored, or as translated for this run). Only with them can the Negative Targeting page's
+   * stop-waste rule be told apart (D1, ads-graduation-stopwaste.ts); without them the ceiling answers as before.
+   */
+  actions?: unknown
 }
 
 export interface GraduationVerdict {
@@ -140,6 +146,11 @@ export function graduationCeiling(input: GraduationInput): GraduationVerdict {
   if (acts.length === 0) {
     return { maxLevel: 'AUTO', reason: 'Only notifies — nothing to gate.', blockedBy: [] }
   }
+
+  // D1 (Negative Targeting, Owner 2026-10-10) — the page's stop-waste rule (its test, a pause kept paused, or a negative
+  // exact in the ad group) may be set to Auto; each change it makes alone is capped in the evaluator (ads-graduation-stopwaste.ts).
+  const stopWaste = stopWasteCeiling(acts, input.actions)
+  if (stopWaste) return stopWaste
 
   const structural = acts.filter((t) => STRUCTURAL_ACTIONS.has(t))
   if (structural.length > 0) {

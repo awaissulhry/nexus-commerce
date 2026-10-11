@@ -135,7 +135,9 @@ describe('builder-slug expansion', () => {
     expect(r.blockedBy).toContain('pause_target')
   })
 
-  it('a negation slug is recognised as the negation family, whitelist gate and all', () => {
+  // Negative Targeting D1, review M1 (2026-10-11) — a builder negative rule is not the page's stop-waste shape (it may write
+  // phrases, campaign-wide or mapped negatives): it stays PROPOSE, whitelist gate and all.
+  it('a negation slug is recognised as the negation family, whitelist gate and all — never Auto (M1)', () => {
     const withProtections = g(['negative-targeting'], true)
     expect(withProtections.maxLevel).toBe('PROPOSE')
     expect(withProtections.reason).toMatch(/retirement path/i)

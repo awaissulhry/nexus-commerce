@@ -6,7 +6,7 @@ import { ChevronDown } from 'lucide-react'
 import { useClickAway } from './useClickAway'
 import { usePopoverPosition } from './usePopoverPosition'
 import type { Size } from '../primitives/size'
-import { ListboxPanel, type ListboxPanelOption } from './ListboxPanel'
+import { ListboxPanel, type ListboxPanelAction, type ListboxPanelOption } from './ListboxPanel'
 
 export interface ListboxOption {
   /** Additional searchable terms without repeating them in the visible option label. */
@@ -99,6 +99,14 @@ export interface ListboxProps {
    * `null` / `undefined` = `document.body`, so every existing call site is unchanged.
    */
   portalTo?: Element | null
+  /**
+   * Commands under the list — "+ New campaign…" (Keyword Harvest DS lane H1, 2026-10-10). Buttons, not options: choosing
+   * one closes the list (focus back on the trigger) and then runs it, so its own form or dialog can take the focus.
+   * Held ones say why and never run. See `ListboxPanelAction`.
+   */
+  actions?: readonly ListboxPanelAction[]
+  /** The actions' group name for a screen reader. Default "Actions". */
+  actionsLabel?: string
 }
 
 /** Past this many options a picker gets a search box without being asked. */
@@ -111,7 +119,7 @@ export interface ListboxProps {
  * banned from native selects; this is what they migrate to.
  */
 export function Listbox({ size = 'md', options, value, onChange, placeholder = 'Select…', ariaLabel, id, 'aria-describedby': describedBy, className, disabled,
-  width, searchable, searchPlaceholder = 'Search…', emptyLabel, emptyIsPlaceholder = false, portalTo }: ListboxProps) {
+  width, searchable, searchPlaceholder = 'Search…', emptyLabel, emptyIsPlaceholder = false, portalTo, actions, actionsLabel }: ListboxProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -124,7 +132,7 @@ export function Listbox({ size = 'md', options, value, onChange, placeholder = '
 
   return (
     <div className={['nds-listbox', size === 'md' ? '' : size, className].filter(Boolean).join(' ')} style={width != null ? { width } : undefined} ref={ref}>
-      <button ref={triggerRef} type="button" id={id} aria-describedby={describedBy} className="nds-listbox-btn" disabled={disabled} aria-haspopup="listbox" aria-expanded={open} aria-label={ariaLabel}
+      <button ref={triggerRef} type="button" id={id} aria-describedby={describedBy} className="nds-listbox-btn" disabled={disabled} aria-haspopup={actions?.length ? 'dialog' : 'listbox'} aria-expanded={open} aria-label={ariaLabel}
         onClick={() => setOpen((o) => !o)}>
         {selected?.leading != null && <span className="nds-listbox-lead">{selected.leading}</span>}
         <span className={selected == null && (emptyIsPlaceholder || emptyLabel == null) ? 'ph' : undefined}>{selected?.label ?? emptyLabel ?? placeholder}</span>
@@ -142,6 +150,9 @@ export function Listbox({ size = 'md', options, value, onChange, placeholder = '
             searchable={searchable}
             searchPlaceholder={searchPlaceholder}
             emptyLabel={emptyLabel}
+            ariaLabel={actions?.length ? ariaLabel : undefined}
+            actions={actions?.map((a) => ({ ...a, onSelect: () => { close(); a.onSelect() } }))}
+            actionsLabel={actionsLabel}
           />,
           /* R-VT-8: the host's container when it named one — an AG popup editor must keep the panel
              inside itself. `document.body` otherwise, which is every page call site. */

@@ -26,7 +26,7 @@ describe('R9 — the rule guard', () => {
   })
 
   it('never pause: every pausing action is refused, with the substitute', () => {
-    for (const type of ['pause_campaign', 'pause_ad_group', 'pause_target', 'pause_all_campaigns', 'pause_keyword_x']) {
+    for (const type of ['pause_campaign', 'pause_ad_group', 'pause_all_campaigns', 'pause_keyword_x']) {
       const out = problems({ actions: [{ type }] })
       expect(out.join(' '), type).toContain(`${type}: refused — it pauses — a rule never pauses (Owner rule: a temporary stop is lower bids); use lower_bid_to_floor`)
     }
@@ -37,6 +37,19 @@ describe('R9 — the rule guard', () => {
     expect(guardRule({ kind: 'ebay-ads', name: 'x', action: { type: 'pause_ad' }, guardrails: { maxActionsPerRun: 5 }, scope: { marketplace: 'EBAY_IT' } }).join(' ')).toContain('pause_ad: refused')
     expect(guardRule({ kind: 'ebay-ads', name: 'x', action: { type: 'reactivate_ad' }, guardrails: { maxActionsPerRun: 5 }, scope: { marketplace: 'EBAY_IT' } }).join(' ')).toContain('reactivate_ad: refused')
     expect(guardRule({ ...good, kind: 'marketing', trigger: 'MKT_ACOS_BREACH', conditions: [{ field: 'campaign.acos', op: 'gt', value: 0.5 }], actions: [{ type: 'mkt_pause_campaign' }] }).join(' ')).toContain('mkt_pause_campaign: refused')
+  })
+
+  // Negative Targeting D4 (Owner 2026-10-10, MCP parity) — an Amazon ads rule may pause a wasting keyword (pause_target);
+  // its save still waits for a person (save-ad-rule's limits) and the rule is born OBSERVE. Every other pause stays refused.
+  it('D4 — an Amazon ads rule may pause a keyword; unpausing one, and every other pause, stays refused', () => {
+    expect(problems({ trigger: 'TARGET_PERFORMANCE', conditions: [{ field: 'adTarget.orders', op: 'eq', value: 0 }], actions: [{ type: 'pause_target', keepPaused: true }] })).toEqual([])
+    expect(problems({ actions: [{ type: 'enable_target' }] }).join(' ')).toContain('enable_target: refused')
+    expect(guardRule({ ...good, kind: 'marketing', trigger: 'MKT_ACOS_BREACH', conditions: [{ field: 'campaign.acos', op: 'gt', value: 0.5 }], actions: [{ type: 'pause_target' }] }).join(' ')).toContain('pause_target: refused')
+  })
+
+  it('an ad group is an Amazon rule\'s finest scope; never with a portfolio', () => {
+    expect(problems({ scope: { adGroupId: 'ag-1' } })).toEqual([])
+    expect(problems({ scope: { adGroupId: 'ag-1', portfolioId: 'pf-1' } }).join(' ')).toContain('a portfolio and an ad group at once')
   })
 
   it('an action outside the allowlist is refused, naming the allowed ones', () => {

@@ -27,6 +27,7 @@ import { normalizeMarketplaceCode } from '../../utils/marketplace-code.js'
 import { listingAccounts, productForChannelSkuOnAccounts } from '../listings/listing-sku-holders.js'
 import { liveCall, type AdsRegion } from './ads-api-client.js'
 import { syncHoldBack, type SyncHoldBack } from './ads-sync-hold-back.js'
+import { HOLD_SELECT, keptPausedTurnedOn } from './waste/hold.js'
 
 // ── Resource configuration ────────────────────────────────────────────
 
@@ -649,7 +650,8 @@ export async function ingestTargets(records: V1Target[]): Promise<{ upserted: nu
   const existing = rows.length
     ? await prisma.adTarget.findMany({
         where: { adGroupId: { in: [...new Set(rows.map((x) => x.adGroupId))] }, externalTargetId: { in: rows.map((x) => x.externalTargetId) } },
-        select: { id: true, externalTargetId: true, adGroupId: true, updatedAt: true },
+        // Negative Targeting (review M3) — with the kept-paused hold: a held target seen ENABLED is alerted here too.
+        select: { id: true, externalTargetId: true, adGroupId: true, updatedAt: true, status: true, isNegative: true, expressionValue: true, ...HOLD_SELECT, adGroup: { select: { campaign: { select: { marketplace: true } } } } },
       })
     : []
   const existKey = new Map(existing.map((e) => [`${e.adGroupId}|${e.externalTargetId}`, e]))
@@ -659,6 +661,8 @@ export async function ingestTargets(records: V1Target[]): Promise<{ upserted: nu
   for (const x of rows) {
     const found = existKey.get(x.key)
     if (found) {
+      // Negative Targeting (review M3) — a kept-paused target Amazon reports ENABLED: shown and alerted, never silent.
+      await keptPausedTurnedOn(found, String(x.data.status), found.adGroup?.campaign?.marketplace ?? null)
       // PERF/accuracy — the v1 export's bid is unreliable (nested → often 0),
       // and re-zeroing good bids every 5-min ingest was what forced a heavy
       // hourly resync. On UPDATE, never clobber an existing bid with 0; the v3

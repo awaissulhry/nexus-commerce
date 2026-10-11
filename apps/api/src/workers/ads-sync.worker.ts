@@ -787,7 +787,7 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
     // 4k — a refused write leaves no local change. Nexus wrote its own copy when the write was queued, so each refused
     // field still holding the refused value goes back to the value it replaced (putBackRefusedWrite); a newer change
     // stays. Inside the entity claim, before settling. Never fails the worker.
-    await putBackRefusedWrite(payload).then(
+    await putBackRefusedWrite(payload, { queueId }).then(
       (r) => {
         if (r.restored.length || r.kept.length) {
           logger.info('[ads-sync.worker] refused write put back in Nexus', {
@@ -824,7 +824,7 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
       .updateMany({ where: { outboundQueueId: queueId, amazonResponseStatus: 'PENDING' }, data: { amazonResponseStatus: 'SKIPPED' } })
       .catch(() => { /* audit-update failure must not break the worker */ })
     // CM-17 — nothing reached Amazon: the value it replaced comes back, as below.
-    await putBackRefusedWrite(payload).catch(() => { /* best-effort, as every put-back */ })
+    await putBackRefusedWrite(payload, { queueId }).catch(() => { /* best-effort, as every put-back */ })
     return { status: 'FAILED', queueId }
   }
 
@@ -938,7 +938,7 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
     // by field, only where Nexus still holds the rejected value. An ad group's default bid has no sync to correct it. A
     // transient failure that ran out of retries keeps the value: the failed-write reconcile sweep sends it again.
     if (permanent) {
-      await putBackRefusedWrite(payload).catch((err) => logger.warn('[ads-sync.worker] could not put back a rejected write', {
+      await putBackRefusedWrite(payload, { queueId }).catch((err) => logger.warn('[ads-sync.worker] could not put back a rejected write', {
         queueId, entityType: payload.entityType, entityId: payload.entityId, error: err instanceof Error ? err.message : String(err),
       }))
     }

@@ -1080,6 +1080,9 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
   'assign-ad-rules': { get ruleId() { return seeded.b.automationRuleId } },
   'set-coverage-set': { op: 'edit-terms', portfolioId: undefined, get setId() { return seeded.b.coverageSetId }, get terms() { return [{ termId: seeded.b.coverageTermId, status: 'PAUSED' }] } },
   'run-ad-engine-now': { engine: 'rules' },
+  // Negative Targeting — ad-waste lists every row of B's place (show all: nothing in the seed wastes), and B's product
+  // advertises in no ad group of the seed, so a product scope would narrow B's own rows to none.
+  'ad-waste': { show: 'all', productId: undefined },
   // Integration (P7 + R12): stop-automation and resume-automation name ads automation rules (`ruleIds`).
   'stop-automation': { get ruleIds() { return [seeded.b.automationRuleId] } },
   'resume-automation': { get ruleIds() { return [seeded.b.automationRuleId] } },

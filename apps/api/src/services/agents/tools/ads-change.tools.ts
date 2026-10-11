@@ -545,7 +545,8 @@ const undoAdChange: AgentTool = {
     if (p.negatives.length) {
       const { retireNegatives } = await import('../../advertising/negatives-retire.service.js')
       // W4-11 — a negative a Claude request added in a Sponsored Brands / Display ad group is retired at its own endpoint.
-      const out = await retireNegatives({ adTargetIds: p.negatives.map((n) => n.targetId), actor: run.actor, retireReason: run.reason, allowSbSd: true })
+      // Negative Targeting (review S7) — the undo of the request that made these negatives lifts them, whoever owns them.
+      const out = await retireNegatives({ adTargetIds: p.negatives.map((n) => n.targetId), actor: run.actor, retireReason: run.reason, allowSbSd: true, owners: { undo: true } })
       retired = { retired: out.summary.retired + out.summary.removedLocal, refused: out.summary.refused, failed: out.summary.failed }
     }
     // The request this put back is undone now (also when it was asked for directly, not through undo-change). W3-1 —

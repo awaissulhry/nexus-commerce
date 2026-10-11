@@ -6,7 +6,9 @@
  * condition on a field the trigger never hands the rule never matches; an empty condition list matches everything.
  * A rule Claude saves is refused, in words, for each of them, and for:
  *   · any action Claude may not automate — every pause above all (a rule never pauses: a temporary stop is lower bids), with the
- *     substitute (no-pause.ts) — and any action outside the allowlist of its kind;
+ *     substitute (no-pause.ts) — and any action outside the allowlist of its kind. Negative Targeting D4: a keyword's own
+ *     pause (`pause_target`, a wasting keyword paused and kept paused) is allowed on an Amazon ads rule; its save still
+ *     waits for a person and the rule is born OBSERVE;
  *   · a missing scope: the whole account must be said (`wholeAccount: true`), never implied;
  *   · missing caps: runs per day, writes per day and value per run are required and above 0.
  *
@@ -24,6 +26,8 @@ export interface RuleScope {
   portfolioId?: string | null
   campaignId?: string | null
   productId?: string | null
+  /** Amazon: ONE ad group (Nexus id) — the finest grain; its campaign is set from it at save. */
+  adGroupId?: string | null
   /** eBay: the campaigns it may act on. */
   campaignIds?: string[] | null
   /** The whole account, said out loud. */
@@ -59,6 +63,8 @@ export const ALLOWED_ACTIONS: Record<RuleKind, ReadonlySet<string>> = {
     'adjust_ad_budget', 'budget_apply', 'set_daily_budget', 'pace_budget', 'set_campaign_target_acos',
     'placement_apply', 'set_placement_multiplier', 'defend_top_of_search',
     'add_negative_exact', 'add_negative_phrase', 'sync_negatives_across_campaigns', 'promote_to_exact', 'harvest_and_negate',
+    // D4 — a wasting keyword paused and kept paused (the save waits for a person; the rule is born OBSERVE).
+    'pause_target',
     'retail_guard', 'notify', 'alert_operator', 'log_only',
   ]),
   'ebay-ads': new Set(['adjust_ad_rate', 'set_rate_to_breakeven_factor', 'bid_down_keyword', 'alert']),
@@ -86,17 +92,19 @@ function scopeProblems(draft: RuleDraft): string[] {
     ? Boolean(s.marketplace || (s.campaignIds && s.campaignIds.length))
     : draft.kind === 'marketing'
       ? Boolean(s.marketplace)
-      : Boolean(s.marketplace || s.portfolioId || s.campaignId || s.productId)
+      : Boolean(s.marketplace || s.portfolioId || s.campaignId || s.productId || s.adGroupId)
   const out: string[] = []
   if (!named && s.wholeAccount !== true) {
     out.push(draft.kind === 'ebay-ads'
       ? 'scope: name the campaigns (campaignIds) or the market (marketplace) it may act on, or say wholeAccount: true'
       : draft.kind === 'marketing'
         ? 'scope: name the market (marketplace) it may act on, or say wholeAccount: true'
-        : 'scope: name the market, portfolio, campaign or product it may act on, or say wholeAccount: true — a rule with no scope reaches every campaign')
+        : 'scope: name the market, portfolio, campaign, ad group or product it may act on, or say wholeAccount: true — a rule with no scope reaches every campaign')
   }
   if (named && s.wholeAccount === true) out.push('scope: wholeAccount: true and a narrower scope at once — say one')
   if (s.portfolioId && s.campaignId) out.push('scope: a portfolio and a campaign at once — a campaign belongs to at most one portfolio; name one')
+  if (s.adGroupId && draft.kind !== 'amazon-ads') out.push('scope: an ad group is an Amazon ads rule\'s grain only')
+  if (s.adGroupId && s.portfolioId) out.push('scope: a portfolio and an ad group at once — an ad group names its own campaign; name one')
   return out
 }
 
@@ -120,8 +128,10 @@ function actionProblems(draft: RuleDraft): string[] {
   if (draft.kind !== 'ebay-ads' && (!Array.isArray(draft.actions) || !draft.actions.length)) out.push('actions: at least one action')
   if (draft.kind !== 'ebay-ads' && Array.isArray(draft.actions) && draft.actions.length > 20) out.push('actions: at most 20')
   if (list.some((a) => !isObject(a) || typeof a.type !== 'string' || !a.type)) out.push('actions: each one is { type, …parameters }')
-  for (const refused of refusedActionsOf(types)) out.push(`${refused.type}: refused — ${refused.why}; use ${refused.instead}`)
-  const refusedTypes = new Set(refusedActionsOf(types).map((r) => r.type))
+  // D4 — the save's reading: an Amazon ads rule may pause a keyword (pause_target); every other pause stays refused.
+  const refusedNow = refusedActionsOf(types, { keywordPause: draft.kind === 'amazon-ads' })
+  for (const refused of refusedNow) out.push(`${refused.type}: refused — ${refused.why}; use ${refused.instead}`)
+  const refusedTypes = new Set(refusedNow.map((r) => r.type))
   for (const type of types) {
     if (!refusedTypes.has(type) && !ALLOWED_ACTIONS[draft.kind].has(type)) out.push(`${type}: not an action a Claude ${draft.kind} rule may carry (allowed: ${[...ALLOWED_ACTIONS[draft.kind]].join(', ')})`)
   }

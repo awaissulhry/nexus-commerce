@@ -608,7 +608,8 @@ async function undoNow(f: Fact, reason: string): Promise<{ actionLogId: string |
     }
     if (c.lever === 'negatives') {
       const { retireNegatives } = await import('../negatives-retire.service.js')
-      const out = await retireNegatives({ adTargetIds: [c.negativeId], actor: AUTO_UNDO_ACTOR, retireReason: reason.slice(0, 480) })
+      // Negative Targeting (review S7) — auto-undo puts back the brain's own add: its own negative, lifted as an undo.
+      const out = await retireNegatives({ adTargetIds: [c.negativeId], actor: AUTO_UNDO_ACTOR, retireReason: reason.slice(0, 480), owners: { undo: true } })
       const o = out.outcomes[0]
       if (!o || (o.kind !== 'retired' && o.kind !== 'removed_local')) return { reason: `the revive was not done: ${o ? `${o.kind}${o.reason ? ` — ${o.reason}` : ''}` : 'no outcome'}` }
       await markUndone()

@@ -100,6 +100,12 @@ const COMMAND_SCOPES: Record<string, string> = {
   '/api/advertising/automation/brain/harvest/apply': 'brain-harvest-apply',
   '/api/advertising/automation/brain/retire': 'brain-retire',
   '/api/advertising/automation/brain/requests/:approvalId/decide': 'brain-request-decide',
+  // Negative Targeting page (lane NWRITE) — one request (or one decision, one skip) per press, even when the answer is
+  // lost and the page sends it again: a double click never asks twice, approves twice or skips twice.
+  '/api/advertising/waste/apply': 'waste-apply',
+  '/api/advertising/waste/skip': 'waste-skip',
+  '/api/advertising/waste/unskip': 'waste-unskip',
+  '/api/advertising/waste/waiting/decide': 'waste-waiting-decide',
 }
 
 /** The POST routes whose Idempotency-Key is honoured (for the tests that hold a route to it). */

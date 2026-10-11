@@ -7030,5 +7030,10 @@
     "scalar": {},
     "compound": {},
     "relations": []
+  },
+  "AdsWasteSkip": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
   }
 }

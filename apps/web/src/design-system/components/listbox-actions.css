@@ -1,0 +1,15 @@
+/* ListboxPanel `actions` (Keyword Harvest DS lane H1, 2026-10-10): commands under the list ("+ New campaign…"). Buttons,
+   not options; they take the option row's look from `.nds-combo-pop button`. Sticky at the panel's foot, so a long list
+   never hides them: `bottom: -5px` covers the panel's own padding, and the panel keeps its focused rows clear of them
+   with scroll padding (one option row per action, plus the rule and padding above them). */
+.nds-combo-pop > .nds-listbox-actions {
+  position: sticky;
+  bottom: -5px;
+  z-index: 1;
+  padding-top: 4px;
+  border-top: 1px solid var(--nds-border-subtle);
+  background: var(--nds-surface);
+}
+.nds-combo-pop:has(> .nds-listbox-actions) {
+  scroll-padding-bottom: calc(var(--nds-listbox-actions, 1) * var(--nds-combo-row-h) + 10px);
+}

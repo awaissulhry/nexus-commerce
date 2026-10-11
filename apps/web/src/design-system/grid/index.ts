@@ -96,6 +96,12 @@ export * from './renderers'
 export { cellDetailKeys, CELL_DETAIL_TRIGGER, type CellDetailKeyParams } from './cellDetail'
 // Progress columns (2026-09-26) — "Go to <field>": open the row, scroll it to the middle, put the cursor in the cell, mark it.
 export { landOnCell, collapsedAncestors, LANDING_CLASS, LANDING_MS, type LandOptions, type LandingGridApi, type LandingRowNode } from './landOnCell'
+// Keyword Harvest DS lane (2026-10-10) — H6 a detail modal walks the rows as shown (all pages) and returns to the row's cell.
+export { displayedRowIds, revealRow, cellOf, pageOfRow, landingColumn, REVEAL_DRAW_FRAMES, type RecordNavGridApi, type RecordNavRowNode, type RevealOptions, type RevealedRow } from './recordNav'
+// Keyword Harvest DS lane (2026-10-10) — H7 Portfolio › Campaign › Ad group as links, cut in the middle (own file, not presets.ts).
+export { entityPathColumn, type EntityPathColumnOptions } from './columns/entityPathColumn'
+export { EntityPathCell, entityPathOf, type EntityPathCellParams } from './renderers/EntityPathCell'
+export { entityPathKeys } from './renderers/entityPathKeys'
 export {
   gridSelection, selectionColumn, integerColumn, moneyColumn, euroColumn, percentColumn, deltaColumn, dateColumn, statusColumn, textColumn,
   stockColumn, lockedColumn, holdColumn, actionsColumn, changeColumn, switchColumn, modeColumn, sparklineColumn, type GridSelectionOptions, type ActionsColumnOptions, type SwitchColumnOptions,

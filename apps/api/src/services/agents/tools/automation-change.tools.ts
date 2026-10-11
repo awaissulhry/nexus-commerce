@@ -42,6 +42,7 @@ const RULE_SCOPE = z.object({
   portfolioId: ID.optional().describe('Amazon: the portfolio (its Amazon portfolio id) it may act on'),
   campaignId: ID.optional().describe('Amazon: the one campaign (Nexus id) it may act on'),
   productId: ID.optional().describe('Amazon: the product line (parent) or variation (Nexus id) it may act on'),
+  adGroupId: ID.optional().describe('Amazon: ONE ad group (Nexus id) it may act on — its campaign is set from it'),
   campaignIds: z.array(ID).max(200).optional().describe('eBay: the campaigns it may act on'),
   wholeAccount: z.boolean().optional().describe('true to let it reach every campaign — said out loud, never implied'),
 })
@@ -140,12 +141,18 @@ const saveAdRule: AgentTool = {
     'when the business set it so — or, for an Amazon ads rule only, run by the business\'s rule inside its limits and the ' +
     'ads strategy of the rule\'s scope (every cap set and within those limits, 0 by default; a rule for the whole account ' +
     'waits for a person). A new rule is born OBSERVE (it runs and records, proposes ' +
-    'and writes nothing; an eBay rule is saved OFF) and climbs with turn-up-automation. Refused, in words: any pause ' +
-    '(a rule never pauses — use lower_bid_to_floor for a temporary stop; a real pause is its own request, pause-ads), an action outside the allowed ones, no scope (say wholeAccount: true for ' +
+    'and writes nothing; an eBay rule is saved OFF) and climbs with turn-up-automation. A rule may pause a wasting KEYWORD ' +
+    '(pause_target: our keyword with spend and no orders, paused and kept paused) — the business\'s rule never saves one: ' +
+    'it is approved in Nexus, or confirmed in Claude. ' +
+    'Refused, in words: any other pause ' +
+    '(a rule never pauses a campaign or ad group — use lower_bid_to_floor for a temporary stop; a real pause is its own request, pause-ads), an action outside the allowed ones, no scope (say wholeAccount: true for ' +
     'the whole account), a cap missing or 0, a percent where a fraction belongs (condition ratios such as acos are fractions: 0.3, not 30; ' +
     'action values carry their own unit — bid_apply\'s targetAcos and every …Pct value are percents, and eBay rule values are ' +
     'percents), a condition on a field ' +
-    "the trigger never hands the rule, no conditions. Editing an AUTO rule drops it to PROPOSE. Amazon and marketing " +
+    "the trigger never hands the rule, no conditions. Editing an AUTO rule drops it to PROPOSE. A stop-waste rule (the Negative " +
+    'Targeting page\'s: pause_target on TARGET_PERFORMANCE, or add_negative_exact on SEARCH_TERM_WASTING) carries its test on its ' +
+    'first action — stopWaste { kind: PAUSE_KEYWORD | NEGATE_TERM, windowDays, minClicks, cpaMultiple, spendFloorCents } — and then ' +
+    'runs on late-order-safe numbers (clicks and spend to 3 days ago, orders to today, stock-out days left out). Amazon and marketing ' +
     'rules: trigger, conditions [{ field, op, value }], actions [{ type, … }], caps. eBay: trigger { scope, all }, action, ' +
     'guardrails { maxActionsPerRun }. Give ruleId to edit: fields left out keep the rule\'s own.',
   riskTier: 'medium',
@@ -162,7 +169,10 @@ const saveAdRule: AgentTool = {
   maxClaudeTrust: 'auto',
   strategyBound: 'amazon-ads',
   limits: SAVE_RULE_LIMITS,
-  withinLimits: ruleSaveRefusal,
+  // D4 — a rule that pauses keywords is saved only with a person's yes, whatever the business's limits allow.
+  withinLimits: (preview, limits) => ((preview as { pausesKeywords?: unknown } | null)?.pausesKeywords === true
+    ? 'the rule pauses keywords: a person approves its save'
+    : ruleSaveRefusal(preview, limits)),
   undo: SAVE_AD_RULE_UNDO,
   planEntities: savedRuleEntities('ruleId'),
   input: z.object({
@@ -176,7 +186,7 @@ const saveAdRule: AgentTool = {
     actions: z.array(JSON_OBJECT).max(20).optional().describe('Amazon / marketing: [{ type, …parameters }] — bids, budgets, placements, negatives, harvest, retail guard, notify'),
     action: JSON_OBJECT.optional().describe('eBay: one action { type, … } — adjust_ad_rate, set_rate_to_breakeven_factor, bid_down_keyword, alert'),
     guardrails: JSON_OBJECT.optional().describe('eBay: { maxActionsPerRun (required, above 0), minClicks?, minSpendCents?, maxBidChangePct? }'),
-    scope: RULE_SCOPE.optional().describe('what it may act on; replaces the rule\'s scope when given'),
+    scope: RULE_SCOPE.optional().describe('what it may act on (market, portfolio, campaign, one ad group, product); replaces the rule\'s scope when given'),
     caps: RULE_CAPS.optional().describe('Amazon / marketing: its caps; merged into the rule\'s own'),
     cooldownHours: z.coerce.number().int().min(1).max(720).optional().describe('eBay: hours before it may act on the same entity again'),
   }),

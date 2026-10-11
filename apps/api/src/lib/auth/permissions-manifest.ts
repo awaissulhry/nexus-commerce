@@ -429,11 +429,19 @@ export const ENTRIES: Entry[] = [
   // (ads.automation.manage). Named on their own so the /bid rule below can never hand them ads.bids.edit.
   P(F.adsView, (m, p) => (isRead(m) && /^\/api\/advertising\/bid-rules(\/[^/]+\/history)?$/.test(p)) || (m.toUpperCase() === 'POST' && p === '/api/advertising/bid-rules/preview')),
   P(F.adsAutomationManage, (m, p) => m.toUpperCase() === 'POST' && /^\/api\/advertising\/bid-rules\/[^/]+\/(archive|unarchive)$/.test(p)),
+  // Negative Targeting page, RULES block (routes/advertising-waste.routes.ts): the list, a rule's history, the starters and
+  // the preview of a rule body (a POST that writes nothing) are reads (ads.view); saving, editing, the mode, archive and
+  // unarchive change a rule (ads.automation.manage). Named on their own so no wider /advertising rule catches them.
+  P(F.adsView, (m, p) => (isRead(m) && /^\/api\/advertising\/waste\/rules(\/starters|\/[^/]+\/history)?$/.test(p)) || (m.toUpperCase() === 'POST' && p === '/api/advertising/waste/rules/preview')),
+  P(F.adsAutomationManage, (m, p) => !isRead(m) && /^\/api\/advertising\/waste\/rules(\/mode|\/[^/]+(\/(archive|unarchive))?)?$/.test(p)),
   // R4 — undoing approved asks of a bid rule puts bids back (as the rule): ads.bids.edit, named on its own.
   P(F.adsBidsEdit, (m, p) => m.toUpperCase() === 'POST' && /^\/api\/advertising\/bid-rules\/[^/]+\/asks\/undo$/.test(p)),
   // Bid page — every bid with its one owner (routes/advertising-bids.routes.ts): a read, ads.view; its money keys are
   // stripped for a person without financials.adspend.view. Named on its own, before the /bid rule below.
   P(F.adsView, (m, p) => isRead(m) && p === '/api/advertising/bids'),
+  // Negative Targeting page (2026-10-11) — the waste reads (routes/advertising-waste.routes.ts READ block): rows, rows/ids,
+  // stopped, one row, history. Reads, ads.view; money keys stripped without financials.adspend.view. Named on their own.
+  P(F.adsView, (m, p) => isRead(m) && /^\/api\/advertising\/waste\/(rows(\/ids)?|stopped|history|row\/[^/]+)$/.test(p)),
   // KAPI-B — one keyword's Auto / Manual (routes/advertising-bid-mode.routes.ts): a hold of its bid or the hand-back,
   // ads.bids.edit, named on its own so no reorder of the broader rules below can hand it another permission.
   P(F.adsBidsEdit, (m, p) => m.toUpperCase() === 'POST' && /^\/api\/advertising\/bids\/[^/]+\/mode$/.test(p)),

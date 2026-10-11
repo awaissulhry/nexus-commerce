@@ -139,6 +139,7 @@ import { WeekHourGridExample } from './WeekHourGridExample'
 import { SwitchColumnExample } from './SwitchColumnExample'
 import { ModeColumnExample } from './ModeColumnExample'
 import { BidPartsExample } from './BidPartsExample'
+import { HarvestPartsExample } from './HarvestPartsExample'
 import { LinkTabsExample } from './LinkTabsExample'
 import { ReviewChangesModalExample } from './ReviewChangesModalExample'
 import { DetailModalExample } from './DetailModalExample'
@@ -1057,6 +1058,7 @@ export function TokenCatalog() {
         <SwitchColumnExample />
         <ModeColumnExample />
         <BidPartsExample />
+        <HarvestPartsExample />
 
         <GridCard toolbar={<GridToolbar count={<><b>{GDS_ROWS.length}</b> campaigns</>} />}>
           <NexusGrid<GdsRow> density="cozy" domLayout="autoHeight" rowData={GDS_ROWS} getRowId={GDS_ROW_ID} columnDefs={GDS_COLS} rowSelection={gdsSelection} selectionColumnDef={GDS_SELECTION_COLUMN} pinnedBottomRowData={GDS_TOTALS} />

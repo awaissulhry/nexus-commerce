@@ -6939,6 +6939,10 @@
       "fields": []
     },
     {
+      "name": "AdsWasteSkip",
+      "fields": []
+    },
+    {
       "name": "AdWriteRefusal",
       "fields": []
     },
