@@ -21,7 +21,7 @@ import { getNegatives, getTermContext, NEG_MARKET_ALL } from '../services/advert
 import { adsReadMarkets } from '../services/advertising/ads-markets.service.js'
 import { getKeywordHarvest, HV_MARKET_ALL, type HvStatus, type HvKind, type HvSortKey } from '../services/advertising/keyword-harvest.service.js'
 import { resolveHarvestPolicy, listHarvestPolicies, saveHarvestPolicy, deleteHarvestPolicy, HV_DEFAULT_CRITERIA, type HvPolicyGrain } from '../services/advertising/harvest-policy.service.js'
-import { planPromotion, promoteCandidates } from '../services/advertising/harvest-promote.service.js'
+import { planPromotion } from '../services/advertising/harvest-promote.service.js'
 import { getHarvestCohort } from '../services/advertising/harvest-cohort.service.js'
 import {
   loadDestinationGraph, resolveStoredDestinations, rankDestinations, listHarvestDestinations,
@@ -1268,15 +1268,11 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
-  // ── HV.4 — the paired write ─────────────────────────────────────────
+  // ── HV.4 — the paired write's plan (read only) ─────────────────────
   //
-  // 🔴 The first route on this page that spends money. GET plans it (nothing is written); POST
-  // executes exactly that plan. They share `planPromotion`, so the sentence the dialog states and
-  // the number written cannot diverge.
-  //
-  // This arms no automation. Harvest rules are capped at PROPOSE by `ads-graduation.ts`
-  // (the ads-auto-harvest cron itself was retired in HP5, 2026-08-21) — that caps AUTOMATIONS;
-  // an operator pressing a button is a different actor.
+  // GET plans a promote (nothing is written). The write (POST /advertising/harvest-promote) and the push of a keyword that
+  // never reached Amazon (POST /advertising/harvest-push) were removed with the Keyword Harvest page (2026-10-11): a
+  // harvest is one approval request through the harvest engine (routes/advertising-harvest.routes.ts).
   fastify.get('/advertising/harvest-promote', async (request, reply) => {
     const q = (request.query ?? {}) as Record<string, string | undefined>
     const raw = (q.market ?? '').trim()
@@ -1288,27 +1284,6 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     if (ids.length === 0) { reply.status(400); return { error: 'ids is required', code: 'ids_required' } }
     if (ids.length > 200) { reply.status(400); return { error: `${ids.length} candidates in one request; the cap is 200`, code: 'too_many' } }
     return planPromotion({ market, candidateIds: ids, line: q.line ?? null, portfolio: q.portfolio ?? null, campaign: q.campaign ?? null, adGroup: q.adGroup ?? null })
-  })
-
-  fastify.post('/advertising/harvest-promote', async (request, reply) => {
-    const b = (request.body ?? {}) as Record<string, unknown>
-    const ids = Array.isArray(b.ids) ? b.ids.map(String).filter(Boolean) : []
-    if (ids.length === 0) { reply.status(400); return { ok: false, error: 'ids is required', code: 'ids_required' } }
-    if (ids.length > 200) { reply.status(400); return { ok: false, error: `${ids.length} candidates in one request; the cap is 200. This is a request bound, not a spend ceiling.`, code: 'too_many' } }
-    // Structural writes that create a keyword AND a negative on Amazon. An explicit confirm is
-    // required, in the body, so a stray POST cannot spend money.
-    if (b.confirm !== true) { reply.status(400); return { ok: false, error: 'confirm:true is required — this creates keywords and negatives on Amazon', code: 'confirm_required' } }
-    const raw = String(b.market ?? '').trim()
-    const market = raw.toLowerCase() === HV_MARKET_ALL ? HV_MARKET_ALL : (raw ? raw.toUpperCase() : HV_MARKET_ALL)
-    const userId = (request as { authUser?: { id?: string } }).authUser?.id ?? 'anonymous'
-    const out = await promoteCandidates({
-      market, candidateIds: ids, userId,
-      line: (b.line as string) ?? null, portfolio: (b.portfolio as string) ?? null,
-      campaign: (b.campaign as string) ?? null, adGroup: (b.adGroup as string) ?? null,
-    })
-    // 🔴 Always 200 with per-row outcomes, never a single pass/fail. N writes have N independent
-    // failure modes and an HTTP status cannot carry three outcome classes (C7).
-    return { ok: true, ...out }
   })
 
   // ── HV.5 — the harvested cohort ─────────────────────────────────────
@@ -1353,28 +1328,6 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     })
     reply.header('Cache-Control', 'private, max-age=60')
     return out
-  })
-
-  // 🔴 Pushes keywords that exist HERE and never reached Amazon. This SPENDS MONEY — a pushed
-  // keyword starts bidding. Same shape as HV.4's promote: confirm in the body, 200 with per-row
-  // outcomes, never a single pass/fail (C7).
-  fastify.post('/advertising/harvest-push', async (request, reply) => {
-    const b = (request.body ?? {}) as Record<string, unknown>
-    const ids = Array.isArray(b.ids) ? b.ids.map(String).filter(Boolean) : []
-    if (ids.length === 0) { reply.status(400); return { ok: false, error: 'ids is required', code: 'ids_required' } }
-    if (ids.length > 200) { reply.status(400); return { ok: false, error: `${ids.length} keywords in one request; the cap is 200. This is a request bound, not a spend ceiling.`, code: 'too_many' } }
-    if (b.confirm !== true) { reply.status(400); return { ok: false, error: 'confirm:true is required — pushing a keyword makes it start bidding at Amazon', code: 'confirm_required' } }
-    const userId = (request as { authUser?: { id?: string } }).authUser?.id ?? 'anonymous'
-    const { pushExistingKeyword } = await import('../services/advertising/ads-create.service.js')
-    const outcomes: Array<{ adTargetId: string } & Awaited<ReturnType<typeof pushExistingKeyword>>> = []
-    for (const id of ids) outcomes.push({ adTargetId: id, ...(await pushExistingKeyword({ adTargetId: id, userId: `user:${userId}` })) })
-    return {
-      ok: true,
-      acted: outcomes.filter((o) => o.outcome === 'acted').length,
-      refused: outcomes.filter((o) => o.outcome === 'refused').length,
-      failed: outcomes.filter((o) => o.outcome === 'failed').length,
-      outcomes,
-    }
   })
 
   // ── PLC.3 — what a scope-bulk write WOULD do ────────────────────────

@@ -12,12 +12,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const execCreate = vi.fn(async () => ({ id: 'exec-new' }))
 const ruleUpdate = vi.fn(async () => ({}))
 const ruleFindUnique = vi.fn(async (): Promise<Record<string, unknown>> => ({}))
+/** The business's protected terms (WHITELIST), counted at run time as at set time (R2). */
+const protections = vi.fn(async () => 0)
 
 vi.mock('../../db.js', () => ({
   default: {
     automationRuleExecution: { count: vi.fn(async () => 0), get create() { return execCreate } },
     automationRule: { get update() { return ruleUpdate }, get findUnique() { return ruleFindUnique } },
     advertisingActionLog: { count: vi.fn(async () => 0) },
+    adKeywordProtection: { get count() { return protections } },
   },
 }))
 const genSuggestions = vi.fn(async () => 1)
@@ -34,7 +37,7 @@ const spy = async (action: { type: string }, _ctx: unknown, meta: { dryRun: bool
   seen.push({ type: action.type, dryRun: meta.dryRun })
   return { type: action.type, ok: true, output: { dryRun: meta.dryRun } }
 }
-for (const t of ['bid_apply', 'pause_target', 'enable_target', 'add_negative_exact', 'add_negative_phrase', 'mystery_action', 'auto_approve_recommendation']) ACTION_HANDLERS[t] = spy as never
+for (const t of ['bid_apply', 'pause_target', 'enable_target', 'add_negative_exact', 'add_negative_phrase', 'mystery_action', 'auto_approve_recommendation', 'harvest_and_negate', 'promote_to_exact']) ACTION_HANDLERS[t] = spy as never
 
 const flush = () => new Promise((r) => setTimeout(r, 0))
 const AUTO = (actions: Array<Record<string, unknown>>, extra: Record<string, unknown> = {}) => ({
@@ -50,6 +53,43 @@ beforeEach(() => {
   vi.clearAllMocks()
   seen.length = 0
   translate.mockReturnValue(null)
+  protections.mockResolvedValue(0)
+})
+
+describe('R2 + release safety — a harvest rule acts alone on Auto only after a person picked Auto on the harvest path', () => {
+  const MARK = { harvestAuto: { confirmedAt: '2026-10-11T10:00:00.000Z', by: 'user:owner' } }
+  const HARVEST = { type: 'harvest_and_negate', mode: 'harvest' }
+  it('a rule at Auto saved before (no mark) keeps asking, protected terms or not — also a legacy row with no level and dryRun off', async () => {
+    protections.mockResolvedValue(2)
+    ruleFindUnique.mockResolvedValueOnce(AUTO([HARVEST]))
+    expect((await evaluateRule({ ruleId: 'rule-1', context })).status).toBe('DRY_RUN')
+    expect(seen).toEqual([{ type: 'harvest_and_negate', dryRun: true }])
+    ruleFindUnique.mockResolvedValueOnce(AUTO([{ type: 'promote_to_exact' }], { autonomyLevel: null }))
+    expect((await evaluateRule({ ruleId: 'rule-1', context })).status).toBe('DRY_RUN')
+    expect(protections).not.toHaveBeenCalled() // nothing is even counted for it
+  })
+  it('picked on the harvest path (its mark) with protected terms: it acts, inside its caps (the engine\'s); without them it asks', async () => {
+    protections.mockResolvedValue(2)
+    ruleFindUnique.mockResolvedValueOnce(AUTO([{ ...HARVEST, ...MARK }]))
+    expect((await evaluateRule({ ruleId: 'rule-1', context })).status).toBe('SUCCESS')
+    expect(seen).toEqual([{ type: 'harvest_and_negate', dryRun: false }])
+    seen.length = 0
+    protections.mockResolvedValue(0)
+    ruleFindUnique.mockResolvedValueOnce(AUTO([{ ...HARVEST, ...MARK }]))
+    expect((await evaluateRule({ ruleId: 'rule-1', context })).status).toBe('DRY_RUN')
+  })
+  it('one that also blocks waste asks even with the mark; a marked promote rule acts like the harvest one', async () => {
+    protections.mockResolvedValue(2)
+    ruleFindUnique.mockResolvedValueOnce(AUTO([{ type: 'harvest_and_negate', ...MARK }]))
+    expect((await evaluateRule({ ruleId: 'rule-1', context })).status).toBe('DRY_RUN')
+    ruleFindUnique.mockResolvedValueOnce(AUTO([{ type: 'promote_to_exact', ...MARK }]))
+    expect((await evaluateRule({ ruleId: 'rule-1', context })).status).toBe('SUCCESS')
+  })
+  it('a count that fails proposes (fails closed)', async () => {
+    protections.mockRejectedValueOnce(new Error('db down'))
+    ruleFindUnique.mockResolvedValueOnce(AUTO([{ ...HARVEST, ...MARK }]))
+    expect((await evaluateRule({ ruleId: 'rule-1', context })).status).toBe('DRY_RUN')
+  })
 })
 
 describe('run-time AUTO ceiling', () => {

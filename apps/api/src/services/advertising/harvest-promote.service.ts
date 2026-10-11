@@ -1,5 +1,7 @@
 /**
- * HV.4 — the paired write: promote a candidate and negate it at its source, as one transaction.
+ * HV.4 — the paired write's PLAN: what promoting a candidate and negating it at its source would do (GET
+ * /advertising/harvest-promote). The write itself (POST /advertising/harvest-promote, promoteCandidates) was removed with the
+ * Keyword Harvest page (2026-10-11): a harvest is one approval request through the harvest engine (services/advertising/harvest/).
  *
  * 🔴 **The first thing on this page that spends money.** Everything before it was a read.
  *
@@ -34,7 +36,6 @@
  */
 
 import prisma from '../../db.js'
-import { applyHarvest, type HarvestOutcome } from './ads-harvest.service.js'
 import { getKeywordHarvest, type HarvestRow } from './keyword-harvest.service.js'
 import { checkAdsWriteGate } from './ads-write-gate.js'
 import { checkLanding, switchOnBid } from './harvest-landing-guard.js'
@@ -115,7 +116,7 @@ function evidenceFor(row: HarvestRow, criteria: { minOrders: number; minClicks: 
  * Build the plan for a set of candidates — everything the confirm dialog states, computed
  * server-side so the sentence, the number written and the record afterwards cannot diverge.
  *
- * Nothing is written here. `promoteCandidates` executes exactly this plan.
+ * Nothing is written here.
  */
 export async function planPromotion(args: {
   market: string
@@ -209,88 +210,6 @@ export async function planPromotion(args: {
     reach: { campaigns: campaigns.size, ofTotal: totalCampaigns },
     promotable: out.filter((r) => r.promotable).length,
     blocked: out.filter((r) => !r.promotable).length,
-  }
-}
-
-export interface PromoteResult {
-  batchId: string
-  acted: number
-  refused: number
-  failed: number
-  outcomes: Array<HarvestOutcome & { candidateId: string; bidCents: number }>
-}
-
-/**
- * Execute the plan. One `applyHarvest` call per candidate, deliberately: a bulk write is N
- * independent writes with N outcomes, and batching them would collapse N answers into one.
- */
-export async function promoteCandidates(args: {
-  market: string
-  candidateIds: string[]
-  userId: string
-  line?: string | null; portfolio?: string | null; campaign?: string | null; adGroup?: string | null
-}): Promise<PromoteResult> {
-  const plan = await planPromotion(args)
-  const batchId = `hv4_${Date.now().toString(36)}`
-  const outcomes: PromoteResult['outcomes'] = []
-
-  for (const row of plan.rows) {
-    if (!row.promotable || !row.destinationAdGroupId || !row.sourceAdGroupId) {
-      outcomes.push({
-        candidateId: row.candidateId, bidCents: row.bidCents,
-        query: row.term, matchType: row.matchType,
-        sourceAdGroupId: row.sourceAdGroupId, destinationAdGroupId: row.destinationAdGroupId,
-        targetId: null, externalTargetId: null, reachedAmazon: false, negative: null,
-        negateReason: row.negateReason,
-        outcome: 'refused',
-        refusal: row.blocked
-          ? { deniedAt: row.blocked.deniedAt, reason: row.blocked.reason }
-          : { deniedAt: 'no_destination', reason: 'No destination is resolved for this candidate, so promoting it would create the keyword back in the ad group that discovered it and would not negate the source.' },
-      })
-      continue
-    }
-
-    // The candidate id encodes market|externalCampaignId|externalAdGroupId|term — the same key the
-    // page renders, so the write acts on exactly the row the operator was looking at.
-    const [, externalCampaignId, externalAdGroupId] = row.candidateId.split('|')
-
-    const res = await applyHarvest({
-      graduations: [{
-        query: row.term,
-        externalCampaignId,
-        externalAdGroupId,
-        impressions: 0, clicks: 0, costCents: 0, orders: 0, salesCents: 0,
-        // 🔴 The bid the dialog showed, passed explicitly. applyHarvest would otherwise re-derive
-        // it from the zeroed metrics above and write €0.50 — showing one number and writing another
-        // is precisely defect ②.
-        bidEur: row.bidCents / 100,
-        evidence: row.evidence,
-      }],
-      // 5d — an ASIN row's destination was resolved for a PRODUCT target, and applyHarvest graduates an ASIN under that key.
-      destinations: { [/^b0[a-z0-9]{8}$/i.test(row.term.trim()) ? 'PRODUCT' : row.matchType]: row.destinationAdGroupId },
-      negateScope: 'AD_GROUP',
-      userId: `user:${args.userId}`,
-    })
-
-    const o = res.outcomes[0]
-    if (o) outcomes.push({ ...o, candidateId: row.candidateId, bidCents: row.bidCents })
-    else {
-      outcomes.push({
-        candidateId: row.candidateId, bidCents: row.bidCents, query: row.term, matchType: row.matchType,
-        sourceAdGroupId: row.sourceAdGroupId, destinationAdGroupId: row.destinationAdGroupId,
-        targetId: null, externalTargetId: null, reachedAmazon: false, negative: null,
-        negateReason: row.negateReason, outcome: 'failed',
-        error: res.errors[0] ?? 'applyHarvest returned no outcome',
-      })
-    }
-  }
-
-  return {
-    batchId,
-    acted: outcomes.filter((o) => o.outcome === 'acted').length,
-    refused: outcomes.filter((o) => o.outcome === 'refused').length,
-    failed: outcomes.filter((o) => o.outcome === 'failed').length,
-    outcomes,
   }
 }
 

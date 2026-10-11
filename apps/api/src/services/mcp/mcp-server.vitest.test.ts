@@ -36,7 +36,7 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 
 const OPEN_WORLD = [
   'add-ad-targets', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'advance-purchase-order',
-  'apply-ad-recommendations', 'apply-ads-playbook', 'apply-brain-harvest', 'apply-brain-hourly-plan', 'archive-ads', 'build-sp-wizard-campaigns', 'bulk-ad-bid-change',
+  'apply-ad-recommendations', 'apply-ads-playbook', 'apply-brain-harvest', 'apply-brain-hourly-plan', 'apply-harvest', 'archive-ads', 'build-sp-wizard-campaigns', 'bulk-ad-bid-change',
   'bulk-listing-price-change', 'bulk-listing-stock', 'bulk-price-change', 'buy-shipping-label', 'cancel-order',
   'channel-identity-check', 'close-listing', 'confirm-shipment', 'create-ad-campaign', 'create-ad-group',
   'create-ai-goal-campaigns',
@@ -178,6 +178,15 @@ describe('C3 — the server and every change tool name the business', () => {
       expect(registered.has(name), name).toBe(true)
       expect(mcpInstructions(business), name).toMatch(new RegExp(`(^|[^a-z-])${name}([^a-z-]|$)`))
     }
+  })
+
+  it('HMCP — the instructions teach the one harvest engine: its reads, its one change set, its undo, its skip; approving stays a person\'s', () => {
+    const registered = new Set(listTools().map((tool) => tool.name))
+    for (const name of ['harvest-candidates', 'harvest-destinations', 'apply-harvest', 'harvest-history', 'skip-harvest-terms', 'harvest-search-term', 'graduate-keyword', 'harvest-rules', 'set-harvest-rules', 'harvest-sources', 'set-harvest-sources']) {
+      expect(registered.has(name), name).toBe(true)
+      expect(mcpInstructions(business), name).toMatch(new RegExp(`(^|[^a-z-])${name}([^a-z-]|$)`))
+    }
+    expect(mcpInstructions(business)).toContain('you cannot approve a waiting harvest')
   })
 
   it('every change tool takes a required business name; a read takes none', () => {

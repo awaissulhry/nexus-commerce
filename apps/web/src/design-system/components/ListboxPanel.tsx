@@ -404,7 +404,8 @@ export function ListboxPanel({
         if (typeof panelRef === 'function') panelRef(n)
         else if (panelRef) (panelRef as React.MutableRefObject<HTMLDivElement | null>).current = n
       }}
-      style={acts.length ? { ...style, ['--nds-listbox-actions' as string]: acts.length } : style}
+      // Rows the sticky actions cover, for the list's scroll padding: a held action's reason line adds about half a row.
+      style={acts.length ? { ...style, ['--nds-listbox-actions' as string]: acts.length + 0.5 * acts.filter((a) => a.heldReason).length } : style}
       className={['nds-combo-pop', 'nds-listbox-pop', className].filter(Boolean).join(' ')}
       id={idPrefix && !acts.length ? `${idPrefix}-listbox` : undefined}
       role={acts.length ? 'dialog' : 'listbox'}
@@ -476,14 +477,18 @@ export function ListboxPanel({
             const i = matches.length + k
             return (
               <button key={a.id} type="button" data-listbox-action={a.id}
-                className={[(filtering || controlled) && i === active ? 'active' : '', a.heldReason ? 'held' : ''].filter(Boolean).join(' ') || undefined}
+                className={[(filtering || controlled) && i === active ? 'active' : '', a.heldReason ? 'held has-note' : ''].filter(Boolean).join(' ') || undefined}
                 title={a.heldReason}
                 aria-disabled={a.heldReason ? true : undefined}
                 aria-description={a.heldReason}
                 onFocus={controlled ? undefined : () => { if (activeRef.current !== i) moveActive(() => i) }}
                 onClick={() => runAction(a)}>
                 {a.icon != null && <span className="nds-listbox-lead" aria-hidden>{a.icon}</span>}
-                <span className="nds-listbox-label">{a.label}</span>
+                {/* Held: drawn as a held option is — the reason on its own line under the label (re-audit N-S4: a held
+                    "New campaign…" looked like one that runs). The line is the description, so `aria-hidden` here. */}
+                {a.heldReason
+                  ? <span className="nds-listbox-text"><span className="nds-listbox-name">{a.label}</span><span className="nds-listbox-note" aria-hidden="true">{a.heldReason}</span></span>
+                  : <span className="nds-listbox-label">{a.label}</span>}
               </button>
             )
           })}

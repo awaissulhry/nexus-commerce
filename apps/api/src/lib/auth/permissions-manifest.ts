@@ -429,6 +429,14 @@ export const ENTRIES: Entry[] = [
   // (ads.automation.manage). Named on their own so the /bid rule below can never hand them ads.bids.edit.
   P(F.adsView, (m, p) => (isRead(m) && /^\/api\/advertising\/bid-rules(\/[^/]+\/history)?$/.test(p)) || (m.toUpperCase() === 'POST' && p === '/api/advertising/bid-rules/preview')),
   P(F.adsAutomationManage, (m, p) => m.toUpperCase() === 'POST' && /^\/api\/advertising\/bid-rules\/[^/]+\/(archive|unarchive)$/.test(p)),
+  // Keyword Harvest page (2026-10-10, lane HCORE) — the harvest engine (routes/advertising-harvest.routes.ts): its reads and
+  // the two previews (POSTs that write nothing) need ads.view; a harvest change set, its undo, a skip and a decision on a
+  // waiting harvest need ads.campaigns.manage (the gate checks the apply-harvest tool's own permissions again); rules and
+  // sources change automation (ads.automation.manage). Named on their own, before the /advertising rules below.
+  P(F.adsView, (m, p) => (isRead(m) && /^\/api\/advertising\/harvest\/(candidates|destinations|history|rules|rules\/[^/]+\/history|sources)$/.test(p))
+    || (m.toUpperCase() === 'POST' && /^\/api\/advertising\/harvest\/(preview|rules\/preview)$/.test(p))),
+  P(F.adsCampaignsManage, (m, p) => m.toUpperCase() === 'POST' && /^\/api\/advertising\/harvest\/(apply|undo|skip|unskip|waiting\/decide)$/.test(p)),
+  P(F.adsAutomationManage, (m, p) => m.toUpperCase() === 'POST' && /^\/api\/advertising\/harvest\/(rules\/mode|rules\/[^/]+\/(archive|unarchive)|sources\/(assign|detach|pause|resume))$/.test(p)),
   // Negative Targeting page, RULES block (routes/advertising-waste.routes.ts): the list, a rule's history, the starters and
   // the preview of a rule body (a POST that writes nothing) are reads (ads.view); saving, editing, the mode, archive and
   // unarchive change a rule (ads.automation.manage). Named on their own so no wider /advertising rule catches them.

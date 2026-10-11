@@ -31,7 +31,7 @@ import type { AgentTool, ToolChange, ToolContext, ToolResult, ToolUndo } from '.
 const INPUT = z.object({
   op: z.enum(['harvest', 'undo']).default('harvest')
     .describe('harvest (default): the keyword in its destination and the negative exact in every source, one change set; undo: put a harvest back (its keyword paused, its source negatives retired)'),
-  harvestId: z.string().trim().min(1).max(64).describe('the brain harvest: the harvestId of its row in ads-brain view harvest (a stored row; a dry run\'s rows have none)'),
+  harvestId: z.string().trim().min(1).max(64).describe('the brain harvest: the harvestId of its row in ads-brain view harvest (a stored row; a dry run\'s rows have none); for op undo also harvest-history or a candidate\'s lastHarvest in harvest-candidates'),
   why: z.string().trim().max(300).optional().describe('why, in a sentence: shown to the person who approves it and kept in the ads audit'),
 })
 
@@ -160,7 +160,10 @@ const applyBrainHarvest: AgentTool = {
     + 'only once the keyword stands; a negative that still fails leaves the pair half done and the brain sends it again. '
     + 'op undo puts a harvest back as a pair: its source negatives retired, then its keyword paused (it stays at Amazon). Nothing '
     + 'changes until a person approves it in Nexus; it never runs by rule (the brain itself writes at AUTO, inside its '
-    + 'caps). A new keyword adds spend: listed in raises, a day-to-day change with no authenticator code. Refused, and not '
+    + 'caps). A request the brain asked for itself waits for a person (the Approvals page, or the Keyword Harvest page\'s '
+    + 'Waiting tile): never ask for it again, and Claude cannot approve it. A harvest of a term the brain did not decide '
+    + '(or into another place, a phrase match, a new campaign or portfolio) is apply-harvest, the same engine. A new keyword '
+    + 'adds spend: listed in raises, a day-to-day change with no authenticator code. Refused, and not '
     + 'queued, when the harvest is not waiting for this, the destination does not serve now, an archived keyword of the '
     + 'term or a negative that blocks it stands there, the term found a home in another ad group of the product meanwhile '
     + '(one owner per term), or the write gate would refuse either half. A paused keyword of the term there is switched '

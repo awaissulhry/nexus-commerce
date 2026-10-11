@@ -76,10 +76,18 @@ describe('the negation gate', () => {
     expect(r.reason).toMatch(/protected terms/i)
   })
 
-  it('still capped once protections exist — the reason changes, the ceiling does not', () => {
+  it('D2 (Owner 2026-10-10) — once protections exist, a harvest rule may reach Auto, inside its caps', () => {
     const r = v(['harvest_and_negate'], true)
-    expect(r.maxLevel).toBe('PROPOSE')
-    expect(r.reason).toMatch(/retirement path/i)
+    expect(r.maxLevel).toBe('AUTO')
+    expect(r.reason).toMatch(/inside its caps/i)
+    expect(r.reason).toMatch(/never a new campaign/i)
+    // A plain negative rule keeps its ceiling: only the harvest family moved.
+    expect(v(['add_negative_exact'], true)).toMatchObject({ maxLevel: 'PROPOSE', reason: expect.stringMatching(/retirement path/i) })
+    // A rule that harvests AND bids is judged by both: still asks.
+    expect(v(['bid_to_target_acos', 'harvest_and_negate'], true).maxLevel).toBe('PROPOSE')
+    // R2 — read from its stored action: one that also blocks waste (no harvest-only mode) asks; harvest-only reaches Auto.
+    expect(graduationCeiling({ actionTypes: ['harvest_and_negate'], hasKeywordProtections: true, actions: [{ type: 'harvest_and_negate' }] })).toMatchObject({ maxLevel: 'PROPOSE', reason: expect.stringMatching(/blocks terms that waste spend/) })
+    expect(graduationCeiling({ actionTypes: ['harvest_and_negate'], hasKeywordProtections: true, actions: [{ type: 'harvest_and_negate', mode: 'harvest' }] }).maxLevel).toBe('AUTO')
   })
 })
 
@@ -145,8 +153,9 @@ describe('builder-slug expansion', () => {
     expect(without.reason).toMatch(/protected terms/i)
   })
 
-  it('a harvest slug is structural — it creates keywords and negatives', () => {
-    expect(g(['keyword-harvesting']).maxLevel).toBe('PROPOSE')
+  it('a harvest slug is structural — it creates keywords and negatives (Auto only inside its caps, with protections: D2)', () => {
+    expect(g(['keyword-harvesting'], false).maxLevel).toBe('PROPOSE')
+    expect(g(['keyword-harvesting'], true).maxLevel).toBe('AUTO')
   })
 
   // 5d — negate-in-source now rides inside promote_to_exact; a saved harvest rule is judged by what it produces.
@@ -158,6 +167,8 @@ describe('builder-slug expansion', () => {
     }
     const produced = producedActionTypes(rule)
     expect(produced).toEqual(['promote_to_exact'])
-    for (const prot of [true, false]) expect(g(produced, prot).maxLevel).toBe('PROPOSE')
+    // D2 — Auto inside its caps once protected terms exist; without them it asks.
+    expect(g(produced, false).maxLevel).toBe('PROPOSE')
+    expect(g(produced, true).maxLevel).toBe('AUTO')
   })
 })

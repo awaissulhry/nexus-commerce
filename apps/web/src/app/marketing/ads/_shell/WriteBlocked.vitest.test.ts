@@ -19,7 +19,6 @@ const src = (rel: string) => readFileSync(join(ads, rel), 'utf8')
 const CONTROLS: Array<{ file: string; button: RegExp }> = [
   { file: 'rules-automation/negative-targeting/NegRemoval.tsx', button: /disabled=\{busy \|\| writeCount === 0 \|\| !!blocked\}/ },
   { file: 'rules-automation/negative-targeting/NegWastefulWords.tsx', button: /disabled=\{busy \|\| !!targetBlocked\}/ },
-  { file: 'rules-automation/keyword-harvest/HvPromote.tsx', button: /disabled=\{busy \|\| plan\.promotable === 0 \|\| !!blocked\}/ },
   { file: 'rules-automation/keyword-tracker/BidAction.tsx', button: /disabled=\{loading \|\| !!blocked\}/ },
   { file: 'rules-automation/keyword-tracker/BidAction.tsx', button: /disabled=\{!p\.canPropose \|\| loading \|\| !!blocked\}/ },
   { file: 'campaigns/[id]/tabs/DetailsTab.tsx', button: /\|\| !!writeBlock\}/ },
@@ -62,8 +61,10 @@ describe('🔴 4c — write controls on a reading-only market are off, with a fo
     })
   }
 
-  it('the harvest selection bar is off too, from the page\'s market', () => {
-    expect(src('rules-automation/keyword-harvest/KeywordHarvestClient.tsx')).toMatch(/\}, promoteBlocked\)\}/)
-    expect(src('rules-automation/keyword-harvest/HvPromote.tsx')).toMatch(/className="h10-hv-promote" disabled=\{!!blocked\}/)
+  // The Keyword Harvest page (2026-10-11) replaced the parked HvPromote / KeywordHarvestClient: what reaches Amazon (Harvest,
+  // Approve, Undo) is HELD with the market's reason (DS Button `heldReason`, focusable), per row and in the bulk bar.
+  it('the harvest page holds what reaches Amazon on a market Nexus only reads', () => {
+    expect(src('rules-automation/keyword-harvest/terms/TermsView.tsx')).toMatch(/const a = writeAccess\(row\.market\); return a\.canWrite \? null : a\.reason/)
+    expect(src('rules-automation/keyword-harvest/terms/termsColumns.tsx')).toMatch(/ctx\.current\.manageHeld \?\? ctx\.current\.writeHeld\(row\)/)
   })
 })

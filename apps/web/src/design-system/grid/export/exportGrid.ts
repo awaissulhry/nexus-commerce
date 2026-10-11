@@ -98,7 +98,6 @@ export function gridCsvRows(source: GridCsvSource, base: string, date?: Date): G
       'This grid loads rows from the server as you scroll, so the file would silently hold only the part already loaded. Export the query instead.',
     )
   }
-  const columns = source.columns.filter((c) => !ENGINE_COLUMNS.includes(c.colId))
   const rows = source.rows.filter((r) => r.isData)
   /**
    * A column that renders a structured value through a `cellRenderer` and declares no
@@ -112,6 +111,15 @@ export function gridCsvRows(source: GridCsvSource, base: string, date?: Date): G
     const v = source.cell(rowKey, colId)
     return v === STRINGIFIED_OBJECT ? null : v
   }
+  /**
+   * A column with no header, no key and no value in any row carries nothing: the row-verbs column (`actionsColumn`,
+   * header '') wrote an unnamed empty column at the end of every file (audit M1). It is dropped; a named or keyed
+   * column always stays, empty or not.
+   */
+  const blank = (v: unknown) => v == null || v === ''
+  const columns = source.columns
+    .filter((c) => !ENGINE_COLUMNS.includes(c.colId))
+    .filter((c) => c.header.trim() !== '' || (c.key != null && c.key !== '') || rows.some((r) => !blank(cell(r.key, c.colId))))
   const csvColumns: CsvColumn<{ key: string }>[] = columns.map((c) => ({
     header: c.header,
     value: (r) => cell(r.key, c.colId),
@@ -195,6 +203,13 @@ export function gridCsvSourceFromApi<T>(api: GridApi<T>, opts: GridCsvSourceOpti
   ]
   const extras = new Map<string, GridCsvExtraColumn<T>>()
   for (const c of [...(opts.leading ?? []), ...(opts.trailing ?? [])]) extras.set(c.colId, c)
+  /**
+   * 🔴 OWN property only. `opts.valueOf` on an options object that does not set it is `Object.prototype.valueOf` —
+   * truthy, and called as `opts.valueOf(colId, data)` it returns the options object itself, which `csvField` blanks.
+   * Every export that passed no `valueOf` wrote a header and rows of bare commas (Keyword Harvest audit M1,
+   * 2026-10-11: Terms 63 rows, Rules, Sources, and the product sheets' "reference table" exports).
+   */
+  const valueOf = Object.prototype.hasOwnProperty.call(opts, 'valueOf') ? opts.valueOf : undefined
 
   const nodes: IRowNode<T>[] = []
   api.forEachNodeAfterFilterAndSort((node) => nodes.push(node))
@@ -221,8 +236,8 @@ export function gridCsvSourceFromApi<T>(api: GridApi<T>, opts: GridCsvSourceOpti
       if (!node) return null
       const extra = extras.get(colId)
       if (extra) return node.data == null ? null : extra.value(node.data)
-      if (opts.valueOf && node.data != null) {
-        const declared = opts.valueOf(colId, node.data)
+      if (valueOf && node.data != null) {
+        const declared = valueOf(colId, node.data)
         if (declared !== undefined) return declared
       }
       return api.getCellValue({ rowNode: node, colKey: colId, useFormatter: true })

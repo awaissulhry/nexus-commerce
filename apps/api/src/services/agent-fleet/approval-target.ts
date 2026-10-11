@@ -615,6 +615,22 @@ const adCampaign = (p: Rec, toolName: string): Part => {
   }
 }
 
+/**
+ * HMCP — a harvest engine change set (apply-harvest, and harvest-search-term / graduate-keyword that ask for it): one line
+ * per write it runs, in order (a portfolio, a campaign, each keyword, each source negative, each funnel block), its market,
+ * and the count of every write (the preview keeps up to 200 lines).
+ */
+function harvestChangeSet(p: Rec, toolName: string): Part {
+  const markets = Array.isArray(p.markets) ? p.markets.map((m) => marketOf(m)).filter((m): m is string => !!m) : []
+  const lines = recs(p.changes).map((c) => ({ label: text(c.label) ?? '?', from: text(c.fromLabel) === 'none' ? null : text(c.fromLabel), to: text(c.toLabel) }))
+  return {
+    channel: EBAY_AD_TOOLS.has(toolName) ? 'EBAY' : 'AMAZON',
+    market: markets.length === 1 ? markets[0] : null,
+    changes: lines,
+    changeCount: Array.isArray(p.steps) ? p.steps.length : lines.length,
+  }
+}
+
 const READERS: Record<string, Reader> = {
   /* Prices of the master record, in the master currency. */
   'bulk-price-change': (p, _a, ctx) => {
@@ -732,7 +748,10 @@ const READERS: Record<string, Reader> = {
       ? [{ label: `Negative keyword${text(p.matchType) ? ` (${String(p.matchType).replace(/^NEGATIVE_/, '').toLowerCase()})` : ''}`, from: null, to: `“${text(p.term)}”` }]
       : [],
   }),
-  'graduate-keyword': (p, _a, _ctx, tool) => {
+  'graduate-keyword': (p, a, ctx, tool) => {
+    // HMCP — a graduation asks the harvest engine for its change set: every write it runs is a line (the keyword, each
+    // source negative, each funnel block), as apply-harvest's and harvest-search-term's cards.
+    if (p.engine === 'apply-harvest') return harvestChangeSet(p, tool)
     const destination = rec(p.destination)
     const bid = adMoney(p.suggestedBidCents, p.currency)
     return {
@@ -904,7 +923,9 @@ const READERS: Record<string, Reader> = {
     const lines = recs(p.changes).map((c) => ({ label: text(c.label) ?? '?', from: text(c.fromLabel), to: text(c.toLabel) }))
     return { channel: 'AMAZON', market: marketOf(p.market) ?? agreed(recs(p.changes).map((c) => marketOf(c.marketplace))), changes: lines, changeCount: num(rec(p.totals)?.retiring) ?? lines.length }
   },
-  'harvest-search-term': (p, _a, _ctx, tool) => ({
+  // HMCP — the harvest engine's change set: every write a line.
+  'apply-harvest': (p, _a, _ctx, tool) => harvestChangeSet(p, tool),
+  'harvest-search-term': (p, _a, _ctx, tool) => (p.engine === 'apply-harvest' ? harvestChangeSet(p, tool) : {
     ...adCampaign(p, tool),
     changes: recs(p.changes).map((c) => ({ label: text(c.label) ?? '?', from: text(c.fromLabel) === 'none' ? null : text(c.fromLabel), to: text(c.toLabel) })),
   }),

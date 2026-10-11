@@ -354,7 +354,7 @@ describe('A2 — ad-targets', () => {
 // ── ad-search-terms ──────────────────────────────────────────────────────────────────────────────────
 
 describe('A2 — ad-search-terms', () => {
-  it('wasteful terms by spend, then converting terms, each with the ids the negative and graduation tools take', async () => {
+  it('wasteful terms by spend, then converting terms, each with the ids the negative tools take; a converting term points to harvest-candidates', async () => {
     const data = (await call('ad-search-terms', { limit: 100 })).data!
     expect(data.dataAsOf).toBe(ymd(dayBefore(3)))
     expect(data.items.map((t: Row) => [t.kind, t.query])).toEqual([
@@ -365,7 +365,8 @@ describe('A2 — ad-search-terms', () => {
       adGroupId: 'ar-g1', externalAdGroupId: 'EXT-G1', market: 'IT', currency: 'EUR', suggestedTool: 'create-negative-keyword',
       metrics: { clicks: 40, orders: 0, spendCents: 2150, salesCents: 0, acos: null },
     })
-    expect(data.items[2]).toMatchObject({ suggestedTool: 'graduate-keyword', metrics: { orders: 3, salesCents: 8888 } })
+    // HMCP — a converting term is harvested through the harvest engine; its candidateId when its campaign is one product's.
+    expect(data.items[2]).toMatchObject({ suggestedTool: 'harvest-candidates', candidateId: null, metrics: { orders: 3, salesCents: 8888 } })
     expect(data.items[1]).toMatchObject({ market: 'UK', currency: 'GBP' })
   })
 

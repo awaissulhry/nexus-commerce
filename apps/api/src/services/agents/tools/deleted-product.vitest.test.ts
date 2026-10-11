@@ -94,6 +94,9 @@ const CREATE_OR_EDIT = new Set([
   // One brain AB-15 — the kill switch of one lever: without a product it stops every product; given one, it is about that
   // product. A change, not a list.
   'set-brain-kill-switch',
+  // Keyword Harvest page (HMCP) — one product's harvest places: named by the product, or by a candidate id that holds it.
+  // Not a list: given a product, it is about that product.
+  'harvest-destinations',
 ])
 /** The tools whose input names a product, and how (`product`: one product by Nexus id or SKU). */
 function productTools(): ProductTool[] {

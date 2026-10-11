@@ -1,0 +1,224 @@
+/*
+ * Keyword Harvest page, Terms view (2026-10-11) — layout only, design-system tokens only. Every control is the design
+ * system's own; light only, like the rest of the ads console.
+ */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.toolbarRight {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+/* The count beside the switch keeps one width, so the search box never moves. */
+.count {
+  display: inline-block;
+  min-width: 8ch;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+/* ── grid cells ─────────────────────────────────────────────────────────────────────────────────────────────────── */
+
+.two {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  height: 100%;
+  line-height: 1.3;
+}
+
+.main {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.subline {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  max-width: 100%;
+  font-size: var(--nds-font-size-sm);
+}
+
+.sub {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.muted {
+  color: var(--nds-text-2);
+}
+
+.fill {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.newPlace {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  color: var(--nds-text-2);
+  white-space: nowrap;
+}
+
+/* A number cell with "since harvest" under it: both lines to the right edge, like the number. */
+.numEnd {
+  align-items: flex-end;
+}
+
+/* A row opens its term on click: say so with the cursor (controls keep theirs). */
+.clickRow {
+  cursor: pointer;
+}
+
+/* ── the term's detail ──────────────────────────────────────────────────────────────────────────────────────────── */
+
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.h {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.footerEnd {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  flex-wrap: wrap;
+}
+
+@media (max-width: 639px) {
+  .count {
+    min-width: 0;
+  }
+
+  /* The switch and the count wrap rather than run off a 264 px card (audit S14). */
+  .inline {
+    flex-wrap: wrap;
+  }
+
+  /* The phone's term wraps to a second line instead of being cut (its row grows, audit S14). */
+  .main .ellipsis {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  /* …and so does its place: the source campaign's link wraps instead of "SEED …" (final pass). */
+  .subline {
+    flex-wrap: wrap;
+  }
+
+  .subline .placeWrap {
+    white-space: normal;
+  }
+
+  .placeWrap :global(.nds-entitylinks) {
+    display: inline;
+  }
+
+  .placeWrap :global(.nds-entitylink) {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+}
+
+/* ── the review's rows (decisions): the place as links on one line, nothing wraps in Now / New (re-audit N-S3) ── */
+.where {
+  display: block;
+  min-width: 0;
+  max-width: 400px;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+/* A place on a phone: its links in a row that wraps, each step whole. */
+.placeLines {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+}
+
+@media (max-width: 760px) {
+  .where {
+    max-width: 120px;
+  }
+
+  .placeLines .placeWrap :global(.nds-entitylinks) {
+    display: inline;
+  }
+
+  .placeLines .placeWrap :global(.nds-entitylink) {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}

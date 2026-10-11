@@ -118,6 +118,20 @@ describe('ListboxPanel — action rows (H1)', () => {
     expect(newCampaign).toHaveBeenCalledTimes(1)
   })
 
+  it('a HELD action is drawn as a held option: the held look and its reason as the line under the label (N-S4)', () => {
+    const { props } = make()
+    const [campaign, portfolio] = actionEls(render(props))
+    expect(portfolio.props.className).toContain('held')
+    expect(portfolio.props.className).toContain('has-note')
+    const note = flat(portfolio).find((el) => el.props.className === 'nds-listbox-note')
+    expect(note?.props.children).toBe('Pick terms of one product first.')
+    expect(note?.props['aria-hidden']).toBe('true')
+    expect(flat(portfolio).find((el) => el.props.className === 'nds-listbox-name')?.props.children).toBe('New portfolio…')
+    // An action that runs keeps its one-line look.
+    expect(campaign.props.className ?? '').not.toContain('held')
+    expect(flat(campaign).some((el) => el.props.className === 'nds-listbox-note')).toBe(false)
+  })
+
   it('a HELD action is reachable and says why, and never runs (click or Enter)', () => {
     const { props, newPortfolio } = make()
     const [, portfolio] = actionEls(render(props))

@@ -5,3 +5,8 @@
 .nds-combo-pop button[role="option"]:has(> .nds-listbox-lead > .nds-tag) {
   align-items: baseline;
 }
+
+/* The Listbox TRIGGER with a leading chip (audit S6, 2026-10-11): `.nds-listbox-btn` spreads its children
+   (`space-between`), so with three — the chip, the label, the chevron — the label floated in the middle. The label
+   after a leading node takes the room, so it starts right after the chip; the chevron stays at the end. */
+.nds-listbox-btn > .nds-listbox-lead + span { flex: 1 1 auto; min-width: 0; }

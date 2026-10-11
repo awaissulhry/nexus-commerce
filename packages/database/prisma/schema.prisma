@@ -20885,6 +20885,30 @@ model AdsBrainHarvest {
   checkedAt       DateTime
   changedAt       DateTime
 
+  /// HARVEST ENGINE (2026-10-10, services/advertising/harvest/) — one record for EVERY actor, not only the brain:
+  /// BRAIN (the ads brain's harvest) | PERSON (the Keyword Harvest page) | CLAUDE (an MCP request) | RULE (a harvest rule).
+  actorKind       String    @default("BRAIN")
+  /// The person's user id, the rule's id, or null for the brain.
+  actorId         String?
+  /// The one approval (AgentApproval.id) of the change set this harvest went out in (apply-harvest); null for the brain's
+  /// own AUTO writes and its apply-brain-harvest pairs (those keep `approvalId`).
+  changeSetId     String?
+  /// The keyword's match type: EXACT (the default, the brain's only one) | PHRASE.
+  match           String    @default("EXACT")
+  /// The funnel blocks that came with it (exact → negative exact in the product's phrase / broad / auto ad groups; phrase →
+  /// negative phrase in broad / auto): [{ adGroupId, campaignId, match, action, why, negativeTargetId?, result?, error? }].
+  funnel          Json?
+  /// A new campaign (and portfolio) the harvest is built into, stage by stage: { key, name, adGroupName, dailyBudgetCents,
+  /// portfolio: { id } | { create: { name, capMonthlyCents? } }, builtPortfolioId?, builtCampaignId?, builtAdGroupId? }.
+  newCampaign     Json?
+  /// Where an executing change set stands for this harvest: PORTFOLIO | CAMPAIGN | KEYWORD | NEGATIVES | DONE.
+  stage           String?
+  /// A person skipped the term: hidden until `skippedUntil`, or for good; the brain does not decide it meanwhile.
+  skippedUntil    DateTime?
+  skippedForGood  Boolean   @default(false)
+  skippedBy       String?
+  skippedAt       DateTime?
+
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -20892,6 +20916,23 @@ model AdsBrainHarvest {
   @@index([marketplace, status])
   @@index([status, judgeAfter])
   @@index([checkedAt])
+  @@index([changeSetId])
+  @@index([workspaceId])
+}
+
+/// HARVEST ENGINE (2026-10-10) — a source ad group a person paused harvesting from (the Keyword Harvest page's Sources view):
+/// no harvest (page, Claude, rule or brain) takes a term from it while the row stands; resume deletes it. Nexus only.
+model AdsHarvestSourcePause {
+  // Business ownership comes from verified database context.
+  workspaceId String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String   @id @default(cuid())
+  /// AdGroup.id (local) of the source; no foreign key (an archived ad group keeps its pause until resumed).
+  adGroupId   String
+  pausedBy    String
+  reason      String?  @db.Text
+  createdAt   DateTime @default(now())
+
+  @@unique([workspaceId, adGroupId], name: "ad_group", map: "AdsHarvestSourcePause_workspaceId_adGroupId_key")
   @@index([workspaceId])
 }
 

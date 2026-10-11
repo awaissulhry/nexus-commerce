@@ -444,6 +444,25 @@ describe('resolveRequest — honesty', () => {
     expect(elsewhere.changes[0]).toEqual({ label: 'Highest bid', from: '150 cents', to: '200 cents' })
   })
 
+  it('HMCP — a harvest asked through any name lists EVERY write of its change set: the keyword, each source negative, each funnel block', () => {
+    const steps = [{ kind: 'keyword' }, { kind: 'sourceNegative' }, { kind: 'sourceNegative' }, { kind: 'funnelNegative' }]
+    const changes = [
+      { label: '"test jacket" · Exact (Test exact)', fromLabel: 'none', toLabel: 'exact keyword' },
+      { label: '"test jacket" · Auto (Test auto)', fromLabel: 'none', toLabel: 'negative exact' },
+      { label: '"test jacket" · Phrase (Test phrase)', fromLabel: 'none', toLabel: 'negative exact' },
+      { label: '"test jacket" · Broad (Test broad)', fromLabel: 'none', toLabel: 'negative exact' },
+    ]
+    const engine = { engine: 'apply-harvest', markets: ['IT'], steps, changes, query: 'test jacket', suggestedBidCents: 40, destination: { id: 'c1', name: 'Test exact', marketplace: 'IT' }, destinationAdGroup: { id: 'g1', name: 'Exact' } }
+    for (const tool of ['graduate-keyword', 'harvest-search-term', 'apply-harvest']) {
+      const out = resolveRequest(tool, {}, { ...engine, action: tool }, ctx)
+      expect(out, tool).toMatchObject({ channel: 'AMAZON', market: 'IT', changeCount: 4 })
+      expect(out.changes, tool).toEqual(changes.map((c) => ({ label: c.label, from: null, to: c.toLabel })))
+    }
+    // A graduation from before the engine keeps its one line.
+    const old = resolveRequest('graduate-keyword', {}, { query: 'test jacket', suggestedBidCents: 40, currency: 'EUR', destination: { id: 'c1', name: 'Test exact', marketplace: 'IT' } }, ctx)
+    expect(old.changes).toEqual([{ label: 'New exact keyword', from: null, to: '“test jacket” at €0.40' }])
+  })
+
   it('PB-6c — a term\'s own campaign (op hero): the card names the term, the product and the market', () => {
     const preview = { op: 'hero', market: 'IT', currency: 'EUR', term: 'test cape', product: { productId: 'p-hero', sku: 'TEST-HERO-1' }, campaigns: [{ slot: 'hero:test cape' }], dailyBudgetCents: 150 }
     const out = resolveRequest('apply-ads-playbook', { op: 'hero', market: 'IT', sku: 'TEST-HERO-1', term: 'test cape' }, preview, ctx)

@@ -2,10 +2,10 @@
 
 /**
  * DetailModal — a row's detail in a centered dialog (bid page polish round 2, 2026-10-10; the Owner: no side drawer on
- * the Bid page). Built on the DS `Modal` (`size="detail"`): 1160px wide, as tall as its content up to min(880px, the
- * viewport), hung from a fixed top so a tab change moves only its bottom edge; the header and the tab row fixed, the body
- * scrolls beyond the max and keeps the tallest height seen while open (no jump on a shorter tab or the next row); on a
- * phone (below `breakpoint.sm`) a full-screen sheet. View rules: `detailModalModel.ts`.
+ * the Bid page). Built on the DS `Modal` (`size="detail"`): 1160px wide, CENTRED in the viewport (the Owner, 2026-10-11),
+ * as tall as its content up to min(880px, the viewport); the header and the tab row fixed, the body scrolls beyond the
+ * max and keeps the tallest height seen while open, so it never shrinks on a shorter tab or the next row — it only grows,
+ * evenly around the centre; on a phone (below `breakpoint.sm`) a full-screen sheet. View rules: `detailModalModel.ts`.
  *
  *   header   title · subtitle · `meta` chips          `actions` · ▲ 3 of 12 ▼ · Close
  *   tabs     the DS `Tabs` — link tabs when a tab has an `href` (the host keeps `?rule=<id>&tab=<tab>` in the address,
@@ -21,7 +21,7 @@
  * to this dialog when the save removed that control). When this closes, the focus goes back to what opened it — pass
  * `returnFocusTo` to name the row's cell instead (after Prev / Next moved on, or when it was opened from the address).
  */
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 
 import { Button, Spinner, Tooltip } from '../primitives'
@@ -30,7 +30,7 @@ import { Modal, isTopModal, type ModalProps } from '../components/Modal'
 import { Tabs, tabPanelProps, type TabItem, type TabLinkComponent } from '../components/Tabs'
 import {
   DETAIL_NAV_KEYS, KEY_TARGET_SELECTORS, detailBodyState, detailNavHeld, detailNavKey, detailNavLabel, detailPosition, nextTallest,
-  type DetailDirection, type KeyTargetKind,
+  onlyEmptyState, type DetailDirection, type KeyTargetKind,
 } from './detailModalModel'
 
 function keyTargetKind(target: EventTarget | null): KeyTargetKind {
@@ -144,26 +144,39 @@ export function DetailModal({
 
   // Run 3: the dialog's height follows its content (up to its max), and the body keeps the tallest height seen while it
   // is open — a shorter tab, a "Reading…" or the next row never shrinks it, so nothing jumps; it starts fresh next time.
-  const innerRef = useRef<HTMLDivElement>(null)
+  // Measured after EVERY render (a tab or a row swaps the content) and whenever the content or the body resizes. The
+  // observer follows the content element itself (a callback ref): attached once on open, it stopped following when the
+  // dialog was opened from the address, and the floor stayed at the "Reading…" height (20 px) so every tab shrank it.
+  const [innerEl, setInnerEl] = useState<HTMLDivElement | null>(null)
   const [tallest, setTallest] = useState(0)
+  const measure = useRef<() => void>(() => {})
+  measure.current = () => {
+    const body = innerEl?.closest<HTMLElement>('.nds-modal-b')
+    if (!innerEl || !body) return
+    const cs = getComputedStyle(body)
+    const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0)
+    const room = body.scrollHeight > body.clientHeight + 1 ? body.clientHeight - pad : Infinity
+    setTallest((t) => nextTallest(t, innerEl.offsetHeight, room))
+  }
+  useEffect(() => { if (!open) setTallest(0) }, [open])
   useEffect(() => {
-    if (!open) { setTallest(0); return }
-    const inner = innerRef.current
-    const body = inner?.closest<HTMLElement>('.nds-modal-b')
-    if (!inner || !body) return
-    const measure = () => {
-      const cs = getComputedStyle(body)
-      const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0)
-      const room = body.scrollHeight > body.clientHeight + 1 ? body.clientHeight - pad : Infinity
-      setTallest((t) => nextTallest(t, inner.offsetHeight, room))
-    }
-    measure()
-    if (typeof ResizeObserver === 'undefined') return
-    const sizes = new ResizeObserver(measure)
-    sizes.observe(inner)
-    sizes.observe(body)
+    if (!open || !innerEl || typeof ResizeObserver === 'undefined') return
+    const sizes = new ResizeObserver(() => measure.current())
+    sizes.observe(innerEl)
+    const body = innerEl.closest<HTMLElement>('.nds-modal-b')
+    if (body) sizes.observe(body)
     return () => sizes.disconnect()
-  }, [open])
+  }, [open, innerEl])
+
+  // Audit M12: content that is only an EmptyState sits in the middle of the kept-tall body, not under the tabs. Checked
+  // after every render (a tab or a row changes the content) and marked on the body for the stylesheet.
+  useLayoutEffect(() => {
+    if (open) measure.current()
+    const body = bodyRef.current
+    if (!body) return
+    if (onlyEmptyState(innerEl)) body.setAttribute('data-only-empty', '')
+    else body.removeAttribute('data-only-empty')
+  })
 
   const state = detailBodyState({ loading, error })
   const tabList = tabs && tabs.length > 0 ? tabs : null
@@ -219,7 +232,7 @@ export function DetailModal({
       busy={state === 'loading'}
     >
       <div ref={bodyRef} className="nds-detail-body" {...panelProps} style={tallest ? { minHeight: tallest } : undefined}>
-        <div ref={innerRef}>
+        <div ref={setInnerEl}>
         {state === 'error' ? (
           <Banner tone="danger" action={onRetry ? <Button size="sm" onClick={onRetry}>Try again</Button> : undefined}>{error}</Banner>
         ) : state === 'loading' ? (

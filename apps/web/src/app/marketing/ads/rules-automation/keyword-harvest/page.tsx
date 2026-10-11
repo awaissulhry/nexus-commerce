@@ -1,30 +1,23 @@
 /**
- * Keyword Harvest — the Rules & Automation tab for harvest rules.
+ * Keyword Harvest — the Rules & Automation tab for harvesting search terms into keywords (2026-10-11, wave 2).
  *
- * U7 (2026-08-18) — this route now mounts `KeywordHarvestRulesClient`: page header · tab bar · the
- * pill [ Rules View | Ad Group View ] · one card. That is what Helium 10's Keyword Harvest tab is
- * (study `docs/2026-08-16-ra-h10-reference-study.md` §3.3), and the three things the operator named
- * for this page — Rules, Ad Group View, and the builder behind "+ Rule".
- *
- * `KeywordHarvestClient` — the eighteen-block page this replaced (candidates/harvested views, the
- * thresholds bar, census lede + strip, candidates grid, destination panel, promote dialog, actors
- * panel and the pending queue) — is PARKED, not deleted: the files sit untouched beside this one,
- * each with a PARKED header, and `docs/2026-08-16-ra-parked-sections.md` names where each is
- * headed (Suggestions, Analytics, Automations).
- *
- * ⚠ Every harvest endpoint is still served and the harvest engine's own arming is untouched.
+ * Mounts `HarvestClient`: header · tab bar · [Terms | Rules | Sources] · tiles · the view. The Terms view lists every
+ * search term that sells (one row per term × product × market) with every harvest action on the page itself: harvest to
+ * the suggested place or to one you pick (a new campaign or portfolio too), approve or reject what waits for you, skip,
+ * unskip and undo — each reviewed, then Done with Undo. The page never writes to Amazon directly: a harvest is one
+ * approval request, the same as Claude's.
  *
  * Suspense stays: the client reads `useSearchParams`.
  */
 import { Suspense } from 'react'
-import { KeywordHarvestRulesClient } from './KeywordHarvestRulesClient'
+import { HarvestClient } from './HarvestClient'
 
 export const dynamic = 'force-dynamic'
 
 export default function Page() {
   return (
     <Suspense fallback={null}>
-      <KeywordHarvestRulesClient />
+      <HarvestClient />
     </Suspense>
   )
 }

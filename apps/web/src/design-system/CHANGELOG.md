@@ -1,3 +1,40 @@
+## DetailModal: an EmptyState sits in the middle; on a phone Prev / Next share the title row; the kept height holds from a link — 2026-10-11
+
+Bid lane re-measure round 2 (`01-bid/audit/AUDIT-DESIGN.md`), DetailModal items M12 and S3, lane HDS.
+- **M12** — content that is ONLY a DS `EmptyState` (alone, or inside wrappers that hold nothing else — `onlyEmptyState`, tested) is centred vertically in the kept-tall body (`.nds-detail-body[data-only-empty]`); normal content keeps its place at the top. Measured in the catalog: "No effect yet" after Settings, 258 px above and below (it was 32 / 187–240).
+- **S3** — on the phone sheet the header is one wrapping row: the title (truncating), Prev / Next and Close on the first line, the subtitle across the full width under it, a detail's own actions after that. Prev / Next and Close are 44 px to touch, laid out on the title's line. Header 89 px on the Harvest term and Bid rule windows at 390 (was 128–131).
+- **Fixed with it** — the kept height (run 3) stayed at the "Reading…" height when the detail was opened from the address, so every tab shrank it; it is now measured after every render and the observer follows the content element.
+- Catalog: the DetailModal example gains an Effect tab that is only an EmptyState. Mirrored in Factory: the `components.css` phone hunk.
+
+## DetailModal is centred — 2026-10-11
+
+The Owner, on the Harvest term window: "the pop-up modal is supposed to be centered — also for the negative and the bids". `Modal size="detail"` no longer hangs from a fixed top (run 3): the backdrop centres it like every Modal, its height follows its content up to `min(880px, 100dvh − 40px)`, and `DetailModal` still keeps the tallest body seen while open, so it never shrinks on a shorter tab or the next row and grows evenly around the centre (measured at 1440×900: the Bid rule's Settings tab grew it 580 → 684 px, 52 px each side). Phone (≤ 760 px) keeps the full-screen sheet; a review stacked on top is centred as before. Measured top = bottom on the Harvest term and rule, Bid rule and keyword, and Negatives windows at 1440×900 and 1440×700. Mirrored in Factory (`components.css` hunk).
+
+## A held Listbox action looks held; a review can be a phone sheet — 2026-10-11
+
+Keyword Harvest re-audit N-S4, lane HDS. A `ListboxPanel` / `Listbox` action with `heldReason` ("New campaign…" when the market cannot build) is drawn as a held option is: the held look and its reason as the line under the label (italic), the icon on the label's line; focusable, announced, a click or Enter does nothing (unchanged). Mirrored in Factory (`ListboxPanel.tsx`, `listbox-actions.css`).
+
+`ReviewChangesModal` accepts `size="detail"` (passed to `Modal`): the review is a full-screen sheet on a phone, like the Harvest window (re-audit N-S3). Additive; the default stays `lg`. Web only.
+
+## ReviewChangesModal passes `groups` and `doneLine` to its panel — 2026-10-11
+
+Keyword Harvest polish round, lane HDS. `ReviewChangesModal` gains `groups` (the table in tabs; each change may name its tab in `group` — `changes` is now typed `ReviewPanelChange`, a `ReviewChange` with an optional `group`) and `doneLine` (the host's own Done line), both passed straight to `ReviewChangesPanel`. Additive: without them nothing changes. The Terms review can drop its hand-built Modal + panel. Web only (patterns are not mirrored).
+
+## Exports fill their cells; bulk-bar labels hide only when they do not fit; the Listbox label starts after its chip — 2026-10-11
+
+Keyword Harvest polish round, lane HDS (audit `02-harvest/audit/AUDIT.md` M1, S1, S6; M11 checked). Mirrored in Factory: `grid/theme/grid.css`, `components/listbox-rows.css`.
+
+- **Export (M1)** — `gridCsvSourceFromApi` read `opts.valueOf`, which on an options object that does not set it is `Object.prototype.valueOf`: every cell became the options object and was written blank. Every grid export without its own `valueOf` (Keyword Harvest Terms, Rules, Sources; the product sheets' "reference table") wrote a header and rows of bare commas. Now only an OWN `valueOf` is used. A column with no header, no key and no value (the row-verbs column) is no longer written as an empty column. /products (its own `toCsv`) was not affected; the Bid page has no Export.
+- **Bulk bar (S1)** — `GridSelectionActions` measures: the fullest form that fits on one line wins (all · without the reach note · icons), before paint and on every toolbar resize (`data-fit`, `selectionBarFit`). The fixed `@container` cut-offs (labels 1320 px, note 1100 px) are gone: a 1312 px Harvest card now shows "Harvest 2 · Harvest to… · Skip…"; /products at 1440 still needs icons (582 px of labels for 486 px free), unchanged.
+- **Listbox trigger (S6)** — after a leading chip the label takes the room, so it starts at the chip instead of floating between the chip and the chevron.
+
+## ReviewChangesPanel: the review body without the Modal, for a review that is a step inside a window — 2026-10-11
+
+Keyword Harvest page, lane HTO (`~/nexus-archive/2026-10-10-ads-pages/02-harvest/HARVEST-WAVE2.md`, design gap H2). Web only (no Factory copy of the review).
+
+- **`ReviewChangesPanel`** (`patterns`) + `reviewChangesPanelModel.ts` (pure, tested): the body of `ReviewChangesModal` — the Done line, "Reading…", the failed read with Try again, conflicts, problems that hold Save, tiles, the one table, the one tick — without the dialog, so a window whose review is a STEP ("Harvest to…": set up → Review → Done in one dialog) renders it in its own body and keeps its own footer (Back, a counted primary). The tick is the host's state (`ack`, `onAckChange`): the host's Save reads it through `saveHeldReason`. New, optional: `warnings` (lines that inform and never hold Save; not shown once done), `groups` (the table in tabs, DS `Tabs` with counts — each change names its tab in `group`; an empty tab is left out; the tab shown is kept while it has changes), a Result's own `tone` (`ReviewPanelResult.tone`: "Waiting" in amber, "Taken back" in grey; default success / danger as before) and `doneLine` (the host's own Done line when counting results cannot say it: "Asked · waits for approval"; a node, so it may hold a live `Countdown`: "1 keyword · 2 blocks · goes to Amazon in 18 s").
+- **`ReviewChangesModal` renders the panel**: the same body, the same order, the same words and classes — no visual change, props unchanged.
+
 ## Removed: WeekHourGrid and sparklineColumn, nothing rendered them — 2026-10-11
 
 Bid page "nothing unnecessary" pass (lane USE-WEB; the Owner: "there must not be anything unnecessary").
