@@ -54,7 +54,7 @@ export async function candidateInCampaign(campaignId: string, query: string): Pr
   if (!term) return { refusal: 'name the search term (query)' }
   const owners = await resolveCampaignOwnership([campaignId])
   const own = owners.get(campaignId)
-  if (!own) return { refusal: `campaign ${campaignId} is not a campaign of this business` }
+  if (!own) return { refusal: `campaign ${campaignId} was not found in this business` }
   const market = strategyMarket(own.market)
   if (!market) return { refusal: `campaign "${own.name}" names no market Nexus knows` }
   if (own.owner.kind === 'shared') return { refusal: `campaign "${own.name}" advertises several products (a shared campaign is no product's), so the term has no one product to harvest it into: find it under its product in harvest-candidates and harvest that candidateId with apply-harvest` }
@@ -65,7 +65,7 @@ export async function candidateInCampaign(campaignId: string, query: string): Pr
 /** The candidate a term that ran in an ad group (Nexus id) is, or why not. */
 export async function candidateInAdGroup(adGroupId: string, query: string): Promise<{ candidateId: string; market: string; productId: string; term: string } | { refusal: string }> {
   const campaignId = await adGroupCampaignId(adGroupId)
-  if (!campaignId) return { refusal: `ad group ${adGroupId} is not an ad group of this business (adGroupId in ad-search-terms or ad-groups)` }
+  if (!campaignId) return { refusal: `ad group ${adGroupId} was not found in this business (adGroupId in ad-search-terms or ad-groups)` }
   return candidateInCampaign(campaignId, query)
 }
 

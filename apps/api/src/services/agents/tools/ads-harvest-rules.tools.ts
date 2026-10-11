@@ -23,6 +23,7 @@ import { BRAIN_ROW_ID, harvestRuleHistory, listHarvestRules, previewHarvestRule,
 import { MAX_SOURCE_IDS, assignSources, detachSources, harvestSources, pauseSources, resumeSources } from '../../advertising/harvest/sources.js'
 import { HARVEST_MONEY } from '../../advertising/harvest/constants.js'
 import type { AdsActor } from '../../advertising/ads-mutation.service.js'
+import { targetingAdGroups } from '../../advertising/ads-targeting-lookup.service.js'
 import { fingerprint } from './ads-targeting-kit.js'
 import { approvedRun, notRun } from './ads-change-kit.js'
 import type { AgentTool, FieldPermission, ToolChange, ToolResult, ToolUndo } from '../tool-types.js'
@@ -146,7 +147,7 @@ async function decideRules(raw: Record<string, unknown>): Promise<ToolResult> {
     seen.add(r.id)
     const s = states.get(r.id)
     if (r.id === BRAIN_ROW_ID) left.push({ id: r.id, why: 'the brain is not a rule: its harvest level is set per product (set-ads-brain)' })
-    else if (!s) left.push({ id: r.id, why: 'no harvest rule with this id in this business' })
+    else if (!s) left.push({ id: r.id, why: 'not found in this business (no harvest rule with this id)' })
     else if (a.op === 'mode' && s.archived) left.push({ id: r.id, why: 'it is archived: unarchive it first' })
     else if (a.op === 'mode' && s.mode === r.mode) left.push({ id: r.id, why: `it is ${modeWords(s.mode)} already` })
     else if (a.op !== 'mode' && s.archived === (a.op === 'archive')) left.push({ id: r.id, why: `it is ${s.archived ? 'archived' : 'not archived'} already` })
@@ -340,9 +341,12 @@ async function decideSources(raw: Record<string, unknown>): Promise<ToolResult> 
   if ('error' in states) return { ok: false, error: states.error }
   const left: SourcesPreview['left'] = []
   const changing: string[] = []
+  // Each ad group as this business holds it: one it does not have is not found; one that is not a source here is named.
+  const groups = new Map((await targetingAdGroups([...new Set(a.adGroupIds)])).map((g) => [g.id, `"${g.name}" (${g.campaign.name})`]))
   for (const id of [...new Set(a.adGroupIds)]) {
     const s = states.get(id)
-    if (!s) left.push({ id, why: `not a source ad group of ${a.market} (harvest-sources)` })
+    if (!groups.has(id)) left.push({ id, why: 'not found in this business' })
+    else if (!s) left.push({ id, why: `${groups.get(id)} is not a source ad group of ${a.market} (harvest-sources)` })
     else if (a.op === 'assign' && s.rules.includes(a.ruleId!)) left.push({ id, why: 'the rule reads it already' })
     else if (a.op === 'detach' && !s.rules.includes(a.ruleId!)) left.push({ id, why: 'the rule does not read it' })
     else if (a.op === 'pause' && s.paused) left.push({ id, why: 'harvesting from it is paused already' })
