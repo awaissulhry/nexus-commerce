@@ -287,6 +287,9 @@ const MODE_BASE = modeColumn<GridRow>('mode', {
 const MODE: ColDef<GridRow> = {
   ...MODE_BASE,
   cellRenderer: ModeWithHolds,
+  // The cell's value is the SET step (sort, filter, editor); what it acts as and what holds it can change while the set step
+  // does not (the Brain stopped: Auto, acts as Off). Every new read redraws it, or the row kept the old hold until a reload.
+  equals: () => false,
   width: 132,
   headerTooltip: 'Off · Watch · Ask me · Auto. An arrow: it acts lower now. A shield: some of its campaigns are held. Hover for why.',
 }
