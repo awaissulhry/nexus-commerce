@@ -47,7 +47,8 @@ import {
   isSkeletonRow, isTotalRow, type SkeletonRow, type TotalRow, type WsContext, type WsContextHolder,
 } from './cells'
 import { modalOutside } from '../hooks/useGridShortcuts'
-import { buildColDefs, columnsSignature } from './columns'
+import { FIRST_COL_MAX, buildColDefs, columnsSignature } from './columns'
+import { widthMoved } from '../columns/columnWidths'
 import { createDraftStore } from './drafts'
 import { bandByEnabled, collectGroupMeta, hasActiveFilters, initialPageOf, orderGroups, pageMath, pluralize, searchRows } from './pipeline'
 import {
@@ -327,12 +328,25 @@ export function WorkspaceGrid<T>({
   }, [showTotal, loading, totalRows])
 
   // ── AG events ─────────────────────────────────────────────────────────────────────────────────
+  /**
+   * Widths (grid audit B4, B8, 2026-10-13). Every column a person did not size fits its content; then, when the columns
+   * are narrower than the card, those columns share the slack — never below their content, never moving a saved
+   * width, a fixed column or the identity column. A saved width used to switch the stretch OFF: the first drag made
+   * every other column jump to its content and left a blank strip on the right. A stretch with no limits reset every
+   * column to 200px first, so the metrics came out equal, whatever they held. Nothing fits during a drag.
+   */
+  const contentWidths = useRef(new Map<string, number>())
+  const resizing = useRef(false)
   const fitColumns = useCallback(() => {
     const api = apiRef.current
-    if (!api || api.isDestroyed()) return
+    if (!api || api.isDestroyed() || resizing.current) return
     const widths = prefsRef.current.widths ?? {}
     const cols = (api.getAllGridColumns() ?? []).filter((c) => c.getColId() !== SELECTION_COL && widths[c.getColId()] == null && !c.getColDef().suppressAutoSize && c.isVisible())
     if (cols.length) api.autoSizeColumns(cols, false)
+    // The identity column fits its content up to the 360 the legacy table gave it; wider is the person's to drag.
+    const first = api.getColumn(FIRST_COL)
+    if (first && widths[FIRST_COL] == null && first.getActualWidth() > FIRST_COL_MAX) api.applyColumnState({ state: [{ colId: FIRST_COL, width: FIRST_COL_MAX }] })
+    contentWidths.current = new Map(cols.map((c) => [c.getColId(), c.getActualWidth()]))
     if (Object.keys(widths).length) api.applyColumnState({ state: widthsToColumnState(prefsRef.current) })
     stretchIfNarrow()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -340,12 +354,24 @@ export function WorkspaceGrid<T>({
   /** A `<table width=100%>` stretches to its box when its content is narrower; so does this grid. */
   const stretchIfNarrow = () => {
     const api = apiRef.current
-    if (!api || api.isDestroyed()) return
-    if (Object.keys(prefsRef.current.widths ?? {}).length) return
-    const total = api.getAllDisplayedColumns().reduce((a, c) => a + c.getActualWidth(), 0)
+    if (!api || api.isDestroyed() || resizing.current) return
+    const displayed = api.getAllDisplayedColumns()
+    const total = displayed.reduce((a, c) => a + c.getActualWidth(), 0)
     const w = wrapRef.current?.clientWidth ?? 0
-    if (w > 0 && total < w) api.sizeColumnsToFit()
+    if (!(w > 0 && total < w)) return
+    const widths = prefsRef.current.widths ?? {}
+    api.sizeColumnsToFit({
+      columnLimits: displayed.map((c) => {
+        const id = c.getColId()
+        const content = contentWidths.current.get(id)
+        // A saved width, and any column the content fit did not measure, stay put; the rest share the slack.
+        return widths[id] != null || content == null
+          ? { key: id, minWidth: c.getActualWidth(), maxWidth: c.getActualWidth() }
+          : { key: id, minWidth: content }
+      }),
+    })
   }
+  const boxWidth = useRef<number | null>(null)
   const fitPending = useRef(0)
   const scheduleFit = useCallback(() => {
     cancelAnimationFrame(fitPending.current)
@@ -360,7 +386,11 @@ export function WorkspaceGrid<T>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const onFirstDataRendered = useCallback((_e: FirstDataRenderedEvent<Row>) => { scheduleFit() }, [scheduleFit])
-  const onGridSizeChanged = useCallback((_e: GridSizeChangedEvent<Row>) => { stretchIfNarrow() }, [])
+  // Only a WIDTH change re-stretches: a height change (rows, a horizontal scrollbar appearing mid-drag) is not a reason.
+  const onGridSizeChanged = useCallback((e: GridSizeChangedEvent<Row>) => {
+    if (widthMoved(boxWidth.current, e.clientWidth)) { boxWidth.current = e.clientWidth; stretchIfNarrow() }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const onSortChangeRef = useRef(onSortChange); onSortChangeRef.current = onSortChange
   const onSortChanged = useCallback((e: SortChangedEvent<Row>) => {
     if (applyingSortRef.current || e.source !== 'uiColumnSorted') return
@@ -407,7 +437,9 @@ export function WorkspaceGrid<T>({
     updatePrefs({ ...withVisibleColumnOrder(prefsRef.current, visible), visible }, true)
   }, [updatePrefs])
   const onColumnResized = useCallback((e: ColumnResizedEvent<Row>) => {
-    if (!e.finished || e.source !== 'uiColumnResized') return
+    if (e.source !== 'uiColumnResized') return
+    resizing.current = !e.finished
+    if (!e.finished) return
     let next = prefsRef.current
     for (const c of e.columns ?? (e.column ? [e.column] : [])) next = withWidth(next, c.getColId(), c.getActualWidth())
     updatePrefs(next, true)

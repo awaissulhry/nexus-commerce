@@ -104,6 +104,16 @@ items are "Customise columns…" / "Reset columns" when the page passes `columnD
   header AND the cells; `WorkspaceGrid` — numbers are its default (a metrics grid), every words column says
   `align: 'left'`. A header's words and its cells' words start at the same x (one horizontal inset per tier).
 
+**Column widths (2026-10-13, `columns/columnWidths.ts`).** A width a person sets is theirs.
+- A definition's `width` / `flex` is where a column STARTS: the engine hands them to AG as `initialWidth` /
+  `initialFlex`, so a refresh, a poll or a rebuilt definition never resets a dragged width. A FIXED column (`resizable:
+  false`, or `minWidth === maxWidth`) keeps `width` — its width is the page's.
+- A drag, or a double-click on the handle (it fits the column to its content), is the person's width. Every later fit
+  holds it; fits share the room among the columns nobody sized, never below their content.
+- A fit runs when the grid's WIDTH changes — never when only its height moved, never during a drag.
+- The handle shows an accent bar under the pointer and while dragging; the partition is its resting mark.
+- Saved across visits: `WorkspaceGrid` (its prefs), a `customizable` `DataGrid`, and pages with a saved layout.
+
 ## 6. Cell types (`renderers/`, `columns/presets.ts`)
 
 | Preset | Renderer | Rule |

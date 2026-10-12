@@ -172,16 +172,15 @@ describe('buildColDefs — structure only, the legacy classes on the cells', () 
     expect(by.get('type')!.headerName).toBe('')
     expect(by.get('type')!.headerComponentParams).toEqual({ innerHeaderComponent: 'Label' })
   })
-  it('`width` is the initial width (a hint the table honoured) and turns auto-size off; a persisted width wins', () => {
+  it('`width` is the initial width (a hint the table honoured); a persisted width wins; a double-click can still fit it', () => {
     const by = new Map(buildColDefs(base).map((d) => [d.colId, d]))
     expect(by.get('name')!.initialWidth).toBe(260)
-    expect(by.get('name')!.suppressAutoSize).toBe(true)
     expect(by.get('status')!.initialWidth).toBeUndefined()
-    expect(by.get('status')!.suppressAutoSize).toBeUndefined()
     const w = new Map(buildColDefs({ ...base, widths: { name: 300, status: 90 } }).map((d) => [d.colId, d]))
     expect(w.get('name')!.initialWidth).toBe(300)
     expect(w.get('status')!.initialWidth).toBe(90)
-    expect(w.get('status')!.suppressAutoSize).toBe(true)
+    // The fit skips a widthed column by itself; `suppressAutoSize` would also have killed the handle's double-click (B11).
+    for (const d of [...by.values(), ...w.values()]) if (d.colId !== '__ck') expect(d.suppressAutoSize).toBeUndefined()
   })
   it('the sort in force seeds `initialSort` on that column only (never `sort`)', () => {
     const by = new Map(buildColDefs({ ...base, sort: { key: 'spend', dir: 'asc' } }).map((d) => [d.colId, d]))

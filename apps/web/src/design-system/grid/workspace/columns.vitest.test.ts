@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { IRowNode, SortComparatorFn } from 'ag-grid-community'
 
-import { alignClass, buildColDefs, columnsSignature, FIRST_COL_MAX, FIRST_COL_MIN } from './columns'
+import { alignClass, buildColDefs, columnsSignature, FIRST_COL_DRAG_MAX, FIRST_COL_MIN } from './columns'
 import { FIRST_COL, GROUP_COL, defaultPrefs } from './prefs'
 import type { GridColumn } from './types'
 
@@ -54,7 +54,8 @@ describe('buildColDefs — structure only, in the preferences\' order', () => {
     expect(first.lockPosition).toBe('left')
     expect(first.suppressMovable).toBe(true)
     expect(first.minWidth).toBe(FIRST_COL_MIN)
-    expect(first.maxWidth).toBe(FIRST_COL_MAX)
+    // A person may drag it past the 360 the grid gives it by itself (B4).
+    expect(first.maxWidth).toBe(FIRST_COL_DRAG_MAX)
     expect(first.initialWidth).toBe(FIRST_COL_MIN)
     expect(first.cellClass).toEqual(['nds-ws-td', 'nm', 'fz'])
     expect(first.cellRenderer).toBe('Identity')
@@ -105,13 +106,13 @@ describe('buildColDefs — structure only, in the preferences\' order', () => {
     expect(defs.find((d) => d.colId === 'spend')!.sortable).toBe(true)
     expect(buildColDefs({ ...base, firstSortable: false, prefs: defaultPrefs(COLS) })[0].sortable).toBe(false)
   })
-  it('a persisted width wins over auto-size, for a metric column and for the identity column', () => {
+  it('a persisted width is where a metric column and the identity column start; a double-click can still fit them', () => {
     const defs = buildColDefs({ ...base, prefs: { ...defaultPrefs(COLS), widths: { spend: 133, [FIRST_COL]: 340 } } })
     const spend = defs.find((d) => d.colId === 'spend')!
     expect(spend.initialWidth).toBe(133)
-    expect(spend.suppressAutoSize).toBe(true)
+    expect(spend.suppressAutoSize).toBe(false)
     expect(defs[0].initialWidth).toBe(340)
-    expect(defs[0].suppressAutoSize).toBe(true)
+    expect(defs[0].suppressAutoSize).toBeUndefined()
   })
   it('defaultSort seeds `initialSort` on that column only (never `sort`, never an index)', () => {
     const defs = buildColDefs({ ...base, prefs: defaultPrefs(COLS), defaultSort: { key: 'spend', dir: 'desc' } })

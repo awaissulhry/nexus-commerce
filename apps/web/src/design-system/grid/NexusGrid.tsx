@@ -27,11 +27,12 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { AgGridReact, type AgGridReactProps } from 'ag-grid-react'
-import type { ColDef, ColumnPinnedEvent, DefaultMenuItem, FirstDataRenderedEvent, GetMainMenuItems, GridApi, GridReadyEvent, GridSizeChangedEvent, MenuItemDef, ModelUpdatedEvent, NewColumnsLoadedEvent } from 'ag-grid-community'
+import type { ColDef, ColumnPinnedEvent, ColumnResizedEvent, DefaultMenuItem, FirstDataRenderedEvent, GetMainMenuItems, GridApi, GridReadyEvent, GridSizeChangedEvent, MenuItemDef, ModelUpdatedEvent, NewColumnsLoadedEvent } from 'ag-grid-community'
 
 import { gridDensity, gridGeometry, type GridDensityName } from '../tokens/grid'
 import { compareSortValues, type SortValue } from './sortValues'
 import { plainFirstGuess, plainGridHeight } from './plainGrid'
+import { heldLimits, widthMoved, widthsAsDefaults } from './columns/columnWidths'
 import { declaredPinning, withPinning } from './statePinning'
 import { fillHandleHit } from './editors/openGesture'
 import { registerGridModules } from './modules'
@@ -200,6 +201,9 @@ export function NexusGrid<T>({
      straight to AG by the spread and never reach this call. ONE host path for "a double-click on
      this cell", wherever in the cell it landed. */
   onCellDoubleClicked,
+  /* Destructured: the engine tracks a person's resizes (which columns they sized, whether a drag is under way) before
+     handing the event on — the width policy below reads both. */
+  onColumnResized,
   onGridSizeChanged,
   onFirstDataRendered,
   onModelUpdated,
@@ -448,12 +452,39 @@ export function NexusGrid<T>({
     }),
     [defaultColDef, plain],
   )
-  // `plain`: the columns keep filling the width as the modal or panel around the grid changes size.
+  /**
+   * Column widths — the engine's policy (`columns/columnWidths.ts`, docs/GRID.md §5). A width a person dragged (or
+   * fitted with a double-click on the handle — AG reports both as `uiColumnResized`) is theirs: no refresh, rebuild or
+   * re-fit moves it. A definition's `width` / `flex` is where a column starts.
+   */
+  const userSized = useRef(new Set<string>())
+  const resizing = useRef(false)
+  const handleColumnResized = useCallback((e: ColumnResizedEvent<T>) => {
+    if (e.source === 'uiColumnResized') {
+      resizing.current = !e.finished
+      if (e.finished) for (const c of e.columns ?? (e.column ? [e.column] : [])) userSized.current.add(c.getColId())
+    }
+    onColumnResized?.(e)
+  }, [onColumnResized])
+  const columnDefs = useMemo(
+    () => (agProps.columnDefs ? widthsAsDefaults(agProps.columnDefs) : agProps.columnDefs),
+    [agProps.columnDefs],
+  )
+  // `plain`: the columns keep filling the width as the modal or panel around the grid changes WIDTH — not when only its
+  // height moves (two-line cells re-wrapping changed the height and reset every column, grid audit B5), never during a
+  // drag, and never over a column the person sized.
+  const fitWidth = useRef<number | null>(null)
   const handleGridSizeChanged = useCallback((e: GridSizeChangedEvent<T>) => {
-    if (plain && !agProps.autoSizeStrategy && e.clientWidth > 0) e.api.sizeColumnsToFit()
+    if (plain && !agProps.autoSizeStrategy && !resizing.current && widthMoved(fitWidth.current, e.clientWidth)) {
+      fitWidth.current = e.clientWidth
+      e.api.sizeColumnsToFit({ columnLimits: heldLimits(e.api.getAllDisplayedColumns(), userSized.current) })
+    }
     measureRows(e.api)
     onGridSizeChanged?.(e)
   }, [plain, agProps.autoSizeStrategy, onGridSizeChanged, measureRows])
+  // One object for the life of the grid: AG reads `autoSizeStrategy` once, and a new object on every render made it
+  // warn (#22) on every render of every `plain` grid.
+  const plainAutoSize = useMemo(() => (plain ? ({ type: 'fitGridWidth' } as const) : undefined), [plain])
 
   const wrapStyle = useMemo<CSSProperties>(
     () => ({
@@ -518,10 +549,11 @@ export function NexusGrid<T>({
           selectionColumnDef={mergedSelectionColumnDef}
           onColumnPinned={handleColumnPinned}
           onCellDoubleClicked={onCellDoubleClicked}
+          onColumnResized={handleColumnResized}
           onGridSizeChanged={handleGridSizeChanged}
           onFirstDataRendered={handleFirstDataRendered}
           onModelUpdated={handleModelUpdated}
-          autoSizeStrategy={plain ? { type: 'fitGridWidth' } : undefined}
+          autoSizeStrategy={plainAutoSize}
           // Popups (header menus, dialogs, tooltips) go on the document, not inside the grid. AG
           // fits a popup to its popup parent's box; under `autoHeight` that box is the whole
           // grid and can run past the viewport, so a header menu opened low on the page ended
@@ -529,6 +561,7 @@ export function NexusGrid<T>({
           // itself below the fold. Against the document, AG fits them to the window.
           popupParent={typeof document !== 'undefined' ? document.body : undefined}
           {...agProps}
+          columnDefs={columnDefs}
           initialState={initialState}
         />
         </GridEmptyCellsContext.Provider>

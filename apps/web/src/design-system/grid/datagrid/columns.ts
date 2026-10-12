@@ -203,7 +203,9 @@ export function buildColDefs<T>(input: BuildColDefsInput<T>): ColDef[] {
       cellClass: ['nds-dg-td', align, c.numeric ? 'num' : '', c.className ?? '', ...stickyClasses(sticky, stickyRight)].filter(Boolean),
       cellClassRules: EDGE_CELL_RULES,
       headerClass: (p: HeaderClassParams) => ['nds-dg-th', align, align === 'r' ? 'nds-ag-head-num' : '', ...stickyClasses(sticky, stickyRight), ...edgeHeaderClass(p)].filter(Boolean),
-      ...(width != null ? { initialWidth: width, suppressAutoSize: true } : {}),
+      // A width is where the column starts. Not `suppressAutoSize`: the fit skips a widthed column itself, and a
+      // double-click on its handle must still fit it to its content (grid audit B11).
+      ...(width != null ? { initialWidth: width } : {}),
     }
   }
   for (const c of visible) defs.push(toDef(c, false))
