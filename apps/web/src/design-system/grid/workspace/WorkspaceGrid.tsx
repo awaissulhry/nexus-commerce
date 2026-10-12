@@ -46,6 +46,7 @@ import {
   GroupBandRenderer, HeaderTipRenderer, IdentityCellRenderer, SelectionSkeletonRenderer, ValueCellRenderer,
   isSkeletonRow, isTotalRow, type SkeletonRow, type TotalRow, type WsContext, type WsContextHolder,
 } from './cells'
+import { modalOutside } from '../hooks/useGridShortcuts'
 import { buildColDefs, columnsSignature } from './columns'
 import { createDraftStore } from './drafts'
 import { bandByEnabled, collectGroupMeta, hasActiveFilters, initialPageOf, orderGroups, pageMath, pluralize, searchRows } from './pipeline'
@@ -53,6 +54,7 @@ import {
   FIRST_COL, SELECTION_COL, defaultPrefs, defaultVisibleKeys, hasStoredPrefs, readStoredPrefs, samePrefs,
   visibleOrderFromColumnState, widthsToColumnState, withWidth, writeStoredPrefs, prefsToModal, prefsFromModal,
 } from './prefs'
+import { rowNavAction } from './rowNavKeys'
 import { adsWorkspaceTheme } from './theme'
 import type { FilterState, GridEditField, GridPrefs, WorkspaceGridProps } from './types'
 import './workspace.css'
@@ -541,7 +543,8 @@ export function WorkspaceGrid<T>({
   }, [search, onSearchChange])
   useEffect(() => { bridgeMounted.current = true }, [])
 
-  // ── keyboard navigation (opt-in) — the legacy document listener, over AG's displayed rows ──────
+  // ── keyboard navigation (opt-in) — a page-wide listener over AG's displayed rows; which keys it may take is
+  //    `rowNavKeys.ts` (never ⌘/Ctrl/Alt, a control's own Enter, typing, menus or dialogs; arrows only in the grid) ──
   const [focusedId, setFocusedId] = useState<string | null>(null)
   const displayedRows = useCallback((): Array<{ node: IRowNode<Row>; row: T }> => {
     const api = apiRef.current
@@ -562,20 +565,23 @@ export function WorkspaceGrid<T>({
   useEffect(() => {
     if (!keyboardNav) return
     const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
+      const wrap = wrapRef.current
+      if (!wrap) return
+      const holdsGrid = (node: unknown) => node instanceof Node && node.contains(wrap)
+      const action = rowNavAction(e, wrap, holdsGrid, { modalOpen: modalOutside(wrap) })
+      if (!action) return
       const list = displayedRows()
       const n = list.length
       if (n === 0) return
-      const k = e.key.toLowerCase()
       const i = list.findIndex((x) => x.node.id === focusedIdRef.current)
-      if (k === 'j' || e.key === 'ArrowDown') { e.preventDefault(); setFocusedId(list[Math.min(n - 1, i + 1)].node.id ?? null) }
-      else if (k === 'k' || e.key === 'ArrowUp') { e.preventDefault(); setFocusedId(list[Math.max(0, (i < 0 ? 0 : i) - 1)].node.id ?? null) }
-      else {
-        if (i < 0 || i >= n) return
-        if (k === 'o' || e.key === 'Enter') { e.preventDefault(); onRowClickRef.current?.(list[i].row) }
-        else onRowKeyRef.current?.(list[i].row, k)
+      if (action.kind === 'move') {
+        e.preventDefault()
+        setFocusedId(list[action.step > 0 ? Math.min(n - 1, i + 1) : Math.max(0, (i < 0 ? 0 : i) - 1)].node.id ?? null)
+        return
       }
+      if (i < 0 || i >= n) return
+      if (action.kind === 'open') { e.preventDefault(); onRowClickRef.current?.(list[i].row) }
+      else onRowKeyRef.current?.(list[i].row, action.key)
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
