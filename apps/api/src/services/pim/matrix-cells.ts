@@ -85,12 +85,13 @@ export function channelShape(channel: string): { cells: MatrixCellKind[]; absent
 export type BusinessAbsence = { cell: 'businessPrice' | 'businessTiers'; reason: string }
 
 /**
- * Business pricing is served ABSENT on an Amazon market coordinate until that market's cached product-type schema exposes
- * the B2B audience (`purchasable_offer … audience` enum ∋ `B2B`) — derived per coordinate from the cache the read already
- * trusts, never hardcoded (MX.1 phase 0(b): every cached schema says `["ALL"]` today). Three honest sentences: no cached
- * schema (nothing to check against), a schema without B2B (Amazon has not enabled it), a schema WITH B2B (the cells are not
- * built yet — the day this arm fires, a lane adds `businessPrice`/`businessTiers` to `MatrixCellKind`). `audience` is the
- * flattened enum; `null` = no active schema is cached for (productType, market).
+ * Business pricing is served ABSENT on an Amazon market coordinate until Amazon lists the B2B audience
+ * (`purchasable_offer … audience` enum ∋ `B2B`) for THAT coordinate's account — derived per coordinate from the
+ * seller-scoped definition the nightly refresh keeps (categories/seller-offer-audience.service.ts), never hardcoded.
+ * The shared CategorySchema cache cannot answer: Amazon lists B2B only to a request carrying the account's `sellerId`.
+ * Three honest sentences: not measured yet (nothing to check against), measured without B2B (Amazon has not enabled
+ * it), measured WITH B2B (the cells are not built yet — the day they are, `businessPrice`/`businessTiers` join
+ * `MatrixCellKind`). `audience` is the audience codes; `null` = never measured for (account, productType, market).
  */
 export function businessAbsence(input: { productType: string | null; market: string; audience: readonly string[] | null }): BusinessAbsence[] {
   const reason = input.audience === null || !input.productType
@@ -99,14 +100,6 @@ export function businessAbsence(input: { productType: string | null; market: str
       ? MATRIX_COPY.absentBusinessNotBuilt(input.productType)
       : MATRIX_COPY.absentBusiness(input.productType)
   return [{ cell: 'businessPrice', reason }, { cell: 'businessTiers', reason }]
-}
-
-/** The flattened `audience` enum out of `jsonb_path_query_array(… '$.properties.purchasable_offer.**.audience.**.enum')` — `[["ALL"]]` → `['ALL']`. */
-export function flattenAudience(raw: unknown): string[] {
-  const out: string[] = []
-  const walk = (v: unknown) => { if (Array.isArray(v)) v.forEach(walk); else if (typeof v === 'string') out.push(v) }
-  walk(raw)
-  return [...new Set(out)]
 }
 
 /** A market coordinate inside a shared region carries NO inventory kinds — they live on the region group. */

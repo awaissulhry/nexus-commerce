@@ -17,7 +17,7 @@ import {
   inSourceOrder, sharedStockReason, sourceCellOf,
 } from './matrix-cells.js'
 import { syncLedgerOf } from '../sync-control-core.js'
-import { businessAbsence, effectiveFulfilment, flattenAudience } from './matrix-cells.js'
+import { businessAbsence, effectiveFulfilment } from './matrix-cells.js'
 import { destinationSellingStates, type SellingStateListing } from '../listings/listing-action.service.js'
 
 const ACTIVE = { state: 'active', reason: null } as const
@@ -217,13 +217,7 @@ describe('sync, price, fulfilment and coordinate helpers', () => {
   })
 })
 
-describe('business pricing absence — derived from the cached schema, three honest sentences (MX.F, design §3.11)', () => {
-  it('flattens the JSONPath projection of the audience enum', () => {
-    expect(flattenAudience([['ALL']])).toEqual(['ALL'])
-    expect(flattenAudience([['ALL', 'B2B'], ['ALL']])).toEqual(['ALL', 'B2B'])
-    expect(flattenAudience([])).toEqual([])
-    expect(flattenAudience(null)).toEqual([])
-  })
+describe('business pricing absence — derived from the account\'s seller-scoped definition, three honest sentences (MX.F, design §3.11)', () => {
   it('a cached schema without B2B → MX.1\'s sentence naming the schema, on BOTH reserved cells (the market is the coordinate\'s, 2026-10-08)', () => {
     const out = businessAbsence({ productType: 'OUTERWEAR', market: 'IT', audience: ['ALL'] })
     expect(out.map((a) => a.cell)).toEqual(['businessPrice', 'businessTiers'])
@@ -232,7 +226,7 @@ describe('business pricing absence — derived from the cached schema, three hon
     /* One sentence for every market that shares it — Customise groups the markets (`absentHint`). */
     expect(businessAbsence({ productType: 'OUTERWEAR', market: 'DE', audience: ['ALL'] })[0]!.reason).toBe(out[0]!.reason)
   })
-  it('no cached schema for (productType, market) → the unchecked sentence, never a false "checked against"', () => {
+  it('never measured for (account, productType, market) → the unchecked sentence, never a false "checked against"', () => {
     const out = businessAbsence({ productType: 'OUTERWEAR', market: 'PL', audience: null })
     for (const a of out) expect(a.reason).toBe(MATRIX_COPY.absentBusinessUnchecked())
     expect(out[0]!.reason).not.toContain('checked against')

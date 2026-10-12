@@ -3,7 +3,7 @@ const state = vi.hoisted(() => ({ workspace: 'one', seller: vi.fn(), client: vi.
 vi.mock('../../lib/workspace-context.js', () => ({ workspaceIdForQuery: () => state.workspace, workspaceContext: () => ({ workspaceId: state.workspace }) }))
 vi.mock('../../lib/amazon-sp-client.js', () => ({ getAmazonSellerId: state.seller, getAmazonSpClient: state.client }))
 vi.mock('./schema-document.js', () => ({ downloadAmazonSchema: state.download, schemaFingerprint: () => 'checked-schema' }))
-import { amazonSellerSpec } from './seller-schema.service.js'
+import { amazonSellerOfferAudience, amazonSellerSpec, offerAudienceLabels } from './seller-schema.service.js'
 afterEach(() => vi.useRealTimers())
 it('isolates seller and workspace requirements, refreshes stale schemas, and evicts failed requests', async () => {
   vi.useFakeTimers(); vi.setSystemTime(new Date('2026-09-11'))
@@ -24,4 +24,25 @@ it('isolates seller and workspace requirements, refreshes stale schemas, and evi
   state.api.mockRejectedValueOnce(new Error('Unavailable'))
   await expect(amazonSellerSpec('a', 'DE', 'JACKET')).rejects.toThrow('Unavailable')
   await expect(amazonSellerSpec('a', 'DE', 'JACKET')).resolves.toMatchObject({ schemaVersion: 'checked-schema' })
+})
+
+it('reads the offer audiences of a seller-scoped definition: asks WITH sellerId, keeps Amazon\'s names, never caches', async () => {
+  state.workspace = 'one'
+  state.seller.mockImplementation(async account => `seller-${account}`)
+  state.client.mockResolvedValue({ callAPI: state.api })
+  state.api.mockReset().mockResolvedValue({ schema: { link: { resource: 'https://schema.example/document' } }, requirementsEnforced: 'ENFORCED' })
+  state.download.mockReset().mockResolvedValue({ properties: { purchasable_offer: { items: { properties: { audience: { enum: ['B2B', 'ALL'], enumNames: ['Amazon Business (B2B)', 'Vendita su Amazon'] } } } } } })
+  expect(await amazonSellerOfferAudience('a', 'IT', 'COAT')).toEqual({ B2B: 'Amazon Business (B2B)', ALL: 'Vendita su Amazon' })
+  await amazonSellerOfferAudience('a', 'IT', 'COAT')
+  expect(state.api).toHaveBeenCalledTimes(2)
+  expect(state.api.mock.calls[0][0].query).toMatchObject({ sellerId: 'seller-a', marketplaceIds: ['APJ6JRA9NG5V4'], requirements: 'LISTING' })
+  state.seller.mockResolvedValueOnce(null)
+  await expect(amazonSellerOfferAudience('b', 'IT', 'COAT')).rejects.toThrow('no verified seller identity')
+})
+
+it('offerAudienceLabels: codes with Amazon\'s names, the code itself when a name is missing, {} without the node', () => {
+  expect(offerAudienceLabels({ properties: { purchasable_offer: { items: { properties: { audience: { enum: ['ALL'] } } } } } })).toEqual({ ALL: 'ALL' })
+  expect(offerAudienceLabels({ properties: { purchasable_offer: { items: { properties: { audience: { enum: ['B2B', 'ALL'], enumNames: ['Business'] } } } } } })).toEqual({ B2B: 'Business', ALL: 'ALL' })
+  expect(offerAudienceLabels({ properties: {} })).toEqual({})
+  expect(offerAudienceLabels(null)).toEqual({})
 })

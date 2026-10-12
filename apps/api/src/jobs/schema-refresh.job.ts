@@ -25,6 +25,10 @@
  * (CategorySchema channel AMAZON_EN, CategorySchemaService.refreshEnglishCopy) — one more SP-API call and S3 download
  * per pair; the summary counts them (englishStored / englishFailed).
  *
+ * Amazon Business (2026-10-12): then, per Amazon pair × each of the business's own Amazon accounts, the offer audiences
+ * Amazon allows that account (services/categories/seller-offer-audience.service.ts) — one seller-scoped download each,
+ * because the shared cache above never lists B2B; the summary counts them (audienceStored / audienceFailed).
+ *
  * Per business: registered through lib/cron/clustered.ts, which with business profiles on runs this handler once per
  * active profile inside withWorkspace — every read, provider credential and cache row belongs to that business. With
  * profiles off it runs once, for the original business.
@@ -42,6 +46,7 @@ import { recordCronRun } from '../utils/cron-observability.js'
 import { AmazonService } from '../services/marketplaces/amazon.service.js'
 import { CategorySchemaService } from '../services/categories/schema-sync.service.js'
 import { COVERAGE_CHANNELS, collectSchemaTargets, fillSchemaTargets } from '../services/categories/schema-coverage.service.js'
+import { refreshSellerOfferAudiences } from '../services/categories/seller-offer-audience.service.js'
 
 let scheduledTask: ReturnType<typeof nodeCron.schedule> | null = null
 
@@ -66,9 +71,14 @@ export async function runSchemaRefresh(): Promise<string> {
 
     // W3 PR-A — Amazon also prints its English copies: englishFailed > 0 with englishStored = 0 means Amazon did not
     // answer in English (or could not be reached), and the sheet keeps the market's names.
+    // Amazon Business — the audiences each own Amazon account may sell to (B2B), from seller-scoped definitions.
+    const amazonPairs = targets.filter(t => t.channel === 'AMAZON')
+    const audience = amazonReady && amazonPairs.length
+      ? await refreshSellerOfferAudiences(amazonPairs, { throttleMs: 300, label: 'schema-refresh cron' })
+      : { stored: 0, failed: 0 }
     const summary = `targets=${targets.length} ` + Object.entries(counts)
       .map(([channel, c]) => `${channel}: added=${c.added} refreshed=${c.refreshed} failed=${c.failed} skipped=${c.skipped}`
-        + (channel === 'AMAZON' ? ` englishStored=${c.englishStored} englishFailed=${c.englishFailed}` : '')).join(' · ')
+        + (channel === 'AMAZON' ? ` englishStored=${c.englishStored} englishFailed=${c.englishFailed} audienceStored=${audience.stored} audienceFailed=${audience.failed}` : '')).join(' · ')
     logger.info(`schema-refresh cron: ${summary}`)
     return summary
   })

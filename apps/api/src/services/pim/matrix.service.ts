@@ -59,6 +59,7 @@ import { ledgerInputs, loadMarketSources, loadSyncLedgers } from '../stock-pool/
 import { marketSourceKey, sellsFrom } from '../sync-control-core.js'
 import { loadChannelPolicies, parsePolicyKey, policyFor } from '../sync-control-policy.service.js'
 import { isOwnConnection } from '../connection-resolver.service.js'
+import { offerAudienceKey, storedOfferAudiences } from '../categories/seller-offer-audience.service.js'
 import { detectEuIntentConflict } from '../amazon-eu-quantity-guard.js'
 import { readAmazonOfferDraft } from '../amazon/offer-draft.js'
 import { listingQuantityVerdict } from './listing-quantity-verdict.js'
@@ -72,7 +73,7 @@ import { readSaleWindows } from './sale-window.js'
 import { FBA_ALL_CENTRES } from '../fba-pan-eu.service.js'
 import { axisValuesOf, buildFamilyAxes, FAMILY_MEMBER_SELECT, readExcludedListingIds, resolveFamilyRoot, type FamilyAxis } from './family-projection.service.js'
 import {
-  businessAbsence, channelLabel, channelRank, channelShape, circled, compareMarkets, deriveFulfilment, flattenAudience, foldQueue, isAmazonEuMarket,
+  businessAbsence, channelLabel, channelRank, channelShape, circled, compareMarkets, deriveFulfilment, foldQueue, isAmazonEuMarket,
   effectiveFulfilment, inSourceOrder, lanePushFailure, listingStateOf, priceCellOf, reportedFulfilment, sourceCellOf, withoutInventory, writableFor, type QueueRowFacts, type SourceLocation,
 } from './matrix-cells.js'
 
@@ -134,14 +135,6 @@ export function casePackOf(owners: Omit<CaseOwnerRow, 'productId'> | null | unde
 
 const upper = (s: string | null | undefined) => String(s ?? '').toUpperCase()
 
-/**
- * MX.F (design §3.11, D-MX5): the B2B audience enum of the NEWEST active cached Amazon schema per market for ONE product
- * type — a JSONPath projection inside Postgres, so the read never loads the 150 KB schema bodies (15 ms measured on the
- * local copy for 7 markets). A SELECT on the cache table only: no schema service is called, so no live SP-API
- * product-type fetch can be triggered from here (the header's rule holds).
- */
-const AUDIENCE_SQL = `SELECT DISTINCT ON ("marketplace") "marketplace", jsonb_path_query_array("schemaDefinition", '$.properties.purchasable_offer.**.audience.**.enum') AS "audience"
-  FROM "CategorySchema" WHERE "channel" = 'AMAZON' AND "productType" = $1 AND "isActive" ORDER BY "marketplace", "fetchedAt" DESC`
 const coordKey = (channel: string, market: string, aliasId?: string | null): CoordinateKey => `${upper(channel)}:${upper(market)}${aliasId ? `#${aliasId}` : ''}`
 
 /** VP.2's stored axis order (`platformAttributes._axisValueOrder` on a parent listing), the same lookup `storedAxisOrder` makes. */
@@ -207,11 +200,14 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
       select: { productId: true, quantity: true, shippedQuantity: true, plan: { select: { id: true, name: true, status: true, createdAt: true } } },
     }),
   ]); queries += 18
-  const audienceRows = parentRow.productType
-    ? await prisma.$queryRawUnsafe<Array<{ marketplace: string | null; audience: unknown }>>(AUDIENCE_SQL, parentRow.productType)
-    : []
-  if (parentRow.productType) queries += 1
-  const audienceByMarket = new Map(audienceRows.map((r) => [upper(r.marketplace), flattenAudience(r.audience)]))
+  /* MX.F (design §3.11, D-MX5) + Amazon Business step 1: the offer audiences the nightly schema refresh measured for this
+     product type per Amazon account × market (seller-scoped definitions — the shared CategorySchema cache never lists
+     B2B). One indexed row read: no schema service is called, so no live SP-API fetch can start from here. */
+  const amazonConnectionIds = connections.filter((c) => upper(c.channelType) === 'AMAZON').map((c) => c.id)
+  const audienceByAccountMarket = parentRow.productType && amazonConnectionIds.length
+    ? await storedOfferAudiences(parentRow.productType, amazonConnectionIds)
+    : new Map<string, string[]>()
+  if (parentRow.productType && amazonConnectionIds.length) queries += 1
   mark('wave1', tWave1)
 
   // ── 3. wave 2 — the tables keyed by listing id ─────────────────────────────────────────────
@@ -442,9 +438,9 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
       region: ch === 'AMAZON' ? (isAmazonEuMarket(ch, mk) ? 'EU' : mk === 'UK' ? 'UK' : m.region || null) : null,
       alias: null, accountId, currency: m.currency, connected, listed: null, draft: null,
       cells: isListed ? (inEu ? withoutInventory(shape.cells) : shape.cells) : [],
-      /* A LISTED Amazon market also declares the reserved business cells absent, with the sentence derived from ITS cached schema. */
+      /* A LISTED Amazon market also declares the reserved business cells absent, with the sentence derived from what Amazon told ITS account. */
       absent: ch === 'AMAZON' && isListed && !global
-        ? [...shape.absent, ...businessAbsence({ productType: parentRow.productType ?? null, market: mk, audience: audienceByMarket.get(mk) ?? null })]
+        ? [...shape.absent, ...businessAbsence({ productType: parentRow.productType ?? null, market: mk, audience: accountId ? audienceByAccountMarket.get(offerAudienceKey(accountId, mk)) ?? null : null })]
         : shape.absent,
       sharedInventoryWith: null, inventoryOn: inEu ? 'AMAZON:EU' : null,
       vocabulary: { fulfilment: shape.fulfilment },
