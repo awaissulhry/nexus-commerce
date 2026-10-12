@@ -37,7 +37,7 @@ function functions(file) {
   if (seedEbayFeed && file === 'services/ebay-feed.service.ts' || seedMarketing && file === 'services/ebay-marketing-dispatch.service.ts') {
     src = src.replaceAll('assertPushAllowed(', '__seed_missing_guard(')
   }
-  if (seedNew && file === (all ? 'services/listing-push-controls.ts' : 'services/pricing-outbound.service.ts')) src += '\nasync function __seedNewPush() { await amazonSpApiClient.patchListingPrice({}); }'
+  if (seedNew && file === (all ? 'services/listing-push-controls.ts' : 'services/pricing-outbound.service.ts')) src += '\nasync function __seedNewPush() { await amazonSpApiClient.submitListingPayload({}); }'
   const tree = ts.createSourceFile(file, src, ts.ScriptTarget.Latest, true)
   const result = []
   visit(tree, node => {

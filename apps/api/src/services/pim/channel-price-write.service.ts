@@ -15,8 +15,8 @@
  *   - the pending PRICE_UPDATE rows for the listing are cancelled and ONE fresh PRICE_UPDATE row is enqueued through
  *     the existing instant lane with the price AND the sale window in its payload, so a price push never wipes the
  *     sale on Amazon (report 19 §5.9) and a sale push never wipes the price. An Amazon row that removes Nexus's own
- *     sale carries `saleRemoved: true`: with NEXUS_AMAZON_OFFER_MERGE on, Amazon's price push leaves any other sale
- *     alone, so a removal must be named.
+ *     sale carries `saleRemoved: true`: Amazon's price push (a merge) leaves any other sale alone, so a removal must be
+ *     named.
  *   - CAS on `ChannelListing.version` (bumped on every applied row); `noop` spends nothing.
  *   - NCF D2 A — Shopify's compare-at price (`compareAt`), kept at `platformAttributes.compareAtPrice`
  *     (`compare-at-price.ts`), through the same CAS and audit. Record-only: it comes from Shopify's own file, and no
@@ -680,12 +680,10 @@ export async function writeChannelPrices(input: {
         let queueId: string | null = null
         // The rows a new price change of this listing replaces: the one waiting in its hold, and a held change (round 5).
         const replaceable: Prisma.OutboundSyncQueueWhereInput = { channelListingId: l.id, syncType: 'PRICE_UPDATE', OR: [{ syncStatus: 'PENDING' }, { syncStatus: 'SKIPPED', errorCode: { in: [...HELD_PRICE_CODES] } }] }
-        // Amazon — with NEXUS_AMAZON_OFFER_MERGE on, a price push leaves the sale Amazon holds alone (a merge,
-        // `amazon/purchasable-offer.ts`), so a person REMOVING Nexus's own sale (a value with both dates: the only sale
-        // Nexus sends) must say so on the row, and keep saying so when a later write in the grace window cancels that
-        // row for this one — or when the removal was held while the listing was paused. Written whether the switch is on
-        // or not: OFF ignores it (its replace drops the sale anyway), and a row queued just before the switch goes on
-        // still carries the removal. Other channels: unchanged.
+        // Amazon — a price push leaves the sale Amazon holds alone (a merge, `amazon/purchasable-offer.ts`), so a person
+        // REMOVING Nexus's own sale (a value with both dates: the only sale Nexus sends) must say so on the row, and keep
+        // saying so when a later write in the grace window cancels that row for this one — or when the removal was held
+        // while the listing was paused. Other channels: unchanged.
         const saleRemovedNow = async () => l.channel === 'AMAZON' && effectiveSale.value == null && (
           (saleChanges && currentSale.value != null && !!currentSale.start && !!currentSale.end)
           || !!(await tx.outboundSyncQueue.findFirst({ where: { ...replaceable, payload: { path: ['saleRemoved'], equals: true } }, select: { id: true } })))

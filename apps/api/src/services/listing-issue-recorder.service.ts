@@ -594,9 +594,9 @@ export async function recordEbayTradingRejection(args: {
  * 'putListingsItem'`, which appears twice, both in tests). Beside it,
  * `AmazonSpApiClient.putListingsItem()` is a real method that sends its own
  * request, and it has a **live call site** at `routes/marketplaces.routes.ts`,
- * with P1.7's `amazonContentRefusal` preview in front of it. Four more client
+ * with P1.7's `amazonContentRefusal` preview in front of it. Three more client
  * methods write content or offers the same way: `submitListingPayload`,
- * `patchListingPrice`, `patchPurchasableOffer` and `deleteListingsItem`.
+ * `patchPurchasableOffer` and `deleteListingsItem`.
  *
  * So the real gap was never "there is no producer". Amazon's `issues` array is
  * parsed, logged, and handed back to the caller — `marketplaces.routes.ts` maps

@@ -12,8 +12,8 @@
  * `submitListingPayload` records what would go out and `getListingsItem` answers the live offer. Nothing reaches Amazon.
  * All SKUs and ASINs are fake; marketplace ids are Amazon's public ones.
  *
- * The merge ships behind `NEXUS_AMAZON_OFFER_MERGE=1` (OFF by default, Owner 2026-09-30). Every arm below runs with the
- * switch ON except "the switch", which pins OFF to exactly what `main` sent: the builder's replace and no live read.
+ * The merge shipped behind `NEXUS_AMAZON_OFFER_MERGE=1` (Owner 2026-09-30), ran ON in production from 2026-10-04, and is
+ * the only path since 2026-10-12 (Amazon Business step 2): the OFF arm's blind replace would delete the B2B instance.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -94,7 +94,6 @@ const onlyPatch = () => {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubEnv('NEXUS_ENABLE_AMAZON_PUBLISH', 'true'); vi.stubEnv('AMAZON_PUBLISH_MODE', 'live')
-  vi.stubEnv('NEXUS_AMAZON_OFFER_MERGE', '1') // the switch ON; the OFF arms unset it
   m.seller.mockResolvedValue('seller')
   m.read.mockResolvedValue({ id: 'l', marketplace: 'IT', platformAttributes: {}, syncPaused: false, productType: 'OUTERWEAR', fulfillmentMethod: 'FBM', salePrice: null })
   m.many.mockResolvedValue([])
@@ -229,40 +228,9 @@ describe('an offer the push cannot name is refused, not overwritten', () => {
   })
 })
 
-describe('the switch (NEXUS_AMAZON_OFFER_MERGE)', () => {
-  it.each([['unset', undefined], ['0', '0'], ['true', 'true'], ['on', 'on']])('%s → OFF: no live read, and the patch is byte-identical to main\'s (the builder\'s replace)', async (_label, value) => {
-    vi.stubEnv('NEXUS_AMAZON_OFFER_MERGE', value as string)
-    await service.syncToAmazon(masterPrice(115))
-    expect(m.get).not.toHaveBeenCalled()
-    expect(submitted()).toEqual(await buildAmazonListingPatch({ source: 'MASTER_PRICE_CHANGE', price: 115, oldPrice: 120, masterPrice: 115, productType: 'OUTERWEAR' } as never, 'IT', 'OUTERWEAR', 'FBM'))
-    expect(onlyPatch().op).toBe('replace')
-  })
-  it('OFF with a Nexus sale and a removal flag on the row: still exactly the builder\'s replace (the flag is inert)', async () => {
-    vi.stubEnv('NEXUS_AMAZON_OFFER_MERGE', '')
-    await service.syncToAmazon(priceWrite({ salePrice: 95, salePriceStart: '2026-10-01', salePriceEnd: '2026-10-15', saleRemoved: true }))
-    expect(m.get).not.toHaveBeenCalled()
-    expect(submitted()).toEqual(await buildAmazonListingPatch({ price: 115, salePrice: 95, salePriceStart: '2026-10-01', salePriceEnd: '2026-10-15' } as never, 'IT', 'OUTERWEAR', 'FBM'))
-  })
-  it('OFF, the live read failing does not matter: no read is made, the replace goes as before', async () => {
-    vi.stubEnv('NEXUS_AMAZON_OFFER_MERGE', '')
-    m.get.mockRejectedValue(new Error('socket hang up'))
-    expect(await service.syncToAmazon(masterPrice(115))).toMatchObject({ success: true, status: 'SUCCESS' })
-    expect(m.get).not.toHaveBeenCalled()
-  })
-  it('is read at send time: the same service turns it on and off between two pushes', async () => {
-    vi.stubEnv('NEXUS_AMAZON_OFFER_MERGE', '')
-    await service.syncToAmazon(masterPrice(115))
-    vi.stubEnv('NEXUS_AMAZON_OFFER_MERGE', '1')
-    await service.syncToAmazon(masterPrice(115))
-    expect(m.submit.mock.calls.map((c: any[]) => c[0].payload.patches[0].op)).toEqual(['replace', 'merge'])
-    expect(m.get).toHaveBeenCalledTimes(1)
-  })
-})
-
 describe('what does not change', () => {
-  it.each([['gated', undefined, undefined], ['dry-run', 'true', 'dry-run'], ['sandbox', 'true', 'sandbox']])('%s mode, switch ON: no live read, as before', async (_mode, flag, mode) => {
+  it.each([['gated', undefined, undefined], ['dry-run', 'true', 'dry-run'], ['sandbox', 'true', 'sandbox']])('%s mode: no live read, as before', async (_mode, flag, mode) => {
     vi.unstubAllEnvs()
-    vi.stubEnv('NEXUS_AMAZON_OFFER_MERGE', '1')
     if (flag) vi.stubEnv('NEXUS_ENABLE_AMAZON_PUBLISH', flag)
     if (mode) vi.stubEnv('AMAZON_PUBLISH_MODE', mode)
     await service.syncToAmazon(masterPrice(115))

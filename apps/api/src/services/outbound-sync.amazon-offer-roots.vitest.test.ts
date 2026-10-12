@@ -3,7 +3,7 @@
  *
  * An Amazon PATCH `replace` of `/attributes/<root>` sets the WHOLE root. The stock job sent `[{DEFAULT, quantity}]`, so
  * every stock push cleared the handling time and the restock date; the price job sent `{currency, our_price, sale}`, so
- * with NEXUS_AMAZON_OFFER_MERGE off every price push cleared the min/max seller price, MAP price, offer window and
+ * without the live-offer merge every price push cleared the min/max seller price, MAP price, offer window and
  * Automate Pricing rule. Both roots now come from THE send builder (`amazon/offer-attributes.ts`) over the listing's
  * LIVE facts (`offer-facts.ts`, job lane). Each expected payload below was written before the code.
  *
@@ -89,8 +89,10 @@ const patchAt = (path: string) => submitted().patches.find((p: { path: string })
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // A price row reads the live offer first (amazon/purchasable-offer.ts). This answer = no live offer yet, so the
+  // builder's patch goes out as built — the payload these arms assert on. An arm that needs a live offer sets its own.
+  m.get.mockResolvedValue({ success: true, sku: 'TEST-SKU-1', asin: null, status: null })
   vi.stubEnv('NEXUS_ENABLE_AMAZON_PUBLISH', 'true'); vi.stubEnv('AMAZON_PUBLISH_MODE', 'live')
-  vi.stubEnv('NEXUS_AMAZON_OFFER_MERGE', '')
   m.seller.mockResolvedValue('seller')
   m.read.mockResolvedValue(listing())
   m.many.mockResolvedValue([])

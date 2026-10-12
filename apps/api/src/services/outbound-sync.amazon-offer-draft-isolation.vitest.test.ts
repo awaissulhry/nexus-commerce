@@ -98,8 +98,10 @@ const LIVE_OFFER = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // A price row reads the live offer first (amazon/purchasable-offer.ts). This answer = no live offer yet, so the
+  // builder's patch goes out as built — the payload these arms assert on. An arm that needs a live offer sets its own.
+  m.get.mockResolvedValue({ success: true, sku: 'TEST-SKU-1', asin: null, status: null })
   vi.stubEnv('NEXUS_ENABLE_AMAZON_PUBLISH', 'true'); vi.stubEnv('AMAZON_PUBLISH_MODE', 'live')
-  vi.stubEnv('NEXUS_AMAZON_OFFER_MERGE', '')
   m.seller.mockResolvedValue('seller')
   m.read.mockResolvedValue(listing())
   m.many.mockResolvedValue([])
@@ -130,7 +132,6 @@ describe('a price push while drafts wait for Publish', () => {
   })
 
   it('merge mode: the held leaves are the live ones, and only Nexus\'s own store (Amazon keeps the rest)', async () => {
-    vi.stubEnv('NEXUS_AMAZON_OFFER_MERGE', '1')
     m.get.mockResolvedValue(liveRead([{ audience: 'ALL', currency: 'EUR', marketplace_id: IT, our_price: scheduled(49.9), minimum_seller_allowed_price: scheduled(28), start_at: { value: '2026-01-01' } }]))
     expect(await service.syncToAmazon(pricePush())).toMatchObject({ success: true, status: 'SUCCESS' })
     expect(submitted().patches).toEqual([{
