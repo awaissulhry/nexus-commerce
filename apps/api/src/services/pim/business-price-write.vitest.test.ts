@@ -122,3 +122,44 @@ describe('copying in never overwrites what Nexus manages', () => {
     expect(after).toEqual(before)
   })
 })
+
+describe('step 4 — a person\'s change queues ONE business push for Amazon', () => {
+  const pending = (key: string) => scoped(() => prisma.outboundSyncQueue.findMany({ where: { channelListingId: ids[key], syncType: 'BUSINESS_PRICE_UPDATE' }, orderBy: { createdAt: 'asc' } }))
+
+  it('an applied change queues a held row; a newer change replaces the one still waiting', async () => {
+    const first = (await write([{ listingId: ids.it!, expectedVersion: await versionOf('it'), setting: pct(6) }])).results[0]!
+    expect(first.outcome).toBe('applied')
+    expect(first.queueId).toBeTruthy()
+    const second = (await write([{ listingId: ids.it!, expectedVersion: first.version, setting: pct(7) }])).results[0]!
+    const rows = await pending('it')
+    expect(rows.find((r) => r.id === first.queueId)!.syncStatus).toBe('CANCELLED')
+    expect(rows.filter((r) => r.syncStatus === 'PENDING').map((r) => r.id)).toEqual([second.queueId])
+    const live = rows.find((r) => r.id === second.queueId)!
+    expect(live).toMatchObject({ targetChannel: 'AMAZON', payload: { syncBusiness: true, source: 'BUSINESS_PRICE_WRITE', actor: 'test@example.test' } })
+    expect(live.holdUntil!.getTime()).toBeGreaterThan(Date.now() + 20_000)
+  })
+
+  it('a no-op, a refusal and a copy of what Amazon holds queue nothing', async () => {
+    const before = (await pending('it')).length
+    await write([{ listingId: ids.it!, expectedVersion: await versionOf('it'), setting: pct(7) }]) // the same again
+    await write([{ listingId: ids.it!, expectedVersion: await versionOf('it'), setting: fixed(500) }]) // refused
+    expect((await pending('it')).length).toBe(before)
+    const fresh = await scoped(async () => (await prisma.channelListing.create({ data: {
+      productId: 'bp-c', channel: 'AMAZON', marketplace: 'IT', channelMarket: 'AMAZON_IT', region: 'EU', aliasKey: 'adopt',
+      channelConnectionId: (await prisma.channelListing.findUnique({ where: { id: ids.it }, select: { channelConnectionId: true } }))!.channelConnectionId,
+      listingStatus: 'ACTIVE', isPublished: true, externalListingId: 'EXT-adopt', price: 105, priceOverride: 105, followMasterPrice: false, quantity: 1,
+    } as never })).id)
+    ids.adopt = fresh
+    expect((await write([{ listingId: fresh, unguardedReason: 'amazon-business-offer-adopt', setting: fixed(90) }])).results[0]).toMatchObject({ outcome: 'applied', queueId: null })
+    expect(await pending('adopt')).toEqual([])
+  })
+
+  it('a paused listing keeps the change in Nexus and says so', async () => {
+    await scoped(() => prisma.channelListing.update({ where: { id: ids.itSale }, data: { syncPaused: true } }))
+    const before = (await pending('itSale')).length
+    const r = (await write([{ listingId: ids.itSale!, expectedVersion: await versionOf('itSale'), setting: pct(8) }])).results[0]!
+    expect(r).toMatchObject({ outcome: 'applied', queueId: null })
+    expect(r.notSent).toContain('sync is paused')
+    expect((await pending('itSale')).length).toBe(before)
+  })
+})

@@ -15,6 +15,13 @@ import { businessPriceOf, businessPriceProblems, type BusinessPriceSetting } fro
 import { amazonBusinessElement, amazonBusinessOfferPlan, businessSendLine } from './business-offer.js'
 import { readAmazonOfferLive } from './purchasable-offer.js'
 
+/** A `[{ schedule: [{ value_with_tax }] }]` amount, or null. */
+function scheduled(v: unknown): number | null {
+  const s = Array.isArray(v) ? (v[0] as { schedule?: Array<{ value_with_tax?: unknown; value?: unknown }> } | undefined)?.schedule?.[0] : undefined
+  const n = s?.value_with_tax ?? s?.value
+  return typeof n === 'number' && Number.isFinite(n) ? n : null
+}
+
 export interface BusinessSendOutcome {
   ok: boolean
   /** What happened, in a sentence (sent, already held, removed, refused, could not read). */
@@ -54,18 +61,23 @@ export async function sendAmazonBusinessOffer(input: {
     if (input.listingId) await recordAmazonBusinessSend(input.listingId, { status, line: outcome.line })
     return outcome
   }
+  const live = await readAmazonOfferLive({ sellerId: input.sellerId, sku: input.sku, marketplaceId: input.marketplaceId })
+  if (live.read === 'failed') {
+    return finish({ ok: false, retryable: true, line: `Amazon's current offer for ${input.sku} could not be read (${live.error ?? 'no answer'}), so the business price was not sent. It will be retried.` }, 'FAILED')
+  }
   let wanted: Record<string, unknown> | null = null
   let line = 'the business offer removed'
   if (input.setting) {
-    const problems = businessPriceProblems({ setting: input.setting, normalPrice: input.normalPrice, minPrice: input.minPrice, maxPrice: input.maxPrice, currency: input.currency })
+    // The bounds Amazon enforces are the ones it holds now (a minimum set in Seller Central counts too); Nexus's own
+    // stored bounds stand where Amazon shows none.
+    const normal = live.instances.find((i) => i?.marketplace_id === input.marketplaceId && (i?.audience ?? 'ALL') === 'ALL')
+    const minPrice = scheduled(normal?.minimum_seller_allowed_price) ?? input.minPrice
+    const maxPrice = scheduled(normal?.maximum_seller_allowed_price) ?? input.maxPrice
+    const problems = businessPriceProblems({ setting: input.setting, normalPrice: input.normalPrice, minPrice, maxPrice, currency: input.currency })
     if (problems.length) return finish({ ok: false, itemLevel: true, line: `The business price was not sent: ${problems.join(' ')}` }, 'REFUSED')
     const price = businessPriceOf(input.setting, input.normalPrice) as number
     wanted = amazonBusinessElement({ marketplaceId: input.marketplaceId, currency: input.currency, price, tiers: input.setting.tiers })
     line = `business price ${businessSendLine(price, input.setting.tiers, input.currency)}`
-  }
-  const live = await readAmazonOfferLive({ sellerId: input.sellerId, sku: input.sku, marketplaceId: input.marketplaceId })
-  if (live.read === 'failed') {
-    return finish({ ok: false, retryable: true, line: `Amazon's current offer for ${input.sku} could not be read (${live.error ?? 'no answer'}), so the business price was not sent. It will be retried.` }, 'FAILED')
   }
   const plan = amazonBusinessOfferPlan({ wanted: wanted as never, live: live.instances, marketplaceId: input.marketplaceId })
   if (plan.kind === 'none') return finish({ ok: true, line: wanted ? `Amazon already holds the ${line}.` : 'Amazon holds no business offer; nothing to remove.' }, wanted ? 'SENT' : 'REMOVED')
