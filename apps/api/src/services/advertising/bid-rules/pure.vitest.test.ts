@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  actionOutcome, autoGateHold, brainMode, brainNextFullRun, brainScheduleWords, effectOf, effectUnchanged, effectWindows, HOLDS, isBidRule, nextQuarter,
+  actionOutcome, autoGateHold, brainMode, brainNextFullRun, brainStopOf, brainScheduleWords, effectOf, effectUnchanged, effectWindows, HOLDS, isBidRule, nextQuarter,
   ruleMode, ruleNextRun, ruleRunTimes, ruleSentence, scheduleWords, shortDay,
   type Hold, type RuleModeFacts,
 } from './pure.js'
@@ -115,6 +115,24 @@ describe('brainMode — the brain\'s pseudo-row', () => {
   it('the Owner\'s kill switch on its bids: all its live campaigns stopped is Off, some is said', () => {
     expect(brainMode({ serverMode: 'live', enrolledLive: 2, account, adsLive: true, killed: 2 })).toMatchObject({ set: 'AUTO', acts: 'OFF', heldBy: { kind: 'stopped', label: 'Brain off' } })
     expect(chips(brainMode({ serverMode: 'live', enrolledLive: 3, account, adsLive: true, killed: 1 }))).toMatchObject({ acts: 'AUTO', heldBy: null, also: [{ kind: 'stopped', label: '1 stopped campaign' }] })
+  })
+})
+
+describe('brainStopOf — the stop the Brain row\'s Stop / Start again names', () => {
+  const kill = (over: Partial<{ lever: string; productId: string | null; market: string | null; at: string; reason: string }> = {}) => ({
+    lever: 'bids', productId: null, market: 'IT', at: '2026-01-10T08:00:00.000Z', reason: 'Stopped on the Bid page', ...over,
+  })
+  it('one market: its own stop first, else the stop of every market; nothing else is this stop', () => {
+    expect(brainStopOf([kill()], 'IT')).toEqual({ market: 'IT', at: '2026-01-10T08:00:00.000Z', reason: 'Stopped on the Bid page' })
+    expect(brainStopOf([kill({ market: null, reason: 'everywhere' }), kill()], 'it')).toMatchObject({ market: 'IT' })
+    expect(brainStopOf([kill({ market: null, reason: 'everywhere' })], 'DE')).toMatchObject({ market: null, reason: 'everywhere' })
+    expect(brainStopOf([kill({ market: 'DE' })], 'IT')).toBeNull()
+    // One product's kill, or another lever's, is not the Brain's stop.
+    expect(brainStopOf([kill({ productId: 'p1' }), kill({ lever: 'budgets' })], 'IT')).toBeNull()
+  })
+  it('All markets: only the stop of every market; the newest wins', () => {
+    expect(brainStopOf([kill()], null)).toBeNull()
+    expect(brainStopOf([kill({ market: null, at: '2026-01-09T08:00:00.000Z', reason: 'old' }), kill({ market: null, reason: 'new' })], null)).toMatchObject({ market: null, reason: 'new' })
   })
 })
 

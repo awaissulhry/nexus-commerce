@@ -59,6 +59,20 @@ export interface BidRuleRow {
   schedule?: string | null
   effect: Effect | null
   archived: boolean
+  /**
+   * The Brain's row only: the Owner's stop of its bids here (its market, or null = every market), or null when none stands.
+   * Absent on an answer that does not say (an older server, or the stops not read): the page then cannot tell.
+   */
+  stop?: BrainStop | null
+}
+
+/** The Owner's stop of the brain's bids for every product (the kill switch on its bids), as the Brain row names it. */
+export interface BrainStop {
+  /** The market it stops; null = every market. */
+  market: string | null
+  /** When it was set (ISO). */
+  at: string
+  reason: string
 }
 
 export interface BidRulesTotals {

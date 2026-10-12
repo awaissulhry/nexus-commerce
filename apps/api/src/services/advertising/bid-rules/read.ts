@@ -33,8 +33,8 @@ import { writeStats } from '../bid-brain/read.js'
 import { withoutUndonePairs } from '../bid-owner.js'
 import {
   ARCHIVED_ADS_DOMAIN, autoGateHold, brainNextFullRun, brainScheduleWords, dayKey, EFFECT_LOOKBACK_DAYS, effectOf, effectWindows, isBidRule,
-  brainMode, modeActs, nextQuarter, ruleMode, ruleRunTimes, ruleSentence, scheduleWords, utcDay,
-  type AccountPosture, type BidRuleMode, type CampaignSplit, type Effect, type Hold, type PerfDay,
+  brainMode, brainStopOf, modeActs, nextQuarter, ruleMode, ruleRunTimes, ruleSentence, scheduleWords, utcDay,
+  type AccountPosture, type BidRuleMode, type BrainStop, type CampaignSplit, type Effect, type Hold, type PerfDay,
 } from './pure.js'
 
 /** Ad-spend money of the bid-rules answers: hidden whole from a person without financials.adspend.view. */
@@ -89,6 +89,11 @@ export interface BidRuleRow {
   /** Before vs after its changes; null when there is nothing to compare or nothing changed (same ACoS, spend and orders). */
   effect: Effect | null
   archived: boolean
+  /**
+   * The Brain's row only: the Owner's stop of its bids here (pure.ts brainStopOf) — null when none stands. Left out when the
+   * stops could not be read (the page then holds Stop and Start again: it cannot say which).
+   */
+  stop?: BrainStop | null
 }
 
 export interface BidRulesTotals {
@@ -617,7 +622,10 @@ async function brainRow(a: { market: string | null; now: Date; posture: AccountP
   const enrolledLive = enrolled.map((e) => e.campaignId).filter(inMarket)
   const serverMode = bidBrainMode()
   // The Owner's kill switch on the bids lever of the campaigns it runs live here.
-  const killed = enrolledLive.length ? (await (await import('../brain/kill-switch.js')).campaignKills(enrolledLive, ['bids'])).size : 0
+  const kills = await import('../brain/kill-switch.js')
+  const killed = enrolledLive.length ? (await kills.campaignKills(enrolledLive, ['bids'])).size : 0
+  // The stop of every product's bids in this market (or every market) — what the page's Stop / Start again names.
+  const stop = await kills.openKills().then((open) => brainStopOf(open, a.market), () => undefined)
   const mode = brainMode({ serverMode, enrolledLive: enrolledLive.length, account: a.posture, adsLive: adsLive(), killed })
   // What it applies to: the campaigns it owns; in shadow, the campaigns it decided for this week.
   const scopeIds = ownedHere.length ? ownedHere : decided.map((d) => d.campaignId).filter(inMarket)
@@ -651,6 +659,7 @@ async function brainRow(a: { market: string | null; now: Date; posture: AccountP
     schedule: brainScheduleWords(everyTick),
     effect: a.effect,
     archived: false,
+    ...(stop !== undefined ? { stop } : {}),
   }
 }
 

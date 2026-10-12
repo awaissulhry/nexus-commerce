@@ -2,14 +2,15 @@
  * Bid page, Rules view — every call the view makes (2026-10-10). Reads: the bid-rules API (list, history, preview), the
  * stored rule, its runs, the brain's clash view, a rule's waiting asks. Writes, each only after the person saved it in the
  * review dialog: the one level route, a builder rule's belt, archive / unarchive, undo of one change, roll back of one
- * run, approve / reject of asks. A rule is made and edited in the bid builder (its own calls). Every refusal comes back in
- * the server's own words.
+ * run, approve / reject of asks, the Brain's Stop / Start again (after its own confirm). A rule is made and edited in the
+ * bid builder (its own calls). Every refusal comes back in the server's own words.
  */
 import { getBackendUrl } from '@/lib/backend-url'
 import type { BidMode, BidRulesAnswer, PreviewResult, RuleHistory } from './bidRulesModel'
 import { LEVEL_OF_MODE } from './bidRulesModel'
 import { modeSteps, refusalWords, withBelt } from './ruleChanges'
 import type { RunRow, StoredRule } from './ruleSettings'
+import type { KillAnswer, KillBody } from './brainStop'
 import { askUndoResults, chunks, routeMissing, type BidOwnerInfo, type BulkResult, type WaitingSuggestion } from './waitingModel'
 import type { ReviewResult } from '@/design-system/patterns'
 
@@ -90,6 +91,18 @@ export async function askEnrollment(campaignId: string, op: 'live' | 'shadow', c
   if (!out.ok) return out
   const body = out.body as BrainAsk | null
   return body && typeof body.approvalId === 'string' ? { ok: true, body } : { ok: false, words: 'No request came back' }
+}
+
+/**
+ * POST /automation/brain/kill — the Brain's Stop (op kill: runs at once on this click, recorded and undoable) or its Start
+ * again (op end, approved in the same click with the code; a refused code leaves the request waiting, its id comes back).
+ * The body is `brainStop.ts` stopBody / startBody.
+ */
+export async function askBrainKill(body: KillBody): Promise<{ ok: true; body: KillAnswer } | { ok: false; words: string }> {
+  const out = await send('/automation/brain/kill', 'POST', body)
+  if (!out.ok) return out
+  const answer = out.body as KillAnswer | null
+  return answer && typeof answer.approvalId === 'string' ? { ok: true, body: answer } : { ok: false, words: 'No request came back' }
 }
 
 /** POST /automation/brain/requests/:id/decide — approve a waiting brain request (with the code when it raises) or reject it. */

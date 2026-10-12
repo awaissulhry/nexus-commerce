@@ -22,6 +22,11 @@
  * A market Nexus only reads holds every write here — the mode, archive and restore, New rule and Edit all, approve and
  * reject, Undo and roll back — each with the reason (the shell's `useWriteBlock`, use audit A1): the page's market, or on
  * All markets the rule's own. The Brain's row is left out of a market where it decides nothing (C-UI 3).
+ *
+ * The Brain's detail carries "Stop the brain" (Owner 2026-10-12): a small confirm, then the stop runs at once — the brain's
+ * kill switch on its bids for every product of the market in view (All markets: every market); "Start again" while a stop
+ * stands, confirmed, then approved with the person's authenticator code (`brainStop.ts`). Held like every brain write
+ * (the permission, a market Nexus only reads), and while the brain runs no campaign on Auto here.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import dynamic from 'next/dynamic'
@@ -53,9 +58,14 @@ import {
   restoreReviewChanges, retidyModes, shownMode, type ModeDraft,
 } from './ruleChanges'
 import {
-  archiveRule, askEnrollment, askUndoSupported, decideAsks, decideBrainRequest, fetchRules, fetchUndoPreview, restoreRule, rollbackRun,
+  archiveRule, askBrainKill, askEnrollment, askUndoSupported, decideAsks, decideBrainRequest, fetchRules, fetchUndoPreview, restoreRule, rollbackRun,
   saveMode, unarchiveRule, undoAsks, undoChange, type BrainAsk,
 } from './ruleApi'
+import {
+  brainStopView, startBody, startCodeWords, startConfirmWords, startingHeld, startNotice, stopBody, stopConfirmWords, stopNotice,
+  type BrainStop, type BrainStopAction, type StopNotice,
+} from './brainStop'
+import { BrainStopConfirm } from './BrainStopConfirm'
 import { runSummary, type RunRow } from './ruleSettings'
 import type { BidRulesData } from './useBidRules'
 import {
@@ -126,6 +136,13 @@ async function brainResult(out: { ok: true; body: BrainAsk } | { ok: false; word
   await decideBrainRequest(out.body.approvalId, 'reject')
   return { ok: false, words: out.body.approve?.error ?? 'Not approved' }
 }
+
+/**
+ * The Brain's Stop / Start again (Owner 2026-10-12): its small confirm, then — Start again only — the approver's code. The
+ * stop it ends is held from the click on, so a re-read in between cannot change what is sent; `approvalId` is a Start again
+ * whose code was refused (it waits: the next code approves it, Cancel rejects it).
+ */
+interface BrainStopTask { action: BrainStopAction; phase: 'confirm' | 'code'; busy: boolean; stop: BrainStop | null; approvalId: string | null; error: string | null }
 
 /** Where the focus goes back to when a review, the builder or a dialog closes and its opener is gone (M10). */
 type FocusBack =
@@ -207,6 +224,10 @@ export function RulesView({ market, data, scope, viewSwitch, setQuery }: {
   const [frozen, setFrozen] = useState<ReviewChange[] | null>(null)
   /** The brain to Auto: the approver's authenticator code, asked on top of the review (the DS one code dialog). */
   const [stepUp, setStepUp] = useState<{ approvalId: string | null; busy: boolean; error: string | null } | null>(null)
+  /** The Brain's Stop / Start again under way, what it answered, and an approved Start again waiting to run (its time). */
+  const [brainStop, setBrainStop] = useState<BrainStopTask | null>(null)
+  const [brainNotice, setBrainNotice] = useState<StopNotice | null>(null)
+  const [starting, setStarting] = useState<string | null>(null)
 
   const tileParam = params.get('show')
   const tile: RulesTile | null = isRulesTile(tileParam) ? tileParam : null
@@ -229,7 +250,7 @@ export function RulesView({ market, data, scope, viewSwitch, setQuery }: {
   const answerRef = useRef(answer)
   answerRef.current = answer
   const setPaused = data.setPaused
-  useEffect(() => { setPaused(!!task || !!builderKey) }, [setPaused, task, builderKey])
+  useEffect(() => { setPaused(!!task || !!builderKey || !!brainStop) }, [setPaused, task, builderKey, brainStop])
 
   // The Brain's row is left out where it decides nothing (C-UI 3); everything else is as read.
   const rows = useMemo(() => (answer?.rules ?? []).filter((r) => !brainIdleHere(r, market)), [answer, market])
@@ -651,6 +672,66 @@ export function RulesView({ market, data, scope, viewSwitch, setQuery }: {
     if (waiting) await decideBrainRequest(waiting, 'reject')
   }, [stepUp])
 
+  // ── the Brain's Stop / Start again ────────────────────────────────────────────────────────────────────────────────
+  /** The detail's Stop / Start again button, whichever it shows now (the confirm gives the focus back to it). */
+  const brainStopButton = useCallback(() => focusable(document.querySelector('[data-return="brain-stop"]')), [])
+  const startBrainStop = useCallback((action: BrainStopAction, stop: BrainStop | null) => {
+    setBrainNotice(null)
+    setBrainStop({ action, phase: 'confirm', busy: false, stop, approvalId: null, error: null })
+  }, [])
+  const confirmBrainStop = useCallback(async () => {
+    const s = brainStop
+    if (!s || s.busy) return
+    if (s.action === 'start') {
+      // The confirm closes first (its focus goes back to Start again); the code step then opens from there, so its own
+      // Cancel gives the focus back to the same button.
+      setBrainStop(null)
+      requestAnimationFrame(() => setBrainStop({ ...s, phase: 'code' }))
+      return
+    }
+    setBrainStop({ ...s, busy: true })
+    const out = await askBrainKill(stopBody(market))
+    // Read again before the confirm closes: the detail then shows Start again, and the focus lands on it.
+    await after()
+    setBrainStop(null)
+    setBrainNotice(stopNotice(out))
+  }, [brainStop, market, after])
+  /** The code: ask with it (or approve the Start again already waiting); a refused code keeps the dialog for another. */
+  const submitStartCode = useCallback(async (code: string) => {
+    const s = brainStop
+    if (!s || s.phase !== 'code' || !s.stop || s.busy) return
+    setBrainStop({ ...s, busy: true, error: null })
+    let approved: { executeAfter?: string }
+    if (s.approvalId) {
+      const out = await decideBrainRequest(s.approvalId, 'approve', code)
+      if (!out.ok) { setBrainStop({ ...s, busy: false, error: out.words }); return }
+      approved = out
+    } else {
+      const out = await askBrainKill(startBody(s.stop, code))
+      if (!out.ok) { setBrainStop(null); setBrainNotice(startNotice(out)); await after(); return }
+      if (!out.body.approve?.ok) { setBrainStop({ ...s, busy: false, approvalId: out.body.approvalId, error: out.body.approve?.error ?? 'Not approved' }); return }
+      approved = out.body
+    }
+    setBrainStop(null)
+    setBrainNotice(startNotice({ ok: true, executeAfter: approved.executeAfter }))
+    if (startingHeld(approved.executeAfter)) setStarting(approved.executeAfter ?? null)
+    await after()
+  }, [brainStop, after])
+  /** Cancel the code: a Start again already waiting for it is rejected (never left behind). */
+  const cancelStartCode = useCallback(async () => {
+    const waiting = brainStop?.approvalId
+    setBrainStop(null)
+    if (waiting) await decideBrainRequest(waiting, 'reject')
+  }, [brainStop])
+  // An approved Start again runs after its short undo window: read again just after it, and say what is true then.
+  useEffect(() => {
+    if (!starting) return
+    const t = window.setTimeout(() => { setStarting(null); void after() }, Math.max(0, Date.parse(starting) - Date.now()) + 5_000)
+    return () => window.clearTimeout(t)
+  }, [starting, after])
+  // The answer belongs to the Brain's detail: it goes when the detail does.
+  useEffect(() => { if (!panelId || !isBrain({ id: panelId, kind: 'rule' })) setBrainNotice(null) }, [panelId])
+
   const TITLE: Record<Task['kind'], string | undefined> = { mode: undefined, archive: 'Archive', restore: 'Restore', undo: 'Undo a change', rollback: 'Roll back a run', approve: 'Approve asks', reject: 'Reject asks', brain: 'Brain' }
   const reviewTitle = task ? TITLE[task.kind] : ''
   // §2: one line at most under the title — only a mode change says when it takes effect.
@@ -870,6 +951,9 @@ export function RulesView({ market, data, scope, viewSwitch, setQuery }: {
           onDecide={(kind, asks) => { remember({ kind: 'panel', key: 'decide' }); setProblems([]); setUndoBack(null); setFrozen(null); setReview({ phase: 'ready' }); setTask({ kind, row: panelRow, asks, back: panelBack() }) }}
           brainHeld={brainHeld}
           brainAutoHeld={brainAutoHeld}
+          brainStop={brainStopView(panelRow, { held: brainHeld, canSecurity, busy: startingHeld(starting) })}
+          onBrainStop={(action) => startBrainStop(action, panelRow.stop ?? null)}
+          brainNotice={brainNotice ? { notice: brainNotice, onDismiss: () => { setBrainNotice(null); requestAnimationFrame(() => focusIn(document.querySelector('[data-drawer-heading]'))) } } : null}
           onBrainPick={(pick) => { remember({ kind: 'panel', key: `brain:${pick.id}` }); setProblems([]); setUndoBack(null); setFrozen(null); setReview({ phase: 'ready' }); setTask({ kind: 'brain', row: panelRow, pick, back: panelBack() }) }}
           notice={notice?.id === panelRow.id ? {
             words: noticeWords(notice), busy: notice.busy, onUndo: () => void undoCreate(),
@@ -917,6 +1001,29 @@ export function RulesView({ market, data, scope, viewSwitch, setQuery }: {
           confirmLabel="Approve"
           onSubmit={(code) => void submitCode(code)}
           onClose={() => void cancelCode()}
+        />
+      )}
+
+      {brainStop?.phase === 'confirm' && panelRow && isBrain(panelRow) && (
+        <BrainStopConfirm
+          words={brainStop.action === 'stop' || !brainStop.stop ? stopConfirmWords(panelRow, market) : startConfirmWords(panelRow, market, brainStop.stop)}
+          busy={brainStop.busy}
+          onConfirm={() => void confirmBrainStop()}
+          onClose={() => setBrainStop(null)}
+          returnFocusTo={brainStopButton}
+        />
+      )}
+
+      {brainStop?.phase === 'code' && brainStop.stop && (
+        <StepUpModal
+          open
+          title={startCodeWords(brainStop.stop).title}
+          sentence={startCodeWords(brainStop.stop).sentence}
+          busy={brainStop.busy}
+          error={brainStop.error}
+          confirmLabel={startCodeWords(brainStop.stop).confirm}
+          onSubmit={(code) => void submitStartCode(code)}
+          onClose={() => void cancelStartCode()}
         />
       )}
 
