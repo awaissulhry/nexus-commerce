@@ -7,8 +7,8 @@
  * ad-spend permission (absent = hidden). `unavailable` is Amazon's (or the server's) reason in words: the page says "—"
  * with it, never a number of its own.
  *
- * Apply is a bid change through the review, and so is Set bid (one rule for both, the Owner's decision). What it means
- * depends on who runs the keyword:
+ * Apply is a bid change through the review, and so is Change bid (one rule for both, the Owner's decision). What it
+ * means depends on who runs the keyword:
  *   the Brain, at Auto   the keyword goes Manual: "The brain stops moving this keyword until you switch it back to Auto";
  *                        the review offers "Set a goal instead"
  *   a rule, a plan, an engine   allowed; the line says it may move it again

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  acosText, aimDirection, bidProblem, bidsQuery, bidsTotalsOf, contestedMark, countWords, editHeldReason, emptyWords, floorGivesBack, gridRowOf, isBidsShow,
+  acosText, aimDirection, bidProblem, bidsQuery, bidsTotalsOf, contestedMark, countWords, emptyWords, floorGivesBack, gridRowOf, isBidsShow,
   isContested, lastChangeWords, matchWord, NO_BID_FILTER, otherWriters, ownerChips, ownerHint, ownerLabel, ownerTone, ownerWords, parseBid,
   planHref, resultsWords, rowCurrency, rowMatches, rulePanelHref, showMatches, writerHref, writerName, inScopeOf, autoHeld, modeChangeLine,
   type BidRow, type BidTotals,
@@ -205,15 +205,6 @@ describe('a direct bid', () => {
     expect(bidProblem(4, 'EUR')).toBe('At least €0.05')
     expect(bidProblem(100_001, 'EUR')).toMatch(/^At most /)
     expect(bidProblem(15, 'EUR')).toBeNull()
-  })
-
-  it('lets you set a bid whoever sets it (one rule with Apply suggested, A6); only the permission and hidden bids hold it', () => {
-    expect(editHeldReason(row({ owner: { kind: 'PERSON', name: 'You', id: 'you' } }), true)).toBeNull()
-    expect(editHeldReason(row({ owner: { kind: 'NONE', name: 'Nobody', id: null } }), true)).toBeNull()
-    expect(editHeldReason(row(), true)).toBeNull()
-    expect(editHeldReason(row({ owner: { kind: 'RULE', name: 'Cut losers', id: 'r1' } }), true)).toBeNull()
-    expect(editHeldReason(row({ owner: { kind: 'NONE', name: 'Nobody', id: null } }), false)).toBe('Needs the ads campaigns permission')
-    expect(editHeldReason(row({ owner: { kind: 'NONE', name: 'Nobody', id: null }, bidNow: undefined }), true)).toBe('Bids are hidden for you')
   })
 })
 

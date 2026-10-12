@@ -3,8 +3,11 @@
 /**
  * Bid page (lane BIDS, 2026-10-10) — the Bids view: every live keyword and target bid with the ONE thing that sets it
  * (`GET /api/advertising/bids`). Owner chips with counts filter it, a search narrows it, Views and Customise keep its
- * columns, a row opens the keyword's detail (why this bid · history with Undo · what if · goal; set the bid where nothing
- * automatic writes over it; lock or unlock the campaign's bids). Every change goes through the DS review first.
+ * columns, a row opens the keyword's detail (why this bid · history with Undo · what if · goal; change the bid; lock or
+ * unlock the campaign's bids). Every change goes through the DS review first.
+ *
+ * Change bid (Owner 2026-10-12): the selected keywords — or one keyword's detail — in one dialog: Set to · Raise · Lower,
+ * by an amount or a percent, with an optional limit; its table follows every key (`adjustModel.ts`, `useBidReview`).
  *
  * Keyword Auto (KEYWORD-AUTO.md):
  *   Auto       a switch per keyword (Manual = a person's hold with no end; Auto = handed back) — drawn only where an
@@ -30,7 +33,7 @@
  * focus goes back to the row's cell (the one on show after ▲ / ▼). A review opens ABOVE it.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Search, SlidersHorizontal, Sparkles } from 'lucide-react'
+import { PencilLine, Search, SlidersHorizontal, Sparkles } from 'lucide-react'
 import { Button, FilterChip, Input } from '@/design-system/primitives'
 import { Banner } from '@/design-system/components'
 import { GridToolbar, PreferencesModal, ReviewChangesModal, type PreferencesValue } from '@/design-system/patterns'
@@ -52,6 +55,7 @@ import {
 } from './bidsModel'
 import { BidDetail, isBidTab, type BidPanelTab } from './BidDetail'
 import { inFlight, inFlightSince } from './liveModel'
+import { changeHeld } from './adjustModel'
 import { applyHeld, applyLabel, applyPlan, suggestedCellOf } from './suggestedModel'
 import { useBidReview } from './useBidReview'
 import { useBidsLive, useSuggested } from './useBidsLive'
@@ -408,6 +412,9 @@ export function BidsView({ market = null, productId = null, campaignId = null, a
         toolbar={bulk ? (
           <GridToolbar count={<span className={page.lead}>{viewSwitch}<span className={page.count}>Selected <b>{selected.length}</b></span></span>}>
             <GridSelectionActions>
+              <Button size="sm" variant="secondary" heldReason={changeHeld(selected, canBids)} onClick={() => void ask({ kind: 'adjust', row: selected[0], rows: selected })}>
+                <PencilLine size={14} aria-hidden /> Change bid…
+              </Button>
               <Button size="sm" variant="secondary" heldReason={applyHeld(bulkPlan)} onClick={() => void ask({ kind: 'apply', row: selected[0], rows: selected })}>
                 <Sparkles size={14} aria-hidden /> {bulkPlan.send.length ? `${applyLabel(bulkPlan.send.length)}…` : 'Apply suggested'}
               </Button>
@@ -527,7 +534,10 @@ export function BidsView({ market = null, productId = null, campaignId = null, a
           onClose={close}
           changes={review.changes}
           state={review.state}
+          title={review.title}
           summary={review.state.phase === 'done' ? review.doneNote : review.summary}
+          lead={review.lead}
+          leadHeld={review.leadHeld}
           problems={review.problems}
           saveLabel={review.saveLabel}
           doneVerb={review.doneVerb}

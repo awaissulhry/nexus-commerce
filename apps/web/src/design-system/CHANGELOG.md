@@ -1,3 +1,15 @@
+## ReviewChangesModal takes a form above its table (`lead`) — 2026-10-12
+
+Bid page, Change bid (lane BIDCHANGE). The Owner wanted to set the selected keywords' bids to his own number, or raise or
+lower them by an amount or a percent: one dialog whose table follows every key, not a form and then a second dialog.
+- **`ReviewChangesModal` `lead`** (and **`ReviewChangesPanel` `lead`**): a form drawn above everything else in the body;
+  the host recomputes `changes` as it is filled in, so the Now → New table follows each key. Not shown once done.
+- **`ReviewChangesModal` `leadHeld`**: why Save waits on that form, in the host's words ("Type a bid"). It is a held
+  reason like the others (tooltip + description, never `disabled`): **`saveHeldReason`** takes it as `lead`, after the
+  read and before "Nothing to save", problems and the tick.
+- Additive: without them nothing changes. Catalog: the review example gains "With a form". Web only (patterns are not
+  mirrored).
+
 ## A Matrix cell takes a price pasted as it was copied, and a refused paste says why — 2026-10-12
 
 The Owner, on the Matrix page: copy works, paste does not. A Matrix Price cell copies `€105.00`, and the cell took only a
