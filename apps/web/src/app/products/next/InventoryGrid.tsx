@@ -19,7 +19,7 @@
  * keystroke are the same edit — and a locked column refuses all of them in the column
  * definition, not in a renderer.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ColGroupDef, IRowNode, ValueGetterParams, ValueSetterParams } from '@/design-system/grid'
 
 import { Pill } from '@/design-system/primitives'
@@ -351,19 +351,6 @@ export function InventoryGrid({ model, density, hiddenKinds, pending, pendingCas
   const getRowId = useCallback((p: { data: GridRow }) => p.data.productId, [])
   const onSel = useCallback((e: { api: GridApi<GridRow> }) => onSelectionChanged(e.api.getSelectedNodes().map((n) => n.data!.productId).filter((id) => id !== '__total')), [onSelectionChanged])
 
-  // Esc in a cell editor reverts that cell (AG) — it must not ALSO close the dialog. The DS Modal listens on the
-  // document and skips a key already handled, so mark it handled when it arrived while a cell was being edited
-  // (read in the capture phase: by the bubble phase AG has already stopped editing). Esc on a cell that is not
-  // being edited still closes the dialog (or asks to discard).
-  const editingAtEsc = useRef(false)
-  const onKeyDownCapture = useCallback((e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === 'Escape') editingAtEsc.current = (apiRef.current?.getEditingCells().length ?? 0) > 0
-  }, [])
-  const onKeyDown = useCallback((e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === 'Escape' && editingAtEsc.current) e.preventDefault()
-    editingAtEsc.current = false
-  }, [])
-
   const rowPx = gridDensity[density].rowMedia
   // The location strip, the header, the rows, and a totals row the height of the header — the
   // page's header is shorter than its rows, and the totals row reads as a footer, not a row.
@@ -373,42 +360,41 @@ export function InventoryGrid({ model, density, hiddenKinds, pending, pendingCas
 
   return (
     <GridDensityProvider value={density}>
-      <div className={styles.ieGridKeys} onKeyDownCapture={onKeyDownCapture} onKeyDown={onKeyDown}>
-        <NexusGrid<GridRow>
-          height={height}
-          density={density}
-          rows="media"
-          groupHeaderHeight={STRIP_PX}
-          rowData={model.rows}
-          getRowId={getRowId}
-          columnDefs={columnDefs}
-          defaultColDef={defaultColDef}
-          quickFilterText={quickFilterText}
-          // Spreadsheet behaviour: a focused cell takes keystrokes, Enter walks down the column.
-          suppressCellFocus={false}
-          enterNavigatesVertically
-          enterNavigatesVerticallyAfterEdit
-          stopEditingWhenCellsLoseFocus
-          undoRedoCellEditing
-          undoRedoCellEditingLimit={100}
-          // A refused cell's reason and the Cases words are tooltips: shown at the sheet's pace, not AG's 2 s.
-          tooltipShowDelay={300}
-          cellSelection={cellSelection}
-          rowSelection={rowSelection}
-          selectionColumnDef={selectionColumnDef}
-          onSelectionChanged={onSel}
-          // After Apply the model reloads and the rows are replaced; the selection the modal shows
-          // must be what the grid holds now, not what it held before.
-          onRowDataUpdated={onSel}
-          onGridReady={onGridReady}
-          onGridSizeChanged={onGridSizeChanged}
-          onCellValueChanged={onHistory}
-          onUndoEnded={onHistory}
-          onRedoEnded={onHistory}
-          onPasteEnd={onHistory}
-          onFillEnd={onHistory}
-        />
-      </div>
+      {/* Esc in a cell editor reverts that cell and leaves the dialog open: the DS Modal's own rule (overlayDismiss.ts). */}
+      <NexusGrid<GridRow>
+        height={height}
+        density={density}
+        rows="media"
+        groupHeaderHeight={STRIP_PX}
+        rowData={model.rows}
+        getRowId={getRowId}
+        columnDefs={columnDefs}
+        defaultColDef={defaultColDef}
+        quickFilterText={quickFilterText}
+        // Spreadsheet behaviour: a focused cell takes keystrokes, Enter walks down the column.
+        suppressCellFocus={false}
+        enterNavigatesVertically
+        enterNavigatesVerticallyAfterEdit
+        stopEditingWhenCellsLoseFocus
+        undoRedoCellEditing
+        undoRedoCellEditingLimit={100}
+        // A refused cell's reason and the Cases words are tooltips: shown at the sheet's pace, not AG's 2 s.
+        tooltipShowDelay={300}
+        cellSelection={cellSelection}
+        rowSelection={rowSelection}
+        selectionColumnDef={selectionColumnDef}
+        onSelectionChanged={onSel}
+        // After Apply the model reloads and the rows are replaced; the selection the modal shows
+        // must be what the grid holds now, not what it held before.
+        onRowDataUpdated={onSel}
+        onGridReady={onGridReady}
+        onGridSizeChanged={onGridSizeChanged}
+        onCellValueChanged={onHistory}
+        onUndoEnded={onHistory}
+        onRedoEnded={onHistory}
+        onPasteEnd={onHistory}
+        onFillEnd={onHistory}
+      />
     </GridDensityProvider>
   )
 }

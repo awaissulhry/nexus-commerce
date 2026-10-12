@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import type { Size } from '../primitives/size'
 import { createLayerStack, ownsKeys, returnFocusOrder, type ReturnFocusTarget } from './modalStack'
+import { createBackdropPress, watchGridEscape } from './overlayDismiss'
 import { opensDark } from '../lib/opens-dark'
 
 // Shared stack keeps background content out of keyboard and assistive-technology navigation. Bottom first: the last
@@ -100,6 +101,8 @@ export interface ModalProps {
  * Centered modal (H10 `.h10-modal` spec). Portaled to <body>; Esc + backdrop
  * click close; scrollable body between bordered header/footer. Modals stack: a second one opens above the first,
  * Esc closes only the top one, and the focus goes back to the opener — also when the opener is inside the modal below.
+ * A drag that starts inside and is let go over the backdrop never closes it, and Esc in a grid's own menu or cell
+ * editor closes only that (overlayDismiss.ts).
  */
 export function Modal({
   open, onClose, title, subtitle, footer, size = 'sm', children, readable = false, className, anchor, 'aria-label': ariaLabel,
@@ -135,6 +138,7 @@ export function Modal({
   if (open && !wasOpen.current && typeof document !== 'undefined') opener.current = document.activeElement as HTMLElement | null
   wasOpen.current = open
   const dark = opensDark(opener.current)
+  const backdropPress = useRef(createBackdropPress()).current
   useEffect(() => {
     if (!open) return
     const dialog = modalRef.current
@@ -148,9 +152,10 @@ export function Modal({
       const auto = elements.find(element => element.matches('[data-autofocus], [autofocus]'))
       ;(auto ?? (initialFocusRef.current === 'dialog' ? dialog : elements[0] ?? dialog)).focus()
     }
+    const gridEscape = watchGridEscape(document)
     const onKey = (event: KeyboardEvent) => {
       if (!dialog || !backdrop || !ownsKeys(modalStack, backdrop, { coveredByOther: coveredByOther(dialog), handled: event.defaultPrevented })) return
-      if (event.key === 'Escape') { event.preventDefault(); closeRef.current() }
+      if (event.key === 'Escape' && !gridEscape.owns(event)) { event.preventDefault(); closeRef.current() }
       if (event.key !== 'Tab') return
       const elements = focusable()
       const first = elements[0] ?? dialog
@@ -161,6 +166,7 @@ export function Modal({
     document.addEventListener('keydown', onKey)
     return () => {
       document.removeEventListener('keydown', onKey)
+      gridEscape.stop()
       if (backdrop) { modalStack.remove(backdrop); updateModalBackground() }
       // The host put the focus somewhere on purpose while this closed (outside this dialog, not <body>): leave it.
       const active = document.activeElement
@@ -173,7 +179,13 @@ export function Modal({
   if (!open || typeof document === 'undefined') return null
 
   return createPortal(
-    <div className={size === 'detail' ? 'nds-backdrop detail' : 'nds-backdrop'} onClick={onClose}>
+    <div
+      className={size === 'detail' ? 'nds-backdrop detail' : 'nds-backdrop'}
+      // Capture phase: a control inside that stops its own pointer events still counts as a press inside.
+      onPointerDownCapture={(e) => backdropPress.down(e.target === e.currentTarget)}
+      onPointerUpCapture={(e) => backdropPress.up(e.target === e.currentTarget)}
+      onClick={(e) => { if (backdropPress.clickCloses(e.target === e.currentTarget)) onClose() }}
+    >
       <div
         ref={modalRef}
         style={anchoredStyle}
