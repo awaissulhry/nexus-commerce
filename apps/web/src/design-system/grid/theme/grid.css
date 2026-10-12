@@ -50,6 +50,15 @@
   text-align: left;
 }
 
+/* AG's own numbers type (`type: 'numericColumn'` / `'rightAligned'`) on the engine's cell. AG right-aligns its header
+   and sets only `text-align` on the cell — which moves nothing in a flex cell (PN.1, below), so the header sat right
+   over values on the left (studio Analytics, grid audit A2). One alignment for the header and its cells. */
+.nds-ag-wrap .ag-cell.ag-right-aligned-cell {
+  justify-content: flex-end;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .nds-ag-ctr {
   justify-content: center;
   text-align: center;

@@ -192,14 +192,14 @@ export function AiAdvertisingDashboard() {
   const statusOf = (g: Goal) => (!g.materializedAt ? 'Not launched' : g.status === 'ACTIVE' ? 'Enabled' : g.status === 'DRAFT' ? 'Draft' : g.status)
 
   const columns: GridColumn<Goal>[] = [
-    { key: 'aiTarget', label: 'AI Target', sortable: true, sortValue: (g) => TARGET_LABEL[g.aiTarget] ?? g.aiTarget, render: (g) => TARGET_LABEL[g.aiTarget] ?? g.aiTarget },
+    { key: 'aiTarget', label: 'AI Target', align: 'left', sortable: true, sortValue: (g) => TARGET_LABEL[g.aiTarget] ?? g.aiTarget, render: (g) => TARGET_LABEL[g.aiTarget] ?? g.aiTarget },
     {
-      key: 'aiControl', label: 'AI Control', tip: "The goal's autonomy — the same vocabulary the Control Room governs. Propose = every decision needs your approval.",
+      key: 'aiControl', label: 'AI Control', align: 'left', tip: "The goal's autonomy — the same vocabulary the Control Room governs. Propose = every decision needs your approval.",
       sortable: true, sortValue: (g) => g.aiControl ?? '',
       render: (g) => { const c = g.aiControl ? CONTROL_LABEL[g.aiControl] ?? { label: g.aiControl, cls: 'off' } : null; return c ? <span className={`aiad-ctl ${c.cls}`}>{c.label}</span> : <span className="aiad-ctl off">—</span> },
     },
     {
-      key: 'status', label: 'Status', sortable: true, sortValue: (g) => statusOf(g),
+      key: 'status', label: 'Status', align: 'left', sortable: true, sortValue: (g) => statusOf(g),
       render: (g) => g.materializedAt
         ? <span className={`aiad-status${g.status === 'ACTIVE' ? '' : ' muted'}`}>{statusOf(g)}</span>
         : (
@@ -209,8 +209,8 @@ export function AiAdvertisingDashboard() {
           </span>
         ),
     },
-    { key: 'startDate', label: 'Start Date', sortable: true, sortValue: (g) => new Date(g.startDate).getTime(), render: (g) => fmtDay(g.startDate) },
-    { key: 'budgetMode', label: 'Budget Mode', sortable: true, sortValue: (g) => g.budgetMode, render: (g) => MODE_LABEL[g.budgetMode] ?? g.budgetMode, defaultHidden: true },
+    { key: 'startDate', label: 'Start Date', align: 'left', sortable: true, sortValue: (g) => new Date(g.startDate).getTime(), render: (g) => fmtDay(g.startDate) },
+    { key: 'budgetMode', label: 'Budget Mode', align: 'left', sortable: true, sortValue: (g) => g.budgetMode, render: (g) => MODE_LABEL[g.budgetMode] ?? g.budgetMode, defaultHidden: true },
     {
       key: 'dailyBudget', label: 'Daily Budget', metric: true, sortable: true, sortValue: (g) => g.dailyBudgetCents,
       render: (g) => eur2(g.dailyBudgetCents), total: (rows) => eur2(rows.reduce((n, r) => n + r.dailyBudgetCents, 0)),

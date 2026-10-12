@@ -131,10 +131,10 @@ describe('buildColDefs — structure only, the legacy classes on the cells', () 
     expect(by.get('acos')!.cellClass).toEqual(['nds-dg-td', 'r'])
     expect(by.get('actions')!.cellClass).toEqual(['nds-dg-td', 'r', 'sticky-right', 'stickyRight'])
   })
-  it('the th never got the column className (DataGrid.tsx:558) and aligns by `align` only — a numeric column without align:right keeps a left heading', () => {
+  it('the th never gets the column className, and sits on its cells\' side — a numeric column\'s heading is right like its figures (grid audit A1)', () => {
     const by = new Map(buildColDefs(base).map((d) => [d.colId, d]))
     const p = { column: { getColId: () => 'x' }, context: undefined } as unknown as HeaderClassParams
-    expect((by.get('spend')!.headerClass as (p: HeaderClassParams) => string[])(p)).toEqual(['nds-dg-th'])
+    expect((by.get('spend')!.headerClass as (p: HeaderClassParams) => string[])(p)).toEqual(['nds-dg-th', 'r', 'nds-ag-head-num'])
     expect((by.get('acos')!.headerClass as (p: HeaderClassParams) => string[])(p)).toEqual(['nds-dg-th', 'r', 'nds-ag-head-num'])
     expect((by.get('status')!.headerClass as (p: HeaderClassParams) => string[])(p)).toEqual(['nds-dg-th'])
     expect((by.get('actions')!.headerClass as (p: HeaderClassParams) => string[])(p)).toEqual(['nds-dg-th', 'r', 'nds-ag-head-num', 'sticky-right', 'stickyRight'])

@@ -1,3 +1,22 @@
+## Grid alignment: a header sits on its cells' side, in every engine — 2026-10-13
+
+Grid audit 2026-10-12 (A1–A9, A12), the Owner's rule 1A: words left, numbers right, the header on its own column's side.
+- **`DataGrid`** (`grid/datagrid` and the old table): a `numeric` column's header is right like its figures (it stayed
+  left: the header read `align`, the cells `numeric`). A right-aligned cell gets tabular figures. The totals cells get
+  the data cells' side padding. The `xs` tier pads 10 (was 9), where its compact header's words start. A centred
+  header centres on the whole cell (the ⋮ is taken out of the flow). `Column.className` is documented as cells only
+  (it never reached the `<th>`).
+- **Engine**: AG's own `type: 'numericColumn'` now right-aligns the cell too (only its header moved: a flex cell
+  ignores `text-align`).
+- **`WorkspaceGrid`**: numbers cells get tabular figures; the cell's 1px side borders go, so a cell's words start at
+  14 like its header's (were 15); a numbers field in edit mode stays right; the Total label sits left under the
+  identity header; `nds-ws-th-ctr` centres. Words columns that fell to the numbers default now say `align: 'left'`
+  (AI Advertising: AI Target, AI Control, Status, Start Date, Budget Mode; Budget: Last ran).
+- **Pages**: studio Analytics, Campaign limits, the Bid page's Results, next-gen Price/Stock and Sync Drift are numbers
+  columns; the Bid page uses `nds-ag-head-num` (one numbers header everywhere). The rule is in `docs/GRID.md` §5.
+- Not here: a tooltip for a cut-off header name (with the tooltip work, grid audit wave 2 PR6); group-header alignment
+  is unchanged (the product sheet and the Matrix keep their left group names).
+
 ## ReviewChangesModal takes a form above its table (`lead`) — 2026-10-12
 
 Bid page, Change bid (lane BIDCHANGE). The Owner wanted to set the selected keywords' bids to his own number, or raise or

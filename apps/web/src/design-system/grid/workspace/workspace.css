@@ -55,10 +55,13 @@
   white-space: nowrap;
   overflow: visible;
   /* `td { padding: 12px 14px }`. AG paints the theme's `cellHorizontalPadding` one pixel under the
-     value on cells (measured 13 at 14) and exactly on headers; the cell is stated here so both
-     read 14 like the legacy `td` and `th`. */
+     value on cells (measured 13 at 14) because its cell keeps a 1px clear border on each side, and exactly on
+     headers. The cell is stated here at 14 and its side borders go (these cells never take focus, the only thing
+     the border is for), so a cell's words start at 14 like its header's — not at 15 (grid audit A8). */
   padding-left: 14px;
   padding-right: 14px;
+  border-left-width: 0;
+  border-right-width: 0;
 }
 /* The legacy cell inherited the page's `html { line-height: 1.5 }` (measured 19.5px at 13px on every baseline
    page); AG's root sets `normal` (~16px), which would shrink every text line by 3.5px and every row with it. */
@@ -73,9 +76,14 @@
 .nds-ag-ws .ag-cell.nds-ws-td.num { justify-content: flex-end; text-align: right; }
 .nds-ag-ws .ag-cell.nds-ws-td.ed { justify-content: flex-start; text-align: left; }
 .nds-ag-ws .ag-cell.nds-ws-td.ctr { justify-content: center; text-align: center; }
+/* A numbers cell keeps its digits in columns (grid audit A4: the app font's digits are proportional by default). */
+.nds-ag-ws .ag-cell.nds-ws-td.num { font-variant-numeric: tabular-nums; }
+/* A centred column's header centres over its cells (the class existed with no rule). */
+.nds-ag-ws .ag-header-cell.nds-ws-th-ctr .ag-header-cell-label { justify-content: center; }
 .nds-ag-ws .ag-cell.nds-ws-td.st { justify-content: flex-start; text-align: left; white-space: nowrap; }
-/* `td.editing { text-align: left }` — the vertical 7px is the row's business, not the cell's */
-.nds-ag-ws .ag-cell.nds-ws-td.editing { justify-content: flex-start; text-align: left; }
+/* A cell open in edit mode keeps its column's side: a numbers field stays right under its right-aligned header, its
+   typed figures too (grid audit A12; the legacy `td.editing` pushed every field left). The vertical 7px is the row's. */
+.nds-ag-ws .ag-cell.nds-ws-td.editing.num input { text-align: right; }
 /* The identity cell: `td.nm { max-width: 360 }` is the column's `maxWidth`; here only what is inside it. */
 .nds-ag-ws .ag-cell.nds-ws-td.nm { overflow: hidden; }
 .nds-ag-ws .ag-cell.nds-ws-td.nm > .ag-cell-value,
@@ -159,9 +167,9 @@
 /* keyboard-focused row (`keyboardNav`: j/k) — `tr.kbd-focus td { blue-50 }`, the rail on the frozen cell */
 .nds-ag-ws .ag-row.kbd-focus { background-color: var(--nds-wsgrid-selection-bg); }
 .nds-ag-ws .ag-row.kbd-focus .ag-cell.nds-ws-td.nm.fz { box-shadow: inset 3px 0 0 var(--nds-wsgrid-accent); }
-/* the pinned Total row: `tr.h10-am-total td { grey-25; 700; grey-900 }`, `td.nm.fz { text-align: right }` */
+/* the pinned Total row: `tr.h10-am-total td { grey-25; 700; grey-900 }`. Its "Total" label sits where the identity
+   header's words do — left; the legacy `td.nm.fz { text-align: right }` pushed it right (grid audit A12). */
 .nds-ag-ws .ag-row-pinned .ag-cell.nds-ws-td { color: var(--nds-wsgrid-text-strong); font-weight: 700; }
-.nds-ag-ws .ag-row-pinned .ag-cell.nds-ws-td.nm.fz { justify-content: flex-end; text-align: right; }
 .nds-ag-ws .ag-floating-top { border-bottom: 1px solid var(--nds-wsgrid-border); }
 /* the group band: `tr.h10-am-grp td { grey-100; padding 7px 16px; rules grey-150 }` */
 .nds-ag-ws .ag-row.h10-am-grp { background-color: var(--nds-wsgrid-surface-sunken); }

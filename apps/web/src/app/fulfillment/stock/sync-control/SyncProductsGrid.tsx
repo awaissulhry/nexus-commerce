@@ -289,7 +289,7 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
         : null,
     },
     {
-      key: 'drift', label: <Hdr k="drift" label="Drift" />, width: 90,
+      key: 'drift', label: <Hdr k="drift" label="Drift" />, align: 'right', width: 90,
       render: (r) => {
         if (r.kind === 'master') {
           return r.m.rollup.driftCount > 0

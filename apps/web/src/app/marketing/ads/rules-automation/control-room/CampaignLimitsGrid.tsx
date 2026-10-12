@@ -13,7 +13,7 @@
 import { memo } from 'react'
 import { Tag, Toggle } from '@/design-system/primitives'
 import {
-  GridLoadingOverlay, GridNoRowsOverlay, NexusGrid, gridSelection, keepFromGrid,
+  GridLoadingOverlay, GridNoRowsOverlay, NexusGrid, gridSelection, keepFromGrid, numericColumn,
   type ColDef, type ICellRendererParams, type NexusGridProps,
 } from '@/design-system/grid'
 import {
@@ -116,14 +116,14 @@ const RulesCell = memo(function RulesCell({ data }: Cell) {
 const NAME: ColDef<GridRow> = { colId: 'name', headerName: 'Campaign', valueGetter: (p) => p.data?.row.name ?? '', pinned: 'left', width: 260, cellRenderer: NameCell }
 const ALLOWED: ColDef<GridRow> = { colId: 'allowed', headerName: 'Automation may change it', valueGetter: (p) => (p.data?.values.allowed ? 1 : 0), width: 210, cellRenderer: AllowedCell }
 const REST: ColDef<GridRow>[] = [
-  { colId: 'min', headerName: 'Lowest bid', valueGetter: (p) => p.data?.values.minBidCents ?? null, width: 130, cellRenderer: MinCell, headerTooltip: 'Every engine and rule keeps bids at or above it. Checked on every change sent to Amazon.' },
-  { colId: 'max', headerName: 'Highest bid', valueGetter: (p) => p.data?.values.maxBidCents ?? null, width: 130, cellRenderer: MaxCell, headerTooltip: 'Every engine and rule keeps bids at or below it. Placement adjustments can still raise the cost per click above it.' },
-  { colId: 'ceiling', headerName: CEILING_WORD, valueGetter: (p) => p.data?.values.cpcMultiple ?? null, width: 250, cellRenderer: CeilingCell, headerTooltip: 'A multiple of the usual click cost. It limits your own bid edits and Claude’s tools only — not the engines. It does nothing for a keyword with no history.' },
+  { colId: 'min', headerName: 'Lowest bid', valueGetter: (p) => p.data?.values.minBidCents ?? null, width: 130, ...numericColumn, cellRenderer: MinCell, headerTooltip: 'Every engine and rule keeps bids at or above it. Checked on every change sent to Amazon.' },
+  { colId: 'max', headerName: 'Highest bid', valueGetter: (p) => p.data?.values.maxBidCents ?? null, width: 130, ...numericColumn, cellRenderer: MaxCell, headerTooltip: 'Every engine and rule keeps bids at or below it. Placement adjustments can still raise the cost per click above it.' },
+  { colId: 'ceiling', headerName: CEILING_WORD, valueGetter: (p) => p.data?.values.cpcMultiple ?? null, width: 250, ...numericColumn, cellRenderer: CeilingCell, headerTooltip: 'A multiple of the usual click cost. It limits your own bid edits and Claude’s tools only — not the engines. It does nothing for a keyword with no history.' },
   { colId: 'locked', headerName: 'Locked', valueGetter: (p) => (p.data ? lockedWords(p.data.values.pins) : ''), width: 150, cellRenderer: LockedCell, headerTooltip: 'Automation may not change a locked part: placement adjustments, bids or the daily budget. Lowering bids to stop a campaign is still allowed.' },
-  { colId: 'acos', headerName: 'Target ACoS', valueGetter: (p) => p.data?.row.targetAcosPct ?? null, width: 140, valueFormatter: (p) => (p.value == null ? 'None of its own' : `${p.value} %`), headerTooltip: 'The campaign’s own target. With none of its own, the strategy’s target (or the account’s) applies.' },
-  { colId: 'budget', headerName: 'Budget a day', valueGetter: (p) => p.data?.row.dailyBudgetCents ?? null, width: 130, valueFormatter: (p) => moneyWords((p.value as number | null) ?? null, currencyOf(p.data?.row.marketplace ?? null)) },
+  { colId: 'acos', headerName: 'Target ACoS', valueGetter: (p) => p.data?.row.targetAcosPct ?? null, width: 140, ...numericColumn, valueFormatter: (p) => (p.value == null ? 'None of its own' : `${p.value} %`), headerTooltip: 'The campaign’s own target. With none of its own, the strategy’s target (or the account’s) applies.' },
+  { colId: 'budget', headerName: 'Budget a day', valueGetter: (p) => p.data?.row.dailyBudgetCents ?? null, width: 130, ...numericColumn, valueFormatter: (p) => moneyWords((p.value as number | null) ?? null, currencyOf(p.data?.row.marketplace ?? null)) },
   { colId: 'suppressed', headerName: 'Bids held low', valueGetter: (p) => (p.data ? suppressedWords(p.data.row) : ''), flex: 1, minWidth: 160 },
-  { colId: 'rules', headerName: 'Its own rules', valueGetter: (p) => p.data?.row.boundRules.length ?? 0, width: 130, cellRenderer: RulesCell, headerTooltip: 'Rules limited to this campaign only.' },
+  { colId: 'rules', headerName: 'Its own rules', valueGetter: (p) => p.data?.row.boundRules.length ?? 0, width: 130, ...numericColumn, cellRenderer: RulesCell, headerTooltip: 'Rules limited to this campaign only.' },
 ]
 const COLUMNS: ColDef<GridRow>[] = [NAME, ALLOWED, ...REST]
 /** A phone: a narrower pinned name and a short header for the switch, so both fit beside each other. */

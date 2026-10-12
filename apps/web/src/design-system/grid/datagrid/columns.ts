@@ -180,8 +180,9 @@ export function buildColDefs<T>(input: BuildColDefsInput<T>): ColDef[] {
   const toDef = (c: Column<T>, hide: boolean): ColDef => {
     const sticky = (!!c.sticky && pinLeft) || lockedColumns.includes(c.key)
     const stickyRight = !c.sticky && !!c.stickyRight && pinRight
+    // One alignment for the header and its cells (grid audit A1): a figures column's header used to stay left over
+    // right-aligned numbers, because the header read `align` and the cells read `numeric`.
     const align = alignClass(c.numeric ? 'right' : c.align)
-    const headAlign = alignClass(c.align)
     const stringLabel = typeof c.label === 'string'
     const width = widths?.[c.key] ?? c.width
     return {
@@ -201,7 +202,7 @@ export function buildColDefs<T>(input: BuildColDefsInput<T>): ColDef[] {
       cellRenderer: components.value,
       cellClass: ['nds-dg-td', align, c.numeric ? 'num' : '', c.className ?? '', ...stickyClasses(sticky, stickyRight)].filter(Boolean),
       cellClassRules: EDGE_CELL_RULES,
-      headerClass: (p: HeaderClassParams) => ['nds-dg-th', headAlign, headAlign === 'r' ? 'nds-ag-head-num' : '', ...stickyClasses(sticky, stickyRight), ...edgeHeaderClass(p)].filter(Boolean),
+      headerClass: (p: HeaderClassParams) => ['nds-dg-th', align, align === 'r' ? 'nds-ag-head-num' : '', ...stickyClasses(sticky, stickyRight), ...edgeHeaderClass(p)].filter(Boolean),
       ...(width != null ? { initialWidth: width, suppressAutoSize: true } : {}),
     }
   }
