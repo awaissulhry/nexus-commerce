@@ -3,22 +3,24 @@
 /**
  * Bid page, Rules view — the detail of one rule (2026-10-10, polish round 2): a centered DS `DetailModal` (the Owner: no
  * side drawer), a full-screen sheet on a phone. Overview · Waiting · Preview · History · Effect · Settings; the brain's
- * detail is read only here (Overview · Clashes · History · Effect).
+ * detail: Overview · Campaigns · Clashes · History · Effect, and in its header "Stop the brain" — or "Start again" while
+ * a stop stands (Owner 2026-10-12; the page confirms and sends it, `brainStop.ts`).
  *
  * Address: `?rule=<id>&tab=<tab>` — the tabs are links (they replace the address, so Back closes the detail); ▲ / ▼ and
  * K / J move to the previous / next rule of the table as it is shown now. Esc closes it and the focus goes back to the
  * rule's cell in the table (the row now shown, after Prev / Next).
  *
  * The detail never writes. A mode pick, an archive, a restore, an Undo, a run's roll back or a decision on asks asks the
- * PAGE, which reviews it in the DS `ReviewChangesModal` stacked ON TOP of this detail; when the review closes the focus
- * goes back to the control that opened it, inside this detail (audit M10). "Edit all" opens the bid builder. Each write
+ * PAGE, which reviews it in the DS `ReviewChangesModal` stacked ON TOP of this detail (the Brain's Stop / Start again: its
+ * small confirm, then the code); when the review closes the focus goes back to the control that opened it, inside this
+ * detail (audit M10). "Edit all" opens the bid builder. Each write
  * control is held with its reason (a permission, or a market Nexus only reads — the page passes the held words, A1).
  *
  * Overview says what the table cannot: the mode with its holds, when it runs, what it works on and what it changed — not
  * the Effect again (its own tab says it, C-UI 5), and no "Changed" block that would only show dashes (C-UI 6).
  */
 import { forwardRef, useEffect, useMemo, useState, type ComponentProps } from 'react'
-import { Activity, Brain, CircleCheck, Inbox, RotateCw, Undo2 } from 'lucide-react'
+import { Activity, Brain, CircleCheck, CirclePlay, CircleStop, Inbox, RotateCw, Undo2 } from 'lucide-react'
 import { Button, InfoTip, SegmentedControl, Skeleton, Tag, ToolbarButton, Tooltip } from '@/design-system/primitives'
 import {
   Banner, Disclosure, EntityLinks, KeyValue, Listbox, type EntityLinkComponent, type ListboxPanelOption, type TabLinkComponent,
@@ -36,6 +38,7 @@ import {
 import { fetchBrainDiff, fetchHistory, fetchPreview, fetchRuns, fetchStoredRule, type BrainDiffDay } from './ruleApi'
 import { runRollbackable, runSummary, runWord, settingGroups, type RunRow, type SettingGroup } from './ruleSettings'
 import type { NoticeWords } from './savedNotice'
+import type { BrainStopAction, BrainStopView, StopNotice } from './brainStop'
 import { RefLinks, type PanelTab } from './RulesTable'
 import { WaitingTab } from './WaitingTab'
 import { PanelGrid, type PanelColumn } from '../_shared/PanelGrid'
@@ -96,6 +99,11 @@ export interface RulePanelProps {
   /** The brain: why Auto cannot be picked for a campaign (the server switch, the approver's permission), or null. */
   brainAutoHeld: string | null
   onBrainPick(pick: BrainPick): void
+  /** The brain: its Stop the brain / Start again in the header (held with its reason), or null for a rule. */
+  brainStop?: BrainStopView | null
+  onBrainStop?(action: BrainStopAction): void
+  /** The brain: what the last Stop / Start again answered, at the top of the detail until dismissed. */
+  brainNotice?: { notice: StopNotice; onDismiss(): void } | null
   /** Just saved in the builder: "Rule created" with Undo, or "Saved", at the top of the detail (never a toast under it). */
   notice?: { words: NoticeWords; busy: boolean; onUndo(): void; onDismiss(): void } | null
 }
@@ -136,6 +144,16 @@ export function RulePanel(p: RulePanelProps) {
       {!brain && <Tag>{p.row.market ?? 'All markets'}</Tag>}
     </>
   )
+  const stop = brain ? p.brainStop ?? null : null
+  const stopButton = stop && (
+    <Button size="sm" variant={stop.variant} heldReason={stop.held} onClick={() => p.onBrainStop?.(stop.action)}>
+      {stop.action === 'stop' ? <CircleStop size={14} aria-hidden /> : <CirclePlay size={14} aria-hidden />} {stop.label}
+    </Button>
+  )
+  // One place for both, so the focus comes back to whichever the detail shows after the confirm (data-return).
+  const actions = stopButton
+    ? <span data-return="brain-stop">{stop?.hint && !stop.held ? <Tooltip label={stop.hint} portal>{stopButton}</Tooltip> : stopButton}</span>
+    : undefined
   return (
     <DetailModal
       open
@@ -143,6 +161,7 @@ export function RulePanel(p: RulePanelProps) {
       title={<span className={styles.panelTitle}>{brain && <Brain size={16} aria-hidden className={styles.brainIcon} />}{p.row.name}</span>}
       subtitle={p.row.sentence}
       meta={meta}
+      actions={actions}
       tabs={tabs.map((t) => ({ id: t.id, label: t.label, href: p.tabHref(t.id), ...(t.count !== undefined ? { count: t.count } : {}) }))}
       activeTab={tab}
       linkAs={TabLink}
@@ -160,6 +179,11 @@ export function RulePanel(p: RulePanelProps) {
             onDismiss={p.notice.onDismiss}
           >
             {p.notice.words.body}
+          </Banner>
+        )}
+        {brain && p.brainNotice && (
+          <Banner tone={p.brainNotice.notice.tone} title={p.brainNotice.notice.title} onDismiss={p.brainNotice.onDismiss}>
+            {p.brainNotice.notice.body}
           </Banner>
         )}
         {tab === 'overview' && <Overview {...p} />}

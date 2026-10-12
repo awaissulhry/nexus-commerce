@@ -272,6 +272,27 @@ export function brainMode(f: { serverMode: 'off' | 'shadow' | 'live'; enrolledLi
   return { set, acts, heldBy, also, autoLocked }
 }
 
+/**
+ * The Owner's stop of the brain's bids for every product (the kill switch on the `bids` lever, brain/kill-switch.ts), as the
+ * Bid page's Brain row shows it and its "Start again" ends it: in one market, the market's own stop first, else the stop of
+ * every market; on All markets (`market` null) only the stop of every market. The newest wins. A kill of one product, or of
+ * another lever, is not this stop (the mode's holds count those). Pure.
+ */
+export interface BrainStop {
+  /** The market it stops; null = every market. */
+  market: string | null
+  /** When it was set (ISO). */
+  at: string
+  reason: string
+}
+export function brainStopOf(kills: ReadonlyArray<{ lever: string; productId: string | null; market: string | null; at: string; reason: string }>, market: string | null): BrainStop | null {
+  const of = (m: string | null) => kills
+    .filter((k) => k.lever === 'bids' && k.productId === null && (k.market?.toUpperCase() ?? null) === m)
+    .sort((a, b) => b.at.localeCompare(a.at))[0]
+  const k = (market ? of(market.toUpperCase()) : undefined) ?? of(null)
+  return k ? { market: k.market ? k.market.toUpperCase() : null, at: k.at, reason: k.reason } : null
+}
+
 /** True when the mode can do anything at all now (counted as "on"). */
 export const modeActs = (m: BidRuleMode) => RANK[m.acts] > RANK.OFF
 

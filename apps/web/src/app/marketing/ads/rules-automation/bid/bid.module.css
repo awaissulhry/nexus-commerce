@@ -368,3 +368,8 @@
   outline-offset: 1px;
   border-radius: var(--nds-radius-xs);
 }
+
+/* The Brain's Stop / Start again confirm: its one line. */
+.confirmLine {
+  margin: 0;
+}
