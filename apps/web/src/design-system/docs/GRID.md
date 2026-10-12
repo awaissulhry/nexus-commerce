@@ -124,6 +124,12 @@ items are "Customise columns…" / "Reset columns" when the page passes `columnD
 - A saved view marked default lands even when the server answers after the grid is up (`useGridState`
   `landOnLateDefault`; pages with their own landing — /products, the Matrix, the sheets — leave it off).
 
+**States and words (2026-10-13).** One empty state ("Nothing here", muted, wrapping) on every engine. The totals row is
+the LAST row and the header's height, on every grid. A reload keeps the rows on screen under `--nds-grid-loading-veil`
+(skeleton rows only before the first rows). AG's menu words are sentence case (`locale.ts`); one tooltip pace (300 ms);
+a header whose name is cut shows the whole name on hover. A grid inside a light-pinned page or a light modal stays
+light under a dark OS.
+
 ## 6. Cell types (`renderers/`, `columns/presets.ts`)
 
 | Preset | Renderer | Rule |

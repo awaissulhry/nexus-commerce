@@ -37,7 +37,7 @@ export const TOKEN_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'matchType', label: 'Match Type' },
   { value: 'keywordType', label: 'Keyword Type' },
   { value: 'asin', label: 'Asin' },
-  { value: 'customize', label: 'Customize' },
+  { value: 'customize', label: 'Customise' },
 ]
 
 function TokenSelect({ value, onChange, onRemove }: { value: string; onChange: (v: string) => void; onRemove: () => void }) {

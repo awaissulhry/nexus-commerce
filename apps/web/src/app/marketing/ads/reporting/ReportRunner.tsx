@@ -525,7 +525,7 @@ export function ReportRunner({ reportId }: { reportId: string }) {
             {colsOpen && (
               <>
                 <button type="button" className="h10-menu-back" aria-label="Close" onClick={() => setColsOpen(false)} />
-                <div className="h10-menu right rpt-colmenu" role="dialog" aria-label="Customize columns">
+                <div className="h10-menu right rpt-colmenu" role="dialog" aria-label="Customise columns">
                   {colOptions.map((c) => (
                     <button
                       key={c.id}

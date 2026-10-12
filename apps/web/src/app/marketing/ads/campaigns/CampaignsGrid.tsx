@@ -2109,7 +2109,7 @@ export function CampaignsGrid() {
         </>}
         <span className="grow" />
         <div className="h10-custwrap">
-          <Button active={showCustomize} onClick={() => setShowCustomize((v) => !v)} aria-haspopup="dialog" aria-expanded={showCustomize}><Settings2 size={13} /> Customize</Button>
+          <Button active={showCustomize} onClick={() => setShowCustomize((v) => !v)} aria-haspopup="dialog" aria-expanded={showCustomize}><Settings2 size={13} /> Customise</Button>
           <PreferencesModal
             attributeGroups
             groupToggles

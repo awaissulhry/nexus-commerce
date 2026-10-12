@@ -128,11 +128,12 @@
 
 /* ── the frozen columns: `td.nm.fz { border-right: wsgrid-rule; box-shadow: 4px 0 6px -3px }` (the rule is the
    theme's `pinnedColumnBorder`); SG.2 `td.fzr0 { border-left; box-shadow: -4px 0 6px -3px }` ── */
-.nds-ag-ws .ag-grid-pinned-left-cells { box-shadow: 4px 0 6px -3px rgba(16, 24, 40, 0.08); }
-.nds-ag-ws .ag-grid-pinned-right-cells { box-shadow: -4px 0 6px -3px rgba(16, 24, 40, 0.08); }
-/* the header's frozen part reads the same (`th.nm.fz`) */
-.nds-ag-ws .ag-header-row .ag-grid-pinned-left-cells { box-shadow: 4px 0 6px -3px rgba(16, 24, 40, 0.08); }
-.nds-ag-ws .ag-header-row .ag-grid-pinned-right-cells { box-shadow: -4px 0 6px -3px rgba(16, 24, 40, 0.08); }
+/* The shadow is the grid token (it flips with the theme; it was a hard-coded rgba, grid audit E15). The right side
+   mirrors it: the same shadow with its x offset negated. */
+.nds-ag-ws .ag-grid-pinned-left-cells,
+.nds-ag-ws .ag-header-row .ag-grid-pinned-left-cells { box-shadow: var(--nds-grid-pinned-shadow); }
+.nds-ag-ws .ag-grid-pinned-right-cells,
+.nds-ag-ws .ag-header-row .ag-grid-pinned-right-cells { box-shadow: -4px 0 6px -3px rgb(var(--nds-shadow-rgb) / 0.08); }
 
 /* ── the frozen cells keep their OWN ground, as the legacy sticky `td` did (workspace-grid.css 166 · 312 · 320 · 329 ·
    331 · 367 · 384 · 396–401): white by default — so a page tint on the row (`rowClassName`) leaves the frozen
@@ -170,7 +171,18 @@
 /* the pinned Total row: `tr.h10-am-total td { grey-25; 700; grey-900 }`. Its "Total" label sits where the identity
    header's words do — left; the legacy `td.nm.fz { text-align: right }` pushed it right (grid audit A12). */
 .nds-ag-ws .ag-row-pinned .ag-cell.nds-ws-td { color: var(--nds-wsgrid-text-strong); font-weight: 700; }
-.nds-ag-ws .ag-floating-top { border-bottom: 1px solid var(--nds-wsgrid-border); }
+/* The totals row is the grid's last row (grid audit E7); the theme's pinned-row rule draws the line above it.
+   A reload keeps the rows on screen under the engine's loading veil (grid audit F8) — never six skeleton rows. The
+   veil covers the data rows only (AG 36's `.ag-grid-scrolling-rows`), not the header or the totals. */
+.nds-ag-ws.is-reloading .ag-grid-scrolling-rows { position: relative; }
+.nds-ag-ws.is-reloading .ag-grid-scrolling-rows::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--nds-grid-loading-veil);
+  pointer-events: none;
+  z-index: 2;
+}
 /* the group band: `tr.h10-am-grp td { grey-100; padding 7px 16px; rules grey-150 }` */
 .nds-ag-ws .ag-row.h10-am-grp { background-color: var(--nds-wsgrid-surface-sunken); }
 .nds-ag-ws .ag-row.h10-am-grp .ag-cell-wrapper { width: 100%; }

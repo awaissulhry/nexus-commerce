@@ -89,7 +89,7 @@ export function WorkspaceGrid<T>({
   toolbarLeft, toolbarRight, exportable, onExport, customizable = true, storageKey, hierarchy,
   selectable = true, selected, onSelectedChange,
   showTotal, totalFirst = 'Total',
-  reportLabel, emptyLabel = 'No data.', emptyNode, defaultSort, enabledFirst, editMode, selectionActions,
+  reportLabel, emptyLabel = 'Nothing here', emptyNode, defaultSort, enabledFirst, editMode, selectionActions,
   searchable, searchPlaceholder = 'Search…', searchValue, pagerCentered, filtersDefaultOpen = true,
   groupBy, onRowClick, keyboardNav, onRowKey, initialFilters, rowClassName,
   onSortChange, onFilterChange,
@@ -219,7 +219,15 @@ export function WorkspaceGrid<T>({
   /** The rows totals are computed over and the count line counts: the whole result, never the page. */
   const totalRows = searched
   const groupMeta = useMemo(() => (groupBy ? collectGroupMeta(totalRows, groupBy) : EMPTY_META), [groupBy, totalRows])
-  const rowData = useMemo<Row[]>(() => (loading ? SKELETON_ROWS : totalRows), [loading, totalRows])
+  /**
+   * Skeleton rows only until the first rows arrive (grid audit F8). A later load — a filter, a sort, a search, a live
+   * sync — keeps the rows on screen under a loading veil until the new ones land: swapping them for six skeleton rows
+   * collapsed the page (Budgets) and threw away the scroll position and the focused row.
+   */
+  const lastRows = useRef<Row[]>([])
+  if (!loading) lastRows.current = totalRows
+  const reloading = loading && lastRows.current.length > 0
+  const rowData = useMemo<Row[]>(() => (loading ? (lastRows.current.length ? lastRows.current : SKELETON_ROWS) : totalRows), [loading, totalRows])
   const empty = !loading && rowData.length === 0
 
   const perPage = server ? server.rowsPerPage : rowsPerPage
@@ -263,7 +271,8 @@ export function WorkspaceGrid<T>({
     return rowIdRef.current(d as T)
   }, [])
   const rowH = rowHeight ?? DEFAULT_ROW_H
-  const getRowHeight = useCallback((p: { node: IRowNode }) => (p.node.group ? GROUP_ROW_H : rowH), [rowH])
+  // The totals row is the header's height, like every grid's (the Owner's card rule, IE.4; grid audit E7).
+  const getRowHeight = useCallback((p: { node: IRowNode; api: GridApi<Row> }) => (p.node.rowPinned ? p.api.getGridOption('headerHeight') ?? rowH : p.node.group ? GROUP_ROW_H : rowH), [rowH])
   const hierarchyRef = useRef(hierarchy); hierarchyRef.current = hierarchy
   const isRowSelectable = useCallback((node: IRowNode<Row>) => {
     const d = node.data as unknown
@@ -291,7 +300,7 @@ export function WorkspaceGrid<T>({
   const rowClassRules = useMemo<RowClassRules<Row>>(() => ({
     'nds-ws-tr': () => true,
     sk: (p: RowClassParams<Row>) => isSkeletonRow(p.data as unknown),
-    'h10-am-total': (p: RowClassParams<Row>) => p.node.rowPinned === 'top',
+    'h10-am-total': (p: RowClassParams<Row>) => p.node.rowPinned === 'bottom',
     'h10-am-grp': (p: RowClassParams<Row>) => !!p.node.group,
     'nds-tree-remainder': (p: RowClassParams<Row>) => p.data != null && !!hierarchyRef.current?.isRemainder?.(p.data as T),
     'kbd-focus': (p: RowClassParams<Row>) => focusedIdRef.current != null && p.node.id === focusedIdRef.current,
@@ -321,7 +330,8 @@ export function WorkspaceGrid<T>({
     [customizable, prefsControlled, chromeless, updatePrefs],
   )
   const totalsVersion = useRef(0)
-  const pinnedTopRowData = useMemo<TotalRow[] | undefined>(() => {
+  // The totals row sits at the BOTTOM, as on every other grid (grid audit E7; it was the legacy table's top row).
+  const pinnedBottomRowData = useMemo<TotalRow[] | undefined>(() => {
     if (!showTotal || loading || totalRows.length === 0) return undefined
     totalsVersion.current += 1
     return [{ __total: true, v: totalsVersion.current }]
@@ -660,7 +670,7 @@ export function WorkspaceGrid<T>({
 
   // ── the grid card: header (AG's) → rows → the empty state under the header when there are none ──
   const grid = (
-    <div ref={wrapRef} className={`nds-wsgrid nds-ag-ws${autoRows ? ' is-auto' : ''}${selectable ? '' : ' nosel'}${editing ? ' is-editing' : ''}${empty ? ' is-empty' : ''}`}>
+    <div ref={wrapRef} aria-busy={loading || undefined} className={`nds-wsgrid nds-ag-ws${autoRows ? ' is-auto' : ''}${selectable ? '' : ' nosel'}${editing ? ' is-editing' : ''}${empty ? ' is-empty' : ''}${reloading ? ' is-reloading' : ''}`}>
       <TooltipPortalProvider>
       <NexusGrid<Row>
         theme={adsWorkspaceTheme}
@@ -671,7 +681,7 @@ export function WorkspaceGrid<T>({
         rowData={rowData}
         columnDefs={columnDefs}
         getRowId={getRowId}
-        pinnedTopRowData={pinnedTopRowData}
+        pinnedBottomRowData={pinnedBottomRowData}
         rowSelection={rowSelection}
         selectionColumnDef={selectionColumnDef}
         defaultColDef={defaultColDef}
@@ -696,7 +706,6 @@ export function WorkspaceGrid<T>({
         // by default (measured: every column +20 against the legacy widths, the identity 350 for 328.5).
         autoSizePadding={0}
         enableCellTextSelection
-        tooltipShowDelay={600}
         columnDialog={columnDialog}
         onGridReady={onGridReady}
         onFirstDataRendered={onFirstDataRendered}
@@ -812,7 +821,7 @@ export function WorkspaceGrid<T>({
         {toolbarRight}
         {customizable && !prefsControlled && (
           <>
-            <Button active={showCustomize} onClick={() => setShowCustomize(true)} aria-haspopup="dialog" aria-expanded={showCustomize}><Settings2 size={13} /> Customize</Button>
+            <Button active={showCustomize} onClick={() => setShowCustomize(true)} aria-haspopup="dialog" aria-expanded={showCustomize}><Settings2 size={13} /> Customise</Button>
             {/* SGX3 — the SHARED dialog, not a second implementation (the same wiring as before). */}
             <PreferencesModal
               attributeGroups

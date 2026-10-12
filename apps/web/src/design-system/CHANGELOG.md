@@ -1,3 +1,21 @@
+## Grid states and words: one of each — 2026-10-13
+
+Grid audit 2026-10-12, wave 2 PR6 (E6, E7, E14, E15, F8, C6, A11).
+- **Empty state**: the engine's on every grid — "Nothing here", muted, wrapping. `NexusGrid` uses the DS overlay by
+  default (AG said "No Rows To Show"); `DataGrid` ("No rows.", one line, body ink) and `WorkspaceGrid` ("No data.")
+  say the same.
+- **Totals row**: the last row, the header's height, everywhere. `WorkspaceGrid` moves it from the top (26 ads pages);
+  `DataGrid`'s is the header's height (it was a 20.5px sliver), its words centred.
+- **Reloads** (`WorkspaceGrid`): the rows stay on screen under the engine's loading veil; skeleton rows only before
+  the first rows arrive (Budgets collapsed to six skeleton rows on every filter, sort, search and sync).
+- **Words**: AG's menu items in sentence case (`grid/locale.ts`: "Pin column", "Autosize all columns", "Reset
+  columns"…); "Customise" everywhere (four "Customize" labels); one tooltip pace, 300 ms.
+- **Cut header names** show in full on hover (only when cut, only without a tooltip of the column's own).
+- **Light pages**: a grid in a light-pinned page or a light modal keeps a light colour scheme under a dark OS.
+- **Ads frozen-column shadow** reads `--nds-grid-pinned-shadow` (was a hard-coded rgba).
+- Not here: the header staying on screen while the page scrolls (needs the Owner's choice); the Matrix's and the
+  sheet's reloads (other lanes are working there).
+
 ## Grid clicks, keys and copy: one contract — 2026-10-13
 
 Grid audit 2026-10-12, wave 2 PR5 (F2, F3, F4, F6, F7, F9, F13). `grid/gridDefaults.ts`, applied by `NexusGrid`; a page's

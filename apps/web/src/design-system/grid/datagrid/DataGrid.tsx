@@ -328,7 +328,8 @@ export function DataGrid<T>({
   const isFullWidthRow = useCallback((p: IsFullWidthRowParams<Row>) => isSubRow(p.rowNode.data), [])
   const isGroupOpenByDefault = useCallback(() => true, [])
   const getRowHeight = useCallback((p: { node: IRowNode<Row> }) => {
-    if (p.node.rowPinned) return totalsHeightRef.current ?? geometryRef.current.totalsHeight
+    // At least the header's height (geometry), taller only when a total's own content needs it.
+    if (p.node.rowPinned) return Math.max(totalsHeightRef.current ?? 0, geometryRef.current.totalsHeight)
     if (isSubRow(p.node.data)) return subHeights.current.get(p.node.id ?? '') ?? geometryRef.current.rowHeight
     return geometryRef.current.rowHeight
   }, [])
@@ -650,7 +651,7 @@ export function DataGrid<T>({
         onRowDataUpdated={onRowDataUpdated}
       />
       </TooltipPortalProvider>
-      {empty && <div className="nds-dg-empty nds-grid-empty">{emptyState ?? 'No rows.'}</div>}
+      {empty && <div className="nds-dg-empty nds-grid-empty" role="status">{emptyState ?? 'Nothing here'}</div>}
     </div>
   )
 

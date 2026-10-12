@@ -93,7 +93,7 @@ export function IdentityCellRenderer(p: ICellRendererParams) {
   const ctx = ctxOf<unknown>(p)
   const d = p.data
   if (isSkeletonRow(d)) return <Skb width={170} />
-  if (p.node.rowPinned === 'top' || isTotalRow(d)) return <b>{ctx.totalFirst}</b>
+  if (p.node.rowPinned != null || isTotalRow(d)) return <b>{ctx.totalFirst}</b>
   if (d == null) return null
   const row = d
   const id = ctx.rowId(row)
@@ -133,7 +133,7 @@ export function ValueCellRenderer(p: ICellRendererParams) {
   const d = p.data
   if (isSkeletonRow(d)) return <Skb width={52} />
   if (!c) return null
-  if (p.node.rowPinned === 'top' || isTotalRow(d)) {
+  if (p.node.rowPinned != null || isTotalRow(d)) {
     const t = typeof c.total === 'function' ? (c.total as (rows: unknown[]) => ReactNode)(ctx.totalRows) : c.total
     return <>{t ?? ''}</>
   }
