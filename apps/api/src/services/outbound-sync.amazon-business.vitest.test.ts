@@ -10,7 +10,7 @@ const m = vi.hoisted(() => {
   const outbound = vi.fn(() => { throw new Error('Unexpected outbound fetch') }); vi.stubGlobal('fetch', outbound)
   return {
     outbound, read: vi.fn(), many: vi.fn(), seller: vi.fn(), audit: vi.fn(),
-    get: vi.fn(), validate: vi.fn(), submit: vi.fn(), offerPatch: vi.fn(), windows: vi.fn(), exec: vi.fn(),
+    get: vi.fn(), validate: vi.fn(), submit: vi.fn(), offerPatch: vi.fn(), windows: vi.fn(), exec: vi.fn(), queueBusiness: vi.fn(),
   }
 })
 vi.mock('../db.js', () => {
@@ -41,6 +41,8 @@ vi.mock('../db.js', () => {
   }
 })
 vi.mock('../lib/amazon-sp-client.js', () => ({ getAmazonSellerId: m.seller }))
+// A follow that could not finish hands the business price to its own business row (the door's queue helper).
+vi.mock('./pim/business-price-write.service.js', () => ({ queueBusinessSends: m.queueBusiness }))
 vi.mock('../lib/queue.js', () => ({ addJobSafely: vi.fn(), outboundSyncQueue: null, readCacheQueue: null, searchIndexQueue: null, redis: { connection: null } }))
 vi.mock('./sync-control-policy.service.js', () => ({ loadChannelPolicies: async () => new Map(), policyFor: () => null }))
 vi.mock('./channel-publish-audit.service.js', () => ({ writeAttemptLog: m.audit, digestPayload: () => 'stub' }))
@@ -85,6 +87,7 @@ beforeEach(() => {
   m.windows.mockResolvedValue(new Map())
   m.get.mockResolvedValue(liveRead([allIt]))
   m.offerPatch.mockResolvedValue({ success: true, sku: SKU, status: 'ACCEPTED' })
+  m.queueBusiness.mockResolvedValue(['q-business'])
 })
 afterEach(() => { vi.unstubAllEnvs() })
 
@@ -133,7 +136,49 @@ describe('a business row sends the business offer alone', () => {
     m.get.mockRejectedValue(new Error('socket hang up'))
     const result = await service.syncToAmazon(businessRow())
     expect(m.offerPatch).not.toHaveBeenCalled()
-    expect(result).toMatchObject({ success: false, errorCode: 'AMAZON_OFFER_READ_FAILED', retryable: true })
+    expect(result).toMatchObject({ success: false, errorCode: 'AMAZON_BUSINESS_PRICE_RETRY', retryable: true })
+  })
+
+  it('a first business offer carries NEXUS\'s normal price — never an older one Amazon still shows', async () => {
+    m.read.mockResolvedValue(listing({ businessPriceRule: 'FIXED', businessPrice: 99, price: 110, priceOverride: 110 }))
+    m.get.mockResolvedValue(liveRead([{ ...allIt, our_price: priceOf(105) }])) // Amazon has not applied 110 yet
+    await service.syncToAmazon(businessRow())
+    const sent = m.offerPatch.mock.calls[0][0]
+    expect(sent.op).toBe('replace')
+    expect(sent.value.find((i: any) => i.audience === 'ALL').our_price).toEqual(priceOf(110))
+  })
+
+  it('the listing changed while the job ran: a first offer is not sent; the row is retried from the newer values', async () => {
+    // The job reads the listing at version 7; the re-read right before the replace (a version-only select) finds 8.
+    m.read.mockImplementation(async (args: any) => (args?.select && Object.keys(args.select).length === 1 && args.select.version
+      ? { version: 8 } : { ...listing({ businessPriceRule: 'FIXED', businessPrice: 99 }), version: 7 }))
+    const result = await service.syncToAmazon(businessRow())
+    expect(m.offerPatch).not.toHaveBeenCalled()
+    expect(result).toMatchObject({ success: false, errorCode: 'AMAZON_BUSINESS_PRICE_RETRY', retryable: true })
+    expect(kept()).toMatchObject({ status: 'DEFERRED' })
+  })
+
+  it('names the product type Amazon holds for the SKU, not Nexus\'s', async () => {
+    m.read.mockResolvedValue(listing({ businessPriceRule: 'FIXED', businessPrice: 32.95 }))
+    const read = liveRead([allIt, b2bIt(30)]) as any
+    m.get.mockResolvedValue({ ...read, rawResponse: { ...read.rawResponse, summaries: [{ productType: 'COAT' }] } })
+    await service.syncToAmazon(businessRow())
+    expect(m.offerPatch.mock.calls[0][0].productType).toBe('COAT')
+  })
+
+  it('a throttled patch is retried, never final', async () => {
+    m.read.mockResolvedValue(listing({ businessPriceRule: 'FIXED', businessPrice: 99 }))
+    m.offerPatch.mockResolvedValue({ success: false, sku: SKU, httpStatus: 429, error: 'HTTP 429 — QuotaExceeded' })
+    const result = await service.syncToAmazon(businessRow())
+    expect(result).toMatchObject({ success: false, errorCode: 'AMAZON_BUSINESS_PRICE_RETRY', retryable: true })
+  })
+
+  it('a row whose listing is gone sends nothing', async () => {
+    m.read.mockResolvedValue(null)
+    const result = await service.syncToAmazon(businessRow())
+    expect(m.get).not.toHaveBeenCalled()
+    // Without its listing the row names no market: refused before anything else, never retried.
+    expect(result).toMatchObject({ success: false, errorCode: 'AMAZON_MARKET_UNRESOLVED', retryable: false })
   })
 
   it('a price Amazon would refuse (below the minimum price Amazon holds, set in Seller Central) is not sent, and is not retried', async () => {
@@ -148,7 +193,7 @@ describe('a business row sends the business offer alone', () => {
 
   it('Amazon refuses the patch: the row fails with Amazon\'s words, not retried', async () => {
     m.read.mockResolvedValue(listing({ businessPriceRule: 'FIXED', businessPrice: 99 }))
-    m.offerPatch.mockResolvedValue({ success: false, sku: SKU, error: '90244: invalid value' })
+    m.offerPatch.mockResolvedValue({ success: false, sku: SKU, error: '90244: invalid value', itemLevel: true })
     const result = await service.syncToAmazon(businessRow())
     expect(result).toMatchObject({ success: false, errorCode: 'AMAZON_BUSINESS_PRICE_REFUSED', retryable: false })
     expect(result.message).toContain('90244')
@@ -161,14 +206,16 @@ describe('a business row sends the business offer alone', () => {
     expect(result).toMatchObject({ success: false, errorCode: 'AMAZON_BUSINESS_PRICE_NOT_SENT', retryable: false })
   })
 
-  it.each([['gated', undefined, undefined], ['dry-run', 'true', 'dry-run']])('%s mode: no live read and no patch', async (_mode, flag, mode) => {
+  it.each([['gated', undefined, undefined], ['dry-run', 'true', 'dry-run'], ['sandbox', 'true', 'sandbox']])('%s mode: no live read and no patch', async (_mode, flag, mode) => {
     vi.unstubAllEnvs()
     if (flag) vi.stubEnv('NEXUS_ENABLE_AMAZON_PUBLISH', flag)
     if (mode) vi.stubEnv('AMAZON_PUBLISH_MODE', mode)
     m.read.mockResolvedValue(listing({ businessPriceRule: 'FIXED', businessPrice: 99 }))
-    await service.syncToAmazon(businessRow())
+    const result = await service.syncToAmazon(businessRow())
     expect(m.get).not.toHaveBeenCalled()
     expect(m.offerPatch).not.toHaveBeenCalled()
+    expect(result.dryRun).toBe(true)
+    expect(m.exec).not.toHaveBeenCalled() // nothing recorded as sent
   })
 })
 
@@ -199,11 +246,48 @@ describe('a normal price push carries a percent-off business price', () => {
     expect(m.offerPatch).not.toHaveBeenCalled()
   })
 
-  it('the business send fails after the normal price went: the price push still stands, and the failure is kept on the listing', async () => {
+  it('the business send fails after the normal price went: the price push still stands, the failure is kept, and a business row retries it', async () => {
     m.read.mockResolvedValue(listing({ businessPriceRule: 'PERCENT_OFF', businessPricePercent: 5 }))
-    m.offerPatch.mockResolvedValue({ success: false, sku: SKU, error: 'Throttled' })
+    m.get.mockResolvedValue(liveRead([allIt, b2bIt(99.75)]))
+    m.offerPatch.mockResolvedValue({ success: false, sku: SKU, httpStatus: 429, error: 'HTTP 429 — Throttled' })
     const result = await service.syncToAmazon(pricePush(115))
     expect(result).toMatchObject({ success: true, status: 'SUCCESS' })
+    expect(kept()).toMatchObject({ status: 'FAILED' })
+    expect(m.queueBusiness).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ listingIds: ['l'], source: 'BUSINESS_PRICE_FOLLOW' }))
+  })
+
+  it('Amazon refuses the follow (this listing\'s data): kept as refused, not queued again', async () => {
+    m.read.mockResolvedValue(listing({ businessPriceRule: 'PERCENT_OFF', businessPricePercent: 5 }))
+    m.get.mockResolvedValue(liveRead([allIt, b2bIt(99.75)]))
+    m.offerPatch.mockResolvedValue({ success: false, sku: SKU, error: '90244', itemLevel: true })
+    await service.syncToAmazon(pricePush(115))
     expect(kept()).toMatchObject({ status: 'REFUSED' })
+    expect(m.queueBusiness).not.toHaveBeenCalled()
+  })
+
+  it('no business offer on Amazon yet: the price push never creates it (its read may be older than the push); a business row does', async () => {
+    m.read.mockResolvedValue(listing({ businessPriceRule: 'PERCENT_OFF', businessPricePercent: 5 }))
+    m.get.mockResolvedValue(liveRead([allIt]))
+    const result = await service.syncToAmazon(pricePush(115))
+    expect(result).toMatchObject({ success: true, status: 'SUCCESS' })
+    expect(m.offerPatch).not.toHaveBeenCalled()
+    expect(m.queueBusiness).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ listingIds: ['l'] }))
+    expect(m.get).toHaveBeenCalledTimes(1) // the follow reuses the read the normal push made
+  })
+
+  it('an error inside the business send never fails a price push that already went', async () => {
+    m.read.mockResolvedValue(listing({ businessPriceRule: 'PERCENT_OFF', businessPricePercent: 5 }))
+    m.get.mockResolvedValue(liveRead([allIt, b2bIt(99.75)]))
+    m.offerPatch.mockRejectedValue(new Error('boom'))
+    const result = await service.syncToAmazon(pricePush(115))
+    expect(result).toMatchObject({ success: true, status: 'SUCCESS' })
+    expect(m.queueBusiness).toHaveBeenCalledTimes(1)
+  })
+
+  it('no Nexus setting while Amazon holds a business offer: a normal price push deletes nothing', async () => {
+    m.read.mockResolvedValue(listing({}))
+    m.get.mockResolvedValue(liveRead([allIt, b2bIt(32.95)]))
+    await service.syncToAmazon(pricePush(115))
+    expect(m.offerPatch).not.toHaveBeenCalled()
   })
 })

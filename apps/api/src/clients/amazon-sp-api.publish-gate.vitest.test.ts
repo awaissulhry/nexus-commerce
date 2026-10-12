@@ -61,3 +61,30 @@ describe('P0.1 — sandbox mode sends nothing on the production-only writers', (
     expect(s.transport.mock.calls.length + s.request.mock.calls.length).toBe(1)
   })
 })
+
+// Amazon Business step 4 review (2026-10-12): the offer writer read only `issues`, so a 4xx/5xx answer (`errors[]`)
+// counted as a success. Now an HTTP failure is a failure, and only this item's own data is item-level.
+describe('patchPurchasableOffer — an HTTP failure is a failure', () => {
+  const answer = (status: number, body: unknown) => {
+    vi.stubEnv('NEXUS_ENABLE_AMAZON_PUBLISH', '1'); vi.stubEnv('AMAZON_PUBLISH_MODE', 'live')
+    const client = new AmazonSpApiClient()
+    vi.spyOn(client, 'getAccessToken').mockResolvedValue('token')
+    vi.spyOn(client as any, 'fetchWithRetry').mockResolvedValue(new Response(JSON.stringify(body), { status }))
+    return client.patchPurchasableOffer({ sellerId: 's', sku: 'x', marketplaceId: 'm', productType: 'COAT', op: 'merge', value: [{ marketplace_id: 'm', currency: 'EUR', audience: 'B2B' }] })
+  }
+  it('429 with errors[] → not a success, not item-level (it may pass later)', async () => {
+    const r = await answer(429, { errors: [{ code: 'QuotaExceeded', message: 'You exceeded your quota' }] })
+    expect(r).toMatchObject({ success: false, httpStatus: 429 })
+    expect(r.itemLevel).toBeUndefined()
+    expect(r.error).toContain('QuotaExceeded')
+  })
+  it('404 → this SKU only (item-level)', async () => {
+    expect(await answer(404, { errors: [{ code: 'NOT_FOUND', message: 'no such SKU' }] })).toMatchObject({ success: false, itemLevel: true })
+  })
+  it('200 with an ERROR issue → Amazon refused this item\'s data (item-level)', async () => {
+    expect(await answer(200, { status: 'INVALID', issues: [{ code: '90244', severity: 'ERROR', message: 'invalid value' }] })).toMatchObject({ success: false, itemLevel: true })
+  })
+  it('200 ACCEPTED → success', async () => {
+    expect(await answer(200, { status: 'ACCEPTED', submissionId: 'sub-1' })).toMatchObject({ success: true, status: 'ACCEPTED', httpStatus: 200 })
+  })
+})

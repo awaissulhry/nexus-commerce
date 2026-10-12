@@ -688,6 +688,10 @@ export class AmazonSpApiClient {
     error?: string
     issues?: SPAPIResponse['issues']
     dryRun?: boolean
+    /** The HTTP status Amazon answered with, when it answered. */
+    httpStatus?: number
+    /** Amazon refused THIS item's data (or does not know the SKU): the same request cannot succeed. */
+    itemLevel?: boolean
   }> {
     const { sellerId, sku, marketplaceId, productType, op, value } = options
     // P0.1 — no sandbox host on this path (AS.5 reason): sandbox = no HTTP.
@@ -720,12 +724,23 @@ export class AmazonSpApiClient {
         },
         `patchPurchasableOffer(${sku}:${marketplaceId}:${op})`,
       )
-      const data = (await response.json()) as SPAPIResponse
+      const data = (await response.json().catch(() => ({}))) as SPAPIResponse
+      // An HTTP failure is a FAILURE (as `submitListingPayload`, P0b): SP-API error bodies carry a top-level `errors[]`,
+      // not `issues[]`, and the gateway answers a 4xx/5xx without throwing. 404 names this SKU only; every other HTTP
+      // failure (400, 401/403, 429, 5xx) may be the account's or the request's, so it is not this item's data.
+      if (!response.ok) {
+        const topErrors = Array.isArray((data as { errors?: Array<{ code?: string; message?: string }> }).errors)
+          ? (data as { errors: Array<{ code?: string; message?: string }> }).errors.map((e) => `${e.code ?? 'ERROR'}: ${e.message ?? ''}`).join(' | ')
+          : `HTTP ${response.status}`
+        logger.warn('SP-API patchPurchasableOffer failed', { sku, marketplaceId, op, httpStatus: response.status, errors: topErrors.slice(0, 400) })
+        return { success: false, sku, httpStatus: response.status, error: `HTTP ${response.status} — ${topErrors.slice(0, 400)}`, ...(response.status === 404 ? { itemLevel: true } : {}) }
+      }
+      // Amazon's verdict on THIS item's data (status INVALID, ERROR issues): sending it again cannot succeed.
       const errorMessage = this.parseErrors(data)
       if (errorMessage) {
-        return { success: false, sku, error: errorMessage, issues: data.issues }
+        return { success: false, sku, httpStatus: response.status, error: errorMessage, issues: data.issues, itemLevel: true }
       }
-      return { success: true, sku, status: data.status, submissionId: data.submissionId }
+      return { success: true, sku, httpStatus: response.status, status: data.status, submissionId: data.submissionId }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       logger.error('SP-API patchPurchasableOffer failed', { sku, marketplaceId, op, error: errorMessage })

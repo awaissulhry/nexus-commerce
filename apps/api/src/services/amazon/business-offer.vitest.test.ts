@@ -19,40 +19,50 @@ describe('amazonBusinessElement — the instance Nexus sends', () => {
 })
 
 describe('amazonBusinessOfferPlan — only the business instance of this market changes', () => {
-  it('none held, one wanted → replace with every live instance verbatim plus the new one (the shape Amazon validated)', () => {
-    const plan = amazonBusinessOfferPlan({ wanted: wanted(99.75, tiers), live: [all], marketplaceId: IT })
-    expect(plan).toEqual({ kind: 'replace', value: [all, wanted(99.75, tiers)] })
+  it('none held, one wanted → replace with THE BUILDER\'s root (Nexus\'s normal offer over Amazon\'s) plus the new one — never Amazon\'s copy as read', () => {
+    const nexusNormal = { ...all, our_price: price(110) } // a price change Amazon may not show yet
+    const plan = amazonBusinessOfferPlan({ wanted: wanted(99.75, tiers), live: [all], marketplaceId: IT, normalRoot: [nexusNormal] })
+    expect(plan).toEqual({ kind: 'replace', value: [nexusNormal, wanted(99.75, tiers)] })
   })
   it('a first offer with no tiers leaves the plan key out of the replace', () => {
-    const plan = amazonBusinessOfferPlan({ wanted: wanted(99.75), live: [all], marketplaceId: IT })
+    const plan = amazonBusinessOfferPlan({ wanted: wanted(99.75), live: [all], marketplaceId: IT, normalRoot: [all] })
     expect(plan.kind).toBe('replace')
     expect((plan as { value: Record<string, unknown>[] }).value[1]).not.toHaveProperty('quantity_discount_plan')
   })
+  it('a first offer: the builder made no root (no price) → refused, nothing sent', () => {
+    expect(amazonBusinessOfferPlan({ wanted: wanted(99.75), live: [all], marketplaceId: IT, normalRoot: null }).kind).toBe('refused')
+  })
   it('held and different → merge naming only the business instance; the normal offer is never in it', () => {
-    const plan = amazonBusinessOfferPlan({ wanted: wanted(99.75, tiers), live: [all, b2bLive(32.95)], marketplaceId: IT })
+    const plan = amazonBusinessOfferPlan({ wanted: wanted(99.75, tiers), live: [all, b2bLive(32.95)], marketplaceId: IT, normalRoot: [all] })
     expect(plan).toEqual({ kind: 'merge', value: [wanted(99.75, tiers)] })
   })
   it('held with a plan, wanted without → merge with quantity_discount_plan null (Amazon\'s documented delete)', () => {
     const livePlan = [{ schedule: [{ discount_type: 'percent', levels: [{ lower_bound: 2, value: 3 }] }] }]
-    const plan = amazonBusinessOfferPlan({ wanted: wanted(32.95), live: [all, b2bLive(32.95, livePlan)], marketplaceId: IT })
+    const plan = amazonBusinessOfferPlan({ wanted: wanted(32.95), live: [all, b2bLive(32.95, livePlan)], marketplaceId: IT, normalRoot: [all] })
     expect(plan).toEqual({ kind: 'merge', value: [{ ...wanted(32.95), quantity_discount_plan: null }] })
   })
   it('held and equal (price and plan) → nothing to send', () => {
     const livePlan = [{ schedule: [{ discount_type: 'percent', levels: [{ lower_bound: 2, value: 3 }, { lower_bound: 5, value: 5 }] }] }]
-    expect(amazonBusinessOfferPlan({ wanted: wanted(99.75, tiers), live: [all, b2bLive(99.75, livePlan)], marketplaceId: IT })).toEqual({ kind: 'none' })
-    expect(amazonBusinessOfferPlan({ wanted: wanted(32.95), live: [all, b2bLive(32.95)], marketplaceId: IT })).toEqual({ kind: 'none' })
+    expect(amazonBusinessOfferPlan({ wanted: wanted(99.75, tiers), live: [all, b2bLive(99.75, livePlan)], marketplaceId: IT, normalRoot: [all] })).toEqual({ kind: 'none' })
+    expect(amazonBusinessOfferPlan({ wanted: wanted(32.95), live: [all, b2bLive(32.95)], marketplaceId: IT, normalRoot: [all] })).toEqual({ kind: 'none' })
   })
   it('none wanted: a held business offer is deleted by its selectors; none held → nothing', () => {
-    expect(amazonBusinessOfferPlan({ wanted: null, live: [all, b2bLive(32.95)], marketplaceId: IT })).toEqual({ kind: 'delete', value: [{ marketplace_id: IT, currency: 'EUR', audience: 'B2B' }] })
-    expect(amazonBusinessOfferPlan({ wanted: null, live: [all], marketplaceId: IT })).toEqual({ kind: 'none' })
+    expect(amazonBusinessOfferPlan({ wanted: null, live: [all, b2bLive(32.95)], marketplaceId: IT, normalRoot: [all] })).toEqual({ kind: 'delete', value: [{ marketplace_id: IT, currency: 'EUR', audience: 'B2B' }] })
+    expect(amazonBusinessOfferPlan({ wanted: null, live: [all], marketplaceId: IT, normalRoot: [all] })).toEqual({ kind: 'none' })
   })
   it('refuses: no normal offer in this market; a business offer held in another currency', () => {
-    expect(amazonBusinessOfferPlan({ wanted: wanted(99.75), live: [], marketplaceId: IT }).kind).toBe('refused')
-    expect(amazonBusinessOfferPlan({ wanted: wanted(99.75), live: [{ ...all, marketplace_id: 'A1PA6795UKMFR9' }], marketplaceId: IT }).kind).toBe('refused')
-    expect(amazonBusinessOfferPlan({ wanted: wanted(99.75), live: [all, { ...b2bLive(32.95), currency: 'GBP' }], marketplaceId: IT }).kind).toBe('refused')
+    expect(amazonBusinessOfferPlan({ wanted: wanted(99.75), live: [], marketplaceId: IT, normalRoot: null }).kind).toBe('refused')
+    expect(amazonBusinessOfferPlan({ wanted: wanted(99.75), live: [{ ...all, marketplace_id: 'A1PA6795UKMFR9' }], marketplaceId: IT, normalRoot: [{ ...all, marketplace_id: 'A1PA6795UKMFR9' }] }).kind).toBe('refused')
+    expect(amazonBusinessOfferPlan({ wanted: wanted(99.75), live: [all, { ...b2bLive(32.95), currency: 'GBP' }], marketplaceId: IT, normalRoot: [all] }).kind).toBe('refused')
   })
-  it('another market\'s business offer is not this market\'s', () => {
+  it('another market\'s business offer is not this market\'s; one with no marketplace_id is (a single-market answer)', () => {
     expect(liveBusinessInstance([{ ...b2bLive(32.95), marketplace_id: 'A1PA6795UKMFR9' }], IT)).toBeNull()
+    const { marketplace_id: _m, ...noMarket } = b2bLive(32.95)
+    expect(liveBusinessInstance([noMarket], IT)).toEqual(noMarket)
+  })
+  it('a business offer Amazon holds with no currency is not removed blind', () => {
+    const { currency: _c, ...noCurrency } = b2bLive(32.95)
+    expect(amazonBusinessOfferPlan({ wanted: null, live: [all, noCurrency], marketplaceId: IT, normalRoot: [all] }).kind).toBe('refused')
   })
 })
 

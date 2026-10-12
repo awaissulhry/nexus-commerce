@@ -230,8 +230,8 @@ describe('business pricing absence — derived from the account\'s seller-scoped
     const out = businessAbsence({ productType: 'OUTERWEAR', market: 'PL', audience: null })
     for (const a of out) expect(a.reason).toBe(MATRIX_COPY.absentBusinessUnchecked())
     expect(out[0]!.reason).not.toContain('checked against')
-    /* A family with no product type has nothing to check against either. */
-    expect(businessAbsence({ productType: null, market: 'IT', audience: ['ALL'] })[0]!.reason).toBe(MATRIX_COPY.absentBusinessUnchecked())
+    /* A family with no product type cannot be checked at all — its own sentence, not "Amazon has not told Nexus yet". */
+    expect(businessAbsence({ productType: null, market: 'IT', audience: ['ALL'] })[0]!.reason).toBe(MATRIX_COPY.absentBusinessNoType())
   })
   it('a schema WITH the B2B audience → still absent, saying the cells are not built (positive control for the enum test)', () => {
     const out = businessAbsence({ productType: 'OUTERWEAR', market: 'DE', audience: ['ALL', 'B2B'] })

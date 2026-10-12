@@ -2,18 +2,50 @@
  * Amazon Business step 4 — send ONE listing's business offer, inside the Amazon push (`syncToAmazon`, live mode only).
  *
  * The listing's business setting (`@nexus/shared/business-price`) and its normal price give the business instance; a
- * fresh live read of `purchasable_offer` gives what Amazon holds; `amazonBusinessOfferPlan` gives the one patch
- * (merge / replace / delete, or nothing). Before anything is sent the setting is checked again against Amazon's rules
- * and the listing's minimum and maximum price (the normal price may have moved since it was saved). The patch goes
- * through `amazonSpApiClient.patchPurchasableOffer` (the channel gateway). What happened is kept on the listing at
- * `platformAttributes.amazonBusinessOffer` (one key, set atomically — no other key is touched, the version is not bumped).
+ * live read of `purchasable_offer` gives what Amazon holds; `amazonBusinessOfferPlan` gives the one patch (merge /
+ * replace / delete, or nothing). Before anything is sent the setting is checked again against Amazon's rules and the
+ * strictest minimum and maximum price Amazon or Nexus holds (the normal price may have moved since it was saved). The
+ * patch goes through `amazonSpApiClient.patchPurchasableOffer` (the channel gateway), named with the product type Amazon
+ * holds for the SKU.
+ *
+ * Two lanes:
+ *   - `row` — a `BUSINESS_PRICE_UPDATE` row: may create the business offer (a replace), but only while the listing is as
+ *     the job read it (`unchanged`), so a normal price change saved meanwhile is never overwritten by an older one.
+ *   - `follow` — right after a normal price push, for a percent-off price: never a replace (the read may predate that
+ *     push); a first offer, or a failure that may pass later, is handed back `retryable` for a business row to do.
+ *
+ * What the last send did is kept on the listing at `platformAttributes.amazonBusinessSend` (one key, set atomically).
  */
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { amazonSpApiClient } from '../../clients/amazon-sp-api.client.js'
 import { businessPriceOf, businessPriceProblems, type BusinessPriceSetting } from '@nexus/shared/business-price'
-import { amazonBusinessElement, amazonBusinessOfferPlan, businessSendLine } from './business-offer.js'
+import type { AmazonOfferFacts } from './offer-facts.js'
+import { amazonPurchasableOffer } from './offer-attributes.js'
+import { amazonBusinessElement, amazonBusinessOfferPlan, businessSendLine, liveBusinessInstance, liveNormalInstance } from './business-offer.js'
 import { readAmazonOfferLive } from './purchasable-offer.js'
+
+type SendStatus = 'SENT' | 'REMOVED' | 'REFUSED' | 'FAILED' | 'DEFERRED'
+export interface BusinessSendOutcome {
+  ok: boolean
+  /** What happened, in a sentence (sent, already held, removed, refused, could not read, handed to a business row). */
+  line: string
+  status: SendStatus
+  /** Amazon or Nexus refused THIS listing's data: sending it again cannot succeed. */
+  itemLevel?: boolean
+  /** Nothing was sent and it may pass later (no answer, throttled, the listing moved, a first offer in the follow lane). */
+  retryable?: boolean
+}
+
+/** Keep what the last business send did, on the listing (`platformAttributes.amazonBusinessSend`). Best effort. */
+export async function recordAmazonBusinessSend(listingId: string, entry: { status: SendStatus; line: string }): Promise<void> {
+  try {
+    const value = JSON.stringify({ ...entry, at: new Date().toISOString() })
+    await prisma.$executeRaw`UPDATE "ChannelListing" SET "platformAttributes" = jsonb_set(COALESCE("platformAttributes", '{}'::jsonb), '{amazonBusinessSend}', ${value}::jsonb, true) WHERE id = ${listingId}`
+  } catch (err) {
+    logger.warn('amazon business offer: send not recorded on the listing', { listingId, error: err instanceof Error ? err.message : String(err) })
+  }
+}
 
 /** A `[{ schedule: [{ value_with_tax }] }]` amount, or null. */
 function scheduled(v: unknown): number | null {
@@ -21,71 +53,75 @@ function scheduled(v: unknown): number | null {
   const n = s?.value_with_tax ?? s?.value
   return typeof n === 'number' && Number.isFinite(n) ? n : null
 }
-
-export interface BusinessSendOutcome {
-  ok: boolean
-  /** What happened, in a sentence (sent, already held, removed, refused, could not read). */
-  line: string
-  /** Amazon or Nexus refused THIS listing's data: retrying the same data cannot succeed. */
-  itemLevel?: boolean
-  /** The live offer could not be read: nothing was sent; a retry may succeed. */
-  retryable?: boolean
-}
-
-/** Keep what the last business send did, on the listing (`platformAttributes.amazonBusinessOffer`). Best effort. */
-export async function recordAmazonBusinessSend(listingId: string, entry: { status: 'SENT' | 'HELD' | 'REMOVED' | 'REFUSED' | 'FAILED'; line: string }): Promise<void> {
-  try {
-    const value = JSON.stringify({ ...entry, at: new Date().toISOString() })
-    await prisma.$executeRaw`UPDATE "ChannelListing" SET "platformAttributes" = jsonb_set(COALESCE("platformAttributes", '{}'::jsonb), '{amazonBusinessOffer}', ${value}::jsonb, true) WHERE id = ${listingId}`
-  } catch (err) {
-    logger.warn('amazon business offer: send not recorded on the listing', { listingId, error: err instanceof Error ? err.message : String(err) })
-  }
-}
+const strictest = (pick: (a: number, b: number) => number, ...values: Array<number | null | undefined>) =>
+  values.filter((v): v is number => typeof v === 'number').reduce<number | null>((acc, v) => (acc == null ? v : pick(acc, v)), null)
 
 export async function sendAmazonBusinessOffer(input: {
+  lane: 'row' | 'follow'
   listingId: string | null
   sellerId: string
   sku: string
   /** The SP-API marketplace id. */
   marketplaceId: string
+  /** Nexus's product type; Amazon's own (from the live read) wins. */
   productType: string
   currency: string
   /** The listing's setting at send time; `null` = Nexus keeps none (a business offer Amazon holds is removed). */
   setting: BusinessPriceSetting | null
-  /** The normal price the business price follows (the price this push sends, or the one the listing holds). */
+  /** The normal price the business price follows: the price this push sends, or the one the listing holds. */
   normalPrice: number | null
-  minPrice: number | null
-  maxPrice: number | null
+  /** The listing's job-lane offer facts: Nexus's bounds, and the normal offer a first business offer's replace carries. */
+  facts: Pick<AmazonOfferFacts, 'values' | 'source'>
+  /** `follow` lane: the instances the normal push read just before it sent (its merge leaves the business instance alone). */
+  live?: Array<Record<string, unknown>>
+  /** `row` lane: is the listing still as the job read it? Asked right before a replace. */
+  unchanged?: () => Promise<boolean>
 }): Promise<BusinessSendOutcome> {
-  const finish = async (outcome: BusinessSendOutcome, status: 'SENT' | 'HELD' | 'REMOVED' | 'REFUSED' | 'FAILED') => {
-    if (input.listingId) await recordAmazonBusinessSend(input.listingId, { status, line: outcome.line })
+  const finish = async (outcome: BusinessSendOutcome) => {
+    if (input.listingId) await recordAmazonBusinessSend(input.listingId, { status: outcome.status, line: outcome.line })
     return outcome
   }
-  const live = await readAmazonOfferLive({ sellerId: input.sellerId, sku: input.sku, marketplaceId: input.marketplaceId })
-  if (live.read === 'failed') {
-    return finish({ ok: false, retryable: true, line: `Amazon's current offer for ${input.sku} could not be read (${live.error ?? 'no answer'}), so the business price was not sent. It will be retried.` }, 'FAILED')
+  const read = input.live ? { read: 'ok' as const, instances: input.live, productType: null as string | null, error: undefined as string | undefined }
+    : await readAmazonOfferLive({ sellerId: input.sellerId, sku: input.sku, marketplaceId: input.marketplaceId })
+  if (read.read === 'failed') {
+    return finish({ ok: false, retryable: true, status: 'FAILED', line: `Amazon's current offer for ${input.sku} could not be read (${read.error ?? 'no answer'}), so the business price was not sent.` })
   }
+  const productType = read.productType || input.productType
   let wanted: Record<string, unknown> | null = null
   let line = 'the business offer removed'
   if (input.setting) {
-    // The bounds Amazon enforces are the ones it holds now (a minimum set in Seller Central counts too); Nexus's own
-    // stored bounds stand where Amazon shows none.
-    const normal = live.instances.find((i) => i?.marketplace_id === input.marketplaceId && (i?.audience ?? 'ALL') === 'ALL')
-    const minPrice = scheduled(normal?.minimum_seller_allowed_price) ?? input.minPrice
-    const maxPrice = scheduled(normal?.maximum_seller_allowed_price) ?? input.maxPrice
+    // The bounds Amazon enforces are the ones it holds now — on the normal offer or the business one, a minimum set in
+    // Seller Central too — and Nexus's own stored ones: the strictest of them all.
+    const normal = liveNormalInstance(read.instances, input.marketplaceId)
+    const business = liveBusinessInstance(read.instances, input.marketplaceId)
+    const minPrice = strictest(Math.max, scheduled(normal?.minimum_seller_allowed_price), scheduled(business?.minimum_seller_allowed_price), input.facts.values.minimum_seller_allowed_price)
+    const maxPrice = strictest(Math.min, scheduled(normal?.maximum_seller_allowed_price), scheduled(business?.maximum_seller_allowed_price), input.facts.values.maximum_seller_allowed_price)
     const problems = businessPriceProblems({ setting: input.setting, normalPrice: input.normalPrice, minPrice, maxPrice, currency: input.currency })
-    if (problems.length) return finish({ ok: false, itemLevel: true, line: `The business price was not sent: ${problems.join(' ')}` }, 'REFUSED')
+    if (problems.length) return finish({ ok: false, itemLevel: true, status: 'REFUSED', line: `The business price was not sent: ${problems.join(' ')}` })
     const price = businessPriceOf(input.setting, input.normalPrice) as number
     wanted = amazonBusinessElement({ marketplaceId: input.marketplaceId, currency: input.currency, price, tiers: input.setting.tiers })
     line = `business price ${businessSendLine(price, input.setting.tiers, input.currency)}`
   }
-  const plan = amazonBusinessOfferPlan({ wanted: wanted as never, live: live.instances, marketplaceId: input.marketplaceId })
-  if (plan.kind === 'none') return finish({ ok: true, line: wanted ? `Amazon already holds the ${line}.` : 'Amazon holds no business offer; nothing to remove.' }, wanted ? 'SENT' : 'REMOVED')
-  if (plan.kind === 'refused') return finish({ ok: false, itemLevel: true, line: plan.reason }, 'REFUSED')
+  const normalRoot = amazonPurchasableOffer({ marketplaceId: input.marketplaceId, currency: input.currency, facts: input.facts, base: read.instances, sendPrice: input.normalPrice })
+  const plan = amazonBusinessOfferPlan({ wanted: wanted as never, live: read.instances as never, marketplaceId: input.marketplaceId, normalRoot: normalRoot as never })
+  if (plan.kind === 'none') {
+    return finish({ ok: true, status: wanted ? 'SENT' : 'REMOVED', line: wanted ? `Amazon already holds the ${line}.` : 'Amazon holds no business offer; nothing to remove.' })
+  }
+  if (plan.kind === 'refused') return finish({ ok: false, itemLevel: true, status: 'REFUSED', line: plan.reason })
+  if (plan.kind === 'replace' && input.lane === 'follow') {
+    return finish({ ok: false, retryable: true, status: 'DEFERRED', line: `Amazon holds no business offer yet: the ${line} is sent by its own business row.` })
+  }
+  if (plan.kind === 'replace' && input.unchanged && !(await input.unchanged())) {
+    return finish({ ok: false, retryable: true, status: 'DEFERRED', line: 'The listing changed while its business price was being sent; it is sent again from the newer values.' })
+  }
+  if (!productType) return finish({ ok: false, itemLevel: true, status: 'REFUSED', line: `Nothing was sent: Amazon names no product type for ${input.sku}, and Nexus holds none for this listing or its product.` })
   const res = await amazonSpApiClient.patchPurchasableOffer({
-    sellerId: input.sellerId, sku: input.sku, marketplaceId: input.marketplaceId, productType: input.productType, op: plan.kind, value: plan.value,
+    sellerId: input.sellerId, sku: input.sku, marketplaceId: input.marketplaceId, productType, op: plan.kind, value: plan.value,
   })
-  if (!res.success) return finish({ ok: false, itemLevel: true, line: `Amazon refused the ${line}: ${res.error ?? 'no reason given'}` }, 'REFUSED')
-  return finish({ ok: true, line: plan.kind === 'delete' ? 'The business offer was removed on Amazon.' : `Sent to Amazon: ${line}.` }, plan.kind === 'delete' ? 'REMOVED' : 'SENT')
+  if (!res.success) {
+    return res.itemLevel
+      ? finish({ ok: false, itemLevel: true, status: 'REFUSED', line: `Amazon refused the ${line}: ${res.error ?? 'no reason given'}` })
+      : finish({ ok: false, retryable: true, status: 'FAILED', line: `The ${line} did not reach Amazon (${res.error ?? 'no answer'}).` })
+  }
+  return finish({ ok: true, status: plan.kind === 'delete' ? 'REMOVED' : 'SENT', line: plan.kind === 'delete' ? 'The business offer was removed on Amazon.' : `Sent to Amazon: ${line}.` })
 }
-

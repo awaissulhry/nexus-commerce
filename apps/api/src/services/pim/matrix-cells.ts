@@ -94,7 +94,9 @@ export type BusinessAbsence = { cell: 'businessPrice' | 'businessTiers'; reason:
  * `MatrixCellKind`). `audience` is the audience codes; `null` = never measured for (account, productType, market).
  */
 export function businessAbsence(input: { productType: string | null; market: string; audience: readonly string[] | null }): BusinessAbsence[] {
-  const reason = input.audience === null || !input.productType
+  const reason = !input.productType
+    ? MATRIX_COPY.absentBusinessNoType()
+    : input.audience === null
     ? MATRIX_COPY.absentBusinessUnchecked()
     : input.audience.includes('B2B')
       ? MATRIX_COPY.absentBusinessNotBuilt(input.productType)

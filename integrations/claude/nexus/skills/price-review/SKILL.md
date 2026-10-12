@@ -34,7 +34,7 @@ Report: prices out of bounds, listings below cost (when visible), missing prices
 | A price change later, cancel one, or settle an UNKNOWN one after checking | `schedule-price-change` (`action`: create, cancel, resolve) |
 | A promotion on a channel, market or product type | `set-promotion` (create or end; nothing reaches a channel while the pricing schedule is off) |
 | An eBay markdown or volume pricing | `set-ebay-price-promotion` (it cannot be ended from Nexus: it is ended in eBay Seller Hub) |
-| B2B quantity tiers | `set-tier-prices` (Nexus quotes and B2B orders only) |
+| Nexus-only quantity tiers | `set-tier-prices` (kept in Nexus only; NOT Amazon Business prices or quantity discounts — no Claude tool sets those yet) |
 | A pricing rule's suggestions | `set-pricing-rule` |
 | Cost prices | `set-product-costs` |
 

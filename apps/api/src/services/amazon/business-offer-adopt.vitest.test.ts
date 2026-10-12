@@ -13,6 +13,7 @@ vi.mock('@nexus/database', async () => {
 vi.mock('../../lib/queue.js', () => ({ outboundSyncQueue: null, redis: null, searchIndexQueue: null, readCacheQueue: null, addJobSafely: vi.fn(async () => undefined) }))
 vi.mock('../../lib/amazon-sp-client.js', () => ({ getAmazonSellerId: async () => 'SELLER-1', getAmazonSpClient: async () => ({ callAPI: state.callAPI }) }))
 
+import { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
 import { OFFER_AUDIENCE_FIELD_KEY } from '../categories/seller-offer-audience.service.js'
@@ -59,29 +60,61 @@ describe('reading an Amazon business offer', () => {
 })
 
 describe('adoptAmazonBusinessOffers', () => {
-  it('copies a real business offer in, keeps what Nexus manages, skips the normal-only offer and an unknown SKU; only B2B markets are read', async () => {
-    state.callAPI.mockImplementation(async ({ query }: { query: { marketplaceIds: string[]; pageToken?: string } }) => query.pageToken === 'page-2'
-      ? { items: [item('TEST-AD-2', all(39.95), b2b(30)), item('UNKNOWN-SKU', b2b(10))] }
-      : { items: [item('TEST-AD-1', all(39.95), b2b(32.95, percentPlan)), item('TEST-AD-3', all(39.95))], pagination: { nextToken: 'page-2' } })
+  const rowOf = (n: number) => scoped(() => prisma.channelListing.findUnique({ where: { id: ids[n] }, select: { version: true, businessPriceRule: true, businessPrice: true, businessTiers: true, platformAttributes: true } }))
+  const businessRows = (n: number) => scoped(() => prisma.outboundSyncQueue.findMany({ where: { channelListingId: ids[n], syncType: 'BUSINESS_PRICE_UPDATE' } }))
+  const pages = (first: unknown[], second: unknown[]) => state.callAPI.mockImplementation(async ({ query }: { query: { pageToken?: string } }) =>
+    query.pageToken === 'page-2' ? { items: second } : { items: first, pagination: { nextToken: 'page-2' } })
+
+  it('copies a real business offer in; VERIFIES the one Nexus keeps (differs → queued to be sent again); skips the normal-only offer and an unknown SKU; only B2B markets are read', async () => {
+    await scoped(() => prisma.channelListing.update({ where: { id: ids[2] }, data: { platformAttributes: { keep: 'me' } } }))
+    pages([item('TEST-AD-1', all(39.95), b2b(32.95, percentPlan)), item('TEST-AD-3', all(39.95))], [item('TEST-AD-2', all(39.95), b2b(30)), item('UNKNOWN-SKU', b2b(10))])
     const counts = await scoped(() => adoptAmazonBusinessOffers({ throttleMs: 0 }))
-    expect(adoptSummary(counts)).toBe('markets=1 scanned=4 found=3 adopted=1 managed=1 noListing=1 refused=0 failedPages=0')
+    expect(adoptSummary(counts)).toBe('markets=1 scanned=4 found=2 adopted=1 managed=0 noListing=1 unreadable=0 refused=0 verified=0 differs=1 missing=0 resent=1 failedPages=0')
     expect(state.callAPI.mock.calls.map((c) => [c[0].path.sellerId, c[0].query.marketplaceIds[0], c[0].query.pageToken ?? null])).toEqual([['SELLER-1', IT, null], ['SELLER-1', IT, 'page-2']])
-    const rows = await scoped(() => prisma.channelListing.findMany({ where: { id: { in: Object.values(ids) } }, select: { id: true, businessPriceRule: true, businessPrice: true, businessPricePercent: true, businessTiers: true } }))
-    const byId = new Map(rows.map((r) => [r.id, r]))
-    expect({ ...byId.get(ids[1]!), businessPrice: Number(byId.get(ids[1]!)!.businessPrice) }).toMatchObject({ businessPriceRule: 'FIXED', businessPrice: 32.95, businessTiers: { type: 'percent', levels: [{ minQty: 2, value: 3 }, { minQty: 5, value: 5 }] } })
-    expect(byId.get(ids[2]!)).toMatchObject({ businessPriceRule: 'PERCENT_OFF', businessPrice: null })
-    expect(byId.get(ids[3]!)).toMatchObject({ businessPriceRule: null })
+    const one = await rowOf(1)
+    expect({ ...one, businessPrice: Number(one!.businessPrice) }).toMatchObject({ businessPriceRule: 'FIXED', businessPrice: 32.95, businessTiers: { type: 'percent', levels: [{ minQty: 2, value: 3 }, { minQty: 5, value: 5 }] } })
+    const two = await rowOf(2)
+    expect(two).toMatchObject({ businessPriceRule: 'PERCENT_OFF', businessPrice: null })
+    // The verification is kept on the listing, beside its other keys, without moving its version.
+    expect(two!.platformAttributes).toMatchObject({ keep: 'me', amazonBusinessLive: { status: 'DIFFERS', amazonPrice: 30, nexusPrice: 37.95 } })
+    expect((await businessRows(2)).map((r) => [r.syncStatus, (r.payload as any).source])).toEqual([['PENDING', 'BUSINESS_PRICE_VERIFY']])
+    expect((await rowOf(3))!.businessPriceRule).toBeNull()
     const audit = await scoped(() => prisma.channelListingOverride.findFirst({ where: { channelListingId: ids[1], fieldName: 'businessPrice' } }))
     expect(audit).toMatchObject({ newValue: '32.95 · 2 tiers (percent: 2+ 3, 5+ 5)', changedBy: 'amazon-business-offer-adopt', reason: 'Copied from the business offer Amazon holds' })
   })
 
-  it('a second run changes nothing: what it copied is now Nexus\'s', async () => {
+  it('a second run: what it copied is now Nexus\'s and agrees with Amazon (verified); nothing is copied again', async () => {
+    const before = (await rowOf(2))!.version
     const counts = await scoped(() => adoptAmazonBusinessOffers({ throttleMs: 0 }))
-    expect(counts).toMatchObject({ adopted: 0, managed: 2, noListing: 1 })
+    expect(counts).toMatchObject({ found: 1, adopted: 0, managed: 0, noListing: 1, verified: 1, differs: 1, resent: 1 })
+    expect((await rowOf(1))!.platformAttributes).toMatchObject({ amazonBusinessLive: { status: 'MATCH', amazonPrice: 32.95 } })
+    expect((await rowOf(2))!.version).toBe(before)
+    // One waiting business row per listing: the newer send replaced the one still waiting.
+    expect((await businessRows(2)).filter((r) => r.syncStatus === 'PENDING')).toHaveLength(1)
   })
 
-  it('a page that fails is counted and the run goes on', async () => {
+  it('a person removed it: Amazon still shows the old offer while the removal is on its way — never copied back', async () => {
+    await scoped(async () => {
+      await prisma.channelListing.update({ where: { id: ids[1] }, data: { businessPriceRule: null, businessPrice: null, businessTiers: Prisma.DbNull } })
+      await prisma.channelListingOverride.create({ data: { channelListingId: ids[1], fieldName: 'businessPrice', previousValue: '32.95 · no tiers', newValue: null, reason: 'business price', changedBy: 'owner@example.test' } })
+    })
+    const counts = await scoped(() => adoptAmazonBusinessOffers({ throttleMs: 0 }))
+    expect(counts).toMatchObject({ adopted: 0, managed: 1 })
+    expect((await rowOf(1))!.businessPriceRule).toBeNull()
+  })
+
+  it('a managed listing Amazon does not list at all is MISSING (a complete scan only) and queued; an unreadable plan is never copied', async () => {
+    pages([item('TEST-AD-3', all(39.95), { ...b2b(20), quantity_discount_plan: [{ schedule: [{ discount_type: 'mystery', levels: [] }] }] })], [])
+    const counts = await scoped(() => adoptAmazonBusinessOffers({ throttleMs: 0 }))
+    expect(counts).toMatchObject({ unreadable: 1, adopted: 0, missing: 1 })
+    expect((await rowOf(2))!.platformAttributes).toMatchObject({ amazonBusinessLive: { status: 'MISSING' } })
+    expect((await rowOf(3))!.businessPriceRule).toBeNull()
+  })
+
+  it('a page that fails is counted, the run goes on, and nothing is called MISSING from a part scan', async () => {
     state.callAPI.mockReset().mockRejectedValue(new Error('QuotaExceeded'))
-    expect(await scoped(() => adoptAmazonBusinessOffers({ throttleMs: 0 }))).toMatchObject({ markets: 1, failedPages: 1, adopted: 0 })
+    const before = JSON.stringify((await rowOf(2))!.platformAttributes)
+    expect(await scoped(() => adoptAmazonBusinessOffers({ throttleMs: 0 }))).toMatchObject({ markets: 1, failedPages: 1, adopted: 0, missing: 0 })
+    expect(JSON.stringify((await rowOf(2))!.platformAttributes)).toBe(before)
   })
 })

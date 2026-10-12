@@ -60,6 +60,7 @@ import { marketSourceKey, sellsFrom } from '../sync-control-core.js'
 import { loadChannelPolicies, parsePolicyKey, policyFor } from '../sync-control-policy.service.js'
 import { isOwnConnection } from '../connection-resolver.service.js'
 import { offerAudienceKey, storedOfferAudiences } from '../categories/seller-offer-audience.service.js'
+import { normaliseCategory } from '../categories/schema-coverage.service.js'
 import { detectEuIntentConflict } from '../amazon-eu-quantity-guard.js'
 import { readAmazonOfferDraft } from '../amazon/offer-draft.js'
 import { listingQuantityVerdict } from './listing-quantity-verdict.js'
@@ -203,11 +204,13 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
   /* MX.F (design §3.11, D-MX5) + Amazon Business step 1: the offer audiences the nightly schema refresh measured for this
      product type per Amazon account × market (seller-scoped definitions — the shared CategorySchema cache never lists
      B2B). One indexed row read: no schema service is called, so no live SP-API fetch can start from here. */
+  // The family's product type in the refresh's own names (upper case, recognised), as the answers are kept.
+  const businessType = normaliseCategory('AMAZON', parentRow.productType)
   const amazonConnectionIds = connections.filter((c) => upper(c.channelType) === 'AMAZON').map((c) => c.id)
-  const audienceByAccountMarket = parentRow.productType && amazonConnectionIds.length
-    ? await storedOfferAudiences(parentRow.productType, amazonConnectionIds)
+  const audienceByAccountMarket = businessType && amazonConnectionIds.length
+    ? await storedOfferAudiences(businessType, amazonConnectionIds)
     : new Map<string, string[]>()
-  if (parentRow.productType && amazonConnectionIds.length) queries += 1
+  if (businessType && amazonConnectionIds.length) queries += 1
   mark('wave1', tWave1)
 
   // ── 3. wave 2 — the tables keyed by listing id ─────────────────────────────────────────────
@@ -440,7 +443,7 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
       cells: isListed ? (inEu ? withoutInventory(shape.cells) : shape.cells) : [],
       /* A LISTED Amazon market also declares the reserved business cells absent, with the sentence derived from what Amazon told ITS account. */
       absent: ch === 'AMAZON' && isListed && !global
-        ? [...shape.absent, ...businessAbsence({ productType: parentRow.productType ?? null, market: mk, audience: accountId ? audienceByAccountMarket.get(offerAudienceKey(accountId, mk)) ?? null : null })]
+        ? [...shape.absent, ...businessAbsence({ productType: businessType, market: mk, audience: accountId ? audienceByAccountMarket.get(offerAudienceKey(accountId, mk)) ?? null : null })]
         : shape.absent,
       sharedInventoryWith: null, inventoryOn: inEu ? 'AMAZON:EU' : null,
       vocabulary: { fulfilment: shape.fulfilment },

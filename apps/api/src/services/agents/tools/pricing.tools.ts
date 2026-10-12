@@ -817,8 +817,10 @@ const setTierPrices: AgentTool = {
   maxClaudeTrust: 'confirm',
   undo: TIER_UNDO,
   description:
-    'Set a product\'s quantity (B2B) tier prices: from N units the unit price is X, for every customer or one customer '
-    + 'group; a null price removes a tier. They price quotes and B2B orders in Nexus; nothing is sent to a marketplace. '
+    'Set a product\'s Nexus-only quantity tier prices: from N units the unit price is X, for every customer or one '
+    + 'customer group; a null price removes a tier. Kept in Nexus only: nothing reads them for an order or a quote today, '
+    + 'and nothing is sent to a marketplace. NOT Amazon Business prices or quantity discounts: those are each Amazon '
+    + 'listing\'s business price (ChannelListing.business*), set through the business price door. '
     + 'Undo puts the old tiers back. Waits for a person: approved in Nexus, or confirmed in Claude with the asker\'s '
     + 'authenticator code when the business set it so.',
   async handler(args): Promise<ToolResult> {
@@ -829,7 +831,7 @@ const setTierPrices: AgentTool = {
       preview: {
         product: { sku: plan.product.sku, basePrice: plan.product.basePrice, currency: masterCurrency() },
         tiers: plan.tiers.map((t) => ({ minQty: t.minQty, customerGroup: t.group, from: t.from, to: t.to, change: t.from == null ? 'add' : t.to == null ? 'remove' : 'update' })),
-        note: `${NOT_YET} Tier prices are used in Nexus (quotes, B2B orders); nothing is sent to a marketplace.`,
+        note: `${NOT_YET} These tier prices are kept in Nexus only (nothing reads them today) and are not Amazon Business prices; nothing is sent to a marketplace.`,
       },
     }
   },

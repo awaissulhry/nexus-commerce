@@ -157,7 +157,7 @@ export const AMAZON_OFFER_FIELDS: readonly AmazonOfferField[] = [
 export const AMAZON_OFFER_OUT_OF_SCOPE: Readonly<Record<string, string>> = {
   purchasable_offer__marketplace_id: 'Selector — the builder names the market.',
   purchasable_offer__currency: 'Selector — the market\'s currency, filled by the builder.',
-  purchasable_offer__audience: 'Selector — Nexus prices the all-buyers (ALL) offer; a business (B2B) offer is kept as Amazon reports it.',
+  purchasable_offer__audience: 'Selector — the sheet prices the all-buyers (ALL) offer. The business (B2B) offer is the listing\'s business price in Nexus (ChannelListing.business*), sent by its own business send; a sheet send keeps it as Amazon reports it, and the business send that follows Publish puts Nexus\'s back.',
   list_price__currency: 'Selector — the market\'s currency, filled by the writer.',
   list_price__marketplace_id: 'Selector — the writer names the market.',
 }

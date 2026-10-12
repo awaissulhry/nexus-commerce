@@ -45,8 +45,8 @@ export const MATRIX_CELL_WIDTHS: Readonly<Record<MatrixCellKind, number>> = {
 /**
  * MX.F (2026-09-13, ruled): the cells a coordinate may declare ABSENT — the eight kinds plus the two business-pricing
  * cells design §3.11 reserves (`B2B price` · `Tiers`). Absence-only today: `cells` never carries them, so the grid renders
- * nothing for them, and Customise lists them greyed with the sentence the server derived from the coordinate's cached
- * product-type schema (D-MX5 — never hardcoded).
+ * nothing for them, and Customise lists them greyed with the sentence the server derived from what Amazon told the
+ * coordinate's account (its seller-scoped product type definition, kept nightly — D-MX5, never hardcoded).
  */
 export type MatrixAbsentCellKind = MatrixCellKind | 'businessPrice' | 'businessTiers'
 /** Customise's label per absent-capable kind — the eight headers plus Appendix A's `B2B price` · `Tiers`. */
@@ -562,7 +562,8 @@ export const MATRIX_COPY = {
   absentFulfilment: (channelLabel: string) => `${channelLabel} has no fulfilment method`,
   /* 2026-10-08: the sentence names no market — it is said per coordinate, and Customise groups the markets that share it. */
   absentBusiness: (pt: string) => `Amazon has not enabled business pricing for this account (checked against the ${pt} schema)`,
-  absentBusinessUnchecked: () => 'Business pricing is not checked yet — Nexus asks Amazon for this account and product type each night',
+  absentBusinessUnchecked: () => 'Business pricing is not checked for this account and product type — Amazon has not told Nexus yet (Nexus asks each night for the product types in use on its own Amazon accounts)',
+  absentBusinessNoType: () => 'Business pricing cannot be checked — this family has no Amazon product type',
   absentBusinessNotBuilt: (pt: string) => `Amazon allows business pricing here (the ${pt} schema) — the B2B cells are not built yet`,
   noListingYet: 'No listing on this coordinate yet',
   /** A write whose listing moved since the caller read it (CAS on `ChannelListing.version`, or another listing there now). */

@@ -1308,7 +1308,7 @@ export class OutboundSyncService {
             productId: true, aliasKey: true, channelSku: true, liveChannelSku: true, listingStatus: true, isPublished: true, externalListingId: true,
             flatFileSnapshot: true, offers: { select: { sku: true, isActive: true, fulfillmentMethod: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
             // Amazon Business step 4 — the business setting the push sends (read at send time, never from the row).
-            businessPriceRule: true, businessPricePercent: true, businessPrice: true, businessTiers: true,
+            businessPriceRule: true, businessPricePercent: true, businessPrice: true, businessTiers: true, version: true,
           },
         })
         .catch(() => null);
@@ -1488,15 +1488,20 @@ export class OutboundSyncService {
     const sendsBusiness = product?.isParent !== true && cl != null
       && (businessRow || (payload.price !== undefined && businessSetting?.rule === 'PERCENT_OFF'));
     let businessOutcome: BusinessSendOutcome | null = null;
-    const sendBusiness = async (sid: string, normalPrice: number | null) => {
+    // The instances the normal push read just before it sent (its merge leaves the business instance alone).
+    let preLive: Array<Record<string, unknown>> | undefined;
+    const sendBusiness = async (sid: string, normalPrice: number | null, lane: 'row' | 'follow') => {
       let currency: string;
       try { currency = await marketCurrency('AMAZON', cl.marketplace); } catch (err) {
-        return { ok: false, itemLevel: true, line: `The business price was not sent: ${err instanceof Error ? err.message : String(err)}` } as BusinessSendOutcome;
+        return { ok: false, itemLevel: true, status: 'REFUSED', line: `The business price was not sent: ${err instanceof Error ? err.message : String(err)}` } as BusinessSendOutcome;
       }
       return sendAmazonBusinessOffer({
-        listingId: queueItem.channelListingId ?? null, sellerId: sid, sku, marketplaceId: resolveAmazonMarketplaceId(marketplaceId), productType, currency,
-        setting: businessSetting, normalPrice,
-        minPrice: offerFacts.values.minimum_seller_allowed_price, maxPrice: offerFacts.values.maximum_seller_allowed_price,
+        lane, listingId: queueItem.channelListingId ?? null, sellerId: sid, sku, marketplaceId: resolveAmazonMarketplaceId(marketplaceId), productType, currency,
+        setting: businessSetting, normalPrice, facts: offerFacts,
+        ...(lane === 'follow' ? { live: preLive } : {
+          // A first business offer's replace carries the normal offer: only while the listing is as this job read it.
+          unchanged: async () => (await prisma.channelListing.findUnique({ where: { id: queueItem.channelListingId }, select: { version: true } }))?.version === cl.version,
+        }),
       });
     };
     if (businessRow) {
@@ -1512,7 +1517,8 @@ export class OutboundSyncService {
           return { success: false, queueId, channel: "AMAZON", status: "FAILED", message: err.message, error: err.message, errorCode: err.code, retryable: false };
         }
       }
-      // The normal price the listing holds (what the last price push sent) is what a percent-off price follows.
+      // The normal price the listing holds (its own price columns, as the job-lane facts read them — the number a price
+      // push sends) is what a percent-off price follows.
       const held = offerFacts.values.our_price.price;
       const r = await listingPublishService.publish({
         channel: "AMAZON", marketplaceId, sku, productId: product?.id ?? null,
@@ -1520,16 +1526,15 @@ export class OutboundSyncService {
         gate: { getMode: getAmazonPublishMode, checkCircuit: checkAmazonCircuit, acquireToken: acquireAmazonPublishToken, recordOutcome: recordAmazonOutcome },
         resolveSeller: async () => sellerId ? { id: sellerId } : { error: "AMAZON_SELLER_ID is not configured. Set the env var before enabling outbound sync." },
         execute: async ({ sellerId: sid, mode }) => {
-          if (!productType) return { ok: false, itemLevel: true, error: `Nothing was sent to Amazon: ${sku} has no Amazon product type (on this listing or its product). Set the listing's product type, then retry.` };
           if (mode !== 'live') return { ok: true };
-          businessOutcome = await sendBusiness(sid, held);
+          businessOutcome = await sendBusiness(sid, held, 'row');
           return { ok: businessOutcome.ok, ...(businessOutcome.ok ? {} : { error: businessOutcome.line }), ...(businessOutcome.itemLevel ? { itemLevel: true } : {}) };
         },
       });
       const outcome = businessOutcome as BusinessSendOutcome | null;
       return {
         success: r.success, queueId, channel: "AMAZON", status: r.status, message: outcome?.line ?? r.message, error: r.error, dryRun: r.mode !== "live",
-        ...(outcome && !outcome.ok ? { errorCode: outcome.retryable ? 'AMAZON_OFFER_READ_FAILED' : 'AMAZON_BUSINESS_PRICE_REFUSED', retryable: outcome.retryable === true } : {}),
+        ...(outcome && !outcome.ok ? { errorCode: outcome.retryable ? 'AMAZON_BUSINESS_PRICE_RETRY' : 'AMAZON_BUSINESS_PRICE_REFUSED', retryable: outcome.retryable === true } : {}),
       };
     }
     const amazonPayload = await buildAmazonListingPatch(payload, marketplaceId, productType, isFba ? "FBA" : "FBM", content, { facts: offerFacts, isParent: product?.isParent === true });
@@ -1601,6 +1606,7 @@ export class OutboundSyncService {
         if (offerPatchAt >= 0 && mode === 'live') {
           const offerMarketplaceId = resolveAmazonMarketplaceId(marketplaceId);
           const live = await readAmazonOfferLive({ sellerId: sid, sku, marketplaceId: offerMarketplaceId });
+          if (live.read === 'ok') preLive = live.instances;
           if (live.read === 'failed') {
             // Never the blind replace: without the live offer it could clear the sale and every part Nexus does not set.
             offerFailure = { errorCode: 'AMAZON_OFFER_READ_FAILED', retryable: true };
@@ -1633,11 +1639,26 @@ export class OutboundSyncService {
           // P0b — REQUIRED patchListingsItem query param; per-market row targets its own market.
           marketplaceId: resolveAmazonMarketplaceId(marketplaceId),
         });
-        // Amazon Business step 4 — a percent-off business price follows the normal price this push just sent. Its own
-        // outcome is kept on the listing (`platformAttributes.amazonBusinessOffer`); the normal price push stands either way.
+        // Amazon Business step 4 — a percent-off business price follows the normal price this push just sent. The normal
+        // price push stands either way; the business outcome is kept on the listing (`platformAttributes.amazonBusinessSend`).
+        // What may pass later (no answer, throttled, a first business offer) goes to its own business row, which retries.
         if (res.success && sendsBusiness && mode === 'live') {
-          businessOutcome = await sendBusiness(sid, typeof payload.price === 'number' ? payload.price : null);
-          if (!businessOutcome.ok) logger.warn('[outbound-sync] Amazon business price not sent with the price push', { sku, marketplaceId, line: businessOutcome.line });
+          try {
+            businessOutcome = await sendBusiness(sid, typeof payload.price === 'number' ? payload.price : null, 'follow');
+          } catch (err) {
+            businessOutcome = { ok: false, retryable: true, status: 'FAILED', line: `The business price was not sent (${err instanceof Error ? err.message : String(err)}).` };
+          }
+          if (!businessOutcome.ok) {
+            logger.warn('[outbound-sync] Amazon business price not sent with the price push', { sku, marketplaceId, line: businessOutcome.line });
+            if (businessOutcome.retryable && queueItem.channelListingId) {
+              try {
+                const { queueBusinessSends } = await import('./pim/business-price-write.service.js');
+                await queueBusinessSends({ listingIds: [queueItem.channelListingId], actor: 'price-push', source: 'BUSINESS_PRICE_FOLLOW', holdMs: 120_000 });
+              } catch (err) {
+                logger.warn('[outbound-sync] business row not queued after the price push', { sku, error: err instanceof Error ? err.message : String(err) });
+              }
+            }
+          }
         }
         return { ok: res.success, error: res.error, ...(res.itemLevel ? { itemLevel: true } : {}) };
       },
