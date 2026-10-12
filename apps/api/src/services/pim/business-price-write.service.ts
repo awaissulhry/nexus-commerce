@@ -14,21 +14,27 @@
  *   - Compare-and-set on `ChannelListing.version` (or a named reason there is none), a `ChannelListingOverride` audit row,
  *     and `before` / `after` on the outcome, so a caller can put the old value back through this same door.
  *
- * Nothing is sent to Amazon here: the send path is step 4. Until it lands, no screen or Claude tool calls this.
+ * Step 4 — a person's applied change queues ONE `BUSINESS_PRICE_UPDATE` row (after the same 30 s hold as a price change,
+ * replacing a business row still waiting), and the Amazon push sends the business offer from the listing's columns at
+ * send time (`syncToAmazon`, `amazon/business-offer.ts`). A paused listing or a still-draft keeps it in Nexus (`notSent`).
+ * Copying in what Amazon holds sends nothing: Amazon already has it.
  */
 import { Prisma } from '@prisma/client'
+import { createOutboundRow } from '../outbound-rows.js'
+import { fireOutboundJobs } from '../outbound-enqueue.js'
+import { afterDatabaseCommit } from '../../lib/database-context.js'
 import prisma from '../../db.js'
 import { MATRIX_COPY } from '@nexus/shared/matrix-contract'
 import {
-  businessPriceOf, businessPriceProblems, businessPriceWarnings, readBusinessTiers, type BusinessPriceSetting,
+  businessPriceOf, businessPriceProblems, businessPriceWarnings, type BusinessPriceSetting,
 } from '@nexus/shared/business-price'
 import { isOwnConnection, listActiveConnections } from '../connection-resolver.service.js'
 import { offerAudienceKey, storedOfferAudiences } from '../categories/seller-offer-audience.service.js'
 import { loadAmazonOfferFacts } from '../amazon/offer-facts.js'
+import { BUSINESS_PRICE_SYNC_TYPE, storedBusinessSetting } from '../amazon/business-offer.js'
 import { masterCurrency } from '../fx-rate.service.js'
-import { listingMarketCurrency, listingSendPrice } from './follower-price.js'
+import { FOLLOWER_PRICE_HOLD_MS, holdsCascadedPrice, listingMarketCurrency, listingSendPrice } from './follower-price.js'
 import { PARENT_PRICE_REASON } from './matrix-cells.js'
-import { decimalToNumber } from './sheet-rows.service.js'
 import type { MarketCurrencyRow } from './market-currency.js'
 
 /** The reasons a business price write may run with no version guard — a closed set, as the price door's. */
@@ -58,21 +64,24 @@ export interface BusinessPriceWriteOutcome {
   /** The business price the setting gives now (a percent of the normal send price, or the exact price); null when unknown. */
   businessPrice: number | null
   warnings: string[]
+  /** The BUSINESS_PRICE_UPDATE row queued for Amazon, when one was. */
+  queueId?: string | null
+  /** The change was saved, and why nothing was sent (a paused listing, a still-draft). */
+  notSent?: string
 }
+
+const businessHeldSentence = (l: { syncPaused: boolean }) => l.syncPaused
+  ? 'The business price is saved in Nexus. Nothing was sent: this listing\'s sync is paused. Send it again once the listing resumes.'
+  : 'The business price is saved in Nexus. Nothing was sent: this listing is a draft that has not been published. Send it again once it is published.'
 export interface BusinessPriceWriteResult { results: BusinessPriceWriteOutcome[]; applied: number; refused: number; noop: number; conflict: number }
 
 const LISTING_SELECT = {
-  id: true, productId: true, channel: true, marketplace: true, channelConnectionId: true, version: true,
+  id: true, productId: true, channel: true, marketplace: true, region: true, channelConnectionId: true, version: true,
+  externalListingId: true, syncPaused: true, listingStatus: true, isPublished: true,
   price: true, priceOverride: true, followMasterPrice: true, pricingRule: true, priceAdjustmentPercent: true,
   businessPriceRule: true, businessPricePercent: true, businessPrice: true, businessTiers: true,
   product: { select: { basePrice: true, isParent: true, productType: true, parent: { select: { productType: true } } } },
 } satisfies Prisma.ChannelListingSelect
-
-/** The setting a stored row holds, or `null` when Nexus manages no business offer there. */
-export function storedBusinessSetting(row: { businessPriceRule: string | null; businessPricePercent: unknown; businessPrice: unknown; businessTiers: unknown }): BusinessPriceSetting | null {
-  if (row.businessPriceRule !== 'PERCENT_OFF' && row.businessPriceRule !== 'FIXED') return null
-  return { rule: row.businessPriceRule, percent: decimalToNumber(row.businessPricePercent), price: decimalToNumber(row.businessPrice), tiers: readBusinessTiers(row.businessTiers) }
-}
 
 /** One shape per meaning: a percent rule carries no price, an exact price no percent. */
 function normalised(s: BusinessPriceSetting | null): BusinessPriceSetting | null {
@@ -111,6 +120,7 @@ export async function writeBusinessPrices(input: {
     listActiveConnections('AMAZON', db),
   ])
   const byId = new Map(listings.map((l) => [l.id, l]))
+  const queued: Array<{ id: string; productId: string | null; syncType: string; holdUntil: Date | null }> = []
   const ownPrimary = connections.filter(isOwnConnection)[0]?.id ?? null
   const accountOf = (l: { channelConnectionId: string | null }) => l.channelConnectionId ?? ownPrimary
   const productTypeOf = (l: typeof listings[number]) => l.product?.parent?.productType ?? l.product?.productType ?? null
@@ -184,15 +194,44 @@ export async function writeBusinessPrices(input: {
         channelListingId: l.id, fieldName: 'businessPrice', previousValue: describe(before), newValue: describe(after),
         reason: input.reason ?? t.unguardedReason ?? 'business price', changedBy: input.actor,
       } })
-      return (await tx.channelListing.findUnique({ where: { id: l.id }, select: { version: true } }))?.version ?? l.version + 1
+      // A person's change goes to Amazon; a copy of what Amazon holds does not.
+      let queueId: string | null = null
+      let notSent: string | undefined
+      if (!t.unguardedReason) {
+        if (holdsCascadedPrice(l)) notSent = businessHeldSentence(l)
+        else {
+          await tx.outboundSyncQueue.updateMany({
+            where: { channelListingId: l.id, syncType: BUSINESS_PRICE_SYNC_TYPE, syncStatus: 'PENDING' },
+            data: { syncStatus: 'CANCELLED', errorMessage: 'Replaced by a newer business price change for this listing' },
+          })
+          const row = await createOutboundRow(tx, {
+            data: {
+              productId: l.productId, channelListingId: l.id, targetChannel: 'AMAZON' as never, targetRegion: l.region,
+              syncStatus: 'PENDING' as never, syncType: BUSINESS_PRICE_SYNC_TYPE, holdUntil: new Date(Date.now() + FOLLOWER_PRICE_HOLD_MS),
+              externalListingId: l.externalListingId, maxRetries: 3,
+              payload: { syncBusiness: true, source: 'BUSINESS_PRICE_WRITE', actor: input.actor } as Prisma.InputJsonValue,
+            },
+            select: { id: true, productId: true, syncType: true, holdUntil: true },
+          })
+          queueId = row.id
+          queued.push(row)
+        }
+      }
+      const version = (await tx.channelListing.findUnique({ where: { id: l.id }, select: { version: true } }))?.version ?? l.version + 1
+      return { version, queueId, notSent }
     })
     if (written === null) {
       result.results.push({ ...base, outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere, version: l.version, before, businessPrice, warnings })
       result.conflict++
       continue
     }
-    result.results.push({ ...base, outcome: 'applied', version: written, before, businessPrice, warnings })
+    result.results.push({ ...base, outcome: 'applied', version: written.version, before, businessPrice, warnings, queueId: written.queueId, ...(written.notSent ? { notSent: written.notSent } : {}) })
     result.applied++
   }
+  // Post-commit: the instant lane honours each row's own holdUntil; the drain cron is the fallback.
+  if (queued.length) await afterDatabaseCommit(`business-prices:${queued.map((row) => row.id).join(',')}`,
+    () => fireOutboundJobs(queued, { source: 'BUSINESS_PRICE_WRITE' }))
   return result
 }
+
+export { BUSINESS_PRICE_SYNC_TYPE, storedBusinessSetting }
