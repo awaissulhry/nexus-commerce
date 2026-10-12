@@ -23,14 +23,16 @@
  * The cursor: the newest moment any bid change in scope moved (an AdMutation's updatedAt — each state change bumps it —
  * an action-log row written, a change undone), and how many bids in scope have their newest change Waiting or Sent — the
  * same per-bid reading as the rows, so the page's "poll every 5 s while any row is Waiting / Sent" agrees with the rows it
- * shows. Scope = GET /advertising/bids's (market, product, campaign, ad group, status; another business's id is a 404);
+ * shows. Scope = GET /advertising/bids's (market, portfolio, product, campaign, ad group — each a list too —, status;
+ * another business's id is a 404: bidScopeWhere, the one where of both reads);
  * `owner` does not narrow it (the owner is worked out per row, which the cursor does not do), so it covers every bid of
  * the scope and moves whenever a row the page shows can. Reads: the scope's target ids, then two indexed reads
  * (AdMutation by entityType+entityId; AdvertisingActionLog by entityType+entityId+createdAt) over 30 days.
  */
 import { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
-import { expandProductScope } from './ads-scope-reach.js'
+import { mergeIds, type ScopeIdLists } from './ads-scope-lists.js'
+import { expandProductScope, unknownScopeId } from './ads-scope-reach.js'
 
 export const BID_DELIVERY_STATES = ['waiting', 'sent', 'live', 'failed', 'cancelled', 'replaced', 'undone'] as const
 export type BidDelivery = (typeof BID_DELIVERY_STATES)[number]
@@ -130,16 +132,62 @@ export async function readBidDeliveries(targetIds: readonly string[], now: Date 
   return { byTarget, latestChangeAt: times.length ? new Date(Math.max(...times.map((t) => t.getTime()))) : null }
 }
 
-// ── The cursor ─────────────────────────────────────────────────────────────────────────────────────────────────────
+// ── The scope ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
-export interface BidCursorQuery {
+/**
+ * The scope of GET /advertising/bids and of its cursor. Scope filter (2026-10-12): each singular param is a list of one,
+ * merged with its plural (ads-scope-lists.ts); OR inside one list, AND across lists. A portfolio is the campaign's
+ * (Campaign.portfolioId, Amazon's id); a product is its line (the product and its children: expandProductScope).
+ */
+export interface BidScopeQuery extends ScopeIdLists {
   market?: string | null
+  portfolioId?: string | null
   productId?: string | null
   campaignId?: string | null
   adGroupId?: string | null
+  status?: 'live' | 'all'
+}
+
+/**
+ * The bids of a scope as one where, for both reads: `status=live` (default) the target, its ad group and its campaign
+ * ENABLED; `all` everything not archived. Another business's campaign, ad group, portfolio or product — or an ad group
+ * outside every campaign named — is not found (ads-scope-reach.ts unknownScopeId), word for word for both reads.
+ */
+export async function bidScopeWhere(q: BidScopeQuery): Promise<{ ok: true; where: Prisma.AdTargetWhereInput } | { ok: false; status: 404; error: string }> {
+  const campaignIds = mergeIds(q.campaignId, q.campaignIds)
+  const adGroupIds = mergeIds(q.adGroupId, q.adGroupIds)
+  const portfolioIds = mergeIds(q.portfolioId, q.portfolioIds)
+  const products = mergeIds(q.productId, q.productIds)
+  const unknown = await unknownScopeId({ campaignIds, adGroupIds, portfolioIds, productIds: products })
+  if (unknown) return { ok: false, status: 404, error: unknown }
+  const productIds = products ? [...new Set((await Promise.all(products.map((id) => expandProductScope(id)))).flat())] : null
+  const market = q.market?.trim().toUpperCase() || null
+  const state = q.status !== 'all' ? ('ENABLED' as const) : { not: 'ARCHIVED' as const }
+  return {
+    ok: true,
+    where: {
+      isNegative: false,
+      status: state,
+      adGroup: {
+        ...(adGroupIds ? { id: { in: adGroupIds } } : {}),
+        status: state,
+        ...(productIds ? { productAds: { some: { productId: { in: productIds } } } } : {}),
+        campaign: {
+          status: state,
+          ...(market ? { marketplace: market } : {}),
+          ...(campaignIds ? { id: { in: campaignIds } } : {}),
+          ...(portfolioIds ? { portfolioId: { in: portfolioIds } } : {}),
+        },
+      },
+    },
+  }
+}
+
+// ── The cursor ─────────────────────────────────────────────────────────────────────────────────────────────────────
+
+export interface BidCursorQuery extends BidScopeQuery {
   /** Taken for the same query string as GET /advertising/bids, and not used: the cursor covers every owner (header). */
   owner?: string | null
-  status?: 'live' | 'all'
 }
 
 export interface BidCursor {
@@ -153,34 +201,13 @@ export interface BidCursor {
 
 export type BidCursorAnswer = { ok: true; cursor: BidCursor } | { ok: false; status: 404; error: string }
 
-const notFound = (error: string): BidCursorAnswer => ({ ok: false, status: 404, error })
-
 /** GET /advertising/bids/cursor — the scope's bids as readBidRows reads them (bid-rows.service.ts), then their deliveries. */
 export async function readBidCursor(q: BidCursorQuery, now: Date = new Date()): Promise<BidCursorAnswer> {
-  // Scope: another business's ids read as not found, word for word as readBidRows says it.
-  if (q.campaignId && !(await prisma.campaign.findUnique({ where: { id: q.campaignId }, select: { id: true } }))) return notFound(`No campaign ${q.campaignId} in this business.`)
-  if (q.adGroupId) {
-    const g = await prisma.adGroup.findUnique({ where: { id: q.adGroupId }, select: { campaignId: true } })
-    if (!g || (q.campaignId && g.campaignId !== q.campaignId)) return notFound(`No ad group ${q.adGroupId} in this business${q.campaignId ? ' and campaign' : ''}.`)
-  }
-  let productIds: string[] | null = null
-  if (q.productId) {
-    if (!(await prisma.product.findUnique({ where: { id: q.productId }, select: { id: true } }))) return notFound(`No product ${q.productId} in this business.`)
-    productIds = await expandProductScope(q.productId)
-  }
-  const market = q.market?.trim().toUpperCase() || null
-  const state = q.status !== 'all' ? ('ENABLED' as const) : { not: 'ARCHIVED' as const }
+  // Scope: another business's ids read as not found, word for word as readBidRows says it (bidScopeWhere).
+  const scope = await bidScopeWhere(q)
+  if ('error' in scope) return scope
   const targets = await prisma.adTarget.findMany({
-    where: {
-      isNegative: false,
-      status: state,
-      adGroup: {
-        ...(q.adGroupId ? { id: q.adGroupId } : {}),
-        status: state,
-        ...(productIds ? { productAds: { some: { productId: { in: productIds } } } } : {}),
-        campaign: { status: state, ...(market ? { marketplace: market } : {}), ...(q.campaignId ? { id: q.campaignId } : {}) },
-      },
-    },
+    where: scope.where,
     select: { id: true },
     orderBy: [{ bidCents: 'desc' }, { id: 'asc' }],
     take: HARD_CAP,

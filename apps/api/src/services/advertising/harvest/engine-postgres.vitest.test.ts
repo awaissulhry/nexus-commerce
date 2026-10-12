@@ -187,6 +187,48 @@ describe.skipIf(!concurrentDatabaseUrl())('HARVEST ENGINE — one engine for eve
     expect(groups.find((g) => g.id === G('jk-auto'))?.held).toMatchObject({ label: 'Auto group' })
   })
 
+  it('scope filter (2026-10-12) — the lists: OR inside, AND across, a singular merged in, the totals follow; an unknown product is 404', async () => {
+    const read = async (q: Record<string, unknown>) => {
+      const got = await inW(() => harvestCandidates({ market: 'IT', ...q }))
+      if ('error' in got) throw new Error(got.error)
+      return { terms: got.data.rows.map((r) => r.term).sort(), totals: got.data.totals, rows: got.data.rows }
+    }
+    const union = (...xs: string[][]) => [...new Set(xs.flat())].sort()
+    // OR inside a list: the union of the singular reads (a source, or the existing destination, in the list).
+    const glove = await read({ campaignId: C('gl-auto') })
+    const phrase = await read({ campaignId: C('jk-phrase') })
+    const exact = await read({ campaignId: C('jk-exact') })
+    expect(glove.terms).toEqual(['glove liner'])
+    expect(phrase.terms).toContain('touring jacket')
+    expect(exact.terms).toContain('touring jacket')
+    const two = await read({ campaignIds: [C('gl-auto'), C('jk-phrase')] })
+    expect(two.terms).toEqual(union(glove.terms, phrase.terms))
+    expect((await read({ adGroupIds: [G('gl-auto'), G('jk-phrase')] })).terms).toEqual(union((await read({ adGroupId: G('gl-auto') })).terms, (await read({ adGroupId: G('jk-phrase') })).terms))
+    // A singular is a list of one merged with its plural.
+    expect((await read({ campaignId: C('gl-auto'), campaignIds: [C('jk-phrase')] })).terms).toEqual(two.terms)
+    // AND across lists: the glove's campaign is in no portfolio.
+    expect((await read({ campaignIds: [C('gl-auto'), C('jk-phrase')], portfolioIds: [PF] })).terms).toEqual(phrase.terms)
+    expect((await read({ adGroupIds: [G('jk-phrase')], campaignIds: [C('gl-auto')] })).terms).toEqual([])
+    // A product is its family: a variation reads its line; several products, each one's.
+    const gloveLine = await read({ productIds: [GLOVE_L] })
+    expect(gloveLine.terms).toEqual(['glove liner'])
+    const jacketLine = await read({ productId: JACKET })
+    expect((await read({ productId: GLOVE, productIds: [JACKET_M] })).terms).toEqual(union(gloveLine.terms, jacketLine.terms))
+    expect((await read({ productIds: [GLOVE_L, JACKET_M], campaignIds: [C('gl-auto')] })).terms).toEqual(['glove liner'])
+    // The tiles count the rows in scope.
+    const candidateStates = ['READY', 'NEEDS_DESTINATION', 'NEEDS_CAMPAIGN', 'HELD']
+    const all = await read({})
+    expect(two.totals.candidates).toBe(two.rows.filter((r) => candidateStates.includes(r.state)).length)
+    expect(two.totals.candidates).toBeLessThan(all.totals.candidates)
+    expect(gloveLine.totals).toMatchObject({ candidates: 1, needCampaign: 1, ready: 0 })
+    // An unknown product, or another business's, in the list: the singular's 404, named; nothing of it is read.
+    await inW2(() => database.client.product.create({ data: { id: id('other-glove'), sku: `HV-OTHER-${hex}`, name: 'Other glove', basePrice: '30.00' } }))
+    for (const gone of ['hv-no-such-product', id('other-glove')]) {
+      const got = await inW(() => harvestCandidates({ market: 'IT', productIds: [GLOVE, gone] }))
+      expect('error' in got && got).toEqual({ error: `Product ${gone} was not found in this business, or it has no single family.`, status: 404 })
+    }
+  })
+
   it('skip: hidden for 7 days (SKIPPED when asked), back with unskip', async () => {
     const out = await inW(() => skipCandidates([cid(JACKET, 'summer jacket')], 7, 'user:owner'))
     expect(out).toMatchObject({ changed: 1, forGood: false })

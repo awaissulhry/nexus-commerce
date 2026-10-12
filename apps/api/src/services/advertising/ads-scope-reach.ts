@@ -123,3 +123,46 @@ export async function resolveScopeReach(sel: ScopeSelection): Promise<ScopeReach
   }
   return reach
 }
+
+/**
+ * Scope filter (2026-10-12) — the ids of a scoped read (ads-scope-lists.ts) that are not this business's, in the words
+ * the Bid and Negative Targeting reads give a singular param: the first unknown id named, campaigns, then ad groups (an
+ * ad group outside every campaign named is not found "and campaign"), portfolios, products. Null: every id is known. The
+ * client is the business's, so another business's id reads exactly as one that does not exist.
+ */
+export async function unknownScopeId(l: { campaignIds?: readonly string[] | null; adGroupIds?: readonly string[] | null; portfolioIds?: readonly string[] | null; productIds?: readonly string[] | null }): Promise<string | null> {
+  const missing = (asked: readonly string[], found: Iterable<string | null>) => {
+    const have = new Set(found)
+    return asked.find((id) => !have.has(id)) ?? null
+  }
+  const campaigns = l.campaignIds?.length ? l.campaignIds : null
+  if (campaigns) {
+    const id = missing(campaigns, (await prisma.campaign.findMany({ where: { id: { in: [...campaigns] } }, select: { id: true } })).map((c) => c.id))
+    if (id) return `No campaign ${id} in this business.`
+  }
+  if (l.adGroupIds?.length) {
+    const groups = await prisma.adGroup.findMany({ where: { id: { in: [...l.adGroupIds] } }, select: { id: true, campaignId: true } })
+    const id = missing(l.adGroupIds, groups.filter((g) => !campaigns || campaigns.includes(g.campaignId)).map((g) => g.id))
+    if (id) return `No ad group ${id} in this business${campaigns ? ` and campaign${campaigns.length > 1 ? 's' : ''}` : ''}.`
+  }
+  if (l.portfolioIds?.length) {
+    const rows = await prisma.campaign.findMany({ where: { portfolioId: { in: [...l.portfolioIds] } }, select: { portfolioId: true }, distinct: ['portfolioId'] })
+    const id = missing(l.portfolioIds, rows.map((r) => r.portfolioId))
+    if (id) return `No portfolio ${id} in this business.`
+  }
+  if (l.productIds?.length) {
+    const id = missing(l.productIds, (await prisma.product.findMany({ where: { id: { in: [...l.productIds] } }, select: { id: true } })).map((p) => p.id))
+    if (id) return `No product ${id} in this business.`
+  }
+  return null
+}
+
+/** Scope filter (2026-10-12) — every ad group not archived, for GET /advertising/scope-options (the picker's Ad group list). */
+export async function scopeAdGroups(): Promise<Array<{ id: string; name: string; campaignId: string; status: string }>> {
+  const rows = await prisma.adGroup.findMany({
+    where: { status: { not: 'ARCHIVED' } },
+    select: { id: true, name: true, campaignId: true, status: true },
+    orderBy: [{ name: 'asc' }, { id: 'asc' }],
+  })
+  return rows.map((g) => ({ id: g.id, name: g.name, campaignId: g.campaignId, status: String(g.status) }))
+}

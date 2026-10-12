@@ -364,6 +364,17 @@ describe('GET /api/advertising/bids/cursor', () => {
     expect((await cursor('market=DE')).json()).toEqual({ latestChangeAt: null, waiting: 0, sent: 0 })
   })
 
+  it('scope filter (2026-10-12) — the lists of /bids: OR inside, AND across, a singular merged in, the same 404', async () => {
+    expect((await cursor('campaignIds=c-sg,c-dl')).json()).toEqual({ latestChangeAt: ago(30_000).toISOString(), waiting: 1, sent: 1 })
+    expect((await cursor('campaignId=c-sg&campaignIds=c-dl')).json()).toMatchObject({ waiting: 1, sent: 1 })
+    expect((await cursor('campaignIds=c-sg,c-de')).json()).toEqual({ latestChangeAt: null, waiting: 0, sent: 0 })
+    expect((await cursor('campaignIds=c-sg,c-dl&adGroupIds=g-sg,g-sg2')).json()).toEqual({ latestChangeAt: null, waiting: 0, sent: 0 })
+    const foreign = await cursor('adGroupIds=g-dl,b-group')
+    expect(foreign.statusCode).toBe(404)
+    expect(foreign.json().error).toBe('No ad group b-group in this business.')
+    expect((await cursor(`campaignIds=${Array.from({ length: 501 }, (_, i) => `c${i}`).join(',')}`)).statusCode).toBe(400)
+  })
+
   it('another business\'s ids are a 404 and its changes never count; a query it does not take is a 400', async () => {
     expect((await cursor('adGroupId=b-group')).statusCode).toBe(404)
     expect((await cursor('campaignId=b-camp')).statusCode).toBe(404)

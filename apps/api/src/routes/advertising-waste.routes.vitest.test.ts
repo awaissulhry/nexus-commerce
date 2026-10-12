@@ -12,6 +12,9 @@
  *   row       runsIn / blockedIn / history of one row
  *   history   paused, negated, removed, refused — with delivery and undo
  *   business  another business's campaign is a 404; money keys are stripped without ad spend
+ *   lists     the scope filter (2026-10-12) on rows, rows/ids, stopped and history: portfolioIds, campaignIds, adGroupIds,
+ *             productIds — OR inside (the union of the singular reads), AND across, a singular merged in, the tiles
+ *             follow; an unknown or another business's id is the singular's 404; at most 500 ids a list
  *
  * Values are made up (public repo).
  */
@@ -176,7 +179,7 @@ beforeAll(async () => {
   })
   await withWorkspace(business(B), async () => {
     const c = database.client as any
-    await c.campaign.create({ data: { id: 'b-camp', name: 'Other business', type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'IT', externalCampaignId: 'EXT-b-camp', dailyBudget: '20.00', startDate: new Date('2026-01-01T00:00:00Z') } })
+    await c.campaign.create({ data: { id: 'b-camp', name: 'Other business', type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'IT', externalCampaignId: 'EXT-b-camp', dailyBudget: '20.00', startDate: new Date('2026-01-01T00:00:00Z'), portfolioId: 'PF-B' } })
   })
   const { default: routes } = await import('./advertising-waste.routes.js')
   app = Fastify()
@@ -398,6 +401,86 @@ describe('GET /api/advertising/waste/rows — the wasting rows', () => {
     expect((await get('rows', 'campaignId=b-camp')).statusCode).toBe(404)
     expect((await get('rows', 'channel=EBAY')).statusCode).toBe(400)
     expect((await get('rows', 'sort=bid')).statusCode).toBe(400)
+  })
+})
+
+describe('scope filter — the four lists on rows, rows/ids, stopped and history (2026-10-12)', () => {
+  const idsOf = async (path: string, query: string): Promise<string[]> => {
+    const res = await get(path, query)
+    expect(res.statusCode, `${path}?${query} ${res.body}`).toBe(200)
+    const body = res.json()
+    if (path === 'rows/ids') return [...body.ids].sort()
+    if (path === 'history') return body.rows.map((r: Row) => `${r.at}|${r.action}|${r.rowId}|${r.text}`).sort()
+    return body.rows.map((r: Row) => r.id).sort()
+  }
+  const union = (...lists: string[][]) => [...new Set(lists.flat())].sort()
+  const reads: Array<[string, string]> = [['rows', 'show=all&pageSize=200'], ['rows/ids', 'show=all'], ['stopped', 'pageSize=200'], ['history', 'days=30']]
+
+  it('OR inside a list: each read answers the union of its singular reads', async () => {
+    for (const [path, base] of reads) {
+      const one = await idsOf(path, `${base}&adGroupId=g-exact`)
+      const two = await idsOf(path, `${base}&adGroupId=g-broad2`)
+      expect(one.length + two.length, path).toBeGreaterThan(0)
+      expect(await idsOf(path, `${base}&adGroupIds=g-exact,g-broad2`), path).toEqual(union(one, two))
+      expect(await idsOf(path, `${base}&campaignIds=c-exact,c-broad`), path).toEqual(union(await idsOf(path, `${base}&campaignId=c-exact`), await idsOf(path, `${base}&campaignId=c-broad`)))
+    }
+  })
+
+  it('AND across lists; a portfolio is the campaign\'s; a product is its family', async () => {
+    for (const [path, base] of reads) {
+      expect(await idsOf(path, `${base}&campaignIds=c-exact,c-broad&adGroupIds=g-exact`), path).toEqual(await idsOf(path, `${base}&adGroupId=g-exact`))
+      expect(await idsOf(path, `${base}&portfolioIds=PF-1`), path).toEqual(await idsOf(path, `${base}&campaignId=c-exact`))
+      expect(await idsOf(path, `${base}&portfolioIds=PF-1&campaignIds=c-broad`), path).toEqual([])
+      expect(await idsOf(path, `${base}&productIds=p-M,p-L`), path).toEqual(await idsOf(path, `${base}&productId=p-root`))
+    }
+  })
+
+  it('a singular is a list of one merged with its plural', async () => {
+    for (const [path, base] of reads) {
+      expect(await idsOf(path, `${base}&adGroupId=g-exact&adGroupIds=g-broad2`), path).toEqual(await idsOf(path, `${base}&adGroupIds=g-exact,g-broad2`))
+      expect(await idsOf(path, `${base}&portfolioId=PF-1&portfolioIds=PF-1`), path).toEqual(await idsOf(path, `${base}&portfolioIds=PF-1`))
+    }
+  })
+
+  it('the tiles follow the lists: the Wasting tile, the negated tile and the Stopped view\'s totals', async () => {
+    const scope = 'adGroupIds=g-exact,g-broad2'
+    const all = await rowsOf('show=wasting')
+    const listed = await rowsOf(`show=wasting&${scope}`)
+    expect(listed.total).toBe(listed.totals.wasting)
+    expect(listed.rows.every((r: Row) => ['g-exact', 'g-broad2'].includes(r.adGroup.id))).toBe(true)
+    expect(listed.totals.wasting).toBeLessThan(all.totals.wasting)
+    const negated = (await get('stopped', `show=negated&${scope}`)).json()
+    expect(listed.totals.negated).toBe(negated.total)
+    expect(negated.totals.negated).toBe(negated.total)
+    const stopped = (await get('stopped', `pageSize=200&${scope}`)).json()
+    expect(stopped.totals.all).toBe(stopped.total)
+    expect(stopped.totals.all).toBeLessThan((await get('stopped', 'pageSize=200')).json().totals.all)
+  })
+
+  it('an unknown or another business\'s id in any list is the singular\'s 404, naming it, on every read', async () => {
+    const cases: Array<[string, string]> = [
+      ['campaignIds=c-exact,b-camp', 'No campaign b-camp in this business.'],
+      ['adGroupIds=g-exact,g-nope', 'No ad group g-nope in this business.'],
+      ['portfolioIds=PF-1,PF-B', 'No portfolio PF-B in this business.'],
+      ['productIds=p-root,p-nope', 'No product p-nope in this business.'],
+      ['campaignIds=c-exact&adGroupIds=g-broad1', 'No ad group g-broad1 in this business and campaign.'],
+    ]
+    for (const [path, base] of reads) {
+      for (const [query, words] of cases) {
+        const res = await get(path, `${base}&${query}`)
+        expect(res.statusCode, `${path}?${query}`).toBe(404)
+        expect(res.json().error, `${path}?${query}`).toBe(words)
+      }
+    }
+  })
+
+  it('at most 500 ids in one list: 501 is a 400 in words', async () => {
+    const many = Array.from({ length: 501 }, (_, i) => `g-${i}`).join(',')
+    for (const [path, base] of reads) {
+      const res = await get(path, `${base}&adGroupIds=${many}`)
+      expect(res.statusCode, path).toBe(400)
+      expect(res.json().error, path).toMatch(/^adGroupIds: at most 500 ids/)
+    }
   })
 })
 
