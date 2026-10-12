@@ -27,6 +27,7 @@ export const START_WHY = 'Started again on the Bid page'
 export const STOP_HELD = {
   security: 'Needs the security permission: starting again takes your authenticator code',
   watching: 'The brain changes no bids here: it only watches',
+  stopped: 'Already stopped on all its campaigns: start it again in its market',
   unread: 'Not read: reload the page',
 } as const
 
@@ -45,7 +46,9 @@ export interface BrainStopView {
  * Which button the Brain's detail shows, and why it is held. `held`: the page's reason for every brain write (a missing
  * ads automation permission, a market Nexus only reads); `busy`: a Start again approved and waiting to run.
  *   a stop stands      → Start again (also held without the security permission: it takes the code)
- *   no stop            → Stop the brain (held while the brain runs no campaign on Auto here: it changes no bids)
+ *   no stop            → Stop the brain (held while the brain runs no campaign on Auto here: it changes no bids; and
+ *                        while other stops already hold every one of its campaigns — a market's own stop seen from All
+ *                        markets, or stops of its products: the mode's "Brain off")
  *   the stop not read  → Stop the brain, held (an older answer, or the read failed: the page cannot say which)
  */
 export function brainStopView(row: BidRuleRow, ctx: { held: string | null; canSecurity: boolean; busy?: string | null }): BrainStopView | null {
@@ -58,9 +61,13 @@ export function brainStopView(row: BidRuleRow, ctx: { held: string | null; canSe
       hint: `Stopped ${whereWords(stop.market)} · ${whenWords(stop.at)}`,
     }
   }
-  const held = ctx.held ?? ctx.busy ?? (stop === undefined ? STOP_HELD.unread : row.mode.set !== 'AUTO' ? STOP_HELD.watching : null)
+  const held = ctx.held ?? ctx.busy
+    ?? (stop === undefined ? STOP_HELD.unread : row.mode.set !== 'AUTO' ? STOP_HELD.watching : allStopped(row) ? STOP_HELD.stopped : null)
   return { action: 'stop', label: 'Stop the brain', variant: 'danger', held, hint: null }
 }
+
+/** Other stops hold every campaign it runs on Auto here: the mode's first hold is the API's "Brain off" (HOLDS.brainOff). */
+const allStopped = (row: BidRuleRow): boolean => row.mode.heldBy?.kind === 'stopped' && row.mode.heldBy.label === 'Brain off'
 
 /** "in IT" · "in every market". */
 function whereWords(market: string | null): string {

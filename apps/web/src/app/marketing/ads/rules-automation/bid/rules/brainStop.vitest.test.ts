@@ -45,6 +45,11 @@ describe('which button the Brain detail shows', () => {
     expect(brainStopView(brain({ stop: stopIT }), { held: 'Needs the ads automation permission', canSecurity: true })?.held).toBe('Needs the ads automation permission')
     // Watch only: it changes no bids here, so there is nothing to stop.
     expect(brainStopView(brain({ mode: { set: 'WATCH', acts: 'WATCH', heldBy: null, also: [], autoLocked: null } }), free)?.held).toBe(STOP_HELD.watching)
+    // Stops of its market (seen from All markets) or of its products already hold every campaign it runs: nothing more to stop.
+    const brainOff = { kind: 'stopped', label: 'Brain off', reason: 'You stopped the brain\'s bids there, so nothing changes.' }
+    expect(brainStopView(brain({ market: null, mode: { set: 'AUTO', acts: 'OFF', heldBy: brainOff, also: [], autoLocked: null } }), free)?.held).toBe(STOP_HELD.stopped)
+    // Ads halted is a stop too, but not the brain's: Stop stays ready (it holds the brain's bids once the halt ends).
+    expect(brainStopView(brain({ mode: { set: 'AUTO', acts: 'OFF', heldBy: { kind: 'stopped', label: 'Ads halted', reason: 'Halted.' }, also: [], autoLocked: null } }), free)?.held).toBeNull()
     // Start again takes the code: the security permission.
     expect(brainStopView(brain({ stop: stopIT }), { held: null, canSecurity: false })?.held).toBe(STOP_HELD.security)
     // An approved Start again waiting to run.
