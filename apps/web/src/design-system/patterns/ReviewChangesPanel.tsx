@@ -9,8 +9,9 @@
  * Save, optional tiles, one table (Where · What · Now · New · Note, a Result once done) and the one tick for a change
  * that lets automation do more. The tick is the HOST's state (`ack` / `onAckChange`) because the host's Save reads it
  * (`saveHeldReason`). Optional, for a step: `warnings` (lines that inform and never hold Save), `groups` (the table in
- * tabs, each change names its tab in `group`; an empty tab is left out), a Result's own `tone`, and `doneLine` (the
- * host's own Done line when counting results cannot say it: "Asked · waits for approval"). Rules:
+ * tabs, each change names its tab in `group`; an empty tab is left out), a Result's own `tone`, `doneLine` (the
+ * host's own Done line when counting results cannot say it: "Asked · waits for approval") and `lead` (a form above it
+ * all, whose table the host recomputes as it is filled in: the Bid page's Change bid). Rules:
  * `reviewChangesPanelModel.ts`.
  */
 import { useId, useState, type ReactNode } from 'react'
@@ -51,11 +52,14 @@ export interface ReviewChangesPanelProps {
   groups?: readonly ReviewGroup[]
   /** The host's own Done line, when counting the results cannot say it (may hold a live part: a `Countdown`). */
   doneLine?: { line: ReactNode; tone: 'success' | 'warning' | 'danger' }
+  /** A form above everything else (a bulk change's How and value): the host recomputes `changes` as it is filled in.
+   *  Not shown once done. */
+  lead?: ReactNode
 }
 
 export function ReviewChangesPanel({
   changes, state = { phase: 'ready' }, label, metrics, problems = [], warnings = [], ackLabel, ack, onAckChange, onRetry,
-  doneVerb = 'saved', groups = [], doneLine,
+  doneVerb = 'saved', groups = [], doneLine, lead,
 }: ReviewChangesPanelProps) {
   const idBase = useId()
   const [wanted, setWanted] = useState<string | null>(null)
@@ -80,6 +84,7 @@ export function ReviewChangesPanel({
 
   return (
     <div className="nds-review">
+      {!done && lead}
       {result && <p className={`nds-review-line ${result.tone}`} role="status">{result.line}</p>}
       {state.phase === 'reading' && <p className="nds-review-line" role="status">Reading today&apos;s values, so “Now” is true. Save waits for it.</p>}
       {state.phase === 'failed' && (

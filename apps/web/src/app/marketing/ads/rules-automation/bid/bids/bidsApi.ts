@@ -8,12 +8,11 @@
  *   GET  /api/advertising/automation/brain/bid-brain/what-if?targetId=&targetAcosPct=
  *   GET  /api/advertising/changes?entityType=AD_TARGET&entityId=&field=bid          one bid's history, with the undo handle
  *   GET  /api/advertising/control-room/guardrail-grid?search=&marketplace=          the campaign's lock (pins) and allowlist
- *   PATCH /api/advertising/ad-targets/:id { bidCents }                              a person's bid, sent now
  *   POST /api/advertising/changes/:actionLogId/undo                                 Undo one change
  *   PATCH /api/advertising/campaigns/:id/pins { pinBids }                           lock the campaign's bids / give them back
  *   GET  /api/advertising/bids/suggested?adGroupId=                                 Amazon's suggested bids, per ad group
  *   GET  /api/advertising/bids/cursor?<scope>                                       has anything moved (live)
- *   POST /api/advertising/ad-targets/bulk-bid { entries }                           Apply suggested (one or many), sent now
+ *   POST /api/advertising/ad-targets/bulk-bid { entries, reason }                   Change bid and Apply suggested (one or many), sent now
  *   POST /api/advertising/bids/:targetId/mode { mode }                              Auto / Manual for one keyword
  *   POST /api/advertising/automation/brain/control { op: 'set-value', … }           a keyword's goal and max (goalModel.ts)
  */
@@ -81,9 +80,6 @@ export async function readCampaignLock(campaign: { id: string; name: string }, m
   return hit ? { bidsLocked: !!hit.pins?.bids, allowlisted: !!hit.managed } : null
 }
 
-export const sendBid = (targetId: string, bidCents: number): Promise<WriteResult> =>
-  adsWrite(`/api/advertising/ad-targets/${encodeURIComponent(targetId)}`, { bidCents, reason: 'Bid page', ...SEND_NOW })
-
 export const undoChange = (actionLogId: string): Promise<WriteResult> =>
   adsWrite(`/api/advertising/changes/${encodeURIComponent(actionLogId)}/undo`, { reason: 'Bid page' }, 'POST')
 
@@ -117,24 +113,29 @@ export async function readCursor(scope: BidsScope): Promise<BidsCursor | null> {
   }
 }
 
-async function postBulk(entries: ReadonlyArray<{ targetId: string; bidCents: number }>, confirm: boolean): Promise<{ status: number; body: unknown }> {
+/** What a bulk send says it is, in the change feed: the page and which of its two bid actions sent it. */
+export const BID_REASON = { suggested: 'Bid page: suggested bid', change: 'Bid page: change bid' } as const
+export type BidReason = (typeof BID_REASON)[keyof typeof BID_REASON]
+
+async function postBulk(entries: ReadonlyArray<{ targetId: string; bidCents: number }>, confirm: boolean, reason: BidReason): Promise<{ status: number; body: unknown }> {
   const r = await fetch(`${getBackendUrl()}/api/advertising/ad-targets/bulk-bid`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ entries: entries.map((e) => ({ adTargetId: e.targetId, bidCents: e.bidCents })), reason: 'Bid page: suggested bid', ...SEND_NOW, ...(confirm ? { confirmOwnLimits: true } : {}) }),
+    body: JSON.stringify({ entries: entries.map((e) => ({ adTargetId: e.targetId, bidCents: e.bidCents })), reason, ...SEND_NOW, ...(confirm ? { confirmOwnLimits: true } : {}) }),
   })
   return { status: r.status, body: await r.json().catch(() => ({})) }
 }
 
 /**
- * Send many bids now (Apply suggested) in one call, and read each row's answer with its change's Undo handle. Past his own
- * limits (3A) it asks "Send anyway" once for every row that waits, and sends those again with his yes. Never throws.
+ * Send many bids now (Change bid, Apply suggested) in one call, and read each row's answer with its change's Undo handle.
+ * Past his own limits (3A) it asks "Send anyway" once for every row that waits, and sends those again with his yes.
+ * Never throws.
  */
-export async function sendBids(entries: ReadonlyArray<{ targetId: string; bidCents: number }>): Promise<SentBid[]> {
+export async function sendBids(entries: ReadonlyArray<{ targetId: string; bidCents: number }>, reason: BidReason): Promise<SentBid[]> {
   const out = new Map<string, SentBid>()
   const run = async (list: ReadonlyArray<{ targetId: string; bidCents: number }>, confirm: boolean): Promise<BulkWait[]> => {
     try {
-      const { status, body } = await postBulk(list, confirm)
+      const { status, body } = await postBulk(list, confirm, reason)
       const read = readBulkBid(list, status, body)
       for (const r of read.results) out.set(r.targetId, r)
       return read.waits

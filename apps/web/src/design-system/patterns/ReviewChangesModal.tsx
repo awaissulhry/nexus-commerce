@@ -12,7 +12,9 @@
  * one tick, which starts unticked every time the dialog opens. While saving, Esc and the backdrop do nothing.
  * Opened from inside another dialog (a row's DetailModal) it stacks above it; when it closes the focus goes back to the
  * control that opened it (polish round 2, audit M10). The Done line counts each result under its verb (S2). On Done the
- * focus moves to Undo, else Done (R5); a Result that would only repeat the New column reads "Done".
+ * focus moves to Undo, else Done (R5); a Result that would only repeat the New column reads "Done". An optional `lead`
+ * is a form above the table (the host recomputes the table as it is filled in) and `leadHeld` holds Save while that
+ * form is not filled in, in the host's words.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 
@@ -64,11 +66,17 @@ export interface ReviewChangesModalProps {
   groups?: readonly ReviewGroup[]
   /** The host's own Done line when counting the results cannot say it ("Asked · waits for approval"). Passed through. */
   doneLine?: ReviewChangesPanelProps['doneLine']
+  /** A form above the table (a bulk change's How and value, Bid page 2026-10-12): the host recomputes `changes` as it
+   *  is filled in, so the table follows each key. Not shown once done. Passed to the panel. */
+  lead?: ReactNode
+  /** Why Save waits on that form, in the host's words ("Type a bid"): the held Save says it like any other reason. */
+  leadHeld?: string | null
 }
 
 export function ReviewChangesModal({
   open, onClose, changes, state = { phase: 'ready' }, title, summary, metrics, problems = [], ackLabel, saveLabel,
   onSave, onRetry, onUndo, undoing = false, doneActions, onDone, size = 'lg', doneVerb = 'saved', returnFocusTo, groups, doneLine,
+  lead, leadHeld,
 }: ReviewChangesModalProps) {
   const [ack, setAck] = useState(false)
   useEffect(() => { if (open) setAck(false) }, [open])
@@ -88,7 +96,7 @@ export function ReviewChangesModal({
   const count = changes.length
   const raises = raiseCount(changes)
   const saving = state.phase === 'saving'
-  const held = saveHeldReason({ state, count, problems: problems.length, raises, ack })
+  const held = saveHeldReason({ state, count, problems: problems.length, raises, ack, lead: leadHeld })
 
   const save = (
     <Button variant="primary" aria-disabled={held ? true : undefined} aria-description={held ?? undefined} onClick={held ? undefined : onSave}>
@@ -124,6 +132,7 @@ export function ReviewChangesModal({
       <ReviewChangesPanel
         changes={changes} state={state} label={title ?? reviewTitle(count)} metrics={metrics} problems={problems}
         ackLabel={ackLabel} ack={ack} onAckChange={setAck} onRetry={onRetry} doneVerb={doneVerb} groups={groups} doneLine={doneLine}
+        lead={lead}
       />
     </Modal>
   )

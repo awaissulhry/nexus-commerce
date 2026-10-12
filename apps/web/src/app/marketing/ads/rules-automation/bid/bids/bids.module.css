@@ -274,10 +274,34 @@
   gap: var(--nds-space-8);
 }
 
-.bidInput {
-  display: inline-flex;
-  flex: none;
-  width: 120px;
+/* Change bid (the review's form above its table): How on its line, the value and the limit side by side, each a
+   readable width; on a phone they wrap. */
+.adjust {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+  margin: 0;
+}
+
+.adjustValues {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--nds-space-12);
+}
+
+/* A column, so the DS field inside takes the box's whole width. */
+.adjustBox {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 160px;
+  min-width: 0;
+}
+
+.hint {
+  margin: 0;
+  color: var(--nds-text-2);
 }
 
 .goalForm {

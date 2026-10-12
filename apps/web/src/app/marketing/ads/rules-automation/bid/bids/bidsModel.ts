@@ -400,17 +400,6 @@ export function bidProblem(cents: number | null, currency: string): string | nul
   return null
 }
 
-/**
- * Why this person may not set this bid by hand, or null when they may. One rule with Apply suggested (the Owner's
- * decision): a person's bid goes through the review whoever sets it; the review says what follows (the Brain's keyword
- * goes Manual, a rule or a plan may move it again — `suggestedModel.movesNext`).
- */
-export function editHeldReason(row: Pick<BidRow, 'bidNow'>, canEdit: boolean): string | null {
-  if (!canEdit) return 'Needs the ads campaigns permission'
-  if (typeof row.bidNow !== 'number') return 'Bids are hidden for you'
-  return null
-}
-
 // ── Auto / Manual per keyword (KEYWORD-AUTO.md: Manual = a person's hold with no end; Auto = handed back) ──────────
 
 export const AUTO_WORDS = { on: 'Auto', off: 'Manual' } as const

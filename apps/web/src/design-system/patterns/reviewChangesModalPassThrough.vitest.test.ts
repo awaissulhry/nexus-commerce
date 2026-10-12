@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ReactElement } from 'react'
+import { createElement, type ReactElement } from 'react'
 
 /**
  * Keyword Harvest polish (2026-10-11): `ReviewChangesModal` passes `groups` and `doneLine` to its `ReviewChangesPanel`
@@ -17,7 +17,9 @@ vi.mock('react', async (original) => {
   const useEffect = () => { runtime.at++ }
   // The Done focus (Bid page R5) holds two refs; a plain object is enough without a DOM.
   const useRef = (init: unknown) => ({ current: init })
-  return { ...real, default: { ...real, useState, useEffect, useRef }, useState, useEffect, useRef }
+  // The panel names its tabs with an id.
+  const useId = () => ':r0:'
+  return { ...real, default: { ...real, useState, useEffect, useRef, useId }, useState, useEffect, useRef, useId }
 })
 
 import { ReviewChangesModal, type ReviewChangesModalProps } from './ReviewChangesModal'
@@ -60,6 +62,43 @@ describe('ReviewChangesModal — groups and doneLine reach the panel', () => {
     const panel = panelOf(base)
     expect(panel.props.groups).toBeUndefined()
     expect(panel.props.doneLine).toBeUndefined()
+    expect(panel.props.lead).toBeUndefined()
     expect(panel.props.doneVerb).toBe('saved')
+  })
+})
+
+/** The Save button in the footer (the primary one), and the tooltip around it when held. */
+const saveOf = (props: ReviewChangesModalProps) => {
+  runtime.at = 0
+  const footer = flat((ReviewChangesModal(props) as El).props.footer)
+  const save = footer.find((el) => el.props.variant === 'primary')!
+  const tip = footer.find((el) => typeof el.props.label === 'string' && el.props.portal === true)
+  return { save, tip }
+}
+
+describe('ReviewChangesModal — a form above the table (lead)', () => {
+  it('passes the form to the panel, which draws it first', () => {
+    const lead = createElement('form', { 'aria-label': 'Change bid' })
+    const panel = panelOf({ ...base, lead })
+    expect(panel.props.lead).toBe(lead)
+    runtime.at = 0
+    const body = flat(ReviewChangesPanel({ changes: base.changes, ack: false, onAckChange() {}, lead }) as El)
+    expect(body[1]).toBe(lead)
+  })
+  it('the panel leaves the form out once done', () => {
+    runtime.at = 0
+    const lead = createElement('form', { 'aria-label': 'Change bid' })
+    const body = flat(ReviewChangesPanel({ changes: base.changes, ack: false, onAckChange() {}, lead, state: { phase: 'done', results: { k1: { ok: true, words: 'Sent' } } } }) as El)
+    expect(body).not.toContain(lead)
+  })
+  it('holds Save with the form\'s own words while it is not filled in, and lets it go once it is', () => {
+    const held = saveOf({ ...base, lead: createElement('form'), leadHeld: 'Type a bid', saveLabel: 'Send 1 bid' })
+    expect(held.save.props['aria-disabled']).toBe(true)
+    expect(held.save.props['aria-description']).toBe('Type a bid')
+    expect(held.save.props.onClick).toBeUndefined()
+    expect(held.tip?.props.label).toBe('Type a bid')
+    const free = saveOf({ ...base, lead: createElement('form'), leadHeld: null, saveLabel: 'Send 1 bid' })
+    expect(free.save.props['aria-disabled']).toBeUndefined()
+    expect(free.tip).toBeUndefined()
   })
 })
