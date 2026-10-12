@@ -97,7 +97,9 @@ export const SIZE_GEOMETRY: Readonly<Record<DataGridSize, SizeGeometry>> = {
   lg: tier(14, 14, 13, '--nds-font-size-base', 'spacious'),
   md: tier(11, 14, 13, '--nds-font-size-base', 'cozy'),
   sm: tier(7, 10, 12.5, '--nds-font-size-sm-plus', 'compact'),
-  xs: tier(5, 9, 11.5, '--nds-font-size-xs-plus', 'compact'),
+  // 10, not the measured 9: the compact header's words start at 10, and a column's words start where its header's do
+  // (grid audit A8, 2026-10-13).
+  xs: tier(5, 10, 11.5, '--nds-font-size-xs-plus', 'compact'),
 }
 
 export const DATAGRID_SIZES: readonly DataGridSize[] = ['xl', 'lg', 'md', 'sm', 'xs']

@@ -19,7 +19,8 @@ describe('the legacy .nds-grid geometry per size — derived from components.css
   it('the paddings and fonts are the tiers\' (components.css:1426, 2247-2326)', () => {
     expect([SIZE_GEOMETRY.md.padY, SIZE_GEOMETRY.md.padX, SIZE_GEOMETRY.md.fontPx]).toEqual([11, 14, 13])
     expect([SIZE_GEOMETRY.sm.padY, SIZE_GEOMETRY.sm.padX, SIZE_GEOMETRY.sm.fontPx]).toEqual([7, 10, 12.5])
-    expect([SIZE_GEOMETRY.xs.padY, SIZE_GEOMETRY.xs.padX, SIZE_GEOMETRY.xs.fontPx]).toEqual([5, 9, 11.5])
+    // xs pads 10, not the legacy 9: a column's words start where its compact header's do (grid audit A8).
+    expect([SIZE_GEOMETRY.xs.padY, SIZE_GEOMETRY.xs.padX, SIZE_GEOMETRY.xs.fontPx]).toEqual([5, 10, 11.5])
     expect([SIZE_GEOMETRY.lg.padY, SIZE_GEOMETRY.lg.padX]).toEqual([14, 14])
     expect([SIZE_GEOMETRY.xl.padY, SIZE_GEOMETRY.xl.padX]).toEqual([19, 14])
   })

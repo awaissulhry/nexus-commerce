@@ -377,11 +377,11 @@ const CAMPAIGN_NOUN = { one: 'campaign', many: 'campaigns' }
 const AD_GROUP_NOUN = { one: 'ad group', many: 'ad groups' }
 /**
  * A numbers column: right-aligned, tabular figures, and its header's words end where its numbers end — the ⋮ menu goes
- * BEFORE the words: AG's own right-aligned header, which the DS mark `nds-ag-head-num` replaced (it kept the menu at the
- * right end, so the words ended 24 px left of the numbers: "Bid now" 923 vs 947, design audit M5). Not both: the DS mark's
- * `flex-end` on AG's reversed label would push the words to the left.
+ * BEFORE the words (design audit M5: "Bid now" ended 24 px left of its numbers). The DS mark `nds-ag-head-num` does this
+ * since #549 (grid.css), the one numbers header every grid uses (grid audit A7). Never with AG's own right-aligned
+ * header class: the two reverse the label twice.
  */
-const NUM_HEAD = 'ag-right-aligned-header'
+const NUM_HEAD = 'nds-ag-head-num'
 const numeric = { type: 'rightAligned', headerClass: NUM_HEAD }
 const num = ['nds-ag-cell', 'nds-ag-num']
 
@@ -443,7 +443,7 @@ export function bidColumns(phone: boolean, features: BidColumnFeatures = NO_COLU
     { ...integerColumn<BidGridRow>('changes7d'), colId: 'changes7d', headerName: LABEL.changes7d, width: 128, headerClass: NUM_HEAD },
     {
       colId: 'results', headerName: LABEL.results, valueGetter: (p) => p.data?.d7.clicks ?? null, valueFormatter: (p) => (p.data ? resultsWords(p.data.d7, p.data.currency).title : ''),
-      cellRenderer: ResultsCell, width: 162, cellClass: 'nds-ag-cell', headerTooltip: `Clicks · orders · ACoS, ${WEEK}`,
+      cellRenderer: ResultsCell, width: 162, cellClass: num, ...numeric, headerTooltip: `Clicks · orders · ACoS, ${WEEK}`,
     },
     {
       colId: 'spark', headerName: LABEL.spark, valueGetter: (p) => p.data?.spark ?? null, sortable: false, cellRenderer: TrendCell, width: 112, cellClass: 'nds-ag-cell',

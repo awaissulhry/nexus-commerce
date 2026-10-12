@@ -510,7 +510,7 @@ export function BudgetClient() {
       sortValue: (r) => r.canStillMove, filterValue: (r) => r.canStillMove,
     },
     {
-      key: 'lastActed', label: 'Last ran',
+      key: 'lastActed', label: 'Last ran', align: 'left',
       render: (r) => (r.lastActedAt ? <span className="h10-bud-when">{clockLabel(r.lastActedAt)}</span> : <span className="h10-bud-nd">never</span>),
       sortValue: (r) => r.lastActedAt ?? '',
     },

@@ -15,7 +15,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
-import { NexusGrid } from '@/design-system/grid'
+import { NexusGrid, numericColumn } from '@/design-system/grid'
 import { Pill, SegmentedControl } from '@/design-system/primitives'
 import type { ColDef } from '@/design-system/grid'
 
@@ -67,29 +67,29 @@ type PriceRow = { key: string; channel: string; marketplace: string | null; pric
 const CHANNEL_COLUMNS: ColDef<ChannelRow>[] = [
   { field: 'channel', headerName: 'Channel', flex: 1, minWidth: 120 },
   { headerName: 'Market', width: 105, valueGetter: (p) => p.data?.marketplace ?? '—' },
-  { field: 'units', headerName: 'Units', width: 105, type: 'numericColumn' },
+  { field: 'units', headerName: 'Units', width: 105, ...numericColumn },
   {
-    field: 'revenue', headerName: 'Revenue', width: 125, type: 'numericColumn',
+    field: 'revenue', headerName: 'Revenue', width: 125, ...numericColumn,
     valueFormatter: (p) => (typeof p.value === 'number' ? p.value.toFixed(2) : ''),
   },
-  { field: 'orders', headerName: 'Orders', width: 105, type: 'numericColumn' },
+  { field: 'orders', headerName: 'Orders', width: 105, ...numericColumn },
 ]
 
 const PRICE_COLUMNS: ColDef<PriceRow>[] = [
   { field: 'channel', headerName: 'Channel', flex: 1, minWidth: 120 },
   { headerName: 'Market', width: 105, valueGetter: (p) => p.data?.marketplace ?? '—' },
   {
-    headerName: 'Price', width: 125, type: 'numericColumn',
+    headerName: 'Price', width: 125, ...numericColumn,
     // "Not set" sorts below every real price rather than alphabetically among them.
     valueGetter: (p) => (p.data?.priceKnown ? Number(p.data.price) : -1),
     valueFormatter: (p) => (p.data?.priceKnown ? p.data.price : 'Not set'),
-    cellClass: (p) => (p.data?.priceKnown ? '' : 'nds-muted'),
+    cellClass: (p) => [...numericColumn.cellClass, ...(p.data?.priceKnown ? [] : ['nds-muted'])],
   },
   {
-    headerName: 'Buy box', width: 125, type: 'numericColumn',
+    headerName: 'Buy box', width: 125, ...numericColumn,
     valueGetter: (p) => (p.data?.buyBoxKnown ? Number(p.data.buyBox) : -1),
     valueFormatter: (p) => (p.data?.buyBoxKnown ? p.data.buyBox : 'No observation'),
-    cellClass: (p) => (p.data?.buyBoxKnown ? '' : 'nds-muted'),
+    cellClass: (p) => [...numericColumn.cellClass, ...(p.data?.buyBoxKnown ? [] : ['nds-muted'])],
   },
 ]
 
@@ -167,21 +167,21 @@ function ProductPerformance() {
     { field: 'name', headerName: 'Campaign', flex: 1, minWidth: 220 },
     { field: 'marketplace', headerName: 'Market', width: 105 },
     { field: 'status', headerName: 'Status', width: 115 },
-    { field: 'impressions', headerName: 'Impressions', width: 140, type: 'numericColumn' },
-    { field: 'clicks', headerName: 'Clicks', width: 105, type: 'numericColumn' },
-    { field: 'orders', headerName: 'Orders', width: 105, type: 'numericColumn' },
+    { field: 'impressions', headerName: 'Impressions', width: 140, ...numericColumn },
+    { field: 'clicks', headerName: 'Clicks', width: 105, ...numericColumn },
+    { field: 'orders', headerName: 'Orders', width: 105, ...numericColumn },
     {
-      headerName: 'Spend', width: 110, type: 'numericColumn',
+      headerName: 'Spend', width: 110, ...numericColumn,
       valueGetter: (p) => (p.data ? p.data.spendCents / 100 : 0),
       valueFormatter: (p) => money(Math.round((p.value as number) * 100), p.data?.currencyCode ?? null),
     },
     {
-      headerName: 'Ad sales', width: 120, type: 'numericColumn',
+      headerName: 'Ad sales', width: 120, ...numericColumn,
       valueGetter: (p) => (p.data ? p.data.adSalesCents / 100 : 0),
       valueFormatter: (p) => money(Math.round((p.value as number) * 100), p.data?.currencyCode ?? null),
     },
     {
-      headerName: 'ACOS', width: 110,
+      headerName: 'ACOS', width: 110, ...numericColumn,
       // 🔴 Sorts on a number but renders the reading: a null ACOS with real spend is "No sales",
       // which is not 0% and must not sort as though it were the best row in the table.
       valueGetter: (p) => (p.data && p.data.spendCents > 0 && p.data.adSalesCents <= 0
@@ -195,16 +195,16 @@ function ProductPerformance() {
     { field: 'query', headerName: 'Search term', flex: 1, minWidth: 240 },
     { field: 'matchType', headerName: 'Match', width: 105 },
     { field: 'marketplace', headerName: 'Market', width: 105 },
-    { field: 'impressions', headerName: 'Impressions', width: 140, type: 'numericColumn' },
-    { field: 'clicks', headerName: 'Clicks', width: 105, type: 'numericColumn' },
-    { field: 'orders', headerName: 'Orders', width: 105, type: 'numericColumn' },
+    { field: 'impressions', headerName: 'Impressions', width: 140, ...numericColumn },
+    { field: 'clicks', headerName: 'Clicks', width: 105, ...numericColumn },
+    { field: 'orders', headerName: 'Orders', width: 105, ...numericColumn },
     {
-      headerName: 'Spend', width: 110, type: 'numericColumn',
+      headerName: 'Spend', width: 110, ...numericColumn,
       valueGetter: (p) => (p.data ? p.data.spendCents / 100 : 0),
       valueFormatter: (p) => (p.value as number).toFixed(2),
     },
     {
-      headerName: 'ACOS', width: 110,
+      headerName: 'ACOS', width: 110, ...numericColumn,
       valueGetter: (p) => (p.data && p.data.spendCents > 0 && p.data.adSalesCents <= 0
         ? Number.POSITIVE_INFINITY
         : p.data?.acos ?? null),

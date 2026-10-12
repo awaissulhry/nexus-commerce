@@ -26,7 +26,7 @@
  */
 
 import { useMemo } from 'react'
-import { NexusGrid, gridFilterDef, type ColDef } from '@/design-system/grid'
+import { NexusGrid, gridFilterDef, numericColumn, type ColDef } from '@/design-system/grid'
 import { useLocalCatalog } from '@/local-first/useLocalCatalog'
 import type { LocalProductRow } from '@/local-first/projection'
 
@@ -56,11 +56,12 @@ export function NextGenClient() {
         field: 'basePrice',
         headerName: 'Price',
         minWidth: 110,
+        ...numericColumn,
         ...gridFilterDef('number'),
         valueFormatter: (p: { value: unknown }) =>
           p.value === null || p.value === undefined ? '—' : `€${Number(p.value).toFixed(2)}`,
       },
-      { field: 'totalStock', headerName: 'Stock', minWidth: 100, ...gridFilterDef('number') },
+      { field: 'totalStock', headerName: 'Stock', minWidth: 100, ...numericColumn, ...gridFilterDef('number') },
       { field: 'productType', headerName: 'Type', minWidth: 150, ...gridFilterDef('text') },
       { field: 'updatedAt', headerName: 'Last updated', minWidth: 160 },
     ],

@@ -87,8 +87,10 @@
    (engine), so `text-align` alone lays the content out as the td did. */
 .nds-ag-dg .ag-cell.nds-dg-td.r { text-align: right; }
 .nds-ag-dg .ag-cell.nds-dg-td.c { text-align: center; }
-/* `td.num { font-variant-numeric: tabular-nums }` (2239) */
-.nds-ag-dg .ag-cell.nds-dg-td.num { font-variant-numeric: tabular-nums; }
+/* `td.num { font-variant-numeric: tabular-nums }` (2239) — and every right-aligned cell: right is for numbers (the
+   Owner's rule, 2026-10-13), and 146 right-aligned columns did not say `numeric` (grid audit A4). */
+.nds-ag-dg .ag-cell.nds-dg-td.num,
+.nds-ag-dg .ag-cell.nds-dg-td.r { font-variant-numeric: tabular-nums; }
 /* `th.ck, td.ck { width: 40px; text-align: center; padding-left: 0; padding-right: 0 }` (1437) and
    `tbody td.ck { vertical-align: middle }` (2341) — the width is the column's. */
 .nds-ag-dg .ag-cell.nds-dg-td.ck {
@@ -114,8 +116,12 @@
    the engine's; only the content box the legacy th centred is restated. ── */
 .nds-ag-dg .ag-header-cell.nds-dg-th.ck { padding-left: 0; padding-right: 0; }
 .nds-ag-dg .ag-header-cell.nds-dg-th.ck .ag-header-cell-comp-wrapper { justify-content: center; }
-/* `th.c { text-align: center }` on the header label (the engine offers the right-aligned mark, `nds-ag-head-num`). */
+/* `th.c { text-align: center }` on the header label (the engine offers the right-aligned mark, `nds-ag-head-num`).
+   The ⋮ menu is taken out of the flow, so the words centre on the whole header cell — the same centre as the
+   column's cells — instead of on what the menu leaves (grid audit A9). */
+.nds-ag-dg .ag-header-cell.nds-dg-th.c .ag-cell-label-container { position: relative; }
 .nds-ag-dg .ag-header-cell.nds-dg-th.c .ag-header-cell-label { justify-content: center; }
+.nds-ag-dg .ag-header-cell.nds-dg-th.c .ag-header-cell-menu-button { position: absolute; right: 0; }
 
 /* ── rows ── */
 /* The hover contract for page sheets (lane-owner decision 3): `tr:hover td { … }` becomes a variable read.
@@ -178,7 +184,9 @@
    No hover: the legacy hover rule was `tbody`-scoped. The section rule is off — the top rule is the CELL's. ── */
 .nds-ag-dg .ag-row.nds-dg-totals { --ag-row-hover-color: transparent; --ag-row-border: none; }
 .nds-ag-dg .ag-row.nds-dg-totals .ag-cell.nds-dg-td {
-  padding: 0;
+  /* The side padding is the data cells' (the page rule that once padded it is gone): a total lines up with the
+     values and the header above it (grid audit A5). The row's height is still its cells'. */
+  padding: 0 var(--nds-dg-pad-x);
   border-top: 1px solid var(--nds-border);
   border-bottom-width: 0;
   font-size: var(--nds-font-size-base);

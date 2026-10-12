@@ -94,6 +94,16 @@ drags). Sort indicator: AG's. Header menu on every column unless `suppressHeader
 items are "Customise columns…" / "Reset columns" when the page passes `columnDialog`. Column groups render as a
 **30px strip** above the header: sunken ground, eyebrow caps 11px/700/0.05em, full-height partitions.
 
+**Alignment (the Owner's rule, 2026-10-13).** A header sits on the same side as its own cells, in every engine.
+- **Left** (the default): words, names, dates, times, statuses, pills, links.
+- **Right**: money, counts, percentages, quantities, bids — with tabular figures. The header's sort and ⋮ icons go on
+  the INNER side of its words, so the words end where the numbers end (`nds-ag-head-num`).
+- **Centre**: only an icon, a checkbox or a switch column.
+- How each engine says it: `NexusGrid` — the `numericColumn` preset or a numeric preset below (AG's own
+  `type: 'numericColumn'` also works on the engine's cell); `DataGrid` — `numeric: true` or `align`, applied to the
+  header AND the cells; `WorkspaceGrid` — numbers are its default (a metrics grid), every words column says
+  `align: 'left'`. A header's words and its cells' words start at the same x (one horizontal inset per tier).
+
 ## 6. Cell types (`renderers/`, `columns/presets.ts`)
 
 | Preset | Renderer | Rule |
