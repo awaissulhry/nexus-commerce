@@ -21,7 +21,7 @@ import { labelFor } from '../bid-grid.service.js'
 import { negativeKeptBy, ownerOfActor, refOfOwner } from './owner.js'
 import { HOLD_ACTIONS, KEPT_PAUSED_DENIED_AT } from './hold.js'
 import { DAY_MS, deliveryOf, negativeMatch, plainWords, romeDay, romeTime, targetMatch, termKeyOf, type Delivery, type Ref } from './pure.js'
-import { inScope, ownerOfNegative, placeRefs, readSkipRows, scopedFacts, type WasteFacts, type WasteScope } from './read.js'
+import { inScope, ownerOfNegative, placeRefs, readSkipRows, scopedFacts, type ResolvedScope, type WasteFacts, type WasteScope } from './read.js'
 
 export type HistoryAction = 'paused' | 'kept' | 'released' | 'turned_on' | 'negated' | 'removed' | 'refused' | 'skipped'
 
@@ -82,7 +82,7 @@ interface Filter { targetIds?: ReadonlySet<string>; termKey?: string; adGroupIds
  * The items of the scope (every place, running or not), `days` back. `filter` narrows to one row (row.ts): its target
  * ids, or a term's words in its places.
  */
-export async function historyItems(f: WasteFacts, s: WasteScope & { root?: string | null }, days: number, kind: 'keyword' | 'term' | 'all', filter: Filter = {}): Promise<{ rows: HistoryItem[]; truncated: boolean }> {
+export async function historyItems(f: WasteFacts, s: ResolvedScope, days: number, kind: 'keyword' | 'term' | 'all', filter: Filter = {}): Promise<{ rows: HistoryItem[]; truncated: boolean }> {
   const now = f.now.getTime()
   const since = new Date(now - days * DAY_MS)
   const places = new Set([...f.adGroups.keys()].filter((id) => inScope(f, id, { ...s, idle: true })))
@@ -281,7 +281,7 @@ export async function readHistory(q: HistoryQuery, now: Date = new Date()): Prom
   if ('error' in scope) return scope
   const days = Math.min(90, Math.max(1, Math.round(q.days ?? 30)))
   // Each market's history, merged newest first (one market's facts each).
-  const outs = await Promise.all(scope.facts.map((f) => historyItems(f, { ...q, root: scope.root }, days, q.kind ?? 'all')))
+  const outs = await Promise.all(scope.facts.map((f) => historyItems(f, { ...q, roots: scope.roots }, days, q.kind ?? 'all')))
   const rows = outs.flatMap((o) => o.rows).sort((a, b) => b.at.localeCompare(a.at))
   return { ok: true, rows: rows.slice(0, HISTORY_MAX), days, truncated: outs.some((o) => o.truncated) || rows.length > HISTORY_MAX }
 }

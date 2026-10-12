@@ -8,6 +8,8 @@
  *   bid       the night floor on now, the highest a click can cost, the brain's aim and what holds it, the last change and the
  *             changes of 7 days with the night floor and its give-back folded away, 7 days of results, the 7-day line
  *   filters   owner (a kind or an id) narrows the rows and not the totals; campaign, ad group, market, product, status
+ *   lists     the scope filter (2026-10-12): portfolioIds, campaignIds, adGroupIds, productIds — OR inside a list, AND across,
+ *             a singular merged in, the totals follow; an unknown or another business's id is the singular's 404; ≤ 500
  *   business  another business's campaign, ad group or product is a 404; its bids never show
  *   money     a person without ad-spend money gets the answer minus exactly the money keys
  *   currency  each bid's market and currency (the market's ads account's, else the campaign's own); the totals' when one
@@ -157,7 +159,7 @@ beforeAll(async () => {
   await withWorkspace(business(B), async () => {
     const c = database.client as any
     await c.product.create({ data: { id: 'bapi-other-jacket', sku: 'BAPI-JACKET', name: 'Jacket', basePrice: '80.00', isParent: true } })
-    await c.campaign.create({ data: { id: 'b-camp', name: 'Other business', type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'IT', externalCampaignId: 'EXT-b-camp', dailyBudget: '20.00', startDate: new Date('2026-01-01T00:00:00Z'), liveBidWritesEnabled: true } })
+    await c.campaign.create({ data: { id: 'b-camp', name: 'Other business', type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'IT', externalCampaignId: 'EXT-b-camp', dailyBudget: '20.00', startDate: new Date('2026-01-01T00:00:00Z'), liveBidWritesEnabled: true, portfolioId: 'PF-B' } })
     await c.adGroup.create({ data: { id: 'b-group', campaignId: 'b-camp', name: 'other group', externalAdGroupId: 'EXT-b-group' } })
     await c.adTarget.create({ data: { id: 'b-target', adGroupId: 'b-group', kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'other jacket', bidCents: 40, externalTargetId: 'EXT-b-target' } })
   })
@@ -291,6 +293,72 @@ describe('filters', () => {
     expect(unknown.statusCode).toBe(400)
     expect(unknown.json().error).toMatch(/Unrecognized key/i)
     expect((await get('status=paused')).statusCode).toBe(400)
+  })
+})
+
+describe('scope filter — the four lists (2026-10-12)', () => {
+  const ids = async (query: string) => {
+    const res = await get(query)
+    expect(res.statusCode, `${query} ${res.body}`).toBe(200)
+    return res.json().rows.map((r: Row) => r.targetId).sort()
+  }
+
+  it('OR inside a list: any campaign, ad group, portfolio or product named', async () => {
+    expect(await ids('campaignIds=c-brain,c-rule')).toEqual(['t-brain', 't-rule', 't-undo'])
+    expect(await ids('adGroupIds=g-c-brain,g-c-seed')).toEqual(['t-brain', 't-seed', 't-undo'])
+    // Bids had no portfolio filter: the campaign's portfolio (Amazon's id), singular or list.
+    expect(await ids('portfolioId=PF-1')).toEqual(['t-it', 't-low', 't-sup'])
+    expect(await ids('portfolioIds=PF-1')).toEqual(['t-it', 't-low', 't-sup'])
+    expect(await ids(`productIds=${P}`)).toEqual(['t-it', 't-low', 't-sup'])
+  })
+
+  it('AND across lists', async () => {
+    expect(await ids(`campaignIds=c-it,c-brain&productIds=${P}`)).toEqual(['t-it', 't-low', 't-sup'])
+    expect(await ids('portfolioIds=PF-1&campaignIds=c-it,c-brain')).toEqual(['t-it', 't-low', 't-sup'])
+    expect(await ids('campaignIds=c-brain,c-rule&adGroupIds=g-c-rule')).toEqual(['t-rule'])
+    expect(await ids('portfolioIds=PF-1&campaignIds=c-brain')).toEqual([])
+  })
+
+  it('a singular is a list of one merged with its plural; parts are trimmed, empty ones dropped, an id counted once', async () => {
+    expect(await ids('campaignId=c-brain&campaignIds=c-rule')).toEqual(['t-brain', 't-rule', 't-undo'])
+    expect(await ids('adGroupId=g-c-seed&adGroupIds=g-c-brain')).toEqual(['t-brain', 't-seed', 't-undo'])
+    expect(await ids('campaignIds=%20c-brain%20,,c-brain,')).toEqual(['t-brain', 't-undo'])
+    // An empty list narrows nothing.
+    expect(await ids('campaignIds=')).toEqual(await ids(''))
+  })
+
+  it('the totals follow the lists (owner still narrows only the rows)', async () => {
+    expect((await get('campaignIds=c-brain,c-rule')).json().totals).toMatchObject({ bids: 3, shown: 3, owners: { BRAIN: 2, RULE: 1, PLAN: 0, PERSON: 0, ENGINE: 0, NONE: 0 } })
+    expect((await get('campaignIds=c-brain,c-rule&owner=RULE')).json().totals).toMatchObject({ bids: 3, shown: 1 })
+    expect((await get('portfolioIds=PF-1')).json().totals).toMatchObject({ bids: 3, d7: { clicks: 10, orders: 1, spend: 300 } })
+  })
+
+  it('an unknown or another business\'s id in any list is the singular\'s 404, naming it; its bids never show', async () => {
+    const cases: Array<[string, RegExp]> = [
+      ['campaignIds=c-it,b-camp', /^No campaign b-camp in this business\.$/],
+      ['adGroupIds=g-c-brain,b-group', /^No ad group b-group in this business\.$/],
+      [`productIds=${P},bapi-other-jacket`, /^No product bapi-other-jacket in this business\.$/],
+      ['portfolioIds=PF-1,PF-B', /^No portfolio PF-B in this business\.$/],
+      ['portfolioId=PF-B', /^No portfolio PF-B in this business\.$/],
+      ['campaignIds=c-it&adGroupIds=g-c-brain', /^No ad group g-c-brain in this business and campaign\.$/],
+      ['campaignIds=c-it,c-rule&adGroupIds=g-c-rule,g-c-brain', /^No ad group g-c-brain in this business and campaigns\.$/],
+    ]
+    for (const [query, words] of cases) {
+      const res = await get(query)
+      expect(res.statusCode, query).toBe(404)
+      expect(res.json().error, query).toMatch(words)
+    }
+  })
+
+  it('at most 500 ids in one list: 500 is read (and checked), 501 is a 400 in words', async () => {
+    const many = (n: number) => Array.from({ length: n }, (_, i) => `c-none-${i}`).join(',')
+    const at = await get(`campaignIds=${many(500)}`)
+    expect(at.statusCode).toBe(404)
+    expect(at.json().error).toBe('No campaign c-none-0 in this business.')
+    const over = await get(`campaignIds=${many(501)}`)
+    expect(over.statusCode).toBe(400)
+    expect(over.json().error).toMatch(/^campaignIds: at most 500 ids/)
+    expect((await get(`adGroupIds=${'x'.repeat(65)}`)).statusCode).toBe(400)
   })
 })
 

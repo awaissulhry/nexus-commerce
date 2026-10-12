@@ -16,6 +16,7 @@
  */
 import prisma from '../../../db.js'
 import { adsReadMarkets } from '../ads-markets.service.js'
+import { mergeIds, type ScopeIdLists } from '../ads-scope-lists.js'
 import { strategyMarket } from '../ads-strategy/bids.js'
 import { AMAZON_MIN_BUDGET_CENTS } from '../brain/harvest.js'
 import type { TermDecision } from '../brain/terms.js'
@@ -33,7 +34,11 @@ export const MAX_PAGE_SIZE = 500
 export const MAX_IDS = 5000
 const DAY = 86_400_000
 
-export interface CandidatesQuery {
+/**
+ * The scope: market, product (its family), portfolio, campaign, ad group — each also a list (the scope filter, 2026-10-12:
+ * `productIds` … merged with the singular; OR inside a list, AND across lists).
+ */
+export interface CandidatesQuery extends ScopeIdLists {
   market: string
   productId?: string | null
   portfolioId?: string | null
@@ -315,10 +320,11 @@ function requestRow(c: Context, w: Waiting, productName: string): HarvestCandida
   }
 }
 
-/** Every row of one market (all states), with what the totals need. */
-export async function marketRows(market: string, opts: { productId?: string | null; now?: Date } = {}): Promise<{ facts: MarketFacts; rows: HarvestCandidateRow[] } | { error: string; status: 400 | 404 }> {
+/** Every row of one market (all states), with what the totals need; `productId` / `productIds` narrow it to their families. */
+export async function marketRows(market: string, opts: { productId?: string | null; productIds?: readonly string[] | null; now?: Date } = {}): Promise<{ facts: MarketFacts; rows: HarvestCandidateRow[] } | { error: string; status: 400 | 404 }> {
   const now = opts.now ?? new Date()
-  const facts = await loadMarketFacts(market, { productId: opts.productId ?? null, now })
+  const products = mergeIds(opts.productId, opts.productIds)
+  const facts = await loadMarketFacts(market, { productIds: products, now })
   if ('error' in facts) return facts
   const [reach, waiting] = await Promise.all([harvestRuleReach(facts.market), openHarvestRequests([facts.market])])
   // The brain's own open requests per record (a pair it asked, a new campaign it asked).
@@ -353,7 +359,7 @@ export async function marketRows(market: string, opts: { productId?: string | nu
   }
   // M4 — every request that waits is a WAITING row, also when its term has no candidate row today.
   const listed = new Set(rows.map((r) => r.id))
-  const missing = [...waiting.entries()].filter(([cid, w]) => !listed.has(cid) && w.market === facts.market && w.op === 'harvest' && (!opts.productId || facts.products.has(w.productId) || w.productId === opts.productId))
+  const missing = [...waiting.entries()].filter(([cid, w]) => !listed.has(cid) && w.market === facts.market && w.op === 'harvest' && (!products || facts.products.has(w.productId) || products.includes(w.productId)))
   if (missing.length) {
     const names = new Map((await prisma.product.findMany({ where: { id: { in: [...new Set(missing.map(([, w]) => w.productId))] } }, select: { id: true, name: true, sku: true } })).map((p) => [p.id, p.sku || p.name || p.id]))
     for (const [, w] of missing) rows.push(requestRow(ctx, w, facts.products.get(w.productId)?.name ?? names.get(w.productId) ?? w.productId))
@@ -366,14 +372,25 @@ const SORTS: Record<string, (r: HarvestCandidateRow) => number | string> = {
   cpc: (r) => r.metrics.cpcCents ?? 0, term: (r) => r.term, state: (r) => ALL_STATES.indexOf(r.state), product: (r) => r.product.name.toLowerCase(),
 }
 
-/** The rows the scope keeps (market, product, portfolio, campaign, ad group, kind, words) — the tiles count these. */
-function inScope(r: HarvestCandidateRow, q: CandidatesQuery): boolean {
-  if (q.kind && r.kind !== q.kind) return false
-  if (q.q && !r.term.includes(q.q.trim().toLowerCase())) return false
-  if (q.portfolioId && !r.sources.some((s) => s.portfolio?.id === q.portfolioId) && !(r.destination?.kind === 'existing' && r.destination.portfolio?.id === q.portfolioId)) return false
-  if (q.campaignId && !r.sources.some((s) => s.campaign.id === q.campaignId) && !(r.destination?.kind === 'existing' && r.destination.campaign.id === q.campaignId)) return false
-  if (q.adGroupId && !r.sources.some((s) => s.adGroup.id === q.adGroupId)) return false
-  return true
+/**
+ * The rows the scope keeps (market, product, portfolio, campaign, ad group, kind, words) — the tiles count these. A
+ * portfolio or campaign: any source, or the existing destination, is one of them; an ad group: any source is one of them
+ * (each dimension a list since the scope filter, 2026-10-12: OR inside, AND across).
+ */
+function inScope(q: CandidatesQuery): (r: HarvestCandidateRow) => boolean {
+  const portfolios = mergeIds(q.portfolioId, q.portfolioIds)
+  const campaigns = mergeIds(q.campaignId, q.campaignIds)
+  const adGroups = mergeIds(q.adGroupId, q.adGroupIds)
+  const text = q.q?.trim().toLowerCase()
+  return (r) => {
+    if (q.kind && r.kind !== q.kind) return false
+    if (text && !r.term.includes(text)) return false
+    const dest = r.destination?.kind === 'existing' ? r.destination : null
+    if (portfolios && !r.sources.some((s) => !!s.portfolio && portfolios.includes(s.portfolio.id)) && !(dest?.portfolio && portfolios.includes(dest.portfolio.id))) return false
+    if (campaigns && !r.sources.some((s) => campaigns.includes(s.campaign.id)) && !(dest && campaigns.includes(dest.campaign.id))) return false
+    if (adGroups && !r.sources.some((s) => adGroups.includes(s.adGroup.id))) return false
+    return true
+  }
 }
 
 export function totalsOf(rows: readonly HarvestCandidateRow[], now: Date): CandidateTotals {
@@ -407,10 +424,11 @@ export async function harvestCandidates(q: CandidatesQuery, opts: { now?: Date; 
   const skipped: CandidatesAnswer['skipped'] = []
   let dataDay: string | null = null
   let windowDays: number | null = null
+  const products = mergeIds(q.productId, q.productIds)
   for (const market of markets) {
-    const got = await marketRows(market, { productId: q.productId ?? null, now })
+    const got = await marketRows(market, { productIds: products, now })
     if ('error' in got) {
-      if (q.productId && got.status === 404) return got
+      if (products && got.status === 404) return got
       continue
     }
     all.push(...got.rows)
@@ -424,7 +442,7 @@ export async function harvestCandidates(q: CandidatesQuery, opts: { now?: Date; 
       ? { market: got.facts.market, by: 'strategy', source: g.source, minOrders: g.minOrders, minClicks: g.minClicks, maxAcosPct: g.maxAcosPct, windowDays: g.windowDays }
       : { market: got.facts.market, by: 'brain', source: null, minOrders: null, minClicks: null, maxAcosPct: null, windowDays: got.facts.windowDays })
   }
-  const scoped = all.filter((r) => inScope(r, q))
+  const scoped = all.filter(inScope(q))
   const owner = q.owner?.toUpperCase() ?? null
   const filtered = scoped.filter((r) => wanted.includes(r.state) && (!owner || r.owner.kind === owner))
   const sortRaw = (q.sort ?? '-orders').trim()

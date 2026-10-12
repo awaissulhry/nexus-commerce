@@ -7,6 +7,7 @@
  * CM-12: Min/Max Bid saved from the detail page goes through `/guardrails`, which no longer writes back its own copy
  *        of `dynamicBidding` on a bounds-only call (that copy put back a Target ACoS saved at the same moment).
  * CM-21: `GET /advertising/portfolios?marketplace=` lists stored portfolios only under their own profile's market.
+ * Scope filter (2026-10-12): `GET /advertising/scope-options` names every ad group not archived (its campaign, status).
  *
  * On a real PostgreSQL (PGlite) with the real advertising routes. Amazon is a stub; fake ids only.
  */
@@ -149,5 +150,23 @@ describe('CM-21 — stored portfolios under their own market', () => {
     const res = await app.inject({ method: 'GET', url: '/api/advertising/portfolios' })
     const rows = (res.json() as { portfolios: Array<{ portfolioId: string; marketplace: string }> }).portfolios
     expect(rows.map((p) => [p.portfolioId, p.marketplace])).toEqual([['1001', 'IT'], ['2001', 'DE'], ['local-pf-local-FR-boots', 'FR']])
+  })
+})
+
+describe('Scope filter (2026-10-12) — scope-options names the ad groups', () => {
+  it('every ad group not archived, with its campaign and status; nothing else of the answer changes', async () => {
+    await withWorkspace(business, async () => {
+      await db().adGroup.create({ data: { id: 'g-paused', campaignId: 'c-1f', name: 'g-paused', status: 'PAUSED' } })
+      await db().adGroup.create({ data: { id: 'g-archived', campaignId: 'c-1f', name: 'g-archived', status: 'ARCHIVED' } })
+    })
+    const res = await app.inject({ method: 'GET', url: '/api/advertising/scope-options' })
+    expect(res.statusCode).toBe(200)
+    const body = res.json() as Record<string, unknown> & { adGroups: Array<Record<string, unknown>> }
+    expect(body.adGroups).toEqual([
+      { id: 'g-big', name: 'g-big', campaignId: 'c-1f', status: 'ENABLED' },
+      { id: 'g-paused', name: 'g-paused', campaignId: 'c-1f', status: 'PAUSED' },
+      { id: 'g-small', name: 'g-small', campaignId: 'c-1f', status: 'ENABLED' },
+    ])
+    expect(Object.keys(body).sort()).toEqual(['adGroups', 'campaigns', 'campaignsWithoutPortfolio', 'portfolios', 'productLines', 'totalCampaigns', 'unnamedAdRows'])
   })
 })

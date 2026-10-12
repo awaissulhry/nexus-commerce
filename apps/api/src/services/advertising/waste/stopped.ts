@@ -26,7 +26,7 @@ import {
 } from './pure.js'
 import {
   blocksNow, inScope, negativesInScope, ownerOfNegative, placeRefs, scopedFacts, servingPlaces,
-  type TargetFact, type WasteFacts, type WasteScope,
+  type ResolvedScope, type TargetFact, type WasteFacts, type WasteScope,
 } from './read.js'
 
 export type StoppedState = 'KEPT_PAUSED' | 'PAUSED' | 'NEGATED' | 'TURNED_ON_ELSEWHERE' | 'NOT_AT_AMAZON'
@@ -78,7 +78,7 @@ const FINAL = 'Final: Amazon archives a removed negative; it can only be added a
  * The stops of the scope: `rows` in places that run, `idle` in places that do not (a paused campaign or ad group: a
  * negative there blocks nothing now). With `s.idle` (one row's detail) every stop is a row.
  */
-export function buildStoppedRows(f: WasteFacts, s: WasteScope & { root?: string | null; idle?: boolean }): { rows: StoppedRow[]; idle: StoppedRow[] } {
+export function buildStoppedRows(f: WasteFacts, s: ResolvedScope): { rows: StoppedRow[]; idle: StoppedRow[] } {
   const rows: StoppedRow[] = []
   const idle: StoppedRow[] = []
   const holdRef = (by: string | null): Ref => (by ? refOfOwner(ownerOfActor(by, f.names)) : { id: 'person', name: 'You' })
@@ -184,7 +184,7 @@ function showMatches(r: StoppedRow, show: StoppedShow): boolean {
 export async function readStopped(q: StoppedQuery, now: Date = new Date()): Promise<StoppedAnswer> {
   const out = await scopedFacts(q, now)
   if ('error' in out) return out
-  const built = out.facts.map((f) => buildStoppedRows(f, { ...q, root: out.root }))
+  const built = out.facts.map((f) => buildStoppedRows(f, { ...q, roots: out.roots }))
   const rows = built.flatMap((b) => b.rows)
   const idle = built.flatMap((b) => b.idle)
   const filtered = filterStopped(rows, q.owner, q.q)

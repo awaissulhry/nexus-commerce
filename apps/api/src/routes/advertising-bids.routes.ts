@@ -4,6 +4,10 @@
  *   GET /api/advertising/bids?market=&productId=&campaignId=&adGroupId=&owner=&status=
  *       → { rows: BidRow[], totals }
  *
+ *   scope    market, portfolioId (the campaign's; Amazon's id), productId (its line), campaignId, adGroupId, and (scope
+ *            filter, 2026-10-12) portfolioIds, productIds, campaignIds, adGroupIds: comma-separated, at most 500 each; a
+ *            singular is a list of one merged with its plural; OR inside a list, AND across lists. The rows and the
+ *            totals follow it (bid-delivery.ts bidScopeWhere).
  *   owner    a kind (BRAIN · RULE · PLAN · PERSON · ENGINE · NONE, any case) or an owner's id (a rule's id, brain,
  *            auto-bid, you): narrows the rows, never the totals
  *   status   live (default: the target, its ad group and its campaign enabled) · all (everything not archived)
@@ -34,6 +38,7 @@ import { z } from 'zod'
 import { FIELDS } from '@nexus/shared/permissions'
 import { financialPayloadCopy } from '../lib/auth/field-filter.js'
 import type { ResolvedPermissions } from '../lib/auth/rbac.js'
+import { ID_LIST } from '../services/advertising/ads-scope-lists.js'
 import { BID_ROWS_MONEY, readBidRows } from '../services/advertising/bid-rows.service.js'
 import { readBidCursor } from '../services/advertising/bid-delivery.js'
 import { SUGGESTED_MONEY, readSuggestedBids } from '../services/advertising/bid-suggested.service.js'
@@ -41,9 +46,14 @@ import { SUGGESTED_MONEY, readSuggestedBids } from '../services/advertising/bid-
 const id = z.string().trim().min(1).max(64)
 const BIDS_QUERY = z.object({
   market: z.string().trim().toUpperCase().min(2).max(20).optional(),
+  portfolioId: id.optional(),
   productId: id.optional(),
   campaignId: id.optional(),
   adGroupId: id.optional(),
+  portfolioIds: ID_LIST.optional(),
+  productIds: ID_LIST.optional(),
+  campaignIds: ID_LIST.optional(),
+  adGroupIds: ID_LIST.optional(),
   owner: z.string().trim().min(1).max(64).optional(),
   status: z.enum(['live', 'all']).default('live'),
 }).strict()

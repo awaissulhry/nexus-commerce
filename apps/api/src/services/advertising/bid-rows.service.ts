@@ -24,10 +24,13 @@
  * crons lives on the scheduler and is not read here. The account dial (Auto · Ask me · Off) is not an owner: under "Ask
  * me" the owner asks instead of writing.
  *
- * Scope: market, productId (its ad groups, the product line expanded), campaignId, adGroupId; `owner` narrows the rows (a
- * kind or an owner's id) and never the totals, so a count reproduces its own rows. `status=live` (default): the target,
- * its ad group and its campaign ENABLED; `all`: everything not archived. Another business's campaign, ad group or
- * product reads as not found. Money is in cents of the campaign's currency, under the keys BID_ROWS_MONEY names.
+ * Scope: market, productId (its ad groups, the product line expanded), portfolioId (the campaign's), campaignId, adGroupId
+ * — and since the scope filter (2026-10-12) their lists portfolioIds, productIds, campaignIds, adGroupIds (OR inside a
+ * list, AND across; a singular is a list of one: bid-delivery.ts bidScopeWhere, the one where of the rows and the
+ * cursor); `owner` narrows the rows (a kind or an owner's id) and never the totals, so a count reproduces its own rows.
+ * `status=live` (default): the target, its ad group and its campaign ENABLED; `all`: everything not archived. Another
+ * business's campaign, ad group, portfolio or product reads as not found. Money is in cents of the campaign's currency,
+ * under the keys BID_ROWS_MONEY names.
  *
  * Each row says its market (Campaign.marketplace) and currency: the currency Amazon bills the market's ads account in
  * (ads-profile-facts.service.ts adsProfileCurrency, for the profile ads-profile-resolver.ts serves the market with), else
@@ -48,7 +51,7 @@ import { microsToCents } from '../ads-core/metrics-math.js'
 import { ruleMatchesScope } from '../automation-rule-scope.js'
 import { engineMode } from '../automation/engine-switch.service.js'
 import { classifyActor } from './ads-engine-actors.js'
-import { readBidDeliveries, type BidDelivery } from './bid-delivery.js'
+import { bidScopeWhere, readBidDeliveries, type BidDelivery, type BidScopeQuery } from './bid-delivery.js'
 import { resolveAssignedCampaignIds } from './ads-rule-scope-resolver.js'
 import { expandProductScope } from './ads-scope-reach.js'
 import { strategyBidReader, type StrategyTarget } from './ads-strategy/bids.js'
@@ -146,13 +149,8 @@ export interface BidRowsTotals {
   truncated: boolean
 }
 
-export interface BidRowsQuery {
-  market?: string | null
-  productId?: string | null
-  campaignId?: string | null
-  adGroupId?: string | null
+export interface BidRowsQuery extends BidScopeQuery {
   owner?: string | null
-  status?: 'live' | 'all'
   /**
    * The rows' order: `spend` (what costs first, then the most clicked) for a person who sees ad spend; `name` (campaign,
    * ad group, words) for one who does not, so the order never gives the spend ranking away. The route decides it.
@@ -186,35 +184,13 @@ const acosPctOf = (spend: number, sales: number) => (sales > 0 ? round1((spend /
 /** A link into the ads pages; the web puts the business's prefix (/w/<id>) in front, as for every ads link the API gives. */
 const href = (...parts: string[]) => `/marketing/ads/${parts.map(encodeURIComponent).join('/')}`
 
-const notFound = (error: string): BidRowsAnswer => ({ ok: false, status: 404, error })
-
 export async function readBidRows(q: BidRowsQuery, now: Date = new Date()): Promise<BidRowsAnswer> {
   // ── Scope: another business's ids read as not found (the workspace's own rows only). ──
-  if (q.campaignId && !(await prisma.campaign.findUnique({ where: { id: q.campaignId }, select: { id: true } }))) return notFound(`No campaign ${q.campaignId} in this business.`)
-  if (q.adGroupId) {
-    const g = await prisma.adGroup.findUnique({ where: { id: q.adGroupId }, select: { campaignId: true } })
-    if (!g || (q.campaignId && g.campaignId !== q.campaignId)) return notFound(`No ad group ${q.adGroupId} in this business${q.campaignId ? ' and campaign' : ''}.`)
-  }
-  let productIds: string[] | null = null
-  if (q.productId) {
-    if (!(await prisma.product.findUnique({ where: { id: q.productId }, select: { id: true } }))) return notFound(`No product ${q.productId} in this business.`)
-    productIds = await expandProductScope(q.productId)
-  }
-  const market = q.market?.trim().toUpperCase() || null
-  const live = q.status !== 'all'
-  const state = live ? ('ENABLED' as const) : { not: 'ARCHIVED' as const }
+  const scope = await bidScopeWhere(q)
+  if ('error' in scope) return scope
 
   const found = await prisma.adTarget.findMany({
-    where: {
-      isNegative: false,
-      status: state,
-      adGroup: {
-        ...(q.adGroupId ? { id: q.adGroupId } : {}),
-        status: state,
-        ...(productIds ? { productAds: { some: { productId: { in: productIds } } } } : {}),
-        campaign: { status: state, ...(market ? { marketplace: market } : {}), ...(q.campaignId ? { id: q.campaignId } : {}) },
-      },
-    },
+    where: scope.where,
     select: {
       id: true, expressionValue: true, expressionType: true, kind: true, bidCents: true, status: true, suppressedFromBidCents: true,
       adGroup: {

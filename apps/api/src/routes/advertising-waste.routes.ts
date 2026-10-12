@@ -5,9 +5,13 @@
  * this one file: READ (NREAD), WRITE (NWRITE), RULES (NRULES); each block stands alone.
  *
  * Every read: ads.view (permissions-manifest.ts), `Cache-Control: no-store`, the workspace is the request's (another
- * business's campaign, ad group, product or row is a 404). Money is in cents of the row's currency under WASTE_MONEY keys,
- * stripped for a person without financials.adspend.view (the same switch as the response filter, field-filter.ts); such a
- * person's rows are never ordered by a money key (the order would give the ranking away). Hrefs carry no /w/<id> prefix.
+ * business's campaign, ad group, portfolio, product or row is a 404). The scope of rows, rows/ids, stopped and history:
+ * market, portfolioId, productId (its family), campaignId, adGroupId and (scope filter, 2026-10-12) their lists
+ * portfolioIds, productIds, campaignIds, adGroupIds — comma-separated, at most 500 each, a singular merged in as a list of
+ * one; OR inside a list, AND across lists; the rows and the tiles follow it. Money is in cents of the row's currency
+ * under WASTE_MONEY keys, stripped for a person without financials.adspend.view (the same switch as the response filter,
+ * field-filter.ts); such a person's rows are never ordered by a money key (the order would give the ranking away). Hrefs
+ * carry no /w/<id> prefix.
  *
  * WRITE block (lane NWRITE) — the page's writes, through the same code as Claude's Nexus tools
  * (services/advertising/waste/write.ts; the ask() pattern of advertising-brain.routes.ts). The person who clicks Send is
@@ -67,6 +71,7 @@ import { previewWasteRule } from '../services/advertising/waste-rules/preview.js
 import { setWasteRuleArchived, setWasteRulesMode } from '../services/advertising/waste-rules/write.js'
 import { STARTERS } from '../services/advertising/waste-rules/pure.js'
 import type { AdsActor } from '../services/advertising/ads-mutation.service.js'
+import { ID_LIST } from '../services/advertising/ads-scope-lists.js'
 
 const NO_PERMISSIONS: ResolvedPermissions = { isOwner: false, permissions: new Set() }
 
@@ -105,6 +110,10 @@ const SCOPE = {
   productId: id.optional(),
   campaignId: id.optional(),
   adGroupId: id.optional(),
+  portfolioIds: ID_LIST.optional(),
+  productIds: ID_LIST.optional(),
+  campaignIds: ID_LIST.optional(),
+  adGroupIds: ID_LIST.optional(),
 }
 const PAGE = {
   q: z.string().trim().max(200).optional(),

@@ -15,6 +15,7 @@
  *              names, the harvest records (every actor), the source pauses, the stored PHRASE destinations.
  */
 import prisma from '../../../db.js'
+import { mergeIds } from '../ads-scope-lists.js'
 import { strategyMarket } from '../ads-strategy/bids.js'
 import { HV_DEST_GRAINS } from '../harvest-destination.service.js'
 import { resolveCampaignOwnership, productFamily } from '../brain/ownership.js'
@@ -124,18 +125,22 @@ export async function marketProductRoots(market: string): Promise<string[]> {
 }
 
 /**
- * One market's facts, for every product that owns a campaign there (or the one product asked: its family root). Reads
- * only. `productId` narrows the load (a family member resolves to its root).
+ * One market's facts, for every product that owns a campaign there (or the products asked: their family roots). Reads
+ * only. `productId` narrows the load (a family member resolves to its root); `productIds` (the scope filter, 2026-10-12)
+ * narrows it to several, merged with `productId` — the first that is not this business's (or has no single family) is
+ * the 404, named.
  */
-export async function loadMarketFacts(market: string, opts: { productId?: string | null; now?: Date } = {}): Promise<MarketFacts | { error: string; status: 400 | 404 }> {
+export async function loadMarketFacts(market: string, opts: { productId?: string | null; productIds?: readonly string[] | null; now?: Date } = {}): Promise<MarketFacts | { error: string; status: 400 | 404 }> {
   const code = strategyMarket(market)
   if (!code) return { error: `${market} is not a market code`, status: 400 }
   const now = opts.now ?? new Date()
+  const asked = mergeIds(opts.productId, opts.productIds)
   let roots: string[]
-  if (opts.productId) {
-    const family = await productFamily(opts.productId)
-    if (!family) return { error: `Product ${opts.productId} was not found in this business, or it has no single family.`, status: 404 }
-    roots = [family.root]
+  if (asked) {
+    const families = await Promise.all(asked.map((id) => productFamily(id)))
+    const gone = asked.find((_, i) => !families[i])
+    if (gone) return { error: `Product ${gone} was not found in this business, or it has no single family.`, status: 404 }
+    roots = [...new Set(families.map((f) => f!.root))]
   } else roots = await marketProductRoots(code)
 
   const [enrollments, overrides] = roots.length ? await Promise.all([
@@ -166,7 +171,7 @@ export async function loadMarketFacts(market: string, opts: { productId?: string
     campaignIds.length ? prisma.adGroup.findMany({ where: { campaignId: { in: campaignIds } }, select: { id: true, name: true, campaignId: true } }) : Promise.resolve([]),
     prisma.amazonAdsPortfolio.findMany({ select: { externalPortfolioId: true, name: true, updatedAt: true }, orderBy: { updatedAt: 'asc' } }),
     roots.length ? prisma.product.findMany({ where: { id: { in: roots } }, select: { id: true, name: true, sku: true } }) : Promise.resolve([]),
-    prisma.adsBrainHarvest.findMany({ where: { marketplace: code, ...(opts.productId ? { productId: { in: roots } } : {}) }, select: RECORD_SELECT }),
+    prisma.adsBrainHarvest.findMany({ where: { marketplace: code, ...(asked ? { productId: { in: roots } } : {}) }, select: RECORD_SELECT }),
     prisma.adsHarvestSourcePause.findMany({ select: { adGroupId: true, pausedBy: true, createdAt: true } }),
     prisma.adsHarvestDestination.findMany({ select: { scopeGrain: true, scopeId: true, matchType: true, adGroupId: true, negateAtSource: true } }),
   ])
