@@ -1338,8 +1338,9 @@ export class OutboundSyncService {
     }
     // MX.1 (D-MX4) — a PRICE push that carries no sale (a legacy producer) takes the listing's STORED sale + window, so
     // `buildAmazonListingPatch`'s `op:replace` on purchasable_offer re-emits it instead of wiping it (report 19 §5.9).
+    // A business row too: a first business offer's replace carries Nexus's normal offer, its sale with its dates.
     let saleWindow: { start: string | null; end: string | null } | null = null;
-    if (payload.price !== undefined && payload.salePrice === undefined && cl && queueItem.channelListingId && cl.salePrice != null) {
+    if ((payload.price !== undefined || queueItem.syncType === BUSINESS_PRICE_SYNC_TYPE) && payload.salePrice === undefined && cl && queueItem.channelListingId && cl.salePrice != null) {
       try {
         const window = (await readSaleWindows(prisma as never, [queueItem.channelListingId])).get(queueItem.channelListingId);
         saleWindow = window ?? null;
@@ -1490,15 +1491,16 @@ export class OutboundSyncService {
     let businessOutcome: BusinessSendOutcome | null = null;
     // The instances the normal push read just before it sent (its merge leaves the business instance alone).
     let preLive: Array<Record<string, unknown>> | undefined;
-    const sendBusiness = async (sid: string, normalPrice: number | null, lane: 'row' | 'follow') => {
+    let preLiveType: string | null = null;
+    const sendBusiness = async (sid: string, normalPrice: number | null, lane: 'row' | 'follow', normalRefusal: string | null = null) => {
       let currency: string;
       try { currency = await marketCurrency('AMAZON', cl.marketplace); } catch (err) {
         return { ok: false, itemLevel: true, status: 'REFUSED', line: `The business price was not sent: ${err instanceof Error ? err.message : String(err)}` } as BusinessSendOutcome;
       }
       return sendAmazonBusinessOffer({
         lane, listingId: queueItem.channelListingId ?? null, sellerId: sid, sku, marketplaceId: resolveAmazonMarketplaceId(marketplaceId), productType, currency,
-        setting: businessSetting, normalPrice, facts: offerFacts,
-        ...(lane === 'follow' ? { live: preLive } : {
+        setting: businessSetting, normalPrice, facts: offerFacts, normalRefusal,
+        ...(lane === 'follow' ? { live: preLive, liveProductType: preLiveType } : {
           // A first business offer's replace carries the normal offer: only while the listing is as this job read it.
           unchanged: async () => (await prisma.channelListing.findUnique({ where: { id: queueItem.channelListingId }, select: { version: true } }))?.version === cl.version,
         }),
@@ -1520,6 +1522,15 @@ export class OutboundSyncService {
       // The normal price the listing holds (its own price columns, as the job-lane facts read them — the number a price
       // push sends) is what a percent-off price follows.
       const held = offerFacts.values.our_price.price;
+      // A first business offer's replace carries that normal price: held to the same floor/ceiling and Amazon bounds a
+      // price push is (a merge or a removal does not send it).
+      let normalRefusal: string | null = null;
+      if (held != null) {
+        const refusal = await priceRefusalFor({ price: held, productId: product?.id, channel: 'Amazon', sku, market: { channel: 'AMAZON', marketplace: cl?.marketplace ?? marketplaceId } });
+        if (refusal) normalRefusal = refusal;
+        else normalRefusal = amazonSellerBoundsRefusal({ price: held, salePrice: offerFacts.values.sale?.start && offerFacts.values.sale?.end ? offerFacts.values.sale.price : null,
+          min: offerFacts.values.minimum_seller_allowed_price, max: offerFacts.values.maximum_seller_allowed_price, sku });
+      }
       const r = await listingPublishService.publish({
         channel: "AMAZON", marketplaceId, sku, productId: product?.id ?? null,
         digest: digestPayload({ business: businessSetting, normalPrice: held }),
@@ -1527,8 +1538,10 @@ export class OutboundSyncService {
         resolveSeller: async () => sellerId ? { id: sellerId } : { error: "AMAZON_SELLER_ID is not configured. Set the env var before enabling outbound sync." },
         execute: async ({ sellerId: sid, mode }) => {
           if (mode !== 'live') return { ok: true };
-          businessOutcome = await sendBusiness(sid, held, 'row');
-          return { ok: businessOutcome.ok, ...(businessOutcome.ok ? {} : { error: businessOutcome.line }), ...(businessOutcome.itemLevel ? { itemLevel: true } : {}) };
+          businessOutcome = await sendBusiness(sid, held, 'row', normalRefusal);
+          // Nothing sent (deferred) or this listing's own data: never a failure of the market (the circuit).
+          const itemOnly = businessOutcome.itemLevel || businessOutcome.status === 'DEFERRED';
+          return { ok: businessOutcome.ok, ...(businessOutcome.ok ? {} : { error: businessOutcome.line }), ...(itemOnly ? { itemLevel: true } : {}) };
         },
       });
       const outcome = businessOutcome as BusinessSendOutcome | null;
@@ -1606,7 +1619,7 @@ export class OutboundSyncService {
         if (offerPatchAt >= 0 && mode === 'live') {
           const offerMarketplaceId = resolveAmazonMarketplaceId(marketplaceId);
           const live = await readAmazonOfferLive({ sellerId: sid, sku, marketplaceId: offerMarketplaceId });
-          if (live.read === 'ok') preLive = live.instances;
+          if (live.read === 'ok') { preLive = live.instances; preLiveType = live.productType; }
           if (live.read === 'failed') {
             // Never the blind replace: without the live offer it could clear the sale and every part Nexus does not set.
             offerFailure = { errorCode: 'AMAZON_OFFER_READ_FAILED', retryable: true };

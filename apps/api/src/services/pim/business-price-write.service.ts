@@ -279,7 +279,7 @@ async function queueBusinessRow(
  * Amazon holds and sends only a difference (nothing when equal). Used after a percent-off follow that could not finish
  * (`syncToAmazon`) and by `queueHeldBusinessSends`. Listings that cannot be sent to now are skipped.
  */
-export async function queueBusinessSends(input: { listingIds: string[]; actor: string; source: string; holdMs?: number }): Promise<string[]> {
+export async function queueBusinessSends(input: { listingIds: string[]; actor: string; source: string; holdMs?: number; staggerMs?: number }): Promise<string[]> {
   if (!input.listingIds.length) return []
   const listings = await prisma.channelListing.findMany({
     where: { id: { in: [...new Set(input.listingIds)] }, channel: 'AMAZON' },
@@ -288,7 +288,9 @@ export async function queueBusinessSends(input: { listingIds: string[]; actor: s
   const queued: QueuedRow[] = []
   for (const l of listings) {
     if (l.product?.isParent || businessHeld(l)) continue
-    queued.push(await prisma.$transaction((tx) => queueBusinessRow(tx, l, { actor: input.actor, source: input.source, holdMs: input.holdMs ?? FOLLOWER_PRICE_HOLD_MS })))
+    // A batch (the nightly check) is spread out, so Amazon's rate limit and the market's circuit never see a burst.
+    const holdMs = (input.holdMs ?? FOLLOWER_PRICE_HOLD_MS) + queued.length * (input.staggerMs ?? 0)
+    queued.push(await prisma.$transaction((tx) => queueBusinessRow(tx, l, { actor: input.actor, source: input.source, holdMs })))
   }
   if (queued.length) await fireOutboundJobs(queued, { source: input.source })
   return queued.map((r) => r.id)
@@ -308,7 +310,12 @@ export async function queueHeldBusinessSends(input: { listingIds?: string[]; pro
       where: { ...scope, channel: 'AMAZON', OR: [{ businessPriceRule: { not: null } }, { overrideHistory: { some: { fieldName: 'businessPrice' } } }] },
       select: { id: true },
     })
-    return await queueBusinessSends({ listingIds: listings.map((l) => l.id), actor: input.actor, source: `BUSINESS_PRICE_${input.cause.toUpperCase()}` })
+    // A reopen replays the offer asynchronously on Amazon's side: the business send waits for it (5 minutes), and the
+    // nightly check covers what is still off after that.
+    return await queueBusinessSends({
+      listingIds: listings.map((l) => l.id), actor: input.actor, source: `BUSINESS_PRICE_${input.cause.toUpperCase()}`,
+      ...(input.cause === 'reopen' ? { holdMs: 5 * 60_000 } : {}), staggerMs: 2_000,
+    })
   } catch (err) {
     // A business send that cannot be queued here is queued by the next change or the next resume; it never fails the caller.
     const { logger } = await import('../../utils/logger.js')

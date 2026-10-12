@@ -100,8 +100,12 @@ export function amazonBusinessOfferPlan(input: {
     const { quantity_discount_plan: plan, ...rest } = input.wanted
     return { kind: 'merge', value: [plan === null && !held.quantity_discount_plan ? rest : input.wanted] }
   }
-  if (!liveNormalInstance(input.live, input.marketplaceId) || !input.normalRoot?.some((i) => ofMarket(i, input.marketplaceId) && audienceOf(i) === 'ALL')) {
+  const normal = liveNormalInstance(input.live, input.marketplaceId)
+  if (!normal || !input.normalRoot?.some((i) => ofMarket(i, input.marketplaceId) && audienceOf(i) === 'ALL')) {
     return { kind: 'refused', reason: 'Amazon holds no normal offer for this listing in this market, and a business price needs one, so nothing was sent.' }
+  }
+  if (normal.currency && normal.currency !== input.wanted.currency) {
+    return { kind: 'refused', reason: `Amazon holds the normal offer in ${normal.currency}, not ${input.wanted.currency}, so no business offer was sent.` }
   }
   const { quantity_discount_plan: plan, ...rest } = input.wanted
   const others = input.normalRoot.filter((i) => !(ofMarket(i, input.marketplaceId) && audienceOf(i) === 'B2B'))

@@ -18,8 +18,9 @@
  * The same scan VERIFIES what Nexus keeps: for each listing with a business setting, Amazon's business offer against
  * the one Nexus sends (`amazonBusinessLive` on the listing: MATCH, DIFFERS or MISSING, with Amazon's price) — the
  * read-back of the step 4 sends, a day at most after them. Nexus is where the business price lives (Owner 10-01: Nexus
- * is the PIM): a business offer Amazon holds differently (a Seller Central edit, an older page's feed that dropped it)
- * gets ONE business send queued, which puts Nexus's back (or says why it cannot).
+ * is the PIM): a business offer Amazon holds differently (a Seller Central edit, an older page's feed that dropped it),
+ * or still holds after a person removed it in Nexus, gets ONE business send queued, which puts Nexus's back (or says
+ * why it cannot). A send Amazon refused is not queued again until the setting or the normal price changes.
  *
  * Reads Amazon, writes Nexus only. Run nightly after the schema refresh (`jobs/amazon-business-offer-adopt.job.ts`).
  */
@@ -35,6 +36,7 @@ import { listingSendSku } from '../listings/listing-send-sku.js'
 import { queueBusinessSends, writeBusinessPrices, type BusinessPriceWriteTarget } from '../pim/business-price-write.service.js'
 import { readAmazonOfferFacts } from './offer-facts.js'
 import { amazonBusinessElement, liveBusinessInstance, sameBusinessOffer, storedBusinessSetting } from './business-offer.js'
+import { businessSendSignature } from './business-offer-send.js'
 
 const record = (v: unknown): Record<string, any> | null => (v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, any> : null)
 const first = (v: unknown): Record<string, any> | null => (Array.isArray(v) ? record(v[0]) : null)
@@ -75,6 +77,8 @@ export interface AdoptCounts {
   verified: number; differs: number; missing: number
   /** Business sends queued to put Nexus's business price back where Amazon differs or holds none. */
   resent: number
+  /** Differences not queued again: Amazon refused this same send before (same setting, same normal price). */
+  stillRefused: number
   failedPages: number
 }
 
@@ -95,7 +99,7 @@ const MAX_PAGES = 500
 export async function adoptAmazonBusinessOffers(opts: { throttleMs?: number; label?: string } = {}): Promise<AdoptCounts> {
   const throttleMs = opts.throttleMs ?? 300
   const label = opts.label ?? 'amazon-business-offer-adopt'
-  const counts: AdoptCounts = { markets: 0, scanned: 0, found: 0, adopted: 0, managed: 0, noListing: 0, unreadable: 0, refused: 0, verified: 0, differs: 0, missing: 0, resent: 0, failedPages: 0 }
+  const counts: AdoptCounts = { markets: 0, scanned: 0, found: 0, adopted: 0, managed: 0, noListing: 0, unreadable: 0, refused: 0, verified: 0, differs: 0, missing: 0, resent: 0, stillRefused: 0, failedPages: 0 }
   for (const connection of (await listActiveConnections('AMAZON')).filter(isOwnConnection)) {
     const kept = await prisma.sellerReferenceLabel.findMany({ where: { channel: 'AMAZON', connectionId: connection.id, fieldKey: OFFER_AUDIENCE_FIELD_KEY }, select: { marketplace: true, labels: true } })
     const markets = [...new Set(kept.filter((r) => record(r.labels) && 'B2B' in (r.labels as object)).map((r) => r.marketplace.toUpperCase()))].sort()
@@ -114,9 +118,10 @@ export async function adoptAmazonBusinessOffers(opts: { throttleMs?: number; lab
       counts.markets++
       const marketplaceId = amazonMarketplaceId(market)
       const targets: BusinessPriceWriteTarget[] = []
-      // The listings whose business price Nexus keeps here, by the SKU Amazon holds for them: verified, never copied over.
+      // The listings whose business price Nexus keeps here — a setting now, or one a person removed (an audit row) — by
+      // the SKU Amazon holds for them: verified, never copied over.
       const managedRows = await prisma.channelListing.findMany({
-        where: { channel: 'AMAZON', marketplace: market, channelConnectionId: connection.id, businessPriceRule: { not: null } },
+        where: { channel: 'AMAZON', marketplace: market, channelConnectionId: connection.id, OR: [{ businessPriceRule: { not: null } }, { overrideHistory: { some: { fieldName: 'businessPrice' } } }] },
         select: { ...CHANNEL_SKU_LISTING_SELECT, businessPriceRule: true, businessPricePercent: true, businessPrice: true, businessTiers: true, price: true, priceOverride: true, followMasterPrice: true, salePrice: true },
       })
       const managed = new Map(managedRows.flatMap((l) => {
@@ -125,6 +130,12 @@ export async function adoptAmazonBusinessOffers(opts: { throttleMs?: number; lab
       }))
       const seenManaged = new Set<string>()
       const resend: string[] = []
+      /** Queue a send for a difference — unless Amazon refused this very send before (same setting, same normal price). */
+      const differs = (l: typeof managedRows[number], setting: ReturnType<typeof storedBusinessSetting>, normal: number | null) => {
+        const last = record(record(l.platformAttributes)?.amazonBusinessSend)
+        if (last?.status === 'REFUSED' && last.signature === businessSendSignature(setting, normal)) { counts.stillRefused++; return }
+        resend.push(l.id)
+      }
       let pageToken: string | undefined
       let page = 0
       let complete = true
@@ -153,10 +164,12 @@ export async function adoptAmazonBusinessOffers(opts: { throttleMs?: number; lab
             const normal = readAmazonOfferFacts({ ...kept, marketplace: market }, 'job').values.our_price.price
             const price = setting ? businessPriceOf(setting, normal) : null
             const expected = setting && price != null ? amazonBusinessElement({ marketplaceId, currency: String(instance?.currency ?? ''), price, tiers: setting.tiers }) : null
-            const status: LiveStatus = !instance ? 'MISSING' : expected && sameBusinessOffer(instance, expected) ? 'MATCH' : 'DIFFERS'
+            // Nexus keeps none (a person removed it): Amazon should hold none either.
+            const status: LiveStatus = !setting ? (instance ? 'DIFFERS' : 'MATCH')
+              : !instance ? 'MISSING' : expected && sameBusinessOffer(instance, expected) ? 'MATCH' : 'DIFFERS'
             if (status === 'MATCH') counts.verified++; else if (status === 'DIFFERS') counts.differs++; else counts.missing++
             await recordAmazonBusinessLive(kept.id, { status, amazonPrice: priceOfInstance(instance), nexusPrice: price })
-            if (status !== 'MATCH') resend.push(kept.id)
+            if (status !== 'MATCH') differs(kept, setting, normal)
             continue
           }
           if (!instance) continue
@@ -166,7 +179,8 @@ export async function adoptAmazonBusinessOffers(opts: { throttleMs?: number; lab
           const match = await productForChannelSku(prisma, { channel: 'AMAZON', channelConnectionId: connection.id, marketplace: market, sku: item.sku })
           const listingId = match && match.ambiguous !== true ? (match as ChannelSkuProductMatch).listingId : null
           if (!listingId) { counts.noListing++; continue }
-          targets.push({ listingId, unguardedReason: 'amazon-business-offer-adopt', setting })
+          // Two Amazon SKUs that match one listing: the first wins (the second would only be a conflict).
+          if (!targets.some((t) => t.listingId === listingId)) targets.push({ listingId, unguardedReason: 'amazon-business-offer-adopt', setting })
         }
         pageToken = typeof answer?.pagination?.nextToken === 'string' ? answer.pagination.nextToken : undefined
         if (throttleMs > 0) await sleep(throttleMs) // the Listings Items API is rate-limited
@@ -176,13 +190,14 @@ export async function adoptAmazonBusinessOffers(opts: { throttleMs?: number; lab
       // A kept business price whose SKU Amazon did not list at all (a complete scan only): Amazon holds no offer for it.
       if (complete) {
         for (const l of managedRows) {
-          if (seenManaged.has(l.id)) continue
+          // Unseen: Amazon lists no offer for this SKU here. Nothing to remove for a removed one; missing for a kept one.
+          if (seenManaged.has(l.id) || !storedBusinessSetting(l)) continue
           counts.missing++
           await recordAmazonBusinessLive(l.id, { status: 'MISSING', amazonPrice: null, nexusPrice: null })
-          resend.push(l.id)
+          differs(l, storedBusinessSetting(l), readAmazonOfferFacts({ ...l, marketplace: market }, 'job').values.our_price.price)
         }
       }
-      if (resend.length) counts.resent += (await queueBusinessSends({ listingIds: resend, actor: 'amazon-business-offer-verify', source: 'BUSINESS_PRICE_VERIFY' })).length
+      if (resend.length) counts.resent += (await queueBusinessSends({ listingIds: resend, actor: 'amazon-business-offer-verify', source: 'BUSINESS_PRICE_VERIFY', staggerMs: 5_000 })).length
       if (!targets.length) continue
       // Nexus has kept a business price for these before (a person's audit row, or an earlier copy): never copied again.
       const touched = new Set((await prisma.channelListingOverride.findMany({
@@ -204,5 +219,5 @@ export async function adoptAmazonBusinessOffers(opts: { throttleMs?: number; lab
   return counts
 }
 
-/** The run's one line: `markets=2 scanned=568 found=5 adopted=5 managed=0 noListing=0 unreadable=0 refused=0 verified=0 differs=0 missing=0 failedPages=0`. */
+/** The run's one line: `markets=2 scanned=568 found=5 adopted=5 … resent=0 stillRefused=0 failedPages=0`, one key per count. */
 export const adoptSummary = (c: AdoptCounts) => Object.entries(c).map(([k, v]) => `${k}=${v}`).join(' ')

@@ -55,6 +55,9 @@ describe('amazonBusinessOfferPlan — only the business instance of this market 
     expect(amazonBusinessOfferPlan({ wanted: wanted(99.75), live: [{ ...all, marketplace_id: 'A1PA6795UKMFR9' }], marketplaceId: IT, normalRoot: [{ ...all, marketplace_id: 'A1PA6795UKMFR9' }] }).kind).toBe('refused')
     expect(amazonBusinessOfferPlan({ wanted: wanted(99.75), live: [all, { ...b2bLive(32.95), currency: 'GBP' }], marketplaceId: IT, normalRoot: [all] }).kind).toBe('refused')
   })
+  it('a first offer is refused when Amazon holds the normal offer in another currency (never a second normal offer)', () => {
+    expect(amazonBusinessOfferPlan({ wanted: wanted(99.75), live: [{ ...all, currency: 'GBP' }], marketplaceId: IT, normalRoot: [{ ...all, currency: 'GBP' }] }).kind).toBe('refused')
+  })
   it('another market\'s business offer is not this market\'s; one with no marketplace_id is (a single-market answer)', () => {
     expect(liveBusinessInstance([{ ...b2bLive(32.95), marketplace_id: 'A1PA6795UKMFR9' }], IT)).toBeNull()
     const { marketplace_id: _m, ...noMarket } = b2bLive(32.95)

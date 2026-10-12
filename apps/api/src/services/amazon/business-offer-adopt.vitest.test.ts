@@ -69,7 +69,7 @@ describe('adoptAmazonBusinessOffers', () => {
     await scoped(() => prisma.channelListing.update({ where: { id: ids[2] }, data: { platformAttributes: { keep: 'me' } } }))
     pages([item('TEST-AD-1', all(39.95), b2b(32.95, percentPlan)), item('TEST-AD-3', all(39.95))], [item('TEST-AD-2', all(39.95), b2b(30)), item('UNKNOWN-SKU', b2b(10))])
     const counts = await scoped(() => adoptAmazonBusinessOffers({ throttleMs: 0 }))
-    expect(adoptSummary(counts)).toBe('markets=1 scanned=4 found=2 adopted=1 managed=0 noListing=1 unreadable=0 refused=0 verified=0 differs=1 missing=0 resent=1 failedPages=0')
+    expect(adoptSummary(counts)).toBe('markets=1 scanned=4 found=2 adopted=1 managed=0 noListing=1 unreadable=0 refused=0 verified=0 differs=1 missing=0 resent=1 stillRefused=0 failedPages=0')
     expect(state.callAPI.mock.calls.map((c) => [c[0].path.sellerId, c[0].query.marketplaceIds[0], c[0].query.pageToken ?? null])).toEqual([['SELLER-1', IT, null], ['SELLER-1', IT, 'page-2']])
     const one = await rowOf(1)
     expect({ ...one, businessPrice: Number(one!.businessPrice) }).toMatchObject({ businessPriceRule: 'FIXED', businessPrice: 32.95, businessTiers: { type: 'percent', levels: [{ minQty: 2, value: 3 }, { minQty: 5, value: 5 }] } })
@@ -93,14 +93,25 @@ describe('adoptAmazonBusinessOffers', () => {
     expect((await businessRows(2)).filter((r) => r.syncStatus === 'PENDING')).toHaveLength(1)
   })
 
-  it('a person removed it: Amazon still shows the old offer while the removal is on its way — never copied back', async () => {
+  it('a person removed it: Amazon still shows the old offer — never copied back; the removal is checked and sent again', async () => {
     await scoped(async () => {
       await prisma.channelListing.update({ where: { id: ids[1] }, data: { businessPriceRule: null, businessPrice: null, businessTiers: Prisma.DbNull } })
       await prisma.channelListingOverride.create({ data: { channelListingId: ids[1], fieldName: 'businessPrice', previousValue: '32.95 · no tiers', newValue: null, reason: 'business price', changedBy: 'owner@example.test' } })
     })
     const counts = await scoped(() => adoptAmazonBusinessOffers({ throttleMs: 0 }))
-    expect(counts).toMatchObject({ adopted: 0, managed: 1 })
+    expect(counts).toMatchObject({ adopted: 0 })
     expect((await rowOf(1))!.businessPriceRule).toBeNull()
+    expect((await rowOf(1))!.platformAttributes).toMatchObject({ amazonBusinessLive: { status: 'DIFFERS', amazonPrice: 32.95, nexusPrice: null } })
+    expect((await businessRows(1)).filter((r) => r.syncStatus === 'PENDING')).toHaveLength(1)
+  })
+
+  it('a send Amazon refused is not queued again every night while nothing changed', async () => {
+    const setting = { rule: 'PERCENT_OFF', percent: 5, price: null, tiers: null }
+    await scoped(() => prisma.$executeRaw`UPDATE "ChannelListing" SET "platformAttributes" = jsonb_set(COALESCE("platformAttributes", '{}'::jsonb), '{amazonBusinessSend}', ${JSON.stringify({ status: 'REFUSED', line: 'refused', signature: JSON.stringify({ setting, normalPrice: 39.95 }) })}::jsonb, true) WHERE id = ${ids[2]}`)
+    await scoped(() => prisma.outboundSyncQueue.updateMany({ where: { channelListingId: ids[2], syncType: 'BUSINESS_PRICE_UPDATE' }, data: { syncStatus: 'CANCELLED' } }))
+    const counts = await scoped(() => adoptAmazonBusinessOffers({ throttleMs: 0 }))
+    expect(counts).toMatchObject({ stillRefused: 1 })
+    expect((await businessRows(2)).filter((r) => r.syncStatus === 'PENDING')).toHaveLength(0)
   })
 
   it('a managed listing Amazon does not list at all is MISSING (a complete scan only) and queued; an unreadable plan is never copied', async () => {

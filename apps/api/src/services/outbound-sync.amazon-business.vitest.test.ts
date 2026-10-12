@@ -158,6 +158,22 @@ describe('a business row sends the business offer alone', () => {
     expect(kept()).toMatchObject({ status: 'DEFERRED' })
   })
 
+  it('a first business offer keeps Nexus\'s running sale — with its dates — in the normal offer it carries', async () => {
+    m.read.mockResolvedValue(listing({ businessPriceRule: 'FIXED', businessPrice: 99, salePrice: 95 }))
+    m.windows.mockResolvedValue(new Map([['l', { start: '2026-10-01', end: '2026-10-31' }]]))
+    await service.syncToAmazon(businessRow())
+    const normal = m.offerPatch.mock.calls[0][0].value.find((i: any) => i.audience === 'ALL')
+    expect(normal.discounted_price).toEqual([{ schedule: [{ start_at: '2026-10-01', end_at: '2026-10-31', value_with_tax: 95 }] }])
+  })
+
+  it('a first business offer is not sent with a normal price outside the listing\'s own bounds', async () => {
+    m.read.mockResolvedValue(listing({ businessPriceRule: 'FIXED', businessPrice: 99, platformAttributes: { amazonOffer: { maximum_seller_allowed_price: 100 } }, price: 110, priceOverride: 110 }))
+    const result = await service.syncToAmazon(businessRow())
+    expect(m.offerPatch).not.toHaveBeenCalled()
+    expect(result).toMatchObject({ success: false, errorCode: 'AMAZON_BUSINESS_PRICE_REFUSED', retryable: false })
+    expect(result.message).toContain('its price may not go')
+  })
+
   it('names the product type Amazon holds for the SKU, not Nexus\'s', async () => {
     m.read.mockResolvedValue(listing({ businessPriceRule: 'FIXED', businessPrice: 32.95 }))
     const read = liveRead([allIt, b2bIt(30)]) as any
@@ -273,6 +289,23 @@ describe('a normal price push carries a percent-off business price', () => {
     expect(m.offerPatch).not.toHaveBeenCalled()
     expect(m.queueBusiness).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ listingIds: ['l'] }))
     expect(m.get).toHaveBeenCalledTimes(1) // the follow reuses the read the normal push made
+  })
+
+  it('a price push that creates the normal offer too (nothing on Amazon yet): the business price is deferred to its own row, never refused', async () => {
+    m.read.mockResolvedValue(listing({ businessPriceRule: 'PERCENT_OFF', businessPricePercent: 5 }))
+    m.get.mockResolvedValue(liveRead([]))
+    await service.syncToAmazon(pricePush(115))
+    expect(m.offerPatch).not.toHaveBeenCalled()
+    expect(kept()).toMatchObject({ status: 'DEFERRED' })
+    expect(m.queueBusiness).toHaveBeenCalledTimes(1)
+  })
+
+  it('the follow names the product type Amazon holds (from the read the normal push made)', async () => {
+    m.read.mockResolvedValue(listing({ businessPriceRule: 'PERCENT_OFF', businessPricePercent: 5 }))
+    const read = liveRead([allIt, b2bIt(99.75)]) as any
+    m.get.mockResolvedValue({ ...read, rawResponse: { ...read.rawResponse, summaries: [{ productType: 'COAT' }] } })
+    await service.syncToAmazon(pricePush(115))
+    expect(m.offerPatch.mock.calls[0][0].productType).toBe('COAT')
   })
 
   it('an error inside the business send never fails a price push that already went', async () => {

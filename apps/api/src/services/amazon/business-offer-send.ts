@@ -37,8 +37,14 @@ export interface BusinessSendOutcome {
   retryable?: boolean
 }
 
+/**
+ * What a send was about: the setting and the normal price it follows. The nightly check does not queue the same refused
+ * send again until one of them changes (`business-offer-adopt.service.ts`).
+ */
+export const businessSendSignature = (setting: BusinessPriceSetting | null, normalPrice: number | null) => JSON.stringify({ setting, normalPrice })
+
 /** Keep what the last business send did, on the listing (`platformAttributes.amazonBusinessSend`). Best effort. */
-export async function recordAmazonBusinessSend(listingId: string, entry: { status: SendStatus; line: string }): Promise<void> {
+export async function recordAmazonBusinessSend(listingId: string, entry: { status: SendStatus; line: string; signature?: string }): Promise<void> {
   try {
     const value = JSON.stringify({ ...entry, at: new Date().toISOString() })
     await prisma.$executeRaw`UPDATE "ChannelListing" SET "platformAttributes" = jsonb_set(COALESCE("platformAttributes", '{}'::jsonb), '{amazonBusinessSend}', ${value}::jsonb, true) WHERE id = ${listingId}`
@@ -74,14 +80,19 @@ export async function sendAmazonBusinessOffer(input: {
   facts: Pick<AmazonOfferFacts, 'values' | 'source'>
   /** `follow` lane: the instances the normal push read just before it sent (its merge leaves the business instance alone). */
   live?: Array<Record<string, unknown>>
+  /** `follow` lane: the product type that read named. */
+  liveProductType?: string | null
+  /** Why the normal price a first offer's replace would carry may not be sent (floor/ceiling, Amazon bounds); null = it may. */
+  normalRefusal?: string | null
   /** `row` lane: is the listing still as the job read it? Asked right before a replace. */
   unchanged?: () => Promise<boolean>
 }): Promise<BusinessSendOutcome> {
+  const signature = businessSendSignature(input.setting, input.normalPrice)
   const finish = async (outcome: BusinessSendOutcome) => {
-    if (input.listingId) await recordAmazonBusinessSend(input.listingId, { status: outcome.status, line: outcome.line })
+    if (input.listingId) await recordAmazonBusinessSend(input.listingId, { status: outcome.status, line: outcome.line, signature })
     return outcome
   }
-  const read = input.live ? { read: 'ok' as const, instances: input.live, productType: null as string | null, error: undefined as string | undefined }
+  const read = input.live ? { read: 'ok' as const, instances: input.live, productType: input.liveProductType ?? null, error: undefined as string | undefined }
     : await readAmazonOfferLive({ sellerId: input.sellerId, sku: input.sku, marketplaceId: input.marketplaceId })
   if (read.read === 'failed') {
     return finish({ ok: false, retryable: true, status: 'FAILED', line: `Amazon's current offer for ${input.sku} could not be read (${read.error ?? 'no answer'}), so the business price was not sent.` })
@@ -102,6 +113,10 @@ export async function sendAmazonBusinessOffer(input: {
     wanted = amazonBusinessElement({ marketplaceId: input.marketplaceId, currency: input.currency, price, tiers: input.setting.tiers })
     line = `business price ${businessSendLine(price, input.setting.tiers, input.currency)}`
   }
+  // The follow lane never creates a business offer (its read may predate the push it follows): a business row does.
+  if (input.lane === 'follow' && wanted && !liveBusinessInstance(read.instances, input.marketplaceId)) {
+    return finish({ ok: false, retryable: true, status: 'DEFERRED', line: `Amazon holds no business offer yet: the ${line} is sent by its own business row.` })
+  }
   const normalRoot = amazonPurchasableOffer({ marketplaceId: input.marketplaceId, currency: input.currency, facts: input.facts, base: read.instances, sendPrice: input.normalPrice })
   const plan = amazonBusinessOfferPlan({ wanted: wanted as never, live: read.instances as never, marketplaceId: input.marketplaceId, normalRoot: normalRoot as never })
   if (plan.kind === 'none') {
@@ -110,6 +125,9 @@ export async function sendAmazonBusinessOffer(input: {
   if (plan.kind === 'refused') return finish({ ok: false, itemLevel: true, status: 'REFUSED', line: plan.reason })
   if (plan.kind === 'replace' && input.lane === 'follow') {
     return finish({ ok: false, retryable: true, status: 'DEFERRED', line: `Amazon holds no business offer yet: the ${line} is sent by its own business row.` })
+  }
+  if (plan.kind === 'replace' && input.normalRefusal) {
+    return finish({ ok: false, itemLevel: true, status: 'REFUSED', line: `The first business offer is sent with the normal offer, and its price may not go: ${input.normalRefusal}` })
   }
   if (plan.kind === 'replace' && input.unchanged && !(await input.unchanged())) {
     return finish({ ok: false, retryable: true, status: 'DEFERRED', line: 'The listing changed while its business price was being sent; it is sent again from the newer values.' })

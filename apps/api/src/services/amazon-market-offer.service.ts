@@ -408,6 +408,7 @@ export async function reopenMarketOffers(opts: {
           data: { offerClosedAt: null, offerActive: true, offerClosedBy: null, offerCloseReason: null },
         })
         result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'REOPENED', detail: undefined, fba: true, ...(fromNexus ? { fromNexus } : {}) })
+        reopened.push(cl.id)
         result.updated++
         processed++
         continue
