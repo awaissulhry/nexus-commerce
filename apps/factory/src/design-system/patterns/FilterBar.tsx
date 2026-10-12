@@ -1,6 +1,6 @@
 'use client'
 
-import { type ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 import { FilterPanel, FilterField } from './FilterPanel'
 import { MultiSelect, Combobox } from '../components'
 import { Toggle } from '../primitives'
@@ -13,6 +13,11 @@ import { Toggle } from '../primitives'
  * *configuration*, never the bar's UI. Reproduces the campaigns-page filter bar
  * (`.h10-am-fpanel`) through DS tokens; change it here and every consumer
  * updates.
+ *
+ * 2026-10-12 (the ads pages' filter bar): every control is named by its field's label and its value ("Campaign 2
+ * selected"); a multiselect may be HELD with its reason (`heldReason`: focusable, says why, does not open); an option
+ * drawn with a count still searches by its words (`searchText`, default its label); while collapsed the header says what
+ * is filtered (`filterSummary`) and offers Clear; `open` / `onOpenChange` let a page remember the panel for the person.
  */
 
 export interface FilterBarOption {
@@ -20,6 +25,8 @@ export interface FilterBarOption {
   label: string
   /** Optional facet count — rendered muted after the label. */
   count?: number
+  /** The words the in-popover search matches. Default: `label`. */
+  searchText?: string
 }
 
 export type FilterDimension =
@@ -39,6 +46,8 @@ export type FilterDimension =
       searchable?: boolean
       /** Span two columns of the 6-col grid. */
       wide?: boolean
+      /** HELD: why nothing can be picked now (the list is read, or has nothing). Null / undefined = it opens. */
+      heldReason?: string | null
     }
   | {
       key: string
@@ -82,6 +91,35 @@ export interface FilterBarProps {
   activeCount?: number
   /** Initial open state (default true — matches the campaigns grid). */
   defaultOpen?: boolean
+  /** Controlled open state, for a page that remembers it per person (with `onOpenChange`). */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+}
+
+/** A field's label as words, when it is plain text. */
+const labelWords = (label: ReactNode): string | null => (typeof label === 'string' || typeof label === 'number' ? String(label) : null)
+
+/**
+ * What the dimensions filter now, in one line for the collapsed header: "Portfolio: Boots IT +1 · Price: 10–50". A pick
+ * whose option is not listed shows by count ("2 selected"). Empty when nothing filters. PURE.
+ */
+export function filterSummary(dimensions: readonly FilterDimension[]): string {
+  const parts: string[] = []
+  for (const d of dimensions) {
+    const name = labelWords(d.label)
+    const say = (what: string) => parts.push(name ? `${name}: ${what}` : what)
+    if (d.kind === 'multiselect' && d.value.length) {
+      const first = d.options.find((o) => o.value === d.value[0])
+      say(first ? `${first.label}${d.value.length > 1 ? ` +${d.value.length - 1}` : ''}` : `${d.value.length} selected`)
+    } else if (d.kind === 'select' && d.value) {
+      say(d.options.find((o) => o.value === d.value)?.label ?? d.value)
+    } else if (d.kind === 'range' && (d.min || d.max)) {
+      say(d.min && d.max ? `${d.min}–${d.max}` : d.min ? `≥ ${d.min}` : `≤ ${d.max}`)
+    } else if (d.kind === 'toggle' && d.value && name) {
+      parts.push(name)
+    }
+  }
+  return parts.join(' · ')
 }
 
 function optionLabel(o: FilterBarOption): ReactNode {
@@ -133,16 +171,18 @@ function RangeField({
   )
 }
 
-function DimensionControl<T extends FilterDimension>({ d }: { d: T }) {
+function DimensionControl<T extends FilterDimension>({ d, labelId }: { d: T; labelId: string }) {
   switch (d.kind) {
     case 'multiselect':
       return (
         <MultiSelect
-          options={d.options.map((o) => ({ value: o.value, label: optionLabel(o) }))}
+          options={d.options.map((o) => ({ value: o.value, label: optionLabel(o), searchText: o.searchText ?? o.label }))}
           value={d.value}
           onChange={d.onChange}
           placeholder={d.placeholder ?? 'All'}
           searchable={d.searchable}
+          labelledBy={labelId}
+          heldReason={d.heldReason}
         />
       )
     case 'select':
@@ -165,21 +205,30 @@ function DimensionControl<T extends FilterDimension>({ d }: { d: T }) {
   }
 }
 
-export function FilterBar({ title, dimensions, presets, onClear, activeCount, defaultOpen = true }: FilterBarProps) {
+/** One field: its label carries an id the control is named by. */
+function DimensionField({ d }: { d: FilterDimension }) {
+  const labelId = useId()
+  return (
+    <FilterField label={d.label} wide={d.wide} labelId={labelId}>
+      <DimensionControl d={d} labelId={labelId} />
+    </FilterField>
+  )
+}
+
+export function FilterBar({ title, dimensions, presets, onClear, activeCount, defaultOpen = true, open, onOpenChange }: FilterBarProps) {
   return (
     <FilterPanel
       title={title}
       presets={presets}
       defaultOpen={defaultOpen}
+      open={open}
+      onOpenChange={onOpenChange}
+      summary={filterSummary(dimensions)}
       onReset={onClear}
       resetLabel="Clear"
       resetDisabled={activeCount === 0}
     >
-      {dimensions.map((d) => (
-        <FilterField key={d.key} label={d.label} wide={d.wide}>
-          <DimensionControl d={d} />
-        </FilterField>
-      ))}
+      {dimensions.map((d) => <DimensionField key={d.key} d={d} />)}
     </FilterPanel>
   )
 }

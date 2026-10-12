@@ -1804,3 +1804,14 @@ PresenceMark axis=intent|fact|both (default both) separates adjacent columns; co
 ## Selection note size — 2026-10-01
 
 `.nds-grid-selbar-note` (grid.css; `SelectionNote`) now has the size of the count beside it (`--nds-font-size-sm-plus`, the size of `.nds-toolbar .cnt`). Before, it took the page's 16px: on the Matrix, "Selected 21 rows" was 12.5px and "on Amazon EU · Inventory · IT DE FR ES" next to it 16px, so the Owner read it as another font (Chrome draws both in Inter). Also fixes the Products page, which uses the same note.
+
+## FilterBar for the ads pages — 2026-10-12
+
+The Bid, Keyword Harvest and Negative Targeting pages' filter bar (Portfolio · Campaign · Ad group · Product) is the DS `FilterBar`, extended — no local copy:
+
+- `MultiSelect labelledBy`: the trigger is named by its field's label AND its value ("Campaign 2 selected"); `FilterBar` wires it for every multiselect (`FilterField labelId`). Before, a FilterBar trigger was named only "All".
+- `MultiSelect heldReason` / `FilterDimension.heldReason` (multiselect): a list with nothing to pick now is HELD — focusable, `aria-disabled` with `aria-description`, a portal Tooltip on hover and focus, never opens — the Button's `heldReason`. Never `disabled` (check-silent-disabled).
+- `OptionListItem.searchText` / `FilterBarOption.searchText`: the words the search matches. A counted option's label is drawn with its count (a node), so the search fell back to the option's id; FilterBar now passes the label's words.
+- `FilterPanel summary` / `open` / `onOpenChange`: hidden, the header says what filters ("Portfolio: Boots +1 · Price: ≥ 10", one line, ellipsis) and offers Clear; a page may hold the open state (the ads pages remember it per person, per phone and desktop). `FilterBar` fills the summary (`filterSummary`). The Show / Hide toggle is named for the panel ("Show filters") with `aria-controls`.
+
+Catalog: the FilterBar specimen has a held list and searchable counted options. Tests: `patterns/filterBar.vitest.test.ts`. Mirrored between Web and Factory (the four files were identical; their CSS added to both).

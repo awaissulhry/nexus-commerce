@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronDown } from 'lucide-react'
+import { Tooltip } from '../primitives/Tooltip'
 import { useClickAway } from './useClickAway'
 import { usePopoverPosition } from './usePopoverPosition'
 import { OptionList, type OptionListItem } from './OptionList'
@@ -31,6 +32,18 @@ export interface MultiSelectProps {
   formatLabel?: (value: string[]) => string
   /** id for the TRIGGER, so a `<label htmlFor>` reaches it. */
   id?: string
+  /**
+   * The id of the field's visible label (2026-10-12): the trigger is named by it AND its value — "Campaign 2 selected" —
+   * where `ariaLabel` would replace the value. Wins over `ariaLabel`.
+   */
+  labelledBy?: string
+  /**
+   * HELD: why nothing can be picked now ("Reading the list", "No portfolio in this market"). Null / undefined = it opens.
+   * Never `disabled` (a disabled trigger takes no focus, so its reason is never heard): held, the trigger keeps its focus,
+   * says why on hover and focus (a portal `Tooltip`) and to a screen reader (`aria-description`), and does not open —
+   * the Button's `heldReason`.
+   */
+  heldReason?: string | null
 }
 
 /**
@@ -41,8 +54,10 @@ export interface MultiSelectProps {
  * control and not two files that agree today. See `OptionList` for why.
  */
 export function MultiSelect({ options, value, onChange, placeholder = 'All', className,
-  ariaLabel, searchable, searchPlaceholder, size = 'md', width, minSelected = 0, formatLabel, id }: MultiSelectProps) {
+  ariaLabel, searchable, searchPlaceholder, size = 'md', width, minSelected = 0, formatLabel, id, labelledBy, heldReason }: MultiSelectProps) {
   const [open, setOpen] = useState(false)
+  const valueId = useId()
+  const held = !!heldReason
   const ref = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const { popRef, style: popStyle } = usePopoverPosition(open, ref, { width: 'anchor' })
@@ -60,6 +75,8 @@ export function MultiSelect({ options, value, onChange, placeholder = 'All', cla
    * Esc is marked as used (`preventDefault`), so a `Modal` around the picker stays open: it closes only on an
    * Escape nothing else used (2026-10-02, the Publish window closed with its Markets list).
    */
+  // A held picker never stays open (it can become held while open: its list is read again).
+  useEffect(() => { if (held) setOpen(false) }, [held])
   useEffect(() => {
     if (!open) return
     const pop = popRef.current
@@ -80,10 +97,18 @@ export function MultiSelect({ options, value, onChange, placeholder = 'All', cla
     <div className={['nds-ms', size === 'sm' ? 'sm' : '', width === 'auto' ? 'auto' : '', className].filter(Boolean).join(' ')}
       style={typeof width === 'number' ? { width } : undefined} ref={ref}
       onKeyDown={(e) => { if (e.key === 'Escape' && open) { e.preventDefault(); close() } }}>
-      <button ref={triggerRef} type="button" id={id} className="nds-ms-btn" aria-haspopup="listbox" aria-expanded={open} aria-label={ariaLabel} onClick={() => setOpen((o) => !o)}>
-        <span className={value.length === 0 ? 'ph' : ''}>{label}</span>
-        <ChevronDown size={15} aria-hidden />
-      </button>
+      {(() => {
+        const trigger = (
+          <button ref={triggerRef} type="button" id={id} className="nds-ms-btn" aria-haspopup="listbox" aria-expanded={open}
+            aria-label={labelledBy ? undefined : ariaLabel} aria-labelledby={labelledBy ? `${labelledBy} ${valueId}` : undefined}
+            aria-disabled={held || undefined} aria-description={heldReason || undefined}
+            onClick={() => { if (!held) setOpen((o) => !o) }}>
+            <span id={valueId} className={value.length === 0 ? 'ph' : ''}>{label}</span>
+            <ChevronDown size={15} aria-hidden />
+          </button>
+        )
+        return held ? <Tooltip label={heldReason} portal>{trigger}</Tooltip> : trigger
+      })()}
       {open && (
         createPortal(
           <div ref={popRef} style={popStyle} className="nds-ms-pop" role="listbox" aria-multiselectable="true" onKeyDown={onPopKeyDown}>

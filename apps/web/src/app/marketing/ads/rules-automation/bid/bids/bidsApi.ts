@@ -4,6 +4,7 @@
  * (`_shared/adsWrite.ts`: the server's own reason, and "Send anyway" past a person's own limits).
  *
  *   GET  /api/advertising/bids?market=&productId=&campaignId=&adGroupId=           the rows, each with its one owner
+ *        &portfolioIds=&campaignIds=&adGroupIds=&productIds=                       (the page's filter bar: lists, OR inside, AND across)
  *   GET  /api/advertising/automation/brain/bid-brain/why?targetId=                  the brain's newest decision
  *   GET  /api/advertising/automation/brain/bid-brain/what-if?targetId=&targetAcosPct=
  *   GET  /api/advertising/changes?entityType=AD_TARGET&entityId=&field=bid          one bid's history, with the undo handle
@@ -18,6 +19,7 @@
  *   POST /api/advertising/automation/brain/control { op: 'set-value', … }           a keyword's goal and max (goalModel.ts)
  */
 import { getBackendUrl } from '@/lib/backend-url'
+import type { ScopeApi } from '../../_shared/scopeFilter/scopeFilterModel'
 import { adsWrite, SEND_NOW, type WriteResult } from '../../../_shared/adsWrite'
 import { askSendAnyway, notSentPastLimits } from '../../../_shared/sendAnyway'
 import { bidsQuery, type BidRow, type BidsAnswer } from './bidsModel'
@@ -41,7 +43,8 @@ async function getJson<T>(path: string): Promise<T> {
   return (await r.json()) as T
 }
 
-export interface BidsScope { market?: string | null; productId?: string | null; campaignId?: string | null; adGroupId?: string | null }
+/** The read's scope; `lists` = the page's filter bar (server params). */
+export interface BidsScope { market?: string | null; productId?: string | null; campaignId?: string | null; adGroupId?: string | null; lists?: ScopeApi | null }
 
 export const readBids = (scope: BidsScope): Promise<BidsAnswer> =>
   getJson<BidsAnswer>(`/api/advertising/bids${bidsQuery(scope)}`)

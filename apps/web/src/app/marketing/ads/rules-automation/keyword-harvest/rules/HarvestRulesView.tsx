@@ -36,6 +36,8 @@ import { emitAdsChange } from '../../_shared/adsBus'
 import { useDetailParam } from '../../../_shared/useDetailParam'
 
 import { MODES, MODE_WORD, archiveWords, isBrain, plural, readError, type ArchiveAnswer, type BidMode, type BidRuleRow } from '../../bid/rules/bidRulesModel'
+import { FILTER_EMPTY, FILTER_HIDES_RULE, narrowRules } from '../../_shared/scopeFilter/scopeFilterModel'
+import type { ScopeView } from '../../_shared/scopeFilter/useScopeFilter'
 import {
   archivable, archiveLabel, archiveReviewChanges, modeConflicts, restoreLabel, restoreReviewChanges,
   type ModeDraft,
@@ -119,9 +121,11 @@ export interface HarvestRulesViewProps {
   onTotals?: (t: HarvestRulesViewTotals) => void
   /** Optional: the page's view switch, drawn at the start of the toolbar (the Bid page's place for it). */
   viewSwitch?: ReactNode
+  /** The page's filter bar: only the rules that can act on its picks show (and count); the brain always. */
+  scope?: ScopeView
 }
 
-export function HarvestRulesView({ market, show: showProp, onTotals, viewSwitch }: HarvestRulesViewProps) {
+export function HarvestRulesView({ market, show: showProp, onTotals, viewSwitch, scope }: HarvestRulesViewProps) {
   const params = useSearchParams()
   const router = useRouter()
   const phone = useNarrow()
@@ -140,7 +144,13 @@ export function HarvestRulesView({ market, show: showProp, onTotals, viewSwitch 
     router.replace(q ? `?${q}` : '?', { scroll: false })
   }, [router])
 
-  const data = useHarvestRules(market)
+  // The rules the page's filter bar reaches (the brain always; nothing while its lists are read): the table, its counts and
+  // the tiles count these.
+  const read = useHarvestRules(market)
+  const pending = !!scope?.pending
+  const scopeReach = scope?.reach ?? null
+  const narrowed = useMemo(() => (read.answer && !pending ? narrowRules(read.answer, scopeReach, isBrain) : null), [read.answer, pending, scopeReach])
+  const data = { ...read, answer: narrowed }
   const { answer, err, load } = data
   const [draft, setDraft] = useState<ModeDraft>({})
   const [search, setSearch] = useState(() => params.get('rq') ?? '')
@@ -175,6 +185,12 @@ export function HarvestRulesView({ market, show: showProp, onTotals, viewSwitch 
 
   const rows = useMemo(() => answer?.rules ?? [], [answer])
   const byId = useMemo(() => new Map(rows.map((r) => [r.id, r])), [rows])
+  // A mode pick of a rule the filter (or the market) no longer shows leaves the draft: "Review N changes" counts only
+  // what its review can show.
+  useEffect(() => {
+    if (!answer) return
+    setDraft((d) => (Object.keys(d).every((id) => byId.has(id)) ? d : Object.fromEntries(Object.entries(d).filter(([id]) => byId.has(id)))))
+  }, [answer, byId])
   const filter = { show, search, archived: showArchived }
   const shown = useMemo(() => visibleHarvestRows(rows, filter), [rows, show, search, showArchived]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -312,12 +328,16 @@ export function HarvestRulesView({ market, show: showProp, onTotals, viewSwitch 
   const clearFilters = useCallback(() => { setSearch(''); setQuery({ show: null, archived: null, rq: null }) }, [setQuery])
   const filtered = isFilteredView(filter)
   // M4: a failed read says so (with Try again), never "No harvest rules yet".
+  const scopeActive = !!scope?.active
+  const clearScope = scope?.clear
   const noRowsParams = useMemo(() => (!answer && err
     ? { title: 'Rules not read', message: readError(err) ?? '', action: { label: 'Try again', onClick: () => void load() } }
     : filtered
       ? { title: 'No rule matches', message: '', action: { label: 'Clear filters', onClick: clearFilters } }
-      : { title: 'No harvest rules yet', message: '', action: archiveHeld ? undefined : { label: 'New rule', onClick: openNew } }),
-  [answer, err, load, filtered, clearFilters, archiveHeld, openNew])
+      : scopeActive && clearScope
+        ? { title: FILTER_EMPTY.title, message: '', action: { label: FILTER_EMPTY.clear, onClick: () => clearScope() } }
+        : { title: 'No harvest rules yet', message: '', action: archiveHeld ? undefined : { label: 'New rule', onClick: openNew } }),
+  [answer, err, load, filtered, clearFilters, archiveHeld, openNew, scopeActive, clearScope])
 
   // ── reviews ───────────────────────────────────────────────────────────────────────────────────────────────────────
   const draftRef = useRef(draft)
@@ -606,8 +626,8 @@ export function HarvestRulesView({ market, show: showProp, onTotals, viewSwitch 
       ) : (
         <RuleDetailPending
           loading={!answer && !err}
-          error={answer ? 'This rule is not in this list: it may be in another market, or gone' : err ? 'Rules not read' : null}
-          onRetry={() => (answer && market !== 'all' ? setQuery({ market: null }) : void load())}
+          error={answer ? (scopeActive ? FILTER_HIDES_RULE : 'This rule is not in this list: it may be in another market, or gone') : err ? 'Rules not read' : null}
+          onRetry={() => (answer && scopeActive && clearScope ? clearScope() : answer && market !== 'all' ? setQuery({ market: null }) : void load())}
           onClose={detail.close}
           returnFocusTo={() => null}
         />

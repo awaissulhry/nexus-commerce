@@ -13,6 +13,9 @@
  *               (`rules/`, `sources/`, lane HRULES)
  *
  * No Amazon Ads account in this business: one empty state, no table.
+ *
+ * The filter bar (2026-10-12, `_shared/scopeFilter`) sits under the tab bar: Portfolio · Campaign · Ad group · Product.
+ * Terms are read with it (the server filters, its totals too); Rules and Sources keep what it reaches (the brain always).
  */
 import { useCallback, useEffect, useState } from 'react'
 import { Megaphone } from 'lucide-react'
@@ -22,6 +25,8 @@ import { useRouter, useSearchParams } from '@/lib/workspaces/navigation'
 import Link from '@/lib/workspaces/Link'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { useAdsMarketplace, useSharedAdsMarket } from '../../_shell/MarketplaceContext'
+import { AdsScopeFilter } from '../_shared/scopeFilter/AdsScopeFilter'
+import { useScopeFilter } from '../_shared/scopeFilter/useScopeFilter'
 import { RulesTabs, rulesTabHeader } from '../_shared/tabs'
 import type { CandidateTotals, ViewReport } from './_shared/types'
 import { HARVEST_VIEWS, isHarvestView, nextShow, placeholderTiles, termsTiles, tileAccent, VIEW_LABEL, type HarvestView, type TileSpec } from './_shared/tiles'
@@ -43,8 +48,12 @@ export function HarvestClient() {
   const view: HarvestView = isHarvestView(raw) ? raw : 'terms'
   const show = params.get('show')
   const [reports, setReports] = useState<Reports>(NO_REPORTS)
+  const filter = useScopeFilter(market)
   // Every number belongs to one read of one market: a new market waits for its own.
   useEffect(() => { setReports(NO_REPORTS) }, [market])
+  // The terms are read again for a new filter: their tiles wait for that read. (Rules and Sources count again at once,
+  // in the same render: their reports are never dropped here.)
+  useEffect(() => { setReports((c) => ({ ...c, terms: null })) }, [filter.key])
 
   /** One place writes the address; the rest of the query is kept. */
   const setQuery = useCallback((patch: Record<string, string | null>) => {
@@ -109,10 +118,11 @@ export function HarvestClient() {
           </div>
         ) : (
           <div className={styles.page}>
+            <AdsScopeFilter filter={filter} unfiltered="Rules and sources" />
             {metrics.length > 0 && <MetricStrip className={styles.tiles} metrics={metrics} />}
-            {view === 'rules' ? <HarvestRulesView market={market} show={show} onTotals={onRulesTotals} viewSwitch={viewSwitch} />
-              : view === 'sources' ? <HarvestSourcesView market={market} show={show} onTotals={onSourcesTotals} viewSwitch={viewSwitch} />
-                : <TermsView market={market} show={isTermsShow(show) ? show : null} onTotals={onTermsTotals} viewSwitch={viewSwitch} />}
+            {view === 'rules' ? <HarvestRulesView market={market} show={show} onTotals={onRulesTotals} viewSwitch={viewSwitch} scope={filter} />
+              : view === 'sources' ? <HarvestSourcesView market={market} show={show} onTotals={onSourcesTotals} viewSwitch={viewSwitch} scope={filter} />
+                : <TermsView market={market} show={isTermsShow(show) ? show : null} onTotals={onTermsTotals} viewSwitch={viewSwitch} scope={filter} />}
           </div>
         )}
       </div>

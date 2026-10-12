@@ -43,7 +43,7 @@ export interface TermsRead {
 
 export function useTermsRead(q: CandidateQuery, enabled = true): TermsRead {
   // A new scope (market, list, product …) drops the rows; a new search reads again in place (no flash per keystroke).
-  const scopeKey = JSON.stringify([q.market, q.state ?? null, q.productId ?? null, q.portfolioId ?? null, q.campaignId ?? null, q.adGroupId ?? null, q.owner ?? null, q.kind ?? null])
+  const scopeKey = JSON.stringify([q.market, q.state ?? null, q.productId ?? null, q.portfolioId ?? null, q.campaignId ?? null, q.adGroupId ?? null, q.lists ?? null, q.owner ?? null, q.kind ?? null])
   const key = `${scopeKey}|${q.q ?? ''}`
   const lastScope = useRef<string | null>(null)
   const [answer, setAnswer] = useState<TermsRead['answer']>(null)

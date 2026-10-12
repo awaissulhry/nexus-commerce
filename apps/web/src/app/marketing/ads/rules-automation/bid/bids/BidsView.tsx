@@ -43,6 +43,8 @@ import { usePermission } from '@/lib/auth/AuthProvider'
 import { useRouter, useSearchParams } from '@/lib/workspaces/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useWriteBlockOf } from '../../../_shell/WriteBlocked'
+import { FILTER_EMPTY } from '../../_shared/scopeFilter/scopeFilterModel'
+import type { ScopeView } from '../../_shared/scopeFilter/useScopeFilter'
 import { useColumnChoices } from '../_shared/columnChoices'
 import { readBids, type BidsScope } from './bidsApi'
 import { bidColumns, bidColumnSpecs, NO_COLUMN_FEATURES, OwnerIcon, type BidColumnFeatures, type BidsCellContext, type BidsCellHandlers } from './bidsColumns'
@@ -59,7 +61,9 @@ import styles from './bids.module.css'
 // The toolbar's lead, count, search and right group: the Rules view's own rules, so the two toolbars line up (audit M3).
 import page from '../bid.module.css'
 
-export interface BidsViewProps extends BidsScope {
+export interface BidsViewProps extends Omit<BidsScope, 'lists'> {
+  /** The page's filter bar: the bids are read with its lists (the server filters); a read it empties says so. */
+  scope?: ScopeView
   /** The page's [Rules | Bids] switch, drawn at the start of this view's toolbar. */
   viewSwitch?: ReactNode
   /** Bumped by the page's Refresh: the bids are read again. */
@@ -113,14 +117,15 @@ function writeInScope(scopeKey: string, v: BidColumnFeatures): void {
   try { window.localStorage.setItem(inScopeKey(scopeKey), JSON.stringify(v)) } catch { /* the next visit reads it again */ }
 }
 
-export function BidsView({ market = null, productId = null, campaignId = null, adGroupId = null, viewSwitch, refreshKey, show, onTotals }: BidsViewProps) {
+export function BidsView({ market = null, productId = null, campaignId = null, adGroupId = null, scope, viewSwitch, refreshKey, show, onTotals }: BidsViewProps) {
   // The server's own gates (permissions-manifest.ts): a bid, a lock and an Undo · a bulk bid and a keyword's mode · a goal.
   const canEdit = usePermission('ads.campaigns.manage')
   const canBids = usePermission('ads.bids.edit')
   const canAutomation = usePermission('ads.automation.manage')
   const canGoal = canEdit && canAutomation
   const phone = usePhone()
-  const scopeKey = `${market ?? ''}|${productId ?? ''}|${campaignId ?? ''}|${adGroupId ?? ''}`
+  const lists = scope?.api ?? null
+  const scopeKey = `${market ?? ''}|${productId ?? ''}|${campaignId ?? ''}|${adGroupId ?? ''}|${scope?.key ?? ''}`
 
   const router = useRouter()
   const params = useSearchParams()
@@ -182,8 +187,8 @@ export function BidsView({ market = null, productId = null, campaignId = null, a
   }, [])
 
   // ── the read ──
-  const scopeRef = useRef<BidsScope>({ market, productId, campaignId, adGroupId })
-  scopeRef.current = { market, productId, campaignId, adGroupId }
+  const scopeRef = useRef<BidsScope>({ market, productId, campaignId, adGroupId, lists })
+  scopeRef.current = { market, productId, campaignId, adGroupId, lists }
   const load = useCallback(async () => {
     setReading(true)
     try {
@@ -361,11 +366,15 @@ export function BidsView({ market = null, productId = null, campaignId = null, a
   // Esc: back to the cell that opened it — or, after ▲ / ▼ or from the address, to the cell of the row on show.
   const detailFocus = useCallback(() => (openId && openId !== openerId.current ? cellFor(openId) : null), [openId, cellFor])
 
+  const scopeActive = !!scope?.active
+  const clearScope = scope?.clear
   const noRowsParams = useMemo(() => {
     if (failed) return { title: 'Bids not read', message: err ?? '', action: { label: 'Try again', onClick: reload } }
+    // The page's filter bar left no bid to read: say so, and clear it.
+    if (!all.length && scopeActive && clearScope) return { title: FILTER_EMPTY.title, message: '', action: { label: FILTER_EMPTY.clear, onClick: () => clearScope() } }
     const words = emptyWords(show, isBidFiltered(filter), all.length > 0)
     return { title: words.title, message: '', action: words.clear ? { label: 'Clear filters', onClick: clear } : undefined }
-  }, [failed, err, reload, show, filter, all.length, clear])
+  }, [failed, err, reload, show, filter, all.length, clear, scopeActive, clearScope])
 
   /* ── Customise, Reset (the toolbar and every header's ⋮ menu) ────────────────────────────── */
 

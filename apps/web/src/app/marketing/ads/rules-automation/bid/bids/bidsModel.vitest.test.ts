@@ -234,6 +234,12 @@ describe('the grid row and the read', () => {
     expect(bidsQuery({ market: 'all' })).toBe('')
     expect(bidsQuery({ market: null, campaignId: 'c1', adGroupId: 'g1' })).toBe('?campaignId=c1&adGroupId=g1')
   })
+
+  it('sends the page\'s filter bar as lists (the read and its cursor alike)', () => {
+    expect(bidsQuery({ market: 'IT', lists: { portfolioIds: 'p1,p2', productIds: 'L1' } })).toBe('?market=IT&portfolioIds=p1%2Cp2&productIds=L1')
+    expect(bidsQuery({ market: 'all', lists: {} })).toBe('')
+    expect(bidsQuery({ market: 'all', lists: null })).toBe('')
+  })
 })
 
 describe('the page\'s tiles (M1): what they show and the numbers they read', () => {
