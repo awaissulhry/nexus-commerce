@@ -6,7 +6,7 @@
  *                         retry a failed push (the Matrix's Sync › Retry), or set an Amazon listing's fulfilment to FBA or
  *                         FBM (the Matrix's Set fulfilment…: a real conversion SENT to Amazon per market and confirmed
  *                         from Amazon's merchant listings report — `fulfilment-conversion.service.ts`).
- *   set-listing-price     set a price, adjust prices by a percentage, copy prices from another market, or set a sale.
+ *   set-listing-price     set a price, adjust prices by a percentage or an amount, copy prices from another market, or set a sale.
  *   revert-listing-change put back a Matrix operation one of them ran (the undo of both).
  *
  * Targets are the Matrix's own: a row (rowId) and a coordinate key (EBAY:IT, AMAZON:EU …) from listing-matrix. The door's
@@ -24,6 +24,7 @@
 import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
 import { MATRIX_COPY, type MatrixVerbParams, type MatrixVerbTarget, type VerbChange, type VerbPreview, type VerbRefusal, type MatrixWriteOutcome } from '@nexus/shared/matrix-contract'
+import { adjustPricesProblem, PREVIEW_WORDS } from '@nexus/shared/matrix-preview'
 import prisma from '../../../db.js'
 import type { AgentTool, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
 import { liveProduct, PRODUCT_NOT_FOUND } from './live-product.js'
@@ -273,7 +274,7 @@ const vetRetry: Vet = async (family, preview, ctx) => {
   for (const change of preview.changes) {
     const landed = await landing.of(change)
     const row = landed ? await newestFailedPush(landed.targets.map((t) => t.id)) : null
-    if (!row) { refusals.push(refusalOf(change, landed ? 'Nothing to retry on this coordinate' : MATRIX_COPY.changedElsewhere)); continue }
+    if (!row) { refusals.push(refusalOf(change, landed ? PREVIEW_WORDS.nothingToRetry : MATRIX_COPY.changedElsewhere)); continue }
     changes.push(change)
     also.push(`${change.sku} on ${change.coordinateKey}: its failed ${row.syncType === 'PRICE_UPDATE' ? 'price' : 'quantity'} push is sent again.`)
   }
@@ -325,9 +326,11 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/
 
 const priceInput = z.object({
   productId: z.string().trim().min(1).max(64).describe('Nexus product id: the family (parent) or one of its variations, as listing-matrix read it'),
-  action: z.enum(PRICE_ACTIONS).describe('set-price, adjust-prices (by a percentage), copy-prices (from another market) or sale'),
+  action: z.enum(PRICE_ACTIONS).describe('set-price, adjust-prices (by a percentage or an amount), copy-prices (from another market) or sale'),
   price: z.coerce.number().positive().max(1_000_000).optional().describe('set-price: the price, in the market\'s currency'),
   percent: z.coerce.number().min(-90).max(500).optional().describe('adjust-prices: the change in percent, e.g. -10 or 5'),
+  amount: z.coerce.number().min(-1_000_000).max(1_000_000).optional().describe('adjust-prices instead of percent: the change in the market\'s currency, e.g. -2.5 or 3'),
+  currency: z.string().trim().length(3).optional().describe('adjust-prices with amount: the currency of the amount, e.g. EUR; a market selling in another currency is refused'),
   fromCoordinateKey: z.string().trim().min(1).max(160).optional().describe('copy-prices: the coordinate key to copy from (same currency)'),
   sale: z.object({
     price: z.coerce.number().positive().max(1_000_000).nullable().describe('the sale price; null ends the sale'),
@@ -340,7 +343,12 @@ const priceInput = z.object({
 function priceParams(args: Record<string, unknown>): MatrixVerbParams | { error: string } {
   const action = String(args.action)
   if (action === 'set-price') return typeof args.price === 'number' ? { verb: 'set-price', value: args.price } : { error: 'set-price needs a price.' }
-  if (action === 'adjust-prices') return typeof args.percent === 'number' ? { verb: 'adjust-prices', percent: args.percent } : { error: 'adjust-prices needs a percent.' }
+  if (action === 'adjust-prices') {
+    const currency = typeof args.currency === 'string' ? args.currency.toUpperCase() : args.currency
+    const problem = adjustPricesProblem({ percent: args.percent, amount: args.amount, currency })
+    if (problem) return { error: `${problem}.` }
+    return typeof args.amount === 'number' ? { verb: 'adjust-prices', amount: args.amount, currency: String(currency) } : { verb: 'adjust-prices', percent: Number(args.percent) }
+  }
   if (action === 'copy-prices') return typeof args.fromCoordinateKey === 'string' ? { verb: 'copy-prices', fromCoordinateKey: args.fromCoordinateKey } : { error: 'copy-prices needs fromCoordinateKey.' }
   return { error: 'sale is not a Matrix verb.' }
 }
@@ -363,7 +371,7 @@ async function planSale(args: Record<string, unknown>, ctx: ToolContext) {
   for (const t of args.targets as MatrixVerbTarget[]) {
     const row = read.rows.find((r) => r.id === t.rowId)
     const cell = row?.cells[t.coordinateKey]
-    if (!row || !cell?.sale || !cell.listingId) { refused.push({ sku: row?.sku ?? t.rowId, coordinateKey: t.coordinateKey, reason: 'No sale price on this coordinate' }); continue }
+    if (!row || !cell?.sale || !cell.listingId) { refused.push({ sku: row?.sku ?? t.rowId, coordinateKey: t.coordinateKey, reason: 'This market has no sale price here' }); continue }
     if (cell.writable.salePrice === false) { refused.push({ sku: row.sku, coordinateKey: t.coordinateKey, reason: cell.writeBlockedReason.salePrice ?? 'This sale price cannot be changed here' }); continue }
     const from = { value: cell.sale.value, start: cell.sale.start, end: cell.sale.end }
     if (from.value === to.value && from.start === to.start && from.end === to.end) continue
@@ -412,7 +420,7 @@ const setListingPrice: AgentTool = {
   maxClaudeTrust: 'ask',
   undo: PRICE_UNDO,
   description:
-    'Change the price of listings per market through the Nexus Matrix: set a price, adjust prices by a percentage, copy '
+    'Change the price of listings per market through the Nexus Matrix: set a price, adjust prices by a percentage or an amount, copy '
     + 'prices from another market in the same currency, or set (or end) a sale with its days. Targets are rows and '
     + 'coordinate keys from listing-matrix. A formula-owned price is refused. The preview is the Matrix\'s own. Waits for a '
     + 'person to approve it in Nexus; a target that changed since is refused, and it can be put back.',

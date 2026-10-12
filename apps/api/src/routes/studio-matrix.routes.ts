@@ -15,6 +15,7 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
 import { FEATURES as F } from '@nexus/shared/permissions'
 import type { MatrixVerbRequest, MatrixWriteCell, VerbPreview } from '@nexus/shared/matrix-contract'
+import { adjustPricesProblem } from '@nexus/shared/matrix-preview'
 import { hasPermission } from '../lib/auth/rbac.js'
 import { UnknownProductError } from '../services/pim/studio-sheet.service.js'
 import { ProductRelationshipError } from '../services/pim/product-relationship.service.js'
@@ -73,13 +74,21 @@ function parseCells(body: unknown): { cells: MatrixWriteCell[]; accountId: strin
   return { cells, accountId: isId(b?.accountId) ? b.accountId : null }
 }
 
-function parseVerb(body: unknown): { req: MatrixVerbRequest & { preview?: VerbPreview } } | { problem: string } {
-  const b = body as { params?: { verb?: unknown }; targets?: unknown; commit?: unknown; preview?: unknown } | null
+export function parseVerb(body: unknown): { req: MatrixVerbRequest & { preview?: VerbPreview } } | { problem: string } {
+  const b = body as { params?: { verb?: unknown; percent?: unknown; amount?: unknown; currency?: unknown }; targets?: unknown; commit?: unknown; preview?: unknown } | null
   if (!b || typeof b !== 'object' || typeof b.params?.verb !== 'string') return { problem: 'The verb request carried no `params.verb`' }
   if (!Array.isArray(b.targets)) return { problem: 'The verb request carried no `targets` array' }
   if (b.targets.length > 2000) return { problem: 'At most 2000 targets per verb' }
   for (const t of b.targets as Array<Record<string, unknown>>) if (typeof t?.rowId !== 'string' || typeof t?.coordinateKey !== 'string') return { problem: 'Each target needs rowId and coordinateKey' }
   const preview = b.preview && typeof b.preview === 'object' && Array.isArray((b.preview as VerbPreview).changes) ? (b.preview as VerbPreview) : undefined
+  /* adjust-prices: a percent OR an amount with its currency. The page commits with `{ verb }` and the preview it showed
+     (the changes carry the new prices), so bare params pass only on a commit that carries a preview. */
+  if (b.params.verb === 'adjust-prices') {
+    const { percent, amount, currency } = b.params
+    const bare = percent == null && amount == null && currency == null
+    const problem = bare && b.commit === true && preview ? null : adjustPricesProblem({ percent, amount, currency })
+    if (problem) return { problem }
+  }
   return { req: { params: b.params as MatrixVerbRequest['params'], targets: b.targets as MatrixVerbRequest['targets'], commit: b.commit === true, ...(preview ? { preview } : {}) } }
 }
 

@@ -209,7 +209,7 @@ describe('set-listing-stock retry-sync', () => {
     await inside(() => db().outboundSyncQueue.create({ data: { productId: ids.fbm, channelListingId: ids.fbmUk, targetChannel: 'AMAZON', syncStatus: 'SKIPPED',
       syncType: 'QUANTITY_UPDATE', payload: { quantity: 5 }, errorMessage: 'guard-held' } as never }))
     const refused = await dryRun({ productId: ids.fbm, action: 'retry-sync', targets: [{ rowId: ids.fbm, coordinateKey: 'AMAZON:UK' }] })
-    expect(refused).toMatchObject({ ok: false, error: expect.stringContaining('Nothing to retry on this coordinate') })
+    expect(refused).toMatchObject({ ok: false, error: expect.stringContaining('Nothing to retry here — the last push did not fail') })
   })
 })
 

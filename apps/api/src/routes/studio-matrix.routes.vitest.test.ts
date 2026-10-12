@@ -284,10 +284,47 @@ describe('POST …/verbs and …/verbs/:id/revert', () => {
     expect(res.statusCode).toBe(200)
     const body = res.json()
     expect(body.results.map((r: { outcome: string }) => r.outcome)).toEqual(['applied', 'refused'])
-    expect(body.results[1].reason).toBe('No listing on this coordinate') // the parent has no AMAZON:IT cell in this read → the fresh preview refuses it
+    expect(body.results[1].reason).toBe('Not on this market') // the parent has no AMAZON:IT cell in this read → the fresh preview refuses it
     expect(body.operation).toMatchObject({ id: 'op-1', verb: 'set-price', applied: 1, refused: 1 })
     expect(body.operation.before).toEqual([{ rowId: 'c1', coordinateKey: 'AMAZON:IT', cells: read().rows[1]!.cells['AMAZON:IT'] }])
     expect(mocks.bulkCreate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: 'PARTIAL', changeCount: 2 }) }))
+  })
+  /* Matrix bulk Edit v2 (2026-10-12): Raise / Lower by an amount — `{ amount, currency }` beside `{ percent }`. */
+  it('adjust-prices by an amount previews as the shared preview does, and commits as set-price at the previewed value', async () => {
+    const req = { params: { verb: 'adjust-prices', amount: -2.5, currency: 'EUR' }, targets: [{ rowId: 'c1', coordinateKey: 'AMAZON:IT' }], commit: false }
+    const res = await app.inject({ method: 'POST', url: '/products/root/studio/matrix/verbs', payload: req })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual(JSON.parse(JSON.stringify(previewVerb(read(), req as never, { can: () => true, simulated: false }))))
+    expect(res.json().changes[0]).toMatchObject({ sku: 'CHILD-1', from: 100, to: 97.5, toLabel: '€97.50', note: 'Own price (was the base price)' })
+    const gbp = await app.inject({ method: 'POST', url: '/products/root/studio/matrix/verbs', payload: { ...req, params: { verb: 'adjust-prices', amount: -2.5, currency: 'GBP' } } })
+    expect(gbp.json().refusals[0]).toMatchObject({ kind: 'currency', reason: 'This market sells in EUR' })
+    // The page commits with `{ verb }` and the preview it showed: the door writes the previewed price.
+    const commit = await app.inject({ method: 'POST', url: '/products/root/studio/matrix/verbs', payload: { params: { verb: 'adjust-prices' }, targets: req.targets, commit: true, preview: res.json() } })
+    expect(commit.statusCode).toBe(200)
+    expect(commit.json().results.map((r: { outcome: string }) => r.outcome)).toEqual(['applied'])
+    expect(mocks.prices).toHaveBeenCalledWith(expect.objectContaining({ targets: [expect.objectContaining({ listingId: 'l-c1-it', price: 97.5 })] }))
+  })
+  it('refuses malformed adjust-prices params with a sentence (400), before any read', async () => {
+    const send = (params: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
+      app.inject({ method: 'POST', url: '/products/root/studio/matrix/verbs', payload: { params: { verb: 'adjust-prices', ...params }, targets: [{ rowId: 'c1', coordinateKey: 'AMAZON:IT' }], commit: false, ...extra } })
+    const cases: Array<[Record<string, unknown>, string]> = [
+      [{ percent: -5, amount: -2, currency: 'EUR' }, 'Adjust prices by a percent or by an amount, not both'],
+      [{ amount: 0, currency: 'EUR' }, 'The amount must be a number other than 0'],
+      [{ amount: '2', currency: 'EUR' }, 'The amount must be a number other than 0'],
+      [{ amount: 2 }, 'An amount needs its currency as a 3-letter code (EUR, GBP …)'],
+      [{ amount: 2, currency: 'euro' }, 'An amount needs its currency as a 3-letter code (EUR, GBP …)'],
+      [{ percent: 5, currency: 'EUR' }, 'A currency goes with an amount, not with a percent'],
+      [{ percent: 'ten' }, 'The percent must be a number'],
+      [{}, 'Adjust prices needs a percent or an amount'],
+    ]
+    for (const [params, message] of cases) {
+      const res = await send(params)
+      expect(res.statusCode, JSON.stringify(params)).toBe(400)
+      expect(res.json()).toEqual({ error: 'invalid_verb', message })
+    }
+    // Bare params pass only on a commit that carries the preview it applies.
+    expect((await send({}, { commit: true })).statusCode).toBe(400)
+    expect(mocks.read).not.toHaveBeenCalled()
   })
   it('an unknown operation cannot be reverted, by name', async () => {
     const res = await app.inject({ method: 'POST', url: '/products/root/studio/matrix/verbs/nope/revert' })
@@ -330,7 +367,7 @@ describe('Sells from — the door, the verb and its Undo', () => {
   it('set-source: preview → commit as one operation → Undo puts the market default back ([]) through the same door', async () => {
     const req = { params: { verb: 'set-source', codes: ['MI-3PL', 'IT-MAIN'] }, targets: [{ rowId: 'c1', coordinateKey: 'AMAZON:IT' }] }
     const preview = await app.inject({ method: 'POST', url: '/products/root/studio/matrix/verbs', headers: { 'x-test-permissions': STOCK }, payload: { ...req, commit: false } })
-    expect(preview.json()).toMatchObject({ verb: 'set-source', confirm: 'none', changes: [{ rowId: 'c1', coordinateKey: 'AMAZON:EU', cell: 'source', from: [], to: ['MI-3PL', 'IT-MAIN'], fromLabel: 'Default (IT-MAIN)', toLabel: 'MI-3PL + IT-MAIN', note: 'Follow shows 14' }] })
+    expect(preview.json()).toMatchObject({ verb: 'set-source', confirm: 'none', changes: [{ rowId: 'c1', coordinateKey: 'AMAZON:EU', cell: 'source', from: [], to: ['MI-3PL', 'IT-MAIN'], fromLabel: 'IT-MAIN', toLabel: 'MI-3PL + IT-MAIN', note: 'Follow shows 14' }] })
     expect(preview.json().notices).toContain('Amazon EU: this covers IT DE')
 
     const commit = await app.inject({ method: 'POST', url: '/products/root/studio/matrix/verbs', headers: { 'x-test-permissions': STOCK }, payload: { params: { verb: 'set-source' }, targets: req.targets, commit: true, preview: preview.json() } })

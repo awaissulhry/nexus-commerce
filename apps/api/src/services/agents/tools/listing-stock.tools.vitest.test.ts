@@ -166,6 +166,16 @@ describe('set-listing-price', () => {
       targets: [{ rowId: ids.child, coordinateKey: 'AMAZON:IT' }] } })
   })
 
+  it('adjusts prices by an amount in the market\'s currency (dry run); a percent and an amount together, or another currency, are refused', async () => {
+    const at = (extra: Json) => dryRun('set-listing-price', { productId: ids.child, action: 'adjust-prices', targets: [{ rowId: ids.child, coordinateKey: 'EBAY:IT' }], ...extra })
+    const ok = await at({ amount: -2.5, currency: 'eur' })
+    expect(ok.ok, ok.error).toBe(true)
+    const change = (ok.preview as Json).changes[0]
+    expect(change).toMatchObject({ cell: 'price', to: Math.round((change.from - 2.5) * 100) / 100 })
+    expect(await at({ percent: -5, amount: -2.5, currency: 'EUR' })).toMatchObject({ ok: false, error: expect.stringContaining('Adjust prices by a percent or by an amount, not both') })
+    expect(await at({ amount: -2.5, currency: 'GBP' })).toMatchObject({ ok: false, error: expect.stringContaining('This market sells in EUR') })
+  })
+
   it('another business\'s product is not found', async () => {
     expect(await dryRun('set-listing-price', { productId: 'no-such-product', action: 'set-price', price: 5, targets: [{ rowId: 'x', coordinateKey: 'EBAY:IT' }] })).toEqual({ ok: false, error: 'Product not found' })
   })

@@ -22,7 +22,9 @@ import {
   type MatrixRead,
   type MatrixRowRead,
   type MatrixVerbId,
+  type MatrixVerbParams,
   type MatrixVerbRequest,
+  type QueueCell,
   type SourceCell,
   type SyncCell,
   type VerbChange,
@@ -142,18 +144,116 @@ export const STILL_HELD = 'Stock sync held — release it to push'
 const money = (v: number | null | undefined, currency: string): string =>
   v == null ? '—' : new Intl.NumberFormat('en-GB', { style: 'currency', currency }).format(v)
 const round2 = (n: number) => Math.round(n * 100) / 100
+const cents = (n: number) => Math.round(n * 100)
 
-export const syncLabel = (s: SyncCell | null | undefined): string => {
-  if (!s) return '—'
+/* ── the grid's own words (Matrix bulk Edit v2, 2026-10-12) ─────────────────────────────────────────────────────────
+   A preview line's `fromLabel → toLabel` says what the Matrix cell says now and will say, in the GRID's words. These
+   mirror the design system's cell texts (`apps/web/src/design-system/grid/renderers/matrixCells.ts`: `matrixModeWord`,
+   `matrixQtyText`, the Buffer text of `matrixCellText`, `matrixQueueWord`). That file is mirrored byte-for-byte into
+   `apps/factory`, which has no `@nexus/shared`, so the words are restated here and held equal by
+   `apps/web/src/app/products/[id]/edit/_studio/matrix/preview-words.vitest.test.ts`. */
+
+const DASH = '—'
+
+/** The grid's Mode word (`matrixModeWord`): `Follow` · `Pinned` · `—` (Amazon-managed, Inactive). */
+export function syncModeWord(s: SyncCell | null | undefined): string {
+  if (!s || s.kind === 'FBA_EXCLUDED' || s.kind === 'CLOSED') return DASH
+  return s.mode === 'PINNED' ? 'Pinned' : 'Follow'
+}
+
+/** The grid's Qty text (`matrixQtyText`): `<n>` · `⏸ <n>` (sync held: what the market keeps) · `—` · `Uncounted` · `Inactive`. */
+export function syncQtyText(s: SyncCell | null | undefined): string {
+  if (!s) return DASH
   switch (s.kind) {
-    case 'FOLLOW': return `Follow ${s.intended ?? '—'}`
-    case 'PINNED': return `Pinned ${s.intended ?? '—'}`
-    case 'PAUSED': return `Sync held (${s.via === 'POLICY' ? 'policy' : 'listing'}) · ${s.mode === 'PINNED' ? 'Pinned' : 'Follow'}`
-    case 'FBA_EXCLUDED': return MATRIX_COPY.amazonManaged
-    case 'UNCOUNTED': return MATRIX_COPY.uncounted
+    case 'FBA_EXCLUDED': return DASH
     case 'CLOSED': return MATRIX_COPY.closed
+    case 'UNCOUNTED': return MATRIX_COPY.uncounted
+    case 'PAUSED': return `⏸ ${s.held ?? DASH}`
+    case 'FOLLOW':
+    case 'PINNED': return s.intended == null ? DASH : String(s.intended)
   }
 }
+
+/** The grid's Buffer text: the number; `—` where the buffer is not used (a fixed quantity, Amazon-managed, Inactive). */
+export function syncBufferText(s: SyncCell | null | undefined): string {
+  if (!s || s.kind === 'FBA_EXCLUDED' || s.kind === 'CLOSED' || s.mode === 'PINNED') return DASH
+  return String(s.buffer)
+}
+
+/** A quantity as the grid's Mode and Qty cells say it together: `Follow · 10` · `Pinned · 5` · `Follow · ⏸ 4` · `Inactive`. */
+export const syncLabel = (s: SyncCell | null | undefined): string => {
+  const mode = syncModeWord(s)
+  return mode === DASH ? syncQtyText(s) : `${mode} · ${syncQtyText(s)}`
+}
+
+/** `2 min` · `9 h` · `3 d` — the grid's age of a queue row (`matrixAgo`). */
+function ageOf(iso: string | null, now: number): string | null {
+  if (!iso) return null
+  const t = Date.parse(iso)
+  if (Number.isNaN(t)) return null
+  const s = Math.max(0, Math.round((now - t) / 1000))
+  if (s < 60) return `${s} s`
+  if (s < 3600) return `${Math.round(s / 60)} min`
+  if (s < 86_400) return `${Math.round(s / 3600)} h`
+  return `${Math.round(s / 86_400)} d`
+}
+
+/**
+ * The grid's Sync word (`matrixQueueWord`): `Sent` · `Queued` · `Sending` · `Failed` · `Dead` · `Sync held · listing` ·
+ * `Sync held · policy` · `Never` · `—`. With `now`, a sent push says its age as the grid does (`Sent 2 min`); the preview
+ * passes none, so the same read gives the same words on the page and on the server.
+ */
+export function queueStateWord(q: QueueCell | null | undefined, now?: number): string {
+  if (!q) return DASH
+  switch (q.state) {
+    case 'sent': { const ago = now == null ? null : ageOf(q.at, now); return ago ? `Sent ${ago}` : 'Sent' }
+    case 'queued': return 'Queued'
+    case 'sending': return 'Sending'
+    case 'failed': return 'Failed'
+    case 'dead': return 'Dead'
+    case 'paused': return `Sync held · ${q.via === 'POLICY' ? 'policy' : 'listing'}`
+    case 'never': return 'Never'
+  }
+}
+
+/* ── refusal sentences: plain words, no "coordinate" (bulk Edit v2) ───────────────────────────────────────────────── */
+
+export const PREVIEW_WORDS = {
+  notOnMarket: 'Not on this market',
+  noPriceHere: 'This market has no price here',
+  noStockHere: MATRIX_COPY.sourceNone,
+  formulaPrice: 'A formula sets this price — edit the formula instead',
+  priceAboveZero: 'A price must be more than 0',
+  noPriceToChange: 'No price to change',
+  noSourcePrice: 'No price on the market you copy from',
+  marketCurrency: (currency: string) => `This market sells in ${currency}`,
+  ownPrice: 'Own price (was the base price)',
+  nothingToRetry: 'Nothing to retry here — the last push did not fail',
+  bufferUnused: 'Used when the market follows your stock',
+} as const
+
+/**
+ * PURE — why `adjust-prices` params cannot run, or null: a percent OR an amount (never both); a finite percent; an amount
+ * other than 0 with its 3-letter currency (`EUR`). The route and the agent tool ask this before the preview.
+ */
+export function adjustPricesProblem(p: { percent?: unknown; amount?: unknown; currency?: unknown }): string | null {
+  const percent = p.percent !== undefined && p.percent !== null
+  const amount = p.amount !== undefined && p.amount !== null
+  if (percent && amount) return 'Adjust prices by a percent or by an amount, not both'
+  if (amount) {
+    if (typeof p.amount !== 'number' || !Number.isFinite(p.amount) || p.amount === 0) return 'The amount must be a number other than 0'
+    return typeof p.currency === 'string' && /^[A-Z]{3}$/.test(p.currency) ? null : 'An amount needs its currency as a 3-letter code (EUR, GBP …)'
+  }
+  if (p.currency !== undefined && p.currency !== null) return 'A currency goes with an amount, not with a percent'
+  if (!percent) return 'Adjust prices needs a percent or an amount'
+  return typeof p.percent === 'number' && Number.isFinite(p.percent) ? null : 'The percent must be a number'
+}
+
+/** An amount cut of this share of the old price, or more, asks for the typed word (as a percent cut of 30 % does). */
+const BIG_CUT_PERCENT = 30
+const bigAmountCut = (params: MatrixVerbParams, changes: readonly VerbChange[]): boolean =>
+  params.verb === 'adjust-prices' && typeof params.amount === 'number' && changes.some((c) =>
+    typeof c.from === 'number' && typeof c.to === 'number' && c.from > 0 && (cents(c.from) - cents(c.to)) * 100 >= cents(c.from) * BIG_CUT_PERCENT)
 
 /** The FOLLOW number: pool − buffer, floored at 0; null when the pool is uncounted. Mirrors the resolver (preview only). */
 export const followQty = (s: Pick<SyncCell, 'poolAvailable' | 'buffer'>): number | null =>
@@ -248,7 +348,7 @@ export function previewVerb(read: MatrixRead, req: MatrixVerbRequest, ctx: Previ
     if (seen.has(dedupe)) continue
     seen.add(dedupe)
     const hit = target(read, { rowId: t.rowId, coordinateKey: key })
-    if (!hit) { const row = read.rows.find(r => r.id === t.rowId); if (row) refuse(row, key, 'no-listing', 'No listing on this coordinate'); continue }
+    if (!hit) { const row = read.rows.find(r => r.id === t.rowId); if (row) refuse(row, key, 'no-listing', PREVIEW_WORDS.notOnMarket); continue }
     const { row, coord, cells } = hit
     if (row.role === 'parent') { refuse(row, key, 'not-applicable', 'The parent row has no listing of its own'); continue }
     if (coord.sharedInventoryWith) notices.add(MATRIX_COPY.euNotice(coord.sharedInventoryWith))
@@ -260,24 +360,30 @@ export function previewVerb(read: MatrixRead, req: MatrixVerbRequest, ctx: Previ
       case 'adjust-prices':
       case 'copy-prices': {
         if (!ctx.can('products.price.edit')) { refuse(row, key, 'permission', 'You do not have permission to change prices (products.price.edit)'); break }
-        if (!cells.price) { refuse(row, key, 'not-applicable', 'This coordinate has no price'); break }
-        if (cells.price.source === 'formula') { refuse(row, key, 'formula', 'A formula owns this cell — edit the formula'); break }
+        if (!cells.price) { refuse(row, key, 'not-applicable', PREVIEW_WORDS.noPriceHere); break }
+        if (cells.price.source === 'formula') { refuse(row, key, 'formula', PREVIEW_WORDS.formulaPrice); break }
         if (cells.writable.price === false) { refuse(row, key, 'not-applicable', cells.writeBlockedReason.price ?? 'This price cannot be changed here'); break }
         let to: number | null = null
-        let note: string | undefined
         if (p.verb === 'set-price') to = round2(p.value)
-        else if (p.verb === 'adjust-prices') { if (cells.price.value == null) { refuse(row, key, 'not-applicable', 'No price to adjust'); break } to = round2(cells.price.value * (1 + p.percent / 100)) }
-        else {
+        else if (p.verb === 'adjust-prices') {
+          const old = cells.price.value
+          if (old == null) { refuse(row, key, 'not-applicable', PREVIEW_WORDS.noPriceToChange); break }
+          /* By an amount (bulk Edit v2): only in the market's own currency — €2 is not £2. */
+          if (typeof p.amount === 'number') {
+            if (p.currency !== coord.currency) { refuse(row, key, 'currency', PREVIEW_WORDS.marketCurrency(coord.currency)); break }
+            to = round2(old + p.amount)
+          } else to = round2(old * (1 + (p.percent ?? NaN) / 100))
+        } else {
           const src = row.cells[p.fromCoordinateKey]
           const srcCoord = read.coordinates.find(c => c.key === p.fromCoordinateKey)
-          if (!src?.price || src.price.value == null) { refuse(row, key, 'no-listing', 'No price on the source market'); break }
-          if (srcCoord && srcCoord.currency !== coord.currency) { refuse(row, key, 'currency', `Different currencies (${srcCoord.currency} → ${coord.currency}) — set the price instead`); break }
+          if (!src?.price || src.price.value == null) { refuse(row, key, 'no-listing', PREVIEW_WORDS.noSourcePrice); break }
+          if (srcCoord && srcCoord.currency !== coord.currency) { refuse(row, key, 'currency', `${PREVIEW_WORDS.marketCurrency(coord.currency)}, not ${srcCoord.currency} — set the price instead`); break }
           to = src.price.value
         }
-        if (to == null || to < 0) { refuse(row, key, 'not-applicable', 'A price must be zero or more'); break }
+        /* Every channel refuses a price of 0, and the door refuses it (above 0): refused here, before Apply. */
+        if (to == null || !Number.isFinite(to) || to <= 0) { refuse(row, key, 'not-applicable', PREVIEW_WORDS.priceAboveZero); break }
         if (to === cells.price.value) break
-        if (cells.price.source === 'master') note = 'Set here (was: follows the base price)'
-        if (to === 0) note = 'A price of 0 is refused by every channel'
+        const note = cells.price.source === 'master' ? PREVIEW_WORDS.ownPrice : undefined
         changes.push({ rowId: row.id, sku: row.sku, coordinateKey: key, cell: 'price', from: cells.price.value, to, fromLabel: cur, toLabel: money(to, coord.currency), note })
         break
       }
@@ -289,7 +395,7 @@ export function previewVerb(read: MatrixRead, req: MatrixVerbRequest, ctx: Previ
       case 'push-now':
       case 'retry-sync': {
         const s = cells.sync
-        if (!s) { refuse(row, key, 'not-applicable', 'This coordinate carries no inventory'); break }
+        if (!s) { refuse(row, key, 'not-applicable', PREVIEW_WORDS.noStockHere); break }
         if (s.kind === 'FBA_EXCLUDED') { refuse(row, key, 'amazon-managed', `${MATRIX_COPY.amazonManaged} — the quantity is never written`); break }
         if (s.kind === 'CLOSED' && p.verb !== 'resume-sync') { refuse(row, key, 'not-applicable', MATRIX_COPY.closedHint); break }
         const from = syncLabel(s)
@@ -297,33 +403,37 @@ export function previewVerb(read: MatrixRead, req: MatrixVerbRequest, ctx: Previ
           if (!Number.isInteger(p.value) || p.value < 0) { refuse(row, key, 'not-applicable', 'A pinned quantity is a whole number, zero or more'); break }
           if (s.mode === 'PINNED' && s.intended === p.value && s.kind === 'PINNED') break
           if (p.value === 0 && coord.channel === 'EBAY' && ctx.ebayZeroAllowed && ctx.ebayZeroAllowed(coord.accountId, coord.market) !== true) { refuse(row, key, 'guard', EBAY_ZERO_REFUSAL); break }
-          changes.push({ rowId: row.id, sku: row.sku, coordinateKey: key, cell: 'syncQty', from: s.intended, to: p.value, fromLabel: from, toLabel: `Pinned ${p.value}`, note: s.kind === 'PAUSED' ? STILL_HELD : undefined })
+          changes.push({ rowId: row.id, sku: row.sku, coordinateKey: key, cell: 'syncQty', from: s.intended, to: p.value, fromLabel: from, toLabel: `Pinned · ${p.value}`, note: s.kind === 'PAUSED' ? STILL_HELD : undefined })
         } else if (p.verb === 'set-follow') {
           if (s.mode === 'FOLLOW') break /* already following — paused or not, nothing to change (resume is its own verb) */
           const to = followQty(s)
-          changes.push({ rowId: row.id, sku: row.sku, coordinateKey: key, cell: 'syncMode', from: s.mode, to: 'FOLLOW', fromLabel: from, toLabel: to == null ? `Follow · ${MATRIX_COPY.uncounted}` : `Follow ${to}`, note: s.kind === 'PAUSED' ? STILL_HELD : undefined })
+          changes.push({ rowId: row.id, sku: row.sku, coordinateKey: key, cell: 'syncMode', from: s.mode, to: 'FOLLOW', fromLabel: from, toLabel: `Follow · ${to ?? MATRIX_COPY.uncounted}`, note: s.kind === 'PAUSED' ? STILL_HELD : undefined })
         } else if (p.verb === 'set-buffer') {
           if (!Number.isInteger(p.value) || p.value < 0) { refuse(row, key, 'not-applicable', 'A buffer is a whole number, zero or more'); break }
           if (s.buffer === p.value) break
           const after = followQty({ poolAvailable: s.poolAvailable, buffer: p.value })
-          changes.push({ rowId: row.id, sku: row.sku, coordinateKey: key, cell: 'syncBuffer', from: s.buffer, to: p.value, fromLabel: `Buffer ${s.buffer}`, toLabel: `Buffer ${p.value}`, note: s.mode === 'FOLLOW' ? `Follow pushes ${after ?? '—'}` : 'Stored — applies when this listing follows the pool' })
+          /* A fixed quantity ignores its buffer (the grid shows `—`): the number is kept, for when the market follows again.
+             The labels name the field: an approval card with one line shows only `from → to`. */
+          const note = s.mode === 'FOLLOW' ? (after == null ? MATRIX_COPY.uncounted : `The market shows ${after}`) : PREVIEW_WORDS.bufferUnused
+          changes.push({ rowId: row.id, sku: row.sku, coordinateKey: key, cell: 'syncBuffer', from: s.buffer, to: p.value, fromLabel: `Buffer ${syncBufferText(s)}`, toLabel: `Buffer ${p.value}`, note })
         } else if (p.verb === 'pause-sync') {
           if (s.kind === 'PAUSED' && s.via === 'POLICY') { refuse(row, key, 'not-applicable', 'Stock sync is already held by the channel policy — manage it in Sync Control'); break }
           if (s.kind === 'PAUSED') break
-          changes.push({ rowId: row.id, sku: row.sku, coordinateKey: key, cell: 'syncState', from: s.kind, to: 'PAUSED', fromLabel: from, toLabel: `Sync held (listing) · ${s.mode === 'PINNED' ? 'Pinned' : 'Follow'}`, note: `The channel keeps ${s.held ?? '—'} until the stock sync is released` })
+          /* The stock-sync verbs speak the grid's Sync words (`queueStateWord`): the Sync cell is the one that changes. */
+          changes.push({ rowId: row.id, sku: row.sku, coordinateKey: key, cell: 'syncState', from: s.kind, to: 'PAUSED', fromLabel: queueStateWord(cells.queue), toLabel: queueStateWord({ state: 'paused', at: null, reason: null, syncType: null, via: 'LISTING' }), note: `The channel keeps ${s.held ?? '—'} until the stock sync is released` })
         } else if (p.verb === 'resume-sync') {
           if (s.kind !== 'PAUSED') break
           if (s.via === 'POLICY') { refuse(row, key, 'not-applicable', 'Held by the channel policy — releasing here changes nothing; release it in Sync Control'); break }
-          const to = s.mode === 'PINNED' ? `Pinned ${s.held ?? '—'}` : `Follow ${followQty(s) ?? MATRIX_COPY.uncounted}`
-          changes.push({ rowId: row.id, sku: row.sku, coordinateKey: key, cell: 'syncState', from: 'PAUSED', to: s.mode, fromLabel: from, toLabel: to, note: 'Releasing recalculates the quantity and pushes it at once' })
+          const pushes = s.mode === 'PINNED' ? s.held ?? DASH : followQty(s) ?? MATRIX_COPY.uncounted
+          changes.push({ rowId: row.id, sku: row.sku, coordinateKey: key, cell: 'syncState', from: 'PAUSED', to: s.mode, fromLabel: queueStateWord(cells.queue), toLabel: `Queued · ${pushes}`, note: 'Releasing recalculates the quantity and pushes it at once' })
         } else if (p.verb === 'push-now') {
           if (s.kind === 'PAUSED') { refuse(row, key, 'not-applicable', STILL_HELD); break }
           if (s.kind === 'UNCOUNTED') { refuse(row, key, 'not-applicable', MATRIX_COPY.uncountedHint); break }
-          changes.push({ rowId: row.id, sku: row.sku, coordinateKey: key, cell: 'syncState', from: cells.queue?.state ?? 'never', to: 'queued', fromLabel: cells.queue?.state ?? 'never', toLabel: `Queued · ${s.intended ?? '—'}`, note: 'A fresh quantity push' })
+          changes.push({ rowId: row.id, sku: row.sku, coordinateKey: key, cell: 'syncState', from: cells.queue?.state ?? 'never', to: 'queued', fromLabel: queueStateWord(cells.queue), toLabel: `Queued · ${s.intended ?? '—'}`, note: 'A fresh quantity push' })
         } else if (p.verb === 'retry-sync') {
           const q = cells.queue
-          if (!q || (q.state !== 'failed' && q.state !== 'dead')) { refuse(row, key, 'not-applicable', 'Nothing to retry on this coordinate'); break }
-          changes.push({ rowId: row.id, sku: row.sku, coordinateKey: key, cell: 'syncState', from: q.state, to: 'queued', fromLabel: q.state, toLabel: 'Queued', note: q.reason ?? undefined })
+          if (!q || (q.state !== 'failed' && q.state !== 'dead')) { refuse(row, key, 'not-applicable', PREVIEW_WORDS.nothingToRetry); break }
+          changes.push({ rowId: row.id, sku: row.sku, coordinateKey: key, cell: 'syncState', from: q.state, to: 'queued', fromLabel: queueStateWord(q), toLabel: 'Queued', note: q.reason ?? undefined })
         }
         break
       }
@@ -366,20 +476,24 @@ export function previewVerb(read: MatrixRead, req: MatrixVerbRequest, ctx: Previ
         if (problem) { refuse(row, key, 'not-applicable', problem); break }
         const to = sellsFromCodes(p.codes, src.marketDefault)
         if (sameSourceCodes(to, src.own)) break
+        /* The grid's From words: what it sells from now (the server's own choice first) → the new list, or the default's. */
+        const now = src.effective.length ? src.effective.map((e) => e.code) : src.own
         changes.push({
           rowId: row.id, sku: row.sku, coordinateKey: key, cell: 'source', from: [...src.own], to,
-          fromLabel: MATRIX_COPY.sourceLabel(src.own, src.marketDefault), toLabel: MATRIX_COPY.sourceLabel(to, src.marketDefault),
-          note: sourceNote(row, src, to, cells.sync),
+          fromLabel: MATRIX_COPY.sourceLabel(now, src.marketDefault), toLabel: MATRIX_COPY.sourceLabel(to, src.marketDefault),
+          note: to.length ? sourceNote(row, src, to, cells.sync) : `${MATRIX_COPY.sourceDefault} · ${sourceNote(row, src, to, cells.sync)}`,
         })
         break
       }
     }
   }
 
-  const big = changes.length >= 100 || (verb === 'adjust-prices' && req.params.verb === 'adjust-prices' && req.params.percent <= -30)
+  const p = req.params
+  const big = changes.length >= 100 || (p.verb === 'adjust-prices' && typeof p.percent === 'number' && p.percent <= -BIG_CUT_PERCENT) || bigAmountCut(p, changes)
   /* Typed confirmation (Owner 2026-10-08), the only level besides none: an AMAZON fulfilment change (it converts the offer
-     on Amazon — the method is the word), and a big change (100 changes or more, or a price cut of 30 % or more — APPLY).
-     An eBay fulfilment change is Nexus only, with this preview and Undo: no word to type. */
+     on Amazon — the method is the word), and a big change (100 changes or more, or a price cut of 30 % or more — by a
+     percent, or by an amount that takes any line down 30 % or more — APPLY). An eBay fulfilment change is Nexus only,
+     with this preview and Undo: no word to type. */
   const amazonFulfilment = req.params.verb === 'set-fulfilment' && changes.some((c) => read.coordinates.find((x) => x.key === c.coordinateKey)?.channel === 'AMAZON')
   const confirm: VerbPreview['confirm'] = amazonFulfilment || big ? 'type-to-confirm' : 'none'
   const confirmWord = confirm === 'type-to-confirm' ? (amazonFulfilment && req.params.verb === 'set-fulfilment' ? req.params.method : 'APPLY') : null
