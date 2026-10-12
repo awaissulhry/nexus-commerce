@@ -159,8 +159,16 @@ export async function promotePublishedOffers(publicationId: string, options: { a
  */
 export async function promoteOffersAfterResult(publicationId: string, data: Record<string, any>, result: StudioPublishResult, userId: string | null): Promise<void> {
   if (data.scope?.channel !== 'AMAZON' || !(PROMOTABLE as readonly string[]).includes(result.status)) return
-  try { await promotePublishedOffers(publicationId, { actor: userId }) }
+  let promoted: OfferPromotionResult | null = null
+  try { promoted = await promotePublishedOffers(publicationId, { actor: userId }) }
   catch (error) { logger.warn('studio publication: offer promotion failed; the result sweep runs it again', { publicationId, error: error instanceof Error ? error.message : String(error) }) }
+  // Amazon Business — Publish replaced the whole offer root with the business offer AS IT WAS AT REVIEW: a business price
+  // sent since then is put back as Nexus keeps it now (one business send per listing; nothing when they agree).
+  const listingIds = [...new Set([...(promoted?.promoted ?? []), ...(promoted?.dropped ?? []), ...(promoted?.refused ?? [])].map((r) => r.listingId))]
+  if (listingIds.length) {
+    const { queueHeldBusinessSends } = await import('./business-price-write.service.js')
+    await queueHeldBusinessSends({ listingIds, actor: userId ?? 'publish', cause: 'publish' })
+  }
 }
 
 const RECOVERY_GRACE_MS = 60_000

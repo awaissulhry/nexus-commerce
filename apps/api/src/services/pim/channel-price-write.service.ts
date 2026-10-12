@@ -812,6 +812,14 @@ export interface HeldPriceSendResult {
  * Best effort for the caller: a failure is logged, never thrown.
  */
 export async function sendHeldPrices(input: { listingIds?: string[]; productIds?: string[]; actor: string; cause: 'resume' | 'publish' }): Promise<HeldPriceSendResult> {
+  const result = await sendHeldPriceRows(input)
+  // Amazon Business — a business price kept in Nexus while the listing could not be sent to goes now (never fails this).
+  const { queueHeldBusinessSends } = await import('./business-price-write.service.js')
+  await queueHeldBusinessSends({ listingIds: input.listingIds, productIds: input.productIds, actor: input.actor, cause: input.cause })
+  return result
+}
+
+async function sendHeldPriceRows(input: { listingIds?: string[]; productIds?: string[]; actor: string; cause: 'resume' | 'publish' }): Promise<HeldPriceSendResult> {
   const result: HeldPriceSendResult = { sent: [], stillHeld: [], superseded: [], refused: [] }
   const scope: Prisma.OutboundSyncQueueWhereInput | null = input.listingIds?.length ? { channelListingId: { in: input.listingIds } }
     : input.productIds?.length ? { channelListing: { productId: { in: input.productIds } } } : null

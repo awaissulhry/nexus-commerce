@@ -74,7 +74,7 @@ export type Placement =
   | { kind: 'identity' } | { kind: 'type' } | { kind: 'action' } | { kind: 'relationship' }
   | { kind: 'id-type' } | { kind: 'id-value' } | { kind: 'identifier' }
   | { kind: 'price' } | { kind: 'sale'; part: 'value' | 'start' | 'end' } | { kind: 'currency' }
-  | { kind: 'pricing-rule'; what: string } | { kind: 'quantity' } | { kind: 'managed' }
+  | { kind: 'pricing-rule'; what: string } | { kind: 'business'; audience: string } | { kind: 'quantity' } | { kind: 'managed' }
   | { kind: 'offer-draft'; leaf: AmazonOfferLeaf }
   | { kind: 'foreign-market'; market: string } | { kind: 'foreign-language'; language: string }
   | { kind: 'duplicate'; of: string } | { kind: 'not-in-type'; attribute: string; legacy: boolean }
@@ -239,7 +239,7 @@ export function placeHeader(parsed: AmazonTemplateParse, header: string, spec: C
   }
   if (PRICE_ROOTS.has(root)) {
     const audience = qualifier(key, 'audience')
-    if (audience && audience !== 'ALL') return { kind: 'pricing-rule', what: `the ${audience} audience price` }
+    if (audience && audience !== 'ALL') return { kind: 'business', audience }
     if (path.at(-1) === 'currency') return { kind: 'currency' }
     if (root === 'purchasable_offer' && path[1] === 'our_price') return { kind: 'price' }
     if (root === 'purchasable_offer' && path[1] === 'discounted_price') return { kind: 'sale', part: path.at(-1) === 'start_at' ? 'start' : path.at(-1) === 'end_at' ? 'end' : 'value' }
@@ -526,6 +526,7 @@ export function mapAmazonWorkbook(parsed: AmazonTemplateParse, specs: Map<string
         case 'currency': currencyCell = { header, raw }; continue
         case 'sale': sale[place.part] = raw; sale.headers.push(header); continue
         case 'pricing-rule': { const reason = `Automated pricing rules stay in the pricing workspace (${place.what}; file value ${raw}).`; exclude(header, reason); log(header, 'excluded', { reason }); continue }
+        case 'business': { const reason = `The ${place.audience} offer is the listing's business price in Nexus, set there and sent by its own business send; it is not imported from a file (file value ${raw}).`; exclude(header, reason); log(header, 'excluded', { reason }); continue }
         case 'offer-draft': { const reason = offerDraftReason(place.leaf, raw); exclude(header, reason); log(header, 'excluded', { reason }); continue }
         case 'quantity': { const reason = `Stock is not imported: EU merchant quantity is one number for all EU markets, and FBA stock is Amazon's (file value ${raw}).`; exclude(header, reason); log(header, 'excluded', { reason }); continue }
         case 'managed': { const reason = `Managed commercial field: use the dedicated pricing or inventory workflow (file value ${raw}).`; exclude(header, reason); log(header, 'excluded', { reason }); continue }

@@ -63,3 +63,21 @@ it('readBusinessTiers reads the stored JSON tolerantly', () => {
   expect(readBusinessTiers({ type: 'other', levels: [] })).toBeNull()
   expect(readBusinessTiers(null)).toBeNull()
 })
+
+describe('review fixes (2026-10-12)', () => {
+  it('an unknown tier type is refused, never read as fixed', () => {
+    expect(businessPriceProblems({ setting: fixed(99, { type: 'weird' as never, levels: [{ minQty: 2, value: 95 }] }), normalPrice: 105 })[0]).toContain('a percent or a fixed price')
+  })
+  it('fixed tiers with a percent business price are refused (it moves with the normal price)', () => {
+    expect(businessPriceProblems({ setting: pct(5, { type: 'fixed', levels: [{ minQty: 2, value: 90 }] }), normalPrice: 105 })[0]).toContain('go with an exact business price')
+  })
+  it('a percent tier that reaches 0.00 is refused', () => {
+    expect(businessPriceProblems({ setting: fixed(0.01, { type: 'percent', levels: [{ minQty: 2, value: 60 }] }), normalPrice: 105 })[0]).toContain('above 0')
+  })
+})
+
+it('rounds to the NEAREST cent, and a price equal to the minimum is allowed', () => {
+  expect(businessPriceOf(pct(5), 29.9)).toBe(28.41) // 28.405 → 28.41, never 28.40
+  expect(businessPriceProblems({ setting: fixed(90), normalPrice: 105, minPrice: 90 })).toEqual([])
+  expect(businessPriceProblems({ setting: fixed(150), normalPrice: 200, maxPrice: 150 })).toEqual([])
+})

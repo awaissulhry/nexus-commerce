@@ -94,6 +94,7 @@ const CHANNEL_COLORS: Record<string, string> = {
 
 const SYNC_TYPE_LABELS: Record<string, string> = {
   PRICE_UPDATE: 'Price',
+  BUSINESS_PRICE_UPDATE: 'Business price',
   QUANTITY_UPDATE: 'Qty',
   LISTING_SYNC: 'Listing',
   OFFER_SYNC: 'Offer',

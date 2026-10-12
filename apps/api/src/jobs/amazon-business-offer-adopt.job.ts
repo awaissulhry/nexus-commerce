@@ -1,7 +1,8 @@
 /**
  * Amazon Business step 3b — nightly copy of the business offers Amazon already holds into Nexus (Owner's pick 3B,
- * 2026-10-12; services/amazon/business-offer-adopt.service.ts). Reads Amazon, writes Nexus only, and only on listings
- * where Nexus manages no business price yet.
+ * 2026-10-12; services/amazon/business-offer-adopt.service.ts), only on listings where Nexus has never kept a business
+ * price. Step 4 — the same scan verifies the business prices Nexus keeps (`amazonBusinessLive` on the listing) and
+ * queues one business send where Amazon differs or holds none; that send is the only thing it sends to Amazon.
  *
  * Runs at 04:30 UTC, after the schema refresh (04:00) has refreshed which markets list the B2B audience for each account.
  * Per business: registered through lib/cron/clustered.ts (hard rule 7), which runs it once per active profile inside

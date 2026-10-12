@@ -2,12 +2,14 @@
  * Amazon Business (B2B) — the business price and quantity tiers of ONE Amazon listing (one SKU in one market).
  * PURE: the API's door and, later, the Matrix screen read the same rules.
  *
- * Stored on `ChannelListing` (`businessPriceRule`, `businessPricePercent`, `businessPrice`, `businessTiers`):
+ * Stored on `ChannelListing` (`businessPriceRule`, `businessPricePercent`, `businessPrice`, `businessTiers`); no rule = no
+ * business offer (a removal reaches Amazon too):
  *   - PERCENT_OFF — the normal send price − X %, rounded to the cent. It follows every normal price change and is never
  *     taken from the sale price. 0 % = the normal price (quantity discounts only).
  *   - FIXED — an exact price.
  *   - tiers — Amazon's `quantity_discount_plan`: 1 to 5 levels, `percent` (off the business price) or `fixed` (a unit
- *     price at that quantity).
+ *     price at that quantity). Fixed tiers go with an exact business price only: a percent business price moves with the
+ *     normal price, and a fixed tier would soon stop being cheaper than it.
  *
  * The rules are Amazon's, from the seller-scoped product type schema (read 2026-10-12) and help pages G201995470,
  * G201824530 and G201812760 (~/nexus-archive/2026-10-12-amazon-business-b2b/A-amazon-rules.md). Nexus refuses only
@@ -20,7 +22,7 @@ export type BusinessTierType = 'percent' | 'fixed'
 export interface BusinessTierLevel { minQty: number; value: number }
 export interface BusinessTiers { type: BusinessTierType; levels: BusinessTierLevel[] }
 
-/** What Nexus keeps for one listing. `null` (no setting) = Nexus manages no business offer there. */
+/** What Nexus keeps for one listing. `null` (no setting) = no business offer there. */
 export interface BusinessPriceSetting {
   rule: BusinessPriceRuleName
   /** PERCENT_OFF only: 0–99, two decimals. */
@@ -65,7 +67,8 @@ export function readBusinessTiers(raw: unknown): BusinessTiers | null {
 
 /** The tiers' own shape, without prices: count, quantities, percent range, order. */
 function tierShapeProblems(tiers: BusinessTiers): string[] {
-  const { levels } = tiers
+  if (tiers.type !== 'percent' && tiers.type !== 'fixed') return ['Quantity discounts are a percent or a fixed price per unit.']
+  const levels = Array.isArray(tiers.levels) ? tiers.levels : []
   if (levels.length < 1 || levels.length > BUSINESS_TIERS_MAX) return [`Amazon takes 1 to ${BUSINESS_TIERS_MAX} quantity discounts; this has ${levels.length}.`]
   const out: string[] = []
   levels.forEach((l, i) => {
@@ -108,6 +111,9 @@ export function businessPriceProblems(input: {
     out.push('This listing has no normal price, and Amazon needs one before a business price.')
   }
   if (setting.tiers) out.push(...tierShapeProblems(setting.tiers))
+  if (setting.rule === 'PERCENT_OFF' && setting.tiers?.type === 'fixed') {
+    out.push('Fixed quantity prices go with an exact business price: a percent business price moves with the normal price. Use percent discounts, or an exact business price.')
+  }
   if (out.length) return out
 
   const normal = input.normalPrice as number
@@ -119,7 +125,8 @@ export function businessPriceProblems(input: {
     const prices = businessTierPrices(business, setting.tiers)
     if (setting.tiers.type === 'fixed' && !(prices[0]! < business)) out.push(`Discount 1: ${money(prices[0]!)} must be lower than the business price ${money(business)}.`)
     const lowest = Math.min(...prices)
-    if (isMoney(input.minPrice) && lowest < input.minPrice) out.push(`A quantity discount reaches ${money(lowest)}, below this listing's minimum price ${money(input.minPrice)}: Amazon refuses it.`)
+    if (lowest < 0.01) out.push(`A quantity discount reaches ${money(lowest)}: every price must be above 0.`)
+    else if (isMoney(input.minPrice) && lowest < input.minPrice) out.push(`A quantity discount reaches ${money(lowest)}, below this listing's minimum price ${money(input.minPrice)}: Amazon refuses it.`)
   }
   return out
 }

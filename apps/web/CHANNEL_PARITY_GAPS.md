@@ -23,7 +23,8 @@
 - ✅ Channel stock drift detection (CS-series)
 
 ### Outbound (Nexus → Amazon) — GATED (publish gate OFF during observation)
-- ✅ Price updates — wired via `masterPriceService` → `OutboundSyncQueue` → `pricing-outbound.service.ts` → `amazonSpApiClient.patchListingPrice()`
+- ✅ Price updates — every price change → the price door → `OutboundSyncQueue` `PRICE_UPDATE` → `syncToAmazon` (a merge on the live offer; `amazon/purchasable-offer.ts`)
+- ✅ Business (B2B) prices — the business price door → `BUSINESS_PRICE_UPDATE` → `syncToAmazon` (`amazon/business-offer-send.ts`)
 - ✅ Listing publish — full listing create/update via `amazon-sp-api.client.ts` (LISTING + LISTING_OFFER_ONLY semantics)
 - ✅ Inventory quantity updates — via `ReviseInventoryStatus` / SP-API patch
 - ✅ FBA inbound shipment creation (`amazon-mcf.service.ts`)

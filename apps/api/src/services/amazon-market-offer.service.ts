@@ -318,6 +318,8 @@ export async function reopenMarketOffers(opts: {
   opts.targets.forEach(t => whereCoordinate({ ...t, channel: 'AMAZON' }))
 
   let processed = 0
+  /** The listings reopened here: their business offer is sent again afterwards. */
+  const reopened: string[] = []
   for (const t of opts.targets) {
     try {
       const cl = await loadRow(t)
@@ -406,6 +408,7 @@ export async function reopenMarketOffers(opts: {
           data: { offerClosedAt: null, offerActive: true, offerClosedBy: null, offerCloseReason: null },
         })
         result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'REOPENED', detail: undefined, fba: true, ...(fromNexus ? { fromNexus } : {}) })
+        reopened.push(cl.id)
         result.updated++
         processed++
         continue
@@ -474,6 +477,7 @@ export async function reopenMarketOffers(opts: {
         },
       })
       result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'REOPENED', detail: undefined, ...(fromNexus ? { fromNexus } : {}) })
+      reopened.push(cl.id)
       result.updated++
       processed++
     } catch (e) {
@@ -483,6 +487,12 @@ export async function reopenMarketOffers(opts: {
       logger.error('market-offer reopen stopped mid-bulk', { processed, remaining: result.remaining, error: result.error })
       break
     }
+  }
+  // Amazon Business — the reopen replayed the offer as it was at the close (or Nexus's normal offer only): the business
+  // offer is sent again as Nexus keeps it now (nothing when they agree).
+  if (reopened.length) {
+    const { queueHeldBusinessSends } = await import('./pim/business-price-write.service.js')
+    await queueHeldBusinessSends({ listingIds: reopened, actor: opts.actor, cause: 'reopen' })
   }
   logger.info('market-offer reopen applied', { actor: opts.actor, updated: result.updated, failed: result.failed })
   return result

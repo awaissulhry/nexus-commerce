@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 const s = vi.hoisted(() => ({
-  findFirst: vi.fn(), findMany: vi.fn(), update: vi.fn(), queue: vi.fn(), patch: vi.fn(), get: vi.fn(), grants: vi.fn(),
+  findFirst: vi.fn(), findMany: vi.fn(), update: vi.fn(), queue: vi.fn(), patch: vi.fn(), get: vi.fn(), grants: vi.fn(), business: vi.fn(async () => []),
 }))
+// Amazon Business — a reopen sends the business offer again as Nexus keeps it (its own module; asserted below).
+vi.mock('./pim/business-price-write.service.js', () => ({ queueHeldBusinessSends: s.business }))
 // P1.3 — a queue row is created through `createOutboundRow`, which asks the BP.S3
 // preflight whether this seller account is SHARED. This coordinate's account is not
 // shared with anyone (no ChannelAccountGrant rows), so no claim is needed; the model
@@ -76,6 +78,8 @@ describe('acknowledged offer lifecycle and ONE fail-closed FBA predicate', () =>
     expect(data).toEqual({ offerClosedAt: null, offerActive: true, offerClosedBy: null, offerCloseReason: null })
     expect(s.queue).not.toHaveBeenCalled()
     expect(s.findMany).not.toHaveBeenCalled()
+    // The replay restored the business offer as it was at the close: it is sent again as Nexus keeps it.
+    expect(s.business).toHaveBeenCalledExactlyOnceWith({ listingIds: [row().id], actor: 'user', cause: 'reopen' })
   })
   it('without allowFba an FBA row is still refused (Sync Control and every other caller)', async () => {
     s.findFirst.mockResolvedValue({ ...row(), fulfillmentMethod: 'FBA' })
