@@ -812,7 +812,7 @@ async function channelResultOf(ap: ApprovalRow, tool: AgentTool | undefined, cha
         : ads.waiting ? 'waiting'
           : ads.sent || (ads.created && ads.created.total > 0 && ads.created.atAmazon === ads.created.total) ? 'reached'
             : 'unknown'
-    return { state, words: adMeaning(ads) }
+    return { state, words: adMeaning(ads, { byRule: ap.decisionVia === 'auto' }) }
   }
   if (EBAY_AD_TOOLS.has(ap.toolName)) {
     const ebay = await ebayDeliveryOf(ap.id)

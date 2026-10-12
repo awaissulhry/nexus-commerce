@@ -44,7 +44,8 @@ const cancelQueuedAdWrite: AgentTool = {
   category: 'advertising',
   description:
     'Cancel an Amazon ad write Nexus queued and has not sent yet — a bid, a budget, a status, a placement — while it ' +
-    'waits in its grace window (about 5 minutes after it was queued), as the staged changes\' Discard does: one write by ' +
+    'waits in its grace window (about 5 minutes after it was queued; a request a person approved is sent at once, with ' +
+    'no window), as the staged changes\' Discard does: one write by ' +
     'outboundQueueId, or every write of one request still waiting by changeSetId (a Claude request\'s approval id, as ' +
     'approval-status names it). Nexus only: nothing reaches Amazon, and Nexus puts each field back where it still holds ' +
     'the cancelled value. The preview names every write it cancels (from → to, on what, who queued it, when its window ' +

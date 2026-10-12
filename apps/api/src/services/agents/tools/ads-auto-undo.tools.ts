@@ -4,9 +4,9 @@
  *   undo-worse-ad-change   puts back ONE automatic ad change auto-undo judged clearly worse (its judgementId, from
  *                          automation-detail A19 or automation-activity A19): the bid, the daily budget or the placement
  *                          goes back to what it was before that change, through the Undo's own path
- *                          (rollback.service.ts reverseJudgedWrite: compare-and-set, the ads audit, the 5-minute window
- *                          to cancel). At PROPOSE auto-undo asks for it itself; Claude may ask for one too (at OBSERVE, a
- *                          judgement it would undo). A person approves it in Nexus — never by rule (ceiling ask): what
+ *                          (rollback.service.ts reverseJudgedWrite: compare-and-set, the ads audit; a person approved it,
+ *                          so it is sent at once, with no cancel window — Owner 2026-10-12). At PROPOSE auto-undo asks
+ *                          for it itself; Claude may ask for one too (at OBSERVE, a judgement it would undo). A person approves it in Nexus — never by rule (ceiling ask): what
  *                          runs alone is auto-undo at AUTO, inside its caps, which a person turned up.
  *
  * Refused, and not queued, when the change was not judged clearly worse, was undone already, waits in another request,
@@ -38,7 +38,7 @@ async function preview(args: Record<string, unknown>, ctx?: Pick<ToolContext, 'a
   const what = LEVER_WORDS(restore.lever)
   const effect = `Puts the ${what} of ${restore.label} back from ${valueWords(restore.lever, restore.fromValue)} to ${valueWords(restore.lever, restore.toValue)} `
     + `(minor units of its currency; percent for a placement), the value before an automatic change by ${judgement.by} that auto-undo judged clearly worse`
-    + `${judgement.why ? `: ${judgement.why}` : ''}. Through the Undo's own path, after its 5-minute window to cancel (a placement goes at once).`
+    + `${judgement.why ? `: ${judgement.why}` : ''}. Through the Undo's own path: once a person approves it, it is sent to Amazon at once, with no cancel window.`
   return {
     ok: true,
     preview: {
@@ -63,7 +63,7 @@ const undoWorseAdChange: AgentTool = {
     'Put back ONE automatic Amazon ad change that auto-undo (A19) judged clearly worse: an engine\'s, a rule\'s at AUTO, '
     + 'or a Claude change that ran by rule — never a person\'s own change or one a person approved. Name its judgementId '
     + '(automation-detail A19 lists the judgements, automation-activity A19 counts them). The bid, daily budget or placement '
-    + 'goes back to its value before that change, through the Undo\'s own path, after its 5-minute window to cancel. '
+    + 'goes back to its value before that change, through the Undo\'s own path, sent to Amazon at once when a person approves it. '
     + 'Nothing changes until a person approves it in Nexus; it never runs by rule (auto-undo itself undoes at AUTO, inside '
     + 'its caps, once a person turned it up). Refused, and not queued, when the change was not judged clearly worse, was '
     + 'undone or superseded since (a later change on the same entity), already waits in another request, or Amazon\'s '

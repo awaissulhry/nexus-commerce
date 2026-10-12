@@ -19,9 +19,19 @@ import type { FEATURES, FIELDS } from '@nexus/shared/permissions'
  * such a run their re-check asks the write gate as a machine's write instead, so a halt, autonomy OFF, pins, the
  * allowlist and his own limits refuse it exactly as before.
  */
-const ruleApprovedRun = new AsyncLocalStorage<true>()
-export const runAsRuleApproved = <T>(work: () => Promise<T>): Promise<T> => ruleApprovedRun.run(true, work)
-export const isRuleApprovedRun = (): boolean => ruleApprovedRun.getStore() === true
+const approvedRunBy = new AsyncLocalStorage<'rule' | 'person'>()
+export const runAsRuleApproved = <T>(work: () => Promise<T>): Promise<T> => approvedRunBy.run('rule', work)
+export const isRuleApprovedRun = (): boolean => approvedRunBy.getStore() === 'rule'
+
+/**
+ * Owner decided 2026-10-12 — the other side: set while `execute` carries out a request a PERSON approved (on the
+ * Approvals page, with his code in Claude through confirm-change, or a change plan he approved), never a standing
+ * rule's. An Amazon ad write his approved request queues is sent at once, with no 5-minute cancel window: he has
+ * decided already (ads-mutation.service.ts `holdUntilFor`). Every automatic write keeps the window. One store with the
+ * rule's mark, so the innermost run decides.
+ */
+export const runAsPersonApproved = <T>(work: () => Promise<T>): Promise<T> => approvedRunBy.run('person', work)
+export const isPersonApprovedRun = (): boolean => approvedRunBy.getStore() === 'person'
 
 export type RiskTier = 'low' | 'medium' | 'high'
 

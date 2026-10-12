@@ -34,7 +34,7 @@ import {
 } from '../../lib/workspace-context.js'
 import { getTool, listTools } from './tool-registry.js'
 import { takeToolCall } from './tool-rate.js'
-import { PLAN_TOOL, runAsRuleApproved, type AgentTool, type DecidedVia, type ToolContext, type ToolDoor, type ToolPermission, type ToolResult, type ToolSurface } from './tool-types.js'
+import { PLAN_TOOL, runAsPersonApproved, runAsRuleApproved, type AgentTool, type DecidedVia, type ToolContext, type ToolDoor, type ToolPermission, type ToolResult, type ToolSurface } from './tool-types.js'
 
 /** Which front door a person came through — recorded, never trusted for access. */
 export type ToolVia = 'app' | 'claude'
@@ -350,10 +350,13 @@ export async function executeTool(
     ...(options.approvedByPerson === true && principal.kind === 'user' ? { approvedByPerson: true } : {}),
     ...(options.decidedVia ? { decidedVia: options.decidedVia } : {}),
   }
-  // 4A — an approved run no person approved is judged as the machine's write (see runAsRuleApproved).
+  // 4A — an approved run no person approved is judged as the machine's write (see runAsRuleApproved). Owner 2026-10-12 —
+  // a run a person approved is marked as his (runAsPersonApproved): its Amazon ad writes go at once, with no cancel window.
   const run = options.approvalId && context.approvedByPerson !== true
     ? () => runAsRuleApproved(() => execute(input, context))
-    : () => execute(input, context)
+    : options.approvalId
+      ? () => runAsPersonApproved(() => execute(input, context))
+      : () => execute(input, context)
   const raw = await asPrincipal(principal, run)
   return { tool, raw, visible: visibleTo(principal, tool, raw) }
 }

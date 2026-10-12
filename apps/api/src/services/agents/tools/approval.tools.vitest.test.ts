@@ -74,9 +74,13 @@ describe('A9 — approval-status follows an approved ad change to Amazon', () =>
     const id = await askAndRun('bulk-ad-bid-change', { bids: [{ targetId: 't-it', bidCents: 50 }, { targetId: 't-it2', bidCents: 65 }] })
     let s = await status(id)
     expect(s.ads).toEqual({ reach: 'live', writes: 2, waiting: 2, sent: 0, refusedByGate: 0, failed: 0, notSent: 0 })
-    expect(s.meaning).toBe('Approved and written in Nexus. Amazon: 2 waiting to be sent (a queued ad write waits out a 5-minute cancel window) (of 2 writes).')
+    expect(s.meaning).toBe('Approved and written in Nexus. Amazon: 2 waiting to be sent (a person approved it, so it goes within a minute, with no cancel window) (of 2 writes).')
 
     const [first, second] = await queueOf(id)
+    // Owner 2026-10-12 — a person approved it: both writes are due now, with no 5-minute cancel window.
+    const due = await inside(() => database.client.outboundSyncQueue.findMany({ where: { id: { in: [first.q, second.q] } }, select: { holdUntil: true } }))
+    expect(due).toHaveLength(2)
+    for (const row of due) expect(row.holdUntil!.getTime()).toBeLessThanOrEqual(Date.now())
     await setQueue(first.q, 'SUCCESS')
     await setQueue(second.q, 'SKIPPED', { errorCode: 'WRITE_GATE_DENIED', errorMessage: '[ADS-WRITE-GATE-DENY] entity_bounds: bid 65 above Campaign.maxBidCents 60' })
     s = await status(id)
@@ -88,6 +92,17 @@ describe('A9 — approval-status follows an approved ad change to Amazon', () =>
     const noMoney = person('u-viewer', 'claude', [FEATURES.aiRun, FEATURES.aiView])
     await setQueue(second.q, 'SKIPPED', { errorCode: 'WRITE_GATE_DENIED' })
     expect((await status(id, noMoney)).ads).not.toHaveProperty('gateReasons')
+  })
+
+  it('a write no person approved keeps the 5-minute cancel window (Owner 2026-10-12)', async () => {
+    vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'live')
+    const { updateAdTargetWithSync } = await import('../../advertising/ads-mutation.service.js')
+    for (const actor of ['automation:test-engine', 'user:u-person'] as const) {
+      const out = await inside(() => updateAdTargetWithSync({ adTargetId: 't-it', patch: { bidCents: actor.startsWith('user:') ? 52 : 51 }, actor, reason: 'test', ...(actor.startsWith('user:') ? { manual: true } : {}) }))
+      expect(out).toMatchObject({ ok: true })
+      const row = await inside(() => database.client.outboundSyncQueue.findUniqueOrThrow({ where: { id: out.outboundQueueId! }, select: { holdUntil: true } }))
+      expect(row.holdUntil!.getTime()).toBeGreaterThan(Date.now() + 4 * 60_000)
+    }
   })
 
   it('sandbox: written in Nexus, nothing sent to Amazon — said so', async () => {

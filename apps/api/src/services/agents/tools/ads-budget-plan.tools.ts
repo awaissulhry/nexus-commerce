@@ -31,7 +31,7 @@ import { marketCurrency } from '../../pim/market-currency.js'
 import { budgetBoundsProblem, budgetPlanFor, currentMonth, deleteBudgetPlan, setCampaignLimit, upsertBudgetPlan, type ClaudeBudgetPlan } from '../../advertising/ads-budget-manager.service.js'
 import { restoreBudgetBaselines } from '../../advertising/ads-budget-baseline.service.js'
 import { amountLabel, campaignCurrency } from './ads-tool-guards.js'
-import { approvedRun, BY_RULE_WORDS, canonical, notRun, ruleFactsFor, ruleRefusal, spOnlyRefusal, type RuleWrite, type StoredReach } from './ads-change-kit.js'
+import { approvedRun, BY_RULE_WORDS, canonical, notRun, queuedNote, ruleFactsFor, ruleRefusal, spOnlyRefusal, type RuleWrite, type StoredReach } from './ads-change-kit.js'
 import { adKitLimits, STEP_PCT_LIMITS, type KitItem } from './ads-autonomy-kit.js'
 import {
   alsoChangedByOf, budgetEnginesOf, budgetLimits, budgetRaiseWords, budgetReach, budgetReachNote, budgetRecheck, budgetRuleRefusal, budgetStepUp, codeGate, codeRuleOf,
@@ -555,7 +555,7 @@ const restoreBudgetBaselinesTool: AgentTool = {
       ? { before: { campaigns: before, changeSetId: run.changeSetId }, after: await RESTORE_BUDGET_BASELINES_UNDO.current({ before: null, after: { campaigns: before } }) }
       : undefined
     const failed = out.results.filter((r) => r.outcome === 'failed')
-    const data = { restored: out.restored, failed: out.failed, reach: p.reach, changeSetId: run.changeSetId, note: 'Queued for Amazon: each write is sent after the 5-minute cancel window. approval-status follows them.' }
+    const data = { restored: out.restored, failed: out.failed, reach: p.reach, changeSetId: run.changeSetId, note: queuedNote(run, 'each write') }
     if (!ran.length) return notRun(`Not run: every restore was refused by the write — ${named(failed.map((r) => `campaign "${r.name}" (${r.why ?? 'refused'})`))}. Nothing changed.`)
     if (failed.length) return { ok: false, data, change, error: `Partly run: ${ran.length} restored, ${failed.length} refused by the write — ${named(failed.map((r) => `campaign "${r.name}" (${r.why ?? 'refused'})`))}. undo-change puts back what ran.` }
     return { ok: true, data, change }
