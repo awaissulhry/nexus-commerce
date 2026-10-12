@@ -44,8 +44,9 @@ export function BidRulesClient() {
   const [market] = useSharedAdsMarket({ raw: params.get('market') })
   const view = params.get('view') === 'bids' ? 'bids' : 'rules'
   const show = params.get('show')
-  const read = useBidRules(market)
   const filter = useScopeFilter(market)
+  // The filter's lists go with the rules read: its clash count is the filter's (the rules are narrowed below).
+  const read = useBidRules(market, filter)
   // The rules the filter reaches, for the tiles and the Rules view alike (nothing while its lists are read).
   const answer = useMemo(() => (read.answer && !filter.pending ? narrowBidRules(read.answer, filter.reach) : null), [read.answer, filter.pending, filter.reach])
   const data: BidRulesData = { ...read, answer }
@@ -101,6 +102,7 @@ export function BidRulesClient() {
           <BidTiles
             view={view}
             totals={data.answer?.totals ?? null}
+            clashesReading={read.listsKey !== filter.key}
             bids={view === 'bids' ? bidsTotals : null}
             tile={view === 'rules' && isRulesTile(show) ? show : null}
             bidsShow={view === 'bids' && isBidsShow(show) ? show : null}

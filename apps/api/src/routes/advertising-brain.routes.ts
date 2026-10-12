@@ -48,6 +48,7 @@ import { isBrainRequest } from '../services/advertising/brain/requests-read.js'
 import { missingPermissions, permissionMessage, requestPrincipal, ToolAccessError, type UserPrincipal } from '../services/agents/call-tool.js'
 import { decideApproval, requestApproval } from '../services/agents/approval-gate.service.js'
 import { getTool } from '../services/agents/tool-registry.js'
+import { ID_LIST } from '../services/advertising/ads-scope-lists.js'
 import { decideFleetApproval } from '../services/agent-fleet/approval-inbox.service.js'
 
 /** A decision on a request: approve (with the code when it raises) or reject (the person's words optional). */
@@ -105,7 +106,9 @@ const advertisingBrainRoutes: FastifyPluginAsync = async (fastify) => {
       return withoutHiddenMoney(request, out.data, money)
     }
 
-  fastify.get('/advertising/automation/brain/bid-brain/:view', read(BID_BRAIN_VIEWS, BID_BRAIN_VIEW_INPUT, BID_BRAIN_MONEY, readBidBrainView))
+  // The page's filter bar lists (2026-10-12) on the HTTP read only (the Bid page's Clashes tab); Claude's tool input is unchanged.
+  const BID_BRAIN_PAGE_INPUT = BID_BRAIN_VIEW_INPUT.extend({ portfolioIds: ID_LIST.optional(), campaignIds: ID_LIST.optional(), adGroupIds: ID_LIST.optional(), productIds: ID_LIST.optional() })
+  fastify.get('/advertising/automation/brain/bid-brain/:view', read(BID_BRAIN_VIEWS, BID_BRAIN_PAGE_INPUT, BID_BRAIN_MONEY, readBidBrainView))
 
   /**
    * A5 rows 19–24 — ask the gate for a brain tool as this person; `atOnce` (op kill) approves and runs it now as the same

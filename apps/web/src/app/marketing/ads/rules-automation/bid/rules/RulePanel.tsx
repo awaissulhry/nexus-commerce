@@ -36,6 +36,7 @@ import {
   type BidMode, type BidRuleRow, type BrainPick, type BrainStep, type Effect, type PreviewResult, type PreviewSample, type RefKind, type RuleChange, type RuleHistory,
 } from './bidRulesModel'
 import { fetchBrainDiff, fetchHistory, fetchPreview, fetchRuns, fetchStoredRule, type BrainDiffDay } from './ruleApi'
+import { addApiParams, type ScopeApi } from '../../_shared/scopeFilter/scopeFilterModel'
 import { runRollbackable, runSummary, runWord, settingGroups, type RunRow, type SettingGroup } from './ruleSettings'
 import type { NoticeWords } from './savedNotice'
 import type { BrainStopAction, BrainStopView, StopNotice } from './brainStop'
@@ -62,6 +63,8 @@ export type AnyTab = PanelTab | 'clashes' | 'campaigns'
 
 export interface RulePanelProps {
   row: BidRuleRow
+  /** The filter bar's lists (2026-10-12): the Brain's Clashes tab counts inside them, as the Clashes tile does. */
+  filterLists?: ScopeApi | null
   tab: AnyTab
   /** Change the tab in place (a chip that opens a tab). */
   onTab(tab: AnyTab): void
@@ -192,7 +195,7 @@ export function RulePanel(p: RulePanelProps) {
         {tab === 'history' && <History {...p} />}
         {tab === 'effect' && <EffectTab row={p.row} market={p.market} />}
         {tab === 'settings' && !brain && <Settings row={p.row} market={p.market} reloadKey={p.reloadKey} />}
-        {tab === 'clashes' && brain && <Clashes market={p.market} />}
+        {tab === 'clashes' && brain && <Clashes market={p.market} lists={p.filterLists ?? null} />}
         {tab === 'campaigns' && brain && <BrainCampaigns row={p.row} market={p.market} reloadKey={p.reloadKey} held={p.brainHeld} autoHeld={p.brainAutoHeld} onPick={p.onBrainPick} />}
       </div>
     </DetailModal>
@@ -578,8 +581,9 @@ function BrainCampaigns({ row, market, reloadKey, held, autoHeld, onPick }: {
 
 // ── the brain's clashes ─────────────────────────────────────────────────────────────────────────────────────────────
 
-function Clashes({ market }: { market: string }) {
-  const { data, error, reload } = useLoad(() => fetchBrainDiff(market), [market])
+function Clashes({ market, lists }: { market: string; lists: ScopeApi | null }) {
+  const listsKey = addApiParams(new URLSearchParams(), lists).toString()
+  const { data, error, reload } = useLoad(() => fetchBrainDiff(market, lists), [market, listsKey])
   const days = useMemo(() => (data ? [...data.days].reverse() : []), [data])
   const columns: Array<PanelColumn<BrainDiffDay>> = [
     { key: 'day', label: 'Day', render: (d) => dayWords(d.day) },
@@ -593,6 +597,7 @@ function Clashes({ market }: { market: string }) {
     <div className={styles.stack}>
       <div className={styles.chips}>
         <HintTag label="Clashes (24 h)" hint="Two automatic writers changed one keyword within 24 hours" />
+        {listsKey && <HintTag label="Filtered" hint="Only the keywords inside the filter bar's picks" />}
       </div>
       {error && <NotRead what="Clashes" error={error} onRetry={reload} />}
       {!data && !error && <Loading />}
