@@ -32,6 +32,8 @@ export interface PublishResult {
   error?: string
   mode: PublishMode
   outcome?: PublishOutcome
+  /** The channel answered and refused this one item (see `PublishArgs.execute`). */
+  itemLevel?: boolean
 }
 
 export interface PublishArgs {
@@ -48,8 +50,12 @@ export interface PublishArgs {
    * (matches the eBay "post-gate connection lookup" rule).
    */
   resolveSeller: () => Promise<{ id: string } | { error: string }>
-  /** The live marketplace call. Only invoked in live/sandbox mode. */
-  execute: (ctx: { sellerId: string; mode: PublishMode }) => Promise<{ ok: boolean; error?: string }>
+  /**
+   * The live marketplace call. Only invoked in live/sandbox mode. `itemLevel`: the channel answered and refused THIS
+   * item (its data) — the account and the channel work, so it is not a circuit failure: one listing's problem never
+   * holds the whole market (MOSS IT 2026-10-12: one listing with no product type held every Amazon IT push ~1 h 40 min).
+   */
+  execute: (ctx: { sellerId: string; mode: PublishMode }) => Promise<{ ok: boolean; error?: string; itemLevel?: boolean }>
 }
 
 export class ListingPublishService {
@@ -116,7 +122,7 @@ export class ListingPublishService {
     }
 
     // 6. Live call.
-    let r: { ok: boolean; error?: string }
+    let r: { ok: boolean; error?: string; itemLevel?: boolean }
     try {
       r = await execute({ sellerId, mode })
     } catch (err) {
@@ -124,10 +130,12 @@ export class ListingPublishService {
       return fail('timeout', mode, sellerId, err instanceof Error ? err.message : String(err), Date.now() - t0)
     }
 
-    gate.recordOutcome(sellerId, marketplaceId, r.ok)
+    // An item-level refusal is neither a success nor a circuit failure: the circuit is left as it is.
+    const itemLevel = !r.ok && r.itemLevel === true
+    if (!itemLevel) gate.recordOutcome(sellerId, marketplaceId, r.ok)
     audit(sellerId, mode, r.ok ? 'success' : 'failed', r.error ?? null, Date.now() - t0)
     if (!r.ok) {
-      return { success: false, channel, status: 'FAILED', message: `Failed to sync to ${channel}`, error: r.error ?? 'Unknown error', mode, outcome: 'failed' }
+      return { success: false, channel, status: 'FAILED', message: `Failed to sync to ${channel}`, error: r.error ?? 'Unknown error', mode, outcome: 'failed', ...(itemLevel ? { itemLevel } : {}) }
     }
     return { success: true, channel, status: 'SUCCESS', message: `Product ${sku} synced to ${channel}`, mode }
   }

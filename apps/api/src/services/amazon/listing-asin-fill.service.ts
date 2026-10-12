@@ -44,6 +44,16 @@ export interface AsinFillReport {
   counts: Record<AsinFillOutcome, number>
 }
 
+/**
+ * Amazon's own product type for the item (the summary's `productType`), or null. The Listings PATCH every stock and price
+ * push sends needs one; a listing linked to an item Nexus did not publish has none of its own.
+ */
+export function summaryProductType(read: { rawResponse?: unknown }): string | null {
+  const summaries = object(read.rawResponse).summaries
+  const raw = object(Array.isArray(summaries) ? summaries[0] : null).productType
+  return typeof raw === 'string' && raw.trim() ? raw.trim().toUpperCase() : null
+}
+
 /** Rows one call reads at most: the operator route's cap. */
 export const ASIN_FILL_MAX = 200
 /** Rows the retry sweep reads per business and run. */
@@ -171,6 +181,18 @@ export async function fillAmazonListingAsins(listingIds: readonly string[], opti
             ? { ...base, sku, outcome: 'already_had_asin', asin: now.externalListingId, reason: 'Another write recorded an ASIN first.' }
             : { ...base, sku, outcome: 'error', reason: 'The listing changed while Amazon was read. Nothing was written.' })
           return
+        }
+        // Amazon's product type, recorded only on a listing that has none (MOSS IT 2026-10-12: linked rows without one
+        // were refused on every stock push). Never over one the listing has.
+        const productType = summaryProductType(read)
+        if (productType) {
+          await prisma.$executeRaw`
+            UPDATE "ChannelListing"
+            SET "platformAttributes" = (CASE WHEN jsonb_typeof("platformAttributes") = 'object' THEN "platformAttributes" ELSE '{}'::jsonb END)
+                  || jsonb_build_object('productType', ${productType}::text),
+                "version" = "version" + 1,
+                "updatedAt" = now()
+            WHERE id = ${id} AND COALESCE(btrim("platformAttributes"->>'productType'), '') = ''`
         }
         written.add(row.productId)
         filled.push(id)
