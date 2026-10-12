@@ -68,6 +68,21 @@ export function approvedRun(ctx: ToolContext, why: string): ApprovedRun | { refu
 }
 
 /**
+ * Owner decided 2026-10-12 — when the writes an approved run queued leave for Amazon, as its result says it. The mutation
+ * layer decides it the same way (ads-mutation.service.ts holdUntilFor): a run a person approved is sent at once, with no
+ * cancel window; a run the business's rule approved waits out the 5-minute cancel window, as every automatic write does.
+ * `what` is the subject ("it", "each bid"); `them` the pronoun approval-status follows.
+ */
+export function queuedNote(run: Pick<ApprovedRun, 'manual'>, what: string, them: 'it' | 'them' = 'them'): string {
+  return run.manual
+    ? `Queued for Amazon: ${what} is sent at once (within a minute), with no cancel window — a person approved it. approval-status follows ${them}.`
+    : `Queued for Amazon: ${what} is sent after the 5-minute cancel window — the business's rule ran it. approval-status follows ${them}.`
+}
+
+/** Owner decided 2026-10-12 — the same, said before anyone decided (a preview, a tool description). */
+export const SENT_WHEN_WORDS = 'once a person approves it, each write is sent to Amazon at once; run by the business\'s rule, each waits out a 5-minute cancel window first'
+
+/**
  * The person who asked (the request's run); the approver when the request names nobody (a fleet run). A campaign born
  * suppressed is flagged suppressed by them (create-ad-campaign, apply-ads-playbook).
  */

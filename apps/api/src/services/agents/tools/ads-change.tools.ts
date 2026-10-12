@@ -67,7 +67,7 @@ import { openStopHolds, restoreBidsFor, restoreCampaignBids, suppressCampaignBid
 import { stopBidsFor, strategySourceWords } from '../../advertising/ads-strategy/effective.js'
 import { playbookHoldOf, playbookHolds, startOnlyRefusal } from '../../advertising/ads-playbook/held.js'
 import { amountLabel, campaignCurrency, checkLiveReach, liftSuppressionRefusal, suppressionOf, type AdWriteIntent, type LiveReach } from './ads-tool-guards.js'
-import { afterwardsArg, afterwardsNote, afterwardsOf, alsoChangedBy, approvedRun, bidStepOf, BY_RULE_WORDS, handBackEvidence, handBackRefusal, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, adWriteRefusalOf, bidWriteOf, stopBidOf, STOP_MIN_CENTS, storedReach, strategyFactsMoney, withStepPast, type BidAfterwards, type BidStep, type RuleWrite, type StoredReach } from './ads-change-kit.js'
+import { afterwardsArg, afterwardsNote, afterwardsOf, alsoChangedBy, approvedRun, bidStepOf, BY_RULE_WORDS, handBackEvidence, handBackRefusal, notRun, queuedNote, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, adWriteRefusalOf, bidWriteOf, stopBidOf, STOP_MIN_CENTS, storedReach, strategyFactsMoney, withStepPast, type BidAfterwards, type BidStep, type RuleWrite, type StoredReach } from './ads-change-kit.js'
 import type { AdWrite } from '@nexus/shared/ads-ad-product'
 import { adKitLimits, LIMIT_FACTS_MONEY, STEP_PCT_LIMITS, STEP_POINT_LIMITS, type KitItem } from './ads-autonomy-kit.js'
 import { strategyBidReader } from '../../advertising/ads-strategy/bids.js'
@@ -777,7 +777,7 @@ async function budgetListExecute(args: Record<string, unknown>, ctx: ToolContext
   const change = ran.length
     ? { before: { campaigns: ran, changeSetId: run.changeSetId }, after: { campaigns: await budgetsNow(ran.map((r) => r.campaignId)) } }
     : undefined
-  const data = { changed: ran.length, failed: failed.length, reach: p.reach, changeSetId: run.changeSetId, note: 'Queued for Amazon: each change is sent after the 5-minute cancel window. approval-status follows them.' }
+  const data = { changed: ran.length, failed: failed.length, reach: p.reach, changeSetId: run.changeSetId, note: queuedNote(run, 'each change') }
   if (!ran.length) return notRun(`Not run: every budget write was refused (${failed.slice(0, 3).join('; ')}). Nothing changed.`)
   if (failed.length) return { ok: false, data, change, error: `Partly run: ${ran.length} set, ${failed.length} refused by the write — ${failed.slice(0, 3).join('; ')}. undo-change puts back what ran.` }
   return { ok: true, data, change }
@@ -897,7 +897,7 @@ const setCampaignBudget: AgentTool = {
         reach: p.reach,
         changeSetId: run.changeSetId,
         outboundQueueId: out.outboundQueueId,
-        note: 'Queued for Amazon: it is sent after the 5-minute cancel window. approval-status follows it.',
+        note: queuedNote(run, 'it', 'it'),
       },
       change: {
         before: { campaignId: p.campaign.id, dailyBudgetCents: p.currentBudgetCents, changeSetId: run.changeSetId, ...sourcesRecord([changeSource]) },
@@ -1506,7 +1506,7 @@ const bulkAdBidChange: AgentTool = {
     return {
       ok: out.failed === 0,
       ...(out.failed ? { error: `Partly run: ${out.applied} queued, ${out.failed} refused by the bid write. Undo-change reverses what was queued.` } : {}),
-      data: { applied: out.applied, skipped: out.skipped, failed: out.failed, reach: p.reach, afterwards: p.afterwards, changeSetId: run.changeSetId, note: 'Queued for Amazon: each bid is sent after the 5-minute cancel window. approval-status follows them.' },
+      data: { applied: out.applied, skipped: out.skipped, failed: out.failed, reach: p.reach, afterwards: p.afterwards, changeSetId: run.changeSetId, note: queuedNote(run, 'each bid') },
       change: {
         // W3-1 — the writes this change made (its undo reverses only them) and the recommendations it settled.
         before: {

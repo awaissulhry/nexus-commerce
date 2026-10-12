@@ -461,8 +461,12 @@ function runWords(b: NonNullable<AdDelivery['build']>): string {
   return `The run is ${b.status.toLowerCase()}.`
 }
 
-/** A9 — what an executed ad change did, in a sentence: in Nexus, then at Amazon. */
-export function adMeaning(d: AdDelivery): string {
+/**
+ * A9 — what an executed ad change did, in a sentence: in Nexus, then at Amazon. Owner 2026-10-12 — a write waiting to be
+ * sent says when it goes: at once when a person approved the change, after the 5-minute cancel window when the business's
+ * rule ran it (`byRule`: AgentApproval.decisionVia 'auto'), as the mutation layer queued it (holdUntilFor).
+ */
+export function adMeaning(d: AdDelivery, decided: { byRule?: boolean } = {}): string {
   // PB-5a / B-1 — a build or a Replicate run runs on its own after approval: say where the run is, never only "run".
   if (d.build) {
     const created = d.created ? ` In Nexus: ${d.created.total} created${d.reach === 'sandbox' ? '' : `, ${d.created.atAmazon} of them confirmed at Amazon`}.` : ''
@@ -475,7 +479,7 @@ export function adMeaning(d: AdDelivery): string {
   }
   const parts = [
     d.sent ? `${d.sent} sent` : '',
-    d.waiting ? `${d.waiting} waiting to be sent (a queued ad write waits out a 5-minute cancel window)` : '',
+    d.waiting ? `${d.waiting} waiting to be sent (${decided.byRule ? 'run by the business\'s rule, a write waits out a 5-minute cancel window' : 'a person approved it, so it goes within a minute, with no cancel window'})` : '',
     d.refusedByGate ? `${d.refusedByGate} refused by the write gate` : '',
     d.failed ? `${d.failed} failed` : '',
     d.notSent - (d.nexusOnly ?? 0) ? `${d.notSent - (d.nexusOnly ?? 0)} not sent (skipped or cancelled)` : '',
@@ -535,6 +539,7 @@ const approvalStatus: AgentTool = {
         operatorNote: true,
         preview: true,
         args: true,
+        decisionVia: true,
       },
     })
     if (!ap) return { ok: false, error: 'Approval not found' }
@@ -577,7 +582,7 @@ const approvalStatus: AgentTool = {
           : ap.status !== 'executed' ? (MEANING[ap.status] ?? null)
           : publication ? publishedMeaning(publication.status)
           : engineRun ? engineRunMeaning(engineRun.run)
-          : ads ? adMeaning(ads) : EBAY_AD_TOOLS.has(ap.toolName) ? ebayMeaning(ebay) : executedMeaning(ap.toolName, channels),
+          : ads ? adMeaning(ads, { byRule: ap.decisionVia === 'auto' }) : EBAY_AD_TOOLS.has(ap.toolName) ? ebayMeaning(ebay) : executedMeaning(ap.toolName, channels),
         ...(outcome?.rejectedReason ? { rejectedReason: outcome.rejectedReason } : {}),
         ...(outcome?.replacedBy ? { replacedBy: outcome.replacedBy } : {}),
         ...(outcome?.handedBack ? { handedBack: outcome.handedBack } : {}),

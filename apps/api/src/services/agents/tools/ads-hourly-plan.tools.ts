@@ -854,7 +854,7 @@ async function runApproved(args: Record<string, unknown>, ctx: ToolContext): Pro
       changeSetId: run.changeSetId,
       ...(gate.at ? { approvedWithCode: gate.at.toISOString() } : {}),
       note: release
-        ? 'The plan is saved in Nexus; the bids it gave back are queued for Amazon (each after the 5-minute cancel window). approval-status follows them.'
+        ? 'The plan is saved in Nexus; the bids it gave back are queued for Amazon at once, with no cancel window (as the screen\'s give-back). approval-status follows them.'
         : 'The plan is saved in Nexus; the hourly bid engine applies it from its next run.',
     },
   }

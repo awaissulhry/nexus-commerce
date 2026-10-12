@@ -4,7 +4,9 @@
  * Every PATCH on a Campaign / AdGroup / AdTarget flows through here:
  *   1. UPSERT the local row (operator sees the change immediately)
  *   2. Enqueue an OutboundSyncQueue row with syncType=AD_* and
- *      holdUntil = NOW + 5min (gives a grace window to cancel)
+ *      holdUntil = NOW + 5min (gives a grace window to cancel) — or NOW
+ *      for a write a person approved, or one a caller sends at once
+ *      (holdUntilFor, Owner 2026-10-12)
  *   3. Write a CampaignBidHistory audit row (changedBy = "user:<id>"
  *      or "automation:<ruleId>")
  *   4. Add a BullMQ job to adsSyncQueue keyed by the OutboundSyncQueue
@@ -38,6 +40,7 @@ import { BRAIN_STATE_ACTOR, checkAdsWriteGate, entityBoundsDenial, logGateDeny, 
 import { brainLiveCeiling } from './bid-brain/live.js'
 import { queuedWriteLever } from './ads-authority-pins.js'
 import { NO_LIMITS, bidLimitsFor, limitSources, strategyWords, stepClamp, type StrategyBidLimits, type WriteSources } from './ads-strategy/bids.js'
+import { isPersonApprovedRun } from '../agents/tool-types.js'
 import { HOLD_ACTIONS, HOLD_SELECT, NO_HOLD, actorNames, holdActive, holdData, holderWords, holdOf, keptPausedRefusal, logKeptPausedRefusal, recordHoldChange, resolveTurnedOn, type HoldColumns, type KeepPausedAsk } from './waste/hold.js'
 
 // Conservative grace window. Operators have 5 min to cancel before
@@ -45,6 +48,26 @@ import { HOLD_ACTIONS, HOLD_SELECT, NO_HOLD, actorNames, holdActive, holdData, h
 const GRACE_PERIOD_MS = Number(process.env.NEXUS_ADS_GRACE_MS ?? 5 * 60 * 1000)
 
 export type AdsActor = `user:${string}` | `automation:${string}`
+
+/**
+ * Owner decided 2026-10-12 — a write a PERSON approved goes to Amazon at once. It is the write of a request he approved
+ * on the Approvals page, with his code in Claude (confirm-change), or as a step of a change plan he approved: the run
+ * is marked his (call-tool.ts `runAsPersonApproved`) and the write is his own (his `user:` actor and manual mark,
+ * ads-change-kit.ts `approvedRun`). An engine's or a rule's write inside such a run is not his, so it keeps the window.
+ */
+export function isPersonApprovedWrite(manual: unknown, actor: string | null | undefined): boolean {
+  return isPersonApprovedRun() && isPersonEdit(manual, actor)
+}
+
+/**
+ * When a queued ad write may leave for Amazon (holdUntil): now when the caller asks to send at once or a person
+ * approved it (isPersonApprovedWrite); otherwise after the 5-minute cancel window, exactly as before for every
+ * automatic write — rules, engines, hourly bid plans, the brain, auto-bid, a request run by the business's rule, and
+ * any write no person approved. The drain sends a due row on its next tick (every minute).
+ */
+export function holdUntilFor(args: { applyImmediately: boolean; personApproved: boolean }, now: Date = new Date()): Date {
+  return args.applyImmediately || args.personApproved ? now : new Date(now.getTime() + GRACE_PERIOD_MS)
+}
 
 /**
  * SYNC.1 — the scheduling engines may never write `Campaign.status`.
@@ -547,7 +570,7 @@ interface EnqueueArgs {
   fieldChanges: FieldChange[]
   actor: AdsActor
   reason: string | null
-  applyImmediately: boolean // when true, holdUntil = NOW (no grace)
+  applyImmediately: boolean // when true, holdUntil = NOW (no grace); a write a person approved goes at once too (holdUntilFor)
   /**
    * ADX G1 — deliberate suppression / restore, not optimisation.
    *
@@ -581,9 +604,8 @@ interface EnqueueArgs {
 }
 
 async function enqueueOutbound(args: EnqueueArgs): Promise<string> {
-  const holdUntil = args.applyImmediately
-    ? new Date()
-    : new Date(Date.now() + GRACE_PERIOD_MS)
+  // Owner 2026-10-12 — a write a person approved goes at once; every other write as before.
+  const holdUntil = holdUntilFor({ applyImmediately: args.applyImmediately, personApproved: isPersonApprovedWrite(args.manual, args.actor) })
   // AX-ZD.1f — the queue row and its typed rows are now written in ONE
   // transaction. While AdMutation was bookkeeping only, a failed write there
   // was better swallowed than allowed to fail an operator's change. Now that

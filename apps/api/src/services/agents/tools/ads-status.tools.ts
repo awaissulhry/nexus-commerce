@@ -50,7 +50,7 @@ import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import prisma from '../../../db.js'
 import { updateAdGroupWithSync, updateAdTargetWithSync, updateCampaignWithSync, updateProductAdWithSync, type MutationOutcome } from '../../advertising/ads-mutation.service.js'
 import { amountLabel, campaignCurrency, checkLiveReach, type LiveReach } from './ads-tool-guards.js'
-import { approvedRun, canonical, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, adWriteRefusalOf, type RuleWrite, type StoredReach } from './ads-change-kit.js'
+import { approvedRun, canonical, notRun, queuedNote, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, adWriteRefusalOf, type RuleWrite, type StoredReach } from './ads-change-kit.js'
 import type { AdWrite } from '@nexus/shared/ads-ad-product'
 import { adKitLimits, limitFactsOf, type KitItem } from './ads-autonomy-kit.js'
 import { STEP_UP_NEEDS, stepUpOf } from '../step-up-approval.js'
@@ -1007,7 +1007,7 @@ async function runApproved(kind: Kind, args: Record<string, unknown>, ctx: ToolC
     failed: failed.length,
     reach: p.reach,
     changeSetId: run.changeSetId,
-    note: 'Queued for Amazon: each change is sent after the 5-minute cancel window. approval-status follows them.',
+    note: queuedNote(run, 'each change'),
   }
   if (failed.length) {
     const what = kind === 'pause' ? 'paused' : kind === 'enable' ? 'switched on' : 'archived'

@@ -62,7 +62,7 @@ import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
 import { playbookHolds, startOnlyRefusal } from '../../advertising/ads-playbook/held.js'
 import { amountLabel, campaignCurrency, checkLiveReach, suppressionOf, type AdWriteIntent, type LiveReach } from './ads-tool-guards.js'
 import {
-  alsoChangedBy, approvedRun, BY_RULE_WORDS, canonical, notRun, reachNote, reachRefusal, recheck, requesterOf, ruleFactsFor, ruleRefusal,
+  alsoChangedBy, approvedRun, BY_RULE_WORDS, canonical, notRun, queuedNote, reachNote, reachRefusal, recheck, requesterOf, ruleFactsFor, ruleRefusal,
   spOnlyRefusal, stepClampWords, bidStepOf, withStepPast, type RuleWrite, type StoredReach,
 } from './ads-change-kit.js'
 import { adKitLimits, LIMIT_FACTS_MONEY, limitFactsOf, STEP_PCT_LIMITS, type KitItem } from './ads-autonomy-kit.js'
@@ -1416,7 +1416,7 @@ async function runSet(args: Record<string, unknown>, ctx: ToolContext): Promise<
     const after = await setStateNow(p.adGroup.id, 'edit')
     return {
       ok: true,
-      data: { adGroupId: p.adGroup.id, defaultBidCents: after.defaultBidCents, name: after.name, reach: p.reach, changeSetId: run.changeSetId, outboundQueueId: out.outboundQueueId, note: out.outboundQueueId ? 'Queued for Amazon: it is sent after the 5-minute cancel window. approval-status follows it.' : 'Nothing was queued: the ad group already had these values.' },
+      data: { adGroupId: p.adGroup.id, defaultBidCents: after.defaultBidCents, name: after.name, reach: p.reach, changeSetId: run.changeSetId, outboundQueueId: out.outboundQueueId, note: out.outboundQueueId ? queuedNote(run, 'it', 'it') : 'Nothing was queued: the ad group already had these values.' },
       ...(out.error === 'no_changes' ? {} : { change: { before, after } }),
     }
   }
@@ -1459,7 +1459,7 @@ const setAdGroup: AgentTool = {
   // let it run unasked.
   alwaysAsk: true,
   requiresApprovalDefault: true,
-  // An edit is sent after the 5-minute cancel window; a stop's and a start's bids are sent at once.
+  // A stop's and a start's bids are sent at once; an edit too once a person approves it (by rule: after the 5-minute cancel window).
   openWorld: true,
   reversibility: 'full',
   strategyBound: 'amazon-ads',

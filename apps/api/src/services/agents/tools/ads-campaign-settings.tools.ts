@@ -10,8 +10,9 @@
  *   biddingStrategy  Amazon's names: legacyForSales ("Dynamic bids - down only"), autoForSales ("Dynamic bids - up and
  *                    down": Amazon may raise each bid up to 100 %), manual ("Fixed bids")
  *
- * The screens' own write: updateCampaignWithSync (PATCH /advertising/campaigns/:id), queued for Amazon after the 5-minute
- * cancel window — the Details tab and the bulk menu send exactly these fields through it. One write per campaign.
+ * The screens' own write: updateCampaignWithSync (PATCH /advertising/campaigns/:id) — the Details tab and the bulk menu
+ * send exactly these fields through it. One write per campaign. A person's approval sends it to Amazon at once; a run by
+ * the business's rule waits out the 5-minute cancel window (Owner 2026-10-12, holdUntilFor).
  *
  * Like every ad change tool (ads-change-kit.ts): the preview names each campaign from → to and where it lands (live at
  * Amazon on which profile, or sandbox); a refusal is not queued; it runs only as an approved request, as the approver
@@ -36,7 +37,7 @@ import { playbookHolds } from '../../advertising/ads-playbook/held.js'
 import { STEP_UP_NEEDS, type StepUp } from '../step-up-approval.js'
 import { ADDS_NO_SPEND, addsSpendWords, codeGate, DAY_TO_DAY_NO_CODE, needsCode } from './ads-code-rule.js'
 import { checkLiveReach, type LiveReach } from './ads-tool-guards.js'
-import { approvedRun, BY_RULE_WORDS, canonical, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, type RuleWrite, type StoredReach } from './ads-change-kit.js'
+import { approvedRun, BY_RULE_WORDS, canonical, notRun, queuedNote, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, SENT_WHEN_WORDS, spOnlyRefusal, type RuleWrite, type StoredReach } from './ads-change-kit.js'
 import { adKitLimits, type KitItem } from './ads-autonomy-kit.js'
 import { capMove, capOf, currencyOfMarket, type HeldCap } from './ads-portfolio.tools.js'
 import type { AgentTool, PlanEntities, PlanEntityKey, ToolChange, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
@@ -346,7 +347,7 @@ async function decide(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'appr
   const effect = `Changes the settings of ${plural(items.length, 'Sponsored Products campaign')} (${counts.map(([s, n]) => `${SETTING_WORDS[s].toLowerCase()} on ${n}`).join(', ')}): `
     + `${named(lines.map((l) => `${l.label} — ${l.changes.map((x) => `${x.label.toLowerCase()} ${x.from} → ${x.to}`).join(', ')}`))}.`
     + (already.length ? ` ${plural(already.length, 'campaign')} already set so ${already.length === 1 ? 'is' : 'are'} left as ${already.length === 1 ? 'it is' : 'they are'}.` : '')
-    + ' Queued for Amazon: each write is sent after the 5-minute cancel window.'
+    + ` Queued for Amazon: ${SENT_WHEN_WORDS}.`
     + addsSpendWords(raises.map((r) => `${r.label}: ${r.why}`), !!settingsStepUp(raising).stepUp)
   return {
     items,
@@ -537,7 +538,7 @@ async function runApproved(args: Record<string, unknown>, ctx: ToolContext): Pro
     failed: failed.length,
     reach: p.reach,
     changeSetId: run.changeSetId,
-    note: 'Queued for Amazon: each change is sent after the 5-minute cancel window. approval-status follows them.',
+    note: queuedNote(run, 'each change'),
   }
   if (failed.length) {
     return { ok: false, data, ...(change ? { change } : {}), error: `${before.length ? `Partly run: ${before.length} changed, ` : 'Not run: '}${failed.length} refused by the write — ${named(failed)}. The rest stays as it was${before.length ? '; undo-change puts back what ran' : ''}.` }
@@ -573,7 +574,7 @@ const setCampaignSettings: AgentTool = {
     + "date removed or moved later, leaving a portfolio's budget cap for a looser one or none — is listed in raises and "
     + 'said in the preview: a day-to-day change, so a person\'s approval sends it with no authenticator code. The preview '
     + 'lists each campaign from → to, where it lands (live at Amazon or sandbox), the '
-    + 'rules that also move it and the limits that apply; each write is queued for Amazon with a 5-minute cancel window. '
+    + `rules that also move it and the limits that apply; ${SENT_WHEN_WORDS}. `
     + 'Refused, and not queued, when a campaign is not found, archived, a draft or not Sponsored Products, a portfolio is '
     + 'not found, archived, made in Nexus only or in another market, a name is taken in the market, an end date is in '
     + 'the past, or Amazon\'s write gate would refuse it. A campaign an ads playbook built may be moved out of its '

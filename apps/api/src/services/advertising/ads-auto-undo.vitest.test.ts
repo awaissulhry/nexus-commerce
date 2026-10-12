@@ -12,7 +12,7 @@
  *               and inside the raise limits
  *   caps        at most N undos a market a day
  *   levels      born OBSERVE (records would-undo, writes nothing at Amazon); PROPOSE asks a person (a request a person
- *               approves, then the value goes back as his request); AUTO puts it back itself through the Undo's path,
+ *               approves, then the value goes back as his request, sent at once); AUTO puts it back itself through the Undo's path,
  *               with the 5-minute window to cancel; a superseded change is never undone; a dry run writes nothing
  */
 import { randomUUID } from 'node:crypto'
@@ -399,6 +399,9 @@ describe('auto-undo — a whole run', { timeout: TIMEOUT }, () => {
     expect(original.rolledBackAt).toBeInstanceOf(Date)
     const reversal = await inside(() => db().advertisingActionLog.findFirstOrThrow({ where: { entityId: 'au-raise', executionId: raise.undoApprovalId } }))
     expect(reversal).toMatchObject({ userId: `user:${people.approver}`, payloadBefore: { bidCents: 70 }, payloadAfter: { bidCents: 50 } })
+    // Owner 2026-10-12 — a person approved it: sent at once, with no 5-minute cancel window (AUTO below keeps it).
+    const sent = await inside(() => db().outboundSyncQueue.findUniqueOrThrow({ where: { id: reversal.outboundQueueId! } }))
+    expect(sent.holdUntil!.getTime()).toBeLessThanOrEqual(Date.now())
   })
 
   it('AUTO: it puts the clearly worse ones back itself, through the Undo, held 5 minutes for a person to cancel; a second run does nothing new', async () => {

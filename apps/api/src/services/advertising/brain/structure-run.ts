@@ -48,6 +48,10 @@ const AGENT_KEY = 'ads-brain-structure'
 
 /** Approval statuses that end a request without running it. */
 const NOT_RUN = ['rejected', 'expired', 'superseded', 'cancelled']
+/** Owner 2026-10-12 — an approved portfolio move waiting at Amazon's door: at once when a person approved it, else after the window. */
+const moveQueued = (a: { decisionVia: string | null }) => a.decisionVia === 'auto'
+  ? 'waiting: the move is queued for Amazon (5-minute cancel window: the business\'s rule ran it)'
+  : 'waiting: the move is queued for Amazon (sent at once: a person approved it)'
 const json = (v: unknown) => v as Prisma.InputJsonValue
 const digestOf = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('base64url').slice(0, 22)
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
@@ -237,7 +241,7 @@ async function pendingWork(p: StructureDueProduct, now: Date, canAsk: { yes: boo
   const rows = await prisma.adsBrainStructure.findMany({ where: { marketplace: p.market, productId: p.productId, status: { in: ['PROPOSED', 'BUILT', 'LIVE_PROPOSED', 'LIVE'] } } })
   if (!rows.length) return
   const ids = [...new Set(rows.flatMap((r) => [r.approvalId, r.liveApprovalId, r.retireApprovalId]).filter((x): x is string => !!x))]
-  const approvals = new Map((ids.length ? await prisma.agentApproval.findMany({ where: { id: { in: ids } }, select: { id: true, status: true, toolName: true } }) : []).map((a) => [a.id, a]))
+  const approvals = new Map((ids.length ? await prisma.agentApproval.findMany({ where: { id: { in: ids } }, select: { id: true, status: true, toolName: true, decisionVia: true } }) : []).map((a) => [a.id, a]))
   const product = await prisma.product.findFirst({ where: { id: p.productId }, select: { name: true, sku: true } })
   const label = product?.name?.trim() || product?.sku || p.productId
   for (const r of rows) {
@@ -253,7 +257,7 @@ async function pendingWork(p: StructureDueProduct, now: Date, canAsk: { yes: boo
         const notIn = wanted.filter((w) => now_.find((c) => c.id === w.campaignId)?.portfolioId !== w.portfolioId)
         if (!notIn.length) { await update({ status: 'DONE', heldBy: null }); s.pending.done++ }
         else if (a.status === 'failed') { await update({ status: 'FAILED', heldBy: `the approved move ${a.id} failed: ${plural(notIn.length, 'campaign')} not in the portfolio` }); s.pending.failed++ }
-        else if (r.heldBy !== 'waiting: the move is queued for Amazon (5-minute cancel window)') await update({ heldBy: 'waiting: the move is queued for Amazon (5-minute cancel window)' })
+        else if (r.heldBy !== moveQueued(a)) await update({ heldBy: moveQueued(a) })
         continue
       }
       const built = await builtBy(r, a)

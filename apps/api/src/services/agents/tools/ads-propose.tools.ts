@@ -45,7 +45,7 @@ import { adGroupCampaigns, adGroupsByExternalId, adGroupsOfCampaign } from '../.
 import { targetingAdGroups } from '../../advertising/ads-targeting-lookup.service.js'
 import { clampBidsByCeiling } from '../../advertising/ads-cpc-ceiling.js'
 import { amountLabel, campaignCurrency, checkLiveReach, suppressionOf } from './ads-tool-guards.js'
-import { afterwardsArg, afterwardsNote, afterwardsOf, alsoChangedBy, approvedRun, bidStepOf, handBackEvidence, handBackRefusal, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, adWriteRefusalOf, bidWriteOf, stepClampWords, storedReach, withStepPast, type BidAfterwards, type StoredReach } from './ads-change-kit.js'
+import { afterwardsArg, afterwardsNote, afterwardsOf, alsoChangedBy, approvedRun, bidStepOf, handBackEvidence, handBackRefusal, notRun, queuedNote, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, adWriteRefusalOf, bidWriteOf, stepClampWords, storedReach, withStepPast, type BidAfterwards, type StoredReach } from './ads-change-kit.js'
 import { adKitLimits, LIMIT_FACTS_MONEY, limitFactsOf, STEP_PCT_LIMITS, type LimitFacts, type ScopeFacts } from './ads-autonomy-kit.js'
 import { bidLimitsFor } from '../../advertising/ads-strategy/bids.js'
 import { HARVEST_MONEY } from '../../advertising/harvest/constants.js'
@@ -812,7 +812,8 @@ const setTargetBid: AgentTool = {
   riskTier: 'high',
   readOnly: false,
   requiresApprovalDefault: true,
-  // A4 — an approved bid change is sent to Amazon (live) after the 5-minute cancel window.
+  // A4 — an approved bid change is sent to Amazon (live): at once when a person approved it, after the 5-minute cancel
+  // window when the business's rule ran it (Owner 2026-10-12).
   openWorld: true,
   reversibility: 'full',
   // AA-W2-6 — the business may let it run by its rule, only inside its limits and the ads strategy where it lands.
@@ -883,7 +884,7 @@ const setTargetBid: AgentTool = {
         changeSetId: run.changeSetId,
         outboundQueueId: out.outboundQueueId,
         actionLogId: out.actionLogId,
-        note: out.outboundQueueId ? 'Queued for Amazon: it is sent after the 5-minute cancel window. approval-status follows it.' : 'The bid was already this value: nothing was queued.',
+        note: out.outboundQueueId ? queuedNote(run, 'it', 'it') : 'The bid was already this value: nothing was queued.',
       },
       ...(out.error === 'no_changes'
         ? {}

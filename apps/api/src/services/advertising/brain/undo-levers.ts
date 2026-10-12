@@ -82,7 +82,7 @@ export const BRAIN_UNDO_RULES: Readonly<Record<BrainUndoLever | 'state:pause' | 
     metric: 'the campaign\'s spend, orders and ACoS in the settled days after the raise against as many days before, and the product\'s ACoS band',
     minDays: 3, maxDays: 7, lookbackDays: 14,
     worse: 'only spend, not orders at the target: its spend rose by more than spendUpPct % and it brought no order after, or its ACoS after is above the band\'s top by more than acosPointsUp points and above its ACoS before',
-    undo: 'the daily budget goes back to its value before the raise, through the Undo\'s own path (compare-and-set, the ads audit, the 5-minute window to cancel)',
+    undo: 'the daily budget goes back to its value before the raise, through the Undo\'s own path (compare-and-set, the ads audit; run alone it waits out the 5-minute window to cancel, approved by a person it is sent at once)',
     holdDays: 7, hold: 'the brain writes no budget of that campaign for 7 days', ceiling: 'AUTO',
   },
   portfolioCap: {

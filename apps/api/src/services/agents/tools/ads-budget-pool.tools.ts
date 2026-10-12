@@ -37,7 +37,7 @@ import {
 import { patchBudgetPool } from '../../advertising/ads-engine-settings.service.js'
 import { computeRebalance } from '../../advertising/budget-pool-rebalancer.service.js'
 import { amountLabel, campaignCurrency } from './ads-tool-guards.js'
-import { approvedRun, BY_RULE_WORDS, canonical, notRun, ruleFactsFor, spOnlyRefusal } from './ads-change-kit.js'
+import { approvedRun, BY_RULE_WORDS, canonical, notRun, queuedNote, ruleFactsFor, spOnlyRefusal } from './ads-change-kit.js'
 import type { KitItem } from './ads-autonomy-kit.js'
 import {
   alsoChangedByOf, budgetEnginesOf, budgetLimits, budgetRaiseWords, budgetReach, budgetReachNote, budgetRecheck, budgetRuleRefusal, budgetStepUp, codeGate, codeRuleOf,
@@ -475,7 +475,7 @@ async function execute(a: Args, ctx: ToolContext): Promise<ToolResult> {
   const data = {
     op: a.op, poolId: a.op === 'delete' ? null : poolId, ...(now.pool ? { pool: now.pool, campaigns: now.allocations.length } : {}),
     reach: p.reach, changeSetId: run.changeSetId,
-    note: a.op === 'rebalance-now' && p.reach ? 'Queued for Amazon: each budget is sent after the 5-minute cancel window. approval-status follows them.' : 'Saved in Nexus.',
+    note: a.op === 'rebalance-now' && p.reach ? queuedNote(run, 'each budget') : 'Saved in Nexus.',
   }
   if (failed.length) return { ok: false, data, change, error: `Partly run: ${plural(failed.length, 'campaign')} refused — ${named(failed)}. undo-change puts back what ran.` }
   return { ok: true, data, change }
