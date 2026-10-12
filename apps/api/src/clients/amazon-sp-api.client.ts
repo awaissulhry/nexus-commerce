@@ -513,6 +513,8 @@ export class AmazonSpApiClient {
     error?: string
     rawResponse?: SPAPIResponse
     dryRun?: boolean
+    /** Amazon answered and refused THIS item (its `issues[]`, or 404: no such SKU) — not an account or Amazon fault. */
+    itemLevel?: boolean
   }> {
     const { sellerId, sku } = options
     let payload = options.payload
@@ -594,7 +596,9 @@ export class AmazonSpApiClient {
               .join(' | ')
           : `HTTP ${response.status}`
         logger.warn('SP-API PATCH failed', { sku, httpStatus: response.status, errors: topErrors.slice(0, 400) })
-        return { success: false, sku, error: `HTTP ${response.status} — ${topErrors.slice(0, 400)}`, rawResponse: data }
+        // A 404 names this SKU only. Every other HTTP failure (400, 401/403, 429, 5xx) may be the account's or the
+        // request's for EVERY item, so it stays a circuit failure.
+        return { success: false, sku, error: `HTTP ${response.status} — ${topErrors.slice(0, 400)}`, rawResponse: data, ...(response.status === 404 ? { itemLevel: true } : {}) }
       }
 
       // Check for errors in issues array (SP-API returns 200/207 even on errors)
@@ -612,6 +616,7 @@ export class AmazonSpApiClient {
           sku,
           error: errorMessage,
           rawResponse: data,
+          itemLevel: true,
         }
       }
 

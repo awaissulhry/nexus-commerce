@@ -98,6 +98,25 @@ describe('ListingPublishService.publish — the chain', () => {
     expect(gate.recordOutcome).toHaveBeenCalledWith('S1', 'APJ6JRA9NG5V4', false)
   })
 
+  it('live + execute refused for THIS item (itemLevel) → fail, NOT recorded against the circuit', async () => {
+    const gate = okGate()
+    const execute = vi.fn(async () => ({ ok: false, error: '4000003: product type invalid', itemLevel: true }))
+    const r = await svc.publish(base(gate, execute))
+    expect(r.success).toBe(false)
+    expect(r.itemLevel).toBe(true)
+    expect(r.error).toBe('4000003: product type invalid')
+    expect(gate.recordOutcome).not.toHaveBeenCalled()
+    expect(writeAttemptLog).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'failed', errorMessage: '4000003: product type invalid' }))
+  })
+
+  it('itemLevel on a success is ignored: the success is recorded', async () => {
+    const gate = okGate()
+    const r = await svc.publish(base(gate, vi.fn(async () => ({ ok: true, itemLevel: true }))))
+    expect(r.success).toBe(true)
+    expect(r.itemLevel).toBeUndefined()
+    expect(gate.recordOutcome).toHaveBeenCalledWith('S1', 'APJ6JRA9NG5V4', true)
+  })
+
   it('live + execute throws → timeout fail, records failure', async () => {
     const gate = okGate()
     const execute = vi.fn(async () => { throw new Error('boom') })
@@ -105,5 +124,22 @@ describe('ListingPublishService.publish — the chain', () => {
     expect(r.success).toBe(false)
     expect(r.outcome).toBe('timeout')
     expect(gate.recordOutcome).toHaveBeenCalledWith('S1', 'APJ6JRA9NG5V4', false)
+  })
+})
+
+describe('ListingPublishService.publish — with the real Amazon circuit (MOSS IT 2026-10-12)', () => {
+  it('three refusals of one listing leave the market open; three account failures still open it', async () => {
+    const amazonGate = await import('./amazon-publish-gate.service.js')
+    amazonGate.resetAllAmazonCircuits()
+    const gate = { ...okGate(), checkCircuit: amazonGate.checkAmazonCircuit, recordOutcome: amazonGate.recordAmazonOutcome }
+    const refused = vi.fn(async () => ({ ok: false, error: '4000003: The Amazon product type specified is invalid or not supported.', itemLevel: true }))
+    for (let i = 0; i < 3; i++) expect((await svc.publish(base(gate, refused))).outcome).toBe('failed')
+    expect(amazonGate.checkAmazonCircuit('S1', 'APJ6JRA9NG5V4')).toMatchObject({ ok: true, state: 'closed' })
+    expect((await svc.publish(base(gate, vi.fn(async () => ({ ok: true }))))).success).toBe(true)
+
+    const down = vi.fn(async () => ({ ok: false, error: 'HTTP 503' }))
+    for (let i = 0; i < 3; i++) await svc.publish(base(gate, down))
+    expect(amazonGate.checkAmazonCircuit('S1', 'APJ6JRA9NG5V4')).toMatchObject({ ok: false, state: 'open' })
+    amazonGate.resetAllAmazonCircuits()
   })
 })

@@ -1504,6 +1504,7 @@ export class OutboundSyncService {
       ? amazonPayload.patches.findIndex((p: { op?: string; path?: string }) => p?.op === 'replace' && p?.path === '/attributes/purchasable_offer')
       : -1;
     let offerFailure: { errorCode: string; retryable: boolean } | null = null;
+    let itemFailure: { errorCode: string; retryable: boolean } | null = null;
 
     // P0.7 → P1.3 — the row goes to its own account; this stays as a consistency check (the listing or
     // SKU must belong to that account), refused and terminal if not.
@@ -1536,6 +1537,12 @@ export class OutboundSyncService {
           ? { id: sellerId }
           : { error: "AMAZON_SELLER_ID is not configured. Set the env var before enabling outbound sync." },
       execute: async ({ sellerId: sid, mode }) => {
+        // The Listings PATCH needs a product type; without one Amazon refuses it (4000003). Said here, without a call:
+        // this listing's data is the problem, so nothing counts against the market's circuit and it is not retried.
+        if (!productType) {
+          itemFailure = { errorCode: 'NO_AMAZON_PRODUCT_TYPE', retryable: false };
+          return { ok: false, itemLevel: true, error: `Nothing was sent to Amazon: ${sku} has no Amazon product type (on this listing or its product). Set the listing's product type, then retry.` };
+        }
         if (offerPatchAt >= 0 && mode === 'live') {
           const offerMarketplaceId = resolveAmazonMarketplaceId(marketplaceId);
           const live = await readAmazonOfferLive({ sellerId: sid, sku, marketplaceId: offerMarketplaceId });
@@ -1554,7 +1561,7 @@ export class OutboundSyncService {
           });
           if (plan.kind === 'refused') {
             offerFailure = { errorCode: 'AMAZON_OFFER_NOT_MATCHED', retryable: false };
-            return { ok: false, error: plan.reason };
+            return { ok: false, itemLevel: true, error: plan.reason };
           }
           if (plan.kind === 'merge') amazonPayload.patches[offerPatchAt] = plan.patch;
         }
@@ -1562,7 +1569,7 @@ export class OutboundSyncService {
         // A price- or stock-only patch set needs no preview; anything else does.
         if (payload.source === 'FM_CATALOG_CASCADE' || isAmazonContentPatchSet(amazonPayload.patches)) {
           const refusal = await amazonContentRefusal({ sellerId: sid, sku, marketplaceId: resolveAmazonMarketplaceId(marketplaceId), productType, patches: amazonPayload.patches });
-          if (refusal) return { ok: false, error: refusal };
+          if (refusal) return { ok: false, itemLevel: true, error: refusal };
         }
         const res = await amazonSpApiClient.submitListingPayload({
           sellerId: sid,
@@ -1571,7 +1578,7 @@ export class OutboundSyncService {
           // P0b — REQUIRED patchListingsItem query param; per-market row targets its own market.
           marketplaceId: resolveAmazonMarketplaceId(marketplaceId),
         });
-        return { ok: res.success, error: res.error };
+        return { ok: res.success, error: res.error, ...(res.itemLevel ? { itemLevel: true } : {}) };
       },
     });
 
@@ -1583,7 +1590,9 @@ export class OutboundSyncService {
       message: r.message,
       error: r.error,
       dryRun: r.mode !== "live", // PD.3 — a non-live "success" published nothing.
-      ...(offerFailure ?? {}),
+      // Amazon refused THIS listing's data: retrying the same data cannot succeed. It fails once, with Amazon's words;
+      // Retry in the Matrix, the next stock change or the daily read-back sends it again once the data is fixed.
+      ...(offerFailure ?? itemFailure ?? (r.itemLevel ? { errorCode: 'AMAZON_LISTING_REFUSED', retryable: false } : {})),
     };
   }
 

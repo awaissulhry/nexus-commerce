@@ -15,9 +15,10 @@ const m = vi.hoisted(() => ({
   marketplaceId: vi.fn(),
   refresh: vi.fn(),
   announce: vi.fn(),
+  executeRaw: vi.fn(),
 }))
 
-vi.mock('../../db.js', () => ({ default: { channelListing: { findMany: m.findMany, findFirst: m.findFirst, updateMany: m.updateMany } } }))
+vi.mock('../../db.js', () => ({ default: { channelListing: { findMany: m.findMany, findFirst: m.findFirst, updateMany: m.updateMany }, $executeRaw: m.executeRaw } }))
 vi.mock('../../clients/amazon-sp-api.client.js', () => ({
   AmazonSpApiClient: class { constructor(account: unknown) { m.clients(account) } getListingsItem(options: unknown) { return m.read(options) } },
 }))
@@ -26,7 +27,7 @@ vi.mock('../categories/marketplace-ids.js', () => ({ configuredAmazonMarketplace
 vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { refreshMany: m.refresh } }))
 vi.mock('../listing-values-events.js', () => ({ announceListingValues: m.announce }))
 
-import { fillAmazonListingAsins, pendingAsinListingIds, sellerSkuOf, summaryStatus, unfilledAmazonListingIds, ASIN_SWEEP_WINDOW_MS } from './listing-asin-fill.service.js'
+import { fillAmazonListingAsins, pendingAsinListingIds, sellerSkuOf, summaryProductType, summaryStatus, unfilledAmazonListingIds, ASIN_SWEEP_WINDOW_MS } from './listing-asin-fill.service.js'
 
 const listing = (id: string, overrides: Record<string, unknown> = {}) => ({
   id, productId: `product-${id}`, channel: 'AMAZON', marketplace: 'IT', channelConnectionId: 'account-a', aliasKey: '',
@@ -183,6 +184,38 @@ describe('fillAmazonListingAsins', () => {
     expect(m.announce).not.toHaveBeenCalled()
   })
 
+  // MOSS IT 2026-10-12: linked rows had no product type, so every stock push of them was refused (4000003).
+  const typed = (asin: string, productType: unknown) =>
+    ({ success: true, sku: 'x', asin, status: ['DISCOVERABLE'], rawResponse: { sku: 'x', summaries: [{ marketplaceId: 'APJ6JRA9NG5V4', asin, status: ['DISCOVERABLE'], productType }] } })
+  const rawSql = (call: any[]) => (call[0] as TemplateStringsArray).join('?')
+
+  it('records Amazon\'s product type with the ASIN, only on a listing that has none', async () => {
+    m.listings = [listing('a', { listingStatus: 'DRAFT', isPublished: false })]
+    m.read.mockResolvedValue(typed('B0TYPED001', 'outerwear'))
+    m.executeRaw.mockResolvedValue(1)
+    const report = await fillAmazonListingAsins(['a'])
+    expect(report.rows[0]).toMatchObject({ outcome: 'filled', asin: 'B0TYPED001' })
+    expect(m.executeRaw).toHaveBeenCalledOnce()
+    const call = m.executeRaw.mock.calls[0]
+    expect(call.slice(1)).toEqual(['OUTERWEAR', 'a'])
+    // The guard that never overwrites a product type the listing already has, and the version the sheet compares.
+    expect(rawSql(call)).toContain(`COALESCE(btrim("platformAttributes"->>'productType'), '') = ''`)
+    expect(rawSql(call)).toContain(`"version" = "version" + 1`)
+  })
+
+  it('writes no product type when Amazon reports none, in a dry run, or when the ASIN write lost its race', async () => {
+    m.listings = [listing('a'), listing('b'), listing('c')]
+    m.read.mockResolvedValueOnce(typed('B0NOTYPE01', null))
+    await fillAmazonListingAsins(['a'])
+    m.read.mockResolvedValueOnce(typed('B0DRYRUN01', 'OUTERWEAR'))
+    await fillAmazonListingAsins(['b'], { dryRun: true })
+    m.read.mockResolvedValueOnce(typed('B0LOSTRC01', 'OUTERWEAR'))
+    m.updateMany.mockResolvedValueOnce({ count: 0 })
+    m.findFirst.mockResolvedValueOnce({ externalListingId: 'B0OTHER001' })
+    await fillAmazonListingAsins(['c'])
+    expect(m.executeRaw).not.toHaveBeenCalled()
+  })
+
   it('refuses more than 200 rows in one call', async () => {
     await expect(fillAmazonListingAsins(Array.from({ length: 201 }, (_, i) => `id-${i}`))).rejects.toThrow('At most 200')
   })
@@ -195,6 +228,14 @@ describe('the rules it shares', () => {
     expect(sellerSkuOf({ ...base, offers: [{ sku: 'OFFER', isActive: true }, { sku: 'OLD', isActive: false }] })).toEqual({ sku: 'OFFER' })
     expect(sellerSkuOf({ ...base, flatFileSnapshot: { item_sku: 'FLAT' } })).toEqual({ sku: 'FLAT' })
     expect(sellerSkuOf({ ...base, offers: [{ sku: 'OFFER', isActive: true }], platformAttributes: { sellerSku: 'OTHER' } })).toHaveProperty('reason')
+  })
+
+  it('reads Amazon\'s product type from the first summary, upper-cased; anything else is none', () => {
+    expect(summaryProductType({ rawResponse: { summaries: [{ productType: ' outerwear ' }, { productType: 'COAT' }] } })).toBe('OUTERWEAR')
+    expect(summaryProductType({ rawResponse: { summaries: [{ productType: '' }] } })).toBeNull()
+    expect(summaryProductType({ rawResponse: { summaries: [{}] } })).toBeNull()
+    expect(summaryProductType({ rawResponse: { summaries: 'x' } })).toBeNull()
+    expect(summaryProductType({})).toBeNull()
   })
 
   it('stores the status Amazon reports: the first entry, as-is', () => {
