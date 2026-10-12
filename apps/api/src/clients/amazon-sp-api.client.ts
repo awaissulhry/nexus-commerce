@@ -653,135 +653,6 @@ export class AmazonSpApiClient {
   }
 
   /**
-   * G.5.1 — Price-only PATCH to an existing listing.
-   *
-   * Faster + lighter than the full `submitListingPayload`: only sends the
-   * purchasable_offer.our_price slot, leaves every other attribute alone.
-   * Use for repricing on an already-listed SKU.
-   *
-   * marketplaceId is the SP-API ID (APJ6JRA9NG5V4 for IT, etc.).
-   * priceWithTax distinguishes EU tax-inclusive markets from US-style
-   * tax-exclusive — caller resolves via Marketplace.taxInclusive.
-   */
-  async patchListingPrice(options: {
-    sellerId: string
-    sku: string
-    marketplaceId: string
-    productType: string
-    price: number
-    currencyCode: string
-    /** When true, the price is tax-inclusive (EU); when false, net (US). */
-    taxInclusive: boolean
-  }): Promise<{
-    success: boolean
-    sku: string
-    status?: string
-    submissionId?: string
-    error?: string
-    issues?: SPAPIResponse['issues']
-    dryRun?: boolean
-  }> {
-    const { sellerId, sku, marketplaceId, productType, price, currencyCode, taxInclusive } = options
-
-    // A1.1 — gate at the client layer. This is the path repricing reached
-    // ungated; it now obeys NEXUS_ENABLE_AMAZON_PUBLISH + AMAZON_PUBLISH_MODE.
-    // P0.1 — 'sandbox' included for the AS.5 reason: this path has no sandbox
-    // host, so sandbox used to send a real production PATCH.
-    const mode = getAmazonPublishMode()
-    if (mode === 'gated' || mode === 'dry-run' || mode === 'sandbox') {
-      if (mode === 'sandbox') {
-        logger.warn('SP-API patchListingPrice: sandbox mode has no sandbox host on this path — treating as dry-run (no HTTP)', { sku, sellerId, marketplaceId })
-      } else {
-        logger.info(`SP-API patchListingPrice (mode=${mode}, no HTTP)`, { sku, sellerId, marketplaceId })
-      }
-      return { success: true, sku, status: 'ACCEPTED', submissionId: `dry-run-${Date.now()}`, dryRun: true }
-    }
-
-    try {
-      const accessToken = await this.getAccessToken()
-
-      // SP-API JSON Patch shape — replace purchasable_offer.our_price.schedule
-      // with a single fresh price entry. The whole purchasable_offer slot
-      // is overwritten because Amazon doesn't support deeper-than-attribute
-      // patches; the productType + marketplaceId in the wrap make the patch
-      // marketplace-specific.
-      const ourPrice = taxInclusive
-        ? [{ schedule: [{ value_with_tax: price }] }]
-        : [{ schedule: [{ value: price, currency: currencyCode }] }]
-
-      const patches = [
-        {
-          op: 'replace',
-          path: '/attributes/purchasable_offer',
-          value: [
-            {
-              marketplace_id: marketplaceId,
-              currency: currencyCode,
-              our_price: ourPrice,
-            },
-          ],
-        },
-      ]
-
-      const url = new URL(
-        `https://sellingpartnerapi-${await (await import('../lib/amazon-sp-client.js')).getAmazonRegion()}.amazon.com/listings/2021-08-01/items/${sellerId}/${encodeURIComponent(
-          sku,
-        )}`,
-      )
-      url.searchParams.set('marketplaceIds', marketplaceId)
-
-      logger.info('SP-API: patchListingPrice', {
-        sku,
-        marketplaceId,
-        currencyCode,
-        price,
-        taxInclusive,
-      })
-
-      const response = await this.fetchWithRetry(
-        url.toString(),
-        {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-amzn-requestid': `nexus-${Date.now()}`,
-            // AS.0 ROOT CAUSE (2026-07-20): SP-API takes the LWA token in
-            // x-amz-access-token — Authorization:Bearer means "no token" to
-            // Amazon ("Access token is missing…" → 403 denied). The read
-            // methods were fixed earlier (see getListingsItem); these write
-            // methods kept the wrong header, which was the ENTIRE
-            // zero-inventory 403 saga. Roles/tokens were never the problem.
-            'x-amz-access-token': accessToken,
-          },
-          body: JSON.stringify({ productType, patches }),
-        },
-        `patchListingPrice(${sku})`,
-      )
-      const data = (await response.json()) as SPAPIResponse
-      const errorMessage = this.parseErrors(data)
-      if (errorMessage) {
-        return {
-          success: false,
-          sku,
-          error: errorMessage,
-          issues: data.issues,
-          submissionId: data.submissionId,
-        }
-      }
-      return {
-        success: true,
-        sku,
-        status: data.status,
-        submissionId: data.submissionId,
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      logger.error('SP-API patchListingPrice failed', { sku, error: errorMessage })
-      return { success: false, sku, error: errorMessage }
-    }
-  }
-
-  /**
    * SCT.6 — close/reopen ONE marketplace's offer for a SKU.
    *
    * Amazon's documented "close a listing": delete the purchasable_offer
@@ -794,9 +665,9 @@ export class AmazonSpApiClient {
    * Reopen replays the verbatim purchasable_offer value array captured at
    * close time (op:replace — also correct when the attribute is absent).
    *
-   * 'merge' — the pricing-engine push with NEXUS_AMAZON_OFFER_MERGE on
-   * (services/amazon/purchasable-offer.ts): one instance's selectors plus the
-   * sub-attributes it changes; Amazon keeps everything the value leaves out.
+   * 'merge' — the queue's price push (services/amazon/purchasable-offer.ts):
+   * one instance's selectors plus the sub-attributes it changes; Amazon keeps
+   * everything the value leaves out (a sale set in Seller Central, the B2B instance).
    */
   async patchPurchasableOffer(options: {
     sellerId: string
@@ -872,7 +743,7 @@ export class AmazonSpApiClient {
    *
    * This is called from the two methods whose `issues` array is Amazon's verdict
    * on the WHOLE item — `putListingsItem` and `submitListingPayload`. It is
-   * deliberately NOT called from `patchListingPrice` / `patchPurchasableOffer`:
+   * deliberately NOT called from `patchPurchasableOffer`:
    * `listings-api` is a REPLACE source, so recording an offer patch's answer
    * would resolve open CONTENT rejections the offer call never spoke about.
    *
@@ -1612,7 +1483,7 @@ export class AmazonSpApiClient {
  * account it will use must be one that owns the SKU(s) it touches (write-account-guard.ts); a SKU
  * that belongs only to another Amazon account is refused, nothing sent. Reads are not checked.
  */
-const GUARDED_WRITES = new Set(['submitListingPayload', 'submitListingPayloadBatch', 'putListingsItem', 'patchListingPrice', 'patchPurchasableOffer', 'deleteListingsItem'])
+const GUARDED_WRITES = new Set(['submitListingPayload', 'submitListingPayloadBatch', 'putListingsItem', 'patchPurchasableOffer', 'deleteListingsItem'])
 
 async function guardAmazonWrite(method: string, args: unknown[], accountId: string | undefined): Promise<void> {
   const { assertWriteAccount, assertWriteAccountPerSku } = await import('../services/write-account-guard.js')

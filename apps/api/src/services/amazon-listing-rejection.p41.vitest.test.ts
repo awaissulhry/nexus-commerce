@@ -176,11 +176,9 @@ describe('5. the client files from the content writes, and only those', () => {
     // `listings-api` is a REPLACE source, so an offer call's answer would resolve
     // CONTENT rejections it never spoke about. Named, not forgotten.
     const callers = callersOfFiler()
-    expect(callers).not.toContain('patchListingPrice')
     expect(callers).not.toContain('patchPurchasableOffer')
     expect(callers).not.toContain('deleteListingsItem')
     // Control: those methods really do exist, so this is not vacuous.
-    expect(client).toContain('async patchListingPrice(')
     expect(client).toContain('async patchPurchasableOffer(')
     expect(client).toContain('async deleteListingsItem(')
   })

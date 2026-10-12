@@ -189,7 +189,7 @@ describe('fulfillment_availability', () => {
   })
 })
 
-describe('merge instance (NEXUS_AMAZON_OFFER_MERGE)', () => {
+describe('merge instance (the queue\'s price push)', () => {
   it('selectors + the selected leaves only; a removal is an explicit null', () => {
     const f = facts({ platformAttributes: { amazonOffer: { map_price: null, minimum_seller_allowed_price: 35 } } })
     expect(amazonOfferMergeLeaves({ marketplaceId: IT, currency: 'EUR', facts: f, leaves: ['our_price', 'minimum_seller_allowed_price', 'map_price', 'sale'] })).toEqual({

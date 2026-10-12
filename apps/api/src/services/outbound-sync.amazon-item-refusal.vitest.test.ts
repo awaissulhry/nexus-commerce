@@ -80,7 +80,6 @@ beforeEach(() => {
   vi.clearAllMocks()
   resetAllAmazonCircuits()
   vi.stubEnv('NEXUS_ENABLE_AMAZON_PUBLISH', 'true'); vi.stubEnv('AMAZON_PUBLISH_MODE', 'live')
-  vi.stubEnv('NEXUS_AMAZON_OFFER_MERGE', '')
   m.seller.mockResolvedValue('seller')
   m.read.mockResolvedValue(listing())
   m.many.mockResolvedValue([])

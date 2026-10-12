@@ -66,7 +66,7 @@ import { usesEbayInventory } from './pim/ebay-listing-model.js'
 import { ebayListingLanguage } from './gateway/channels.js';
 import { tryResolveConnection } from './connection-resolver.service.js'
 import { syncNativeShopifyOffer } from './shopify/offer-sync.service.js'
-import { amazonOfferMergeEnabled, amazonOfferReadFailure, amazonPriceOfferPlan, readAmazonOfferLive } from './amazon/purchasable-offer.js'
+import { amazonOfferReadFailure, amazonPriceOfferPlan, readAmazonOfferLive } from './amazon/purchasable-offer.js'
 import { readAmazonOfferFacts, type AmazonOfferFacts } from './amazon/offer-facts.js'
 import { AMAZON_PRICE_OUTSIDE_SELLER_BOUNDS, amazonFulfillmentAvailability, amazonPurchasableOffer, amazonSellerBoundsRefusal } from './amazon/offer-attributes.js'
 import { PURCHASABLE_OFFER_LEAVES } from './amazon/offer-fields.js'
@@ -441,8 +441,8 @@ export async function buildAmazonListingPatch(
     // MX.1 (D-MX4) — the sale rides the SAME purchasable_offer instance as our_price, so the one `op:replace` this
     // builder emits carries both and a price push never wipes the sale (report 19 §5.9); a sale without both dates is
     // never emitted (`amazon/discounted-price.ts`). The other offer leaves Nexus knows ride it too (gaps 1–3).
-    // With NEXUS_AMAZON_OFFER_MERGE=1, `syncToAmazon` turns this replace into a MERGE on the live offer instance at
-    // send time (amazon/purchasable-offer.ts); the replace then goes out as built only for a first offer.
+    // `syncToAmazon` turns this replace into a MERGE on the live offer instance at send time
+    // (amazon/purchasable-offer.ts); the replace goes out as built only for a first offer.
     // No price, or a parent (no offer of its own): no root at all, never one that clears Amazon's price.
     const purchasableOffer = amazonPurchasableOffer({ marketplaceId, currency, facts: facts!, sendPrice: payload.price, isParent: offer?.isParent });
     if (purchasableOffer) attrs.purchasable_offer = purchasableOffer;
@@ -1494,13 +1494,12 @@ export class OutboundSyncService {
       };
     }
 
-    // With NEXUS_AMAZON_OFFER_MERGE=1 (amazon/purchasable-offer.ts — OFF by default, and OFF is exactly what this sent
-    // before), the price goes as a MERGE into the live offer instance it prices, so a price push changes our_price —
-    // and the sale only as far as Nexus owns it — and leaves the rest of Amazon's offer as it is: a Seller Central sale,
-    // map_price, the min/max seller-allowed prices, the offer dates, the B2B instance. The builder's replace stands only
-    // for a first offer. Read INSIDE `execute` and only in live mode, i.e. only when a real write follows (gated,
-    // dry-run and sandbox stay exactly as they were), right before the write; a failed read sends nothing.
-    const offerPatchAt = amazonOfferMergeEnabled() && payload.price !== undefined
+    // The price goes as a MERGE into the live offer instance it prices (amazon/purchasable-offer.ts), so a price push
+    // changes our_price — and the sale only as far as Nexus owns it — and leaves the rest of Amazon's offer as it is: a
+    // Seller Central sale, map_price, the min/max seller-allowed prices, the offer dates, the B2B instance. The builder's
+    // replace stands only for a first offer. Read INSIDE `execute` and only in live mode, i.e. only when a real write
+    // follows (gated, dry-run and sandbox stay exactly as they were), right before the write; a failed read sends nothing.
+    const offerPatchAt = payload.price !== undefined
       ? amazonPayload.patches.findIndex((p: { op?: string; path?: string }) => p?.op === 'replace' && p?.path === '/attributes/purchasable_offer')
       : -1;
     let offerFailure: { errorCode: string; retryable: boolean } | null = null;

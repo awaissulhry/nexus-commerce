@@ -9,7 +9,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 const s = vi.hoisted(() => ({ listings: [] as any[], closed: new Set<string>(), door: vi.fn(), update: vi.fn(), find: vi.fn(), patch: vi.fn() }))
 vi.mock('./pim/channel-price-write.service.js', () => ({ writeChannelPrices: s.door }))
-vi.mock('../clients/amazon-sp-api.client.js', () => ({ amazonSpApiClient: { patchListingPrice: s.patch, patchPurchasableOffer: s.patch } }))
+vi.mock('../clients/amazon-sp-api.client.js', () => ({ amazonSpApiClient: { patchPurchasableOffer: s.patch } }))
 vi.mock('./amazon-market-offer.service.js', () => ({ closedMarketSet: async () => s.closed }))
 import { pushPriceUpdate } from './pricing-outbound.service.js'
 const db = {

@@ -86,7 +86,7 @@ export function amazonPurchasableOffer(input: PurchasableOfferInput): Json[] | n
 }
 
 /**
- * The ONE merge instance of `purchasable_offer` (`NEXUS_AMAZON_OFFER_MERGE`): its selectors and the selected leaves only;
+ * The ONE merge instance of `purchasable_offer` (the queue's price push): its selectors and the selected leaves only;
  * a leaf the facts remove is an explicit `null` (Amazon's documented delete). Everything else is left to Amazon.
  */
 export function amazonOfferMergeLeaves(input: { marketplaceId: string; currency: string; audience?: string; facts: OfferFacts; leaves: readonly AmazonOfferLeaf[]; sendPrice?: number | null }): Json {

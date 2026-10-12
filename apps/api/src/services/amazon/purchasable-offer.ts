@@ -18,44 +18,18 @@
  * enum (`add | replace | merge | delete`) in listingsItems_2021-08-01.json. The live read gives the merge its exact
  * selectors, and tells a first offer (no instance yet: the builder's replace goes as before) from an existing one.
  *
- * Two senders use it, behind ONE switch: the queue's price push (`outbound-sync.service.ts`) and the pricing-engine push
- * (`pricing-outbound.service.ts`).
+ * Its one sender is the queue's price push (`outbound-sync.service.ts`).
+ * The `NEXUS_AMAZON_OFFER_MERGE` switch that guarded it (OFF = the builder's blind replace) ran ON in production from
+ * 2026-10-04 and was removed 2026-10-12 (Amazon Business step 2): a blind replace would also delete the B2B instance.
  */
 import { amazonSpApiClient } from '../../clients/amazon-sp-api.client.js'
 import { amazonOfferMergeLeaves } from './offer-attributes.js'
 import type { AmazonOfferFacts } from './offer-facts.js'
 import { AMAZON_SUB_ATTRIBUTE, type AmazonOfferLeaf } from './offer-fields.js'
 
-/**
- * 🔴 The switch: `NEXUS_AMAZON_OFFER_MERGE=1` turns the read + merge on; unset or anything else keeps today's
- * `replace` and makes no live read. Read at send time, so a Railway variable change needs no code change.
- *
- * Why it exists (Owner, 2026-09-30): the merge ships OFF, is proven on Amazon without changing anything
- * (`node apps/api/dist/scripts/amazon-offer-merge-proof.js`, VALIDATION_PREVIEW only), and is switched on only after that.
- * When it may go: once it has run ON in production and a price push has been read back with the rest of the offer
- * intact — then delete this function, its two call sites and the OFF arms of their tests, in one change.
- */
-export const AMAZON_OFFER_MERGE_ENV = 'NEXUS_AMAZON_OFFER_MERGE'
-export function amazonOfferMergeEnabled(): boolean {
-  return process.env[AMAZON_OFFER_MERGE_ENV] === '1'
-}
-
 /** The reason a price push sent nothing because the live offer could not be read. Each sender adds how it retries. */
 export function amazonOfferReadFailure(sku: string, error: string | undefined): string {
   return `Amazon's current offer for ${sku} could not be read (${error ?? 'no answer'}), so the price was not sent: sent without it, the push could clear the offer's sale and the other parts Nexus does not set.`
-}
-
-/**
- * The offer instance the pricing-engine push prices — the one `amazonSpApiClient.patchListingPrice` sends (its
- * replace is left exactly as it was; `clients/amazon-sp-api.price-offer-parity.vitest.test.ts` pins the two to the same bytes).
- */
-export function amazonListingPriceOffer(input: { marketplaceId: string; currencyCode: string; price: number; taxInclusive: boolean }): Record<string, unknown> {
-  const { marketplaceId, currencyCode, price, taxInclusive } = input
-  return {
-    marketplace_id: marketplaceId,
-    currency: currencyCode,
-    our_price: taxInclusive ? [{ schedule: [{ value_with_tax: price }] }] : [{ schedule: [{ value: price, currency: currencyCode }] }],
-  }
 }
 
 /** What the live read saw, handed to a caller's `refuse` check before anything is sent. */

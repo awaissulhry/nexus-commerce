@@ -33,11 +33,10 @@ describe('permanent delete honours the same Amazon master gate as every write', 
   })
 })
 
-// P0.1 — these three writers have no sandbox host, so `sandbox` used to send
+// P0.1 — these writers have no sandbox host, so `sandbox` used to send
 // to PRODUCTION. Sandbox now behaves as a dry run: no token, no HTTP.
-describe('P0.1 — sandbox mode sends nothing on the three production-only writers', () => {
+describe('P0.1 — sandbox mode sends nothing on the production-only writers', () => {
   const writers = [
-    ['patchListingPrice', (c: AmazonSpApiClient) => c.patchListingPrice({ sellerId: 's', sku: 'x', marketplaceId: 'm', productType: 'COAT', price: 10, currencyCode: 'EUR', taxInclusive: true })],
     ['patchPurchasableOffer', (c: AmazonSpApiClient) => c.patchPurchasableOffer({ sellerId: 's', sku: 'x', marketplaceId: 'm', productType: 'COAT', op: 'delete', value: [{ marketplace_id: 'm', currency: 'EUR' }] })],
     ['deleteListingsItem', (c: AmazonSpApiClient) => c.deleteListingsItem({ sellerId: 's', sku: 'x', marketplaceId: 'm' })],
   ] as const

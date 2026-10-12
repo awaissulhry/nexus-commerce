@@ -1,6 +1,6 @@
 /**
  * A1.1 — the SP-API client gates EVERY write method through getAmazonPublishMode(),
- * so no caller (incl. repricing → patchListingPrice, which used to be ungated) can
+ * so no caller (incl. the offer patch repricing once reached ungated) can
  * write to Amazon when publishing is disabled. When gated/dry-run the method
  * short-circuits with dryRun:true and makes NO HTTP call (so no creds/network).
  */
@@ -23,10 +23,10 @@ describe('A1.1 — SP-API write methods gate when publishing is disabled', () =>
     expect(r.success).toBe(true)
   })
 
-  it('patchListingPrice short-circuits (the previously-ungated repricing path)', async () => {
-    const r = await amazonSpApiClient.patchListingPrice({
-      sellerId: 'S', sku: 'X', marketplaceId: 'APJ6JRA9NG5V4',
-      productType: 'OUTERWEAR', price: 99.99, currencyCode: 'EUR', taxInclusive: true,
+  it('patchPurchasableOffer short-circuits (the offer patch a price push sends)', async () => {
+    const r = await amazonSpApiClient.patchPurchasableOffer({
+      sellerId: 'S', sku: 'X', marketplaceId: 'APJ6JRA9NG5V4', productType: 'OUTERWEAR', op: 'merge',
+      value: [{ marketplace_id: 'APJ6JRA9NG5V4', currency: 'EUR', audience: 'ALL', our_price: [{ schedule: [{ value_with_tax: 99.99 }] }] }],
     })
     expect(r.dryRun).toBe(true)
     expect(r.success).toBe(true)
@@ -43,9 +43,9 @@ describe('A1.1 — SP-API write methods gate when publishing is disabled', () =>
 
   it('with the master flag OFF, even AMAZON_PUBLISH_MODE=live stays gated', async () => {
     process.env.AMAZON_PUBLISH_MODE = 'live'
-    const r = await amazonSpApiClient.patchListingPrice({
-      sellerId: 'S', sku: 'X', marketplaceId: 'APJ6JRA9NG5V4',
-      productType: 'OUTERWEAR', price: 50, currencyCode: 'EUR', taxInclusive: true,
+    const r = await amazonSpApiClient.patchPurchasableOffer({
+      sellerId: 'S', sku: 'X', marketplaceId: 'APJ6JRA9NG5V4', productType: 'OUTERWEAR', op: 'merge',
+      value: [{ marketplace_id: 'APJ6JRA9NG5V4', currency: 'EUR', audience: 'ALL', our_price: [{ schedule: [{ value_with_tax: 50 }] }] }],
     })
     expect(r.dryRun).toBe(true) // flag gate takes precedence over mode
     delete process.env.AMAZON_PUBLISH_MODE

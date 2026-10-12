@@ -83,7 +83,6 @@ const sentSku = () => m.submit.mock.calls[0][0].sku
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubEnv('NEXUS_ENABLE_AMAZON_PUBLISH', 'true'); vi.stubEnv('AMAZON_PUBLISH_MODE', 'live')
-  vi.stubEnv('NEXUS_AMAZON_OFFER_MERGE', '')
   m.seller.mockResolvedValue('seller')
   m.read.mockResolvedValue(listing())
   m.many.mockResolvedValue([])
@@ -142,7 +141,6 @@ describe('a listing with its own seller SKU is sent under that SKU', () => {
   })
 
   it('the live offer read (offer merge on) and the content pre-check name the same SKU', async () => {
-    vi.stubEnv('NEXUS_AMAZON_OFFER_MERGE', '1')
     m.read.mockResolvedValue(listing({ liveChannelSku: 'OWN-IT' }))
     await service.syncToAmazon(pricePush())
     expect(m.get).toHaveBeenCalledWith(expect.objectContaining({ sku: 'OWN-IT' }))
