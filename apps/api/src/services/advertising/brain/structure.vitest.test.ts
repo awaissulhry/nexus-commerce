@@ -283,7 +283,7 @@ describe('AB-16 — going live (D1 = B)', () => {
     expect(goLiveVerdict(g())).toEqual({ inside: true, why: expect.stringMatching(/a person's normal approval sends it \(D1 = B\)/) })
     expect(goLiveVerdict(g({ status: 'LIVE_PROPOSED' })).inside).toBe(true)
   })
-  it('outside: each reason named — the approver\'s code, as before', () => {
+  it('outside: each reason named — the go-live door\'s own approval, as before', () => {
     const out = (extra: Partial<GoLiveFacts>) => goLiveVerdict(g(extra))
     expect(out({ enrolled: false })).toMatchObject({ inside: false, why: expect.stringMatching(/not enrolled/) })
     expect(out({ structure: 'OFF', structureWhy: 'OFF by the Owner' }).why).toMatch(/structure lever is OFF/)
@@ -293,7 +293,7 @@ describe('AB-16 — going live (D1 = B)', () => {
     expect(out({ kind: 'SPLIT', liveSkcs: 20 }).inside).toBe(true)
     expect(out({ brake: 'hold_raises' }).why).toMatch(/money brake holds every raise/)
     expect(out({ status: 'LIVE' }).why).toMatch(/not built and waiting to go live/)
-    expect(out({ brake: 'cut_bids' }).why).toMatch(/authenticator code/)
+    expect(out({ brake: 'cut_bids' }).why).toMatch(/the go-live door's own approval, as for any new structure going live/)
     expect(out({ structure: 'OBSERVE', structureWhy: 'back to shadow' }).why).toMatch(/structure lever is OBSERVE, not PROPOSE/)
     expect(out({ killed: 'stopped by the Owner' }).why).toMatch(/kill switch is on \(stopped by the Owner\)/)
     expect(out({ ceiling: { live: false, why: 'the structure\'s env ceiling NEXUS_ADS_BRAIN_STRUCTURE_MODE is shadow' } }).why).toMatch(/NEXUS_ADS_BRAIN_STRUCTURE_MODE is shadow/)

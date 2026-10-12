@@ -43,7 +43,7 @@ For each business and each tool, the Owner sets how a change Claude asks for get
 | **Auto** | It runs by the business's rule, without a person, but only inside that tool's limits (for example how far a price may move). Outside them it waits for a person, and Claude says why. |
 
 - **Ceilings in code.** Each tool has a highest level it can ever take. Refunds, order cancellations, buyer messages, publishing, sending a purchase order and other changes that reach a buyer, a supplier or money cannot go above Ask. FBA quantity has no tool at all.
-- **Raising** a level, loosening a limit, raising the daily limit or resuming after a pause needs the `settings.security.manage` permission and a fresh 2FA code. **Lowering**, tightening a limit and **Pause** need neither: a brake is always easy.
+- **Raising** a level, loosening a limit, raising the daily limit or resuming after a pause needs the `settings.security.manage` permission. **Lowering**, tightening a limit and **Pause** do not: a brake is always easy.
 - **Brakes per business:** at most 200 changes run by rule in 24 hours (the Owner can change the number); **Pause every change that runs by rule** sends every waiting rule-run back to a person, at once; and Nexus pauses by itself after repeated rule-runs that were stale or failed within an hour.
 - **The connection must allow it too.** When you connect, the tick "Run the changes your business set to run by rule" (scope `nexus.run`) lets that connection use Confirm and Auto. Without it, every change waits for a person, whatever the level.
 - A change that runs by rule still waits a short undo window (about 20 seconds) in which anyone with permission can stop it on the Approvals page.
@@ -127,7 +127,7 @@ Some new paths only act when the Owner turns them on in the server's environment
 | `buyer-message` | Write to a buyer, reply to eBay feedback, ask for an Amazon review |
 | `ads-weekly-review` | How the ads are doing, and what to change (a stop is lower bids; a real pause only when you mean one) |
 | `ads-strategy` | Your ads strategy per market, category and product, kept in Nexus: read it, compare, and propose the changes as one plan |
-| `ads-playbook` | How a product's Amazon ads are built and run: include it, build or adopt its campaigns through Nexus's own builder, start them (with your code) or stop them with low bids; phases, drift and winners as Nexus adds them |
+| `ads-playbook` | How a product's Amazon ads are built and run: include it, build or adopt its campaigns through Nexus's own builder, start them (you approve it) or stop them with low bids; phases, drift and winners as Nexus adds them |
 | `ads-daily-manager` | The daily Amazon ads run of a scheduled Claude routine: reads, asks for one plan inside your strategy (it waits for you in Nexus unless you set it to run by rule), reports to Nexus; for a product the ads brain runs it only supervises (never a lever the brain owns; the brain's report, clashes, tool gaps and your decisions in its report); the routine's setup steps are inside |
 | `automation-review` | What is automated, why a rule did or did not act, rules and levels |
 | `platform-health` | Channel accounts, alerts, failed syncs and jobs |

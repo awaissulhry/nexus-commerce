@@ -196,7 +196,7 @@ describe('rules table words', () => {
     expect(brainStepOf('c1', new Set(['c1']))).toBe('AUTO')
     expect(brainStepOf('c2', new Set(['c1']))).toBe('WATCH')
     expect(brainPickChange({ id: 'c2', name: 'Jacket Exact', from: 'WATCH', to: 'AUTO' })).toEqual({
-      id: 'c2', where: 'Jacket Exact', what: 'Brain', now: 'Watch', next: 'Auto', raise: true, note: 'Becomes its one bid writer · your code',
+      id: 'c2', where: 'Jacket Exact', what: 'Brain', now: 'Watch', next: 'Auto', raise: true, note: 'Becomes its one bid writer',
     })
     expect(brainPickChange({ id: 'c1', name: 'Jacket Exact', from: 'AUTO', to: 'WATCH' })).toMatchObject({ raise: false, next: 'Watch' })
     const now = Date.parse('2026-10-10T12:00:00Z')

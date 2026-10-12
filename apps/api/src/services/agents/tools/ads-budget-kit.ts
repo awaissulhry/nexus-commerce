@@ -17,7 +17,7 @@
  *            budget: set-ad-guardrail).
  *   recheck  `execute` re-runs the dry run and refuses when where it lands, or a value the person approved, moved.
  *   limits   by default nothing runs by rule (maxItems 0, no op listed, no market listed, no raise); each loosening is a
- *            limit the business sets (Settings › AI › Claude), which itself needs the code.
+ *            limit the business sets (Settings › AI › Claude), which itself needs settings.security.manage.
  */
 import { z } from 'zod'
 import { checkLiveReach } from './ads-tool-guards.js'
@@ -92,7 +92,7 @@ export function budgetReachNote(reach: StoredReach | null, later: string): strin
 /** How a request that needs the code is approved, in one sentence (its stepUp). */
 export const BUDGET_CODE_HOW = 'A person with settings.security.manage approves it in Nexus with their authenticator code, or the person who asked '
   + 'confirms it in Claude with theirs. By the business\'s rule only where this tool\'s limits allow a raise (allowRaise, off by default; '
-  + 'switching it on needs the code too).'
+  + 'switching it on needs settings.security.manage).'
 
 /**
  * Whether a raise through a lever needs the approver's code — each tool decides it in ONE helper (its `…NeedsCode`), so a

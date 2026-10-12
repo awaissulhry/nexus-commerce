@@ -20,9 +20,9 @@
  * product in one market) through the one writer the Playbook section uses (ads-playbook/write.ts): set, capture a
  * template from live campaigns, enroll or take out a product (its phase recipes made absolute at enrollment), remove.
  * Nexus only. The preview judges each change by what it would make an enrolled product spend once applied; a change
- * that adds no spend may run by the business's rule inside the tool's limits; a RAISE never does — a person with
- * settings.security.manage approves it with their authenticator code, or the person who asked confirms it in Claude
- * with theirs, and `execute` checks that again. Undo writes the previous version back through this tool.
+ * that adds no spend may run by the business's rule inside the tool's limits; a RAISE never does — a person approves
+ * it, or the person who asked confirms it in Claude, and `execute` checks that again. No authenticator code since
+ * 2026-10-12 (ads-code-rule.ts). Undo writes the previous version back through this tool.
  */
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
@@ -43,11 +43,12 @@ import { notRun } from './ads-change-kit.js'
 import { codeGate, DAY_TO_DAY_NO_CODE, needsCode } from './ads-code-rule.js'
 
 /**
- * set-ads-playbook's code decision, in ONE place: what adds spend is a big door of the Owner's code rule
- * (ads-code-rule.ts) — the stepUp the playbook writer puts on a raise stays. Never by rule either way.
+ * set-ads-playbook's code decision, in ONE place: what adds spend asks the approver's code only where the Owner's code
+ * rule (ads-code-rule.ts) says so — off since 2026-10-12 (the writer reads the same line). Never by rule either way.
  */
 export function playbookCodeOf(preview: PlaybookPreview): PlaybookPreview & { noCode?: string } {
-  if (!preview.stepUp || needsCode('set-ads-playbook: adds spend')) return preview
+  if (preview.direction !== 'raise') return preview
+  if (needsCode('set-ads-playbook: adds spend')) return preview
   return { ...preview, stepUp: null, noCode: DAY_TO_DAY_NO_CODE }
 }
 
@@ -152,8 +153,8 @@ const setAdsPlaybook: AgentTool = {
   requiresApprovalDefault: true,
   // Nexus only: nothing is sent to Amazon, and nothing reads a playbook until an approved apply compiles it.
   openWorld: false,
-  // ads.automation.manage, and the ad-spend money a playbook holds (budgets, bids, recipes); a RAISE also needs
-  // settings.security.manage and a fresh authenticator code, checked when it is approved and again in `execute`.
+  // ads.automation.manage, and the ad-spend money a playbook holds (budgets, bids, recipes); a RAISE is a person's
+  // decision, checked when it is approved and again in `execute`.
   requires: [F.adsAutomationManage, FIELDS.financialsAdspendView],
   reversibility: 'full',
   maxClaudeTrust: 'auto',
@@ -166,7 +167,7 @@ const setAdsPlaybook: AgentTool = {
   withinLimits(preview, limits) {
     const p = preview as Pick<PlaybookPreview, 'direction' | 'raises' | 'kind' | 'target'> | null
     if (!p?.direction) return 'there is no preview of this playbook change to check'
-    if (p.direction === 'raise') return `it raises ${(p.raises ?? []).join(', ') || 'what a playbook may spend'}: a person with settings.security.manage decides, with their authenticator code`
+    if (p.direction === 'raise') return `it raises ${(p.raises ?? []).join(', ') || 'what a playbook may spend'}: a person decides`
     if (p.kind === 'template' && !limits.allowTemplateEdit) return 'a template reaches every product that follows it: this business lets a person decide each template change'
     const markets = (limits.markets as string[] | undefined) ?? []
     const market = p.target && 'market' in p.target ? p.target.market : null
@@ -188,9 +189,9 @@ const setAdsPlaybook: AgentTool = {
     + 'product spend once applied (RAISE: enrolling, a higher budget or base bid, more terms or slots, higher start-bid '
     + 'factors or placements, an isolation switch off). Nexus only: nothing reads a playbook yet and nothing at Amazon '
     + 'moves; a later step compiles it on an approved apply. Waits for a person to approve it in Nexus. A change that adds '
-    + "no spend may run by the business's rule when the business allows it; a RAISE never does: a person with "
-    + 'settings.security.manage approves it in Nexus with their authenticator code, or the person who asked confirms it in '
-    + 'Claude with theirs. Pass expectVersion (from ads-playbook) to refuse one that moved. Undo puts the previous version back.',
+    + "no spend may run by the business's rule when the business allows it; a RAISE never does: a person approves it in "
+    + 'Nexus (no authenticator code), or the person who asked confirms it in Claude when the business set this tool to '
+    + 'confirm in Claude. Pass expectVersion (from ads-playbook) to refuse one that moved. Undo puts the previous version back.',
   async handler(args) {
     const planned = await planPlaybookChange(args)
     return 'error' in planned ? { ok: false, error: planned.error } : { ok: true, preview: playbookCodeOf(planned.plan.preview) }
@@ -209,13 +210,13 @@ const setAdsPlaybook: AgentTool = {
     let stepUpAt: Date | null = null
     let raiseWithoutCode: string | null = null
     if (plan.direction === 'raise') {
-      // A raise never runs by rule (withinLimits refuses it; this is the last door), and runs only with a fresh
-      // authenticator code where the fresh dry run's stepUp asks it (the code table: a big door) — never a plain approve.
+      // A raise never runs by rule (withinLimits refuses it; this is the last door); it asks the approver's code only
+      // where the fresh dry run's stepUp asks it (the code table — off since 2026-10-12).
       if (ctx.decidedVia === 'auto') return notRun('Not run: it raises what an ads playbook may spend, which a person decides, never a rule. Ask for it again; a person approves it.')
       const gate = await codeGate(ctx, playbookCodeOf(plan.preview))
       if ('refusal' in gate) return notRun(gate.refusal)
       stepUpAt = gate.at
-      if (!stepUpAt) raiseWithoutCode = "approved by a person without the authenticator code: the Owner's code rule makes this raise a day-to-day change"
+      if (!stepUpAt) raiseWithoutCode = 'approved by a person without the authenticator code (no ads request asks for it)'
     }
     const decision = await prisma.agentApproval.findUnique({ where: { id: approvalId }, select: { decidedBy: true } })
     const out = await applyPlaybookPlan(plan, {

@@ -29,7 +29,6 @@ import {
   scopeWhat,
   serverError,
   sourceWords,
-  stepUpSentence,
   valueText,
   type Scope,
 } from './strategyWords'
@@ -205,10 +204,6 @@ describe('the save: one table, the raise list, the counted button', () => {
     expect(listWords(['a'])).toBe('a')
     expect(listWords(['a', 'b', 'c'])).toBe('a, b and c')
     expect(listWords(['a', 'b', 'c', 'd', 'e'])).toBe('a, b, c and 2 more')
-    expect(stepUpSentence(raiseList(changes), scopeWhat(MARKET, 'IT')))
-      .toBe('This raises the highest bid and the target for the IT market strategy. Raising the strategy asks for the 6-digit code from your authenticator app; lowering it never does.')
-    expect(stepUpSentence(['the highest bid'], scopeWhat(MARKET, 'IT'), true))
-      .toBe('Undo puts a higher value back for the highest bid of the IT market strategy. Raising the strategy asks for the 6-digit code from your authenticator app; lowering it never does.')
   })
 
   it('what happens when it lands: what it covers, what binds at once and who reads it, what is stored only, Nexus only', () => {
@@ -226,9 +221,9 @@ describe('the save: one table, the raise list, the counted button', () => {
     ])
   })
 
-  it('the button says what it does and how many; a raise says it asks for the code; no permission holds it with why', () => {
+  it('the button says what it does and how many; a raise asks for no code; no permission holds it with why', () => {
     expect(saveButtonWords({ changes: 1, raises: 0, mayRaise: false })).toEqual({ label: 'Save 1 change', disabled: false, why: null })
-    expect(saveButtonWords({ changes: 4, raises: 2, mayRaise: true })).toEqual({ label: 'Save 4 changes with your code…', disabled: false, why: null })
+    expect(saveButtonWords({ changes: 4, raises: 2, mayRaise: true })).toEqual({ label: 'Save 4 changes', disabled: false, why: null })
     expect(saveButtonWords({ changes: 4, raises: 2, mayRaise: false })).toMatchObject({ label: 'Save 4 changes', disabled: true, why: expect.stringContaining('settings.security.manage') })
   })
 
@@ -237,7 +232,7 @@ describe('the save: one table, the raise list, the counted button', () => {
     expect(barWords({ changes: 2, problems: 0, checking: true, raises: null, clears: 0 })).toBe('2 unsaved changes · checking…')
     expect(barWords({ changes: 1, problems: 0, checking: false, raises: [], clears: 0 })).toBe('1 unsaved change · lowers or keeps every limit')
     expect(barWords({ changes: 1, problems: 0, checking: false, raises: ['the highest bid'], clears: 2 }))
-      .toBe("1 unsaved change · clears 2 campaigns' own targets · raises the highest bid: saving asks for your code")
+      .toBe("1 unsaved change · clears 2 campaigns' own targets · raises the highest bid")
   })
 
   it('leaving unsaved edits asks first, with a confirmation the design system accepts', () => {

@@ -16,10 +16,10 @@
  *   judge     each change is RAISE / LOWER / SAME by what it would make an ENROLLED product spend once applied
  *             (judge.ts): enrolling, a higher daily budget or base bid, more terms, slots, start-bid factors,
  *             placements, an isolation switch off; PB-9 — the phase table and the product's phase recipes by what a
- *             phase switch would then write. A raise needs settings.security.manage and a fresh authenticator
- *             code — on the screen with the code (the route), from Claude approved in Nexus with it or confirmed in
- *             Claude with it (set-ads-playbook) — and never runs by rule. Everything else a person approves, or the
- *             business's rule runs inside the tool's limits.
+ *             phase switch would then write. A raise needs a person with settings.security.manage — on the screen
+ *             (the route), from Claude approved in Nexus or confirmed in Claude (set-ads-playbook) — and never runs by
+ *             rule; since 2026-10-12 (Owner, "B") no authenticator code is asked for it. Everything else a person
+ *             approves, or the business's rule runs inside the tool's limits.
  *   apply     ONE transaction: the row (version + 1; a stale `expectVersion` or a row moved since → a conflict) and one
  *             AdsPlaybookVersion row (changes, direction, via, approvalId, actor, stepUpAt).
  *
@@ -31,6 +31,7 @@ import { z } from 'zod'
 import { Prisma } from '@nexus/database'
 import prisma from '../../../db.js'
 import { STEP_UP_NEEDS } from '../../agents/step-up-approval.js'
+import { needsCode } from '../../agents/tools/ads-code-rule.js'
 import type { RaiseWords } from '../../agents/claude-trust.service.js'
 import { PRODUCT_NOT_FOUND } from '../../agents/tools/live-product.js'
 import { MARKET_SCOPE, fractionToPct, type StrategyLevel } from '../ads-strategy/fields.js'
@@ -600,7 +601,7 @@ function finish(p: {
     changes: p.changes,
     direction,
     raises,
-    stepUp: direction === 'raise'
+    stepUp: direction === 'raise' && needsCode('set-ads-playbook: adds spend')
       ? {
           what: 'raises what an ads playbook may spend',
           raises,
@@ -650,8 +651,9 @@ export interface PlaybookWriter {
   /** When a raise was confirmed with a fresh authenticator code; null for a change that does not raise. */
   stepUpAt?: Date | null
   /**
-   * The Owner's code rule (agents/tools/ads-code-rule.ts): a raise a PERSON approved where the code table asks no code for
-   * set-ads-playbook — the sentence that says so is kept with the version. Empty today: a playbook raise is a big door.
+   * A raise a PERSON decided without the code: approved where the code table (agents/tools/ads-code-rule.ts) asks no code
+   * for set-ads-playbook, or saved on the Playbook screen (Owner, 2026-10-12: no code for a raise) — the sentence that
+   * says so is kept with the version.
    */
   raiseWithoutCode?: string | null
   /** 'user:<id>' or 'claude:<approvalId>'. */
@@ -674,7 +676,7 @@ function playbookReason(plan: PlaybookPlan, writer: PlaybookWriter): string | nu
 
 /** Write a planned change in ONE transaction, with its version row; a row that moved since → a conflict. */
 export async function applyPlaybookPlan(plan: PlaybookPlan, writer: PlaybookWriter): Promise<ApplyOutcome> {
-  if (plan.direction === 'raise' && !writer.stepUpAt && !writer.raiseWithoutCode?.trim()) throw new Error('a raise of an ads playbook is written only with the time its authenticator code was confirmed')
+  if (plan.direction === 'raise' && !writer.stepUpAt && !writer.raiseWithoutCode?.trim()) throw new Error('a raise of an ads playbook is written only as a person decided it (with or without the code)')
   let id = ''
   let version = 0
   try {

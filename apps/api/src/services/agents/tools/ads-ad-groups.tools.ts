@@ -13,18 +13,18 @@
  *                    its own. Born at the floor, as the builders' rule 2 wants: every bid above the 2-cent floor starts at
  *                    it with its planned bid remembered, on a floor of the ad group's own held by the person who asked —
  *                    inside a campaign stopped with low bids too, so no campaign restore gives it back (lead decision,
- *                    W4-6 review): only set-ad-group op start does, with the approver's code. `startLive` starts the bids
- *                    as planned: a new structure going live, a big door of the Owner's code rule (ads-code-rule.ts) — the
- *                    approver's authenticator code.
+ *                    W4-6 review): only set-ad-group op start does. `startLive` starts the bids as planned: a new
+ *                    structure going live, a big door of the Owner's code rule (ads-code-rule.ts) — the approver's
+ *                    authenticator code where the table's line is on (every line off since 2026-10-12, Owner "B").
  *   add-product-ads  products (by SKU) into an existing ad group (createProductAdLocal). Each serves at the ad group's bids,
- *                    so it adds spend: new product ads are a big door — the approver's authenticator code.
+ *                    so it adds spend: new product ads are a big door — a person approves them.
  *   set-ad-group     one ad group. op edit: its default bid — as set-target-bid does a bid (the CPC step the campaign and
  *                    the ads strategy allow, never raising a bid a floor holds) — and its name (updateAdGroupWithSync).
  *                    op stop: its bids to the stop bid, each remembered (lowerAdGroupBids: the Owner's temporary stop is
  *                    low bids, never a pause). op start: the remembered bids back (restoreAdGroupBids) — only a floor
  *                    create-ad-group or op stop made (a stock floor is restore-ad-bids-after-stock's, an engine's is its
  *                    own). The floor create-ad-group made it at (born at the floor, never started since): a new structure
- *                    going live, a big door — the approver's authenticator code, never by rule, as a playbook START. The
+ *                    going live, a big door — a person's approval, never by rule, as a playbook START. The
  *                    floor an op stop made (lead decision under code rule A, as restore-campaign after a later stop): a
  *                    day-to-day give-back — no code, the raise listed, by rule only inside this tool's limits
  *                    (maxRestoredBidCents, 0 by default). A pause, an enable and an archive of an ad group stay pause-ads,
@@ -503,14 +503,14 @@ const CREATE_INPUT = z.object({
   negativeKeywords: z.array(negativeArg).max(LIST_MAX).optional().describe("searches this ad group never shows on (its own negatives only), at most 250"),
   negativeAsins: z.array(ASIN).max(LIST_MAX).optional().describe('ASINs this ad group never shows on (its own negatives only), at most 250'),
   startLive: z.boolean().default(false)
-    .describe("false (default): born at the 2-cent floor, every planned bid kept to give back (set-ad-group op start, or restore-campaign inside a stopped campaign); true: the bids start as planned and it spends from the start — a big door: approving that needs the approver's authenticator code"),
+    .describe("false (default): born at the 2-cent floor, every planned bid kept to give back (set-ad-group op start, or restore-campaign inside a stopped campaign); true: the bids start as planned and it spends from the start — a big door: a person approves it, never a rule"),
   why: whyArg,
 })
 type CreateArgs = z.infer<typeof CREATE_INPUT>
 
 /**
  * How a new ad group's bids start: as planned, or at a floor of its own held by the person who asked — inside a campaign
- * stopped with low bids too (lead decision, W4-6 review): only set-ad-group op start gives it back, with the code.
+ * stopped with low bids too (lead decision, W4-6 review): only set-ad-group op start gives it back.
  */
 type StartMode = 'live' | 'own'
 
@@ -878,8 +878,8 @@ const createAdGroup: AgentTool = {
     + '(keywords and ASINs) — through the screen\'s own creates. It is born safe: every bid starts at the 2-cent floor '
     + '(never paused) with its planned bid remembered, so it spends next to nothing until set-ad-group op start gives the '
     + 'planned bids back (inside a campaign a person stopped with low bids it joins that floor, and restore-campaign gives '
-    + 'everything back). startLive: true starts the bids as planned — a new structure going live (a big door of the Owner\'s '
-    + 'code rule), so approving it needs the approver\'s authenticator code. Each product must be sold on Amazon in the campaign\'s market; the same product twice '
+    + 'everything back). startLive: true starts the bids as planned — a new structure going live (a big door), so a person '
+    + 'approves it and it never runs by rule. Each product must be sold on Amazon in the campaign\'s market; the same product twice '
     + 'in one campaign is refused (its ads would bid against each other), another product in the campaign is only '
     + 'listed, and the same product in another campaign of the market is warned. A person approves it in Nexus, unless '
     + 'the business lets it run by its rule inside its limits and the ads strategy (by default it does not). The preview '
@@ -1061,9 +1061,9 @@ const addProductAds: AgentTool = {
   undo: ADS_UNDO,
   description:
     'Add product ads (by SKU, up to 100) to an existing ad group of an Amazon Sponsored Products campaign, through the '
-    + 'screen\'s own create. Each serves at the ad group\'s bids, so it adds spend: new product ads are a big door of the '
-    + 'Owner\'s code rule — approving it needs the approver\'s authenticator code (in Nexus, or the person who asked '
-    + 'confirms it in Claude) — unless the business lets it run by '
+    + 'screen\'s own create. Each serves at the ad group\'s bids, so it adds spend: new product ads are a big door — a '
+    + 'person approves it (in Nexus, or the person who asked confirms it in Claude when the business set it so) — unless '
+    + 'the business lets it run by '
     + 'its rule inside its limits and the ads strategy (by default it does not). Each product must be sold on Amazon in '
     + 'the campaign\'s market (a live listing with an ASIN); the same product twice in one campaign is refused (its ads '
     + 'would bid against each other), another product in the campaign is only listed, and the same product in another '
@@ -1209,7 +1209,7 @@ async function floorPreview(op: 'stop' | 'start', group: GroupRow, ctx: Pick<Too
   if (campaignFloor) {
     return { ok: false, error: `Not queued: ${campaignFloor}: its ad groups' bids are that floor's — ${isPerson(campaign.bidsSuppressedBy) ? 'restore-campaign gives them back' : 'the engine that set it gives them back'}${op === 'stop' ? ', and they already serve at it' : ''}.` }
   }
-  // PB-5b — a playbook's campaign: its bids stop and start only with the playbook's own ops (START needs the code).
+  // PB-5b — a playbook's campaign: its bids stop and start only with the playbook's own ops (START is a person's).
   const playbook = await playbookRefusal(campaign, 'its ad groups\' bids move')
   if (playbook) return { ok: false, error: `Not queued: ${playbook}.` }
   let moves: BidMove[] = []
@@ -1475,7 +1475,7 @@ const setAdGroup: AgentTool = {
     + 'allows (byRuleBidCents); never raising a bid a floor holds — and/or its name (new in its campaign). op stop: every bid of it to the stop bid the ads strategy sets (the 2-cent floor when it '
     + 'sets none), each remembered — the temporary stop, never a pause; refused on an ad group already at a floor of its '
     + 'own. op start: the bids a floor create-ad-group or op stop made remembered given back — the planned bids of a new '
-    + 'ad group born at the floor are a big door (the approver\'s authenticator code, and it never runs by rule); after an '
+    + 'ad group born at the floor are a big door (a person approves it, and it never runs by rule); after an '
     + 'op stop it is a day-to-day give-back (listed in raises, no code; by rule only inside maxRestoredBidCents, 0 by '
     + 'default); a stock floor is '
     + 'restore-ad-bids-after-stock\'s, an engine\'s or another person\'s floor theirs. Nothing changes until it is approved: '

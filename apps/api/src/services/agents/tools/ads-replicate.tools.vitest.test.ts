@@ -23,7 +23,9 @@
  *             the translations (and refuses a term it has none for); through a change plan too
  */
 import { randomUUID } from 'node:crypto'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { codeRuleA } from '../../../test-support/code-rule-a.js'
+import { __codeRuleTest } from './ads-code-rule.js'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
 import { formulaDatabase } from '../../../test-support/formula-database.js'
 import { seedAdsFixture } from '../../../test-support/ads-fixtures.js'
@@ -204,7 +206,9 @@ beforeAll(async () => {
     await db().adProductAd.create({ data: { adGroupId: 'g-cat', asin: 'B0CATASN01', externalAdId: 'EXT-pa-cat' } })
   })
 }, 180_000)
-afterAll(async () => { vi.unstubAllEnvs(); await database?.close() }, 30_000)
+afterAll(async () => { __codeRuleTest.reset(); vi.unstubAllEnvs(); await database?.close() }, 30_000)
+// Rule A's big doors set back on: the code path stays proven (every line is off since 2026-10-12, Owner "B").
+beforeEach(() => codeRuleA())
 
 describe('B-1 — the copy, and what refuses it', () => {
   it('previews each campaign from its source, born at the floor and off the allowlist, its placements left for once it is live', async () => {

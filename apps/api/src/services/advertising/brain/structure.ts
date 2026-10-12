@@ -580,6 +580,6 @@ export function goLiveVerdict(g: GoLiveFacts): { inside: boolean; why: string } 
   if (g.kind === 'SKC' && g.liveSkcs >= g.skcMax) outside.push(`the product already runs ${plural(g.liveSkcs, 'single-keyword campaign')} of the brain (skcMax ${g.skcMax})`)
   if (g.brake && RAISE_HOLDING_BRAKES.includes(g.brake)) outside.push(`the product's money brake holds every raise (${g.brake})`)
   return outside.length
-    ? { inside: false, why: `outside the caps: ${outside.join('; ')} — the approver's authenticator code, as for any new structure going live` }
+    ? { inside: false, why: `outside the caps: ${outside.join('; ')} — the go-live door's own approval, as for any new structure going live` }
     : { inside: true, why: 'a campaign the ads brain built for an enrolled product, going live inside its caps (its first budget, the single-keyword campaigns, the money brake): a person\'s normal approval sends it (D1 = B)' }
 }

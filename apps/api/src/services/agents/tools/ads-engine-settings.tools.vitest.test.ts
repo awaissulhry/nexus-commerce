@@ -22,7 +22,7 @@ import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { __codeRuleTest } from './ads-code-rule.js'
 import Fastify, { type FastifyInstance } from 'fastify'
-import { generateSecret, generateSync } from 'otplib'
+import { generateSecret } from 'otplib'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import { formulaDatabase } from '../../../test-support/formula-database.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../../lib/workspace-context.js'
@@ -105,7 +105,6 @@ async function person(who: Who, label: string, permissions: string[]) {
   await c.workspaceMemberRole.create({ data: { membershipId: membership.id, roleId: role.id } })
   people[who] = { id: user.id, secret, label }
 }
-const codeOf = (who: Who = 'owner') => generateSync({ secret: people[who].secret })
 function claude(who: Who = 'owner'): McpPrincipal {
   return {
     kind: 'user', userId: people[who].id, label: people[who].label, permissions: { isOwner: false, permissions: new Set(EVERYTHING) },
@@ -461,14 +460,14 @@ describe('W4-8 run-ad-engine-now — the Control Room’s Run now', { timeout: T
   it('by rule through the real commit: only for an engine the limits list, and then it starts', async () => {
     const owner = { userId: people.owner.id, label: 'Olga Owner', canManage: true }
     // It cannot be undone: its level and its limits are raised one at a time, each with its own code.
-    expect(await inside(() => setClaudeRule(owner, 'run-ad-engine-now', { level: 'auto', code: codeOf() }))).toMatchObject({ ok: true })
+    expect(await inside(() => setClaudeRule(owner, 'run-ad-engine-now', { level: 'auto' }))).toMatchObject({ ok: true })
     try {
       __stepUpTest.reset()
-      expect(await inside(() => setClaudeRule(owner, 'run-ad-engine-now', { limits: { maxItems: 1, engines: ['auto-bid'], minHoursSinceLastRun: 2 }, code: codeOf() }))).toMatchObject({ ok: true })
+      expect(await inside(() => setClaudeRule(owner, 'run-ad-engine-now', { limits: { maxItems: 1, engines: ['auto-bid'], minHoursSinceLastRun: 2 } }))).toMatchObject({ ok: true })
       const waits = await call('run-ad-engine-now', { engine: 'rules' })
       expect(waits.answer, JSON.stringify(waits.answer)).toMatchObject({ status: 'waiting_for_approval', trust: { why: expect.stringContaining('is not on the engines Claude may run now by rule') } })
       __stepUpTest.reset()
-      expect(await inside(() => setClaudeRule(owner, 'run-ad-engine-now', { limits: { maxItems: 1, engines: ['rules'], minHoursSinceLastRun: 2 }, code: codeOf() }))).toMatchObject({ ok: true })
+      expect(await inside(() => setClaudeRule(owner, 'run-ad-engine-now', { limits: { maxItems: 1, engines: ['rules'], minHoursSinceLastRun: 2 } }))).toMatchObject({ ok: true })
       const runs = await call('run-ad-engine-now', { engine: 'rules' })
       expect(runs.answer, JSON.stringify(runs.answer)).toMatchObject({ status: 'runs_by_rule', preview: { level: 'PROPOSE', raises: [] } })
       expect(await commit(runs.answer.approvalId)).toMatchObject({ ok: true, status: 'executed' })
@@ -479,7 +478,7 @@ describe('W4-8 run-ad-engine-now — the Control Room’s Run now', { timeout: T
       expect(jobs.ran).toContain('advertising-rule-evaluator')
     } finally {
       __stepUpTest.reset()
-      expect(await inside(() => setClaudeRule(owner, 'run-ad-engine-now', { level: 'ask', limits: null, code: codeOf() }))).toMatchObject({ ok: true })
+      expect(await inside(() => setClaudeRule(owner, 'run-ad-engine-now', { level: 'ask', limits: null }))).toMatchObject({ ok: true })
     }
   })
 })

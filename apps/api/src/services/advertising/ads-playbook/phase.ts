@@ -30,8 +30,8 @@
  * BY EFFECT. Every part says whether it adds spend: a higher target ACoS or highest bid, a looser harvest or negate
  * group, more Claude may do alone (the strategy writer's rules); a floor given back; an hourly plan switched on, or one
  * switched off that gives back the floors it set; the harvest more often. Any of these and the whole switch is a RAISE:
- * it needs the approver's code, and runs by rule only where the Owner allowed raising phase moves (the tool's
- * `allowPhaseUp`) — never when it lets Claude do more alone (`raisesClaude`): that always needs his code. A switch that only
+ * a person approves it, and it runs by rule only where the Owner allowed raising phase moves (the tool's
+ * `allowPhaseUp`) — never when it lets Claude do more alone (`raisesClaude`): that is always a person's. A switch that only
  * lowers may run by rule where the Owner allows the phase kind. Never a pause, never an archive, never an FBA quantity,
  * never the Owner's own hourly plans.
  */
@@ -268,7 +268,7 @@ export interface PhasePlan {
   harvest: HarvestStep
   direction: Direction
   raises: string[]
-  /** It lets Claude do more alone (a claudeAutonomy level up, or a narrower level taken off): never by rule, always the code. */
+  /** It lets Claude do more alone (a claudeAutonomy level up, or a narrower level taken off): never by rule, always a person. */
   raisesClaude: boolean
   check: PhaseCheck
   ctx: ArtifactContext

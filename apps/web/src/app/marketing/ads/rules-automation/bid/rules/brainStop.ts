@@ -8,8 +8,8 @@
  * brain's other levers, a person's own bids and every other engine are as before.
  *
  * Start again: the same door with `op: 'end'` for the stop the row names (`row.stop`: its market, or every market), asked
- * and approved in one click with the approver's authenticator code (the DS StepUpModal): ending a stop lets the brain write
- * bids again, a big door. The code is passed through once and never kept.
+ * and approved in one click (no authenticator code since 2026-10-12, Owner "B"). Only when the API still asks the
+ * approver's code for it (`needsCode`) does the request wait for the DS StepUpModal; the code is passed once, never kept.
  *
  * The page's words only: Brain, Stop, Start again, bids, campaigns. No sentences on the page beyond the confirm's one line.
  */
@@ -25,7 +25,6 @@ export const START_WHY = 'Started again on the Bid page'
 
 /** Why a Stop / Start again cannot be used, in the page's words. */
 export const STOP_HELD = {
-  security: 'Needs the security permission: starting again takes your authenticator code',
   watching: 'The brain changes no bids here: it only watches',
   stopped: 'Already stopped on all its campaigns: start it again in its market',
   unread: 'Not read: reload the page',
@@ -45,19 +44,19 @@ export interface BrainStopView {
 /**
  * Which button the Brain's detail shows, and why it is held. `held`: the page's reason for every brain write (a missing
  * ads automation permission, a market Nexus only reads); `busy`: a Start again approved and waiting to run.
- *   a stop stands      → Start again (also held without the security permission: it takes the code)
+ *   a stop stands      → Start again
  *   no stop            → Stop the brain (held while the brain runs no campaign on Auto here: it changes no bids; and
  *                        while other stops already hold every one of its campaigns — a market's own stop seen from All
  *                        markets, or stops of its products: the mode's "Brain off")
  *   the stop not read  → Stop the brain, held (an older answer, or the read failed: the page cannot say which)
  */
-export function brainStopView(row: BidRuleRow, ctx: { held: string | null; canSecurity: boolean; busy?: string | null }): BrainStopView | null {
+export function brainStopView(row: BidRuleRow, ctx: { held: string | null; busy?: string | null }): BrainStopView | null {
   if (!isBrain(row)) return null
   const stop = row.stop
   if (stop) {
     return {
       action: 'start', label: 'Start again', variant: 'secondary',
-      held: ctx.held ?? ctx.busy ?? (ctx.canSecurity ? null : STOP_HELD.security),
+      held: ctx.held ?? ctx.busy ?? null,
       hint: `Stopped ${whereWords(stop.market)} · ${whenWords(stop.at)}`,
     }
   }
@@ -104,7 +103,7 @@ export function startConfirmWords(row: BidRuleRow, market: string, stop: BrainSt
   const what = same ? `bids on its ${plural(worksOn(row, 'campaigns').total, 'campaign')} ${whereWords(stop.market)}` : `bids ${whereWords(stop.market)}`
   return {
     title: 'Start the brain again?',
-    line: `It changes ${what} again, inside your limits. Next: the code from your authenticator app.`,
+    line: `It changes ${what} again, inside your limits.`,
     cancel: 'Keep stopped',
     confirm: 'Start again',
     busy: 'Starting…',
@@ -112,7 +111,7 @@ export function startConfirmWords(row: BidRuleRow, market: string, stop: BrainSt
   }
 }
 
-/** The code step's words (the DS StepUpModal). */
+/** The code step's words (the DS StepUpModal), shown only when the API asks the code. */
 export function startCodeWords(stop: BrainStop): { title: string; sentence: string; confirm: string } {
   return {
     title: 'Start the brain again',
@@ -129,7 +128,6 @@ export interface KillBody {
   why: string
   market?: string
   approve?: true
-  code?: string
 }
 
 /** Stop: every product's bids in the market in view; All markets names no market (every market). */
@@ -137,9 +135,9 @@ export function stopBody(market: string): KillBody {
   return { op: 'kill', lever: BRAIN_STOP_LEVER, why: STOP_WHY, ...(market && market !== 'all' ? { market } : {}) }
 }
 
-/** Start again: ends the stop the row names, approved in the same click with the person's code. */
-export function startBody(stop: BrainStop, code: string): KillBody {
-  return { op: 'end', lever: BRAIN_STOP_LEVER, why: START_WHY, ...(stop.market ? { market: stop.market } : {}), approve: true, code }
+/** Start again: ends the stop the row names, approved in the same click. */
+export function startBody(stop: BrainStop): KillBody {
+  return { op: 'end', lever: BRAIN_STOP_LEVER, why: START_WHY, ...(stop.market ? { market: stop.market } : {}), approve: true }
 }
 
 // ── the answers ─────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -166,7 +164,7 @@ export function stopNotice(out: { ok: true; body: KillAnswer } | { ok: false; wo
   return { tone: 'warning', title: 'Waiting for approval', body: out.body.approve?.error ?? 'It did not run now: the request waits in Approvals.' }
 }
 
-/** A Start again's answer in words: approved (and when it runs), or refused. A refused code stays in the code step. */
+/** A Start again's answer in words: approved (and when it runs), or refused. A refused code (when one is asked) stays in the code step. */
 export function startNotice(out: { ok: true; executeAfter?: string | null } | { ok: false; words: string }, now = Date.now()): StopNotice {
   if (!out.ok) return { tone: 'danger', title: 'Not started', body: out.words }
   const later = !!out.executeAfter && Date.parse(out.executeAfter) > now

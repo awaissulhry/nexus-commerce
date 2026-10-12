@@ -576,12 +576,11 @@ export function listWords(items: readonly string[], max = 3): string {
   return `${items.slice(0, max).join(', ')} and ${items.length - max} more`
 }
 
-/** The primary button of the save: what it does, with its count; a raise says it asks for the code. */
+/** The primary button of the save: what it does, with its count; a raise is held without the security permission. */
 export function saveButtonWords(o: { changes: number; raises: number; mayRaise: boolean; undo?: boolean }): { label: string; disabled: boolean; why: string | null } {
   const what = o.undo ? 'Undo' : `Save ${plural(o.changes, 'change')}`
-  if (!o.raises) return { label: what, disabled: false, why: null }
-  if (!o.mayRaise) return { label: what, disabled: true, why: 'Raising the strategy needs the settings.security.manage permission. Lower it instead, or ask the person who has it.' }
-  return { label: `${what} with your code…`, disabled: false, why: null }
+  if (o.raises && !o.mayRaise) return { label: what, disabled: true, why: 'Raising the strategy needs the settings.security.manage permission. Lower it instead, or ask the person who has it.' }
+  return { label: what, disabled: false, why: null }
 }
 
 /** The sticky bar's sentence while there are unsaved edits. */
@@ -591,12 +590,7 @@ export function barWords(o: { changes: number; problems: number; checking: boole
   if (o.problems) return `${head} · ${plural(o.problems, 'problem')} to fix first`
   if (o.checking || !o.raises) return `${head}${clears} · checking…`
   if (!o.raises.length) return `${head}${clears} · lowers or keeps every limit`
-  return `${head}${clears} · raises ${listWords(o.raises)}: saving asks for your code`
-}
-
-/** The step-up dialog's sentence: what rises, and that lowering never asks. */
-export function stepUpSentence(raises: readonly string[], where: string, undo = false): string {
-  return `${undo ? 'Undo puts a higher value back for' : 'This raises'} ${listWords(raises, 4)} ${undo ? 'of' : 'for'} ${where}. Raising the strategy asks for the 6-digit code from your authenticator app; lowering it never does.`
+  return `${head}${clears} · raises ${listWords(o.raises)}`
 }
 
 /** What happens when the save lands, per changed field: binds at once (and who reads it), or stored only. */

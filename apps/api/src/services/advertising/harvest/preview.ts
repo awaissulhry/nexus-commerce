@@ -317,7 +317,8 @@ export async function previewChangeSet(body: PreviewBody, opts: { actor: ActorKi
   const steps: Step[] = []
   const add = (s: Omit<Step, 'i'>) => { const step = { ...s, i: steps.length }; steps.push(step); return step.i }
   // M3 (code rule A, Owner 10-07) — a NEW campaign that goes live at once (born serving, on the live-write allowlist, with
-  // its product ads) is a big door: the approver's authenticator code, for the page and Claude alike. Only the brain's own
+  // its product ads) is a big door: the approver's authenticator code where the code table's line is on (off since
+  // 2026-10-12, Owner "B"), for the page and Claude alike. Only the brain's own
   // harvest campaigns go live with a normal approval (10-08 D1 = B: harvest-golive.ts), and they never come through here.
   const coded = usedCampaigns.length > 0 && opts.actor !== 'BRAIN' && needsCode('set-campaign-live-writes: on')
   const pfStep = new Map<string, number>()

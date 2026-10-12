@@ -18,7 +18,11 @@
  * Values are made up (public repo).
  */
 import { randomBytes } from 'node:crypto'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { codeRuleA } from '../../../test-support/code-rule-a.js'
+
+// Rule A's big doors set back on: the code path stays proven (every line is off since 2026-10-12, Owner "B").
+beforeEach(() => codeRuleA())
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
 import { concurrentDatabase, concurrentDatabaseUrl } from '../../../test-support/concurrent-database.js'
 import { seedAdsFixture } from '../../../test-support/ads-fixtures.js'

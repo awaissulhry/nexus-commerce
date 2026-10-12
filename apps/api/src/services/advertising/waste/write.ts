@@ -28,8 +28,9 @@
  * apply    the same preview again; a different planHash is 409 (something moved: preview again). The rows that are not
  *          refused become ONE request — the tool itself for one row, else one change plan (submit-change-plan), one step
  *          per row (so each row has its own change and Undo) — asked as the person and approved by the same person at
- *          once through the Approvals page's path (decideFleetApproval: the undo window; a request that raises needs
- *          settings.security.manage and the authenticator code). The answer: { changeSetId, status, steps, … }.
+ *          once through the Approvals page's path (decideFleetApproval: the undo window; a request whose stepUp asks the
+ *          code needs settings.security.manage and the authenticator code — none since 2026-10-12, the code table's
+ *          lines are off). The answer: { changeSetId, status, steps, … }.
  * waiting  a request that waits on the page's rows (one of the tools above, or a plan holding one) approved or rejected
  *          through the same path, as on the Approvals page; any other request is 404 here. A rule's Ask-me card
  *          (`suggestion:<AdsRuleSuggestion.id>`: a keyword pause or a search-term negative) is decided through the

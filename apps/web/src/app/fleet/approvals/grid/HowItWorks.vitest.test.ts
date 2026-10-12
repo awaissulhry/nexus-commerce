@@ -92,7 +92,8 @@ describe('How it works — this page, in plain words', () => {
     expect(words).toContain('A reason is optional; it goes back to whoever asked, so Claude sees why you said no.')
     expect(words).toContain('Never in bulk: refunds, messages, cancellations, closing a listing, deleting, change plans, or any kind that cannot be undone.')
     expect(words).toContain('“Ask me”, “Confirm in Claude with my code” or “Run by themselves within these limits”')
-    expect(words).toContain('going back to “Ask me” needs no code')
+    expect(words).toContain('Raising a level needs the security permission; going back to “Ask me” needs nothing.')
+    expect(words).not.toMatch(/authenticator|6-digit/)
     expect(words).toContain('A rule changes only new requests')
   })
 

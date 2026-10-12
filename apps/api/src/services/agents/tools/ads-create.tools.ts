@@ -210,8 +210,8 @@ async function createPreview(raw: Record<string, unknown>, ctx: Pick<ToolContext
         + `one ad group, ${plural(plan.products.length, 'product')} and ${targeting}${plan.negativeKeywords.length ? `, ${plural(plan.negativeKeywords.length, 'negative keyword')}` : ''}${plan.portfolio ? `, in the portfolio "${plan.portfolio.name}"` : ''}. `
         + `It is born with every bid at the ${floor}-cent floor (suppressed, not paused) and off the live-write allowlist, so it spends next to nothing until a person approves restore-campaign.`,
       nextSteps: [
-        'set-campaign-live-writes (enabled: true): only an allowlisted campaign takes an approved change live (a big door: the approver\'s authenticator code)',
-        'restore-campaign: puts the planned bids back — the campaign starts spending (a big door: the approver\'s authenticator code)',
+        'set-campaign-live-writes (enabled: true): only an allowlisted campaign takes an approved change live (a big door: a person approves it)',
+        'restore-campaign: puts the planned bids back — the campaign starts spending (a big door: a person approves it)',
       ],
       undoNote: UNDO_WORDS,
       limitFacts: facts,

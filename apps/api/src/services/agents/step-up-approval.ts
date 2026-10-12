@@ -1,7 +1,9 @@
 /**
  * ADS AUTONOMY W1-3 — a request a person approves only with their fresh authenticator code, alone or as a step of a
  * change plan: the ads "big doors" of the Owner's code rule (tools/ads-code-rule.ts, 2026-10-07) — a strategy raise, a
- * playbook change or START, a new structure going live, new product ads, someone else's pause lifted.
+ * playbook change or START, a new structure going live, new product ads, someone else's pause lifted. Since 2026-10-12
+ * (Owner, "B") every line of that table is off, so no preview carries a `stepUp`; this machinery serves a line set back
+ * on, and a request stored with one before.
  *
  *   mark     the tool's dry run puts `stepUp` on its preview ({ what, raises, needs, how }); a change plan copies it onto
  *            its own preview (change-plan.service.ts). The Approvals page, the bulk approve and Claude read it there.

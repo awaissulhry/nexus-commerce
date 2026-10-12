@@ -15,8 +15,9 @@
  *             a built campaign START started and left at the phase's floor is released here, with the code
  *   rank      a phase that switches an hourly plan off is a raise when the floors it set come back, a lowering when kept
  */
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { __codeRuleTest } from './ads-code-rule.js'
+import { codeRuleA } from '../../../test-support/code-rule-a.js'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
 import { formulaDatabase } from '../../../test-support/formula-database.js'
 import { seedAdsFixture } from '../../../test-support/ads-fixtures.js'
@@ -134,7 +135,9 @@ beforeAll(async () => {
     }
   })
 }, 180_000)
-afterAll(async () => { await database?.close() }, 30_000)
+afterAll(async () => { __codeRuleTest.reset(); await database?.close() }, 30_000)
+// Rule A's big doors set back on: the code path stays proven (every line is off since 2026-10-12, Owner "B").
+beforeEach(() => codeRuleA())
 
 describe('the phase check, in the effective view', () => {
   it('days in phase, the hold, each exit rule with its numbers; no proposal inside the hold', async () => {
@@ -208,7 +211,7 @@ describe('PROFIT → GROW raises the target: the whole switch needs the approver
       expect(flipped.stepUp).toBeNull()
       expect(flipped.noCode).toMatch(/day-to-day/)
       expect(flipped.effect).toMatch(/It ADDS SPEND \(.*\): a day-to-day change/)
-    } finally { __codeRuleTest.reset() }
+    } finally { codeRuleA() }
     expect(p.strategy.changes.find((c: Row) => c.field === 'goal')).toMatchObject({ direction: 'raise' })
     const asked = await ask(phase('GROW'))
     expect(await approve(asked.approvalId!)).toMatchObject({ ok: false, error: expect.stringMatching(/it switches a product's playbook phase in a way that adds spend, and that runs only when a person with settings.security.manage approved it with their authenticator code/) })
@@ -252,7 +255,7 @@ describe('by rule: only the move the phase check proposes, outside the hold; a r
     expect(version).toMatchObject({ direction: 'raise', stepUpAt: null, reason: expect.stringMatching(/allowPhaseUp/) })
   })
 
-  it("a switch that lets Claude do more alone never runs by rule — allowPhaseUp or not; the strategy writer refuses it without a code", async () => {
+  it("a switch that lets Claude do more alone never runs by rule — allowPhaseUp or not; the strategy writer refuses it by rule", async () => {
     // LAUNCH narrows Claude's budget changes to ask; the row holds it, and LAUNCH has run 40 days: the check proposes GROW.
     await inside(async () => {
       const row = await db().adsStrategy.findUniqueOrThrow({ where: { id: strategyId } })
@@ -266,11 +269,11 @@ describe('by rule: only the move the phase check proposes, outside the hold; a r
     const p = (await preview(phase('GROW'))).preview as Row
     expect(p).toMatchObject({ direction: 'raise', raisesClaude: true, proposed: true })
     expect(p.strategy.changes.find((c: Row) => c.field === 'claudeAutonomy')).toMatchObject({ direction: 'raise', claudeAutonomy: { from: { budget: 'ask' }, to: null } })
-    expect(judge(p, { allowPhaseUp: true })).toMatch(/it lets Claude do more alone .* always needs a person with settings.security.manage and their authenticator code, never a rule/)
+    expect(judge(p, { allowPhaseUp: true })).toMatch(/it lets Claude do more alone .* is always a person's decision, never a rule/)
     expect(judge({ ...p, raisesClaude: undefined }, { allowPhaseUp: true })).toMatch(/does not say whether it raises what Claude may do alone/)
     // Run by rule anyway (a stale preview): not run, nothing written.
     const asked = await ask(phase('GROW'))
-    expect(await approve(asked.approvalId!, 'auto')).toMatchObject({ ok: false, error: expect.stringMatching(/lets Claude do more alone, which always needs a person's authenticator code/) })
+    expect(await approve(asked.approvalId!, 'auto')).toMatchObject({ ok: false, error: expect.stringMatching(/lets Claude do more alone, which a person decides, never a rule/) })
     expect(await inside(() => db().adsStrategy.findUniqueOrThrow({ where: { id: strategyId } }))).toMatchObject({ goal: 'LAUNCH' })
     // The writer holds the line on its own: a raise of Claude's levels is never written under raiseByRule.
     const planned = await inside(() => planStrategyChange({ channel: 'AMAZON', market: 'IT', level: 'product', productId: pb.parent, values: { claudeAutonomy: null } }))

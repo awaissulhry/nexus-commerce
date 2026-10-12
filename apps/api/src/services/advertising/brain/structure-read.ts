@@ -152,7 +152,7 @@ export async function brainStructure(a: { market?: string; productId?: string; s
       decidedNow: decided ? decided.map(decisionView) : [],
       decidedNowNote: 'decidedNow is the weekly decision as the brain would take it now — stored nowhere, nothing asked. The brain stores and asks only for an enrolled product whose structure lever is OBSERVE (shadow) or PROPOSE (under NEXUS_ADS_BRAIN_STRUCTURE_MODE=live).',
       stored,
-      goLiveRule: 'D1 = B: a campaign the brain built for an enrolled product goes live with a normal approval while it is inside the caps (its first budget at most firstBudgetPctOfEnvelope of the day\'s envelope, the product below skcMax live single-keyword campaigns, no money brake holding raises); outside them the approver\'s authenticator code, as for any new structure going live.',
+      goLiveRule: 'D1 = B: a campaign the brain built for an enrolled product goes live with a normal approval while it is inside the caps (its first budget at most firstBudgetPctOfEnvelope of the day\'s envelope, the product below skcMax live single-keyword campaigns, no money brake holding raises); outside them the go-live door\'s own approval, as for any new structure going live.',
     },
   }
 }

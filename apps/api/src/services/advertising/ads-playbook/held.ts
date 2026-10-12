@@ -1,6 +1,6 @@
 /**
- * ADS PLAYBOOK PB-5b — the campaigns whose bids only a playbook START gives back, so no other door lifts them without
- * the approver's authenticator code (restore-campaign, undo-ad-change):
+ * ADS PLAYBOOK PB-5b — the campaigns whose bids only a playbook START gives back, so no other door lifts them around
+ * START (restore-campaign, undo-ad-change):
  *
  *   built   a slot a playbook built (AdsPlaybookLink kind slot, origin built): born at the floor, stopped at the floor
  *   held    a campaign whose hourly plan's floor a playbook STOP took over (kind STOP_FLOOR_KIND, one per campaign: the
@@ -42,5 +42,5 @@ export async function playbookHoldOf(entities: { targetIds?: readonly string[]; 
 /** Why a door other than START may not give these bids back. */
 export function startOnlyRefusal(name: string, why: 'built' | 'held'): string {
   return `${name} ${why === 'built' ? 'was built by an ads playbook' : 'is at a floor a playbook stop holds'}: its bids go back only with apply-ads-playbook op start, `
-    + "which needs the approver's authenticator code and switches the playbook's hourly plans and rules on with them"
+    + "which a person approves and which switches the playbook's hourly plans and rules on with them"
 }

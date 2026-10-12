@@ -1,6 +1,13 @@
 /**
- * THE OWNER'S CODE RULE (2026-10-07, "Code rule: A") — which Amazon ads requests a person approves only with their fresh
- * authenticator code (the preview's `stepUp`, checked by `stepUpApproval` in `execute`). Only the BIG DOORS:
+ * THE OWNER'S CODE RULE — which Amazon ads requests a person approves only with their fresh authenticator code (the
+ * preview's `stepUp`, checked by `stepUpApproval` in `execute`).
+ *
+ * NOW (Owner, 2026-10-12, "B"): NONE. Every line below is off: a person's normal approval sends every ads request, and
+ * the bulk approve takes them too. The table stays as the switch: one line set back to `true` asks the code again for
+ * that door, on the card and in the run. What still asks the code is elsewhere: signing in, connecting Claude, and a
+ * change set to "confirm in Claude".
+ *
+ * Until 2026-10-12 ("Code rule: A", 2026-10-07) only the BIG DOORS asked it:
  *
  *   a new structure going live   create-ad-group startLive, set-ad-group op start, set-campaign-live-writes on (the
  *                                allowlist), restore-campaign of a campaign born at the floor (with the allowlist, the
@@ -31,34 +38,33 @@
  * the FRESH dry run's `stepUp` (`codeGate`, or the tool's own gate reading it): a line flipped here changes both the card
  * and the run. The table test (ads-code-rule.vitest.test.ts) pins every line, and each door's own test flips its line
  * (`__codeRuleTest`) to prove the tool follows. What the table does NOT decide: a door's "never by rule" (each tool's
- * withinLimits and execute keep it, code or not), and the Owner's separate rule that more of what Claude may do alone
- * (the strategy's claudeAutonomy, a phase switch that raises it) is always raised with his code.
+ * withinLimits and execute keep it, code or not).
  */
 import { stepUpApproval, stepUpOf } from '../step-up-approval.js'
 import type { ToolContext } from '../tool-types.js'
 
 export const CODE_RULE = {
-  // ── Big doors: the approver's code ──
-  'create-ad-group: startLive': true,
-  'set-ad-group: op start': true,
-  'add-product-ads': true,
-  'set-campaign-live-writes: on': true,
-  'restore-campaign: born at the floor': true,
-  'apply-ads-playbook: start': true,
-  'apply-ads-playbook: a phase switch that raises': true,
-  'set-ads-playbook: adds spend': true,
-  'set-ads-strategy: a raise': true,
-  'enable-ads: includePeoplesPauses': true,
+  // ── The big doors of code rule A — off since 2026-10-12 (Owner, "B"): a normal approval ──
+  'create-ad-group: startLive': false,
+  'set-ad-group: op start': false,
+  'add-product-ads': false,
+  'set-campaign-live-writes: on': false,
+  'restore-campaign: born at the floor': false,
+  'apply-ads-playbook: start': false,
+  'apply-ads-playbook: a phase switch that raises': false,
+  'set-ads-playbook: adds spend': false,
+  'set-ads-strategy: a raise': false,
+  'enable-ads: includePeoplesPauses': false,
   // BID BRAIN BB-6 — a campaign under the bid brain: a new bid writer going live.
-  'set-bid-brain-enrollment: live': true,
+  'set-bid-brain-enrollment: live': false,
   // ONE BRAIN — set-ads-brain: a lever of a product's brain to AUTO (or a campaign under the bid brain), whichever op does it.
-  'set-ads-brain: a lever to AUTO': true,
+  'set-ads-brain: a lever to AUTO': false,
   // Batch 2 fix — set-ads-brain op leave lifting the brain's own pauses: an automation's pause lifted (the brain going off).
-  'set-ads-brain: leave lifts the brain\'s pauses': true,
+  'set-ads-brain: leave lifts the brain\'s pauses': false,
   // Batch 2 review fix (lead decision) — a raise of a product's portfolio cap limit: a larger monthly cap may be written.
-  'set-ads-brain: a portfolio cap limit raised': true,
+  'set-ads-brain: a portfolio cap limit raised': false,
   // Batch 2 review fix (lead decision) — ending a kill switch: the brain writes that lever again.
-  'set-brain-kill-switch: end': true,
+  'set-brain-kill-switch: end': false,
   // ── Day-to-day: listed in raises, warned, a normal approval ──
   // ONE BRAIN AB-16 (D1 = B) — a brain-built campaign of an enrolled product going live inside its caps (goLiveDoor).
   'brain structure go-live: inside an enrolled product, inside caps': false,
@@ -87,17 +93,15 @@ export function needsCode(door: CodeDoor): boolean {
   return flipped.get(door) ?? CODE_RULE[door]
 }
 
-/** Tests only — flip one line of the table, to prove a tool follows it; `reset` puts the table back. */
+/** Tests only — flip one line of the table (from what it reads now), to prove a tool follows it; `reset` puts the table back. */
 export const __codeRuleTest = {
-  flip(door: CodeDoor, value = !CODE_RULE[door]) { flipped.set(door, value) },
+  flip(door: CodeDoor, value = !needsCode(door)) { flipped.set(door, value) },
   reset() { flipped.clear() },
 }
 
 /** What a preview says (`noCode`) when it can add spend and approving it needs no code. */
-export const DAY_TO_DAY_NO_CODE = 'It can add spend (listed in raises), as a day-to-day change: a person\'s approval sends it, with no '
-  + 'authenticator code (the Owner\'s code rule keeps the code for new structures going live, new product ads, a strategy or '
-  + 'playbook raise, lifting someone else\'s pause, the ads brain to AUTO, a raise of its portfolio cap limit and ending its '
-  + 'kill switch). Where it goes past the business\'s own limits, the card warns.'
+export const DAY_TO_DAY_NO_CODE = 'It can add spend (listed in raises), as a day-to-day change: a person\'s approval sends it, with '
+  + 'no authenticator code (no ads request asks for the code). Where it goes past the business\'s own limits, the card warns.'
 
 /** AB-16 (D1 = B) — the brain's go-live line. */
 export const BRAIN_GO_LIVE: CodeDoor = 'brain structure go-live: inside an enrolled product, inside caps'

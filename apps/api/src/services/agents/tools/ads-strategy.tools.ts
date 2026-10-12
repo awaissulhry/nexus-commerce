@@ -18,9 +18,9 @@
  * ADS AUTONOMY W1-3 — set-ads-strategy: Claude asks to change ONE row (a market, a category or a product in one market)
  * through the one writer the Strategy tab uses (ads-strategy/write.ts). Its preview judges every field raise / lower /
  * same on the value in force; a LOWERING may run by the business's rule (limits `allowLower`); a RAISE never does — a
- * person with settings.security.manage approves it in Nexus with their authenticator code, or the person who asked
- * confirms it in Claude with theirs, and `execute` checks that again (agents/step-up-approval.ts). Undo writes the
- * previous version back through this tool (an undo of a lowering is a raise: it needs the code too).
+ * person with settings.security.manage approves it in Nexus, or the person who asked confirms it in Claude, and
+ * `execute` checks that again. No authenticator code since 2026-10-12 (ads-code-rule.ts). Undo writes the previous
+ * version back through this tool (an undo of a lowering is a raise: a person decides it too).
  */
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
@@ -41,13 +41,12 @@ import { notRun } from './ads-change-kit.js'
 import { codeGate, DAY_TO_DAY_NO_CODE, needsCode } from './ads-code-rule.js'
 
 /**
- * set-ads-strategy's code decision, in ONE place: a raise is a big door of the Owner's code rule (ads-code-rule.ts) —
- * the stepUp the strategy writer puts on a raise stays. Should the table ever let it go, a raise of what Claude may do
- * alone (claudeAutonomy) still keeps it: the Owner's own rule, which the writer enforces too. Never by rule either way.
+ * set-ads-strategy's code decision, in ONE place: a raise asks the approver's code only where the Owner's code rule
+ * (ads-code-rule.ts) says so — off since 2026-10-12 (the writer reads the same line). Never by rule either way.
  */
 export function strategyCodeOf(preview: StrategyPreview): StrategyPreview & { noCode?: string } {
-  if (!preview.stepUp || needsCode('set-ads-strategy: a raise')) return preview
-  if (preview.changes.some((c) => c.field === 'claudeAutonomy' && c.direction === 'raise')) return preview
+  if (preview.direction !== 'raise') return preview
+  if (needsCode('set-ads-strategy: a raise')) return preview
   return { ...preview, stepUp: null, noCode: DAY_TO_DAY_NO_CODE }
 }
 
@@ -134,8 +133,8 @@ const setAdsStrategy: AgentTool = {
   // Nexus only: nothing is sent to Amazon. A protected term binds Nexus's write gate at once; the fields an engine or a
   // door reads (readBy) act from its next run.
   openWorld: false,
-  // ads.automation.manage, and the ad-spend money it holds; a RAISE also needs settings.security.manage and a fresh
-  // authenticator code, checked when it is approved and again in `execute` (never in `requires`: tool-never.vitest).
+  // ads.automation.manage, and the ad-spend money it holds; a RAISE is a person's decision, checked when it is approved
+  // and again in `execute` (never in `requires`: tool-never.vitest).
   requires: [F.adsAutomationManage, FIELDS.financialsAdspendView],
   reversibility: 'full',
   // A lowering is a brake ("stopping is never harder than going", the set-ad-guardrail precedent): it may run by the
@@ -148,7 +147,7 @@ const setAdsStrategy: AgentTool = {
   withinLimits(preview, limits) {
     const p = preview as Pick<StrategyPreview, 'direction' | 'raises'> | null
     if (!p?.direction) return 'there is no preview of this strategy change to check'
-    if (p.direction === 'raise') return `it raises ${(p.raises ?? []).join(', ') || 'the strategy'}: a person with settings.security.manage decides, with their authenticator code`
+    if (p.direction === 'raise') return `it raises ${(p.raises ?? []).join(', ') || 'the strategy'}: a person decides`
     return limits.allowLower ? null : 'this business lets a person decide every change of the ads strategy'
   },
   undo: SET_ADS_STRATEGY_UNDO,
@@ -172,8 +171,8 @@ const setAdsStrategy: AgentTool = {
     + 'change Claude asks for there to the lower level of what Claude may do alone); every other field is stored and shown '
     + 'only (notReadYet). Waits '
     + 'for a person to approve it in Nexus. A change that only lowers may run by the business\'s rule when the business allows '
-    + 'it; a RAISE never does: a person with settings.security.manage approves it in Nexus with their authenticator code, or '
-    + 'the person who asked confirms it in Claude with theirs. Pass expectVersion (from ads-strategy view rows) to refuse a '
+    + 'it; a RAISE never does: a person approves it in Nexus (no authenticator code), or the person who asked confirms it '
+    + 'in Claude when the business set this tool to confirm in Claude. Pass expectVersion (from ads-strategy view rows) to refuse a '
     + 'row that moved. Undo puts the previous version back.',
   async handler(args) {
     const planned = await planStrategyChange(args)
@@ -193,13 +192,13 @@ const setAdsStrategy: AgentTool = {
     let stepUpAt: Date | null = null
     let raiseWithoutCode: string | null = null
     if (plan.direction === 'raise') {
-      // A raise never runs by rule (withinLimits refuses it; this is the last door), and runs only with a fresh
-      // authenticator code where the fresh dry run's stepUp asks it (the code table: a big door) — never a plain approve.
+      // A raise never runs by rule (withinLimits refuses it; this is the last door); it asks the approver's code only
+      // where the fresh dry run's stepUp asks it (the code table — off since 2026-10-12).
       if (ctx.decidedVia === 'auto') return notRun('Not run: it raises the ads strategy, which a person decides, never a rule. Ask for it again; a person approves it.')
       const gate = await codeGate(ctx, strategyCodeOf(plan.preview))
       if ('refusal' in gate) return notRun(gate.refusal)
       stepUpAt = gate.at
-      if (!stepUpAt) raiseWithoutCode = "approved by a person without the authenticator code: the Owner's code rule makes this raise a day-to-day change"
+      if (!stepUpAt) raiseWithoutCode = 'approved by a person without the authenticator code (no ads request asks for it)'
     }
     const decision = await prisma.agentApproval.findUnique({ where: { id: approvalId }, select: { decidedBy: true } })
     const out = await applyStrategyPlan(plan, {

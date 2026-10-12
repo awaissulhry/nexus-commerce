@@ -22,6 +22,8 @@
  *              the strategy and the limits it may run
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { codeRuleA } from '../../../test-support/code-rule-a.js'
+import { __codeRuleTest } from './ads-code-rule.js'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
 import { formulaDatabase } from '../../../test-support/formula-database.js'
 import { seedAdsFixture } from '../../../test-support/ads-fixtures.js'
@@ -164,8 +166,10 @@ beforeAll(async () => {
     await db().campaign.create({ data: { name: 'Taken-SP-Auto', type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'IT', externalCampaignId: 'EXT-taken', dailyBudget: '10.00', startDate: new Date('2026-01-01T00:00:00Z') } })
   })
 }, 180_000)
-afterAll(async () => { vi.unstubAllEnvs(); await database?.close() }, 30_000)
+afterAll(async () => { __codeRuleTest.reset(); vi.unstubAllEnvs(); await database?.close() }, 30_000)
 beforeEach(() => {
+  // Rule A's big doors set back on: the code path stays proven (every line is off since 2026-10-12, Owner "B").
+  codeRuleA()
   vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'live')
   amz.calls = []; amz.bids = []
 })

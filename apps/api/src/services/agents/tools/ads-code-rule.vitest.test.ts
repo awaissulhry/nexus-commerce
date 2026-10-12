@@ -1,8 +1,11 @@
 /**
- * THE OWNER'S CODE RULE A (2026-10-07) — which ads requests a person approves only with their authenticator code.
+ * THE OWNER'S CODE RULE — which ads requests a person approves only with their authenticator code. Since 2026-10-12
+ * (Owner, "B") every line is off: by default no ads request asks the code. The tests below that prove the mechanism set
+ * their line back on (`doorOn`), as the Owner could; `by default` proves the B state through the real approve path.
  *
  *   table       every door the rule names, code yes or no, pinned line by line: a change of the rule is deliberate
- *   big doors   the two this rule added through the REAL approve path (the Approvals inbox's own approve,
+ *   by default  B: a big door (the allowlist on) asks no code, and a plain approve runs it
+ *   big doors   (their line set back on) the two rule A added through the REAL approve path (the Approvals inbox's own approve,
  *               decideFleetApproval, then the commit after the undo window): set-campaign-live-writes on, and
  *               restore-campaign of a campaign born at the floor (the builders' go-live) — without the code mfa_required
  *               and nothing changes; with it, it runs. The other big doors keep their own real-path tests
@@ -94,6 +97,8 @@ async function claudeCall(tool: string, args: Record<string, unknown>): Promise<
   const result = await inside(() => runToolForClaude(viaClaude(), getTool(tool)!, { ...args, business: people.business }))
   return JSON.parse((result.content as Array<{ text: string }>).map((b) => b.text).join(''))
 }
+/** A line of the table set back on for one test (beforeEach resets every flip), as the Owner could set it. */
+const doorOn = (...doors: CodeDoor[]) => { for (const door of doors) __codeRuleTest.flip(door, true) }
 const campaignRow = (id: string) => inside(() => db().campaign.findUniqueOrThrow({ where: { id } })) as Promise<Row>
 const bidOf = async (id: string) => (await inside(() => db().adTarget.findUniqueOrThrow({ where: { id } }))).bidCents as number
 
@@ -150,23 +155,23 @@ afterAll(async () => { await database?.close() }, 30_000)
 describe('the Owner\'s code rule A — the table', () => {
   it('every door, code yes or no, pinned: a change of the rule is one line there and one line here', () => {
     expect(CODE_RULE).toEqual({
-      // Big doors: the approver's code.
-      'create-ad-group: startLive': true,
-      'set-ad-group: op start': true,
-      'add-product-ads': true,
-      'set-campaign-live-writes: on': true,
-      'restore-campaign: born at the floor': true,
-      'apply-ads-playbook: start': true,
-      'apply-ads-playbook: a phase switch that raises': true,
-      'set-ads-playbook: adds spend': true,
-      'set-ads-strategy: a raise': true,
-      'enable-ads: includePeoplesPauses': true,
-      'set-bid-brain-enrollment: live': true,
-      'set-ads-brain: a lever to AUTO': true,
-      'set-ads-brain: leave lifts the brain\'s pauses': true,
+      // The big doors of rule A — off since 2026-10-12 (Owner, "B"): a normal approval.
+      'create-ad-group: startLive': false,
+      'set-ad-group: op start': false,
+      'add-product-ads': false,
+      'set-campaign-live-writes: on': false,
+      'restore-campaign: born at the floor': false,
+      'apply-ads-playbook: start': false,
+      'apply-ads-playbook: a phase switch that raises': false,
+      'set-ads-playbook: adds spend': false,
+      'set-ads-strategy: a raise': false,
+      'enable-ads: includePeoplesPauses': false,
+      'set-bid-brain-enrollment: live': false,
+      'set-ads-brain: a lever to AUTO': false,
+      'set-ads-brain: leave lifts the brain\'s pauses': false,
       // Batch 2 review fix (lead decision) — the brain let loose: a raised portfolio cap limit, a kill switch ended.
-      'set-ads-brain: a portfolio cap limit raised': true,
-      'set-brain-kill-switch: end': true,
+      'set-ads-brain: a portfolio cap limit raised': false,
+      'set-brain-kill-switch: end': false,
       // Day-to-day: listed in raises, said in the effect, warned past his own limits, a normal approval.
       // AB-16 (D1 = B): a campaign the ads brain built for an enrolled product, going live inside its caps.
       'brain structure go-live: inside an enrolled product, inside caps': false,
@@ -188,8 +193,23 @@ describe('the Owner\'s code rule A — the table', () => {
   })
 })
 
-describe('the Owner\'s code rule A — the big doors it added, through the Approvals inbox', () => {
+describe('the Owner\'s code rule — by default (B, 2026-10-12): no ads request asks the code', () => {
+  it('the allowlist on, a big door of rule A: no stepUp, and a plain approve in the Approvals inbox runs it', async () => {
+    await inside(() => db().campaign.update({ where: { id: 'c-off' }, data: { liveBidWritesEnabled: false } }))
+    expect(needsCode('set-campaign-live-writes: on')).toBe(false)
+    const asked = await ask('set-campaign-live-writes', { campaignId: 'c-off', enabled: true })
+    const stored = await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: asked.approvalId } }))
+    expect(stored.preview.stepUp).toBeUndefined()
+    expect(await approve(asked.approvalId)).toMatchObject({ ok: true, status: 'scheduled' })
+    expect(await commit(asked.approvalId)).toMatchObject({ ok: true, status: 'executed' })
+    expect((await campaignRow('c-off')).liveBidWritesEnabled).toBe(true)
+    await inside(() => db().campaign.update({ where: { id: 'c-off' }, data: { liveBidWritesEnabled: false } }))
+  })
+})
+
+describe('the Owner\'s code rule A — the big doors it added, through the Approvals inbox (their line set back on)', () => {
   it('set-brain-kill-switch end (batch 2 review fix): without the code mfa_required and the kill stands; with it, it ends — a kill itself needs none', async () => {
+    doorOn('set-brain-kill-switch: end')
     const { setBrainKill, killStanding } = await import('../../advertising/brain/kill-switch.js')
     const target = { lever: 'budgets' as const, productId: null, market: 'IT' }
     // A kill is a normal approval: no stepUp, a plain approve runs it.
@@ -220,6 +240,7 @@ describe('the Owner\'s code rule A — the big doors it added, through the Appro
   })
 
   it('set-campaign-live-writes on: without the code mfa_required and nothing changes; with it, it runs at commit', async () => {
+    doorOn('set-campaign-live-writes: on')
     const asked = await ask('set-campaign-live-writes', { campaignId: 'c-off', enabled: true })
     expect(asked).toMatchObject({ ok: true, mode: 'queued' })
     const stored = await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: asked.approvalId } }))
@@ -242,17 +263,17 @@ describe('the Owner\'s code rule A — the big doors it added, through the Appro
   })
 
   it('restore-campaign of a campaign born at the floor (the builders\' go-live): without the code mfa_required; with it, its planned bids come back', async () => {
+    // By default (B) the card asks no code.
+    const plain = await preview('restore-campaign', { campaignId: 'c-born' })
+    expect(plain.preview).toMatchObject({ bornAtFloor: { since: expect.any(String) }, effect: expect.stringMatching(/a new campaign starts spending\.$/) })
+    expect(plain.preview).not.toHaveProperty('stepUp')
+    doorOn('restore-campaign: born at the floor')
     const p = await preview('restore-campaign', { campaignId: 'c-born' })
     expect(p.preview).toMatchObject({
       bornAtFloor: { since: expect.any(String) },
       stepUp: { what: 'gives Test c-born, born at the floor, its planned bids (a new campaign starts spending)', raises: ['Bids', 'Spend'] },
       effect: expect.stringMatching(/It was born at the floor and has not spent at its planned bids yet: a new campaign starts spending, so approving it needs the approver's authenticator code\.$/),
     })
-    // Its line flipped, the card asks no code.
-    __codeRuleTest.flip('restore-campaign: born at the floor')
-    try {
-      expect((await preview('restore-campaign', { campaignId: 'c-born' })).preview).not.toHaveProperty('stepUp')
-    } finally { __codeRuleTest.reset() }
     const asked = await ask('restore-campaign', { campaignId: 'c-born' })
     expect(await approve(asked.approvalId)).toMatchObject({ ok: false, code: 'mfa_required', raises: ['Bids', 'Spend'] })
     expect(await bidOf('t-c-born')).toBe(2)
@@ -264,6 +285,7 @@ describe('the Owner\'s code rule A — the big doors it added, through the Appro
   })
 
   it('a request approved before the rule, without the code, is refused at execute: ask for it again', async () => {
+    doorOn('set-campaign-live-writes: on')
     // As an approval stored before the rule: a plain approve recorded, and the fresh dry run now asks for the code.
     await inside(async () => {
       await db().campaign.update({ where: { id: 'c-off' }, data: { liveBidWritesEnabled: false } })
@@ -322,7 +344,8 @@ describe('ONE BRAIN AB-16 (D1 = B) — a campaign the ads brain built goes live 
     expect(await bidOf('t-c-brain-in')).toBe(60)
   })
 
-  it('outside the caps (a budget above the first-budget cap): the code as before — mfa_required without it', async () => {
+  it('outside the caps (a budget above the first-budget cap), the door\'s line on: the code as before — mfa_required without it', async () => {
+    doorOn('set-campaign-live-writes: on')
     const asked = await ask('set-campaign-live-writes', { campaignId: 'c-brain-out', enabled: true })
     const stored = await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: asked.approvalId } }))
     expect(stored.preview).toMatchObject({ brainStructure: { inside: false, why: expect.stringMatching(/above the first-budget cap/) }, stepUp: { raises: ['Live writes'] } })
@@ -330,8 +353,9 @@ describe('ONE BRAIN AB-16 (D1 = B) — a campaign the ads brain built goes live 
     expect((await campaignRow('c-brain-out')).liveBidWritesEnabled).toBe(false)
   })
 
-  it('the Owner takes the structure lever back (OFF): the code again; the line flipped, the brain\'s campaign needs it too', async () => {
+  it('the Owner takes the structure lever back (OFF): the door\'s own line again; the brain\'s line flipped, the brain\'s campaign needs the code too', async () => {
     const off = await inside(() => db().adsBrainOverride.create({ data: { productId: PRODUCT, marketplace: 'IT', scope: 'PRODUCT', kind: 'LEVEL', key: 'structure', ref: '', value: 'OFF', by: 'user:owner', reason: 'mine' } }))
+    doorOn('restore-campaign: born at the floor')
     try {
       const p = await preview('restore-campaign', { campaignId: 'c-brain-out' })
       expect(p.preview).toMatchObject({ brainStructure: { inside: false, why: expect.stringMatching(/structure lever is OFF/) }, stepUp: { raises: ['Bids', 'Spend'] } })
@@ -360,7 +384,7 @@ describe('the Owner\'s code rule A — day-to-day: a plain approve', () => {
   it('a negative retired at Amazon: listed in raises and said in the effect, no code; a plain approve runs it', async () => {
     await inside(() => db().adTarget.update({ where: { id: 't-neg' }, data: { externalTargetId: 'EXT-t-neg' } }))
     const p = await preview('retire-negatives', { negativeIds: ['t-neg'] })
-    expect(p.preview).toMatchObject({ raises: [expect.stringMatching(/^negative exact "free"/)], noCode: expect.stringMatching(/day-to-day/), effect: expect.stringMatching(/so spend can rise \(a day-to-day change/) })
+    expect(p.preview).toMatchObject({ raises: [expect.stringMatching(/^negative exact "free"/)], noCode: expect.stringMatching(/with no authenticator code/), effect: expect.stringMatching(/so spend can rise \(a day-to-day change/) })
     expect(p.preview).not.toHaveProperty('stepUp')
     const asked = await ask('retire-negatives', { negativeIds: ['t-neg'] })
     expect(await approve(asked.approvalId)).toMatchObject({ ok: true, status: 'scheduled' })
@@ -369,16 +393,13 @@ describe('the Owner\'s code rule A — day-to-day: a plain approve', () => {
 })
 
 describe('the Owner\'s code rule A — a flipped line changes the card and the run', () => {
-  it('the allowlist with its line off: no stepUp, and a plain approve runs it', async () => {
+  it('the allowlist with its line flipped on, then off again: stepUp only while it is on', async () => {
     await inside(() => db().campaign.update({ where: { id: 'c-off' }, data: { liveBidWritesEnabled: false } }))
     __codeRuleTest.flip('set-campaign-live-writes: on')
-    expect(needsCode('set-campaign-live-writes: on')).toBe(false)
-    const asked = await ask('set-campaign-live-writes', { campaignId: 'c-off', enabled: true })
-    const stored = await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: asked.approvalId } }))
-    expect(stored.preview.stepUp).toBeUndefined()
-    expect(await approve(asked.approvalId)).toMatchObject({ ok: true, status: 'scheduled' })
-    expect(await commit(asked.approvalId)).toMatchObject({ ok: true, status: 'executed' })
-    expect((await campaignRow('c-off')).liveBidWritesEnabled).toBe(true)
+    expect(needsCode('set-campaign-live-writes: on')).toBe(true)
+    expect((await preview('set-campaign-live-writes', { campaignId: 'c-off', enabled: true })).preview).toMatchObject({ stepUp: { raises: ['Live writes'] } })
+    __codeRuleTest.flip('set-campaign-live-writes: on', false)
+    expect((await preview('set-campaign-live-writes', { campaignId: 'c-off', enabled: true })).preview).not.toHaveProperty('stepUp')
   })
 
   it('a retire with its line on: stepUp, no code mfa_required, with the code it runs', async () => {
@@ -393,7 +414,8 @@ describe('the Owner\'s code rule A — a flipped line changes the card and the r
 })
 
 describe('the Owner\'s code rule A — a big door in a change plan, and confirmed in Claude', () => {
-  it('a change plan with the allowlist on as a step carries its stepUp: without the code mfa_required; with it the step runs', async () => {
+  it('a change plan with the allowlist on as a step carries its stepUp (its line on): without the code mfa_required; with it the step runs', async () => {
+    doorOn('set-campaign-live-writes: on')
     const asked = await ask('submit-change-plan', { title: 'Test go live', steps: [{ tool: 'set-campaign-live-writes', args: { campaignId: 'c-door-plan', enabled: true } }] })
     expect(asked, JSON.stringify(asked)).toMatchObject({ ok: true, mode: 'queued' })
     const stored = await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: asked.approvalId } }))
@@ -410,7 +432,8 @@ describe('the Owner\'s code rule A — a big door in a change plan, and confirme
     const asker = { userId: people.asker, label: 'Test Asker', canManage: true }
     vi.stubEnv('NEXUS_OAUTH_ISSUER', 'https://web.example.test')
     vi.stubEnv('NEXUS_AI_KILL_SWITCH', '')
-    expect(await inside(() => setClaudeRule(asker, 'set-campaign-live-writes', { level: 'confirm', code: askerCode() }))).toMatchObject({ ok: true })
+    expect(await inside(() => setClaudeRule(asker, 'set-campaign-live-writes', { level: 'confirm' }))).toMatchObject({ ok: true })
+    doorOn('set-campaign-live-writes: on')
     try {
       const answer = await claudeCall('set-campaign-live-writes', { campaignId: 'c-door-confirm', enabled: true })
       expect(answer, JSON.stringify(answer)).toMatchObject({ status: 'waiting_for_approval', trust: { level: 'confirm' }, confirm: { planHash: expect.any(String) } })

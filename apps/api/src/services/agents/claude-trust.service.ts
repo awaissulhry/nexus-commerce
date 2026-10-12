@@ -14,9 +14,9 @@
  *              AUTO_PAUSE_FAILURES rule-runs that were stale or failed within an hour.
  *   nexus.run  without that scope on the connection, every change waits for a person, whatever the level.
  *   raising    a level, LOOSENING a tool's limits, raising the daily cap or resuming after a pause needs
- *              settings.security.manage and a fresh 2FA code. A brake is easy: lowering, TIGHTENING limits
- *              (`limitsTighten`) and Pause need neither (the routes let anyone who may use Claude in the business —
- *              ai.run — reach them). Every change is audited (AgentControlAudit, charter `claude`).
+ *              settings.security.manage (no authenticator code since 2026-10-12, Owner "B"). A brake is easy:
+ *              lowering, TIGHTENING limits (`limitsTighten`) and Pause need nothing (the routes let anyone who may use
+ *              Claude in the business — ai.run — reach them). Every change is audited (AgentControlAudit, charter `claude`).
  *
  * How `auto` runs: the gate stores the request as usual; Claude's door (mcp-tool-call.ts) then schedules it as the
  * person who asked (decisionVia auto), through the normal undo window; the sweep's normal commit re-checks their
@@ -39,7 +39,7 @@
  * the connection's own scope recorded beside the verdict) and the verdict is recorded on
  * the request (AgentApproval.ruleVerdict, `watchVerdictOf` / a plan's per step). It is never scheduled by the rule: a
  * person decides it, as at confirm (watch allows all confirm allows, so lowering watch → confirm never lets Claude do
- * more). Raising to watch is a raise (2FA); lowering auto → watch is a free brake. Offered only for a tool whose
+ * more). Raising to watch is a raise; lowering auto → watch is a free brake. Offered only for a tool whose
  * ceiling is auto, never for a brake (`levelsFor`).
  */
 
@@ -81,8 +81,8 @@ const isLevel = (value: unknown): value is ClaudeTrust => typeof value === 'stri
 const lower = (a: ClaudeTrust, b: ClaudeTrust): ClaudeTrust => (RANK[a] <= RANK[b] ? a : b)
 
 /**
- * Who changes a setting: the signed-in person (their id for the 2FA code, their name for the audit) and whether they
- * hold settings.security.manage in this business — needed to raise anything, never to lower or pause.
+ * Who changes a setting: the signed-in person (their id, their name for the audit) and whether they hold
+ * settings.security.manage in this business — needed to raise anything, never to lower or pause.
  */
 export interface TrustActor {
   userId: string
@@ -109,14 +109,14 @@ export const CLAUDE_RAISE: RaiseWords = {
 }
 
 /**
- * Raising: settings.security.manage, then a fresh 2FA code (lib/auth/step-up.ts: single use, lockout after wrong
- * codes). `sentence` names what is raised; the ads strategy (ads autonomy W1-3) raises through here too.
+ * Raising: settings.security.manage. Since 2026-10-12 (Owner, "B") no authenticator code is asked for a raise.
+ * `sentence` names what is raised; the ads strategy and playbook screens (ads autonomy W1-3, PB-3) raise through here too.
  */
-export async function mayRaise(actor: TrustActor, code: unknown, sentence: RaiseWords = CLAUDE_RAISE): Promise<TrustRefusal | null> {
+export async function mayRaise(actor: TrustActor, sentence: RaiseWords = CLAUDE_RAISE): Promise<TrustRefusal | null> {
   if (!actor.canManage) {
     return { ok: false, status: 403, code: 'forbidden', error: `${sentence.act} needs the settings.security.manage permission in this business. ${sentence.free}` }
   }
-  return stepUp(actor.userId, code, sentence)
+  return null
 }
 
 export type TrustRefusal = { ok: false; status: 400 | 403 | 404 | 429; code?: string; error: string }
@@ -823,7 +823,7 @@ export async function noteAutoFailure(): Promise<void> {
         title: "Nexus paused Claude's changes that run by rule",
         body: `${failures} changes run by rule were stale or failed within an hour, so Nexus paused every change that runs by rule in this business. `
           + `${paused.handedBack} waiting ${paused.handedBack === 1 ? 'change went' : 'changes went'} back to a person.\n`
-          + 'Claude can still read and ask; what it asks for waits for a person. To resume, open Settings, AI, Claude (your authenticator code).',
+          + 'Claude can still read and ask; what it asks for waits for a person. To resume, open Settings, AI, Claude.',
         href: '/settings/ai/claude',
         meta: { automatic: true, failures, handedBack: paused.handedBack },
       })
@@ -876,11 +876,11 @@ export async function pauseAutoRuns(
   return { ok: true, paused: true, handedBack, alreadyPaused: now.paused }
 }
 
-/** Lift the pause: changes may run by rule again. Takes a fresh 2FA code. */
-export async function resumeAutoRuns(actor: TrustActor, code: unknown): Promise<{ ok: true; paused: false } | TrustRefusal> {
+/** Lift the pause: changes may run by rule again. A raise: settings.security.manage. */
+export async function resumeAutoRuns(actor: TrustActor): Promise<{ ok: true; paused: false } | TrustRefusal> {
   const now = await autonomyOf()
   if (!now.paused) return { ok: true, paused: false }
-  const refused = await mayRaise(actor, code)
+  const refused = await mayRaise(actor)
   if (refused) return refused
   await prisma.agentAutonomy.update({
     where: { workspaceId: workspaceIdForQuery() },
@@ -896,8 +896,11 @@ export async function resumeAutoRuns(actor: TrustActor, code: unknown): Promise<
   return { ok: true, paused: false }
 }
 
-/** The person's fresh 2FA code, once (lib/auth/step-up.ts: single use, lockout after wrong codes). */
-async function stepUp(userId: string, code: unknown, sentence: RaiseWords): Promise<TrustRefusal | null> {
+/**
+ * The person's fresh 2FA code, once (lib/auth/step-up.ts: single use, lockout after wrong codes). Asked only where the
+ * Owner's code table still asks it of an approval (agent-fleet/approval-inbox.service.ts, agents/tools/ads-code-rule.ts).
+ */
+export async function freshCode(userId: string, code: unknown, sentence: RaiseWords): Promise<TrustRefusal | null> {
   const user = userId
     ? await prisma.userProfile.findUnique({ where: { id: userId }, select: { twoFactorEnabledAt: true, twoFactorSecret: true } })
     : null
@@ -918,7 +921,7 @@ async function stepUp(userId: string, code: unknown, sentence: RaiseWords): Prom
  * Does going from `before` to `after` only TIGHTEN a tool's limits (or leave them as they are)? By the limits
  * convention (tool-types.ts `limits`): a `max…` number lower, a `min…` number higher, an `allow…` switch off, a `max…`
  * choice earlier in its own list, a list of what is allowed with nothing added. Any other change — or a limit whose
- * direction the convention does not say — counts as loosening: it asks for settings.security.manage and the code.
+ * direction the convention does not say — counts as loosening: it asks for settings.security.manage.
  */
 export function limitsTighten(tool: Pick<AgentTool, 'limits'>, before: Record<string, unknown> | null, after: Record<string, unknown> | null): boolean {
   const b = before ?? {}
@@ -988,14 +991,12 @@ export interface RulePatch {
   level?: unknown
   /** The tool's limits, or null for its code defaults. */
   limits?: unknown
-  code?: unknown
 }
 
 /**
  * Set one tool's level and/or limits in this business. A level is refused above the tool's ceiling (floors cannot be
- * raised); limits are checked against the tool's own schema (unknown keys refused). Raising the level, or any change
- * of limits, needs a fresh 2FA code; lowering does not. For a tool that cannot be undone, raising the level and
- * loosening the limits are two calls, so two codes (AA-W2-13). Audited.
+ * raised); limits are checked against the tool's own schema (unknown keys refused). Raising the level, or loosening
+ * the limits, needs settings.security.manage; lowering and tightening do not. Audited.
  */
 export async function setClaudeRule(actor: TrustActor, toolName: string, patch: RulePatch): Promise<{ ok: true; rule: ClaudeToolRule } | TrustRefusal> {
   const tool = getTool(toolName)
@@ -1029,17 +1030,8 @@ export async function setClaudeRule(actor: TrustActor, toolName: string, patch: 
   // Tightening limits is a brake, like lowering a level; loosening them lets Claude do more, like raising one.
   const defaults = defaultsOf(tool)
   const loosening = limitsChanged && !limitsTighten(tool, current.limits ?? defaults, limits ? { ...defaults, ...limits } : defaults)
-  // ADS AUTONOMY AA-W2-13 — a kind that cannot be undone (archive-ads): what it may do alone is raised one step at a
-  // time, each with its own fresh code (a code is single use), so a permanent change never starts running by rule on
-  // one code. Lowering and tightening stay free.
-  if (raising && loosening && tool.reversibility === 'none') {
-    return {
-      ok: false, status: 400, code: 'second_code_required',
-      error: `${toolName} cannot be undone: raise its level and loosen its limits one at a time, each with its own authenticator code.`,
-    }
-  }
   if (raising || loosening) {
-    const refused = await mayRaise(actor, patch.code)
+    const refused = await mayRaise(actor)
     if (refused) return refused
   }
 
@@ -1069,8 +1061,8 @@ export async function setClaudeRule(actor: TrustActor, toolName: string, patch: 
   return { ok: true, rule: (await claudeRuleOf(toolName))! }
 }
 
-/** Set the most changes that may run by rule in 24 hours. Raising it needs a fresh 2FA code. Audited. */
-export async function setDailyAutoCap(actor: TrustActor, patch: { dailyAutoCap?: unknown; code?: unknown }): Promise<{ ok: true; dailyAutoCap: number } | TrustRefusal> {
+/** Set the most changes that may run by rule in 24 hours. Raising it needs settings.security.manage. Audited. */
+export async function setDailyAutoCap(actor: TrustActor, patch: { dailyAutoCap?: unknown }): Promise<{ ok: true; dailyAutoCap: number } | TrustRefusal> {
   const cap = Number(patch.dailyAutoCap)
   if (!Number.isInteger(cap) || cap < 0 || cap > MAX_DAILY_AUTO_CAP) {
     return { ok: false, status: 400, error: `dailyAutoCap must be a whole number from 0 to ${MAX_DAILY_AUTO_CAP}.` }
@@ -1078,7 +1070,7 @@ export async function setDailyAutoCap(actor: TrustActor, patch: { dailyAutoCap?:
   const now = await autonomyOf()
   if (cap === now.dailyAutoCap) return { ok: true, dailyAutoCap: cap }
   if (cap > now.dailyAutoCap) {
-    const refused = await mayRaise(actor, patch.code)
+    const refused = await mayRaise(actor)
     if (refused) return refused
   }
   await prisma.agentAutonomy.upsert({

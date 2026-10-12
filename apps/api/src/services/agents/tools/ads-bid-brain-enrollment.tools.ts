@@ -4,7 +4,8 @@
  * when it went LIVE). The rules of each op are in bid-brain/enrollment.ts.
  *
  * THE OWNER'S CODE RULE (ads-code-rule.ts) — going LIVE is a big door (a new writer starts spending decisions on the
- * campaign): approving it needs the approver's authenticator code. A hold and the way back to shadow are brakes; a
+ * campaign): where the table's line is on, approving it needs the approver's authenticator code (off since 2026-10-12:
+ * a person's normal approval). A hold and the way back to shadow are brakes; a
  * release and a give-back are day-to-day (they can raise bids, and the card lists them). Every op waits for a person:
  * this tool never runs by rule (ceiling ask).
  */
@@ -177,7 +178,7 @@ const setBidBrainEnrollment: AgentTool = {
     + 'the campaign\'s one bid writer (from its next run; while the server switch NEXUS_BID_BRAIN_MODE is live) — keyword '
     + 'bids toward the goal at most once per new data day, inside the limits; auto-bid, rules and other engines leave the '
     + 'campaign, and a person\'s own edit still passes and holds that bid. Every bid and placement is kept for a give-back. '
-    + 'Going LIVE is a big door: approving it needs the approver\'s authenticator code. op hold: the brain raises nothing for '
+    + 'Going LIVE is a big door: a person approves it (no authenticator code). op hold: the brain raises nothing for '
     + 'some days; op release ends a hold; op shadow: the brain stops, bids stay (what a stop saved — its placements, its '
     + 'bidding strategy — goes back); op give-back: back to shadow and the bids '
     + 'and placements put back as they were when it went LIVE. LIVE (and release) needs the campaign not kept off the bid brain by '

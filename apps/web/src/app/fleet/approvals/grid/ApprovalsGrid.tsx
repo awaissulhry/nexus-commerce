@@ -136,7 +136,7 @@ function ApprovalsGridPage() {
   const [search, setSearch] = useState('')
   const [openId, setOpenId] = useState<string | null>(null)
   const [automateRow, setAutomateRow] = useState<QueueRow | null>(null)
-  /** W1-4 — the request that raises, waiting for the approver's authenticator code. */
+  /** W1-4 — the request the API marks `needsCode`, waiting for the approver's authenticator code. */
   const [codeAsk, setCodeAsk] = useState<{ row: QueueRow; again: boolean; error: string | null; busy: boolean } | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [bulk, setBulk] = useState<BulkState | null>(null)

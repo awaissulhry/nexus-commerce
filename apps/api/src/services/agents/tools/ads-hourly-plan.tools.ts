@@ -241,7 +241,7 @@ const PLAN_LIMITS = adKitLimits({ maxItems: 0 }, {
   markets: z.array(z.string().trim().toUpperCase().min(2).max(20)).max(20).default([])
     .describe('the markets where a plan change may run by rule; empty = none (every request waits for a person)'),
   // Empty is none (as markets): a shorter list is a tighter one (claude-trust.service.ts limitsTighten), so "empty = any"
-  // would let a person loosen it without their code.
+  // would let a person loosen it without settings.security.manage.
   campaignIds: z.array(z.string().trim().min(1).max(64)).max(250).default([])
     .describe('the campaigns whose plan changes may run by rule (every campaign a change touches must be listed); empty = none'),
   allowRaise: z.boolean().default(false)

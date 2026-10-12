@@ -207,7 +207,7 @@ export const applyHarvestTool: AgentTool = {
     + '{ key, productId, match, name (default: the SP Super Wizard\'s naming), dailyBudgetCents (default: the product\'s '
     + 'usual), portfolio: { id } (an Amazon portfolio id) | { newPortfolio: key } | null (default: the product\'s '
     + 'portfolio) } — the product\'s funnel campaign for the match: one manual campaign, one ad group, its products, born '
-    + 'serving at the bids planned, so a change set that builds one needs the approver\'s authenticator code. newPortfolios (≤ 10): { key, name, capMonthlyCents } — a portfolio a new campaign is '
+    + 'serving at the bids planned, so a change set that builds one is a big door a person approves. newPortfolios (≤ 10):{ key, name, capMonthlyCents } — a portfolio a new campaign is '
     + 'born in. planHash: the preview\'s, to refuse a plan that moved since a review. The preview lists every step in '
     + 'order (portfolio → campaign → keyword → source negatives → funnel negatives), each item harvestable or blocked with '
     + 'why (never dropped), the totals, raises and planHash. op undo — harvestIds (harvest-history, or a candidate\'s '

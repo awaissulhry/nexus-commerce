@@ -4,7 +4,7 @@
  *
  *   Rules      how far Claude may go here without a person: each tool's level and limits, the Pause and the daily
  *              limit (RulesPanel). Reading needs ai.view; Pause and lowering need ai.run; letting Claude do more needs
- *              settings.security.manage and a fresh 2FA code — the API says so when it refuses.
+ *              settings.security.manage — the API says so when it refuses.
  *   Activity   what Claude did here, with Undo (ActivityPanel).
  */
 import { useCallback, useEffect, useState } from 'react'

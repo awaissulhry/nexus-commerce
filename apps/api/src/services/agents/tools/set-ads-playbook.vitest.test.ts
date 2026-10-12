@@ -12,6 +12,9 @@
  *             allowTemplateEdit; a market outside `markets` waits
  *   bulk      a raise is left out of a bulk approve, with why
  *   undo      the undo of a lowering is a raise: it needs the code, and puts the row back
+ *
+ * Since 2026-10-12 (Owner, "B") the code table's line for a playbook raise is OFF: `by default` proves a raise asks no
+ * code and a plain approve runs it. Every other test sets the line back ON (beforeEach), as the Owner could.
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -150,9 +153,14 @@ beforeAll(async () => {
   await app.ready()
 }, 120_000)
 
-beforeEach(() => __stepUpTest.reset())
+beforeEach(() => {
+  __stepUpTest.reset()
+  __codeRuleTest.reset()
+  __codeRuleTest.flip('set-ads-playbook: adds spend', true)
+})
 
 afterAll(async () => {
+  __codeRuleTest.reset()
   vi.unstubAllEnvs()
   await app?.close()
   await database?.close()
@@ -209,17 +217,17 @@ describe('PB-3 — a raise needs the approver\u2019s fresh authenticator code', 
 })
 
 describe('PB-3 — the code table (ads-code-rule.ts)', { timeout: TIMEOUT }, () => {
-  it('flipped, a raise asks no code and a plain approve runs it, the version saying so; still never by rule', async () => {
-    __codeRuleTest.flip('set-ads-playbook: adds spend')
+  it('by default (B, the line off): a raise asks no code and a plain approve runs it, the version saying so; still never by rule', async () => {
+    __codeRuleTest.flip('set-ads-playbook: adds spend', false)
     try {
       const { answer } = await productRow({ dailyBudgetCents: 2700 })
-      expect(answer.preview).toMatchObject({ direction: 'raise', stepUp: null, noCode: expect.stringMatching(/day-to-day/) })
+      expect(answer.preview).toMatchObject({ direction: 'raise', stepUp: null, noCode: expect.stringMatching(/no authenticator code/) })
       expect(getTool('set-ads-playbook')!.withinLimits!(answer.preview, { allowTemplateEdit: true, markets: [] })).toMatch(/^it raises/)
       expect(await inside(() => scheduleApproval({ id: answer.approvalId, actor: viewer('owner', EVERYTHING), via: 'nexus' }))).toMatchObject({ ok: true })
       expect(await commit(answer.approvalId)).toMatchObject({ ok: true, status: 'executed' })
       expect((await rowOf()).dailyBudgetCents).toBe(2700)
-      expect(await versionOf(answer.approvalId)).toMatchObject({ direction: 'raise', stepUpAt: null, reason: expect.stringMatching(/without the authenticator code: the Owner's code rule/) })
-    } finally { __codeRuleTest.reset() }
+      expect(await versionOf(answer.approvalId)).toMatchObject({ direction: 'raise', stepUpAt: null, reason: expect.stringMatching(/without the authenticator code/) })
+    } finally { __codeRuleTest.flip('set-ads-playbook: adds spend', true) }
     // Put back as it was for the tests after this one (a lowering runs on a plain approve).
     const back = await productRow({ dailyBudgetCents: 2000 })
     expect(await inside(() => scheduleApproval({ id: back.answer.approvalId, actor: viewer('owner', EVERYTHING), via: 'nexus' }))).toMatchObject({ ok: true })
@@ -232,7 +240,7 @@ describe('PB-3 — by rule', { timeout: TIMEOUT }, () => {
   const owner = () => ({ userId: people.owner.id, label: 'Olga Owner', canManage: true })
 
   it('at auto a change that adds no spend runs by rule; a raise never does; a template change only with allowTemplateEdit; a market outside the list waits', async () => {
-    expect(await inside(() => setClaudeRule(owner(), 'set-ads-playbook', { level: 'auto', code: codeOf() }))).toMatchObject({ ok: true })
+    expect(await inside(() => setClaudeRule(owner(), 'set-ads-playbook', { level: 'auto' }))).toMatchObject({ ok: true })
     try {
       const lowered = await productRow({ dailyBudgetCents: 1800 })
       expect(lowered.answer, JSON.stringify(lowered.answer)).toMatchObject({ status: 'runs_by_rule', trust: { level: 'auto' } })
@@ -240,18 +248,16 @@ describe('PB-3 — by rule', { timeout: TIMEOUT }, () => {
       expect(await versionOf(lowered.answer.approvalId)).toMatchObject({ direction: 'lower', via: 'claude', stepUpAt: null })
 
       const raised = await productRow({ dailyBudgetCents: 2400 })
-      expect(raised.answer).toMatchObject({ status: 'waiting_for_approval', trust: { why: expect.stringContaining('it raises Daily budget: a person with settings.security.manage decides') } })
+      expect(raised.answer).toMatchObject({ status: 'waiting_for_approval', trust: { why: expect.stringContaining('it raises Daily budget; a person approves it in Nexus') } })
 
       const template = await call('set-ads-playbook', { channel: 'AMAZON', kind: 'template', templateId: ids.template, status: 'DRAFT' })
       expect(template.answer).toMatchObject({ status: 'waiting_for_approval', trust: { why: expect.stringContaining('a template reaches every product that follows it') } })
 
-      __stepUpTest.reset()
-      expect(await inside(() => setClaudeRule(owner(), 'set-ads-playbook', { limits: { allowTemplateEdit: false, markets: ['DE'] }, code: codeOf() }))).toMatchObject({ ok: true })
+      expect(await inside(() => setClaudeRule(owner(), 'set-ads-playbook', { limits: { allowTemplateEdit: false, markets: ['DE'] } }))).toMatchObject({ ok: true })
       const elsewhere = await productRow({ nameToken: 'TESTTOOL2' })
       expect(elsewhere.answer).toMatchObject({ status: 'waiting_for_approval', trust: { why: expect.stringContaining('only in DE') } })
     } finally {
-      __stepUpTest.reset()
-      expect(await inside(() => setClaudeRule(owner(), 'set-ads-playbook', { level: 'ask', limits: null, code: codeOf() }))).toMatchObject({ ok: true })
+      expect(await inside(() => setClaudeRule(owner(), 'set-ads-playbook', { level: 'ask', limits: null }))).toMatchObject({ ok: true })
     }
   })
 })

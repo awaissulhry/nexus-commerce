@@ -168,7 +168,7 @@ export const brainStepOf = (campaignId: string, owned: ReadonlySet<string>): Bra
 export function brainPickChange(p: BrainPick): { id: string; where: string; what: string; now: string; next: string; raise: boolean; note: string } {
   return {
     id: p.id, where: p.name, what: 'Brain', now: MODE_WORD[p.from], next: MODE_WORD[p.to], raise: p.to === 'AUTO',
-    note: p.to === 'AUTO' ? 'Becomes its one bid writer · your code' : 'Bids stay; today’s writers resume',
+    note: p.to === 'AUTO' ? 'Becomes its one bid writer' : 'Bids stay; today’s writers resume',
   }
 }
 

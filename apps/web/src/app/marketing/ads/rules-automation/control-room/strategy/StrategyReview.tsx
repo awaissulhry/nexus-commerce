@@ -3,8 +3,9 @@
 /**
  * ADS AUTONOMY W1-4 — the save of one strategy change, in the pattern the Owner liked on the product sheet's import
  * (2026-09-26): ONE summary, ONE table of every setting from → to with raise or lower, what happens when it lands, and
- * ONE button that says what it does with its count. A raise says so before anything is asked; the tab then asks for
- * the authenticator code (StepUpModal). Done says the version it made, with Undo (the previous version written back).
+ * ONE button that says what it does with its count. A raise says so before it is saved; it needs the security
+ * permission and no code (Owner 2026-10-12, "B"). Done says the version it made, with Undo (the previous version
+ * written back).
  *
  * Presentational: the tab owns the calls. Everything in it comes from the API's preview (apps/api ads-strategy/write.ts).
  */
@@ -77,7 +78,7 @@ export function StrategyReview(p: StrategyReviewProps) {
         )}
         {(phase === 'done' || phase === 'undoing') && p.saved && (
           <Banner tone="success" title={`Saved: ${p.what} is now at version ${p.saved.version}.`}>
-            Undo writes the previous version back.{lowers > 0 ? ' Putting a higher number back counts as a raise, so that asks for your code.' : ''}
+            Undo writes the previous version back.{lowers > 0 ? ' Putting a higher number back counts as a raise, so it needs the security permission.' : ''}
           </Banner>
         )}
         {!done && (
@@ -88,13 +89,13 @@ export function StrategyReview(p: StrategyReviewProps) {
         {!done && (
           <div className={styles.summaryTiles}><MetricStrip metrics={[
             { label: 'Changes', value: String(settings) },
-            { label: 'Raise', value: String(raises.length), hint: raises.length ? 'asks for your code' : 'none' },
-            { label: 'Lower', value: String(lowers), hint: lowers ? (raises.length ? 'no code for these' : 'saves at once') : 'none' },
+            { label: 'Raise', value: String(raises.length), hint: raises.length ? 'needs the security permission' : 'none' },
+            { label: 'Lower', value: String(lowers), hint: lowers ? 'saves at once' : 'none' },
           ]} /></div>
         )}
         {!done && raises.length > 0 && (
           preview.mayRaise
-            ? <Banner tone="warning" title={`It raises ${listWords(raises)}.`}>Saving asks for the 6-digit code from your authenticator app. Lowering never does.</Banner>
+            ? <Banner tone="warning" title={`It raises ${listWords(raises)}.`}>A raise lets the ads spend or do more. Check it before you save.</Banner>
             : <Banner tone="danger" title={`It raises ${listWords(raises)}.`}>{button.why}</Banner>
         )}
         {p.conflict && (

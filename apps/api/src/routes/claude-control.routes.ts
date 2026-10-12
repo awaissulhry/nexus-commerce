@@ -3,23 +3,24 @@
  * (services/agents/claude-trust.service.ts). The web's Claude page (C9) reads and writes these.
  *
  *   GET  /api/claude/trust          every tool Claude is offered: its level, ceiling and limits; the business's brakes
- *   PUT  /api/claude/trust/:tool    { level?, limits?, code? } — raising a level or changing limits needs a fresh 2FA code
+ *   PUT  /api/claude/trust/:tool    { level?, limits? } — raising a level or loosening limits needs settings.security.manage
  *   GET  /api/claude/trust/:tool/simulate?days=30&level=auto&limits=<url-encoded JSON>
  *                                   Approvals grid — what that rule would have done with Claude's requests of the tool in
  *                                   the last days (max 90): RuleSimulation (services/agents/claude-rule-simulate.service.ts).
  *                                   Read-only; ai.view, like GET /claude/trust
- *   PUT  /api/claude/autonomy       { dailyAutoCap, code? } — raising the cap needs the code
+ *   PUT  /api/claude/autonomy       { dailyAutoCap } — raising the cap needs settings.security.manage
  *   POST /api/claude/pause          { reason? } — at once; what waits to run by rule goes back to a person
- *   POST /api/claude/resume         { code }
+ *   POST /api/claude/resume         {} — needs settings.security.manage
  *   GET  /api/claude/activity       C8 — what Claude did here: ?from&to&tool&outcome&connectionId&cursor&limit
  *                                   (services/agents/claude-activity.service.ts), previews through the reader's money filter
  *   POST /api/claude/changes/:id/undo  C8 — Undo on the activity page: the click approves the inverse change, which then
  *                                   waits out the same undo window (services/agents/change-undo.service.ts); ai.run
  *
  * Reading needs ai.view. A brake is easy: Pause and lowering need only ai.run (anyone who may use Claude here). Resume
- * needs settings.security.manage; raising a level, changing limits or raising the cap are refused by the service
- * without settings.security.manage and a fresh 2FA code (permissions-manifest.ts; the business the workspace hook
- * verified). Claude has no tool for any of it: raising its own levels and limits is never for Claude.
+ * needs settings.security.manage; raising a level, loosening limits or raising the cap are refused by the service
+ * without settings.security.manage (permissions-manifest.ts; the business the workspace hook verified). No
+ * authenticator code since 2026-10-12 (Owner, "B"). Claude has no tool for any of it: raising its own levels and
+ * limits is never for Claude.
  * Zero Prisma calls here: the service holds the rules.
  */
 
@@ -96,13 +97,13 @@ const claudeControlRoutes: FastifyPluginAsync = async (fastify) => {
   )
 
   fastify.put<{ Params: { tool: string } }>('/claude/trust/:tool', async (request, reply) => {
-    const { level, limits, code } = body(request)
-    return answer(reply, await setClaudeRule(await actorOf(request), request.params.tool, { level, limits, code }))
+    const { level, limits } = body(request)
+    return answer(reply, await setClaudeRule(await actorOf(request), request.params.tool, { level, limits }))
   })
 
   fastify.put('/claude/autonomy', async (request, reply) => {
-    const { dailyAutoCap, code } = body(request)
-    return answer(reply, await setDailyAutoCap(await actorOf(request), { dailyAutoCap, code }))
+    const { dailyAutoCap } = body(request)
+    return answer(reply, await setDailyAutoCap(await actorOf(request), { dailyAutoCap }))
   })
 
   fastify.post('/claude/pause', async (request) => {
@@ -111,11 +112,11 @@ const claudeControlRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   fastify.post('/claude/resume', async (request, reply) => {
-    return answer(reply, await resumeAutoRuns(await actorOf(request), body(request).code))
+    return answer(reply, await resumeAutoRuns(await actorOf(request)))
   })
 
   // C8 — the person's click is the approval: the inverse change, as them, parked for the same undo window. W1-3 — an
-  // inverse that raises (the undo of an ads strategy lowering) takes the person's authenticator code (`code`).
+  // inverse the code table still asks the code for takes the person's authenticator code (`code`); none does today.
   fastify.post<{ Params: { id: string } }>('/claude/changes/:id/undo', async (request, reply) => {
     const out = await undoChangeByClick(await requestPrincipal(request), request.params.id, body(request).code)
     if (out.ok !== false) return out

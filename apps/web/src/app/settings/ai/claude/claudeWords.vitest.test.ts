@@ -1,6 +1,6 @@
 /**
  * MCP full control C9 — Settings › AI › Claude says what the API decides, in plain words: which choice raises what
- * Claude may do (and so asks for a fresh 2FA code), the limits as a person reads and types them, and each activity
+ * Claude may do (and so needs settings.security.manage), the limits as a person reads and types them, and each activity
  * outcome. Pure logic: the components render it.
  */
 import { describe, expect, it } from 'vitest'
@@ -29,7 +29,7 @@ const PRICE_SCHEMA: LimitsSchema = {
 }
 
 describe('levels', () => {
-  it('raising lets Claude do more and asks for the code; lowering and staying do not', () => {
+  it('raising lets Claude do more; lowering and staying do not', () => {
     expect(raises('ask', 'auto')).toBe(true)
     expect(raises('off', 'ask')).toBe(true)
     expect(raises('auto', 'ask')).toBe(false)
@@ -66,13 +66,13 @@ describe('limits', () => {
     expect(limitsSummary({ readOnly: false, limits: null, limitsSchema: PRICE_SCHEMA, limitsInvalid: 'x' })).toContain('set them again')
   })
 
-  it('tightening is a brake (sent at once); anything else loosens (asks for the code)', () => {
+  it('tightening is a brake; anything else loosens', () => {
     const fields = limitFields({ properties: { maxProducts: { type: 'integer' }, minMargin: { type: 'number' }, maxChangePercent: { type: 'number' } } }, { maxProducts: 25, minMargin: 5, maxChangePercent: 10 })
     expect(tightens(fields, { maxProducts: 10, minMargin: 8, maxChangePercent: 10 })).toBe(true)
     expect(tightens(fields, { maxProducts: 25, minMargin: 5, maxChangePercent: 10 })).toBe(true)
     expect(tightens(fields, { maxProducts: 30, minMargin: 5, maxChangePercent: 10 })).toBe(false)
     expect(tightens(fields, { maxProducts: 10, minMargin: 4, maxChangePercent: 10 })).toBe(false)
-    expect(tightens(fields, null)).toBe(false) // back to the defaults: the API decides; the page asks for the code
+    expect(tightens(fields, null)).toBe(false) // back to the defaults: a loosening, the API decides
   })
 
   it('typed values are numbers inside their bounds, or the first problem in words', () => {
@@ -117,7 +117,7 @@ describe('activity', () => {
   })
 })
 
-describe('the 2FA dialog says what it raises, once (2026-10-02 end-to-end run: "Set Set product tags to Confirm")', () => {
+describe('a raise says what it raises, once (2026-10-02 end-to-end run: "Set Set product tags to Confirm")', () => {
   const rule = { name: 'set-product-tags', title: 'Set product tags' } as ClaudeRule
 
   it('a tool is named as a name, never glued to a verb of its own', () => {

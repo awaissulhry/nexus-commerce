@@ -66,7 +66,7 @@ import { logger } from '../../utils/logger.js'
 import { resolvePermissions, type ResolvedPermissions } from '../../lib/auth/rbac.js'
 import { WorkspaceError, type WorkspaceContext } from '../../lib/workspace-context.js'
 import { createWorkspaceService } from '../workspace.service.js'
-import { autoCommitRefusal, autoFreshRefusal, autoPlanCommitRefusal, mayRaise, noteAutoFailure, type RaiseWords } from '../agents/claude-trust.service.js'
+import { autoCommitRefusal, autoFreshRefusal, autoPlanCommitRefusal, freshCode, mayRaise, noteAutoFailure, type RaiseWords } from '../agents/claude-trust.service.js'
 import { drainPlans, enqueuePlan } from '../agents/change-plan.service.js'
 import { approvalStepUp, stepUpOf, type StepUp } from '../agents/step-up-approval.js'
 import { PLAN_TOOL } from '../agents/tool-types.js'
@@ -351,11 +351,9 @@ async function approverStepUp(actor: ToolPrincipal, code: unknown, stepUp: StepU
   if (actor.kind !== 'user') {
     return { ok: false, code: 'forbidden', httpStatus: 403, error: `Only a signed-in person approves a change that ${stepUp.what}, with their authenticator code.`, raises: stepUp.raises }
   }
-  const refused = await mayRaise(
-    { userId: actor.userId, label: actor.label, canManage: hasPermission(actor.permissions, F.settingsSecurityManage) },
-    code,
-    approveRaiseWords(stepUp),
-  )
+  const words = approveRaiseWords(stepUp)
+  const refused = (await mayRaise({ userId: actor.userId, label: actor.label, canManage: hasPermission(actor.permissions, F.settingsSecurityManage) }, words))
+    ?? (await freshCode(actor.userId, code, words))
   if (!refused) return null
   return { ok: false, code: refused.code as DecideOutcome['code'], httpStatus: refused.status as DecideOutcome['httpStatus'], error: refused.error, raises: stepUp.raises }
 }

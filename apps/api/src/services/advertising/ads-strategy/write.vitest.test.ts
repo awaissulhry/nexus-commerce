@@ -13,6 +13,9 @@
  *   undo      undoArgsOf → plan → apply puts the row, the terms and the targets back exactly
  *   money     changes are keyed by registry or column name, labels carry no amount; the history read strips the money
  *   business  another business neither sees nor changes this one's rows (row-level security, profiles ON)
+ *
+ * The code table's line for a strategy raise is set back ON for this file (the writer's stepUp is what most of it
+ * pins); `B` proves the default since 2026-10-12 (Owner, "B"): no stepUp, a raise written as a person's without the code.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { FIELDS } from '@nexus/shared/permissions'
@@ -37,6 +40,7 @@ import {
   type StrategyWriter,
 } from './write.js'
 import { readStrategy } from './read.js'
+import { __codeRuleTest } from '../../agents/tools/ads-code-rule.js'
 
 const A = 'w1_write_alpha'
 const B = 'w1_write_bravo'
@@ -71,6 +75,7 @@ const versionsOf = (strategyId: string) => db().adsStrategyVersion.findMany({ wh
 const targetOf = async (campaignId: string) => ((await db().campaign.findUniqueOrThrow({ where: { id: campaignId } })).dynamicBidding as Json | null)
 
 beforeAll(async () => {
+  __codeRuleTest.flip('set-ads-strategy: a raise', true)
   database = await formulaDatabase()
   vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1')
   for (const id of [A, B]) {
@@ -101,6 +106,7 @@ beforeAll(async () => {
 }, 120_000)
 
 afterAll(async () => {
+  __codeRuleTest.reset()
   vi.unstubAllEnvs()
   await database?.close()
 }, 30_000)
@@ -250,7 +256,7 @@ describe('a change planned and saved', () => {
       expect(plan.direction).toBe('raise')
       expect(plan.preview.raises).toEqual(['Target', 'Highest bid (cents)'])
       expect(plan.preview.stepUp).toMatchObject({ what: 'raises the ads strategy', raises: ['Target', 'Highest bid (cents)'], needs: expect.stringContaining('settings.security.manage') })
-      await expect(applyStrategyPlan(plan, SCREEN)).rejects.toThrow(/authenticator code/)
+      await expect(applyStrategyPlan(plan, SCREEN)).rejects.toThrow(/written only as a person decided it/)
       const out = await applyStrategyPlan(plan, CODED)
       expect(out).toMatchObject({ ok: true, version: 2, direction: 'raise' })
       const row = (await rowOf('MARKET'))!
@@ -454,7 +460,7 @@ describe("AA-W2-2b — Claude's daily limits of what runs by rule (the market ro
       expect(up.preview).toMatchObject({ direction: 'raise', raises: DAILY, stepUp: { raises: DAILY } })
       expect(up.preview.liveEffect).toContain("Most changes Claude may run by rule a day binds at once: read by Claude's door, for an ad change that may run by the business's rule in this market")
       expect(up.preview.warnings ?? []).toEqual([])
-      await expect(applyStrategyPlan(up, SCREEN)).rejects.toThrow(/authenticator code/)
+      await expect(applyStrategyPlan(up, SCREEN)).rejects.toThrow(/written only as a person decided it/)
       expect(await applyStrategyPlan(up, CODED)).toMatchObject({ ok: true, direction: 'raise' })
       expect(await rowOf('MARKET')).toMatchObject({ claudeMaxChangesPerDay: 40, claudeMaxRaisesPerDay: 5, claudeMaxBudgetIncreasePerDayCents: 2000 })
     })
@@ -510,7 +516,7 @@ describe("BB-20 — the bid brain's explore budget a day (the market row only; e
       const up = await planned(it_({ level: 'market', values: { exploreBudgetCents: 300 } }))
       expect(up.changes.map((c) => [c.field, c.from, c.to, c.direction])).toEqual([['exploreBudgetCents', null, 300, 'raise']])
       expect(up.preview).toMatchObject({ direction: 'raise', raises: ['Explore budget a day (cents)'] })
-      await expect(applyStrategyPlan(up, SCREEN)).rejects.toThrow(/authenticator code/)
+      await expect(applyStrategyPlan(up, SCREEN)).rejects.toThrow(/written only as a person decided it/)
       expect(await applyStrategyPlan(up, CODED)).toMatchObject({ ok: true, direction: 'raise' })
       expect(await rowOf('MARKET')).toMatchObject({ exploreBudgetCents: 300 })
       const off = await planned(it_({ level: 'market', values: { exploreBudgetCents: 0 } }))
@@ -534,5 +540,29 @@ describe("BB-20 — the bid brain's explore budget a day (the market row only; e
       const hidden = financialPayloadCopy(read.data, { isOwner: false, permissions: new Set() }, STRATEGY_MONEY) as Json
       expect('exploreBudgetCents' in (hidden.markets[0].fields as Json[]).find((f) => f.field === 'exploreBudgetCents')!).toBe(false)
     })
+  })
+})
+
+describe('B (Owner, 2026-10-12) — the code table\'s line off: no stepUp; a raise written as a person\'s, without the code', () => {
+  it('a raise previews without stepUp; written only as a person decided it (raiseWithoutCode kept on the version); more for Claude alone never by rule', async () => {
+    __codeRuleTest.flip('set-ads-strategy: a raise', false)
+    try {
+      await inA(async () => {
+        const plan = await planned(it_({ level: 'market', values: { target: { kind: 'ACOS', pct: 60 } } }))
+        expect(plan.direction).toBe('raise')
+        expect(plan.preview.stepUp).toBeNull()
+        await expect(applyStrategyPlan(plan, SCREEN)).rejects.toThrow(/written only as a person decided it/)
+        const out = await applyStrategyPlan(plan, { ...SCREEN, raiseWithoutCode: 'saved on the Strategy screen, without the authenticator code' })
+        if (!out.ok) throw new Error('not applied')
+        const written = (await versionsOf(out.strategyId)).at(-1)!
+        expect(written).toMatchObject({ direction: 'raise', stepUpAt: null, reason: expect.stringContaining('without the authenticator code') })
+        // What Claude may do alone: narrowed (a lowering), then the narrowing taken off (a raise).
+        await saved(it_({ level: 'market', values: { claudeAutonomy: { bid: 'ask' } } }))
+        const more = await planned(it_({ level: 'market', values: { claudeAutonomy: null } }))
+        expect(more.changes).toEqual([expect.objectContaining({ field: 'claudeAutonomy', direction: 'raise' })])
+        await expect(applyStrategyPlan(more, { ...SCREEN, raiseByRule: 'run by the business\'s rule' })).rejects.toThrow(/never by rule/)
+        expect(await applyStrategyPlan(more, { ...SCREEN, raiseWithoutCode: 'approved by a person without the authenticator code' })).toMatchObject({ ok: true, direction: 'raise' })
+      })
+    } finally { __codeRuleTest.flip('set-ads-strategy: a raise', true) }
   })
 })

@@ -84,12 +84,12 @@ export interface BrainAsk {
 }
 
 /**
- * POST /automation/brain/bid-brain/enrollment — one campaign to Auto (`live`: the brain becomes its one bid writer; the
- * approver's authenticator code) or back to Watch (`shadow`). Asked and approved by this person in one click; when the
- * approve is refused the request waits (its id comes back) and can be approved with a code, or rejected.
+ * POST /automation/brain/bid-brain/enrollment — one campaign to Auto (`live`: the brain becomes its one bid writer) or
+ * back to Watch (`shadow`). Asked and approved by this person in one click (no code since 2026-10-12); when the approve
+ * is refused the request waits (its id comes back): approved with a code when the API asks one (`needsCode`), or rejected.
  */
-export async function askEnrollment(campaignId: string, op: 'live' | 'shadow', code?: string): Promise<{ ok: true; body: BrainAsk } | { ok: false; words: string }> {
-  const out = await send('/automation/brain/bid-brain/enrollment', 'POST', { campaignId, op, approve: true, why: 'set on the Bid page', ...(code ? { code } : {}) })
+export async function askEnrollment(campaignId: string, op: 'live' | 'shadow'): Promise<{ ok: true; body: BrainAsk } | { ok: false; words: string }> {
+  const out = await send('/automation/brain/bid-brain/enrollment', 'POST', { campaignId, op, approve: true, why: 'set on the Bid page' })
   if (!out.ok) return out
   const body = out.body as BrainAsk | null
   return body && typeof body.approvalId === 'string' ? { ok: true, body } : { ok: false, words: 'No request came back' }
@@ -97,7 +97,7 @@ export async function askEnrollment(campaignId: string, op: 'live' | 'shadow', c
 
 /**
  * POST /automation/brain/kill — the Brain's Stop (op kill: runs at once on this click, recorded and undoable) or its Start
- * again (op end, approved in the same click with the code; a refused code leaves the request waiting, its id comes back).
+ * again (op end, approved in the same click; a refused approve leaves the request waiting, its id comes back).
  * The body is `brainStop.ts` stopBody / startBody.
  */
 export async function askBrainKill(body: KillBody): Promise<{ ok: true; body: KillAnswer } | { ok: false; words: string }> {

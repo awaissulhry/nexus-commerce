@@ -19,7 +19,7 @@
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { generateSecret, generateSync } from 'otplib'
+import { generateSecret } from 'otplib'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import { formulaDatabase } from '../../test-support/formula-database.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
@@ -272,11 +272,7 @@ describe('C6 — running a plan', { timeout: TIMEOUT }, () => {
 })
 
 describe('C6 — a plan runs by the business’s rule only when every step may', { timeout: TIMEOUT }, () => {
-  const code = () => {
-    __stepUpTest.reset()
-    return generateSync({ secret })
-  }
-  const toAuto = (tool: string) => inside(() => setClaudeRule(manager(), tool, { level: 'auto', code: code() }))
+  const toAuto = (tool: string) => inside(() => setClaudeRule(manager(), tool, { level: 'auto' }))
 
   it('every step at auto and inside its limits: scheduled by the rule; the commit hands it to the worker', async () => {
     await toAuto('set-price')
@@ -344,12 +340,8 @@ describe('C6 — unticking steps supersedes the plan with a smaller one', { time
 })
 
 describe('AA-W2-4 — a watched plan: the full check per step, recorded on it; a person decides', { timeout: TIMEOUT }, () => {
-  const code = () => {
-    __stepUpTest.reset()
-    return generateSync({ secret })
-  }
   const setTo = async (tool: string, level: string) => {
-    expect(await inside(() => setClaudeRule(manager(), tool, { level, code: code() }))).toMatchObject({ ok: true })
+    expect(await inside(() => setClaudeRule(manager(), tool, { level }))).toMatchObject({ ok: true })
   }
   beforeAll(async () => {
     await inside(async () => {

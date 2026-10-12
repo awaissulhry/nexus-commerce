@@ -10,9 +10,9 @@
  *
  * Nexus only (nothing is sent to Amazon by the switch itself). A person approves every op in Nexus (Claude asks with the
  * Owner's word). Batch 2 review fix (lead decision, code rule A: ads-code-rule.ts 'set-brain-kill-switch: end') — ending a
- * kill is a BIG DOOR: it lets the brain write that lever again, so approving it needs the approver's authenticator code (the
- * preview's `stepUp`, checked again on the fresh dry run in `execute`); setting a kill stays a normal approval. Its undo is
- * the opposite op (an undo that ends a kill asks for the code too).
+ * kill is a BIG DOOR: it lets the brain write that lever again, so where the table's line is on approving it needs the
+ * approver's authenticator code (the preview's `stepUp`, checked again on the fresh dry run in `execute`; off since
+ * 2026-10-12, Owner "B": a normal approval); setting a kill stays a normal approval. Its undo is the opposite op.
  */
 import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
@@ -109,8 +109,8 @@ const setBrainKillSwitch: AgentTool = {
     + 'once. The brain then writes and asks nothing on that lever (each lever\'s run holds and names the kill) and Amazon\'s write gate '
     + 'refuses the brain\'s own writer on it, a lowering by the brain included; the brain\'s other levers, a person\'s own edits, the '
     + 'safety checks and every other engine are as before. Say why (why): it is kept with who and when, and shown in the ads-brain map. '
-    + 'op end: the kill ends and the brain writes that lever again as its level says — a big door: approving it needs the '
-    + 'approver\'s authenticator code (a kill itself is a normal approval). Nothing is sent to Amazon by the switch itself. '
+    + 'op end: the kill ends and the brain writes that lever again as its level says — a big door, a person\'s normal '
+    + 'approval (as a kill itself is). Nothing is sent to Amazon by the switch itself. '
     + 'A person approves every op in Nexus; nothing changes until then. Its undo is the opposite op.',
   input: z.object({
     op: z.enum(OPS).describe('kill: stop the lever; end: end the kill (the brain writes the lever again as its level says)'),

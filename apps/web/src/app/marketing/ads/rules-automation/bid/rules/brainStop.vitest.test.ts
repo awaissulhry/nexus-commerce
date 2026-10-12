@@ -25,7 +25,7 @@ function brain(over: Partial<BidRuleRow> = {}): BidRuleRow {
 }
 const stopIT: BrainStop = { market: 'IT', at: '2026-01-10T08:00:00.000Z', reason: STOP_WHY }
 const stopAll: BrainStop = { market: null, at: '2026-01-10T08:00:00.000Z', reason: STOP_WHY }
-const free = { held: null, canSecurity: true }
+const free = { held: null }
 
 describe('which button the Brain detail shows', () => {
   it('the brain runs on Auto and nothing stops it: Stop the brain, ready', () => {
@@ -40,9 +40,9 @@ describe('which button the Brain detail shows', () => {
   })
 
   it('held with the reason: the page\'s (permission, a market Nexus only reads) first, then the brain\'s own', () => {
-    expect(brainStopView(brain(), { held: 'Needs the ads automation permission', canSecurity: true })?.held).toBe('Needs the ads automation permission')
-    expect(brainStopView(brain(), { held: 'Amazon FR: Nexus only reads this market', canSecurity: true })?.held).toBe('Amazon FR: Nexus only reads this market')
-    expect(brainStopView(brain({ stop: stopIT }), { held: 'Needs the ads automation permission', canSecurity: true })?.held).toBe('Needs the ads automation permission')
+    expect(brainStopView(brain(), { held: 'Needs the ads automation permission' })?.held).toBe('Needs the ads automation permission')
+    expect(brainStopView(brain(), { held: 'Amazon FR: Nexus only reads this market' })?.held).toBe('Amazon FR: Nexus only reads this market')
+    expect(brainStopView(brain({ stop: stopIT }), { held: 'Needs the ads automation permission' })?.held).toBe('Needs the ads automation permission')
     // Watch only: it changes no bids here, so there is nothing to stop.
     expect(brainStopView(brain({ mode: { set: 'WATCH', acts: 'WATCH', heldBy: null, also: [], autoLocked: null } }), free)?.held).toBe(STOP_HELD.watching)
     // Stops of its market (seen from All markets) or of its products already hold every campaign it runs: nothing more to stop.
@@ -50,8 +50,8 @@ describe('which button the Brain detail shows', () => {
     expect(brainStopView(brain({ market: null, mode: { set: 'AUTO', acts: 'OFF', heldBy: brainOff, also: [], autoLocked: null } }), free)?.held).toBe(STOP_HELD.stopped)
     // Ads halted is a stop too, but not the brain's: Stop stays ready (it holds the brain's bids once the halt ends).
     expect(brainStopView(brain({ mode: { set: 'AUTO', acts: 'OFF', heldBy: { kind: 'stopped', label: 'Ads halted', reason: 'Halted.' }, also: [], autoLocked: null } }), free)?.held).toBeNull()
-    // Start again takes the code: the security permission.
-    expect(brainStopView(brain({ stop: stopIT }), { held: null, canSecurity: false })?.held).toBe(STOP_HELD.security)
+    // Start again takes no code since 2026-10-12: nothing more holds it.
+    expect(brainStopView(brain({ stop: stopIT }), free)?.held).toBeNull()
     // An approved Start again waiting to run.
     expect(brainStopView(brain({ stop: stopIT }), { ...free, busy: 'Starting: runs in 20 s' })?.held).toBe('Starting: runs in 20 s')
   })
@@ -79,10 +79,10 @@ describe('the confirm', () => {
   it('Start again: the stop\'s own market; a stop of every market seen from one market says so', () => {
     expect(startConfirmWords(brain({ stop: stopIT }), 'IT', stopIT)).toEqual({
       title: 'Start the brain again?',
-      line: 'It changes bids on its 3 campaigns in IT again, inside your limits. Next: the code from your authenticator app.',
+      line: 'It changes bids on its 3 campaigns in IT again, inside your limits.',
       cancel: 'Keep stopped', confirm: 'Start again', busy: 'Starting…', tone: 'primary',
     })
-    expect(startConfirmWords(brain({ stop: stopAll }), 'IT', stopAll).line).toBe('It changes bids in every market again, inside your limits. Next: the code from your authenticator app.')
+    expect(startConfirmWords(brain({ stop: stopAll }), 'IT', stopAll).line).toBe('It changes bids in every market again, inside your limits.')
     expect(startConfirmWords(brain({ stop: stopAll }), 'all', stopAll).line).toContain('on its 3 campaigns in every market again')
     expect(startCodeWords(stopIT)).toEqual({ title: 'Start the brain again', sentence: 'The brain changes bids in IT again. Approving it takes the code from your authenticator app.', confirm: 'Start again' })
   })
@@ -98,9 +98,9 @@ describe('the requests', () => {
     expect(stopBody('IT')).not.toHaveProperty('code')
   })
 
-  it('Start again: ends the stop the row names, approved in the same click with the code', () => {
-    expect(startBody(stopIT, '123456')).toEqual({ op: 'end', lever: 'bids', why: START_WHY, market: 'IT', approve: true, code: '123456' })
-    expect(startBody(stopAll, '123456')).toEqual({ op: 'end', lever: 'bids', why: START_WHY, approve: true, code: '123456' })
+  it('Start again: ends the stop the row names, approved in the same click (no code)', () => {
+    expect(startBody(stopIT)).toEqual({ op: 'end', lever: 'bids', why: START_WHY, market: 'IT', approve: true })
+    expect(startBody(stopAll)).toEqual({ op: 'end', lever: 'bids', why: START_WHY, approve: true })
   })
 })
 

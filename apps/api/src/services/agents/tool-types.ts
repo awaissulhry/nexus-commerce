@@ -76,7 +76,7 @@ export type StrategyBound = 'amazon-ads'
 
 /**
  * AA-W2-1 — who decided the request an `execute` carries out (ToolContext.decidedVia): a person in Nexus (`nexus`, with
- * their code for a raise), the person who asked, with their code in Claude (`claude`, confirm-change), or the
+ * their code where a preview's stepUp asks it), the person who asked, with their code in Claude (`claude`, confirm-change), or the
  * business's rule (`auto`).
  */
 export type DecidedVia = 'nexus' | 'claude' | 'auto'
@@ -361,7 +361,7 @@ export interface AgentTool {
    * A zod object whose every field has a default: `limits.parse({})` is the code default.
    *
    * Name each limit so its direction is known (claude-trust.service.ts limitsTighten): TIGHTENING is a brake anyone
-   * who may use Claude can apply; anything else needs settings.security.manage and a fresh 2FA code.
+   * who may use Claude can apply; anything else needs settings.security.manage.
    *   `max…` number      lower is tighter            `min…` number       higher is tighter
    *   `allow…` boolean   false is tighter            `max…` enum         an earlier option is tighter (order them)
    *   a list of what is allowed (e.g. `fields`)      fewer items is tighter

@@ -16,8 +16,9 @@
  *             does not run it, one with the code does; by rule only with allowStart; its undo is a stop
  *   stop      PB-5b — no code: floored and off the allowlist, the row STOPPED; its undo is a start
  */
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { __codeRuleTest } from './ads-code-rule.js'
+import { codeRuleA } from '../../../test-support/code-rule-a.js'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
 import { formulaDatabase } from '../../../test-support/formula-database.js'
 import { seedAdsFixture } from '../../../test-support/ads-fixtures.js'
@@ -128,7 +129,9 @@ beforeAll(async () => {
     await db().adsStrategy.updateMany({ where: { market: 'IT', level: 'MARKET' }, data: { claudeMaxChangesPerDay: 10, claudeMaxRaisesPerDay: 10, claudeMaxBudgetIncreasePerDayCents: 100_000 } })
   })
 }, 180_000)
-afterAll(async () => { vi.unstubAllEnvs(); await database?.close() }, 30_000)
+afterAll(async () => { __codeRuleTest.reset(); vi.unstubAllEnvs(); await database?.close() }, 30_000)
+// Rule A's big doors set back on: the code path stays proven (every line is off since 2026-10-12, Owner "B").
+beforeEach(() => codeRuleA())
 
 describe('the build preview, and what refuses it', () => {
   it('every campaign it makes, born at the floor and off the allowlist, placements at START, where it lands, the facts', async () => {
@@ -236,7 +239,7 @@ describe('PB-5b — START and STOP of the built playbook', () => {
       effect: expect.stringMatching(/^Starts TEST-TESTAPA-PARENT's playbook in IT: 5 campaigns it built go on the live-write allowlist/),
     })
     expect(p.campaigns.every((c: Row) => c.allowlist === 'on')).toBe(true)
-    expect(judge(p)).toMatch(/it starts spending: a person decides, with their authenticator code .*allowStart is off/)
+    expect(judge(p)).toMatch(/it starts spending: a person decides .*allowStart is off/)
     expect(judge(p, { allowStart: true, maxBidCents: 100 })).toBeNull()
     expect(judge({ op: 'stop', market: 'IT' })).toBeNull()
     // The code table decides the code (a big door): flipped, the start card asks none; by rule still only with allowStart.
@@ -246,7 +249,7 @@ describe('PB-5b — START and STOP of the built playbook', () => {
       expect(flipped).not.toHaveProperty('stepUp')
       expect(flipped.noCode).toMatch(/day-to-day/)
       expect(judge(flipped)).toMatch(/allowStart is off/)
-    } finally { __codeRuleTest.reset() }
+    } finally { codeRuleA() }
     // A stop carries no code.
     const s = (await preview('apply-ads-playbook', stop())).preview as Row
     expect(s).toMatchObject({ op: 'stop', noCode: expect.any(String) })

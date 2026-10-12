@@ -9,8 +9,8 @@
  *   - the limits for Auto, pre-filled from the kind's limits now, with what THIS request shows as a hint (never filled
  *     in); the limits the settings page cannot edit either are shown, not changed;
  *   - a history test while the person edits (GET /api/claude/trust/:tool/simulate, 400 ms after the last change);
- *   - lowering, keeping, or only tightening saves at once; raising the level or loosening a limit first asks for the
- *     2FA code with the DS StepUpModal (and so does any save the API answers with `mfa_required`);
+ *   - Save sends the rule at once, a raise too: no authenticator code since 2026-10-12 (Owner, "B"); a raise or a
+ *     loosening needs settings.security.manage, and the API's refusal is shown as it is;
  *   - "Also approve this one" is never ticked for the person: the PAGE approves the row after onSaved.
  * The API decides and refuses; its sentence is shown as it is, inside the modal.
  */
@@ -20,9 +20,8 @@ import { Banner, Field, KeyValue, Modal } from '@/design-system/components'
 import { Button, Checkbox, Input, RadioCard, Spinner } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import Link from '@/lib/workspaces/Link'
-import { claudeApi, ClaudeApiError } from '@/app/settings/ai/claude/claudeApi'
-import { pauseSentence, raiseText, type Autonomy, type ClaudeRule, type Raise } from '@/app/settings/ai/claude/claudeWords'
-import { StepUpModal } from '@/design-system/patterns'
+import { claudeApi } from '@/app/settings/ai/claude/claudeApi'
+import { pauseSentence, type Autonomy, type ClaudeRule } from '@/app/settings/ai/claude/claudeWords'
 import type { AutomateModalProps } from './contracts'
 import {
   alwaysNeedsYouWords,
@@ -85,9 +84,6 @@ function AutomateDialog({ row, onClose, onSaved }: { row: QueueRow } & Omit<Auto
   const [alsoApprove, setAlsoApprove] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  /** The save that waits for the person's 2FA code. */
-  const [pending, setPending] = useState<{ patch: Extract<SavePlan, { kind: 'save' }>['patch']; level: AutomateLevel; raise: Raise } | null>(null)
-  const [codeError, setCodeError] = useState<string | null>(null)
   const [test, setTest] = useState<Test>({ state: 'idle' })
   const leadId = useId()
   const limitsId = useId()
@@ -184,37 +180,13 @@ function AutomateDialog({ row, onClose, onSaved }: { row: QueueRow } & Omit<Auto
       return
     }
     setError(null)
-    if (plan.needsCode) {
-      setCodeError(null)
-      setPending({ patch: plan.patch, level: chosen, raise: plan.raise })
-      return
-    }
-    // A brake (lower, keep, tighten): sent at once. If the API judges it a raise after all, it asks for the code.
+    // Sent at once, a raise too; the API refuses a raise without settings.security.manage, in its own words.
     setBusy(true)
     try {
       await claudeApi.setRule(rule.name, plan.patch)
       finish(chosen)
     } catch (err) {
-      if (err instanceof ClaudeApiError && err.code === 'mfa_required') {
-        setCodeError(null)
-        setPending({ patch: plan.patch, level: chosen, raise: plan.raise })
-      } else setError(message(err))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const submitCode = async (code: string) => {
-    if (!rule || !pending) return
-    setBusy(true)
-    setCodeError(null)
-    try {
-      await claudeApi.setRule(rule.name, { ...pending.patch, code })
-      const level = pending.level
-      setPending(null)
-      finish(level)
-    } catch (err) {
-      setCodeError(message(err))
+      setError(message(err))
     } finally {
       setBusy(false)
     }
@@ -224,7 +196,6 @@ function AutomateDialog({ row, onClose, onSaved }: { row: QueueRow } & Omit<Auto
   const nothingToChoose = !offers || (ready && (!rule || !choices.length))
   const canSave = !busy && !!plan && plan.kind !== 'invalid' && (plan.kind !== 'nothing' || (approvable && alsoApprove))
   const allRules = <Link href="/settings/ai/claude" className="aq-auto-link">All rules</Link>
-  const stepUp = pending ? raiseText(pending.raise) : null
 
   return (
     <>
@@ -350,16 +321,6 @@ function AutomateDialog({ row, onClose, onSaved }: { row: QueueRow } & Omit<Auto
           )}
         </div>
       </Modal>
-      <StepUpModal
-        open={!!pending}
-        title={stepUp?.title ?? ''}
-        sentence={stepUp?.sentence ?? ''}
-        busy={busy}
-        error={codeError}
-        onSubmit={(code) => void submitCode(code)}
-        onClose={() => setPending(null)}
-        className={PORTAL}
-      />
     </>
   )
 }

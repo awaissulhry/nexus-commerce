@@ -25,8 +25,12 @@
  *
  * The Brain's detail carries "Stop the brain" (Owner 2026-10-12): a small confirm, then the stop runs at once — the brain's
  * kill switch on its bids for every product of the market in view (All markets: every market); "Start again" while a stop
- * stands, confirmed, then approved with the person's authenticator code (`brainStop.ts`). Held like every brain write
- * (the permission, a market Nexus only reads), and while the brain runs no campaign on Auto here.
+ * stands, confirmed, then asked and approved in the same click (`brainStop.ts`). Held like every brain write (the
+ * permission, a market Nexus only reads), and while the brain runs no campaign on Auto here.
+ *
+ * No authenticator code since 2026-10-12 (Owner, "B"): the brain to Auto and Start again are approved with the click.
+ * Only when the API still asks the approver's code for one (`needsCode`: a line of its code table set back) does the DS
+ * code dialog open, to approve the request that then waits.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import dynamic from 'next/dynamic'
@@ -198,7 +202,6 @@ export function RulesView({ market, data, scope, viewSwitch, setQuery }: {
   const { toast } = useToast()
   const canCampaigns = usePermission('ads.campaigns.manage')
   const canAutomation = usePermission('ads.automation.manage')
-  const canSecurity = usePermission('settings.security.manage')
   // The page's market Nexus only reads: every write is held with that reason; on All markets each rule's own market.
   const pageBlock = useWriteBlock([market])
   const blockOf = useWriteBlockOf()
@@ -222,8 +225,8 @@ export function RulesView({ market, data, scope, viewSwitch, setQuery }: {
   const [reloadKey, setReloadKey] = useState(0)
   /** The lines under review, held from Save on: a saved pick leaves the draft, its line must stay on the Done screen. */
   const [frozen, setFrozen] = useState<ReviewChange[] | null>(null)
-  /** The brain to Auto: the approver's authenticator code, asked on top of the review (the DS one code dialog). */
-  const [stepUp, setStepUp] = useState<{ approvalId: string | null; busy: boolean; error: string | null } | null>(null)
+  /** The brain to Auto when the API asks the approver's code for it: the request waits, the DS code dialog approves it. */
+  const [stepUp, setStepUp] = useState<{ approvalId: string; busy: boolean; error: string | null } | null>(null)
   /** The Brain's Stop / Start again under way, what it answered, and an approved Start again waiting to run (its time). */
   const [brainStop, setBrainStop] = useState<BrainStopTask | null>(null)
   const [brainNotice, setBrainNotice] = useState<StopNotice | null>(null)
@@ -532,10 +535,37 @@ export function RulesView({ market, data, scope, viewSwitch, setQuery }: {
     return back
   }, [])
 
+  /** The brain on Auto for a campaign: Done with Undo (back to Watch, a brake approved in one click). */
+  const brainLiveDone = useCallback(async (pick: BrainPick, approved: { executeAfter?: string }) => {
+    setStepUp(null)
+    setFrozen(reviewChanges)
+    setReview({ phase: 'done', results: { [pick.id]: { ok: true, words: brainAskWords(approved) } } })
+    setUndoBack(() => async () => {
+      const r = await brainResult(await askEnrollment(pick.id, 'shadow'))
+      return { [pick.id]: r.ok ? { ok: true, words: `Undone: ${MODE_WORD.WATCH}` } : { ...r, verb: 'undone' } }
+    })
+    await after()
+  }, [reviewChanges, after])
+
+  /**
+   * The brain to Auto: asked and approved in one click. When the API asks the approver's code for it (`needsCode`) the
+   * request waits and the code dialog approves it; any other refusal rejects the waiting request (never left behind).
+   */
+  const brainLive = useCallback(async (pick: BrainPick) => {
+    setFrozen(reviewChanges)
+    setReview({ phase: 'saving', done: 0 })
+    const out = await askEnrollment(pick.id, 'live')
+    if (!out.ok) { setReview({ phase: 'done', results: { [pick.id]: { ok: false, words: out.words } } }); return }
+    if (out.body.approve?.ok) { await brainLiveDone(pick, out.body); return }
+    if (out.body.needsCode) { setReview({ phase: 'ready' }); setStepUp({ approvalId: out.body.approvalId, busy: false, error: null }); return }
+    await decideBrainRequest(out.body.approvalId, 'reject')
+    setReview({ phase: 'done', results: { [pick.id]: { ok: false, words: out.body.approve?.error ?? 'Not approved' } } })
+  }, [reviewChanges, brainLiveDone])
+
   const save = useCallback(async () => {
     if (!task) return
-    // The brain to Auto is a new bid writer: the code first (the request is sent with it).
-    if (task.kind === 'brain' && task.pick.to === 'AUTO') { setStepUp({ approvalId: null, busy: false, error: null }); return }
+    // The brain to Auto is a new bid writer: asked and approved in one click (brainLive).
+    if (task.kind === 'brain' && task.pick.to === 'AUTO') { await brainLive(task.pick); return }
     const results: Record<string, ReviewResult> = {}
     const list = reviewChanges
     setFrozen(list)
@@ -617,7 +647,7 @@ export function RulesView({ market, data, scope, viewSwitch, setQuery }: {
       emitAdsChange('ads.suggestion.changed')
       if (kind === 'apply') emitAdsChange('ads.bid.changed')
     } else if (task.kind === 'brain') {
-      // Back to Watch: a brake, asked and approved in one click (no code); going back to Auto would need it again.
+      // Back to Watch: a brake, asked and approved in one click.
       results[task.pick.id] = await brainResult(await askEnrollment(task.pick.id, 'shadow'))
     } else if (task.kind === 'rollback') {
       const out = await rollbackRun(task.run.id)
@@ -625,7 +655,7 @@ export function RulesView({ market, data, scope, viewSwitch, setQuery }: {
     }
     setReview({ phase: 'done', results })
     await after()
-  }, [task, reviewChanges, byId, after, undoRejects, undoApprovals])
+  }, [task, reviewChanges, byId, after, undoRejects, undoApprovals, brainLive])
 
   const undoDone = useCallback(async () => {
     if (!undoBack || undoing) return
@@ -636,35 +666,14 @@ export function RulesView({ market, data, scope, viewSwitch, setQuery }: {
     await after()
   }, [undoBack, undoing, after])
 
-  /** The code dialog's answer: ask (or approve the waiting request) with the code; a refused code keeps the dialog. */
+  /** The code dialog's answer: approve the waiting request with the code; a refused code keeps the dialog. */
   const submitCode = useCallback(async (code: string) => {
     if (!task || task.kind !== 'brain' || !stepUp) return
-    const pick = task.pick
     setStepUp({ ...stepUp, busy: true, error: null })
-    let approved: { executeAfter?: string } | null = null
-    if (stepUp.approvalId) {
-      const out = await decideBrainRequest(stepUp.approvalId, 'approve', code)
-      if (!out.ok) { setStepUp({ approvalId: stepUp.approvalId, busy: false, error: out.words }); return }
-      approved = out
-    } else {
-      const out = await askEnrollment(pick.id, 'live', code)
-      if (!out.ok) {
-        setStepUp(null); setFrozen(reviewChanges)
-        setReview({ phase: 'done', results: { [pick.id]: { ok: false, words: out.words } } })
-        return
-      }
-      if (!out.body.approve?.ok) { setStepUp({ approvalId: out.body.approvalId, busy: false, error: out.body.approve?.error ?? 'Not approved' }); return }
-      approved = out.body
-    }
-    setStepUp(null)
-    setFrozen(reviewChanges)
-    setReview({ phase: 'done', results: { [pick.id]: { ok: true, words: brainAskWords(approved) } } })
-    setUndoBack(() => async () => {
-      const r = await brainResult(await askEnrollment(pick.id, 'shadow'))
-      return { [pick.id]: r.ok ? { ok: true, words: `Undone: ${MODE_WORD.WATCH}` } : { ...r, verb: 'undone' } }
-    })
-    await after()
-  }, [task, stepUp, reviewChanges, after])
+    const out = await decideBrainRequest(stepUp.approvalId, 'approve', code)
+    if (!out.ok) { setStepUp({ ...stepUp, busy: false, error: out.words }); return }
+    await brainLiveDone(task.pick, out)
+  }, [task, stepUp, brainLiveDone])
   /** Cancel the code: a request already waiting for it is rejected (never left behind); the review stays open. */
   const cancelCode = useCallback(async () => {
     const waiting = stepUp?.approvalId
@@ -682,11 +691,26 @@ export function RulesView({ market, data, scope, viewSwitch, setQuery }: {
   const confirmBrainStop = useCallback(async () => {
     const s = brainStop
     if (!s || s.busy) return
-    if (s.action === 'start') {
-      // The confirm closes first (its focus goes back to Start again); the code step then opens from there, so its own
-      // Cancel gives the focus back to the same button.
+    if (s.action === 'start' && s.stop) {
+      // Asked and approved in this click. Only when the API asks the approver's code (`needsCode`) does the request wait:
+      // the confirm closes first (its focus goes back to Start again) and the code step opens from there, so its own
+      // Cancel gives the focus back to the same button. Any other refusal rejects the waiting request.
+      setBrainStop({ ...s, busy: true })
+      const out = await askBrainKill(startBody(s.stop))
+      if (!out.ok) { setBrainStop(null); setBrainNotice(startNotice(out)); await after(); return }
+      if (!out.body.approve?.ok) {
+        if (out.body.needsCode) {
+          setBrainStop(null)
+          requestAnimationFrame(() => setBrainStop({ ...s, phase: 'code', approvalId: out.body.approvalId }))
+          return
+        }
+        await decideBrainRequest(out.body.approvalId, 'reject')
+        setBrainStop(null); setBrainNotice(startNotice({ ok: false, words: out.body.approve?.error ?? 'Not approved' })); await after(); return
+      }
       setBrainStop(null)
-      requestAnimationFrame(() => setBrainStop({ ...s, phase: 'code' }))
+      setBrainNotice(startNotice({ ok: true, executeAfter: out.body.executeAfter }))
+      if (startingHeld(out.body.executeAfter)) setStarting(out.body.executeAfter ?? null)
+      await after()
       return
     }
     setBrainStop({ ...s, busy: true })
@@ -696,22 +720,13 @@ export function RulesView({ market, data, scope, viewSwitch, setQuery }: {
     setBrainStop(null)
     setBrainNotice(stopNotice(out))
   }, [brainStop, market, after])
-  /** The code: ask with it (or approve the Start again already waiting); a refused code keeps the dialog for another. */
+  /** The code (only when the API asks it): approve the Start again waiting for it; a refused code keeps the dialog. */
   const submitStartCode = useCallback(async (code: string) => {
     const s = brainStop
-    if (!s || s.phase !== 'code' || !s.stop || s.busy) return
+    if (!s || s.phase !== 'code' || !s.approvalId || s.busy) return
     setBrainStop({ ...s, busy: true, error: null })
-    let approved: { executeAfter?: string }
-    if (s.approvalId) {
-      const out = await decideBrainRequest(s.approvalId, 'approve', code)
-      if (!out.ok) { setBrainStop({ ...s, busy: false, error: out.words }); return }
-      approved = out
-    } else {
-      const out = await askBrainKill(startBody(s.stop, code))
-      if (!out.ok) { setBrainStop(null); setBrainNotice(startNotice(out)); await after(); return }
-      if (!out.body.approve?.ok) { setBrainStop({ ...s, busy: false, approvalId: out.body.approvalId, error: out.body.approve?.error ?? 'Not approved' }); return }
-      approved = out.body
-    }
+    const approved = await decideBrainRequest(s.approvalId, 'approve', code)
+    if (!approved.ok) { setBrainStop({ ...s, busy: false, error: approved.words }); return }
     setBrainStop(null)
     setBrainNotice(startNotice({ ok: true, executeAfter: approved.executeAfter }))
     if (startingHeld(approved.executeAfter)) setStarting(approved.executeAfter ?? null)
@@ -743,14 +758,14 @@ export function RulesView({ market, data, scope, viewSwitch, setQuery }: {
           : task.kind === 'rollback' ? 'Roll back 1 run'
             : task.kind === 'approve' ? approveLabel(reviewChanges.length)
               : task.kind === 'reject' ? rejectLabel(reviewChanges.length)
-                : task.kind === 'brain' ? (task.pick.to === 'AUTO' ? 'Approve with code' : 'Save 1 change') : undefined
+                : task.kind === 'brain' ? 'Save 1 change' : undefined
   const raises = reviewChanges.filter((c) => c.raise).length
   /** What the Done line counts a result as when its words name no verb ("1 archived", "2 approved"). */
   const DONE_VERB: Record<Task['kind'], string> = { mode: 'saved', archive: 'archived', restore: 'restored', undo: 'undone', rollback: 'rolled back', approve: 'approved', reject: 'rejected', brain: 'approved' }
   const ack = !raises ? undefined : task?.kind === 'brain' ? 'I understand: the Brain becomes this campaign’s one bid writer' : raiseAck(raises)
-  // Auto for a campaign: held by the server switch (the brain row's own reason) or the approver's permission.
+  // Auto for a campaign: held by the server switch (the brain row's own reason).
   const brainRowNow = rows.find(isBrain)
-  const brainAutoHeld = brainRowNow?.mode.autoLocked ? holdReason(brainRowNow.mode.autoLocked) : canSecurity ? null : 'Needs the security permission: Auto takes your authenticator code'
+  const brainAutoHeld = brainRowNow?.mode.autoLocked ? holdReason(brainRowNow.mode.autoLocked) : null
 
   // ── the builder ───────────────────────────────────────────────────────────────────────────────────────────────────
   const builderClosedHere = useRef(false)
@@ -952,7 +967,7 @@ export function RulesView({ market, data, scope, viewSwitch, setQuery }: {
           onDecide={(kind, asks) => { remember({ kind: 'panel', key: 'decide' }); setProblems([]); setUndoBack(null); setFrozen(null); setReview({ phase: 'ready' }); setTask({ kind, row: panelRow, asks, back: panelBack() }) }}
           brainHeld={brainHeld}
           brainAutoHeld={brainAutoHeld}
-          brainStop={brainStopView(panelRow, { held: brainHeld, canSecurity, busy: startingHeld(starting) })}
+          brainStop={brainStopView(panelRow, { held: brainHeld, busy: startingHeld(starting) })}
           onBrainStop={(action) => startBrainStop(action, panelRow.stop ?? null)}
           brainNotice={brainNotice ? { notice: brainNotice, onDismiss: () => { setBrainNotice(null); requestAnimationFrame(() => focusIn(document.querySelector('[data-drawer-heading]'))) } } : null}
           onBrainPick={(pick) => { remember({ kind: 'panel', key: `brain:${pick.id}` }); setProblems([]); setUndoBack(null); setFrozen(null); setReview({ phase: 'ready' }); setTask({ kind: 'brain', row: panelRow, pick, back: panelBack() }) }}
