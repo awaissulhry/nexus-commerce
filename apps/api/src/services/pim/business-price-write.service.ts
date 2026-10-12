@@ -140,17 +140,24 @@ export async function writeBusinessPrices(input: {
     const offer = facts.get(l.id)?.values
     let businessPrice: number | null = null
     let warnings: string[] = []
-    if (after) {
+    // Copying in what Amazon already holds: never over a setting Nexus manages (the write below is conditional on it too).
+    if (t.unguardedReason === 'amazon-business-offer-adopt' && before !== null) {
+      result.results.push({ ...base, outcome: 'noop', reason: 'Nexus already manages this business price.', version: l.version, before, businessPrice: null, warnings: [] })
+      result.noop++
+      continue targets
+    }
+    if (after && !t.unguardedReason) {
       const pt = productTypeOf(l)
       const account = accountOf(l)
       const allowed = pt && account ? audiences.get(pt)?.get(offerAudienceKey(account, l.marketplace)) ?? null : null
       if (!pt || allowed === null) { refuse(MATRIX_COPY.absentBusinessUnchecked(), before); continue }
       if (!allowed.includes('B2B')) { refuse(MATRIX_COPY.absentBusiness(pt), before); continue }
-      // Copying in what Amazon already holds records it as it is; only a person's change is held to Amazon's rules.
-      if (!t.unguardedReason) {
-        const problems = businessPriceProblems({ setting: after, normalPrice: normal, minPrice: offer?.minimum_seller_allowed_price ?? null, maxPrice: offer?.maximum_seller_allowed_price ?? null, currency })
-        if (problems.length) { refuse(problems.join(' '), before); continue }
-      }
+      const problems = businessPriceProblems({ setting: after, normalPrice: normal, minPrice: offer?.minimum_seller_allowed_price ?? null, maxPrice: offer?.maximum_seller_allowed_price ?? null, currency })
+      if (problems.length) { refuse(problems.join(' '), before); continue }
+    }
+    // Copying in what Amazon already holds records it as it is (Amazon took it, so B2B is on there); only a person's
+    // change is held to the audience check and Amazon's rules. Both get the warnings.
+    if (after) {
       businessPrice = businessPriceOf(after, normal)
       warnings = businessPriceWarnings({ setting: after, normalPrice: normal, salePrice: offer?.sale?.price ?? null, currency })
     }
@@ -161,7 +168,7 @@ export async function writeBusinessPrices(input: {
     }
 
     const written = await inTransaction(async (tx) => {
-      const where = guarded ? { id: l.id, version: t.expectedVersion } : { id: l.id }
+      const where = guarded ? { id: l.id, version: t.expectedVersion } : t.unguardedReason === 'amazon-business-offer-adopt' ? { id: l.id, businessPriceRule: null } : { id: l.id }
       const update = await tx.channelListing.updateMany({
         where,
         data: {

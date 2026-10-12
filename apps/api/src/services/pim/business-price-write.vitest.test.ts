@@ -111,3 +111,14 @@ describe('the business price door', () => {
     expect(r.warnings[0]).toMatch(/^Hidden by Amazon/)
   })
 })
+
+describe('copying in never overwrites what Nexus manages', () => {
+  it('an adopt over a managed listing is a no-op, and the setting stays', async () => {
+    const before = await scoped(() => prisma.channelListing.findUnique({ where: { id: ids.it }, select: { businessPriceRule: true, version: true } }))
+    expect(before!.businessPriceRule).not.toBeNull()
+    const r = (await write([{ listingId: ids.it!, unguardedReason: 'amazon-business-offer-adopt', setting: fixed(50) }])).results[0]!
+    expect(r).toMatchObject({ outcome: 'noop', reason: 'Nexus already manages this business price.' })
+    const after = await scoped(() => prisma.channelListing.findUnique({ where: { id: ids.it }, select: { businessPriceRule: true, version: true } }))
+    expect(after).toEqual(before)
+  })
+})

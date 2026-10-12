@@ -38,6 +38,7 @@ import { startPricingCron } from "../jobs/pricing-refresh.job.js";
 import { startRepricerCron } from "../jobs/repricer.job.js";
 import { startCatalogRefreshCron } from "../jobs/catalog-refresh.job.js";
 import { startSchemaRefreshCron } from "../jobs/schema-refresh.job.js";
+import { startAmazonBusinessOfferAdoptCron } from "../jobs/amazon-business-offer-adopt.job.js";
 import { startEbayReturnsPollCron } from "../jobs/ebay-returns-poll.job.js";
 import { startAmazonReturnsPollCron } from "../jobs/amazon-returns-poll.job.js";
 import { startFlatFileFeedPollCron } from "../jobs/amazon-flat-file-feed-poll.job.js";
@@ -300,6 +301,8 @@ export async function startScheduler(): Promise<void> {
   // ALA Phase 5 / attributes P4 — daily channel-rule refresh for Amazon, eBay and Etsy (04:00 UTC).
   // On by default since P4; NEXUS_ENABLE_SCHEMA_REFRESH_CRON=0 turns it off.
   startSchemaRefreshCron();
+  // Amazon Business step 3b — copy the business offers Amazon holds into Nexus where it manages none (04:30 UTC).
+  startAmazonBusinessOfferAdoptCron();
   startTaxonomyRefreshCron();
 
   // ADS AUTONOMY W4-2 — the daily Claude ads run's watchdog: hourly, per business; a business with no expected report

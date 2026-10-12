@@ -76,6 +76,7 @@ import { runPurgeSoftDeletedOnce } from './purge-soft-deleted-products.job.js'
 import { runLeadTimeStatsCronOnce } from './lead-time-stats.job.js'
 import { runCatalogRefresh } from './catalog-refresh.job.js'
 import { runSchemaRefresh } from './schema-refresh.job.js'
+import { runAmazonBusinessOfferAdopt } from './amazon-business-offer-adopt.job.js'
 import { runObservabilityRetention } from './observability-retention.job.js'
 import { runOrphanBulkJobCleanupOnce } from './bulk-job-orphan-cleanup.job.js'
 import { runScheduledBulkActionCronOnce } from './scheduled-bulk-action.job.js'
@@ -233,6 +234,7 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'lead-time-stats': () => runLeadTimeStatsCronOnce(),
   'catalog-refresh': () => runCatalogRefresh(),
   'schema-refresh': () => runSchemaRefresh(),
+  'amazon-business-offer-adopt': () => runAmazonBusinessOfferAdopt(),
   'observability-retention': () => runObservabilityRetention(),
   'bulk-job-orphan-cleanup': () => runOrphanBulkJobCleanupOnce(),
   'scheduled-bulk-action': () => runScheduledBulkActionCronOnce(),
