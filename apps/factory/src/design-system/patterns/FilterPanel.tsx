@@ -31,6 +31,8 @@ export interface FilterPanelProps {
    * the reset (when it is not disabled), so a filter can be cleared without opening the panel.
    */
   summary?: ReactNode
+  /** The summary on a phone, where a line of names ends in "…" after two letters: "2 on". Optional. */
+  summaryShort?: ReactNode
 }
 
 /**
@@ -40,7 +42,7 @@ export interface FilterPanelProps {
  * Keyboard (2026-10-12): the Show / Hide toggle is named for the panel ("Show filters"), says whether it is open
  * (`aria-expanded`) and which region it opens (`aria-controls`).
  */
-export function FilterPanel({ title = 'Filters', presets, children, onReset, onApply, resetLabel = 'Reset', resetDisabled, footerExtra, defaultOpen = true, open: openProp, onOpenChange, summary }: FilterPanelProps) {
+export function FilterPanel({ title = 'Filters', presets, children, onReset, onApply, resetLabel = 'Reset', resetDisabled, footerExtra, defaultOpen = true, open: openProp, onOpenChange, summary, summaryShort }: FilterPanelProps) {
   const [own, setOwn] = useState(defaultOpen)
   const open = openProp ?? own
   const setOpen = (next: boolean) => { if (openProp === undefined) setOwn(next); onOpenChange?.(next) }
@@ -51,7 +53,8 @@ export function FilterPanel({ title = 'Filters', presets, children, onReset, onA
     <div className={['nds-fpanel', open ? '' : 'collapsed'].filter(Boolean).join(' ')}>
       <div className="nds-fpanel-head">
         <h3>{title}</h3>
-        {showSummary && <span className="nds-fpanel-summary">{summary}</span>}
+        {showSummary && <span className={summaryShort != null ? 'nds-fpanel-summary has-short' : 'nds-fpanel-summary'}>{summary}</span>}
+        {showSummary && summaryShort != null && <span className="nds-fpanel-summary short">{summaryShort}</span>}
         <span className="nds-fpanel-head-end">
           {!open && onReset && !resetDisabled && (
             <Button size="sm" variant="link" onClick={onReset}>{resetLabel}</Button>

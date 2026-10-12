@@ -7,6 +7,7 @@ import { Tooltip } from '../primitives/Tooltip'
 import { useClickAway } from './useClickAway'
 import { usePopoverPosition } from './usePopoverPosition'
 import { OptionList, type OptionListItem } from './OptionList'
+import { opensDark } from '../lib/opens-dark'
 
 /** The list's item shape, aliased so this component and `OptionList` cannot drift apart. */
 export type MultiSelectOption = OptionListItem
@@ -111,7 +112,8 @@ export function MultiSelect({ options, value, onChange, placeholder = 'All', cla
       })()}
       {open && (
         createPortal(
-          <div ref={popRef} style={popStyle} className="nds-ms-pop" role="listbox" aria-multiselectable="true" onKeyDown={onPopKeyDown}>
+          <div ref={popRef} style={popStyle} className="nds-ms-pop"
+            data-nds-light={opensDark(triggerRef.current) ? undefined : ''} role="listbox" aria-multiselectable="true" onKeyDown={onPopKeyDown}>
             <OptionList
               options={options}
               value={value}

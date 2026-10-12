@@ -122,6 +122,17 @@ export function filterSummary(dimensions: readonly FilterDimension[]): string {
   return parts.join(' · ')
 }
 
+/** How many dimensions filter now (the collapsed header on a phone: "2 on"). PURE. */
+export function filtersOn(dimensions: readonly FilterDimension[]): number {
+  return dimensions.filter((d) => (d.kind === 'multiselect' ? d.value.length > 0
+    : d.kind === 'select' ? !!d.value
+      : d.kind === 'range' ? !!(d.min || d.max)
+        : d.value)).length
+}
+
+/** A multiselect filter's trigger once something is picked: "1 selected", "3 selected" — never "All". */
+export const pickedWords = (value: readonly string[]): string => `${value.length} selected`
+
 function optionLabel(o: FilterBarOption): ReactNode {
   if (o.count == null) return o.label
   return (
@@ -180,6 +191,8 @@ function DimensionControl<T extends FilterDimension>({ d, labelId }: { d: T; lab
           value={d.value}
           onChange={d.onChange}
           placeholder={d.placeholder ?? 'All'}
+          // A filter says "All" only when nothing filters: every option of a narrowed list ticked is still a filter.
+          formatLabel={pickedWords}
           searchable={d.searchable}
           labelledBy={labelId}
           heldReason={d.heldReason}
@@ -224,6 +237,7 @@ export function FilterBar({ title, dimensions, presets, onClear, activeCount, de
       open={open}
       onOpenChange={onOpenChange}
       summary={filterSummary(dimensions)}
+      summaryShort={filtersOn(dimensions) ? `${filtersOn(dimensions)} on` : undefined}
       onReset={onClear}
       resetLabel="Clear"
       resetDisabled={activeCount === 0}

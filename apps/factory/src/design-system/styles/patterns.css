@@ -321,6 +321,14 @@
   font-size: var(--nds-font-size-sm-plus);
   color: var(--nds-text-2);
 }
+.nds-fpanel-summary.short {
+  display: none;
+  flex: 0 1 auto;
+}
+@media (max-width: 760px) {
+  .nds-fpanel-summary.has-short { display: none; }
+  .nds-fpanel-summary.short { display: inline; }
+}
 .nds-fpanel-head-end {
   display: inline-flex;
   align-items: center;
@@ -404,6 +412,12 @@
   }
 }
 @media (max-width: 760px) {
+  /* Half a phone is ~105 px: a tighter trigger keeps "1 selected" whole. */
+  .nds-fpanel-field .nds-ms-btn {
+    gap: 4px;
+    padding-left: 9px;
+    padding-right: 8px;
+  }
   .nds-fpanel-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

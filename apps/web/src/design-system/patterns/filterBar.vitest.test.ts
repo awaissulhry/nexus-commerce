@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { OptionList } from '../components/OptionList'
-import { FilterBar, filterSummary, type FilterDimension } from './FilterBar'
+import { FilterBar, filterSummary, filtersOn, type FilterDimension } from './FilterBar'
 
 /** 2026-10-12 — the ads pages' filter bar: named triggers, held lists, counted options that search by words, the
  *  collapsed header's summary and Clear, and an open state the page holds. */
@@ -30,10 +30,29 @@ describe('filterSummary', () => {
   })
 })
 
+describe('a picked list', () => {
+  it('says how many are picked, never "All" (every option of a narrowed list ticked still filters)', () => {
+    const html = render({ dimensions: dims({ value: ['p1', 'p2', 'p3'] }) })
+    expect(html).toContain('3 selected')
+    // The one "All" left is the Campaign list's, where nothing is picked.
+    expect(html.match(/>All</g)).toHaveLength(1)
+  })
+})
+
+describe('filtersOn', () => {
+  it('counts the fields that filter, not the picks', () => {
+    expect(filtersOn(dims())).toBe(2)
+    expect(filtersOn(dims({ value: [] }))).toBe(1)
+    expect(filtersOn([{ key: 't', label: 'Has photos', kind: 'toggle', value: false, onChange: noop }])).toBe(0)
+  })
+})
+
 describe('FilterBar', () => {
   it('collapsed: the header says what filters and offers Clear; the toggle names the panel', () => {
     const html = render({ open: false })
-    expect(html).toContain('<span class="nds-fpanel-summary">Portfolio: Boots +1 · Price: ≥ 10</span>')
+    expect(html).toContain('<span class="nds-fpanel-summary has-short">Portfolio: Boots +1 · Price: ≥ 10</span>')
+    // On a phone the names give way to a count (CSS swaps the two at 760 px).
+    expect(html).toContain('<span class="nds-fpanel-summary short">2 on</span>')
     const all = buttons(html)
     expect(all.map((b) => b.body.replace(/<[^>]+>/g, ''))).toEqual(['Clear', 'Show'])
     const toggle = all[1].attrs

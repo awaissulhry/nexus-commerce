@@ -130,6 +130,8 @@ export function BidsView({ market = null, productId = null, campaignId = null, a
   const phone = usePhone()
   const lists = scope?.api ?? null
   const scopeKey = `${market ?? ''}|${productId ?? ''}|${campaignId ?? ''}|${adGroupId ?? ''}|${scope?.key ?? ''}`
+  // The column memory is the scope's without the filter bar's picks: one entry per market, not one per filter ever picked.
+  const memoKey = `${market ?? ''}|${productId ?? ''}|${campaignId ?? ''}|${adGroupId ?? ''}|`
 
   const router = useRouter()
   const params = useSearchParams()
@@ -219,11 +221,12 @@ export function BidsView({ market = null, productId = null, campaignId = null, a
 
   // ── which columns the rows in scope need (never one that could only say "—"); while they are read, last time's ──
   // Read before the grid is made, so its first columns are the scope's own (its saved order and picks apply whole).
-  const [remembered, setRemembered] = useState<BidColumnFeatures | null>(() => (typeof window === 'undefined' ? null : readInScope(scopeKey)))
+  const [remembered, setRemembered] = useState<BidColumnFeatures | null>(() => (typeof window === 'undefined' ? null : readInScope(memoKey)))
   const firstScope = useRef(scopeKey)
-  useEffect(() => { if (scopeKey !== firstScope.current) { firstScope.current = scopeKey; setRemembered(readInScope(scopeKey)) } }, [scopeKey])
+  useEffect(() => { if (scopeKey !== firstScope.current) { firstScope.current = scopeKey; setRemembered(readInScope(memoKey)) } }, [scopeKey]) // eslint-disable-line react-hooks/exhaustive-deps
   const answered = useMemo(() => (answer ? inScopeOf(answer.rows) : null), [answer])
-  useEffect(() => { if (answered) writeInScope(scopeKey, answered) }, [answered]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Written for the unfiltered rows only: a filtered read needs a subset of those columns, never more.
+  useEffect(() => { if (answered && !scope?.key) writeInScope(memoKey, answered) }, [answered]) // eslint-disable-line react-hooks/exhaustive-deps
   const inScope = answered ?? remembered ?? NO_COLUMN_FEATURES
 
   // ── rows; a write to a market Nexus only reads is held on the row, with the reason (A1) ──
