@@ -28,7 +28,7 @@ export interface UseGridShortcutsOptions {
 }
 
 /** A modal that is open and does NOT contain the grid owns the keyboard, wherever focus is. */
-function modalOutside(container: HTMLElement): boolean {
+export function modalOutside(container: HTMLElement): boolean {
   if (typeof document === 'undefined') return false
   for (const modal of document.querySelectorAll('[aria-modal="true"], dialog[open]')) {
     if (!modal.contains(container)) return true
