@@ -38,6 +38,8 @@ import { useRouter, useSearchParams } from '@/lib/workspaces/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useDetailParam } from '../../../_shared/useDetailParam'
 import { emitAdsChange } from '../../_shared/adsBus'
+import { FILTER_EMPTY, FILTER_HIDES_RULE, narrowRules } from '../../_shared/scopeFilter/scopeFilterModel'
+import type { ScopeView } from '../../_shared/scopeFilter/useScopeFilter'
 import { MODES, MODE_WORD, type BidMode } from '../../bid/rules/bidRulesModel'
 import { fetchSuggestions, fetchUndoPreview } from '../../bid/rules/ruleApi'
 import { useWasteReview } from '../waste/useWasteReview'
@@ -132,10 +134,12 @@ function ruleCell(id: string | null | undefined, col = 'rule'): HTMLElement | nu
   return document.querySelector<HTMLElement>(`.ag-row[row-id="${CSS.escape(id)}"] [col-id="${col}"]`)
 }
 
-export function WasteRulesView({ market, viewSwitch }: {
+export function WasteRulesView({ market, viewSwitch, scope }: {
   market: string
   /** The page's [Wasting | Stopped | Rules] switch, at the start of the toolbar (optional: the page may show it above). */
   viewSwitch?: ReactNode
+  /** The page's filter bar: only the rules that can act on its picks show (and count); the Brain and Harvest rows always. */
+  scope?: ScopeView
 }) {
   const router = useRouter()
   const params = useSearchParams()
@@ -156,7 +160,13 @@ export function WasteRulesView({ market, viewSwitch }: {
     router.replace(q ? `?${q}` : '?', { scroll: false })
   }, [router])
 
-  const { answer, err, load, put } = useWasteRules(market)
+  // The rules the page's filter bar reaches (the Brain and Harvest rows always; nothing while its lists are read): the
+  // table and its counts count these.
+  const read = useWasteRules(market)
+  const { err, load, put } = read
+  const pending = !!scope?.pending
+  const scopeReach = scope?.reach ?? null
+  const answer = useMemo(() => (read.answer && !pending ? narrowRules(read.answer, scopeReach, isPseudo) : null), [read.answer, pending, scopeReach])
   const [draft, setDraft] = useState<ModeDraft>({})
   const [search, setSearch] = useState(() => params.get('q') ?? '')
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -194,6 +204,12 @@ export function WasteRulesView({ market, viewSwitch }: {
   answerRef.current = answer
   const rows = useMemo(() => answer?.rules ?? [], [answer])
   const byId = useMemo(() => new Map(rows.map((r) => [r.id, r])), [rows])
+  // A mode pick of a rule the filter (or the market) no longer shows leaves the draft: "Review N changes" counts only
+  // what its review can show.
+  useEffect(() => {
+    if (!answer) return
+    setDraft((d) => (Object.keys(d).every((id) => byId.has(id)) ? d : Object.fromEntries(Object.entries(d).filter(([id]) => byId.has(id)))))
+  }, [answer, byId])
   const filter = { search, archived: showArchived }
   const shown = useMemo(() => visibleRows(rows, filter), [rows, search, showArchived]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -331,13 +347,17 @@ export function WasteRulesView({ market, viewSwitch }: {
   }, [router, setQuery, params])
   const clearFilters = useCallback(() => { setSearch(''); setQuery({ archived: null, q: null }) }, [setQuery])
   const filtered = isFiltered(filter)
+  const scopeActive = !!scope?.active
+  const clearScope = scope?.clear
   // M4: a failed read says so (and offers Try again), never "No rules yet".
   const noRowsParams = useMemo(() => (!answer && err
     ? { title: 'Rules not read', message: readError(err) ?? '', action: { label: 'Try again', onClick: () => void load() } }
     : filtered
       ? { title: showArchived && !search.trim() ? 'No archived rules' : 'No rule matches', message: '', action: { label: 'Clear filters', onClick: clearFilters } }
-      : { title: 'No stop-waste rules yet', message: '', action: archiveHeld ? undefined : { label: 'New rule', onClick: openNew } }),
-  [answer, err, load, filtered, clearFilters, archiveHeld, openNew, showArchived, search])
+      : scopeActive && clearScope
+        ? { title: FILTER_EMPTY.title, message: '', action: { label: FILTER_EMPTY.clear, onClick: () => clearScope() } }
+        : { title: 'No stop-waste rules yet', message: '', action: archiveHeld ? undefined : { label: 'New rule', onClick: openNew } }),
+  [answer, err, load, filtered, clearFilters, archiveHeld, openNew, showArchived, search, scopeActive, clearScope])
 
   // ── reviews ───────────────────────────────────────────────────────────────────────────────────────────────────────
   const draftRef = useRef(draft)
@@ -728,8 +748,8 @@ export function WasteRulesView({ market, viewSwitch }: {
       ) : (
         <RuleDetailPending
           loading={!answer && !err}
-          error={answer ? 'This rule is not in this list: it may be in another market, or gone' : err ? 'Rules not read' : null}
-          onRetry={() => (answer && market !== 'all' ? setQuery({ market: null }) : void load())}
+          error={answer ? (scopeActive ? FILTER_HIDES_RULE : 'This rule is not in this list: it may be in another market, or gone') : err ? 'Rules not read' : null}
+          onRetry={() => (answer && scopeActive && clearScope ? clearScope() : answer && market !== 'all' ? setQuery({ market: null }) : void load())}
           onClose={detail.close}
           returnFocusTo={() => null}
         />

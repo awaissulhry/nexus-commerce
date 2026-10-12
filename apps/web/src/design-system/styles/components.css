@@ -1269,6 +1269,23 @@ body.nds-drawer-resizing * {
   height: 15px;
   accent-color: var(--nds-primary);
 }
+/* A HELD MultiSelect (`heldReason`): focusable, says why, does not open. Its Tooltip wraps the trigger, so the wrapper
+   takes the trigger's place in the row (2026-10-12). */
+.nds-ms > .nds-tooltip {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.nds-ms > .nds-tooltip > .nds-ms-btn {
+  flex: 1 1 auto;
+}
+.nds-ms-btn[aria-disabled="true"] {
+  opacity: 0.62;
+  cursor: default;
+}
+.nds-ms-btn[aria-disabled="true"]:hover {
+  border-color: var(--nds-border);
+}
 /* Facet count rendered after an option label (FilterBar `count`). */
 .nds-ms-count {
   color: var(--nds-text-muted);

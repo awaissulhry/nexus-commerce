@@ -22,6 +22,7 @@ import { useAdsMarketplaceOptional } from '../../_shell/MarketplaceContext'
 import { ALL_MARKETS, pageMarket } from '../../_shell/adsMarkets'
 import { RULE_TYPES } from './ruleTypes'
 import { rulesTabCounts, rulesTabItems } from './rulesFrame'
+import { carryQuery, carryTabs } from './scopeFilter/scopeFilterModel'
 import { useRulesTabRules } from './tabCountsContext'
 import styles from './rulesFrame.module.css'
 
@@ -307,6 +308,8 @@ const TabLink: TabLinkComponent = (props) => <Link {...(props as ComponentProps<
  *   scrolls sideways inside itself, the tab you are on in view, with a fade and an arrow at each edge that has more
  *   (`overflow="scroll"`); the scrollbar stays in a band below the labels.
  * · Keyboard: every tab is a Tab stop; ←/→/Home/End move between them; Enter follows.
+ * · The filter bar's picks (2026-10-12): between Bid, Keyword Harvest and Negative Targeting the links carry
+ *   `?portfolio=&campaign=&adGroup=&product=` (`carryTabs`); every other link is as it was.
  */
 export function RulesTabs({ active }: { active?: string }) {
   const rules = useRulesTabRules()
@@ -320,8 +323,10 @@ export function RulesTabs({ active }: { active?: string }) {
     () => (rules ? rulesTabCounts(rules, Object.keys(RULE_TAB_ACTION_TYPES), ruleBelongsToTab, market) : null),
     [rules, market],
   )
-  const items = useMemo(() => rulesTabItems(RULES_TABS, counts, rulesTabHref), [counts])
-  const current = activeTabFromPath(items, pathname) ?? active ?? ''
+  const base = useMemo(() => rulesTabItems(RULES_TABS, counts, rulesTabHref), [counts])
+  const current = activeTabFromPath(base, pathname) ?? active ?? ''
+  const carry = carryQuery(new URLSearchParams(params?.toString() ?? ''))
+  const items = useMemo(() => carryTabs(base, current, carry), [base, current, carry])
   return (
     <div className={styles.tabs}>
       <Tabs size="lg" dense overflow="scroll" ariaLabel="Rules and automation" tabs={items} active={current} linkAs={TabLink} />

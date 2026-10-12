@@ -2,8 +2,9 @@
  * Negative Targeting page (2026-10-11, lane NVIEW) — the page's words and rules, pure and tested in Node
  * (`wasteModel.vitest.test.ts`). The components only draw what these say.
  *
- *   address   ?market= · ?view=wasting|stopped|rules · ?show=<tile filter> · ?kind= · ?q= · ?scope=pf:|cp:|ag:<id>
- *             · ?sort= · ?page= · ?row=<row id>&tab=overview|where|history
+ *   address   ?market= · ?view=wasting|stopped|rules · ?show=<tile filter> · ?kind= · ?q= · ?sort= · ?page=
+ *             · ?row=<row id>&tab=overview|where|history; the page's filter bar `?portfolio=&campaign=&adGroup=&product=`
+ *             (`_shared/scopeFilter`, read here as `lists`)
  *   verbs     our keyword or target → Pause (kept paused); a shopper's search term → Negative exact / phrase, in the ad
  *             group or the whole campaign; a shopper's ASIN → Negative product. A row whose verb the server holds keeps
  *             it on screen, held, with the server's reason. Stopped rows: Turn on… · Remove negative… · Release lock ·
@@ -13,6 +14,7 @@
  */
 import { CHANGE_STATE_TONE, CHANGE_STATE_WORD, type ChangeState, type ChangeTone } from '../../bid/_shared/delivery'
 import { dayWords, money } from '../../bid/_shared/format'
+import { addApiParams, type ScopeApi } from '../../_shared/scopeFilter/scopeFilterModel'
 import type {
   ActionGate, ApplyAnswer, Delivery, HistoryAction, Match, Owner, PreviewAnswer, PreviewStep, Ref, RowKind, RowState, StoppedRow, StoppedState,
   StoppedTotals, VerbAction, WaitingSteps, WasteAction, WasteItem, WasteRow, WasteTotals, Where,
@@ -42,26 +44,6 @@ export const DETAIL_TABS = ['overview', 'where', 'history'] as const
 export type DetailTab = (typeof DETAIL_TABS)[number]
 export const detailTabOf = (v: string | null | undefined): DetailTab => ((DETAIL_TABS as readonly string[]).includes(v ?? '') ? v as DetailTab : 'overview')
 
-/** A scope the toolbar picker sets: `pf:<portfolio id>`, `cp:<campaign id>`, `ag:<ad group id>`; null = the whole market. */
-export type ScopeLevel = 'pf' | 'cp' | 'ag'
-export interface Scope { level: ScopeLevel; id: string }
-export function scopeOf(v: string | null | undefined): Scope | null {
-  const m = /^(pf|cp|ag):(.{1,64})$/.exec((v ?? '').trim())
-  return m ? { level: m[1] as ScopeLevel, id: m[2] } : null
-}
-export const scopeKey = (s: Scope | null): string | null => (s ? `${s.level}:${s.id}` : null)
-
-/** The API's scope params for a scope (the read routes take portfolioId, campaignId, adGroupId). */
-export function scopeParams(market: string | null, scope: Scope | null): Record<string, string> {
-  const out: Record<string, string> = {}
-  const m = (market ?? '').trim()
-  if (m && m.toLowerCase() !== 'all') out.market = m.toUpperCase()
-  if (scope?.level === 'pf') out.portfolioId = scope.id
-  if (scope?.level === 'cp') out.campaignId = scope.id
-  if (scope?.level === 'ag') out.adGroupId = scope.id
-  return out
-}
-
 /** The grid's columns that the server can order by, and the key it takes. */
 export const SORT_KEY: Readonly<Record<string, string>> = {
   term: 'text', where: 'where', product: 'product', spend: 'spend', clicks: 'clicks', orders: 'orders', xCpa: 'xCpa', owner: 'owner', state: 'state',
@@ -83,7 +65,8 @@ export const DEFAULT_PAGE_SIZE = 50
 
 export interface ListQuery {
   market: string | null
-  scope: Scope | null
+  /** The page's filter bar: `portfolioIds`, `campaignIds`, `adGroupIds`, `productIds` (lists; OR inside, AND across). */
+  lists?: ScopeApi | null
   kind: KindFilter
   show: string
   q: string
@@ -92,9 +75,12 @@ export interface ListQuery {
   pageSize?: number
 }
 
-/** The query string of a list read (rows, rows/ids, stopped). Empty values are left out. */
+/** The query string of a list read (rows, rows/ids, stopped). Empty values are left out; 'all' markets = no market. */
 export function listSearch(q: ListQuery): string {
-  const p = new URLSearchParams(scopeParams(q.market, q.scope))
+  const p = new URLSearchParams()
+  const m = (q.market ?? '').trim()
+  if (m && m.toLowerCase() !== 'all') p.set('market', m.toUpperCase())
+  addApiParams(p, q.lists)
   if (q.kind !== 'all') p.set('kind', q.kind)
   if (q.show) p.set('show', q.show)
   if (q.q.trim()) p.set('q', q.q.trim())
@@ -763,36 +749,6 @@ export function emptyWords(view: 'wasting' | 'stopped', show: string, filtered: 
   if (show === 'waiting') return { title: 'Nothing waits for you', clear: true }
   if (show === 'skipped') return { title: 'Nothing skipped', clear: true }
   return { title: 'Nothing wasting', clear: false }
-}
-
-// ── the scope picker ────────────────────────────────────────────────────────────────────────────────────────────────
-
-export interface ScopeOption { value: string; label: string; group: string }
-
-/**
- * The scope picker's options, from the refs of the rows read so far (portfolio › campaign › ad group), each level its
- * group; a campaign's ad groups carry the campaign in the label. The scope on now is always an option.
- */
-export function scopeOptions(seen: Iterable<{ portfolio: Ref | null; campaign: Ref | null; adGroup: Ref | null }>, current: Scope | null, currentLabel?: string | null): ScopeOption[] {
-  const pf = new Map<string, string>()
-  const cp = new Map<string, string>()
-  const ag = new Map<string, string>()
-  for (const r of seen) {
-    if (r.portfolio) pf.set(r.portfolio.id, r.portfolio.name)
-    if (r.campaign) cp.set(r.campaign.id, r.campaign.name)
-    if (r.adGroup && r.campaign) ag.set(r.adGroup.id, `${r.adGroup.name} · ${r.campaign.name}`)
-  }
-  const sorted = (m: Map<string, string>) => [...m].sort((a, b) => a[1].localeCompare(b[1]))
-  const out: ScopeOption[] = [
-    ...sorted(pf).map(([id, name]) => ({ value: `pf:${id}`, label: name, group: 'Portfolio' })),
-    ...sorted(cp).map(([id, name]) => ({ value: `cp:${id}`, label: name, group: 'Campaign' })),
-    ...sorted(ag).map(([id, name]) => ({ value: `ag:${id}`, label: name, group: 'Ad group' })),
-  ]
-  const key = scopeKey(current)
-  if (key && !out.some((o) => o.value === key)) {
-    out.unshift({ value: key, label: currentLabel || current!.id, group: current!.level === 'pf' ? 'Portfolio' : current!.level === 'cp' ? 'Campaign' : 'Ad group' })
-  }
-  return out
 }
 
 // ── CSV ─────────────────────────────────────────────────────────────────────────────────────────────────────────────

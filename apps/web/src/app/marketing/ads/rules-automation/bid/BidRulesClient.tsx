@@ -14,19 +14,25 @@
  *
  * The header and the tab bar are the section's (`AdsPageHeader` → the DS `RulesHeader` the layout frames, lane SHELL).
  * The market picker writes `?market=`; the view is `?view=rules|bids`.
+ *
+ * The filter bar (2026-10-12, `_shared/scopeFilter`) sits under the tab bar: Portfolio · Campaign · Ad group · Product.
+ * The Bids view reads its bids with it (the server filters); the Rules view and the tiles keep the rules that can act on
+ * a pick (the brain always shows).
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { SegmentedControl } from '@/design-system/primitives'
 import { ToastProvider } from '@/design-system/components'
 import { useRouter, useSearchParams } from '@/lib/workspaces/navigation'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { useAdsMarketplace, useSharedAdsMarket } from '../../_shell/MarketplaceContext'
+import { AdsScopeFilter } from '../_shared/scopeFilter/AdsScopeFilter'
+import { useScopeFilter } from '../_shared/scopeFilter/useScopeFilter'
 import { RulesTabs, rulesTabHeader } from '../_shared/tabs'
 import { BidsView, isBidsShow, type BidsTotals } from './bids'
 import { BidTiles, type BidsTileTotals } from './rules/BidTiles'
-import { isRulesTile } from './rules/bidRulesModel'
+import { isRulesTile, narrowBidRules } from './rules/bidRulesModel'
 import { RulesView } from './rules/RulesView'
-import { useBidRules } from './rules/useBidRules'
+import { useBidRules, type BidRulesData } from './rules/useBidRules'
 import styles from './bid.module.css'
 
 const VIEWS = [{ value: 'rules', label: 'Rules' }, { value: 'bids', label: 'Bids' }]
@@ -38,10 +44,14 @@ export function BidRulesClient() {
   const [market] = useSharedAdsMarket({ raw: params.get('market') })
   const view = params.get('view') === 'bids' ? 'bids' : 'rules'
   const show = params.get('show')
-  const data = useBidRules(market)
+  const read = useBidRules(market)
+  const filter = useScopeFilter(market)
+  // The rules the filter reaches, for the tiles and the Rules view alike (nothing while its lists are read).
+  const answer = useMemo(() => (read.answer && !filter.pending ? narrowBidRules(read.answer, filter.reach) : null), [read.answer, filter.pending, filter.reach])
+  const data: BidRulesData = { ...read, answer }
   const [bidsTotals, setBidsTotals] = useState<BidsTileTotals | null>(null)
-  // The bids' numbers belong to one read of one market: a new market waits for its own.
-  useEffect(() => { setBidsTotals(null) }, [market])
+  // The bids' numbers belong to one read of one market and one filter: a new one waits for its own.
+  useEffect(() => { setBidsTotals(null) }, [market, filter.key])
   // The contract with lane BIDS (M1): `show` filters its bids, `onTotals` reports its totals after each read.
   const onTotals = useCallback((t: BidsTotals) => { setBidsTotals({ changed7d: t.changed7d, contested: t.contested }) }, [])
 
@@ -87,6 +97,7 @@ export function BidRulesClient() {
         />
         <RulesTabs active="bid" />
         <div className={styles.page}>
+          <AdsScopeFilter filter={filter} />
           <BidTiles
             view={view}
             totals={data.answer?.totals ?? null}
@@ -97,8 +108,8 @@ export function BidRulesClient() {
             onWaiting={openWaiting}
           />
           {view === 'bids'
-            ? <BidsView market={market} viewSwitch={viewSwitch} show={isBidsShow(show) ? show : undefined} onTotals={onTotals} />
-            : <RulesView market={market} data={data} viewSwitch={viewSwitch} setQuery={setQuery} />}
+            ? <BidsView market={market} scope={filter} viewSwitch={viewSwitch} show={isBidsShow(show) ? show : undefined} onTotals={onTotals} />
+            : <RulesView market={market} data={data} scope={filter} viewSwitch={viewSwitch} setQuery={setQuery} />}
         </div>
       </div>
     </ToastProvider>

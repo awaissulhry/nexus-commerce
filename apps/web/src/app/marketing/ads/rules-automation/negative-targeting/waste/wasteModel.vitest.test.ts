@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  ackWords, appliedWords, chipOwner, decideLines, decideSummary, planWords, doneLine, isFinal, keepWord, olderKeep, shownSteps, unknownAction, detailTabOf, emptyWords, idKind, kindOf, landsWord, listSearch, previewSummary, saveWords, scopeOf, scopeOptions, scopeParams,
+  ackWords, appliedWords, chipOwner, decideLines, decideSummary, planWords, doneLine, isFinal, keepWord, olderKeep, shownSteps, unknownAction, detailTabOf, emptyWords, idKind, kindOf, landsWord, listSearch, previewSummary, saveWords,
   sinceView, skipIds, sortOf, sortParam, spendHint, verbLabel, waitingCount, stateSentence, stoppedBulkPlan, stoppedShowOf, stoppedVerb, termOfId, tileQuery, tilesOf, undoWords, viewOf, waitingOf,
   wasteBulkCounts, wasteBulkPlan, wastingShowOf, wasteVerb, xCpaText,
 } from './wasteModel'
@@ -43,12 +43,6 @@ describe('the address', () => {
     expect(detailTabOf('history')).toBe('history')
     expect(detailTabOf('why')).toBe('overview')
   })
-  it('reads a scope and gives the API its params', () => {
-    expect(scopeOf('cp:c1')).toEqual({ level: 'cp', id: 'c1' })
-    expect(scopeOf('xx:1')).toBeNull()
-    expect(scopeParams('it', scopeOf('ag:g1'))).toEqual({ market: 'IT', adGroupId: 'g1' })
-    expect(scopeParams('all', scopeOf('pf:p'))).toEqual({ portfolioId: 'p' })
-  })
   it('turns a header sort into the server key and back', () => {
     expect(sortParam({ colId: 'spend', dir: 'desc' })).toBe('-spend')
     expect(sortParam({ colId: 'trend', dir: 'asc' })).toBeNull()
@@ -56,8 +50,15 @@ describe('the address', () => {
     expect(sortOf('bogus')).toBeNull()
   })
   it('builds the list query and leaves out what is empty', () => {
-    expect(listSearch({ market: 'IT', scope: null, kind: 'all', show: 'wasting', q: ' ', page: 1, pageSize: 50 })).toBe('?market=IT&show=wasting&pageSize=50')
-    expect(listSearch({ market: null, scope: scopeOf('cp:c1'), kind: 'term', show: 'all', q: 'coat', sort: '-spend', page: 2 })).toBe('?campaignId=c1&kind=term&show=all&q=coat&sort=-spend&page=2')
+    expect(listSearch({ market: 'it', lists: null, kind: 'all', show: 'wasting', q: ' ', page: 1, pageSize: 50 })).toBe('?market=IT&show=wasting&pageSize=50')
+    expect(listSearch({ market: 'all', lists: { campaignIds: 'c1,c2' }, kind: 'term', show: 'all', q: 'coat', sort: '-spend', page: 2 })).toBe('?campaignIds=c1%2Cc2&kind=term&show=all&q=coat&sort=-spend&page=2')
+  })
+  it('sends the filter bar\'s lists, only those with a pick', () => {
+    const qs = new URLSearchParams(listSearch({ market: 'IT', lists: { portfolioIds: 'p1', adGroupIds: 'g1,g2' }, kind: 'all', show: 'wasting', q: '' }).slice(1))
+    expect(qs.get('portfolioIds')).toBe('p1')
+    expect(qs.get('adGroupIds')).toBe('g1,g2')
+    expect(qs.has('campaignIds')).toBe(false)
+    expect(qs.has('portfolioId')).toBe(false)
   })
 })
 
@@ -201,10 +202,6 @@ describe('words', () => {
     expect(emptyWords('wasting', 'wasting', false)).toEqual({ title: 'Nothing wasting', clear: false })
     expect(emptyWords('stopped', 'kept', false)).toEqual({ title: 'None here', clear: true })
     expect(emptyWords('wasting', 'wasting', true).clear).toBe(true)
-  })
-  it('the scope picker lists every level once, the scope on now always', () => {
-    const opts = scopeOptions([row(), term()], scopeOf('cp:zz'), 'Other campaign')
-    expect(opts.map((o) => `${o.group}:${o.label}`)).toEqual(['Campaign:Other campaign', 'Portfolio:Jackets', 'Campaign:Jacket Exact', 'Ad group:Exact group · Jacket Exact'])
   })
 })
 

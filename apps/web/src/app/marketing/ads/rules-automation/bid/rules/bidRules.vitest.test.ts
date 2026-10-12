@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   BRAIN_ID, LAST7_ROOM_ONE_MARKET, allAdGroups, brainAskWords, brainPickChange, brainStepOf, archiveWords, autoLockOf, holdReason, holdWord, changeFromTo, sampleFromTo, sampleHold, effectView,
   effectWindow, heldStep, holdsOf, last7Fit, last7Parts, last7Tab, last7Text, marketMoney, modeLock, nextRunView, noEffectWords, partHolds, previewParts,
-  readError, rowMatchesSearch, rowMatchesTile, visibleRows, whoWord, worksOn,
-  type BidRuleRow, type Effect, type RuleChange,
+  narrowBidRules, readError, rowMatchesSearch, rowMatchesTile, visibleRows, whoWord, worksOn,
+  type BidRuleRow, type BidRulesAnswer, type Effect, type RuleChange,
 } from './bidRulesModel'
+import { NO_PICKS, buildIndex, reachOf } from '../../_shared/scopeFilter/scopeFilterModel'
 import {
   archiveReviewChanges, beltFor, bulkModeOptions, canChangeBids, modeConflicts, modeReviewChanges, modeSteps, pickMode, pickModeFor, raiseAck, refusalWords,
   restoreReviewChanges, retidyModes, shownMode, withBelt,
@@ -24,6 +25,32 @@ function row(over: Partial<BidRuleRow> = {}): BidRuleRow {
   }
 }
 const brain = row({ id: BRAIN_ID, kind: 'brain', name: 'Brain', mode: { set: 'WATCH', acts: 'WATCH', heldBy: null, also: [], autoLocked: { kind: 'server', label: 'Auto off (server)', reason: 'The server switch must allow changes first.' } } })
+
+describe('the page\'s filter bar (2026-10-12)', () => {
+  const index = buildIndex({
+    campaigns: [{ id: 'c1', name: 'Jacket Exact', marketplace: 'IT', portfolioId: 'p1' }, { id: 'c2', name: 'Boots', marketplace: 'IT', portfolioId: 'p2' }],
+    portfolios: [{ externalPortfolioId: 'p1', name: 'Jackets' }, { externalPortfolioId: 'p2', name: 'Boots' }],
+    productLines: [],
+  }, 'IT')
+  const changed = (bids: number) => ({ portfolios: [], campaigns: [], adGroups: [], bids, keywords: 0 })
+  const answer: BidRulesAnswer = {
+    market: 'IT',
+    rules: [
+      row({ id: BRAIN_ID, kind: 'brain', changed7d: changed(5), waiting: 1 }),
+      row({ id: 'r1', changed7d: changed(3), waiting: 2 }),
+      row({ id: 'r2', scope: { ...row().scope, campaigns: [ref('c2')] }, changed7d: changed(7), mode: { ...row().mode, set: 'OFF' } }),
+    ],
+    totals: { rules: 2, on: 1, waiting: 2, bidsChanged7d: 15, clashes: 4, archived: 0, otherMarkets: 0 },
+  }
+
+  it('keeps the brain and the rules that can act on a pick; the tiles count what shows', () => {
+    const out = narrowBidRules(answer, reachOf({ ...NO_PICKS, portfolio: ['p1'] }, index))
+    expect(out.rules.map((r) => r.id)).toEqual([BRAIN_ID, 'r1'])
+    // Rule changes · 7 d counts the brain's too (as the server does); Clashes stays the brain's.
+    expect(out.totals).toEqual({ rules: 1, on: 1, waiting: 2, bidsChanged7d: 8, clashes: 4, archived: 0, otherMarkets: 0 })
+    expect(narrowBidRules(answer, null)).toBe(answer)
+  })
+})
 
 describe('rules table words', () => {
   it('tiles filter: on, changed, waiting', () => {

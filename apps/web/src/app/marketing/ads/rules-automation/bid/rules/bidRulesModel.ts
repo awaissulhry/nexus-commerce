@@ -9,6 +9,7 @@
  * The Owner's words only: Off · Watch · Ask me · Auto; Brain; Rule. Labels, numbers and chips — never sentences on the
  * page, except the one line a rule carries.
  */
+import { narrowRules, type ScopeReach } from '../../_shared/scopeFilter/scopeFilterModel'
 import { WEEK, currencyOf, dayWords, moneyText, periodWord, relWords, whenWords } from '../_shared/format'
 
 // ── the API's shapes ────────────────────────────────────────────────────────────────────────────────────────────────
@@ -207,6 +208,18 @@ export function visibleRows(rows: readonly BidRuleRow[], f: RulesFilter): BidRul
 }
 
 export const isFiltered = (f: RulesFilter): boolean => !!f.tile || f.search.trim() !== '' || f.archived
+
+/**
+ * The rules the page's filter bar reaches (2026-10-12): the brain's row always; a rule when it can act on a pick. The
+ * tiles count what shows — Rules on, Rule changes · 7 d (the brain's included, as the server counts), Waiting for you —
+ * and the toolbar's "N rules" and Archived. Clashes stays the brain's (its row always shows). `reach` null: as read.
+ */
+export function narrowBidRules(answer: BidRulesAnswer, reach: ScopeReach | null): BidRulesAnswer {
+  if (!reach) return answer
+  const out = narrowRules(answer, reach, isBrain)
+  const active = out.rules.filter((r) => !r.archived)
+  return { ...out, totals: { ...out.totals, bidsChanged7d: active.reduce((n, r) => n + r.changed7d.bids, 0) } }
+}
 
 // ── what it works on / changed ──────────────────────────────────────────────────────────────────────────────────────
 

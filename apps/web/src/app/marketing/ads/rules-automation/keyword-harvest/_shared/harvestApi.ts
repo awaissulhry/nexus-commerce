@@ -10,6 +10,7 @@
  * writes are Nexus settings.
  */
 import { getBackendUrl } from '@/lib/backend-url'
+import { addApiParams } from '../../_shared/scopeFilter/scopeFilterModel'
 import type {
   ApplyAnswer, ApplyBody, CandidateQuery, CandidatesAnswer, DecideAnswer, HarvestDestinations, HarvestMatch,
   HarvestRulesAnswer, HarvestSourcesAnswer, HistoryAnswer, HistoryQuery, PreviewAnswer, PreviewBody,
@@ -39,6 +40,7 @@ export function candidateSearch(q: CandidateQuery): string {
   put('portfolioId', q.portfolioId)
   put('campaignId', q.campaignId)
   put('adGroupId', q.adGroupId)
+  addApiParams(out, q.lists)
   if (q.state?.length) out.set('state', q.state.join(','))
   put('owner', q.owner)
   put('kind', q.kind)

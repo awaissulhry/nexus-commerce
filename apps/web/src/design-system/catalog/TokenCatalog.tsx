@@ -273,6 +273,8 @@ function FilterBarDemo() {
       kind: 'multiselect',
       value: filters.channels,
       onChange: (v) => setFilters((f) => ({ ...f, channels: v })),
+      // Counted options still search by their words (`searchText`, default the label).
+      searchable: true,
       options: [
         { value: 'amazon', label: 'Amazon', count: 212 },
         { value: 'ebay', label: 'eBay', count: 64 },
@@ -302,6 +304,16 @@ function FilterBarDemo() {
         { value: 'helmet', label: 'Casco' },
         { value: 'gloves', label: 'Guanti' },
       ],
+    },
+    {
+      // HELD: nothing to pick here now — focusable, says why on hover and focus, does not open.
+      key: 'brand',
+      label: 'Brand',
+      kind: 'multiselect',
+      value: [],
+      onChange: () => {},
+      options: [],
+      heldReason: 'No brand in this market',
     },
     {
       key: 'price',
@@ -1281,7 +1293,7 @@ export function TokenCatalog() {
         </FilterPanel>
 
         <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>
-          FilterBar <span style={{ textTransform: 'none', fontWeight: 500 }}>· config-driven (pass `dimensions`); the grid-workspace bar</span>
+          FilterBar <span style={{ textTransform: 'none', fontWeight: 500 }}>· config-driven (pass `dimensions`); the grid-workspace bar · Hide it: the header says what filters and offers Clear</span>
         </div>
         <FilterBarDemo />
 

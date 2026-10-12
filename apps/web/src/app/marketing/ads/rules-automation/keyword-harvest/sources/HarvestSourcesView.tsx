@@ -13,6 +13,9 @@
  * The page frame (header, view switch, tiles) is the page's (lane TERMS): this view reads `show` (the tile that filters)
  * and reports its numbers and tiles through `onTotals` after each read — the same predicates as the filter.
  * Address: `?show=` (the page's) · `?sq=` the search.
+ *
+ * The page's filter bar (2026-10-12): the sources are read for the market and kept here when they sit among its picks
+ * (`placeInReach`) — the table, its count, the tiles, "Select all" and Export follow; nothing shows while its lists are read.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Download, Pause, Play, Search, SlidersHorizontal, Unlink, Workflow } from 'lucide-react'
@@ -27,6 +30,8 @@ import { usePermission } from '@/lib/auth/AuthProvider'
 import { useRouter, useSearchParams } from '@/lib/workspaces/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitAdsChange, useAdsSync } from '../../_shared/adsBus'
+import { FILTER_EMPTY, placeInReach } from '../../_shared/scopeFilter/scopeFilterModel'
+import type { ScopeView } from '../../_shared/scopeFilter/useScopeFilter'
 import { plural, readError } from '../../bid/rules/bidRulesModel'
 import { assignSources, detachSources, pauseSources, readHarvestSources, resumeSources } from '../_shared/harvestApi'
 import type { HarvestSourceRow, HarvestSourcesAnswer, Ref } from '../_shared/types'
@@ -66,9 +71,11 @@ export interface HarvestSourcesViewProps {
   onTotals?: (t: HarvestSourcesViewTotals) => void
   /** Optional: the page's view switch, drawn at the start of the toolbar. */
   viewSwitch?: ReactNode
+  /** The page's filter bar: only the sources among its picks show (and count). */
+  scope?: ScopeView
 }
 
-export function HarvestSourcesView({ market, show: showProp, onTotals, viewSwitch }: HarvestSourcesViewProps) {
+export function HarvestSourcesView({ market, show: showProp, onTotals, viewSwitch, scope }: HarvestSourcesViewProps) {
   const params = useSearchParams()
   const router = useRouter()
   const phone = useNarrow()
@@ -84,7 +91,7 @@ export function HarvestSourcesView({ market, show: showProp, onTotals, viewSwitc
   }, [router])
 
   // ── the reads ─────────────────────────────────────────────────────────────────────────────────────────────────────
-  const [answer, setAnswer] = useState<HarvestSourcesAnswer | null>(null)
+  const [answerRead, setAnswer] = useState<HarvestSourcesAnswer | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [rules, setRules] = useState<PickRule[]>([])
   const [paused, setPaused] = useState(false)
@@ -105,6 +112,10 @@ export function HarvestSourcesView({ market, show: showProp, onTotals, viewSwitc
     } catch (e) { if (current()) setErr((e as Error).message); return null }
   }, [oneMarket, beginRead])
   useEffect(() => { setAnswer(null); void load() }, [load])
+  // The sources the page's filter bar reaches (none while its lists are read): every number below counts these.
+  const pending = !!scope?.pending
+  const scopeReach = scope?.reach ?? null
+  const answer = useMemo(() => (answerRead && !pending ? { ...answerRead, rows: answerRead.rows.filter((r) => placeInReach(r, scopeReach)) } : null), [answerRead, pending, scopeReach])
   useAdsSync(['ads.rule.changed'], () => { void load() }, paused)
 
   const reach = useMemo(() => new Map<string, RuleReach | null>(rules.map((r) => [r.id, r.reach])), [rules])
@@ -323,12 +334,16 @@ export function HarvestSourcesView({ market, show: showProp, onTotals, viewSwitc
     } catch (e) { toast((e as Error).message, 'danger') }
   }, [oneMarket, filtered, toast])
   const clearFilters = useCallback(() => { setSearch(''); setQuery({ show: null, sq: null }) }, [setQuery])
+  const scopeActive = !!scope?.active
+  const clearScope = scope?.clear
   const noRowsParams = useMemo(() => (!answer && err
     ? { title: 'Sources not read', message: readError(err) ?? '', action: { label: 'Try again', onClick: () => void load() } }
     : filtered
       ? { title: 'No ad group matches', message: '', action: { label: 'Clear filters', onClick: clearFilters } }
-      : { title: 'No ad group finds search terms here', message: '' }),
-  [answer, err, load, filtered, clearFilters])
+      : scopeActive && clearScope && !!answerRead?.rows.length
+        ? { title: FILTER_EMPTY.title, message: '', action: { label: FILTER_EMPTY.clear, onClick: () => clearScope() } }
+        : { title: 'No ad group finds search terms here', message: '' }),
+  [answer, answerRead, err, load, filtered, clearFilters, scopeActive, clearScope])
 
   // ── the picker ────────────────────────────────────────────────────────────────────────────────────────────────────
   const pickOptions = useMemo(() => (!pick ? [] : pick.kind === 'assign' ? assignOptions(rules) : detachOptions(pick.rows, reach)), [pick, rules, reach])
