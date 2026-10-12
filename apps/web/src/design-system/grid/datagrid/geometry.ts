@@ -88,8 +88,9 @@ const tier = (padY: number, padX: number, fontPx: number, fontToken: string, den
   rowHeight: padY * 2 + line(fontPx) + ROW_RULE,
   density,
   headerHeight: gridDensity[density].header,
-  // The totals cells keep the TABLE's 13px (the size tiers never reached `tfoot`), whatever the tier.
-  totalsHeight: TOTALS_PAD * 2 + line(13) + ROW_RULE,
+  // The totals cells keep the TABLE's 13px (the size tiers never reached `tfoot`), whatever the tier. The row is the
+  // HEADER's height, as on every grid (the Owner's card rule, IE.4; grid audit E7) — it was 20.5px, a sliver.
+  totalsHeight: Math.max(gridDensity[density].header, TOTALS_PAD * 2 + line(13) + ROW_RULE),
 })
 
 export const SIZE_GEOMETRY: Readonly<Record<DataGridSize, SizeGeometry>> = {

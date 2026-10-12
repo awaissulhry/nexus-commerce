@@ -184,6 +184,8 @@
    No hover: the legacy hover rule was `tbody`-scoped. The section rule is off — the top rule is the CELL's. ── */
 .nds-ag-dg .ag-row.nds-dg-totals { --ag-row-hover-color: transparent; --ag-row-border: none; }
 .nds-ag-dg .ag-row.nds-dg-totals .ag-cell.nds-dg-td {
+  /* The row is the header's height now (geometry.ts): its words sit in the middle of it, like the header's. */
+  align-items: center;
   /* The side padding is the data cells' (the page rule that once padded it is gone): a total lines up with the
      values and the header above it (grid audit A5). The row's height is still its cells'. */
   padding: 0 var(--nds-dg-pad-x);
@@ -196,18 +198,18 @@
 .nds-ag-dg .ag-row.nds-dg-totals .ag-cell.nds-dg-td.ck { padding-left: 0; padding-right: 0; }
 .nds-ag-dg .nds-dg-total { display: block; min-width: 0; }
 
-/* ── the empty state: `td.nds-grid-empty` (1505) — by the legacy cascade `.nds-grid tbody td` (0,1,2) outranked
-   `.nds-grid-empty` (0,1,0) on padding, ink, weight and white-space, so the cell that shipped is one line at the
-   tier's padding in body ink, centred, with its rule; the 40px grey intent never rendered. ── */
+/* ── the empty state: the ENGINE's (grid audit E6, 2026-10-13) — the words the engine's overlay says ("Nothing here"),
+   its muted ink and its 28px, and the sentence WRAPS (`grid.css` `.nds-ag-empty`: a nowrap empty state once painted
+   out of its cell). It was the legacy cell's one line in body ink. Centred, with its rule. ── */
 .nds-ag-dg .nds-dg-empty {
   display: block;
-  padding: var(--nds-dg-pad-y) var(--nds-dg-pad-x);
+  padding: 28px var(--nds-dg-pad-x);
   text-align: center;
-  color: var(--nds-text);
+  color: var(--nds-grid-empty-fg);
   font-weight: 500;
   font-size: var(--nds-dg-font);
   line-height: var(--nds-dg-line);
-  white-space: nowrap;
+  white-space: normal;
   background: var(--nds-surface);
   border-bottom: 1px solid var(--nds-border-subtle);
 }

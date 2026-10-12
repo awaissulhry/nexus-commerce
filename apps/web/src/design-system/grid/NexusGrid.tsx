@@ -34,6 +34,9 @@ import { compareSortValues, type SortValue } from './sortValues'
 import { plainFirstGuess, plainGridHeight } from './plainGrid'
 import { heldLimits, widthMoved, widthsAsDefaults } from './columns/columnWidths'
 import { interactionDefaults } from './gridDefaults'
+import { GRID_LOCALE_TEXT } from './locale'
+import { GridNoRowsOverlay } from './renderers/overlays'
+import { LIGHT_PINNED } from '../lib/opens-dark'
 import { declaredPinning, withPinning } from './statePinning'
 import { fillHandleHit } from './editors/openGesture'
 import { registerGridModules } from './modules'
@@ -212,7 +215,7 @@ export function NexusGrid<T>({
 }: NexusGridProps<T>) {
   // `plain` sizes the grid to its rows unless the caller chose a layout (run 3: AG's autoHeight kept a 150px band).
   const fitRows = plain && agProps.domLayout === undefined
-  const themeMode = useAgThemeMode()
+  const appMode = useAgThemeMode()
   const contextDensity = useGridDensity()
   const density = densityProp ?? contextDensity
   const tier = gridDensity[density]
@@ -421,7 +424,7 @@ export function NexusGrid<T>({
     if (!columnDialog) return undefined
     return (p) => {
       const kept: (DefaultMenuItem | MenuItemDef<T>)[] = p.defaultItems.filter((i) => i !== 'columnChooser' && i !== 'resetColumns')
-        .map((i) => (i === 'pinSubMenu' && pinSides === 'left' ? { name: 'Pin Column', icon: agIcon('pin'), subMenu: ['clearPinned', 'pinLeft'] as DefaultMenuItem[] } : i))
+        .map((i) => (i === 'pinSubMenu' && pinSides === 'left' ? { name: GRID_LOCALE_TEXT.pinColumn, icon: agIcon('pin'), subMenu: ['clearPinned', 'pinLeft'] as DefaultMenuItem[] } : i))
       while (kept[kept.length - 1] === 'separator') kept.pop()
       const own: MenuItemDef<T>[] = []
       if (columnDialog.customise) own.push({ name: 'Customise columns…', icon: agIcon('columns'), action: columnDialog.customise })
@@ -489,6 +492,32 @@ export function NexusGrid<T>({
     () => interactionDefaults({ cellSelection: agProps.cellSelection, getContextMenuItems: agProps.getContextMenuItems, columnDefs, defaultColDef: mergedDefaultColDef }),
     [agProps.cellSelection, agProps.getContextMenuItems, columnDefs, mergedDefaultColDef],
   )
+  /**
+   * The grid's light or dark follows the place it sits in, not only <html> (grid audit C6): a light-pinned page or a
+   * light DS modal under a dark OS keeps a light grid — native scrollbars and checkboxes included (`lib/opens-dark`).
+   */
+  const [lightPinned, setLightPinned] = useState(false)
+  useEffect(() => { setLightPinned(!!wrapRef.current?.closest(LIGHT_PINNED)) }, [])
+  const themeMode = appMode === 'dark' && !lightPinned ? 'dark' : 'light'
+  // A header whose name is cut off shows the whole name under the pointer (grid audit A11) — only when it is cut, and
+  // only when the column has no tooltip of its own. Read at hover time, so a resize or a refresh can never leave a stale
+  // one behind.
+  useEffect(() => {
+    const root = wrapRef.current
+    if (!root) return
+    const onOver = (e: PointerEvent) => {
+      const header = (e.target as Element | null)?.closest?.('.ag-header-cell')
+      const text = header?.querySelector<HTMLElement>('.ag-header-cell-text')
+      if (!header || !text) return
+      const colId = header.getAttribute('col-id')
+      const api = apiRef.current
+      const own = colId && api && !api.isDestroyed() ? api.getColumn(colId)?.getColDef().headerTooltip : undefined
+      if (!own && text.scrollWidth > text.clientWidth + 1) text.title = text.textContent ?? ''
+      else text.removeAttribute('title')
+    }
+    root.addEventListener('pointerover', onOver)
+    return () => root.removeEventListener('pointerover', onOver)
+  }, [])
   // One object for the life of the grid: AG reads `autoSizeStrategy` once, and a new object on every render made it
   // warn (#22) on every render of every `plain` grid.
   const plainAutoSize = useMemo(() => (plain ? ({ type: 'fitGridWidth' } as const) : undefined), [plain])
@@ -562,6 +591,11 @@ export function NexusGrid<T>({
           onModelUpdated={handleModelUpdated}
           autoSizeStrategy={plainAutoSize}
           {...interaction}
+          // AG's words in the DS's voice; the DS empty state; one tooltip pace for every grid (300 ms — AG's own 2 s
+          // read as "no tooltip", Matrix audit 2026-10-08). A page's own value still wins.
+          localeText={GRID_LOCALE_TEXT}
+          noRowsOverlayComponent={GridNoRowsOverlay}
+          tooltipShowDelay={300}
           // Popups (header menus, dialogs, tooltips) go on the document, not inside the grid. AG
           // fits a popup to its popup parent's box; under `autoHeight` that box is the whole
           // grid and can run past the viewport, so a header menu opened low on the page ended

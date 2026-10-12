@@ -31,8 +31,9 @@ describe('the legacy .nds-grid geometry per size — derived from components.css
     expect(SIZE_GEOMETRY.lg.density).toBe('spacious')
     expect(SIZE_GEOMETRY.xl.density).toBe('spacious')
   })
-  it('the totals row before measurement: the TABLE\'s 13px line + the top rule and NO padding (the app reset zeroes the UA td padding — measured), at every size', () => {
-    for (const s of DATAGRID_SIZES) expect(SIZE_GEOMETRY[s].totalsHeight).toBe(19.5 + 1)
+  it('the totals row is the header\'s height at every size (grid audit E7) — never the 20.5px sliver of the TABLE\'s line + rule', () => {
+    for (const s of DATAGRID_SIZES) expect(SIZE_GEOMETRY[s].totalsHeight).toBe(SIZE_GEOMETRY[s].headerHeight)
+    for (const s of DATAGRID_SIZES) expect(SIZE_GEOMETRY[s].totalsHeight).toBeGreaterThan(19.5 + 1)
   })
   it('md is the default; the checkbox column is 40', () => {
     expect(geometryFor(undefined)).toBe(SIZE_GEOMETRY.md)
