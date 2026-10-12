@@ -176,11 +176,14 @@ export function InventoryEditorModal({ row, density, onClose, title, subtitle: s
     )
   }, [pending, pendingCases, pendingCount, applying, applyBatch, reason, notes])
 
-  /** Close asks first when there is unapplied work; the DS modal routes Esc and ✕ here too. */
+  /**
+   * Close asks first when there is unapplied work; the DS modal routes Esc, ✕ and the backdrop here too. Asking again
+   * keeps the question up: only its own Discard button throws the work away — a second Esc used to discard it unasked.
+   */
   const requestClose = useCallback(() => {
-    if (pendingCount && !confirmDiscard) { setConfirmDiscard(true); return }
+    if (pendingCount) { setConfirmDiscard(true); return }
     onClose()
-  }, [pendingCount, confirmDiscard, onClose])
+  }, [pendingCount, onClose])
 
   const rowCount = model?.rows.length ?? 0
   // A passed name (the Matrix) can be long: two lines at most, the whole name on hover.
