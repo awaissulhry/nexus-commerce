@@ -270,6 +270,8 @@ export function HarvestRulesView({ market, show: showProp, onTotals, viewSwitch,
   const restoringLastUsed = useRef(false)
   const views = useGridState<PageState>({
     surface: 'ads-harvest-rules',
+    // Land on the scope's default view even when it answers after the grid is up (grid audit F7).
+    landOnLateDefault: true,
     baseUrl: getBackendUrl(),
     getPageState: () => pageState.current,
     applyPageState: (pg) => { if (!restoringLastUsed.current) setQuery({ show: isRulesShow(pg?.show) ? pg.show : null, archived: pg?.archived ? '1' : null }) },

@@ -167,6 +167,9 @@ export function TermsView({ market, show = null, onTotals, viewSwitch, scope }: 
   }), [])
   const gridState = useGridState<Record<string, never>>({
     surface: 'ads-harvest-terms', baseUrl: getBackendUrl(), getPageState: NO_PAGE_STATE, applyPageState: IGNORE_PAGE_STATE, persistKeys: PERSIST_KEYS,
+    // Land on the scope's default view even when it answers after the grid is up (grid audit F7) — not on a phone,
+    // which keeps no saved layout.
+    landOnLateDefault: !phone,
   })
   const bindState = useRef(gridState.bind)
   bindState.current = gridState.bind

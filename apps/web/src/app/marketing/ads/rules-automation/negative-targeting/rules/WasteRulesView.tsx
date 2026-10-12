@@ -270,6 +270,8 @@ export function WasteRulesView({ market, viewSwitch, scope }: {
   const restoringLastUsed = useRef(false)
   const views = useGridState<{ archived: boolean }>({
     surface: 'ads-neg-rules',
+    // Land on the scope's default view even when it answers after the grid is up (grid audit F7).
+    landOnLateDefault: true,
     baseUrl: getBackendUrl(),
     getPageState: () => pageState.current,
     applyPageState: (pg) => { if (!restoringLastUsed.current) setQuery({ archived: pg?.archived ? '1' : null }) },

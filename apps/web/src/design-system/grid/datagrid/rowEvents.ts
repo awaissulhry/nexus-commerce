@@ -20,6 +20,8 @@
  * applied by `rowDom.ts`.
  */
 
+import { endsTextSelection, inSelectionColumn } from '../../patterns/workspace-grid/rowInteraction'
+
 /** native event type → the React prop name the legacy element would have carried. */
 export const DELEGATED_EVENTS: ReadonlyArray<readonly [type: string, prop: string]> = [
   ['click', 'onClick'],
@@ -104,7 +106,11 @@ function dispatch(ev: Event): void {
     if (ev.cancelBubble) return
   }
   const row = t.closest('.ag-row') as HTMLElement | null
-  if (row) call(target.rowHandlers(row), prop, ev, row)
+  if (!row) return
+  // A click in the selection column beside its box, or one that ends a text selection in this grid, is not a click on
+  // the row (grid audit F2: selecting words to copy them opened the row). A control's own click never reached here.
+  if (ev.type === 'click' && (inSelectionColumn(t) || endsTextSelection(rootEl, typeof window === 'undefined' ? null : window.getSelection()))) return
+  call(target.rowHandlers(row), prop, ev, row)
 }
 
 function install(): void {

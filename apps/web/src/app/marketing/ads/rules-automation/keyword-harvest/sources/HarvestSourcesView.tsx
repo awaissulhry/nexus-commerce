@@ -276,6 +276,8 @@ export function HarvestSourcesView({ market, show: showProp, onTotals, viewSwitc
   const restoringLastUsed = useRef(false)
   const views = useGridState<PageState>({
     surface: 'ads-harvest-sources',
+    // Land on the scope's default view even when it answers after the grid is up (grid audit F7).
+    landOnLateDefault: true,
     baseUrl: getBackendUrl(),
     getPageState: () => pageState.current,
     applyPageState: (pg) => { if (!restoringLastUsed.current) setQuery({ show: isSourcesShow(pg?.show) ? pg.show : null }) },

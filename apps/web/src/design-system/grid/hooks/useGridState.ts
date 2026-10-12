@@ -136,6 +136,14 @@ export interface UseGridStateOptions<TPage> extends UseGridViewsOptions<TPage> {
    * CHANNEL (`product-edit:views:AMAZON`): the column set is the channel's, not the market's.
    */
   viewsSurface?: string
+  /**
+   * Land on the scope's default view when it arrives AFTER the grid mounted (grid audit F7, 2026-10-13). AG reads
+   * `initialState` once; the server's views usually answer a moment after the grid is up, so a view marked "This scope
+   * lands on this view" was never applied and the last-used layout showed instead. Applied once per mount, only when the
+   * grid did not already start from it. Pages with their own landing (the products page's working layout, the Matrix,
+   * the sheets) leave it off. Default false.
+   */
+  landOnLateDefault?: boolean
 }
 
 export function useGridState<TPage>({
@@ -149,6 +157,7 @@ export function useGridState<TPage>({
   persistKeys,
   viewsSurface,
   initialRead,
+  landOnLateDefault = false,
 }: UseGridStateOptions<TPage>) {
   const views = useGridViews<TPage>({ surface: viewsSurface ?? surface, baseUrl, getPageState, applyPageState, applyColumnsView, initialRead })
   const apiRef = useRef<GridApi | null>(null)
@@ -196,10 +205,17 @@ export function useGridState<TPage>({
     timer.current = setTimeout(persist, PERSIST_DEBOUNCE_MS)
   }, [persist])
 
+  /** Whether the grid STARTED from the default view (it was in `initialState` when the grid came up). */
+  const startedOnDefault = useRef(false)
+  const [bound, setBound] = useState(false)
+  const landed = useRef(false)
+
   /** Hand the grid over: from here every state change is remembered. */
   const bind = useCallback(
     (api: GridApi) => {
       apiRef.current = api
+      startedOnDefault.current = defaultGridState != null
+      setBound(true)
       views.bind(api)
       api.addEventListener('stateUpdated', persistSoon)
       // The last-used PAGE state (density, page size, accordion) — the grid part rode in `initialState`.
@@ -208,6 +224,15 @@ export function useGridState<TPage>({
     },
     [views, persistSoon, autoRestore, lastUsed, defaultGridState],
   )
+
+  // The default view that answered after the grid came up: applied once, as the grid would have started from it.
+  const { loaded: viewsLoaded, defaultView, apply: applyView } = views
+  useEffect(() => {
+    if (!landOnLateDefault || landed.current || !bound || !viewsLoaded) return
+    landed.current = true
+    if (!defaultView || startedOnDefault.current || !isGridStatePayload<TPage>(defaultView.payload)) return
+    applyView(defaultView)
+  }, [landOnLateDefault, bound, viewsLoaded, defaultView, applyView])
 
   /** The page changed something AG state does not hold (density, page size, a tile). */
   const markDirty = useCallback(() => persistSoon(), [persistSoon])

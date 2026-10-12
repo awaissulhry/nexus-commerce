@@ -292,6 +292,8 @@ export function BidsView({ market = null, productId = null, campaignId = null, a
   }), [specs])
   const gridState = useGridState<Record<string, never>>({
     surface: 'ads-bid-bids',
+    // Land on the scope's default view even when it answers after the grid is up (grid audit F7).
+    landOnLateDefault: true,
     baseUrl: getBackendUrl(),
     getPageState: NO_PAGE_STATE,
     applyPageState: IGNORE_PAGE_STATE,

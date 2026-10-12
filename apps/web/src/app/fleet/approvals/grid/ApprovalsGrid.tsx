@@ -219,6 +219,8 @@ function ApprovalsGridPage() {
   const restoringLastUsed = useRef(false)
   const gridViews = useGridState<QueuePageState>({
     surface: 'fleet-approvals',
+    // Land on the scope's default view even when it answers after the grid is up (grid audit F7).
+    landOnLateDefault: true,
     baseUrl: getBackendUrl(),
     getPageState: () => pageState.current,
     applyPageState: (page) => {
