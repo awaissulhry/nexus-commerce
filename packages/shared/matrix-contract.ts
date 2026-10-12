@@ -560,7 +560,7 @@ export const MATRIX_COPY = {
   absentFulfilment: (channelLabel: string) => `${channelLabel} has no fulfilment method`,
   /* 2026-10-08: the sentence names no market — it is said per coordinate, and Customise groups the markets that share it. */
   absentBusiness: (pt: string) => `Amazon has not enabled business pricing for this account (checked against the ${pt} schema)`,
-  absentBusinessUnchecked: () => 'Business pricing could not be checked — no product-type schema is cached for this family',
+  absentBusinessUnchecked: () => 'Business pricing is not checked yet — Nexus asks Amazon for this account and product type each night',
   absentBusinessNotBuilt: (pt: string) => `Amazon allows business pricing here (the ${pt} schema) — the B2B cells are not built yet`,
   noListingYet: 'No listing on this coordinate yet',
   /** A write whose listing moved since the caller read it (CAS on `ChannelListing.version`, or another listing there now). */
