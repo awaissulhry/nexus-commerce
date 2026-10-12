@@ -49,6 +49,7 @@ import {
   type DgContext, type DgContextHolder,
 } from './cells'
 import { CK_COL, SORTING_ORDER, buildColDefs, columnsSignature, orderColumns, splitColumns } from './columns'
+import { widthMoved } from '../columns/columnWidths'
 import { geometryFor, geometryVars } from './geometry'
 import {
   defaultPrefs, parseStoredPrefs, readStoredRaw, reconcileStoredPrefs, visibleOrderFromColumnState, withWidth, writeStoredPrefs,
@@ -416,33 +417,45 @@ export function DataGrid<T>({
    * below the width its content measured (`contentWidths`, recorded by `fitColumns`), so a grid whose content
    * is wider than its box overflows sideways exactly as the table did. AG fits to its own body width, which
    * already excludes the scrollbar. Persisted widths count as widthed.
+   *
+   * A width the PERSON set is theirs (grid audit B3, 2026-10-13): a drag or a double-click on the handle — on every
+   * DataGrid, saved or not — is held at its width by every later fit (it used to snap back the moment the box changed),
+   * may go below its content, and is never auto-sized again. A fit runs when the box's WIDTH changes, never when only
+   * its height did (rows, an expanded row, a horizontal scrollbar), and never during a drag.
    */
   const contentWidths = useRef(new Map<string, number>())
+  const userWidths = useRef(new Map<string, number>())
+  const resizing = useRef(false)
+  /** A header refresh asked for during a drag, run when the drag ends. */
+  const headerRefreshHeld = useRef(false)
+  const isWidthed = useCallback((id: string) => id === CK_COL || userWidths.current.has(id) || prefsRef.current.widths?.[id] != null || columnsByKeyRef.current.get(id)?.width != null, [])
   const fitToBox = useCallback(() => {
     const api = apiRef.current
-    if (!api || api.isDestroyed()) return
+    if (!api || api.isDestroyed() || resizing.current) return
     const displayed = api.getAllDisplayedColumns()
     if (!displayed.length || !(wrapRef.current?.clientWidth ?? 0)) return
-    const widths = prefsRef.current.widths ?? {}
-    const isWidthed = (id: string) => id === CK_COL || widths[id] != null || columnsByKeyRef.current.get(id)?.width != null
     const anyAuto = displayed.some((c) => !isWidthed(c.getColId()))
     api.sizeColumnsToFit({
       columnLimits: displayed.map((c) => {
         const id = c.getColId()
-        if (anyAuto && isWidthed(id)) return { key: id, minWidth: c.getActualWidth(), maxWidth: c.getActualWidth() }
+        // The person's width, and with any auto column left every widthed one, stay put; the slack is the rest's.
+        if (userWidths.current.has(id) || (anyAuto && isWidthed(id))) return { key: id, minWidth: c.getActualWidth(), maxWidth: c.getActualWidth() }
         const content = contentWidths.current.get(id)
         return content != null ? { key: id, minWidth: content } : { key: id, minWidth: c.getActualWidth() }
       }),
     })
-  }, [])
+  }, [isWidthed])
+  const autoFitting = useRef(false)
   const fitColumns = useCallback(() => {
     const api = apiRef.current
-    if (!api || api.isDestroyed()) return
-    const cols = (api.getAllGridColumns() ?? []).filter((c) => !c.getColDef().suppressAutoSize && c.isVisible())
-    if (cols.length) api.autoSizeColumns(cols, false)
+    if (!api || api.isDestroyed() || resizing.current) return
+    const cols = (api.getAllGridColumns() ?? []).filter((c) => !isWidthed(c.getColId()) && c.isVisible())
+    autoFitting.current = true
+    try { if (cols.length) api.autoSizeColumns(cols, false) } finally { autoFitting.current = false }
     contentWidths.current = new Map(cols.map((c) => [c.getColId(), c.getActualWidth()]))
     fitToBox()
-  }, [fitToBox])
+  }, [fitToBox, isWidthed])
+  const boxWidth = useRef<number | null>(null)
   const fitPending = useRef(0)
   const scheduleFit = useCallback(() => {
     cancelAnimationFrame(fitPending.current)
@@ -459,7 +472,10 @@ export function DataGrid<T>({
     applyHeaderProps()
   }, [updateEdges, applyHeaderProps])
   const onFirstDataRendered = useCallback((_e: FirstDataRenderedEvent<Row>) => { scheduleFit(); requestRowHeights(); syncEdgeRows(); measureNatural() }, [scheduleFit, requestRowHeights, syncEdgeRows, measureNatural])
-  const onGridSizeChanged = useCallback((_e: GridSizeChangedEvent<Row>) => { fitToBox(); measureNatural() }, [fitToBox, measureNatural])
+  const onGridSizeChanged = useCallback((e: GridSizeChangedEvent<Row>) => {
+    if (widthMoved(boxWidth.current, e.clientWidth)) { boxWidth.current = e.clientWidth; fitToBox() }
+    measureNatural()
+  }, [fitToBox, measureNatural])
   const onSortChanged = useCallback((e: SortChangedEvent<Row>) => {
     if (applyingSortRef.current || e.source !== 'uiColumnSorted') return
     const next = sortOfState(e.api)
@@ -476,13 +492,20 @@ export function DataGrid<T>({
     }
   }, [customizable])
   const onColumnResized = useCallback((e: ColumnResizedEvent<Row>) => {
-    if (!e.finished || e.source !== 'uiColumnResized' || !customizable) return
+    if (e.source !== 'uiColumnResized' || autoFitting.current) return
+    resizing.current = !e.finished
+    if (!e.finished) return
+    const resized = e.columns ?? (e.column ? [e.column] : [])
+    for (const c of resized) userWidths.current.set(c.getColId(), c.getActualWidth())
+    // A header refresh asked for during the drag ran now: it would have pulled the handle out from under the pointer.
+    if (headerRefreshHeld.current) { headerRefreshHeld.current = false; e.api.refreshHeader(); applyHeaderProps() }
+    if (!customizable) return
     setPrefs((p) => {
       let next = p
-      for (const c of e.columns ?? (e.column ? [e.column] : [])) next = withWidth(next, c.getColId(), c.getActualWidth())
+      for (const c of resized) next = withWidth(next, c.getColId(), c.getActualWidth())
       return next
     })
-  }, [customizable])
+  }, [customizable, applyHeaderProps])
   const onDisplayedColumnsChanged = useCallback((e: DisplayedColumnsChangedEvent<Row>) => {
     if (updateEdges(e.api)) {
       e.api.refreshCells({ force: true, suppressFlash: true })
@@ -522,14 +545,20 @@ export function DataGrid<T>({
     lastCellIds.current = ids
     if (changed && api && !api.isDestroyed()) api.refreshCells({ force: true, suppressFlash: true })
   })
-  // The header reads the JSX labels and the select-all state through the context: refresh it when they change.
+  // The header reads the JSX labels and the select-all state through the context: refresh it when they change. A
+  // refresh rebuilds every header cell, so never mid-drag (it ended the drag); it waits for the drag to finish. Only a
+  // JSX label can change without changing the definitions, so a grid of string labels refreshes on the select-all
+  // state alone, not on every parent render (grid audit C5/F10).
   const lastHeaderIds = useRef<unknown[]>([])
+  const jsxLabels = columns.some((c) => typeof c.label !== 'string')
   useEffect(() => {
     const api = apiRef.current
-    const ids = [columns, allSelected, someSelected, selectAllHint, headerProps]
+    const ids = [jsxLabels ? columns : null, allSelected, someSelected, selectAllHint, headerProps]
     const changed = ids.length !== lastHeaderIds.current.length || ids.some((v, i) => v !== lastHeaderIds.current[i])
     lastHeaderIds.current = ids
-    if (changed && api && !api.isDestroyed()) { api.refreshHeader(); applyHeaderProps() }
+    if (!changed || !api || api.isDestroyed()) return
+    if (resizing.current) { headerRefreshHeld.current = true; return }
+    api.refreshHeader(); applyHeaderProps()
   })
   // Column widths: auto-size to content when the column set or the rows arrive; persisted widths win.
   useEffect(() => { if (apiRef.current) scheduleFit() }, [colSig, visibleSig, empty, widthsSig, scheduleFit])

@@ -158,7 +158,12 @@ export function InventoryGrid({ model, density, hiddenKinds, pending, pendingCas
       suppressMovable: true,
       // 34-character SKUs are normal in this catalogue; the thumbnail and the mono SKU need 320px
       // at the Compact thumbnail, and the thumbnail's extra width at the wider tiers (less on a phone).
+      // FIXED, as the Matrix's product column is: its width follows the room and the density, so it is the page's,
+      // not a starting width the engine keeps (grid/columns/columnWidths.ts).
       width: identityW,
+      minWidth: identityW,
+      maxWidth: identityW,
+      resizable: false,
       cellRenderer: RowIdentity,
       getQuickFilterText: (p) => `${p.data?.sku ?? ''} ${p.data?.name ?? ''}`,
       cellClass: 'nds-ag-cell',

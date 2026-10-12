@@ -13,7 +13,6 @@ import { SheetLoadError } from './SheetLoadError'
 import { SHEET_STATE_OVERLAYS } from './sheetGridStates'
 import type { ProductSheetModel } from './productSheetModel'
 import { withGroupHeaderClass } from './sheetGroups'
-import { widthsAsDefaults } from './columnWidths'
 import './product-sheet.css'
 
 /** The only Information sheet renderer, for Shared product and every channel. */
@@ -24,8 +23,9 @@ export function ProductSheetSurface<Row, Page, DrawerRow extends SheetRow>(model
   const channel = model.scope === 'channel'
   /* 2026-10-01 — every column name wears its group's colour (`sheetGroups.ts`); a def's own header class is kept. */
   const sourceDefs = model.grid.columnDefs
-  // A def's width is the column's default only: the operator's (and the saved layout's) width survives a rebuild (`columnWidths.ts`).
-  const columnDefs = useMemo(() => sourceDefs && widthsAsDefaults(withGroupHeaderClass(sourceDefs, columns.headerClass)), [sourceDefs, columns.headerClass])
+  // A def's width is the column's default only — the engine's rule for every grid now (`grid/columns/columnWidths.ts`):
+  // the operator's (and the saved layout's) width survives a rebuild.
+  const columnDefs = useMemo(() => sourceDefs && withGroupHeaderClass(sourceDefs, columns.headerClass), [sourceDefs, columns.headerClass])
   const ownDisplayedChanged = model.grid.onDisplayedColumnsChanged
   const redrawOnChange = columns.onDisplayedColumnsChanged
   const onDisplayedColumnsChanged = useCallback((event: Parameters<NonNullable<typeof ownDisplayedChanged>>[0]) => {

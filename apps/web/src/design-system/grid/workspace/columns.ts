@@ -20,9 +20,12 @@ import type { WsContextHolder } from './cells'
 export const alignClass = <T>(c: GridColumn<T>): 'num' | 'ed' | 'ctr' =>
   c.align === 'center' ? 'ctr' : c.align === 'left' ? 'ed' : c.align === 'right' ? 'num' : c.metric === false ? 'ed' : 'num'
 
-/** The identity column's measured box: `th.nm { width: 300; min-width: 300 }`, `td.nm { max-width: 360 }`. */
+/** The identity column's measured box: `th.nm { width: 300; min-width: 300 }`, `td.nm { max-width: 360 }` — 360 is how
+ *  wide the grid makes it by itself (`fitColumns` caps its content fit there). A person may drag it wider, to read a
+ *  long campaign name, up to `FIRST_COL_DRAG_MAX` (grid audit B4: it stopped at 360). */
 export const FIRST_COL_MIN = 300
 export const FIRST_COL_MAX = 360
+export const FIRST_COL_DRAG_MAX = 720
 
 export interface BuildColDefsInput<T> {
   columns: readonly GridColumn<T>[]
@@ -102,8 +105,7 @@ export function buildColDefs<T>(input: BuildColDefsInput<T>): ColDef[] {
     suppressMovable: true,
     initialWidth: widthOf(FIRST_COL) ?? FIRST_COL_MIN,
     minWidth: FIRST_COL_MIN,
-    maxWidth: FIRST_COL_MAX,
-    suppressAutoSize: widthOf(FIRST_COL) != null,
+    maxWidth: FIRST_COL_DRAG_MAX,
     // The legacy `th.nm { width: 300px }` took its content width and never the table's slack — the extra
     // width of a narrow grid went to the OTHER columns (measured: identity 300 on Budget Manager, 328.5 on the
     // campaign pages, whatever the box). So the stretch-to-fit leaves this column alone.
@@ -142,7 +144,9 @@ export function buildColDefs<T>(input: BuildColDefsInput<T>): ColDef[] {
       headerClass: ['nds-ws-th', `nds-ws-th-${align}`, ...(align === 'num' ? ['nds-ag-head-num'] : []), ...(pinned ? ['fzr', ...(c.key === fzr0 ? ['fzr0'] : [])] : [])],
       ...(widthOf(c.key) != null ? { initialWidth: widthOf(c.key) } : c.width != null ? { initialWidth: c.width } : {}),
       ...(c.width != null ? { minWidth: c.width, maxWidth: c.width, resizable: false } : {}),
-      suppressAutoSize: fixed,
+      // Only a FIXED column (its own `width`) refuses a fit to its content: a saved width is skipped by the grid's own
+      // fit, and a double-click on its handle must still fit it (grid audit B11).
+      suppressAutoSize: c.width != null,
       suppressSizeToFit: fixed,
       ...initialSort(c.key),
     }

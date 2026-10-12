@@ -250,6 +250,15 @@
   justify-content: center;
 }
 
+/* The resize handle shows itself (grid audit B10): the theme turns the handle's own mark off — the header partition is
+   the resting mark — so a person could not tell where to grab. On the pointer, and while dragging, the handle draws an
+   accent bar (AG's own height for it). Only a resizable column has a handle. */
+.nds-ag-wrap .ag-header-cell-resize:hover,
+.nds-ag-wrap .ag-header-cell-resize:active {
+  --ag-header-column-resize-handle-width: var(--nds-grid-partition-w);
+  --ag-header-column-resize-handle-color: var(--nds-grid-accent);
+}
+
 /* PN.1 — compact density tightens the cell's horizontal padding too. The theme sets cell padding
    once, so the density-specific value lands here, keyed off the wrapper's `data-density`. AG sets
    this variable on its root wrapper, hence the selector. (AG renders the padding one pixel under

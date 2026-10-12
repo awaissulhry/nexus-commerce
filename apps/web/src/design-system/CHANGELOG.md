@@ -1,3 +1,21 @@
+## Grid widths: a width a person sets stays — 2026-10-13
+
+Grid audit 2026-10-12, wave 2 PR4a (B3–B5, B8–B12, C5, F10). One policy in the engine (`grid/columns/columnWidths.ts`,
+docs/GRID.md §5):
+- **`NexusGrid`**: a definition's `width` / `flex` reach AG as `initialWidth` / `initialFlex` (a fixed column — not
+  resizable, or min = max — keeps `width`), so a rebuilt definition never resets a dragged width. The sheet's own
+  `widthsAsDefaults` moved here. A `plain` grid re-fits only when its width changes, never during a drag, and holds
+  every column the person sized (it reset all of them when two-line cells re-wrapped). Its `autoSizeStrategy` is one
+  object for the grid's life (AG warned on every render). The resize handle shows an accent bar under the pointer.
+- **`DataGrid`**: a drag or a handle double-click is held by every later fit, on every DataGrid (it snapped back when
+  the box changed); fits run on a width change only, never mid-drag; a widthed column can be fitted by double-click
+  (no `suppressAutoSize`); the header is refreshed only when a JSX label or the select-all state changes, and never
+  mid-drag (a refresh on every parent render could end a drag).
+- **`WorkspaceGrid`**: the stretch to the card keeps running after the first drag (it turned off, leaving a blank
+  strip), shares the slack only among unsized columns above their content (it reset every column to 200 first), runs
+  on a width change only and never mid-drag. The identity column can be dragged to 720 (stopped at 360); a saved
+  width can be re-fitted by double-click.
+
 ## Grid alignment: a header sits on its cells' side, in every engine — 2026-10-13
 
 Grid audit 2026-10-12 (A1–A9, A12), the Owner's rule 1A: words left, numbers right, the header on its own column's side.
