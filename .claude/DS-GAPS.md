@@ -4345,3 +4345,7 @@ The approved accessibility follow-up is complete: held ScopeBar wrapper/ring is 
 - CLOSED S1: selection-bar labels hide by measured fit (`GridSelectionActions` `data-fit`), not by a 1320 px card width.
 - CLOSED S6: Listbox trigger label after a leading chip starts at the chip (`components/listbox-rows.css`).
 - CHECKED M11: the bottom-left "N" is Next.js's dev-tools button (`nextjs-portal` shadow root, "Open Next.js Dev Tools"), not the app; it is not drawn under `next start`. No change.
+
+## 2026-10-12 — Bid page Change bid, lane BIDCHANGE
+- CLOSED: `ReviewChangesModal` had no place for a form above its table (a bulk change's How and value, its table worked out again on every key) — `lead` on the modal and on `ReviewChangesPanel`, and `leadHeld`: Save waits on the form in the host's words (`saveHeldReason` `lead`). Used by the Bid page's Change bid (`bid/bids/ChangeBidForm.tsx`).
+- ✅ RESOLVED (ads filter bar, 2026-10-12) — **FilterBar could not serve a 4-list filter on the Bid / Keyword Harvest / Negative Targeting pages.** Its multiselect triggers were named only "All" (no label link), a counted option's search matched its id (the label is a node), an empty list could only be `disabled` (silent), and hidden it said nothing of what filters. Added `MultiSelect labelledBy` + `heldReason`, `OptionListItem.searchText`, `FilterPanel summary` / `open` / `onOpenChange` (Clear in the hidden header), wired through `FilterBar` (`filterSummary`). Web/Factory mirrored — apps/web/src/design-system/patterns/FilterBar.tsx

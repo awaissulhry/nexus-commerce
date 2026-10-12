@@ -35,7 +35,8 @@ import { LEGACY_WORKSPACE_ID, workspaceContext } from '@nexus/database/workspace
 import { resolveAutonomy } from '../ads-autonomy.js'
 import { negativeBuilderPlaces, producedActionTypes } from '../ads-rule-adapter.service.js'
 import { resolveAssignedCampaignIds } from '../ads-rule-scope-resolver.js'
-import { expandProductScope } from '../ads-scope-reach.js'
+import { idIn, mergeIds, type ScopeIdLists } from '../ads-scope-lists.js'
+import { expandProductScope, unknownScopeId } from '../ads-scope-reach.js'
 import { strategyMarket } from '../ads-strategy/bids.js'
 
 /**
@@ -70,7 +71,11 @@ import { withAskRows } from './asks.js'
 
 // ── The query ───────────────────────────────────────────────────────────────────────────────────────────────────
 
-export interface WasteScope {
+/**
+ * The scope of every read: market, portfolio, product (its family), campaign, ad group — each also a list since the scope
+ * filter (2026-10-12): `portfolioIds` … merged with the singular (ads-scope-lists.ts); OR inside a list, AND across lists.
+ */
+export interface WasteScope extends ScopeIdLists {
   channel?: 'AMAZON'
   market?: string | null
   portfolioId?: string | null
@@ -78,6 +83,9 @@ export interface WasteScope {
   campaignId?: string | null
   adGroupId?: string | null
 }
+
+/** A scope as the row builders take it: the products resolved to their family roots (checkScope), `idle` for every place. */
+export type ResolvedScope = WasteScope & { roots?: readonly string[] | null; idle?: boolean }
 
 export interface WasteQuery extends WasteScope {
   kind?: KindFilter
@@ -276,23 +284,22 @@ const cents = (micros: unknown) => Math.round(Number(micros ?? 0) / 10_000)
 const num = (v: unknown) => Number(v ?? 0)
 const jsonObj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {})
 
-/** Scope ids that are not this business's read as not found, as on the Bid page. */
-export async function checkScope(s: WasteScope): Promise<{ ok: true; market: string | null; root: string | null } | { ok: false; status: 400 | 404; error: string }> {
+/**
+ * Scope ids that are not this business's read as not found, as on the Bid page (ads-scope-reach.ts unknownScopeId: every
+ * id of every list, the first unknown named). `roots`: the products asked, each as its family root.
+ */
+export async function checkScope(s: WasteScope): Promise<{ ok: true; market: string | null; roots: string[] | null } | { ok: false; status: 400 | 404; error: string }> {
   if (s.channel && s.channel !== 'AMAZON') return { ok: false, status: 400, error: 'Only Amazon is read here yet; eBay comes later (PLAN step 4).' }
   const market = s.market ? marketCode(s.market) : null
   if (s.market && !market) return { ok: false, status: 400, error: `market: ${s.market} is not a market code` }
-  if (s.campaignId && !(await prisma.campaign.findUnique({ where: { id: s.campaignId }, select: { id: true } }))) return { ok: false, status: 404, error: `No campaign ${s.campaignId} in this business.` }
-  if (s.adGroupId) {
-    const g = await prisma.adGroup.findUnique({ where: { id: s.adGroupId }, select: { campaignId: true } })
-    if (!g || (s.campaignId && g.campaignId !== s.campaignId)) return { ok: false, status: 404, error: `No ad group ${s.adGroupId} in this business${s.campaignId ? ' and campaign' : ''}.` }
-  }
-  if (s.portfolioId && !(await prisma.campaign.findFirst({ where: { portfolioId: s.portfolioId }, select: { id: true } }))) return { ok: false, status: 404, error: `No portfolio ${s.portfolioId} in this business.` }
-  let root: string | null = null
-  if (s.productId) {
-    if (!(await prisma.product.findUnique({ where: { id: s.productId }, select: { id: true } }))) return { ok: false, status: 404, error: `No product ${s.productId} in this business.` }
-    root = (await productFamily(s.productId))?.root ?? s.productId
-  }
-  return { ok: true, market, root }
+  const products = mergeIds(s.productId, s.productIds)
+  const unknown = await unknownScopeId({
+    campaignIds: mergeIds(s.campaignId, s.campaignIds), adGroupIds: mergeIds(s.adGroupId, s.adGroupIds),
+    portfolioIds: mergeIds(s.portfolioId, s.portfolioIds), productIds: products,
+  })
+  if (unknown) return { ok: false, status: 404, error: unknown }
+  const roots = products ? [...new Set(await Promise.all(products.map(async (id) => (await productFamily(id))?.root ?? id)))] : null
+  return { ok: true, market, roots }
 }
 
 // ── The memo: one market's facts per business, a short while ───────────────────────────────────────────────────
@@ -1028,15 +1035,18 @@ function rulesReaching(f: WasteFacts, adGroupId: string, kind: 'pause' | 'negate
   }, { marketplace: c.market, campaignId: c.id, portfolioId: c.portfolioId, productIds: g.productIds })).map((r) => ({ id: r.id, name: r.name }))
 }
 
-/** The scope filter on one place: a place that runs (unless `idle`: one row's detail and the history read every place). */
-export function inScope(f: WasteFacts, adGroupId: string, s: WasteScope & { root?: string | null; idle?: boolean }): boolean {
+/**
+ * The scope filter on one place: a place that runs (unless `idle`: one row's detail and the history read every place),
+ * inside every dimension named (its ad group, campaign, portfolio one of the list; a product family among its campaign's).
+ */
+export function inScope(f: WasteFacts, adGroupId: string, s: ResolvedScope): boolean {
   const g = f.adGroups.get(adGroupId)
   if (!g || (!g.live && !s.idle)) return false
   const c = f.campaigns.get(g.campaignId)!
-  if (s.adGroupId && s.adGroupId !== g.id) return false
-  if (s.campaignId && s.campaignId !== c.id) return false
-  if (s.portfolioId && s.portfolioId !== c.portfolioId) return false
-  if (s.root && !(f.ownership.get(c.id)?.productIds ?? []).includes(s.root)) return false
+  if (!idIn(g.id, s.adGroupId, s.adGroupIds)) return false
+  if (!idIn(c.id, s.campaignId, s.campaignIds)) return false
+  if (!idIn(c.portfolioId, s.portfolioId, s.portfolioIds)) return false
+  if (s.roots?.length && !(f.ownership.get(c.id)?.productIds ?? []).some((p) => s.roots!.includes(p))) return false
   return true
 }
 
@@ -1053,7 +1063,7 @@ export function servingPlaces(f: WasteFacts, key: string, except: string | null)
 }
 
 /** Every row the facts hold for places that run inside the scope (no show, kind, owner or text filter yet). */
-export function buildWasteRows(f: WasteFacts, s: WasteScope & { root?: string | null; idle?: boolean }): WasteRow[] {
+export function buildWasteRows(f: WasteFacts, s: ResolvedScope): WasteRow[] {
   const now = f.now.getTime()
   const rows: WasteRow[] = []
   const factsFor = (adGroupId: string) => {
@@ -1222,7 +1232,7 @@ export function buildWasteRows(f: WasteFacts, s: WasteScope & { root?: string | 
  * The standing negatives of the scope: an ad group's own where the ad group runs inside the scope, a campaign's where
  * one of its running ad groups is inside it. The Stopped view and the Wasting view's "negated" tile read this one list.
  */
-export function negativesInScope(f: WasteFacts, s: WasteScope & { root?: string | null; idle?: boolean }): TargetFact[] {
+export function negativesInScope(f: WasteFacts, s: ResolvedScope): TargetFact[] {
   const out: TargetFact[] = []
   for (const [adGroupId, list] of f.negByGroup) if (inScope(f, adGroupId, s)) out.push(...list)
   const campaignsIn = new Set([...f.adGroups.values()].filter((g) => inScope(f, g.id, s)).map((g) => g.campaignId))
@@ -1291,10 +1301,13 @@ export function criteriaOf(f: WasteFacts, market: string | null): WasteCriteria 
 
 /** The markets with Sponsored Products campaigns (not archived) in this business, narrowed by a campaign, ad group or portfolio scope. */
 async function adsMarkets(s: WasteScope): Promise<string[]> {
+  const campaignIds = mergeIds(s.campaignId, s.campaignIds)
+  const portfolioIds = mergeIds(s.portfolioId, s.portfolioIds)
+  const adGroupIds = mergeIds(s.adGroupId, s.adGroupIds)
   const rows = await prisma.campaign.findMany({
     where: {
       status: { not: 'ARCHIVED' }, OR: [{ adProduct: 'SPONSORED_PRODUCTS' }, { adProduct: null, type: 'SP' }],
-      ...(s.campaignId ? { id: s.campaignId } : {}), ...(s.portfolioId ? { portfolioId: s.portfolioId } : {}), ...(s.adGroupId ? { adGroups: { some: { id: s.adGroupId } } } : {}),
+      ...(campaignIds ? { id: { in: campaignIds } } : {}), ...(portfolioIds ? { portfolioId: { in: portfolioIds } } : {}), ...(adGroupIds ? { adGroups: { some: { id: { in: adGroupIds } } } } : {}),
     },
     select: { marketplace: true }, distinct: ['marketplace'],
   })
@@ -1305,18 +1318,18 @@ async function adsMarkets(s: WasteScope): Promise<string[]> {
  * The scope checked, and each market's facts (one market's are reused a short while: marketWasteFacts). No market: every
  * market with Amazon ads in this business, one market's facts each (rows keep their own market and currency).
  */
-export async function scopedFacts(q: WasteScope, now: Date): Promise<{ ok: true; facts: WasteFacts[]; market: string | null; root: string | null } | { ok: false; status: 400 | 404; error: string }> {
+export async function scopedFacts(q: WasteScope, now: Date): Promise<{ ok: true; facts: WasteFacts[]; market: string | null; roots: string[] | null } | { ok: false; status: 400 | 404; error: string }> {
   const scope = await checkScope(q)
   if ('error' in scope) return scope
   const markets = scope.market ? [scope.market] : await adsMarkets(q)
   const facts = await Promise.all(markets.map((m) => marketWasteFacts(m, now)))
-  return { ok: true, facts, market: scope.market, root: scope.root }
+  return { ok: true, facts, market: scope.market, roots: scope.roots }
 }
 
-async function scopedRows(q: WasteQuery, now: Date): Promise<{ ok: true; facts: WasteFacts[]; all: WasteRow[]; market: string | null; root: string | null } | { ok: false; status: 400 | 404; error: string }> {
+async function scopedRows(q: WasteQuery, now: Date): Promise<{ ok: true; facts: WasteFacts[]; all: WasteRow[]; market: string | null; roots: string[] | null } | { ok: false; status: 400 | 404; error: string }> {
   const out = await scopedFacts(q, now)
   if ('error' in out) return out
-  return { ...out, all: out.facts.flatMap((f) => buildWasteRows(f, { ...q, root: out.root })) }
+  return { ...out, all: out.facts.flatMap((f) => buildWasteRows(f, { ...q, roots: out.roots })) }
 }
 
 /** Several markets' criteria in one: the shared window; the bar of each market (a strategy where one names it). */
@@ -1354,7 +1367,7 @@ export async function readWasteRows(q: WasteQuery, now: Date = new Date()): Prom
   const filtered = out.all.filter((r) => ownerMatches(r.owner, q.owner) && textMatches(r, q.q))
   // The negated tile under the same owner and text filters as the rows: the Stopped view's own predicate (its NEGATED
   // rows), each market's added up (counts, never money). Clashes are rows (their `clash`), counted by totalsOf.
-  const scope = { ...q, root: out.root }
+  const scope = { ...q, roots: out.roots }
   const negated = out.facts.reduce((n, f) => n + filterStopped(buildStoppedRows(f, scope).rows, q.owner, q.q).filter((r) => r.state === 'NEGATED').length, 0)
   const totals = totalsOf(filtered, show, { negated })
   const matching = withAskCounts(filtered).filter((r) => showMatches(r, show) && kindMatches(r, kind)).sort(compareRows(q.sort))

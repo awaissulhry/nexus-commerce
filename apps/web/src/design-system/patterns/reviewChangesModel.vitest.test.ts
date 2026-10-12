@@ -43,6 +43,14 @@ describe('reviewChangesModel — Save is held, and says why', () => {
     expect(held({ state: { phase: 'saving' } })).toBe('Saving')
     expect(held({ state: { phase: 'done', results: {} } })).toBe('Already saved')
   })
+  it('waits on the form above the table in the host\'s words: after the read, before nothing to save and problems', () => {
+    expect(held({ lead: 'Type a bid' })).toBe('Type a bid')
+    expect(held({ lead: 'Type a bid', count: 0, problems: 1, raises: 1 })).toBe('Type a bid')
+    expect(held({ lead: 'Type a bid', state: { phase: 'reading' } })).toBe("Reading today's values first")
+    expect(held({ lead: 'Type a bid', state: { phase: 'done', results: {} } })).toBe('Already saved')
+    expect(held({ lead: null })).toBe(null)
+    expect(held({ lead: '' })).toBe(null)
+  })
 })
 
 describe('reviewChangesModel — one table', () => {

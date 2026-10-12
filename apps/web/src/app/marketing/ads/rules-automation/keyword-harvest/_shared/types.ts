@@ -10,6 +10,7 @@
  * The destination tree's types are the DestinationPicker's own (`rules-automation/_shared/destinationOptions.ts`, lane HDS):
  * re-exported here so a lane never declares them twice.
  */
+import type { ScopeApi } from '../../_shared/scopeFilter/scopeFilterModel'
 import type {
   DestinationAdGroup, DestinationCampaign, DestinationNewCampaign, DestinationPortfolio, DestinationStored, HarvestDestinations,
   HarvestHeld, HarvestMatch, HarvestRef, HarvestRole, HarvestTo,
@@ -200,6 +201,8 @@ export interface CandidateQuery {
   portfolioId?: string | null
   campaignId?: string | null
   adGroupId?: string | null
+  /** The page's filter bar: `portfolioIds`, `campaignIds`, `adGroupIds`, `productIds` (lists; OR inside, AND across). */
+  lists?: ScopeApi | null
   /** Default: the first seven of `ALL_STATES`. `['all']` = every state. */
   state?: readonly (CandidateState | 'all')[] | null
   owner?: OwnerKind | null

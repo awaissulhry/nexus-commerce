@@ -4,7 +4,9 @@
  * Bid page, Bids view — every change on a bid goes through the DS review (ReviewChangesModal): one table Now → New, a
  * counted Save, Done with Undo. This hook holds the review the view shows and saves each kind:
  *
- *   bid     a person's bid, sent now (PATCH ad-targets)            Undo: the bid before, sent again
+ *   adjust  Change bid, one keyword or many (bulk-bid): Set to ·   Undo: each change through the change feed
+ *           Raise / Lower by an amount or a percent, an optional
+ *           limit — a form above the table, worked out again on every key (adjustModel.ts)
  *           one rule with Apply (the Owner's decision): whoever sets the bid, it goes; a keyword the brain runs at
  *           Auto goes Manual with it (and back on Undo), a rule / plan / engine row says who may move it next
  *   undo    one change of the History, put back (the change feed)  —
@@ -14,19 +16,21 @@
  *   mode    Auto / Manual for one keyword                          Undo: the other way
  *   goal    the keyword's own target ACoS / max / top of search   Undo: the values before (the brain's settings)
  *
- * "Now" is read again before Save where the server can say it (a bid, a lock); the plan words are pure
- * (suggestedModel.ts, goalModel.ts, bidsModel.ts).
+ * "Now" is read again before Save where the server can say it (one keyword's bid, a lock); the plan words are pure
+ * (adjustModel.ts, suggestedModel.ts, goalModel.ts, bidsModel.ts).
  */
-import { createElement, useCallback, useState, type ReactNode } from 'react'
+import { createElement, useCallback, useRef, useState, type ReactNode } from 'react'
 import { Button } from '@/design-system/primitives'
 import type { ReviewChange, ReviewResult, ReviewState } from '@/design-system/patterns'
 import type { WriteResult } from '../../../_shared/adsWrite'
-import { money, relWords } from '../_shared/format'
-import { readCampaignLock, readOneBid, readWhy, saveGoalSetting, sendBid, sendBids, setBidLock, setKeywordMode, undoChange } from './bidsApi'
+import { currencySymbol, money, relWords } from '../_shared/format'
+import { adjustForm, adjustNothing, adjustPlan, adjustStart, adjustSummary, changeTitle, sendLabel, tableOrder, type AdjustDraft } from './adjustModel'
+import { BID_REASON, readCampaignLock, readOneBid, readWhy, saveGoalSetting, sendBids, setBidLock, setKeywordMode, undoChange, type BidReason } from './bidsApi'
 import { AUTO_WORDS, modeChangeLine, type BidGridRow } from './bidsModel'
 import type { BidAsk } from './BidDetail'
+import { ChangeBidForm } from './ChangeBidForm'
 import { GOAL_KEYS, GOAL_LABEL, goalBody, goalChanges, goalHeld, goalRaises, goalValueWords, type GoalChange, type InheritedGoal } from './goalModel'
-import { applyHeld, applyLabel, applyPlan, applySummary, BRAIN_STOPS, movesNext, skipWords, type SuggestedCell } from './suggestedModel'
+import { applyHeld, applyLabel, applyPlan, applySummary, skipWords, type SuggestedCell } from './suggestedModel'
 
 export interface BidReview {
   ask: BidAsk
@@ -42,6 +46,12 @@ export interface BidReview {
   /** Done's Undo: puts the saved values back and says how each went. */
   undo: (() => Promise<Record<string, ReviewResult>>) | null
   undoing: boolean
+  /** The dialog's own title ("Change 12 bids"); unset = the review's count. */
+  title?: string
+  /** Change bid: the form above the table, why Save waits on it, and what it was worked out from. */
+  lead?: ReactNode
+  leadHeld?: string | null
+  adjust?: { rows: BidGridRow[]; draft: AdjustDraft }
 }
 
 const ACK = 'I understand automation may change this bid again.'
@@ -50,6 +60,45 @@ const ACK = 'I understand automation may change this bid again.'
 const resultWords = (r: WriteResult): string => (r.ok ? (r.outcome === 'queued' ? 'Sent' : 'Saved') : r.reason ?? 'Not saved')
 const where = (r: BidGridRow) => `${r.campaign.name} · ${r.adGroup.name}`
 const bidWords = (cents: number | null | undefined, currency: string) => (typeof cents === 'number' ? money(cents, currency) : '—')
+
+/** A line that goes to Amazon: the bid it gets, and whether the brain's keyword goes Manual with it. */
+interface SendLine { row: BidGridRow; next: number | null; goesManual: boolean }
+
+/**
+ * Send bids now in one bulk call (Apply suggested and Change bid): each result in words; a keyword the brain runs at Auto
+ * goes Manual with its bid. Undo puts each change back through the change feed, and a keyword switched to Manual back
+ * to Auto.
+ */
+async function sendLines(lines: readonly SendLine[], reason: BidReason): Promise<{ results: Record<string, ReviewResult>; undo: BidReview['undo'] }> {
+  const results: Record<string, ReviewResult> = {}
+  const sent = await sendBids(lines.map((l) => ({ targetId: l.row.targetId, bidCents: l.next! })), reason)
+  const manual: string[] = []
+  for (const s of sent) {
+    const line = lines.find((l) => l.row.targetId === s.targetId)
+    let words = s.words
+    if (s.ok && line?.goesManual && line.row.auto === 'AUTO') {
+      const m = await setKeywordMode(s.targetId, 'MANUAL')
+      if (m.ok) manual.push(s.targetId)
+      else words = `${words} · still Auto: ${m.reason ?? 'not switched'}`
+    }
+    results[s.targetId] = { ok: s.ok, words }
+  }
+  const handles = sent.filter((s) => s.ok && s.actionLogId)
+  const undo = handles.length ? async () => {
+    const back: Record<string, ReviewResult> = {}
+    for (const s of handles) {
+      const u = await undoChange(s.actionLogId!)
+      let words = u.ok ? 'Undone' : u.reason ?? 'Not undone'
+      if (u.ok && manual.includes(s.targetId)) {
+        const m = await setKeywordMode(s.targetId, 'AUTO')
+        if (!m.ok) words = `Undone · still Manual: ${m.reason ?? 'not switched'}`
+      }
+      back[s.targetId] = { ok: u.ok, words }
+    }
+    return back
+  } : null
+  return { results, undo }
+}
 
 export function useBidReview({ market, canGoal, cellOf, after, onSetGoal }: {
   market: string | null
@@ -70,11 +119,41 @@ export function useBidReview({ market, canGoal, cellOf, after, onSetGoal }: {
   const goalOffer = (row: BidGridRow) => (goalHeld(row, market, canGoal) ? null
     : createElement(Button, { size: 'xs', variant: 'link', onClick: () => { setReview(null); onSetGoal(row) } }, 'Set a goal instead'))
 
+  /**
+   * Change bid's review, worked out from its rows and the form as typed: the table (the bids that change first, each one
+   * that stays with why), the counted Send, the form, and why Save waits on it. `locked` while the bids are sent.
+   */
+  const adjustFields = (rows: BidGridRow[], draft: AdjustDraft, locked = false): Pick<BidReview, 'adjust' | 'title' | 'changes' | 'problems' | 'summary' | 'saveLabel' | 'lead' | 'leadHeld'> => {
+    const plan = adjustPlan(rows, draft)
+    const single = plan.send.length === 1 ? plan.send[0] : null
+    const offer = single?.goesManual ? goalOffer(single.row) : null
+    const nothing = adjustNothing(plan)
+    return {
+      adjust: { rows, draft },
+      title: changeTitle(rows.length),
+      changes: tableOrder(plan.lines).map((l) => ({ id: l.row.targetId, where: where(l.row), what: l.row.text, now: bidWords(l.now, l.row.currency), next: bidWords(l.next, l.row.currency), note: l.note ?? undefined })),
+      problems: nothing ? [nothing] : [],
+      summary: createElement('span', null, adjustSummary(plan), offer ? ' ' : null, offer),
+      saveLabel: sendLabel(plan.send.length),
+      lead: createElement(ChangeBidForm, { form: adjustForm(rows, draft, currencySymbol), draft, locked, onDraft: setDraft }),
+      leadHeld: plan.input.held,
+    }
+  }
+  const fieldsRef = useRef(adjustFields)
+  fieldsRef.current = adjustFields
+  /** A key in the form: the table follows it. Nothing moves while the bids are sent or once they are. */
+  const setDraft = useCallback((draft: AdjustDraft) => setReview((v) => (v?.adjust && v.state.phase !== 'saving' && v.state.phase !== 'done'
+    ? { ...v, ...fieldsRef.current(v.adjust.rows, draft) } : v)), [])
+  /** The review on screen, for Try again: it keeps what was typed. */
+  const reviewRef = useRef(review)
+  reviewRef.current = review
+
   const ask = useCallback(async (a: BidAsk) => {
     const r = a.row
     const base = { ask: a, problems: [] as string[], undo: null, undoing: false, ackLabel: ACK, doneNote: undefined }
     // A market Nexus only reads: the controls are held there; a review that opens anyway says why and saves nothing (A1).
-    const blocked = a.kind === 'apply' ? null : r.writeBlock ?? null
+    // Apply and Change bid say it per line.
+    const blocked = a.kind === 'apply' || a.kind === 'adjust' ? null : r.writeBlock ?? null
 
     if (a.kind === 'lock') {
       setReview({
@@ -116,6 +195,30 @@ export function useBidReview({ market, canGoal, cellOf, after, onSetGoal }: {
         saveLabel: applyLabel(plan.send.length),
         doneVerb: 'sent',
       })
+      return
+    }
+
+    if (a.kind === 'adjust') {
+      // One keyword (its detail, or one ticked): "Now" and who sets it are read again first, as a bid always was; many
+      // keywords go with the rows the view keeps live.
+      const single = a.rows.length === 1
+      const kept = reviewRef.current?.ask === a ? reviewRef.current.adjust?.draft : undefined
+      setReview({
+        ...base,
+        ...adjustFields(a.rows, kept ?? adjustStart(a.rows)),
+        state: single ? { phase: 'reading' } : { phase: 'ready' },
+        doneVerb: 'sent',
+      })
+      if (!single) return
+      try {
+        const fresh = await readOneBid(r)
+        if (!fresh) throw new Error('This bid could not be read again.')
+        const conflicts = typeof fresh.bidNow === 'number' && typeof r.bidNow === 'number' && fresh.bidNow !== r.bidNow
+          ? [{ label: 'Bid now', was: money(r.bidNow, r.currency), now: money(fresh.bidNow, r.currency) }]
+          : []
+        const rows = [{ ...r, bidNow: fresh.bidNow, owner: fresh.owner, auto: fresh.auto ?? r.auto }]
+        setReview((v) => (v && v.ask === a && v.adjust ? { ...v, ...adjustFields(rows, v.adjust.draft), state: { phase: 'ready', conflicts } } : v))
+      } catch (e) { fail(a, e) }
       return
     }
 
@@ -165,26 +268,16 @@ export function useBidReview({ market, canGoal, cellOf, after, onSetGoal }: {
       return
     }
 
-    // A person's bid, or one change of the History put back: "Now" read again. A bid follows Apply's one rule: who moves
-    // it next is said on its line, and a keyword the brain runs at Auto goes Manual with it (A6).
-    const next = a.kind === 'bid' ? a.nextCents : a.line.from
-    const bidSummary = (row: Pick<BidGridRow, 'owner' | 'auto'>) => {
-      const who = a.kind === 'bid' ? movesNext(row) : { note: null, goesManual: false }
-      const offer = who.goesManual ? goalOffer(r) : null
-      return {
-        note: a.kind === 'undo' ? `Undo · ${relWords(a.line.at)}` : who.note ?? undefined,
-        summary: who.goesManual ? createElement('span', null, `Sends to Amazon now. ${BRAIN_STOPS}.`, offer ? ' ' : null, offer) : 'Sends to Amazon now.',
-      }
-    }
-    const first = bidSummary(r)
+    // One change of the History, put back: "Now" read again.
+    const next = a.line.from
     setReview({
       ...base,
-      changes: [{ id: r.targetId, where: where(r), what: r.text, now: bidWords(r.bidNow, r.currency), next: bidWords(next, r.currency), note: first.note }],
+      changes: [{ id: r.targetId, where: where(r), what: r.text, now: bidWords(r.bidNow, r.currency), next: bidWords(next, r.currency), note: `Undo · ${relWords(a.line.at)}` }],
       state: { phase: 'reading' },
       problems: blocked ? [blocked] : next == null ? ['The bid before this change is not known.'] : [],
-      summary: first.summary,
-      saveLabel: a.kind === 'undo' ? 'Undo 1 change' : 'Send 1 bid',
-      doneVerb: a.kind === 'undo' ? 'undone' : 'sent',
+      summary: 'Sends to Amazon now.',
+      saveLabel: 'Undo 1 change',
+      doneVerb: 'undone',
     })
     try {
       const fresh = await readOneBid(r)
@@ -195,56 +288,32 @@ export function useBidReview({ market, canGoal, cellOf, after, onSetGoal }: {
       const problems: string[] = []
       if (blocked) problems.push(blocked)
       if (next == null) problems.push('The bid before this change is not known.')
-      if (a.kind === 'bid' && fresh.bidNow === a.nextCents) problems.push('That is the bid now.')
-      const before = typeof fresh.bidNow === 'number' ? fresh.bidNow : null
-      // Who sets it now (read again): its line and the summary follow the fresh owner.
-      const now = bidSummary({ owner: fresh.owner, auto: fresh.auto ?? r.auto })
       setReview((v) => v && v.ask === a ? {
         ...v,
-        changes: v.changes.map((c) => ({ ...c, now: bidWords(fresh.bidNow, r.currency), note: now.note })),
-        summary: now.summary,
+        changes: v.changes.map((c) => ({ ...c, now: bidWords(fresh.bidNow, r.currency) })),
         problems,
         state: { phase: 'ready', conflicts },
-        undo: a.kind === 'bid' && before !== null ? async () => {
-          const back = await sendBid(r.targetId, before)
-          return { [r.targetId]: { ok: back.ok, words: back.ok ? 'Undone' : back.reason ?? 'Not undone' } }
-        } : null,
       } : v)
     } catch (e) { fail(a, e) }
   }, [market, canGoal, cellOf, onSetGoal]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const save = useCallback(async () => {
     const v = review
-    if (!v || v.state.phase !== 'ready' || v.problems.length) return
+    if (!v || v.state.phase !== 'ready' || v.problems.length || v.leadHeld) return
     const a = v.ask
-    setReview({ ...v, state: { phase: 'saving', done: 0 } })
-    const results: Record<string, ReviewResult> = {}
+    // Change bid: the form holds still while its bids go, and "Saving…" counts nothing (its table holds the bids that stay).
+    setReview({ ...v, ...(v.adjust ? adjustFields(v.adjust.rows, v.adjust.draft, true) : {}), state: v.adjust ? { phase: 'saving' } : { phase: 'saving', done: 0 } })
+    let results: Record<string, ReviewResult> = {}
     let undo: BidReview['undo'] = null
     let doneNote: ReactNode | undefined
+    // Change bid's Done table lists the bids that went, not the ones that stayed.
+    let doneChanges: ReviewChange[] | null = null
 
-    if (a.kind === 'bid' || a.kind === 'undo' || a.kind === 'lock') {
-      const out = a.kind === 'bid' ? await sendBid(a.row.targetId, a.nextCents)
-        : a.kind === 'undo' ? (a.line.undo.kind === 'undo' ? await undoChange(a.line.undo.changeId) : { ok: false, outcome: 'refused' as const, reason: a.line.undo.reason })
-          : await setBidLock(a.row.campaign.id, a.lock)
+    if (a.kind === 'undo' || a.kind === 'lock') {
+      const out = a.kind === 'undo' ? (a.line.undo.kind === 'undo' ? await undoChange(a.line.undo.changeId) : { ok: false, outcome: 'refused' as const, reason: a.line.undo.reason })
+        : await setBidLock(a.row.campaign.id, a.lock)
       const id = v.changes[0]?.id ?? 'change'
       results[id] = { ok: out.ok, words: a.kind === 'undo' && out.ok ? 'Undone' : resultWords(out) }
-      // A keyword the brain runs at Auto goes Manual with a person's bid (Apply's rule), and back on Undo.
-      const manual = out.ok && a.kind === 'bid' && movesNext(a.row).goesManual && a.row.auto === 'AUTO'
-      if (manual) {
-        const m = await setKeywordMode(a.row.targetId, 'MANUAL')
-        if (!m.ok) results[id] = { ok: true, words: `${results[id].words} · still Auto: ${m.reason ?? 'not switched'}` }
-      }
-      if (out.ok && a.kind === 'bid' && v.undo) {
-        const sendBack = v.undo
-        undo = manual ? async () => {
-          const back = await sendBack()
-          if (back[id]?.ok) {
-            const m = await setKeywordMode(a.row.targetId, 'AUTO')
-            if (!m.ok) back[id] = { ok: true, words: `Undone · still Manual: ${m.reason ?? 'not switched'}` }
-          }
-          return back
-        } : sendBack
-      }
       if (out.ok && a.kind === 'lock') {
         undo = async () => {
           const back = await setBidLock(a.row.campaign.id, !a.lock)
@@ -252,35 +321,14 @@ export function useBidReview({ market, canGoal, cellOf, after, onSetGoal }: {
         }
       }
     } else if (a.kind === 'apply') {
-      const plan = applyPlan(a.rows, cellOf)
-      const sent = await sendBids(plan.send.map((l) => ({ targetId: l.row.targetId, bidCents: l.next! })))
-      const manual: string[] = []
-      for (const s of sent) {
-        const line = plan.send.find((l) => l.row.targetId === s.targetId)
-        let words = s.words
-        if (s.ok && line?.goesManual && line.row.auto === 'AUTO') {
-          const m = await setKeywordMode(s.targetId, 'MANUAL')
-          if (m.ok) manual.push(s.targetId)
-          else words = `${words} · still Auto: ${m.reason ?? 'not switched'}`
-        }
-        results[s.targetId] = { ok: s.ok, words }
-      }
-      const handles = sent.filter((s) => s.ok && s.actionLogId)
-      if (handles.length) {
-        undo = async () => {
-          const back: Record<string, ReviewResult> = {}
-          for (const s of handles) {
-            const u = await undoChange(s.actionLogId!)
-            let words = u.ok ? 'Undone' : u.reason ?? 'Not undone'
-            if (u.ok && manual.includes(s.targetId)) {
-              const m = await setKeywordMode(s.targetId, 'AUTO')
-              if (!m.ok) words = `Undone · still Manual: ${m.reason ?? 'not switched'}`
-            }
-            back[s.targetId] = { ok: u.ok, words }
-          }
-          return back
-        }
-      }
+      const out = await sendLines(applyPlan(a.rows, cellOf).send, BID_REASON.suggested)
+      results = out.results
+      undo = out.undo
+    } else if (a.kind === 'adjust' && v.adjust) {
+      const out = await sendLines(adjustPlan(v.adjust.rows, v.adjust.draft).send, BID_REASON.change)
+      results = out.results
+      undo = out.undo
+      doneChanges = v.changes.filter((c) => c.id in results)
     } else if (a.kind === 'mode') {
       const out = await setKeywordMode(a.row.targetId, a.next)
       const word = a.next === 'AUTO' ? AUTO_WORDS.on : AUTO_WORDS.off
@@ -321,9 +369,9 @@ export function useBidReview({ market, canGoal, cellOf, after, onSetGoal }: {
       }
     }
 
-    setReview((cur) => (cur && cur.ask === a ? { ...cur, state: { phase: 'done', results }, undo, doneNote } : cur))
+    setReview((cur) => (cur && cur.ask === a ? { ...cur, ...(doneChanges ? { changes: doneChanges } : {}), state: { phase: 'done', results }, undo, doneNote } : cur))
     await after()
-  }, [review, market, cellOf, after])
+  }, [review, market, cellOf, after]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const undoSaved = useCallback(async () => {
     const v = review

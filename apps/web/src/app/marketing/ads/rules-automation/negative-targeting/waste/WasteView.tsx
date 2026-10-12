@@ -4,8 +4,10 @@
  * Negative Targeting page (2026-10-11, lane NVIEW) — the Wasting and the Stopped views: ONE NexusGrid card each, built
  * like /products (ProductsNextClient) and the Bid page's Bids view.
  *
- *   toolbar   [Wasting | Stopped | Rules] · count · Search · All · Keywords · Search terms · Scope ▾ · filter chips
+ *   toolbar   [Wasting | Stopped | Rules] · count · Search · All · Keywords · Search terms · Show ▾
  *                                                                             Views · Customise · Export
+ *   filter    the page's filter bar (Portfolio · Campaign · Ad group · Product, above the tiles): every read sends its
+ *             lists — the rows, the totals, "Select all N", Prev / Next and Export follow it
  *   ticked    Selected N · "Select all M that match" · the verbs, each counted (a verb that fits none is held and says
  *             why) · ⋯ · Clear
  *   grid      server pages (`?page=`, `?sort=`), checkboxes, header select-page; a row (click or Enter) opens its record
@@ -29,6 +31,8 @@ import {
 } from '@/design-system/grid'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useDetailParam } from '../../../_shared/useDetailParam'
+import { FILTER_EMPTY } from '../../_shared/scopeFilter/scopeFilterModel'
+import type { ScopeView } from '../../_shared/scopeFilter/useScopeFilter'
 import {
   STOPPED_COLUMN_SPECS, WASTE_COLUMN_SPECS, stoppedColumns, stoppedGridRow, wasteColumns, wasteGridRow, withVerbHandler,
   type CellContext, type CellHandlers, type StoppedGridRow, type WasteGridRow,
@@ -36,11 +40,11 @@ import {
 import { RowDetail } from './RowDetail'
 import { readAllRows, readAllStopped, readRowIds, readRows, readStopped } from './wasteApi'
 import {
-  DEFAULT_PAGE_SIZE, NOT_KEPT, waitingCount, detailTabOf, emptyWords, PAGE_SIZES, plural, scopeKey, scopeOptions, skipIds, sortOf, sortParam, stoppedBulkCounts, stoppedBulkPlan,
+  DEFAULT_PAGE_SIZE, NOT_KEPT, waitingCount, detailTabOf, emptyWords, PAGE_SIZES, plural, skipIds, sortOf, sortParam, stoppedBulkCounts, stoppedBulkPlan,
   stoppedChips, stoppedCsvRow, STOPPED_BULK_LABEL, STOPPED_CSV_HEADERS, waitingOf, WASTE_BULK_LABEL, WASTE_CSV_HEADERS, wasteBulkCounts, wasteBulkPlan, wasteCsvRow,
-  type KindFilter, type ListQuery, type Picked, type RowVerbView, type Scope, type StoppedBulk, type WasteBulk,
+  type KindFilter, type ListQuery, type Picked, type RowVerbView, type StoppedBulk, type WasteBulk,
 } from './wasteModel'
-import type { Ref, StoppedRow, StoppedTotals, WasteRow, WasteTotals } from './wasteTypes'
+import type { StoppedRow, StoppedTotals, WasteRow, WasteTotals } from './wasteTypes'
 import { useWasteReview, type WasteAsk } from './useWasteReview'
 import styles from '../negatives.module.css'
 
@@ -53,7 +57,8 @@ export interface WasteViewProps {
   show: string
   kind: KindFilter
   q: string
-  scope: Scope | null
+  /** The page's filter bar: every read sends its lists. */
+  scope?: ScopeView
   sort: string | null
   page: number
   pageSize: number
@@ -95,7 +100,8 @@ export function WasteView(props: WasteViewProps) {
   const phone = useNarrow()
   const { toast } = useToast()
   const wasting = view === 'wasting'
-  const query: ListQuery = useMemo(() => ({ market, scope, kind, show, q, sort: wasting ? sort : null, page, pageSize }), [market, scope, kind, show, q, sort, page, pageSize, wasting])
+  const scopeKey = scope?.key ?? ''
+  const query: ListQuery = useMemo(() => ({ market, lists: scope?.api ?? null, kind, show, q, sort: wasting ? sort : null, page, pageSize }), [market, scopeKey, kind, show, q, sort, page, pageSize, wasting]) // eslint-disable-line react-hooks/exhaustive-deps
   const queryKey = JSON.stringify(query)
 
   /* ── the read ── */
@@ -104,9 +110,6 @@ export function WasteView(props: WasteViewProps) {
   const [reading, setReading] = useState(true)
   const [again, setAgain] = useState(0)
   const [version, setVersion] = useState(0)
-  const seen = useRef(new Map<string, { portfolio: Ref | null; campaign: Ref | null; adGroup: Ref | null }>())
-  const seenMarket = useRef(market)
-  if (seenMarket.current !== market) { seenMarket.current = market; seen.current = new Map() }
   const onTotalsRef = useRef(onTotals)
   onTotalsRef.current = onTotals
   useEffect(() => {
@@ -118,7 +121,6 @@ export function WasteView(props: WasteViewProps) {
           ? await readRows(query, ctl.signal).then((a) => ({ rows: a.rows.map(wasteGridRow), total: a.total, totals: a.totals }))
           : await readStopped(query, ctl.signal).then((a) => ({ rows: a.rows.map(stoppedGridRow), total: a.total, totals: a.totals }))
         if (ctl.signal.aborted) return
-        for (const r of out.rows) seen.current.set(`${r.campaign.id}|${r.adGroup?.id ?? ''}`, { portfolio: r.portfolio, campaign: r.campaign, adGroup: r.adGroup })
         setRead(out)
         setErr(null)
         setReading(false)
@@ -143,7 +145,10 @@ export function WasteView(props: WasteViewProps) {
   const byId = useMemo(() => new Map(rows.map((r) => [r.id, r])), [rows])
   const failed = !!err && !read
   const loading = !read && !err
-  const filtered = !!q.trim() || kind !== 'all' || !!scope || (wasting ? show !== 'wasting' : show !== 'all')
+  const scopeActive = !!scope?.active
+  /** The view's own filters (its toolbar); the page's filter bar is `scopeActive`. */
+  const ownFiltered = !!q.trim() || kind !== 'all' || (wasting ? show !== 'wasting' : show !== 'all')
+  const filtered = ownFiltered || scopeActive
 
   /* ── the record: ?row=&tab= ── */
   const detail = useDetailParam({ key: 'row', tabKey: 'tab' })
@@ -169,7 +174,7 @@ export function WasteView(props: WasteViewProps) {
   /* ── selection: kept across pages; "select all M that match" reaches past the page ── */
   const [picked, setPicked] = useState<Map<string, Picked<AnyRow>>>(new Map())
   const syncing = useRef(false)
-  useEffect(() => { setPicked(new Map()) }, [shapeKey, q, kind, show, scopeKey(scope)]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setPicked(new Map()) }, [shapeKey, q, kind, show, scopeKey]) // eslint-disable-line react-hooks/exhaustive-deps
   const onSelectionChanged = useCallback<NonNullable<NexusGridProps<AnyRow>['onSelectionChanged']>>((e) => {
     if (syncing.current) return
     const on = new Set(e.api.getSelectedRows().map((r) => r.id))
@@ -461,8 +466,6 @@ export function WasteView(props: WasteViewProps) {
   })()
 
   /* ── toolbar ── */
-  const scopeLabel = scope ? [...seen.current.values()].map((s) => (scope.level === 'pf' ? s.portfolio : scope.level === 'cp' ? s.campaign : s.adGroup)).find((r) => r?.id === scope.id)?.name ?? null : null
-  const scopeOpts = useMemo(() => scopeOptions(seen.current.values(), scope, scopeLabel), [read, scope]) // eslint-disable-line react-hooks/exhaustive-deps
   const totalsNow = read?.totals ?? null
   const chips = wasting
     ? [
@@ -481,14 +484,12 @@ export function WasteView(props: WasteViewProps) {
   const filterControls = (
     <>
       <SegmentedControl size="sm" ariaLabel="Kind" options={KIND_OPTIONS} value={kind} onChange={(v) => setQuery({ kind: v === 'all' ? null : v, page: null })} />
-      <Listbox size="sm" width={phone ? '100%' : 180} ariaLabel="Scope" searchable options={scopeOpts} value={scopeKey(scope) ?? ''} emptyLabel={market && market !== 'all' ? `All of ${market}` : 'All markets'}
-        onChange={(v) => setQuery({ scope: v || null, page: null })} />
       <Listbox size="sm" width={phone ? '100%' : 164} ariaLabel="Show" value={show}
         options={chips.map((c) => ({ value: c.id, label: c.label, title: c.title, trailing: c.count != null ? <span className={styles.count}>{c.count}</span> : undefined }))}
         onChange={(v) => setQuery({ show: v === (wasting ? 'wasting' : 'all') ? null : v, page: null })} />
     </>
   )
-  const activeFilters = [!!q.trim(), kind !== 'all', !!scope, wasting ? show !== 'wasting' : show !== 'all'].filter(Boolean).length
+  const activeFilters = [!!q.trim(), kind !== 'all', wasting ? show !== 'wasting' : show !== 'all'].filter(Boolean).length
   const toolbar = bulkBar ?? (
     <GridToolbar
       count={<span className={styles.inline}>{viewSwitch}{shownCount != null && !phone && <span className={styles.count}>{shownCount}</span>}</span>}
@@ -518,11 +519,16 @@ export function WasteView(props: WasteViewProps) {
     </GridToolbar>
   )
 
+  const clearScope = scope?.clear
   const noRowsParams = useMemo(() => {
     if (failed) return { title: wasting ? 'Wasting not read' : 'Stopped not read', message: err ?? '', action: { label: 'Try again', onClick: reload } }
+    // Only the page's filter bar narrows: say so, and clear it.
+    if (scopeActive && clearScope && !ownFiltered) return { title: FILTER_EMPTY.title, message: '', action: { label: FILTER_EMPTY.clear, onClick: () => clearScope() } }
     const w = emptyWords(view, show, filtered)
-    return { title: w.title, message: '', action: w.clear ? { label: 'Clear filters', onClick: () => setQuery({ q: null, kind: null, scope: null, show: null, page: null }) } : undefined }
-  }, [failed, err, reload, view, show, filtered, wasting, setQuery])
+    // Clear filters clears the view's own and the filter bar's in ONE address change (two in one tick lose the first).
+    const own = { q: null, kind: null, show: null, page: null }
+    return { title: w.title, message: '', action: w.clear ? { label: 'Clear filters', onClick: () => (scopeActive && clearScope ? clearScope(own) : setQuery(own)) } : undefined }
+  }, [failed, err, reload, view, show, filtered, ownFiltered, scopeActive, clearScope, wasting, setQuery])
 
   const pageCount = Math.max(1, Math.ceil(total / pageSize))
   const pagerShown = !!read && !failed && total > PAGE_SIZES[0]

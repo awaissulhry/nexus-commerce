@@ -19,6 +19,16 @@ describe('harvestApi — candidateSearch', () => {
   })
 })
 
+describe('harvestApi — the page\'s filter bar', () => {
+  it('sends its lists with the terms read (OR inside, AND across: the server\'s)', () => {
+    const s = new URLSearchParams(candidateSearch({ market: 'IT', lists: { campaignIds: 'c1,c2', adGroupIds: 'g1' } }))
+    expect(s.get('campaignIds')).toBe('c1,c2')
+    expect(s.get('adGroupIds')).toBe('g1')
+    expect(s.has('portfolioIds')).toBe(false)
+    expect(candidateSearch({ market: 'IT', lists: null })).toBe('market=IT')
+  })
+})
+
 describe('harvestApi — refusalOf', () => {
   it('uses the server words, else the status', () => {
     expect(refusalOf(409, { error: ' The plan moved. ' })).toBe('The plan moved.')

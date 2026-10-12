@@ -3,7 +3,12 @@
  * harvest action of the page on one route file. Contract: ~/nexus-archive/2026-10-10-ads-pages/02-harvest/HCORE-API.md.
  *
  *   GET  /api/advertising/harvest/candidates            the terms that sell, one row per term × product × market, with
- *                                                       their sources, destination, start bid, state, owner, skip, waiting
+ *                                                       their sources, destination, start bid, state, owner, skip, waiting;
+ *                                                       scope: productId, portfolioId, campaignId, adGroupId and (scope
+ *                                                       filter, 2026-10-12) their lists productIds, portfolioIds,
+ *                                                       campaignIds, adGroupIds — comma-separated, at most 500 each, a
+ *                                                       singular merged in as a list of one; OR inside, AND across; the
+ *                                                       rows and the totals follow it
  *   GET  /api/advertising/harvest/destinations          the product's portfolio → campaign → ad group tree (held, suggested)
  *   POST /api/advertising/harvest/preview               the change set step by step (writes nothing), with its planHash
  *   POST /api/advertising/harvest/apply                 ONE apply-harvest request (an approval, never a direct write);
@@ -30,6 +35,7 @@ import { z } from 'zod'
 import { financialPayloadCopy } from '../lib/auth/field-filter.js'
 import type { ResolvedPermissions } from '../lib/auth/rbac.js'
 import type { AdsActor } from '../services/advertising/ads-mutation.service.js'
+import { ID_LIST } from '../services/advertising/ads-scope-lists.js'
 import { requestPrincipal, ToolAccessError, type UserPrincipal } from '../services/agents/call-tool.js'
 import {
   HARVEST_MONEY, ITEM_INPUT, MAX_ITEMS, NEW_CAMPAIGN_INPUT, NEW_PORTFOLIO_INPUT,
@@ -46,6 +52,7 @@ const MARKET = z.string().trim().min(2).max(200)
 const CANDIDATES_QUERY = z.object({
   market: MARKET,
   productId: ID.optional(), portfolioId: ID.optional(), campaignId: ID.optional(), adGroupId: ID.optional(),
+  productIds: ID_LIST.optional(), portfolioIds: ID_LIST.optional(), campaignIds: ID_LIST.optional(), adGroupIds: ID_LIST.optional(),
   state: z.string().trim().max(400).optional(), owner: z.enum(['BRAIN', 'RULE', 'PERSON', 'NONE', 'brain', 'rule', 'person', 'none']).optional(),
   kind: z.enum(['keyword', 'asin']).optional(), q: z.string().trim().max(200).optional(),
   page: z.coerce.number().int().min(1).max(10_000).optional(), pageSize: z.coerce.number().int().min(1).max(500).optional(),

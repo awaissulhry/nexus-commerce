@@ -97,6 +97,18 @@ describe('reads', () => {
     expect((await get('/api/advertising/harvest/candidates')).json()).toMatchObject({ error: expect.stringMatching(/^market:/) })
   })
 
+  it('candidates: the scope filter\'s lists (2026-10-12) — trimmed, empty parts dropped, an id once, beside the singulars; 501 is a 400', async () => {
+    const r = await get('/api/advertising/harvest/candidates?market=IT&campaignIds=c1,%20c2,,c1&portfolioIds=PF-1&adGroupIds=g1&productId=p1&productIds=p2,p3')
+    expect(r.statusCode).toBe(200)
+    expect(last('harvestCandidates')?.[0]).toMatchObject({ market: 'IT', campaignIds: ['c1', 'c2'], portfolioIds: ['PF-1'], adGroupIds: ['g1'], productId: 'p1', productIds: ['p2', 'p3'] })
+    h.calls = []
+    const over = await get(`/api/advertising/harvest/candidates?market=IT&productIds=${Array.from({ length: 501 }, (_, i) => `p${i}`).join(',')}`)
+    expect(over.statusCode).toBe(400)
+    expect(over.json()).toMatchObject({ code: 'too_many', max: 500, path: 'productIds' })
+    expect(last('harvestCandidates')).toBeUndefined()
+    expect((await get(`/api/advertising/harvest/candidates?market=IT&productIds=${Array.from({ length: 500 }, (_, i) => `p${i}`).join(',')}`)).statusCode).toBe(200)
+  })
+
   it('destinations need the product (or a candidate)', async () => {
     expect((await get('/api/advertising/harvest/destinations?market=IT')).statusCode).toBe(400)
     expect((await get('/api/advertising/harvest/destinations?market=IT&productId=p1&match=PHRASE')).statusCode).toBe(200)

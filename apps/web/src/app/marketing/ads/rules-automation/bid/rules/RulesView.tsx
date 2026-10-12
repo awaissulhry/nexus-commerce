@@ -43,6 +43,8 @@ import { usePermission } from '@/lib/auth/AuthProvider'
 import { useRouter, useSearchParams } from '@/lib/workspaces/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitAdsChange } from '../../_shared/adsBus'
+import { FILTER_EMPTY, FILTER_HIDES_RULE } from '../../_shared/scopeFilter/scopeFilterModel'
+import type { ScopeView } from '../../_shared/scopeFilter/useScopeFilter'
 import { useWriteBlock, useWriteBlockOf } from '../../../_shell/WriteBlocked'
 import { useColumnChoices } from '../_shared/columnChoices'
 import { whenWords } from '../_shared/format'
@@ -180,10 +182,12 @@ function usePhone(): boolean {
   return phone
 }
 
-export function RulesView({ market, data, viewSwitch, setQuery }: {
+export function RulesView({ market, data, scope, viewSwitch, setQuery }: {
   market: string
-  /** The page's one read of the bid rules (the tiles read it too). */
+  /** The page's one read of the bid rules (the tiles read it too), narrowed to its filter bar. */
   data: BidRulesData
+  /** The page's filter bar: a table it empties says so, with Clear filter. */
+  scope?: ScopeView
   /** The page's [Rules | Bids] switch, at the start of the toolbar. */
   viewSwitch: ReactNode
   /** One address change (the page keeps the rest of the query); `push` adds a history entry (opening a detail). */
@@ -251,6 +255,12 @@ export function RulesView({ market, data, viewSwitch, setQuery }: {
   // The Brain's row is left out where it decides nothing (C-UI 3); everything else is as read.
   const rows = useMemo(() => (answer?.rules ?? []).filter((r) => !brainIdleHere(r, market)), [answer, market])
   const byId = useMemo(() => new Map(rows.map((r) => [r.id, r])), [rows])
+  // A mode pick of a rule the filter (or the market) no longer shows leaves the draft: "Review N changes" counts only
+  // what its review can show.
+  useEffect(() => {
+    if (!answer) return
+    setDraft((d) => (Object.keys(d).every((id) => byId.has(id)) ? d : Object.fromEntries(Object.entries(d).filter(([id]) => byId.has(id)))))
+  }, [answer, byId])
   const filter: RulesFilter = { tile, search, archived: showArchived }
   const shown = useMemo(() => visibleRows(rows, filter), [rows, tile, search, showArchived]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -421,14 +431,18 @@ export function RulesView({ market, data, viewSwitch, setQuery }: {
   const openNew = useCallback(() => { remember({ kind: 'selector', selector: '[data-return="new"]' }); setQuery({ builder: 'new', ruleId: null }) }, [remember, setQuery])
   const clearFilters = useCallback(() => { setSearch(''); setQuery({ show: null, archived: null, q: null }) }, [setQuery])
   const filtered = isFiltered(filter)
+  const scopeActive = !!scope?.active
+  const clearScope = scope?.clear
   // M4: a failed read says so (and offers Try again), never "No bid rules yet". No second New rule here: the toolbar has
   // it (C-UI 4).
   const noRowsParams = useMemo(() => (!answer && err
     ? { title: 'Rules not read', message: readError(err) ?? '', action: { label: 'Try again', onClick: () => void load() } }
     : filtered
       ? { title: 'No rule matches', message: '', action: { label: 'Clear filters', onClick: clearFilters } }
-      : { title: 'No bid rules yet', message: '' }),
-  [answer, err, load, filtered, clearFilters])
+      : scopeActive && clearScope
+        ? { title: FILTER_EMPTY.title, message: '', action: { label: FILTER_EMPTY.clear, onClick: () => clearScope() } }
+        : { title: 'No bid rules yet', message: '' }),
+  [answer, err, load, filtered, clearFilters, scopeActive, clearScope])
 
   // ── reviews ───────────────────────────────────────────────────────────────────────────────────────────────────────
   const panelBack = (): PanelState | null => (panelId ? { id: panelId, tab: panelTab } : null)
@@ -949,8 +963,8 @@ export function RulesView({ market, data, viewSwitch, setQuery }: {
       ) : (
         <RuleDetailPending
           loading={!answer && !err}
-          error={answer ? 'This rule is not in this list: it may be in another market, or gone' : err ? 'Rules not read' : null}
-          onRetry={() => (answer && market !== 'all' ? setQuery({ market: null }) : void load())}
+          error={answer ? (scopeActive ? FILTER_HIDES_RULE : 'This rule is not in this list: it may be in another market, or gone') : err ? 'Rules not read' : null}
+          onRetry={() => (answer && scopeActive && clearScope ? clearScope() : answer && market !== 'all' ? setQuery({ market: null }) : void load())}
           onClose={closeDetail}
           returnFocusTo={() => null}
         />

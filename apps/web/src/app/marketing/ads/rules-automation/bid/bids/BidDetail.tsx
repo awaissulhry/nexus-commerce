@@ -8,9 +8,10 @@
  *   header   the keyword · match · market · who sets it (a rule opens its detail, the Brain the Why tab) · ▲ n of N ▼
  *   tabs     Why (the Brain's own decision) · History (every change with Undo) · What if (the Brain at another target
  *            ACoS) — a new tab joins `TABS`
- *   body     a rail that stays on every tab — the bid now, the Brain's bid, the trend, where it lives, its numbers, Set
- *            bid (one rule with Apply suggested: whoever sets the bid, the review says what follows) and Lock / Unlock
- *            campaign bids — and the tab beside it (under it on a phone)
+ *   body     a rail that stays on every tab — the bid now, the Brain's bid, the trend, where it lives, its numbers,
+ *            Change bid… (the one dialog the Bids view's bulk bar opens: Set to · Raise · Lower, by an amount or a
+ *            percent; one rule with Apply suggested: whoever sets the bid, the review says what follows) and Lock /
+ *            Unlock campaign bids — and the tab beside it (under it on a phone)
  *
  * Every write control is held, with the reason, where the keyword's market is one Nexus only reads (`row.writeBlock`,
  * set by the view from the shell's `useWriteBlockOf`, use audit A1).
@@ -27,7 +28,8 @@ import { ChangeValue } from '@/design-system/grid'
 import Link from '@/lib/workspaces/Link'
 import { currencySymbol, money, moneyText, relWords, WEEK, whenWords } from '../_shared/format'
 import { readCampaignLock, readHistory, readWhatIf, readWhy, type CampaignLock } from './bidsApi'
-import { acosText, AUTO_WORDS, autoHeld, bidProblem, editHeldReason, lastChangeWords, matchWord, parseBid, writerName, type BidGridRow } from './bidsModel'
+import { changeHeld } from './adjustModel'
+import { acosText, AUTO_WORDS, autoHeld, lastChangeWords, matchWord, writerName, type BidGridRow } from './bidsModel'
 import { draftOf, GOAL_KEYS, GOAL_LABEL, goalChanges, goalHeld, goalText, parseGoal, type GoalDraft, type GoalValues } from './goalModel'
 import { suggestedWords } from './suggestedModel'
 import { NightFloorMark, OwnerChip, OwnerIcon, TREND_LABEL } from './bidsColumns'
@@ -40,7 +42,8 @@ import styles from './bids.module.css'
 
 /** What the detail (and the table) asks the view to review and save. */
 export type BidAsk =
-  | { kind: 'bid'; row: BidGridRow; nextCents: number }
+  /** Change bid: Set to · Raise · Lower by an amount or a percent, for one keyword or the selected ones. */
+  | { kind: 'adjust'; row: BidGridRow; rows: BidGridRow[] }
   | { kind: 'undo'; row: BidGridRow; line: HistoryLine }
   | { kind: 'lock'; row: BidGridRow; lock: boolean }
   /** Amazon's suggested bid, for one row or the selected rows. */
@@ -309,15 +312,8 @@ function SuggestedLine({ row, canBids, onAsk }: { row: BidGridRow; canBids: bool
 
 /** The rail: what stays in view on every tab, and the two actions on the bid. */
 function BidRail({ row, market, canEdit, canBids, version, onAsk }: { row: BidGridRow; market: string | null; canEdit: boolean; canBids: boolean; version: number; onAsk: (ask: BidAsk) => void }) {
-  const [bidText, setBidText] = useState('')
-  // Another keyword, or a save (the view bumps `version`): the box starts empty again.
-  useEffect(() => { setBidText('') }, [row.targetId, version])
   const [lock] = useLoad<CampaignLock | null>(() => readCampaignLock(row.campaign, market), `${row.campaign.id}:${market ?? ''}:${version}`)
 
-  const editHeld = row.writeBlock ?? editHeldReason(row, canEdit)
-  const typed = parseBid(bidText)
-  const problem = bidProblem(typed, row.currency)
-  const same = typed !== null && typed === row.bidNow
   const lockHeld = !canEdit ? 'Needs the ads campaigns permission'
     : row.writeBlock ? row.writeBlock
       : lock.state === 'loading' ? 'Reading the campaign\'s lock…'
@@ -343,32 +339,21 @@ function BidRail({ row, market, canEdit, canBids, version, onAsk }: { row: BidGr
         <Sparkline values={row.spark ?? []} label={TREND_LABEL} format={(n) => money(n, row.currency)} width={140} height={28} />
       </div>
 
-      <form
-        className={styles.actions}
-        onSubmit={(e) => {
-          e.preventDefault()
-          if (!editHeld && !problem && !same && typed !== null) onAsk({ kind: 'bid', row, nextCents: typed })
-        }}
-      >
-        {!editHeld && (
-          <span className={styles.bidInput}>
-            <Input size="sm" fieldClassName={styles.field} prefix={currencySymbol(row.currency)} inputMode="decimal" aria-label="New bid" placeholder={typeof row.bidNow === 'number' ? (row.bidNow / 100).toFixed(2) : ''} value={bidText} onChange={(e) => setBidText(e.target.value)} />
-          </span>
-        )}
-        <Button size="sm" variant="primary" type="submit" heldReason={editHeld ?? (bidText.trim() === '' ? 'Type a bid' : problem ?? (same ? 'That is the bid now' : null))}>
-          <PencilLine size={14} aria-hidden /> Set bid
+      <div className={styles.actions}>
+        <Button size="sm" variant="primary" heldReason={changeHeld([row], canBids)} onClick={() => onAsk({ kind: 'adjust', row, rows: [row] })}>
+          <PencilLine size={14} aria-hidden /> Change bid…
         </Button>
         {locked ? (
-          <Button size="sm" variant="secondary" type="button" heldReason={lockHeld} onClick={() => onAsk({ kind: 'lock', row, lock: false })} title="Give every bid of this campaign back to automation">
+          <Button size="sm" variant="secondary" heldReason={lockHeld} onClick={() => onAsk({ kind: 'lock', row, lock: false })} title="Give every bid of this campaign back to automation">
             <LockOpen size={14} aria-hidden /> Unlock campaign bids
           </Button>
         ) : (
           // Kept where nothing sets the bid too: the lock also keeps out a writer added later (use audit, kept on purpose).
-          <Button size="sm" variant="secondary" type="button" heldReason={lockHeld} onClick={() => onAsk({ kind: 'lock', row, lock: true })} title="Every bid of this campaign: automation leaves them, also a writer added later">
+          <Button size="sm" variant="secondary" heldReason={lockHeld} onClick={() => onAsk({ kind: 'lock', row, lock: true })} title="Every bid of this campaign: automation leaves them, also a writer added later">
             <Lock size={14} aria-hidden /> Lock campaign bids
           </Button>
         )}
-      </form>
+      </div>
 
       <div className={styles.actions}>
         <SuggestedLine row={row} canBids={canBids} onAsk={onAsk} />

@@ -1223,6 +1223,13 @@ body.nds-drawer-resizing * {
 .nds-ms-btn:hover {
   border-color: var(--nds-border-strong);
 }
+/* The value stays on one line ("1 selected" wrapped in a half-width phone field) and ends in "…" when it must. */
+.nds-ms-btn > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .nds-ms-btn .ph {
   color: var(--nds-text-muted);
 }
@@ -1241,6 +1248,11 @@ body.nds-drawer-resizing * {
   border-radius: var(--nds-radius-xl);
   box-shadow: var(--nds-shadow-menu);
   padding: 5px;
+}
+/* A list opened from a light page is light on a dark OS too: its tick boxes draw light (lib/opens-dark.ts; the ads
+   pages are light-only and the popup renders at <body>, outside their pin). */
+.nds-ms-pop[data-nds-light] {
+  color-scheme: light;
 }
 .nds-ms-opt {
   display: flex;
@@ -1268,6 +1280,23 @@ body.nds-drawer-resizing * {
   width: 15px;
   height: 15px;
   accent-color: var(--nds-primary);
+}
+/* A HELD MultiSelect (`heldReason`): focusable, says why, does not open. Its Tooltip wraps the trigger, so the wrapper
+   takes the trigger's place in the row (2026-10-12). */
+.nds-ms > .nds-tooltip {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.nds-ms > .nds-tooltip > .nds-ms-btn {
+  flex: 1 1 auto;
+}
+.nds-ms-btn[aria-disabled="true"] {
+  opacity: 0.62;
+  cursor: default;
+}
+.nds-ms-btn[aria-disabled="true"]:hover {
+  border-color: var(--nds-border);
 }
 /* Facet count rendered after an option label (FilterBar `count`). */
 .nds-ms-count {

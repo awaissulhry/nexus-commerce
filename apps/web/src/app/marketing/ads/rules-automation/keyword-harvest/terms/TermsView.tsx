@@ -34,6 +34,8 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { useRouter, useSearchParams } from '@/lib/workspaces/navigation'
 import { useDetailParam } from '../../../_shared/useDetailParam'
 import { useAdsMarketplace } from '../../../_shell/MarketplaceContext'
+import { FILTER_EMPTY } from '../../_shared/scopeFilter/scopeFilterModel'
+import type { ScopeView } from '../../_shared/scopeFilter/useScopeFilter'
 import { readCandidates } from '../_shared/harvestApi'
 import type { CandidateQuery, CandidateTotals, HarvestCandidateRow, HarvestToMode, HarvestToSource, SkipDays } from '../_shared/types'
 import { HarvestToWindow } from '../harvest-to'
@@ -57,6 +59,8 @@ export interface TermsViewProps {
   onTotals?: (totals: CandidateTotals) => void
   /** The page's [Terms | Rules | Sources] switch, drawn at the start of this view's toolbar. */
   viewSwitch?: ReactNode
+  /** The page's filter bar: the terms are read with its lists (the server filters, the tiles' totals too). */
+  scope?: ScopeView
 }
 
 /* ── stable grid options (GDS decision 12) ───────────────────────────────────────────────── */
@@ -86,7 +90,7 @@ function CountWords({ shown, total, filtered }: { shown: number; total: number; 
 /** The selection: ticked rows, or every term that matches ("Select all N"). */
 type Picked = { kind: 'rows'; ids: string[] } | { kind: 'all'; ids: string[]; total: number }
 
-export function TermsView({ market, show = null, onTotals, viewSwitch }: TermsViewProps) {
+export function TermsView({ market, show = null, onTotals, viewSwitch, scope }: TermsViewProps) {
   const canManage = usePermission('ads.campaigns.manage')
   const manageHeld = canManage ? null : 'Needs the permission to manage campaigns'
   const phone = useNarrow()
@@ -116,7 +120,9 @@ export function TermsView({ market, show = null, onTotals, viewSwitch }: TermsVi
   const detail = useDetailParam({ key: 'term', tabKey: 'tab' })
 
   // ── the read ──
-  const query = useMemo<CandidateQuery>(() => ({ market: market || 'all', state: listStates(list), q: qParam.trim() || null }), [market, list, qParam])
+  const lists = scope?.api ?? null
+  const scopeKey = scope?.key ?? ''
+  const query = useMemo<CandidateQuery>(() => ({ market: market || 'all', state: listStates(list), q: qParam.trim() || null, lists }), [market, list, qParam, scopeKey]) // eslint-disable-line react-hooks/exhaustive-deps
   const read = useTermsRead(query)
   const answer = read.answer
   const [version, setVersion] = useState(0)
@@ -127,7 +133,7 @@ export function TermsView({ market, show = null, onTotals, viewSwitch }: TermsVi
   // The tiles' totals, with "Harvested" counted in the page's one window from the open list's rows (the server counts
   // 30 days); the skipped list keeps the count of the last open read.
   const harvestedRef = useRef<number | undefined>(undefined)
-  useEffect(() => { harvestedRef.current = undefined }, [market])
+  useEffect(() => { harvestedRef.current = undefined }, [market, scopeKey])
   useEffect(() => {
     if (!answer) return
     if (list === 'open') harvestedRef.current = harvestedInWindow(answer.rows)
@@ -201,7 +207,7 @@ export function TermsView({ market, show = null, onTotals, viewSwitch }: TermsVi
 
   // A new market or list: nothing stays ticked.
   // A new market, list, search or tile (Back / Forward too): nothing stays ticked (release review Low).
-  useEffect(() => { apiRef.current?.deselectAll(); setPicked({ kind: 'rows', ids: [] }); setPageTicked(false) }, [market, list, qParam, show])
+  useEffect(() => { apiRef.current?.deselectAll(); setPicked({ kind: 'rows', ids: [] }); setPageTicked(false) }, [market, list, qParam, show, scopeKey])
 
   const selectedRows = useMemo(() => picked.ids.flatMap((id) => byId.get(id) ?? []), [picked, byId])
   const ticked = picked.ids.length
@@ -375,13 +381,17 @@ export function TermsView({ market, show = null, onTotals, viewSwitch }: TermsVi
   // ── words ──
   const filtered = !!show || !!qParam.trim()
   const countText = failed ? null : answer ? <CountWords shown={shown.length} total={all.length} filtered={filtered} /> : 'Reading…'
+  const scopeActive = !!scope?.active
+  const clearScope = scope?.clear
   const noRowsParams = useMemo(() => {
     if (failed) return { title: 'Terms not read', message: read.err ?? '', action: { label: 'Try again', onClick: () => void read.reload() } }
+    // The page's filter bar left no term to read: say so, and clear it.
+    if (!all.length && list === 'open' && !qParam.trim() && scopeActive && clearScope) return { title: FILTER_EMPTY.title, message: '', action: { label: FILTER_EMPTY.clear, onClick: () => clearScope() } }
     const words = emptyWords({ show: list === 'open' ? show : null, list, search: qParam, any: all.length > 0 })
     // One write of the address (audit M2: two replaces in one tick lost the first).
     const clear = () => { setSearch(''); patch({ q: null, list: null, show: null }) }
     return { title: words.title, message: '', action: words.clear ? { label: 'Clear filters', onClick: clear } : undefined }
-  }, [failed, read, show, list, qParam, all.length, patch])
+  }, [failed, read, show, list, qParam, all.length, patch, scopeActive, clearScope])
 
   const skippedCount = answer?.totals.skipped ?? 0
   // "N out of date" (beside Waiting for you) filters too: a toolbar button like Skipped, in the address (?show=stale).

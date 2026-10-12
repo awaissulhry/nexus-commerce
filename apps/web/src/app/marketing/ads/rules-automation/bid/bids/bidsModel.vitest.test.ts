@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  acosText, aimDirection, bidProblem, bidsQuery, bidsTotalsOf, contestedMark, countWords, editHeldReason, emptyWords, floorGivesBack, gridRowOf, isBidsShow,
+  acosText, aimDirection, bidProblem, bidsQuery, bidsTotalsOf, contestedMark, countWords, emptyWords, floorGivesBack, gridRowOf, isBidsShow,
   isContested, lastChangeWords, matchWord, NO_BID_FILTER, otherWriters, ownerChips, ownerHint, ownerLabel, ownerTone, ownerWords, parseBid,
   planHref, resultsWords, rowCurrency, rowMatches, rulePanelHref, showMatches, writerHref, writerName, inScopeOf, autoHeld, modeChangeLine,
   type BidRow, type BidTotals,
@@ -206,15 +206,6 @@ describe('a direct bid', () => {
     expect(bidProblem(100_001, 'EUR')).toMatch(/^At most /)
     expect(bidProblem(15, 'EUR')).toBeNull()
   })
-
-  it('lets you set a bid whoever sets it (one rule with Apply suggested, A6); only the permission and hidden bids hold it', () => {
-    expect(editHeldReason(row({ owner: { kind: 'PERSON', name: 'You', id: 'you' } }), true)).toBeNull()
-    expect(editHeldReason(row({ owner: { kind: 'NONE', name: 'Nobody', id: null } }), true)).toBeNull()
-    expect(editHeldReason(row(), true)).toBeNull()
-    expect(editHeldReason(row({ owner: { kind: 'RULE', name: 'Cut losers', id: 'r1' } }), true)).toBeNull()
-    expect(editHeldReason(row({ owner: { kind: 'NONE', name: 'Nobody', id: null } }), false)).toBe('Needs the ads campaigns permission')
-    expect(editHeldReason(row({ owner: { kind: 'NONE', name: 'Nobody', id: null }, bidNow: undefined }), true)).toBe('Bids are hidden for you')
-  })
 })
 
 describe('the grid row and the read', () => {
@@ -233,6 +224,12 @@ describe('the grid row and the read', () => {
     expect(bidsQuery({ market: 'it' })).toBe('?market=IT')
     expect(bidsQuery({ market: 'all' })).toBe('')
     expect(bidsQuery({ market: null, campaignId: 'c1', adGroupId: 'g1' })).toBe('?campaignId=c1&adGroupId=g1')
+  })
+
+  it('sends the page\'s filter bar as lists (the read and its cursor alike)', () => {
+    expect(bidsQuery({ market: 'IT', lists: { portfolioIds: 'p1,p2', productIds: 'L1' } })).toBe('?market=IT&portfolioIds=p1%2Cp2&productIds=L1')
+    expect(bidsQuery({ market: 'all', lists: {} })).toBe('')
+    expect(bidsQuery({ market: 'all', lists: null })).toBe('')
   })
 })
 

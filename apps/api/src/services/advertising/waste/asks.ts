@@ -21,7 +21,8 @@ import {
   keywordRowId, negativeMatch, negRowId, SPARK_WEEKS, targetMatch, termKeyOf, termRowId, WASTE_WINDOW_DAYS,
   type Match, type RowNumbers, type RowState, type RowKind, type VerbAction, type WasteRow,
 } from './pure.js'
-import { blockersOf, inScope, numbersOf, placeRefs, waitingOfFact, type WaitItem, type WasteFacts, type WasteScope } from './read.js'
+import { idIn } from '../ads-scope-lists.js'
+import { blockersOf, inScope, numbersOf, placeRefs, waitingOfFact, type ResolvedScope, type WaitItem, type WasteFacts, type WasteScope } from './read.js'
 
 const NO_NUMBERS: RowNumbers = Object.freeze({ impressions: 0, clicks: 0, orders: 0, spendCents: 0, salesCents: 0, acosPct: null, cpcCents: null, xCpa: null })
 
@@ -56,9 +57,10 @@ function placeOf(f: WasteFacts, it: WaitItem, s: WasteScope & { adGroupId?: stri
   }
   const c = it.campaignId ? f.campaigns.get(it.campaignId) : undefined
   if (!c) return null
+  // Its home: an ad group the scope names (the first, running ones first), else the campaign's first running one.
   const groups = [...f.adGroups.values()].filter((g) => g.campaignId === c.id)
-  const home = (s.adGroupId ? groups.find((g) => g.id === s.adGroupId) : undefined)
-    ?? groups.sort((a, b) => Number(b.live) - Number(a.live) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id))[0]
+    .sort((a, b) => Number(b.live) - Number(a.live) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
+  const home = groups.find((g) => idIn(g.id, s.adGroupId, s.adGroupIds)) ?? groups[0]
   if (!home) return null
   const ids = [...listed.values()].filter((r) => r.kind === 'TERM' && r.campaign.id === c.id && !r.id.startsWith('neg:') && termKeyOf(r.text) === key).map((r) => r.id)
   return { adGroupId: home.id, campaignId: c.id, level: 'CAMPAIGN', key, ids: ids.length ? ids : [termRowId(c.market, home.externalAdGroupId ?? home.id, key)] }
@@ -137,7 +139,7 @@ function askRow(f: WasteFacts, it: WaitItem, p: ItemPlace, id: string): WasteRow
 }
 
 /** The page's rows with every waiting change listed (see the file's note). The rows given are fresh: carried asks are set on them. */
-export function withAskRows(f: WasteFacts, s: WasteScope & { root?: string | null; idle?: boolean }, rows: WasteRow[]): WasteRow[] {
+export function withAskRows(f: WasteFacts, s: ResolvedScope, rows: WasteRow[]): WasteRow[] {
   if (!f.waitItems.length) return rows
   const out = [...rows]
   const at = new Map(out.map((r, i) => [r.id, i]))

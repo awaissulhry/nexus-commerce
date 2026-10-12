@@ -35,6 +35,11 @@ import { searchOptions } from '../lib/option-search'
 export interface OptionListItem {
   value: string
   label: ReactNode
+  /**
+   * The words the search box matches (2026-10-12). Default: the label when it is plain text, else the value. A label
+   * drawn with more than text (a FilterBar option with its count) passes its words here, or the search would match its id.
+   */
+  searchText?: string
 }
 
 export interface OptionListProps {
@@ -92,7 +97,7 @@ export function OptionList({
 
   const showSearch = searchable || !!initialQuery || options.length > SEARCH_THRESHOLD
   const matches = showSearch
-    ? searchOptions(q, options, (o) => (typeof o.label === 'string' ? o.label : o.value))
+    ? searchOptions(q, options, (o) => o.searchText ?? (typeof o.label === 'string' ? o.label : o.value))
     : options
 
   return (

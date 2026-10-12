@@ -3,8 +3,11 @@
 /**
  * Bid page (lane BIDS, 2026-10-10) — the Bids view: every live keyword and target bid with the ONE thing that sets it
  * (`GET /api/advertising/bids`). Owner chips with counts filter it, a search narrows it, Views and Customise keep its
- * columns, a row opens the keyword's detail (why this bid · history with Undo · what if · goal; set the bid where nothing
- * automatic writes over it; lock or unlock the campaign's bids). Every change goes through the DS review first.
+ * columns, a row opens the keyword's detail (why this bid · history with Undo · what if · goal; change the bid; lock or
+ * unlock the campaign's bids). Every change goes through the DS review first.
+ *
+ * Change bid (Owner 2026-10-12): the selected keywords — or one keyword's detail — in one dialog: Set to · Raise · Lower,
+ * by an amount or a percent, with an optional limit; its table follows every key (`adjustModel.ts`, `useBidReview`).
  *
  * Keyword Auto (KEYWORD-AUTO.md):
  *   Auto       a switch per keyword (Manual = a person's hold with no end; Auto = handed back) — drawn only where an
@@ -30,7 +33,7 @@
  * focus goes back to the row's cell (the one on show after ▲ / ▼). A review opens ABOVE it.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Search, SlidersHorizontal, Sparkles } from 'lucide-react'
+import { PencilLine, Search, SlidersHorizontal, Sparkles } from 'lucide-react'
 import { Button, FilterChip, Input } from '@/design-system/primitives'
 import { Banner } from '@/design-system/components'
 import { GridToolbar, PreferencesModal, ReviewChangesModal, type PreferencesValue } from '@/design-system/patterns'
@@ -43,6 +46,8 @@ import { usePermission } from '@/lib/auth/AuthProvider'
 import { useRouter, useSearchParams } from '@/lib/workspaces/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useWriteBlockOf } from '../../../_shell/WriteBlocked'
+import { FILTER_EMPTY } from '../../_shared/scopeFilter/scopeFilterModel'
+import type { ScopeView } from '../../_shared/scopeFilter/useScopeFilter'
 import { useColumnChoices } from '../_shared/columnChoices'
 import { readBids, type BidsScope } from './bidsApi'
 import { bidColumns, bidColumnSpecs, NO_COLUMN_FEATURES, OwnerIcon, type BidColumnFeatures, type BidsCellContext, type BidsCellHandlers } from './bidsColumns'
@@ -52,6 +57,7 @@ import {
 } from './bidsModel'
 import { BidDetail, isBidTab, type BidPanelTab } from './BidDetail'
 import { inFlight, inFlightSince } from './liveModel'
+import { changeHeld } from './adjustModel'
 import { applyHeld, applyLabel, applyPlan, suggestedCellOf } from './suggestedModel'
 import { useBidReview } from './useBidReview'
 import { useBidsLive, useSuggested } from './useBidsLive'
@@ -59,7 +65,9 @@ import styles from './bids.module.css'
 // The toolbar's lead, count, search and right group: the Rules view's own rules, so the two toolbars line up (audit M3).
 import page from '../bid.module.css'
 
-export interface BidsViewProps extends BidsScope {
+export interface BidsViewProps extends Omit<BidsScope, 'lists'> {
+  /** The page's filter bar: the bids are read with its lists (the server filters); a read it empties says so. */
+  scope?: ScopeView
   /** The page's [Rules | Bids] switch, drawn at the start of this view's toolbar. */
   viewSwitch?: ReactNode
   /** Bumped by the page's Refresh: the bids are read again. */
@@ -113,14 +121,17 @@ function writeInScope(scopeKey: string, v: BidColumnFeatures): void {
   try { window.localStorage.setItem(inScopeKey(scopeKey), JSON.stringify(v)) } catch { /* the next visit reads it again */ }
 }
 
-export function BidsView({ market = null, productId = null, campaignId = null, adGroupId = null, viewSwitch, refreshKey, show, onTotals }: BidsViewProps) {
+export function BidsView({ market = null, productId = null, campaignId = null, adGroupId = null, scope, viewSwitch, refreshKey, show, onTotals }: BidsViewProps) {
   // The server's own gates (permissions-manifest.ts): a bid, a lock and an Undo · a bulk bid and a keyword's mode · a goal.
   const canEdit = usePermission('ads.campaigns.manage')
   const canBids = usePermission('ads.bids.edit')
   const canAutomation = usePermission('ads.automation.manage')
   const canGoal = canEdit && canAutomation
   const phone = usePhone()
-  const scopeKey = `${market ?? ''}|${productId ?? ''}|${campaignId ?? ''}|${adGroupId ?? ''}`
+  const lists = scope?.api ?? null
+  const scopeKey = `${market ?? ''}|${productId ?? ''}|${campaignId ?? ''}|${adGroupId ?? ''}|${scope?.key ?? ''}`
+  // The column memory is the scope's without the filter bar's picks: one entry per market, not one per filter ever picked.
+  const memoKey = `${market ?? ''}|${productId ?? ''}|${campaignId ?? ''}|${adGroupId ?? ''}|`
 
   const router = useRouter()
   const params = useSearchParams()
@@ -182,8 +193,8 @@ export function BidsView({ market = null, productId = null, campaignId = null, a
   }, [])
 
   // ── the read ──
-  const scopeRef = useRef<BidsScope>({ market, productId, campaignId, adGroupId })
-  scopeRef.current = { market, productId, campaignId, adGroupId }
+  const scopeRef = useRef<BidsScope>({ market, productId, campaignId, adGroupId, lists })
+  scopeRef.current = { market, productId, campaignId, adGroupId, lists }
   const load = useCallback(async () => {
     setReading(true)
     try {
@@ -210,11 +221,12 @@ export function BidsView({ market = null, productId = null, campaignId = null, a
 
   // ── which columns the rows in scope need (never one that could only say "—"); while they are read, last time's ──
   // Read before the grid is made, so its first columns are the scope's own (its saved order and picks apply whole).
-  const [remembered, setRemembered] = useState<BidColumnFeatures | null>(() => (typeof window === 'undefined' ? null : readInScope(scopeKey)))
+  const [remembered, setRemembered] = useState<BidColumnFeatures | null>(() => (typeof window === 'undefined' ? null : readInScope(memoKey)))
   const firstScope = useRef(scopeKey)
-  useEffect(() => { if (scopeKey !== firstScope.current) { firstScope.current = scopeKey; setRemembered(readInScope(scopeKey)) } }, [scopeKey])
+  useEffect(() => { if (scopeKey !== firstScope.current) { firstScope.current = scopeKey; setRemembered(readInScope(memoKey)) } }, [scopeKey]) // eslint-disable-line react-hooks/exhaustive-deps
   const answered = useMemo(() => (answer ? inScopeOf(answer.rows) : null), [answer])
-  useEffect(() => { if (answered) writeInScope(scopeKey, answered) }, [answered]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Written for the unfiltered rows only: a filtered read needs a subset of those columns, never more.
+  useEffect(() => { if (answered && !scope?.key) writeInScope(memoKey, answered) }, [answered]) // eslint-disable-line react-hooks/exhaustive-deps
   const inScope = answered ?? remembered ?? NO_COLUMN_FEATURES
 
   // ── rows; a write to a market Nexus only reads is held on the row, with the reason (A1) ──
@@ -361,11 +373,15 @@ export function BidsView({ market = null, productId = null, campaignId = null, a
   // Esc: back to the cell that opened it — or, after ▲ / ▼ or from the address, to the cell of the row on show.
   const detailFocus = useCallback(() => (openId && openId !== openerId.current ? cellFor(openId) : null), [openId, cellFor])
 
+  const scopeActive = !!scope?.active
+  const clearScope = scope?.clear
   const noRowsParams = useMemo(() => {
     if (failed) return { title: 'Bids not read', message: err ?? '', action: { label: 'Try again', onClick: reload } }
+    // The page's filter bar left no bid to read: say so, and clear it.
+    if (!all.length && scopeActive && clearScope) return { title: FILTER_EMPTY.title, message: '', action: { label: FILTER_EMPTY.clear, onClick: () => clearScope() } }
     const words = emptyWords(show, isBidFiltered(filter), all.length > 0)
     return { title: words.title, message: '', action: words.clear ? { label: 'Clear filters', onClick: clear } : undefined }
-  }, [failed, err, reload, show, filter, all.length, clear])
+  }, [failed, err, reload, show, filter, all.length, clear, scopeActive, clearScope])
 
   /* ── Customise, Reset (the toolbar and every header's ⋮ menu) ────────────────────────────── */
 
@@ -408,6 +424,9 @@ export function BidsView({ market = null, productId = null, campaignId = null, a
         toolbar={bulk ? (
           <GridToolbar count={<span className={page.lead}>{viewSwitch}<span className={page.count}>Selected <b>{selected.length}</b></span></span>}>
             <GridSelectionActions>
+              <Button size="sm" variant="secondary" heldReason={changeHeld(selected, canBids)} onClick={() => void ask({ kind: 'adjust', row: selected[0], rows: selected })}>
+                <PencilLine size={14} aria-hidden /> Change bid…
+              </Button>
               <Button size="sm" variant="secondary" heldReason={applyHeld(bulkPlan)} onClick={() => void ask({ kind: 'apply', row: selected[0], rows: selected })}>
                 <Sparkles size={14} aria-hidden /> {bulkPlan.send.length ? `${applyLabel(bulkPlan.send.length)}…` : 'Apply suggested'}
               </Button>
@@ -527,7 +546,10 @@ export function BidsView({ market = null, productId = null, campaignId = null, a
           onClose={close}
           changes={review.changes}
           state={review.state}
+          title={review.title}
           summary={review.state.phase === 'done' ? review.doneNote : review.summary}
+          lead={review.lead}
+          leadHeld={review.leadHeld}
           problems={review.problems}
           saveLabel={review.saveLabel}
           doneVerb={review.doneVerb}

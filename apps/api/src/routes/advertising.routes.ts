@@ -5937,9 +5937,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
    *
    * Children are included so the picker can offer "the whole line" and "one variation" from the
    * same list, which is the affordance `campaign-builder/.../ProductSelection.tsx` already ships.
+   *
+   * Scope filter (2026-10-12) — `adGroups`: every ad group not archived with its campaign, for the Ad group
+   * list of the Bid / Keyword Harvest / Negative Targeting filter (ads-scope-reach.ts scopeAdGroups).
    */
   fastify.get('/advertising/scope-options', async (_request, reply) => {
-    const [campaigns, portfolios, ads] = await Promise.all([
+    const { scopeAdGroups } = await import('../services/advertising/ads-scope-reach.js')
+    const [campaigns, portfolios, ads, adGroups] = await Promise.all([
       prisma.campaign.findMany({
         select: { id: true, name: true, marketplace: true, portfolioId: true, status: true },
         orderBy: { name: 'asc' },
@@ -5949,6 +5953,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         where: { productId: { not: null } },
         select: { productId: true, asin: true, adGroup: { select: { campaignId: true } } },
       }),
+      scopeAdGroups(),
     ])
 
     // product id → the campaigns advertising it
@@ -6003,6 +6008,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       totalCampaigns: campaigns.length,
       campaigns,
       portfolios,
+      adGroups,
       /** Campaigns carrying no portfolio — the blind spot the portfolio grain cannot reach. */
       campaignsWithoutPortfolio: campaigns.filter((c) => !c.portfolioId).length,
       productLines: [...lines.values()]

@@ -15,8 +15,13 @@
  * a SHOPPER'S search term that wastes gets a negative (exact, phrase or product; in the ad group or the whole campaign).
  * Every write is one review (counted Save, Done with Undo), through the same code as the Nexus MCP tools.
  *
- * Address: `?market=&view=&show=&kind=&q=&scope=&sort=&page=&pageSize=&row=&tab=` — one place writes it (`setQuery`):
+ * Address: `?market=&view=&show=&kind=&q=&sort=&page=&pageSize=&row=&tab=` — one place writes it (`setQuery`):
  * the rest of the query is kept; a record's open is a step in the history (`useDetailParam`), everything else replaces.
+ *
+ * The filter bar (2026-10-12, `_shared/scopeFilter`) sits under the tab bar: Portfolio · Campaign · Ad group · Product
+ * (`?portfolio=&campaign=&adGroup=&product=`; the old `?scope=pf:|cp:|ag:<id>` is read once and written in those).
+ * Wasting and Stopped — rows, tiles, select all, Export — are read with it; the Rules view keeps the rules that can act on
+ * a pick (the Brain and Harvest rows always show). A filter change goes back to the first page.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { SegmentedControl } from '@/design-system/primitives'
@@ -25,13 +30,15 @@ import { usePermission } from '@/lib/auth/AuthProvider'
 import { useRouter, useSearchParams } from '@/lib/workspaces/navigation'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { useAdsMarketplace, useSharedAdsMarket } from '../../_shell/MarketplaceContext'
+import { AdsScopeFilter } from '../_shared/scopeFilter/AdsScopeFilter'
+import { useScopeFilter } from '../_shared/scopeFilter/useScopeFilter'
 import { RulesTabs, rulesTabHeader } from '../_shared/tabs'
 import { currencyOf } from '../bid/_shared/format'
 import { WasteRulesView } from './rules/WasteRulesView'
 import { WasteView } from './waste/WasteView'
 import { readRows, readStopped } from './waste/wasteApi'
 import {
-  DEFAULT_PAGE_SIZE, kindOf, PAGE_SIZES, scopeOf, stoppedShowOf, tileQuery, tilesOf, viewOf, wastingShowOf, type TileId,
+  DEFAULT_PAGE_SIZE, kindOf, PAGE_SIZES, stoppedShowOf, tileQuery, tilesOf, viewOf, wastingShowOf, type TileId,
 } from './waste/wasteModel'
 import type { StoppedTotals, WasteTotals } from './waste/wasteTypes'
 import styles from './negatives.module.css'
@@ -61,7 +68,7 @@ function NegativesPage() {
   const stoppedShow = stoppedShowOf(rawShow)
   const kind = kindOf(params.get('kind'))
   const q = params.get('q') ?? ''
-  const scope = scopeOf(params.get('scope'))
+  const filter = useScopeFilter(market, { clear: ['page'] })
   const sort = params.get('sort')
   const page = Math.max(1, Number(params.get('page')) || 1)
   const sizeParam = Number(params.get('pageSize'))
@@ -80,12 +87,12 @@ function NegativesPage() {
   const [stoppedTotals, setStoppedTotals] = useState<StoppedTotals | null>(null)
   const [tilesKey, setTilesKey] = useState(0)
   const [refreshKey, setRefreshKey] = useState(0)
-  const filterKey = JSON.stringify([market, scope, q])
+  const filterKey = JSON.stringify([market, filter.key, q])
   useEffect(() => { setWasteTotals(null); setStoppedTotals(null) }, [filterKey])
   // The view on screen reports its own totals; the other view's are read here (one row, the same filters).
   useEffect(() => {
     const ctl = new AbortController()
-    const base = { market, scope, kind: 'all' as const, q, page: 1, pageSize: 1 }
+    const base = { market, lists: filter.api, kind: 'all' as const, q, page: 1, pageSize: 1 }
     if (view !== 'wasting') readRows({ ...base, show: 'wasting' }, ctl.signal).then((a) => setWasteTotals(a.totals)).catch(() => { if (!ctl.signal.aborted) setWasteTotals(null) })
     if (view !== 'stopped') readStopped({ ...base, show: 'all' }, ctl.signal).then((a) => setStoppedTotals(a.totals)).catch(() => { if (!ctl.signal.aborted) setStoppedTotals(null) })
     return () => ctl.abort()
@@ -129,7 +136,7 @@ function NegativesPage() {
           {...rulesTabHeader('negative-targeting')}
           markets={readMarkets}
           market={market}
-          onMarketChange={(m) => setQuery({ market: m && m !== 'all' ? m : null, scope: null, page: null, row: null, tab: null })}
+          onMarketChange={(m) => setQuery({ market: m && m !== 'all' ? m : null, page: null, row: null, tab: null })}
           showDataSync={false}
           showDateRange={false}
           showChangeLog={false}
@@ -137,9 +144,10 @@ function NegativesPage() {
       )}
       {!building && <RulesTabs active="negative-targeting" />}
       <div className={styles.page}>
+        {!building && <AdsScopeFilter filter={filter} />}
         {!building && <MetricStrip className={styles.tiles} metrics={metrics} />}
         {view === 'rules' ? (
-          <WasteRulesView market={market ?? 'all'} viewSwitch={viewSwitch} />
+          <WasteRulesView market={market ?? 'all'} viewSwitch={viewSwitch} scope={filter} />
         ) : (
           <WasteView
             view={view}
@@ -148,7 +156,7 @@ function NegativesPage() {
             show={view === 'wasting' ? wastingShow : stoppedShow}
             kind={kind}
             q={q}
-            scope={scope}
+            scope={filter}
             sort={sort}
             page={page}
             pageSize={pageSize}

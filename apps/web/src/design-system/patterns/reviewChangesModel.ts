@@ -61,14 +61,16 @@ export function ackWords(raises: number): string {
 
 /**
  * Why Save is held, in words (the held button's tooltip and description), or null when it may run. Order: the state of
- * the read, then nothing to save, then problems, then the tick.
+ * the read, then the form above the table (`lead`: the host's own words, "Type a bid"), then nothing to save, then
+ * problems, then the tick.
  */
-export function saveHeldReason(args: { state: ReviewState; count: number; problems: number; raises: number; ack: boolean }): string | null {
-  const { state, count, problems, raises, ack } = args
+export function saveHeldReason(args: { state: ReviewState; count: number; problems: number; raises: number; ack: boolean; lead?: string | null }): string | null {
+  const { state, count, problems, raises, ack, lead } = args
   if (state.phase === 'reading') return 'Reading today\'s values first'
   if (state.phase === 'failed') return 'Today\'s values could not be read'
   if (state.phase === 'saving') return 'Saving'
   if (state.phase === 'done') return 'Already saved'
+  if (lead) return lead
   if (count === 0) return 'Nothing to save'
   if (problems > 0) return problems === 1 ? 'Fix the problem first' : 'Fix the problems first'
   if (raises > 0 && !ack) return 'Tick the box first'

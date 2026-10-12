@@ -8,6 +8,7 @@
  * acosPct, spark) are left out by the server for a person without the ad-spend permission: absent (undefined) means
  * hidden, null means "none".
  */
+import { addApiParams, type ScopeApi } from '../../_shared/scopeFilter/scopeFilterModel'
 import type { ChangeState } from '../_shared/delivery'
 import type { SuggestedCell } from './suggestedModel'
 import { currencyOf, money, relWords, signedMoney, WEEK, whenWords } from '../_shared/format'
@@ -400,17 +401,6 @@ export function bidProblem(cents: number | null, currency: string): string | nul
   return null
 }
 
-/**
- * Why this person may not set this bid by hand, or null when they may. One rule with Apply suggested (the Owner's
- * decision): a person's bid goes through the review whoever sets it; the review says what follows (the Brain's keyword
- * goes Manual, a rule or a plan may move it again — `suggestedModel.movesNext`).
- */
-export function editHeldReason(row: Pick<BidRow, 'bidNow'>, canEdit: boolean): string | null {
-  if (!canEdit) return 'Needs the ads campaigns permission'
-  if (typeof row.bidNow !== 'number') return 'Bids are hidden for you'
-  return null
-}
-
 // ── Auto / Manual per keyword (KEYWORD-AUTO.md: Manual = a person's hold with no end; Auto = handed back) ──────────
 
 export const AUTO_WORDS = { on: 'Auto', off: 'Manual' } as const
@@ -475,14 +465,16 @@ export function gridRowOf(row: BidRow, viewMarket: string | null | undefined): B
   }
 }
 
-/** The bids view's read: the scope as query words (an empty market or 'all' = every market). */
-export function bidsQuery(scope: { market?: string | null; productId?: string | null; campaignId?: string | null; adGroupId?: string | null }): string {
+/** The bids view's read: the scope as query words (an empty market or 'all' = every market); `lists` = the page's filter
+ *  bar (`portfolioIds`, `campaignIds`, `adGroupIds`, `productIds`). */
+export function bidsQuery(scope: { market?: string | null; productId?: string | null; campaignId?: string | null; adGroupId?: string | null; lists?: ScopeApi | null }): string {
   const qs = new URLSearchParams()
   const market = marketParam(scope.market)
   if (market) qs.set('market', market)
   if (scope.productId) qs.set('productId', scope.productId)
   if (scope.campaignId) qs.set('campaignId', scope.campaignId)
   if (scope.adGroupId) qs.set('adGroupId', scope.adGroupId)
+  addApiParams(qs, scope.lists)
   const s = qs.toString()
   return s ? `?${s}` : ''
 }
