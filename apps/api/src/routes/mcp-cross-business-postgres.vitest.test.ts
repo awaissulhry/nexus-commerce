@@ -2235,8 +2235,7 @@ describe.skipIf(!concurrentDatabaseUrl())('MCP.8 — a Claude connection for one
       clients['Claude run'] = String((await registerClient({ client_name: 'Claude run', redirect_uris: [CALLBACK] })).client_id)
       run.a = await connect(people.both, 'Claude run', A, `${API}/mcp`, RUN_SCOPES)
       run.b = await connect(people.both, 'Claude run', B, `${API}/mcp`, RUN_SCOPES)
-      __stepUpTest.reset()
-      const saved = await inApp('B-only', 'PUT', '/api/claude/trust/set-price', sessions.bOnly, B, { level: 'auto', code: generateSync({ secret }) })
+      const saved = await inApp('B-only', 'PUT', '/api/claude/trust/set-price', sessions.bOnly, B, { level: 'auto' })
       expect(saved.statusCode, saved.body).toBe(200)
 
       const inB = JSON.parse(textOf(await setPrice(run.b.access, 'B-control', seeded.b.productId, B)))
@@ -2264,8 +2263,7 @@ describe.skipIf(!concurrentDatabaseUrl())('MCP.8 — a Claude connection for one
       expect((inA.json() as { autonomy: unknown }).autonomy).toMatchObject({ paused: false })
       expect(await rowsOf('SELECT id, status, "decisionVia" FROM "AgentApproval" WHERE "workspaceId" = $1 ORDER BY id', [A])).toEqual(queuedInA)
       // A session of A cannot lift B's pause either: it is not B's to touch from A.
-      __stepUpTest.reset()
-      expect((await inApp('A', 'POST', '/api/claude/resume', sessions.both, A, { code: generateSync({ secret }) })).json()).toMatchObject({ ok: true, paused: false })
+      expect((await inApp('A', 'POST', '/api/claude/resume', sessions.both, A, {})).json()).toMatchObject({ ok: true, paused: false })
       expect(((await inApp('B-control', 'GET', '/api/claude/trust', sessions.bOnly, B)).json() as { autonomy: unknown }).autonomy).toMatchObject({ paused: true })
     })
 

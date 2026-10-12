@@ -29,15 +29,16 @@
  *              in the same transaction (an approved one would run as the approver after the product left), and each
  *              campaign its own pause holds is
  *              resumed after the commit, as the approver (`pauses`: resume, the default — lifting an automation's pause is a
- *              big door under code rule A, so the approver's code; or keep: they stay paused, each named, a normal approval).
+ *              big door; or keep: they stay paused, each named, a normal approval).
  *
- *   big door   code rule A: a change that takes any lever to AUTO — on the product or one of its own campaigns, by a level,
- *              an unlock, an include, a reset or an enrollment (an adopted AUTO included) — or that puts a campaign under
- *              the bid brain, needs the approver's authenticator code (`needsCode`, with each reason in `bigDoor`). Batch 2
- *              review fix (lead decision) — so does a value that RAISES the product's portfolio cap limit
- *              (portfolioCapLimitCents, the limit in force before → after, the server's where none is set: limitRaise).
- *              Everything else (OBSERVE, PROPOSE, OFF, locks, exclusions, other values, a lower limit, leave) is a normal
- *              approval; what can add spend is listed in `raises` and said in the effect, never silently.
+ *   big door   the Owner's code rule: a change that takes any lever to AUTO — on the product or one of its own campaigns, by
+ *              a level, an unlock, an include, a reset or an enrollment (an adopted AUTO included) — or that puts a campaign
+ *              under the bid brain is marked `needsCode`, with each reason in `bigDoor`. Batch 2 review fix (lead decision)
+ *              — so is a value that RAISES the product's portfolio cap limit (portfolioCapLimitCents, the limit in force
+ *              before → after, the server's where none is set: limitRaise). The tool asks the approver's authenticator code
+ *              for it only where the code table's line is on (agents/tools/ads-code-rule.ts; off since 2026-10-12, Owner
+ *              "B": a normal approval). Everything else (OBSERVE, PROPOSE, OFF, locks, exclusions, other values, a lower
+ *              limit, leave) is a normal approval; what can add spend is listed in `raises` and said in the effect.
  *   refusals   a level a lever does not take yet, a value outside its bounds or the wrong scope, a lock ref the lever has
  *              no such thing for, a lever to AUTO while one of Amazon's own rules acts on it there (AB-4), a campaign that
  *              does not advertise the product, and a change that changes nothing — each said, nothing queued.

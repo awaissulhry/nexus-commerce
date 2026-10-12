@@ -97,7 +97,7 @@ beforeAll(async () => {
     }
   })
   __stepUpTest.reset()
-  expect(await inside(() => setClaudeRule({ userId: ids.asker, label: 'Cora Confirm', canManage: true }, 'set-price', { level: 'confirm', code: codeOf() }))).toMatchObject({ ok: true })
+  expect(await inside(() => setClaudeRule({ userId: ids.asker, label: 'Cora Confirm', canManage: true }, 'set-price', { level: 'confirm' }))).toMatchObject({ ok: true })
 }, 120_000)
 
 beforeEach(() => __stepUpTest.reset())

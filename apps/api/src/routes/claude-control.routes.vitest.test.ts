@@ -2,7 +2,7 @@
  * MCP full control C5 — the routes a business sets Claude's levels, limits and brakes through, as the API serves them
  * (and C8: the activity list, "what did Claude do"):
  * the real manifest, workspace hook and RBAC gate in front; the service stood in (claude-trust.vitest.test.ts proves
- * the rows, the 2FA code and the brakes).
+ * the rows, the permission a raise takes and the brakes).
  *
  * The promises: reading the rules needs ai.view in the business; every change needs settings.security.manage there
  * (Claude has no tool for any of it: "never for Claude" — raising its own levels and limits); a refusal keeps the
@@ -171,8 +171,8 @@ describe('C5 — who may read and change Claude’s rules', () => {
     expect((await call('POST', '/api/claude/pause', 'token-viewer', {})).statusCode).toBe(200)
     expect(m.pause).toHaveBeenCalledWith({ userId: 'u-viewer', label: 'Name u-viewer', canManage: false }, undefined)
     expect((await call('PUT', '/api/claude/trust/set-price', 'token-viewer', { level: 'ask' })).statusCode).toBe(200)
-    expect(m.setRule).toHaveBeenCalledWith({ userId: 'u-viewer', label: 'Name u-viewer', canManage: false }, 'set-price', { level: 'ask', limits: undefined, code: undefined })
-    expect((await call('POST', '/api/claude/resume', 'token-viewer', { code: '123456' })).statusCode).toBe(403)
+    expect(m.setRule).toHaveBeenCalledWith({ userId: 'u-viewer', label: 'Name u-viewer', canManage: false }, 'set-price', { level: 'ask', limits: undefined })
+    expect((await call('POST', '/api/claude/resume', 'token-viewer', {})).statusCode).toBe(403)
     expect(m.resume).not.toHaveBeenCalled()
   })
 })
@@ -180,27 +180,28 @@ describe('C5 — who may read and change Claude’s rules', () => {
 describe('C5 — what the routes hand the service, and what they answer', () => {
   const ADMIN = { userId: 'u-admin', label: 'Name u-admin', canManage: true }
 
-  it('PUT a level: the tool, the level, the limits and the code, as the signed-in person', async () => {
+  it('PUT a level: the tool, the level and the limits, as the signed-in person — a code sent along is not handed on (Owner "B")', async () => {
     const saved = await call('PUT', '/api/claude/trust/set-price', 'token-admin', { level: 'auto', limits: { maxChangePercent: 5 }, code: '123456' })
     expect(saved.statusCode).toBe(200)
     expect(saved.json()).toEqual({ ok: true, rule: { tool: 'set-price', level: 'auto' } })
-    expect(m.setRule).toHaveBeenCalledWith(ADMIN, 'set-price', { level: 'auto', limits: { maxChangePercent: 5 }, code: '123456' })
+    expect(m.setRule).toHaveBeenCalledWith(ADMIN, 'set-price', { level: 'auto', limits: { maxChangePercent: 5 } })
+    expect(m.setRule.mock.calls.at(-1)![2]).not.toHaveProperty('code')
   })
 
   it('a refusal keeps the service’s status and words', async () => {
-    m.setRule.mockResolvedValue({ ok: false, status: 403, code: 'mfa_required', error: 'Type the code.' })
+    m.setRule.mockResolvedValue({ ok: false, status: 403, code: 'forbidden', error: 'Needs settings.security.manage.' })
     const refused = await call('PUT', '/api/claude/trust/set-price', 'token-admin', { level: 'auto' })
     expect(refused.statusCode).toBe(403)
-    expect(refused.json()).toEqual({ ok: false, code: 'mfa_required', error: 'Type the code.' })
+    expect(refused.json()).toEqual({ ok: false, code: 'forbidden', error: 'Needs settings.security.manage.' })
   })
 
-  it('PUT the daily cap, Pause with a reason, Resume with the code', async () => {
-    expect((await call('PUT', '/api/claude/autonomy', 'token-admin', { dailyAutoCap: 50, code: '123456' })).json()).toEqual({ ok: true, dailyAutoCap: 50 })
-    expect(m.setCap).toHaveBeenCalledWith(ADMIN, { dailyAutoCap: 50, code: '123456' })
+  it('PUT the daily cap, Pause with a reason, Resume — no code', async () => {
+    expect((await call('PUT', '/api/claude/autonomy', 'token-admin', { dailyAutoCap: 50 })).json()).toEqual({ ok: true, dailyAutoCap: 50 })
+    expect(m.setCap).toHaveBeenCalledWith(ADMIN, { dailyAutoCap: 50 })
     expect((await call('POST', '/api/claude/pause', 'token-admin', { reason: 'checking' })).json()).toEqual({ ok: true, handedBack: 2 })
     expect(m.pause).toHaveBeenCalledWith(ADMIN, 'checking')
-    expect((await call('POST', '/api/claude/resume', 'token-admin', { code: '123456' })).json()).toEqual({ ok: true })
-    expect(m.resume).toHaveBeenCalledWith(ADMIN, '123456')
+    expect((await call('POST', '/api/claude/resume', 'token-admin', {})).json()).toEqual({ ok: true })
+    expect(m.resume).toHaveBeenCalledWith(ADMIN)
   })
 })
 

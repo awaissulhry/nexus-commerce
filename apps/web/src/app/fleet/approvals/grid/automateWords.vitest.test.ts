@@ -1,8 +1,8 @@
 /**
  * Approvals grid — "Automate this kind…" (PLAN.md §4): the words and rules of the modal, and the modal built on the design
  * system only. The rule itself is the settings page's (claudeWords.ts); these pin what the modal adds on top of it:
- *   which levels a kind may take · why a kind always needs a person · the hint from the request · when Save asks for the
- *   2FA code · the history test in words · "Also approve this one" never ticked for the person.
+ *   which levels a kind may take · why a kind always needs a person · the hint from the request · what Save sends (no
+ *   code, Owner 2026-10-12 "B") · the history test in words · "Also approve this one" never ticked for the person.
  */
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -200,30 +200,29 @@ describe('limits', () => {
   })
 })
 
-describe('Save — when it asks for the 2FA code (as the settings page does)', () => {
-  it('raising the level asks for the code; the limits go only when they changed', () => {
-    expect(savePlan(rule(), 'auto', {})).toMatchObject({ kind: 'save', patch: { level: 'auto' }, needsCode: true, raise: { kind: 'level', level: 'auto' } })
-    expect(savePlan(rule(), 'confirm', { maxChangePercent: 'x' })).toMatchObject({ kind: 'save', patch: { level: 'confirm' }, needsCode: true })
-    const both = savePlan(rule(), 'auto', { maxChangePercent: '5' })
-    expect(both).toMatchObject({ kind: 'save', patch: { level: 'auto', limits: { maxChangePercent: 5 } }, needsCode: true, raise: { kind: 'level' } })
+describe('Save — what it sends, at once (no code since 2026-10-12)', () => {
+  it('raising the level sends it; the limits go only when they changed', () => {
+    expect(savePlan(rule(), 'auto', {})).toEqual({ kind: 'save', patch: { level: 'auto' } })
+    expect(savePlan(rule(), 'confirm', { maxChangePercent: 'x' })).toEqual({ kind: 'save', patch: { level: 'confirm' } })
+    expect(savePlan(rule(), 'auto', { maxChangePercent: '5' })).toEqual({ kind: 'save', patch: { level: 'auto', limits: { maxChangePercent: 5 } } })
   })
 
-  it('lowering, and only tightening, save at once with no code', () => {
+  it('lowering and tightening send just what changed', () => {
     const auto = rule({ level: 'auto', stored: 'auto' })
-    expect(savePlan(auto, 'ask', { maxChangePercent: '50' })).toEqual({ kind: 'save', patch: { level: 'ask' }, needsCode: false, raise: { kind: 'level', rule: auto, level: 'ask' } })
-    expect(savePlan(auto, 'auto', { maxChangePercent: '5' })).toMatchObject({ kind: 'save', patch: { limits: { maxChangePercent: 5 } }, needsCode: false })
+    expect(savePlan(auto, 'ask', { maxChangePercent: '50' })).toEqual({ kind: 'save', patch: { level: 'ask' } })
+    expect(savePlan(auto, 'auto', { maxChangePercent: '5' })).toEqual({ kind: 'save', patch: { limits: { maxChangePercent: 5 } } })
     expect(savePlan(auto, 'auto', { maxChangePercent: '10' })).toEqual({ kind: 'nothing' })
   })
 
-  it('loosening a limit asks for the code; a bad limit saves nothing', () => {
+  it('loosening a limit sends it too; a bad limit saves nothing', () => {
     const auto = rule({ level: 'auto', stored: 'auto' })
-    expect(savePlan(auto, 'auto', { maxChangePercent: '20' })).toMatchObject({ kind: 'save', patch: { limits: { maxChangePercent: 20 } }, needsCode: true, raise: { kind: 'limits' } })
+    expect(savePlan(auto, 'auto', { maxChangePercent: '20' })).toEqual({ kind: 'save', patch: { limits: { maxChangePercent: 20 } } })
     expect(savePlan(auto, 'auto', { maxChangePercent: '200' })).toEqual({ kind: 'invalid', errors: { maxChangePercent: 'At most 100.' } })
   })
 
-  it('limits saved that no longer fit the kind are set again, with no code when they do not loosen', () => {
+  it('limits saved that no longer fit the kind are set again', () => {
     const broken = rule({ level: 'auto', stored: 'auto', limitsInvalid: 'maxChangePercent: Too big' })
-    expect(savePlan(broken, 'auto', {})).toMatchObject({ kind: 'save', patch: { limits: { maxChangePercent: 10 } }, needsCode: false })
+    expect(savePlan(broken, 'auto', {})).toEqual({ kind: 'save', patch: { limits: { maxChangePercent: 10 } } })
   })
 
   it('the button says what pressing it does', () => {
@@ -290,16 +289,14 @@ describe('built on the design system', () => {
       expect(classes.split(/\s+/).every((c) => /^aq-auto(-[a-z]+)*$/.test(c)), classes).toBe(true)
     }
     expect(modal).toMatch(/const PORTAL = 'fleet-portal'/)
-    expect(modal.match(/className=\{PORTAL\}/g)).toHaveLength(2) // the modal and its 2FA dialog
+    expect(modal.match(/className=\{PORTAL\}/g)).toHaveLength(1) // the modal (no code dialog since 2026-10-12)
     expect(modal).toMatch(/import Link from '@\/lib\/workspaces\/Link'/)
     expect(modal).toMatch(/<Link href="\/settings\/ai\/claude"/)
   })
 
-  it('saves through the settings page\'s own call and its own 2FA dialog', () => {
+  it('saves through the settings page\'s own call, with no code dialog', () => {
     expect(modal).toMatch(/claudeApi\.setRule\(rule\.name, plan\.patch\)/)
-    expect(modal).toMatch(/claudeApi\.setRule\(rule\.name, \{ \.\.\.pending\.patch, code \}\)/)
-    expect(modal).toMatch(/<StepUpModal/)
-    expect(modal).toMatch(/err\.code === 'mfa_required'/)
+    expect(modal).not.toMatch(/StepUpModal|mfa_required/)
   })
 
   it('the stylesheet holds layout only, on the design tokens', () => {

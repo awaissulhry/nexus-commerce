@@ -10,7 +10,8 @@
  *                                                                 what Claude may do alone (effective view)
  *   GET  /api/advertising/automation/strategy/history?market=&categoryId|productId=   the recorded versions
  *   POST /api/advertising/automation/strategy/preview             one change planned: from → to, raise or lower, nothing saved
- *   PUT  /api/advertising/automation/strategy                     save it (expectVersion; a raise with `code`); answers `undo`
+ *   PUT  /api/advertising/automation/strategy                     save it (expectVersion; a raise needs the security
+ *                                                                 permission, no code since 2026-10-12); answers `undo`
  *
  * Money keys are absent (not null) when this person may not see ad-spend money: `'maxBidCents' in row` tells the two apart.
  */
@@ -188,7 +189,7 @@ export interface StrategyChangeBody {
   reason?: string
 }
 
-/** A refusal: the API's sentence, its code (`version_moved`, `mfa_required`, `mfa_invalid`, …) and HTTP status. */
+/** A refusal: the API's sentence, its code (`version_moved`, `forbidden`, …) and HTTP status. */
 export class StrategyError extends Error {
   constructor(message: string, readonly status: number, readonly code: string | null, readonly raises: string[] = []) {
     super(message)
@@ -209,7 +210,7 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 const query = (market: string, scope?: { categoryId?: string; productId?: string }, extra: Record<string, string> = {}) =>
   `?${new URLSearchParams({ market, ...(scope?.categoryId ? { categoryId: scope.categoryId } : {}), ...(scope?.productId ? { productId: scope.productId } : {}), ...extra })}`
 
-const write = (body: StrategyChangeBody & { code?: string }) => ({ headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+const write = (body: StrategyChangeBody) => ({ headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
 
 export const strategyApi = {
   rows: async (market: string) => (await call<{ markets: RowsMarket[] }>(query(market))).markets[0] ?? null,
@@ -217,7 +218,7 @@ export const strategyApi = {
   history: async (market: string, scope?: { categoryId?: string; productId?: string }) =>
     (await call<{ markets: Array<{ versions: HistoryVersion[] }> }>(`/history${query(market, scope, { limit: '20' })}`)).markets[0]?.versions ?? [],
   preview: (body: StrategyChangeBody) => call<StrategyPreview>('/preview', { method: 'POST', ...write(body) }),
-  save: (body: StrategyChangeBody, code?: string) => call<SavedStrategy>('', { method: 'PUT', ...write(code ? { ...body, code } : body) }),
+  save: (body: StrategyChangeBody) => call<SavedStrategy>('', { method: 'PUT', ...write(body) }),
 }
 
 /** A category of the business's own tree, as GET /api/pim/categories/tree answers. */

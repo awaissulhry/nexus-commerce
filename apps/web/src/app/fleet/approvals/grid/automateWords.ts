@@ -3,23 +3,21 @@
  * "Automate this kind…" modal, kept pure so they are tested without a browser.
  *
  * The rule itself is the one Settings › AI › Claude › Rules edits (one business × one kind, its level and its limits);
- * this file reuses that page's own helpers (claudeWords.ts: limit fields, parsing, raises, tightens) and only adds what
- * the modal says on top: which levels this kind may take, a hint from the request in front of the person, when the save
- * needs the 2FA code, and the history test in words. The API decides and refuses; nothing here is a second rule.
+ * this file reuses that page's own helpers (claudeWords.ts: limit fields, parsing) and only adds what the modal says on
+ * top: which levels this kind may take, a hint from the request in front of the person, and the history test in words.
+ * Saving asks for no code (Owner 2026-10-12, "B"): a raise needs settings.security.manage, which the API checks. The API
+ * decides and refuses; nothing here is a second rule.
  */
 import type { QueueRow, QueueTarget, QueueTrustLevel, RuleSimulation } from '@nexus/shared/approval-queue'
 import {
   limitFields,
   parseLimits,
-  raises,
   rank,
-  tightens,
   toolTitle,
   type ClaudeRule,
   type ClaudeTrust,
   type LimitField,
   type LimitsSchema,
-  type Raise,
 } from '@/app/settings/ai/claude/claudeWords'
 
 /** The change-plan tool: a plan has no rule of its own; it runs by itself only when every kind of step in it may. */
@@ -45,7 +43,7 @@ export const CHOICE_HINT: Record<AutomateLevel, string> = {
 }
 
 /** The line under the choices. */
-export const AUTOMATE_NOTE = 'A rule changes only new requests. You can switch it back to Ask me at any time, without a code.'
+export const AUTOMATE_NOTE = 'A rule changes only new requests. You can switch it back to Ask me at any time.'
 
 /** Under the history test: what it does not replay (claude-rule-simulate.service.ts). */
 export const TEST_NOTE = 'This test checks the limits only. A pause or the daily limit can still hold a request.'
@@ -215,17 +213,13 @@ export type SavePlan =
   | { kind: 'invalid'; errors: Record<string, string> }
   /** The level and the limits are as they are now: nothing to send. */
   | { kind: 'nothing' }
-  /**
-   * Send `patch` (PUT /api/claude/trust/:tool). `needsCode`: it lets Claude do more without a person — a higher level,
-   * or limits that do not only tighten — so the 2FA code is asked for first, as on the settings page. `raise` names it
-   * for the code dialog (claudeWords raiseText).
-   */
-  | { kind: 'save'; patch: { level?: AutomateLevel; limits?: Record<string, number> }; needsCode: boolean; raise: Raise }
+  /** Send `patch` (PUT /api/claude/trust/:tool), at once — a raise too (no code since 2026-10-12). */
+  | { kind: 'save'; patch: { level?: AutomateLevel; limits?: Record<string, number> } }
 
 /**
- * What Save sends, and whether it needs the code. Limits are sent only for `auto`, and only when they changed (or the
- * saved ones no longer fit the kind, so they must be set again). Tightening and lowering are brakes: no code. The API
- * judges again either way (claude-trust.service.ts setClaudeRule) and asks for the code itself if it disagrees.
+ * What Save sends. Limits are sent only for `auto`, and only when they changed (or the saved ones no longer fit the
+ * kind, so they must be set again). The API judges it (claude-trust.service.ts setClaudeRule): a raise or a loosening
+ * needs settings.security.manage, and its refusal is shown as it is.
  */
 export function savePlan(rule: ClaudeRule, chosen: AutomateLevel, typed: Record<string, string>): SavePlan {
   const fields = numberLimits(rule)
@@ -240,11 +234,7 @@ export function savePlan(rule: ClaudeRule, chosen: AutomateLevel, typed: Record<
   }
   const levelChanged = chosen !== rule.level
   if (!levelChanged && !limits) return { kind: 'nothing' }
-  const raising = raises(rule.level, chosen)
-  const loosening = !!limits && !tightens(fields, limits)
-  const patch = { ...(levelChanged ? { level: chosen } : {}), ...(limits ? { limits } : {}) }
-  const raise: Raise = raising || !limits ? { kind: 'level', rule, level: chosen } : { kind: 'limits', rule, limits }
-  return { kind: 'save', patch, needsCode: raising || loosening, raise }
+  return { kind: 'save', patch: { ...(levelChanged ? { level: chosen } : {}), ...(limits ? { limits } : {}) } }
 }
 
 /** The limits the history test sends: the typed numbers when they all parse, else null (the fields show why). */

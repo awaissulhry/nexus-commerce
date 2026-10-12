@@ -12,7 +12,7 @@
  *
  * The detail never writes. A mode pick, an archive, a restore, an Undo, a run's roll back or a decision on asks asks the
  * PAGE, which reviews it in the DS `ReviewChangesModal` stacked ON TOP of this detail (the Brain's Stop / Start again: its
- * small confirm, then the code); when the review closes the focus goes back to the control that opened it, inside this
+ * small confirm); when the review closes the focus goes back to the control that opened it, inside this
  * detail (audit M10). "Edit all" opens the bid builder. Each write
  * control is held with its reason (a permission, or a market Nexus only reads — the page passes the held words, A1).
  *
@@ -533,8 +533,8 @@ function Settings({ row, market, reloadKey }: { row: BidRuleRow; market: string;
 
 /**
  * The brain, per campaign (the Owner: the Bid page does this itself). Each campaign it works on reads Watch (it decides
- * and records) or Auto (it owns the campaign: its one bid writer); a pick asks for the change, reviewed by the page —
- * Auto with the approver's authenticator code (the API's rule: a new bid writer is a big door).
+ * and records) or Auto (it owns the campaign: its one bid writer); a pick asks for the change, reviewed by the page and
+ * approved with the Save (no authenticator code since 2026-10-12).
  */
 function BrainCampaigns({ row, market, reloadKey, held, autoHeld, onPick }: {
   row: BidRuleRow

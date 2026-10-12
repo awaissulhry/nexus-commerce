@@ -15,7 +15,8 @@
  *            words, "Harvest 3 · create 1".
  *   Done     POST /apply with the person's approval in the same click (one request, one approval; it goes to Amazon after
  *            the short undo window): "3 keywords · 6 blocks · goes to Amazon in 18 s", Undo, Open campaign. A new
- *            campaign needs the approver's authenticator code (code rule A): the DS code dialog asks for it. A plan that
+ *            campaign took the approver's authenticator code until 2026-10-12 (Owner, "B": none now); the DS code
+ *            dialog opens only when the API still asks it (`codes` / `stepUp`, `mfa_required`). A plan that
  *            moved since the review (409) is read again with a plain note.
  *   Undo     before it ran: taken back (nothing sent). After: its harvests put back — each keyword paused (never
  *            archived), each block removed — reviewed first, one request.
@@ -62,7 +63,7 @@ export type { HarvestToWindowProps } from '../_shared/types'
 
 type Step = 'setup' | 'review' | 'done' | 'undo'
 
-/** The change set's approval takes the approver's authenticator code (a new campaign: code rule A). */
+/** The change set's approval takes the approver's authenticator code: only when the API says so (none since 2026-10-12). */
 function needsCode(p: PreviewAnswer | null): boolean {
   return !!p && (p.approvals.codes > 0 || !!(p as PreviewAnswer & { stepUp?: unknown }).stepUp)
 }
@@ -200,7 +201,7 @@ function HarvestToBody({ source, mode, market, productId, returnFocusTo, onClose
   const [undoState, setUndoState] = useState<ReviewState>({ phase: 'ready' })
   const [undoAnswer, setUndoAnswer] = useState<UndoAnswer | null>(null)
   const [, setClock] = useState(0)
-  // A new campaign needs the approver's authenticator code (code rule A): the DS code dialog, stacked on this window.
+  // The approver's authenticator code, when the API asks it: the DS code dialog, stacked on this window.
   const [stepUp, setStepUp] = useState<{ busy: boolean; error: string | null } | null>(null)
   const asked = useRef(0)
 

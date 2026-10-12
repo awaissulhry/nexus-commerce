@@ -60,6 +60,8 @@ vi.mock('../../email/transport.js', async (importOriginal) => (await import('../
 
 import { A, B, e2eDoor, type Door } from '../../../test-support/ads-autonomy-e2e.js'
 import { A_TERMS, atAmazon, drainAdWrites, seedBusinessA, seedBusinessB } from '../../../test-support/ads-autonomy-e2e-seed.js'
+import { codeRuleA } from '../../../test-support/code-rule-a.js'
+import { __codeRuleTest } from '../../agents/tools/ads-code-rule.js'
 
 type Json = Record<string, any>
 let door: Door
@@ -72,6 +74,9 @@ let applicationId = ''
 const TIMEOUT = 60_000
 
 beforeAll(async () => {
+  // The flow proves rule A's big doors with the approver's code: their lines set back on for this file (every line is
+  // off since 2026-10-12, Owner "B"; ads-code-rule.vitest.test.ts proves that default).
+  codeRuleA()
   database = await formulaDatabase()
   vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1')
   vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'live')
@@ -85,6 +90,7 @@ beforeAll(async () => {
 }, 180_000)
 
 afterAll(async () => {
+  __codeRuleTest.reset()
   vi.unstubAllEnvs()
   await door?.close()
   await database?.close()

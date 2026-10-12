@@ -225,7 +225,7 @@ function Verbs({ row, actions, busy, onReject }: { row: QueueRow; actions: Appro
   const held = !row.canApprove
   const automate = automateOffer(row)
   const approveLabel = `${row.plan ? `Approve ${plural(row.plan.steps, 'change')}` : 'Approve'}${row.needsCode ? ' with code…' : ''}`
-  // W1-4 — a request that raises: the approve asks for the approver's authenticator code first.
+  // W1-4 — a request the API marks `needsCode`: the approve asks for the approver's authenticator code first.
   const code = codeSentence(row)
   return (
     <section className={styles.section} aria-label="Decide">

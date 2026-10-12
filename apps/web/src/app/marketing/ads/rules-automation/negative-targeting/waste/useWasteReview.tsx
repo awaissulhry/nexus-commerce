@@ -7,8 +7,8 @@
  *
  *   change   pause · negative exact / phrase / product (ad group or campaign) · turn on · remove negative · release ·
  *            keep paused until — POST /waste/preview (writes nothing) → Save → POST /waste/apply: ONE change set,
- *            approved by the person who clicks (a turn-on of a kept-paused keyword asks the authenticator code: the DS
- *            StepUpModal). Undo: inside the 20 s window the approve is taken back and the request rejected; after it,
+ *            approved by the person who clicks (a step the API says `needsCode` for asks the authenticator code in the DS
+ *            StepUpModal; none does since 2026-10-12). Undo: inside the 20 s window the approve is taken back and the request rejected; after it,
  *            the set is undone (undo-change), or one history row (POST /advertising/changes/:id/undo).
  *   skip     Skip 7 d / 30 d, Unskip — Nexus only; Undo is the other one.
  *   decide   Approve / Reject what waits for you — through the Approvals page's path. Undo of an approve: back to
@@ -68,7 +68,7 @@ export interface WasteReview {
   lines?: DecideLine[]
 }
 
-/** The authenticator code asked on top of the review (a turn-on of a kept-paused keyword raises spend). */
+/** The authenticator code asked on top of the review, when the API says a step needs it (`needsCode`). */
 export interface StepUpAsk { busy: boolean; error: string | null; approvalId: string | null }
 
 const pathNode = (items: Array<Ref | null>) => <EntityPath items={items} linkAs={WorkspaceLink} label="Where" />

@@ -179,7 +179,8 @@ const agentRoutes: FastifyPluginAsync = async (fastify) => {
       decision,
       reason: request.body?.reason?.trim() || undefined,
       actor: await requestPrincipal(request),
-      // ADS AUTONOMY W1-3 — a raise is approved only with the approver's authenticator code (as on the Approvals page).
+      // ADS AUTONOMY W1-3 — a request whose preview carries `stepUp` is approved only with the approver's authenticator
+      // code (as on the Approvals page); none does since 2026-10-12 (the code table's lines are off).
       code: request.body?.code,
     })
     if (!r.ok && r.error === 'approval not found')

@@ -2,19 +2,20 @@
 /**
  * MCP full control C9 — Settings › AI › Claude › Rules: how far Claude may go in this business without a person.
  *
- *   Brakes   Pause (a switch: on at once, no code — a brake is easy; off asks for the 2FA code), and the most changes
- *            that may run by rule in 24 hours (lowering at once; raising asks for the code).
+ *   Brakes   Pause (a switch: on and off at once), and the most changes that may run by rule in 24 hours.
  *   Tools    one row per tool Claude is offered: what it does, its level (a Select of the levels the tool allows —
- *            never above its ceiling), and its limits for Auto (edited in a dialog). Lowering a level is sent at once;
- *            raising one, or changing limits, first asks for the person's 2FA code. A list (ToolRows), not a grid: Tab
- *            reaches each Level select and Edit in the order shown, and at phone width each tool stacks (claude.css).
+ *            never above its ceiling), and its limits for Auto (edited in a dialog). Every change is sent at once; a
+ *            raise (a higher level, looser limits, a higher cap, Resume) needs settings.security.manage, and the
+ *            notice says what it lets Claude do (no authenticator code since 2026-10-12, Owner "B"). A list (ToolRows),
+ *            not a grid: Tab reaches each Level select and Edit in the order shown, and at phone width each tool
+ *            stacks (claude.css).
  *
  * The API decides and refuses (claude-control.routes.ts): its sentence is shown as it is. Every tool starts at Ask.
  */
 import { useEffect, useId, useMemo, useState } from 'react'
 import { Banner, Card, Field, Modal } from '@/design-system/components'
 import { Button, Input, Select, Toggle } from '@/design-system/primitives'
-import { claudeApi, ClaudeApiError } from './claudeApi'
+import { claudeApi } from './claudeApi'
 import {
   LEVEL_SHORT,
   levelLabel,
@@ -32,7 +33,6 @@ import {
   type ClaudeTrust,
   type Raise,
 } from './claudeWords'
-import { StepUpModal } from '@/design-system/patterns'
 
 interface RulesActions {
   busy: boolean
@@ -41,6 +41,12 @@ interface RulesActions {
 }
 
 const message = (error: unknown) => (error instanceof Error ? error.message : 'That could not be completed. Try again.')
+
+/** A raise is sent at once like any change; its notice says what it lets Claude do. */
+function raised(raise: Raise): string {
+  const { title, sentence } = raiseText(raise)
+  return `${title}: done. ${sentence}`
+}
 
 /**
  * The tools, one row each: the tool, what it does, its Level select, the most it may be set to, its limits for Auto.
@@ -96,7 +102,7 @@ function ToolRows({ tools, actions }: { tools: ClaudeRule[]; actions: RulesActio
   )
 }
 
-/** The limits of one tool, as fields; saving any change then asks for the code. */
+/** The limits of one tool, as fields; saving sends them at once. */
 function LimitsModal({ rule, onSave, onClose }: { rule: ClaudeRule; onSave: (limits: Record<string, number> | null) => void; onClose: () => void }) {
   const fields = useMemo(() => limitFields(rule.limitsSchema, rule.limits), [rule])
   const [typed, setTyped] = useState<Record<string, string>>({})
@@ -140,7 +146,7 @@ function LimitsModal({ rule, onSave, onClose }: { rule: ClaudeRule; onSave: (lim
             />
           </Field>
         ))}
-        <p className="claude-note">Tightening a limit takes effect at once. Loosening one, or going back to the defaults, asks for your two-factor code: limits decide what runs without a person.</p>
+        <p className="claude-note">Saving takes effect at once. Limits decide what runs without a person: loosening one, or going back to the defaults, needs the security permission.</p>
       </form>
     </Modal>
   )
@@ -150,8 +156,6 @@ export function RulesPanel({ rules, onChanged }: { rules: ClaudeRules; onChanged
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-  const [raise, setRaise] = useState<Raise | null>(null)
-  const [raiseError, setRaiseError] = useState<string | null>(null)
   const [limitsFor, setLimitsFor] = useState<ClaudeRule | null>(null)
   const [cap, setCap] = useState(String(rules.autonomy.dailyAutoCap))
   const pauseLabel = useId()
@@ -177,32 +181,13 @@ export function RulesPanel({ rules, onChanged }: { rules: ClaudeRules; onChanged
     busy,
     setLevel: (rule, level) => {
       if (level === rule.level) return
-      if (raises(rule.level, level)) {
-        setRaiseError(null)
-        setRaise({ kind: 'level', rule, level })
-      } else void run(() => claudeApi.setRule(rule.name, { level }), `${toolTitle(rule)} is now ${LEVEL_SHORT[level]}.`)
+      void run(
+        () => claudeApi.setRule(rule.name, { level }),
+        raises(rule.level, level) ? raised({ kind: 'level', rule, level }) : `${toolTitle(rule)} is now ${LEVEL_SHORT[level]}.`,
+      )
     },
     editLimits: (rule) => setLimitsFor(rule),
   }), [busy])
-
-  const submitRaise = async (code: string) => {
-    if (!raise) return
-    setBusy(true)
-    setRaiseError(null)
-    try {
-      if (raise.kind === 'level') await claudeApi.setRule(raise.rule.name, { level: raise.level, code })
-      else if (raise.kind === 'limits') await claudeApi.setRule(raise.rule.name, { limits: raise.limits, code })
-      else if (raise.kind === 'cap') await claudeApi.setDailyCap(raise.value, code)
-      else await claudeApi.resume(code)
-      setNotice(`${raiseText(raise).title}: done.`)
-      setRaise(null)
-      onChanged()
-    } catch (err) {
-      setRaiseError(err instanceof ClaudeApiError ? err.message : message(err))
-    } finally {
-      setBusy(false)
-    }
-  }
 
   const saveCap = () => {
     const value = Number(cap)
@@ -210,14 +195,13 @@ export function RulesPanel({ rules, onChanged }: { rules: ClaudeRules; onChanged
       setError('The daily limit is a whole number of changes, 0 or more.')
       return
     }
-    if (value > rules.autonomy.dailyAutoCap) {
-      setRaiseError(null)
-      setRaise({ kind: 'cap', value })
-    } else void run(() => claudeApi.setDailyCap(value), `At most ${value} changes may run by rule in 24 hours.`)
+    void run(
+      () => claudeApi.setDailyCap(value),
+      value > rules.autonomy.dailyAutoCap ? raised({ kind: 'cap', value }) : `At most ${value} changes may run by rule in 24 hours.`,
+    )
   }
 
   const { autonomy } = rules
-  const text = raise ? raiseText(raise) : null
   return (
     <div className="claude-panel">
       {error && <Banner tone="danger" onDismiss={() => setError(null)}>{error}</Banner>}
@@ -233,16 +217,13 @@ export function RulesPanel({ rules, onChanged }: { rules: ClaudeRules; onChanged
               disabled={busy}
               onChange={(next) => {
                 if (next) void run(() => claudeApi.pause(), 'Paused. Every change Claude asks for now waits for a person.')
-                else {
-                  setRaiseError(null)
-                  setRaise({ kind: 'resume' })
-                }
+                else void run(() => claudeApi.resume(), raised({ kind: 'resume' }))
               }}
             />
             <span id={pauseLabel}>Pause every change that runs by rule</span>
           </div>
           {!autonomy.paused && <p className="claude-note">{pauseSentence(autonomy)}</p>}
-          <Field label="Most changes that may run by rule in 24 hours" hint="Lowering is immediate; raising asks for your two-factor code." htmlFor={capId}>
+          <Field label="Most changes that may run by rule in 24 hours" hint="Takes effect at once. Raising it needs the security permission." htmlFor={capId}>
             <div className="claude-row">
               <Input id={capId} size="sm" inputMode="numeric" value={cap} onChange={(event) => setCap(event.target.value.replace(/\D/g, ''))} disabled={busy} />
               <Button size="sm" variant="secondary" onClick={saveCap} disabled={busy || cap === String(autonomy.dailyAutoCap)}>Save</Button>
@@ -253,7 +234,7 @@ export function RulesPanel({ rules, onChanged }: { rules: ClaudeRules; onChanged
 
       <Card
         header="What Claude may do here"
-        description="Every tool starts at Ask: a person approves each change in Nexus. Lowering a level takes effect at once; letting Claude do more asks for your two-factor code."
+        description="Every tool starts at Ask: a person approves each change in Nexus. A new level takes effect at once; letting Claude do more needs the security permission."
       >
         <ToolRows tools={rules.tools} actions={actions} />
       </Card>
@@ -265,36 +246,14 @@ export function RulesPanel({ rules, onChanged }: { rules: ClaudeRules; onChanged
           onSave={(limits) => {
             const rule = limitsFor
             setLimitsFor(null)
-            setRaiseError(null)
-            // Tightening is a brake: sent at once. Loosening (or a refusal asking for the code) goes through the code.
-            if (tightens(limitFields(rule.limitsSchema, rule.limits), limits)) {
-              void (async () => {
-                setBusy(true)
-                setError(null)
-                try {
-                  await claudeApi.setRule(rule.name, { limits })
-                  setNotice(`The limits for ${toolTitle(rule)} are tighter now.`)
-                  onChanged()
-                } catch (err) {
-                  if (err instanceof ClaudeApiError && err.code === 'mfa_required') setRaise({ kind: 'limits', rule, limits })
-                  else setError(message(err))
-                } finally {
-                  setBusy(false)
-                }
-              })()
-            } else setRaise({ kind: 'limits', rule, limits })
+            const tighter = tightens(limitFields(rule.limitsSchema, rule.limits), limits)
+            void run(
+              () => claudeApi.setRule(rule.name, { limits }),
+              tighter ? `The limits for ${toolTitle(rule)} are tighter now.` : raised({ kind: 'limits', rule, limits }),
+            )
           }}
         />
       )}
-      <StepUpModal
-        open={!!raise}
-        title={text?.title ?? ''}
-        sentence={text?.sentence ?? ''}
-        busy={busy}
-        error={raiseError}
-        onSubmit={(code) => void submitRaise(code)}
-        onClose={() => setRaise(null)}
-      />
     </div>
   )
 }

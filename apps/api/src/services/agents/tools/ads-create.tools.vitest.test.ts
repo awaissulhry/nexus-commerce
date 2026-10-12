@@ -11,6 +11,8 @@
  * approval-status counts what it created; a plan or ceiling that moved after approval is not run.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { codeRuleA } from '../../../test-support/code-rule-a.js'
+import { __codeRuleTest } from './ads-code-rule.js'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
 import { formulaDatabase } from '../../../test-support/formula-database.js'
 import { seedAdsFixture } from '../../../test-support/ads-fixtures.js'
@@ -80,8 +82,9 @@ beforeAll(async () => {
     }
   })
 }, 180_000)
-afterAll(async () => { vi.unstubAllEnvs(); await database?.close() }, 30_000)
-beforeEach(() => { vi.unstubAllEnvs() })
+afterAll(async () => { __codeRuleTest.reset(); vi.unstubAllEnvs(); await database?.close() }, 30_000)
+// Rule A's big doors set back on: the code path stays proven (every line is off since 2026-10-12, Owner "B").
+beforeEach(() => { vi.unstubAllEnvs(); codeRuleA() })
 
 const plan = (extra: Record<string, unknown> = {}) => ({
   market: 'IT', name: 'Italy jackets launch', skus: ['TEST-JACKET-1', 'TEST-JACKET-2'], dailyBudgetCents: 1500, defaultBidCents: 60,

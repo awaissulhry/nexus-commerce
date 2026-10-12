@@ -29,11 +29,10 @@
  *                                                         whether this person may
  *   PUT  /api/advertising/automation/playbook           save it. `expectVersion` (the version read; 0 for a new one) is
  *                                                         required: 409 `version_moved` when it moved since. A raise
- *                                                         needs settings.security.manage and `code`, the person's fresh
- *                                                         authenticator code: 403 `mfa_required` (naming the raises),
- *                                                         400 `mfa_invalid`, 429 `mfa_locked`. Anything else saves at
- *                                                         once. The answer carries `undo`, the change that puts the
- *                                                         previous version back.
+ *                                                         needs settings.security.manage (403 naming the raises); no
+ *                                                         authenticator code since 2026-10-12 (Owner, "B"). Anything
+ *                                                         else saves at once. The answer carries `undo`, the change
+ *                                                         that puts the previous version back.
  *
  * Both take ads.automation.manage (the manifest's advertising /automation rule) and the ad-spend money a playbook holds
  * (financials.adspend.view, checked here): a person who may not see the money does not set it.
@@ -122,7 +121,7 @@ const advertisingPlaybookRoutes: FastifyPluginAsync = async (fastify) => {
   // PB-4 — a dry run of building one product's playbook in one market: nothing is created, saved or sent.
   fastify.get('/advertising/automation/playbook/compile', read('compile'))
 
-  // PB-3 — the change planned, nothing saved: what the Playbook section shows before Save (and whether Save asks for the code).
+  // PB-3 — the change planned, nothing saved: what the Playbook section shows before Save (and whether this person may raise).
   fastify.post('/advertising/automation/playbook/preview', async (request, reply) => {
     const person = await writerOf(request, reply)
     if (!person) return reply
@@ -132,36 +131,34 @@ const advertisingPlaybookRoutes: FastifyPluginAsync = async (fastify) => {
     return { ...planned.plan.preview, mayRaise: hasPermission(person.permissions, F.settingsSecurityManage) }
   })
 
-  // PB-3 — save it: at once, or a raise with the person's fresh authenticator code (the W1 rule).
+  // PB-3 — save it: at once, or a raise by a person with settings.security.manage (no code since 2026-10-12).
   fastify.put('/advertising/automation/playbook', async (request, reply) => {
     const person = await writerOf(request, reply)
     if (!person) return reply
-    const { code, ...body } = bodyOf(request)
+    const { code: _code, ...body } = bodyOf(request)
     if (typeof body.expectVersion !== 'number') {
       return reply.code(400).send({ error: 'expectVersion: the version you read (0 when it does not exist yet), so a change saved meanwhile is never overwritten.' })
     }
     const planned = await planPlaybookChange(body)
     if ('error' in planned) return reply.code(planned.status).send({ error: planned.error, ...(planned.code ? { code: planned.code } : {}) })
     const { plan } = planned
-    let stepUpAt: Date | null = null
     if (plan.direction === 'raise') {
       const refused = await mayRaise(
         { userId: person.userId, label: person.label, canManage: hasPermission(person.permissions, F.settingsSecurityManage) },
-        code,
         PLAYBOOK_RAISE,
       )
       if (refused) {
         const { status, ...rest } = refused
         return reply.code(status).send({ ...rest, raises: plan.raises })
       }
-      stepUpAt = new Date()
     }
     const out = await applyPlaybookPlan(plan, {
       via: 'screen',
       actor: person.label,
       actorUserId: person.userId,
       approvalId: null,
-      stepUpAt,
+      stepUpAt: null,
+      raiseWithoutCode: plan.direction === 'raise' ? 'saved on the Playbook screen by a person with settings.security.manage, without the authenticator code' : null,
       updatedBy: `user:${person.userId}`,
     })
     if ('error' in out) return reply.code(out.status).send({ error: out.error, code: out.code })
@@ -175,7 +172,7 @@ const advertisingPlaybookRoutes: FastifyPluginAsync = async (fastify) => {
       liveEffect: plan.preview.liveEffect,
       ...(plan.preview.recipes ? { recipes: plan.preview.recipes } : {}),
       // The change that puts the previous version back (the Playbook section's Undo), as set-ads-playbook's own undo
-      // writes it: previewed and saved through these same routes, so putting back a raise asks for the code.
+      // writes it: previewed and saved through these same routes, so putting back a raise is a raise like any other.
       undo: undoArgsOf(out.before, out.after),
     }
   })

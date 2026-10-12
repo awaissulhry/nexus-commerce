@@ -127,7 +127,7 @@ export function claudeRows(rules: ClaudeRules | null, watch: WatchSummary | null
     .map((t) => claudeRow(t, rules.autonomy, byTool.get(t.name), g))
 }
 
-/** The code dialog's title and sentence for a raise, in the Control Room's words (Settings › AI › Claude has its own). */
+/** A raise's title and sentence, in the Control Room's words (Settings › AI › Claude has its own). */
 export function claudeRaiseText(rule: Pick<ClaudeRule, 'name' | 'title'>, to: ClaudeTrust): { title: string; sentence: string; confirmLabel: string } {
   const name = `“${claudeName(rule)}”`
   const sentence = to === 'auto'
@@ -163,8 +163,36 @@ export function claudeLevelOptions(rule: ClaudeRule): Array<{ value: ClaudeTrust
 }
 
 const RANK: readonly ClaudeTrust[] = ['off', 'ask', 'confirm', 'watch', 'auto']
-/** A raise lets Claude do more without a person: it needs a fresh authenticator code (the server checks it too). */
+/**
+ * A raise lets Claude do more without a person: it needs settings.security.manage (the server checks it too). No
+ * authenticator code since 2026-10-12 (Owner, "B"): it is a plain question, like lowering.
+ */
 export const claudeRaises = (from: ClaudeTrust, to: ClaudeTrust) => RANK.indexOf(to) > RANK.indexOf(from)
+
+/** The plain question before a raise. */
+export function claudeRaiseImpact(rule: Pick<ClaudeRule, 'name' | 'title'>, to: ClaudeTrust): ActionImpact {
+  const { title, sentence, confirmLabel } = claudeRaiseText(rule, to)
+  return {
+    level: 'confirm',
+    title: `${title}?`,
+    consequences: [sentence, 'It applies to new requests.'],
+    reach: 'local',
+    reversal: { verb: 'Lower it again', fidelity: 'exact' },
+    confirmLabel,
+  }
+}
+
+/** The plain question before Resume. */
+export function claudeResumeImpact(): ActionImpact {
+  return {
+    level: 'confirm',
+    title: 'Resume Claude’s changes by rule?',
+    consequences: ['Changes set to Auto run by your rule again, inside their limits and the ads strategy — in every part of Nexus.'],
+    reach: 'local',
+    reversal: { verb: 'Pause', fidelity: 'exact' },
+    confirmLabel: 'Resume',
+  }
+}
 
 /** The watch report of one kind, as the side panel says it. Null when the kind was never watched in the window. */
 export function watchReport(kind: WatchKind | undefined, now = Date.now()): {
@@ -196,7 +224,7 @@ export function watchReport(kind: WatchKind | undefined, now = Date.now()): {
   }
 }
 
-/** The plain question before a lower level (no code: a brake is easy). */
+/** The plain question before a lower level (a brake is easy). */
 export function claudeLowerImpact(title: string, from: ClaudeTrust, to: ClaudeTrust): ActionImpact {
   return {
     level: 'confirm',
@@ -206,12 +234,12 @@ export function claudeLowerImpact(title: string, from: ClaudeTrust, to: ClaudeTr
       CLAUDE_MEANS[to],
     ],
     reach: 'local',
-    reversal: { verb: 'Raise it again (with your code)', fidelity: 'exact' },
+    reversal: { verb: 'Raise it again', fidelity: 'exact' },
     confirmLabel: `Lower to ${CLAUDE_WORD[to]}`,
   }
 }
 
-/** The plain question before Pause: a brake, so no code (Resume asks for one). */
+/** The plain question before Pause (a brake). */
 export function claudePauseImpact(): ActionImpact {
   return {
     level: 'confirm',
@@ -221,7 +249,7 @@ export function claudePauseImpact(): ActionImpact {
       'Changes that wait for their undo time go back to a person.',
     ],
     reach: 'local',
-    reversal: { verb: 'Resume (with your code)', fidelity: 'exact' },
+    reversal: { verb: 'Resume', fidelity: 'exact' },
     confirmLabel: 'Pause',
   }
 }

@@ -5,19 +5,20 @@
  *
  *   enroll · set-level · lock · unlock · exclude · include · set-value · leave
  *
- * THE OWNER'S CODE RULE A (ads-code-rule.ts 'set-ads-brain: a lever to AUTO') — a change that takes any lever to AUTO (on
+ * THE OWNER'S CODE RULE (ads-code-rule.ts 'set-ads-brain: a lever to AUTO') — a change that takes any lever to AUTO (on
  * the product or one of its own campaigns, whichever op does it, an enrollment with an adopted AUTO included) or puts a
- * campaign under the bid brain is a BIG DOOR: approving it needs the approver's authenticator code (the preview's
- * `stepUp`, checked again on the fresh dry run in `execute`). Batch 2 review fix (lead decision) — so is op set-value
- * RAISING the product's portfolio cap limit (portfolioCapLimitCents; 'set-ads-brain: a portfolio cap limit raised'); a lower
- * limit is a normal approval. Everything else is day-to-day: a person's normal approval, with what can add spend listed in
- * `raises` and said in the effect. Every op waits for a person: never by rule, never confirmed in Claude (ceiling ask).
+ * campaign under the bid brain is a BIG DOOR: where the table's line is on, approving it needs the approver's
+ * authenticator code (the preview's `stepUp`, checked again on the fresh dry run in `execute`). Batch 2 review fix (lead
+ * decision) — so is op set-value RAISING the product's portfolio cap limit (portfolioCapLimitCents; 'set-ads-brain: a
+ * portfolio cap limit raised'). Every line is off since 2026-10-12 (Owner, "B"): all of it is a person's normal approval,
+ * with what can add spend listed in `raises` and said in the effect. Every op waits for a person: never by rule, never
+ * confirmed in Claude (ceiling ask).
  *
  * Approved, it runs as the person who approved it, on the basis it was approved on (the brain's version and the plan's
  * basis): anything moved since refuses it. op leave gives back, after the commit, the bids and placements of each own
  * campaign the bid brain ran (set-bid-brain-enrollment's putBack, the write gate judging each write), or what a stop saved
  * on those taken back to shadow; withdraws (in the commit) every request the brain asked for that still waits; and
- * resumes each campaign the brain's own pause holds (pauses: resume — a big door, the approver's code), as the approver.
+ * resumes each campaign the brain's own pause holds (pauses: resume — a big door), as the approver.
  * undo-change asks this tool for the op that puts the choice back.
  */
 import { z } from 'zod'
@@ -127,8 +128,8 @@ const describeOps =
   + 'happens to its own campaigns the bid brain runs: give-back (default: bids and placements back as they were when each '
   + 'went LIVE), shadow (bids stay where they are) or keep (the bid brain keeps running them one by one); every request the '
   + 'brain asked for that still waits for a person is withdrawn; pauses says what happens to the campaigns the brain\'s own '
-  + 'pause holds: resume (default: switched back on as the approver — lifting an automation\'s pause needs the approver\'s '
-  + 'authenticator code) or keep (they stay paused, each named).'
+  + 'pause holds: resume (default: switched back on as the approver — lifting an automation\'s pause is a big door, '
+  + 'said in the preview) or keep (they stay paused, each named).'
 
 const setAdsBrain: AgentTool = {
   name: CONTROL_TOOL,
@@ -140,10 +141,9 @@ const setAdsBrain: AgentTool = {
     + 'and shared — a shared campaign is no brain\'s — the excluded and locked ones and those with a level of their own), '
     + 'each change from → to, what the brain will start doing lever by lever, what can add spend, and the refusals: a '
     + 'level a lever does not take yet, a value outside its bounds, a lever to AUTO while one of Amazon\'s own rules acts on '
-    + 'it, a change that changes nothing. Any change that takes a lever to AUTO (or puts a campaign under the bid brain) is '
-    + 'a big door: approving it needs the approver\'s authenticator code, and so does a value that raises the product\'s '
-    + 'portfolio cap limit (portfolioCapLimitCents); OBSERVE, PROPOSE, OFF, locks, exclusions, other values (a lower limit '
-    + 'included) and leave are a normal approval, with what adds spend said. A person approves every change in Nexus; nothing '
+    + 'it, a change that changes nothing. Every change is a person\'s normal approval (no authenticator code) — a lever to '
+    + 'AUTO (or a campaign under the bid brain) and a value that raises the product\'s portfolio cap limit '
+    + '(portfolioCapLimitCents) included —, with what adds spend said. A person approves every change in Nexus; nothing '
     + 'changes until then, and an approved change runs only on the facts it was approved on. ads-brain view map shows '
     + 'every setting with its source afterwards.',
   input: z.object({

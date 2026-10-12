@@ -13,12 +13,12 @@
  *            AdsStrategyVersion row (changes, direction, via, approvalId, actor, stepUpAt), the protected terms and the
  *            campaign targets, each with its ads audit row.
  *   who      a lowering is free for anyone who may set the strategy (ads.automation.manage, and the ad-spend money it
- *            holds). A RAISE needs settings.security.manage and a fresh authenticator code (Owner decision 2026-10-06):
- *            on the screen with the code (the route), from Claude approved in Nexus with the code or confirmed in Claude
- *            with it (set-ads-strategy). Never by rule — with ONE reviewed exception (PB-9): a playbook phase switch
- *            the business's rule runs because the Owner allowed raising phase moves (apply-ads-playbook `allowPhaseUp`,
- *            itself a limit only loosened with his code); its version says so and keeps no code time. Never a raise of
- *            what Claude may do alone (claudeAutonomy): that one always needs the code.
+ *            holds). A RAISE needs a person with settings.security.manage: on the screen (the route), or from Claude
+ *            approved in Nexus or confirmed in Claude (set-ads-strategy). Since 2026-10-12 (Owner, "B") no authenticator
+ *            code is asked for it, unless the code table's line is set back (agents/tools/ads-code-rule.ts). Never by
+ *            rule — with ONE reviewed exception (PB-9): a playbook phase switch the business's rule runs because the
+ *            Owner allowed raising phase moves (apply-ads-playbook `allowPhaseUp`); its version says so and keeps no code
+ *            time. Never a raise of what Claude may do alone (claudeAutonomy) by rule: that one is always a person's.
  *
  * 🔴 Money stays keyed. `changes[].field` is a registry key or a column name, a group's values sit under their column
  * names, and labels carry no amount: the strategy reads strip ad-spend money by key (fields.ts STRATEGY_MONEY).
@@ -38,6 +38,7 @@ import prisma from '../../../db.js'
 import { patchDynamicBiddingIn } from '../dynamic-bidding-write.js'
 import { normaliseTerm } from '../ads-negation-policy.js'
 import { STEP_UP_NEEDS } from '../../agents/step-up-approval.js'
+import { needsCode } from '../../agents/tools/ads-code-rule.js'
 import type { RaiseWords } from '../../agents/claude-trust.service.js'
 import { exploreBudgetOf } from '../bid-brain/explore.js'
 import { accountDefaultFraction, readOwnerTargets, targetFraction } from '../ads-target-acos-resolver.js'
@@ -787,7 +788,7 @@ function previewOf(p: {
     changes: p.changes,
     direction: p.direction,
     raises: p.raises,
-    stepUp: p.direction === 'raise'
+    stepUp: p.direction === 'raise' && needsCode('set-ads-strategy: a raise')
       ? {
           what: 'raises the ads strategy',
           raises: p.raises,
@@ -824,14 +825,14 @@ export interface StrategyWriter {
   /**
    * PB-9 — the one reviewed way a raise is written without a code: a playbook phase switch run by the business's rule
    * because the Owner let raising phase moves run so (apply-ads-playbook `allowPhaseUp`, a limit only loosened with his
-   * authenticator code). The sentence that says so is kept with the version; stepUpAt stays empty (no code was typed).
-   * Never for a raise of what Claude may do alone: `applyStrategyPlan` refuses that without a code.
+   * authenticator code until 2026-10-12). The sentence that says so is kept with the version; stepUpAt stays empty (no
+   * code was typed). Never for a raise of what Claude may do alone: `applyStrategyPlan` refuses that by rule.
    */
   raiseByRule?: string | null
   /**
-   * The Owner's code rule (agents/tools/ads-code-rule.ts): a raise a PERSON approved where the code table asks no code
-   * for that door — the sentence that says so is kept with the version; stepUpAt stays empty. Empty today: every strategy
-   * raise is a big door. Never for a raise of what Claude may do alone (always with his code).
+   * A raise a PERSON decided without the code: approved where the code table (agents/tools/ads-code-rule.ts) asks no code
+   * for that door, or saved on the Strategy screen (Owner, 2026-10-12: no code for a raise) — the sentence that says so
+   * is kept with the version; stepUpAt stays empty.
    */
   raiseWithoutCode?: string | null
   /** On the row: 'user:<id>' or 'claude:<approvalId>'. */
@@ -848,10 +849,10 @@ const MOVED = 'The strategy (or a protected term or campaign target it changes) 
 
 /** Write a planned change in ONE transaction, with its version row; a row, term or campaign that moved since → a conflict. */
 export async function applyStrategyPlan(plan: StrategyPlan, writer: StrategyWriter): Promise<ApplyOutcome> {
-  if (plan.direction === 'raise' && !writer.stepUpAt && !writer.raiseByRule?.trim() && !writer.raiseWithoutCode?.trim()) throw new Error('a raise of the ads strategy is written only with the time its authenticator code was confirmed')
-  // The Owner's rule: more of what Claude may do alone is ALWAYS raised with his code — never under raiseByRule.
-  if (!writer.stepUpAt && plan.changes.some((c) => c.field === 'claudeAutonomy' && c.direction === 'raise')) {
-    throw new Error('a raise of what Claude may do alone is written only with the time its authenticator code was confirmed, never by rule')
+  if (plan.direction === 'raise' && !writer.stepUpAt && !writer.raiseByRule?.trim() && !writer.raiseWithoutCode?.trim()) throw new Error('a raise of the ads strategy is written only as a person decided it (with or without the code), or by the rule that lets it')
+  // The Owner's rule: more of what Claude may do alone is ALWAYS raised by a person — never under raiseByRule.
+  if (!writer.stepUpAt && !writer.raiseWithoutCode?.trim() && plan.changes.some((c) => c.field === 'claudeAutonomy' && c.direction === 'raise')) {
+    throw new Error('a raise of what Claude may do alone is written only as a person decided it, never by rule')
   }
   const { scope } = plan
   const without = writer.raiseByRule?.trim() || writer.raiseWithoutCode?.trim()

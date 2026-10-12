@@ -1,8 +1,8 @@
 /**
  * ADS PLAYBOOK PB-3 — is a playbook change a RAISE? Pure. Nothing at Amazon moves when a playbook is saved, but what it
  * says is what a later apply builds and starts. So a change is judged by what it would make an ENROLLED product spend
- * once applied, the W1 rule (Owner decision 2026-10-06): a raise needs settings.security.manage and a fresh
- * authenticator code, and never runs by rule.
+ * once applied, the W1 rule (Owner decision 2026-10-06): a raise is a person's decision (settings.security.manage on the
+ * screen; no authenticator code since 2026-10-12), and never runs by rule.
  *
  *   raise   enrolling a product · a higher (or a first) daily budget or base bid · a positive term added (brand,
  *           category, competitor, competitor ASIN), a category term newly exact at start, a product negative removed ·

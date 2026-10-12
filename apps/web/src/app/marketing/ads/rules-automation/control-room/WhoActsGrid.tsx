@@ -14,8 +14,7 @@ import { memo, useCallback, useMemo, useState } from 'react'
 import { Search } from 'lucide-react'
 import { Button, Input, Pill, type Tone } from '@/design-system/primitives'
 import { Banner, Listbox, type ListboxOption } from '@/design-system/components'
-import { GridToolbar, StepUpModal } from '@/design-system/patterns'
-import { claudeApi } from '@/app/settings/ai/claude/claudeApi'
+import { GridToolbar } from '@/design-system/patterns'
 
 import {
   GridCard,
@@ -28,8 +27,7 @@ import {
   type NexusGridProps,
 } from '@/design-system/grid'
 import Link from '@/lib/workspaces/Link'
-import { ClaudeKindDrawer, type ClaudeCodeStep } from './ClaudeKindDrawer'
-import { CLAUDE_WORD, claudeName, claudeRaiseText } from './claudeKinds'
+import { ClaudeKindDrawer } from './ClaudeKindDrawer'
 import { EngineDrawer } from './EngineDrawer'
 import { RuleDrawer } from './RuleDrawer'
 import { LEVEL_WORD } from './levelWords'
@@ -106,10 +104,6 @@ export function WhoActsGrid({ rows, error, claudeError, readiness, protectedTerm
   onClaudeChanged: () => void
 }) {
   const [openId, setOpenId] = useState<string | null>(null)
-  // A raise of a Claude kind (or Resume) asks for the code in a Modal, which would open behind a drawer: the drawer
-  // steps aside while the code is asked, and opens again after.
-  const [codeAsk, setCodeAsk] = useState<{ rowId: string; step: ClaudeCodeStep; busy: boolean; error: string | null } | null>(null)
-  const [claudeDone, setClaudeDone] = useState<string | null>(null)
 
   const all = useMemo(() => rows ?? [], [rows])
   const shown = useMemo(() => all.filter((r) => rowMatches(r, filter)), [all, filter])
@@ -195,47 +189,13 @@ export function WhoActsGrid({ rows, error, claudeError, readiness, protectedTerm
       {open?.kind === 'engine' && open.engine && (
         <EngineDrawer row={open as ActorRow & { engine: Engine }} onClose={() => setOpenId(null)} onChanged={onEnginesChanged} />
       )}
-      {open?.kind === 'claude' && open.claude && !codeAsk && (
+      {open?.kind === 'claude' && open.claude && (
         <ClaudeKindDrawer
           row={open as ActorRow & { claude: NonNullable<ActorRow['claude']> }}
-          done={claudeDone}
-          onClose={() => { setOpenId(null); setClaudeDone(null) }}
+          onClose={() => setOpenId(null)}
           onChanged={onClaudeChanged}
-          onCode={(step) => { setClaudeDone(null); setCodeAsk({ rowId: open.id, step, busy: false, error: null }) }}
         />
       )}
-      {(() => {
-        const asked = codeAsk ? all.find((r) => r.id === codeAsk.rowId)?.claude?.rule : undefined
-        const step = codeAsk?.step
-        const text = asked && step
-          ? step.kind === 'level'
-            ? claudeRaiseText(asked, step.to)
-            : { title: 'Resume Claude’s changes by rule', sentence: 'Changes set to Auto run by your rule again, inside their limits and the ads strategy — in every part of Nexus.', confirmLabel: 'Resume' }
-          : null
-        return (
-          <StepUpModal
-            open={!!(codeAsk && asked)}
-            title={text?.title ?? ''}
-            sentence={text?.sentence ?? ''}
-            confirmLabel={text?.confirmLabel ?? 'Confirm'}
-            busy={!!codeAsk?.busy}
-            error={codeAsk?.error ?? null}
-            onClose={() => { if (!codeAsk?.busy) setCodeAsk(null) }}
-            onSubmit={(code) => {
-              if (!codeAsk || !asked || !step) return
-              const ask = codeAsk
-              setCodeAsk({ ...ask, busy: true, error: null })
-              const sent = step.kind === 'level'
-                ? claudeApi.setRule(asked.name, { level: step.to, code }).then(() => `“${claudeName(asked)}” is at ${CLAUDE_WORD[step.to]} for new requests.`)
-                : claudeApi.resume(code).then(() => 'Claude’s changes by rule run again.')
-              sent.then(
-                (done) => { setCodeAsk(null); setClaudeDone(done); onClaudeChanged() },
-                (e: unknown) => setCodeAsk({ ...ask, busy: false, error: e instanceof Error ? e.message : String(e) }),
-              )
-            }}
-          />
-        )
-      })()}
       {open?.kind === 'rule' && open.rule && (
         <RuleDrawer row={open as ActorRow & { rule: Rule }} readiness={readiness.get(open.rule.id)} onClose={() => setOpenId(null)} onChanged={onRulesChanged} />
       )}

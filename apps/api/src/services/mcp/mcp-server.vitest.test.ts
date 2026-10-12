@@ -131,9 +131,10 @@ describe('C3 — the server and every change tool name the business', () => {
       'Archive an ad (archive-ads) only when it is meant for good',
       // W1-8 — where the ads strategy lives, and that it only narrows.
       'read it with ads-strategy, change', 'It only narrows what this business lets',
-      // BB-4 — the bid brain's read tool; BB-6 — it writes only for a campaign put LIVE, with the approver's code.
+      // BB-4 — the bid brain's read tool; BB-6 — it writes only for a campaign put LIVE, a person's approval (no code
+      // since 2026-10-12, Owner "B").
       'bid-brain (read only; the bid', 'writes only for a campaign set-bid-brain-enrollment put LIVE',
-      "needs the approver's authenticator code; its diff view",
+      "is a person's approval; its diff view",
       // AB-3 — the brain's map, read only; every view it has (AB-7 money, AB-9 terms, AB-12 state, AB-13 hours, AB-10 negatives, AB-11 harvest, AB-14 report).
       'ads-brain (read only; views map, clashes, setup, money, terms, state, hours, negatives, harvest, report, structure, bidding, retire, proof)',
       // AB-11 — the brain's harvest request, a person's decision.
@@ -141,22 +142,22 @@ describe('C3 — the server and every change tool name the business', () => {
       // AB-13 (batch 2 review fix) — the brain's painted hourly plan, named, and that it reaches Amazon through the engine.
       'An hourly plan the brain painted is applied with apply-brain-hourly-plan',
       'bid engine applies at Amazon from its next run; a person approves it in Nexus, never by rule',
-      // One brain — the Owner's control tool; a lever to AUTO is a big door.
-      'The Owner controls a product\'s brain with set-ads-brain', 'lever to AUTO needs the approver\'s authenticator code',
+      // One brain — the Owner's control tool; a lever to AUTO and a raised portfolio cap limit: a normal approval (B).
+      'The Owner controls a product\'s brain with set-ads-brain',
+      'to AUTO and a raise of the product\'s portfolio cap limit (portfolioCapLimitCents) included, is a person\'s normal approval',
       // AB-15 — the kill switch per lever, a person's decision.
       'One lever of the brain is stopped at once, for one product or every product, with set-brain-kill-switch',
-      // Batch 2 review fix (lead decision, code rule A) — two more big doors: a raised portfolio cap limit, a kill ended.
-      'and so does raising the product\'s portfolio cap limit',
-      'ending one lets the brain write that lever again and needs the approver\'s authenticator code',
+      // Batch 2 review fix (lead decision) — a kill ended: a normal approval since 2026-10-12 (B).
+      'ending one lets the brain write that lever again, also a normal approval',
       // AB-20 — the duplicate writers retired and given back (a person's decision), and the views that show them and the proof.
       'retire-ads-writers (op retire, or op give-back; never deleted; a person approves it): ads-brain view retire lists what',
-      // PB-11 — where the playbook lives, and that a start needs the approver's code.
+      // PB-11 — where the playbook lives, and that a start is a person's approval.
       'read it with ads-playbook, change it with', 'start, stop or sync its campaigns, switch its phase',
-      "a start needs the approver's authenticator code",
+      "a start is a person's approval",
       // W4-14 — a copy into another market, a person's hourly plan and a person's pause keep their own doors.
       'a copy into another market never runs by rule',
       'An hourly bid plan a person made changes by rule only where the business allowed it',
-      "only with enable-ads includePeoplesPauses and the approver's authenticator code, never by rule",
+      "only with enable-ads includePeoplesPauses and a person's approval, never by rule",
       // Platform health watchdog (2026-10-07) — the daily checks are read first in an unattended run.
       'read platform-health-checks first in a daily or unattended run']) {
       expect(mcpInstructions(business), rule).toContain(rule)

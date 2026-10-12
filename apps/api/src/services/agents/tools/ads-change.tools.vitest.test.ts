@@ -8,6 +8,8 @@
  * undo asks the same tool for the old value; a starting value that moved is not run.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { codeRuleA } from '../../../test-support/code-rule-a.js'
+import { __codeRuleTest } from './ads-code-rule.js'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
 import { formulaDatabase } from '../../../test-support/formula-database.js'
 import { seedAdsFixture } from '../../../test-support/ads-fixtures.js'
@@ -71,8 +73,9 @@ beforeAll(async () => {
     await database.client.campaign.update({ where: { id: 'c-pin' }, data: { pinBudget: true, pinPlacement: true } })
   })
 }, 180_000)
-afterAll(async () => { vi.unstubAllEnvs(); await database?.close() }, 30_000)
-beforeEach(() => { vi.unstubAllEnvs() })
+afterAll(async () => { __codeRuleTest.reset(); vi.unstubAllEnvs(); await database?.close() }, 30_000)
+// Rule A's big doors set back on: the code path stays proven (every line is off since 2026-10-12, Owner "B").
+beforeEach(() => { vi.unstubAllEnvs(); codeRuleA() })
 
 describe('A6 — set-campaign-budget', () => {
   it('previews the budget now and after in the campaign\'s own currency, and where it lands', async () => {

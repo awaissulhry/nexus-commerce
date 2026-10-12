@@ -14,9 +14,9 @@
  *   start   PB-5b — the built campaigns start spending (ads-playbook/start.ts): on the live-write allowlist, their
  *           planned bids back (never above what was remembered; a bid moved since stays; an engine's floor and an ad
  *           group's own floor stay), the placements the build deferred, the portfolio repair, then the playbook's
- *           hourly plans and rules switched on; a paused campaign is never enabled. It adds spend, so approving it needs
- *           the approver's authenticator code (stepUp) — by rule only where the business let it (allowStart, a
- *           loosening that itself needs the code) and the ads strategy runs both restore and allowlist alone.
+ *           hourly plans and rules switched on; a paused campaign is never enabled. It adds spend, so a person approves
+ *           it (the approver's authenticator code only where the code table's line is on — off since 2026-10-12) — by
+ *           rule only where the business let it (allowStart) and the ads strategy runs both restore and allowlist alone.
  *   stop    PB-5b — the brake and START's undo: the built campaigns' bids to the 2¢ floor (remembered again; an engine's
  *           floor taken over), off the allowlist, then the playbook's hourly plans (their floors handed to the stop) and
  *           rules off. Never a pause, never an archive; no code (it lowers spend).
@@ -83,7 +83,7 @@ const MAX_SLOTS = 30
 
 const input = z.object({
   op: z.enum(['build', 'adopt', 'start', 'stop', 'sync', 'sync-negatives', 'phase', 'hero'])
-    .describe("build: create the slots the product does not hold yet (born at the 2¢ floor, off the live-write allowlist, no placements: nothing spends until START); adopt: bind campaigns the product already runs to its slots (Nexus only); start: the built campaigns start spending (allowlist, planned bids, placements, then the playbook's hourly plans and rules; needs the approver's authenticator code); stop: the brake — built campaigns back to the 2¢ floor and off the allowlist, the hourly plans and rules off (never a pause); sync: fix its drift (ads-playbook view drift), adding only; sync-negatives: only its missing negatives (a kind of its own: it lowers spend); phase: switch the product's playbook phase (its strategy numbers, slots, hourly plans and harvest cadence); hero: a campaign of its own for a declining or lost term (one exact keyword, born like a build; the term keeps running where it is; a winning term is refused)"),
+    .describe("build: create the slots the product does not hold yet (born at the 2¢ floor, off the live-write allowlist, no placements: nothing spends until START); adopt: bind campaigns the product already runs to its slots (Nexus only); start: the built campaigns start spending (allowlist, planned bids, placements, then the playbook's hourly plans and rules; a person approves it); stop: the brake — built campaigns back to the 2¢ floor and off the allowlist, the hourly plans and rules off (never a pause); sync: fix its drift (ads-playbook view drift), adding only; sync-negatives: only its missing negatives (a kind of its own: it lowers spend); phase: switch the product's playbook phase (its strategy numbers, slots, hourly plans and harvest cadence); hero: a campaign of its own for a declining or lost term (one exact keyword, born like a build; the term keeps running where it is; a winning term is refused)"),
   market: z.string().trim().toUpperCase().min(2).max(20).describe('ONE Amazon market code (IT, DE, FR, ES, UK; business-overview lists them)'),
   productId: ID.optional().describe('the product (a parent or a variation), its Nexus id; or sku'),
   sku: z.string().trim().min(1).max(100).optional().describe("instead of productId: the product's SKU in this business"),
@@ -332,7 +332,7 @@ async function startPreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Prom
   // The playbook's hourly plans a START switches on raise bids too (top of search): part of what the code approves.
   const rankOn = p.artifacts.filter((l) => l.kind === 'rankGroup' && l.does === 'enable').length
   // AB-16 (D1 = B) — a START of campaigns the ads brain built (a hero it asked for), inside their caps and nothing else
-  // switched on or given back: the brain's line, a normal approval. Anything more: the playbook's START line (the code).
+  // switched on or given back: the brain's line, a normal approval. Anything more: the playbook's START line.
   const brainGoLive = op === 'start' && acting.length && !switching && !p.heldFloors.length && !p.syncedBids.length ? await structureGoLive(acting.map((c) => c.campaignId)) : null
   const paused = p.campaigns.filter((c) => c.paused).length
   const effect = op === 'start'
@@ -387,7 +387,7 @@ async function startPreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Prom
         effect,
         undoNote: op === 'start'
           ? 'Undo asks for a STOP of the campaigns this start started (their bids back to the floor, off the allowlist).'
-          : 'Undo asks for a START of the campaigns this stop stopped (it needs the approver\'s authenticator code again).',
+          : `Undo asks for a START of the campaigns this stop stopped (${needsCode('apply-ads-playbook: start') ? 'it needs the approver\'s authenticator code again' : 'a person approves it again'}).`,
         ...(facts ? { limitFacts: facts, limitsNote: limitsNote(facts) } : {}),
       },
     },
@@ -491,7 +491,7 @@ async function phasePreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Prom
         phase: { from: p.from, to: p.to },
         direction: p.direction,
         raises: p.raises,
-        // Claude allowed more alone: never by rule, always the approver's code (the Owner's rule).
+        // Claude allowed more alone: never by rule, always a person (the Owner's rule).
         raisesClaude: p.raisesClaude,
         currency,
         highestRestoredBidCents,
@@ -518,7 +518,7 @@ async function phasePreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Prom
             what: "switches a product's playbook phase in a way that adds spend",
             raises: p.raises,
             needs: STEP_UP_NEEDS,
-            how: 'A person with settings.security.manage approves it in Nexus with their authenticator code, or the person who asked confirms it in Claude with theirs. '
+            how: 'A person with settings.security.manage approves it in Nexus with their authenticator code, or the person who asked confirms it in Claude with theirs (the code table asks it for this door). '
               + (p.raisesClaude ? 'It lets Claude do more alone, so it never runs by rule.' : 'It runs by rule only where the business allowed raising phase moves (allowPhaseUp).'),
           }
           : null,
@@ -541,19 +541,19 @@ async function phasePreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Prom
 }
 
 /**
- * A phase switch's code decision, in ONE place: a raise is a strategy raise through the playbook — a big door of the
- * Owner's code rule (ads-code-rule.ts) — and one that lets Claude do more alone ALWAYS needs the code (the Owner's own
- * rule, apart from the table).
+ * A phase switch's code decision, in ONE place: a raise asks the approver's code only where the Owner's code rule
+ * (ads-code-rule.ts) says so — off since 2026-10-12. One that lets Claude do more alone is still never run by rule
+ * (withinLimits and `execute` refuse it), code or not.
  */
-function phaseNeedsCode(p: Pick<PhasePlan, 'direction' | 'raisesClaude'>): boolean {
-  return p.direction === 'raise' && (needsCode('apply-ads-playbook: a phase switch that raises') || !!p.raisesClaude)
+function phaseNeedsCode(p: Pick<PhasePlan, 'direction'>): boolean {
+  return p.direction === 'raise' && needsCode('apply-ads-playbook: a phase switch that raises')
 }
 
 /**
  * PB-5b, PB-9 — the ONE gate of an op that adds spend (a start; a phase switch that raises), reading the fresh dry run's
- * stepUp (the code table decided it): approved with the approver's fresh authenticator code, or run by the business's
- * rule where this tool's limits let it (allowStart, allowPhaseUp — each a loosening that itself needed the code;
- * withinLimits holds the rest). An op that adds nothing, or one the table asks no code for, passes.
+ * stepUp (the code table decided it): approved with the approver's fresh authenticator code where the table asks it, or
+ * run by the business's rule where this tool's limits let it (allowStart, allowPhaseUp; withinLimits holds the rest).
+ * An op that adds nothing, or one the table asks no code for, passes.
  */
 async function spendGate(ctx: ToolContext, preview: unknown): Promise<{ stepUpAt: Date | null; byRule: boolean } | { refusal: string }> {
   const gate = await codeGate(ctx, preview)
@@ -686,11 +686,11 @@ const APPLY_LIMITS = adKitLimits({ maxItems: 1 }, {
   maxCampaigns: z.number().int().min(0).max(MAX_SLOTS).default(0).describe('build: the most campaigns one build may create by rule; 0 = every build waits for a person'),
   maxDailyBudgetCents: z.number().int().min(0).default(0).describe("build: the most daily budget (all its campaigns, minor units of the market's currency) one build may create by rule; 0 = every build waits for a person"),
   maxBidCents: z.number().int().min(0).default(0).describe("build: the highest planned bid (restored at START) a build created by rule may hold; start: the highest bid a start by rule may put back — in minor units of the market's currency"),
-  // PB-5b — a start adds spend: off by default, so every start waits for a person with their authenticator code.
-  allowStart: z.boolean().default(false).describe('start: let a start run by rule (inside the other limits and the ads strategy); off by default — every start then waits for a person, who approves it with their authenticator code'),
+  // PB-5b — a start adds spend: off by default, so every start waits for a person.
+  allowStart: z.boolean().default(false).describe('start: let a start run by rule (inside the other limits and the ads strategy); off by default — every start then waits for a person, who approves it'),
   markets: z.array(z.string().trim().toUpperCase().min(2).max(20)).max(20).default([]).describe('the markets where it may run by rule (empty = every market)'),
-  // PB-9 — off by default: a phase switch that adds spend waits for a person with the code; on is a loosening (the code).
-  allowPhaseUp: z.boolean().default(false).describe('phase: let a phase switch that ADDS spend (a higher target, bids given back, an hourly plan on) run by rule when Nexus proposes it; off = every raising switch waits for a person with their code'),
+  // PB-9 — off by default: a phase switch that adds spend waits for a person; on is a loosening.
+  allowPhaseUp: z.boolean().default(false).describe('phase: let a phase switch that ADDS spend (a higher target, bids given back, an hourly plan on) run by rule when Nexus proposes it; off = every raising switch waits for a person'),
 })
 
 /**
@@ -710,7 +710,7 @@ function applyRefusal(preview: unknown, limits: Record<string, unknown>): string
   if (p.op === 'phase') return phaseRefusal(preview, limits)
   // PB-10 — a sync runs by rule only when it adds no spend (its negatives), inside the kit's limits.
   if (p.op === 'sync' || p.op === 'sync-negatives') return syncRefusal(preview, limits)
-  if (p.op === 'start' && limits.allowStart !== true) return "it starts spending: a person decides, with their authenticator code (this business does not let a start run by rule: allowStart is off)"
+  if (p.op === 'start' && limits.allowStart !== true) return "it starts spending: a person decides (this business does not let a start run by rule: allowStart is off)"
   const common = commonRefusal(preview, limits)
   if (common) return common
   const currency = p.currency ?? 'EUR'
@@ -750,14 +750,14 @@ function phaseRefusal(preview: unknown, limits: Record<string, unknown>): string
   }
   const to = p.phase?.to
   if (!to || !p.phaseCheck) return 'there is no phase check in this preview; a person decides'
-  // The Owner's rule: more of what Claude may do alone is always raised with his code — allowPhaseUp or not.
-  if (p.raisesClaude !== false) return p.raisesClaude ? "it lets Claude do more alone (the phase's Claude levels): a raise of what Claude may do alone always needs a person with settings.security.manage and their authenticator code, never a rule" : 'the preview does not say whether it raises what Claude may do alone; a person decides'
+  // The Owner's rule: more of what Claude may do alone is always raised by a person — allowPhaseUp or not.
+  if (p.raisesClaude !== false) return p.raisesClaude ? "it lets Claude do more alone (the phase's Claude levels): a raise of what Claude may do alone is always a person's decision, never a rule" : 'the preview does not say whether it raises what Claude may do alone; a person decides'
   const hold = p.phaseCheck.hold
   if (hold?.held) return `${p.phase?.from ?? 'the phase'} is inside its ${hold.minDays ?? ''}-day hold (${hold.daysLeft ?? '?'} more days): only a person's own switch moves it now; a person decides`
   const proposed = p.phaseCheck.proposal?.to
   if (proposed !== to) return `Nexus's phase check ${proposed ? `proposes ${proposed}` : 'proposes no move'} now, not ${to}: a switch it does not propose is a person's own; a person decides`
   if (p.direction === 'raise' && limits.allowPhaseUp !== true) {
-    return `it adds spend (${(p.raises ?? []).join('; ') || 'a raise'}), and this business lets no raising phase switch run by rule (allowPhaseUp is off): a person with settings.security.manage decides, with their authenticator code`
+    return `it adds spend (${(p.raises ?? []).join('; ') || 'a raise'}), and this business lets no raising phase switch run by rule (allowPhaseUp is off): a person decides`
   }
   const common = commonRefusal(preview, limits)
   if (common) return common
@@ -878,15 +878,15 @@ const applyAdsPlaybook: AgentTool = {
     + 'makes the campaigns the playbook built spend: on the live-write allowlist, their planned bids back (never above '
     + 'what was planned; a bid moved since, an engine\'s floor and an ad group\'s own floor stay), the placements the build '
     + 'held back, then the playbook\'s hourly plans and rules switched on; a paused campaign is never enabled and an adopted '
-    + 'one is left as it is. Starting to spend needs the approver\'s authenticator code (in Nexus, or the person who asked '
-    + 'confirms it in Claude). op stop is the brake: the built campaigns\' bids to the 2-cent floor (remembered), off the '
+    + 'one is left as it is. Starting to spend is a person\'s approval (in Nexus, or the person who asked confirms it in '
+    + 'Claude when the business set it so). op stop is the brake: the built campaigns\' bids to the 2-cent floor (remembered), off the '
     + 'allowlist, the hourly plans and rules off — never a pause; it needs no code. op phase '
     + "switches the product's phase (phase: the ads strategy's goal): the phase's recipe numbers and Claude levels go into "
     + "the product's strategy row, each slot is floored (low bids, never paused) or gets back a floor the last phase set "
     + '(a built slot\'s floor only START gives back), the playbook\'s own hourly plans go off / on / light (on only once it '
     + "runs), and its harvest rule takes the phase's cadence; read the phase check first (ads-playbook view effective: days "
     + 'in phase, the hold, each exit rule with its numbers, the move Nexus proposes). It is judged by effect: if anything '
-    + "adds spend the whole switch is a raise and needs the approver's authenticator code. It runs by rule only when Nexus "
+    + "adds spend the whole switch is a raise, listed in raises. It runs by rule only when Nexus "
     + 'proposes exactly this move outside the hold, inside the ads strategy, and — for a raise — only where the business '
     + 'allowed it (allowPhaseUp); never a pause, an archive or the Owner\'s own hourly plans. A person approves it in Nexus, unless '
     + 'the business lets it run by its rule inside its limits and the ads strategy (by default a build does not: '
@@ -956,16 +956,16 @@ const applyAdsPlaybook: AgentTool = {
       const run = approvedRun(ctx, a.why ?? preview.effect)
       if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
       // A raise passes the same gate as a start; by rule only with allowPhaseUp (withinLimits) — and never one that lets
-      // Claude do more alone (the Owner's rule: that always needs his code).
-      if (ctx.decidedVia === 'auto' && p.raisesClaude) return notRun("Not run: it lets Claude do more alone, which always needs a person's authenticator code, never a rule. Ask for it again; a person approves it.")
+      // Claude do more alone (the Owner's rule: that is always a person's decision).
+      if (ctx.decidedVia === 'auto' && p.raisesClaude) return notRun("Not run: it lets Claude do more alone, which a person decides, never a rule. Ask for it again; a person approves it.")
       const gate = await spendGate(ctx, fresh.result.preview)
       if ('refusal' in gate) return notRun(gate.refusal)
       const stepUpAt = gate.stepUpAt
       const raise = p.direction === 'raise'
       const byRule = raise && ctx.decidedVia === 'auto'
       const raiseByRule = byRule ? "run by the business's rule: this business lets raising playbook phase switches run so (apply-ads-playbook allowPhaseUp)" : null
-      // A raise a person approved where the code table asks no code (never one that lets Claude do more alone).
-      const raiseWithoutCode = raise && !byRule && !stepUpAt ? "approved by a person without the authenticator code: the Owner's code rule makes this phase switch a day-to-day change" : null
+      // A raise a person approved where the code table asks no code.
+      const raiseWithoutCode = raise && !byRule && !stepUpAt ? 'approved by a person without the authenticator code (no ads request asks for it)' : null
       const out = await runPhase(p, { actor: run.actor, reason: run.reason, changeSetId: run.changeSetId, manual: run.manual, writer: writerOf(run.changeSetId), stepUpAt, raiseByRule, raiseWithoutCode })
       if ('error' in out) return notRun(`Not run: ${out.error}`)
       return {
@@ -992,8 +992,8 @@ const applyAdsPlaybook: AgentTool = {
       const preview = fresh.result.preview as { reach: StoredReach; effect: string }
       const run = approvedRun(ctx, a.why ?? preview.effect)
       if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
-      // A start adds spend: approved with the approver's fresh code, or run by the business's rule (allowStart, itself a
-      // loosening that needed the code). A stop lowers spend: no code.
+      // A start adds spend: approved by a person (with the approver's fresh code where the code table asks it), or run
+      // by the business's rule (allowStart, itself a loosening). A stop lowers spend: no code.
       const gate = await spendGate(ctx, fresh.result.preview)
       if ('refusal' in gate) return notRun(gate.refusal.replace('a raise runs', 'a start runs').replace('it raises', 'it starts spending').replace('a raise needs', 'a start needs'))
       const stepUpAt = gate.stepUpAt

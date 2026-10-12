@@ -15,6 +15,10 @@
  *   bulk      a raise is left out of a bulk approve, with why; a lowering beside it is approved
  *   undo      the undo of a lowering is a raise: it needs the code, and puts the row back
  *   recheck   an approver who lost settings.security.manage before it ran: not run
+ *
+ * Since 2026-10-12 (Owner, "B") the code table's line for a strategy raise is OFF: `by default` proves a raise asks no
+ * code, a plain approve runs it and the bulk approve takes it. Every other test sets the line back ON (beforeEach), as
+ * the Owner could, to keep the code path proven.
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -156,9 +160,14 @@ beforeAll(async () => {
   await app.ready()
 }, 120_000)
 
-beforeEach(() => __stepUpTest.reset())
+beforeEach(() => {
+  __stepUpTest.reset()
+  __codeRuleTest.reset()
+  __codeRuleTest.flip('set-ads-strategy: a raise', true)
+})
 
 afterAll(async () => {
+  __codeRuleTest.reset()
   vi.unstubAllEnvs()
   await app?.close()
   await database?.close()
@@ -183,7 +192,7 @@ describe('W1-3 — a lowering', { timeout: TIMEOUT }, () => {
   })
 })
 
-describe('W1-3 — a raise needs the approver’s fresh authenticator code', { timeout: TIMEOUT }, () => {
+describe('W1-3 — a raise needs the approver’s fresh authenticator code (its line set back on)', { timeout: TIMEOUT }, () => {
   it('no code: 403 naming the raises; no permission: 403; a wrong code: 400; nothing scheduled — with the code it runs', async () => {
     const { answer } = await strategy({ maxBidCents: 200 })
     expect(answer.preview).toMatchObject({ direction: 'raise', raises: ['Highest bid (cents)'], stepUp: { what: 'raises the ads strategy', raises: ['Highest bid (cents)'] } })
@@ -232,23 +241,22 @@ describe('W1-3 — a raise needs the approver’s fresh authenticator code', { t
     expect(await approvalOf(answer.approvalId)).toMatchObject({ status: 'pending' })
   })
 
-  it('the code table decides it (ads-code-rule.ts): flipped, a raise asks no code and a plain approve runs it — never by rule, and more for Claude alone keeps the code', async () => {
-    __codeRuleTest.flip('set-ads-strategy: a raise')
+  it('by default (B, the line off): a raise asks no code and a plain approve runs it — never by rule; more for Claude alone asks no code either', async () => {
+    __codeRuleTest.flip('set-ads-strategy: a raise', false)
     try {
       const { answer } = await strategy({ maxBidCents: 280 })
-      expect(answer.preview).toMatchObject({ direction: 'raise', stepUp: null, noCode: expect.stringMatching(/day-to-day/) })
+      expect(answer.preview).toMatchObject({ direction: 'raise', stepUp: null, noCode: expect.stringMatching(/no authenticator code/) })
       // Never by rule, whatever the table says.
       expect(getTool('set-ads-strategy')!.withinLimits!(answer.preview, { allowLower: true })).toMatch(/^it raises Highest bid \(cents\)/)
       expect(await inside(() => scheduleApproval({ id: answer.approvalId, actor: viewer('owner', EVERYTHING), via: 'nexus' }))).toMatchObject({ ok: true })
       expect(await commit(answer.approvalId)).toMatchObject({ ok: true, status: 'executed' })
       expect((await marketRow()).maxBidCents).toBe(280)
-      expect(await versionOf(answer.approvalId)).toMatchObject({ direction: 'raise', stepUpAt: null, reason: expect.stringMatching(/without the authenticator code: the Owner's code rule/) })
-      // More of what Claude may do alone keeps the code, whatever the table says (the Owner's own rule).
+      expect(await versionOf(answer.approvalId)).toMatchObject({ direction: 'raise', stepUpAt: null, reason: expect.stringMatching(/without the authenticator code/) })
+      // More of what Claude may do alone: no code either (Owner "B"); still never by rule (withinLimits, execute).
       const { noCode: _dayToDay, ...stored } = answer.preview
-      const raisedAutonomy = { ...stored, changes: [...stored.changes, { field: 'claudeAutonomy', direction: 'raise' }], stepUp: { what: 'raises the ads strategy', raises: ['What Claude may do alone'], needs: 'x', how: 'y' } }
-      expect(strategyCodeOf(raisedAutonomy as never)).toMatchObject({ stepUp: { what: 'raises the ads strategy' } })
-      expect(strategyCodeOf(raisedAutonomy as never)).not.toHaveProperty('noCode')
-    } finally { __codeRuleTest.reset() }
+      const raisedAutonomy = { ...stored, changes: [...stored.changes, { field: 'claudeAutonomy', direction: 'raise' }] }
+      expect(strategyCodeOf(raisedAutonomy as never)).toMatchObject({ stepUp: null, noCode: expect.any(String) })
+    } finally { __codeRuleTest.flip('set-ads-strategy: a raise', true) }
     // Put back as it was for the tests after this one.
     const back = await strategy({ maxBidCents: 200 })
     expect(await inside(() => scheduleApproval({ id: back.answer.approvalId, actor: viewer('owner', EVERYTHING), via: 'nexus' }))).toMatchObject({ ok: true })
@@ -277,7 +285,7 @@ describe('W1-3 — by rule, and confirmed in Claude', { timeout: TIMEOUT }, () =
   const owner = () => ({ userId: people.owner.id, label: 'Olga Owner', canManage: true })
 
   it('at auto a lowering runs by rule; a raise never does, and Claude is told why; allowLower off sends lowerings to a person', async () => {
-    expect(await inside(() => setClaudeRule(owner(), 'set-ads-strategy', { level: 'auto', code: codeOf() }))).toMatchObject({ ok: true })
+    expect(await inside(() => setClaudeRule(owner(), 'set-ads-strategy', { level: 'auto' }))).toMatchObject({ ok: true })
     try {
       const lowered = await strategy({ maxBidCents: 190 })
       expect(lowered.answer, JSON.stringify(lowered.answer)).toMatchObject({ status: 'runs_by_rule', trust: { level: 'auto' } })
@@ -286,22 +294,20 @@ describe('W1-3 — by rule, and confirmed in Claude', { timeout: TIMEOUT }, () =
       expect(await versionOf(lowered.answer.approvalId)).toMatchObject({ direction: 'lower', via: 'claude', stepUpAt: null })
 
       const raised = await strategy({ maxBidCents: 210 })
-      expect(raised.answer).toMatchObject({ status: 'waiting_for_approval', trust: { level: 'auto', why: expect.stringContaining('it raises Highest bid (cents): a person with settings.security.manage decides') } })
+      expect(raised.answer).toMatchObject({ status: 'waiting_for_approval', trust: { level: 'auto', why: expect.stringContaining('it raises Highest bid (cents); a person approves it in Nexus') } })
 
-      // Tightening a limit is a brake: no code. Then every change waits for a person.
+      // Tightening a limit is a brake. Then every change waits for a person.
       expect(await inside(() => setClaudeRule(owner(), 'set-ads-strategy', { limits: { allowLower: false } }))).toMatchObject({ ok: true })
       const held = await strategy({ maxBidCents: 180 })
       expect(held.answer).toMatchObject({ status: 'waiting_for_approval', trust: { why: expect.stringContaining('a person decide every change of the ads strategy') } })
     } finally {
-      // Back to ask, and the default limits (allowLower again loosens: the code, used once — so a fresh verifier state).
-      __stepUpTest.reset()
-      expect(await inside(() => setClaudeRule(owner(), 'set-ads-strategy', { level: 'ask', limits: null, code: codeOf() }))).toMatchObject({ ok: true })
+      // Back to ask, and the default limits (allowLower again loosens: settings.security.manage, which the owner holds).
+      expect(await inside(() => setClaudeRule(owner(), 'set-ads-strategy', { level: 'ask', limits: null }))).toMatchObject({ ok: true })
     }
   })
 
   it('at confirm the person who asked approves a raise with their own code in Claude', async () => {
-    expect(await inside(() => setClaudeRule(owner(), 'set-ads-strategy', { level: 'confirm', code: codeOf() }))).toMatchObject({ ok: true })
-    __stepUpTest.reset()
+    expect(await inside(() => setClaudeRule(owner(), 'set-ads-strategy', { level: 'confirm' }))).toMatchObject({ ok: true })
     try {
       const { answer } = await strategy({ maxBidCents: 240 })
       expect(answer).toMatchObject({ status: 'waiting_for_approval', preview: { direction: 'raise' }, confirm: { planHash: expect.any(String) } })
@@ -350,6 +356,20 @@ describe('W1-3 — plans, bulk and undo', { timeout: TIMEOUT }, () => {
     expect(out.json()).toMatchObject({ ok: true, done: 1, of: 2, skipped: [{ id: raise.approvalId, why: 'Not approved: it raises the ads strategy (Highest bid (cents)), so it is approved on its own, with your authenticator code.' }] })
     expect(await approvalOf(raise.approvalId)).toMatchObject({ status: 'pending' })
     expect(await approvalOf(lower.approvalId)).toMatchObject({ status: 'scheduled', decisionVia: 'nexus' })
+  })
+
+  it('by default (B, the line off): the bulk approve takes a raise with the rest', async () => {
+    __codeRuleTest.flip('set-ads-strategy: a raise', false)
+    const raise = (await strategy({ maxBidCents: 310 })).answer
+    expect(raise.preview).toMatchObject({ direction: 'raise', stepUp: null })
+    signedIn = people.owner.id
+    const preview = await app.inject({ method: 'POST', url: '/agent/fleet/approvals/bulk-preview', payload: { ids: [raise.approvalId], decision: 'approve' } })
+    expect(preview.json()).toMatchObject({ count: 1, blockedReason: null })
+    expect(preview.json().sentence).not.toContain('left out')
+    const out = await app.inject({ method: 'POST', url: '/agent/fleet/approvals/bulk-decide', payload: { ids: [raise.approvalId], decision: 'approve' } })
+    expect(out.json()).toMatchObject({ ok: true, done: 1, of: 1 })
+    expect(await approvalOf(raise.approvalId)).toMatchObject({ status: 'scheduled', decisionVia: 'nexus' })
+    // Never committed here: the tests after this one work on category rows.
   })
 
   it('the undo of a lowering is a raise: it needs the code, and puts the row back', async () => {

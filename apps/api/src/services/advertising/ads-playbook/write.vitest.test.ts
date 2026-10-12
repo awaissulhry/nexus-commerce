@@ -14,6 +14,9 @@
  *              is never written; a row moved since → 409 and nothing written
  *   undo       the undo arguments put the previous version back
  *   business   another business cannot name this one's template or product
+ *
+ * The code table's line for a playbook raise is set back ON for this file (the writer's stepUp is what it pins); `B`
+ * proves the default since 2026-10-12 (Owner, "B"): no stepUp, a raise written as a person's without the code.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { formulaDatabase } from '../../../test-support/formula-database.js'
@@ -27,6 +30,7 @@ vi.mock('../../../db.js', () => ({
 
 import { applyPlaybookPlan, planPlaybookChange, playbookStateNow, undoArgsOf, type PlaybookPlan, type PlaybookState } from './write.js'
 import { PRODUCT_NOT_FOUND } from '../../agents/tools/live-product.js'
+import { __codeRuleTest } from '../../agents/tools/ads-code-rule.js'
 
 const A = 'pb3_write_alpha'
 const B = 'pb3_write_bravo'
@@ -58,6 +62,7 @@ const product = (productId: string, extra: Record<string, unknown> = {}) => ({ k
 const dirOf = (p: PlaybookPlan, field: string) => p.changes.find((c) => c.field === field)?.direction
 
 beforeAll(async () => {
+  __codeRuleTest.flip('set-ads-playbook: adds spend', true)
   database = await formulaDatabase()
   vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1')
   for (const id of [A, B]) {
@@ -87,6 +92,7 @@ beforeAll(async () => {
 }, 120_000)
 
 afterAll(async () => {
+  __codeRuleTest.reset()
   vi.unstubAllEnvs()
   await database?.close()
 }, 30_000)
@@ -226,7 +232,7 @@ describe('apply and undo', () => {
     await inA(async () => {
       const p = await plan(product(ids.parent, { values: { dailyBudgetCents: 3000 } }))
       expect(p.direction).toBe('raise')
-      await expect(applyPlaybookPlan(p, { ...writer(p), stepUpAt: null })).rejects.toThrow(/written only with the time its authenticator code was confirmed/)
+      await expect(applyPlaybookPlan(p, { ...writer(p), stepUpAt: null })).rejects.toThrow(/written only as a person decided it/)
       const lower = await plan(product(ids.parent, { values: { dailyBudgetCents: 1800 } }))
       await save(product(ids.parent, { values: { nameToken: 'TESTPB3C' } }))
       const before = await db().adsPlaybookVersion.count()
@@ -255,5 +261,24 @@ describe('business', () => {
       expect(await refusal({ kind: 'playbook', market: 'IT', level: 'market', values: { templateId: ids.template } })).toMatchObject({ status: 404 })
       expect(await db().adsPlaybook.count()).toBe(0)
     })
+  })
+})
+
+describe('B (Owner, 2026-10-12) — the code table\'s line off: no stepUp; a raise written as a person\'s, without the code', () => {
+  it('a raise previews without stepUp, and is written only as a person decided it (raiseWithoutCode kept as the reason)', async () => {
+    __codeRuleTest.flip('set-ads-playbook: adds spend', false)
+    try {
+      await inA(async () => {
+        const row = await db().adsPlaybook.findFirstOrThrow({ where: { market: 'IT', level: 'PRODUCT', scopeId: ids.parent } })
+        const p = await plan(product(ids.parent, { values: { dailyBudgetCents: (row.dailyBudgetCents ?? 0) + 500 } }))
+        expect(p.direction).toBe('raise')
+        expect(p.preview.stepUp).toBeNull()
+        await expect(applyPlaybookPlan(p, { ...writer(p), stepUpAt: null })).rejects.toThrow(/written only as a person decided it/)
+        const out = await applyPlaybookPlan(p, { ...writer(p), stepUpAt: null, raiseWithoutCode: 'saved on the Playbook screen, without the authenticator code' })
+        if (!out.ok) throw new Error('not saved')
+        const version = await db().adsPlaybookVersion.findFirstOrThrow({ where: { kind: 'playbook', refId: out.id, version: out.version } })
+        expect(version).toMatchObject({ direction: 'raise', stepUpAt: null, reason: expect.stringContaining('without the authenticator code') })
+      })
+    } finally { __codeRuleTest.flip('set-ads-playbook: adds spend', true) }
   })
 })

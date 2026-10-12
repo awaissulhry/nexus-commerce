@@ -16,6 +16,7 @@
 import { randomUUID } from 'node:crypto'
 import Fastify, { type FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { codeRuleA } from '../test-support/code-rule-a.js'
 import { generateSecret, generateSync } from 'otplib'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
 import { formulaDatabase } from '../test-support/formula-database.js'
@@ -96,7 +97,8 @@ beforeAll(async () => {
   await app.ready()
 }, 180_000)
 
-beforeEach(() => { __stepUpTest.reset(); permissions = new Set(OWNER) })
+// Rule A's big doors set back on: the code path stays proven (every line is off since 2026-10-12, Owner "B").
+beforeEach(() => { __stepUpTest.reset(); codeRuleA(); permissions = new Set(OWNER) })
 
 afterAll(async () => {
   vi.unstubAllEnvs()

@@ -19,7 +19,7 @@
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
-import { generateSecret, generateSync } from 'otplib'
+import { generateSecret } from 'otplib'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import { formulaDatabase } from '../../test-support/formula-database.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
@@ -131,7 +131,7 @@ beforeAll(async () => {
   story.queued = { label: 'queued', runId: await runIdOf(queued.approvalId), approvalId: queued.approvalId }
 
   __stepUpTest.reset()
-  expect(await inside(() => setClaudeRule({ userId: ids.person, label: 'Ada Audit', canManage: true }, 'set-price', { level: 'auto', code: generateSync({ secret }) }))).toMatchObject({ ok: true })
+  expect(await inside(() => setClaudeRule({ userId: ids.person, label: 'Ada Audit', canManage: true }, 'set-price', { level: 'auto' }))).toMatchObject({ ok: true })
   const ran = await call('set-price', { productId: ids.product, price: 103 })
   expect(ran.status).toBe('runs_by_rule')
   expect(await windowCloses(ran.approvalId)).toMatchObject({ ok: true, status: 'executed' })
@@ -338,7 +338,7 @@ describe('AA-W2-4 — the watch report: would-have-run against what a person dec
   it('each watched request carries its verdict; the first page reports in total and per kind, plan steps one by one', async () => {
     await inside(() => db().agentAutonomy.deleteMany({})) // the events test above left the business paused
     __stepUpTest.reset()
-    expect(await inside(() => setClaudeRule({ userId: ids.person, label: 'Ada Audit', canManage: true }, 'set-price', { level: 'watch', code: generateSync({ secret }) }))).toMatchObject({ ok: true })
+    expect(await inside(() => setClaudeRule({ userId: ids.person, label: 'Ada Audit', canManage: true }, 'set-price', { level: 'watch' }))).toMatchObject({ ok: true })
     const base = await priceOf(ids.product)
     const approved = await call('set-price', { productId: ids.product, price: base + 1 })
     const rejected = await call('set-price', { productId: ids.product, price: base + 2 })

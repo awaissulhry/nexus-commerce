@@ -21,9 +21,9 @@
  *                                                         wins, the live effect; `mayRaise` says whether this person may
  *   PUT  /api/advertising/automation/strategy           save it. `expectVersion` (the version read; 0 for a new row) is
  *                                                         required: 409 `version_moved` when the row moved since. A raise
- *                                                         needs settings.security.manage and `code`, the person's fresh
- *                                                         authenticator code: 403 `mfa_required` (naming the raises),
- *                                                         400 `mfa_invalid`, 429 `mfa_locked`. A lowering saves at once.
+ *                                                         needs settings.security.manage (403 naming the raises); no
+ *                                                         authenticator code since 2026-10-12 (Owner, "B"). A lowering
+ *                                                         saves at once.
  *                                                         W1-4: the answer carries `undo`, the change that puts the
  *                                                         previous version back (the Strategy tab's Undo sends it here).
  *
@@ -98,7 +98,7 @@ const advertisingStrategyRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/advertising/automation/strategy/effective', read('effective'))
   fastify.get('/advertising/automation/strategy/history', read('history'))
 
-  // W1-3 — the change planned, nothing saved: what the Strategy tab shows before Save (and whether Save asks for the code).
+  // W1-3 — the change planned, nothing saved: what the Strategy tab shows before Save (and whether this person may raise).
   fastify.post('/advertising/automation/strategy/preview', async (request, reply) => {
     const person = await writerOf(request, reply)
     if (!person) return reply
@@ -108,36 +108,34 @@ const advertisingStrategyRoutes: FastifyPluginAsync = async (fastify) => {
     return { ...planned.plan.preview, mayRaise: hasPermission(person.permissions, F.settingsSecurityManage) }
   })
 
-  // W1-3 — save it: a lowering at once; a raise with the person's fresh authenticator code (Owner decision 2026-10-06).
+  // W1-3 — save it: a lowering at once; a raise by a person with settings.security.manage (no code since 2026-10-12).
   fastify.put('/advertising/automation/strategy', async (request, reply) => {
     const person = await writerOf(request, reply)
     if (!person) return reply
-    const { code, ...body } = bodyOf(request)
+    const { code: _code, ...body } = bodyOf(request)
     if (typeof body.expectVersion !== 'number') {
       return reply.code(400).send({ error: 'expectVersion: the version you read (0 when the row does not exist yet), so a change saved meanwhile is never overwritten.' })
     }
     const planned = await planStrategyChange(body)
     if ('error' in planned) return reply.code(planned.status).send({ error: planned.error, ...(planned.code ? { code: planned.code } : {}) })
     const { plan } = planned
-    let stepUpAt: Date | null = null
     if (plan.direction === 'raise') {
       const refused = await mayRaise(
         { userId: person.userId, label: person.label, canManage: hasPermission(person.permissions, F.settingsSecurityManage) },
-        code,
         STRATEGY_RAISE,
       )
       if (refused) {
         const { status, ...rest } = refused
         return reply.code(status).send({ ...rest, raises: plan.raises })
       }
-      stepUpAt = new Date()
     }
     const out = await applyStrategyPlan(plan, {
       via: 'screen',
       actor: person.label,
       actorUserId: person.userId,
       approvalId: null,
-      stepUpAt,
+      stepUpAt: null,
+      raiseWithoutCode: plan.direction === 'raise' ? 'saved on the Strategy screen by a person with settings.security.manage, without the authenticator code' : null,
       updatedBy: `user:${person.userId}`,
     })
     if ('error' in out) return reply.code(out.status).send({ error: out.error, code: out.code })
@@ -150,7 +148,7 @@ const advertisingStrategyRoutes: FastifyPluginAsync = async (fastify) => {
       summary: plan.preview.summary,
       liveEffect: plan.preview.liveEffect,
       // W1-4 — the change that puts the previous version back (the Strategy tab's Undo), as set-ads-strategy's own undo
-      // writes it: previewed and saved through these same routes, so putting back a higher number asks for the code.
+      // writes it: previewed and saved through these same routes, so putting back a higher number is a raise like any other.
       undo: undoArgsOf(out.before, out.after),
     }
   })

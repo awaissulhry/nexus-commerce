@@ -265,7 +265,7 @@ export function findDrift(f: DriftFacts): DriftReport {
     if (c.status === 'PAUSED') {
       const person = latest(c.id, STATUS_CHANGE)
       // W4-2 — paused at Amazon or by a person: enable-ads lifts it only asked so, with the approver's code (a Claude pause needs neither).
-      const fix: DriftFix = { by: 'tool', tool: 'enable-ads', args: { campaignIds: [c.id], includePeoplesPauses: true, why: `the playbook's slot ${slot.key} runs` }, addsSpend: true, note: 'A real pause is lifted by enable-ads (its own approval; when no Claude request paused it, a person approves it with their authenticator code, never by rule); sync never switches a campaign on.' }
+      const fix: DriftFix = { by: 'tool', tool: 'enable-ads', args: { campaignIds: [c.id], includePeoplesPauses: true, why: `the playbook's slot ${slot.key} runs` }, addsSpend: true, note: 'A real pause is lifted by enable-ads (its own approval; when no Claude request paused it, a person approves it, never by rule); sync never switches a campaign on.' }
       items.push({
         key: keyOf('slot_paused', slot.key), kind: 'slot_paused', ...base,
         says: `"${c.name}" (slot "${slot.key}") is paused at Amazon; the playbook never pauses (a slot "off" is low bids).`,

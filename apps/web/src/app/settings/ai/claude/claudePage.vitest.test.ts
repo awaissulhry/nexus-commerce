@@ -3,8 +3,8 @@
  * and built on the design system only.
  *
  *   reach   the settings rail lists the page for a person who may see the assistant (ai.view, the API's own rule)
- *   build   Tabs (Rules, Activity), lists whose controls are each a Tab stop, the 2FA dialog before any raise, ActionConfirm before
- *           Undo; no raw <button>/<input>/<select>/<table>, no Tailwind class, only the page's own layout classes
+ *   build   Tabs (Rules, Activity), lists whose controls are each a Tab stop, no code dialog for a raise (Owner 2026-10-12, "B"),
+ *           ActionConfirm before Undo; no raw <button>/<input>/<select>/<table>, no Tailwind class, only the page's own layout classes
  */
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -37,12 +37,12 @@ describe('C9 — reachable', () => {
 })
 
 describe('C9 — built on the design system', () => {
-  it('Rules and Activity are tabs; a raise asks for the code; Undo asks first; the plan steps are a list', () => {
+  it('Rules and Activity are tabs; a raise asks for no code; Undo asks first; the plan steps are a list', () => {
     expect(source(HERE, 'ClaudeClient.tsx')).toMatch(/<Tabs[\s\S]*id: 'rules'[\s\S]*id: 'activity'/)
     // Rules is a list (ToolRows): every Level select is a Tab stop, not a grid that holds Tab in its header.
     expect(source(HERE, 'RulesPanel.tsx')).toMatch(/<ToolRows /)
     expect(source(HERE, 'RulesPanel.tsx')).not.toMatch(/<NexusGrid/)
-    expect(source(HERE, 'RulesPanel.tsx')).toMatch(/<StepUpModal/)
+    expect(source(HERE, 'RulesPanel.tsx')).not.toMatch(/StepUpModal|\bcode\)|code=/)
     expect(source(HERE, 'RulesPanel.tsx')).toMatch(/<Toggle/)
     // Activity is a list (ActivityRows): each Undo a Tab stop, on screen at phone width.
     expect(source(HERE, 'ActivityPanel.tsx')).toMatch(/<ActivityRows /)

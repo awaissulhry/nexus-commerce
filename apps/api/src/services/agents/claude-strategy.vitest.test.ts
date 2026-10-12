@@ -94,7 +94,7 @@ async function call(tool: string, args: Record<string, unknown>, workspaceId = A
   return { isError: !!result.isError, answer: JSON.parse((result.content as Array<{ text: string }>).map((b) => b.text).join('')) }
 }
 async function setLevel(tool: string, level: string, workspaceId = A) {
-  const saved = await inside(() => setClaudeRule({ userId: ids.person, label: 'Stella Strategy', canManage: true }, tool, { level, code: code() }), workspaceId)
+  const saved = await inside(() => setClaudeRule({ userId: ids.person, label: 'Stella Strategy', canManage: true }, tool, { level }), workspaceId)
   expect(saved, 'error' in saved ? saved.error : '').toMatchObject({ ok: true })
 }
 /** One strategy row in business A (IT unless named), saying what Claude may do alone. */
@@ -431,7 +431,7 @@ describe('AA-W2-8 — budgets, placements and target ACoS run by rule only insid
     data: { market: 'IT', level: 'MARKET', scopeId: '*', label: 'Test market (IT)', claudeAutonomy: { budget: 'auto', placement: 'auto', target: 'auto' }, ...room, ...extra, updatedBy: 'user:test' },
   }))
   async function setLimits(tool: string, limits: Record<string, unknown>) {
-    const saved = await inside(() => setClaudeRule({ userId: ids.person, label: 'Stella Strategy', canManage: true }, tool, { limits, code: code() }))
+    const saved = await inside(() => setClaudeRule({ userId: ids.person, label: 'Stella Strategy', canManage: true }, tool, { limits }))
     expect(saved, 'error' in saved ? saved.error : '').toMatchObject({ ok: true })
   }
   const budgetOf = async (id: string) => Math.round(Number((await inside(() => db().campaign.findUniqueOrThrow({ where: { id } }))).dailyBudget) * 100)
@@ -535,7 +535,7 @@ describe('AA-W2-9 — stop, restore and the allowlist run by rule only inside th
     data: { market: 'IT', level: 'MARKET', scopeId: '*', label: 'Test market (IT)', claudeAutonomy, ...room, ...extra, updatedBy: 'user:test' },
   }))
   async function setLimits(tool: string, limits: Record<string, unknown>) {
-    const saved = await inside(() => setClaudeRule({ userId: ids.person, label: 'Stella Strategy', canManage: true }, tool, { limits, code: code() }))
+    const saved = await inside(() => setClaudeRule({ userId: ids.person, label: 'Stella Strategy', canManage: true }, tool, { limits }))
     expect(saved, 'error' in saved ? saved.error : '').toMatchObject({ ok: true })
   }
 

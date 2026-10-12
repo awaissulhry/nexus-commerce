@@ -15,7 +15,8 @@
  * alone.
  */
 import { randomUUID } from 'node:crypto'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { codeRuleA } from '../../../test-support/code-rule-a.js'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
 import { formulaDatabase } from '../../../test-support/formula-database.js'
 import { seedAdsFixture } from '../../../test-support/ads-fixtures.js'
@@ -206,7 +207,9 @@ beforeAll(async () => {
     await db().adGroup.update({ where: { id: 'g-c-other-floor' }, data: { ...floored, bidsSuppressedBy: 'user:u-someone' } })
   })
 }, 180_000)
-afterAll(async () => { await database?.close() }, 30_000)
+afterAll(async () => { __codeRuleTest.reset(); await database?.close() }, 30_000)
+// Rule A's big doors set back on: the code path stays proven (every line is off since 2026-10-12, Owner "B").
+beforeEach(() => codeRuleA())
 
 const group = (extra: Record<string, unknown> = {}) => ({
   campaignId: 'c-it', name: 'Test new group', defaultBidCents: 40, skus: ['TEST-AG-1'],
@@ -390,7 +393,7 @@ describe('create-ad-group — approved', () => {
       expect(flipped.stepUp).toBeUndefined()
       expect(flipped.noCode).toMatch(/it still never runs by rule/)
       expect(judge('set-ad-group', { ...flipped, ...insideFacts('set-ad-group', 'restore', 1) }, { maxItems: 10, maxRestoredBidCents: 10_000 })).toMatch(/never runs by rule/)
-    } finally { __codeRuleTest.reset() }
+    } finally { codeRuleA() }
     const started = await ask('set-ad-group', { adGroupId: id, op: 'start' })
     const plain = await approve(started.approvalId!)
     expect(plain).toMatchObject({ ok: false, status: 'pending' })
@@ -441,7 +444,7 @@ describe('create-ad-group — approved', () => {
       const flipped = (await preview('create-ad-group', group({ name: 'Test live flipped', startLive: true, skus: ['TEST-AG-7'] }))).preview
       expect(flipped.stepUp).toBeUndefined()
       expect(flipped.noCode).toMatch(/day-to-day/)
-    } finally { __codeRuleTest.reset() }
+    } finally { codeRuleA() }
     const plain = await ask('create-ad-group', group({ name: 'Test live plain', startLive: true, skus: ['TEST-AG-7'] }))
     const refused = await approve(plain.approvalId!)
     expect(refused).toMatchObject({ ok: false, status: 'pending' })
@@ -492,7 +495,7 @@ describe('add-product-ads', () => {
     try {
       expect((await preview('add-product-ads', { adGroupId: 'g-c-it', skus: ['TEST-AG-5'] })).preview).toMatchObject({ noCode: expect.stringMatching(/day-to-day/) })
       expect((await preview('add-product-ads', { adGroupId: 'g-c-it', skus: ['TEST-AG-5'] })).preview.stepUp).toBeUndefined()
-    } finally { __codeRuleTest.reset() }
+    } finally { codeRuleA() }
     expect((await preview('add-product-ads', { adGroupId: 'g-c-it', skus: ['TEST-AG-2'] })).error).toMatch(/the same product twice in one campaign/)
     expect((await preview('add-product-ads', { adGroupId: 'g-c-it', skus: ['TEST-UNLISTED-1'] })).error).toMatch(/^Not sold on Amazon IT/)
     expect((await preview('add-product-ads', { adGroupId: 'nope', skus: ['TEST-AG-5'] })).error).toMatch(/^Ad group nope not found/)

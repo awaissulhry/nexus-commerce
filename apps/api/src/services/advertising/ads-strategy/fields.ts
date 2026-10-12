@@ -11,7 +11,7 @@
  *                scope the subject belongs to is in force at once (nothing is inherited)
  *   safer        how one value is chosen when several products (an ad group, a campaign) or several categories of one
  *                product each give one: the one that spends less (the Owner's rule for shared ad groups)
- *   raise        what counts as loosening, for the writer (W1-3): a raise needs the Owner's authenticator code
+ *   raise        what counts as loosening, for the writer (W1-3): a raise is a person's decision, never a rule's
  *   money        ad-spend money: hidden from a person without financials.adspend.view
  *   readBy       the engines and doors that ACT on it, each saying where it acts. Each W1 reader adds itself here, so a
  *                screen never claims a reader that does not exist (W1-5: the bid engines on the target, the lowest and

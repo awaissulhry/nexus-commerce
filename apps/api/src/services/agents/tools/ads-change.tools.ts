@@ -36,9 +36,10 @@
  *
  * THE OWNER'S CODE RULE (ads-code-rule.ts, 2026-10-07) — two big doors live here: set-campaign-live-writes on (the
  * allowlist), and restore-campaign of a campaign born at the floor (with the allowlist, the builders' go-live: a new
- * structure starts spending). A person approves each only with their authenticator code (stepUp); by the business's rule
- * only inside the tool's own limits, as before. A restore after a later stop (suppress-campaign, a person's no-pause stop)
- * is day-to-day: no code. The other tools here move day-to-day levers: listed, warned past his own limits, no code.
+ * structure starts spending). Where the table's line is on, a person approves each only with their authenticator code
+ * (stepUp) — both lines are off since 2026-10-12 (Owner, "B"): a person's normal approval; by the business's rule only
+ * inside the tool's own limits, as before. A restore after a later stop (suppress-campaign, a person's no-pause stop) is
+ * day-to-day. The other tools here move day-to-day levers: listed, warned past his own limits, no code.
  *
  * ADS AUTONOMY W3-1 — set-campaign-budget, bulk-ad-bid-change (per row) and suppress-campaign take an optional `source`
  * (ads-change-source.ts): the engine recommendation the change carries out, kept in the preview and on the ads audit
@@ -296,7 +297,7 @@ const NEGATIVE_LIFTS = ['retire-negatives'] as const
 async function liftRefusal(changeSetId: string, changeId?: string): Promise<string | null> {
   const lift = await prisma.agentChange.findFirst({ where: { approvalId: changeSetId, toolName: { in: [...NEGATIVE_LIFTS] }, ...(changeId ? { id: changeId } : {}) }, select: { id: true } })
   if (!lift) return null
-  return `Not undone: ${changeId ? 'that change' : `change set ${changeSetId}`} retired negatives (retire-negatives). undo-ad-change never lifts a negative it did not create — that is retire-negatives' own, with the approver's authenticator code; undo-change of the retire adds the same negatives again.`
+  return `Not undone: ${changeId ? 'that change' : `change set ${changeSetId}`} retired negatives (retire-negatives). undo-ad-change never lifts a negative it did not create — that is retire-negatives' own, a person's approval; undo-change of the retire adds the same negatives again.`
 }
 
 /**
@@ -417,7 +418,7 @@ async function finish(source: Record<string, unknown>, rows: UndoRow[], negative
     return {
       ok: false,
       error: `Not undone: it would switch back on what no Claude request paused — ${shown}. Such a pause is lifted only with enable-ads and `
-        + 'includePeoplesPauses: true: the preview says who paused it, and a person approves it with their authenticator code, never by rule.',
+        + 'includePeoplesPauses: true: the preview says who paused it, and a person approves it, never by rule.',
     }
   }
   // W4-3 — never a back door around set-campaign-settings' code (a setting put back that adds spend), nor around
@@ -515,9 +516,9 @@ const undoAdChange: AgentTool = {
     + 'limits allow (a put-back that raises waits for a person by default), and never a status, an archive or a lifted '
     + 'negative keyword. The preview lists every write it reverses, where it lands (live or sandbox) and the ads '
     + 'strategy\'s limits that apply; refused, and not queued, when Amazon\'s write gate would refuse it, when it would '
-    + 'switch back on a pause no Claude request made (enable-ads with includePeoplesPauses does that, with the approver\'s '
-    + 'authenticator code), when a campaign setting it puts back would add spend (set-campaign-settings does that, with '
-    + 'the approver\'s authenticator code), or when it holds a portfolio change (undo-change of that request). Its own writes '
+    + 'switch back on a pause no Claude request made (enable-ads with includePeoplesPauses does that, a person\'s '
+    + 'approval), when a campaign setting it puts back would add spend (set-campaign-settings does that, listed in its '
+    + 'raises), or when it holds a portfolio change (undo-change of that request). Its own writes '
     + 'are a change set of their own: undo-change of it puts back what it reversed (retired negatives are not created again).',
   async handler(args, ctx) {
     return undoPreview(args, ctx)
@@ -1674,8 +1675,8 @@ async function bornAtFloorSince(campaignId: string, suppressedAt: Date | null): 
 /**
  * restore-campaign's code decision, in ONE place: the Owner's code rule (ads-code-rule.ts) — giving a campaign born at
  * the floor its planned bids starts a new structure spending (with the allowlist, the builders' go-live): a big door, the
- * approver's authenticator code. A restore after a later stop (suppress-campaign, a person's no-pause stop) is
- * day-to-day: no code.
+ * approver's authenticator code where the table's line is on (off since 2026-10-12). A restore after a later stop
+ * (suppress-campaign, a person's no-pause stop) is day-to-day: no code.
  */
 function restoreStepUp(born: Date | null, name: string, brain: StructureGoLive | null = null): { stepUp?: StepUp; noCode?: string } {
   if (!born) return {}
@@ -1812,8 +1813,8 @@ const restoreCampaign: AgentTool = {
     'Put back the bids an Amazon Sponsored Products campaign had before it was suppressed (the no-pause stop), so it '
     + 'serves again. Only a suppression a person set is lifted here — never one an engine set (dayparting, the retail '
     + 'guard, budget enforcement own theirs). Nothing changes until it is approved; spend resumes. A campaign born at the '
-    + 'floor (made by create-ad-campaign or a builder, never restored since) starts spending with it: a big door (the '
-    + 'Owner\'s code rule), so a person approves it with their authenticator code; a restore after a later stop needs none. '
+    + 'floor (made by create-ad-campaign or a builder, never restored since) starts spending with it: a big door, so a '
+    + 'person approves it (no authenticator code); a restore after a later stop is day-to-day. '
     + `${BY_RULE_WORDS}: no bid put back above the highest its limits allow (0 by default: every restore waits for a `
     + 'person), within the market\'s daily budget increase by rule (its daily budget spends again) and keeping the '
     + 'month\'s spend forecast under its monthly cap. The preview lists the bids it restores in the campaign\'s currency, '
@@ -1935,8 +1936,8 @@ async function liveWritesPreview(args: Record<string, unknown>, ctx?: Pick<ToolC
 
 /**
  * set-campaign-live-writes' code decision, in ONE place: the Owner's code rule (ads-code-rule.ts) makes putting a campaign
- * ON the allowlist a big door — the writes it lets through start a structure spending — so a person approves it with the
- * approver's authenticator code; taking one off is a brake (no code).
+ * ON the allowlist a big door — the writes it lets through start a structure spending — so a person approves it, with the
+ * approver's authenticator code where the table's line is on (off since 2026-10-12); taking one off is a brake (no code).
  */
 function liveWritesStepUp(enabled: boolean, name: string, brain: StructureGoLive | null = null): { stepUp?: StepUp; noCode?: string } {
   if (!enabled) return {}
@@ -2008,8 +2009,8 @@ const setCampaignLiveWrites: AgentTool = {
     + 'write from an approved ad change, a rule or a schedule (d2); a person\'s own edit on the Nexus screens passes it. '
     + 'A campaign launched from the Nexus screens (the campaign wizards, a blueprint, an AI goal) is put on it the moment '
     + 'it exists; one made by create-ad-campaign or found by a sync starts off it. It is a Nexus switch and sends nothing '
-    + 'to Amazon itself. Putting a campaign ON is a big door (the Owner\'s code rule: a new structure going live): a person '
-    + 'approves it with their authenticator code; taking one off needs none. '
+    + 'to Amazon itself. Putting a campaign ON is a big door (a new structure going live): a person approves it (no '
+    + 'authenticator code); taking one off is a brake. '
     + `Nothing changes until it is approved. ${BY_RULE_WORDS}: taking a campaign off (a brake) at any `
     + 'limit; putting one on only for a campaign a Claude request created in this business, at most as many a day as its '
     + 'limits allow (0 by default: each waits for a person), and never one a rule or schedule also moves. The preview '

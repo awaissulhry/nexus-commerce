@@ -17,7 +17,9 @@
  *   handover  once the hero proves itself, its term's old exact keyword is proposed at the 2-cent floor (one bid, a person
  *             decides) — never a negative (L1 holds); before that, nothing; B's same keyword is never touched
  */
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { codeRuleA } from '../../../test-support/code-rule-a.js'
+import { __codeRuleTest } from './ads-code-rule.js'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
 import { formulaDatabase } from '../../../test-support/formula-database.js'
 import { seedProductPlaybook } from '../../../test-support/ads-playbook-fixtures.js'
@@ -160,7 +162,9 @@ beforeAll(async () => {
     await searched(exactB, 'test cape', 10, { orders: 1, clicks: 10, costCents: 400, salesCents: 2000 }, 'KW-WB-CAPE')
   })
 }, 180_000)
-afterAll(async () => { vi.unstubAllEnvs(); await database?.close() }, 30_000)
+afterAll(async () => { __codeRuleTest.reset(); vi.unstubAllEnvs(); await database?.close() }, 30_000)
+// Rule A's big doors set back on: the code path stays proven (every line is off since 2026-10-12, Owner "B").
+beforeEach(() => codeRuleA())
 
 const entry = (view: Row, term: string) => view.data.entries.find((e: Row) => e.term === term)
 

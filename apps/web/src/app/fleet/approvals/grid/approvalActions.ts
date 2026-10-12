@@ -12,8 +12,9 @@
  *
  * Endpoints (apps/api `routes/agent-fleet.routes.ts`, `agent-fleet-approvals.routes.ts`):
  *   approve / reject / retry  POST /api/agent/fleet/approvals/:id/decide  { decision, reason? }
- *                             ADS AUTONOMY W1-4 — a request that raises (`needsCode`) asks the page for the approver's
- *                             authenticator code first (`askCode`); `approveWithCode` sends it as `code`
+ *                             ADS AUTONOMY W1-4 — a request the API marks `needsCode` asks the page for the approver's
+ *                             authenticator code first (`askCode`); `approveWithCode` sends it as `code`. None is
+ *                             marked since 2026-10-12 (Owner, "B"), unless a line of the API's code table is set back
  *   undo                      POST …/:id/undo      (no body)
  *   hold                      POST …/:id/hold      (no body) — 10 more minutes
  *   commit                    POST …/:id/commit    (no body) — at the stop window's end; the server refuses an early
@@ -50,7 +51,7 @@ export interface QueueActions extends ApprovalActions {
   /** Decide many; resolves with what the server did (a refused bulk is `ok: false` with its reason). */
   bulkDecide(rows: readonly QueueRow[], decision: 'approve' | 'reject', reason?: string): Promise<QueueBulkResult>
   /**
-   * W1-4 — approve a request that raises with the approver's authenticator code. A wrong, used or missing code comes back
+   * W1-4 — approve a request marked `needsCode` with the approver's authenticator code. A wrong, used or missing code comes back
    * (`codeError`) for the code dialog to show; anything else lands on the row, as any approve.
    */
   approveWithCode(row: QueueRow, code: string, again: boolean): Promise<{ codeError: string | null }>
@@ -87,7 +88,7 @@ export function rowName(row: Pick<QueueRow, 'title' | 'target'>): string {
 export function useApprovalActions(opts: {
   refresh(): void
   openAutomate(row: QueueRow): void
-  /** W1-4 — the row raises: the page asks for the approver's authenticator code, then calls `approveWithCode`. */
+  /** W1-4 — the row is marked `needsCode`: the page asks for the approver's authenticator code, then calls `approveWithCode`. */
   askCode(row: QueueRow, again: boolean): void
 }): QueueActions {
   const { toast } = useToast()

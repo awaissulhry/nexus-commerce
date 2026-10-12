@@ -64,6 +64,8 @@ vi.mock('../../email/transport.js', async (importOriginal) => (await import('../
 
 import { A, B, e2eDoor, type Door } from '../../../test-support/ads-autonomy-e2e.js'
 import { atAmazon, drainAdWrites, seedBusinessA, seedBusinessB, throughStart } from '../../../test-support/ads-autonomy-e2e-seed.js'
+import { codeRuleA } from '../../../test-support/code-rule-a.js'
+import { __codeRuleTest } from '../../agents/tools/ads-code-rule.js'
 
 type Json = Record<string, any>
 let door: Door
@@ -74,6 +76,9 @@ const TIMEOUT = 60_000
 const DAY = 86_400_000
 
 beforeAll(async () => {
+  // The flow proves rule A's big doors with the approver's code: their lines set back on for this file (every line is
+  // off since 2026-10-12, Owner "B"; ads-code-rule.vitest.test.ts proves that default).
+  codeRuleA()
   database = await formulaDatabase()
   vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1')
   vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'live')
@@ -107,6 +112,7 @@ beforeAll(async () => {
 }, 240_000)
 
 afterAll(async () => {
+  __codeRuleTest.reset()
   vi.unstubAllEnvs()
   await door?.close()
   await database?.close()
@@ -681,7 +687,7 @@ describe('8 — a phase switch that adds spend needs the code; one that lets Cla
       expect(asked.answer).toMatchObject({
         status: 'waiting_for_approval',
         preview: { phase: { from: 'LAUNCH', to: 'GROW' }, raisesClaude: true, stepUp: expect.any(Object) },
-        trust: { level: 'auto', why: expect.stringMatching(/it lets Claude do more alone .*always needs a person with settings\.security\.manage and their authenticator code, never a rule/) },
+        trust: { level: 'auto', why: expect.stringMatching(/it lets Claude do more alone .*is always a person's decision, never a rule/) },
       })
       expect((asked.answer.preview.strategy.changes as Json[]).find((c) => c.field === 'claudeAutonomy')).toMatchObject({ direction: 'raise' })
       expect((await door.decide(asked.answer.approvalId, { decision: 'reject' })).status).toBe(200)

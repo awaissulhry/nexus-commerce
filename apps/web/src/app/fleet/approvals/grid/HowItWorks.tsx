@@ -116,8 +116,8 @@ export function HowItWorksContent({ keys, gate, onRetryGate, now }: {
           from the request in front of you, and a test on your last {TEST_DAYS} days shows how many would have run by themselves.
         </p>
         <p className={styles.text}>
-          Raising a level asks for the 6-digit code from your authenticator app; going back to “{CHOICE_LABEL.ask}” needs no
-          code. A rule changes only new requests: the ones already here still wait for you. Every rule is also in{' '}
+          Raising a level needs the security permission; going back to “{CHOICE_LABEL.ask}” needs nothing. A rule changes
+          only new requests: the ones already here still wait for you. Every rule is also in{' '}
           <Link href="/settings/ai/claude" className={styles.link}>Settings › AI › Claude</Link>.
         </p>
       </section>

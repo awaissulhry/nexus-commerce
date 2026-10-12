@@ -15,13 +15,13 @@
  *   POST …/brain/control                     set-ads-brain (enroll, set-level, lock, unlock, exclude, include, set-value, leave)
  *   POST …/brain/kill                        set-brain-kill-switch: op kill runs AT ONCE on the person's click, like the halt
  *                                            (still a request, recorded and undoable: decideApproval runs it now, 200);
- *                                            op end is a request that needs the approver's code. The only web door that
+ *                                            op end is a request a person approves. The only web door that
  *                                            stops the brain at once (no page calls it yet: kept on purpose, 2026-10-11)
  *   POST …/brain/bid-brain/enrollment        set-bid-brain-enrollment
  *   POST …/brain/requests/:approvalId/decide approve or reject a request the brain's list holds (brain/requests-read.ts
  *                                            isBrainRequest, else 404), through the Approvals page's own path
- *                                            (decideFleetApproval: the 20-second undo window; a request that raises takes
- *                                            settings.security.manage and the code)
+ *                                            (decideFleetApproval: the 20-second undo window; a request whose stepUp asks
+ *                                            the code takes settings.security.manage and the code — none since 2026-10-12)
  *
  * Body: the tool's own arguments (anything else is dropped), and optionally `approve: true` with `code` — the same person
  * asks and approves in one click (decideFleetApproval). `approve` and `code` are never stored with the request. The answer:
@@ -143,7 +143,7 @@ const advertisingBrainRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.code(202).send(withoutHiddenMoney(request, { ...base, status: 'pending' }, BRAIN_VIEW_MONEY))
   }
   fastify.post('/advertising/automation/brain/control', ask('set-ads-brain'))
-  // Lead decision — a kill runs at once on a person's click, like the halt; ending one goes through approval and the code.
+  // Lead decision — a kill runs at once on a person's click, like the halt; ending one goes through approval.
   fastify.post('/advertising/automation/brain/kill', ask('set-brain-kill-switch', (args) => args.op === 'kill'))
   fastify.post('/advertising/automation/brain/bid-brain/enrollment', ask('set-bid-brain-enrollment'))
 

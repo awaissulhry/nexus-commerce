@@ -13,11 +13,12 @@
  *   ceilings    a level above the tool's code ceiling is read as the ceiling, and cannot be saved
  *   brakes      the daily cap, Pause (instant: what waits to run by rule goes back to a person), the level lowered in
  *               the window, and the automatic pause after 5 stale or failed rule-runs in an hour
- *   raising     needs settings.security.manage (the routes) and a fresh 2FA code; lowering does not
+ *   raising     needs settings.security.manage (the routes); no authenticator code since 2026-10-12 (Owner, "B");
+ *               lowering does not
  *   businesses  one business's level never applies in another
  *   watch       AA-W2-4 — the full check auto would make runs and its verdict is recorded on the request; it is never
  *               scheduled: a person decides it (as at confirm); the cap counts the watched changes that would have run;
- *               offered only below an auto ceiling and never for a brake; raising to it takes the code
+ *               offered only below an auto ceiling and never for a brake; raising to it takes settings.security.manage
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -116,9 +117,9 @@ async function windowCloses(approvalId: string) {
   await inside(() => db().agentApproval.update({ where: { id: approvalId }, data: { executeAfter: new Date(Date.now() - 1000) } }))
   return inside(() => commitScheduledApproval(approvalId))
 }
-/** Set a level (and limits) the way the Settings page does: raising takes a fresh code. */
+/** Set a level (and limits) the way the Settings page does, as a person who may raise. */
 async function setLevel(tool: string, level: string, limits?: Record<string, unknown> | null, workspaceId = A) {
-  const saved = await inside(() => setClaudeRule(actor(), tool, { level, ...(limits !== undefined ? { limits } : {}), code: code() }), workspaceId)
+  const saved = await inside(() => setClaudeRule(actor(), tool, { level, ...(limits !== undefined ? { limits } : {}) }), workspaceId)
   expect(saved, 'error' in saved ? saved.error : '').toMatchObject({ ok: true })
 }
 const resetRules = () => inside(async () => {
@@ -261,9 +262,9 @@ describe('C5 — off and the ceilings', { timeout: TIMEOUT }, () => {
   it('a level above the tool’s ceiling cannot be saved, and a stored one is read as the ceiling', async () => {
     const message = getTool('send-customer-message')!
     expect(message.maxClaudeTrust).toBe('ask')
-    const refused = await inside(() => setClaudeRule(actor(), 'send-customer-message', { level: 'auto', code: code() }))
+    const refused = await inside(() => setClaudeRule(actor(), 'send-customer-message', { level: 'auto' }))
     expect(refused).toMatchObject({ ok: false, status: 400, error: expect.stringContaining('ask at most') })
-    const read = await inside(() => setClaudeRule(actor(), 'product-search', { level: 'auto', code: code() }))
+    const read = await inside(() => setClaudeRule(actor(), 'product-search', { level: 'auto' }))
     expect(read).toMatchObject({ ok: false, status: 400 })
     // Written straight into the row (an older release, a hand edit): still ask.
     await inside(() => db().agentTool.create({ data: { name: 'send-customer-message', riskTier: 'high', requiresApproval: true, claudeTrust: 'auto' } }))
@@ -271,23 +272,27 @@ describe('C5 — off and the ceilings', { timeout: TIMEOUT }, () => {
   })
 })
 
-describe('C5 — raising takes a fresh 2FA code; lowering does not; every change is audited', { timeout: TIMEOUT }, () => {
-  it('raising without a code, or with a wrong one, is refused; with a fresh one it is saved and audited', async () => {
-    expect(await inside(() => setClaudeRule(actor(), 'set-price', { level: 'auto' }))).toMatchObject({ ok: false, status: 403, code: 'mfa_required' })
-    expect(await inside(() => setClaudeRule(actor(), 'set-price', { level: 'auto', code: '000000' }))).toMatchObject({ ok: false, status: 400, code: 'mfa_invalid' })
+describe('C5 — raising takes settings.security.manage, no authenticator code (Owner "B", 2026-10-12); every change is audited', { timeout: TIMEOUT }, () => {
+  it('raising by a person who may raise: saved and audited, no code asked', async () => {
     expect(await inside(() => claudeRuleOf('set-price'))).toMatchObject({ level: 'ask' })
-    const saved = await inside(() => setClaudeRule(actor(), 'set-price', { level: 'auto', code: code() }))
+    const saved = await inside(() => setClaudeRule(actor(), 'set-price', { level: 'auto' }))
     expect(saved).toMatchObject({ ok: true, rule: { level: 'auto' } })
     const audit = await inside(() => db().agentControlAudit.findFirstOrThrow({ where: { charterKey: 'claude', action: 'policy' }, orderBy: { createdAt: 'desc' } }))
     expect(audit).toMatchObject({ actor: 'Tara Trust', fromValue: { tool: 'set-price', level: 'ask' }, toValue: { tool: 'set-price', level: 'auto' } })
   })
 
-  it('limits: checked against the tool’s own schema, and a looser one needs the code', async () => {
+  it('limits: checked against the tool’s own schema; a looser one saves for a person who may raise', async () => {
     await setLevel('set-price', 'auto')
-    expect(await inside(() => setClaudeRule(actor(), 'set-price', { limits: { maxChangePercent: 500 }, code: code() }))).toMatchObject({ ok: false, status: 400 })
-    expect(await inside(() => setClaudeRule(actor(), 'set-price', { limits: { maxChangePercent: 5, extra: 1 }, code: code() }))).toMatchObject({ ok: false, status: 400 })
-    expect(await inside(() => setClaudeRule(actor(), 'set-price', { limits: { maxChangePercent: 15 } }))).toMatchObject({ ok: false, code: 'mfa_required' })
-    expect(await inside(() => setClaudeRule(actor(), 'set-price', { limits: { maxChangePercent: 15 }, code: code() }))).toMatchObject({ ok: true, rule: { limits: { maxChangePercent: 15 } } })
+    expect(await inside(() => setClaudeRule(actor(), 'set-price', { limits: { maxChangePercent: 500 } }))).toMatchObject({ ok: false, status: 400 })
+    expect(await inside(() => setClaudeRule(actor(), 'set-price', { limits: { maxChangePercent: 5, extra: 1 } }))).toMatchObject({ ok: false, status: 400 })
+    expect(await inside(() => setClaudeRule(actor(), 'set-price', { limits: { maxChangePercent: 15 } }))).toMatchObject({ ok: true, rule: { limits: { maxChangePercent: 15 } } })
+  })
+
+  it('raising a level and loosening its limits in one call, even for a kind that cannot be undone (no second code any more)', async () => {
+    expect(getTool('archive-ads')!.reversibility).toBe('none')
+    const saved = await inside(() => setClaudeRule(actor(), 'archive-ads', { level: 'auto', limits: { maxItems: 1 } }))
+    expect(saved).toMatchObject({ ok: true, rule: { level: 'auto', limits: { maxItems: 1 } } })
+    expect(await inside(() => setClaudeRule(actor(), 'archive-ads', { level: 'ask', limits: null }))).toMatchObject({ ok: true })
   })
 
   it('lowering needs no code', async () => {
@@ -316,18 +321,18 @@ describe('C5 — a brake is easy: anyone who may use Claude here lowers and paus
     expect(await inside(() => pauseAutoRuns(brake(), 'stop'))).toMatchObject({ ok: true, paused: true })
   })
 
-  it('raising a level, loosening limits, raising the cap or Resume: refused without it, even with a right code', async () => {
+  it('raising a level, loosening limits, raising the cap or Resume: refused without it', async () => {
     const forbidden = { ok: false, status: 403, code: 'forbidden', error: expect.stringContaining('settings.security.manage') }
-    expect(await inside(() => setClaudeRule(brake(), 'set-price', { level: 'auto', code: code() }))).toMatchObject(forbidden)
-    expect(await inside(() => setClaudeRule(brake(), 'set-price', { limits: { maxChangePercent: 15 }, code: code() }))).toMatchObject(forbidden)
-    expect(await inside(() => setDailyAutoCap(brake(), { dailyAutoCap: 500, code: code() }))).toMatchObject(forbidden)
+    expect(await inside(() => setClaudeRule(brake(), 'set-price', { level: 'auto' }))).toMatchObject(forbidden)
+    expect(await inside(() => setClaudeRule(brake(), 'set-price', { limits: { maxChangePercent: 15 } }))).toMatchObject(forbidden)
+    expect(await inside(() => setDailyAutoCap(brake(), { dailyAutoCap: 500 }))).toMatchObject(forbidden)
     await inside(() => pauseAutoRuns(brake(), 'stop'))
-    expect(await inside(() => resumeAutoRuns(brake(), code()))).toMatchObject(forbidden)
+    expect(await inside(() => resumeAutoRuns(brake()))).toMatchObject(forbidden)
     expect(await inside(() => claudeRuleOf('set-price'))).toMatchObject({ level: 'ask' })
   })
 })
 
-describe('C5 — tightening a limit is a brake too; loosening one needs settings.security.manage and the code', { timeout: TIMEOUT }, () => {
+describe('C5 — tightening a limit is a brake too; loosening one needs settings.security.manage', { timeout: TIMEOUT }, () => {
   it('a smaller max, a shorter list of what is allowed: no code, no permission beyond using Claude', async () => {
     await setLevel('set-price', 'auto')
     expect(await inside(() => setClaudeRule(brake(), 'set-price', { limits: { maxChangePercent: 5 } }))).toMatchObject({ ok: true, rule: { limits: { maxChangePercent: 5 } } })
@@ -337,7 +342,7 @@ describe('C5 — tightening a limit is a brake too; loosening one needs settings
     expect(audit.toValue).toMatchObject({ tool: 'apply-content', limits: { fields: ['title'] } })
   })
 
-  it('a larger max, a longer list, back to looser defaults, or one looser among tighter: settings.security.manage and the code', async () => {
+  it('a larger max, a longer list, back to looser defaults, or one looser among tighter: settings.security.manage', async () => {
     const forbidden = { ok: false, status: 403, code: 'forbidden' }
     await inside(() => setClaudeRule(brake(), 'set-price', { limits: { maxChangePercent: 5 } }))
     expect(await inside(() => setClaudeRule(brake(), 'set-price', { limits: { maxChangePercent: 8 } }))).toMatchObject(forbidden)
@@ -345,9 +350,8 @@ describe('C5 — tightening a limit is a brake too; loosening one needs settings
     expect(await inside(() => setClaudeRule(brake(), 'bulk-price-change', { limits: { maxProducts: 10, maxChangePercent: 20 } }))).toMatchObject(forbidden)
     await inside(() => setClaudeRule(brake(), 'apply-content', { limits: { fields: ['title'] } }))
     expect(await inside(() => setClaudeRule(brake(), 'apply-content', { limits: { fields: ['title', 'description'] } }))).toMatchObject(forbidden)
-    // The person who may raise still needs the code to loosen.
-    expect(await inside(() => setClaudeRule(actor(), 'set-price', { limits: { maxChangePercent: 8 } }))).toMatchObject({ ok: false, code: 'mfa_required' })
-    expect(await inside(() => setClaudeRule(actor(), 'set-price', { limits: { maxChangePercent: 8 }, code: code() }))).toMatchObject({ ok: true })
+    // The person who may raise loosens it: no code.
+    expect(await inside(() => setClaudeRule(actor(), 'set-price', { limits: { maxChangePercent: 8 } }))).toMatchObject({ ok: true })
   })
 
   it('the direction of every kind of limit: max lower, min higher, allow off, a max level earlier, the allowed list smaller; anything else loosens', () => {
@@ -381,12 +385,12 @@ describe('C5 — the brakes', { timeout: TIMEOUT }, () => {
     expect(await inside(() => setDailyAutoCap(actor(), { dailyAutoCap: used }))).toMatchObject({ ok: true }) // lowering: no code
     const second = await call('set-price', { productId: ids.productA, price: (await priceOf(ids.productA)) + 2 })
     expect(second.answer).toMatchObject({ status: 'waiting_for_approval', trust: { why: expect.stringContaining(`${used} changes run by rule in 24 hours`) } })
-    // Raising it back takes the code.
-    expect(await inside(() => setDailyAutoCap(actor(), { dailyAutoCap: 200 }))).toMatchObject({ ok: false, code: 'mfa_required' })
-    expect(await inside(() => setDailyAutoCap(actor(), { dailyAutoCap: 200, code: code() }))).toMatchObject({ ok: true })
+    // Raising it back takes settings.security.manage, no code.
+    expect(await inside(() => setDailyAutoCap(brake(), { dailyAutoCap: 200 }))).toMatchObject({ ok: false, code: 'forbidden' })
+    expect(await inside(() => setDailyAutoCap(actor(), { dailyAutoCap: 200 }))).toMatchObject({ ok: true })
   })
 
-  it('Pause: at once, what waits to run by rule goes back to a person, and new ones wait; Resume takes the code', async () => {
+  it('Pause: at once, what waits to run by rule goes back to a person, and new ones wait; Resume takes settings.security.manage', async () => {
     await setLevel('set-price', 'auto')
     const parked = await call('set-price', { productId: ids.productA, price: (await priceOf(ids.productA)) + 1 })
     expect(parked.answer.status).toBe('runs_by_rule')
@@ -396,8 +400,8 @@ describe('C5 — the brakes', { timeout: TIMEOUT }, () => {
     expect(next.answer).toMatchObject({ status: 'waiting_for_approval', trust: { why: expect.stringContaining('paused') } })
     expect((await inside(() => listClaudeRules())).autonomy).toMatchObject({ paused: true, pausedBy: 'Tara Trust', reason: 'checking prices' })
 
-    expect(await inside(() => resumeAutoRuns(actor(), undefined))).toMatchObject({ ok: false, code: 'mfa_required' })
-    expect(await inside(() => resumeAutoRuns(actor(), code()))).toMatchObject({ ok: true })
+    expect(await inside(() => resumeAutoRuns(brake()))).toMatchObject({ ok: false, code: 'forbidden' })
+    expect(await inside(() => resumeAutoRuns(actor()))).toMatchObject({ ok: true })
     expect((await call('set-price', { productId: ids.productA, price: (await priceOf(ids.productA)) + 1 })).answer.status).toBe('runs_by_rule')
   })
 
@@ -528,9 +532,9 @@ describe('AA-W2-4 — watch: the full check auto would make, recorded on the req
     }
     // AA-W2-11 — a tool whose ceiling is confirm (turn-up-automation, the earlier example, may now run by rule).
     expect(levelsFor(getTool('steer-fleet')!)).toEqual(['off', 'ask', 'confirm'])
-    expect(await inside(() => setClaudeRule(actor(), 'stop-automation', { level: 'watch', code: code() })))
+    expect(await inside(() => setClaudeRule(actor(), 'stop-automation', { level: 'watch' })))
       .toMatchObject({ ok: false, status: 400, error: 'stop-automation cannot be watched: it is a brake, so it runs by rule or waits for a person.' })
-    expect(await inside(() => setClaudeRule(actor(), 'steer-fleet', { level: 'watch', code: code() })))
+    expect(await inside(() => setClaudeRule(actor(), 'steer-fleet', { level: 'watch' })))
       .toMatchObject({ ok: false, status: 400, error: 'steer-fleet cannot be watched: only a kind that may run by rule (auto) can be.' })
     // Written straight into the row (a hand edit): a watch the tool does not allow reads as the level below it.
     await inside(() => db().agentTool.create({ data: { name: 'steer-fleet', riskTier: 'medium', requiresApproval: true, claudeTrust: 'watch' } }))
@@ -538,11 +542,11 @@ describe('AA-W2-4 — watch: the full check auto would make, recorded on the req
     expect((await inside(() => listClaudeRules())).tools.find((t) => t.name === 'stop-automation')).toMatchObject({ ceiling: 'auto', levels: ['off', 'ask', 'confirm', 'auto'] })
   })
 
-  it('raising to watch takes settings.security.manage and the code; auto → watch is a free brake; watch → auto a raise', async () => {
-    expect(await inside(() => setClaudeRule(actor(), 'set-price', { level: 'watch' }))).toMatchObject({ ok: false, code: 'mfa_required' })
-    expect(await inside(() => setClaudeRule(brake(), 'set-price', { level: 'watch', code: code() }))).toMatchObject({ ok: false, code: 'forbidden' })
+  it('raising to watch takes settings.security.manage; auto → watch is a free brake; watch → auto a raise', async () => {
+    expect(await inside(() => setClaudeRule(brake(), 'set-price', { level: 'watch' }))).toMatchObject({ ok: false, code: 'forbidden' })
     await setLevel('set-price', 'confirm')
-    expect(await inside(() => setClaudeRule(actor(), 'set-price', { level: 'watch' }))).toMatchObject({ ok: false, code: 'mfa_required' })
+    expect(await inside(() => setClaudeRule(brake(), 'set-price', { level: 'watch' }))).toMatchObject({ ok: false, code: 'forbidden' })
+    expect(await inside(() => setClaudeRule(actor(), 'set-price', { level: 'watch' }))).toMatchObject({ ok: true, rule: { level: 'watch' } })
     await setLevel('set-price', 'auto')
     expect(await inside(() => setClaudeRule(brake(), 'set-price', { level: 'watch' }))).toMatchObject({ ok: true, rule: { level: 'watch' } })
     const audit = await inside(() => db().agentControlAudit.findFirstOrThrow({ where: { charterKey: 'claude', action: 'policy' }, orderBy: { createdAt: 'desc' } }))
@@ -550,7 +554,7 @@ describe('AA-W2-4 — watch: the full check auto would make, recorded on the req
     expect(await inside(() => setClaudeRule(brake(), 'set-price', { level: 'confirm' }))).toMatchObject({ ok: true, rule: { level: 'confirm' } })
     expect(await inside(() => setClaudeRule(brake(), 'set-price', { level: 'watch' }))).toMatchObject({ ok: false, code: 'forbidden' })
     await setLevel('set-price', 'watch')
-    expect(await inside(() => setClaudeRule(actor(), 'set-price', { level: 'auto' }))).toMatchObject({ ok: false, code: 'mfa_required' })
+    expect(await inside(() => setClaudeRule(brake(), 'set-price', { level: 'auto' }))).toMatchObject({ ok: false, code: 'forbidden' })
   })
 
   it('lowered from auto to watch inside the undo window: the change goes back to a person instead of running', async () => {

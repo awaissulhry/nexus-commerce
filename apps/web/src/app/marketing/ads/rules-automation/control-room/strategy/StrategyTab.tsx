@@ -10,8 +10,8 @@
  *             or "Stored only" while no engine does (the API's registry decides; StrategyEditor).
  *   save      the pattern the Owner liked (product sheet import, 2026-09-26): the API previews every edit as it is
  *             typed (raise or lower is the API's judgement, never this screen's); one summary, one table, a counted
- *             button; a raise asks for the authenticator code (the DS StepUpModal); Done with Undo, which writes the
- *             previous version back. A version saved meanwhile (409) says so and offers a reload.
+ *             button; a raise needs the security permission and asks for no code (Owner 2026-10-12, "B"); Done with
+ *             Undo, which writes the previous version back. A version saved meanwhile (409) says so and offers a reload.
  *
  * The ads console is pinned light (ControlRoomClient); this tab uses semantic tokens only.
  */
@@ -19,7 +19,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
 import { Banner, Disclosure, PressableRow, useActionConfirm } from '@/design-system/components'
 import { Button, SegmentedControl, Skeleton, Tag } from '@/design-system/primitives'
-import { EditModeBar, StepUpModal } from '@/design-system/patterns'
+import { EditModeBar } from '@/design-system/patterns'
 import { usePermission } from '@/lib/auth/AuthProvider'
 import { usePathname, useRouter, useSearchParams } from '@/lib/workspaces/navigation'
 import { useAdsMarketplace, useSharedAdsMarket } from '../../../_shell/MarketplaceContext'
@@ -51,7 +51,6 @@ import {
   rowSummary,
   scopeWhat,
   serverError,
-  stepUpSentence,
   type Draft,
   type FieldKey,
   type Scope,
@@ -66,8 +65,6 @@ const scopeArgs = (scope: Scope) =>
 const rowOf = (rows: RowsMarket | null, scope: Scope): StrategyRowOut | null =>
   rows?.rows.find((r) => (scope.level === 'MARKET' ? r.level === 'MARKET' : r.level === scope.level && r.scopeId === scope.id)) ?? null
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
-
-interface CodeAsk { purpose: 'save' | 'undo'; sentence: string; body: StrategyChangeBody; error: string | null; busy: boolean }
 
 export function StrategyTab() {
   const params = useSearchParams()
@@ -102,7 +99,6 @@ export function StrategyTab() {
   const [conflict, setConflict] = useState(false)
   const [saved, setSaved] = useState<SavedStrategy | null>(null)
   const [undone, setUndone] = useState<{ version: number; changes: SavedStrategy['changes'] } | null>(null)
-  const [code, setCode] = useState<CodeAsk | null>(null)
 
   // ── Reads ──────────────────────────────────────────────────────────────────────────────────────
 
@@ -198,15 +194,8 @@ export function StrategyTab() {
     setReview({ preview: p, body: b }); setPhase('review'); setFlowError(null); setConflict(false); setSaved(null); setUndone(null)
   }
 
-  const fail = (e: unknown, purpose: 'save' | 'undo', ask: CodeAsk | null) => {
+  const fail = (e: unknown, purpose: 'save' | 'undo') => {
     const err = e instanceof StrategyError ? e : null
-    if (err?.code && err.code.startsWith('mfa') && ask) {
-      // The code itself was refused: its dialog says so and stays open; the save behind it waits again.
-      setCode({ ...ask, error: err.message, busy: false })
-      if (purpose === 'save') setPhase('review')
-      return
-    }
-    setCode(null)
     if (err?.code === 'version_moved') {
       if (purpose === 'save') { setConflict(true); setPhase('review') } else { setFlowError('It changed again since you saved, so nothing was undone. Close this and look at the strategy again.'); setPhase('done') }
       return
@@ -215,32 +204,27 @@ export function StrategyTab() {
     setPhase(purpose === 'save' ? 'review' : 'done')
   }
 
-  const doSave = async (b: StrategyChangeBody, codeValue?: string, ask: CodeAsk | null = null) => {
+  const doSave = async (b: StrategyChangeBody) => {
     setPhase('saving'); setFlowError(null)
-    if (ask) setCode({ ...ask, busy: true, error: null })
     try {
-      const out = await strategyApi.save(b, codeValue)
-      setCode(null); setSaved(out); setPhase('done')
+      const out = await strategyApi.save(b)
+      setSaved(out); setPhase('done')
       await reload()
-    } catch (e) { fail(e, 'save', ask) }
+    } catch (e) { fail(e, 'save') }
   }
 
-  const doUndo = async (b: StrategyChangeBody, codeValue?: string, ask: CodeAsk | null = null) => {
+  const doUndo = async (b: StrategyChangeBody) => {
     setPhase('undoing'); setFlowError(null)
-    if (ask) setCode({ ...ask, busy: true, error: null })
     try {
-      const out = await strategyApi.save(b, codeValue)
-      setCode(null); setUndone({ version: out.version, changes: out.changes }); setPhase('undone')
+      const out = await strategyApi.save(b)
+      setUndone({ version: out.version, changes: out.changes }); setPhase('undone')
       await reload()
-    } catch (e) { fail(e, 'undo', ask) }
+    } catch (e) { fail(e, 'undo') }
   }
 
+  // A raise saves like any change (no code since 2026-10-12); the API refuses it without the security permission.
   const onSave = () => {
     if (!review) return
-    if (review.preview.direction === 'raise') {
-      setCode({ purpose: 'save', sentence: stepUpSentence(raiseList(review.preview.changes), what), body: review.body, error: null, busy: false })
-      return
-    }
     void doSave(review.body)
   }
 
@@ -248,12 +232,11 @@ export function StrategyTab() {
     if (!saved) return
     setPhase('undoing'); setFlowError(null)
     try {
-      // Putting a higher number back is a raise like any other: the API says so, and then the code is asked.
+      // Putting a higher number back is a raise like any other: the API says so, and it needs the security permission.
       const p = await strategyApi.preview(saved.undo)
-      if (p.direction !== 'raise') { await doUndo(saved.undo); return }
-      if (!p.mayRaise) { setFlowError('Undoing puts back a higher number, which counts as a raise: it needs the settings.security.manage permission.'); setPhase('done'); return }
-      setCode({ purpose: 'undo', sentence: stepUpSentence(raiseList(p.changes), what, true), body: saved.undo, error: null, busy: false })
-    } catch (e) { fail(e, 'undo', null) }
+      if (p.direction === 'raise' && !p.mayRaise) { setFlowError('Undoing puts back a higher number, which counts as a raise: it needs the settings.security.manage permission.'); setPhase('done'); return }
+      await doUndo(saved.undo)
+    } catch (e) { fail(e, 'undo') }
   }
 
   const onRemove = async () => {
@@ -265,7 +248,7 @@ export function StrategyTab() {
   }
 
   const closeReview = () => {
-    setReview(null); setCode(null)
+    setReview(null)
   }
 
   // ── What is shown ──────────────────────────────────────────────────────────────────────────────
@@ -427,12 +410,6 @@ export function StrategyTab() {
         open={!!review} what={what} preview={review?.preview ?? null} currency={currency} phase={phase} error={flowError}
         conflict={conflict} saved={saved} undone={undone} onSave={onSave} onUndo={() => void onUndo()}
         onReload={() => { closeReview(); void reload() }} onClose={closeReview}
-      />
-      <StepUpModal
-        open={!!code} title="Your authenticator code" sentence={code?.sentence ?? ''} busy={!!code?.busy} error={code?.error ?? null}
-        confirmLabel={code?.purpose === 'undo' ? 'Undo' : 'Save'}
-        onSubmit={(value) => { if (!code) return; const ask = code; void (ask.purpose === 'save' ? doSave(ask.body, value, ask) : doUndo(ask.body, value, ask)) }}
-        onClose={() => { if (code?.busy) return; setCode(null); setPhase((ph) => (ph === 'undoing' ? 'done' : ph)) }}
       />
       <AddScopeDialog
         kind={adding} market={market} taken={taken} onClose={() => setAdding(null)}

@@ -164,8 +164,7 @@ export async function e2eDoor(database: Database): Promise<Door> {
       return door.commit(approvalId, opts.biz ?? A)
     },
     async rule(tool, patch, biz = A) {
-      __stepUpTest.reset()
-      const out = await inside(() => setClaudeRule({ userId: people.owner.id, label: people.owner.label, canManage: true }, tool, { ...patch, code: codeOf() } as never), biz)
+      const out = await inside(() => setClaudeRule({ userId: people.owner.id, label: people.owner.label, canManage: true }, tool, patch as never), biz)
       return out as Json
     },
     async close() { await app.close() },

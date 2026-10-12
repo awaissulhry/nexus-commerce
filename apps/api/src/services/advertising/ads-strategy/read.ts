@@ -119,7 +119,7 @@ const CLAUDE_NOTE =
 const DAILY_NOTE =
   "What Claude's ad changes may add in this market in 24 hours when they run by the business's rule (never a person's "
   + 'approval): what ran by rule in the last 24 hours plus the change must fit, or a person decides. Empty is 0: nothing '
-  + 'that adds to it runs by rule here. The market row only; raising one needs the authenticator code.'
+  + 'that adds to it runs by rule here. The market row only; raising one is a person\'s decision.'
 const NOT_COMPARED = [
   "daily spend ceilings (they cap a day's budget increases: a different thing from a monthly cap)",
   'engine caps per run (code and server settings)',

@@ -2,8 +2,9 @@
  * MCP full control C9 — the words and rules of Settings › AI › Claude, kept pure so they are tested without a browser.
  *
  * The API decides everything (apps/api/src/services/agents/claude-trust.service.ts, claude-activity.service.ts); this
- * file only says it: which levels a tool may take, whether a choice RAISES what Claude may do (that asks for a fresh
- * 2FA code before it is sent), the limits as a person reads them, and each activity outcome in words.
+ * file only says it: which levels a tool may take, whether a choice RAISES what Claude may do (that needs
+ * settings.security.manage; no authenticator code since 2026-10-12), the limits as a person reads them, and each
+ * activity outcome in words.
  */
 
 /** Lowest first. `watch` (ADS AUTONOMY AA-W2-4): checked as Auto would and recorded, but a person still decides. */
@@ -29,7 +30,7 @@ export function levelLabel(level: ClaudeTrust, readOnly: boolean): string {
 
 export const rank = (level: ClaudeTrust) => TRUST_ORDER.indexOf(level)
 
-/** Does going from `from` to `to` let Claude do more without a person? Then it needs the 2FA code (and the API's permission). */
+/** Does going from `from` to `to` let Claude do more without a person? Then it needs settings.security.manage (the API checks). */
 export function raises(from: ClaudeTrust, to: ClaudeTrust): boolean {
   return rank(to) > rank(from)
 }
@@ -70,14 +71,14 @@ export interface ClaudeRules {
  * runs into the sentence's own ("Set Set product tags to Confirm", the 2026-10-02 end-to-end run). */
 export const toolTitle = (rule: Pick<ClaudeRule, 'title'>) => `“${rule.title}”`
 
-/** What a person raises, and so confirms with a fresh 2FA code. */
+/** What a person raises: it lets Claude do more without a person. */
 export type Raise =
   | { kind: 'level'; rule: ClaudeRule; level: ClaudeTrust }
   | { kind: 'limits'; rule: ClaudeRule; limits: Record<string, number> | null }
   | { kind: 'cap'; value: number }
   | { kind: 'resume' }
 
-/** The 2FA dialog's title and its one sentence: what the code raises. */
+/** What a raise did, as a title and one sentence: shown when it is saved. */
 export function raiseText(raise: Raise): { title: string; sentence: string } {
   switch (raise.kind) {
     case 'level':
@@ -158,8 +159,8 @@ export function parseLimits(fields: LimitField[], typed: Record<string, string>)
 
 /**
  * Do the new limits only TIGHTEN the current ones (the API's convention: a `max…` lower, a `min…` higher)? Then they
- * are a brake: sent at once, no code. Anything else — or back to the defaults — asks for the code first; the API
- * decides either way (claude-trust.service.ts limitsTighten).
+ * are a brake. Anything else — or back to the defaults — loosens them: that needs settings.security.manage, and the
+ * API decides either way (claude-trust.service.ts limitsTighten).
  */
 export function tightens(fields: LimitField[], next: Record<string, number> | null): boolean {
   if (!next) return false

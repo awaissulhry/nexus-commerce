@@ -27,8 +27,9 @@ function statusOf(error: string): 403 | 404 | 409 {
 
 /**
  * Undo one recorded change now, as this person: queue the inverse change and approve it with the click. ADS AUTONOMY
- * W1-3 — an inverse that raises (the undo of a strategy lowering) is approved only with the person's fresh
- * authenticator code (`code`); without it the undo waits in the Approvals page.
+ * W1-3 — an inverse whose preview carries `stepUp` is approved only with the person's fresh authenticator code
+ * (`code`); without it the undo waits in the Approvals page. None carries one since 2026-10-12 (the code table's lines
+ * are off): the undo of a strategy lowering is approved with the click.
  */
 export async function undoChangeByClick(principal: UserPrincipal, changeId: string, code?: unknown): Promise<UndoClickResult> {
   const id = changeId.trim()
