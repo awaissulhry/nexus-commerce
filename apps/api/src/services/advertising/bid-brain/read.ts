@@ -24,6 +24,8 @@
  */
 import { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
+import type { ScopeIdLists } from '../ads-scope-lists.js'
+import { filterTargetIds } from '../bid-delivery.js'
 import { parseActor } from '../ads-changes.service.js'
 import { strategyMarket } from '../ads-strategy/bids.js'
 import { decide, type Decision } from './decide.js'
@@ -41,7 +43,8 @@ import { loadShare } from './share-load.js'
 export const BRAIN_VIEWS = ['why', 'what-if', 'diff', 'calibration', 'hour-factors', 'probes'] as const
 export type BrainView = (typeof BRAIN_VIEWS)[number]
 
-export interface BrainReadArgs {
+/** The filter bar's lists (2026-10-12) narrow the keywords like campaignId / productId do (the Bid page's Clashes tab). */
+export interface BrainReadArgs extends ScopeIdLists {
   view?: BrainView
   market?: string
   campaignId?: string
@@ -65,6 +68,13 @@ async function scopeTargets(args: BrainReadArgs): Promise<{ ids: string[] | null
     const t = await prisma.adTarget.findUnique({ where: { id: args.targetId }, select: { id: true, adGroup: { select: { campaign: { select: { marketplace: true } } } } } })
     if (!t) return { ids: [], markets: [], error: `No keyword or target ${args.targetId} in this business.` }
     return { ids: [t.id], markets: marketsOf([t.adGroup.campaign.marketplace]) }
+  }
+  // The filter bar's lists, with the singular campaign / product merged in (bid-delivery.ts filterTargetIds: every status).
+  if ([args.portfolioIds, args.campaignIds, args.adGroupIds, args.productIds].some((l) => l?.length)) {
+    const market = args.market ? strategyMarket(args.market) : null
+    const got = await filterTargetIds({ market, campaignId: args.campaignId, productId: args.productId, portfolioIds: args.portfolioIds, campaignIds: args.campaignIds, adGroupIds: args.adGroupIds, productIds: args.productIds })
+    if ('error' in got) return { ids: [], markets: [], error: got.error }
+    return { ids: got.ids ?? [], markets: market ? [market] : [...SHADOW_MARKETS] }
   }
   if (args.campaignId) {
     const c = await prisma.campaign.findUnique({ where: { id: args.campaignId }, select: { marketplace: true, adGroups: { select: { targets: { where: { isNegative: false }, select: { id: true } } } } } })

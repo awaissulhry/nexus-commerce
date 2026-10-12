@@ -152,5 +152,5 @@ export async function readBidBrainView(args: BrainReadArgs): Promise<ViewAnswer>
  * a keyword — another business's ids read as not found), else 400 (the question was not one the view answers). Pure.
  */
 export function readRefusalStatus(error: string): 404 | 400 {
-  return /\bnot found\b|^No (product|campaign|keyword or target) \S+ in this business\b/i.test(error) ? 404 : 400
+  return /\bnot found\b|^No (product|campaign|ad group|portfolio|keyword or target) \S+ in this business\b/i.test(error) ? 404 : 400
 }

@@ -113,6 +113,17 @@ describe('GET /api/advertising/automation/brain/bid-brain/:view — the bid-brai
     expect((await get('/api/advertising/automation/brain/bid-brain/why?campaignId=no-such')).statusCode).toBe(404)
     expect((await get('/api/advertising/automation/brain/bid-brain/why?targetId=no-such')).statusCode).toBe(404)
   })
+
+  it('the Bid page\'s filter lists narrow the diff to their keywords (the Clashes tab); an id not in this business is a 404', async () => {
+    const diff = (q: string) => get(`/api/advertising/automation/brain/bid-brain/diff?market=IT&${q}`)
+    const decided = async (q: string) => ((await diff(q)).json().days as Array<{ decided: number }>).reduce((n, d) => n + d.decided, 0)
+    expect(await decided('campaignIds=c-it')).toBe(1)
+    expect(await decided(`productIds=${P}`)).toBe(1)
+    expect(await decided('campaignIds=c-off')).toBe(0)
+    expect(await decided('campaignIds=c-it,c-off')).toBe(1)
+    expect((await diff('campaignIds=no-such')).statusCode).toBe(404)
+    expect((await diff('adGroupIds=no-such')).json().error).toBe('No ad group no-such in this business.')
+  })
 })
 
 describe('money', () => {

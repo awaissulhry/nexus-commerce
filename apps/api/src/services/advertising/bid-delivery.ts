@@ -145,12 +145,13 @@ export interface BidScopeQuery extends ScopeIdLists {
   productId?: string | null
   campaignId?: string | null
   adGroupId?: string | null
-  status?: 'live' | 'all'
+  /** `any` (the clash counts): every status, archived too — a keyword two writers changed this week counts after its archive. */
+  status?: 'live' | 'all' | 'any'
 }
 
 /**
  * The bids of a scope as one where, for both reads: `status=live` (default) the target, its ad group and its campaign
- * ENABLED; `all` everything not archived. Another business's campaign, ad group, portfolio or product — or an ad group
+ * ENABLED; `all` everything not archived; `any` every status (the clash counts, filterTargetIds). Another business's campaign, ad group, portfolio or product — or an ad group
  * outside every campaign named — is not found (ads-scope-reach.ts unknownScopeId), word for word for both reads.
  */
 export async function bidScopeWhere(q: BidScopeQuery): Promise<{ ok: true; where: Prisma.AdTargetWhereInput } | { ok: false; status: 404; error: string }> {
@@ -162,18 +163,18 @@ export async function bidScopeWhere(q: BidScopeQuery): Promise<{ ok: true; where
   if (unknown) return { ok: false, status: 404, error: unknown }
   const productIds = products ? [...new Set((await Promise.all(products.map((id) => expandProductScope(id)))).flat())] : null
   const market = q.market?.trim().toUpperCase() || null
-  const state = q.status !== 'all' ? ('ENABLED' as const) : { not: 'ARCHIVED' as const }
+  const state = q.status === 'any' ? undefined : q.status !== 'all' ? ('ENABLED' as const) : { not: 'ARCHIVED' as const }
   return {
     ok: true,
     where: {
       isNegative: false,
-      status: state,
+      ...(state ? { status: state } : {}),
       adGroup: {
         ...(adGroupIds ? { id: { in: adGroupIds } } : {}),
-        status: state,
+        ...(state ? { status: state } : {}),
         ...(productIds ? { productAds: { some: { productId: { in: productIds } } } } : {}),
         campaign: {
-          status: state,
+          ...(state ? { status: state } : {}),
           ...(market ? { marketplace: market } : {}),
           ...(campaignIds ? { id: { in: campaignIds } } : {}),
           ...(portfolioIds ? { portfolioId: { in: portfolioIds } } : {}),
@@ -181,6 +182,18 @@ export async function bidScopeWhere(q: BidScopeQuery): Promise<{ ok: true; where
       },
     },
   }
+}
+
+/**
+ * The keywords the filter bar's lists reach (2026-10-12: the Bid page's "Clashes · 7 d" tile and the brain's Clashes tab
+ * follow the filter), every status: null when no list narrows. Another business's id is not found (bidScopeWhere).
+ */
+export async function filterTargetIds(q: BidScopeQuery): Promise<{ ok: true; ids: string[] | null } | { ok: false; status: 404; error: string }> {
+  if (![q.portfolioIds, q.campaignIds, q.adGroupIds, q.productIds].some((l) => l?.length)) return { ok: true, ids: null }
+  const scope = await bidScopeWhere({ ...q, status: 'any' })
+  if ('error' in scope) return scope
+  const rows = await prisma.adTarget.findMany({ where: scope.where, select: { id: true } })
+  return { ok: true, ids: rows.map((r) => r.id) }
 }
 
 // ── The cursor ─────────────────────────────────────────────────────────────────────────────────────────────────────

@@ -455,14 +455,14 @@ export function RulesView({ market, data, scope, viewSwitch, setQuery }: {
     setProblems([]); setUndoBack(null); setFrozen(null); setTask({ kind: 'mode', back }); setReview({ phase: 'reading' })
     const before = new Map((answerRef.current?.rules ?? []).map((r) => [r.id, r]))
     try {
-      const fresh = await fetchRules(market)
+      const fresh = await fetchRules(market, scope?.api)
       const freshById = new Map(fresh.rules.map((r) => [r.id, r]))
       const conflicts = modeConflicts(draftRef.current, before, freshById)
       data.put(fresh)
       setDraft((d) => retidyModes(d, freshById))
       setReview({ phase: 'ready', conflicts })
     } catch (e) { setReview({ phase: 'failed', error: (e as Error).message }) }
-  }, [market, data, remember])
+  }, [market, scope?.api, data, remember])
 
   const startUndo = useCallback(async (row: BidRuleRow, change: RuleChange, back: PanelState | null) => {
     remember(back ? { kind: 'panel', key: `undo:${change.id}` } : { kind: 'grid' })
@@ -926,6 +926,7 @@ export function RulesView({ market, data, scope, viewSwitch, setQuery }: {
       {panelId && !builderKey && (panelRow ? (
         <RulePanel
           row={panelRow}
+          filterLists={scope?.api}
           tab={panelTab}
           onTab={(tab) => setQuery({ tab })}
           tabHref={tabHref}

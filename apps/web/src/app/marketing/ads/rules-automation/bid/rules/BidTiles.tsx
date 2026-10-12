@@ -4,7 +4,7 @@
  * Bid page — the four tiles above both views (2026-10-10). One label never shows two numbers (audit M1):
  *
  *   Rules view   Rules on · Rule changes · 7 d · Waiting for you · Clashes · 7 d   (the rules read; each filters the rules;
- *                Clashes = the Brain's clashes, its Clashes tab)
+ *                Clashes = the Brain's clashes, its Clashes tab — inside the filter bar's picks, 2026-10-12)
  *   Bids view    Rules on · Bids changed · 7 d · Waiting for you · Two writers     (Bids changed and Two writers are the bids
  *                view's own totals — `BidsTotals.changed7d` and `.contested` — and filter its bids: `?show=changed7d|contested`)
  *
@@ -29,9 +29,11 @@ export const BIDS_CHANGED_LABEL = `Bids changed · ${WEEK}`
 export const RULE_CLASHES_LABEL = `Clashes · ${WEEK}`
 export const TWO_WRITERS_LABEL = 'Two writers'
 
-export function BidTiles({ view, totals, bids, tile, bidsShow, onQuery, onWaiting }: {
+export function BidTiles({ view, totals, clashesReading = false, bids, tile, bidsShow, onQuery, onWaiting }: {
   view: 'rules' | 'bids'
   totals: BidRulesTotals | null
+  /** The clash count on screen was read for the filter before: "—" until the filter's own arrives. */
+  clashesReading?: boolean
   /** The Bids view's own totals, once it has reported them. */
   bids: BidsTileTotals | null
   /** The rules tile that filters now (Rules view). */
@@ -44,6 +46,8 @@ export function BidTiles({ view, totals, bids, tile, bidsShow, onQuery, onWaitin
   onWaiting(): void
 }) {
   const t = totals
+  // The brain's clashes, inside the filter bar's picks (the rules read sends them): none shown while the filter's own is read.
+  const clashes = t && !clashesReading ? t.clashes : null
   const pickRules = (id: RulesTile) => () => onQuery({ view: null, show: tile === id && view === 'rules' ? null : id, rule: null, tab: null })
   const pickBids = (id: BidsShow) => () => onQuery({ show: bidsShow === id ? null : id })
   const rulesOn: Metric = { label: 'Rules on', value: t ? t.on : '—', accent: 'var(--nds-success)', onClick: pickRules('on'), active: view === 'rules' && tile === 'on' }
@@ -66,9 +70,9 @@ export function BidTiles({ view, totals, bids, tile, bidsShow, onQuery, onWaitin
       rulesOn,
       { label: RULE_CHANGES_LABEL, value: t ? t.bidsChanged7d : '—', accent: 'var(--nds-primary)', onClick: pickRules('changed'), active: view === 'rules' && tile === 'changed' },
       waiting,
-      t && t.clashes > 0
-        ? { label: RULE_CLASHES_LABEL, value: t.clashes, accent: 'var(--nds-danger)', onClick: () => onQuery({ view: null, show: null, rule: BRAIN_ID, tab: 'clashes' }) }
-        : { label: RULE_CLASHES_LABEL, value: t ? t.clashes : '—', accent: 'var(--nds-border-strong)' },
+      clashes != null && clashes > 0
+        ? { label: RULE_CLASHES_LABEL, value: clashes, accent: 'var(--nds-danger)', onClick: () => onQuery({ view: null, show: null, rule: BRAIN_ID, tab: 'clashes' }) }
+        : { label: RULE_CLASHES_LABEL, value: clashes ?? '—', accent: 'var(--nds-border-strong)' },
     ]).map((m) => ({ ...m, label: <span className={styles.tileLabel}>{glue(String(m.label))}</span>, value: <span className={styles.tileValue}>{m.value}</span> }))
   // The box is a size container: the strip goes 2 × 2 when four labels would wrap, and on a phone every label keeps two
   // lines, so the four numbers always share one line (design audit M10).

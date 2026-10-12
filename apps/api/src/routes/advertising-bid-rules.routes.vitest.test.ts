@@ -532,3 +532,22 @@ describe('POST /api/advertising/bid-rules/:id/archive and /unarchive', () => {
     expect((await post(`/api/advertising/bid-rules/${ids.r5}/archive`)).statusCode).toBe(404)
   })
 })
+
+describe('the filter bar\'s lists', () => {
+  it('narrow the clash count only: the rules stay; a pick without the clash counts none; an unknown id counts none and blanks nothing', async () => {
+    // A second automatic writer on t-it an hour after R1's change (2 hours ago): one clash this week, in c-it (Jackets IT).
+    await inA(() => db().advertisingActionLog.create({ data: { userId: 'automation:hourly-plan-test', actionType: 'AD_BID_UPDATE', entityType: 'AD_TARGET', entityId: 't-it', payloadBefore: { bidCents: 60 }, payloadAfter: { bidCents: 55 }, amazonResponseStatus: 'SUCCESS', createdAt: new Date(Date.now() - 3_600_000) } }))
+    const all = (await get('/api/advertising/bid-rules?market=IT')).json()
+    expect(all.totals.clashes).toBe(1)
+    const ruleIds = (b: { rules: Array<{ id: string }> }) => b.rules.map((r) => r.id)
+    const inPortfolio = (await get('/api/advertising/bid-rules?market=IT&portfolioIds=pf-jackets')).json()
+    expect(inPortfolio.totals.clashes).toBe(1)
+    expect(ruleIds(inPortfolio)).toEqual(ruleIds(all))
+    const elsewhere = (await get('/api/advertising/bid-rules?market=IT&campaignIds=c-off')).json()
+    expect(elsewhere.totals).toMatchObject({ clashes: 0, rules: all.totals.rules, on: all.totals.on })
+    const unknown = await get('/api/advertising/bid-rules?market=IT&portfolioIds=pf-nowhere')
+    expect(unknown.statusCode, unknown.body).toBe(200)
+    expect(unknown.json().totals.clashes).toBe(0)
+    expect(ruleIds(unknown.json())).toEqual(ruleIds(all))
+  })
+})

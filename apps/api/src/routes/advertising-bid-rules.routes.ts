@@ -6,6 +6,8 @@
  *                                                          { kind, label, reason } (chip, tooltip); its runs say nextRunAt,
  *                                                          firstRunAt / thenRunAt and the schedule in words; scope.counts
  *                                                          are the true totals (the ref lists stop at 100)
+ *                                                          &portfolioIds=&campaignIds=&adGroupIds=&productIds= (the filter
+ *                                                          bar's lists) narrow totals.clashes only
  *   GET  /api/advertising/bid-rules/:id/history?days=&market=&limit=
  *                                                          one rule's (or the brain's) changes, newest first, each with its
  *                                                          keyword, ad group, campaign, portfolio, from → to, who, delivery and
@@ -37,9 +39,11 @@ import { BID_RULES_MONEY, bidRuleHistory, listBidRules } from '../services/adver
 import { previewBidRuleBody, type PreviewBody } from '../services/advertising/bid-rules/preview.js'
 import { setBidRuleArchived } from '../services/advertising/bid-rules/write.js'
 import { undoApprovedAsks } from '../services/advertising/bid-rules/ask-undo.js'
+import { ID_LIST } from '../services/advertising/ads-scope-lists.js'
 
 const MARKET = z.string().trim().min(2).max(20).optional()
-const LIST_QUERY = z.object({ market: MARKET })
+// The filter bar's lists (ads-scope-lists.ts): they narrow the clash count only (listBidRules).
+const LIST_QUERY = z.object({ market: MARKET, portfolioIds: ID_LIST.optional(), campaignIds: ID_LIST.optional(), adGroupIds: ID_LIST.optional(), productIds: ID_LIST.optional() })
 const HISTORY_QUERY = z.object({
   market: MARKET,
   days: z.coerce.number().int().min(1).max(90).default(7),
@@ -83,7 +87,7 @@ const advertisingBidRulesRoutes: FastifyPluginAsync = async (fastify) => {
     reply.header('Cache-Control', 'no-store')
     const parsed = LIST_QUERY.safeParse(request.query ?? {})
     if (!parsed.success) return reply.code(400).send({ error: problemOf(parsed.error) })
-    return withoutHiddenMoney(request, await listBidRules({ market: parsed.data.market ?? null }))
+    return withoutHiddenMoney(request, await listBidRules({ ...parsed.data, market: parsed.data.market ?? null }))
   })
 
   fastify.get('/advertising/bid-rules/:id/history', async (request, reply) => {

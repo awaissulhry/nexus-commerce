@@ -12,6 +12,7 @@ import { modeSteps, refusalWords, withBelt } from './ruleChanges'
 import type { RunRow, StoredRule } from './ruleSettings'
 import type { KillAnswer, KillBody } from './brainStop'
 import { askUndoResults, chunks, routeMissing, type BidOwnerInfo, type BulkResult, type WaitingSuggestion } from './waitingModel'
+import { addApiParams, type ScopeApi } from '../../_shared/scopeFilter/scopeFilterModel'
 import type { ReviewResult } from '@/design-system/patterns'
 
 const api = (path: string) => `${getBackendUrl()}/api/advertising${path}`
@@ -40,8 +41,9 @@ async function send(path: string, method: 'POST' | 'PATCH', body?: unknown): Pro
 
 export const marketQuery = (market: string) => (market && market !== 'all' ? `market=${encodeURIComponent(market)}` : '')
 
-export async function fetchRules(market: string): Promise<BidRulesAnswer> {
-  const q = marketQuery(market)
+/** The rules of the market; the filter bar's lists narrow the clash count only (the page narrows the rules itself). */
+export async function fetchRules(market: string, lists?: ScopeApi | null): Promise<BidRulesAnswer> {
+  const q = addApiParams(new URLSearchParams(marketQuery(market)), lists).toString()
   return readJson(await fetch(api(`/bid-rules${q ? `?${q}` : ''}`), { cache: 'no-store' }))
 }
 
@@ -66,8 +68,8 @@ export async function fetchRuns(id: string): Promise<RunRow[]> {
 
 export interface BrainDiffDay { day: string; decided: number; agree: number; higher: number; lower: number; hold: number; conflicts: number; writes: number; brainWrites: number }
 /** The brain's diff view: its server switch, the campaigns it owns now (LIVE or HELD) and its days. */
-export async function fetchBrainDiff(market: string): Promise<{ mode: string; owned: string[]; days: BrainDiffDay[] }> {
-  const q = ['days=7', marketQuery(market)].filter(Boolean).join('&')
+export async function fetchBrainDiff(market: string, lists?: ScopeApi | null): Promise<{ mode: string; owned: string[]; days: BrainDiffDay[] }> {
+  const q = addApiParams(new URLSearchParams(['days=7', marketQuery(market)].filter(Boolean).join('&')), lists).toString()
   const j = await readJson<{ mode?: string; owned?: string[]; days?: BrainDiffDay[] }>(await fetch(api(`/automation/brain/bid-brain/diff?${q}`), { cache: 'no-store' }))
   return { mode: j.mode ?? '', owned: Array.isArray(j.owned) ? j.owned : [], days: Array.isArray(j.days) ? j.days : [] }
 }

@@ -30,6 +30,8 @@ import { settledLag } from '../ads-settled-window.js'
 import { BRAIN_ACTOR, brainOwnedCampaignIds } from '../bid-brain/live.js'
 import { bidBrainMode } from '../bid-brain/shadow.js'
 import { writeStats } from '../bid-brain/read.js'
+import { filterTargetIds } from '../bid-delivery.js'
+import type { ScopeIdLists } from '../ads-scope-lists.js'
 import { withoutUndonePairs } from '../bid-owner.js'
 import {
   ARCHIVED_ADS_DOMAIN, autoGateHold, brainNextFullRun, brainScheduleWords, dayKey, EFFECT_LOOKBACK_DAYS, effectOf, effectWindows, isBidRule,
@@ -429,7 +431,12 @@ function pickedCampaigns(actions: unknown): string[] {
   return []
 }
 
-export interface ListBidRulesQuery { market?: string | null }
+/**
+ * The rules of one market. The filter bar's lists (2026-10-12) narrow ONLY the clash count: each rule carries its own
+ * scope and the page narrows the rules itself; an id that is not this business's narrows the count to nothing, so a stale
+ * pick never blanks the rules.
+ */
+export interface ListBidRulesQuery extends ScopeIdLists { market?: string | null }
 
 /** GET /advertising/bid-rules — every bid rule of this business (the brain first), in the market asked or every market. */
 export async function listBidRules(q: ListBidRulesQuery, opts: { now?: Date } = {}): Promise<{ market: string | null; rules: BidRuleRow[]; totals: BidRulesTotals }> {
@@ -575,9 +582,13 @@ export async function listBidRules(q: ListBidRulesQuery, opts: { now?: Date } = 
 
   const brain = await brainRow({ market, now, posture, owned, book, writes: writesOf.get(BRAIN_ROW_ID) ?? [], effect: effectFor(BRAIN_ROW_ID) })
 
-  // Clashes: keywords two different automatic writers changed within 24 hours, per day (the brain's diff view's own count).
+  // Clashes: keywords two different automatic writers changed within 24 hours, per day (the brain's diff view's own count),
+  // inside the filter bar's picks when the page sends them.
+  const filtered = await filterTargetIds({ market, portfolioIds: q.portfolioIds, campaignIds: q.campaignIds, adGroupIds: q.adGroupIds, productIds: q.productIds })
+  const inFilter = 'error' in filtered ? new Set<string>() : filtered.ids ? new Set(filtered.ids) : null
   const changedTargets = [...new Set(writes.filter((w) => w.entityType === 'AD_TARGET' && w.createdAt >= weekAgo && landed(w)).map((w) => w.entityId))]
     .filter((id) => { const c = book.campaignOfTarget(id); return !market || (!!c && book.campaigns.get(c)?.marketplace === market) })
+    .filter((id) => !inFilter || inFilter.has(id))
   const bidWrites = changedTargets.length ? await prisma.advertisingActionLog.findMany({
     where: { entityType: 'AD_TARGET', actionType: 'AD_BID_UPDATE', entityId: { in: changedTargets }, createdAt: { gte: new Date(weekAgo.getTime() - DAY) } },
     select: { entityId: true, userId: true, createdAt: true },
