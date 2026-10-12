@@ -149,7 +149,10 @@ function NegativesPage() {
         {view === 'rules' ? (
           <WasteRulesView market={market ?? 'all'} viewSwitch={viewSwitch} scope={filter} />
         ) : (
+          // Keyed by the tab: each list keeps its own saved layout (widths, order). Unkeyed, the grid read the first
+          // tab's layout once and the second tab opened with it, then saved it over its own (grid audit B7).
           <WasteView
+            key={view}
             view={view}
             market={market}
             viewSwitch={viewSwitch}
