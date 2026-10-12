@@ -73,7 +73,8 @@ export interface MatrixState {
   previewVerbRun: (req: MatrixVerbRequest) => Promise<VerbPreview>
   /** The operation, and each cell's outcome (a cell refused at the run says why). */
   applyVerbRun: (preview: VerbPreview) => Promise<VerbOperation & { results?: readonly MatrixWriteOutcome[] }>
-  revert: (op: VerbOperation) => Promise<void>
+  /** Puts a verb's change back; the server's answer — what it put back, and each cell's outcome (a refusal says why). */
+  revert: (op: VerbOperation) => Promise<VerbOperation & { results?: readonly MatrixWriteOutcome[] }>
   /** A row's cells on a coordinate, read at PAINT time. */
   cellsOf: (rowId: string, key: CoordinateKey) => MatrixCells | null
   /** The same cells as the server last read them — never the grid's edited clone (⌘Z keeps what a cell WAS). */
@@ -349,16 +350,20 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
     }
   }, [productId, accountId, locale, commitRead, live])
 
-  const revert = useCallback(async (op: VerbOperation) => {
-    if (!readRef.current) return
+  const revert = useCallback(async (op: VerbOperation): Promise<VerbOperation & { results?: readonly MatrixWriteOutcome[] }> => {
+    if (!readRef.current) throw new Error('The Matrix has not loaded')
     live.begin()
     let covered: number | null = null
     try {
       const res = await fetch(`${getBackendUrl()}${MATRIX_ENDPOINTS.revert(productId, op.id)}`, { method: 'POST', credentials: 'include' })
-      if (!res.ok) throw new Error(`The revert was refused (HTTP ${res.status})`)
+      const body = await res.json().catch(() => null)
+      if (!res.ok) throw new Error((body as { message?: string } | null)?.message ?? `The revert was refused (HTTP ${res.status})`)
       const seqAtReread = live.state.seq
       const again = await fetchMatrix(productId, { accountId, locale })
       if (again.kind === 'live') { commitRead(again.read); covered = seqAtReread }
+      // The server's answer (`{ operation, results }`): an Undo counts what was put back, never what was asked for.
+      const answer = body as { operation?: VerbOperation; results?: MatrixWriteOutcome[] } | null
+      return answer?.operation ? { ...answer.operation, results: answer.results } : { ...op, applied: 0, refused: 0, results: [] }
     } finally {
       live.end(covered)
     }

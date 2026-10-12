@@ -2,25 +2,32 @@
  * The Matrix bulk Edit dialog's own logic, as pure functions (`BulkEditDialog.tsx` is the screen; `types.ts` the contract).
  *
  * Everything here reads what the operator typed or what the runner answered and says it back in plain words: how an
- * entry is read (or why it cannot be), what the Apply button says and why it is held, the footer sentence, the skipped
- * lines by reason, what the dialog opens on, and the key that ties a preview to what is on screen. Nothing here
- * computes a number the dialog shows as a result: every `Now → New` is the runner's.
+ * entry is read (or why it cannot be), what the Apply button says and why it is held, the ONE next step, the markets
+ * that cannot be ticked, the skipped lines by reason, what the dialog opens on, the key that ties a preview to what is
+ * on screen, and the keys of the table's rows. Nothing here computes a number the dialog shows as a result: every
+ * `Now → New` is the runner's.
  */
 import type { CoordinateKey } from '../contract'
 import type {
-  BulkChoiceOption, BulkEditSource, BulkFieldId, BulkFieldSpec, BulkInitial, BulkInput, BulkInputKind, BulkLine, BulkModeId,
-  BulkModeSpec, BulkPreview, BulkRequest,
+  BulkAdjustUnit, BulkChoiceOption, BulkEditSource, BulkFieldId, BulkFieldSpec, BulkGroup, BulkInitial, BulkInput, BulkInputKind,
+  BulkLine, BulkMarketOption, BulkModeId, BulkModeSpec, BulkNotice, BulkPreview, BulkRequest,
 } from './types'
 
 /** The preview is asked again this long after the last change. */
 export const PREVIEW_DELAY_MS = 250
 /** Up to this many choices show as segments; more open a list. */
 export const SEGMENT_CHOICES_MAX = 5
+/** From this many markets to tick, `All` and `None` show beside them. */
+export const ALL_NONE_MIN = 4
+/** A new sale runs this many days from today (the dates the dialog fills in). */
+export const SALE_DEFAULT_DAYS = 7
 
 /** What is on screen, as typed: the dialog parses it and never sends a string it could not read. */
 export interface BulkRaw {
-  /** The amount, the percentage, the number, or the sale price. */
+  /** The price, the amount to raise or lower by, the number, or the sale price. */
   text: string
+  /** Raise · Lower: what `text` is — a percentage or an amount in the markets' currency. */
+  unit: BulkAdjustUnit
   choice: string
   /** The sale's dates, ISO `YYYY-MM-DD` (the date fields give ISO whatever they show). */
   start: string
@@ -28,11 +35,40 @@ export interface BulkRaw {
   /** Sells from: the warehouses ticked, in sale order. */
   codes: readonly string[]
 }
-export const EMPTY_RAW: BulkRaw = Object.freeze({ text: '', choice: '', start: '', end: '', codes: Object.freeze([]) as readonly string[] })
+export const EMPTY_RAW: BulkRaw = Object.freeze({
+  text: '', unit: 'percent', choice: '', start: '', end: '', codes: Object.freeze([]) as readonly string[],
+})
+
+// ── Dates ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** The day as the operator's own calendar says it, `YYYY-MM-DD` (local time: a sale "from today" starts on the day they see). */
+export function localIsoDate(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
+/** `YYYY-MM-DD` plus `days` calendar days (month and year ends included). */
+export function addDays(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
+/** A new sale's dates: from today, for a week. */
+export const saleDefaultDates = (today: string): { start: string; end: string } => ({ start: today, end: addDays(today, SALE_DEFAULT_DAYS) })
+
+/** A real calendar day written `YYYY-MM-DD` (`2026-02-30` is not one). */
+export function isIsoDate(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false
+  const d = new Date(`${s}T00:00:00Z`)
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s
+}
+
+// ── Reading an entry ──────────────────────────────────────────────────────────────────────────────────────────────
 
 /**
  * `empty`    nothing entered yet: Apply waits, no error under the field
- * `partial`  a number still being typed (`99,`, `-`): Apply waits, no error yet
+ * `partial`  a number still being typed (`99,`): Apply waits, no error yet
  * `invalid`  it cannot be read: the reason shows under the field
  */
 export type ParseState = 'ok' | 'empty' | 'partial' | 'invalid'
@@ -49,47 +85,52 @@ export interface ParseResult {
 const ok = (input: BulkInput): ParseResult => ({ input, state: 'ok', reason: null, at: null })
 const fail = (state: Exclude<ParseState, 'ok'>, reason: string, at: ParseResult['at'] = 'value'): ParseResult => ({ input: null, state, reason, at })
 
-/** A typed minus: ASCII, the minus sign the placeholder shows, or an en dash. */
-const MINUS = /^[-−–]/
+/** Every channel refuses a price of 0, and a change of 0 changes nothing. */
+export const MORE_THAN_ZERO = 'Enter more than 0.'
+export const NO_SIGN = 'Enter the number without a sign.'
+export const DOWN_BY_100 = 'It cannot go down by 100 % or more.'
+
+/** A typed sign: ASCII, the minus sign, an en dash, or a plus. */
+const SIGN = /^[-−–+]/
 const compact = (s: string) => s.trim().replace(/\s+/g, '')
+const round2 = (n: number) => Math.round(n * 100) / 100
 
 function readMoney(raw: string, empty: string): ParseResult {
   const t = compact(raw)
   if (t === '') return fail('empty', empty)
-  if (MINUS.test(t)) return fail('invalid', 'Enter 0 or more.')
+  if (SIGN.test(t)) return fail('invalid', MORE_THAN_ZERO)
   if (/^\d+[.,]$/.test(t)) return fail('partial', 'Finish the number.')
   if (/^\d+[.,]\d{3,}$/.test(t)) return fail('invalid', 'Use at most 2 decimals, like 99.75.')
   if (!/^\d+(?:[.,]\d{1,2})?$/.test(t)) return fail('invalid', 'Enter a number, like 99.75.')
-  return ok({ amount: Math.round(Number(t.replace(',', '.')) * 100) / 100 })
+  const amount = round2(Number(t.replace(',', '.')))
+  if (amount <= 0) return fail('invalid', MORE_THAN_ZERO)
+  return ok({ amount })
 }
 
-function readPercent(raw: string): ParseResult {
-  const t = compact(raw).replace(/%$/, '').replace(MINUS, '-')
-  if (t === '') return fail('empty', 'Enter a percentage.')
-  if (/^[-+]$/.test(t) || /^[-+]?\d+[.,]$/.test(t)) return fail('partial', 'Finish the number.')
-  if (!/^[-+]?\d+(?:[.,]\d{1,2})?$/.test(t)) return fail('invalid', 'Enter a percentage, like −5 or 10.')
-  const n = Number(t.replace(',', '.'))
-  if (n === 0) return fail('invalid', 'Enter a change other than 0.')
-  if (n <= -100) return fail('invalid', 'It cannot go down by 100 % or more.')
-  return ok({ percent: n })
+/** Raise · Lower: an unsigned number in its unit; the mode is the sign (Lower 5 % → `percent: -5`, Raise €2 → `delta: 2`). */
+function readAdjust(raw: BulkRaw, sign: 1 | -1): ParseResult {
+  const percent = raw.unit === 'percent'
+  const t = percent ? compact(raw.text).replace(/%$/, '') : compact(raw.text)
+  if (t === '') return fail('empty', percent ? 'Enter a percentage.' : 'Enter an amount.')
+  if (SIGN.test(t)) return fail('invalid', NO_SIGN)
+  if (/^\d+[.,]$/.test(t)) return fail('partial', 'Finish the number.')
+  if (/^\d+[.,]\d{3,}$/.test(t)) return fail('invalid', percent ? 'Use at most 2 decimals, like 2.5.' : 'Use at most 2 decimals, like 2.50.')
+  if (!/^\d+(?:[.,]\d{1,2})?$/.test(t)) return fail('invalid', percent ? 'Enter a number, like 5.' : 'Enter a number, like 2.50.')
+  const n = round2(Number(t.replace(',', '.')))
+  if (n === 0) return fail('invalid', MORE_THAN_ZERO)
+  if (percent && sign < 0 && n >= 100) return fail('invalid', DOWN_BY_100)
+  return ok(percent ? { percent: sign * n } : { delta: sign * n })
 }
 
 function readInteger(raw: string): ParseResult {
   const t = compact(raw)
   if (t === '') return fail('empty', 'Enter a number.')
-  if (MINUS.test(t)) return fail('invalid', 'Enter 0 or more.')
+  if (SIGN.test(t)) return fail('invalid', 'Enter 0 or more.')
   if (/^\d+[.,]\d*$/.test(t)) return fail('invalid', 'Enter a whole number.')
   if (!/^\d+$/.test(t)) return fail('invalid', 'Enter a whole number, like 5.')
   const n = Number(t)
   if (!Number.isSafeInteger(n)) return fail('invalid', 'That number is too large.')
   return ok({ amount: n })
-}
-
-/** A real calendar day written `YYYY-MM-DD` (`2026-02-30` is not one). */
-export function isIsoDate(s: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false
-  const d = new Date(`${s}T00:00:00Z`)
-  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s
 }
 
 function readSale(raw: BulkRaw): ParseResult {
@@ -104,25 +145,35 @@ function readSale(raw: BulkRaw): ParseResult {
   return ok({ sale: { value: value.input.amount!, start: raw.start, end: raw.end } })
 }
 
+/** The sign a mode gives an `adjust` entry: Lower takes it down, everything else up. */
+export const adjustSign = (mode: BulkModeId | null | undefined): 1 | -1 => (mode === 'lower' ? -1 : 1)
+
+export interface ParseOptions {
+  /** A `choice` mode's choices: a choice no longer offered (the markets changed) is not read. */
+  choices?: readonly BulkChoiceOption[]
+  /** The mode: Lower is the minus sign of an `adjust` entry. */
+  mode?: BulkModeId | null
+}
+
 /**
  * Reads what the operator entered for a mode:
- *   money    0 or more, up to 2 decimals: `105` · `99,75` · `99.75`
- *   percent  signed, not 0, above −100: `-5` · `−5` · `+10` · `2,5 %`
- *   integer  a whole number, 0 or more (as `amount`)
- *   choice   one of `choices` (when given: a choice no longer offered is not read)
- *   sale     a sale price as money, and a start and an end date with start ≤ end
+ *   money      more than 0, up to 2 decimals: `105` · `99,75` · `99.75`
+ *   adjust     unsigned, more than 0, up to 2 decimals, in `raw.unit`; Lower by 100 % or more is refused
+ *   integer    a whole number, 0 or more (as `amount`)
+ *   choice     one of `choices` (when given)
+ *   sale       a sale price as money, and a start and an end date with start ≤ end
  *   locations  at least one warehouse ticked (as `codes`, in sale order)
- *   none     always read
+ *   none · handoff  always read (nothing to enter)
  */
-export function parseInput(kind: BulkInputKind, raw: BulkRaw, choices?: readonly BulkChoiceOption[]): ParseResult {
+export function parseInput(kind: BulkInputKind, raw: BulkRaw, opts: ParseOptions = {}): ParseResult {
   switch (kind) {
-    case 'none': return ok({})
-    case 'money': return readMoney(raw.text, 'Enter an amount.')
-    case 'percent': return readPercent(raw.text)
+    case 'none': case 'handoff': return ok({})
+    case 'money': return readMoney(raw.text, 'Enter a price.')
+    case 'adjust': return readAdjust(raw, adjustSign(opts.mode))
     case 'integer': return readInteger(raw.text)
     case 'choice': {
       const c = raw.choice
-      if (c === '' || (choices && !choices.some((o) => o.value === c))) return fail('empty', 'Choose one.')
+      if (c === '' || (opts.choices && !opts.choices.some((o) => o.value === c))) return fail('empty', 'Choose one.')
       return ok({ choice: c })
     }
     case 'sale': return readSale(raw)
@@ -130,16 +181,28 @@ export function parseInput(kind: BulkInputKind, raw: BulkRaw, choices?: readonly
   }
 }
 
-/** The input's words back on screen (an opening value, `initial.input`). */
-export function rawFromInput(kind: BulkInputKind, input: BulkInput | undefined): BulkRaw {
-  if (!input) return EMPTY_RAW
-  switch (kind) {
-    case 'money': case 'integer': return { ...EMPTY_RAW, text: input.amount != null ? String(input.amount) : '' }
-    case 'percent': return { ...EMPTY_RAW, text: input.percent != null ? String(input.percent) : '' }
-    case 'choice': return { ...EMPTY_RAW, choice: input.choice ?? '' }
-    case 'sale': return input.sale ? { ...EMPTY_RAW, text: String(input.sale.value), start: input.sale.start, end: input.sale.end } : EMPTY_RAW
-    case 'locations': return { ...EMPTY_RAW, codes: [...(input.codes ?? [])] }
-    case 'none': return EMPTY_RAW
+type ModeShape = Pick<BulkModeSpec, 'input' | 'units'>
+
+/** What a mode starts with: nothing typed, its first unit, and — for a sale — today and a week from today. */
+export function modeRaw(mode: ModeShape | null | undefined, today: string): BulkRaw {
+  if (!mode) return EMPTY_RAW
+  return { ...EMPTY_RAW, unit: mode.units?.[0] ?? EMPTY_RAW.unit, ...(mode.input === 'sale' ? saleDefaultDates(today) : {}) }
+}
+
+/** An opening value (`initial.input`) back on screen, in the mode's own controls. */
+export function rawFromInput(mode: ModeShape, input: BulkInput | undefined, today: string): BulkRaw {
+  const base = modeRaw(mode, today)
+  if (!input) return base
+  switch (mode.input) {
+    case 'money': case 'integer': return { ...base, text: input.amount != null ? String(input.amount) : '' }
+    case 'adjust':
+      if (input.delta != null) return { ...base, text: String(Math.abs(input.delta)), unit: 'money' }
+      if (input.percent != null) return { ...base, text: String(Math.abs(input.percent)), unit: 'percent' }
+      return base
+    case 'choice': return { ...base, choice: input.choice ?? '' }
+    case 'sale': return input.sale ? { ...base, text: String(input.sale.value), start: input.sale.start, end: input.sale.end } : base
+    case 'locations': return { ...base, codes: [...(input.codes ?? [])] }
+    case 'none': case 'handoff': return base
   }
 }
 
@@ -149,7 +212,25 @@ export const currencySymbol = (code: string): string => SYMBOLS[code.trim().toUp
 
 /** An input's label when its mode names none. */
 export const DEFAULT_INPUT_LABEL: Readonly<Record<BulkInputKind, string>> = {
-  none: '', money: 'Amount', percent: 'Change by', integer: 'Number', choice: 'Choose', sale: 'Sale price', locations: 'Warehouses',
+  none: '', money: 'New price', adjust: 'By', integer: 'Number', choice: 'Choose', sale: 'Sale price', locations: 'Warehouses', handoff: 'Open',
+}
+
+// ── The field list ────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** The fields under their headings (Prices · Listing · Stock), headings and fields in the order the runner gives them. */
+export function fieldGroups<F extends Pick<BulkFieldSpec, 'group'>>(fields: readonly F[]): Array<{ group: BulkGroup; fields: F[] }> {
+  const out: Array<{ group: BulkGroup; fields: F[] }> = []
+  for (const f of fields) {
+    const g = out.find((x) => x.group === f.group)
+    if (g) g.fields.push(f)
+    else out.push({ group: f.group, fields: [f] })
+  }
+  return out
+}
+
+/** The phone's field list (a `Listbox`): grouped, the description as the note, a held field with its reason. */
+export function fieldListOptions(fields: readonly BulkFieldSpec[]): Array<{ value: string; label: string; group: string; note: string; heldReason?: string }> {
+  return fields.map((f) => ({ value: f.id, label: f.label, group: f.group, note: f.held ?? f.description, ...(f.held !== null ? { heldReason: f.held } : {}) }))
 }
 
 // ── What the dialog opens on ──────────────────────────────────────────────────────────────────────────────────────
@@ -161,8 +242,9 @@ export interface BulkFormState {
   markets: CoordinateKey[]
   raw: BulkRaw
 }
+const NO_FORM: BulkFormState = { field: null, mode: null, markets: [], raw: EMPTY_RAW }
 
-type SourceShape = Pick<BulkEditSource, 'fields' | 'marketsFor' | 'defaultMarkets'>
+type SourceShape = Pick<BulkEditSource, 'fields' | 'marketsFor' | 'defaultMarkets'> & Partial<Pick<BulkEditSource, 'defaultMode'>>
 
 /** The markets of a field that can be ticked: offered, and not held. */
 export function tickableMarkets(source: SourceShape, field: BulkFieldSpec): CoordinateKey[] {
@@ -179,50 +261,91 @@ function marketsFor(source: SourceShape, field: BulkFieldSpec, wanted?: readonly
   return named.length > 0 ? named : pick(source.defaultMarkets(field.id))
 }
 
-/** A field as it starts when chosen: its first mode, its default markets, nothing typed. */
-export function fieldDefaults(source: SourceShape, fieldId: BulkFieldId): BulkFormState {
+/** The mode a field opens on: the runner's choice for these rows and markets (`defaultMode`), else the field's first. */
+export function defaultModeFor(source: SourceShape, field: BulkFieldSpec, markets: readonly CoordinateKey[]): BulkModeSpec | undefined {
+  const wanted = source.defaultMode?.(field.id, markets) ?? null
+  return field.modes.find((m) => m.id === wanted) ?? field.modes[0]
+}
+
+/** A field as it starts when chosen: its default markets, its default mode for them, nothing typed (a sale's dates filled). */
+export function fieldDefaults(source: SourceShape, fieldId: BulkFieldId, today: string): BulkFormState {
   const field = source.fields.find((f) => f.id === fieldId)
-  if (!field) return { field: null, mode: null, markets: [], raw: EMPTY_RAW }
-  return { field: field.id, mode: field.modes[0]?.id ?? null, markets: marketsFor(source, field), raw: EMPTY_RAW }
+  if (!field) return NO_FORM
+  const markets = marketsFor(source, field)
+  const mode = defaultModeFor(source, field, markets)
+  return { field: field.id, mode: mode?.id ?? null, markets, raw: modeRaw(mode, today) }
 }
 
 /**
  * What the dialog opens on: the initial field when it is offered (with its mode and value when they belong to it),
- * else the first field that is not held (else the first field, which then says why it is held); its first mode; the
- * initial markets that can be ticked, else the field's default markets.
+ * else the first field that is not held (else the first field, which then says why it is held); the initial markets
+ * that can be ticked, else the field's default markets; the initial mode, else the field's default mode for those markets.
  */
-export function resolveInitial(source: SourceShape | null, initial?: BulkInitial): BulkFormState {
-  if (!source || source.fields.length === 0) return { field: null, mode: null, markets: [], raw: EMPTY_RAW }
+export function resolveInitial(source: SourceShape | null, initial: BulkInitial | undefined, today: string): BulkFormState {
+  if (!source || source.fields.length === 0) return NO_FORM
   const asked = initial?.field ? source.fields.find((f) => f.id === initial.field && f.held === null) : undefined
   const field = asked ?? source.fields.find((f) => f.held === null) ?? source.fields[0]!
+  const markets = marketsFor(source, field, initial?.coordinateKeys)
   const askedMode = asked && initial?.mode ? field.modes.find((m) => m.id === initial.mode) : undefined
-  const mode: BulkModeSpec | undefined = askedMode ?? field.modes[0]
-  return {
-    field: field.id,
-    mode: mode?.id ?? null,
-    markets: marketsFor(source, field, initial?.coordinateKeys),
-    raw: asked && mode && (askedMode || !initial?.mode) ? rawFromInput(mode.input, initial?.input) : EMPTY_RAW,
+  const mode = askedMode ?? defaultModeFor(source, field, markets)
+  // The opening value belongs to the field asked for, and to its mode when one was named.
+  const carry = !!asked && !!mode && (!!askedMode || !initial?.mode)
+  return { field: field.id, mode: mode?.id ?? null, markets, raw: carry && mode ? rawFromInput(mode, initial?.input, today) : modeRaw(mode, today) }
+}
+
+// ── Markets ───────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** Copy from: the market the prices come from is the source, not a target. */
+export const COPY_SOURCE_HELD = 'Prices are copied from here'
+
+/** The market a Copy from takes its prices from; null for any other mode or while none is chosen. */
+export const copySource = (mode: BulkModeId | null | undefined, raw: Pick<BulkRaw, 'choice'>): CoordinateKey | null =>
+  (mode === 'copy' && raw.choice !== '' ? raw.choice : null)
+
+/** The markets as the dialog shows them: the runner's, with the Copy from source held (it cannot also be a target). */
+export function marketsShown(options: readonly BulkMarketOption[], source: CoordinateKey | null): BulkMarketOption[] {
+  return options.map((m) => (source !== null && m.key === source && m.held === null ? { ...m, held: COPY_SOURCE_HELD } : m))
+}
+
+/** The markets the request names: ticked AND tickable on screen, in the order shown (a held one is never sent). */
+export function requestMarkets(ticked: readonly CoordinateKey[], shown: readonly BulkMarketOption[]): CoordinateKey[] {
+  return shown.filter((m) => m.held === null && ticked.includes(m.key)).map((m) => m.key)
+}
+
+/**
+ * The held markets as ONE line, grouped by reason, the largest group first:
+ * `None of these rows is on it: eBay · IT, Etsy. Prices are copied from here: Amazon · DE.` Null when none is held.
+ */
+export function heldMarketsLine(shown: readonly BulkMarketOption[]): string | null {
+  const groups = new Map<string, string[]>()
+  for (const m of shown) {
+    if (m.held === null) continue
+    const reason = m.held.trim().replace(/[.:]$/, '')
+    groups.set(reason, [...(groups.get(reason) ?? []), m.label])
   }
+  if (groups.size === 0) return null
+  return [...groups.entries()].sort((a, b) => b[1].length - a[1].length).map(([reason, labels]) => `${reason}: ${labels.join(', ')}.`).join(' ')
 }
 
 // ── The request, and the key that ties a preview to the screen ──────────────────────────────────────────────────────
 
-/** The request on screen; null while the entry cannot be read, no market is ticked, or the field is held. */
+/** The request on screen; null while the entry cannot be read, no market is ticked, the field is held, or it is a hand-off. */
 export function buildRequest(field: BulkFieldSpec | null, mode: BulkModeSpec | null, parsed: ParseResult, markets: readonly CoordinateKey[]): BulkRequest | null {
-  if (!field || !mode || field.held !== null || !parsed.input) return null
+  if (!field || !mode || field.held !== null || mode.input === 'handoff' || !parsed.input) return null
   if (field.perMarket && markets.length === 0) return null
   return { field: field.id, mode: mode.id, input: parsed.input, coordinateKeys: field.perMarket ? [...markets] : [] }
 }
 
 /**
  * One string per request, stable whatever order the markets were ticked in and whatever order the input's keys were
- * written in. A preview is applied only when the key of the request it answers equals the key on screen.
+ * written in, and different for anything that changes the answer (a percentage and an amount are different requests).
+ * A preview is applied only when the key of the request it answers equals the key on screen.
  */
 export function requestKey(r: BulkRequest | null): string | null {
   if (!r) return null
   const i = r.input
   return JSON.stringify([
-    r.field, r.mode, i.amount ?? null, i.percent ?? null, i.choice ?? null,
+    r.field, r.mode, i.amount ?? null, i.percent ?? null, i.delta ?? null, i.choice ?? null,
     i.sale ? [i.sale.value, i.sale.start, i.sale.end] : null,
     // Sells from: the order is the sale order, so it is part of the request (never sorted).
     i.codes ?? null,
@@ -259,10 +382,51 @@ export function footerStatus(s: { phase: BulkPhase; current: Pick<BulkPreview, '
   return s.held ?? ''
 }
 
+type StepField = Pick<BulkFieldSpec, 'held' | 'perMarket'>
+type StepMode = Pick<BulkModeSpec, 'id' | 'input' | 'inputLabel'>
+
+const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1)
+
+/** What to enter or choose, as an order: `Enter the new price` · `Enter how much` · `Choose the method` · `Tick a warehouse`. */
+function stepWords(mode: StepMode | null, parsed: ParseResult): string {
+  const label = mode?.inputLabel ? lowerFirst(mode.inputLabel) : null
+  switch (mode?.input) {
+    case 'money': case 'integer': return label ? `Enter the ${label}` : 'Enter a value'
+    case 'adjust': return 'Enter how much'
+    case 'choice': return mode.id === 'copy' ? 'Choose a market to copy from' : label ? `Choose the ${label}` : 'Choose a value'
+    case 'sale': return parsed.at === 'start' ? 'Choose the start date' : parsed.at === 'end' ? 'Choose the end date' : 'Enter the sale price'
+    case 'locations': return 'Tick a warehouse'
+    default: return 'Choose a value'
+  }
+}
+
+/** The ONE next step: `short` for the footer (`Enter the new price`), `long` above the table (`… to see what changes.`). */
+export interface NextStep { short: string; long: string }
+const toSee = (short: string): NextStep => ({ short, long: `${short} to see what changes.` })
+
+/**
+ * What the operator does next before anything can be previewed, in the order they meet it: choose a field, (a held
+ * field says why), enter the value (or correct it), tick a market. Null = nothing: the request is on screen (or the
+ * field is a hand-off, whose button says what happens).
+ */
+export function nextStep(s: { field: StepField | null; mode: StepMode | null; parsed: ParseResult; ticked: number }): NextStep | null {
+  if (!s.field) return { short: 'Choose what to change', long: 'Choose what to change.' }
+  if (s.field.held) return { short: s.field.held, long: s.field.held }
+  if (s.mode?.input === 'handoff') return null
+  if (s.parsed.state === 'empty') return toSee(stepWords(s.mode, s.parsed))
+  // A half-typed number shows no error yet, so the step names it. An unreadable entry has its reason under its own
+  // control already: the step only points there.
+  if (s.parsed.state === 'partial') return toSee((s.parsed.reason ?? 'Finish the number').replace(/\.$/, ''))
+  if (s.parsed.state !== 'ok') return toSee('Correct the value')
+  if (s.field.perMarket && s.ticked === 0) return toSee('Tick a market')
+  return null
+}
+
 export interface HeldInputs {
   phase: BulkPhase
   /** No field chosen (`null` field) or the field's own `held`. */
-  field: Pick<BulkFieldSpec, 'held' | 'perMarket'> | null
+  field: StepField | null
+  mode?: StepMode | null
   parsed: ParseResult
   ticked: number
   /** The preview could not be worked out. */
@@ -276,16 +440,55 @@ export interface HeldInputs {
 /** Why Apply waits, in the order the operator meets the reasons; null = it can apply. */
 export function applyHeldReason(s: HeldInputs): string | null {
   if (s.phase === 'applying') return 'Applying…'
-  if (!s.field) return 'Choose what to change'
-  if (s.field.held) return s.field.held
-  if (s.parsed.state === 'empty') return 'Choose a value first'
-  if (s.parsed.state !== 'ok') return s.parsed.reason ?? 'Choose a value first'
-  if (s.field.perMarket && s.ticked === 0) return 'Tick at least one market'
+  const next = nextStep({ field: s.field, mode: s.mode ?? null, parsed: s.parsed, ticked: s.ticked })
+  if (next) return next.short
   if (s.error) return 'The changes could not be worked out'
   if (!s.current) return 'Working out the changes…'
   if (s.current.changes === 0) return 'Nothing would change'
   if (s.current.confirmWord && !s.confirmed) return `Type ${s.current.confirmWord} to confirm`
   return null
+}
+
+/** What a `choice` mode says when it has no choice: never "nothing to choose" while markets are ticked. */
+export function noChoiceText(mode: BulkModeId | null, ticked: number): string {
+  if (ticked === 0) return 'Tick a market to see the choices.'
+  return mode === 'copy' ? 'No market here has a price to copy.' : 'The ticked markets do not take this.'
+}
+
+/**
+ * A refusal as the dialog says it: the server's `Refused — …` prefix dropped (the line already says Skipped), the first
+ * letter upper-case: `Refused — an active FBA offer keeps…` → `An active FBA offer keeps…`.
+ */
+export function reasonText(reason: string): string {
+  const t = reason.replace(/^Refused\s*[—–-]\s*/, '')
+  return t.charAt(0).toUpperCase() + t.slice(1)
+}
+
+/** A failed or refused preview line, in the New column. */
+export const skippedText = (reason: string): string => `Skipped — ${reasonText(reason)}`
+
+/** The skipped reasons' disclosure: `Why 3 lines are skipped`. */
+export const skippedSummary = (n: number): string => (n === 1 ? 'Why 1 line is skipped' : `Why ${num(n)} lines are skipped`)
+
+export const NOT_UNDOABLE = 'This cannot be undone once it is sent.'
+
+/**
+ * The banners above the table: the runner's notices, each once and never the mode's hint again, then "cannot be undone"
+ * when it cannot. A notice that arrives as a bare string (an older runner) is info.
+ */
+export function noticesFor(p: Pick<BulkPreview, 'notices' | 'undoable'>, hint: string | null | undefined): BulkNotice[] {
+  const norm = (s: string) => s.trim().replace(/\.$/, '').toLowerCase()
+  const seen = new Set<string>(hint ? [norm(hint)] : [])
+  const out: BulkNotice[] = []
+  for (const raw of p.notices as ReadonlyArray<BulkNotice | string>) {
+    const n: BulkNotice = typeof raw === 'string' ? { text: raw, tone: 'info' } : raw
+    const k = norm(n.text)
+    if (k === '' || seen.has(k)) continue
+    seen.add(k)
+    out.push(n)
+  }
+  if (!p.undoable && !seen.has(norm(NOT_UNDOABLE))) out.push({ text: NOT_UNDOABLE, tone: 'info' })
+  return out
 }
 
 // ── The table ─────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -306,7 +509,7 @@ export function groupSkipped(lines: readonly BulkLine[]): SkipGroup[] {
 }
 
 /** `Amazon-managed (2): SKU-A, SKU-B` */
-export const skipGroupLine = (g: SkipGroup): string => `${g.reason} (${num(g.count)}): ${g.skus.join(', ')}`
+export const skipGroupLine = (g: SkipGroup): string => `${reasonText(g.reason)} (${num(g.count)}): ${g.skus.join(', ')}`
 
 export type LineFilter = 'all' | 'changes' | 'skipped'
 
@@ -337,13 +540,46 @@ export function effectiveFilter(lines: readonly BulkLine[], filter: LineFilter):
   return lineFilterOptions(lines).some((o) => o.value === filter) ? filter : 'all'
 }
 
-/** What the table area says while there is no request to preview. */
-export function previewPrompt(s: { field: Pick<BulkFieldSpec, 'held' | 'perMarket'> | null; kind: BulkInputKind; parsed: ParseResult; ticked: number }): string {
-  if (!s.field) return 'Choose what to change.'
-  if (s.field.held) return s.field.held
-  if (s.parsed.state !== 'ok') return s.kind === 'choice' ? 'Choose a value to see what would change.' : s.kind === 'locations' ? 'Tick a warehouse to see what would change.' : 'Enter a value to see what would change.'
-  if (s.field.perMarket && s.ticked === 0) return 'Tick a market to see what would change.'
-  return 'Working out the changes…'
+/** One row of the table: a line, under the key of the set of lines it came in. */
+/** `first` = the first row of its variant in the table on screen (the full name and SKU); the rest say the name quietly. */
+export interface TableRow { key: string; line: BulkLine; first: boolean }
+
+/**
+ * A key per SET of lines, by identity: the same array keeps its key; another array — even one with the same words —
+ * gets a new one. The DS grid redraws a cell only when its row is new or the value it reads changed, and the table's
+ * cells read nothing it compares, so a row that kept its key across two previews kept the old words (the stale-cell
+ * bug, BEFORE-NOTES 2026-10-12: Quantity showing a Fulfilment refusal). A new key per set makes every row new.
+ */
+export function createTableKeys(): (lines: readonly BulkLine[]) => string {
+  const seen = new WeakMap<readonly BulkLine[], string>()
+  let n = 0
+  return (lines) => {
+    let k = seen.get(lines)
+    if (k === undefined) { n += 1; k = `t${n}`; seen.set(lines, k) }
+    return k
+  }
+}
+
+/** The table's rows: `<set key>|<line id>`, unique even when a set repeats a line id (`#2`, `#3`). */
+export function tableRows(lines: readonly BulkLine[], setKey: string): TableRow[] {
+  const used = new Map<string, number>()
+  return lines.map((line) => {
+    const n = (used.get(line.id) ?? 0) + 1
+    used.set(line.id, n)
+    return { key: `${setKey}|${line.id}${n > 1 ? `#${n}` : ''}`, line, first: true }
+  })
+}
+
+/** Marks the first row of each run of one variant: a variant on 8 markets names its SKU once, not 8 times. */
+export function markFirsts(rows: readonly TableRow[]): TableRow[] {
+  return rows.map((r, i) => ({ ...r, first: i === 0 || rows[i - 1]!.line.rowId !== r.line.rowId }))
+}
+
+/** The rows a filter keeps (their keys unchanged), each variant's first row marked. */
+export function filterRows(rows: readonly TableRow[], filter: LineFilter): TableRow[] {
+  if (filter === 'changes') return markFirsts(rows.filter((r) => r.line.skipped === null))
+  if (filter === 'skipped') return markFirsts(rows.filter((r) => r.line.skipped !== null))
+  return markFirsts(rows)
 }
 
 /** A thrown value as a sentence. */

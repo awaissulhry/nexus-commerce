@@ -111,7 +111,7 @@ describe('preview — every change labelled, every refusal named, inventory verb
     const r = read(); const row = firstFbm(r)
     const pin = applyCells(r, [{ rowId: row.id, coordinateKey: 'AMAZON:EU', cell: 'syncQty', value: 3, expectedVersion: row.cells['AMAZON:EU']!.version }]).read
     const f = previewVerb(pin, { params: { verb: 'set-follow' }, targets: [{ rowId: row.id, coordinateKey: 'AMAZON:EU' }], commit: false }, ctx)
-    expect(f.changes[0]!.fromLabel).toBe('Pinned 3'); expect(f.changes[0]!.toLabel).toBe(`Follow ${followQty(row.cells['AMAZON:EU']!.sync!)}`)
+    expect(f.changes[0]!.fromLabel).toBe('Pinned · 3'); expect(f.changes[0]!.toLabel).toBe(`Follow · ${followQty(row.cells['AMAZON:EU']!.sync!)}`)
     const pz = previewVerb(r, { params: { verb: 'pause-sync' }, targets: [{ rowId: row.id, coordinateKey: 'AMAZON:EU' }], commit: false }, ctx)
     expect(pz.changes[0]!.note).toMatch(/^The channel keeps \d+ until the stock sync is released$/)
     const policy = r.rows.find(x => x.role === 'variant' && x.cells['SHOPIFY:GLOBAL']?.sync?.via === 'POLICY')

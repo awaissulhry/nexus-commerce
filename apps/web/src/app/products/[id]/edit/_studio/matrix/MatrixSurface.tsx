@@ -113,8 +113,8 @@ import { DONE_COPY, deleteDraft, fbaPageHref, footerLinks, hasAmazonListing, ope
 import { FBA_ROUTES, readOnePlanAnswer } from './fba/plansDrawer'
 import { FbaPlansDrawer } from './fba/FbaPlansDrawer'
 import { createBulkSource, type BulkDoors } from './bulk/bulkSource'
-import type { BulkContext } from './bulk/fields'
-import type { BulkEditSource, BulkInitial } from './bulk/types'
+import { BULK_NOT_ON_SCREEN, bulkFieldOfKind, caseHandoffHeld, type BulkContext } from './bulk/fields'
+import type { BulkEditSource, BulkFieldId, BulkInitial } from './bulk/types'
 import styles from './matrix.module.css'
 
 /** Saved views live here (design D-MX8); widths, pins and sort are remembered per surface. */
@@ -172,6 +172,8 @@ export function MatrixSurface({ productId }: { productId: string }) {
   const axesRef = useRef<AxisSummary[]>(axes)
   axesRef.current = axes
   const ordered = useMemo(() => orderByAxisValues(rows, axes), [rows, axes])
+  const orderedRef = useRef(ordered)
+  orderedRef.current = ordered
 
   /* ── the Matrix read ─────────────────────────────────────────────────────────────────────── */
 
@@ -604,11 +606,13 @@ export function MatrixSurface({ productId }: { productId: string }) {
   /* ── the bulk Edit's doors ──────────────────────────────────────────────────────────────────
      Read at every preview and Apply through refs: a write moves cells and versions while the dialog is open. */
 
-  const bulkLive = useRef({ visibleCoordinates, focusedKey, publishRead, canPrice: false, canDelete: false, canStock: false })
+  const bulkLive = useRef({ visibleCoordinates, focusedKey, publishRead, canEdit: false, canPrice: false, canDelete: false, canStock: false })
   bulkLive.current = {
     visibleCoordinates, focusedKey, publishRead,
-    // "Sells from" needs `inventory.adjust` (the server's preview refuses it per row too).
+    // "Sells from" and Case size need `inventory.adjust` (the server's preview refuses it per row too).
     canStock: has('inventory.adjust'),
+    // Every Matrix write but a market's Status needs `products.edit` (without it the server answers 403).
+    canEdit: has('products.edit'),
     // The server refuses every price write without both (`products.edit` on the route, `products.price.edit` in the service).
     canPrice: has('products.edit') && has('products.price.edit'),
     canDelete: has('products.delete'),
@@ -618,15 +622,35 @@ export function MatrixSurface({ productId }: { productId: string }) {
   const statusPlaceOfRef = useRef(statusPlaceOf)
   statusPlaceOfRef.current = statusPlaceOf
 
+  /* Case size from the bulk Edit (a hand-off): the rows' variants as members — a ticked parent stands for every variant,
+     as the parent row's own Case cell opens it (`openCase`). Null = no variant to open it on. */
+  const caseTargetOf = useCallback((rows: readonly StudioRow[]): CaseTarget | null => {
+    const parent = rows.find((r) => r.isParent)
+    const pool = parent ? rowsRef.current : rows
+    const members = pool.flatMap((x) => { const v = matrix.rowOf(x.id); return v && v.role !== 'parent' ? [{ id: x.id, sku: x.sku, pack: v.pack }] : [] })
+    if (members.length === 0) return null
+    if (parent) return { rowId: parent.id, label: allVariants(members.length), subtitle: parent.sku, members, anchor: null }
+    if (members.length === 1) return { rowId: members[0]!.id, label: members[0]!.sku, members, anchor: null }
+    return { rowId: members[0]!.id, label: `${members.length} variants`, subtitle: sheet?.family.sku, members, anchor: null }
+  }, [matrix, sheet])
+
+  /** A ticked row's short name, as its Product cell says it under the SKU: the axis values (`Nero · S`), else its name. */
+  const bulkNameOf = useCallback((r: StudioRow): string | null => {
+    const axes = r.isParent ? '' : axesRef.current.map((a) => r.axisValues?.[a.key] ?? '—').join(' · ')
+    return axes || r.name?.trim() || null
+  }, [])
+
   const bulkDoors = useCallback((rows: readonly StudioRow[]): BulkDoors => {
     const context = (): BulkContext => {
       const live = bulkLive.current
       const now = new Map(rowsRef.current.map((r) => [r.id, r]))
+      const caseTarget = caseTargetOf(rows)
       return {
-        rows: rows.map((r) => ({ id: r.id, sku: r.sku, isParent: r.isParent, basePrice: now.get(r.id)?.basePrice ?? r.basePrice ?? null })),
+        rows: rows.map((r) => { const fresh = now.get(r.id) ?? r; return { id: r.id, sku: r.sku, name: bulkNameOf(fresh), isParent: r.isParent, basePrice: fresh.basePrice ?? null } }),
         coordinates: live.visibleCoordinates,
         cellsOf: (rowId, key) => cellsOfRef.current(rowId, key),
         statusCellOf: (rowId, coord) => { const row = now.get(rowId); return row ? statusCellOf(row, coord) : null },
+        canEdit: live.canEdit,
         canPrice: live.canPrice,
         statusHeld: !live.publishRead.loaded ? 'The markets\' Status is still being read. Try again in a moment.'
           : live.publishRead.failed ? STATUS_READ_FAILED : live.publishRead.lockedReason,
@@ -634,6 +658,16 @@ export function MatrixSurface({ productId }: { productId: string }) {
         focusedKey: live.focusedKey,
         locations: readRef.current?.locations,
         canStock: live.canStock,
+        rowOf: (rowId) => matrix.rowOf(rowId),
+        caseTextOf: (rowId) => caseViewOf(rowId, matrix.rowOf, rowsRef.current).text,
+        handoffHeld: {
+          casePack: caseHandoffHeld({
+            canStock: live.canStock, onAmazon: hasAmazonListing(readRef.current),
+            members: caseTarget?.members.length ?? 0, packsRead: !!caseTarget && caseTarget.members.every((m) => m.pack !== undefined),
+          }),
+          // The toolbar offers Stock source… for any ticked rows (its dialog says when the role cannot switch).
+          stockPool: null,
+        },
       }
     }
     return {
@@ -641,20 +675,28 @@ export function MatrixSurface({ productId }: { productId: string }) {
       previewVerb: (req) => matrix.previewVerbRun(req),
       applyVerb: (preview) => matrix.applyVerbRun(preview),
       revertVerb: (op) => matrix.revert(op),
-      writeCells: (cells) => matrix.write(cells),
+      // Quiet: the dialog (or its Undo receipt) says every refusal — no toast behind it.
+      writeCells: (cells) => matrix.write(cells, { quiet: true }),
       /* Base price: the grid's own road (as the Information page's "Set every row…"): each value lands on its row and
-         reaches `onCellValueChanged` → the master writer, fenced as ONE operation so it leaves as one save. */
+         reaches `onCellValueChanged` → the master writer, fenced as ONE operation so it leaves as one save. A row the
+         grid does not show (filtered, folded) has no node to take it: refused, never reported as saved. */
       masterWrite: async (writes) => {
         const api = getGridApi()
         if (!api || api.isDestroyed()) throw new Error('The grid is not ready. Try again in a moment.')
+        const offScreen = new Set<string>()
         writer.beginOperation()
         try {
-          for (const w of writes) api.getRowNode(w.rowId)?.setDataValue(BASE_PRICE_COL, w.value, 'bulk-edit')
+          for (const w of writes) {
+            const node = api.getRowNode(w.rowId)
+            if (node) node.setDataValue(BASE_PRICE_COL, w.value, 'bulk-edit')
+            else offScreen.add(w.rowId)
+          }
         } finally {
           writer.endOperation()
         }
         await writer.flush()
         return writes.map((w) => {
+          if (offScreen.has(w.rowId)) return { rowId: w.rowId, ok: false, reason: BULK_NOT_ON_SCREEN }
           const mark = tracker.get(w.rowId, BASE_PRICE_COL)
           return mark?.state === 'refused' ? { rowId: w.rowId, ok: false, reason: mark.reason } : { rowId: w.rowId, ok: true }
         })
@@ -689,36 +731,11 @@ export function MatrixSurface({ productId }: { productId: string }) {
         return { applied, refused }
       },
     }
-  }, [matrix, getGridApi, writer, tracker, statusCellOf])
+  }, [matrix, getGridApi, writer, tracker, statusCellOf, caseTargetOf, bulkNameOf])
 
   const [bulk, setBulk] = useState<{ source: BulkEditSource; initial?: BulkInitial } | null>(null)
   /** The last change the dialog applied that can still be put back — offered again as a toast when the dialog closes. */
   const bulkUndo = useRef<{ sentence: string; undo: () => Promise<string>; used: boolean } | null>(null)
-  const openBulk = useCallback((rows: readonly StudioRow[], initial?: BulkInitial) => {
-    if (!read || rows.length === 0) return
-    const variantsTicked = rows.filter((r) => !r.isParent).length
-    const family = sheet?.family.sku ?? ''
-    const total = rowsRef.current.filter((r) => !r.isParent).length
-    const base = createBulkSource(bulkDoors(rows), {
-      title: rows.length === 1 ? `Edit · ${rows[0]!.sku}` : `Edit · ${rows.length} rows`,
-      subtitle: [family, rows.length === 1 && rows[0]!.isParent ? 'the parent row' : `${variantsTicked} of ${total} ${total === 1 ? 'variant' : 'variants'}`].filter(Boolean).join(' · '),
-    })
-    bulkUndo.current = null
-    setBulk({
-      initial,
-      source: {
-        ...base,
-        apply: async (preview) => {
-          const result = await base.apply(preview)
-          if (!result.undo) { bulkUndo.current = null; return result }
-          const entry = { sentence: result.sentence, undo: result.undo, used: false }
-          bulkUndo.current = entry
-          return { ...result, undo: async () => { entry.used = true; return result.undo!() } }
-        },
-      },
-    })
-  }, [read, sheet, bulkDoors])
-  openBulkRef.current = openBulk
   const closeBulk = useCallback(() => {
     setBulk(null)
     const last = bulkUndo.current
@@ -735,6 +752,71 @@ export function MatrixSurface({ productId }: { productId: string }) {
       { duration: 12000 },
     )
   }, [toast])
+  /* The hand-offs (Case size, Stock source): the bulk Edit closes and the field's own dialog opens on the same rows — a
+     ticked parent stands for the whole family, as the toolbar's Stock source… and the parent's Case cell do. */
+  const handOff = useCallback((field: BulkFieldId, rows: readonly StudioRow[]) => {
+    if (field === 'casePack') {
+      const target = caseTargetOf(rows)
+      if (!target) return
+      closeBulk()
+      setCaseTarget(target)
+      return
+    }
+    if (field === 'stockPool') {
+      const family = rows.some((r) => r.isParent) ? rowsRef.current : rows
+      closeBulk()
+      setStockSourceTargets(family.map((r) => ({ id: r.id, sku: r.sku, source: matrix.rowOf(r.id)?.stock.source ?? null })))
+    }
+  }, [caseTargetOf, closeBulk, matrix])
+  const openBulk = useCallback((picked: readonly StudioRow[], initial?: BulkInitial) => {
+    if (!read || picked.length === 0) return
+    /* The grid's order (AG hands the ticked rows in the order they were ticked): rows on screen by their place, the rest
+       after them in the family's order. */
+    const api = getGridApi()
+    const family = new Map(orderedRef.current.map((r, i) => [r.id, i]))
+    const place = (r: StudioRow) => (api && !api.isDestroyed() ? api.getRowNode(r.id)?.rowIndex ?? null : null) ?? 1e6 + (family.get(r.id) ?? 1e6)
+    const rows = [...picked].sort((a, b) => place(a) - place(b))
+    const variantsTicked = rows.filter((r) => !r.isParent).length
+    const parentTicked = rows.some((r) => r.isParent)
+    const familySku = sheet?.family.sku ?? ''
+    const total = rowsRef.current.filter((r) => !r.isParent).length
+    const variantWord = (n: number) => `${n} ${n === 1 ? 'variant' : 'variants'}`
+    const title = rows.length === 1
+      ? (rows[0]!.isParent ? 'Edit the parent row' : `Edit ${rows[0]!.sku}`)
+      : `Edit ${variantWord(variantsTicked)}${parentTicked ? ' and the parent row' : ''}`
+    const base = createBulkSource({ ...bulkDoors(rows), openElsewhere: (field) => handOff(field, rows) }, {
+      title,
+      subtitle: [familySku, rows.length === 1 && rows[0]!.isParent ? 'the parent row' : `${variantsTicked} of ${variantWord(total)}`].filter(Boolean).join(' · '),
+    })
+    bulkUndo.current = null
+    setBulk({
+      initial,
+      source: {
+        ...base,
+        apply: async (preview) => {
+          const result = await base.apply(preview)
+          if (!result.undo) { bulkUndo.current = null; return result }
+          const entry = { sentence: result.sentence, undo: result.undo, used: false }
+          bulkUndo.current = entry
+          return { ...result, undo: async () => { entry.used = true; return result.undo!() } }
+        },
+      },
+    })
+  }, [read, sheet, bulkDoors, handOff, getGridApi])
+  openBulkRef.current = openBulk
+  /** The toolbar's Edit… opens on the field of the column the operator was in (the grid's focused cell), when it has one. */
+  const bulkInitialFromFocus = useCallback((): BulkInitial | undefined => {
+    const api = getGridApi()
+    const colId = api && !api.isDestroyed() ? api.getFocusedCell()?.column.getColId() : undefined
+    if (!colId) return undefined
+    const parsed = parseMatrixColId(colId)
+    const field: BulkFieldId | null = colId === BASE_PRICE_COL ? 'basePrice'
+      : colId === CASE_COL ? 'casePack'
+      : isMatrixFromColId(colId) ? 'stockSource'
+      : isMatrixStatusColId(colId) ? 'listingStatus'
+      : parsed ? bulkFieldOfKind(parsed.kind) : null
+    return field ? { field } : undefined
+  }, [getGridApi])
 
   /* The row ⋯: Edit that one row, and the two stock-sync actions on it — each opens the same dialog, preview first. */
   const rowMenuRef = useRef<(row: StudioRow) => MenuItemDef[]>(() => [])
@@ -1135,7 +1217,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
             onSaveCurrentView={saveCurrentView} onUpdateCurrentView={updateCurrentView} viewsEmptyLabel={viewsEmptyLabel} activeCount={shownColumns}
             onCustomise={openCustomise} onExport={onExport} exportDisabled={!read || busy} onReload={onReload}
             /* Selection in the TOOLBAR, as on the sheet and the Variants tab (Owner, 2026-09-26). */
-            selectionActions={<MatrixSelectionActions onEdit={() => openBulk(selectedRows)} editHeld={!read || busy ? 'The Matrix is still loading' : null} stockSource={stockSource} sendToFba={sendToFba} />}
+            selectionActions={<MatrixSelectionActions onEdit={() => openBulk(selectedRows, bulkInitialFromFocus())} editHeld={!read || busy ? 'The Matrix is still loading' : null} stockSource={stockSource} sendToFba={sendToFba} />}
             onClearSelection={() => getGridApi()?.deselectAll()}
           />
         }

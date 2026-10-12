@@ -8,7 +8,10 @@
  */
 import { describe, expect, it } from 'vitest'
 import { MATRIX_COPY, MATRIX_VERB_LABELS, type MatrixRead } from './matrix-contract.js'
-import { STILL_HELD, followFromCodes, followQty, inventoryCoordinate, previewVerb, sellsFromCodes, sourceCodesProblem, syncLabel } from './matrix-preview.js'
+import {
+  PREVIEW_WORDS, STILL_HELD, adjustPricesProblem, followFromCodes, followQty, inventoryCoordinate, previewVerb, queueStateWord, sellsFromCodes, sourceCodesProblem,
+  syncBufferText, syncLabel,
+} from './matrix-preview.js'
 
 const read = (): MatrixRead => ({
   version: 1, productId: 'p', source: 'live', generatedAt: '2026-09-13T00:00:00.000Z', policies: [],
@@ -36,7 +39,7 @@ describe('matrix-preview — one function, one answer', () => {
     const ctx = { can: () => true, simulated: false }
     expect(JSON.stringify(previewVerb(read(), req, ctx))).toBe(JSON.stringify(previewVerb(read(), req, ctx)))
     const p = previewVerb(read(), req, ctx)
-    expect(p.changes[0]).toMatchObject({ cell: 'price', to: 95, toLabel: '€95.00', note: 'Set here (was: follows the base price)' })
+    expect(p.changes[0]).toMatchObject({ cell: 'price', to: 95, toLabel: '€95.00', note: 'Own price (was the base price)' })
     expect(p.simulated).toBe(false); expect(p.notices).not.toContain(MATRIX_COPY.simulated)
   })
   it('asks products.price.edit for the price verbs, and nothing else for the inventory verbs', () => {
@@ -46,13 +49,13 @@ describe('matrix-preview — one function, one answer', () => {
     expect(price.refusals[0]).toMatchObject({ kind: 'permission', reason: expect.stringContaining('products.price.edit') })
     expect(asked).toEqual(['products.price.edit'])
     const pin = previewVerb(read(), { params: { verb: 'pin-quantity', value: 4 }, targets: [{ rowId: 'c1', coordinateKey: 'AMAZON:IT' }], commit: false }, ctx)
-    expect(pin.changes[0]).toMatchObject({ coordinateKey: 'AMAZON:EU', cell: 'syncQty', to: 4, fromLabel: 'Follow 10', toLabel: 'Pinned 4' })
+    expect(pin.changes[0]).toMatchObject({ coordinateKey: 'AMAZON:EU', cell: 'syncQty', to: 4, fromLabel: 'Follow · 10', toLabel: 'Pinned · 4' })
     expect(pin.notices).toContain('Amazon EU: this covers IT DE'); expect(asked).toEqual(['products.price.edit'])
   })
   it('routes an EU market target to its region group and labels the resolver number', () => {
     expect(inventoryCoordinate(read(), 'AMAZON:IT')).toBe('AMAZON:EU')
     expect(followQty({ poolAvailable: 10, buffer: 3 })).toBe(7); expect(followQty({ poolAvailable: null, buffer: 3 })).toBeNull()
-    expect(syncLabel({ kind: 'PAUSED', via: 'POLICY', mode: 'PINNED', intended: null, held: 2, buffer: 0, poolAvailable: 9, routedLocations: [], fbaAtAmazon: null, oversold: false })).toBe('Sync held (policy) · Pinned')
+    expect(syncLabel({ kind: 'PAUSED', via: 'POLICY', mode: 'PINNED', intended: null, held: 2, buffer: 0, poolAvailable: 9, routedLocations: [], fbaAtAmazon: null, oversold: false })).toBe('Pinned · ⏸ 2')
   })
 })
 
@@ -66,6 +69,8 @@ describe('matrix-preview — hold / release stock sync words (build shape v2)', 
   const held = (via: 'POLICY' | 'LISTING'): MatrixRead => {
     const r = read()
     r.rows[1].cells['AMAZON:EU'].sync = { kind: 'PAUSED', via, mode: 'FOLLOW', intended: null, held: 4, buffer: 0, poolAvailable: 10, routedLocations: ['IT-MAIN'], fbaAtAmazon: null, oversold: false }
+    /* The server folds a held sync into the Sync cell (`foldQueue`): the grid reads "Sync held · listing". */
+    r.rows[1].cells['AMAZON:EU'].queue = { state: 'paused', at: null, reason: null, syncType: null, via }
     return r
   }
   const run = (r: MatrixRead, verb: 'pause-sync' | 'resume-sync' | 'push-now' | 'pin-quantity') =>
@@ -77,9 +82,9 @@ describe('matrix-preview — hold / release stock sync words (build shape v2)', 
   })
   it('a hold says "Sync held", a release says what it pushes, a push on a held listing is refused with "release"', () => {
     const hold = run(read(), 'pause-sync')
-    expect(hold.changes[0]).toMatchObject({ toLabel: 'Sync held (listing) · Follow', note: 'The channel keeps 10 until the stock sync is released' })
+    expect(hold.changes[0]).toMatchObject({ fromLabel: 'Sent', toLabel: 'Sync held · listing', note: 'The channel keeps 10 until the stock sync is released' })
     const release = run(held('LISTING'), 'resume-sync')
-    expect(release.changes[0]).toMatchObject({ fromLabel: 'Sync held (listing) · Follow', toLabel: 'Follow 10' })
+    expect(release.changes[0]).toMatchObject({ fromLabel: 'Sync held · listing', toLabel: 'Queued · 10' })
     expect(run(held('LISTING'), 'push-now').refusals[0]?.reason).toBe(STILL_HELD)
     expect(run(held('LISTING'), 'pin-quantity').changes[0]?.note).toBe(STILL_HELD)
     expect(run(held('POLICY'), 'resume-sync').refusals[0]?.reason).toMatch(/^Held by the channel policy — releasing here changes nothing/)
@@ -180,7 +185,7 @@ describe('matrix-preview — set-source (Sells from)', () => {
     const p = run(withSource(), ['MI-3PL', 'IT-MAIN'])
     expect(p.changes).toEqual([{
       rowId: 'c1', sku: 'CHILD-1', coordinateKey: 'AMAZON:EU', cell: 'source', from: [], to: ['MI-3PL', 'IT-MAIN'],
-      fromLabel: 'Default (IT-MAIN)', toLabel: 'MI-3PL + IT-MAIN', note: 'Follow shows 14',
+      fromLabel: 'IT-MAIN', toLabel: 'MI-3PL + IT-MAIN', note: 'Follow shows 14',
     }])
     expect(p.notices).toContain('Amazon EU: this covers IT DE')
     /* 2026-10-08: none or a typed word — the Edit dialog's Apply confirms a small change. */
@@ -191,7 +196,7 @@ describe('matrix-preview — set-source (Sells from)', () => {
 
   it('back to the default stores [] and says so; the same list again is no change', () => {
     const own = withSource({ own: ['MI-3PL'], effective: [{ code: 'MI-3PL', available: 4 }] })
-    expect(run(own, ['IT-MAIN']).changes[0]).toMatchObject({ from: ['MI-3PL'], to: [], fromLabel: 'MI-3PL', toLabel: 'Default (IT-MAIN)', note: 'Follow shows 10' })
+    expect(run(own, ['IT-MAIN']).changes[0]).toMatchObject({ from: ['MI-3PL'], to: [], fromLabel: 'MI-3PL', toLabel: 'IT-MAIN', note: 'The market default · Follow shows 10' })
     expect(run(own, []).changes[0]).toMatchObject({ to: [] })
     const same = run(own, ['MI-3PL'])
     expect(same.changes).toEqual([]); expect(same.refusals).toEqual([])
@@ -217,5 +222,127 @@ describe('matrix-preview — set-source (Sells from)', () => {
     const p = previewVerb(r, { params: { verb: 'set-source', codes: ['MI-3PL'] }, targets: [{ rowId: 'p', coordinateKey: 'AMAZON:EU' }], commit: false }, ctx)
     expect(p.refusals[0]).toMatchObject({ rowId: 'p', kind: 'not-applicable' })
     expect(MATRIX_VERB_LABELS['set-source']).toBe('Set sells from…')
+  })
+})
+
+/**
+ * Matrix bulk Edit v2 (2026-10-12) — Raise / Lower by an amount, a price of 0 refused before Apply, and preview words that
+ * say what the grid says (the dialog shows `fromLabel → toLabel`, the note and every refusal verbatim).
+ */
+describe('matrix-preview — adjust prices by an amount', () => {
+  const ctx = { can: () => true, simulated: false }
+  const priced = (value: number | null, source: 'master' | 'override' | 'formula' = 'override'): MatrixRead => {
+    const r = read()
+    r.rows[1].cells['AMAZON:IT'].price = { value, currency: 'EUR', source, formula: source === 'formula' ? '=BASE*1.1' : null, clamped: null }
+    return r
+  }
+  const by = (r: MatrixRead, amount: number, currency = 'EUR') =>
+    previewVerb(r, { params: { verb: 'adjust-prices', amount, currency }, targets: [{ rowId: 'c1', coordinateKey: 'AMAZON:IT' }], commit: false }, ctx)
+
+  it('moves each price by the amount, rounded to cents', () => {
+    const p = by(priced(99.99), -2.5)
+    expect(p.changes).toEqual([expect.objectContaining({ cell: 'price', from: 99.99, to: 97.49, fromLabel: '€99.99', toLabel: '€97.49' })])
+    expect(p.changes[0]!.note).toBeUndefined()
+    expect(by(priced(100, 'master'), 3).changes[0]).toMatchObject({ to: 103, note: PREVIEW_WORDS.ownPrice })
+    expect(p.confirm).toBe('none')
+  })
+  it('refuses a market that sells in another currency, a price that would be 0 or less, and a market with no price', () => {
+    expect(by(priced(100), -2, 'GBP').refusals).toEqual([expect.objectContaining({ kind: 'currency', reason: 'This market sells in EUR' })])
+    expect(by(priced(10), -10).refusals[0]).toMatchObject({ reason: 'A price must be more than 0' })
+    expect(by(priced(10), -12).refusals[0]).toMatchObject({ reason: 'A price must be more than 0' })
+    expect(by(priced(null), 5).refusals[0]).toMatchObject({ kind: 'not-applicable', reason: 'No price to change' })
+    expect(by(priced(100, 'formula'), 5).refusals[0]).toMatchObject({ kind: 'formula', reason: 'A formula sets this price — edit the formula instead' })
+  })
+  it('asks for the typed word when any line drops by 30 % or more — by an amount as by a percent', () => {
+    expect(by(priced(100), -30)).toMatchObject({ confirm: 'type-to-confirm', confirmWord: 'APPLY' })
+    expect(by(priced(10), -3)).toMatchObject({ confirm: 'type-to-confirm', confirmWord: 'APPLY' })
+    expect(by(priced(100), -29.99)).toMatchObject({ confirm: 'none', confirmWord: null })
+    expect(by(priced(100), 50)).toMatchObject({ confirm: 'none' })
+    const pct = (percent: number) => previewVerb(priced(100), { params: { verb: 'adjust-prices', percent }, targets: [{ rowId: 'c1', coordinateKey: 'AMAZON:IT' }], commit: false }, ctx)
+    expect(pct(-30).confirm).toBe('type-to-confirm'); expect(pct(-29).confirm).toBe('none')
+  })
+  it('checks the params: a percent or an amount, never both; an amount other than 0 with a 3-letter currency', () => {
+    expect(adjustPricesProblem({ percent: -5 })).toBeNull()
+    expect(adjustPricesProblem({ amount: -2.5, currency: 'EUR' })).toBeNull()
+    expect(adjustPricesProblem({ percent: -5, amount: 2, currency: 'EUR' })).toBe('Adjust prices by a percent or by an amount, not both')
+    expect(adjustPricesProblem({ amount: 0, currency: 'EUR' })).toBe('The amount must be a number other than 0')
+    expect(adjustPricesProblem({ amount: Number.NaN, currency: 'EUR' })).toBe('The amount must be a number other than 0')
+    expect(adjustPricesProblem({ amount: '2', currency: 'EUR' })).toBe('The amount must be a number other than 0')
+    expect(adjustPricesProblem({ amount: 2 })).toMatch(/3-letter code/)
+    expect(adjustPricesProblem({ amount: 2, currency: 'eur' })).toMatch(/3-letter code/)
+    expect(adjustPricesProblem({ percent: 5, currency: 'EUR' })).toBe('A currency goes with an amount, not with a percent')
+    expect(adjustPricesProblem({})).toBe('Adjust prices needs a percent or an amount')
+    expect(adjustPricesProblem({ percent: Number.POSITIVE_INFINITY })).toBe('The percent must be a number')
+  })
+})
+
+describe('matrix-preview — a price of 0 is refused before Apply', () => {
+  const ctx = { can: () => true, simulated: false }
+  const set = (value: number) => previewVerb(read(), { params: { verb: 'set-price', value }, targets: [{ rowId: 'c1', coordinateKey: 'AMAZON:IT' }], commit: false }, ctx)
+  it('set-price 0 (or less) is a refusal, never a change with a note', () => {
+    for (const v of [0, 0.001, -1]) {
+      const p = set(v)
+      expect(p.changes).toEqual([])
+      expect(p.refusals).toEqual([expect.objectContaining({ kind: 'not-applicable', reason: 'A price must be more than 0' })])
+    }
+    expect(set(0.01).changes[0]).toMatchObject({ to: 0.01, toLabel: '€0.01' })
+  })
+  it('a cut of 100 % is refused the same way', () => {
+    const p = previewVerb(read(), { params: { verb: 'adjust-prices', percent: -100 }, targets: [{ rowId: 'c1', coordinateKey: 'AMAZON:IT' }], commit: false }, ctx)
+    expect(p.refusals[0]).toMatchObject({ reason: 'A price must be more than 0' })
+  })
+})
+
+describe('matrix-preview — the grid\'s words', () => {
+  const ctx = { can: () => true, simulated: false }
+  const run = (r: MatrixRead, params: Parameters<typeof previewVerb>[1]['params'], coordinateKey = 'AMAZON:IT') =>
+    previewVerb(r, { params, targets: [{ rowId: 'c1', coordinateKey }], commit: false }, ctx)
+  const pinned = (): MatrixRead => {
+    const r = read()
+    r.rows[1].cells['AMAZON:EU'].sync = { kind: 'PINNED', via: null, mode: 'PINNED', intended: 3, held: 3, buffer: 1, poolAvailable: 10, routedLocations: ['IT-MAIN'], fbaAtAmazon: null, oversold: false }
+    return r
+  }
+
+  it('Quantity reads Mode · Qty, as the grid\'s two cells', () => {
+    expect(run(pinned(), { verb: 'set-follow' }).changes[0]).toMatchObject({ fromLabel: 'Pinned · 3', toLabel: 'Follow · 9' })
+    expect(run(read(), { verb: 'pin-quantity', value: 0 }).changes[0]).toMatchObject({ fromLabel: 'Follow · 10', toLabel: 'Pinned · 0' })
+    const uncounted = pinned(); uncounted.rows[1].cells['AMAZON:EU'].sync!.poolAvailable = null
+    expect(run(uncounted, { verb: 'set-follow' }).changes[0]).toMatchObject({ toLabel: 'Follow · Uncounted' })
+  })
+  it('Buffer reads the number, `—` on a fixed quantity, with the plain note', () => {
+    expect(run(read(), { verb: 'set-buffer', value: 2 }).changes[0]).toMatchObject({ fromLabel: 'Buffer 0', toLabel: 'Buffer 2', note: 'The market shows 8' })
+    expect(run(pinned(), { verb: 'set-buffer', value: 4 }).changes[0]).toMatchObject({ from: 1, to: 4, fromLabel: 'Buffer —', toLabel: 'Buffer 4', note: 'Used when the market follows your stock' })
+    expect(syncBufferText(pinned().rows[1].cells['AMAZON:EU'].sync)).toBe('—')
+  })
+  it('Push now and Retry read the Sync column\'s words, never a raw state', () => {
+    const r = read()
+    expect(run(r, { verb: 'push-now' }).changes[0]).toMatchObject({ from: 'sent', fromLabel: 'Sent', toLabel: 'Queued · 10' })
+    r.rows[1].cells['AMAZON:EU'].queue = null
+    expect(run(r, { verb: 'push-now' }).changes[0]).toMatchObject({ from: 'never', fromLabel: '—' })
+    r.rows[1].cells['AMAZON:EU'].queue = { state: 'failed', at: null, reason: 'eBay: 25002', syncType: 'QUANTITY_UPDATE', via: null }
+    expect(run(r, { verb: 'retry-sync' }).changes[0]).toMatchObject({ from: 'failed', fromLabel: 'Failed', toLabel: 'Queued', note: 'eBay: 25002' })
+    expect(run(read(), { verb: 'retry-sync' }).refusals[0]).toMatchObject({ reason: 'Nothing to retry here — the last push did not fail' })
+    expect(queueStateWord({ state: 'never', at: null, reason: null, syncType: null, via: null })).toBe('Never')
+    expect(queueStateWord({ state: 'sent', at: '2026-10-12T10:00:00.000Z', reason: null, syncType: null, via: null })).toBe('Sent')
+    expect(queueStateWord({ state: 'sent', at: '2026-10-12T10:00:00.000Z', reason: null, syncType: null, via: null }, Date.parse('2026-10-12T10:02:00.000Z'))).toBe('Sent 2 min')
+  })
+  it('refusals say where in plain words, never "coordinate"', () => {
+    const r = read()
+    r.coordinates.push({ key: 'EBAY:IT', kind: 'market', channel: 'EBAY', market: 'IT', label: 'eBay · IT', region: null, alias: null, accountId: 'e1', currency: 'EUR', connected: true, listed: 0, draft: 0,
+      cells: ['listing', 'price'], absent: [], sharedInventoryWith: null, inventoryOn: null, vocabulary: { fulfilment: null } })
+    expect(run(r, { verb: 'set-price', value: 5 }, 'EBAY:IT').refusals[0]).toMatchObject({ kind: 'no-listing', reason: 'Not on this market' })
+    expect(run(read(), { verb: 'set-price', value: 5 }, 'AMAZON:EU').refusals[0]).toMatchObject({ reason: 'This market has no price here' })
+    const noSync = read(); noSync.rows[1].cells['AMAZON:EU'].sync = null
+    expect(run(noSync, { verb: 'pin-quantity', value: 2 }).refusals[0]).toMatchObject({ reason: 'This market carries no stock here' })
+    const all = Object.values(PREVIEW_WORDS).map((w) => (typeof w === 'function' ? w('EUR') : w))
+    for (const w of [...all, MATRIX_COPY.sourceNone]) expect(w).not.toMatch(/coordinate/i)
+  })
+  it('copy-prices across currencies names the currencies plainly', () => {
+    const r = read()
+    r.coordinates.push({ key: 'AMAZON:UK', kind: 'market', channel: 'AMAZON', market: 'UK', label: 'Amazon · UK', region: null, alias: null, accountId: 'a', currency: 'GBP', connected: true, listed: 1, draft: 0,
+      cells: ['listing', 'price'], absent: [], sharedInventoryWith: null, inventoryOn: null, vocabulary: { fulfilment: null } })
+    r.rows[1].cells['AMAZON:UK'] = { ...r.rows[1].cells['AMAZON:IT'], price: { value: 80, currency: 'GBP', source: 'override', formula: null, clamped: null } }
+    expect(run(r, { verb: 'copy-prices', fromCoordinateKey: 'AMAZON:UK' }).refusals[0]).toMatchObject({ kind: 'currency', reason: 'This market sells in EUR, not GBP — set the price instead' })
+    expect(run(read(), { verb: 'copy-prices', fromCoordinateKey: 'AMAZON:UK' }).refusals[0]).toMatchObject({ reason: 'No price on the market you copy from' })
   })
 })

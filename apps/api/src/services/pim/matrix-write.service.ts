@@ -31,7 +31,7 @@
 import { createOutboundRow } from '../outbound-rows.js'
 import prisma from '../../db.js'
 import type { Prisma } from '@prisma/client'
-import { inventoryCoordinate, previewVerb, sameSourceCodes, sellsFromCodes, SOURCE_PERMISSION, sourceCodesProblem, type AmazonFulfilmentFacts, type PreviewContext } from '@nexus/shared/matrix-preview'
+import { inventoryCoordinate, previewVerb, PREVIEW_WORDS, sameSourceCodes, sellsFromCodes, SOURCE_PERMISSION, sourceCodesProblem, type AmazonFulfilmentFacts, type PreviewContext } from '@nexus/shared/matrix-preview'
 import {
   MATRIX_COPY,
   type CoordinateKey,
@@ -246,7 +246,7 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
   const hit = locate(read, w.rowId, w.coordinateKey)
   /* The caller saw another listing on this coordinate (another account's, or one replaced since): never write over it. */
   if (hit && w.expectedListingId !== undefined && hit.cells.listingId !== w.expectedListingId) return { ...base, outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere, version: hit.cells.version }
-  if (!hit || !hit.cells.listingId) return { ...base, outcome: 'refused', reason: 'No listing on this coordinate', version: hit?.cells.version ?? 0 }
+  if (!hit || !hit.cells.listingId) return { ...base, outcome: 'refused', reason: PREVIEW_WORDS.notOnMarket, version: hit?.cells.version ?? 0 }
   const { row, coord, cells } = hit
   if (cells.version !== w.expectedVersion) return { ...base, outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere, version: cells.version }
   /* "Sells from" is not one of the cell kinds: its own gate (`cells.source`), its own write. */
@@ -278,7 +278,7 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
   try {
     switch (w.cell) {
       case 'syncMode': {
-        const s = cells.sync; if (!s) return refuse('This coordinate carries no inventory')
+        const s = cells.sync; if (!s) return refuse(PREVIEW_WORDS.noStockHere)
         const mode = w.value === 'PINNED' ? 'PINNED' : w.value === 'FOLLOW' ? 'FOLLOW' : null
         if (!mode) return refuse('Mode is Follow or Pinned')
         if (s.mode === mode) return noop()
@@ -290,7 +290,7 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
         return applied()
       }
       case 'syncQty': {
-        const s = cells.sync; if (!s) return refuse('This coordinate carries no inventory')
+        const s = cells.sync; if (!s) return refuse(PREVIEW_WORDS.noStockHere)
         const n = asInt(w.value)
         if (n == null || n < 0) return refuse('A pinned quantity is a whole number, zero or more')
         /* A pinned row's value is `intended` when the resolver speaks and `held` (the lockstep-written quantity) under a
@@ -303,7 +303,7 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
         return applied()
       }
       case 'syncBuffer': {
-        const s = cells.sync; if (!s) return refuse('This coordinate carries no inventory')
+        const s = cells.sync; if (!s) return refuse(PREVIEW_WORDS.noStockHere)
         const n = asInt(w.value)
         if (n == null || n < 0) return refuse('A buffer is a whole number, zero or more')
         if (s.buffer === n) return noop()
@@ -338,11 +338,11 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
         return { ...base, outcome: mine.outcome, reason: mine.reason, version: mine.version }
       }
       case 'price': {
-        const p = cells.price; if (!p) return refuse('This coordinate has no price')
+        const p = cells.price; if (!p) return refuse(PREVIEW_WORDS.noPriceHere)
         if (!ctx.can(PRICE_PERMISSION)) return refuse(PRICE_PERMISSION_REASON)
         const v = w.value === null ? null : typeof w.value === 'number' ? w.value : Number(w.value)
         // A typed price is above 0, as the price door requires (2026-10-01); rounded with the one cents helper.
-        if (v !== null && (!Number.isFinite(v) || v <= 0)) return refuse('A price must be above 0')
+        if (v !== null && (!Number.isFinite(v) || v <= 0)) return refuse(PREVIEW_WORDS.priceAboveZero)
         const rounded = v === null ? null : roundCents(v)
         if (rounded !== null && p.value === rounded && p.source === 'override') return noop()
         if (rounded === null && p.source === 'master') return noop()
@@ -355,7 +355,7 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
         return mine.outcome === 'applied' ? applied(mine.version, moved(r.results)) : { ...base, outcome: mine.outcome, reason: mine.reason, version: mine.version }
       }
       case 'salePrice': {
-        const sale = cells.sale; if (!sale) return refuse('This coordinate has no sale price')
+        const sale = cells.sale; if (!sale) return refuse('This market has no sale price here')
         if (!ctx.can(PRICE_PERMISSION)) return refuse(PRICE_PERMISSION_REASON)
         const v = (w.value ?? null) as { value?: number | null; start?: string | null; end?: string | null } | null
         const next = { value: v?.value ?? null, start: v?.start ?? null, end: v?.end ?? null }
@@ -463,7 +463,7 @@ export function newestFailedPush(listingIds: readonly string[]) {
 async function applySyncState(read: MatrixRead, change: VerbChange, verb: MatrixVerbId, ctx: DoorContext): Promise<MatrixWriteOutcome> {
   const base = { rowId: change.rowId, coordinateKey: change.coordinateKey, cell: 'syncMode' as MatrixWritableKind }
   const hit = locate(read, change.rowId, change.coordinateKey)
-  if (!hit?.cells.sync || !hit.cells.listingId) return { ...base, outcome: 'refused', reason: 'No inventory on this coordinate', version: hit?.cells.version ?? 0 }
+  if (!hit?.cells.sync || !hit.cells.listingId) return { ...base, outcome: 'refused', reason: PREVIEW_WORDS.noStockHere, version: hit?.cells.version ?? 0 }
   const { row, cells, coord } = hit
   if (cells.sync.kind === 'FBA_EXCLUDED') return { ...base, outcome: 'refused', reason: MATRIX_COPY.amazonManaged, version: cells.version }
   const resolved = await targetsOf(read, hit, cells.version)
@@ -511,7 +511,7 @@ async function applySyncState(read: MatrixRead, change: VerbChange, verb: Matrix
     }
     if (verb === 'retry-sync') {
       const failed = await newestFailedPush(targets.map((t) => t.id))
-      if (!failed) return { ...base, outcome: 'refused', reason: 'Nothing to retry on this coordinate', version: cells.version }
+      if (!failed) return { ...base, outcome: 'refused', reason: PREVIEW_WORDS.nothingToRetry, version: cells.version }
       if (await prisma.channelListing.findFirst({ where: { id: { in: targets.map((t) => t.id) }, offerClosedAt: { not: null } }, select: { id: true } })) throw new SellingPaused()
       await bumpTx(targets)
       /* The explicit row id, never the unscoped bulk route (report 28 §5.4) — the same statement `POST /api/outbound-queue/:id/retry` runs. */
@@ -716,7 +716,7 @@ export async function revertMatrixOperation(ctx: DoorContext, operationId: strin
   try {
     for (const b of stored.before ?? []) {
       const hit = locate(read, b.rowId, b.coordinateKey)
-      if (!hit) { results.push({ rowId: b.rowId, coordinateKey: b.coordinateKey, cell: 'syncMode', outcome: 'refused', reason: 'No listing on this coordinate any more', version: 0 }); continue }
+      if (!hit) { results.push({ rowId: b.rowId, coordinateKey: b.coordinateKey, cell: 'syncMode', outcome: 'refused', reason: `${PREVIEW_WORDS.notOnMarket} any more`, version: 0 }); continue }
       /* Amazon fulfilment (2026-10-07): the revert of a conversion that reached Amazon is the OPPOSITE conversion, through
          the same door with fresh checks (refused with the reason when they fail) — never a value-only write. */
       const sent = isAmazonKey(b.coordinateKey) ? stored.changes?.find((c) => c.rowId === b.rowId && c.coordinateKey === b.coordinateKey && c.cell === 'fulfilment') : undefined

@@ -1,35 +1,116 @@
 /* The Matrix bulk Edit dialog — layout only; every control and colour comes from the design system. */
+
+/* ONE fixed height on a desktop, whatever field, mode or answer is on screen: nothing jumps, and the footer never
+   moves. It is the DS modal's height (82vh) less its header, its body padding and its footer, between a floor and a
+   ceiling. The table scrolls inside; this body never does. On a phone it is as tall as its content and the dialog body
+   scrolls (one scrollbar either way). */
 .body {
   display: flex;
   flex-direction: column;
-  gap: var(--nds-space-14);
+  height: clamp(360px, calc(82vh - 196px), 680px);
   min-width: 0;
   color: var(--nds-text);
   font-size: var(--nds-font-size-base);
   line-height: 1.5;
 }
+
+/* Two panes: the field list (≈ 292 px: every description on one line) and the field itself. One row, exactly the
+   body's height. */
 .form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-14);
-  min-width: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 292px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: var(--nds-space-24);
   margin: 0;
 }
 
-/* Change · How · Value: one column; each control keeps a readable width on a wide dialog and takes the line on a phone. */
-.controls {
+/* ── the field list (left) — scrolls on its own when it is taller than the pane ── */
+/* A tighter line height here keeps all eleven fields in view on a laptop screen (11 × two lines). */
+.fieldsPane {
+  line-height: 1.35;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-inline-end: var(--nds-space-12);
+  border-inline-end: 1px solid var(--nds-border-subtle);
+}
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.fields > legend { padding: 0; margin-bottom: var(--nds-space-4); }
+.group {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+/* The group heading: the same look as the DS Listbox's group headings, so both lists read as one family. */
+.groupHead {
+  padding: var(--nds-space-4) var(--nds-space-8) var(--nds-space-2);
+  font-size: var(--nds-font-size-micro-plus);
+  font-weight: var(--nds-font-weight-bold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nds-text-muted);
+}
+
+/* ── the field (right): heading, How, value, hint, markets, a rule, notices, the table ── */
+.pane {
   display: flex;
   flex-direction: column;
   gap: var(--nds-space-12);
   min-width: 0;
+  min-height: 0;
 }
-.change { width: min(100%, 340px); }
+.pane > * { flex: none; }
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+.fieldTitle {
+  margin: 0;
+  font-size: var(--nds-font-size-base-plus);
+  font-weight: var(--nds-font-weight-bold);
+  line-height: 1.35;
+  color: var(--nds-text);
+}
+.desc {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* How · value · hint: one column; each control keeps a readable width on a wide dialog and takes the line on a phone. */
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+.change { width: 100%; }
 .value { width: min(100%, 240px); }
+.choice { width: min(100%, 320px); }
+/* Raise · Lower: the number, and beside it what it is (% or the currency). */
+.adjust {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--nds-space-10) var(--nds-space-14);
+}
 .sale {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--nds-space-10);
-  width: min(100%, 600px);
+  width: min(100%, 560px);
 }
 .hint {
   margin: 0;
@@ -37,11 +118,11 @@
   font-size: var(--nds-font-size-sm);
 }
 
-/* Markets: a fieldset that draws nothing of its own; the boxes wrap inline. */
+/* Markets: a fieldset that draws nothing of its own; the boxes wrap inline; the held ones are one line under them. */
 .markets {
   display: flex;
   flex-direction: column;
-  gap: var(--nds-space-8);
+  gap: var(--nds-space-6);
   min-width: 0;
   margin: 0;
   padding: 0;
@@ -51,22 +132,15 @@
 .marketList {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: var(--nds-space-8) var(--nds-space-18);
 }
-.heldNote {
-  margin-inline-start: var(--nds-space-6);
-  color: var(--nds-text-muted);
-  font-size: var(--nds-font-size-sm);
-  font-style: italic;
+.allNone {
+  display: inline-flex;
+  gap: var(--nds-space-10);
 }
 
-/* The preview: notices, the skipped reasons, the filter and the table, in that order. */
-.preview {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-10);
-  min-width: 0;
-}
+/* The skipped reasons. */
 .list {
   margin: 0;
   padding-inline-start: var(--nds-space-18);
@@ -75,6 +149,8 @@
   gap: var(--nds-space-4);
   overflow-wrap: anywhere;
 }
+
+/* The line above the table: the filter (or the next step) and the row count. */
 .toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -83,43 +159,76 @@
   gap: var(--nds-space-10);
   min-height: var(--nds-control-h-sm);
 }
-.muted {
-  color: var(--nds-text-muted);
+.step {
+  margin: 0;
+  min-width: 0;
+  color: var(--nds-text-2);
   font-size: var(--nds-font-size-sm);
 }
-/* The table area holds its height from the first answer on: loading, refreshing and the table take the same room. */
-.tableArea {
-  min-height: 168px;
+.muted {
+  color: var(--nds-text-muted);
+}
+.toolbar > .muted { font-size: var(--nds-font-size-sm); }
+
+/* The table takes the rest of the pane's height (the grid is bounded by it and scrolls inside); the area never grows
+   with its rows, so the dialog keeps its height. */
+.pane > .tableArea {
+  flex: 1 1 0;
+  min-height: 132px;
   min-width: 0;
 }
 .loading {
   display: flex;
   flex-direction: column;
-  justify-content: center;
   gap: var(--nds-space-10);
-  min-height: 168px;
+  padding-top: var(--nds-space-10);
 }
 
-/* Table cells: the grid sizes the columns (Column.width); these only shape the text inside a cell. */
-.mono {
-  font-family: var(--nds-font-mono);
-  font-variant-numeric: tabular-nums;
-  white-space: normal;
-  overflow-wrap: anywhere;
+/* The done screen: the banner, then the table in the rest of the height. */
+.done {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
 }
-.next {
+.done > * { flex: none; }
+.done > .tableArea {
+  flex: 1 1 0;
+  min-height: 132px;
+  min-width: 0;
+}
+
+/* Table cells: the grid sizes the columns; these only shape the text inside a cell. Text wraps (the row grows with it),
+   so a long reason or note is read whole, never cut. */
+.stack {
   display: flex;
   flex-direction: column;
   gap: var(--nds-space-2);
   min-width: 0;
-}
-.next > b { font-weight: var(--nds-font-weight-bold); }
-.note, .reason {
-  color: var(--nds-text-muted);
-  font-size: var(--nds-font-size-sm);
+  white-space: normal;
   overflow-wrap: anywhere;
 }
-.reason { font-style: italic; }
+.wrap {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.name { font-weight: var(--nds-font-weight-bold); }
+.mono {
+  font-family: var(--nds-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.value { font-weight: var(--nds-font-weight-bold); }
+.note {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+.tagged {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-6);
+}
 
 /* The footer's sentence. On a phone it takes its own line above the buttons. */
 .status {
@@ -127,8 +236,23 @@
   color: var(--nds-text-2);
   font-size: var(--nds-font-size-sm);
 }
-@media (max-width: 640px) {
+
+/* A short desktop screen (a 13-inch laptop, ~800 px tall): the fixed height would leave the table one row. There the body
+   is as tall as its content and the dialog body scrolls; the field list stays in view (sticky) and the table keeps
+   room for about six rows, scrolling inside. */
+@media (min-width: 761px) and (max-height: 919px) {
+  .body { height: auto; }
+  .form { grid-template-rows: auto; align-items: start; }
+  .fieldsPane { position: sticky; top: 0; max-height: calc(82vh - 196px); }
+  .pane > .tableArea, .done > .tableArea { flex: none; height: 320px; min-height: 0; }
+}
+
+/* Phone (the DS `useNarrow` breakpoint): one column, as tall as its content; the dialog body scrolls. */
+@media (max-width: 760px) {
+  .body { height: auto; }
+  .form { display: flex; flex-direction: column; }
+  .pane > .tableArea, .done > .tableArea { flex: none; min-height: 0; }
   .status { flex-basis: 100%; }
-  .change, .value, .sale { width: 100%; }
+  .value, .sale, .choice { width: 100%; }
   .sale { grid-template-columns: minmax(0, 1fr); }
 }

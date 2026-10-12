@@ -457,7 +457,9 @@ export interface MatrixVerbTarget { rowId: string; coordinateKey: CoordinateKey 
 
 export type MatrixVerbParams =
   | { verb: 'set-price'; value: number }
-  | { verb: 'adjust-prices'; percent: number }
+  /** By a signed percentage (−5 lowers by 5 %), or by a signed `amount` in `currency` (−2.5 lowers by 2.50); one of the two. */
+  | { verb: 'adjust-prices'; percent: number; amount?: undefined; currency?: undefined }
+  | { verb: 'adjust-prices'; amount: number; currency: string; percent?: undefined }
   | { verb: 'copy-prices'; fromCoordinateKey: CoordinateKey }
   | { verb: 'pin-quantity'; value: number }
   | { verb: 'set-follow' }
@@ -584,14 +586,19 @@ export const MATRIX_COPY = {
   sourceParent: 'Set on the variants — the parent has no listing of its own',
   sourceFba: 'Amazon-managed — Amazon ships FBA orders from its own stock',
   sourcePermission: 'You do not have permission to change where stock sells from (inventory.adjust)',
-  sourceNone: 'This coordinate carries no inventory',
+  sourceNone: 'This market carries no stock here',
   sourceTooMany: 'At most 20 locations',
   sourceTwice: (code: string) => `${code} is listed twice`,
   sourceUnknown: (code: string) => `${code} is not a warehouse of this business`,
   sourceInactive: (code: string) => `${code} is switched off — switch it on in Locations first`,
-  /** The change's label for a verb row: `Default (IT-MAIN)` or the own list. */
+  /**
+   * The change's label for a verb row, in the grid's From words (`fromCellText`): the codes in sale order (`IT-MAIN +
+   * MI-3PL`) — the own list, else the market default's — or `None`. The grid tells the default only by a muted look.
+   */
   sourceLabel: (own: readonly string[], marketDefault: readonly string[]) =>
-    own.length ? own.join(' + ') : `Default (${marketDefault.join(' + ') || 'none'})`,
+    (own.length ? own : marketDefault).join(' + ') || 'None',
+  /** The note's lead when a change goes back to the market default (the label alone reads the same as an own list). */
+  sourceDefault: 'The market default',
 } as const
 
 const hhmm = (iso: string): string => {
