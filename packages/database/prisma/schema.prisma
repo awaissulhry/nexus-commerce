@@ -87,6 +87,12 @@ enum PricingRuleType {
   PERCENT_OF_MASTER
 }
 
+/// Amazon Business (B2B): how a listing's business price is set (ChannelListing.businessPriceRule).
+enum BusinessPriceRule {
+  PERCENT_OFF
+  FIXED
+}
+
 model Product {
   // Business ownership comes from verified database context.
   workspaceId       String  @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
@@ -1631,6 +1637,15 @@ model ChannelListing {
   // ── PHASE 28: Pricing Rules & Adjustments ──────────────────────
   pricingRule            PricingRuleType @default(FIXED) // FIXED, MATCH_AMAZON, PERCENT_OF_MASTER
   priceAdjustmentPercent Decimal?        @db.Decimal(5, 2) // For PERCENT_OF_MASTER rule (e.g., 10 for +10%)
+
+  // ── Amazon Business (B2B), 2026-10-12 ──────────────────────────
+  // The business offer Nexus manages for this listing (an Amazon market; @nexus/shared/business-price).
+  // null rule = Nexus manages none. PERCENT_OFF = the normal send price − businessPricePercent %; FIXED = businessPrice.
+  businessPriceRule    BusinessPriceRule?
+  businessPricePercent Decimal?           @db.Decimal(5, 2)
+  businessPrice        Decimal?           @db.Decimal(10, 2)
+  // { type: 'percent' | 'fixed', levels: [{ minQty, value }] } — Amazon's quantity_discount_plan, 1 to 5 levels.
+  businessTiers        Json?
 
   // ── Platform-Specific Inventory ────────────────────────────────
   // Overrides master totalStock if set

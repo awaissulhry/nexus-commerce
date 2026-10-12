@@ -58,6 +58,10 @@
       "types": "./dist/push-lock.d.ts",
       "default": "./dist/push-lock.js"
     },
+    "./business-price": {
+      "types": "./dist/business-price.d.ts",
+      "default": "./dist/business-price.js"
+    },
     "./listing-price": {
       "types": "./dist/listing-price.d.ts",
       "default": "./dist/listing-price.js"

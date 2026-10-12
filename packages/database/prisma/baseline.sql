@@ -39,6 +39,9 @@ CREATE TYPE "OutboundSyncStatus" AS ENUM ('PENDING', 'IN_PROGRESS', 'SUCCESS', '
 CREATE TYPE "PricingRuleType" AS ENUM ('FIXED', 'MATCH_AMAZON', 'PERCENT_OF_MASTER');
 
 -- CreateEnum
+CREATE TYPE "BusinessPriceRule" AS ENUM ('PERCENT_OFF', 'FIXED');
+
+-- CreateEnum
 CREATE TYPE "FieldParentage" AS ENUM ('PARENT', 'CHILD');
 
 -- CreateEnum
@@ -653,6 +656,10 @@ CREATE TABLE "ChannelListing" (
     "salePrice" DECIMAL(10,2),
     "pricingRule" "PricingRuleType" NOT NULL DEFAULT 'FIXED',
     "priceAdjustmentPercent" DECIMAL(5,2),
+    "businessPriceRule" "BusinessPriceRule",
+    "businessPricePercent" DECIMAL(5,2),
+    "businessPrice" DECIMAL(10,2),
+    "businessTiers" JSONB,
     "quantity" INTEGER,
     "platformAttributes" JSONB,
     "flatFileSnapshot" JSONB,
