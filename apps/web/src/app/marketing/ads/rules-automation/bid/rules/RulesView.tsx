@@ -382,6 +382,8 @@ export function RulesView({ market, data, scope, viewSwitch, setQuery }: {
   const restoringLastUsed = useRef(false)
   const views = useGridState<PageState>({
     surface: 'ads-bid-rules',
+    // Land on the scope's default view even when it answers after the grid is up (grid audit F7).
+    landOnLateDefault: true,
     baseUrl: getBackendUrl(),
     getPageState: () => pageState.current,
     // The address wins on load (a tile or a link names what to show): only a NAMED view applies its filter.

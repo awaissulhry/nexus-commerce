@@ -33,6 +33,7 @@ import { gridDensity, gridGeometry, type GridDensityName } from '../tokens/grid'
 import { compareSortValues, type SortValue } from './sortValues'
 import { plainFirstGuess, plainGridHeight } from './plainGrid'
 import { heldLimits, widthMoved, widthsAsDefaults } from './columns/columnWidths'
+import { interactionDefaults } from './gridDefaults'
 import { declaredPinning, withPinning } from './statePinning'
 import { fillHandleHit } from './editors/openGesture'
 import { registerGridModules } from './modules'
@@ -482,6 +483,12 @@ export function NexusGrid<T>({
     measureRows(e.api)
     onGridSizeChanged?.(e)
   }, [plain, agProps.autoSizeStrategy, onGridSizeChanged, measureRows])
+  // Copy, the right-click menu, Tab and a header dragged out — one contract for every grid (`gridDefaults.ts`). The
+  // page's own options still win: they are spread after these.
+  const interaction = useMemo(
+    () => interactionDefaults({ cellSelection: agProps.cellSelection, getContextMenuItems: agProps.getContextMenuItems, columnDefs, defaultColDef: mergedDefaultColDef }),
+    [agProps.cellSelection, agProps.getContextMenuItems, columnDefs, mergedDefaultColDef],
+  )
   // One object for the life of the grid: AG reads `autoSizeStrategy` once, and a new object on every render made it
   // warn (#22) on every render of every `plain` grid.
   const plainAutoSize = useMemo(() => (plain ? ({ type: 'fitGridWidth' } as const) : undefined), [plain])
@@ -554,6 +561,7 @@ export function NexusGrid<T>({
           onFirstDataRendered={handleFirstDataRendered}
           onModelUpdated={handleModelUpdated}
           autoSizeStrategy={plainAutoSize}
+          {...interaction}
           // Popups (header menus, dialogs, tooltips) go on the document, not inside the grid. AG
           // fits a popup to its popup parent's box; under `autoHeight` that box is the whole
           // grid and can run past the viewport, so a header menu opened low on the page ended

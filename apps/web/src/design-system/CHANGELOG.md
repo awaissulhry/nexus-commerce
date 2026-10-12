@@ -1,3 +1,19 @@
+## Grid clicks, keys and copy: one contract — 2026-10-13
+
+Grid audit 2026-10-12, wave 2 PR5 (F2, F3, F4, F6, F7, F9, F13). `grid/gridDefaults.ts`, applied by `NexusGrid`; a page's
+own option still wins.
+- **Reading grids** (no cell ranges): mouse text selection + browser copy on every grid, in screen order
+  (`ensureDomOrder`); the browser's right-click menu instead of AG's (whose Copy copied nothing and whose Export wrote
+  sort values — raw cents, blanks), unless the page brings its own items; Tab leaves a read-only grid in one press
+  instead of walking every cell.
+- **Spreadsheets** (cell ranges): unchanged — AG's range copy, menu and Tab.
+- **Every grid**: a header dragged out never hides its column (only DataGrid and WorkspaceGrid had this).
+- **Row clicks** (`rowInteraction.ts`, both wrappers): a click that ends a text selection in the grid, or lands in the
+  selection column beside the box, does not open the row. A word picked by double-click still opens it on its first
+  click — the two cannot be told apart in time.
+- **`useGridState` `landOnLateDefault`**: a view marked default lands when the server answers after the grid is up;
+  on for the Bid, Rules, Terms, Negatives, Harvest rules / sources, stop-waste rules and Approvals grids.
+
 ## Grid widths: a width a person sets stays — 2026-10-13
 
 Grid audit 2026-10-12, wave 2 PR4a (B3–B5, B8–B12, C5, F10). One policy in the engine (`grid/columns/columnWidths.ts`,

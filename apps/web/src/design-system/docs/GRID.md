@@ -114,6 +114,16 @@ items are "Customise columns…" / "Reset columns" when the page passes `columnD
 - The handle shows an accent bar under the pointer and while dragging; the partition is its resting mark.
 - Saved across visits: `WorkspaceGrid` (its prefs), a `customizable` `DataGrid`, and pages with a saved layout.
 
+**Clicks, keys and copy (2026-10-13, `gridDefaults.ts`).** Two kinds of grid, decided by `cellSelection`:
+- **Spreadsheet** (cell ranges — sheets, Matrix, stock editor): AG's range copy (⌘C), AG's right-click menu, Tab from
+  cell to cell.
+- **Reading grid** (all others): the mouse selects text and the browser copies it, in screen order; the browser's own
+  right-click menu (AG's only when the page brings its own items); Tab leaves the grid in one press.
+- Both: a header dragged out of the grid never hides its column. A click that ends a text selection, or lands in the
+  selection column beside its box, never opens the row (`rowInteraction.ts`).
+- A saved view marked default lands even when the server answers after the grid is up (`useGridState`
+  `landOnLateDefault`; pages with their own landing — /products, the Matrix, the sheets — leave it off).
+
 ## 6. Cell types (`renderers/`, `columns/presets.ts`)
 
 | Preset | Renderer | Rule |

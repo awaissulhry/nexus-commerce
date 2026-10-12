@@ -288,6 +288,8 @@ export function WasteView(props: WasteViewProps) {
   }), [specs])
   const gridState = useGridState<Record<string, never>>({
     surface: wasting ? 'ads-neg-wasting' : 'ads-neg-stopped', baseUrl: getBackendUrl(), getPageState: NO_PAGE_STATE, applyPageState: IGNORE_PAGE_STATE, persistKeys: PERSIST_KEYS,
+    // Land on the scope's default view even when it answers after the grid is up (grid audit F7).
+    landOnLateDefault: true,
   })
   const bindState = useRef(gridState.bind)
   bindState.current = gridState.bind

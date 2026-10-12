@@ -36,7 +36,7 @@ import { emitPrefsChanged } from '@/design-system/patterns/prefs-bus'
 import { AdsFilterBar, isServerKey, stripServerKeys } from '@/design-system/patterns/workspace-grid/AdsFilterBar'
 import { filterRows } from '@/design-system/patterns/workspace-grid/filterRows'
 import { collectEdits } from '@/design-system/patterns/workspace-grid/editDrafts'
-import { isInteractiveChild } from '@/design-system/patterns/workspace-grid/rowInteraction'
+import { notARowClick } from '@/design-system/patterns/workspace-grid/rowInteraction'
 
 import { TooltipPortalProvider } from '@/design-system/primitives/Tooltip'
 import { NexusGrid } from '../NexusGrid'
@@ -427,7 +427,8 @@ export function WorkspaceGrid<T>({
   const onCellClicked = useCallback((e: CellClickedEvent<Row>) => {
     const d = e.data as unknown
     if (!onRowClickRef.current || d == null || isSkeletonRow(d) || isTotalRow(d) || e.node.group || e.node.rowPinned) return
-    if (isInteractiveChild(e.event?.target)) return
+    // A control in the row, the selection column beside its box, or the end of a text selection is not a row click.
+    if (notARowClick(e.event?.target, wrapRef.current)) return
     onRowClickRef.current(d as T)
   }, [])
   const onColumnMoved = useCallback((e: ColumnMovedEvent<Row>) => {
