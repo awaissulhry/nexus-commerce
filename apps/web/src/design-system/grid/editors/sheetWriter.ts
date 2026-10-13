@@ -583,12 +583,44 @@ export interface ReadBackSnapshot<T> {
 
 type OutcomeListener = (outcome: SheetCellOutcome) => void
 
+/**
+ * What a write that is NOT a cell edit (`exclusive`: a formula save, replace or removal) answers the writer: what its
+ * caller gets back, and the row's version after it — set only when the row may adopt it (the app decides; absent = the
+ * row keeps the version it holds).
+ */
+export interface SheetExclusiveAnswer<R> {
+  result: R
+  version?: number
+}
+
+/** What an `exclusive` write is handed when its turn comes: the row's version as this writer holds it, and its row. */
+export interface SheetExclusiveTurn<T> {
+  expectedVersion?: number
+  row: T | null
+}
+
+type QueuedCell = { value: unknown; intent: SheetWriteIntent; onOutcome?: OutcomeListener }
+
+/** A non-cell write waiting for its turn in a row's line (`exclusive`). */
+interface LineTask {
+  run: (turn: SheetExclusiveTurn<never>) => Promise<SheetExclusiveAnswer<unknown>>
+  settle: (result: unknown) => void
+  fail: (error: unknown) => void
+}
+
+/** What waits in a row's line ahead of its open cells: cells a non-cell write closed, and the non-cell writes. */
+type LineEntry = { cells: Map<string, QueuedCell> } | { task: LineTask }
+
 interface RowQueue {
-  /** colId → the pending edit. A second edit to the same cell inside the window replaces the first. */
-  cells: Map<string, { value: unknown; intent: SheetWriteIntent; onOutcome?: OutcomeListener }>
+  /** colId → the pending edit, AFTER everything in `line`. A second edit to the same cell inside the window replaces the first. */
+  cells: Map<string, QueuedCell>
   timer: ReturnType<typeof setTimeout> | null
   inFlight: boolean
+  /** The row's writes that go before `cells`, oldest first (`exclusive`). Empty: the row's line is `cells` alone. */
+  line: LineEntry[]
 }
+
+const cellsOf = (cells: Map<string, QueuedCell>): SheetWriteCell[] => [...cells.entries()].map(([colId, e]) => ({ colId, value: e.value, intent: e.intent }))
 
 export const DEFAULT_SHEET_FLUSH_MS = 40
 /** Batch mode: extra patience per row in one call before its cells read "still waiting". */
@@ -647,6 +679,11 @@ export class SheetWriter<T> {
   private operationDepth = 0
   private fenceTimer: ReturnType<typeof setTimeout> | null = null
   private reconcilingBatch = false
+  /**
+   * rowId → the row's write in the air (a cell flight or a non-cell write), as the version its answer names: a teardown
+   * lines the row's remaining writes up behind it (`leaveInOrder`).
+   */
+  private readonly turns = new Map<string, Promise<number | undefined>>()
 
   constructor(options: SheetWriterOptions<T>) {
     this.opts = options as SheetWriter<T>['opts']
@@ -689,12 +726,11 @@ export class SheetWriter<T> {
   set(rowId: string, colId: string, value: unknown, opts: { row?: T; intent?: SheetWriteIntent; onOutcome?: OutcomeListener } = {}): void {
     if (this.destroyed) return
     if (opts.row !== undefined) this.rememberRow(rowId, opts.row)
-    const q: RowQueue = this.queues.get(rowId) ?? { cells: new Map(), timer: null, inFlight: false }
+    const q = this.queueOf(rowId)
     const replaced = q.cells.get(colId)?.onOutcome
     // The LAST edit to a cell inside the window wins — its intent along with its value, so a
     // reset following a set is a reset and not a set carrying a stale null.
     q.cells.set(colId, { value, intent: opts.intent ?? 'set', onOutcome: opts.onOutcome })
-    this.queues.set(rowId, q)
     // The edit it replaced is never sent.
     if (replaced && replaced !== opts.onOutcome) replaced('dropped')
     // A new edit replaces the refused one: `retryFailed` must never resend a value that is no longer on screen.
@@ -703,6 +739,102 @@ export class SheetWriter<T> {
     this.repaint(rowId, [colId])
     this.emit()
     this.schedule(rowId)
+  }
+
+  /**
+   * G4 (2026-10-13) — a write that is NOT a cell edit (a formula save, replace or removal) in this row's ONE line: it
+   * leaves after the row's earlier cell writes (queued or in the air) have answered, and the row's later cell writes
+   * wait for it. `run` is handed the row's version as this writer then holds it, and its answer's `version` (when the
+   * app lets the row adopt it) is the version every later write of the row sends.
+   *
+   * 🔴 Why: a formula wrote through its own per-row queue and its own route, beside this writer. A formula and a cell of
+   * the same row were then in the air together, and the formula's answer carried no version — so the next cell save of
+   * the row sent the version from before the formula and was refused 409 "Another change landed first", the other
+   * change being the page's own formula (measured 2026-10-13: Manufacturer `=upper("acme")`, then Cost 16; a paste of
+   * Brand and Manufacturer over 8 rows, two of them formulas, refused Brand on both and took 13 s).
+   *
+   * The cells queued before this call leave first, as their own save; it is never part of a cell batch, and no window
+   * or operation fence holds it once its turn has come. Resolves with the answer's `result`, or `undefined` when it
+   * never left (`discard()` came first) or its answer belongs to edits `discard()` threw away. A `run` that throws
+   * rejects with that error; the row's line carries on either way.
+   */
+  exclusive<R>(rowId: string, run: (turn: SheetExclusiveTurn<T>) => Promise<SheetExclusiveAnswer<R>>): Promise<R | undefined> {
+    if (this.destroyed) return run({ expectedVersion: this.versions.get(rowId), row: this.rows.get(rowId) ?? null }).then((answer) => answer.result)
+    return new Promise<R | undefined>((settle, fail) => {
+      const q = this.queueOf(rowId)
+      // The cells edited before this write leave before it, as their own save; those edited after it wait behind it.
+      if (q.cells.size > 0) {
+        q.line.push({ cells: q.cells })
+        q.cells = new Map()
+        if (q.timer) { clearTimeout(q.timer); q.timer = null }
+      }
+      q.line.push({ task: { run: run as LineTask['run'], settle: settle as LineTask['settle'], fail } })
+      this.emit()
+      this.schedule(rowId)
+    })
+  }
+
+  private queueOf(rowId: string): RowQueue {
+    let q = this.queues.get(rowId)
+    if (!q) this.queues.set(rowId, q = { cells: new Map(), timer: null, inFlight: false, line: [] })
+    return q
+  }
+
+  /** The cells a row sends next: the cells at the head of its line, or its open cells when its line is empty. Null: a non-cell write is next. */
+  private nextCells(q: RowQueue): Map<string, QueuedCell> | null {
+    const head = q.line[0]
+    return !head ? q.cells : 'cells' in head ? head.cells : null
+  }
+
+  /** The cells `nextCells` named have left: they go from the row's line (or its open cells). */
+  private takeNextCells(q: RowQueue): void {
+    if (q.line.length > 0) q.line.shift()
+    else q.cells.clear()
+  }
+
+  /** Is `colId` of the row edited again and waiting — anywhere in its line or its open cells? */
+  private queuedAgain(rowId: string, colId: string): boolean {
+    const q = this.queues.get(rowId)
+    return !!q && (q.cells.has(colId) || q.line.some((e) => 'cells' in e && e.cells.has(colId)))
+  }
+
+  /** Does the row still have anything waiting to be sent? */
+  private hasQueued(q: RowQueue | undefined): boolean {
+    return !!q && (q.cells.size > 0 || q.line.length > 0)
+  }
+
+  /** A non-cell write whose turn has come (`exclusive`): sent, its answer's version adopted, then the row's line goes on. */
+  private async runTask(rowId: string): Promise<void> {
+    const q = this.queues.get(rowId)
+    const head = q?.line[0]
+    if (!q || q.inFlight || !head || !('task' in head) || this.unreachableRows.has(rowId)) return
+    const { task } = head
+    q.line.shift()
+    q.inFlight = true
+    this.inFlightCells.set(rowId, 1)
+    this.emit()
+    const generation = this.generation
+    let answer: SheetExclusiveAnswer<unknown> | undefined
+    let failure: { error: unknown } | null = null
+    const turn = task.run({ expectedVersion: this.versions.get(rowId), row: (this.rows.get(rowId) ?? null) as never })
+    const answered = turn.then((a) => a.version, () => undefined)
+    this.turns.set(rowId, answered)
+    try {
+      answer = await turn
+    } catch (error) {
+      failure = { error }
+    }
+    if (this.turns.get(rowId) === answered) this.turns.delete(rowId)
+    // Discarded meanwhile: the answer is about edits that were thrown away, and the row now belongs to the next read.
+    if (generation !== this.generation) { task.settle(undefined); return }
+    if (typeof answer?.version === 'number') this.seed([{ id: rowId, version: answer.version }])
+    q.inFlight = false
+    this.inFlightCells.delete(rowId)
+    this.emit()
+    if (failure) task.fail(failure.error)
+    else task.settle(answer!.result)
+    if (this.hasQueued(q)) this.schedule(rowId)
+    else if (!q.timer) this.queues.delete(rowId)
   }
 
   private schedule(rowId: string): void {
@@ -715,8 +847,12 @@ export class SheetWriter<T> {
      * reconcile loop of its own.
      */
     if (this.unreachableRows.has(rowId)) return
+    // A non-cell write whose turn has come goes now: no window gathers it and no operation fence holds it.
+    if (!this.nextCells(q)) { void this.runTask(rowId); return }
     if (this.opts.commitBatch) { this.scheduleBatch(); return }
     if (q.timer) clearTimeout(q.timer)
+    // Cells a non-cell write closed are complete: they leave now, ahead of it.
+    if (q.line.length > 0) { q.timer = null; void this.flushRow(rowId); return }
     q.timer = setTimeout(() => {
       q.timer = null
       void this.flushRow(rowId)
@@ -792,7 +928,7 @@ export class SheetWriter<T> {
     // A held queue (unreachable row) is not going to settle — waiting on it hangs Publish for as
     // long as the outage lasts. Those cells are safe in the queue; the reconcile loop sends them.
     const settling = () =>
-      [...this.queues.entries()].some(([id, q]) => !this.unreachableRows.has(id) && (q.inFlight || q.cells.size > 0))
+      [...this.queues.entries()].some(([id, q]) => !this.unreachableRows.has(id) && (q.inFlight || this.hasQueued(q)))
     while (settling()) {
       await new Promise((r) => setTimeout(r, 5))
     }
@@ -800,12 +936,15 @@ export class SheetWriter<T> {
 
   private async flushRow(rowId: string): Promise<void> {
     const q = this.queues.get(rowId)
-    if (!q || q.inFlight || q.cells.size === 0 || this.destroyed || this.unreachableRows.has(rowId)) return
+    if (!q || q.inFlight || this.destroyed || this.unreachableRows.has(rowId)) return
+    const next = this.nextCells(q)
+    if (!next) { void this.runTask(rowId); return }
+    if (next.size === 0) return
     const generation = this.generation
 
-    const batch: SheetWriteCell[] = [...q.cells.entries()].map(([colId, e]) => ({ colId, value: e.value, intent: e.intent }))
-    this.takeOff(rowId, q)
-    q.cells.clear()
+    const batch = cellsOf(next)
+    this.takeOff(rowId, next)
+    this.takeNextCells(q)
     q.inFlight = true
     this.inFlightCells.set(rowId, batch.length)
     this.emit()
@@ -850,15 +989,20 @@ export class SheetWriter<T> {
         this.repaint(rowId, batch.map((b) => b.colId))
         this.emit()
       }, COMMIT_TIMEOUT_MS)
+      let answered: Promise<number | undefined> | undefined
       try {
-        result = await this.opts.commit({
+        const flight = this.opts.commit({
           rowId,
           row: sentRow,
           cells: batch,
           expectedVersion: this.versions.get(rowId),
         })
+        answered = Promise.resolve(flight).then((r) => r?.version, () => undefined)
+        this.turns.set(rowId, answered)
+        result = await flight
       } finally {
         clearTimeout(patience)
+        if (answered && this.turns.get(rowId) === answered) this.turns.delete(rowId)
       }
     } catch (err) {
       /*
@@ -908,15 +1052,17 @@ export class SheetWriter<T> {
       const noAnswer = rejected || (own?.unreachable ?? result.unreachable) === true
       const state = ok ? 'saved' : noAnswer ? 'unknown' : 'refused'
       const warning = ok ? own?.warning : undefined
-      if (!q.cells.has(colId)) {
+      // Edited again since this flight left (in its open cells, or behind a non-cell write in its line).
+      const again = this.queuedAgain(rowId, colId)
+      if (!again) {
         if (warning) this.opts.tracker.setSavedWithWarning(rowId, colId, warning)
         else this.opts.tracker.set(rowId, colId, state, noAnswer ? 'Connection lost — refresh to see whether this saved.' : reason)
       }
-      // The cell the operator has already re-edited (`q.cells.has(colId)`) keeps no mark, so it gets
+      // The cell the operator has already re-edited (`again`) keeps no mark, so it gets
       // no announcement either: the refusal is about a value that is no longer on screen.
-      if (state === 'refused' && !q.cells.has(colId)) refused.push({ rowId, colId, reason })
+      if (state === 'refused' && !again) refused.push({ rowId, colId, reason })
       // Kept for `retryFailed()`: only a REFUSED value can be retried as is; `unknown` is the reconcile's to answer.
-      if (!q.cells.has(colId)) {
+      if (!again) {
         if (state === 'refused') this.rememberFailed(rowId, batch.find((b) => b.colId === colId)!)
         else if (state === 'saved') this.forgetFailed(rowId, colId)
       }
@@ -952,7 +1098,7 @@ export class SheetWriter<T> {
       }, SAVED_FADE_MS)
     }
 
-    if (q.cells.size > 0) this.schedule(rowId) // cells that arrived while this batch was in flight
+    if (this.hasQueued(q)) this.schedule(rowId) // what arrived while this batch was in flight
     else if (!q.timer) this.queues.delete(rowId)
   }
 
@@ -968,11 +1114,15 @@ export class SheetWriter<T> {
     const requests: SheetWriteRequest<T>[] = []
     const batches = new Map<string, SheetWriteCell[]>()
     for (const [rowId, q] of this.queues) {
-      if (q.inFlight || q.cells.size === 0 || this.unreachableRows.has(rowId)) continue
+      if (q.inFlight || this.unreachableRows.has(rowId)) continue
+      // A non-cell write whose turn has come is never part of a cell batch; the cells behind it wait for it.
+      const next = this.nextCells(q)
+      if (!next) { void this.runTask(rowId); continue }
+      if (next.size === 0) continue
       if (q.timer) { clearTimeout(q.timer); q.timer = null }
-      const batch: SheetWriteCell[] = [...q.cells.entries()].map(([colId, e]) => ({ colId, value: e.value, intent: e.intent }))
-      this.takeOff(rowId, q)
-      q.cells.clear()
+      const batch = cellsOf(next)
+      this.takeOff(rowId, next)
+      this.takeNextCells(q)
       q.inFlight = true
       this.inFlightCells.set(rowId, batch.length)
       batches.set(rowId, batch)
@@ -994,8 +1144,15 @@ export class SheetWriter<T> {
     }, COMMIT_TIMEOUT_MS + requests.length * BATCH_PATIENCE_PER_ROW_MS)
     let results: Map<string, SheetWriteResult>
     let rejected = false
+    const answered = new Map<string, Promise<number | undefined>>()
     try {
-      results = await this.opts.commitBatch(requests)
+      const call = this.opts.commitBatch(requests)
+      for (const request of requests) {
+        const turn = Promise.resolve(call).then((m) => m.get(request.rowId)?.version, () => undefined)
+        answered.set(request.rowId, turn)
+        this.turns.set(request.rowId, turn)
+      }
+      results = await call
     } catch (err) {
       rejected = true
       const reason = err instanceof Error ? err.message : String(err)
@@ -1003,6 +1160,7 @@ export class SheetWriter<T> {
     } finally {
       clearTimeout(patience)
       this.batchInFlight = false
+      for (const [rowId, turn] of answered) if (this.turns.get(rowId) === turn) this.turns.delete(rowId)
     }
     if (generation !== this.generation) return
     // Row by row, in order: every other row stays in flight until its own turn, so `pending` reaches 0 — and a
@@ -1016,7 +1174,7 @@ export class SheetWriter<T> {
     }
     if (refused.length) this.opts.onRefused?.(refused)
     // Cells edited while this call was on the wire go now, as the next call.
-    if ([...this.queues.entries()].some(([id, q]) => !q.inFlight && q.cells.size > 0 && !this.unreachableRows.has(id))) this.scheduleBatch()
+    if ([...this.queues.entries()].some(([id, q]) => !q.inFlight && (this.nextCells(q)?.size ?? 0) > 0 && !this.unreachableRows.has(id))) this.scheduleBatch()
   }
 
   /** Cells the server REFUSED and that were not edited since — what the sheet offers to retry. */
@@ -1059,9 +1217,9 @@ export class SheetWriter<T> {
   }
 
   /** A row's queued cells leave as its flight: their `onOutcome`s wait for its answer (`settle`). */
-  private takeOff(rowId: string, q: RowQueue): void {
+  private takeOff(rowId: string, cells: Map<string, QueuedCell>): void {
     const listeners = new Map<string, OutcomeListener>()
-    for (const [colId, e] of q.cells) if (e.onOutcome) listeners.set(colId, e.onOutcome)
+    for (const [colId, e] of cells) if (e.onOutcome) listeners.set(colId, e.onOutcome)
     if (listeners.size) this.flightOutcomes.set(rowId, listeners)
   }
 
@@ -1094,7 +1252,10 @@ export class SheetWriter<T> {
   /** Cells queued or in flight — what the status strip calls "unsaved". */
   get pending(): number {
     let n = 0
-    for (const [rowId, q] of this.queues) n += q.cells.size + (q.inFlight ? this.inFlightCells.get(rowId) ?? 1 : 0)
+    for (const [rowId, q] of this.queues) {
+      // A non-cell write waiting in the line is one change not saved yet, as a queued cell is.
+      n += q.cells.size + q.line.reduce((sum, e) => sum + ('cells' in e ? e.cells.size : 1), 0) + (q.inFlight ? this.inFlightCells.get(rowId) ?? 1 : 0)
+    }
     return n
   }
 
@@ -1147,7 +1308,7 @@ export class SheetWriter<T> {
           const landed = snapshot.matches && Object.prototype.hasOwnProperty.call(snapshot.matches, colId) ? snapshot.matches[colId] : known ? sheetValuesMatch(snapshot.values[colId], cell.value) : null
           if (landed === null) { unresolved = true; continue }
           ok = ok && landed
-          if (this.queues.get(rowId)?.cells.has(colId)) continue
+          if (this.queuedAgain(rowId, colId)) continue
           this.opts.tracker.set(
             rowId,
             colId,
@@ -1164,12 +1325,12 @@ export class SheetWriter<T> {
         this.emit()
         this.opts.onReconciled?.({ rowId, ok, savedAt: new Date().toISOString() })
         // Anything typed during the outage was queued, not lost. Send it now that we can.
-        if (this.queues.get(rowId)?.cells.size) this.schedule(rowId)
+        if (this.hasQueued(this.queues.get(rowId))) this.schedule(rowId)
         return
       }
       // Still nothing. Say so on the mark rather than leaving a stale sentence.
       for (const colId of Object.keys(outstanding)) {
-        if (!this.queues.get(rowId)?.cells.has(colId)) this.opts.tracker.set(rowId, colId, 'unknown', 'Connection lost — checking whether this saved…')
+        if (!this.queuedAgain(rowId, colId)) this.opts.tracker.set(rowId, colId, 'unknown', 'Connection lost — checking whether this saved…')
       }
       this.repaint(rowId, Object.keys(outstanding))
       this.emit()
@@ -1203,7 +1364,7 @@ export class SheetWriter<T> {
           if (!snapshot) {
             pending = true
             for (const colId of Object.keys(outstanding)) {
-              if (!this.queues.get(request.rowId)?.cells.has(colId)) this.opts.tracker.set(request.rowId, colId, 'unknown', 'Connection lost — checking whether this saved…')
+              if (!this.queuedAgain(request.rowId, colId)) this.opts.tracker.set(request.rowId, colId, 'unknown', 'Connection lost — checking whether this saved…')
             }
             this.repaint(request.rowId, Object.keys(outstanding))
             continue
@@ -1229,7 +1390,7 @@ export class SheetWriter<T> {
       const landed = snapshot.matches && Object.prototype.hasOwnProperty.call(snapshot.matches, colId) ? snapshot.matches[colId] : known ? sheetValuesMatch(snapshot.values[colId], cell.value) : null
       if (landed === null) { unresolved = true; continue }
       ok = ok && landed
-      if (this.queues.get(rowId)?.cells.has(colId)) continue
+      if (this.queuedAgain(rowId, colId)) continue
       this.opts.tracker.set(rowId, colId, landed ? 'saved' : 'refused', landed ? undefined : 'The stored value differs from this edit. Review it before trying again.')
       if (landed) this.forgetFailed(rowId, colId)
       else this.rememberFailed(rowId, cell)
@@ -1239,7 +1400,7 @@ export class SheetWriter<T> {
     this.repaint(rowId, Object.keys(outstanding))
     this.opts.onReconciled?.({ rowId, ok, savedAt: new Date().toISOString() })
     // Anything typed during the outage was queued, not lost. Send it now that we can.
-    if (this.queues.get(rowId)?.cells.size) this.schedule(rowId)
+    if (this.hasQueued(this.queues.get(rowId))) this.schedule(rowId)
     return true
   }
 
@@ -1336,9 +1497,13 @@ export class SheetWriter<T> {
     this.operationDepth = 0
     this.reconcilingBatch = false
     // Nothing queued is sent, and no answer of a flight in the air is painted: none of them counts as stored.
-    const dropped = [...this.queues.values()].flatMap((q) => [...q.cells.values()].flatMap((e) => (e.onOutcome ? [e.onOutcome] : [])))
+    const dropped = [...this.queues.values()].flatMap((q) => [q.cells, ...q.line.flatMap((e) => ('cells' in e ? [e.cells] : []))])
+      .flatMap((cells) => [...cells.values()].flatMap((e) => (e.onOutcome ? [e.onOutcome] : [])))
       .concat([...this.flightOutcomes.values()].flatMap((listeners) => [...listeners.values()]))
+    // A non-cell write still waiting for its turn never leaves either: its caller hears `undefined`.
+    const unsent = [...this.queues.values()].flatMap((q) => q.line.flatMap((e) => ('task' in e ? [e.task] : [])))
     this.flightOutcomes.clear()
+    this.turns.clear()
     this.queues.clear()
     this.inFlightCells.clear()
     this.failed.clear()
@@ -1349,6 +1514,7 @@ export class SheetWriter<T> {
     this.opts.tracker.clearAll()
     this.emit()
     for (const listener of dropped) listener('dropped')
+    for (const task of unsent) task.settle(undefined)
   }
 
   /** Idempotent: a second call flushes nothing again and leaves the writer destroyed. */
@@ -1359,6 +1525,14 @@ export class SheetWriter<T> {
     this.generation++
     if (this.batchTimer) { clearTimeout(this.batchTimer); this.batchTimer = null }
     if (this.fenceTimer) { clearTimeout(this.fenceTimer); this.fenceTimer = null }
+    // A row whose line holds a non-cell write leaves in that order, one write after another (`leaveInOrder`).
+    for (const [rowId, q] of this.queues) {
+      if (q.line.length === 0) continue
+      if (q.timer) clearTimeout(q.timer)
+      this.leaveInOrder(rowId, q)
+      q.line = []
+      q.cells.clear()
+    }
     if (this.opts.commitBatch) {
       // Batch mode: everything still queued leaves as ONE call, fire-and-forget, for the reason below.
       const requests = [...this.queues].filter(([, q]) => q.cells.size > 0).map(([rowId, q]) => ({ rowId, row: this.rows.get(rowId) ?? null,
@@ -1378,10 +1552,41 @@ export class SheetWriter<T> {
       })
     }
     this.queues.clear()
+    this.turns.clear()
     // The header's outage line is a claim about a loop that is about to stop running. It goes too.
     this.unreachableRows.clear()
     this.reconciling.clear()
     this.listeners.clear()
+  }
+
+  /**
+   * Teardown of a row whose line holds a non-cell write: its writes leave in their order, each after the one before has
+   * answered — the first after the row's write already in the air — so the version each sends is the one the write
+   * before it answered. Fire-and-forget, as the rest of `destroy()`: there is nothing left to paint.
+   */
+  private leaveInOrder(rowId: string, q: RowQueue): void {
+    const entries: LineEntry[] = [...q.line, ...(q.cells.size > 0 ? [{ cells: new Map(q.cells) }] : [])]
+    let chain: Promise<unknown> = (this.turns.get(rowId) ?? Promise.resolve(undefined)).then((version) => {
+      if (typeof version === 'number') this.seed([{ id: rowId, version }])
+    })
+    for (const entry of entries) {
+      chain = chain.then(async () => {
+        const row = this.rows.get(rowId) ?? null
+        if ('task' in entry) {
+          try {
+            const answer = await entry.task.run({ expectedVersion: this.versions.get(rowId), row: row as never })
+            if (typeof answer.version === 'number') this.seed([{ id: rowId, version: answer.version }])
+            entry.task.settle(answer.result)
+          } catch (error) {
+            entry.task.fail(error)
+          }
+          return
+        }
+        const request: SheetWriteRequest<T> = { rowId, row, cells: cellsOf(entry.cells), expectedVersion: this.versions.get(rowId) }
+        const result = this.opts.commitBatch ? (await this.opts.commitBatch([request])).get(rowId) : await this.opts.commit(request)
+        if (typeof result?.version === 'number') this.seed([{ id: rowId, version: result.version }])
+      }).catch(() => undefined /* the component is gone; a refusal has no surface left to report on */)
+    }
   }
 
   private emit(): void {

@@ -27,7 +27,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { columnLanguages, languageField } from './sheet/languages'
 import { formulaReadKey } from './sheet/formulaColumns'
 import { useSaveReporter } from './contracts'
-import { reportedFormulaWrite } from './formulaWrites'
+import { reportedFormulaWrite, formulaVersionFacts, type FormulaSend, type FormulaWriteLine, type FormulaWriteResult } from './formulaWrites'
 import { FORMULA_READS_AT_ONCE, FORMULAS_LOADING, clearFailures, createHeldEdits, effectiveFormulas, emptyReads, failRead, failureFor, formulaState, landRead, rowKnown, runBounded, saveLocally, seedFromSheet, type FormulaReads, type FormulaSeedRow, type KnownFormula } from './formulaReadiness'
 
 export interface CellFormulaRow {
@@ -82,6 +82,12 @@ export interface UseCellFormulasInput {
   seedRows?: readonly FormulaSeedRow[]
   onSettled?: () => void
   onValueSaved?: (rowId: string, fieldKey: string, value: unknown) => void
+  /**
+   * G4 (2026-10-13) — the sheet's ONE write line (`sheet/formulaWriteLine.ts`, over `SheetWriter.exclusive`): a formula
+   * save, replace or removal leaves after the row's earlier cell saves and before its later ones, and the row adopts the
+   * version it answered. Without it (no sheet) formula writes keep their own per-row queue, as before.
+   */
+  writeLine?: FormulaWriteLine
 }
 
 export interface CellFormulas {
@@ -99,7 +105,7 @@ export interface CellFormulas {
   whenKnown: (rowId: string, fieldKey: string, edit: () => void, drop?: (reason?: string) => void) => void
   sourceLabel: string
   sourceLabelFor: (fieldKey?: string) => string
-  replace: (rowId: string, fieldKey: string, value: unknown) => Promise<{ ok: boolean; error?: string }>
+  replace: (rowId: string, fieldKey: string, value: unknown) => Promise<FormulaWriteResult>
 
   /** `rowId` + `fieldKey` → the stored expression, so editing a formula cell opens the formula. */
   exprFor: (rowId: string, fieldKey: string) => string | null
@@ -112,13 +118,13 @@ export interface CellFormulas {
   /** The engine's shared function catalog, for the signature hint. */
   functions: FormulaFunctionDoc[]
   preview: (rowId: string, fieldKey: string, expr: string, signal?: AbortSignal) => Promise<FormulaPreviewResponse>
-  save: (rowId: string, fieldKey: string, expr: string) => Promise<{ ok: boolean; error?: string }>
+  save: (rowId: string, fieldKey: string, expr: string) => Promise<FormulaWriteResult>
   /** Drop a formula, keeping the value it last produced. The audit row keeps it restorable. */
-  pinOver: (rowId: string, fieldKey: string) => Promise<{ ok: boolean; error?: string }>
+  pinOver: (rowId: string, fieldKey: string) => Promise<FormulaWriteResult>
   reload: () => void
 }
 
-export function useCellFormulas({ productId, scope = 'master', channel = null, marketplace = null, market, locale, channelConnectionId, aliasKey, rowIds, columnKeys, rowScopes, seedRows, writeFacts, onSettled, onValueSaved }: UseCellFormulasInput): CellFormulas {
+export function useCellFormulas({ productId, scope = 'master', channel = null, marketplace = null, market, locale, channelConnectionId, aliasKey, rowIds, columnKeys, rowScopes, seedRows, writeFacts, onSettled, onValueSaved, writeLine }: UseCellFormulasInput): CellFormulas {
   const reporter = useSaveReporter()
   const coord = useMemo(() => ({ scope, channel, marketplace, market, locale, channelConnectionId, aliasKey }), [scope, channel, marketplace, market, locale, channelConnectionId, aliasKey])
   const columnsKey = JSON.stringify(columnKeys ?? [])
@@ -142,8 +148,8 @@ export function useCellFormulas({ productId, scope = 'master', channel = null, m
   const seed = seedRef.current
   const functions = EXPR_FUNCTIONS
   const [nonce, setNonce] = useState(0)
-  const live = useRef({ coordinateKey, writeFacts, onSettled, onValueSaved })
-  live.current = { coordinateKey, writeFacts, onSettled, onValueSaved }
+  const live = useRef({ coordinateKey, writeFacts, onSettled, onValueSaved, writeLine })
+  live.current = { coordinateKey, writeFacts, onSettled, onValueSaved, writeLine }
   const revision = useRef(0)
   const queue = useMemo(() => createFormulaSaveQueue(() => {
     if (live.current.coordinateKey !== coordinateKey) return
@@ -239,30 +245,40 @@ export function useCellFormulas({ productId, scope = 'master', channel = null, m
     return res.ok ? body : { ok: false, error: body?.error ?? 'Could not check the formula.' }
   }, [target])
 
-  const commit = useCallback((rowId: string, fieldKey: string, change: { expr: string } | { value: unknown }) => reportedFormulaWrite(reporter, rowId, fieldKey, () => queue.enqueue(rowId, async () => {
+  /* G4 — in the sheet's write line when the sheet gives one (after the row's earlier saves, before its later ones; the
+     row adopts the version the answer names); otherwise in this hook's own per-row queue. Either way the refresh after a
+     burst waits for every formula write. */
+  const write = useCallback((rowId: string, send: FormulaSend): Promise<FormulaWriteResult> => {
+    const line = live.current.writeLine
+    return line ? queue.track(line(rowId, send)) : queue.enqueue(rowId, async () => (await send()).result)
+  }, [queue])
+
+  const commit = useCallback((rowId: string, fieldKey: string, change: { expr: string } | { value: unknown }) => reportedFormulaWrite(reporter, rowId, fieldKey, () => write(rowId, async () => {
     const destination = target(rowId, fieldKey)
     const literal = 'value' in change
     const res = await fetch(`${getBackendUrl()}/api/pim/formulas/product/${encodeURIComponent(destination.productId)}${literal ? '/value' : ''}`, {
       method: 'PUT', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...destination, ...change, contentAddress: live.current.writeFacts?.(rowId, fieldKey)?.contentAddress, contentAcknowledged: live.current.writeFacts?.(rowId, fieldKey)?.contentAcknowledged }),
     })
     const body = await res.json()
-    if (!res.ok) return { ok: false, error: body?.error ?? 'Could not save this field.' }
+    if (!res.ok) return { result: { ok: false, error: body?.error ?? 'Could not save this field.' }, facts: {} }
     revision.current += 1
     if (live.current.coordinateKey === coordinateKey && (literal || body.formula)) setReads(previous => previous.key === readKey ? saveLocally(previous, rowId, fieldKey, literal ? null : body.formula) : previous)
-    const result = literal ? { ok: true } : formulaSaveOutcome(body)
+    const result: FormulaWriteResult = literal ? { ok: true } : formulaSaveOutcome(body)
     if (result.ok && live.current.coordinateKey === coordinateKey) live.current.onValueSaved?.(rowId, fieldKey, body.value)
-    return result
-  })), [reporter, queue, target, coordinateKey, readKey])
+    return { result, facts: formulaVersionFacts(body) }
+  })), [reporter, write, target, coordinateKey, readKey])
   const save = useCallback((rowId: string, fieldKey: string, expr: string) => commit(rowId, fieldKey, { expr }), [commit])
   const replace = useCallback((rowId: string, fieldKey: string, value: unknown) => commit(rowId, fieldKey, { value }), [commit])
-  const pinOver = useCallback((rowId: string, fieldKey: string) => reportedFormulaWrite(reporter, rowId, fieldKey, () => queue.enqueue(rowId, async () => {
+  /* Removing a formula moves no row version (only its `CellFormula` row goes), but it still takes its turn in the line:
+     a reset or an edit made after it must land after it. */
+  const pinOver = useCallback((rowId: string, fieldKey: string) => reportedFormulaWrite(reporter, rowId, fieldKey, () => write(rowId, async () => {
     const { productId: canonicalId, ...destination } = target(rowId, fieldKey)
     const q = new URLSearchParams()
     for (const [name, value] of Object.entries(destination)) if (value != null) q.set(name, value)
     const res = await fetch(`${getBackendUrl()}/api/pim/formulas/product/${encodeURIComponent(canonicalId)}?${q}`, { method: 'DELETE', credentials: 'include' })
     const body = await res.json()
-    return res.ok ? { ok: true } : { ok: false, error: body?.error ?? 'Could not remove the formula.' }
-  })), [reporter, queue, target])
+    return { result: res.ok ? { ok: true } : { ok: false, error: body?.error ?? 'Could not remove the formula.' }, facts: {} }
+  })), [reporter, write, target])
   void productId
   const sourceLabelFor = (fieldKey?: string) => {
     const language = languageField(fieldKey ?? '', locale).locale

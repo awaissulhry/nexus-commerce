@@ -270,3 +270,29 @@ describe('formula recovery through the real product API and PostgreSQL', { timeo
     expect(effect).toHaveBeenCalledTimes(1)
   })
 })
+
+/**
+ * G4 (2026-10-13) — the formula routes answer the version they left the row at, through the real routes and PostgreSQL.
+ * Without it the product sheet's next save of the row sent the version from before the formula: 409 "Another change
+ * landed first" on its own formula.
+ */
+describe('a formula save answers the row version it left', { timeout: 30_000 }, () => {
+  const versionOf = async () => (await prisma.product.findUniqueOrThrow({ where: { id: 'one' } })).version
+  it('PUT …/product/:id answers the version it was made over and the one the row holds now', async () => {
+    const before = await versionOf()
+    const saved = await app.inject({ method: 'PUT', url: '/api/pim/formulas/product/one', payload: { ...coordinate, expr: 'upper($brand)' } })
+    const now = await versionOf()
+    expect(now).toBeGreaterThan(before)
+    expect(saved.json(), saved.body).toMatchObject({ ok: true, value: 'NEXUS', versionOf: 'product', versionBefore: before, currentVersion: now })
+  })
+  it('PUT …/value answers it too, and a save sent at that version is taken', async () => {
+    await app.inject({ method: 'PUT', url: '/api/pim/formulas/product/one', payload: { ...coordinate, expr: 'upper($brand)' } })
+    const before = await versionOf()
+    const replaced = await app.inject({ method: 'PUT', url: '/api/pim/formulas/product/one/value', payload: { ...coordinate, value: 'Zeta' } })
+    expect(replaced.json(), replaced.body).toMatchObject({ ok: true, versionOf: 'product', versionBefore: before, currentVersion: await versionOf() })
+    const next = await app.inject({ method: 'PATCH', url: '/api/products/bulk', payload: { expectedVersion: replaced.json().currentVersion,
+      changes: [{ id: 'one', field: 'brand', value: 'Next brand' }], marketplaceContexts: [{ marketplace: 'IT', locale: 'it' }] } })
+    expect(next.statusCode, next.body).toBe(200)
+    expect((await prisma.product.findUniqueOrThrow({ where: { id: 'one' } })).brand).toBe('Next brand')
+  })
+})

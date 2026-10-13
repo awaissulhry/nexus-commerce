@@ -180,10 +180,12 @@ describe('G2/G3 — both sheets record an edit with its state and keep it only w
       expect(src).toContain('useSheetUndo(writer, getGridApi, { tracker, resetCell: resetCellBack })')
       expect(src).toContain('writer.set(rowId, colId, null, { row, intent: before.intent, onOutcome });')
       expect(src).not.toMatch(/undo\.record\(/)
-      // Review of #607, finding 4 — an edit dropped while formulas loaded, and a refused (or unanswered) formula save,
-      // tell the history the cell shows a value the server does not hold.
-      expect(src.match(/undo\.unsaved\(/g)).toHaveLength(3)
+      // Review of #607, finding 4 — an edit dropped while formulas loaded tells the history the cell shows a value the
+      // server does not hold. A refused (or unanswered) formula save now tells it through the edit's own outcome: the
+      // formula edit is recorded like any other (G5, `../formulaUndo.ts`, which the history hears as `refused`).
+      expect(src.match(/undo\.unsaved\(/g)).toHaveLength(1)
       expect(src).toMatch(/'refused', reason \?\? HELD_EDIT_DROPPED\);\s*\/\/[^\n]*\n\s*undo\.unsaved\(/)
+      expect(src).toMatch(/sendFormulaEdit\([^\n]*, formulas, undo\.edit\)/)
     }
     // Review of #607, finding 1 — a channel list position reads its list's other positions before recording a list reset.
     expect(readFileSync(join(__dirname, 'useChannelSheetAdapter.tsx'), 'utf8')).toContain('listPositions(row, colId, ')

@@ -44,7 +44,7 @@ import { withSheetGroups } from '../sheetGroups';
 import { useHeaderPaste } from '../headerPaste';
 import { isSlotListKey } from '@/design-system/grid/editors/slotList';
 import { acknowledgePendingEdits, expandSlotListKeys, queuePendingEdit, revertPendingEdit, slotFanOut, slotListKeyOfSlot, slotListRefusal, withSlotListColumns } from '../slotListColumns';
-import { CellSaveTracker, IdentityBand, ProvenanceMark, SheetWriter, bandColSpan, landOnCell, type ColDef, type ICellRendererParams, type SheetWriteRequest, exprOf, isFormulaDraft, type FormulaCandidate, type FormulaWiring } from '@/design-system/grid';
+import { CellSaveTracker, IdentityBand, ProvenanceMark, SheetWriter, bandColSpan, landOnCell, type ColDef, type ICellRendererParams, type SheetWriteRequest, isFormulaDraft, type FormulaCandidate, type FormulaWiring } from '@/design-system/grid';
 import { Button } from '@/design-system/primitives';
 import { Banner, Modal, useToast, type MenuItemDef } from '@/design-system/components';
 import { refusalWords } from '@/design-system/grid/editors/refusalWords';
@@ -61,6 +61,8 @@ import { takeSheetLanding } from '@/app/products/_publication/history/runActions
 import { discardOfferDrafts, offerDraftControls } from './offerDrafts';
 import { useLiveStockCells } from './useLiveStockCells';
 import { useCellFormulas } from '../../useCellFormulas';
+import { sheetFormulaLine } from '../formulaWriteLine';
+import { formulaWriteOutcome, sendFormulaEdit, type RecordSheetEdit } from '../formulaUndo';
 import { HELD_EDIT_DROPPED, HELD_FOR_FORMULAS } from '../../formulaReadiness';
 import { useActionConfirm } from '@/design-system/grid/actions/ActionConfirm';
 import { wholeListWriteField } from './provenance';
@@ -303,6 +305,9 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         /* P0 — the rows already say which cells hold a formula, so no editor waits for the formula reads. */
         seedRows: rows,
         channelConnectionId: data?.scope.connectionId ?? accountId,
+        /* G4 — formula writes take their turn in the sheet writer's line for their row (`../formulaWriteLine.ts`); the
+           writer is built below, so it is read when a write is made. */
+        writeLine: sheetFormulaLine(() => writerRef.current),
         onSettled: () => { void quietRefresh(() => !tracker.hasOpenChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0); },
         onValueSaved: (rowId, fieldKey, value) => {
             const node = getGridApi()?.getRowNode(rowId);
@@ -327,6 +332,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const colIdOfRef = useCallback((name: string, fieldKey?: string) => formulaColumnId(dataRef.current?.columns ?? [], name, fieldKey, dataRef.current?.scope.locale ?? ''), []);
     const formulaLive = useRef({ candidatesFor, colIdOfRef, formulas, alternateAccount });
     formulaLive.current = { candidatesFor, colIdOfRef, formulas, alternateAccount };
+    /* G5 — the sheet's ⌘Z history, for a formula the cell editor replaces with a value itself. Assigned once `undo` exists. */
+    const recordEditRef = useRef<RecordSheetEdit>(() => () => undefined);
     /* Option A (2026-09-26) — the cell editor's history and "follows" context (this scope has no AI draft layer). Assigned
        once the scope is known; read through this ref so the wiring stays one stable object. */
     const editorContextLive = useRef<(row: ChannelSheetRow, key: string) => CellEditorContext | null>(() => null);
@@ -342,7 +349,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         candidatesFor: (row, fieldKey) => formulaLive.current.candidatesFor(row, fieldKey),
         preview: (rowId, fieldKey, expr, signal) => formulaLive.current.formulas.preview(rowId, fieldKey, expr, signal),
         functions: () => formulaLive.current.formulas.functions,
-        replaceFormula: (rowId: string, fieldKey: string, value: unknown) => formulaLive.current.formulas.replace(rowId, fieldKey, value),
+        // G5 — the editor's own "replace the formula with this value" is a step of ⌘Z too.
+        replaceFormula: (rowId: string, fieldKey: string, value: unknown) => sendFormulaEdit({ rowId, colId: fieldKey, value, before: value }, formulaLive.current.formulas, recordEditRef.current),
         unavailableReason: (rowId, fieldKey) => formulaLive.current.formulas.unavailableFor(rowId, fieldKey),
         retry: () => formulaLive.current.formulas.reload(),
         sourceLabel: fieldKey => formulaLive.current.formulas.sourceLabelFor(fieldKey),
@@ -518,10 +526,30 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             row.values = { ...row.values, [colId]: shown };
         }
         api.refreshCells({ rowNodes: [node], columns: [colId], force: true });
+        /* G5 — a cell that holds a formula (one typed over the followed value) drops it first, in the row's write line; the
+           reset then removes the value it kept — the cell menu's own order (`useSheetControl.reset`). A formula that cannot
+           be removed leaves the cell refused, and no reset is sent. */
+        const sheetFormulas = formulaLive.current.formulas;
+        if (sheetFormulas.exprFor(rowId, colId)) {
+            tracker.set(rowId, colId, 'saving');
+            void sheetFormulas.pinOver(rowId, colId).then((removed) => {
+                if (removed.ok) {
+                    writer.set(rowId, colId, null, { row: getGridApi()?.getRowNode(rowId)?.data ?? row, intent: before.intent, onOutcome });
+                    return;
+                }
+                onOutcome(formulaWriteOutcome(removed));
+                if (removed.dropped) return;
+                tracker.set(rowId, colId, 'refused', removed.error ?? 'The formula could not be removed.');
+                const n = getGridApi()?.getRowNode(rowId);
+                if (n) getGridApi()?.refreshCells({ rowNodes: [n], columns: [colId], force: true });
+            });
+            return;
+        }
         writer.set(rowId, colId, null, { row, intent: before.intent, onOutcome });
-    }, [getGridApi, writer]);
+    }, [getGridApi, writer, tracker]);
     /* ⌘Z undoes a whole operation (a fill, a paste) in one step and one save, and still works after the sheet re-reads. */
     const undo = useSheetUndo(writer, getGridApi, { tracker, resetCell: resetCellBack });
+    recordEditRef.current = undo.edit;
     /* S11 — the first column's SKU is THIS listing's own (`../identitySkuColumn.tsx`, rules in `../identitySkuEdit.ts`). */
     /* Add rows (R2, R3) — empty rows in page memory; the SKU typed into one creates a draft variation, or a new listing
        of this product here whose SKU is that listing's own (`../newRows/`). */
@@ -717,6 +745,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         }
         const typed = typeof e.newValue === 'string' ? e.newValue : null;
         if (!shopifyValue && ((typed !== null && isFormulaDraft(typed)) || formulas.exprFor(e.data.rowId, colId!))) {
+            // Read while the row still holds the edited cell (its noted prior goes with it).
             const before = beforeOf(e.data);
             const row = e.data;
             const prev = row.values?.[colId];
@@ -728,8 +757,13 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             }
             const { writeId, subject } = channelWriteIdentity(row.rowId, ++writeSeq.current, { channel, marketplace, accountId, locale, instanceId: writeInstanceId });
             reporterRef.current.pending(writeId, subject);
-            void (typed !== null && isFormulaDraft(typed) ? formulas.save(row.rowId, colId, exprOf(typed)) : formulas.replace(row.rowId, colId, e.newValue))
+            /* G4 + G5 — the formula write takes its turn in the row's write line (`../formulaWriteLine.ts`), and the edit is a
+               step of ⌘Z, kept only if it is stored (`../formulaUndo.ts`). */
+            void sendFormulaEdit({ rowId: row.rowId, colId, value: e.newValue, before, source: e.source }, formulas, undo.edit)
                 .then((r) => {
+                // Discarded with the sheet's other edits (Reload): the read that follows paints the cell.
+                if (r.dropped)
+                    return;
                 reporterRef.current.resolved(writeId, r.ok, r.error, subject);
                 tracker.set(row.rowId, colId, r.ok ? 'saved' : 'refused', r.error);
                 if (!r.ok) {
@@ -740,15 +774,13 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                         if (n)
                             getGridApi()?.refreshCells({ force: true, rowNodes: [n], columns: [colId] });
                     }
-                    // The cell shows the refused value; the server still holds `before` (finding 4).
-                    undo.unsaved({ rowId: row.rowId, colId, before, after: e.newValue });
+                    // The cell shows the refused value; the history heard the refusal and keeps what the server holds.
                 }
             })
                 .catch((err: unknown) => {
                 const reason = err instanceof Error ? err.message : String(err);
                 tracker.set(row.rowId, colId, 'unknown', `Could not confirm this save. Refresh to check: ${reason}`);
                 reporterRef.current.resolved(writeId, false, reason, subject);
-                undo.unsaved({ rowId: row.rowId, colId, before, after: e.newValue });
             });
             return;
         }
