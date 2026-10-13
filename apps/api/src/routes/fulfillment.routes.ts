@@ -188,6 +188,7 @@ import {
   transitionShipmentStatus as inboundTransitionStatus,
   InvalidTransitionError,
   NotFoundError,
+  ReceiveConflictError,
 } from '../services/inbound.service.js'
 import {
   isCloudinaryConfigured,
@@ -3746,6 +3747,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         items?: Array<{
           itemId: string
           quantityReceived: number
+          // The received total the screen showed; the line must still stand there or the route answers 409.
+          expectedReceived?: number
           qcStatus?: string
           qcNotes?: string
           idempotencyKey?: string
@@ -3773,6 +3776,11 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       return updated
     } catch (error: any) {
       if (error instanceof NotFoundError) return reply.code(404).send({ error: error.message })
+      if (error instanceof ReceiveConflictError) {
+        // The lines that still stood where the screen saw them were booked; other screens re-read too.
+        publishInboundEvent({ type: 'inbound.received', shipmentId: (request.params as { id: string }).id, ts: Date.now() })
+        return reply.code(409).send({ error: error.message, conflicts: error.conflicts })
+      }
       fastify.log.error({ err: error }, '[inbound/:id/receive] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }

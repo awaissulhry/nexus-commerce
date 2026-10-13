@@ -286,7 +286,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'a stock count reconciled by Claude while sales land (08 S6: the variance once, every sale counted, never below zero)', file: 'src/services/stock/stock-reconcile-concurrency.vitest.test.ts', expect: 3 },
   { name: 'set-stock-source end to end (08 S8: preview per listing, a non-owner refused, the owner switches to the lent stock and undo switches back, other business not found)', file: 'src/services/stock/stock-source-tool-postgres.vitest.test.ts', expect: 4 },
   { name: 'a purchase order moves once (08 S9: five sends at once, one e-mail; a send racing a cancel, one wins)', file: 'src/services/supply/po-transition-concurrency.vitest.test.ts', expect: 3 },
-  { name: 'one receive per arrival through the route (08 S10: five identical receives add the stock once; two different ones end at one)', file: 'src/services/supply/receive-concurrency.vitest.test.ts', expect: 3 },
+  { name: 'one receive per arrival through the route (08 S10: five identical receives add the stock once; two different ones end at one; two receivers who saw the same total both count)', file: 'src/services/supply/receive-concurrency.vitest.test.ts', expect: 4 },
   { name: 'an order line is taken once (re-reads, oversold lines, surplus holds and splits, reconcile, races; Amazon FBM, Shopify, MCF)', file: 'src/services/order-stock-once-postgres.vitest.test.ts', expect: 21 },
   { name: 'one stock model across channels (crash heal, multi-line totals, cancellation after shipment, races)', file: 'src/services/stock-model-postgres.vitest.test.ts', expect: 51 },
   { name: 'assortment copy test (AE.3)', file: 'src/services/assortment/copy-run.vitest.test.ts', expect: 8 },

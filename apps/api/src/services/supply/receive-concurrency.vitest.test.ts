@@ -6,6 +6,9 @@
  * receives of "5 received" on a line at 0 both read 0, both added 5, and the shelf showed 10 for 5 that arrived. Now
  * each line is locked while it is read and moved: the second finds 5 already received and moves nothing.
  *
+ * A receive screen also sends the total it saw (expectedReceived): two receivers who both saw 0 and both counted 5 at
+ * the same moment — one books, the other is refused (409) with the current total and books on top of it after re-reading.
+ *
  * Needs NEXUS_TEST_CONCURRENT_PG_URL (a throwaway Docker PostgreSQL); SKIPS without it.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -54,8 +57,8 @@ describe.skipIf(!serverUrl)(`08 S10 — one receive per arrival through the rout
     await q(`INSERT INTO "InboundShipmentItem" (id, "workspaceId", "inboundShipmentId", "productId", sku, "quantityExpected") VALUES ($1,$2,$3,$4,$5,10)`, [iid, WS, sid, id.product, sku])
     return { sid, iid }
   }
-  const receive = (sid: string, iid: string, quantityReceived: number) =>
-    app.inject({ method: 'POST', url: `/api/fulfillment/inbound/${sid}/receive`, payload: { items: [{ itemId: iid, quantityReceived }] } })
+  const receive = (sid: string, iid: string, quantityReceived: number, expectedReceived?: number) =>
+    app.inject({ method: 'POST', url: `/api/fulfillment/inbound/${sid}/receive`, payload: { items: [{ itemId: iid, quantityReceived, expectedReceived }] } })
 
   beforeAll(async () => {
     process.env.NEXUS_WORKSPACES_ENABLED = '1'
@@ -107,5 +110,19 @@ describe.skipIf(!serverUrl)(`08 S10 — one receive per arrival through the rout
     expect(await stock()).toBe(before + line)
     const receipts = await q<{ quantity: number }>(`SELECT quantity FROM "InboundReceipt" WHERE "inboundShipmentItemId" = $1`, [iid])
     expect(receipts.reduce((n, r) => n + r.quantity, 0)).toBe(line)
+  }, 60_000)
+
+  it('R3 — two receivers who both saw 0 send "5 received" at once: one books, the other is refused with 5 and then books on top', async () => {
+    const { sid, iid } = await shipment('TWO')
+    const before = await stock()
+    const answers = await Promise.all([receive(sid, iid, 5, 0), receive(sid, iid, 5, 0)])
+    expect(answers.map((a) => a.statusCode).sort()).toEqual([200, 409])
+    expect(answers.find((a) => a.statusCode === 409)!.json().conflicts).toEqual([expect.objectContaining({ itemId: iid, quantityReceived: 5 })])
+    expect(await stock()).toBe(before + 5)
+    // The refused screen re-read 5 and sets 10.
+    expect((await receive(sid, iid, 10, 5)).statusCode).toBe(200)
+    expect(await stock()).toBe(before + 10)
+    const receipts = await q<{ quantity: number }>(`SELECT quantity FROM "InboundReceipt" WHERE "inboundShipmentItemId" = $1`, [iid])
+    expect(receipts.map((r) => r.quantity)).toEqual([5, 5])
   }, 60_000)
 })
