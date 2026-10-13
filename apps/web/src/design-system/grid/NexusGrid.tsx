@@ -27,7 +27,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { AgGridReact, type AgGridReactProps } from 'ag-grid-react'
-import type { ColDef, ColumnPinnedEvent, ColumnResizedEvent, DefaultMenuItem, FirstDataRenderedEvent, GetMainMenuItems, GridApi, GridReadyEvent, GridSizeChangedEvent, MenuItemDef, ModelUpdatedEvent, NewColumnsLoadedEvent } from 'ag-grid-community'
+import type { ColDef, ColumnPinnedEvent, ColumnResizedEvent, DefaultMenuItem, FirstDataRenderedEvent, GetMainMenuItems, GridApi, GridReadyEvent, GridSizeChangedEvent, MenuItemDef, ModelUpdatedEvent, NewColumnsLoadedEvent, ProcessUnpinnedColumnsParams } from 'ag-grid-community'
 
 import { gridDensity, gridGeometry, type GridDensityName } from '../tokens/grid'
 import { compareSortValues, type SortValue } from './sortValues'
@@ -37,6 +37,7 @@ import { interactionDefaults } from './gridDefaults'
 import { GRID_LOCALE_TEXT } from './locale'
 import { GridNoRowsOverlay } from './renderers/overlays'
 import { LIGHT_PINNED } from '../lib/opens-dark'
+import { NARROW_QUERY } from '../components/useNarrow'
 import { declaredPinning, withPinning } from './statePinning'
 import { fillHandleHit } from './editors/openGesture'
 import { registerGridModules } from './modules'
@@ -92,6 +93,17 @@ export type GridDensity = GridDensityName
  * the moment someone picked "compact" (DS.1 + PES.2, hub #184).
  */
 export type GridRowKind = 'text' | 'media' | 'media-line'
+
+/**
+ * A phone (≤ 760px, the DS sheet breakpoint; grid audit E9 — the rule WorkspaceGrid has had since #578): pinned columns
+ * are DRAWN unpinned (`grid.css`), so a 320px identity column never fills the grid and a sideways swipe moves every
+ * column. The column STATE keeps its pins: a saved layout is unchanged and pins again on a wider screen. So AG's own
+ * "unpin what does not fit" (which writes the state, and a Customise or a saved view would then keep it) is held off on a
+ * phone, and a grid that opens on a phone draws every column — AG draws only the columns it counts as inside the
+ * unpinned part, and with the pinned part scrolling away that left a blank strip.
+ */
+const onPhone = (): boolean => typeof window !== 'undefined' && window.matchMedia(NARROW_QUERY).matches
+const keepPinsOnPhone = <T,>(p: ProcessUnpinnedColumnsParams<T>) => (onPhone() ? [] : p.columns)
 
 /** KT.3 — a blank sinks to the BOTTOM in both directions, pre-inverted for AG's descending flip. */
 const blankSafeComparator = (a: SortValue, b: SortValue, _na: unknown, _nb: unknown, desc: boolean) => {
@@ -215,6 +227,7 @@ export function NexusGrid<T>({
 }: NexusGridProps<T>) {
   // `plain` sizes the grid to its rows unless the caller chose a layout (run 3: AG's autoHeight kept a 150px band).
   const fitRows = plain && agProps.domLayout === undefined
+  const [openedOnPhone] = useState(onPhone)
   const appMode = useAgThemeMode()
   const contextDensity = useGridDensity()
   const density = densityProp ?? contextDensity
@@ -590,6 +603,8 @@ export function NexusGrid<T>({
           onFirstDataRendered={handleFirstDataRendered}
           onModelUpdated={handleModelUpdated}
           autoSizeStrategy={plainAutoSize}
+          processUnpinnedColumns={keepPinsOnPhone}
+          suppressColumnVirtualisation={openedOnPhone}
           {...interaction}
           // AG's words in the DS's voice; the DS empty state; one tooltip pace for every grid (300 ms — AG's own 2 s
           // read as "no tooltip", Matrix audit 2026-10-08). A page's own value still wins.

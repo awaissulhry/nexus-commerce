@@ -1,3 +1,17 @@
+## One density scale; grids on a phone — 2026-10-13
+
+Grid audit wave 4, PR11 + PR12 engine part (E5, E9, D7).
+- **`DataGrid` sizes land on the engine's three densities** (`grid/datagrid/geometry.ts`): `xs`/`sm` → compact,
+  `md` → cozy, `lg`/`xl` → spacious — the tier's text row (28 / 43 / 49, whole pixels), header and side padding, the
+  engine's 13px cell text on a 20px line box. It had five tiers of its own, with fractional rows (28.25 / 33.75 / 42.5
+  / 48.5 / 58.5) and 11.5 / 12.5px text at `xs` / `sm`. The 16 `sm`/`xs` tables (dialogs, catalog transfer, categories)
+  are compact now: 28px rows, 13px text. `SIZE_GEOMETRY` / `DATAGRID_SIZES` and the wrapper's `data-size` went (unused).
+- **Phone (≤ 760px)**: pinned columns are drawn unpinned on every `NexusGrid` (and so every `DataGrid`) — they scroll with
+  the rest, the column state keeps its pins (AG's own unpinning is held off on a phone), a grid that opens on a phone
+  draws every column. `GridPager` wraps (the page buttons, then "Rows per page"; on /products at 390px the list stood
+  71px past the screen). GRID.md §11 states the phone rule (it said "mobile out of scope").
+- `grid/theme/grid.css` mirrored in `apps/factory` (identical file).
+
 ## The ads grids look like /products — 2026-10-13
 
 Grid audit wave 4, PR9 (E1, E4, E8, E17, A10 ads part, E9 ads part).
@@ -15,8 +29,7 @@ Grid audit wave 4, PR9 (E1, E4, E8, E17, A10 ads part, E9 ads part).
   with "…". `pagerCentered` is gone (one pager, one place); its 18 call sites dropped it.
 - **"Learn More"** under the grid linked nowhere (E8); it is gone. The Ad Manager (`CampaignsGrid`) moves into the same
   card with the same pager.
-- **Phone**: toolbars wrap, and the pager wraps inside the ads card (`.nds-ws-card > .nds-grid-pager`) until the engine
-  pager wraps everywhere (PR12).
+- **Phone**: toolbars wrap, and the pager wraps through the engine's `GridPager` rule (PR12).
 
 ## A table window fills a phone; a DataGrid's second pinned column stays on its row — 2026-10-13
 

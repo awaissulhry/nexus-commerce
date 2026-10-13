@@ -6,4 +6,3 @@
 export { DataGrid } from './DataGrid'
 export type { Column, DataGridProps } from '../../components/DataGrid'
 export { dataGridTheme } from './theme'
-export { SIZE_GEOMETRY, DATAGRID_SIZES, geometryFor, type DataGridSize, type SizeGeometry } from './geometry'

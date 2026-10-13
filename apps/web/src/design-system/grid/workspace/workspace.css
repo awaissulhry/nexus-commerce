@@ -35,9 +35,6 @@
    cut them off over a short grid. The toolbar above and the pager below keep the grid off the card's round corners. */
 .nds-gridcard.nds-ws-card { overflow: visible; }
 .nds-ws-card + .nds-ws-latest { margin-top: 12px; }
-/* A phone: the pager wraps instead of running past the card (`GridPager` does not wrap yet; wave 4 PR12 makes the
-   engine pager wrap — drop this then). */
-.nds-ws-card > .nds-grid-pager { flex-wrap: wrap; row-gap: var(--nds-space-8); }
 .nds-ag-ws .ag-root-wrapper {
   --ag-wrapper-border: none;
   --ag-wrapper-border-radius: 0;

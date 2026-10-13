@@ -607,7 +607,6 @@ export function DataGrid<T>({
       ref={wrapRef}
       className={['nds-grid-wrap', 'nds-grid', 'nds-ag-dg', empty ? 'is-empty' : '', className].filter(Boolean).join(' ')}
       style={wrapperStyle}
-      data-size={size}
     >
       <TooltipPortalProvider>
       <NexusGrid<Row>
