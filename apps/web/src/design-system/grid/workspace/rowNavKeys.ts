@@ -11,12 +11,21 @@
  *
  *  - the keys belong to this grid only while focus is inside the grid or on something that HOLDS it — the page itself
  *    when nothing is focused, or the shell's `<main tabIndex={-1}>` a click lands on — never on another control;
+ *  - a grid inside a dialog (a `DetailModal`'s Ad groups) takes them while focus is inside the grid: the dialog AROUND
+ *    it is its host, not a dialog open on top of it. Focus elsewhere in that dialog leaves the keys to the dialog
+ *    (`DetailModal`'s own J / K). A menu, a popup editor or the Customise dialog opened from the grid still refuses them;
  *  - ArrowUp / ArrowDown move rows only while focus is inside the grid — on the page they scroll it;
  *  - J / K and the arrows repeat while held; a verb never does (holding A must not apply row after row).
  */
-import { matchGridShortcut, shortcutKey, type MatchOptions, type ShortcutContainer, type ShortcutKeyEvent } from '../hooks/gridShortcuts'
+import {
+  OVERLAY_SELECTOR, matchGridShortcut, shortcutKey, type MatchOptions, type ShortcutContainer, type ShortcutElement, type ShortcutKeyEvent,
+} from '../hooks/gridShortcuts'
 
 export type RowNavAction = { kind: 'move'; step: 1 | -1 } | { kind: 'open' } | { kind: 'verb'; key: string }
+
+/** The node is a dialog, a menu or a list, or sits in one. */
+const inOverlay = (node: unknown): boolean =>
+  !!node && typeof (node as ShortcutElement).closest === 'function' && (node as ShortcutElement).closest(OVERLAY_SELECTOR) != null
 
 /**
  * `grid.contains(node)`: focus is inside the grid. `holdsGrid(node)`: the focused element holds the grid — `<body>`
@@ -31,8 +40,11 @@ export function rowNavAction(
   const key = shortcutKey(event.key)
   const arrow = key === 'ArrowDown' || key === 'ArrowUp'
   const move = arrow || key === 'j' || key === 'k'
+  // A holder counts only outside every dialog. The shortcut filter refuses an overlay its container contains, and a
+  // dialog around the grid HOLDS the grid: counted as a holder, it read as a dialog open inside the grid and refused
+  // every key there (the Google Ads campaign window, 2026-10-13).
   const scope: ShortcutContainer = {
-    contains: (node) => grid.contains(node) || (!arrow && holdsGrid(node)),
+    contains: (node) => grid.contains(node) || (!arrow && holdsGrid(node) && !inOverlay(node)),
   }
   if (!matchGridShortcut(event, scope, [{ key: event.key, repeat: move }], options)) return null
   if (key === 'j' || key === 'ArrowDown') return { kind: 'move', step: 1 }

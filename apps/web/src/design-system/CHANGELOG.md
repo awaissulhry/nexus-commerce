@@ -1,3 +1,14 @@
+## WorkspaceGrid: row keys in a dialog; the totals row without an AG warning — 2026-10-13
+
+Found by the Google Ads browser check (campaign window, Ad groups and Keywords).
+- **`grid/workspace/rowNavKeys.ts`**: J / K, O and the row verbs work in a grid inside a dialog (`DetailModal`) while
+  focus is in the grid. The dialog around the grid counted as something that holds it, so the shortcut filter read it as
+  a dialog open INSIDE the grid and refused every key; the arrows worked. A menu, a popup editor or the Customise dialog
+  opened from the grid still refuses them; focus elsewhere in the dialog leaves J / K to the dialog.
+- **`grid/workspace/WorkspaceGrid.tsx`**: the totals row's height is the density's header height, read from the tier.
+  `api.getGridOption('headerHeight')` ran while AG built the grid, before its API functions exist: AG warning #27 in
+  development, and a data row's height for the totals row in production until its data changed.
+
 ## `NexusGrid reloading`: a re-read keeps the rows under the loading veil — 2026-10-13
 
 Grid audit step 5 (F8, the three grids wave 2 skipped: Matrix, product sheet, Family variants).

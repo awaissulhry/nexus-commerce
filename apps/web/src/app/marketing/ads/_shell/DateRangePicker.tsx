@@ -19,11 +19,13 @@
 import { useState } from 'react'
 import { Calendar, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { InfoTip } from '@/design-system/primitives'
+import { MONTHS_SHORT } from '@/design-system/lib/format'
 
 const DOW = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 /** AM-36 — days since Monday (Mon 0 … Sun 6), the ISO week the server uses. */
 const sinceMonday = (d: Date) => (d.getDay() + 6) % 7
-const fmt = (d: Date) => `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`
+/** One date look across Nexus (#591): "13 Sep 2026", month words from the DS, never the runtime's locale. */
+const fmt = (d: Date) => `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`
 const sod = (d: Date) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x }
 const addMonths = (d: Date, n: number) => { const x = new Date(d); x.setDate(1); x.setMonth(x.getMonth() + n); return x }
 const sameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
@@ -106,7 +108,7 @@ export function DateRangePicker({ value, onChange, disabledReason }: {
 
   const today = sod(new Date())
   const months = [view, addMonths(view, 1)]
-  const label = `${fmt(value.start)} - ${fmt(value.end)}`
+  const label = `${fmt(value.start)} – ${fmt(value.end)}`
   // One trigger: with `disabledReason` it is focusable but inert (`aria-disabled`), its name carries the reason, and
   // the InfoTip shows the reason on hover and keyboard focus.
   const trigger = (

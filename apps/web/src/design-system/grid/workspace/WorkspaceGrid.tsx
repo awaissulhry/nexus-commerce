@@ -49,6 +49,7 @@ import {
   isSkeletonRow, isTotalRow, type SkeletonRow, type TotalRow, type WsContext, type WsContextHolder,
 } from './cells'
 import { modalOutside } from '../hooks/useGridShortcuts'
+import { useGridDensityTier } from '../hooks/useGridDensity'
 import { FIRST_COL_MAX, buildColDefs, columnsSignature } from './columns'
 import { widthMoved } from '../columns/columnWidths'
 import { createDraftStore } from './drafts'
@@ -273,8 +274,11 @@ export function WorkspaceGrid<T>({
     return rowIdRef.current(d as T)
   }, [])
   const rowH = rowHeight ?? DEFAULT_ROW_H
-  // The totals row is the header's height, like every grid's (the Owner's card rule, IE.4; grid audit E7).
-  const getRowHeight = useCallback((p: { node: IRowNode; api: GridApi<Row> }) => (p.node.rowPinned ? p.api.getGridOption('headerHeight') ?? rowH : p.node.group ? GROUP_ROW_H : rowH), [rowH])
+  // The totals row is the header's height, like every grid's (the Owner's card rule, IE.4; grid audit E7): the header
+  // NexusGrid draws at this density. Not `api.getGridOption`: AG sizes a pinned row while it builds the grid, before its
+  // API functions exist, so the call warned (AG #27) and the totals row took a data row's height.
+  const headerH = useGridDensityTier().header
+  const getRowHeight = useCallback((p: { node: IRowNode }) => (p.node.rowPinned ? headerH : p.node.group ? GROUP_ROW_H : rowH), [rowH, headerH])
   const hierarchyRef = useRef(hierarchy); hierarchyRef.current = hierarchy
   const isRowSelectable = useCallback((node: IRowNode<Row>) => {
     const d = node.data as unknown
