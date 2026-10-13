@@ -3,13 +3,13 @@
 /**
  * AGW — the ads console's workspace grid on AG Grid Enterprise.
  *
- * The props are the hand-rolled grid's, unchanged (`./types.ts`); the chrome around the rows —
- * filter panel + preset library, toolbar, pager, "Latest Report" footer, the hover-edit popover,
- * the DS Customize dialog — is the hand-rolled grid's markup, lifted verbatim; only the `<table>`
- * became `NexusGrid`. What the engine owns is the header (the Owner's exemption), sorting, paging,
- * selection, pinning, column drag and resize, grouping. What stays the shared pure modules is the
- * filtering, the search, the sort comparison, the edit diff, the rank vocabulary. The design and
- * the prop-by-prop mapping: docs/2026-09-05-ads-console-on-ag-grid-design.md §2 and §5.
+ * The props are the hand-rolled grid's (`./types.ts`); the chrome around the rows — filter panel + preset library,
+ * toolbar, "Latest Report" footer, the hover-edit popover, the DS Customise dialog — is the hand-rolled grid's markup.
+ * The look is the engine's, as on /products (grid audit wave 4, E1): the engine theme, the DS grid card (`GridCard`)
+ * and the DS pager (`GridPager`); the ads console's own theme variant and its nine-page pager are gone. What the
+ * engine owns is the header, sorting, paging, selection, pinning, column drag and resize, grouping. What stays the
+ * shared pure modules is the filtering, the search, the sort comparison, the edit diff, the rank vocabulary. The
+ * prop-by-prop mapping: docs/2026-09-05-ads-console-on-ag-grid-design.md §2 and §5.
  *
  * Three rules this file keeps that a reader might otherwise "simplify" away:
  *   1. The column DEFINITIONS depend on structure only (`columns.ts`); the row-reading functions
@@ -30,7 +30,7 @@ import type {
 } from 'ag-grid-community'
 
 import { Button } from '@/design-system/primitives'
-import { Listbox, useNarrow } from '@/design-system/components'
+import { useNarrow } from '@/design-system/components'
 import { PreferencesModal, type PreferencesColumnSpec } from '@/design-system/patterns/PreferencesModal'
 import { emitPrefsChanged } from '@/design-system/patterns/prefs-bus'
 import { AdsFilterBar, isServerKey, stripServerKeys } from '@/design-system/patterns/workspace-grid/AdsFilterBar'
@@ -40,6 +40,8 @@ import { notARowClick } from '@/design-system/patterns/workspace-grid/rowInterac
 
 import { TooltipPortalProvider } from '@/design-system/primitives/Tooltip'
 import { NexusGrid } from '../NexusGrid'
+import { GridCard } from '../hosts/GridCard'
+import { GridPager } from '../toolbars/GridPager'
 import { rendererOwnsKeyboard } from '../rendererKeyboard'
 import { withVisibleColumnOrder } from '../preferencesLayout'
 import {
@@ -56,7 +58,6 @@ import {
   visibleOrderFromColumnState, widthsToColumnState, withWidth, writeStoredPrefs, prefsToModal, prefsFromModal, prefsForScreen,
 } from './prefs'
 import { rowNavAction } from './rowNavKeys'
-import { adsWorkspaceTheme } from './theme'
 import type { FilterState, GridEditField, GridPrefs, WorkspaceGridProps } from './types'
 import './workspace.css'
 
@@ -73,7 +74,6 @@ const DEFAULT_ROW_H = 45
 const GROUP_ROW_H = 35
 const SKELETON_ROWS: SkeletonRow[] = Array.from({ length: 6 }, (_, i) => ({ __skeleton: i }))
 const SORTING_ORDER: SortDirection[] = ['asc', 'desc', null]
-const PAGE_SIZES = [{ value: '50', label: '50' }, { value: '100', label: '100' }, { value: '200', label: '200' }, { value: '500', label: '500' }]
 const EMPTY_META: ReadonlyMap<string, { label: string; order?: number }> = new Map()
 const RENDERERS = { identity: IdentityCellRenderer, value: ValueCellRenderer, headerTip: HeaderTipRenderer }
 
@@ -90,7 +90,7 @@ export function WorkspaceGrid<T>({
   selectable = true, selected, onSelectedChange,
   showTotal, totalFirst = 'Total',
   reportLabel, emptyLabel = 'Nothing here', emptyNode, defaultSort, enabledFirst, editMode, selectionActions,
-  searchable, searchPlaceholder = 'Search…', searchValue, pagerCentered, filtersDefaultOpen = true,
+  searchable, searchPlaceholder = 'Search…', searchValue, filtersDefaultOpen = true,
   groupBy, onRowClick, keyboardNav, onRowKey, initialFilters, rowClassName,
   onSortChange, onFilterChange,
   initialPage, onPageChange, initialSearch, onSearchChange,
@@ -288,9 +288,8 @@ export function WorkspaceGrid<T>({
   // The legacy's third click clears the sort; AG's default order is the same three steps, stated.
   const defaultColDef = useMemo<ColDef<Row>>(() => ({ sortingOrder: SORTING_ORDER, suppressKeyboardEvent: rendererOwnsKeyboard }), [])
   const selectionColumnDef = useMemo<SelectionColumnDef>(() => ({
-    // MEASURED on the legacy pages: the `td.ck` box was 48px wide (the sheet says 46; a table cell adds its rule),
-    // and the identity column started at x = 46 + 48 + … exactly where AG puts it with 48 here.
-    width: 48, minWidth: 48, maxWidth: 48, suppressSizeToFit: true, suppressAutoSize: true, resizable: false,
+    // The engine's checkbox column width (`gridGeometry.selectColW`, set by NexusGrid), as on /products (grid audit E1).
+    suppressSizeToFit: true, suppressAutoSize: true, resizable: false,
     lockPosition: 'left', lockPinned: true,
     cellClass: ['nds-ws-td', 'ck'],
     headerClass: 'nds-ws-th nds-ws-th-ck',
@@ -675,7 +674,6 @@ export function WorkspaceGrid<T>({
     <div ref={wrapRef} aria-busy={loading || undefined} className={`nds-wsgrid nds-ag-ws${autoRows ? ' is-auto' : ''}${selectable ? '' : ' nosel'}${editing ? ' is-editing' : ''}${empty ? ' is-empty' : ''}${reloading ? ' is-reloading' : ''}`}>
       <TooltipPortalProvider>
       <NexusGrid<Row>
-        theme={adsWorkspaceTheme}
         className="nds-ws-grid"
         domLayout="autoHeight"
         rowHeight={rowH}
@@ -795,79 +793,76 @@ export function WorkspaceGrid<T>({
         />
       )}
 
-      {/* one card: toolbar + grid + pager share the grid rectangle (H10 — toolbar sits inside it) */}
-      <div className="nds-card h10-cardstack">
-      {/* toolbar */}
-      <div className="h10-am-toolbar">
-        <span className="cnt">{selectable && sel.size > 0
-          ? <b>{`Selected ${sel.size} ${pluralize(noun, sel.size)}`}</b>
-          : totalCount === 0 ? `Showing 0 ${pluralize(noun, 0)}` : `Viewing ${viewStart}-${viewEnd} of ${server ? totalCount.toLocaleString('en-GB') : totalCount} ${pluralize(noun, totalCount)}`}</span>
-        {editMode && editMode.bulk !== false ? (editing ? (
-          <span className="h10-edit-actions">
-            <button type="button" className="h10-discard" onClick={discardEdits}>Discard Changes</button>
-      <Button variant="primary" disabled={!dirtyEdits.length || applying} onClick={applyEdits}>{applying ? 'Applying…' : 'Apply Changes'}</Button>
-          </span>
-        ) : (
-     <Button variant="primary" onClick={enterEdit}><Pencil size={13} /> {editMode.label}</Button>
-        )) : toolbarLeft}
-        {selectable && sel.size > 0 && !editing && selectionActions ? selectionActions([...sel], toggleAllClear) : null}
-        {/* inline 🔍 sits after the count + any selection actions (H10 order) */}
-        {searchable && (searchOpen ? (
-          <span className="h10-am-searchbox">
-            <Search size={14} />
-            <input autoFocus value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }} placeholder={searchPlaceholder} aria-label="Search" />
-            <button type="button" className="x" aria-label="Clear search" onMouseDown={(e) => e.preventDefault()} onClick={() => { setSearch(''); setSearchOpen(false) }}><X size={13} /></button>
-          </span>
-        ) : (
-          <button type="button" className="h10-am-searchbtn" aria-label="Search" onClick={() => setSearchOpen(true)}><Search size={15} /></button>
-        ))}
-        <span className="grow" />
-        {toolbarRight}
-        {customizable && !prefsControlled && (
-          <>
-            <Button active={showCustomize} onClick={() => setShowCustomize(true)} aria-haspopup="dialog" aria-expanded={showCustomize}><Settings2 size={13} /> Customise</Button>
-            {/* SGX3 — the SHARED dialog, not a second implementation (the same wiring as before). */}
-            <PreferencesModal
-              attributeGroups
-              groupToggles
-              inViewCount
-              open={showCustomize}
-              onClose={() => setShowCustomize(false)}
-              title="Customise columns"
-              value={prefsToModal(prefs, columns, perPage)}
-              onConfirm={(next) => {
-                updatePrefs(prefsFromModal(prefs, next, columns), true)
-              }}
-              allColumns={prefsColumns}
-              defaultVisible={defaultVisible}
-              sortFieldOptions={[]}
-              pageSizeChoices={[]}
-              showSticky
-            />
-          </>
+      {/* One card, as on /products: toolbar + grid + pager share the grid rectangle (`GridCard`, grid audit E1/E17). The
+          card lets a toolbar menu hang past its edge (`.nds-ws-card`): a page's own menus (Portfolio, Adjust budget, the
+          report's column menu) are not portalled, and a card that clips cut them off over a short grid. */}
+      <GridCard
+        className="nds-ws-card h10-cardstack"
+        toolbar={(
+          <div className="nds-toolbar h10-am-toolbar">
+            <span className="cnt">{selectable && sel.size > 0
+              ? <b>{`Selected ${sel.size} ${pluralize(noun, sel.size)}`}</b>
+              : totalCount === 0 ? `Showing 0 ${pluralize(noun, 0)}` : `Viewing ${viewStart}-${viewEnd} of ${server ? totalCount.toLocaleString('en-GB') : totalCount} ${pluralize(noun, totalCount)}`}</span>
+            {editMode && editMode.bulk !== false ? (editing ? (
+              <span className="h10-edit-actions">
+                <button type="button" className="h10-discard" onClick={discardEdits}>Discard Changes</button>
+                <Button variant="primary" disabled={!dirtyEdits.length || applying} onClick={applyEdits}>{applying ? 'Applying…' : 'Apply Changes'}</Button>
+              </span>
+            ) : (
+              <Button variant="primary" onClick={enterEdit}><Pencil size={13} /> {editMode.label}</Button>
+            )) : toolbarLeft}
+            {selectable && sel.size > 0 && !editing && selectionActions ? selectionActions([...sel], toggleAllClear) : null}
+            {/* the search sits after the count and any selection actions (H10 order) */}
+            {searchable && (searchOpen ? (
+              <span className="h10-am-searchbox">
+                <Search size={14} />
+                <input autoFocus value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }} placeholder={searchPlaceholder} aria-label="Search" />
+                <button type="button" className="x" aria-label="Clear search" onMouseDown={(e) => e.preventDefault()} onClick={() => { setSearch(''); setSearchOpen(false) }}><X size={13} /></button>
+              </span>
+            ) : (
+              <button type="button" className="h10-am-searchbtn" aria-label="Search" onClick={() => setSearchOpen(true)}><Search size={15} /></button>
+            ))}
+            <span className="grow" />
+            {toolbarRight}
+            {customizable && !prefsControlled && (
+              <>
+                <Button active={showCustomize} onClick={() => setShowCustomize(true)} aria-haspopup="dialog" aria-expanded={showCustomize}><Settings2 size={13} /> Customise</Button>
+                {/* SGX3 — the SHARED dialog, not a second implementation (the same wiring as before). */}
+                <PreferencesModal
+                  attributeGroups
+                  groupToggles
+                  inViewCount
+                  open={showCustomize}
+                  onClose={() => setShowCustomize(false)}
+                  title="Customise columns"
+                  value={prefsToModal(prefs, columns, perPage)}
+                  onConfirm={(next) => {
+                    updatePrefs(prefsFromModal(prefs, next, columns), true)
+                  }}
+                  allColumns={prefsColumns}
+                  defaultVisible={defaultVisible}
+                  sortFieldOptions={[]}
+                  pageSizeChoices={[]}
+                  showSticky
+                />
+              </>
+            )}
+            {exportable && <Button onClick={onExport}><Download size={13} /> Export Data…</Button>}
+          </div>
         )}
-    {exportable && <Button onClick={onExport}><Download size={13} /> Export Data…</Button>}
-      </div>
-
-      {grid}
-
-      {/* pager */}
-      <div className="h10-am-pager">
-        <span className="grow" />
-        <div className="pg">
-          <button type="button" className="pgbtn" disabled={safePage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} aria-label="Previous page">‹</button>
-          {Array.from({ length: Math.min(pageCount, 9) }).map((_, i) => (
-            <button type="button" key={i} className={`pgbtn ${safePage === i + 1 ? 'on' : ''}`} onClick={() => setPage(i + 1)}>{i + 1}</button>
-          ))}
-          <button type="button" className="pgbtn" disabled={safePage >= pageCount} onClick={() => setPage((p) => Math.min(pageCount, p + 1))} aria-label="Next page">›</button>
-        </div>
-        {pagerCentered && <span className="grow" />}
-        <div className="rpp">Rows per page:
-          <Listbox width={84} options={PAGE_SIZES} value={String(perPage)} onChange={(v) => { if (server) server.onRowsPerPageChange(Number(v)); else setRowsPerPage(Number(v)); setPage(1) }} ariaLabel="Rows per page" />
-        </div>
-      </div>
-      </div>
-      {reportLabel && <div className="h10-am-latest"><b>Latest Report:</b> {reportLabel} · Performance data is not real-time. <span className="lk">Learn More</span></div>}
+        footer={(
+          <GridPager
+            page={safePage}
+            pageCount={pageCount}
+            pageSize={perPage}
+            onPage={setPage}
+            onPageSize={(n) => { if (server) server.onRowsPerPageChange(n); else setRowsPerPage(n); setPage(1) }}
+          />
+        )}
+      >
+        {grid}
+      </GridCard>
+      {reportLabel && <div className="h10-am-latest nds-ws-latest"><b>Latest Report:</b> {reportLabel} · Performance data is not real-time.</div>}
 
       {inlinePopover}
     </>

@@ -231,7 +231,6 @@ export function BindingSection({ scope, weeks, openRail, onRows }: Pick<BspSlotP
           },
         ]}
         customizable={false}
-        pagerCentered
         // The server already sorts by days-binding then max ratio; this keeps a header click honest.
         defaultSort={{ key: 'daysBinding', dir: 'desc' }}
         emptyLabel="No campaign spent anything in this window"

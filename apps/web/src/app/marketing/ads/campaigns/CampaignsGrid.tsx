@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Button, Checkbox, Pill, Toggle, ToolbarButton } from '@/design-system/primitives'
 import './campaigns-ds.css'
-import { Listbox, Modal, Pagination, SummaryTable } from '@/design-system/components'
+import { Listbox, Modal, SummaryTable } from '@/design-system/components'
 import Link from '@/lib/workspaces/Link'
 import { Settings2, Download, Wand2, Plus, ChevronDown, Library, Book, Search, Trash2, ListChecks, Pencil, Bot } from 'lucide-react'
 import { TargetAcosCell, MinMaxBidCell, MinMaxBudgetCell, BudgetUtilCell, UsageHoursCell, BidAutomationCell, BidRuleCell, BidAlgoMenu, placementGovernor, BID_ALGOS, type BudgetUsageState } from '../_shared/RuleColumnCells'
@@ -41,6 +41,7 @@ import { matchesBidAutomation, matchesRuleFilter, ruleReach, type AccountWideRul
 import { amazonEditHold } from './_grid/amazonEditHold'
 import { PreferencesModal, type PreferencesColumnSpec, type PreferencesValue } from '@/design-system/patterns'
 import { readColumnLayout, withVisibleColumnOrder, type ColumnLayoutPreferences } from '@/design-system/grid/preferencesLayout'
+import { GridCard, GridPager } from '@/design-system/grid'
 
 interface Camp {
   id: string; name: string; marketplace: string | null; status: string
@@ -2052,129 +2053,129 @@ export function CampaignsGrid() {
         )}
       </div>
 
-      {/* toolbar — H10 selection-aware actions (CBN.2h.6) */}
-      <div className="h10-am-toolbar">
-        <span className="cnt">{sel.size > 0 ? <b>{`Selected ${sel.size} Campaign${sel.size > 1 ? 's' : ''}`}</b> : `Viewing ${viewStart}-${viewEnd} of ${filtered.length} Campaigns`}</span>
-        <Button active={sel.size > 0} disabled={sel.size === 0} onClick={() => setShowBulk(true)}><ListChecks size={13} /> Bulk Actions</Button>
-        <Button active={mode === 'edit'} aria-pressed={mode === 'edit'} onClick={() => setMode(mode === 'edit' ? 'metrics' : 'edit')}><Pencil size={13} /> Edit Campaigns</Button>
-        <div className="h10-bulkwrap">
-     <Button disabled={sel.size === 0} onClick={() => setPortfolioMenu((v) => !v)}><Plus size={13} /> Portfolio</Button>
-          {portfolioMenu && sel.size > 0 && <>
-            <button type="button" className="h10-menu-back" aria-label="Close" onClick={() => setPortfolioMenu(false)} />
-            <div className="h10-menu" role="dialog" aria-label="Assign to portfolio" style={{ maxHeight: 320, overflowY: 'auto' }}>
-              <button type="button" onClick={() => void applyBulkPortfolio(null, 'No portfolio')}>No portfolio</button>
-              {pickMarket.mixed
-                ? <span className="sub" style={{ padding: '8px 11px' }}>These campaigns are in different markets. A portfolio holds one market&apos;s campaigns, so select campaigns from one market.</span>
-                : <>
-                  {assignable.map((p) => (
-                    <button type="button" key={p.portfolioId} onClick={() => void applyBulkPortfolio(p.portfolioId, p.name)}>{p.name}</button>
-                  ))}
-                  {assignable.length === 0 && <span className="sub" style={{ padding: '8px 11px' }}>{pickMarket.market ? `No portfolios on Amazon for ${pickMarket.market} yet — create one first.` : 'The market of these campaigns is not known, so no portfolio can be offered.'}</span>}
-                </>}
+      {/* One card, as on /products (`GridCard`, grid audit E1): the selection-aware toolbar (CBN.2h.6), the grid and the
+          DS pager share the grid rectangle. The card lets the toolbar's own menus (Portfolio, Adjust Budget) hang past
+          its edge over a short grid (`.nds-ws-card`). */}
+      <GridCard
+        className="nds-ws-card"
+        toolbar={(
+          <div className="nds-toolbar h10-am-toolbar">
+            <span className="cnt">{sel.size > 0 ? <b>{`Selected ${sel.size} Campaign${sel.size > 1 ? 's' : ''}`}</b> : `Viewing ${viewStart}-${viewEnd} of ${filtered.length} Campaigns`}</span>
+            <Button active={sel.size > 0} disabled={sel.size === 0} onClick={() => setShowBulk(true)}><ListChecks size={13} /> Bulk Actions</Button>
+            <Button active={mode === 'edit'} aria-pressed={mode === 'edit'} onClick={() => setMode(mode === 'edit' ? 'metrics' : 'edit')}><Pencil size={13} /> Edit Campaigns</Button>
+            <div className="h10-bulkwrap">
+         <Button disabled={sel.size === 0} onClick={() => setPortfolioMenu((v) => !v)}><Plus size={13} /> Portfolio</Button>
+              {portfolioMenu && sel.size > 0 && <>
+                <button type="button" className="h10-menu-back" aria-label="Close" onClick={() => setPortfolioMenu(false)} />
+                <div className="h10-menu" role="dialog" aria-label="Assign to portfolio" style={{ maxHeight: 320, overflowY: 'auto' }}>
+                  <button type="button" onClick={() => void applyBulkPortfolio(null, 'No portfolio')}>No portfolio</button>
+                  {pickMarket.mixed
+                    ? <span className="sub" style={{ padding: '8px 11px' }}>These campaigns are in different markets. A portfolio holds one market&apos;s campaigns, so select campaigns from one market.</span>
+                    : <>
+                      {assignable.map((p) => (
+                        <button type="button" key={p.portfolioId} onClick={() => void applyBulkPortfolio(p.portfolioId, p.name)}>{p.name}</button>
+                      ))}
+                      {assignable.length === 0 && <span className="sub" style={{ padding: '8px 11px' }}>{pickMarket.market ? `No portfolios on Amazon for ${pickMarket.market} yet — create one first.` : 'The market of these campaigns is not known, so no portfolio can be offered.'}</span>}
+                    </>}
+                </div>
+              </>}
             </div>
-          </>}
-        </div>
-        {sel.size > 0 && <>
-          <div className="h10-bulkwrap">
-      <Button onClick={() => setAdjustOpen((v) => !v)}>Adjust Budget</Button>
-            {adjustOpen && <>
-              <button type="button" className="h10-menu-back" aria-label="Close" onClick={() => setAdjustOpen(false)} />
-              <div className="h10-menu adjbud" role="dialog" aria-label="Adjust Budget">
-                <div className="abh">Adjust Budget</div>
-                {BUDGET_MODES.map((m) => (
-                  <label className="abr" key={m.value}><input type="radio" name="adjmode" checked={adjMode === m.value} onChange={() => setAdjMode(m.value)} /> {m.label}</label>
-                ))}
-                {(() => {
-                  // PR 1c (CM-7) — the same reader as the Bulk Actions modal: an empty, non-number or
-                  // below-€1.00 box keeps Apply off and says why; a cut that lands below €1.00 says
-                  // how many campaigns stop at Amazon's minimum before anything is written.
-                  const r = readBudgetChange(adjMode, adjVal)
-                  const sum = r.ok ? summariseBudgetChange(selectedBudgets, adjMode, r.value) : null
-                  const floorNote = sum ? atMinimumNote(sum.atMinimum) : null
-                  return <>
-                    <div className="abrow">
-                      <span className="h10-bulk-inp"><span className="pf">{adjMode === 'set' ? '€' : '%'}</span><input type="number" min="0" step="any" value={adjVal} onChange={(e) => setAdjVal(e.target.value)} aria-label="Budget value" aria-invalid={!r.ok && adjVal.trim() !== ''} /></span>
-                      <Button variant="primary" size="sm" disabled={!r.ok} onClick={applyAdjustBudget}>Apply</Button>
-                    </div>
-                    {!r.ok && (adjVal.trim() === '' ? <p className="n">{r.message}</p> : <p className="e" role="alert">{r.message}</p>)}
-                    {floorNote && <p className="n">{floorNote}</p>}
-                  </>
-                })()}
+            {sel.size > 0 && <>
+              <div className="h10-bulkwrap">
+          <Button onClick={() => setAdjustOpen((v) => !v)}>Adjust Budget</Button>
+                {adjustOpen && <>
+                  <button type="button" className="h10-menu-back" aria-label="Close" onClick={() => setAdjustOpen(false)} />
+                  <div className="h10-menu adjbud" role="dialog" aria-label="Adjust Budget">
+                    <div className="abh">Adjust Budget</div>
+                    {BUDGET_MODES.map((m) => (
+                      <label className="abr" key={m.value}><input type="radio" name="adjmode" checked={adjMode === m.value} onChange={() => setAdjMode(m.value)} /> {m.label}</label>
+                    ))}
+                    {(() => {
+                      // PR 1c (CM-7) — the same reader as the Bulk Actions modal: an empty, non-number or
+                      // below-€1.00 box keeps Apply off and says why; a cut that lands below €1.00 says
+                      // how many campaigns stop at Amazon's minimum before anything is written.
+                      const r = readBudgetChange(adjMode, adjVal)
+                      const sum = r.ok ? summariseBudgetChange(selectedBudgets, adjMode, r.value) : null
+                      const floorNote = sum ? atMinimumNote(sum.atMinimum) : null
+                      return <>
+                        <div className="abrow">
+                          <span className="h10-bulk-inp"><span className="pf">{adjMode === 'set' ? '€' : '%'}</span><input type="number" min="0" step="any" value={adjVal} onChange={(e) => setAdjVal(e.target.value)} aria-label="Budget value" aria-invalid={!r.ok && adjVal.trim() !== ''} /></span>
+                          <Button variant="primary" size="sm" disabled={!r.ok} onClick={applyAdjustBudget}>Apply</Button>
+                        </div>
+                        {!r.ok && (adjVal.trim() === '' ? <p className="n">{r.message}</p> : <p className="e" role="alert">{r.message}</p>)}
+                        {floorNote && <p className="n">{floorNote}</p>}
+                      </>
+                    })()}
+                  </div>
+                </>}
               </div>
+         <Button onClick={() => setBulkConfirm('ENABLED')}>Enable</Button>
+         <Button onClick={() => setBulkConfirm('ARCHIVED')}>Archive</Button>
+         <Button onClick={() => setBulkConfirm('PAUSED')}>Pause</Button>
             </>}
+            <span className="grow" />
+            <div className="h10-custwrap">
+              <Button active={showCustomize} onClick={() => setShowCustomize((v) => !v)} aria-haspopup="dialog" aria-expanded={showCustomize}><Settings2 size={13} /> Customise</Button>
+              <PreferencesModal
+                attributeGroups
+                groupToggles
+                inViewCount
+                open={showCustomize}
+                onClose={() => setShowCustomize(false)}
+                title="Customise columns"
+                allColumns={CUSTOMIZE_COLUMNS}
+                defaultVisible={CUSTOMIZE_DEFAULT}
+                value={{
+                  ...colLayout,
+                  lockedColumns: colLayout.lockedColumns ?? [],
+                  visibleColumns: ['__first', ...colOrder.filter((k) => colVisible.includes(k))],
+                  stickyFirstColumn: true, stickyLastColumn: true, pageSize: 100, sortBy: 'name', sortDir: 'asc',
+                }}
+                onConfirm={onCustomizeConfirm}
+                /* the grid already has a footer page-size picker and sortable headers; a second control
+                   for one setting is the same inconsistency in another costume. And this grid has no
+                   right-frozen column, so a "sticky last" toggle would be a control that does nothing. */
+                pageSizeChoices={[]}
+                sortFieldOptions={[]}
+                showSticky={false}
+              />
+            </div>
+            {/* Was a dead control — an H10 pixel-match placeholder with no onClick,
+                which is its own small lie: a button that looks like it works. Now it
+                opens the export scope modal, so "Export Data" from the grid means
+                exactly what it says and carries the current view with it. */}
+        <Button onClick={() => setExportOpen(true)} aria-haspopup="dialog"><Download size={13} /> Export Data</Button>
+            <Link href="/marketing/ads/rules-automation/builder" className="nds-btn"><Wand2 size={13} /> Create Rule</Link>
+            <Link href="/marketing/ads/campaign-builder" className="nds-btn primary"><Plus size={13} /> Campaign</Link>
           </div>
-     <Button onClick={() => setBulkConfirm('ENABLED')}>Enable</Button>
-     <Button onClick={() => setBulkConfirm('ARCHIVED')}>Archive</Button>
-     <Button onClick={() => setBulkConfirm('PAUSED')}>Pause</Button>
-        </>}
-        <span className="grow" />
-        <div className="h10-custwrap">
-          <Button active={showCustomize} onClick={() => setShowCustomize((v) => !v)} aria-haspopup="dialog" aria-expanded={showCustomize}><Settings2 size={13} /> Customise</Button>
-          <PreferencesModal
-            attributeGroups
-            groupToggles
-            inViewCount
-            open={showCustomize}
-            onClose={() => setShowCustomize(false)}
-            title="Customise columns"
-            allColumns={CUSTOMIZE_COLUMNS}
-            defaultVisible={CUSTOMIZE_DEFAULT}
-            value={{
-              ...colLayout,
-              lockedColumns: colLayout.lockedColumns ?? [],
-              visibleColumns: ['__first', ...colOrder.filter((k) => colVisible.includes(k))],
-              stickyFirstColumn: true, stickyLastColumn: true, pageSize: 100, sortBy: 'name', sortDir: 'asc',
-            }}
-            onConfirm={onCustomizeConfirm}
-            /* the grid already has a footer page-size picker and sortable headers; a second control
-               for one setting is the same inconsistency in another costume. And this grid has no
-               right-frozen column, so a "sticky last" toggle would be a control that does nothing. */
-            pageSizeChoices={[]}
-            sortFieldOptions={[]}
-            showSticky={false}
-          />
-        </div>
-        {/* Was a dead control — an H10 pixel-match placeholder with no onClick,
-            which is its own small lie: a button that looks like it works. Now it
-            opens the export scope modal, so "Export Data" from the grid means
-            exactly what it says and carries the current view with it. */}
-    <Button onClick={() => setExportOpen(true)} aria-haspopup="dialog"><Download size={13} /> Export Data</Button>
-        <Link href="/marketing/ads/rules-automation/builder" className="nds-btn"><Wand2 size={13} /> Create Rule</Link>
-        <Link href="/marketing/ads/campaign-builder" className="nds-btn primary"><Plus size={13} /> Campaign</Link>
-      </div>
-
-      {/* grid — the shared WorkspaceGrid contract, chromeless: this page keeps the toolbar above and
-          the pager below, and hands the grid the rows it already filtered, sorted and paged. */}
-      <AdsDataGrid
-        chromeless
-        rows={paged}
-        rowId={campaignId}
-        noun="Campaign"
-        firstColLabel="Campaign"
-        renderFirst={renderCampaignFirst}
-        firstSortValue={campaignName}
-        columns={columns}
-        selectable
-        selected={sel}
-        onSelectedChange={setSel}
-        selectAllIds={filteredIds}
-        prefs={gridPrefs}
-        onPrefsChange={onGridPrefsChange}
-        defaultSort={gridSort}
-        onSortChange={onGridSortChange}
-        loading={loading}
-        emptyLabel="No campaigns."
-        rowHeight={50}
-      />
-
-      {/* pagination + latest report (H10 footer) */}
-      <div className="h10-am-pager">
-        <span className="grow" />
-        <div className="pg"><Pagination page={safePage} pageCount={pageCount} onPage={setPage} /></div>
-        <div className="rpp">Rows per page:
-          <Listbox width={84} options={[{ value: '50', label: '50' }, { value: '100', label: '100' }, { value: '200', label: '200' }, { value: '500', label: '500' }]} value={String(rowsPerPage)} onChange={(v) => { setRowsPerPage(Number(v)); setPage(1) }} ariaLabel="Rows per page" />
-        </div>
-      </div>
+        )}
+        footer={<GridPager page={safePage} pageCount={pageCount} pageSize={rowsPerPage} onPage={setPage} onPageSize={(n) => { setRowsPerPage(n); setPage(1) }} />}
+      >
+        {/* grid — the shared WorkspaceGrid contract, chromeless: this page keeps the toolbar above and
+            the pager below, and hands the grid the rows it already filtered, sorted and paged. */}
+        <AdsDataGrid
+          chromeless
+          rows={paged}
+          rowId={campaignId}
+          noun="Campaign"
+          firstColLabel="Campaign"
+          renderFirst={renderCampaignFirst}
+          firstSortValue={campaignName}
+          columns={columns}
+          selectable
+          selected={sel}
+          onSelectedChange={setSel}
+          selectAllIds={filteredIds}
+          prefs={gridPrefs}
+          onPrefsChange={onGridPrefsChange}
+          defaultSort={gridSort}
+          onSortChange={onGridSortChange}
+          loading={loading}
+          emptyLabel="No campaigns."
+          rowHeight={50}
+        />
+      </GridCard>
+      {/* the latest report (H10 footer) */}
       <div className="h10-am-latest"><b>Performance data:</b> {latestReport} · Performance data is not real-time{vintage.ruleSafe ? '' : ' — Amazon restates for up to 60 days'}.{' '}{/* AM-26 — was a "Learn More" styled as a link that went nowhere; the explanation it promised is here. */}<InfoTip tip={PERFORMANCE_DATA_TIP} /></div>
 
       {/* CBN.2c.2 — edit-mode Discard/Apply footer */}

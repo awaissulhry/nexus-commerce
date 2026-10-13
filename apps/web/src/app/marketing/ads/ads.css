@@ -20,24 +20,15 @@
 .h10-am-search input { border: none; outline: none; font: inherit; font-size: 13px; width: 100%; background: transparent; color: var(--nds-grey-900); }
 .h10-am-presethint { font-size: 11px; color: var(--nds-grey-400); }
 /* Wraps on a narrow screen: one line it could not hold pushed Customise past the card's edge and panned the page (390 px). */
+/* Every `.h10-am-toolbar` is also the DS `.nds-toolbar` (its count, its spacer); this adds the wrap. */
 .h10-am-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.h10-am-toolbar .cnt { font-size: 12.5px; color: var(--nds-grey-600); }
-.h10-am-toolbar .cnt b { color: var(--nds-grey-900); }
-.h10-am-toolbar .grow { flex: 1; }
 
-/* CBN.3 — unify toolbar + grid + pager into ONE card (H10: the toolbar lives inside the grid
-   rectangle, just above the header). Scoped to .h10-am-card so the standalone .nds-wsgrid /
-   .h10-am-toolbar used by CampaignsGrid stay exactly as they are. */
-/* Cards are the DS `.nds-card` now. What the DS Card deliberately does NOT carry is a top
-   margin — its consumers space with gap. Four AutomationTab cards stack directly, so the
-   spacing is kept as an explicit class at the call site rather than a scoped rule that
-   would silently re-style every future DS Card in this console. */
+/* A grid's toolbar, rows and pager share ONE card — the DS grid card (`GridCard`, as on /products; grid audit E1).
+   What a card deliberately does NOT carry is a top margin — its consumers space with gap. Cards that stack directly
+   (four AutomationTab cards, the grid card under a filter bar) keep the spacing as an explicit class at the call site
+   rather than a scoped rule that would silently re-style every future card in this console. */
 .h10-cardstack { margin-top: 16px; }
-.nds-card .h10-am-toolbar { padding: 14px 16px; }
-.nds-card .nds-wsgrid,
 .nds-card .eb-tablebox { border: none; border-radius: 0; background: transparent; }
-.nds-card .h10-am-pager { padding: 12px 16px 14px; }
-.nds-card + .h10-am-latest { margin-top: 12px; }
 
 .h10-toggle { display: inline-block; width: 30px; height: 17px; border-radius: var(--nds-radius-full); background: #cbd2db; position: relative; vertical-align: middle; }
 .h10-toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: var(--nds-radius-full); background: var(--nds-white); }
@@ -312,7 +303,6 @@
 
 .h10-am-latest { font-size: 12.5px; color: var(--nds-grey-600); padding: 2px 2px 4px; }
 .h10-am-latest b { color: var(--nds-grey-900); font-weight: 700; }
-.h10-am-latest .lk { color: var(--nds-blue-600); font-weight: 600; cursor: pointer; }
 
 .h10-bidrule { display: inline-flex; align-items: center; gap: 5px; color: var(--nds-grey-800); font-weight: 600; }
 .h10-rules { display: inline-flex; align-items: center; gap: 5px; color: var(--nds-grey-500); }
@@ -492,7 +482,6 @@
 .h10-bud.bad { border-color: var(--nds-danger); background: var(--nds-danger-soft); }
 .h10-am-editbar .lbl.bad { color: var(--nds-danger-text); }
 
-.h10-am-toolbar .cnt { white-space: nowrap; }
 
 /* grid Bid Automation toggle — ON state (reads Campaign.dynamicBidding.bidAutomation) */
 .h10-toggle.on { background: var(--nds-blue-600); }

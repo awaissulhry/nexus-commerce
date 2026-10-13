@@ -1305,7 +1305,6 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
         searchable
         searchPlaceholder="Search rules…"
         searchValue={(r) => r.name}
-        pagerCentered
         defaultSort={{ key: '__first', dir: 'asc' }}
         emptyNode={emptyNode}
         /**
