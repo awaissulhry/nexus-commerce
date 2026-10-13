@@ -22,6 +22,7 @@ import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { WarnGlyph } from '@/design-system/grid'
 import { ruleBelongsToTab } from './tabs'
 import { NoDataIllus } from './NoDataIllus'
+import { money } from '../../campaigns/_grid/format'
 
 interface RuleRow {
   id: string
@@ -88,7 +89,7 @@ const RULE_COLUMNS: Array<Column<RuleRow>> = [
       <span title="The two caps: writes per day (demotes to propose beyond it) and € per action (the gate refuses above it). Unset = that cap does not bind.">
         {r.maxWritesPerDay != null ? `${num(r.maxWritesPerDay)}/day` : '—'}
         {' · '}
-        {r.maxValueCentsEur != null ? (r.maxValueCentsEur === 0 ? <>€0 <WarnGlyph /></> : `€${(r.maxValueCentsEur / 100).toFixed(0)}`) : '—'}
+        {r.maxValueCentsEur != null ? (r.maxValueCentsEur === 0 ? <>{money(0)} <WarnGlyph /></> : money(r.maxValueCentsEur)) : '—'}
       </span>
     ),
   },

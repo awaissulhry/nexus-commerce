@@ -49,7 +49,7 @@ import { Tabs, type TabItem } from '@/design-system/components/Tabs'
 import { ToastProvider, useToast } from '@/design-system/components/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import { dash, eur, AcosCell, RoasCell, ACOS_DOT_TIP, ROAS_DOT_TIP } from './cells'
-import { pct } from '../campaigns/_grid/format' // AM-30 — targetAcosPct is percent points; one ACoS rendering
+import { eur as eurMoney, pct } from '../campaigns/_grid/format' // AM-30 — targetAcosPct is percent points; one ACoS rendering
 /**
  * SGX (2026-08-24) — this file held seven tabs in 2,447 lines. The payload shapes, the
  * presentational cells, the two drawers and the A.I. change readers are now their own modules,
@@ -801,7 +801,7 @@ function SuggestionsInner() {
   /** the delta half of H10's "Suggested Change" — new value beside a colored arrow + delta */
   const suggestedChange = (cur: number | null, next: number | null, unit: 'cents' | 'eur') => {
     if (next == null) return dash('Needs a current value to project from')
-    const fmt = (v: number) => (unit === 'cents' ? eur(v) : `€${v.toFixed(2)}`)
+    const fmt = (v: number) => (unit === 'cents' ? eur(v) : eurMoney(v))
     if (cur == null) return <b className="h10-sug-sugval">{fmt(next)}</b>
     const d = next - cur
     if (Math.abs(d) < (unit === 'cents' ? 1 : 0.005)) return <b className="h10-sug-sugval">{fmt(next)}</b>
@@ -968,7 +968,7 @@ function SuggestionsInner() {
       sortValue: (s) => s.current?.dailyBudgetEur ?? null,
       render: (s) => {
         if (s.current?.dailyBudgetEur == null) return dash('The campaign no longer resolves locally')
-        if (!isPending) return <span className="h10-sug-num">€{s.current.dailyBudgetEur.toFixed(2)}</span>
+        if (!isPending) return <span className="h10-sug-num">{eurMoney(s.current.dailyBudgetEur)}</span>
         const st = staged.get(s.id)
         return (
           <BufferInput

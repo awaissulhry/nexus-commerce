@@ -15,6 +15,7 @@ import { sharingApi } from './sharingApi'
 import type { Grant, ListingPreview, PoolProduct, SwitchPreview } from './stockPoolApi'
 import { COST_PRICE_MISSING, listingNameParts, previewRuleWords } from './stockWords'
 import { count } from './words'
+import { num } from '@/design-system/lib/format'
 
 type Target = 'pool' | 'own'
 
@@ -51,8 +52,8 @@ export function PoolProductsSection({ grant, canAct, onChanged }: { grant: Grant
   const columns: Array<Column<PoolProduct>> = [
     { key: 'product', label: 'Product', render: (p) => <span><strong>{p.sku}</strong>{p.name && p.name !== p.sku ? <span className="shared-products-note"> · {p.name}</span> : null}</span> },
     { key: 'uses', label: 'Stock used', render: (p) => p.source === 'pool' ? <Pill tone="info">Shared stock</Pill> : <Pill tone="neutral">Own stock</Pill> },
-    { key: 'own', label: 'Own available', numeric: true, render: (p) => p.ownAvailable.toLocaleString() },
-    { key: 'pool', label: 'Shared available', numeric: true, render: (p) => p.poolAvailable === null ? 'Not on' : p.poolAvailable.toLocaleString() },
+    { key: 'own', label: 'Own available', numeric: true, render: (p) => num(p.ownAvailable) },
+    { key: 'pool', label: 'Shared available', numeric: true, render: (p) => p.poolAvailable === null ? 'Not on' : num(p.poolAvailable) },
     { key: 'cost', label: 'Cost price', render: (p) => p.costPriceMissing ? <Pill tone="warning">Missing</Pill> : 'Set' },
   ]
 
@@ -108,7 +109,7 @@ function SwitchPreviewModal({ grant, to, productIds, onClose, onSwitched }: {
       const { head, name } = listingNameParts(row)
       return <>{head}{name !== null && <> · {row.listingMark != null && !row.itemId && <><AliasMark position={row.listingMark} /> </>}{name}</>}</>
     } },
-    { key: 'now', label: 'Shows now', numeric: true, render: (row) => row.showsNow === null ? '—' : row.showsNow.toLocaleString() },
+    { key: 'now', label: 'Shows now', numeric: true, render: (row) => num(row.showsNow) },
     { key: 'after', label: 'After the switch', render: (row) => previewRuleWords(row) },
   ]
   return <Modal open onClose={() => { if (!busy) onClose() }} size="lg" title={title}

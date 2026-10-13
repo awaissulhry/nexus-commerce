@@ -32,6 +32,7 @@ import type { Plan, PlanCampaign, CopyScope, PlanEdits } from './replicate-types
 import { COPY_ITEMS, BIDDING_STRATEGIES } from './replicate-types'
 import { describeChanges } from './edit-model'
 import { InfoTip } from '../../campaigns/InfoTip'
+import { eur } from '../../campaigns/_grid/format'
 
 /** AX3.8 — where a detached run has got to. */
 export interface RunProgress {
@@ -248,8 +249,8 @@ export function LaunchStep({
             },
             {
               key: 'budget', label: 'Daily budget', align: 'right', width: 120,
-              total: <b>€{t.dailyBudgetTotal.toFixed(2)}</b>,
-              render: (c) => `€${Number(c.dailyBudget ?? 0).toFixed(2)}`,
+              total: <b>{eur(t.dailyBudgetTotal)}</b>,
+              render: (c) => eur(c.dailyBudget ?? 0),
             },
             {
               key: 'act', label: '', align: 'right', width: 46,

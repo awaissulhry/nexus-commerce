@@ -49,6 +49,7 @@ import { useCursorBaseline, useCursorPoll } from '../_shared/useCursorPoll'
 import { StaleBanner } from '../_shared/StaleBanner'
 import { AdsFilterBar } from '../../campaigns/_grid/AdsFilterBar'
 import { useMergedFilters } from '../_shared/useMergedFilters'
+import { money } from '../../campaigns/_grid/format'
 
 interface Rule extends DetailRule {
   category: string
@@ -532,7 +533,7 @@ export function AutomationsClient() {
           <span className="h10-au-caps">
             {c.perDay != null && <em title="Row cap: matches dispatched per day. Reaching it refuses further matches (no row is written).">{num(c.perDay)}/day</em>}
             {c.writesPerDay != null && <em title="Write cap: writes per day, counted by actor. Reaching it demotes the rule to dry-run — it keeps proposing, stops writing.">{num(c.writesPerDay)} wr/day</em>}
-            {c.perDayCents != null && <em title="Spend ceiling per day.">€{(c.perDayCents / 100).toFixed(0)}</em>}
+            {c.perDayCents != null && <em title="Spend ceiling per day.">{money(c.perDayCents)}</em>}
             {c.perDay == null && c.writesPerDay == null && c.perDayCents == null && (
               <i className="h10-au-nocap" title="No cap of any kind is set on this rule.">uncapped</i>
             )}

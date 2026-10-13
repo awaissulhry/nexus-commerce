@@ -60,7 +60,7 @@ import { useMergedFilters } from '../_shared/useMergedFilters'
 import { WatchlistPanel } from './WatchlistPanel'
 import { TermDrawer } from './TermDrawer'
 import { buildCsv } from './csv'
-import { sharePct } from '../../campaigns/_grid/format'
+import { money, sharePct } from '../../campaigns/_grid/format'
 import { emitAdsChange, useAdsSync } from '../_shared/adsBus'
 
 /** The four production Amazon Ads markets. IE/NL/PL/SE/UK are sandbox and hold no listings. */
@@ -193,7 +193,6 @@ interface Payload {
 const num = (n: number) => n.toLocaleString('en-IE')
 /* A share is 0..1 from SQP, shown with two decimals of a percent (0.7% and 0.04% are both real here) through the
    console's one share formatter, `sharePct`: a tiny non-zero share reads "<0.01%", no reading reads "—". */
-const eur = (cents: number) => `€${(cents / 100).toLocaleString('en-IE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const dayMonth = (iso: string) => {
   const d = new Date(`${iso}T00:00:00Z`)
   return `${d.getUTCDate()} ${d.toLocaleString('en-GB', { month: 'short', timeZone: 'UTC' })}`
@@ -438,9 +437,9 @@ export function KeywordTrackerClient() {
         return (
           <span
             className="h10-kt-spend"
-            title={`${eur(r.spendCents)} on this term in the week of ${r.asOf ? dayMonth(r.asOf) : '—'}${r.clicks ? ` · ${num(r.clicks)} click${r.clicks === 1 ? '' : 's'}` : ''}${r.orders ? ` · ${num(r.orders)} order${r.orders === 1 ? '' : 's'}` : ' · no orders'}. Spend is per TERM; the share beside it is one ASIN's.`}
+            title={`${money(r.spendCents)} on this term in the week of ${r.asOf ? dayMonth(r.asOf) : '—'}${r.clicks ? ` · ${num(r.clicks)} click${r.clicks === 1 ? '' : 's'}` : ''}${r.orders ? ` · ${num(r.orders)} order${r.orders === 1 ? '' : 's'}` : ' · no orders'}. Spend is per TERM; the share beside it is one ASIN's.`}
           >
-            {eur(r.spendCents)}
+            {money(r.spendCents)}
           </span>
         )
       },

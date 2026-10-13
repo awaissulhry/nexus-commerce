@@ -74,6 +74,7 @@ import { CreateWorker } from './CreateWorker'
 // has been broken twice by features touching the row set; views.vitest.test.ts
 // makes a third time a failing test rather than a screenshot someone squints at.
 import { countIn, matchesView, type View } from './views'
+import { num } from '@/design-system/lib/format'
 
 /** Design contract rule 3: jargon without a glossary entry fails review. These
  *  maps are the narrowing — a tier or dial we have no definition for renders as
@@ -887,7 +888,7 @@ export function WorkersClient() {
       align: 'right',
       sortable: true,
       sortValue: (r) => r.charter.maxTokensPerRun ?? 0,
-      render: (r) => (r.charter.maxTokensPerRun ?? 0).toLocaleString(),
+      render: (r) => num(r.charter.maxTokensPerRun ?? 0),
     },
   ], [busyKeys, canAct, requestLevel])
 

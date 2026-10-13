@@ -17,7 +17,7 @@ import { compareSortValues } from '@/design-system/grid/sortValues'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { pct, sharePct, acosRank, acosFilterValue, acosSortNumber, NO_SALES_ACOS, NO_ACOS_SORT } from './format'
+import { pct, sharePct, acosRank, acosFilterValue, acosSortNumber, int, money, NO_SALES_ACOS, NO_ACOS_SORT } from './format'
 import { TargetAcosCell } from '../../_shared/RuleColumnCells'
 
 describe('pct — a fraction in, a percent out, no guessing (AM-4)', () => {
@@ -182,5 +182,33 @@ describe('no ads screen sorts or filters a missing ACoS as -1 / 0 / -Infinity', 
   it('CATCHES the old Conflicts accessor', () => {
     const line = "{ key: 'acos', label: 'ACOS', sortable: true, sortValue: (x) => x.acos ?? -1 }"
     expect(ACCESSOR.test(line) && SENTINEL.test(line)).toBe(true)
+  })
+})
+
+describe('counts and money read the same in every browser (grid audit E11, the Owner 1A/2A)', () => {
+  /** An Italian browser: every number formatted WITHOUT a locale groups with "." — what `int` did before. */
+  const asItalianBrowser = (run: () => void) => {
+    const original = Number.prototype.toLocaleString
+    Number.prototype.toLocaleString = function (this: number, locales?: Intl.LocalesArgument, options?: Intl.NumberFormatOptions) {
+      return original.call(this, locales ?? 'it-IT', options)
+    }
+    try { run() } finally { Number.prototype.toLocaleString = original }
+  }
+  it('`int` prints "12,345" and "1,284", not the browser\'s "12.345" and "1284"', () => {
+    asItalianBrowser(() => {
+      expect((12345).toLocaleString()).toBe('12.345') // the stub is in force
+      expect((1284).toLocaleString()).toBe('1284')
+      expect(int(12345)).toBe('12,345')
+      expect(int(1284)).toBe('1,284')
+      expect(int('1234567')).toBe('1,234,567')
+      expect(int(0)).toBe('0')
+    })
+  })
+  it('`money` keeps the cents, Ad Manager style, whatever the browser', () => {
+    asItalianBrowser(() => {
+      expect(money(123456)).toBe('€1,234.56')
+      expect(money(50)).toBe('€0.50')
+      expect(money(null)).toBe('—')
+    })
   })
 })

@@ -57,6 +57,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { useAuth } from '@/lib/auth/AuthProvider'
 import { Button, Checkbox, Input } from '@/design-system/primitives'
 import { WriteBlockedTip, useWriteBlock } from '../../_shell/WriteBlocked'
+import { money } from '../../campaigns/_grid/format'
 
 interface PreviewResponse {
   term: string
@@ -92,7 +93,6 @@ interface PreviewResponse {
   sampleTargetsTruncated: boolean
 }
 
-const eur = (c: number | null | undefined) => (c == null ? '—' : `€${(c / 100).toFixed(2)}`)
 
 /** The reason labels, in the order the sentence names them. Each is a different problem. */
 const REASON_LABEL: Record<string, string> = {
@@ -281,7 +281,7 @@ export function BidAction({
               <span className="h10-kt6-sep">·</span>
               <span className="h10-kt6-big">{p.changing.campaigns}</span>
               <span className="h10-kt6-of">of {p.matched.campaigns} campaigns</span>
-              <span className="h10-kt6-commit">commits up to {eur(p.commitmentCents)}</span>
+              <span className="h10-kt6-commit">commits up to {money(p.commitmentCents)}</span>
             </div>
             {/* verbatim from the server — see the header note on why this is not re-phrased here */}
             <p className="h10-kt6-say">{p.confirmationText}</p>
@@ -300,7 +300,7 @@ export function BidAction({
           {p.highestUniformAllowedCents != null && p.excludedByReason.over_campaign_ceiling > 0 && (
             <p className="h10-kt6-hint">
               <Button variant="link" inline onClick={() => setBidEuros((p.highestUniformAllowedCents! / 100).toFixed(2))}>
-                Use {eur(p.highestUniformAllowedCents)} instead
+                Use {money(p.highestUniformAllowedCents)} instead
               </Button>{' '}
               — the highest bid every campaign here would accept.
             </p>
@@ -316,8 +316,8 @@ export function BidAction({
               <Info size={13} />
               <span>
                 {p.committed.pendingCount === 1
-                  ? `1 other proposal for ${market} is already waiting, committing up to ${eur(p.committed.pendingCents)} if it is approved.`
-                  : `${p.committed.pendingCount} other proposals for ${market} are already waiting, committing up to ${eur(p.committed.pendingCents)} between them if they are all approved.`}
+                  ? `1 other proposal for ${market} is already waiting, committing up to ${money(p.committed.pendingCents)} if it is approved.`
+                  : `${p.committed.pendingCount} other proposals for ${market} are already waiting, committing up to ${money(p.committed.pendingCents)} between them if they are all approved.`}
                 {' '}Pending proposals are not counted against the ceiling, because a proposal spends nothing until it is applied.
               </span>
             </p>
@@ -336,9 +336,9 @@ export function BidAction({
                 columns={[
                   { key: 'campaign', label: 'Campaign', render: (t) => <span title={t.campaignName}>{t.campaignName}</span> },
                   { key: 'match', label: 'Match', render: (t) => <>{t.matchType.toLowerCase()}</> },
-                  { key: 'now', label: 'Now', numeric: true, render: (t) => <>{eur(t.fromCents)}</> },
-                  { key: 'proposed', label: 'Proposed', numeric: true, render: (t) => <b>{eur(t.toCents)}</b> },
-                  { key: 'cap', label: 'Cap', numeric: true, render: (t) => <>{eur(t.maxBidCents)}</> },
+                  { key: 'now', label: 'Now', numeric: true, render: (t) => <>{money(t.fromCents)}</> },
+                  { key: 'proposed', label: 'Proposed', numeric: true, render: (t) => <b>{money(t.toCents)}</b> },
+                  { key: 'cap', label: 'Cap', numeric: true, render: (t) => <>{money(t.maxBidCents)}</> },
                 ]}
               />
               {p.sampleTargetsTruncated && (
@@ -421,8 +421,8 @@ export function BidAction({
               <p>
                 <b>Raise this proposal?</b> It will change nothing on Amazon. {p.changing.targets} target
                 {p.changing.targets === 1 ? '' : 's'} in {p.changing.campaigns} campaign
-                {p.changing.campaigns === 1 ? '' : 's'} would be set to {eur(p.requestedBidCents)},
-                committing up to {eur(p.commitmentCents)}, and the proposal waits for approval before
+                {p.changing.campaigns === 1 ? '' : 's'} would be set to {money(p.requestedBidCents)},
+                committing up to {money(p.commitmentCents)}, and the proposal waits for approval before
                 anything is written.
               </p>
               <div className="h10-kt6-cbtns">

@@ -42,6 +42,7 @@ import {
   CampaignSettings, AdGroupSettings, ChangesDrawer,
   RenameModal, BulkValueModal, AddTargetsModal, MatchTypeModal,
 } from './ReviewPanels'
+import { eur } from '../../campaigns/_grid/format'
 
 type Scope = { kind: 'all' } | { kind: 'campaign'; id: string } | { kind: 'adGroup'; id: string }
 type Filter = 'all' | 'conflicts' | 'keywords' | 'negatives' | 'products' | 'auto' | 'edited' | 'dropped'
@@ -547,7 +548,7 @@ function CampaignsTable({ campaigns, onOpen, onRemove, onBudget, onBulkBudget, o
           },
           {
             key: 'budget', label: 'Daily budget', align: 'right', width: 120,
-            total: <b>€{total.toFixed(2)}/day</b>,
+            total: <b>{eur(total)}/day</b>,
             render: (c) => (
               <Input
                 size="xs" prefix="€" fieldClassName="rep-inlfield"

@@ -38,6 +38,7 @@ import { BudgetPoolsDrawer } from './BudgetPoolsDrawer'
 import { NO_MONTHLY_CAP, readMonthlyBudgetCents } from '../_shared/budgetInput'
 import { budgetMonthOf } from './budgetMonth'
 import { initialLimitEdits } from './limitEdits'
+import { money } from '../campaigns/_grid/format'
 
 // ── types (mirror ads-budget-manager.service BudgetManagerResult) ──────────
 interface SpendSlice { month: string; budgetCents: number; spendCents: number | null; pct: number | null; daily: number[] }
@@ -69,7 +70,6 @@ const ENGINE_UNKNOWN = 'The budget engine’s mode could not be read, so this pa
 const mktName = (m: string) => MARKET_NAME[m] ?? m
 
 const API = () => getBackendUrl()
-const eur = (c: number | null | undefined) => (c == null ? '—' : `€${(c / 100).toLocaleString('en-IE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
 const pctTxt = (p: number | null | undefined) => (p == null ? '—' : `${(p * 100).toFixed(p >= 1 ? 0 : 1)}%`)
 const STATUS_COLOR: Record<Row['status'], string> = { 'on-track': '#1f9d5b', over: '#d9534f', under: '#1f6fde', 'no-budget': '#9aa3b0' }
 const STATUS_LABEL: Record<Row['status'], string> = { 'on-track': 'On track', over: 'Over pace', under: 'Under pace', 'no-budget': 'No budget' }
@@ -151,7 +151,7 @@ function SettingsModal({ row, month, onClose, onSaved, toast }: { row: Row; mont
       <div className="bm-set">
         <Field
           label="Monthly budget"
-          hint={budgetCents > 0 ? `≈ ${eur(Math.round(perDay))}/day even across ${dim} days. ${NO_MONTHLY_CAP}` : `${NO_MONTHLY_CAP} Set one to pace this market or stop over spend.`}
+          hint={budgetCents > 0 ? `≈ ${money(Math.round(perDay))}/day even across ${dim} days. ${NO_MONTHLY_CAP}` : `${NO_MONTHLY_CAP} Set one to pace this market or stop over spend.`}
           error={budgetRead.ok ? undefined : budgetRead.message}
         >
           <Input fieldClassName="bm-eurin" prefix="€" inputMode="decimal" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="No cap" />
@@ -270,7 +270,7 @@ function MoreDrawer({ row, month, onClose, onSaved, toast }: { row: Row; month: 
               {shown.map((c) => (
                 <div className="bm-more-row" key={c.id}>
                   <span className="nm"><span className={`bm-cdot ${c.status === 'ENABLED' ? 'on' : c.status === 'PAUSED' ? 'pa' : 'ar'}`} />{c.name}</span>
-                  <span className="db">{eur(c.dailyBudgetCents)}</span>
+                  <span className="db">{money(c.dailyBudgetCents)}</span>
                   <Input size="sm" fieldClassName="lim" inputMode="decimal" placeholder="—" value={edits[c.id]?.min ?? ''} onChange={(e) => setEdits((p) => ({ ...p, [c.id]: { min: e.target.value, max: p[c.id]?.max ?? '' } }))} aria-label={`Min for ${c.name}`} />
                   <Input size="sm" fieldClassName="lim" inputMode="decimal" placeholder="—" value={edits[c.id]?.max ?? ''} onChange={(e) => setEdits((p) => ({ ...p, [c.id]: { min: p[c.id]?.min ?? '', max: e.target.value } }))} aria-label={`Max for ${c.name}`} />
                 </div>
@@ -388,12 +388,12 @@ export function BudgetManagerClient() {
   const columns: GridColumn<Row>[] = useMemo(() => [
     { key: 'autoPacing', label: 'Auto Pacing', metric: false, sortable: true, tip: 'Automatically distribute the monthly budget across the month.', sortValue: (r) => (r.autoPacing ? 1 : 0), render: (r) => <StatusControl value={r.autoPacing} onChange={(v) => setFlag(r, 'autoPacing', v)} /> },
     { key: 'stopOverSpend', label: 'Stop Over Spend', metric: false, sortable: true, tip: 'Suppress delivery (bid-floor, never pause) once the monthly cap is reached.', sortValue: (r) => (r.stopOverSpend ? 1 : 0), render: (r) => <StatusControl value={r.stopOverSpend} onChange={(v) => setFlag(r, 'stopOverSpend', v)} /> },
-    { key: 'lastMonth', label: 'Last Month', metric: false, sortable: true, sortValue: (r) => r.lastMonth.spendCents ?? 0, render: (r) => (<span className="bm-cell"><Sparkline data={r.lastMonth.daily} color="#9aa3b0" /><span className="bm-cellv">{eur(r.lastMonth.spendCents)}<i>{pctTxt(r.lastMonth.pct)}</i></span></span>) },
-    { key: 'thisMonth', label: 'This Month', metric: false, sortable: true, sortValue: (r) => r.spendCents ?? 0, render: (r) => (<span className="bm-cell"><Sparkline data={r.daily} color={STATUS_COLOR[r.status]} /><span className="bm-cellv">{eur(r.spendCents)}<i className={`st st-${r.status}`} title={STATUS_LABEL[r.status]}>{pctTxt(r.pct)}</i></span></span>) },
+    { key: 'lastMonth', label: 'Last Month', metric: false, sortable: true, sortValue: (r) => r.lastMonth.spendCents ?? 0, render: (r) => (<span className="bm-cell"><Sparkline data={r.lastMonth.daily} color="#9aa3b0" /><span className="bm-cellv">{money(r.lastMonth.spendCents)}<i>{pctTxt(r.lastMonth.pct)}</i></span></span>) },
+    { key: 'thisMonth', label: 'This Month', metric: false, sortable: true, sortValue: (r) => r.spendCents ?? 0, render: (r) => (<span className="bm-cell"><Sparkline data={r.daily} color={STATUS_COLOR[r.status]} /><span className="bm-cellv">{money(r.spendCents)}<i className={`st st-${r.status}`} title={STATUS_LABEL[r.status]}>{pctTxt(r.pct)}</i></span></span>) },
     { key: 'nextMonthBudget', label: 'Next Month Budget', metric: false, sortable: true, sortValue: (r) => r.nextMonthBudgetCents ?? -1, render: (r) => (
       editingNext === r.marketplace
         ? <Input size="xs" fieldClassName="bm-nextedit" prefix="€" autoFocus inputMode="decimal" value={nextDraft} placeholder="Empty = no cap" title={NO_MONTHLY_CAP} onChange={(e) => setNextDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') saveNext(r); if (e.key === 'Escape') setEditingNext(null) }} onBlur={() => saveNext(r)} aria-label="Next month budget" />
-        : <Button variant="quiet" size="xs" className="bm-nextbtn" onClick={() => { setEditingNext(r.marketplace); setNextDraft(r.nextMonthBudgetCents != null && r.nextMonthBudgetCents > 0 ? (r.nextMonthBudgetCents / 100).toFixed(2) : '') }}>{r.nextMonthBudgetCents != null && r.nextMonthBudgetCents > 0 ? eur(r.nextMonthBudgetCents) : r.nextMonthBudgetCents === 0 ? <span className="ph">No cap</span> : <span className="ph">Set budget</span>}<Pencil size={11} /></Button>
+        : <Button variant="quiet" size="xs" className="bm-nextbtn" onClick={() => { setEditingNext(r.marketplace); setNextDraft(r.nextMonthBudgetCents != null && r.nextMonthBudgetCents > 0 ? (r.nextMonthBudgetCents / 100).toFixed(2) : '') }}>{r.nextMonthBudgetCents != null && r.nextMonthBudgetCents > 0 ? money(r.nextMonthBudgetCents) : r.nextMonthBudgetCents === 0 ? <span className="ph">No cap</span> : <span className="ph">Set budget</span>}<Pencil size={11} /></Button>
     ) },
   ], [editingNext, nextDraft, month, result, enforcement]) // eslint-disable-line react-hooks/exhaustive-deps — AM-8: the toggles' toast reads the engine
   /**
@@ -419,7 +419,7 @@ export function BudgetManagerClient() {
       <ToolbarButton icon={<Settings size={14} />} label={`Settings for ${mktName(r.marketplace)}`} onClick={() => setSettingsFor(r)} />
       {FLAG[r.marketplace] && <span className="bm-flag">{FLAG[r.marketplace]}</span>}
       <span className="bm-mkt">{mktName(r.marketplace)}{r.tag ? <em> · {r.tag}</em> : null}{r.campaignLimitCount > 0 ? <span className="bm-lim" title={`${r.campaignLimitCount} campaign limit${r.campaignLimitCount === 1 ? '' : 's'}`}>{r.campaignLimitCount} limit{r.campaignLimitCount === 1 ? '' : 's'}</span> : null}</span>
-      {r.projectedOverspend && <span className="bm-warn" title={`Projected month-end spend ${eur(r.forecastSpendCents)} exceeds budget`}><AlertTriangle size={13} /></span>}
+      {r.projectedOverspend && <span className="bm-warn" title={`Projected month-end spend ${money(r.forecastSpendCents)} exceeds budget`}><AlertTriangle size={13} /></span>}
     </span>
   )
 
@@ -439,7 +439,7 @@ export function BudgetManagerClient() {
         <b>{monthLabel(month)}</b>
         <ToolbarButton variant="boxed" icon={<ChevronRight size={16} />} label="Next month" onClick={() => setMonth(shiftM(month, 1))} />
         {month !== nowMonth() && <Button variant="link" size="sm" onClick={() => setMonth(nowMonth())}>This month</Button>}
-        {result && <span className="bm-mb-sum">Budget <b>{eur(result.totals.budgetCents)}</b> · Spent <b>{eur(result.totals.spendCents)}</b>{result.totals.pct != null && <em> ({pctTxt(result.totals.pct)})</em>}</span>}
+        {result && <span className="bm-mb-sum">Budget <b>{money(result.totals.budgetCents)}</b> · Spent <b>{money(result.totals.spendCents)}</b>{result.totals.pct != null && <em> ({pctTxt(result.totals.pct)})</em>}</span>}
         <span className="bm-grow" />
     <Button onClick={() => setPoolsOpen(true)}><Wallet size={13} /> Budget Pools</Button>
     <Button onClick={() => { setCanvasMarket(enforcement?.plans[0]?.marketplace ?? markets[0] ?? ''); setCanvasOpen(true) }}><Network size={13} /> Allocation Map</Button>

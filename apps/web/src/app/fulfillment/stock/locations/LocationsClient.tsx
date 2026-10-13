@@ -18,6 +18,7 @@ import { Skeleton } from '@/design-system/primitives/Skeleton'
 import { StockSubNav } from '@/components/inventory/StockSubNav'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import { num } from '@/design-system/lib/format'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
@@ -253,7 +254,7 @@ function LocationsInner() {
       label: t('stock.locations.col.available'),
       width: 90,
       align: 'right',
-      render: (row) => <span className="tabular-nums font-medium">{row.totalAvailable.toLocaleString()}</span>,
+      render: (row) => <span className="tabular-nums font-medium">{num(row.totalAvailable)}</span>,
       sortable: true,
       sortValue: (row) => row.totalAvailable,
     },

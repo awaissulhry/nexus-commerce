@@ -76,6 +76,7 @@ import { BudgetSections } from './BudgetSections'
 
 import { useAdsSync } from '../_shared/adsBus'
 import { Listbox } from '@/design-system/components'
+import { money } from '../../campaigns/_grid/format'
 
 const DEFAULT_MARKET = 'all'
 const DEFAULT_STATUS = 'enabled'
@@ -83,9 +84,8 @@ const DEFAULT_WINDOW = '7d'
 const DEFAULT_VIEW: BudView = 'campaigns'
 
 const num = (n: number) => n.toLocaleString('en-IE')
-const eur = (cents: number) => `€${(cents / 100).toFixed(2)}`
 /** Signed money, for a movement column where the sign IS the finding. */
-const signedEur = (cents: number) => `${cents > 0 ? '+' : cents < 0 ? '−' : ''}${eur(Math.abs(cents))}`
+const signedEur = (cents: number) => `${cents > 0 ? '+' : cents < 0 ? '−' : ''}${money(Math.abs(cents))}`
 const pct = (r: number) => `${(r * 100).toFixed(0)}%`
 const signedPct = (r: number) => `${r > 0 ? '+' : r < 0 ? '−' : ''}${Math.abs(r * 100).toFixed(0)}%`
 const NOT_MEASURED = <span className="h10-bud-ns" title="No performance row for this campaign in the window — it was not served, which is not the same as spending nothing">not served</span>
@@ -290,12 +290,12 @@ export function BudgetClient() {
       tip: 'The LOCAL value, which is what every rule reads and writes. Where the write gate is closed this can differ from what Amazon holds — the gate stops the dispatch, not the cut.',
       render: (r) => (
         <span className={r.atFloor ? 'h10-bud-amt floor' : 'h10-bud-amt'}>
-          {eur(r.dailyBudgetCents)}
+          {money(r.dailyBudgetCents)}
           {r.atFloor && <i title="At Amazon's €1 minimum. A −15% or −20% trim computes €1 again and changes nothing.">floor</i>}
         </span>
       ),
       sortValue: (r) => r.dailyBudgetCents, filterValue: (r) => r.dailyBudgetCents / 100,
-      total: (vis) => eur(vis.reduce((s, r) => s + r.dailyBudgetCents, 0)),
+      total: (vis) => money(vis.reduce((s, r) => s + r.dailyBudgetCents, 0)),
     },
     {
       // BUD.2 — the anchor and the bounds, on the row they govern. A blank is honest: it means
@@ -307,10 +307,10 @@ export function BudgetClient() {
           ? <span className="h10-bud-nobase" title="No baseline captured and no bounds set — relative rules compound from the current value here.">—</span>
           : (
             <span className="h10-bud-base">
-              {r.budgetBaselineCents != null && <em title="Baseline — the anchor relative rules compute from."><Anchor size={11} strokeWidth={2} className="nds-cell-glyph" role="img" aria-label="Baseline" /> {eur(r.budgetBaselineCents)}</em>}
+              {r.budgetBaselineCents != null && <em title="Baseline — the anchor relative rules compute from."><Anchor size={11} strokeWidth={2} className="nds-cell-glyph" role="img" aria-label="Baseline" /> {money(r.budgetBaselineCents)}</em>}
               {(r.minBudgetCents != null || r.maxBudgetCents != null) && (
                 <em title="Gate-enforced bounds: a cut below the floor or a raise above the ceiling is denied.">
-                  {r.minBudgetCents != null ? eur(r.minBudgetCents) : '—'}·{r.maxBudgetCents != null ? eur(r.maxBudgetCents) : '—'}
+                  {r.minBudgetCents != null ? money(r.minBudgetCents) : '—'}·{r.maxBudgetCents != null ? money(r.maxBudgetCents) : '—'}
                 </em>
               )}
             </span>
@@ -321,9 +321,9 @@ export function BudgetClient() {
     {
       key: 'spend', label: `${days}d spend`,
       tip: 'From AmazonAdsDailyPerformance, entityType CAMPAIGN — never a denormalised column.',
-      render: (r) => (r.measured ? eur(r.spend7dCents) : NOT_MEASURED),
+      render: (r) => (r.measured ? money(r.spend7dCents) : NOT_MEASURED),
       sortValue: (r) => (r.measured ? r.spend7dCents : -1), filterValue: (r) => r.spend7dCents / 100,
-      total: (vis) => eur(vis.reduce((s, r) => s + r.spend7dCents, 0)),
+      total: (vis) => money(vis.reduce((s, r) => s + r.spend7dCents, 0)),
     },
     {
       key: 'utilization', label: 'Utilisation',
@@ -352,7 +352,7 @@ export function BudgetClient() {
         const to = r.lastMovedToCents
         return (
           <span className="h10-bud-moved">
-            <b>{from != null && to != null ? `${eur(from)} → ${eur(to)}` : '—'}</b>
+            <b>{from != null && to != null ? `${money(from)} → ${money(to)}` : '—'}</b>
             <i title={`${clockLabel(r.lastMovedAt)} Rome`}>
               {clockLabel(r.lastMovedAt)}
               {r.lastMovedBy && <> · {r.lastMovedBy}</>}
@@ -582,7 +582,7 @@ export function BudgetClient() {
     const bits: string[] = [sc.market === 'all' ? 'All markets' : sc.market]
     bits.push(sc.campaigns == null ? `all ${num(sc.total)} campaigns` : `${num(sc.campaigns)} of ${num(sc.total)} campaigns`)
     bits.push(`${num(census.campaigns)} ${status === 'all' ? '' : `${status} `}here`)
-    bits.push(`${eur(census.totalBudgetCents)}/day`)
+    bits.push(`${money(census.totalBudgetCents)}/day`)
     return bits.join(' · ')
   })()
 
@@ -600,7 +600,7 @@ export function BudgetClient() {
       apply: () => push({ view: 'campaigns', ...CLEAR }),
     },
     {
-      key: 'total', n: eur(census.totalBudgetCents), label: 'per day, in total',
+      key: 'total', n: money(census.totalBudgetCents), label: 'per day, in total',
       tip: 'Summed from the local Campaign.dailyBudget of the rows below. Click to sort the grid by the column this sums.',
       on: sortParam === 'budget',
       apply: () => push({ view: 'campaigns', ...CLEAR, sort: 'budget', dir: 'desc' }),

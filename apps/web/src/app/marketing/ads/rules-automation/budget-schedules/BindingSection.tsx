@@ -56,9 +56,8 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { SectionEmpty } from './SectionShell'
 import type { BindingResult, BindingCampaignRow, BspSlotProps } from './slot-contract'
 import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
+import { money } from '../../campaigns/_grid/format'
 
-const eur = (c: number) => `€${(c / 100).toLocaleString('en-IE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-const eur0 = (c: number) => `€${Math.round(c / 100).toLocaleString('en-IE')}`
 /** 🔴 Whole percent. The reconstruction does not support a decimal and must not imply one. */
 const ratioPct = (r: number) => `${Math.round(r * 100)}%`
 const hourLabel = (h: number | null) => (h == null ? '—' : `${String(h).padStart(2, '0')}:00`)
@@ -113,12 +112,12 @@ export function BindingSection({ scope, weeks, openRail, onRows }: Pick<BspSlotP
     {
       key: 'currentBudgetCents', label: 'Budget now', metric: false, sortable: true,
       tip: 'Today’s daily budget. The ratios beside it are against the budget in force on each past day, which is usually a different number.',
-      render: (r) => <span className="h10-bsp-num">{eur(r.currentBudgetCents)}</span>,
+      render: (r) => <span className="h10-bsp-num">{money(r.currentBudgetCents)}</span>,
       sortValue: (r) => String(r.currentBudgetCents).padStart(12, '0'),
     },
     {
       key: 'spendCents', label: 'Spend in window', metric: false, sortable: true,
-      render: (r) => <span className="h10-bsp-num">{eur0(r.spendCents)}</span>,
+      render: (r) => <span className="h10-bsp-num">{money(r.spendCents)}</span>,
       sortValue: (r) => String(r.spendCents).padStart(12, '0'),
     },
     {
@@ -150,7 +149,7 @@ export function BindingSection({ scope, weeks, openRail, onRows }: Pick<BspSlotP
       render: (r) => (r.lastBudgetWrite
         ? <span className="h10-bsp-lw">
             {dayLabel(r.lastBudgetWrite.at.slice(0, 10))}
-            {r.lastBudgetWrite.toCents != null && <i> → {eur(r.lastBudgetWrite.toCents)}</i>}
+            {r.lastBudgetWrite.toCents != null && <i> → {money(r.lastBudgetWrite.toCents)}</i>}
           </span>
         : <span className="h10-bsp-dim">never</span>),
       sortValue: (r) => r.lastBudgetWrite?.at ?? '',

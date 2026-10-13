@@ -51,6 +51,7 @@ import { Spinner } from '@/design-system/primitives/Spinner'
 import { Divider } from '@/design-system/primitives/Divider'
 import { getBackendUrl } from '@/lib/backend-url'
 import { usePermission } from '@/lib/auth/AuthProvider'
+import { formatGridValue } from '@/design-system/grid'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
@@ -1272,7 +1273,7 @@ function SampleSkuTable({ sample }: { sample: ResolvedSku[] }) {
         align: 'right',
         render: (r) => (
           <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--nds-text-2)' }}>
-            €{fmtMoney(r.price)}
+            {formatGridValue('eur', r.price).text}
           </span>
         ),
       },

@@ -18,7 +18,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, EyeOff, FolderX, Search } from 'lucide-react'
 
 import { Button, Input, InfoTip, Pill, SegmentedControl } from '@/design-system/primitives'
-import { composeCellTooltip, longTextTooltipLine, lengthCapOf, CellSaveTracker, EmptyValue, ExpandButton, ExpandSlot, GridPager, GridSearchSlot, GridSelectionActions, GridSheet, GridSheetStatus, GridToolbar, FollowsCell, IdentityChip, LongTextCell, NexusGrid, ReadinessCell, RequiredValue, SHEET_GRID_OPTIONS, SkuTag, gridSelection, lengthValidation, longTextEditor, numericColumn, numericEditor, roundTripClassRules, saveCell, selectEditor, selectValidation, sheetClassRules, sheetPasteProcessor, type ColDef, type ColGroupDef, type GridApi, type GridReadyEvent, type ICellRendererParams, type IRowNode, type ReadinessValue, type ValueGetterParams, type ValueSetterParams } from '@/design-system/grid'
+import { composeCellTooltip, formatGridValue, longTextTooltipLine, lengthCapOf, CellSaveTracker, EmptyValue, ExpandButton, ExpandSlot, GridPager, GridSearchSlot, GridSelectionActions, GridSheet, GridSheetStatus, GridToolbar, FollowsCell, IdentityChip, LongTextCell, NexusGrid, ReadinessCell, RequiredValue, SHEET_GRID_OPTIONS, SkuTag, gridSelection, lengthValidation, longTextEditor, numericColumn, numericEditor, roundTripClassRules, saveCell, selectEditor, selectValidation, sheetClassRules, sheetPasteProcessor, type ColDef, type ColGroupDef, type GridApi, type GridReadyEvent, type ICellRendererParams, type IRowNode, type ReadinessValue, type ValueGetterParams, type ValueSetterParams } from '@/design-system/grid'
 
 import { columnApplies, columnRequiredByAny } from '@nexus/shared/master-sheet'
 
@@ -314,7 +314,7 @@ export function MasterSheet({ market: marketProp, height, onMarketChange }: Mast
             cellClass: [...numericColumn.cellClass, 'nds-cell-is-locked'],
             headerTooltip: `What ${c.label} is actually carrying. Read-only here — edit it on the channel surface.`,
             valueGetter: (p: ValueGetterParams<SheetRow>) => p.data?.listings[k]?.price ?? null,
-            valueFormatter: (p) => (p.value == null ? '' : `€${Number(p.value).toFixed(2)}`),
+            valueFormatter: (p) => formatGridValue('eur', p.value).text,
           },
           {
             colId: `follows:${k}`,

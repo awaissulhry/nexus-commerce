@@ -39,7 +39,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { TermChart, type TermPoint } from './TermChart'
 import { BidAction } from './BidAction'
 import { ChangeLog } from './ChangeLog'
-import { sharePct } from '../../campaigns/_grid/format'
+import { money, sharePct } from '../../campaigns/_grid/format'
 
 interface TermPayload {
   term: string
@@ -71,7 +71,6 @@ const num = (n: number) => n.toLocaleString('en-IE')
 // Free visibility numbers (2026-10-10) — every share goes through the console's one formatter (`sharePct`): no reading
 // reads "—" and a tiny non-zero share "<0.01%", never a rounded or substituted "0.00%".
 const pct = (v: number | null | undefined) => sharePct(v)
-const eur = (c: number) => `€${(c / 100).toFixed(2)}`
 const dayMonth = (iso: string) => {
   const d = new Date(`${iso}T00:00:00Z`)
   return `${d.getUTCDate()} ${d.toLocaleString('en-GB', { month: 'short', timeZone: 'UTC' })}`
@@ -257,7 +256,7 @@ export function TermDrawer({
                                 <span className="nm" title={g.name}>{g.name}</span>
                                 <span className="mt">{g.matchTypes.join('/')}</span>
                                 <span className="ct">{g.enabledTargets} of {g.targets} enabled</span>
-                                <span className="bid">{g.minBidCents === g.maxBidCents ? eur(g.minBidCents) : `${eur(g.minBidCents)}–${eur(g.maxBidCents)}`}</span>
+                                <span className="bid">{g.minBidCents === g.maxBidCents ? money(g.minBidCents) : `${money(g.minBidCents)}–${money(g.maxBidCents)}`}</span>
                               </li>
                             ))}
                           </ul>

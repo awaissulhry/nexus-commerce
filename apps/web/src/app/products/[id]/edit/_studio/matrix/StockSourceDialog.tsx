@@ -23,6 +23,7 @@ import { listingName, previewRuleWords, warehousesWords } from '@/app/settings/s
 
 import type { MatrixRowRead } from './contract'
 import styles from './StockSourceDialog.module.css'
+import { num } from '@/design-system/lib/format'
 
 export type StockSource = NonNullable<MatrixRowRead['stock']['source']>
 
@@ -190,7 +191,7 @@ export function StockSourceDialog({ open, targets, suggestedGrantId, canSwitch, 
   const columns: Array<Column<PreviewRow>> = [
     ...(oneSku ? [] : [{ key: 'sku', label: 'SKU', width: 220, render: (r: PreviewRow) => r.sku }]),
     { key: 'listing', label: 'Listing', width: 320, render: (r) => r.listing },
-    { key: 'now', label: 'Shows now', width: 120, numeric: true, render: (r) => (r.showsNow === null ? '—' : r.showsNow.toLocaleString()) },
+    { key: 'now', label: 'Shows now', width: 120, numeric: true, render: (r) => num(r.showsNow) },
     { key: 'after', label: 'After', width: 160, render: (r) => r.after },
   ]
   const action = to === 'pool' ? 'Connect' : 'Disconnect'

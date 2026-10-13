@@ -25,6 +25,7 @@ import { Drawer } from '@/design-system/components'
 import { DataGrid } from '@/design-system/grid/datagrid'
 import { Button, Input, SegmentedControl, ToolbarButton } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
+import { money } from '../campaigns/_grid/format'
 
 type Strategy = 'STATIC' | 'PROFIT_WEIGHTED' | 'URGENCY_WEIGHTED'
 
@@ -49,7 +50,6 @@ interface ProposedRow { allocationId: string; campaignId: string | null; marketp
 interface RebalanceOutcome { ok: boolean; poolName: string; strategy: string; proposed: ProposedRow[]; totalShiftCents: number; warnings: string[]; skipped?: string }
 
 const API = () => getBackendUrl()
-const eur = (c: number | null | undefined) => (c == null ? '—' : `€${(c / 100).toLocaleString('en-IE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' }) : 'never')
 
 // ── one expanded pool: controls, allocations, rebalance, history ──────────────
@@ -119,9 +119,9 @@ function PoolBody({ poolId, onChanged, toast }: { poolId: string; onChanged: () 
   return (
     <div className="bp-body">
       <div className="bp-stats">
-        <span className="bp-stat"><i>Target/day</i><b>{eur(pool.totalDailyBudgetCents)}</b></span>
-        <span className="bp-stat"><i>Current total</i><b>{eur(currentTotal)}</b></span>
-        <span className="bp-stat"><i>Δ vs target</i><b className={Math.abs(delta) > pool.totalDailyBudgetCents * 0.1 ? 'warn' : ''}>{delta >= 0 ? '+' : ''}{eur(delta)}</b></span>
+        <span className="bp-stat"><i>Target/day</i><b>{money(pool.totalDailyBudgetCents)}</b></span>
+        <span className="bp-stat"><i>Current total</i><b>{money(currentTotal)}</b></span>
+        <span className="bp-stat"><i>Δ vs target</i><b className={Math.abs(delta) > pool.totalDailyBudgetCents * 0.1 ? 'warn' : ''}>{delta >= 0 ? '+' : ''}{money(delta)}</b></span>
         <span className="bp-stat"><i>Last rebalance</i><b>{when(pool.lastRebalancedAt)}</b></span>
       </div>
 
@@ -158,9 +158,9 @@ function PoolBody({ poolId, onChanged, toast }: { poolId: string; onChanged: () 
                 <span className="mk">{a.marketplace}</span>
                 <span className="nm" title={c?.name}>{c?.name ?? a.campaignId?.slice(0, 12) ?? '—'}</span>
                 {c && <span className="st">{c.status}</span>}
-                {c && <span className="bd">{eur(Math.round(Number(c.dailyBudget) * 100))}/d</span>}
+                {c && <span className="bd">{money(Math.round(Number(c.dailyBudget) * 100))}/d</span>}
                 <span className="tg">target {a.targetSharePct}%</span>
-                <span className="mm">min {eur(a.minDailyBudgetCents)}{a.maxDailyBudgetCents != null ? ` · max ${eur(a.maxDailyBudgetCents)}` : ''}</span>
+                <span className="mm">min {money(a.minDailyBudgetCents)}{a.maxDailyBudgetCents != null ? ` · max ${money(a.maxDailyBudgetCents)}` : ''}</span>
                 <ToolbarButton
                   size="sm" tone="danger" tooltip={false}
                   icon={busy === a.id ? <Loader2 size={13} className="bp-spin" /> : <X size={13} />}
@@ -192,7 +192,7 @@ function PoolBody({ poolId, onChanged, toast }: { poolId: string; onChanged: () 
 
       {preview && (
         <div className="bp-prev">
-          <div className="bp-prev-h">{STRATEGY_LABEL[preview.strategy as Strategy] ?? preview.strategy} · total shift {eur(preview.totalShiftCents)}</div>
+          <div className="bp-prev-h">{STRATEGY_LABEL[preview.strategy as Strategy] ?? preview.strategy} · total shift {money(preview.totalShiftCents)}</div>
           {preview.warnings.length > 0 && <div className="bp-warn">{preview.warnings.join(' · ')}</div>}
           {preview.proposed.length === 0 ? (
             <div className="bp-empty">Nothing to move — every allocation is already where the strategy would put it.</div>
@@ -206,9 +206,9 @@ function PoolBody({ poolId, onChanged, toast }: { poolId: string; onChanged: () 
               columns={[
                 { key: 'mkt', label: 'Mkt', render: (r) => <span className="mono">{r.marketplace}</span> },
                 { key: 'campaign', label: 'Campaign', render: (r) => <span className="mono trunc" title={r.campaignId ?? ''}>{byId.get(r.campaignId ?? '')?.name ?? r.campaignId?.slice(0, 10) ?? '—'}</span> },
-                { key: 'current', label: 'Current', align: 'right', render: (r) => eur(r.oldBudgetCents) },
-                { key: 'proposed', label: 'Proposed', align: 'right', render: (r) => eur(r.proposedBudgetCents) },
-                { key: 'delta', label: 'Δ', align: 'right', render: (r) => <span className={r.shiftCents > 0 ? 'pos' : r.shiftCents < 0 ? 'neg' : ''}>{r.shiftCents > 0 ? '+' : ''}{eur(r.shiftCents)}</span> },
+                { key: 'current', label: 'Current', align: 'right', render: (r) => money(r.oldBudgetCents) },
+                { key: 'proposed', label: 'Proposed', align: 'right', render: (r) => money(r.proposedBudgetCents) },
+                { key: 'delta', label: 'Δ', align: 'right', render: (r) => <span className={r.shiftCents > 0 ? 'pos' : r.shiftCents < 0 ? 'neg' : ''}>{r.shiftCents > 0 ? '+' : ''}{money(r.shiftCents)}</span> },
                 { key: 'clamp', label: 'Clamp', render: (r) => <span className="clamp">{r.clampedReason ?? ''}</span> },
               ]}
             />
@@ -230,7 +230,7 @@ function PoolBody({ poolId, onChanged, toast }: { poolId: string; onChanged: () 
                   <span className="t">{when(rb.createdAt)}</span>
                   <span className={`tag ${rb.appliedAt ? 'ok' : 'dry'}`}>{rb.appliedAt ? 'Applied' : 'Dry-run'}</span>
                   <span className="by">{rb.triggeredBy}</span>
-                  <span className="sh">shift {eur(rb.totalShiftCents)}</span>
+                  <span className="sh">shift {money(rb.totalShiftCents)}</span>
                 </div>
               ))}
             </div>
@@ -289,7 +289,7 @@ export function BudgetPoolsDrawer({ open, onClose, toast }: { open: boolean; onC
           <div className="bp-top">
             <span className="bp-stat"><i>Pools</i><b>{pools.length}</b></span>
             <span className="bp-stat"><i>Active</i><b>{pools.filter((p) => p.enabled).length}</b></span>
-            <span className="bp-stat"><i>Active budget/day</i><b>{eur(activeBudget)}</b></span>
+            <span className="bp-stat"><i>Active budget/day</i><b>{money(activeBudget)}</b></span>
             <span className="bp-stat"><i>Allocations</i><b>{pools.reduce((a, p) => a + (p._count?.allocations ?? 0), 0)}</b></span>
           </div>
 
@@ -337,7 +337,7 @@ export function BudgetPoolsDrawer({ open, onClose, toast }: { open: boolean; onC
                     <span className="nm">{p.name}</span>
                     <span className={`tag ${p.enabled ? (p.dryRun ? 'dry' : 'ok') : 'off'}`}>{p.enabled ? (p.dryRun ? 'Dry-run' : 'Live') : 'Disabled'}</span>
                     <span className="tag strat">{STRATEGY_LABEL[p.strategy]}</span>
-                    <span className="bd">{eur(p.totalDailyBudgetCents)}/d</span>
+                    <span className="bd">{money(p.totalDailyBudgetCents)}/d</span>
                     <span className="al">{p._count?.allocations ?? 0} alloc</span>
                     <ChevronDown size={15} className={`chev ${expanded === p.id ? 'open' : ''}`} />
                   </Button>

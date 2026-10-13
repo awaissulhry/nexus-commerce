@@ -47,6 +47,7 @@ import { createPortal } from 'react-dom'
 import { AlertTriangle, Loader2, ShieldAlert, X } from 'lucide-react'
 import { Button, Input, Select, ToolbarButton } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
+import { money } from '../../campaigns/_grid/format'
 
 export type LaneKey = 'top' | 'rest' | 'product'
 export type FlagKey = 'inverted' | 'compounding' | 'unmanaged' | 'decorative'
@@ -117,7 +118,6 @@ interface WriteOutcome {
   deniedAt?: string
 }
 
-const eur = (c: number) => `€${(c / 100).toFixed(2)}`
 const num = (n: number) => n.toLocaleString('en-IE')
 
 /** More than this many campaigns and a click is not enough — you type the count. */
@@ -336,7 +336,7 @@ export function PlcBulkPanel({ scope, lane, onClose, onDone }: {
                   { key: 'lane', label: LANE_LABEL[laneSel], numeric: true, render: (r) => (<>{r.current[laneSel]}% → <b>{r.proposed[laneSel]}%</b></>) },
                   { key: 'eff', label: 'Effective bid', numeric: true, render: (r) => (r.effectiveBidBefore == null
                     ? <span className="h10-plc3-nobase">no base bid</span>
-                    : <>{eur(r.effectiveBidBefore)} → {eur(r.effectiveBidAfter!)}</>) },
+                    : <>{money(r.effectiveBidBefore)} → {money(r.effectiveBidAfter!)}</>) },
                   { key: 'verdict', label: 'Verdict', render: (r) => (r.skip
                     ? <span className="skip" title={SKIP_WHY[r.skip]}>{SKIP_WORD[r.skip]}</span>
                     : r.revertedByEngine

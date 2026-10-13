@@ -23,7 +23,7 @@ import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { lastCompleteDays } from '../_shell/DateRangePicker'
 import { useAdsMarketplace, ALL_MARKETS } from '../_shell/MarketplaceContext'
 import { AdsDataGrid, type GridColumn, type GridFilter, type FilterState } from '../campaigns/_grid/AdsDataGrid'
-import { acosRank, acosFilterValue } from '../campaigns/_grid/format'
+import { acosFilterValue, acosRank, money } from '../campaigns/_grid/format'
 import { MetricChart, type ChartMetric } from '../_shared/MetricChart'
 import { MetricStrip, type Metric } from '@/design-system/components/MetricStrip'
 import { EmptyState } from '@/design-system/components/EmptyState'
@@ -69,7 +69,6 @@ const CHART_METRICS: ChartMetric[] = [
 ]
 const METRICS_STORE = 'aiad-chart-metrics'
 
-const eur2 = (cents: number) => `€${(cents / 100).toLocaleString('en-IE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const fmtDay = (iso: string) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) }
 const dayParam = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
@@ -163,8 +162,8 @@ export function AiAdvertisingDashboard() {
   })), [summary])
 
   const stripMetrics: Metric[] = [
-    { label: 'Spend', value: eur2(totals.spendCents), delta: delta(totals.spendCents, prev.spendCents, true) },
-    { label: 'Sales', value: eur2(totals.salesCents), delta: delta(totals.salesCents, prev.salesCents) },
+    { label: 'Spend', value: money(totals.spendCents), delta: delta(totals.spendCents, prev.spendCents, true) },
+    { label: 'Sales', value: money(totals.salesCents), delta: delta(totals.salesCents, prev.salesCents) },
     { label: 'ACoS', value: totals.acosPct == null ? '—' : `${totals.acosPct.toFixed(2)}%`, delta: delta(totals.acosPct, prev.acosPct, true) },
     { label: 'PPC Orders', value: String(totals.orders), delta: delta(totals.orders, prev.orders) },
     { label: 'Active Goals', value: String(activeGoals) },
@@ -213,7 +212,7 @@ export function AiAdvertisingDashboard() {
     { key: 'budgetMode', label: 'Budget Mode', align: 'left', sortable: true, sortValue: (g) => g.budgetMode, render: (g) => MODE_LABEL[g.budgetMode] ?? g.budgetMode, defaultHidden: true },
     {
       key: 'dailyBudget', label: 'Daily Budget', metric: true, sortable: true, sortValue: (g) => g.dailyBudgetCents,
-      render: (g) => eur2(g.dailyBudgetCents), total: (rows) => eur2(rows.reduce((n, r) => n + r.dailyBudgetCents, 0)),
+      render: (g) => money(g.dailyBudgetCents), total: (rows) => money(rows.reduce((n, r) => n + r.dailyBudgetCents, 0)),
     },
     {
       key: 'utilization', label: 'Budget Utilization', tip: 'Latest reported day’s spend against the daily budget. Report data lags a day or two — the date is in the cell tooltip.',
@@ -232,13 +231,13 @@ export function AiAdvertisingDashboard() {
     },
     {
       key: 'spend', label: 'Spend', metric: true, sortable: true, sortValue: (g) => perfByGoal.get(g.id)?.spendCents ?? -1, filterValue: (g) => (perfByGoal.get(g.id)?.spendCents ?? 0) / 100,
-      render: (g) => { const p = perfByGoal.get(g.id); return p ? eur2(p.spendCents) : '—' },
-      total: (rows) => eur2(rows.reduce((n, r) => n + (perfByGoal.get(r.id)?.spendCents ?? 0), 0)),
+      render: (g) => { const p = perfByGoal.get(g.id); return p ? money(p.spendCents) : '—' },
+      total: (rows) => money(rows.reduce((n, r) => n + (perfByGoal.get(r.id)?.spendCents ?? 0), 0)),
     },
     {
       key: 'sales', label: 'Sales', metric: true, sortable: true, sortValue: (g) => perfByGoal.get(g.id)?.salesCents ?? -1,
-      render: (g) => { const p = perfByGoal.get(g.id); return p ? eur2(p.salesCents) : '—' },
-      total: (rows) => eur2(rows.reduce((n, r) => n + (perfByGoal.get(r.id)?.salesCents ?? 0), 0)),
+      render: (g) => { const p = perfByGoal.get(g.id); return p ? money(p.salesCents) : '—' },
+      total: (rows) => money(rows.reduce((n, r) => n + (perfByGoal.get(r.id)?.salesCents ?? 0), 0)),
     },
     {
       // AM-11 — `acosPct` is PERCENT POINTS; spend with no sales sorts/filters as the WORST ACoS, never 0 %.

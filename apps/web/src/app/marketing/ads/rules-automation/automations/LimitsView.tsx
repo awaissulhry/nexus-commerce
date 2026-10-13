@@ -18,6 +18,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import type { ScopeOptions } from './ScopeForm'
 import { Listbox } from '@/design-system/components'
 import { DataGrid } from '@/design-system/grid/datagrid'
+import { money } from '../../campaigns/_grid/format'
 
 interface Ceiling {
   id: string
@@ -36,7 +37,6 @@ interface RefusalSummary {
 }
 
 const GRAIN_WORD: Record<Ceiling['grain'], string> = { MARKET: 'Market', PORTFOLIO: 'Portfolio', LINE: 'Product line', CAMPAIGN: 'Campaign' }
-const eur = (c: number) => `€${(c / 100).toFixed(2)}`
 
 export function LimitsView({ scopeOptions, global }: {
   scopeOptions: ScopeOptions | null
@@ -159,7 +159,7 @@ export function LimitsView({ scopeOptions, global }: {
               { key: 'grain', label: 'Grain', render: (c) => <>{GRAIN_WORD[c.grain]}</> },
               { key: 'cap', label: 'Daily cap', align: 'right', render: (c) => (c.dailyCapCents == null
                 ? <i title="Opened but not set — resolves to NO_CEILING; it does NOT mean unlimited.">not set</i>
-                : <>{eur(c.dailyCapCents)}</>) },
+                : <>{money(c.dailyCapCents)}</>) },
               { key: 'on', label: 'On', render: (c) => <Toggle checked={c.enabled} aria-label={`Ceiling for ${c.label}`} disabled={busy} onClick={() => void toggle(c)} /> },
               { key: 'actions', label: '', render: (c) => <ToolbarButton tone="danger" size="sm" icon={<Trash2 size={13} aria-hidden />} label={`Delete ceiling for ${c.label}`} tooltip={false} disabled={busy} onClick={() => void remove(c)} /> },
             ]}
