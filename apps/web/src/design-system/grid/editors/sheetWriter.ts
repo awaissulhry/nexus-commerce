@@ -73,6 +73,13 @@ const COMMIT_TIMEOUT_MS = 30_000
 
 export type SheetWriteIntent = 'set' | 'pin' | 'reset' | 'reset-list'
 
+/**
+ * What became of ONE `set()` — reported once to its `onOutcome`: `saved` (the server stored it), `refused`, `unknown`
+ * (no answer: the reconcile reads the row), or `dropped` (never sent: a later edit of the same cell replaced it in the
+ * queue, or the edits were discarded). The sheet's undo keeps only what was stored.
+ */
+export type SheetCellOutcome = 'saved' | 'refused' | 'unknown' | 'dropped'
+
 /* ── VT.2 — the `variationTheme` routing branch ───────────────────────────────────────────────
  *
  * The ONE place that decides what a variation-theme commit sends. Pure, exported, node-tested; the
@@ -574,9 +581,11 @@ export interface ReadBackSnapshot<T> {
   matches?: Record<string, boolean | null>
 }
 
+type OutcomeListener = (outcome: SheetCellOutcome) => void
+
 interface RowQueue {
   /** colId → the pending edit. A second edit to the same cell inside the window replaces the first. */
-  cells: Map<string, { value: unknown; intent: SheetWriteIntent }>
+  cells: Map<string, { value: unknown; intent: SheetWriteIntent; onOutcome?: OutcomeListener }>
   timer: ReturnType<typeof setTimeout> | null
   inFlight: boolean
 }
@@ -630,6 +639,8 @@ export class SheetWriter<T> {
   private readonly inFlightCells = new Map<string, number>()
   /** rowId → colId → the edit the server REFUSED, kept so `retryFailed()` can send it again. */
   private readonly failed = new Map<string, Map<string, SheetWriteCell>>()
+  /** rowId → colId → the `onOutcome` of each cell in the row's CURRENT flight, told once the flight settles. */
+  private readonly flightOutcomes = new Map<string, Map<string, OutcomeListener>>()
   /* Batch mode (`commitBatch`): one sheet-wide timer, one call in flight, an operation fence. */
   private batchTimer: ReturnType<typeof setTimeout> | null = null
   private batchInFlight = false
@@ -675,14 +686,17 @@ export class SheetWriter<T> {
    * Queue one cell. Paints it `saving` immediately, so a burst of 100 pasted cells reads as work in
    * progress from the first frame rather than after the first response.
    */
-  set(rowId: string, colId: string, value: unknown, opts: { row?: T; intent?: SheetWriteIntent } = {}): void {
+  set(rowId: string, colId: string, value: unknown, opts: { row?: T; intent?: SheetWriteIntent; onOutcome?: OutcomeListener } = {}): void {
     if (this.destroyed) return
     if (opts.row !== undefined) this.rememberRow(rowId, opts.row)
-    const q = this.queues.get(rowId) ?? { cells: new Map<string, { value: unknown; intent: SheetWriteIntent }>(), timer: null, inFlight: false }
+    const q: RowQueue = this.queues.get(rowId) ?? { cells: new Map(), timer: null, inFlight: false }
+    const replaced = q.cells.get(colId)?.onOutcome
     // The LAST edit to a cell inside the window wins — its intent along with its value, so a
     // reset following a set is a reset and not a set carrying a stale null.
-    q.cells.set(colId, { value, intent: opts.intent ?? 'set' })
+    q.cells.set(colId, { value, intent: opts.intent ?? 'set', onOutcome: opts.onOutcome })
     this.queues.set(rowId, q)
+    // The edit it replaced is never sent.
+    if (replaced && replaced !== opts.onOutcome) replaced('dropped')
     // A new edit replaces the refused one: `retryFailed` must never resend a value that is no longer on screen.
     this.forgetFailed(rowId, colId)
     this.opts.tracker.set(rowId, colId, 'saving')
@@ -790,6 +804,7 @@ export class SheetWriter<T> {
     const generation = this.generation
 
     const batch: SheetWriteCell[] = [...q.cells.entries()].map(([colId, e]) => ({ colId, value: e.value, intent: e.intent }))
+    this.takeOff(rowId, q)
     q.cells.clear()
     q.inFlight = true
     this.inFlightCells.set(rowId, batch.length)
@@ -879,6 +894,9 @@ export class SheetWriter<T> {
     const settledCols: string[] = []
     /** R-VT-15 — the refusals of THIS batch, collected in the same loop that paints them. */
     const refused: Array<{ rowId: string; colId: string; reason?: string }> = []
+    const outcomes: Array<[OutcomeListener, SheetCellOutcome]> = []
+    const listeners = this.flightOutcomes.get(rowId)
+    this.flightOutcomes.delete(rowId)
     for (const { colId } of batch) {
       const own = result.cells?.[colId]
       const ok = own ? own.ok : result.ok
@@ -902,12 +920,16 @@ export class SheetWriter<T> {
         if (state === 'refused') this.rememberFailed(rowId, batch.find((b) => b.colId === colId)!)
         else if (state === 'saved') this.forgetFailed(rowId, colId)
       }
+      // This flight's own answer, also when the cell was edited again meanwhile: the next edit is made over it.
+      const listener = listeners?.get(colId)
+      if (listener) outcomes.push([listener, state])
       settledCols.push(colId)
     }
     q.inFlight = false
     this.inFlightCells.delete(rowId)
     this.repaint(rowId, settledCols)
     this.emit()
+    for (const [listener, outcome] of outcomes) listener(outcome)
     // A batch collects every row's refusals and announces them ONCE (a 250-row paste is one event, not 250 toasts).
     if (refused.length) { if (refusalSink) refusalSink.push(...refused); else this.opts.onRefused?.(refused) }
     this.opts.onSettled?.({ rowId, ok: result.ok, savedAt: new Date().toISOString() })
@@ -949,6 +971,7 @@ export class SheetWriter<T> {
       if (q.inFlight || q.cells.size === 0 || this.unreachableRows.has(rowId)) continue
       if (q.timer) { clearTimeout(q.timer); q.timer = null }
       const batch: SheetWriteCell[] = [...q.cells.entries()].map(([colId, e]) => ({ colId, value: e.value, intent: e.intent }))
+      this.takeOff(rowId, q)
       q.cells.clear()
       q.inFlight = true
       this.inFlightCells.set(rowId, batch.length)
@@ -1021,6 +1044,13 @@ export class SheetWriter<T> {
       this.endOperation()
     }
     return retry.length
+  }
+
+  /** A row's queued cells leave as its flight: their `onOutcome`s wait for its answer (`settle`). */
+  private takeOff(rowId: string, q: RowQueue): void {
+    const listeners = new Map<string, OutcomeListener>()
+    for (const [colId, e] of q.cells) if (e.onOutcome) listeners.set(colId, e.onOutcome)
+    if (listeners.size) this.flightOutcomes.set(rowId, listeners)
   }
 
   private rememberFailed(rowId: string, cell: SheetWriteCell): void {
@@ -1293,6 +1323,10 @@ export class SheetWriter<T> {
     this.batchInFlight = false
     this.operationDepth = 0
     this.reconcilingBatch = false
+    // Nothing queued is sent, and no answer of a flight in the air is painted: none of them counts as stored.
+    const dropped = [...this.queues.values()].flatMap((q) => [...q.cells.values()].flatMap((e) => (e.onOutcome ? [e.onOutcome] : [])))
+      .concat([...this.flightOutcomes.values()].flatMap((listeners) => [...listeners.values()]))
+    this.flightOutcomes.clear()
     this.queues.clear()
     this.inFlightCells.clear()
     this.failed.clear()
@@ -1302,6 +1336,7 @@ export class SheetWriter<T> {
     this.reconciling.clear()
     this.opts.tracker.clearAll()
     this.emit()
+    for (const listener of dropped) listener('dropped')
   }
 
   /** Idempotent: a second call flushes nothing again and leaves the writer destroyed. */

@@ -12,6 +12,7 @@ import { STOCK_FBA_KEY } from '../channel/stockCells'
 import { isCellEditable } from '../channel/rows'
 import { channelCellDrawsRequired, channelCellMark, channelCellProvenance } from '../channel/channelCellProvenance'
 import { optimisticCell } from '../channel/savedCellPatch'
+import { noteEditPrior } from '../sheetUndo'
 import { chipHasCell } from '../channel/viewChips'
 import { parseReferenceOrScalarValue, referenceColumnDef } from '../referenceLabels'
 import { isReferenceField } from '../referenceOptions'
@@ -172,7 +173,10 @@ export function buildChannelColumns(options: BuildChannelColumnsOptions): ColDef
       // Typing into a cell pins it at this row's layer, which is what the server will report back (`optimisticCell`:
       // an eBay listing-level value keeps its source; the server's cell is remembered for the in-place settle).
       const value = parseReferenceOrScalarValue(columnForCategory(col, data?.scope.label ?? '', p.data.productType ?? null), p.newValue)
-      p.data.values = { ...p.data.values, [col.key]: optimisticCell(prev, value, p.data.rowKind) }
+      const next = optimisticCell(prev, value, p.data.rowKind)
+      // The sheet's undo reads what the cell was — its value AND whether it followed (G3, `sheetUndo.ts`).
+      noteEditPrior(next, prev)
+      p.data.values = { ...p.data.values, [col.key]: next }
       return true
     },
     ...(Array.isArray(col.validation?.recordFields) ? { valueParser: (p: { newValue: unknown }) => parseRecordValue(p.newValue), valueFormatter: (p: { value: unknown }) => recordSummary(p.value, col.validation!.recordFields as any) } : {}),

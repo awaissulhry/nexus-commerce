@@ -3,9 +3,9 @@
  * quiet read is owed, and whether readiness must be read for the whole family. Kept out of the adapter so each rule can
  * be tested without a grid.
  */
-import type { SheetWriteRequest } from '@/design-system/grid'
+import type { CellSaveState, SheetWriteRequest } from '@/design-system/grid'
 import { changeTarget } from './useChannelSheet'
-import type { ChannelSheetRow } from './types'
+import { studioRowId, type ChannelScopePage, type ChannelSheetRow } from './types'
 
 /** What one part of a row's save reports (`ChannelWriteCoord.onStored`). */
 export type SettleOutcome = { patched: ChannelSheetRow[]; columns: string[] } | { read: string }
@@ -42,7 +42,7 @@ export function rowSettle(req: Pick<SheetWriteRequest<ChannelSheetRow>, 'cells' 
 }
 
 export interface FollowUpReadDeps {
-  /** Nothing pending, nothing unconfirmed, no open editor: a read may replace the rows. */
+  /** Nothing pending, nothing waiting for an answer, no open editor: a read may replace the rows (a refused cell is kept). */
   idle: () => boolean
   /** The sheet's quiet read; resolves true when it replaced the rows. */
   read: (canApply: () => boolean) => Promise<boolean>
@@ -54,7 +54,7 @@ export interface FollowUpReadDeps {
 
 /**
  * The one quiet read a save that was not settled in place still owes (review 3). It stays owed until a read has actually
- * replaced the rows: a read that is dropped (an editor open, a newer write, a refused cell, a failed fetch) is tried
+ * replaced the rows: a read that is dropped (an editor open, a newer write, a failed fetch) is tried
  * again when the sheet is idle, and a read that cannot start yet waits instead of fetching.
  */
 export class FollowUpRead {
@@ -101,4 +101,22 @@ export class FollowUpRead {
     this.attempts++
     this.cancel = this.deps.schedule(() => { this.cancel = null; this.settle() }, this.retryMs)
   }
+}
+
+/**
+ * G1 (2026-10-13) — what a quiet read keeps: a cell whose edit the server did not store (refused) or has not answered
+ * keeps the value the sheet shows, so its mark never outlives its value; every other cell is the read's. The Shared
+ * scope's quiet read does the same (`useMasterSheet`). Before, any refused cell held back every quiet read, and a
+ * variation went on showing the value it inherited before the family's save.
+ */
+export function keepUnsettledCells(page: ChannelScopePage, shown: readonly ChannelSheetRow[],
+  stateOf: (rowId: string, colId: string) => CellSaveState | undefined): ChannelScopePage {
+  const byId = new Map(shown.map((row) => [row.rowId, row]))
+  return { ...page, rows: page.rows.map((row) => {
+    const rowId = studioRowId(row.aliasId, row.id)
+    const before = byId.get(rowId)
+    if (!before) return row
+    const kept = Object.keys(before.values ?? {}).filter((key) => { const state = stateOf(rowId, key); return !!state && state !== 'saved' && !!before.values[key] })
+    return kept.length ? { ...row, values: { ...row.values, ...Object.fromEntries(kept.map((key) => [key, before.values[key]])) } } : row
+  }) }
 }

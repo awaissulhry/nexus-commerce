@@ -38,6 +38,7 @@ import { isReferenceField } from '../referenceOptions'
 import { ReferenceSelectEditor } from '../ReferenceSelectEditor'
 import type { SheetColumn, StudioRow } from './types'
 import { loadVariationFamily } from './variationFamilyLoader'
+import { noteEditPrior } from '../sheetUndo'
 
 /** P2 — the master variation-theme editor's params: one frozen object for the life of the module (see the column below). */
 const MASTER_VARIATION_EDITOR_PARAMS: Record<string, unknown> = Object.freeze({ loadFamily: loadVariationFamily })
@@ -246,25 +247,25 @@ export function buildMasterColumns(
         // returns, so the row object must be MUTATED here — scheduling React state hands the save
         // path the OLD value (reference_ag_value_setter_must_mutate_params_data).
         const previous = cellOf(p.data, col.key)
-        p.data.values = {
-          ...p.data.values,
-          [col.key]: {
-            ...previous,
-            // The row keeps a real `source` after an edit: this row now stores the value, so the
-            // resolver would report it as the row's own on the next read.
-            source: p.data.isParent ? 'master' : 'variant',
-            value: parseReferenceOrScalarValue(col, p.newValue),
-            // Editing a cell gives THIS row the value: it is no longer inherited, and on a child
-            // that is exactly the layout's "edit to pin".
-            inherited: false,
-            inheritedFrom: null,
-            layer: p.data.isParent ? 'master' : 'variant',
-            pinned: !p.data.isParent,
-            editable: previous?.editable ?? true,
-            writeField: previous?.writeField ?? col.writeField,
-            writeTarget: previous?.writeTarget ?? 'master',
-          },
+        const next: StudioRow['values'][string] = {
+          ...previous,
+          // The row keeps a real `source` after an edit: this row now stores the value, so the
+          // resolver would report it as the row's own on the next read.
+          source: p.data.isParent ? 'master' : 'variant',
+          value: parseReferenceOrScalarValue(col, p.newValue),
+          // Editing a cell gives THIS row the value: it is no longer inherited, and on a child
+          // that is exactly the layout's "edit to pin".
+          inherited: false,
+          inheritedFrom: null,
+          layer: p.data.isParent ? 'master' : 'variant',
+          pinned: !p.data.isParent,
+          editable: previous?.editable ?? true,
+          writeField: previous?.writeField ?? col.writeField,
+          writeTarget: previous?.writeTarget ?? 'master',
         }
+        // The sheet's undo reads what the cell was — its value AND whether it was inherited (G3, `sheetUndo.ts`).
+        noteEditPrior(next, previous)
+        p.data.values = { ...p.data.values, [col.key]: next }
         return true
       },
       /* 🔴 `editable`, NOT `applies` — the same predicate AG is given above, and that is the whole

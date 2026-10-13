@@ -112,3 +112,18 @@ describe('background reads preserve unconfirmed edits', () => {
     expect(tracker.hasUnconfirmedChanges).toBe(false)
   })
 })
+
+describe('G1 — the re-read gate: only an edit still on its way holds a background read back', () => {
+  it('saving, waiting and unknown hold it; a refused cell does not (its answer is in, and the read keeps it)', () => {
+    const tracker = new CellSaveTracker()
+    tracker.set('M', 'gtin', 'refused', 'GTIN must be 8–14 digits')
+    expect(tracker.hasUnconfirmedChanges).toBe(true)
+    expect(tracker.hasOpenChanges).toBe(false)
+    for (const state of ['saving', 'waiting', 'unknown'] as const) {
+      tracker.set('P', 'manufacturer', state)
+      expect(tracker.hasOpenChanges).toBe(true)
+    }
+    tracker.set('P', 'manufacturer', 'saved')
+    expect(tracker.hasOpenChanges).toBe(false)
+  })
+})

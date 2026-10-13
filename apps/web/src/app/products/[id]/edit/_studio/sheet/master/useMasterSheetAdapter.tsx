@@ -9,7 +9,8 @@ import { channelLabel, languageLabel } from '../../scopes';
 import { productSheetRowKey, filterProductSheetRows } from '../productSheetRows';
 import { useSheetChips } from '../useSheetChips';
 import { useSheetSaveStatus } from '../useSheetSaveStatus';
-import { useSheetUndo } from '../useSheetUndo';
+import { useSheetUndo, type ResetCellBack } from '../useSheetUndo';
+import { inheritedCell, stateBefore, takeEditPrior } from '../sheetUndo';
 import { useSheetGridBindings } from '../useSheetGridBindings';
 import { useProductSheetInteraction } from '../useProductSheetInteraction';
 import { useSheetGeometry } from '../useSheetGeometry';
@@ -314,8 +315,24 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     const rows = useMemo(() => (sheet && familyOrder.settled ? sortByFamilyRank(sheet.rows, familyOrder.rank) : []), [sheet, familyOrder.settled, familyOrder.rank]);
     const { saveStatus, refused, refusedRowIds } = useSheetSaveStatus(writer, tracker, rows, sheet?.columns);
     savedAtRef.current = saveStatus.saved;
+    /* G3 — ⌘Z puts a cell that inherited back by a reset (the write path's own `reset`), never by storing the value it
+       showed: the inherited value and provenance show at once, and the read after the save confirms them. */
+    const resetCellBack = useCallback<ResetCellBack>((rowId, colId, before, onOutcome) => {
+        const api = getGridApi();
+        const node = api?.getRowNode(rowId);
+        const row = node?.data;
+        if (!api || !node || !row) {
+            onOutcome('dropped');
+            return;
+        }
+        const cell = cellOf(row, colId);
+        if (cell)
+            row.values = { ...row.values, [colId]: inheritedCell(cell, before) };
+        api.refreshCells({ rowNodes: [node], columns: [colId], force: true });
+        writer.set(rowId, colId, null, { row, intent: before.intent, onOutcome });
+    }, [getGridApi, writer]);
     /* ⌘Z undoes a whole operation (a fill, a paste) in one step and one save, and still works after the sheet re-reads. */
-    const undo = useSheetUndo(writer, getGridApi);
+    const undo = useSheetUndo(writer, getGridApi, { tracker, resetCell: resetCellBack });
     const { toast } = useToast();
     /* Add rows (R2) — empty rows in page memory; the SKU typed into one creates a draft variation (`../newRows/`). */
     const familyRoot = rows.find((row) => !row.parentId);
@@ -827,9 +844,12 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             });
             return;
         }
-        undo.record({ rowId: e.data.id, colId: colId!, before: e.oldValue, after: e.newValue }, e.source);
-        writer.set(e.data.id, colId!, e.newValue, { row: e.data });
-    }, [writer, formulas, onWriteStart, onWriteEnd, reload, undo.record, identitySku.onValueChanged]);
+        /* G2/G3 — the history keeps the cell's state (a cell that inherited is put back by a reset), and only what the
+           server stored: the writer reports this edit's outcome. */
+        const column = columnByKeyRef.current.get(colId!);
+        const before = column ? stateBefore(e.oldValue, e.data, colId!, takeEditPrior(e.data.values?.[colId!]), row => masterResetOffer(row, column)) : e.oldValue;
+        writer.set(e.data.id, colId!, e.newValue, { row: e.data, onOutcome: undo.edit({ rowId: e.data.id, colId: colId!, before, after: e.newValue }, e.source) });
+    }, [writer, formulas, onWriteStart, onWriteEnd, reload, undo.edit, identitySku.onValueChanged]);
     /* A held edit re-enters through the LATEST handler, which sees the formula state that released it. */
     const latestValueChanged = useRef(onCellValueChanged);
     latestValueChanged.current = onCellValueChanged;
