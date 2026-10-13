@@ -1596,17 +1596,23 @@ body.nds-drawer-resizing * {
 /* ── CoverageSummary (channel footprint in one non-growing line) ──── */
 /* Separated by a middot generated in CSS, so the markup carries only the facts and a part can be
    added or dropped without anyone maintaining punctuation. */
+/* One line that ends in "…" when its cell is narrower than the line — it was cut through a letter ("1 draft · 3 missin",
+   /products, Owner 2026-10-13). A flex row cannot end in an ellipsis, so the parts run inline and the dot carries the
+   6px either side that the gap gave. The InfoTip on it still names every channel. */
 .nds-coverage {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  display: inline-block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
   font-size: var(--nds-font-size-sm);
   color: var(--nds-text-2);
   white-space: nowrap;
 }
 .nds-coverage > span + span::before {
   content: '·';
-  margin-right: 6px;
+  margin: 0 6px;
   color: var(--nds-text-3);
 }
 .nds-coverage .iss {

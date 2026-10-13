@@ -274,8 +274,11 @@ export function MatrixGroupHeader(p: { displayName: string; coordinate?: MatrixC
   const tag = stripTag(c)
   return (
     <span className="nds-matrix-strip" title={stripTitle(c, p.displayName)}>
-      <span className="nds-matrix-strip-label">{p.displayName}</span>
-      {tag && <Tag tone={c && c.listed! > 0 ? 'success' : 'neutral'} className="nds-matrix-strip-tag">{tag}</Tag>}
+      {/* The name and its tag stay in view together while the group scrolls (`nds-grid-group-sticky`, grid.css). */}
+      <span className="nds-matrix-strip-in nds-grid-group-sticky">
+        <span className="nds-matrix-strip-label">{p.displayName}</span>
+        {tag && <Tag tone={c && c.listed! > 0 ? 'success' : 'neutral'} className="nds-matrix-strip-tag">{tag}</Tag>}
+      </span>
     </span>
   )
 }

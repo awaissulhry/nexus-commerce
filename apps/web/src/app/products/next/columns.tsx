@@ -286,7 +286,9 @@ export function buildPageColumns({ activeChannels, onDuplicate, onOpenInventory,
       key: 'channels',
       groupKey: 'products-next:identity', group: 'Identity',
       label: 'Channels',
-      width: 130,
+      /* Wide enough for all three states on one line ("1 live · 1 draft · 3 missing"): at 130 "1 draft · 3 missing" was
+         cut through a letter (Owner 2026-10-13). A width a person drags still wins (#571). */
+      width: 190,
       value: (row) => channelsOf(row, activeChannels),
       exportValue: (row) => coverageText(channelsOf(row, activeChannels)),
       preset: { cellClass: 'nds-ag-cell', cellRenderer: CoverageCell },
