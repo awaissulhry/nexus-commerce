@@ -158,6 +158,18 @@ describe('a business row sends the business offer alone', () => {
     expect(kept()).toMatchObject({ status: 'DEFERRED' })
   })
 
+  it('a newer setting was saved while the job ran: a change or a removal is not sent (never an older setting over the newer one); its own row sends the newer one', async () => {
+    // The job reads FIXED 32.95; the re-read right before the send (the business columns) finds FIXED 30.
+    m.read.mockImplementation(async (args: any) => (args?.select && Object.keys(args.select).length === 4 && args.select.businessPriceRule
+      ? { businessPriceRule: 'FIXED', businessPricePercent: null, businessPrice: 30, businessTiers: null }
+      : listing({ businessPriceRule: 'FIXED', businessPrice: 32.95 })))
+    m.get.mockResolvedValue(liveRead([allIt, b2bIt(31)]))
+    const result = await service.syncToAmazon(businessRow())
+    expect(m.offerPatch).not.toHaveBeenCalled()
+    expect(result).toMatchObject({ success: false, retryable: true })
+    expect(kept()).toMatchObject({ status: 'DEFERRED', line: 'The business price changed while it was being sent; the newer one is sent by its own row.' })
+  })
+
   it('a first business offer keeps Nexus\'s running sale — with its dates — in the normal offer it carries', async () => {
     m.read.mockResolvedValue(listing({ businessPriceRule: 'FIXED', businessPrice: 99, salePrice: 95 }))
     m.windows.mockResolvedValue(new Map([['l', { start: '2026-10-01', end: '2026-10-31' }]]))

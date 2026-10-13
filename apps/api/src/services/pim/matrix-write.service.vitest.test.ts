@@ -318,13 +318,9 @@ describe('the door answers the listings it moved, refuses a listing it did not e
     expect(ok).toMatchObject({ outcome: 'applied', version: 4 })
   })
 
-  it('the same expectedVersion twice is a conflict with the current version and the one sentence — in one write and across two', async () => {
-    const one = await writeMatrixCells(ctx, [
-      { rowId: 'row', coordinateKey: 'AMAZON:EU', cell: 'syncQty', value: 7, expectedVersion: 3 },
-      { rowId: 'row', coordinateKey: 'AMAZON:EU', cell: 'syncBuffer', value: 2, expectedVersion: 3 },
-    ])
-    expect(one.results.map((r) => [r.outcome, r.version, r.reason])).toEqual([['applied', 4, undefined], ['conflict', 4, 'Changed elsewhere — reloaded']])
-    expect(setStockBuffer).not.toHaveBeenCalled()
+  it('a second request carrying the version the first one spent is a conflict with the current version and the one sentence', async () => {
+    const one = await writeMatrixCells(ctx, [{ rowId: 'row', coordinateKey: 'AMAZON:EU', cell: 'syncQty', value: 7, expectedVersion: 3 }])
+    expect(one.results.map((r) => [r.outcome, r.version])).toEqual([['applied', 4]])
     // A second request carrying the version the first one spent: the fresh read holds 4.
     vi.mocked(getMatrixRead).mockImplementation(async () => euRead(4))
     const two = await writeMatrixCells(ctx, [{ rowId: 'row', coordinateKey: 'AMAZON:EU', cell: 'syncQty', value: 8, expectedVersion: 3 }])
@@ -502,6 +498,20 @@ describe('applyCell — the business cell (cell: businessPrice) goes through the
   ])('%s: the business door\'s answer, as it gave it', async (_name, r) => {
     answer(r)
     expect(await applyCell(read(businessCell()), cell(pct5), ctx)).toEqual({ rowId: 'row', coordinateKey: 'AMAZON:IT', cell: 'businessPrice', ...r })
+  })
+  it('one request is ONE view: the B2B price and Tiers of one listing, read at the same version — the second goes at the version the first left (never "changed elsewhere" against itself); a cell read at another version is still a conflict', async () => {
+    vi.mocked(getMatrixRead).mockReset().mockImplementation(async () => read(businessCell()))
+    door.mockReset()
+      .mockResolvedValueOnce({ results: [{ listingId: 'listing', productId: 'row', marketplace: 'IT', outcome: 'applied', version: 8, guarded: true, before: null, after: pct5, businessPrice: 99.75, warnings: [] }], applied: 1, refused: 0, noop: 0, conflict: 0 } as never)
+      .mockResolvedValueOnce({ results: [{ listingId: 'listing', productId: 'row', marketplace: 'IT', outcome: 'applied', version: 9, guarded: true, before: pct5, after: pct5, businessPrice: 99.75, warnings: [] }], applied: 1, refused: 0, noop: 0, conflict: 0 } as never)
+    const r = await writeMatrixCells(ctx, [cell(pct5), { ...cell(pct5), cell: 'businessTiers' } as never])
+    expect(r.results.map((o) => [o.cell, o.outcome, o.version])).toEqual([['businessPrice', 'applied', 8], ['businessTiers', 'applied', 9]])
+    expect(door.mock.calls.map((c) => c[0].targets[0]!.expectedVersion)).toEqual([7, 8])
+    // A cell read at another version than the one this request began from: a conflict, the door never asked.
+    door.mockReset().mockResolvedValueOnce({ results: [{ listingId: 'listing', productId: 'row', marketplace: 'IT', outcome: 'applied', version: 8, guarded: true, before: null, after: pct5, businessPrice: 99.75, warnings: [] }], applied: 1, refused: 0, noop: 0, conflict: 0 } as never)
+    const stale = await writeMatrixCells(ctx, [cell(pct5), { ...cell(pct5), cell: 'businessTiers', expectedVersion: 6 } as never])
+    expect(stale.results.map((o) => o.outcome)).toEqual(['applied', 'conflict'])
+    expect(door).toHaveBeenCalledTimes(1)
   })
   it('refused before the door: a held cell (its sentence), a value it cannot read, no products.price.edit', async () => {
     door.mockReset()

@@ -864,6 +864,12 @@ describe('the B2B price and Tiers cells (Amazon Business)', () => {
     expect(matrixApplyValue(c, 'businessPrice', '')).toBe(true)
     expect(c.business).toMatchObject({ rule: null, percent: null, exact: null, price: null, tiers: null })
     expect(matrixApplyValue(c, 'businessPrice', 'abc')).toBe(false)
+    // The same rule again changes nothing (a paste over cells that already hold it): no write, nothing blanked.
+    const same = cells({ ...B2B, business: biz({ tiers }) })
+    expect(matrixApplyValue(same, 'businessPrice', '€99.75 · −5%')).toBe(false)
+    expect(same.business!.price).toBe(99.75)
+    expect(matrixApplyValue(same, 'businessTiers', '2+ −3% · 5+ −5%')).toBe(false)
+    expect(same.business!.tiers!.levels[0]!.unitPrice).toBe(96.76)
     expect(matrixApplyValue(cells(), 'businessPrice', '5%')).toBe(false)
     // A redo replays the door's own setting.
     expect(matrixCoerceValue('businessPrice', { rule: 'FIXED', percent: null, price: 32.95, tiers: null })).toEqual({ rule: 'FIXED', price: 32.95 })
