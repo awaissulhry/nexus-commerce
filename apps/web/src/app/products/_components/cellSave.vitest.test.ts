@@ -61,6 +61,29 @@ describe('product grid inline cells — one save line', () => {
     expect(await saveProductCell(save, PRODUCT, 3, server.patch({ productType: 'BAG' }))).toEqual({ kind: 'saved' })
   })
 
+  it('a hung save of one row never holds up the cells of another row', async () => {
+    const save = cellSave()
+    const other = stubServer(1)
+    let hung = false
+    void saveProductCell(save, 'product-test-hung', 1, () => { hung = true; return new Promise<CellPatchReply>(() => {}) })
+    const elsewhere = await Promise.race([
+      saveProductCell(save, PRODUCT, 1, other.patch({ brand: 'Acme' })),
+      new Promise((resolve) => setTimeout(() => resolve('still waiting'), 50)),
+    ])
+    expect(hung).toBe(true)
+    expect(elsewhere).toEqual({ kind: 'saved' })
+    expect(save.lines.has(PRODUCT)).toBe(false) // an idle row's line is dropped
+  })
+
+  it('a no-op answer wrote nothing: its version is never taken as this tab’s own', async () => {
+    const save = cellSave()
+    const sent: Array<number | undefined> = []
+    // The same stock typed again; someone else had moved the row to 5 meanwhile.
+    expect(await saveProductCell(save, PRODUCT, 4, async (ifMatch) => { sent.push(ifMatch); return { ok: true, status: 200, json: { id: PRODUCT, version: 5, noop: true } } })).toEqual({ kind: 'saved' })
+    await saveProductCell(save, PRODUCT, 4, async (ifMatch) => { sent.push(ifMatch); return { ok: false, status: 409, json: { code: 'VERSION_CONFLICT', currentVersion: 5 } } })
+    expect(sent).toEqual([4, 4]) // the next cell goes out at what the row showed, and meets the other write
+  })
+
   it('a row without a version is sent without If-Match, and a lost connection is a failure', async () => {
     const save = cellSave()
     const sent: Array<number | undefined> = []

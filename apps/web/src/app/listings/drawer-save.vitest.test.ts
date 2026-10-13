@@ -4,7 +4,7 @@
  * The stub server checks `expectedVersion` the way PATCH /api/listings/:id does and answers `{ listing: { version } }`.
  */
 import { describe, expect, it } from 'vitest'
-import { drawerSave, sendDrawerPatch, type DrawerPatchReply } from './drawer-save'
+import { drawerSave, readDrawerListing, RELOAD_FIRST, sendDrawerPatch, type DrawerPatchReply } from './drawer-save'
 
 const LISTING = 'listing-test-1'
 
@@ -67,6 +67,31 @@ describe('listing drawer — one save line', () => {
     const next = sendDrawerPatch(save, LISTING, () => 1, { stockBuffer: 2 }, server.patch)
     expect(await lost).toEqual({ ok: false, error: 'Failed to fetch' })
     expect(await next).toMatchObject({ ok: true })
+  })
+
+  it('a write is never sent without a version: the drawer still shows another listing, or has not read this one', async () => {
+    const save = drawerSave()
+    const sent: unknown[] = []
+    const result = await sendDrawerPatch(save, LISTING, () => undefined, { followMasterPrice: false }, async (body) => { sent.push(body); return { ok: true, status: 200, json: {} } })
+    expect(result).toEqual({ ok: false, error: RELOAD_FIRST })
+    expect(sent).toEqual([])
+  })
+
+  it('a reload of the listing the drawer moved away from never paints, and never blocks the new listing’s read', async () => {
+    const save = drawerSave()
+    let current = 'listing-test-a'
+    let releaseA!: (v: { id: string }) => void
+    let releaseB!: (v: { id: string }) => void
+    const beforeSwitch = readDrawerListing(save, () => current, () => new Promise<{ id: string }>((resolve) => { releaseA = resolve }))
+    current = 'listing-test-b' // a companion on the Per-channel tab, or another grid row
+    const newListing = readDrawerListing(save, () => current, () => new Promise<{ id: string }>((resolve) => { releaseB = resolve }))
+    // A toggle on A that finished after the switch reloads A once more — a later ticket than B's read.
+    const lateA = readDrawerListing(save, () => current, async () => ({ id: 'listing-test-a' }))
+    expect(await lateA).toEqual({ kind: 'stale' })
+    releaseA({ id: 'listing-test-a' })
+    expect(await beforeSwitch).toEqual({ kind: 'stale' })
+    releaseB({ id: 'listing-test-b' })
+    expect(await newListing).toMatchObject({ kind: 'fresh', value: { id: 'listing-test-b' } })
   })
 
   it('the reload of the first toggle never paints over the reload of the second', async () => {

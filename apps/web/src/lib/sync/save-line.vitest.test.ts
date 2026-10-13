@@ -65,6 +65,26 @@ describe('saveLine — reads', () => {
     expect(await line.read(async () => 'after', { quietWhileWriting: true })).toMatchObject({ kind: 'fresh', value: 'after' })
   })
 
+  it('quietWhileWriting drops a read that started before a write and lands after it settled', async () => {
+    const line = saveLine()
+    const read = deferred<string>()
+    const reading = line.read(() => read.promise, { quietWhileWriting: true })
+    await line.write(async () => undefined) // started and settled while the read was out
+    expect(line.pending).toBe(0)
+    read.resolve('from before the write')
+    expect(await reading).toEqual({ kind: 'stale' })
+  })
+
+  it('a read `keep` refuses is dropped without counting as painted', async () => {
+    const line = saveLine()
+    const older = deferred<string>()
+    const wanted = line.read(() => older.promise, { keep: (v) => v === 'listing-b' })
+    const unwanted = line.read(async () => 'listing-a', { keep: (v) => v === 'listing-b' })
+    expect(await unwanted).toEqual({ kind: 'stale' })
+    older.resolve('listing-b')
+    expect(await wanted).toMatchObject({ kind: 'fresh', value: 'listing-b' })
+  })
+
   it('only the newest read reports a failure', async () => {
     const line = saveLine()
     const older = deferred<string>()

@@ -75,7 +75,7 @@ import { usePermission } from '@/lib/auth/AuthProvider'
 import { adjustmentPercentProblem } from '@nexus/shared/listing-price'
 import { inlineCellPatchBody, priceDriftView } from './listing-price-view'
 import { bulkUndoBody, bulkUndoTargets } from './bulk-undo'
-import { drawerSave, sendDrawerPatch } from './drawer-save'
+import { drawerSave, readDrawerListing, RELOAD_FIRST, sendDrawerPatch } from './drawer-save'
 import { usePolledList } from '@/lib/sync/use-polled-list'
 import {
   emitInvalidation,
@@ -4914,11 +4914,14 @@ function ListingDrawer({ id: initialId, onClose, onChanged }: { id: string; onCl
   // reloads ticketed, so an older reload (a toggle's own, or its invalidation echo) never paints over a newer one.
   const [save] = useState(drawerSave)
   const shownRef = useRef<any>(null)
+  // The listing the drawer is on now: a reload of another one (started before a switch) is dropped.
+  const idRef = useRef(id)
+  idRef.current = id
 
   const loadListing = useCallback(async () => {
     setLoading(true)
     setError(null)
-    const got = await save.line.read(async () => {
+    const got = await readDrawerListing(save, () => idRef.current, async () => {
       const res = await fetch(`${getBackendUrl()}/api/listings/${id}`, { cache: 'no-store' })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return res.json()
@@ -4949,6 +4952,12 @@ function ListingDrawer({ id: initialId, onClose, onChanged }: { id: string; onCl
 
   const patch = useCallback(async (body: any): Promise<boolean> => {
     if (!listing) return false
+    // The drawer still shows another listing (it moved to this one and the read has not landed): nothing to check
+    // this write against.
+    if (shownRef.current?.id !== id) {
+      setError(RELOAD_FIRST)
+      return false
+    }
     // The version is read when this write STARTS, after every drawer write before it (see drawer-save.ts).
     const sent = await sendDrawerPatch(save, id, () => (shownRef.current?.id === id ? shownRef.current.version : undefined), body, async (withVersion) => {
       const res = await fetch(`${getBackendUrl()}/api/listings/${id}`, {

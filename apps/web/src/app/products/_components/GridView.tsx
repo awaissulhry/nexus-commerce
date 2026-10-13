@@ -150,8 +150,8 @@ const PRODUCT_SORT_KEYS: Record<string, string> = {
 
 const noop = () => {}
 
-/** The inline cells' save line (cellSave.ts): shared by every cell of every row, for the life of the tab. A row's own
- *  version only grows, so it stays right across reloads and pages. Used on edits only, never while rendering. */
+/** The inline cells' save lines (cellSave.ts): one per row, for the life of the tab. A row's own version only grows,
+ *  so it stays right across reloads and pages. Used on edits only, never while rendering. */
 const CELL_SAVE = cellSave()
 
 /**
@@ -788,7 +788,7 @@ function EditableCell({
       body[meta.apiField] = value
     }
 
-    // P.7 — If-Match optimistic-concurrency, in the cells' save line: sent at the newer of the row's version and the
+    // P.7 — If-Match optimistic-concurrency, in the row's save line: sent at the newer of the row's version and the
     // one this tab's own last write of the row left, so a second field of the row never refuses itself.
     const result = await saveProductCell(CELL_SAVE, product.id, product.version, async (ifMatch) => {
       const headers: Record<string, string> = {

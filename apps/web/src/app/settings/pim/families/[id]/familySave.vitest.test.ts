@@ -91,6 +91,23 @@ describe('family attribute order — one request per drag, one at a time', () =>
     expect(p.painted).toEqual([['fa-c', 'fa-a', 'fa-b']])
   })
 
+  it('the read after drag 1, landing after drag 2 has saved, never paints drag 1’s order', async () => {
+    const p = page()
+    p.holdReadsFrom(true)
+    const drag1 = p.save.write(() => sendAttributeOrder(FAMILY, ['fa-b', 'fa-a', 'fa-c']))
+    await flush() // drag 1 saved; its read is out with drag 1's order
+    expect(p.reads).toHaveLength(1)
+    const drag2 = p.save.write(() => sendAttributeOrder(FAMILY, ['fa-c', 'fa-b', 'fa-a']))
+    await flush() // drag 2 saved; its own read is out too
+    expect(p.reads).toHaveLength(2)
+    p.reads[0].release() // drag 1's read lands now, after drag 2 has settled
+    await flush()
+    expect(p.painted).toEqual([]) // painting it would put drag 1's order back under drag 2
+    p.reads[1].release()
+    await Promise.all([drag1, drag2])
+    expect(p.painted).toEqual([['fa-c', 'fa-b', 'fa-a']])
+  })
+
   it('a refused drag says why, and the page reads the server’s order again', async () => {
     const p = page()
     vi.stubGlobal('fetch', async () => ({ ok: false, status: 409, json: async () => ({ error: 'The attributes of this family changed after the page read them.' }) }))
