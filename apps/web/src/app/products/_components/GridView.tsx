@@ -65,6 +65,7 @@ import {
   type Density,
 } from '@/lib/products/theme'
 import type { ProductRow as ProductRowType } from '../_types'
+import { cellSave, saveProductCell } from './cellSave'
 import type { ColumnDef } from '../_columns'
 import {
   VirtualizedGrid as SharedVirtualizedGrid,
@@ -148,6 +149,10 @@ const PRODUCT_SORT_KEYS: Record<string, string> = {
 }
 
 const noop = () => {}
+
+/** The inline cells' save line (cellSave.ts): shared by every cell of every row, for the life of the tab. A row's own
+ *  version only grows, so it stays right across reloads and pages. Used on edits only, never while rendering. */
+const CELL_SAVE = cellSave()
 
 /**
  * VirtualizedGrid — re-export wrapper with the original props interface.
@@ -783,13 +788,13 @@ function EditableCell({
       body[meta.apiField] = value
     }
 
-    try {
-      // P.7 — If-Match optimistic-concurrency.
+    // P.7 — If-Match optimistic-concurrency, in the cells' save line: sent at the newer of the row's version and the
+    // one this tab's own last write of the row left, so a second field of the row never refuses itself.
+    const result = await saveProductCell(CELL_SAVE, product.id, product.version, async (ifMatch) => {
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       }
-      if (typeof product.version === 'number')
-        headers['If-Match'] = String(product.version)
+      if (ifMatch !== undefined) headers['If-Match'] = String(ifMatch)
       const res = await fetch(
         `${getBackendUrl()}/api/products/${product.id}`,
         {
@@ -798,42 +803,41 @@ function EditableCell({
           body: JSON.stringify(body),
         },
       )
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}))
-        if (res.status === 409 && errJson?.code === 'VERSION_CONFLICT') {
-          setCellError(
-            `Another change landed first (version ${errJson.currentVersion ?? '?'}) — refreshing.`,
-          )
-          onChanged()
-          return
-        }
-        throw new Error(errJson?.error ?? `Update failed (${res.status})`)
-      }
-      // basePrice + totalStock cascade to ChannelListing — broadcast
-      // both invalidations so /listings + /bulk-operations refresh.
-      const cascadesToListings =
-        meta.apiField === 'basePrice' || meta.apiField === 'totalStock'
-      emitInvalidation({
-        type: 'product.updated',
-        id: product.id,
-        fields: [field],
-        meta: { source: 'products-inline-edit' },
-      })
-      if (cascadesToListings) {
-        emitInvalidation({
-          type: 'listing.updated',
-          meta: {
-            productIds: [product.id],
-            source: 'products-inline-edit',
-            field,
-          },
-        })
-      }
-      setCellError(null)
+      return { ok: res.ok, status: res.status, json: await res.json().catch(() => ({})) }
+    })
+    if (result.kind === 'conflict') {
+      setCellError(
+        `Another change landed first (version ${result.currentVersion ?? '?'}) — refreshing.`,
+      )
       onChanged()
-    } catch (e: any) {
-      setCellError(e instanceof Error ? e.message : String(e))
+      return
     }
+    if (result.kind === 'failed') {
+      setCellError(result.message)
+      return
+    }
+    // basePrice + totalStock cascade to ChannelListing — broadcast
+    // both invalidations so /listings + /bulk-operations refresh.
+    const cascadesToListings =
+      meta.apiField === 'basePrice' || meta.apiField === 'totalStock'
+    emitInvalidation({
+      type: 'product.updated',
+      id: product.id,
+      fields: [field],
+      meta: { source: 'products-inline-edit' },
+    })
+    if (cascadesToListings) {
+      emitInvalidation({
+        type: 'listing.updated',
+        meta: {
+          productIds: [product.id],
+          source: 'products-inline-edit',
+          field,
+        },
+      })
+    }
+    setCellError(null)
+    onChanged()
   }
 
   const errorBanner = cellError ? (

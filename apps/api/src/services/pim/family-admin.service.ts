@@ -220,6 +220,51 @@ export async function updateFamilyAttribute(id: string, body: FamilyAttributeUpd
   }
 }
 
+export interface FamilyAttributeOrderInput {
+  /** Every one of the family's own attribute links (FamilyAttribute ids), in their new order. */
+  familyAttributeIds?: unknown
+}
+
+const ORDER_MOVED = 'The attributes of this family changed after the page read them. The page shows them again; order them once more.'
+
+/**
+ * The order of a family's own attributes (Settings › PIM › Families, drag to reorder), written in ONE transaction:
+ * every link gets its sortOrder (0, 10, 20 …), or none does. A drag used to send one PATCH per link at once, with no
+ * transaction, so two quick drags mixed their orders.
+ *
+ * The list must name each of the family's own links exactly once: a link attached or detached since the page read is a
+ * 409, and the page reads again. Rows are written in id order, so two reorders of one family queue behind each other's
+ * row locks (the later one wins whole) and never deadlock.
+ */
+export async function reorderFamilyAttributes(familyId: string, body: FamilyAttributeOrderInput) {
+  const ids = body?.familyAttributeIds
+  if (!Array.isArray(ids) || ids.length === 0 || !ids.every((id) => typeof id === 'string' && id.length > 0)) {
+    refuse(400, 'familyAttributeIds must be a non-empty array of family-attribute ids')
+  }
+  const ordered = ids as string[]
+  if (new Set(ordered).size !== ordered.length) refuse(400, 'familyAttributeIds names a family attribute more than once')
+  const position = new Map(ordered.map((id, index) => [id, index * 10]))
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const family = await tx.productFamily.findUnique({ where: { id: familyId }, select: { id: true } })
+      if (!family) refuse(404, 'family not found')
+      const own = await tx.familyAttribute.findMany({ where: { familyId }, select: { id: true } })
+      if (own.length !== ordered.length || own.some((fa) => !position.has(fa.id))) refuse(409, ORDER_MOVED)
+      for (const id of [...ordered].sort()) {
+        await tx.familyAttribute.update({ where: { id }, data: { sortOrder: position.get(id)! } })
+      }
+      const familyAttributes = await tx.familyAttribute.findMany({
+        where: { familyId }, orderBy: [{ sortOrder: 'asc' }], select: { id: true, sortOrder: true },
+      })
+      return { familyId, familyAttributes }
+    })
+  } catch (err: any) {
+    // A link detached between the check and its update: the order the page sent no longer fits the family.
+    if (err?.code === 'P2025') refuse(409, ORDER_MOVED)
+    throw err
+  }
+}
+
 /**
  * Detach an attribute from a family. Removing a parent's attribute means children stop inheriting it. Stored values on
  * products are NOT touched (the attribute itself still exists; only the family→attribute link breaks).
