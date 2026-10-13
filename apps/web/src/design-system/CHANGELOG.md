@@ -1,3 +1,28 @@
+## Ads grids: one blank, icon headers; no unused density tokens — 2026-10-13
+
+Grid audit wave 4, PR13 chunk 2 (E11 blank, E12, E13, E16).
+- **One blank on the ads grids** (`grid/workspace/cells.tsx`): a cell whose `render` gives `null`, `undefined`, `''` or
+  the plain dash draws the engine's `EmptyValue` — the muted dash, "Not measured" to a screen reader — as /products does.
+  A total that comes out as the dash does too; a column with no total stays empty. A page's own dash element (with a
+  reason in its `title`) is kept.
+- **`GridColumn.headerIcon`** (WorkspaceGrid): an icon drawn in the header instead of the label's words, for a narrow
+  verb column; the label stays the column's name (Customise, screen readers). The Suggestions and Recommendations
+  decision columns use it (Apply ✓, Remove / Snooze ✕, Stop suggesting ⏸ — the cells' own lucide icons) and are centred
+  (rule 1A: an icon column centres). Their Customise rows read words, not glyphs. A `headerIcon` column has no header
+  menu button: in the 52px column AG's button left the label 0px wide, so the old ✓ ✕ ⏸ glyphs never showed either
+  (measured on a local stack); Pin / Autosize do nothing on a fixed, pinned verb column.
+- **Glyphs → icons**: the preset delete "✕" (WorkspaceGrid) and the Ad Manager's hourly "⏱" are lucide `X` / `Timer`.
+- **Tokens**: the 15 density CSS variables (`--nds-grid-row-text-*`, `-row-media-*`, `-row-media-line-*`, `-header-*`,
+  `-thumb-*`) are no longer emitted — nothing read them; NexusGrid and DataGrid take the sizes from `gridDensity` in TS.
+  Factory copy mirrored; both token files regenerated.
+- **Page CSS**: the second `@keyframes h10sh` (ads.css) and the replicate review table's cell rules (no column carries
+  those classes) are gone; the eBay totals-row font override goes (the engine owns the totals row); the eBay movers
+  share bar is drawn again (its rules aimed at cell classes the AG DataGrid never sets); four non-link first-column
+  names use the engine's cell ink, not a palette step.
+- **/products**: `ProductsSkeleton` and its `loadingOverlayComponent` are deleted — the grid is server-side, and AG shows
+  no loading overlay there: the first block loads in AG's own loading row at the real row height (measured on a local
+  stack, 85px at Spacious), so the skeleton was never drawn.
+
 ## A dialog open when the page loads hydrates cleanly — 2026-10-13
 
 Grid audit wave 4 (found on the grid lab's Publish review tab). Both apps (identical files).

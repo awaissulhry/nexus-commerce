@@ -45,7 +45,7 @@ import { GridPager } from '../toolbars/GridPager'
 import { rendererOwnsKeyboard } from '../rendererKeyboard'
 import { withVisibleColumnOrder } from '../preferencesLayout'
 import {
-  GroupBandRenderer, HeaderTipRenderer, IdentityCellRenderer, SelectionSkeletonRenderer, ValueCellRenderer,
+  GroupBandRenderer, HeaderTipRenderer, IconHeaderRenderer, IdentityCellRenderer, SelectionSkeletonRenderer, ValueCellRenderer,
   isSkeletonRow, isTotalRow, type SkeletonRow, type TotalRow, type WsContext, type WsContextHolder,
 } from './cells'
 import { modalOutside } from '../hooks/useGridShortcuts'
@@ -75,7 +75,7 @@ const GROUP_ROW_H = 35
 const SKELETON_ROWS: SkeletonRow[] = Array.from({ length: 6 }, (_, i) => ({ __skeleton: i }))
 const SORTING_ORDER: SortDirection[] = ['asc', 'desc', null]
 const EMPTY_META: ReadonlyMap<string, { label: string; order?: number }> = new Map()
-const RENDERERS = { identity: IdentityCellRenderer, value: ValueCellRenderer, headerTip: HeaderTipRenderer }
+const RENDERERS = { identity: IdentityCellRenderer, value: ValueCellRenderer, headerTip: HeaderTipRenderer, iconHeader: IconHeaderRenderer }
 
 const sortOfState = (api: GridApi): { key: string; dir: 'asc' | 'desc' } | null => {
   const s = api.getColumnState().filter((c) => c.sort).sort((a, b) => (a.sortIndex ?? 0) - (b.sortIndex ?? 0))[0]
@@ -772,7 +772,7 @@ export function WorkspaceGrid<T>({
  onDoubleClick={() => setPresetRenaming(p.name)}
  >{p.name}</Button>
                         )}
-                        <Button variant="link" aria-label={`Delete preset ${p.name}`} style={{ fontSize: 11 }} onClick={() => persistPresets(presets.filter((x) => x.name !== p.name))}>✕</Button>
+                        <Button variant="link" aria-label={`Delete preset ${p.name}`} onClick={() => persistPresets(presets.filter((x) => x.name !== p.name))}><X size={12} aria-hidden /></Button>
                       </span>
                     ))}
                     {presetSaveOpen ? (

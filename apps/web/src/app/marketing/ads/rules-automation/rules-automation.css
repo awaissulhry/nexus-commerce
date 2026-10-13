@@ -1586,7 +1586,7 @@
    grid in this console makes that column a LINK; a keyword here is not one until KT.4 adds the
    history drawer, and blue text that does nothing when clicked is a promise the page cannot keep.
    Matched on specificity rather than !important so KT.4 can simply delete this rule. */
-.nds-wsgrid .nds-ws-td.nm .h10-kt-kw .t { color: var(--nds-grey-900); }
+.nds-wsgrid .nds-ws-td.nm .h10-kt-kw .t { color: var(--nds-grid-cell-fg); }
 .h10-kt-kw .bd, .h10-kt-kw .ac { flex-shrink: 0; padding: 1px 6px; border-radius: 5px; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
 .h10-kt-kw .bd { background: var(--nds-grey-75); color: var(--nds-grey-600); }
 .h10-kt-kw .ac { background: #fff6e8; color: var(--nds-warning-text); }
@@ -1839,7 +1839,7 @@
    and underlines on hover, so a term with the colour fixed still BEHAVES like a link — the pointer
    arrives before the click and the underline confirms the promise. KT.1 shipped the colour alone
    and KT.1b had to come back for the other two. */
-.nds-wsgrid .nds-ws-td.nm .h10-hv-term .t { color: var(--nds-grey-900); font-weight: 700; cursor: default; }
+.nds-wsgrid .nds-ws-td.nm .h10-hv-term .t { color: var(--nds-grid-cell-fg); font-weight: 700; cursor: default; }
 .nds-wsgrid .nds-ws-td.nm .h10-hv-term .t:hover { text-decoration: none; }
 .h10-hv-term { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .h10-hv-term .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2011,7 +2011,7 @@
    underlines on hover — because every other consumer of this grid makes that column a link. Here
    it is not one (P1 gives the row an inspector), so all three halves of that promise are undone at
    (0,3,2). `!important` is not needed and would make this harder to delete when P1 lands. */
-.nds-wsgrid .nds-ws-td.nm .h10-plc-camp span.t { color: var(--nds-grey-900); font-weight: 700; cursor: default; }
+.nds-wsgrid .nds-ws-td.nm .h10-plc-camp span.t { color: var(--nds-grid-cell-fg); font-weight: 700; cursor: default; }
 .nds-wsgrid .nds-ws-td.nm .h10-plc-camp span.t:hover { text-decoration: none; }
 
 @media (max-width: 1200px) {
@@ -2439,13 +2439,13 @@
 .h10-bud-prov h2 i { font-style: normal; font-size: 11.5px; font-weight: 600; line-height: 1.55; color: var(--nds-grey-600); }
 
 /* ── 🔴 the RULES view's first column, LAST so it wins ──────────────────────────────────────────
-   `ads.css:695` paints `.nds-wsgrid td.nm .t` blue at (0,3,1), sets `cursor: pointer`, and `:696`
-   underlines on hover, because every other consumer makes that column a link. In the CAMPAIGNS
+   The engine (`workspace.css`) paints `.nds-ag-ws .nds-ws-td.nm .t` blue at (0,3,1), sets `cursor: pointer`, and
+   underlines it on hover, because every other consumer makes that column a link. In the CAMPAIGNS
    view it really is an `<a>` and keeps the blue it has earned. In the RULES view it is not a link
    yet — BUD.3 makes it open the rule record — so all three halves of the promise are undone here
    at (0,3,2), scoped to `.h10-bud-rule span.t` so the campaign view is untouched. A blue name that
    does nothing when clicked is a promise the page cannot keep. */
-.nds-wsgrid .nds-ws-td.nm .h10-bud-rule span.t { color: var(--nds-grey-900); font-weight: 700; cursor: default; }
+.nds-wsgrid .nds-ws-td.nm .h10-bud-rule span.t { color: var(--nds-grid-cell-fg); font-weight: 700; cursor: default; }
 .nds-wsgrid .nds-ws-td.nm .h10-bud-rule span.t:hover { text-decoration: none; }
 
 /* 🔴 1180, not 1400. Measured on prod: at 1280 the content box is 1154px, so six cells are 186px

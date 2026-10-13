@@ -47,6 +47,8 @@ export interface BuildColDefsInput<T> {
     identity: unknown
     value: unknown
     headerTip: unknown
+    /** The header of a column with a `headerIcon`: the icon, named by the label. */
+    iconHeader: unknown
   }
 }
 
@@ -129,6 +131,9 @@ export function buildColDefs<T>(input: BuildColDefsInput<T>): ColDef[] {
     return {
       colId: c.key,
       headerName: c.label,
+      /* A verb column's header is its icon. It is narrow (52px), and AG's menu button left the label 0px wide, so the icon
+         (and the glyph before it) never showed; the menu's Pin / Autosize do nothing on a fixed, pinned verb column. */
+      ...(c.headerIcon != null ? { headerComponentParams: { innerHeaderComponent: components.iconHeader }, suppressHeaderMenuButton: true } : {}),
       ...(c.tip ? { headerTooltip: c.tip, tooltipComponent: components.headerTip } : {}),
       hide,
       pinned: pinned ? 'right' : pinnedLeft ? 'left' : null,
@@ -179,5 +184,5 @@ export function buildColDefs<T>(input: BuildColDefsInput<T>): ColDef[] {
  * definitions — and AG's column model — stay put.
  */
 export function columnsSignature<T>(columns: readonly GridColumn<T>[]): string {
-  return JSON.stringify(columns.map((c) => [c.key, c.label, c.tip ?? null, c.align ?? null, c.metric ?? null, c.sortable ?? null, c.defaultHidden ?? null, c.freezeRight ?? null, c.width ?? null]))
+  return JSON.stringify(columns.map((c) => [c.key, c.label, c.headerIcon != null, c.tip ?? null, c.align ?? null, c.metric ?? null, c.sortable ?? null, c.defaultHidden ?? null, c.freezeRight ?? null, c.width ?? null]))
 }

@@ -307,7 +307,7 @@ export function RecommendationsView({ status, rowParam, writeUrl }: {
     // it has no bulk apply endpoint: each apply is its own gated POST.
     ...(isPending ? [
       {
-        key: 'ok', label: '✓', tip: 'Apply this recommendation — hover for exactly what it does; a confirm states the account mode (sandbox = simulated · live = gated writes) before anything is sent.', metric: false, sortable: false, freezeRight: true, width: 52,
+        key: 'ok', label: 'Apply', headerIcon: <Check size={14} aria-hidden />, align: 'center', tip: 'Apply this recommendation — hover for exactly what it does; a confirm states the account mode (sandbox = simulated · live = gated writes) before anything is sent.', metric: false, sortable: false, freezeRight: true, width: 52,
         render: (r: Recommendation) => r.apply ? (
           <ApproveHoverCard content={() => recHoverContent(r, () => writeUrl({ row: r.id }, { history: true }), mode)}>
             <ToolbarButton
@@ -319,7 +319,7 @@ export function RecommendationsView({ status, rowParam, writeUrl }: {
         ) : dash('No one-click apply for this recommendation — open the row to review it'),
       } as GridColumn<Recommendation>,
       {
-        key: 'no', label: '✕', tip: 'Snooze — hides it for this session. The engines recompute this feed continuously, so it comes back with the next run; ⏸ is how you stop it for good. Undo lives in the toast.', metric: false, sortable: false, freezeRight: true, width: 52,
+        key: 'no', label: 'Snooze', headerIcon: <X size={14} aria-hidden />, align: 'center', tip: 'Snooze — hides it for this session. The engines recompute this feed continuously, so it comes back with the next run; ⏸ is how you stop it for good. Undo lives in the toast.', metric: false, sortable: false, freezeRight: true, width: 52,
         render: (r: Recommendation) => (
           <ToolbarButton
             variant="boxed" className="h10-sug-iconbtn no" tooltip={false}
@@ -331,7 +331,7 @@ export function RecommendationsView({ status, rowParam, writeUrl }: {
       {
         // SG.9 — H10's third verb: stop raising this one. Nothing changes at Amazon; the
         // engines simply stop proposing it until you unmute.
-        key: 'pz', label: '⏸', tip: 'Stop suggesting this. Nothing is changed at Amazon — the engines just stop raising it, permanently, until you unmute it under Status → Muted.', metric: false, sortable: false, freezeRight: true, width: 52,
+        key: 'pz', label: 'Stop suggesting', headerIcon: <Pause size={14} aria-hidden />, align: 'center', tip: 'Stop suggesting this. Nothing is changed at Amazon — the engines just stop raising it, permanently, until you unmute it under Status → Muted.', metric: false, sortable: false, freezeRight: true, width: 52,
         render: (r: Recommendation) => (
           <ToolbarButton
             variant="boxed" className="h10-sug-iconbtn pz" tooltip={false}

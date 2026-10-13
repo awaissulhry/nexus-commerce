@@ -276,11 +276,8 @@
 .invModalFoot { display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 12px; }
 .invManageLink { color: var(--nds-text-link); font-size: var(--nds-font-size-base); }
 
-/* ── Grid loading skeleton (shown while the initial product list loads) ── */
+/* ── Waiting for the saved layout (the grid's first block then loads in AG's own loading row, at the real row height) ── */
 .layoutLoading { display: flex; padding: var(--nds-space-12) var(--nds-space-16); }
-.gridSkel { display: flex; flex-direction: column; gap: 14px; width: 100%; padding: 6px 2px; }
-.gridSkelRow { display: flex; align-items: center; gap: 12px; }
-.gridSkelText { display: flex; flex-direction: column; gap: 7px; flex: 1; }
 
 /* A group row's auto-column cell: the key, then how many products it folds. */
 

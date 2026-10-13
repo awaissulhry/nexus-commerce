@@ -49,8 +49,8 @@ export interface GridCssVar {
  *
  * 🔴 DO NOT drop `rowMediaLine` back toward `rowText` (28) to reclaim vertical space. Two things
  * break, and NEITHER reports the row height as the cause:
- *   1. The thumbnail clips — and NOTHING currently prevents it. `grid.css` carries
- *      `min(--nds-grid-thumb-compact, calc(--ag-row-height - 4px))`, which LOOKS like a cap and is
+ *   1. The thumbnail clips — and NOTHING currently prevents it. `grid.css` carried
+ *      `min(--nds-grid-thumb-compact, calc(--ag-row-height - 4px))`, which LOOKED like a cap and was
  *      inert: measured 2026-09-02 (DS.1 and UX.1 independently), `--ag-row-height` computes to
  *      **42px while the rows render at 28px**, because `NexusGrid` passes `rowHeight` as a grid
  *      OPTION and AG applies it inline without ever feeding that variable. So it evaluates
@@ -145,12 +145,8 @@ export const gridVars: ReadonlyArray<GridCssVar> = [
   { name: '--nds-grid-strip-weight', value: String(gridType.stripWeight) },
   { name: '--nds-grid-strip-tracking', value: gridType.stripTracking },
   { name: '--nds-grid-empty-fg', value: 'var(--nds-text-2)' },
-  // ── density (compact / cozy / spacious) ──
-  ...GRID_DENSITIES.map((d) => ({ name: `--nds-grid-row-text-${d}`, value: px(gridDensity[d].rowText) })),
-  ...GRID_DENSITIES.map((d) => ({ name: `--nds-grid-row-media-${d}`, value: px(gridDensity[d].rowMedia) })),
-  ...GRID_DENSITIES.map((d) => ({ name: `--nds-grid-row-media-line-${d}`, value: px(gridDensity[d].rowMediaLine) })),
-  ...GRID_DENSITIES.map((d) => ({ name: `--nds-grid-header-${d}`, value: px(gridDensity[d].header) })),
-  ...GRID_DENSITIES.map((d) => ({ name: `--nds-grid-thumb-${d}`, value: px(gridDensity[d].thumb) })),
+  // ── density: the row, header and thumbnail sizes are read from `gridDensity` in TS (NexusGrid, DataGrid); only the
+  //    cell padding is a CSS input ──
   { name: '--nds-grid-cell-pad-x', value: px(gridDensity.cozy.cellPadX) },
   { name: '--nds-grid-cell-pad-x-compact', value: px(gridDensity.compact.cellPadX) },
   { name: '--nds-grid-strip-h', value: px(gridGeometry.stripH) },

@@ -82,7 +82,6 @@ import { BulkEditModal, type BulkEditChanges } from './BulkEditModal'
 import { TagDialog } from './TagDialog'
 import { InventoryEditorModal } from './InventoryEditorModal'
 import { NewProductDialog } from './NewProductDialog'
-import { ProductsSkeleton } from './ProductsSkeleton'
 import { loadWorkingLayout, saveWorkingLayout, type StoredSheetLayout } from '@/design-system/grid/views/savedViewTransport'
 import { preferencesFromLayout, mergeVisibleColumnOrder } from '@/design-system/grid/views/columnLayout'
 import { isGridStatePayload, type GridViewPayload, type SavedGridView } from '@/design-system/grid/hooks/useGridViews'
@@ -1617,7 +1616,6 @@ function ProductsNextInner() {
                 onSelectionChanged={onSelectionChanged}
                 onStoreRefreshed={onStoreRefreshed}
                 initialState={initialState}
-                loadingOverlayComponent={ProductsSkeleton}
                 overlayNoRowsTemplate={NO_ROWS_TEMPLATE}
               />
               {/* The footer as Ad Manager's: pages on the left of the control, rows per page on the right. */}

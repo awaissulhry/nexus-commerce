@@ -23,7 +23,13 @@ export interface GridPrefs extends ColumnLayoutPreferences {
 
 export interface GridColumn<T> {
   key: string
+  /** The column's name: its header, its row in the Customise dialog, a screen reader's word for it. */
   label: string
+  /**
+   * An icon drawn in the header INSTEAD of the label's words (a narrow verb column: Apply ✓, Remove ✕, Stop ⏸). The
+   * label stays the column's name everywhere else and is the icon's accessible name. Pass the cells' own icon.
+   */
+  headerIcon?: ReactNode
   /** Column groups in the Nexus customization modal. Omit for one Columns group. */
   group?: string
   groupKey?: string

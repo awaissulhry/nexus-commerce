@@ -1100,7 +1100,7 @@ function SuggestionsInner() {
     // Hovering ✓ opens the action card stating EXACTLY what will land where (SG.2f).
     ...(status === 'pending' ? [
       {
-        key: 'ok', label: '✓', tip: 'Stage this change for Apply — hover for exactly what will happen. Click again to un-stage.', metric: false, sortable: false, freezeRight: true, width: DECISION_W,
+        key: 'ok', label: 'Apply', headerIcon: <Check size={14} aria-hidden />, align: 'center', tip: 'Stage this change for Apply — hover for exactly what will happen. Click again to un-stage.', metric: false, sortable: false, freezeRight: true, width: DECISION_W,
         render: (s: Suggestion) => {
           const on = staged.get(s.id)?.kind === 'apply'
           return (
@@ -1116,7 +1116,7 @@ function SuggestionsInner() {
         },
       } as GridColumn<Suggestion>,
       {
-        key: 'no', label: '✕', tip: 'Remove suggestion until a new one is generated — stages with Apply. Click again to un-stage.', metric: false, sortable: false, freezeRight: true, width: DECISION_W,
+        key: 'no', label: 'Remove', headerIcon: <X size={14} aria-hidden />, align: 'center', tip: 'Remove suggestion until a new one is generated — stages with Apply. Click again to un-stage.', metric: false, sortable: false, freezeRight: true, width: DECISION_W,
         render: (s: Suggestion) => {
           const on = staged.get(s.id)?.kind === 'remove'
           return (
@@ -1139,7 +1139,7 @@ function SuggestionsInner() {
          * (It used to pause the target here, which is close to the opposite; the real pause
          * still exists and now lives in the row drawer, where its blast radius is legible.)
          */
-        key: 'pz', label: '⏸', tip: 'Stop suggesting for this keyword/target. Nothing is changed at Amazon — it keeps running; we simply stop proposing changes for it. Stages with Apply; find muted rows under Status → Muted.', metric: false, sortable: false, freezeRight: true, width: DECISION_W,
+        key: 'pz', label: 'Stop suggesting', headerIcon: <Pause size={14} aria-hidden />, align: 'center', tip: 'Stop suggesting for this keyword/target. Nothing is changed at Amazon — it keeps running; we simply stop proposing changes for it. Stages with Apply; find muted rows under Status → Muted.', metric: false, sortable: false, freezeRight: true, width: DECISION_W,
         render: (s: Suggestion) => {
           const on = staged.get(s.id)?.kind === 'mute'
           const what = ENTITY_LABEL[s.entityType]?.toLowerCase() ?? 'entity'
@@ -1352,7 +1352,7 @@ function SuggestionsInner() {
               { key: 'at', label: aiStatus === 'dismissed' ? 'Dismissed' : aiStatus === 'applied' ? 'Decided' : aiStatus === 'muted' ? 'Muted' : 'Proposed', metric: false, sortable: true, sortValue: (r) => r.at, render: (r) => <span className="h10-sug-when">{new Date(r.at).toLocaleDateString('en-GB')}</span> } as GridColumn<AiDecision>,
               ...(aiStatus === 'proposed' ? [
                 {
-                  key: 'ok', label: '✓', metric: false, sortable: false, freezeRight: true, width: DECISION_W,
+                  key: 'ok', label: 'Apply', headerIcon: <Check size={14} aria-hidden />, align: 'center', metric: false, sortable: false, freezeRight: true, width: DECISION_W,
                   tip: 'Stage this proposal for Apply — approval executes through the same write-gated engine an AUTO plan uses. A bid approve re-runs the plan’s optimizer at apply time, so the applied bids are computed fresh and can differ from the shown figure. Click again to un-stage.',
                   render: (r: AiDecision) => {
                     const on = aiStaged.get(r.id) === 'apply'
@@ -1369,7 +1369,7 @@ function SuggestionsInner() {
                   },
                 } as GridColumn<AiDecision>,
                 {
-                  key: 'no', label: '✕', metric: false, sortable: false, freezeRight: true, width: DECISION_W,
+                  key: 'no', label: 'Remove', headerIcon: <X size={14} aria-hidden />, align: 'center', metric: false, sortable: false, freezeRight: true, width: DECISION_W,
                   tip: 'Remove this proposal — the plan won’t re-propose it for 7 days (restore it from the Dismissed view any time). Stages with Apply; click again to un-stage.',
                   render: (r: AiDecision) => {
                     const on = aiStaged.get(r.id) === 'remove'
@@ -1387,7 +1387,7 @@ function SuggestionsInner() {
                   // SG.9 — the mute, at this tab's grain: a decision names a campaign, so
                   // "stop suggesting for this" means the plans stop proposing for that
                   // campaign. Nothing is written; the campaign keeps running and spending.
-                  key: 'pz', label: '⏸', metric: false, sortable: false, freezeRight: true, width: DECISION_W,
+                  key: 'pz', label: 'Stop suggesting', headerIcon: <Pause size={14} aria-hidden />, align: 'center', metric: false, sortable: false, freezeRight: true, width: DECISION_W,
                   tip: 'Stop the A.I. proposing for this campaign. Nothing is changed at Amazon — the campaign keeps running; only the proposals stop. Stages with Apply; find muted campaigns under Status → Muted.',
                   render: (r: AiDecision) => {
                     const on = aiStaged.get(r.id) === 'mute'

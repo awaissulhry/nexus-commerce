@@ -15,8 +15,10 @@
  */
 import { memo, useCallback, useSyncExternalStore, type ReactNode } from 'react'
 import { ChevronDown, Pencil } from 'lucide-react'
-import type { ICellRendererParams, ITooltipParams } from 'ag-grid-community'
+import type { ICellRendererParams, IHeaderParams, ITooltipParams } from 'ag-grid-community'
 
+import { EmptyValue } from '../renderers/cells'
+import { EMPTY_DASH } from '../renderers/format'
 import type { DraftStore } from './drafts'
 import { pluralize } from './pipeline'
 import type { GridColumn, GridEditField, GridHierarchy } from './types'
@@ -125,6 +127,13 @@ export function IdentityCellRenderer(p: ICellRendererParams) {
   )
 }
 
+/**
+ * The ads blank (grid audit E11): a cell whose `render` gives no value — `null`, `undefined`, `''` or the plain dash —
+ * draws the engine's `EmptyValue` (the muted dash, "Not measured" to a screen reader), as every /products cell does.
+ * One place for every ads grid; a page's own dash ELEMENT (one with a reason in its `title`) is kept as it is.
+ */
+const isBlank = (v: ReactNode): boolean => v == null || v === '' || v === EMPTY_DASH
+
 /** A metric / settings cell: `column.render`, or the edit field, or the total. */
 export function ValueCellRenderer(p: ICellRendererParams) {
   const ctx = ctxOf<unknown>(p)
@@ -135,11 +144,14 @@ export function ValueCellRenderer(p: ICellRendererParams) {
   if (!c) return null
   if (p.node.rowPinned != null || isTotalRow(d)) {
     const t = typeof c.total === 'function' ? (c.total as (rows: unknown[]) => ReactNode)(ctx.totalRows) : c.total
-    return <>{t ?? ''}</>
+    /* A column with no total stays empty; a total that came out as the dash is the engine's blank. */
+    return t === EMPTY_DASH ? <EmptyValue /> : <>{t ?? ''}</>
   }
   if (d == null) return null
   const cf = ctx.editing ? ctx.editByKey.get(key) : undefined
-  return cf ? <EditableCell ctx={ctx} row={d} field={cf} /> : <>{withPencil(ctx, d, key, c.render(d))}</>
+  if (cf) return <EditableCell ctx={ctx} row={d} field={cf} />
+  const v = c.render(d)
+  return <>{withPencil(ctx, d, key, isBlank(v) ? <EmptyValue /> : v)}</>
 }
 
 /** The skeleton bar in the selection column while loading (the checkbox otherwise — AG's own). */
@@ -159,6 +171,13 @@ export function GroupBandRenderer(p: ICellRendererParams) {
       <span className="gc">{count} {pluralize(ctx.noun, count)}</span>
     </div>
   )
+}
+
+/** The header of a column with a `headerIcon`: the icon, its accessible name the column's label. */
+export function IconHeaderRenderer(p: IHeaderParams) {
+  const c = ctxOf<unknown>(p).columnsByKey.get(p.column.getColId())
+  if (!c) return null
+  return <span className="nds-ws-th-icon" role="img" aria-label={c.label}>{c.headerIcon}</span>
 }
 
 /** A header `tip`, drawn as the DS HoverCard's card (the same class, so the same rules paint it). */
