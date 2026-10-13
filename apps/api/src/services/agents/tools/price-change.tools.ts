@@ -273,9 +273,10 @@ const bulkListingPriceChange: AgentTool = {
     if (approved.basis !== (approvedOnVersion(approved) ? now.versionBasis : now.basis)) return { ok: false, error: 'A listing\'s price or sale changed since this was approved. Nothing changed; ask Claude again.' }
     const { writeChannelPrices } = await import('../../pim/channel-price-write.service.js')
     const written = await writeChannelPrices({
-      // At the version just read, with the price it showed: a quantity write landing in between is not a price change
-      // (the door's A-17 retry); a price someone else set in between is still a conflict.
-      targets: plan.lines.map((line) => ({ listingId: line.listing.id, price: line.to, expectedVersion: line.listing.version, expectedPrice: ownPrice(line.listing) })),
+      // At the version just read: anything landing on a listing between this read and its write (a sale set on the Matrix,
+      // a price) is a conflict for that listing. No `expectedPrice`: the door's A-17 retry compares the own price only and
+      // would write past a sale set in that gap.
+      targets: plan.lines.map((line) => ({ listingId: line.listing.id, price: line.to, expectedVersion: line.listing.version })),
       actor: actorOf(ctx, 'bulk-listing-price-change'), source: 'BULK_OVERRIDE', reason: 'Claude bulk-listing-price-change (approved in Nexus)',
     })
     const applied = new Set(written.results.filter((r) => r.outcome === 'applied' || r.outcome === 'noop').map((r) => r.listingId))
