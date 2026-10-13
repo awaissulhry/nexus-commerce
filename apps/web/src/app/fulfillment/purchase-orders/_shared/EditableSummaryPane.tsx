@@ -15,7 +15,9 @@ import '@/design-system/styles/components.css'
 //   - HTML5 drag-and-drop reorder (sets lineOrder server-side)
 //   - Add / remove rows (≥1 row enforced server-side)
 //   - Notes + expected-delivery-date inline-editable on the header
-//   - Debounced autosave (1.5s after last edit) with toast feedback
+//   - Debounced autosave (1.5s after last edit) with toast feedback; one
+//     save at a time, each sending the draft as it is when it goes out
+//     (po-autosave.ts)
 //   - Optimistic lock via PO.version — 409 triggers a full refetch +
 //     "Reloaded — PO was changed elsewhere" toast.
 
@@ -38,7 +40,9 @@ import { useToast } from '@/components/ui/Toast'
 import { DateField } from '@/design-system/components/DateField'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
+import { mayReseed, type SaveGate } from './po-autosave'
 import { formatCurrency } from './po-lens'
+import { useDraft, useSaveQueue } from './use-po-autosave'
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -89,6 +93,8 @@ type SaveState = 'idle' | 'pending' | 'saving' | 'saved' | 'error'
 interface EditableSummaryPaneProps {
   po: POHeaderInput & { items: POItemInput[] }
   onRefresh: () => void | Promise<void>
+  /** The page flushes the pending save through it before a status transition. */
+  saveGate?: SaveGate
 }
 
 let localSeq = 0
@@ -114,81 +120,87 @@ function parseCentsField(value: string): number {
 
 // ── Main component ────────────────────────────────────────────────
 
-export function EditableSummaryPane({ po, onRefresh }: EditableSummaryPaneProps) {
+interface Draft {
+  items: POItemInput[]
+  notes: string
+  expectedDate: string
+}
+
+function draftFromPo(po: EditableSummaryPaneProps['po']): Draft {
+  return {
+    items: rowsFromServerItems(po.items),
+    notes: po.notes ?? '',
+    expectedDate: po.expectedDeliveryDate ? po.expectedDeliveryDate.slice(0, 10) : '',
+  }
+}
+
+// Keys for "what the server holds", to skip no-op saves. The date compares
+// as yyyy-mm-dd: the server answers a full timestamp for the day sent.
+function itemsKey(items: POItemInput[]): string {
+  return JSON.stringify(serializeItems(items))
+}
+
+function headerKey(notes: string, expectedDate: string | null): string {
+  return JSON.stringify({ notes, expectedDate: expectedDate ? expectedDate.slice(0, 10) : null })
+}
+
+export function EditableSummaryPane({ po, onRefresh, saveGate }: EditableSummaryPaneProps) {
   const { toast } = useToast()
 
-  // Local draft state, seeded from props on mount + on po.version bump.
-  // Edits live here until autosave commits or refresh discards them.
-  const [items, setItems] = useState<POItemInput[]>(() => rowsFromServerItems(po.items))
-  const [notes, setNotes] = useState<string>(po.notes ?? '')
-  const [expectedDate, setExpectedDate] = useState<string>(
-    po.expectedDeliveryDate ? po.expectedDeliveryDate.slice(0, 10) : '',
-  )
+  // Local draft, seeded from props. Edits live here until autosave commits
+  // them. The save reads draftRef when it is SENT, so the last keystroke
+  // before the timer ends goes out too.
+  const [draft, draftRef, setDraft] = useDraft<Draft>(() => draftFromPo(po))
+  const { items, notes, expectedDate } = draft
   const [saveState, setSaveState] = useState<SaveState>('idle')
 
-  // The "server snapshot" — version + last-saved values. Used to skip
-  // no-op saves and to render the dirty indicator.
+  // The server's copy as this editor knows it: the version (seeded, or
+  // returned by our own last save — never taken back from an older refresh)
+  // and the last-saved values.
   const versionRef = useRef<number>(po.version)
-  const lastServerItemsRef = useRef<string>(JSON.stringify(serializeItems(po.items)))
-  const lastServerHeaderRef = useRef<string>(
-    JSON.stringify({ notes: po.notes ?? '', expectedDate: po.expectedDeliveryDate ?? null }),
-  )
-
-  // When the parent feeds a fresh PO (po.version bumped), re-seed local
-  // state. Avoids "stuck on old version" after a peer browser change.
-  useEffect(() => {
-    versionRef.current = po.version
-    setItems(rowsFromServerItems(po.items))
-    setNotes(po.notes ?? '')
-    setExpectedDate(po.expectedDeliveryDate ? po.expectedDeliveryDate.slice(0, 10) : '')
-    lastServerItemsRef.current = JSON.stringify(serializeItems(po.items))
-    lastServerHeaderRef.current = JSON.stringify({
-      notes: po.notes ?? '',
-      expectedDate: po.expectedDeliveryDate ?? null,
-    })
-    setSaveState('idle')
-  }, [po.id, po.version, po.notes, po.expectedDeliveryDate, po.items])
+  const lastServerItemsRef = useRef<string>(itemsKey(po.items))
+  const lastServerHeaderRef = useRef<string>(headerKey(po.notes ?? '', po.expectedDeliveryDate))
+  // Set by a 409: the server version the editor reloads from, draft or not.
+  const conflictVersionRef = useRef<number | null>(null)
+  const poRef = useRef(po)
+  poRef.current = po
 
   // ── Autosave logic ──────────────────────────────────────────────
   //
-  // Two save streams: header (PATCH /:id) and lines (PATCH /:id/lines).
-  // We collapse both into a single "save tick" so an autosave runs at
-  // most once every 1.5s of quiescence. A pending save during a save
-  // queues a follow-up.
+  // Two save streams: header (PATCH /:id) and lines (PATCH /:id/lines),
+  // collapsed into one save that runs 1.5s after the last edit. One save at
+  // a time: an edit during a save waits behind it (useSaveQueue).
 
-  const saveTimerRef = useRef<number | null>(null)
-  const inFlightRef = useRef<boolean>(false)
-  const followupRef = useRef<boolean>(false)
+  // 409 — drop the draft and reload the server's copy.
+  const conflict = async (res: Response): Promise<false> => {
+    const body = await res.json().catch(() => ({}))
+    queue.cancel()
+    conflictVersionRef.current =
+      typeof body?.current?.version === 'number' ? body.current.version : versionRef.current
+    toast.warning('PO was changed elsewhere — reloading')
+    setSaveState('idle')
+    await onRefresh()
+    return false
+  }
 
-  const runSave = useCallback(async () => {
-    if (inFlightRef.current) {
-      followupRef.current = true
-      return
+  const save = async (): Promise<boolean> => {
+    // The draft as it is NOW, not when the timer started.
+    const sent = draftRef.current
+    const itemsPayload = serializeItems(sent.items)
+    const sentItemsKey = JSON.stringify(itemsPayload)
+    const sentHeaderKey = headerKey(sent.notes, sent.expectedDate || null)
+    const itemsDirty = sentItemsKey !== lastServerItemsRef.current
+    const headerDirty = sentHeaderKey !== lastServerHeaderRef.current
+
+    if (!itemsDirty && !headerDirty) {
+      setSaveState((curr) => (curr === 'saved' ? curr : 'idle'))
+      return true
     }
-    inFlightRef.current = true
+
     setSaveState('saving')
     try {
-      // Snapshot what we're about to send (so concurrent edits don't
-      // change the payload mid-flight).
-      const itemsPayload = serializeItems(items)
-      const headerPayload = {
-        notes: notes,
-        expectedDeliveryDate: expectedDate || null,
-      }
-      const itemsDirty = JSON.stringify(itemsPayload) !== lastServerItemsRef.current
-      const headerDirty =
-        JSON.stringify({
-          notes: headerPayload.notes,
-          expectedDate: headerPayload.expectedDeliveryDate,
-        }) !== lastServerHeaderRef.current
-
-      if (!itemsDirty && !headerDirty) {
-        setSaveState('idle')
-        return
-      }
-
-      // Header first — header version bumps don't conflict with line
-      // save when sent sequentially because we re-read version after.
+      // Header first, then lines; each sends the version the one before
+      // returned.
       if (headerDirty) {
         const res = await fetch(
           `${getBackendUrl()}/api/fulfillment/purchase-orders/${po.id}`,
@@ -197,28 +209,19 @@ export function EditableSummaryPane({ po, onRefresh }: EditableSummaryPaneProps)
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               version: versionRef.current,
-              notes: headerPayload.notes,
-              expectedDeliveryDate: headerPayload.expectedDeliveryDate,
+              notes: sent.notes,
+              expectedDeliveryDate: sent.expectedDate || null,
             }),
           },
         )
-        if (res.status === 409) {
-          const body = await res.json().catch(() => ({}))
-          toast.warning('PO was changed elsewhere — reloading')
-          await onRefresh()
-          versionRef.current = body?.current?.version ?? versionRef.current
-          return
-        }
+        if (res.status === 409) return await conflict(res)
         if (!res.ok) {
           const body = await res.json().catch(() => ({}))
           throw new Error(body?.error ?? `HTTP ${res.status}`)
         }
         const updated = await res.json()
         versionRef.current = updated.version
-        lastServerHeaderRef.current = JSON.stringify({
-          notes: updated.notes ?? '',
-          expectedDate: updated.expectedDeliveryDate ?? null,
-        })
+        lastServerHeaderRef.current = sentHeaderKey
       }
 
       if (itemsDirty) {
@@ -233,20 +236,14 @@ export function EditableSummaryPane({ po, onRefresh }: EditableSummaryPaneProps)
             }),
           },
         )
-        if (res.status === 409) {
-          const body = await res.json().catch(() => ({}))
-          toast.warning('PO was changed elsewhere — reloading')
-          await onRefresh()
-          versionRef.current = body?.current?.version ?? versionRef.current
-          return
-        }
+        if (res.status === 409) return await conflict(res)
         if (!res.ok) {
           const body = await res.json().catch(() => ({}))
           throw new Error(body?.error ?? `HTTP ${res.status}`)
         }
         const updated = await res.json()
         versionRef.current = updated.version
-        lastServerItemsRef.current = JSON.stringify(serializeItems(updated.items))
+        lastServerItemsRef.current = sentItemsKey
       }
 
       setSaveState('saved')
@@ -255,76 +252,117 @@ export function EditableSummaryPane({ po, onRefresh }: EditableSummaryPaneProps)
       window.setTimeout(() => {
         setSaveState((curr) => (curr === 'saved' ? 'idle' : curr))
       }, 2000)
+      return true
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
       setSaveState('error')
-    } finally {
-      inFlightRef.current = false
-      if (followupRef.current) {
-        followupRef.current = false
-        // Trailing save in case more edits landed during the network trip.
-        runSave()
-      }
+      return false
     }
-  }, [po.id, items, notes, expectedDate, onRefresh, toast])
+  }
+
+  // Take the server's copy only when it is newer than what this editor
+  // knows and nothing is unsaved — or after a 409. The echo of our own save
+  // (po.updated → refresh) carries the version that save returned, so it
+  // never wipes typing in progress.
+  const reseedIfNewer = () => {
+    const server = poRef.current
+    const current = draftRef.current
+    const unsaved =
+      queue.busy() ||
+      itemsKey(current.items) !== lastServerItemsRef.current ||
+      headerKey(current.notes, current.expectedDate || null) !== lastServerHeaderRef.current
+    if (
+      !mayReseed({
+        serverVersion: server.version,
+        knownVersion: versionRef.current,
+        unsaved,
+        conflictVersion: conflictVersionRef.current,
+      })
+    ) {
+      return
+    }
+    queue.cancel()
+    conflictVersionRef.current = null
+    versionRef.current = server.version
+    lastServerItemsRef.current = itemsKey(server.items)
+    lastServerHeaderRef.current = headerKey(server.notes ?? '', server.expectedDeliveryDate)
+    setDraft(draftFromPo(server))
+    setSaveState('idle')
+  }
+
+  const queue = useSaveQueue(save, 1500, reseedIfNewer)
+  useEffect(() => saveGate?.register(queue), [saveGate, queue])
+
+  // Each fresh server copy from the parent (a peer's change, a refresh).
+  useEffect(() => {
+    reseedIfNewer()
+    // reseedIfNewer reads refs only; it runs once per server copy.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [po])
 
   const scheduleSave = useCallback(() => {
     setSaveState('pending')
-    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current)
-    saveTimerRef.current = window.setTimeout(() => {
-      runSave()
-    }, 1500)
-  }, [runSave])
+    queue.schedule()
+  }, [queue])
 
   // ── Mutators ────────────────────────────────────────────────────
 
   const updateLine = useCallback(
     (id: string, patch: Partial<POItemInput>) => {
-      setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)))
+      setDraft((prev) => ({
+        ...prev,
+        items: prev.items.map((it) => (it.id === id ? { ...it, ...patch } : it)),
+      }))
       scheduleSave()
     },
-    [scheduleSave],
+    [setDraft, scheduleSave],
   )
 
   const addLine = useCallback(() => {
-    setItems((prev) => [
+    setDraft((prev) => ({
       ...prev,
-      {
-        id: newLocalId(),
-        productId: null,
-        sku: '',
-        supplierSku: null,
-        quantityOrdered: 1,
-        quantityReceived: 0,
-        unitCostCents: 0,
-        note: null,
-        moq: 1,
-        casePack: null,
-      },
-    ])
+      items: [
+        ...prev.items,
+        {
+          id: newLocalId(),
+          productId: null,
+          sku: '',
+          supplierSku: null,
+          quantityOrdered: 1,
+          quantityReceived: 0,
+          unitCostCents: 0,
+          note: null,
+          moq: 1,
+          casePack: null,
+        },
+      ],
+    }))
     // No save — empty SKU rows wouldn't validate. Wait for SKU input.
-  }, [])
+  }, [setDraft])
 
   const removeLine = useCallback(
     (id: string) => {
-      setItems((prev) => (prev.length === 1 ? prev : prev.filter((it) => it.id !== id)))
+      setDraft((prev) => ({
+        ...prev,
+        items: prev.items.length === 1 ? prev.items : prev.items.filter((it) => it.id !== id),
+      }))
       scheduleSave()
     },
-    [scheduleSave],
+    [setDraft, scheduleSave],
   )
 
   const reorderLine = useCallback(
     (fromIdx: number, toIdx: number) => {
-      setItems((prev) => {
+      setDraft((prev) => {
         if (fromIdx === toIdx) return prev
-        const next = [...prev]
+        const next = [...prev.items]
         const [moved] = next.splice(fromIdx, 1)
         next.splice(toIdx, 0, moved)
-        return next
+        return { ...prev, items: next }
       })
       scheduleSave()
     },
-    [scheduleSave],
+    [setDraft, scheduleSave],
   )
 
   // ── Render ──────────────────────────────────────────────────────
@@ -353,7 +391,7 @@ export function EditableSummaryPane({ po, onRefresh }: EditableSummaryPaneProps)
             <DateField
               value={expectedDate}
               onChange={(v) => {
-                setExpectedDate(v)
+                setDraft((prev) => ({ ...prev, expectedDate: v }))
                 scheduleSave()
               }}
               ariaLabel="Expected delivery"
@@ -375,7 +413,8 @@ export function EditableSummaryPane({ po, onRefresh }: EditableSummaryPaneProps)
           <textarea
             value={notes}
             onChange={(e) => {
-              setNotes(e.target.value)
+              const next = e.target.value
+              setDraft((prev) => ({ ...prev, notes: next }))
               scheduleSave()
             }}
             rows={3}

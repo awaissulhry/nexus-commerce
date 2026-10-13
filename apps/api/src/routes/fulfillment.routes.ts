@@ -5474,6 +5474,30 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // Factory naming for each sent line of a lines save: a field the line
+  // sends wins (null clears it); an absent field keeps the stored line's
+  // value. Lines are replaced wholesale (new ids), so a sent line finds its
+  // stored line by SKU, in line order — two lines with one SKU keep theirs
+  // in turn. A new SKU has nothing stored and starts empty.
+  type FactoryNaming = { factoryName: string | null; factorySize: string | null; factorySpec: string | null }
+  function keepFactoryNaming(
+    sent: Array<{ sku: string } & { [K in keyof FactoryNaming]?: string | null }>,
+    stored: Array<{ sku: string } & FactoryNaming>,
+  ): FactoryNaming[] {
+    const unused = [...stored]
+    return sent.map((line) => {
+      const at = unused.findIndex((s) => s.sku === line.sku)
+      const match = at >= 0 ? unused.splice(at, 1)[0] : null
+      const pick = (field: keyof FactoryNaming) =>
+        line[field] !== undefined ? line[field] ?? null : match?.[field] ?? null
+      return {
+        factoryName: pick('factoryName'),
+        factorySize: pick('factorySize'),
+        factorySpec: pick('factorySpec'),
+      }
+    })
+  }
+
   // PO.6 — edit-in-place: bulk-replace line items.
   //
   // Frontend autosave sends the full items[] array every time. We use
@@ -5485,6 +5509,10 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   // pattern needs idempotency + simple conflict semantics. One PATCH
   // per edit risks partial-state races where another tab sees a half-
   // applied PO. Bulk-replace keeps each save atomic.
+  //
+  // PD.1 factory naming (factoryName / factorySize / factorySpec) on a line:
+  // absent from the sent line = keep the stored value, explicit null = clear.
+  // The draft editor never sends it, and the bulk-replace used to wipe it.
   fastify.patch('/fulfillment/purchase-orders/:id/lines', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
@@ -5547,6 +5575,12 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         if (locked.count === 0) {
           throw new Error('VERSION_MISMATCH')
         }
+        const stored = await tx.purchaseOrderItem.findMany({
+          where: { purchaseOrderId: id },
+          orderBy: [{ lineOrder: 'asc' }, { id: 'asc' }],
+          select: { sku: true, factoryName: true, factorySize: true, factorySpec: true },
+        })
+        const factoryNaming = keepFactoryNaming(items, stored)
         await tx.purchaseOrderItem.deleteMany({ where: { purchaseOrderId: id } })
         await tx.purchaseOrderItem.createMany({
           data: items.map((it, idx) => ({
@@ -5559,9 +5593,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
             note: it.note ?? null,
             lineOrder: it.lineOrder ?? idx,
             // PD.1 — per-line factory-facing naming override.
-            factoryName: it.factoryName ?? null,
-            factorySize: it.factorySize ?? null,
-            factorySpec: it.factorySpec ?? null,
+            ...factoryNaming[idx],
           })),
         })
         return await tx.purchaseOrder.findUnique({
@@ -5991,6 +6023,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   //     after:  ItemSnapshot[],   // operator-editable; what apply commits
   //     beforeTotalCents: number,
   //     afterTotalCents:  number,
+  //     editVersion?:     number,  // optimistic lock for PATCH; absent = 0
   //   }
   //
   // Status lifecycle:
@@ -6045,6 +6078,13 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       unitCostCents: it.unitCostCents,
       note: it.note,
     }))
+  }
+
+  // The revision editor's optimistic lock, kept in the snapshot it versions:
+  // saved edits so far (absent on a revision no one has edited = 0).
+  function editVersionOf(snapshot: unknown): number {
+    const value = (snapshot as { editVersion?: unknown } | null | undefined)?.editVersion
+    return typeof value === 'number' ? value : 0
   }
 
   function totalOf(items: ItemSnapshot[]): number {
@@ -6124,6 +6164,11 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   // items. The frozen `before` snapshot is preserved. Only PENDING
   // revisions are mutable — once notified or acked, the revision is
   // locked.
+  //
+  // Optimistic lock: `snapshotJson.editVersion` counts saved edits (absent
+  // = 0). The editor sends the editVersion its last save returned; a
+  // mismatch answers 409 + the current editVersion, like the PO's own
+  // `version`. A body without editVersion (an older tab) still saves.
   fastify.patch(
     '/fulfillment/purchase-orders/:id/revisions/:revisionId',
     async (request, reply) => {
@@ -6135,6 +6180,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         const body = (request.body ?? {}) as {
           items?: ItemSnapshot[]
           reason?: string | null
+          editVersion?: number
         }
         const items = Array.isArray(body.items) ? body.items : []
         if (items.length === 0) {
@@ -6154,6 +6200,15 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         const existing = rev.snapshotJson as any
+        const editVersion = editVersionOf(existing)
+        const versionMismatch = (current: number) =>
+          reply.code(409).send({
+            error: 'Version mismatch — revision was changed by someone else',
+            current: { id: rev.id, editVersion: current },
+          })
+        if (typeof body.editVersion === 'number' && body.editVersion !== editVersion) {
+          return versionMismatch(editVersion)
+        }
         const before = (existing?.before ?? []) as ItemSnapshot[]
         const after = items.map((it) => ({
           productId: it.productId ?? null,
@@ -6168,17 +6223,33 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           after,
           beforeTotalCents: totalOf(before),
           afterTotalCents: totalOf(after),
+          editVersion: editVersion + 1,
         }
-        const updated = await prisma.purchaseOrderRevision.update({
-          where: { id: revisionId },
+        const reason = body.reason === undefined ? rev.reason : body.reason?.trim() || null
+        // Compare-and-set on the snapshot read above, so a save that landed
+        // in between (or an apply / cancel) is never overwritten.
+        const written = await prisma.purchaseOrderRevision.updateMany({
+          where: {
+            id: revisionId,
+            status: 'PENDING',
+            snapshotJson: { equals: rev.snapshotJson as Prisma.InputJsonValue },
+          },
           data: {
             snapshotJson: snapshot as unknown as Prisma.InputJsonValue,
-            reason: body.reason === undefined ? rev.reason : body.reason?.trim() || null,
+            reason,
           },
         })
+        if (written.count === 0) {
+          const fresh = await prisma.purchaseOrderRevision.findUnique({
+            where: { id: revisionId },
+            select: { snapshotJson: true },
+          })
+          return versionMismatch(editVersionOf(fresh?.snapshotJson))
+        }
 
         publishPoEvent({ type: 'po.updated', poId: id, reason: 'revision-edited', ts: Date.now() })
-        return updated
+        // What this save wrote — never a later writer's copy (or editVersion).
+        return { ...rev, reason, snapshotJson: snapshot }
       } catch (err: any) {
         fastify.log.error({ err }, '[purchase-orders/:id/revisions PATCH] failed')
         return reply.code(500).send({ error: err?.message ?? String(err) })
@@ -6226,7 +6297,26 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         const totalCents = totalOf(after)
 
         await prisma.$transaction(async (tx) => {
-          // Replace PO items.
+          // Mark the revision first, and only the copy read above: a save
+          // from another tab (or an apply / cancel) that landed since fails
+          // this compare-and-set, and nothing is written.
+          const marked = await tx.purchaseOrderRevision.updateMany({
+            where: {
+              id: revisionId,
+              status: rev.status,
+              snapshotJson: { equals: rev.snapshotJson as Prisma.InputJsonValue },
+            },
+            data: { status: 'SUPPLIER_ACKED', supplierAckedAt: new Date() },
+          })
+          if (marked.count === 0) throw new Error('REVISION_CHANGED')
+          // Replace PO items. A revision line carries no factory naming, so
+          // each line keeps the one stored for its SKU.
+          const stored = await tx.purchaseOrderItem.findMany({
+            where: { purchaseOrderId: id },
+            orderBy: [{ lineOrder: 'asc' }, { id: 'asc' }],
+            select: { sku: true, factoryName: true, factorySize: true, factorySpec: true },
+          })
+          const factoryNaming = keepFactoryNaming(after, stored)
           await tx.purchaseOrderItem.deleteMany({ where: { purchaseOrderId: id } })
           await tx.purchaseOrderItem.createMany({
             data: after.map((it, idx) => ({
@@ -6238,6 +6328,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
               unitCostCents: it.unitCostCents,
               note: it.note ?? null,
               lineOrder: idx,
+              ...factoryNaming[idx],
             })),
           })
           await tx.purchaseOrder.update({
@@ -6246,10 +6337,6 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
               totalCents,
               version: { increment: 1 },
             },
-          })
-          await tx.purchaseOrderRevision.update({
-            where: { id: revisionId },
-            data: { status: 'SUPPLIER_ACKED', supplierAckedAt: new Date() },
           })
           // Defensive: any other in-flight revisions are now stale.
           await tx.purchaseOrderRevision.updateMany({
@@ -6265,6 +6352,19 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         publishPoEvent({ type: 'po.updated', poId: id, reason: 'revision-applied', ts: Date.now() })
         return { ok: true, applied: revisionId }
       } catch (err: any) {
+        if (err?.message === 'REVISION_CHANGED') {
+          const { revisionId } = request.params as { revisionId: string }
+          const fresh = await prisma.purchaseOrderRevision.findUnique({
+            where: { id: revisionId },
+            select: { id: true, status: true, snapshotJson: true },
+          })
+          return reply.code(409).send({
+            error: 'Version mismatch — revision was changed by someone else',
+            current: fresh
+              ? { id: fresh.id, status: fresh.status, editVersion: editVersionOf(fresh.snapshotJson) }
+              : null,
+          })
+        }
         fastify.log.error({ err }, '[purchase-orders/:id/revisions/:revisionId/apply] failed')
         return reply.code(500).send({ error: err?.message ?? String(err) })
       }
