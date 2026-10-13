@@ -48,6 +48,7 @@ import {
   useInvalidationChannel,
 } from '@/lib/sync/invalidation-channel'
 import { useInboundEvents } from '@/lib/sync/use-inbound-events'
+import { deskReceiveLine, scanReceiveLine } from './receive-line'
 
 type InboundType = 'FBA' | 'SUPPLIER' | 'MANUFACTURING' | 'TRANSFER'
 type InboundStatus =
@@ -852,7 +853,8 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
   const askConfirm = useConfirm()
   const [shipment, setShipment] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [receiveBuf, setReceiveBuf] = useState<Record<string, { qty: string; qc: string; photoUrl: string }>>({})
+  // `seen` = the line's received total when the person started editing it: the total the receive says it saw.
+  const [receiveBuf, setReceiveBuf] = useState<Record<string, { qty: string; qc: string; photoUrl: string; seen: number }>>({})
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
   const [composerOpen, setComposerOpen] = useState<null | { kind: 'discrepancy' } | { kind: 'discrepancyForItem'; itemId: string } | { kind: 'attachment' }>(null)
   const [busy, setBusy] = useState(false)
@@ -869,22 +871,7 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
 
   const submitReceive = async () => {
     const updates = Object.entries(receiveBuf)
-      .map(([itemId, v]) => {
-        const qty = Number(v.qty)
-        if (!Number.isFinite(qty) || qty < 0) return null
-        const photoUrls = v.photoUrl?.trim() ? [v.photoUrl.trim()] : undefined
-        // Skip rows with neither a non-zero qty target nor a QC update nor a photo.
-        const item = shipment?.items?.find((it: any) => it.id === itemId)
-        const cumulativeChanges = qty !== (item?.quantityReceived ?? 0)
-        const qcChanges = v.qc !== (item?.qcStatus ?? '')
-        if (!cumulativeChanges && !qcChanges && !photoUrls) return null
-        return {
-          itemId,
-          quantityReceived: cumulativeChanges ? qty : (item?.quantityReceived ?? 0),
-          qcStatus: v.qc || undefined,
-          photoUrls,
-        }
-      })
+      .map(([itemId, v]) => deskReceiveLine(itemId, v, shipment?.items?.find((it: any) => it.id === itemId)?.qcStatus ?? null))
       .filter(Boolean)
     if (updates.length === 0) { toast.error('Enter received quantities, change QC, or paste a photo URL'); return }
     setBusy(true)
@@ -896,6 +883,8 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
+        // 409: a line moved since this drawer read it. Re-read, so the person sees the current totals and enters again.
+        if (res.status === 409) { setReceiveBuf({}); fetchOne(); onChanged() }
         throw new Error(err.error ?? 'Receive failed')
       }
       setReceiveBuf({})
@@ -917,6 +906,7 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
           qty: String(it.quantityReceived + remaining),
           qc: receiveBuf[it.id]?.qc ?? 'PASS',
           photoUrl: receiveBuf[it.id]?.photoUrl ?? '',
+          seen: it.quantityReceived,
         }
       }
     }
@@ -1131,7 +1121,7 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
                       item={it}
                       buf={receiveBuf[it.id]}
                       expanded={expandedItems.has(it.id)}
-                      onBufChange={(v) => setReceiveBuf({ ...receiveBuf, [it.id]: v })}
+                      onBufChange={(v) => setReceiveBuf({ ...receiveBuf, [it.id]: { ...v, seen: receiveBuf[it.id]?.seen ?? it.quantityReceived } })}
                       onToggleExpand={() => toggleExpand(it.id)}
                       onReleaseHold={() => releaseHold(it.id)}
                       onAddDiscrepancy={() => setComposerOpen({ kind: 'discrepancyForItem', itemId: it.id })}
@@ -2941,19 +2931,23 @@ function BulkReceiveModal({ onClose, onReceived }: { onClose: () => void; onRece
   const applyReceive = async (cand: ReceiveCandidate, qtyValue: number) => {
     setBusy(true)
     try {
-      const target = Math.min(cand.quantityExpected, cand.quantityReceived + qtyValue)
+      const line = scanReceiveLine(cand, qtyValue)
       const idempotencyKey = `bulk-${cand.itemId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
       const res = await fetch(`${getBackendUrl()}/api/fulfillment/inbound/${cand.shipment.id}/receive`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           actor: 'bulk-receive',
-          items: [{ itemId: cand.itemId, quantityReceived: target, idempotencyKey }],
+          items: [{ ...line, idempotencyKey }],
         }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data?.error ?? `Receive failed (${res.status})`)
-      const applied = target - cand.quantityReceived
+      if (!res.ok) {
+        // 409: the line moved since the lookup. Drop the old pick; scanning again looks the current total up.
+        if (res.status === 409) { setCandidates(null); onReceived() }
+        throw new Error(data?.error ?? `Receive failed (${res.status})`)
+      }
+      const applied = line.quantityReceived - line.expectedReceived
       setLog((prev) => [
         { ts: Date.now(), sku: cand.sku, shipmentRef: cand.shipment.reference, applied, ok: true },
         ...prev,

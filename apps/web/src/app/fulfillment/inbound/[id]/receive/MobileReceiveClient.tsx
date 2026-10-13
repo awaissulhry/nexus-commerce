@@ -28,6 +28,7 @@ import {
 import { getBackendUrl } from '@/lib/backend-url'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { DateField } from '@/design-system/components/DateField'
+import { receiveLine } from '../../receive-line'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
@@ -178,6 +179,11 @@ export default function MobileReceiveClient({ id }: { id: string }) {
               fetchOne()
             }}
             onError={(message) => setToast({ kind: 'error', message })}
+            onStale={(message) => {
+              setActiveItemId(null)
+              setToast({ kind: 'error', message })
+              fetchOne()
+            }}
           />
         ) : (
           <ItemList
@@ -372,16 +378,20 @@ function ItemCard({ item, onClick }: { item: Item; onClick: () => void }) {
 // Item detail — large-tap-target receive controls
 // ─────────────────────────────────────────────────────────────────────
 function ItemReceiveDetail({
-  shipmentId, item, onBack, onSaved, onError,
+  shipmentId, item, onBack, onSaved, onError, onStale,
 }: {
   shipmentId: string
   item: Item
   onBack: () => void
   onSaved: (message: string) => void
   onError: (message: string) => void
+  /** The line moved since this page read it: back to the list, re-read, and say so. */
+  onStale: (message: string) => void
 }) {
   const askConfirm = useConfirm()
   const [target, setTarget] = useState<number>(item.quantityReceived)
+  // The total this page showed when it opened the line: the receive says it saw it (a refresh does not move it).
+  const [seen] = useState<number>(item.quantityReceived)
   const [qc, setQc] = useState<string>(item.qcStatus ?? '')
   const [busy, setBusy] = useState(false)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
@@ -402,7 +412,7 @@ function ItemReceiveDetail({
   const onHold = item.qcStatus === 'HOLD' || item.qcStatus === 'FAIL'
 
   const submit = async () => {
-    if (target === item.quantityReceived && qc === (item.qcStatus ?? '')) {
+    if (target === seen && qc === (item.qcStatus ?? '')) {
       onError('No changes to save')
       return
     }
@@ -413,8 +423,7 @@ function ItemReceiveDetail({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           items: [{
-            itemId: item.id,
-            quantityReceived: target,
+            ...receiveLine(item.id, seen, target),
             qcStatus: qc || undefined,
             // L.11 — only send lot fields when the operator opened
             // the panel and provided a lot number. Avoids creating
@@ -437,9 +446,11 @@ function ItemReceiveDetail({
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
+        // 409: someone received on this line since this page read it. Nothing was booked; show the current total.
+        if (res.status === 409) { onStale(err.error ?? `${item.sku} changed meanwhile; check the total and enter it again.`); return }
         throw new Error(err.error ?? 'Save failed')
       }
-      const delta = target - item.quantityReceived
+      const delta = target - seen
       onSaved(delta !== 0
         ? `Received ${delta > 0 ? '+' : ''}${delta} for ${item.sku}`
         : `Updated QC for ${item.sku}`)

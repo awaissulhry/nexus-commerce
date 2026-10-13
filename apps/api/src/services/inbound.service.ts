@@ -72,11 +72,25 @@ export class NotFoundError extends Error {
   }
 }
 
+/** Lines whose received total moved after the screen read it. Nothing was booked for them; the other lines were. */
+export class ReceiveConflictError extends Error {
+  constructor(public conflicts: Array<{ itemId: string; sku: string; quantityReceived: number }>) {
+    super(`Changed meanwhile: ${conflicts.map((c) => `${c.sku} now shows ${c.quantityReceived} received`).join(', ')}. Nothing was booked for ${conflicts.length === 1 ? 'it' : 'them'}; check the total and enter it again.`)
+    this.name = 'ReceiveConflictError'
+  }
+}
+
 // ─── Receive ────────────────────────────────────────────────────────
 
 interface ReceiveItemInput {
   itemId: string
+  /** The line's new received TOTAL; the stock moves by the difference to the received count now. */
   quantityReceived: number
+  /** The received total the screen showed when the person set quantityReceived (desk, mobile, scan send it). When the
+   *  line no longer stands there — another receiver, another tab — nothing is booked for it and receiveItems throws
+   *  ReceiveConflictError once the other lines are done, so a screen holding an older total can neither swallow
+   *  another receiver's units nor book a negative. Without it the total is booked as before (Claude, PO receive). */
+  expectedReceived?: number
   qcStatus?: string
   qcNotes?: string
   idempotencyKey?: string
@@ -122,6 +136,7 @@ export async function receiveItems(args: ReceiveArgs) {
   }
   const reason = reasonMap[shipment.type] ?? 'INBOUND_RECEIVED'
   const sign = shipment.type === 'FBA' ? -1 : 1
+  const conflicts: ReceiveConflictError['conflicts'] = []
 
   for (const upd of items) {
     const orig = shipment.items.find((it) => it.id === upd.itemId)
@@ -129,15 +144,21 @@ export async function receiveItems(args: ReceiveArgs) {
 
     const target = Number(upd.quantityReceived)
     if (!Number.isFinite(target) || target < 0) continue
+    // An unreadable seen total is a mismatch (NaN equals nothing): refused, never booked blind.
+    const expected = upd.expectedReceived == null ? null : Number(upd.expectedReceived)
 
     // MCP full control 08 S10 — the line is locked while its received count is read and the stock moved, in one
     // transaction. Before, two identical receives of "5 received" (a double-click, a retried request) both read 0,
     // both added 5 and the shelf showed 10. Now the second waits, finds 5 already received and moves nothing; two
     // different targets end at the later one with the stock moved by exactly the difference each time.
+    // A screen's receive also says which total it saw (expectedReceived): two receivers who both saw 0 and both
+    // counted 5 would otherwise book 5 once, and a screen still showing 0 that sends 3 would book −2. The line must
+    // still stand at the total the screen saw, or nothing moves and the person is shown the current total.
     const isStock = (!upd.qcStatus || upd.qcStatus === 'PASS') && !!orig.productId
     const settled = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "InboundShipmentItem" WHERE id = ${orig.id} FOR UPDATE`
       const fresh = await tx.inboundShipmentItem.findUniqueOrThrow({ where: { id: orig.id }, select: { quantityReceived: true } })
+      if (expected !== null && fresh.quantityReceived !== expected) return { delta: 0, moved: null, conflict: fresh.quantityReceived }
       const delta = target - fresh.quantityReceived
       if (delta === 0) return { delta: 0, moved: null }
 
@@ -187,6 +208,10 @@ export async function receiveItems(args: ReceiveArgs) {
       return { delta, moved }
     })
 
+    if ('conflict' in settled) {
+      conflicts.push({ itemId: orig.id, sku: orig.sku, quantityReceived: settled.conflict })
+      continue
+    }
     if (settled.delta === 0) {
       if ('duplicate' in settled) continue
       // QC + photo append still allowed without stock churn.
@@ -298,6 +323,9 @@ export async function receiveItems(args: ReceiveArgs) {
 
   // Auto-transition (RECEIVING → PARTIALLY_RECEIVED → RECEIVED → RECONCILED)
   await maybeAutoTransition(shipmentId)
+
+  // After the lines that did book (and their PO and status follow-ups), the ones that moved meanwhile are refused.
+  if (conflicts.length > 0) throw new ReceiveConflictError(conflicts)
 
   return prisma.inboundShipment.findUnique({
     where: { id: shipmentId },
