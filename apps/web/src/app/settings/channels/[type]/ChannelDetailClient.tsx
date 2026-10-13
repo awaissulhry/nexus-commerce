@@ -41,6 +41,7 @@ import { useSettingsForm } from '../../_shell/SettingsSaveBar'
 import '../channels.css'
 import { InboundGrid } from '../ChannelEventsGrid'
 import { ShopifyShadowReportCard } from './ShopifyShadowReportCard'
+import { GoogleAccountsCard } from './GoogleAccountsCard'
 import {
   type ActionNote,
   type ChannelConnection,
@@ -68,6 +69,8 @@ import {
   runHeartbeat,
   sameSet,
   showLastError,
+  showsGoogleAccounts,
+  showsMarketplacesAndEvents,
   startReconnect,
   statusPill,
   testHold,
@@ -355,13 +358,22 @@ export default function ChannelDetailClient({ channelType, initial, initialError
         <ConnectionCard connection={connection} status={status} />
         <PermissionsCard scopes={detail.scopes} drift={drift} permissionModel={detail.permissionModel} />
       </div>
-      <MarketplacesCard
-        channelType={channelType}
-        participation={detail.connectionScopes ?? []}
-        draftMarkets={draftMarkets}
-        setDraftMarkets={setDraftMarkets}
-      />
-      <InboundEventsCard events={detail.recentEvents} stats={detail.eventStats} />
+      {/* Google Ads step 1a — Google has no markets to scope and sends no inbound events; its page shows the
+          accounts this business reads instead. */}
+      {showsGoogleAccounts(channelType) && connection.isManagedBy !== 'pending' && (
+        <GoogleAccountsCard connectionId={connection.id} reloadSignal={detail} onReconnect={() => { void onReconnect() }} />
+      )}
+      {showsMarketplacesAndEvents(channelType) && (
+        <>
+          <MarketplacesCard
+            channelType={channelType}
+            participation={detail.connectionScopes ?? []}
+            draftMarkets={draftMarkets}
+            setDraftMarkets={setDraftMarkets}
+          />
+          <InboundEventsCard events={detail.recentEvents} stats={detail.eventStats} />
+        </>
+      )}
       {channelType === 'shopify' && connection.isManagedBy !== 'pending' && <ShopifyShadowReportCard accountId={connection.id} />}
       <AdvancedCard meta={detail.meta} />
     </div>
@@ -414,7 +426,8 @@ function ConnectionCard({
       ),
     },
     { label: 'Managed by', value: connection.connectMode === 'self_authorization' && connection.isManagedBy === 'oauth' ? 'Private app authorization' : MANAGED_BY[connection.isManagedBy] },
-    { label: 'Account', value: identityLine(connection) },
+    // One line with an ellipsis, the full text on hover: a long e-mail is never broken inside a word.
+    { label: 'Account', value: <span className="nds-connect-ident" title={identityLine(connection)}>{identityLine(connection)}</span> },
     {
       label: 'Region',
       value: connection.region ? <Tag>{connection.region}</Tag> : <span style={muted}>—</span>,

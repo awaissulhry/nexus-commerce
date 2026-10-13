@@ -14,7 +14,7 @@ import { NexusGrid, type ColDef, type ICellRendererParams } from '@/design-syste
 import { Pill, Tag } from '@/design-system/primitives'
 import { EmptyState } from '@/design-system/components'
 import { relativeTime } from './channels-data'
-import { readableAccountText, summariseDetail, type AccountNames } from './channel-event-details'
+import { eventTypeLabel, readableAccountText, summariseDetail, type AccountNames } from './channel-event-details'
 export { summariseDetail } from './channel-event-details'
 
 export interface LedgerRow {
@@ -73,7 +73,7 @@ function WhenCell(p: ICellRendererParams<{ createdAt: string }>) {
   return <span title={iso}>{relativeTime(iso ?? null)}</span>
 }
 function TypeCell(p: ICellRendererParams<LedgerRow>) {
-  return p.data ? <Tag>{p.data.type}</Tag> : null
+  return p.data ? <Tag>{eventTypeLabel(p.data.type)}</Tag> : null
 }
 /** The status a row is really in, falling back to the old boolean for older callers. */
 export function inboundStatusOf(row: InboundRow): InboundStatus {

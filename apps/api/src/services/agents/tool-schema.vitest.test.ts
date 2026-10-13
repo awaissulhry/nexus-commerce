@@ -110,8 +110,9 @@ describe('MCP.3 — every tool describes its own arguments', () => {
       const schema = inputJsonSchema(listTools().find((t) => t.name === name)!) as JsonObjectSchema
       return { properties: Object.keys(schema.properties ?? {}), required: schema.required ?? [] }
     }
-    expect(described('ads-overview')).toEqual({ properties: ['channel', 'market', 'days'], required: [] })
-    expect(described('ad-campaigns')).toEqual({ properties: ['channel', 'market', 'status', 'search', 'days', 'limit', 'cursor'], required: [] })
+    // Google Ads step 1a — overview and campaigns also take the Google account (channel google, read per account).
+    expect(described('ads-overview')).toEqual({ properties: ['channel', 'market', 'accountId', 'days'], required: [] })
+    expect(described('ad-campaigns')).toEqual({ properties: ['channel', 'market', 'accountId', 'status', 'search', 'days', 'limit', 'cursor'], required: [] })
     expect(described('ad-targets')).toEqual({ properties: ['campaignId', 'adGroupId', 'market', 'status', 'search', 'days', 'limit', 'cursor'], required: [] })
     expect(described('ad-search-terms')).toEqual({ properties: ['kind', 'campaignId', 'market', 'search', 'days', 'limit', 'cursor'], required: [] })
     expect(described('ad-changes')).toEqual({ properties: ['channel', 'campaignId', 'targetId', 'source', 'days', 'limit', 'cursor'], required: [] })

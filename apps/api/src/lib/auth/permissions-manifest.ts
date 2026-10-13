@@ -197,6 +197,13 @@ export const ENTRIES: Entry[] = [
   RW(F.settingsIntegrationsManage, F.settingsIntegrationsManage, pfx('/api/cx/connections')),
   // P0.5 — our app secrets' expiry dates (never a secret): the same people who manage connections.
   RW(F.settingsIntegrationsManage, F.settingsIntegrationsManage, pfx('/api/cx/apps')),
+  // Google Ads step 1a — the Google connection's account choice (C1–C3): read by those who manage connections,
+  // the choice itself by those who connect ads accounts.
+  P(F.settingsIntegrationsManage, (m, p) => isRead(m) && (p === '/api/google-ads/connections' || /^\/api\/google-ads\/connections\/[^/]+\/choices$/.test(p))),
+  P(F.adsConnect, (m, p) => m.toUpperCase() === 'PUT' && /^\/api\/google-ads\/connections\/[^/]+\/selection$/.test(p)),
+  // Google Ads step 1a — the read-only Google Ads tab (R1–R4) and its "Read now" (the ads sync permission).
+  P(F.adsView, (m, p) => isRead(m) && /^\/api\/google-ads\/(overview|campaigns(\/[^/]+\/(days|changes))?)$/.test(p)),
+  P(F.adsCampaignsManage, (m, p) => m.toUpperCase() === 'POST' && p === '/api/google-ads/sync'),
   P(F.settingsIntegrationsManage, pfx('/api/cx/channels')),
   // P3.6 — the channel health dashboard and the per-change trace. Read-only, and the
   // same people who manage connections: both answer questions ABOUT the channels this

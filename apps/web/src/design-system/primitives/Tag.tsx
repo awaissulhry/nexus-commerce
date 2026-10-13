@@ -16,10 +16,17 @@ export type TagTone = Tone | LegacyTagTone   // 'positive' retained for the unto
 export interface TagProps {
   tone?: TagTone
   className?: string
+  /** The full text on hover — pass it with `truncate`, so a clipped chip still says everything. */
+  title?: string
+  /**
+   * One line, never wider than its container: a long name ends in an ellipsis instead of running past the card's
+   * edge (the chip's `white-space: nowrap` let it overflow). Pair it with `title`.
+   */
+  truncate?: boolean
   children: ReactNode
 }
 
-export function Tag({ tone = 'neutral', className, children }: TagProps) {
+export function Tag({ tone = 'neutral', className, title, truncate, children }: TagProps) {
   const t = tone === 'positive' ? 'success' : tone   // normalize legacy
-  return <span className={`nds-tag ${t}${className ? ` ${className}` : ''}`}>{children}</span>
+  return <span className={`nds-tag ${t}${truncate ? ' is-truncated' : ''}${className ? ` ${className}` : ''}`} title={title}>{children}</span>
 }

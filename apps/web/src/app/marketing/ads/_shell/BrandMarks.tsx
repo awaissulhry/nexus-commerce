@@ -1,6 +1,6 @@
 /**
  * CH1 — the square channel marks, shared by the rail's channel switch and the
- * SP super-wizard product rows.
+ * SP super-wizard product rows. (Google's tile joined them in Google Ads step 1a.)
  *
  * Both render as a 20x20 tile so they can be dropped in at any size and stay
  * optically matched: Amazon is its navy app tile (white "a" + orange smile),
@@ -39,6 +39,26 @@ export function EbayBadge({ size = 15 }: { size?: number }) {
         <text x="10" y="13.2" textAnchor="middle" fontSize="7.5" fontWeight="700" letterSpacing="-0.3">
           <tspan fill="#E53238">e</tspan><tspan fill="#0064D2">b</tspan><tspan fill="#F5AF02">a</tspan><tspan fill="#86B817">y</tspan>
         </text>
+      </svg>
+    </span>
+  )
+}
+
+/**
+ * Google Ads step 1a — Google's tile for the third switch position: the white tile (same hairline as eBay's) carrying
+ * the four-colour "G" drawn as four arcs and a bar, so it reads at the 15px corner chip too. An SVG, never an emoji.
+ */
+export function GoogleBadge({ size = 15 }: { size?: number }) {
+  return (
+    <span className="h10-bmk" style={{ width: size, height: size }} aria-hidden>
+      <svg viewBox="0 0 20 20" width={size} height={size}>
+        <rect x="0.5" y="0.5" width="19" height="19" rx="2.5" fill="#fff" stroke="rgba(0,0,0,0.14)" strokeWidth="1" />
+        <g fill="none" strokeWidth="2.6" strokeLinecap="butt">
+          <path d="M5.5 6.85A5.5 5.5 0 0 1 14.21 6.47" stroke="#EA4335" />
+          <path d="M6.11 13.89A5.5 5.5 0 0 1 5.5 6.85" stroke="#FBBC05" />
+          <path d="M13.89 13.89A5.5 5.5 0 0 1 6.11 13.89" stroke="#34A853" />
+          <path d="M15.5 10A5.5 5.5 0 0 1 13.89 13.89M10 10H15.5" stroke="#4285F4" />
+        </g>
       </svg>
     </span>
   )

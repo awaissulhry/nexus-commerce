@@ -8,7 +8,8 @@ type SetupState = { key: string; ready: boolean; error: string | null }
 
 /** Check before the user opens a provider tab. Start still revalidates on the server. */
 export function useConnectionReadiness(channelKey: string, workspaceId?: string) {
-  const checked = channelKey === 'SHOPIFY' || channelKey === 'ETSY'
+  // Google Ads step 1a: Google too has app credentials to check (`/api/cx/connect/google/readiness`).
+  const checked = channelKey === 'SHOPIFY' || channelKey === 'ETSY' || channelKey === 'GOOGLE'
   const key = `${channelKey}:${workspaceId ?? ''}`
   const [state, setState] = useState<SetupState | null>(null)
   const [attempt, setAttempt] = useState(0)

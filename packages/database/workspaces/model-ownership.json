@@ -517,6 +517,11 @@
     "ChannelHeldSweep",
     "PlatformHealthCheck",
     "AmazonSalesRank",
-    "AdsWasteSkip"
+    "AdsWasteSkip",
+    "GoogleAccountLink",
+    "GoogleAdsCustomer",
+    "GoogleAdsCampaign",
+    "GoogleAdsDailyMetric",
+    "GoogleAdsChangeEvent"
   ]
 }

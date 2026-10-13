@@ -45,6 +45,9 @@ const ENV_KEYS = [
   'NEXUS_MARKETING_MAX_WRITE_VALUE_CENTS',
   'NEXUS_MARKETING_AMAZON_LIVE',
   'NEXUS_AMAZON_ADS_MODE',
+  'NEXUS_MARKETING_WRITES_GOOGLE',
+  'NEXUS_MARKETING_WRITES_META',
+  'NEXUS_MARKETING_WRITES_TIKTOK',
 ] as const
 
 const saved: Record<string, string | undefined> = {}
@@ -104,6 +107,22 @@ describe('checkMarketingWriteGate — other channels stay closed by default', ()
   })
   it('Shopify/Google default sandbox', () => {
     expect(checkMarketingWriteGate({ channel: 'SHOPIFY', marketplace: null, payloadValueCents: 1 }).mode).toBe('sandbox')
+    expect(checkMarketingWriteGate({ channel: 'GOOGLE', marketplace: null, payloadValueCents: 1 }).mode).toBe('sandbox')
+  })
+})
+
+describe('Google Ads step 1a (D4) — Google, Meta and TikTok are never live, whatever the env says', () => {
+  it('their live flags set to 1 still answer sandbox', () => {
+    for (const [channel, flag] of [['GOOGLE', 'NEXUS_MARKETING_WRITES_GOOGLE'], ['META', 'NEXUS_MARKETING_WRITES_META'], ['TIKTOK', 'NEXUS_MARKETING_WRITES_TIKTOK']] as const) {
+      process.env[flag] = '1'
+      expect({ channel, decision: checkMarketingWriteGate({ channel, marketplace: null, payloadValueCents: 1 }) }).toEqual({ channel, decision: { allowed: true, mode: 'sandbox' } })
+    }
+  })
+
+  it('control: the same flag opens eBay', () => {
+    process.env.NEXUS_MARKETING_WRITES_GOOGLE = '1'
+    process.env.NEXUS_MARKETING_WRITES_EBAY = '1'
+    expect(checkMarketingWriteGate({ channel: 'EBAY', marketplace: 'EBAY_IT', payloadValueCents: 1 }).mode).toBe('live')
     expect(checkMarketingWriteGate({ channel: 'GOOGLE', marketplace: null, payloadValueCents: 1 }).mode).toBe('sandbox')
   })
 })

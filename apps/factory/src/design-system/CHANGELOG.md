@@ -1,3 +1,12 @@
+## Tag `truncate` + `title`; PerformanceGraph `axisLabel` — 2026-10-13
+
+Google Ads step 1a, screen fixes. Mirrored from `apps/web` (identical files).
+- **`Tag truncate title`**: one line, never wider than its container, ending in an ellipsis; `title` carries the full
+  text. A Tag is `white-space: nowrap`, so a long chip ran past its card's edge (the Google card on Settings › Channels).
+- **`PerformanceGraph` `ChartSeries.axisLabel`**: the axis's name above it ("Cost (EUR)" left, "Conversion value (EUR)"
+  right), with its line's colour. Two series on two axes whose scales differ (cost 0–100, value 0–1200) read as the
+  same size without it. Optional; a graph without it is unchanged.
+
 ## A Matrix cell takes a price pasted as it was copied, and a refused paste says why — 2026-10-12
 
 The Owner, on the Matrix page: copy works, paste does not. A Matrix Price cell copies `€105.00`, and the cell took only a

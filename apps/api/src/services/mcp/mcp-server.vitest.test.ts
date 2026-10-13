@@ -159,7 +159,10 @@ describe('C3 — the server and every change tool name the business', () => {
       'An hourly bid plan a person made changes by rule only where the business allowed it',
       "only with enable-ads includePeoplesPauses and a person's approval, never by rule",
       // Platform health watchdog (2026-10-07) — the daily checks are read first in an unattended run.
-      'read platform-health-checks first in a daily or unattended run']) {
+      'read platform-health-checks first in a daily or unattended run',
+      // Google Ads step 1a — read only, through the two ad reads; never a step of a change plan.
+      'Google Ads is read only: ads-overview and ad-campaigns with channel google read the Google Ads account a person chose',
+      'no tool changes Google Ads, so never put a Google step in a change plan']) {
       expect(mcpInstructions(business), rule).toContain(rule)
     }
   })

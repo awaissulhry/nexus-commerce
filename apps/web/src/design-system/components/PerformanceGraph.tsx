@@ -9,6 +9,11 @@ export interface ChartSeries {
   color: string
   axis: 'left' | 'right'
   format?: (v: number) => string
+  /**
+   * The name of this series' axis, shown above it ("Cost (EUR)"). Two series on two axes whose scales differ read as
+   * the same size without one; set it on both, or on neither.
+   */
+  axisLabel?: string
 }
 
 export interface PerformanceGraphProps {
@@ -56,8 +61,19 @@ function ChartTooltip({
  * left/right axes, tokenized axes + grid, custom tooltip + legend. Recharts.
  */
 export function PerformanceGraph({ data, xKey, left, right, height = 240, className }: PerformanceGraphProps) {
+  const leftAxis = left.axis === 'left' ? left : right.axis === 'left' ? right : null
+  const rightAxis = right.axis === 'right' ? right : left.axis === 'right' ? left : null
   return (
     <div className={className || undefined}>
+      {(leftAxis?.axisLabel || rightAxis?.axisLabel) && (
+        <div className="nds-chart-axes">
+          {[leftAxis, rightAxis].map((s, i) => (
+            <span key={i} className={i === 0 ? 'l' : 'r'}>
+              {s?.axisLabel && <><span className="ln" style={{ background: s.color }} aria-hidden="true" />{s.axisLabel}</>}
+            </span>
+          ))}
+        </div>
+      )}
       <ResponsiveContainer width="100%" height={height}>
         <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 4, left: 0 }}>
           <CartesianGrid stroke={color.borderSubtle} vertical={false} />

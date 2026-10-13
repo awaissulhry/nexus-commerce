@@ -6,6 +6,9 @@
  *   1. Per-channel mode is live (Amazon: NEXUS_AMAZON_ADS_MODE=live; other
  *      channels: NEXUS_MARKETING_WRITES_<CHANNEL>=1)
  *   2. payload value ≤ NEXUS_MARKETING_MAX_WRITE_VALUE_CENTS (default €500)
+ * Google, Meta and TikTok are never live, whatever the env says (Google Ads
+ * step 1a, D4): Nexus has no integration that changes them
+ * (marketing-read-only-channels.ts; their adapters are sandbox stubs).
  * Otherwise the mutation runs in sandbox: the DB-side optimistic update +
  * audit complete, but no external API call fires.
  *
@@ -50,11 +53,10 @@ function channelLiveEnabled(channel: MktChannel): boolean {
     case 'SHOPIFY':
       return process.env.NEXUS_MARKETING_WRITES_SHOPIFY === '1'
     case 'GOOGLE':
-      return process.env.NEXUS_MARKETING_WRITES_GOOGLE === '1'
     case 'META':
-      return process.env.NEXUS_MARKETING_WRITES_META === '1'
     case 'TIKTOK':
-      return process.env.NEXUS_MARKETING_WRITES_TIKTOK === '1'
+      // Read only (Google Ads step 1a, D4): no integration changes these channels, so no env flag makes them live.
+      return false
     case 'INTERNAL':
       // Content/outreach delegate to MC/RV pipelines (P10) — gated there.
       return process.env.NEXUS_MARKETING_WRITES_INTERNAL === '1'

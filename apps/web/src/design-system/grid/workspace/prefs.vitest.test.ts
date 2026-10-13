@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { defaultPrefs, parseStoredPrefs, samePrefs, visibleOrderFromColumnState, widthsToColumnState, withWidth } from './prefs'
+import { defaultPrefs, parseStoredPrefs, prefsForScreen, samePrefs, visibleOrderFromColumnState, widthsToColumnState, withWidth } from './prefs'
 import type { GridColumn } from './types'
 
 const col = (key: string, defaultHidden = false): GridColumn<unknown> => ({ key, label: key, render: () => null, defaultHidden })
@@ -65,5 +65,16 @@ describe('header drag → the visible order; header resize → widths', () => {
     expect(samePrefs(a, { ...a, stickyLast: false })).toBe(false)
     expect(samePrefs(a, { ...a, widths: { spend: 1 } })).toBe(false)
     expect(samePrefs({ ...a, widths: { spend: 1 } }, { ...a, widths: { spend: 1 } })).toBe(true)
+  })
+})
+
+describe('the screen it is drawn on', () => {
+  it('a phone draws the identity column unpinned (pinned, its 300px hid every other column); the saved choice stays', () => {
+    const saved = { visible: ['a', 'b'], stickyFirst: true, stickyLast: true }
+    expect(prefsForScreen(saved, true)).toEqual({ visible: ['a', 'b'], stickyFirst: false, stickyLast: true })
+    expect(saved.stickyFirst).toBe(true)
+    expect(prefsForScreen(saved, false)).toBe(saved)
+    const unpinned = { ...saved, stickyFirst: false }
+    expect(prefsForScreen(unpinned, true)).toBe(unpinned)
   })
 })

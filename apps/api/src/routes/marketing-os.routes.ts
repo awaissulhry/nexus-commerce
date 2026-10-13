@@ -19,6 +19,7 @@ import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { sseResponseHeaders } from '../lib/sse.js'
 import { publishMarketingEvent } from '../services/marketing-events.service.js'
+import { campaignReadOnlyRefusal, channelReadOnlyRefusal } from '../services/marketing/marketing-read-only-channels.js'
 
 const ROSTER_MAX = 500
 
@@ -463,6 +464,12 @@ const marketingOsRoutes: FastifyPluginAsync = async (app) => {
       reply.status(400)
       return { error: 'name, channel, surface are required' }
     }
+    // Google Ads step 1a (D2) — Google, Meta and TikTok are read only: no draft that looks like a campaign Nexus runs.
+    const readOnly = channelReadOnlyRefusal(b.channel)
+    if (readOnly) {
+      reply.status(409)
+      return readOnly
+    }
     const marketplaces = (b.marketplaces as string[]) ?? []
     const data: Record<string, unknown> = {
       channel: b.channel,
@@ -509,6 +516,12 @@ const marketingOsRoutes: FastifyPluginAsync = async (app) => {
   // Launch an INTERNAL content-push / outreach campaign (sandbox-gated).
   app.post('/marketing/os/campaigns/:id/launch', async (request, reply) => {
     const { id } = request.params as { id: string }
+    // Google Ads step 1a (D1) — refused before anything is queued: Nexus would mark it done while nothing reached the channel.
+    const readOnly = await campaignReadOnlyRefusal(id)
+    if (readOnly) {
+      reply.status(409)
+      return readOnly
+    }
     const { enqueueCampaignMutation } = await import('../services/marketing/marketing-mutation.service.js')
     try {
       const r = await enqueueCampaignMutation({ campaignId: id, syncType: 'MKT_LAUNCH', payload: {}, applyImmediately: true })
@@ -527,6 +540,13 @@ const marketingOsRoutes: FastifyPluginAsync = async (app) => {
   app.patch('/marketing/os/campaigns/:id/mutate', async (request, reply) => {
     const { id } = request.params as { id: string }
     const b = request.body as Record<string, unknown>
+    // Google Ads step 1a (D1) — a pause, resume or budget change on a read-only channel is refused before anything is
+    // queued: the sandbox stub would mark it SUCCESS while the channel was never called.
+    const readOnly = await campaignReadOnlyRefusal(id)
+    if (readOnly) {
+      reply.status(409)
+      return readOnly
+    }
     const { enqueueCampaignMutation } = await import('../services/marketing/marketing-mutation.service.js')
     try {
       if (b.status !== undefined) {

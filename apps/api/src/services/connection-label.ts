@@ -11,7 +11,7 @@ export interface LabelledConnection {
 
 const CHANNEL_NAMES: Record<string, string> = {
   AMAZON: 'Amazon Seller', AMAZON_ADS: 'Amazon Ads', EBAY: 'eBay',
-  SHOPIFY: 'Shopify', WOOCOMMERCE: 'WooCommerce', ETSY: 'Etsy',
+  SHOPIFY: 'Shopify', WOOCOMMERCE: 'WooCommerce', ETSY: 'Etsy', GOOGLE: 'Google',
 }
 const PLACEHOLDERS = new Set(['eBay seller (verified)', 'eBay seller'])
 

@@ -7286,6 +7286,8 @@ model ChannelConnection {
   // CX Etsy — receipt ingest state (activation time, poll cursor, lease) and durable refusals.
   etsyReceiptIngest        EtsyReceiptIngest[]
   etsyReceiptRefusals      EtsyReceiptRefusal[]
+  // Google step 1a — the Google Ads / Merchant Center / GA4 account each business picked through this login.
+  googleAccountLinks       GoogleAccountLink[]
 
   @@index([workspaceId, channelType])
   // The partial unique index `ChannelConnection_channelType_marketplace_active_key`
@@ -22805,4 +22807,190 @@ model AmazonSalesRank {
   @@index([asin, marketplace, capturedAt(sort: Desc)])
   @@index([capturedAt])
   @@index([workspaceId])
+}
+
+// ── Google Ads, step 1a (2026-10-13): connect + read. Read-only; nothing here is ever sent to Google. ──────────────
+// The tables mirror what the daily read (apps/api/src/services/marketing/google-ads/) takes from the Google Ads API.
+// Own stack (the eBay precedent): no Amazon tables, no unified MarketingCampaign / CampaignMetric copy.
+
+/// The Google account a business picked for each Google product (one Google Ads account, one Merchant Center account,
+/// one GA4 property per business in step 1). Survives a reconnect of the same login (the connect upsert rewrites the
+/// connection's scope rows, so the choice cannot live there).
+model GoogleAccountLink {
+  workspaceId      String            @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id               String            @id @default(cuid())
+  connectionId     String
+  connection       ChannelConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  /// ADS | MERCHANT | GA4
+  product          String
+  /// ADS: the Google Ads customer id (digits only, no hyphens); MERCHANT: the Merchant Center account id; GA4: the
+  /// property id (digits).
+  externalId       String
+  /// ADS only: the manager account the calls go through (the login-customer-id header, digits only); null = direct.
+  loginCustomerId  String?
+  /// The name a person reads (Google's descriptive name, or a fallback sentence); never shown as a customer id.
+  label            String
+  metadata         Json?
+  selectedByUserId String
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@unique([workspaceId, product], name: "google_link_product")
+  @@index([workspaceId])
+  @@index([connectionId])
+}
+
+/// One Google Ads account (customer) a business reads, and the state of its daily read.
+model GoogleAdsCustomer {
+  workspaceId          String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                   String    @id @default(cuid())
+  /// The Google ChannelConnection the read goes through (no foreign key: the read history outlives a disconnect).
+  connectionId         String
+  /// Digits only, no hyphens.
+  customerId           String
+  /// The manager the calls go through (login-customer-id), digits only; null = direct access.
+  loginCustomerId      String?
+  descriptiveName      String?
+  /// ISO 4217; every money column of this account's rows is in it (never converted).
+  currencyCode         String
+  /// IANA zone; Google's days (segments.date) are days in this zone.
+  timeZone             String
+  manager              Boolean   @default(false)
+  testAccount          Boolean   @default(false)
+  /// ENABLED | CANCELED | SUSPENDED | CLOSED | UNKNOWN
+  status               String
+  parentCustomerId     String?
+  level                Int?
+  backfillCompletedAt  DateTime?
+  structureSyncedAt    DateTime?
+  /// The contiguous range of account days whose daily numbers were read: a day inside it with no row is a zero day;
+  /// a day outside it was never read (shown as "not read", never as zero).
+  metricsReadFrom      DateTime? @db.Date
+  metricsReadThrough   DateTime? @db.Date
+  /// Google's change history is read up to this instant (it keeps 30 days; Nexus keeps every event it read).
+  changesSyncedThrough DateTime?
+  /// When the last read that called Google ended (any outcome; a run that sent nothing leaves it), and when one last succeeded.
+  lastSyncAt           DateTime?
+  lastSuccessAt        DateTime?
+  /// SUCCESS | PARTIAL | FAILED | SKIPPED_BUDGET | AUTH_LOST | MANAGER
+  lastSyncStatus       String?
+  /// A plain sentence for a person; never a token, a request body or an e-mail address.
+  lastSyncError        String?
+  opsUsedLastRun       Int?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@unique([workspaceId, customerId], name: "google_ads_customer")
+  @@index([workspaceId])
+  @@index([connectionId])
+}
+
+/// One Google Ads campaign with its budget, as the last read saw it.
+model GoogleAdsCampaign {
+  workspaceId              String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                       String    @id @default(cuid())
+  customerId               String
+  campaignId               String
+  name                     String
+  /// ENABLED | PAUSED | REMOVED
+  status                   String
+  servingStatus            String?
+  primaryStatus            String?
+  primaryStatusReasons     String[]  @default([])
+  /// advertising_channel_type: SEARCH | PERFORMANCE_MAX | SHOPPING | DISPLAY | VIDEO | DEMAND_GEN | …
+  channelType              String
+  channelSubType           String?
+  biddingStrategyType      String?
+  /// The portfolio bidding strategy's resource name, when the campaign uses one.
+  portfolioBiddingStrategy String?
+  targetCpaMicros          BigInt?
+  /// Google's ROAS target as a ratio (4.5 = 450 %).
+  targetRoas               Decimal?  @db.Decimal(10, 4)
+  budgetId                 String?
+  /// The average daily amount (DAILY budgets); null for a custom-period budget.
+  budgetAmountMicros       BigInt?
+  budgetDeliveryMethod     String?
+  budgetPeriod             String?
+  budgetShared             Boolean   @default(false)
+  merchantId               String?
+  feedLabel                String?
+  /// Days in the account's time zone (Google sends start_date_time / end_date_time).
+  startDate                DateTime? @db.Date
+  endDate                  DateTime? @db.Date
+  currencyCode             String
+  firstSeenAt              DateTime  @default(now())
+  lastSeenAt               DateTime
+  /// Set when a full read no longer returns the campaign (removed at Google, or no longer visible).
+  removedAt                DateTime?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  @@unique([workspaceId, customerId, campaignId], name: "google_ads_campaign")
+  @@index([workspaceId])
+  @@index([customerId, status])
+  @@index([channelType])
+}
+
+/// One day of Google Ads numbers for one entity. Step 1a writes CAMPAIGN rows only; the other grains come with step 1b.
+/// A day is replaced whole on every read of it (Google restates recent days).
+model GoogleAdsDailyMetric {
+  workspaceId               String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                        String   @id @default(cuid())
+  customerId                String
+  /// The account's own day (segments.date).
+  date                      DateTime @db.Date
+  /// CAMPAIGN | AD_GROUP | KEYWORD | ASSET_GROUP | PRODUCT | SEARCH_TERM
+  entityType                String
+  /// The entity's Google id at that grain (CAMPAIGN: the campaign id).
+  entityId                  String
+  campaignId                String
+  adGroupId                 String?
+  label                     String?
+  impressions               Int      @default(0)
+  clicks                    Int      @default(0)
+  costMicros                BigInt   @default(0)
+  conversions               Decimal  @default(0) @db.Decimal(14, 4)
+  /// Google sends conversions_value in currency units (a double); stored in micros of the account currency.
+  conversionsValueMicros    BigInt   @default(0)
+  allConversions            Decimal? @db.Decimal(14, 4)
+  allConversionsValueMicros BigInt?
+  currencyCode              String
+  extra                     Json?
+  pulledAt                  DateTime
+  createdAt                 DateTime @default(now())
+
+  @@unique([workspaceId, customerId, entityType, entityId, date], name: "google_ads_daily_metric")
+  @@index([workspaceId])
+  @@index([customerId, entityType, date])
+  @@index([campaignId, date])
+}
+
+/// One entry of Google's change history (change_event). Google keeps 30 days; Nexus keeps every entry it read.
+model GoogleAdsChangeEvent {
+  workspaceId        String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                 String   @id @default(cuid())
+  customerId         String
+  /// customers/{customer_id}/changeEvents/{timestamp_micros}~{command_index}~{mutate_index}
+  resourceName       String
+  changedAt          DateTime
+  /// change_resource_type: CAMPAIGN | CAMPAIGN_BUDGET | AD_GROUP | AD_GROUP_CRITERION | …
+  resourceType       String
+  changeResourceName String
+  /// CREATE | UPDATE | REMOVE
+  operation          String
+  /// Where the change was made (client_type: GOOGLE_ADS_WEB_CLIENT, GOOGLE_ADS_RECOMMENDATIONS, …).
+  clientType         String?
+  /// Personal data: stored, never returned by an API route and never logged.
+  userEmail          String?
+  changedFields      String[] @default([])
+  campaignId         String?
+  adGroupId          String?
+  oldResource        Json?
+  newResource        Json?
+  createdAt          DateTime @default(now())
+
+  @@unique([workspaceId, resourceName], name: "google_ads_change_event")
+  @@index([workspaceId])
+  @@index([customerId, changedAt])
+  @@index([campaignId, changedAt])
 }

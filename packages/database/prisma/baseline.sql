@@ -11004,6 +11004,138 @@ CREATE TABLE "AmazonSalesRank" (
     CONSTRAINT "AmazonSalesRank_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "GoogleAccountLink" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "connectionId" TEXT NOT NULL,
+    "product" TEXT NOT NULL,
+    "externalId" TEXT NOT NULL,
+    "loginCustomerId" TEXT,
+    "label" TEXT NOT NULL,
+    "metadata" JSONB,
+    "selectedByUserId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "GoogleAccountLink_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "GoogleAdsCustomer" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "connectionId" TEXT NOT NULL,
+    "customerId" TEXT NOT NULL,
+    "loginCustomerId" TEXT,
+    "descriptiveName" TEXT,
+    "currencyCode" TEXT NOT NULL,
+    "timeZone" TEXT NOT NULL,
+    "manager" BOOLEAN NOT NULL DEFAULT false,
+    "testAccount" BOOLEAN NOT NULL DEFAULT false,
+    "status" TEXT NOT NULL,
+    "parentCustomerId" TEXT,
+    "level" INTEGER,
+    "backfillCompletedAt" TIMESTAMP(3),
+    "structureSyncedAt" TIMESTAMP(3),
+    "metricsReadFrom" DATE,
+    "metricsReadThrough" DATE,
+    "changesSyncedThrough" TIMESTAMP(3),
+    "lastSyncAt" TIMESTAMP(3),
+    "lastSuccessAt" TIMESTAMP(3),
+    "lastSyncStatus" TEXT,
+    "lastSyncError" TEXT,
+    "opsUsedLastRun" INTEGER,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "GoogleAdsCustomer_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "GoogleAdsCampaign" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "customerId" TEXT NOT NULL,
+    "campaignId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "servingStatus" TEXT,
+    "primaryStatus" TEXT,
+    "primaryStatusReasons" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "channelType" TEXT NOT NULL,
+    "channelSubType" TEXT,
+    "biddingStrategyType" TEXT,
+    "portfolioBiddingStrategy" TEXT,
+    "targetCpaMicros" BIGINT,
+    "targetRoas" DECIMAL(10,4),
+    "budgetId" TEXT,
+    "budgetAmountMicros" BIGINT,
+    "budgetDeliveryMethod" TEXT,
+    "budgetPeriod" TEXT,
+    "budgetShared" BOOLEAN NOT NULL DEFAULT false,
+    "merchantId" TEXT,
+    "feedLabel" TEXT,
+    "startDate" DATE,
+    "endDate" DATE,
+    "currencyCode" TEXT NOT NULL,
+    "firstSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastSeenAt" TIMESTAMP(3) NOT NULL,
+    "removedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "GoogleAdsCampaign_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "GoogleAdsDailyMetric" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "customerId" TEXT NOT NULL,
+    "date" DATE NOT NULL,
+    "entityType" TEXT NOT NULL,
+    "entityId" TEXT NOT NULL,
+    "campaignId" TEXT NOT NULL,
+    "adGroupId" TEXT,
+    "label" TEXT,
+    "impressions" INTEGER NOT NULL DEFAULT 0,
+    "clicks" INTEGER NOT NULL DEFAULT 0,
+    "costMicros" BIGINT NOT NULL DEFAULT 0,
+    "conversions" DECIMAL(14,4) NOT NULL DEFAULT 0,
+    "conversionsValueMicros" BIGINT NOT NULL DEFAULT 0,
+    "allConversions" DECIMAL(14,4),
+    "allConversionsValueMicros" BIGINT,
+    "currencyCode" TEXT NOT NULL,
+    "extra" JSONB,
+    "pulledAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "GoogleAdsDailyMetric_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "GoogleAdsChangeEvent" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "customerId" TEXT NOT NULL,
+    "resourceName" TEXT NOT NULL,
+    "changedAt" TIMESTAMP(3) NOT NULL,
+    "resourceType" TEXT NOT NULL,
+    "changeResourceName" TEXT NOT NULL,
+    "operation" TEXT NOT NULL,
+    "clientType" TEXT,
+    "userEmail" TEXT,
+    "changedFields" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "campaignId" TEXT,
+    "adGroupId" TEXT,
+    "oldResource" JSONB,
+    "newResource" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "GoogleAdsChangeEvent_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE INDEX "Product_gtin_idx" ON "Product"("gtin");
 
@@ -16620,6 +16752,60 @@ CREATE INDEX "AmazonSalesRank_capturedAt_idx" ON "AmazonSalesRank"("capturedAt")
 -- CreateIndex
 CREATE INDEX "AmazonSalesRank_workspaceId_idx" ON "AmazonSalesRank"("workspaceId");
 
+-- CreateIndex
+CREATE INDEX "GoogleAccountLink_workspaceId_idx" ON "GoogleAccountLink"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "GoogleAccountLink_connectionId_idx" ON "GoogleAccountLink"("connectionId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "GoogleAccountLink_workspaceId_product_key" ON "GoogleAccountLink"("workspaceId", "product");
+
+-- CreateIndex
+CREATE INDEX "GoogleAdsCustomer_workspaceId_idx" ON "GoogleAdsCustomer"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "GoogleAdsCustomer_connectionId_idx" ON "GoogleAdsCustomer"("connectionId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "GoogleAdsCustomer_workspaceId_customerId_key" ON "GoogleAdsCustomer"("workspaceId", "customerId");
+
+-- CreateIndex
+CREATE INDEX "GoogleAdsCampaign_workspaceId_idx" ON "GoogleAdsCampaign"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "GoogleAdsCampaign_customerId_status_idx" ON "GoogleAdsCampaign"("customerId", "status");
+
+-- CreateIndex
+CREATE INDEX "GoogleAdsCampaign_channelType_idx" ON "GoogleAdsCampaign"("channelType");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "GoogleAdsCampaign_workspaceId_customerId_campaignId_key" ON "GoogleAdsCampaign"("workspaceId", "customerId", "campaignId");
+
+-- CreateIndex
+CREATE INDEX "GoogleAdsDailyMetric_workspaceId_idx" ON "GoogleAdsDailyMetric"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "GoogleAdsDailyMetric_customerId_entityType_date_idx" ON "GoogleAdsDailyMetric"("customerId", "entityType", "date");
+
+-- CreateIndex
+CREATE INDEX "GoogleAdsDailyMetric_campaignId_date_idx" ON "GoogleAdsDailyMetric"("campaignId", "date");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "GoogleAdsDailyMetric_workspaceId_customerId_entityType_enti_key" ON "GoogleAdsDailyMetric"("workspaceId", "customerId", "entityType", "entityId", "date");
+
+-- CreateIndex
+CREATE INDEX "GoogleAdsChangeEvent_workspaceId_idx" ON "GoogleAdsChangeEvent"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "GoogleAdsChangeEvent_customerId_changedAt_idx" ON "GoogleAdsChangeEvent"("customerId", "changedAt");
+
+-- CreateIndex
+CREATE INDEX "GoogleAdsChangeEvent_campaignId_changedAt_idx" ON "GoogleAdsChangeEvent"("campaignId", "changedAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "GoogleAdsChangeEvent_workspaceId_resourceName_key" ON "GoogleAdsChangeEvent"("workspaceId", "resourceName");
+
 -- AddForeignKey
 ALTER TABLE "Product" ADD CONSTRAINT "Product_familyId_fkey" FOREIGN KEY ("familyId") REFERENCES "ProductFamily"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
@@ -17714,4 +17900,7 @@ ALTER TABLE "ChannelHeldSweep" ADD CONSTRAINT "ChannelHeldSweep_channelConnectio
 
 -- AddForeignKey
 ALTER TABLE "ChannelItemClaim" ADD CONSTRAINT "ChannelItemClaim_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "GoogleAccountLink" ADD CONSTRAINT "GoogleAccountLink_connectionId_fkey" FOREIGN KEY ("connectionId") REFERENCES "ChannelConnection"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 

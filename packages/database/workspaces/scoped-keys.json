@@ -7044,5 +7044,65 @@
     "scalar": {},
     "compound": {},
     "relations": []
+  },
+  "GoogleAccountLink": {
+    "scalar": {},
+    "compound": {
+      "google_link_product": [
+        "product"
+      ]
+    },
+    "relations": [
+      {
+        "field": "connection",
+        "model": "ChannelConnection",
+        "from": [
+          "connectionId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "GoogleAdsCustomer": {
+    "scalar": {},
+    "compound": {
+      "google_ads_customer": [
+        "customerId"
+      ]
+    },
+    "relations": []
+  },
+  "GoogleAdsCampaign": {
+    "scalar": {},
+    "compound": {
+      "google_ads_campaign": [
+        "customerId",
+        "campaignId"
+      ]
+    },
+    "relations": []
+  },
+  "GoogleAdsDailyMetric": {
+    "scalar": {},
+    "compound": {
+      "google_ads_daily_metric": [
+        "customerId",
+        "entityType",
+        "entityId",
+        "date"
+      ]
+    },
+    "relations": []
+  },
+  "GoogleAdsChangeEvent": {
+    "scalar": {},
+    "compound": {
+      "google_ads_change_event": [
+        "resourceName"
+      ]
+    },
+    "relations": []
   }
 }

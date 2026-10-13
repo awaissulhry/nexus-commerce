@@ -74,6 +74,8 @@ export function mcpInstructions(business: McpBusiness): string {
     'The Amazon ads strategy lives in Nexus, one place per market, category and product: read it with ads-strategy, change',
     'it with set-ads-strategy (a raise is a person\'s decision, never a rule\'s). It only narrows what this business lets',
     'Claude do alone per kind of ad action, never widens it; an answer it narrowed names the strategy row (trust.strategy).',
+    'Google Ads is read only: ads-overview and ad-campaigns with channel google read the Google Ads account a person chose',
+    'for this business; no tool changes Google Ads, so never put a Google step in a change plan.',
     'Why an Amazon keyword bid is what it is, and what it would be at another target ACoS: bid-brain (read only; the bid',
     'brain decides in shadow on IT and DE, and writes only for a campaign set-bid-brain-enrollment put LIVE — going live',
     'is a person\'s approval; its diff view sets it against what today\'s writers set).',

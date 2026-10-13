@@ -14,6 +14,7 @@ import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/components.css'
 import { Banner } from '@/design-system/components/Banner'
+import { channelPlainName } from '../calendar/calendarLegend'
 
 interface Row {
   key: string; spendEurCents: number; salesCents: number
@@ -74,7 +75,7 @@ export function AnalyticsClient({ initial }: { initial: AnalyticsData }) {
           {rows.length === 0 && <tr><td className="px-3 py-4 text-tertiary text-xs">No data in window.</td></tr>}
           {rows.map((r) => (
             <tr key={r.key} className="hover:bg-slate-50 dark:hover:bg-slate-900/40">
-              <td className="px-3 py-1.5">{isChannel && <span className={`inline-block w-2 h-2 rounded-full mr-1.5 ${CHANNEL_DOT[r.key] ?? CHANNEL_DOT.INTERNAL}`} />}<span className="text-slate-700 dark:text-slate-200">{r.key || '—'}</span></td>
+              <td className="px-3 py-1.5">{isChannel && <span className={`inline-block w-2 h-2 rounded-full mr-1.5 ${CHANNEL_DOT[r.key] ?? CHANNEL_DOT.INTERNAL}`} />}<span className="text-slate-700 dark:text-slate-200">{isChannel ? channelPlainName(r.key) : r.key || '—'}</span></td>
               <td className="px-3 py-1.5 text-right tabular-nums text-slate-600 dark:text-slate-300">{eur(r.spendEurCents)}</td>
               <td className="px-3 py-1.5 text-right tabular-nums text-slate-600 dark:text-slate-300">{eur(r.salesCents)}</td>
               <td className="px-3 py-1.5 text-right tabular-nums">{r.roas != null ? r.roas.toFixed(2) : '—'}</td>
@@ -116,7 +117,7 @@ export function AnalyticsClient({ initial }: { initial: AnalyticsData }) {
           {data.amazonShadow.ageHours != null && data.amazonShadow.ageHours >= 48
             ? ` — ${Math.floor(data.amazonShadow.ageHours / 24)} days ago. `
             : '. '}
-          eBay and other channels here are live; Amazon refreshes nightly, and Ad Manager is its source of truth.
+          eBay figures here come from eBay&apos;s own reports; Amazon&apos;s are copied nightly, and Ad Manager is their source of truth. Google Ads is not in these totals: its numbers are read separately, in Ads › Google.
         </Banner>
       )}
 

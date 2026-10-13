@@ -145,10 +145,12 @@ function DefaultAdsHeader({
   primaryAction?: HeaderPrimary
   // ER1 (additive; Amazon default) — the account-cluster brand mark. eBay
   // pages pass 'ebay' so the header stops showing the amazon wordmark.
-  channel?: 'amazon' | 'ebay'
+  // Google Ads step 1a — 'google': read only, no market picker and no change log of Nexus's own (Nexus makes no
+  // change in Google Ads), so neither the amazon wordmark nor the Amazon change log may appear there.
+  channel?: 'amazon' | 'ebay' | 'google'
 }) {
   const pathname = usePathname()
-  const changeLogHref = channel === 'ebay' ? '/marketing/ads/ebay/change-log' : '/marketing/ads/changelog'
+  const changeLogHref = channel === 'ebay' ? '/marketing/ads/ebay/change-log' : channel === 'google' ? null : '/marketing/ads/changelog'
   const [open, setOpen] = useState<'' | 'action'>('')
   const close = () => setOpen('')
   // AM-16 — the default window is the 7 complete days ending yesterday (DateRangePicker's rule).
@@ -204,7 +206,7 @@ function DefaultAdsHeader({
             operator to the Amazon one would be worse than showing nothing. Hidden when you are
             already there. Navigates in place rather than a new tab — this is top-level console
             navigation, unlike the drawer's link, where a new tab exists to preserve the drawer. */}
-        {showChangeLog && pathname !== changeLogHref && (
+        {showChangeLog && changeLogHref && pathname !== changeLogHref && (
           <Button asChild variant="ghost">
             <Link href={changeLogHref} title="Every change Nexus made to this account — what changed, what caused it, and whether it reached the channel">
               <History size={14} /> Change Log
@@ -229,7 +231,7 @@ function DefaultAdsHeader({
             onValuesChange={onMarketValuesChange}
             allowAll={allowAllMarkets}
             notYet={marketNotYet}
-            brand={channel === 'ebay' ? <EbayMark /> : <span className="amz">amazon</span>}
+            brand={channel === 'ebay' ? <EbayMark /> : channel === 'google' ? <span>Google</span> : <span className="amz">amazon</span>}
           />
         )}
 
