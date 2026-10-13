@@ -3,7 +3,8 @@
 import { useState } from "react";
 import type { Table } from "@tanstack/react-table";
 import type { InventoryItem } from "@/types/inventory";
-import { bulkUpdateItems } from "@/app/inventory/manage/actions";
+import { getBackendUrl } from "@/lib/backend-url";
+import { useRouter } from "@/lib/workspaces/navigation";
 
 interface BulkActionBarProps {
   table: Table<InventoryItem>;
@@ -20,6 +21,7 @@ export default function BulkActionBar({ table }: BulkActionBarProps) {
   const [loading, setLoading] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const router = useRouter();
 
   const selectedRows = table.getFilteredSelectedRowModel().rows;
   const count = selectedRows.length;
@@ -39,18 +41,32 @@ export default function BulkActionBar({ table }: BulkActionBarProps) {
     }, 5000);
   };
 
+  // Pause = a real, recorded stock change (POST /api/stock/pause): each own-warehouse level of the selected products
+  // and their variations goes to its reserved count (nothing left to sell), one audited movement each, cascaded to
+  // every listing that follows stock. Amazon FBA units are never written.
   const handlePause = async () => {
-    if (selectedSkus.length === 0) return;
+    if (selectedIds.length === 0) return;
     setLoading(true);
     setDropdownOpen(false);
 
     try {
-      const result = await bulkUpdateItems(selectedSkus, "pause");
-      if (result.success) {
-        showToast("success", `✓ Successfully paused ${result.affected} listing${result.affected !== 1 ? "s" : ""}`);
+      const res = await fetch(`${getBackendUrl()}/api/stock/pause`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productIds: selectedIds }),
+      });
+      const result = await res.json().catch(() => ({}));
+      if (res.ok && result.ok) {
+        const s = (n: number) => (n !== 1 ? "s" : "");
+        const skipped = result.notFound > 0 ? ` ${result.notFound} selected row${s(result.notFound)} skipped (not a product).` : "";
+        showToast(
+          "success",
+          `✓ Paused ${result.products} product${s(result.products)}: ${result.units} sellable unit${s(result.units)} at your own warehouses set to 0 in ${result.movements} stock movement${s(result.movements)}. Amazon FBA units are not changed.${skipped}`,
+        );
         table.resetRowSelection();
+        router.refresh();
       } else {
-        showToast("error", `✗ Failed to pause listings: ${result.error || "Unknown error"}`);
+        showToast("error", `✗ Failed to pause listings: ${result.error || `HTTP ${res.status}`}`);
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : "Unknown error occurred";

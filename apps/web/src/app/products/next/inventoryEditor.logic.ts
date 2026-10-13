@@ -220,9 +220,12 @@ export function withEdit(pending: PendingEdits, row: MatrixRow, locationId: stri
 
 /**
  * One changed cell as the server receives it: an absolute on-hand, absolute sealed counts of the
- * sizes typed there (the other sizes keep theirs), or both.
+ * sizes typed there (the other sizes keep theirs), or both. A new on-hand carries `expected`, the
+ * server's on-hand this grid showed for the cell: a sale or another person's change since then
+ * refuses the cell (STALE_ON_HAND) instead of being overwritten, and the cell stays pending over
+ * the re-read number.
  */
-export interface CellChange { productId: string; locationId: string; value?: number; cases?: CaseCount[] }
+export interface CellChange { productId: string; locationId: string; value?: number; expected?: number; cases?: CaseCount[] }
 
 const splitKey = (key: string) => {
   const i = key.indexOf(':')
@@ -247,13 +250,18 @@ export function casesCells(pendingCases: PendingCases): Set<string> {
 /**
  * The batch the server receives: ONE change per cell, carrying its on-hand and its typed sealed
  * counts when either is pending — so the server writes them in one transaction and checks the
- * counts against the NEW units.
+ * counts against the NEW units. With the `model`, each on-hand carries the server number the grid
+ * shows for that cell (`expected`, the base the person saw).
  */
-export function changesOf(pending: PendingEdits, pendingCases: PendingCases = new Map()): CellChange[] {
+export function changesOf(pending: PendingEdits, pendingCases: PendingCases = new Map(), model?: MatrixModel): CellChange[] {
   const caseCells = casesCells(pendingCases)
+  const rows = new Map((model?.rows ?? []).map((r) => [r.productId, r]))
   const out: CellChange[] = [...pending.entries()].map(([key, value]) => {
     const cases = caseCells.has(key) ? typedAt(pendingCases, key) : null
-    return { ...splitKey(key), value, ...(cases ? { cases } : {}) }
+    const at = splitKey(key)
+    const row = rows.get(at.productId)
+    const seen = row ? { expected: row.cells[at.locationId]?.quantity ?? 0 } : {}
+    return { ...at, value, ...seen, ...(cases ? { cases } : {}) }
   })
   for (const key of caseCells) if (!pending.has(key)) out.push({ ...splitKey(key), cases: typedAt(pendingCases, key) })
   return out

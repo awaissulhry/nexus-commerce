@@ -4,7 +4,7 @@ import prisma from '../db.js'
 import { applyStockMovement, listStockMovements, ProtectedLocationError } from '../services/stock-movement.service.js'
 import { LocationAdjustmentError } from '../services/location-adjustment.js'
 import { listStockLocations, listStockReservations, listStockRows, listStockTransfers, readProductStock } from '../services/stock/stock-read.service.js'
-import { adjustOneLocation, adjustReasonOf, NoLocationError } from '../services/stock/location-adjust.service.js'
+import { adjustOneLocation, adjustReasonOf, NoLocationError, pauseOwnStock } from '../services/stock/location-adjust.service.js'
 import { CaseCountError } from '../services/stock/stock-cases.service.js'
 import type { CaseCount } from '@nexus/shared/stock-cases'
 import { placeHold, PooledHoldRefusal, releaseHold } from '../services/stock/stock-hold.service.js'
@@ -123,9 +123,11 @@ function safeNum(v: unknown, fallback?: number): number | undefined {
  * The absolute values of one set-on-hand change. Without `cases` (null or absent) the value is read exactly as before
  * (`Number(value)`: a missing one is refused INVALID_VALUE). With `cases` (Step 3, the sealed count) the value may be
  * left out — a case-only count; a `cases` that is not a number is refused INVALID_CASES by the service.
+ * `expected` — the on-hand the person saw (checkSeenOnHand): a sale since then refuses the change STALE_ON_HAND.
  */
-function adjustValuesOf(raw: { value?: unknown; cases?: unknown }): { value?: number; cases?: CaseCount[] } {
-  if (raw?.cases == null) return { value: Number(raw?.value) }
+function adjustValuesOf(raw: { value?: unknown; cases?: unknown; expected?: unknown }): { value?: number; expected?: number; cases?: CaseCount[] } {
+  const seen = raw?.expected == null ? {} : { expected: Number(raw.expected) }
+  if (raw?.cases == null) return { value: Number(raw?.value), ...seen }
   // Step 3 — the sealed counts per size: [{ unitsPerCase, cases }]. Anything else reads as an invalid count
   // (INVALID_CASES from the shared rule), never as "no change".
   const list = Array.isArray(raw.cases) ? raw.cases : [raw.cases]
@@ -136,8 +138,15 @@ function adjustValuesOf(raw: { value?: unknown; cases?: unknown }): { value?: nu
       cases: typeof o.cases === 'number' ? o.cases : Number.NaN,
     }
   })
-  return { ...(raw.value == null ? {} : { value: Number(raw.value) }), cases }
+  return { ...(raw.value == null ? {} : { value: Number(raw.value) }), ...seen, cases }
 }
+
+/** A refusal's answer: its words and code, and the current on-hand when the refusal is STALE_ON_HAND. */
+const refusalOf = (error: LocationAdjustmentError | NoLocationError | CaseCountError) => ({
+  error: error.message,
+  code: error.code,
+  ...(error instanceof LocationAdjustmentError && error.current !== undefined ? { current: error.current } : {}),
+})
 
 const stockRoutes: FastifyPluginAsync = async (fastify) => {
   // ── GET /api/stock/products ──────────────────────────────────────
@@ -2335,7 +2344,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
   // transaction; the answer then carries `cases` (every size after it).
   fastify.post('/stock/adjust-location', async (request, reply) => {
     try {
-      const body = (request.body ?? {}) as { productId?: string; locationId?: string; value?: number; cases?: unknown; reason?: string; notes?: string }
+      const body = (request.body ?? {}) as { productId?: string; locationId?: string; value?: number; expected?: number; cases?: unknown; reason?: string; notes?: string }
       const productId = typeof body.productId === 'string' ? body.productId : ''
       const locationId = typeof body.locationId === 'string' ? body.locationId : ''
       if (!productId || !locationId) {
@@ -2346,7 +2355,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (error: any) {
       if (error instanceof NoLocationError) return reply.code(404).send({ error: error.message, code: error.code })
       if (error instanceof LocationAdjustmentError || error instanceof CaseCountError) {
-        return reply.code(400).send({ error: error.message, code: error.code })
+        return reply.code(error.code === 'STALE_ON_HAND' ? 409 : 400).send(refusalOf(error))
       }
       fastify.log.error({ err: error }, '[stock/adjust-location] failed')
       return reply.code(400).send({ error: error?.message ?? String(error) })
@@ -2375,8 +2384,8 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
     const reason = adjustReasonOf(body.reason)
     const notes = typeof body.notes === 'string' && body.notes.trim() ? body.notes.trim() : undefined
 
-    const results: Array<{ productId: string; locationId: string; ok: boolean; noop?: boolean; quantity?: number; reserved?: number; available?: number; cases?: CaseCount[]; error?: string; code?: string }> = []
-    for (const raw of body.changes as Array<{ productId?: unknown; locationId?: unknown; value?: unknown; cases?: unknown }>) {
+    const results: Array<{ productId: string; locationId: string; ok: boolean; noop?: boolean; quantity?: number; reserved?: number; available?: number; cases?: CaseCount[]; error?: string; code?: string; current?: number }> = []
+    for (const raw of body.changes as Array<{ productId?: unknown; locationId?: unknown; value?: unknown; expected?: unknown; cases?: unknown }>) {
       const productId = typeof raw?.productId === 'string' ? raw.productId : ''
       const locationId = typeof raw?.locationId === 'string' ? raw.locationId : ''
       if (!productId || !locationId) { results.push({ productId, locationId, ok: false, error: 'productId and locationId are required', code: 'MISSING_FIELDS' }); continue }
@@ -2384,12 +2393,33 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
         const r = await adjustOneLocation({ productId, locationId, ...adjustValuesOf(raw), reason, notes, actor: 'products-next-inventory-editor' })
         results.push({ productId, locationId, ok: true, noop: r.noop, quantity: r.quantity, reserved: r.reserved, available: r.available, ...(r.cases === undefined ? {} : { cases: r.cases }) })
       } catch (error: any) {
-        const code = error instanceof NoLocationError || error instanceof LocationAdjustmentError || error instanceof CaseCountError ? error.code : 'FAILED'
-        if (code === 'FAILED') fastify.log.error({ err: error, productId, locationId }, '[stock/adjust-locations] change failed')
-        results.push({ productId, locationId, ok: false, error: error?.message ?? String(error), code })
+        if (error instanceof NoLocationError || error instanceof LocationAdjustmentError || error instanceof CaseCountError) {
+          results.push({ productId, locationId, ok: false, ...refusalOf(error) })
+          continue
+        }
+        fastify.log.error({ err: error, productId, locationId }, '[stock/adjust-locations] change failed')
+        results.push({ productId, locationId, ok: false, error: error?.message ?? String(error), code: 'FAILED' })
       }
     }
     return { ok: results.every((r) => r.ok), results }
+  })
+
+  // ── POST /api/stock/pause ───────────────────────────────────────
+  // The FBA page's "Pause Listings" (/products/fba): every own WAREHOUSE level of the chosen products (and their
+  // variations) drops to its reserved count, one audited movement each, cascaded to the listings that follow stock
+  // (pauseOwnStock). Amazon FBA and Shopify locations are never written. Body: { productIds: string[] } (≤ 500).
+  fastify.post('/stock/pause', async (request, reply) => {
+    const body = (request.body ?? {}) as { productIds?: unknown }
+    if (!Array.isArray(body.productIds) || body.productIds.length === 0 || !body.productIds.every((id) => typeof id === 'string' && id)) {
+      return reply.code(400).send({ error: '`productIds` must be a list of product ids', code: 'MISSING_FIELDS' })
+    }
+    if (body.productIds.length > 500) return reply.code(400).send({ error: 'At most 500 products per pause', code: 'TOO_MANY' })
+    try {
+      return { ok: true, ...(await pauseOwnStock({ productIds: body.productIds as string[], actor: 'products-fba-pause' })) }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/pause] failed')
+      return reply.code(400).send({ error: error?.message ?? String(error) })
+    }
   })
 
   // ── POST /api/stock/bulk-transfer ───────────────────────────────

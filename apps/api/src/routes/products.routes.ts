@@ -15,7 +15,8 @@ import { buildUploadPlan, parseUploadBuffer, summarisePlan, type PlanRow } from 
 import { parseZipUpload } from '../services/products/bulk-zip-upload.service.js'
 import { auditLogService } from '../services/audit-log.service.js'
 import { assertCreatable, createProduct, CreateProductError } from '../services/products/create-product.service.js'
-import { applyStockMovement } from '../services/stock-movement.service.js'
+import { FbmOnHandError, setFbmOnHand } from '../services/stock/location-adjust.service.js'
+import { LocationAdjustmentError } from '../services/location-adjustment.js'
 import { listEtag, matches } from '../utils/list-etag.js'
 import { countProductStats, listProducts, type ProductListQuery } from '../services/products/list-products.service.js'
 import { gridRequestToListQuery, resolveGridLookups, type ProductsGridRequest, type ProductsGridResponse } from '../services/products/products-grid.contract.js'
@@ -866,16 +867,16 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // M.3 — PATCH /api/products/:id/fbm-stock
-  // Inline FBM stock adjustment from the grid. Body: { value }, the new
-  // absolute total across all non-FBA buckets. We compute the delta and
-  // apply it to the canonical FBM StockLevel (warehouse first, then
-  // shopify, then channel-reserved). FBA stock is untouched.
+  // Inline FBM stock adjustment from the Stock page. Body: { value, expected } — the new absolute total across all
+  // non-FBA buckets and the total the person saw — or { change }, a signed delta. The read, the expected-base check
+  // (a sale since the person read the number refuses the save, 409 STALE_ON_HAND with the current numbers) and the
+  // movement run under the stock lock in setFbmOnHand. FBA stock is untouched.
   //
   // Returns the refreshed { fbaStock, fbmStock } so the caller can
   // confirm optimistic UI against the authoritative number.
   fastify.patch<{
     Params: { id: string }
-    Body: { value?: number; change?: number; reason?: string; notes?: string }
+    Body: { value?: number; expected?: number; change?: number; reason?: string; notes?: string }
   }>('/products/:id/fbm-stock', async (request, reply) => {
     try {
       const { id } = request.params
@@ -883,95 +884,27 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Accept either `value` (absolute) or `change` (signed delta).
       // Absolute is the natural shape for inline edits where the
-      // operator types the new total; we convert to delta below.
+      // operator types the new total; the service converts it to a delta.
       const valueGiven = typeof body.value === 'number' && Number.isFinite(body.value)
       const changeGiven = typeof body.change === 'number' && Number.isFinite(body.change)
       if (!valueGiven && !changeGiven) {
         return reply.code(400).send({ error: 'value or change required' })
       }
 
-      const levels = await prisma.stockLevel.findMany({
-        where: { productId: id },
-        select: {
-          id: true,
-          quantity: true,
-          location: { select: { id: true, type: true, code: true } },
-        },
-      })
-
-      const fbmLevels = levels.filter((sl) => sl.location.type !== 'AMAZON_FBA')
-      if (fbmLevels.length === 0) {
-        return reply.code(400).send({
-          error: 'This product has no FBM StockLevel. Add a warehouse bucket first.',
-          code: 'NO_FBM_BUCKET',
-        })
-      }
-
-      const fbmTotalNow = fbmLevels.reduce((s, sl) => s + sl.quantity, 0)
-      let change: number
-      if (valueGiven) {
-        const target = Math.max(0, Math.floor(body.value!))
-        change = target - fbmTotalNow
-      } else {
-        change = Math.floor(body.change!)
-      }
-      if (change === 0) {
-        const fbaTotal = levels.filter((sl) => sl.location.type === 'AMAZON_FBA').reduce((s, sl) => s + sl.quantity, 0)
-        return reply.send({ ok: true, noChange: true, fbaStock: fbaTotal, fbmStock: fbmTotalNow })
-      }
-
-      // Pick the target bucket: prefer WAREHOUSE, then SHOPIFY_LOCATION,
-      // then CHANNEL_RESERVED. Ties resolved by largest current qty so
-      // we don't accidentally drive a tiny bucket negative.
-      const typePriority: Record<string, number> = {
-        WAREHOUSE: 0,
-        SHOPIFY_LOCATION: 1,
-        CHANNEL_RESERVED: 2,
-      }
-      const sorted = [...fbmLevels].sort((a, b) => {
-        const pa = typePriority[a.location.type] ?? 99
-        const pb = typePriority[b.location.type] ?? 99
-        if (pa !== pb) return pa - pb
-        return b.quantity - a.quantity
-      })
-      const target = sorted[0]
-
-      // If we're removing more than the target bucket holds, refuse —
-      // the operator should distribute the decrement explicitly via
-      // /stock rather than silently overdrawing one bucket.
-      if (change < 0 && target.quantity + change < 0) {
-        return reply.code(400).send({
-          error: `Cannot reduce ${target.location.code} below 0 — currently ${target.quantity}. Adjust per-location on /fulfillment/stock.`,
-          code: 'INSUFFICIENT_BUCKET',
-        })
-      }
-
-      const movement = await applyStockMovement({
+      const r = await setFbmOnHand({
         productId: id,
-        locationId: target.location.id,
-        change,
-        reason: (body.reason as any) ?? 'MANUAL_ADJUSTMENT',
+        ...(valueGiven ? { value: body.value, ...(body.expected == null ? {} : { expected: Number(body.expected) }) } : { change: body.change }),
+        reason: body.reason ?? 'MANUAL_ADJUSTMENT',
         notes: body.notes,
         actor: 'fbm-inline',
       })
-
-      // Reload totals — applyStockMovement already mutated the level.
-      const refreshed = await prisma.stockLevel.findMany({
-        where: { productId: id },
-        select: {
-          quantity: true,
-          location: { select: { type: true } },
-        },
-      })
-      const fbaStock = refreshed
-        .filter((sl) => sl.location.type === 'AMAZON_FBA')
-        .reduce((s, sl) => s + sl.quantity, 0)
-      const fbmStock = refreshed
-        .filter((sl) => sl.location.type !== 'AMAZON_FBA')
-        .reduce((s, sl) => s + sl.quantity, 0)
-
-      return reply.send({ ok: true, movement, fbaStock, fbmStock })
+      if (r.noChange) return reply.send({ ok: true, noChange: true, fbaStock: r.fbaStock, fbmStock: r.fbmStock })
+      return reply.send({ ok: true, movement: r.movement, fbaStock: r.fbaStock, fbmStock: r.fbmStock })
     } catch (err: any) {
+      if (err instanceof FbmOnHandError) {
+        return reply.code(err.code === 'STALE_ON_HAND' ? 409 : 400).send({ error: err.message, code: err.code, ...(err.stock ?? {}) })
+      }
+      if (err instanceof LocationAdjustmentError) return reply.code(400).send({ error: err.message, code: err.code })
       fastify.log.error({ err }, '[products/:id/fbm-stock] failed')
       return reply.code(400).send({ error: err?.message ?? String(err) })
     }

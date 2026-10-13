@@ -1296,7 +1296,9 @@ const ProductCell = memo(function ProductCell({
     // AM.1 — Inventory (Available units). Splits FBA + FBM as two
     // stacked lines so the operator sees method-specific stock at a
     // glance. FBA is read-only (Amazon owns it); the lock icon
-    // surfaces that intent. M.3 will add inline editing on the FBM row.
+    // surfaces that intent. Read-only here: these numbers are AVAILABLE
+    // units, so a save could not name the on-hand the person saw (the
+    // expected-base rule) — on-hand is edited on the Stock page.
     case 'inventory': {
       if (p.isParent && !p.parentId) return null
       return (
@@ -1305,20 +1307,6 @@ const ProductCell = memo(function ProductCell({
             fba={p.fbaStock}
             fbm={p.fbmStock}
             fbmLowThreshold={p.lowStockThreshold ?? 10}
-            onAdjustFbm={async (value) => {
-              const res = await fetch(`${getBackendUrl()}/api/products/${p.id}/fbm-stock`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ value }),
-              })
-              if (!res.ok) {
-                const err = await res.json().catch(() => ({ error: `${res.status}` }))
-                throw new Error(err?.error ?? `${res.status}`)
-              }
-              const data = await res.json()
-              emitInvalidation({ type: 'stock.adjusted', meta: { productId: p.id, source: 'products-grid-fbm-inline' } })
-              return { fbaStock: data.fbaStock, fbmStock: data.fbmStock }
-            }}
           />
           <Link
             href={`/products/${p.id}/edit?tab=matrix`}

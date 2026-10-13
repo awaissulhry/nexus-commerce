@@ -42,6 +42,17 @@ describe('pending edits sit over the server numbers', () => {
     expect(deltaOf(m.rows[0], 'it', p)).toBe(5)
     expect(changesOf(p)).toEqual([{ productId: 'p1', locationId: 'it', value: 15 }])
   })
+  it('with the model, each on-hand names the server number the grid showed (the expected base); a cell with no level saw 0', () => {
+    const m = model()
+    let p = withEdit(new Map(), m.rows[0], 'it', 15)
+    p = withEdit(p, m.rows[1], 'it', 1)
+    expect(changesOf(p, new Map(), m)).toEqual([
+      { productId: 'p1', locationId: 'it', value: 15, expected: 10 },
+      { productId: 'p2', locationId: 'it', value: 1, expected: 3 },
+    ])
+    const none = buildMatrixModel(LOCS, [{ id: 'p3', sku: 'A-L', name: 'A large', thumbnailUrl: null, stockLevels: [] }])
+    expect(changesOf(withEdit(new Map(), none.rows[0], 'it', 4), new Map(), none)).toEqual([{ productId: 'p3', locationId: 'it', value: 4, expected: 0 }])
+  })
   it('typing the server value back clears the edit; invalid input is refused', () => {
     const m = model()
     let p = withEdit(new Map(), m.rows[0], 'it', 15)

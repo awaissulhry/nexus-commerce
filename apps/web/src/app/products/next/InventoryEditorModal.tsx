@@ -146,7 +146,7 @@ export function InventoryEditorModal({ row, density, onClose, title, subtitle: s
     if (!pendingCount || applying) return
     setApplying(true)
     setMessage(null)
-    const changes = changesOf(pending, pendingCases)
+    const changes = changesOf(pending, pendingCases, model ?? undefined)
     const res = await applyBatch({ reason, notes: notes.trim() || undefined, changes })
     setApplying(false)
     if (!res.ok) { setMessage({ text: res.error, tone: 'danger' }); return }
@@ -174,7 +174,7 @@ export function InventoryEditorModal({ row, density, onClose, title, subtitle: s
         ? { text: `${applied} applied · ${refusedCells.size} refused — hover a red cell for why`, tone: 'danger' }
         : { text: `${applied} ${applied === 1 ? 'change' : 'changes'} applied`, tone: 'success' },
     )
-  }, [pending, pendingCases, pendingCount, applying, applyBatch, reason, notes])
+  }, [pending, pendingCases, pendingCount, applying, applyBatch, reason, notes, model])
 
   /**
    * Close asks first when there is unapplied work; the DS modal routes Esc, ✕ and the backdrop here too. Asking again

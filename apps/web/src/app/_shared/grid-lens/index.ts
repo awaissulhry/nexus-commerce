@@ -42,7 +42,7 @@ export type {
   ActionIcon,
   MenuItemDef,
 } from './ActionCluster'
-export { StockSplit } from './StockSplit'
+export { StockSplit, saveFbmOnHand } from './StockSplit'
 export { DensityToggle } from './DensityToggle'
 export { AutoRefreshSelect } from './AutoRefreshSelect'
 export { KpiStrip } from './KpiStrip'
