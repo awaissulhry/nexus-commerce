@@ -248,3 +248,50 @@ it('a quiet read dropped while an editor is open is read again after Escape, wit
     expect(current.tracker.get('proof-product', 'brand')?.state).toBe('saved')
   } finally { vi.useRealTimers() }
 })
+
+/* Grid audit F8 — a Reload of the sheet on screen keeps its rows: the grids draw them under the loading veil
+   (`reloading`) instead of emptying, and an open editor is never repainted under the person. */
+it('a Reload keeps the sheet on screen: loading holds, reloading is set, the new read replaces it when it lands', async () => {
+  const before = current.sheet
+  holdReads = true
+  stored = { ...stored, name: 'Name B' }
+  current.reload(); render(); await settle()
+  expect(current.loading).toBe(true)
+  expect(current.reloading).toBe(true)
+  expect(current.sheet).toBe(before)
+  heldReads.shift()!()
+  await settle()
+  expect(current.loading).toBe(false)
+  expect(current.reloading).toBe(false)
+  expect(current.sheet!.rows[0].values.name.value).toBe('Name B')
+})
+
+it('a first read is not a reload: no sheet yet means skeleton rows, not the veil', async () => {
+  hooks.state.slots = []; hooks.state.effects = []
+  holdReads = true
+  render(); await settle()
+  expect(current.sheet).toBeNull()
+  expect(current.loading).toBe(true)
+  expect(current.reloading).toBe(false)
+})
+
+it('a Reload that lands while an editor is open waits for it to close, then reads again quietly', async () => {
+  let editing: unknown[] = [{ rowIndex: 0, column: 'brand' }]
+  current.bindGrid({ isDestroyed: () => false, getEditingCells: () => editing, stopEditing: () => {}, getRowNode: () => undefined, refreshCells: () => {} } as never)
+  stored = { ...stored, name: 'Name B' }
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    const reads = readCount
+    current.reload(); render(); await settle()
+    expect(readCount).toBe(reads + 1)
+    // The read answered while the editor was open: nothing is painted under it, and the veil is off again.
+    expect(current.sheet!.rows[0].values.name.value).toBe('Name A')
+    expect(current.loading).toBe(false)
+    expect(current.reloading).toBe(false)
+    editing = []
+    await vi.advanceTimersByTimeAsync(5_000)
+    await settle()
+    expect(readCount).toBe(reads + 2)
+    expect(current.sheet!.rows[0].values.name.value).toBe('Name B')
+  } finally { vi.useRealTimers() }
+})

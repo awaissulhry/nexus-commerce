@@ -183,7 +183,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     /* S11 — a Shared rename the server made: its sentence about the channels, and the studio's header shows the new SKU. */
     const skuRenamedRef = useRef<(renames: SkuRename[]) => void>(() => undefined);
     const studioSkuRenamed = useStudioSkuRenamed();
-    const { sheet: loadedSheet, loading: sheetLoading, switching, error, contractProblems, reload, refresh, writer, tracker, conflicts, bindGrid } = useMasterSheet({
+    const { sheet: loadedSheet, loading: sheetLoading, switching, reloading: sheetReloading, error, contractProblems, reload, refresh, writer, tracker, conflicts, bindGrid } = useMasterSheet({
         productId, market, locale, locales: languageScope.locales, onWriteStart, onWriteEnd, onSettled,
         onVariationThemeSaved: () => { reloadFamilyRef.current(); reloadOrderRef.current(); },
         /* R-VT-15 — the server's refusal sentence, said the moment it arrives, through the ONE DS
@@ -307,6 +307,10 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     const orderPending = !!sheet && !familyOrder.settled;
     /* Everything that reads "loaded" — the toolbar, Export, the chips, the drawer — waits for the order too. */
     const loading = sheetLoading || orderPending;
+    /* Grid audit F8: skeleton rows only before the first read; a re-read of the rows on screen keeps them under the
+       loading veil (`reloading`), while everything above still holds on `loading`. */
+    const firstLoad = (sheetLoading && !sheetReloading) || orderPending;
+    const reloading = loading && !firstLoad;
     const rows = useMemo(() => (sheet && familyOrder.settled ? sortByFamilyRank(sheet.rows, familyOrder.rank) : []), [sheet, familyOrder.settled, familyOrder.rank]);
     const { saveStatus, refused, refusedRowIds } = useSheetSaveStatus(writer, tracker, rows, sheet?.columns);
     savedAtRef.current = saveStatus.saved;
@@ -932,7 +936,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     }, onReload);
     return {
         scope: 'master',
-        loading: loading, switching, unavailable: !!error,
+        loading: loading, switching, reloading, unavailable: !!error,
         errorLabel: 'shared product information',
         errorMessage: error,
         backendMissing: false, retry: reload,
@@ -1008,7 +1012,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             getContextMenuItems: menuWithNewRows,
             flatTree: true,
             groupDefaultExpanded: -1,
-            rowData: loading ? [] : gridRows,
+            rowData: firstLoad ? [] : gridRows,
             onFirstDataRendered: remeasureSoon,
             onRowDataUpdated: remeasureSoon,
             onDisplayedColumnsChanged: replayReveal,
@@ -1028,7 +1032,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             ...publishFenceProps,
             rowClassRules: rowClassRules,
             processDataFromClipboard: pasteIntoNewRows,
-            loading: loading,
+            loading: firstLoad,
             columnDialog: columnDialog,
             initialState: sheetColumns.initialState,
             onCellDoubleClicked: onCellDoubleClicked,

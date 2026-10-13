@@ -161,19 +161,6 @@
 /* keyboard-focused row (`keyboardNav`: j/k) — the selected ground, and the rail on the frozen cell */
 .nds-ag-ws .ag-row.kbd-focus { background-color: var(--nds-grid-selected-bg); }
 .nds-ag-ws .ag-row.kbd-focus .ag-cell.nds-ws-td.nm.fz { box-shadow: inset 3px 0 0 var(--nds-grid-accent); }
-/* The totals row is the grid's last row (grid audit E7), the engine's totals ground and weight; its "Total" label
-   sits where the identity header's words do — left. The theme's pinned-row rule draws the line above it.
-   A reload keeps the rows on screen under the engine's loading veil (grid audit F8) — never six skeleton rows. The
-   veil covers the data rows only (AG 36's `.ag-grid-scrolling-rows`), not the header or the totals. */
-.nds-ag-ws.is-reloading .ag-grid-scrolling-rows { position: relative; }
-.nds-ag-ws.is-reloading .ag-grid-scrolling-rows::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: var(--nds-grid-loading-veil);
-  pointer-events: none;
-  z-index: 2;
-}
 /* the group band: the engine's strip ground, `padding 7px 16px` */
 .nds-ag-ws .ag-row.h10-am-grp { background-color: var(--nds-grid-strip-bg); }
 .nds-ag-ws .ag-row.h10-am-grp .ag-cell-wrapper { width: 100%; }

@@ -156,7 +156,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
   const onWriteStart = useCallback((id: string, rowId: string) => reporter.pending(id, rowId), [reporter])
   const onWriteEnd = useCallback((id: string, ok: boolean, msg?: string, rowId?: string) => reporter.resolved(id, ok, msg, rowId), [reporter])
   const onSettled = useCallback(({ ok, savedAt }: { rowId?: string; ok: boolean; savedAt: string }) => { if (ok) setLastSavedAt(savedAt) }, [])
-  const { sheet: loadedSheet, loading, error, contractProblems, reload, writer, tracker, conflicts, bindGrid } = useMasterSheet({
+  const { sheet: loadedSheet, loading, reloading: sheetReloading, error, contractProblems, reload, writer, tracker, conflicts, bindGrid } = useMasterSheet({
     productId, market: marketOrFirst, locale: localeOrFirst, onWriteStart, onWriteEnd, onSettled,
   })
   const sheet = useReferenceNames(loadedSheet, 'MASTER', marketOrFirst)
@@ -1220,7 +1220,12 @@ export function MatrixSurface({ productId }: { productId: string }) {
   const total = rows.length
   const variants = rows.filter((r) => !r.isParent).length
   const hasParent = rows.some((r) => r.isParent)
-  const busy = loading || matrix.status === 'loading'
+  const busy = loading || matrix.status === 'loading' || matrix.reloading
+  /* Grid audit F8: skeleton rows only before the first read. A Reload — the toolbar's, the one after a stock-source switch
+     (twice), "changed elsewhere — refresh" — keeps the rows and cells on screen under the loading veil; `busy` still holds
+     every action until it lands. */
+  const firstLoad = (loading && !sheetReloading) || matrix.status === 'loading'
+  const reloading = !firstLoad && busy
   const emptyState = useMemo(() => sheetEmptyState(total, () => { setSearch(''); chipBar.setActive(null) }, onReload), [total, chipBar, onReload])
   // The lent stock most of this family's SKUs sell from now (the dialog's default for SKUs that use their own).
   const familyGrantId = useMemo(() => {
@@ -1302,7 +1307,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
           />
         }
         footer={
-          !busy && !error && (
+          !firstLoad && !error && (
             <>
               {/* The selection is counted ONCE, on the toolbar ("Selected N rows"), not again here. */}
               <GridSheetStatus rows={visibleRows.length} pending={pending} saving={writer.busy} lastSavedAt={lastSavedAt}>
@@ -1355,7 +1360,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
               noRowsOverlayComponentParams={emptyState}
               rows="media-line"
               groupHeaderHeight={gridGeometry.stripH}
-              rowData={busy ? [] : visibleRows}
+              rowData={firstLoad ? [] : visibleRows}
               columnDefs={columnDefs}
               defaultColDef={defaultColDef}
               getRowId={getRowId}
@@ -1370,7 +1375,8 @@ export function MatrixSurface({ productId }: { productId: string }) {
               onCellDoubleClicked={onCellDoubleClicked}
               onCellKeyDown={onCellKeyDown}
               onCellFocused={onCellFocused}
-              loading={busy}
+              loading={firstLoad}
+              reloading={reloading}
               columnDialog={columnDialog}
             />
           </>

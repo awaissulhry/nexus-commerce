@@ -87,6 +87,20 @@
   white-space: normal;
 }
 
+/* A reload (grid audit F8): the rows stay on screen under the loading veil until the new ones land — never an empty grid
+   or skeleton rows, which threw away the scroll position, the selection, the focused cell and an open editor. The veil
+   covers the data rows only (AG 36's `.ag-grid-scrolling-rows`), not the header or the totals, and takes no clicks.
+   `NexusGrid reloading` sets the class; WorkspaceGrid passes its own reloads through. */
+.nds-ag-wrap.is-reloading .ag-grid-scrolling-rows { position: relative; }
+.nds-ag-wrap.is-reloading .ag-grid-scrolling-rows::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--nds-grid-loading-veil);
+  pointer-events: none;
+  z-index: 2;
+}
+
 /* AG.3 — the bulk-action bay, shown only while rows are selected. Geometry only, deliberately:
    every control inside is the caller's and is already a DS primitive. */
 .nds-ag-selbar {

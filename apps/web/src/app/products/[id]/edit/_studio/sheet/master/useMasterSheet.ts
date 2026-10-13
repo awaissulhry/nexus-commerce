@@ -67,6 +67,13 @@ export interface MasterSheetState {
    * surface dims it and holds every edit — instead of blanking to a skeleton for the length of a multi-language read.
    */
   switching: boolean
+  /**
+   * `loading`, and the read is of the sheet already on screen — the same product, market and languages (a Reload, a
+   * refresh after a stock switch, "changed elsewhere — refresh"). The grids keep its rows under the engine's loading
+   * veil (`NexusGrid reloading`, grid audit F8) instead of emptying; only a first read or a new coordinate starts from
+   * skeleton rows. Everything that holds on `loading` still holds.
+   */
+  reloading: boolean
   error: string | null
   /** Contract problems found in a response we still rendered — shown, never swallowed. */
   contractProblems: string[]
@@ -90,6 +97,7 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
   const [sheet, setSheet] = useState<StudioSheet | null>(null)
   const [loading, setLoading] = useState(true)
   const [switching, setSwitching] = useState(false)
+  const [reloading, setReloading] = useState(false)
   const lastRead = useRef<{ coordinate: string; locales: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [contractProblems, setProblems] = useState<string[]>([])
@@ -220,13 +228,17 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
        arrives. Any other change (product, market, first language) is a new sheet and shows the skeleton. */
     const coordinate = JSON.stringify([productId, market, locale])
     const languageSwitch = !quiet && !!sheetRef.current && lastRead.current?.coordinate === coordinate && lastRead.current.locales !== localesQuery
+    const sameRead = !quiet && !!sheetRef.current && lastRead.current?.coordinate === coordinate && lastRead.current.locales === localesQuery
     lastRead.current = { coordinate, locales: localesQuery }
     // This read pays any owed one; if an open editor drops it too, it is owed again.
     if (owedRead.current) { clearTimeout(owedRead.current); owedRead.current = null }
     if (languageSwitch) {
       apiRef.current?.stopEditing(true)
       setSwitching(true)
-    } else if (!quiet) setLoading(true)
+    } else if (!quiet) {
+      setLoading(true)
+      setReloading(sameRead)
+    }
     quietRead.current = false
     setError(null)
     setProblems([])
@@ -265,7 +277,9 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
       .then((next) => {
         if (cancelled || mine !== requestRef.current) return
         const api = apiRef.current
-        if (quiet && api && !api.isDestroyed() && api.getEditingCells().length > 0) { oweQuietRead(); return }
+        /* An open editor is never repainted under the person: a re-read of the rows on screen waits for it to close,
+           and then lands quietly (so the cell it commits keeps its saving state, as any quiet read does). */
+        if ((quiet || sameRead) && api && !api.isDestroyed() && api.getEditingCells().length > 0) { oweQuietRead(); return }
         if (quiet) {
           for (const row of next.rows) {
             const previous = sheetRef.current?.rows.find(old => old.id === row.id)
@@ -286,7 +300,7 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
         setError(studioReadMessage(err))
       })
       .finally(() => {
-        if (!cancelled && mine === requestRef.current) { setLoading(false); setSwitching(false) }
+        if (!cancelled && mine === requestRef.current) { setLoading(false); setSwitching(false); setReloading(false) }
       })
 
     return () => { cancelled = true; abort.abort() }
@@ -309,5 +323,5 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
   const refresh = useCallback(() => { quietRead.current = true; setNonce(n => n + 1) }, [])
   const bindGrid = useCallback((api: GridApi<StudioRow> | null) => { apiRef.current = api }, [])
 
-  return { sheet, loading, switching, error, contractProblems, reload, refresh, writer, tracker, conflicts, bindGrid }
+  return { sheet, loading, switching, reloading, error, contractProblems, reload, refresh, writer, tracker, conflicts, bindGrid }
 }
