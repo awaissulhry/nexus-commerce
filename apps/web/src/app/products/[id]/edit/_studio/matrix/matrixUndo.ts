@@ -7,11 +7,11 @@
  *
  * Undo puts a cell back AS IT WAS, not only its number: a quantity that followed the stock follows it again (a typed
  * number would pin it), a price that followed the base price follows it again. These are the server's own revert rules
- * (`restoreWrites`, `apps/api/src/services/pim/matrix-write.service.ts`) for the five kinds a cell edit changes. Redo
+ * (`restoreWrites`, `apps/api/src/services/pim/matrix-write.service.ts`) for the kinds a cell edit changes. Redo
  * sends the edit again, as typing it would.
  */
 import { HISTORY_ONLY } from '../sheet/sheetUndo'
-import { matrixCellValue, matrixWrite, MATRIX_UNCHANGED, type CoordinateKey, type MatrixCellKind, type MatrixCells, type MatrixDoorKind, type MatrixWriteCell } from '@/design-system/grid'
+import { matrixBusinessSettingOfCell, matrixCellValue, matrixWrite, MATRIX_UNCHANGED, type CoordinateKey, type MatrixCellKind, type MatrixCells, type MatrixDoorKind, type MatrixWriteCell } from '@/design-system/grid'
 
 /**
  * A Matrix cell's history value — only the history holds it (`HISTORY_ONLY`): the sheet's replay skips it, and the page
@@ -89,6 +89,13 @@ export function matrixReplay(
       const was = b.sale, now = live.sale
       if (!was || !now || (was.value === now.value && was.start === now.start && was.end === now.end)) return SKIP
       return write('salePrice', { value: was.value, start: was.start, end: was.end })
+    }
+    /* Amazon Business: the whole setting as it was (`null` = no business price), through the column's own door kind. */
+    case 'businessPrice':
+    case 'businessTiers': {
+      if (!b.business || !live.business) return SKIP
+      const was = matrixBusinessSettingOfCell(b.business)
+      return JSON.stringify(was) === JSON.stringify(matrixBusinessSettingOfCell(live.business)) ? SKIP : write(kind, was)
     }
     default:
       return SKIP

@@ -247,7 +247,7 @@ export interface MatrixCoordinate {
 
 /* ── writes: one door ───────────────────────────────────────────────────────────────────────── */
 
-export type MatrixWritableKind = Extract<MatrixCellKind, 'fulfilment' | 'syncMode' | 'syncQty' | 'syncBuffer' | 'price' | 'salePrice' | 'businessPrice'>
+export type MatrixWritableKind = Extract<MatrixCellKind, 'fulfilment' | 'syncMode' | 'syncQty' | 'syncBuffer' | 'price' | 'salePrice' | 'businessPrice' | 'businessTiers'>
 /** What the one door writes: the writable kinds plus "Sells from" (`value`: codes in sale order; `[]` = the market default). */
 export type MatrixDoorKind = MatrixWritableKind | 'source'
 

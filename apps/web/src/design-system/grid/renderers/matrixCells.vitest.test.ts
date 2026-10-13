@@ -26,6 +26,14 @@ import {
   MATRIX_OVERSOLD_SENTENCE,
   isSaleEditorValue,
   matrixApplyValue,
+  matrixBusinessPriceParse,
+  matrixBusinessPriceText,
+  matrixBusinessSetting,
+  matrixBusinessSettingOfCell,
+  matrixBusinessSortValue,
+  matrixBusinessTiersParse,
+  matrixBusinessTiersText,
+  MATRIX_BUSINESS_TIERS_NEED_PRICE,
   matrixListingNotSelling,
   matrixListingProjection,
   matrixCellClasses,
@@ -430,8 +438,8 @@ describe('editability, the fill-safe value and the default mutation', () => {
     expect(matrixCellValue('syncState', cells())).toBeNull()
     expect(matrixCellValue('price', null)).toBeNull()
   })
-  it('the fill handle is allowed on exactly price · syncQty · syncBuffer · syncMode', () => {
-    expect([...MATRIX_FILLABLE_KINDS].sort()).toEqual(['price', 'syncBuffer', 'syncMode', 'syncQty'])
+  it('the fill handle is allowed on exactly price · syncQty · syncBuffer · syncMode · businessPrice · businessTiers', () => {
+    expect([...MATRIX_FILLABLE_KINDS].sort()).toEqual(['businessPrice', 'businessTiers', 'price', 'syncBuffer', 'syncMode', 'syncQty'])
     for (const k of MATRIX_CELL_KINDS) expect(matrixFillAllowed(k)).toBe(MATRIX_FILLABLE_KINDS.includes(k))
     expect(matrixFillAllowed('fulfilment')).toBe(false)
     expect(matrixFillAllowed('salePrice')).toBe(false)
@@ -743,7 +751,8 @@ describe('the B2B price and Tiers cells (Amazon Business)', () => {
   it('text: price · −percent, an exact price, 0 % = the price, no price yet, none; tiers as quantity + discount', () => {
     expect(matrixCellText('businessPrice', STATE_FIXTURES['business-percent'].c, COORD)).toBe('€99.75 · −5%')
     expect(matrixCellText('businessPrice', STATE_FIXTURES['business-fixed'].c, COORD)).toBe('€32.95')
-    expect(matrixCellText('businessPrice', cells({ business: biz({ percent: 0, price: 105 }) }), COORD)).toBe('€105.00')
+    // 0 % says its percent too: the text is also what a copy, a fill and an undo carry back as the same rule.
+    expect(matrixCellText('businessPrice', cells({ business: biz({ percent: 0, price: 105 }) }), COORD)).toBe('€105.00 · −0%')
     expect(matrixCellText('businessPrice', cells({ business: biz({ percent: 2.5, price: null, normalPrice: null }) }), COORD)).toBe('−2.5%')
     expect(matrixCellText('businessPrice', STATE_FIXTURES['business-none'].c, COORD)).toBe(MATRIX_DASH)
     expect(matrixCellText('businessPrice', STATE_FIXTURES['business-reported'].c, COORD)).toBe(MATRIX_DASH)
@@ -787,18 +796,78 @@ describe('the B2B price and Tiers cells (Amazon Business)', () => {
     expect(matrixCellTone('businessPrice', STATE_FIXTURES['business-failed'].c)).toBe(readinessMeta('errors', 'row').tone)
   })
 
-  it('never typed, pasted or filled: AG opens no editor; a writable cell opens the business editor instead', () => {
+  it('typed, pasted, filled like any cell (Owner 2026-10-13): writable → editable; held → the reason', () => {
     for (const kind of ['businessPrice', 'businessTiers'] as const) {
-      expect(matrixCellEditable(kind, STATE_FIXTURES['business-percent'].c)).toEqual({ editable: false, reason: 'Enter or F2 opens the business price editor' })
+      expect(matrixCellEditable(kind, STATE_FIXTURES['business-percent'].c)).toEqual({ editable: true, reason: null })
       expect(matrixCellEditable(kind, cells({ business: biz(), writable: {}, writeBlockedReason: { [kind]: 'Set on the variants' } })).reason).toBe('Set on the variants')
-      expect(matrixCoerceValue(kind, 90)).toBeUndefined()
-      expect(matrixApplyValue(STATE_FIXTURES['business-percent'].c, kind, 90)).toBe(false)
-      expect(matrixFillAllowed(kind)).toBe(false)
+      expect(matrixFillAllowed(kind)).toBe(true)
     }
-    expect(matrixCellValue('businessPrice', STATE_FIXTURES['business-percent'].c)).toBe(99.75)
-    expect(matrixCellValue('businessPrice', STATE_FIXTURES['business-none'].c)).toBeNull()
-    expect(matrixCellValue('businessTiers', cells({ business: biz({ tiers }) }))).toBe(94.76)
+    // The value is the RULE as text — what a copy, a fill and an undo carry; sorting reads the price instead.
+    expect(matrixCellValue('businessPrice', STATE_FIXTURES['business-percent'].c)).toBe('€99.75 · −5%')
+    expect(matrixCellValue('businessPrice', STATE_FIXTURES['business-none'].c)).toBe(MATRIX_DASH)
+    expect(matrixCellValue('businessPrice', cells())).toBeNull()
+    expect(matrixCellValue('businessTiers', cells({ business: biz({ tiers }) }))).toBe('2+ −3% · 5+ −5%')
+    expect(matrixBusinessSortValue('businessPrice', STATE_FIXTURES['business-percent'].c)).toBe(99.75)
+    expect(matrixBusinessSortValue('businessTiers', cells({ business: biz({ tiers }) }))).toBe(94.76)
     expect(matrixCompare('businessPrice', 32.95, null)).toBeLessThan(0)
+  })
+
+  it('reads what people type and copy: a percent is the rule, a number an exact price, empty none', () => {
+    expect(matrixBusinessPriceParse('5%')).toEqual({ rule: 'PERCENT_OFF', percent: 5 })
+    expect(matrixBusinessPriceParse('−5%')).toEqual({ rule: 'PERCENT_OFF', percent: 5 })
+    expect(matrixBusinessPriceParse('-5,5 %')).toEqual({ rule: 'PERCENT_OFF', percent: 5.5 })
+    // The cell's own copy carries the RULE, never the euro amount: each listing keeps its own price.
+    expect(matrixBusinessPriceParse('€99.75 · −5%')).toEqual({ rule: 'PERCENT_OFF', percent: 5 })
+    expect(matrixBusinessPriceParse('€105.00 · −0%')).toEqual({ rule: 'PERCENT_OFF', percent: 0 })
+    expect(matrixBusinessPriceParse('32.95')).toEqual({ rule: 'FIXED', price: 32.95 })
+    expect(matrixBusinessPriceParse('€32.95')).toEqual({ rule: 'FIXED', price: 32.95 })
+    expect(matrixBusinessPriceParse('32,95')).toEqual({ rule: 'FIXED', price: 32.95 })
+    expect(matrixBusinessPriceParse('')).toBeNull()
+    expect(matrixBusinessPriceParse('—')).toBeNull()
+    for (const junk of ['abc', '+5%', '0', '1,050', '€1 · €2']) expect(matrixBusinessPriceParse(junk)).toBeUndefined()
+    expect(matrixBusinessTiersParse('2+ −3% · 5+ −5%')).toEqual({ type: 'percent', levels: [{ minQty: 2, value: 3 }, { minQty: 5, value: 5 }] })
+    expect(matrixBusinessTiersParse('2+ 3%; 5+ 5%')).toEqual({ type: 'percent', levels: [{ minQty: 2, value: 3 }, { minQty: 5, value: 5 }] })
+    expect(matrixBusinessTiersParse('3+ €30.00')).toEqual({ type: 'fixed', levels: [{ minQty: 3, value: 30 }] })
+    expect(matrixBusinessTiersParse('—')).toBeNull()
+    for (const junk of ['2 3%', '2+ 3% · 5+ €30', 'x+ 3%', '2+']) expect(matrixBusinessTiersParse(junk)).toBeUndefined()
+    // Every text the cells show reads back as what it shows.
+    for (const b of [biz(), biz({ percent: 0, price: 105 }), biz({ rule: 'FIXED', percent: null, exact: 32.95, price: 32.95 }), biz({ rule: null, percent: null, price: null })]) {
+      const back = matrixBusinessPriceParse(matrixBusinessPriceText(b))
+      expect(back).toEqual(b.rule == null ? null : b.rule === 'FIXED' ? { rule: 'FIXED', price: b.exact } : { rule: 'PERCENT_OFF', percent: b.percent })
+    }
+    expect(matrixBusinessTiersParse(matrixBusinessTiersText(biz({ tiers })))).toEqual({ type: 'percent', levels: [{ minQty: 2, value: 3 }, { minQty: 5, value: 5 }] })
+  })
+
+  it('an edit writes the WHOLE setting: the edited part, the rest as the cell keeps it; tiers need a business price', () => {
+    const kept = biz({ tiers })
+    const levels = [{ minQty: 2, value: 3 }, { minQty: 5, value: 5 }]
+    expect(matrixBusinessSetting('businessPrice', { rule: 'PERCENT_OFF', percent: 6 }, kept)).toEqual({ rule: 'PERCENT_OFF', percent: 6, price: null, tiers: { type: 'percent', levels } })
+    expect(matrixBusinessSetting('businessPrice', { rule: 'FIXED', price: 90 }, kept)).toEqual({ rule: 'FIXED', percent: null, price: 90, tiers: { type: 'percent', levels } })
+    // Removing the B2B price removes the business offer, discounts included.
+    expect(matrixBusinessSetting('businessPrice', null, kept)).toBeNull()
+    expect(matrixBusinessSetting('businessTiers', { type: 'percent', levels: [{ minQty: 3, value: 4 }] }, kept)).toEqual({ rule: 'PERCENT_OFF', percent: 5, price: null, tiers: { type: 'percent', levels: [{ minQty: 3, value: 4 }] } })
+    expect(matrixBusinessSetting('businessTiers', null, kept)).toEqual({ rule: 'PERCENT_OFF', percent: 5, price: null, tiers: null })
+    const none = biz({ rule: null, percent: null, price: null })
+    expect(matrixBusinessSetting('businessTiers', { type: 'percent', levels }, none)).toBe(MATRIX_BUSINESS_TIERS_NEED_PRICE)
+    expect(matrixBusinessSettingOfCell(kept)).toEqual({ rule: 'PERCENT_OFF', percent: 5, price: null, tiers: { type: 'percent', levels } })
+  })
+
+  it('the default mutation shows what was typed; the numbers only the server works out wait for its answer', () => {
+    const c = cells({ ...B2B, business: biz({ tiers }) })
+    expect(matrixApplyValue(c, 'businessPrice', '6%')).toBe(true)
+    expect(c.business).toMatchObject({ rule: 'PERCENT_OFF', percent: 6, exact: null, price: null })
+    expect(c.business!.tiers!.levels.map((l) => l.unitPrice)).toEqual([null, null])
+    expect(matrixApplyValue(c, 'businessPrice', '€89.00')).toBe(true)
+    expect(c.business).toMatchObject({ rule: 'FIXED', percent: null, exact: 89, price: 89 })
+    expect(matrixApplyValue(c, 'businessTiers', '3+ 4%')).toBe(true)
+    expect(c.business!.tiers).toEqual({ type: 'percent', levels: [{ minQty: 3, value: 4, unitPrice: null }] })
+    expect(matrixApplyValue(c, 'businessPrice', '')).toBe(true)
+    expect(c.business).toMatchObject({ rule: null, percent: null, exact: null, price: null, tiers: null })
+    expect(matrixApplyValue(c, 'businessPrice', 'abc')).toBe(false)
+    expect(matrixApplyValue(cells(), 'businessPrice', '5%')).toBe(false)
+    // A redo replays the door's own setting.
+    expect(matrixCoerceValue('businessPrice', { rule: 'FIXED', percent: null, price: 32.95, tiers: null })).toEqual({ rule: 'FIXED', price: 32.95 })
+    expect(matrixCoerceValue('businessTiers', { rule: 'FIXED', percent: null, price: 32.95, tiers: { type: 'fixed', levels: [{ minQty: 2, value: 30 }] } })).toEqual({ type: 'fixed', levels: [{ minQty: 2, value: 30 }] })
   })
 
   it('renderers: the marks, and the pencil only where the page wired the editor and the cell may change', () => {

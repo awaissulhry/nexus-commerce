@@ -52,9 +52,9 @@ beforeAll(() => scoped(async () => {
 afterAll(async () => { await state.db?.close() }, 60_000)
 
 const cellsOf = async (rowId: string) => (await scoped(() => getMatrixRead({ productId: 'mwb-p', canEditPrice: true }))).rows.find((r) => r.id === rowId)!.cells[KEY]!
-const write = async (rowId: string, value: unknown, expectedVersion?: number) => {
+const write = async (rowId: string, value: unknown, expectedVersion?: number, cell: 'businessPrice' | 'businessTiers' = 'businessPrice') => {
   const cells = await cellsOf(rowId)
-  const r = await scoped(() => writeMatrixCells(ctx, [{ rowId, coordinateKey: KEY, cell: 'businessPrice', value, expectedVersion: expectedVersion ?? cells.version, expectedListingId: cells.listingId! }]))
+  const r = await scoped(() => writeMatrixCells(ctx, [{ rowId, coordinateKey: KEY, cell, value, expectedVersion: expectedVersion ?? cells.version, expectedListingId: cells.listingId! }]))
   return r.results[0]!
 }
 const stored = () => scoped(() => prisma.channelListing.findUnique({ where: { id: ids.c }, select: { version: true, businessPriceRule: true, businessPricePercent: true, businessPrice: true, businessTiers: true } }))
@@ -104,5 +104,13 @@ describe('the Matrix door writes the business setting through the business price
 
   it('the family parent: refused with the not-buyable sentence', async () => {
     expect(await write('mwb-p', pct(5))).toMatchObject({ outcome: 'refused', reason: PARENT_PRICE_REASON })
+  })
+
+  it('the Tiers column: the same door under its own kind — the whole setting stored', async () => {
+    const before = (await cellsOf('mwb-c')).version
+    const fewer = { type: 'percent' as const, levels: [{ minQty: 3, value: 4 }] }
+    expect(await write('mwb-c', pct(5, fewer), undefined, 'businessTiers')).toMatchObject({ cell: 'businessTiers', outcome: 'applied', version: before + 1 })
+    expect((await stored())!.businessTiers).toEqual(fewer)
+    expect(await write('mwb-c', pct(5, tiers), undefined, 'businessTiers')).toMatchObject({ outcome: 'applied' })
   })
 })

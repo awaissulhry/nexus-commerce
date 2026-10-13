@@ -20,6 +20,7 @@ vi.mock('ag-grid-react', () => ({
 import { MATRIX_CELL_KINDS, MATRIX_CELL_LABELS, MATRIX_CELL_WIDTHS, type MatrixCellKind, type MatrixCells, type MatrixCoordinate } from '../matrix/contract'
 import { MATRIX_CELL_CLASSES, MATRIX_CELL_COPY, MATRIX_FILLABLE_KINDS } from '../renderers/matrixCells'
 import { MATRIX_CELL_RENDERERS, matrixWaitingLine } from '../renderers/MatrixCellViews'
+import { BusinessOpenEditor } from './BusinessOpenEditor'
 import { FormulaCellEditor, type FormulaWiring } from './FormulaCellEditor'
 import { matrixColumnDef, type MatrixColumnOptions } from './matrixColumn'
 import { CellSaveTracker } from './roundTrip'
@@ -266,37 +267,48 @@ describe('matrixColumnDef — the B2B price and Tiers columns (Amazon Business)'
     return { id: 'r1', cells: { 'AMAZON:IT': c } }
   }
 
-  it('no AG editor and never editable; no fill handle; the pencil is revealed on row hover and AG leaves its clicks alone', () => {
+  it('typed like any cell: a character opens AG\'s text editor; Enter, F2 and a double-click open the business editor', () => {
     const onOpenBusiness = vi.fn()
     for (const kind of ['businessPrice', 'businessTiers'] as const) {
       const d = def(kind, { onOpenBusiness })
       expect(d.cellEditor).toBeUndefined()
-      expect(d.cellEditorSelector).toBeUndefined()
-      expect(call(d.editable, { data: b2bRow() })).toBe(false)
-      expect(d.suppressFillHandle).toBe(true)
+      const pick = (eventKey: string | null) => fn(d.cellEditorSelector)({ eventKey })
+      for (const key of ['5', '-', '€', 'Backspace', 'Delete']) expect(pick(key)).toEqual({ component: 'agTextCellEditor' })
+      for (const key of ['Enter', 'F2', null]) expect(pick(key).component).toBe(BusinessOpenEditor)
+      // The business editor's open hands the page the cell it opened on.
+      const params = { data: b2bRow() }
+      pick('Enter').params.open(params, null)
+      expect(onOpenBusiness).toHaveBeenLastCalledWith(params, null)
+      expect(call(d.editable, { data: b2bRow() })).toBe(true)
+      expect(d.suppressFillHandle).toBe(false)
       expect(fn(d.cellClass)({ data: b2bRow() })).toContain('nds-reveal-row')
-      expect(fn(d.cellClass)({ data: b2bRow() })).not.toContain('nds-cell-is-editable')
+      expect(fn(d.cellClass)({ data: b2bRow() })).toContain('nds-cell-is-editable')
       const rp = d.cellRendererParams as { onOpenBusiness: unknown; suppressMouseEventHandling: (p: { event: { target: unknown } }) => boolean }
       expect(rp.onOpenBusiness).toBe(onOpenBusiness)
       expect(typeof rp.suppressMouseEventHandling).toBe('function')
     }
+    // No business editor wired (the factory, the lab): every gesture types.
+    expect(def('businessPrice').cellEditor).toBe('agTextCellEditor')
     // Every other kind keeps AG's mouse handling.
     expect((def('price').cellRendererParams as Record<string, unknown>).suppressMouseEventHandling).toBeUndefined()
   })
 
-  it('a paste or a typed value is refused with the sentence, and nothing moves', () => {
+  it('a paste or a typed value is read as the rule; junk is refused with the sentence and nothing moves', () => {
     const r = b2bRow()
     const onValueRefused = vi.fn()
-    expect(fn(def('businessPrice', { onValueRefused }).valueSetter)({ data: r, newValue: '90', oldValue: 99.75 } as ValueSetterParams<Row>)).toBe(false)
-    expect(onValueRefused).toHaveBeenCalledWith('The B2B price and quantity discounts are set in their editor (Enter or F2 on the cell) — never typed, pasted or filled', r)
-    expect(r.cells['AMAZON:IT']!.business!.price).toBe(99.75)
+    expect(fn(def('businessPrice', { onValueRefused }).valueSetter)({ data: r, newValue: '6%', oldValue: '€99.75 · −5%' } as ValueSetterParams<Row>)).toBe(true)
+    expect(r.cells['AMAZON:IT']!.business).toMatchObject({ rule: 'PERCENT_OFF', percent: 6, price: null })
+    expect(fn(def('businessPrice', { onValueRefused }).valueSetter)({ data: r, newValue: 'abc', oldValue: '−6%' } as ValueSetterParams<Row>)).toBe(false)
+    expect(onValueRefused).toHaveBeenCalledWith('A B2B price is a percent below the price (5%) or a price (32.95); empty removes it', r)
+    expect(r.cells['AMAZON:IT']!.business!.percent).toBe(6)
   })
 
-  it('the text, the value and the comparator', () => {
+  it('the text is the value (copy, fill); the column sorts by the price it gives', () => {
     const d = def('businessPrice')
     expect(fn(d.valueFormatter)({ data: b2bRow() })).toBe('€99.75 · −5%')
-    expect(fn(d.valueGetter)({ data: b2bRow() })).toBe(99.75)
-    expect(fn(d.comparator)(10, 20)).toBeLessThan(0)
+    expect(fn(d.valueGetter)({ data: b2bRow() })).toBe('€99.75 · −5%')
+    const cheap = b2bRow(); cheap.cells['AMAZON:IT']!.business!.price = 50
+    expect(fn(d.comparator)('x', 'y', { data: cheap }, { data: b2bRow() })).toBeLessThan(0)
   })
 })
 

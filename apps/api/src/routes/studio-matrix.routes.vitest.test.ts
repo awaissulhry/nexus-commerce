@@ -399,7 +399,7 @@ describe('Sells from — the door, the verb and its Undo', () => {
   })
 })
 
-/** Amazon Business (step 5, Part 2): the door takes `cell: 'businessPrice'` — the whole setting — on an Amazon market. */
+/** Amazon Business (step 5): the door takes `cell: 'businessPrice'` or `'businessTiers'` — the whole setting — on an Amazon market. */
 describe('PATCH — the Amazon Business cell', () => {
   const business = { rule: null, percent: null, exact: null, tiers: null, price: null, normalPrice: 100, minPrice: null, maxPrice: null, currency: 'EUR', warnings: [], held: null, send: null, live: null, reported: null }
   const withBusiness = (): MatrixRead => {
@@ -418,15 +418,18 @@ describe('PATCH — the Amazon Business cell', () => {
     expect(res.json().results[0]).toEqual({ rowId: 'c1', coordinateKey: 'AMAZON:IT', cell: 'businessPrice', outcome: 'applied', version: 4, listings: [{ listingId: 'l-c1-it', productId: 'c1', version: 4 }] })
     expect(mocks.business).toHaveBeenCalledWith(expect.objectContaining({ targets: [{ listingId: 'l-c1-it', setting, expectedVersion: 3 }], reason: 'matrix' }))
   })
+  it('the Tiers column writes the same whole setting under its own kind (its own round-trip mark)', async () => {
+    mocks.read.mockImplementation(async () => withBusiness())
+    mocks.business.mockResolvedValue({ results: [{ listingId: 'l-c1-it', productId: 'c1', marketplace: 'IT', outcome: 'applied', version: 4, guarded: true, before: null, after: setting, businessPrice: 95, warnings: [] }], applied: 1, refused: 0, noop: 0, conflict: 0 })
+    const res = await app.inject({ method: 'PATCH', url: '/products/root/studio/matrix', payload: { cells: [{ rowId: 'c1', coordinateKey: 'AMAZON:IT', cell: 'businessTiers', value: setting, expectedVersion: 3, expectedListingId: 'l-c1-it' }] } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().results[0]).toMatchObject({ cell: 'businessTiers', outcome: 'applied', version: 4 })
+    expect(mocks.business).toHaveBeenCalledWith(expect.objectContaining({ targets: [{ listingId: 'l-c1-it', setting, expectedVersion: 3 }], reason: 'matrix' }))
+  })
   it('without products.price.edit: refused with the permission sentence, the door never called', async () => {
     mocks.read.mockImplementation(async () => withBusiness())
     const res = await app.inject({ method: 'PATCH', url: '/products/root/studio/matrix', headers: { 'x-test-permissions': NO_PRICE_EDIT }, payload: { cells: [{ rowId: 'c1', coordinateKey: 'AMAZON:IT', cell: 'businessPrice', value: null, expectedVersion: 3 }] } })
     expect(res.json().results[0]).toMatchObject({ outcome: 'refused', reason: expect.stringContaining('products.price.edit') })
-    expect(mocks.business).not.toHaveBeenCalled()
-  })
-  it('the Tiers column has no door kind of its own: the setting carries the tiers (400 at the boundary)', async () => {
-    const res = await app.inject({ method: 'PATCH', url: '/products/root/studio/matrix', payload: { cells: [{ rowId: 'c1', coordinateKey: 'AMAZON:IT', cell: 'businessTiers', value: null, expectedVersion: 3 }] } })
-    expect(res.statusCode).toBe(400)
     expect(mocks.business).not.toHaveBeenCalled()
   })
 })

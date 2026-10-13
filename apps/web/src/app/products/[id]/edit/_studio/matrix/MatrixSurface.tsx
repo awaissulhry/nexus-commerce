@@ -46,7 +46,6 @@ import {
   isColumnsViewPayload,
   matrixCellEditable,
   matrixCellOpens,
-  MATRIX_BUSINESS_KINDS,
   matrixCellText,
   matrixWrite,
   MATRIX_UNCHANGED,
@@ -340,7 +339,8 @@ export function MatrixSurface({ productId }: { productId: string }) {
   }, [matrix])
   const caseDoor = canSwitchStock ? openCase : undefined
   /* Amazon Business (step 5): a market's B2B price and Tiers cells open ONE pop-up — the business price and its quantity
-     discounts, saved together through the Matrix door. The server decides who may (`writable`, the price right). */
+     discounts, saved together through the Matrix door — on Enter, F2, a double-click (the engine's editor) or the pencil.
+     Typing, paste, fill, Delete and ⌘Z work on the cells like on any other. The server decides who may (`writable`). */
   const [businessTarget, setBusinessTarget] = useState<BusinessTarget | null>(null)
   const openBusiness = useCallback((rowId: string, key: CoordinateKey, anchor: HTMLElement | null) => {
     const r = rowsRef.current.find((x) => x.id === rowId)
@@ -974,23 +974,13 @@ export function MatrixSurface({ productId }: { productId: string }) {
     caseDoor(e.data.id, target instanceof Element ? target.closest<HTMLElement>('[role="gridcell"]') : null)
     return true
   }, [caseDoor])
-  /** A B2B price or Tiers cell on an open gesture (double-click, Enter, F2), when it may change; anchored on the cell. A
-   *  cell that may not (the parent, no price right) explains itself instead (`explainHeld`). */
-  const openBusinessCell = useCallback((e: { data?: StudioRow; colDef?: { colId?: string }; event?: Event | null }): boolean => {
-    const parsed = parseMatrixColId(e.colDef?.colId)
-    if (!parsed || !e.data || !MATRIX_BUSINESS_KINDS.includes(parsed.kind) || !matrixCellOpens(parsed.kind, matrix.cellsOf(e.data.id, parsed.key))) return false
-    const target = e.event?.target
-    openBusiness(e.data.id, parsed.key, target instanceof Element ? target.closest<HTMLElement>('[role="gridcell"]') : null)
-    return true
-  }, [openBusiness, matrix])
   const onCellDoubleClicked = useCallback((e: { data?: StudioRow; colDef?: { colId?: string }; event?: Event | null }) => {
     if (e.colDef?.colId === STOCK_COL && e.data && stockDoor) { stockDoor(e.data.id); return }
-    if (openBusinessCell(e)) return
     if (openCaseCell(e)) return
     if (openFromCell(e)) return
     if (openFbaCell(e)) return
     explainHeld(e)
-  }, [explainHeld, stockDoor, openFromCell, openCaseCell, openFbaCell, openBusinessCell])
+  }, [explainHeld, stockDoor, openFromCell, openCaseCell, openFbaCell])
   /* AG's union includes a full-width variant without `colDef`; both are typed loosely and guarded. */
   const onCellKeyDown = useCallback((e: { data?: StudioRow; colDef?: { colId?: string }; event?: Event | null; column?: { getColId(): string } | null }) => {
     /* Delete / Backspace on a market's Status: the selected Status cells go back to "no change" (the sheet's rule). */
@@ -1002,13 +992,12 @@ export function MatrixSurface({ productId }: { productId: string }) {
     if (key && onUndoKey(key)) return
     if (!key || key.altKey || key.ctrlKey || key.metaKey) return
     if ((key.key === 'Enter' || key.key === 'F2') && e.colDef?.colId === STOCK_COL && e.data && stockDoor) { stockDoor(e.data.id); return }
-    if ((key.key === 'Enter' || key.key === 'F2') && openBusinessCell(e)) return
     if ((key.key === 'Enter' || key.key === 'F2') && openFromCell(e)) return
     if ((key.key === 'Enter' || key.key === 'F2') && openCaseCell(e)) return
     if ((key.key === 'Enter' || key.key === 'F2') && openFbaCell(e)) return
     const opens = key.key === 'Enter' || key.key === 'F2' || (key.key.length === 1 && key.key !== ' ')
     if (opens) explainHeld(e)
-  }, [explainHeld, clearStatusCells, getGridApi, statusPlaceOf, stockDoor, openFromCell, openCaseCell, openFbaCell, openBusinessCell, onUndoKey])
+  }, [explainHeld, clearStatusCells, getGridApi, statusPlaceOf, stockDoor, openFromCell, openCaseCell, openFbaCell, onUndoKey])
 
   /* ── views: presets + saved views on the Matrix surface ─────────────────────────────────── */
 

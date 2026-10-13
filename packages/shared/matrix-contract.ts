@@ -450,7 +450,7 @@ export interface MatrixLocation { code: string; name: string; active: boolean; i
 
 /* ── writes: one door ───────────────────────────────────────────────────────────────────────── */
 
-export type MatrixWritableKind = Extract<MatrixCellKind, 'fulfilment' | 'syncMode' | 'syncQty' | 'syncBuffer' | 'price' | 'salePrice' | 'businessPrice'>
+export type MatrixWritableKind = Extract<MatrixCellKind, 'fulfilment' | 'syncMode' | 'syncQty' | 'syncBuffer' | 'price' | 'salePrice' | 'businessPrice' | 'businessTiers'>
 /** What the one door writes: the writable cell kinds plus "Sells from" (`value`: the codes in sale order; `[]` = the market default). */
 export type MatrixDoorKind = MatrixWritableKind | 'source'
 
