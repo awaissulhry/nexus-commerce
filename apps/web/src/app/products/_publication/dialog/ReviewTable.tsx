@@ -194,7 +194,7 @@ export function ReviewTable({ markets, locked, now, ariaLabel, allMarkets = fals
     <SegmentedControl ariaLabel="Show" size="sm" options={filters} value={filter} onChange={v => setFilter(v as ReviewFilter)} />
     {/* Keyed by the view: "All markets" and one market have different columns and widths, and a width is where a column
         STARTS (the engine's rule) — the same grid switching views kept the other view's widths and ran past the window. */}
-    <DataGrid key={allMarkets ? 'all' : 'one'} ariaLabel={ariaLabel} size="md" keyboardScroll headerMenus={false} columns={columns} rows={pageRows} rowKey={r => r.key}
+    <DataGrid key={allMarkets ? 'all' : 'one'} ariaLabel={ariaLabel} size="md" headerMenus={false} columns={columns} rows={pageRows} rowKey={r => r.key}
       // A field row (and a value a Full update removes) is the DataGrid's child row: sunken, with the rail, under its product.
       rowClassName={r => (r.type === 'field' || r.type === 'removal' ? 'nds-grid-kid' : undefined)}
       emptyState={filter === 'all' ? 'Nothing is waiting to be sent here.' : filter === 'problems' ? 'No problems.' : 'Nothing is deleted.'} />

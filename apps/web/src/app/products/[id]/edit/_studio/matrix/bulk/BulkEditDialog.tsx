@@ -577,7 +577,7 @@ export function BulkEditDialog(p: BulkEditDialogProps) {
           </div>
         ) : (
           <DataGrid ariaLabel={tableMode === 'done' ? 'What was changed' : tableMode === 'preview' ? 'What would change' : 'The rows now'} size="sm"
-            keyboardScroll headerMenus={false} maxHeight={tableMax} columns={columns} rows={rows} rowKey={(r) => r.key}
+            headerMenus={false} maxHeight={tableMax} columns={columns} rows={rows} rowKey={(r) => r.key}
             emptyState={<EmptyState title="Nothing to show" description="None of these rows is on the ticked markets." />} />
         )}
       </div>

@@ -190,7 +190,7 @@ export function FbaSendForm(p: FbaSendFormProps) {
       )}
       {p.tableActions}
       <div ref={tableRef} className={styles.table} aria-busy={p.reading || undefined}>
-        <DataGrid ariaLabel="SKUs to send" size="sm" keyboardScroll headerMenus={false} maxHeight={p.maxHeight ?? 320} columns={columns} rows={draft.skus} rowKey={(s) => s.productId}
+        <DataGrid ariaLabel="SKUs to send" size="sm" headerMenus={false} maxHeight={p.maxHeight ?? 320} columns={columns} rows={draft.skus} rowKey={(s) => s.productId}
           emptyState={p.emptyState ?? <EmptyState title="No SKU to send" description="None of the ticked rows is a SKU this business sells." />} />
       </div>
       {summary && summary.looseUnits > 0 && (

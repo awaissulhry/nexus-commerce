@@ -33,7 +33,7 @@ import { gridDensity, gridGeometry, type GridDensityName } from '../tokens/grid'
 import { compareSortValues, type SortValue } from './sortValues'
 import { plainFirstGuess, plainGridHeight } from './plainGrid'
 import { heldLimits, widthMoved, widthsAsDefaults } from './columns/columnWidths'
-import { interactionDefaults } from './gridDefaults'
+import { interactionDefaults, readsOnly } from './gridDefaults'
 import { GRID_LOCALE_TEXT } from './locale'
 import { GridNoRowsOverlay } from './renderers/overlays'
 import { LIGHT_PINNED } from '../lib/opens-dark'
@@ -44,6 +44,7 @@ import { registerGridModules } from './modules'
 import { workspaceGridTheme } from './theme/theme'
 import { useAgThemeMode } from './hooks/useAgThemeMode'
 import { useGridDensity } from './hooks/useGridDensity'
+import { useReadGridKeys } from './hooks/useReadGridKeys'
 import { GridEmptyCellsContext, type GridEmptyCells } from './renderers/emptyCells'
 import './theme/grid.css'
 
@@ -505,6 +506,14 @@ export function NexusGrid<T>({
     () => interactionDefaults({ cellSelection: agProps.cellSelection, getContextMenuItems: agProps.getContextMenuItems, columnDefs, defaultColDef: mergedDefaultColDef }),
     [agProps.cellSelection, agProps.getContextMenuItems, columnDefs, mergedDefaultColDef],
   )
+  // A grid that reads is one stop on the page: Tab leaves it, the arrows move between cells, Enter acts on a cell
+  // (`readGridKeys.ts`, grid audit F6). Grids that edit keep their spreadsheet keys.
+  const reads = readsOnly({ cellSelection: agProps.cellSelection, columnDefs, defaultColDef: mergedDefaultColDef })
+  useReadGridKeys(wrapRef, apiRef, {
+    reads,
+    opensRows: agProps.onRowClicked != null || agProps.onCellClicked != null,
+    defaultKeys: mergedDefaultColDef.suppressKeyboardEvent,
+  })
   /**
    * The grid's light or dark follows the place it sits in, not only <html> (grid audit C6): a light-pinned page or a
    * light DS modal under a dark OS keeps a light grid — native scrollbars and checkboxes included (`lib/opens-dark`).
@@ -582,6 +591,8 @@ export function NexusGrid<T>({
         data-density={density}
         data-rows={rows}
         data-empty-cells={emptyCells}
+        // Read by grid.css: a reading grid's focus box shows for the keyboard only.
+        data-reads={reads || undefined}
       >
         <GridEmptyCellsContext.Provider value={emptyCells}>
         <AgGridReact<T>

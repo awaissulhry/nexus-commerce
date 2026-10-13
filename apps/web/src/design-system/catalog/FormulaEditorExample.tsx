@@ -110,7 +110,7 @@ export function FormulaEditorExample() {
           return { ok: result.ok, error: result.error ?? undefined }
         }} />
       <p>Result grids stay within a narrow form. Focus a cell and use arrow keys to reach the next column.</p>
-      <DataGrid ariaLabel="Sample formula results" keyboardScroll columns={REVIEW_COLUMNS} rows={rows} rowKey={rowKey} size="sm" />
+      <DataGrid ariaLabel="Sample formula results" columns={REVIEW_COLUMNS} rows={rows} rowKey={rowKey} size="sm" />
     </div>}
     <Button size="sm" onClick={() => { formulas.current.clear(); setRows(INITIAL.map(row => ({ ...row }))); setNotice('Sample reset.') }}>Reset sample</Button>
   </div>

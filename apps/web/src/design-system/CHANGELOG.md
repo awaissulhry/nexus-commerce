@@ -1,3 +1,19 @@
+## A reading grid is one stop for the keyboard — 2026-10-13
+
+Grid audit step 5 (F6, second half). Measured on a local stack before: Tab walked every column header again and again
+(115 presses on /products never left the grid), and where it reached the rows it stopped on every link and button.
+- **`readGridKeys.ts`** (the rule, tested) + **`hooks/useReadGridKeys.ts`** (applies it in `NexusGrid`): on a grid that
+  reads (`readsOnly`: no cell ranges, no editable column) Tab enters on the header and leaves in one press; the arrows
+  move between cells; Enter presses a cell's one control, moves into a cell with several (Tab walks them, Esc returns),
+  or opens the row; Space presses a cell's one button. Columns with their own keys, AG's selection cell and form grids
+  (typing fields in cells) keep theirs. Editing grids (sheets, Matrix, ranges) are unchanged.
+- **`gridDefaults.ts`**: a reading grid's cells take focus (`suppressCellFocus: false`). `DataGrid` no longer reads
+  `keyboardScroll` (its cells always take focus); the prop stays in `dataGridTypes.ts` for the factory's HTML table.
+- **`grid.css`** (both apps): one focus ring on a reading grid's cell, 2px accent, keyboard only. AG's 1px box showed on
+  a mouse click and not at all in the DataGrid (0px cell borders).
+- **`WorkspaceGrid`** row keys: the focused cell is the keyboard row (`onCellFocused`); J / K move it like the arrows and
+  a verb acts on the row the ring is on; a redrawn row gets its focus back.
+
 ## Ads grids: one blank, icon headers; no unused density tokens — 2026-10-13
 
 Grid audit wave 4, PR13 chunk 2 (E11 blank, E12, E13, E16).

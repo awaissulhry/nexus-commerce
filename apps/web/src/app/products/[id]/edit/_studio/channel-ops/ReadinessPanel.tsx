@@ -36,10 +36,10 @@ export function ReadinessPanel() {
   const attention = entries.filter(entry => entry.state !== 'ready')
   return <div className={styles.panel}>
     <Card header="Readiness by language" padded={false} description="Required content for each destination and language. — means readiness could not be scored.">
-      <DataGrid ariaLabel="Readiness matrix" keyboardScroll rows={[...grouped.values()]} rowKey={row => row.key} columns={columns} emptyState="Readiness has not been computed for this product." />
+      <DataGrid ariaLabel="Readiness matrix" rows={[...grouped.values()]} rowKey={row => row.key} columns={columns} emptyState="Readiness has not been computed for this product." />
     </Card>
     <Card header="Needs attention" padded={false} description="Missing or invalid fields from the same readiness results.">
-      <DataGrid ariaLabel="Needs attention by language" keyboardScroll rows={attention} rowKey={entry => `${entry.coordinateKey}:${entry.language}`} columns={[
+      <DataGrid ariaLabel="Needs attention by language" rows={attention} rowKey={entry => `${entry.coordinateKey}:${entry.language}`} columns={[
         { key: 'coordinate', label: 'Coordinate', render: entry => entry.label },
         { key: 'language', label: 'Language', render: entry => entry.language.toUpperCase() },
         { key: 'state', label: 'Readiness', render: entry => <ReadinessValue entry={entry} language={entry.language} /> },

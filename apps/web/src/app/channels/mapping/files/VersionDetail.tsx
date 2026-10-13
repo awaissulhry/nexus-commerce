@@ -383,7 +383,6 @@ export function VersionDetail({ setId, sets, stores = [], onSelect, onListChange
         <DataGrid<MappingFieldRow>
           ariaLabel={`Columns of ${formLabel(set)} v${set.version}`}
           size="sm"
-          keyboardScroll
           columns={columns}
           rows={paged.rows}
           rowKey={r => r.channelKey}
