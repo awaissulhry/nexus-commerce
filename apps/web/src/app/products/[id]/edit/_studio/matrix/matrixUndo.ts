@@ -49,6 +49,16 @@ export const MATRIX_UNDO_COPY = {
   gone: 'This change cannot be put back: the listing on this market is not the one that was changed',
   /** A toast's Undo whose ⌘Z step is gone: ⌘Z took it already, or the change was not saved. */
   done: 'Nothing to put back: this change was undone already',
+  /**
+   * A clamped price shows its floor or ceiling, not the listing's own price: the page cannot tell whether someone set
+   * another price since, so an undo never writes over it blind.
+   */
+  clamped: 'Not put back: this price is held at its floor or ceiling, so Nexus cannot tell whether it changed since. Set it in the cell',
+  /**
+   * The B2B price before the change was set at Amazon and is not kept in Nexus: putting it "back" would remove the
+   * business offer at Amazon. The pop-up's toast offers no Undo then; ⌘Z refuses the same way.
+   */
+  amazonOwn: 'Not put back: the business price before this change was set at Amazon, outside Nexus. Nexus never removes it to undo — set it in the B2B price pop-up',
 } as const
 
 /** A kind the Matrix's history holds: a Matrix cell's, or a market's "Sells from" (the From column, `source`). */
@@ -84,6 +94,12 @@ export function matrixStillHolds(kind: MatrixHistoryKind, written: unknown, live
   }
   if (kind === 'source') return live.source && Array.isArray(written) ? sameSourceCodes(written as string[], live.source.own) : null
   if (kind === 'listing' || kind === 'syncState') return null
+  /* A clamped price shows the floor or ceiling, not the listing's own price: the price's SOURCE still says whether it is
+     the listing's own or the base price's. Back to the base price (null) is read from it; an own number cannot be. */
+  if (kind === 'price' && live.price?.clamped) {
+    if (written === null) return live.price.source === 'master'
+    return live.price.source === 'override' ? null : false
+  }
   const expected = stampAfterOwnWrite(kind, { cell: kind, value: written })
   if (!expected || matrixCellStamp(kind, live) === undefined) return null
   return matrixStampHolds(kind, expected, live)
@@ -109,9 +125,16 @@ export function matrixReplay(
   place: { rowId: string; coordinateKey: CoordinateKey },
 ): MatrixReplay {
   const step = replayStep(kind, entry, live, place)
+  if (step.kind !== 'write' || !('before' in entry)) return step
   /* Undo: a cell is put back only while it still holds what the edit wrote (a newer value stays). */
-  if (step.kind === 'write' && 'before' in entry && 'written' in entry && matrixStillHolds(kind, entry.written, live) === false)
-    return { kind: 'refuse', reason: MATRIX_COPY.changedSince }
+  if ('written' in entry) {
+    const holds = matrixStillHolds(kind, entry.written, live)
+    if (holds === false) return { kind: 'refuse', reason: MATRIX_COPY.changedSince }
+    // A clamped own price cannot be read back: never a blind write over it.
+    if (holds === null && kind === 'price' && live?.price?.clamped) return { kind: 'refuse', reason: MATRIX_UNDO_COPY.clamped }
+  } else if (kind === 'price' && live?.price?.clamped && live.price.source === 'override') {
+    return { kind: 'refuse', reason: MATRIX_UNDO_COPY.clamped }
+  }
   return step
 }
 
@@ -179,11 +202,71 @@ function replayStep(
     case 'businessPrice':
     case 'businessTiers': {
       if (!b.business || !live.business) return SKIP
+      // A business price set at Amazon (not kept in Nexus) is never "put back" by removing the offer.
+      if (b.business.rule == null && b.business.reported) return { kind: 'refuse', reason: MATRIX_UNDO_COPY.amazonOwn }
       const was = matrixBusinessSettingOfCell(b.business)
       return JSON.stringify(was) === JSON.stringify(matrixBusinessSettingOfCell(live.business)) ? SKIP : write(kind, was)
     }
     default:
       return SKIP
+  }
+}
+
+/** The part of the page's history a replay needs: an undo it could not carry out leaves the redo stack. */
+export interface ReplayHistory { dropRedo: (rowId: string, colId: string, before?: unknown) => boolean }
+
+export interface MatrixStepReplay {
+  /** The step's writes, built from the cells as they are when the line's turn comes. */
+  build: () => MatrixWriteCell[]
+  /** Why a cell could not be put back (or sent again), as said when the writes were built. */
+  readonly refused: readonly string[]
+  /** The server's answer: an undo it refused (or that met a newer value) leaves the redo stack too. */
+  settle: (outcomes: readonly MatrixWriteOutcome[]) => void
+}
+
+/**
+ * One history step's Matrix values on their way back (⌘Z, ⌘⇧Z, a pop-up toast's Undo) — 2026-10-13 review. An undo that is
+ * refused — here (`changedSince`, a clamped price, a listing that is not the one changed) or by the server (a conflict, a
+ * refusal) — takes its change OFF the redo stack (`dropRedo`): a ⌘⇧Z never writes the old edit over the newer value. A
+ * change put back stays redoable.
+ */
+export function matrixStepReplay(
+  values: ReadonlyArray<{ rowId: string; colId: string; value: unknown }>,
+  direction: 'undo' | 'redo',
+  deps: { liveOf: (rowId: string, key: CoordinateKey) => MatrixCells | null; history: ReplayHistory; stamp?: (cell: MatrixWriteCell, live: MatrixCells | null) => MatrixWriteCell; say?: (reason: string) => void },
+): MatrixStepReplay {
+  const refused: string[] = []
+  const sentFrom = new Map<string, { rowId: string; colId: string; value: unknown }>()
+  const drop = (v: { rowId: string; colId: string; value: unknown }) => { if (direction === 'undo') deps.history.dropRedo(v.rowId, v.colId, v.value) }
+  return {
+    refused,
+    build() {
+      refused.length = 0
+      sentFrom.clear()
+      const out: MatrixWriteCell[] = []
+      for (const v of values) {
+        const place = matrixHistoryPlace(v.colId)
+        if (!place || !isMatrixHistoryValue(v.value)) continue
+        const live = deps.liveOf(v.rowId, place.key)
+        const step = matrixReplay(place.kind, v.value, live, { rowId: v.rowId, coordinateKey: place.key })
+        if (step.kind === 'write') {
+          out.push(deps.stamp ? deps.stamp(step.cell, live) : step.cell)
+          sentFrom.set(`${v.rowId}|${place.key}|${step.cell.cell}`, v)
+        } else if (step.kind === 'refuse') {
+          refused.push(step.reason)
+          deps.say?.(step.reason)
+          drop(v)
+        }
+      }
+      return out
+    },
+    settle(outcomes) {
+      for (const o of outcomes) {
+        if (o.outcome !== 'refused' && o.outcome !== 'conflict') continue
+        const v = sentFrom.get(`${o.rowId}|${o.coordinateKey}|${o.cell}`)
+        if (v) drop(v)
+      }
+    },
   }
 }
 

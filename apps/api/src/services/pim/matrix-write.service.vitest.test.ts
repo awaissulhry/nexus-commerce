@@ -14,10 +14,12 @@ const h = vi.hoisted(() => ({
   locations: vi.fn(async () => [] as Array<{ code: string; name: string; isActive: boolean }>), audit: vi.fn(async () => ({ count: 0 })), link: vi.fn(async () => null as unknown),
   // A verb's stored operation (the revert reads it, claims it and writes its answer back).
   opFind: vi.fn(async () => null as unknown), opClaim: vi.fn(async () => ({ count: 1 })), opUpdate: vi.fn(async () => ({})),
+  // A listing's stored own price (a clamped price shows its floor or ceiling, not it).
+  listing: vi.fn(async () => null as unknown),
 }))
 vi.mock('../../db.js', () => ({ default: {
   $transaction: async (work: (tx: unknown) => unknown) => work({ channelListing: { updateMany: h.updateMany, findUnique: async () => ({ version: 9 }) } }),
-  channelListing: { findMany: h.findMany }, stockPoolLink: { findFirst: h.link }, stockLocation: { findMany: h.locations }, syncControlAudit: { createMany: h.audit },
+  channelListing: { findMany: h.findMany, findUnique: h.listing }, stockPoolLink: { findFirst: h.link }, stockLocation: { findMany: h.locations }, syncControlAudit: { createMany: h.audit },
   bulkOperation: { findUnique: h.opFind, updateMany: h.opClaim, update: h.opUpdate },
 } }))
 vi.mock('../../lib/queue.js', () => ({ addJobSafely: async () => null, outboundSyncQueue: null }))
@@ -33,7 +35,7 @@ vi.mock('./business-price-write.service.js', () => ({ writeBusinessPrices: vi.fn
 vi.mock('./matrix.service.js', () => ({ getMatrixRead: vi.fn() }))
 vi.mock('../listing-values-events.js', () => ({ announceListingValues: vi.fn() }))
 
-import { applyCell, BUSINESS_VALUE_REASON, businessSettingFromValue, holdsChange, paramsForChange, restoreFieldOf, restoreWrites, revertMatrixOperation, writeMatrixCells } from './matrix-write.service.js'
+import { applyCell, BUSINESS_VALUE_REASON, businessSettingFromValue, holdsChange, movedSincePreview, paramsForChange, restoreFieldOf, restoreWrites, revertMatrixOperation, writeMatrixCells } from './matrix-write.service.js'
 import { writeBusinessPrices } from './business-price-write.service.js'
 import type { BusinessCell } from '@nexus/shared/matrix-contract'
 import { writeChannelPrices, type PriceWriteTarget } from './channel-price-write.service.js'
@@ -589,6 +591,22 @@ describe('revertMatrixOperation — only what the run wrote, and only while the 
     expect(answer.operation).toMatchObject({ applied: 1, refused: 1 })
     expect(h.opUpdate.mock.calls.at(-1)![0]).toMatchObject({ data: { status: 'PARTIAL' } })
   })
+  it('a clamped price: someone set 13 since (still clamped to the floor 15) — it stays; the run\'s own 12 still stored is put back', async () => {
+    const clamped = (version: number): MatrixCells => ({ ...priced(15, 'override', version), price: { value: 15, currency: 'EUR', source: 'override', formula: null, clamped: 'floor' } })
+    h.opFind.mockResolvedValue(op({ ...stored, changes: [stored.changes[0]!], outcomes: [stored.outcomes[0]], before: [stored.before[0]] }))
+    vi.mocked(getMatrixRead).mockReset().mockResolvedValue(read(clamped(6), priced(100, 'master', 5)))
+    h.listing.mockReset().mockResolvedValue({ priceOverride: 13 })
+    const later = await revertMatrixOperation(ctx, 'op-1')
+    expect(later.results).toEqual([{ rowId: 'a', coordinateKey: 'EBAY:IT', cell: 'price', outcome: 'conflict', reason: MATRIX_COPY.changedSince, version: 6 }])
+    expect(vi.mocked(writeChannelPrices)).not.toHaveBeenCalled()
+    expect(h.listing).toHaveBeenCalledWith({ where: { id: 'l-a' }, select: { priceOverride: true } })
+
+    h.listing.mockResolvedValue({ priceOverride: 12 })
+    const own = { ...stored, changes: [{ ...stored.changes[0]!, to: 12 }], outcomes: [stored.outcomes[0]], before: [stored.before[0]] }
+    h.opFind.mockResolvedValue(op(own))
+    const back = await revertMatrixOperation(ctx, 'op-1')
+    expect(back.results.map((r) => r.outcome)).toEqual(['applied'])
+  })
   it('a cell the run did not change (refused at the run) is not touched, whatever moved there since', async () => {
     h.opFind.mockResolvedValue({ ...op({ ...stored, outcomes: [stored.outcomes[0], { ...stored.outcomes[1], outcome: 'refused', reason: 'A formula sets this price', version: 5 }] }), status: 'PARTIAL' })
     vi.mocked(getMatrixRead).mockReset().mockResolvedValue(read(priced(90, 'override', 4), priced(80, 'override', 6)))
@@ -600,13 +618,18 @@ describe('revertMatrixOperation — only what the run wrote, and only while the 
 
 describe('holdsChange / restoreFieldOf — what a run wrote, and whether the cell still holds it', () => {
   const sync = cells({}).sync!
-  it('price: the run\'s own price (rounded); a newer price, the base price again or a formula do not hold; a clamped price cannot tell', () => {
-    const p = (value: number, source: 'override' | 'master' | 'formula', clamped: 'floor' | null = null) => cells({ price: { value, currency: 'EUR', source, formula: null, clamped } })
+  it('price: the run\'s own price (rounded); a newer price, the base price again or a formula do not hold', () => {
+    const p = (value: number, source: 'override' | 'master' | 'formula') => cells({ price: { value, currency: 'EUR', source, formula: null, clamped: null } })
     expect(holdsChange({ cell: 'price', to: 89.999 }, p(90, 'override'))).toBe(true)
     expect(holdsChange({ cell: 'price', to: 90 }, p(95, 'override'))).toBe(false)
     expect(holdsChange({ cell: 'price', to: 90 }, p(90, 'master'))).toBe(false)
     expect(holdsChange({ cell: 'price', to: 90 }, p(90, 'formula'))).toBe(false)
-    expect(holdsChange({ cell: 'price', to: 90 }, p(95, 'override', 'floor'))).toBe(true)
+  })
+  it('a clamped price (it shows its floor) holds only while the STORED own price is the run\'s; unread, it never does', () => {
+    const clamped = cells({ price: { value: 15, currency: 'EUR', source: 'override', formula: null, clamped: 'floor' } })
+    expect(holdsChange({ cell: 'price', to: 12 }, clamped, { priceOverride: 12 })).toBe(true)
+    expect(holdsChange({ cell: 'price', to: 12 }, clamped, { priceOverride: 13 })).toBe(false)
+    expect(holdsChange({ cell: 'price', to: 12 }, clamped)).toBe(false)
   })
   it('quantity, buffer, pause, fulfilment and Sells from', () => {
     const pinned = cells({ sync: { ...sync, kind: 'PINNED', mode: 'PINNED', intended: 7 } })
@@ -640,5 +663,26 @@ describe('holdsChange / restoreFieldOf — what a run wrote, and whether the cel
     const live = cells({ sync: { ...sync, buffer: 3 }, price: { value: 90, currency: 'EUR', source: 'override', formula: null, clamped: null } })
     expect(restoreWrites('r', 'EBAY:IT', before, live, new Set(['price']))).toEqual([{ kind: 'cell', cell: 'price', value: null }])
     expect(restoreWrites('r', 'EBAY:IT', before, live, new Set(['buffer']))).toEqual([{ kind: 'cell', cell: 'syncBuffer', value: 0 }])
+  })
+})
+
+/**
+ * 2026-10-13 review — a run checks the value each change was previewed FROM: an "adjust by %" applied after someone changed
+ * the price would write a value worked out from the old one. A Follow quantity's number moves with every sale (Owner 4A),
+ * so a pin compares its mode only.
+ */
+describe('movedSincePreview — the value a change was previewed from', () => {
+  const ch = (over: Partial<VerbChange>): VerbChange => change(over)
+  it('a price, a buffer, a method or a list that moved since the preview has moved', () => {
+    expect(movedSincePreview(ch({ cell: 'price', from: 100 }), ch({ cell: 'price', from: 110 }))).toBe(true)
+    expect(movedSincePreview(ch({ cell: 'price', from: 100 }), ch({ cell: 'price', from: 100 }))).toBe(false)
+    expect(movedSincePreview(ch({ cell: 'syncBuffer', from: 0 }), ch({ cell: 'syncBuffer', from: 2 }))).toBe(true)
+    expect(movedSincePreview(ch({ cell: 'source', from: [] }), ch({ cell: 'source', from: ['MI-3PL'] }))).toBe(true)
+  })
+  it('a pin of a Follow quantity: a sale moving the follow number is not a change; a pin set since is', () => {
+    const follow = cells({})
+    expect(movedSincePreview(ch({ cell: 'syncQty', from: 29, fromLabel: 'Follow · 29' }), ch({ cell: 'syncQty', from: 27, fromLabel: 'Follow · 27' }), follow)).toBe(false)
+    const pinned = cells({ sync: { ...follow.sync!, kind: 'PINNED', mode: 'PINNED', intended: 40 } })
+    expect(movedSincePreview(ch({ cell: 'syncQty', from: 29, fromLabel: 'Follow · 29' }), ch({ cell: 'syncQty', from: 40, fromLabel: 'Pinned · 40' }), pinned)).toBe(true)
   })
 })

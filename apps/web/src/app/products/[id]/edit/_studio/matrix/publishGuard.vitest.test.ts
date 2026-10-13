@@ -64,6 +64,15 @@ describe('the Matrix\'s Publish barrier', () => {
     l.edit(false)
     expect(await store.preparePublication()).toBeNull()
   })
+  it('a save that got no answer (connection lost) holds Publish, as the Information page does, until it is resolved', async () => {
+    const store = createWorkspaceSaveStore(vi.fn())
+    let unknown = true
+    const l = lines({ unanswered: () => unknown })
+    store.registerPublicationBarrier(matrixPublicationBarrier({ ...l.all, unanswered: () => unknown }))
+    expect(await store.preparePublication()).toBe(MATRIX_PUBLISH_HELD.unanswered)
+    unknown = false
+    expect(await store.preparePublication()).toBeNull()
+  })
   it('a write that fails still settles the line (Publish then reads the page\'s own refusal marks)', async () => {
     const line = createInFlight()
     const failed = line.track(Promise.reject(new Error('Connection lost')))

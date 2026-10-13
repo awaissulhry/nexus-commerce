@@ -37,6 +37,14 @@ describe('a typed Base price: its ⌘Z step is kept only when the save stores it
     sent[1]!.answer('unknown')
     expect(history.canUndo).toBe(false)
   })
+  it('⌘Z\'s write-back the server refuses leaves the redo stack: ⌘⇧Z never writes the edit over what the cell holds', () => {
+    const { history, line, sent } = setup()
+    line.changed(edit('a', 100, 90))
+    sent[0]!.answer('saved')
+    history.undo((values) => { for (const v of values) line.changed(edit(v.rowId, 90, v.value as number, 'undo')) })
+    sent[1]!.answer('refused')
+    expect(history.canRedo).toBe(false)
+  })
   it('⌘Z\'s own write-back is saved but is no new step', () => {
     const { history, line, sent } = setup()
     line.changed(edit('a', 90, 100, 'undo'))

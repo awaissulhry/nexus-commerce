@@ -6,6 +6,8 @@
  * edit is handed to the writer, kept only when the save stores it — a row the server refused or never answered leaves the
  * history, as a refused Matrix cell does (`forgetUnsaved`).
  *
+ * An undo's write-back the server did not store takes its change off the redo stack (`SheetUndoHistory.dropRedo`).
+ *
  * The bulk Edit's rows are NO ⌘Z step: the bulk Edit's own Undo (its receipt, then its toast) is their one way back. A
  * toast Undo that took a ⌘Z step of its own made ⌘Z re-apply the bulk change afterwards. A bulk row waits here for its
  * save's answer, so the dialog says what the server did, never what was asked.
@@ -21,8 +23,11 @@ export const BULK_EDIT_SOURCE = 'bulk-edit'
 export type BaseRowAnswer = SheetCellOutcome | 'unchanged'
 
 export interface BaseLineDeps<Row> {
-  /** The page's ⌘Z history (`SheetUndoHistory.edit`). */
-  history: { edit: (change: SheetCellChange, unconfirmed: boolean, step?: boolean) => (outcome: SheetCellOutcome) => void }
+  /** The page's ⌘Z history (`SheetUndoHistory.edit`, `dropRedo`). */
+  history: {
+    edit: (change: SheetCellChange, unconfirmed: boolean, step?: boolean) => (outcome: SheetCellOutcome) => void
+    dropRedo: (rowId: string, colId: string, before?: unknown) => boolean
+  }
   /** The master writer (`SheetWriter.set`). */
   writer: { set: (rowId: string, colId: string, value: unknown, opts: { row?: Row; onOutcome?: (outcome: SheetCellOutcome) => void }) => void }
   /** The cell shows an edit the server did not store (refused, or no answer): its "before" is what the server holds. */
@@ -48,7 +53,12 @@ export function createBaseLine<Row>(deps: BaseLineDeps<Row>): BaseLine<Row> {
       const kept = deps.history.edit({ rowId: e.rowId, colId: e.colId, before: e.before, after: e.after }, deps.unconfirmed(e.rowId, e.colId), !bulk && !replay)
       const answer = bulk ? waiting.get(e.rowId) : undefined
       if (answer) waiting.delete(e.rowId)
-      deps.writer.set(e.rowId, e.colId, e.after, { row: e.row, onOutcome: (outcome) => { kept(outcome); answer?.(outcome) } })
+      deps.writer.set(e.rowId, e.colId, e.after, { row: e.row, onOutcome: (outcome) => {
+        kept(outcome)
+        answer?.(outcome)
+        // ⌘Z's write-back not stored: the step leaves the redo stack — ⌘⇧Z never writes the edit over what the cell holds.
+        if (e.source === 'undo' && outcome !== 'saved') deps.history.dropRedo(e.rowId, e.colId)
+      } })
     },
     awaitRow(rowId) {
       return new Promise((resolve) => { waiting.set(rowId, resolve) })

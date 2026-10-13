@@ -2,7 +2,8 @@
  * Publish on the Matrix (2026-10-13, one save line). Publish reviews only after every editor that registered with it has
  * saved (`workspaceSave.ts`). The Matrix registers its barrier here: before the review it waits for every write of the
  * page — the Matrix cells, verbs and reverts (`useMatrix`'s line), each market's Status (the publish actions' writes) and
- * the Base price (the master writer) — and it holds Publish while one is still in flight or a cell editor is open.
+ * the Base price (the master writer) — and it holds Publish while one is still in flight, a write got no answer (the
+ * connection was lost; the Information page's rule), or a cell editor is open.
  * Without it a Status or a price set on the Matrix just before Publish could be missing from the review.
  */
 import type { PublicationSaveBarrier } from '../workspaceSave'
@@ -10,6 +11,8 @@ import type { PublicationSaveBarrier } from '../workspaceSave'
 export const MATRIX_PUBLISH_HELD = {
   editing: 'Apply or cancel the open cell before publishing.',
   saving: 'Wait for the Matrix to save before publishing.',
+  /** A save that got no answer (connection lost): the Information page holds Publish the same way. */
+  unanswered: 'A change on the Matrix got no answer from the server. Reload the Matrix to see whether it saved before publishing.',
 } as const
 
 /** Work in flight, counted: `pending()` while any of it runs, `settled()` once everything started so far has finished. */
@@ -44,6 +47,8 @@ export interface MatrixPublishLines {
   base: { flush: () => Promise<void>; readonly pending: number }
   /** A cell editor is open on the grid. */
   editing: () => boolean
+  /** A write whose outcome is unknown (no answer: the connection was lost) — absent = none can be. */
+  unanswered?: () => boolean
 }
 
 const nextTurn = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
@@ -64,7 +69,8 @@ export function matrixPublicationBarrier(lines: MatrixPublishLines): Publication
     },
     blocker() {
       if (lines.editing()) return MATRIX_PUBLISH_HELD.editing
-      return busy() ? MATRIX_PUBLISH_HELD.saving : null
+      if (busy()) return MATRIX_PUBLISH_HELD.saving
+      return lines.unanswered?.() ? MATRIX_PUBLISH_HELD.unanswered : null
     },
   }
 }

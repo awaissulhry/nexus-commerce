@@ -101,7 +101,7 @@ import { StockSourceDialog, type StockSourceSwitched, type StockSourceTarget } f
 import { sharingApi } from '@/app/settings/sharing/sharingApi'
 import { MatrixToolbar, type MatrixPageState } from './MatrixToolbar'
 import { useMatrix } from './useMatrix'
-import { forgetUnsaved, isMatrixHistoryValue, matrixHistoryAfter, matrixHistoryBefore, matrixHistoryColId, matrixHistoryPlace, matrixReplay, MATRIX_UNDO_COPY, type MatrixHistoryNote } from './matrixUndo'
+import { forgetUnsaved, isMatrixHistoryValue, matrixHistoryAfter, matrixHistoryBefore, matrixHistoryColId, matrixStepReplay, MATRIX_UNDO_COPY, type MatrixHistoryNote } from './matrixUndo'
 import { baseRowResult, BULK_EDIT_SOURCE, createBaseLine, type BaseRowAnswer } from './baseLine'
 import { createInFlight, matrixPublicationBarrier } from './publishGuard'
 import { withStamp } from './stamps'
@@ -587,7 +587,9 @@ export function MatrixSurface({ productId }: { productId: string }) {
     status: statusLine,
     base: writer,
     editing: () => (getGridApi()?.getEditingCells().length ?? 0) > 0,
-  })), [registerPublicationBarrier, settledMatrix, pendingMatrix, statusLine, writer, getGridApi])
+    // A save that got no answer (connection lost): the Information page's rule — Publish waits until it is resolved.
+    unanswered: () => tracker.hasOpenChanges || statusTracker.hasOpenChanges || writer.unknownCount > 0,
+  })), [registerPublicationBarrier, settledMatrix, pendingMatrix, statusLine, writer, getGridApi, tracker, statusTracker])
   const statusColumnOf = useCallback((coord: MatrixCoordinate): ColDef<StudioRow> | null => statusColumn<StudioRow>({
     colId: matrixStatusColId(coord.key),
     cell: (row) => statusCellOf(row, coord),
@@ -634,7 +636,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
   }, [writeMatrix, history, savedCellsOf])
   sendCellsRef.current = sendCells
   /** One history step's values on their way back: the Matrix cells' writes (in line), and why any could not be put back. */
-  const replayHistory = useCallback((values: Parameters<ApplyCellValues>[0], direction: 'undo' | 'redo', quiet = false): { sent: Promise<MatrixWriteOutcome[]> | null; refused: string[] } => {
+  const replayHistory = useCallback((values: Parameters<ApplyCellValues>[0], direction: 'undo' | 'redo', quiet = false): { sent: Promise<MatrixWriteOutcome[]> | null; refused: readonly string[] } => {
     const api = getGridApi()
     if (!api || api.isDestroyed()) return { sent: null, refused: [] }
     /* Base price: back through the grid, as the Information page's undo does — one operation, one save. */
@@ -645,25 +647,16 @@ export function MatrixSurface({ productId }: { productId: string }) {
     }
     /* A Matrix cell (and a market's Sells from): the write that puts it back as it was — only while it still holds what the
        edit wrote — or sends the edit again, all in one request, built when its turn in line comes from the cells as the
-       writes before it left them. */
+       writes before it left them. An undo refused (here or by the server) leaves the redo stack (`matrixStepReplay`). */
     const cells = values.filter((v) => isMatrixHistoryValue(v.value))
-    const refused: string[] = []
-    if (cells.length === 0) return { sent: null, refused }
-    const sent = sendCells(() => {
-      const out: MatrixWriteCell[] = []
-      refused.length = 0
-      for (const v of cells) {
-        const place = matrixHistoryPlace(v.colId)
-        if (!place || !isMatrixHistoryValue(v.value)) continue
-        const live = savedCellsOf(v.rowId, place.key)
-        const step = matrixReplay(place.kind, v.value, live, { rowId: v.rowId, coordinateKey: place.key })
-        if (step.kind === 'write') out.push(withStamp(step.cell, live))
-        else if (step.kind === 'refuse') { refused.push(step.reason); if (!quiet) sayReason(step.reason, 'info') }
-      }
-      return out
-    }, { quiet })
-    return { sent, refused }
-  }, [getGridApi, writer, savedCellsOf, sendCells, sayReason])
+    if (cells.length === 0) return { sent: null, refused: [] }
+    const step = matrixStepReplay(cells, direction, {
+      liveOf: savedCellsOf, history, stamp: withStamp, say: quiet ? undefined : (reason) => sayReason(reason, 'info'),
+    })
+    const sent = sendCells(() => step.build(), { quiet })
+    void sent.then((outcomes) => step.settle(outcomes))
+    return { sent, refused: step.refused }
+  }, [getGridApi, writer, savedCellsOf, sendCells, sayReason, history])
   const applyHistory = useCallback<ApplyCellValues>((values, direction) => { void replayHistory(values, direction) }, [replayHistory])
   /* ⌘Z / ⌘⇧Z take their step only once every write asked before has settled — a step is recorded when its write is sent —
      and one after another: a second ⌘Z works from what the first put back. */
@@ -688,6 +681,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
    */
   const undoNotes = useCallback((notes: readonly HistoryNote[]): Promise<void> => {
     const run = undoLine.current.then(() => settledWrites()).then(async () => {
+      // A refused Undo takes its change off the redo stack (`matrixStepReplay`): ⌘⇧Z never re-sends it over the newer value.
       const got: { replay?: ReturnType<typeof replayHistory> } = {}
       const taken = history.undoStep((c) => notes.some((n) => c.after === n.after), (values, direction) => { got.replay = replayHistory(values, direction, true) })
       if (taken === 0 || !got.replay) throw new Error(MATRIX_UNDO_COPY.done)

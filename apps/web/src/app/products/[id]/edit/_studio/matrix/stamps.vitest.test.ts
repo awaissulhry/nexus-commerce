@@ -11,7 +11,7 @@ import { SheetUndoHistory } from '../sheet/sheetUndo'
 import { forgetUnsaved, matrixHistoryAfter, matrixHistoryBefore, type MatrixHistoryNote } from './matrixUndo'
 import { patchMatrix } from './source'
 import { matrixStampHolds } from '@nexus/shared/matrix-stamp'
-import { rebaseOnOwnMoves, recordOwnMoves, withStamp, type OwnMoves } from './stamps'
+import { rebaseOnOwnMoves, recordOwnMoves, recordServerMoves, withStamp, type OwnMoves } from './stamps'
 import type { MatrixRead } from './contract'
 
 const pristine = (over: Partial<MatrixCells> = {}): MatrixCells => ({
@@ -164,5 +164,16 @@ describe('a cell re-based onto this page\'s own write is stamped with what that 
   })
   it('no own move on the listing: the cell is sent as it was typed', () => {
     expect(rebaseOnOwnMoves(second, new Map(), null)).toBe(second)
+  })
+})
+
+describe('a verb run\'s moves (`recordServerMoves`) never bridge another person\'s change', () => {
+  it('a run checked at version 6 (someone else moved 5 → 6) leaves a cell typed at 5 at 5; one typed at 6 goes at 7', () => {
+    const moves: OwnMoves = new Map()
+    const read = { rows: [{ id: 'r1', cells: { 'AMAZON:EU': { listingId: 'L1', version: 5 } } }] } as unknown as MatrixRead
+    recordServerMoves(moves, read, [{ rowId: 'r1', coordinateKey: 'AMAZON:EU', cell: 'syncBuffer', outcome: 'applied', version: 7, writtenAt: 6 }], () => 3)
+    const typed = (expectedVersion: number) => rebaseOnOwnMoves({ rowId: 'r1', coordinateKey: 'AMAZON:EU', cell: 'price', value: 30, expectedVersion, expectedListingId: 'L1', expected: { own: null } }, moves, read)
+    expect(typed(5).expectedVersion).toBe(5)
+    expect(typed(6).expectedVersion).toBe(7)
   })
 })

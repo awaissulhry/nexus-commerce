@@ -648,6 +648,24 @@ export function paramsForChange(verb: MatrixVerbId, change: VerbChange): MatrixV
 
 export type VerbCommitResult = { operation: VerbOperation; results: MatrixWriteOutcome[] }
 
+export const CHANGED_SINCE_PREVIEW = 'Changed since the preview — reload and run the verb again'
+
+/** The mode word of a quantity label (`Follow · 29` → `Follow`). */
+const modeWordOf = (label: string): string => label.split(' · ')[0] ?? label
+
+/**
+ * Did the value a carried change was previewed FROM move since (2026-10-13 review)? The fresh preview reproduced the same
+ * new value, but an "adjust by %" worked out from an older price, a buffer, a method or a list someone changed since would
+ * write over their change: refused, `Changed since the preview`. A Follow quantity's number moves with every sale (Owner
+ * 4A: a pin is AT its number, whatever the follow number did): there only the mode is compared. The stock-sync states are
+ * re-read by the fresh preview itself.
+ */
+export function movedSincePreview(carried: Pick<VerbChange, 'cell' | 'from' | 'fromLabel'>, fresh: Pick<VerbChange, 'from' | 'fromLabel'>, live?: MatrixCells): boolean {
+  if (carried.cell === 'syncState') return false
+  if (carried.cell === 'syncQty' && live?.sync?.mode !== 'PINNED') return modeWordOf(carried.fromLabel) !== modeWordOf(fresh.fromLabel)
+  return canonical(carried.from ?? null) !== canonical(fresh.from ?? null)
+}
+
 /**
  * MCP full control L8 — eBay ENDS a listing pinned at 0 unless the account's out-of-stock option is ON. For a pin to 0 on
  * eBay coordinates (a fresh request, or a carried preview), the option is read from eBay ONCE per account and market
@@ -738,9 +756,11 @@ export async function runMatrixVerb(ctx: DoorContext, req: MatrixVerbRequest & {
   for (const ch of carried) {
     const params = paramsForChange(verb, ch)
     const fresh = params ? previewVerb(read, { params, targets: [{ rowId: ch.rowId, coordinateKey: ch.coordinateKey }], commit: false }, pctx) : null
-    const same = fresh?.changes.find((c) => c.rowId === ch.rowId && c.coordinateKey === ch.coordinateKey && c.cell === ch.cell && canonical(c.to) === canonical(ch.to))
+    const reproduced = fresh?.changes.find((c) => c.rowId === ch.rowId && c.coordinateKey === ch.coordinateKey && c.cell === ch.cell && canonical(c.to) === canonical(ch.to))
+    // The value the preview worked FROM must still be there: a run never writes a value worked out from an older one.
+    const same = reproduced && !movedSincePreview(ch, reproduced, locate(read, ch.rowId, ch.coordinateKey)?.cells) ? reproduced : undefined
     if (!same) {
-      const reason = fresh?.refusals.find((r) => r.rowId === ch.rowId)?.reason ?? 'Changed since the preview — reload and run the verb again'
+      const reason = (reproduced ? undefined : fresh?.refusals.find((r) => r.rowId === ch.rowId)?.reason) ?? CHANGED_SINCE_PREVIEW
       results.push({ rowId: ch.rowId, coordinateKey: ch.coordinateKey, cell: ch.cell === 'syncState' ? 'syncMode' : (ch.cell as MatrixDoorKind), outcome: 'refused', reason, version: read.rows.find((r) => r.id === ch.rowId)?.cells[ch.coordinateKey]?.version ?? 0 })
       continue
     }
@@ -835,16 +855,18 @@ export function restoreFieldOf(change: Pick<VerbChange, 'cell' | 'to'>): Restore
 /**
  * Does the live cell still hold what this applied change wrote? A revert puts a cell back only then: a newer value — the
  * person's own edit made after the run, or anyone else's — is never written over (`MATRIX_COPY.changedSince`).
+ * `stored.priceOverride`: the listing's own price as stored — a clamped price SHOWS its floor or ceiling, so only the
+ * stored override says whether it is still the run's (unread = it does not hold: never a blind write).
  */
-export function holdsChange(change: Pick<VerbChange, 'cell' | 'to'>, live: MatrixCells): boolean {
+export function holdsChange(change: Pick<VerbChange, 'cell' | 'to'>, live: MatrixCells, stored?: { priceOverride: number | null }): boolean {
   const to = change.to
   const s = live.sync
   switch (change.cell) {
     case 'price': {
       const p = live.price
       if (!p || p.source !== 'override' || typeof to !== 'number') return false
-      // A clamped price shows the floor or the ceiling, not the stored override: it cannot tell, and the version decides.
-      return p.clamped != null || p.value === roundCents(to)
+      if (p.clamped == null) return p.value === roundCents(to)
+      return stored?.priceOverride != null && roundCents(stored.priceOverride) === roundCents(to)
     }
     case 'syncQty': return !!s && s.mode === 'PINNED' && (s.intended ?? s.held) === to
     case 'syncMode': return !!s && s.mode === to
@@ -890,10 +912,15 @@ export async function revertMatrixOperation(ctx: DoorContext, operationId: strin
          cells are still put back. Only the fields the run changed are put back, never another field moved since. */
       const mine = changed.filter((c) => c.rowId === b.rowId && c.coordinateKey === b.coordinateKey)
       const only = new Set<RestoreField>()
+      // A clamped price shows its floor or ceiling: the listing's own price is read as stored.
+      const stored = hit.cells.price?.clamped && hit.cells.listingId && mine.some((c) => c.cell === 'price')
+        ? await prisma.channelListing.findUnique({ where: { id: hit.cells.listingId }, select: { priceOverride: true } })
+        : null
+      const facts = stored ? { priceOverride: stored.priceOverride == null ? null : Number(stored.priceOverride) } : undefined
       for (const c of mine) {
         const field = restoreFieldOf(c)
         if (!field) continue
-        if (holdsChange(c, hit.cells)) { only.add(field); continue }
+        if (holdsChange(c, hit.cells, facts)) { only.add(field); continue }
         results.push({ rowId: b.rowId, coordinateKey: b.coordinateKey, cell: c.cell === 'syncState' ? 'syncMode' : (c.cell as MatrixDoorKind), outcome: 'conflict', reason: MATRIX_COPY.changedSince, version: hit.cells.version })
       }
       /* Amazon fulfilment (2026-10-07): the revert of a conversion that reached Amazon is the OPPOSITE conversion, through
