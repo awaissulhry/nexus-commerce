@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import { ACTIVATES_ON_ENTER_SELECTOR, OVERLAY_SELECTOR, TEXT_ENTRY_SELECTOR, type ShortcutElement, type ShortcutKeyEvent } from '../hooks/gridShortcuts'
+import {
+  ACTIVATES_ON_ENTER_SELECTOR, CELL_EDITOR_SELECTOR, OVERLAY_SELECTOR, TEXT_ENTRY_SELECTOR, type ShortcutElement, type ShortcutKeyEvent,
+} from '../hooks/gridShortcuts'
 import { rowNavAction } from './rowNavKeys'
 
 /** A fake element that answers `closest` for the kinds of ancestors it has — enough to test every refusal in node. */
@@ -92,5 +94,49 @@ describe('the ads grid row keys (keyboardNav)', () => {
     expect(rowNavAction(key('ArrowDown', gridCell, { repeat: true }), grid, page)).toEqual({ kind: 'move', step: 1 })
     expect(rowNavAction(key('a', body, { repeat: true }), grid, page)).toBeNull()
     expect(rowNavAction(key('Enter', body, { repeat: true }), grid, page)).toBeNull()
+  })
+})
+
+describe('the row keys of a grid inside a dialog (a DetailModal’s Ad groups)', () => {
+  // The dialog around the grid: `closest` from anything in it finds it. It, its tab panel and the page HOLD the grid.
+  const dialog: ShortcutElement = { closest: (selector) => (selector === OVERLAY_SELECTOR ? dialog : null) }
+  const inDialog = (own: { overlay?: boolean; editor?: boolean } = {}): ShortcutElement => {
+    const self: ShortcutElement = {
+      closest: (selector) => {
+        if (selector === OVERLAY_SELECTOR) return own.overlay ? self : dialog
+        if (selector === CELL_EDITOR_SELECTOR) return own.editor ? self : null
+        return null
+      },
+    }
+    return self
+  }
+  const tabPanel = inDialog()
+  const cell = inDialog()
+  const menuItem = inDialog({ overlay: true })
+  const popupEditor = inDialog({ editor: true })
+  const customiseItem: ShortcutElement = { closest: (selector) => (selector === OVERLAY_SELECTOR ? customiseItem : null) }
+  const dialogGrid = { contains: (node: unknown) => node === cell || node === menuItem || node === popupEditor }
+  const holds = (node: unknown) => node === dialog || node === tabPanel || node === body || node === root
+
+  it('moves with J / K and the arrows, opens with O and hands verbs on, from a cell of the grid', () => {
+    expect(rowNavAction(key('j', cell), dialogGrid, holds)).toEqual({ kind: 'move', step: 1 })
+    expect(rowNavAction(key('k', cell), dialogGrid, holds)).toEqual({ kind: 'move', step: -1 })
+    expect(rowNavAction(key('j', cell, { repeat: true }), dialogGrid, holds)).toEqual({ kind: 'move', step: 1 })
+    expect(rowNavAction(key('ArrowDown', cell), dialogGrid, holds)).toEqual({ kind: 'move', step: 1 })
+    expect(rowNavAction(key('o', cell), dialogGrid, holds)).toEqual({ kind: 'open' })
+    expect(rowNavAction(key('a', cell), dialogGrid, holds)).toEqual({ kind: 'verb', key: 'a' })
+  })
+
+  it('still refuses them in a menu or a popup editor opened from the grid, and under the Customise dialog', () => {
+    expect(rowNavAction(key('j', menuItem), dialogGrid, holds)).toBeNull()
+    expect(rowNavAction(key('j', popupEditor), dialogGrid, holds)).toBeNull()
+    // The Customise dialog is a second modal that does not hold the grid: open, it owns the keys wherever focus is.
+    expect(rowNavAction(key('j', cell), dialogGrid, holds, { modalOpen: true })).toBeNull()
+    expect(rowNavAction(key('j', customiseItem), dialogGrid, holds)).toBeNull()
+  })
+
+  it('leaves J / K to the dialog while focus is on the dialog outside the grid (DetailModal’s own rows)', () => {
+    expect(rowNavAction(key('j', dialog), dialogGrid, holds)).toBeNull()
+    expect(rowNavAction(key('k', tabPanel), dialogGrid, holds)).toBeNull()
   })
 })

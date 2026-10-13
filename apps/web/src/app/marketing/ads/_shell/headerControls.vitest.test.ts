@@ -136,9 +136,9 @@ describe('AM-26 — a date picker the page cannot use is kept, disabled, and say
 
   it('renders the range, does not act, and carries the reason for keyboard and screen readers', () => {
     const html = renderToStaticMarkup(createElement(DateRangePicker, { value: range, onChange: () => {}, disabledReason: 'The week chips below choose the week.' }))
-    expect(html).toContain('09/28/2026 - 10/04/2026')
+    expect(html).toContain('28 Sep 2026 – 4 Oct 2026')
     expect(html).toContain('aria-disabled="true"')
-    expect(html).toContain('aria-label="09/28/2026 - 10/04/2026. The week chips below choose the week."')
+    expect(html).toContain('aria-label="28 Sep 2026 – 4 Oct 2026. The week chips below choose the week."')
     expect(html).toContain('h10-tipwrap') // the InfoTip shows the reason on hover AND on focus
     expect(html).not.toContain(' disabled=""') // stays focusable
   })
