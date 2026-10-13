@@ -1,3 +1,12 @@
+## A dialog open when the page loads hydrates cleanly — 2026-10-13
+
+Grid audit wave 4 (found on the grid lab's Publish review tab). Both apps (identical files).
+- **`useHydrated`** (`components/useHydrated.ts`, new; AsOf's pattern, now shared): false on the server and the first
+  render, true after it.
+- **`Modal`, `Drawer`, `Builder`** draw their portal when it is true, not on `typeof document`: a dialog open at page
+  load drew nothing on the server and the whole dialog on the first render (React hydration error #418). The open
+  effects (focus, layer stack, Esc, Tab trap, anchoring) wait for it too. A dialog opened by a click is unchanged.
+
 ## The grid lab's parity tabs and web's HTML-table DataGrid retired — 2026-10-13
 
 Grid audit wave 4, PR13 chunk 2 (the part that waited for PR10).
