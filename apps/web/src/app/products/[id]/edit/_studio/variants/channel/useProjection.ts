@@ -17,6 +17,9 @@
  *     order they were asked. Each is sent at the version it was made on, moved along THIS page's own
  *     applied writes (`moves`): a second quick tick goes out at the version the first one left, so the
  *     page never conflicts with itself. A move by anyone else is still a conflict.
+ *     🔴 A write's own move is exactly ONE step (`sent → sent + 1`). An answer further on carries
+ *     someone else's write too (an older server answers the read made after its commit): it is never
+ *     counted as this page's, so a later save cannot pass over it.
  *  4. **An older read never paints over a newer one.** Every read takes a ticket when it starts; a
  *     write that lands takes a newer one. A read that started before the write answered is dropped
  *     (reference_read_before_the_write_arrived).
@@ -24,11 +27,20 @@
  *     ticks not yet settled laid over it, so a re-read that lands between two writes cannot flip the
  *     second tick back. Each of those rows is marked pending while it is
  *     (feedback_100_percent_honest_ui).
+ *  6. **No verdict is not a refusal.** A dropped connection, a timeout or a 5xx may have landed. The
+ *     line stops, the page reads again, says "may or may not have been saved", and the next write goes
+ *     on from what that read shows (reference_transport_failure_write_is_unknown_outcome).
+ *  7. **eBay's order token is taken at Save.** Every Specifics or value-order edit carries the page's
+ *     order token, and the token moves with every row of the family (a tick, a pin). When the save's
+ *     version, moved along this page's own writes, is the version the server shows, the save carries
+ *     the token read now; otherwise it keeps the one it was made on and a real change answers 409.
+ *  8. **Writes still in line keep the tab.** Closing or reloading the tab asks first while a tick or a
+ *     save is waiting or in flight.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { writeQueue } from '../writeQueue'
-import { MAPPING_CHANGED_ELSEWHERE } from './copy'
+import { MAPPING_CHANGED_ELSEWHERE, unknownOutcome } from './copy'
 import type { ProjectionDraft, ProjectionPage, ProjectionSaveResult, ProjectionSource } from './types'
 
 export interface ProjectionState {
@@ -63,6 +75,13 @@ const movedElsewhere = (r: Refusal): boolean => (r.conflict ? r.code !== 'axes_l
 const sameKeys = (a: ReadonlySet<string>, b: ReadonlyMap<string, unknown>): boolean =>
   a.size === b.size && [...b.keys()].every(k => a.has(k))
 
+/** The mapped axes in their order — what a mapping save writes, compared on what a read shows. */
+const mappedTargets = (mapping: ProjectionPage['mapping']): string =>
+  JSON.stringify([...mapping].filter(m => m.target !== null).sort((a, b) => a.order - b.order).map(m => [m.axisKey, m.target]))
+
+/** A source that throws reached no verdict either. */
+const noVerdict = (e: unknown): Refusal => ({ ok: false, conflict: false, unknown: true, reason: e instanceof Error ? e.message : String(e) })
+
 export function useProjection(source: ProjectionSource): ProjectionState {
   const [page, setPage] = useState<ProjectionPage | null>(null)
   const [loading, setLoading] = useState(true)
@@ -84,7 +103,7 @@ export function useProjection(source: ProjectionSource): ProjectionState {
   const readTicket = useRef(0)
   const shownTicket = useRef(0)
   const inLine = useMemo(() => writeQueue(), [])
-  /** This page's own applied writes, version → version. */
+  /** This page's own applied writes, version → version (always one step). */
   const moves = useRef(new Map<number, number>())
   const mappingSaves = useRef(0)
 
@@ -130,6 +149,15 @@ export function useProjection(source: ProjectionSource): ProjectionState {
 
   const reload = useCallback(() => { setNonce(n => n + 1) }, [])
 
+  /* Rule 8 — writes waiting or in flight are lost with the tab: the browser asks before it closes or reloads. */
+  const busy = pending.size > 0 || saving
+  useEffect(() => {
+    if (!busy || typeof window === 'undefined') return
+    const onBeforeUnload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [busy])
+
   /** The version a write is sent at: the one it was made on, moved along this page's own applied writes only. */
   const rebase = useCallback((seen: number): number => {
     let v = seen
@@ -137,16 +165,44 @@ export function useProjection(source: ProjectionSource): ProjectionState {
     return v
   }, [])
 
-  /** A write of this page landed: record its move, and show what the server now holds, then re-read. */
+  /** A read inside the line (ticketed like every read): what the next write goes on from. `null` when it fails. */
+  const readNow = useCallback(async (): Promise<ProjectionPage | null> => {
+    const ticket = ++readTicket.current
+    try {
+      const fresh = await source.read(new AbortController().signal)
+      if (live.current) commit(fresh, ticket)
+      return fresh
+    } catch {
+      return null
+    }
+  }, [source, commit])
+
+  /**
+   * A write of this page landed. Only a ONE-step answer is this page's own move; anything further on carries
+   * someone else's write as well, and is left for the re-read to show. Then the page shows what the server holds.
+   */
   const landed = useCallback((sent: number, version: number, patch: (p: ProjectionPage) => ProjectionPage) => {
-    if (sent !== version) moves.current.set(sent, version)
+    const own = version === sent + 1
+    if (own) moves.current.set(sent, version)
     const shown = server.current
     if (shown) {
       const next = patch(shown)
-      commit(rebase(shown.version) === version ? { ...next, version } : next)
+      commit(own && rebase(shown.version) === version ? { ...next, version } : next)
     }
     setNonce(n => n + 1)
   }, [commit, rebase])
+
+  /**
+   * Rule 6 — no verdict. The line waits for a fresh read. When that read shows exactly one step and this write's
+   * own value, the step was this write's and the next write goes on from it; otherwise it is left as someone else's.
+   */
+  const noAnswer = useCallback(async (sent: number, reason: string, showsMine: (p: ProjectionPage) => boolean) => {
+    const fresh = await readNow()
+    if (!live.current) return
+    if (fresh && fresh.version === sent + 1 && showsMine(fresh)) moves.current.set(sent, fresh.version)
+    if (!fresh) { publish(); setNonce(n => n + 1) } // the read failed too: the page's own read tries again
+    setWriteError(unknownOutcome(reason))
+  }, [readNow, publish])
 
   /** A refusal. A conflict repaints from the server's page and re-reads; anything else puts the row back and says why. */
   const refused = useCallback((result: Refusal, mapping: boolean) => {
@@ -173,7 +229,7 @@ export function useProjection(source: ProjectionSource): ProjectionState {
       try {
         result = await source.setIncluded(sent, [{ id, included }])
       } catch (e) {
-        result = { ok: false, conflict: false, reason: e instanceof Error ? e.message : String(e) }
+        result = noVerdict(e)
       }
       if (!live.current) return
       const mine = asked.current.get(id)
@@ -182,13 +238,17 @@ export function useProjection(source: ProjectionSource): ProjectionState {
         landed(sent, result.version, p => ({ ...p, children: p.children.map(c => (c.id === id ? { ...c, included } : c)) }))
         return
       }
+      if (!result.conflict && result.unknown) {
+        await noAnswer(sent, result.reason, p => p.children.find(c => c.id === id)?.included === included)
+        return
+      }
       /* Refused: the row shows what the server holds again. Leaving the optimistic value would be
          the page telling the operator a write landed that did not. */
       refused(result, false)
     })
-  }, [source, inLine, rebase, publish, landed, refused])
+  }, [source, inLine, rebase, publish, landed, noAnswer, refused])
 
-  const saveMapping = useCallback((draft: ProjectionDraft, basedOn?: number): Promise<boolean> => {
+  const saveMapping = useCallback((requested: ProjectionDraft, basedOn?: number): Promise<boolean> => {
     const shown = server.current
     if (!shown) return Promise.resolve(false)
     const seen = basedOn ?? shown.version
@@ -198,11 +258,18 @@ export function useProjection(source: ProjectionSource): ProjectionState {
     return inLine(async () => {
       try {
         const sent = rebase(seen)
+        let draft = requested
+        /* Rule 7 — the order token as the server holds it NOW, when nothing but this page's own writes moved the version. */
+        if (draft.presentationOrder) {
+          const fresh = await readNow()
+          const token = fresh?.order?.token
+          if (fresh && fresh.version === sent && token) draft = { ...draft, presentationOrder: { ...draft.presentationOrder, expectedToken: token } }
+        }
         let result: ProjectionSaveResult
         try {
           result = await source.saveMapping(sent, draft)
         } catch (e) {
-          result = { ok: false, conflict: false, reason: e instanceof Error ? e.message : String(e) }
+          result = noVerdict(e)
         }
         if (!live.current) return false
         if (result.ok) {
@@ -213,6 +280,11 @@ export function useProjection(source: ProjectionSource): ProjectionState {
           }))
           return true
         }
+        if (!result.conflict && result.unknown) {
+          /* The dock stays open with the draft: saving it again is a no-op if this one landed. */
+          await noAnswer(sent, result.reason, p => mappedTargets(p.mapping) === mappedTargets(draft.mapping) && p.split.mode === draft.split.mode)
+          return false
+        }
         refused(result, true)
         return false
       } finally {
@@ -220,7 +292,7 @@ export function useProjection(source: ProjectionSource): ProjectionState {
         if (live.current && mappingSaves.current === 0) setSaving(false)
       }
     })
-  }, [source, inLine, rebase, landed, refused])
+  }, [source, inLine, rebase, readNow, landed, noAnswer, refused])
 
   const dismissWriteError = useCallback(() => setWriteError(null), [])
 

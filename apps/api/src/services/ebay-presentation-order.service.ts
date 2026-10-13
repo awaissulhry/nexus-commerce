@@ -12,6 +12,14 @@ import { ORDER_RECEIPT } from './ebay-presentation-consumer.service.js'
 import { normalizeMarket } from './ebay-image-axis-preference.service.js'
 import { isOwnAxisKey } from '@nexus/shared/variation-mapping'
 
+/**
+ * 2.4 — the order's inputs MOVED (its token or the listing version differs from what the caller reviewed), as opposed to
+ * a request this destination refuses. Still a `MappingConflict` (409) for every existing caller; the projection save
+ * (`writeProjectionMapping`) answers it as a version conflict carrying the current page, so the dock shows the server's
+ * mapping and says why, never a 500.
+ */
+export class PresentationOrderMoved extends MappingConflict {}
+
 export interface PresentationDestinationInput { productId: string; marketplace: string; accountId?: string; aliasKey?: string }
 export interface PresentationDestination { productId: string; marketplace: string; channelConnectionId: string; aliasKey: string }
 const bag = (v: unknown): Record<string, unknown> => v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {}
@@ -90,7 +98,7 @@ export async function readPresentationOrder(input: PresentationDestinationInput)
   const order = mapped.products[0]?.presentationOrder
   const axes = await resolveFamilyAxes(destination.productId, destination.marketplace, destination)
   const after = await presentationOrderInputs(destination)
-  if (after.token !== before.token) throw new MappingConflict('Presentation inputs changed while loading. Reload the current destination')
+  if (after.token !== before.token) throw new PresentationOrderMoved('Presentation inputs changed while loading. Reload the current destination')
   return { ...destination, accountId: destination.channelConnectionId, listingId: before.listing.id, externalListingId: before.listing.externalListingId,
     version: before.listing.version, token: before.token, axes: axes.axes, warnings: axes.warnings,
     conflicts: order?.conflicts ?? [], source: order?.rule ? { id: order.rule.id, name: order.rule.name, version: order.rule.version } : null,
@@ -148,7 +156,7 @@ export async function preparePresentationOrder(input: PresentationOrderSave) {
   if (typeof input.accountId !== 'string' || !input.accountId.trim()) throw new MappingConflict('Save to the account observed when loading this destination')
   if (!Number.isInteger(input.expectedVersion) || input.expectedVersion < 0 || typeof input.expectedToken !== 'string' || !input.expectedToken) throw new MappingConflict('Reload the current destination before saving')
   const view = await readPresentationOrder(input)
-  if (view.token !== input.expectedToken || view.version !== input.expectedVersion) throw new MappingConflict('This listing, rule or family changed. Reload before saving the order')
+  if (view.token !== input.expectedToken || view.version !== input.expectedVersion) throw new PresentationOrderMoved('This listing, rule or family changed. Reload before saving the order')
   return view
 }
 
@@ -157,13 +165,13 @@ export async function writePresentationOrderInTransaction(tx: Prisma.Transaction
   view: Awaited<ReturnType<typeof readPresentationOrder>>, userId: string | null, axisNameLabels?: Record<string, string>, variationAxes?: string[]) {
   const destination: PresentationDestination = { productId: view.productId, marketplace: view.marketplace, channelConnectionId: view.channelConnectionId, aliasKey: view.aliasKey }
     const current = await presentationOrderInputs(destination, tx)
-    if (current.token !== input.expectedToken || current.listing.version !== input.expectedVersion) throw new MappingConflict('The reviewed destination changed before saving')
+    if (current.token !== input.expectedToken || current.listing.version !== input.expectedVersion) throw new PresentationOrderMoved('The reviewed destination changed before saving')
     const attrs = changePresentationOrder(current.listing.platformAttributes, input.change, view.axes)
     if (axisNameLabels) attrs._axisNameLabels = axisNameLabels
     if (variationAxes) { attrs._variationAxes = variationAxes; attrs._variationAxesMode = 'override' }
     attrs[ORDER_RECEIPT] = { version: input.expectedVersion + 1, savedAt: new Date().toISOString(), publication: 'separate' }
     const saved = await tx.channelListing.updateMany({ where: { id: current.listing.id, version: input.expectedVersion, platformAttributes: { equals: current.listing.platformAttributes ?? Prisma.DbNull } }, data: { platformAttributes: attrs as Prisma.InputJsonValue, version: { increment: 1 } } })
-    if (saved.count !== 1) throw new MappingConflict('Another change won this listing. Reload before saving')
+    if (saved.count !== 1) throw new PresentationOrderMoved('Another change won this listing. Reload before saving')
     await tx.bulkOperation.create({ data: { userId, status: 'COMPLETED', productCount: 1, changeCount: 1, total: 1, processed: 1, completedAt: new Date(), changes: JSON.parse(JSON.stringify({ kind: 'presentation-order-save-v1', destination, listingId: current.listing.id, expectedVersion: input.expectedVersion, expectedToken: input.expectedToken, before: current.listing.platformAttributes, after: attrs })) } })
 }
 

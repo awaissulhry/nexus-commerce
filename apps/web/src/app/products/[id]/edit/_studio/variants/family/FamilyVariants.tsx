@@ -74,6 +74,7 @@ import { axisColumnsFor, buildVariantColumns, identityLine, IDENTITY_COL } from 
 import { SCOPE_PROGRESS_COLUMN } from '../../sheet/progressColumns'
 import { excludedSomewhere, mergeAxisValues } from './projections'
 import { liveSource } from '../channel/source'
+import { unknownOutcome } from '../channel/copy'
 import { writeQueue } from '../writeQueue'
 import { includeVariant } from './includeVariant'
 import { FamilyBand } from './FamilyBand'
@@ -393,6 +394,8 @@ function FamilyVariantsSurface({ productId, market, locale }: { productId: strin
     reporter.pending(ticket, row.id)
     try {
       const result = await includeVariant(inLine, source, row.id, included)
+      /* 2.4 — no verdict is not a refusal: it may have landed, so the page reads again and says so. */
+      if (!result.ok && !result.conflict && result.unknown) { onFamilyChanged(); throw new Error(unknownOutcome(result.reason)) }
       if (!result.ok) throw new Error(result.reason)
       reporter.resolved(ticket, true, undefined, row.id)
       onFamilyChanged()

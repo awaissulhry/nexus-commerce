@@ -36,47 +36,71 @@ const hooks = vi.hoisted(() => {
 })
 vi.mock('react', async original => ({ ...await original<typeof import('react')>(), ...hooks.react }))
 
-import { MAPPING_CHANGED_ELSEWHERE } from './copy'
+import { MAPPING_CHANGED_ELSEWHERE, unknownOutcome } from './copy'
 import { draftDirty, draftOf, heldAfter, startDraft } from './mappingDraft'
 import type { ProjectionDraft, ProjectionMapping, ProjectionPage, ProjectionSaveResult, ProjectionSource } from './types'
 import { useProjection, type ProjectionState } from './useProjection'
 
-/* ── the stub server: one parent listing version, checked on every write ─────────────────────────────────────────── */
+/* ── the stub server ─────────────────────────────────────────────────────────────────────────────────────────────────
+ * One parent listing version, checked on every write, as the projection routes check it. It also models:
+ *  - eBay's ORDER TOKEN (`ebay-presentation-order.service.ts`): built from every family listing row, so a tick (the
+ *    parent version and a variant's row) and a pin (a variant's row only) both move it; a save carrying an order change
+ *    with an old token answers 409 with the current page;
+ *  - WHICH version a write answers: the one it wrote (`written`), or the read made after its commit (`after-read`, the
+ *    server before 2.4), which may already carry someone else's write (`afterCommit`);
+ *  - a write that lands and whose answer is lost (`loseNextAnswer`: the connection drops after the commit).
+ */
 
 type Held = Array<() => void>
 const server = {
   version: 5,
   included: new Map<string, boolean>(),
   mapping: [] as ProjectionMapping[],
-  sent: [] as Array<{ kind: 'children' | 'mapping'; expectedVersion: number }>,
+  /** Bumped by a pin: a variant's eBay row moved, the parent version did not. */
+  rowStamp: 0,
+  ebay: false,
+  answer: 'written' as 'written' | 'after-read',
+  afterCommit: null as null | (() => void),
+  loseNextAnswer: false,
+  sent: [] as Array<{ kind: 'children' | 'mapping'; expectedVersion: number; token?: string }>,
   holdReads: false, heldReads: [] as Held,
   holdWrites: false, heldWrites: [] as Held,
 }
 const mapped = (target: string): ProjectionMapping[] => [{ axisKey: 'Colore', axisLabel: 'Colore', target, order: 0 }]
+const tokenOf = () => `T:${server.version}:${[...server.included].map(([id, v]) => `${id}=${v}`).join(',')}:${server.rowStamp}`
 const pageOf = (): ProjectionPage => ({
   version: server.version,
   mapping: server.mapping.map(m => ({ ...m })),
   split: { mode: 'single', listings: [], creatable: false },
   children: [...server.included].map(([id, included]) => ({ id, sku: id.toUpperCase(), included, values: {}, listing: { state: 'live', externalId: null } })),
+  ...(server.ebay ? { order: { axes: ['Colore'], valueOrder: {}, editorUrl: '', writableHere: true, reason: '', token: tokenOf() } } : {}),
 } as unknown as ProjectionPage)
 const hold = (on: boolean, line: Held) => (on ? new Promise<void>(resolve => line.push(resolve)) : Promise.resolve())
+/** Someone else's write: the parent listing moves (and the order token with it). */
+const otherWrite = (change: () => void = () => {}) => { change(); server.version += 1 }
 
 /** Each write is checked when it reaches the server — the projection routes' compare-and-set on the parent listing. */
-async function written(kind: 'children' | 'mapping', expectedVersion: number, apply: () => void): Promise<ProjectionSaveResult> {
-  server.sent.push({ kind, expectedVersion })
+async function written(kind: 'children' | 'mapping', expectedVersion: number, apply: () => void, opts: { token?: string; noop?: () => boolean } = {}): Promise<ProjectionSaveResult> {
+  server.sent.push({ kind, expectedVersion, ...(opts.token ? { token: opts.token } : {}) })
   await hold(server.holdWrites, server.heldWrites)
-  if (expectedVersion !== server.version) {
+  if (expectedVersion !== server.version || (opts.token !== undefined && opts.token !== tokenOf())) {
     return { ok: false, conflict: true, current: pageOf(), reason: 'This listing changed after you opened it.', code: 'version_conflict' }
   }
+  if (opts.noop?.()) return { ok: true, version: server.version } // nothing to write: the route answers the page as it is
   apply()
   server.version += 1
-  return { ok: true, version: server.version }
+  const wrote = server.version
+  server.afterCommit?.(); server.afterCommit = null
+  if (server.loseNextAnswer) { server.loseNextAnswer = false; return { ok: false, conflict: false, unknown: true, reason: 'Failed to fetch' } }
+  return { ok: true, version: server.answer === 'written' ? wrote : server.version }
 }
+const sameMapping = (draft: ProjectionDraft) => JSON.stringify(draft.mapping.map(m => [m.axisKey, m.target])) === JSON.stringify(server.mapping.map(m => [m.axisKey, m.target]))
 const source: ProjectionSource = {
   /* The snapshot is taken when the read REACHES the server; a held read answers it later. */
   async read() { const snapshot = pageOf(); await hold(server.holdReads, server.heldReads); return snapshot },
   setIncluded: (expectedVersion, changes) => written('children', expectedVersion, () => { for (const c of changes) server.included.set(c.id, c.included) }),
-  saveMapping: (expectedVersion, draft) => written('mapping', expectedVersion, () => { server.mapping = draft.mapping.map(m => ({ ...m })) }),
+  saveMapping: (expectedVersion, draft) => written('mapping', expectedVersion, () => { server.mapping = draft.mapping.map(m => ({ ...m })) },
+    { token: draft.presentationOrder?.expectedToken, noop: () => !draft.presentationOrder && sameMapping(draft) }),
 }
 
 /* ── the harness ─────────────────────────────────────────────────────────────────────────────────────────────────── */
@@ -97,12 +121,14 @@ beforeEach(async () => {
   hooks.state.slots = []; hooks.state.effects = []; hooks.state.index = 0
   Object.assign(server, {
     version: 5, included: new Map([['c1', false], ['c2', false]]), mapping: mapped('Color'), sent: [],
+    rowStamp: 0, ebay: false, answer: 'written', afterCommit: null, loseNextAnswer: false,
     holdReads: false, heldReads: [], holdWrites: false, heldWrites: [],
   })
   render(); await settle()
   expect(current.page?.version).toBe(5)
 })
 afterEach(() => {
+  vi.unstubAllGlobals()
   for (const slot of hooks.state.slots) slot.cleanup?.()
   for (const release of [...server.heldReads, ...server.heldWrites]) release()
 })
@@ -235,4 +261,115 @@ it('a 409 that is a rule (axes_locked), not a move elsewhere, keeps the draft an
   expect(ok).toBe(false)
   expect(current.mappingConflicts).toBe(0)
   expect(current.writeError).toBe('Specifics are locked on a live listing.')
+})
+
+/* ── review of #608: the eBay order token, the answer's version, a lost answer, the leave guard ─────────────────── */
+
+/** An eBay page: the read carries the order token, and the dock's draft carries it from the first Specifics edit. */
+const ebayDraft = async (): Promise<{ draft: ProjectionDraft; base: number }> => {
+  server.ebay = true
+  current.reload()
+  await settle()
+  const page = current.page!
+  expect(page.order?.token).toBe(tokenOf())
+  return { draft: { ...draftOf(page), mapping: mapped('Colour'), presentationOrder: { expectedToken: page.order!.token!, change: { axes: ['Colore'] } } }, base: page.version }
+}
+
+it('eBay: an edited mapping plus one tick still saves — the order token is taken again at Save', async () => {
+  const { draft, base } = await ebayDraft()
+  current.setIncluded('c1', true) // 5 → 6: the version AND the order token move
+  await settle()
+  const now = tokenOf()
+  expect(now).not.toBe(draft.presentationOrder!.expectedToken)
+  const ok = await current.saveMapping(draft, base)
+  await settle()
+  expect(ok).toBe(true)
+  expect(server.sent.at(-1)).toEqual({ kind: 'mapping', expectedVersion: 6, token: now })
+  expect(server.mapping[0].target).toBe('Colour')
+  expect(current.writeError).toBeNull()
+  expect(current.mappingConflicts).toBe(0)
+})
+
+it('eBay: a pin on a variant row (the token moves, the version does not) does not block the Save either', async () => {
+  const { draft, base } = await ebayDraft()
+  server.rowStamp += 1 // the pin: a variant's eBay row moved
+  current.reload()
+  await settle()
+  const ok = await current.saveMapping(draft, base)
+  await settle()
+  expect(ok).toBe(true)
+  expect(server.mapping[0].target).toBe('Colour')
+})
+
+it('eBay: an order change made elsewhere still answers 409 — the dock resets and says so', async () => {
+  const { draft, base } = await ebayDraft()
+  otherWrite(() => { server.mapping = mapped('Shade') }) // someone else saved the mapping: 5 → 6
+  const seen = current.mappingConflicts
+  const ok = await current.saveMapping(draft, base)
+  await settle()
+  expect(ok).toBe(false)
+  expect(server.mapping[0].target).toBe('Shade')
+  expect(current.mappingConflicts).toBe(seen + 1)
+  expect(current.writeError).toBe(MAPPING_CHANGED_ELSEWHERE)
+})
+
+it('an answer that already carries someone else\'s write is not counted as this page\'s own move', async () => {
+  server.answer = 'after-read' // the server before 2.4 answered the read made after its commit
+  const held = { ...startDraft(current.page!), draft: { ...draftOf(current.page!), mapping: mapped('Colour') } }
+  /* The tick commits 5 → 6; before the read after it, someone else saves a mapping 6 → 7; the tick answers 7. */
+  server.afterCommit = () => otherWrite(() => { server.mapping = mapped('Shade') })
+  current.setIncluded('c1', true)
+  await settle()
+  expect(server.version).toBe(7)
+  const ok = await current.saveMapping(held.draft, held.base.version)
+  await settle()
+  expect(ok).toBe(false)
+  expect(server.mapping[0].target).toBe('Shade') // not overwritten
+  expect(current.writeError).toBe(MAPPING_CHANGED_ELSEWHERE)
+})
+
+it('a tick whose answer is lost but which landed: the page reads again, says so, and the next tick goes on from there', async () => {
+  server.loseNextAnswer = true
+  current.setIncluded('c1', true)
+  await settle()
+  expect(server.included.get('c1')).toBe(true)
+  expect(includedOf('c1')).toBe(true) // what the server holds, not reverted
+  expect(current.writeError).toBe(unknownOutcome('Failed to fetch'))
+  current.setIncluded('c2', true)
+  await settle()
+  expect(server.sent.at(-1)).toEqual({ kind: 'children', expectedVersion: 6 })
+  expect(server.included.get('c2')).toBe(true)
+  expect(current.writeError).toBeNull()
+})
+
+it('a Save whose answer is lost but which landed: it says "may or may not", and saving again is not called a conflict', async () => {
+  const draft = { ...draftOf(current.page!), mapping: mapped('Colour') }
+  server.loseNextAnswer = true
+  expect(await current.saveMapping(draft, 5)).toBe(false)
+  await settle()
+  expect(server.mapping[0].target).toBe('Colour')
+  expect(current.writeError).toBe(unknownOutcome('Failed to fetch'))
+  expect(await current.saveMapping(draft, 5)).toBe(true) // the dock's draft, at the same base
+  await settle()
+  expect(current.mappingConflicts).toBe(0)
+  expect(current.writeError).toBeNull()
+})
+
+it('ticks waiting or in flight keep the tab: closing it asks first, until they settle', async () => {
+  const unload = new Set<unknown>()
+  vi.stubGlobal('window', {
+    addEventListener: (type: string, fn: unknown) => { if (type === 'beforeunload') unload.add(fn) },
+    removeEventListener: (type: string, fn: unknown) => { if (type === 'beforeunload') unload.delete(fn) },
+  })
+  server.holdWrites = true
+  current.setIncluded('c1', true)
+  current.setIncluded('c2', true)
+  await settle()
+  expect(unload.size).toBe(1)
+  server.heldWrites.shift()!()
+  await settle()
+  expect(unload.size).toBe(1) // the second is still in line
+  server.heldWrites.shift()!()
+  await settle()
+  expect(unload.size).toBe(0)
 })

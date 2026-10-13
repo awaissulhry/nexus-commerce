@@ -132,6 +132,8 @@ export function liveSource(coord: ProjectionCoordinateInput): ProjectionSource {
           return { ok: false, conflict: false, reason: `${reasonOf(parsed, refused)} Reload this page to see the current mapping.`, ...(code ? { code } : {}) }
         }
       }
+      /* 2.4 — a 5xx is no verdict: the server may have committed before it failed (the read after a commit can fail). */
+      if (res.status >= 500) return { ok: false, conflict: false, unknown: true, reason: reasonOf(parsed, `HTTP ${res.status}`), ...(code ? { code } : {}) }
       if (!res.ok) return { ok: false, conflict: false, reason: reasonOf(parsed, refused), ...(code ? { code } : {}) }
       const next = isObject(parsed) && typeof parsed.version === 'number' ? parsed.version : null
       /* 🔴 A write's RESPONSE is not what it wrote (reference_claims_must_match_their_measurement).
@@ -140,7 +142,8 @@ export function liveSource(coord: ProjectionCoordinateInput): ProjectionSource {
       if (next === null) return { ok: false, conflict: false, reason: 'The server accepted the change but did not return the new version. Reload this page before editing again.' }
       return { ok: true, version: next }
     } catch (e) {
-      return { ok: false, conflict: false, reason: e instanceof Error ? e.message : String(e) }
+      /* 2.4 — the connection dropped or the 30 s timeout fired: the write may still have landed. */
+      return { ok: false, conflict: false, unknown: true, reason: e instanceof Error ? e.message : String(e) }
     }
   }
 
