@@ -392,6 +392,10 @@ export const actionsColumn = <T,>({ width, pinned = true, prefsLabel: _prefsLabe
       resizable: false,
       suppressHeaderMenuButton: true,
       cellClass: 'nds-ag-cell',
+      /* Its buttons sit right, so a header that names the column ("Actions" on /products, from the Customise label)
+         sits right too — rule 1A: a header on its own column's side (Owner 2026-10-13, the header read left above
+         right-hand buttons). A blank header is unchanged. */
+      headerClass: 'nds-ag-head-num',
       cellRenderer: ActionsCell,
       cellRendererParams: params,
       /* Two verbs + ⋯ are three Tab stops in one cell (gap G2, 2026-10-05): the cell's controls keep their own keys, so

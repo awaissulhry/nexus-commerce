@@ -1,3 +1,18 @@
+## Numbers end under their header; a group heading stays in view — 2026-10-13
+
+Owner 2026-10-13 ("headings … and cell contents not properly aligned, especially on the Matrix"). Measured on the Matrix,
+both product sheets and /products. `grid.css` mirrored in `apps/factory` (identical file).
+- **Number cells** (`.ag-cell.nds-ag-num .nds-cell-value`): the value ends at the right edge under its right-aligned
+  header. `.nds-cell-value` fills the cell, so Base price, Price, Sale, Qty, Buffer, Stock, Min margin and the channel
+  prices drew their values LEFT. In a number cell every mark, glyph, lock and hover action now sits BEFORE the number
+  ("✎ €105.00", "🔒 128"), so every number in a column ends on one line — the mirror of a text cell.
+- **Sticky group headings** (`.nds-grid-group-sticky`): a custom group header's name stays in view while its group
+  scrolls, stopping at the pinned columns' edge — NexusGrid keeps `--nds-grid-pinned-left` (AG 36 scrolls the header and
+  the pinned part in one viewport). On a phone the edge is the viewport's. The Matrix's market strips use it: "Amazon ·
+  IT" no longer leaves a nameless band over Price and Sale.
+- **`actionsColumn`**: a header that names the column sits right, over its buttons (/products "Actions").
+- **`CoverageSummary`**: one line that ends in "…" in a narrow cell, instead of a letter cut in half (both apps).
+
 ## A press on a scrolling tab strip activates the tab it started on — 2026-10-13
 
 Found by the Google Ads browser check (390 px). Mirrored in Factory: `components/Tabs.tsx` (identical).

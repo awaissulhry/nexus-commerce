@@ -27,7 +27,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { AgGridReact, type AgGridReactProps } from 'ag-grid-react'
-import type { ColDef, ColumnPinnedEvent, ColumnResizedEvent, DefaultMenuItem, FirstDataRenderedEvent, GetMainMenuItems, GridApi, GridReadyEvent, GridSizeChangedEvent, MenuItemDef, ModelUpdatedEvent, NewColumnsLoadedEvent, ProcessUnpinnedColumnsParams } from 'ag-grid-community'
+import type { ColDef, ColumnPinnedEvent, ColumnResizedEvent, DefaultMenuItem, DisplayedColumnsChangedEvent, FirstDataRenderedEvent, GetMainMenuItems, GridApi, GridReadyEvent, GridSizeChangedEvent, MenuItemDef, ModelUpdatedEvent, NewColumnsLoadedEvent, ProcessUnpinnedColumnsParams } from 'ag-grid-community'
 
 import { gridDensity, gridGeometry, type GridDensityName } from '../tokens/grid'
 import { compareSortValues, type SortValue } from './sortValues'
@@ -231,6 +231,8 @@ export function NexusGrid<T>({
   onGridSizeChanged,
   onFirstDataRendered,
   onModelUpdated,
+  /* Destructured: the engine keeps `--nds-grid-pinned-left` current (below) before handing the event on. */
+  onDisplayedColumnsChanged,
   ...agProps
 }: NexusGridProps<T>) {
   // `plain` sizes the grid to its rows unless the caller chose a layout (run 3: AG's autoHeight kept a 150px band).
@@ -280,10 +282,28 @@ export function NexusGrid<T>({
       if (!api.isDestroyed()) api.applyColumnState({ state: [{ colId: 'ag-Grid-SelectionColumn', pinned: want }] })
     }, 0)
   }, [])
+  /**
+   * `--nds-grid-pinned-left` on the wrapper: how wide the columns pinned left are. AG 36 scrolls the header and the
+   * pinned columns in ONE viewport (`.ag-grid-viewport`), the pinned part held in place by `position: sticky`. A group
+   * heading that stays in view while its group scrolls (`.nds-grid-group-sticky`, grid.css) must stop at the pinned
+   * part's edge, not the viewport's — under the pinned columns it was hidden (the Matrix's "Amazon · IT" left a nameless
+   * band over Price and Sale, Owner 2026-10-13). Kept current on every event that moves that edge.
+   */
+  const syncPinnedLeft = useCallback((api: GridApi<T>) => {
+    const wrap = wrapRef.current
+    if (!wrap || api.isDestroyed()) return
+    const width = api.getDisplayedLeftColumns().reduce((sum, column) => sum + column.getActualWidth(), 0)
+    wrap.style.setProperty('--nds-grid-pinned-left', `${width}px`)
+  }, [])
+  const handleDisplayedColumnsChanged = useCallback((e: DisplayedColumnsChangedEvent<T>) => {
+    syncPinnedLeft(e.api)
+    onDisplayedColumnsChanged?.(e)
+  }, [syncPinnedLeft, onDisplayedColumnsChanged])
   const handleColumnPinned = useCallback((e: ColumnPinnedEvent<T>) => {
     keepSelectionFirst(e.api)
+    syncPinnedLeft(e.api)
     onColumnPinned?.(e)
-  }, [keepSelectionFirst, onColumnPinned])
+  }, [keepSelectionFirst, syncPinnedLeft, onColumnPinned])
 
   /**
    * AG caches every row's height; changing `rowHeight` / `getRowHeight` as an option does not
@@ -327,9 +347,10 @@ export function NexusGrid<T>({
       // area from the first render, ahead of an unpinned selection column — the `columnPinned`
       // hook only sees pins made at runtime. Measured: checkboxes after the first column.
       keepSelectionFirst(e.api)
+      syncPinnedLeft(e.api)
       onGridReady?.(e)
     },
-    [onGridReady, keepSelectionFirst],
+    [onGridReady, keepSelectionFirst, syncPinnedLeft],
   )
   const handleNewColumnsLoaded = useCallback(
     (e: NewColumnsLoadedEvent<T>) => {
@@ -489,8 +510,9 @@ export function NexusGrid<T>({
       resizing.current = !e.finished
       if (e.finished) for (const c of e.columns ?? (e.column ? [e.column] : [])) userSized.current.add(c.getColId())
     }
+    syncPinnedLeft(e.api)
     onColumnResized?.(e)
-  }, [onColumnResized])
+  }, [onColumnResized, syncPinnedLeft])
   const columnDefs = useMemo(
     () => (agProps.columnDefs ? widthsAsDefaults(agProps.columnDefs) : agProps.columnDefs),
     [agProps.columnDefs],
@@ -616,6 +638,7 @@ export function NexusGrid<T>({
           getMainMenuItems={getMainMenuItems}
           selectionColumnDef={mergedSelectionColumnDef}
           onColumnPinned={handleColumnPinned}
+          onDisplayedColumnsChanged={handleDisplayedColumnsChanged}
           onCellDoubleClicked={onCellDoubleClicked}
           onColumnResized={handleColumnResized}
           onGridSizeChanged={handleGridSizeChanged}

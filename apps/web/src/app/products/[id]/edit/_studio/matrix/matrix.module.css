@@ -32,12 +32,19 @@
 .surface :global(.nds-matrix-strip) {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
   min-width: 0;
   max-width: 100%;
   width: 100%;
   position: relative;
   container-type: inline-size;
+}
+/* The name and the tag, kept together: this is what stays in view while the group scrolls (`nds-grid-group-sticky`). */
+.surface :global(.nds-matrix-strip-in) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
 }
 .surface :global(.nds-matrix-strip-label) {
   overflow: hidden;

@@ -263,6 +263,24 @@
 .nds-ag-nexus .ag-header-group-cell .ag-header-group-cell-label {
   justify-content: center;
 }
+/* A group heading that stays in view while its group scrolls (Owner 2026-10-13, "headings … not proper headings"):
+   the Matrix's "Amazon · IT" scrolled away with its first column and left a nameless coloured band over Price and Sale.
+   A custom group header puts this class on its name. AG 36 scrolls the header and the pinned columns in one viewport, so
+   the name stops at the pinned part's edge (`--nds-grid-pinned-left`, kept by NexusGrid) plus the header's own inset —
+   where it sits at rest. Only a SCROLLING group (`.ag-grid-scrolling-cells`): a pinned group never moves. On a phone the
+   pinned columns scroll too (#581), so the edge is the viewport's. */
+.nds-ag-nexus .ag-grid-scrolling-cells .nds-grid-group-sticky {
+  position: sticky;
+  left: calc(var(--nds-grid-sticky-left, var(--nds-grid-pinned-left, 0px)) + var(--ag-cell-horizontal-padding));
+}
+/* AG clips a header component's root (`.ag-header-cell-comp-wrapper-limited-height > * { overflow: hidden }`): that
+   made the root a scroll box of its own, so the sticky name inside could never move. The name clips itself. */
+.nds-ag-nexus .ag-header-cell-comp-wrapper-limited-height > :has(.nds-grid-group-sticky) {
+  overflow: visible;
+}
+@media (max-width: 760px) {
+  .nds-ag-nexus { --nds-grid-sticky-left: 0px; }
+}
 
 /* The resize handle shows itself (grid audit B10): the theme turns the handle's own mark off — the header partition is
    the resting mark — so a person could not tell where to grab. On the pointer, and while dragging, the handle draws an
@@ -1055,6 +1073,20 @@
 .nds-cell-value > .nds-ag-chev ~ .nds-tooltip:has(> [data-nds-cell-action]) { margin-inline-start: var(--nds-space-4); }
 .nds-cell-value > .nds-cell-value-text:has(+ [data-nds-cell-action]),
 .nds-cell-value > .nds-cell-value-text:has(+ .nds-tooltip > [data-nds-cell-action]) { margin-inline-end: var(--nds-space-4); }
+/* A NUMBER's cell (rule 1A; Owner 2026-10-13: "cell contents not properly aligned, especially on the Matrix"): the value
+   ends at the cell's right edge, under its right-aligned header, on every row. `.nds-cell-value` fills the cell, so the
+   cell's own `flex-end` never reached the text — Base price, Price, Sale, Qty, Buffer, Stock and Min margin drew their
+   values LEFT under a RIGHT header (measured on the Matrix and both sheets). And a mark after the number (the Matrix's
+   ✎ or link glyph) or a hover action pushed some numbers off the edge others reached. So in a number cell the text goes
+   LAST and every mark, glyph and action sits before it — the mirror of a text cell, and how the Stock cell already
+   draws its pencil. */
+.ag-cell.nds-ag-num .nds-cell-value { justify-content: flex-end; }
+.ag-cell.nds-ag-num .nds-cell-value > .nds-cell-value-text { order: 1; margin-inline-end: 0; }
+.ag-cell.nds-ag-num .nds-cell-value > .nds-matrix-marks { margin-left: 0; margin-right: var(--nds-space-4); }
+.ag-cell.nds-ag-num .nds-cell-value > [data-nds-cell-action],
+.ag-cell.nds-ag-num .nds-cell-value > .nds-tooltip:has(> [data-nds-cell-action]) { margin-inline-start: 0; margin-inline-end: auto; }
+/* The read-only lock too: before a number ("🔒 128"), after a word, so every number in a column ends on one line. */
+.ag-cell.nds-ag-num .nds-cell-locked > .nds-cell-lock-glyph { order: -1; }
 /* 🔴 ITALIC OVERHANG (Owner, 2026-09-05: "required … is cropped a bit at the end"). The clip box is
    `.nds-cell-value-text`'s padding box, sized to the text's ADVANCE width; an italic glyph paints past
    its advance, so the last letter's tail was cut off. Every italic run inside a clipped cell carries
