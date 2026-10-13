@@ -197,13 +197,25 @@ function locationsOf(raw: unknown[]): MatrixLocation[] {
 /* ── the write ────────────────────────────────────────────────────────────────────────────────── */
 
 /**
- * The server ANSWERED the write with a refusal (an HTTP 4xx/5xx and its words): the outcome is known — nothing was
- * stored — so the cells say it as a refusal. Only a write that got no answer (the connection was lost) is `unknown`.
+ * The server REFUSED the whole write (an HTTP 4xx and its words: an invalid write, no permission, no such product, a
+ * conflict) — checked before anything is written, so the outcome is known: nothing was stored, and the cells say it as a
+ * refusal.
  */
 export class MatrixWriteRefused extends Error {
   constructor(message: string, readonly status: number) {
     super(message)
     this.name = 'MatrixWriteRefused'
+  }
+}
+
+/**
+ * The server FAILED (an HTTP 5xx — its own error, or a proxy's 502/504 after the commit): the door writes cell by cell, so
+ * part of the write may be stored. The outcome is NOT known — only a read can tell — like a write that got no answer.
+ */
+export class MatrixWriteUncertain extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message)
+    this.name = 'MatrixWriteUncertain'
   }
 }
 
@@ -227,7 +239,10 @@ export async function patchMatrix(
     signal: opts.signal,
   })
   const body = await res.json().catch(() => null)
-  if (!res.ok) throw new MatrixWriteRefused((body as { message?: string } | null)?.message ?? `The Matrix write was refused (HTTP ${res.status})`, res.status)
+  if (!res.ok) {
+    const message = (body as { message?: string } | null)?.message ?? `The Matrix write was refused (HTTP ${res.status})`
+    throw res.status >= 500 ? new MatrixWriteUncertain(message, res.status) : new MatrixWriteRefused(message, res.status)
+  }
   return (body ?? { results: [], version: 0 }) as MatrixWriteResult
 }
 

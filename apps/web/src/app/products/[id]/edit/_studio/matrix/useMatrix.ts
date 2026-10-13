@@ -39,7 +39,7 @@ import {
   type VerbOperation,
   type VerbPreview,
 } from './contract'
-import { fetchMatrix, MatrixWriteRefused, patchMatrix, type MatrixSource } from './source'
+import { fetchMatrix, MatrixWriteRefused, MatrixWriteUncertain, patchMatrix, type MatrixSource } from './source'
 import { afterLiveWrite } from './refusals'
 import { rebaseOnOwnMoves, recordOwnMoves, recordServerMoves, type OwnMoves } from './stamps'
 import { matrixFromColId } from './sellsFrom'
@@ -375,23 +375,29 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
     } catch (e) {
       const reason = e instanceof Error ? e.message : String(e)
       const refused = cells.map((c) => ({ rowId: c.rowId, coordinateKey: c.coordinateKey, cell: c.cell, outcome: 'refused' as const, reason, version: c.expectedVersion }))
-      /* The server ANSWERED with a refusal (a 4xx/5xx and its words): nothing was stored, and that is known — a refusal,
-         said like the door's own; the typed value leaves the grid's clone. Never `unknown`: that holds Publish. */
+      /* The server REFUSED the write (a 4xx and its words, checked before anything is written): nothing was stored, and
+         that is known — a refusal, said like the door's own; the typed value leaves the grid's clone. Never `unknown`. */
       if (e instanceof MatrixWriteRefused) {
         if (readRef.current) commitRead({ ...readRef.current })
         mark(refused, quiet)
         return refused
       }
-      /* No answer (the connection was lost): an UNKNOWN outcome, not a refusal — say so; the next read answers it. */
+      /* No answer (the connection was lost), or the server FAILED (a 5xx: part of the write may be stored): an UNKNOWN
+         outcome, never a refusal. The cells say so, and the Matrix reads again at once — that read (it starts after the
+         failure) shows what the server holds and answers the marks; while the server stays down it fails and they stay. */
       const failedAt = readTicket.current
+      const why = e instanceof MatrixWriteUncertain
+        ? `The server failed (HTTP ${e.status}) — reading the Matrix again to see whether this saved. (${reason})`
+        : `Connection lost — refresh to see whether this saved. (${reason})`
       for (const c of cells) {
         const colId = doorColId(c.coordinateKey, c.cell)
-        tracker.set(c.rowId, colId, 'unknown', `Connection lost — refresh to see whether this saved. (${reason})`)
+        tracker.set(c.rowId, colId, 'unknown', why)
         unanswered.current.set(`${c.rowId}|${colId}`, { rowId: c.rowId, colId, failedAt })
         repaint(c.rowId, colId)
       }
       optsRef.current.onSettled?.({ ok: false, savedAt: new Date().toISOString() })
-      return refused
+      live.request()
+      return refused.map((o) => ({ ...o, reason: why }))
     } finally {
       live.end(covered)
     }
