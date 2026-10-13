@@ -1,3 +1,11 @@
+## A full sub-line gives way at the SKU — 2026-10-13
+
+Owner 2B. `IdentityCell`'s sub-line (SKU · type · "2 variations" on /products) was cut through a letter at the column's
+edge. Both apps (identical files).
+- **`.nds-cell-sub`**: the SKU gives way first and ends in "…" (it keeps its first 5 characters); past that a `Tag`
+  truncates too; a link or count after them stays whole. The line clips nothing else.
+- **`SkuTag`**: its whole text on hover.
+
 ## Numbers end under their header; a group heading stays in view — 2026-10-13
 
 Owner 2026-10-13 ("headings … and cell contents not properly aligned, especially on the Matrix"). Measured on the Matrix,
