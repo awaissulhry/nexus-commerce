@@ -225,6 +225,12 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     /* Everything that reads "loaded" — the toolbar, Export, the chips, the drawer — waits for the order too. */
     const loading = sheetLoading || orderPending;
     const rows = useMemo(() => (data && familyOrder.settled ? orderRows(withRowIdentity(data.rows, data.aliases, rowObjects.current), familyOrder.rank) : []), [data, familyOrder.settled, familyOrder.rank]);
+    /* A re-read of rows already on screen (a Reload, "changed elsewhere — refresh"): the read keeps them (same URL), so
+       they stay under the engine's loading veil and the footer stays, as on the master sheet (grid audit F8). Every hold
+       on `loading` still holds. */
+    const reloading = loading && rows.length > 0;
+    /* The grid's skeleton rows only before the first read, as on the master sheet. */
+    const firstLoad = loading && !reloading;
     // Read live (Owner, 2026-09-26) — one ⋯ item and its drawer; everything else lives in _studio/live-read.
     const liveRead = useLiveRead({ productId, channel, channelLabel: data?.scope.label ?? channel, marketplace, accountId, aliasKey: selectedAlias, rows });
     const channelRefusal = (key: string, row: ChannelSheetRow): string | null => {
@@ -1282,7 +1288,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const noAccount = !accountId && !data?.scope.connectionId && accounts.length === 0;
     return {
         scope: 'channel',
-        loading: loading, switching, unavailable: unavailable,
+        loading: loading, switching, reloading, unavailable: unavailable,
         errorLabel: `${channelLabel(channel)} · ${marketplace} information`,
         errorMessage: error,
         backendMissing: backendMissing, retry: reload,
@@ -1412,7 +1418,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
               Metafields and metaobject fields appear here as soon as Shopify answers. The sheet updates by itself.
             </Banner>}</>,
         grid: {
-            loading: loading,
+            loading: firstLoad,
             noRowsOverlayComponentParams: emptyState,
             ...shopifyClipboard,
             processDataFromClipboard: pasteIntoNewRows,
