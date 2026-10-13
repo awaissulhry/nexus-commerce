@@ -15,7 +15,7 @@
 import { useLayoutEffect, useRef, type HTMLAttributes, type ReactNode } from 'react'
 import type { ICellRendererParams, IHeaderParams } from 'ag-grid-community'
 
-import type { Column } from '../../components/DataGrid'
+import type { Column } from '../../components/dataGridTypes'
 import { ROW_RULE } from './geometry'
 import { applyTo, clearFrom, splitElementProps } from './rowDom'
 import { isSubRow, isTotalRow, type RowMeta, type SubRow } from './rows'

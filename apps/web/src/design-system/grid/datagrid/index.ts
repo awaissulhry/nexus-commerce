@@ -4,5 +4,5 @@
  * makes; the types are the legacy file's own, re-exported.
  */
 export { DataGrid } from './DataGrid'
-export type { Column, DataGridProps } from '../../components/DataGrid'
+export type { Column, DataGridProps } from '../../components/dataGridTypes'
 export { dataGridTheme } from './theme'

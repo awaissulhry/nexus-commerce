@@ -25,7 +25,6 @@
     "grid:conformance": "node scripts/check-grid-chrome.mjs",
     "gates:browser": "node scripts/run-browser-gates.mjs --all",
     "gates:full": "bash scripts/gates-full.sh",
-    "grid:parity": "node scripts/check-workspace-parity.mjs",
     "layout:v2": "node scripts/check-layout-v2.mjs",
     "grid:modules": "node scripts/check-grid-modules.mjs",
     "grid:modules:selftest": "node scripts/check-grid-modules.mjs --self-test",

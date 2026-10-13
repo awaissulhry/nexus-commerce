@@ -5,9 +5,8 @@
  *
  * AGW (2026-09-05) — the engine under it is AG Grid Enterprise: `@/design-system/grid/workspace`, the
  * IDENTICAL `WorkspaceGridProps`. The legacy grid was measured in a browser on 17 console pages before
- * this flip (the programme's baseline; every record stamped `engine: 'legacy'`), and its hand-rolled
- * body is frozen under `app/design/grid-lab/legacy/LegacyWorkspaceGrid.stories.tsx` for the parity lab only.
- * Rollback is these two exports pointing back at that copy — nothing else in the console changes.
+ * this flip (the programme's baseline; every record stamped `engine: 'legacy'`). Its frozen copy and the
+ * grid lab's parity tabs went in grid audit wave 4 (2026-10-13): the AG engine is the only one.
  */
 export {
   WorkspaceGrid,

@@ -17,7 +17,7 @@
  */
 import type { CellClassParams, CellClassRules, ColDef, HeaderClassParams, IRowNode, SortDirection, ValueGetterParams } from 'ag-grid-community'
 
-import type { Column } from '../../components/DataGrid'
+import type { Column } from '../../components/dataGridTypes'
 import type { DgContextHolder } from './cells'
 import { CHECKBOX_COL_W } from './geometry'
 

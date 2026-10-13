@@ -27,8 +27,8 @@ The `/marketing/ads` application uses the Nexus AG Grid adapters: `grid/workspac
 for workspaces with search, filters, preferences and paging; `grid/datagrid` for
 smaller tables, expanded detail rows and in-cell controls. Keep feature content
 in renderers and use the published `.nds-ws-*` / `.nds-dg-*` row and cell classes.
-Saved preferences retain their existing keys and shapes. The comparison catalog
-is `/design/grid-lab`; `?tab=datagrid&scenario=dg-inline-edit` isolates a scenario.
+Saved preferences retain their existing keys and shapes. The grid lab is
+`/design/grid-lab` (`?tab=gds` for the GDS scenarios, `?tab=features` for the enterprise features).
 These adapters are currently web-only; other platforms keep their existing grids.
 
 `Tooltip portal` or `TooltipPortalProvider` places tooltip bubbles on the shared

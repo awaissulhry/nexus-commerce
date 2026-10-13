@@ -7,8 +7,8 @@
  * `scripts/check-grid-chrome.mjs` can hold them against `design-system/grid/spec.json` at every
  * density, in both themes, at a laptop and a monitor width.
  *
- * Rendered OUTSIDE the lab's `.h10-shell` wrapper on purpose: the shell pins the console light, and
- * dark mode can only be measured where the pin does not reach.
+ * Rendered OUTSIDE the console shell on purpose: the ads shell pins the console light, and dark mode
+ * can only be measured where the pin does not reach.
  *
  * Lab-only: this folder may import `ag-grid-*` (scripts/check-ag-grid-import-boundary.mjs). Every
  * option object handed to a grid is a module constant or a `useMemo` — the identity guard holds the
