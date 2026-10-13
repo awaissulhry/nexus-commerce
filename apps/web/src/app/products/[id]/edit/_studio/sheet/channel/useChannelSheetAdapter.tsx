@@ -21,6 +21,7 @@ import { createShopifyBulkPost, orderShopifyColumnRequests } from '../../shopify
 import { preserveContentVersions } from '../contentVersions';
 import { useSheetUndo, type ResetCellBack } from '../useSheetUndo';
 import { inheritedCell, listPositions, stateBefore, takeEditPrior } from '../sheetUndo';
+import { carryShownCell } from '../sheetStamps';
 import { useShopifyDraftCell, type ShopifyHistoryRefused } from '../../shopify/ShopifyDraftCell';
 import { shopifyHistoryChange, shopifyHistoryRefusal, takeShopifyReplayIntent } from '../../shopify/draftHistory';
 import { shopifyGridTransfer } from '../../shopify/shopifyGridTransfer';
@@ -258,7 +259,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     /* G1 — a quiet re-read waits only for edits still on their way (saving, waiting, no answer): a refused cell no longer
        holds back the read that shows a variation the value it now inherits. The refused cell keeps the value it shows,
        and its mark, through the read — as on the Shared scope (`useMasterSheet`'s quiet read). */
-    const quietRefresh = useCallback((canApply: () => boolean) => refreshRef.current(canApply, (page) => keepUnsettledCells(page, rowsRef.current, (rowId, colId) => tracker.get(rowId, colId)?.state)), [tracker]);
+    const quietRefresh = useCallback((canApply: () => boolean) => refreshRef.current(canApply, (page) => keepUnsettledCells(page, rowsRef.current, (rowId, colId) => tracker.get(rowId, colId)?.state, (rowId, colId, words) => tracker.set(rowId, colId, 'refused', words))), [tracker]);
     /* Sheet publish parity, step 3 — the "Last publish" column reads the destination's publication status through a
        ref, so a new answer refreshes its cells without rebuilding the column (`refreshCells` below). */
     const publishLookup = useMemo(() => publishColumnLookup(data?.columns ?? [], data?.scope.label ?? ''), [data?.columns, data?.scope.label]);
@@ -424,6 +425,9 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             const inPlace = save.inPlace(result.ok);
             if (inPlace) repaintSettled(inPlace.rows, inPlace.columns, req);
             else if (result.ok) followUp.owe();
+            /* Field stamps (2026-10-13) — a conflict now means the field itself moved: the row is read again quietly once the
+               sheet is idle, so the other change shows on every other cell; the refused cell keeps its value and mark. */
+            else if (result.conflict) { followUp.owe(); followUp.settle(); }
             if (result.unreachable)
                 unsettledWrites.current.set(req.rowId, { writeId, subject });
             else
@@ -507,8 +511,12 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             return;
         }
         const cell = row.values?.[colId];
-        if (cell)
-            row.values = { ...row.values, [colId]: inheritedCell(cell, before) };
+        if (cell) {
+            const shown = inheritedCell(cell, before);
+            // Field stamps: the reset is made over the cell the server holds, when the sheet read it as it stands.
+            carryShownCell(cell, shown);
+            row.values = { ...row.values, [colId]: shown };
+        }
         api.refreshCells({ rowNodes: [node], columns: [colId], force: true });
         writer.set(rowId, colId, null, { row, intent: before.intent, onOutcome });
     }, [getGridApi, writer]);

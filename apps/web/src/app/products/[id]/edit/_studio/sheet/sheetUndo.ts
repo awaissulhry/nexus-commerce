@@ -136,6 +136,10 @@ export function takeEditPrior(next: unknown): unknown {
   noted.taken = true
   return noted.prior
 }
+/** The cell an edit replaced, taken or not — read only (the field stamps, `sheetStamps.ts`); undefined when none was noted. */
+export function editPriorOf(next: unknown): unknown {
+  return notedPrior(next)?.prior
+}
 /** The cell replaced `from` without a new edit (a Shared/pin choice marks it): the edit's prior goes with it. Finding 3. */
 export function carryEditPrior(from: unknown, to: object): void {
   const noted = notedPrior(from)
@@ -273,7 +277,9 @@ export class SheetUndoHistory {
    * history: an undo never puts back, and a redo never sends, what was not saved (the Matrix's rule, `sendCells`).
    * `step: false` — an undo's or redo's own write: it is no step, but what it stores is the next edit's "before".
    */
-  edit(change: SheetCellChange, unconfirmed: boolean, step = true): (outcome: SheetCellOutcome) => void {
+  edit(change: SheetCellChange, unconfirmed: boolean, step = true, serverValue?: () => { value: unknown } | undefined): (outcome: SheetCellOutcome) => void {
+    // An edit typed into a cell refused because its field moved is made over what the server holds now (`serverHolds`).
+    if (unconfirmed) this.serverHolds(change.rowId, change.colId, serverValue?.())
     const { key, ledger } = this.ledgerFor(change, unconfirmed)
     const mine = { entry: step ? this.record({ ...change, before: ledger.value }) : null, after: change.after }
     ledger.open.push(mine)
@@ -295,7 +301,23 @@ export class SheetUndoHistory {
       if (latest && outcome !== 'dropped') ledger.unsaved = { value: mine.after }
       // A step that merged a later change of this cell keeps it: that change's own answer decides.
       if (mine.entry && !ledger.open.some((later) => later.entry === mine.entry)) this.drop((c) => c === mine.entry && c.after === mine.after)
+      // Refused because its field moved: the server holds the value the refusal named (`serverHolds`).
+      if (outcome === 'refused') this.serverHolds(change.rowId, change.colId, serverValue?.())
     }
+  }
+
+  /**
+   * Field stamps (re-review of #611) — the server holds `now` for this cell (a refusal named the moved field, or a read
+   * showed it moved again) while the cell shows an edit it did not store. That is the "before" of the next edit of the
+   * cell, and of any edit of it still on its way: an undo of an edit typed into the refused cell puts back the other
+   * person's value, never the value from before their change. `undefined` (not such a cell): nothing changes.
+   */
+  serverHolds(rowId: string, colId: string, now: { value: unknown } | undefined): void {
+    if (!now) return
+    const held = this.stored.get(`${rowId}::${colId}`)
+    if (!held) return
+    held.value = now.value
+    for (const pending of held.open) if (pending.entry) pending.entry.before = now.value
   }
 
   private close(): void {

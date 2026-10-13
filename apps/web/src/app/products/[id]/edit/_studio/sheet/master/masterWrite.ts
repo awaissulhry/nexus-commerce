@@ -25,6 +25,7 @@ import { wireCellValue } from '../sheetReset'
 import { saveWarningFor } from '../saveWarnings'
 import { adoptContentVersions, contentWriteProof } from '../contentVersions'
 import { sharedWriteField, skuRenamesOf } from '../identitySkuEdit'
+import { forgetMovedRefusal, holdsMovedRefusal, noteMovedFieldRefusal, stampFor } from '../sheetStamps'
 
 import { askForThemeChangePlan } from '../../variants/channel/themePlanAsk'
 /**
@@ -141,10 +142,18 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
   let batchReason: string | undefined
   let anyOk = false
 
+  /* Field stamps (2026-10-13, `../sheetStamps.ts`): what each cell showed, from the read — so a row whose version moved for
+     another field (a sale, a cascade, another person's edit) still takes this edit. A refused cell sent again carries the
+     server's cell its mark named. Only on a guarded write: a write without a version has nothing for a stamp to stand in for. */
+  const sent = new Map(bulk.map((c) => [c.colId, req.row?.values?.[c.colId]]))
+  const stamps = bulk.map((c) => (proof.expectedVersion ? stampFor(sent.get(c.colId), c.colId, c.intent, byKey.get(c.colId)) : {}))
+  // …and while the row shows a cell refused because its field moved, a refusal naming no field hands it no version.
+  const heldForMoved = holdsMovedRefusal(req.row)
+
   try {
     if (bulk.length > 0) {
       const res = await (ctx.bulkSend ?? directBulkSend)({
-        changes: bulk.map((c) => ({
+        changes: bulk.map((c, i) => ({
           id: req.rowId,
           contentAddress: req.row?.values?.[c.colId]?.contentAddress,
           contentVersion: req.row?.values?.[c.colId]?.contentVersion,
@@ -159,6 +168,7 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
           // here rather than in the writer precisely so the two can differ.
           value: c.intent === 'reset' ? null : c.value === '' ? null : wireCellValue(c.value),
           ...(c.intent === 'reset' ? { intent: 'reset' } : {}),
+          ...stamps[i],
         })),
         /* 🔴 THE MARKETPLACE CONTEXT. Without it every `attr_*` write on the master scope was
            REFUSED — the Owner's "I'm unable to write a lot of attributes still, such as color".
@@ -187,9 +197,16 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
 
       if (res.status === 409) {
         conflict = true
-        version = versionFromBody(body)
+        // Field stamps — a stamped field moved (`current`): the row keeps the version it read until the quiet read that
+        // follows shows the other change; meanwhile every other field of the row is still checked against it.
+        // The same while the row shows a cell refused because its field moved: a version from a refusal that names no field
+        // could hold that field at a value its mark does not show (`holdsMovedRefusal`, re-review of #611).
+        version = body?.current || heldForMoved ? undefined : versionFromBody(body)
         batchReason = body?.message || body?.error || 'Someone else changed this row. Refresh to see their version.'
-        for (const c of bulk) cells[c.colId] = { ok: false, reason: batchReason }
+        /* …and the refused cell's mark says what the server holds now; "Try again" replaces exactly that (review of #611). */
+        const moved = body?.current ? noteMovedFieldRefusal(bulk.map((c, i) => ({ colId: c.colId, cell: sent.get(c.colId), stamp: stamps[i],
+          optionLabels: byKey.get(c.colId)?.optionLabels })), body.current) : null
+        for (const c of bulk) cells[c.colId] = { ok: false, reason: moved?.get(c.colId) ?? batchReason }
       } else if (!res.ok) {
         const errors: Array<{ id?: string; field?: string; error?: string }> = Array.isArray(body?.errors) ? body.errors : []
         batchReason = body?.error || body?.message || errors[0]?.error || `Refused (HTTP ${res.status})`
@@ -207,7 +224,8 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
           /* P1 — a value stored WITH a problem the server names keeps that sentence on its cell (`warnings[]`). */
           const warning = mine ? undefined : saveWarningFor(body, req.rowId, [field, c.colId])
           cells[c.colId] = mine ? { ok: false, reason: mine.error || 'Refused' } : { ok: true, ...(warning ? { warning } : {}) }
-          if (!mine) anyOk = true
+          // Stored: a cell refused because its field moved (or a value typed into it) is refused no more.
+          if (!mine) { anyOk = true; forgetMovedRefusal(sent.get(c.colId)) }
         }
         /*
          * 🔴 READ BACK, never computed. The `expectedVersion + 1` that used to sit here invented a
@@ -219,9 +237,14 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
          * If the server returns no version it did not participate in the CAS, and the caller keeps
          * the version it read from the sheet. A guessed version loses a race it should have won.
          */
-        version = versionFromBody(body) ?? version
-        // The translation the save moved hands its new token to every cell writing to it.
-        adoptContentVersions(req.row, body, ctx.sheet?.rows ?? [], proof)
+        /* Field stamps — a save that went ahead over ANOTHER change to this row (`writtenAt`) answers the version after
+           both. The row has not shown that change yet, so it keeps the version and tokens it read: its next save is checked
+           field by field again (`sheet-stamp-door.ts`), never waved through. The read after this save brings both. */
+        if (typeof body?.writtenAt !== 'number') {
+          version = versionFromBody(body) ?? version
+          // The translation the save moved hands its new token to every cell writing to it.
+          adoptContentVersions(req.row, body, ctx.sheet?.rows ?? [], proof)
+        }
         // S11 — a product SKU renamed: the answer says what each rename did on the channels.
         const renames = skuRenamesOf(body)
         if (renames.length) ctx.opts.onSkuRenames?.(renames)

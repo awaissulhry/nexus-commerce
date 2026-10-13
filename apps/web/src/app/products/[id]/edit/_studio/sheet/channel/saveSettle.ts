@@ -4,6 +4,7 @@
  * be tested without a grid.
  */
 import type { CellSaveState, SheetWriteRequest } from '@/design-system/grid'
+import { readAgainOverRefused } from '../sheetStamps'
 import { changeTarget } from './useChannelSheet'
 import { studioRowId, type ChannelScopePage, type ChannelSheetRow } from './types'
 
@@ -108,15 +109,24 @@ export class FollowUpRead {
  * keeps the value the sheet shows, so its mark never outlives its value; every other cell is the read's. The Shared
  * scope's quiet read does the same (`useMasterSheet`). Before, any refused cell held back every quiet read, and a
  * variation went on showing the value it inherited before the family's save.
+ *
+ * Field stamps (review of #611): this read gives the row its version, so a refused cell kept over it names what the
+ * server holds now (`reword`, the cell's mark), and "Try again" replaces exactly that (`../sheetStamps.ts`).
  */
 export function keepUnsettledCells(page: ChannelScopePage, shown: readonly ChannelSheetRow[],
-  stateOf: (rowId: string, colId: string) => CellSaveState | undefined): ChannelScopePage {
+  stateOf: (rowId: string, colId: string) => CellSaveState | undefined,
+  reword?: (rowId: string, colId: string, words: string) => void): ChannelScopePage {
   const byId = new Map(shown.map((row) => [row.rowId, row]))
+  const labels = new Map((page.columns ?? []).map((column) => [column.key, column.optionLabels]))
   return { ...page, rows: page.rows.map((row) => {
     const rowId = studioRowId(row.aliasId, row.id)
     const before = byId.get(rowId)
     if (!before) return row
     const kept = Object.keys(before.values ?? {}).filter((key) => { const state = stateOf(rowId, key); return !!state && state !== 'saved' && !!before.values[key] })
+    for (const key of kept) {
+      const words = stateOf(rowId, key) === 'refused' ? readAgainOverRefused(before.values[key], row.values?.[key], labels.get(key)) : undefined
+      if (words) reword?.(rowId, key, words)
+    }
     return kept.length ? { ...row, values: { ...row.values, ...Object.fromEntries(kept.map((key) => [key, before.values[key]])) } } : row
   }) }
 }

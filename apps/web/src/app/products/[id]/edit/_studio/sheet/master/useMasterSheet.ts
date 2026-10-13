@@ -27,6 +27,7 @@ import { recoverSheetRow } from '../sheetRecovery'
 import { commitMasterRow } from './masterWrite'
 import { runBulkOperation, type BulkSend } from '../bulkOperation'
 import { preserveContentVersions } from '../contentVersions'
+import { readAgainOverRefused, rememberReadCells } from '../sheetStamps'
 import { verifyContract, type StudioRow, type StudioSheet } from './types'
 import type { SkuRename } from '../identitySkuEdit'
 
@@ -203,7 +204,10 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
         // this memo's deps are `[tracker, commit, localesQuery]` and a callback in them would rebuild
         // the writer and orphan its queue.
         onRefused: (refusals) => optsRef.current.onRefused?.(refusals),
-        onConflict: (rowId) => setConflicts((prev) => (prev.includes(rowId) ? prev : [...prev, rowId])),
+        /* Field stamps (2026-10-13) — a conflict now means the field itself moved: the row is read again quietly, so the
+           other change shows on every other cell; the refused cell keeps its value and its "changed elsewhere" mark, and
+           the refresh offer stays while it does. */
+        onConflict: (rowId) => { setConflicts((prev) => (prev.includes(rowId) ? prev : [...prev, rowId])); oweQuietRead() },
       }),
     [tracker, commit, localesQuery],
   )
@@ -243,7 +247,9 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
     quietRead.current = false
     setError(null)
     setProblems([])
-    setConflicts([])
+    // A quiet read keeps the refresh offer for a row that still shows a refused cell (its value is not the server's).
+    setConflicts((prev) => quiet ? prev.filter((rowId) => Object.keys(sheetRef.current?.rows.find((row) => row.id === rowId)?.values ?? {})
+      .some((key) => tracker.get(rowId, key)?.state === 'refused')) : [])
 
     const backend = getBackendUrl()
     /**
@@ -263,6 +269,8 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
       const studio = await fetchStudioRead(compactSheetUrl(studioUrl), signal)
       if (studio && studio.ok) {
         const body = decodeSheetCells((await studio.json()) as StudioSheet)
+        // Field stamps: these cells are what the server holds; an edit made over one is stamped from it (`../sheetStamps.ts`).
+        rememberReadCells(body.rows)
         return { ...body, meta: { ...body.meta, source: 'studio' } }
       }
       const failureBody: unknown = await studio?.json().catch(() => null)
@@ -282,11 +290,16 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
            and then lands quietly (so the cell it commits keeps its saving state, as any quiet read does). */
         if ((quiet || sameRead) && api && !api.isDestroyed() && api.getEditingCells().length > 0) { oweQuietRead(); return }
         if (quiet) {
+          const labels = new Map(next.columns.map((column) => [column.key, column.optionLabels]))
           for (const row of next.rows) {
             const previous = sheetRef.current?.rows.find(old => old.id === row.id)
             if (!previous) continue
             for (const key of Object.keys(row.values)) {
               const state = tracker.get(row.id, key)?.state
+              /* Field stamps (review of #611) — this read gives the row its version, so a refused cell kept over it names what
+                 the server holds now, and "Try again" replaces exactly that (`../sheetStamps.ts`). */
+              const words = state === 'refused' && previous.values[key] ? readAgainOverRefused(previous.values[key], row.values[key], labels.get(key)) : undefined
+              if (words) tracker.set(row.id, key, 'refused', words)
               if (state && ['refused', 'unknown', 'saving', 'pending'].includes(state) && previous.values[key]) row.values[key] = previous.values[key]
             }
           }

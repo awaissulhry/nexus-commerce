@@ -78,7 +78,16 @@ export interface ProductBulkInput {
     contentAcknowledged?: boolean
     contentVersion?: number
     contentState?: 'draft' | 'reviewed'
+    /**
+     * Field stamps (the product sheet, 2026-10-13, `sheet-stamp-door.ts`): what the edited cell showed when the person
+     * read it (`@nexus/shared/sheet-stamp`), and the sheet column it is (`column`, the key the scope's sheet read uses).
+     * Read only by the stamp door; this writer ignores both.
+     */
+    expected?: import('@nexus/shared/sheet-stamp').SheetCellStamp
+    column?: string
   }>
+  /** Field stamps — the listing the page read on this row (channel scope); a stamped retry needs the same listing. */
+  expectedListingId?: string | null
   marketplaceContext?: {
     accountId?: string
     locale?: string

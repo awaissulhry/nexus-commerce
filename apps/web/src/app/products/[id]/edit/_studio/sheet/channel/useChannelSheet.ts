@@ -40,6 +40,7 @@ import { wireAliasKey } from './types'
 import { wholeListWriteField } from './provenance'
 import { IDENTITY_SKU_COLUMN, identitySkuChannelChange } from '../identitySkuEdit'
 import { adoptContentVersions, contentWriteProof } from '../contentVersions'
+import { forgetMovedRefusal, holdsMovedRefusal, noteMovedFieldRefusal, rememberReadCells, stampFor, type StampFields } from '../sheetStamps'
 import type { AliasGroup, ChannelScopeChannel, ChannelScopePage, ChannelSheetRow, SheetColumn, SheetListing, StudioCellValue } from './types'
 
 export interface UseChannelSheetOptions {
@@ -95,6 +96,8 @@ export function channelSheetResponse(body: unknown): ChannelScopePage {
       !page.meta || !Array.isArray(page.meta.schemaMissing) || !Array.isArray(page.meta.schemaAge)) {
     throw new Error('The information response was incomplete. Try again.')
   }
+  // Field stamps: these cells are what the server holds; an edit made over one is stamped from it (`../sheetStamps.ts`).
+  rememberReadCells(page.rows)
   return page as ChannelScopePage
 }
 
@@ -445,12 +448,13 @@ async function commitChannelLanguage(
 
   const changes = req.cells.map(({ colId, value, intent }) => {
     // S11 — the first column is THIS listing's own SKU (`channel_sku`, a channel write on the row's listing context).
-    if (colId === IDENTITY_SKU_COLUMN) return { colId, change: { id: row.id, ...identitySkuChannelChange(value, intent) } }
+    if (colId === IDENTITY_SKU_COLUMN) return { colId, cell: row.values?.[colId], change: { id: row.id, ...identitySkuChannelChange(value, intent) } }
     const cell = row.values?.[colId]
     const address = intent === 'reset' || intent === 'reset-list' ? cell?.contentAcknowledgement?.pin.address ?? cell?.contentAddress : cell?.contentAddress
     const isReset = intent === 'reset' || intent === 'reset-list'
     return {
       colId,
+      cell,
       change: {
         id: row.id,
         contentAddress: address,
@@ -489,6 +493,10 @@ async function commitChannelLanguage(
          */
         target: changeTarget(cell, intent),
         intent: intent === 'reset-list' ? 'reset' : intent,
+        /* Field stamps (2026-10-13, `../sheetStamps.ts`): what this cell showed, from the read — so a listing or product
+           whose version moved for another field (a sale, a cascade, another person's edit) still takes this edit. Shopify
+           cells are read through Shopify's own enrichment, which the door does not repeat. */
+        ...(coord.channel === 'SHOPIFY' ? {} : stampFor(cell, colId, intent, coord.columnOf?.(colId))),
       },
     }
   })
@@ -522,6 +530,10 @@ async function commitChannelLanguage(
   if (!selection.ok) return { ok: false, conflict: true, reason: selection.reason,
     cells: Object.fromEntries(req.cells.map(cell => [cell.colId, { ok: false, reason: selection.reason }])) }
   const proof = selection.proof, casVersion = proof.expectedVersion
+  const stamped = changes.some(({ change }) => 'expected' in change && change.expected !== undefined)
+  const listingAtBuild = row.listing?.id ?? null
+  // While the row shows a cell refused because its field moved, a refusal naming no field hands it no version (below).
+  const heldForMoved = holdsMovedRefusal(row)
 
   try {
     const send = (expectedVersion: number | undefined) => (coord.bulkSend ?? directBulkSend)({
@@ -533,6 +545,8 @@ async function commitChannelLanguage(
         { channel: coord.channel, marketplace: coord.marketplace, ...(coord.accountId ? { accountId: coord.accountId } : {}), ...(coord.locale ? { locale: coord.locale } : {}), aliasKey: wireAliasKey(row.aliasId) },
       ],
       ...(expectedVersion !== undefined ? { expectedVersion } : {}),
+      // Field stamps: the listing this row was read with — a stamped save never lands on another one.
+      ...(stamped ? { expectedListingId: listingAtBuild } : {}),
     })
     let res = await send(casVersion)
     let body = await res.json().catch(() => null)
@@ -559,8 +573,12 @@ async function commitChannelLanguage(
     const family = [...(coord.familyRows?.() ?? [])]
     const listingVersions = new Map([row, ...family].map((r) => [r, r.listing?.version]))
     // P2 — decided against the answer before its other effects land; applied once the save is known to be clean.
-    const settle = res.ok && coord.onStored ? planSavedCellPatch({ row, body, column: (colId) => coord.columnOf?.(colId), sent: coord.sentCells,
-      changes: changes.map(({ colId, change }) => ({ colId, field: change.field, value: change.value, intent: change.intent, target: change.target })) }) : null
+    /* Field stamps — a save that went ahead over another change to this row (`writtenAt`): that change is on the server
+       only, so the row is read again rather than settled in place. */
+    const settle = !res.ok || !coord.onStored ? null
+      : typeof body?.writtenAt === 'number' ? { kind: 'read' as const, reason: 'saved over another change to this row' }
+      : planSavedCellPatch({ row, body, column: (colId) => coord.columnOf?.(colId), sent: coord.sentCells,
+        changes: changes.map(({ colId, change }) => ({ colId, field: change.field, value: change.value, intent: change.intent, target: change.target })) })
     if (res.ok) {
       reportCreated(req, coord, createdListingsOf(body))
       // Only what the server STORED travels to the family: a cell it refused (a 200 can still refuse single cells) keeps
@@ -571,7 +589,18 @@ async function commitChannelLanguage(
         stored.map(({ colId, change }) => ({ colId, value: change.value })))
       if (moved.length) coord.onFamilyChanged?.(moved, stored.map(({ colId }) => colId))
     }
-    const raw = typeof body?.currentVersion === 'number' ? body.currentVersion : undefined
+    /**
+     * Field stamps — a save that went ahead over ANOTHER change to this row (`writtenAt`) answers the version after both. This
+     * row has not shown that other change yet, so it keeps the tokens it read: its next save is checked field by field
+     * again (`sheet-stamp-door.ts`), never waved through as if the other change had been seen. The read after this save
+     * brings the value and the tokens together. A refusal because a stamped field moved (`current`) keeps them too: the
+     * other change is read quietly next, and until then every other field of the row is still checked against it.
+     */
+    const overOther = res.ok && typeof body?.writtenAt === 'number'
+    // The same while the row shows a cell refused because its field moved: a version from a refusal that names no field
+    // could hold that field at a value its mark does not show (`holdsMovedRefusal`, re-review of #611).
+    const keepRead = overOther || res.status === 409 && (!!body?.current || heldForMoved)
+    const raw = typeof body?.currentVersion === 'number' && !keepRead ? body.currentVersion : undefined
     /**
      * 🔴 `versionOf` says WHICH ROW the number belongs to — read it, never infer it.
      *
@@ -588,7 +617,7 @@ async function commitChannelLanguage(
     const versionOf: 'channelListing' | 'product' | undefined = body?.versionOf
     if (versionOf === 'channelListing' && raw !== undefined && row.listing) row.listing.version = raw
     // The content row the save moved hands its new token to every cell writing to it (bullets, title, …).
-    if (res.ok) adoptContentVersions(row, body, family, proof)
+    if (res.ok && !overOther) adoptContentVersions(row, body, family, proof)
     let version = versionOf === 'product' ? raw : undefined
     if (res.ok && version !== undefined) {
       const confirmedVersion = version
@@ -606,20 +635,26 @@ async function commitChannelLanguage(
       if (['AMBIGUOUS_CONNECTION', 'LISTING_SCOPE_MISMATCH'].includes(body?.code ?? body?.error)) {
         return { ok: false, reason: body?.message || 'Reload and choose the correct listing and account before editing.' }
       }
+      // Name the row the number belongs to, or say nothing about a version at all. Asserting a
+      // listing version we were handed from the product row is how the old message said "v1"
+      // about a listing sitting at 19.
+      const reason: string = body?.message || body?.error || (
+        versionOf === 'channelListing'
+          ? `Someone else changed this listing (now v${raw ?? '?'}). Review the edit before reloading.`
+          : versionOf === 'product'
+            ? `Someone else changed this product (now v${raw ?? '?'}). Review the edit before reloading.`
+            : 'Someone else changed this row first. Review the edit before reloading.')
+      /* Field stamps — a stamped field moved (`current`): the refused cell's mark says what the server holds now, and "Try
+         again" replaces exactly that (`../sheetStamps.ts`, review of #611). */
+      const moved = body?.current ? noteMovedFieldRefusal(changes.map(({ colId, cell, change }) => ({ colId, cell,
+        stamp: change as StampFields, optionLabels: coord.columnOf?.(colId)?.optionLabels })), body.current) : null
       // Hand the server's version back so the writer can retry rather than stay behind.
       return {
         ok: false,
         conflict: true,
         version,
-        // Name the row the number belongs to, or say nothing about a version at all. Asserting a
-        // listing version we were handed from the product row is how the old message said "v1"
-        // about a listing sitting at 19.
-        reason: body?.message || body?.error || (
-          versionOf === 'channelListing'
-            ? `Someone else changed this listing (now v${raw ?? '?'}). Review the edit before reloading.`
-            : versionOf === 'product'
-              ? `Someone else changed this product (now v${raw ?? '?'}). Review the edit before reloading.`
-              : 'Someone else changed this row first. Review the edit before reloading.'),
+        reason,
+        ...(moved ? { cells: Object.fromEntries(changes.map(({ colId }) => [colId, { ok: false, reason: moved.get(colId) ?? reason }])) } : {}),
       }
     }
     if (!res.ok) {
@@ -635,10 +670,11 @@ async function commitChannelLanguage(
     const warningOf = (colId: string, field: string) => saveWarningFor(body, row.id, [field, colId])
     if (errors.length > 0) {
       const cells: Record<string, { ok: boolean; reason?: string; warning?: string }> = {}
-      for (const { colId, change } of changes) {
+      for (const { colId, cell, change } of changes) {
         const hit = errors.find((e) => e.field === change.field && (e.id === undefined || e.id === row.id))
         const warning = warningOf(colId, change.field)
         cells[colId] = hit ? { ok: false, reason: hit.error || 'Refused' } : { ok: true, ...(warning ? { warning } : {}) }
+        if (!hit) forgetMovedRefusal(cell)
       }
       return { ok: false, version, cells }
     }
@@ -665,6 +701,8 @@ async function commitChannelLanguage(
       }
     }
 
+    // Stored: a cell refused because its field moved (or a value typed into it) is refused no more (re-review of #611).
+    for (const { cell } of changes) forgetMovedRefusal(cell)
     const warned = changes.flatMap(({ colId, change }) => { const warning = warningOf(colId, change.field); return warning ? [[colId, { ok: true, warning }] as const] : [] })
     if (settle?.kind === 'patch') {
       const patched = new Set(settle.apply())
