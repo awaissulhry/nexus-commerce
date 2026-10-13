@@ -661,7 +661,13 @@ export function MatrixSurface({ productId }: { productId: string }) {
   /* ⌘Z / ⌘⇧Z take their step only once every write asked before has settled — a step is recorded when its write is sent —
      and one after another: a second ⌘Z works from what the first put back. */
   const undoLine = useRef<Promise<void>>(Promise.resolve())
-  const settledWrites = matrix.settled
+  const settledMatrixWrites = matrix.settled
+  /* Every write asked before — the Matrix line AND the Base price writer (its write-backs reach the writer on AG's next
+     turn) — has settled: two undos of one Base price cell never queue together, the later replacing the earlier. */
+  const settledWrites = useCallback(async (): Promise<void> => {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await Promise.all([settledMatrixWrites(), writer.flush()])
+  }, [settledMatrixWrites, writer])
   /** True when the key was ⌘Z / ⌘⇧Z and was handled. An open editor keeps its own text undo. */
   const onUndoKey = useCallback((key: KeyboardEvent): boolean => {
     const action = undoShortcut(key)

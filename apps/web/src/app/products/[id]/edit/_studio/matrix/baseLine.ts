@@ -56,8 +56,10 @@ export function createBaseLine<Row>(deps: BaseLineDeps<Row>): BaseLine<Row> {
       deps.writer.set(e.rowId, e.colId, e.after, { row: e.row, onOutcome: (outcome) => {
         kept(outcome)
         answer?.(outcome)
-        // ⌘Z's write-back not stored: the step leaves the redo stack — ⌘⇧Z never writes the edit over what the cell holds.
-        if (e.source === 'undo' && outcome !== 'saved') deps.history.dropRedo(e.rowId, e.colId)
+        /* ⌘Z's write-back refused (or never answered): THAT step leaves the redo stack — ⌘⇧Z never writes its edit over
+           what the cell holds. The step is the one whose "before" this write-back put back (`e.after`); a write-back a later
+           one replaced in the queue (`dropped`) was not refused, and its step stays. */
+        if (e.source === 'undo' && (outcome === 'refused' || outcome === 'unknown')) deps.history.dropRedo(e.rowId, e.colId, e.after)
       } })
     },
     awaitRow(rowId) {

@@ -662,7 +662,11 @@ const modeWordOf = (label: string): string => label.split(' · ')[0] ?? label
  */
 export function movedSincePreview(carried: Pick<VerbChange, 'cell' | 'from' | 'fromLabel'>, fresh: Pick<VerbChange, 'from' | 'fromLabel'>, live?: MatrixCells): boolean {
   if (carried.cell === 'syncState') return false
-  if (carried.cell === 'syncQty' && live?.sync?.mode !== 'PINNED') return modeWordOf(carried.fromLabel) !== modeWordOf(fresh.fromLabel)
+  if (carried.cell === 'syncQty') {
+    // The mode first (a Follow cell pinned since at the same number has moved); a Follow number alone has not.
+    if (modeWordOf(carried.fromLabel) !== modeWordOf(fresh.fromLabel)) return true
+    if (live?.sync?.mode !== 'PINNED') return false
+  }
   return canonical(carried.from ?? null) !== canonical(fresh.from ?? null)
 }
 

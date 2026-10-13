@@ -685,4 +685,9 @@ describe('movedSincePreview — the value a change was previewed from', () => {
     const pinned = cells({ sync: { ...follow.sync!, kind: 'PINNED', mode: 'PINNED', intended: 40 } })
     expect(movedSincePreview(ch({ cell: 'syncQty', from: 29, fromLabel: 'Follow · 29' }), ch({ cell: 'syncQty', from: 40, fromLabel: 'Pinned · 40' }), pinned)).toBe(true)
   })
+  it('a Follow cell someone pinned at the SAME number since the preview has moved (its mode did)', () => {
+    const pinned29 = cells({ sync: { ...cells({}).sync!, kind: 'PINNED', mode: 'PINNED', intended: 29 } })
+    expect(movedSincePreview(ch({ cell: 'syncQty', from: 29, fromLabel: 'Follow · 29' }), ch({ cell: 'syncQty', from: 29, fromLabel: 'Pinned · 29' }), pinned29)).toBe(true)
+    expect(movedSincePreview(ch({ cell: 'syncQty', from: 40, fromLabel: 'Pinned · 40' }), ch({ cell: 'syncQty', from: 40, fromLabel: 'Pinned · 40' }), cells({ sync: { ...cells({}).sync!, kind: 'PINNED', mode: 'PINNED', intended: 40 } }))).toBe(false)
+  })
 })

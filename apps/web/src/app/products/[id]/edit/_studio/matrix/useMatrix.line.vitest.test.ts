@@ -4,7 +4,7 @@
  * waits too; and the versions a run leaves are this page's own moves, so a cell typed before the run landed is sent at the
  * version the run left. Node has no React renderer, so only hook scheduling is replaced (as in `useMatrix.reload`).
  */
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { MatrixWriteCell, MatrixWriteOutcome, VerbPreview } from './contract'
 
@@ -40,35 +40,42 @@ vi.mock('react', async original => ({ ...await original<typeof import('react')>(
 
 /** The server: the listing's version, the cell writes it received (and the account each named), a gate that holds the
     next one, and whether it answers a conflict. */
-const server = vi.hoisted(() => ({ version: 3, patches: [] as MatrixWriteCell[][], accounts: [] as Array<string | null | undefined>, hold: null as null | Promise<void>, conflict: false }))
+const server = vi.hoisted(() => ({ version: 3, patches: [] as MatrixWriteCell[][], accounts: [] as Array<string | null | undefined>, hold: null as null | Promise<void>, conflict: false, fail: null as null | 'answered' | 'lost' }))
 const cellsAt = (version: number) => ({
   listingId: 'L1', version, listing: null, fulfilment: null, sync: null, queue: null, sale: { value: null, start: null, end: null },
   price: { value: 100, currency: 'EUR', source: 'override', formula: null, clamped: null }, writable: { price: true, salePrice: true }, writeBlockedReason: {},
 })
-vi.mock('./source', async original => ({
-  ...await original<typeof import('./source')>(),
+vi.mock('./source', async original => { const real = await original<typeof import('./source')>(); return {
+  ...real,
   fetchMatrix: vi.fn(async () => ({ kind: 'live', read: { source: 'live', productId: 'p1', coordinates: [], rows: [{ id: 'r1', cells: { 'EBAY:IT': cellsAt(server.version) } }] } })),
   patchMatrix: vi.fn(async (_p: string, cells: MatrixWriteCell[], opts?: { accountId?: string | null }) => {
     server.patches.push(cells)
     server.accounts.push(opts?.accountId)
     if (server.hold) await server.hold
+    // A gateway answered 502 (a refusal with its words), or no answer came at all (the connection was lost).
+    if (server.fail === 'answered') throw new real.MatrixWriteRefused('Bad gateway — the change was not saved', 502)
+    if (server.fail === 'lost') throw new TypeError('Failed to fetch')
     // A conflict answers without a sentence of its own: the page says the one sentence.
     const results: MatrixWriteOutcome[] = cells.map((c) => (server.conflict
       ? { rowId: c.rowId, coordinateKey: c.coordinateKey, cell: c.cell, outcome: 'conflict', version: server.version }
       : { rowId: c.rowId, coordinateKey: c.coordinateKey, cell: c.cell, outcome: 'applied', version: ++server.version }))
     return { results, version: 1 }
   }),
-}))
+} })
 vi.mock('../useListingValuesLive', () => ({ useListingValuesLive: () => {} }))
 vi.mock('@/lib/sync/invalidation-channel', () => ({ emitInvalidation: () => {} }))
 
+import { CellSaveTracker } from '@/design-system/grid'
 import { MATRIX_COPY } from './contract'
+import { createWorkspaceSaveStore } from '../workspaceSave'
+import { matrixPublicationBarrier, MATRIX_PUBLISH_HELD } from './publishGuard'
 import { useMatrix, type MatrixState } from './useMatrix'
 
 let current: MatrixState
 let account: string | null = null
 const marks: Array<[string, string, string, string | undefined]> = []
-const tracker = { set: (rowId: string, colId: string, state: string, reason?: string) => { marks.push([rowId, colId, state, reason]) }, get: () => undefined, clear: () => {} }
+const fakeTracker = { set: (rowId: string, colId: string, state: string, reason?: string) => { marks.push([rowId, colId, state, reason]) }, get: () => undefined, clear: () => {} }
+let tracker: unknown = fakeTracker
 const api = { isDestroyed: () => false, getEditingCells: () => [], refreshCells: () => {}, getRowNode: () => null, addEventListener: () => {}, removeEventListener: () => {} }
 const render = () => {
   hooks.state.index = 0
@@ -87,10 +94,11 @@ const preview: VerbPreview = {
 
 beforeEach(async () => {
   hooks.state.slots = []; hooks.state.effects = []; hooks.state.index = 0
-  Object.assign(server, { version: 3, patches: [], accounts: [], hold: null, conflict: false })
+  Object.assign(server, { version: 3, patches: [], accounts: [], hold: null, conflict: false, fail: null })
   verbCalls.length = 0
   marks.length = 0
   account = null
+  tracker = fakeTracker
   vi.stubGlobal('fetch', vi.fn(async (_url: string, init: { body?: string }) => {
     const body = JSON.parse(init.body ?? '{}') as { commit: boolean }
     verbCalls.push({ commit: body.commit })
@@ -159,4 +167,48 @@ it('writes name the read\'s account and each cell\'s listing; a conflict says th
   expect(server.accounts).toEqual(['acc-1'])
   expect(server.patches[0]).toEqual([expect.objectContaining({ expectedListingId: 'L1', expectedVersion: 3 })])
   expect(marks.at(-1)).toEqual(['r1', 'EBAY:IT.price', 'refused', MATRIX_COPY.changedElsewhere])
+})
+
+/**
+ * 2026-10-13 re-review — a failed write holds Publish (and every way out) only while its outcome is truly unknown: a
+ * server that ANSWERED with a refusal (a 502 included) is a refusal with its words, and a read that lands after a lost
+ * connection answers the unknown mark (Reload). Publish and leaving are free again.
+ */
+describe('a failed write: refused when answered, unknown only without an answer — and a fresh read answers it', () => {
+  const real = () => {
+    hooks.state.slots = []; hooks.state.effects = []; hooks.state.index = 0
+    const t = new CellSaveTracker()
+    tracker = t
+    return t
+  }
+  const publishBlocker = (t: CellSaveTracker) => {
+    const store = createWorkspaceSaveStore(() => {})
+    store.registerPublicationBarrier(matrixPublicationBarrier({ matrix: { settled: current.settled, pending: current.pending }, status: { settled: async () => {}, pending: () => 0 }, base: { pending: 0, flush: async () => {} }, editing: () => false, unanswered: () => t.hasOpenChanges }))
+    return store.publicationBlocker()
+  }
+
+  it('a 502 with its words: the cell is REFUSED with them, never unknown; Publish is not held by it', async () => {
+    const t = real()
+    render(); await settle()
+    server.fail = 'answered'
+    const [out] = await current.write([typed('price', 95, 3)])
+    expect(out).toMatchObject({ outcome: 'refused', reason: 'Bad gateway — the change was not saved' })
+    expect(t.get('r1', 'EBAY:IT.price')).toMatchObject({ state: 'refused', reason: 'Bad gateway — the change was not saved' })
+    expect(t.hasOpenChanges).toBe(false)
+    expect(publishBlocker(t)).toBeNull()
+  })
+
+  it('a lost connection: unknown (Publish held) — Reload reads the cells again and answers it; Publish and leaving are free', async () => {
+    const t = real()
+    render(); await settle()
+    server.fail = 'lost'
+    await current.write([typed('price', 95, 3)])
+    expect(t.get('r1', 'EBAY:IT.price')?.state).toBe('unknown')
+    expect(publishBlocker(t)).toBe(MATRIX_PUBLISH_HELD.unanswered)
+    server.fail = null
+    current.reload(); await settle()
+    expect(t.get('r1', 'EBAY:IT.price')).toBeUndefined()
+    expect(t.hasOpenChanges).toBe(false)
+    expect(publishBlocker(t)).toBeNull()
+  })
 })

@@ -418,7 +418,9 @@ export class SheetUndoHistory {
    * value the undo replayed — picks the change when the cell has more than one. Returns whether one was dropped.
    */
   dropRedo(rowId: string, colId: string, before?: unknown): boolean {
-    const match = (c: SheetCellChange) => c.rowId === rowId && c.colId === colId && (before === undefined || c.before === before)
+    // A history-only value is matched as itself; a plain value as the sheet compares values (`110` and "110").
+    const same = (v: unknown) => v === before || (!isHistoryOnly(before) && !isHistoryOnly(v) && sheetValuesMatch(v, before))
+    const match = (c: SheetCellChange) => c.rowId === rowId && c.colId === colId && (before === undefined || same(c.before))
     const out = (step: SheetCellChange[]) => { const i = step.findIndex(match); if (i >= 0) step.splice(i, 1); return i >= 0 }
     if (this.undoing && out(this.undoing)) return true
     for (let s = this.redoStack.length - 1; s >= 0; s--) {

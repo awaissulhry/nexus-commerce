@@ -39,7 +39,7 @@ import {
   type VerbOperation,
   type VerbPreview,
 } from './contract'
-import { fetchMatrix, patchMatrix, type MatrixSource } from './source'
+import { fetchMatrix, MatrixWriteRefused, patchMatrix, type MatrixSource } from './source'
 import { afterLiveWrite } from './refusals'
 import { rebaseOnOwnMoves, recordOwnMoves, recordServerMoves, type OwnMoves } from './stamps'
 import { matrixFromColId } from './sellsFrom'
@@ -152,10 +152,26 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
 
   /* The read, its ref and its row index move TOGETHER, synchronously: a repaint issued in the same
      tick as a store write must already see the new cells, and React state alone lands a frame late. */
-  const commitRead = useCallback((next: MatrixRead | null, ticket: number = ++readTicket.current) => {
+  /* Cells whose write got NO answer (the connection was lost): `unknown` until a read that STARTED after the failure lands
+     — that read shows what the server holds, so the mark is answered (as the Information page drops its marks on a
+     reload). `failedAt` = how many reads had started when the write failed. */
+  const unanswered = useRef(new Map<string, { rowId: string; colId: string; failedAt: number }>())
+
+  /* `ticket` is given for a FRESH read from the server (numbered when its fetch started); a re-commit of the stored read
+     takes the next number and answers nothing. */
+  const commitRead = useCallback((next: MatrixRead | null, fresh?: number) => {
+    const ticket = fresh ?? ++readTicket.current
     if (ticket < shownTicket.current) return
     shownTicket.current = ticket
     readRef.current = next
+    if (fresh !== undefined && next?.source === 'live') {
+      const marks = optsRef.current.tracker
+      for (const [key, u] of unanswered.current) {
+        if (u.failedAt >= fresh) continue
+        unanswered.current.delete(key)
+        if (marks.get(u.rowId, u.colId)?.state === 'unknown') marks.clear(u.rowId, u.colId)
+      }
+    }
     liveMembers.current.clear()
     liveVersions.current.clear()
     if (next?.source === 'live') {
@@ -357,11 +373,25 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
       }
       return result.results
     } catch (e) {
-      /* A transport failure is an UNKNOWN outcome, not a refusal: say so, and ask for a re-read. */
       const reason = e instanceof Error ? e.message : String(e)
-      for (const c of cells) { const colId = doorColId(c.coordinateKey, c.cell); tracker.set(c.rowId, colId, 'unknown', `Connection lost — refresh to see whether this saved. (${reason})`); repaint(c.rowId, colId) }
+      const refused = cells.map((c) => ({ rowId: c.rowId, coordinateKey: c.coordinateKey, cell: c.cell, outcome: 'refused' as const, reason, version: c.expectedVersion }))
+      /* The server ANSWERED with a refusal (a 4xx/5xx and its words): nothing was stored, and that is known — a refusal,
+         said like the door's own; the typed value leaves the grid's clone. Never `unknown`: that holds Publish. */
+      if (e instanceof MatrixWriteRefused) {
+        if (readRef.current) commitRead({ ...readRef.current })
+        mark(refused, quiet)
+        return refused
+      }
+      /* No answer (the connection was lost): an UNKNOWN outcome, not a refusal — say so; the next read answers it. */
+      const failedAt = readTicket.current
+      for (const c of cells) {
+        const colId = doorColId(c.coordinateKey, c.cell)
+        tracker.set(c.rowId, colId, 'unknown', `Connection lost — refresh to see whether this saved. (${reason})`)
+        unanswered.current.set(`${c.rowId}|${colId}`, { rowId: c.rowId, colId, failedAt })
+        repaint(c.rowId, colId)
+      }
       optsRef.current.onSettled?.({ ok: false, savedAt: new Date().toISOString() })
-      return cells.map((c) => ({ rowId: c.rowId, coordinateKey: c.coordinateKey, cell: c.cell, outcome: 'refused' as const, reason, version: c.expectedVersion }))
+      return refused
     } finally {
       live.end(covered)
     }

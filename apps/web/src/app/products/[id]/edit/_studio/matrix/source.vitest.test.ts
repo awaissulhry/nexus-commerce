@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { MATRIX_ENDPOINTS } from './contract'
-import { fetchMatrix, parseMatrixRead, patchMatrix } from './source'
+import { fetchMatrix, MatrixWriteRefused, parseMatrixRead, patchMatrix } from './source'
 
 const ok = (body: unknown, status = 200): Response => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 const fetchOnce = (res: Response | Error, seen: Array<{ url: string; init?: RequestInit }> = []): typeof fetch =>
@@ -117,5 +117,12 @@ describe('patchMatrix — the live write door', () => {
   })
   it('a refused write throws the server\'s sentence', async () => {
     await expect(patchMatrix('p', [], { baseUrl: 'http://api', fetchImpl: fetchOnce(ok({ message: 'Version conflict' }, 409)) })).rejects.toThrow('Version conflict')
+  })
+  it('an ANSWERED failure (a 502 too) is a refusal with its status; only no answer is not', async () => {
+    const answered = await patchMatrix('p', [], { baseUrl: 'http://api', fetchImpl: fetchOnce(ok({ message: 'Bad gateway' }, 502)) }).catch((e: unknown) => e)
+    expect(answered).toBeInstanceOf(MatrixWriteRefused)
+    expect(answered).toMatchObject({ message: 'Bad gateway', status: 502 })
+    const lost = await patchMatrix('p', [], { baseUrl: 'http://api', fetchImpl: fetchOnce(new Error('net::ERR_CONNECTION_RESET')) }).catch((e: unknown) => e)
+    expect(lost).not.toBeInstanceOf(MatrixWriteRefused)
   })
 })

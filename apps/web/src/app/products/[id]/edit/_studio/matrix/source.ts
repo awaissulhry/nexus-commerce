@@ -197,6 +197,17 @@ function locationsOf(raw: unknown[]): MatrixLocation[] {
 /* ── the write ────────────────────────────────────────────────────────────────────────────────── */
 
 /**
+ * The server ANSWERED the write with a refusal (an HTTP 4xx/5xx and its words): the outcome is known — nothing was
+ * stored — so the cells say it as a refusal. Only a write that got no answer (the connection was lost) is `unknown`.
+ */
+export class MatrixWriteRefused extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message)
+    this.name = 'MatrixWriteRefused'
+  }
+}
+
+/**
  * `accountId` is the account the READ used (`fetchMatrix`'s), so the server resolves the same listings it showed; each
  * cell's `expectedListingId` (with `expectedVersion`) makes a write onto a different listing a conflict, never a hit.
  */
@@ -216,7 +227,7 @@ export async function patchMatrix(
     signal: opts.signal,
   })
   const body = await res.json().catch(() => null)
-  if (!res.ok) throw new Error((body as { message?: string } | null)?.message ?? `The Matrix write was refused (HTTP ${res.status})`)
+  if (!res.ok) throw new MatrixWriteRefused((body as { message?: string } | null)?.message ?? `The Matrix write was refused (HTTP ${res.status})`, res.status)
   return (body ?? { results: [], version: 0 }) as MatrixWriteResult
 }
 
