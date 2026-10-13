@@ -409,7 +409,6 @@ export function PublishRuns(props: PublishRunsProps) {
             rows={rows}
             rowKey={run => run.id}
             size="sm"
-            keyboardScroll
             customizable={!narrow}
             storageKey={`nexus:publish-runs:${scope.scope}`}
             customizeOpen={customizeOpen}

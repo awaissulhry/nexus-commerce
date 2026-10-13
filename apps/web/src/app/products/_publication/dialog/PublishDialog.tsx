@@ -707,7 +707,7 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
         </Banner>
       })()}
       {/* Audit D4 — what the channel refused, by SKU, in one table; its notes in one section under it. */}
-      {result && result.results.some(r => r.status === 'FAILED') && <DataGrid ariaLabel="Products the channel refused" size="sm" keyboardScroll columns={REFUSED_COLUMNS}
+      {result && result.results.some(r => r.status === 'FAILED') && <DataGrid ariaLabel="Products the channel refused" size="sm" columns={REFUSED_COLUMNS}
         rows={result.results.filter(r => r.status === 'FAILED')} rowKey={row => row.sku} />}
       {!!result?.warnings?.length && <Disclosure open summary={`${result.warnings.length} ${result.warnings.length === 1 ? 'note' : 'notes'} from the channel`}>
         <ul className={styles.issues}>{result.warnings.map(message => <li key={message}>{message}</li>)}</ul>

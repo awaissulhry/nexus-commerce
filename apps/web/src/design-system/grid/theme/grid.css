@@ -406,6 +406,13 @@
 /* …and the checkbox's own 3px halo (`.ag-checkbox-input-wrapper:focus-within`), for the same pointer tick.
    Keyboard focus (`:focus-visible` on the input) keeps it. */
 .nds-ag-nexus .ag-checkbox-input-wrapper:focus-within:not(:has(:focus-visible)) { box-shadow: none; }
+/* A grid that READS (`data-reads`, grid audit F6 — its cells take focus so the arrows and Enter work): ONE focus ring, for
+   the keyboard only. AG's 1px box showed on a mouse click and not at all in the DataGrid, whose cell borders are 0px
+   (measured 2026-10-13). A click shows none — `data-pointer-focus` marks a pointer press until the next key, because AG
+   focuses a clicked cell from script and the browser counts that as keyboard focus after an arrow — and a control inside
+   the cell that holds the focus draws its own ring. */
+.nds-ag-nexus[data-reads] .ag-cell { --ag-range-selection-border-color: transparent; }
+.nds-ag-nexus[data-reads]:not([data-pointer-focus]) .ag-cell:focus-visible { outline: 2px solid var(--nds-grid-accent); outline-offset: -2px; }
 .nds-cell-muted { color: var(--nds-grid-muted-fg); }
 .nds-cell-strong { font-weight: var(--nds-font-weight-semibold); }
 .nds-cell-date { font-size: var(--nds-font-size-sm); white-space: nowrap; }

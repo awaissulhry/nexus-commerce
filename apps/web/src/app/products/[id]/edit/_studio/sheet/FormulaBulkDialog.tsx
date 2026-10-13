@@ -130,7 +130,7 @@ export function FormulaBulkDialog({ rows, columns, coordinate, candidatesFor, fu
       {rows.length > 1 && <p className={styles.note}>The result above previews {labels.get(sample)}. Preview products checks every selected row.</p>}
       <div role="status" aria-live="polite">{progress}</div>
       {error && <p role="alert" className={styles.error}>{error}</p>}
-      {results.length > 0 && <DataGrid keyboardScroll ariaLabel="Formula changes" rows={results} rowKey={row => row.productId}
+      {results.length > 0 && <DataGrid ariaLabel="Formula changes" rows={results} rowKey={row => row.productId}
         columns={[
           { key: 'product', label: 'Product', width: 200, render: row => <span className={styles.cell}>{labels.get(row.productId)}</span> },
           { key: 'before', label: 'Before', width: 250, render: row => <span className={styles.cell}>{display(row.before)}</span> },

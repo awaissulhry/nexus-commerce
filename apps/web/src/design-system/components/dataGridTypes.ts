@@ -76,7 +76,10 @@ export interface Column<T> {
 export interface DataGridProps<T> {
   /** Accessible table name, especially when multiple grids share a page. */
   ariaLabel?: string
-  /** Offer a keyboard focus stop when the table overflows its viewport. */
+  /**
+   * The HTML table (the factory's): offer a keyboard focus stop when the table overflows its viewport. The AG DataGrid
+   * reads no such switch: its cells always take focus, and Tab, the arrows and Enter follow the engine's rule.
+   */
   keyboardScroll?: boolean
   columns: Array<Column<T>>
   rows: T[]

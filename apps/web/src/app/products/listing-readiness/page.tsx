@@ -55,7 +55,7 @@ export default function ListingReadiness() {
     {(error || languages.error) && <Banner tone="danger">{error || languages.error}</Banner>}
     <div className={styles.actions}><span aria-live="polite">{loading ? 'Loading readiness…' : `${result?.total ?? '—'} ${result?.total === 1 ? 'coordinate' : 'coordinates'} · ${result?.productCount ?? '—'} ${result?.productCount === 1 ? 'product' : 'products'}`}</span>
       <Button onClick={() => setTranslate(true)} disabled={!query?.language || loading || !result?.total} title={!query?.language ? 'Choose a language to preview translation for every matching row.' : undefined}>Translate filtered products…</Button></div>
-    {result && <><DataGrid columns={columns} rows={result.rows} rowKey={row => row.id} ariaLabel="Readiness by coordinate and language" keyboardScroll emptyState="No indexed rows match this filter." />
+    {result && <><DataGrid columns={columns} rows={result.rows} rowKey={row => row.id} ariaLabel="Readiness by coordinate and language" emptyState="No indexed rows match this filter." />
       <Pagination page={result.page} pageCount={Math.max(1, Math.ceil(result.total / result.pageSize))} onPage={page => setQuery(prior => ({ ...prior, page: String(page) }))} />
       <p>Last computed: {result.computedAt ? new Date(result.computedAt).toLocaleString() : '—'}. Readiness reflects saved information; publication checks run before publishing.</p></>}
     {query && <TranslateDialog open={translate} onClose={() => setTranslate(false)} language={query.language ?? ''} scope={{ kind: 'readiness', query }} />}

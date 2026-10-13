@@ -150,7 +150,7 @@ function ContentReviewBody({ review, selectedIds, selection, selecting = false, 
       {review.photosOnly ? 'Choose only photos to send now, or fix the problems first.' : plan ? 'They are the first rows of the table below. Fix them, then check again.' : 'Each row says what to fix. Fix them, then check again.'}
     </Banner>}
     {/* With the plan, the problems are rows of the one table; without it (the products list's rows) they keep their own. */}
-    {problems.length > 0 && !plan && <DataGrid ariaLabel="Problems to fix before publishing" size="md" keyboardScroll headerMenus={false} columns={PROBLEM_COLUMNS} rows={problems} rowKey={row => row.id} />}
+    {problems.length > 0 && !plan && <DataGrid ariaLabel="Problems to fix before publishing" size="md" headerMenus={false} columns={PROBLEM_COLUMNS} rows={problems} rowKey={row => row.id} />}
     {/* Notes inform and block nothing: one closed section, as in the Import dialog. */}
     {notes.length > 0 && <Disclosure summary={`${notes.length} ${notes.length === 1 ? 'note' : 'notes'}`}>
       <ul className={styles.issues}>{notes.map(note => <li key={note}>{note}</li>)}</ul>
@@ -170,6 +170,6 @@ function ContentReviewBody({ review, selectedIds, selection, selecting = false, 
     {!sparse && review.overwrite && <PublicationOverwrite overwrite={review.overwrite} confirmed={confirmed && !!review.id}
       onConfirm={onConfirmChange} disabled={!review.id || locked} />}
     {!sparse && !review.overwrite && !blockers.length && review.rows.some(row => row.existing) && <Banner tone="warning" title="Overwrite review unavailable">The review did not check what this overwrites on the existing listings. Check again.</Banner>}
-    {!plan && <DataGrid ariaLabel="Products in this publication" size="md" keyboardScroll headerMenus={false} columns={PRODUCT_COLUMNS} rows={review.rows} rowKey={row => row.productId} />}
+    {!plan && <DataGrid ariaLabel="Products in this publication" size="md" headerMenus={false} columns={PRODUCT_COLUMNS} rows={review.rows} rowKey={row => row.productId} />}
   </div>
 }

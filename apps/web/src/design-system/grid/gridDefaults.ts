@@ -8,7 +8,8 @@
  *  - every other grid READS: the person selects text with the mouse and copies it with the browser, the browser's own
  *    right-click menu is there ("Open link in a new tab", Copy), and Tab leaves the grid in one press instead of walking
  *    every cell of every row. AG's right-click menu on such a grid offered a Copy that copied nothing (no focused cell)
- *    and an Export that wrote sort values — raw cents, blanks.
+ *    and an Export that wrote sort values — raw cents, blanks. Its cells take focus, so the arrows move between them
+ *    and Enter acts on a cell (`readGridKeys.ts`, step 5).
  *  - On both, a header dragged out of the grid never hides its column (AG's default did, and the layout saved it).
  */
 import type { ColDef, ColGroupDef } from 'ag-grid-community'
@@ -29,12 +30,18 @@ export function anyEditable<T>(defs: ReadonlyArray<ColDef<T> | ColGroupDef<T>> |
 /** AG's `tabToNextCell`: `false` hands Tab back to the page, so the focus leaves the grid. */
 export const leaveGridOnTab = (): false => false
 
+/** The grid only reads: no cell ranges and no column a person can edit. */
+export function readsOnly<T>(input: { cellSelection: unknown; columnDefs: ReadonlyArray<ColDef<T> | ColGroupDef<T>> | null | undefined; defaultColDef?: ColDef<T> }): boolean {
+  return !isSpreadsheet(input.cellSelection) && !anyEditable(input.columnDefs, input.defaultColDef)
+}
+
 export interface InteractionDefaults {
   suppressContextMenu: boolean
   enableCellTextSelection: boolean
   ensureDomOrder: boolean
   suppressDragLeaveHidesColumns: true
   tabToNextCell?: typeof leaveGridOnTab
+  suppressCellFocus?: false
 }
 
 export function interactionDefaults<T>(input: {
@@ -44,7 +51,7 @@ export function interactionDefaults<T>(input: {
   defaultColDef?: ColDef<T>
 }): InteractionDefaults {
   const spreadsheet = isSpreadsheet(input.cellSelection)
-  const readOnly = !spreadsheet && !anyEditable(input.columnDefs, input.defaultColDef)
+  const readOnly = readsOnly(input)
   return {
     // A page with its own right-click items keeps AG's menu (the products page, the sheets, Family variants).
     suppressContextMenu: !spreadsheet && input.getContextMenuItems == null,
@@ -52,6 +59,8 @@ export function interactionDefaults<T>(input: {
     // Text selected across rows copies in the order on screen (AG keeps the DOM in render order otherwise).
     ensureDomOrder: !spreadsheet,
     suppressDragLeaveHidesColumns: true,
-    ...(readOnly ? { tabToNextCell: leaveGridOnTab } : {}),
+    // A reading grid's cells take focus — the arrows move between them, Enter acts (`readGridKeys.ts`). Tab still
+    // leaves: `useReadGridKeys` takes it first; in a form grid (fields in cells) AG hands it back to the page.
+    ...(readOnly ? { tabToNextCell: leaveGridOnTab, suppressCellFocus: false as const } : {}),
   }
 }

@@ -67,7 +67,7 @@ export function FormulaHistoryDialog({ familyProductId, coordinate, onClose, onA
     </>}>
     <div className={styles.content}>
       {error && <p role="alert" className={styles.error}>{error} <Button onClick={() => void load()}>Try again</Button></p>}
-      {loading ? <p role="status">Loading formula history…</p> : operations.length === 0 ? <p>No saved formula operations for this scope yet.</p> : <DataGrid keyboardScroll ariaLabel="Saved formula operations" rows={operations} rowKey={row => row.operationId} columns={[
+      {loading ? <p role="status">Loading formula history…</p> : operations.length === 0 ? <p>No saved formula operations for this scope yet.</p> : <DataGrid ariaLabel="Saved formula operations" rows={operations} rowKey={row => row.operationId} columns={[
         { key: 'date', label: 'Started', render: row => <Button disabled={busy} onClick={() => void open(row.operationId)}>{row.createdAt ? when(row.createdAt) : 'View operation'}</Button> },
         { key: 'field', label: 'Field', render: row => <span className={styles.cell}>{row.fieldKey}</span> },
         { key: 'formula', label: 'Formula', render: row => <span className={styles.cell}>={row.expr}</span> },
@@ -75,7 +75,7 @@ export function FormulaHistoryDialog({ familyProductId, coordinate, onClose, onA
       ]} />}
       {selected && <>
         <p role="status" aria-live="polite">{operationLabel(selected.status)} · {selected.processed} of {selected.total} {selected.total === 1 ? 'product' : 'products'} checked.</p>
-        <DataGrid keyboardScroll ariaLabel="Saved formula results" rows={selected.rows} rowKey={row => row.productId} columns={[
+        <DataGrid ariaLabel="Saved formula results" rows={selected.rows} rowKey={row => row.productId} columns={[
           { key: 'product', label: 'Product', render: row => <span className={styles.cell}>{row.label ?? row.productId}</span> },
           { key: 'before', label: 'Before', render: row => <span className={styles.cell}>{displayFormulaValue(row.before)}</span> },
           { key: 'after', label: 'Saved result', render: row => <span className={styles.cell}>{row.status === 'applied' || row.status === 'restored' ? displayFormulaValue(row.value) : '—'}</span> },
