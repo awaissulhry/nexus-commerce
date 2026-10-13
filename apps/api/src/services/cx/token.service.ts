@@ -856,6 +856,9 @@ export async function revoke(connectionId: string, actor: Actor, reason: 'operat
   // it the moment the core has no usable grant — which a revoke is exactly what
   // creates. Without this, Ads calls carried on after the operator disconnected.
   const legacy = await clearLegacyChannelCredentials(key)
+  // GOOGLE: a disconnected business lets go of the Google Ads / Merchant Center / GA4 accounts it picked, so another
+  // business may pick them (each id belongs to ONE business, 20261013b). A reconnect here asks to pick again.
+  if (key === 'GOOGLE') await prisma.googleAccountLink.deleteMany({ where: { connectionId } })
   await recordConnectionEvent({ connectionId, channelKey: key, type: reason === 'channel' ? 'revoke' : 'disconnect', actor, detail: { reason, revokedAtChannel, legacy } })
   await recordConnectionEvent({ connectionId, channelKey: key, type: 'status_change', actor, detail: { from: row.authStatus, to: next, reason } })
   return { revokedAtChannel }

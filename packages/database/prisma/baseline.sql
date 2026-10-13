@@ -16762,6 +16762,9 @@ CREATE INDEX "GoogleAccountLink_connectionId_idx" ON "GoogleAccountLink"("connec
 CREATE UNIQUE INDEX "GoogleAccountLink_workspaceId_product_key" ON "GoogleAccountLink"("workspaceId", "product");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "GoogleAccountLink_product_externalId_key" ON "GoogleAccountLink"("product", "externalId");
+
+-- CreateIndex
 CREATE INDEX "GoogleAdsCustomer_workspaceId_idx" ON "GoogleAdsCustomer"("workspaceId");
 
 -- CreateIndex

@@ -13,6 +13,7 @@
  *   • Otherwise → a NEW row.
  */
 
+import { workspaceIdForQuery } from '@nexus/database/workspace-context'
 import prisma from '../../db.js'
 import { countUnidentifiedAccounts, findAccountByExternalId } from '../connection-resolver.service.js'
 import type { ConnectionIdentity } from './catalog.js'
@@ -41,9 +42,15 @@ export async function placeGrant(input: {
   region?: string | null
 }): Promise<GrantPlacement> {
   const { channelType, channelLabel, identity, targetConnectionId } = input
+  // GOOGLE: one login may be connected in many businesses, each on its own row (20261013b). Match and fold only into
+  // this business's own rows, never into a row another business shares with it (its write would be refused).
+  const ownWorkspaceId = channelType === 'GOOGLE' ? workspaceIdForQuery() : undefined
+  const findAccount = (externalAccountId: string) => findAccountByExternalId(channelType, externalAccountId, undefined, ownWorkspaceId)
+  const notOwn = (target: { workspaceId: string } | null) => Boolean(ownWorkspaceId && target && target.workspaceId !== ownWorkspaceId)
 
   if (targetConnectionId) {
     const target = await prisma.channelConnection.findUnique({ where: { id: targetConnectionId } })
+    if (notOwn(target)) throw new IdentityRefusal('ADOPT_TARGET_INVALID', `Reconnect ${channelLabel} from the business that owns this connection.`)
     if (channelType === 'AMAZON' && target && ((target.externalAccountId && target.externalAccountId !== identity?.userId) ||
         (target.region && input.region && target.region !== input.region))) {
       throw new IdentityRefusal('ADOPT_TARGET_INVALID', 'Reconnect the same Amazon seller account in its existing region.')
@@ -51,13 +58,13 @@ export async function placeGrant(input: {
     if (!target || target.managedBy === 'transferred' || target.channelType !== channelType || (target.externalAccountId && target.externalAccountId !== identity?.userId)) {
       throw new IdentityRefusal('ADOPT_TARGET_INVALID', `Reconnect using the same verified ${channelLabel} account. The returned seller identity does not match this connection.`)
     }
-    const existing = identity?.userId ? await findAccountByExternalId(channelType, identity.userId) : null
+    const existing = identity?.userId ? await findAccount(identity.userId) : null
     if (existing && existing.id !== target.id) throw new IdentityRefusal('ADOPT_TARGET_INVALID', channelType === 'AMAZON' ? 'This Amazon authorization belongs to another account or region.' : 'This seller is already connected as another account. Reconnect that account instead.')
     return { kind: target.externalAccountId && target.externalAccountId === identity?.userId ? 'reconsent' : 'adopt', connectionId: target.id }
   }
 
   if (identity?.userId) {
-    const already = await findAccountByExternalId(channelType, identity.userId)
+    const already = await findAccount(identity.userId)
     if (already) {
       if (channelType === 'AMAZON' && ((targetConnectionId && already.id !== targetConnectionId) ||
           (already.region && input.region && already.region !== input.region))) {
@@ -68,7 +75,7 @@ export async function placeGrant(input: {
 
     if (targetConnectionId) {
       const target = await prisma.channelConnection.findUnique({ where: { id: targetConnectionId } })
-      if (!target || target.channelType !== channelType) {
+      if (!target || target.channelType !== channelType || notOwn(target)) {
         throw new IdentityRefusal('ADOPT_TARGET_INVALID', `The account to reconnect is not a ${channelLabel} connection.`)
       }
       return { kind: 'adopt', connectionId: target.id }

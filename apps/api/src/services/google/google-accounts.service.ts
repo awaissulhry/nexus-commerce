@@ -53,9 +53,17 @@ export interface GoogleSelectionInput {
   analyticsPropertyId: string | null
 }
 
-/** A choice refused: 400 (not a valid choice), 404 (no such Google sign-in here), 409 (`not_offered`, `customer_taken`). */
+/**
+ * A choice refused: 400 (not a valid choice), 404 (no such Google sign-in here), 409 (`not_offered`, `customer_taken`,
+ * `taken_by_other_business` with the `product` another business already picked).
+ */
 export class GoogleSelectionError extends Error {
-  constructor(readonly statusCode: 400 | 404 | 409, readonly code: 'invalid' | 'not_found' | 'not_offered' | 'customer_taken', message: string) {
+  constructor(
+    readonly statusCode: 400 | 404 | 409,
+    readonly code: 'invalid' | 'not_found' | 'not_offered' | 'customer_taken' | 'taken_by_other_business',
+    message: string,
+    readonly product: GoogleProduct | null = null,
+  ) {
     super(message)
     this.name = 'GoogleSelectionError'
   }
@@ -260,14 +268,36 @@ export function parseSelection(body: unknown): GoogleSelectionInput {
 
 const NOT_OFFERED_ADS = 'Google does not offer this Google Ads account to this sign-in. Reload the list and choose again.'
 
+/**
+ * One Google login may be connected in many businesses, but each Google Ads account, Merchant Center account and GA4
+ * property is picked by ONE business (Owner 2026-10-13). The global unique index on (product, externalId) refuses the
+ * second business (another business's rows are invisible here); this says so without naming that business.
+ */
+const TAKEN: Record<string, { product: GoogleProduct; message: string }> = {
+  ADS: { product: 'ads', message: 'Another business in Nexus already reads this Google Ads account. A Google Ads account can belong to one business only. Choose another account, or disconnect Google in the other business first.' },
+  MERCHANT: { product: 'merchant_center', message: 'Another business in Nexus already uses this Merchant Center account. A Merchant Center account can belong to one business only. Choose another account, or disconnect Google in the other business first.' },
+  GA4: { product: 'analytics', message: 'Another business in Nexus already uses this Google Analytics property. A property can belong to one business only. Choose another property, or disconnect Google in the other business first.' },
+}
+
 async function linkRow(tx: Prisma.TransactionClient, product: string, data: {
   connectionId: string; externalId: string; loginCustomerId: string | null; label: string; metadata: Prisma.InputJsonObject; selectedByUserId: string
 }) {
-  return tx.googleAccountLink.upsert({
-    where: { google_link_product: workspaceKey({ product }) },
-    create: { product, ...data },
-    update: data,
-  })
+  try {
+    return await tx.googleAccountLink.upsert({
+      where: { google_link_product: workspaceKey({ product }) },
+      create: { product, ...data },
+      update: data,
+    })
+  } catch (err) {
+    // The index name travels in `meta.target` (Prisma's own engine) or in `meta.driverAdapterError.cause.constraint`
+    // (the pg driver adapter); the other unique key, (workspaceId, product), names no externalId.
+    const e = err as { code?: string; meta?: unknown }
+    const taken = TAKEN[product]
+    if (taken && e?.code === 'P2002' && JSON.stringify(e.meta ?? null).includes('externalId')) {
+      throw new GoogleSelectionError(409, 'taken_by_other_business', taken.message, taken.product)
+    }
+    throw err
+  }
 }
 
 /**

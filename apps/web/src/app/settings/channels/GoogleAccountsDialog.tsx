@@ -95,8 +95,8 @@ export function GoogleAccountsDialog({ connectionId, current, onClose, onSaved, 
     try {
       const result = await saveGoogleSelection(connectionId, selectionBody(draft))
       if (result.ok) { onSaved(result.account); return }
-      const words = conflictText(result.code, result.error)
-      setSaveError({ ...words, inAds: result.code === 'customer_taken' })
+      const words = conflictText(result.code, result.error, result.product)
+      setSaveError({ ...words, inAds: result.code === 'customer_taken' || (result.code === 'taken_by_other_business' && result.product === 'ads') })
       // Google no longer offers a pick: read the lists again so the dialog shows what it does offer now.
       if (result.code === 'not_offered') void load()
     } catch (err) {
