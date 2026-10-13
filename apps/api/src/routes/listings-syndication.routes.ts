@@ -29,7 +29,8 @@ import { AmbiguousConnectionError, tryResolveConnection } from '../services/conn
 import { DraftListingError, ensureDraftListingsInTransaction } from '../services/pim/draft-listing.service.js'
 import { isStillDraftListing } from '@nexus/shared/push-lock'
 import { isManagedShopifyAttribute } from '../services/shopify/linked-state-guard.js'
-import { applyListingBulkPricing, assertPriceEditAllowed, ListingPricingError, parseListingPricingEdit, patchListing, PRICE_ABOVE_ZERO, type ListingPricingEdit } from '../services/listings/listing-pricing-edit.service.js'
+import { applyListingBulkPricing, assertPriceEditAllowed, bulkFollowChangesOf, ListingPricingError, parseListingPricingEdit, patchListing, PRICE_ABOVE_ZERO, restoreBulkFollowFlags, type BulkFollowChange, type BulkFollowFlagsBefore, type ListingPricingEdit } from '../services/listings/listing-pricing-edit.service.js'
+import { inDatabaseTransaction } from '../lib/database-context.js'
 import { listingVersionOf, setListingQuantityFollow, writeListingCellThroughMatrix, type ListingMatrixCell } from '../services/listings/listing-matrix-cell.service.js'
 import { permissionCheckerFor } from './studio-matrix.routes.js'
 import { adjustmentPercentProblem, normalisePricingRule, PRICING_RULE_REFUSAL } from '@nexus/shared/listing-price'
@@ -86,6 +87,8 @@ interface ListingBulkActionPayload {
   listingIds: string[]
   payload?: any
 }
+
+const BULK_ALREADY_UNDONE = 'This bulk action was already undone.'
 
 function csvParam(v: unknown): string[] | undefined {
   if (typeof v !== 'string' || v.length === 0 || v === 'ALL') return undefined
@@ -3357,6 +3360,10 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
   //   - "unfollow-master"  → followMaster* = false (freeze current values; nothing is sent)
   //   - "set-pricing-rule" → pricingRule (+ priceAdjustmentPercent) through the door: a following listing's price
   //                          is recomputed and sent. A refusal (floor/ceiling, currency) fails that listing by name.
+  //   - "undo"             → payload.jobId: a finished "unfollow-master" job put back. Only the listings that job
+  //                          changed (its answer's `changed`; listingIds, when sent, narrow them), each follow flag
+  //                          back to what it was. A listing that failed, or was already unfollowed, is not touched.
+  //                          A job is undone once.
   // Returns 202 with jobId — poll GET /api/listings/bulk-action/:jobId
   // ─────────────────────────────────────────────────────────────────
   fastify.post('/listings/bulk-action', {
@@ -3369,17 +3376,18 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         payload?: any
       }
       const action = body.action
-      const ids = Array.isArray(body.listingIds) ? body.listingIds : []
+      let ids = Array.isArray(body.listingIds) ? body.listingIds : []
       if (!action) return reply.code(400).send({ error: 'action is required' })
       if (action === 'publish' || action === 'unpublish') {
         return reply.code(409).send({ code: 'CHANNEL_WORKFLOW_REQUIRED',
           error: 'Use the listing channel workflow to publish or withdraw listings. A local status flag cannot confirm a marketplace change.',
           reviewHref: '/products/listing-readiness' })
       }
-      if (ids.length === 0) return reply.code(400).send({ error: 'listingIds[] is required' })
+      // An Undo names its job; the listings come from what that job changed.
+      if (ids.length === 0 && action !== 'undo') return reply.code(400).send({ error: 'listingIds[] is required' })
       if (ids.length > 1000) return reply.code(400).send({ error: 'Max 1000 listings per bulk action' })
 
-      const validActions = ['resync', 'set-price', 'follow-master', 'unfollow-master', 'set-pricing-rule']
+      const validActions = ['resync', 'set-price', 'follow-master', 'unfollow-master', 'set-pricing-rule', 'undo']
       if (!validActions.includes(action)) {
         return reply.code(400).send({ error: `Invalid action. Allowed: ${validActions.join(', ')}` })
       }
@@ -3411,6 +3419,32 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         }
       }
 
+      // 2026-10-13 — the Undo of a bulk unfollow master ran follow-master on EVERY selected listing: one that had
+      // failed, and one already unfollowed before, were handed back to the master too (its own price and quantity
+      // wiped, the master's sent). It now puts back only what the job recorded as changed, flag by flag.
+      let undo: { jobId: string; before: Map<string, BulkFollowFlagsBefore> } | null = null
+      if (action === 'undo') {
+        const undoJobId = typeof body.payload?.jobId === 'string' ? body.payload.jobId : ''
+        const original = undoJobId
+          ? await prisma.bulkActionJob.findUnique({ where: { id: undoJobId }, select: { actionType: true, actionPayload: true, status: true, rollbackJobId: true, rollbackData: true } })
+          : null
+        if (!original || original.actionType !== LISTING_BULK_ACTION_TYPE) return reply.code(404).send({ error: 'Job not found' })
+        // Follow master cleared each listing's own price and queued the master's: an unfollow cannot bring it back.
+        if ((original.actionPayload as unknown as ListingBulkActionPayload | null)?.action !== 'unfollow-master') {
+          return reply.code(409).send({ error: 'Only a bulk Unfollow master can be undone.' })
+        }
+        if (!['COMPLETED', 'FAILED', 'PARTIALLY_COMPLETED'].includes(original.status)) {
+          return reply.code(409).send({ error: 'This bulk action is still running. Undo it once it has finished.' })
+        }
+        if (original.rollbackJobId) return reply.code(409).send({ error: BULK_ALREADY_UNDONE })
+        const wanted = ids.length ? new Set(ids) : null
+        const before = new Map(bulkFollowChangesOf(original.rollbackData).filter((c) => !wanted || wanted.has(c.listingId)).map((c) => [c.listingId, c.before]))
+        if (before.size === 0) return reply.code(409).send({ error: 'Nothing to undo: the action changed no listing.' })
+        undo = { jobId: undoJobId, before }
+        ids = [...before.keys()]
+      }
+      const undoOf = undo
+
       const actionPayload: ListingBulkActionPayload = {
         action,
         listingIds: ids,
@@ -3420,23 +3454,31 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       // S.0.5 / H-5 — persist to BulkActionJob. The targetProductIds
       // column is repurposed as targetListingIds here (column type is
       // String[] either way; per-route semantics carried in actionType).
-      const job = await prisma.bulkActionJob.create({
-        data: {
-          jobName: `Listings: ${action} (${ids.length})`,
-          actionType: LISTING_BULK_ACTION_TYPE,
-          targetProductIds: ids, // listingIds stored here for /listings actionType
-          targetVariationIds: [],
-          actionPayload: actionPayload as any,
-          status: 'QUEUED',
-          totalItems: ids.length,
-          processedItems: 0,
-          failedItems: 0,
-          skippedItems: 0,
-          progressPercent: 0,
-          isRollbackable: false, // Phase J of /bulk-operations adds rollback; not in scope here
-          // Who ran it: the signed-in person (bulk-action-actor.ts); the job history shows their name.
-          createdBy: bulkActorOf(request),
-        },
+      // An Undo claims its job (rollbackJobId) in the same transaction: a second Undo of it is refused, never run.
+      const job = await inDatabaseTransaction(prisma, async () => {
+        const created = await prisma.bulkActionJob.create({
+          data: {
+            jobName: `Listings: ${action} (${ids.length})`,
+            actionType: LISTING_BULK_ACTION_TYPE,
+            targetProductIds: ids, // listingIds stored here for /listings actionType
+            targetVariationIds: [],
+            actionPayload: actionPayload as any,
+            status: 'QUEUED',
+            totalItems: ids.length,
+            processedItems: 0,
+            failedItems: 0,
+            skippedItems: 0,
+            progressPercent: 0,
+            isRollbackable: false, // Phase J of /bulk-operations adds rollback; not in scope here
+            // Who ran it: the signed-in person (bulk-action-actor.ts); the job history shows their name.
+            createdBy: bulkActorOf(request),
+          },
+        })
+        if (undoOf) {
+          const claimed = await prisma.bulkActionJob.updateMany({ where: { id: undoOf.jobId, rollbackJobId: null }, data: { rollbackJobId: created.id } })
+          if (claimed.count !== 1) throw new ListingPricingError(409, BULK_ALREADY_UNDONE)
+        }
+        return created
       })
       const jobId = job.id
 
@@ -3452,6 +3494,24 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         let failed = 0
         const errors: Array<{ listingId: string; reason: string }> = []
         const quantityNotes: Array<{ listingId: string; reason: string }> = []
+        // What a follow / unfollow master changed, flag by flag with what it was, kept on the job (rollbackData): its
+        // Undo puts back exactly that, never a listing that failed or was already so.
+        const followChanges: BulkFollowChange[] | null = action === 'follow-master' || action === 'unfollow-master' ? [] : null
+        const journalFollowQuantity = (id: string, oldVal: boolean, newVal: boolean) => {
+          prisma.auditLog.create({
+            data: {
+              entityType: 'ChannelListing',
+              entityId: id,
+              action: 'update',
+              userId: null,
+              before: { followMasterQuantity: oldVal },
+              after: { followMasterQuantity: newVal },
+              metadata: { field: 'followMasterQuantity', reason: `bulk:${action}`, jobId },
+            },
+          }).catch((auditErr: unknown) => {
+            fastify.log.warn({ err: auditErr, id, jobId }, '[listings/bulk-action] followMasterQuantity audit write failed (non-blocking)')
+          })
+        }
 
         // A2 — pre-read followMasterQuantity for follow/unfollow actions so
         // we can skip no-op audit writes and capture accurate before values.
@@ -3478,6 +3538,12 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
               data.lastSyncError = null
               data.version = { increment: 1 }
               await prisma.channelListing.update({ where: { id }, data })
+            } else if (action === 'undo') {
+              const before = undoOf?.before.get(id) ?? {}
+              const restored = await restoreBulkFollowFlags({ listingId: id, before, actor: job.createdBy ?? 'listings-bulk-action' })
+              if (restored.notSent) quantityNotes.push({ listingId: id, reason: `Not sent: ${restored.notSent}` })
+              if (restored.quantitySkipped) quantityNotes.push({ listingId: id, reason: `Quantity not changed: ${restored.quantitySkipped}` })
+              if (restored.restored.includes('followMasterQuantity')) journalFollowQuantity(id, before.followMasterQuantity !== true, before.followMasterQuantity === true)
             } else {
               // 2026-10-01 — set-price, set-pricing-rule, follow-master and unfollow-master go through the ONE
               // channel price door: a pinned price or a recomputed follower price is queued (30 s hold), and a refusal
@@ -3493,6 +3559,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
               // sent (a paused listing or a draft, a market in another currency): the job names it.
               if (priced.notSent) quantityNotes.push({ listingId: id, reason: `Not sent: ${priced.notSent}` })
               if (priced.quantitySkipped) quantityNotes.push({ listingId: id, reason: `Quantity not changed: ${priced.quantitySkipped}` })
+              if (priced.changed && followChanges) followChanges.push({ listingId: id, before: priced.changed })
             }
             succeeded += 1
 
@@ -3500,21 +3567,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
             if ((action === 'follow-master' || action === 'unfollow-master') && !quantityNotes.some((n) => n.listingId === id && n.reason.startsWith('Quantity not changed: '))) {
               const newVal = action === 'follow-master'
               const oldVal = followQtyBefore.get(id) ?? true // default is true
-              if (oldVal !== newVal) {
-                prisma.auditLog.create({
-                  data: {
-                    entityType: 'ChannelListing',
-                    entityId: id,
-                    action: 'update',
-                    userId: null,
-                    before: { followMasterQuantity: oldVal },
-                    after: { followMasterQuantity: newVal },
-                    metadata: { field: 'followMasterQuantity', reason: `bulk:${action}`, jobId },
-                  },
-                }).catch((auditErr: unknown) => {
-                  fastify.log.warn({ err: auditErr, id, jobId }, '[listings/bulk-action] followMasterQuantity audit write failed (non-blocking)')
-                })
-              }
+              if (oldVal !== newVal) journalFollowQuantity(id, oldVal, newVal)
             }
           } catch (err: any) {
             failed += 1
@@ -3534,6 +3587,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
                 progressPercent: Math.floor((processedTotal / ids.length) * 100),
                 errorLog: [...errors, ...quantityNotes] as any,
                 lastError: errors.length > 0 ? errors[errors.length - 1].reason : quantityNotes.length > 0 ? quantityNotes[quantityNotes.length - 1].reason : null,
+                ...(followChanges ? { rollbackData: { followFlagsBefore: followChanges } as any } : {}),
               },
             })
             .catch((e) => {
@@ -3574,6 +3628,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
             status: finalStatus,
             completedAt: new Date(),
             progressPercent: 100,
+            ...(followChanges ? { rollbackData: { followFlagsBefore: followChanges } as any } : {}),
           },
         })
         publishListingEvent({
@@ -3598,6 +3653,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
 
       return reply.code(202).send({ jobId, status: 'QUEUED', total: ids.length })
     } catch (error: any) {
+      if (error instanceof ListingPricingError) return reply.code(error.statusCode).send({ error: error.message })
       fastify.log.error({ err: error }, '[listings/bulk-action] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
@@ -3630,6 +3686,8 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       succeeded: job.processedItems,
       failed: job.failedItems,
       errors: errorLog,
+      // The listings a follow / unfollow master changed: what an Undo (action "undo") puts back.
+      changed: bulkFollowChangesOf(job.rollbackData).map((c) => c.listingId),
       status: job.status,
       createdAt: job.createdAt.getTime(),
       updatedAt: job.updatedAt.getTime(),
