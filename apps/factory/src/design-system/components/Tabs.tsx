@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useId, useRef, type ComponentType, type FocusEvent, type KeyboardEvent, type MouseEventHandler, type ReactNode, type RefObject } from 'react'
+import { useCallback, useEffect, useId, useRef, type ComponentType, type FocusEvent, type KeyboardEvent, type MouseEvent, type MouseEventHandler, type ReactNode, type RefObject } from 'react'
 import NextLink from 'next/link'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useHorizontalOverflow } from './useHorizontalOverflow'
@@ -102,6 +102,10 @@ export interface TabsProps {
    * the focus is brought wholly into view clear of the fade, and when the focus leaves the strip the tab you are on is
    * brought back, so the strip is never left scrolled with a cut label. Rules: `tabsScroll.ts`. The strip is wrapped
    * in `.nds-tabs-scroller` (it holds the arrows); `className` stays on the strip.
+   *
+   * A press never scrolls the strip (2026-10-13): a mouse or touch press focuses its tab between press and release, and
+   * a reveal then moved the tab from under the pointer, so the release landed beside it and the click was lost. The
+   * strip follows a KEYBOARD focus (`:focus-visible`) only, and a pressed tab is brought into view after its click.
    */
   overflow?: 'scroll'
   /**
@@ -162,18 +166,25 @@ export function Tabs({ ariaLabel, tabs, active, onChange, linkAs, className, siz
     const still = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
     list.scrollBy({ left: dir * stripStep(list.clientWidth), behavior: still ? 'auto' : 'smooth' })
   }, [])
-  // A tab that takes the focus comes wholly into view; when the focus leaves the strip, the tab you are on comes back.
+  // A tab the KEYBOARD focuses comes wholly into view (`:focus-visible`, as the Tooltip reads it); when the focus leaves
+  // the strip, the tab you are on comes back — unless a press inside the strip took it (`:active`: Safari and Firefox on
+  // a Mac blur the focused tab without focusing the pressed one). A press scrolls nothing until its click lands.
   const onFocus = useCallback((e: FocusEvent<HTMLElement>) => {
     const list = listRef.current
     const tab = (e.target as HTMLElement).closest<HTMLElement>('[data-tab-id]')
-    if (overflow === 'scroll' && list && tab) revealInStrip(list, tab)
+    if (overflow === 'scroll' && list && tab && tab.matches(':focus-visible')) revealInStrip(list, tab)
   }, [overflow])
   const onBlur = useCallback((e: FocusEvent<HTMLElement>) => {
     const list = listRef.current
-    if (overflow !== 'scroll' || !list || list.contains(e.relatedTarget as Node | null)) return
+    if (overflow !== 'scroll' || !list || list.contains(e.relatedTarget as Node | null) || list.matches(':active')) return
     const tab = list.querySelector<HTMLElement>(`[data-tab-id="${CSS.escape(active)}"]`)
     if (tab) revealInStrip(list, tab)
   }, [overflow, active])
+  const onClick = useCallback((e: MouseEvent<HTMLElement>) => {
+    const list = listRef.current
+    const tab = (e.target as Element).closest<HTMLElement>('[data-tab-id]')
+    if (overflow === 'scroll' && list && tab) revealInStrip(list, tab)
+  }, [overflow])
 
   /**
    * Arrow-key selection, the ARIA tablist pattern.
@@ -240,7 +251,7 @@ export function Tabs({ ariaLabel, tabs, active, onChange, linkAs, className, siz
   if (links) {
     const Link = linkAs ?? NextLink
     return framed(
-      <nav className={barClass} aria-label={ariaLabel} ref={listRef} onKeyDown={onKeyDown} onFocus={onFocus} onBlur={onBlur}>
+      <nav className={barClass} aria-label={ariaLabel} ref={listRef} onKeyDown={onKeyDown} onFocus={onFocus} onBlur={onBlur} onClick={onClick}>
         {tabs.map((t) => {
           const on = t.id === active
           if (!t.href || t.disabled) {
@@ -266,6 +277,7 @@ export function Tabs({ ariaLabel, tabs, active, onChange, linkAs, className, siz
       onKeyDown={onKeyDown}
       onFocus={onFocus}
       onBlur={onBlur}
+      onClick={onClick}
     >
       {tabs.map((t) => (
         <button

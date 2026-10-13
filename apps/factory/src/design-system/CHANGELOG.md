@@ -1,3 +1,10 @@
+## A press on a scrolling tab strip activates the tab it started on — 2026-10-13
+
+Mirrored from `apps/web` (identical file).
+- **`Tabs overflow="scroll"`**: a press no longer scrolls the strip, so the release lands on the pressed tab (a focus
+  from a press brought the tab into view between pointerdown and pointerup, and the click went beside it). The strip
+  follows a keyboard focus (`:focus-visible`); a pressed tab comes into view after its click.
+
 ## Tag `truncate` + `title`; PerformanceGraph `axisLabel` — 2026-10-13
 
 Google Ads step 1a, screen fixes. Mirrored from `apps/web` (identical files).

@@ -14,6 +14,8 @@ const harness = vi.hoisted(() => ({
   scrollLeft: 0,
   scrolls: [] as number[],
   observers: [] as Array<{ callback: () => void; observed: number; live: boolean }>,
+  /** A pointer is held down inside the strip (it matches `:active`). */
+  pressed: false,
 }))
 vi.mock('react', async importOriginal => ({
   ...await importOriginal<typeof import('react')>(),
@@ -47,13 +49,23 @@ afterAll(() => vi.unstubAllGlobals())
 import { Tabs, type TabItem } from './Tabs'
 
 const tabs = (...ids: string[]): TabItem[] => ids.map(id => ({ id, label: `${id} · checking…` }))
-const render = (items: TabItem[], active: string, scroll = true) => {
+const render = (items: TabItem[], active: string, scroll = true, onChange: (id: string) => void = () => {}) => {
   harness.ids = items.map(tab => tab.id)
   harness.at = 0
-  Tabs({ ariaLabel: 'Chosen markets', tabs: items, active, onChange: () => {}, ...(scroll ? { overflow: 'scroll' as const } : {}) })
+  return Tabs({ ariaLabel: 'Chosen markets', tabs: items, active, onChange, ...(scroll ? { overflow: 'scroll' as const } : {}) }) as unknown as El
 }
 /** A label grew: every tab is wider now, and the live observer hears it. */
 const labelsGrow = (width: number) => { harness.width = width; harness.observers.filter(o => o.live).forEach(o => o.callback()) }
+type El = { props: Record<string, unknown> & { children?: unknown } }
+/** The element in the rendered tree that `test` picks (the strip, a tab). */
+const find = (node: unknown, test: (el: El) => boolean): El | null => {
+  if (Array.isArray(node)) { for (const child of node) { const hit = find(child, test); if (hit) return hit } return null }
+  if (!node || typeof node !== 'object' || !('props' in node)) return null
+  const el = node as El
+  return test(el) ? el : find(el.props.children, test)
+}
+type Handler = (event: unknown) => void
+const handler = (el: El | null, name: string) => el?.props[name] as Handler
 const tabRect = (id: string) => {
   const at = harness.ids.indexOf(id)
   const left = at * harness.width - harness.scrollLeft
@@ -63,6 +75,7 @@ const tabRect = (id: string) => {
 describe('Tabs keeps the active tab in view', () => {
   beforeEach(() => {
     harness.deps = []; harness.cleanups = []; harness.scrolls = []; harness.observers = []; harness.scrollLeft = 0; harness.width = 240
+    harness.pressed = false
     harness.ref.current = {
       getBoundingClientRect: () => ({ left: 0, right: 400 }),
       clientWidth: 400,
@@ -74,6 +87,8 @@ describe('Tabs keeps the active tab in view', () => {
         return harness.ids.includes(id) ? { getBoundingClientRect: () => tabRect(id) } : null
       },
       querySelectorAll: () => harness.ids.map(() => ({})),
+      contains: () => false,
+      matches: (selector: string) => selector === ':active' && harness.pressed,
     }
   })
 
@@ -130,5 +145,58 @@ describe('Tabs keeps the active tab in view', () => {
     render(tabs('IT'), 'IT', false)
     render(tabs('IT'), 'IT')
     expect(overflowMarks.calls).toBe(2)
+  })
+
+  // Google Ads tabs at 390 px (2026-10-13): a mouse press on a tab under the edge fade did nothing. The browser focuses
+  // the pressed tab between pointerdown and pointerup; the focus scrolled the strip, the release landed on the next tab
+  // and the click went there. The strip is 400 px, its tabs 240: IT (240–480) sits under the end fade (344–400).
+  describe('a press activates the tab it started on', () => {
+    /** The tab element the browser hands the focus and click events: `keyboard` = it matches `:focus-visible`. */
+    const tabEl = (id: string, keyboard: boolean) => {
+      const el = { dataset: { tabId: id }, closest: () => el, matches: (q: string) => q === ':focus-visible' && keyboard, getBoundingClientRect: () => tabRect(id) }
+      return el
+    }
+    /** The tab under a point of the strip after any scroll since the press. */
+    const tabAt = (x: number) => harness.ids[Math.floor((x + harness.scrollLeft) / harness.width)]
+    const strip = (tree: El) => find(tree, el => el.props.role === 'tablist')
+    const tab = (tree: El, id: string) => find(tree, el => el.props['data-tab-id'] === id)
+
+    it('a mouse or touch press does not scroll the strip; the release lands on the pressed tab, which comes into view after its click', () => {
+      const chosen: string[] = []
+      const tree = render(tabs('DE', 'IT', 'FR'), 'DE', true, id => chosen.push(id))
+      const pressAt = 370
+      expect(tabAt(pressAt)).toBe('IT')
+      // pointerdown → the browser focuses IT (no :focus-visible) → pointerup → click on the tab under the pointer now.
+      harness.pressed = true
+      handler(strip(tree), 'onFocus')({ target: tabEl('IT', false) })
+      expect(harness.scrolls).toEqual([])
+      harness.pressed = false
+      const released = tabAt(pressAt)
+      expect(released).toBe('IT')
+      handler(tab(tree, released), 'onClick')({})
+      handler(strip(tree), 'onClick')({ target: tabEl(released, false) })
+      expect(chosen).toEqual(['IT'])
+      // After the click: IT wholly in view, clear of the fade — and the host's re-render does not move it again.
+      expect(harness.scrolls).toEqual([136])
+      render(tabs('DE', 'IT', 'FR'), 'IT')
+      expect(harness.scrolls).toEqual([136])
+    })
+
+    it('a keyboard focus (Tab, the arrows) still brings the tab wholly into view at once', () => {
+      const tree = render(tabs('DE', 'IT', 'FR'), 'DE')
+      handler(strip(tree), 'onFocus')({ target: tabEl('IT', true) })
+      expect(harness.scrolls).toEqual([136])
+    })
+
+    it('the focus leaving the strip brings the active tab back — but not under a press inside the strip (Safari, Firefox on a Mac)', () => {
+      const tree = render(tabs('DE', 'IT', 'FR'), 'DE')
+      harness.scrollLeft = 320 // scrolled to the end with the arrow: DE is out of view
+      harness.pressed = true
+      handler(strip(tree), 'onBlur')({ relatedTarget: null })
+      expect(harness.scrolls).toEqual([])
+      harness.pressed = false
+      handler(strip(tree), 'onBlur')({ relatedTarget: null })
+      expect(harness.scrolls).toEqual([0])
+    })
   })
 })
