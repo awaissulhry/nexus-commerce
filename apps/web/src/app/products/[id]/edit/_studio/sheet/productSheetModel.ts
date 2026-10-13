@@ -21,6 +21,11 @@ export interface ProductSheetModel<Row, Page, DrawerRow extends SheetRow = Sheet
   loading: boolean
   /** Only the languages changed and the new read is on its way: the last sheet stays on screen, dimmed and held. */
   switching?: boolean
+  /**
+   * `loading`, and it is a re-read of the rows on screen (a Reload, "changed elsewhere — refresh"): the grid keeps them
+   * under the engine's loading veil and the footer stays (grid audit F8). Every hold on `loading` still holds.
+   */
+  reloading?: boolean
   unavailable: boolean
   backendMissing: boolean
   errorLabel: string

@@ -1,3 +1,16 @@
+## `NexusGrid reloading`: a re-read keeps the rows under the loading veil — 2026-10-13
+
+Grid audit step 5 (F8, the three grids wave 2 skipped: Matrix, product sheet, Family variants).
+- **`NexusGrid` `reloading`** (new prop): the rows stay on screen under the engine's loading veil
+  (`--nds-grid-loading-veil`) while they are read again; the scroll position, the selection, the focused cell and an open
+  editor survive. AG's own `loading` is for the first read only — its overlay draws skeleton rows over whatever is there.
+- **One veil**: the rule moved from `workspace.css` (`.nds-ag-ws.is-reloading`) into the engine's `grid.css`
+  (`.nds-ag-wrap.is-reloading`, both apps); `WorkspaceGrid` passes its reloads through the prop.
+- Pages: `useMasterSheet` has `reloading` (a re-read of the same product, market and languages while that sheet is on
+  screen; a read that lands while an editor is open waits for it, then lands quietly), and `useMatrix` reads the family
+  on screen again through its live re-read (cells stay; an open editor or a write in flight is waited for). Every hold on
+  `loading` still holds.
+
 ## Ads grids: one blank, icon headers; no unused density tokens — 2026-10-13
 
 Grid audit wave 4, PR13 chunk 2 (E11 blank, E12, E13, E16).

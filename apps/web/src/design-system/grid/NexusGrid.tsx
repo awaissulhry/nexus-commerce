@@ -175,6 +175,12 @@ export interface NexusGridProps<T> extends AgGridReactProps<T> {
   plain?: boolean
   /** `plain` only: the tallest the grid grows before it scrolls inside (px). Default 480. */
   plainMaxHeight?: number
+  /**
+   * A re-read of rows already on screen (grid audit F8): the rows stay, under the engine's loading veil
+   * (`--nds-grid-loading-veil`), so the scroll position, the selection, the focused cell and an open editor survive.
+   * AG's own `loading` is for the FIRST read only — its overlay draws skeleton rows over whatever is there.
+   */
+  reloading?: boolean
 }
 
 
@@ -197,6 +203,7 @@ export function NexusGrid<T>({
   emptyCells = 'dash',
   plain = false,
   plainMaxHeight = 480,
+  reloading = false,
   defaultColDef,
   selectionColumnDef,
   onColumnPinned,
@@ -574,7 +581,8 @@ export function NexusGrid<T>({
         // `nds-ag-nexus` marks the DS grid: the column-group strip and the DataGrid-parity rules
         // in grid.css key on it, so EVERY NexusGrid — in a card, in a modal, anywhere — reads
         // the same.
-        className={['nds-ag-wrap', 'nds-ag-nexus', flatTree ? 'nds-ag-flat-tree' : '', fill ? 'nds-ag-fill' : '', className].filter(Boolean).join(' ')}
+        className={['nds-ag-wrap', 'nds-ag-nexus', flatTree ? 'nds-ag-flat-tree' : '', fill ? 'nds-ag-fill' : '', reloading ? 'is-reloading' : '', className].filter(Boolean).join(' ')}
+        aria-busy={reloading || undefined}
         style={wrapStyle}
         data-ag-theme-mode={themeMode}
         // Read by grid.css for the per-density knobs the Theming API sets once globally

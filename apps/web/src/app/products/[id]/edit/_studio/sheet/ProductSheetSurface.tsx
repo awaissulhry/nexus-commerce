@@ -54,6 +54,7 @@ export function ProductSheetSurface<Row, Page, DrawerRow extends SheetRow>(model
     {...SHEET_GRID_OPTIONS}
     {...SHEET_STATE_OVERLAYS}
     {...model.grid}
+    reloading={model.reloading}
     columnDefs={columnDefs}
     /* The header keeps a cell's classes until it is redrawn; these redraw it so the group colours follow the columns. */
     onDisplayedColumnsChanged={onDisplayedColumnsChanged}
@@ -114,7 +115,7 @@ export function ProductSheetSurface<Row, Page, DrawerRow extends SheetRow>(model
         activeChipId={chips.activeId}
         onChipToggle={chips.setActive}
       />{model.toolbarExtra}</>}
-      footer={!model.loading && !model.unavailable && <>
+      footer={(!model.loading || model.reloading) && !model.unavailable && <>
         {model.footerBefore}
         <GridSheetStatus {...model.status} source={model.saveStatus} start={model.footerStart}>
           {model.footerLead}

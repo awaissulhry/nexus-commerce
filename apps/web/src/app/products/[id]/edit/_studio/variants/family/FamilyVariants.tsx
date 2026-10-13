@@ -113,7 +113,7 @@ function FamilyVariantsSurface({ productId, market, locale }: { productId: strin
   const afterWrite = useRef<() => void>(() => {})
   const onSettled = useCallback(({ ok, savedAt }: { rowId: string; ok: boolean; savedAt: string }) => { if (ok) { setLastSavedAt(savedAt); afterWrite.current() } }, [])
 
-  const { sheet: loadedSheet, loading, error, contractProblems, reload, writer, tracker, conflicts, bindGrid } = useMasterSheet({
+  const { sheet: loadedSheet, loading, reloading, error, contractProblems, reload, writer, tracker, conflicts, bindGrid } = useMasterSheet({
     productId, market, locale, onWriteStart, onWriteEnd, onSettled,
   })
   const sheet = useReferenceNames(loadedSheet, 'MASTER', market)
@@ -598,7 +598,7 @@ function FamilyVariantsSurface({ productId, market, locale }: { productId: strin
           />
         }
         footer={
-          !loading && !error && (
+          (!loading || reloading) && !error && (
             <>
               {rowPress.problem && <div className="nds-grid-footstrip" role="alert"><span className="nds-cell-stock-out">{rowPress.problem}</span></div>}
               {rowPress.confirmElement}
@@ -638,7 +638,8 @@ function FamilyVariantsSurface({ productId, market, locale }: { productId: strin
               /* The 30px strip above the header — the THREE groups of §3.3. */
               groupHeaderHeight={gridGeometry.stripH}
               getContextMenuItems={stableContextMenu}
-              rowData={loading ? [] : visibleRows}
+              /* Grid audit F8: skeleton rows only before the first read; a re-read keeps the rows under the loading veil. */
+              rowData={loading && !reloading ? [] : visibleRows}
               columnDefs={columnDefs}
               defaultColDef={defaultColDef}
               getRowId={getRowId}
@@ -647,7 +648,8 @@ function FamilyVariantsSurface({ productId, market, locale }: { productId: strin
               onGridReady={onGridReady}
               onGridPreDestroyed={onGridPreDestroyed}
               onCellValueChanged={onCellValueChanged}
-              loading={loading}
+              loading={loading && !reloading}
+              reloading={reloading}
               columnDialog={columnDialog}
             />
           </>

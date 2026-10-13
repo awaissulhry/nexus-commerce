@@ -671,10 +671,11 @@ export function WorkspaceGrid<T>({
 
   // ── the grid card: header (AG's) → rows → the empty state under the header when there are none ──
   const grid = (
-    <div ref={wrapRef} aria-busy={loading || undefined} className={`nds-wsgrid nds-ag-ws${autoRows ? ' is-auto' : ''}${selectable ? '' : ' nosel'}${editing ? ' is-editing' : ''}${empty ? ' is-empty' : ''}${reloading ? ' is-reloading' : ''}`}>
+    <div ref={wrapRef} aria-busy={loading || undefined} className={`nds-wsgrid nds-ag-ws${autoRows ? ' is-auto' : ''}${selectable ? '' : ' nosel'}${editing ? ' is-editing' : ''}${empty ? ' is-empty' : ''}`}>
       <TooltipPortalProvider>
       <NexusGrid<Row>
         className="nds-ws-grid"
+        reloading={reloading}
         domLayout="autoHeight"
         rowHeight={rowH}
         getRowHeight={getRowHeight}

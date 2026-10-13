@@ -28,7 +28,7 @@ describe.each([['channel', channel], ['master', master]])('%s sheet', (_scope, s
   })
   it('adds the empty rows after the rows on screen, locks and blanks their other cells, marks the row and draws its own cell', () => {
     expect(src).toMatch(/const gridRows = useMemo\(\(\) => withNewRows</)
-    expect(src).toMatch(/rowData: (loading \? \[\] : )?gridRows,/)
+    expect(src).toMatch(/rowData: (firstLoad \? \[\] : )?gridRows,/)
     expect(src).toContain('lockedOnNewRows([')
     expect(src).toContain('[UNSAVED_ROW_CLASS]: (p: { data?: ')
     expect(src).toContain('<NewRowCell row={fresh}')

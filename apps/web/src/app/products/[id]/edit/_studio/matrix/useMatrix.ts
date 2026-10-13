@@ -63,6 +63,8 @@ export interface MatrixState {
   read: MatrixRead | null
   /** `loading` until the read has answered; `error` = it failed (the load-error state, never a picture of cells). */
   status: 'loading' | 'ready' | 'error'
+  /** A Reload of the family on screen is under way: the cells stay, the grid draws its loading veil (grid audit F8). */
+  reloading: boolean
   error: string | null
   reload: () => void
   /** Read again QUIETLY (the live re-read): the grid keeps its read; it waits for an open editor or a write in flight. */
@@ -117,6 +119,7 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
   const [probe, setProbe] = useState<MatrixSource | null>(null)
   const [read, setRead] = useState<MatrixRead | null>(null)
   const [nonce, setNonce] = useState(0)
+  const [reloading, setReloading] = useState(false)
   const readRef = useRef<MatrixRead | null>(null)
   const byRow = useRef(new Map<string, MatrixRowRead>())
   const optsRef = useRef(opts)
@@ -169,8 +172,6 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
   useEffect(() => { commitRead(probe?.kind === 'live' ? probe.read : null) }, [probe, commitRead])
 
   /* Reload reads again. */
-  const reload = useCallback(() => setNonce((n) => n + 1), [])
-
   /* ── live: this family's listings changed elsewhere ─────────────────────────────────────── */
 
   /* `seq` counts live requests; `owedSeq` is the newest one still owed (0 = none). A write whose own re-read started
@@ -215,6 +216,7 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
       const more = l.again && !stale
       l.again = false
       if (more) void run()
+      else setReloading(false)
     }
     function flush() {
       if (!l.alive || l.owedSeq === 0 || !idle()) return
@@ -223,6 +225,7 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
     }
     return {
       state: l,
+      idle,
       request: () => { l.seq += 1; if (idle()) void run(); else owe() },
       /** A live write (a cell, a verb, a revert) starts: no live re-read lands while one is in flight. */
       begin: () => { l.writes += 1; l.writeEpoch += 1 },
@@ -236,6 +239,16 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
     }
   }, [commitRead])
   useEffect(() => { live.state.alive = true; return live.dispose }, [live])
+
+  /* A Reload of the family on screen is the live re-read (grid audit F8): the cells stay, under the grid's loading veil
+     while it runs, and an open editor or a write in flight is waited for, so a typed value is never repainted away. The
+     re-read after a stock-source switch (MatrixSurface `reloadSoonAgain`) lands the same way. A first read, or one after
+     a failed read, starts from nothing. */
+  const reload = useCallback(() => {
+    if (readRef.current?.source !== 'live') { setNonce((n) => n + 1); return }
+    if (live.idle()) setReloading(true)
+    live.request()
+  }, [live])
 
   const liveFamily = read?.source === 'live' ? read.productId : null
   useListingValuesLive({
@@ -379,6 +392,7 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
   return {
     read,
     status,
+    reloading,
     error: probe?.kind === 'error' ? probe.message : null,
     reload,
     refresh: live.request,
