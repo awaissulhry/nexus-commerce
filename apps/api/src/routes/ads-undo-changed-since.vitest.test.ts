@@ -132,7 +132,7 @@ beforeAll(async () => {
   await app.register(advertisingRoutes, { prefix: '/api' })
   await app.register(keywordActionsRoutes, { prefix: '/api' })
   await app.ready()
-  for (const id of ['u1', 'u2', 'u3', 'u4', 'u5', 'u6', 'b1', 'b2', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8']) await seedCampaign(id)
+  for (const id of ['u1', 'u2', 'u3', 'u4', 'u5', 'u6', 'b1', 'b2', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'h1', 'h2']) await seedCampaign(id)
 }, 180_000)
 afterAll(async () => { await app?.close(); await database?.close() })
 beforeEach(() => { cache.reads = [] })
@@ -352,6 +352,11 @@ describe('group 3 review — every person-clicked rollback is guarded and says w
     expect(r.body).toMatchObject({ reversed: 1, changedSince: 1 })
     expect(String(r.body.reason)).toMatch(/Changed since: now bid €0\.75\./)
     expect([(await bidOf('r8-t1')).bidCents, (await bidOf('r8-t2')).bidCents]).toEqual([35, 75])
+    // Re-review (b) — not marked rolled back while part of it stands: its Undo stays, and the summary says so.
+    expect(r.body.summary).toBe('Rolled back 1 of 2; 1 changed since and was not put back')
+    const after = await inside(() => database.client.importJob.findUniqueOrThrow({ where: { id: job.id }, select: { status: true, errorSummary: true } }))
+    expect(after.status).not.toBe('ROLLED_BACK')
+    expect(after.errorSummary).toBe('Rolled back 1 of 2; 1 changed since and was not put back')
   })
 
   it('a rule run\'s rollback: what a person changed since stays, the rest of the run is put back', async () => {
@@ -368,5 +373,32 @@ describe('group 3 review — every person-clicked rollback is guarded and says w
     expect(r.body).toMatchObject({ reversed: 1, changedSince: 1 })
     expect(String(r.body.reason)).toMatch(/Changed since: now bid €0\.80\./)
     expect([(await bidOf('u6-t1')).bidCents, (await bidOf('u6-t2')).bidCents]).toEqual([35, 80])
+  })
+})
+
+describe('group 3 re-review — honest answers', () => {
+  it('(a) a rule run that wrote one keyword twice (35 → 45 → 55): its rollback puts both back, to 35, with no "Changed since"', async () => {
+    const run = await inside(async () => {
+      const rule = await database.client.automationRule.create({ data: { name: 'test rule twice', trigger: 'SCHEDULE', domain: 'advertising' } as never, select: { id: true } })
+      return database.client.automationRuleExecution.create({ data: { ruleId: rule.id, triggerData: {}, actionResults: [], dryRun: false, status: 'SUCCESS', finishedAt: new Date() } as never, select: { id: true, ruleId: true } })
+    })
+    await inside(async () => {
+      await updateAdTargetWithSync({ adTargetId: 'h1-t1', patch: { bidCents: 45 }, actor: `automation:${run.ruleId}` as never, applyImmediately: true, force: true, changeSetId: run.id })
+      await updateAdTargetWithSync({ adTargetId: 'h1-t1', patch: { bidCents: 55 }, actor: `automation:${run.ruleId}` as never, applyImmediately: true, force: true, changeSetId: run.id })
+    })
+    expect((await bidOf('h1-t1')).bidCents).toBe(55)
+    const r = await send('POST', `/advertising/actions/${run.id}/rollback`, {})
+    expect(r.body).toMatchObject({ ok: true, reversed: 2 })
+    expect(r.body.changedSince).toBeUndefined()
+    expect((await bidOf('h1-t1')).bidCents).toBe(35)
+  })
+
+  it('(b) a bulk-sheet upload put back whole is marked rolled back', async () => {
+    const job = await inside(() => database.client.importJob.create({ data: { jobName: 'test upload whole', fileKind: 'xlsx', targetEntity: 'adsBulksheet' } as never, select: { id: true } }))
+    await inside(() => updateAdTargetWithSync({ adTargetId: 'h2-t1', patch: { bidCents: 45 }, actor: 'user:owner-test', applyImmediately: true, manual: true, changeSetId: `import:${job.id}` }))
+    const r = await send('POST', `/advertising/bulk/import/${job.id}/rollback`, {})
+    expect(r.body).toMatchObject({ reversed: 1, summary: 'Rolled back 1 change(s)' })
+    const after = await inside(() => database.client.importJob.findUniqueOrThrow({ where: { id: job.id }, select: { status: true } }))
+    expect(after.status).toBe('ROLLED_BACK')
   })
 })

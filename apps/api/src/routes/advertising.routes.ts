@@ -4774,7 +4774,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const job = await prisma.importJob.findUnique({ where: { id } })
     if (!job || job.targetEntity !== 'adsBulksheet') { reply.status(404); return { error: 'not_found' } }
 
-    const { rollbackByChangeSetId } = await import('../services/advertising/rollback.service.js')
+    const { rollbackByChangeSetId, rollbackSummary } = await import('../services/advertising/rollback.service.js')
     const outcome = await rollbackByChangeSetId({
       changeSetId: `import:${id}`,
       actor: actorFromHeaders(request.headers as Record<string, unknown>),
@@ -4784,10 +4784,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       // since: now …", `changedSince` + `reason`); the rest of the upload is put back.
       onlyIfStillStands: true,
     })
+    // Group 3 review — ROLLED_BACK only when the whole upload went back: a part refused (changed since) or failed keeps
+    // the job's status, so its Undo stays on the Bulk page for the rest, and the summary says what is still standing.
+    const summary = rollbackSummary(outcome)
     if (outcome.reversed > 0) {
-      await prisma.importJob.update({ where: { id }, data: { status: 'ROLLED_BACK', errorSummary: `Rolled back ${outcome.reversed} change(s)` } })
+      await prisma.importJob.update({ where: { id }, data: summary.whole ? { status: 'ROLLED_BACK', errorSummary: summary.words } : { errorSummary: summary.words } })
     }
-    return { importJobId: id, changeSetId: `import:${id}`, ...outcome }
+    return { importJobId: id, changeSetId: `import:${id}`, ...outcome, summary: summary.words }
   })
 
   /**

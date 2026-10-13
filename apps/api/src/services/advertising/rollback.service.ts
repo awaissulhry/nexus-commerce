@@ -902,6 +902,21 @@ function noteChangedSince(out: RollbackOutcome, total: number): void {
   else out.reason ??= `${out.changedSince} of ${total} changes not undone. ${first}`
 }
 
+/**
+ * Group 3 review — an Undo of a whole upload or run, in words: put back whole, or "Rolled back N of M; K changed since and
+ * were not put back" (and how many failed). `whole` is false when anything of it was refused or failed, so the screen keeps
+ * its Undo for the rest. Pure.
+ */
+export function rollbackSummary(out: Pick<RollbackOutcome, 'reversed' | 'skipped' | 'failed' | 'changedSince'>): { whole: boolean; words: string } {
+  const total = out.reversed + out.skipped + out.failed
+  const since = out.changedSince ?? 0
+  if (!since && !out.failed) return { whole: true, words: `Rolled back ${out.reversed} change(s)` }
+  const parts = [`Rolled back ${out.reversed} of ${total}`]
+  if (since) parts.push(`${since} changed since and ${since === 1 ? 'was' : 'were'} not put back`)
+  if (out.failed) parts.push(`${out.failed} failed`)
+  return { whole: false, words: parts.join('; ') }
+}
+
 /** Editing correctness (group 3) — each entity's rows of one Undo, judged before the first write (changedSinceUndo). */
 async function changedSinceByEntity(logs: StandRow[]): Promise<Map<string, string | null>> {
   const byEntity = new Map<string, StandRow[]>()
@@ -969,7 +984,9 @@ export async function rollbackByExecutionId(args: {
       rolledBackAt: null,
       createdAt: { gte: new Date(Date.now() - ROLLBACK_WINDOW_MS) },
     },
-    orderBy: { createdAt: 'asc' },
+    // Group 3 review — newest first, as rollbackByChangeSetId: a run that wrote one keyword twice (35 → 45 → 55) goes back
+    // to 35, each reversal finding the value the write it undoes left (its compare-and-set), not "Changed since".
+    orderBy: { createdAt: 'desc' },
   })
 
   const out: RollbackOutcome = {

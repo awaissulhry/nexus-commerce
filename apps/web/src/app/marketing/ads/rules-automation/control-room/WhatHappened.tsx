@@ -155,7 +155,7 @@ export function WhatHappened() {
       })
       const result = undoResult(r.ok, r.status, await r.json().catch(() => null))
       setResults((m) => new Map(m).set(c.id, result))
-      if (result.ok) await load()
+      if (result.ok || result.partly) await load()
     } catch (e) {
       setResults((m) => new Map(m).set(c.id, { ok: false, text: (e as Error).message }))
     } finally { setBusy(null) }

@@ -301,8 +301,15 @@ export function undoImpact(c: Change): ActionImpact {
   }
 }
 
-/** What the undo did. "Nothing to undo" is the server's answer for a change that left nothing to put back. */
-export function undoResult(httpOk: boolean, httpStatus: number, body: { ok?: boolean; reversed?: number; nothingToUndo?: boolean; reason?: string } | null): { ok: boolean; text: string } {
+/**
+ * What the undo did. "Nothing to undo" is the server's answer for a change that left nothing to put back. Group 3 — a set
+ * part of which changed since was not undone as a whole: not ok (the item is not marked undone), the server's reason
+ * shown, and `partly` (something was put back: the history is read again).
+ */
+export function undoResult(httpOk: boolean, httpStatus: number, body: { ok?: boolean; reversed?: number; nothingToUndo?: boolean; changedSince?: number; reason?: string } | null): { ok: boolean; text: string; partly?: boolean } {
+  if (httpOk && (body?.reversed ?? 0) > 0 && body?.changedSince) {
+    return { ok: false, partly: true, text: `Partly undone. ${body.reason ?? `${body.changedSince} changed since and ${body.changedSince === 1 ? 'was' : 'were'} not put back.`}` }
+  }
   const ok = httpOk && body?.ok !== false && (body?.reversed ?? 0) > 0
   if (ok) return { ok, text: 'Undone. The earlier value is on its way back to Amazon.' }
   return { ok, text: body?.reason ?? (body?.nothingToUndo ? 'Nothing to undo.' : `It could not be undone (${httpStatus}).`) }
