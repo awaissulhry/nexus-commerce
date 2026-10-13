@@ -139,6 +139,13 @@ export async function writeBusinessPrices(input: {
     }
     if (!l) { refuse('This listing no longer exists.'); continue }
     const before = storedBusinessSetting(l)
+    const conflict = (version: number) => {
+      result.results.push({ ...base, outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere, version, before, businessPrice: null, warnings: [] })
+      result.conflict++
+    }
+    /* A person's write read at another version is a conflict BEFORE anything else — never a "nothing to change" that
+       the page would paint as saved while another write's value is the one stored. */
+    if (guarded && l.version !== t.expectedVersion) { conflict(l.version); continue }
     if (l.channel !== 'AMAZON') { refuse('Only an Amazon listing has a business price.', before); continue }
     if (l.product?.isParent) { refuse(PARENT_PRICE_REASON, before); continue }
 
@@ -206,8 +213,9 @@ export async function writeBusinessPrices(input: {
       return { version, queueId, notSent }
     })
     if (written === null) {
-      result.results.push({ ...base, outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere, version: l.version, before, businessPrice, warnings })
-      result.conflict++
+      // The version the listing has NOW, so the page can write again at it (the price door's rule).
+      const now = await db.channelListing.findUnique({ where: { id: l.id }, select: { version: true } })
+      conflict(now?.version ?? l.version)
       continue
     }
     result.results.push({ ...base, outcome: 'applied', version: written.version, before, businessPrice, warnings, queueId: written.queueId, ...(written.notSent ? { notSent: written.notSent } : {}) })

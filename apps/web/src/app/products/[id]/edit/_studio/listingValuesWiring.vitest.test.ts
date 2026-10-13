@@ -48,7 +48,9 @@ describe('the Matrix is wired to the live rule', () => {
     expect(useMatrix).toMatch(/emitInvalidation\(\{ type: 'listing\.values_changed'[^)]*source: 'local'/)
   })
   it('writes name the read\'s account and each cell\'s listing; a conflict says the one sentence', () => {
-    expect(useMatrix).toContain('patchMatrix(productId, cells.map((c) => withListing(c, current)), { accountId })')
+    // Each cell names its listing (and, when this page's own earlier write moved it, the version that write left).
+    expect(useMatrix).toContain('.map((c) => rebase(withListing(c, current)))')
+    expect(useMatrix).toContain('patchMatrix(productId, cells, { accountId })')
     expect(useMatrix).toContain('MATRIX_COPY.changedElsewhere')
     expect(useMatrix).not.toContain("'Changed elsewhere — reloaded'")
   })

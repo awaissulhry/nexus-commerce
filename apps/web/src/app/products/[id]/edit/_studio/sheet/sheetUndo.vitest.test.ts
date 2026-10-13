@@ -33,6 +33,25 @@ describe('SheetUndoHistory', () => {
     expect(calls[1][41]).toEqual({ rowId: 'r42', colId: 'theme', value: 'clean' })
   })
 
+  it('forgets a recorded change that did not happen (refused, a conflict, nothing changed); a step left empty leaves the history', async () => {
+    const history = new SheetUndoHistory()
+    const kept = { v: 'kept' }, refused = { v: 'refused' }, alone = { v: 'alone' }
+    history.begin()
+    history.record({ rowId: 'r1', colId: 'a', before: 1, after: kept })
+    history.record({ rowId: 'r2', colId: 'a', before: 1, after: refused })
+    history.end()
+    history.record({ rowId: 'r3', colId: 'a', before: 1, after: alone })
+    await vi.advanceTimersByTimeAsync(0)
+    history.forget('r2', 'a', refused)
+    history.forget('r3', 'a', alone)
+    // Only the very record goes: another object on the same cell is not touched.
+    history.forget('r1', 'a', { v: 'kept' })
+    const { calls, apply } = recorder()
+    expect(history.undo(apply)).toBe(1)
+    expect(calls[0]).toEqual([{ rowId: 'r1', colId: 'a', value: 1 }])
+    expect(history.canUndo).toBe(false)
+  })
+
   it('makes each typed cell its own step, closed after the turn it happened in', async () => {
     const history = new SheetUndoHistory()
     history.record({ rowId: 'r1', colId: 'a', before: 1, after: 2 })

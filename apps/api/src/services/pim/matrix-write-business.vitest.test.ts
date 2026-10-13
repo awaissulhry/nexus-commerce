@@ -113,4 +113,9 @@ describe('the Matrix door writes the business setting through the business price
     expect((await stored())!.businessTiers).toEqual(fewer)
     expect(await write('mwb-c', pct(5, tiers), undefined, 'businessTiers')).toMatchObject({ outcome: 'applied' })
   })
+  it('a person\'s write read at an older version is a conflict that names the version now — never "nothing to change" over another write\'s value', async () => {
+    const now = await cellsOf('mwb-c')
+    const same = { rule: now.business!.rule, percent: now.business!.percent, price: now.business!.rule === 'FIXED' ? now.business!.exact : null, tiers: now.business!.tiers ? { type: now.business!.tiers.type, levels: now.business!.tiers.levels.map((l) => ({ minQty: l.minQty, value: l.value })) } : null }
+    expect(await write('mwb-c', same, now.version - 1)).toMatchObject({ outcome: 'conflict', version: now.version, reason: MATRIX_COPY.changedElsewhere })
+  })
 })

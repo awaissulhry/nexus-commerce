@@ -114,3 +114,20 @@ describe('matrixReplay — Amazon Business: undo puts the whole business setting
     expect(undo('businessPrice', was, cells({ version: 4, business: biz() }))).toEqual({ kind: 'skip' })
   })
 })
+
+describe('matrixReplay — Amazon Business: a redo sends the WHOLE setting the edit saved', () => {
+  const biz = (over: Record<string, unknown> = {}) => ({
+    rule: 'PERCENT_OFF', percent: 5, exact: null, price: 99.75, normalPrice: 105, minPrice: null, maxPrice: null, currency: 'EUR',
+    tiers: { type: 'percent', levels: [{ minQty: 2, value: 3, unitPrice: 96.76 }] }, warnings: [], held: null, send: null, live: null, reported: null, ...over,
+  }) as never
+  const saved = { rule: 'PERCENT_OFF', percent: 7, price: null, tiers: { type: 'percent', levels: [{ minQty: 3, value: 4 }] } }
+  it('the recorded setting, price and tiers together — never the half its column shows joined to what is there after the undo', () => {
+    const live = cells({ version: 9, business: biz() })
+    expect(matrixReplay('businessTiers', matrixHistoryAfter(saved), live, place)).toEqual(write('businessTiers', saved, 9))
+    expect(matrixReplay('businessPrice', matrixHistoryAfter(null), live, place)).toEqual(write('businessPrice', null, 9))
+  })
+  it('already there → skip', () => {
+    const live = cells({ version: 9, business: biz({ percent: 7, tiers: { type: 'percent', levels: [{ minQty: 3, value: 4, unitPrice: null }] } }) })
+    expect(matrixReplay('businessPrice', matrixHistoryAfter(saved), live, place)).toEqual({ kind: 'skip' })
+  })
+})

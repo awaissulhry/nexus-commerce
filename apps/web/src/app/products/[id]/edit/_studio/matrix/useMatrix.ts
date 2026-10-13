@@ -67,9 +67,17 @@ export interface MatrixState {
   reload: () => void
   /** Read again QUIETLY (the live re-read): the grid keeps its read; it waits for an open editor or a write in flight. */
   refresh: () => void
-  /** The one door. Per-cell outcomes are painted through the tracker; the read is replaced. `quiet`: a refusal is not
-   *  said by the page (the caller says it — the From pop-up keeps it on screen). */
-  write: (cells: readonly MatrixWriteCell[], opts?: { quiet?: boolean }) => Promise<MatrixWriteOutcome[]>
+  /**
+   * The one door. Per-cell outcomes are painted through the tracker; the read is replaced. `quiet`: a refusal is not
+   * said by the page (the caller says it — the From pop-up keeps it on screen).
+   *
+   * Writes go ONE AT A TIME, in the order they were asked: `cells` may be a function, called when this write's turn comes
+   * (an undo builds its writes from the cells as the writes before it left them), and `onSend` runs right before it is
+   * sent (the page takes its history snapshot then).
+   */
+  write: (cells: readonly MatrixWriteCell[] | (() => readonly MatrixWriteCell[]), opts?: { quiet?: boolean; onSend?: () => void }) => Promise<MatrixWriteOutcome[]>
+  /** Resolves once every write asked so far has settled (an undo waits for it before it takes its step). */
+  settled: () => Promise<void>
   previewVerbRun: (req: MatrixVerbRequest) => Promise<VerbPreview>
   /** The operation, and each cell's outcome (a cell refused at the run says why). */
   applyVerbRun: (preview: VerbPreview) => Promise<VerbOperation & { results?: readonly MatrixWriteOutcome[] }>
@@ -125,10 +133,16 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
      same tick as a commit (this tab's own echo) already sees the new versions. */
   const liveMembers = useRef(new Set<string>())
   const liveVersions = useRef(new Map<string, number>())
+  /* Every read is ticketed when its fetch STARTS: a read that started before the one already shown is older, and never
+     paints over it (28 writes of a paste used to re-read in parallel, and whichever answered last won). */
+  const readTicket = useRef(0)
+  const shownTicket = useRef(0)
 
   /* The read, its ref and its row index move TOGETHER, synchronously: a repaint issued in the same
      tick as a store write must already see the new cells, and React state alone lands a frame late. */
-  const commitRead = useCallback((next: MatrixRead | null) => {
+  const commitRead = useCallback((next: MatrixRead | null, ticket: number = ++readTicket.current) => {
+    if (ticket < shownTicket.current) return
+    shownTicket.current = ticket
     readRef.current = next
     liveMembers.current.clear()
     liveVersions.current.clear()
@@ -203,6 +217,7 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
       l.fetching = true
       const { productId: pid, accountId: acc, locale: loc } = optsRef.current
       const epoch = l.writeEpoch
+      const ticket = ++readTicket.current
       const got = await fetchMatrix(pid, { accountId: acc, locale: loc })
       l.fetching = false
       const o = optsRef.current
@@ -210,7 +225,7 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
       /* A transport failure keeps what the page holds; the next event or Reload reads again. */
       if (!stale && got.kind === 'live') {
         if (l.writeEpoch !== epoch || !idle()) owe()
-        else commitRead(got.read)
+        else commitRead(got.read, ticket)
       }
       const more = l.again && !stale
       l.again = false
@@ -278,20 +293,43 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
 
   /* ── the one door ───────────────────────────────────────────────────────────────────────── */
 
-  const write = useCallback(async (cells: readonly MatrixWriteCell[], wopts?: { quiet?: boolean }): Promise<MatrixWriteOutcome[]> => {
+  /* The writes in line, one at a time; and each listing's moves by THIS page's applied writes (version → version), so a cell
+     edited on the view before an earlier write of this page landed is sent at the version that write left — the same
+     person's next edit, never "changed elsewhere" against itself. A move by anyone else is still a conflict. */
+  const writeChain = useRef<Promise<unknown>>(Promise.resolve())
+  const moves = useRef(new Map<string, Map<number, number>>())
+  const rebase = useCallback((c: MatrixWriteCell): MatrixWriteCell => {
+    const hops = c.expectedListingId ? moves.current.get(c.expectedListingId) : undefined
+    let v = c.expectedVersion
+    for (let n = 0; hops?.has(v) && n < 1000; n++) v = hops.get(v)!
+    return v === c.expectedVersion ? c : { ...c, expectedVersion: v }
+  }, [])
+
+  const sendNow = useCallback(async (asked: readonly MatrixWriteCell[] | (() => readonly MatrixWriteCell[]), wopts?: { quiet?: boolean; onSend?: () => void }): Promise<MatrixWriteOutcome[]> => {
     const current = readRef.current
     const quiet = wopts?.quiet === true
-    if (!current || cells.length === 0) return []
+    if (!current) return []
+    const cells = (typeof asked === 'function' ? asked() : asked).map((c) => rebase(withListing(c, current)))
+    if (cells.length === 0) return []
     for (const c of cells) { tracker.set(c.rowId, doorColId(c.coordinateKey, c.cell), 'saving'); repaint(c.rowId, doorColId(c.coordinateKey, c.cell)) }
+    wopts?.onSend?.()
     live.begin()
     let covered: number | null = null
     try {
-      const result = await patchMatrix(productId, cells.map((c) => withListing(c, current)), { accountId })
+      const result = await patchMatrix(productId, cells, { accountId })
+      result.results.forEach((o, i) => {
+        const sent = cells[i]
+        if (o.outcome !== 'applied' || !sent?.expectedListingId || sent.expectedVersion === o.version) return
+        const hops = moves.current.get(sent.expectedListingId) ?? new Map<number, number>()
+        hops.set(sent.expectedVersion, o.version)
+        moves.current.set(sent.expectedListingId, hops)
+      })
       const after = afterLiveWrite(result.results)
       if (after === 'reread') {
         const seqAtReread = live.state.seq
+        const ticket = ++readTicket.current
         const again = await fetchMatrix(productId, { accountId, locale })
-        if (again.kind === 'live') { commitRead(again.read); covered = seqAtReread }
+        if (again.kind === 'live') { commitRead(again.read, ticket); covered = seqAtReread }
       } else if (after === 'restore' && readRef.current) {
         /* A refusal wrote nothing, but the grid EDITED its clone of the cells (the engine's valueSetter): the typed
            number would stay on screen, and the cell's own hover would describe it as saved. Re-commit the stored read
@@ -316,7 +354,14 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
     } finally {
       live.end(covered)
     }
-  }, [productId, accountId, locale, tracker, repaint, mark, commitRead, live])
+  }, [productId, accountId, locale, tracker, repaint, mark, commitRead, live, rebase])
+
+  const write = useCallback((cells: readonly MatrixWriteCell[] | (() => readonly MatrixWriteCell[]), wopts?: { quiet?: boolean; onSend?: () => void }): Promise<MatrixWriteOutcome[]> => {
+    const run = writeChain.current.then(() => sendNow(cells, wopts), () => sendNow(cells, wopts))
+    writeChain.current = run.catch(() => undefined)
+    return run
+  }, [sendNow])
+  const settled = useCallback((): Promise<void> => writeChain.current.then(() => undefined), [])
 
   /* ── verbs: preview → apply → revert ────────────────────────────────────────────────────── */
 
@@ -342,8 +387,9 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
       const body = await res.json().catch(() => null)
       if (!res.ok) throw new Error((body as { message?: string } | null)?.message ?? `The verb was refused (HTTP ${res.status})`)
       const seqAtReread = live.state.seq
+      const ticket = ++readTicket.current
       const again = await fetchMatrix(productId, { accountId, locale })
-      if (again.kind === 'live') { commitRead(again.read); covered = seqAtReread }
+      if (again.kind === 'live') { commitRead(again.read, ticket); covered = seqAtReread }
       const answer = body as { operation: VerbOperation; results?: MatrixWriteOutcome[] }
       return { ...answer.operation, results: answer.results }
     } finally {
@@ -360,8 +406,9 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
       const body = await res.json().catch(() => null)
       if (!res.ok) throw new Error((body as { message?: string } | null)?.message ?? `The revert was refused (HTTP ${res.status})`)
       const seqAtReread = live.state.seq
+      const ticket = ++readTicket.current
       const again = await fetchMatrix(productId, { accountId, locale })
-      if (again.kind === 'live') { commitRead(again.read); covered = seqAtReread }
+      if (again.kind === 'live') { commitRead(again.read, ticket); covered = seqAtReread }
       // The server's answer (`{ operation, results }`): an Undo counts what was put back, never what was asked for.
       const answer = body as { operation?: VerbOperation; results?: MatrixWriteOutcome[] } | null
       return answer?.operation ? { ...answer.operation, results: answer.results } : { ...op, applied: 0, refused: 0, results: [] }
@@ -383,6 +430,7 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
     reload,
     refresh: live.request,
     write,
+    settled,
     previewVerbRun,
     applyVerbRun,
     revert,

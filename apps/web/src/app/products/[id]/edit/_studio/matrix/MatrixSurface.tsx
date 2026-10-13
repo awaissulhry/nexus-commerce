@@ -101,7 +101,7 @@ import { StockSourceDialog, type StockSourceSwitched, type StockSourceTarget } f
 import { sharingApi } from '@/app/settings/sharing/sharingApi'
 import { MatrixToolbar, type MatrixPageState } from './MatrixToolbar'
 import { useMatrix } from './useMatrix'
-import { isMatrixHistoryValue, matrixHistoryAfter, matrixHistoryBefore, matrixReplay } from './matrixUndo'
+import { isMatrixHistoryValue, matrixHistoryAfter, matrixHistoryBefore, matrixReplay, type MatrixHistoryValue } from './matrixUndo'
 import { SheetUndoHistory, undoShortcut, writeHistoryValues, type ApplyCellValues } from '../sheet/sheetUndo'
 import { clearsNothing, matrixStatusCell, publishCellsByPlace, savedBeforeMatrixBusiness, savedBeforeMatrixCase, savedBeforeMatrixFrom, savedBeforeMatrixStatus } from './statusCells'
 import { FROM_LABEL, fromBefore, fromCellText, fromCellView, fromGroupKey, isMatrixFromColId, matrixFromColId } from './sellsFrom'
@@ -119,6 +119,11 @@ import { createBulkSource, type BulkDoors } from './bulk/bulkSource'
 import { BULK_NOT_ON_SCREEN, bulkFieldOfKind, caseHandoffHeld, type BulkContext } from './bulk/fields'
 import type { BulkEditSource, BulkFieldId, BulkInitial } from './bulk/types'
 import styles from './matrix.module.css'
+
+/** One ⌘Z record of a Matrix write: the cell, and what the write saved (`matrixHistoryAfter`). */
+interface HistoryNote { rowId: string; colId: string; key: CoordinateKey; after: MatrixHistoryValue }
+/** The page's one way to send cells: in line, with their ⌘Z step taken when they are sent. */
+type SendCells = (cells: readonly MatrixWriteCell[] | (() => readonly MatrixWriteCell[]), opts?: { quiet?: boolean; notes?: readonly HistoryNote[] }) => Promise<MatrixWriteOutcome[]>
 
 /** Saved views live here (design D-MX8); widths, pins and sort are remembered per surface. */
 export const MATRIX_VIEWS_SURFACE = 'product-edit:views:matrix'
@@ -349,11 +354,17 @@ export function MatrixSurface({ productId }: { productId: string }) {
     if (!r || !coord || !cells?.business || !matrixCellOpens('businessPrice', cells)) return
     setBusinessTarget({ rowId, sku: r.sku, coordinate: coord, business: cells.business, version: cells.version, salePrice: cells.sale?.value ?? null, anchor })
   }, [matrix.cellsOf])
-  /** The whole setting through the Matrix door, quiet (the pop-up says a refusal); at the version it opened on, or the current one (Undo). */
+  /** The page's one way to send cells (defined with the history below); the pop-up's save goes through it too. */
+  const sendCellsRef = useRef<SendCells | null>(null)
+  /**
+   * The whole setting through the Matrix door, quiet (the pop-up says a refusal); at the version it opened on, or the
+   * current one (Undo). In line with every other write, and one ⌘Z step like a typed cell.
+   */
   const writeBusiness = useCallback(async (rowId: string, key: CoordinateKey, setting: BusinessPriceSetting | null, expectedVersion: number | null): Promise<MatrixWriteOutcome | null> => {
     const cells = matrix.cellsOf(rowId, key)
-    if (!cells?.business || !cells.listingId) return null
-    const [outcome] = await matrix.write([{ rowId, coordinateKey: key, cell: 'businessPrice', value: setting, expectedVersion: expectedVersion ?? cells.version, expectedListingId: cells.listingId }], { quiet: true })
+    if (!cells?.business || !cells.listingId || !sendCellsRef.current) return null
+    const cell: MatrixWriteCell = { rowId, coordinateKey: key, cell: 'businessPrice', value: setting, expectedVersion: expectedVersion ?? cells.version, expectedListingId: cells.listingId }
+    const [outcome] = await sendCellsRef.current([cell], { quiet: true, notes: [{ rowId, key, colId: matrixColId(key, 'businessPrice'), after: matrixHistoryAfter(setting) }] })
     return outcome ?? null
   }, [matrix])
   /** After a save: one toast with Undo (none when the old business price was set outside Nexus). */
@@ -568,17 +579,30 @@ export function MatrixSurface({ productId }: { productId: string }) {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps -- another product starts with nothing to undo
   const history = useMemo(() => new SheetUndoHistory(), [productId])
-  /* The Matrix writes in flight: an undo waits for them, so it reads the cells they leave and sends at their version. */
-  const writesInFlight = useRef(new Set<Promise<unknown>>())
   const writeMatrix = matrix.write
-  const sendCells = useCallback((cells: readonly MatrixWriteCell[]) => {
-    const sent = writeMatrix(cells)
-    writesInFlight.current.add(sent)
-    const done = () => { writesInFlight.current.delete(sent) }
-    void sent.then(done, done)
-    return sent
-  }, [writeMatrix])
   const savedCellsOf = matrix.savedCellsOf
+  /**
+   * One write through the page's one door, IN LINE with every other (`useMatrix.write`). Its ⌘Z step (`notes`) is taken
+   * right before it is sent — "before" = the cells as the writes ahead of it left them — and a cell the server did not
+   * change (refused, a conflict, nothing to change) leaves the step: an undo never puts back, and a redo never sends, what
+   * was not saved.
+   */
+  const sendCells = useCallback<SendCells>((cells, sopts = {}) => {
+    const notes = sopts.notes ?? []
+    const sent = writeMatrix(cells, {
+      quiet: sopts.quiet,
+      onSend: notes.length ? () => { for (const n of notes) history.record({ rowId: n.rowId, colId: n.colId, before: matrixHistoryBefore(savedCellsOf(n.rowId, n.key)), after: n.after }) } : undefined,
+    })
+    if (notes.length) void sent.then((outcomes) => {
+      for (const o of outcomes) {
+        if (o.outcome === 'applied') continue
+        const note = notes.find((n) => n.rowId === o.rowId && n.key === o.coordinateKey && n.colId === `${o.coordinateKey}.${o.cell}`)
+        if (note) history.forget(note.rowId, note.colId, note.after)
+      }
+    })
+    return sent
+  }, [writeMatrix, history, savedCellsOf])
+  sendCellsRef.current = sendCells
   const applyHistory = useCallback<ApplyCellValues>((values, direction) => {
     const api = getGridApi()
     if (!api || api.isDestroyed()) return
@@ -588,11 +612,11 @@ export function MatrixSurface({ productId }: { productId: string }) {
       writer.beginOperation()
       try { writeHistoryValues(api, shared, direction) } finally { setTimeout(() => writer.endOperation(), 0) }
     }
-    /* A Matrix cell: the write that puts it back as it was (or sends the edit again), all in one request. */
+    /* A Matrix cell: the write that puts it back as it was (or sends the edit again), all in one request — built when its
+       turn in line comes, from the cells as the writes before it left them. */
     const cells = values.filter((v) => isMatrixHistoryValue(v.value))
     if (cells.length === 0) return
-    void (async () => {
-      await Promise.all([...writesInFlight.current])
+    void sendCells(() => {
       const out: MatrixWriteCell[] = []
       for (const v of cells) {
         const parsed = parseMatrixColId(v.colId)
@@ -601,22 +625,30 @@ export function MatrixSurface({ productId }: { productId: string }) {
         if (step.kind === 'write') out.push(step.cell)
         else if (step.kind === 'refuse') sayReason(step.reason, 'info')
       }
-      if (out.length) await sendCells(out)
-    })()
+      return out
+    })
   }, [getGridApi, writer, savedCellsOf, sendCells, sayReason])
+  /* ⌘Z / ⌘⇧Z take their step only once every write asked before has settled — a step is recorded when its write is sent —
+     and one after another: a second ⌘Z works from what the first put back. */
+  const undoLine = useRef<Promise<void>>(Promise.resolve())
+  const settledWrites = matrix.settled
   /** True when the key was ⌘Z / ⌘⇧Z and was handled. An open editor keeps its own text undo. */
   const onUndoKey = useCallback((key: KeyboardEvent): boolean => {
     const action = undoShortcut(key)
     if (!action || (getGridApi()?.getEditingCells().length ?? 0) > 0) return false
     key.preventDefault()
-    if (action === 'undo') history.undo(applyHistory)
-    else history.redo(applyHistory)
+    undoLine.current = undoLine.current
+      .then(() => settledWrites())
+      .then(() => { if (action === 'undo') history.undo(applyHistory); else history.redo(applyHistory) })
+      .catch(() => undefined)
     return true
-  }, [history, applyHistory, getGridApi])
+  }, [history, applyHistory, getGridApi, settledWrites])
 
   /* A value a cell cannot hold (a paste of "abc" or "1,050", a sale with dates) keeps the old one, and the page says why —
      once per paste or fill, with how many cells. A range Delete says nothing: it asked for no value. */
   const refusedInOperation = useRef<{ verb: 'pasted' | 'filled' | null; reasons: Map<string, number> } | null>(null)
+  /* A paste, a fill or a range Delete is ONE request (and one ⌘Z step): its cells wait here until the operation ends. */
+  const operationCells = useRef<{ cells: MatrixWriteCell[]; notes: HistoryNote[] } | null>(null)
   const onValueRefused = useCallback((reason: string) => {
     const open = refusedInOperation.current
     if (!open) { sayReason(reason, 'danger'); return }
@@ -626,14 +658,18 @@ export function MatrixSurface({ productId }: { productId: string }) {
     beginStatusOperation()
     history.begin()
     refusedInOperation.current ??= { verb, reasons: new Map() }
+    operationCells.current ??= { cells: [], notes: [] }
   }, [beginStatusOperation, history])
   const endOperation = useCallback(() => {
     endStatusOperation()
     history.end()
+    const batch = operationCells.current
+    operationCells.current = null
+    if (batch?.cells.length) void sendCells(batch.cells, { notes: batch.notes })
     const open = refusedInOperation.current
     refusedInOperation.current = null
     if (open?.verb) for (const [reason, n] of open.reasons) sayReason(`${n} ${n === 1 ? 'cell was' : 'cells were'} not ${open.verb}: ${reason}`, 'danger')
-  }, [endStatusOperation, history, sayReason])
+  }, [endStatusOperation, history, sayReason, sendCells])
   /* A fill, a paste or a range Delete is one operation: one Status write per value and one toast, one undo step. */
   const operationProps = useMemo(() => ({
     onFillStart: () => beginOperation('filled'), onFillEnd: endOperation,
@@ -919,11 +955,14 @@ export function MatrixSurface({ productId }: { productId: string }) {
         }
         return
       }
-      /* The history keeps the cell as the server last read it (its mode, its price source), not only its number. */
-      history.record({ rowId: e.data.id, colId: colId!, before: matrixHistoryBefore(matrix.savedCellsOf(e.data.id, parsed.key)), after: matrixHistoryAfter(decision.cell.value) })
-      void sendCells([decision.cell])
+      /* The history keeps the cell as the server last read it (its mode, its price source), not only its number — taken
+         when the write is sent (`sendCells`). Inside a paste, a fill or a range Delete the cell waits for the rest. */
+      const note: HistoryNote = { rowId: e.data.id, colId: colId!, key: parsed.key, after: matrixHistoryAfter(decision.cell.value) }
+      const batch = operationCells.current
+      if (batch) { batch.cells.push(decision.cell); batch.notes.push(note); return }
+      void sendCells([decision.cell], { notes: [note] })
     },
-    [matrix, writer, tracker, getGridApi, sayReason, history, sendCells],
+    [matrix, writer, tracker, getGridApi, sayReason, sendCells],
   )
 
   /* ── a held cell EXPLAINS itself on an open gesture (the sheet's `explainRefusal` rule) ──── */

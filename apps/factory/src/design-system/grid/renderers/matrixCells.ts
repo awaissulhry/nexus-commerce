@@ -1252,6 +1252,9 @@ export function matrixApplyValue(cells: MatrixCells | null | undefined, kind: Ma
       const b = cells.business
       if (!b) return false
       const p = v as MatrixBusinessPriceInput | null
+      /* The same rule again (a paste over cells that already hold it) changes nothing: no write, and nothing blanked. */
+      const now = matrixBusinessSettingOfCell(b)
+      if (JSON.stringify(p) === JSON.stringify(now && (now.rule === 'PERCENT_OFF' ? { rule: 'PERCENT_OFF', percent: now.percent } : { rule: 'FIXED', price: now.price }))) return false
       cells.business = p === null
         ? { ...b, rule: null, percent: null, exact: null, price: null, tiers: null }
         : p.rule === 'PERCENT_OFF'
@@ -1263,6 +1266,8 @@ export function matrixApplyValue(cells: MatrixCells | null | undefined, kind: Ma
       const b = cells.business
       if (!b) return false
       const t = v as MatrixBusinessTiersInput | null
+      const nowTiers = b.tiers ? { type: b.tiers.type, levels: b.tiers.levels.map((l) => ({ minQty: l.minQty, value: l.value })) } : null
+      if (JSON.stringify(t) === JSON.stringify(nowTiers)) return false
       cells.business = { ...b, tiers: t && { type: t.type, levels: t.levels.map((l) => ({ ...l, unitPrice: null })) } }
       return true
     }

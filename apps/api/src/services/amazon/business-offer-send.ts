@@ -17,6 +17,7 @@
  * What the last send did is kept on the listing at `platformAttributes.amazonBusinessSend` (one key, set atomically).
  */
 import prisma from '../../db.js'
+import { announceListingValues } from '../listing-values-events.js'
 import { logger } from '../../utils/logger.js'
 import { amazonSpApiClient } from '../../clients/amazon-sp-api.client.js'
 import { businessPriceOf, businessPriceProblems, type BusinessPriceSetting } from '@nexus/shared/business-price'
@@ -48,6 +49,8 @@ export async function recordAmazonBusinessSend(listingId: string, entry: { statu
   try {
     const value = JSON.stringify({ ...entry, at: new Date().toISOString() })
     await prisma.$executeRaw`UPDATE "ChannelListing" SET "platformAttributes" = jsonb_set(COALESCE("platformAttributes", '{}'::jsonb), '{amazonBusinessSend}', ${value}::jsonb, true) WHERE id = ${listingId}`
+    // The open Matrix re-reads the cell: its send state (sent, refused, removed) shows without a reload.
+    announceListingValues([listingId], ['businessPrice'], 'business-send')
   } catch (err) {
     logger.warn('amazon business offer: send not recorded on the listing', { listingId, error: err instanceof Error ? err.message : String(err) })
   }
@@ -86,6 +89,8 @@ export async function sendAmazonBusinessOffer(input: {
   normalRefusal?: string | null
   /** `row` lane: is the listing still as the job read it? Asked right before a replace. */
   unchanged?: () => Promise<boolean>
+  /** Any send: is the business setting still the one this job read? A newer one goes out with its own row. */
+  settingUnchanged?: () => Promise<boolean>
 }): Promise<BusinessSendOutcome> {
   const signature = businessSendSignature(input.setting, input.normalPrice)
   const finish = async (outcome: BusinessSendOutcome) => {
@@ -131,6 +136,11 @@ export async function sendAmazonBusinessOffer(input: {
   }
   if (plan.kind === 'replace' && input.unchanged && !(await input.unchanged())) {
     return finish({ ok: false, retryable: true, status: 'DEFERRED', line: 'The listing changed while its business price was being sent; it is sent again from the newer values.' })
+  }
+  /* Any send (a change, a removal too): never an OLDER setting over a newer one a person saved meanwhile — that write
+     queued its own row, which sends the newer one. */
+  if (input.settingUnchanged && !(await input.settingUnchanged())) {
+    return finish({ ok: false, retryable: true, status: 'DEFERRED', line: 'The business price changed while it was being sent; the newer one is sent by its own row.' })
   }
   if (!productType) return finish({ ok: false, itemLevel: true, status: 'REFUSED', line: `Nothing was sent: Amazon names no product type for ${input.sku}, and Nexus holds none for this listing or its product.` })
   const res = await amazonSpApiClient.patchPurchasableOffer({

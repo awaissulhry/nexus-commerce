@@ -95,6 +95,27 @@ export class SheetUndoHistory {
     this.redoStack.length = 0
   }
 
+  /**
+   * A recorded change that did NOT happen (the server refused it, or it changed nothing): it leaves its step, and a step
+   * left empty leaves the history — an undo never puts back, and a redo never sends, what was not saved. Matched by the
+   * recorded `after` object itself, so only that one record goes.
+   */
+  forget(rowId: string, colId: string, after: unknown): void {
+    const drop = (step: SheetCellChange[]) => {
+      const i = step.findIndex((c) => c.rowId === rowId && c.colId === colId && c.after === after)
+      if (i >= 0) step.splice(i, 1)
+      return i >= 0
+    }
+    if (this.open && drop(this.open)) return
+    for (const stack of [this.undoStack, this.redoStack]) {
+      for (let s = stack.length - 1; s >= 0; s--) {
+        if (!drop(stack[s]!)) continue
+        if (stack[s]!.length === 0) stack.splice(s, 1)
+        return
+      }
+    }
+  }
+
   get canUndo(): boolean { return this.undoStack.length > 0 || !!this.open?.length }
   get canRedo(): boolean { return this.redoStack.length > 0 }
 
