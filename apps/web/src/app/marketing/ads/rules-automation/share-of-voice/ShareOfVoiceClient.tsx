@@ -1106,7 +1106,6 @@ export function ShareOfVoiceClient() {
                no callback out, so it could not write `?q=`. One search box, in the toolbar, whose
                value is the URL. */
             searchable={false}
-            pagerCentered
             storageKey="nexus.sov.cols"
             exportable
             onExport={onExport}

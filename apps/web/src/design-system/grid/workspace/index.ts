@@ -7,7 +7,6 @@
 export { WorkspaceGrid } from './WorkspaceGrid'
 export { AdsFilterBar, stripServerKeys, isServerKey } from '@/design-system/patterns/workspace-grid/AdsFilterBar'
 export { enabledRank } from '@/design-system/patterns/workspace-grid/enabledRank'
-export { adsWorkspaceTheme } from './theme'
 export type {
   GridPrefs, GridColumn, GridHierarchy, GridRangeFilter, GridSelectFilter, GridMultiSelectFilter, GridFilter,
   GridEditField, GridEditMode, RangeVal, FilterState, WorkspaceGridProps,

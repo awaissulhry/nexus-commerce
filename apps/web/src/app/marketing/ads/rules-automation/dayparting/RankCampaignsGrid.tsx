@@ -241,7 +241,6 @@ export function RankCampaignsGrid({ palette }: { palette: { color: (k: string) =
         searchable
         searchPlaceholder="Search campaigns…"
         searchValue={(r) => r.campaignName}
-        pagerCentered
         defaultSort={{ key: '__first', dir: 'asc' }}
         toolbarLeft={<GrainSwitch schedules={groups.length} campaigns={campaigns.length} skewMinutes={clock?.skewMinutes ?? null} />}
         emptyLabel="No campaigns under rank control in this scope."

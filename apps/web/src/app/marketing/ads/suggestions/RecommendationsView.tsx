@@ -396,7 +396,6 @@ export function RecommendationsView({ status, rowParam, writeUrl }: {
         searchable
         searchPlaceholder="Search recommendations…"
         searchValue={(r) => `${r.title} ${r.detail}`}
-        pagerCentered
         customizable
         storageKey="suggestions-grid-recommendations-v1"
         defaultSort={{ key: 'impact', dir: 'desc' }}

@@ -186,7 +186,6 @@ export function RuleListTab({ noun, seed, onAddRule, liveType, editHref, emptyNo
         searchable
         searchPlaceholder="Search rules…"
         searchValue={(r) => r.name}
-        pagerCentered
         defaultSort={{ key: '__first', dir: 'asc' }}
         emptyLabel={`No ${nounLower}s yet.`}
         emptyNode={emptyNode}
