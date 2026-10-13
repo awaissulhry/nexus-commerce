@@ -20,7 +20,7 @@ import { newOperationId, runBulkOperation, type BulkSend } from '../bulkOperatio
 import { createShopifyBulkPost, orderShopifyColumnRequests } from '../../shopify/channelSheetWriter';
 import { preserveContentVersions } from '../contentVersions';
 import { useSheetUndo, type ResetCellBack } from '../useSheetUndo';
-import { inheritedCell, stateBefore, takeEditPrior } from '../sheetUndo';
+import { inheritedCell, listPositions, stateBefore, takeEditPrior } from '../sheetUndo';
 import { useShopifyDraftCell, type ShopifyHistoryRefused } from '../../shopify/ShopifyDraftCell';
 import { shopifyHistoryChange, shopifyHistoryRefusal, takeShopifyReplayIntent } from '../../shopify/draftHistory';
 import { shopifyGridTransfer } from '../../shopify/shopifyGridTransfer';
@@ -687,19 +687,29 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             return;
         }
         const shopifyValue = !!data?.columns.find(column => column.key === colId)?.shopifyField;
+        /* G2/G3 — the cell as the server holds it, with its state (a cell that followed is put back by a reset; a list
+           position only when no other position held its own value before). Read once, while the row holds the edited cell. */
+        const beforeOf = (row: ChannelSheetRow) => stateBefore(e.oldValue, row, colId, takeEditPrior(row.values?.[colId]), (r, key) => channelResetOffer(r, key),
+            listPositions(row, colId, (cell) => wholeListWriteField((cell as StudioCellValue | undefined)?.writeField ?? ''), (key) => undo.history.inOpenStep(row.rowId, key)));
         /* P0 — a cell whose formula state is not known yet keeps the edit and applies it once it is (the formula path if
            the cell turns out to hold one). Never refused: the refusal lost every paste made while formulas loaded. */
         if (!shopifyValue && !formulas.knownFor(e.data.rowId, colId)) {
             const rowId = e.data.rowId;
+            const row = e.data;
             tracker.set(rowId, colId, 'saving', HELD_FOR_FORMULAS);
             formulas.whenKnown(rowId, colId, () => {
                 if (tracker.get(rowId, colId)?.reason === HELD_FOR_FORMULAS)
                     latestValueChanged.current(e);
-            }, (reason) => tracker.set(rowId, colId, 'refused', reason ?? HELD_EDIT_DROPPED));
+            }, (reason) => {
+                tracker.set(rowId, colId, 'refused', reason ?? HELD_EDIT_DROPPED);
+                // The edit never left: the cell shows a value the server does not hold (finding 4).
+                undo.unsaved({ rowId, colId, before: beforeOf(row), after: e.newValue });
+            });
             return;
         }
         const typed = typeof e.newValue === 'string' ? e.newValue : null;
         if (!shopifyValue && ((typed !== null && isFormulaDraft(typed)) || formulas.exprFor(e.data.rowId, colId!))) {
+            const before = beforeOf(e.data);
             const row = e.data;
             const prev = row.values?.[colId];
             if (prev) {
@@ -722,12 +732,15 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                         if (n)
                             getGridApi()?.refreshCells({ force: true, rowNodes: [n], columns: [colId] });
                     }
+                    // The cell shows the refused value; the server still holds `before` (finding 4).
+                    undo.unsaved({ rowId: row.rowId, colId, before, after: e.newValue });
                 }
             })
                 .catch((err: unknown) => {
                 const reason = err instanceof Error ? err.message : String(err);
                 tracker.set(row.rowId, colId, 'unknown', `Could not confirm this save. Refresh to check: ${reason}`);
                 reporterRef.current.resolved(writeId, false, reason, subject);
+                undo.unsaved({ rowId: row.rowId, colId, before, after: e.newValue });
             });
             return;
         }
@@ -736,11 +749,11 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
            G2/G3 — every other cell keeps its state too (a cell that followed is put back by a reset), and the history keeps
            only what the server stored: the writer reports this edit's outcome. */
         const history = shopifyValue ? shopifyHistoryChange(e.data.values?.[colId], e.oldValue, e.newValue) : null;
-        const before = history ? history.before : stateBefore(e.oldValue, e.data, colId, takeEditPrior(e.data.values?.[colId]), row => channelResetOffer(row, colId), wholeListWriteField(e.data.values?.[colId]?.writeField ?? ''));
+        const before = history ? history.before : beforeOf(e.data);
         const onOutcome = undo.edit({ rowId: e.data.rowId, colId, before, after: history ? history.after : e.newValue }, e.source);
         const replay = shopifyValue ? takeShopifyReplayIntent(e.data.values?.[colId]) : undefined;
         writer.set(e.data.rowId, colId, replay === 'reset' ? null : e.newValue, { row: e.data, intent: replay ?? 'set', onOutcome });
-    }, [writer, formulas, reload, channel, marketplace, accountId, locale, writeInstanceId, undo.edit, identitySku.onValueChanged]);
+    }, [writer, formulas, reload, channel, marketplace, accountId, locale, writeInstanceId, undo.edit, undo.unsaved, undo.history, identitySku.onValueChanged]);
     /* A held edit re-enters through the LATEST handler, which sees the formula state that released it. */
     const latestValueChanged = useRef(onCellValueChanged);
     latestValueChanged.current = onCellValueChanged;

@@ -75,6 +75,12 @@ export function useSheetUndo<Row>(writer: SheetWriter<Row>, getGridApi: () => Gr
   }, [history])
 
   /**
+   * G2 — an edit that never reached the writer and was not stored (dropped while formulas loaded, a refused formula
+   * save): no step, but the next edit of the cell takes `before` — what the server holds — as its "before".
+   */
+  const unsaved = useCallback((change: SheetCellChange) => { history.unsaved(change) }, [history])
+
+  /**
    * P1 — the sheet's own multi-cell writes (Clear on Delete, Set every row…) as ONE undo step and ONE save, exactly like
    * the grid's fill and paste: `run` writes through the grid (`setDataValue`), and the fence closes on the next turn,
    * after AG has reported every change.
@@ -99,7 +105,7 @@ export function useSheetUndo<Row>(writer: SheetWriter<Row>, getGridApi: () => Gr
     }),
   }), [writer, history])
 
-  return { history, record, edit, onKeyDown, gridProps, operation }
+  return { history, record, edit, unsaved, onKeyDown, gridProps, operation }
 }
 
 /** The cell shows an edit the server did not store: refused, or no answer came. */

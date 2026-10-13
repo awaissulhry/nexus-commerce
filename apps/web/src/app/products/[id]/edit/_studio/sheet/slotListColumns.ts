@@ -12,6 +12,7 @@
  * beyond the ruling.
  */
 import { isSlotListKey, slotListChanges, slotListKey, type SlotGroup } from '@/design-system/grid/editors/slotList'
+import { carryEditPrior } from './sheetUndo'
 
 /** The lists that get one cell, with the words the cell uses. */
 export const SLOT_LIST_FIELDS: Readonly<Record<string, { label: string; itemLabel: string }>> = {
@@ -205,7 +206,11 @@ export function acknowledgePendingEdits<E extends { row: { values: Record<string
     if (!choices) { (tier === 'shared' ? apply : keep).push(edit); continue }
     const address = choices[tier]?.address
     if (!address) { keep.push(edit); continue }
-    edit.row.values = { ...edit.row.values, [edit.colId]: { ...cell, contentAddress: address, contentAcknowledged: true } }
+    const next = { ...cell, contentAddress: address, contentAcknowledged: true }
+    // A pin makes the cell this listing's own: its undo must find the cell it replaced (following Shared) and reset it,
+    // not pin the Shared text (review of #607, finding 3). A Shared answer writes the Shared text: its undo writes it back.
+    if (tier === 'pin') carryEditPrior(cell, next)
+    edit.row.values = { ...edit.row.values, [edit.colId]: next }
     apply.push(edit)
   }
   return { apply, keep }

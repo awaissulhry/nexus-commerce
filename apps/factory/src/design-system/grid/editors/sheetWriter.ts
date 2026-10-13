@@ -1046,6 +1046,18 @@ export class SheetWriter<T> {
     return retry.length
   }
 
+  /**
+   * A read replaced a REFUSED cell's value (a full re-read: Reload, "changed elsewhere — refresh"): its mark and its retry
+   * go with the value they were about, so neither the status line nor "Try again" speaks of an edit no longer on screen.
+   */
+  forgetRefused(rowId: string, colId: string): void {
+    if (this.opts.tracker.get(rowId, colId)?.state !== 'refused') return
+    this.forgetFailed(rowId, colId)
+    this.opts.tracker.clear(rowId, colId)
+    this.repaint(rowId, [colId])
+    this.emit()
+  }
+
   /** A row's queued cells leave as its flight: their `onOutcome`s wait for its answer (`settle`). */
   private takeOff(rowId: string, q: RowQueue): void {
     const listeners = new Map<string, OutcomeListener>()

@@ -15,7 +15,7 @@
  * or follows is put back by a reset (`SheetInheritValue`), never by storing the value it showed; and an edit the server
  * did not store leaves the history (`edit`).
  */
-import type { SheetCellOutcome } from '@/design-system/grid/editors/sheetWriter'
+import { sheetValuesMatch, type SheetCellOutcome } from '@/design-system/grid/editors/sheetWriter'
 
 export interface SheetCellChange {
   rowId: string
@@ -56,19 +56,60 @@ export const isInheritValue = (value: unknown): value is SheetInheritValue =>
 /** The reset a cell offers (`sheetReset.ts`'s `masterResetOffer` / `channelResetOffer`), or null. */
 export type CellResetOffer = { intent: 'reset' | 'reset-list' } | null
 
+/** The list a position belongs to: its key, every position of it in the row, and each one as it was before the operation. */
+export interface ListPositions {
+  key: string
+  positions: readonly string[]
+  /** The cell a position held before the operation being recorded; `undefined` = the cell it holds now. */
+  priorOf: (colId: string) => unknown
+}
+
 /**
  * The "before" an edit records: its value, or — when the cell had no value of its own before the edit (`prior`, the cell
  * the edit replaced, offers no reset) and the edited cell now has one a reset takes away — the inheritance
  * (`SheetInheritValue`). A cell that offers no reset either way (a family row, a field nothing inherits) keeps the plain
  * value, as before.
+ *
+ * 🔴 A list position resets with its WHOLE list (`reset-list`): the inheritance is recorded only when no other position
+ * of the list held a value of its own before the operation. Otherwise undoing one position would wipe the positions saved
+ * before it (review of #607, finding 1: position 1 typed and saved, position 2 typed while the sheet still showed it
+ * following — ⌘Z reset the list and position 1 was gone). Then the plain value, as before.
  */
 export function stateBefore<Row extends { values?: Record<string, unknown> }>(value: unknown, row: Row, colId: string, prior: unknown,
-  offerOf: (row: Row) => CellResetOffer, list: string | null = null): unknown {
+  offerOf: (row: Row, colId: string) => CellResetOffer, list: ListPositions | null = null): unknown {
   if (prior === undefined) return value
-  const now = offerOf(row)
-  if (!now || offerOf({ ...row, values: { ...row.values, [colId]: prior } } as Row)) return value
-  return Object.freeze({ [HISTORY_ONLY]: true as const, kind: 'sheet-inherit' as const, value, intent: now.intent, cell: prior, list: now.intent === 'reset-list' ? list : null })
+  const now = offerOf(row, colId)
+  const before = { ...row, values: { ...row.values, [colId]: prior } } as Row
+  if (!now || offerOf(before, colId)) return value
+  if (now.intent === 'reset-list') {
+    if (!list) return value
+    const others = list.positions.filter((key) => key !== colId)
+    const earlier = others.flatMap((key) => { const cell = list.priorOf(key); return cell === undefined ? [] : [[key, cell] as const] })
+    const listBefore = { ...before, values: { ...before.values, ...Object.fromEntries(earlier) } } as Row
+    if (others.some((key) => offerOf(listBefore, key))) return value
+  }
+  return Object.freeze({ [HISTORY_ONLY]: true as const, kind: 'sheet-inherit' as const, value, intent: now.intent, cell: prior, list: now.intent === 'reset-list' ? list!.key : null })
 }
+
+/**
+ * The positions of the list `colId` belongs to in `row` (`listOf` names a cell's list), each read as it was before the
+ * operation being recorded: a position this same operation changed (its edit not recorded yet, or recorded in the open
+ * step) by the cell it replaced, any other by the cell it holds now.
+ */
+export function listPositions(row: { values?: Record<string, unknown> }, colId: string, listOf: (cell: unknown) => string | null,
+  inOpenStep: (colId: string) => boolean): ListPositions | null {
+  const values = row.values ?? {}
+  const key = listOf(values[colId])
+  if (!key) return null
+  return {
+    key,
+    positions: Object.keys(values).filter((k) => listOf(values[k]) === key),
+    priorOf: (k) => { const noted = notedPrior(values[k]); return noted && (!noted.taken || inOpenStep(k)) ? noted.prior : undefined },
+  }
+}
+
+/** The value a "before" or "after" shows (a history-only value carries it). */
+const shownValue = (value: unknown): unknown => (isHistoryOnly(value) ? (value as { value?: unknown }).value : value)
 
 /** The provenance a reset puts back on screen until the sheet reads the cell again. */
 const INHERIT_STATE_KEYS = ['source', 'layer', 'inherited', 'inheritedFrom', 'pinned'] as const
@@ -80,16 +121,25 @@ export function inheritedCell<Cell extends object>(current: Cell, before: SheetI
 }
 
 /* The cell an operator edit replaced: kept by the column's value setter (AG has run it by the time the change is
-   reported, and the row then holds only the new cell), read once when the edit is recorded. */
-const editPriors = new WeakMap<object, unknown>()
+   reported, and the row then holds only the new cell), taken once when the edit is recorded. */
+const editPriors = new WeakMap<object, { prior: unknown; taken: boolean }>()
+const notedPrior = (cell: unknown) => (typeof cell === 'object' && cell !== null ? editPriors.get(cell) : undefined)
+/** An edit made `next` from `previous`. Over an edit the history never recorded (it waits for a Shared/pin choice, or it
+ *  changed nothing) the cell keeps what it was before both. */
 export function noteEditPrior(next: object, previous: unknown): void {
-  editPriors.set(next, previous)
+  const earlier = notedPrior(previous)
+  editPriors.set(next, { prior: earlier && !earlier.taken ? earlier.prior : previous, taken: false })
 }
 export function takeEditPrior(next: unknown): unknown {
-  if (typeof next !== 'object' || next === null) return undefined
-  const prior = editPriors.get(next)
-  editPriors.delete(next)
-  return prior
+  const noted = notedPrior(next)
+  if (!noted || noted.taken) return undefined
+  noted.taken = true
+  return noted.prior
+}
+/** The cell replaced `from` without a new edit (a Shared/pin choice marks it): the edit's prior goes with it. Finding 3. */
+export function carryEditPrior(from: unknown, to: object): void {
+  const noted = notedPrior(from)
+  if (noted && !noted.taken) editPriors.set(to, { prior: noted.prior, taken: false })
 }
 
 /** The part of AG's API a replay writes through. */
@@ -128,6 +178,13 @@ export function routeHistoryValues(values: Array<{ rowId: string; colId: string;
 export type ApplyCellValues = (values: Array<{ rowId: string; colId: string; value: unknown }>, direction: 'undo' | 'redo') => void
 
 export const SHEET_UNDO_LIMIT = 100
+
+/** One cell's ledger (`SheetUndoHistory.edit`). */
+interface CellLedger {
+  value: unknown
+  open: Array<{ entry: SheetCellChange | null; after: unknown }>
+  unsaved?: { value: unknown }
+}
 
 export class SheetUndoHistory {
   private readonly undoStack: SheetCellChange[][] = []
@@ -172,8 +229,40 @@ export class SheetUndoHistory {
   }
 
   /* G2 — per cell, what the server holds as far as this page knows, while an edit of the cell is unsettled or was not
-     stored: `value` is a "before" (a plain value or a history-only one), `open` the edits whose save has not answered. */
-  private readonly stored = new Map<string, { value: unknown; open: Array<{ entry: SheetCellChange | null; after: unknown }> }>()
+     stored: `value` is a "before" (a plain value or a history-only one), `open` the edits whose save has not answered,
+     `unsaved` the value the cell was left showing that the server does not hold. */
+  private readonly stored = new Map<string, CellLedger>()
+
+  /** True when `colId` of `rowId` was changed by the step still being recorded. */
+  inOpenStep(rowId: string, colId: string): boolean {
+    return !!this.open?.some((c) => c.rowId === rowId && c.colId === colId)
+  }
+
+  /**
+   * The cell's ledger for a new edit. The remembered "before" counts only while an edit of the cell is on its way, or the
+   * cell still SHOWS the value that was not stored (refused, unanswered) — never after a read replaced it (review of
+   * #607, finding 2: a refused edit, then "changed elsewhere — refresh" showed another person's value under the old mark;
+   * the next edit's undo put back the remembered value over theirs). Otherwise it starts from what the cell shows.
+   */
+  private ledgerFor(change: SheetCellChange, unconfirmed: boolean) {
+    const key = `${change.rowId}::${change.colId}`
+    const held = this.stored.get(key)
+    const live = !!held && (held.open.length > 0 || (unconfirmed && !!held.unsaved && sheetValuesMatch(shownValue(change.before), shownValue(held.unsaved.value))))
+    if (live) return { key, ledger: held! }
+    const ledger: CellLedger = { value: change.before, open: [] }
+    this.stored.set(key, ledger)
+    return { key, ledger }
+  }
+
+  /**
+   * G2, finding 4 — an edit that never reached the writer and was not stored (held while formulas loaded and then
+   * dropped, a refused formula save): no step, but the cell now shows `after`, which the server does not hold — the next
+   * edit of the cell takes `before` (what the server holds) as its "before".
+   */
+  unsaved(change: SheetCellChange): void {
+    const { ledger } = this.ledgerFor(change, true)
+    ledger.unsaved = { value: change.after }
+  }
 
   /**
    * G2 — an edit whose save the writer reports (`SheetWriter.set`'s `onOutcome`); returns that report's handler.
@@ -185,24 +274,25 @@ export class SheetUndoHistory {
    * `step: false` — an undo's or redo's own write: it is no step, but what it stores is the next edit's "before".
    */
   edit(change: SheetCellChange, unconfirmed: boolean, step = true): (outcome: SheetCellOutcome) => void {
-    const key = `${change.rowId}::${change.colId}`
-    let cell = this.stored.get(key)
-    if (!cell || (cell.open.length === 0 && !unconfirmed)) this.stored.set(key, cell = { value: change.before, open: [] })
-    const mine = { entry: step ? this.record({ ...change, before: cell.value }) : null, after: change.after }
-    cell.open.push(mine)
-    const ledger = cell
+    const { key, ledger } = this.ledgerFor(change, unconfirmed)
+    const mine = { entry: step ? this.record({ ...change, before: ledger.value }) : null, after: change.after }
+    ledger.open.push(mine)
     return (outcome) => {
       const at = ledger.open.indexOf(mine)
       if (at < 0) return
       ledger.open.splice(at, 1)
+      const latest = ledger.open.length === at
       if (outcome === 'saved') {
         ledger.value = mine.after
+        if (latest) delete ledger.unsaved
         // The edits of this cell made after it, still unanswered, were made over the value it stored.
         for (const later of ledger.open.slice(at)) if (later.entry && later.entry !== mine.entry) later.entry.before = mine.after
         // Stored and nothing else on its way: the cell shows what the server holds, and the next edit reads it there.
         if (ledger.open.length === 0 && this.stored.get(key) === ledger) this.stored.delete(key)
         return
       }
+      // Refused or unanswered, and nothing typed since: the cell is left showing it.
+      if (latest && outcome !== 'dropped') ledger.unsaved = { value: mine.after }
       // A step that merged a later change of this cell keeps it: that change's own answer decides.
       if (mine.entry && !ledger.open.some((later) => later.entry === mine.entry)) this.drop((c) => c === mine.entry && c.after === mine.after)
     }

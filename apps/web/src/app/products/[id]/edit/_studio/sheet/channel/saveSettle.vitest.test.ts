@@ -166,6 +166,8 @@ describe('G1 — a quiet read lands over a refused cell, and keeps that cell', (
     expect(master.match(/hasOpenChanges/g)).toHaveLength(3)
     // The Shared scope's quiet read keeps a refused cell's value (as `keepUnsettledCells` does here).
     expect(master).toContain("if (state && ['refused', 'unknown', 'saving', 'pending'].includes(state) && previous.values[key]) row.values[key] = previous.values[key]")
+    // Review of #607, finding 2 — a full read (Reload, "changed elsewhere — refresh") takes the refusal marks with the values.
+    expect(master).toContain('for (const row of next.rows) for (const key of Object.keys(row.values)) writer.forgetRefused(row.id, key)')
   })
 })
 
@@ -174,10 +176,16 @@ describe('G2/G3 — both sheets record an edit with its state and keep it only w
     for (const file of [join(__dirname, 'useChannelSheetAdapter.tsx'), join(__dirname, '..', 'master', 'useMasterSheetAdapter.tsx')]) {
       const src = readFileSync(file, 'utf8')
       expect(src).toMatch(/onOutcome: undo\.edit\(|const onOutcome = undo\.edit\(/)
-      expect(src).toContain('stateBefore(e.oldValue, e.data, ')
+      expect(src).toMatch(/stateBefore\(e\.oldValue, (e\.data|row), colId!?, takeEditPrior\(/)
       expect(src).toContain('useSheetUndo(writer, getGridApi, { tracker, resetCell: resetCellBack })')
       expect(src).toContain('writer.set(rowId, colId, null, { row, intent: before.intent, onOutcome });')
       expect(src).not.toMatch(/undo\.record\(/)
+      // Review of #607, finding 4 — an edit dropped while formulas loaded, and a refused (or unanswered) formula save,
+      // tell the history the cell shows a value the server does not hold.
+      expect(src.match(/undo\.unsaved\(/g)).toHaveLength(3)
+      expect(src).toMatch(/'refused', reason \?\? HELD_EDIT_DROPPED\);\s*\/\/[^\n]*\n\s*undo\.unsaved\(/)
     }
+    // Review of #607, finding 1 — a channel list position reads its list's other positions before recording a list reset.
+    expect(readFileSync(join(__dirname, 'useChannelSheetAdapter.tsx'), 'utf8')).toContain('listPositions(row, colId, ')
   })
 })

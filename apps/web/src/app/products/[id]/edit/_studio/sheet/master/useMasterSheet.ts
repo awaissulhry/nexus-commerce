@@ -290,6 +290,11 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
               if (state && ['refused', 'unknown', 'saving', 'pending'].includes(state) && previous.values[key]) row.values[key] = previous.values[key]
             }
           }
+        } else {
+          /* A full read ("changed elsewhere — refresh", Reload) replaces every cell it reads, refused ones included: their
+             refusal marks go with the values they were about (#663; review of #607, finding 2 — a mark left on another
+             person's value made the next edit's undo put back the remembered value over theirs). */
+          for (const row of next.rows) for (const key of Object.keys(row.values)) writer.forgetRefused(row.id, key)
         }
         setProblems(verifyContract(next))
         setSheet(next)

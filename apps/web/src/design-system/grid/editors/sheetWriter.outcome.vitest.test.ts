@@ -86,4 +86,32 @@ describe('SheetWriter — each edit hears its outcome', () => {
     expect(h.log).toHaveLength(2)
     w.destroy()
   })
+
+  /* Review of #607, finding 2 — "changed elsewhere — refresh" replaced a refused cell's value and left its mark (and its
+     retry) on another person's value. A full read now takes both with the value. */
+  it('forgets a refused cell a read replaced: no mark, and "Try again" no longer resends it', async () => {
+    const tracker = new CellSaveTracker()
+    const sent: unknown[] = []
+    const commit = async (req: SheetWriteRequest<unknown>): Promise<SheetWriteResult> => {
+      sent.push(...req.cells.map((c) => c.value))
+      return { ok: false, cells: Object.fromEntries(req.cells.map((c) => [c.colId, { ok: false, reason: 'Changed elsewhere.' }])) }
+    }
+    const w = new SheetWriter({ tracker, getApi: () => null, commit })
+    w.set('r1', 'material', 'X')
+    w.set('r2', 'material', 'Z')
+    await w.flush()
+    expect(w.failedCount).toBe(2)
+    w.forgetRefused('r1', 'material')
+    expect(tracker.get('r1', 'material')).toBeUndefined()
+    expect(w.failedCount).toBe(1)
+    sent.length = 0
+    w.retryFailed()
+    await w.flush()
+    expect(sent).toEqual(['Z'])
+    // Only a refusal goes: an edit still on its way keeps its mark.
+    tracker.set('r3', 'material', 'saving')
+    w.forgetRefused('r3', 'material')
+    expect(tracker.get('r3', 'material')?.state).toBe('saving')
+    w.destroy()
+  })
 })
