@@ -21,8 +21,11 @@
  * 🔴 Review state. A text write marks its WHOLE language (or pin) row reviewed and `manual`
  * (`pim/translation-write.ts`, `pim/content-write.ts`). A write at a fresh version must never mark as reviewed a field
  * someone else (the AI translator, `pim/catalog-translate.ts`) drafted after the person read the row. So when the
- * translation row this write lands on moved since the person's read (or the page sent no token for it) and that row is
- * a draft now, the write is refused: the person reads the draft first.
+ * translation row this write lands on moved since the person's read (or the page sent no token for it) and that row
+ * holds unreviewed MACHINE text now, the write is refused: the person reads the draft first. "Machine text" is the
+ * publish gate's own predicate (`pim/publish-review-gate.ts` `unreviewedMachineDraft`). A row with no source is never
+ * one: every Shared text edit cascades onto the listings that follow Shared and creates or bumps their pin row with only
+ * `follows` (`master-content.service.ts`) — nothing was drafted, so it refuses nothing (review of #611).
  */
 import { isSheetCellStamp, sheetCellStamp, sheetStampHolds, type SheetCellStamp } from '@nexus/shared/sheet-stamp'
 import { FEATURES } from '@nexus/shared/permissions'
@@ -30,6 +33,7 @@ import prisma from '../../db.js'
 import { activeDatabaseTransaction, inDatabaseTransaction, inSavepoint } from '../../lib/database-context.js'
 import { ProductBulkError } from '../../lib/product-bulk-error.js'
 import { applyProductBulkEdits, type ProductBulkContext, type ProductBulkInput } from './bulk-edit.service.js'
+import { unreviewedMachineDraft } from '../pim/publish-review-gate.js'
 import type { StudioSheet } from '../pim/studio-sheet.service.js'
 
 /** One try of the unit's write (the caller's own writer and its per-try evidence); the door gives each try a savepoint. */
@@ -39,6 +43,14 @@ export type StampedOutcome<T> = { ok: true; value: T; writtenAt?: number } | { o
 
 /** The sentence for a text row someone drafted after the person read it. */
 export const DRAFT_SINCE_READ = 'Other text in this language was drafted since you read it, and saving would mark that draft as reviewed. Refresh, review the draft, then save again.'
+
+/**
+ * Does this text row hold unreviewed machine text? The publish gate's predicate, on the row as the content resolver reads
+ * it: no source is a person's text (`content-resolver.ts` reads it as `manual`). So a follow-only row a Shared cascade made
+ * (no source, never reviewed) is not a draft.
+ */
+const holdsMachineDraft = (row: { source: string | null; reviewedAt: Date | null }) => unreviewedMachineDraft({ translation: {
+  source: (row.source ?? 'manual') as 'manual' | 'ai' | 'translated', reviewedAt: row.reviewedAt ? row.reviewedAt.toISOString() : null, outdated: false } })
 
 /** The one destination a stamped unit names: a Shared scope (no channel) or one channel coordinate. */
 interface StampScope { channel?: string; marketplace: string; accountId?: string; locale?: string; aliasKey: string }
@@ -133,13 +145,14 @@ async function stampVerdict(input: ProductBulkInput, context: ProductBulkContext
   for (const change of input.changes) {
     const address = change.contentAddress as { tier?: string; language?: string } | undefined
     if ((address?.tier !== 'language' && address?.tier !== 'pin') || !address.language) { changes.push(change); continue }
+    const select = { version: true, reviewedAt: true, source: true } as const
     const text = address.tier === 'language'
-      ? await prisma.productTranslation.findFirst({ where: { productId, language: address.language }, select: { version: true, reviewedAt: true } })
-      : listingId ? await prisma.channelListingTranslation.findFirst({ where: { channelListingId: listingId, language: address.language }, select: { version: true, reviewedAt: true } }) : null
+      ? await prisma.productTranslation.findFirst({ where: { productId, language: address.language }, select })
+      : listingId ? await prisma.channelListingTranslation.findFirst({ where: { channelListingId: listingId, language: address.language }, select }) : null
     const version = text?.version ?? 0
     const moved = change.contentVersion === undefined || change.contentVersion !== version
     // `current` is empty — every stamped cell held — and present, so the page treats this as the field-level refusal it is.
-    if (moved && text && text.reviewedAt === null && change.contentState !== 'draft') return refuse({ error: DRAFT_SINCE_READ, message: DRAFT_SINCE_READ, current: {} })
+    if (moved && text && holdsMachineDraft(text) && change.contentState !== 'draft') return refuse({ error: DRAFT_SINCE_READ, message: DRAFT_SINCE_READ, current: {} })
     changes.push(change.contentVersion === undefined ? change : { ...change, contentVersion: version })
   }
   return { retry: { ...input, expectedVersion: owner.version, changes } }

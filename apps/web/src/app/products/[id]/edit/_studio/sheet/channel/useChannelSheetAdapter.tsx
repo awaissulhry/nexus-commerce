@@ -259,7 +259,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     /* G1 — a quiet re-read waits only for edits still on their way (saving, waiting, no answer): a refused cell no longer
        holds back the read that shows a variation the value it now inherits. The refused cell keeps the value it shows,
        and its mark, through the read — as on the Shared scope (`useMasterSheet`'s quiet read). */
-    const quietRefresh = useCallback((canApply: () => boolean) => refreshRef.current(canApply, (page) => keepUnsettledCells(page, rowsRef.current, (rowId, colId) => tracker.get(rowId, colId)?.state)), [tracker]);
+    const quietRefresh = useCallback((canApply: () => boolean) => refreshRef.current(canApply, (page) => keepUnsettledCells(page, rowsRef.current, (rowId, colId) => tracker.get(rowId, colId)?.state, (rowId, colId, words) => tracker.set(rowId, colId, 'refused', words))), [tracker]);
     /* Sheet publish parity, step 3 — the "Last publish" column reads the destination's publication status through a
        ref, so a new answer refreshes its cells without rebuilding the column (`refreshCells` below). */
     const publishLookup = useMemo(() => publishColumnLookup(data?.columns ?? [], data?.scope.label ?? ''), [data?.columns, data?.scope.label]);

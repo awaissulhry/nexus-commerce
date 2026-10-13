@@ -27,7 +27,7 @@ import { recoverSheetRow } from '../sheetRecovery'
 import { commitMasterRow } from './masterWrite'
 import { runBulkOperation, type BulkSend } from '../bulkOperation'
 import { preserveContentVersions } from '../contentVersions'
-import { rememberReadCells } from '../sheetStamps'
+import { readAgainOverRefused, rememberReadCells } from '../sheetStamps'
 import { verifyContract, type StudioRow, type StudioSheet } from './types'
 import type { SkuRename } from '../identitySkuEdit'
 
@@ -290,11 +290,16 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
            and then lands quietly (so the cell it commits keeps its saving state, as any quiet read does). */
         if ((quiet || sameRead) && api && !api.isDestroyed() && api.getEditingCells().length > 0) { oweQuietRead(); return }
         if (quiet) {
+          const labels = new Map(next.columns.map((column) => [column.key, column.optionLabels]))
           for (const row of next.rows) {
             const previous = sheetRef.current?.rows.find(old => old.id === row.id)
             if (!previous) continue
             for (const key of Object.keys(row.values)) {
               const state = tracker.get(row.id, key)?.state
+              /* Field stamps (review of #611) — this read gives the row its version, so a refused cell kept over it names what
+                 the server holds now, and "Try again" replaces exactly that (`../sheetStamps.ts`). */
+              const words = state === 'refused' && previous.values[key] ? readAgainOverRefused(previous.values[key], row.values[key], labels.get(key)) : undefined
+              if (words) tracker.set(row.id, key, 'refused', words)
               if (state && ['refused', 'unknown', 'saving', 'pending'].includes(state) && previous.values[key]) row.values[key] = previous.values[key]
             }
           }

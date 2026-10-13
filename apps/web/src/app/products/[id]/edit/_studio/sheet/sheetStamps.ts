@@ -16,15 +16,30 @@
  * After a save that went ahead over another change (`writtenAt`), or a refusal because a stamped field moved (`current`),
  * the row keeps the version and text tokens it READ (`masterWrite.ts`, `channel/useChannelSheet.ts`): the other change is
  * not on screen yet, so the row's next save is checked field by field again; the quiet read that follows brings both.
+ *
+ * 🔴 A refused cell and "Try again" (review of #611). The refused cell keeps the person's value through the quiet read,
+ * while the row takes that read's version. A retry sent on the version alone would then overwrite the other person's
+ * value, which the page never showed. So a refusal that names the moved field (`current`) puts the server's value in the
+ * cell's mark ("Changed elsewhere: now …"), and the retry carries the stamp of THAT server cell: a deliberate replace of
+ * exactly what the mark showed, which the door refuses again if the field moved once more. A quiet read that keeps a
+ * refused cell over a server cell its stamp no longer matches moves the stamp, and the words, to that cell: the version
+ * the row now holds and the value the mark shows come from the same read.
  */
-import { sheetCellStamp, type SheetCellStamp } from '@nexus/shared/sheet-stamp'
+import { isSheetCellStamp, sheetCellStamp, sheetStampHolds, type SheetCellStamp, type SheetStampCell } from '@nexus/shared/sheet-stamp'
 
+import { optionLabel } from './optionLabel'
 import { editPriorOf } from './sheetUndo'
 
 /** Every cell object a sheet read sent (the Shared and the channel scope alike). */
 const readCells = new WeakSet<object>()
 /** A cell that replaced an unsent edit without a new edit (a Shared/pin choice): the read cell the edit was made over. */
 const carried = new WeakMap<object, object>()
+/**
+ * A cell a stamped save sent and the door refused: the server's cell its retry replaces — the one the refusal named
+ * (`current`), the one its own stamp named when that field held, or the one a later quiet read showed. `null`: the
+ * refusal named the field, but the server read has no such cell.
+ */
+const replacing = new WeakMap<object, SheetCellStamp | null>()
 
 const isObject = (value: unknown): value is object => typeof value === 'object' && value !== null
 
@@ -68,9 +83,65 @@ export interface StampFields { expected?: SheetCellStamp; column?: string }
  */
 export function stampFor(current: unknown, colId: string, intent: string | undefined, column?: { locale?: string } | null): StampFields {
   if (intent === 'reset-list') return {}
-  const seen = seenCell(current)
-  const expected = seen ? sheetCellStamp(seen) : undefined
+  // A refused cell sent again ("Try again") replaces the server's cell its mark named — never only its own read's.
+  const target = isObject(current) ? replacing.get(current) : undefined
+  const seen = target ? undefined : seenCell(current)
+  const expected = target ?? (seen ? sheetCellStamp(seen) : undefined)
   if (!expected) return {}
   const at = column?.locale ? colId.lastIndexOf('@') : -1
   return { expected, column: at > 0 ? colId.slice(0, at) : colId }
+}
+
+/** The mark of a refused cell whose field the server holds as something else now. */
+export const CHANGED_ELSEWHERE_UNREAD = 'Changed elsewhere. Refresh to see the stored value.'
+
+/** A value in the mark's sentence: "empty", "Yes"/"No", or the text (a code as its label), quoted and cut short. */
+function valueWords(value: unknown, optionLabels?: Record<string, string> | null): string {
+  if (value === null || value === undefined || value === '' || Array.isArray(value) && value.length === 0) return 'empty'
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
+  const one = (item: unknown) => (isObject(item) ? JSON.stringify(item) : optionLabel(item, optionLabels))
+  const text = Array.isArray(value) ? value.map(one).join(', ') : one(value)
+  return `“${text.length > 80 ? `${text.slice(0, 79)}…` : text}”`
+}
+
+/** "Changed elsewhere: now “Brand X”. Try again to replace it." — what a refused cell's mark says of the server's cell. */
+export function changedElsewhereWords(current: SheetCellStamp | null | undefined, optionLabels?: Record<string, string> | null): string {
+  return current ? `Changed elsewhere: now ${valueWords(current.value, optionLabels)}. Try again to replace it.` : CHANGED_ELSEWHERE_UNREAD
+}
+
+/** One cell a stamped save sent: the cell the row held, the stamp it carried, and its column's option labels. */
+export interface SentStampedCell { colId: string; cell: unknown; stamp: StampFields; optionLabels?: Record<string, string> | null }
+
+/**
+ * A save refused because stamped fields moved (`current`, keyed by the column each change named). Every stamped cell it
+ * sent remembers the server's cell its retry replaces: the one `current` names, else the one its own stamp named (that
+ * field held). Answers each named cell's mark words (colId → words); a cell `current` does not name keeps the server's.
+ */
+export function noteMovedFieldRefusal(sent: readonly SentStampedCell[], current: unknown): Map<string, string> {
+  const words = new Map<string, string>()
+  if (!isObject(current)) return words
+  for (const { colId, cell, stamp, optionLabels } of sent) {
+    if (!isObject(cell) || !stamp.expected || !stamp.column) continue
+    if (!Object.prototype.hasOwnProperty.call(current, stamp.column)) { replacing.set(cell, stamp.expected); continue }
+    const now = (current as Record<string, unknown>)[stamp.column]
+    const target = isSheetCellStamp(now) ? now : null
+    replacing.set(cell, target)
+    words.set(colId, changedElsewhereWords(target, optionLabels))
+  }
+  return words
+}
+
+/**
+ * A quiet read kept a refused cell (`kept`, the person's value) over the server's cell it read (`fresh`). When the cell's
+ * retry would replace something else than that server cell, it now replaces that cell, and the mark says so: the new
+ * words, or undefined when nothing changes (the field holds what the retry replaces, or the cell was not refused by a
+ * stamped save).
+ */
+export function readAgainOverRefused(kept: unknown, fresh: unknown, optionLabels?: Record<string, string> | null): string | undefined {
+  if (!isObject(kept) || !replacing.has(kept)) return undefined
+  const target = replacing.get(kept) ?? null
+  const now = isObject(fresh) ? sheetCellStamp(fresh as SheetStampCell) : undefined
+  if (!now || target && sheetStampHolds(target, fresh as SheetStampCell)) return undefined
+  replacing.set(kept, now)
+  return changedElsewhereWords(now, optionLabels)
 }

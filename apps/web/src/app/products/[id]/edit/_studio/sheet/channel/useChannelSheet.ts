@@ -40,7 +40,7 @@ import { wireAliasKey } from './types'
 import { wholeListWriteField } from './provenance'
 import { IDENTITY_SKU_COLUMN, identitySkuChannelChange } from '../identitySkuEdit'
 import { adoptContentVersions, contentWriteProof } from '../contentVersions'
-import { rememberReadCells, stampFor } from '../sheetStamps'
+import { noteMovedFieldRefusal, rememberReadCells, stampFor, type StampFields } from '../sheetStamps'
 import type { AliasGroup, ChannelScopeChannel, ChannelScopePage, ChannelSheetRow, SheetColumn, SheetListing, StudioCellValue } from './types'
 
 export interface UseChannelSheetOptions {
@@ -630,20 +630,26 @@ async function commitChannelLanguage(
       if (['AMBIGUOUS_CONNECTION', 'LISTING_SCOPE_MISMATCH'].includes(body?.code ?? body?.error)) {
         return { ok: false, reason: body?.message || 'Reload and choose the correct listing and account before editing.' }
       }
+      // Name the row the number belongs to, or say nothing about a version at all. Asserting a
+      // listing version we were handed from the product row is how the old message said "v1"
+      // about a listing sitting at 19.
+      const reason: string = body?.message || body?.error || (
+        versionOf === 'channelListing'
+          ? `Someone else changed this listing (now v${raw ?? '?'}). Review the edit before reloading.`
+          : versionOf === 'product'
+            ? `Someone else changed this product (now v${raw ?? '?'}). Review the edit before reloading.`
+            : 'Someone else changed this row first. Review the edit before reloading.')
+      /* Field stamps — a stamped field moved (`current`): the refused cell's mark says what the server holds now, and "Try
+         again" replaces exactly that (`../sheetStamps.ts`, review of #611). */
+      const moved = body?.current ? noteMovedFieldRefusal(changes.map(({ colId, change }) => ({ colId, cell: row.values?.[colId],
+        stamp: change as StampFields, optionLabels: coord.columnOf?.(colId)?.optionLabels })), body.current) : null
       // Hand the server's version back so the writer can retry rather than stay behind.
       return {
         ok: false,
         conflict: true,
         version,
-        // Name the row the number belongs to, or say nothing about a version at all. Asserting a
-        // listing version we were handed from the product row is how the old message said "v1"
-        // about a listing sitting at 19.
-        reason: body?.message || body?.error || (
-          versionOf === 'channelListing'
-            ? `Someone else changed this listing (now v${raw ?? '?'}). Review the edit before reloading.`
-            : versionOf === 'product'
-              ? `Someone else changed this product (now v${raw ?? '?'}). Review the edit before reloading.`
-              : 'Someone else changed this row first. Review the edit before reloading.'),
+        reason,
+        ...(moved ? { cells: Object.fromEntries(changes.map(({ colId }) => [colId, { ok: false, reason: moved.get(colId) ?? reason }])) } : {}),
       }
     }
     if (!res.ok) {

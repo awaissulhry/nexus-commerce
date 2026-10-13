@@ -1,7 +1,8 @@
 /**
  * Field stamps on the product sheet (2026-10-13, `sheet-stamp-door.ts`): a sheet write whose row moved goes ahead when
  * the fields it edits did not; a moved field still refuses, with the field as it is now; a text row someone drafted
- * since the read is never marked reviewed; a write without stamps is checked on the version alone, as before.
+ * since the read is never marked reviewed — and a row nobody drafted (a Shared cascade's follow-only pin row) never refuses;
+ * a write without stamps is checked on the version alone, as before.
  *
  * Runs the real door, the real row writer (`applyProductBulkEdits`) and the real sheet read (`getStudioSheet`) on
  * PostgreSQL (PGlite). Every stamp is taken from the sheet read, as the page takes it, and every claim is what was STORED.
@@ -25,6 +26,7 @@ import { sheetCellStamp } from '@nexus/shared/sheet-stamp'
 import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
 import { getStudioSheet } from '../pim/studio-sheet.service.js'
+import { writeContent } from '../pim/content-write.js'
 import { writeTranslation } from '../pim/translation-write.js'
 import { applyProductBulkEdits, type ProductBulkInput } from './bulk-edit.service.js'
 import { applyProductBulkSave } from './bulk-save.service.js'
@@ -199,4 +201,67 @@ it('a listing whose version moved takes an edit of its pinned title; a listing t
   const elsewhere = await save({ changes: [title('Titolo altro')], marketplaceContexts: contexts, expectedVersion: 1, expectedListingId: 'another-listing' } as never)
   expect(elsewhere.status).toBe(409)
   expect((await scoped(() => prisma.channelListingTranslation.findFirstOrThrow({ where: { channelListingId: ids.listing, language: 'it' } }))).name).toBe('Titolo nuovo')
+})
+
+/** A product whose Amazon IT listing follows the Shared text (no pin row yet), both at version 1. */
+const followingListing = () => scoped(async () => {
+  const n = ++serial
+  const own = await prisma.product.create({ data: { sku: `STAMP-F-${n}`, name: 'Giacca', description: 'Descrizione', basePrice: 10, productType: 'COAT' } as never })
+  const listing = await prisma.channelListing.create({ data: { productId: own.id, channel: 'AMAZON', marketplace: 'IT', channelMarket: 'AMAZON_IT', region: 'EU', channelConnectionId: account } as never })
+  return { product: own.id, listing: listing.id }
+})
+const channelSheet = (productId: string) => scoped(() => getStudioSheet({ productId, scope: 'channel', channel: 'AMAZON', market: 'IT', locale: 'it', accountId: account }))
+const channelIt = () => [{ channel: 'AMAZON', marketplace: 'IT', accountId: account, locale: 'it', aliasKey: '' }]
+const pinRow = (listingId: string) => scoped(() => prisma.channelListingTranslation.findFirst({ where: { channelListingId: listingId, language: 'it' } }))
+/** Another person edits the Shared Italian description; it cascades onto every listing that follows Shared. */
+const sharedDescriptionEdit = async (productId: string, value: string) => {
+  const cell = cellOf(await sharedSheet(productId), productId, 'description')
+  await otherPerson({ changes: [{ id: productId, field: cell.writeField, value, contentAddress: cell.contentAddress, contentVersion: cell.contentVersion }],
+    marketplaceContexts: SHARED_IT, expectedVersion: (await product(productId)).version } as never)
+}
+/** The person answers "Pin on Amazon · IT" for a title edit made over a cell that follows Shared — as the page sends it. */
+const pinTitle = (sheet: Awaited<ReturnType<typeof channelSheet>>, productId: string, value: string) => {
+  const cell = cellOf(sheet, productId, 'name')
+  return { ...stamped(sheet, productId, 'name', value), target: 'channel', contentAddress: cell.contentAcknowledgement!.pin!.address, contentAcknowledged: true }
+}
+
+it('a Shared text cascade onto a listing that follows Shared does not refuse a pin of another field there — nothing was drafted', async () => {
+  const ids = await followingListing()
+  const sheet = await channelSheet(ids.product)
+  expect(cellOf(sheet, ids.product, 'name')).toMatchObject({ value: 'Giacca', follows: true })
+  // Someone edits the Shared description: the cascade moves the listing and gives it a pin row holding only `follows`.
+  await sharedDescriptionEdit(ids.product, 'Descrizione nuova')
+  expect(await pinRow(ids.listing)).toMatchObject({ follows: ['description'], source: null, reviewedAt: null, version: 1 })
+  const answer = await save({ changes: [pinTitle(sheet, ids.product, 'Titolo mio')], marketplaceContexts: channelIt(), expectedVersion: 1, expectedListingId: ids.listing } as never)
+  expect(answer.status, JSON.stringify(answer.body)).toBe(200)
+  expect(answer.body).toMatchObject({ writtenAt: 2, versionOf: 'channelListing' })
+  expect(await pinRow(ids.listing)).toMatchObject({ name: 'Titolo mio', follows: ['description'] })
+})
+
+it('a follow-only pin row from an earlier cascade, then only a version bump, does not refuse a pin of the title', async () => {
+  const ids = await followingListing()
+  // The cascade happened long before the read: the pin row is already there, holding only `follows`.
+  await sharedDescriptionEdit(ids.product, 'Descrizione nuova')
+  const sheet = await channelSheet(ids.product)
+  const listingVersion = sheet.rows.find(row => row.id === ids.product)!.listing!.version
+  // A stock sync moves the listing's version; no text moves.
+  await scoped(() => prisma.channelListing.update({ where: { id: ids.listing }, data: { version: { increment: 1 } } }))
+  const answer = await save({ changes: [pinTitle(sheet, ids.product, 'Titolo mio')], marketplaceContexts: channelIt(), expectedVersion: listingVersion, expectedListingId: ids.listing } as never)
+  expect(answer.status, JSON.stringify(answer.body)).toBe(200)
+  expect(answer.body).toMatchObject({ writtenAt: listingVersion + 1 })
+  expect(await pinRow(ids.listing)).toMatchObject({ name: 'Titolo mio' })
+})
+
+it('a machine draft on the listing’s pin row since the read still refuses an edit of another pinned field', async () => {
+  const ids = await followingListing()
+  await scoped(() => prisma.channelListingTranslation.create({ data: { channelListingId: ids.listing, language: 'it', name: 'Titolo pin', source: 'manual', reviewedAt: new Date(), version: 1 } as never }))
+  const sheet = await channelSheet(ids.product)
+  expect(cellOf(sheet, ids.product, 'name')).toMatchObject({ tier: 'pin', contentVersion: 1 })
+  // The AI drafts the pin's description after the read (the pin writer's own draft path).
+  await scoped(() => writeContent({ productId: ids.product, address: { tier: 'pin', language: 'it', coordinate: { channel: 'AMAZON', market: 'IT', accountId: account } } as never,
+    values: { description: 'Bozza IA' }, state: 'draft', expectedVersion: 1, expectedContentVersion: 1, label: 'Description' }))
+  const answer = await save({ changes: [{ ...stamped(sheet, ids.product, 'name', 'Titolo nuovo'), target: 'channel' }], marketplaceContexts: channelIt(), expectedVersion: 1, expectedListingId: ids.listing } as never)
+  expect(answer.status).toBe(409)
+  expect(answer.body).toMatchObject({ error: DRAFT_SINCE_READ, current: {} })
+  expect(await pinRow(ids.listing)).toMatchObject({ name: 'Titolo pin', description: 'Bozza IA', source: 'ai', reviewedAt: null })
 })

@@ -25,7 +25,7 @@ import { wireCellValue } from '../sheetReset'
 import { saveWarningFor } from '../saveWarnings'
 import { adoptContentVersions, contentWriteProof } from '../contentVersions'
 import { sharedWriteField, skuRenamesOf } from '../identitySkuEdit'
-import { stampFor } from '../sheetStamps'
+import { noteMovedFieldRefusal, stampFor } from '../sheetStamps'
 
 import { askForThemeChangePlan } from '../../variants/channel/themePlanAsk'
 /**
@@ -142,10 +142,15 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
   let batchReason: string | undefined
   let anyOk = false
 
+  /* Field stamps (2026-10-13, `../sheetStamps.ts`): what each cell showed, from the read — so a row whose version moved for
+     another field (a sale, a cascade, another person's edit) still takes this edit. A refused cell sent again carries the
+     server's cell its mark named. Only on a guarded write: a write without a version has nothing for a stamp to stand in for. */
+  const stamps = bulk.map((c) => (proof.expectedVersion ? stampFor(req.row?.values?.[c.colId], c.colId, c.intent, byKey.get(c.colId)) : {}))
+
   try {
     if (bulk.length > 0) {
       const res = await (ctx.bulkSend ?? directBulkSend)({
-        changes: bulk.map((c) => ({
+        changes: bulk.map((c, i) => ({
           id: req.rowId,
           contentAddress: req.row?.values?.[c.colId]?.contentAddress,
           contentVersion: req.row?.values?.[c.colId]?.contentVersion,
@@ -160,10 +165,7 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
           // here rather than in the writer precisely so the two can differ.
           value: c.intent === 'reset' ? null : c.value === '' ? null : wireCellValue(c.value),
           ...(c.intent === 'reset' ? { intent: 'reset' } : {}),
-          /* Field stamps (2026-10-13, `../sheetStamps.ts`): what this cell showed, from the read — so a row whose version
-             moved for another field (a sale, a cascade, another person's edit) still takes this edit. Only on a guarded
-             write: a write without a version has nothing for a stamp to stand in for. */
-          ...(proof.expectedVersion ? stampFor(req.row?.values?.[c.colId], c.colId, c.intent, byKey.get(c.colId)) : {}),
+          ...stamps[i],
         })),
         /* 🔴 THE MARKETPLACE CONTEXT. Without it every `attr_*` write on the master scope was
            REFUSED — the Owner's "I'm unable to write a lot of attributes still, such as color".
@@ -196,7 +198,10 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
         // follows shows the other change; meanwhile every other field of the row is still checked against it.
         version = body?.current ? undefined : versionFromBody(body)
         batchReason = body?.message || body?.error || 'Someone else changed this row. Refresh to see their version.'
-        for (const c of bulk) cells[c.colId] = { ok: false, reason: batchReason }
+        /* …and the refused cell's mark says what the server holds now; "Try again" replaces exactly that (review of #611). */
+        const moved = body?.current ? noteMovedFieldRefusal(bulk.map((c, i) => ({ colId: c.colId, cell: req.row?.values?.[c.colId], stamp: stamps[i],
+          optionLabels: byKey.get(c.colId)?.optionLabels })), body.current) : null
+        for (const c of bulk) cells[c.colId] = { ok: false, reason: moved?.get(c.colId) ?? batchReason }
       } else if (!res.ok) {
         const errors: Array<{ id?: string; field?: string; error?: string }> = Array.isArray(body?.errors) ? body.errors : []
         batchReason = body?.error || body?.message || errors[0]?.error || `Refused (HTTP ${res.status})`

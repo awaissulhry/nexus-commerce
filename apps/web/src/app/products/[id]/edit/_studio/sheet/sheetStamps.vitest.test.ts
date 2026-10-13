@@ -6,11 +6,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { sheetCellStamp } from '@nexus/shared/sheet-stamp'
+import { CellSaveTracker } from '@/design-system/grid/editors/roundTrip'
+import { SheetWriter } from '@/design-system/grid/editors/sheetWriter'
 import { commitMasterRow, type MasterCommitContext } from './master/masterWrite'
 import type { StudioRow, StudioSheet } from './master/types'
 import { commitChannelRow } from './channel/useChannelSheet'
-import type { ChannelSheetRow } from './channel/types'
-import { carrySeenCell, carryShownCell, rememberReadCells, seenCell, stampFor } from './sheetStamps'
+import { keepUnsettledCells } from './channel/saveSettle'
+import type { ChannelScopePage, ChannelSheetRow } from './channel/types'
+import { carrySeenCell, carryShownCell, readAgainOverRefused, rememberReadCells, seenCell, stampFor } from './sheetStamps'
 import { noteEditPrior, takeEditPrior } from './sheetUndo'
 
 /** A cell as the sheet read sends it. */
@@ -204,5 +207,121 @@ describe('commitChannelRow — the stamps on the wire', () => {
       { channel: 'SHOPIFY', marketplace: 'GLOBAL', bulkSend: async (body) => { sent.push(body); return json(200, { updated: 1 }) } })
     expect(sent[0].changes[0]).not.toHaveProperty('expected')
     expect(sent[0]).not.toHaveProperty('expectedListingId')
+  })
+})
+
+/*
+ * Review of #611 — "Try again" after a refusal because the field moved. The quiet read gives the row the latest version
+ * while the refused cell still shows the person's value; a retry on the version alone then overwrote the other person's
+ * value, which the page never showed. Now the mark names the server's value, and the retry replaces exactly that.
+ */
+describe('a refused cell whose field moved: its mark names the server’s value, and “Try again” replaces exactly that', () => {
+  const MASTER = { tier: null, inherited: false, pinned: false, follows: null, layer: 'master' }
+  const sheet = { scope: { kind: 'master', label: 'Shared', locale: 'it' }, columns: [
+    { key: 'brand', writeField: 'brand', label: 'Brand', group: 'g', requiredBy: [], storage: 'column' },
+  ] } as unknown as StudioSheet
+  const refusedFor = (value: string) => ({ code: 'VERSION_CONFLICT', error: 'Another change landed first', currentVersion: 3, versionOf: 'product',
+    current: { brand: { value, from: MASTER } } })
+
+  /** The Shared sheet's writer, as `useMasterSheet` builds it, saving through `commitMasterRow`; every body it sends. */
+  function masterSheet(answers: Array<[number, unknown]>) {
+    const sent: Array<Record<string, any>> = []
+    const tracker = new CellSaveTracker()
+    const writer = new SheetWriter<StudioRow>({ tracker, getApi: () => null, flushMs: 1,
+      commit: (req) => commitMasterRow(req, { sheet, opts: {}, locale: 'it', market: 'IT',
+        bulkSend: async (body) => { sent.push(body); const [status, answer] = answers.shift()!; return json(status, answer) as never } }) })
+    return { sent, tracker, writer }
+  }
+  /** `useMasterSheet`'s quiet read: the server's row, with the refused cell kept (and its mark reworded when it says so). */
+  function quietRead(tracker: CellSaveTracker, writer: SheetWriter<StudioRow>, shown: StudioRow, version: number, server: Record<string, unknown>) {
+    const fresh = { id: shown.id, version, values: { brand: readCell(server.value, server) } } as unknown as StudioRow
+    rememberReadCells([fresh])
+    const words = readAgainOverRefused(shown.values.brand, fresh.values.brand)
+    if (words) tracker.set(shown.id, 'brand', 'refused', words)
+    fresh.values.brand = shown.values.brand
+    writer.seed([{ id: fresh.id, version: fresh.version, row: fresh }])
+    return fresh
+  }
+
+  it('the Shared sheet: the mark says “now Brand X”, and Try again after the quiet read sends the stamp of Brand X — not the version alone', async () => {
+    const { sent, tracker, writer } = masterSheet([[409, refusedFor('Brand X')], [200, { updated: 1, currentVersion: 4, versionOf: 'product' }]])
+    const read = readCell('Brand P')
+    rememberReadCells([{ values: { brand: read } }])
+    const row = { id: 'p1', version: 2, values: { brand: edit(read, 'Brand Mine') } } as unknown as StudioRow
+    writer.seed([{ id: 'p1', version: 2, row }])
+    writer.set('p1', 'brand', 'Brand Mine', { row })
+    await writer.flush()
+    expect(tracker.get('p1', 'brand')).toMatchObject({ state: 'refused', reason: 'Changed elsewhere: now “Brand X”. Try again to replace it.' })
+    // The quiet read: the row takes version 3, the refused cell keeps the person's value and its mark.
+    quietRead(tracker, writer, row, 3, { value: 'Brand X' })
+    expect(tracker.get('p1', 'brand')?.reason).toBe('Changed elsewhere: now “Brand X”. Try again to replace it.')
+    expect(writer.retryFailed()).toBe(1)
+    await writer.flush()
+    expect(sent[1].expectedVersion).toBe(3)
+    expect(sent[1].changes[0]).toMatchObject({ field: 'brand', value: 'Brand Mine', column: 'brand', expected: { value: 'Brand X', from: MASTER } })
+  })
+
+  it('the field moved once more before the quiet read: the mark names the newer value, and Try again replaces that one', async () => {
+    const { sent, tracker, writer } = masterSheet([[409, refusedFor('Brand X')], [200, { updated: 1, currentVersion: 5, versionOf: 'product' }]])
+    const read = readCell('Brand P')
+    rememberReadCells([{ values: { brand: read } }])
+    const row = { id: 'p1', version: 2, values: { brand: edit(read, 'Brand Mine') } } as unknown as StudioRow
+    writer.seed([{ id: 'p1', version: 2, row }])
+    writer.set('p1', 'brand', 'Brand Mine', { row })
+    await writer.flush()
+    quietRead(tracker, writer, row, 4, { value: 'Brand Y' })
+    expect(tracker.get('p1', 'brand')).toMatchObject({ state: 'refused', reason: 'Changed elsewhere: now “Brand Y”. Try again to replace it.' })
+    writer.retryFailed()
+    await writer.flush()
+    expect(sent[1]).toMatchObject({ expectedVersion: 4 })
+    expect(sent[1].changes[0].expected).toEqual({ value: 'Brand Y', from: MASTER })
+  })
+
+  it('Try again before the quiet read keeps the version it read and sends the stamp of the value the mark named', async () => {
+    const { sent, writer } = masterSheet([[409, refusedFor('Brand X')], [409, refusedFor('Brand Z')]])
+    const read = readCell('Brand P')
+    rememberReadCells([{ values: { brand: read } }])
+    const row = { id: 'p1', version: 2, values: { brand: edit(read, 'Brand Mine') } } as unknown as StudioRow
+    writer.seed([{ id: 'p1', version: 2, row }])
+    writer.set('p1', 'brand', 'Brand Mine', { row })
+    await writer.flush()
+    writer.retryFailed()
+    await writer.flush()
+    expect(sent[1]).toMatchObject({ expectedVersion: 2 })
+    expect(sent[1].changes[0].expected).toEqual({ value: 'Brand X', from: MASTER })
+  })
+
+  it('the channel sheet: the mark names the server’s value, a quiet read rewords it when the field moved again, and Try again replaces that', async () => {
+    const LISTING = { tier: null, inherited: false, pinned: true, follows: false, layer: 'channel' }
+    const channelCell = (value: unknown) => readCell(value, { writeField: 'material', writeTarget: 'channelListing', writeVerb: 'channel', layer: 'channel', pinned: true, follows: false })
+    const read = channelCell('Cotone')
+    rememberReadCells([{ values: { material: read } }])
+    const row = { id: 'p1', rowId: 'primary:p1', rowKind: 'variant', aliasId: null, version: 7, listing: { id: 'l1', version: 82 }, values: { material: edit(read, 'Lana') } } as unknown as ChannelSheetRow
+    const sent: Array<Record<string, any>> = []
+    const answers: Array<[number, unknown]> = [
+      [409, { code: 'VERSION_CONFLICT', error: 'Another change landed first', currentVersion: 83, versionOf: 'channelListing', current: { material: { value: 'Seta', from: LISTING } } }],
+      [200, { updated: 1, currentVersion: 85, versionOf: 'channelListing' }],
+    ]
+    const coord = { channel: 'EBAY' as const, marketplace: 'IT', bulkSend: async (body: Record<string, unknown>) => { sent.push(body); const [status, answer] = answers.shift()!; return json(status, answer) as never } }
+    const refused = await commitChannelRow({ rowId: row.rowId, row, cells: [{ colId: 'material', value: 'Lana', intent: 'set' }], expectedVersion: 7 }, coord)
+    expect(refused).toMatchObject({ ok: false, conflict: true, cells: { material: { ok: false, reason: 'Changed elsewhere: now “Seta”. Try again to replace it.' } } })
+    expect(row.listing?.version).toBe(82)
+    // The quiet read (`keepUnsettledCells`): the listing is at 84 and the field moved once more; the refused cell stays.
+    const page = { columns: [{ key: 'material' }], rows: [{ ...row, listing: { id: 'l1', version: 84 }, values: { material: channelCell('Lino') } }] } as unknown as ChannelScopePage
+    const reworded: Array<[string, string, string]> = []
+    const landed = keepUnsettledCells(page, [row], () => 'refused', (rowId, colId, words) => reworded.push([rowId, colId, words]))
+    expect(reworded).toEqual([['primary:p1', 'material', 'Changed elsewhere: now “Lino”. Try again to replace it.']])
+    const fresh = landed.rows[0] as unknown as ChannelSheetRow
+    expect(fresh.values.material).toBe(row.values.material)
+    // Try again: the writer sends the refused value once more, on the row the read gave it.
+    await commitChannelRow({ rowId: row.rowId, row: fresh, cells: [{ colId: 'material', value: 'Lana', intent: 'set' }], expectedVersion: 7 }, coord)
+    expect(sent[1]).toMatchObject({ expectedVersion: 84, expectedListingId: 'l1' })
+    expect(sent[1].changes[0]).toMatchObject({ field: 'material', value: 'Lana', column: 'material', expected: { value: 'Lino', from: LISTING } })
+  })
+
+  it('a quiet read rewords nothing for a refused cell no stamped save refused (its retry is what it was)', () => {
+    const read = readCell('Brand P')
+    rememberReadCells([{ values: { brand: read } }])
+    expect(readAgainOverRefused(edit(read, 'Brand Q'), readCell('Brand X'))).toBeUndefined()
   })
 })
