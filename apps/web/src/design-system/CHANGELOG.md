@@ -1,3 +1,23 @@
+## Every web DataGrid is the AG one; the barrel exports only the grid's types — 2026-10-13
+
+Grid audit wave 4, PR10 (E2).
+- **`components/index.ts`** (both apps, identical): `export type { DataGridProps, Column } from './DataGrid'` — the
+  HTML-table `DataGrid` component is no longer in the barrel, so no page reaches it by accident. Web pages import
+  `DataGrid` from `design-system/grid/datagrid` (the same props); the factory, which has no AG engine, imports its
+  table by path (`components/DataGrid`, 5 sites). The types stay where the AG engine already reads them.
+- **14 web pages moved**: Stock sync control (products, listings, one product, history), Locations, Stock import
+  preview, Volume pricing, the eBay import wizard (4 tables), Fleet activity, assignments, workers, map (2 lists), the
+  language-axis design page, and the DS catalog's DataGrid demo. In web the HTML table is now only the legacy side of
+  the grid lab's DataGrid parity (`grid-kit` count 32 → 1).
+- **Page CSS rewritten to the engine's hooks** (`.nds-dg-tr`, `.nds-dg-td`, `first`): the `table-layout: fixed`,
+  `overflow` and `nth-child` workarounds go (the engine holds every widthed column at its width, clips, and keeps one
+  line). Fleet activity's percentage split is now column widths; Assignment titles get a width so they end in "…";
+  the map list's selected row keeps its blue cells and left bar. Sync control's Compact / Cozy / Spacious drives the
+  grid's `size` (`xs` / `md` / `lg` = the DS 28 / 43 / 49 px rows) instead of repainting cell padding. Page overrides
+  of the engine's look go, as wave 2 set: Assignments' own empty-state ink and padding and its middle alignment,
+  Workers' 9px cell padding. The map list's name button is held to its cell, so a long name ends in "…" and its
+  badge stays whole.
+
 ## A table window fills a phone; a DataGrid's second pinned column stays on its row — 2026-10-13
 
 Grid audit wave 3 (the Publish review).

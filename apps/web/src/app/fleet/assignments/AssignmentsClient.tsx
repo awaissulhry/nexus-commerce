@@ -34,7 +34,7 @@ import Link from '@/lib/workspaces/Link'
 import { Plus, RefreshCw, Target, AlertTriangle, Layers, Globe, Trash2, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { searchOptions } from '@/lib/option-search'
-import { DataGrid, type Column } from '@/design-system/components'
+import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { GridToolbar } from '@/design-system/patterns'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import { useVisibilityPoll } from '../_shared/use-visibility-poll'
@@ -367,6 +367,9 @@ export function AssignmentsClient() {
       },
       {
         key: 'title',
+        // A width like every other column, so the grid scales them all to the card and a long title ends in "…" (its
+        // full text is the link's tooltip); an unsized column would grow to the longest title and push the row sideways.
+        width: 400,
         label: (
           <span title="The name given when this was made — the worker, and what it points at. You can rename it on its own page.">
             Assignment

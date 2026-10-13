@@ -2,7 +2,6 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import type { TransferCell } from '@nexus/shared/catalog-transfer'
-import { DataGrid } from '@/design-system/components/DataGrid'
 import { previewColumns } from './previewColumns'
 
 const cell: TransferCell = {
@@ -62,14 +61,11 @@ describe('catalog review on the Nexus table', () => {
     expect(render('after', { after: ['red', 'blue'] })).toContain('[&quot;red&quot;,&quot;blue&quot;]')
   })
 
-  it('renders the real shared table with its accessible name and all review headings', () => {
-    const html = renderToStaticMarkup(createElement(DataGrid<TransferCell>, {
-      ariaLabel: 'Catalog import changes', columns, rows: [cell], rowKey: row => String(row.row), size: 'sm',
-    }))
-    expect(html).toContain('<table aria-label="Catalog import changes"')
-    for (const label of ['Product / scope', 'Attribute', 'Current value', 'Proposed value']) expect(html).toContain(label)
-    expect(html).toContain('Old title')
-    expect(html).toContain('New title')
+  // The review draws these columns in the AG DataGrid (TransferReview), which renders in the browser only.
+  it('gives the review every heading, and the current and proposed values', () => {
+    for (const label of ['Product / scope', 'Attribute', 'Current value', 'Proposed value']) expect(columns.map(c => c.label)).toContain(label)
+    expect(render('before', {})).toContain('Old title')
+    expect(render('after', {})).toContain('New title')
   })
 })
 

@@ -1530,28 +1530,9 @@
   padding: 4px;
 }
 
-/*
- * The table-layout trap, recorded by the Workers stream and inherited here:
- * `.nds-grid` is `table-layout: auto` with `white-space: nowrap` on every
- * cell, so a declared column width is only a hint and long content wins —
- * a worker's name or an adjacency list expands its column and overruns the
- * ones to its right. Pin the table to `fixed` so widths are honoured, and let
- * the cells that carry lists wrap on purpose.
- *
- * A plain global class, NOT a CSS-module one: a hashed class has resolved to
- * `undefined` at render in this repo before. Verify with
- * `getComputedStyle(table).tableLayout === 'fixed'`.
- */
-.sbm-listwrapper .nds-grid {
-  table-layout: fixed;
-  width: 100%;
-}
-.sbm-listwrapper .nds-grid th,
-.sbm-listwrapper .nds-grid td {
-  overflow: hidden;
-  vertical-align: top;
-}
-.sbm-listwrapper .nds-grid td .sbm-listwrap {
+/* The cells that carry lists wrap on purpose. The grid holds each column at its width, so a worker's name or an
+   adjacency list grows its row, never its column. */
+.sbm-listwrapper .sbm-listwrap {
   white-space: normal;
   line-height: 1.4;
 }
@@ -1567,6 +1548,8 @@
   align-items: center;
   gap: 6px;
   min-width: 0;
+  /* A button is as wide as its content; held to its cell, the name below truncates instead of the badge being cut. */
+  max-width: 100%;
 }
 .sbm-listname .nm {
   font-weight: 600;
@@ -1580,10 +1563,8 @@
 .sbm-listname .sbm-tag-diag {
   flex: none;
 }
-/* S5.g — there was no focus rule for this table either. The name buttons and
-   the DataGrid's own sort buttons fell back to the UA ring, on a page where
-   S1R–S4R each shipped an explicit one. */
-.sbm-listgrid th button:focus-visible,
+/* S5.g — there was no focus rule for this table either. The name buttons fell
+   back to the UA ring, on a page where S1R–S4R each shipped an explicit one. */
 .sbm-listname:focus-visible {
   outline: 2px solid #1f4f8b;
   outline-offset: 2px;
@@ -1642,20 +1623,18 @@
  * gives a selected card a ring around the whole thing. The name treatment
  * stays; it is the accessible name of the control that changed the selection.
  *
- * The bar is on the first cell rather than the `<tr>`: a `box-shadow` on a row
- * is unreliable once cells paint their own background, and the cells here do.
+ * The bar is on the first cell (`first`, the grid's mark on the first data
+ * column) rather than the row: the cells paint the selected background over
+ * the row's own hover paint.
  */
-.sbm-listgrid tbody tr.is-selected > td {
+.sbm-listgrid .nds-dg-tr.is-selected .nds-dg-td {
   background: var(--nds-blue-50);
 }
-.sbm-listgrid tbody tr.is-selected > td:first-child {
+.sbm-listgrid .nds-dg-tr.is-selected .nds-dg-td.first {
   box-shadow: inset 3px 0 0 #2b6cb0;
 }
-.sbm-listgrid tbody tr.is-dimmed {
-  background: var(--nds-grey-25);
-}
-.sbm-listgrid tbody tr.is-dimmed td,
-.sbm-listgrid tbody tr.is-dimmed .sbm-listname .nm {
+.sbm-listgrid .nds-dg-tr.is-dimmed .nds-dg-td,
+.sbm-listgrid .nds-dg-tr.is-dimmed .sbm-listname .nm {
   color: var(--nds-grey-600);
 }
 .sbm-listfoot {

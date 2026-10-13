@@ -10,7 +10,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Plus, SlidersHorizontal } from "lucide-react";
 import { PageHeader } from "@/design-system/patterns";
-import { Card, DataGrid, Drawer, Modal, useToast, Listbox } from "@/design-system/components";
+import { Card, Drawer, Modal, useToast, Listbox } from "@/design-system/components";
+import { DataGrid } from "@/design-system/components/DataGrid";
 import { Button, Input, Pill } from "@/design-system/primitives";
 import { eur } from "@/design-system/lib/format";
 import { apiJson } from "@/lib/api-client";

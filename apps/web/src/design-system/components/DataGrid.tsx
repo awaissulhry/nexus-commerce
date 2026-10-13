@@ -244,9 +244,11 @@ export interface DataGridProps<T> {
 }
 
 /**
- * The universal data grid (`.nds-grid`; the richer `.nds-wsgrid` is the ads console's): sortable headers, row selection
- * with select-all, sticky header, pinned left columns, an optional sticky totals
- * row, and an empty state. Generic over the row type.
+ * The HTML-table data grid (`.nds-grid`): sortable headers, row selection with select-all, sticky header, pinned left
+ * columns, an optional sticky totals row, and an empty state. Generic over the row type.
+ *
+ * The factory's table, imported by this path. Web pages use the AG `DataGrid` (`design-system/grid/datagrid`), which
+ * takes the props and column types above; in web this one is only the legacy side of the grid lab's DataGrid parity.
  */
 export function DataGrid<T>({
   ariaLabel, keyboardScroll = false,

@@ -23,6 +23,7 @@ import { MappingStatusExample } from './MappingStatusExample'
 import { useMemo, useState, type ComponentProps, type ReactNode } from 'react'
 import { GridCard, LoadedRowsSelectionHeader, NexusGrid, gridSelection, integerColumn, moneyColumn, percentColumn, statusColumn, textColumn, type ColDef } from '../grid'
 import { PROJECTION_STATES, ProjectionCell, projectionMeta } from '../grid/renderers'
+import { DataGrid } from '../grid/datagrid'
 import { Search, Inbox, Home, Megaphone, BarChart3, Settings, Settings2, Filter, Download, Trash2, Columns } from 'lucide-react'
 import {
   palette,
@@ -83,7 +84,6 @@ import {
   DateRangePicker,
   PerformanceGraph,
   Heatmap,
-  DataGrid,
   ImageUpload,
   Banner,
   Stepper,
@@ -1077,7 +1077,7 @@ export function TokenCatalog() {
 
       <section data-cat="datagrid" style={{ marginBottom: 40 }}>
         <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 2px', letterSpacing: '-0.01em' }}>
-          DataGrid <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--nds-text-3)' }}>· Phase 4 · RETIRING — rebuild on NexusGrid above</span>
+          DataGrid <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--nds-text-3)' }}>· the DataGrid props on NexusGrid (<code>grid/datagrid</code>)</span>
         </h2>
         <p style={{ fontSize: 13, color: 'var(--nds-text-3)', margin: '0 0 14px' }}>
           The universal grid — sortable headers, row selection, a pinned Campaign column, and a sticky totals row.

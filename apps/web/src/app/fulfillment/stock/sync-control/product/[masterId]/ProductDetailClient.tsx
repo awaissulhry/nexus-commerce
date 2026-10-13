@@ -10,7 +10,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { usePathname, useRouter } from '@/lib/workspaces/navigation'
 import Link from '@/lib/workspaces/Link'
-import { Banner, DataGrid, Pagination, type Column } from '@/design-system/components'
+import { Banner, Pagination } from '@/design-system/components'
+import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { Listbox, MultiSelect } from '@/design-system/components'
 import { GridToolbar } from '@/design-system/patterns'
 import { Button, Input, Pill, SegmentedControl } from '@/design-system/primitives'
@@ -28,7 +29,7 @@ import {
   ebayZeroRefusal,
   listingTarget, BULK_ACTIONS, INACTIVE_NOTE, INACTIVE_ROW, actionLabel, actionCounts,
   DENSITY_OPTIONS, MODE_TONE, MODE_LABEL, MODE_HELP, COLUMN_HELP, ACTION_HELP, CONTROL_HELP, PAGE_SIZES,
-  type Density, type Mode, type Row, type ProductMaster,
+  type Density, type Mode, type Row, type ProductMaster, DENSITY_SIZE,
 } from '../../sync-control-shared'
 import { Tip, TipText } from '../../SyncTip'
 import styles from '../../styles.module.css'
@@ -480,8 +481,8 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
           )}
         </GridToolbar>
 
-        <div className={density === 'compact' ? styles.densityCompact : density === 'spacious' ? styles.densitySpacious : undefined}>
-          <DataGrid<Row>
+        <DataGrid<Row>
+            size={DENSITY_SIZE[density]}
             columns={columns}
             rows={pageRows}
             rowKey={rowKey}
@@ -493,7 +494,6 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
             rowSelectableHint={`Not selectable: Amazon-managed (FBA), or ${INACTIVE_ROW}`}
             emptyState={loading ? <span style={{ color: 'var(--text-tertiary)' }}>Loading…</span> : <span style={{ color: 'var(--text-tertiary)' }}>No listings.</span>}
           />
-        </div>
 
         <div className={styles.gridFooter}>
           <span className="tabular-nums">{children.length} listings · page {page}/{pages}</span>

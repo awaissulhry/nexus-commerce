@@ -148,32 +148,12 @@
 
 .sbw-gridcard { margin-top: 12px; }
 
-/* ── the table-layout trap ────────────────────────────────────────────────
-   `.nds-grid` is `table-layout: auto` with `white-space: nowrap` on every
-   cell, so a column's declared `width` is only a hint and long content wins:
-   the status reason lines expanded their column and overran the three columns
-   to their right. Caught in the browser; tsc is blind to it.
-
-   The proven fix (Sync Control products grid, 2026-07-21): pin the table to
-   `fixed` so every column honours its exact width, clip horizontally, and let
-   the cells that carry sentences wrap on purpose. A plain global class, not a
-   CSS-module one — a hashed class has resolved to `undefined` at render here
-   before. Verify with `getComputedStyle(table).tableLayout === 'fixed'`. */
-.sbw-gridcard .nds-grid { table-layout: fixed; width: 100%; }
-.sbw-gridcard .nds-grid th,
-.sbw-gridcard .nds-grid td {
-  overflow: hidden;
-  vertical-align: top;
-  padding-top: 9px;
-  padding-bottom: 9px;
-}
-
-/* The cells that carry prose opt back INTO wrapping. Everything else stays
-   nowrap, which is what keeps the numeric columns aligned. */
-.sbw-gridcard .nds-grid td .sbw-status,
-.sbw-gridcard .nds-grid td .sbw-reason,
-.sbw-gridcard .nds-grid td .sbw-note,
-.sbw-gridcard .nds-grid td .sbw-scope {
+/* The cells that carry prose wrap on purpose; every other cell stays on one line, which keeps the numeric columns
+   aligned. The grid holds each column at its width, so a long reason grows its row, never its column. */
+.sbw-gridcard .sbw-status,
+.sbw-gridcard .sbw-reason,
+.sbw-gridcard .sbw-note,
+.sbw-gridcard .sbw-scope {
   white-space: normal;
 }
 

@@ -30,7 +30,8 @@ import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 
 import { Button, FilterChip, Pill, SegmentedControl } from '@/design-system/primitives'
-import { Banner, Card, DataGrid, Listbox } from '@/design-system/components'
+import { Banner, Card, Listbox } from '@/design-system/components'
+import { DataGrid } from '@/design-system/grid/datagrid'
 import { GridToolbar, ScopeBar, type ScopeBarItem } from '@/design-system/patterns'
 import {
   CompletenessPill,

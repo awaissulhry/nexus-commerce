@@ -44,7 +44,7 @@ import Link from '@/lib/workspaces/Link'
 import { AlertTriangle, Archive, Ban, Bot, Check, Columns, Pause as PauseIcon, Plus, RefreshCw, ShieldAlert, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { GLOSSARY, Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
-import { DataGrid, type Column } from '@/design-system/components'
+import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { GridToolbar } from '@/design-system/patterns'
 import {
   ago,

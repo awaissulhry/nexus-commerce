@@ -31,7 +31,7 @@
  * the rule exists to prevent.
  */
 
-import { DataGrid, type Column } from '@/design-system/components/DataGrid'
+import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { ago } from '../_shared/run-health'
 import { statusOf, type MapEdge, type MapNode } from './lib'
 import { overlayById } from './overlays'

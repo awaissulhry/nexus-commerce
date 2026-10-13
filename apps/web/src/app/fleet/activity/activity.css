@@ -367,39 +367,9 @@
 .sba-gridcard {
   overflow: hidden;
 }
-/*
-  `table-layout: fixed` is not cosmetic here. "What happened" carries a whole
-  explained failure sentence; on `auto` that one cell widens its column and
-  pushes Cost off the card. A PLAIN global class, never a CSS-module one —
-  a hashed class has resolved to `undefined` at render in this repo before.
-*/
-.sba-gridcard .nds-grid {
-  table-layout: fixed;
-  width: 100%;
-}
-/*
-  Explicit widths for all seven columns. Under `table-layout: fixed` an unsized
-  column gets an equal share of what is left, which gave Worker ~10% — narrow
-  enough that the `fleet-sweep` badge (nowrap, by design) overflowed the cell
-  and printed ON TOP of the next column's text. Sizing every column is the fix;
-  sizing one and hoping is what caused it.
-*/
-.sba-gridcard .nds-grid th:nth-child(1),
-.sba-gridcard .nds-grid td:nth-child(1) { width: 8%; }
-.sba-gridcard .nds-grid th:nth-child(2),
-.sba-gridcard .nds-grid td:nth-child(2) { width: 18%; }
-.sba-gridcard .nds-grid th:nth-child(3),
-.sba-gridcard .nds-grid td:nth-child(3) { width: 34%; }
-.sba-gridcard .nds-grid th:nth-child(4),
-.sba-gridcard .nds-grid td:nth-child(4) { width: 16%; }
-.sba-gridcard .nds-grid th:nth-child(5),
-.sba-gridcard .nds-grid td:nth-child(5) { width: 9%; }
-.sba-gridcard .nds-grid th:nth-child(6),
-.sba-gridcard .nds-grid td:nth-child(6) { width: 7%; }
-.sba-gridcard .nds-grid th:nth-child(7),
-.sba-gridcard .nds-grid td:nth-child(7) { width: 8%; }
-/* A worker with a badge wraps to a second line rather than escaping its cell. */
-.sba-gridcard .nds-grid td:nth-child(2) {
+/* A worker with a badge wraps to a second line rather than escaping its cell. The column widths are the columns'
+   own (`runColumns`): every column has one, so the grid scales them to the card. */
+.sba-gridcard .sba-wrapcell {
   white-space: normal;
 }
 .sba-cellprose {
