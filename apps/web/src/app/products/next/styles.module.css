@@ -18,6 +18,10 @@
   padding: 18px 24px 28px;
   min-height: 100vh;
 }
+/* A phone (≤ 760px): the shell's 16px margins are the page's only side gutter (Owner 4A, 2026-10-13). */
+@media (max-width: 760px) {
+  .wrap { padding-left: 0; padding-right: 0; }
+}
 
 /* ── Header actions row ──────────────────────────────────── */
 .acts {
