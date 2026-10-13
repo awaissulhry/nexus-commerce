@@ -5,7 +5,9 @@
   removal) takes its turn in the row's line: after the row's earlier cell saves have answered, before its later ones.
   `run` gets the row's version as the writer holds it (`SheetExclusiveTurn`) and may answer the version the row adopts
   (`SheetExclusiveAnswer.version`). It counts in `pending`, `busy` and `flush()`; `discard()` drops one still waiting
-  (its promise resolves `undefined`). Cells-only rows behave exactly as before.
+  (its promise resolves `undefined`) and keeps one already sent as the row's write in the air, so the row's next write
+  waits for its answer. A `run` that throws synchronously rejects like any other. Cells-only rows behave exactly as
+  before.
 
 ## A Matrix write carries what its cell showed — 2026-10-13
 

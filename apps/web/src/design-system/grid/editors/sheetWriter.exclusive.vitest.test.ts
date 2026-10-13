@@ -130,6 +130,54 @@ describe('SheetWriter.exclusive — a formula write takes its turn in the row\'s
     expect(commits.map((c) => c.cells[0]?.colId)).toEqual(['brand'])
   })
 
+  it('review of #614: a write that throws SYNCHRONOUSLY rejects like any other, and never jams the row\'s line', async () => {
+    const { writer, commits } = rowWriter()
+    const failed = writer.exclusive('p1', (): Promise<SheetExclusiveAnswer<string>> => { throw new Error('bad request') })
+    let heard: string | undefined
+    failed.then(() => { heard = 'resolved' }, (error: Error) => { heard = error.message })
+    writer.set('p1', 'brand', 'Acme')
+    await vi.advanceTimersByTimeAsync(50)
+    expect(heard).toBe('bad request')
+    expect(commits.map((c) => c.cells[0]?.colId)).toEqual(['brand'])
+    expect(writer.pending).toBe(0)
+    expect(writer.busy).toBe(false)
+  })
+
+  it('review of #614: after discard(), a formula already sent keeps the row\'s next write behind it', async () => {
+    const { writer, commits } = rowWriter()
+    writer.seed([{ id: 'p1', version: 5 }])
+    const inAir = deferred<SheetExclusiveAnswer<string>>()
+    const formula = writer.exclusive('p1', () => inAir.promise)
+    await vi.advanceTimersByTimeAsync(0)
+    writer.discard()
+    writer.set('p1', 'brand', 'Acme')
+    await vi.advanceTimersByTimeAsync(50)
+    // Never two writes of one row in the air; the discarded formula counts as nothing unsaved.
+    expect(commits).toHaveLength(0)
+    expect(writer.pending).toBe(1)
+    inAir.resolve({ result: 'stored', version: 6 })
+    await expect(formula).resolves.toBeUndefined()
+    await vi.advanceTimersByTimeAsync(50)
+    expect(commits).toHaveLength(1)
+    // Its answer belongs to the discarded edits: not adopted (the read after the discard brings the row).
+    expect(commits[0]).toMatchObject({ rowId: 'p1', expectedVersion: 5, cells: [{ colId: 'brand', value: 'Acme' }] })
+    expect(writer.pending).toBe(0)
+    expect(writer.busy).toBe(false)
+  })
+
+  it('after discard(), a formula already sent with nothing behind it frees the row when it answers', async () => {
+    const { writer } = rowWriter()
+    const inAir = deferred<SheetExclusiveAnswer<string>>()
+    void writer.exclusive('p1', () => inAir.promise)
+    await vi.advanceTimersByTimeAsync(0)
+    writer.discard()
+    expect(writer.pending).toBe(0)
+    expect(writer.busy).toBe(true)
+    inAir.resolve({ result: 'stored' })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(writer.busy).toBe(false)
+  })
+
   it('flush() waits for a formula write too (Publish flushes first)', async () => {
     const formula = deferred<SheetExclusiveAnswer<string>>()
     const { writer } = rowWriter()

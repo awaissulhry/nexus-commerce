@@ -2,8 +2,12 @@ import type { SaveReporter } from './types'
 
 let sequence = 0
 
-/** A formula write's outcome. `dropped`: it never left, or its answer belongs to edits the sheet discarded meanwhile. */
-export interface FormulaWriteResult { ok: boolean; error?: string; dropped?: boolean }
+/**
+ * A formula write's outcome. `dropped`: it never left, or its answer belongs to edits the sheet discarded meanwhile.
+ * `stored`: the server holds the change although `ok` is false — a formula kept for correction because it did not
+ * evaluate (`lastError`); the cell says refused, and ⌘Z still has the step (review of #614).
+ */
+export interface FormulaWriteResult { ok: boolean; error?: string; dropped?: boolean; stored?: boolean }
 
 /**
  * G4 (2026-10-13) — what the formula routes answer about the row a write moved (`cell-formula.routes.ts`, additive): the

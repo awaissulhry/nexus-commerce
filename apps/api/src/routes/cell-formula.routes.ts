@@ -139,14 +139,18 @@ const cellFormulaRoutes: FastifyPluginAsync = async (fastify) => {
           : {}),
       },
     }))
-    const body = res.json() as { error?: string; details?: string[]; errors?: Array<{ error?: string }>; updated?: number; unchanged?: number }
+    const body = res.json() as { error?: string; details?: string[]; errors?: Array<{ error?: string }>; updated?: number; unchanged?: number; currentVersion?: unknown; versionOf?: unknown }
     const first = body?.errors?.[0]?.error ?? body?.details?.[0]
     if (res.statusCode !== 200 || first) {
       // The writer's own sentence, verbatim — it is the one the operator would
       // have seen typing the value by hand, which is the point of the rule.
       return { ok: false, error: first ?? body.error ?? `write refused (HTTP ${res.statusCode})` }
     }
-    return { ok: true, atomicResults: context.results }
+    // G4 (review of #614) — the row's version as the bulk route read it inside this write's transaction: this write and
+    // nothing after it. The formula routes pass it to the sheet; a read-back after commit could count a foreign write.
+    const versionOf = body?.versionOf === 'product' || body?.versionOf === 'channelListing' ? body.versionOf : undefined
+    return { ok: true, atomicResults: context.results,
+      ...(versionOf && typeof body?.currentVersion === 'number' ? { currentVersion: body.currentVersion, versionOf } : {}) }
   })
 
   fastify.get('/pim/formulas/functions', async (_req, reply) =>

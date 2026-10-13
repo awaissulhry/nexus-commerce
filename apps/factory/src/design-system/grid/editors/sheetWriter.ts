@@ -618,6 +618,8 @@ interface RowQueue {
   inFlight: boolean
   /** The row's writes that go before `cells`, oldest first (`exclusive`). Empty: the row's line is `cells` alone. */
   line: LineEntry[]
+  /** The non-cell write in the air (`runTask`), so `discard()` can keep the row's next writes behind it. */
+  taskTurn?: Promise<unknown>
 }
 
 const cellsOf = (cells: Map<string, QueuedCell>): SheetWriteCell[] => [...cells.entries()].map(([colId, e]) => ({ colId, value: e.value, intent: e.intent }))
@@ -759,7 +761,10 @@ export class SheetWriter<T> {
    * rejects with that error; the row's line carries on either way.
    */
   exclusive<R>(rowId: string, run: (turn: SheetExclusiveTurn<T>) => Promise<SheetExclusiveAnswer<R>>): Promise<R | undefined> {
-    if (this.destroyed) return run({ expectedVersion: this.versions.get(rowId), row: this.rows.get(rowId) ?? null }).then((answer) => answer.result)
+    if (this.destroyed) {
+      const turn = { expectedVersion: this.versions.get(rowId), row: this.rows.get(rowId) ?? null }
+      return Promise.resolve().then(() => run(turn)).then((answer) => answer.result)
+    }
     return new Promise<R | undefined>((settle, fail) => {
       const q = this.queueOf(rowId)
       // The cells edited before this write leave before it, as their own save; those edited after it wait behind it.
@@ -816,23 +821,48 @@ export class SheetWriter<T> {
     const generation = this.generation
     let answer: SheetExclusiveAnswer<unknown> | undefined
     let failure: { error: unknown } | null = null
-    const turn = task.run({ expectedVersion: this.versions.get(rowId), row: (this.rows.get(rowId) ?? null) as never })
+    const args = { expectedVersion: this.versions.get(rowId), row: (this.rows.get(rowId) ?? null) as never }
+    // A `run` that throws synchronously is a refused turn like any other: it must never jam the row's line (review of #614).
+    const turn = Promise.resolve().then(() => task.run(args))
     const answered = turn.then((a) => a.version, () => undefined)
     this.turns.set(rowId, answered)
+    q.taskTurn = answered
     try {
       answer = await turn
     } catch (error) {
       failure = { error }
     }
     if (this.turns.get(rowId) === answered) this.turns.delete(rowId)
-    // Discarded meanwhile: the answer is about edits that were thrown away, and the row now belongs to the next read.
-    if (generation !== this.generation) { task.settle(undefined); return }
+    if (q.taskTurn === answered) q.taskTurn = undefined
+    // Discarded meanwhile: the answer is about edits that were thrown away (it is neither painted nor adopted), and the
+    // row now belongs to the next read. The row's next writes, kept behind it by `discard()`, go now.
+    if (generation !== this.generation) {
+      task.settle(undefined)
+      this.releaseCarried(rowId, answered)
+      return
+    }
     if (typeof answer?.version === 'number') this.seed([{ id: rowId, version: answer.version }])
     q.inFlight = false
     this.inFlightCells.delete(rowId)
     this.emit()
     if (failure) task.fail(failure.error)
     else task.settle(answer!.result)
+    if (this.hasQueued(q)) this.schedule(rowId)
+    else if (!q.timer) this.queues.delete(rowId)
+  }
+
+  /**
+   * A non-cell write that `discard()` kept as the row's write in the air has answered: the writes made since go now. Only
+   * the row's own carried turn releases it — a later discard or destroy has already moved on.
+   */
+  private releaseCarried(rowId: string, turn: Promise<unknown>): void {
+    const q = this.queues.get(rowId)
+    if (!q || q.taskTurn !== turn) return
+    q.taskTurn = undefined
+    q.inFlight = false
+    this.inFlightCells.delete(rowId)
+    if (this.turns.get(rowId) === turn) this.turns.delete(rowId)
+    this.emit()
     if (this.hasQueued(q)) this.schedule(rowId)
     else if (!q.timer) this.queues.delete(rowId)
   }
@@ -1502,6 +1532,10 @@ export class SheetWriter<T> {
       .concat([...this.flightOutcomes.values()].flatMap((listeners) => [...listeners.values()]))
     // A non-cell write still waiting for its turn never leaves either: its caller hears `undefined`.
     const unsent = [...this.queues.values()].flatMap((q) => q.line.flatMap((e) => ('task' in e ? [e.task] : [])))
+    // A non-cell write already SENT is still on the wire (review of #614): the row keeps it as its write in the air, so a
+    // write made after the discard waits for its answer — never two writes of one row in the air together. It counts
+    // in neither `pending` nor anything painted: it belongs to the edits thrown away.
+    const carried = [...this.queues].flatMap(([rowId, q]) => (q.inFlight && q.taskTurn ? [[rowId, q.taskTurn] as const] : []))
     this.flightOutcomes.clear()
     this.turns.clear()
     this.queues.clear()
@@ -1511,6 +1545,11 @@ export class SheetWriter<T> {
     // land on cells that no longer hold what it is reasoning about.
     this.unreachableRows.clear()
     this.reconciling.clear()
+    for (const [rowId, turn] of carried) {
+      this.queues.set(rowId, { cells: new Map(), timer: null, inFlight: true, line: [], taskTurn: turn })
+      this.inFlightCells.set(rowId, 0)
+      this.turns.set(rowId, turn as Promise<number | undefined>)
+    }
     this.opts.tracker.clearAll()
     this.emit()
     for (const listener of dropped) listener('dropped')
@@ -1525,9 +1564,10 @@ export class SheetWriter<T> {
     this.generation++
     if (this.batchTimer) { clearTimeout(this.batchTimer); this.batchTimer = null }
     if (this.fenceTimer) { clearTimeout(this.fenceTimer); this.fenceTimer = null }
-    // A row whose line holds a non-cell write leaves in that order, one write after another (`leaveInOrder`).
+    // A row whose line holds a non-cell write — or whose write in the air is one — leaves in that order, one write after
+    // another (`leaveInOrder`).
     for (const [rowId, q] of this.queues) {
-      if (q.line.length === 0) continue
+      if (q.line.length === 0 && !q.taskTurn) continue
       if (q.timer) clearTimeout(q.timer)
       this.leaveInOrder(rowId, q)
       q.line = []

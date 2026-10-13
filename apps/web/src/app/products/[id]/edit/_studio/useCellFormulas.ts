@@ -263,7 +263,8 @@ export function useCellFormulas({ productId, scope = 'master', channel = null, m
     if (!res.ok) return { result: { ok: false, error: body?.error ?? 'Could not save this field.' }, facts: {} }
     revision.current += 1
     if (live.current.coordinateKey === coordinateKey && (literal || body.formula)) setReads(previous => previous.key === readKey ? saveLocally(previous, rowId, fieldKey, literal ? null : body.formula) : previous)
-    const result: FormulaWriteResult = literal ? { ok: true } : formulaSaveOutcome(body)
+    // A formula that did not evaluate is still STORED (with its `lastError`, for correction): the answer carries it.
+    const result: FormulaWriteResult = literal ? { ok: true } : { ...formulaSaveOutcome(body), ...(body.formula ? { stored: true } : {}) }
     if (result.ok && live.current.coordinateKey === coordinateKey) live.current.onValueSaved?.(rowId, fieldKey, body.value)
     return { result, facts: formulaVersionFacts(body) }
   })), [reporter, write, target, coordinateKey, readKey])

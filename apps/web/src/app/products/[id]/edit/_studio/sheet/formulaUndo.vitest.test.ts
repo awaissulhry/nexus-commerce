@@ -81,6 +81,16 @@ describe('a formula edit in the sheet\'s ⌘Z', () => {
     expect(undo()).toEqual([{ rowId: 'p1', colId: 'costPrice', value: 15 }])
   })
 
+  it('review of #614: a formula STORED without a value (`=$typo`, kept with its error) stays a step — the server holds it', async () => {
+    const { history, record, sender, undo } = sheet({}, { ok: false, error: 'Unknown field $athlete', stored: true })
+    history.edit({ rowId: 'p1', colId: 'costPrice', before: 15, after: 16 }, false)('saved')
+    await turn()
+    const result = await sendFormulaEdit({ rowId: 'p1', colId: 'manufacturer', value: '=$athlete', before: 'Acme Ltd' }, sender, record)
+    expect(result.ok).toBe(false)
+    expect(formulaWriteOutcome(result)).toBe('saved')
+    expect(undo()).toEqual([{ rowId: 'p1', colId: 'manufacturer', value: 'Acme Ltd' }])
+  })
+
   it('a formula write the sheet discarded leaves the history too', async () => {
     const { history, record, sender } = sheet({}, { ok: false, dropped: true })
     await sendFormulaEdit({ rowId: 'p1', colId: 'manufacturer', value: '=upper("acme")', before: 'Acme Ltd' }, sender, record)

@@ -121,6 +121,27 @@ describe('formula writes in the sheet\'s write line', () => {
     expect(writer.versionOf('row-x')).toBe(7)
   })
 
+  it('review of #614: a formula stored without a value (it did not evaluate) answers not ok, but STORED', async () => {
+    const formulas = render(sheet())
+    const saved = formulas.save('row-x', 'manufacturer', '$athlete')
+    await vi.advanceTimersByTimeAsync(0)
+    answer.resolve(json({ ok: false, value: 'Acme Ltd', error: 'Unknown field $athlete',
+      formula: { fieldKey: 'manufacturer', expr: '$athlete', lastError: 'Unknown field $athlete' } }))
+    await expect(saved).resolves.toMatchObject({ ok: false, stored: true, error: 'Unknown field $athlete' })
+    // The sheet holds it as the cell's formula (the next render reads the hook's own state).
+    expect(render(sheet()).exprFor('row-x', 'manufacturer')).toBe('$athlete')
+  })
+
+  it('a value the route refused is neither ok nor stored', async () => {
+    const formulas = render(sheet())
+    const replaced = formulas.replace('row-x', 'manufacturer', 'Zeta')
+    await vi.advanceTimersByTimeAsync(0)
+    answer.resolve(json({ error: 'This field cannot be edited in this scope.' }, 400))
+    const result = await replaced
+    expect(result).toMatchObject({ ok: false, error: 'This field cannot be edited in this scope.' })
+    expect(result.stored).toBeUndefined()
+  })
+
   it('another change in between is not on screen: the row keeps the version it holds', async () => {
     writer.seed([{ id: 'row-x', version: 5 }])
     const formulas = render(sheet())

@@ -20,9 +20,12 @@ import type { SheetCellChange } from './sheetUndo'
 /** How the history holds a formula: as it is typed, so its replay takes the formula road. */
 export const formulaHistoryValue = (expr: string): string => `=${expr}`
 
-/** A formula write's result as the history hears it. */
+/**
+ * A formula write's result as the history hears it. A formula stored without a value (it did not evaluate: `=$typo`)
+ * is STORED — the server holds it and the sheet shows it — so it stays a step, while its cell says refused.
+ */
 export function formulaWriteOutcome(result: FormulaWriteResult): SheetCellOutcome {
-  return result.dropped ? 'dropped' : result.ok ? 'saved' : 'refused'
+  return result.dropped ? 'dropped' : result.ok || result.stored ? 'saved' : 'refused'
 }
 
 /** The part of `useCellFormulas()` a formula edit is sent through. */
