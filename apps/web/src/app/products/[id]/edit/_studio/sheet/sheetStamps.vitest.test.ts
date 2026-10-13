@@ -13,8 +13,8 @@ import type { StudioRow, StudioSheet } from './master/types'
 import { commitChannelRow } from './channel/useChannelSheet'
 import { keepUnsettledCells } from './channel/saveSettle'
 import type { ChannelScopePage, ChannelSheetRow } from './channel/types'
-import { carrySeenCell, carryShownCell, readAgainOverRefused, rememberReadCells, seenCell, stampFor } from './sheetStamps'
-import { noteEditPrior, takeEditPrior } from './sheetUndo'
+import { carrySeenCell, carryShownCell, movedValueOf, readAgainOverRefused, rememberReadCells, seenCell, stampFor } from './sheetStamps'
+import { noteEditPrior, SheetUndoHistory, takeEditPrior } from './sheetUndo'
 
 /** A cell as the sheet read sends it. */
 const readCell = (value: unknown, over: Record<string, unknown> = {}) =>
@@ -323,5 +323,114 @@ describe('a refused cell whose field moved: its mark names the server’s value,
     const read = readCell('Brand P')
     rememberReadCells([{ values: { brand: read } }])
     expect(readAgainOverRefused(edit(read, 'Brand Q'), readCell('Brand X'))).toBeUndefined()
+  })
+})
+
+/*
+ * Re-review of #611 — the refused cell beyond "Try again": a value typed into it, a save of it that is stored, its undo, and
+ * a refusal of another cell of the row that names no field.
+ */
+describe('a cell refused because its field moved: a value typed into it, its stored save, its undo, and the row’s version', () => {
+  const MASTER = { tier: null, inherited: false, pinned: false, follows: null, layer: 'master' }
+  const sheet = { scope: { kind: 'master', label: 'Shared', locale: 'it' }, columns: [
+    { key: 'brand', writeField: 'brand', label: 'Brand', group: 'g', requiredBy: [], storage: 'column' },
+    { key: 'color', writeField: 'color', label: 'Colour', group: 'g', requiredBy: [], storage: 'column' },
+  ] } as unknown as StudioSheet
+  const conflict = (current?: string) => ({ code: 'VERSION_CONFLICT', error: 'Another change landed first', currentVersion: 4, versionOf: 'product',
+    ...(current ? { current: { brand: { value: current, from: MASTER } } } : {}) })
+
+  /** The Shared sheet's writer and undo, as `useMasterSheetAdapter` wires them; every body it sends. */
+  function masterSheet(answers: Array<[number, unknown]>) {
+    const sent: Array<Record<string, any>> = []
+    const tracker = new CellSaveTracker()
+    const history = new SheetUndoHistory()
+    const writer = new SheetWriter<StudioRow>({ tracker, getApi: () => null, flushMs: 1,
+      commit: (req) => commitMasterRow(req, { sheet, opts: {}, locale: 'it', market: 'IT',
+        bulkSend: async (body) => { sent.push(body); const [status, answer] = answers.shift()!; return json(status, answer) as never } }) })
+    const read = readCell('Brand P')
+    rememberReadCells([{ values: { brand: read } }])
+    const row = { id: 'p1', version: 2, values: { brand: read, color: readCell('Rosso', { writeField: 'color' }) } } as unknown as StudioRow
+    writer.seed([{ id: 'p1', version: 2, row }])
+    /** The person types `value` into the brand cell: the column's value setter, then the save with its undo record. */
+    const type = (value: string, before: unknown) => {
+      const next = edit(row.values.brand as object, value)
+      takeEditPrior(next) // the adapter reads the edit's "before" as it records it
+      row.values = { ...row.values, brand: next } as never
+      const refused = tracker.get('p1', 'brand')?.state === 'refused'
+      const onOutcome = history.edit({ rowId: 'p1', colId: 'brand', before, after: value }, refused, true, () => movedValueOf(row.values.brand))
+      writer.set('p1', 'brand', value, { row, onOutcome })
+    }
+    return { sent, tracker, history, writer, row, type }
+  }
+
+  it('a value typed into the refused cell carries the stamp of the value its mark names, and refuses again if that moved', async () => {
+    const { sent, tracker, writer, type } = masterSheet([[409, conflict('Brand X')], [409, conflict('Brand Y')], [409, conflict('Brand Y')]])
+    type('Mine', 'Brand P')
+    await writer.flush()
+    expect(tracker.get('p1', 'brand')?.reason).toBe('Changed elsewhere: now “Brand X”. Try again to replace it.')
+    // An open editor holds the quiet read back; the person types a new value into the red cell; a third person sets Y.
+    type('Mine 2', 'Mine')
+    await writer.flush()
+    expect(sent[1]).toMatchObject({ expectedVersion: 2 })
+    expect(sent[1].changes[0]).toMatchObject({ value: 'Mine 2', column: 'brand', expected: { value: 'Brand X', from: MASTER } })
+    expect(tracker.get('p1', 'brand')?.reason).toBe('Changed elsewhere: now “Brand Y”. Try again to replace it.')
+    expect(writer.versionOf('p1')).toBe(2)
+    writer.retryFailed()
+    await writer.flush()
+    expect(sent[2]).toMatchObject({ expectedVersion: 2 })
+    expect(sent[2].changes[0]).toMatchObject({ value: 'Mine 2', expected: { value: 'Brand Y', from: MASTER } })
+  })
+
+  it('undo after a value typed into the refused cell was stored puts back the other person’s value, not the one from before it', async () => {
+    const { history, writer, type } = masterSheet([[409, conflict('Brand X')], [200, { updated: 1, currentVersion: 4, versionOf: 'product', writtenAt: 3 }]])
+    type('Mine', 'Brand P')
+    await writer.flush()
+    type('Mine 2', 'Mine')
+    await writer.flush()
+    const put: unknown[] = []
+    history.undo((values) => { put.push(...values.map((v) => v.value)) })
+    expect(put).toEqual(['Brand X'])
+  })
+
+  it('a stored save ends the refusal: a value typed before the next read is not checked against the server’s old value', async () => {
+    const { sent, writer, type } = masterSheet([[409, conflict('Brand X')], [200, { updated: 1, currentVersion: 4, versionOf: 'product', writtenAt: 3 }], [200, { updated: 1, currentVersion: 5, versionOf: 'product' }]])
+    type('Mine', 'Brand P')
+    await writer.flush()
+    writer.retryFailed()
+    await writer.flush()
+    expect(sent[1].changes[0].expected).toEqual({ value: 'Brand X', from: MASTER })
+    type('Mine 3', 'Mine')
+    await writer.flush()
+    // Made over the person's own stored value: no stamp of Brand X (which would refuse it as "now Mine").
+    expect(sent[2].changes[0]).not.toHaveProperty('expected')
+  })
+
+  it('a refusal of another cell of the row that names no field hands the row no version while the refused cell shows', async () => {
+    const { sent, writer, type, row } = masterSheet([[409, conflict('Brand X')], [409, conflict()]])
+    type('Mine', 'Brand P')
+    await writer.flush()
+    // An unstamped save of another cell (the page wrote it itself): the door checks the version alone and answers v4.
+    row.values = { ...row.values, color: readCell('Blu', { writeField: 'color' }) } as never
+    writer.set('p1', 'color', 'Blu', { row })
+    await writer.flush()
+    expect(sent[1].changes[0]).not.toHaveProperty('expected')
+    expect(writer.versionOf('p1')).toBe(2)
+  })
+
+  it('the channel sheet: the same refusal naming no field leaves the listing version the row read', async () => {
+    const LISTING = { tier: null, inherited: false, pinned: true, follows: false, layer: 'channel' }
+    const channelCell = (value: unknown, writeField = 'material') => readCell(value, { writeField, writeTarget: 'channelListing', writeVerb: 'channel', layer: 'channel', pinned: true, follows: false })
+    const read = channelCell('Cotone')
+    rememberReadCells([{ values: { material: read } }])
+    const row = { id: 'p1', rowId: 'primary:p1', rowKind: 'variant', aliasId: null, version: 7, listing: { id: 'l1', version: 82 },
+      values: { material: edit(read, 'Lana'), finish: channelCell('Opaco', 'finish') } } as unknown as ChannelSheetRow
+    const answers: Array<[number, unknown]> = [
+      [409, { code: 'VERSION_CONFLICT', error: 'Another change landed first', currentVersion: 83, versionOf: 'channelListing', current: { material: { value: 'Seta', from: LISTING } } }],
+      [409, { code: 'VERSION_CONFLICT', error: 'Another change landed first', currentVersion: 84, versionOf: 'channelListing' }],
+    ]
+    const coord = { channel: 'EBAY' as const, marketplace: 'IT', bulkSend: async () => { const [status, answer] = answers.shift()!; return json(status, answer) as never } }
+    await commitChannelRow({ rowId: row.rowId, row, cells: [{ colId: 'material', value: 'Lana', intent: 'set' }], expectedVersion: 7 }, coord)
+    await commitChannelRow({ rowId: row.rowId, row, cells: [{ colId: 'finish', value: 'Lucido', intent: 'set' }], expectedVersion: 7 }, coord)
+    expect(row.listing?.version).toBe(82)
   })
 })

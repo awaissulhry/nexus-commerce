@@ -24,6 +24,10 @@
  * exactly what the mark showed, which the door refuses again if the field moved once more. A quiet read that keeps a
  * refused cell over a server cell its stamp no longer matches moves the stamp, and the words, to that cell: the version
  * the row now holds and the value the mark shows come from the same read.
+ *
+ * Re-review of #611: a value TYPED into such a cell is made over the same server cell (it carries that stamp, and the
+ * undo's "before" is that value, `sheetUndo.ts` `serverHolds`); a save of the cell that is stored ends it; and while a
+ * row holds one, a refusal that names no field never hands the row a version (`holdsMovedRefusal`) — the quiet read does.
  */
 import { isSheetCellStamp, sheetCellStamp, sheetStampHolds, type SheetCellStamp, type SheetStampCell } from '@nexus/shared/sheet-stamp'
 
@@ -83,13 +87,51 @@ export interface StampFields { expected?: SheetCellStamp; column?: string }
  */
 export function stampFor(current: unknown, colId: string, intent: string | undefined, column?: { locale?: string } | null): StampFields {
   if (intent === 'reset-list') return {}
-  // A refused cell sent again ("Try again") replaces the server's cell its mark named — never only its own read's.
-  const target = isObject(current) ? replacing.get(current) : undefined
-  const seen = target ? undefined : seenCell(current)
+  /* A refused cell sent again ("Try again"), or a value typed into it, replaces the server's cell its mark named — never
+     only the read's. A typed value takes that cell over, so its own refusal or retry keeps it. */
+  const refused = refusedUnder(current)
+  if (refused && refused !== current) replacing.set(current as object, replacing.get(refused) ?? null)
+  const target = refused ? replacing.get(refused) ?? undefined : undefined
+  const seen = target ? undefined : seenCell(refused ?? current)
   const expected = target ?? (seen ? sheetCellStamp(seen) : undefined)
   if (!expected) return {}
   const at = column?.locale ? colId.lastIndexOf('@') : -1
   return { expected, column: at > 0 ? colId.slice(0, at) : colId }
+}
+
+/** The cell refused because its field moved that `cell` is — or that a value typed into it (`cell`) was made over. */
+function refusedUnder(cell: unknown): object | undefined {
+  if (!isObject(cell)) return undefined
+  if (replacing.has(cell)) return cell
+  const prior = editPriorOf(cell)
+  return isObject(prior) && replacing.has(prior) ? prior : undefined
+}
+
+/**
+ * What the server holds for a cell refused because its field moved (or for a value typed into it), as far as the page
+ * knows: the value its mark names. Undefined for any other cell. The undo's "before" for the next edit (`useSheetUndo`).
+ */
+export function movedValueOf(cell: unknown): { value: unknown } | undefined {
+  const refused = refusedUnder(cell)
+  const target = refused ? replacing.get(refused) : undefined
+  return target ? { value: target.value } : undefined
+}
+
+/** A save of `cell` was stored: the person's value replaced the server's, so neither it nor the cell it was typed into is refused any more. */
+export function forgetMovedRefusal(cell: unknown): void {
+  if (!isObject(cell)) return
+  replacing.delete(cell)
+  const prior = editPriorOf(cell)
+  if (isObject(prior)) replacing.delete(prior)
+}
+
+/**
+ * Does the row show a cell refused because its field moved (or a value typed into one)? Then a refusal that names no
+ * field must not hand the row the server's version: that version may hold the field at a value the mark does not show,
+ * and a retry at it would be written without its stamp being checked. The quiet read brings the version with the value.
+ */
+export function holdsMovedRefusal(row: { values?: Record<string, unknown> } | null | undefined): boolean {
+  return Object.values(row?.values ?? {}).some((cell) => !!refusedUnder(cell))
 }
 
 /** The mark of a refused cell whose field the server holds as something else now. */

@@ -40,7 +40,7 @@ import { wireAliasKey } from './types'
 import { wholeListWriteField } from './provenance'
 import { IDENTITY_SKU_COLUMN, identitySkuChannelChange } from '../identitySkuEdit'
 import { adoptContentVersions, contentWriteProof } from '../contentVersions'
-import { noteMovedFieldRefusal, rememberReadCells, stampFor, type StampFields } from '../sheetStamps'
+import { forgetMovedRefusal, holdsMovedRefusal, noteMovedFieldRefusal, rememberReadCells, stampFor, type StampFields } from '../sheetStamps'
 import type { AliasGroup, ChannelScopeChannel, ChannelScopePage, ChannelSheetRow, SheetColumn, SheetListing, StudioCellValue } from './types'
 
 export interface UseChannelSheetOptions {
@@ -448,12 +448,13 @@ async function commitChannelLanguage(
 
   const changes = req.cells.map(({ colId, value, intent }) => {
     // S11 — the first column is THIS listing's own SKU (`channel_sku`, a channel write on the row's listing context).
-    if (colId === IDENTITY_SKU_COLUMN) return { colId, change: { id: row.id, ...identitySkuChannelChange(value, intent) } }
+    if (colId === IDENTITY_SKU_COLUMN) return { colId, cell: row.values?.[colId], change: { id: row.id, ...identitySkuChannelChange(value, intent) } }
     const cell = row.values?.[colId]
     const address = intent === 'reset' || intent === 'reset-list' ? cell?.contentAcknowledgement?.pin.address ?? cell?.contentAddress : cell?.contentAddress
     const isReset = intent === 'reset' || intent === 'reset-list'
     return {
       colId,
+      cell,
       change: {
         id: row.id,
         contentAddress: address,
@@ -531,6 +532,8 @@ async function commitChannelLanguage(
   const proof = selection.proof, casVersion = proof.expectedVersion
   const stamped = changes.some(({ change }) => 'expected' in change && change.expected !== undefined)
   const listingAtBuild = row.listing?.id ?? null
+  // While the row shows a cell refused because its field moved, a refusal naming no field hands it no version (below).
+  const heldForMoved = holdsMovedRefusal(row)
 
   try {
     const send = (expectedVersion: number | undefined) => (coord.bulkSend ?? directBulkSend)({
@@ -594,7 +597,9 @@ async function commitChannelLanguage(
      * other change is read quietly next, and until then every other field of the row is still checked against it.
      */
     const overOther = res.ok && typeof body?.writtenAt === 'number'
-    const keepRead = overOther || res.status === 409 && !!body?.current
+    // The same while the row shows a cell refused because its field moved: a version from a refusal that names no field
+    // could hold that field at a value its mark does not show (`holdsMovedRefusal`, re-review of #611).
+    const keepRead = overOther || res.status === 409 && (!!body?.current || heldForMoved)
     const raw = typeof body?.currentVersion === 'number' && !keepRead ? body.currentVersion : undefined
     /**
      * 🔴 `versionOf` says WHICH ROW the number belongs to — read it, never infer it.
@@ -641,7 +646,7 @@ async function commitChannelLanguage(
             : 'Someone else changed this row first. Review the edit before reloading.')
       /* Field stamps — a stamped field moved (`current`): the refused cell's mark says what the server holds now, and "Try
          again" replaces exactly that (`../sheetStamps.ts`, review of #611). */
-      const moved = body?.current ? noteMovedFieldRefusal(changes.map(({ colId, change }) => ({ colId, cell: row.values?.[colId],
+      const moved = body?.current ? noteMovedFieldRefusal(changes.map(({ colId, cell, change }) => ({ colId, cell,
         stamp: change as StampFields, optionLabels: coord.columnOf?.(colId)?.optionLabels })), body.current) : null
       // Hand the server's version back so the writer can retry rather than stay behind.
       return {
@@ -665,10 +670,11 @@ async function commitChannelLanguage(
     const warningOf = (colId: string, field: string) => saveWarningFor(body, row.id, [field, colId])
     if (errors.length > 0) {
       const cells: Record<string, { ok: boolean; reason?: string; warning?: string }> = {}
-      for (const { colId, change } of changes) {
+      for (const { colId, cell, change } of changes) {
         const hit = errors.find((e) => e.field === change.field && (e.id === undefined || e.id === row.id))
         const warning = warningOf(colId, change.field)
         cells[colId] = hit ? { ok: false, reason: hit.error || 'Refused' } : { ok: true, ...(warning ? { warning } : {}) }
+        if (!hit) forgetMovedRefusal(cell)
       }
       return { ok: false, version, cells }
     }
@@ -695,6 +701,8 @@ async function commitChannelLanguage(
       }
     }
 
+    // Stored: a cell refused because its field moved (or a value typed into it) is refused no more (re-review of #611).
+    for (const { cell } of changes) forgetMovedRefusal(cell)
     const warned = changes.flatMap(({ colId, change }) => { const warning = warningOf(colId, change.field); return warning ? [[colId, { ok: true, warning }] as const] : [] })
     if (settle?.kind === 'patch') {
       const patched = new Set(settle.apply())

@@ -3,6 +3,7 @@ import type { CellSaveTracker, GridApi, SheetCellOutcome, SheetWriter } from '@/
 
 import { operationFence } from './bulkOperation'
 import { routeHistoryValues, SheetUndoHistory, undoShortcut, writeHistoryValues, type ApplyCellValues, type SheetCellChange, type SheetInheritValue } from './sheetUndo'
+import { movedValueOf } from './sheetStamps'
 
 /** Puts one cell back to what it inherits (G3): the scope shows the inherited value and saves the reset with `intent`. */
 export type ResetCellBack = (rowId: string, colId: string, before: SheetInheritValue, onOutcome: (outcome: SheetCellOutcome) => void) => void
@@ -71,8 +72,14 @@ export function useSheetUndo<Row>(writer: SheetWriter<Row>, getGridApi: () => Gr
    */
   const edit = useCallback((change: SheetCellChange, source?: string) => {
     const replay = source === 'undo' || source === 'redo'
-    return history.edit(change, unconfirmed(live.current.tracker, change.rowId, change.colId), !replay)
-  }, [history])
+    /* Field stamps (re-review of #611) — a cell refused because its field moved: the server holds the value its mark
+       names, read from the cell the grid holds when the ledger asks (`sheetStamps.ts` `movedValueOf`). */
+    const serverValue = () => {
+      const data = getGridApi()?.getRowNode(change.rowId)?.data as { values?: Record<string, unknown> } | undefined
+      return movedValueOf(data?.values?.[change.colId])
+    }
+    return history.edit(change, unconfirmed(live.current.tracker, change.rowId, change.colId), !replay, serverValue)
+  }, [history, getGridApi])
 
   /**
    * G2 — an edit that never reached the writer and was not stored (dropped while formulas loaded, a refused formula

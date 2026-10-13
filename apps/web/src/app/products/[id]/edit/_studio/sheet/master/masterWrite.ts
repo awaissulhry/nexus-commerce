@@ -25,7 +25,7 @@ import { wireCellValue } from '../sheetReset'
 import { saveWarningFor } from '../saveWarnings'
 import { adoptContentVersions, contentWriteProof } from '../contentVersions'
 import { sharedWriteField, skuRenamesOf } from '../identitySkuEdit'
-import { noteMovedFieldRefusal, stampFor } from '../sheetStamps'
+import { forgetMovedRefusal, holdsMovedRefusal, noteMovedFieldRefusal, stampFor } from '../sheetStamps'
 
 import { askForThemeChangePlan } from '../../variants/channel/themePlanAsk'
 /**
@@ -145,7 +145,10 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
   /* Field stamps (2026-10-13, `../sheetStamps.ts`): what each cell showed, from the read — so a row whose version moved for
      another field (a sale, a cascade, another person's edit) still takes this edit. A refused cell sent again carries the
      server's cell its mark named. Only on a guarded write: a write without a version has nothing for a stamp to stand in for. */
-  const stamps = bulk.map((c) => (proof.expectedVersion ? stampFor(req.row?.values?.[c.colId], c.colId, c.intent, byKey.get(c.colId)) : {}))
+  const sent = new Map(bulk.map((c) => [c.colId, req.row?.values?.[c.colId]]))
+  const stamps = bulk.map((c) => (proof.expectedVersion ? stampFor(sent.get(c.colId), c.colId, c.intent, byKey.get(c.colId)) : {}))
+  // …and while the row shows a cell refused because its field moved, a refusal naming no field hands it no version.
+  const heldForMoved = holdsMovedRefusal(req.row)
 
   try {
     if (bulk.length > 0) {
@@ -196,10 +199,12 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
         conflict = true
         // Field stamps — a stamped field moved (`current`): the row keeps the version it read until the quiet read that
         // follows shows the other change; meanwhile every other field of the row is still checked against it.
-        version = body?.current ? undefined : versionFromBody(body)
+        // The same while the row shows a cell refused because its field moved: a version from a refusal that names no field
+        // could hold that field at a value its mark does not show (`holdsMovedRefusal`, re-review of #611).
+        version = body?.current || heldForMoved ? undefined : versionFromBody(body)
         batchReason = body?.message || body?.error || 'Someone else changed this row. Refresh to see their version.'
         /* …and the refused cell's mark says what the server holds now; "Try again" replaces exactly that (review of #611). */
-        const moved = body?.current ? noteMovedFieldRefusal(bulk.map((c, i) => ({ colId: c.colId, cell: req.row?.values?.[c.colId], stamp: stamps[i],
+        const moved = body?.current ? noteMovedFieldRefusal(bulk.map((c, i) => ({ colId: c.colId, cell: sent.get(c.colId), stamp: stamps[i],
           optionLabels: byKey.get(c.colId)?.optionLabels })), body.current) : null
         for (const c of bulk) cells[c.colId] = { ok: false, reason: moved?.get(c.colId) ?? batchReason }
       } else if (!res.ok) {
@@ -219,7 +224,8 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
           /* P1 — a value stored WITH a problem the server names keeps that sentence on its cell (`warnings[]`). */
           const warning = mine ? undefined : saveWarningFor(body, req.rowId, [field, c.colId])
           cells[c.colId] = mine ? { ok: false, reason: mine.error || 'Refused' } : { ok: true, ...(warning ? { warning } : {}) }
-          if (!mine) anyOk = true
+          // Stored: a cell refused because its field moved (or a value typed into it) is refused no more.
+          if (!mine) { anyOk = true; forgetMovedRefusal(sent.get(c.colId)) }
         }
         /*
          * 🔴 READ BACK, never computed. The `expectedVersion + 1` that used to sit here invented a
