@@ -153,27 +153,6 @@
    `.acr-fleet` is worn by three fleet pages. */
 .as-page .as-gridcard { margin-top: 4px; }
 
-/* The table-layout trap, third instance in this series. `.nds-grid` is
-   `table-layout: auto` with `white-space: nowrap`, so a declared width is only
-   a hint and the longest string wins the slack. Measured on the shipped
-   `acr-pg-tbl` at 1728px: 675px — 41.8% of the table — was allocated to
-   nothing, and "Points at" ran 3.43× its widest content while carrying the one
-   fact this page exists for. `fixed` makes every declared width exact. */
-.as-page .nds-grid { table-layout: fixed; width: 100%; }
-.as-page .nds-grid th,
-.as-page .nds-grid td {
-  overflow: hidden;
-  vertical-align: middle;
-}
-/* No cell wraps here — one line, ellipsis, full value in the tooltip. That is
-   what makes row height uniform at every width; the shipped table varied 34%
-   down one list at 896px because titles wrapped and subtitles did not. */
-.as-page .nds-grid td { white-space: nowrap; }
-/* The header's own colour is the DS `--text-secondary` (#5b6573 on #f7f9fb =
-   5.6:1), which is why moving to this substrate fixes the 2.73:1 header that
-   `acr-pg-tbl` shipped. Recorded so nobody "helpfully" re-greys it. */
-.as-page .nds-grid-empty { color: var(--nds-grey-600); padding: 34px 20px; }
-
 .as-page .nds-toolbar { flex-wrap: wrap; row-gap: 6px; }
 .as-search { min-width: 240px; }
 /* The count is the toolbar's anchor, so it does not shrink under the search

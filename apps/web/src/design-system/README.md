@@ -85,7 +85,8 @@ rewritten.
 
 ```ts
 import { Button, Badge } from '@/design-system/primitives'
-import { DataGrid, Modal } from '@/design-system/components'
+import { Modal } from '@/design-system/components'
+import { DataGrid } from '@/design-system/grid/datagrid'
 import { tokens } from '@/design-system/tokens'
 ```
 

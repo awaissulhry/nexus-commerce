@@ -37,7 +37,9 @@ export { PerformanceGraph, type PerformanceGraphProps, type ChartSeries } from '
 export { BurnDownChart, type BurnDownChartProps, type BurnDownPoint } from './BurnDownChart'
 export { Heatmap, type HeatmapProps } from './Heatmap'
 export { SavedChip, type SavedChipProps, type SavedChipAction } from './SavedChip'
-export { DataGrid, type DataGridProps, type Column } from './DataGrid'
+// The grid's props and column types, shared by both tables. The AG `DataGrid` is `design-system/grid/datagrid`, where
+// every web page imports it from; the HTML-table one (`./DataGrid`) is the factory's, imported by its path.
+export type { DataGridProps, Column } from './DataGrid'
 export { ImageUpload, type ImageUploadProps, type ImageUploadCriterion } from './ImageUpload'
 export { Banner, type BannerProps } from './Banner'
 export { Stepper, type StepperProps, type StepperStep } from './Stepper'

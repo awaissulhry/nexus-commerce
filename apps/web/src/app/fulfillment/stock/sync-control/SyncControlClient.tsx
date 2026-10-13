@@ -10,7 +10,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Search } from 'lucide-react'
 import { Listbox } from '@/design-system/components/Listbox'
-import { Banner, DataGrid, Pagination, type Column } from '@/design-system/components'
+import { Banner, Pagination } from '@/design-system/components'
+import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { GridToolbar, FilterBar, type FilterDimension } from '@/design-system/patterns'
 import { Button, Input, Pill, SegmentedControl } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -33,7 +34,7 @@ import {
   listingTarget, BULK_ACTIONS, INACTIVE_NOTE, INACTIVE_ROW, actionLabel, actionCounts,
   DENSITY_OPTIONS, MODE_TONE, MODE_LABEL, MODE_HELP, COLUMN_HELP, ACTION_HELP, CONTROL_HELP, PAGE_SIZES,
   QUANTITY_CHANNELS, policyMarketOptions, policyMarketFor, marketFilterOptions,
-  type Mode, type Row, type Density,
+  type Mode, type Row, type Density, DENSITY_SIZE,
 } from './sync-control-shared'
 
 const API = getBackendUrl()
@@ -636,8 +637,8 @@ export default function SyncControlClient() {
           )}
         </GridToolbar>
 
-        <div className={density === 'compact' ? styles.densityCompact : density === 'spacious' ? styles.densitySpacious : undefined}>
-          <DataGrid<Row>
+        <DataGrid<Row>
+            size={DENSITY_SIZE[density]}
             columns={columns}
             rows={rows}
             rowKey={rowKey}
@@ -655,7 +656,6 @@ export default function SyncControlClient() {
               )
             }
           />
-        </div>
 
         <div className={styles.gridFooter}>
           <span className="tabular-nums">{total} rows · page {page}/{pages}</span>

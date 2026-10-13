@@ -34,7 +34,7 @@
  * and nothing else. There is no dial here, and there is nothing to press.
  */
 
-import { DataGrid, type Column } from '@/design-system/components/DataGrid'
+import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { relationOf, type EntityGraph, type EntityEdge } from './EntityCanvas'
 /* S6.i — its own module so it can be tested: this file imports the design
    system, and the apps/web vitest runner has no `@/` alias. */

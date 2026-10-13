@@ -33,7 +33,7 @@ import {
 } from 'lucide-react'
 import { PageHeader } from '@/design-system/patterns/PageHeader'
 import { Card } from '@/design-system/components/Card'
-import { DataGrid, type Column } from '@/design-system/components/DataGrid'
+import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { Modal } from '@/design-system/components/Modal'
 import { EmptyState } from '@/design-system/components/EmptyState'
 import { Banner } from '@/design-system/components/Banner'
