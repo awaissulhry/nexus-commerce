@@ -44,7 +44,8 @@ import { getInformationSheet as getStudioSheet } from './information-sheet.js'
 import { coordinatesFor, type SheetColumn } from './sheet-columns.service.js'
 import { legacyAliasIndexesPresent } from './listing-alias.service.js'
 import { axisSynonymKey } from '../ebay-theme-axes.js'
-import { readPresentationOrder, preparePresentationOrder, writePresentationOrderInTransaction, type PresentationOrderChange } from '../ebay-presentation-order.service.js'
+import { readPresentationOrder, preparePresentationOrder, writePresentationOrderInTransaction, PresentationOrderMoved, type PresentationOrderChange } from '../ebay-presentation-order.service.js'
+import { MappingConflict } from './mapping/revision-token.js'
 import {
   isFreeformTarget, limitsFor, parseThemeAxes, vocabularyFor,
   type ProjectionLimits, type ProjectionVocabulary, type TargetOption,
@@ -1942,11 +1943,15 @@ export async function writeProjectionMapping(input: MappingWriteInput): Promise<
   const listing = await prisma.channelListing.findFirst({ where: { productId: root.id, channel, marketplace: market, aliasKey: input.aliasKey ?? '', channelConnectionId: current.coordinate.accountId }, select: { id: true, version: true, platformAttributes: true } })
   if (!listing) throw new ProjectionConflictError('no_listing_here', 'Create a listing on this coordinate before mapping variations.')
   const orderInput = input.presentationOrder ? { productId: root.id, marketplace: market, accountId: current.coordinate.accountId ?? undefined, aliasKey: current.coordinate.aliasKey, expectedVersion: input.expectedVersion, expectedToken: input.presentationOrder.expectedToken, change: input.presentationOrder.change } : null
-  const orderView = orderInput ? await preparePresentationOrder(orderInput) : null
+  let orderView: Awaited<ReturnType<typeof preparePresentationOrder>> | null = null
+  try { orderView = orderInput ? await preparePresentationOrder(orderInput) : null } catch (error) { throw await orderRefusal(input, error) }
   const names = Object.fromEntries((requested ?? []).map(e => [e.axisKey, e.target]))
   const bag = { ...((listing.platformAttributes ?? {}) as Record<string, unknown>) }
   if (input.reset) { delete bag._variationAxes; delete bag._axisNameLabels; bag._variationAxesMode = 'inherit' }
   else { bag._variationAxes = requested!.map(e => e.axisKey); bag._axisNameLabels = names; bag._variationAxesMode = 'override' }
+  /* 2.4 — the version THIS save wrote, read inside its own transaction. The read after the commit may already carry
+     someone else's next write; answering with that version would let the caller count the other write as its own. */
+  let written = input.expectedVersion + 1
   try {
     // QUALITY-PLAN A1b — the content transaction (`inDatabaseTransaction`, Serializable, retried on a lost race), so the
     // readiness producer below runs before the commit, exactly as `setFamilyAxes` does. Before this the index kept the
@@ -1963,13 +1968,26 @@ export async function writeProjectionMapping(input: MappingWriteInput): Promise<
         } })
         if (saved.count !== 1) throw new ProjectionConflictError('version_conflict', 'Another edit won this listing. Reload before saving.')
       }
+      written = (await tx.channelListing.findUniqueOrThrow({ where: { id: listing.id }, select: { version: true } })).version
       await produceReadinessForProducts([root.id, ...current.children.map(child => child.id)], { channel, market, accountId: current.coordinate.accountId })
     }, { isolationLevel: 'Serializable' })
   } catch (error) {
     if (['P2034', 'P2025'].includes(String((error as { code?: string })?.code))) throw new ProjectionConflictError('version_conflict', 'Another edit won this listing. Reload before saving.')
-    throw error
+    throw await orderRefusal(input, error)
   }
-  return getProjectionRead(input)
+  return { ...await getProjectionRead(input), version: written }
+}
+
+/**
+ * 2.4 — the eBay order's refusals, said the way this route says its own. Inputs that MOVED (the order token or the
+ * listing version) are a version conflict carrying the current page, so the dock shows the server's mapping and says
+ * why; any other order refusal is a request error. A `MappingConflict` has no `code`, so it used to reach the client as
+ * a 500 `studio_request_failed`. Anything else passes through unchanged.
+ */
+async function orderRefusal(input: ProjectionInput, error: unknown): Promise<unknown> {
+  if (error instanceof PresentationOrderMoved) return new ProjectionConflictError('version_conflict', error.message, { current: await getProjectionRead(input) })
+  if (error instanceof MappingConflict) return new ProjectionRequestError(error.message)
+  return error
 }
 
 /**
@@ -2092,6 +2110,9 @@ export async function writeProjectionInclusion(input: InclusionWriteInput): Prom
     // response reports the state rather than a no-op the client would have to interpret.
   }
 
+  /* 2.4 — the version THIS write left on the parent listing, read inside its own transaction. The read after the commit
+     may already carry someone else's next write; answering with that version would let the caller count it as its own. */
+  let written = input.expectedVersion + 1
   // QUALITY-PLAN A1c — the content transaction, so the readiness index follows an include / exclude before the commit
   // (a variant ticked out takes its value gap and its collision with it; ticked back in, they return), as the theme save
   // does since A1b. Only this coordinate is rebuilt.
@@ -2139,13 +2160,18 @@ export async function writeProjectionInclusion(input: InclusionWriteInput): Prom
     }
     await setVariationExcluded(toExclude, true, tx)
     await setVariationExcluded(toInclude, false, tx)
+    const parent = await tx.channelListing.findFirst({
+      where: { productId: root.id, channel, marketplace: market, channelConnectionId: before.coordinate.accountId, aliasKey },
+      select: { version: true },
+    })
+    written = parent?.version ?? written
     await produceReadinessForProducts([root.id, ...before.children.map(child => child.id)], { channel, market, accountId: before.coordinate.accountId })
   }, { isolationLevel: 'Serializable' })
 
   const after = await getProjectionRead(input)
   const afterById = new Map(after.children.map((child) => [child.id, child]))
   return {
-    version: after.version,
+    version: written,
     results: input.changes.map((change) => {
       const child = afterById.get(change.id)
       return {

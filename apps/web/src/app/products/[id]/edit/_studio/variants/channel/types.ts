@@ -386,6 +386,12 @@ export interface ProjectionSaveFailed {
   reason: string
   /** VT.4 — the wire's `error` field. Absent when the body carried none. */
   code?: ProjectionRefusalCode
+  /**
+   * 2.4 — NO verdict reached the page: the connection dropped, the request timed out, or the server failed (5xx). The
+   * write may or may not have landed, so this is not a refusal: the page reads again before its next write
+   * (reference_transport_failure_write_is_unknown_outcome).
+   */
+  unknown?: true
 }
 
 export type ProjectionSaveResult = ProjectionSaveOk | ProjectionSaveConflict | ProjectionSaveFailed

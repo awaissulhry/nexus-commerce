@@ -74,6 +74,9 @@ import { axisColumnsFor, buildVariantColumns, identityLine, IDENTITY_COL } from 
 import { SCOPE_PROGRESS_COLUMN } from '../../sheet/progressColumns'
 import { excludedSomewhere, mergeAxisValues } from './projections'
 import { liveSource } from '../channel/source'
+import { unknownOutcome } from '../channel/copy'
+import { writeQueue } from '../writeQueue'
+import { includeVariant } from './includeVariant'
 import { FamilyBand } from './FamilyBand'
 import { GenerateCombinationsDialog } from './GenerateCombinationsDialog'
 import { ManageAxesDialog, saveAxisOrder } from './ManageAxesDialog'
@@ -382,14 +385,17 @@ function FamilyVariantsSurface({ productId, market, locale }: { productId: strin
   const [prefs, setPrefs] = useState<PreferencesValue | null>(null)
   const [prefsOpen, setPrefsOpen] = useState(false)
 
+  /* 2.4 — the page's ticks go ONE AT A TIME (`includeVariant`): a second quick tick reads the version the first left. */
+  const inLine = useMemo(() => writeQueue(), [])
   const setIncluded = useCallback(async (row: StudioRow, channel: import('./projections').ProjectionChannel, included: boolean) => {
     if (!channel.accountId) { toast.toast('Choose a channel account before changing inclusion.', 'danger'); return }
     const source = liveSource({ productId, channel: channel.channel, market: channel.market, accountId: channel.accountId, aliasKey: '', locale })
     const ticket = `variant-inclusion:${channel.key}:${row.id}`
     reporter.pending(ticket, row.id)
     try {
-      const current = await source.read(new AbortController().signal)
-      const result = await source.setIncluded(current.version, [{ id: row.id, included }])
+      const result = await includeVariant(inLine, source, row.id, included)
+      /* 2.4 — no verdict is not a refusal: it may have landed, so the page reads again and says so. */
+      if (!result.ok && !result.conflict && result.unknown) { onFamilyChanged(); throw new Error(unknownOutcome(result.reason)) }
       if (!result.ok) throw new Error(result.reason)
       reporter.resolved(ticket, true, undefined, row.id)
       onFamilyChanged()
@@ -397,7 +403,7 @@ function FamilyVariantsSurface({ productId, market, locale }: { productId: strin
       const message = err instanceof Error ? err.message : String(err)
       reporter.resolved(ticket, false, message, row.id); toast.toast(message, 'danger')
     }
-  }, [productId, locale, reporter, toast, onFamilyChanged])
+  }, [productId, locale, reporter, toast, onFamilyChanged, inLine])
 
   const columnDefs = useMemo(
     () =>

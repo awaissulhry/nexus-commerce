@@ -119,3 +119,18 @@ export const splitPerAxisLabel = (axisLabel: string, listings: number, counts: n
 
 /** §4.4.4's banner title. The REASON is the server's sentence, never composed here. */
 export const LOCK_TITLE = 'Specifics lock once the listing is live'
+
+/**
+ * 2.4 — a Save mapping refused because the listing moved somewhere else (a real 409, never this page's own earlier
+ * write). The dock then shows the server's mapping, and this says so: the edits were not saved.
+ */
+/**
+ * 2.4 — a write that reached no verdict (the connection dropped, a timeout, a server failure). It may have landed, so the
+ * page read again and shows what the server holds; the sentence says exactly that, never "not saved"
+ * (reference_transport_failure_write_is_unknown_outcome).
+ */
+export const unknownOutcome = (reason: string): string =>
+  `${reason || 'The connection dropped'} — this change may or may not have been saved. The page now shows what the server holds.`
+
+export const MAPPING_CHANGED_ELSEWHERE =
+  'This listing changed somewhere else while you were editing the mapping. The panel now shows the saved mapping. Your changes were not saved — make them again if you still want them.'
