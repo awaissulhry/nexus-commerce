@@ -27,16 +27,15 @@ import { fireOutboundJobs } from '../outbound-enqueue.js'
 import { afterDatabaseCommit } from '../../lib/database-context.js'
 import prisma from '../../db.js'
 import { MATRIX_COPY } from '@nexus/shared/matrix-contract'
-import { assertPushAllowed } from '@nexus/shared/push-lock'
 import {
   businessPriceOf, businessPriceProblems, businessPriceWarnings, type BusinessPriceSetting,
 } from '@nexus/shared/business-price'
 import { isOwnConnection, listActiveConnections } from '../connection-resolver.service.js'
-import { offerAudienceKey, storedOfferAudiences } from '../categories/seller-offer-audience.service.js'
-import { normaliseCategory } from '../categories/schema-coverage.service.js'
+import { businessTypeCandidates, loadBusinessAudiences } from '../categories/seller-offer-audience.service.js'
+import { businessHeld } from './business-held.js'
 import { loadAmazonOfferFacts } from '../amazon/offer-facts.js'
 import { BUSINESS_PRICE_SYNC_TYPE, storedBusinessSetting } from '../amazon/business-offer.js'
-import { FOLLOWER_PRICE_HOLD_MS, holdsCascadedPrice, listingMarketCurrency } from './follower-price.js'
+import { FOLLOWER_PRICE_HOLD_MS, listingMarketCurrency } from './follower-price.js'
 import { PARENT_PRICE_REASON } from './matrix-cells.js'
 import type { MarketCurrencyRow } from './market-currency.js'
 
@@ -73,14 +72,6 @@ export interface BusinessPriceWriteOutcome {
   notSent?: string
 }
 
-/** Can this listing be sent to now? `null` = yes; otherwise the sentence for a change kept in Nexus until it can. */
-function businessHeld(l: { syncPaused: boolean; listingStatus: string | null; isPublished: boolean; externalListingId: string | null; offerClosedAt: Date | null }): string | null {
-  if (l.syncPaused) return 'The business price is saved in Nexus. Nothing was sent yet: this listing\'s sync is paused. It is sent when the listing resumes.'
-  if (holdsCascadedPrice(l)) return 'The business price is saved in Nexus. Nothing was sent yet: this listing is a draft that has not been published. It is sent when the listing is published.'
-  if (l.offerClosedAt) return 'The business price is saved in Nexus. Nothing was sent yet: this listing is Inactive here. It is sent when the listing is set Active again.'
-  const lock = assertPushAllowed(l)
-  return lock ? `The business price is saved in Nexus. Nothing was sent: ${lock.sentence}` : null
-}
 export interface BusinessPriceWriteResult { results: BusinessPriceWriteOutcome[]; applied: number; refused: number; noop: number; conflict: number }
 
 const LISTING_SELECT = {
@@ -100,15 +91,6 @@ function normalised(s: BusinessPriceSetting | null): BusinessPriceSetting | null
     : { rule: 'FIXED', percent: null, price: s.price ?? null, tiers }
 }
 
-/**
- * The product types a listing's B2B answer may be kept under, in the names the nightly refresh uses (upper case,
- * recognised): the listing's Amazon type, then its product's, then its family's. The first one Amazon answered for wins.
- */
-export function businessTypeCandidates(l: { platformAttributes?: unknown; product?: { productType?: string | null; parent?: { productType?: string | null } | null } | null }): string[] {
-  const own = l.platformAttributes && typeof l.platformAttributes === 'object' ? (l.platformAttributes as { productType?: unknown }).productType : null
-  const out = [own, l.product?.productType, l.product?.parent?.productType].map((v) => normaliseCategory('AMAZON', v)).filter((v): v is string => !!v)
-  return [...new Set(out)]
-}
 const same = (a: BusinessPriceSetting | null, b: BusinessPriceSetting | null) => JSON.stringify(a) === JSON.stringify(b)
 
 /** The audit line: `−5 % · 3 tiers (percent)`, `99.00 · no tiers`, or `—`. */
@@ -142,22 +124,8 @@ export async function writeBusinessPrices(input: {
   const queued: Array<{ id: string; productId: string | null; syncType: string; holdUntil: Date | null }> = []
   const ownPrimary = connections.filter(isOwnConnection)[0]?.id ?? null
   const accountOf = (l: { channelConnectionId: string | null }) => l.channelConnectionId ?? ownPrimary
-  // The kept audiences, one read per product type.
-  const audiences = new Map<string, Map<string, string[]>>()
-  for (const pt of new Set(listings.flatMap(businessTypeCandidates))) {
-    const accounts = [...new Set(listings.filter((l) => businessTypeCandidates(l).includes(pt)).map(accountOf).filter((v): v is string => !!v))]
-    audiences.set(pt, await storedOfferAudiences(pt, accounts))
-  }
-  /** The first product type Amazon answered for, with its audiences; `null` = never measured. */
-  const audienceOf = (l: typeof listings[number]): { productType: string; audience: string[] } | null => {
-    const account = accountOf(l)
-    if (!account) return null
-    for (const pt of businessTypeCandidates(l)) {
-      const audience = audiences.get(pt)?.get(offerAudienceKey(account, l.marketplace))
-      if (audience) return { productType: pt, audience }
-    }
-    return null
-  }
+  /** The first product type Amazon answered for, with its audiences; `null` = never measured (one shared rule). */
+  const audienceOf = await loadBusinessAudiences(listings, (l) => accountOf(l))
 
   targets: for (const t of input.targets) {
     const l = byId.get(t.listingId)
@@ -324,4 +292,4 @@ export async function queueHeldBusinessSends(input: { listingIds?: string[]; pro
   }
 }
 
-export { BUSINESS_PRICE_SYNC_TYPE, storedBusinessSetting }
+export { BUSINESS_PRICE_SYNC_TYPE, storedBusinessSetting, businessTypeCandidates, businessHeld }

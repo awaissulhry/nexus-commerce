@@ -64,6 +64,9 @@ describe('the engine Matrix contract equals the wire Matrix contract', () => {
     expect(bothWays<engine.MatrixCells, wire.MatrixCells>(true)).toBe(true)
     /* Step 2 — "Sells from", beside the inventory cells. */
     expect(bothWays<engine.SourceCell, wire.SourceCell>(true)).toBe(true)
+    expect(bothWays<engine.BusinessCell, wire.BusinessCell>(true)).toBe(true)
+    expect(bothWays<engine.BusinessSendState, wire.BusinessSendState>(true)).toBe(true)
+    expect(bothWays<engine.BusinessTierLevelCell, wire.BusinessTierLevelCell>(true)).toBe(true)
   })
 
   it('every coordinate, write and verb type is bidirectionally assignable', () => {

@@ -16,6 +16,7 @@ import { workspaceIdForQuery } from '../../lib/workspace-context.js'
 import { logger } from '../../utils/logger.js'
 import { isOwnConnection, listActiveConnections } from '../connection-resolver.service.js'
 import { amazonSellerOfferAudience } from './seller-schema.service.js'
+import { normaliseCategory } from './schema-coverage.service.js'
 
 export const OFFER_AUDIENCE_FIELD_KEY = 'purchasable_offer.audience'
 
@@ -70,4 +71,45 @@ export async function storedOfferAudiences(productType: string, connectionIds: r
   })
   return new Map(rows.map(r => [offerAudienceKey(r.connectionId, r.marketplace),
     r.labels && typeof r.labels === 'object' && !Array.isArray(r.labels) ? Object.keys(r.labels) : []]))
+}
+
+/**
+ * The product types a listing's B2B answer may be kept under, in the names the nightly refresh uses (upper case,
+ * recognised): the listing's Amazon type, then its product's, then its family's. The first one Amazon answered for wins.
+ */
+export function businessTypeCandidates(l: { platformAttributes?: unknown; product?: { productType?: string | null; parent?: { productType?: string | null } | null } | null }): string[] {
+  const own = l.platformAttributes && typeof l.platformAttributes === 'object' ? (l.platformAttributes as { productType?: unknown }).productType : null
+  const out = [own, l.product?.productType, l.product?.parent?.productType].map((v) => normaliseCategory('AMAZON', v)).filter((v): v is string => !!v)
+  return [...new Set(out)]
+}
+
+export interface BusinessAudienceListing {
+  marketplace: string
+  platformAttributes?: unknown
+  product?: { productType?: string | null; parent?: { productType?: string | null } | null } | null
+}
+
+/**
+ * ONE rule for "does Amazon list B2B for this listing" (the business price door and the Matrix read): the kept answers
+ * of the listing's account and market under the first of its product types Amazon answered for. One read per product
+ * type. The resolver answers `null` when nothing was ever measured for it.
+ */
+export async function loadBusinessAudiences<L extends BusinessAudienceListing>(
+  listings: readonly L[],
+  accountOf: (l: L) => string | null,
+): Promise<(l: L) => { productType: string; audience: string[] } | null> {
+  const audiences = new Map<string, Map<string, string[]>>()
+  for (const pt of new Set(listings.flatMap(businessTypeCandidates))) {
+    const accounts = [...new Set(listings.filter((l) => businessTypeCandidates(l).includes(pt)).map(accountOf).filter((v): v is string => !!v))]
+    audiences.set(pt, await storedOfferAudiences(pt, accounts))
+  }
+  return (l) => {
+    const account = accountOf(l)
+    if (!account) return null
+    for (const pt of businessTypeCandidates(l)) {
+      const audience = audiences.get(pt)?.get(offerAudienceKey(account, l.marketplace))
+      if (audience) return { productType: pt, audience }
+    }
+    return null
+  }
 }

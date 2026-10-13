@@ -217,6 +217,56 @@ export interface SourceCell {
   blockedReason: string | null
 }
 
+/**
+ * Amazon Business (B2B) — this listing's business offer on this Amazon market: what Nexus keeps, what it sends and what
+ * it last saw on Amazon (@nexus/shared/business-price; RESEARCH.md "Model as built"). The one fact the business cells
+ * read. Absent on every other channel, on a market where Amazon lists no B2B for this account, and from an older server;
+ * `null` on a family parent (no offer of its own). Every number and sentence is the server's.
+ */
+export interface BusinessTierLevelCell {
+  /** From this many units of this SKU in one order. */
+  minQty: number
+  /** A percent off the business price (`percent` tiers) or a price per unit (`fixed` tiers). */
+  value: number
+  /** The unit price a buyer pays at this tier now; null when the business price is unknown. */
+  unitPrice: number | null
+}
+/** Where the newest business send stands (a BUSINESS_PRICE_UPDATE row, else the listing's own send record). */
+export interface BusinessSendState {
+  state: 'queued' | 'sending' | 'sent' | 'removed' | 'deferred' | 'failed' | 'refused' | 'not-sent'
+  /** ISO time: when it was sent or refused, or when a queued send leaves. */
+  at: string | null
+  /** The send's own sentence (Amazon's words on a refusal). */
+  line: string | null
+  /** No retry follows: Amazon refused this listing's data, or the retries are spent. */
+  final: boolean
+}
+export interface BusinessCell {
+  /** `PERCENT_OFF` = the normal price − `percent` %; `FIXED` = `exact`; null = no business offer. */
+  rule: 'PERCENT_OFF' | 'FIXED' | null
+  percent: number | null
+  exact: number | null
+  tiers: { type: 'percent' | 'fixed'; levels: BusinessTierLevelCell[] } | null
+  /** The business price the setting gives now; null when there is none or it cannot be known (no normal price). */
+  price: number | null
+  /** The normal price the push sends — what a percent follows and an exact price is compared with. */
+  normalPrice: number | null
+  /** The listing's Amazon minimum and maximum seller price, when set. */
+  minPrice: number | null
+  maxPrice: number | null
+  /** The market's currency. */
+  currency: string
+  /** Saved, but worth a word: hidden by Amazon (not below the normal price), a sale below the business price. */
+  warnings: string[]
+  /** The listing cannot be sent to now (paused, a draft, Inactive…): the sentence; null = it can. */
+  held: string | null
+  send: BusinessSendState | null
+  /** The nightly check of the business price shown here (only when it checked this very price). */
+  live: { status: 'MATCH' | 'DIFFERS' | 'MISSING'; amazonPrice: number | null; at: string } | null
+  /** Amazon shows a business price Nexus has never kept for this listing (set outside Nexus). */
+  reported: { price: number } | null
+}
+
 /** Everything one row says about one coordinate. */
 export interface MatrixCells {
   /** The listing row this coordinate's cells belong to; null on a coordinate with no listing for this row. */
@@ -235,6 +285,8 @@ export interface MatrixCells {
   writeBlockedReason: Partial<Record<MatrixCellKind, string>>
   /** "Sells from" — on a coordinate whose cells include `syncQty` (absent elsewhere and on an older server). */
   source?: SourceCell | null
+  /** Amazon Business — on an Amazon market where Amazon lists B2B for this account (absent elsewhere and on an older server). */
+  business?: BusinessCell | null
 }
 
 /* ── coordinates ────────────────────────────────────────────────────────────────────────────── */

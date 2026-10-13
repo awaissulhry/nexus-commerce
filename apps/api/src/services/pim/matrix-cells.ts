@@ -18,6 +18,8 @@ import {
   INVENTORY_CELL_KINDS,
   MATRIX_CELL_KINDS,
   MATRIX_COPY,
+  type BusinessCell,
+  type BusinessSendState,
   type CoordinateKey,
   type FulfilmentMethod,
   type ListingCell,
@@ -32,6 +34,8 @@ import {
   type SyncCell,
 } from '@nexus/shared/matrix-contract'
 import { AMAZON_EU_SHARED_MARKETS } from '../amazon-eu-quantity-guard.js'
+import { businessPriceOf, businessPriceWarnings, businessTierPrices } from '@nexus/shared/business-price'
+import { liveBusinessInstance, storedBusinessSetting } from '../amazon/business-offer.js'
 import { amazonFulfilmentCodes, describeAmazonFulfilmentCode, isFbaFulfilmentCode } from '../../lib/amazon-fulfilment-programme.js'
 import { locationServes, marketSourceKey, sellsFrom, type IntendedResolution, type MarketSources, type SyncLedger } from '../sync-control-core.js'
 
@@ -495,3 +499,109 @@ export function sourceCellOf(f: SourceFacts): SourceCell {
 /** Which coordinate carries a target's INVENTORY cells — the region group for an EU market (mirrors the preview's rule). */
 export const regionKeyFor = (channel: string, market: string): CoordinateKey | null =>
   isAmazonEuMarket(channel, market) ? 'AMAZON:EU' : null
+
+/* ── Amazon Business (B2B) ─────────────────────────────────────────────────────────────────── */
+
+/** The newest BUSINESS_PRICE_UPDATE row of a listing, as the business cell reads it. */
+export interface BusinessQueueFacts {
+  syncStatus: string
+  isDead: boolean
+  errorCode: string | null
+  errorMessage: string | null
+  holdUntil: Date | null
+  syncedAt: Date | null
+  updatedAt: Date
+  createdAt: Date
+}
+
+const record = (v: unknown): Record<string, unknown> | null => (v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : null)
+const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null)
+const str = (v: unknown) => (typeof v === 'string' && v ? v : null)
+
+/**
+ * Where the newest business send stands. A row still waiting or running speaks for itself; otherwise the newer of the
+ * row and the listing's own send record (`platformAttributes.amazonBusinessSend`, written by every send — the follow
+ * after a price push writes no row).
+ */
+export function businessSendOf(row: BusinessQueueFacts | null, sendRecord: unknown): BusinessSendState | null {
+  if (row?.syncStatus === 'PENDING') return { state: 'queued', at: iso(row.holdUntil ?? row.createdAt), line: null, final: false }
+  if (row?.syncStatus === 'IN_PROGRESS') return { state: 'sending', at: iso(row.updatedAt), line: null, final: false }
+  const rec = record(sendRecord)
+  const recAt = str(rec?.at)
+  const rowNewer = row && row.syncStatus !== 'CANCELLED' && (!recAt || row.updatedAt.toISOString() > recAt)
+  if (rowNewer) {
+    if (row!.syncStatus === 'SKIPPED') return { state: 'not-sent', at: iso(row!.updatedAt), line: row!.errorMessage, final: true }
+    if (row!.syncStatus === 'FAILED') {
+      const refused = row!.errorCode === 'AMAZON_BUSINESS_PRICE_REFUSED' || row!.errorCode === 'AMAZON_BUSINESS_PRICE_NOT_SENT'
+      return { state: refused ? 'refused' : 'failed', at: iso(row!.updatedAt), line: row!.errorMessage, final: refused || row!.isDead }
+    }
+    if (row!.syncStatus === 'SUCCESS' && !rec) return { state: 'sent', at: iso(row!.syncedAt ?? row!.updatedAt), line: null, final: true }
+  }
+  if (!rec) return null
+  const status = str(rec.status)
+  const state: BusinessSendState['state'] | null = status === 'SENT' ? 'sent' : status === 'REMOVED' ? 'removed' : status === 'DEFERRED' ? 'deferred'
+    : status === 'REFUSED' ? 'refused' : status === 'FAILED' ? 'failed' : null
+  if (!state) return null
+  return { state, at: recAt, line: str(rec.line), final: state === 'sent' || state === 'removed' || state === 'refused' }
+}
+
+const amountOf = (instance: Record<string, unknown> | null): number | null => {
+  const ours = Array.isArray(instance?.our_price) ? record(instance!.our_price[0]) : null
+  const schedule = Array.isArray(ours?.schedule) ? record(ours!.schedule[0]) : null
+  const v = schedule?.value_with_tax ?? schedule?.value
+  return typeof v === 'number' && Number.isFinite(v) ? v : null
+}
+
+/**
+ * The business cell of ONE listing on ONE Amazon market, from what the read already holds (PURE): the stored setting,
+ * the listing's job-lane offer facts (the normal price the push sends, its bounds and its sale), the newest business
+ * row, the listing's send and nightly-check records, and the pull's own copy of Amazon's offer.
+ */
+export function businessCellOf(input: {
+  listing: { businessPriceRule?: string | null; businessPricePercent?: unknown; businessPrice?: unknown; businessTiers?: unknown; platformAttributes?: unknown }
+  /** The SP-API marketplace id (to find this market's business offer in the pull's copy). */
+  marketplaceId: string
+  currency: string
+  normalPrice: number | null
+  minPrice: number | null
+  maxPrice: number | null
+  salePrice: number | null
+  held: string | null
+  row: BusinessQueueFacts | null
+  /** Nexus has kept a business price for this listing before (a business audit row). */
+  everKept: boolean
+}): BusinessCell {
+  const setting = storedBusinessSetting(input.listing)
+  const price = setting ? businessPriceOf(setting, input.normalPrice) : null
+  const unit = setting?.tiers && price != null ? businessTierPrices(price, setting.tiers) : null
+  const pa = record(input.listing.platformAttributes)
+  const send = businessSendOf(input.row, pa?.amazonBusinessSend)
+  const liveRec = record(pa?.amazonBusinessLive)
+  const liveStatus = str(liveRec?.status)
+  const liveAt = str(liveRec?.at)
+  // The nightly check speaks only of the price shown here, and only when nothing was sent after it.
+  const live = liveRec && liveAt && (liveStatus === 'MATCH' || liveStatus === 'DIFFERS' || liveStatus === 'MISSING')
+    && (liveRec.nexusPrice ?? null) === price && (!send?.at || liveAt >= send.at)
+    ? { status: liveStatus as 'MATCH' | 'DIFFERS' | 'MISSING', amazonPrice: typeof liveRec.amazonPrice === 'number' ? liveRec.amazonPrice : null, at: liveAt }
+    : null
+  // A business offer Amazon shows that Nexus never kept (set outside Nexus): the pull's copy of Amazon's attributes.
+  const attrs = record(pa?.attributes)
+  const instances = Array.isArray(attrs?.purchasable_offer) ? (attrs!.purchasable_offer as unknown[]).map(record).filter((x): x is Record<string, unknown> => !!x) : []
+  const amazonOwn = !setting && !input.everKept ? amountOf(liveBusinessInstance(instances as never, input.marketplaceId)) : null
+  return {
+    rule: setting?.rule ?? null,
+    percent: setting?.rule === 'PERCENT_OFF' ? setting.percent : null,
+    exact: setting?.rule === 'FIXED' ? setting.price : null,
+    tiers: setting?.tiers ? { type: setting.tiers.type, levels: setting.tiers.levels.map((l, i) => ({ minQty: l.minQty, value: l.value, unitPrice: unit?.[i] ?? null })) } : null,
+    price,
+    normalPrice: input.normalPrice,
+    minPrice: input.minPrice,
+    maxPrice: input.maxPrice,
+    currency: input.currency,
+    warnings: setting ? businessPriceWarnings({ setting, normalPrice: input.normalPrice, salePrice: input.salePrice, currency: input.currency }) : [],
+    held: input.held,
+    send,
+    live,
+    reported: amazonOwn != null ? { price: amazonOwn } : null,
+  }
+}

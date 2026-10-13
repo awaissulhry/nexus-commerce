@@ -173,6 +173,35 @@ export interface SourceCell {
 }
 
 /** Everything one row says about one coordinate. */
+/** Amazon Business (B2B) — see `@nexus/shared/matrix-contract` `BusinessCell` (the wire's own words). */
+export interface BusinessTierLevelCell {
+  minQty: number
+  value: number
+  unitPrice: number | null
+}
+export interface BusinessSendState {
+  state: 'queued' | 'sending' | 'sent' | 'removed' | 'deferred' | 'failed' | 'refused' | 'not-sent'
+  at: string | null
+  line: string | null
+  final: boolean
+}
+export interface BusinessCell {
+  rule: 'PERCENT_OFF' | 'FIXED' | null
+  percent: number | null
+  exact: number | null
+  tiers: { type: 'percent' | 'fixed'; levels: BusinessTierLevelCell[] } | null
+  price: number | null
+  normalPrice: number | null
+  minPrice: number | null
+  maxPrice: number | null
+  currency: string
+  warnings: string[]
+  held: string | null
+  send: BusinessSendState | null
+  live: { status: 'MATCH' | 'DIFFERS' | 'MISSING'; amazonPrice: number | null; at: string } | null
+  reported: { price: number } | null
+}
+
 export interface MatrixCells {
   listingId: string | null
   /** `ChannelListing.version` — the CAS discriminator for every write on this coordinate. */
@@ -187,6 +216,8 @@ export interface MatrixCells {
   writeBlockedReason: Partial<Record<MatrixCellKind, string>>
   /** "Sells from" — on a coordinate whose cells include `syncQty`. */
   source?: SourceCell | null
+  /** Amazon Business — on an Amazon market where Amazon lists B2B for this account. */
+  business?: BusinessCell | null
 }
 
 /* ── coordinates ────────────────────────────────────────────────────────────────────────────── */
