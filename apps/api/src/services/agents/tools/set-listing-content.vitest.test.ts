@@ -30,7 +30,7 @@ vi.mock('../../../db.js', async () => {
 })
 vi.mock('../../../lib/queue.js', () => ({
   outboundSyncQueue: null, channelSyncQueue: null, bulkJobQueue: null, redis: null,
-  searchIndexQueue: null, readCacheQueue: null, readinessQueue: null,
+  searchIndexQueue: null, readCacheQueue: null, readinessQueue: null, agentPlanQueue: null,
   addJobSafely: vi.fn(async () => ({ enqueued: false })),
 }))
 // The sheet read picks each row's face image; this fixture has none.
@@ -43,6 +43,7 @@ vi.mock('../../pim/readiness-index.service.js', async () => (await import('../..
 import { callTool, ToolAccessError, type UserPrincipal } from '../call-tool.js'
 import { runOrQueueTool } from '../approval-gate.service.js'
 import { checkStaleness, commitScheduledApproval, MATERIAL_PREVIEW_FIELDS, scheduleApproval } from '../../agent-fleet/approval-inbox.service.js'
+import { runPlan } from '../change-plan.service.js'
 
 const A = LEGACY_WORKSPACE_ID
 const business = { workspaceId: A, actorUserId: null, membershipId: null, roleKeys: [] }
@@ -251,13 +252,28 @@ describe('T7 — set-listing-content', { timeout: 30_000 }, () => {
     expect((await translationOf(amazonDe.id))!.name).toBe('Edited in the sheet')
   })
 
-  it('2.3 — another of the listing\'s own fields edited after the approval moves nothing it stands on: it runs', async () => {
-    const { parent, amazonDe } = await seed('TEST-SKU-T7-OTHER')
+  it('2.3 — a draft written into another of the listing\'s own German fields after the approval refuses it: it never rides along as reviewed', async () => {
+    const { parent, amazonDe } = await seed('TEST-SKU-T7-DRAFT')
     const { approvalId } = await queued({ product: parent.id, coordinate: AMAZON_DE, language: 'de', pin: { description: 'Eigene Beschreibung.' }, englishMeaning: { description: 'Own description.' } })
-    // A person edits the listing's own German TITLE in the sheet meanwhile: the pin row's version moves, its description does not.
-    await inside(() => db().channelListingTranslation.updateMany({ where: { channelListingId: amazonDe.id, language: 'de' }, data: { name: 'Edited in the sheet', version: { increment: 1 } } }))
-    expect(await approveAndRun(approvalId)).toMatchObject({ ok: true, status: 'executed' })
-    expect(await translationOf(amazonDe.id)).toMatchObject({ name: 'Edited in the sheet', description: 'Eigene Beschreibung.' })
+    // An AI draft of the listing's own German title meanwhile: not reviewed; the pin row's version moves, its description does not.
+    await inside(() => db().channelListingTranslation.updateMany({ where: { channelListingId: amazonDe.id, language: 'de' }, data: { name: 'KI-Titel', source: 'ai', reviewedAt: null, version: { increment: 1 } } }))
+    const ran = await approveAndRun(approvalId)
+    expect(ran).toMatchObject({ ok: false, error: expect.stringMatching(/the facts moved since you approved it — basis changed/) })
+    expect(await translationOf(amazonDe.id)).toMatchObject({ name: 'KI-Titel', description: null, source: 'ai', reviewedAt: null })
+  })
+
+  it('2.3 — a plan of two pins on one listing and language (the description, then the title): both run, the second on the first one\'s own write', async () => {
+    const { parent, amazonDe } = await seed('TEST-SKU-T7-PLAN')
+    const out = await ask('submit-change-plan', { title: 'Test two Amazon DE pins', steps: [
+      { tool: 'set-listing-content', args: { product: parent.id, coordinate: AMAZON_DE, language: 'de', pin: { description: 'Eigene Beschreibung.' }, englishMeaning: { description: 'Own description.' } } },
+      { tool: 'set-listing-content', args: { product: parent.id, coordinate: AMAZON_DE, language: 'de', pin: { title: 'Eigener Titel' }, englishMeaning: { title: 'Own title' } } },
+    ] })
+    expect(out, out.error).toMatchObject({ ok: true, mode: 'queued' })
+    expect(await approveAndRun(out.approvalId!)).toMatchObject({ ok: true, status: 'executing' })
+    const ran = await inside(() => runPlan(out.approvalId!))
+    const steps = await inside(() => db().agentPlanStep.findMany({ where: { approvalId: out.approvalId! }, orderBy: { position: 'asc' } }))
+    expect(ran, JSON.stringify(steps.map((step) => [step.status, step.reason]))).toMatchObject({ finished: true, counts: { done: 2 } })
+    expect(await translationOf(amazonDe.id)).toMatchObject({ name: 'Eigener Titel', description: 'Eigene Beschreibung.' })
   })
 
   it('undo restores an attribute with its original JSON type: a number stays a number, a list stays a list', async () => {

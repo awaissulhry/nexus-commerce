@@ -26,7 +26,8 @@ import { FEATURES as F } from '@nexus/shared/permissions'
 import { MATRIX_COPY, type MatrixVerbParams, type MatrixVerbTarget, type VerbChange, type VerbPreview, type VerbRefusal, type MatrixWriteOutcome } from '@nexus/shared/matrix-contract'
 import { adjustPricesProblem, PREVIEW_WORDS } from '@nexus/shared/matrix-preview'
 import prisma from '../../../db.js'
-import { approvedOnVersion, BASIS_ON_FIELDS, entityKeys, type AgentTool, type PlanEntities, type PlanEntityKey, type ToolContext, type ToolResult, type ToolUndo } from '../tool-types.js'
+import { approvedOnVersion, BASIS_ON_FIELDS, factHash, type AgentTool, type PlanFacts, type PlanWrite, type ToolContext, type ToolResult, type ToolUndo } from '../tool-types.js'
+import { listingPlanFacts, listingPriceFacts, pinnedPrice, saleFact } from './listing-facts.js'
 import { liveProduct, PRODUCT_NOT_FOUND } from './live-product.js'
 
 const matrixWrite = () => import('../../pim/matrix-write.service.js')
@@ -156,9 +157,15 @@ async function runVerbFor(args: Record<string, unknown>, ctx: ToolContext, param
   const refused = out.results.filter((r) => r.outcome === 'refused' || r.outcome === 'conflict')
   const summary = { operationId: out.operation.id, applied: out.operation.applied, refused: refused.map((r) => ({ rowId: r.rowId, coordinateKey: r.coordinateKey, reason: r.reason ?? r.outcome })) }
   if (!out.operation.applied) return { ok: false, error: `Nothing changed: ${refused.slice(0, 10).map((r) => `${r.coordinateKey}: ${r.reason ?? r.outcome}`).join(' · ')}` }
+  // 2.3 — the prices this run wrote, from the door's own answer: each listing a price write moved, pinned at its new price.
+  const planWrites: PlanWrite[] = out.results.filter((r) => r.outcome === 'applied' && r.cell === 'price').flatMap((r) => {
+    const change = carried.changes.find((c) => c.rowId === r.rowId && c.coordinateKey === r.coordinateKey && c.cell === 'price')
+    return typeof change?.to === 'number' ? (r.listings ?? []).map((l) => ({ key: `listing:${l.listingId}:price` as const, after: pinnedPrice(change.to as number) })) : []
+  })
   return {
     ok: true,
     data: summary,
+    ...(planWrites.length ? { planWrites } : {}),
     // C1 — the Matrix operation: it holds every touched cell's value from before, and its revert puts them back.
     change: { before: { productId: family.id, operationId: out.operation.id, verb: params.verb, changes: approved.changes }, after: { productId: family.id, operationId: out.operation.id, reverted: false } },
   }
@@ -179,41 +186,6 @@ const MATRIX_UNDO: ToolUndo = {
     if (verb === 'push-now' || verb === 'retry-sync') return { refusal: 'A push that was sent cannot be called back: the channel keeps what it received. Set the quantity again instead.' }
     return { tool: 'revert-listing-change', args: { productId: after.productId, operationId: after.operationId } }
   },
-}
-
-/** The `<row>@<coordinate>` of every target asked and every cell the preview landed on (Amazon's one EU quantity: AMAZON:EU). */
-function matrixCells(args: Record<string, unknown>, preview: unknown): string[] {
-  const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null)
-  const at = (c: unknown) => {
-    const cell = (c ?? {}) as { rowId?: unknown; coordinateKey?: unknown }
-    const row = text(cell.rowId), key = text(cell.coordinateKey)
-    return row && key ? `${row}@${key}` : null
-  }
-  const asked = Array.isArray(args.targets) ? args.targets.map(at) : []
-  const changes = (preview as { changes?: unknown } | null)?.changes
-  const landed = Array.isArray(changes) ? changes.map(at) : []
-  return [...asked, ...landed].filter((cell): cell is string => !!cell)
-}
-
-/**
- * C6 / 2.3 — a Matrix step of a change plan (AgentTool.planEntities): every listing it targets, as the Matrix names it, and
- * the field it changes there — `stock` (set-listing-stock), `price` or `sale` (set-listing-price). A price also reads the
- * master price of its row (a listing that follows it shows it) and, for copy-prices, the market it copies from. Pure.
- */
-export function matrixEntities(field: 'stock' | 'price' | 'sale') {
-  return (args: Record<string, unknown>, preview: unknown): PlanEntities => {
-    const cells = matrixCells(args, preview)
-    const writes = entityKeys(cells.map((cell) => `listing:${cell}:${field}` as const))
-    if (field !== 'price') return { reads: writes, writes }
-    const rows = cells.map((cell) => cell.slice(0, cell.indexOf('@')))
-    const from = typeof args.fromCoordinateKey === 'string' && args.fromCoordinateKey.trim() ? args.fromCoordinateKey.trim() : null
-    const reads: PlanEntityKey[] = [
-      ...writes,
-      ...rows.map((row) => `product:${row}:price` as const),
-      ...(from ? rows.map((row) => `listing:${row}@${from}:price` as const) : []),
-    ]
-    return { reads: entityKeys(reads), writes }
-  }
 }
 
 // ── set-listing-stock ────────────────────────────────────────────────────────────────────────────────
@@ -337,7 +309,6 @@ const setListingStock: AgentTool = {
   reversibility: 'partial',
   maxClaudeTrust: 'ask',
   undo: MATRIX_UNDO,
-  planEntities: matrixEntities('stock'),
   description:
     'Change how listings take their stock, per listing and market, through the Nexus Matrix: pin a quantity, follow the '
     + 'stock again, set a buffer, hold or release the stock sync, push now, retry a failed push (retry-sync), or set an '
@@ -405,7 +376,7 @@ async function planSale(args: Record<string, unknown>, ctx: ToolContext) {
   if (!ctx.can(F.productsPriceEdit)) return { error: 'A sale price needs products.price.edit.' }
   const { getMatrixRead } = await matrixRead()
   const read = await getMatrixRead({ productId: family.id, canEditPrice: true })
-  const cells: Array<{ rowId: string; sku: string; coordinateKey: string; from: SaleValue; to: SaleValue; version: number }> = []
+  const cells: Array<{ rowId: string; sku: string; coordinateKey: string; from: SaleValue; to: SaleValue; version: number; listingId: string }> = []
   const refused: Array<{ sku: string; coordinateKey: string; reason: string }> = []
   for (const t of args.targets as MatrixVerbTarget[]) {
     const row = read.rows.find((r) => r.id === t.rowId)
@@ -414,29 +385,57 @@ async function planSale(args: Record<string, unknown>, ctx: ToolContext) {
     if (cell.writable.salePrice === false) { refused.push({ sku: row.sku, coordinateKey: t.coordinateKey, reason: cell.writeBlockedReason.salePrice ?? 'This sale price cannot be changed here' }); continue }
     const from = { value: cell.sale.value, start: cell.sale.start, end: cell.sale.end }
     if (from.value === to.value && from.start === to.start && from.end === to.end) continue
-    cells.push({ rowId: row.id, sku: row.sku, coordinateKey: t.coordinateKey, from, to, version: cell.version })
+    cells.push({ rowId: row.id, sku: row.sku, coordinateKey: t.coordinateKey, from, to, version: cell.version, listingId: cell.listingId })
   }
   return { family, cells, refused }
 }
 
+/**
+ * 2.3 — what a sale stands on (`planFacts`): each listing's sale AND the price it was planned against (its own price, and
+ * under `context` its rule, master price and market), so a sale never runs above a price someone set since; and what it
+ * sets. Never the listing's version: an order's stock cascade moves that.
+ */
+async function saleFacts(cells: Array<{ listingId: string; to: SaleValue }>): Promise<PlanFacts> {
+  const facts = await listingPriceFacts(cells.map((c) => c.listingId))
+  return listingPlanFacts(facts, Object.fromEntries(cells.map((c) => [`listing:${c.listingId}:sale`, saleFact(c.to)])))
+}
+
+/**
+ * 2.3 — what a price verb stands on beyond its own from → to (`planFacts`): the sale of each listing it prices, so a new
+ * price never runs past a sale someone set since; and what it sets. Each change's listing is the Matrix cell's.
+ */
+async function priceVerbFacts(familyId: string, changes: readonly VerbChange[], ctx: ToolContext): Promise<PlanFacts> {
+  const [{ getMatrixRead }, { locate }] = await Promise.all([matrixRead(), matrixWrite()])
+  const read = await getMatrixRead({ productId: familyId, accountId: null, canEditPrice: ctx.can(F.productsPriceEdit) })
+  const listingOf = (c: VerbChange) => locate(read, c.rowId, c.coordinateKey)?.cells.listingId ?? null
+  const ids = changes.map(listingOf).filter((id): id is string => !!id)
+  const sets = Object.fromEntries(changes.map((c) => [`listing:${listingOf(c) ?? `${c.rowId}@${c.coordinateKey}`}:price`, c.to]))
+  return listingPlanFacts(await listingPriceFacts(ids), sets, { keep: (key) => key.endsWith(':sale'), context: false })
+}
+
 type SaleCell = { rowId: string; sku: string; coordinateKey: string; from: SaleValue; to: SaleValue; version?: number }
+type SalePreview = { verb?: unknown; changes?: SaleCell[]; basisOn?: unknown; planFacts?: PlanFacts }
 const sameSale = (a: Partial<SaleValue> | undefined, b: Partial<SaleValue> | undefined) =>
   (a?.value ?? null) === (b?.value ?? null) && (a?.start ?? null) === (b?.start ?? null) && (a?.end ?? null) === (b?.end ?? null)
 const cellOf = (c: { rowId: string; coordinateKey: string }) => `${c.rowId}|${c.coordinateKey}`
 
 /**
- * The cells an approved sale writes, each with the version to write at. 2.3: each cell as the person saw it — its sale —
- * at the version it has now: an order that moved the version moves nothing a sale stands on; a sale someone else set since
- * refuses the whole request. One approved before 2.3 carried each cell's version and writes only at it, as approved.
+ * The cells an approved sale writes, each with the version to write at (and the listing, when known). 2.3: each cell as
+ * the person saw it — its sale, and the price it was planned against — at the version it has now: an order that moved the
+ * version moves nothing a sale stands on; a sale or a price someone else set since refuses the whole request. One
+ * approved before 2.3 carried each cell's version and writes only at it, as approved.
  */
-async function saleWrites(args: Record<string, unknown>, ctx: ToolContext, approved: { changes: SaleCell[]; basisOn?: unknown }, sku: string) {
-  if (approvedOnVersion(approved)) return { writes: approved.changes.map((c) => ({ change: c, version: Number(c.version) })) }
+async function saleWrites(args: Record<string, unknown>, ctx: ToolContext, approved: SalePreview & { changes: SaleCell[] }, sku: string) {
+  if (approvedOnVersion(approved)) return { writes: approved.changes.map((c) => ({ change: c, version: Number(c.version), listingId: null as string | null })) }
   const plan = await planSale(args, ctx)
   if ('error' in plan) return { error: plan.error === PRODUCT_NOT_FOUND ? plan.error : `${plan.error} Nothing changed.` }
   const now = new Map(plan.cells.map((c) => [cellOf(c), c]))
   const moved = approved.changes.filter((c) => { const fresh = now.get(cellOf(c)); return !fresh || !sameSale(fresh.from, c.from) || !sameSale(fresh.to, c.to) })
   if (moved.length) return { error: `${sku}: ${moved.slice(0, 10).map((c) => `${c.sku} ${c.coordinateKey}`).join(', ')} changed since it was approved. Nothing changed; ask Claude again.` }
-  return { writes: approved.changes.map((c) => ({ change: c, version: now.get(cellOf(c))!.version })) }
+  if (approved.planFacts && factHash(approved.planFacts) !== factHash(await saleFacts(plan.cells))) {
+    return { error: `${sku}: the price this sale was planned against changed since it was approved. Nothing changed; ask Claude again.` }
+  }
+  return { writes: approved.changes.map((c) => ({ change: c, version: now.get(cellOf(c))!.version, listingId: now.get(cellOf(c))!.listingId as string | null })) }
 }
 
 const PRICE_UNDO: ToolUndo = {
@@ -478,30 +477,47 @@ const setListingPrice: AgentTool = {
   reversibility: 'partial',
   maxClaudeTrust: 'ask',
   undo: PRICE_UNDO,
-  planEntities: (args, preview) => matrixEntities(args.action === 'sale' ? 'sale' : 'price')(args, preview),
+  // 2.3 — a later step of a plan re-based on an earlier step's own write: a sale's lines follow the facts it stands on
+  // (`planFacts`, checked one by one); a price verb's lines must not move at all.
+  planRebase: (preview) => ((preview as { verb?: unknown } | null)?.verb === 'sale' ? ['changes'] : []),
   description:
     'Change the price of listings per market through the Nexus Matrix: set a price, adjust prices by a percentage or an amount, copy '
     + 'prices from another market in the same currency, or set (or end) a sale with its days. Targets are rows and '
     + 'coordinate keys from listing-matrix. A formula-owned price is refused. The preview is the Matrix\'s own. Waits for a '
     + 'person to approve it in Nexus; a target that changed since is refused, and it can be put back.',
   async handler(args, ctx) {
-    if (args.action !== 'sale') return previewVerbFor('set-listing-price', args, ctx, priceParams(args))
+    if (args.action !== 'sale') {
+      const out = await previewVerbFor('set-listing-price', args, ctx, priceParams(args))
+      if (!out.ok) return out
+      const preview = out.preview as { family: { productId: string }; changes: VerbChange[] }
+      return { ...out, preview: { ...preview, planFacts: await priceVerbFacts(preview.family.productId, preview.changes, ctx) } }
+    }
     const plan = await planSale(args, ctx)
     if ('error' in plan) return { ok: false, error: plan.error === PRODUCT_NOT_FOUND ? plan.error : `${plan.error} Nothing was queued.` }
     if (!plan.cells.length) return { ok: false, error: `${plan.family.sku}: nothing to change${plan.refused.length ? ` — ${plan.refused.slice(0, 10).map((r) => `${r.sku} ${r.coordinateKey}: ${r.reason}`).join(' · ')}` : ''}. Nothing was queued.` }
     // 2.3 — each sale as it is and as it gets, never the listing's version (an order's stock cascade moves that). The
     // versions read are kept beside, one per change, only to check a request approved before on them, as approved.
     return { ok: true, preview: { action: 'set-listing-price', family: { productId: plan.family.id, sku: plan.family.sku }, verb: 'sale', basisOn: BASIS_ON_FIELDS,
-      changes: plan.cells.map(({ version: _version, ...cell }) => cell), versions: plan.cells.map((c) => c.version),
+      changes: plan.cells.map(({ version: _version, listingId: _listing, ...cell }) => cell), versions: plan.cells.map((c) => c.version),
+      planFacts: await saleFacts(plan.cells),
       ...(plan.refused.length ? { refused: plan.refused } : {}) } }
   },
   async execute(args, ctx) {
-    if (args.action !== 'sale') return runVerbFor(args, ctx, priceParams(args))
-    const approved = ctx.approvedPreview as { verb?: unknown; changes?: SaleCell[]; basisOn?: unknown } | undefined
+    if (args.action !== 'sale') {
+      // 2.3 — a new price never runs past a sale someone set since it was approved (a request approved before 2.3 has
+      // no facts to check: it runs as approved).
+      const approved = ctx.approvedPreview as { changes?: unknown; planFacts?: PlanFacts } | undefined
+      const family = approved?.planFacts && Array.isArray(approved.changes) ? await familyRoot(String(args.productId)) : null
+      if (family && factHash(approved!.planFacts) !== factHash(await priceVerbFacts(family.id, approved!.changes as VerbChange[], ctx))) {
+        return { ok: false, error: `${family.sku}: a sale on these listings changed since this price was approved. Nothing changed; ask Claude again.` }
+      }
+      return runVerbFor(args, ctx, priceParams(args))
+    }
+    const approved = ctx.approvedPreview as SalePreview | undefined
     if (approved?.verb !== 'sale' || !Array.isArray(approved.changes)) return { ok: false, error: 'A sale is set only after a person approved its preview. Nothing changed.' }
     const family = await familyRoot(String(args.productId))
     if (!family) return { ok: false, error: PRODUCT_NOT_FOUND }
-    const cells = await saleWrites(args, ctx, { changes: approved.changes, basisOn: approved.basisOn }, family.sku)
+    const cells = await saleWrites(args, ctx, { ...approved, changes: approved.changes }, family.sku)
     if ('error' in cells) return { ok: false, error: cells.error ?? 'Nothing changed.' }
     const { writeMatrixCells } = await matrixWrite()
     // Each cell at its version: one that moved in between is a conflict, never overwritten.
@@ -510,8 +526,15 @@ const setListingPrice: AgentTool = {
     const refused = out.results.filter((r) => r.outcome !== 'applied' && r.outcome !== 'noop')
     if (!applied.length) return { ok: false, error: `Nothing changed: ${refused.slice(0, 10).map((r) => `${r.coordinateKey}: ${r.reason ?? r.outcome}`).join(' · ')}` }
     const done = approved.changes.filter((c) => applied.some((r) => r.rowId === c.rowId && r.coordinateKey === c.coordinateKey))
+    // 2.3 — the sales this run wrote, from the door's own answer.
+    const planWrites: PlanWrite[] = cells.writes.flatMap(({ change, listingId }) => {
+      const hit = applied.find((r) => r.rowId === change.rowId && r.coordinateKey === change.coordinateKey)
+      const ids = hit?.listings?.length ? hit.listings.map((l) => l.listingId) : hit && listingId ? [listingId] : []
+      return ids.map((id) => ({ key: `listing:${id}:sale` as const, after: saleFact(change.to) }))
+    })
     return {
       ok: true,
+      ...(planWrites.length ? { planWrites } : {}),
       data: { applied: applied.length, refused: refused.map((r) => ({ rowId: r.rowId, coordinateKey: r.coordinateKey, reason: r.reason ?? r.outcome })) },
       change: {
         before: { kind: 'sale', productId: family.id, sale: done.map((c) => ({ rowId: c.rowId, coordinateKey: c.coordinateKey, ...c.from })) },

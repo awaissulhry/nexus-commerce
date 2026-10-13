@@ -6,10 +6,12 @@
  *   price basis  set-listing-price (a sale) and bulk-listing-price-change stood on the listing version: an order between
  *                the approval and the run refused them, the price untouched. They now stand on the price (the sale) they
  *                saw: an order moves nothing; a price or a sale someone else set still refuses them.
+ *   sale/price   a sale stands on the price it was planned against, a price on the listing's sale: neither runs past the
+ *                other when someone moved it after the approval.
  *   plans        a later step on the listing an earlier step of the SAME plan changed was skipped for that step's version
- *                bump ("the facts moved"). Another field: nothing it stands on moved. The same field: the steps' entities
- *                (AgentTool.planEntities) take the later step's basis again after the earlier one ran. A change made
- *                outside the plan between the steps still skips it.
+ *                bump ("the facts moved"). It is re-based on what that earlier step WROTE (ToolResult.planWrites), fact by
+ *                fact, and only when what it sets is unchanged: a step whose value would follow the moved base (a percent)
+ *                is skipped, and so is one where anyone else moved a fact — between the steps, or while the earlier one ran.
  *   before       a request approved before this change (its preview stood on the version, and has no `basisOn`) is
  *                checked on the version, as it was approved.
  */
@@ -44,8 +46,21 @@ vi.mock('../outbound-destination.js', async (importOriginal) => ({
 }))
 vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { refresh: vi.fn(async () => undefined), refreshMany: vi.fn(async () => undefined), refreshInTransaction: vi.fn(async () => undefined) } }))
 vi.mock('../product-event.service.js', () => ({ productEventService: { emit: vi.fn(), emitMany: vi.fn(), emitManyTx: vi.fn(), emitTx: vi.fn() } }))
-// A seam for "someone changes it outside the plan, just before this step is re-checked": runs once, then clears itself.
-const hooks = vi.hoisted(() => ({ beforeCheck: null as null | ((toolName: string, args: Record<string, unknown>) => Promise<boolean>) }))
+// Seams for "someone changes it outside the plan": just before a step is re-checked, or while a step runs (after its own
+// write, before the plan runner looks at the later steps). Each runs once, then clears itself.
+type Hook = null | ((toolName: string, args: Record<string, unknown>) => Promise<boolean>)
+const hooks = vi.hoisted(() => ({ beforeCheck: null as Hook, duringRun: null as Hook }))
+vi.mock('./call-tool.js', async (importOriginal) => {
+  const real = await importOriginal<typeof import('./call-tool.js')>()
+  return {
+    ...real,
+    executeTool: async (...a: Parameters<typeof real.executeTool>) => {
+      const out = await real.executeTool(...a)
+      if (hooks.duringRun && (await hooks.duringRun(a[1], a[2]))) hooks.duringRun = null
+      return out
+    },
+  }
+})
 vi.mock('../agent-fleet/approval-inbox.service.js', async (importOriginal) => {
   const real = await importOriginal<typeof import('../agent-fleet/approval-inbox.service.js')>()
   return {
@@ -60,7 +75,8 @@ vi.mock('../agent-fleet/approval-inbox.service.js', async (importOriginal) => {
 import type { UserPrincipal } from './call-tool.js'
 import { runOrQueueTool } from './approval-gate.service.js'
 import { runPlan } from './change-plan.service.js'
-import { getTool } from './tool-registry.js'
+import { rebaseVerdict } from './change-plan.service.js'
+import { factHash } from './tool-types.js'
 import { commitScheduledApproval, decideFleetApproval } from '../agent-fleet/approval-inbox.service.js'
 
 const business = { workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }
@@ -145,7 +161,7 @@ beforeAll(async () => {
     accounts.amazon = (await c.channelConnection.create({ data: { channelType: 'AMAZON', accountLabel: 'Test Amazon', isActive: true, isPrimary: true, externalAccountId: 'TEST-PB-AMAZON' } })).id
   })
 }, 180_000)
-afterEach(() => { hooks.beforeCheck = null })
+afterEach(() => { hooks.beforeCheck = null; hooks.duringRun = null })
 afterAll(async () => { await database?.close() }, 60_000)
 
 const salePrice = (j: { child: string; parent: string }, price: number) =>
@@ -202,6 +218,29 @@ describe('an approved price change stands on the price it saw, not on the listin
   })
 })
 
+describe('a sale and a price guard each other', { timeout: 60_000 }, () => {
+  it('an approved sale is refused when someone repriced the listing after the approval: it never runs above the price', async () => {
+    const j = await jacket('SALE-REPRICED')
+    const { approvalId } = await askApprove('set-listing-price', salePrice(j, 8))
+    await someonePins(j.amazon, 7)
+    const out = await commit(approvalId)
+    expect(out, JSON.stringify(out)).toMatchObject({ ok: false, error: expect.stringMatching(/the facts moved since you approved it — a price, sale or pricing it stands on changed/) })
+    expect([n((await listing(j.amazon)).price), n((await listing(j.amazon)).salePrice)]).toEqual([7, null])
+  })
+
+  it('an approved price is refused when someone set a sale on the listing after the approval (the bulk tool and the Matrix)', async () => {
+    const j = await jacket('PRICE-ON-SALE')
+    const bulk = await askApprove('bulk-listing-price-change', { listingIds: [j.ebay], mode: 'set', value: 12 })
+    const matrix = await askApprove('set-listing-price', setPrice(j, 12, 'EBAY:IT'))
+    await someoneSetsSale(j.ebay, 11)
+    for (const approvalId of [bulk.approvalId, matrix.approvalId]) {
+      const out = await commit(approvalId)
+      expect(out, JSON.stringify(out)).toMatchObject({ ok: false, error: expect.stringMatching(/the facts moved since you approved it/) })
+    }
+    expect([n((await listing(j.ebay)).price), n((await listing(j.ebay)).salePrice)]).toEqual([10, 11])
+  })
+})
+
 /** The basis bulk-listing-price-change previewed until 2026-10-13: every listing's VERSION with its price facts. */
 async function versionBasisOf(listingIds: string[], to: number[]): Promise<string> {
   const rows = await Promise.all(listingIds.map((id) => inside(() => db().channelListing.findUniqueOrThrow({ where: { id }, include: { product: true } }))))
@@ -211,7 +250,7 @@ async function versionBasisOf(listingIds: string[], to: number[]): Promise<strin
 /** An approval stored before this change: its preview as the tool wrote it then (no `basisOn`, the version in its basis). */
 async function storedBefore(approvalId: string, preview: (now: Row) => Row) {
   const row = await stored(approvalId)
-  const { basisOn: _on, versionBasis: _v, versions: _vs, ...rest } = row.preview
+  const { basisOn: _on, versionBasis: _v, versions: _vs, planFacts: _f, ...rest } = row.preview
   await inside(() => db().agentApproval.update({ where: { id: approvalId }, data: { preview: preview(rest) } }))
 }
 
@@ -270,39 +309,66 @@ describe('a change plan: a later step on the listing an earlier step changed', {
     expect([n(after.price), n(after.salePrice)]).toEqual([12, 9])
   })
 
-  it('a price, then a percent on that same price: both run, and the second says its basis was taken again', async () => {
-    const j = await jacket('PLAN-SAME')
+  it('two absolute prices: the second, on a listing the first priced and one it did not, runs on the first one\'s own write', async () => {
+    const [j, k] = [await jacket('PLAN-SET'), await jacket('PLAN-SET-OTHER')]
+    const { approvalId } = await askApprove('submit-change-plan', { title: 'Test two prices', steps: [
+      { tool: 'bulk-listing-price-change', args: { listingIds: [j.ebay, j.amazon], mode: 'set', value: 20 } },
+      { tool: 'bulk-listing-price-change', args: { listingIds: [j.amazon, k.ebay], mode: 'set', value: 25 } },
+    ] })
+    await commit(approvalId)
+    const out = await inside(() => runPlan(approvalId))
+    const rows = await steps(approvalId)
+    expect(out, JSON.stringify(rows.map((r) => [r.status, r.reason]))).toMatchObject({ finished: true, counts: { done: 2 } })
+    expect([n((await listing(j.ebay)).price), n((await listing(j.amazon)).price), n((await listing(k.ebay)).price)]).toEqual([20, 25, 25])
+    const trace = await inside(() => db().agentControlAudit.findMany({ where: { action: 'basis_rebased' } })) as Row[]
+    expect(trace.some((t) => t.toValue?.approvalId === approvalId && t.toValue?.step === 2 && /^step 1 \(bulk-listing-price-change\) of this plan wrote what it stands on/.test(t.note))).toBe(true)
+  })
+
+  it('a price, then a percent of it: the percent would now run on the new price, not the one approved — skipped, and it says so', async () => {
+    const j = await jacket('PLAN-PCT')
     const { approvalId } = await askApprove('submit-change-plan', { title: 'Test price then percent', steps: [
       { tool: 'bulk-listing-price-change', args: { listingIds: [j.ebay], mode: 'set', value: 20 } },
       { tool: 'bulk-listing-price-change', args: { listingIds: [j.ebay], mode: 'percent', value: 10 } },
     ] })
     await commit(approvalId)
-    const out = await inside(() => runPlan(approvalId))
-    const rows = await steps(approvalId)
-    expect(out, JSON.stringify(rows.map((s) => [s.status, s.reason]))).toMatchObject({ finished: true, counts: { done: 2 } })
-    expect(n((await listing(j.ebay)).price)).toBe(22)
-    const trace = await inside(() => db().agentControlAudit.findMany({ where: { action: 'basis_rebased' } })) as Row[]
-    expect(trace.some((t) => t.toValue?.approvalId === approvalId && t.toValue?.step === 2 && /^step 1 \(bulk-listing-price-change\) of this plan changed what it stands on/.test(t.note))).toBe(true)
+    expect(await inside(() => runPlan(approvalId))).toMatchObject({ finished: true, counts: { done: 1, skipped: 1 } })
+    const [, second] = await steps(approvalId)
+    expect(second.reason).toMatch(/^not run — an earlier step of this plan changed what it stands on, but it would now set another value than the one you approved/)
+    expect(n((await listing(j.ebay)).price)).toBe(20)
   })
 
-  it('control: a price another writer set between the two steps still skips the second', async () => {
-    const j = await jacket('PLAN-OUT')
-    const { approvalId } = await askApprove('submit-change-plan', { title: 'Test price then percent, moved meanwhile', steps: [
-      { tool: 'bulk-listing-price-change', args: { listingIds: [j.ebay], mode: 'set', value: 20 } },
-      { tool: 'bulk-listing-price-change', args: { listingIds: [j.ebay], mode: 'percent', value: 10 } },
+  it('a master price, then a percent on a listing that follows it: skipped, the listing keeps following the new master price', async () => {
+    const j = await jacket('PLAN-MASTER')
+    const { approvalId } = await askApprove('submit-change-plan', { title: 'Test master then percent', steps: [
+      { tool: 'set-price', args: { productId: j.child, price: 20 } },
+      { tool: 'set-listing-price', args: { productId: j.child, action: 'adjust-prices', percent: 10, targets: [{ rowId: j.child, coordinateKey: 'EBAY:IT' }] } },
     ] })
     await commit(approvalId)
-    // A person pins the listing on the Matrix after step 1 ran, just before step 2 is re-checked.
-    hooks.beforeCheck = async (tool, args) => {
-      if (tool !== 'bulk-listing-price-change' || args.mode !== 'percent') return false
-      await someonePins(j.ebay, 30)
+    const out = await inside(() => runPlan(approvalId))
+    const rows = await steps(approvalId)
+    expect(out, JSON.stringify(rows.map((r) => [r.status, r.reason]))).toMatchObject({ finished: true, counts: { done: 1, skipped: 1 } })
+    expect(rows[1].reason).toMatch(/^not run — the facts moved since you approved it/)
+    expect((await listing(j.ebay)).followMasterPrice).toBe(true)
+  })
+
+  it('control: a price another writer set WHILE the first step ran, on a listing it did not touch, skips the second', async () => {
+    const [j, k] = [await jacket('PLAN-DURING'), await jacket('PLAN-DURING-OTHER')]
+    const { approvalId } = await askApprove('submit-change-plan', { title: 'Test two prices, one moved meanwhile', steps: [
+      { tool: 'bulk-listing-price-change', args: { listingIds: [j.ebay, j.amazon], mode: 'set', value: 20 } },
+      { tool: 'bulk-listing-price-change', args: { listingIds: [j.amazon, k.ebay], mode: 'set', value: 25 } },
+    ] })
+    await commit(approvalId)
+    // A person pins the other listing on the Matrix while step 1 runs: after its write, before the runner looks again.
+    hooks.duringRun = async (tool, args) => {
+      if (tool !== 'bulk-listing-price-change' || (args as { value?: unknown }).value !== 20) return false
+      await someonePins(k.ebay, 30)
       return true
     }
     expect(await inside(() => runPlan(approvalId))).toMatchObject({ finished: true, counts: { done: 1, skipped: 1 } })
     const [first, second] = await steps(approvalId)
     expect(first.status).toBe('done')
-    expect(second.reason).toMatch(/^not run — the facts moved since you approved it/)
-    expect(n((await listing(j.ebay)).price)).toBe(30)
+    expect(second.reason).toMatch(/^not run — an earlier step of this plan changed what it stands on, but a listing's own price changed outside this plan/)
+    expect([n((await listing(j.amazon)).price), n((await listing(k.ebay)).price)]).toEqual([20, 30])
   })
 
   it('control: a sale another writer set between a price and a sale on one listing still skips the sale', async () => {
@@ -325,46 +391,34 @@ describe('a change plan: a later step on the listing an earlier step changed', {
   })
 })
 
-describe('pure: what each listing step stands on and changes (planEntities)', () => {
-  const entities = (tool: string, args: Record<string, unknown>, preview: unknown = {}) => getTool(tool)!.planEntities!(args, preview)
+describe('pure: when a later step may be re-based on an earlier step\'s own write (rebaseVerdict)', () => {
+  const tool = { name: 'bulk-listing-price-change', planRebase: () => ['changes', 'totals', 'basis'] }
+  const was = { follow: true, override: null, price: 10 }
+  const pinned = { follow: false, override: 20, price: 20 }
+  const preview = (stands: Record<string, unknown>, sets: unknown = { 'listing:l1:price': 25 }, extra: Row = {}) =>
+    ({ changes: [], totals: {}, basis: factHash({ stands, sets }), ...extra, planFacts: { stands: Object.fromEntries(Object.entries(stands).map(([k, v]) => [k, factHash(v)])), sets: factHash(sets) } })
+  const before = preview({ 'listing:l1:price': was, 'listing:l2:price': was, context: 'c' })
+  const write = { key: 'listing:l1:price' as const, before: was, after: pinned }
 
-  it('a listing\'s price and sale by its id; by its Matrix row and coordinate; a product\'s master price', () => {
-    expect(entities('bulk-listing-price-change', { listingIds: ['l2', 'l1'], mode: 'percent', value: 5 }))
-      .toEqual({ reads: ['listing:l1:price', 'listing:l2:price'], writes: ['listing:l1:price', 'listing:l2:price'] })
-    expect(entities('bulk-listing-price-change', { prices: [{ listingId: 'l3', price: null }] }))
-      .toEqual({ reads: ['listing:l3:price'], writes: ['listing:l3:price'] })
-    // A resend sends the price a listing carries when it runs (a rule price is stored again if it moved).
-    expect(entities('resend-prices', { listingIds: ['l1'] })).toEqual({ reads: ['listing:l1:price'], writes: ['listing:l1:price'] })
-    expect(entities('set-price', { productId: 'p1', price: 12 })).toEqual({ reads: ['product:p1:price'], writes: ['product:p1:price'] })
-    const matrixPrice = { productId: 'p0', action: 'set-price', price: 12, targets: [{ rowId: 'p1', coordinateKey: 'EBAY:IT' }] }
-    expect(entities('set-listing-price', matrixPrice, { verb: 'set-price', changes: [{ rowId: 'p1', coordinateKey: 'EBAY:IT', cell: 'price' }] }))
-      .toEqual({ reads: ['listing:p1@EBAY:IT:price', 'product:p1:price'], writes: ['listing:p1@EBAY:IT:price'] })
-    const sale = { productId: 'p0', action: 'sale', sale: { price: 8 }, targets: [{ rowId: 'p1', coordinateKey: 'AMAZON:IT' }] }
-    expect(entities('set-listing-price', sale, { verb: 'sale', changes: [{ rowId: 'p1', coordinateKey: 'AMAZON:IT' }] }))
-      .toEqual({ reads: ['listing:p1@AMAZON:IT:sale'], writes: ['listing:p1@AMAZON:IT:sale'] })
-    // Stock lands where the Matrix put it (Amazon's one EU quantity), named both as asked and as landed.
-    const pin = { productId: 'p0', action: 'pin-quantity', quantity: 3, targets: [{ rowId: 'p1', coordinateKey: 'AMAZON:IT' }] }
-    expect(entities('set-listing-stock', pin, { verb: 'pin-quantity', changes: [{ rowId: 'p1', coordinateKey: 'AMAZON:EU', cell: 'syncQty' }] }))
-      .toEqual({ reads: ['listing:p1@AMAZON:EU:stock', 'listing:p1@AMAZON:IT:stock'], writes: ['listing:p1@AMAZON:EU:stock', 'listing:p1@AMAZON:IT:stock'] })
-    // copy-prices also reads the market it copies from.
-    const copy = { productId: 'p0', action: 'copy-prices', fromCoordinateKey: 'EBAY:IT', targets: [{ rowId: 'p1', coordinateKey: 'AMAZON:IT' }] }
-    expect(entities('set-listing-price', copy, { verb: 'copy-prices', changes: [] }).reads)
-      .toEqual(['listing:p1@AMAZON:IT:price', 'listing:p1@EBAY:IT:price', 'product:p1:price'])
+  it('a fact the earlier step wrote, holding exactly what it left: re-based', () => {
+    expect(rebaseVerdict(tool, before, preview({ 'listing:l1:price': pinned, 'listing:l2:price': was, context: 'c' }), [write])).toBeNull()
   })
-
-  it('a product\'s shared text per field and language (and the source it falls back to); a listing\'s own text', () => {
-    expect(entities('set-content', { product: 'p1', language: 'de', title: 'x' }, { productId: 'p1', language: 'de', layer: 'language', changes: { title: {} } }))
-      .toEqual({ reads: ['product:p1:title@de', 'product:p1:title@source'], writes: ['product:p1:title@de'] })
-    expect(entities('set-content', { product: 'TEST-SKU-1', language: 'it', title: 'x' }, { productId: 'p1', language: 'it', layer: 'source', changes: { title: {} } }).writes)
-      .toEqual(['product:TEST-SKU-1:title@it', 'product:TEST-SKU-1:title@source', 'product:p1:title@it', 'product:p1:title@source'])
-    expect(entities('bulk-content-change', { language: 'de', items: [{ product: 'SKU-A', title: 'x' }, { product: 'SKU-B', attributes: { care_note: 'y' }, reset: ['description'] }] },
-      { language: 'de', layer: 'language', changes: [{ sku: 'SKU-A', field: 'title' }] }).writes)
-      .toEqual(['product:SKU-A:title@de', 'product:SKU-B:care_note@de', 'product:SKU-B:description@de'])
-    expect(entities('set-listing-content', { product: 'p1', coordinate: { channel: 'amazon', market: 'de' }, language: 'de' },
-      { productId: 'p1', language: 'de', changes: { title: { kind: 'pin' }, color: { kind: 'attribute' } } }))
-      .toEqual({
-        reads: ['listing:p1@AMAZON:DE:color@de', 'listing:p1@AMAZON:DE:title@de', 'product:p1:title@de', 'product:p1:title@source'],
-        writes: ['listing:p1@AMAZON:DE:color@de', 'listing:p1@AMAZON:DE:title@de', 'product:p1:title@de'],
-      })
+  it('what it sets moved (a percent on the moved base): refused', () => {
+    expect(rebaseVerdict(tool, before, preview({ 'listing:l1:price': pinned, 'listing:l2:price': was, context: 'c' }, { 'listing:l1:price': 22 }), [write]))
+      .toMatch(/^it would now set another value/)
+  })
+  it('the written fact holds another value than the write left, or the write found another one: refused', () => {
+    expect(rebaseVerdict(tool, before, preview({ 'listing:l1:price': { ...pinned, price: 21 }, 'listing:l2:price': was, context: 'c' }), [write])).toMatch(/changed outside this plan$/)
+    expect(rebaseVerdict(tool, before, preview({ 'listing:l1:price': pinned, 'listing:l2:price': was, context: 'c' }), [{ ...write, before: pinned }])).toMatch(/changed outside this plan$/)
+  })
+  it('a fact the earlier step did not write moved, or the context, or a field its facts do not explain: refused', () => {
+    expect(rebaseVerdict(tool, before, preview({ 'listing:l1:price': pinned, 'listing:l2:price': pinned, context: 'c' }), [write])).toBe('a listing\'s own price changed outside this plan')
+    expect(rebaseVerdict(tool, before, preview({ 'listing:l1:price': pinned, 'listing:l2:price': was, context: 'd' }), [write])).toMatch(/^its pricing/)
+    const sale = { name: 'set-listing-price', planRebase: () => [] as string[] }
+    const verb = (changes: unknown, stands: Record<string, unknown>) => ({ verb: 'set-price', changes, planFacts: { stands: Object.fromEntries(Object.entries(stands).map(([k, v]) => [k, factHash(v)])), sets: 'x' } })
+    expect(rebaseVerdict(sale, verb([{ from: 10 }], { 'listing:l1:sale': 1 }), verb([{ from: 11 }], { 'listing:l1:sale': 2 }), [{ key: 'listing:l1:sale', after: 2 }])).toBe('changes changed outside this plan')
+  })
+  it('a step without facts (approved before this change) is never re-based', () => {
+    expect(rebaseVerdict(tool, { basis: 'old' }, before, [write])).toMatch(/^it has no facts/)
   })
 })

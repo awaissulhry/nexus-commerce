@@ -36,10 +36,26 @@ vi.mock('../../../lib/queue.js', () => ({
 vi.mock('../../product-read-cache.service.js', () => ({ productReadCacheService: { refresh: vi.fn(), refreshMany: vi.fn(), refreshInTransaction: vi.fn() } }))
 vi.mock('../../pim/readiness-index.service.js', async () => (await import('../../../test-support/readiness-module-mock.js')).readinessModuleMock(vi.fn()))
 
+// 2.3 — a seam for "someone writes while a step of a plan runs" (after its own write): runs once, then clears itself.
+const hooks = vi.hoisted(() => ({ duringRun: null as null | ((toolName: string, args: Record<string, unknown>) => Promise<boolean>) }))
+vi.mock('../call-tool.js', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../call-tool.js')>()
+  return {
+    ...real,
+    executeTool: async (...a: Parameters<typeof real.executeTool>) => {
+      const out = await real.executeTool(...a)
+      if (hooks.duringRun && (await hooks.duringRun(a[1], a[2]))) hooks.duringRun = null
+      return out
+    },
+  }
+})
+
+// The plan runner first, so it takes the call-tool seam above (imported after call-tool, call-tool's own graph would load
+// it with the original).
+import { runPlan } from '../change-plan.service.js'
 import { callTool, ToolAccessError, type UserPrincipal } from '../call-tool.js'
 import { runOrQueueTool } from '../approval-gate.service.js'
 import { checkStaleness, commitScheduledApproval, MATERIAL_PREVIEW_FIELDS, scheduleApproval } from '../../agent-fleet/approval-inbox.service.js'
-import { runPlan } from '../change-plan.service.js'
 
 const A = LEGACY_WORKSPACE_ID
 const business = { workspaceId: A, actorUserId: null, membershipId: null, roleKeys: [] }
@@ -306,23 +322,24 @@ describe('T5 — reset, attributes, undo, permissions', { timeout: 30_000 }, () 
   })
 })
 
-describe('2.3 — set-content stands on the fields it changes, never on the language row\'s version', { timeout: 60_000 }, () => {
-  /** A person edits another German field in the sheet: the row's version moves, the field asked about does not. */
-  const someoneEditsGermanDescription = (productId: string, description: string) =>
-    inside(() => db().productTranslation.updateMany({ where: { productId, language: 'de' }, data: { description, version: { increment: 1 } } }))
+describe('2.3 — set-content stands on its language row\'s version; a plan re-bases only on its own earlier write', { timeout: 60_000 }, () => {
   const germanRow = (productId: string) =>
     inside(() => db().productTranslation.create({ data: { productId, language: 'de', name: 'Jacke', description: 'Alt.', source: 'manual', reviewedAt: new Date() } }))
+  /** The AI translation (catalog-translate.ts) writes a German field as a draft: source ai, not reviewed; the row's version moves. */
+  const aiDraft = (productId: string, data: Record<string, unknown>) =>
+    inside(() => db().productTranslation.updateMany({ where: { productId, language: 'de' }, data: { ...data, source: 'ai', reviewedAt: null, version: { increment: 1 } } }))
 
-  it('another German field a person edited after the approval moves nothing it stands on: it runs', async () => {
-    const { parent } = await seed('TEST-SKU-T5-OTHER')
+  it('an AI draft of another German field written after the approval refuses it: approving the title never marks that draft reviewed', async () => {
+    const { parent } = await seed('TEST-SKU-T5-DRAFT')
     await germanRow(parent.id)
     const { approvalId } = await queued({ product: parent.id, language: 'de', title: 'Motorradjacke', englishMeaning: { title: 'Motorcycle jacket' } })
-    await someoneEditsGermanDescription(parent.id, 'Neu.')
-    expect(await approveAndRun(approvalId)).toMatchObject({ ok: true, status: 'executed' })
-    expect(await german(parent.id)).toMatchObject({ name: 'Motorradjacke', description: 'Neu.' })
+    await aiDraft(parent.id, { description: 'KI-Entwurf.' })
+    const ran = await approveAndRun(approvalId)
+    expect(ran).toMatchObject({ ok: false, error: expect.stringMatching(/the facts moved since you approved it — basis changed/) })
+    expect(await german(parent.id)).toMatchObject({ name: 'Jacke', description: 'KI-Entwurf.', source: 'ai', reviewedAt: null })
   })
 
-  it('a plan of two steps on one product and language (the title, then the description): both run', async () => {
+  it('a plan of two steps on one product and language (the title, then the description): both run, the second on the first one\'s own write', async () => {
     const { parent } = await seed('TEST-SKU-T5-PLAN')
     const out = await ask('submit-change-plan', { title: 'Test two German texts', steps: [
       { tool: 'set-content', args: { product: parent.id, language: 'de', title: 'Motorradjacke', englishMeaning: { title: 'Motorcycle jacket' } } },
@@ -336,26 +353,32 @@ describe('2.3 — set-content stands on the fields it changes, never on the lang
     expect(await german(parent.id)).toMatchObject({ name: 'Motorradjacke', description: 'Eine Jacke.' })
   })
 
+  it('control: an AI draft written into the row WHILE the first step ran skips the second, and stays an unreviewed draft', async () => {
+    const { parent } = await seed('TEST-SKU-T5-PLAN-DRAFT')
+    await germanRow(parent.id)
+    const out = await ask('submit-change-plan', { title: 'Test two German texts, a draft meanwhile', steps: [
+      { tool: 'set-content', args: { product: parent.id, language: 'de', title: 'Motorradjacke', englishMeaning: { title: 'Motorcycle jacket' } } },
+      { tool: 'set-content', args: { product: parent.id, language: 'de', description: 'Eine Jacke.', englishMeaning: { description: 'A jacket.' } } },
+    ] })
+    await approveAndRun(out.approvalId!)
+    hooks.duringRun = async (tool, args) => {
+      if (tool !== 'set-content' || args.title === undefined) return false
+      await aiDraft(parent.id, { keywords: ['KI'] })
+      return true
+    }
+    expect(await inside(() => runPlan(out.approvalId!))).toMatchObject({ finished: true, counts: { done: 1, skipped: 1 } })
+    const [, second] = await inside(() => db().agentPlanStep.findMany({ where: { approvalId: out.approvalId! }, orderBy: { position: 'asc' } }))
+    expect(second.reason).toMatch(/^not run — an earlier step of this plan changed what it stands on, but the de text changed outside this plan/)
+    expect(await german(parent.id)).toMatchObject({ name: 'Motorradjacke', description: 'Alt.', keywords: ['KI'], source: 'ai', reviewedAt: null })
+  })
+
   it('control: a person\'s edit of the same field after the approval still refuses it', async () => {
     const { parent } = await seed('TEST-SKU-T5-SAMEFIELD')
     await germanRow(parent.id)
     const { approvalId } = await queued({ product: parent.id, language: 'de', description: 'Eine Jacke.', englishMeaning: { description: 'A jacket.' } })
-    await someoneEditsGermanDescription(parent.id, 'Von Hand.')
+    await inside(() => db().productTranslation.updateMany({ where: { productId: parent.id, language: 'de' }, data: { description: 'Von Hand.', version: { increment: 1 } } }))
     const ran = await approveAndRun(approvalId)
     expect(ran).toMatchObject({ ok: false, error: expect.stringMatching(/the facts moved since you approved it/) })
     expect((await german(parent.id))!.description).toBe('Von Hand.')
-  })
-
-  it('a request approved before (its basis held the row\'s version) is checked on it, as it was approved', async () => {
-    const { parent } = await seed('TEST-SKU-T5-BEFORE')
-    await germanRow(parent.id)
-    const { approvalId } = await queued({ product: parent.id, language: 'de', title: 'Motorradjacke', englishMeaning: { title: 'Motorcycle jacket' } })
-    const row = await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: approvalId } }))
-    const { basisOn: _on, versionBasis, ...before } = row.preview as Data
-    await inside(() => db().agentApproval.update({ where: { id: approvalId }, data: { preview: { ...before, basis: versionBasis ?? before.basis } } }))
-    await someoneEditsGermanDescription(parent.id, 'Neu.')
-    const ran = await approveAndRun(approvalId)
-    expect(ran).toMatchObject({ ok: false, error: expect.stringMatching(/the facts moved since you approved it — basis changed/) })
-    expect((await german(parent.id))!.name).toBe('Jacke')
   })
 })

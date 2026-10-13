@@ -30,7 +30,7 @@ import {
 import { staleRefusal } from './stale-preview.js'
 import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
-import { entityKeys, type AgentTool, type PlanEntities, type ToolUndo } from '../tool-types.js'
+import type { AgentTool, ToolUndo } from '../tool-types.js'
 import { liveProduct } from './live-product.js'
 import { priceBoundsOf, storedPriceReason } from '../../price-bounds.service.js'
 import { roundCents } from '@nexus/shared/listing-price'
@@ -105,11 +105,6 @@ const setPrice: AgentTool = {
   limits: SET_PRICE_LIMITS,
   withinLimits: setPriceWithinLimits,
   undo: SET_PRICE_UNDO,
-  // C6 / 2.3 — the master price it reads and writes; a later Matrix price step on a listing of this product reads it too.
-  planEntities: (args): PlanEntities => {
-    const keys = entityKeys([typeof args.productId === 'string' && args.productId.trim() ? `product:${args.productId.trim()}:price` : null])
-    return { reads: keys, writes: keys }
-  },
   description:
     'Change a product master price (cascades to channels per their pricing rules; channel push is gated). Waits for a '
     + 'person to approve it in Nexus, unless the business lets Claude make small moves itself (inside its limits).',
