@@ -18,6 +18,13 @@ Grid audit wave 4, PR10 (E2).
   Workers' 9px cell padding. The map list's name button is held to its cell, so a long name ends in "…" and its
   badge stays whole.
 
+## `RequiredValue` draws the outline warn glyph — 2026-10-13
+
+Grid audit wave 4, PR13 chunk 1 (E13). `RequiredValue` ("required" on an empty cell a channel requires) drew the text
+"⚠", which Windows and Android paint as a colour emoji; it now draws `WarnGlyph` (the outline triangle the Matrix uses)
+before the word. Its name stays "Required". The product sheet (`MasterSheet.tsx`) uses the component instead of its own
+copy of the span. Mirrored in `apps/factory` (identical file).
+
 ## One density scale; grids on a phone — 2026-10-13
 
 Grid audit wave 4, PR11 + PR12 engine part (E5, E9, D7).

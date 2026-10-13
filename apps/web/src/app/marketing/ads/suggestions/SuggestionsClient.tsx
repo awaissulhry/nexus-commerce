@@ -28,7 +28,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from '@/lib/workspaces/Link'
 import { useSearchParams } from 'next/navigation'
 import { useRouter } from '@/lib/workspaces/navigation'
-import { Check, X, RefreshCw, Sparkles, ExternalLink, RotateCcw, Pause, Volume2, Settings } from 'lucide-react'
+import { Check, X, RefreshCw, Sparkles, ExternalLink, RotateCcw, Pause, Volume2, Settings, Pencil } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { useAdsMarketplace, useSharedAdsMarket } from '../_shell/MarketplaceContext'
 import { AdsDataGrid, type GridColumn, type GridFilter, type FilterState } from '../campaigns/_grid/AdsDataGrid'
@@ -665,7 +665,7 @@ function SuggestionsInner() {
   }, [aiStaged, aiRunOps])
 
   // SG.2e — the summary band is GONE (operator, twice): H10 puts nothing between the tabs and
-  // Filters, and the money facts already live on the rows — the € at stake column, the ♦
+  // Filters, and the money facts already live on the rows — the € at stake column, the diamond
   // pure-waste marker, and the waste-first default ordering.
 
   // ── the one filter bar: scope grains + page facets ────────────────────────
@@ -910,7 +910,7 @@ function SuggestionsInner() {
     tacos: { key: 'tacos', label: 'Target ACoS', tip: 'The campaign’s own target ACoS.', metric: true, sortable: true, sortValue: (s) => s.current?.targetAcosPct ?? null, render: (s) => s.current?.targetAcosPct != null ? <span className="h10-sug-num">{pct(s.current.targetAcosPct / 100)}</span> : dash('No target ACoS set on the campaign') },
     stake: {
       key: 'stake', label: '€ at stake', metric: true, sortable: true,
-      tip: 'Trailing 30-day spend this action would redirect — not money saved. ♦ marks spend that produced no sales at all, the only case where cutting it is pure recovery.',
+      tip: 'Trailing 30-day spend this action would redirect — not money saved. The diamond marks spend that produced no sales at all, the only case where cutting it is pure recovery.',
       sortValue: stakeSort,
       render: (s) => <StakeCell p={pricing?.byId[s.id]} />,
     },
@@ -1038,7 +1038,7 @@ function SuggestionsInner() {
           <span className="h10-sug-change" title={a.note ?? undefined}>
             {a.from ? <><span className="h10-sug-num">{a.from}</span><span className="d"> → </span></> : <span className="d">set to </span>}
             <b className="h10-sug-sugval">{a.to}</b>
-            {a.note ? <span className="d" title={a.note}> ✎</span> : null}
+            {a.note ? <span className="d" title={a.note}> <Pencil size={11} strokeWidth={2} className="nds-cell-glyph" role="img" aria-label={`Note: ${a.note}`} /></span> : null}
           </span>
         )
       },

@@ -20,11 +20,12 @@ import { Tooltip } from '@/design-system/primitives'
 import { useTooltipsDisabled } from '@/design-system/primitives/Tooltip'
 import type { EntityLinkComponent } from '@/design-system/components'
 import {
-  actionsColumn, integerColumn, keepFromGrid, type ColDef, type ICellRendererParams, type RowVerb,
+  actionsColumn, entityLinksKeys, integerColumn, keepFromGrid, type ColDef, type ICellRendererParams, type RowVerb,
 } from '@/design-system/grid'
 import Link from '@/lib/workspaces/Link'
 import { dayWords, money } from '../../bid/_shared/format'
 import { OwnerChip } from '../../_shared/OwnerChip'
+import { ProductCell } from '../../_shared/ProductCell'
 import { ClashMark, KindMark, MatchChip, SkippedMark, StateMark, WaitingMark } from './marks'
 import { ownerKeys, placeKeys, sinceKeys, verbKeys } from './cellKeys'
 import {
@@ -91,17 +92,9 @@ const WhereCell = memo(function WhereCell({ data }: Cell<WasteGridRow | StoppedG
 })
 
 /** The product: its link, or "2 products" on a shared campaign (its campaign holds them; hover says so). */
-const ProductCell = memo(function ProductCell({ data }: Cell<WasteGridRow | StoppedGridRow>) {
+const ProductRenderer = memo(function ProductRenderer({ data }: Cell<WasteGridRow | StoppedGridRow>) {
   if (!data) return null
-  if (data.product?.href) {
-    return (
-      <span className={styles.ellipsis} onClickCapture={keepFromGrid}>
-        <Link href={data.product.href} className="nds-entitylink" title={data.product.name}>{data.product.name}</Link>
-      </span>
-    )
-  }
-  const words = productWords(data)
-  return <span className="nds-cell-muted" title={words === '—' ? 'No product on record' : `A shared campaign: ${words}`}>{words}</span>
+  return <ProductCell product={data.product} count={'productCount' in data ? data.productCount : 0} />
 })
 
 const SpendCell = memo(function SpendCell({ data }: Cell<WasteGridRow>) {
@@ -248,7 +241,7 @@ export function wasteColumns(phone: boolean): ColDef<WasteGridRow>[] {
   const cols: ColDef<WasteGridRow>[] = [
     { colId: 'term', headerName: L.term, valueGetter: (p) => p.data?.text ?? '', cellRenderer: TermCell, pinned: 'left', width: 220, cellClass: 'nds-ag-cell', ...serverSort },
     { colId: 'where', headerName: L.where, valueGetter: (p) => (p.data ? entityPathText(p.data.path) : ''), cellRenderer: WhereCell, flex: 1, minWidth: 240, cellClass: 'nds-ag-cell', suppressKeyboardEvent: placeKeys as ColDef<WasteGridRow>['suppressKeyboardEvent'], ...serverSort, headerTooltip: 'Campaign, then its ad group; the portfolio on hover. Enter: the campaign · Shift+Enter: the ad group' },
-    { colId: 'product', headerName: L.product, valueGetter: (p) => (p.data ? productWords(p.data) : ''), cellRenderer: ProductCell, width: 124, cellClass: 'nds-ag-cell', ...serverSort },
+    { colId: 'product', headerName: L.product, valueGetter: (p) => (p.data ? productWords(p.data) : ''), cellRenderer: ProductRenderer, suppressKeyboardEvent: entityLinksKeys as ColDef<WasteGridRow>['suppressKeyboardEvent'], width: 124, cellClass: 'nds-ag-cell', ...serverSort },
     { colId: 'spend', headerName: L.spend, valueGetter: (p) => p.data?.d?.spendCents ?? null, valueFormatter: moneyOf, cellRenderer: SpendCell, width: 92, cellClass: num, ...numeric, ...serverSort, headerTooltip: 'Spend in the window, out-of-stock days left out' },
     { ...integerColumn<WasteGridRow>('d.clicks'), colId: 'clicks', headerName: L.clicks, width: 74, ...DESC_FIRST, ...serverSort },
     { ...integerColumn<WasteGridRow>('d.orders'), colId: 'orders', headerName: L.orders, width: 78, ...DESC_FIRST, ...serverSort, headerTooltip: 'Orders up to today: a late order can only save a row' },
@@ -312,7 +305,7 @@ export function stoppedColumns(phone: boolean): ColDef<StoppedGridRow>[] {
   const cols: ColDef<StoppedGridRow>[] = [
     { colId: 'term', headerName: L.term, valueGetter: (p) => p.data?.text ?? '', cellRenderer: TermCell, pinned: 'left', width: 220, cellClass: 'nds-ag-cell' },
     { colId: 'where', headerName: L.where, valueGetter: (p) => (p.data ? entityPathText(p.data.path) : ''), cellRenderer: WhereCell, flex: 1, minWidth: 240, cellClass: 'nds-ag-cell', suppressKeyboardEvent: placeKeys as ColDef<StoppedGridRow>['suppressKeyboardEvent'], headerTooltip: 'Campaign, then its ad group (or the whole campaign); the portfolio on hover. Enter: the campaign · Shift+Enter: the ad group' },
-    { colId: 'product', headerName: L.product, valueGetter: (p) => (p.data ? productWords(p.data) : ''), cellRenderer: ProductCell, width: 132, cellClass: 'nds-ag-cell' },
+    { colId: 'product', headerName: L.product, valueGetter: (p) => (p.data ? productWords(p.data) : ''), cellRenderer: ProductRenderer, suppressKeyboardEvent: entityLinksKeys as ColDef<StoppedGridRow>['suppressKeyboardEvent'], width: 132, cellClass: 'nds-ag-cell' },
     { colId: 'owner', headerName: L.owner, valueGetter: (p) => (p.data ? chipOwner(p.data.owner).hint : ''), cellRenderer: OwnerCell, width: 116, cellClass: 'nds-ag-cell', suppressKeyboardEvent: ownerKeys as ColDef<StoppedGridRow>['suppressKeyboardEvent'] },
     { colId: 'since', headerName: L.since, valueGetter: (p) => p.data?.since ?? null, cellRenderer: SinceCell, width: 92, cellClass: 'nds-ag-cell', valueFormatter: (p) => dayWords(p.value as string | null), suppressKeyboardEvent: sinceKeys as ColDef<StoppedGridRow>['suppressKeyboardEvent'], headerTooltip: 'When it was added or paused, from the record that says so. Enter: how it is known' },
     { colId: 'spendBefore', headerName: L.spendBefore, valueGetter: (p) => p.data?.spendBeforeCents ?? null, valueFormatter: moneyOf, cellRenderer: SpendBeforeCell, width: 124, cellClass: num, ...numeric, headerTooltip: 'Spend in the 30 days before it stopped' },

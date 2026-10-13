@@ -24,7 +24,7 @@ import { whenWords } from '../../bid/_shared/format'
 import type { HarvestSourceRow } from '../_shared/types'
 import { harvestingWord, roleWord, windowWord } from './sourcesModel'
 import styles from '../../bid/bid.module.css'
-import own from './sources.module.css'
+import { ProductCell, TwoLineLink } from '../../_shared/ProductCell'
 
 /** What the view hands the grid (a ref that never changes identity). */
 export interface SourcesHandlers {
@@ -69,21 +69,8 @@ const AdGroupCell = memo(function AdGroupCell({ data: g, eGridCell }: Cell) {
   )
 })
 
-/** A name as a link that takes a second line before it is cut (re-audit S14); the whole name on hover. */
-function TwoLineLink({ name, href }: { name: string; href: string | null | undefined }) {
-  return (
-    <span className={own.cell} onClickCapture={keepFromGrid}>
-      {href
-        ? <WorkspaceLink href={href} className={`nds-entitylink ${own.clamp2}`} title={name}>{name}</WorkspaceLink>
-        : <span className={own.clamp2} title={name}>{name}</span>}
-    </span>
-  )
-}
-
-const ProductCell = memo(function ProductCell({ data: g }: Cell) {
-  const p = g?.row.product
-  if (!p) return <span className={styles.muted}>—</span>
-  return <TwoLineLink name={p.name} href={p.href} />
+const ProductRenderer = memo(function ProductRenderer({ data: g }: Cell) {
+  return g ? <ProductCell product={g.row.product} /> : null
 })
 
 const RulesCell = memo(function RulesCell({ data: g, context, eGridCell }: Cell) {
@@ -137,7 +124,7 @@ const linkCol = (colId: 'product' | 'portfolio', header: string, width: number):
   valueGetter: (p) => { const v = p.data?.row[colId]; return v ? [v] : [] },
 })
 // The names take the room the card has (re-audit S14): product twice the share of portfolio and rules.
-const PRODUCT: ColDef<SourceGridRow> = { ...linkCol('product', 'Product', 160), width: undefined, flex: 2, minWidth: 180, cellRenderer: ProductCell }
+const PRODUCT: ColDef<SourceGridRow> = { ...linkCol('product', 'Product', 160), width: undefined, flex: 2, minWidth: 180, cellRenderer: ProductRenderer }
 const PORTFOLIO: ColDef<SourceGridRow> = { ...linkCol('portfolio', 'Portfolio', 120), width: undefined, flex: 1, minWidth: 110 }
 const RULES: ColDef<SourceGridRow> = {
   colId: 'rules', headerName: 'Rules', flex: 1, minWidth: 120,

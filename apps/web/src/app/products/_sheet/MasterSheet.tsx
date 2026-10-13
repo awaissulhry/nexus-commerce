@@ -18,7 +18,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, EyeOff, FolderX, Search } from 'lucide-react'
 
 import { Button, Input, InfoTip, Pill, SegmentedControl } from '@/design-system/primitives'
-import { composeCellTooltip, longTextTooltipLine, lengthCapOf, CellSaveTracker, EmptyValue, ExpandButton, ExpandSlot, GridPager, GridSearchSlot, GridSelectionActions, GridSheet, GridSheetStatus, GridToolbar, FollowsCell, IdentityChip, LongTextCell, NexusGrid, ReadinessCell, SHEET_GRID_OPTIONS, SkuTag, gridSelection, lengthValidation, longTextEditor, numericColumn, numericEditor, roundTripClassRules, saveCell, selectEditor, selectValidation, sheetClassRules, sheetPasteProcessor, type ColDef, type ColGroupDef, type GridApi, type GridReadyEvent, type ICellRendererParams, type IRowNode, type ReadinessValue, type ValueGetterParams, type ValueSetterParams } from '@/design-system/grid'
+import { composeCellTooltip, longTextTooltipLine, lengthCapOf, CellSaveTracker, EmptyValue, ExpandButton, ExpandSlot, GridPager, GridSearchSlot, GridSelectionActions, GridSheet, GridSheetStatus, GridToolbar, FollowsCell, IdentityChip, LongTextCell, NexusGrid, ReadinessCell, RequiredValue, SHEET_GRID_OPTIONS, SkuTag, gridSelection, lengthValidation, longTextEditor, numericColumn, numericEditor, roundTripClassRules, saveCell, selectEditor, selectValidation, sheetClassRules, sheetPasteProcessor, type ColDef, type ColGroupDef, type GridApi, type GridReadyEvent, type ICellRendererParams, type IRowNode, type ReadinessValue, type ValueGetterParams, type ValueSetterParams } from '@/design-system/grid'
 
 import { columnApplies, columnRequiredByAny } from '@nexus/shared/master-sheet'
 
@@ -182,7 +182,7 @@ export function MasterSheet({ market: marketProp, height, onMarketChange }: Mast
           editable,
           cellRenderer: (p: ICellRendererParams<SheetRow>) => {
             if (p.value != null && p.value !== '') return <span>{col.optionLabels?.[String(p.value)] ?? String(p.value)}</span>
-            if (p.data && applies(p.data, col) && requiredHere(p.data, col)) return <span className="nds-cell-required">⚠ required</span>
+            if (p.data && applies(p.data, col) && requiredHere(p.data, col)) return <RequiredValue />
             return <EmptyValue />
           },
         }
@@ -232,7 +232,7 @@ export function MasterSheet({ market: marketProp, height, onMarketChange }: Mast
         editable,
         cellRenderer: (p: ICellRendererParams<SheetRow>) => {
           if (p.value != null && p.value !== '') return <span>{String(p.value)}</span>
-          if (p.data && applies(p.data, col) && requiredHere(p.data, col)) return <span className="nds-cell-required">⚠ required</span>
+          if (p.data && applies(p.data, col) && requiredHere(p.data, col)) return <RequiredValue />
           return <EmptyValue />
         },
       }

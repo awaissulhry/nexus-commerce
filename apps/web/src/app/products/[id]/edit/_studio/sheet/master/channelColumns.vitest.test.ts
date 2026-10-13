@@ -135,7 +135,7 @@ describe.each(['EBAY', 'AMAZON', 'SHOPIFY', 'ETSY'])('%s scope marks', channel =
   it('adds no mark to an empty required cell that already says "required"', () => {
     const required = setup([{ ...base, kind: 'text', requiredBy: [`${channel} · DE`] }], undefined, scope)[0]
     const html = render(required, cellOf({ value: null, mapped: { ...plain, provenance: 'missing', errors: ["Field 'Title' is required."] } }), null)
-    expect(html).toContain('⚠ required')
+    expect(html).toContain('nds-cell-required')
     expect(html).not.toContain('nds-cell-prov')
   })
 
@@ -146,18 +146,18 @@ describe.each(['EBAY', 'AMAZON', 'SHOPIFY', 'ETSY'])('%s scope marks', channel =
     inheritedFrom: null, follows: null, mapped: { value: null, derived: false, status: 'unmapped', provenance: null, sourcePath: null, fallbackPath: null,
       usesExpression: false, legacySource: 'missing', appliedTransforms: [], warnings: [], errors, mappingErrors: [], autoCorrected: null,
       requiredByRule: false, overLimit: null, ...over } })
-  it('draws Amazon’s conditional requirement on an empty cell as "⚠ required", with no mark (the column alone does not require it)', () => {
+  it('draws Amazon’s conditional requirement on an empty cell as "required", with no mark (the column alone does not require it)', () => {
     // `required: true` on the issue → the resolver's `required` → `requiredByRule` on the wire.
     const html = render(definition, emptyRequired(["Required by the category's condition for this product: External Product ID."], { requiredByRule: true }), null)
-    expect(html).toContain('⚠ required')
+    expect(html).toContain('nds-cell-required')
     expect(html).not.toContain('nds-cell-prov')
   })
-  it('draws Etsy’s schema requirement on an empty cell as "⚠ required", with no mark — although it arrives with requiredByRule false', () => {
+  it('draws Etsy’s schema requirement on an empty cell as "required", with no mark — although it arrives with requiredByRule false', () => {
     // Etsy fields are `requiredInParent: false`, so the schema check words it as an envelope ("the … attribute") and leaves
     // `required` false: only the sentence says it.
     const html = render(definition, emptyRequired(['Required by the category schema: the taxonomy_id attribute.'],
       { sourceOwner: { kind: 'listing', label: 'Etsy category selection', path: 'listing.platformAttributes.taxonomy_id' } }), null)
-    expect(html).toContain('⚠ required')
+    expect(html).toContain('nds-cell-required')
     expect(html).not.toContain('nds-cell-prov')
   })
   it('keeps the attention mark on an empty cell when another error stands beside the required one', () => {
@@ -165,7 +165,7 @@ describe.each(['EBAY', 'AMAZON', 'SHOPIFY', 'ETSY'])('%s scope marks', channel =
       'Category requirement validation is unavailable: The category validation schema is unavailable.',
       'Translation into de is pending.']) {
       const html = render(definition, emptyRequired(["Required by the category's condition for this product: External Product ID.", other], { requiredByRule: true }), null)
-      expect(html).toContain('⚠ required')
+      expect(html).toContain('nds-cell-required')
       expect(markOf(html)).toBe('attention')
       // The mark names the cause it is drawn for; the cell already says "required" (Cell details keeps every sentence).
       expect(titleOf(html)).toBe(`Field validation: ${other}`)
@@ -173,12 +173,12 @@ describe.each(['EBAY', 'AMAZON', 'SHOPIFY', 'ETSY'])('%s scope marks', channel =
   })
   it('keeps the attention mark on a FILLED cell whose error says "required" (the value is there; something else is wrong)', () => {
     const html = render(definition, cellOf({ value: 'X', mapped: { ...plain, errors: ["Required by the category's condition for this product: External Product ID."], requiredByRule: true } }), 'X')
-    expect(html).not.toContain('⚠ required')
+    expect(html).not.toContain('nds-cell-required')
     expect(markOf(html)).toBe('attention')
   })
   it('an empty cell whose only error is not a requirement draws "—" and the attention mark', () => {
     const html = render(definition, emptyRequired(['The category requires an allowed alternative; this option needs: External Product ID.']), null)
-    expect(html).not.toContain('⚠ required')
+    expect(html).not.toContain('nds-cell-required')
     expect(markOf(html)).toBe('attention')
   })
 

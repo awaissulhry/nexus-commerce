@@ -23,7 +23,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from '@/lib/workspaces/Link'
 import { useParams } from 'next/navigation'
 import {
-  AlertTriangle, ArrowLeft, ArrowRight, Check, Crown, Info, Pause, Play, RefreshCw, X,
+  AlertTriangle, ArrowLeft, ArrowRight, Check, Crown, Diamond, Info, Pause, Play, RefreshCw, X,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button } from '@/design-system/primitives/Button'
@@ -696,7 +696,7 @@ export function FamilyCockpitClient() {
               columns={[
                 { key: 'rule', label: 'Rule', render: (p) => p.ruleName ?? '—' },
                 { key: 'action', label: 'Action', render: (p) => <span className="mono">{p.proposedKey}</span> },
-                { key: 'entity', label: 'Term / entity', render: (p) => <>{p.recoverable && <span className="fc-diamond" title="This spend produced nothing — pure recovery">♦</span>}{p.entityLabel ?? '—'}</> },
+                { key: 'entity', label: 'Term / entity', render: (p) => <>{p.recoverable && <span className="fc-diamond" title="This spend produced nothing — pure recovery" role="img" aria-label="Pure recovery"><Diamond size={10} fill="currentColor" strokeWidth={2} className="nds-cell-glyph" aria-hidden /></span>}{p.entityLabel ?? '—'}</> },
                 { key: 'stake', label: 'At stake (30d)', align: 'right', render: (p) => eur(p.spendAtStakeCents) },
                 { key: 'sales', label: 'Sales it made', align: 'right', render: (p) => eur(p.salesAtStakeCents) },
               ]}

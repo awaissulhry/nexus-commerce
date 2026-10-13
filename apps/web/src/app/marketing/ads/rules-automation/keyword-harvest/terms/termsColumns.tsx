@@ -27,6 +27,7 @@ import {
   acosText, approveHeld, barWords, decideHeld, goesToText, harvestToHeld, numbersWindowWords, roleWord, rowMoney, rowNumbers, skipHeld, statusOf,
   undoHeld,
 } from './termsModel'
+import { ProductCell } from '../../_shared/ProductCell'
 import styles from './terms.module.css'
 
 /** What the cells ask the view. */
@@ -49,7 +50,6 @@ type Cell = ICellRendererParams<HarvestCandidateRow> & { context?: TermsCellCont
 
 const WorkspaceLink = Link as unknown as EntityLinkComponent
 const CAMPAIGN_NOUN = { one: 'campaign', many: 'campaigns' }
-const PRODUCT_NOUN = { one: 'product', many: 'products' }
 const AD_GROUP_NOUN = { one: 'ad group', many: 'ad groups' }
 
 /** The term, and under it the match it came from and its main source campaign (+N when it ran in more). */
@@ -73,9 +73,8 @@ export const TermCell = memo(function TermCell({ data }: Cell) {
   )
 })
 
-const ProductCell = memo(function ProductCell({ data }: Cell) {
-  if (!data) return null
-  return <span className={styles.fill} onClickCapture={keepFromGrid}><EntityLinks items={[data.product]} noun={PRODUCT_NOUN} linkAs={WorkspaceLink} /></span>
+const ProductRenderer = memo(function ProductRenderer({ data }: Cell) {
+  return data ? <ProductCell product={data.product} /> : null
 })
 
 /** Where it goes: the place (links), or the new campaign the harvest would make (its name on hover). */
@@ -268,7 +267,7 @@ export function termColumns(phone: boolean, ctx: Ctx): ColDef<HarvestCandidateRo
   const cols: ColDef<HarvestCandidateRow>[] = [
     term,
     {
-      colId: 'product', headerName: LABEL.product, width: 130, cellClass: 'nds-ag-cell', cellRenderer: ProductCell,
+      colId: 'product', headerName: LABEL.product, width: 130, cellClass: 'nds-ag-cell', cellRenderer: ProductRenderer,
       valueGetter: (p) => p.data?.product.name ?? '',
       suppressKeyboardEvent: entityLinksKeys as ColDef<HarvestCandidateRow>['suppressKeyboardEvent'], headerTooltip: 'Enter: the product',
     },

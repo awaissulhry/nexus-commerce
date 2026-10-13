@@ -204,8 +204,8 @@ export function TermDrawer({
                   columns={[
                     { key: 'asin', label: 'ASIN', render: (a) => <span className="mono">{a.asin}</span> },
                     { key: 'product', label: 'Product', render: (a) => (a.name ? <span title={a.name}>{a.sku ? `${a.sku} — ` : ''}{a.name}</span> : <span className="h10-kt-nd">not in the PIM</span>) },
-                    { key: 'share', label: 'Share', align: 'right', render: (a) => <b>{pct(a.share)}</b> },
-                    { key: 'clickshare', label: 'Click share', align: 'right', render: (a) => (a.clickShare != null ? <>{pct(a.clickShare)}</> : <span className="h10-kt-nd">—</span>) },
+                    { key: 'share', label: 'Share', numeric: true, render: (a) => <b>{pct(a.share)}</b> },
+                    { key: 'clickshare', label: 'Click share', numeric: true, render: (a) => (a.clickShare != null ? <>{pct(a.clickShare)}</> : <span className="h10-kt-nd">—</span>) },
                     { key: 'onterm', label: 'On this term', render: (a) => (a.advertisedOnTerm
                       ? <span className="h10-kt-drok">advertised</span>
                       : <span className="h10-kt-drno" title="This ASIN holds the query organically or via another campaign, but it is not in any ad group bidding this term.">not advertised on it</span>) },

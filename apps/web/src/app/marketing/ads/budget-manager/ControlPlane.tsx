@@ -19,6 +19,7 @@ import { Modal } from '@/design-system/components'
 import { AllocationCanvas, type StagedChange, type OntoNode, type SelectRef } from './AllocationCanvas'
 import { getBackendUrl } from '@/lib/backend-url'
 import { readDailyBudget, readTargetAcosPercent } from '../_shared/budgetInput'
+import { FLAG, MARKET_NAME } from '../_shell/adsMarkets'
 import './control-plane.css'
 import { askSendAnyway, type OwnLimitLine } from '../_shared/sendAnyway'
 
@@ -30,8 +31,6 @@ type AnyNode = (EnfCampaign & { kindType: 'campaign' }) | (OntoNode & { kindType
 
 const API = () => getBackendUrl()
 const eur = (c: number | null | undefined) => (c == null ? '—' : `€${(c / 100).toLocaleString('en-IE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
-const FLAG: Record<string, string> = { IT: '🇮🇹', DE: '🇩🇪', FR: '🇫🇷', ES: '🇪🇸', GB: '🇬🇧', UK: '🇬🇧', NL: '🇳🇱', SE: '🇸🇪', PL: '🇵🇱', BE: '🇧🇪', IE: '🇮🇪' }
-const MARKET_NAME: Record<string, string> = { IT: 'Italy', DE: 'Germany', FR: 'France', ES: 'Spain', GB: 'United Kingdom', UK: 'United Kingdom', NL: 'Netherlands', SE: 'Sweden', PL: 'Poland', BE: 'Belgium', IE: 'Ireland' }
 const mkt = (m: string) => MARKET_NAME[m] ?? m
 const parseEur = (s: string) => Math.max(0, Math.round((parseFloat(s.replace(',', '.')) || 0) * 100))
 const fetchChildren = (parentType: string, parentId: string): Promise<OntoNode[]> => fetch(`${API()}/api/advertising/ontology/children?parentType=${parentType}&parentId=${encodeURIComponent(parentId)}`).then((r) => r.json()).then((j) => (Array.isArray(j?.children) ? j.children : [])).catch(() => [])
@@ -439,7 +438,7 @@ export function ControlPlane({ open, onClose, enforcement, month, initialMarket,
               <div className={`cp-main ${flash ? 'flash' : ''}`}>
                 <div className="cp-tabs">
                   {enforcement.plans.map((p) => (
-                    <FilterChip key={p.marketplace} className="cp-tab" pressed={market === p.marketplace} onClick={() => { setMarket(p.marketplace); setSel(null); setMulti([]); setFocusCampaign(null); setFocusAdGroup(null); setAdGroups(null); setTargets(null); try { localStorage.setItem('cp.lastMarket', p.marketplace) } catch { /* */ } }}>{FLAG[p.marketplace] ?? '🌐'} {mkt(p.marketplace)}{stagedInMarket(p) > 0 ? <em className="dot"> ●</em> : null}</FilterChip>
+                    <FilterChip key={p.marketplace} className="cp-tab" pressed={market === p.marketplace} onClick={() => { setMarket(p.marketplace); setSel(null); setMulti([]); setFocusCampaign(null); setFocusAdGroup(null); setAdGroups(null); setTargets(null); try { localStorage.setItem('cp.lastMarket', p.marketplace) } catch { /* */ } }}>{FLAG[p.marketplace] ? `${FLAG[p.marketplace]} ` : ''}{mkt(p.marketplace)}{stagedInMarket(p) > 0 ? <em className="dot"> ●</em> : null}</FilterChip>
                   ))}
                   <span className="grow" />
                   <span className="cp-hint">Click a node to inspect · ⌘-click to multi-select · campaigns &amp; ad groups drill in</span>

@@ -422,7 +422,7 @@ export function CellSaveReason({ reason }: { reason?: string }) {
  * `columnRequiredByAny`) and this decides HOW it looks.
  */
 export function RequiredValue() {
-  return <span className="nds-cell-required" role="img" aria-label="Required">⚠ required</span>
+  return <span className="nds-cell-required" role="img" aria-label="Required"><WarnGlyph /> required</span>
 }
 
 export const LongTextCell = memo(function LongTextCell(p: ICellRendererParams & LongTextCaps) {

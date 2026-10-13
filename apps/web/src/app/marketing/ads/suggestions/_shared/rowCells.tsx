@@ -8,7 +8,7 @@
 
 import type { ReactNode } from 'react'
 import Link from '@/lib/workspaces/Link'
-import { ChevronRight, ExternalLink, RotateCcw } from 'lucide-react'
+import { ChevronRight, Diamond, ExternalLink, RotateCcw } from 'lucide-react'
 import { ToolbarButton } from '@/design-system/primitives'
 import { Tag, type TagTone } from '@/design-system/primitives/Tag'
 import { HoverCard } from '../../campaigns/FilterDropdown'
@@ -178,7 +178,7 @@ export function ImpactCell({ s }: { s: Suggestion }) {
 }
 
 /**
- * The € at stake, and the ♦ that separates recovery from a trade.
+ * The € at stake, and the diamond that separates recovery from a trade.
  * A row with no price is NOT shown as €0 — a confident zero would sort real decisions below it.
  */
 export function StakeCell({ p }: { p: Priced | undefined }) {
@@ -198,7 +198,7 @@ export function StakeCell({ p }: { p: Priced | undefined }) {
             : `${eur(p.spendAtStakeCents)} of trailing spend this would redirect. It produced ${eur(p.salesAtStakeCents ?? 0)} of sales, so cutting it is a trade, not a saving.`
       }
     >
-      {p.recoverable && <span className="dia" aria-label="pure waste">♦</span>}
+      {p.recoverable && <Diamond size={10} fill="currentColor" strokeWidth={2} className="dia" role="img" aria-label="Pure waste" />}
       {p.direction === 'increase' ? '+' : ''}{eur(p.spendAtStakeCents)}
     </span>
   )
