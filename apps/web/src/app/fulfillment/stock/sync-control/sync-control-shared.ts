@@ -5,7 +5,7 @@
  */
 import type { Tone } from '@/design-system/primitives'
 import type { SegmentedOption } from '@/design-system/primitives'
-import type { DataGridSize } from '@/design-system/grid/datagrid'
+import type { DataGridProps } from '@/design-system/grid/datagrid'
 
 export type Mode = 'FOLLOW' | 'PINNED' | 'PAUSED' | 'PAUSED_POLICY' | 'UNCOUNTED' | 'FBA' | 'EXCLUDED' | 'CLOSED'
 
@@ -332,7 +332,7 @@ export const DENSITY_OPTIONS: SegmentedOption[] = [
 export type Density = 'compact' | 'cozy' | 'spacious'
 
 /** The page's density as the DataGrid's row size: the DS compact / cozy / spacious rows (28 / 43 / 49 px). */
-export const DENSITY_SIZE: Record<Density, DataGridSize> = { compact: 'xs', cozy: 'md', spacious: 'lg' }
+export const DENSITY_SIZE: Record<Density, NonNullable<DataGridProps<unknown>['size']>> = { compact: 'xs', cozy: 'md', spacious: 'lg' }
 
 /** Bridge the page's density vocabulary to grid-lens DensityContext. */
 export function mapDensity(d: Density): 'compact' | 'comfortable' | 'spacious' {
