@@ -19,5 +19,6 @@
   "order-stock-restore.sql": "20260926v_cx_pool_lender_release",
   "ebay-erasure-review.sql": "20260926t_cx_ebay_erasure_review",
   "identity-foreign.sql": "20261001q_identity_foreign_ids",
-  "channel-item-claim.sql": "20261002j_identity_item_claim"
+  "channel-item-claim.sql": "20261002j_identity_item_claim",
+  "google-links-taken.sql": "20261013d_google_links_taken"
 }

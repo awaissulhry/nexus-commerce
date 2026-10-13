@@ -21,6 +21,18 @@ export { GOOGLE_KEY } from '@/lib/google-ads/contract'
 /** The Listbox value of "None" (Merchant Center, Analytics) and of "None — direct access" (manager). */
 export const NONE = ''
 
+/**
+ * What a Google account another business in Nexus already picked says in the list (C2 `takenByAnotherBusiness`). One
+ * business per account: the option is HELD (shown, reachable, never chosen) and never names that business.
+ */
+export const TAKEN_ELSEWHERE = 'Chosen in another business in Nexus'
+
+/** Whether another business in Nexus already picked this account. Absent (an older server) = not known: not held. */
+const takenElsewhere = (c: { takenByAnotherBusiness?: boolean } | null | undefined) => c?.takenByAnotherBusiness === true
+
+/** A held option's reason, shown under its label as well (the DS reads a note equal to the reason once). */
+const held = (taken: boolean) => (taken ? { heldReason: TAKEN_ELSEWHERE, note: TAKEN_ELSEWHERE } : {})
+
 /** "1234567890" → "123-456-7890", the way Google Ads prints a customer id. Anything else is returned as it came. */
 export function formatCustomerId(id: string): string {
   const digits = id.replace(/\D/g, '')
@@ -47,10 +59,16 @@ export function readableCustomers(choices: GoogleChoices | null): GoogleAdsCusto
   return customers.filter((c) => !managerIds.has(c.customerId))
 }
 
+/** The Google Ads accounts this business may choose: offered, not a manager, not picked by another business. */
+export function choosableCustomers(choices: GoogleChoices | null): GoogleAdsCustomerChoice[] {
+  return readableCustomers(choices).filter((c) => !takenElsewhere(c))
+}
+
 /**
  * The Google Ads account options. Each account appears once: under "Your accounts" when this sign-in reaches it
  * directly, else under "Through manager <name>". A test account says so. The customer id rides along at the end of
- * the row — it is how Google Ads itself tells two accounts apart — and is searchable, but it is never the name.
+ * the row — it is how Google Ads itself tells two accounts apart — and is searchable, but it is never the name. An
+ * account another business in Nexus already picked is held, and says so instead of its currency and time zone.
  */
 export function adsAccountOptions(choices: GoogleChoices | null): ListboxPanelOption[] {
   return readableCustomers(choices)
@@ -61,6 +79,7 @@ export function adsAccountOptions(choices: GoogleChoices | null): ListboxPanelOp
       trailing: formatCustomerId(c.customerId),
       searchText: [c.customerId, formatCustomerId(c.customerId), c.currency?.trim()].filter(Boolean).join(' '),
       note: currencyAndTimeZone(c),
+      ...held(takenElsewhere(c)),
     }))
     .sort((a, b) => (a.group === b.group ? a.label.localeCompare(b.label) : a.group === 'Your accounts' ? -1 : b.group === 'Your accounts' ? 1 : a.group.localeCompare(b.group)))
 }
@@ -93,7 +112,9 @@ export function reconcileManager(customer: GoogleAdsCustomerChoice | null | unde
 export function merchantOptions(choices: GoogleChoices | null): ListboxPanelOption[] {
   return [
     { value: NONE, label: 'None' },
-    ...(choices?.merchantCenter.accounts ?? []).map((a) => ({ value: a.id, label: a.name?.trim() || 'Unnamed Merchant Center account', trailing: a.id, searchText: a.id })),
+    ...(choices?.merchantCenter.accounts ?? []).map((a) => ({
+      value: a.id, label: a.name?.trim() || 'Unnamed Merchant Center account', trailing: a.id, searchText: a.id, ...held(takenElsewhere(a)),
+    })),
   ]
 }
 
@@ -105,9 +126,13 @@ export function analyticsOptions(choices: GoogleChoices | null): ListboxPanelOpt
       label: p.name?.trim() || 'Unnamed Google Analytics property',
       group: p.accountName?.trim() || 'Google Analytics',
       searchText: p.propertyId,
+      ...held(takenElsewhere(p)),
     })),
   ]
 }
+
+/** A Merchant Center or Analytics pick this business may keep: None, or an option that is offered and not held. */
+const keepable = (options: ListboxPanelOption[], value: string) => value === NONE || options.some((o) => o.value === value && !o.heldReason)
 
 export interface SelectionDraft {
   ads: string
@@ -116,30 +141,39 @@ export interface SelectionDraft {
   analytics: string
 }
 
-/** What the dialog opens on: the saved choice, kept only where this sign-in still offers it. */
+/**
+ * What the dialog opens on: the saved choice, kept only where this sign-in still offers it and no other business has
+ * picked it. The only Google Ads account is preselected only when no other business has picked it.
+ */
 export function initialDraft(current: GoogleAccount | null | undefined, choices: GoogleChoices | null): SelectionDraft {
-  const customers = readableCustomers(choices)
-  const ads = current?.ads && customers.some((c) => c.customerId === current.ads!.customerId) ? current.ads.customerId : customers.length === 1 ? customers[0]!.customerId : NONE
-  const customer = customers.find((c) => c.customerId === ads)
+  const readable = readableCustomers(choices)
+  const choosable = choosableCustomers(choices)
+  const ads = current?.ads && choosable.some((c) => c.customerId === current.ads!.customerId)
+    ? current.ads.customerId
+    : readable.length === 1 && choosable.length === 1 ? choosable[0]!.customerId : NONE
+  const customer = choosable.find((c) => c.customerId === ads)
   const savedManager = current?.manager?.customerId ?? (current?.ads ? NONE : defaultManager(customer))
   const merchant = current?.merchantCenter?.id ?? NONE
   const property = current?.analytics?.propertyId ?? NONE
   return {
     ads,
     manager: reconcileManager(customer, savedManager),
-    merchantCenter: merchantOptions(choices).some((o) => o.value === merchant) ? merchant : NONE,
-    analytics: analyticsOptions(choices).some((o) => o.value === property) ? property : NONE,
+    merchantCenter: keepable(merchantOptions(choices), merchant) ? merchant : NONE,
+    analytics: keepable(analyticsOptions(choices), property) ? property : NONE,
   }
 }
 
-/** After the lists are read again (Try again, or a refused save): keep each pick that is still offered. */
+/**
+ * After the lists are read again (Try again, or a refused save): keep each pick that is still offered and that no other
+ * business has picked in the meantime.
+ */
 export function reconcileDraft(draft: SelectionDraft, choices: GoogleChoices | null): SelectionDraft {
-  const customer = readableCustomers(choices).find((c) => c.customerId === draft.ads)
+  const customer = choosableCustomers(choices).find((c) => c.customerId === draft.ads)
   return {
     ads: customer ? draft.ads : NONE,
     manager: reconcileManager(customer, draft.manager),
-    merchantCenter: merchantOptions(choices).some((o) => o.value === draft.merchantCenter) ? draft.merchantCenter : NONE,
-    analytics: analyticsOptions(choices).some((o) => o.value === draft.analytics) ? draft.analytics : NONE,
+    merchantCenter: keepable(merchantOptions(choices), draft.merchantCenter) ? draft.merchantCenter : NONE,
+    analytics: keepable(analyticsOptions(choices), draft.analytics) ? draft.analytics : NONE,
   }
 }
 
@@ -149,8 +183,36 @@ export function chooseAds(draft: SelectionDraft, ads: string, choices: GoogleCho
   return { ...draft, ads, manager: defaultManager(customer) }
 }
 
+/** Saved only with an offered Google Ads account, and nothing another business in Nexus already picked. */
 export function canSave(draft: SelectionDraft, choices: GoogleChoices | null): boolean {
-  return draft.ads !== NONE && readableCustomers(choices).some((c) => c.customerId === draft.ads)
+  return draft.ads !== NONE && choosableCustomers(choices).some((c) => c.customerId === draft.ads)
+    && keepable(merchantOptions(choices), draft.merchantCenter) && keepable(analyticsOptions(choices), draft.analytics)
+}
+
+/**
+ * Why Save is held, in plain words; null when it may be pressed. When every Google Ads account here is picked by another
+ * business already, choosing is not enough, and the reason says so. Never names that business.
+ */
+export function saveHeldReason(draft: SelectionDraft | null, choices: GoogleChoices | null): string | null {
+  if (draft && canSave(draft, choices)) return null
+  const readable = readableCustomers(choices)
+  if (readable.length > 0 && choosableCustomers(choices).length === 0) {
+    return readable.length === 1
+      ? 'The only Google Ads account here is chosen in another business in Nexus. An account can belong to one business only.'
+      : 'Every Google Ads account here is chosen in another business in Nexus. An account can belong to one business only.'
+  }
+  if (!draft || draft.ads === NONE) return 'Choose the Google Ads account Nexus reads first.'
+  const heldPick = (options: ListboxPanelOption[], value: string) => value !== NONE && options.some((o) => o.value === value && o.heldReason)
+  if (readable.some((c) => c.customerId === draft.ads && takenElsewhere(c))) {
+    return 'This Google Ads account is chosen in another business in Nexus. Choose another one.'
+  }
+  if (heldPick(merchantOptions(choices), draft.merchantCenter)) {
+    return 'This Merchant Center account is chosen in another business in Nexus. Choose another one, or None.'
+  }
+  if (heldPick(analyticsOptions(choices), draft.analytics)) {
+    return 'This Google Analytics property is chosen in another business in Nexus. Choose another one, or None.'
+  }
+  return 'This Google sign-in can no longer see one of the chosen accounts. Choose again.'
 }
 
 /** The C3 body. "None" travels as null. */

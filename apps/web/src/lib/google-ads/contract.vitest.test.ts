@@ -50,6 +50,19 @@ describe('connection calls (C1–C3)', () => {
     expect(f.mock.calls[0]![0]).toBe('http://localhost:8091/api/google-ads/connections/conn%2F1/choices')
   })
 
+  it('C2 carries, per account, whether another business in Nexus already picked it (and nothing about which)', async () => {
+    const body = {
+      missingProducts: [],
+      ads: { customers: [{ customerId: '1112223333', name: 'Shop One', currency: 'EUR', timeZone: 'Europe/Rome', isTest: false, direct: true, managers: [], takenByAnotherBusiness: true }], error: null },
+      merchantCenter: { accounts: [{ id: '5550001', name: 'Feed A', takenByAnotherBusiness: false }], error: null },
+      analytics: { properties: [{ propertyId: '321', name: 'Web shop', accountName: 'Analytics account', takenByAnotherBusiness: true }], error: null },
+    }
+    const answer = await fetchGoogleChoices('c1', reply(body))
+    expect(answer.ads.customers[0]!.takenByAnotherBusiness).toBe(true)
+    expect(answer.merchantCenter.accounts[0]!.takenByAnotherBusiness).toBe(false)
+    expect(answer.analytics.properties[0]!.takenByAnotherBusiness).toBe(true)
+  })
+
   it('C3 PUTs the selection body and returns the saved account', async () => {
     const account = { connectionId: 'c1' }
     const f = reply({ account })
@@ -161,6 +174,14 @@ describe('step 1b reads (R5–R15): GET only, the window and the filters as quer
     const f = reply({})
     await fetchGoogleNegatives({ campaignId: 'cmp_1', level: 'list' }, f)
     expect(f.mock.calls[0]![0]).toBe(`${base}/negatives?campaignId=cmp_1&level=list`)
+  })
+
+  it('R7 reads each list\'s kind and whether it is in force as sent: true, false, or null (not read)', async () => {
+    const list = (listId: string, accountLevel: boolean | null, appliesToAccount: boolean | null) =>
+      ({ listId, externalListId: listId, name: `Test ${listId}`, status: 'ENABLED', memberCount: 1, accountLevel, appliesToAccount, campaigns: [], seenAt: '2026-10-12T06:30:00Z' })
+    const f = reply({ read: {}, items: [], lists: [list('l1', true, true), list('l2', true, false), list('l3', null, null)], nextCursor: null, total: 0 })
+    const page = await fetchGoogleNegatives({ campaignId: 'cmp_1' }, f)
+    expect(page.lists.map((l) => [l.accountLevel, l.appliesToAccount])).toEqual([[true, true], [true, false], [null, null]])
   })
 
   it('R8 search terms and R9 the brand split', async () => {

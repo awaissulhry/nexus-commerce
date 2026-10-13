@@ -5,8 +5,9 @@
  * request is one operation (its later pages are free); `customers:listAccessibleCustomers` is counted as one too.
  * Nexus keeps itself under two caps over a ROLLING 24 hours:
  *
- *   global       NEXUS_GOOGLE_ADS_DAILY_OPS (default 2,400), for every account and the connect flow together
- *   per account  100 (a daily read is 21 with step 1b, an account's first read 26; a manual read at most once an hour.
+ *   global       NEXUS_GOOGLE_ADS_DAILY_OPS (default 2,400), for every account and the connect flow together — about
+ *                109 accounts read once a day at 22 operations each
+ *   per account  100 (a daily read is 22 with step 1b, an account's first read 27; a manual read at most once an hour.
  *                When it runs short, a read drops its slower parts first: sync-plan.ts)
  *
  * A run reserves what it may spend BEFORE its first call; a refused reservation means zero calls. The counts live in
@@ -29,7 +30,11 @@ const BUCKET_TTL_SEC = 25 * 3600
 const HOURS = 24
 const OP_TIMEOUT_MS = 3000
 
-/** The Redis commands this file uses (ioredis-compatible). */
+/**
+ * The Redis commands the Google Ads read uses (ioredis-compatible): this file's counters, and the read's lock and its
+ * memory of refused queries (read-guard.ts), which share this connection and its test seam. `eval` (the lock's
+ * compare-and-delete) is optional: without it the lock simply runs out.
+ */
 export interface OpsRedis {
   status?: string
   incrby(key: string, increment: number): Promise<number>
@@ -38,6 +43,9 @@ export interface OpsRedis {
   mget(...keys: string[]): Promise<Array<string | null>>
   get(key: string): Promise<string | null>
   set(key: string, value: string, mode: 'PX', ms: number): Promise<unknown>
+  /** SET … PX … NX: 'OK' when set, null when the key was there. */
+  set(key: string, value: string, mode: 'PX', ms: number, nx: 'NX'): Promise<unknown>
+  eval?(script: string, numberOfKeys: number, ...args: Array<string | number>): Promise<unknown>
 }
 
 let override: OpsRedis | null | undefined
@@ -47,15 +55,17 @@ export function setOpsBudgetRedisForTests(client: OpsRedis | null | undefined): 
   override = client
 }
 
-async function client(): Promise<OpsRedis | null> {
+/** The app's Redis for the Google Ads read (null when none is configured). Shared with read-guard.ts. */
+export async function googleAdsRedis(): Promise<OpsRedis | null> {
   if (override !== undefined) return override
   if (!process.env.REDIS_URL?.trim() && !process.env.REDIS_HOST?.trim()) return null
   const { redis } = await import('../../../lib/queue.js')
   return redis.connection as unknown as OpsRedis
 }
+const client = googleAdsRedis
 
 /** ioredis queues commands while it reconnects: a Redis that does not answer in 3 s counts as down. */
-function timed<T>(work: Promise<T>): Promise<T> {
+export function timed<T>(work: Promise<T>): Promise<T> {
   work.catch(() => {})
   const timeout = new Promise<never>((_, reject) => { setTimeout(() => reject(new Error('Redis did not answer in time')), OP_TIMEOUT_MS).unref?.() })
   return Promise.race<T>([work, timeout])

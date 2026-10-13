@@ -5,7 +5,8 @@
  *
  *   GET /api/google-ads/connections                       C1  { items: GoogleAccount[] }
  *   GET /api/google-ads/connections/:id/choices[?refresh=1]  C2  what the sign-in can see (Google asked at most once per
- *                                                         5 minutes; refresh=1 asks again now)
+ *                                                         5 minutes; refresh=1 asks again now); each account says
+ *                                                         `takenByAnotherBusiness` (read fresh, naming no business)
  *   PUT /api/google-ads/connections/:id/selection         C3  { account } | 409 { code: 'not_offered' | 'customer_taken', error }
  *                                                         | 409 { code: 'taken_by_other_business', product, error }
  */
@@ -42,7 +43,7 @@ export default async function googleAccountsRoutes(app: FastifyInstance) {
   app.get<{ Params: { id: string }; Querystring: { refresh?: string } }>('/google-ads/connections/:id/choices', async (request, reply) => {
     try {
       const force = request.query?.refresh === '1' || request.query?.refresh === 'true'
-      return reply.send(choicesAnswer(await getChoices(request.params.id, { force })))
+      return reply.send(await choicesAnswer(await getChoices(request.params.id, { force })))
     } catch (err) {
       return fail(reply, err, 'list what this Google sign-in can see')
     }

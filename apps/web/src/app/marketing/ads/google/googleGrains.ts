@@ -88,6 +88,20 @@ export function campaignTabOf(tab: string | null | undefined, tabs: readonly Cam
   return isCampaignTab(tab) && tabs.includes(tab) ? tab : 'overview'
 }
 
+/** An address that names a campaign the server does not find in this business (a 404). */
+export const CAMPAIGN_NOT_HERE = 'This campaign is not in this business’s Google Ads account.'
+
+/**
+ * What the campaign window shows before it has the campaign: it is reading; the server does not find the campaign in
+ * this business (404: a notice and Close, no Try again — reading again cannot help); or the read failed, or answered
+ * without the campaign (a sentence and Try again).
+ */
+export function campaignWindowBody(input: { hasCampaign: boolean; loading: boolean; status: number | null }): 'campaign' | 'loading' | 'not_here' | 'error' {
+  if (input.hasCampaign) return 'campaign'
+  if (input.loading) return 'loading'
+  return input.status === 404 ? 'not_here' : 'error'
+}
+
 // ─── Read state: not read yet, empty, gaps ──────────────────────────────
 
 export interface Noun { one: string; many: string }
@@ -122,6 +136,15 @@ export function lastTryText(read: Pick<GoogleRead, 'lastStatus' | 'lastError'> |
   return null
 }
 
+/**
+ * What a good read did other than planned, in Nexus's words, or null — e.g. a first read Google answered with too many
+ * rows, so Nexus read fewer days ("…so Nexus read the last 45 days instead. Older days are not read."). The server
+ * keeps it in `lastError` of a SUCCESS read; it is information, never an error.
+ */
+export function readNoteText(read: Pick<GoogleRead, 'lastStatus' | 'lastError'> | null | undefined): string | null {
+  return read?.lastStatus === 'SUCCESS' && read.lastError?.trim() ? read.lastError.trim() : null
+}
+
 /** "Not read yet. Nexus has not read this campaign's keywords from Google yet. It reads them in the next daily read (next: …)." */
 export function notReadText(noun: Noun, scope: GrainScope, read: Pick<GoogleRead, 'lastStatus' | 'lastError'> | null | undefined, nextReadAt: string | null, timeZone?: string): string {
   const next = formatMoment(nextReadAt, timeZone)
@@ -142,7 +165,10 @@ export interface GrainView {
   kind: GrainKind
   /** The words for `not_read` / `empty`; null for `ok`. */
   text: string | null
-  /** Above the grid, in order: a failed last read, numbers not read, days not read, a list cut at its cap. */
+  /**
+   * Above the grid, in order: a failed last read, a good read's note (it read fewer days), numbers not read or their
+   * read's note, days not read, a list cut at its cap.
+   */
   notes: GrainNote[]
 }
 
@@ -168,7 +194,11 @@ export function grainView(input: {
   const notes: GrainNote[] = []
   const failed = lastTryText(read)
   if (failed) notes.push({ tone: 'warning', text: `${failed} This shows the read of ${formatMoment(read!.readAt, timeZone) ?? DASH}.` })
+  const note = readNoteText(read)
+  if (note) notes.push({ tone: 'info', text: note })
   if (count === 0) return { kind: 'empty', text: emptyText(noun, scope, windowed), notes }
+  const numbersNote = numbersRead ? readNoteText(numbersRead) : null
+  if (numbersNote && numbersNote !== note) notes.push({ tone: 'info', text: numbersNote })
   if (numbersRead !== undefined && notReadYet(numbersRead)) {
     notes.push({ tone: 'info', text: `Nexus has not read the numbers of these ${noun.many} yet. They show as — until it does.` })
   } else if (windowed && coverage) {
@@ -319,14 +349,17 @@ export const BRAND_FILTER_OPTIONS = [
   { value: 'non_brand', label: 'Not brand' },
 ]
 
-/** What counts as a brand search, in words; the words as the business keeps them, quoted. */
+/**
+ * What counts as a brand search, in words; the words as the business keeps them, quoted. One name on the search terms
+ * tab: "brand words (your protected terms)" here, the tab's first sentence about them, then "brand words".
+ */
 export function brandRuleText(terms: readonly string[], max = 8): string {
   const shown = terms.map((t) => t.trim()).filter(Boolean)
-  if (!shown.length) return 'Nexus does not know your brand names yet, so it cannot split brand searches from the rest.'
+  if (!shown.length) return 'Nexus does not know the brand words (your protected terms) yet, so it cannot split brand searches from the rest.'
   const listed = shown.slice(0, max).map((t) => `“${t}”`).join(', ')
   const more = shown.length - Math.min(shown.length, max)
   // "matches", not "contains": Nexus matches each protected term by its own match type (exact, starts with, contains).
-  return `A search counts as brand when it matches one of your protected terms: ${listed}${more > 0 ? ` and ${more} more` : ''}.`
+  return `A search counts as brand when it matches one of the brand words (your protected terms): ${listed}${more > 0 ? ` and ${more} more` : ''}.`
 }
 
 export const SEARCH_TERM_SCOPE_TEXT = 'Only searches that got at least one click. Google leaves out searches that few people made.'
@@ -343,11 +376,52 @@ export function negativeMatchLabel(n: Pick<GoogleNegative, 'kind' | 'matchType'>
   return n.kind === 'brand_list' ? 'Brand list' : matchTypeLabel(n.matchType)
 }
 
-/** Where the negative is set: on an ad group, on the campaign, or in a list attached to it. */
-export function negativeLevelText(n: Pick<GoogleNegative, 'level' | 'adGroupName' | 'listName'>): string {
+/**
+ * Where a negative keyword list applies: the whole account (Google applies it: a customer_negative_criterion points at
+ * it), an account-level list not in use (read: none points at it), an account-level list not read yet, or the campaigns
+ * it is attached to.
+ */
+export type ListScope = 'whole_account' | 'account_not_in_use' | 'account_not_read' | 'campaigns'
+
+export function listScope(l: Pick<GoogleNegativeList, 'accountLevel' | 'appliesToAccount'>): ListScope {
+  if (l.appliesToAccount === true) return 'whole_account'
+  if (l.accountLevel !== true) return 'campaigns'
+  return l.appliesToAccount === false ? 'account_not_in_use' : 'account_not_read'
+}
+
+/** Each list's scope by its id. */
+export function listScopes(lists: readonly Pick<GoogleNegativeList, 'listId' | 'accountLevel' | 'appliesToAccount'>[]): ReadonlyMap<string, ListScope> {
+  return new Map(lists.map((l) => [l.listId, listScope(l)]))
+}
+
+const NO_SCOPES: ReadonlyMap<string, ListScope> = new Map()
+
+const LIST_LEVEL: Readonly<Record<ListScope, string>> = {
+  whole_account: 'Whole account',
+  account_not_in_use: 'Account-level list, not in use',
+  account_not_read: 'Account-level list',
+  campaigns: 'List',
+}
+
+/** Where the negative is set: on an ad group, on the campaign, in a list attached to it, or in the account-level list. */
+export function negativeLevelText(n: Pick<GoogleNegative, 'level' | 'adGroupName' | 'listId' | 'listName'>, scopes: ReadonlyMap<string, ListScope> = NO_SCOPES): string {
   if (n.level === 'ad_group') return `Ad group: ${n.adGroupName?.trim() || DASH}`
-  if (n.level === 'list') return `List: ${n.listName?.trim() || DASH}`
+  if (n.level === 'list') return `${LIST_LEVEL[(n.listId && scopes.get(n.listId)) || 'campaigns']}: ${n.listName?.trim() || DASH}`
   return 'Campaign'
+}
+
+/**
+ * Under the lists, one plain fact per account-level state shown. (A list a manager account attaches to this account
+ * lives in the manager account: Nexus cannot read it from this account, so it is never in these lists.)
+ */
+export function accountListNote(lists: readonly Pick<GoogleNegativeList, 'accountLevel' | 'appliesToAccount' | 'status'>[]): string | null {
+  const shown = new Set(lists.filter((l) => l.status?.toUpperCase() !== 'REMOVED').map(listScope))
+  const facts = [
+    shown.has('whole_account') && 'Whole account: Google applies this list to every campaign that shows on Google Search or Shopping.',
+    shown.has('account_not_in_use') && 'Not in use: Google does not apply this account-level list, so it blocks nothing.',
+    shown.has('account_not_read') && 'Nexus has not read yet whether the account-level list is in use.',
+  ].filter((fact): fact is string => !!fact)
+  return facts.length ? facts.join(' ') : null
 }
 
 export const NEGATIVE_LEVEL_OPTIONS = [
@@ -386,14 +460,28 @@ export function negativesMissingText(missing: readonly string[]): string | null 
 
 export const NEGATIVE_LIST_COLUMNS = ['List', 'Negative keywords', 'Used by'] as const
 
-/** The negative keyword lists attached to the campaign (a removed list blocks nothing), by name. */
+const USED_BY: Readonly<Record<ListScope, (campaigns: number) => string>> = {
+  whole_account: () => 'Whole account',
+  account_not_in_use: () => 'Not in use',
+  account_not_read: () => 'Account-level list',
+  campaigns: (n) => `${formatInt(n)} ${n === 1 ? 'campaign' : 'campaigns'}`,
+}
+
+/**
+ * The negative keyword lists of the campaign — those attached to it and the account-level list (a removed list blocks
+ * nothing), by name. "Used by" counts a list's campaigns; the account-level list has none: it says whether it is in force.
+ */
 export function negativeListRows(lists: readonly GoogleNegativeList[]): Array<{ id: string; cells: [name: string, keywords: string, usedBy: string] }> {
   return lists
     .filter((l) => l.status?.toUpperCase() !== 'REMOVED')
     .sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }))
     .map((l) => ({
       id: l.listId,
-      cells: [l.name, formatInt(l.memberCount), `${formatInt(l.campaigns.length)} ${l.campaigns.length === 1 ? 'campaign' : 'campaigns'}`],
+      cells: [
+        l.name,
+        formatInt(l.memberCount),
+        USED_BY[listScope(l)](l.campaigns.length),
+      ],
     }))
 }
 

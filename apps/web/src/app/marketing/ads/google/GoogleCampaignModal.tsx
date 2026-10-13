@@ -12,10 +12,12 @@
  *   …        ad groups, keywords, asset groups, products, negatives, search terms, Google acts on its own
  *   Changes  Google's change history for it (R4): when, where it was made, what changed — never who by e-mail
  *
+ * An address with a campaign the server does not find in this business (404) says so, with Close and no Try again.
+ *
  * A row of the Ad groups tab opens Keywords filtered to that ad group. Read only: no control here changes Google Ads.
  */
 import { useCallback, useMemo, useState } from 'react'
-import { Banner, KeyValue, PerformanceGraph, SummaryTable, type KeyValueItem, type TabItem } from '@/design-system/components'
+import { Banner, EmptyState, KeyValue, PerformanceGraph, SummaryTable, type KeyValueItem, type TabItem } from '@/design-system/components'
 import { DetailModal } from '@/design-system/patterns'
 import { Button, Pill, Skeleton } from '@/design-system/primitives'
 import { chart } from '@/design-system/tokens'
@@ -57,7 +59,7 @@ import {
   settingsReadText,
   toMinor,
 } from './googleAds'
-import { CAMPAIGN_TAB_LABEL, campaignTabOf, campaignTabs, type CampaignTab } from './googleGrains'
+import { CAMPAIGN_NOT_HERE, CAMPAIGN_TAB_LABEL, campaignTabOf, campaignTabs, campaignWindowBody, type CampaignTab } from './googleGrains'
 import { googleReadKey, useGoogleRead, type GoogleReadState } from './useGoogleRead'
 import './googleModal.css'
 
@@ -135,6 +137,7 @@ function CampaignWindow({ id, detail, campaign, account, window: range, currency
   ) : undefined
 
   const grain = { account, window: range, currency: ccy, nextReadAt }
+  const body = campaignWindowBody({ hasCampaign: !!c, loading: days.loading, status: days.status })
 
   return (
     <DetailModal
@@ -147,10 +150,11 @@ function CampaignWindow({ id, detail, campaign, account, window: range, currency
       activeTab={active}
       onTabChange={showTab}
       tabsLabel="Campaign"
-      loading={!c && days.loading}
-      error={!c && !days.loading && days.error ? days.error : undefined}
+      loading={body === 'loading'}
+      error={body === 'error' ? days.error ?? 'Nexus answered without this campaign.' : undefined}
       onRetry={days.reload}
     >
+      {body === 'not_here' && <EmptyState title={CAMPAIGN_NOT_HERE} />}
       {c && active === 'overview' && <Overview c={c} days={days} currency={ccy} range={range} />}
       {c && active === 'ad-groups' && (
         <GoogleAdGroupsTab campaignId={id} {...grain} onOpenAdGroup={hasKeywords ? openAdGroup : undefined} onCount={onCount.adGroups} />

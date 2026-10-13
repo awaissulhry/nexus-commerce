@@ -266,7 +266,8 @@ export function GoogleAdsClient() {
                 {campaigns.data?.truncated && (
                   <Banner tone="warning">This account has more campaigns than this page loads at once; the list and its totals show the first ones only.</Banner>
                 )}
-                <AdsDataGrid<GoogleCampaign>
+                {/* After a failed load the banner is all: an empty grid would say Google reported no campaigns. */}
+                {!campaigns.error && <AdsDataGrid<GoogleCampaign>
                   rows={campaignRows ?? []}
                   loading={campaigns.loading}
                   rowId={(r) => r.campaignId}
@@ -290,7 +291,7 @@ export function GoogleAdsClient() {
                   selectable={false}
                   keyboardNav
                   emptyLabel="Google reported no campaigns for this account."
-                />
+                />}
               </>
             )}
             {view === 'search-terms' && (

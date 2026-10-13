@@ -6,25 +6,31 @@
  *   tier 2    safety: campaign settings, ad approvals, product status, auto-apply                       4 operations
  *   tier 3    numbers per day: ad groups, keywords, asset groups, products, search terms              5 (first reads more)
  *   tier 4    structure: ad groups, keywords + ad-group negatives, campaign negatives, asset groups   4
- *   tier 5    slow: negative keyword lists (their keywords + their campaigns), recommendations        3
+ *   tier 5    slow: negative keyword lists (their keywords, their campaigns, the account's list),     4
+ *             recommendations
  *
- * A regular run costs 21 (RUN_OPS). When the allowance is short the run drops tier 5, then 4, 3 and 2; what it drops is
+ * A regular run costs 22 (RUN_OPS). When the allowance is short the run drops tier 5, then 4, 3 and 2; what it drops is
  * not read this time (SKIPPED_BUDGET) and nothing it read before moves. A grain's first read is reserved whole or not
  * at all: ad groups and keywords read 90 days in three 30-day pieces, search terms 30 days in two 15-day pieces, asset
- * groups 90 days and products 30 days in one — so the first run of an account costs 26.
+ * groups 90 days and products 30 days in one — so the first run of an account costs 27.
  *
  * Windows, in the account's days, always ending yesterday (never today): 14 days (35 on the account's Sundays), search
  * terms 7 (14 on Sundays). A grain that missed runs reaches back to the day after its last day read, never further back
- * than its first read. A window longer than the Sunday window is read in pieces.
+ * than its first read. A window longer than the Sunday window is read in pieces. A first read over the row cap is read
+ * once more over half its window (`shorterFirstRead`; the campaign numbers' 400-day backfill: `shorterBackfill`), never
+ * shorter than the daily window; the campaign numbers' catch-up after missed runs, over its oldest half (`shorterCatchUp`).
  */
-import { accountToday, accountYesterday, addDays, chunkWindow, dayCount, weekdayOf, type DayWindow } from './dates.js'
+import { BACKFILL_DAYS, DAILY_WINDOW_DAYS, accountToday, accountYesterday, addDays, chunkWindow, dayCount, weekdayOf, type DayWindow } from './dates.js'
 import type { GoogleAdsDayResource, GoogleAdsDetailEntityType, GoogleAdsReadResource } from './types.js'
 
 export type GoogleAdsTier = 2 | 3 | 4 | 5
 
 /** The four step 1a reads: account, campaigns, campaign days, change history (one operation each). */
 export const CORE_OPS = 4
-/** One operation for a retry or a refused query sent again without a NOT VERIFIED field. */
+/**
+ * One operation for a retry, or for a safety-net query sent again without the field Google refused (every such field is
+ * verified valid in v25: https://developers.google.com/google-ads/api/fields/v25/<resource>).
+ */
 export const SPARE_OPS = 1
 
 /** A grain below the campaign: its windows, how its first read is cut, how long its days are kept. */
@@ -65,11 +71,12 @@ export const DETAIL_STEPS: ReadonlyArray<{ resource: GoogleAdsReadResource; tier
   { resource: 'KEYWORDS', tier: 4, ops: 1 },
   { resource: 'CAMPAIGN_NEGATIVES', tier: 4, ops: 1 },
   { resource: 'ASSET_GROUPS', tier: 4, ops: 1 },
-  { resource: 'NEGATIVE_LISTS', tier: 5, ops: 2 },
+  // Their keywords, the campaigns they are attached to, and the list attached to the account (sync.service.ts).
+  { resource: 'NEGATIVE_LISTS', tier: 5, ops: 3 },
   { resource: 'RECOMMENDATIONS', tier: 5, ops: 1 },
 ]
 
-/** What a regular run reserves: core 4 + step 1b 16 + 1 spare. */
+/** What a regular run reserves: core 4 + step 1b 17 + 1 spare. */
 export const RUN_OPS = CORE_OPS + DETAIL_STEPS.reduce((total, step) => total + step.ops, 0) + SPARE_OPS
 
 /** The tiers a run tries to reserve, largest first: everything, then without tier 5, without 5 and 4, … , core only. */
@@ -113,6 +120,45 @@ export function grainRead(spec: GrainSpec, timeZone: string, now: Date, readThro
     window = { from, to: yesterday }
   }
   return { window, chunks: dayCount(window) > spec.sundayDays ? chunkWindow(window, spec.chunkDays) : [window], first: !readThrough }
+}
+
+/** Half of a first read's days, ending where it ended, never shorter than the daily window; null when not shorter. */
+function halfOf(window: DayWindow, firstReadDays: number, dailyDays: number): DayWindow | null {
+  const days = Math.max(dailyDays, Math.floor(firstReadDays / 2))
+  if (days >= dayCount(window)) return null
+  return { from: addDays(window.to, -(days - 1)), to: window.to }
+}
+
+/**
+ * A first read that Google answered with too many rows (sync.service.ts): read once more over half the first window,
+ * never shorter than the daily window, ending yesterday as before (90 days → 45; 30 → 15). Null when it would not be
+ * shorter, so a run retries at most once and never loops.
+ */
+export function shorterFirstRead(spec: GrainSpec, read: GrainRead): GrainRead | null {
+  const window = read.first ? halfOf(read.window, spec.firstReadDays, spec.dailyDays) : null
+  if (!window) return null
+  return { window, chunks: dayCount(window) > spec.sundayDays ? chunkWindow(window, spec.chunkDays) : [window], first: true }
+}
+
+/**
+ * The same for the campaign numbers' first read (the 400-day backfill, one query): once more over half of it, never
+ * shorter than the daily window, ending yesterday as before (400 days → 200). Null when it would not be shorter.
+ */
+export function shorterBackfill(window: DayWindow): DayWindow | null {
+  return halfOf(window, BACKFILL_DAYS, DAILY_WINDOW_DAYS)
+}
+
+/**
+ * The campaign numbers' catch-up after missed runs (the daily read reaching back to the day after the last day read, up
+ * to 400 days, one query) over the row cap: once more over its OLDEST half, never shorter than the daily window — the
+ * days right after the last day read, so the range of days read stays in one piece and the next read goes on from
+ * there. (Its newest half would leave a gap, and store.ts `mergeReadRange` then drops the older range: every day read
+ * before would count as not read.) Null when it would not be shorter.
+ */
+export function shorterCatchUp(window: DayWindow): DayWindow | null {
+  const days = Math.max(DAILY_WINDOW_DAYS, Math.floor(dayCount(window) / 2))
+  if (days >= dayCount(window)) return null
+  return { from: window.from, to: addDays(window.from, days - 1) }
 }
 
 export interface PlannedStep {

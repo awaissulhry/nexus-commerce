@@ -5,24 +5,31 @@
  * keyword level) unless it returned none while more than 5 were active; a negative list keeps details a read did not
  * get; campaign settings with "not read" as NULL; policy issues resolved when no longer returned and started again
  * when back; recommendations replaced whole; the retention prune moving the grain's range in the same transaction;
- * one business never touches another's rows. Values are made up (public repo).
+ * one business never touches another's rows; a big read written 500 rows per statement (a key twice in one read: the
+ * last row); policy issues resolved more than 90 days ago deleted. Values are made up (public repo).
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { formulaDatabase } from '../../../test-support/formula-database.js'
 import { withWorkspace } from '../../../lib/workspace-context.js'
 
 let database: Awaited<ReturnType<typeof formulaDatabase>>
+/** Raw statements sent (the batched writes). */
+const h = vi.hoisted(() => ({ rawStatements: 0 }))
 vi.mock('../../../db.js', () => ({
   default: new Proxy({} as Record<string, unknown>, {
-    get: (_t, property) => (database.client as unknown as Record<string, unknown>)[property as string],
+    get: (_t, property) => {
+      const value = (database.client as unknown as Record<string, unknown>)[property as string]
+      if (property !== '$executeRaw' || typeof value !== 'function') return value
+      return (...args: unknown[]) => { h.rawStatements += 1; return (value as (...a: unknown[]) => unknown)(...args) }
+    },
   }),
 }))
 
 import { mapCampaign, mapCampaignDay, mapGrainDay } from './mappers.js'
 import { ensureGoogleAdsCustomer, replaceDailyMetrics, upsertCampaigns } from './store.js'
 import {
-  activeNegativeListIds, pruneDailyMetrics, readStatesOf, recordReadState, recordReadStates, replaceRecommendations, saveAdGroups, saveAutoApply,
-  saveCampaignFlags, saveKeywords, saveNegativeLists, savePolicyIssues,
+  activeNegativeListIds, pruneDailyMetrics, pruneResolvedPolicyIssues, readStatesOf, recordReadState, recordReadStates, replaceRecommendations, saveAdGroups,
+  saveAutoApply, saveCampaignFlags, saveKeywords, saveNegativeLists, savePolicyIssues,
 } from './store-detail.js'
 import type { GoogleAdsAdGroupData, GoogleAdsKeywordData, GoogleAdsPolicyIssueData } from './types.js'
 
@@ -119,20 +126,21 @@ describe('Google Ads step 1b store (PGlite, business profiles on)', () => {
 
   it('negative keyword lists: details a read did not get are kept; attachments as sent; unseen lists and keywords removed', async () => {
     await inA(async () => {
-      const list = { customerId: CID, sharedSetId: '66', name: 'Test negatives', status: 'ENABLED', memberCount: 2, campaignIds: ['333', '111', '111'] }
-      const saved = await saveNegativeLists(CID, [list, { ...list, sharedSetId: '67', name: 'Test second list', campaignIds: [] }],
+      const list = { customerId: CID, sharedSetId: '66', name: 'Test negatives', status: 'ENABLED', memberCount: 2, listType: 'NEGATIVE_KEYWORDS', appliesToAccount: false, campaignIds: ['333', '111', '111'] }
+      const saved = await saveNegativeLists(CID, [list, { ...list, sharedSetId: '67', name: 'Test second list', listType: 'ACCOUNT_LEVEL_NEGATIVE_KEYWORDS', appliesToAccount: true, campaignIds: [] }],
         [keyword('LIST', '93', '66'), keyword('LIST', '94', '66')], T1)
       expect(saved).toEqual({ lists: { upserted: 2, removed: 0, breaker: false }, keywords: { upserted: 2, removed: 0, breaker: false } })
-      expect(await db().googleAdsNegativeList.findFirstOrThrow({ where: { sharedSetId: '66' } })).toMatchObject({ name: 'Test negatives', memberCount: 2, campaignIds: ['111', '333'] })
-      // The next read without the lists' details (the twin queries): names and counts stay, attachments are this read's.
-      await saveNegativeLists(CID, [{ ...list, name: null, status: null, memberCount: null, campaignIds: ['111'] }], [keyword('LIST', '93', '66')], T2)
-      expect(await db().googleAdsNegativeList.findFirstOrThrow({ where: { sharedSetId: '66' } })).toMatchObject({ name: 'Test negatives', status: 'ENABLED', memberCount: 2, campaignIds: ['111'], removedAt: null })
+      expect(await db().googleAdsNegativeList.findFirstOrThrow({ where: { sharedSetId: '66' } })).toMatchObject({ name: 'Test negatives', memberCount: 2, listType: 'NEGATIVE_KEYWORDS', campaignIds: ['111', '333'] })
+      expect(await db().googleAdsNegativeList.findFirstOrThrow({ where: { sharedSetId: '67' } })).toMatchObject({ listType: 'ACCOUNT_LEVEL_NEGATIVE_KEYWORDS', appliesToAccount: true, campaignIds: [] })
+      // The next read without the lists' details (the twin queries): names, counts and the type stay, attachments are this read's.
+      await saveNegativeLists(CID, [{ ...list, name: null, status: null, memberCount: null, listType: null, appliesToAccount: null, campaignIds: ['111'] }], [keyword('LIST', '93', '66')], T2)
+      expect(await db().googleAdsNegativeList.findFirstOrThrow({ where: { sharedSetId: '66' } })).toMatchObject({ name: 'Test negatives', status: 'ENABLED', memberCount: 2, listType: 'NEGATIVE_KEYWORDS', appliesToAccount: false, campaignIds: ['111'], removedAt: null })
       expect(await db().googleAdsNegativeList.findFirstOrThrow({ where: { sharedSetId: '67' } })).toMatchObject({ removedAt: T2 })
       expect(await db().googleAdsKeyword.findFirstOrThrow({ where: { level: 'LIST', criterionId: '94' } })).toMatchObject({ removedAt: T2 })
       expect([...await activeNegativeListIds(CID)]).toEqual(['66'])
       // A list first seen without details: no name yet ("" = not read).
-      await saveNegativeLists(CID, [{ ...list, sharedSetId: '68', name: null, status: null, memberCount: null, campaignIds: [] }, { ...list, campaignIds: [] }], [], T3)
-      expect(await db().googleAdsNegativeList.findFirstOrThrow({ where: { sharedSetId: '68' } })).toMatchObject({ name: '', status: 'UNKNOWN', memberCount: null })
+      await saveNegativeLists(CID, [{ ...list, sharedSetId: '68', name: null, status: null, memberCount: null, listType: null, appliesToAccount: null, campaignIds: [] }, { ...list, campaignIds: [] }], [], T3)
+      expect(await db().googleAdsNegativeList.findFirstOrThrow({ where: { sharedSetId: '68' } })).toMatchObject({ name: '', status: 'UNKNOWN', memberCount: null, listType: null, appliesToAccount: null })
     })
   })
 
@@ -222,6 +230,50 @@ describe('Google Ads step 1b store (PGlite, business profiles on)', () => {
       // Never read: nothing to move.
       expect(await pruneDailyMetrics(CID, 'ASSET_GROUP', '2025-09-08')).toEqual({ deleted: 0, readFrom: null })
       expect(await db().googleAdsDailyMetric.count({ where: { entityType: 'CAMPAIGN' } })).toBe(1)
+    })
+  })
+
+  it('a big read: 500 rows per statement, the same key twice keeps the last row, numbers and lists as Google sent them', async () => {
+    const BIG = '2234567890'
+    const big = (id: number, bid: bigint): GoogleAdsKeywordData => ({ ...keyword('AD_GROUP', String(id), '7100'), customerId: BIG, cpcBidMicros: bid, qualityScore: 7 })
+    const rows = Array.from({ length: 1_201 }, (_, i) => big(100_000 + i, 1_000_000n))
+    h.rawStatements = 0
+    await inA(async () => {
+      // 1,201 keywords (one of them twice: the later row wins) in 3 statements, not 1,202 upserts.
+      expect(await saveKeywords(BIG, 'AD_GROUP', [...rows, big(100_000, 9_000_000_000n)], T1)).toEqual({ upserted: 1_202, removed: 0, breaker: false })
+      expect(h.rawStatements).toBe(3)
+      expect(await db().googleAdsKeyword.count({ where: { customerId: BIG } })).toBe(1_201)
+      expect(await db().googleAdsKeyword.findFirstOrThrow({ where: { customerId: BIG, criterionId: '100000' } })).toMatchObject({
+        workspaceId: A, cpcBidMicros: 9_000_000_000n, qualityScore: 7, matchType: 'PHRASE', firstSeenAt: T1, lastSeenAt: T1, removedAt: null,
+      })
+      // The next read: seen again, changed where Google changed it, the first sighting kept; what it lacks removed.
+      h.rawStatements = 0
+      await saveKeywords(BIG, 'AD_GROUP', rows.slice(0, 1_000).map((row, i) => (i === 1 ? { ...row, status: 'PAUSED' } : row)), T2)
+      expect(h.rawStatements).toBe(2)
+      expect(await db().googleAdsKeyword.findFirstOrThrow({ where: { customerId: BIG, criterionId: '100001' } })).toMatchObject({
+        status: 'PAUSED', cpcBidMicros: 1_000_000n, firstSeenAt: T1, lastSeenAt: T2, removedAt: null,
+      })
+      expect(await db().googleAdsKeyword.count({ where: { customerId: BIG, removedAt: T2 } })).toBe(201)
+      // Ad groups: a ROAS target and the reasons list as sent.
+      await saveAdGroups(BIG, [{ ...adGroup('7100'), customerId: BIG, targetRoas: '4.5', primaryStatusReasons: ['BIDDING_STRATEGY_LEARNING', 'AD_GROUP_PAUSED'] }], T1)
+      const group = await db().googleAdsAdGroup.findFirstOrThrow({ where: { customerId: BIG } })
+      expect(group).toMatchObject({ cpcBidMicros: 500_000n, primaryStatusReasons: ['BIDDING_STRATEGY_LEARNING', 'AD_GROUP_PAUSED'], firstSeenAt: T1 })
+      expect(group.targetRoas?.toString()).toBe('4.5')
+    })
+  })
+
+  it('policy issues resolved more than 90 days ago are deleted; open ones and those resolved since stay', async () => {
+    const OLD = '3234567890'
+    await inA(async () => {
+      const issue = (adId: string) => ({ ...adIssue(adId), customerId: OLD })
+      await savePolicyIssues(OLD, 'AD', [issue('81'), issue('82'), issue('83')], new Date('2026-06-01T06:25:00Z'), 40)
+      await savePolicyIssues(OLD, 'AD', [issue('83')], new Date('2026-06-02T06:25:00Z'), 40) // 81, 82 resolved on 2026-06-02
+      await savePolicyIssues(OLD, 'AD', [issue('82'), issue('83')], new Date('2026-09-20T06:25:00Z'), 40) // 82 back
+      await savePolicyIssues(OLD, 'AD', [issue('83')], new Date('2026-09-21T06:25:00Z'), 40) // 82 resolved again
+      expect(await pruneResolvedPolicyIssues(OLD, new Date('2026-07-15T06:25:00Z'))).toBe(1)
+      expect(await db().googleAdsPolicyIssue.findMany({ where: { customerId: OLD }, orderBy: { adId: 'asc' }, select: { adId: true, resolvedAt: true } })).toEqual([
+        { adId: '82', resolvedAt: new Date('2026-09-21T06:25:00Z') }, { adId: '83', resolvedAt: null },
+      ])
     })
   })
 

@@ -15,7 +15,7 @@ import type {
   GoogleAdsAutoApplyData, GoogleAdsCampaignCriterionRow, GoogleAdsCampaignData, GoogleAdsCampaignDayRow, GoogleAdsCampaignFlagsData,
   GoogleAdsCampaignFlagsRow, GoogleAdsCampaignRow, GoogleAdsCampaignSharedSetRow, GoogleAdsCampaignStatus, GoogleAdsChangeEventData,
   GoogleAdsChangeEventRow, GoogleAdsChangeSource, GoogleAdsCustomerClientData, GoogleAdsCustomerClientRow, GoogleAdsCustomerData,
-  GoogleAdsCustomerJson, GoogleAdsCustomerRow, GoogleAdsDailyMetricData, GoogleAdsDetailEntityType, GoogleAdsGrainDayRow, GoogleAdsKeywordData,
+  GoogleAdsCustomerJson, GoogleAdsCustomerNegativeCriterionRow, GoogleAdsCustomerRow, GoogleAdsDailyMetricData, GoogleAdsDetailEntityType, GoogleAdsGrainDayRow, GoogleAdsKeywordData,
   GoogleAdsMetricsJson, GoogleAdsPolicyIssueData, GoogleAdsRecommendationData, GoogleAdsRecommendationMetricsJson, GoogleAdsRecommendationRow,
   GoogleAdsRecommendationSubscriptionRow, GoogleAdsRefJson, GoogleAdsSharedCriterionRow, GoogleAdsSharedSetData, GoogleAdsSharedSetJson,
   GoogleAdsShoppingProductRow,
@@ -367,7 +367,10 @@ export function searchTermKey(campaignId: string, term: string): string {
 /** KEYWORD daily key: a criterion id is unique only within its ad group. */
 export const keywordDayKey = (adGroupId: string, criterionId: string): string => `${adGroupId}~${criterionId}`
 
-/** A Merchant Center item id as Nexus keys it: lower case (Google reports product_item_id in lower case). */
+/**
+ * A Merchant Center item id as Nexus keys it: lower case. Google does not document the case of
+ * segments.product_item_id or shopping_product.item_id, so both are lower-cased and a match never depends on it.
+ */
 export const productItemKey = (itemId: string): string => itemId.trim().toLowerCase()
 
 /** PRODUCT daily key: `<campaignId>~<item id, lower case>`. */
@@ -660,9 +663,20 @@ export function mapSharedSet(json: GoogleAdsSharedSetJson | undefined): GoogleAd
   return { sharedSetId, name: text(json.name), type: enumText(json.type), status: enumText(json.status), memberCount: count(json.memberCount) }
 }
 
-/** A shared set Nexus keeps as a negative keyword list: its type, when known, is NEGATIVE_KEYWORDS, and it is not removed. */
+/**
+ * The shared set types that hold negative keywords (https://developers.google.com/google-ads/api/fields/v25/shared_set,
+ * shared_set.type): NEGATIVE_KEYWORDS, a list attached to campaigns (campaign_shared_set), and
+ * ACCOUNT_LEVEL_NEGATIVE_KEYWORDS, a list meant for the whole account. Google attaches an account-level list to the
+ * account with a customer_negative_criterion (negative_keyword_list.shared_set; at most one per account), never to a
+ * campaign (https://developers.google.com/google-ads/api/docs/targeting/shared-sets). Nexus reads that link
+ * (`mapAccountListLink`): the list is in force only while one points at it.
+ */
+export const NEGATIVE_LIST_TYPES = ['NEGATIVE_KEYWORDS', 'ACCOUNT_LEVEL_NEGATIVE_KEYWORDS'] as const
+export const ACCOUNT_LEVEL_LIST_TYPE = 'ACCOUNT_LEVEL_NEGATIVE_KEYWORDS'
+
+/** A shared set Nexus keeps as a negative keyword list: its type, when known, is one of NEGATIVE_LIST_TYPES, and it is not removed. */
 const isNegativeList = (set: GoogleAdsSharedSetData | null): boolean =>
-  !set || ((set.type === null || set.type === 'NEGATIVE_KEYWORDS') && set.status !== 'REMOVED')
+  !set || ((set.type === null || (NEGATIVE_LIST_TYPES as readonly string[]).includes(set.type)) && set.status !== 'REMOVED')
 
 /** One keyword of a negative keyword list, with the list when the query carried it. */
 export function mapListKeyword(row: GoogleAdsSharedCriterionRow, context: { customerId: string }): { keyword: GoogleAdsKeywordData; set: GoogleAdsSharedSetData | null } | null {
@@ -692,6 +706,18 @@ export function mapListKeyword(row: GoogleAdsSharedCriterionRow, context: { cust
   }
 }
 
+/**
+ * The negative keyword list a customer_negative_criterion points at — the list Google applies to the whole account — and
+ * the account that owns it ("customers/<customerId>/sharedSets/<sharedSetId>"). A manager account's list attached to a
+ * client account names the manager: its keywords live there and cannot be read from the client account.
+ */
+export function mapAccountListLink(row: GoogleAdsCustomerNegativeCriterionRow): { customerId: string; sharedSetId: string } | null {
+  const criterion = row.customerNegativeCriterion
+  if (!criterion || (criterion.type !== undefined && criterion.type !== 'NEGATIVE_KEYWORD_LIST')) return null
+  const match = /^customers\/(\d+)\/sharedSets\/(\d+)$/.exec(text(criterion.negativeKeywordList?.sharedSet) ?? '')
+  return match ? { customerId: match[1]!, sharedSetId: match[2]! } : null
+}
+
 /** One list attached to one campaign, with the list when the query carried it. */
 export function mapListAttachment(row: GoogleAdsCampaignSharedSetRow): { campaignId: string; sharedSetId: string; set: GoogleAdsSharedSetData | null } | null {
   const attachment = row.campaignSharedSet
@@ -702,6 +728,7 @@ export function mapListAttachment(row: GoogleAdsCampaignSharedSetRow): { campaig
   return { campaignId, sharedSetId, set }
 }
 
+/** The RecommendationMetrics Nexus keeps (v25 also has videoViews, not kept); each is optional, sent only when estimated. */
 const IMPACT_KEYS = ['impressions', 'clicks', 'costMicros', 'conversions', 'conversionsValue'] as const
 
 function impactMetrics(metrics: GoogleAdsRecommendationMetricsJson | undefined): Prisma.InputJsonObject {

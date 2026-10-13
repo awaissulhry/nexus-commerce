@@ -116,5 +116,8 @@ export function workspacePolicySql() {
   sql.push(readFileSync(new URL('../workspaces/identity-foreign.sql', import.meta.url), 'utf8'))
   // MCP full control I12 — one seller-owned channel id, one owner (report mode). Byte-for-byte the tail of 20261002j.
   sql.push(readFileSync(new URL('../workspaces/channel-item-claim.sql', import.meta.url), 'utf8'))
+  // Google Ads AAA — which Google ids (Ads account, Merchant Center account, GA4 property) another business already picked,
+  // for the account picker; yes or no per id, never naming the business. Byte-for-byte the tail of 20261013d.
+  sql.push(readFileSync(new URL('../workspaces/google-links-taken.sql', import.meta.url), 'utf8'))
   return sql.join('\n') + '\n' 
 }

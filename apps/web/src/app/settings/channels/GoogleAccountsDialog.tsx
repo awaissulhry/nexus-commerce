@@ -6,8 +6,10 @@
  * property (optional, chosen now and read in a later step).
  *
  * Centred DS `Modal`; every control is a DS `Field` + `Listbox`. Each product's list is read on its own (C2), so one
- * failing shows its own banner and leaves the others usable. Saving (C3) is checked by the server against a fresh read
- * and queues the first read; a refusal (409) is said in words and never names another business.
+ * failing shows its own banner and leaves the others usable. An account another business in Nexus already picked is a
+ * held option ("Chosen in another business in Nexus"), never chosen for the person. Saving (C3) is checked by the
+ * server against a fresh read and queues the first read; a refusal (409) is said in words and never names another
+ * business.
  * The words and every decision are in `./google-selection.ts`.
  */
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react'
@@ -25,6 +27,7 @@ import {
   merchantOptions,
   readableCustomers,
   reconcileDraft,
+  saveHeldReason,
   sectionError,
   selectionBody,
   type SectionErrorView,
@@ -97,8 +100,9 @@ export function GoogleAccountsDialog({ connectionId, current, onClose, onSaved, 
       if (result.ok) { onSaved(result.account); return }
       const words = conflictText(result.code, result.error, result.product)
       setSaveError({ ...words, inAds: result.code === 'customer_taken' || (result.code === 'taken_by_other_business' && result.product === 'ads') })
-      // Google no longer offers a pick: read the lists again so the dialog shows what it does offer now.
-      if (result.code === 'not_offered') void load()
+      // Google no longer offers a pick, or another business picked it meanwhile: read the lists again, so the dialog
+      // shows what may be chosen now (Google's lists are kept for 5 minutes; who picked what is read fresh).
+      if (result.code === 'not_offered' || result.code === 'taken_by_other_business') void load()
     } catch (err) {
       setSaveError({ title: 'The choice was not saved', text: err instanceof Error ? err.message : 'Nexus could not reach the server. Try again.', inAds: false })
     } finally {
@@ -127,7 +131,7 @@ export function GoogleAccountsDialog({ connectionId, current, onClose, onSaved, 
     footer={<>
       <Button onClick={close} disabled={busy}>Cancel</Button>
       <Button variant="primary" type="submit" form={formId} aria-busy={busy || undefined}
-        heldReason={busy ? null : loading && !choices ? 'Nexus is still asking Google which accounts this sign-in can see.' : !ready ? 'Choose the Google Ads account Nexus reads first.' : null}>
+        heldReason={busy ? null : loading && !choices ? 'Nexus is still asking Google which accounts this sign-in can see.' : saveHeldReason(draft, choices)}>
         {busy ? 'Saving…' : 'Save and start reading'}
       </Button>
     </>}>

@@ -16,8 +16,8 @@ import type {
 import * as m from './mappers.js'
 import type {
   GoogleAdsAdGroupCriterionRow, GoogleAdsAdGroupRow, GoogleAdsAdPolicyRow, GoogleAdsAssetGroupRow, GoogleAdsCampaignCriterionRow,
-  GoogleAdsCampaignFlagsRow, GoogleAdsCampaignSharedSetRow, GoogleAdsDailyMetricData, GoogleAdsGrainDayRow, GoogleAdsRecommendationRow,
-  GoogleAdsRecommendationSubscriptionRow, GoogleAdsSharedCriterionRow, GoogleAdsShoppingProductRow,
+  GoogleAdsCampaignFlagsRow, GoogleAdsCampaignSharedSetRow, GoogleAdsCustomerNegativeCriterionRow, GoogleAdsDailyMetricData, GoogleAdsGrainDayRow,
+  GoogleAdsRecommendationRow, GoogleAdsRecommendationSubscriptionRow, GoogleAdsSharedCriterionRow, GoogleAdsShoppingProductRow,
 } from './types.js'
 
 const fixture = <T>(name: string): T => JSON.parse(readFileSync(new URL(`../../../test-support/google-ads/${name}`, import.meta.url), 'utf8')) as T
@@ -300,6 +300,10 @@ describe('step 1b: safety', () => {
       { customerId: '1234567890', type: 'KEYWORD', status: 'ENABLED', createdAtGoogle: new Date('2026-09-01T08:00:00Z'), modifiedAtGoogle: new Date('2026-09-15T07:30:00Z') },
       { customerId: '1234567890', type: 'CAMPAIGN_BUDGET', status: 'PAUSED', createdAtGoogle: new Date('2026-08-20T06:00:00Z'), modifiedAtGoogle: null },
     ])
+    // v25 writes modify_date_time with microseconds ("yyyy-MM-dd HH:mm:ss.ssssss"); it is read, not dropped.
+    const micro = m.mapAutoApply({ recommendationSubscription: { type: 'KEYWORD', status: 'ENABLED', createDateTime: '2026-09-01 10:00:00', modifyDateTime: '2026-09-15 09:30:00.250000' } },
+      { ...CID, timeZone: ROME })
+    expect(micro?.modifiedAtGoogle).toEqual(new Date('2026-09-15T07:30:00.250Z'))
   })
 })
 
@@ -355,6 +359,33 @@ describe('step 1b: negative keyword lists and recommendations', () => {
     expect(m.mapListAttachment({ campaignSharedSet: { campaign: 'customers/1/campaigns/2', sharedSet: 'customers/1/sharedSets/3', status: 'REMOVED' } })).toBeNull()
   })
 
+  it('the account-level list (ACCOUNT_LEVEL_NEGATIVE_KEYWORDS) is kept with its type; a removed list or another kind of set is not', () => {
+    const accountLevel = rows<GoogleAdsSharedCriterionRow>('search-negative-list-keywords.json').map((row) => m.mapListKeyword(row, CID)).find((r) => r?.set?.sharedSetId === '77777777777')
+    expect(accountLevel).toMatchObject({
+      keyword: { level: 'LIST', parentKey: 'l:77777777777', criterionId: '93121', sharedSetId: '77777777777', negative: true, text: 'test second hand', matchType: 'EXACT', campaignId: null },
+      set: { sharedSetId: '77777777777', name: 'Test account negatives', type: 'ACCOUNT_LEVEL_NEGATIVE_KEYWORDS', status: 'ENABLED', memberCount: 1 },
+    })
+    const keywordOf = (type: string, status = 'ENABLED') => m.mapListKeyword({
+      sharedCriterion: { sharedSet: 'customers/1234567890/sharedSets/88', criterionId: '1', type: 'KEYWORD', keyword: { text: 'test x', matchType: 'BROAD' } },
+      sharedSet: { id: '88', name: 'Test set', type, status, memberCount: '1' },
+    }, CID)
+    expect(keywordOf('ACCOUNT_LEVEL_NEGATIVE_KEYWORDS')?.set?.type).toBe('ACCOUNT_LEVEL_NEGATIVE_KEYWORDS')
+    expect(keywordOf('ACCOUNT_LEVEL_NEGATIVE_KEYWORDS', 'REMOVED')).toBeNull()
+    expect(keywordOf('NEGATIVE_PLACEMENTS')).toBeNull()
+    expect(keywordOf('BRANDS')).toBeNull()
+  })
+
+  it('the list attached to the account (customer_negative_criterion): its id and the account that owns it', () => {
+    const [link] = rows<GoogleAdsCustomerNegativeCriterionRow>('search-customer-negative-criteria.json').map((row) => m.mapAccountListLink(row))
+    expect(link).toEqual({ customerId: '1234567890', sharedSetId: '77777777777' })
+    // A manager account's list attached to this account names the manager (its keywords cannot be read from here).
+    expect(m.mapAccountListLink({ customerNegativeCriterion: { negativeKeywordList: { sharedSet: 'customers/9876543210/sharedSets/88888888888' } } }))
+      .toEqual({ customerId: '9876543210', sharedSetId: '88888888888' })
+    expect(m.mapAccountListLink({ customerNegativeCriterion: { type: 'PLACEMENT_LIST' } })).toBeNull()
+    expect(m.mapAccountListLink({ customerNegativeCriterion: { negativeKeywordList: { sharedSet: 'not a resource name' } } })).toBeNull()
+    expect(m.mapAccountListLink({})).toBeNull()
+  })
+
   it('recommendations: dismissed always set, the impact as sent (micros as text), none when not read', () => {
     const [keyword, budget] = rows<GoogleAdsRecommendationRow>('search-recommendations.json').map((row) => m.mapRecommendation(row, { ...CID, impactRead: true }))
     expect(keyword).toEqual({
@@ -367,5 +398,9 @@ describe('step 1b: negative keyword lists and recommendations', () => {
     const notRead = m.mapRecommendation(rows<GoogleAdsRecommendationRow>('search-recommendations.json')[0], { ...CID, impactRead: false })
     expect(notRead).not.toHaveProperty('impact')
     expect(notRead?.dismissed).toBe(false)
+    // recommendation.impact is read whole: a metric Nexus does not keep (videoViews) is left out.
+    const video = m.mapRecommendation({ recommendation: { resourceName: 'customers/1234567890/recommendations/test-rec-3', type: 'CAMPAIGN_BUDGET',
+      impact: { baseMetrics: { impressions: 10, videoViews: 4 }, potentialMetrics: { videoViews: 6 } } } }, { ...CID, impactRead: true })
+    expect(video?.impact).toEqual({ base: { impressions: 10 }, potential: {} })
   })
 })

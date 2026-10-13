@@ -39,6 +39,26 @@
         "status": "ENABLED",
         "memberCount": "2"
       }
+    },
+    {
+      "sharedCriterion": {
+        "resourceName": "customers/1234567890/sharedCriteria/77777777777~93121",
+        "sharedSet": "customers/1234567890/sharedSets/77777777777",
+        "criterionId": "93121",
+        "type": "KEYWORD",
+        "keyword": {
+          "text": "test second hand",
+          "matchType": "EXACT"
+        }
+      },
+      "sharedSet": {
+        "resourceName": "customers/1234567890/sharedSets/77777777777",
+        "id": "77777777777",
+        "name": "Test account negatives",
+        "type": "ACCOUNT_LEVEL_NEGATIVE_KEYWORDS",
+        "status": "ENABLED",
+        "memberCount": "1"
+      }
     }
   ],
   "fieldMask": "sharedCriterion.sharedSet,sharedCriterion.criterionId,sharedCriterion.type,sharedCriterion.keyword.text,sharedCriterion.keyword.matchType,sharedSet.id,sharedSet.name,sharedSet.type,sharedSet.status,sharedSet.memberCount"

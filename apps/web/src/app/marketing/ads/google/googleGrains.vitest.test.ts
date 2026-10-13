@@ -6,12 +6,14 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import type { GoogleCampaignAutomation, GoogleMetrics, GoogleNegative, GoogleOutsideChange, GoogleRead } from '@/lib/google-ads/contract'
+import type { GoogleCampaignAutomation, GoogleMetrics, GoogleNegative, GoogleNegativeList, GoogleOutsideChange, GoogleRead } from '@/lib/google-ads/contract'
 import { METRIC_COLUMN_KEYS, metricColumns } from './googleAds'
 import {
-  activeNegatives, adGroupTypeLabel, adStrengthWord, brandKey, brandLabel, brandRuleText, campaignOutsideChanges, campaignTabOf, campaignTabs,
-  emptyText, finalUrlText, flagsOnCount, flagWord, grainView, keywordWord, matchTypeLabel, negativeLevelText, negativeListRows,
+  accountListNote, activeNegatives, listScopes, adGroupTypeLabel, adStrengthWord, brandKey, brandLabel, brandRuleText, CAMPAIGN_NOT_HERE, campaignOutsideChanges, campaignTabOf,
+  campaignTabs, campaignWindowBody,
+  emptyText, finalUrlText, flagsOnCount, flagWord, grainView, keywordWord, lastTryText, matchTypeLabel, negativeLevelText, negativeListRows,
   negativeMatchLabel, negativesMissingText, negativesRead, negativeText, notReadText, NOUN, primaryWord, productIssuesText, productStatusWord,
+  readNoteText,
 } from './googleGrains'
 import { adGroupColumns } from './GoogleAdGroupsTab'
 import { assetGroupColumns } from './GoogleAssetGroupsTab'
@@ -51,6 +53,25 @@ describe('campaignTabs — a tab that does not apply is absent', () => {
   })
 })
 
+describe('campaignWindowBody — an address with a campaign that is not in this business', () => {
+  it('404: a notice in plain words, never an error with Try again', () => {
+    expect(campaignWindowBody({ hasCampaign: false, loading: false, status: 404 })).toBe('not_here')
+    expect(CAMPAIGN_NOT_HERE).toBe('This campaign is not in this business’s Google Ads account.')
+  })
+
+  it('any other failure (or an answer without the campaign) keeps Try again; reading shows as reading', () => {
+    expect(campaignWindowBody({ hasCampaign: false, loading: false, status: 500 })).toBe('error')
+    expect(campaignWindowBody({ hasCampaign: false, loading: false, status: 403 })).toBe('error')
+    expect(campaignWindowBody({ hasCampaign: false, loading: false, status: null })).toBe('error')
+    expect(campaignWindowBody({ hasCampaign: false, loading: true, status: null })).toBe('loading')
+  })
+
+  it('a campaign on hand (the grid row) shows at once, whatever its days read did', () => {
+    expect(campaignWindowBody({ hasCampaign: true, loading: true, status: null })).toBe('campaign')
+    expect(campaignWindowBody({ hasCampaign: true, loading: false, status: 404 })).toBe('campaign')
+  })
+})
+
 describe('Not read yet — never an empty list, never 0', () => {
   const base = { noun: NOUN.keyword, scope: 'campaign' as const, windowed: true, nextReadAt: '2026-10-14T06:25:00Z', timeZone: 'UTC' }
 
@@ -84,6 +105,24 @@ describe('Not read yet — never an empty list, never 0', () => {
     const v = grainView({ ...base, read: read({ lastStatus: 'FAILED', lastError: 'Timed out.' }), count: 4 })
     expect(v.kind).toBe('ok')
     expect(v.notes[0]).toEqual({ tone: 'warning', text: 'The last try failed: Timed out. This shows the read of 12 Oct 2026, 06:30.' })
+  })
+
+  it('a good read that read fewer days says so as information, never as a failure — the list\'s own read and its numbers\' read', () => {
+    const fewer = 'Google sent more than 200,000 rows of daily numbers for the first 90 days, so Nexus read the last 45 days instead. Older days are not read.'
+    expect(readNoteText(read({ lastError: fewer }))).toBe(fewer)
+    expect(readNoteText(read({ lastError: '  ' }))).toBeNull()
+    expect(readNoteText(read({ lastStatus: 'FAILED', lastError: 'Timed out.' }))).toBeNull()
+    expect(lastTryText(read({ lastError: fewer }))).toBeNull()
+    // Search terms: the list is its numbers.
+    expect(grainView({ ...base, read: read({ resource: 'SEARCH_TERM_DAYS', lastError: fewer }), count: 4 }).notes).toEqual([{ tone: 'info', text: fewer }])
+    // Over an empty list too.
+    expect(grainView({ ...base, read: read({ lastError: fewer }), count: 0 })).toMatchObject({ kind: 'empty', notes: [{ tone: 'info', text: fewer }] })
+    // Keywords: the numbers come from another read; the same sentence twice is said once (products' list read can be its numbers).
+    const numbers = read({ resource: 'KEYWORD_DAYS', lastError: fewer })
+    expect(grainView({ ...base, read: read(), numbersRead: numbers, count: 4 }).notes).toEqual([{ tone: 'info', text: fewer }])
+    expect(grainView({ ...base, read: numbers, numbersRead: numbers, count: 4 }).notes).toEqual([{ tone: 'info', text: fewer }])
+    // A failed later read still warns first; the note of an earlier good read is not on the state any more.
+    expect(grainView({ ...base, read: read({ lastStatus: 'FAILED', lastError: 'Timed out.' }), numbersRead: numbers, count: 4 }).notes.map((n) => n.tone)).toEqual(['warning', 'info'])
   })
 
   it('numbers not read: said once, and no day-gap note (there are no days to miss)', () => {
@@ -155,9 +194,19 @@ describe('Google’s words', () => {
   it('brand: no brand words → "—" for every term, never "Not brand"', () => {
     expect([brandLabel(true), brandLabel(false), brandLabel(null)]).toEqual(['Brand', 'Not brand', '—'])
     expect([brandKey(true), brandKey(false), brandKey(null)]).toEqual(['brand', 'non_brand', ''])
-    expect(brandRuleText([])).toBe('Nexus does not know your brand names yet, so it cannot split brand searches from the rest.')
-    expect(brandRuleText(['acme', ' acme moto '])).toBe('A search counts as brand when it matches one of your protected terms: “acme”, “acme moto”.')
-    expect(brandRuleText(['a', 'b', 'c'], 2)).toBe('A search counts as brand when it matches one of your protected terms: “a”, “b” and 1 more.')
+    expect(brandRuleText([])).toBe('Nexus does not know the brand words (your protected terms) yet, so it cannot split brand searches from the rest.')
+    expect(brandRuleText(['acme', ' acme moto '])).toBe('A search counts as brand when it matches one of the brand words (your protected terms): “acme”, “acme moto”.')
+    expect(brandRuleText(['a', 'b', 'c'], 2)).toBe('A search counts as brand when it matches one of the brand words (your protected terms): “a”, “b” and 1 more.')
+  })
+
+  it('one word for brand on the search terms tab: "brand words (your protected terms)" in its sentence, then "brand words"', () => {
+    const tip = searchTermColumns('EUR', true).find((c) => c.key === 'brand')!.tip!
+    expect(tip).toBe('Brand when the search matches one of the brand words; “—” when Nexus does not know them.')
+    // The tab's own words (the sentence, the column tip, the tiles, the link) name them one way.
+    const tab = readFileSync(fileURLToPath(new URL('./GoogleSearchTermsGrid.tsx', import.meta.url)), 'utf8')
+    const shown = [brandRuleText([]), brandRuleText(['acme']), tip, ...[...tab.matchAll(/'([^'\n]*brand[^'\n]*)'/gi)].map((m) => m[1])]
+    for (const words of shown) expect({ words, protectedOutsideTheName: /protected term/i.test(words.replace('brand words (your protected terms)', '')) }).toEqual({ words, protectedOutsideTheName: false })
+    expect(shown.filter((w) => /brand names/i.test(w))).toEqual([])
   })
 
   it('negatives: the words, the match type, where they are set; removed ones left out, A→Z', () => {
@@ -171,12 +220,35 @@ describe('Google’s words', () => {
     expect(negativeLevelText(n({ level: 'ad_group', adGroupName: 'Helmets' }))).toBe('Ad group: Helmets')
     expect(negativeLevelText(n({ level: 'list', listName: 'Account-wide' }))).toBe('List: Account-wide')
     expect(negativeLevelText(n({}))).toBe('Campaign')
+    // The account-level list: "Whole account" only when Google applies it; not in use, or not read yet, in words.
+    const scopes = listScopes([
+      { listId: 'l9', accountLevel: true, appliesToAccount: true }, { listId: 'l8', accountLevel: true, appliesToAccount: false },
+      { listId: 'l7', accountLevel: true, appliesToAccount: null }, { listId: 'l2', accountLevel: false, appliesToAccount: false },
+      { listId: 'l3', accountLevel: null, appliesToAccount: null },
+    ])
+    const setOn = (listId: string) => negativeLevelText(n({ level: 'list', listId, listName: `Test ${listId}` }), scopes)
+    expect(['l9', 'l8', 'l7', 'l2', 'l3'].map(setOn)).toEqual([
+      'Whole account: Test l9', 'Account-level list, not in use: Test l8', 'Account-level list: Test l7', 'List: Test l2', 'List: Test l3',
+    ])
+    const state = (accountLevel: boolean | null, appliesToAccount: boolean | null, status = 'ENABLED') => ({ accountLevel, appliesToAccount, status })
+    expect(accountListNote([state(true, true)])).toBe('Whole account: Google applies this list to every campaign that shows on Google Search or Shopping.')
+    expect(accountListNote([state(true, false)])).toBe('Not in use: Google does not apply this account-level list, so it blocks nothing.')
+    expect(accountListNote([state(true, null), state(false, false)])).toBe('Nexus has not read yet whether the account-level list is in use.')
+    expect(accountListNote([state(false, false), state(null, null), state(true, true, 'REMOVED')])).toBeNull()
     expect(activeNegatives([n({ negativeId: 'a', text: 'used' }), n({ negativeId: 'b', text: 'Cheap' }), n({ negativeId: 'c', text: 'gone', status: 'REMOVED' })]).map((x) => x.negativeId)).toEqual(['b', 'a'])
+    const list = (listId: string, name: string, accountLevel: boolean | null, appliesToAccount: boolean | null, over: Partial<GoogleNegativeList> = {}): GoogleNegativeList =>
+      ({ listId, externalListId: listId, name, status: 'ENABLED', memberCount: 3, accountLevel, appliesToAccount, campaigns: [], seenAt: '', ...over })
     expect(negativeListRows([
-      { listId: 'l2', externalListId: '2', name: 'Jobs', status: 'ENABLED', memberCount: 12, campaigns: [{ campaignId: 'c1', externalCampaignId: '111', name: 'Shop' }], seenAt: '' },
-      { listId: 'l1', externalListId: '1', name: 'Free', status: 'ENABLED', memberCount: null, campaigns: [], seenAt: '' },
-      { listId: 'l3', externalListId: '3', name: 'Old', status: 'REMOVED', memberCount: 4, campaigns: [], seenAt: '' },
+      list('l2', 'Jobs', false, false, { memberCount: 12, campaigns: [{ campaignId: 'c1', externalCampaignId: '111', name: 'Shop' }] }),
+      list('l1', 'Free', null, null, { memberCount: null }),
+      list('l3', 'Old', false, false, { status: 'REMOVED' }),
+      list('l9', 'Account negatives', true, true),
+      list('l8', 'Account spare', true, false),
+      list('l7', 'Account unread', true, null),
     ])).toEqual([
+      { id: 'l9', cells: ['Account negatives', '3', 'Whole account'] },
+      { id: 'l8', cells: ['Account spare', '3', 'Not in use'] },
+      { id: 'l7', cells: ['Account unread', '3', 'Account-level list'] },
       { id: 'l1', cells: ['Free', '—', '0 campaigns'] },
       { id: 'l2', cells: ['Jobs', '12', '1 campaign'] },
     ])
