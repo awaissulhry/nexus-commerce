@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { MatrixCells, MatrixCoordinate, MatrixVerbRequest, MatrixWriteCell, MatrixWriteOutcome, VerbOperation, VerbPreview } from '../contract'
 import { createBulkSource, revertSentence, type BulkDoors } from './bulkSource'
 import { BULK_ALREADY_FOLLOWS, BULK_FOLLOWS_BASE, BULK_NO_HANDOFF, BULK_NOT_ON_SCREEN, BULK_SENT, type BulkContext } from './fields'
+import { MATRIX_COPY } from '../contract'
 import type { BulkRequest } from './types'
 
 const coord = (key: string, label: string, cells: MatrixCoordinate['cells'], extra: Partial<MatrixCoordinate> = {}): MatrixCoordinate => ({
@@ -38,7 +39,9 @@ function doorsFor(table: Record<string, MatrixCells>, over: Partial<BulkDoors> =
     previewVerb: vi.fn(async (req: MatrixVerbRequest): Promise<VerbPreview> => ({ verb: req.params.verb, changes: [], refusals: [], notices: [], confirm: 'none', confirmWord: null, simulated: false })),
     applyVerb: vi.fn(),
     revertVerb: vi.fn(),
-    writeCells: vi.fn(async (cells: readonly MatrixWriteCell[]) => {
+    // The page's line: a function is built when the writes' turn comes (here, at once).
+    writeCells: vi.fn(async (asked: readonly MatrixWriteCell[] | (() => readonly MatrixWriteCell[])) => {
+      const cells = typeof asked === 'function' ? asked() : asked
       writes.push([...cells])
       return cells.map((c): MatrixWriteOutcome => ({ rowId: c.rowId, coordinateKey: c.coordinateKey, cell: c.cell, outcome: 'applied', version: c.expectedVersion + 1 }))
     }),
@@ -164,5 +167,89 @@ describe('the source the dialog reads', () => {
     expect(source.current('price', ['AMAZON:IT']).map((l) => [l.name, l.now, l.note])).toEqual([['Nero · S', '€105.00', 'Set here'], ['Nero · M', '€99.00', BULK_FOLLOWS_BASE]])
     expect(source.defaultMode('price', ['AMAZON:IT'])).toBeNull()
     expect(source.marketsNote('salePrice')).toBe('Not on eBay IT: no sale price there')
+  })
+})
+
+/**
+ * One save line (2026-10-13): an Undo is built when its turn in the page's line comes, never when it is clicked; and it puts
+ * a cell back only while the cell still holds what Apply wrote — a newer value (the person's own, or anyone else's) stays.
+ */
+describe('Undo — built at its turn, and only over what Apply wrote', () => {
+  const sale = (value: number | null, version: number, start: string | null = null): MatrixCells => ({
+    ...price(120, 'override', version), sale: { value, start, end: null },
+  })
+  /** writeCells as the page's line runs it: a write waits for `release()`, and its cells are built then. */
+  function line(table: Record<string, MatrixCells>) {
+    const built: MatrixWriteCell[][] = []
+    let gate: Promise<void> = Promise.resolve()
+    const writeCells = vi.fn(async (asked: readonly MatrixWriteCell[] | (() => readonly MatrixWriteCell[])) => {
+      await gate
+      const cells = typeof asked === 'function' ? asked() : asked
+      built.push([...cells])
+      return cells.map((c): MatrixWriteOutcome => {
+        const k = `${c.rowId}|${c.coordinateKey}`
+        const next = table[k]!.version + 1
+        table[k] = c.cell === 'salePrice' ? { ...table[k]!, version: next, sale: c.value as MatrixCells['sale'] } : { ...table[k]!, version: next }
+        return { rowId: c.rowId, coordinateKey: c.coordinateKey, cell: c.cell, outcome: 'applied', version: next }
+      })
+    })
+    return { built, writeCells, hold: () => { let release!: () => void; gate = new Promise((r) => { release = r }); return () => { gate = Promise.resolve(); release() } } }
+  }
+
+  it('Sale: the Undo clicked while a write is on its way is built from the cells as that write left them', async () => {
+    const table: Record<string, MatrixCells> = { 'a|AMAZON:IT': sale(null, 4) }
+    const l = line(table)
+    const { source } = doorsFor(table, { writeCells: l.writeCells })
+    const pv = await source.preview(req({ field: 'salePrice', mode: 'sale-set', input: { sale: { value: 99, start: '2026-10-14', end: '2026-10-31' } } }))
+    const result = await source.apply(pv)
+    expect(l.built[0]!.map((c) => c.expectedVersion)).toEqual([4])
+    // Another write of this page is on its way (it moves the listing to version 7) when Undo is clicked.
+    const release = l.hold()
+    const undoing = result.undo!()
+    table['a|AMAZON:IT'] = { ...table['a|AMAZON:IT']!, version: 7 }
+    release()
+    expect(await undoing).toBe('Put back 1 sale.')
+    expect(l.built[1]).toEqual([expect.objectContaining({ cell: 'salePrice', value: { value: null, start: null, end: null }, expectedVersion: 7 })])
+  })
+
+  it('Sale: a cell whose sale changed since keeps it (changedSince); the others are put back', async () => {
+    const table: Record<string, MatrixCells> = { 'a|AMAZON:IT': sale(null, 4), 'b|AMAZON:IT': sale(null, 2) }
+    const { source, writes } = doorsFor(table, {
+      writeCells: vi.fn(async (asked: readonly MatrixWriteCell[] | (() => readonly MatrixWriteCell[])) => {
+        const cells = typeof asked === 'function' ? asked() : asked
+        writes.push([...cells])
+        return cells.map((c): MatrixWriteOutcome => ({ rowId: c.rowId, coordinateKey: c.coordinateKey, cell: c.cell, outcome: 'applied', version: c.expectedVersion + 1 }))
+      }),
+    })
+    const pv = await source.preview(req({ field: 'salePrice', mode: 'sale-set', input: { sale: { value: 99, start: '2026-10-14', end: '2026-10-31' } } }))
+    const result = await source.apply(pv)
+    expect(result.applied).toBe(2)
+    // a still shows the bulk's sale (the read spells the day as a full time); b was changed to 89 since.
+    table['a|AMAZON:IT'] = { ...sale(99, 5, '2026-10-14T00:00:00.000Z'), sale: { value: 99, start: '2026-10-14T00:00:00.000Z', end: '2026-10-31T00:00:00.000Z' } }
+    table['b|AMAZON:IT'] = { ...sale(89, 4, '2026-10-14T00:00:00.000Z'), sale: { value: 89, start: '2026-10-14T00:00:00.000Z', end: '2026-10-31T00:00:00.000Z' } }
+    expect(await result.undo!()).toBe(`Put back 1 sale · 1 could not be put back: ${MATRIX_COPY.changedSince}.`)
+    expect(writes[1]!.map((c) => [c.rowId, c.expectedVersion])).toEqual([['a', 5]])
+  })
+
+  it('Use base price: a price set again since (no longer following the base) keeps it; the Undo is built at its turn', async () => {
+    const table: Record<string, MatrixCells> = { 'a|AMAZON:IT': price(99, 'override', 2), 'b|AMAZON:IT': price(98, 'override', 4) }
+    const { source, writes } = doorsFor(table)
+    const result = await source.apply(await source.preview(req({ field: 'price', mode: 'follow-base' })))
+    expect(result.applied).toBe(2)
+    table['a|AMAZON:IT'] = price(105, 'master', 3)
+    table['b|AMAZON:IT'] = price(97, 'override', 6)
+    expect(await result.undo!()).toBe(`Put back 1 price · 1 could not be put back: ${MATRIX_COPY.changedSince}.`)
+    expect(writes[1]).toEqual([{ rowId: 'a', coordinateKey: 'AMAZON:IT', cell: 'price', value: 99, expectedVersion: 3 }])
+  })
+
+  it('Base price: a row whose base price changed since keeps it; the others are put back', async () => {
+    const now: Record<string, number | null> = {}
+    const { source, doors } = doorsFor({}, {}, { basePriceNow: (rowId) => now[rowId] ?? null })
+    const result = await source.apply(await source.preview(req({ field: 'basePrice', mode: 'set', input: { amount: 90 }, coordinateKeys: [] })))
+    expect(result.applied).toBe(2)
+    now.a = 90
+    now.b = 95
+    expect(await result.undo!()).toBe(`Put back 1 base price · 1 could not be put back: ${MATRIX_COPY.changedSince}.`)
+    expect((doors.masterWrite as ReturnType<typeof vi.fn>).mock.calls[1]![0]).toEqual([{ rowId: 'a', value: 105 }])
   })
 })

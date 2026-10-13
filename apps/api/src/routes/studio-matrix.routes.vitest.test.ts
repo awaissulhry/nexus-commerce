@@ -355,6 +355,9 @@ describe('POST …/verbs and …/verbs/:id/revert', () => {
     expect(res.statusCode).toBe(200)
     const body = res.json()
     expect(body.results.map((r: { outcome: string }) => r.outcome)).toEqual(['applied', 'refused'])
+    // The applied cell names the version it was checked at: the page records the run as its own move (one save line).
+    expect(body.results[0]).toMatchObject({ writtenAt: 3 })
+    expect(body.results[1]).not.toHaveProperty('writtenAt')
     expect(body.results[1].reason).toBe('Not on this market') // the parent has no AMAZON:IT cell in this read → the fresh preview refuses it
     expect(body.operation).toMatchObject({ id: 'op-1', verb: 'set-price', applied: 1, refused: 1 })
     expect(body.operation.before).toEqual([{ rowId: 'c1', coordinateKey: 'AMAZON:IT', cells: read().rows[1]!.cells['AMAZON:IT'] }])
@@ -374,6 +377,23 @@ describe('POST …/verbs and …/verbs/:id/revert', () => {
     expect(commit.statusCode).toBe(200)
     expect(commit.json().results.map((r: { outcome: string }) => r.outcome)).toEqual(['applied'])
     expect(mocks.prices).toHaveBeenCalledWith(expect.objectContaining({ targets: [expect.objectContaining({ listingId: 'l-c1-it', price: 97.5 })] }))
+  })
+  /* 2026-10-13 review: the run checks the value each change was previewed FROM — never a price worked out from an old one. */
+  it('an adjust-prices run after someone changed the price is refused "Changed since the preview"; nothing is written', async () => {
+    const req = { params: { verb: 'adjust-prices', percent: -5 }, targets: [{ rowId: 'c1', coordinateKey: 'AMAZON:IT' }], commit: false }
+    const preview = await app.inject({ method: 'POST', url: '/products/root/studio/matrix/verbs', payload: req })
+    expect(preview.json().changes[0]).toMatchObject({ from: 100, to: 95 })
+    // Someone sets the price to 110 before the run: 95 was worked out from 100.
+    mocks.read.mockImplementation(async () => {
+      const r = read()
+      r.rows[1]!.cells['AMAZON:IT']!.price = { value: 110, currency: 'EUR', source: 'override', formula: null, clamped: null }
+      r.rows[1]!.cells['AMAZON:IT']!.version = 4
+      return r
+    })
+    const commit = await app.inject({ method: 'POST', url: '/products/root/studio/matrix/verbs', payload: { params: { verb: 'adjust-prices' }, targets: req.targets, commit: true, preview: preview.json() } })
+    expect(commit.statusCode).toBe(200)
+    expect(commit.json().results).toEqual([expect.objectContaining({ outcome: 'refused', reason: 'Changed since the preview — reload and run the verb again' })])
+    expect(mocks.prices).not.toHaveBeenCalled()
   })
   it('refuses malformed adjust-prices params with a sentence (400), before any read', async () => {
     const send = (params: Record<string, unknown>, extra: Record<string, unknown> = {}) =>

@@ -47,10 +47,9 @@ describe('the Matrix is wired to the live rule', () => {
     expect(useMatrix).toContain('useListingValuesLive({')
     expect(useMatrix).toMatch(/emitInvalidation\(\{ type: 'listing\.values_changed'[^)]*source: 'local'/)
   })
-  it('writes name the read\'s account and each cell\'s listing; a conflict says the one sentence', () => {
-    // Each cell names its listing (and, when this page's own earlier write moved it, the version that write left).
-    expect(useMatrix).toContain('.map((c) => rebase(withListing(c, current)))')
-    expect(useMatrix).toContain('patchMatrix(productId, cells, { accountId })')
+  /* "Writes name the read's account and each cell's listing; a conflict says the one sentence" is asserted by its
+     behaviour in `matrix/useMatrix.line.vitest.test.ts` (2026-10-13): its source text here broke when #610 changed it. */
+  it('never spells the conflict sentence itself (the one sentence is MATRIX_COPY\'s)', () => {
     expect(useMatrix).toContain('MATRIX_COPY.changedElsewhere')
     expect(useMatrix).not.toContain("'Changed elsewhere — reloaded'")
   })

@@ -193,6 +193,11 @@ interface CellLedger {
 export class SheetUndoHistory {
   private readonly undoStack: SheetCellChange[][] = []
   private readonly redoStack: SheetCellChange[][] = []
+  /* When each step was made: both stacks keep that order (`toUndo`, `toRedo`), whatever order a toast took steps in. */
+  private readonly made = new WeakMap<SheetCellChange[], number>()
+  private steps = 0
+  /** The step an undo is replaying right now: a change its host refuses during the replay leaves it (`dropRedo`). */
+  private undoing: SheetCellChange[] | null = null
   private open: SheetCellChange[] | null = null
   private depth = 0
   private replaying = false
@@ -324,6 +329,7 @@ export class SheetUndoHistory {
     const step = this.open
     this.open = null
     if (!step?.length) return
+    this.made.set(step, ++this.steps)
     this.undoStack.push(step)
     if (this.undoStack.length > this.limit) this.undoStack.shift()
     // A new edit makes the undone future unreachable, as in every spreadsheet.
@@ -363,10 +369,37 @@ export class SheetUndoHistory {
   undo(apply: ApplyCellValues): number {
     if (this.open?.length && this.depth === 0) this.close()
     const step = this.undoStack.pop()
-    if (!step) return 0
-    this.replay(apply, step.map((c) => ({ rowId: c.rowId, colId: c.colId, value: c.before })), 'undo')
-    this.redoStack.push(step)
-    return step.length
+    return step ? this.undoTaken(step, apply) : 0
+  }
+
+  /**
+   * Undo THE step holding a change that `match`es — wherever it is on the undo stack — as ⌘Z would undo it when it is the
+   * last: its "before" values put back, and the step moved onto the redo stack. One step, two doors: a toast's Undo and ⌘Z
+   * undo the same step, so whichever comes first takes it and the other finds nothing (never a second write, never a new
+   * step that ⌘Z would then re-apply). Returns how many cells it wrote (0 = no such step: undone already, or not saved).
+   */
+  undoStep(match: (change: SheetCellChange) => boolean, apply: ApplyCellValues): number {
+    if (this.open?.length && this.depth === 0) this.close()
+    for (let s = this.undoStack.length - 1; s >= 0; s--) {
+      const step = this.undoStack[s]!
+      if (!step.some(match)) continue
+      this.undoStack.splice(s, 1)
+      return this.undoTaken(step, apply)
+    }
+    return 0
+  }
+
+  private undoTaken(step: SheetCellChange[], apply: ApplyCellValues): number {
+    const cells = step.length
+    this.undoing = step
+    try {
+      this.replay(apply, step.map((c) => ({ rowId: c.rowId, colId: c.colId, value: c.before })), 'undo')
+    } finally {
+      this.undoing = null
+    }
+    // Every change refused during the replay left it: nothing of it is on the redo stack.
+    if (step.length) this.toRedo(step)
+    return cells
   }
 
   /** Re-apply the last undone step's "after" values. */
@@ -374,8 +407,43 @@ export class SheetUndoHistory {
     const step = this.redoStack.pop()
     if (!step) return 0
     this.replay(apply, step.map((c) => ({ rowId: c.rowId, colId: c.colId, value: c.after })), 'redo')
-    this.undoStack.push(step)
+    this.toUndo(step)
     return step.length
+  }
+
+  /**
+   * An undo its host could not carry out for this cell — it holds a newer value (`changedSince`), or the server refused
+   * the write: the change leaves the redo stack, so a redo never writes the old edit over the newer value; a step left
+   * empty leaves too. Works during the replay and after it (the host answers when the write's turn comes). `before` — the
+   * value the undo replayed — picks the change when the cell has more than one. Returns whether one was dropped.
+   */
+  dropRedo(rowId: string, colId: string, before?: unknown): boolean {
+    // A history-only value is matched as itself; a plain value as the sheet compares values (`110` and "110").
+    const same = (v: unknown) => v === before || (!isHistoryOnly(before) && !isHistoryOnly(v) && sheetValuesMatch(v, before))
+    const match = (c: SheetCellChange) => c.rowId === rowId && c.colId === colId && (before === undefined || same(c.before))
+    const out = (step: SheetCellChange[]) => { const i = step.findIndex(match); if (i >= 0) step.splice(i, 1); return i >= 0 }
+    if (this.undoing && out(this.undoing)) return true
+    for (let s = this.redoStack.length - 1; s >= 0; s--) {
+      if (!out(this.redoStack[s]!)) continue
+      if (this.redoStack[s]!.length === 0) this.redoStack.splice(s, 1)
+      return true
+    }
+    return false
+  }
+
+  /* Both stacks keep the order the steps were made in: ⌘Z undoes the newest step still done, ⌘⇧Z redoes the oldest step
+     undone — also after a toast took a step from the middle (`undoStep`). */
+  private toRedo(step: SheetCellChange[]): void {
+    const at = this.made.get(step) ?? 0
+    let i = this.redoStack.length
+    while (i > 0 && (this.made.get(this.redoStack[i - 1]!) ?? 0) < at) i--
+    this.redoStack.splice(i, 0, step)
+  }
+  private toUndo(step: SheetCellChange[]): void {
+    const at = this.made.get(step) ?? 0
+    let i = this.undoStack.length
+    while (i > 0 && (this.made.get(this.undoStack[i - 1]!) ?? 0) > at) i--
+    this.undoStack.splice(i, 0, step)
   }
 
   clear(): void {

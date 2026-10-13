@@ -17,7 +17,8 @@
  *                                                    [Cancel] [Save]
  *
  * One Save writes the whole setting through the Matrix door (`businessPrice`, at the version the pop-up opened on); the
- * page then says it in a toast with Undo. The rules are `businessPricing.ts` (the server's own, from @nexus/shared).
+ * page then says it in a toast with Undo — the save's own ⌘Z step (2026-10-13), so ⌘Z and the toast are one way back. The
+ * rules are `businessPricing.ts` (the server's own, from @nexus/shared).
  */
 import { useState, type KeyboardEvent } from 'react'
 import { Plus, X } from 'lucide-react'
@@ -53,10 +54,17 @@ export interface BusinessTarget {
 /** What a save hands the page: the toast's sentence, and its Undo (none when Nexus could not put the old one back). */
 export interface BusinessSaved { sentence: string; undo: (() => Promise<string>) | null }
 
+/**
+ * The save, answered: the door's outcome, and — the page's one way back — the ⌘Z step it was recorded as (2026-10-13): the
+ * toast's Undo is that step, never a second write of the old setting at whatever version the listing has. It throws with
+ * the reason when nothing was put back (a newer setting stays).
+ */
+export interface BusinessWrite { outcome: MatrixWriteOutcome; undo: () => Promise<void> }
+
 export interface BusinessPricingDialogProps {
   target: BusinessTarget
-  /** The Matrix door: the whole setting (`null` = no business price) at a version; null = no listing there now. */
-  writeBusiness: (rowId: string, key: CoordinateKey, setting: BusinessPriceSetting | null, expectedVersion: number | null) => Promise<MatrixWriteOutcome | null>
+  /** The Matrix door: the whole setting (`null` = no business price) at the version the pop-up opened on; null = no listing there now. */
+  writeBusiness: (rowId: string, key: CoordinateKey, setting: BusinessPriceSetting | null, expectedVersion: number) => Promise<BusinessWrite | null>
   onClose: () => void
   onSaved: (saved: BusinessSaved) => void
 }
@@ -108,16 +116,16 @@ export function BusinessPricingDialog(p: BusinessPricingDialogProps) {
     const setting = parsed.setting
     setBusy(true); setError(null)
     try {
-      const outcome = await p.writeBusiness(target.rowId, target.coordinate.key, setting, target.version)
-      if (!outcome) { setError('This listing is no longer here. Close and open the pop-up again.'); return }
+      const saved = await p.writeBusiness(target.rowId, target.coordinate.key, setting, target.version)
+      if (!saved) { setError('This listing is no longer here. Close and open the pop-up again.'); return }
+      const { outcome } = saved
       if (outcome.outcome === 'refused' || outcome.outcome === 'conflict') { setError(outcome.reason ?? 'Not saved'); return }
       if (outcome.outcome === 'applied') {
-        const back = businessUndoOf(b)
         p.onSaved({
           sentence: businessSavedSentence(target.sku, where, setting, b),
-          undo: back ? async () => {
-            const again = await p.writeBusiness(target.rowId, target.coordinate.key, back.setting, null)
-            if (!again || again.outcome === 'refused' || again.outcome === 'conflict') throw new Error(again?.reason ?? 'Not put back')
+          // The ⌘Z step of this save: put back only while the listing still holds this setting.
+          undo: businessUndoOf(b) ? async () => {
+            await saved.undo()
             return `Put back · ${target.sku} · ${where}`
           } : null,
         })

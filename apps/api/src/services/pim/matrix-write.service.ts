@@ -30,8 +30,10 @@
  * read — identical by construction). `commit:true` re-verifies EVERY carried change by re-running the shared preview
  * for that one target with params rebuilt from `change.to`, refuses what the fresh preview does not reproduce, applies
  * the rest through the door as ONE `BulkOperation` (`kind: 'studio-matrix-verb'`, the D15 import store) that captures
- * every touched cell BY VALUE, and answers `VerbOperation`. REVERT restores every captured cell by value through the
- * same door (versions bump) and marks the operation `REVERTED` (or `PARTIAL`, never a lie).
+ * every touched cell BY VALUE, and answers `VerbOperation`. REVERT restores the fields the run changed, by value, through
+ * the same door (versions bump) — each only while the cell still holds what the run wrote (a newer value stays and the
+ * cell answers `changedSince`) — and marks the operation `REVERTED` (or `PARTIAL`, never a lie). Every applied cell of a
+ * run or a revert names the version it was checked at (`writtenAt`), so the page records it as its own move.
  */
 import { createOutboundRow } from '../outbound-rows.js'
 import prisma from '../../db.js'
@@ -646,6 +648,28 @@ export function paramsForChange(verb: MatrixVerbId, change: VerbChange): MatrixV
 
 export type VerbCommitResult = { operation: VerbOperation; results: MatrixWriteOutcome[] }
 
+export const CHANGED_SINCE_PREVIEW = 'Changed since the preview — reload and run the verb again'
+
+/** The mode word of a quantity label (`Follow · 29` → `Follow`). */
+const modeWordOf = (label: string): string => label.split(' · ')[0] ?? label
+
+/**
+ * Did the value a carried change was previewed FROM move since (2026-10-13 review)? The fresh preview reproduced the same
+ * new value, but an "adjust by %" worked out from an older price, a buffer, a method or a list someone changed since would
+ * write over their change: refused, `Changed since the preview`. A Follow quantity's number moves with every sale (Owner
+ * 4A: a pin is AT its number, whatever the follow number did): there only the mode is compared. The stock-sync states are
+ * re-read by the fresh preview itself.
+ */
+export function movedSincePreview(carried: Pick<VerbChange, 'cell' | 'from' | 'fromLabel'>, fresh: Pick<VerbChange, 'from' | 'fromLabel'>, live?: MatrixCells): boolean {
+  if (carried.cell === 'syncState') return false
+  if (carried.cell === 'syncQty') {
+    // The mode first (a Follow cell pinned since at the same number has moved); a Follow number alone has not.
+    if (modeWordOf(carried.fromLabel) !== modeWordOf(fresh.fromLabel)) return true
+    if (live?.sync?.mode !== 'PINNED') return false
+  }
+  return canonical(carried.from ?? null) !== canonical(fresh.from ?? null)
+}
+
 /**
  * MCP full control L8 — eBay ENDS a listing pinned at 0 unless the account's out-of-stock option is ON. For a pin to 0 on
  * eBay coordinates (a fresh request, or a carried preview), the option is read from eBay ONCE per account and market
@@ -736,18 +760,21 @@ export async function runMatrixVerb(ctx: DoorContext, req: MatrixVerbRequest & {
   for (const ch of carried) {
     const params = paramsForChange(verb, ch)
     const fresh = params ? previewVerb(read, { params, targets: [{ rowId: ch.rowId, coordinateKey: ch.coordinateKey }], commit: false }, pctx) : null
-    const same = fresh?.changes.find((c) => c.rowId === ch.rowId && c.coordinateKey === ch.coordinateKey && c.cell === ch.cell && canonical(c.to) === canonical(ch.to))
+    const reproduced = fresh?.changes.find((c) => c.rowId === ch.rowId && c.coordinateKey === ch.coordinateKey && c.cell === ch.cell && canonical(c.to) === canonical(ch.to))
+    // The value the preview worked FROM must still be there: a run never writes a value worked out from an older one.
+    const same = reproduced && !movedSincePreview(ch, reproduced, locate(read, ch.rowId, ch.coordinateKey)?.cells) ? reproduced : undefined
     if (!same) {
-      const reason = fresh?.refusals.find((r) => r.rowId === ch.rowId)?.reason ?? 'Changed since the preview — reload and run the verb again'
+      const reason = (reproduced ? undefined : fresh?.refusals.find((r) => r.rowId === ch.rowId)?.reason) ?? CHANGED_SINCE_PREVIEW
       results.push({ rowId: ch.rowId, coordinateKey: ch.coordinateKey, cell: ch.cell === 'syncState' ? 'syncMode' : (ch.cell as MatrixDoorKind), outcome: 'refused', reason, version: read.rows.find((r) => r.id === ch.rowId)?.cells[ch.coordinateKey]?.version ?? 0 })
       continue
     }
     const cells = locate(read, ch.rowId, ch.coordinateKey)?.cells
+    const at = cells?.version ?? 0
     const outcome = ch.cell === 'syncState' || STATE_VERBS.has(verb)
       ? await applySyncState(read, ch, verb, ctx)
-      : await applyCell(read, { rowId: ch.rowId, coordinateKey: ch.coordinateKey, cell: ch.cell as MatrixDoorKind, value: ch.to, expectedVersion: cells?.version ?? 0 }, verb === 'set-fulfilment' ? { ...ctx, conversion: 'matrix-verb' } : ctx)
+      : await applyCell(read, { rowId: ch.rowId, coordinateKey: ch.coordinateKey, cell: ch.cell as MatrixDoorKind, value: ch.to, expectedVersion: at }, verb === 'set-fulfilment' ? { ...ctx, conversion: 'matrix-verb' } : ctx)
     if (outcome.outcome === 'applied' && cells) cells.version = outcome.version
-    results.push(outcome)
+    results.push(checkedAt(outcome, at))
   }
   await refreshCache(read, results)
 
@@ -774,38 +801,97 @@ export class OperationNotRevertibleError extends Error {
 
 interface StoredOp { kind?: string; verb?: MatrixVerbId; productId?: string; before?: VerbOperation['before']; changes?: VerbChange[]; outcomes?: MatrixWriteOutcome[]; phase?: string }
 
-/** The cell writes that take `live` back to `before`, in the order the door must run them. */
-export function restoreWrites(rowId: string, key: CoordinateKey, before: MatrixCells, live: MatrixCells): Array<{ kind: 'state'; verb: 'pause-sync' | 'resume-sync' } | { kind: 'cell'; cell: MatrixDoorKind; value: unknown }> {
+/** The part of a cell one restore write puts back — one per kind of change a verb makes. */
+export type RestoreField = 'state' | 'fulfilment' | 'quantity' | 'buffer' | 'price' | 'sale' | 'business' | 'source'
+
+/**
+ * The cell writes that take `live` back to `before`, in the order the door must run them — of `only` those fields when it
+ * is given (a revert puts back what its verb changed, never another field someone else moved since).
+ */
+export function restoreWrites(rowId: string, key: CoordinateKey, before: MatrixCells, live: MatrixCells, only?: ReadonlySet<RestoreField>): Array<{ kind: 'state'; verb: 'pause-sync' | 'resume-sync' } | { kind: 'cell'; cell: MatrixDoorKind; value: unknown }> {
   const out: Array<{ kind: 'state'; verb: 'pause-sync' | 'resume-sync' } | { kind: 'cell'; cell: MatrixDoorKind; value: unknown }> = []
   const b = before, l = live
-  if (b.sync && l.sync) {
+  const wants = (field: RestoreField) => !only || only.has(field)
+  if (b.sync && l.sync && wants('state')) {
     if (b.sync.kind === 'PAUSED' && b.sync.via === 'LISTING' && l.sync.kind !== 'PAUSED') out.push({ kind: 'state', verb: 'pause-sync' })
     if (b.sync.kind !== 'PAUSED' && l.sync.kind === 'PAUSED' && l.sync.via === 'LISTING') out.push({ kind: 'state', verb: 'resume-sync' })
   }
   /* Amazon: never a value-only fulfilment write — a set-fulfilment is reverted by the opposite CONVERSION (`revertMatrixOperation`). */
-  if (b.fulfilment && l.fulfilment && b.fulfilment.method !== l.fulfilment.method && !isAmazonKey(key)) out.push({ kind: 'cell', cell: 'fulfilment', value: b.fulfilment.source === 'set' ? b.fulfilment.method : null })
+  if (b.fulfilment && l.fulfilment && wants('fulfilment') && b.fulfilment.method !== l.fulfilment.method && !isAmazonKey(key)) out.push({ kind: 'cell', cell: 'fulfilment', value: b.fulfilment.source === 'set' ? b.fulfilment.method : null })
   if (b.sync && l.sync && b.sync.kind !== 'FBA_EXCLUDED') {
-    if (b.sync.mode === 'PINNED' && (l.sync.mode !== 'PINNED' || l.sync.intended !== b.sync.intended)) out.push({ kind: 'cell', cell: 'syncQty', value: b.sync.intended ?? b.sync.held ?? 0 })
-    else if (b.sync.mode === 'FOLLOW' && l.sync.mode !== 'FOLLOW') out.push({ kind: 'cell', cell: 'syncMode', value: 'FOLLOW' })
-    if (b.sync.buffer !== l.sync.buffer) out.push({ kind: 'cell', cell: 'syncBuffer', value: b.sync.buffer })
+    if (wants('quantity')) {
+      if (b.sync.mode === 'PINNED' && (l.sync.mode !== 'PINNED' || l.sync.intended !== b.sync.intended)) out.push({ kind: 'cell', cell: 'syncQty', value: b.sync.intended ?? b.sync.held ?? 0 })
+      else if (b.sync.mode === 'FOLLOW' && l.sync.mode !== 'FOLLOW') out.push({ kind: 'cell', cell: 'syncMode', value: 'FOLLOW' })
+    }
+    if (wants('buffer') && b.sync.buffer !== l.sync.buffer) out.push({ kind: 'cell', cell: 'syncBuffer', value: b.sync.buffer })
   }
-  if (b.price && l.price && b.price.source !== 'formula') {
+  if (b.price && l.price && b.price.source !== 'formula' && wants('price')) {
     if (b.price.source === 'override' && (l.price.value !== b.price.value || l.price.source !== 'override')) out.push({ kind: 'cell', cell: 'price', value: b.price.value })
     else if (b.price.source === 'master' && l.price.source === 'override') out.push({ kind: 'cell', cell: 'price', value: null })
   }
-  if (b.sale && l.sale && (b.sale.value !== l.sale.value || b.sale.start !== l.sale.start || b.sale.end !== l.sale.end)) out.push({ kind: 'cell', cell: 'salePrice', value: { ...b.sale } })
+  if (b.sale && l.sale && wants('sale') && (b.sale.value !== l.sale.value || b.sale.start !== l.sale.start || b.sale.end !== l.sale.end)) out.push({ kind: 'cell', cell: 'salePrice', value: { ...b.sale } })
   /* Amazon Business: the whole setting as it was (`null` = no business offer) — one write, the tiers with it. */
-  if (b.business && l.business) {
+  if (b.business && l.business && wants('business')) {
     const was = businessSettingOfCell(b.business)
     if (canonical(was) !== canonical(businessSettingOfCell(l.business))) out.push({ kind: 'cell', cell: 'businessPrice', value: was })
   }
   /* "Sells from": back to the listing's own list as it was (`[]` = the market default again). */
-  if (b.source && l.source && !sameSourceCodes(b.source.own, l.source.own)) out.push({ kind: 'cell', cell: 'source', value: [...b.source.own] })
+  if (b.source && l.source && wants('source') && !sameSourceCodes(b.source.own, l.source.own)) out.push({ kind: 'cell', cell: 'source', value: [...b.source.own] })
   void rowId
   return out
 }
 
+/** The field a verb's change writes (`restoreWrites`' word for it); null = none to put back (a push, a retry). */
+export function restoreFieldOf(change: Pick<VerbChange, 'cell' | 'to'>): RestoreField | null {
+  switch (change.cell) {
+    case 'syncState': return change.to === 'PAUSED' || change.to === 'FOLLOW' || change.to === 'PINNED' ? 'state' : null
+    case 'syncMode': case 'syncQty': return 'quantity'
+    case 'syncBuffer': return 'buffer'
+    case 'fulfilment': return 'fulfilment'
+    case 'price': return 'price'
+    case 'salePrice': return 'sale'
+    case 'businessPrice': case 'businessTiers': return 'business'
+    case 'source': return 'source'
+    default: return null
+  }
+}
+
+/**
+ * Does the live cell still hold what this applied change wrote? A revert puts a cell back only then: a newer value — the
+ * person's own edit made after the run, or anyone else's — is never written over (`MATRIX_COPY.changedSince`).
+ * `stored.priceOverride`: the listing's own price as stored — a clamped price SHOWS its floor or ceiling, so only the
+ * stored override says whether it is still the run's (unread = it does not hold: never a blind write).
+ */
+export function holdsChange(change: Pick<VerbChange, 'cell' | 'to'>, live: MatrixCells, stored?: { priceOverride: number | null }): boolean {
+  const to = change.to
+  const s = live.sync
+  switch (change.cell) {
+    case 'price': {
+      const p = live.price
+      if (!p || p.source !== 'override' || typeof to !== 'number') return false
+      if (p.clamped == null) return p.value === roundCents(to)
+      return stored?.priceOverride != null && roundCents(stored.priceOverride) === roundCents(to)
+    }
+    case 'syncQty': return !!s && s.mode === 'PINNED' && (s.intended ?? s.held) === to
+    case 'syncMode': return !!s && s.mode === to
+    case 'syncBuffer': return !!s && s.buffer === to
+    case 'syncState':
+      if (!s) return false
+      if (to === 'PAUSED') return s.kind === 'PAUSED' && s.via === 'LISTING'
+      if (to === 'FOLLOW' || to === 'PINNED') return s.kind !== 'PAUSED'
+      return true
+    // Amazon: the conversion Nexus sent last is still this one (the method itself changes once Amazon's report confirms it).
+    case 'fulfilment': return !!live.fulfilment && (live.fulfilment.method === to || live.fulfilment.conversion?.to === to)
+    case 'source': return !!live.source && Array.isArray(to) && sameSourceCodes(to as string[], live.source.own)
+    default: return true
+  }
+}
+
 const isAmazonKey = (key: CoordinateKey): boolean => /^AMAZON:/i.test(key)
+
+/** An applied outcome names the version it was checked at (`writtenAt`): the page records the move as its own. */
+const checkedAt = (outcome: MatrixWriteOutcome, version: number): MatrixWriteOutcome =>
+  outcome.outcome === 'applied' && outcome.writtenAt === undefined ? { ...outcome, writtenAt: version } : outcome
 
 export async function revertMatrixOperation(ctx: DoorContext, operationId: string): Promise<VerbCommitResult> {
   const op = await prisma.bulkOperation.findUnique({ where: { id: operationId } })
@@ -818,24 +904,45 @@ export async function revertMatrixOperation(ctx: DoorContext, operationId: strin
 
   const read = await doorRead(ctx)
   const results: MatrixWriteOutcome[] = []
+  /* What the run CHANGED, per cell: a carried change and its outcome share their place in the run (one outcome each). An
+     operation stored without outcomes counts every carried change. */
+  const changed = (stored.changes ?? []).filter((_, i) => !stored.outcomes || stored.outcomes[i]?.outcome === 'applied')
   try {
     for (const b of stored.before ?? []) {
       const hit = locate(read, b.rowId, b.coordinateKey)
       if (!hit) { results.push({ rowId: b.rowId, coordinateKey: b.coordinateKey, cell: 'syncMode', outcome: 'refused', reason: `${PREVIEW_WORDS.notOnMarket} any more`, version: 0 }); continue }
+      /* 2026-10-13 (one save line): a cell is put back only while it still holds what the run wrote there. A newer value —
+         the person's own edit after the run, or anyone else's — stays, and the cell answers `changedSince`; the other
+         cells are still put back. Only the fields the run changed are put back, never another field moved since. */
+      const mine = changed.filter((c) => c.rowId === b.rowId && c.coordinateKey === b.coordinateKey)
+      const only = new Set<RestoreField>()
+      // A clamped price shows its floor or ceiling: the listing's own price is read as stored.
+      const stored = hit.cells.price?.clamped && hit.cells.listingId && mine.some((c) => c.cell === 'price')
+        ? await prisma.channelListing.findUnique({ where: { id: hit.cells.listingId }, select: { priceOverride: true } })
+        : null
+      const facts = stored ? { priceOverride: stored.priceOverride == null ? null : Number(stored.priceOverride) } : undefined
+      for (const c of mine) {
+        const field = restoreFieldOf(c)
+        if (!field) continue
+        if (holdsChange(c, hit.cells, facts)) { only.add(field); continue }
+        results.push({ rowId: b.rowId, coordinateKey: b.coordinateKey, cell: c.cell === 'syncState' ? 'syncMode' : (c.cell as MatrixDoorKind), outcome: 'conflict', reason: MATRIX_COPY.changedSince, version: hit.cells.version })
+      }
       /* Amazon fulfilment (2026-10-07): the revert of a conversion that reached Amazon is the OPPOSITE conversion, through
          the same door with fresh checks (refused with the reason when they fail) — never a value-only write. */
-      const sent = isAmazonKey(b.coordinateKey) ? stored.changes?.find((c) => c.rowId === b.rowId && c.coordinateKey === b.coordinateKey && c.cell === 'fulfilment') : undefined
-      if (sent && stored.outcomes?.some((o) => o.rowId === b.rowId && o.coordinateKey === b.coordinateKey && o.cell === 'fulfilment' && o.outcome === 'applied')) {
-        const outcome = await applyCell(read, { rowId: b.rowId, coordinateKey: b.coordinateKey, cell: 'fulfilment', value: sent.to === 'FBA' ? 'FBM' : 'FBA', expectedVersion: hit.cells.version }, { ...ctx, conversion: 'matrix-revert' })
+      const sent = isAmazonKey(b.coordinateKey) && only.has('fulfilment') ? mine.find((c) => c.cell === 'fulfilment') : undefined
+      if (sent) {
+        const at = hit.cells.version
+        const outcome = await applyCell(read, { rowId: b.rowId, coordinateKey: b.coordinateKey, cell: 'fulfilment', value: sent.to === 'FBA' ? 'FBM' : 'FBA', expectedVersion: at }, { ...ctx, conversion: 'matrix-revert' })
         if (outcome.outcome === 'applied') hit.cells.version = outcome.version
-        results.push(outcome)
+        results.push(checkedAt(outcome, at))
       }
-      for (const w of restoreWrites(b.rowId, b.coordinateKey, b.cells, hit.cells)) {
+      for (const w of restoreWrites(b.rowId, b.coordinateKey, b.cells, hit.cells, only)) {
+        const at = hit.cells.version
         const outcome = w.kind === 'state'
           ? await applySyncState(read, { rowId: b.rowId, sku: hit.row.sku, coordinateKey: b.coordinateKey, cell: 'syncState', from: null, to: null, fromLabel: '', toLabel: '' }, w.verb, ctx)
-          : await applyCell(read, { rowId: b.rowId, coordinateKey: b.coordinateKey, cell: w.cell, value: w.value, expectedVersion: hit.cells.version }, ctx)
+          : await applyCell(read, { rowId: b.rowId, coordinateKey: b.coordinateKey, cell: w.cell, value: w.value, expectedVersion: at }, ctx)
         if (outcome.outcome === 'applied') hit.cells.version = outcome.version
-        results.push(outcome)
+        results.push(checkedAt(outcome, at))
       }
     }
   } catch (err) {

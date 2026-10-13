@@ -518,7 +518,8 @@ export interface MatrixWriteOutcome {
   /**
    * The version the write was checked at, when it is NOT the one the caller sent: the listing had moved, the cell's stamp
    * held, so it went ahead on the fresh version. The caller's own-move bookkeeping hops from THIS version, never from the
-   * older one it sent (that would skip the other change in between).
+   * older one it sent (that would skip the other change in between). A verb's run and a revert send no version: they name
+   * it on every cell they applied, so the page records their moves the same way (2026-10-13, one save line).
    */
   writtenAt?: number
   /** A region-inventory write lands on every market it carries. */
@@ -662,6 +663,11 @@ export const MATRIX_COPY = {
   noListingYet: 'No listing on this coordinate yet',
   /** A write whose listing moved since the caller read it (CAS on `ChannelListing.version`, or another listing there now). */
   changedElsewhere: 'Changed elsewhere — reloaded',
+  /**
+   * An Undo (a verb's revert, the bulk Edit's Undo, ⌘Z, a pop-up's toast) puts a cell back only while it still holds what
+   * the change wrote: a newer value — the person's own later edit, or anyone else's — is never written over.
+   */
+  changedSince: 'Changed since — the newer value stays',
   /** A sheet row whose listing is not the one the Matrix read holds for its market (another account). */
   accountMismatch: "The Matrix shows another account's listing for this market, so this cell cannot be changed here",
   /** The tooltip line of a Price or Sale cell whose product sheet change waits for Publish (`PriceCell.waiting`). */

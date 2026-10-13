@@ -208,6 +208,11 @@ export interface BulkContext {
   caseTextOf?: (rowId: string) => string
   /** The hand-offs: why each cannot open for these rows now (null = it can). A field missing here is not offered. */
   handoffHeld?: Partial<Record<BulkHandoffField, string | null>>
+  /**
+   * A row's base price as the grid holds it NOW (a save lands there before the read catches up) — the Undo puts back only
+   * what still holds the bulk's value. Absent = the row's `basePrice`.
+   */
+  basePriceNow?: (rowId: string) => number | null
 }
 
 const variants = (ctx: BulkContext) => ctx.rows.filter((r) => !r.isParent)

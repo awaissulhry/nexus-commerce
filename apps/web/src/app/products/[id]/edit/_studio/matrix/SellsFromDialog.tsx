@@ -14,9 +14,10 @@
  *     Changes the default for 18 listings  ← Every product (a dry run)
  *                                  [Cancel] [Save]
  *
- * This product writes the listing's own list through the Matrix door (`cell: 'source'`; equal to the default = `[]`).
- * Every product writes the market default (`POST /api/stock/sync-control/market-sources`, Amazon EU = one list for the
- * group). Both hand the page a sentence and an Undo for its toast. The rules are `sellsFrom.ts`.
+ * This product writes the listing's own list through the Matrix door (`cell: 'source'`; equal to the default = `[]`), in
+ * line and as one ⌘Z step like a typed cell — its toast's Undo is that step (2026-10-13). Every product writes the market
+ * default (`POST /api/stock/sync-control/market-sources`, Amazon EU = one list for the group). Both hand the page a
+ * sentence and an Undo for its toast. The rules are `sellsFrom.ts`.
  */
 import { useEffect, useState } from 'react'
 
@@ -45,6 +46,13 @@ export interface SellsFromTarget {
 /** What a save hands the page: the toast's sentence, and the Undo that puts it back (resolves with the receipt). */
 export interface SellsFromSaved { sentence: string; undo: () => Promise<string>; scope: SellsFromScope }
 
+/**
+ * This product's write, answered: the door's outcome, and — the page's one way back — the ⌘Z step it was recorded as
+ * (2026-10-13): the toast's Undo is that step, never a second write of the old list. It throws with the reason when nothing
+ * was put back (a newer list stays).
+ */
+export interface SellsFromWrite { outcome: MatrixWriteOutcome; undo: () => Promise<void> }
+
 /** Mounted once per opening (the page renders it only while a cell is open): every choice starts fresh from the cell. */
 export interface SellsFromDialogProps {
   target: SellsFromTarget
@@ -52,7 +60,7 @@ export interface SellsFromDialogProps {
   rowOf: (rowId: string) => MatrixRowRead | null
   locations: readonly MatrixLocation[]
   /** This product: the Matrix door (a `source` cell write at the cell's current version, quiet); null = no cell there now. */
-  writeSource: (rowId: string, key: CoordinateKey, codes: string[]) => Promise<MatrixWriteOutcome | null>
+  writeSource: (rowId: string, key: CoordinateKey, codes: string[]) => Promise<SellsFromWrite | null>
   /** Every product: the market default route. Injectable for a test; the real route by default. */
   postMarket?: (body: MarketSourcesRequest) => Promise<MarketSourcesAnswer>
   onClose: () => void
@@ -106,16 +114,17 @@ export function SellsFromDialog(p: SellsFromDialogProps) {
       if (scope === 'product') {
         const codes = productCodesToWrite(draft, src)
         const before = [...src.own]
-        const outcome = await p.writeSource(target.rowId, coord.key, codes)
-        if (!outcome) { setError('This listing is no longer here. Close and open the pop-up again.'); return }
+        const saved = await p.writeSource(target.rowId, coord.key, codes)
+        if (!saved) { setError('This listing is no longer here. Close and open the pop-up again.'); return }
+        const { outcome } = saved
         if (outcome.outcome === 'refused' || outcome.outcome === 'conflict') { setError(outcome.reason ?? 'Not saved'); return }
         if (outcome.outcome === 'applied') {
           p.onSaved({
             scope,
             sentence: productSavedSentence(target.sku, where, codes, src),
+            // The ⌘Z step of this save: put back only while the listing still sells from this list.
             undo: async () => {
-              const back = await p.writeSource(target.rowId, coord.key, before)
-              if (!back || back.outcome === 'refused' || back.outcome === 'conflict') throw new Error(back?.reason ?? 'Not put back')
+              await saved.undo()
               return `Put back: ${productSavedSentence(target.sku, where, before, src)}`
             },
           })
