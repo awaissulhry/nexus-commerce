@@ -4929,6 +4929,8 @@ function ListingDrawer({ id: initialId, onClose, onChanged }: { id: string; onCl
     if (got.kind === 'fresh') {
       shownRef.current = got.value
       setListing(got.value)
+      // A write refused only because this read had not landed yet: the read is here now. A real write error stays.
+      setError((shown) => (shown === RELOAD_FIRST ? null : shown))
     } else if (got.kind === 'failed') {
       setError(got.error instanceof Error ? got.error.message : String(got.error))
     }
