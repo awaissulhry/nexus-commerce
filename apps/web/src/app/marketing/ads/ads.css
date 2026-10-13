@@ -789,7 +789,7 @@
 
 /* right padding clears the persistent "Ask AI" widget (bottom-right), matching the Ad
    Manager edit-footer fix (commit 7e49af7e) so the Save button never sits under it. */
-.h10-cd-footer { position: sticky; bottom: 0; display: flex; align-items: center; gap: 12px; margin: 0 -30px -26px; padding: 13px 150px 13px 30px; background: var(--nds-white); border-top: 1px solid var(--nds-grey-150); box-shadow: 0 -4px 16px rgba(16, 24, 40, 0.06); z-index: 20; }
+.h10-cd-footer { position: sticky; bottom: 0; display: flex; align-items: center; gap: 12px; margin: 0 calc(-1 * var(--h10-gutter-x, 30px)) -26px; padding: 13px 150px 13px var(--h10-gutter-x, 30px); background: var(--nds-white); border-top: 1px solid var(--nds-grey-150); box-shadow: 0 -4px 16px rgba(16, 24, 40, 0.06); z-index: 20; }
 .h10-cd-footer .msg { font-size: 12.5px; color: var(--nds-text-muted); }
 
 /* ── CBN.3.5 — product cell (Ads tab first column): thumb + title + ASIN/SKU ── */
