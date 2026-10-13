@@ -17,7 +17,9 @@ vi.mock('../../lib/queue.js', () => ({ outboundSyncQueue: null, redis: null, sea
 import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
 import { OFFER_AUDIENCE_FIELD_KEY } from '../categories/seller-offer-audience.service.js'
+import { MATRIX_COPY } from '@nexus/shared/matrix-contract'
 import { getMatrixRead } from './matrix.service.js'
+import { PARENT_PRICE_REASON, PRICE_PERMISSION_REASON } from './matrix-cells.js'
 
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
 const IT = 'APJ6JRA9NG5V4'
@@ -50,6 +52,13 @@ beforeAll(() => scoped(async () => {
   await kept('IT', 'COAT', { ALL: 'Vendita su Amazon' })
   await kept('DE', 'OUTERWEAR', { ALL: 'Bei Amazon verkaufen' })
   // A business send waiting in its hold; and an older normal price push (the queue fold must never see the business row).
+  // An eBay listing beside them: no channel but Amazon ever serves the business cells.
+  await prisma.marketplace.create({ data: { channel: 'EBAY', code: 'IT', name: 'eBay IT', currency: 'EUR', region: 'EU', language: 'it', languages: ['it'] } })
+  const ebay = (await prisma.channelConnection.create({ data: { channelType: 'EBAY', accountLabel: 'ebay', isActive: true, isPrimary: true } as never })).id
+  ids['1-ebay'] = (await prisma.channelListing.create({ data: {
+    productId: 'mb-1', channel: 'EBAY', marketplace: 'IT', channelMarket: 'EBAY_IT', region: 'EU', channelConnectionId: ebay,
+    listingStatus: 'ACTIVE', isPublished: true, externalListingId: 'EXT-1-ebay', price: 105, quantity: 3,
+  } as never })).id
   await prisma.outboundSyncQueue.create({ data: {
     productId: 'mb-1', channelListingId: ids['1-it'], targetChannel: 'AMAZON', targetRegion: 'EU', syncStatus: 'PENDING', syncType: 'BUSINESS_PRICE_UPDATE',
     holdUntil: new Date('2026-10-13T10:00:30Z'), maxRetries: 3, payload: { syncBusiness: true },
@@ -86,5 +95,29 @@ describe('the Matrix read carries the business cell', () => {
   it('the business row never reaches the stock and price lane (the queue fold)', async () => {
     const eu = (await read()).rows.find((r) => r.id === 'mb-1')!.cells['AMAZON:EU']
     expect(eu?.queue?.state ?? 'never').toBe('never')
+  })
+
+  it('Part 2 — the IT group serves B2B price and Tiers after Sale; DE (no B2B), the EU inventory group and eBay never do', async () => {
+    const coords = (await read()).coordinates
+    expect(coords.find((c) => c.key === 'AMAZON:IT')!.cells.slice(-3)).toEqual(['salePrice', 'businessPrice', 'businessTiers'])
+    expect(coords.find((c) => c.key === 'AMAZON:IT')!.absent.map((a) => a.cell)).not.toContain('businessPrice')
+    expect(coords.find((c) => c.key === 'AMAZON:DE')!.absent.filter((a) => a.cell === 'businessPrice').map((a) => a.reason)).toEqual([MATRIX_COPY.absentBusiness('OUTERWEAR')])
+    for (const key of ['AMAZON:DE', 'AMAZON:EU', 'EBAY:IT']) {
+      const coord = coords.find((c) => c.key === key)!
+      expect(coord.cells, key).not.toContain('businessPrice'); expect(coord.cells, key).not.toContain('businessTiers')
+    }
+    expect((await cellOf('mb-1', 'EBAY:IT'))!).not.toHaveProperty('business')
+  })
+
+  it('Part 2 — writable: a variant with B2B (kept or not); held on the parent, on a listing whose own type has no B2B, and without products.price.edit', async () => {
+    const it1 = (await cellOf('mb-1', 'AMAZON:IT'))!
+    expect(it1.writable).toMatchObject({ businessPrice: true, businessTiers: true })
+    expect((await cellOf('mb-2', 'AMAZON:IT'))!.writable.businessPrice).toBe(true)
+    const parent = (await cellOf('mb-p', 'AMAZON:IT'))!
+    expect(parent.writable.businessPrice).toBe(false); expect(parent.writeBlockedReason.businessPrice).toBe(PARENT_PRICE_REASON)
+    const coat = (await cellOf('mb-3', 'AMAZON:IT'))!
+    expect(coat.writable.businessTiers).toBe(false); expect(coat.writeBlockedReason.businessPrice).toBe(MATRIX_COPY.absentBusiness('COAT'))
+    const noRight = (await scoped(() => getMatrixRead({ productId: 'mb-p', canEditPrice: false }))).rows.find((r) => r.id === 'mb-1')!.cells['AMAZON:IT']!
+    expect(noRight.writable.businessPrice).toBe(false); expect(noRight.writeBlockedReason.businessPrice).toBe(PRICE_PERMISSION_REASON)
   })
 })

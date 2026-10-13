@@ -33,7 +33,7 @@ describe('matrixWrite — what a Matrix cell edit sends, and why it sometimes se
     /* Positive control on the same predicate: every Matrix kind gets PAST the routing test. */
     let past = 0
     for (const k of MATRIX_CELL_KINDS) { const d = matrixWrite(col(k), cellsOf(), 1, 2); if (!(d.send === false && d.reason === MATRIX_NOT_A_COLUMN)) past++ }
-    expect(past).toBe(8)
+    expect(past).toBe(10)
   })
 
   it('sends a syncQty write with the listing’s version as the CAS token — a typed number on a Follow cell pins (the store does it)', () => {

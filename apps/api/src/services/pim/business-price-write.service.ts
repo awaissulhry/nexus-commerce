@@ -25,6 +25,7 @@ import { Prisma } from '@prisma/client'
 import { createOutboundRow } from '../outbound-rows.js'
 import { fireOutboundJobs } from '../outbound-enqueue.js'
 import { afterDatabaseCommit } from '../../lib/database-context.js'
+import { announceListingValues } from '../listing-values-events.js'
 import prisma from '../../db.js'
 import { MATRIX_COPY } from '@nexus/shared/matrix-contract'
 import {
@@ -36,7 +37,7 @@ import { businessHeld } from './business-held.js'
 import { loadAmazonOfferFacts } from '../amazon/offer-facts.js'
 import { BUSINESS_PRICE_SYNC_TYPE, storedBusinessSetting } from '../amazon/business-offer.js'
 import { FOLLOWER_PRICE_HOLD_MS, listingMarketCurrency } from './follower-price.js'
-import { PARENT_PRICE_REASON } from './matrix-cells.js'
+import { businessListingReason, PARENT_PRICE_REASON } from './matrix-cells.js'
 import type { MarketCurrencyRow } from './market-currency.js'
 
 /** The reasons a business price write may run with no version guard — a closed set, as the price door's. */
@@ -154,10 +155,9 @@ export async function writeBusinessPrices(input: {
       continue targets
     }
     if (after && !t.unguardedReason) {
-      if (!businessTypeCandidates(l).length) { refuse(MATRIX_COPY.absentBusinessNoType(), before); continue }
-      const measured = audienceOf(l)
-      if (!measured) { refuse(MATRIX_COPY.absentBusinessUnchecked(), before); continue }
-      if (!measured.audience.includes('B2B')) { refuse(MATRIX_COPY.absentBusiness(measured.productType), before); continue }
+      // The Matrix holds the cell with the same sentence (`businessListingReason`, one rule).
+      const blocked = businessListingReason(businessTypeCandidates(l), audienceOf(l), l.marketplace)
+      if (blocked) { refuse(blocked, before); continue }
       const problems = businessPriceProblems({ setting: after, normalPrice: normal, minPrice: offer?.minimum_seller_allowed_price ?? null, maxPrice: offer?.maximum_seller_allowed_price ?? null, currency })
       if (problems.length) { refuse(problems.join(' '), before); continue }
     }
@@ -213,6 +213,9 @@ export async function writeBusinessPrices(input: {
     result.results.push({ ...base, outcome: 'applied', version: written.version, before, businessPrice, warnings, queueId: written.queueId, ...(written.notSent ? { notSent: written.notSent } : {}) })
     result.applied++
   }
+  // The sheet and the Matrix re-read these listings (inside the caller's transaction the hint waits for ITS commit).
+  const changed = result.results.filter((r) => r.outcome === 'applied').map((r) => r.listingId)
+  if (changed.length) announceListingValues(changed, ['businessPrice'], 'business-price')
   // Post-commit: the instant lane honours each row's own holdUntil; the drain cron is the fallback.
   if (queued.length) await afterDatabaseCommit(`business-prices:${queued.map((row) => row.id).join(',')}`,
     () => fireOutboundJobs(queued, { source: 'BUSINESS_PRICE_WRITE' }))

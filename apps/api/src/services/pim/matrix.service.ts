@@ -41,6 +41,7 @@ import {
   type FulfilmentCell,
   type FulfilmentMethod,
   type MatrixCasePack,
+  type MatrixCellKind,
   type MatrixCells,
   type MatrixCoordinate,
   type MatrixFbaInbound,
@@ -66,7 +67,7 @@ import { detectEuIntentConflict } from '../amazon-eu-quantity-guard.js'
 import { readAmazonOfferDraft } from '../amazon/offer-draft.js'
 import { amazonMarketplaceIdOf, readAmazonOfferFacts } from '../amazon/offer-facts.js'
 import { BUSINESS_PRICE_SYNC_TYPE } from '../amazon/business-offer.js'
-import { loadBusinessAudiences } from '../categories/seller-offer-audience.service.js'
+import { businessTypeCandidates, loadBusinessAudiences } from '../categories/seller-offer-audience.service.js'
 import { businessHeld } from './business-held.js'
 import { listingQuantityVerdict } from './listing-quantity-verdict.js'
 import { MARKETPLACE_ID_TO_CODE } from '../../utils/marketplace-code.js'
@@ -79,7 +80,7 @@ import { readSaleWindows } from './sale-window.js'
 import { FBA_ALL_CENTRES } from '../fba-pan-eu.service.js'
 import { axisValuesOf, buildFamilyAxes, FAMILY_MEMBER_SELECT, readExcludedListingIds, resolveFamilyRoot, type FamilyAxis } from './family-projection.service.js'
 import {
-  businessAbsence, businessCellOf, channelLabel, channelRank, channelShape, circled, compareMarkets, deriveFulfilment, foldQueue, isAmazonEuMarket,
+  BUSINESS_CELL_KINDS, businessAbsence, businessCellOf, businessListingReason, channelLabel, channelRank, channelShape, circled, compareMarkets, deriveFulfilment, foldQueue, isAmazonEuMarket,
   effectiveFulfilment, inSourceOrder, lanePushFailure, listingStateOf, priceCellOf, reportedFulfilment, sourceCellOf, withoutInventory, writableFor, type QueueRowFacts, type SourceLocation,
 } from './matrix-cells.js'
 
@@ -232,6 +233,11 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
     ? await loadBusinessAudiences(amazonListings.map(audienceListing), (l) => l.channelConnectionId ?? ownPrimaryAmazon)
     : () => null
   if (amazonListings.length) queries += 1
+  /** Why this Amazon listing has no business offer here (the door's own sentence), or null when Amazon lists B2B for it. */
+  const businessReasonOf = (l: MatrixListing): string | null => {
+    const shaped = audienceListing(l)
+    return businessListingReason(businessTypeCandidates(shaped), businessAudienceOf(shaped), l.marketplace)
+  }
   mark('wave1', tWave1)
 
   // ── 3. wave 2 — the tables keyed by listing id ─────────────────────────────────────────────
@@ -453,6 +459,22 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
   const unlisted: Coord[] = []
   const euCandidates: Array<{ market: string; currency: string }> = []
   const amazonEuRows = new Map<string, MatrixListing[]>() // memberId → its EU rows, in market order
+  /**
+   * Amazon Business — an Amazon market group serves the B2B price and Tiers cells when Amazon lists B2B for at least one
+   * of its variants' listings (each listing by the door's own rule, `businessReasonOf`); a variant whose listing has
+   * none holds both cells with the sentence. Otherwise the cells are absent with the first variant's sentence — or, with
+   * no variant listed here, the family's (`businessAbsence`).
+   */
+  const businessShape = (byMember: Map<string, MatrixListing[]>, mk: string, accountId: string | null): { serves: boolean; absent: Array<{ cell: MatrixCellKind; reason: string }> } => {
+    const variants = [...byMember.entries()].filter(([memberId]) => !isFamilyParent(memberId)).map(([, rows]) => rows[0]!)
+    if (variants.some((l) => businessReasonOf(l) === null)) return { serves: true, absent: [] }
+    if (variants.length) {
+      const reason = businessReasonOf(variants[0]!)!
+      return { serves: false, absent: [{ cell: 'businessPrice', reason }, { cell: 'businessTiers', reason }] }
+    }
+    const family = businessAbsence({ productType: businessType, market: mk, audience: accountId ? audienceByAccountMarket.get(offerAudienceKey(accountId, mk)) ?? null : null })
+    return { serves: family.length === 0, absent: family }
+  }
 
   for (const m of marketplaces) {
     const ch = upper(m.channel), mk = upper(m.code)
@@ -471,16 +493,16 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
     const global = mk === 'GLOBAL'
     const byMember = new Map<string, MatrixListing[]>()
     for (const l of primaryRows) byMember.set(l.productId, [...(byMember.get(l.productId) ?? []), l])
+    /* A LISTED Amazon market serves the business cells where Amazon lists B2B, else declares them absent with the
+       sentence derived from what Amazon told ITS account. */
+    const business = ch === 'AMAZON' && isListed && !global ? businessShape(byMember, mk, accountId) : null
     const coord: Coord = {
       key, kind: global ? 'global' : 'market', channel: ch, market: mk,
       label: global ? channelLabel(ch) : `${channelLabel(ch)} · ${mk}`,
       region: ch === 'AMAZON' ? (isAmazonEuMarket(ch, mk) ? 'EU' : mk === 'UK' ? 'UK' : m.region || null) : null,
       alias: null, accountId, currency: m.currency, connected, listed: null, draft: null,
-      cells: isListed ? (inEu ? withoutInventory(shape.cells) : shape.cells) : [],
-      /* A LISTED Amazon market also declares the reserved business cells absent, with the sentence derived from what Amazon told ITS account. */
-      absent: ch === 'AMAZON' && isListed && !global
-        ? [...shape.absent, ...businessAbsence({ productType: businessType, market: mk, audience: accountId ? audienceByAccountMarket.get(offerAudienceKey(accountId, mk)) ?? null : null })]
-        : shape.absent,
+      cells: isListed ? [...(inEu ? withoutInventory(shape.cells) : shape.cells), ...(business?.serves ? BUSINESS_CELL_KINDS : [])] : [],
+      absent: business ? [...shape.absent, ...business.absent] : shape.absent,
       sharedInventoryWith: null, inventoryOn: inEu ? 'AMAZON:EU' : null,
       vocabulary: { fulfilment: shape.fulfilment },
       rowsOf: (id) => byMember.get(id) ?? [], euMarkets: null,
@@ -492,10 +514,14 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
       const aliasRows = rowsHere.filter((l) => l.aliasKey === alias.id)
       const byMemberA = new Map<string, MatrixListing[]>()
       for (const l of aliasRows) byMemberA.set(l.productId, [...(byMemberA.get(l.productId) ?? []), l])
+      const aliasListed = connected && aliasRows.length > 0
+      // An alias follows its market's rule over its own listings.
+      const aliasBusiness = ch === 'AMAZON' && aliasListed && !global ? businessShape(byMemberA, mk, alias.channelConnectionId ?? accountId) : null
       listed.push({
         ...coord, key: coordKey(ch, mk, alias.id), label: `${coord.label} ${circled(alias.position + 1)}`,
         alias: { id: alias.id, label: alias.label, position: alias.position }, accountId: alias.channelConnectionId ?? accountId,
-        cells: connected && aliasRows.length > 0 ? shape.cells : [], inventoryOn: null,
+        cells: aliasListed ? [...shape.cells, ...(aliasBusiness?.serves ? BUSINESS_CELL_KINDS : [])] : [], inventoryOn: null,
+        absent: aliasBusiness ? [...shape.absent, ...aliasBusiness.absent] : shape.absent,
         rowsOf: (id) => byMemberA.get(id) ?? [], euMarkets: null,
       })
     }
@@ -627,7 +653,9 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
       sale.waiting = s ? { value: s.price, start: s.start, end: s.end } : { value: null, start: null, end: null }
     }
     const sharedFrom = sourceOf(member.id)?.lenderName ?? null
-    const gate = writableFor({ role: isParent ? 'parent' : 'variant', cells: coord.cells, sync, fulfilment: fulfilment ? { method: fulfilment.method, guard: fulfilment.guard } : null, price, canEditPrice: input.canEditPrice, sharedFrom })
+    /* Amazon Business — where this group serves the business cells: the listing's own B2B verdict (null = listed). */
+    const businessBlocked = serves('businessPrice') && !isParent ? businessReasonOf(primary) : undefined
+    const gate = writableFor({ role: isParent ? 'parent' : 'variant', cells: coord.cells, sync, fulfilment: fulfilment ? { method: fulfilment.method, guard: fulfilment.guard } : null, price, canEditPrice: input.canEditPrice, sharedFrom, businessBlocked })
     /* "Sells from" (Step 2): one per group that carries the quantity — once on Amazon EU (its primary row's list; the door
        writes the same list on every EU row). */
     const source = serves('syncQty') ? sourceCellOf({
@@ -635,12 +663,12 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
       ledger: syncLedgers.get(member.id)?.ledger, marketSources, locations: sourceLocations,
       isFba: sync?.kind === 'FBA_EXCLUDED', sharedFrom, canAdjustStock: input.canAdjustStock === true,
     }) : null
-    /* Amazon Business — on an Amazon market only: the listing's business offer where Amazon lists B2B for it (absent where
-       it does not); the family parent has no offer of its own (null). */
+    /* Amazon Business — on an Amazon market group that serves the business cells: the listing's business offer where
+       Amazon lists B2B for it (absent where it does not); the family parent has no offer of its own (null). */
     let business: BusinessCell | null | undefined
-    if (coord.channel === 'AMAZON' && coord.kind === 'market') {
-      if (isParent) business = coord.accountId && audienceByAccountMarket.get(offerAudienceKey(coord.accountId, coord.market))?.includes('B2B') ? null : undefined
-      else if (businessAudienceOf(audienceListing(primary))?.audience.includes('B2B')) {
+    if (serves('businessPrice') && coord.channel === 'AMAZON' && coord.kind === 'market') {
+      if (isParent) business = null
+      else if (businessBlocked === null) {
         const facts = readAmazonOfferFacts({ ...primary, saleWindow: window ?? null }, 'job').values
         business = businessCellOf({
           listing: primary, marketplaceId: amazonMarketplaceIdOf(primary.marketplace) ?? '', currency: coord.currency,

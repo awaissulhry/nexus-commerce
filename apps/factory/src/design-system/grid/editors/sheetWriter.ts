@@ -369,6 +369,8 @@ export const MATRIX_NOT_A_COLUMN = 'Not a Matrix column'
 export const MATRIX_NO_LISTING = 'No listing on this coordinate'
 export const MATRIX_FULFILMENT_INLINE = 'Fulfilment is changed through its preview (the cell\'s picker, or Edit… → Fulfilment) — never pasted or filled'
 export const MATRIX_UNCHANGED = 'Unchanged'
+/** The business cells are set in their editor only: a typed number would silently turn a percent rule into an exact price. */
+export const MATRIX_BUSINESS_INLINE = 'The B2B price and quantity discounts are set in their editor (Enter or F2 on the cell) — never typed, pasted or filled'
 
 const MATRIX_NOT_A_VALUE: Readonly<Record<string, string>> = {
   syncQty: 'A quantity is a whole number, zero or more',
@@ -376,6 +378,8 @@ const MATRIX_NOT_A_VALUE: Readonly<Record<string, string>> = {
   price: 'A price is zero or more',
   syncMode: 'Mode is Follow or Pinned',
   salePrice: 'A sale is a price, zero or more, with an optional window',
+  businessPrice: MATRIX_BUSINESS_INLINE,
+  businessTiers: MATRIX_BUSINESS_INLINE,
 }
 export const MATRIX_SALE_DATES_NOT_PASTED = 'A sale with dates cannot be pasted (its dates show no year): paste the price, then set the dates in the cell'
 
@@ -385,6 +389,7 @@ export const MATRIX_SALE_DATES_NOT_PASTED = 'A sale with dates cannot be pasted 
  */
 export function matrixValueRefusal(kind: string, value: unknown): string | null {
   if (!(MATRIX_CELL_KINDS as readonly string[]).includes(kind) || matrixCoerceValue(kind as MatrixCellKind, value) !== undefined) return null
+  if (kind === 'businessPrice' || kind === 'businessTiers') return MATRIX_BUSINESS_INLINE
   if (typeof value === 'string' && kind !== 'syncMode' && matrixNumberTextAmbiguous(value)) {
     const t = value.trim()
     const decimal = Number(t.replace(/[^\d.,]/g, '').replace(',', '.'))
@@ -402,10 +407,11 @@ export function matrixWrite(
 ): MatrixWriteDecision {
   const kind = column.kind
   if (!(MATRIX_CELL_KINDS as readonly string[]).includes(kind)) return { send: false, reason: MATRIX_NOT_A_COLUMN }
-  const k = kind as MatrixWritableKind | 'listing' | 'syncState'
+  const k = kind as MatrixWritableKind | 'listing' | 'syncState' | 'businessTiers'
   if (!cell) return { send: false, reason: MATRIX_NO_LISTING }
   if (k === 'listing' || k === 'syncState') return { send: false, reason: `${MATRIX_CELL_LABELS[k]} is a fact, not a write` }
   if (k === 'fulfilment') return { send: false, reason: MATRIX_FULFILMENT_INLINE }
+  if (k === 'businessPrice' || k === 'businessTiers') return { send: false, reason: MATRIX_BUSINESS_INLINE }
   if (cell.writable[k] !== true) return { send: false, reason: cell.writeBlockedReason[k] ?? 'This cell cannot be changed here' }
   const value = matrixCoerceValue(k, after)
   if (value === undefined) return { send: false, reason: matrixValueRefusal(k, after) ?? 'Not a value this cell can hold' }

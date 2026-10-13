@@ -92,10 +92,14 @@ export {
   matrixCellEditable, matrixCellValue, matrixApplyValue, matrixCoerceValue, matrixCompare, matrixFillAllowed,
   matrixFulfilmentOptions, matrixMoney, matrixDay, matrixAgo, matrixSaleText, MATRIX_SALE_WINDOW_MARK, matrixNumberText, matrixNumberTextAmbiguous, matrixModeWord, matrixQueueWord, matrixQueueGlyph, matrixQtyText,
   isMatrixCellKind, isSaleEditorValue, matrixGuardDiffers, matrixReportedDiffers,
+  // Amazon Business (step 5): the B2B price and Tiers cells.
+  matrixBusinessPriceText, matrixBusinessTiersText, matrixBusinessSendLine, matrixBusinessHidden, matrixPercent, matrixCellOpens,
+  MATRIX_BUSINESS_KINDS, MATRIX_BUSINESS_OPENS,
   type MatrixCellState, type MatrixToneSource, type MatrixEditability, type SaleEditorValue,
 } from './matrixCells'
 export {
   ListingStateCell, FulfilmentCell, SyncModeCell, SyncQtyCell, SyncBufferCell, SyncStateCell, PriceCell, SaleCell,
+  BusinessPriceCell, BusinessTiersCell, MATRIX_BUSINESS_EDIT,
   MATRIX_CELL_RENDERERS, type MatrixCellParams, type MatrixCellProps,
 } from './MatrixCellViews'
 

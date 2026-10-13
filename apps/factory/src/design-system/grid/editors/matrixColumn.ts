@@ -79,6 +79,8 @@ export interface MatrixColumnOptions<T> {
   rowIdOf?: (data: T) => string
   onJump?: (params: ICellRendererParams) => void
   onPickFulfilment?: (method: FulfilmentMethod, params: ICellRendererParams) => void
+  /** The B2B price and Tiers cells' pencil opens the business price editor (Amazon Business). Absent = no pencil. */
+  onOpenBusiness?: (params: ICellRendererParams, anchor: HTMLElement | null) => void
   /**
    * Write the filled/typed value back into `params.data` — AG discards it otherwise. Optional: the
    * default is `matrixApplyValue` on the object `cells(data)` returns, which IS the row's own.
@@ -108,7 +110,9 @@ const MODE_OPTIONS = [
   { value: 'PINNED', label: 'Pinned' },
 ] as const
 
-const NUMERIC_KINDS: readonly MatrixCellKind[] = ['syncQty', 'syncBuffer', 'price', 'salePrice']
+const NUMERIC_KINDS: readonly MatrixCellKind[] = ['syncQty', 'syncBuffer', 'price', 'salePrice', 'businessPrice']
+/** The cells whose pencil opens a page editor (Amazon Business): the pencil shows on row hover and AG leaves its clicks alone. */
+const OPENS_EDITOR_KINDS: readonly MatrixCellKind[] = ['businessPrice', 'businessTiers']
 
 /** The editor fragment per kind. `fulfilment` is a select the setter intercepts; facts have none. */
 function editorFor<T>(kind: MatrixCellKind, opts: MatrixColumnOptions<T>): Partial<ColDef<T>> {
@@ -137,8 +141,11 @@ function editorFor<T>(kind: MatrixCellKind, opts: MatrixColumnOptions<T>): Parti
         cellEditorPopupPosition: 'under',
         cellEditorParams: { currency: opts.coordinate.currency },
       }
+    /* The business cells take no typing: the page opens its editor (`onOpenBusiness`, `matrixCellOpens`). */
     case 'listing':
     case 'syncState':
+    case 'businessPrice':
+    case 'businessTiers':
       return {}
   }
 }
@@ -152,15 +159,19 @@ export function matrixColumnDef<T>(kind: MatrixCellKind, opts: MatrixColumnOptio
   const coordinateOf = opts.coordinateOf
   const coordOf = coordinateOf ? (row: T | undefined): MatrixCoordinate => coordinateOf(row) ?? coordinate : (): MatrixCoordinate => coordinate
 
+  const opensEditor = OPENS_EDITOR_KINDS.includes(kind)
   /* STABLE — built once per call, handed to AG as one object. */
-  const rendererParams: MatrixCellParams = {
+  const rendererParams: MatrixCellParams & { suppressMouseEventHandling?: (p: { event: MouseEvent }) => boolean } = {
     kind,
     coordinate,
     facts: (p) => cells(p.data as T | undefined),
     onJump: opts.onJump,
     onPickFulfilment: opts.onPickFulfilment,
+    onOpenBusiness: opts.onOpenBusiness,
     copy,
     now,
+    /* The pencil's own click: AG must not start a range drag or take the double-click (the Case and From cells' rule). */
+    ...(opensEditor ? { suppressMouseEventHandling: (p: { event: MouseEvent }) => p.event.target instanceof Element && !!p.event.target.closest('[data-nds-cell-action]') } : {}),
   }
 
   const editable = (row: T | undefined) => matrixCellEditable(kind, cells(row)).editable
@@ -210,7 +221,8 @@ export function matrixColumnDef<T>(kind: MatrixCellKind, opts: MatrixColumnOptio
     cellDataType: false,
     /* `nds-cell-is-locked` is a RULE below, never in `cellClass`: a class present in both is added
        and removed in the same paint (VT.2's measured mechanism). */
-    cellClass: (p) => ['nds-ag-cell', numeric ? 'nds-ag-num' : '', kind === 'listing' ? 'nds-matrix-listing' : '', editable(data(p)) ? 'nds-cell-is-editable' : ''].filter(Boolean).join(' '),
+    /* A business cell reveals its pencil on row hover (the Case and From cells' rule); it takes no typing, so no text cursor. */
+    cellClass: (p) => ['nds-ag-cell', numeric ? 'nds-ag-num' : '', kind === 'listing' ? 'nds-matrix-listing' : '', opensEditor ? 'nds-reveal-row' : '', editable(data(p)) ? 'nds-cell-is-editable' : ''].filter(Boolean).join(' '),
     cellClassRules: classRules,
     cellRenderer: MATRIX_CELL_RENDERERS[kind],
     cellRendererParams: rendererParams,

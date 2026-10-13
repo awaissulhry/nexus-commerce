@@ -34,7 +34,7 @@ import {
   type SyncCell,
 } from '@nexus/shared/matrix-contract'
 import { AMAZON_EU_SHARED_MARKETS } from '../amazon-eu-quantity-guard.js'
-import { businessPriceOf, businessPriceWarnings, businessTierPrices } from '@nexus/shared/business-price'
+import { businessPriceOf, businessPriceWarnings, businessTierPrices, type BusinessPriceSetting } from '@nexus/shared/business-price'
 import { liveBusinessInstance, storedBusinessSetting } from '../amazon/business-offer.js'
 import { amazonFulfilmentCodes, describeAmazonFulfilmentCode, isFbaFulfilmentCode } from '../../lib/amazon-fulfilment-programme.js'
 import { locationServes, marketSourceKey, sellsFrom, type IntendedResolution, type MarketSources, type SyncLedger } from '../sync-control-core.js'
@@ -71,10 +71,14 @@ export const circled = (n: number): string => (n >= 1 && n <= 20 ? String.fromCo
 
 export const MERCHANT_CHANNELS = new Set(['EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY'])
 
+/** Amazon Business (B2B): the two kinds an Amazon market coordinate serves where Amazon lists B2B for its listings. */
+export const BUSINESS_CELL_KINDS: readonly MatrixCellKind[] = ['businessPrice', 'businessTiers']
+
 /** The kinds a channel SERVES, the ones it has no store for (with the operator's sentence), and its fulfilment words. */
 export function channelShape(channel: string): { cells: MatrixCellKind[]; absent: Array<{ cell: MatrixCellKind; reason: string }>; fulfilment: FulfilmentMethod[] | null } {
   const ch = channel.toUpperCase()
-  let cells: MatrixCellKind[] = [...MATRIX_CELL_KINDS]
+  /* The business kinds are never a channel's: an Amazon market coordinate adds them where Amazon lists B2B (the read). */
+  let cells: MatrixCellKind[] = MATRIX_CELL_KINDS.filter((k) => !BUSINESS_CELL_KINDS.includes(k))
   const absent: Array<{ cell: MatrixCellKind; reason: string }> = []
   if (ch === 'EBAY') { cells = cells.filter((k) => k !== 'salePrice'); absent.push({ cell: 'salePrice', reason: MATRIX_COPY.absentSaleEbay }) }
   // 2026-09-30 — Etsy's listing API has no sale price (Etsy sales are shop promotions), so the cell is absent, not offered.
@@ -89,23 +93,32 @@ export function channelShape(channel: string): { cells: MatrixCellKind[]; absent
 export type BusinessAbsence = { cell: 'businessPrice' | 'businessTiers'; reason: string }
 
 /**
- * Business pricing is served ABSENT on an Amazon market coordinate until Amazon lists the B2B audience
- * (`purchasable_offer … audience` enum ∋ `B2B`) for THAT coordinate's account — derived per coordinate from the
- * seller-scoped definition the nightly refresh keeps (categories/seller-offer-audience.service.ts), never hardcoded.
- * The shared CategorySchema cache cannot answer: Amazon lists B2B only to a request carrying the account's `sellerId`.
- * Three honest sentences: not measured yet (nothing to check against), measured without B2B (Amazon has not enabled
- * it), measured WITH B2B (the cells are not built yet — the day they are, `businessPrice`/`businessTiers` join
- * `MatrixCellKind`). `audience` is the audience codes; `null` = never measured for (account, productType, market).
+ * Business pricing is served on an Amazon market coordinate only where Amazon lists the B2B audience
+ * (`purchasable_offer … audience` enum ∋ `B2B`) for the account — derived from the seller-scoped definition the nightly
+ * refresh keeps (categories/seller-offer-audience.service.ts), never hardcoded. The shared CategorySchema cache cannot
+ * answer: Amazon lists B2B only to a request carrying the account's `sellerId`. Where it is not listed, the two cells are
+ * ABSENT with one of three honest sentences: no product type to check, not measured yet, measured without B2B. `[]` =
+ * B2B is listed (the cells are served). `audience` is the audience codes; `null` = never measured for (account,
+ * productType, market).
  */
 export function businessAbsence(input: { productType: string | null; market: string; audience: readonly string[] | null }): BusinessAbsence[] {
+  if (input.productType && input.audience?.includes('B2B')) return []
   const reason = !input.productType
     ? MATRIX_COPY.absentBusinessNoType()
     : input.audience === null
     ? MATRIX_COPY.absentBusinessUnchecked()
-    : input.audience.includes('B2B')
-      ? MATRIX_COPY.absentBusinessNotBuilt(input.productType)
-      : MATRIX_COPY.absentBusiness(input.productType)
+    : MATRIX_COPY.absentBusiness(input.productType)
   return [{ cell: 'businessPrice', reason }, { cell: 'businessTiers', reason }]
+}
+
+/**
+ * ONE listing's B2B verdict as a sentence — the business price door's refusal and the Matrix's held cell say the same:
+ * `types` are the listing's product types in the door's order (`businessTypeCandidates`: its Amazon type, its
+ * product's, its family's), `measured` the first one Amazon answered for (`loadBusinessAudiences`). `null` = Amazon lists
+ * B2B for this listing.
+ */
+export function businessListingReason(types: readonly string[], measured: { productType: string; audience: readonly string[] } | null, market = ''): string | null {
+  return businessAbsence({ productType: measured?.productType ?? types[0] ?? null, market, audience: measured?.audience ?? null })[0]?.reason ?? null
 }
 
 /** A market coordinate inside a shared region carries NO inventory kinds — they live on the region group. */
@@ -392,6 +405,11 @@ export interface WritableInput {
   canEditPrice: boolean
   /** Shared stock by SKU: the business whose lent stock this SKU sells from, or null (its own stock). */
   sharedFrom?: string | null
+  /**
+   * Amazon Business — why this listing has no business offer here (`businessListingReason`), or null when Amazon lists
+   * B2B for it. Read only where the coordinate serves the business kinds; absent there = held (fail closed).
+   */
+  businessBlocked?: string | null
 }
 
 /**
@@ -423,8 +441,16 @@ export function writableFor(input: WritableInput): Pick<MatrixCells, 'writable' 
   for (const k of input.cells) {
     if (k === 'listing' || k === 'syncState') continue
     const inventory = INVENTORY_CELL_KINDS.includes(k)
-    if (input.role === 'parent') { hold(k, k === 'price' || k === 'salePrice' ? PARENT_PRICE_REASON : PARENT_REASON); continue }
-    if ((k === 'price' || k === 'salePrice') && !input.canEditPrice) { hold(k, PRICE_PERMISSION_REASON); continue }
+    const priced = k === 'price' || k === 'salePrice' || BUSINESS_CELL_KINDS.includes(k)
+    if (input.role === 'parent') { hold(k, priced ? PARENT_PRICE_REASON : PARENT_REASON); continue }
+    if (priced && !input.canEditPrice) { hold(k, PRICE_PERMISSION_REASON); continue }
+    /* Amazon Business: both cells open ONE editor (the whole setting), writable where Amazon lists B2B for this listing.
+       A listing that cannot be sent to now (paused, a draft, Inactive) still keeps its setting: the send waits for it. */
+    if (BUSINESS_CELL_KINDS.includes(k)) {
+      if (input.businessBlocked === null) writable[k] = true
+      else hold(k, input.businessBlocked ?? MATRIX_COPY.absentBusinessUnchecked())
+      continue
+    }
     if (inventory && input.sync?.kind === 'CLOSED') { hold(k, MATRIX_COPY.closedHint); continue }
     if (inventory && k !== 'fulfilment' && input.sync?.kind === 'FBA_EXCLUDED') {
       hold(k, input.fulfilment?.method === 'FBM' && input.fulfilment.guard === 'FBA' ? MATRIX_COPY.guardFba : MATRIX_COPY.amazonManaged)
@@ -603,5 +629,19 @@ export function businessCellOf(input: {
     send,
     live,
     reported: amazonOwn != null ? { price: amazonOwn } : null,
+  }
+}
+
+/**
+ * The setting a business cell shows, as the business price door takes it back (`BusinessPriceSetting`; `null` = no
+ * business offer) — what an undo restores by value.
+ */
+export function businessSettingOfCell(cell: BusinessCell): BusinessPriceSetting | null {
+  if (!cell.rule) return null
+  return {
+    rule: cell.rule,
+    percent: cell.rule === 'PERCENT_OFF' ? cell.percent : null,
+    price: cell.rule === 'FIXED' ? cell.exact : null,
+    tiers: cell.tiers ? { type: cell.tiers.type, levels: cell.tiers.levels.map((l) => ({ minQty: l.minQty, value: l.value })) } : null,
   }
 }

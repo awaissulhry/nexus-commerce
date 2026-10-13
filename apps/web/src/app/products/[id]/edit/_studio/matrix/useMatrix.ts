@@ -88,6 +88,7 @@ const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T
 const FIELDS_OF: Readonly<Record<MatrixDoorKind, readonly string[]>> = {
   syncMode: ['quantityMode', 'quantity'], syncQty: ['quantityMode', 'quantity'], syncBuffer: ['stockBuffer', 'quantity'],
   fulfilment: ['fulfilment'], price: ['price'], salePrice: ['salePrice'], source: ['stockSource', 'quantity'],
+  businessPrice: ['businessPrice'],
 }
 
 /** Each cell names the listing it was read from (the PRISTINE read), so a write onto another listing is a conflict. */

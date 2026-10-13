@@ -58,7 +58,7 @@ const call = <F,>(f: F | undefined | boolean | string, ...args: unknown[]) => (t
 const fn = (f: unknown) => f as (...a: any[]) => any
 
 describe('matrixColumnDef — one ColDef per kind, every piece from the engine tables', () => {
-  it('width, minWidth and header come from the contract tables for all eight kinds (counted)', () => {
+  it('width, minWidth and header come from the contract tables for every kind (counted)', () => {
     let arms = 0
     for (const kind of MATRIX_CELL_KINDS) {
       const d = def(kind)
@@ -71,7 +71,7 @@ describe('matrixColumnDef — one ColDef per kind, every piece from the engine t
       expect(d.suppressMovable).toBe(true)
       arms++
     }
-    expect(arms).toBe(8)
+    expect(arms).toBe(10)
   })
 
   it('the fill handle is suppressed on exactly the non-fillable kinds', () => {
@@ -252,6 +252,51 @@ describe('matrixColumnDef — one ColDef per kind, every piece from the engine t
     expect(rp.onJump).toBe(onJump)
     expect(rp.facts({ data: row() })).toEqual(cellsOf())
     expect(d.cellRendererParams).toBe(d.cellRendererParams)
+  })
+})
+
+describe('matrixColumnDef — the B2B price and Tiers columns (Amazon Business)', () => {
+  const b2bRow = (): Row => {
+    const c = cellsOf()
+    c.writable = { ...c.writable, businessPrice: true, businessTiers: true }
+    c.business = {
+      rule: 'PERCENT_OFF', percent: 5, exact: null, tiers: null, price: 99.75, normalPrice: 105, minPrice: null, maxPrice: null,
+      currency: 'EUR', warnings: [], held: null, send: null, live: null, reported: null,
+    }
+    return { id: 'r1', cells: { 'AMAZON:IT': c } }
+  }
+
+  it('no AG editor and never editable; no fill handle; the pencil is revealed on row hover and AG leaves its clicks alone', () => {
+    const onOpenBusiness = vi.fn()
+    for (const kind of ['businessPrice', 'businessTiers'] as const) {
+      const d = def(kind, { onOpenBusiness })
+      expect(d.cellEditor).toBeUndefined()
+      expect(d.cellEditorSelector).toBeUndefined()
+      expect(call(d.editable, { data: b2bRow() })).toBe(false)
+      expect(d.suppressFillHandle).toBe(true)
+      expect(fn(d.cellClass)({ data: b2bRow() })).toContain('nds-reveal-row')
+      expect(fn(d.cellClass)({ data: b2bRow() })).not.toContain('nds-cell-is-editable')
+      const rp = d.cellRendererParams as { onOpenBusiness: unknown; suppressMouseEventHandling: (p: { event: { target: unknown } }) => boolean }
+      expect(rp.onOpenBusiness).toBe(onOpenBusiness)
+      expect(typeof rp.suppressMouseEventHandling).toBe('function')
+    }
+    // Every other kind keeps AG's mouse handling.
+    expect((def('price').cellRendererParams as Record<string, unknown>).suppressMouseEventHandling).toBeUndefined()
+  })
+
+  it('a paste or a typed value is refused with the sentence, and nothing moves', () => {
+    const r = b2bRow()
+    const onValueRefused = vi.fn()
+    expect(fn(def('businessPrice', { onValueRefused }).valueSetter)({ data: r, newValue: '90', oldValue: 99.75 } as ValueSetterParams<Row>)).toBe(false)
+    expect(onValueRefused).toHaveBeenCalledWith('The B2B price and quantity discounts are set in their editor (Enter or F2 on the cell) — never typed, pasted or filled', r)
+    expect(r.cells['AMAZON:IT']!.business!.price).toBe(99.75)
+  })
+
+  it('the text, the value and the comparator', () => {
+    const d = def('businessPrice')
+    expect(fn(d.valueFormatter)({ data: b2bRow() })).toBe('€99.75 · −5%')
+    expect(fn(d.valueGetter)({ data: b2bRow() })).toBe(99.75)
+    expect(fn(d.comparator)(10, 20)).toBeLessThan(0)
   })
 })
 

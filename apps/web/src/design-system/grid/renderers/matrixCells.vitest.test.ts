@@ -16,7 +16,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import type { ICellRendererParams } from 'ag-grid-community'
 
-import type { ListingState, MatrixCellKind, MatrixCells, MatrixCoordinate } from '../matrix/contract'
+import type { BusinessCell, ListingState, MatrixCellKind, MatrixCells, MatrixCoordinate } from '../matrix/contract'
 import { MATRIX_CELL_KINDS } from '../matrix/contract'
 import {
   MATRIX_CELL_CLASSES,
@@ -92,6 +92,16 @@ function cells(over: Deep = {}): MatrixCells {
 
 const NOW = Date.parse('2026-09-13T05:02:00.000Z') // 2 min after the fixture's `sent`
 
+/** A 5 %-below business price on a €105 listing, sent — every business fixture starts here and moves ONE thing. */
+function biz(over: Partial<BusinessCell> = {}): BusinessCell {
+  return {
+    rule: 'PERCENT_OFF', percent: 5, exact: null, tiers: null, price: 99.75, normalPrice: 105, minPrice: null, maxPrice: null,
+    currency: 'EUR', warnings: [], held: null, send: { state: 'sent', at: '2026-09-13T05:00:00.000Z', line: null, final: true },
+    live: null, reported: null, ...over,
+  }
+}
+const B2B = { writable: { businessPrice: true, businessTiers: true } } as const
+
 /**
  * ONE fixture per state — the set claim. `absent` is any kind on a `null` cells object.
  * Typed as a full record so a new `MatrixCellState` member without a row here is a compile error.
@@ -132,6 +142,15 @@ const STATE_FIXTURES: Record<MatrixCellState, { kind: MatrixCellKind; c: MatrixC
   'price-clamped': { kind: 'price', c: cells({ price: { value: 80, source: 'override', clamped: 'floor' } }) },
   'sale-set': { kind: 'salePrice', c: cells({ sale: { value: 89, start: '2026-09-12', end: '2026-09-30' } }) },
   'sale-none': { kind: 'salePrice', c: cells() },
+  'business-none': { kind: 'businessPrice', c: cells({ business: biz({ rule: null, percent: null, price: null }) }) },
+  'business-percent': { kind: 'businessPrice', c: cells({ ...B2B, business: biz() }) },
+  'business-fixed': { kind: 'businessPrice', c: cells({ ...B2B, business: biz({ rule: 'FIXED', percent: null, exact: 32.95, price: 32.95, normalPrice: 39.95 }) }) },
+  'business-hidden': { kind: 'businessPrice', c: cells({ business: biz({ rule: 'FIXED', percent: null, exact: 110, price: 110, warnings: ['Hidden by Amazon: the business price EUR 110.00 is above the normal price EUR 105.00.'] }) }) },
+  'business-differs': { kind: 'businessPrice', c: cells({ business: biz({ live: { status: 'DIFFERS', amazonPrice: 90, at: '2026-09-13T04:30:00.000Z' } }) }) },
+  'business-failed': { kind: 'businessPrice', c: cells({ business: biz({ send: { state: 'refused', at: '2026-09-13T05:00:00.000Z', line: 'Amazon: 8541 — the price is below the minimum', final: true } }) }) },
+  'business-reported': { kind: 'businessPrice', c: cells({ business: biz({ rule: null, percent: null, price: null, reported: { price: 90 } }) }) },
+  'tiers-none': { kind: 'businessTiers', c: cells({ business: biz() }) },
+  'tiers-set': { kind: 'businessTiers', c: cells({ business: biz({ tiers: { type: 'percent', levels: [{ minQty: 2, value: 3, unitPrice: 96.76 }, { minQty: 5, value: 5, unitPrice: 94.76 }] } }) }) },
 }
 const STATES = Object.keys(STATE_FIXTURES) as MatrixCellState[]
 
@@ -146,7 +165,7 @@ describe('matrixCellState — every §3.4 state is produced by exactly its fixtu
       arms++
     }
     expect(arms).toBe(STATES.length)
-    expect(STATES.length).toBe(35)
+    expect(STATES.length).toBe(44)
   })
 
   it('reads the resolver verdict in its own precedence: FBA beats CLOSED beats PAUSED beats PINNED', () => {
@@ -647,7 +666,7 @@ describe('the eight renderers draw what the rules decided', () => {
       expect(h).toMatch(/^<span class="nds-cell-empty"[^>]*>—<\/span>$/)
       arms++
     }
-    expect(arms).toBe(8)
+    expect(arms).toBe(10)
   })
 })
 
@@ -713,5 +732,88 @@ describe('the Listing cell — health words first, then the selling word (build 
     expect(matrixListingNotSelling({ state: 'closed' })).toBe(true)
     expect(matrixListingNotSelling({ state: 'listed' })).toBe(false)
     expect(matrixListingNotSelling(null)).toBe(false)
+  })
+})
+
+/* ── Amazon Business: the B2B price and Tiers cells ─────────────────────────────────────────────── */
+
+describe('the B2B price and Tiers cells (Amazon Business)', () => {
+  const tiers = { type: 'percent' as const, levels: [{ minQty: 2, value: 3, unitPrice: 96.76 }, { minQty: 5, value: 5, unitPrice: 94.76 }] }
+
+  it('text: price · −percent, an exact price, 0 % = the price, no price yet, none; tiers as quantity + discount', () => {
+    expect(matrixCellText('businessPrice', STATE_FIXTURES['business-percent'].c, COORD)).toBe('€99.75 · −5%')
+    expect(matrixCellText('businessPrice', STATE_FIXTURES['business-fixed'].c, COORD)).toBe('€32.95')
+    expect(matrixCellText('businessPrice', cells({ business: biz({ percent: 0, price: 105 }) }), COORD)).toBe('€105.00')
+    expect(matrixCellText('businessPrice', cells({ business: biz({ percent: 2.5, price: null, normalPrice: null }) }), COORD)).toBe('−2.5%')
+    expect(matrixCellText('businessPrice', STATE_FIXTURES['business-none'].c, COORD)).toBe(MATRIX_DASH)
+    expect(matrixCellText('businessPrice', STATE_FIXTURES['business-reported'].c, COORD)).toBe(MATRIX_DASH)
+    expect(matrixCellText('businessTiers', cells({ business: biz({ tiers }) }), COORD)).toBe('2+ −3% · 5+ −5%')
+    const fixed = { type: 'fixed' as const, levels: [{ minQty: 3, value: 30, unitPrice: 30 }] }
+    expect(matrixCellText('businessTiers', cells({ business: biz({ rule: 'FIXED', exact: 32.95, price: 32.95, tiers: fixed }) }), COORD)).toBe('3+ €30.00')
+    // Tiers kept without a rule are not an offer: the dash.
+    expect(matrixCellText('businessTiers', cells({ business: biz({ rule: null, tiers }) }), COORD)).toBe(MATRIX_DASH)
+    // No business fact (another channel, an older server): the dash, never a number.
+    expect(matrixCellText('businessPrice', cells(), COORD)).toBe(MATRIX_DASH)
+  })
+
+  it('tooltip: the reason first on a refusal; Amazon differing; the rule; the server\'s warnings; the hold; a send on its way', () => {
+    expect(matrixCellTooltip('businessPrice', STATE_FIXTURES['business-failed'].c, COORD, MATRIX_CELL_COPY, NOW))
+      .toBe('Amazon: 8541 — the price is below the minimum · Amazon refused the business price 2 min ago · 5% below the price €105.00')
+    expect(matrixCellTooltip('businessPrice', STATE_FIXTURES['business-differs'].c, COORD, MATRIX_CELL_COPY, NOW))
+      .toBe('Amazon shows €90.00 — differs from Nexus · checked 32 min ago · 5% below the price €105.00')
+    expect(matrixCellTooltip('businessPrice', STATE_FIXTURES['business-reported'].c, COORD))
+      .toBe('Amazon shows a business price of €90.00 that Nexus does not keep — set outside Nexus')
+    expect(matrixCellTooltip('businessPrice', STATE_FIXTURES['business-hidden'].c, COORD))
+      .toBe('Exact business price · the price is €105.00 · Hidden by Amazon: the business price EUR 110.00 is above the normal price EUR 105.00.')
+    const queued = cells({ business: biz({ held: 'The listing is paused: the business price is sent when it sells again.', send: { state: 'queued', at: null, line: null, final: false } }) })
+    expect(matrixCellTooltip('businessPrice', queued, COORD))
+      .toBe('5% below the price €105.00 · The listing is paused: the business price is sent when it sells again. · Waiting to be sent to Amazon')
+    const failing = cells({ business: biz({ send: { state: 'failed', at: '2026-09-13T05:00:00.000Z', line: 'Amazon did not answer', final: false } }) })
+    expect(matrixCellTooltip('businessPrice', failing, COORD, MATRIX_CELL_COPY, NOW)).toMatch(/^Amazon did not answer · last business price send failed 2 min ago · it is tried again by itself/)
+    // A send that reached Amazon is quiet.
+    expect(matrixCellTooltip('businessPrice', STATE_FIXTURES['business-percent'].c, COORD)).toBe('5% below the price €105.00')
+    expect(matrixCellTooltip('businessTiers', cells({ business: biz({ tiers }) }), COORD)).toBe('2+ units: −3% → €96.76 each · 5+ units: −5% → €94.76 each')
+    expect(matrixCellTooltip('businessTiers', STATE_FIXTURES['tiers-none'].c, COORD)).toBe('No quantity discounts')
+    // A held cell carries its reason (the parent row).
+    const parent = cells({ business: null, writable: { businessPrice: false }, writeBlockedReason: { businessPrice: 'Set on the variants' } })
+    expect(matrixCellTooltip('businessPrice', parent, COORD)).toBe('Set on the variants')
+  })
+
+  it('classes: a percent follows, an exact price is pinned, no write → locked, no fact → locked', () => {
+    expect(matrixCellClasses('businessPrice', STATE_FIXTURES['business-percent'].c)).toEqual(['nds-cell-is-following'])
+    expect(matrixCellClasses('businessPrice', STATE_FIXTURES['business-fixed'].c)).toEqual(['nds-cell-is-pinned'])
+    expect(matrixCellClasses('businessPrice', cells({ business: biz(), writable: { businessPrice: false } }))).toEqual(['nds-cell-is-locked'])
+    expect(matrixCellClasses('businessTiers', cells({ business: null }))).toEqual(['nds-cell-is-locked'])
+    expect(matrixCellTone('businessPrice', STATE_FIXTURES['business-failed'].c)).toBe(readinessMeta('errors', 'row').tone)
+  })
+
+  it('never typed, pasted or filled: AG opens no editor; a writable cell opens the business editor instead', () => {
+    for (const kind of ['businessPrice', 'businessTiers'] as const) {
+      expect(matrixCellEditable(kind, STATE_FIXTURES['business-percent'].c)).toEqual({ editable: false, reason: 'Enter or F2 opens the business price editor' })
+      expect(matrixCellEditable(kind, cells({ business: biz(), writable: {}, writeBlockedReason: { [kind]: 'Set on the variants' } })).reason).toBe('Set on the variants')
+      expect(matrixCoerceValue(kind, 90)).toBeUndefined()
+      expect(matrixApplyValue(STATE_FIXTURES['business-percent'].c, kind, 90)).toBe(false)
+      expect(matrixFillAllowed(kind)).toBe(false)
+    }
+    expect(matrixCellValue('businessPrice', STATE_FIXTURES['business-percent'].c)).toBe(99.75)
+    expect(matrixCellValue('businessPrice', STATE_FIXTURES['business-none'].c)).toBeNull()
+    expect(matrixCellValue('businessTiers', cells({ business: biz({ tiers }) }))).toBe(94.76)
+    expect(matrixCompare('businessPrice', 32.95, null)).toBeLessThan(0)
+  })
+
+  it('renderers: the marks, and the pencil only where the page wired the editor and the cell may change', () => {
+    const open = { onOpenBusiness: () => undefined }
+    expect(html('businessPrice', STATE_FIXTURES['business-percent'].c, COORD, open)).toMatch(/€99\.75 · −5%.*nds-cell-prov-inherited.*data-nds-cell-action/s)
+    expect(html('businessPrice', STATE_FIXTURES['business-fixed'].c, COORD, open)).toMatch(/€32\.95.*nds-cell-prov-pinned/s)
+    expect(html('businessPrice', STATE_FIXTURES['business-differs'].c)).toContain('nds-matrix-reported')
+    expect(html('businessPrice', STATE_FIXTURES['business-reported'].c)).toContain('nds-matrix-reported')
+    expect(html('businessPrice', STATE_FIXTURES['business-hidden'].c)).toContain('nds-matrix-warn')
+    expect(html('businessPrice', STATE_FIXTURES['business-failed'].c)).toContain('nds-matrix-failed')
+    expect(html('businessTiers', cells({ ...B2B, business: biz({ tiers }) }), COORD, open)).toMatch(/2\+ −3% · 5\+ −5%.*data-nds-cell-action/s)
+    // No editor wired, or a cell that may not change (the parent): no pencil.
+    expect(html('businessPrice', STATE_FIXTURES['business-percent'].c)).not.toContain('data-nds-cell-action')
+    expect(html('businessPrice', cells({ business: biz(), writable: { businessPrice: false } }), COORD, open)).not.toContain('data-nds-cell-action')
+    // The family parent carries `business: null`: the muted dash.
+    expect(html('businessPrice', cells({ business: null }))).toMatch(/nds-cell-muted.*—/s)
   })
 })

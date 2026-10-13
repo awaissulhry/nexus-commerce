@@ -45,7 +45,7 @@ import {
   type MatrixWriteDecision,
 } from '@/design-system/grid'
 import type { MatrixCellState } from '@/design-system/grid/renderers/matrixCells'
-import type { MatrixRead, MatrixRowRead, MatrixWriteOutcome } from '@/app/products/[id]/edit/_studio/matrix/contract'
+import type { BusinessCell, MatrixRead, MatrixRowRead, MatrixWriteOutcome } from '@/app/products/[id]/edit/_studio/matrix/contract'
 import { buildPreviewMatrix, type PreviewCoordinateInput, type PreviewRowInput } from '@/app/products/[id]/edit/_studio/matrix/fixtures'
 import { applyCells } from '@/app/products/[id]/edit/_studio/matrix/store'
 
@@ -81,7 +81,7 @@ const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T
 
 /**
  * THE STATE SHEET — the members a hash-driven fixture does not reach on six rows, forced onto named
- * cells so the coverage legend below can count all 35. Each line names the state it produces.
+ * cells so the coverage legend below can count all 44. Each line names the state it produces.
  */
 function forceStates(read: MatrixRead): MatrixRead {
   const out = clone(read)
@@ -133,6 +133,35 @@ function forceStates(read: MatrixRead): MatrixRead {
   it('v4').writable.price = true; delete it('v4').writeBlockedReason.price
   it('v5').listing = { state: 'needs-value', externalId: null, detail: null, published: true }                        // needs-value
   it('v5').sale = { value: null, start: null, end: null }                                                             // sale-none
+
+  /* AMAZON:IT — Amazon Business: the B2B price and Tiers cells (Amazon lists B2B there for the account). */
+  const itCoord = out.coordinates.find((c) => c.key === 'AMAZON:IT')
+  if (itCoord && !itCoord.cells.includes('businessPrice')) itCoord.cells = [...itCoord.cells, 'businessPrice', 'businessTiers']
+  const biz = (over: Partial<BusinessCell>): BusinessCell => ({
+    rule: 'PERCENT_OFF', percent: 5, exact: null, tiers: null, price: 99.75, normalPrice: 105, minPrice: null, maxPrice: null, currency: 'EUR',
+    warnings: [], held: null, send: { state: 'sent', at: '2026-09-13T05:40:00.000Z', line: null, final: true }, live: null, reported: null, ...over,
+  })
+  const b2b = (id: string, b: BusinessCell | null, writable = true) => {
+    it(id).business = b
+    it(id).writable.businessPrice = writable; it(id).writable.businessTiers = writable
+    if (!writable) { it(id).writeBlockedReason.businessPrice = 'Set on the variants'; it(id).writeBlockedReason.businessTiers = 'Set on the variants' }
+  }
+  b2b('p', null, false)
+  b2b('v1', biz({ tiers: { type: 'percent', levels: [{ minQty: 2, value: 3, unitPrice: 96.76 }, { minQty: 5, value: 5, unitPrice: 94.76 }] } })) // business-percent · tiers-set
+  b2b('v2', biz({ rule: 'FIXED', percent: null, exact: 89, price: 89, normalPrice: 99 }))                              // business-fixed · tiers-none
+  b2b('v3', biz({ rule: 'FIXED', percent: null, exact: 110, price: 110, warnings: ['Hidden by Amazon: the business price EUR 110.00 is above the normal price EUR 105.00.'] })) // business-hidden
+  b2b('v4', biz({ rule: null, percent: null, price: null, reported: { price: 90 } }))                                 // business-reported
+  b2b('v5', biz({ live: { status: 'DIFFERS', amazonPrice: 90, at: '2026-09-13T04:30:00.000Z' } }))                     // business-differs
+  /* AMAZON:IT on DE's rows would repeat the market; the refused send and "none" ride on DE (Amazon lists B2B there in the lab). */
+  const deCoord = out.coordinates.find((c) => c.key === 'AMAZON:DE')
+  if (deCoord && !deCoord.cells.includes('businessPrice')) deCoord.cells = [...deCoord.cells, 'businessPrice', 'businessTiers']
+  for (const id of ['v1', 'v2', 'v3', 'v4', 'v5']) {
+    const c = at(id, 'AMAZON:DE')
+    c.business = id === 'v1' ? biz({ send: { state: 'refused', at: '2026-09-13T05:40:00.000Z', line: 'Amazon: 8541 — the price is below the minimum', final: true } }) // business-failed
+      : biz({ rule: null, percent: null, price: null })                                                               // business-none
+    c.writable.businessPrice = true; c.writable.businessTiers = true
+  }
+  at('p', 'AMAZON:DE').business = null
 
   /* AMAZON:DE — the four Matrix words + the `not buyable` detail. */
   const de = (id: string) => at(id, 'AMAZON:DE')
@@ -334,4 +363,6 @@ const MATRIX_CELL_STATES: readonly MatrixCellState[] = [
   'queue-sent', 'queue-queued', 'queue-sending', 'queue-failed', 'queue-dead', 'queue-paused', 'queue-never',
   'price-master', 'price-override', 'price-formula', 'price-clamped',
   'sale-set', 'sale-none',
+  'business-none', 'business-percent', 'business-fixed', 'business-hidden', 'business-differs', 'business-failed', 'business-reported',
+  'tiers-none', 'tiers-set',
 ]

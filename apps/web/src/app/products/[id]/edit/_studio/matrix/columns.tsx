@@ -38,7 +38,7 @@ import { ProductRoleChip } from '../sheet/ProductRoleChip'
 import { sharedProgressColumn } from '../sheet/progressColumns'
 import type { AxisSummary } from '../variants/family/coverage'
 
-import { MATRIX_ABSENT_CELL_LABELS, MATRIX_COPY, type CoordinateKey, type FulfilmentMethod, type MatrixAbsentCellKind, type MatrixCellKind, type MatrixCells, type MatrixCoordinate, type MatrixFbaPlan, type MatrixRowRead } from './contract'
+import { MATRIX_ABSENT_CELL_LABELS, MATRIX_CELL_KINDS, MATRIX_COPY, type CoordinateKey, type FulfilmentMethod, type MatrixAbsentCellKind, type MatrixCellKind, type MatrixCells, type MatrixCoordinate, type MatrixFbaPlan, type MatrixRowRead } from './contract'
 import { refusedTooltip } from './refusals'
 import { CASE_EDIT_COPY, CASE_HEADER_TIP, CASE_LABEL, caseCellView, type CaseCellView } from './casePack'
 import { FROM_COL_W, FROM_LABEL, fromBefore, fromCellText, fromCellView, isMatrixFromColId, matrixFromColId } from './sellsFrom'
@@ -115,8 +115,7 @@ export function parseMatrixColId(colId: string | undefined | null): { key: Coord
   const key = colId.slice(0, i)
   const kind = colId.slice(i + 1)
   if (key === 'shared') return null
-  const kinds: readonly string[] = ['listing', 'fulfilment', 'syncMode', 'syncQty', 'syncBuffer', 'syncState', 'price', 'salePrice']
-  return kinds.includes(kind) ? { key, kind: kind as MatrixCellKind } : null
+  return (MATRIX_CELL_KINDS as readonly string[]).includes(kind) ? { key, kind: kind as MatrixCellKind } : null
 }
 
 /* ── the group colours ────────────────────────────────────────────────────────────────────── */
@@ -471,6 +470,8 @@ export interface BuildMatrixColumnsOptions {
   onOpenFrom?: (rowId: string, key: CoordinateKey, anchor: HTMLElement | null) => void
   /** The Case cell opens the Case pop-up for a row (absent = no door: no right to adjust stock). */
   onOpenCase?: (rowId: string, anchor: HTMLElement | null) => void
+  /** Amazon Business: a B2B price or Tiers cell opens the business price editor for that row and market (absent = no door). */
+  onOpenBusiness?: (rowId: string, key: CoordinateKey, anchor: HTMLElement | null) => void
   /** Send to FBA (Step 4): this family's open plans, read at PAINT time (the FBA qty tooltip names them). */
   fbaPlansOf?: () => readonly MatrixFbaPlan[]
 }
@@ -635,6 +636,7 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
           rowIdOf: rowId,
           onPickFulfilment,
           onValueRefused: opts.onValueRefused,
+          onOpenBusiness: opts.onOpenBusiness ? (p, anchor) => { if (p.data) opts.onOpenBusiness?.((p.data as StudioRow).id, coord.key, anchor) } : undefined,
           /* The app's copy table, verbatim (Appendix A) — the engine asks, the page supplies. */
           copy: MATRIX_COPY,
         }

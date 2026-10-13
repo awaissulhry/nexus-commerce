@@ -70,10 +70,12 @@ describe('fixtures — deterministic, region-folded, honest about absence', () =
     }
     expect(seen).toBeGreaterThan(100)
   })
-  it('counts listed/draft per coordinate from the rows, and the eight kinds are the contract order', () => {
+  it('counts listed/draft per coordinate from the rows, and the kinds are the contract order', () => {
     const r = read(); const it = r.coordinates.find(c => c.key === 'AMAZON:IT')!
     expect((it.listed ?? 0) + (it.draft ?? 0)).toBeLessThanOrEqual(20); expect(it.listed).not.toBeNull()
-    expect(MATRIX_CELL_KINDS).toEqual(['listing', 'fulfilment', 'syncMode', 'syncQty', 'syncBuffer', 'syncState', 'price', 'salePrice'])
+    expect(MATRIX_CELL_KINDS).toEqual(['listing', 'fulfilment', 'syncMode', 'syncQty', 'syncBuffer', 'syncState', 'price', 'salePrice', 'businessPrice', 'businessTiers'])
+    // The preview has no Amazon Business: no coordinate serves the two business cells.
+    expect(r.coordinates.some(c => c.cells.includes('businessPrice') || c.cells.includes('businessTiers'))).toBe(false)
   })
 })
 

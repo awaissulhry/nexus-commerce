@@ -1,0 +1,110 @@
+/* The B2B price pop-up (Amazon Business step 5) — layout only; every control is the design system's (Modal, Field,
+   Input, SegmentedControl, Banner, Button, ToolbarButton, Tooltip). The Case pop-up's look. */
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  font-size: var(--nds-font-size-base);
+}
+
+/* The percent or the exact price, and beside it the price Nexus sends. */
+.priceRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.amount {
+  width: 8rem;
+}
+
+.amount > input {
+  min-width: 0;
+  width: 100%;
+}
+
+.sends {
+  padding-bottom: var(--nds-space-6);
+  color: var(--nds-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.hint {
+  margin: 0;
+  color: var(--nds-text-2);
+}
+
+/* The quantity discounts: a heading with the type, a heading row, then one row per discount. */
+.tiers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.tiersHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+
+/* The heading reads like a Field label (the design system's label colour and weight). */
+.tiersTitle,
+.headCell {
+  font-size: var(--nds-font-size-sm-plus);
+  font-weight: var(--nds-font-weight-semibold);
+  line-height: 1.25;
+  color: var(--nds-text-strong);
+}
+
+.tierRow {
+  display: grid;
+  grid-template-columns: 6rem 8rem minmax(0, 1fr) 28px;
+  column-gap: var(--nds-space-8);
+  row-gap: var(--nds-space-4);
+  align-items: center;
+}
+
+/* Every number field fills its grid cell (the design system's field is inline and sized by its content). */
+.fill {
+  width: 100%;
+  min-width: 0;
+}
+
+.fill > input {
+  min-width: 0;
+  width: 100%;
+}
+
+.pays {
+  color: var(--nds-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A row's first problem, under it — the Field error's colour and size. */
+.rowError {
+  grid-column: 1 / -1;
+  font-size: var(--nds-font-size-xs-plus);
+  font-weight: var(--nds-font-weight-medium);
+  line-height: 1.4;
+  color: var(--nds-danger-text);
+}
+
+.add {
+  display: flex;
+}
+
+/* Why Save is held, beside the buttons (the Sells from pop-up's status line). */
+.status {
+  color: var(--nds-text-2);
+  min-width: 0;
+}
+
+/* A phone: the quantity and the discount share the row; Buyer pays keeps its room. */
+@media (max-width: 480px) {
+  .tierRow {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 5rem) 28px;
+  }
+}

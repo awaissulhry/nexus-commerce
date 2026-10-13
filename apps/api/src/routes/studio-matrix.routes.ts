@@ -48,8 +48,8 @@ function sendError(reply: FastifyReply, err: unknown, log: { error: (o: unknown,
   return reply.code(500).send({ error: 'matrix_request_failed', message: err instanceof Error ? err.message : String(err) })
 }
 
-/** The door's cell kinds — the writable cells plus "Sells from" (Step 2, `inventory.adjust` checked in the service). */
-const WRITABLE = new Set(['fulfilment', 'syncMode', 'syncQty', 'syncBuffer', 'price', 'salePrice', 'source'])
+/** The door's cell kinds — the writable cells (the Amazon Business setting among them) plus "Sells from" (Step 2, `inventory.adjust` checked in the service). */
+const WRITABLE = new Set(['fulfilment', 'syncMode', 'syncQty', 'syncBuffer', 'price', 'salePrice', 'businessPrice', 'source'])
 
 const isId = (v: unknown): v is string => typeof v === 'string' && v.length > 0
 
