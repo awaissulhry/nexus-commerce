@@ -26,7 +26,7 @@ import { FEATURES as F } from '@nexus/shared/permissions'
 import { channelLabel } from '@nexus/shared/channel-label'
 import type { ContentAddress } from '@nexus/shared/content-language'
 import prisma from '../../../db.js'
-import type { AgentTool, ToolResult, ToolUndo } from '../tool-types.js'
+import { factHash, type AgentTool, type PlanFacts, type PlanWrite, type ToolResult, type ToolUndo } from '../tool-types.js'
 import { PRODUCT_NOT_FOUND } from './live-product.js'
 import { NEXUS_ONLY } from './bulk.tools.js'
 import { channelNotHere, COORDINATE_CHANNELS, languageArg, languageOf, liveProductByRef, NOT_CONTENT_GROUPS, primaryLanguage } from './content.tools.js'
@@ -408,6 +408,22 @@ export function sharedChanges(plan: SharedPlan) {
 export const sharedBasis = (plan: SharedPlan) =>
   basisOf({ product: plan.product.id, language: plan.language, tier: plan.tier, version: plan.translationVersion, own: plan.fields.map((f) => [f.field, f.own]) })
 
+/*
+ * 2.3 — a text change stands on its whole text row's VERSION (`basis`), never only on the fields it changes: approving it
+ * marks the whole row reviewed, so a draft written into another field of the row since (an AI translation) must refuse
+ * it, not ride along unseen. Inside a change plan, a later step on the same row is re-based on an earlier step's own write
+ * only (AgentTool.planRebase): the row at exactly the version that write left it at.
+ */
+/** The plan facts of a text change on one row: the row's version, and what it sets per field. */
+const textPlanFacts = (row: string, version: number, sets: Record<string, unknown>): PlanFacts =>
+  ({ stands: { [row]: factHash(version) }, sets: factHash(sets) })
+/** A shared-text plan on a language row (the source text has no row version to stand on). */
+const sharedTextRow = (plan: SharedPlan) => (plan.tier === 'language' ? `product:${plan.product.id}:text@${plan.language}` : null)
+const sharedPlanFacts = (plan: SharedPlan): PlanFacts | null => {
+  const row = sharedTextRow(plan)
+  return row ? textPlanFacts(row, plan.translationVersion ?? 0, Object.fromEntries(plan.fields.map((f) => [f.field, f.reset ? { reset: true } : f.to]))) : null
+}
+
 export interface GlossaryFinding { sku?: string; field: string; avoid: string; use: string; context: string | null }
 
 /** The glossary's avoid words in new texts, for a brand in one language (one finding per field and word). */
@@ -556,6 +572,9 @@ const setContent: AgentTool = {
   // d8: the person's Approve in Nexus is the review of the text, so a person always approves it there.
   maxClaudeTrust: 'ask',
   undo: SET_CONTENT_UNDO,
+  // 2.3 — re-based in a plan only on an earlier step's own write to its row: the basis (the row's version) may move, the
+  // rest of what the person read (the texts from → to, who they reach) may not.
+  planRebase: () => ['basis'],
   description:
     'Change one product\'s shared text in one language — title, bullet points, description, keywords, translatable '
     + 'attributes — or drop a language\'s own text so it shows the source again (reset). The primary language (it) is the '
@@ -573,6 +592,7 @@ const setContent: AgentTool = {
       reachOf(plan.product, plan.fields.map((f) => f.field), plan.language),
       glossaryHitsFor(plan),
     ])
+    const planFacts = sharedPlanFacts(plan)
     return {
       ok: true,
       preview: {
@@ -584,6 +604,7 @@ const setContent: AgentTool = {
         changes: sharedChanges(plan),
         reach,
         basis: sharedBasis(plan),
+        ...(planFacts ? { planFacts } : {}),
         ...(plan.unchanged.length ? { unchanged: plan.unchanged } : {}),
         ...(checked.warnings.length ? { warnings: checked.warnings } : {}),
         ...(hits.length ? { glossaryHits: hits } : {}),
@@ -608,8 +629,14 @@ const setContent: AgentTool = {
         const removedRow = await dropEmptyLanguageRow(plan, ctx.userId, 'set-content')
         const now = await contentProduct(plan.product.id)
         const record = (fieldsOwn: Record<string, Own>) => ({ productId: plan.product.id, language: plan.language, tier: plan.tier, fields: fieldsOwn })
+        // 2.3 — the language row this write left, read inside its own transaction (the row is held until it commits).
+        const row = sharedTextRow(plan)
+        const planWrites: PlanWrite[] = row
+          ? [{ key: row as PlanWrite['key'], before: plan.translationVersion ?? 0, after: now?.translations.find((t) => t.language === plan.language)?.version ?? 0 }]
+          : []
         return {
           ok: true,
+          ...(planWrites.length ? { planWrites } : {}),
           data: {
             productId: plan.product.id, sku: plan.product.sku, language: plan.language, applied: fields,
             ...(removedRow ? { removedLanguageRow: true } : {}),
@@ -973,6 +1000,8 @@ const setListingContent: AgentTool = {
   reversibility: 'full',
   maxClaudeTrust: 'ask',
   undo: SET_LISTING_CONTENT_UNDO,
+  // 2.3 — as set-content: re-based in a plan only on an earlier step's own write to its listing's text row.
+  planRebase: () => ['basis'],
   description:
     'Change what one listing (Amazon, eBay or Etsy + market; Etsy: GLOBAL) shows, without touching the shared text or any other listing: '
     + 'pin = text this listing keeps as its own; follow = fields it stops keeping, so they show the shared text again; '
@@ -1001,6 +1030,7 @@ const setListingContent: AgentTool = {
         changes: listingChanges(plan, shared),
         reach: { listing: plan.label, status: plan.listing.listingStatus, otherListingsChange: false },
         basis: basisOf({ listing: plan.listing.id, language: plan.language, pinVersion: plan.pinVersion, own: plan.fields.map((f) => [f.kind, f.writerField, f.own]) }),
+        planFacts: textPlanFacts(`listing:${plan.listing.id}:text@${plan.language}`, plan.pinVersion, Object.fromEntries(plan.fields.map((f) => [`${f.kind}:${f.writerField}`, f.drop ? { drop: true } : f.to ?? null]))),
         ...(plan.unchanged.length ? { unchanged: plan.unchanged } : {}),
         ...(checked.warnings.length ? { warnings: checked.warnings } : {}),
         ...(hits.length ? { glossaryHits: hits } : {}),
@@ -1011,27 +1041,38 @@ const setListingContent: AgentTool = {
   async execute(args, ctx): Promise<ToolResult> {
     const plan = await planListingContent(args, NOTHING_WRITTEN)
     if ('error' in plan) return { ok: false, error: plan.error }
-    const written = await runContentWriter(
-      { ...listingWrites(plan), expectedVersion: plan.listing.version },
-      contentWriterContext(ctx.userId, 'set-listing-content'),
-      (row) => row.field.replace(/^attr_/, ''),
-    )
-    if ('refusal' in written) return { ok: false, error: `${written.refusal.replace(/[.\s]+$/, '')}. ${NOTHING_WRITTEN}` }
-    // Where each attribute is stored, kept on both sides so the undo reads it back the same way.
-    const stores = Object.fromEntries(plan.fields.filter((f) => f.kind === 'attribute').map((f) => [f.writerField, { field: f.field, ...(f.store ? { store: f.store } : {}) }]))
-    const record = (own: { pins: Record<string, Own>; attributes: Record<string, Own> }) => ({
-      productId: plan.product.id, sku: plan.product.sku, listingId: plan.listing.id, coordinate: plan.coordinate, language: plan.language, ...own,
-      ...(Object.keys(stores).length ? { stores } : {}),
-    })
-    const before = {
-      pins: Object.fromEntries(plan.fields.filter((f) => f.kind !== 'attribute').map((f) => [f.field, f.own])),
-      attributes: Object.fromEntries(plan.fields.filter((f) => f.kind === 'attribute').map((f) => [f.writerField, f.own])),
-    }
-    const after = await listingOwn(plan, plan.fields)
-    return {
-      ok: true,
-      data: { productId: plan.product.id, listing: plan.label, language: plan.language, applied: plan.fields.map((f) => `${f.kind} ${f.field}`), ...(written.warnings.length ? { warnings: written.warnings } : {}) },
-      change: { before: record(before), after: record(after ?? { pins: {}, attributes: {} }) },
+    try {
+      // One transaction: the write, and what it left (2.3: the text row's version, read while the write holds the row).
+      return await inDatabaseTransaction(prisma, async () => {
+        const written = await runContentWriter(
+          { ...listingWrites(plan), expectedVersion: plan.listing.version },
+          contentWriterContext(ctx.userId, 'set-listing-content'),
+          (row) => row.field.replace(/^attr_/, ''),
+        )
+        if ('refusal' in written) throw new ContentRefused(written.refusal)
+        // Where each attribute is stored, kept on both sides so the undo reads it back the same way.
+        const stores = Object.fromEntries(plan.fields.filter((f) => f.kind === 'attribute').map((f) => [f.writerField, { field: f.field, ...(f.store ? { store: f.store } : {}) }]))
+        const record = (own: { pins: Record<string, Own>; attributes: Record<string, Own> }) => ({
+          productId: plan.product.id, sku: plan.product.sku, listingId: plan.listing.id, coordinate: plan.coordinate, language: plan.language, ...own,
+          ...(Object.keys(stores).length ? { stores } : {}),
+        })
+        const before = {
+          pins: Object.fromEntries(plan.fields.filter((f) => f.kind !== 'attribute').map((f) => [f.field, f.own])),
+          attributes: Object.fromEntries(plan.fields.filter((f) => f.kind === 'attribute').map((f) => [f.writerField, f.own])),
+        }
+        const after = await listingOwn(plan, plan.fields)
+        const pinRow = await prisma.channelListingTranslation.findFirst({ where: { channelListingId: plan.listing.id, language: plan.language }, select: { version: true } })
+        const planWrites: PlanWrite[] = [{ key: `listing:${plan.listing.id}:text@${plan.language}`, before: plan.pinVersion, after: pinRow?.version ?? 0 }]
+        return {
+          ok: true,
+          planWrites,
+          data: { productId: plan.product.id, listing: plan.label, language: plan.language, applied: plan.fields.map((f) => `${f.kind} ${f.field}`), ...(written.warnings.length ? { warnings: written.warnings } : {}) },
+          change: { before: record(before), after: record(after ?? { pins: {}, attributes: {} }) },
+        }
+      })
+    } catch (error) {
+      if (error instanceof ContentRefused) return { ok: false, error: `${error.message.replace(/[.\s]+$/, '')}. ${NOTHING_WRITTEN}` }
+      throw error
     }
   },
 }

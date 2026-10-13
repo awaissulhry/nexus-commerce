@@ -238,7 +238,22 @@ function asPrincipal<T>(principal: ToolPrincipal, work: () => Promise<T>): Promi
 /** What the principal may see of a tool's output. Owners and money-cleared users get it as it is. */
 export function visibleTo<T>(principal: ToolPrincipal, tool: Pick<AgentTool, 'restrictedFields'>, value: T): T {
   if (principal.kind === 'system') return value
-  return financialPayloadCopy(value, principal.permissions, tool.restrictedFields)
+  return financialPayloadCopy(withoutPlanFacts(value), principal.permissions, tool.restrictedFields)
+}
+
+/**
+ * 2.3 — a preview's `planFacts` (tool-types.ts PlanFacts) are the plan runner's to check, never a person's or Claude's to
+ * read, as `basis`: dropped from a tool's answer (its `preview`) and from a stored preview shown again.
+ */
+function withoutPlanFacts<T>(value: T): T {
+  const drop = (v: unknown) => {
+    if (!v || typeof v !== 'object' || Array.isArray(v) || !('planFacts' in v)) return v
+    const { planFacts: _facts, ...rest } = v as Record<string, unknown>
+    return rest
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value
+  const outer = drop(value) as Record<string, unknown>
+  return ('preview' in outer ? { ...outer, preview: drop(outer.preview) } : outer) as T
 }
 
 export interface CallOptions {

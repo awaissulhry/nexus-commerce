@@ -10,6 +10,7 @@
  */
 
 import { AsyncLocalStorage } from 'node:async_hooks'
+import { createHash } from 'node:crypto'
 import type { z } from 'zod'
 import type { FEATURES, FIELDS } from '@nexus/shared/permissions'
 
@@ -228,6 +229,64 @@ export interface ToolContext {
  */
 export type PlanEntityKey = `${string}:${string}`
 
+/**
+ * Proposal 2.3 — a preview that stands on the fields its change reads and writes (`basisOn: 'fields'`), never on a
+ * listing's VERSION: an order's stock cascade or a quantity push moves the version, and neither is a reason to refuse a
+ * price change whose own facts did not move.
+ */
+export const BASIS_ON_FIELDS = 'fields' as const
+
+/**
+ * Proposal 2.3 — was this preview approved before its tool's basis moved off a version (it does not say `basisOn:
+ * 'fields'`)? Such a request is checked on the version basis, as it was approved. Pure.
+ */
+export function approvedOnVersion(preview: unknown): boolean {
+  return (preview as { basisOn?: unknown } | null | undefined)?.basisOn !== BASIS_ON_FIELDS
+}
+
+/**
+ * Proposal 2.3 — what a step of a change plan WROTE, from its own write (its result, or read inside the write's own
+ * transaction while it holds the row — never read back after it committed): one entity and field,
+ * the value it found there when the write knows it, and the value it left. A later step of the same plan that stands on
+ * that entity and field may be re-based on it (AgentTool.planRebase) — only when the value there now is exactly the one
+ * this write left. The keys and values are the `stands` ones of the tools that read them:
+ *   `listing:<ChannelListing id>:price`     its own price: { follow, override, price }
+ *   `listing:<ChannelListing id>:sale`      its sale: { value, start, end }
+ *   `product:<Product id>:text@<language>`  the version of a product's text row in that language
+ *   `listing:<ChannelListing id>:text@<language>`  the version of a listing's own text row in that language
+ */
+export interface PlanWrite {
+  key: PlanEntityKey
+  before?: unknown
+  after: unknown
+}
+
+/**
+ * Proposal 2.3 — a fact as a plan step's preview keeps it (`planFacts.stands`, `planFacts.sets`): a short hash of its
+ * value, whatever the order of its keys, so a preview carries no money and stays small, and a PlanWrite's value compares
+ * with it. Pure.
+ */
+export function factHash(value: unknown): string {
+  const sorted = (v: unknown): unknown =>
+    Array.isArray(v)
+      ? v.map(sorted)
+      : v !== null && typeof v === 'object'
+        ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, sorted((v as Record<string, unknown>)[k])]))
+        : v
+  return createHash('sha256').update(JSON.stringify(sorted(JSON.parse(JSON.stringify(value ?? null))))).digest('hex').slice(0, 16)
+}
+
+/**
+ * Proposal 2.3 — what a re-basable step of a change plan stands on (AgentTool.planRebase), in its preview as `planFacts`:
+ * each entity and field a plan step may write, by key, with its value's hash (`stands`); every other fact it was worked
+ * out from under `context`; and the hash of what it sets per entity and field (`sets`). Kept out of what a person or
+ * Claude is shown (call-tool.ts `visibleTo`): it is the run's to check, as `basis` is.
+ */
+export interface PlanFacts {
+  stands: Record<string, string>
+  sets: string
+}
+
 /** C6 — what a plan step stands on and what it changes (AgentTool.planEntities). */
 export interface PlanEntities {
   reads: PlanEntityKey[]
@@ -246,6 +305,11 @@ export interface ToolResult {
    * input of `undo`. Absent when nothing was changed or the tool keeps no record.
    */
   change?: ToolChange
+  /**
+   * 2.3 — `execute` of a tool with `planRebase`: every entity and field it wrote, from its own write (PlanWrite). The plan
+   * runner re-bases a later step of the same plan on them, and on nothing else.
+   */
+  planWrites?: PlanWrite[]
   /**
    * C2 — a control tool's dry run only: the request the gate then queues, as a NEW request of that tool through
    * the same gate (its permissions, preview, approval, staleness). `undoes`: the AgentChange it puts back.
@@ -392,6 +456,15 @@ export interface AgentTool {
    * re-check compares the preview it was approved on, as for any approval.
    */
   planEntities?: (args: Record<string, unknown>, preview: unknown) => PlanEntities
+  /**
+   * Proposal 2.3 — a step of a change plan that the plan runner may re-base on what an EARLIER step of the same plan
+   * wrote (PlanWrite), verified fact by fact (change-plan.service.ts `rebaseVerdict`). Its previews carry `planFacts`
+   * (PlanFacts): complete, so that the preview is a function of its arguments and these facts. Returns the material
+   * fields of a preview that its facts explain, so they may differ after the re-base; every other material field must
+   * not. A step is re-based only when what it sets is unchanged, and every fact is unchanged or exactly what the earlier
+   * step wrote there.
+   */
+  planRebase?: (preview: unknown) => readonly string[]
   /** Dry-run preview (no side effects). Always safe to run. Call it only
    *  through call-tool.ts. */
   handler: (

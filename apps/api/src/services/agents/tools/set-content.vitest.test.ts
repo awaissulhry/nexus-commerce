@@ -30,12 +30,29 @@ vi.mock('../../../db.js', async () => {
 })
 vi.mock('../../../lib/queue.js', () => ({
   outboundSyncQueue: null, channelSyncQueue: null, bulkJobQueue: null, redis: null,
-  searchIndexQueue: null, readCacheQueue: null, readinessQueue: null,
+  searchIndexQueue: null, readCacheQueue: null, readinessQueue: null, agentPlanQueue: null,
   addJobSafely: vi.fn(async () => ({ enqueued: false })),
 }))
 vi.mock('../../product-read-cache.service.js', () => ({ productReadCacheService: { refresh: vi.fn(), refreshMany: vi.fn(), refreshInTransaction: vi.fn() } }))
 vi.mock('../../pim/readiness-index.service.js', async () => (await import('../../../test-support/readiness-module-mock.js')).readinessModuleMock(vi.fn()))
 
+// 2.3 — a seam for "someone writes while a step of a plan runs" (after its own write): runs once, then clears itself.
+const hooks = vi.hoisted(() => ({ duringRun: null as null | ((toolName: string, args: Record<string, unknown>) => Promise<boolean>) }))
+vi.mock('../call-tool.js', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../call-tool.js')>()
+  return {
+    ...real,
+    executeTool: async (...a: Parameters<typeof real.executeTool>) => {
+      const out = await real.executeTool(...a)
+      if (hooks.duringRun && (await hooks.duringRun(a[1], a[2]))) hooks.duringRun = null
+      return out
+    },
+  }
+})
+
+// The plan runner first, so it takes the call-tool seam above (imported after call-tool, call-tool's own graph would load
+// it with the original).
+import { runPlan } from '../change-plan.service.js'
 import { callTool, ToolAccessError, type UserPrincipal } from '../call-tool.js'
 import { runOrQueueTool } from '../approval-gate.service.js'
 import { checkStaleness, commitScheduledApproval, MATERIAL_PREVIEW_FIELDS, scheduleApproval } from '../../agent-fleet/approval-inbox.service.js'
@@ -302,5 +319,66 @@ describe('T5 — reset, attributes, undo, permissions', { timeout: 30_000 }, () 
       .rejects.toBeInstanceOf(ToolAccessError)
     await inside(() => db().product.update({ where: { id: parent.id }, data: { deletedAt: new Date() } }))
     expect(await preview({ product: parent.sku, language: 'de', title: 'Jacke', englishMeaning: { title: 'Jacket' } })).toEqual({ ok: false, error: 'Product not found' })
+  })
+})
+
+describe('2.3 — set-content stands on its language row\'s version; a plan re-bases only on its own earlier write', { timeout: 60_000 }, () => {
+  const germanRow = (productId: string) =>
+    inside(() => db().productTranslation.create({ data: { productId, language: 'de', name: 'Jacke', description: 'Alt.', source: 'manual', reviewedAt: new Date() } }))
+  /** The AI translation (catalog-translate.ts) writes a German field as a draft: source ai, not reviewed; the row's version moves. */
+  const aiDraft = (productId: string, data: Record<string, unknown>) =>
+    inside(() => db().productTranslation.updateMany({ where: { productId, language: 'de' }, data: { ...data, source: 'ai', reviewedAt: null, version: { increment: 1 } } }))
+
+  it('an AI draft of another German field written after the approval refuses it: approving the title never marks that draft reviewed', async () => {
+    const { parent } = await seed('TEST-SKU-T5-DRAFT')
+    await germanRow(parent.id)
+    const { approvalId } = await queued({ product: parent.id, language: 'de', title: 'Motorradjacke', englishMeaning: { title: 'Motorcycle jacket' } })
+    await aiDraft(parent.id, { description: 'KI-Entwurf.' })
+    const ran = await approveAndRun(approvalId)
+    expect(ran).toMatchObject({ ok: false, error: expect.stringMatching(/the facts moved since you approved it — basis changed/) })
+    expect(await german(parent.id)).toMatchObject({ name: 'Jacke', description: 'KI-Entwurf.', source: 'ai', reviewedAt: null })
+  })
+
+  it('a plan of two steps on one product and language (the title, then the description): both run, the second on the first one\'s own write', async () => {
+    const { parent } = await seed('TEST-SKU-T5-PLAN')
+    const out = await ask('submit-change-plan', { title: 'Test two German texts', steps: [
+      { tool: 'set-content', args: { product: parent.id, language: 'de', title: 'Motorradjacke', englishMeaning: { title: 'Motorcycle jacket' } } },
+      { tool: 'set-content', args: { product: parent.id, language: 'de', description: 'Eine Jacke.', englishMeaning: { description: 'A jacket.' } } },
+    ] })
+    expect(out, out.error).toMatchObject({ ok: true, mode: 'queued' })
+    expect(await approveAndRun(out.approvalId!)).toMatchObject({ ok: true, status: 'executing' })
+    const ran = await inside(() => runPlan(out.approvalId!))
+    const steps = await inside(() => db().agentPlanStep.findMany({ where: { approvalId: out.approvalId! }, orderBy: { position: 'asc' } }))
+    expect(ran, JSON.stringify(steps.map((step) => [step.status, step.reason]))).toMatchObject({ finished: true, counts: { done: 2 } })
+    expect(await german(parent.id)).toMatchObject({ name: 'Motorradjacke', description: 'Eine Jacke.' })
+  })
+
+  it('control: an AI draft written into the row WHILE the first step ran skips the second, and stays an unreviewed draft', async () => {
+    const { parent } = await seed('TEST-SKU-T5-PLAN-DRAFT')
+    await germanRow(parent.id)
+    const out = await ask('submit-change-plan', { title: 'Test two German texts, a draft meanwhile', steps: [
+      { tool: 'set-content', args: { product: parent.id, language: 'de', title: 'Motorradjacke', englishMeaning: { title: 'Motorcycle jacket' } } },
+      { tool: 'set-content', args: { product: parent.id, language: 'de', description: 'Eine Jacke.', englishMeaning: { description: 'A jacket.' } } },
+    ] })
+    await approveAndRun(out.approvalId!)
+    hooks.duringRun = async (tool, args) => {
+      if (tool !== 'set-content' || args.title === undefined) return false
+      await aiDraft(parent.id, { keywords: ['KI'] })
+      return true
+    }
+    expect(await inside(() => runPlan(out.approvalId!))).toMatchObject({ finished: true, counts: { done: 1, skipped: 1 } })
+    const [, second] = await inside(() => db().agentPlanStep.findMany({ where: { approvalId: out.approvalId! }, orderBy: { position: 'asc' } }))
+    expect(second.reason).toMatch(/^not run — an earlier step of this plan changed what it stands on, but the de text changed outside this plan/)
+    expect(await german(parent.id)).toMatchObject({ name: 'Motorradjacke', description: 'Alt.', keywords: ['KI'], source: 'ai', reviewedAt: null })
+  })
+
+  it('control: a person\'s edit of the same field after the approval still refuses it', async () => {
+    const { parent } = await seed('TEST-SKU-T5-SAMEFIELD')
+    await germanRow(parent.id)
+    const { approvalId } = await queued({ product: parent.id, language: 'de', description: 'Eine Jacke.', englishMeaning: { description: 'A jacket.' } })
+    await inside(() => db().productTranslation.updateMany({ where: { productId: parent.id, language: 'de' }, data: { description: 'Von Hand.', version: { increment: 1 } } }))
+    const ran = await approveAndRun(approvalId)
+    expect(ran).toMatchObject({ ok: false, error: expect.stringMatching(/the facts moved since you approved it/) })
+    expect((await german(parent.id))!.description).toBe('Von Hand.')
   })
 })

@@ -69,7 +69,7 @@ import { createWorkspaceService } from '../workspace.service.js'
 import { autoCommitRefusal, autoFreshRefusal, autoPlanCommitRefusal, freshCode, mayRaise, noteAutoFailure, type RaiseWords } from '../agents/claude-trust.service.js'
 import { drainPlans, enqueuePlan } from '../agents/change-plan.service.js'
 import { approvalStepUp, stepUpOf, type StepUp } from '../agents/step-up-approval.js'
-import { PLAN_TOOL } from '../agents/tool-types.js'
+import { approvedOnVersion, PLAN_TOOL } from '../agents/tool-types.js'
 import type { QueueBulkResult } from '@nexus/shared/approval-queue'
 import { BULK_MAX_IDS, bulkApproveRefusal } from './bulk-approve-policy.js'
 
@@ -1068,8 +1068,10 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'set-pricing-rule': ['action', 'rule', 'changes', 'products'],
   'set-promotion': ['action', 'promotion', 'scope'],
   'schedule-price-change': ['action', 'change', 'bounds'],
-  // 08 S11 — every product's floor and ceiling and every listing's price as they were (`basis` fingerprints all of them,
-  // with each listing's version), and what is sent again.
+  // 08 S11 — every product's floor and ceiling and every listing's price as they were (`basis` fingerprints all of them),
+  // and what is sent again. 2.3 — a listing's price stands on its own price, sale and pricing and its master price
+  // (`planFacts`), never on its version (VERSION_BASIS_BEFORE: a request approved before is checked on the version, as it
+  // was approved).
   'set-price-bounds': ['changes', 'totals', 'basis'],
   'bulk-listing-price-change': ['changes', 'totals', 'basis'],
   'resend-prices': ['send', 'totals', 'basis'],
@@ -1101,10 +1103,12 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'create-product': ['product', 'variations'],
   'create-variations': ['previewToken', 'familyVersion', 'counts'],
   'discard-new-products': ['restore', 'products'],
-  // L8 — the Matrix door's own preview: the verb and every change it would make (from → to per cell; a sale's cell
-  // version too). The run carries these changes and the door re-verifies each one again.
+  // L8 — the Matrix door's own preview: the verb and every change it would make (from → to per cell). The run carries
+  // these changes and the door re-verifies each one again. 2.3 — a sale stands on the sale it saw and the price it was
+  // planned against, a price on the sale of its listings (`planFacts`), never on the listing's version (a sale approved
+  // before carried the version in each change: VERSION_BASIS_BEFORE).
   'set-listing-stock': ['verb', 'changes'],
-  'set-listing-price': ['verb', 'changes'],
+  'set-listing-price': ['verb', 'changes', 'planFacts'],
   'revert-listing-change': ['operationId', 'status', 'cells'],
   // L9 — each listing and how its channel closes or reopens it (and the eBay quantity a reopen pins).
   'close-listing': ['listings', 'how'],
@@ -1123,6 +1127,26 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   // the person approved is a different import.
   'import-catalog': ['counts', 'basis'],
   'rollback-bulk-operation': ['counts', 'basis'],
+}
+
+/**
+ * Proposal 2.3 (2026-10-13) — the listing price tools whose basis stood on the listing's VERSION until then, which every
+ * write to the row moves (an order's stock cascade, a quantity push): an approved price change was refused although its
+ * price had not moved. Their previews now stand on the facts they change and depend on (`basisOn: 'fields'`) and still
+ * carry the version basis they were compared on before (`versionBasis`; a sale's `versions`, one per change). A request
+ * approved before (its preview has no `basisOn`) is compared with the fresh dry run in the shape it was approved in — on
+ * the version, as it was. Pure. (Text changes still stand on their row's version: approving one marks the whole row
+ * reviewed.)
+ */
+export const VERSION_BASIS_BEFORE: Readonly<Record<string, (fresh: Record<string, unknown>) => Record<string, unknown>>> = {
+  'bulk-listing-price-change': (fresh) => ({ ...fresh, basis: fresh.versionBasis }),
+  'resend-prices': (fresh) => ({ ...fresh, basis: fresh.versionBasis }),
+  // A sale: each change carried the version its listing was read at. Any other set-listing-price never did.
+  'set-listing-price': (fresh) => {
+    const versions = fresh.versions
+    if (!Array.isArray(versions) || !Array.isArray(fresh.changes)) return fresh
+    return { ...fresh, changes: (fresh.changes as Array<Record<string, unknown>>).map((change, i) => ({ ...change, version: versions[i] })) }
+  },
 }
 
 export interface StalenessVerdict {
@@ -1264,26 +1288,36 @@ export async function freshDryRun(
   return { ok: true, why: null, preview: fresh.preview, data: fresh.data }
 }
 
+/** The material fields that differ, by name, and the two previews as compared. */
+function movedMaterial(toolName: string, approved: unknown, now: unknown) {
+  const before = (approved ?? {}) as Record<string, unknown>
+  const fresh = (now ?? {}) as Record<string, unknown>
+  // 2.3 — approved before its tool's basis moved off a version: compared on the version, as it was approved.
+  const shape = VERSION_BASIS_BEFORE[toolName]
+  const after = shape && approvedOnVersion(before) ? shape(fresh) : fresh
+  const keys = (MATERIAL_PREVIEW_FIELDS[toolName] ?? []).filter((key) => key in before && canonicalJson(before[key]) !== canonicalJson(after[key]))
+  return { before, after, keys }
+}
+
+/** The names of the material fields that differ between the preview approved and a fresh one (movedFields). Pure. */
+export function movedFieldNames(toolName: string, approved: unknown, now: unknown): string[] {
+  return movedMaterial(toolName, approved, now).keys
+}
+
 /**
  * The material fields (MATERIAL_PREVIEW_FIELDS) of a tool that differ between the preview approved and a fresh one, each
  * as the sentence the re-check says; empty when none moved. A field the approved preview did not carry is not compared.
  * Pure.
  */
 export function movedFields(toolName: string, approved: unknown, now: unknown): string[] {
-  const before = (approved ?? {}) as Record<string, unknown>
-  const after = (now ?? {}) as Record<string, unknown>
-  const moved: string[] = []
-  for (const key of MATERIAL_PREVIEW_FIELDS[toolName] ?? []) {
-    if (!(key in before)) continue
-    if (canonicalJson(before[key]) !== canonicalJson(after[key])) {
-      moved.push(
-        key.toLowerCase().includes('cents')
-          ? `${key} changed from ${money(before[key])} to ${money(after[key])}`
-          : `${key} changed from ${JSON.stringify(before[key]) ?? 'none'} to ${JSON.stringify(after[key]) ?? 'none'}`,
-      )
-    }
-  }
-  return moved
+  const { before, after, keys } = movedMaterial(toolName, approved, now)
+  return keys.map((key) =>
+    key === 'planFacts'
+      // 2.3 — hashes, never shown: say what they are.
+      ? 'a price, sale or pricing it stands on changed'
+      : key.toLowerCase().includes('cents')
+        ? `${key} changed from ${money(before[key])} to ${money(after[key])}`
+        : `${key} changed from ${JSON.stringify(before[key]) ?? 'none'} to ${JSON.stringify(after[key]) ?? 'none'}`)
 }
 
 /* ── AP.7: the precedent a decision actually created ───────────────────── */
