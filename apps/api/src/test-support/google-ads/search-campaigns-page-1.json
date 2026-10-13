@@ -1,0 +1,52 @@
+{
+  "results": [
+    {
+      "campaign": {
+        "resourceName": "customers/1234567890/campaigns/11111111111",
+        "id": "11111111111",
+        "name": "Test search campaign",
+        "status": "ENABLED",
+        "servingStatus": "SERVING",
+        "primaryStatus": "ELIGIBLE",
+        "advertisingChannelType": "SEARCH",
+        "biddingStrategyType": "TARGET_CPA",
+        "targetCpa": { "targetCpaMicros": "2500000" },
+        "startDateTime": "2026-01-15 00:00:00",
+        "endDateTime": "2037-12-30 23:59:59"
+      },
+      "campaignBudget": {
+        "resourceName": "customers/1234567890/campaignBudgets/21111111111",
+        "id": "21111111111",
+        "amountMicros": "15000000",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/1234567890/campaigns/22222222222",
+        "id": "22222222222",
+        "name": "Test performance max campaign",
+        "status": "PAUSED",
+        "servingStatus": "SERVING",
+        "primaryStatus": "PAUSED",
+        "primaryStatusReasons": ["CAMPAIGN_PAUSED"],
+        "advertisingChannelType": "PERFORMANCE_MAX",
+        "biddingStrategyType": "MAXIMIZE_CONVERSION_VALUE",
+        "maximizeConversionValue": { "targetRoas": 4.5 },
+        "startDateTime": "2026-03-01 00:00:00",
+        "shoppingSetting": { "merchantId": "5555555555", "feedLabel": "IT" }
+      },
+      "campaignBudget": {
+        "resourceName": "customers/1234567890/campaignBudgets/23333333333",
+        "id": "23333333333",
+        "amountMicros": "40000000",
+        "deliveryMethod": "STANDARD",
+        "period": "DAILY",
+        "explicitlyShared": true
+      }
+    }
+  ],
+  "nextPageToken": "fake-page-token-2",
+  "fieldMask": "campaign.id,campaign.name,campaign.status,campaign.servingStatus,campaign.primaryStatus,campaign.primaryStatusReasons,campaign.advertisingChannelType,campaign.advertisingChannelSubType,campaign.biddingStrategyType,campaign.biddingStrategy,campaign.targetCpa.targetCpaMicros,campaign.targetRoas.targetRoas,campaign.maximizeConversions.targetCpaMicros,campaign.maximizeConversionValue.targetRoas,campaign.startDateTime,campaign.endDateTime,campaign.shoppingSetting.merchantId,campaign.shoppingSetting.feedLabel,campaignBudget.id,campaignBudget.amountMicros,campaignBudget.deliveryMethod,campaignBudget.period,campaignBudget.explicitlyShared"
+}

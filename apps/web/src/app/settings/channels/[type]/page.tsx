@@ -12,7 +12,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import ChannelDetailClient from './ChannelDetailClient'
 import { CHANNEL_LABEL, PAGE_MAX_WIDTH, type ChannelDetail } from './channelDetail'
 
-const KNOWN = new Set(['amazon', 'ebay', 'shopify', 'woocommerce', 'etsy'])
+const KNOWN = new Set(['amazon', 'ebay', 'shopify', 'woocommerce', 'etsy', 'google'])
 
 export default function ChannelDetailPage() {
   const params = useParams<{ type: string }>()

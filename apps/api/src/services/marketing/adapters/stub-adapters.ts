@@ -2,17 +2,20 @@
  * UM-series (P11/P12/P13) — sandbox-stub channel adapters for Shopify,
  * Google Ads, Meta, and TikTok.
  *
- * These register the channels so the cockpit lens tabs, capabilities, and
- * the create-campaign flow work for them NOW — but they have no live
- * integration yet (each needs its own OAuth app + API credentials the
- * operator provisions). Until then:
- *   - pullCampaigns returns [] (nothing to shadow without creds)
+ * They only register the channels, so the unified layer has an adapter for
+ * each. None of them changes anything at the channel. (The cockpit page that
+ * showed their lens tabs, capabilities and a create flow is not routed.)
+ * Google, Meta and TikTok are read only: the marketing OS routes refuse
+ * creating, changing or launching one of their campaigns before anything is
+ * queued, and the write gate never answers live for them, whatever the env
+ * says (marketing-read-only-channels.ts, marketing-write-gate.ts):
+ *   - pullCampaigns returns [] (nothing is read through them)
  *   - applyMutation sandbox-finalizes (returns wouldChange, no external call)
- *     and throws if a live write is attempted without the channel's gate
+ *     and throws if a live write is attempted
  *   - setBudget likewise
  *
- * When credentials land, each stub graduates to a real adapter (live
- * pull/push) — the unified layer above is unchanged.
+ * Google Ads is read through its own stack (services/marketing/google-ads/),
+ * not through this adapter; changes to Google Ads are made in Google Ads.
  */
 
 import type { MktChannel, MktSurface } from '@prisma/client'

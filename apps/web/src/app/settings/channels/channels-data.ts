@@ -12,6 +12,7 @@ import { WORKSPACES_ENABLED } from '@/lib/workspaces/paths'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { AccountRow } from '@/design-system/components/AccountSwitcher'
 import { accountDisplayName, channelDisplayName } from '@/design-system/lib'
+import type { GoogleAccount } from '@/lib/google-ads/contract'
 
 export type { AccountRow }
 
@@ -107,6 +108,14 @@ const pickAds = (raw: unknown) => {
   return { items: r.items, adsMode: r.adsMode ?? 'sandbox' }
 }
 
+const pickGoogle = (raw: unknown) => {
+  const r = raw as { items?: GoogleAccount[] }
+  if (!r || !Array.isArray(r.items) || !r.items.every((item) => item && typeof item.connectionId === 'string')) {
+    throw new Error('The Google accounts could not be verified.')
+  }
+  return { items: r.items }
+}
+
 export function useAccounts(reloadSignal: unknown, includeDisconnected = false, workspaceId: string | null = null) {
   return useJson(`/api/accounts${includeDisconnected ? '?includeDisconnected=1' : ''}`, reloadSignal, pickAccounts, workspaceId)
 }
@@ -117,6 +126,11 @@ export function useCatalogue(reloadSignal: unknown = 0) {
 
 export function useAdsConnections(reloadSignal: unknown, workspaceId: string | null = null) {
   return useJson('/api/advertising/connections', reloadSignal, pickAds, workspaceId)
+}
+
+/** Google Ads step 1a — this business's Google sign-ins and the accounts chosen for each (C1). */
+export function useGoogleAccounts(reloadSignal: unknown, workspaceId: string | null = null) {
+  return useJson('/api/google-ads/connections', reloadSignal, pickGoogle, workspaceId)
 }
 
 /** The one place channel display names live on this page (the catalogue carries them for its own keys). */

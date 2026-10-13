@@ -1,0 +1,47 @@
+{
+  "results": [
+    {
+      "changeEvent": {
+        "resourceName": "customers/1234567890/changeEvents/1760266800000000~0~0",
+        "changeDateTime": "2026-10-12 13:00:00.123456",
+        "changeResourceType": "CAMPAIGN_BUDGET",
+        "changeResourceName": "customers/1234567890/campaignBudgets/21111111111",
+        "resourceChangeOperation": "UPDATE",
+        "changedFields": "amountMicros",
+        "clientType": "GOOGLE_ADS_RECOMMENDATIONS_SUBSCRIPTION",
+        "userEmail": "test.person@example.com",
+        "campaign": "customers/1234567890/campaigns/11111111111",
+        "oldResource": { "campaignBudget": { "amountMicros": "10000000" } },
+        "newResource": { "campaignBudget": { "amountMicros": "15000000" } }
+      }
+    },
+    {
+      "changeEvent": {
+        "resourceName": "customers/1234567890/changeEvents/1760270400000000~1~0",
+        "changeDateTime": "2026-10-12 14:00:00",
+        "changeResourceType": "CAMPAIGN",
+        "changeResourceName": "customers/1234567890/campaigns/22222222222",
+        "resourceChangeOperation": "UPDATE",
+        "changedFields": "status,name",
+        "clientType": "GOOGLE_ADS_WEB_CLIENT",
+        "userEmail": "test.person@example.com",
+        "campaign": "customers/1234567890/campaigns/22222222222",
+        "oldResource": { "campaign": { "status": "ENABLED", "name": "Test old name" } },
+        "newResource": { "campaign": { "status": "PAUSED", "name": "Test performance max campaign" } }
+      }
+    },
+    {
+      "changeEvent": {
+        "resourceName": "customers/1234567890/changeEvents/1760274000000000~0~3",
+        "changeDateTime": "2026-10-12 15:00:00",
+        "changeResourceType": "AD_GROUP_CRITERION",
+        "changeResourceName": "customers/1234567890/adGroupCriteria/31111111111~41111111111",
+        "resourceChangeOperation": "CREATE",
+        "clientType": "GOOGLE_ADS_EDITOR",
+        "campaign": "customers/1234567890/campaigns/11111111111",
+        "adGroup": "customers/1234567890/adGroups/31111111111"
+      }
+    }
+  ],
+  "fieldMask": "changeEvent.resourceName,changeEvent.changeDateTime,changeEvent.changeResourceType,changeEvent.changeResourceName,changeEvent.resourceChangeOperation,changeEvent.changedFields,changeEvent.clientType,changeEvent.userEmail,changeEvent.campaign,changeEvent.adGroup,changeEvent.oldResource,changeEvent.newResource"
+}

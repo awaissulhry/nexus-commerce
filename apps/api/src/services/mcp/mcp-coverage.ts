@@ -140,6 +140,8 @@ export const ROUTE_COVERAGE: Readonly<Record<string, RouteCoverage>> = {
   'flat-file-unified': { excluded: 'Owner rule 2026-09-29: never the old flat-file pages', feature: 14 },
   forecast: { part: '08', feature: 38 },
   fulfillment: { part: '07', feature: 28, also: 'routing and shipping (#27, #28); inbound, purchase orders, suppliers, replenishment and FNSKU are 08 (#36–#39)' },
+  'google-accounts': { excluded: 'choosing which Google Ads, Merchant Center and Analytics accounts a Google connection reads: a person in the browser (09 §2); Claude sees the connection with channel-connections', feature: 51 },
+  'google-ads-read': { part: '01', feature: 19, also: 'Google Ads step 1a, read only: Claude reads the account overview and campaigns with ads-overview and ad-campaigns (channel google; the same read service); one campaign\'s days and change history are the page\'s alone, and "Read now" (sync) is a person\'s; no tool changes Google Ads' },
   'gtin-exemption': { part: '04', feature: 9 },
   health: { excluded: 'webhook receivers and health checks: machine to machine, nothing for a person or Claude', feature: 82 },
   'import-wizard': { part: '09', feature: 68 },

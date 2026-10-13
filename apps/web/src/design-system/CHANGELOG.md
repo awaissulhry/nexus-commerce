@@ -1,3 +1,25 @@
+## Tag `truncate` + `title`; PerformanceGraph `axisLabel` — 2026-10-13
+
+Google Ads step 1a, screen fixes. Both mirrored in `apps/factory` (identical files).
+- **`Tag truncate title`**: one line, never wider than its container, ending in an ellipsis; `title` carries the full
+  text. A Tag is `white-space: nowrap`, so a long chip ran past its card's edge (the Google card on Settings › Channels).
+- **`PerformanceGraph` `ChartSeries.axisLabel`**: the axis's name above it ("Cost (EUR)" left, "Conversion value (EUR)"
+  right), with its line's colour. Two series on two axes whose scales differ (cost 0–100, value 0–1200) read as the
+  same size without it. Optional; a graph without it is unchanged.
+- **`WorkspaceGrid` auto-size keeps 1px** (`autoSizePadding` 0 → 1, web only): AG measures a column with
+  `offsetWidth`, a whole number, so a header or value 26.4px wide got 26px and ended in "…" ("Cost" read "C…",
+  "€40.00 a day (shared)" lost its last letters). Every auto-sized column is 1px wider; nothing is cut by rounding.
+- **`WorkspaceGrid` on a phone** (`useNarrow`, ≤ 760px): the identity column is drawn unpinned (`prefsForScreen`). At
+  300px it was as wide as the grid, so pinned it covered every other column and a sideways swipe moved nothing. The
+  saved "sticky first column" choice is unchanged and applies again on a wider screen. Its pager wraps (`.h10-am-pager`:
+  "Rows per page" was squeezed into three lines and its list stuck out of the card). Web only.
+
+## Account names: Google — 2026-10-13
+
+Google Ads step 1a. `lib/account-identity.ts` (identical in `apps/factory`): `channelDisplayName('GOOGLE')` is "Google",
+and a label shaped like a Google Ads customer id (`123-456-7890`) is a placeholder, shown as "Google account" — an id is
+routing data, never a name.
+
 ## Grid states and words: one of each — 2026-10-13
 
 Grid audit 2026-10-12, wave 2 PR6 (E6, E7, E14, E15, F8, C6, A11).

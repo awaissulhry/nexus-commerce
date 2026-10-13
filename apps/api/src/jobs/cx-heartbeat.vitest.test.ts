@@ -339,6 +339,22 @@ describe('runHeartbeatFor — ok', () => {
     expect(scopeUpserts).toHaveLength(2)
   })
 
+  it('a connector with discoverOnHeartbeat: false (Google — scarce Ads quota) is not discovered on the heartbeat', async () => {
+    fakeSpec.discoverScopes = discoverScopes
+    fakeSpec.discoverOnHeartbeat = false
+    registerChannel(fakeSpec)
+    try {
+      heartbeat.mockResolvedValue({ ok: true, latencyMs: 1 })
+      discoverScopes.mockResolvedValue([{ kind: 'marketplace', externalId: 'X', label: 'X' }])
+      const r = await runHeartbeatFor(seedRow())
+      expect(r.ok).toBe(true)
+      expect(discoverScopes).not.toHaveBeenCalled()
+      expect(scopeUpserts).toHaveLength(0)
+    } finally {
+      delete fakeSpec.discoverOnHeartbeat
+    }
+  })
+
   it('writes isActive on update only when discovery measured it (ads wave 4d)', async () => {
     fakeSpec.discoverScopes = discoverScopes
     registerChannel(fakeSpec)

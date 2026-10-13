@@ -30,7 +30,7 @@ import type {
 } from 'ag-grid-community'
 
 import { Button } from '@/design-system/primitives'
-import { Listbox } from '@/design-system/components'
+import { Listbox, useNarrow } from '@/design-system/components'
 import { PreferencesModal, type PreferencesColumnSpec } from '@/design-system/patterns/PreferencesModal'
 import { emitPrefsChanged } from '@/design-system/patterns/prefs-bus'
 import { AdsFilterBar, isServerKey, stripServerKeys } from '@/design-system/patterns/workspace-grid/AdsFilterBar'
@@ -53,7 +53,7 @@ import { createDraftStore } from './drafts'
 import { bandByEnabled, collectGroupMeta, hasActiveFilters, initialPageOf, orderGroups, pageMath, pluralize, searchRows } from './pipeline'
 import {
   FIRST_COL, SELECTION_COL, defaultPrefs, defaultVisibleKeys, hasStoredPrefs, readStoredPrefs, samePrefs,
-  visibleOrderFromColumnState, widthsToColumnState, withWidth, writeStoredPrefs, prefsToModal, prefsFromModal,
+  visibleOrderFromColumnState, widthsToColumnState, withWidth, writeStoredPrefs, prefsToModal, prefsFromModal, prefsForScreen,
 } from './prefs'
 import { rowNavAction } from './rowNavKeys'
 import { adsWorkspaceTheme } from './theme'
@@ -255,11 +255,13 @@ export function WorkspaceGrid<T>({
 
   // ── column definitions: structure only, keyed on a structural signature ───────────────────────
   const colSig = useMemo(() => columnsSignature(columns), [columns])
+  const narrow = useNarrow()
+  const drawnPrefs = useMemo(() => prefsForScreen(prefs, narrow), [prefs, narrow])
   const columnDefs = useMemo<ColDef[]>(
-    () => buildColDefs({ columns, prefs, firstColLabel, firstSortable: !!firstSortValue, rawOrder, groupBy: !!groupBy, autoRows, tree: treeMode, defaultSort: dsKey ? { key: dsKey, dir: dsDir } : undefined, components: RENDERERS }),
+    () => buildColDefs({ columns, prefs: drawnPrefs, firstColLabel, firstSortable: !!firstSortValue, rawOrder, groupBy: !!groupBy, autoRows, tree: treeMode, defaultSort: dsKey ? { key: dsKey, dir: dsDir } : undefined, components: RENDERERS }),
     // `columns` is deliberately NOT a dependency — `colSig` stands for it (rule 1 in the file header).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [colSig, prefs, firstColLabel, !!firstSortValue, rawOrder, !!groupBy, autoRows, treeMode, dsKey, dsDir],
+    [colSig, drawnPrefs, firstColLabel, !!firstSortValue, rawOrder, !!groupBy, autoRows, treeMode, dsKey, dsDir],
   )
 
   // ── stable AG options ─────────────────────────────────────────────────────────────────────────
@@ -703,8 +705,10 @@ export function WorkspaceGrid<T>({
         suppressDragLeaveHidesColumns
         suppressRowTransform
         // A `<table>` column is exactly its content plus the cell padding; AG's auto-size adds 20px of slack
-        // by default (measured: every column +20 against the legacy widths, the identity 350 for 328.5).
-        autoSizePadding={0}
+        // by default (measured: every column +20 against the legacy widths, the identity 350 for 328.5). One pixel
+        // stays: AG measures with `offsetWidth`, a whole number, so a header or a value 26.4px wide got 26 and ended
+        // in "…" ("Cost" read "C…", "€40.00 a day (shared)" lost its last letters; Google Ads grid, 2026-10-13).
+        autoSizePadding={1}
         enableCellTextSelection
         columnDialog={columnDialog}
         onGridReady={onGridReady}

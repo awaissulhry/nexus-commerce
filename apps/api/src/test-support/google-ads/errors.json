@@ -1,0 +1,232 @@
+{
+  "//": "Google Ads REST error answers (v25 GoogleAdsFailure inside the standard Google API error). httpStatus is the HTTP status the answer came with; body is its JSON. Fictional request ids.",
+  "queryError": {
+    "httpStatus": 400,
+    "body": {
+      "error": {
+        "code": 400,
+        "message": "Request contains an invalid argument.",
+        "status": "INVALID_ARGUMENT",
+        "details": [
+          {
+            "@type": "type.googleapis.com/google.ads.googleads.v25.errors.GoogleAdsFailure",
+            "errors": [
+              {
+                "errorCode": {
+                  "queryError": "UNRECOGNIZED_FIELD"
+                },
+                "message": "Unrecognized field in the query: 'campaign.start_date'."
+              }
+            ],
+            "requestId": "test-request-0001"
+          }
+        ]
+      }
+    }
+  },
+  "authRevoked": {
+    "httpStatus": 401,
+    "body": {
+      "error": {
+        "code": 401,
+        "message": "Request had invalid authentication credentials.",
+        "status": "UNAUTHENTICATED",
+        "details": [
+          {
+            "@type": "type.googleapis.com/google.ads.googleads.v25.errors.GoogleAdsFailure",
+            "errors": [
+              {
+                "errorCode": {
+                  "authenticationError": "OAUTH_TOKEN_REVOKED"
+                },
+                "message": "OAuth token in the header has been revoked."
+              }
+            ],
+            "requestId": "test-request-0002"
+          }
+        ]
+      }
+    }
+  },
+  "permissionDenied": {
+    "httpStatus": 403,
+    "body": {
+      "error": {
+        "code": 403,
+        "message": "The caller does not have permission",
+        "status": "PERMISSION_DENIED",
+        "details": [
+          {
+            "@type": "type.googleapis.com/google.ads.googleads.v25.errors.GoogleAdsFailure",
+            "errors": [
+              {
+                "errorCode": {
+                  "authorizationError": "USER_PERMISSION_DENIED"
+                },
+                "message": "User doesn't have permission to access customer."
+              }
+            ],
+            "requestId": "test-request-0003"
+          }
+        ]
+      }
+    }
+  },
+  "notApprovedForProduction": {
+    "httpStatus": 403,
+    "body": {
+      "error": {
+        "code": 403,
+        "message": "The caller does not have permission",
+        "status": "PERMISSION_DENIED",
+        "details": [
+          {
+            "@type": "type.googleapis.com/google.ads.googleads.v25.errors.GoogleAdsFailure",
+            "errors": [
+              {
+                "errorCode": {
+                  "authorizationError": "CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION"
+                },
+                "message": "The Google Cloud project is only approved for use with test accounts."
+              }
+            ],
+            "requestId": "test-request-0004"
+          }
+        ]
+      }
+    }
+  },
+  "quotaExhausted": {
+    "httpStatus": 429,
+    "body": {
+      "error": {
+        "code": 429,
+        "message": "Too many requests.",
+        "status": "RESOURCE_EXHAUSTED",
+        "details": [
+          {
+            "@type": "type.googleapis.com/google.ads.googleads.v25.errors.GoogleAdsFailure",
+            "errors": [
+              {
+                "errorCode": {
+                  "quotaError": "RESOURCE_EXHAUSTED"
+                },
+                "message": "Number of operations for explorer access exceeded.",
+                "details": {
+                  "quotaErrorDetails": {
+                    "rateScope": "DEVELOPER",
+                    "rateName": "Number of operations for explorer access",
+                    "retryDelay": "43200s"
+                  }
+                }
+              }
+            ],
+            "requestId": "test-request-0005"
+          }
+        ]
+      }
+    }
+  },
+  "temporarilyExhausted": {
+    "httpStatus": 429,
+    "body": {
+      "error": {
+        "code": 429,
+        "message": "Too many requests.",
+        "status": "RESOURCE_EXHAUSTED",
+        "details": [
+          {
+            "@type": "type.googleapis.com/google.ads.googleads.v25.errors.GoogleAdsFailure",
+            "errors": [
+              {
+                "errorCode": {
+                  "quotaError": "RESOURCE_TEMPORARILY_EXHAUSTED"
+                },
+                "message": "Too many requests in a short amount of time.",
+                "details": {
+                  "quotaErrorDetails": {
+                    "rateScope": "ACCOUNT",
+                    "retryDelay": "45s"
+                  }
+                }
+              }
+            ],
+            "requestId": "test-request-0006"
+          }
+        ]
+      }
+    }
+  },
+  "internal": {
+    "httpStatus": 500,
+    "body": {
+      "error": {
+        "code": 500,
+        "message": "Internal error encountered.",
+        "status": "INTERNAL",
+        "details": [
+          {
+            "@type": "type.googleapis.com/google.ads.googleads.v25.errors.GoogleAdsFailure",
+            "errors": [
+              {
+                "errorCode": {
+                  "internalError": "INTERNAL_ERROR"
+                },
+                "message": "Google Ads API encountered unexpected internal error."
+              }
+            ],
+            "requestId": "test-request-0007"
+          }
+        ]
+      }
+    }
+  },
+  "transient": {
+    "httpStatus": 503,
+    "body": {
+      "error": {
+        "code": 503,
+        "message": "The service is currently unavailable.",
+        "status": "UNAVAILABLE",
+        "details": [
+          {
+            "@type": "type.googleapis.com/google.ads.googleads.v25.errors.GoogleAdsFailure",
+            "errors": [
+              {
+                "errorCode": {
+                  "internalError": "TRANSIENT_ERROR"
+                },
+                "message": "Google Ads API encountered an unexpected transient error."
+              }
+            ],
+            "requestId": "test-request-0008"
+          }
+        ]
+      }
+    }
+  },
+  "expiredPageToken": {
+    "httpStatus": 400,
+    "body": {
+      "error": {
+        "code": 400,
+        "message": "Request contains an invalid argument.",
+        "status": "INVALID_ARGUMENT",
+        "details": [
+          {
+            "@type": "type.googleapis.com/google.ads.googleads.v25.errors.GoogleAdsFailure",
+            "errors": [
+              {
+                "errorCode": {
+                  "requestError": "EXPIRED_PAGE_TOKEN"
+                },
+                "message": "Next page token specified in user request has expired."
+              }
+            ],
+            "requestId": "test-request-0009"
+          }
+        ]
+      }
+    }
+  }
+}

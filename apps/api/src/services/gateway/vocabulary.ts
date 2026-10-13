@@ -33,7 +33,11 @@ export const GATEWAY_ERROR_CLASSES: readonly GatewayErrorClass[] = [
 const RETRYABLE = new Set<GatewayErrorClass>(['rate_limited', 'transient', 'network', 'timeout'])
 export const isRetryableClass = (cls: GatewayErrorClass): boolean => RETRYABLE.has(cls)
 
-export type GatewayChannel = 'EBAY' | 'AMAZON_SP' | 'SHOPIFY' | 'AMAZON_ADS' | 'ETSY'
+/**
+ * GOOGLE (2026-10-13) — one channel for every Google API Nexus calls (Google Ads, Merchant Center,
+ * Analytics, the sign-in's userinfo); the rate bucket is per host (channels.bucketGroupOf).
+ */
+export type GatewayChannel = 'EBAY' | 'AMAZON_SP' | 'SHOPIFY' | 'AMAZON_ADS' | 'ETSY' | 'GOOGLE'
 
 /**
  * P3.1 — how bad the channel says it is.
@@ -259,6 +263,72 @@ function etsy(status: number, text: string): ChannelVerdict {
   return verdict(byStatus(status), body?.error ?? null, message)
 }
 
+/**
+ * Google's answers share one envelope: `{ error: { code, message, status, details[] } }`. Google Ads puts
+ * its own code inside a `GoogleAdsFailure` detail (`errors[].errorCode` = `{ authorizationError:
+ * 'USER_PERMISSION_DENIED' }`); the other Google APIs put a reason in a `google.rpc.ErrorInfo` detail
+ * (`SERVICE_DISABLED`, `ACCESS_TOKEN_SCOPE_INSUFFICIENT`). The token endpoint answers OAuth's own
+ * `{ error, error_description }`.
+ *
+ * `channelCode` = the Google Ads code, else the ErrorInfo reason, else `error.status`.
+ */
+const GOOGLE_CONFIGURATION_CODES = new Set([
+  // v25: a Cloud project with test access called a live account (the app needs a higher access level).
+  'CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION',
+  // The developer token is optional since 2026-09 (GOOGLE_ADS_DEVELOPER_TOKEN); when one is sent and refused.
+  'DEVELOPER_TOKEN_NOT_APPROVED', 'DEVELOPER_TOKEN_PROHIBITED', 'DEVELOPER_TOKEN_INVALID',
+  // The API is not switched on in the Cloud project.
+  'SERVICE_DISABLED', 'API_DISABLED',
+])
+
+/** The Google Ads error code inside a `GoogleAdsFailure` detail (`{ authorizationError: 'X' }` → `X`). */
+export function googleAdsErrorCode(body: any): string | null {
+  const details = Array.isArray(body?.error?.details) ? body.error.details : []
+  for (const detail of details) {
+    const errors = Array.isArray(detail?.errors) ? detail.errors : []
+    for (const e of errors) {
+      const code = e?.errorCode && typeof e.errorCode === 'object' ? Object.values(e.errorCode).find((v) => typeof v === 'string') : null
+      if (code) return String(code)
+    }
+  }
+  return null
+}
+
+/** The `reason` of a `google.rpc.ErrorInfo` detail (Merchant API, Analytics Admin, the API front door). */
+export function googleErrorReason(body: any): string | null {
+  const details = Array.isArray(body?.error?.details) ? body.error.details : []
+  const info = details.find((d: any) => typeof d?.reason === 'string' && d.reason)
+  return info ? String(info.reason) : null
+}
+
+function google(status: number, text: string): ChannelVerdict {
+  const body = parseJson(text)
+  const envelope = body?.error && typeof body.error === 'object' ? body.error : null
+  const adsCode = googleAdsErrorCode(body)
+  const reason = googleErrorReason(body)
+  const googleStatus: string | null = typeof envelope?.status === 'string' ? envelope.status : null
+  const oauthError = typeof body?.error === 'string' ? body.error : null
+  const adsMessage = Array.isArray(envelope?.details)
+    ? envelope.details.flatMap((d: any) => (Array.isArray(d?.errors) ? d.errors : [])).find((e: any) => typeof e?.message === 'string')?.message
+    : null
+  const message = adsMessage ?? envelope?.message ?? (typeof body?.error_description === 'string' ? body.error_description : null) ?? (text || null)
+  const code = adsCode ?? reason ?? googleStatus ?? oauthError ?? null
+  if (/invalid_grant/i.test(text)) return verdict('auth_revoked', code ?? 'invalid_grant', message)
+  if (/invalid_client|unauthorized_client/i.test(text)) return verdict('configuration', code ?? 'invalid_client', message)
+  if ((adsCode && GOOGLE_CONFIGURATION_CODES.has(adsCode)) || (reason && GOOGLE_CONFIGURATION_CODES.has(reason))) return verdict('configuration', code, message)
+  // Merchant API: a Cloud project that is not registered with the Merchant Center account is refused with a
+  // 401 UNAUTHENTICATED ("GCP project with id … is not registered with the merchant account") — the token is
+  // fine, so it is setup, not a dead sign-in.
+  if (status === 401 && /not registered/i.test(String(message ?? ''))) return verdict('configuration', code ?? 'not_registered', message)
+  if (status === 401 || googleStatus === 'UNAUTHENTICATED') return verdict('auth_expired', code ?? 401, message)
+  if (status === 429 || googleStatus === 'RESOURCE_EXHAUSTED') return verdict('rate_limited', code ?? 429, message)
+  if (status === 403 || googleStatus === 'PERMISSION_DENIED') return verdict('forbidden', code ?? 403, message)
+  if (googleStatus === 'INVALID_ARGUMENT' || googleStatus === 'FAILED_PRECONDITION') return verdict('validation', code, message)
+  if (googleStatus === 'NOT_FOUND') return verdict('not_found', code, message)
+  if (googleStatus === 'UNAVAILABLE' || googleStatus === 'INTERNAL' || googleStatus === 'DEADLINE_EXCEEDED') return verdict('transient', code, message)
+  return verdict(byStatus(status), code, message)
+}
+
 /** Classify a channel's answer. `status` 0 = no answer (network); `timedOut` wins over everything. */
 export function classifyChannelAnswer(channel: GatewayChannel, status: number, text: string, opts: { timedOut?: boolean } = {}): ChannelVerdict {
   if (opts.timedOut) return verdict('timeout', null, 'The channel did not answer in time.')
@@ -269,5 +339,6 @@ export function classifyChannelAnswer(channel: GatewayChannel, status: number, t
     case 'SHOPIFY': return shopify(status, text)
     case 'AMAZON_ADS': return amazonAds(status, text)
     case 'ETSY': return etsy(status, text)
+    case 'GOOGLE': return google(status, text)
   }
 }

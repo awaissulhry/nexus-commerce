@@ -77,6 +77,7 @@ import { startAdsRegionReconcileCron } from "../jobs/p45b-ads-region-reconcile.j
 import { startEtsyContentRefreshCron } from "../jobs/etsy-content-refresh.job.js";
 import { startEtsyReceiptsPollCron } from "../jobs/etsy-receipts-poll.job.js";
 import { startEbayAdsSyncCrons } from "../jobs/ebay-ads-sync.job.js";
+import { startGoogleAdsSyncCron } from "../jobs/ads-google-sync.job.js";
 import { startReconcileCron } from "../jobs/reconcile-cron.job.js";
 import { startLateShipmentFlagCron } from "../jobs/late-shipment-flag.job.js";
 import { startTrackingPushbackCron } from "../jobs/tracking-pushback.job.js";
@@ -595,6 +596,10 @@ export async function startScheduler(): Promise<void> {
   if (process.env.NEXUS_ENABLE_ETSY_RECEIPTS_POLL_CRON === '1') startEtsyReceiptsPollCron();
   // E2 eBay Ads read-side sync (prod default-ON; NEXUS_ENABLE_EBAY_ADS_SYNC gates)
   startEbayAdsSyncCrons();
+  // Google Ads step 1a — the daily read of each business's chosen Google Ads account, 06:25 UTC (read-only; ship live;
+  // NEXUS_GOOGLE_ADS_SYNC=off schedules nothing).
+  markCronStep('google-ads-sync')
+  startGoogleAdsSyncCron();
   // P5.3 — daily reconcile cron: Amazon drift + cumulative bleed + stale-conflict escalation
   startReconcileCron();
 

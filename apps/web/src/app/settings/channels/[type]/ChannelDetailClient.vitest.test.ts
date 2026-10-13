@@ -19,7 +19,10 @@ import {
   relativeWhen,
   runHeartbeat,
   sameSet,
+  shortScope,
   showLastError,
+  showsGoogleAccounts,
+  showsMarketplacesAndEvents,
   startReconnect,
   statusPill,
   testHold,
@@ -333,5 +336,45 @@ describe('inbound events — the processed pill', () => {
     expect(eventTone({ ...base, isProcessed: true, error: 'boom' })).toEqual({ tone: 'danger', label: 'failed' })
     expect(eventTone({ ...base, isProcessed: true, error: null })).toEqual({ tone: 'success', label: 'ok' })
     expect(eventTone({ ...base, isProcessed: false, error: null })).toEqual({ tone: 'warning', label: 'pending' })
+  })
+})
+
+describe('Google (Google Ads step 1a)', () => {
+  const google = (over: Partial<ChannelConnection> = {}) =>
+    connection({ channel: 'GOOGLE', sellerName: 'Google sign-in', region: null, grantedScopes: [], identity: null, ...over })
+
+  it('Reconnect is live for a signed-in Google account, and asks the Google connector', async () => {
+    expect(reconnectHold('google', google())).toEqual({ held: false })
+    const fetchImpl = fakeFetch({ success: true, authUrl: 'https://accounts.google.com/o/oauth2/v2/auth?x=1' })
+    await startReconnect('google', 'g-1', null, fetchImpl)
+    const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit]
+    expect(url).toMatch(/\/api\/cx\/connect\/google\/start$/)
+    expect(JSON.parse(String(init.body))).toEqual({ intent: 'reconnect', targetConnectionId: 'g-1' })
+  })
+
+  it('Reconnect is held while nothing is connected', () => {
+    const h = reconnectHold('google', google({ isManagedBy: 'pending' }))
+    expect(h.held && h.reason).toBe('No Google account is connected yet — use Channels → Connect to sign in.')
+  })
+
+  it('names Google’s scopes in words; other scopes keep their tail', () => {
+    expect(shortScope('https://www.googleapis.com/auth/adwords')).toBe('Google Ads')
+    expect(shortScope('https://www.googleapis.com/auth/content')).toBe('Merchant Center')
+    expect(shortScope('https://www.googleapis.com/auth/analytics.readonly')).toBe('Google Analytics (read)')
+    expect(shortScope('https://api.ebay.com/oauth/api_scope/sell.inventory')).toBe('sell.inventory')
+  })
+
+  it('shows the Google accounts card instead of Marketplaces and Inbound events', () => {
+    expect(showsMarketplacesAndEvents('google')).toBe(false)
+    expect(showsGoogleAccounts('google')).toBe(true)
+    for (const other of ['amazon', 'ebay', 'shopify', 'woocommerce', 'etsy']) {
+      expect(showsMarketplacesAndEvents(other)).toBe(true)
+      expect(showsGoogleAccounts(other)).toBe(false)
+    }
+  })
+
+  it('has no markets to scope, and never shows a customer id as its name', () => {
+    expect(marketplaceOptions('google')).toEqual([])
+    expect(identityLine(google({ sellerName: '123-456-7890' }))).toBe('Google account')
   })
 })

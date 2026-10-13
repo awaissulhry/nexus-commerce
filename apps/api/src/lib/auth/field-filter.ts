@@ -103,6 +103,17 @@ function copyWalk(
 
 const NO_PERMS: ResolvedPermissions = { isOwner: false, permissions: new Set() }
 
+const filtering = () => process.env.NEXUS_RBAC_MODE === 'enforce' || process.env.NEXUS_WORKSPACES_ENABLED === '1'
+
+/**
+ * The same strip for one route plugin whose answers carry money under a key the shared registry does not name
+ * (`extra`: key → the permission that reveals it). Registered on the plugin, it runs after the global hook.
+ */
+export function financialFilterHookWith(extra: Readonly<Record<string, string>>) {
+  return async (req: FastifyRequest, _reply: unknown, payload: unknown): Promise<unknown> =>
+    filtering() ? financialPayloadCopy(payload, req.__rbacResolved ?? NO_PERMS, extra) : payload
+}
+
 /** preSerialization hook — enforce-mode field stripping. */
 export async function financialFilterHook(
   req: FastifyRequest,

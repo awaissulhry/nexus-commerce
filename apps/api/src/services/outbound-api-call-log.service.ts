@@ -82,6 +82,8 @@ type Channel =
   | 'SENDCLOUD'
   // P1.1 — Amazon Ads rows were written as 'AMAZON'; the gateway writes them as their own channel.
   | 'AMAZON_ADS'
+  // 2026-10-13 — Google (Ads, Merchant Center, Analytics, sign-in userinfo), one gateway channel.
+  | 'GOOGLE'
 
 export interface ApiCallContext {
   channel: Channel

@@ -72,3 +72,61 @@ export function sortAppSecrets(rows: AppSecretRow[]): AppSecretRow[] {
   const rank = (row: AppSecretRow) => (SECRET_EXPIRES_ON_SCHEDULE.has(row.channelKey) ? 0 : 1)
   return [...rows].sort((a, b) => rank(a) - rank(b) || a.label.localeCompare(b.label) || a.environment.localeCompare(b.environment))
 }
+
+/**
+ * Google (2026-10-13) — our own Google Cloud OAuth client, from `GET /api/cx/apps/credentials`. The secret
+ * is write-only: the API says whether one is set, never what it is. The client id is not a secret.
+ */
+export interface AppCredentialsRow {
+  channelKey: string
+  label: string
+  environment: string
+  /** The exact address to register in Google Cloud; null when the server does not know its public address. */
+  redirectUri: string | null
+  redirectUriProblem: string | null
+  clientId: string | null
+  secretSet: boolean
+  /** saved = set in Nexus; environment = from the server's environment variables; none = not set. */
+  source: 'saved' | 'environment' | 'none'
+  updatedAt: string | null
+}
+
+/** What the Google sign-in app's status pill and sentence say. */
+export function appCredentialsStatus(row: AppCredentialsRow): { tone: Tone; label: string; detail: string } {
+  if (row.source === 'none' || !row.clientId) {
+    return {
+      tone: 'warning',
+      label: 'Not set',
+      detail: 'Google cannot be connected until an Owner pastes the client ID and client secret of the Nexus OAuth client from Google Cloud.',
+    }
+  }
+  if (!row.secretSet) {
+    return { tone: 'warning', label: 'Secret missing', detail: `Client ${row.clientId} is set, but its secret is not. Paste the client secret to finish.` }
+  }
+  if (row.source === 'environment') {
+    return {
+      tone: 'info',
+      label: 'From the server settings',
+      detail: `Nexus uses client ${row.clientId} from the server’s environment. Saving here replaces it.`,
+    }
+  }
+  return {
+    tone: 'success',
+    label: 'Set',
+    detail: `Client ${row.clientId}. The secret is stored encrypted and is never shown.${row.updatedAt ? ` Saved ${formatExpiryDate(row.updatedAt)}.` : ''}`,
+  }
+}
+
+/** Google's web client ids end in `.apps.googleusercontent.com` (the API checks the same). */
+export const GOOGLE_CLIENT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,200}\.apps\.googleusercontent\.com$/
+
+/** What is wrong with the form before it is sent, in words; null when it can be saved. */
+export function appCredentialsFormProblem(clientId: string, clientSecret: string): string | null {
+  const id = clientId.trim()
+  const secret = clientSecret.trim()
+  if (!id && !secret) return 'Paste the client ID and the client secret.'
+  if (!GOOGLE_CLIENT_ID_PATTERN.test(id)) return 'The client ID of a Google OAuth client ends in .apps.googleusercontent.com.'
+  if (!secret) return 'Paste the client secret too. Google shows it next to the client ID.'
+  if (/\s/.test(secret)) return 'The client secret has no spaces. Paste it again.'
+  return null
+}

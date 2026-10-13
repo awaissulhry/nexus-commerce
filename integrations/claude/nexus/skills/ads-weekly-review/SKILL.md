@@ -1,6 +1,6 @@
 ---
 name: ads-weekly-review
-description: Weekly advertising review in Nexus, market by market, for Amazon Sponsored Products and eBay Promoted Listings - read spend, sales and ACoS, wasteful search terms, the harvest engine's candidates and the verdicts of past harvests, bids and the engines' recommendations, explain them in plain words, then offer the changes as one change plan (negatives, harvests, lower bids, budgets, eBay rates) that a person approves. A temporary stop is lower bids; it pauses an ad only when the person means a real pause. Use when the person asks how their ads are doing, for a weekly ads or bid review, or what to change in their campaigns.
+description: Weekly advertising review in Nexus, market by market, for Amazon Sponsored Products and eBay Promoted Listings, and reads Google Ads campaigns and daily numbers - read spend, sales and ACoS, wasteful search terms, the harvest engine's candidates and the verdicts of past harvests, bids and the engines' recommendations, explain them in plain words, then offer the changes as one change plan (negatives, harvests, lower bids, budgets, eBay rates) that a person approves. A temporary stop is lower bids; it pauses an ad only when the person means a real pause. Use when the person asks how their ads are doing, for a weekly ads or bid review, or what to change in their campaigns.
 ---
 
 # Ads weekly review
@@ -35,7 +35,7 @@ Say each with its grain (campaign, keyword, search query, ASIN), its window (a d
 
 ## 1. Per market: read
 
-Ask which channel (`amazon`, the default, or `ebay`) and markets, or take every market with spend.
+Ask which channel (`amazon`, the default, `ebay` or `google`) and markets, or take every market with spend. Google Ads is read per account, not per market: see "Google Ads (read only)" below.
 
 1. `ads-overview` (`channel`, `market`, `days`: 7 by default): spend, sales, ACoS, ROAS, against the period before; top spenders; the automation dial; data feed health. eBay: pacing against the monthly ceilings and findings (rates above break-even, missing costs, unpromoted listings). This eBay read also checks the ceilings: a market at its monthly ceiling halts every eBay ad write of the business until a person resumes it — say so if it happens.
 2. `ad-campaigns` (`channel`, `market`, `status`, `days`): Amazon per campaign budget, `targetAcos` (a fraction), ACoS, `liveWrites`, suppressed bids, pins. eBay per campaign funding model, campaign rate (`bidPercentage`), daily budget (Priority), `automation` (posture, rules), account; eBay statuses are RUNNING, PAUSED, SYSTEM_PAUSED, ENDED, SUSPENDED, SCHEDULED.
@@ -47,6 +47,15 @@ Ask which channel (`amazon`, the default, or `ebay`) and markets, or take every 
 8. Amazon only — `ads-brain`: `view: "map"` (`market`) names the products the ads brain runs; for each, `view: "map"` (`productId`, `market`: who owns each lever of each campaign), `view: "report"` (`market`, then `productId`: the brain's daily product report in plain words, what waits for a person) and `view: "clashes"` (`market`); `view: "setup"` for the tools not set up; `view: "money"` (`productId`, `market`) for its off-Amazon lane (`offAmazon`: its share of spend and a line for the Owner when it stays above the band — the setting itself is in Amazon's console, Nexus cannot change it).
 
 `ad-search-terms` and `ad-targets` read Amazon data only: they take no `channel`, and a call with one is refused. eBay: `ebay-ad-details` (`view`: `listings`, `ad-groups` or `keywords`; `campaignId`, `market`, `adGroupId`, `search`, `days`, `limit`, `cursor`) reads each promoted listing's ad rate and break-even rate (`rateNote` says why `set-ebay-ad-rates` cannot change a campaign's rates), a Priority campaign's ad groups, and its keywords with bids and metrics, under the ids `set-ebay-ad-rates` and `ebay-keywords-change` take (`ebayCampaignId`, `ebayItemId`, `ebayAdGroupId`, `ebayKeywordId`). No tool reads eBay search terms. Never call a change tool just to look (it queues a request).
+
+### Google Ads (read only)
+
+Nexus reads the Google Ads account a person chose for the business and changes nothing in Google Ads.
+
+- Read `ads-overview` and `ad-campaigns` with `channel: "google"` (`days`; `status`, `search`; `accountId` only when the business has more than one Google account; never `market`). `ad-search-terms`, `ad-targets`, `ad-changes` and `ad-recommendations` do not read Google.
+- The numbers are cost, conversions and conversion value as Google counts them (Google's attribution and conversion actions, days in the account's time zone). Never call them sales, orders or ACoS; return on ad spend is conversion value ÷ cost.
+- Conversions can be fractional, and the last 14 days can still rise as Google adds late conversions (`provisionalFrom`). A day with `read: false` has no numbers: say "not read", never 0, and name `coverage.missingDays`. `previous` is there only when Nexus read every day of the window before.
+- Nexus changes nothing in Google Ads (`writes.mode` is none). Say what you would change and why, and that a person makes the change in Google Ads; never put a Google step in a change plan.
 
 ## 2. Explain
 

@@ -1,0 +1,101 @@
+/* Google Ads step 1a — /marketing/ads/google. Layout and domain content only: every colour, size and space is a
+   semantic --nds-* token, and every control is a design-system component (nothing here restyles one). */
+
+.gads-root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.gads-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+/* "Read from Google … · newest day … · days in …": one wrapping line of facts above the numbers. */
+.gads-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+  color: var(--nds-text-muted);
+}
+
+.gads-note {
+  margin: var(--nds-space-8) 0 0;
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+  color: var(--nds-text-2);
+}
+
+.gads-camp {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text);
+}
+
+.gads-status {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.gads-dim {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-muted);
+}
+
+/* The campaign window. */
+.gads-modal {
+  display: grid;
+  gap: var(--nds-space-20);
+  min-width: 0;
+}
+
+.gads-section {
+  display: grid;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.gads-section h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+}
+
+/* A day table is wider than a phone: it scrolls sideways on its own, and takes the focus so a keyboard can scroll it. */
+.gads-table {
+  min-width: 0;
+  max-height: 360px;
+  overflow: auto;
+}
+
+/* Headers never break inside a word ("Conversion / s"): the columns take their content's width (the DS table shares
+   the width out evenly) and the region above scrolls sideways when the window is narrower. A day row stays on one
+   line too; a change's summary wraps between words. */
+.gads-table .nds-summary-table {
+  table-layout: auto;
+}
+
+.gads-table .nds-summary-table th,
+.gads-days .nds-summary-table td {
+  white-space: nowrap;
+}
+
+.gads-table:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 2px;
+}

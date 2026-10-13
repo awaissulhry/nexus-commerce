@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readableAccountText, summariseDetail } from './channel-event-details'
+import { eventTypeLabel, readableAccountText, summariseDetail } from './channel-event-details'
 
 describe('connection ledger names', () => {
   it('omits account identifiers, including the legacy identity string', () => {
@@ -29,5 +29,21 @@ describe('connection ledger names', () => {
   })
   it('escapes known keys and replaces complete tokens only', () => {
     expect(readableAccountText('Account internal.key, not internalXkey or prefixinternal.key', { 'internal.key': 'motovento' })).toBe('Account motovento, not internalXkey or prefixinternal.key')
+  })
+})
+
+describe('ledger event types in words', () => {
+  it('names the Google choice and the app credentials; other types stay as stored', () => {
+    expect(eventTypeLabel('accounts_linked')).toBe('Accounts chosen')
+    expect(eventTypeLabel('app_credentials_set')).toBe('App credentials set')
+    expect(eventTypeLabel('refresh')).toBe('refresh')
+    expect(eventTypeLabel('toString')).toBe('toString')
+  })
+  it('summarises a Google choice by names, never by account ids', () => {
+    const detail = {
+      googleAds: 'Test advertiser', adsCustomerId: '1234567890', throughManager: 'no (direct access)', managerCustomerId: null,
+      merchantCenter: 'none', merchantCenterId: null, analytics: 'Test property', analyticsPropertyId: '987654321', previousAdsCustomerId: null, actorKind: 'operator',
+    }
+    expect(summariseDetail(detail)).toBe('googleAds: Test advertiser · throughManager: no (direct access) · merchantCenter: none · analytics: Test property')
   })
 })

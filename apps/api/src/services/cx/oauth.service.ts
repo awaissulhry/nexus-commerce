@@ -112,7 +112,7 @@ async function oauthConfiguration(channelKey: ChannelKey, environment: Environme
     }
     throw err
   }
-  if ((channelKey === 'SHOPIFY' || channelKey === 'ETSY') && (!app.clientId.trim() || !app.clientSecret.trim())) {
+  if ((channelKey === 'SHOPIFY' || channelKey === 'ETSY' || channelKey === 'GOOGLE') && (!app.clientId.trim() || !app.clientSecret.trim())) {
     throw new OAuthFlowError('channel_unavailable', `${spec.displayName} setup is incomplete on this Nexus server. Ask your Nexus administrator to configure both the app key and secret.`, 503)
   }
   const amazonApplicationId = channelKey === 'AMAZON_SP' && typeof app.extra.applicationId === 'string' ? app.extra.applicationId.trim() : ''
@@ -122,7 +122,7 @@ async function oauthConfiguration(channelKey: ChannelKey, environment: Environme
   // eBay uses its RuName; other channels use the provider-registered callback URL.
   const redirectUri = app.redirectUris[0] ?? callbackUrlFor(channelKey)
   let localCallback = false
-  if (channelKey === 'SHOPIFY' || channelKey === 'ETSY') {
+  if (channelKey === 'SHOPIFY' || channelKey === 'ETSY' || channelKey === 'GOOGLE') {
     const message = `${spec.displayName} needs a secure return address for sign-in. Ask your Nexus administrator to configure and register the public HTTPS callback URL.`
     let callback: URL
     try { callback = new URL(redirectUri) } catch { throw new OAuthFlowError('channel_unavailable', message, 503) }
@@ -404,10 +404,20 @@ export async function complete(input: {
     token: async () => accessToken,
   }
   let identity: ConnectionIdentity | null = null
-  try {
-    identity = await spec.identity(probe)
-  } catch (err) {
-    logger.warn('[cx-oauth] identity lookup failed', { channelKey: input.channelKey, error: err instanceof Error ? err.message : String(err) })
+  // OpenID Connect channels (Google) prove who consented inside the token answer itself (`id_token`).
+  if (spec.auth.identityFromTokenResponse) {
+    try {
+      identity = spec.auth.identityFromTokenResponse(token, { clientId: app.clientId })
+    } catch (err) {
+      logger.warn('[cx-oauth] identity from the token answer failed', { channelKey: input.channelKey, error: err instanceof Error ? err.message : String(err) })
+    }
+  }
+  if (!identity) {
+    try {
+      identity = await spec.identity(probe)
+    } catch (err) {
+      logger.warn('[cx-oauth] identity lookup failed', { channelKey: input.channelKey, error: err instanceof Error ? err.message : String(err) })
+    }
   }
   if (!identity?.userId && (input.channelKey === 'EBAY' || spec.auth.identityRequired || process.env.NEXUS_WORKSPACES_ENABLED === '1')) {
     throw await fail('identity_refused', 'The provider could not verify this account identity. No connection was changed.', 409)

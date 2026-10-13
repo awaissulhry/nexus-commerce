@@ -110,13 +110,14 @@ const SELECT = {
  *    can show the ceiling but never "how many left".
  *  - **eBay** sends nothing per call. Its quotas live behind a separate Analytics call
  *    (`getRateLimits`), which this installation has never made — see §6 of build/P3.3.md.
- *  - **Amazon Ads** and **Etsy** answer only on a 429.
+ *  - **Amazon Ads**, **Etsy** and **Google** answer only on a 429.
  */
 const NO_PER_CALL_HEADROOM: Partial<Record<string, string>> = {
   EBAY: 'eBay does not report its quota on a call. It publishes the remaining counts through a separate Analytics call, which Nexus does not make yet.',
   AMAZON: 'Amazon reports its rate limit but not how much is left, so a remaining count cannot be shown.',
   AMAZON_ADS: 'Amazon Ads reports its limit only when it refuses a call (429).',
   ETSY: 'Etsy reports its limit only when it refuses a call (429).',
+  GOOGLE: 'Google reports its limits only when it refuses a call (429).',
 }
 
 function headroomFrom(

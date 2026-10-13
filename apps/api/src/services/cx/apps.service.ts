@@ -17,6 +17,7 @@ import { logger } from '../../utils/logger.js'
 import { encryptCredentials, decryptCredentials, isCredentialsBlob } from '../../lib/crypto.js'
 import type { ChannelKey } from './catalog.js'
 import { ChannelAppConfigurationError } from './app-configuration-error.js'
+import { publicApiBaseValue } from '../public-api-origin.js'
 
 export type Environment = 'production' | 'sandbox'
 
@@ -79,6 +80,15 @@ function envSeed(key: ChannelKey): { clientId: string; clientSecret: string; red
     case 'ETSY':
       if (!e.ETSY_API_KEY || !e.ETSY_SHARED_SECRET) return null
       return { clientId: e.ETSY_API_KEY, clientSecret: e.ETSY_SHARED_SECRET, redirectUris: [], extra: {} }
+    case 'GOOGLE': {
+      // The fallback only: the Owner normally pastes the Google client id + secret in Settings → Channels
+      // → Diagnostics → App secrets (PUT /api/cx/apps/GOOGLE/credentials), which writes the row.
+      const id = e.GOOGLE_OAUTH_CLIENT_ID?.trim()
+      const secret = e.GOOGLE_OAUTH_CLIENT_SECRET?.trim()
+      if (!id || !secret) return null
+      const base = (publicApiBaseValue() ?? '').replace(/\/$/, '')
+      return { clientId: id, clientSecret: secret, redirectUris: base ? [`${base}/api/cx/callback/google`] : [], extra: {} }
+    }
   }
 }
 
@@ -89,7 +99,7 @@ function ebayEnvKeysEnvironment(): Environment {
 
 /** Create a ChannelApp row from env for every channel that has env credentials and no row yet. */
 export async function seedChannelApps(): Promise<void> {
-  const keys: ChannelKey[] = ['EBAY', 'AMAZON_SP', 'AMAZON_ADS', 'SHOPIFY', 'ETSY']
+  const keys: ChannelKey[] = ['EBAY', 'AMAZON_SP', 'AMAZON_ADS', 'SHOPIFY', 'ETSY', 'GOOGLE']
   for (const key of keys) {
     const seed = envSeed(key)
     if (!seed) continue
@@ -253,6 +263,11 @@ export async function storeClientSecret(
     where: { channelKey_environment: { channelKey: key, environment } },
     data: { clientSecretEnc: blob, secretExpiresAt, rotatedAt: new Date() },
   })
+  cache.delete(`${key}:${environment}`)
+}
+
+/** Drop the cached app credentials of one channel, so the next call reads the row just written. */
+export function forgetChannelApp(key: ChannelKey, environment: Environment = 'production'): void {
   cache.delete(`${key}:${environment}`)
 }
 

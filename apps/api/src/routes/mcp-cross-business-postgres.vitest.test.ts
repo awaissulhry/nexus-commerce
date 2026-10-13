@@ -25,6 +25,9 @@
  *  11. a channel account one business shares with the other is named to that business, by its owner, and to no one
  *      once the share is revoked (MCP full control P4)
  *
+ * Google Ads step 1a — each business has its own Google sign-in, chosen Google Ads account and a campaign with a day of
+ * numbers: ads-overview and ad-campaigns with channel google read them in that business only (1, 1b).
+ *
  * Business profiles are ON for the whole file, as production runs: with them off there is one business and
  * nothing to keep apart. The runner leaves NEXUS_WORKSPACES_ENABLED unset (vitest.setup.ts then sets 0), so the
  * file pins it, like the other real-PostgreSQL suites. The tests run in order: 4 and 3 take the person's access
@@ -62,6 +65,7 @@ import { createSession } from '../lib/auth/session.js'
 import { __stepUpTest } from '../lib/auth/step-up.js'
 import { generateToken } from '../lib/auth/tokens.js'
 import { workspaceHook } from '../lib/workspace-hook.js'
+import { GOOGLE_REQUIRED_SCOPES } from '../services/cx/connectors/google/scopes.js'
 import { offeredOn } from '../services/agents/call-tool.js'
 import { listTools } from '../services/agents/tool-registry.js'
 import type { AgentTool } from '../services/agents/tool-types.js'
@@ -237,6 +241,9 @@ interface Seeded {
   harvestSourceAdGroupId: string
   /** Health watchdog — one stored run of the daily platform checks (what platform-health-checks reads). */
   healthRunId: string
+  /** Google Ads step 1a — the business's Google sign-in (the accountId the Google ad reads take) and its Google campaign. */
+  googleConnectionId: string
+  googleCampaignId: string
 }
 const seeded = {} as Record<'a' | 'b', Seeded>
 /** Phase 3 T3 — the eBay category id each business has loaded (its details name the business's canary). */
@@ -571,6 +578,25 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
         impressions: 120, clicks: 6, adFeesCents: 300, salesCents: 5000, soldQty: 1, currency: 'EUR', reportedAt: new Date(),
       },
     })
+    // Google Ads step 1a — the business's own Google sign-in, its chosen Google Ads account (read through two days ago)
+    // and one campaign with a day of numbers: what ads-overview and ad-campaigns read with channel google.
+    const googleLogin = await db.channelConnection.create({
+      data: { channelType: 'GOOGLE', managedBy: 'oauth', isActive: true, accountLabel: `${canary}-GOOGLE-LOGIN`, authStatus: 'connected', externalAccountId: `${mark}-GOOGLE-${RUN}`, grantedScopes: GOOGLE_REQUIRED_SCOPES } as never,
+    })
+    const googleDigits = (BigInt(`0x${RUN}`) % 100_000_000n).toString().padStart(8, '0')
+    const googleCustomerId = `${mark === 'ALPHA' ? 81 : 82}${googleDigits}`
+    const googleCampaignExternalId = `${mark === 'ALPHA' ? 91 : 92}${googleDigits}07`
+    const utcDay = (daysAgo: number) => new Date(`${new Date(Date.now() - daysAgo * 86_400_000).toISOString().slice(0, 10)}T00:00:00Z`)
+    await db.googleAccountLink.create({ data: { connectionId: googleLogin.id, product: 'ADS', externalId: googleCustomerId, label: `${canary}-GOOGLE-ADS`, selectedByUserId: 'user:mcp8' } })
+    await db.googleAdsCustomer.create({
+      data: { connectionId: googleLogin.id, customerId: googleCustomerId, descriptiveName: `${canary}-GOOGLE-ADS`, currencyCode: 'EUR', timeZone: 'Europe/Rome', status: 'ENABLED', metricsReadFrom: utcDay(60), metricsReadThrough: utcDay(2), lastSuccessAt: new Date() },
+    })
+    const googleCampaign = await db.googleAdsCampaign.create({
+      data: { customerId: googleCustomerId, campaignId: googleCampaignExternalId, name: `${canary}-GOOGLE-CAMPAIGN`, status: 'ENABLED', channelType: 'SEARCH', currencyCode: 'EUR', lastSeenAt: new Date() },
+    })
+    await db.googleAdsDailyMetric.create({
+      data: { customerId: googleCustomerId, date: utcDay(3), entityType: 'CAMPAIGN', entityId: googleCampaignExternalId, campaignId: googleCampaignExternalId, label: `${canary}-GOOGLE-CAMPAIGN`, impressions: 400, clicks: 12, costMicros: 6_000_000n, conversions: '1', conversionsValueMicros: 30_000_000n, currencyCode: 'EUR', pulledAt: new Date() },
+    })
     // R11 — a suggestion of that rule: what decide-automation-suggestions decides.
     const suggestion = await db.adsRuleSuggestion.create({
       data: { ruleId: automationRule.id, ruleName: `${canary}-AUTOMATION-RULE`, entityType: 'CAMPAIGN', entityId: campaign.id, entityName: `${canary}-SUGGESTION`, proposedAction: { type: 'bid_down', percent: 5 }, proposedKey: `${mark}-SUGGESTION` },
@@ -789,6 +815,7 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
         queuedWrite.id, buildRun.id,
         portfolio.id, portfolio.externalPortfolioId,
         judgement.id, brainDecision.id, brainDecision.runId, healthRunId,
+        googleLogin.id, googleLogin.externalAccountId!, googleCustomerId, googleCampaign.id, googleCampaignExternalId,
       ],
       agentRows: [run.id, first.id, spare.id, adsRun.id],
       changeId: change.id,
@@ -856,6 +883,8 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
       harvestRuleId: harvestRule.id,
       harvestSourceAdGroupId: harvestSource.id,
       healthRunId,
+      googleConnectionId: googleLogin.id,
+      googleCampaignId: googleCampaign.id,
     }
   })
 }
@@ -1058,6 +1087,10 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
   // read), inside B its details come from B's cache. Neither side calls eBay. `query` is left out (B_VALUES names a
   // product search's words): with it the call would be an eBay search, which no test may send.
   get 'ebay-categories'() { return { market: seeded.b.market, categoryId: MCP8_EBAY_CATEGORY, query: undefined } },
+  // Google Ads step 1a — the two ad reads that take channel google are aimed at B's Google sign-in (accountId), read per
+  // account and never per market (the eBay forms of these reads are held in 1b).
+  get 'ads-overview'() { return { channel: 'google', market: undefined, accountId: seeded.b.googleConnectionId } },
+  get 'ad-campaigns'() { return { channel: 'google', market: undefined, accountId: seeded.b.googleConnectionId } },
   // L7 — a new product of its own: a SKU no business has (a create names no row to aim at B).
   'create-product': { sku: `MCP8-NEW-${RUN}` },
   // L8 — the value the first action (pin-quantity, set-price) needs.
@@ -1916,7 +1949,7 @@ describe.skipIf(!concurrentDatabaseUrl())('MCP.8 — a Claude connection for one
     })
   })
 
-  describe('1b — the ad reads (MCP full control A2, A13, T4; bid brain BB-4; ads brain AB-3)', () => {
+  describe('1b — the ad reads (MCP full control A2, A13, T4; bid brain BB-4; ads brain AB-3; Google Ads step 1a)', () => {
     /** Each read aimed at one of business B's ad rows by its id. */
     const aimed = (): Array<[string, Record<string, unknown>]> => [
       ['ad-changes', { channel: 'ebay', campaignId: seeded.b.ebayCampaignId }],
@@ -1930,13 +1963,18 @@ describe.skipIf(!concurrentDatabaseUrl())('MCP.8 — a Claude connection for one
       ['ad-recommendations', { campaignId: seeded.b.campaignId }],
       // AB-3 — the brain's map of one campaign (its levers' owners, its writers and the action log's evidence).
       ['ads-brain', { view: 'map', campaignId: seeded.b.campaignId }],
+      // Google Ads step 1a — B's Google sign-in, named as the account to read.
+      ['ads-overview', { channel: 'google', accountId: seeded.b.googleConnectionId }],
+      ['ad-campaigns', { channel: 'google', accountId: seeded.b.googleConnectionId }],
     ]
 
-    it("business B's campaign, ad group and target ids read as not found from A, and B's Amazon and eBay lists never show in A; inside B they read (control)", async () => {
+    it("business B's campaign, ad group and target ids read as not found from A, and B's Amazon, eBay and Google lists never show in A; inside B they read (control)", async () => {
       const missed: string[] = []
       await withClaude(tokens.bOwn.access, 'B-control', async (client) => {
         const lists: Array<[string, Record<string, unknown>]> = [
           ['ad-campaigns', {}], ['ads-overview', {}], ['ad-campaigns', { channel: 'ebay' }], ['ads-overview', { channel: 'ebay' }],
+          // Google Ads step 1a — the business's own Google Ads account.
+          ['ad-campaigns', { channel: 'google' }], ['ads-overview', { channel: 'google' }],
           // BB-4 — the bid brain with no scope reads every shadow market (IT, DE) by raw SQL: B's decision is in IT.
           ['bid-brain', {}],
         ]
@@ -1963,6 +2001,8 @@ describe.skipIf(!concurrentDatabaseUrl())('MCP.8 — a Claude connection for one
           ['ad-changes', { channel: 'ebay' }, null], ['ad-recommendations', { channel: 'ebay' }, seeded.a.ebayCampaignId],
           // T4 — the eBay ad details open A's own live campaigns (control), never B's.
           ['ebay-ad-details', {}, seeded.a.ebayCampaignId],
+          // Google Ads step 1a — A's own Google campaign is read (control), B's never.
+          ['ad-campaigns', { channel: 'google' }, seeded.a.googleCampaignId], ['ads-overview', { channel: 'google' }, seeded.a.googleCampaignId],
           // BB-4 — the bid brain's decisions in every shadow market: A's own target's (control), never B's (same market, IT).
           ['bid-brain', {}, seeded.a.targetId],
         ]

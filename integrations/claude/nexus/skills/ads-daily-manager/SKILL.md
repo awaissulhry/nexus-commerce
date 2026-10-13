@@ -5,7 +5,7 @@ description: The daily Amazon Sponsored Products run for ONE Nexus business, mad
 
 # Ads daily manager
 
-One run a day, for one business, on Amazon Sponsored Products: read, decide inside the business's ads strategy, ask once, report. It is made for a Claude routine. Nobody answers in the chat during the run, so the change plan waits on the Nexus Approvals page for a person; only what the business set to run by its rule runs by itself. This file holds steps only: every number (targets, caps, bids, thresholds, money) is read from Nexus at run time. eBay ads are not part of this run; they stay with `ads-weekly-review` and a person.
+One run a day, for one business, on Amazon Sponsored Products: read, decide inside the business's ads strategy, ask once, report. It is made for a Claude routine. Nobody answers in the chat during the run, so the change plan waits on the Nexus Approvals page for a person; only what the business set to run by its rule runs by itself. This file holds steps only: every number (targets, caps, bids, thresholds, money) is read from Nexus at run time. eBay and Google ads are not part of this run; they stay with `ads-weekly-review` and a person.
 
 ## Hard rules
 

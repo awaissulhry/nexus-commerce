@@ -34,3 +34,16 @@ export function summariseDetail(detail: Record<string, unknown> | null, names: A
     .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`)
     .join(' · ')
 }
+
+/**
+ * Words for the ledger event types a person would not read as they are stored (Google, 2026-10-13). Every other type
+ * still shows as stored.
+ */
+const EVENT_TYPE_WORDS: Readonly<Record<string, string>> = {
+  accounts_linked: 'Accounts chosen',
+  app_credentials_set: 'App credentials set',
+}
+
+export function eventTypeLabel(type: string): string {
+  return Object.prototype.hasOwnProperty.call(EVENT_TYPE_WORDS, type) ? EVENT_TYPE_WORDS[type] : type
+}

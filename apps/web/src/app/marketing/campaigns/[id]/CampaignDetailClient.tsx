@@ -4,6 +4,7 @@
  * UM-series — campaign detail client. Header + KPIs, channel-specific
  * detail block, per-market links, targets, and the action audit trail.
  * Inline pause/resume + budget edit (sandbox-gated). Live via SSE.
+ * Google Ads step 1a (D1): none of those for a read-only channel (Google, Meta, TikTok) — `campaignWrites.ts`.
  */
 
 import { useCallback, useState } from 'react'
@@ -12,6 +13,8 @@ import { ArrowLeft, Play, Pause, Check, Rocket } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
 import { accountDisplayName } from '@/design-system/lib'
+import { Banner } from '@/design-system/components/Banner'
+import { campaignMoney, campaignWrites } from './campaignWrites'
 
 export interface CampaignDetail {
   id: string; name: string; channel: string; surface: string; objective: string; status: string
@@ -59,6 +62,10 @@ export function CampaignDetailClient({ campaign, initialActions }: { campaign: C
   }
   const launch = async () => { setBusy(true); try { await fetch(`${getBackendUrl()}/api/marketing/os/campaigns/${c.id}/launch`, { method: 'POST' }) } finally { setBusy(false); void reload() } }
 
+  // Google Ads step 1a (D1) — Google, Meta and TikTok are read only: no write control, and never-read money is "—".
+  const writes = campaignWrites(c)
+  const money = campaignMoney(c, actions.metrics.length)
+
   const detailBlock = (() => {
     if (c.amazonAds) return [['Ad product', c.amazonAds.adProduct], ['Account', accountDisplayName({ channel: 'AMAZON_ADS', label: c.amazonAds.accountLabel ?? '' })], ['Portfolio', c.amazonAds.portfolioId ?? '—']]
     if (c.ebayPromoted) return [['Funding', c.ebayPromoted.fundingStrategy], ['Bid %', c.ebayPromoted.bidPercentage ?? '—']]
@@ -79,23 +86,25 @@ export function CampaignDetailClient({ campaign, initialActions }: { campaign: C
           <div className="text-sm text-slate-500 mt-0.5">{c.channel} · {c.surface} · {c.objective} · {c.status}{c.budgetScope === 'MULTI_MARKET' ? ' · multi-market' : ''}</div>
         </div>
         <div className="ml-auto flex items-center gap-2">
-          {(c.status === 'ACTIVE' || c.status === 'PAUSED') && (
+          {writes.canPauseResume && (
             <button disabled={busy} onClick={() => void mutate({ status: c.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE' })} className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md border border-default dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40">
               {c.status === 'ACTIVE' ? <><Pause size={14} className="text-amber-600" /> Pause</> : <><Play size={14} className="text-emerald-600" /> Resume</>}
             </button>
           )}
-          {c.channel === 'INTERNAL' && <button disabled={busy} onClick={launch} className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-40"><Rocket size={14} /> Launch</button>}
+          {writes.canLaunch && <button disabled={busy} onClick={launch} className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-40"><Rocket size={14} /> Launch</button>}
         </div>
       </header>
+
+      {writes.readOnlyNote && <div style={{ marginBottom: 'var(--nds-space-16)' }}><Banner tone="info">{writes.readOnlyNote}</Banner></div>}
 
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
         {[
           ['Budget', editing ? null : `${eur(c.budgetCents, c.currency)}${c.budgetKind === 'DAILY' ? '/d' : ''}`],
-          ['Spend', eur(c.spendCents, c.currency)],
-          ['Sales', eur(c.salesCents, c.currency)],
-          ['ACOS', c.acos ? `${(Number(c.acos) * 100).toFixed(1)}%` : '—'],
-          ['ROAS', c.roas ? Number(c.roas).toFixed(2) : '—'],
+          ['Spend', eur(money.spendCents, c.currency)],
+          ['Sales', eur(money.salesCents, c.currency)],
+          ['ACOS', money.acos ? `${(Number(money.acos) * 100).toFixed(1)}%` : '—'],
+          ['ROAS', money.roas ? Number(money.roas).toFixed(2) : '—'],
         ].map(([label, val]) => (
           <div key={label as string} className="rounded-lg border border-default dark:border-slate-800 px-3 py-2">
             <div className="text-[10px] uppercase text-tertiary">{label}</div>
@@ -105,7 +114,7 @@ export function CampaignDetailClient({ campaign, initialActions }: { campaign: C
                 <button onClick={() => { void mutate({ budgetCents: Math.round(parseFloat(budgetVal || '0') * 100) }); setEditing(false) }} className="text-blue-600"><Check size={14} /></button>
               </div>
             ) : (
-              <button onClick={() => label === 'Budget' && setEditing(true)} className={`text-base font-semibold text-slate-800 dark:text-slate-100 ${label === 'Budget' ? 'hover:underline decoration-dotted' : 'cursor-default'}`}>{val}</button>
+              <button onClick={() => label === 'Budget' && writes.canEditBudget && setEditing(true)} className={`text-base font-semibold text-slate-800 dark:text-slate-100 ${label === 'Budget' && writes.canEditBudget ? 'hover:underline decoration-dotted' : 'cursor-default'}`}>{val}</button>
             )}
           </div>
         ))}

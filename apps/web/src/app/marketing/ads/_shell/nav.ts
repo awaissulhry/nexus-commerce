@@ -48,6 +48,60 @@ export const EBAY_ADS_NAV: NavItem[] = [
   { label: 'Weekly Digest', route: 'ebay/digest', Icon: PieChart },
 ]
 
+/**
+ * Google Ads step 1a — the third channel on the same switch (PLAN.md L8, the eBay precedent). Google is READ ONLY in
+ * Nexus for now, so its rail is short: one Ad Manager page and the place its accounts are chosen (Settings › Channels ›
+ * Google, which leaves this console like the Amazon rail's Settings row).
+ */
+export const GOOGLE_ADS_NAV: NavItem[] = [
+  { label: 'Ad Manager', route: 'google', Icon: Table },
+  { label: 'Settings', route: 'google-settings', href: '/settings/channels/google', Icon: Settings },
+]
+
+export type AdChannel = 'amazon' | 'ebay' | 'google'
+
+const under = (pathname: string, route: string) => pathname === `${ADS_BASE}/${route}` || pathname.startsWith(`${ADS_BASE}/${route}/`)
+
+/** Which channel's console a path is in. */
+export function adChannelOf(pathname: string): AdChannel {
+  if (under(pathname, 'ebay')) return 'ebay'
+  if (under(pathname, 'google')) return 'google'
+  return 'amazon'
+}
+
+/** The rail for a channel. */
+export function navFor(channel: AdChannel): NavItem[] {
+  return channel === 'ebay' ? EBAY_ADS_NAV : channel === 'google' ? GOOGLE_ADS_NAV : ADS_NAV
+}
+
+// E4.1 — channel counterparts: switching keeps you on the equivalent page.
+const TO_EBAY: Record<string, string> = {
+  campaigns: 'ebay/campaigns',
+  dashboard: 'ebay',
+  changelog: 'ebay/change-log',
+}
+const TO_AMAZON: Record<string, string> = {
+  'ebay/campaigns': 'campaigns',
+  'ebay/products': 'campaigns',
+  'ebay/change-log': 'changelog',
+  ebay: 'dashboard',
+}
+
+/**
+ * Where the channel switch goes (a route under ADS_BASE), or null when you are already there. Google has one page, so
+ * every page switches to it; from Google you land on the other channel's Ad Manager, its counterpart.
+ */
+export function switchTarget(pathname: string, to: AdChannel): string | null {
+  const from = adChannelOf(pathname)
+  if (from === to) return null
+  if (to === 'google') return 'google'
+  if (from === 'google') return to === 'ebay' ? 'ebay/campaigns' : 'campaigns'
+  const current = pathname.slice(ADS_BASE.length + 1) // strip "/marketing/ads/"
+  const map = to === 'ebay' ? TO_EBAY : TO_AMAZON
+  const hit = Object.entries(map).find(([route]) => current === route || current.startsWith(`${route}/`))
+  return hit ? hit[1] : to === 'ebay' ? 'ebay' : 'dashboard'
+}
+
 export const ADS_NAV: NavItem[] = [
   { label: 'Account Overview', route: 'account-overview', Icon: LayoutGrid },
   { label: 'Dashboard', route: 'dashboard', Icon: Gauge },

@@ -17,6 +17,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'
 import { Listbox } from '@/design-system/components/Listbox'
 import { DateField } from '@/design-system/components/DateField'
+import { calendarLegend } from './calendarLegend'
 
 interface CalEntry {
   id: string; kind: string; title: string; channel: string | null
@@ -156,8 +157,9 @@ export function MarketingCalendarClient({ initial }: { initial: CalendarData }) 
       {/* Legend */}
       <div className="flex flex-wrap items-center gap-3 mb-2 text-xs text-slate-500">
         <span className="inline-flex items-center gap-1"><Sparkles size={12} className="text-amber-500" /> Retail event (demand band)</span>
-        {Object.entries(CHANNEL_DOT).slice(0, 4).map(([ch, cls]) => (
-          <span key={ch} className="inline-flex items-center gap-1"><span className={`w-2 h-2 rounded-full ${cls}`} /> {ch}</span>
+        {/* Google Ads step 1a (D3) — only the channels on this calendar, by their plain names. */}
+        {calendarLegend(data.campaigns).map(({ channel, name }) => (
+          <span key={channel} className="inline-flex items-center gap-1"><span className={`w-2 h-2 rounded-full ${CHANNEL_DOT[channel] ?? CHANNEL_DOT.INTERNAL}`} /> {name}</span>
         ))}
       </div>
 
