@@ -254,3 +254,50 @@ describe('the preview (dry run)', () => {
     expect(buffer).not.toHaveBeenCalled()
   }), 60_000)
 })
+
+/*
+ * 1.8 (2026-10-13) made the follow / pin / buffer primitives move the version of every row they write. One job that sets
+ * a pricing rule AND a buffer or quantity on an Amazon EU SKU writes the group's inventory at its first row: the other EU
+ * rows' versions move under the job's own read, and their rule write (never retried by the price door) failed "The price of
+ * this listing changed after the job read it". The job now checks each row against the versions ITS OWN inventory step
+ * left — and still moves them, so an open Matrix learns of the change. A move by anyone else still fails the row.
+ */
+describe('a pricing rule and the inventory of an Amazon EU group in one job', () => {
+  const RULE = { pricingRule: 'PERCENT_OF_MASTER', priceAdjustmentPercent: 10 }
+  it.each([['a buffer', { stockBuffer: 2 }], ['a fixed quantity', { quantityOverride: 4 }]] as const)('%s: every EU row takes the rule and the inventory; each version moved', (_name, inventory) => scoped(async () => {
+    const product = `eu-rule-${Object.keys(inventory)[0]}`
+    const l = await seed(product, [{ channel: 'AMAZON', marketplace: 'IT' }, { channel: 'AMAZON', marketplace: 'DE' }, { channel: 'AMAZON', marketplace: 'FR' }])
+    const before = Object.fromEntries(await Promise.all(Object.entries(l).map(async ([k, id]) => [k, (await listing(id)).version] as const)))
+    const { result, items } = await runJob('AMAZON', { ...RULE, ...inventory }, { targetProductIds: [product] })
+    expect(items.map((i) => [i.channelListingId, i.status, i.errorMessage]).sort()).toEqual(Object.values(l).map((id) => [id, 'SUCCEEDED', null]).sort())
+    expect(result).toMatchObject({ status: 'COMPLETED', processedItems: 3, failedItems: 0 })
+    for (const [k, id] of Object.entries(l)) {
+      const row = await listing(id)
+      expect(row.pricingRule, k).toBe('PERCENT_OF_MASTER')
+      expect(Number(row.priceAdjustmentPercent), k).toBe(10)
+      if ('stockBuffer' in inventory) expect(row.stockBuffer, k).toBe(2)
+      else expect(qtyColumns(row), k).toMatchObject({ quantity: 4, quantityOverride: 4, followMasterQuantity: false })
+      // The Matrix still learns of it: the version moved past the rule write AND the inventory write.
+      expect(row.version, k).toBeGreaterThanOrEqual(before[k]! + 2)
+    }
+  }), 60_000)
+
+  it('a move by anyone else between the job\'s read and a row\'s turn still fails that row (negative control)', () => scoped(async () => {
+    const l = await seed('eu-rule-foreign', [{ channel: 'AMAZON', marketplace: 'IT' }, { channel: 'AMAZON', marketplace: 'DE' }])
+    const job = await service.createJob({ jobName: 'rule foreign', actionType: 'MARKETPLACE_OVERRIDE_UPDATE', channel: 'AMAZON', actionPayload: { ...RULE, stockBuffer: 1 }, createdBy: 'person-1', targetProductIds: ['eu-rule-foreign'] })
+    // Someone else re-prices both rows right after the job's own buffer write (at its first row): the row still to come
+    // was moved by the job AND by them — it must fail, never be written over.
+    const real = (await vi.importActual<typeof import('./follow-master.service.js')>('./follow-master.service.js')).setStockBuffer
+    buffer.mockImplementationOnce(async (opts) => {
+      const out = await real(opts)
+      await prisma.channelListing.updateMany({ where: { id: { in: Object.values(l) } }, data: { price: 11, priceOverride: 11, followMasterPrice: false, version: { increment: 1 } } })
+      return out
+    })
+    await service.processJob(job.id)
+    const items = await prisma.bulkActionItem.findMany({ where: { jobId: job.id } })
+    expect(items.map((i) => i.status).sort()).toEqual(['FAILED', 'SUCCEEDED'])
+    const failed = items.find((i) => i.status === 'FAILED')!
+    expect(failed.errorMessage).toMatch(/The price of this listing changed after the job read it/)
+    expect(Number((await listing(failed.channelListingId!)).priceOverride)).toBe(11)
+  }), 60_000)
+})

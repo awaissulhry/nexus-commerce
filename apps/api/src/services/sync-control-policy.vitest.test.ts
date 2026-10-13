@@ -63,9 +63,10 @@ describe('SC.5 — enforceNewListingDefaults', () => {
       ],
     })
     expect(await enforceNewListingDefaults(db as never)).toEqual({ paused: 1 })
+    // 1.8 (2026-10-13): the pause moves the listing's version, so an open Matrix cell is checked against it.
     expect(db.channelListing.updateMany).toHaveBeenCalledWith({
       where: { id: { in: ['l1'] } },
-      data: { syncPaused: true },
+      data: { syncPaused: true, version: { increment: 1 } },
     })
     const auditArg = db.syncControlAudit.createMany.mock.calls[0][0] as { data: Array<{ actor: string; scopeId: string }> }
     expect(auditArg.data).toHaveLength(1)

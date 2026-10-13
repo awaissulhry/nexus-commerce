@@ -173,9 +173,10 @@ describe('an Etsy coordinate\'s Mode, Qty and Buffer cells go through the follow
   const done = { updated: 1, skippedFba: 0, unchanged: 0, matched: 1, results: [] }
 
   it.each([
-    ['syncMode', 'PINNED', () => expect(setFollowMasterQuantity).toHaveBeenCalledWith({ productIds: ['row'], channel: 'ETSY', markets: ['GLOBAL'], follow: false, actor: 'tester' })],
-    ['syncQty', 4, () => expect(setFollowMasterQuantity).toHaveBeenCalledWith({ productIds: ['row'], channel: 'ETSY', markets: ['GLOBAL'], follow: false, actor: 'tester' })],
-    ['syncBuffer', 2, () => expect(setStockBuffer).toHaveBeenCalledWith({ productIds: ['row'], channel: 'ETSY', markets: ['GLOBAL'], buffer: 2, actor: 'tester' })],
+    /* The door bumped the version under its own CAS: the primitive is told not to bump it again. */
+    ['syncMode', 'PINNED', () => expect(setFollowMasterQuantity).toHaveBeenCalledWith({ productIds: ['row'], channel: 'ETSY', markets: ['GLOBAL'], follow: false, actor: 'tester', bumpVersion: false })],
+    ['syncQty', 4, () => expect(setFollowMasterQuantity).toHaveBeenCalledWith({ productIds: ['row'], channel: 'ETSY', markets: ['GLOBAL'], follow: false, actor: 'tester', bumpVersion: false })],
+    ['syncBuffer', 2, () => expect(setStockBuffer).toHaveBeenCalledWith({ productIds: ['row'], channel: 'ETSY', markets: ['GLOBAL'], buffer: 2, actor: 'tester', bumpVersion: false })],
   ] as const)('%s', async (cell, value, called) => {
     vi.mocked(setFollowMasterQuantity).mockReset().mockResolvedValue(done)
     vi.mocked(setStockBuffer).mockReset().mockResolvedValue({ ...done, results: [] })

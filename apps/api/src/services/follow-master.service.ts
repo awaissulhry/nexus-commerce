@@ -108,6 +108,8 @@ export interface FollowMasterResult {
     marketplace: string
     action: 'FOLLOW' | 'PIN' | 'SKIPPED_FBA' | 'UNCHANGED'
     quantity: number | null
+    /** A row this call wrote AND bumped: its version after the write (the write moved it from `version - 1`). */
+    version?: number
   }>
 }
 
@@ -119,6 +121,13 @@ export interface FollowMasterOpts {
   markets: string[] | 'ALL'
   follow: boolean
   actor?: string
+  /**
+   * Bump `ChannelListing.version` on every row written (default). The Matrix and every screen that keeps a version read
+   * it as "this listing changed" (`listing.values_changed` carries the new one). `false` only for a caller that already
+   * bumped the row under its own compare-and-set (the Matrix door) or whose own save owns the version it hands back (the
+   * legacy flat-file save flow, `POST /api/listings/follow-master-quantity`).
+   */
+  bumpVersion?: boolean
 }
 
 /**
@@ -165,6 +174,7 @@ export async function amazonManagedListingIds(listingIds: readonly string[]): Pr
 
 export async function setFollowMasterQuantity(opts: FollowMasterOpts): Promise<FollowMasterResult> {
   const { productIds, channel, follow, actor } = opts
+  const bump = opts.bumpVersion !== false
   const result: FollowMasterResult = { updated: 0, skippedFba: 0, unchanged: 0, matched: 0, results: [] }
   const coordinateWhere = opts.coordinates?.map(whereCoordinate)
   if (productIds.length === 0 || coordinateWhere?.length === 0) return result
@@ -281,27 +291,26 @@ export async function setFollowMasterQuantity(opts: FollowMasterOpts): Promise<F
             continue
           }
 
-          await tx.channelListing.update({
+          const written = await tx.channelListing.update({
             where: { id: cl.id, ...(coordinateWhere ? whereCoordinate(cl) : {}) },
+            select: { version: true },
             data: {
               quantity: write.quantity,
               quantityOverride: write.quantityOverride,
               followMasterQuantity: write.followMasterQuantity,
               lastSyncStatus: 'PENDING',
               lastSyncedAt: null,
-              // Deliberately NOT bumping `version`. In the flat-file save flow this
-              // endpoint runs immediately AFTER the content save (sync-rows), which owns
-              // the optimistic-concurrency `version` the grid tracks and returns. Bumping
-              // here would desync the grid's _version, so the operator's NEXT save of the
-              // same row would fail Amazon's version check ("Changed elsewhere…") and drop
-              // their content edit. This write is coherent with the content save, so the
-              // content save's version bump is sufficient.
+              // 1.8 (2026-10-13): the version moves with the mode and the number, so an open Matrix cell edited on the
+              // old read is checked against them (its field stamp) instead of overwriting them. Not for a caller that
+              // bumped the row itself or owns the version it returns (`bumpVersion: false`, see FollowMasterOpts).
+              ...(bump ? { version: { increment: 1 } } : {}),
             },
           })
           acc.updated++
           acc.results.push({
             listingId: cl.id, sku: cl.product?.sku ?? null, channel: cl.channel,
             marketplace: cl.marketplace, action: follow ? 'FOLLOW' : 'PIN', quantity: write.quantity,
+            ...(bump && typeof written?.version === 'number' ? { version: written.version } : {}),
           })
 
           if (QUANTITY_PUSH_CHANNELS.has(cl.channel)) {
@@ -391,7 +400,8 @@ export async function setFollowMasterQuantity(opts: FollowMasterOpts): Promise<F
 // listing then republishes pool−buffer (computeAvailableToPublish subtracts it);
 // a PINNED listing just stores the buffer — its fixed quantity is untouched, since
 // a buffer only shapes what a following listing exposes. Same invariants as follow:
-// never writes StockLevel/totalStock, skips FBA fail-closed, no version bump.
+// never writes StockLevel/totalStock, skips FBA fail-closed; the version is bumped
+// on every row written unless the caller bumped it itself (`bumpVersion: false`).
 
 export interface StockBufferWrite {
   stockBuffer: number
@@ -442,6 +452,8 @@ export interface StockBufferResult {
   results: Array<{
     listingId: string; sku: string | null; channel: string; marketplace: string
     action: 'BUFFER' | 'SKIPPED_FBA' | 'UNCHANGED'; buffer: number; quantity: number | null
+    /** As FollowMasterResult: a row this call wrote and bumped, at its version after the write. */
+    version?: number
   }>
 }
 
@@ -452,10 +464,13 @@ export interface StockBufferOpts {
   markets: string[] | 'ALL'
   buffer: number
   actor?: string
+  /** As `FollowMasterOpts.bumpVersion`: default true. */
+  bumpVersion?: boolean
 }
 
 export async function setStockBuffer(opts: StockBufferOpts): Promise<StockBufferResult> {
   const { productIds, channel, buffer, actor } = opts
+  const bump = opts.bumpVersion !== false
   const result: StockBufferResult = { updated: 0, skippedFba: 0, unchanged: 0, matched: 0, results: [] }
   const coordinateWhere = opts.coordinates?.map(whereCoordinate)
   if (productIds.length === 0 || coordinateWhere?.length === 0) return result
@@ -531,19 +546,21 @@ export async function setStockBuffer(opts: StockBufferOpts): Promise<StockBuffer
             continue
           }
 
-          await tx.channelListing.update({
+          const written = await tx.channelListing.update({
             where: { id: cl.id, ...(coordinateWhere ? whereCoordinate(cl) : {}) },
+            select: { version: true },
             data: {
               stockBuffer: write.stockBuffer,
               quantity: write.quantity,
               quantityOverride: write.quantityOverride,
               followMasterQuantity: write.followMasterQuantity,
               ...(write.pushQuantity !== null ? { lastSyncStatus: 'PENDING', lastSyncedAt: null } : {}),
-              // No version bump — same reasoning as setFollowMasterQuantity.
+              // 1.8 — the same version rule as setFollowMasterQuantity.
+              ...(bump ? { version: { increment: 1 } } : {}),
             },
           })
           acc.updated++
-          acc.results.push({ listingId: cl.id, sku: cl.product?.sku ?? null, channel: cl.channel, marketplace: cl.marketplace, action: 'BUFFER', buffer: write.stockBuffer, quantity: write.quantity })
+          acc.results.push({ listingId: cl.id, sku: cl.product?.sku ?? null, channel: cl.channel, marketplace: cl.marketplace, action: 'BUFFER', buffer: write.stockBuffer, quantity: write.quantity, ...(bump && typeof written?.version === 'number' ? { version: written.version } : {}) })
 
           if (write.pushQuantity !== null && QUANTITY_PUSH_CHANNELS.has(cl.channel)) {
             toQueue.push({

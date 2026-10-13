@@ -41,6 +41,7 @@ import { computeAvailableToPublish } from './available-to-publish.service.js'
 import { buildSharedFanoutRows, type SharedMembershipRow } from './ebay-shared-fanout.service.js'
 import { handleMovementStockoutTransition } from './stockout-detector.service.js'
 import { productReadCacheService } from './product-read-cache.service.js'
+import { announceListingValues } from './listing-values-events.js'
 import { lockProductStock } from './stock-lock.js'
 import { keepCasesInTx } from './stock/stock-cases.service.js'
 import { outboundSyncQueue, addJobSafely } from '../lib/queue.js'
@@ -1576,6 +1577,16 @@ async function executeApplyImport(args: {
     )
   }
 
+  // ── After: 1.8 (2026-10-13) — the listings the import wrote moved their version (each write bumps it): open screens
+  // are told, so an open Matrix re-reads them instead of writing over them on its old read. ─────────────────────────
+  {
+    const written = committedPlans.filter((p) => !failedProducts.has(p.productId))
+    const followed = written.flatMap((p) => p.cascadeWrites.map((w) => w.listingId))
+    const explicit = written.flatMap((p) => p.explicitWrites.map((w) => w.listingId))
+    if (followed.length) announceListingValues(followed, ['quantity'], 'stock-import')
+    if (explicit.length) announceListingValues(explicit, pinOverride ? ['quantityMode', 'quantity'] : ['quantity'], 'stock-import')
+  }
+
   // ── After: stockout transitions — once per product (initial → final
   // available); a momentary mid-file dip no longer opens a phantom stockout.
   for (const plan of committedPlans) {
@@ -1757,10 +1768,13 @@ export async function applyControlColumns(
 
   // Explicit FOLLOW/PINNED clears a pause (the sheet states the desired mode).
   if (resumeProducts.size > 0) {
+    // 1.8 — the resume moves the version, and open screens are told (an open Matrix re-reads it).
+    const resuming = (await prisma.channelListing.findMany({ where: { productId: { in: [...resumeProducts] }, syncPaused: true }, select: { id: true } }).catch(() => [])).map((l) => l.id)
     await prisma.channelListing.updateMany({
       where: { productId: { in: [...resumeProducts] }, syncPaused: true },
-      data: { syncPaused: false },
+      data: { syncPaused: false, version: { increment: 1 } },
     }).catch(() => {})
+    if (resuming.length) announceListingValues(resuming, ['syncState'], 'stock-import')
     // Round 5 (2026-10-01) — a resume like Sync Control's: the prices held while those listings were paused are sent
     // once now, at the price each carries (the price door's `sendHeldPrices`; it never throws).
     try {
@@ -1825,8 +1839,9 @@ export async function applyControlColumns(
       return !fba && !l.syncPaused
     })
     if (eligible.length > 0) {
-      const u = await prisma.channelListing.updateMany({ where: { id: { in: eligible.map((l) => l.id) } }, data: { syncPaused: true } })
+      const u = await prisma.channelListing.updateMany({ where: { id: { in: eligible.map((l) => l.id) } }, data: { syncPaused: true, version: { increment: 1 } } })
       out.paused += u.count
+      if (u.count) announceListingValues(eligible.map((l) => l.id), ['syncState'], 'stock-import')
     }
     await prisma.syncControlAudit.createMany({
       data: eligible.map((l) => ({
@@ -2043,6 +2058,7 @@ export async function revertImport(jobId: string, actor?: string | null): Promis
       const holdUntil = new Date(Date.now() + IMPORT_HOLD_MS)
       const restoreResults: ApplyResult['results'] = []
       const restoreQueue: Array<{ id: string; productId: string | null }> = []
+      const restoredIds: string[] = []
       for (const r of explicitRestores.values()) {
         const targetQty = r.prior ? r.prior.quantity : r.oldQuantity
         if (targetQty == null) {
@@ -2091,6 +2107,7 @@ export async function revertImport(jobId: string, actor?: string | null): Promis
             })
           })
           restoreQueue.push({ id: qid, productId: r.productId })
+          restoredIds.push(r.listingId)
           restored++
           restoreResults.push({ sku: r.externalListingId ?? r.listingId, raw: `listing:${r.channel}`, applied: true, channelApplied: true, quantity: targetQty })
         } catch (err) {
@@ -2106,6 +2123,8 @@ export async function revertImport(jobId: string, actor?: string | null): Promis
           { delay: IMPORT_HOLD_MS, jobId: q.id },
         )
       }
+      // 1.8 — each restore bumped its listing's version: open screens are told.
+      if (restoredIds.length) announceListingValues(restoredIds, ['quantityMode', 'quantity'], 'stock-import-revert')
       // Fold channel outcomes into the revert job row honestly.
       const existing = await prisma.stockImportJob.findUnique({
         where: { id: revertJobId },

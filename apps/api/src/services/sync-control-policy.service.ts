@@ -8,6 +8,7 @@
 import type { Prisma } from '@prisma/client'
 import prisma from '../db.js'
 import { normalizeMarket, KNOWN_CHANNELS } from './sync-control-core.js'
+import { announceListingValues } from './listing-values-events.js'
 
 /**
  * Step 2 — a row may also hold the market's "Sells from" list (`sourceLocationCodes`). That list is not a pause or a
@@ -260,10 +261,12 @@ export async function enforceNewListingDefaults(db: EnforceDb = prisma as never)
     const fresh = scoped.filter((c) => !seenIds.has(c.id))
     if (fresh.length === 0) continue
 
+    // 1.8 — the pause moves the version, and open screens are told (an open Matrix re-reads it).
     await db.channelListing.updateMany({
       where: { id: { in: fresh.map((f) => f.id) } },
-      data: { syncPaused: true },
+      data: { syncPaused: true, version: { increment: 1 } },
     })
+    announceListingValues(fresh.map((f) => f.id), ['syncState'], 'sync-control-policy')
     await db.syncControlAudit.createMany({
       data: fresh.map((f) => ({
         actor: 'policy:new-listing',

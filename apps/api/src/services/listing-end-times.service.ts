@@ -25,6 +25,7 @@ import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { setFollowMasterQuantity } from './follow-master.service.js'
 import { recascadeAfterSyncControlChange } from './stock-movement.service.js'
+import { announceListingValues } from './listing-values-events.js'
 
 const ACTOR = 'system:end-time'
 
@@ -133,7 +134,8 @@ export async function endDueOverrides(now = new Date()): Promise<EndTimesRun> {
   })
   for (const l of paused) {
     const done = await prisma.$transaction(async (tx) => {
-      const u = await tx.channelListing.updateMany({ where: { id: l.id, ...duePause(now) }, data: { syncPaused: false } })
+      // 1.8 — the resume moves the version (an open Matrix cell is checked against it), and is announced below.
+      const u = await tx.channelListing.updateMany({ where: { id: l.id, ...duePause(now) }, data: { syncPaused: false, version: { increment: 1 } } })
       if (u.count === 0) return false // changed meanwhile
       await tx.syncControlAudit.create({
         data: auditRow({
@@ -146,6 +148,7 @@ export async function endDueOverrides(now = new Date()): Promise<EndTimesRun> {
     })
     if (!done) continue
     run.pausesEnded++
+    announceListingValues([l.id], ['syncState'], 'pause-ended')
     recascade.add(l.productId)
   }
 

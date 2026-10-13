@@ -15,7 +15,7 @@ type Row = {
 }
 
 const m = vi.hoisted(() => {
-  const s = { listings: [] as Row[], publish: vi.fn(), versions: {} as Record<string, number> }
+  const s = { listings: [] as Row[], publish: vi.fn(), versions: {} as Record<string, number>, updates: [] as Array<{ id: string; data: Record<string, any> }> }
   const db: Record<string, unknown> = {
     channelListing: {
       findMany: async ({ where, select }: { where: Record<string, any>; select?: Record<string, unknown> }) => {
@@ -26,7 +26,12 @@ const m = vi.hoisted(() => {
         // The per-chunk fresh buffer read.
         return s.listings.filter((l) => where.id.in.includes(l.id)).map((l) => ({ id: l.id, stockBuffer: l.stockBuffer }))
       },
-      update: async () => ({}),
+      // Each row write, kept; a version increment moves the version the announce reads.
+      update: async ({ where, data }: { where: { id: string }; data: Record<string, any> }) => {
+        s.updates.push({ id: where.id, data })
+        if (data.version?.increment) s.versions[where.id] = (s.versions[where.id] ?? 1) + data.version.increment
+        return {}
+      },
     },
     stockLevel: { findMany: async () => [] }, // FBA evidence: no FBA stock anywhere
   }
@@ -61,6 +66,7 @@ const opts = { productIds: ['p-a', 'p-b', 'p-c'], channel: 'AMAZON' as const, ma
 beforeEach(() => {
   m.publish.mockReset()
   m.versions = {}
+  m.updates = []
   // a: pinned at 5 (FOLLOW writes it); b: already following the pool of 10 (FOLLOW leaves it); c: FBA (always skipped).
   m.listings = [row('a', { quantity: 5, quantityOverride: 5, followMasterQuantity: false }), row('b'), row('c', { fulfillmentMethod: 'FBA' })]
 })
@@ -113,5 +119,34 @@ describe('follow / pin / buffer announce only the rows they wrote', () => {
     })).rejects.toThrow('refused')
     await settle()
     expect(m.publish).not.toHaveBeenCalled()
+  })
+})
+
+/*
+ * 1.8 (2026-10-13) — the primitives used to write the mode, the number and the buffer WITHOUT moving the listing's
+ * version (Sync Control, the stock import, the bulk edit, the listings screens all write through them), so an open Matrix
+ * cell edited on the old read passed its version check and wrote over them. Every row they write now moves its version,
+ * and the announce carries the new one; a caller that bumped the rows under its own compare-and-set says so.
+ */
+describe('1.8 — every row written moves its version, and the announce carries the new one', () => {
+  it('a Sync Control buffer change: each written row bumped once, announced at its new version; the FBA row untouched', async () => {
+    await setStockBuffer({ ...opts, buffer: 2 })
+    await settle()
+    expect(m.updates.map((u) => [u.id, u.data.version])).toEqual([['a', { increment: 1 }], ['b', { increment: 1 }]])
+    expect(m.publish.mock.calls[0][0]).toMatchObject({ fields: ['stockBuffer', 'quantity'], listings: [{ listingId: 'a', productId: 'p-a', version: 2 }, { listingId: 'b', productId: 'p-b', version: 2 }] })
+  })
+
+  it('a Sync Control FOLLOW: the row it rejoins is bumped; the one already following is neither written nor bumped', async () => {
+    await setFollowMasterQuantity({ ...opts, follow: true })
+    await settle()
+    expect(m.updates.map((u) => [u.id, u.data.version])).toEqual([['a', { increment: 1 }]])
+    expect(m.publish.mock.calls[0][0].listings).toEqual([{ listingId: 'a', productId: 'p-a', version: 2 }])
+  })
+
+  it('bumpVersion: false (the Matrix door bumped the rows itself; the flat-file save owns its version): written, not bumped', async () => {
+    await setFollowMasterQuantity({ ...opts, follow: true, bumpVersion: false })
+    await setStockBuffer({ ...opts, buffer: 2, bumpVersion: false })
+    expect(m.updates.length).toBeGreaterThan(0)
+    expect(m.updates.every((u) => u.data.version === undefined)).toBe(true)
   })
 })

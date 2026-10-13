@@ -21,6 +21,7 @@ import { logger } from '../utils/logger.js'
 import { validateServesTokens } from '../services/sync-control-core.js'
 import { amazonManagedListingIds, setFollowMasterQuantity, setStockBuffer } from '../services/follow-master.service.js'
 import { recascadeAfterSyncControlChange } from '../services/stock-movement.service.js'
+import { announceListingValues } from '../services/listing-values-events.js'
 import { summarizeProductSync, marketMatches, rowMarkets, omitChildrenInList, INLINE_PREVIEW_ROWS, summarizeFamilies, familyKeyOf, rowMatchesScope, type SyncScope } from '../services/sync-control-product-view.js'
 import { projectBufferAndDetect, detectEuIntentConflict, AMAZON_EU_SHARED_MARKETS, EU_GUARD_REMEDY, type EuIntentRow } from '../services/amazon-eu-quantity-guard.js'
 import { isFbaCoordinate } from '../services/amazon-market-offer.service.js'
@@ -713,7 +714,10 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
             if (c.lane === 'SHARED' && c.itemId) {
               await setMembershipModeByCoordinate({ itemId: c.itemId, marketplace: c.marketplace, sku: c.sku }, null)
             } else {
-              await prisma.channelListing.updateMany({ where: { id: { in: await writableIds(c) } }, data: { syncPaused: false } })
+              // 1.8 — a listing it resumes moves its version and is announced, so an open Matrix re-reads it.
+              const ids = await writableIds(c)
+              const resumed = await prisma.channelListing.updateMany({ where: { id: { in: ids }, syncPaused: true }, data: { syncPaused: false, version: { increment: 1 } } })
+              if (resumed.count) announceListingValues(ids, ['syncState'], 'sync-control')
               await setFollowMasterQuantity({ productIds: [c.productId], channel: c.channel as never, markets: [c.marketplace], follow: true, actor, coordinates: await writableCoordinates(c) })
             }
           } else if (c.target === 'PINNED' && c.lane === 'SHARED' && c.itemId) {
@@ -722,10 +726,14 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
           } else if (c.target === 'PINNED') {
             await setFollowMasterQuantity({ productIds: [c.productId], channel: c.channel as never, markets: [c.marketplace], follow: false, actor, coordinates: await writableCoordinates(c) })
             if (c.pinnedQty != null) {
-              await prisma.channelListing.updateMany({ where: { id: { in: await writableIds(c) } }, data: { quantity: c.pinnedQty, quantityOverride: c.pinnedQty, followMasterQuantity: false } })
+              const ids = await writableIds(c)
+              await prisma.channelListing.updateMany({ where: { id: { in: ids } }, data: { quantity: c.pinnedQty, quantityOverride: c.pinnedQty, followMasterQuantity: false, version: { increment: 1 } } })
+              announceListingValues(ids, ['quantityMode', 'quantity'], 'sync-control')
             }
           } else if (c.target === 'PAUSED') {
-            await prisma.channelListing.updateMany({ where: { id: { in: await writableIds(c) } }, data: { syncPaused: true } })
+            const ids = await writableIds(c)
+            const paused = await prisma.channelListing.updateMany({ where: { id: { in: ids }, syncPaused: false }, data: { syncPaused: true, version: { increment: 1 } } })
+            if (paused.count) announceListingValues(ids, ['syncState'], 'sync-control')
           } else if (c.target === 'EXCLUDED' && c.itemId) {
             await prisma.sharedListingMembership.updateMany({ where: { itemId: c.itemId, marketplace: c.marketplace, sku: c.sku }, data: { followPool: false } })
           }

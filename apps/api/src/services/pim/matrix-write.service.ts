@@ -3,11 +3,12 @@
  * the page in preview mode, made real).
  *
  * ONE door. Every cell write is CAS-checked on the listing's `ChannelListing.version` (a stale `expectedVersion` is a
- * `conflict` carrying the CURRENT version), refused BY NAME with the read's own sentence (FBA → `Amazon-managed` or the
- * guard's sentence, the parent, a formula-owned price, a missing `products.price.edit`, a pinned buffer), a `noop` when
- * nothing would change (no version spent), and `applied` with the NEW version. Every applied write bumps the version
+ * `conflict` carrying the CURRENT version — unless the write's field stamp still holds: the cell's own field(s) are what
+ * the person saw, so it goes ahead at the fresh version, `@nexus/shared/matrix-stamp`), refused BY NAME with the read's
+ * own sentence (FBA → `Amazon-managed` or the guard's sentence, the parent, a formula-owned price, a missing
+ * `products.price.edit`, a pinned buffer), a `noop` when nothing would change (no version spent), and `applied` with the NEW version. Every applied write bumps the version
  * FIRST (`updateMany where { id, version }`) and only then delegates — so a concurrent writer conflicts instead of
- * being clobbered, and the July primitives (which deliberately do not bump) stay untouched:
+ * being clobbered, and the follow / pin / buffer primitives are told not to bump a second time (`bumpVersion: false`):
  *
  *   syncMode / syncQty → `setFollowMasterQuantity` (FOLLOW, or PIN; typing into a Follow cell pins AT THE TYPED VALUE,
  *                        D-MX3 — the value is staged into `quantity` inside the CAS transaction and the primitive's
@@ -36,6 +37,7 @@ import { createOutboundRow } from '../outbound-rows.js'
 import prisma from '../../db.js'
 import type { Prisma } from '@prisma/client'
 import { inventoryCoordinate, previewVerb, PREVIEW_WORDS, sameSourceCodes, sellsFromCodes, SOURCE_PERMISSION, sourceCodesProblem, type AmazonFulfilmentFacts, type PreviewContext } from '@nexus/shared/matrix-preview'
+import { matrixCellStamp, matrixStampHolds } from '@nexus/shared/matrix-stamp'
 import {
   MATRIX_COPY,
   type CoordinateKey,
@@ -235,7 +237,8 @@ export async function writeQuantityMode(input: {
     if (lender) return { refused: sharedStockReason(lender), staged: false }
   }
   await bumpTx(input.targets, !input.follow && input.quantity !== undefined ? { quantity: input.quantity } : undefined)
-  const r = await setFollowMasterQuantity({ productIds: [input.productId], channel: input.channel as 'AMAZON' | 'EBAY', markets: input.targets.map((t) => t.marketplace), follow: input.follow, actor: input.actor, ...(input.coordinates ? { coordinates: input.coordinates } : {}) })
+  /* The door bumped every target above, under CAS: the primitive must not bump again (the answer names version + 1). */
+  const r = await setFollowMasterQuantity({ productIds: [input.productId], channel: input.channel as 'AMAZON' | 'EBAY', markets: input.targets.map((t) => t.marketplace), follow: input.follow, actor: input.actor, ...(input.coordinates ? { coordinates: input.coordinates } : {}), bumpVersion: false })
   if (await skippedLiveFba(input.channel, r.results)) return { refused: MATRIX_COPY.amazonManaged, staged: true }
   return {}
 }
@@ -276,14 +279,37 @@ export function businessSettingFromValue(value: unknown): BusinessPriceSetting |
   return { rule: v.rule, percent, price, tiers: { type: t.type, levels } }
 }
 
+/**
+ * One cell through the door. Field stamps (2026-10-13): a version that moved says the LISTING changed — a sale, a stock or
+ * price cascade, another cell. When this cell's own field(s) are still what the person saw (`matrixStampHolds`), the write
+ * goes ahead at the fresh version and says so (`writtenAt`); when they moved, it is refused with them as they are now
+ * (`current`). A write without a stamp (an older client, a verb, a revert) is checked on the version alone, as before.
+ * Owner 4A: a Follow Qty cell stamps its mode only, so a typed number pins at itself after a sale moved the follow number.
+ */
 export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorContext): Promise<MatrixWriteOutcome> {
+  const cells = locate(read, w.rowId, w.coordinateKey)?.cells
+  const sameListing = !!cells?.listingId && (w.expectedListingId === undefined || cells.listingId === w.expectedListingId)
+  if (sameListing && cells!.version !== w.expectedVersion && matrixStampHolds(w.cell, w.expected, cells)) {
+    const at = cells!.version
+    const out = await applyCellAt(read, { ...w, expectedVersion: at }, ctx)
+    // Every outcome that moved a version (applied, or refused after staging) names the version it was checked at.
+    return out.outcome === 'applied' || out.listings?.length ? { ...out, writtenAt: at } : out
+  }
+  return applyCellAt(read, w, ctx)
+}
+
+async function applyCellAt(read: MatrixRead, w: MatrixWriteCell, ctx: DoorContext): Promise<MatrixWriteOutcome> {
   const base = { rowId: w.rowId, coordinateKey: w.coordinateKey, cell: w.cell }
   const hit = locate(read, w.rowId, w.coordinateKey)
   /* The caller saw another listing on this coordinate (another account's, or one replaced since): never write over it. */
   if (hit && w.expectedListingId !== undefined && hit.cells.listingId !== w.expectedListingId) return { ...base, outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere, version: hit.cells.version }
   if (!hit || !hit.cells.listingId) return { ...base, outcome: 'refused', reason: PREVIEW_WORDS.notOnMarket, version: hit?.cells.version ?? 0 }
   const { row, coord, cells } = hit
-  if (cells.version !== w.expectedVersion) return { ...base, outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere, version: cells.version }
+  /* A stamped write lands here only when its stamp did NOT hold: the conflict names the field(s) as they are now. */
+  if (cells.version !== w.expectedVersion) {
+    const current = w.expected ? matrixCellStamp(w.cell, cells) : undefined
+    return { ...base, outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere, version: cells.version, ...(current ? { current } : {}) }
+  }
   /* "Sells from" is not one of the cell kinds: its own gate (`cells.source`), its own write. */
   if (w.cell === 'source') return applySource(read, hit, w, ctx)
   if (cells.writable[w.cell] !== true) return { ...base, outcome: 'refused', reason: cells.writeBlockedReason[w.cell] ?? 'This cell cannot be changed here', version: cells.version }
@@ -344,7 +370,7 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
         if (s.buffer === n) return noop()
         if (await amazonManaged()) return managedRefusal()
         await bumpTx(targets)
-        const r = await setStockBuffer({ productIds: [row.id], channel, markets, buffer: n, actor: ctx.actor })
+        const r = await setStockBuffer({ productIds: [row.id], channel, markets, buffer: n, actor: ctx.actor, bumpVersion: false })
         if (await skippedLiveFba(channel, r.results)) return stagedRefusal(MATRIX_COPY.amazonManaged)
         return applied()
       }
