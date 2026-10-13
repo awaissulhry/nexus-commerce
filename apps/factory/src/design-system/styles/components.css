@@ -2687,9 +2687,11 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
 }
 
 /* Figures column: digits that line up. The DS set `font-variant-numeric` on no selector at all,
-   so every converted money column silently lost the fix its hand-rolled version had. */
+   so every converted money column silently lost the fix its hand-rolled version had. A right-aligned
+   cell is a figures cell too (the Owner's rule, 2026-10-13: right is for numbers). */
 .nds-grid td.num,
-.nds-grid th.num {
+.nds-grid th.num,
+.nds-grid td.r {
   font-variant-numeric: tabular-nums;
 }
 
