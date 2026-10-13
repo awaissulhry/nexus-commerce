@@ -101,7 +101,13 @@ export const roasText = (v: unknown): string => {
   return Number.isFinite(n) ? n.toFixed(2) : '—'
 }
 
-export const int = (v: unknown): string => num(v).toLocaleString()
+/**
+ * THE count formatter of the ads console: "1,284" in every browser (grid audit E11, the Owner's 1A on 2026-10-13). A bare
+ * `toLocaleString()` followed the browser's language: an Italian browser read "12.345" (twelve thousand, or twelve
+ * point three?) and "1284" with no separator at all. The locale is the money formatters' (`en-IE`), so a count and an
+ * amount group their digits the same way.
+ */
+export const int = (v: unknown): string => num(v).toLocaleString('en-IE')
 
 export const STATUS_PILL: Record<string, { label: string; cls: string }> = {
   ENABLED: { label: 'Enabled', cls: 'ok' },

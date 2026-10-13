@@ -45,11 +45,11 @@ import { Modal } from '@/design-system/components'
 import { Input } from '@/design-system/primitives'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import type { BmCampaignRow, ResolvedScope } from './slot-contract'
+import { money } from '../../campaigns/_grid/format'
 
 /** €1/day — Amazon's minimum campaign budget, and the enforcement engine's implicit floor. */
 const FLOOR_CENTS = 100
 
-const eur = (c: number) => `€${(c / 100).toFixed(2)}`
 const parseEur = (s: string): number | null => {
   const t = s.trim().replace(',', '.').replace(/^€/, '')
   if (!t) return null
@@ -94,15 +94,15 @@ export function CampaignLimitsModal({
     {
       key: 'daily', label: 'Daily budget', metric: false, sortable: true,
       tip: 'What the campaign is set to today. The limits below clamp what the pacing engine may change it to.',
-      render: (r) => <span className="h10-bsp-num">{eur(r.dailyBudgetCents)}</span>,
+      render: (r) => <span className="h10-bsp-num">{money(r.dailyBudgetCents)}</span>,
       sortValue: (r) => String(r.dailyBudgetCents).padStart(12, '0'),
     },
     {
       key: 'minCents', label: 'Min', metric: false, sortable: true,
       tip: 'The engine will not lower this campaign below here. Amazon’s own floor is €1.00, so leaving it empty and setting €1.00 are the same instruction.',
       render: (r) => (r.minCents == null
-        ? <span className="h10-bsp-dim">{eur(FLOOR_CENTS)} (floor)</span>
-        : <span className="h10-bsp-num">{eur(r.minCents)}</span>),
+        ? <span className="h10-bsp-dim">{money(FLOOR_CENTS)} (floor)</span>
+        : <span className="h10-bsp-num">{money(r.minCents)}</span>),
       sortValue: (r) => String(r.minCents ?? FLOOR_CENTS).padStart(12, '0'),
     },
     {
@@ -110,7 +110,7 @@ export function CampaignLimitsModal({
       tip: 'The engine will not raise this campaign above here. Empty means no ceiling.',
       render: (r) => (r.maxCents == null
         ? <span className="h10-bsp-dim">no ceiling</span>
-        : <span className="h10-bsp-num">{eur(r.maxCents)}</span>),
+        : <span className="h10-bsp-num">{money(r.maxCents)}</span>),
       sortValue: (r) => String(r.maxCents ?? 99999999).padStart(12, '0'),
     },
   ], [])
@@ -131,7 +131,7 @@ export function CampaignLimitsModal({
     const bad = payload.find((p) => p.minCents != null && p.maxCents != null && p.minCents > p.maxCents)
     if (bad) {
       const name = byId.get(bad.campaignId)?.name ?? bad.campaignId
-      setSaveErr(`${name}: the minimum (${eur(bad.minCents as number)}) is above the maximum (${eur(bad.maxCents as number)}). Nothing was saved.`)
+      setSaveErr(`${name}: the minimum (${money(bad.minCents as number)}) is above the maximum (${money(bad.maxCents as number)}). Nothing was saved.`)
       return
     }
     try {

@@ -18,6 +18,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { Listbox } from '@/design-system/components'
 import { DataGrid } from '@/design-system/grid/datagrid'
 import { Checkbox } from '@/design-system/primitives'
+import { eur } from '../../campaigns/_grid/format'
 
 interface LedgerRow {
   id: string
@@ -54,7 +55,7 @@ const ago = (iso: string) => {
 function changeText(r: LedgerRow): string {
   const b = r.payloadBefore ?? {}, a = r.payloadAfter ?? {}
   if (b.dailyBudget != null || a.dailyBudget != null) {
-    return `budget €${Number(b.dailyBudget ?? 0).toFixed(2)} → €${Number(a.dailyBudget ?? 0).toFixed(2)}`
+    return `budget ${eur(b.dailyBudget ?? 0)} → ${eur(a.dailyBudget ?? 0)}`
   }
   if (b.bidCents != null || a.bidCents != null) {
     return `bid ${Number(b.bidCents ?? 0)}¢ → ${Number(a.bidCents ?? 0)}¢`

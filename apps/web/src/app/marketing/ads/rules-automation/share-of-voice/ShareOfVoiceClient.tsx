@@ -73,7 +73,7 @@ import { SovRowDrawer } from './SovRowDrawer'
 import { buildSovCsv, sovCsvFilename } from './sovExport'
 import { SovSavedViews } from './SovSavedViews'
 import { useAdsSync } from '../_shared/adsBus'
-import { sharePct } from '../../campaigns/_grid/format'
+import { money, sharePct } from '../../campaigns/_grid/format'
 
 /** The four production Amazon Ads markets. IE/NL/PL/SE/UK are sandbox and hold no listings. */
 /** How far back the view may reach for its ONE period, in weeks. See the service's `SOV_WEEKS`. */
@@ -614,7 +614,7 @@ export function ShareOfVoiceClient() {
     {
       key: 'adCpc', label: `Ad CPC · ${data?.adWindowDays ?? 30}d`,
       tip: 'Spend ÷ clicks on this query in the ad window. Blank when there were no clicks — never €0.00.',
-      render: (r) => (r.ad?.cpcCents == null ? <span className="h10-sov-nd">—</span> : `€${(r.ad.cpcCents / 100).toFixed(2)}`),
+      render: (r) => (r.ad?.cpcCents == null ? <span className="h10-sov-nd">—</span> : money(r.ad.cpcCents)),
       sortValue: (r) => r.ad?.cpcCents ?? -1,
     },
     // ── SOV.3 — the judgement, re-cut against medians server-side. ──

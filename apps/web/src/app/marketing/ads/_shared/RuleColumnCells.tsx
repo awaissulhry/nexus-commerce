@@ -328,7 +328,7 @@ That is NOT 0%. Amazon does not zero its percentage at the reset — it stops up
       )
     }
     const pct = fraction * 100
-    const denom = current.budget != null ? `€${current.budget.toFixed(2)}` : 'its daily budget'
+    const denom = current.budget != null ? eurMoney(current.budget) : 'its daily budget'
     const title = current.state === 'derived'
       ? `Today's spend ÷ this campaign's stored daily budget (${denom}), from the hourly stream — Amazon itself has not reported a percentage since the 00:00 UTC reset.
 Newest hourly row: ${current.asOf ?? 'unknown'}. A cross-check, not Amazon's own answer: our stored budget can differ from Amazon's.

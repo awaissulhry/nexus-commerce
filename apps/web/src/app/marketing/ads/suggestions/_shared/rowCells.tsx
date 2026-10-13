@@ -14,6 +14,7 @@ import { Tag, type TagTone } from '@/design-system/primitives/Tag'
 import { HoverCard } from '../../campaigns/FilterDropdown'
 import { ApproveHoverCard, type HoverContent } from '../ApproveHoverCard'
 import { dash, eur, type SuggestionMetrics } from '../cells'
+import { eur as eurMoney } from '../../campaigns/_grid/format'
 import { ACTION_LABEL, ACTION_TONE, ENTITY_LABEL, ENTITY_TONE, srcOf, type Priced, type Suggestion } from './types'
 import { placementOnBudgetTrigger } from '../../rules-automation/automations/ruleText'
 
@@ -340,9 +341,9 @@ export function approveHoverContent(s: Suggestion): { title: string; sub: string
       title,
       sub: 'This campaign’s daily budget will be changed when changes are applied.',
       rows: [rowFor(undefined,
-        s.suggested?.budgetEur != null ? `€${s.suggested.budgetEur.toFixed(2)}` : '—',
+        s.suggested?.budgetEur != null ? eurMoney(s.suggested.budgetEur) : '—',
         src.campaignName ?? src.label, null, '—',
-        s.current?.dailyBudgetEur != null ? `from €${s.current.dailyBudgetEur.toFixed(2)}` : 'Applicable',
+        s.current?.dailyBudgetEur != null ? `from ${eurMoney(s.current.dailyBudgetEur)}` : 'Applicable',
       )],
     }
   }

@@ -28,6 +28,7 @@ import {
   businessName, copyWords, count, detachedWords, fieldListWords, fieldName, fieldSource, followingFacts, holdsWords, placeActionLabel, shareStateWords, stockWords, takeOutImpact,
 } from './sharingWords'
 import styles from './sharing.module.css'
+import { num } from '@/design-system/lib/format'
 
 type Notice = { tone: 'success' | 'danger'; text: string } | null
 
@@ -195,9 +196,9 @@ function Stock({ data }: { data: ProductSharing }) {
   const { source, lentTo } = data.stock
   const columns: Array<Column<LentUsage>> = [
     { key: 'business', label: 'Business', render: (u) => u.businessName },
-    { key: 'held', label: 'Held for its orders now', numeric: true, render: (u) => u.heldNow.toLocaleString() },
-    { key: 'sold', label: 'Sold, last 30 days', numeric: true, render: (u) => u.sold30d.toLocaleString() },
-    { key: 'back', label: 'Put back, last 30 days', numeric: true, render: (u) => u.putBack30d.toLocaleString() },
+    { key: 'held', label: 'Held for its orders now', numeric: true, render: (u) => num(u.heldNow) },
+    { key: 'sold', label: 'Sold, last 30 days', numeric: true, render: (u) => num(u.sold30d) },
+    { key: 'back', label: 'Put back, last 30 days', numeric: true, render: (u) => num(u.putBack30d) },
   ]
   return <Card header="Stock" headingLevel={3} headerAction={<Button asChild variant="secondary"><Link href="/settings/sharing">Manage shared stock</Link></Button>}>
     <div className={styles.stack}>

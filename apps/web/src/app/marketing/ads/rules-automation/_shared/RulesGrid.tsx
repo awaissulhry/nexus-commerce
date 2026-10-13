@@ -98,6 +98,7 @@ import { PC_METRIC_UNIT } from './PerformanceCriteria'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ruleBelongsToTab, RULE_TAB_ACTION_TYPES } from './tabs'
 import { placementThenSentence } from './placementLanes'
+import { eur as euros } from '../../campaigns/_grid/format'
 import { placementOnBudgetTrigger } from '../automations/ruleText'
 import { planBulkAutomation, bulkAutomationNotice, type BulkRuleState } from './bulkAutomation'
 import { RULE_TYPES } from './ruleTypes'
@@ -449,7 +450,7 @@ function summariseRule(rule: Record<string, unknown>, tabKey?: string): RuleCrit
    */
   const bidEur = a0?.graduationBidEur ?? a0?.bidEur
   // `0.5` must print as €0.50 — a bid is money, and money with one decimal reads as a typo.
-  if ((type === 'harvest_and_negate' || type === 'promote_to_exact') && typeof bidEur === 'number') then += ` @ €${bidEur.toFixed(2)}`
+  if ((type === 'harvest_and_negate' || type === 'promote_to_exact') && typeof bidEur === 'number') then += ` @ ${euros(bidEur)}`
 
   if (ifs) return { text: then ? `${ifs} → ${then}` : ifs, why: `This rule fires when ${ifs}${then ? `, and then: ${then}` : ''}.` }
 

@@ -15,6 +15,7 @@
 import { useCallback, useMemo } from 'react'
 import { ExternalLink, History } from 'lucide-react'
 import { AdsDataGrid, type GridColumn, type FilterState } from '../../campaigns/_grid/AdsDataGrid'
+import { money } from '../../campaigns/_grid/format'
 import { NoDataIllus } from '../_shared/NoDataIllus'
 import { ScheduleActivityDrawer, isDrawerTab, type DrawerTab } from './ScheduleActivityDrawer'
 import { relTime } from './scheduleHealth'
@@ -124,12 +125,12 @@ export function RankCampaignsGrid({ palette }: { palette: { color: (k: string) =
     {
       key: 'spend', label: 'Spend 30d', metric: true, sortable: true, defaultHidden: true,
       sortValue: (r) => r.perf?.costCents ?? -1,
-      render: (r) => (r.perf ? <span>{`€${(r.perf.costCents / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}</span> : <span className="rd-none">—</span>),
+      render: (r) => (r.perf ? <span>{money(r.perf.costCents)}</span> : <span className="rd-none">—</span>),
     },
     {
       key: 'sales', label: 'Sales 30d', metric: true, sortable: true, defaultHidden: true,
       sortValue: (r) => r.perf?.salesCents ?? -1,
-      render: (r) => (r.perf ? <span>{`€${(r.perf.salesCents / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}</span> : <span className="rd-none">—</span>),
+      render: (r) => (r.perf ? <span>{money(r.perf.salesCents)}</span> : <span className="rd-none">—</span>),
     },
     {
       key: 'roas', label: 'ROAS 30d', metric: true, sortable: true, defaultHidden: true,

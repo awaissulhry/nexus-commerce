@@ -24,7 +24,7 @@ import { useAdsMarketplace, useSharedAdsMarket } from '../_shell/MarketplaceCont
 import { describeWindow } from '@nexus/shared/data-vintage'
 import { getBackendUrl } from '@/lib/backend-url'
 import { enabledRank } from './_grid/enabledRank'
-import { acosRank, pct, roasText } from './_grid/format'
+import { acosRank, eur, int, num, pct, roasText } from './_grid/format'
 import { AdsDataGrid, type GridColumn, type GridPrefs } from './_grid/AdsDataGrid'
 import { AdManagerGraph } from './AdManagerGraph'
 import { reportFreshnessText, type IntradayInfo, type MarketFreshness } from './reportFreshness'
@@ -124,8 +124,6 @@ interface Camp {
   usageSince?: string | null
 }
 type Mode = 'metrics' | 'edit'
-const num = (v: unknown) => (typeof v === 'number' ? v : Number(v) || 0)
-const eur = (v: number) => `€${v.toLocaleString('en-IE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 /**
  * ADM-H P3 — the third token in this grid's empty-state vocabulary, and the one it was missing.
  * **None** = settable, nothing set · **—** = no value · **unknown** = the source did not say.
@@ -514,8 +512,8 @@ function renderCol(c: Camp, key: string): ReactNode {
       if (!Number.isFinite(r)) return spend > 0 ? NO_SALES : '—'
       return roasText(r) // AM-30 — the console's one ROAS rendering
     }
-    case 'impressions': return impr.toLocaleString()
-    case 'clicks': return clicks.toLocaleString()
+    case 'impressions': return int(impr)
+    case 'clicks': return int(clicks)
     case 'cpc': return clicks ? eur(spend / clicks) : '—'
     case 'ctr': return impr ? `${((clicks / impr) * 100).toFixed(2)}%` : '—'
     /**
@@ -526,7 +524,7 @@ function renderCol(c: Camp, key: string): ReactNode {
      * on all 220 rows. `hasOrders` makes the guarantee structural instead of circumstantial.
      */
     case 'cvr': return !hasOrders ? UNKNOWN : clicks ? `${((orders / clicks) * 100).toFixed(2)}%` : '—'
-    case 'ppcOrders': return !hasOrders ? UNKNOWN : orders.toLocaleString()
+    case 'ppcOrders': return !hasOrders ? UNKNOWN : int(orders)
     case 'cpa': return !hasOrders ? UNKNOWN : orders ? eur(spend / orders) : '—'
     case 'aov': return !hasOrders ? UNKNOWN : orders ? eur(sales / orders) : '—'
     /**
@@ -542,22 +540,22 @@ function renderCol(c: Camp, key: string): ReactNode {
     // ADM-A3 — these nine were unconditional N/A tokens: the map they fell through to was keyed by
     // COLUMN, so no row could ever show a value even once Amazon started sending one. Now the
     // reading wins when there is one, and `notApplicableFor` explains the absence when there isn't.
-    case 'ntbOrders': return c.ntbOrders == null ? (notApplicableFor(key, c) ?? UNKNOWN) : c.ntbOrders.toLocaleString()
-    case 'ntbUnits': return c.ntbUnits == null ? (notApplicableFor(key, c) ?? UNKNOWN) : c.ntbUnits.toLocaleString()
+    case 'ntbOrders': return c.ntbOrders == null ? (notApplicableFor(key, c) ?? UNKNOWN) : int(c.ntbOrders)
+    case 'ntbUnits': return c.ntbUnits == null ? (notApplicableFor(key, c) ?? UNKNOWN) : int(c.ntbUnits)
     case 'ntbSales': return c.ntbSales == null ? (notApplicableFor(key, c) ?? UNKNOWN) : eur(c.ntbSales)
     case 'ntbOrdersPct': return c.ntbOrdersPct == null ? (notApplicableFor(key, c) ?? UNKNOWN) : sharePct(c.ntbOrdersPct)
     case 'ntbSalesPct': return c.ntbSalesPct == null ? (notApplicableFor(key, c) ?? UNKNOWN) : sharePct(c.ntbSalesPct)
     case 'ntbUnitsPct': return c.ntbUnitsPct == null ? (notApplicableFor(key, c) ?? UNKNOWN) : sharePct(c.ntbUnitsPct)
     case 'ntbOrderRate': return c.ntbOrderRate == null ? (notApplicableFor(key, c) ?? UNKNOWN) : sharePct(c.ntbOrderRate)
-    case 'kindleReads': return c.kindleReads == null ? (notApplicableFor(key, c) ?? UNKNOWN) : c.kindleReads.toLocaleString()
+    case 'kindleReads': return c.kindleReads == null ? (notApplicableFor(key, c) ?? UNKNOWN) : int(c.kindleReads)
     case 'kindleRoyalties': return c.kindleRoyalties == null ? (notApplicableFor(key, c) ?? UNKNOWN) : eur(c.kindleRoyalties)
-    case 'saleUnits': return c.saleUnits == null ? UNKNOWN : c.saleUnits.toLocaleString()
+    case 'saleUnits': return c.saleUnits == null ? UNKNOWN : int(c.saleUnits)
     case 'asp': return c.asp == null ? UNKNOWN : eur(c.asp)
     case 'otherSales': return c.otherSales == null ? UNKNOWN : eur(c.otherSales)
     case 'otherSalesPct': return c.otherSalesPct == null ? UNKNOWN : sharePct(c.otherSalesPct)
     case 'sameSkuSales': return c.sameSkuSales == null ? UNKNOWN : eur(c.sameSkuSales)
-    case 'sameSkuSaleUnits': return c.sameSkuSaleUnits == null ? UNKNOWN : c.sameSkuSaleUnits.toLocaleString()
-    case 'sameSkuOrders': return c.sameSkuOrders == null ? UNKNOWN : c.sameSkuOrders.toLocaleString()
+    case 'sameSkuSaleUnits': return c.sameSkuSaleUnits == null ? UNKNOWN : int(c.sameSkuSaleUnits)
+    case 'sameSkuOrders': return c.sameSkuOrders == null ? UNKNOWN : int(c.sameSkuOrders)
     case 'topOfSearchIS': {
       if (c.topOfSearchIS == null) return UNKNOWN
       const d = c.topOfSearchISDays ?? 0

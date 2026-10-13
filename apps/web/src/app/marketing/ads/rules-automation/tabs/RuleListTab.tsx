@@ -21,6 +21,7 @@ import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ruleBelongsToTab } from '../_shared/tabs'
 import { RULE_TYPES } from '../_shared/ruleTypes'
+import { eur } from '../../campaigns/_grid/format'
 
 const BUILDER_SLUGS = new Set(RULE_TYPES.map((r) => r.slug))
 const isBuilderRule = (rule: Record<string, unknown> | undefined): boolean => {
@@ -323,7 +324,7 @@ export function HistoryDrawer({ rule, onClose }: { rule: { id: string; name: str
   const summary = (e: ExecRow) => {
     const acted = (e.actionResults ?? []).filter((a) => a.ok && a.output && !a.output.skipped)
     if (!acted.length) return e.status === 'NO_MATCH' ? 'No match' : '—'
-    return acted.map((a) => a.output?.wouldChange ?? (a.output?.newDailyBudget != null ? `→ €${a.output.newDailyBudget}` : a.type)).join(', ')
+    return acted.map((a) => a.output?.wouldChange ?? (a.output?.newDailyBudget != null ? `→ ${eur(a.output.newDailyBudget)}` : a.type)).join(', ')
   }
   return (
     <div className="h10-hist-back" onClick={onClose}>

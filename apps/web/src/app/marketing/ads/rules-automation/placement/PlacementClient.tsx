@@ -76,6 +76,7 @@ import { PlcInspector } from './PlcInspector'
 import { PlcBulkPanel } from './PlcBulkPanel'
 import { useCursorPoll } from '../_shared/useCursorPoll'
 import { useAdsSync } from '../_shared/adsBus'
+import { money } from '../../campaigns/_grid/format'
 
 /** The four production Amazon Ads markets, plus the account-wide view the header already offers. */
 /**
@@ -201,9 +202,7 @@ interface PlcCursor extends Record<string, unknown> {
 }
 
 const num = (n: number) => n.toLocaleString('en-IE')
-const eur = (cents: number) => `€${(cents / 100).toLocaleString('en-IE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 /** A CPC is small; two decimals hide the difference between €0.40 and €0.45 nowhere else. */
-const eur2 = (cents: number) => `€${(cents / 100).toFixed(2)}`
 const dayMonth = (iso: string) => {
   const d = new Date(`${iso}T00:00:00Z`)
   return `${d.getUTCDate()} ${d.toLocaleString('en-GB', { month: 'short', timeZone: 'UTC' })}`
@@ -618,10 +617,10 @@ export function PlacementClient() {
     {
       key: 'spend', label: 'Spend',
       tip: 'Amazon\'s placement report, summed over the window in the header. Account-wide over 60 days, Top of Search takes 45% of the spend for 2.3% of the impressions.',
-      render: (r) => (r.hasReportRow ? eur(r.spendCents) : <NoDelivery />),
+      render: (r) => (r.hasReportRow ? money(r.spendCents) : <NoDelivery />),
       sortValue: (r) => (r.hasReportRow ? r.spendCents : nullLast),
       filterValue: (r) => r.spendCents / 100,
-      total: (visible) => eur(visible.reduce((a, r) => a + r.spendCents, 0)),
+      total: (visible) => money(visible.reduce((a, r) => a + r.spendCents, 0)),
     },
     {
       key: 'roas', label: 'ROAS',
@@ -637,13 +636,13 @@ export function PlacementClient() {
     },
     {
       key: 'cpc', label: 'CPC',
-      render: (r) => (r.cpc == null ? <NoValue reason={r.hasReportRow ? 'No clicks on this lane in the window.' : undefined} /> : eur2(r.cpc)),
+      render: (r) => (r.cpc == null ? <NoValue reason={r.hasReportRow ? 'No clicks on this lane in the window.' : undefined} /> : money(r.cpc)),
       sortValue: (r) => r.cpc ?? nullLast,
       filterValue: (r) => (r.cpc ?? 0) / 100,
       total: (visible) => {
         const sp = visible.reduce((a, r) => a + r.spendCents, 0)
         const cl = visible.reduce((a, r) => a + r.clicks, 0)
-        return cl > 0 ? eur2(sp / cl) : '—'
+        return cl > 0 ? money(sp / cl) : '—'
       },
     },
     {
@@ -823,7 +822,7 @@ export function PlacementClient() {
               <span className="h10-plc-lanefoot">
                 <span><b>{((l.impressionsPct ?? 0) * 100).toFixed(1)}%</b> of impressions</span>
                 <span><b>{((l.spendPct ?? 0) * 100).toFixed(1)}%</b> of spend</span>
-                <span>{l.cpc == null ? '—' : eur2(l.cpc)} CPC</span>
+                <span>{l.cpc == null ? '—' : money(l.cpc)} CPC</span>
               </span>
             </div>
           ))}

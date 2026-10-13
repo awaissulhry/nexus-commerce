@@ -20,6 +20,7 @@ import { useEffect, useState } from 'react'
 import { DataGrid } from '@/design-system/grid/datagrid'
 import { AlertTriangle, CalendarClock } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { money } from '../../campaigns/_grid/format'
 
 interface Row {
   at: string
@@ -60,7 +61,6 @@ type PreviewRow = Row & { isNow: boolean; changed: boolean }
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const hh = (h: number) => `${String(h).padStart(2, '0')}:00`
-const eur = (cents: number) => `€${(cents / 100).toFixed(2)}`
 
 export function Next24Preview({ groupId }: { groupId: string }) {
   const [data, setData] = useState<Payload | null>(null)
@@ -196,14 +196,14 @@ export function Next24Preview({ groupId }: { groupId: string }) {
               )}
               {/* MB.6 — on its OWN line, so it never widens the cell past its column. */}
               {h.cpcCapPct != null && !h.suppressed && (
-                <span className="capd" title={`The €${((h.maxCpcCents ?? 0) / 100).toFixed(2)} CPC ceiling holds this hour at ${h.cpcCapPct}% — the target itself sets more`}>CPC-capped</span>
+                <span className="capd" title={`The ${money(h.maxCpcCents ?? 0)} CPC ceiling holds this hour at ${h.cpcCapPct}% — the target itself sets more`}>CPC-capped</span>
               )}
             </>),
           },
           {
             key: 'gd', label: 'Guardrails', width: 108, className: 'gd',
             render: (h) => (<>
-              {h.maxCpcCents != null && <span>max {eur(h.maxCpcCents)}</span>}
+              {h.maxCpcCents != null && <span>max {money(h.maxCpcCents)}</span>}
               {h.maxCpcCents == null && !h.suppressed && h.floorPct != null && <span className="none">—</span>}
             </>),
           },

@@ -18,6 +18,7 @@ import { Button, Pill } from '@/design-system/primitives'
 import { Banner } from '@/design-system/components'
 import { Plus, ExternalLink, History } from 'lucide-react'
 import { AdsDataGrid, type GridColumn, type GridFilter, type FilterState } from '../../campaigns/_grid/AdsDataGrid'
+import { money } from '../../campaigns/_grid/format'
 import { rdFilters, rdFilterState, rdUrlPatch, rdFlattenBarChange, rdBaselineOptions } from '../dayparting/_rd/rdFilters'
 import { NoDataIllus } from '../_shared/NoDataIllus'
 import { ScheduleActivityDrawer, isDrawerTab, type DrawerTab } from '../dayparting/ScheduleActivityDrawer'
@@ -65,7 +66,8 @@ interface RankRow {
 }
 // RD.P0 — the RankTarget palette (and its built-in fallbacks) moved to the page's data layer, so
 // the week strip, the drawer and every later section colour a key the same way.
-const eur = (cents: number) => (cents === 0 ? '\u2014' : `\u20ac${(cents / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`)
+/** No spend or sales in the period reads as the dash; an amount reads as the console's money, with its cents. */
+const eur = (cents: number) => (cents === 0 ? '\u2014' : money(cents))
 const builderHref = (id?: string) => `/marketing/ads/rules-automation/builder/dayparting-schedule${id ? `?groupId=${id}` : ''}`
 
 export function RankGoalsList() {
