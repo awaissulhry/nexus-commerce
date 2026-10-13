@@ -145,6 +145,9 @@ describe('each change', () => {
     expect(undoResult(true, 200, { ok: true, reversed: 1 })).toEqual({ ok: true, text: 'Undone. The earlier value is on its way back to Amazon.' })
     expect(undoResult(true, 200, { ok: true, reversed: 0, nothingToUndo: true })).toEqual({ ok: false, text: 'Nothing to undo.' })
     expect(undoResult(false, 409, { ok: false, reason: 'Outside the undo window' })).toEqual({ ok: false, text: 'Outside the undo window' })
+    // Group 3 re-review (d) — a set part of which changed since: not "Undone.", not marked undone, the server's reason shown.
+    const reason = '1 of 2 changes not undone. Changed since: now bid €0.75. Undo would overwrite that newer change, so nothing was put back.'
+    expect(undoResult(true, 200, { ok: true, reversed: 1, changedSince: 1, reason })).toEqual({ ok: false, partly: true, text: `Partly undone. ${reason}` })
   })
 })
 

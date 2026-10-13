@@ -12,7 +12,7 @@ import { useAdsSync } from '../../_shared/adsBus'
 import { previewHarvestRule, readHarvestRules, readHistory } from '../_shared/harvestApi'
 import type { HarvestRulesAnswer } from '../_shared/types'
 import { capOf, effectByRule, type RuleEffect } from './harvestRulesModel'
-import { latestRead } from './latestRead'
+import { latestRead } from '../../../_shared/latestRead'
 
 /** The days the Effect column counts. */
 export const EFFECT_DAYS = 30

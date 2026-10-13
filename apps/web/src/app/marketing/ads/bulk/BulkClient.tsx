@@ -264,7 +264,11 @@ function BulkInner() {
       if (body.expired) {
         toast(body.reason ?? `Past the ${body.windowHours ?? 24}-hour undo window.`, 'warning')
       } else {
-        toast(`${body.reversed} change${body.reversed === 1 ? '' : 's'} reverted — ${body.skipped} skipped · ${body.failed} failed`, body.failed ? 'warning' : 'success')
+        // Group 3 — changes that moved since the upload are not put back: the summary says how many of the upload went back
+        // ("Rolled back N of M; K changed since and were not put back"), and its Undo stays for the rest.
+        toast(body.changedSince || body.failed
+          ? `${body.summary ?? `${body.reversed} change${body.reversed === 1 ? '' : 's'} reverted`}.${body.reason ? ` ${body.reason}` : ''}`
+          : `${body.reversed} change${body.reversed === 1 ? '' : 's'} reverted — ${body.skipped} skipped · ${body.failed} failed`, body.failed || body.changedSince ? 'warning' : 'success')
       }
       void loadJobs()
     } finally { setBusy(false) }

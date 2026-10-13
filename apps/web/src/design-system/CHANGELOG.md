@@ -1,3 +1,14 @@
+## A sheet row has ONE write line, formulas included — 2026-10-13
+
+`grid/editors/sheetWriter.ts` (both apps, identical).
+- **`SheetWriter.exclusive(rowId, run)`**: a write that is not a cell edit (the product sheet's formula save, replace and
+  removal) takes its turn in the row's line: after the row's earlier cell saves have answered, before its later ones.
+  `run` gets the row's version as the writer holds it (`SheetExclusiveTurn`) and may answer the version the row adopts
+  (`SheetExclusiveAnswer.version`). It counts in `pending`, `busy` and `flush()`; `discard()` drops one still waiting
+  (its promise resolves `undefined`) and keeps one already sent as the row's write in the air, so the row's next write
+  waits for its answer. A `run` that throws synchronously rejects like any other. Cells-only rows behave exactly as
+  before.
+
 ## A Matrix write carries what its cell showed — 2026-10-13
 
 `grid/matrix/contract.ts` (both apps, identical; equal to the shared wire contract).

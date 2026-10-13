@@ -127,8 +127,11 @@ export const applyLabel = (n: number): string => (n === 1 ? 'Apply 1 suggested b
 
 // ── The bulk send's answer (POST /api/advertising/ad-targets/bulk-bid) ───────────────────────────────────────────────
 
-/** One bid of a bulk send: sent (with its change's Undo handle, the change feed's) or not, with why. */
-export interface SentBid { targetId: string; ok: boolean; words: string; actionLogId: string | null }
+/**
+ * One bid of a bulk send: sent (with its change's Undo handle, the change feed's) or not, with why. `queued`: on its way to
+ * Amazon (a queue row), not only saved in Nexus.
+ */
+export interface SentBid { targetId: string; ok: boolean; words: string; actionLogId: string | null; queued?: boolean }
 /** A row that waits on his own limits (3A): his "Send anyway" sends it again. */
 export interface BulkWait { adTargetId: string; limits: OwnLimitLine[] }
 
@@ -157,7 +160,7 @@ export function readBulkBid(list: ReadonlyArray<{ targetId: string }>, status: n
   list.filter((e) => !heldBack.has(e.targetId)).forEach((e, i) => {
     const o = outcomes[i]
     if (!o || waiting.has(e.targetId)) return
-    results.push({ targetId: e.targetId, ok: !!o.ok, words: o.ok ? (o.outboundQueueId ? 'Sent' : 'Saved') : reasonText(o.error), actionLogId: o.actionLogId ?? null })
+    results.push({ targetId: e.targetId, ok: !!o.ok, words: o.ok ? (o.outboundQueueId ? 'Sent' : 'Saved') : reasonText(o.error), actionLogId: o.actionLogId ?? null, queued: !!o.ok && !!o.outboundQueueId })
   })
   return { results, waits }
 }

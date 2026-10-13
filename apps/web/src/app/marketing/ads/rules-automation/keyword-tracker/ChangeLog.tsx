@@ -146,7 +146,8 @@ export function ChangeLog({
       })
       const b = await r.json().catch(() => ({}))
       if (r.ok) {
-        setNote({ ok: true, text: `Reversed ${b.reversed} change${b.reversed === 1 ? '' : 's'}. The previous bid${b.reversed === 1 ? '' : 's'} ${b.reversed === 1 ? 'has' : 'have'} been pushed back to Amazon.` })
+        // Group 3 — rows of the set that changed since were not put back: the answer's reason says which.
+        setNote({ ok: !b.changedSince, text: `Reversed ${b.reversed} change${b.reversed === 1 ? '' : 's'}. The previous bid${b.reversed === 1 ? '' : 's'} ${b.reversed === 1 ? 'has' : 'have'} been pushed back to Amazon.${b.changedSince && b.reason ? ` ${b.reason}` : ''}` })
         onUndo?.()
       } else {
         setNote({ ok: false, text: String(b.error ?? `Could not undo (${r.status})`) })

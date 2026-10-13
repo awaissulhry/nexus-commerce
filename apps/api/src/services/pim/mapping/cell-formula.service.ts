@@ -111,7 +111,20 @@ export type FormulaFieldWriter = (args: {
   expectedVersion?: number
   dryRun?: boolean
   updatedBy?: string | null
-}) => Promise<{ ok: boolean; error?: string | null; atomicResults?: unknown[] }>
+}) => Promise<FieldWriterAnswer>
+
+/**
+ * The ordinary writer's answer. G4 (review of #614): `currentVersion` / `versionOf` are the bulk route's own, read INSIDE
+ * its transaction (`bulk-edit.service.ts`), so they count this write and nothing after it — the version a formula route
+ * may hand the sheet. A read-back after commit could count a foreign write the sheet never showed.
+ */
+export interface FieldWriterAnswer {
+  ok: boolean
+  error?: string | null
+  atomicResults?: unknown[]
+  currentVersion?: number
+  versionOf?: 'product' | 'channelListing'
+}
 
 let fieldWriter: FormulaFieldWriter | null = null
 
@@ -567,7 +580,7 @@ async function writeValue(
   atomic?: () => unknown[],
   expectedVersion?: number,
   dryRun = false,
-): Promise<{ atomicResults?: unknown[] }> {
+): Promise<FieldWriterAnswer> {
   // #775 — delegated to the ordinary cell writer. Everything this used to do by
   // hand (the master allow-list, the channel column mapping, the `attr_*` merge
   // with its marketplace context, the select validation, the CAS, the audit row)
@@ -609,7 +622,7 @@ async function writeValue(
 // Set / delete / restore
 // ────────────────────────────────────────────────────────────────────
 
-export interface SetFormulaResult {
+export interface SetFormulaResult extends FormulaRowVersion {
   formula: CellFormulaRow
   value: unknown
   error: string | null
@@ -619,6 +632,40 @@ export interface SetFormulaResult {
   warnings: string[]
   /** Other cells on this product that were re-evaluated because they read this field. */
   cascaded: Array<{ fieldKey: string; scope: FormulaScope; value: unknown; error: string | null }>
+}
+
+/**
+ * G4 (2026-10-13) — the row a formula write moved, in the bulk route's own terms, so the sheet's writer can go on from
+ * it instead of sending the version from before the formula (409 "Another change landed first" on the page's own next
+ * edit). `versionOf` names the row (`product`, or for a channel-listing column the `channelListing` with its id);
+ * `versionBefore` is the version the write's own compare-and-set was sent with; `currentVersion` is the version the
+ * ordinary writer answered from INSIDE that write's transaction — never a read-back after commit (review of #614: a
+ * foreign write between the commit, the audit row and the cascade was counted, the sheet adopted it, and its next
+ * stamped save overwrote that write unseen). The cascade's own bumps are not in it either: the sheet's next save then
+ * goes through the field-stamp check. The sheet adopts `currentVersion` only when `versionBefore` is the version it
+ * holds. Absent when nothing of the row was written, or the writer named another row.
+ */
+export interface FormulaRowVersion {
+  currentVersion?: number
+  versionOf?: 'product' | 'channelListing'
+  versionBefore?: number
+  listingId?: string
+}
+
+/** The written row as the write found it (`ctx`) — the version its compare-and-set is sent with. */
+function rowBeforeWrite(col: { writeTarget?: string }, ctx: { product?: { version?: number } | null; channelListing?: { id?: string; version?: number } | null }) {
+  if (col.writeTarget === 'channelListing') {
+    const listing = ctx.channelListing
+    return listing?.id && typeof listing.version === 'number' ? { versionOf: 'channelListing' as const, id: listing.id, version: listing.version } : null
+  }
+  const version = ctx.product?.version
+  return typeof version === 'number' ? { versionOf: 'product' as const, version } : null
+}
+
+/** `FormulaRowVersion` for a written row: the writer's in-transaction answer, only when it names the same row. */
+function rowVersionAnswer(before: ReturnType<typeof rowBeforeWrite>, wrote: FieldWriterAnswer | null): FormulaRowVersion {
+  if (!before || !wrote || typeof wrote.currentVersion !== 'number' || wrote.versionOf !== before.versionOf) return {}
+  return { currentVersion: wrote.currentVersion, versionOf: before.versionOf, versionBefore: before.version, ...(before.versionOf === 'channelListing' ? { listingId: before.id } : {}) }
 }
 
 export function formulaStateToken(ctx: Awaited<ReturnType<typeof loadContext>>, formula?: { expr: string; version?: number; lastError?: string | null } | null): string {
@@ -756,6 +803,7 @@ export async function setCellFormula(input: CellCoordinate & {
   // moved rather than implying it. Taken from the context that was already
   // loaded; no extra query.
   const versionBefore = (ctx.product as unknown as { version?: number } | null)?.version ?? null
+  const written = rowBeforeWrite(col, ctx)
 
   const existing = await findFormulaAt(input)
   const mutation = () => prisma.cellFormula.upsert({
@@ -778,8 +826,8 @@ export async function setCellFormula(input: CellCoordinate & {
 
   // An invalid expression is retained for correction while the previous value stays intact.
   // A valid expression and its materialised result commit in the ordinary writer's transaction.
-  const saved = effectiveError ? await mutation() :
-    (await writeValue(input, normalisedValue, col, () => [mutation()], col.writeTarget === 'channelListing' ? ctx.channelListing?.version : ctx.product.version)).atomicResults?.[0] as Awaited<ReturnType<typeof mutation>>
+  const wrote = effectiveError ? null : await writeValue(input, normalisedValue, col, () => [mutation()], col.writeTarget === 'channelListing' ? ctx.channelListing?.version : ctx.product.version)
+  const saved = wrote ? wrote.atomicResults?.[0] as Awaited<ReturnType<typeof mutation>> : await mutation()
   if (!saved) throw new Error('The formula transaction did not return its saved expression.')
   const versionAfter =
     (await prisma.product.findUnique({ where: { id: input.productId }, select: { version: true } }))?.version ?? null
@@ -837,6 +885,7 @@ export async function setCellFormula(input: CellCoordinate & {
     ...(refusal ? { allowedOptions: refusal.allowedOptions, actualValue: refusal.actualValue } : {}),
     warnings: [...outcome.warnings, ...(optionWarning ? [optionWarning] : [])],
     cascaded,
+    ...rowVersionAnswer(written, wrote),
   }
 }
 
@@ -949,6 +998,7 @@ export async function setCellLiteral(input: CellCoordinate & {
   const verdict = optionVerdict({ column: col, catalogueField: await catalogueFieldFor(input), value: input.value, channel: input.scope === 'channel' ? input.channel : null })
   if (verdict.ok === false) throw new Error(verdict.error)
   const literalWarning = verdict.warning
+  const written = rowBeforeWrite(col, ctx)
   const atomic = () => [
     prisma.cellFormula.deleteMany({ where: existing ? { id: existing.id } : whereCoord(input).productId_scope_channel_marketplace_locale_fieldKey }),
     ...(existing ? [prisma.auditLog.create({ data: {
@@ -958,12 +1008,12 @@ export async function setCellLiteral(input: CellCoordinate & {
         market: input.market ?? null, expr: existing.expr, dependsOn: existing.dependsOn, language: normalizeLanguage(input.locale || PRIMARY_CONTENT_LOCALE), contentAddress: input.contentAddress } as any,
     } })] : []),
   ]
-  await writeValue(input, verdict.value, col, atomic,
+  const wrote = await writeValue(input, verdict.value, col, atomic,
     col.writeTarget === 'channelListing' ? ctx.channelListing?.version : ctx.product.version)
   const cascaded = await reevaluateDependents({ productId: input.productId, changedFields: [input.fieldKey],
     updatedBy: input.updatedBy, ip: input.ip,
     ...(col.writeTarget === 'channelListing' && input.channel && input.marketplace ? { coordinate: { channel: input.channel, marketplace: input.marketplace, channelConnectionId: input.channelConnectionId, aliasKey: input.aliasKey, locale: input.locale } } : {}) })
-  return { ok: true, value: verdict.value, ...(literalWarning ? { warnings: [literalWarning] } : {}), cascaded }
+  return { ok: true, value: verdict.value, ...(literalWarning ? { warnings: [literalWarning] } : {}), cascaded, ...rowVersionAnswer(written, wrote) }
 }
 
 /** Restore an operation snapshot, including a formula that had kept its last valid value. */

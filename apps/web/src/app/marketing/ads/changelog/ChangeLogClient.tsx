@@ -198,8 +198,9 @@ export function ChangeLogClient() {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}),
       })
       const j = await r.json().catch(() => null)
+      // Group 3 — a change of the set that no longer stands is not put back: the answer says which ("Changed since: now …").
       setUndoMsg(r.ok && j?.reversed
-        ? `Undone — ${j.reversed} change${j.reversed === 1 ? '' : 's'} reversed. The reversal is queued through the normal write path and appears in this log as its own entry.`
+        ? `Undone — ${j.reversed} change${j.reversed === 1 ? '' : 's'} reversed. The reversal is queued through the normal write path and appears in this log as its own entry.${j.changedSince && j.reason ? ` ${j.reason}` : ''}`
         : (j?.reason ?? 'Could not undo that change.'))
       if (r.ok && j?.reversed) { setUndoing(null); load() }
     } catch { setUndoMsg('Request failed — please retry.') }

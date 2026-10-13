@@ -30,7 +30,7 @@ import { Button, InfoTip, Pill } from '@/design-system/primitives';
 import { SheetTransfer } from '../../transfer/SheetTransfer';
 import { FormulaBulkDialog } from '../FormulaBulkDialog';
 import { FormulaHistoryDialog } from '../FormulaHistoryDialog';
-import { ExpandButton, ExpandSlot, IdentityBand, BAND_WIDTH_FLOOR, useExpanded, ProvenanceMark, actionContextMenu, actionMenuItems, useActionConfirm, useActionPress, GridExportRefused, writeGate, exprOf, isFormulaDraft, landOnCell, type FormulaCandidate, type ColDef, type ICellRendererParams, type PrefsBridgeOptions } from '@/design-system/grid';
+import { ExpandButton, ExpandSlot, IdentityBand, BAND_WIDTH_FLOOR, useExpanded, ProvenanceMark, actionContextMenu, actionMenuItems, useActionConfirm, useActionPress, GridExportRefused, writeGate, isFormulaDraft, landOnCell, type FormulaCandidate, type ColDef, type ICellRendererParams, type PrefsBridgeOptions } from '@/design-system/grid';
 import { getBackendUrl } from '@/lib/backend-url';
 import { ClassificationDialog } from './ClassificationDialog';
 import { SCOPE_PROGRESS_COLUMN, SHARED_PROGRESS_TIP, coordinateProgressValue, coordinateReadinessColumns, listingsHref, progressColumn, progressSheetColumn, refreshProgressItem, rowProgressValue, sheetFieldAction, studioFieldHref, withoutProgressColumns, type ColumnPresence } from '../progressColumns';
@@ -50,6 +50,8 @@ import { familyOps } from './familyOps';
 import { FamilySelectionVerbs } from './FamilySelectionBar';
 import { useFamily } from './useFamily';
 import { useCellFormulas } from '../../useCellFormulas';
+import { sheetFormulaLine } from '../formulaWriteLine';
+import { formulaWriteOutcome, sendFormulaEdit, type RecordSheetEdit } from '../formulaUndo';
 import { HELD_EDIT_DROPPED, HELD_FOR_FORMULAS } from '../../formulaReadiness';
 import { cellOf, editRefusalReason } from './columnRules';
 import type { SheetColumn, StudioRow } from './types';
@@ -202,7 +204,8 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     /* P0 — the studio read's rows already say which cells hold a formula. Not a legacy read (it carries none) and not the
        previous language's sheet, which stays on screen while the next one loads. */
     const formulaSeedRows = useMemo(() => sheet?.meta.source === 'studio' && sheet.scope.locale === locale ? sheet.rows.map(row => ({ rowId: row.id, values: row.values })) : undefined, [sheet, locale]);
-    const formulas = useCellFormulas({ writeFacts: (rowId, fieldKey) => sheet?.rows.find(row => row.id === rowId)?.values[fieldKey], productId, market, locale, columnKeys: sheet?.columns.map(column => column.key), rowIds: formulaRowIds, seedRows: formulaSeedRows, onSettled: refresh, onValueSaved: (rowId, fieldKey, value) => {
+    /* G4 — formula writes take their turn in the sheet writer's line for their row (`../formulaWriteLine.ts`). */
+    const formulas = useCellFormulas({ writeFacts: (rowId, fieldKey) => sheet?.rows.find(row => row.id === rowId)?.values[fieldKey], productId, market, locale, columnKeys: sheet?.columns.map(column => column.key), rowIds: formulaRowIds, seedRows: formulaSeedRows, onSettled: refresh, writeLine: sheetFormulaLine(() => writer), onValueSaved: (rowId, fieldKey, value) => {
             const node = getGridApi()?.getRowNode(rowId);
             if (!node?.data)
                 return;
@@ -224,6 +227,8 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     const colIdOfRef = useCallback((name: string, fieldKey?: string): string | null => formulaColumnId(sheet?.columns ?? [], name, fieldKey, locale), [sheet, locale]);
     const formulaLive = useRef({ candidatesFor, formulas, colIdOfRef });
     formulaLive.current = { candidatesFor, formulas, colIdOfRef };
+    /* G5 — the sheet's ⌘Z history, for a formula the cell editor replaces with a value itself. Assigned once `undo` exists. */
+    const recordEditRef = useRef<RecordSheetEdit>(() => () => undefined);
     /* Option A (2026-09-26) — the cell editor's AI draft, history and "follows" context. Assigned below, once the AI layer
        and the drawer scope exist; read through this ref so the wiring stays one stable object. */
     const editorContextLive = useRef<(row: StudioRow, key: string) => CellEditorContext | null>(() => null);
@@ -231,7 +236,8 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         candidatesFor: (row: StudioRow, fieldKey?: string) => formulaLive.current.candidatesFor(row, fieldKey),
         preview: (rowId: string, fieldKey: string, expr: string, signal?: AbortSignal) => formulaLive.current.formulas.preview(rowId, fieldKey, expr, signal),
         functions: () => formulaLive.current.formulas.functions,
-        replaceFormula: (rowId: string, fieldKey: string, value: unknown) => formulaLive.current.formulas.replace(rowId, fieldKey, value),
+        // G5 — the editor's own "replace the formula with this value" is a step of ⌘Z too.
+        replaceFormula: (rowId: string, fieldKey: string, value: unknown) => sendFormulaEdit({ rowId, colId: fieldKey, value, before: value }, formulaLive.current.formulas, recordEditRef.current),
         unavailableReason: (rowId: string | undefined, fieldKey: string) => formulaLive.current.formulas.unavailableFor(rowId, fieldKey),
         retry: () => formulaLive.current.formulas.reload(),
         sourceLabel: (fieldKey?: string) => formulaLive.current.formulas.sourceLabelFor(fieldKey),
@@ -334,10 +340,30 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             row.values = { ...row.values, [colId]: shown };
         }
         api.refreshCells({ rowNodes: [node], columns: [colId], force: true });
+        /* G5 — a cell that holds a formula (one typed over the inherited value) drops it first, in the row's write line; the
+           reset then removes the value it kept — the cell menu's own order (`useSheetControl.reset`). A formula that cannot
+           be removed leaves the cell refused, and no reset is sent. */
+        const sheetFormulas = formulaLive.current.formulas;
+        if (sheetFormulas.exprFor(rowId, colId)) {
+            tracker.set(rowId, colId, 'saving');
+            void sheetFormulas.pinOver(rowId, colId).then((removed) => {
+                if (removed.ok) {
+                    writer.set(rowId, colId, null, { row: getGridApi()?.getRowNode(rowId)?.data ?? row, intent: before.intent, onOutcome });
+                    return;
+                }
+                onOutcome(formulaWriteOutcome(removed));
+                if (removed.dropped) return;
+                tracker.set(rowId, colId, 'refused', removed.error ?? 'The formula could not be removed.');
+                const n = getGridApi()?.getRowNode(rowId);
+                if (n) getGridApi()?.refreshCells({ rowNodes: [n], columns: [colId], force: true });
+            });
+            return;
+        }
         writer.set(rowId, colId, null, { row, intent: before.intent, onOutcome });
-    }, [getGridApi, writer]);
+    }, [getGridApi, writer, tracker]);
     /* ⌘Z undoes a whole operation (a fill, a paste) in one step and one save, and still works after the sheet re-reads. */
     const undo = useSheetUndo(writer, getGridApi, { tracker, resetCell: resetCellBack });
+    recordEditRef.current = undo.edit;
     const { toast } = useToast();
     /* Add rows (R2) — empty rows in page memory; the SKU typed into one creates a draft variation (`../newRows/`). */
     const familyRoot = rows.find((row) => !row.parentId);
@@ -803,7 +829,10 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         const colId = e.colDef.colId;
         if (identitySku.onValueChanged(e))
             return;
-        if (!writeGate({ colId, source: e.source, selfInflicted: false, oldValue: e.oldValue, newValue: e.newValue }).write)
+        /* G5 — an undo or redo that puts a value back over a formula is a change even when the formula shows that same
+           value: the formula goes. */
+        const replayOverFormula = (e.source === 'undo' || e.source === 'redo') && !!formulas.exprFor(e.data.id, colId!);
+        if (!writeGate({ colId, source: e.source, selfInflicted: false, ...(replayOverFormula ? {} : { oldValue: e.oldValue, newValue: e.newValue }) }).write)
             return;
         /* P0 — a cell whose formula state is not known yet keeps the edit and applies it once it is (the formula path if
            the cell turns out to hold one). Never refused: the refusal lost every paste made while formulas loaded. */
@@ -828,6 +857,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         }
         const typed = typeof e.newValue === 'string' ? e.newValue : null;
         if ((typed !== null && isFormulaDraft(typed)) || formulas.exprFor(e.data.id, colId!)) {
+            // Read while the row still holds the edited cell (its noted prior goes with it).
             const before = beforeOf();
             const prev = cellOf(e.data, colId!);
             if (prev) {
@@ -839,8 +869,13 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             const writeId = `${e.data.id}:${colId}:${Date.now()}`;
             onWriteStart(writeId, e.data.id);
             tracker.set(e.data.id, colId!, 'saving');
-            void (typed !== null && isFormulaDraft(typed) ? formulas.save(e.data.id, colId!, exprOf(typed)) : formulas.replace(e.data.id, colId!, e.newValue))
+            /* G4 + G5 — the formula write takes its turn in the row's write line (`../formulaWriteLine.ts`), and the edit is a
+               step of ⌘Z, kept only if it is stored (`../formulaUndo.ts`). */
+            void sendFormulaEdit({ rowId: e.data.id, colId: colId!, value: e.newValue, before, source: e.source }, formulas, undo.edit)
                 .then((r) => {
+                // Discarded with the sheet's other edits (Reload): the read that follows paints the cell.
+                if (r.dropped)
+                    return;
                 onWriteEnd(writeId, r.ok, r.error, e.data.id);
                 tracker.set(e.data.id, colId!, r.ok ? 'saved' : 'refused', r.error);
                 if (!r.ok) {
@@ -851,15 +886,13 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
                         if (n)
                             getGridApi()?.refreshCells({ force: true, rowNodes: [n], columns: [colId!] });
                     }
-                    // The cell shows the refused value; the server still holds `before` (finding 4).
-                    undo.unsaved({ rowId: e.data.id, colId: colId!, before, after: e.newValue });
+                    // The cell shows the refused value; the history heard the refusal and keeps what the server holds.
                 }
             })
                 .catch((err: unknown) => {
                 const reason = err instanceof Error ? err.message : String(err);
                 onWriteEnd(writeId, false, reason, e.data.id);
                 tracker.set(e.data.id, colId!, 'unknown', `Could not reach the server — ${reason}. Refresh to see whether this saved.`);
-                undo.unsaved({ rowId: e.data.id, colId: colId!, before, after: e.newValue });
             });
             return;
         }

@@ -103,6 +103,16 @@ export function nextDailyBudget(current: number, mode: BudgetMode, value: number
     : { value: next, atMinimum: false }
 }
 
+/**
+ * Editing correctness (group 3) — what one campaign's bulk Set / ±% sends: the new budget AND the budget it was worked out
+ * from (`expectedDailyBudget`). The list on screen can be up to 5 minutes old (the API's read cache), so the server
+ * refuses the campaign when its budget is no longer that one ("Changed since: now …"): "+10 %" never lands on a budget a
+ * schedule or an engine has moved since.
+ */
+export function bulkBudgetPatch(current: number, mode: BudgetMode, value: number): { dailyBudget: number; expectedDailyBudget: number } {
+  return { dailyBudget: nextDailyBudget(current, mode, value).value, expectedDailyBudget: current }
+}
+
 /** What a Set / ±% change sends to a set of campaigns: the lowest and highest new budget, and how many stop at €1.00. */
 export function summariseBudgetChange(currents: number[], mode: BudgetMode, value: number): { lowest: number; highest: number; atMinimum: number } | null {
   if (currents.length === 0) return null

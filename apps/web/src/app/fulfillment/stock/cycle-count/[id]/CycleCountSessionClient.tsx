@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from '@/lib/workspaces/navigation'
 import {
   AlertCircle,
@@ -23,6 +23,7 @@ import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
+import { countSave, type CountSave } from './countSave'
 
 interface CountItem {
   id: string
@@ -94,7 +95,8 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
   const [data, setData] = useState<CountSession | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [actingId, setActingId] = useState<string | null>(null)
+  // Items with a write waiting or in flight — each its own state (countSave.ts), never one shared id.
+  const [busyItems, setBusyItems] = useState<ReadonlySet<string>>(() => new Set())
   const [busyTopAction, setBusyTopAction] = useState<string | null>(null)
   const [filter, setFilter] = useState<StatusFilter>('all')
   // Per-item input draft so the operator can type a number then commit on blur.
@@ -110,26 +112,48 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
   const [reasonInput, setReasonInput] = useState('')
   const [reasonSubmitting, setReasonSubmitting] = useState(false)
 
-  const fetchData = useCallback(async () => {
-    try {
-      setLoading(true)
-      const res = await fetch(
-        `${getBackendUrl()}/api/fulfillment/cycle-counts/${countId}`,
-        { cache: 'no-store' },
-      )
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body.error ?? `HTTP ${res.status}`)
-      }
-      const json = await res.json()
-      setData(json.count ?? null)
-      setError(null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setLoading(false)
+  // One save line (countSave.ts): the page's writes go one at a time; reads are ticketed and kept off the screen while
+  // a write is waiting or in flight; the page reads again once its last write has settled; a recorded count's draft
+  // stays on screen until a read that includes it.
+  const saveRef = useRef<{ countId: string; save: CountSave } | null>(null)
+  if (saveRef.current?.countId !== countId) {
+    saveRef.current = {
+      countId,
+      save: countSave<CountSession | null>({
+        read: async () => {
+          const res = await fetch(
+            `${getBackendUrl()}/api/fulfillment/cycle-counts/${countId}`,
+            { cache: 'no-store' },
+          )
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}))
+            throw new Error(body.error ?? `HTTP ${res.status}`)
+          }
+          const json = await res.json()
+          return (json.count ?? null) as CountSession | null
+        },
+        paint: (session, settled) => {
+          setData(session)
+          setError(null)
+          setLoading(false)
+          if (settled.length > 0) {
+            setDrafts((d) => {
+              const next = { ...d }
+              for (const { itemId, draft } of settled) if (next[itemId] === draft) delete next[itemId]
+              return next
+            })
+          }
+        },
+        readFailed: (err) => {
+          setError(err instanceof Error ? err.message : String(err))
+          setLoading(false)
+        },
+        busy: (ids) => setBusyItems(ids),
+      }),
     }
-  }, [countId])
+  }
+  const save = saveRef.current.save
+  const fetchData = save.refresh
 
   useEffect(() => {
     fetchData()
@@ -174,16 +198,17 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
   const handleStart = async () => {
     setBusyTopAction('start')
     try {
-      const res = await fetch(
-        `${getBackendUrl()}/api/fulfillment/cycle-counts/${countId}/start`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' },
-      )
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body.error ?? `HTTP ${res.status}`)
-      }
+      await save.write(async () => {
+        const res = await fetch(
+          `${getBackendUrl()}/api/fulfillment/cycle-counts/${countId}/start`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' },
+        )
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          throw new Error(body.error ?? `HTTP ${res.status}`)
+        }
+      })
       toast.success(t('cycleCount.session.startedToast'))
-      await fetchData()
     } catch (err) {
       toast.error(t('cycleCount.session.startFailed', { error: err instanceof Error ? err.message : String(err) }))
     } finally {
@@ -200,14 +225,16 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
     }))) return
     setBusyTopAction('complete')
     try {
-      const res = await fetch(
-        `${getBackendUrl()}/api/fulfillment/cycle-counts/${countId}/complete`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' },
-      )
-      const body = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`)
+      // In line: Complete waits for every count before it.
+      await save.write(async () => {
+        const res = await fetch(
+          `${getBackendUrl()}/api/fulfillment/cycle-counts/${countId}/complete`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' },
+        )
+        const body = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`)
+      })
       toast.success(t('cycleCount.session.completedToast'))
-      await fetchData()
     } catch (err) {
       toast.error(t('cycleCount.session.completeFailed', { error: err instanceof Error ? err.message : String(err) }))
     } finally {
@@ -225,20 +252,21 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
   const performCancel = async (reason: string | null) => {
     setBusyTopAction('cancel')
     try {
-      const res = await fetch(
-        `${getBackendUrl()}/api/fulfillment/cycle-counts/${countId}/cancel`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reason }),
-        },
-      )
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body.error ?? `HTTP ${res.status}`)
-      }
+      await save.write(async () => {
+        const res = await fetch(
+          `${getBackendUrl()}/api/fulfillment/cycle-counts/${countId}/cancel`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason }),
+          },
+        )
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          throw new Error(body.error ?? `HTTP ${res.status}`)
+        }
+      })
       toast.success(t('cycleCount.session.cancelledToast'))
-      await fetchData()
     } catch (err) {
       toast.error(t('cycleCount.session.cancelFailed', { error: err instanceof Error ? err.message : String(err) }))
     } finally {
@@ -254,44 +282,41 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
       toast.error(t('cycleCount.session.qtyInvalid'))
       return
     }
-    setActingId(item.id)
+    // This count is already waiting, in flight, or saved and not read back yet: a second blur sends nothing.
+    if (save.held(item.id) === raw) return
     try {
-      const res = await fetch(
-        `${getBackendUrl()}/api/fulfillment/cycle-counts/${countId}/items/${item.id}`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ countedQuantity: qty }),
-        },
-      )
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body.error ?? `HTTP ${res.status}`)
-      }
-      // Clear draft now that it's committed
-      setDrafts((d) => {
-        const { [item.id]: _, ...rest } = d
-        return rest
-      })
-      await fetchData()
+      // The draft stays on screen until a read that includes this count (countSave.ts), then goes.
+      await save.write(async () => {
+        const res = await fetch(
+          `${getBackendUrl()}/api/fulfillment/cycle-counts/${countId}/items/${item.id}`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ countedQuantity: qty }),
+          },
+        )
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          throw new Error(body.error ?? `HTTP ${res.status}`)
+        }
+      }, { itemId: item.id, draft: raw })
     } catch (err) {
       toast.error(t('cycleCount.session.recordFailed', { error: err instanceof Error ? err.message : String(err) }))
-    } finally {
-      setActingId(null)
     }
   }
 
   const handleReconcile = async (item: CountItem) => {
-    setActingId(item.id)
     try {
-      const res = await fetch(
-        `${getBackendUrl()}/api/fulfillment/cycle-counts/${countId}/items/${item.id}/reconcile`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' },
-      )
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body.error ?? `HTTP ${res.status}`)
-      }
+      await save.write(async () => {
+        const res = await fetch(
+          `${getBackendUrl()}/api/fulfillment/cycle-counts/${countId}/items/${item.id}/reconcile`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' },
+        )
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          throw new Error(body.error ?? `HTTP ${res.status}`)
+        }
+      }, { itemId: item.id })
       const variance = (item.countedQuantity ?? 0) - item.expectedQuantity
       toast.success(
         variance === 0
@@ -302,11 +327,8 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
               n: variance,
             }),
       )
-      await fetchData()
     } catch (err) {
       toast.error(t('cycleCount.session.reconcileFailed', { error: err instanceof Error ? err.message : String(err) }))
-    } finally {
-      setActingId(null)
     }
   }
 
@@ -316,26 +338,24 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
   }
 
   const performIgnore = async (itemId: string, sku: string, notes: string | null) => {
-    setActingId(itemId)
     try {
-      const res = await fetch(
-        `${getBackendUrl()}/api/fulfillment/cycle-counts/${countId}/items/${itemId}/ignore`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ notes }),
-        },
-      )
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body.error ?? `HTTP ${res.status}`)
-      }
+      await save.write(async () => {
+        const res = await fetch(
+          `${getBackendUrl()}/api/fulfillment/cycle-counts/${countId}/items/${itemId}/ignore`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ notes }),
+          },
+        )
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          throw new Error(body.error ?? `HTTP ${res.status}`)
+        }
+      }, { itemId })
       toast.success(t('cycleCount.session.ignoredToast', { sku }))
-      await fetchData()
     } catch (err) {
       toast.error(t('cycleCount.session.ignoreFailed', { error: err instanceof Error ? err.message : String(err) }))
-    } finally {
-      setActingId(null)
     }
   }
 
@@ -680,7 +700,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                                 e.currentTarget.blur()
                               }
                             }}
-                            disabled={actingId === it.id}
+                            disabled={busyItems.has(it.id)}
                             className="mt-0.5 w-24 h-11 px-2 text-right tabular-nums text-base border border-default dark:border-slate-700 rounded focus:outline-none focus:ring-2 focus:ring-blue-300"
                             placeholder="—"
                           />
@@ -709,10 +729,10 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                         <button
                           type="button"
                           onClick={() => handleReconcile(it)}
-                          disabled={actingId === it.id}
+                          disabled={busyItems.has(it.id)}
                           className="flex-1 inline-flex items-center justify-center gap-1 min-h-[44px] px-3 text-sm font-medium text-white bg-green-600 border border-green-600 rounded hover:bg-green-700 disabled:opacity-50"
                         >
-                          {actingId === it.id ? (
+                          {busyItems.has(it.id) ? (
                             <Loader2 className="w-3.5 h-3.5 animate-spin" />
                           ) : (
                             <Check className="w-3.5 h-3.5" />
@@ -723,7 +743,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                           <button
                             type="button"
                             onClick={() => handleIgnore(it)}
-                            disabled={actingId === it.id}
+                            disabled={busyItems.has(it.id)}
                             className="flex-1 inline-flex items-center justify-center gap-1 min-h-[44px] px-3 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
                           >
                             <SkipForward className="w-3.5 h-3.5" />
@@ -800,7 +820,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                                 e.currentTarget.blur()
                               }
                             }}
-                            disabled={actingId === it.id}
+                            disabled={busyItems.has(it.id)}
                             className="w-24 h-11 sm:h-8 px-2 text-right tabular-nums text-base border border-default dark:border-slate-700 rounded focus:outline-none focus:ring-2 focus:ring-blue-300"
                             placeholder="—"
                           />
@@ -840,7 +860,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                             <button
                               type="button"
                               onClick={() => handleReconcile(it)}
-                              disabled={actingId === it.id}
+                              disabled={busyItems.has(it.id)}
                               className="inline-flex items-center gap-1 min-h-[44px] sm:min-h-0 px-2 py-1 text-sm font-medium text-white bg-green-600 border border-green-600 rounded hover:bg-green-700 disabled:opacity-50"
                               title={
                                 isVarianceZero
@@ -848,7 +868,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                                   : t('cycleCount.session.actionReconcileTitle')
                               }
                             >
-                              {actingId === it.id ? (
+                              {busyItems.has(it.id) ? (
                                 <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
                               ) : (
                                 <Check className="w-3 h-3" aria-hidden="true" />
@@ -859,7 +879,7 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                               <button
                                 type="button"
                                 onClick={() => handleIgnore(it)}
-                                disabled={actingId === it.id}
+                                disabled={busyItems.has(it.id)}
                                 className="inline-flex items-center gap-1 min-h-[44px] sm:min-h-0 px-2 py-1 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
                                 title={t('cycleCount.session.actionIgnoreTitle')}
                               >

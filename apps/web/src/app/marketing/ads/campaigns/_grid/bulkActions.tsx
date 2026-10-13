@@ -2,8 +2,9 @@
 
 /**
  * CBN.3 — shared bulk-action helpers for the AdsDataGrid `selectionActions` slot. `bulkPatch`
- * fires one PATCH per selected id against /api/advertising/<base>/<id>; AdjustBidModal is the
- * shared "set bid for N selected" dialog used by Ad Groups (Default Bid) and Targets (Bid).
+ * fires one PATCH per selected id against /api/advertising/<base>/<id>; `bulkBid` sends many
+ * keyword / target bids in one request; AdjustBidModal is the shared "set bid for N selected"
+ * dialog used by Ad Groups (Default Bid) and Targets (Bid).
  */
 import { useState } from 'react'
 import { Button, Input } from '@/design-system/primitives'
@@ -11,6 +12,8 @@ import { Field, Modal } from '@/design-system/components'
 import '../campaigns-ds.css'
 
 import { SEND_NOW, adsWriteEach, type EachResult } from '../../_shared/adsWrite'
+import { sendBids } from '../../rules-automation/bid/bids/bidsApi'
+import { eachOfSent } from './targetBids'
 
 /**
  * PATCH the same body to /api/advertising/<base>/<id> for every id. CM-11 — it reads every answer now: which ids changed
@@ -19,6 +22,16 @@ import { SEND_NOW, adsWriteEach, type EachResult } from '../../_shared/adsWrite'
  */
 export async function bulkPatch(base: string, ids: string[], body: Record<string, unknown>): Promise<EachResult> {
   return adsWriteEach(base, ids, { ...body, ...SEND_NOW })
+}
+
+/**
+ * Editing correctness (group 3) — many keyword / target bids in ONE request: POST /api/advertising/ad-targets/bulk-bid, the
+ * route the Bid page's Change bid sends through (sendBids: sent now, "Send anyway" past his own limits, each row's own
+ * answer). Each bid is its own change with its own Undo in the change feed. Never throws.
+ */
+export async function bulkBid(entries: ReadonlyArray<{ id: string; bidCents: number }>, reason: string): Promise<EachResult> {
+  if (!entries.length) return { done: [], queued: 0, failed: [] }
+  return eachOfSent(await sendBids(entries.map((e) => ({ targetId: e.id, bidCents: e.bidCents })), reason))
 }
 
 export function AdjustBidModal({ count, noun, bidLabel = 'Bid', currency = '€', onClose, onApply }: {
