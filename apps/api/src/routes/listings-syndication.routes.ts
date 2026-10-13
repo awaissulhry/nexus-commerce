@@ -31,7 +31,7 @@ import { isStillDraftListing } from '@nexus/shared/push-lock'
 import { isManagedShopifyAttribute } from '../services/shopify/linked-state-guard.js'
 import { applyListingBulkPricing, assertPriceEditAllowed, bulkFollowChangesOf, ListingPricingError, parseListingPricingEdit, patchListing, PRICE_ABOVE_ZERO, restoreBulkFollowFlags, type BulkFollowChange, type BulkFollowFlagsBefore, type ListingPricingEdit } from '../services/listings/listing-pricing-edit.service.js'
 import { inDatabaseTransaction } from '../lib/database-context.js'
-import { listingVersionOf, setListingQuantityFollow, writeListingCellThroughMatrix, type ListingMatrixCell } from '../services/listings/listing-matrix-cell.service.js'
+import { setListingQuantityFollow, writeListingCellThroughMatrix, type ListingMatrixCell } from '../services/listings/listing-matrix-cell.service.js'
 import { permissionCheckerFor } from './studio-matrix.routes.js'
 import { adjustmentPercentProblem, normalisePricingRule, PRICING_RULE_REFUSAL } from '@nexus/shared/listing-price'
 import { connectionLabel, connectionLabelDirectory } from '../services/connection-label.js'
@@ -1341,7 +1341,13 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         if (err instanceof ListingPricingError) return reply.code(err.statusCode).send({ error: err.message, ...err.details })
         throw err
       }
-      const fresh = await listingVersionOf(id)
+      // The version THIS request wrote, from its own writes' compare-and-sets — never a read after the commit, which may
+      // already carry someone else's next write (the listing drawer sends its next write at this version, so it would
+      // pass over that write unseen). The quantity step counts only when it started from the version the first step
+      // left; when another write landed between the two, the answer stays at the first step's version and the caller's
+      // next write is checked against the listing as it is.
+      let version: number | null = updated ? updated.version : null
+      if (quantity && (version === null || quantity.from === version)) version = quantity.version
       // S.4 — broadcast so other tabs / cells refresh within 200ms.
       publishListingEvent({ type: 'listing.updated', listingId: id, reason: 'patch', ts: Date.now() })
       // ES.2 — persist the change to the immutable event log.
@@ -1356,7 +1362,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       })
       return {
         ok: true,
-        listing: { id, version: fresh ?? updated?.version ?? null },
+        listing: { id, version },
         // A price change that was saved but not sent says why (another currency, paused, a draft, Match Amazon…).
         ...(updated?.notSent ? { notSent: updated.notSent } : {}),
         queued: updated?.queueId != null,

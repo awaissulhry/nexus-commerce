@@ -1059,7 +1059,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
       // service call mutates anything.
       const current = await prisma.product.findUnique({
         where: { id },
-        select: { id: true, totalStock: true, version: true },
+        select: { id: true, totalStock: true, version: true, updatedAt: true },
       })
       if (!current) {
         return reply.code(404).send({ error: 'Product not found' })
@@ -1132,6 +1132,17 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
       // No-op PATCH (empty body). Return the current state without bumping
       // version — caller may be polling with no actual change to write.
       if (!hasMutations) {
+        // The version is checked here too: answering the version read now to a caller whose If-Match is older would
+        // tell it that a change it never saw was its own (the product grid sends its next cell at what it is answered).
+        if (expectedVersion !== undefined && expectedVersion !== current.version) {
+          return reply.code(409).send({
+            error: 'Product version mismatch — another change landed first',
+            code: 'VERSION_CONFLICT',
+            expectedVersion,
+            currentVersion: current.version,
+            currentUpdatedAt: current.updatedAt.toISOString(),
+          })
+        }
         return {
           id,
           version: current.version,
@@ -1145,6 +1156,10 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
       // their post-commit BullMQ enqueue when given one — see service
       // docstrings). Version bump owns the lock so the field updates
       // below don't double-increment.
+      // The version THIS edit wrote, from its own version bump inside the transaction (the field writes below never
+      // bump it again). The read after the commit may already carry someone else's next write; answering with it would
+      // let the caller count that write as its own and send its next change over it unseen.
+      let writtenVersion: number | null = null
       try {
         await prisma.$transaction(async (tx) => {
           if (expectedVersion !== undefined) {
@@ -1153,10 +1168,11 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
             // and rethrow as VERSION_CONFLICT so the outer handler can
             // map it to a 409 with the fresh version attached.
             try {
-              await tx.product.update({
+              writtenVersion = (await tx.product.update({
                 where: { id, version: expectedVersion },
                 data: { version: { increment: 1 } },
-              })
+                select: { version: true },
+              })).version
             } catch (err: any) {
               if (err?.code === 'P2025') {
                 throw Object.assign(
@@ -1171,10 +1187,11 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
           } else {
             // No CAS — still bump version so the field is a useful
             // freshness signal even for callers that don't send If-Match.
-            await tx.product.update({
+            writtenVersion = (await tx.product.update({
               where: { id },
               data: { version: { increment: 1 } },
-            })
+              select: { version: true },
+            })).version
           }
 
           if (newBasePrice !== undefined) {
@@ -1301,6 +1318,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
 
       return {
         ...updated,
+        version: writtenVersion ?? updated.version,
         basePrice: Number(updated.basePrice),
       }
     } catch (err: any) {

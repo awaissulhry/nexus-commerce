@@ -10,6 +10,7 @@ import { contentLanguages } from '../services/pim/content-read.js'
  *   GET    /families/:id/effective         — resolver result (uses W2.4)
  *   POST   /families                       — create
  *   PATCH  /families/:id                   — update label/desc/parent
+ *   PUT    /families/:id/attribute-order   — the own attributes' order, in one transaction
  *   DELETE /families/:id                   — delete (cascades:
  *                                              child families → parent SET NULL,
  *                                              attached products → familyId SET NULL,
@@ -27,8 +28,9 @@ import { contentLanguages } from '../services/pim/content-read.js'
 
 import type { FastifyPluginAsync, FastifyReply } from 'fastify'
 import {
-  FamilyAdminError, createFamilyAttribute, createProductFamily, deleteFamilyAttribute, deleteProductFamily, updateFamilyAttribute,
-  updateProductFamily, type FamilyAttributeCreateInput, type FamilyAttributeUpdateInput, type FamilyCreateInput, type FamilyUpdateInput,
+  FamilyAdminError, createFamilyAttribute, createProductFamily, deleteFamilyAttribute, deleteProductFamily, reorderFamilyAttributes,
+  updateFamilyAttribute, updateProductFamily, type FamilyAttributeCreateInput, type FamilyAttributeOrderInput,
+  type FamilyAttributeUpdateInput, type FamilyCreateInput, type FamilyUpdateInput,
 } from '../services/pim/family-admin.service.js'
 import { invalidateAttributeSchemasAfterWrites } from '../services/pim/attribute-schema-invalidation.js'
 import prisma from '../db.js'
@@ -340,6 +342,14 @@ const familiesRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = request.params as { id: string }
     const body = request.body as FamilyAttributeUpdateInput
     return adminReply(reply, async () => ({ familyAttribute: await updateFamilyAttribute(id, body) }))
+  })
+
+  // PUT /api/families/:id/attribute-order — the family's own attributes in their new order, written in one transaction
+  // (Settings › PIM › Families, drag to reorder). Body: { familyAttributeIds: [...every own link, in order] }.
+  fastify.put('/families/:id/attribute-order', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const body = request.body as FamilyAttributeOrderInput
+    return adminReply(reply, () => reorderFamilyAttributes(id, body))
   })
 
   // DELETE /api/family-attributes/:id — detach attribute from family.

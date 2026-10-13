@@ -75,6 +75,7 @@ import { usePermission } from '@/lib/auth/AuthProvider'
 import { adjustmentPercentProblem } from '@nexus/shared/listing-price'
 import { inlineCellPatchBody, priceDriftView } from './listing-price-view'
 import { bulkUndoBody, bulkUndoTargets } from './bulk-undo'
+import { drawerSave, readDrawerListing, RELOAD_FIRST, sendDrawerPatch } from './drawer-save'
 import { usePolledList } from '@/lib/sync/use-polled-list'
 import {
   emitInvalidation,
@@ -4909,21 +4910,32 @@ function ListingDrawer({ id: initialId, onClose, onChanged }: { id: string; onCl
   const [activeTab, setActiveTab] = useState<DrawerTab>('detail')
   const [actionPending, setActionPending] = useState<string | null>(null)
   const { toast } = useToast()
+  // One save line (drawer-save.ts): writes one at a time, each at the version this drawer's own last write left;
+  // reloads ticketed, so an older reload (a toggle's own, or its invalidation echo) never paints over a newer one.
+  const [save] = useState(drawerSave)
+  const shownRef = useRef<any>(null)
+  // The listing the drawer is on now: a reload of another one (started before a switch) is dropped.
+  const idRef = useRef(id)
+  idRef.current = id
 
   const loadListing = useCallback(async () => {
     setLoading(true)
     setError(null)
-    try {
+    const got = await readDrawerListing(save, () => idRef.current, async () => {
       const res = await fetch(`${getBackendUrl()}/api/listings/${id}`, { cache: 'no-store' })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
-      setListing(data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setLoading(false)
+      return res.json()
+    })
+    if (got.kind === 'fresh') {
+      shownRef.current = got.value
+      setListing(got.value)
+      // A write refused only because this read had not landed yet: the read is here now. A real write error stays.
+      setError((shown) => (shown === RELOAD_FIRST ? null : shown))
+    } else if (got.kind === 'failed') {
+      setError(got.error instanceof Error ? got.error.message : String(got.error))
     }
-  }, [id])
+    setLoading(false)
+  }, [id, save])
 
   useEffect(() => {
     loadListing()
@@ -4942,34 +4954,39 @@ function ListingDrawer({ id: initialId, onClose, onChanged }: { id: string; onCl
 
   const patch = useCallback(async (body: any): Promise<boolean> => {
     if (!listing) return false
-    try {
+    // The drawer still shows another listing (it moved to this one and the read has not landed): nothing to check
+    // this write against.
+    if (shownRef.current?.id !== id) {
+      setError(RELOAD_FIRST)
+      return false
+    }
+    // The version is read when this write STARTS, after every drawer write before it (see drawer-save.ts).
+    const sent = await sendDrawerPatch(save, id, () => (shownRef.current?.id === id ? shownRef.current.version : undefined), body, async (withVersion) => {
       const res = await fetch(`${getBackendUrl()}/api/listings/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...body, expectedVersion: listing.version }),
+        body: JSON.stringify(withVersion),
       })
-      const answer = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        setError(answer?.error ?? `HTTP ${res.status}`)
-        return false
-      }
-      // A pricing change was saved but its price not sent (another currency, paused, a draft, Match Amazon…): say so.
-      // When a price was queued, say when it leaves.
-      if (answer?.notSent) toast.warning(answer.notSent)
-      else if (answer?.queued) toast.success('Price recomputed; it is sent to the channel in 30 seconds')
-      // The quantity's follow flag goes through the Studio matrix's Mode write: Amazon EU is one number for the group,
-      // and an Amazon-managed (FBA) quantity is Amazon's.
-      if (answer?.quantity?.note) toast.warning(answer.quantity.note)
-      else if (Array.isArray(answer?.quantity?.expandedTo) && answer.quantity.expandedTo.length > 1) toast.success(`Quantity mode set for the Amazon EU group (${answer.quantity.expandedTo.join(' ')})`)
-      onChanged()
-      emitInvalidation({ type: 'listing.updated', id })
-      await loadListing()
-      return true
-    } catch (e: any) {
-      setError(e?.message ?? String(e))
+      return { ok: res.ok, status: res.status, json: await res.json().catch(() => ({})) }
+    })
+    if (!sent.ok) {
+      setError(sent.error)
       return false
     }
-  }, [id, listing, loadListing, onChanged, toast])
+    const answer = sent.answer
+    // A pricing change was saved but its price not sent (another currency, paused, a draft, Match Amazon…): say so.
+    // When a price was queued, say when it leaves.
+    if (answer?.notSent) toast.warning(answer.notSent)
+    else if (answer?.queued) toast.success('Price recomputed; it is sent to the channel in 30 seconds')
+    // The quantity's follow flag goes through the Studio matrix's Mode write: Amazon EU is one number for the group,
+    // and an Amazon-managed (FBA) quantity is Amazon's.
+    if (answer?.quantity?.note) toast.warning(answer.quantity.note)
+    else if (Array.isArray(answer?.quantity?.expandedTo) && answer.quantity.expandedTo.length > 1) toast.success(`Quantity mode set for the Amazon EU group (${answer.quantity.expandedTo.join(' ')})`)
+    onChanged()
+    emitInvalidation({ type: 'listing.updated', id })
+    await loadListing()
+    return true
+  }, [id, listing, loadListing, onChanged, toast, save])
 
   const resync = async () => {
     setActionPending('resync')
