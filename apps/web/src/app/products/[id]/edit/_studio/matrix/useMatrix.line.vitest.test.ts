@@ -38,8 +38,9 @@ const hooks = vi.hoisted(() => {
 })
 vi.mock('react', async original => ({ ...await original<typeof import('react')>(), ...hooks.react }))
 
-/** The server: the listing's version, the cell writes it received, and a gate that holds the next one. */
-const server = vi.hoisted(() => ({ version: 3, patches: [] as MatrixWriteCell[][], hold: null as null | Promise<void> }))
+/** The server: the listing's version, the cell writes it received (and the account each named), a gate that holds the
+    next one, and whether it answers a conflict. */
+const server = vi.hoisted(() => ({ version: 3, patches: [] as MatrixWriteCell[][], accounts: [] as Array<string | null | undefined>, hold: null as null | Promise<void>, conflict: false }))
 const cellsAt = (version: number) => ({
   listingId: 'L1', version, listing: null, fulfilment: null, sync: null, queue: null, sale: { value: null, start: null, end: null },
   price: { value: 100, currency: 'EUR', source: 'override', formula: null, clamped: null }, writable: { price: true, salePrice: true }, writeBlockedReason: {},
@@ -47,24 +48,31 @@ const cellsAt = (version: number) => ({
 vi.mock('./source', async original => ({
   ...await original<typeof import('./source')>(),
   fetchMatrix: vi.fn(async () => ({ kind: 'live', read: { source: 'live', productId: 'p1', coordinates: [], rows: [{ id: 'r1', cells: { 'EBAY:IT': cellsAt(server.version) } }] } })),
-  patchMatrix: vi.fn(async (_p: string, cells: MatrixWriteCell[]) => {
+  patchMatrix: vi.fn(async (_p: string, cells: MatrixWriteCell[], opts?: { accountId?: string | null }) => {
     server.patches.push(cells)
+    server.accounts.push(opts?.accountId)
     if (server.hold) await server.hold
-    const results: MatrixWriteOutcome[] = cells.map((c) => ({ rowId: c.rowId, coordinateKey: c.coordinateKey, cell: c.cell, outcome: 'applied', version: ++server.version }))
+    // A conflict answers without a sentence of its own: the page says the one sentence.
+    const results: MatrixWriteOutcome[] = cells.map((c) => (server.conflict
+      ? { rowId: c.rowId, coordinateKey: c.coordinateKey, cell: c.cell, outcome: 'conflict', version: server.version }
+      : { rowId: c.rowId, coordinateKey: c.coordinateKey, cell: c.cell, outcome: 'applied', version: ++server.version }))
     return { results, version: 1 }
   }),
 }))
 vi.mock('../useListingValuesLive', () => ({ useListingValuesLive: () => {} }))
 vi.mock('@/lib/sync/invalidation-channel', () => ({ emitInvalidation: () => {} }))
 
+import { MATRIX_COPY } from './contract'
 import { useMatrix, type MatrixState } from './useMatrix'
 
 let current: MatrixState
-const tracker = { set: () => {}, get: () => undefined, clear: () => {} }
+let account: string | null = null
+const marks: Array<[string, string, string, string | undefined]> = []
+const tracker = { set: (rowId: string, colId: string, state: string, reason?: string) => { marks.push([rowId, colId, state, reason]) }, get: () => undefined, clear: () => {} }
 const api = { isDestroyed: () => false, getEditingCells: () => [], refreshCells: () => {}, getRowNode: () => null, addEventListener: () => {}, removeEventListener: () => {} }
 const render = () => {
   hooks.state.index = 0
-  current = useMatrix({ productId: 'p1', accountId: null, locale: null, tracker: tracker as never, getApi: () => api as never })
+  current = useMatrix({ productId: 'p1', accountId: account, locale: null, tracker: tracker as never, getApi: () => api as never })
   for (const effect of hooks.state.effects.splice(0)) effect()
   return current
 }
@@ -79,8 +87,10 @@ const preview: VerbPreview = {
 
 beforeEach(async () => {
   hooks.state.slots = []; hooks.state.effects = []; hooks.state.index = 0
-  Object.assign(server, { version: 3, patches: [], hold: null })
+  Object.assign(server, { version: 3, patches: [], accounts: [], hold: null, conflict: false })
   verbCalls.length = 0
+  marks.length = 0
+  account = null
   vi.stubGlobal('fetch', vi.fn(async (_url: string, init: { body?: string }) => {
     const body = JSON.parse(init.body ?? '{}') as { commit: boolean }
     verbCalls.push({ commit: body.commit })
@@ -135,4 +145,18 @@ it('the versions a run leaves are this page\'s own moves: a cell typed before it
   const sale = current.write([typed('salePrice', { value: 79, start: null, end: null }, 3)])
   await applying; await sale
   expect(server.patches.at(-1)!.map((c) => [c.cell, c.expectedVersion])).toEqual([['salePrice', 4]])
+})
+
+/* Moved here from `listingValuesWiring` (2026-10-13): it asserted useMatrix's source text, which #610's field stamps
+   changed; the behaviour it guards is asserted here instead. */
+it('writes name the read\'s account and each cell\'s listing; a conflict says the one sentence', async () => {
+  hooks.state.slots = []; hooks.state.effects = []; hooks.state.index = 0
+  account = 'acc-1'
+  render(); await settle()
+  // A typed cell names no listing: the write names the one the read showed on that coordinate.
+  server.conflict = true
+  await current.write([{ rowId: 'r1', coordinateKey: 'EBAY:IT', cell: 'price', value: 95, expectedVersion: 3 }])
+  expect(server.accounts).toEqual(['acc-1'])
+  expect(server.patches[0]).toEqual([expect.objectContaining({ expectedListingId: 'L1', expectedVersion: 3 })])
+  expect(marks.at(-1)).toEqual(['r1', 'EBAY:IT.price', 'refused', MATRIX_COPY.changedElsewhere])
 })
