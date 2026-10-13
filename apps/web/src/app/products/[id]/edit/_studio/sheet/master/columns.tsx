@@ -31,6 +31,7 @@ import { columnRequiredByAny, isProductRelationshipColumn } from '@nexus/shared/
 
 import { cellIsEditable, cellOf, holdsFamilyValue, sharedCellFrom, sharedCellMember, sharedCellNotes, sharedHoverNote, validationApplies, widthFor, type AiDraft, type SharedCellFacts } from './columnRules'
 import { optionLabel } from '../optionLabel'
+import { isMoneyColumn, moneyText } from '../moneyFields'
 import { languageColumn } from '../languages'
 import { parseReferenceOrScalarValue, referenceColumnDef, referenceTooltip } from '../referenceLabels'
 import { isReferenceField } from '../referenceOptions'
@@ -539,7 +540,8 @@ export function buildMasterColumns(
         cellClass: (p) =>
           // Same correction as the text branch above — `cellIsEditable`, the predicate AG is given.
           [...numericColumn.cellClass, cellIsEditable(col, p.data) ? 'nds-cell-is-editable' : 'nds-cell-is-locked'].join(' '),
-        cellRenderer: (p: ICellRendererParams<StudioRow>) => withMark(p, p.value == null ? emptyOrRequired(p) : <>{String(p.value)}</>),
+        // A price draws two decimals (`moneyFields.ts`, Owner 1A 2026-10-13); the value and its editor keep the number.
+        cellRenderer: (p: ICellRendererParams<StudioRow>) => withMark(p, p.value == null ? emptyOrRequired(p) : <>{(isMoneyColumn(col) && moneyText(p.value)) || String(p.value)}</>),
       }
     }
     if (col.kind === 'boolean') {

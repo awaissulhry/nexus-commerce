@@ -466,7 +466,13 @@
 }
 .nds-cell-identity:hover .nds-cell-open, .nds-cell-title-row:hover .nds-cell-open { display: inline-flex; }
 .nds-cell-open:hover { background: var(--nds-primary-hover); }
-.nds-cell-sub { font-size: var(--nds-font-size-xs); color: var(--nds-grid-muted-fg); margin-top: 2px; display: flex; gap: 8px; align-items: center; flex-wrap: nowrap; }
+.nds-cell-sub { font-size: var(--nds-font-size-xs); color: var(--nds-grid-muted-fg); margin-top: 2px; display: flex; gap: 8px; align-items: center; flex-wrap: nowrap; min-width: 0; overflow: hidden; }
+/* A sub-line wider than its cell (SKU · type · "2 variations" on /products): the SKU gives way first and ends in "…",
+   its whole text on hover (Owner 2B, 2026-10-13 — the parts were cut through a letter). It keeps its first characters;
+   past that a tag gives way too (it shrinks ten times slower, its whole text on hover); a link or count stays whole. */
+.nds-cell-sub > .nds-cell-sku { flex: 0 10 auto; min-width: 5ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nds-cell-sub > .nds-tag { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.nds-cell-sub > :not(.nds-cell-sku):not(.nds-tag) { flex: none; }
 /* `--nds-font-mono` exists as of 2026-09-01 and resolves to JetBrains Mono, which the app already
    loads; this line inlined the OS stack and so every SKU in the sheet rendered in the wrong face.
    The fallback is kept deliberately — it keeps the cell readable if the token is ever removed, and

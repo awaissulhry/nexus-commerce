@@ -17,6 +17,7 @@ import { CellSaveReason, EmptyValue, LongTextCell, MarkedValue, MetafieldValue, 
 import { CellSaveMark } from '@/design-system/grid/renderers/CellSaveMark'
 
 import { isReferenceField } from '../referenceOptions'
+import { isMoneyColumn, moneyText } from '../moneyFields'
 import { channelCellDrawsRequired, channelCellMark, channelCellPresent, channelCellProvenance } from './channelCellProvenance'
 import { isProductRelationshipColumn } from '@nexus/shared/master-sheet'
 import type { ChannelSheetRow, SheetColumn } from './types'
@@ -129,7 +130,8 @@ export const CascadeCell = memo(function CascadeCell(
              the required treatment of an EMPTY cell stays this renderer's below. */
           <LongTextCell {...p} maxLength={column.maxLength} maxBytes={column.maxBytes} capFrom={column.capFrom} required={column.requiredBy.length > 0} />
         ) : (
-          String(p.valueFormatted ?? p.value ?? cell?.value ?? '')
+          /* A price draws two decimals (`moneyFields.ts`, Owner 1A 2026-10-13) unless a formatter already resolved it. */
+          (p.valueFormatted == null && isMoneyColumn(column) && moneyText(p.value ?? cell?.value)) || String(p.valueFormatted ?? p.value ?? cell?.value ?? '')
         )
       ) : (
         drawsRequired ? <RequiredValue /> : <EmptyValue />

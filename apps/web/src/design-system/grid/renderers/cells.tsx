@@ -604,8 +604,9 @@ export const IdentityCell = memo(function IdentityCell({ image, photoCount, titl
 })
 
 /** The monospace SKU in a sub-line. */
+/** The SKU; it gives way first on a full sub-line ("…", the whole SKU on hover — Owner 2B, 2026-10-13). */
 export const SkuTag = memo(function SkuTag({ children }: { children: ReactNode }) {
-  return <span className="nds-cell-sku">{children}</span>
+  return <span className="nds-cell-sku" title={typeof children === 'string' ? children : undefined}>{children}</span>
 })
 
 /** The 20px chevron that expands a tree row, and the slot that keeps a leaf aligned. */

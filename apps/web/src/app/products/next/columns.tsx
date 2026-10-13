@@ -227,7 +227,7 @@ export function ProductCell({ row, isChild, hasChildren, isExpanded, onExpand }:
       sub={
         <>
           <SkuTag>{row.sku}</SkuTag>
-          {row.productType && <Tag>{row.productType}</Tag>}
+          {row.productType && <Tag title={row.productType}>{row.productType}</Tag>}
           {/* The count is the way to the family page — the same grid scoped to this family, paged
               and sorted like the catalogue. It opens in a new tab so the place in this list is kept. */}
           {!isChild && n > 0 && (
