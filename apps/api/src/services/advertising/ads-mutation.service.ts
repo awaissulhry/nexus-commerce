@@ -268,6 +268,11 @@ export interface MutationOutcome {
    * Targeting's Turn on.
    */
   keptPaused?: { by: string; byName: string; at: string; until: string | null; reason: string | null; needsRelease: true }
+  /**
+   * Editing correctness (group 3) — refused, nothing written: the value the screen worked its change out from is no
+   * longer the entity's (`expectedDailyBudget`). `now` is the value it holds; `error` says it in words.
+   */
+  changedSince?: { field: 'dailyBudget'; now: number }
 }
 
 /** 3A — the answer to a person's write past his own limits: nothing written, his "Send anyway" decides. */
@@ -1326,6 +1331,13 @@ export async function updateCampaignWithSync(args: {
    * own endpoints (see adProductRefused). Absent: Sponsored Products only, as before.
    */
   allowSbSd?: boolean
+  /**
+   * Editing correctness (group 3) — the daily budget the screen showed when it worked out `patch.dailyBudget` (the Ad
+   * Manager's bulk Set / +% / −%, read through a cache up to 5 minutes old). When the campaign's budget is no longer
+   * that (a budget schedule, an engine, another person changed it since), the write is refused and says what it is now:
+   * a change built on an old value never overwrites a newer one. Absent: as before.
+   */
+  expectedDailyBudget?: number | null
 }): Promise<MutationOutcome> {
   const existing = await prisma.campaign.findUnique({
     where: { id: args.campaignId },
@@ -1348,6 +1360,17 @@ export async function updateCampaignWithSync(args: {
   })
   if (!existing) {
     return { ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'not_found' }
+  }
+  // Editing correctness (group 3) — see expectedDailyBudget: compare-and-set against the budget the screen saw.
+  const budgetNow = Number(existing.dailyBudget)
+  if (args.patch.dailyBudget != null && args.expectedDailyBudget != null && Number.isFinite(Number(args.expectedDailyBudget))
+    && Math.abs(budgetNow - Number(args.expectedDailyBudget)) >= 0.005) {
+    const amount = (n: number) => { try { return new Intl.NumberFormat('en-GB', { style: 'currency', currency: existing.dailyBudgetCurrency || 'EUR' }).format(n) } catch { return n.toFixed(2) } }
+    return {
+      ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null,
+      error: `Changed since: now ${amount(budgetNow)} (the screen showed ${amount(Number(args.expectedDailyBudget))}). Nothing was written, so the newer budget stands.`,
+      changedSince: { field: 'dailyBudget', now: budgetNow },
+    }
   }
   // 6a — see adProductRefused. W4-11 — the write, described from the patch, for a caller that may change SB/SD.
   const sbSdWrite: AdWrite | null = args.allowSbSd === true

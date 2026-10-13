@@ -17,7 +17,7 @@ import Link from '@/lib/workspaces/Link'
 import { Settings2, Download, Wand2, Plus, ChevronDown, Library, Book, Search, Trash2, ListChecks, Pencil, Bot, Timer } from 'lucide-react'
 import { TargetAcosCell, MinMaxBidCell, MinMaxBudgetCell, BudgetUtilCell, UsageHoursCell, BidAutomationCell, BidRuleCell, BidAlgoMenu, placementGovernor, BID_ALGOS, type BudgetUsageState } from '../_shared/RuleColumnCells'
 import { RangePopover, ValuePopover, anchorFromEvent, type PopAnchor } from '../_shared/RuleColumnEditors'
-import { atMinimumNote, nextDailyBudget, readBudgetChange, readDailyBudget, readTargetAcosPercent, summariseBudgetChange } from '../_shared/budgetInput'
+import { atMinimumNote, bulkBudgetPatch, readBudgetChange, readDailyBudget, readTargetAcosPercent, summariseBudgetChange } from '../_shared/budgetInput'
 import { CampaignNameCell, StatusCell, BiddingStrategyCell, StrategyModal, AutomationCell, AmazonDeliveryCell, STATUS_PILL, STRAT_LABEL } from '../_shared/CampaignRowCells'
 import { ARCHIVE_IS_PERMANENT } from '../_shared/archiveWords'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
@@ -38,6 +38,8 @@ import { pillTone } from '../_shared/pillTone'
 import { changedPlacementLanes } from '../_shared/placementLanes'
 import { assignablePortfolios, sharedMarket, type PortfolioOption } from '../_shared/portfolioPicker'
 import { readWrite, reasonText } from '../_shared/adsWrite'
+import { latestRead } from '../_shared/latestRead'
+import { campaignsListPath, readsFresh } from './_grid/campaignsRead'
 import { askSendAnyway, confirmed, notSentPastLimits, readNeedsConfirmation } from '../_shared/sendAnyway'
 import { matchesBidAutomation, matchesRuleFilter, ruleReach, type AccountWideRule, type RuleReach } from './_grid/campaignRules'
 import { amazonEditHold } from './_grid/amazonEditHold'
@@ -216,9 +218,15 @@ const sharePct = (frac: number) => {
  * two, and `entity_orphaned` (AX2.0) is a refusal we must not paint as success.
  */
 type WriteOutcome = 'applied' | 'queued' | 'refused' | 'error'
+/**
+ * Editing correctness (group 3) — when this screen last changed something: while that is younger than the API's read
+ * cache, every read of the list reads past it (campaignsRead.ts readsFresh), so no re-read shows a value from before it.
+ */
+let lastWriteAt: number | null = null
 // CM-26 — the one reader (_shared/adsWrite.ts): `error` is the server's own reason, in words.
 async function patchWrite(url: string, body: Record<string, unknown>): Promise<{ outcome: WriteOutcome; error?: string }> {
   try {
+    lastWriteAt = Date.now()
     let r = await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     let answer = await r.json().catch(() => ({}))
     // 3A — past his own limits: "Send anyway" (SendAnywayHost), then the same edit again with his confirmation.
@@ -1213,21 +1221,25 @@ export function CampaignsGrid() {
     return () => { alive = false }
   }, [])
 
+  // Editing correctness (group 3) — the read ticket: only the newest read of the list may show (a read that started
+  // before a save, or before a date change, and answers after it is dropped).
+  const [beginRead] = useState(latestRead)
   const load = useCallback(async (opts?: { sync?: boolean; range?: { start: Date; end: Date } }) => {
+    const current = beginRead()
     if (opts?.sync) setSyncing(true)
     try {
-      const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-      const qs = opts?.range ? `&startDate=${ymd(opts.range.start)}&endDate=${ymd(opts.range.end)}` : ''
       // AM-34 — "Refresh view" reads past the API's 300-s read cache (`fresh=1`); `no-store` alone skips only the browser's.
-      const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500${qs}${opts?.sync ? '&fresh=1' : ''}`, { cache: 'no-store' })
+      // Group 3 — so does every read while this screen's last write is younger than that cache.
+      const r = await fetch(`${getBackendUrl()}${campaignsListPath({ range: opts?.range, fresh: readsFresh(!!opts?.sync, lastWriteAt) })}`, { cache: 'no-store' })
       const d = await r.json()
+      if (!current()) return
       // ADX G2 — Min/Max Bid is persisted, not UI-only: before it, the editor updated local
       // state, toasted "Amazon field pending", and threw the value away on refresh. The cells
       // read `minBidCents`/`maxBidCents` straight off the payload now, so nothing is derived here.
       setRows((d.items ?? []) as Camp[])
       setFreshness({ markets: Array.isArray(d.freshness) ? d.freshness : [], intraday: d.intraday ?? null })
-    } catch { /* ignore */ } finally { setLoading(false); setSyncing(false) }
-  }, [])
+    } catch { /* ignore */ } finally { if (current()) { setLoading(false); setSyncing(false) } }
+  }, [beginRead])
 
   useEffect(() => {
     void load({ range: dateRange })
@@ -1298,8 +1310,9 @@ export function CampaignsGrid() {
         if (ch.budget) {
           // PR 1c (CM-7) — to the cent, never to the euro (€12.34 +10% wrote €14.00); only a cut can
           // land below €1.00, and the review / Adjust Budget note said how many stop there.
-          const next = nextDailyBudget(num(c.dailyBudget), ch.budget.mode, ch.budget.value).value
-          body.dailyBudget = next; opt.dailyBudget = String(next)
+          // Group 3 — with the budget it was worked out from: the server refuses it when that moved since.
+          const next = bulkBudgetPatch(num(c.dailyBudget), ch.budget.mode, ch.budget.value)
+          Object.assign(body, next); opt.dailyBudget = String(next.dailyBudget)
         }
         calls.push(patchWrite(`${base}/api/advertising/campaigns/${c.id}`, body))
       }
@@ -1331,6 +1344,8 @@ export function CampaignsGrid() {
     setApplying(false); setSel(new Set())
     setApplyMsg(`Applied to ${ok} campaign${ok !== 1 ? 's' : ''}${fail ? ` · ${fail} not changed — ${reasons[0] ?? 'no reason given'}${fail > 1 ? ` (and ${fail - 1} more)` : ''}` : ''}`)
     setTimeout(() => setApplyMsg(''), 6000)
+    // Group 3 — read again past the cache: what was saved, and what a refused campaign holds now.
+    void load({ range: dateRange })
   }
   const applyAdjustBudget = () => {
     const r = readBudgetChange(adjMode, adjVal)

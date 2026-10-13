@@ -332,6 +332,7 @@ const keywordActionsRoutes = async (fastify: FastifyInstance): Promise<void> => 
       actor: `user:${who}`,
       reason: 'Keyword Tracker: undone by the operator',
       manual: true, // 1e — the Undo button is a person's click (isPersonEdit)
+      onlyIfStillStands: true, // editing correctness (group 3) — never over a newer write ("Changed since: now …")
     })
     if (!r.ok || r.reversed === 0) {
       reply.status(409)

@@ -79,7 +79,8 @@ describe('AM-34 — the refresh button says what it does', () => {
   it('the one page that asks the channel says so; the re-reads skip the cache', () => {
     expect(read('ebay/campaigns/EbayCampaignsGrid.tsx')).toMatch(/dataSyncLabel="Sync from eBay now"/)
     const grid = read('campaigns/CampaignsGrid.tsx')
-    expect(grid).toMatch(/opts\?\.sync \? '&fresh=1' : ''/)
+    // Group 3 — the list's path is built in campaigns/_grid/campaignsRead.ts; "Refresh view" (sync) always reads fresh.
+    expect(grid).toContain('fresh: readsFresh(!!opts?.sync, lastWriteAt)')
     expect(read('campaigns/AdManagerGraph.tsx')).toMatch(/params\.set\('fresh', '1'\)/)
     expect(read('budget-manager/BudgetManagerClient.tsx')).toMatch(/budget-manager\?month=\$\{m\}`, \{ cache: 'no-store' \}/)
   })

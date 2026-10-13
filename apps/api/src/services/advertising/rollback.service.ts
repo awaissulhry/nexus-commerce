@@ -95,6 +95,12 @@ export interface RollbackOutcome {
    * counted as skipped, never as reversed, and is not marked undone.
    */
   nothingToUndo?: boolean
+  /**
+   * Editing correctness (group 3) — a person's Undo (`onlyIfStillStands`): how many rows were NOT put back because their
+   * change no longer stands (changedSinceUndo). Each is a SKIPPED detail whose reason starts "Changed since: now …";
+   * when nothing was reversed, `ok` is false and `reason` is the first of them.
+   */
+  changedSince?: number
   details: Array<{
     actionLogId: string
     actionType: string
@@ -145,7 +151,7 @@ const NO_PLACEMENT_SNAPSHOT = 'Nexus has no record of the placements before this
  * (it used to answer `reversed: 1` for a row that changed nothing, and mark it undone).
  */
 export function noteNothingToUndo(out: RollbackOutcome, why?: string | null): RollbackOutcome {
-  if (out.reversed > 0 || out.failed > 0 || out.skipped === 0) return out
+  if (out.reversed > 0 || out.failed > 0 || out.skipped === 0 || out.changedSince) return out
   out.nothingToUndo = true
   if (!out.reason) out.reason = `Nothing to undo: ${why || 'this change left nothing that can be put back.'}`
   return out
@@ -432,11 +438,18 @@ export async function rollbackByActionLogId(args: {
   stampChangeSetId?: string | null
   /** W4-11 — undo-ad-change: an SB/SD write a Claude request made goes back on its own route (see reverseOne). */
   allowSbSd?: boolean
+  /**
+   * Editing correctness (group 3) — a person's Undo button (the change feed, the Bid page, the keyword tracker): a row is
+   * put back only while its change still stands (changedSinceUndo), else it is refused with "Changed since: now …" and
+   * nothing is written. Set only by those routes; a Claude request's undo-ad-change says in its preview that it
+   * overwrites a newer value, and keeps doing so.
+   */
+  onlyIfStillStands?: boolean
 }): Promise<RollbackOutcome> {
   const log = await prisma.advertisingActionLog.findUnique({ where: { id: args.actionLogId } })
   if (!log) return { ok: false, reversed: 0, skipped: 0, failed: 0, details: [], reason: 'That change no longer exists.' }
   // A grouped row reverses with its set, so the entity never lands in a state that never existed.
-  if (log.executionId) return rollbackByChangeSetId({ changeSetId: log.executionId, actor: args.actor, reason: args.reason, manual: args.manual, stampChangeSetId: args.stampChangeSetId, allowSbSd: args.allowSbSd })
+  if (log.executionId) return rollbackByChangeSetId({ changeSetId: log.executionId, actor: args.actor, reason: args.reason, manual: args.manual, stampChangeSetId: args.stampChangeSetId, allowSbSd: args.allowSbSd, onlyIfStillStands: args.onlyIfStillStands })
 
   const out: RollbackOutcome = { ok: true, reversed: 0, skipped: 0, failed: 0, details: [] }
   if (log.rolledBackAt) { out.skipped = 1; out.reason = 'Already undone.'; return out }
@@ -445,8 +458,14 @@ export async function rollbackByActionLogId(args: {
     out.reason = `Older than the ${rollbackWindowLabel(log.actionType)} undo window for this kind of change.`
     return out
   }
-  const r = await reverseOne(log as never, args.actor, args.reason, args.manual === true, args.stampChangeSetId ?? null, args.allowSbSd === true)
   const base = { actionLogId: log.id, actionType: log.actionType, entityType: log.entityType, entityId: log.entityId }
+  const moved = args.onlyIfStillStands ? await changedSinceUndo([log]) : null
+  if (moved) {
+    out.ok = false; out.skipped = 1; out.changedSince = 1; out.reason = moved
+    out.details.push({ ...base, outcome: 'SKIPPED', reason: moved })
+    return out
+  }
+  const r = await reverseOne(log as never, args.actor, args.reason, args.manual === true, args.stampChangeSetId ?? null, args.allowSbSd === true)
   // CM-22 — a no-op (`ok` with `skipped`) is skipped, not reversed, and the row is not marked undone.
   if (r.ok && !r.skipped) {
     out.reversed = 1
@@ -499,6 +518,140 @@ export async function judgedWriteStands(log: { id: string; entityType: string; e
     return c && same(c.dailyBudget, after.dailyBudget) ? null : 'the daily budget is no longer what this change set'
   }
   return `a ${log.entityType} write is not one auto-undo puts back`
+}
+
+/**
+ * Editing correctness (group 3) — the fields reverseOne writes back, per entity: what a person's Undo would overwrite.
+ * `placements` stands for a placement change's adjustments (update_placement_bidding).
+ */
+const UNDO_FIELDS: Record<string, readonly string[]> = {
+  AD_TARGET: ['bidCents', 'status'],
+  AD_GROUP: ['defaultBidCents', 'status'],
+  CAMPAIGN: ['dailyBudget', 'dailyBudgetCurrency', 'status', 'biddingStrategy', 'endDate', 'name', 'portfolioId'],
+}
+
+type StandRow = { id: string; entityType: string; entityId: string; actionType: string; payloadBefore: unknown; payloadAfter: unknown; createdAt: Date }
+type Payload = Record<string, unknown>
+type Placements = Array<{ placement?: string; percentage?: number }>
+
+/** One value, as the action log and the entity hold it: a number to the cent (a budget is "20.00" in one, 20 in the other). */
+function sameValue(a: unknown, b: unknown): boolean {
+  if ((a ?? null) === (b ?? null)) return true
+  if (a == null || b == null || a === '' || b === '') return false
+  const x = Number(a)
+  const y = Number(b)
+  return Number.isFinite(x) && Number.isFinite(y) && Math.abs(x - y) < 0.005
+}
+function samePlacements(a: unknown, b: unknown): boolean {
+  const list = (p: unknown): Placements => (Array.isArray(p) ? (p as Placements) : [])
+  const x = list(a)
+  const y = list(b)
+  const pct = (l: Placements, placement: string | undefined) => l.find((n) => n.placement === placement)?.percentage ?? 0
+  return [...x, ...y].every((p) => pct(x, p.placement) === pct(y, p.placement))
+}
+
+/** The fields one action log row changed, of those its Undo writes back. */
+function undoFieldsOf(row: Pick<StandRow, 'entityType' | 'actionType' | 'payloadBefore' | 'payloadAfter'>): string[] {
+  const before = (row.payloadBefore ?? {}) as Payload
+  const after = (row.payloadAfter ?? {}) as Payload
+  if (row.actionType === 'update_placement_bidding') return Array.isArray(after.adjustments) && !samePlacements(before.adjustments, after.adjustments) ? ['placements'] : []
+  return (UNDO_FIELDS[row.entityType] ?? []).filter((f) => (f in before || f in after) && !sameValue(before[f], after[f]))
+}
+
+const money = (amount: number, currency: string | null | undefined): string => {
+  try {
+    return new Intl.NumberFormat('en-GB', { style: 'currency', currency: currency || 'EUR' }).format(amount)
+  } catch {
+    return `${amount.toFixed(2)} ${currency ?? ''}`.trim()
+  }
+}
+/** A value as the person reads it ("bid €0.45", "status paused", "daily budget €12.00"). */
+function valueWords(entityType: string, field: string, value: unknown, currency: string | null): string {
+  const n = Number(value)
+  if (field === 'bidCents' || field === 'defaultBidCents') {
+    return `${entityType === 'AD_GROUP' ? 'default bid' : 'bid'} ${value == null || !Number.isFinite(n) ? 'none' : money(n / 100, currency)}`
+  }
+  if (field === 'dailyBudget') return `daily budget ${value == null || !Number.isFinite(n) ? 'none' : money(n, currency)}`
+  if (field === 'placements') {
+    const list = (Array.isArray(value) ? value : []) as Placements
+    return `placements ${list.length ? list.map((p) => `${String(p.placement ?? '').replace(/^PLACEMENT_/, '').toLowerCase().replace(/_/g, ' ')} ${p.percentage ?? 0} %`).join(', ') : 'none'}`
+  }
+  const label: Record<string, string> = { dailyBudgetCurrency: 'currency', biddingStrategy: 'bidding strategy', endDate: 'end date', portfolioId: 'portfolio' }
+  const shown = value == null || value === '' ? 'none' : field === 'endDate' ? String(value).slice(0, 10) : field === 'status' ? String(value).toLowerCase() : String(value)
+  return `${label[field] ?? field} ${field === 'name' && shown !== 'none' ? `"${shown}"` : shown}`
+}
+
+/** The entity as it is now: the values an Undo writes back (UNDO_FIELDS, its placements), and its money's currency. */
+async function currentValues(entityType: string, entityId: string): Promise<{ values: Payload; currency: string | null } | null> {
+  if (entityType === 'AD_TARGET') {
+    const t = await prisma.adTarget.findUnique({ where: { id: entityId }, select: { bidCents: true, status: true, adGroup: { select: { campaign: { select: { dailyBudgetCurrency: true } } } } } })
+    return t ? { values: { bidCents: t.bidCents, status: t.status }, currency: t.adGroup?.campaign?.dailyBudgetCurrency ?? null } : null
+  }
+  if (entityType === 'AD_GROUP') {
+    const g = await prisma.adGroup.findUnique({ where: { id: entityId }, select: { defaultBidCents: true, status: true, campaign: { select: { dailyBudgetCurrency: true } } } })
+    return g ? { values: { defaultBidCents: g.defaultBidCents, status: g.status }, currency: g.campaign?.dailyBudgetCurrency ?? null } : null
+  }
+  if (entityType === 'CAMPAIGN') {
+    const c = await prisma.campaign.findUnique({
+      where: { id: entityId },
+      select: { dailyBudget: true, dailyBudgetCurrency: true, status: true, biddingStrategy: true, endDate: true, name: true, portfolioId: true, dynamicBidding: true },
+    })
+    if (!c) return null
+    const { dynamicBidding, ...rest } = c
+    const placements = (dynamicBidding as { placementBidding?: Placements } | null)?.placementBidding ?? []
+    return {
+      values: { ...rest, dailyBudget: Number(c.dailyBudget), endDate: c.endDate?.toISOString() ?? null, placements },
+      currency: c.dailyBudgetCurrency ?? null,
+    }
+  }
+  return null
+}
+
+/**
+ * Editing correctness (group 3) — a person's Undo puts the old value back only while the change still stands: the same
+ * compare-and-set auto-undo and a rule's undo make (judgedWriteStands), narrowed to the fields the change wrote (the
+ * only ones its Undo writes back), so a later pause does not hold back the Undo of a bid. It refuses when
+ *   · a later write on the same entity changed one of those fields (a write that set something: one that failed, was
+ *     refused or was cancelled put its value back, so it is not one), or
+ *   · the entity no longer holds what the change set (an Amazon read, a write with no record).
+ * `rows`: the change's own rows on ONE entity — one row, or every row of one change set on that entity (they are
+ * judged together: none of them is a later change of the others, and the newest says what the set left).
+ * Null when it stands, else the refusal in words: "Changed since: now bid €0.45. …". Rows of an entity or a change
+ * the Undo does not write back (a create, a retail event, a product ad) are not judged here: null.
+ */
+export async function changedSinceUndo(rows: StandRow[]): Promise<string | null> {
+  if (!rows.length) return null
+  const { entityType, entityId } = rows[0]!
+  const ordered = [...rows].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+  const judged = ordered.filter((r) => !r.actionType.startsWith('create_') && !r.actionType.startsWith('bulksheet_create_'))
+  const fields = [...new Set(judged.flatMap(undoFieldsOf))]
+  if (!fields.length) return null
+  // What the change(s) left: each field as the newest row that wrote it set it.
+  const expected: Payload = {}
+  for (const r of judged) {
+    const after = (r.payloadAfter ?? {}) as Payload
+    for (const f of fields) {
+      if (f === 'placements') { if (Array.isArray(after.adjustments)) expected.placements = after.adjustments }
+      else if (f in after) expected[f] = after[f]
+    }
+  }
+  const later = await prisma.advertisingActionLog.findMany({
+    where: {
+      entityType, entityId, createdAt: { gt: ordered[0]!.createdAt }, id: { notIn: rows.map((r) => r.id) },
+      actionType: { notIn: [...NON_CHANGE_ACTION_TYPES] },
+      OR: [{ amazonResponseStatus: null }, { amazonResponseStatus: { notIn: ['FAILED', 'SKIPPED', 'CANCELLED'] } }],
+    },
+    select: { entityType: true, actionType: true, payloadBefore: true, payloadAfter: true },
+    orderBy: { createdAt: 'asc' },
+  })
+  const laterFields = new Set(later.flatMap(undoFieldsOf).filter((f) => fields.includes(f)))
+  const now = await currentValues(entityType, entityId)
+  if (!now) return null // the entity is gone: reverseOne answers that in its own words
+  const moved = fields.filter((f) => (f === 'placements' ? !samePlacements(now.values.placements, expected.placements) : !sameValue(now.values[f], expected[f])))
+  const changed = [...new Set([...moved, ...laterFields])]
+  if (!changed.length) return null
+  const words = changed.map((f) => valueWords(entityType, f, now.values[f], now.currency)).join(', ')
+  return `Changed since: now ${words}. Undo would overwrite that newer change, so nothing was put back.`
 }
 
 /**
@@ -616,6 +769,12 @@ export async function rollbackByChangeSetId(args: {
   actionLogIds?: string[] | null
   /** W4-11 — undo-ad-change: an SB/SD write a Claude request made goes back on its own route (see reverseOne). */
   allowSbSd?: boolean
+  /**
+   * Editing correctness (group 3) — a person's Undo button (see rollbackByActionLogId): each entity of the set is put back
+   * only while what the set did to it still stands (changedSinceUndo, judged before anything is written); the rows of
+   * an entity changed since are refused with "Changed since: now …", the others are still put back.
+   */
+  onlyIfStillStands?: boolean
 }): Promise<RollbackOutcome> {
   const logs = await prisma.advertisingActionLog.findMany({
     where: {
@@ -646,9 +805,26 @@ export async function rollbackByChangeSetId(args: {
     }
   }
   const stamp = args.stampChangeSetId && args.stampChangeSetId !== args.changeSetId ? args.stampChangeSetId : null
+  // Editing correctness (group 3) — judged per entity before the first write: the reversals' own rows are later writes.
+  const movedOf = new Map<string, string | null>()
+  if (args.onlyIfStillStands) {
+    const byEntity = new Map<string, typeof logs>()
+    for (const log of logs) {
+      const key = `${log.entityType}:${log.entityId}`
+      byEntity.set(key, [...(byEntity.get(key) ?? []), log])
+    }
+    for (const [key, rows] of byEntity) movedOf.set(key, await changedSinceUndo(rows))
+  }
   for (const log of logs) {
-    const r = await reverseOne(log, args.actor, args.reason, args.manual === true, stamp, args.allowSbSd === true)
     const base = { actionLogId: log.id, actionType: log.actionType, entityType: log.entityType, entityId: log.entityId }
+    const moved = movedOf.get(`${log.entityType}:${log.entityId}`)
+    if (moved) {
+      out.skipped += 1
+      out.changedSince = (out.changedSince ?? 0) + 1
+      out.details.push({ ...base, outcome: 'SKIPPED', reason: moved })
+      continue
+    }
+    const r = await reverseOne(log, args.actor, args.reason, args.manual === true, stamp, args.allowSbSd === true)
     if (r.ok && !r.skipped) {
       out.reversed += 1
       out.details.push({ ...base, outcome: 'REVERSED' })
@@ -664,6 +840,11 @@ export async function rollbackByChangeSetId(args: {
       out.ok = false
       out.details.push({ ...base, outcome: 'FAILED', reason: r.reason })
     }
+  }
+  if (out.changedSince) {
+    const first = out.details.find((d) => d.reason?.startsWith('Changed since:'))!.reason!
+    if (out.reversed === 0) { out.ok = false; out.reason ??= first }
+    else out.reason ??= `${out.changedSince} of ${logs.length} changes not undone. ${first}`
   }
   return noteNothingToUndo(out, out.details.find((d) => d.outcome === 'SKIPPED')?.reason)
 }

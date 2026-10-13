@@ -120,7 +120,7 @@ export async function readCursor(scope: BidsScope): Promise<BidsCursor | null> {
 export const BID_REASON = { suggested: 'Bid page: suggested bid', change: 'Bid page: change bid' } as const
 export type BidReason = (typeof BID_REASON)[keyof typeof BID_REASON]
 
-async function postBulk(entries: ReadonlyArray<{ targetId: string; bidCents: number }>, confirm: boolean, reason: BidReason): Promise<{ status: number; body: unknown }> {
+async function postBulk(entries: ReadonlyArray<{ targetId: string; bidCents: number }>, confirm: boolean, reason: string): Promise<{ status: number; body: unknown }> {
   const r = await fetch(`${getBackendUrl()}/api/advertising/ad-targets/bulk-bid`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -132,9 +132,10 @@ async function postBulk(entries: ReadonlyArray<{ targetId: string; bidCents: num
 /**
  * Send many bids now (Change bid, Apply suggested) in one call, and read each row's answer with its change's Undo handle.
  * Past his own limits (3A) it asks "Send anyway" once for every row that waits, and sends those again with his yes.
- * Never throws.
+ * Never throws. `reason`: what the change feed says sent them (BID_REASON here; the campaign manager's tabs send their own,
+ * campaigns/_grid/bulkActions.tsx bulkBid).
  */
-export async function sendBids(entries: ReadonlyArray<{ targetId: string; bidCents: number }>, reason: BidReason): Promise<SentBid[]> {
+export async function sendBids(entries: ReadonlyArray<{ targetId: string; bidCents: number }>, reason: string): Promise<SentBid[]> {
   const out = new Map<string, SentBid>()
   const run = async (list: ReadonlyArray<{ targetId: string; bidCents: number }>, confirm: boolean): Promise<BulkWait[]> => {
     try {

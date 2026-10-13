@@ -46,6 +46,7 @@ import { usePermission } from '@/lib/auth/AuthProvider'
 import { useRouter, useSearchParams } from '@/lib/workspaces/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useWriteBlockOf } from '../../../_shell/WriteBlocked'
+import { latestRead } from '../../../_shared/latestRead'
 import { FILTER_EMPTY } from '../../_shared/scopeFilter/scopeFilterModel'
 import type { ScopeView } from '../../_shared/scopeFilter/useScopeFilter'
 import { useColumnChoices } from '../_shared/columnChoices'
@@ -195,20 +196,25 @@ export function BidsView({ market = null, productId = null, campaignId = null, a
   // ── the read ──
   const scopeRef = useRef<BidsScope>({ market, productId, campaignId, adGroupId, lists })
   scopeRef.current = { market, productId, campaignId, adGroupId, lists }
+  // Editing correctness (group 3) — the read ticket: only the newest read shows. A read that started before a save (or a
+  // scope change, or the live cursor's) and answers after the save's own re-read is dropped, never painted over it.
+  const [beginRead] = useState(latestRead)
   const load = useCallback(async () => {
+    const current = beginRead()
     setReading(true)
     try {
       const next = await readBids(scopeRef.current)
+      if (!current()) return null
       setAnswer(next)
       setErr(null)
       return next
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e))
+      if (current()) setErr(e instanceof Error ? e.message : String(e))
       return null
     } finally {
-      setReading(false)
+      if (current()) setReading(false)
     }
-  }, [])
+  }, [beginRead])
   useEffect(() => { setAnswer(null); setErr(null); void load() }, [scopeKey, refreshKey, load])
   const reload = useCallback(() => { setErr(null); void load() }, [load])
   const after = useCallback(async () => { await load(); setVersion((n) => n + 1) }, [load])
