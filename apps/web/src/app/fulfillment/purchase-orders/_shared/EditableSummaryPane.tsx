@@ -40,7 +40,7 @@ import { useToast } from '@/components/ui/Toast'
 import { DateField } from '@/design-system/components/DateField'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
-import { mayReseed } from './po-autosave'
+import { mayReseed, type SaveGate } from './po-autosave'
 import { formatCurrency } from './po-lens'
 import { useDraft, useSaveQueue } from './use-po-autosave'
 
@@ -93,6 +93,8 @@ type SaveState = 'idle' | 'pending' | 'saving' | 'saved' | 'error'
 interface EditableSummaryPaneProps {
   po: POHeaderInput & { items: POItemInput[] }
   onRefresh: () => void | Promise<void>
+  /** The page flushes the pending save through it before a status transition. */
+  saveGate?: SaveGate
 }
 
 let localSeq = 0
@@ -142,7 +144,7 @@ function headerKey(notes: string, expectedDate: string | null): string {
   return JSON.stringify({ notes, expectedDate: expectedDate ? expectedDate.slice(0, 10) : null })
 }
 
-export function EditableSummaryPane({ po, onRefresh }: EditableSummaryPaneProps) {
+export function EditableSummaryPane({ po, onRefresh, saveGate }: EditableSummaryPaneProps) {
   const { toast } = useToast()
 
   // Local draft, seeded from props. Edits live here until autosave commits
@@ -289,6 +291,7 @@ export function EditableSummaryPane({ po, onRefresh }: EditableSummaryPaneProps)
   }
 
   const queue = useSaveQueue(save, 1500, reseedIfNewer)
+  useEffect(() => saveGate?.register(queue), [saveGate, queue])
 
   // Each fresh server copy from the parent (a peer's change, a refresh).
   useEffect(() => {

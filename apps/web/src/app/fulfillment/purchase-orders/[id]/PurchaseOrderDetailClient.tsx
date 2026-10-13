@@ -59,7 +59,7 @@ import {
 } from '../_shared/po-lens'
 import { PoLiveSyncChip } from '../_shared/PoLiveSyncChip'
 import { EditableSummaryPane, isEditableStatus } from '../_shared/EditableSummaryPane'
-import { createReadTicket, mayReseed } from '../_shared/po-autosave'
+import { createReadTicket, createSaveGate, mayReseed } from '../_shared/po-autosave'
 import { useDraft, useSaveQueue } from '../_shared/use-po-autosave'
 import { ThreeWayMatchPanel } from '../_shared/ThreeWayMatchPanel'
 import { QuickReceiveModal } from '../_shared/QuickReceiveModal'
@@ -371,11 +371,21 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
     [pathname, router, searchParams],
   )
 
+  // The draft editor's pending save, sent before any status transition.
+  const [saveGate] = useState(createSaveGate)
+
   const handleTransition = useCallback(
     async (transition: string, reason?: string) => {
       setActionError(null)
       setTransitioning(transition)
       try {
+        // The draft's last edit goes first: the transition bumps the PO
+        // version, so a save still waiting would answer 409 and lose the
+        // edit — or the PO would move on (approved, sent) without it.
+        if (!(await saveGate.flush())) {
+          setActionError('Your last edit could not be saved, so the PO was not changed. Check it and try again.')
+          return
+        }
         const res = await fetch(
           `${getBackendUrl()}/api/fulfillment/purchase-orders/${id}/transition`,
           {
@@ -406,7 +416,7 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
         setTransitioning(null)
       }
     },
-    [id, refresh],
+    [id, refresh, saveGate],
   )
 
   // PO-Plus.8 — keyboard shortcuts. R/A/S/K trigger the state-machine
@@ -1043,7 +1053,7 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
       <div className="po-detail-print-all space-y-4">
         <section data-tab-pane className={cn(tab !== 'summary' && 'po-detail-tab-inactive')}>
           {isEditableStatus(po.status) ? (
-            <EditableSummaryPane po={po} onRefresh={refresh} />
+            <EditableSummaryPane po={po} onRefresh={refresh} saveGate={saveGate} />
           ) : (
             <div className="space-y-4">
               {/* PO.10 — three-way match surfaces above the read-only
@@ -2171,8 +2181,6 @@ function RevisionEditor({
     if (!window.confirm(`Cancel revision v${revision.version}? Edits will be discarded.`)) {
       return
     }
-    // The edits are being discarded: no save waits behind the cancel.
-    queue.cancel()
     setBusy('cancel')
     setError(null)
     try {
@@ -2184,6 +2192,9 @@ function RevisionEditor({
         const body = await res.json().catch(() => ({}))
         throw new Error(body?.error ?? `HTTP ${res.status}`)
       }
+      // Cancelled: the edits are discarded, so no save waits behind it. (A
+      // failed cancel keeps the pending save, and the edits with it.)
+      queue.cancel()
       await onRefresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))

@@ -17,6 +17,9 @@
 //     own save carries the version that save returned, so it is never newer.
 //   - A read ticket drops a response when a newer read has started, so an
 //     older answer never overwrites a newer one.
+//   - A save gate lets the page send the draft editor's last edit before it
+//     changes the PO (a status transition bumps the version, so a save still
+//     waiting would answer 409 and lose the edit).
 
 export interface SaveQueue {
   /** An edit happened: (re)start the quiet timer. The save runs when it ends. */
@@ -128,5 +131,25 @@ export function createReadTicket(): ReadTicket {
   return {
     take: () => ++latest,
     isLatest: (ticket) => ticket === latest,
+  }
+}
+
+export interface SaveGate {
+  /** The editor hands up its queue while it is mounted; call the returned function on unmount. */
+  register(queue: Pick<SaveQueue, 'flush'>): () => void
+  /** Sends what the editor still holds and waits for it: true when no editor is mounted or its save went through. */
+  flush(): Promise<boolean>
+}
+
+export function createSaveGate(): SaveGate {
+  let current: Pick<SaveQueue, 'flush'> | null = null
+  return {
+    register(queue) {
+      current = queue
+      return () => {
+        if (current === queue) current = null
+      }
+    },
+    flush: () => (current ? current.flush() : Promise.resolve(true)),
   }
 }

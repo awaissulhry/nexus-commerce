@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createReadTicket, createSaveQueue, mayReseed } from './po-autosave'
+import { createReadTicket, createSaveGate, createSaveQueue, mayReseed } from './po-autosave'
 
 // The PO editors keep their draft in a ref and the save reads it when it is
 // sent. These tests drive the queue the same way: `draft` stands for the ref,
@@ -253,5 +253,83 @@ describe('read ticket — an older answer never overwrites a newer one', () => {
     slow.resolve(true)
     await first
     expect(page).toBe('v6 (read after the save)')
+  })
+})
+
+describe('save gate — a status transition waits for the draft\'s pending save', () => {
+  // A DRAFT PO at version 7. The editor's save sends the version it knows and
+  // bumps the server's; the transition bumps it too. This mirrors the page:
+  // handleTransition awaits saveGate.flush() and stops when it is false.
+  function page(saveOk = true) {
+    const server = { version: 7, notes: '', log: [] as string[] }
+    const draft = { notes: '' }
+    let known = 7
+    const queue = createSaveQueue({
+      delayMs: 1500,
+      save: async () => {
+        if (draft.notes === server.notes) return true
+        if (!saveOk) {
+          server.log.push('save failed')
+          return false
+        }
+        if (known !== server.version) {
+          server.log.push(`409 (sent ${known}, server ${server.version})`)
+          return false
+        }
+        server.notes = draft.notes
+        server.version += 1
+        known = server.version
+        server.log.push(`save v${known - 1}→v${known}`)
+        return true
+      },
+    })
+    const gate = createSaveGate()
+    const unregister = gate.register(queue)
+    const transition = async (name: string) => {
+      if (!(await gate.flush())) return false
+      server.version += 1
+      server.log.push(`${name} → v${server.version}`)
+      return true
+    }
+    return { server, draft, queue, gate, unregister, transition }
+  }
+
+  it('🔴 type "ship by sea", Submit within 1.5 s: the save goes first with v7, then the transition — the text is kept', async () => {
+    const p = page()
+    p.draft.notes = 'ship by sea'
+    p.queue.schedule()
+    await vi.advanceTimersByTimeAsync(500)
+    await expect(p.transition('submit-for-review')).resolves.toBe(true)
+    expect(p.server.log).toEqual(['save v7→v8', 'submit-for-review → v9'])
+    expect(p.server.notes).toBe('ship by sea')
+    // The old timer does not fire a second save afterwards.
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(p.server.log).toHaveLength(2)
+  })
+
+  it('🔴 the transition is not sent when the last edit could not be saved', async () => {
+    const p = page(false)
+    p.draft.notes = 'ship by sea'
+    p.queue.schedule()
+    await expect(p.transition('approve')).resolves.toBe(false)
+    expect(p.server.log).toEqual(['save failed'])
+    expect(p.server.version).toBe(7)
+  })
+
+  it('with no edit waiting the transition goes straight through', async () => {
+    const p = page()
+    await expect(p.transition('approve')).resolves.toBe(true)
+    expect(p.server.log).toEqual(['approve → v8'])
+  })
+
+  it('with no editor mounted (a sent PO) the gate is open; unregister only removes its own queue', async () => {
+    const gate = createSaveGate()
+    await expect(gate.flush()).resolves.toBe(true)
+    const first = createSaveQueue({ delayMs: 10, save: async () => false })
+    const second = createSaveQueue({ delayMs: 10, save: async () => true })
+    const unregisterFirst = gate.register(first)
+    gate.register(second) // a remount registered before the old cleanup ran
+    unregisterFirst()
+    await expect(gate.flush()).resolves.toBe(true) // still the second editor
   })
 })
