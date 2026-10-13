@@ -10,7 +10,8 @@
  * Build shape v2 (P10): each chosen market reads its part of the Publish PLAN (`POST …/studio-publication/plan`): the
  * content review (Partial and Full update rows) AND the waiting Status changes and Deletes, the rows whose content is
  * held back and the values that no longer apply. Each market tab shows the review's metric strip and problems, then
- * one summary line and one table (`ActionPlanTable`). Ended and Delete need the typed family SKU. One market with
+ * one summary line and one table (`ReviewTable`: one row per change; with more than one market, "All markets" lists every
+ * market's in one table first — grid audit wave 3). Ended and Delete need the typed family SKU. One market with
  * content only sends through the single-publish path exactly as before; several markets, a ticked status change or a
  * value to clear go to the background batch (`POST /api/publication-batches { plan }`), which keeps sending when the
  * dialog closes. Done offers Undo for Inactive and Ended (Status Active again, reviewed anew); a Delete cannot be undone.
@@ -56,6 +57,8 @@ import {
 import { activeTab, initialChoice, marketOptionLabel, marketTabLabel, marketTabParts, refillChoice, type PickerChoice } from './pickers'
 import { DestinationPicker } from './DestinationPicker'
 import { ReviewBody } from './ReviewBody'
+import { ReviewTable, type ReviewTableMarketProps } from './ReviewTable'
+import { marketStateRow } from './reviewRows'
 import { ManyPublishDialog, type ManyPublishDialogProps } from './ManyPublishDialog'
 import styles from './publication.module.css'
 import oneClick from './oneClick.module.css'
@@ -64,20 +67,21 @@ export { publicationDestinationParts } from './ReviewBody'
 
 /** How the opening surface's autosave meets the dialog: a review waits for saving to finish. */
 type ResultRow = StudioPublishResult['results'][number]
+// The widths fit the window's body (1040 px window; grid audit D2 — the 620 px body cut the end of every message): the
+// channel's words wrap, whole.
 const REFUSED_COLUMNS: Column<ResultRow>[] = [
-  { key: 'sku', label: 'SKU', width: 180, className: styles.skuCol, render: row => <span className={styles.sku} title={row.sku}>{row.sku}</span> },
-  { key: 'message', label: 'What the channel said', width: 560, className: styles.textCol, render: row => <span className={styles.fix}>{row.message}</span> },
+  { key: 'sku', label: 'SKU', width: 180, className: styles.skuCol, render: row => <span className={styles.sku}>{row.sku}</span> },
+  { key: 'message', label: 'What the channel said', width: 780, className: styles.textCol, render: row => <span className={styles.fix}>{row.message}</span> },
 ]
-/**
- * A market's results once the batch sent it: the content, and each listing of each status change. The widths fit the
- * window's 620 px body at desktop (the channel's words wrap instead of hiding past the edge); a phone scrolls sideways.
- */
+/** A market's results once the batch sent it: the content, and each listing of each status change. A phone scrolls sideways. */
 const PLAN_RESULT_COLUMNS: Column<PlanResultRow>[] = [
-  { key: 'sku', label: 'SKU', width: 160, className: styles.skuCol, render: row => <span className={styles.sku} title={row.sku}>{row.sku}</span> },
-  { key: 'what', label: 'What', width: 120, className: styles.textCol, render: row => <span className={styles.fix}>{row.what}</span> },
-  { key: 'result', label: 'Result', width: 150, render: row => <span title={row.meta.hint}><PublishStatusPill meta={row.meta} /></span> },
-  { key: 'message', label: 'What the channel said', width: 190, className: styles.textCol, render: row => <span className={styles.fix}>{row.message ?? row.meta.hint}</span> },
+  { key: 'sku', label: 'SKU', width: 180, className: styles.skuCol, render: row => <span className={styles.sku}>{row.sku}</span> },
+  { key: 'what', label: 'What', width: 160, className: styles.textCol, render: row => <span className={styles.fix}>{row.what}</span> },
+  { key: 'result', label: 'Result', width: 160, render: row => <span title={row.meta.hint}><PublishStatusPill meta={row.meta} /></span> },
+  { key: 'message', label: 'What the channel said', width: 460, className: styles.textCol, render: row => <span className={styles.fix}>{row.message ?? row.meta.hint}</span> },
 ]
+/** "All markets": the first tab when more than one market is chosen — every market's changes in one table (wave 3). */
+const ALL_MARKETS = '__all__'
 
 export interface PublicationSaveBridge {
   state: { kind: string; at?: number; message?: string }
@@ -157,15 +161,18 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
       filledFirst.current = firstSignature
       if (listedKeys) filledListed.current = true
       setChoice(initialChoice(options, firstTicked, listedKeys))
-      if (firstTicked[0]) setActive(firstTicked[0])
+      setActive(ALL_MARKETS)
       return
     }
     if (listedKeys && !filledListed.current) { filledListed.current = true; setChoice(initialChoice(options, firstTicked, listedKeys)); return }
     if (!choice.channel) setChoice(initialChoice(options, firstTicked, listedKeys))
   }, [choice.channel, options, firstTicked, firstSignature, listedKeys])
   const ticked = useMemo(() => new Set(choice.keys), [choice.keys])
-  const [active, setActive] = useState<string | null>(firstTicked[0] ?? null)
-  const shownTab = activeTab(choice.keys, active)
+  // With more than one market the window opens on "All markets": every change of every market in one table, no tab to
+  // click through (grid audit wave 3). One market: its own tab, as before.
+  const [active, setActive] = useState<string | null>(ALL_MARKETS)
+  const tabKeys = useMemo(() => (choice.keys.length > 1 ? [ALL_MARKETS, ...choice.keys] : choice.keys), [choice.keys])
+  const shownTab = activeTab(tabKeys, active)
   const shownRef = useRef(shownTab)
   shownRef.current = shownTab
   const tabBase = useId()
@@ -590,14 +597,15 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
   }
   // A long listing name ends with an ellipsis (its whole name on hover); what the review says is always shown whole —
   // so a tab never runs past a phone's width (review 2026-10-05).
-  const tabs = choice.keys.flatMap(key => {
+  const allTab = tabKeys[0] === ALL_MARKETS ? [{ id: ALL_MARKETS, label: <span className={styles.tabLabel}><span className={styles.tabName}>{`All ${word.many}`}</span></span> }] : []
+  const tabs = [...allTab, ...choice.keys.flatMap(key => {
     const o = optionOf(key)
     if (!o) return []
     const said = sentWord(key) ?? planTabWords(stateOf(key), entryOf(key))
     const { name, words } = marketTabParts(o, stateOf(key), said)
     return [{ id: key, label: <span className={styles.tabLabel} title={marketTabLabel(o, stateOf(key), said)}>
       <span className={styles.tabName}>{name}</span><span className={styles.tabWords}>{` · ${words}`}</span></span> }]
-  })
+  })]
   const renderPanel = (key: string) => {
     const option = optionOf(key)
     if (!option) return null
@@ -613,7 +621,7 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
     // An alias (or the main listing of a market with aliases) is named with the band's mark; else the plan's own words.
     const place = optionListingLabel(option) ? destinationPlace(option.scope, option) : entry.plan?.label ?? destinationPlace(option.scope)
     const planPart = entry.plan && own ? {
-      label: place, summary: planSummaryLine(own.counts, own.wholeProducts, own.content.includes(key) ? createdCounts(rows) : null), rows,
+      key, channel: option.scope.channel, label: place, summary: planSummaryLine(own.counts, own.wholeProducts, own.content.includes(key) ? createdCounts(rows) : null), rows,
       lifecycleIds: entry.lifecycleIds, contentError: entry.plan.error, now, onTicksChange: (next: { selectedIds: string[]; lifecycleIds: string[] }) => chooseTicks(key, next),
     } : null
     return <div className={styles.tabPanel} {...tabPanelProps(tabBase, key)} ref={panelRef} aria-label={`Review for ${marketOptionLabel(option)}`}>
@@ -635,10 +643,28 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
     </div>
   }
 
+  /** "All markets": every chosen market's rows in one table; a market not ready says why in a row of its own. */
+  const renderAll = () => {
+    const markets: ReviewTableMarketProps[] = choice.keys.flatMap(key => {
+      const option = optionOf(key)
+      if (!option) return []
+      const entry = entryOf(key), state = stateOf(key)
+      const label = optionListingLabel(option) ? destinationPlace(option.scope, option) : entry.plan?.label ?? destinationPlace(option.scope)
+      return [{ key, label, channel: option.scope.channel, rows: entry.plan ? actionPlanRows(entry, state, now) : [], review: entry.review,
+        selectedIds: entry.selectedIds, lifecycleIds: entry.lifecycleIds, state: marketStateRow(state),
+        onTicksChange: (next: { selectedIds: string[]; lifecycleIds: string[] }) => chooseTicks(key, next) }]
+    })
+    return <div className={styles.tabPanel} {...tabPanelProps(tabBase, ALL_MARKETS)} aria-label={`Review for all ${word.many}`}>
+      <ReviewTable allMarkets markets={markets} locked={locked || !!busy || sendWaiting} now={now} ariaLabel={`Changes in this publish to ${choice.keys.length} ${word.many}`}
+        onCheckAgain={checkAgain} onOpen={setActive} />
+    </div>
+  }
+
   const progress = batch ? batchProgress(batch) : null
   const batchPlaces = batch ? countBatchPlaces(batch.children) : 0
 
-  return <Modal open onClose={() => { if (!pending) onClose() }} size="lg" readable title="Publish product"
+  // The size of the Import window (grid audit D1: a 660 px box left 300 px for the review); a full-screen sheet on a phone.
+  return <Modal open onClose={() => { if (!pending) onClose() }} size="xxl" title="Publish product"
     subtitle={`${productLabel} · Saved product information and included variants`}
     footer={<>
       {footReason && <span id={reasonId} className={`grow ${styles.footReason}`}>{footReason}</span>}
@@ -705,7 +731,7 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
         ? planFamilySummary(counted, { ...plan, nothing: [] }, action.counts, action.wholeProducts, action.send, created, word)
         : `Nothing to send: these ${word.many} already have the saved values.`}</p>}
       {roleLock && <Banner tone="warning" title={roleLock}>The other changes can still be sent.</Banner>}
-      {shownTab && renderPanel(shownTab)}
+      {shownTab === ALL_MARKETS ? renderAll() : shownTab && renderPanel(shownTab)}
       {ticked.size >= MAX_BATCH_DESTINATIONS && !locked && <p className={styles.muted}>{batchLimitText(word)}</p>}
       {waitingHint && <p className={styles.muted}>{waitingHint}</p>}
 

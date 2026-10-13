@@ -1,3 +1,12 @@
+## A table window fills a phone; a DataGrid's second pinned column stays on its row — 2026-10-13
+
+Grid audit wave 3 (the Publish review).
+- **`Modal` `xxl`** is a full-screen sheet at phone width (≤ 760 px), as `detail` is: the Publish and Import windows
+  left a narrow, short box for a long review (audit D7).
+- **`DataGrid` `sticky` columns**: the legacy `sticky` mark on a pinned column's cells is also the app's Tailwind utility
+  `.sticky { position: sticky }`, which won over AG's own placement. With two pinned columns, the second one's cells
+  dropped one row (each cell went into the flow under the one before). AG's placement is restated (`datagrid.css`).
+
 ## Tag `truncate` + `title`; PerformanceGraph `axisLabel` — 2026-10-13
 
 Google Ads step 1a, screen fixes. Both mirrored in `apps/factory` (identical files).

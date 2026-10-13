@@ -1,0 +1,18 @@
+/* Grid audit wave 3 — the Publish review's one table (ReviewTable). The grid sizes the columns; these classes only shape
+   the words inside a cell: values WRAP whole (audit D6), nothing is cut, and a row that sends nothing reads quieter. */
+.table { display: flex; flex-direction: column; gap: var(--nds-space-12); min-width: 0; }
+.lines { display: flex; flex-direction: column; align-items: flex-start; gap: var(--nds-space-4); white-space: normal; overflow-wrap: anywhere; min-width: 0; }
+/* A tag in a narrow cell wraps rather than being cut. */
+.lines :global(.nds-tag) { white-space: normal; max-width: 100%; }
+.what { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-6); }
+.sku { white-space: normal; overflow-wrap: anywhere; font-weight: var(--nds-font-weight-semibold); }
+.where { white-space: normal; overflow-wrap: anywhere; }
+.fieldName { white-space: normal; overflow-wrap: anywhere; }
+/* A value as the channel and Nexus hold it: every line kept (a list is one item per line), long words broken. */
+.value { white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; }
+.sends { color: var(--nds-text-strong); font-weight: var(--nds-font-weight-medium); }
+.quiet { color: var(--nds-text-muted); }
+/* The table's pager: the rows shown, then the pages (the DS pager), on one line that wraps on a phone. */
+.pager { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--nds-space-8); }
+/* A problem's long SKU list: the DS disclosure, flush in the cell. */
+.skuList { width: 100%; overflow-wrap: anywhere; white-space: normal; }

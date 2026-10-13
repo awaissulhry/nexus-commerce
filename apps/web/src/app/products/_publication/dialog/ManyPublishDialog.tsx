@@ -233,24 +233,25 @@ export function ManyPublishDialog({ productIds, familyCount, destinations, loadi
     const shown = manyRowLabel(manyRowState(child, now))
     return <span title={shown.hint}><Pill tone={shown.tone} dot>{shown.label}</Pill></span>
   }
-  // The verdict sits next to the product, so a phone shows it without scrolling sideways.
+  // The verdict sits next to the product, so a phone shows it without scrolling sideways. The product's words wrap in a
+  // column of their own width (grid audit D8: an unsized column took the whole title on one line and pushed the rest off).
   const rowColumns: Array<Column<PublishPlanBatchChild>> = [
-    { key: 'product', label: 'Product', render: c => { const creates = createsSentence(c.creates ?? []); return <span className={styles.destination}><strong>{c.familySku ?? '—'}</strong>{c.familyTitle && <span className={styles.muted}>{c.familyTitle}</span>}{creates && <span className={styles.muted}>{creates}</span>}</span> } },
-    { key: 'review', label: sending ? 'Result' : 'Review', render: rowStatus },
-    { key: 'changes', label: 'Changes', numeric: true, render: c => { const s = manyRowState(c, now); return s.kind === 'ready' ? s.changes.toLocaleString('en') : '—' } },
-    { key: 'details', label: <span className="nds-vh">Details</span>, render: c => detailsButton(c.publicationId, c.familySku, manyDestinationLabel(c, options)) },
+    { key: 'product', label: 'Product', width: 480, render: c => { const creates = createsSentence(c.creates ?? []); return <span className={styles.destination}><strong>{c.familySku ?? '—'}</strong>{c.familyTitle && <span className={styles.muted}>{c.familyTitle}</span>}{creates && <span className={styles.muted}>{creates}</span>}</span> } },
+    { key: 'review', label: sending ? 'Result' : 'Review', width: 220, render: rowStatus },
+    { key: 'changes', label: 'Changes', numeric: true, width: 130, render: c => { const s = manyRowState(c, now); return s.kind === 'ready' ? s.changes.toLocaleString('en') : '—' } },
+    { key: 'details', label: <span className="nds-vh">Details</span>, width: 110, render: c => detailsButton(c.publicationId, c.familySku, manyDestinationLabel(c, options)) },
   ]
   // P11 — a Status row: the product × market's verdict before the send, its result after; the listings it changes.
   const statusColumns: Array<Column<ManyStatusRow>> = [
-    { key: 'product', label: 'Product', width: 230, render: r => <span className={styles.sentCell}><strong>{r.familySku ?? '—'}</strong>{r.familyTitle && <span className={`${styles.muted} ${styles.clamp}`} title={r.familyTitle}>{r.familyTitle}</span>}</span> },
-    { key: 'review', label: sending ? 'Result' : 'Review', width: 150, render: r => {
+    { key: 'product', label: 'Product', width: 440, render: r => <span className={styles.sentCell}><strong>{r.familySku ?? '—'}</strong>{r.familyTitle && <span className={styles.muted}>{r.familyTitle}</span>}</span> },
+    { key: 'review', label: sending ? 'Result' : 'Review', width: 220, render: r => {
       if (sending) { const meta = statusGroupMeta(r.children); return <span title={meta.hint}><PublishStatusPill meta={meta} /></span> }
       const shown = manyStatusRowLabel(r, status ?? 'inactive')
       return <span title={shown.hint}><Pill tone={shown.tone} dot>{shown.label}</Pill></span>
     } },
-    { key: 'listings', label: 'Listings', numeric: true, width: 120, render: r => r.send ? `${r.send.toLocaleString('en')}${r.refused ? ` · ${r.refused.toLocaleString('en')} cannot` : ''}`
+    { key: 'listings', label: 'Listings', numeric: true, width: 160, render: r => r.send ? `${r.send.toLocaleString('en')}${r.refused ? ` · ${r.refused.toLocaleString('en')} cannot` : ''}`
       : r.refused ? `${r.refused.toLocaleString('en')} cannot` : '—' },
-    { key: 'details', label: <span className="nds-vh">Details</span>, width: 90, render: r => detailsButton(r.key, r.familySku, manyMarketName(r)) },
+    { key: 'details', label: <span className="nds-vh">Details</span>, width: 110, render: r => detailsButton(r.key, r.familySku, manyMarketName(r)) },
   ]
   const renderStatusRow = (r: ManyStatusRow) => expanded.has(r.key)
     ? <div className={styles.expanded}><ManyStatusDetails row={r} sent={sending} /></div> : null
@@ -306,7 +307,7 @@ export function ManyPublishDialog({ productIds, familyCount, destinations, loadi
     return null
   })()
 
-  return <Modal open onClose={() => { if (busy !== 'check' && busy !== 'submit') onClose() }} size="lg" readable title="Publish products"
+  return <Modal open onClose={() => { if (busy !== 'check' && busy !== 'submit') onClose() }} size="xxl" title="Publish products"
     subtitle={`${plural(familyCount, 'product', 'products')} selected${productIds.length !== familyCount ? ` (${plural(productIds.length, 'row', 'rows')}: a selected variation publishes its whole product)` : ''}`}
     footer={<>
       <Button size="sm" disabled={busy === 'check' || busy === 'submit'} onClick={onClose}>{batch ? (batch.done ? 'Done' : 'Close') : 'Cancel'}</Button>
@@ -401,7 +402,7 @@ export function ManyPublishDialog({ productIds, familyCount, destinations, loadi
       {(reviewed || sending) && batch && shownTab && !status && <div className={styles.tabPanel} {...tabPanelProps(tabBase, shownTab)}>
         {differsLine && <p className={styles.planSummary}>{differsLine}</p>}
         {notListedLine && <p className={styles.muted}>{notListedLine}</p>}
-        <DataGrid ariaLabel={`Products in ${optionOf(shownTab) ? marketShortLabel(optionOf(shownTab)!) : 'this market'}`} size="sm" columns={rowColumns} rows={childrenOf(shownTab)}
+        <DataGrid ariaLabel={`Products in ${optionOf(shownTab) ? marketShortLabel(optionOf(shownTab)!) : 'this market'}`} size="md" headerMenus={false} columns={rowColumns} rows={childrenOf(shownTab)}
           rowKey={c => c.publicationId} renderExpanded={renderRow} expanded={expanded} />
       </div>}
       {(reviewed || sending) && batch && shownTab && status && <div className={styles.tabPanel} {...tabPanelProps(tabBase, shownTab)}>
@@ -409,7 +410,7 @@ export function ManyPublishDialog({ productIds, familyCount, destinations, loadi
           <p className={styles.planSummary}>{marketSummary.line}</p>
           {marketSummary.reasons.length > 0 && <ul className={styles.issues} aria-label="Why some listings cannot change">{marketSummary.reasons.map(reason => <li key={reason}>{reason}</li>)}</ul>}
         </>}
-        <DataGrid ariaLabel={`Products in ${shownMarket || 'this market'}`} size="sm" columns={statusColumns} rows={statusRowsOf(shownTab)}
+        <DataGrid ariaLabel={`Products in ${shownMarket || 'this market'}`} size="md" headerMenus={false} columns={statusColumns} rows={statusRowsOf(shownTab)}
           rowKey={r => r.key} renderExpanded={renderStatusRow} expanded={expanded} />
       </div>}
     </div>

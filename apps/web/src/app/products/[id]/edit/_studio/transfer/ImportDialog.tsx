@@ -176,14 +176,15 @@ export function ImportDialog({ open, onClose, productId, market, onApplied }: { 
   // A family the file created is another product: the done screen opens it, and it is published from there.
   const opens = openFamilyActions(status)
   const columns: Column<SheetImportChange>[] = [
-    { key: 'sku', label: 'SKU', width: 190, className: styles.skuCol, render: c => <span className={styles.mono} title={c.sku}>{c.sku}</span> },
-    { key: 'where', label: 'Where', width: 120, className: styles.whereCol, render: c => c.destination },
-    { key: 'column', label: 'Column', width: 140, className: styles.fieldCol, render: c => <span title={c.field}>{c.label}{c.locale && c.entity !== 'Products' ? ` · ${c.locale}` : ''}</span> },
+    // The widths fit the 1040 px window's body (980 px): 1,006 px of columns cut the Status column by 24 px (grid audit D10).
+    { key: 'sku', label: 'SKU', width: 180, className: styles.skuCol, render: c => <span className={styles.mono} title={c.sku}>{c.sku}</span> },
+    { key: 'where', label: 'Where', width: 110, className: styles.whereCol, render: c => c.destination },
+    { key: 'column', label: 'Column', width: 130, className: styles.fieldCol, render: c => <span title={c.field}>{c.label}{c.locale && c.entity !== 'Products' ? ` · ${c.locale}` : ''}</span> },
     { key: 'now', label: 'Now', width: 230, className: styles.valueCol, render: c => <span className={styles.value} title={cellValue(c, 'before', 4000)}>{changeCells(c)[0]}</span> },
     { key: 'new', label: 'New', width: 230, className: styles.valueCol, render: c => c.problem && (c.status === 'problem' || c.status === 'failed')
       ? <span className={styles.problem}>{c.problem}{whereInFile(c) ? <span className={styles.muted}> · {whereInFile(c)}</span> : null}</span>
       : <span className={styles.value} title={cellValue(c, 'after', 4000)}>{changeCells(c)[1]}</span> },
-    { key: 'status', label: 'Status', width: 96, className: styles.statusCol, render: c => <Tag tone={TONES[c.status]}>{STATUS_LABELS[c.status]}</Tag> },
+    { key: 'status', label: 'Status', width: 100, className: styles.statusCol, render: c => <Tag tone={TONES[c.status]}>{STATUS_LABELS[c.status]}</Tag> },
   ]
 
   const footer = <>

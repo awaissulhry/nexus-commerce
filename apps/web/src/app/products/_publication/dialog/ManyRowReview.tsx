@@ -153,10 +153,10 @@ export function ManyStatusDetails({ row, sent }: ManyStatusDetailsProps) {
     const columns: Array<Column<ManyStatusResult>> = [
       { key: 'sku', label: 'SKU', width: 180, className: styles.skuCol, render: r => <span className={styles.sku}>{r.sku}</span> },
       { key: 'result', label: 'Result', width: 120, render: r => { const meta = lifecycleRowMeta(r.outcome); return <span title={meta.hint}><PublishStatusPill meta={meta} /></span> } },
-      { key: 'message', label: 'What happened', width: 270, render: r => <span className={styles.sentCell}>{[r.action ? LISTING_ACTION_LABEL[r.action] : null, r.message || null].filter(Boolean).join(': ')}</span> },
+      { key: 'message', label: 'What happened', width: 480, render: r => <span className={styles.sentCell}>{[r.action ? LISTING_ACTION_LABEL[r.action] : null, r.message || null].filter(Boolean).join(': ')}</span> },
     ]
     return <div className={styles.body}>
-      <DataGrid ariaLabel={label} size="sm" columns={columns} rows={row.results} rowKey={r => r.key} />
+      <DataGrid ariaLabel={label} size="md" headerMenus={false} columns={columns} rows={row.results} rowKey={r => r.key} />
       {studioLink && <div className={styles.actions}>{studioLink}</div>}
     </div>
   }
@@ -170,10 +170,10 @@ export function ManyStatusDetails({ row, sent }: ManyStatusDetailsProps) {
     // Widths fit the window at desktop; a phone scrolls the table sideways, SKUs first (as the Publish window's table).
     { key: 'sku', label: 'SKU', width: 180, className: styles.skuCol, render: l => <span className={styles.sku}>{l.sku}</span> },
     { key: 'plan', label: 'Change', width: 120, render: l => <Pill tone={PLAN_WORD[l.plan].tone} dot>{PLAN_WORD[l.plan].label}</Pill> },
-    { key: 'sentence', label: 'What happens', width: 270, render: l => <span className={styles.sentCell}>{l.sentence}</span> },
+    { key: 'sentence', label: 'What happens', width: 480, render: l => <span className={styles.sentCell}>{l.sentence}</span> },
   ]
   return <div className={styles.body}>
-    <DataGrid ariaLabel={label} size="sm" columns={columns} rows={row.listings} rowKey={l => l.key} />
+    <DataGrid ariaLabel={label} size="md" headerMenus={false} columns={columns} rows={row.listings} rowKey={l => l.key} />
     {studioLink && <div className={styles.actions}>{studioLink}</div>}
   </div>
 }

@@ -73,3 +73,30 @@ export const formatElapsed = (ms: number | null | undefined) => {
   if (minutes > 0) return `${minutes} min ${seconds} s`
   return `${seconds} s`
 }
+
+/**
+ * Any stored value as plain words, WHOLE (grid audit wave 3): text as it is, a list one item per line ("• …"), an object
+ * one "key: value" per line, a nested list or object on one line ("a, b" / "key: value; key: value"). Never raw JSON with
+ * its braces and quotes — the Publish review and the mapping impact review both showed `{"unit":"cm","value":40}`.
+ */
+export function plainValue(value: unknown): string {
+  if (value === null || value === undefined) return 'Empty'
+  if (typeof value === 'string') return value.trim() === '' ? '(empty text)' : value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (Array.isArray(value)) return value.length ? value.map(item => `• ${inlineValue(item)}`).join('\n') : 'Empty list'
+  if (typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+    return entries.length ? entries.map(([key, item]) => `${key}: ${inlineValue(item)}`).join('\n') : 'Empty'
+  }
+  return String(value)
+}
+
+/** A value on one line: a nested list reads "a, b", an object "key: value; key: value". */
+export function inlineValue(value: unknown): string {
+  if (value === null || value === undefined) return 'Empty'
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (Array.isArray(value)) return value.map(inlineValue).join(', ')
+  if (typeof value === 'object') return Object.entries(value as Record<string, unknown>).map(([k, v]) => `${k}: ${inlineValue(v)}`).join('; ')
+  return String(value)
+}

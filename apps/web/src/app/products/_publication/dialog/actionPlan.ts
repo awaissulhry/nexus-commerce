@@ -195,10 +195,6 @@ export interface ActionPlanRow {
   defaultFieldIds: string[]
   /** Content rows: ticked of the fields that can be ticked. */
   fields: { ticked: number; total: number }
-  /** Full update rows: what the channel holds that Nexus does not — removed when sent. */
-  removals: Array<{ label: string; value: string }>
-  /** The row opens: a Partial row to its field ticks, a Full row to what it sends and removes. */
-  expandable: boolean
   /** New listings: this Publish creates the row, and how it starts ("Creates GALE-M · Inactive — …"); null otherwise. */
   creates: { startsAs: StartAsTarget; sentence: string } | null
   /** New listings: its Status (or its family's main row's) is Not listed, so Publish leaves it out (held, never sent). */
@@ -207,13 +203,6 @@ export interface ActionPlanRow {
 
 /** Danger first (Delete, then End), then Pause, Full update, Resume and Relist, Partial; rows that send nothing last. */
 const RANK: Readonly<Record<string, number>> = { delete: 0, move: 0, end: 1, pause: 2, full: 3, resume: 4, relist: 4, partial: 5, idle: 6, held: 7, outgrown: 8 }
-
-/** A removed value as one short line. */
-export function removalText(value: unknown): string {
-  if (value === null || value === undefined || value === '') return '(empty)'
-  const text = typeof value === 'string' ? value : JSON.stringify(value)
-  return text.length > 120 ? `${text.slice(0, 119)}…` : text
-}
 
 /** "just now", "5 minutes ago", "3 hours ago", "2 days ago". Empty for a missing or unreadable time. */
 export function agoText(at: string | null | undefined, now: number = Date.now()): string {
@@ -254,7 +243,7 @@ function lifecycleRow(row: PublishPlanLifecycleRow, ticked: ReadonlySet<string>,
     key: row.id, kind: 'lifecycle', productId: row.productId, sku: row.sku, what, action: row.action, sent: row.refused ?? row.sentence,
     warning: row.refused ? null : row.warning, checkedAtSend: row.refused ? null : row.checkedAtSend, notSent: row.refused,
     setBy: setByText(row, now), stale: row.stale, tick: row.refused ? 'none' : ticked.has(row.id) ? 'on' : 'off', tickable: !row.refused,
-    danger: isDanger(row.action), changeIds: [], defaultFieldIds: [], fields: { ticked: 0, total: 0 }, removals: [], expandable: false,
+    danger: isDanger(row.action), changeIds: [], defaultFieldIds: [], fields: { ticked: 0, total: 0 },
     creates: null, notListed: false,
   }
 }
@@ -298,7 +287,6 @@ export function actionPlanRows(entry: Pick<DestinationEntry, 'plan' | 'review' |
     // One-click "Nexus wins": the ticked fields that replace a value on the channel.
     const replacing = usable.filter(c => ticked.has(c.id) && !!c.replaces).length
     const defaults = usable.filter(c => c.selectedByDefault)
-    const removals = mode === 'full' ? (review?.removals ?? []).filter(r => r.productId === row.productId).map(r => ({ label: r.label, value: removalText(r.value) })) : []
     const notSent = row.blocked ?? held.get(row.productId) ?? blockedBy
     let sent: string, tick: PlanTick
     if (notSent) { sent = notSent; tick = 'none' }
@@ -341,8 +329,7 @@ export function actionPlanRows(entry: Pick<DestinationEntry, 'plan' | 'review' |
       // S10 — a move deletes the old SKU: a danger row, like Delete.
       tick, tickable: tick !== 'none' && tick !== 'whole' && !!review?.id, danger: moving && !notSent,
       changeIds: changes.map(c => c.id), defaultFieldIds: (defaults.length ? defaults : usable).map(c => c.id),
-      fields: { ticked: on, total: usable.length }, removals,
-      expandable: sparse && !notSent && !moving && (changes.length > 0 || removals.length > 0),
+      fields: { ticked: on, total: usable.length },
       creates, notListed,
     })
   }
@@ -354,7 +341,7 @@ export function actionPlanRows(entry: Pick<DestinationEntry, 'plan' | 'review' |
       key: `held:${row.productId}`, kind: 'held', productId: row.productId, sku: row.sku,
       what: row.notListed || row.deleted ? NOT_LISTED_WHAT : { column: 'send', mode: 'partial', setAt: null, setByName: null },
       action: null, sent: row.reason, warning: null, checkedAtSend: null, notSent: row.reason, setBy: null, stale: false, tick: 'none', tickable: false, danger: false,
-      changeIds: [], defaultFieldIds: [], fields: { ticked: 0, total: 0 }, removals: [], expandable: false,
+      changeIds: [], defaultFieldIds: [], fields: { ticked: 0, total: 0 },
       creates: null, notListed: !!row.notListed || !!row.deleted,
     })
   }
@@ -367,7 +354,7 @@ export function actionPlanRows(entry: Pick<DestinationEntry, 'plan' | 'review' |
     rows.push({
       key: `outgrown:${row.id}`, kind: 'outgrown', productId: row.productId, sku: row.sku, what, action: null, sent: `${reason} ${CLEARED_ON_SEND}`,
       warning: null, checkedAtSend: null, notSent: NO_LONGER_APPLIES, setBy: null, stale: false, tick: 'none', tickable: false, danger: false,
-      changeIds: [], defaultFieldIds: [], fields: { ticked: 0, total: 0 }, removals: [], expandable: false,
+      changeIds: [], defaultFieldIds: [], fields: { ticked: 0, total: 0 },
       creates: null, notListed: false,
     })
   }
