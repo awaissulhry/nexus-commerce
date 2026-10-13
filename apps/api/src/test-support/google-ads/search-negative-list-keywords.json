@@ -1,0 +1,45 @@
+{
+  "results": [
+    {
+      "sharedCriterion": {
+        "resourceName": "customers/1234567890/sharedCriteria/66666666666~93111",
+        "sharedSet": "customers/1234567890/sharedSets/66666666666",
+        "criterionId": "93111",
+        "type": "KEYWORD",
+        "keyword": {
+          "text": "test free",
+          "matchType": "BROAD"
+        }
+      },
+      "sharedSet": {
+        "resourceName": "customers/1234567890/sharedSets/66666666666",
+        "id": "66666666666",
+        "name": "Test negative list",
+        "type": "NEGATIVE_KEYWORDS",
+        "status": "ENABLED",
+        "memberCount": "2"
+      }
+    },
+    {
+      "sharedCriterion": {
+        "resourceName": "customers/1234567890/sharedCriteria/66666666666~93112",
+        "sharedSet": "customers/1234567890/sharedSets/66666666666",
+        "criterionId": "93112",
+        "type": "KEYWORD",
+        "keyword": {
+          "text": "test repair manual",
+          "matchType": "PHRASE"
+        }
+      },
+      "sharedSet": {
+        "resourceName": "customers/1234567890/sharedSets/66666666666",
+        "id": "66666666666",
+        "name": "Test negative list",
+        "type": "NEGATIVE_KEYWORDS",
+        "status": "ENABLED",
+        "memberCount": "2"
+      }
+    }
+  ],
+  "fieldMask": "sharedCriterion.sharedSet,sharedCriterion.criterionId,sharedCriterion.type,sharedCriterion.keyword.text,sharedCriterion.keyword.matchType,sharedSet.id,sharedSet.name,sharedSet.type,sharedSet.status,sharedSet.memberCount"
+}

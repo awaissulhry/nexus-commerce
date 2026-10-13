@@ -1,0 +1,48 @@
+{
+  "results": [
+    {
+      "campaign": {
+        "resourceName": "customers/1234567890/campaigns/11111111111",
+        "id": "11111111111",
+        "aiMaxSetting": {
+          "enableAiMax": true
+        },
+        "keywordMatchType": "BROAD",
+        "broadMatchMigrationDateTime": "2026-10-01 12:00:00",
+        "assetAutomationSettings": [
+          {
+            "assetAutomationType": "FINAL_URL_EXPANSION_TEXT_ASSET_AUTOMATION",
+            "assetAutomationStatus": "OPTED_IN"
+          },
+          {
+            "assetAutomationType": "TEXT_ASSET_AUTOMATION",
+            "assetAutomationStatus": "OPTED_OUT"
+          }
+        ],
+        "networkSettings": {
+          "targetGoogleSearch": true,
+          "targetSearchNetwork": true
+        },
+        "dynamicSearchAdsSetting": {
+          "domainName": "shop.example.com"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/1234567890/campaigns/22222222222",
+        "id": "22222222222"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/1234567890/campaigns/33333333333",
+        "id": "33333333333",
+        "networkSettings": {
+          "targetGoogleSearch": true
+        }
+      }
+    }
+  ],
+  "fieldMask": "campaign.id,campaign.aiMaxSetting.enableAiMax,campaign.keywordMatchType,campaign.broadMatchMigrationDateTime,campaign.assetAutomationSettings,campaign.networkSettings.targetGoogleSearch,campaign.networkSettings.targetSearchNetwork,campaign.networkSettings.targetContentNetwork,campaign.networkSettings.targetPartnerSearchNetwork,campaign.dynamicSearchAdsSetting.domainName"
+}

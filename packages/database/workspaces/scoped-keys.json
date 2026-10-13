@@ -7104,5 +7104,87 @@
       ]
     },
     "relations": []
+  },
+  "GoogleAdsReadState": {
+    "scalar": {},
+    "compound": {
+      "google_ads_read_state": [
+        "customerId",
+        "resource"
+      ]
+    },
+    "relations": []
+  },
+  "GoogleAdsAdGroup": {
+    "scalar": {},
+    "compound": {
+      "google_ads_ad_group": [
+        "customerId",
+        "adGroupId"
+      ]
+    },
+    "relations": []
+  },
+  "GoogleAdsAssetGroup": {
+    "scalar": {},
+    "compound": {
+      "google_ads_asset_group": [
+        "customerId",
+        "assetGroupId"
+      ]
+    },
+    "relations": []
+  },
+  "GoogleAdsKeyword": {
+    "scalar": {},
+    "compound": {
+      "google_ads_keyword": [
+        "customerId",
+        "parentKey",
+        "criterionId"
+      ]
+    },
+    "relations": []
+  },
+  "GoogleAdsNegativeList": {
+    "scalar": {},
+    "compound": {
+      "google_ads_negative_list": [
+        "customerId",
+        "sharedSetId"
+      ]
+    },
+    "relations": []
+  },
+  "GoogleAdsPolicyIssue": {
+    "scalar": {},
+    "compound": {
+      "google_ads_policy_issue": [
+        "customerId",
+        "kind",
+        "entityKey"
+      ]
+    },
+    "relations": []
+  },
+  "GoogleAdsRecommendation": {
+    "scalar": {},
+    "compound": {
+      "google_ads_recommendation": [
+        "customerId",
+        "resourceName"
+      ]
+    },
+    "relations": []
+  },
+  "GoogleAdsAutoApply": {
+    "scalar": {},
+    "compound": {
+      "google_ads_auto_apply": [
+        "customerId",
+        "type"
+      ]
+    },
+    "relations": []
   }
 }

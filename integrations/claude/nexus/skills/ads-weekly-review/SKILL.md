@@ -1,6 +1,6 @@
 ---
 name: ads-weekly-review
-description: Weekly advertising review in Nexus, market by market, for Amazon Sponsored Products and eBay Promoted Listings, and reads Google Ads campaigns and daily numbers - read spend, sales and ACoS, wasteful search terms, the harvest engine's candidates and the verdicts of past harvests, bids and the engines' recommendations, explain them in plain words, then offer the changes as one change plan (negatives, harvests, lower bids, budgets, eBay rates) that a person approves. A temporary stop is lower bids; it pauses an ad only when the person means a real pause. Use when the person asks how their ads are doing, for a weekly ads or bid review, or what to change in their campaigns.
+description: Weekly advertising review in Nexus, market by market, for Amazon Sponsored Products and eBay Promoted Listings, and reads Google Ads (campaigns, numbers, search terms and the brand split, what Google does on its own, its recommendations and alerts) - read spend, sales and ACoS, wasteful search terms, the harvest engine's candidates and the verdicts of past harvests, bids and the engines' recommendations, explain them in plain words, then offer the changes as one change plan (negatives, harvests, lower bids, budgets, eBay rates) that a person approves. A temporary stop is lower bids; it pauses an ad only when the person means a real pause. Use when the person asks how their ads are doing, for a weekly ads or bid review, or what to change in their campaigns.
 ---
 
 # Ads weekly review
@@ -53,6 +53,14 @@ Ask which channel (`amazon`, the default, `ebay` or `google`) and markets, or ta
 Nexus reads the Google Ads account a person chose for the business and changes nothing in Google Ads.
 
 - Read `ads-overview` and `ad-campaigns` with `channel: "google"` (`days`; `status`, `search`; `accountId` only when the business has more than one Google account; never `market`). `ad-search-terms`, `ad-targets`, `ad-changes` and `ad-recommendations` do not read Google.
+- Then `google-ad-details`, one `view` at a time (`campaignId`, `days`, `search`, `limit`, `cursor`; `accountId` as above):
+  - `alerts` first: what needs a look (spend pace, month pace, no conversions, tracking stopped, disapproved ads, products not eligible, limited ads, auto-apply on, changed by Google, settings changed, moved to AI Max). `notChecked` names the checks that could not run and why.
+  - `search-terms`: the search terms with at least one click, by cost. Google does not list a search with no click. `brand-split`: cost, clicks and conversions split into brand, not brand and "not in the search-term list", per campaign type. Brand means one of the business's protected terms for every market (`brandTerms`; a person sets them in Nexus, Marketing › Ads › Rules & automation › Control room › Limits). With none set, `brand` is null: say "not marked", never "not brand".
+  - `keywords` (by cost), `ad-groups`, `negatives`, `asset-groups` (Performance Max) and `products` (Shopping: the status at Google and why, and the Nexus product with the same SKU).
+  - `acts-on-its-own` — what Google acts on by itself: the recommendation types it applies on its own (auto-apply), and per campaign AI Max, broad match, search partners, display expansion, final URL expansion, text customization, dynamic search ads and brand exclusions. A flag that is null is not read yet, never "off". It also lists the changes made outside Nexus and who made them. Changes made with Google Ads Editor never show there.
+  - `recommendations`: Google's own, with their expected effect. Read only: Nexus applies and dismisses none. A person decides them in Google Ads.
+  - `disapprovals`: disapproved or limited ads, and products that are not eligible or limited, with Google's reasons.
+- A part whose `readAt` is null is not read yet: say "not read yet", never 0.
 - The numbers are cost, conversions and conversion value as Google counts them (Google's attribution and conversion actions, days in the account's time zone). Never call them sales, orders or ACoS; return on ad spend is conversion value ÷ cost.
 - Conversions can be fractional, and the last 14 days can still rise as Google adds late conversions (`provisionalFrom`). A day with `read: false` has no numbers: say "not read", never 0, and name `coverage.missingDays`. `previous` is there only when Nexus read every day of the window before.
 - Nexus changes nothing in Google Ads (`writes.mode` is none). Say what you would change and why, and that a person makes the change in Google Ads; never put a Google step in a change plan.
@@ -60,6 +68,8 @@ Nexus reads the Google Ads account a person chose for the business and changes n
 ## 2. Explain
 
 Per market, a few lines: spend and sales against last week, ACoS against the target the business holds in Nexus (`ads-strategy`), the 3 biggest wastes, the 3 best terms ready to harvest and the verdicts of past harvests (Amazon: `harvest-candidates`, `harvest-history`), campaigns over budget or starved, anything an engine flags. For each product the ads brain runs: what it did or would do in shadow, what waits for a person, its clashes and the tools not set up. Then a short list of proposed changes with why — none on a lever the brain owns.
+
+Google Ads, per account: cost, conversions and conversion value against the period before (only when `previous` is there), the alerts, the brand split, the search terms that cost most with no conversion, what Google did on its own, and what you would change in Google Ads and why (a person makes it there).
 
 ## 3. Propose (one plan per review)
 

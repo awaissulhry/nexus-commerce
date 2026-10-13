@@ -1,0 +1,90 @@
+{
+  "results": [
+    {
+      "campaign": {
+        "resourceName": "customers/1234567890/campaigns/11111111111",
+        "id": "11111111111"
+      },
+      "adGroup": {
+        "resourceName": "customers/1234567890/adGroups/71111111111",
+        "id": "71111111111"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/1234567890/adGroupAds/71111111111~81111111111",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/1234567890/ads/81111111111",
+          "id": "81111111111",
+          "type": "RESPONSIVE_SEARCH_AD"
+        },
+        "policySummary": {
+          "approvalStatus": "DISAPPROVED",
+          "reviewStatus": "REVIEWED",
+          "policyTopicEntries": [
+            {
+              "topic": "DESTINATION_NOT_WORKING",
+              "type": "PROHIBITED"
+            },
+            {
+              "topic": "DESTINATION_NOT_WORKING",
+              "type": "PROHIBITED"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/1234567890/campaigns/11111111111",
+        "id": "11111111111"
+      },
+      "adGroup": {
+        "resourceName": "customers/1234567890/adGroups/71111111111",
+        "id": "71111111111"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/1234567890/adGroupAds/71111111111~81111111112",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/1234567890/ads/81111111112",
+          "id": "81111111112",
+          "type": "RESPONSIVE_SEARCH_AD"
+        },
+        "policySummary": {
+          "approvalStatus": "APPROVED_LIMITED",
+          "reviewStatus": "REVIEWED",
+          "policyTopicEntries": [
+            {
+              "topic": "TRADEMARKS_IN_AD_TEXT",
+              "type": "LIMITED"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/1234567890/campaigns/11111111111",
+        "id": "11111111111"
+      },
+      "adGroup": {
+        "resourceName": "customers/1234567890/adGroups/71111111112",
+        "id": "71111111112"
+      },
+      "adGroupAd": {
+        "resourceName": "customers/1234567890/adGroupAds/71111111112~81111111113",
+        "status": "ENABLED",
+        "ad": {
+          "resourceName": "customers/1234567890/ads/81111111113",
+          "id": "81111111113",
+          "type": "RESPONSIVE_SEARCH_AD"
+        },
+        "policySummary": {
+          "approvalStatus": "APPROVED",
+          "reviewStatus": "REVIEWED"
+        }
+      }
+    }
+  ],
+  "fieldMask": "campaign.id,adGroup.id,adGroupAd.ad.id,adGroupAd.ad.type,adGroupAd.status,adGroupAd.policySummary.approvalStatus,adGroupAd.policySummary.reviewStatus,adGroupAd.policySummary.policyTopicEntries"
+}

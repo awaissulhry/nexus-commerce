@@ -27,12 +27,14 @@ export const DEFAULT_BUCKETS: Record<GatewayChannel, BucketParams> = {
 
 /**
  * Google, per API (the key's operation group is the host's, channels.googleHostGroup). Google Ads is the
- * scarce one — a daily operation budget per Cloud project — so its bucket is a burst of 30 refilled one
- * call per 30 s: a connect's discovery (≤ 1 + 20 + a few manager reads) fits in the burst, a runaway loop
- * cannot spend the day's budget. Merchant Center, Analytics and the userinfo heartbeat are generous.
+ * scarce one — a daily operation budget per Cloud project — so its bucket is a burst of 60 refilled one
+ * call per 30 s, per connection: a connect's discovery (≤ 1 + 20 + a few manager reads) and a step-1b daily
+ * read (21 first pages, 27 on an account's first run, plus the extra pages of a big account) fit in the
+ * burst; a runaway loop cannot spend the day's budget (ops-budget.ts reserves every run's operations first).
+ * Merchant Center, Analytics and the userinfo heartbeat are generous.
  */
 export const GOOGLE_BUCKETS: Record<'ads' | 'merchant' | 'analytics' | 'identity', BucketParams> = {
-  ads: { capacity: 30, refillPerSec: 1 / 30 },
+  ads: { capacity: 60, refillPerSec: 1 / 30 },
   merchant: { capacity: 10, refillPerSec: 2 },
   analytics: { capacity: 10, refillPerSec: 1 },
   identity: { capacity: 5, refillPerSec: 1 },

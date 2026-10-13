@@ -21,7 +21,8 @@ The Nexus server's instructions hold the rules for every change — say which bu
 3. **Inbox.** `alerts-inbox` (`source`, `severity`): failed or given-up syncs, alerts that fired and were not acknowledged, unread notifications, failed incoming events, worst first; the first page counts them and lists the alert rules.
 4. **Queues.** `sync-activity` with `kind: "queue"` (`tab`: active, dead), `"failed-calls"`, `"webhooks"`, `"error-groups"`.
 5. **Jobs.** `job-history` (`kind`: import, export, bulk, transfer; `status: "FAILED"`; `jobId` for one job and its first rows).
-6. When asked: `audit-trail` (who changed what), `ai-usage` (Nexus's own AI use), `business-overview`.
+6. **Google Ads.** When the business has a Google Ads account: `google-ad-details` with `view: "alerts"` — spend pace (yesterday, or the month so far, ahead of the budget), no conversions (a campaign that spends and gets clicks but no conversion, or conversion tracking that stopped), disapproved ads and products that are not eligible, auto-apply on (Google applies its recommendations by itself), changes Google made on its own, settings changed and campaigns moved to AI Max. `notChecked` names the checks that could not run, and why (a part not read yet). `view: "disapprovals"` lists each ad and product with Google's reasons. Read only: a person fixes these in Google Ads.
+7. When asked: `audit-trail` (who changed what), `ai-usage` (Nexus's own AI use), `business-overview`.
 
 ## 2. Report
 
@@ -30,6 +31,7 @@ The Nexus server's instructions hold the rules for every change — say which bu
 - Channels whose calls fail or lag, the worst operations, and the oldest waiting change.
 - Alerts by severity, the recurring errors, and dead queue items per channel.
 - Failed jobs, with the first failing rows' reasons.
+- Google Ads alerts, worst first (danger, then warn, then info), and the checks that could not run; a person acts on them in Google Ads.
 - What could not be read (a tool not allowed for this person).
 
 ## 3. Offer (only when asked)

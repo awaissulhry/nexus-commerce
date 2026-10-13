@@ -1,0 +1,25 @@
+{
+  "results": [
+    {
+      "campaign": {
+        "resourceName": "customers/1234567890/campaigns/22222222222",
+        "id": "22222222222"
+      },
+      "assetGroup": {
+        "resourceName": "customers/1234567890/assetGroups/61111111111",
+        "id": "61111111111",
+        "name": "Test asset group",
+        "status": "ENABLED",
+        "primaryStatus": "ELIGIBLE",
+        "primaryStatusReasons": [
+          "ASSET_GROUP_UNDER_REVIEW"
+        ],
+        "adStrength": "GOOD",
+        "finalUrls": [
+          "https://shop.example.com/helmets"
+        ]
+      }
+    }
+  ],
+  "fieldMask": "campaign.id,assetGroup.id,assetGroup.name,assetGroup.status,assetGroup.primaryStatus,assetGroup.primaryStatusReasons,assetGroup.adStrength,assetGroup.finalUrls"
+}

@@ -38,6 +38,11 @@
  * through services/marketing/google-ads/read.service.ts (the Google Ads tab's own reads). Read only: no Nexus tool
  * changes Google Ads (`writes.mode: none`). A day Nexus has not read has no numbers (never 0); amounts are minor units
  * of the account's currency.
+ *
+ * Google Ads step 1b (PLAN-1B §8) — `google-ad-details` opens the rest of the Google Ads page with a `view`: ad groups,
+ * keywords, negatives, search terms and the brand split, asset groups, products, what Google does on its own, Google's
+ * recommendations, the alerts and the disapprovals — each the page's own read service (google-ads/read-detail,
+ * read-search-terms, read-acts and alerts services), never a query of its own. Still read only.
  */
 
 import { adProductOf, isLifetimeBudget } from '@nexus/shared/ads-ad-product'
@@ -109,12 +114,26 @@ import { EBAY_MARKETPLACE_SHORT } from '../../ads-core/ebay-marketplace.js'
 import { marketCurrency, marketCurrencyRows } from '../../pim/market-currency.js'
 import {
   GoogleAdsReadError,
+  googleAdsAccount,
   googleAdsCampaignList,
   googleAdsOverview,
   type GoogleAccount,
   type GoogleAdsMetrics,
 } from '../../marketing/google-ads/read.service.js'
 import { campaignTypeText } from '../../marketing/google-ads/mappers.js'
+import {
+  googleAdsAdGroups,
+  googleAdsAssetGroups,
+  googleAdsDisapprovals,
+  googleAdsKeywords,
+  googleAdsNegatives,
+  googleAdsProducts,
+} from '../../marketing/google-ads/read-detail.service.js'
+import { googleAdsBrandSplit, googleAdsSearchTerms } from '../../marketing/google-ads/read-search-terms.service.js'
+import { googleAdsActsOnItsOwn, googleAdsRecommendations } from '../../marketing/google-ads/read-acts.service.js'
+// The alerts service is imported where it is used: it also raises the bell's notifications, whose module graph the tool
+// registry must not load in every process that lists tools.
+import type { googleAdsAlerts } from '../../marketing/google-ads/alerts.service.js'
 import type { AgentTool, ToolResult } from '../tool-types.js'
 
 const ADSPEND = FIELDS.financialsAdspendView
@@ -2066,4 +2085,370 @@ const ebayAdDetailsTool: AgentTool = {
   handler: (args) => listTool('ebay-ad-details', async () => ebayAdDetails(args as unknown as EbayDetailArgs, scopeOf('ebay-ad-details', args))),
 }
 
-export const ADS_READ_TOOLS: AgentTool[] = [adsOverview, adCampaigns, adTargets, adSearchTerms, adChanges, adRecommendations, ebayAdDetailsTool]
+// ── google-ad-details (Google Ads step 1b, read only) ──────────────────────────────────────────────
+
+/*
+ * One tool with a `view`, as ebay-ad-details: each view is one of the Google Ads page's own reads (R5–R15), answered from
+ * what the daily read stored. A list is read whole from its service (following the service's own pages, up to
+ * GOOGLE_DETAIL_READ_CAP rows) and paged here, so this tool's cursor is its own: a keyset of names, or, for the lists
+ * ranked by cost, only a place — never an amount.
+ */
+const GOOGLE_DETAIL_VIEWS = [
+  'ad-groups', 'keywords', 'negatives', 'search-terms', 'brand-split', 'asset-groups', 'products', 'acts-on-its-own',
+  'recommendations', 'alerts', 'disapprovals',
+] as const
+type GoogleDetailView = (typeof GOOGLE_DETAIL_VIEWS)[number]
+
+/** What each view takes besides the account. A filter a view does not take is refused, never ignored. */
+const GOOGLE_VIEW_TAKES: Readonly<Record<GoogleDetailView, { campaignId: boolean; days: boolean; search: boolean; pages: boolean }>> = {
+  'ad-groups': { campaignId: true, days: true, search: true, pages: true },
+  keywords: { campaignId: true, days: true, search: true, pages: true },
+  negatives: { campaignId: true, days: false, search: true, pages: true },
+  'search-terms': { campaignId: true, days: true, search: true, pages: true },
+  'brand-split': { campaignId: false, days: true, search: false, pages: false },
+  'asset-groups': { campaignId: true, days: true, search: false, pages: true },
+  products: { campaignId: true, days: true, search: true, pages: true },
+  'acts-on-its-own': { campaignId: false, days: false, search: false, pages: true },
+  recommendations: { campaignId: true, days: false, search: false, pages: true },
+  alerts: { campaignId: false, days: false, search: false, pages: true },
+  disapprovals: { campaignId: true, days: false, search: false, pages: true },
+}
+
+/**
+ * This read's money beyond AD_MONEY and the shared registry: bids and targets, a recommendation's expected effect and an
+ * alert's figures (each stripped whole), as the Google Ads routes strip them (PLAN-1B M12).
+ */
+const GOOGLE_DETAIL_MONEY = {
+  ...AD_MONEY,
+  cpcBidCents: ADSPEND,
+  effectiveCpcBidCents: ADSPEND,
+  targetCpaCents: ADSPEND,
+  targetRoas: ADSPEND,
+  impact: ADSPEND,
+  numbers: ADSPEND,
+} as const
+
+/** Never under `note`: AD_MONEY strips that key as prose that quotes amounts. */
+const GOOGLE_DETAIL_WRITES = { mode: 'none', text: 'No Nexus tool changes Google Ads: a person makes every change in Google Ads.' } as const
+const GOOGLE_DETAIL_DAYS = 30
+/** The most rows one call reads from a list service; beyond it the answer says how many it left out. */
+const GOOGLE_DETAIL_READ_CAP = 2000
+/** Rows asked of a list service per call while reading it whole. */
+const GOOGLE_SERVICE_PAGE = 500
+const GOOGLE_EDITOR_UNSEEN = 'Changes made with Google Ads Editor never reach Google\'s change history, so Nexus cannot list them.'
+const GOOGLE_SEARCH_TERM_SCOPE = 'Only search terms with at least one click in the window are read: a term with impressions and no click is not in this list.'
+
+interface GoogleDetailArgs { view: GoogleDetailView; accountId?: string; campaignId?: string; days?: number; search?: string; limit?: number; cursor?: string }
+
+/** Why these arguments do not fit the view, or null when they do. */
+function googleDetailRefusal(a: GoogleDetailArgs): string | null {
+  const takes = GOOGLE_VIEW_TAKES[a.view]
+  if (a.campaignId && !takes.campaignId) return `View ${a.view} reads the whole account: leave campaignId out.`
+  if (a.days != null && !takes.days) return `View ${a.view} has no window of days: leave days out.`
+  if (a.search && !takes.search) return `View ${a.view} takes no search: leave search out.`
+  if ((a.limit != null || a.cursor) && !takes.pages) return `View ${a.view} is one short answer with no pages: leave limit and cursor out.`
+  return null
+}
+
+/** Why there is nothing to read in Google Ads for this business, in words; null when an account is chosen. */
+function googleNoAccount(account: GoogleAccount | null): string | null {
+  if (!account) return 'Google is not connected for this business: a person connects Google in Nexus (Settings › Channels › Google) and chooses the Google Ads account Nexus reads.'
+  if (!account.ads) return 'No Google Ads account is chosen for this business yet: a person chooses one in Nexus (Settings › Channels › Google).'
+  return null
+}
+
+interface GoogleReadState { readAt: string | null; lastStatus: string | null; lastError: string | null }
+
+/** "Not read yet" in words, with why when the last try failed or was skipped; null when Nexus has read it. */
+function googleNotRead(read: GoogleReadState | null | undefined, what: string): string | null {
+  if (read?.readAt) return null
+  const why = read?.lastStatus === 'FAILED' && read.lastError
+    ? ` The last try failed: ${read.lastError}`
+    : read?.lastStatus === 'SKIPPED_BUDGET' ? ' The last read left it out to stay within the day\'s Google reads.' : ''
+  return `Nexus has not read the ${what} from Google yet.${why}`
+}
+
+/** Why a list holds no rows (not read yet, or nothing matches), in words; null when it holds some. */
+function googleListEmpty(read: GoogleReadState | null | undefined, total: number, filtered: boolean, one: string, many: string): string | null {
+  return googleNotRead(read, many) ?? (total === 0 ? (filtered ? `No ${one} matches these filters.` : `No ${one} in this account.`) : null)
+}
+
+interface ServicePage { items: unknown[]; nextCursor: string | null; total: number }
+
+/** A list service read whole: its own pages followed up to GOOGLE_DETAIL_READ_CAP rows, in the service's order. */
+async function readEvery<P extends ServicePage>(read: (paging: { limit: number; cursor?: string }) => Promise<P>) {
+  const first = await read({ limit: GOOGLE_SERVICE_PAGE })
+  const items: P['items'][number][] = [...first.items]
+  let next = first.nextCursor
+  while (next && items.length < GOOGLE_DETAIL_READ_CAP) {
+    const page = await read({ limit: GOOGLE_SERVICE_PAGE, cursor: next })
+    items.push(...page.items)
+    next = page.items.length ? page.nextCursor : null
+  }
+  const rows = items.slice(0, GOOGLE_DETAIL_READ_CAP)
+  const total = Math.max(first.total, items.length)
+  return { first, rows, total }
+}
+
+/** The list part of an answer: the page, the totals, and what the reader may do for more (narrowBy null: no filter). */
+function googleListOut(page: { items: unknown[]; nextCursor: string | null; cut: number }, read: number, total: number, narrowBy: string | null) {
+  const trimmed = page.cut ? ` (cut from ${page.items.length + page.cut} to stay within the size limit)` : ''
+  return {
+    items: page.items,
+    nextCursor: page.nextCursor,
+    total,
+    ...(read < total ? { truncated: `Only the first ${read} of ${total} rows were read: narrow with ${narrowBy ?? 'a filter'}.` } : {}),
+    ...(page.nextCursor
+      ? { more: narrowBy ? moreHint(page.items.length, total, page.cut, narrowBy) : `${total} rows; this page has ${page.items.length}${trimmed}. To go on, call again with cursor set to nextCursor.` }
+      : {}),
+  }
+}
+
+/** The window of a view with numbers, as ads-overview names it (provisionalFrom: Google can still add conversions). */
+const googleWindowOut = (window: { from: string; to: string; provisionalFrom: string | null }, coverage: { daysInWindow: number }) =>
+  ({ from: window.from, to: window.to, days: coverage.daysInWindow, provisionalFrom: window.provisionalFrom })
+const GOOGLE_DETAIL_COUNTING = `${GOOGLE_COUNTING} Google can still add late conversions to recent days: figures on or after provisionalFrom may still change.`
+/** Alerts worst first. */
+const GOOGLE_SEVERITY_RANK: Readonly<Record<string, number>> = { danger: 0, warn: 1, info: 2 }
+
+async function googleAdDetails(a: GoogleDetailArgs, scope: string): Promise<Record<string, unknown>> {
+  const context = await googleAdsAccount(a.accountId)
+  const takes = GOOGLE_VIEW_TAKES[a.view]
+  const base = {
+    channel: 'google' as const,
+    view: a.view,
+    writes: GOOGLE_DETAIL_WRITES,
+    account: context.account ? googleAccountOut(context.account) : null,
+  }
+  const missing = googleNoAccount(context.account)
+  if (missing) return { ...base, ...(takes.pages ? { items: [], nextCursor: null, total: 0 } : {}), empty: missing }
+  try {
+    return await googleDetailView(a, scope, base, context.account!.connectionId)
+  } catch (error) {
+    // The answer is always about the account named (or the chosen one): a campaign of another Google Ads account of the
+    // business is not in it, and the refusal says how to read that one.
+    const several = context.accounts.filter((other) => other.ads).length > 1
+    if (error instanceof GoogleAdsReadError && error.status === 404 && a.campaignId && !a.accountId && several) {
+      throw new GoogleAdsReadError(404, `${error.message}. If it is a campaign of another Google Ads account of this business, name that account with accountId.`)
+    }
+    throw error
+  }
+}
+
+/** One view, read for one Google account (its connection id). */
+async function googleDetailView(a: GoogleDetailArgs, scope: string, base: Record<string, unknown>, connectionId: string): Promise<Record<string, unknown>> {
+  const size = pageSize(a.limit)
+  const account = { connectionId }
+  const days = a.days ?? GOOGLE_DETAIL_DAYS
+  const filtered = !!(a.campaignId || a.search)
+  const numbersOf = (read: GoogleReadState, what: string) => {
+    const unread = googleNotRead(read, what)
+    return unread ? { numbersNotRead: `${unread} Their metrics are null (not read), never 0.` } : {}
+  }
+
+  switch (a.view) {
+    case 'ad-groups': {
+      const { first, rows, total } = await readEvery((paging) => googleAdsAdGroups({ ...account, days, campaignId: a.campaignId, search: a.search, ...paging }))
+      const page = keysetPage(rows, (g): CursorPosition => ({ values: [g.name], id: g.adGroupId }), size, scope, a.cursor)
+      const empty = googleListEmpty(first.read, total, filtered, 'ad group', 'ad groups')
+      return {
+        ...base, currency: first.currency, dataAsOf: first.dataAsOf, window: googleWindowOut(first.window, first.coverage),
+        coverage: first.coverage, counting: GOOGLE_DETAIL_COUNTING, read: first.read, numbersRead: first.numbersRead,
+        ...numbersOf(first.numbersRead, 'ad groups\' numbers'),
+        ...googleListOut(page, rows.length, total, 'campaignId or search'), ...(empty ? { empty } : {}),
+      }
+    }
+    case 'keywords': {
+      const { first, rows, total } = await readEvery((paging) => googleAdsKeywords({ ...account, days, campaignId: a.campaignId, search: a.search, sort: 'spend', ...paging }))
+      const page = rankedPage(rows, (k) => k.keywordId, size, scope, a.cursor)
+      const empty = googleListEmpty(first.read, total, filtered, 'keyword', 'keywords')
+      return {
+        ...base, currency: first.currency, dataAsOf: first.dataAsOf, window: googleWindowOut(first.window, first.coverage),
+        coverage: first.coverage, counting: GOOGLE_DETAIL_COUNTING, order: 'by cost in the window, highest first',
+        read: first.read, numbersRead: first.numbersRead, ...numbersOf(first.numbersRead, 'keywords\' numbers'),
+        ...googleListOut(page, rows.length, total, 'campaignId or search'), ...(empty ? { empty } : {}),
+      }
+    }
+    case 'negatives': {
+      const { first, rows, total } = await readEvery((paging) => googleAdsNegatives({ ...account, campaignId: a.campaignId, search: a.search, ...paging }))
+      const page = keysetPage(rows, (n): CursorPosition => ({
+        values: [n.level, n.campaignName ?? '', n.adGroupName ?? n.listName ?? '', n.text ?? ''], id: n.negativeId,
+      }), size, scope, a.cursor)
+      const reads = [first.read.adGroup, first.read.campaign, first.read.lists]
+      const empty = reads.every((r) => !r.readAt) ? googleNotRead(first.read.adGroup, 'negative keywords')
+        : total === 0 ? (filtered ? 'No negative keyword matches these filters.' : 'No negative keyword in this account.') : null
+      return { ...base, read: first.read, lists: first.lists, ...googleListOut(page, rows.length, total, 'campaignId or search'), ...(empty ? { empty } : {}) }
+    }
+    case 'search-terms': {
+      const { first, rows, total } = await readEvery((paging) => googleAdsSearchTerms({ ...account, days, campaignId: a.campaignId, search: a.search, sort: 'spend', ...paging }))
+      const page = rankedPage(rows, (t) => t.termId, size, scope, a.cursor)
+      const empty = googleListEmpty(first.read, total, filtered, 'search term', 'search terms')
+      return {
+        ...base, currency: first.currency, dataAsOf: first.dataAsOf, window: googleWindowOut(first.window, first.coverage),
+        coverage: first.coverage, counting: GOOGLE_DETAIL_COUNTING, order: 'by cost in the window, highest first',
+        scope: first.scope, scopeText: GOOGLE_SEARCH_TERM_SCOPE, brandTerms: first.brandTerms, brandText: googleBrandText(first.brandTerms.terms.length),
+        read: first.read, ...googleListOut(page, rows.length, total, 'campaignId or search'), ...(empty ? { empty } : {}),
+      }
+    }
+    case 'brand-split': {
+      const split = await googleAdsBrandSplit({ ...account, days })
+      const empty = googleNotRead(split.read, 'search terms')
+      return {
+        ...base, currency: split.currency, dataAsOf: split.dataAsOf, window: googleWindowOut(split.window, split.coverage),
+        coverage: split.coverage, counting: GOOGLE_DETAIL_COUNTING, scopeText: GOOGLE_SEARCH_TERM_SCOPE,
+        brandTerms: split.brandTerms, brandText: googleBrandText(split.brandTerms.terms.length),
+        splitText: 'Per campaign type (ALL, then Search, Shopping, Performance Max): the total, the search terms that are brand, those that are not, '
+          + 'and what is not in the search-term list (total minus the search terms: clicks on terms Google does not name, or without a click). '
+          + 'Coverage counts only the days Nexus read both the campaign numbers and the search terms.',
+        read: split.read, rows: split.rows, ...(empty ? { empty } : {}),
+      }
+    }
+    case 'asset-groups': {
+      const { first, rows, total } = await readEvery((paging) => googleAdsAssetGroups({ ...account, days, campaignId: a.campaignId, ...paging }))
+      const page = keysetPage(rows, (g): CursorPosition => ({ values: [g.name], id: g.assetGroupId }), size, scope, a.cursor)
+      const empty = googleListEmpty(first.read, total, filtered, 'asset group', 'asset groups')
+      return {
+        ...base, currency: first.currency, dataAsOf: first.dataAsOf, window: googleWindowOut(first.window, first.coverage),
+        coverage: first.coverage, counting: GOOGLE_DETAIL_COUNTING, read: first.read, numbersRead: first.numbersRead,
+        ...numbersOf(first.numbersRead, 'asset groups\' numbers'),
+        ...googleListOut(page, rows.length, total, 'campaignId'), ...(empty ? { empty } : {}),
+      }
+    }
+    case 'products': {
+      const { first, rows, total } = await readEvery((paging) => googleAdsProducts({ ...account, days, campaignId: a.campaignId, search: a.search, sort: 'spend', ...paging }))
+      const page = rankedPage(rows, (p) => p.productKey, size, scope, a.cursor)
+      const empty = first.numbersRead.readAt || first.statusRead.readAt
+        ? (total === 0 ? (filtered ? 'No product matches these filters.' : 'No product in this account.') : null)
+        : googleNotRead(first.statusRead, 'products')
+      const statusNotRead = googleNotRead(first.statusRead, 'products\' status at Google')
+      return {
+        ...base, currency: first.currency, dataAsOf: first.dataAsOf, window: googleWindowOut(first.window, first.coverage),
+        coverage: first.coverage, counting: GOOGLE_DETAIL_COUNTING, order: 'by cost in the window, highest first',
+        numbersRead: first.numbersRead, statusRead: first.statusRead, ...numbersOf(first.numbersRead, 'products\' numbers'),
+        ...(statusNotRead ? { statusNotRead: `${statusNotRead} Their status is null (not read).` } : {}),
+        ...googleListOut(page, rows.length, total, 'campaignId or search'), ...(empty ? { empty } : {}),
+      }
+    }
+    case 'acts-on-its-own': {
+      const acts = await googleAdsActsOnItsOwn({ ...account })
+      const changes = acts.outsideChanges.items
+      const page = keysetPage(changes, (c): CursorPosition => ({ values: [c.changedAt], id: shortId(JSON.stringify(c)) }), size, scope, a.cursor, [true])
+      return {
+        ...base, read: acts.read, autoApply: acts.autoApply,
+        ...(acts.autoApply ? {} : { autoApplyNotRead: googleNotRead(acts.read.autoApply, 'recommendation types Google applies on its own') }),
+        campaigns: acts.campaigns,
+        outsideChanges: {
+          nexusWrites: acts.outsideChanges.nexusWrites,
+          coveredFrom: acts.outsideChanges.coveredFrom,
+          coveredThrough: acts.outsideChanges.coveredThrough,
+          bySource: acts.outsideChanges.bySource,
+        },
+        unseen: GOOGLE_EDITOR_UNSEEN,
+        // items: the changes made outside Nexus, newest first (at most 200, as the page shows them).
+        ...googleListOut(page, changes.length, changes.length, null),
+      }
+    }
+    case 'recommendations': {
+      const recs = await googleAdsRecommendations({ ...account, campaignId: a.campaignId })
+      const page = keysetPage(recs.items, (r): CursorPosition => ({ values: [r.typeText, r.campaignName ?? ''], id: r.recommendationId }), size, scope, a.cursor)
+      const empty = googleNotRead(recs.read, 'recommendations')
+        ?? (recs.items.length === 0 ? (a.campaignId ? 'Google has no recommendation for this campaign.' : 'Google has no recommendation for this account.') : null)
+      return {
+        ...base, currency: recs.currency, read: recs.read, byType: recs.byType,
+        recommendationsText: 'Read only: Nexus applies and dismisses none of Google\'s recommendations; a person does that in Google Ads. autoApplied: Google applied it on its own.',
+        ...googleListOut(page, recs.items.length, recs.items.length, 'campaignId'), ...(empty ? { empty } : {}),
+      }
+    }
+    case 'alerts': {
+      const { googleAdsAlerts: readAlerts } = await import('../../marketing/google-ads/alerts.service.js')
+      const alerts: Awaited<ReturnType<typeof googleAdsAlerts>> = await readAlerts({ ...account })
+      const page = keysetPage(alerts.items, (al): CursorPosition => ({
+        values: [GOOGLE_SEVERITY_RANK[al.severity] ?? 3, al.kind, al.campaignName ?? ''], id: al.alertId,
+      }), size, scope, a.cursor)
+      return {
+        ...base, checkedAt: alerts.checkedAt, notChecked: alerts.notChecked,
+        ...googleListOut(page, alerts.items.length, alerts.items.length, null),
+        ...(alerts.items.length === 0 ? { empty: 'Nothing needs a look in Google Ads right now (notChecked names what could not be checked).' } : {}),
+      }
+    }
+    case 'disapprovals': {
+      const issues = await googleAdsDisapprovals({ ...account, campaignId: a.campaignId })
+      const rows = [
+        ...issues.ads.map((ad) => ({ kind: 'ad' as const, ...ad })),
+        ...issues.products.map((product) => ({ kind: 'product' as const, ...product })),
+      ]
+      const page = keysetPage(rows, (r): CursorPosition => (r.kind === 'ad'
+        ? { values: ['ad', r.campaignName ?? '', r.adGroupName ?? ''], id: `ad:${r.adId}` }
+        : { values: ['product', r.title ?? '', r.itemId, r.status], id: `product:${r.itemId}` }), size, scope, a.cursor)
+      const empty = !issues.read.ads.readAt && !issues.read.products.readAt
+        ? googleNotRead(issues.read.ads, 'ads\' and products\' review status')
+        : rows.length === 0 ? 'No ad is disapproved or limited, and no product is not eligible or limited.' : null
+      return {
+        ...base, read: issues.read,
+        ...(issues.truncated ? { truncated: 'Google holds more issues than Nexus keeps (500 ads and 500 products): the rest are not listed.' } : {}),
+        ...googleListOut(page, rows.length, rows.length, 'campaignId'), ...(empty ? { empty } : {}),
+      }
+    }
+  }
+}
+
+/** What `brand` means in this answer, in words. */
+function googleBrandText(terms: number): string {
+  return terms > 0
+    ? 'brand true = the search term holds one of the business\'s protected terms that apply to every market (brandTerms); a person changes them in Nexus (brandTerms.editHref).'
+    : 'No protected terms that apply to every market are set, so no search term is marked brand or not brand (brand null, never "not brand"); a person sets them in Nexus (brandTerms.editHref).'
+}
+
+const googleAdDetailsTool: AgentTool = {
+  name: 'google-ad-details',
+  title: 'Google Ads details',
+  category: 'insights',
+  riskTier: 'low',
+  readOnly: true,
+  requires: [F.adsView],
+  restrictedFields: GOOGLE_DETAIL_MONEY,
+  input: z.object({
+    view: z.preprocess(lower, z.enum(GOOGLE_DETAIL_VIEWS))
+      .describe('what to read: ad-groups | keywords | negatives | search-terms | brand-split | asset-groups | products | acts-on-its-own | recommendations | alerts | disapprovals'),
+    accountId: z.string().trim().min(1).max(64).optional()
+      .describe('the Google account to read, by its connectionId (channel-connections); default the business\'s chosen Google Ads account'),
+    campaignId: z.string().trim().min(1).max(64).optional()
+      .describe('only this Google campaign: campaignId from ad-campaigns with channel google. Views ad-groups, keywords, negatives, search-terms, asset-groups, products, recommendations and disapprovals'),
+    days: z.coerce.number().int().min(1).max(MAX_DAYS).optional()
+      .describe(`views with numbers (ad-groups, keywords, search-terms, brand-split, asset-groups, products): the last N days, ending yesterday in the account's time zone (default ${GOOGLE_DETAIL_DAYS}, max ${MAX_DAYS})`),
+    search: z.string().trim().min(1).max(100).optional()
+      .describe('only rows whose text contains this: ad group names, keyword and negative text, search terms, product titles or item ids (views ad-groups, keywords, negatives, search-terms, products)'),
+    limit: limitArg,
+    cursor: cursorArg,
+  }),
+  description:
+    'Google Ads, read only: what the Google Ads account a person chose for this business holds, as the Google Ads page in '
+    + 'Nexus shows it (stored data, no Google call). view ad-groups: each ad group with its status, bid or target and '
+    + 'numbers. keywords: each keyword with match type, status, quality score, bid and numbers, by cost. negatives: the '
+    + 'negative keywords of ad groups, campaigns and negative keyword lists (lists: each list and its campaigns). '
+    + 'search-terms: the search terms with at least one click, each marked brand or not (brand = a protected term of the '
+    + 'business for every market; none set, brand is null), by cost. brand-split: cost, clicks and conversions split into '
+    + 'brand, not brand and not in the search-term list, per campaign type. asset-groups: Performance Max asset groups '
+    + 'with ad strength and numbers. products: Shopping products with their status at Google (no issue, limited, not '
+    + 'eligible and why), the Nexus product with the same SKU, and numbers, by cost. acts-on-its-own: what Google does by '
+    + 'itself — the recommendation types it applies on its own (auto-apply), per campaign AI Max, campaign broad match, '
+    + 'search partners, display expansion, final URL expansion, text customization, dynamic search ads and brand '
+    + 'exclusions (a flag null = not read yet) — and the changes made outside Nexus, with who made them. recommendations: '
+    + 'Google\'s recommendations with their expected effect (impact). alerts: what needs a look (spend pace, month pace, '
+    + 'no conversions, tracking stopped, disapproved ads, products not eligible, limited ads, auto-apply on, changed by '
+    + 'Google, settings changed, moved to AI Max) and the checks that could not run (notChecked). disapprovals: '
+    + 'disapproved or limited ads and products not eligible or limited, with Google\'s reasons. A part Nexus has not read '
+    + 'yet says so (readAt null): say "not read yet", never 0; a day outside a read range has no numbers (coverage). '
+    + GOOGLE_COUNTING + ' Amounts are minor units (cents) of the account\'s currency, never converted; a person without '
+    + 'the ad-spend money permission gets the same answer without the amounts (bids, targets, impact and an alert\'s '
+    + 'numbers too).' + PAGING + ' No tool changes Google Ads (writes.mode none): say what you would change and that a '
+    + 'person makes it in Google Ads; never put a Google step in a change plan.',
+  handler: (args) => listTool('google-ad-details', async () => {
+    const a = args as unknown as GoogleDetailArgs
+    const refused = googleDetailRefusal(a)
+    if (refused) return { ok: false, error: refused }
+    return googleRead(() => googleAdDetails(a, scopeOf('google-ad-details', args)))
+  }),
+}
+
+export const ADS_READ_TOOLS: AgentTool[] = [adsOverview, adCampaigns, adTargets, adSearchTerms, adChanges, adRecommendations, ebayAdDetailsTool, googleAdDetailsTool]

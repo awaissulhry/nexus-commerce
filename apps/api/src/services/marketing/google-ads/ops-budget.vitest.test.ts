@@ -1,7 +1,7 @@
 /**
- * Google Ads step 1a — the daily operations allowance over a rolling 24 hours: the global cap (env, default 2,400)
- * and 60 per account, counted in Redis hourly buckets; refused when Redis is down; stopped for an hour when Google
- * says the day's allowance is used up; two racing reservations never overspend.
+ * Google Ads steps 1a and 1b — the daily operations allowance over a rolling 24 hours: the global cap (env, default
+ * 2,400) and 100 per account (step 1b: was 60), counted in Redis hourly buckets; refused when Redis is down; stopped
+ * for an hour when Google says the day's allowance is used up; two racing reservations never overspend.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -31,9 +31,9 @@ beforeEach(() => { redis = new FakeOpsRedis(); setOpsBudgetRedisForTests(redis) 
 afterEach(() => { setOpsBudgetRedisForTests(undefined); vi.unstubAllEnvs() })
 
 describe('the Google Ads operations allowance', () => {
-  it('caps: 2,400 a day for Nexus (env can lower it), 60 per account', () => {
+  it('caps: 2,400 a day for Nexus (env can lower it), 100 per account', () => {
     expect(DEFAULT_GLOBAL_DAILY_OPS).toBe(2400)
-    expect(ACCOUNT_DAILY_OPS).toBe(60)
+    expect(ACCOUNT_DAILY_OPS).toBe(100)
     vi.stubEnv('NEXUS_GOOGLE_ADS_DAILY_OPS', '')
     expect(globalOpsCap()).toBe(2400)
     vi.stubEnv('NEXUS_GOOGLE_ADS_DAILY_OPS', '500')
@@ -44,18 +44,18 @@ describe('the Google Ads operations allowance', () => {
 
   it('a daily run reserves its operations in the current hour\'s buckets (25 h TTL)', async () => {
     const r = await reserveOps('1234567890', 14, T0)
-    expect(r).toMatchObject({ ok: true, reason: null, ops: 14, usedGlobal: 14, usedAccount: 14, capGlobal: 2400, capAccount: 60, sentence: '' })
+    expect(r).toMatchObject({ ok: true, reason: null, ops: 14, usedGlobal: 14, usedAccount: 14, capGlobal: 2400, capAccount: 100, sentence: '' })
     expect(redis.values.get('nexus:gads:ops:2026101306')).toBe('14')
     expect(redis.values.get('nexus:gads:ops:acct:1234567890:2026101306')).toBe('14')
     expect(redis.ttl.get('nexus:gads:ops:2026101306')).toBe(25 * 3600)
   })
 
   it('the account cap refuses and takes its own share back', async () => {
-    expect((await reserveOps('1234567890', 50, T0)).ok).toBe(true)
+    expect((await reserveOps('1234567890', 90, T0)).ok).toBe(true)
     const refused = await reserveOps('1234567890', 14, at(5))
-    expect(refused).toMatchObject({ ok: false, reason: 'account_cap', ops: 0, usedAccount: 50 })
-    expect(refused.sentence).toContain('50 of its 60')
-    expect(await opsUsedLast24h('1234567890', at(5))).toEqual({ global: 50, account: 50 })
+    expect(refused).toMatchObject({ ok: false, reason: 'account_cap', ops: 0, usedAccount: 90 })
+    expect(refused.sentence).toContain('90 of its 100')
+    expect(await opsUsedLast24h('1234567890', at(5))).toEqual({ global: 90, account: 90 })
     // Another account is not held back by this one.
     expect((await reserveOps('1112223334', 14, at(5))).ok).toBe(true)
   })
@@ -84,12 +84,12 @@ describe('the Google Ads operations allowance', () => {
   })
 
   it('the account cap\'s refusal says when the account has room again', async () => {
-    expect((await reserveOps('1234567890', 50, T0)).ok).toBe(true)
+    expect((await reserveOps('1234567890', 90, T0)).ok).toBe(true)
     expect(await reserveOps('1234567890', 14, at(5))).toMatchObject({ reason: 'account_cap', retryAt: new Date('2026-10-14T06:00:00Z') })
   })
 
   it('rolling 24 hours: an hour\'s operations count until 24 hourly buckets later', async () => {
-    await reserveOps('1234567890', 60, T0) // counted in the 06:00 UTC bucket
+    await reserveOps('1234567890', 100, T0) // counted in the 06:00 UTC bucket
     expect((await reserveOps('1234567890', 1, new Date('2026-10-14T05:59:00Z'))).reason).toBe('account_cap')
     expect((await reserveOps('1234567890', 1, new Date('2026-10-14T06:00:00Z'))).ok).toBe(true)
   })
@@ -103,17 +103,17 @@ describe('the Google Ads operations allowance', () => {
   })
 
   it('operations spent beyond a reservation are always counted, even over a cap — never refused and given back', async () => {
-    const r = await reserveOps('1234567890', 60, T0) // the account's whole allowance
+    const r = await reserveOps('1234567890', 100, T0) // the account's whole allowance
     expect(r.ok).toBe(true)
     await addSpentOps('1234567890', 2, r.reservedAt) // two retries reached Google
-    expect(await opsUsedLast24h('1234567890', at(30))).toEqual({ global: 62, account: 62 })
+    expect(await opsUsedLast24h('1234567890', at(30))).toEqual({ global: 102, account: 102 })
     expect(redis.ttl.get('nexus:gads:ops:acct:1234567890:2026101306')).toBe(25 * 3600)
     // Nothing to add, or Redis down: nothing happens, nothing throws.
     await addSpentOps('1234567890', 0, r.reservedAt)
     setOpsBudgetRedisForTests(null)
     await expect(addSpentOps('1234567890', 3, r.reservedAt)).resolves.toBeUndefined()
     setOpsBudgetRedisForTests(redis)
-    expect(await opsUsedLast24h('1234567890', at(30))).toEqual({ global: 62, account: 62 })
+    expect(await opsUsedLast24h('1234567890', at(30))).toEqual({ global: 102, account: 102 })
     // The next reservation waits until the overspend leaves the rolling 24 hours.
     expect((await reserveOps('1234567890', 1, at(30))).reason).toBe('account_cap')
   })
@@ -152,11 +152,11 @@ describe('the Google Ads operations allowance', () => {
   })
 
   it('two reservations racing at the cap never overspend it', async () => {
-    const [a, b] = await Promise.all([reserveOps('1234567890', 40, T0), reserveOps('1234567890', 40, T0)])
+    const [a, b] = await Promise.all([reserveOps('1234567890', 60, T0), reserveOps('1234567890', 60, T0)])
     expect([a.ok, b.ok].filter(Boolean).length).toBeLessThanOrEqual(1)
     const used = await opsUsedLast24h('1234567890', T0)
-    expect(used?.account).toBeLessThanOrEqual(60)
-    expect(used?.account).toBe((a.ok ? 40 : 0) + (b.ok ? 40 : 0))
+    expect(used?.account).toBeLessThanOrEqual(100)
+    expect(used?.account).toBe((a.ok ? 60 : 0) + (b.ok ? 60 : 0))
   })
 
   it('nothing to reserve is always fine and counts nothing', async () => {

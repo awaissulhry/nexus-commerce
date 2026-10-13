@@ -1,13 +1,15 @@
 /**
- * Google Ads step 1a, W2 — the rules of /marketing/ads/google, in the node-only web suite (the page and its modal are
- * thin over `googleAds.ts`). Fixtures are made up: no business names, numbers or ids (the repo is public).
+ * Google Ads steps 1a and 1b — the rules of /marketing/ads/google, in the node-only web suite (the page, its tabs and the
+ * campaign window are thin over `googleAds.ts`, `googleAttention.ts` and `googleGrains.ts`). Fixtures are made up: no
+ * business names, numbers or ids (the repo is public).
  */
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
-import type { GoogleAccount, GoogleDay, GoogleOverview } from '@/lib/google-ads/contract'
+import { describe, expect, it, vi } from 'vitest'
+import type { GoogleAccount, GoogleDay, GoogleMetrics, GoogleOverview } from '@/lib/google-ads/contract'
 import {
   CAMPAIGN_COLUMN_ORDER,
+  METRIC_COLUMN_KEYS,
   NOT_READ,
   biddingLabel,
   budgetText,
@@ -27,6 +29,7 @@ import {
   formatMoney,
   formatWindow,
   googlePageState,
+  metricColumns,
   metricTiles,
   metricsView,
   missingDaysText,
@@ -41,6 +44,16 @@ import {
   withoutEmails,
   ymd,
 } from './googleAds'
+import {
+  GOOGLE_READ_CACHE_MAX,
+  GOOGLE_READ_TTL_MS,
+  cachedGoogleRead,
+  forgetGoogleReads,
+  googleReadCacheKey,
+  googleReadKey,
+  rememberGoogleRead,
+  sharedGoogleRead,
+} from './useGoogleRead'
 
 function account(over: Partial<GoogleAccount> = {}): GoogleAccount {
   return {
@@ -77,6 +90,7 @@ function overview(over: Partial<GoogleOverview> = {}): GoogleOverview {
     totals: { impressions: 2000, clicks: 100, spendCents: 12_345, conversions: 5, conversionValueCents: 49_380, ctr: 0.05, avgCpcCents: 123, roas: 4, costPerConversionCents: 2469 },
     previous: null,
     days: [read('2026-10-10', 6000, 24_000), unread('2026-10-11'), read('2026-10-12', 6345, 25_380, true)],
+    reads: [],
     ...over,
   }
 }
@@ -329,29 +343,15 @@ describe('dates', () => {
   })
 })
 
-describe('Google’s words only', () => {
-  // The words the Amazon screens use for sales-side numbers, and the claim that something is running from Nexus.
-  const FORBIDDEN = /\b(ACoS|ACOS|Sales|Orders|Live)\b/
-  const strip = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1').replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
-  it.each(['./googleAds.ts', './GoogleAdsClient.tsx', './GoogleCampaignModal.tsx'])('%s never says ACoS, Sales, Orders or Live', (file) => {
-    const src = strip(readFileSync(fileURLToPath(new URL(file, import.meta.url)), 'utf8'))
-    expect(src).not.toMatch(FORBIDDEN)
-  })
-
-  it('the page has no write control and does not call a write route', () => {
-    for (const file of ['./GoogleAdsClient.tsx', './GoogleCampaignModal.tsx']) {
-      const src = readFileSync(fileURLToPath(new URL(file, import.meta.url)), 'utf8')
-      expect(src).not.toMatch(/method:\s*'(PUT|PATCH|DELETE)'|\/mutate|\/budget|Pause|Resume|Enable campaign/)
-    }
-  })
-})
-
 describe('the grid, the charts and the day table', () => {
   const src = (file: string) => readFileSync(fileURLToPath(new URL(file, import.meta.url)), 'utf8')
 
   it('money first, as Google Ads shows it: what a campaign cost and brought in come right after its status and type', () => {
     expect(CAMPAIGN_COLUMN_ORDER).toEqual(['status', 'type', 'cost', 'value', 'roas', 'conversions', 'cpa', 'clicks', 'impressions', 'ctr', 'cpc', 'budget', 'bidding'])
     expect(src('./GoogleAdsClient.tsx')).toMatch(/return CAMPAIGN_COLUMN_ORDER\.map\(\(key\) => byKey\[key\]\)/)
+    // The campaign grid's nine metric columns are the shared ones, in the same order.
+    expect(CAMPAIGN_COLUMN_ORDER.filter((k) => (METRIC_COLUMN_KEYS as readonly string[]).includes(k))).toEqual([...METRIC_COLUMN_KEYS])
+    expect(src('./GoogleAdsClient.tsx')).toMatch(/metricColumns<GoogleCampaign>\(\(r\) => r\.metrics, currency\)/)
   })
 
   it('no row checkboxes: nothing on this page acts on a selection', () => {
@@ -371,5 +371,158 @@ describe('the grid, the charts and the day table', () => {
     expect(css).toMatch(/\.gads-table \.nds-summary-table \{\s*table-layout: auto;/)
     expect(css).toMatch(/\.gads-table \.nds-summary-table th,\s*\.gads-days \.nds-summary-table td \{\s*white-space: nowrap;/)
     expect(src('./GoogleCampaignModal.tsx')).toMatch(/className="gads-table gads-days"[^>]*aria-label="Days table"/)
+  })
+})
+
+describe('metricColumns: the nine metric columns every Google grid uses', () => {
+  type Row = { id: string; m: GoogleMetrics | null }
+  const rows: Row[] = [
+    { id: 'a', m: { impressions: 1000, clicks: 50, spendCents: 5_000, conversions: 2, conversionValueCents: 20_000, ctr: null } },
+    { id: 'b', m: { impressions: 1000, clicks: 0, spendCents: 0, conversions: 0, conversionValueCents: 0, ctr: null } },
+    { id: 'c', m: null },
+  ]
+  const cols = metricColumns<Row>((r) => r.m, 'EUR')
+  const col = (key: string) => cols.find((c) => c.key === key)!
+  const total = (key: string, vr: Row[] = rows) => (col(key).total as (vr: Row[]) => unknown)(vr)
+
+  it('the same nine, in Google Ads’ order, with the same labels as the campaign grid', () => {
+    expect(cols.map((c) => c.key)).toEqual([...METRIC_COLUMN_KEYS])
+    expect(cols.map((c) => c.label)).toEqual(['Cost', 'Conversion value', 'Return on ad spend', 'Conversions', 'Cost per conversion', 'Clicks', 'Impressions', 'Click rate', 'Avg. cost per click'])
+    // Numbers on the right: no metric column says otherwise.
+    expect(cols.every((c) => c.metric !== false && c.align !== 'left')).toBe(true)
+  })
+
+  it('ratios per row from the row’s own sums; "—" over 0, never a made-up ratio', () => {
+    expect(col('roas').render(rows[0]!)).toBe('4.00')
+    expect(col('cpc').render(rows[0]!)).toBe('€1.00')
+    expect(col('cpa').render(rows[1]!)).toBe('—')
+    expect(col('roas').render(rows[1]!)).toBe('—')
+    expect(col('cost').render(rows[1]!)).toBe('€0.00')
+  })
+
+  it('a row Nexus read no day of is "—" everywhere and sorts as a blank, never 0', () => {
+    for (const c of cols) expect(c.render(rows[2]!)).toBe('—')
+    for (const c of cols) expect(c.sortValue!(rows[2]!)).toBeNull()
+  })
+
+  it('totals from the sums of the rows shown (ratios from those sums), leaving rows not read out', () => {
+    expect(total('cost')).toBe('€50.00')
+    expect(total('clicks')).toBe('50')
+    expect(total('impressions')).toBe('2,000')
+    expect(total('ctr')).toBe('2.50%')
+    expect(total('roas')).toBe('4.00')
+    expect(total('cost', [rows[2]!])).toBe('—')
+  })
+
+  it('money hidden for the role stays "—" in the rows and the totals', () => {
+    const hidden: Row = { id: 'h', m: { impressions: 10, clicks: 1, conversions: 1, ctr: null } }
+    expect(col('cost').render(hidden)).toBe('—')
+    expect(total('cost', [hidden, rows[0]!])).toBe('—')
+    expect(col('clicks').render(hidden)).toBe('1')
+  })
+})
+
+/**
+ * The guards of the whole folder — the page, its tabs, the campaign window and the grain grids (step 1b, WA and WB):
+ * every file present is read, so a file added later is held to the same rules without being listed here.
+ */
+describe('every Google Ads screen file', () => {
+  const dir = fileURLToPath(new URL('.', import.meta.url))
+  const all = readdirSync(dir).filter((f) => /\.(ts|tsx|css)$/.test(f) && !/\.vitest\.test\.ts$/.test(f)).sort()
+  const code = all.filter((f) => /\.tsx?$/.test(f))
+  const tsx = all.filter((f) => f.endsWith('.tsx'))
+  const read = (f: string) => readFileSync(`${dir}/${f}`, 'utf8')
+  const strip = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1').replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
+
+  it('the step-1b files are here (the guards below read them)', () => {
+    for (const f of ['GoogleAdsClient.tsx', 'GoogleAlertsCard.tsx', 'GoogleActsPanel.tsx', 'GoogleRecommendationsTab.tsx', 'GoogleDisapprovalsTab.tsx', 'GoogleCampaignModal.tsx', 'googleAttention.ts', 'useGoogleRead.ts', 'google.css']) {
+      expect(all).toContain(f)
+    }
+  })
+
+  // The words the Amazon screens use for sales-side numbers, and the claim that something is running from Nexus.
+  it.each(code)('%s: Google’s words only (never ACoS, Sales, Orders or Live)', (file) => {
+    expect(strip(read(file))).not.toMatch(/\b(ACoS|ACOS|Sales|Orders|Live)\b/)
+  })
+
+  // Google's own state words ("Paused") live in the .ts models; a .tsx holding them would look like a control.
+  it.each(tsx)('%s: no write control and no write route', (file) => {
+    expect(read(file)).not.toMatch(/method:\s*'(POST|PUT|PATCH|DELETE)'|\/mutate|\/budget|Pause|Resume|Enable campaign|Apply recommendation|\bDismiss\b/)
+  })
+
+  it.each(code)('%s: reads only (no write call of the contract)', (file) => {
+    expect(read(file)).not.toMatch(/saveGoogleSelection|method:\s*'(PUT|PATCH|DELETE)'/)
+  })
+
+  it.each(tsx)('%s: every grid has no row checkboxes (nothing acts on a selection)', (file) => {
+    const src = strip(read(file))
+    const grids = (src.match(/<AdsDataGrid\b/g) ?? []).length
+    expect((src.match(/selectable=\{false\}/g) ?? []).length).toBe(grids)
+    expect(src).not.toMatch(/selectionActions/)
+  })
+
+  it.each(all)('%s: no emoji and no help cursor', (file) => {
+    const src = read(file)
+    expect(src).not.toMatch(/\p{Extended_Pictographic}/u)
+    expect(src).not.toMatch(/cursor:\s*help|cursor:\s*['"]help/)
+  })
+
+  it.each(tsx)('%s: no Tailwind classes (feature classes and the DS only)', (file) => {
+    const classes = [...read(file).matchAll(/className="([^"]*)"/g)].flatMap((m) => m[1]!.split(/\s+/).filter(Boolean))
+    for (const c of classes) expect(c).toMatch(/^(gads-|h10-am$|nds-)/)
+  })
+
+  it.each(all.filter((f) => f.endsWith('.css')))('%s: semantic tokens only (no raw colour)', (file) => {
+    const css = read(file).replace(/\/\*[\s\S]*?\*\//g, '')
+    expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/)
+    expect(css).not.toMatch(/--nds-(grey|blue|red|green|amber|orange)-\d/)
+  })
+})
+
+describe('useGoogleRead: the read cache never crosses a business or a person, and forgets', () => {
+  it('a key names every parameter; undefined and null are the same', () => {
+    expect(googleReadKey('alerts', null)).toBe(googleReadKey('alerts', undefined))
+    expect(googleReadKey('overview', 'c1', '2026-10-01', '2026-10-12')).not.toBe(googleReadKey('overview', 'c1', '2026-10-01', '2026-10-13'))
+  })
+
+  it('the same key in another business, or for another person, is another entry', () => {
+    const k = googleReadKey('alerts', null)
+    expect(googleReadCacheKey(k, 'ws_a', 'u1')).not.toBe(googleReadCacheKey(k, 'ws_b', 'u1'))
+    expect(googleReadCacheKey(k, 'ws_a', 'u1')).not.toBe(googleReadCacheKey(k, 'ws_a', 'u2'))
+  })
+
+  it('keeps an answer for a few minutes, then reads again', () => {
+    forgetGoogleReads()
+    const k = googleReadCacheKey(googleReadKey('t-ttl'), 'ws_a', 'u1')
+    rememberGoogleRead(k, { n: 1 }, 1_000)
+    expect(cachedGoogleRead(k, 1_000 + GOOGLE_READ_TTL_MS)).toEqual({ n: 1 })
+    expect(cachedGoogleRead(k, 1_001 + GOOGLE_READ_TTL_MS)).toBeUndefined()
+    expect(cachedGoogleRead(k, 1_000)).toBeUndefined()
+  })
+
+  it('past the cap the oldest answer goes; forgetting one key or all', () => {
+    forgetGoogleReads()
+    const key = (i: number) => googleReadCacheKey(googleReadKey('t-cap', i), 'ws_a', 'u1')
+    for (let i = 0; i <= GOOGLE_READ_CACHE_MAX; i++) rememberGoogleRead(key(i), i, 5_000)
+    expect(cachedGoogleRead(key(0), 5_000)).toBeUndefined()
+    expect(cachedGoogleRead(key(GOOGLE_READ_CACHE_MAX), 5_000)).toBe(GOOGLE_READ_CACHE_MAX)
+    forgetGoogleReads(key(1))
+    expect(cachedGoogleRead(key(1), 5_000)).toBeUndefined()
+    expect(cachedGoogleRead(key(2), 5_000)).toBe(2)
+    forgetGoogleReads()
+    expect(cachedGoogleRead(key(2), 5_000)).toBeUndefined()
+  })
+
+  it('two callers while one read runs share one request; a failed read is not kept', async () => {
+    const k = googleReadCacheKey(googleReadKey('t-shared'), 'ws_a', 'u1')
+    const load = vi.fn(async () => 'answer')
+    const [a, b] = await Promise.all([sharedGoogleRead(k, load), sharedGoogleRead(k, load)])
+    expect([a, b]).toEqual(['answer', 'answer'])
+    expect(load).toHaveBeenCalledTimes(1)
+    await sharedGoogleRead(k, load)
+    expect(load).toHaveBeenCalledTimes(2)
+    const fail = vi.fn(async () => { throw new Error('Google did not answer.') })
+    await expect(sharedGoogleRead(k, fail)).rejects.toThrow('Google did not answer.')
+    await expect(sharedGoogleRead(k, load)).resolves.toBe('answer')
   })
 })

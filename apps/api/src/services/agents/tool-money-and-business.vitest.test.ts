@@ -387,6 +387,9 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'ad-recommendations': (ids) => ({ campaignId: ids.campaignId }),
   // T4 — an eBay campaign's keywords: bids and fees are money.
   'ebay-ad-details': (ids) => ({ view: 'keywords', campaignId: ids.ebayCampaignId }),
+  // Google Ads step 1b — the Google ad details: no business here has a Google sign-in, so each answers why there is
+  // nothing to read (no money, nothing of the other business); google-ad-details.vitest.test.ts reads every view.
+  'google-ad-details': () => ({ view: 'keywords' }),
   // L2 — listing reads: where each listing lives, its stock and price per market, its photo plan.
   'listing-coordinates': (ids) => ({ productId: ids.productId }),
   'listing-matrix': (ids) => ({ productId: ids.productId }),

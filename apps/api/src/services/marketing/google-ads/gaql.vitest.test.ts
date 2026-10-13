@@ -1,10 +1,16 @@
 /**
- * Google Ads step 1a — the query texts are golden: a field renamed by a Google Ads version shows up here first.
- * Every query that selects segments.date filters it; the change history is bounded (30 days, LIMIT ≤ 10,000).
+ * Google Ads steps 1a and 1b — the query texts are golden: a field renamed by a Google Ads version shows up here first.
+ * Every query that selects segments.date filters it; the change history is bounded (30 days, LIMIT ≤ 10,000). Each
+ * NOT VERIFIED field has a twin without it, which differs from the first text by that field only.
  */
 import { describe, expect, it } from 'vitest'
+import * as gaql from './gaql.js'
 import {
-  CAMPAIGNS_QUERY, CHANGE_EVENT_LIMIT, CUSTOMER_CLIENTS_QUERY, CUSTOMER_QUERY, campaignDailyMetricsQuery, changeEventsQuery,
+  AD_GROUPS_QUERY, AD_GROUP_KEYWORDS_QUERY, AD_POLICY_QUERY, ASSET_GROUPS_QUERY, AUTO_APPLY_QUERY, CAMPAIGNS_QUERY, CAMPAIGN_FLAGS_QUERY,
+  CAMPAIGN_FLAGS_QUERY_WITHOUT_ASSET_AUTOMATION, CAMPAIGN_NEGATIVES_QUERY, CHANGE_EVENT_LIMIT, CUSTOMER_CLIENTS_QUERY, CUSTOMER_QUERY,
+  NEGATIVE_LIST_ATTACHMENTS_QUERY, NEGATIVE_LIST_ATTACHMENTS_QUERY_WITHOUT_SET, NEGATIVE_LIST_KEYWORDS_QUERY, NEGATIVE_LIST_KEYWORDS_QUERY_WITHOUT_SET,
+  RECOMMENDATIONS_QUERY, RECOMMENDATIONS_QUERY_WITHOUT_IMPACT, SHOPPING_PRODUCTS_QUERY, adGroupDailyMetricsQuery, assetGroupDailyMetricsQuery,
+  campaignDailyMetricsQuery, changeEventsQuery, keywordDailyMetricsQuery, productDailyMetricsQuery, searchTermDailyMetricsQuery,
 } from './gaql.js'
 import { changeHistoryWindow } from './dates.js'
 
@@ -78,6 +84,136 @@ describe('Google Ads queries (v25 field names)', () => {
       changeEventsQuery('2026-10-01 00:00:00', '2026-10-02 00:00:00')]) {
       expect(q).not.toMatch(/page_size|PARAMETERS/i)
       expect(q.startsWith('SELECT ')).toBe(true)
+    }
+  })
+})
+
+const M = 'metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.conversions_value, metrics.all_conversions, metrics.all_conversions_value'
+const W = { from: '2026-09-29', to: '2026-10-12' }
+
+describe('Google Ads step 1b queries (v25 field names)', () => {
+  it('tier 2: campaign settings, and the twin without asset_automation_settings (NOT VERIFIED)', () => {
+    expect(CAMPAIGN_FLAGS_QUERY).toBe(
+      'SELECT campaign.id, campaign.ai_max_setting.enable_ai_max, campaign.keyword_match_type, campaign.broad_match_migration_date_time, ' +
+      'campaign.asset_automation_settings, campaign.network_settings.target_google_search, campaign.network_settings.target_search_network, ' +
+      'campaign.network_settings.target_content_network, campaign.network_settings.target_partner_search_network, ' +
+      "campaign.dynamic_search_ads_setting.domain_name FROM campaign WHERE campaign.status != 'REMOVED'",
+    )
+    expect(CAMPAIGN_FLAGS_QUERY_WITHOUT_ASSET_AUTOMATION).toBe(CAMPAIGN_FLAGS_QUERY.replace('campaign.asset_automation_settings, ', ''))
+    // v25 has no url_expansion_opt_out.
+    expect(CAMPAIGN_FLAGS_QUERY).not.toContain('url_expansion_opt_out')
+  })
+
+  it('tier 2: ad approvals and product status filter nothing on the approval or the product status (the mapper does)', () => {
+    expect(AD_POLICY_QUERY).toBe(
+      'SELECT campaign.id, ad_group.id, ad_group_ad.ad.id, ad_group_ad.ad.type, ad_group_ad.status, ' +
+      'ad_group_ad.policy_summary.approval_status, ad_group_ad.policy_summary.review_status, ' +
+      'ad_group_ad.policy_summary.policy_topic_entries FROM ad_group_ad ' +
+      "WHERE ad_group_ad.status = 'ENABLED' AND ad_group.status = 'ENABLED' AND campaign.status != 'REMOVED'",
+    )
+    expect(AD_POLICY_QUERY).not.toMatch(/WHERE.*approval_status/)
+    expect(SHOPPING_PRODUCTS_QUERY).toBe(
+      'SELECT shopping_product.merchant_center_id, shopping_product.channel, shopping_product.language_code, ' +
+      'shopping_product.feed_label, shopping_product.item_id, shopping_product.title, shopping_product.status, ' +
+      'shopping_product.issues FROM shopping_product',
+    )
+    expect(AUTO_APPLY_QUERY).toBe(
+      'SELECT recommendation_subscription.type, recommendation_subscription.status, recommendation_subscription.create_date_time, ' +
+      'recommendation_subscription.modify_date_time FROM recommendation_subscription',
+    )
+  })
+
+  it('tier 3: numbers per day, a finite window, both ends included', () => {
+    expect(adGroupDailyMetricsQuery(W)).toBe(
+      `SELECT campaign.id, ad_group.id, ad_group.name, segments.date, ${M} FROM ad_group WHERE segments.date BETWEEN '2026-09-29' AND '2026-10-12'`,
+    )
+    expect(keywordDailyMetricsQuery(W)).toBe(
+      'SELECT campaign.id, ad_group.id, ad_group_criterion.criterion_id, ad_group_criterion.keyword.text, segments.date, ' +
+      `${M} FROM keyword_view WHERE segments.date BETWEEN '2026-09-29' AND '2026-10-12'`,
+    )
+    expect(assetGroupDailyMetricsQuery(W)).toBe(
+      `SELECT campaign.id, asset_group.id, asset_group.name, segments.date, ${M} FROM asset_group WHERE segments.date BETWEEN '2026-09-29' AND '2026-10-12'`,
+    )
+    expect(productDailyMetricsQuery(W)).toBe(
+      `SELECT campaign.id, segments.product_item_id, segments.product_title, segments.date, ${M} FROM shopping_performance_view ` +
+      "WHERE segments.date BETWEEN '2026-09-29' AND '2026-10-12' AND metrics.impressions > 0",
+    )
+    expect(searchTermDailyMetricsQuery(W)).toBe(
+      `SELECT campaign.id, campaign_search_term_view.search_term, segments.date, ${M} FROM campaign_search_term_view ` +
+      "WHERE segments.date BETWEEN '2026-09-29' AND '2026-10-12' AND metrics.clicks > 0",
+    )
+    // The twin without the clicks filter (NOT VERIFIED on this view): the mapper drops the terms without a click.
+    expect(searchTermDailyMetricsQuery(W, false)).toBe(searchTermDailyMetricsQuery(W).replace(' AND metrics.clicks > 0', ''))
+    for (const query of [adGroupDailyMetricsQuery, keywordDailyMetricsQuery, assetGroupDailyMetricsQuery, productDailyMetricsQuery, searchTermDailyMetricsQuery]) {
+      expect(() => query({ from: '2026-10-13', to: '2026-10-12' })).toThrow('ends before it starts')
+      expect(() => query({ from: "2026-10-01' OR '1'='1", to: '2026-10-12' })).toThrow('is not a day')
+    }
+  })
+
+  it('tier 4: structure, removed ones left out', () => {
+    expect(AD_GROUPS_QUERY).toBe(
+      'SELECT campaign.id, ad_group.id, ad_group.name, ad_group.status, ad_group.type, ad_group.cpc_bid_micros, ' +
+      'ad_group.target_cpa_micros, ad_group.target_roas, ad_group.primary_status, ad_group.primary_status_reasons, ' +
+      "ad_group.ai_max_ad_group_setting.disable_search_term_matching FROM ad_group WHERE ad_group.status != 'REMOVED' " +
+      "AND campaign.status != 'REMOVED'",
+    )
+    expect(AD_GROUP_KEYWORDS_QUERY).toBe(
+      'SELECT campaign.id, ad_group.id, ad_group_criterion.criterion_id, ad_group_criterion.negative, ad_group_criterion.status, ' +
+      'ad_group_criterion.type, ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, ' +
+      'ad_group_criterion.quality_info.quality_score, ad_group_criterion.system_serving_status, ad_group_criterion.approval_status, ' +
+      'ad_group_criterion.primary_status, ad_group_criterion.cpc_bid_micros, ad_group_criterion.effective_cpc_bid_micros ' +
+      "FROM ad_group_criterion WHERE ad_group_criterion.type = 'KEYWORD' AND ad_group_criterion.status != 'REMOVED' " +
+      "AND ad_group.status != 'REMOVED' AND campaign.status != 'REMOVED'",
+    )
+    expect(CAMPAIGN_NEGATIVES_QUERY).toBe(
+      'SELECT campaign.id, campaign_criterion.criterion_id, campaign_criterion.negative, campaign_criterion.type, ' +
+      'campaign_criterion.status, campaign_criterion.keyword.text, campaign_criterion.keyword.match_type, ' +
+      'campaign_criterion.brand_list.shared_set FROM campaign_criterion WHERE campaign_criterion.negative = TRUE ' +
+      "AND campaign_criterion.type IN ('KEYWORD', 'BRAND_LIST') AND campaign_criterion.status != 'REMOVED' " +
+      "AND campaign.status != 'REMOVED'",
+    )
+    expect(ASSET_GROUPS_QUERY).toBe(
+      'SELECT campaign.id, asset_group.id, asset_group.name, asset_group.status, asset_group.primary_status, ' +
+      'asset_group.primary_status_reasons, asset_group.ad_strength, asset_group.final_urls FROM asset_group ' +
+      "WHERE asset_group.status != 'REMOVED' AND campaign.status != 'REMOVED'",
+    )
+  })
+
+  it('tier 5: negative keyword lists (shared_set.* NOT VERIFIED) and recommendations (impact NOT VERIFIED), each with its twin', () => {
+    const set = 'shared_set.id, shared_set.name, shared_set.type, shared_set.status, shared_set.member_count'
+    expect(NEGATIVE_LIST_KEYWORDS_QUERY).toBe(
+      'SELECT shared_criterion.shared_set, shared_criterion.criterion_id, shared_criterion.type, shared_criterion.keyword.text, ' +
+      `shared_criterion.keyword.match_type, ${set} FROM shared_criterion WHERE shared_criterion.type = 'KEYWORD'`,
+    )
+    expect(NEGATIVE_LIST_KEYWORDS_QUERY_WITHOUT_SET).toBe(NEGATIVE_LIST_KEYWORDS_QUERY.replace(`, ${set}`, ''))
+    expect(NEGATIVE_LIST_ATTACHMENTS_QUERY).toBe(
+      `SELECT campaign_shared_set.campaign, campaign_shared_set.shared_set, campaign_shared_set.status, ${set} ` +
+      "FROM campaign_shared_set WHERE campaign_shared_set.status != 'REMOVED' AND campaign.status != 'REMOVED'",
+    )
+    expect(NEGATIVE_LIST_ATTACHMENTS_QUERY_WITHOUT_SET).toBe(NEGATIVE_LIST_ATTACHMENTS_QUERY.replace(`, ${set}`, ''))
+    const impact = ['base_metrics', 'potential_metrics'].flatMap((side) =>
+      ['impressions', 'clicks', 'cost_micros', 'conversions', 'conversions_value'].map((metric) => `recommendation.impact.${side}.${metric}`)).join(', ')
+    expect(RECOMMENDATIONS_QUERY).toBe(
+      'SELECT recommendation.resource_name, recommendation.type, recommendation.campaign, recommendation.ad_group, ' +
+      `recommendation.dismissed, ${impact} FROM recommendation`,
+    )
+    expect(RECOMMENDATIONS_QUERY).toContain('recommendation.impact.potential_metrics.conversions_value FROM recommendation')
+    expect(RECOMMENDATIONS_QUERY_WITHOUT_IMPACT).toBe(RECOMMENDATIONS_QUERY.replace(`, ${impact}`, ''))
+  })
+
+  it('every query only reads: a SELECT, no page size, no change of anything', () => {
+    const texts = Object.entries(gaql).flatMap(([name, value]) => {
+      if (typeof value === 'string' && /_QUERY($|_)/.test(name)) return [value]
+      if (typeof value === 'function' && name.endsWith('Query') && name !== 'changeEventsQuery') return [(value as (w: typeof W) => string)(W)]
+      return []
+    })
+    texts.push(changeEventsQuery('2026-10-01 00:00:00', '2026-10-02 00:00:00'), searchTermDailyMetricsQuery(W, false))
+    // Step 1a: 5 (with the change history); step 1b: 16 + 5 twins without a NOT VERIFIED field.
+    expect(texts.length).toBe(26)
+    for (const q of texts) {
+      expect(q.startsWith('SELECT ')).toBe(true)
+      expect(q).not.toMatch(/page_size|PARAMETERS|\bmutate\b/i)
+      if (q.includes('segments.date')) expect(q).toMatch(/segments\.date BETWEEN '\d{4}-\d{2}-\d{2}' AND '\d{4}-\d{2}-\d{2}'/)
     }
   })
 })

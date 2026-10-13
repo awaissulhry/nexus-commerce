@@ -1,0 +1,53 @@
+{
+  "results": [
+    {
+      "campaign": {
+        "resourceName": "customers/1234567890/campaigns/33333333333",
+        "id": "33333333333"
+      },
+      "segments": {
+        "date": "2026-10-12",
+        "productItemId": "test-sku-1",
+        "productTitle": "Test helmet, size M"
+      },
+      "metrics": {
+        "impressions": "300",
+        "clicks": "9",
+        "costMicros": "4500000",
+        "conversions": 1,
+        "conversionsValue": 89.9
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/1234567890/campaigns/33333333333",
+        "id": "33333333333"
+      },
+      "segments": {
+        "date": "2026-10-12",
+        "productItemId": "test-sku-1",
+        "productTitle": "Test helmet M"
+      },
+      "metrics": {
+        "impressions": "20",
+        "clicks": "1",
+        "costMicros": "500000"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/1234567890/campaigns/22222222222",
+        "id": "22222222222"
+      },
+      "segments": {
+        "date": "2026-10-12",
+        "productItemId": "test-sku-2",
+        "productTitle": "Test gloves"
+      },
+      "metrics": {
+        "impressions": "75"
+      }
+    }
+  ],
+  "fieldMask": "campaign.id,segments.productItemId,segments.productTitle,segments.date,metrics.impressions,metrics.clicks,metrics.costMicros,metrics.conversions,metrics.conversionsValue,metrics.allConversions,metrics.allConversionsValue"
+}

@@ -12,6 +12,7 @@
  *  - Google's own vocabulary: cost, conversions, conversion value, return on ad spend. Never the Amazon words for
  *    sales-side numbers, and nothing that claims Nexus changes Google Ads.
  */
+import type { GridColumn } from '../campaigns/_grid/AdsDataGrid'
 import type {
   GoogleAccount,
   GoogleCampaign,
@@ -194,6 +195,41 @@ export function ratiosOf(s: Pick<Sums, 'impressions' | 'clicks' | 'spendCents' |
 export function metricsView(m: GoogleMetrics | null | undefined): (Sums & Ratios) | null {
   const s = sumMetrics([m])
   return s ? { ...s, ...ratiosOf(s) } : null
+}
+
+// ─── The nine metric columns (every Google grid) ───────────────────────
+
+/** A number a grid may sort on, or null (a blank sinks in both directions). */
+export const sortable = (v: number | null | undefined) => (v == null || !Number.isFinite(v) ? null : v)
+
+/** The nine metric columns, in Google Ads' own order: money first, then the traffic. */
+export const METRIC_COLUMN_KEYS = ['cost', 'value', 'roas', 'conversions', 'cpa', 'clicks', 'impressions', 'ctr', 'cpc'] as const
+export type MetricColumnKey = (typeof METRIC_COLUMN_KEYS)[number]
+
+/**
+ * The nine metric columns every Google grid uses (campaigns, ad groups, keywords, search terms, products, asset groups) —
+ * one definition, so a label, a tip or a total is exactly the same on every grid. `get` reads a row's numbers; null =
+ * Nexus read no day of it ("—", never 0, left out of the totals). Each ratio is worked out from the row's own sums, and
+ * the totals row from the sums of the rows shown.
+ */
+export function metricColumns<T>(get: (row: T) => GoogleMetrics | null | undefined, currency: string | null): GridColumn<T>[] {
+  const m = (r: T) => metricsView(get(r))
+  const total = (vr: T[]) => {
+    const s = sumMetrics(vr.map(get))
+    return s ? { ...s, ...ratiosOf(s) } : null
+  }
+  const byKey: Record<MetricColumnKey, GridColumn<T>> = {
+    cost: { key: 'cost', label: 'Cost', sortValue: (r) => sortable(m(r)?.spendCents), render: (r) => formatMoney(m(r)?.spendCents, currency), total: (vr) => formatMoney(total(vr)?.spendCents, currency) },
+    value: { key: 'value', label: 'Conversion value', sortValue: (r) => sortable(m(r)?.conversionValueCents), render: (r) => formatMoney(m(r)?.conversionValueCents, currency), total: (vr) => formatMoney(total(vr)?.conversionValueCents, currency) },
+    roas: { key: 'roas', label: 'Return on ad spend', tip: 'Conversion value ÷ cost.', sortValue: (r) => sortable(m(r)?.roas), render: (r) => formatRoas(m(r)?.roas), total: (vr) => formatRoas(total(vr)?.roas) },
+    conversions: { key: 'conversions', label: 'Conversions', tip: 'As Google counts them; Google counts part-conversions.', sortValue: (r) => sortable(m(r)?.conversions), render: (r) => formatConversions(m(r)?.conversions), total: (vr) => formatConversions(total(vr)?.conversions) },
+    cpa: { key: 'cpa', label: 'Cost per conversion', tip: 'Cost ÷ conversions.', sortValue: (r) => sortable(m(r)?.costPerConversionCents), render: (r) => formatMoney(m(r)?.costPerConversionCents, currency), total: (vr) => formatMoney(total(vr)?.costPerConversionCents, currency) },
+    clicks: { key: 'clicks', label: 'Clicks', sortValue: (r) => sortable(m(r)?.clicks), render: (r) => formatInt(m(r)?.clicks), total: (vr) => formatInt(total(vr)?.clicks) },
+    impressions: { key: 'impressions', label: 'Impressions', sortValue: (r) => sortable(m(r)?.impressions), render: (r) => formatInt(m(r)?.impressions), total: (vr) => formatInt(total(vr)?.impressions) },
+    ctr: { key: 'ctr', label: 'Click rate', tip: 'Clicks ÷ impressions.', sortValue: (r) => sortable(m(r)?.ctr), render: (r) => formatRate(m(r)?.ctr), total: (vr) => formatRate(total(vr)?.ctr) },
+    cpc: { key: 'cpc', label: 'Avg. cost per click', tip: 'Cost ÷ clicks.', sortValue: (r) => sortable(m(r)?.avgCpcCents), render: (r) => formatMoney(m(r)?.avgCpcCents, currency), total: (vr) => formatMoney(total(vr)?.avgCpcCents, currency) },
+  }
+  return METRIC_COLUMN_KEYS.map((key) => byKey[key])
 }
 
 // ─── The page's state ───────────────────────────────────────────────────

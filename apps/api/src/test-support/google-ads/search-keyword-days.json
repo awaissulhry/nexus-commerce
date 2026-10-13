@@ -1,0 +1,57 @@
+{
+  "results": [
+    {
+      "campaign": {
+        "resourceName": "customers/1234567890/campaigns/11111111111",
+        "id": "11111111111"
+      },
+      "adGroup": {
+        "resourceName": "customers/1234567890/adGroups/71111111111",
+        "id": "71111111111"
+      },
+      "adGroupCriterion": {
+        "resourceName": "customers/1234567890/adGroupCriteria/71111111111~91111",
+        "criterionId": "91111",
+        "keyword": {
+          "text": "test helmet"
+        }
+      },
+      "segments": {
+        "date": "2026-10-12"
+      },
+      "metrics": {
+        "impressions": "700",
+        "clicks": "25",
+        "costMicros": "17500000",
+        "conversions": 1.5,
+        "conversionsValue": 120
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/1234567890/campaigns/11111111111",
+        "id": "11111111111"
+      },
+      "adGroup": {
+        "resourceName": "customers/1234567890/adGroups/71111111111",
+        "id": "71111111111"
+      },
+      "adGroupCriterion": {
+        "resourceName": "customers/1234567890/adGroupCriteria/71111111111~91112",
+        "criterionId": "91112",
+        "keyword": {
+          "text": "test full face helmet"
+        }
+      },
+      "segments": {
+        "date": "2026-10-11"
+      },
+      "metrics": {
+        "impressions": "40",
+        "clicks": "2",
+        "costMicros": "1300000"
+      }
+    }
+  ],
+  "fieldMask": "campaign.id,adGroup.id,adGroupCriterion.criterionId,adGroupCriterion.keyword.text,segments.date,metrics.impressions,metrics.clicks,metrics.costMicros,metrics.conversions,metrics.conversionsValue,metrics.allConversions,metrics.allConversionsValue"
+}

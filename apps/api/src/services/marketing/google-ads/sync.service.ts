@@ -1,49 +1,92 @@
 /**
- * Google Ads step 1a — one read of one Google Ads account, in the CURRENT business (PLAN.md L9, L10; plan-2 §4).
- * Read-only: every call is a GoogleAdsService.Search through the gateway, which refuses anything else.
+ * Google Ads steps 1a and 1b — one read of one Google Ads account, in the CURRENT business (PLAN.md L9, L10; plan-2 §4;
+ * plan-1b-backend §2–§4). Read-only: every call is a GoogleAdsService.Search through the gateway, which refuses
+ * anything else.
  *
- *   1. reserve the run's operations (customer 1 + campaigns 1 + daily numbers 1 + change history 1 + spare 1); a
- *      refused reservation means no call at all (SKIPPED_BUDGET)
+ *   1. reserve the run's operations BEFORE the first call (sync-plan.ts: core 4 + spare 1 + the step 1b tiers; 21 on a
+ *      regular day). Short of allowance, the run drops tier 5, then 4, 3 and 2; the core is never dropped — when even it
+ *      does not fit, no call at all (SKIPPED_BUDGET)
  *   2. the account (`customer`): a MANAGER account holds no campaigns of its own — the run stops there (MANAGER)
  *   3. campaigns with their budgets; after a full read, campaigns no longer returned get `removedAt`
  *   4. daily campaign numbers: never read → the last 400 account days (BACKFILL); otherwise the last 14 days (35 on the
  *      account's Sundays), reaching back to the day after the last day read when the account missed runs
  *   5. Google's change history: never read → its whole 30 days; otherwise from where the last read stopped
- *   6. the account's read state, and `campaign.metrics.refreshed` (channel GOOGLE) when numbers were stored
+ *   6. step 1b, tier by tier (2 safety, 3 numbers, 4 structure, 5 slow): each step records its own GoogleAdsReadState
+ *      (SUCCESS | FAILED | SKIPPED_BUDGET, in words); a dropped tier is SKIPPED_BUDGET and moves nothing
+ *   7. the retention prune (search terms 180 days, the other grains below the campaign 400; campaign days forever)
+ *   8. the account's read state — `lastSuccessAt` (the data's "as of") when the four core steps succeeded; SUCCESS only
+ *      when every step did, else PARTIAL — and `campaign.metrics.refreshed` (channel GOOGLE) when campaign numbers were
+ *      stored; then the alerts are evaluated over what is stored (no Google call; never fails the run)
  *
  * A step that fails is recorded in words and the next one still runs — unless the failure means nothing else can
- * work (sign-in lost, the day's allowance used up, access refused, the Nexus app not approved): the run stops. A
- * failed step deletes nothing: the stored days are replaced only by a complete read of them.
+ * work (sign-in lost, the day's allowance used up, the Nexus app not approved, the gateway refusing; for the core also
+ * access refused): the run stops, and the step 1b reads it did not reach say why. A failed step deletes nothing: stored
+ * days are replaced only by a complete read of them, and a grain's first read is stored all or nothing.
  */
 import { logger } from '../../../utils/logger.js'
 import { publishMarketingEvent } from '../../marketing-events.service.js'
 import { accountYesterday, addDays, backfillWindow, changeHistoryWindow, dailyWindow, dateToDay, type DayWindow } from './dates.js'
 import { GoogleAdsReadError, localFailure, type GoogleAdsFailure } from './errors.js'
-import { CAMPAIGNS_QUERY, CHANGE_EVENT_LIMIT, CUSTOMER_QUERY, campaignDailyMetricsQuery, changeEventsQuery } from './gaql.js'
-import { mapCampaign, mapCampaignDay, mapChangeEvent, mapCustomer } from './mappers.js'
-import { addSpentOps, releaseOps, reserveOps } from './ops-budget.js'
+import {
+  AD_GROUPS_QUERY, AD_GROUP_KEYWORDS_QUERY, AD_POLICY_QUERY, ASSET_GROUPS_QUERY, AUTO_APPLY_QUERY, CAMPAIGNS_QUERY, CAMPAIGN_FLAGS_QUERY,
+  CAMPAIGN_FLAGS_QUERY_WITHOUT_ASSET_AUTOMATION, CAMPAIGN_NEGATIVES_QUERY, CHANGE_EVENT_LIMIT, CUSTOMER_QUERY, NEGATIVE_LIST_ATTACHMENTS_QUERY,
+  NEGATIVE_LIST_ATTACHMENTS_QUERY_WITHOUT_SET, NEGATIVE_LIST_KEYWORDS_QUERY, NEGATIVE_LIST_KEYWORDS_QUERY_WITHOUT_SET, RECOMMENDATIONS_QUERY,
+  RECOMMENDATIONS_QUERY_WITHOUT_IMPACT, SHOPPING_PRODUCTS_QUERY, adGroupDailyMetricsQuery, assetGroupDailyMetricsQuery, campaignDailyMetricsQuery,
+  changeEventsQuery, keywordDailyMetricsQuery, productDailyMetricsQuery, searchTermDailyMetricsQuery,
+} from './gaql.js'
+import {
+  mapAdGroup, mapAdGroupKeyword, mapAdPolicyIssue, mapAssetGroup, mapAutoApply, mapCampaign, mapCampaignDay, mapCampaignFlags, mapCampaignNegative,
+  mapChangeEvent, mapCustomer, mapGrainDay, mapListAttachment, mapListKeyword, mapRecommendation, mapShoppingProductIssue,
+} from './mappers.js'
+import { addSpentOps, releaseOps, reserveOps, type OpsReservation } from './ops-budget.js'
 import { searchAll, searchRows } from './read-client.js'
 import {
   ensureGoogleAdsCustomer, markUnseenCampaignsRemoved, recordSyncOutcome, replaceDailyMetrics, saveCustomerDetails, storeChangeEvents,
   upsertCampaigns, type GoogleAdsSyncStatus,
 } from './store.js'
+import {
+  activeNegativeListIds, pruneDailyMetrics, readStatesOf, recordReadState, recordReadStates, replaceRecommendations, saveAdGroups, saveAssetGroups,
+  saveAutoApply, saveCampaignFlags, saveKeywords, saveNegativeLists, savePolicyIssues,
+} from './store-detail.js'
+import {
+  DETAIL_STEPS, GRAINS, READ_RESOURCE_TEXT, RUN_OPS, TIER_CANDIDATES, knownTimeZone, planDetailRead, retentionKeepFrom, runOps, type GoogleAdsTier,
+  type PlannedStep,
+} from './sync-plan.js'
 import { readTargetFor } from './targets.js'
 import type {
-  GoogleAdsCampaignData, GoogleAdsCampaignDayRow, GoogleAdsCampaignRow, GoogleAdsChangeEventData, GoogleAdsChangeEventRow, GoogleAdsCustomerRow,
-  GoogleAdsDailyMetricData, GoogleAdsTarget,
+  GoogleAdsAdGroupCriterionRow, GoogleAdsAdGroupRow, GoogleAdsAdPolicyRow, GoogleAdsAssetGroupRow, GoogleAdsCampaignCriterionRow,
+  GoogleAdsCampaignData, GoogleAdsCampaignDayRow, GoogleAdsCampaignFlagsRow, GoogleAdsCampaignRow, GoogleAdsCampaignSharedSetRow,
+  GoogleAdsChangeEventData, GoogleAdsChangeEventRow, GoogleAdsCustomerRow, GoogleAdsDailyMetricData, GoogleAdsDayResource, GoogleAdsGrainDayRow,
+  GoogleAdsKeywordData, GoogleAdsNegativeListData, GoogleAdsReadResource, GoogleAdsReadStatus, GoogleAdsRecommendationRow,
+  GoogleAdsRecommendationSubscriptionRow, GoogleAdsSharedCriterionRow, GoogleAdsShoppingProductRow, GoogleAdsTarget,
 } from './types.js'
 
 export type GoogleAdsSyncKind = 'BACKFILL' | 'DAILY' | 'MANUAL'
 
-/** Operations a run reserves before its first call (PLAN.md L10: 4 + a spare). */
-export const RUN_OPS = 5
+/** Operations a regular run reserves before its first call (sync-plan.ts: core 4 + step 1b 16 + a spare). */
+export { RUN_OPS }
 /** A change history read that hits Google's LIMIT continues at most this many times (one more operation each). */
 export const CHANGE_HISTORY_CONTINUATIONS = 2
-/** More daily rows than this in one read is not kept (memory); the read says so. */
+/** More daily rows than this in one read of one grain is not kept (memory); the read says so. */
 export const MAX_METRIC_ROWS = 200_000
 
 const MANAGER_SENTENCE = 'This is a Google Ads manager account: it has no campaigns of its own. Choose one of the accounts under it in Settings, Channels, Google.'
 const NO_ACCOUNT_SENTENCE = 'Google Ads sent no details for this account, so Nexus read nothing.'
+/** A step 1b read left out for want of allowance (its read state). */
+const SHORT_BUDGET_SENTENCE = 'Not read in this run: the Google Ads allowance ran short, so Nexus read the more urgent parts first. It reads this at the next read.'
+/** The same for the run as a whole. */
+const SHORT_BUDGET_RUN_SENTENCE = 'Some parts were not read in this run: the Google Ads allowance ran short, so Nexus read the more urgent parts first. It reads them at the next read.'
+const NOT_REACHED_PREFIX = 'Not read in this run:'
+
+const ALL_DETAIL_RESOURCES: readonly GoogleAdsReadResource[] = DETAIL_STEPS.map((step) => step.resource)
+
+/** How one step 1b read ended in this run. */
+export interface GoogleAdsDetailOutcome {
+  resource: GoogleAdsReadResource
+  status: GoogleAdsReadStatus
+  rows: number
+  error: string | null
+}
 
 export interface GoogleAdsSyncResult {
   customerId: string
@@ -61,6 +104,12 @@ export interface GoogleAdsSyncResult {
   metricRows: number
   window: DayWindow | null
   changeEvents: number
+  /** Step 1b: each read's end, in run order (empty when the run never got that far). */
+  details: GoogleAdsDetailOutcome[]
+  /** Step 1b tiers left out for want of allowance. */
+  tiersDropped: GoogleAdsTier[]
+  /** Alerts the run raised (null when they were not evaluated). */
+  alertsRaised: number | null
 }
 
 /** The daily window, reaching back to the day after the last day read when runs were missed (never past 400 days). */
@@ -79,7 +128,240 @@ function stopsTheRun(failure: GoogleAdsFailure): boolean {
   return failure.authLost || failure.quotaExhausted || failure.notApprovedForProduction || failure.permissionDenied || failure.origin === 'gateway'
 }
 
-interface StepFailure { step: string; failure: GoogleAdsFailure }
+/**
+ * The same for a step 1b read: access refused to one resource (a Merchant Center link, a recommendation type) stops
+ * only that read — the account itself was reached by the core steps.
+ */
+function stopsTheDetail(failure: GoogleAdsFailure): boolean {
+  return failure.authLost || failure.quotaExhausted || failure.notApprovedForProduction || failure.origin === 'gateway'
+}
+
+/** Google refused the query itself (an unknown or unselectable field): a NOT VERIFIED field may be the cause. */
+export function isRefusedQuery(failure: GoogleAdsFailure): boolean {
+  return failure.origin === 'google' && failure.httpStatus === 400 && !failure.retryable && !failure.pageTokenExpired && !failure.authLost &&
+    !failure.quotaExhausted && !failure.permissionDenied && !failure.notApprovedForProduction
+}
+
+interface StepFailure { step: string; failure: GoogleAdsFailure; detail?: GoogleAdsReadResource }
+
+/**
+ * Reserve what the run may spend: everything, else without tier 5, then 4, 3, 2; the core alone last. A refusal that a
+ * smaller run cannot fix either (Redis down, Google's day used up) stops at once.
+ */
+async function reserveRun(customerId: string, steps: readonly PlannedStep[], now: Date): Promise<{ reservation: OpsReservation; tiers: readonly GoogleAdsTier[] }> {
+  let refused: OpsReservation | null = null
+  for (const tiers of TIER_CANDIDATES) {
+    const reservation = await reserveOps(customerId, runOps(steps, tiers), now)
+    if (reservation.ok) return { reservation, tiers }
+    refused = reservation
+    if (reservation.reason !== 'account_cap' && reservation.reason !== 'global_cap') break
+  }
+  return { reservation: refused!, tiers: [] }
+}
+
+/** What a step 1b read needs to call Google and count what it spends. */
+interface DetailContext {
+  target: GoogleAdsTarget
+  customerId: string
+  currencyCode: string
+  timeZone: string
+  /** Adds operations the moment a query returns. */
+  spend: (ops: number) => void
+}
+
+/**
+ * Every row of one query, mapped (rows the mapper refuses are dropped). `raw` counts every row Google returned. More
+ * than `limit` mapped rows stops the read in words (the query's operation is spent).
+ */
+async function collect<Row, Out>(
+  ctx: DetailContext,
+  query: string,
+  operation: string,
+  map: (row: Row) => Out | null,
+  limit = Number.POSITIVE_INFINITY,
+): Promise<{ out: Out[]; raw: number }> {
+  let out: Out[] = []
+  let raw = 0
+  const read = await searchAll<Row>(ctx.target, query, (rows) => {
+    raw += rows.length
+    for (const row of rows) {
+      const mapped = map(row)
+      if (mapped !== null) out.push(mapped)
+    }
+    if (out.length > limit) {
+      throw new GoogleAdsReadError(localFailure(`Google sent more than ${limit.toLocaleString('en-US')} rows for this part of the account; Nexus kept none of this read.`, 'TOO_MANY_ROWS'), operation, 1)
+    }
+  }, { operation, onRestart: () => { out = []; raw = 0 } })
+  ctx.spend(read.ops)
+  return { out, raw }
+}
+
+/**
+ * `collect`, and when Google refuses the query itself, once more with `fallback` (the same query without a NOT VERIFIED
+ * field: what it leaves out is then not read). The refused attempt's operation is counted.
+ */
+async function collectWithFallback<Row, Out>(
+  ctx: DetailContext,
+  primary: string,
+  fallback: string,
+  operation: string,
+  map: (row: Row, fellBack: boolean) => Out | null,
+  limit?: number,
+): Promise<{ out: Out[]; raw: number; fellBack: boolean }> {
+  try {
+    return { ...(await collect<Row, Out>(ctx, primary, operation, (row) => map(row, false), limit)), fellBack: false }
+  } catch (err) {
+    if (!(err instanceof GoogleAdsReadError) || !isRefusedQuery(err.failure)) throw err
+    ctx.spend(err.opsSpent)
+    logger.warn('[google-ads-sync] Google refused a query; sending it once more without the field it may not know', {
+      customerId: ctx.customerId, operation, code: err.failure.code,
+    })
+    return { ...(await collect<Row, Out>(ctx, fallback, operation, (row) => map(row, true), limit)), fellBack: true }
+  }
+}
+
+const DAY_QUERY: Readonly<Record<GoogleAdsDayResource, (window: DayWindow) => string>> = {
+  AD_GROUP_DAYS: adGroupDailyMetricsQuery,
+  KEYWORD_DAYS: keywordDailyMetricsQuery,
+  ASSET_GROUP_DAYS: assetGroupDailyMetricsQuery,
+  PRODUCT_DAYS: productDailyMetricsQuery,
+  SEARCH_TERM_DAYS: (window) => searchTermDailyMetricsQuery(window, true),
+}
+
+/**
+ * One grain's days: every piece of its window read first, then stored in ONE transaction with the grain's range of days
+ * read (a first read is all or nothing). Returns the rows stored.
+ */
+async function readGrainDays(ctx: DetailContext, step: PlannedStep): Promise<number> {
+  const grain = step.grain!
+  const resource = grain.spec.resource
+  const operation = `ads.search.${resource.toLowerCase().replace(/_(\w)/g, (_, c: string) => c.toUpperCase())}`
+  const days: GoogleAdsDailyMetricData[] = []
+  let clicksFilter = true
+  for (const chunk of grain.chunks) {
+    const map = (row: GoogleAdsGrainDayRow) => mapGrainDay(grain.spec.entityType, row, ctx)
+    const limit = MAX_METRIC_ROWS - days.length
+    let read: { out: GoogleAdsDailyMetricData[] }
+    if (resource === 'SEARCH_TERM_DAYS' && clicksFilter) {
+      // `metrics.clicks > 0` on campaign_search_term_view is NOT VERIFIED: once refused, the rest of the run reads without it.
+      const both = await collectWithFallback<GoogleAdsGrainDayRow, GoogleAdsDailyMetricData>(ctx, searchTermDailyMetricsQuery(chunk, true),
+        searchTermDailyMetricsQuery(chunk, false), operation, (row) => map(row), limit)
+      if (both.fellBack) clicksFilter = false
+      read = both
+    } else {
+      const query = resource === 'SEARCH_TERM_DAYS' ? searchTermDailyMetricsQuery(chunk, false) : DAY_QUERY[resource](chunk)
+      read = await collect<GoogleAdsGrainDayRow, GoogleAdsDailyMetricData>(ctx, query, operation, map, limit)
+    }
+    if (days.length + read.out.length > MAX_METRIC_ROWS) {
+      throw new GoogleAdsReadError(localFailure(`Google sent more than ${MAX_METRIC_ROWS.toLocaleString('en-US')} rows of daily numbers for this part of the account; Nexus kept none of this read.`, 'TOO_MANY_ROWS'), operation)
+    }
+    for (const day of read.out) days.push(day)
+  }
+  const saved = await replaceDailyMetrics(ctx.customerId, grain.spec.entityType, grain.window, days, new Date())
+  return saved.rows
+}
+
+/** One step 1b read: ask Google, store what it answered. Returns the rows stored. */
+async function readDetail(ctx: DetailContext, step: PlannedStep, seenAt: Date): Promise<number> {
+  const { customerId, timeZone } = ctx
+  const askedAt = new Date()
+  switch (step.resource) {
+    case 'CAMPAIGN_SETTINGS': {
+      const read = await collectWithFallback<GoogleAdsCampaignFlagsRow, ReturnType<typeof mapCampaignFlags>>(ctx, CAMPAIGN_FLAGS_QUERY,
+        CAMPAIGN_FLAGS_QUERY_WITHOUT_ASSET_AUTOMATION, 'ads.search.campaignSettings', (row, fellBack) => mapCampaignFlags(row, { timeZone, assetAutomationRead: !fellBack }))
+      return saveCampaignFlags(customerId, read.out.filter((flags) => flags !== null), askedAt)
+    }
+    case 'AD_POLICY': {
+      const read = await collect<GoogleAdsAdPolicyRow, ReturnType<typeof mapAdPolicyIssue>>(ctx, AD_POLICY_QUERY, 'ads.search.adPolicy', (row) => mapAdPolicyIssue(row, ctx))
+      const saved = await savePolicyIssues(customerId, 'AD', read.out.filter((issue) => issue !== null), seenAt, read.raw)
+      return saved.open
+    }
+    case 'PRODUCT_STATUS': {
+      const read = await collect<GoogleAdsShoppingProductRow, ReturnType<typeof mapShoppingProductIssue>>(ctx, SHOPPING_PRODUCTS_QUERY, 'ads.search.productStatus',
+        (row) => mapShoppingProductIssue(row, ctx))
+      const saved = await savePolicyIssues(customerId, 'PRODUCT', read.out.filter((issue) => issue !== null), seenAt, read.raw)
+      return saved.open
+    }
+    case 'AUTO_APPLY': {
+      const read = await collect<GoogleAdsRecommendationSubscriptionRow, ReturnType<typeof mapAutoApply>>(ctx, AUTO_APPLY_QUERY, 'ads.search.autoApply',
+        (row) => mapAutoApply(row, ctx))
+      return (await saveAutoApply(customerId, read.out.filter((row) => row !== null), seenAt)).upserted
+    }
+    case 'AD_GROUP_DAYS':
+    case 'KEYWORD_DAYS':
+    case 'ASSET_GROUP_DAYS':
+    case 'PRODUCT_DAYS':
+    case 'SEARCH_TERM_DAYS':
+      return readGrainDays(ctx, step)
+    case 'AD_GROUPS': {
+      const read = await collect<GoogleAdsAdGroupRow, ReturnType<typeof mapAdGroup>>(ctx, AD_GROUPS_QUERY, 'ads.search.adGroups', (row) => mapAdGroup(row, ctx))
+      return (await saveAdGroups(customerId, read.out.filter((row) => row !== null), seenAt)).upserted
+    }
+    case 'KEYWORDS': {
+      const read = await collect<GoogleAdsAdGroupCriterionRow, GoogleAdsKeywordData>(ctx, AD_GROUP_KEYWORDS_QUERY, 'ads.search.keywords', (row) => mapAdGroupKeyword(row, ctx))
+      return (await saveKeywords(customerId, 'AD_GROUP', read.out, seenAt)).upserted
+    }
+    case 'CAMPAIGN_NEGATIVES': {
+      const read = await collect<GoogleAdsCampaignCriterionRow, GoogleAdsKeywordData>(ctx, CAMPAIGN_NEGATIVES_QUERY, 'ads.search.campaignNegatives',
+        (row) => mapCampaignNegative(row, ctx))
+      return (await saveKeywords(customerId, 'CAMPAIGN', read.out, seenAt)).upserted
+    }
+    case 'ASSET_GROUPS': {
+      const read = await collect<GoogleAdsAssetGroupRow, ReturnType<typeof mapAssetGroup>>(ctx, ASSET_GROUPS_QUERY, 'ads.search.assetGroups', (row) => mapAssetGroup(row, ctx))
+      return (await saveAssetGroups(customerId, read.out.filter((row) => row !== null), seenAt)).upserted
+    }
+    case 'NEGATIVE_LISTS':
+      return readNegativeLists(ctx, seenAt)
+    case 'RECOMMENDATIONS': {
+      const read = await collectWithFallback<GoogleAdsRecommendationRow, ReturnType<typeof mapRecommendation>>(ctx, RECOMMENDATIONS_QUERY,
+        RECOMMENDATIONS_QUERY_WITHOUT_IMPACT, 'ads.search.recommendations', (row, fellBack) => mapRecommendation(row, { customerId, impactRead: !fellBack }))
+      return replaceRecommendations(customerId, read.out.filter((row) => row !== null), askedAt)
+    }
+  }
+}
+
+/**
+ * The negative keyword lists: their keywords, then the campaigns they are attached to (two queries, one read state).
+ * Without the lists' details (the fallback queries), an attachment counts only for a list known as a negative keyword
+ * list — one whose keywords were just read, or one stored before.
+ */
+async function readNegativeLists(ctx: DetailContext, seenAt: Date): Promise<number> {
+  const keywords = await collectWithFallback<GoogleAdsSharedCriterionRow, ReturnType<typeof mapListKeyword>>(ctx, NEGATIVE_LIST_KEYWORDS_QUERY,
+    NEGATIVE_LIST_KEYWORDS_QUERY_WITHOUT_SET, 'ads.search.negativeListKeywords', (row) => mapListKeyword(row, ctx))
+  const attachments = await collectWithFallback<GoogleAdsCampaignSharedSetRow, ReturnType<typeof mapListAttachment>>(ctx, NEGATIVE_LIST_ATTACHMENTS_QUERY,
+    NEGATIVE_LIST_ATTACHMENTS_QUERY_WITHOUT_SET, 'ads.search.negativeListAttachments', (row) => mapListAttachment(row))
+  const lists = new Map<string, GoogleAdsNegativeListData>()
+  const listOf = (sharedSetId: string) => {
+    let list = lists.get(sharedSetId)
+    if (!list) {
+      list = { customerId: ctx.customerId, sharedSetId, name: null, status: null, memberCount: null, campaignIds: [] }
+      lists.set(sharedSetId, list)
+    }
+    return list
+  }
+  const details = (list: GoogleAdsNegativeListData, set: { name: string | null; status: string | null; memberCount: number | null } | null) => {
+    if (!set) return
+    list.name ??= set.name
+    list.status ??= set.status
+    list.memberCount ??= set.memberCount
+  }
+  const listKeywords: GoogleAdsKeywordData[] = []
+  for (const row of keywords.out) {
+    if (!row) continue
+    listKeywords.push(row.keyword)
+    details(listOf(row.keyword.sharedSetId!), row.set)
+  }
+  const stored = attachments.out.some((row) => row && !row.set) ? await activeNegativeListIds(ctx.customerId) : new Set<string>()
+  for (const row of attachments.out) {
+    if (!row) continue
+    if (!row.set && !lists.has(row.sharedSetId) && !stored.has(row.sharedSetId)) continue
+    const list = listOf(row.sharedSetId)
+    details(list, row.set)
+    if (!list.campaignIds.includes(row.campaignId)) list.campaignIds.push(row.campaignId)
+  }
+  const saved = await saveNegativeLists(ctx.customerId, [...lists.values()], listKeywords, seenAt)
+  return saved.lists.upserted
+}
 
 /** Read one Google Ads account now. Never throws for a Google answer; the result and the account row say what happened. */
 export async function syncGoogleAdsAccount(target: GoogleAdsTarget, options: { kind: GoogleAdsSyncKind; now?: Date }): Promise<GoogleAdsSyncResult> {
@@ -88,21 +370,43 @@ export async function syncGoogleAdsAccount(target: GoogleAdsTarget, options: { k
   const result: GoogleAdsSyncResult = {
     customerId, kind: options.kind, mode: null, status: 'FAILED', error: null, ops: 0,
     campaigns: 0, campaignsRemoved: 0, removalBreaker: false, metricRows: 0, window: null, changeEvents: 0,
+    details: [], tiersDropped: [], alertsRaised: null,
   }
   const account = await ensureGoogleAdsCustomer({
     connectionId: target.connectionId, customerId, loginCustomerId: target.loginCustomerId,
     descriptiveName: null, currencyCode: null, timeZone: null, testAccount: false,
   })
+  const states = await readStatesOf(customerId)
+  const readThrough = Object.fromEntries(GRAINS.map((grain) => {
+    const through = states.get(grain.resource)?.readThrough
+    return [grain.resource, through ? dateToDay(through) : null]
+  })) as Partial<Record<GoogleAdsDayResource, string | null>>
+  // The plan the allowance is reserved for, in the time zone last read (a first read costs the same in any zone).
+  const planned = planDetailRead({ timeZone: knownTimeZone(account.timeZone) ?? 'UTC', now, readThrough })
+
+  /** Several step 1b reads ended the same way without being attempted (recorded best effort). */
+  const notAttempted = async (resources: readonly GoogleAdsReadResource[], status: 'FAILED' | 'SKIPPED_BUDGET', sentence: string) => {
+    for (const resource of resources) result.details.push({ resource, status, rows: 0, error: sentence })
+    try {
+      await recordReadStates(customerId, resources, { status, at: new Date(), error: sentence })
+    } catch (err) {
+      logger.error('[google-ads-sync] could not record the read state', { customerId, error: err instanceof Error ? err.message : String(err) })
+    }
+  }
 
   // 1 — the allowance first: a refused reservation sends nothing.
-  const reservation = await reserveOps(customerId, RUN_OPS, now)
+  const budget = await reserveRun(customerId, planned, now)
+  const reservation = budget.reservation
   if (!reservation.ok) {
     result.status = 'SKIPPED_BUDGET'
     result.error = reservation.sentence
     await recordSyncOutcome(customerId, { status: 'SKIPPED_BUDGET', error: reservation.sentence, ops: 0, at: new Date() })
+    await notAttempted(ALL_DETAIL_RESOURCES, 'SKIPPED_BUDGET', reservation.sentence)
     logger.info('[google-ads-sync] not started: no allowance', { customerId, reason: reservation.reason })
     return result
   }
+  result.tiersDropped = ([2, 3, 4, 5] as GoogleAdsTier[]).filter((tier) => !budget.tiers.includes(tier))
+  const droppedResources = new Set(DETAIL_STEPS.filter((s) => !budget.tiers.includes(s.tier)).map((s) => s.resource))
   let reserved = reservation.ops
   const failures: StepFailure[] = []
   let stopped = false
@@ -244,26 +548,99 @@ export async function syncGoogleAdsAccount(target: GoogleAdsTarget, options: { k
         outcome.changesSyncedThrough = through
       })
     }
+    const coreSucceeded = !!customer && !stopped && failures.length === 0
 
+    // 6 — step 1b, tier by tier, in the account's own days.
+    if (customer && !stopped) {
+      const steps = planDetailRead({ timeZone: customer.timeZone, now, readThrough })
+      const ctx: DetailContext = { target, customerId, currencyCode: customer.currencyCode, timeZone: customer.timeZone, spend: (ops) => { result.ops += ops } }
+      if (droppedResources.size > 0) failures.push({ step: 'budget', failure: localFailure(SHORT_BUDGET_RUN_SENTENCE, 'SKIPPED_BUDGET') })
+      let stop: GoogleAdsFailure | null = null
+      for (const planned of steps) {
+        const resource = planned.resource
+        if (droppedResources.has(resource)) {
+          await notAttempted([resource], 'SKIPPED_BUDGET', SHORT_BUDGET_SENTENCE)
+          continue
+        }
+        if (stop) {
+          await notAttempted([resource], 'FAILED', `${NOT_REACHED_PREFIX} ${stop.sentence}`)
+          continue
+        }
+        const askedAt = new Date()
+        try {
+          const rows = await readDetail(ctx, planned, now)
+          stored = true
+          await recordReadState(customerId, resource, { status: 'SUCCESS', at: new Date(), readAt: askedAt, rows })
+          result.details.push({ resource, status: 'SUCCESS', rows, error: null })
+        } catch (err) {
+          const failure = err instanceof GoogleAdsReadError
+            ? err.failure
+            : localFailure('Nexus could not finish this part of the read. It tries again at the next read.', 'INTERNAL')
+          if (err instanceof GoogleAdsReadError) result.ops += err.opsSpent
+          else logger.error('[google-ads-sync] step failed', { customerId, step: resource, error: err instanceof Error ? err.message : String(err) })
+          failures.push({ step: resource, failure, detail: resource })
+          result.details.push({ resource, status: 'FAILED', rows: 0, error: failure.sentence })
+          try {
+            await recordReadState(customerId, resource, { status: 'FAILED', at: new Date(), error: failure.sentence })
+          } catch (recordErr) {
+            logger.error('[google-ads-sync] could not record the read state', { customerId, step: resource, error: recordErr instanceof Error ? recordErr.message : String(recordErr) })
+          }
+          if (stopsTheDetail(failure)) { stop = failure; stopped = true }
+        }
+      }
+    } else {
+      // The core stopped the run: the step 1b reads say why they were not read (or that the allowance left them out).
+      const why = failures[failures.length - 1]?.failure.sentence ?? NO_ACCOUNT_SENTENCE
+      await notAttempted(ALL_DETAIL_RESOURCES.filter((r) => droppedResources.has(r)), 'SKIPPED_BUDGET', SHORT_BUDGET_SENTENCE)
+      await notAttempted(ALL_DETAIL_RESOURCES.filter((r) => !droppedResources.has(r)), 'FAILED', `${NOT_REACHED_PREFIX} ${why}`)
+    }
+
+    // 7 — retention, in the account's days (local only: no Google call).
+    const zone = knownTimeZone(customer?.timeZone) ?? knownTimeZone(account.timeZone)
+    if (zone) {
+      for (const grain of GRAINS) {
+        try {
+          await pruneDailyMetrics(customerId, grain.entityType, retentionKeepFrom(grain, zone, now))
+        } catch (err) {
+          logger.warn('[google-ads-sync] could not prune old days', { customerId, grain: grain.entityType, error: err instanceof Error ? err.message : String(err) })
+        }
+      }
+    }
+
+    // 8 — the account's read state.
     if (failures.length === 0) result.status = 'SUCCESS'
     else if (failures.some((f) => f.failure.authLost)) result.status = 'AUTH_LOST'
     else result.status = stored ? 'PARTIAL' : 'FAILED'
-    result.error = failures[0]?.failure.sentence ?? null
-    await recordSyncOutcome(customerId, { status: result.status, error: result.error, ops: result.ops, at: new Date(), ...outcome })
+    const first = failures[0]
+    result.error = first ? (first.detail ? `${READ_RESOURCE_TEXT[first.detail]}: ${first.failure.sentence}` : first.failure.sentence) : null
+    await recordSyncOutcome(customerId, { status: result.status, error: result.error, ops: result.ops, at: new Date(), coreSucceeded, ...outcome })
     if (metricsStored) {
       publishMarketingEvent({ type: 'campaign.metrics.refreshed', channel: 'GOOGLE', marketplace: null, rows: result.metricRows, ts: Date.now() })
     }
+    result.alertsRaised = await raiseAlerts(customerId, now)
     logger.info('[google-ads-sync] read finished', {
       customerId, kind: result.kind, mode: result.mode, status: result.status, ops: result.ops, campaigns: result.campaigns,
       removed: result.campaignsRemoved, metricRows: result.metricRows, changeEvents: result.changeEvents,
+      detailsRead: result.details.filter((d) => d.status === 'SUCCESS').length, tiersDropped: result.tiersDropped, alertsRaised: result.alertsRaised,
       failedSteps: failures.map((f) => `${f.step}:${f.failure.code ?? 'unknown'}`),
     })
     return result
   } finally {
-    // What was reserved and not spent goes back; what was spent beyond it (retries) is counted as spent — added to the
-    // buckets, never a reservation that a full cap could refuse and give back uncounted.
+    // What was reserved and not spent goes back; what was spent beyond it (retries, a query sent again without a NOT
+    // VERIFIED field) is counted as spent — added to the buckets, never a reservation a full cap could refuse.
     if (reserved > result.ops) await releaseOps(customerId, reserved - result.ops, reservation.reservedAt)
     else if (result.ops > reserved) await addSpentOps(customerId, result.ops - reserved, reservation.reservedAt)
+  }
+}
+
+/** The alerts over what is now stored (alerts.service.ts; no Google call). Never fails the run. */
+async function raiseAlerts(customerId: string, now: Date): Promise<number | null> {
+  try {
+    const { raiseGoogleAdsAlerts } = await import('./alerts.service.js')
+    return (await raiseGoogleAdsAlerts(customerId, now)).raised
+  } catch (err) {
+    logger.warn('[google-ads-sync] alerts not evaluated', { customerId, error: err instanceof Error ? err.message : String(err) })
+    return null
   }
 }
 
@@ -277,6 +654,7 @@ export async function syncGoogleAdsCustomer(customerId: string, kind: GoogleAdsS
     return {
       customerId, kind, mode: null, status: 'NOT_LINKED', error: 'This business no longer reads this Google Ads account.', ops: 0,
       campaigns: 0, campaignsRemoved: 0, removalBreaker: false, metricRows: 0, window: null, changeEvents: 0,
+      details: [], tiersDropped: [], alertsRaised: null,
     }
   }
   return syncGoogleAdsAccount(target, { kind, now })
@@ -285,5 +663,8 @@ export async function syncGoogleAdsCustomer(customerId: string, kind: GoogleAdsS
 /** One line for the cron's run record. */
 export function syncSummaryLine(results: GoogleAdsSyncResult[]): string {
   if (results.length === 0) return 'no Google Ads account chosen'
-  return results.map((r) => `${r.customerId.slice(-4)}: ${r.status}${r.mode ? ` ${r.mode}` : ''} ops=${r.ops} campaigns=${r.campaigns} days=${r.metricRows} changes=${r.changeEvents}`).join(' | ')
+  return results.map((r) => {
+    const details = r.details?.length ? ` details=${r.details.filter((d) => d.status === 'SUCCESS').length}/${r.details.length}` : ''
+    return `${r.customerId.slice(-4)}: ${r.status}${r.mode ? ` ${r.mode}` : ''} ops=${r.ops} campaigns=${r.campaigns} days=${r.metricRows} changes=${r.changeEvents}${details}`
+  }).join(' | ')
 }

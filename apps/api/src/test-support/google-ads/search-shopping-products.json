@@ -1,0 +1,66 @@
+{
+  "results": [
+    {
+      "shoppingProduct": {
+        "resourceName": "customers/1234567890/shoppingProducts/5555555555~ONLINE~it~IT~Test-SKU-1",
+        "merchantCenterId": "5555555555",
+        "channel": "ONLINE",
+        "languageCode": "it",
+        "feedLabel": "IT",
+        "itemId": "Test-SKU-1",
+        "title": "Test helmet, size M",
+        "status": "NOT_ELIGIBLE",
+        "issues": [
+          {
+            "errorCode": "missing_gtin",
+            "adsSeverity": "NOT_ELIGIBLE",
+            "attributeName": "gtin",
+            "description": "Missing value [gtin]",
+            "detail": "Add a GTIN for this product.",
+            "documentation": "https://support.example.com/gtin",
+            "affectedRegions": [
+              "IT"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "shoppingProduct": {
+        "resourceName": "customers/1234567890/shoppingProducts/5555555555~ONLINE~it~IT~test-sku-2",
+        "merchantCenterId": "5555555555",
+        "channel": "ONLINE",
+        "languageCode": "it",
+        "feedLabel": "IT",
+        "itemId": "test-sku-2",
+        "title": "Test gloves",
+        "status": "ELIGIBLE_LIMITED",
+        "issues": [
+          {
+            "errorCode": "image_too_small",
+            "adsSeverity": "DEMOTED",
+            "attributeName": "image_link",
+            "description": "Image too small",
+            "affectedRegions": [
+              "IT",
+              "SM"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "shoppingProduct": {
+        "resourceName": "customers/1234567890/shoppingProducts/5555555555~ONLINE~it~IT~test-sku-3",
+        "merchantCenterId": "5555555555",
+        "channel": "ONLINE",
+        "languageCode": "it",
+        "feedLabel": "IT",
+        "itemId": "test-sku-3",
+        "title": "Test jacket",
+        "status": "ELIGIBLE"
+      }
+    }
+  ],
+  "fieldMask": "shoppingProduct.merchantCenterId,shoppingProduct.channel,shoppingProduct.languageCode,shoppingProduct.feedLabel,shoppingProduct.itemId,shoppingProduct.title,shoppingProduct.status,shoppingProduct.issues"
+}

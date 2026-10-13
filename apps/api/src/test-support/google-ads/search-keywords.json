@@ -1,0 +1,78 @@
+{
+  "results": [
+    {
+      "campaign": {
+        "resourceName": "customers/1234567890/campaigns/11111111111",
+        "id": "11111111111"
+      },
+      "adGroup": {
+        "resourceName": "customers/1234567890/adGroups/71111111111",
+        "id": "71111111111"
+      },
+      "adGroupCriterion": {
+        "resourceName": "customers/1234567890/adGroupCriteria/71111111111~91111",
+        "criterionId": "91111",
+        "status": "ENABLED",
+        "type": "KEYWORD",
+        "keyword": {
+          "text": "test helmet",
+          "matchType": "PHRASE"
+        },
+        "qualityInfo": {
+          "qualityScore": 7
+        },
+        "systemServingStatus": "ELIGIBLE",
+        "approvalStatus": "APPROVED",
+        "primaryStatus": "ELIGIBLE",
+        "cpcBidMicros": "700000",
+        "effectiveCpcBidMicros": "700000"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/1234567890/campaigns/11111111111",
+        "id": "11111111111"
+      },
+      "adGroup": {
+        "resourceName": "customers/1234567890/adGroups/71111111111",
+        "id": "71111111111"
+      },
+      "adGroupCriterion": {
+        "resourceName": "customers/1234567890/adGroupCriteria/71111111111~91112",
+        "criterionId": "91112",
+        "status": "PAUSED",
+        "type": "KEYWORD",
+        "keyword": {
+          "text": "test full face helmet",
+          "matchType": "EXACT"
+        },
+        "systemServingStatus": "ELIGIBLE",
+        "approvalStatus": "APPROVED",
+        "primaryStatus": "PAUSED",
+        "effectiveCpcBidMicros": "650000"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/1234567890/campaigns/11111111111",
+        "id": "11111111111"
+      },
+      "adGroup": {
+        "resourceName": "customers/1234567890/adGroups/71111111111",
+        "id": "71111111111"
+      },
+      "adGroupCriterion": {
+        "resourceName": "customers/1234567890/adGroupCriteria/71111111111~91113",
+        "criterionId": "91113",
+        "negative": true,
+        "status": "ENABLED",
+        "type": "KEYWORD",
+        "keyword": {
+          "text": "test cheap",
+          "matchType": "BROAD"
+        }
+      }
+    }
+  ],
+  "fieldMask": "campaign.id,adGroup.id,adGroupCriterion.criterionId,adGroupCriterion.negative,adGroupCriterion.status,adGroupCriterion.type,adGroupCriterion.keyword.text,adGroupCriterion.keyword.matchType,adGroupCriterion.qualityInfo.qualityScore,adGroupCriterion.systemServingStatus,adGroupCriterion.approvalStatus,adGroupCriterion.primaryStatus,adGroupCriterion.cpcBidMicros,adGroupCriterion.effectiveCpcBidMicros"
+}
