@@ -38,6 +38,8 @@ const CHANNELS = [
   { dir: 'amazon-ads', revokable: false },
   { dir: 'shopify', revokable: false },
   { dir: 'etsy', revokable: false },
+  // Google has a revoke endpoint, but it ends the grant for every business on the same login (20261013b).
+  { dir: 'google', revokable: false },
 ] as const
 
 describe('revoke coverage (P6.4)', () => {

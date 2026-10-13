@@ -307,12 +307,12 @@ function useChromeless(side: Side): SideBuild {
   return { props, above: <Log label="fired" lines={log} /> }
 }
 
-/** S17 — the rules grids' pager: centred, opened on page 2 from a URL-shaped seed, emitting page changes. */
-function usePagerCentered(): SideBuild {
+/** S17 — the rules grids' pager: opened on page 2 from a URL-shaped seed, emitting page changes. */
+function usePagerSeeded(): SideBuild {
   const [log, push] = useLog()
   const onPageChange = useCallback((p: number) => push(`onPageChange ${p}`), [push])
   const onRowClick = useCallback((r: ParityRow) => push(`onRowClick ${r.id}`), [push])
-  const props = useMemo<WsProps>(() => ({ ...BASE, rows: ROWS_120, pagerCentered: true, initialPage: 2, onPageChange, selectable: false, keyboardNav: true, onRowClick }), [onPageChange, onRowClick])
+  const props = useMemo<WsProps>(() => ({ ...BASE, rows: ROWS_120, initialPage: 2, onPageChange, selectable: false, keyboardNav: true, onRowClick }), [onPageChange, onRowClick])
   return { props, above: <Log label="fired" lines={log} /> }
 }
 
@@ -360,7 +360,7 @@ export const WS_SCENARIOS: WsScenarioDef[] = [
   { id: 'empty-label', title: 'empty with emptyLabel only', useSide: useEmptyLabel, exempt: ['totals'] },
   { id: 'customizable', title: 'customizable + storageKey — the DS PreferencesModal', note: 'Each engine keeps its own lab layout; the AG side supports groups and pins. CPC is defaultHidden.', useSide: useCustomizable },
   { id: 'chromeless', title: 'chromeless + controlled prefs (AG only) — the Ad Manager’s mode', note: 'The AG side renders only the grid card with a controlled column subset; the legacy side renders the same subset with its chrome (it has no chromeless mode). Toolbar and pager are exempt here; rows, cells and header are compared.', useSide: useChromeless, exempt: ['toolbar', 'pager'] },
-  { id: 'pager-centered', title: 'pagerCentered + initialPage 2 + onPageChange', note: 'Opens on page 2 of 2; the pager sits in the middle.', useSide: usePagerCentered },
+  { id: 'pager-seeded', title: 'initialPage 2 + onPageChange', note: 'Opens on page 2 of 2.', useSide: usePagerSeeded },
 ]
 
 export function WorkspaceScenarios({ engines, scenario = 'all' }: { engines: ParityEngines; scenario?: string }) {

@@ -164,8 +164,6 @@ export interface WorkspaceGridProps<T> {
   searchable?: boolean
   searchPlaceholder?: string
   searchValue?: (row: T) => string
-  /** center the pager (H10 rules grid) instead of right-aligning it. */
-  pagerCentered?: boolean
   /** initial filters-panel open state (H10 rules grid loads collapsed). */
   filtersDefaultOpen?: boolean
   /** ER3.1 — Filter Library: saveable named presets persisted in localStorage under this key. */

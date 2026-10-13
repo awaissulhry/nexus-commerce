@@ -1007,7 +1007,6 @@ export function AutomationsClient() {
         selected={sel}
         onSelectedChange={setSel}
         defaultSort={{ key: 'mode', dir: 'desc' }}
-        pagerCentered
         rowClassName={(a) => (a.k === 'rule' && conflicts.has(a.r.id) ? 'h10-au-rowconf' : a.k !== 'rule' ? 'h10-au-rowactor' : undefined)}
         emptyLabel="No actors match this filter."
         filters={filters}

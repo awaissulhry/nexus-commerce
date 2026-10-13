@@ -867,7 +867,6 @@ export function KeywordTrackerClient() {
               document.body.appendChild(a); a.click(); a.remove()
               URL.revokeObjectURL(a.href)
             }}
-            pagerCentered
             storageKey="nexus.kt.cols"
             toolbarLeft={(
               <span className="h10-kt-tools">

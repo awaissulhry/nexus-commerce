@@ -1587,7 +1587,6 @@ function SuggestionsInner() {
             onSelectedChange={setSel}
             searchable
             searchPlaceholder="Search terms & keywords…"
-            pagerCentered
             customizable
             storageKey={`suggestions-grid-${activeView.key}-v1`}
             defaultSort={status === 'pending' ? undefined : { key: 'when', dir: 'desc' }}

@@ -186,7 +186,6 @@ export function CampaignLimitsModal({
           value: (r) => (r as BmCampaignRow).status,
         }]}
         customizable={false}
-        pagerCentered
         defaultSort={{ key: 'daily', dir: 'desc' }}
         emptyLabel="No campaigns in this market"
         editMode={{

@@ -98,7 +98,7 @@ export function ConnectAccountDialog({ channel, options, accountLabel, busy, err
         Nexus requests broad read/write access to your store, including products, orders, customers, inventory, content, and settings. Restricted permissions are included only after app approval. Your password is entered only on Shopify.
       </Banner>}
       {channel.key === 'GOOGLE' && <Banner tone="info" title="Google will ask you to allow access">
-        Google asks for access to Google Ads, Merchant Center and Google Analytics (Analytics to read only). Tick every box. For now Nexus only reads the Google Ads account you choose next; it changes nothing in Google. Your password is entered only on Google.
+        Google asks for access to Google Ads, Merchant Center and Google Analytics (Analytics to read only). Tick every box. For now Nexus only reads the Google Ads account you choose next; it changes nothing in Google. You can connect the same Google login in each of your businesses. Your password is entered only on Google.
       </Banner>}
       {WORKSPACES_ENABLED && selected && <p className="nds-connect-note">{reconnecting ? 'Access will be renewed' : 'The account you authorize will be connected'} in <strong>{selected.name}</strong>.</p>}
       {WORKSPACES_ENABLED && !reconnecting && <div><Button asChild variant="link" inline><a href="/profiles?create=1">Create a new business profile</a></Button></div>}

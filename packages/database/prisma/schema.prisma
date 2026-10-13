@@ -7226,6 +7226,8 @@ model ChannelConnection {
   // name, Shopify shop domain. Load-bearing: the partial unique index
   // `ChannelConnection_active_account_key` keys on it, so two accounts we cannot
   // tell apart cannot both be active. NULL until MAP.4 adds eBay's identity scope.
+  // GOOGLE (the login's `sub`) is the one exception: the same login may be active
+  // once per business (`ChannelConnection_google_active_login_key`, 20261013b).
   externalAccountId String?
 
   connectionMetadata Json?
@@ -21772,7 +21774,8 @@ model ChannelAccountOwnership {
 
 // ── BP.S1a — one owner, many guests ────────────────────────────────────────────
 // ChannelAccountOwnership above says a seller account has exactly ONE owning
-// business, by primary key, and workspace-ingress.ts depends on that: a verified
+// business, by primary key (GOOGLE logins write no row: one login may connect in
+// many businesses, 20261013b), and workspace-ingress.ts depends on that: a verified
 // notification that resolves to more than one business is refused (503). So a
 // second business does not become a co-owner — it receives a READ-ONLY grant.
 // Enforcement is the `nexus_workspace_grant_read` FOR SELECT policy, never
@@ -22815,7 +22818,9 @@ model AmazonSalesRank {
 
 /// The Google account a business picked for each Google product (one Google Ads account, one Merchant Center account,
 /// one GA4 property per business in step 1). Survives a reconnect of the same login (the connect upsert rewrites the
-/// connection's scope rows, so the choice cannot live there).
+/// connection's scope rows, so the choice cannot live there). One Google login may be connected in many businesses
+/// (20261013b), but each Google Ads / Merchant Center / GA4 id is chosen by ONE business only: (product, externalId)
+/// is unique across businesses. A disconnect deletes the business's rows, so another business may then choose them.
 model GoogleAccountLink {
   workspaceId      String            @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
   id               String            @id @default(cuid())
@@ -22836,6 +22841,7 @@ model GoogleAccountLink {
   updatedAt        DateTime          @updatedAt
 
   @@unique([workspaceId, product], name: "google_link_product")
+  @@unique([product, externalId])
   @@index([workspaceId])
   @@index([connectionId])
 }

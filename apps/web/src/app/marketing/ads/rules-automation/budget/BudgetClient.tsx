@@ -912,7 +912,6 @@ export function BudgetClient() {
           onRowClick={WRITE_ACTIONS.onRowAction ?? undefined}
           exportable
           onExport={csv}
-          pagerCentered
           storageKey="nexus.budget.cols"
           toolbarLeft={toolbarLeft}
           toolbarRight={toolbarRight}
@@ -951,7 +950,6 @@ export function BudgetClient() {
           selectable={false}
           exportable
           onExport={csv}
-          pagerCentered
           storageKey="nexus.budget.rulecols"
           toolbarLeft={toolbarLeft}
           toolbarRight={toolbarRight}

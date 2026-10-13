@@ -400,11 +400,16 @@ export async function isPrimaryChannelConnection(channel: string, connectionId: 
  *
  * The re-consent case: an operator reconnecting an account we already hold must
  * refresh that row, not mint a second one for the same seller.
+ *
+ * `ownWorkspaceId` limits the match to that business's own rows, leaving out a row
+ * another business shares with it (BP.S1a read grant). GOOGLE needs it: one Google
+ * login may be connected in many businesses, each on its own row (20261013b).
  */
 export async function findAccountByExternalId(
   channel: string,
   externalAccountId: string,
   excludeConnectionId?: string,
+  ownWorkspaceId?: string,
 ): Promise<ConnectionRow | null> {
   return prisma.channelConnection.findFirst({
     select: CONNECTION_PUBLIC_SELECT,
@@ -413,6 +418,7 @@ export async function findAccountByExternalId(
       isActive: true,
       externalAccountId,
       ...(excludeConnectionId ? { NOT: { id: excludeConnectionId } } : {}),
+      ...(ownWorkspaceId ? { workspaceId: ownWorkspaceId } : {}),
     },
   });
 }

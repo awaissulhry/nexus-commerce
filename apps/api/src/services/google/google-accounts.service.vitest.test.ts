@@ -9,6 +9,8 @@
  *       ledger row once per change; the account row prepared and the first read queued; another business's sign-in is
  *       not found; another connected sign-in of this business holding the choice is `customer_taken`
  *   the states in words; /api/accounts says "Choose a Google Ads account"
+ *   one Google login in many businesses: each business its own row; an account another business picked is
+ *       `taken_by_other_business` (never naming it); Disconnect sends nothing to Google and frees the picks
  * Values are made up (public repo).
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -56,8 +58,10 @@ vi.mock('../marketing/google-ads/enqueue.js', () => ({
 import { GOOGLE_REQUIRED_SCOPES } from '../cx/connectors/google/scopes.js'
 import { listAccountRows } from '../accounts/account-rows.service.js'
 import {
-  __clearGoogleChoicesCache, CHOICES_TTL_MS, choicesAnswer, getChoices, googleAccountState, GoogleConnectionNotFound, listGoogleAccounts, saveSelection,
+  __clearGoogleChoicesCache, CHOICES_TTL_MS, choicesAnswer, getChoices, googleAccountState, GoogleConnectionNotFound, GoogleSelectionError, listGoogleAccounts, saveSelection,
 } from './google-accounts.service.js'
+import '../cx/connectors/google/spec.js'
+import { revoke } from '../cx/token.service.js'
 
 const A = 'gacct_alpha'
 const B = 'gacct_bravo'
@@ -247,5 +251,51 @@ describe('the states in words', () => {
     expect(googleAccountState({ ...base, readingOn: false })).toEqual({
       state: 'first_read_pending', stateText: 'Nexus has not read “Test advertiser” yet: reading Google Ads is switched off on the server for now.',
     })
+  })
+})
+
+describe('one Google login in many businesses (Owner 2026-10-13)', () => {
+  let connBSame = ''
+  const refusal = (work: Promise<unknown>) => work.then(() => { throw new Error('expected a refusal') }, (err: unknown) => err as GoogleSelectionError)
+
+  it('the same Google login connects in a second business on its own row, but never twice in one business', async () => {
+    connBSame = (await inB(() => googleConnection('test-google-login-a2', 'second.a@example.test'))).id
+    expect(connBSame).not.toBe(connA2)
+    expect(await inA(() => db().channelConnection.findUnique({ where: { id: connA2 } }))).toMatchObject({ isActive: true, externalAccountId: 'test-google-login-a2' })
+    expect(await refused(inB(() => googleConnection('test-google-login-a2', 'second.a@example.test')))).toMatchObject({ code: 'P2002' })
+  })
+
+  it('an account another business picked is refused, in words that name nothing of it; nothing is saved', async () => {
+    await inA(() => saveSelection(connA2, pick('1234567890', { merchantCenterId: '5555555555', analyticsPropertyId: '444444444' })))
+    for (const [body, product] of [
+      [pick('1234567890'), 'ads'],
+      [pick('5550001112', { merchantCenterId: '5555555555' }), 'merchant_center'],
+      [pick('5550001112', { analyticsPropertyId: '444444444' }), 'analytics'],
+    ] as const) {
+      const err = await refusal(inB(() => saveSelection(connBSame, body)))
+      expect(err).toBeInstanceOf(GoogleSelectionError)
+      expect(err).toMatchObject({ statusCode: 409, code: 'taken_by_other_business', product })
+      expect(err.message).toMatch(/one business only/)
+      expect(err.message).not.toMatch(/\d{6,}|example|gacct/)
+    }
+    expect(await inB(() => db().googleAccountLink.count())).toBe(0)
+    // What no other business holds is saved.
+    const { account } = await inB(() => saveSelection(connBSame, pick('5550001112')))
+    expect(account).toMatchObject({ connectionId: connBSame, ads: { customerId: '5550001112' } })
+  })
+
+  it('Disconnect in one business sends nothing to Google and frees its picks; the other business keeps its sign-in', async () => {
+    const sent = vi.spyOn(globalThis, 'fetch')
+    try {
+      expect(await inA(() => revoke(connA2, { kind: 'operator', userId: 'user-a' }, 'operator'))).toEqual({ revokedAtChannel: false })
+      expect(sent).not.toHaveBeenCalled()
+    } finally {
+      sent.mockRestore()
+    }
+    expect(await inA(() => db().googleAccountLink.count())).toBe(0)
+    expect(await inB(() => db().channelConnection.findUnique({ where: { id: connBSame } }))).toMatchObject({ isActive: true, authStatus: 'connected' })
+    // The freed accounts may now be picked by the other business.
+    const { account } = await inB(() => saveSelection(connBSame, pick('1234567890', { merchantCenterId: '5555555555', analyticsPropertyId: '444444444' })))
+    expect(account).toMatchObject({ ads: { customerId: '1234567890' }, merchantCenter: { id: '5555555555' }, analytics: { propertyId: '444444444' } })
   })
 })

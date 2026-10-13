@@ -10,9 +10,14 @@ DO $$ BEGIN
 END $$;
 
 -- Preserve deployed uniqueness, including unidentified-account sentinels. No obsolete global primary index.
+-- GOOGLE (Owner 2026-10-13): one Google login may be connected in many businesses, once per business, each with its
+-- own connection row and refresh token. Every other channel keeps one seller account = one business.
 CREATE UNIQUE INDEX IF NOT EXISTS "ChannelConnection_active_account_key"
   ON "ChannelConnection" ("channelType", COALESCE("marketplace", '~'), COALESCE("externalAccountId", '~'))
-  WHERE "isActive" = true;
+  WHERE "isActive" = true AND "channelType" <> 'GOOGLE';
+CREATE UNIQUE INDEX IF NOT EXISTS "ChannelConnection_google_active_login_key"
+  ON "ChannelConnection" ("workspaceId", COALESCE("externalAccountId", '~'))
+  WHERE "isActive" = true AND "channelType" = 'GOOGLE';
 CREATE UNIQUE INDEX IF NOT EXISTS "ChannelConnection_workspace_channel_primary_key"
   ON "ChannelConnection" ("workspaceId", "channelType") WHERE "isPrimary" = true;
 CREATE INDEX IF NOT EXISTS "WebhookEvent_signatureOk_idx" ON "WebhookEvent" ("signatureOk") WHERE "signatureOk" = false;
@@ -35,7 +40,8 @@ $$;
 CREATE OR REPLACE FUNCTION nexus_channel_route_sync() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
     BEGIN
       IF TG_OP = 'DELETE' THEN DELETE FROM "ChannelAccountRoute" WHERE "connectionId" = OLD.id; RETURN OLD; END IF;
-      IF NEW."externalAccountId" IS NOT NULL THEN
+      -- GOOGLE claims no single owning business (the indexes above); its route row is still kept.
+      IF NEW."externalAccountId" IS NOT NULL AND NEW."channelType" <> 'GOOGLE' THEN
         INSERT INTO "ChannelAccountOwnership" ("channelType", environment, "externalAccountId", "workspaceId")
           VALUES (NEW."channelType", COALESCE(NEW."connectionMetadata"->>'environment', 'production'), NEW."externalAccountId", NEW."workspaceId")
           ON CONFLICT DO NOTHING;
