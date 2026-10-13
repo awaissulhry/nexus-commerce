@@ -523,7 +523,12 @@ export class BulkActionService {
    * EU quantity is one number for every EU market of a SKU, so a quantity or buffer change on one EU row is applied to
    * the SKU's whole EU group at once — and only when the job itself holds every row of that group.
    */
-  private readonly overrideRuns = new Map<string, { scope: Set<string>; inventoryDone: Set<string> }>();
+  /**
+   * Per MARKETPLACE_OVERRIDE_UPDATE run: the rows it holds, the rows whose inventory it already changed (an Amazon EU group
+   * at its first row), and its OWN moves of each row's version (listing → version → version), so a row's price write is
+   * checked against what the job itself left — never against a move by anyone else.
+   */
+  private readonly overrideRuns = new Map<string, { scope: Set<string>; inventoryDone: Set<string>; moves: Map<string, Map<number, number>> }>();
 
   constructor(private prisma: PrismaClient = prisma) {
     this.masterPriceService = new MasterPriceService(prisma);
@@ -774,7 +779,7 @@ export class BulkActionService {
         throw new Error('No items found to process');
       }
       if (job.actionType === 'MARKETPLACE_OVERRIDE_UPDATE') {
-        this.overrideRuns.set(jobId, { scope: new Set(items.map((i) => i.id)), inventoryDone: new Set() });
+        this.overrideRuns.set(jobId, { scope: new Set(items.map((i) => i.id)), inventoryDone: new Set(), moves: new Map() });
       }
 
       let processedItems = 0;
@@ -3475,7 +3480,10 @@ export class BulkActionService {
             listingId: item.id,
             ...(plan.price !== undefined ? { price: plan.price } : {}),
             ...(plan.rule !== undefined ? { rule: plan.rule } : {}),
-            expectedVersion: item.version,
+            // 1.8 (2026-10-13): the inventory primitives move every row they write. An Amazon EU group's inventory is
+            // written at its FIRST row, so a later EU row is checked against the version the job's own write left
+            // (`ownVersion`); a move by anyone else still fails the row.
+            expectedVersion: this.ownVersion(job.id, item),
             ...(seen !== undefined ? { expectedPrice: seen } : {}),
           }],
           actor,
@@ -3587,6 +3595,7 @@ export class BulkActionService {
     let changed = false
     if (plan.buffer !== undefined) {
       const r = await setStockBuffer({ ...base, buffer: plan.buffer })
+      this.recordOwnMoves(jobId, r.results)
       check(r)
       if (r.updated > 0) changed = true
     }
@@ -3599,6 +3608,7 @@ export class BulkActionService {
         })
       }
       const r = await setFollowMasterQuantity({ ...base, follow: plan.quantity.follow })
+      this.recordOwnMoves(jobId, r.results)
       check(r)
       if (r.updated > 0) changed = true
     }
@@ -3608,6 +3618,26 @@ export class BulkActionService {
     }
     return changed
   }
+  /** The rows an inventory primitive wrote and bumped, as this run's own moves (`version - 1` → `version`). */
+  private recordOwnMoves(jobId: string, results: ReadonlyArray<{ listingId: string; version?: number }>): void {
+    const moves = this.overrideRuns.get(jobId)?.moves
+    if (!moves) return
+    for (const r of results) {
+      if (typeof r.version !== 'number') continue
+      const hops = moves.get(r.listingId) ?? new Map<number, number>()
+      hops.set(r.version - 1, r.version)
+      moves.set(r.listingId, hops)
+    }
+  }
+
+  /** The version `item` has after this run's OWN writes, from the version the run read; any other move is not followed. */
+  private ownVersion(jobId: string, item: Pick<ChannelListing, 'id' | 'version'>): number {
+    const hops = this.overrideRuns.get(jobId)?.moves.get(item.id)
+    let version = item.version
+    for (let n = 0; hops?.has(version) && n < 100; n++) version = hops.get(version)!
+    return version
+  }
+
   /**
    * Count items matching the given ScopeFilters, scoped to the
    * action's target entity. Used by createJob to populate totalItems

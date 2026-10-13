@@ -108,6 +108,8 @@ export interface FollowMasterResult {
     marketplace: string
     action: 'FOLLOW' | 'PIN' | 'SKIPPED_FBA' | 'UNCHANGED'
     quantity: number | null
+    /** A row this call wrote AND bumped: its version after the write (the write moved it from `version - 1`). */
+    version?: number
   }>
 }
 
@@ -289,8 +291,9 @@ export async function setFollowMasterQuantity(opts: FollowMasterOpts): Promise<F
             continue
           }
 
-          await tx.channelListing.update({
+          const written = await tx.channelListing.update({
             where: { id: cl.id, ...(coordinateWhere ? whereCoordinate(cl) : {}) },
+            select: { version: true },
             data: {
               quantity: write.quantity,
               quantityOverride: write.quantityOverride,
@@ -307,6 +310,7 @@ export async function setFollowMasterQuantity(opts: FollowMasterOpts): Promise<F
           acc.results.push({
             listingId: cl.id, sku: cl.product?.sku ?? null, channel: cl.channel,
             marketplace: cl.marketplace, action: follow ? 'FOLLOW' : 'PIN', quantity: write.quantity,
+            ...(bump && typeof written?.version === 'number' ? { version: written.version } : {}),
           })
 
           if (QUANTITY_PUSH_CHANNELS.has(cl.channel)) {
@@ -448,6 +452,8 @@ export interface StockBufferResult {
   results: Array<{
     listingId: string; sku: string | null; channel: string; marketplace: string
     action: 'BUFFER' | 'SKIPPED_FBA' | 'UNCHANGED'; buffer: number; quantity: number | null
+    /** As FollowMasterResult: a row this call wrote and bumped, at its version after the write. */
+    version?: number
   }>
 }
 
@@ -540,8 +546,9 @@ export async function setStockBuffer(opts: StockBufferOpts): Promise<StockBuffer
             continue
           }
 
-          await tx.channelListing.update({
+          const written = await tx.channelListing.update({
             where: { id: cl.id, ...(coordinateWhere ? whereCoordinate(cl) : {}) },
+            select: { version: true },
             data: {
               stockBuffer: write.stockBuffer,
               quantity: write.quantity,
@@ -553,7 +560,7 @@ export async function setStockBuffer(opts: StockBufferOpts): Promise<StockBuffer
             },
           })
           acc.updated++
-          acc.results.push({ listingId: cl.id, sku: cl.product?.sku ?? null, channel: cl.channel, marketplace: cl.marketplace, action: 'BUFFER', buffer: write.stockBuffer, quantity: write.quantity })
+          acc.results.push({ listingId: cl.id, sku: cl.product?.sku ?? null, channel: cl.channel, marketplace: cl.marketplace, action: 'BUFFER', buffer: write.stockBuffer, quantity: write.quantity, ...(bump && typeof written?.version === 'number' ? { version: written.version } : {}) })
 
           if (write.pushQuantity !== null && QUANTITY_PUSH_CHANNELS.has(cl.channel)) {
             toQueue.push({

@@ -10,7 +10,9 @@ import { matrixCellStamp } from '@nexus/shared/matrix-stamp'
 import { SheetUndoHistory } from '../sheet/sheetUndo'
 import { forgetUnsaved, matrixHistoryAfter, matrixHistoryBefore, type MatrixHistoryNote } from './matrixUndo'
 import { patchMatrix } from './source'
-import { recordOwnMoves, withStamp } from './stamps'
+import { matrixStampHolds } from '@nexus/shared/matrix-stamp'
+import { rebaseOnOwnMoves, recordOwnMoves, withStamp, type OwnMoves } from './stamps'
+import type { MatrixRead } from './contract'
 
 const pristine = (over: Partial<MatrixCells> = {}): MatrixCells => ({
   listingId: 'L1', version: 3, listing: null,
@@ -31,7 +33,8 @@ function typed(kind: 'syncQty' | 'price' | 'syncBuffer', saved: MatrixCells, val
   expect(matrixApplyValue(clone, kind, value)).toBe(true)
   const decision = matrixWrite({ kind, coordinateKey: 'AMAZON:EU', rowId: 'r1' }, clone, before, value)
   if (!decision.send) throw new Error(decision.reason)
-  return { clone, cell: withStamp({ ...decision.cell, expectedListingId: 'L1' }, saved) }
+  // As built by the engine: no listing of its own (`matrixWrite`) — `withStamp` names the one it stamped from.
+  return { clone, cell: withStamp(decision.cell, saved) }
 }
 
 describe('a cell edit sends the value its cell showed (the stamp), from the pristine read', () => {
@@ -55,6 +58,16 @@ describe('a cell edit sends the value its cell showed (the stamp), from the pris
     expect(withStamp(write, pristine({ listingId: 'L2' }))).toEqual(write)
     expect(withStamp(write, null)).toEqual(write)
     expect(withStamp(write, pristine())).toEqual({ ...write, expected: { buffer: 0 } })
+  })
+  it('🔴 the stamp and the listing come from ONE read: a typed cell is pinned to the listing it was stamped from', () => {
+    const { cell } = typed('syncQty', pristine(), 7)
+    expect(cell).toMatchObject({ expectedListingId: 'L1', expected: { mode: 'FOLLOW' } })
+    /* The page attaches a listing later only to a cell that names none (useMatrix `withListing`): a newer read holding
+       ANOTHER listing on the coordinate (an alias made main, a delete and re-create) can no longer re-point this one —
+       and the door refuses a listing other than the one named. Negative control: built without the read, it names none. */
+    const unpinned = matrixWrite({ kind: 'syncQty', coordinateKey: 'AMAZON:EU', rowId: 'r1' }, pristine(), 10, 7)
+    expect(unpinned.send && unpinned.cell.expectedListingId).toBeUndefined()
+    expect(withStamp(unpinned.send ? unpinned.cell : (null as never), pristine({ version: 4 })).expectedListingId).toBeUndefined()
   })
   it('the stamp travels in the PATCH body, cell by cell', async () => {
     let body: unknown = null
@@ -89,21 +102,67 @@ describe('a write the server did not change leaves its ⌘Z step (forgetUnsaved)
 describe('own-move re-basing (#592) hops from the version the server checked the write at', () => {
   const sent = { rowId: 'r1', coordinateKey: 'AMAZON:IT', cell: 'price' as const, value: 90, expectedVersion: 3, expectedListingId: 'L1' }
   it('a write applied at the version it was sent: the hop is sent → new (a later edit on the same view follows it)', () => {
-    const moves = new Map<string, Map<number, number>>()
+    const moves: OwnMoves = new Map()
     recordOwnMoves(moves, [sent], [{ rowId: 'r1', coordinateKey: 'AMAZON:IT', cell: 'price', outcome: 'applied', version: 4 }])
-    expect([...moves.get('L1')!]).toEqual([[3, 4]])
+    expect([...moves.get('L1')!]).toEqual([[3, { to: 4, wrote: [{ cell: 'price', value: 90 }] }]])
   })
   it('🔴 a stamped write that went ahead over a sale (3 → 5): the hop is 5 → 6, never 3 → 6 — a later edit made on the view at 3 is still checked against the sale', () => {
-    const moves = new Map<string, Map<number, number>>()
+    const moves: OwnMoves = new Map()
     recordOwnMoves(moves, [sent], [{ rowId: 'r1', coordinateKey: 'AMAZON:IT', cell: 'price', outcome: 'applied', version: 6, writtenAt: 5 }])
-    expect([...moves.get('L1')!]).toEqual([[5, 6]])
+    expect([...moves.get('L1')!]).toEqual([[5, { to: 6, wrote: [{ cell: 'price', value: 90 }] }]])
   })
   it('a refusal or a conflict moves nothing', () => {
-    const moves = new Map<string, Map<number, number>>()
+    const moves: OwnMoves = new Map()
     recordOwnMoves(moves, [sent, { ...sent, cell: 'salePrice' as const }], [
       { rowId: 'r1', coordinateKey: 'AMAZON:IT', cell: 'price', outcome: 'conflict', version: 5, current: { own: 95 } },
       { rowId: 'r1', coordinateKey: 'AMAZON:IT', cell: 'salePrice', outcome: 'refused', reason: 'no', version: 3 },
     ])
     expect(moves.size).toBe(0)
+  })
+})
+
+/*
+ * A quick second edit of the same cell, typed before the first write's re-read landed, was stamped with the value from
+ * BEFORE the first write; re-based onto the version the first write left, a restore of that older value by someone else
+ * passed it, and the second edit overwrote the restore silently. The stamp is now taken again from what this page wrote.
+ */
+describe('a cell re-based onto this page\'s own write is stamped with what that write left, never the older value', () => {
+  const ownPrice = (value: number, version: number) => pristine({ version, price: { value, currency: 'EUR', source: 'override', formula: null, clamped: null } })
+  const at = (cells: MatrixCells): MatrixRead => ({ version: 1, productId: 'p1', source: 'live', generatedAt: '', coordinates: [], policies: [], rows: [{ id: 'r1', sku: 'S', role: 'variant', stock: { available: 0, uncounted: false, locations: [] }, basePrice: null, status: 'ACTIVE', cells: { 'AMAZON:IT': cells } }] })
+  const first = { rowId: 'r1', coordinateKey: 'AMAZON:IT', cell: 'price' as const, value: 60, expectedVersion: 3, expectedListingId: 'L1', expected: { own: 50 } }
+  const second = { ...first, value: 65 }
+  const afterFirst = (): OwnMoves => {
+    const moves: OwnMoves = new Map()
+    recordOwnMoves(moves, [first], [{ rowId: 'r1', coordinateKey: 'AMAZON:IT', cell: 'price', outcome: 'applied', version: 4 }])
+    return moves
+  }
+
+  it('🔴 50 → 60, then 65 typed on the old view: sent at 4 stamped {own: 60}; someone\'s restore to 50 now fails it', () => {
+    const sent = rebaseOnOwnMoves(second, afterFirst(), at(ownPrice(50, 3)))
+    expect(sent).toMatchObject({ value: 65, expectedVersion: 4, expected: { own: 60 } })
+    const restored = ownPrice(50, 5)
+    expect(matrixStampHolds('price', sent.expected, restored)).toBe(false)
+    // Negative control: the stamp it was typed with would have passed the restore.
+    expect(matrixStampHolds('price', second.expected, restored)).toBe(true)
+  })
+  it('the read at that version already on the page: the stamp is taken from it', () => {
+    const sent = rebaseOnOwnMoves(second, afterFirst(), at(ownPrice(60, 4)))
+    expect(sent).toMatchObject({ expectedVersion: 4, expected: { own: 60 } })
+  })
+  it('the page\'s own write changed ANOTHER field: the cell keeps the stamp it was typed with', () => {
+    const sale = { rowId: 'r1', coordinateKey: 'AMAZON:IT', cell: 'salePrice' as const, value: { value: 40, start: null, end: null }, expectedVersion: 3, expectedListingId: 'L1', expected: { sale: { value: null, start: null, end: null } } }
+    expect(rebaseOnOwnMoves(sale, afterFirst(), null)).toEqual({ ...sale, expectedVersion: 4 })
+  })
+  it('a pin from the Mode cell (its number unknown to the page): the Qty edit after it goes without a stamp — the version decides', () => {
+    const moves: OwnMoves = new Map()
+    const mode = { rowId: 'r1', coordinateKey: 'AMAZON:EU', cell: 'syncMode' as const, value: 'PINNED', expectedVersion: 3, expectedListingId: 'L1' }
+    recordOwnMoves(moves, [mode], [{ rowId: 'r1', coordinateKey: 'AMAZON:EU', cell: 'syncMode', outcome: 'applied', version: 4 }])
+    const qty = { ...mode, cell: 'syncQty' as const, value: 7, expected: { mode: 'FOLLOW' as const } }
+    const sent = rebaseOnOwnMoves(qty, moves, null)
+    expect(sent.expectedVersion).toBe(4)
+    expect(sent).not.toHaveProperty('expected')
+  })
+  it('no own move on the listing: the cell is sent as it was typed', () => {
+    expect(rebaseOnOwnMoves(second, new Map(), null)).toBe(second)
   })
 })

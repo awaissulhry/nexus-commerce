@@ -40,7 +40,7 @@ import {
 } from './contract'
 import { fetchMatrix, patchMatrix, type MatrixSource } from './source'
 import { afterLiveWrite } from './refusals'
-import { recordOwnMoves } from './stamps'
+import { rebaseOnOwnMoves, recordOwnMoves, type OwnMoves } from './stamps'
 import { matrixFromColId } from './sellsFrom'
 
 export const matrixColId = (key: CoordinateKey, kind: string): string => `${key}.${kind}`
@@ -312,19 +312,13 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
      person's next edit, never "changed elsewhere" against itself. A move by anyone else is decided by the cell's field
      stamp (`stamps.ts`): applied when its own field is as the person saw it, a conflict when that field moved. */
   const writeChain = useRef<Promise<unknown>>(Promise.resolve())
-  const moves = useRef(new Map<string, Map<number, number>>())
-  const rebase = useCallback((c: MatrixWriteCell): MatrixWriteCell => {
-    const hops = c.expectedListingId ? moves.current.get(c.expectedListingId) : undefined
-    let v = c.expectedVersion
-    for (let n = 0; hops?.has(v) && n < 1000; n++) v = hops.get(v)!
-    return v === c.expectedVersion ? c : { ...c, expectedVersion: v }
-  }, [])
+  const moves = useRef<OwnMoves>(new Map())
 
   const sendNow = useCallback(async (asked: readonly MatrixWriteCell[] | (() => readonly MatrixWriteCell[]), wopts?: { quiet?: boolean; onSend?: () => void }): Promise<MatrixWriteOutcome[]> => {
     const current = readRef.current
     const quiet = wopts?.quiet === true
     if (!current) return []
-    const cells = (typeof asked === 'function' ? asked() : asked).map((c) => rebase(withListing(c, current)))
+    const cells = (typeof asked === 'function' ? asked() : asked).map((c) => rebaseOnOwnMoves(withListing(c, current), moves.current, current))
     if (cells.length === 0) return []
     for (const c of cells) { tracker.set(c.rowId, doorColId(c.coordinateKey, c.cell), 'saving'); repaint(c.rowId, doorColId(c.coordinateKey, c.cell)) }
     wopts?.onSend?.()
@@ -363,7 +357,7 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
     } finally {
       live.end(covered)
     }
-  }, [productId, accountId, locale, tracker, repaint, mark, commitRead, live, rebase])
+  }, [productId, accountId, locale, tracker, repaint, mark, commitRead, live])
 
   const write = useCallback((cells: readonly MatrixWriteCell[] | (() => readonly MatrixWriteCell[]), wopts?: { quiet?: boolean; onSend?: () => void }): Promise<MatrixWriteOutcome[]> => {
     const run = writeChain.current.then(() => sendNow(cells, wopts), () => sendNow(cells, wopts))
