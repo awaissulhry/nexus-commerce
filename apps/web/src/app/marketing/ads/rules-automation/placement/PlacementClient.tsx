@@ -944,7 +944,6 @@ export function PlacementClient() {
            exact defect of the tab this page replaces. */
         customizable
         storageKey="nexus.plc.cols"
-        pagerCentered
         toolbarLeft={(
           <span className="h10-plc-tools">
             <Input

@@ -73,11 +73,12 @@ export interface GoogleSelectionBody {
   analyticsPropertyId: string | null
 }
 
-export type GoogleSelectionConflict = 'not_offered' | 'customer_taken'
+/** `taken_by_other_business`: another business in Nexus already picked this account (`product` says which). */
+export type GoogleSelectionConflict = 'not_offered' | 'customer_taken' | 'taken_by_other_business'
 
 export type SaveSelectionResult =
   | { ok: true; account: GoogleAccount }
-  | { ok: false; status: number; code: GoogleSelectionConflict | null; error: string }
+  | { ok: false; status: number; code: GoogleSelectionConflict | null; product?: GoogleProduct; error: string }
 
 // ─── Read (R1–R4, S) ────────────────────────────────────────────────────
 
@@ -270,10 +271,11 @@ export async function saveGoogleSelection(connectionId: string, body: GoogleSele
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
-  const data = (await res.json().catch(() => null)) as { account?: GoogleAccount; code?: string; error?: string } | null
+  const data = (await res.json().catch(() => null)) as { account?: GoogleAccount; code?: string; product?: string; error?: string } | null
   if (res.ok && data?.account) return { ok: true, account: data.account }
-  const code = res.status === 409 && (data?.code === 'not_offered' || data?.code === 'customer_taken') ? data.code : null
-  return { ok: false, status: res.status, code, error: res.ok ? 'Nexus saved nothing it could confirm. Reload and check the choice.' : errorText(data, res.status) }
+  const code = res.status === 409 && (data?.code === 'not_offered' || data?.code === 'customer_taken' || data?.code === 'taken_by_other_business') ? data.code : null
+  const product = code === 'taken_by_other_business' && (data?.product === 'ads' || data?.product === 'merchant_center' || data?.product === 'analytics') ? data.product : null
+  return { ok: false, status: res.status, code, ...(product ? { product } : {}), error: res.ok ? 'Nexus saved nothing it could confirm. Reload and check the choice.' : errorText(data, res.status) }
 }
 
 export interface GoogleWindowQuery {

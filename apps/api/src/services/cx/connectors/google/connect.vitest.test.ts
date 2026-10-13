@@ -2,6 +2,7 @@
  * Google on the shared connect flow (start → Google's consent → callback): the exact consent URL, the grant
  * stored in the business that started it with the identity from the id_token, refusals that change nothing
  * (no refresh token, an id_token for another app), and a permission left unticked recorded as scope drift.
+ * One Google login connects in many businesses, each on its own connection with its own token (20261013b).
  * The real oauth.service and the real Google entry; prisma is in memory, Google's token endpoint is stubbed,
  * discovery is stubbed (spec.vitest.test.ts covers it).
  */
@@ -22,7 +23,7 @@ const h = vi.hoisted(() => {
   const scopeUpserts: Array<Record<string, any>> = []
   const apply = (row: Row, data: Record<string, unknown>) => { for (const [k, v] of Object.entries(data)) if (v !== undefined) row[k] = v }
   const matches = (row: Row, where: Record<string, unknown>) => {
-    for (const k of ['channelType', 'isActive', 'externalAccountId']) if (where[k] !== undefined && row[k] !== where[k]) return false
+    for (const k of ['channelType', 'isActive', 'externalAccountId', 'workspaceId']) if (where[k] !== undefined && row[k] !== where[k]) return false
     const not = where.NOT as { id?: string } | undefined
     return !(not?.id && row.id === not.id)
   }
@@ -101,8 +102,8 @@ const fetchMock = vi.fn(async (url: string | URL | Request) => {
 
 const ACTOR = { kind: 'operator' as const, userId: 'user-1' }
 const business = { workspaceId: 'business-a', actorUserId: 'user-1', membershipId: 'member-a', roleKeys: ['OWNER'] }
-const membership = () => ({ id: 'member-a', status: 'active', version: 1, userId: 'user-1', user: { status: 'active' },
-  workspace: { id: 'business-a', name: 'Business A', status: 'active', version: 1 }, roles: [{ role: { id: 'owner', key: 'OWNER', name: 'Owner', permissions: [] } }] })
+const membership = (workspaceId = 'business-a') => ({ id: `member-${workspaceId}`, status: 'active', version: 1, userId: 'user-1', user: { status: 'active' },
+  workspace: { id: workspaceId, name: workspaceId, status: 'active', version: 1 }, roles: [{ role: { id: 'owner', key: 'OWNER', name: 'Owner', permissions: [] } }] })
 const cookiesOf = (s: { cookie: { name: string; value: string } }) => ({ [s.cookie.name]: s.cookie.value })
 const finish = (s: Awaited<ReturnType<typeof start>>, query: Record<string, string> = {}) =>
   complete({ channelKey: 'GOOGLE', query: { state: s.state, code: 'google-code', ...query }, cookies: cookiesOf(s), actorUserId: 'user-1' })
@@ -118,7 +119,7 @@ beforeAll(async () => { vi.stubGlobal('fetch', fetchMock); await encryptCredenti
 afterAll(() => { vi.unstubAllGlobals() })
 beforeEach(() => {
   h.reset()
-  h.prisma.workspaceMembership.findUnique = async () => membership()
+  h.prisma.workspaceMembership.findUnique = async (args?: { where?: { workspaceId_userId?: { workspaceId?: string } } }) => membership(args?.where?.workspaceId_userId?.workspaceId)
   fetchMock.mockClear()
   discoverGoogleScopes.mockClear()
   tokenAnswer = () => json({ access_token: 'fixture-access-token', refresh_token: 'fixture-refresh-token', expires_in: 3599, scope: ALL, token_type: 'Bearer', id_token: idToken() })
@@ -205,5 +206,31 @@ describe('Google connect: callback', () => {
     const again = await finishInBusiness(await startInBusiness())
     expect(again).toMatchObject({ connectionId: first.connectionId, placement: 'reconsent' })
     expect(h.connections.size).toBe(1)
+  })
+})
+
+describe('one Google login in many businesses (Owner 2026-10-13)', () => {
+  const businessB = { ...business, workspaceId: 'business-b', membershipId: 'member-business-b' }
+  const inB = <T>(work: () => Promise<T>) => withWorkspace(businessB, work)
+
+  it('connects in a second business on its own connection with its own token; each business reconnects only its own', async () => {
+    vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1')
+    const first = await finishInBusiness(await startInBusiness())
+    tokenAnswer = () => json({ access_token: 'fixture-access-token-b', refresh_token: 'fixture-refresh-token-b', expires_in: 3599, scope: ALL, id_token: idToken() })
+    const second = await inB(async () => finish(await start({ channelKey: 'GOOGLE', intent: 'connect', actor: ACTOR })))
+    expect(second).toMatchObject({ workspaceId: 'business-b', placement: 'new', identity: { userId: 'google-sub-1' } })
+    expect(second.connectionId).not.toBe(first.connectionId)
+    const rowA = h.connections.get(first.connectionId)!
+    const rowB = h.connections.get(second.connectionId)!
+    expect(rowA).toMatchObject({ workspaceId: 'business-a', isActive: true, externalAccountId: 'google-sub-1', displayName: 'owner@example.test' })
+    expect(rowB).toMatchObject({ workspaceId: 'business-b', isActive: true, externalAccountId: 'google-sub-1', displayName: 'owner@example.test' })
+    expect(await decryptCredentials(String(rowA.credentialsEnc))).toMatchObject({ refreshToken: 'fixture-refresh-token' })
+    expect(await decryptCredentials(String(rowB.credentialsEnc))).toMatchObject({ refreshToken: 'fixture-refresh-token-b' })
+    // A reconnect in the first business still folds into its own row.
+    expect(await finishInBusiness(await startInBusiness())).toMatchObject({ connectionId: first.connectionId, placement: 'reconsent' })
+    expect(h.connections.size).toBe(2)
+    // The second business cannot reconnect the first business's row (a row it may only see through sharing).
+    await expect(inB(() => start({ channelKey: 'GOOGLE', intent: 'reconnect', targetConnectionId: first.connectionId, actor: ACTOR })))
+      .rejects.toMatchObject({ code: 'invalid_intent', message: expect.stringMatching(/business that owns this connection/) })
   })
 })

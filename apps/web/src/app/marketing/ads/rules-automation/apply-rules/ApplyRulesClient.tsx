@@ -1276,7 +1276,6 @@ export function ApplyRulesClient() {
           enabledFirst={(r) => r.status}
           showTotal
           totalFirst={`${num(campaignRows.length)} shown`}
-          pagerCentered
           reportLabel="Amazon Advertising"
           /* U9 — the campaign grain writes now: H10's three safe verbs. `onRowClick` stays the
              explicit null of the S0 contract (the row drawer is S7's, not this unit's). */
@@ -1321,7 +1320,6 @@ export function ApplyRulesClient() {
           totalFirst={grain === 'line'
             ? `${num(aggregates.length)} lines — rows overlap`
             : `${num(aggregates.length)} rows`}
-          pagerCentered
           reportLabel="Amazon Advertising"
           selectionActions={NO_WRITE_ACTIONS.selectionActions ?? undefined}
           toolbarLeft={toolbarLeft}

@@ -477,7 +477,6 @@ export function BudgetManagerClient() {
         searchable
         searchPlaceholder="Search markets…"
         searchValue={(r) => mktName(r.marketplace)}
-        pagerCentered
         defaultSort={{ key: 'thisMonth', dir: 'desc' }}
         emptyNode={<div className="bm-empty"><span className="ill"><BadgeDollarSign size={26} /></span><b>No budgets yet</b><span>Open a market’s settings (the gear) to set a monthly budget, then turn on Auto Pacing.</span></div>}
       />

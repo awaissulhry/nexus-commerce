@@ -12,6 +12,25 @@ Grid audit wave 4, PR11 + PR12 engine part (E5, E9, D7).
   71px past the screen). GRID.md §11 states the phone rule (it said "mobile out of scope").
 - `grid/theme/grid.css` mirrored in `apps/factory` (identical file).
 
+## The ads grids look like /products — 2026-10-13
+
+Grid audit wave 4, PR9 (E1, E4, E8, E17, A10 ads part, E9 ads part).
+- **`WorkspaceGrid` drops its own theme.** `adsWorkspaceTheme` (`grid/workspace/theme.ts`) is gone: the ~50 ads grids
+  draw with the engine theme, as /products does — the same header ink and type, cell ink, hover, selected and totals
+  grounds, the engine checkbox (it was a 20px rounded box in another blue) in the engine's 43px column (was 48), and the
+  engine's pinned edge (the ads drop shadow is gone). `workspace.css` states every piece of chrome with the grid tokens
+  (`--nds-grid-*`); `tokens/workspace.ts` keeps only the ads content roles (Auto/Manual tags, SP/SD badges, live dot) —
+  16 chrome roles retired, mirrored in `apps/factory`.
+- **One card.** The toolbar, rows and pager sit in the DS grid card (`GridCard`, `.nds-gridcard`), as on /products; the
+  grid inside draws no frame (`.nds-gridcard .nds-wsgrid`). A page stylesheet and this one each set that border with
+  equal specificity, so which one won was load order (E17). `.nds-ws-card` lets a page's own toolbar menus hang past the
+  card's edge over a short grid. A grid on its own (`chromeless`) draws the engine's frame.
+- **The DS pager.** `GridPager` replaces the hand-built pager, which showed pages 1–9 only (E4): every page is reachable,
+  with "…". `pagerCentered` is gone (one pager, one place); its 18 call sites dropped it.
+- **"Learn More"** under the grid linked nowhere (E8); it is gone. The Ad Manager (`CampaignsGrid`) moves into the same
+  card with the same pager.
+- **Phone**: toolbars wrap, and the pager wraps through the engine's `GridPager` rule (PR12).
+
 ## A table window fills a phone; a DataGrid's second pinned column stays on its row — 2026-10-13
 
 Grid audit wave 3 (the Publish review).

@@ -53,6 +53,12 @@ describe('connection calls (C1–C3)', () => {
       .resolves.toEqual({ ok: false, status: 409, code, error: 'Refused in words.' })
   })
 
+  it('C3 reads a 409 taken_by_other_business with the product another business picked', async () => {
+    const f = reply({ code: 'taken_by_other_business', product: 'merchant_center', error: 'Refused in words.' }, 409)
+    await expect(saveGoogleSelection('c1', { adsCustomerId: '1', managerCustomerId: null, merchantCenterId: '2', analyticsPropertyId: null }, f))
+      .resolves.toEqual({ ok: false, status: 409, code: 'taken_by_other_business', product: 'merchant_center', error: 'Refused in words.' })
+  })
+
   it('C3 keeps an unknown 409 code out of the typed codes', async () => {
     const f = reply({ code: 'something_else', error: 'No.' }, 409)
     const r = await saveGoogleSelection('c1', { adsCustomerId: '1', managerCustomerId: null, merchantCenterId: null, analyticsPropertyId: null }, f)

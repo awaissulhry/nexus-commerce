@@ -4,6 +4,10 @@
  * ONE Google sign-in per business covers Google Ads, Merchant Center and Google Analytics (read-only):
  * one connection (`channelType` GOOGLE), its reachable accounts as `ConnectionScope` rows, and the
  * business's picks in `GoogleAccountLink` (they survive a reconnect).
+ * - The same Google login may be connected in many businesses (Owner 2026-10-13, migration 20261013b),
+ *   each with its own connection row and refresh token; every Google account id is picked by ONE business.
+ * - So Disconnect never revokes at Google: Google's revoke ends the app's grant for that Google user,
+ *   which would stop every other business on the same login. `revokeHint` says where the person does it.
  *
  * - Consent at accounts.google.com with `access_type=offline` + `prompt=consent`: Google hands out a
  *   refresh token only on a consent, and a reconnect must get a new one. PKCE (S256) on top of the secret.
@@ -28,7 +32,6 @@ import { GOOGLE_REQUIRED_SCOPES } from './scopes.js'
 
 export const GOOGLE_AUTHORIZE_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
 export const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
-export const GOOGLE_REVOKE_URL = 'https://oauth2.googleapis.com/revoke'
 export const GOOGLE_USERINFO_URL = 'https://openidconnect.googleapis.com/v1/userinfo'
 
 /** The heartbeat: Google's userinfo (who this token belongs to), through the gateway. One cheap call. */
@@ -93,7 +96,12 @@ export const googleSpec: ChannelSpec = {
     refreshTokenLifetimeSec: null,
     refreshTokenRequired: true,
     rotatesRefreshToken: false,
-    revokeUrl: () => GOOGLE_REVOKE_URL,
+    // No revokeUrl, on purpose: see the header (one login, many businesses).
+    revokeHint: {
+      url: 'https://myaccount.google.com/connections',
+      label: 'Google Account → Third-party apps and services',
+      detail: 'Nexus does not remove its access at Google, because the same Google login may be connected in your other businesses. Removing Nexus there disconnects every business that uses this Google login.',
+    },
   },
   identity: async () => null, // the id_token is the identity; with none, the grant is refused (identityRequired)
   heartbeat,

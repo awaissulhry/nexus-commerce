@@ -464,7 +464,6 @@ export function RankGoalsList() {
       searchable
       searchPlaceholder="Search hourly bid plans…"
       searchValue={(r) => r.name}
-      pagerCentered
       defaultSort={{ key: '__first', dir: 'asc' }}
       emptyLabel={narrowedToEmpty ? `No hourly bid plans in ${narrowedWhere}.` : 'No hourly bid plans yet.'}
       // RDX/B1 — "no schedules yet" would be a lie when the account has 16 and you simply picked a

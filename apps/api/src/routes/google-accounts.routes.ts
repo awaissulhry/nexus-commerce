@@ -7,6 +7,7 @@
  *   GET /api/google-ads/connections/:id/choices[?refresh=1]  C2  what the sign-in can see (Google asked at most once per
  *                                                         5 minutes; refresh=1 asks again now)
  *   PUT /api/google-ads/connections/:id/selection         C3  { account } | 409 { code: 'not_offered' | 'customer_taken', error }
+ *                                                         | 409 { code: 'taken_by_other_business', product, error }
  */
 import type { FastifyInstance, FastifyReply } from 'fastify'
 import { logger } from '../utils/logger.js'
@@ -17,7 +18,9 @@ import {
 const actorOf = (request: unknown) => ({ userId: (request as { authUser?: { id?: string } }).authUser?.id ?? null })
 
 function fail(reply: FastifyReply, err: unknown, what: string) {
-  if (err instanceof GoogleSelectionError) return reply.code(err.statusCode).send({ code: err.code, error: err.message })
+  if (err instanceof GoogleSelectionError) {
+    return reply.code(err.statusCode).send({ code: err.code, ...(err.product ? { product: err.product } : {}), error: err.message })
+  }
   if (err instanceof GoogleConnectionNotFound) return reply.code(404).send({ code: 'not_found', error: 'This Google sign-in is not connected to this business.' })
   const status = (err as { statusCode?: unknown })?.statusCode
   if (typeof status === 'number' && status >= 400 && status < 500) {

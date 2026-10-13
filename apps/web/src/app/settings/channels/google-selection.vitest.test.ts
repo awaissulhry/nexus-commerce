@@ -209,10 +209,18 @@ describe('section errors, in words', () => {
 })
 
 describe('a refused save (409)', () => {
-  it('customer_taken never names the other business', () => {
-    const words = conflictText('customer_taken', 'Belongs to Other Shop Ltd')
-    expect(`${words.title} ${words.text}`).not.toContain('Other Shop')
-    expect(words.text).toContain('Another business in Nexus already reads this Google Ads account.')
+  it('customer_taken: another Google sign-in of THIS business holds the choice', () => {
+    const words = conflictText('customer_taken', 'The server said no.')
+    expect(words.title).toBe('Another Google sign-in holds the choice')
+    expect(words.text).toContain('through another Google sign-in')
+  })
+
+  it('taken_by_other_business: one title per product and the server’s sentence, which names no business', () => {
+    const said = 'Another business in Nexus already uses this Merchant Center account. A Merchant Center account can belong to one business only.'
+    expect(conflictText('taken_by_other_business', said, 'merchant_center')).toEqual({ title: 'This Merchant Center account belongs to another business', text: said })
+    expect(conflictText('taken_by_other_business', 'x', 'analytics').title).toBe('This Google Analytics property belongs to another business')
+    expect(conflictText('taken_by_other_business', 'x', 'ads').title).toBe('This Google Ads account belongs to another business')
+    expect(conflictText('taken_by_other_business', '').text).toMatch(/one business only/)
   })
 
   it('not_offered says the lists were read again', () => {
