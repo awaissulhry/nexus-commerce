@@ -1,5 +1,6 @@
 'use client'
 
+import { when } from '@/design-system/grid/renderers/format'
 import { useEffect, useState } from 'react'
 import Link from '@/lib/workspaces/Link'
 import { Banner, Drawer } from '@/design-system/components'
@@ -33,14 +34,14 @@ export function HistoryDrawer({ channel, market, token, onClose, onApplied }: {
       {!history && <p role="status">Loading history…</p>}
       {history && <>
         <DataGrid ariaLabel="Recent mapping reviews" rows={history.reviews} rowKey={r => r.id} columns={[
-          { key: 'date', label: 'Started', render: r => new Date(r.createdAt).toLocaleString() },
+          { key: 'date', label: 'Started', render: r => when(r.createdAt) },
           { key: 'state', label: 'Status', render: r => r.status.replace('MAPPING_', '').toLowerCase() },
           { key: 'progress', label: 'Scanned', render: r => `${r.processed} / ${r.total}` },
           { key: 'open', label: 'Review', render: r => <Button asChild inline variant="link"><Link href={`/channels/mapping/impact/${r.id}`}>Open review</Link></Button> },
         ]} />
         <DataGrid ariaLabel="Saved mapping revisions" rows={history.revisions} rowKey={r => r.id} columns={[
           { key: 'version', label: 'Revision', render: r => r.version },
-          { key: 'date', label: 'Saved', render: r => new Date(r.createdAt).toLocaleString() },
+          { key: 'date', label: 'Saved', render: r => when(r.createdAt) },
           { key: 'reason', label: 'Reason', render: r => r.reason ?? 'Mapping change' },
           { key: 'restore', label: 'Restore', render: r => <Button size="xs" disabled={busy} onClick={() => void restore(r.id)} aria-label={`Preview restoring revision ${r.version}`}>Preview restore</Button> },
         ]} />

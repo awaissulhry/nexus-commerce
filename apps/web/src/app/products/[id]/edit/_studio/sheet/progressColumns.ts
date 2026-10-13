@@ -15,6 +15,7 @@
  * the index), or the readiness index for a coordinate. Nothing here computes a percentage from what the grid happens
  * to show, and an unmeasured side is `null`, never zero.
  */
+import { clockTime } from '@/design-system/grid/renderers/format'
 import { browserWorkspaceId, workspaceHref } from '@/lib/workspaces/paths'
 import { ProgressCell, cellDetailKeys, progressText, combinedPercent, type ColDef, type ICellRendererParams, type ProgressAction, type ProgressCellParams, type ProgressField, type ProgressValue } from '@/design-system/grid'
 
@@ -252,7 +253,7 @@ export interface ProgressMenuItem { name: string; action: () => void; disabled?:
 
 /** "Refresh progress", with when the bars were last read — the ⋯ menu and every progress column's header menu say it. */
 export function refreshProgressItem(refresh: () => void, readAt: number | null | undefined, failed?: string | null): ProgressMenuItem {
-  const at = readAt ? new Date(readAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null
+  const at = readAt ? clockTime(readAt) : null
   return { name: at ? `Refresh progress · read ${at}` : 'Refresh progress', action: refresh, ...(failed ? { tooltip: `The last refresh failed: ${failed}` } : {}) }
 }
 

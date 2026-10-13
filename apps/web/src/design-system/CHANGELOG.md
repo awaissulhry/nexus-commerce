@@ -1,3 +1,13 @@
+## One date look in every grid — 2026-10-13
+
+Grid audit step 5 (the Owner's choice: one date-time look, the same in every browser language). Both apps (identical files).
+- **`when`** (`grid/renderers/format.ts`): "13 Oct 2026, 09:30" — 24-hour, with the year, the viewer's time zone. It
+  followed the browser's language ("13 ott, 09:30" in an Italian browser) and had no year.
+- **`ago`**: English words in every browser ("3 hours ago"; an Italian browser wrote "3 ore fa").
+- **`clockTime`** (new): "09:30", 24-hour. The publish times and the sheet's progress menu use it.
+- **`MONTHS_SHORT`** (`lib/format.ts`, new): the one month table. `formatDate`, `when`, the publish times, the Matrix day
+  and the ads date words read it. `formatDate` now writes "1 Sep 2026", not "01 Sept 2026" (CLDR's en-GB September).
+
 ## Ads grids: one blank, icon headers; no unused density tokens — 2026-10-13
 
 Grid audit wave 4, PR13 chunk 2 (E11 blank, E12, E13, E16).

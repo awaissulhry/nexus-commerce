@@ -14,6 +14,7 @@
  * that preview issued.
  */
 
+import { whenWords } from '../rules-automation/bid/_shared/format'
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import {
@@ -70,7 +71,6 @@ interface WaitingRow { rowIndex: number; label: string; message: string }
 
 const api = (p: string) => `${getBackendUrl()}/api/advertising${p}`
 const eur = (n: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(n)
-const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : '—')
 
 const STATUS_TONE: Record<string, string> = {
   COMPLETED: 'ok', FAILED_PARTIAL: 'warn', FAILED: 'bad',
@@ -546,7 +546,7 @@ function BulkInner() {
                   rowKey={(j) => j.id}
                   columns={[
                     { key: 'file', label: 'File', sortable: true, sortValue: (j) => j.filename ?? '', render: (j) => <span className="bulk-name" title={j.filename ?? ''}>{j.filename ?? '—'}</span> },
-                    { key: 'when', label: 'When', sortable: true, sortValue: (j) => j.createdAt, render: (j) => <span className="bulk-when">{when(j.createdAt)}</span> },
+                    { key: 'when', label: 'When', sortable: true, sortValue: (j) => j.createdAt, render: (j) => <span className="bulk-when">{whenWords(j.createdAt)}</span> },
                     { key: 'rows', label: 'Rows', align: 'right', sortable: true, sortValue: (j) => j.totalRows, render: (j) => <span className="bulk-num">{j.totalRows}</span> },
                     { key: 'applied', label: 'Applied', align: 'right', sortable: true, sortValue: (j) => j.successRows, render: (j) => <span className="bulk-num">{j.successRows}</span> },
                     { key: 'failed', label: 'Failed', align: 'right', sortable: true, sortValue: (j) => j.failedRows, render: (j) => <span className={`bulk-num ${j.failedRows ? 'is-danger' : ''}`}>{j.failedRows}</span> },
