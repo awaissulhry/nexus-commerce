@@ -1172,9 +1172,22 @@
 /* 16px — same value, same reason as the footstrip above. I fixed the footstrip alone earlier and
    left this and the skeleton at 14, so the engine's own three chrome bands disagreed with each
    other. Enumerating one consumer and calling it the set is the mistake, not the number. */
-.nds-grid-pager { display: flex; align-items: center; gap: 16px; padding: 10px 16px; border-top: 1px solid var(--nds-border); }
+.nds-grid-pager { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 10px 16px; border-top: 1px solid var(--nds-border); }
 .nds-grid-pager-grow { flex: 1; }
 .nds-grid-pager-rpp { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--nds-text-2); white-space: nowrap; }
+/* A narrow card (grid audit E9, 2026-10-13): the pager WRAPS instead of running past the card. Measured on /products at
+   390 px, where the card is 216 px wide: the page buttons and "Rows per page" needed 340 px, and the rows-per-page list
+   stood 71 px past the screen's edge. Now the page buttons take the first line, left, and "Rows per page" the next; with
+   many pages the buttons wrap among themselves, and in the narrowest card the words wrap above their list. Above the
+   widths below one line holds everything, as before. */
+.nds-grid-pager .nds-pager { flex-wrap: wrap; row-gap: 4px; min-width: 0; }
+@container (max-width: 640px) {
+  .nds-grid-pager-grow { display: none; }
+}
+@container (max-width: 400px) {
+  .nds-grid-pager { padding-inline: 12px; }
+  .nds-grid-pager-rpp { flex-wrap: wrap; row-gap: 4px; white-space: normal; }
+}
 /* the editor's footer strip inside the card */
 /* 🔴 16px horizontal, not 14 — the studio's gutter. DS.1 measured the three stacked text runs
    inside one sheet card starting at x = 81 / 83 / 81: the footstrip rendered TWICE at the time
@@ -2202,6 +2215,15 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-text); o
 .nds-grid-sheet-status-live { display: flex; align-items: center; gap: inherit; flex: 1 1 0; min-width: 0; align-self: stretch; }
 @media (max-width: 760px) {
   .nds-grid-sheet-status-start .nds-grid-sheet-status-wide { display: none; }
+}
+/* A phone (≤ 760px, the DS sheet breakpoint; grid audit E9): pinned columns scroll with the rest. AG 36 holds a pinned
+   part in place with `position: sticky` inside the row; here it stays in the row's flow, so a 320 px identity column (or
+   43 px of checkboxes beside it) never covers the grid and a sideways swipe moves every column. Drawn only: the pins in
+   the column state are kept (`NexusGrid`, `keepPinsOnPhone`), so a saved layout is unchanged and pins again on a wider
+   screen — the rule WorkspaceGrid has had since #578. */
+@media (max-width: 760px) {
+  .nds-ag-nexus .ag-grid-pinned-left-cells,
+  .nds-ag-nexus .ag-grid-pinned-right-cells { position: relative; left: auto; right: auto; }
 }
 /* A row the person ADDED and has not saved (`UNSAVED_ROW_CLASS`; apply with `rowClassRules`): a DASHED warning bar at the
    row's start edge — the same ink and place as the inactive row's solid bar (`nds-row-inactive`, ≥ 3:1 on every row

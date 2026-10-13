@@ -5,7 +5,7 @@
  *
  *   div.nds-grid-wrap            → the SAME wrapper, still `.nds-grid-wrap` (the frame: components.css:1393 keeps
  *   table.nds-grid[.sm|…]          applying) + `.nds-grid` (so `.x .nds-grid { tabular-nums }` page rules still
- *                                  inherit into the cells) + `.nds-ag-dg` + the consumer's className; `data-size`
+ *                                  inherit into the cells) + `.nds-ag-dg` + the consumer's className
  *   tbody tr                     → .ag-row.nds-dg-tr (AG 36.1 renders ONE row element per row, the pinned
  *                                  sections inside it, so `:hover` on the row reaches every cell)
  *   tr.sel / tr.nds-grid-kid /   → .nds-dg-tr.sel / .nds-grid-kid / .nds-grid-sub / .nds-dg-totals (+ `first`,
@@ -16,8 +16,9 @@
  *   th …                         → the engine's header (the Owner's exemption) — nothing restated but the
  *                                  checkbox header and the two per-column marks the legacy th carried
  *
- * GEOMETRY comes from `geometry.ts` as custom properties on the wrapper (`--nds-dg-pad-y/-x`, `--nds-dg-font`,
- * `--nds-dg-line`): ONE source, never a pixel restated here. Every colour is the token the legacy rule bound.
+ * GEOMETRY comes from `geometry.ts` as custom properties on the wrapper (`--nds-dg-pad-y/-x`, `--nds-dg-line`) — the
+ * engine's three density tiers (grid audit E5): ONE source, never a pixel restated here. The text is the engine's
+ * one cell size at every tier (`--nds-grid-cell-size`, 13px). Every colour is the token the legacy rule bound.
  * This is the one sheet in the folder allowed to address `.ag-*` (it lives in `design-system/grid/`).
  *
  * SPECIFICITY (for page sheets rewritten to the contract): AG injects its own stylesheet at runtime, AFTER every
@@ -25,7 +26,7 @@
  * `border`, `height`) sits at (0,3,0) — `.nds-ag-dg .ag-cell.nds-dg-td`. A page rule on one of THOSE properties
  * needs (0,3,0) and a later position (a page sheet imported after the DS import, the usual order) or (0,4,0).
  * Properties this sheet does not restate on the cell — `white-space`, `overflow`, `color`, `background`,
- * `font-variant-numeric`, `max-width`, `text-overflow`, and `font-size` at `md` — are AG's (0,1,0) or inherited,
+ * `font-variant-numeric`, `max-width`, `text-overflow` and `font-size` — are AG's (0,1,0) or inherited,
  * so a (0,2,0) page rule (`.page .nds-dg-td`) wins them regardless of order, as it did against the legacy td.
  */
 
@@ -70,18 +71,11 @@
   font-weight: 500;
   overflow: visible;
 }
-/* The engine sheet sets `line-height: normal` on the value box (PN.1); the legacy td inherited the page's 1.5. */
+/* The engine sheet sets `line-height: normal` on the value box (PN.1); the cell's line box is the whole-pixel one
+   `geometry.ts` states (20px), so a one-line row is the tier's row exactly. */
 .nds-ag-dg .ag-cell.nds-dg-td .ag-cell-value,
 .nds-ag-dg .ag-cell.nds-dg-td .ag-cell-wrapper {
   line-height: var(--nds-dg-line);
-}
-/* `.nds-grid.sm tbody td { font-size: sm-plus }` · `.xs { xs-plus }` — the tier's font on the cell, NOT the
-   header (the engine's) and NOT the totals row (the table's 13px, see below). `md` sets nothing: the cell inherits
-   AG's root (`--nds-grid-cell-size` = 13px), as the legacy td inherited the table's, so a page's (0,2,0) font rule
-   still wins at md (`.h10-plc3-rows`). */
-.nds-ag-dg[data-size='sm'] .ag-cell.nds-dg-td,
-.nds-ag-dg[data-size='xs'] .ag-cell.nds-dg-td {
-  font-size: var(--nds-dg-font);
 }
 /* `th.r, td.r { text-align: right }` · `th.c, td.c { center }` (1444-1450). The cell's wrapper is full width
    (engine), so `text-align` alone lays the content out as the td did. */
@@ -112,11 +106,6 @@
    EVERY right-sticky cell, and of its header (`th.sticky-right`). A left-sticky column drew nothing. */
 .nds-ag-dg .ag-cell.nds-dg-td.sticky-right,
 .nds-ag-dg .ag-header-cell.nds-dg-th.sticky-right { box-shadow: inset 1px 0 0 var(--nds-border-subtle); }
-/* `.nds-grid.sm tbody td .nds-pill, .nds-tag { font-size: micro }` (2270) · `.xs … { micro; padding: 1px 6px }` (2265) */
-.nds-ag-dg[data-size='sm'] .ag-cell.nds-dg-td .nds-pill,
-.nds-ag-dg[data-size='sm'] .ag-cell.nds-dg-td .nds-tag { font-size: var(--nds-font-size-micro); }
-.nds-ag-dg[data-size='xs'] .ag-cell.nds-dg-td .nds-pill,
-.nds-ag-dg[data-size='xs'] .ag-cell.nds-dg-td .nds-tag { font-size: var(--nds-font-size-micro); padding: 1px 6px; }
 
 /* ── the checkbox header: `th.ck` — the native box centred in the 40px header cell. The header cell itself is
    the engine's; only the content box the legacy th centred is restated. ── */
@@ -164,7 +153,7 @@
   padding: 0;
   width: 100%;
   box-sizing: border-box;
-  font-size: var(--nds-dg-font);
+  font-size: var(--nds-grid-cell-size);
   line-height: var(--nds-dg-line);
   font-weight: 500;
 }
@@ -213,7 +202,7 @@
   text-align: center;
   color: var(--nds-grid-empty-fg);
   font-weight: 500;
-  font-size: var(--nds-dg-font);
+  font-size: var(--nds-grid-cell-size);
   line-height: var(--nds-dg-line);
   white-space: normal;
   background: var(--nds-surface);

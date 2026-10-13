@@ -85,6 +85,11 @@ AG paints `--ag-cell-horizontal-padding` one pixel under the variable (14 → 13
 the grid follows the nearest `GridDensityProvider`; `GridDensityToggle` in the toolbar's right slot is the one
 control. Rows are integers because AG virtualises off them.
 
+These three are the only densities on an AG grid (grid audit E5, 2026-10-13). The DS `DataGrid`'s `size` names land on
+them (`grid/datagrid/geometry.ts`): `xs` and `sm` → compact, `md` (the default) → cozy, `lg` and `xl` → spacious — the
+tier's text row, header and horizontal padding, the engine's 13px cell text on a 20px line box. Its rows grow with their
+content (every column is `autoHeight`), so the text row is a floor: a row holding a 28px control is 36 / 51 / 57.
+
 ## 5. Header chrome
 
 One header row at the tier's height. Partitions: 2px `--nds-grid-partition`, **30% of the header row** —
@@ -237,7 +242,15 @@ stamped on `<html>`.
 Light/dark through the tokens; the console shell pins light, so dark is verified in the lab. AG's ARIA is kept
 (`role=grid`, `aria-sort`, `aria-selected`, row/col indexes); contrast ≥ AA on every state; never `cursor: help`.
 `localeText` lives in one file; numbers and dates only through `design-system/lib`. Curated modules; memoised
-renderers; a 500-row page is the most a page grid draws. RTL and mobile widths are out of scope for v1.
+renderers; a 500-row page is the most a page grid draws. RTL is out of scope.
+
+**Phone** (≤ 760px, the DS sheet breakpoint `NARROW_QUERY`; grid audit E9). Every grid works at 390px: no control
+runs past its card and the page never scrolls sideways — the grid scrolls inside its card.
+- Pinned columns are drawn unpinned: they scroll with the rest (`grid.css`, `.nds-ag-nexus`; WorkspaceGrid since #578).
+  The column state keeps its pins — AG's own unpinning is held off on a phone — so a saved layout is unchanged and pins
+  again on a wider screen. A grid that opens on a phone draws every column.
+- `GridPager` wraps: the page buttons first, "Rows per page" under them; in the narrowest card the words wrap above
+  their list. A `GridCard` toolbar wraps and gives the selection actions and the search their own lines (`@container`).
 
 ## 12. Empty · loading · error
 
