@@ -59,6 +59,8 @@ import {
 } from '../_shared/po-lens'
 import { PoLiveSyncChip } from '../_shared/PoLiveSyncChip'
 import { EditableSummaryPane, isEditableStatus } from '../_shared/EditableSummaryPane'
+import { createReadTicket, mayReseed } from '../_shared/po-autosave'
+import { useDraft, useSaveQueue } from '../_shared/use-po-autosave'
 import { ThreeWayMatchPanel } from '../_shared/ThreeWayMatchPanel'
 import { QuickReceiveModal } from '../_shared/QuickReceiveModal'
 import { SupplierScorecardDrawer } from '../_shared/SupplierScorecardDrawer'
@@ -102,6 +104,8 @@ interface RevisionSnapshot {
   after: RevisionItemSnapshot[]
   beforeTotalCents: number
   afterTotalCents: number
+  // Optimistic lock for the revision editor; bumped by every saved edit.
+  editVersion?: number
 }
 
 interface PORevision {
@@ -270,7 +274,12 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
   const [cancelReason, setCancelReason] = useState('')
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
 
+  // Every refresh takes a read ticket: when refreshes overlap (a save's
+  // po.updated echo, a peer's change, a button), only the newest one may set
+  // the page — an older answer never overwrites a newer one.
+  const [readTicket] = useState(createReadTicket)
   const refresh = useCallback(async () => {
+    const ticket = readTicket.take()
     setLoading(true)
     setError(null)
     try {
@@ -283,19 +292,16 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
         throw new Error(body.error ?? `HTTP ${pRes.status}`)
       }
       const data = await pRes.json()
+      const aData = aRes.ok ? await aRes.json() : null
+      if (!readTicket.isLatest(ticket)) return
       setPo(data)
-      if (aRes.ok) {
-        const aData = await aRes.json()
-        setAudit(aData.trail ?? [])
-      } else {
-        setAudit([])
-      }
+      setAudit(aData?.trail ?? [])
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      if (readTicket.isLatest(ticket)) setError(err instanceof Error ? err.message : String(err))
     } finally {
-      setLoading(false)
+      if (readTicket.isLatest(ticket)) setLoading(false)
     }
-  }, [id])
+  }, [id, readTicket])
 
   useEffect(() => {
     refresh()
@@ -1862,6 +1868,7 @@ function RevisionsPane({
       {/* In-flight revision editor */}
       {inFlight && (
         <RevisionEditor
+          key={inFlight.id}
           poId={poId}
           poCurrency={poCurrency}
           revision={inFlight}
@@ -1957,6 +1964,27 @@ function revisionStatusVariant(
 
 // ── Revision editor with side-by-side diff ─────────────────────────
 
+interface RevisionDraft {
+  items: RevisionItemSnapshot[]
+  reason: string
+}
+
+function revisionDraft(revision: PORevision): RevisionDraft {
+  return {
+    items: revision.snapshotJson.after.map((it) => ({ ...it })),
+    reason: revision.reason ?? '',
+  }
+}
+
+// Bumped by every saved edit; 0 on a revision no one has edited yet.
+function revisionEditVersion(revision: { snapshotJson: RevisionSnapshot }): number {
+  return revision.snapshotJson?.editVersion ?? 0
+}
+
+function revisionDraftKey(draft: RevisionDraft): string {
+  return JSON.stringify(draft)
+}
+
 function RevisionEditor({
   poId,
   poCurrency,
@@ -1969,23 +1997,23 @@ function RevisionEditor({
   onRefresh: () => void | Promise<void>
 }) {
   const before = revision.snapshotJson.before
-  // Local mutable copy of the proposed (after) items.
-  const [items, setItems] = useState<RevisionItemSnapshot[]>(
-    revision.snapshotJson.after.map((it) => ({ ...it })),
-  )
-  const [reason, setReason] = useState<string>(revision.reason ?? '')
+  // Local mutable copy of the proposed (after) items. The save reads
+  // draftRef when it is SENT, so the last keystroke goes out too.
+  const [draft, draftRef, setDraft] = useDraft<RevisionDraft>(() => revisionDraft(revision))
+  const { items, reason } = draft
   const [saving, setSaving] = useState(false)
   const [savedJustNow, setSavedJustNow] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<'apply' | 'cancel' | null>(null)
-  const saveTimerRef = useRef<number | null>(null)
 
-  // Re-seed when the server pushes a fresh revision (e.g. after a peer
-  // edits it via the SSE pipe).
-  useEffect(() => {
-    setItems(revision.snapshotJson.after.map((it) => ({ ...it })))
-    setReason(revision.reason ?? '')
-  }, [revision.id, revision.snapshotJson])
+  // The server's copy as this editor knows it: the edit version (seeded, or
+  // returned by our own last save) and the last-saved draft.
+  const versionRef = useRef<number>(revisionEditVersion(revision))
+  const savedKeyRef = useRef<string>(revisionDraftKey(draft))
+  // Set by a 409: the edit version the editor reloads from, draft or not.
+  const conflictVersionRef = useRef<number | null>(null)
+  const revisionRef = useRef(revision)
+  revisionRef.current = revision
 
   const diff = useMemo(() => computeDiff(before, items), [before, items])
   const afterTotal = items.reduce(
@@ -1994,54 +2022,122 @@ function RevisionEditor({
   )
   const deltaCents = afterTotal - revision.snapshotJson.beforeTotalCents
 
-  const scheduleSave = useCallback(() => {
-    setSavedJustNow(false)
-    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current)
-    saveTimerRef.current = window.setTimeout(async () => {
-      setSaving(true)
-      setError(null)
-      try {
-        const res = await fetch(
-          `${getBackendUrl()}/api/fulfillment/purchase-orders/${poId}/revisions/${revision.id}`,
-          {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ items, reason: reason || null }),
-          },
-        )
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}))
-          throw new Error(body?.error ?? `HTTP ${res.status}`)
-        }
-        setSavedJustNow(true)
-        window.setTimeout(() => setSavedJustNow(false), 2000)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err))
-      } finally {
-        setSaving(false)
+  // Autosave 1.5s after the last edit, one save at a time (useSaveQueue).
+  const save = async (): Promise<boolean> => {
+    // The draft as it is NOW, not when the timer started.
+    const sent = draftRef.current
+    const sentKey = revisionDraftKey(sent)
+    if (sentKey === savedKeyRef.current) return true
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/purchase-orders/${poId}/revisions/${revision.id}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            items: sent.items,
+            reason: sent.reason || null,
+            editVersion: versionRef.current,
+          }),
+        },
+      )
+      if (res.status === 409) {
+        // Changed elsewhere (or no longer editable): drop the draft and
+        // reload the server's copy.
+        const body = await res.json().catch(() => ({}))
+        queue.cancel()
+        const current = body?.current?.editVersion
+        conflictVersionRef.current = typeof current === 'number' ? current : versionRef.current
+        setError(body?.error ?? 'Revision was changed elsewhere — reloading')
+        await onRefresh()
+        return false
       }
-    }, 1500)
-  }, [poId, revision.id, items, reason])
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.error ?? `HTTP ${res.status}`)
+      }
+      const updated = await res.json()
+      versionRef.current = revisionEditVersion(updated)
+      savedKeyRef.current = sentKey
+      setSavedJustNow(true)
+      window.setTimeout(() => setSavedJustNow(false), 2000)
+      return true
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+      return false
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Take the server's copy only when it is newer than what this editor
+  // knows and nothing is unsaved — or after a 409. The echo of our own save
+  // carries the edit version that save returned, so it never wipes typing.
+  const reseedIfNewer = () => {
+    const server = revisionRef.current
+    const unsaved = queue.busy() || revisionDraftKey(draftRef.current) !== savedKeyRef.current
+    if (
+      !mayReseed({
+        serverVersion: revisionEditVersion(server),
+        knownVersion: versionRef.current,
+        unsaved,
+        conflictVersion: conflictVersionRef.current,
+      })
+    ) {
+      return
+    }
+    queue.cancel()
+    conflictVersionRef.current = null
+    versionRef.current = revisionEditVersion(server)
+    const next = revisionDraft(server)
+    savedKeyRef.current = revisionDraftKey(next)
+    setDraft(next)
+  }
+
+  const queue = useSaveQueue(save, 1500, reseedIfNewer)
+
+  // Each fresh server copy (e.g. after a peer edits it via the SSE pipe).
+  useEffect(() => {
+    reseedIfNewer()
+    // reseedIfNewer reads refs only; it runs once per server copy.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revision])
+
+  const scheduleSave = () => {
+    setSavedJustNow(false)
+    queue.schedule()
+  }
 
   const updateItem = (idx: number, patch: Partial<RevisionItemSnapshot>) => {
-    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)))
+    setDraft((prev) => ({
+      ...prev,
+      items: prev.items.map((it, i) => (i === idx ? { ...it, ...patch } : it)),
+    }))
     scheduleSave()
   }
   const addItem = () => {
-    setItems((prev) => [
+    setDraft((prev) => ({
       ...prev,
-      {
-        productId: null,
-        supplierSku: null,
-        sku: '',
-        quantityOrdered: 1,
-        unitCostCents: 0,
-        note: null,
-      },
-    ])
+      items: [
+        ...prev.items,
+        {
+          productId: null,
+          supplierSku: null,
+          sku: '',
+          quantityOrdered: 1,
+          unitCostCents: 0,
+          note: null,
+        },
+      ],
+    }))
   }
   const removeItem = (idx: number) => {
-    setItems((prev) => (prev.length === 1 ? prev : prev.filter((_, i) => i !== idx)))
+    setDraft((prev) => ({
+      ...prev,
+      items: prev.items.length === 1 ? prev.items : prev.items.filter((_, i) => i !== idx),
+    }))
     scheduleSave()
   }
 
@@ -2052,6 +2148,9 @@ function RevisionEditor({
     setBusy('apply')
     setError(null)
     try {
+      // Apply commits what the server holds: send the last edit and wait
+      // for any save still on its way. A failed save shows its own error.
+      if (!(await queue.flush())) return
       const res = await fetch(
         `${getBackendUrl()}/api/fulfillment/purchase-orders/${poId}/revisions/${revision.id}/apply`,
         { method: 'POST' },
@@ -2072,6 +2171,8 @@ function RevisionEditor({
     if (!window.confirm(`Cancel revision v${revision.version}? Edits will be discarded.`)) {
       return
     }
+    // The edits are being discarded: no save waits behind the cancel.
+    queue.cancel()
     setBusy('cancel')
     setError(null)
     try {
@@ -2145,7 +2246,8 @@ function RevisionEditor({
           type="text"
           value={reason}
           onChange={(e) => {
-            setReason(e.target.value)
+            const next = e.target.value
+            setDraft((prev) => ({ ...prev, reason: next }))
             scheduleSave()
           }}
           placeholder="Why is this revision needed?"

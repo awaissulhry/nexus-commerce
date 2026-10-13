@@ -5983,6 +5983,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   //     after:  ItemSnapshot[],   // operator-editable; what apply commits
   //     beforeTotalCents: number,
   //     afterTotalCents:  number,
+  //     editVersion?:     number,  // optimistic lock for PATCH; absent = 0
   //   }
   //
   // Status lifecycle:
@@ -6037,6 +6038,13 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       unitCostCents: it.unitCostCents,
       note: it.note,
     }))
+  }
+
+  // The revision editor's optimistic lock, kept in the snapshot it versions:
+  // saved edits so far (absent on a revision no one has edited = 0).
+  function editVersionOf(snapshot: unknown): number {
+    const value = (snapshot as { editVersion?: unknown } | null | undefined)?.editVersion
+    return typeof value === 'number' ? value : 0
   }
 
   function totalOf(items: ItemSnapshot[]): number {
@@ -6116,6 +6124,11 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   // items. The frozen `before` snapshot is preserved. Only PENDING
   // revisions are mutable — once notified or acked, the revision is
   // locked.
+  //
+  // Optimistic lock: `snapshotJson.editVersion` counts saved edits (absent
+  // = 0). The editor sends the editVersion its last save returned; a
+  // mismatch answers 409 + the current editVersion, like the PO's own
+  // `version`. A body without editVersion (an older tab) still saves.
   fastify.patch(
     '/fulfillment/purchase-orders/:id/revisions/:revisionId',
     async (request, reply) => {
@@ -6127,6 +6140,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         const body = (request.body ?? {}) as {
           items?: ItemSnapshot[]
           reason?: string | null
+          editVersion?: number
         }
         const items = Array.isArray(body.items) ? body.items : []
         if (items.length === 0) {
@@ -6146,6 +6160,15 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         const existing = rev.snapshotJson as any
+        const editVersion = editVersionOf(existing)
+        const versionMismatch = (current: number) =>
+          reply.code(409).send({
+            error: 'Version mismatch — revision was changed by someone else',
+            current: { id: rev.id, editVersion: current },
+          })
+        if (typeof body.editVersion === 'number' && body.editVersion !== editVersion) {
+          return versionMismatch(editVersion)
+        }
         const before = (existing?.before ?? []) as ItemSnapshot[]
         const after = items.map((it) => ({
           productId: it.productId ?? null,
@@ -6160,13 +6183,30 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           after,
           beforeTotalCents: totalOf(before),
           afterTotalCents: totalOf(after),
+          editVersion: editVersion + 1,
         }
-        const updated = await prisma.purchaseOrderRevision.update({
-          where: { id: revisionId },
+        // Compare-and-set on the snapshot read above, so a save that landed
+        // in between (or an apply / cancel) is never overwritten.
+        const written = await prisma.purchaseOrderRevision.updateMany({
+          where: {
+            id: revisionId,
+            status: 'PENDING',
+            snapshotJson: { equals: rev.snapshotJson as Prisma.InputJsonValue },
+          },
           data: {
             snapshotJson: snapshot as unknown as Prisma.InputJsonValue,
             reason: body.reason === undefined ? rev.reason : body.reason?.trim() || null,
           },
+        })
+        if (written.count === 0) {
+          const fresh = await prisma.purchaseOrderRevision.findUnique({
+            where: { id: revisionId },
+            select: { snapshotJson: true },
+          })
+          return versionMismatch(editVersionOf(fresh?.snapshotJson))
+        }
+        const updated = await prisma.purchaseOrderRevision.findUnique({
+          where: { id: revisionId },
         })
 
         publishPoEvent({ type: 'po.updated', poId: id, reason: 'revision-edited', ts: Date.now() })
