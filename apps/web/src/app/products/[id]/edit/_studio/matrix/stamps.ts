@@ -62,9 +62,32 @@ export function recordOwnMoves(moves: OwnMoves, sent: readonly MatrixWriteCell[]
   })
 }
 
+/**
+ * A verb's run or a revert, answered (2026-10-13, one save line): every cell it applied names the version it was checked at
+ * (`writtenAt`), so its moves are recorded exactly as a typed write's — a cell edited on the view before it landed is sent
+ * at the version it left, never "changed elsewhere" against the person's own run. `read` is the read the run was asked
+ * from (it names each cell's listing); `valueOf` what the run wrote there (undefined = the page cannot say: a cell of that
+ * field is then sent on its version alone, or stamped from the read at that version when the page holds it). A cell
+ * without `writtenAt` (an older server) is not recorded: the version alone decides, as before.
+ */
+export function recordServerMoves(moves: OwnMoves, read: MatrixRead | null, outcomes: readonly MatrixWriteOutcome[], valueOf: (o: MatrixWriteOutcome) => unknown = () => undefined): void {
+  const sent: MatrixWriteCell[] = []
+  const answered: MatrixWriteOutcome[] = []
+  for (const o of outcomes) {
+    if (o.outcome !== 'applied' || o.writtenAt === undefined) continue
+    const listingId = read?.rows.find((r) => r.id === o.rowId)?.cells[o.coordinateKey]?.listingId
+    if (!listingId || (o.listings?.length && !o.listings.some((l) => l.listingId === listingId))) continue
+    sent.push({ rowId: o.rowId, coordinateKey: o.coordinateKey, cell: o.cell, value: valueOf(o), expectedVersion: o.writtenAt, expectedListingId: listingId })
+    answered.push(o)
+  }
+  recordOwnMoves(moves, sent, answered)
+}
+
 /** The stamp a cell of `kind` has right after this page wrote `w` (same field), or undefined when the page cannot know it. */
 export function stampAfterOwnWrite(kind: MatrixDoorKind, w: { cell: MatrixDoorKind; value: unknown }): MatrixCellStamp | undefined {
   const v = w.value
+  // What was written is not known (a revert's cell): never a guess.
+  if (v === undefined) return undefined
   switch (FIELD_OF[kind]) {
     case 'mode':
       if (w.cell === 'syncQty' && typeof v === 'number') return kind === 'syncQty' ? { mode: 'PINNED', qty: v } : { mode: 'PINNED' }

@@ -3,20 +3,25 @@
  *
  *   Base price      the master sheet writer (the page's `masterWrite`): one save for every row
  *   Sale            Matrix cell writes (`writeCells`), each cell built by the engine's `matrixWrite`
- *   Use base price  Matrix cell writes of `price: null` (the door hands the listing back to the base price); Undo is the
- *                   page's ⌘Z road (`matrixReplay`)
+ *   Use base price  Matrix cell writes of `price: null` (the door hands the listing back to the base price); Undo builds
+ *                   its writes as the page's ⌘Z does (`matrixReplay`)
  *   Status          each market's Status cells (the page's `statusWrite` → the publish actions), sent by Publish
  *   Case size,      their own dialogs, opened on the same rows (the page's `openElsewhere`)
  *   Stock source
  *   everything else the Matrix verbs: the server previews, the operator applies what was previewed, Undo reverts it
  *
  * Every result sentence counts what the server ANSWERED, never what was asked for.
+ *
+ * 2026-10-13 (one save line): every Matrix write is built when its turn in the page's line comes (`writeCells` takes a
+ * function), so an Undo clicked while a write is on its way works from the cells as that write left them; and an Undo
+ * puts a cell back only while it still holds what Apply wrote — a newer value, the person's own or anyone else's, stays
+ * (`MATRIX_COPY.changedSince`). The bulk Edit's Undo is its ONE way back: its writes are no ⌘Z step.
  */
 import type { StatusTarget } from '@nexus/shared/listing-actions'
 
 import { MATRIX_COPY, type CoordinateKey, type MatrixVerbRequest, type MatrixWriteCell, type MatrixWriteOutcome, type VerbOperation, type VerbPreview } from '../contract'
 import { matrixWrite } from '@/design-system/grid'
-import { matrixHistoryBefore, matrixReplay } from '../matrixUndo'
+import { matrixHistoryAfter, matrixHistoryBefore, matrixReplay, matrixStillHolds } from '../matrixUndo'
 
 import {
   BULK_ALREADY_FOLLOWS, BULK_SENT, basePriceLines, bulkChoices, bulkCurrency, bulkCurrent, bulkDefaultMarkets, bulkDefaultMode, bulkFields,
@@ -36,8 +41,11 @@ export interface BulkDoors {
   applyVerb: (preview: VerbPreview) => Promise<VerbAnswer>
   /** Puts a verb's change back; the server's answer (what it put back, what it could not). */
   revertVerb: (op: VerbOperation) => Promise<VerbAnswer>
-  /** Matrix cell writes — QUIET: the dialog says the result, so nothing is toasted behind it. */
-  writeCells: (cells: readonly MatrixWriteCell[]) => Promise<MatrixWriteOutcome[]>
+  /**
+   * Matrix cell writes — QUIET: the dialog says the result, so nothing is toasted behind it. A function is called when the
+   * writes' turn in the page's line comes (the cells as the writes before them left them); no cell = nothing is sent.
+   */
+  writeCells: (cells: readonly MatrixWriteCell[] | (() => readonly MatrixWriteCell[])) => Promise<MatrixWriteOutcome[]>
   /** Base price for these rows, as one save; each row's answer (a refusal carries the server's reason). */
   masterWrite: (writes: ReadonlyArray<{ rowId: string; value: number | null }>) => Promise<Array<{ rowId: string; ok: boolean; reason?: string }>>
   /** Each market's Status for these cells (a null target clears the waiting one); what was saved and what was refused. */
@@ -69,6 +77,12 @@ function answered<L extends BulkLine>(lines: readonly L[], refusedAt: (line: L) 
   })
 }
 const toneOf = (applied: number, skipped: number): BulkResult['tone'] => (applied === 0 ? 'danger' : skipped > 0 ? 'warning' : 'success')
+/** An Undo's receipt: what was put back, and how many could not be with the first reason. */
+const undoReceipt = (put: string, missed: number, why: string | undefined): string =>
+  `Put back ${put}${missed > 0 ? ` · ${missed} could not be put back${why ? `: ${why}` : ''}` : ''}.`
+/** Two amounts in cents: the grid's number and the preview's may differ in the last float digit. */
+const sameAmount = (a: number | null | undefined, b: number | null | undefined): boolean =>
+  a == null || b == null ? a == null && b == null : Math.round(a * 100) === Math.round(b * 100)
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 const outcomeReason = (o: MatrixWriteOutcome) => o.reason ?? (o.outcome === 'conflict' ? MATRIX_COPY.changedElsewhere : o.outcome === 'noop' ? 'Nothing to change' : 'Not changed')
 /** Cell outcomes by place: the places applied, and why each other place was not. */
@@ -197,31 +211,43 @@ export function createBulkSource(doors: BulkDoors, opening: { title: string; sub
       const ok = answers.filter((a) => a.ok).map((a) => a.rowId)
       const skipped = shown.skipped + (answers.length - ok.length)
       const why = new Map(answers.filter((a) => !a.ok).map((a) => [a.rowId, a.reason ?? 'Not saved']))
-      const back = changing.filter((l) => ok.includes(l.rowId)).map((l) => ({ rowId: l.rowId, value: l.before }))
+      const back = changing.filter((l) => ok.includes(l.rowId))
       return {
         applied: ok.length, skipped, tone: toneOf(ok.length, skipped),
         sentence: and(`${bulkNoun('basePrice', ok.length)} changed${skippedPart(skipped)}.`, ok.length > 0 ? BULK_SENT.followers : ''),
         lines: answered(shown.lines, (l) => why.get(l.rowId) ?? null),
         undo: back.length ? async () => {
-          const undone = await doors.masterWrite(back)
+          // Only a row that still holds the base price Apply wrote is put back: a newer one stays.
+          const ctx = doors.context()
+          const now = (rowId: string) => (ctx.basePriceNow ? ctx.basePriceNow(rowId) : ctx.rows.find((r) => r.id === rowId)?.basePrice ?? null)
+          const held = back.filter((l) => sameAmount(now(l.rowId), l.value))
+          const undone = held.length ? await doors.masterWrite(held.map((l) => ({ rowId: l.rowId, value: l.before }))) : []
           const refused = undone.filter((a) => !a.ok)
-          return `Put back ${bulkNoun('basePrice', undone.length - refused.length)}${refused.length ? ` · ${refused.length} could not be put back: ${refused[0]!.reason ?? 'Not saved'}` : ''}.`
+          const missed = back.length - held.length + refused.length
+          return undoReceipt(bulkNoun('basePrice', undone.length - refused.length), missed, held.length < back.length ? MATRIX_COPY.changedSince : refused[0]?.reason ?? 'Not saved')
         } : null,
       }
     }
 
     if (payload.kind === 'sale') {
-      const send = async (lines: readonly SaleLine[], valueOf: (l: SaleLine) => SaleLine['value']) => {
-        const ctx = doors.context()
-        const cells: MatrixWriteCell[] = []
+      /* The cells are built when their turn comes (the cells as the writes ahead left them). Undo: a cell is put back only
+         while it still shows the sale Apply wrote. */
+      const send = async (lines: readonly SaleLine[], valueOf: (l: SaleLine) => SaleLine['value'], undo = false) => {
         const early = new Map<string, string>()
-        for (const l of lines) {
-          const now = ctx.cellsOf(l.rowId, l.coordinateKey)
-          const decision = matrixWrite({ kind: 'salePrice', coordinateKey: l.coordinateKey, rowId: l.rowId }, now, now?.sale ?? null, valueOf(l))
-          if (decision.send) cells.push(decision.cell)
-          else early.set(placeKey(l.rowId, l.coordinateKey), decision.reason)
-        }
-        const outcomes = cells.length ? await doors.writeCells(cells) : []
+        const outcomes = await doors.writeCells(() => {
+          const ctx = doors.context()
+          const cells: MatrixWriteCell[] = []
+          early.clear()
+          for (const l of lines) {
+            const k = placeKey(l.rowId, l.coordinateKey)
+            const now = ctx.cellsOf(l.rowId, l.coordinateKey)
+            if (undo && matrixStillHolds('salePrice', l.value, now) === false) { early.set(k, MATRIX_COPY.changedSince); continue }
+            const decision = matrixWrite({ kind: 'salePrice', coordinateKey: l.coordinateKey, rowId: l.rowId }, now, now?.sale ?? null, valueOf(l))
+            if (decision.send) cells.push(decision.cell)
+            else early.set(k, decision.reason)
+          }
+          return cells
+        })
         return { ...byPlace(outcomes), early }
       }
       const changing = payload.lines.filter((l) => l.skipped === null)
@@ -234,27 +260,31 @@ export function createBulkSource(doors: BulkDoors, opening: { title: string; sub
         lines: answered(shown.lines as SaleLine[], (l) => { const k = placeKey(l.rowId, l.coordinateKey); return r.applied.has(k) ? null : r.why.get(k) ?? r.early.get(k) ?? 'Not saved' }),
         sentence: and(`${bulkNoun('salePrice', applied)} ${shown.request.mode === 'sale-remove' ? 'removed' : 'set'}${skippedPart(skipped)}.`, bulkSent(applied)),
         undo: back.length ? async () => {
-          const u = await send(back, (l) => l.before)
-          return `Put back ${bulkNoun('salePrice', u.applied.size)}${u.applied.size < back.length ? ` · ${back.length - u.applied.size} could not be put back` : ''}.`
+          const u = await send(back, (l) => l.before, true)
+          const why = back.map((l) => placeKey(l.rowId, l.coordinateKey)).filter((k) => !u.applied.has(k)).map((k) => u.why.get(k) ?? u.early.get(k)).find(Boolean)
+          return undoReceipt(bulkNoun('salePrice', u.applied.size), back.length - u.applied.size, why)
         } : null,
       }
     }
 
     if (payload.kind === 'follow-base') {
-      const ctx = doors.context()
       const changing = payload.lines.filter((l) => l.skipped === null)
-      const cells: MatrixWriteCell[] = []
       const early = new Map<string, string>()
-      for (const l of changing) {
-        const now = ctx.cellsOf(l.rowId, l.coordinateKey)
-        const k = placeKey(l.rowId, l.coordinateKey)
-        // The same checks as the preview, on the cell as it is NOW (a write may have moved it while the dialog was open).
-        if (!now?.price || now.listingId !== l.before.listingId) early.set(k, MATRIX_COPY.changedElsewhere)
-        else if (now.price.source === 'master') early.set(k, BULK_ALREADY_FOLLOWS)
-        else if (now.writable.price !== true) early.set(k, now.writeBlockedReason.price ?? 'The price cannot be changed on this market')
-        else cells.push({ rowId: l.rowId, coordinateKey: l.coordinateKey, cell: 'price', value: null, expectedVersion: now.version, ...(now.listingId ? { expectedListingId: now.listingId } : {}) })
-      }
-      const r = byPlace(cells.length ? await doors.writeCells(cells) : [])
+      const r = byPlace(await doors.writeCells(() => {
+        const ctx = doors.context()
+        const cells: MatrixWriteCell[] = []
+        early.clear()
+        for (const l of changing) {
+          const now = ctx.cellsOf(l.rowId, l.coordinateKey)
+          const k = placeKey(l.rowId, l.coordinateKey)
+          // The same checks as the preview, on the cell as it is NOW (a write may have moved it while the dialog was open).
+          if (!now?.price || now.listingId !== l.before.listingId) early.set(k, MATRIX_COPY.changedElsewhere)
+          else if (now.price.source === 'master') early.set(k, BULK_ALREADY_FOLLOWS)
+          else if (now.writable.price !== true) early.set(k, now.writeBlockedReason.price ?? 'The price cannot be changed on this market')
+          else cells.push({ rowId: l.rowId, coordinateKey: l.coordinateKey, cell: 'price', value: null, expectedVersion: now.version, ...(now.listingId ? { expectedListingId: now.listingId } : {}) })
+        }
+        return cells
+      }))
       const applied = r.applied.size
       const skipped = shown.skipped + (changing.length - applied)
       const back = changing.filter((l) => r.applied.has(placeKey(l.rowId, l.coordinateKey)))
@@ -263,18 +293,24 @@ export function createBulkSource(doors: BulkDoors, opening: { title: string; sub
         lines: answered(shown.lines as FollowBaseLine[], (l) => { const k = placeKey(l.rowId, l.coordinateKey); return r.applied.has(k) ? null : r.why.get(k) ?? early.get(k) ?? 'Not saved' }),
         sentence: and(`${plural(applied, 'market now follows', 'markets now follow')} the base price${skippedPart(skipped)}.`, applied > 0 ? BULK_SENT.it : ''),
         undo: back.length ? async () => {
-          // The page's ⌘Z road: each price back as it was (its own number, set here), at the cell's version NOW.
-          const live = doors.context()
-          const writes: MatrixWriteCell[] = []
-          let gone = 0
-          for (const l of back) {
-            const step = matrixReplay('price', matrixHistoryBefore(l.before), live.cellsOf(l.rowId, l.coordinateKey), { rowId: l.rowId, coordinateKey: l.coordinateKey })
-            if (step.kind === 'write') writes.push(step.cell)
-            else if (step.kind === 'refuse') gone += 1
-          }
-          const u = byPlace(writes.length ? await doors.writeCells(writes) : [])
-          const missed = gone + (writes.length - u.applied.size)
-          return `Put back ${bulkNoun('price', u.applied.size)}${missed > 0 ? ` · ${missed} could not be put back` : ''}.`
+          /* The page's ⌘Z road: each price back as it was (its own number, set here), at the cell's version when the writes'
+             turn comes — and only while it still follows the base price, as Apply left it (a newer price stays). */
+          const said = new Map<string, string>()
+          let already = 0
+          const u = byPlace(await doors.writeCells(() => {
+            const live = doors.context()
+            const writes: MatrixWriteCell[] = []
+            said.clear(); already = 0
+            for (const l of back) {
+              const step = matrixReplay('price', matrixHistoryBefore(l.before, matrixHistoryAfter(null)), live.cellsOf(l.rowId, l.coordinateKey), { rowId: l.rowId, coordinateKey: l.coordinateKey })
+              if (step.kind === 'write') writes.push(step.cell)
+              else if (step.kind === 'refuse') said.set(placeKey(l.rowId, l.coordinateKey), step.reason)
+              else already += 1
+            }
+            return writes
+          }))
+          const why = back.map((l) => placeKey(l.rowId, l.coordinateKey)).filter((k) => !u.applied.has(k)).map((k) => u.why.get(k) ?? said.get(k)).find(Boolean)
+          return undoReceipt(bulkNoun('price', u.applied.size), back.length - already - u.applied.size, why)
         } : null,
       }
     }

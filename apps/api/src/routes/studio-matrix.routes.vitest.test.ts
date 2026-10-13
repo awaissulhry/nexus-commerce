@@ -355,6 +355,9 @@ describe('POST …/verbs and …/verbs/:id/revert', () => {
     expect(res.statusCode).toBe(200)
     const body = res.json()
     expect(body.results.map((r: { outcome: string }) => r.outcome)).toEqual(['applied', 'refused'])
+    // The applied cell names the version it was checked at: the page records the run as its own move (one save line).
+    expect(body.results[0]).toMatchObject({ writtenAt: 3 })
+    expect(body.results[1]).not.toHaveProperty('writtenAt')
     expect(body.results[1].reason).toBe('Not on this market') // the parent has no AMAZON:IT cell in this read → the fresh preview refuses it
     expect(body.operation).toMatchObject({ id: 'op-1', verb: 'set-price', applied: 1, refused: 1 })
     expect(body.operation.before).toEqual([{ rowId: 'c1', coordinateKey: 'AMAZON:IT', cells: read().rows[1]!.cells['AMAZON:IT'] }])

@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import type { MatrixCells } from '@/design-system/grid'
 import { isHistoryOnly, SheetUndoHistory } from '../sheet/sheetUndo'
-import { isMatrixHistoryValue, matrixHistoryAfter, matrixHistoryBefore, matrixReplay, MATRIX_UNDO_COPY } from './matrixUndo'
+import { MATRIX_COPY, type MatrixWriteOutcome } from './contract'
+import { forgetUnsaved, isMatrixHistoryValue, matrixHistoryAfter, matrixHistoryBefore, matrixHistoryColId, matrixHistoryPlace, matrixReplay, matrixStillHolds, MATRIX_UNDO_COPY } from './matrixUndo'
 
 type Over = { [K in keyof MatrixCells]?: MatrixCells[K] extends object | null ? Partial<NonNullable<MatrixCells[K]>> | null : MatrixCells[K] }
 
@@ -129,5 +130,97 @@ describe('matrixReplay — Amazon Business: a redo sends the WHOLE setting the e
   it('already there → skip', () => {
     const live = cells({ version: 9, business: biz({ percent: 7, tiers: { type: 'percent', levels: [{ minQty: 3, value: 4, unitPrice: null }] } }) })
     expect(matrixReplay('businessPrice', matrixHistoryAfter(saved), live, place)).toEqual({ kind: 'skip' })
+  })
+})
+
+/**
+ * One save line (2026-10-13): an undo puts a cell back only while it still holds what the edit wrote — a newer value, the
+ * person's own or anyone else's, stays. The written value rides on the step's undo side (`matrixHistoryBefore(cells, after)`).
+ */
+describe('matrixReplay — undo only over what the edit wrote', () => {
+  const undoOf = (kind: Parameters<typeof matrixReplay>[0], before: MatrixCells, written: unknown, live: MatrixCells) =>
+    matrixReplay(kind, matrixHistoryBefore(before, matrixHistoryAfter(written)), live, place)
+  it('a price typed to 99 is put back while the cell shows 99; once someone set 95 it stays, and says why', () => {
+    expect(undoOf('price', cells(), 99, cells({ version: 4, price: { value: 99, source: 'override' } }))).toEqual(write('price', null, 4))
+    expect(undoOf('price', cells(), 99, cells({ version: 5, price: { value: 95, source: 'override' } }))).toEqual({ kind: 'refuse', reason: MATRIX_COPY.changedSince })
+    // Someone put it back already: nothing to write, nothing to say.
+    expect(undoOf('price', cells(), 99, cells({ version: 5 }))).toEqual({ kind: 'skip' })
+  })
+  it('a pinned quantity, a buffer and a sale: the same rule', () => {
+    expect(undoOf('syncQty', cells(), 35, cells({ version: 4, sync: { kind: 'PINNED', mode: 'PINNED', intended: 35 } }))).toEqual(write('syncMode', 'FOLLOW', 4))
+    expect(undoOf('syncQty', cells(), 35, cells({ version: 4, sync: { kind: 'PINNED', mode: 'PINNED', intended: 40 } }))).toEqual({ kind: 'refuse', reason: MATRIX_COPY.changedSince })
+    expect(undoOf('syncBuffer', cells(), 2, cells({ version: 4, sync: { buffer: 3 } }))).toEqual({ kind: 'refuse', reason: MATRIX_COPY.changedSince })
+    const typed = { value: 79, start: '2026-10-14', end: null }
+    expect(undoOf('salePrice', cells(), typed, cells({ version: 4, sale: { value: 79, start: '2026-10-14T00:00:00.000Z' } }))).toEqual(write('salePrice', { value: null, start: null, end: null }, 4))
+    expect(undoOf('salePrice', cells(), typed, cells({ version: 4, sale: { value: 69, start: '2026-10-14T00:00:00.000Z' } }))).toEqual({ kind: 'refuse', reason: MATRIX_COPY.changedSince })
+  })
+  it('the B2B setting the pop-up saved is put back only while the cell holds that setting', () => {
+    const biz = (over: Record<string, unknown> = {}) => ({
+      rule: 'PERCENT_OFF', percent: 5, exact: null, price: 99.75, normalPrice: 105, minPrice: null, maxPrice: null, currency: 'EUR',
+      tiers: null, warnings: [], held: null, send: null, live: null, reported: null, ...over,
+    }) as never
+    const none = cells({ business: biz({ rule: null, percent: null, price: null }) })
+    const saved = { rule: 'PERCENT_OFF', percent: 5, price: null, tiers: null }
+    expect(undoOf('businessPrice', none, saved, cells({ version: 8, business: biz() }))).toEqual(write('businessPrice', null, 8))
+    expect(undoOf('businessPrice', none, saved, cells({ version: 9, business: biz({ percent: 7, price: 97.65 }) }))).toEqual({ kind: 'refuse', reason: MATRIX_COPY.changedSince })
+  })
+  it('a step recorded without what it wrote (an older history value) keeps the old rule', () => {
+    expect(undo('price', cells(), cells({ version: 5, price: { value: 95, source: 'override' } }))).toEqual(write('price', null, 5))
+    expect(matrixStillHolds('price', 99, cells({ price: { value: 99, source: 'override', clamped: 'floor' } }))).toBeNull()
+  })
+})
+
+describe('Sells from (this product) is a ⌘Z step like any Matrix cell', () => {
+  const src = (own: string[]) => ({ own, marketDefault: ['IT-MAIN'], defaultOrigin: 'routes' as const, effective: [], writable: true, blockedReason: null })
+  it('its history column is the group\'s From column; undo puts the list back, redo sends it again', () => {
+    expect(matrixHistoryColId('AMAZON:EU', 'source')).toBe('AMAZON:EU.from')
+    expect(matrixHistoryPlace('AMAZON:EU.from')).toEqual({ key: 'AMAZON:EU', kind: 'source' })
+    expect(matrixHistoryPlace('AMAZON:EU.price')).toEqual({ key: 'AMAZON:EU', kind: 'price' })
+    expect(matrixHistoryPlace('AMAZON:EU.status')).toBeNull()
+    const before = cells({ source: src([]) })
+    const live = cells({ version: 4, source: src(['MI-3PL']) })
+    expect(matrixReplay('source', matrixHistoryBefore(before, matrixHistoryAfter(['MI-3PL'])), live, place)).toEqual(write('source', [], 4))
+    // Changed since (someone chose another list): it stays.
+    expect(matrixReplay('source', matrixHistoryBefore(before, matrixHistoryAfter(['MI-3PL'])), cells({ version: 5, source: src(['IT-MAIN', 'MI-3PL']) }), place))
+      .toEqual({ kind: 'refuse', reason: MATRIX_COPY.changedSince })
+    expect(matrixReplay('source', matrixHistoryAfter(['MI-3PL']), cells({ version: 6, source: src([]) }), place)).toEqual(write('source', ['MI-3PL'], 6))
+    expect(matrixReplay('source', matrixHistoryAfter(['MI-3PL']), live, place)).toEqual({ kind: 'skip' })
+  })
+  it('a refused Sells-from save leaves the history (its note matched on the From column)', () => {
+    const after = matrixHistoryAfter(['MI-3PL'])
+    const forgot: unknown[] = []
+    const refused: MatrixWriteOutcome = { rowId: 'r1', coordinateKey: 'AMAZON:EU', cell: 'source', outcome: 'conflict', version: 5 }
+    forgetUnsaved({ forget: (rowId, colId, a) => { forgot.push([rowId, colId, a]) } }, [{ rowId: 'r1', key: 'AMAZON:EU', colId: 'AMAZON:EU.from', after }], [refused])
+    expect(forgot).toEqual([['r1', 'AMAZON:EU.from', after]])
+  })
+})
+
+describe('one step, two doors: a toast\'s Undo and ⌘Z undo the SAME step (`undoStep`)', () => {
+  const step = (after: unknown) => ({ rowId: 'r1', colId: 'AMAZON:IT.businessPrice', before: matrixHistoryBefore(cells()), after })
+  it('the toast takes its step wherever it is; ⌘Z then finds the step before it — never the toast\'s change again', () => {
+    const history = new SheetUndoHistory()
+    const typed = matrixHistoryAfter(99)
+    const popup = matrixHistoryAfter({ rule: 'PERCENT_OFF', percent: 5, price: null, tiers: null })
+    history.record({ rowId: 'r1', colId: 'AMAZON:IT.price', before: matrixHistoryBefore(cells()), after: typed })
+    history.undo(() => {}); history.redo(() => {}) // closes the first step
+    history.record(step(popup))
+    const seen: string[] = []
+    const apply = (values: Array<{ colId: string }>) => { seen.push(...values.map((v) => v.colId)) }
+    expect(history.undoStep((c) => c.after === popup, apply)).toBe(1)
+    expect(seen).toEqual(['AMAZON:IT.businessPrice'])
+    // The toast again, or ⌘Z for the same change: it is gone — ⌘Z undoes the typed price instead.
+    expect(history.undoStep((c) => c.after === popup, apply)).toBe(0)
+    expect(history.undo(apply)).toBe(1)
+    expect(seen).toEqual(['AMAZON:IT.businessPrice', 'AMAZON:IT.price'])
+    // ⌘⇧Z redoes the latest undone first.
+    expect(history.redo(apply)).toBe(1)
+    expect(seen.at(-1)).toBe('AMAZON:IT.price')
+  })
+  it('⌘Z first: the toast\'s Undo then finds nothing to put back', () => {
+    const history = new SheetUndoHistory()
+    const popup = matrixHistoryAfter(null)
+    history.record(step(popup))
+    expect(history.undo(() => {})).toBe(1)
+    expect(history.undoStep((c) => c.after === popup, () => {})).toBe(0)
   })
 })

@@ -72,7 +72,7 @@ import { InventoryEditorModal } from '@/app/products/next/InventoryEditorModal'
 import type { InventoryEditorTarget } from '@/app/products/next/useInventoryEditor'
 import { DEFAULT_DENSITY } from '@/app/products/next/density'
 
-import { useRegisterViewChip, useSaveReporter, useStudioScope, useViewChips } from '../contracts'
+import { usePublicationBarrier, useRegisterViewChip, useSaveReporter, useStudioScope, useViewChips } from '../contracts'
 import { SHEET_STATE_OVERLAYS, sheetEmptyState } from '../sheet/sheetGridStates'
 import { SheetLoadError } from '../sheet/SheetLoadError'
 import { useMasterSheet } from '../sheet/master/useMasterSheet'
@@ -101,14 +101,16 @@ import { StockSourceDialog, type StockSourceSwitched, type StockSourceTarget } f
 import { sharingApi } from '@/app/settings/sharing/sharingApi'
 import { MatrixToolbar, type MatrixPageState } from './MatrixToolbar'
 import { useMatrix } from './useMatrix'
-import { forgetUnsaved, isMatrixHistoryValue, matrixHistoryAfter, matrixHistoryBefore, matrixReplay, type MatrixHistoryNote } from './matrixUndo'
+import { forgetUnsaved, isMatrixHistoryValue, matrixHistoryAfter, matrixHistoryBefore, matrixHistoryColId, matrixHistoryPlace, matrixReplay, MATRIX_UNDO_COPY, type MatrixHistoryNote } from './matrixUndo'
+import { baseRowResult, BULK_EDIT_SOURCE, createBaseLine, type BaseRowAnswer } from './baseLine'
+import { createInFlight, matrixPublicationBarrier } from './publishGuard'
 import { withStamp } from './stamps'
 import { SheetUndoHistory, undoShortcut, writeHistoryValues, type ApplyCellValues } from '../sheet/sheetUndo'
 import { clearsNothing, matrixStatusCell, publishCellsByPlace, savedBeforeMatrixBusiness, savedBeforeMatrixCase, savedBeforeMatrixFrom, savedBeforeMatrixStatus } from './statusCells'
 import { FROM_LABEL, fromBefore, fromCellText, fromCellView, fromGroupKey, isMatrixFromColId, matrixFromColId } from './sellsFrom'
-import { SellsFromDialog, type SellsFromSaved, type SellsFromTarget } from './SellsFromDialog'
+import { SellsFromDialog, type SellsFromSaved, type SellsFromTarget, type SellsFromWrite } from './SellsFromDialog'
 import { CaseDialog, type CaseSaved, type CaseTarget } from './CaseDialog'
-import { BusinessPricingDialog, type BusinessSaved, type BusinessTarget } from './BusinessPricingDialog'
+import { BusinessPricingDialog, type BusinessSaved, type BusinessTarget, type BusinessWrite } from './BusinessPricingDialog'
 import { allVariants, CASE_MIXED } from './casePack'
 import { refusalLead, refusedRowIds, type RefusedMark } from './refusals'
 import { BulkEditDialog } from './bulk/BulkEditDialog'
@@ -309,12 +311,21 @@ export function MatrixSurface({ productId }: { productId: string }) {
     setFromTarget({ rowId, sku: r.sku, coordinate: coord, anchor })
   }, [matrix.cellsOf])
   const fromDoor = canSwitchStock && (read?.locations?.length ?? 0) > 0 ? openFrom : undefined
-  /** This product's choice, through the Matrix door at the cell's current version; quiet: the pop-up says a refusal. */
-  const writeSource = useCallback(async (rowId: string, key: CoordinateKey, codes: string[]): Promise<MatrixWriteOutcome | null> => {
+  /** The page's one way to send cells (defined with the history below); the pop-ups' saves go through it too. */
+  const sendCellsRef = useRef<SendCells | null>(null)
+  /** A pop-up toast's Undo: THE ⌘Z step its save was recorded as (defined with the history below) — one way back, not two. */
+  const undoNotesRef = useRef<(notes: readonly HistoryNote[]) => Promise<void>>(async () => {})
+  /**
+   * This product's choice, through the Matrix door at the cell's current version: in line with every other write and one
+   * ⌘Z step like a typed cell (2026-10-13); quiet: the pop-up says a refusal. Its toast's Undo is that ⌘Z step.
+   */
+  const writeSource = useCallback(async (rowId: string, key: CoordinateKey, codes: string[]): Promise<SellsFromWrite | null> => {
     const cells = matrix.cellsOf(rowId, key)
-    if (!cells?.source || !cells.listingId) return null
-    const [outcome] = await matrix.write([withStamp({ rowId, coordinateKey: key, cell: 'source', value: codes, expectedVersion: cells.version, expectedListingId: cells.listingId }, matrix.savedCellsOf(rowId, key))], { quiet: true })
-    return outcome ?? null
+    if (!cells?.source || !cells.listingId || !sendCellsRef.current) return null
+    const note: HistoryNote = { rowId, key, colId: matrixHistoryColId(key, 'source'), after: matrixHistoryAfter(codes) }
+    const cell = withStamp({ rowId, coordinateKey: key, cell: 'source', value: codes, expectedVersion: cells.version, expectedListingId: cells.listingId }, matrix.savedCellsOf(rowId, key))
+    const [outcome] = await sendCellsRef.current([cell], { quiet: true, notes: [note] })
+    return outcome ? { outcome, undo: () => undoNotesRef.current([note]) } : null
   }, [matrix])
   /** After a save: one toast with Undo (the bulk Edit's pattern). A market default re-pushes in the background: read again now and once more soon. */
   const onFromSaved = useCallback((saved: SellsFromSaved) => {
@@ -358,20 +369,20 @@ export function MatrixSurface({ productId }: { productId: string }) {
     businessSeen.current = { rowId, key, cells: matrix.savedCellsOf(rowId, key) }
     setBusinessTarget({ rowId, sku: r.sku, coordinate: coord, business: cells.business, version: cells.version, salePrice: cells.sale?.value ?? null, anchor })
   }, [matrix.cellsOf, matrix.savedCellsOf])
-  /** The page's one way to send cells (defined with the history below); the pop-up's save goes through it too. */
-  const sendCellsRef = useRef<SendCells | null>(null)
   /**
-   * The whole setting through the Matrix door, quiet (the pop-up says a refusal); at the version it opened on, or the
-   * current one (Undo). In line with every other write, and one ⌘Z step like a typed cell.
+   * The whole setting through the Matrix door at the version the pop-up opened on, quiet (the pop-up says a refusal). In
+   * line with every other write, and one ⌘Z step like a typed cell — its toast's Undo is that step (2026-10-13: the toast
+   * no longer writes the old setting at the current version unchecked, beside a ⌘Z step that held the same change).
    */
-  const writeBusiness = useCallback(async (rowId: string, key: CoordinateKey, setting: BusinessPriceSetting | null, expectedVersion: number | null): Promise<MatrixWriteOutcome | null> => {
+  const writeBusiness = useCallback(async (rowId: string, key: CoordinateKey, setting: BusinessPriceSetting | null, expectedVersion: number): Promise<BusinessWrite | null> => {
     const cells = matrix.cellsOf(rowId, key)
     if (!cells?.business || !cells.listingId || !sendCellsRef.current) return null
     const opened = businessSeen.current
-    const seen = expectedVersion !== null && opened?.rowId === rowId && opened.key === key ? opened.cells : matrix.savedCellsOf(rowId, key)
-    const cell = withStamp({ rowId, coordinateKey: key, cell: 'businessPrice', value: setting, expectedVersion: expectedVersion ?? cells.version, expectedListingId: cells.listingId }, seen)
-    const [outcome] = await sendCellsRef.current([cell], { quiet: true, notes: [{ rowId, key, colId: matrixColId(key, 'businessPrice'), after: matrixHistoryAfter(setting) }] })
-    return outcome ?? null
+    const seen = opened?.rowId === rowId && opened.key === key ? opened.cells : matrix.savedCellsOf(rowId, key)
+    const cell = withStamp({ rowId, coordinateKey: key, cell: 'businessPrice', value: setting, expectedVersion, expectedListingId: cells.listingId }, seen)
+    const note: HistoryNote = { rowId, key, colId: matrixColId(key, 'businessPrice'), after: matrixHistoryAfter(setting) }
+    const [outcome] = await sendCellsRef.current([cell], { quiet: true, notes: [note] })
+    return outcome ? { outcome, undo: () => undoNotesRef.current([note]) } : null
   }, [matrix])
   /** After a save: one toast with Undo (none when the old business price was set outside Nexus). */
   const onBusinessSaved = useCallback((saved: BusinessSaved) => {
@@ -546,8 +557,10 @@ export function MatrixSurface({ productId }: { productId: string }) {
     const cell = statusCellOf(row, coord)
     return { rowId: row.id, colId: matrixStatusColId(coord.key), column: 'status', cell, sku: cell ? listingLabel(row.sku, cell) : row.sku }
   }, [statusCellOf])
+  /* Each market's Status writes, counted: Publish waits for them before it reviews (`publishGuard.ts`). */
+  const statusLine = useMemo(() => createInFlight(), [])
   const statusEditing = usePublishCellEditing({
-    write: (change, listingIds) => publishActionsRef.current.write(change, listingIds),
+    write: (change, listingIds) => statusLine.track(publishActionsRef.current.write(change, listingIds)),
     places: () => {
       const at = new Map<string, { rowId: string; colId: string; label: string }>()
       for (const coord of statusCoordinatesRef.current) for (const row of rowsRef.current) {
@@ -564,6 +577,17 @@ export function MatrixSurface({ productId }: { productId: string }) {
     onStarted: () => matrix.refresh(),
   })
   const { stage: stageStatus, tracker: statusTracker, onClearKey: clearStatusCells, begin: beginStatusOperation, end: endStatusOperation } = statusEditing
+  /* Publish (2026-10-13, one save line): it reviews only after the Matrix's writes, its Status writes and its Base price have
+     saved, and holds while one is in flight or a cell editor is open (`publishGuard.ts`). */
+  const registerPublicationBarrier = usePublicationBarrier()
+  const settledMatrix = matrix.settled
+  const pendingMatrix = matrix.pending
+  useEffect(() => registerPublicationBarrier(matrixPublicationBarrier({
+    matrix: { settled: settledMatrix, pending: pendingMatrix },
+    status: statusLine,
+    base: writer,
+    editing: () => (getGridApi()?.getEditingCells().length ?? 0) > 0,
+  })), [registerPublicationBarrier, settledMatrix, pendingMatrix, statusLine, writer, getGridApi])
   const statusColumnOf = useCallback((coord: MatrixCoordinate): ColDef<StudioRow> | null => statusColumn<StudioRow>({
     colId: matrixStatusColId(coord.key),
     cell: (row) => statusCellOf(row, coord),
@@ -585,6 +609,11 @@ export function MatrixSurface({ productId }: { productId: string }) {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps -- another product starts with nothing to undo
   const history = useMemo(() => new SheetUndoHistory(), [productId])
+  /* Base price (the Shared column): the master writer, its ⌘Z step kept only when the save stores it (`baseLine.ts`). */
+  const baseLine = useMemo(() => createBaseLine<StudioRow>({
+    history, writer,
+    unconfirmed: (rowId, colId) => { const state = tracker.get(rowId, colId)?.state; return state === 'refused' || state === 'unknown' },
+  }), [history, writer, tracker])
   const writeMatrix = matrix.write
   const savedCellsOf = matrix.savedCellsOf
   /**
@@ -597,38 +626,45 @@ export function MatrixSurface({ productId }: { productId: string }) {
     const notes = sopts.notes ?? []
     const sent = writeMatrix(cells, {
       quiet: sopts.quiet,
-      onSend: notes.length ? () => { for (const n of notes) history.record({ rowId: n.rowId, colId: n.colId, before: matrixHistoryBefore(savedCellsOf(n.rowId, n.key)), after: n.after }) } : undefined,
+      // The undo side carries what the write sent: an undo puts the cell back only while it still holds it.
+      onSend: notes.length ? () => { for (const n of notes) history.record({ rowId: n.rowId, colId: n.colId, before: matrixHistoryBefore(savedCellsOf(n.rowId, n.key), n.after), after: n.after }) } : undefined,
     })
     if (notes.length) void sent.then((outcomes) => forgetUnsaved(history, notes, outcomes))
     return sent
   }, [writeMatrix, history, savedCellsOf])
   sendCellsRef.current = sendCells
-  const applyHistory = useCallback<ApplyCellValues>((values, direction) => {
+  /** One history step's values on their way back: the Matrix cells' writes (in line), and why any could not be put back. */
+  const replayHistory = useCallback((values: Parameters<ApplyCellValues>[0], direction: 'undo' | 'redo', quiet = false): { sent: Promise<MatrixWriteOutcome[]> | null; refused: string[] } => {
     const api = getGridApi()
-    if (!api || api.isDestroyed()) return
+    if (!api || api.isDestroyed()) return { sent: null, refused: [] }
     /* Base price: back through the grid, as the Information page's undo does — one operation, one save. */
     const shared = values.filter((v) => !isMatrixHistoryValue(v.value))
     if (shared.length) {
       writer.beginOperation()
       try { writeHistoryValues(api, shared, direction) } finally { setTimeout(() => writer.endOperation(), 0) }
     }
-    /* A Matrix cell: the write that puts it back as it was (or sends the edit again), all in one request — built when its
-       turn in line comes, from the cells as the writes before it left them. */
+    /* A Matrix cell (and a market's Sells from): the write that puts it back as it was — only while it still holds what the
+       edit wrote — or sends the edit again, all in one request, built when its turn in line comes from the cells as the
+       writes before it left them. */
     const cells = values.filter((v) => isMatrixHistoryValue(v.value))
-    if (cells.length === 0) return
-    void sendCells(() => {
+    const refused: string[] = []
+    if (cells.length === 0) return { sent: null, refused }
+    const sent = sendCells(() => {
       const out: MatrixWriteCell[] = []
+      refused.length = 0
       for (const v of cells) {
-        const parsed = parseMatrixColId(v.colId)
-        if (!parsed || !isMatrixHistoryValue(v.value)) continue
-        const live = savedCellsOf(v.rowId, parsed.key)
-        const step = matrixReplay(parsed.kind, v.value, live, { rowId: v.rowId, coordinateKey: parsed.key })
+        const place = matrixHistoryPlace(v.colId)
+        if (!place || !isMatrixHistoryValue(v.value)) continue
+        const live = savedCellsOf(v.rowId, place.key)
+        const step = matrixReplay(place.kind, v.value, live, { rowId: v.rowId, coordinateKey: place.key })
         if (step.kind === 'write') out.push(withStamp(step.cell, live))
-        else if (step.kind === 'refuse') sayReason(step.reason, 'info')
+        else if (step.kind === 'refuse') { refused.push(step.reason); if (!quiet) sayReason(step.reason, 'info') }
       }
       return out
-    })
+    }, { quiet })
+    return { sent, refused }
   }, [getGridApi, writer, savedCellsOf, sendCells, sayReason])
+  const applyHistory = useCallback<ApplyCellValues>((values, direction) => { void replayHistory(values, direction) }, [replayHistory])
   /* ⌘Z / ⌘⇧Z take their step only once every write asked before has settled — a step is recorded when its write is sent —
      and one after another: a second ⌘Z works from what the first put back. */
   const undoLine = useRef<Promise<void>>(Promise.resolve())
@@ -644,6 +680,26 @@ export function MatrixSurface({ productId }: { productId: string }) {
       .catch(() => undefined)
     return true
   }, [history, applyHistory, getGridApi, settledWrites])
+  /**
+   * A pop-up toast's Undo (B2B price, Sells from): THE ⌘Z step its save was recorded as (`SheetUndoHistory.undoStep`), so
+   * the toast and ⌘Z are one way back — whichever comes first takes the step, the other finds it gone (never a second
+   * write, never a new step ⌘Z would re-apply). In line like ⌘Z; quiet: the toast says the result. Throws with the reason
+   * when nothing was put back.
+   */
+  const undoNotes = useCallback((notes: readonly HistoryNote[]): Promise<void> => {
+    const run = undoLine.current.then(() => settledWrites()).then(async () => {
+      const got: { replay?: ReturnType<typeof replayHistory> } = {}
+      const taken = history.undoStep((c) => notes.some((n) => c.after === n.after), (values, direction) => { got.replay = replayHistory(values, direction, true) })
+      if (taken === 0 || !got.replay) throw new Error(MATRIX_UNDO_COPY.done)
+      const outcomes = got.replay.sent ? await got.replay.sent : []
+      const failed = outcomes.find((o) => o.outcome === 'refused' || o.outcome === 'conflict')
+      if (failed) throw new Error(failed.reason ?? MATRIX_COPY.changedElsewhere)
+      if (got.replay.refused.length) throw new Error(got.replay.refused[0])
+    })
+    undoLine.current = run.catch(() => undefined)
+    return run
+  }, [history, settledWrites, replayHistory])
+  undoNotesRef.current = undoNotes
 
   /* A value a cell cannot hold (a paste of "abc" or "1,050", a sale with dates) keeps the old one, and the page says why —
      once per paste or fill, with how many cells. A range Delete says nothing: it asked for no value. */
@@ -735,6 +791,14 @@ export function MatrixSurface({ productId }: { productId: string }) {
         canStock: live.canStock,
         rowOf: (rowId) => matrix.rowOf(rowId),
         caseTextOf: (rowId) => caseViewOf(rowId, matrix.rowOf, rowsRef.current).text,
+        // The Base price the grid holds now (a save lands there before the read catches up): what the bulk Undo checks.
+        basePriceNow: (rowId) => {
+          const row = now.get(rowId)
+          const cell = row?.values?.[BASE_PRICE_COL]
+          if (!cell) return row?.basePrice ?? null
+          const v = cell.value
+          return typeof v === 'number' ? v : v == null || v === '' ? null : Number(v)
+        },
         handoffHeld: {
           casePack: caseHandoffHeld({
             canStock: live.canStock, onAmazon: hasAmazonListing(readRef.current),
@@ -750,31 +814,40 @@ export function MatrixSurface({ productId }: { productId: string }) {
       previewVerb: (req) => matrix.previewVerbRun(req),
       applyVerb: (preview) => matrix.applyVerbRun(preview),
       revertVerb: (op) => matrix.revert(op),
-      // Quiet: the dialog (or its Undo receipt) says every refusal — no toast behind it.
-      writeCells: (cells) => matrix.write(cells.map((c) => withStamp(c, matrix.savedCellsOf(c.rowId, c.coordinateKey))), { quiet: true }),
+      /* Quiet: the dialog (or its Undo receipt) says every refusal — no toast behind it. In line, built at its turn (a
+         function is called then), each cell stamped with what the cell showed then. No ⌘Z step: the bulk Undo is the way back. */
+      writeCells: (cells) => matrix.write(() => (typeof cells === 'function' ? cells() : cells).map((c) => withStamp(c, matrix.savedCellsOf(c.rowId, c.coordinateKey))), { quiet: true }),
       /* Base price: the grid's own road (as the Information page's "Set every row…"): each value lands on its row and
-         reaches `onCellValueChanged` → the master writer, fenced as ONE operation so it leaves as one save. A row the
-         grid does not show (filtered, folded) has no node to take it: refused, never reported as saved. */
+         reaches `onCellValueChanged` → the master writer (`baseLine.ts`), fenced as ONE operation so it leaves as one save,
+         and each row answered by its own save (refused, or no answer, is never reported as saved). AG reports the changes
+         on its next turn: the fence closes after them. A row the grid does not show (filtered, folded) has no node to take
+         it: refused. The rows are no ⌘Z step: the bulk Edit's Undo is their one way back. */
       masterWrite: async (writes) => {
         const api = getGridApi()
         if (!api || api.isDestroyed()) throw new Error('The grid is not ready. Try again in a moment.')
         const offScreen = new Set<string>()
+        const answers = new Map<string, Promise<BaseRowAnswer>>()
         writer.beginOperation()
         try {
           for (const w of writes) {
             const node = api.getRowNode(w.rowId)
-            if (node) node.setDataValue(BASE_PRICE_COL, w.value, 'bulk-edit')
-            else offScreen.add(w.rowId)
+            if (!node) { offScreen.add(w.rowId); continue }
+            answers.set(w.rowId, baseLine.awaitRow(w.rowId))
+            node.setDataValue(BASE_PRICE_COL, w.value, BULK_EDIT_SOURCE)
           }
+          await new Promise((resolve) => setTimeout(resolve, 0))
         } finally {
           writer.endOperation()
         }
+        // A row AG reported no change for already held the value: nothing to save.
+        baseLine.settleUnchanged(answers.keys())
         await writer.flush()
-        return writes.map((w) => {
-          if (offScreen.has(w.rowId)) return { rowId: w.rowId, ok: false, reason: BULK_NOT_ON_SCREEN }
-          const mark = tracker.get(w.rowId, BASE_PRICE_COL)
-          return mark?.state === 'refused' ? { rowId: w.rowId, ok: false, reason: mark.reason } : { rowId: w.rowId, ok: true }
-        })
+        // A row whose save never answered (the row is unreachable) is said as such, never waited for forever.
+        const noAnswer = new Promise<BaseRowAnswer>((resolve) => setTimeout(() => resolve('unknown'), 0))
+        const answered = new Map<string, BaseRowAnswer>()
+        for (const [rowId, answer] of answers) answered.set(rowId, await Promise.race([answer, noAnswer]))
+        const refusalOf = (rowId: string) => { const mark = tracker.get(rowId, BASE_PRICE_COL); return mark?.state === 'refused' || mark?.state === 'unknown' ? mark.reason : undefined }
+        return writes.map((w) => (offScreen.has(w.rowId) ? { rowId: w.rowId, ok: false, reason: BULK_NOT_ON_SCREEN } : baseRowResult(w.rowId, answered.get(w.rowId), refusalOf)))
       },
       /* Each market's Status: the Status column's own editing (one write per value, the cells marked), answered, quiet —
          the dialog says the result. */
@@ -806,7 +879,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
         return { applied, refused }
       },
     }
-  }, [matrix, getGridApi, writer, tracker, statusCellOf, caseTargetOf, bulkNameOf])
+  }, [matrix, getGridApi, writer, tracker, statusCellOf, caseTargetOf, bulkNameOf, baseLine])
 
   const [bulk, setBulk] = useState<{ source: BulkEditSource; initial?: BulkInitial } | null>(null)
   /** The last change the dialog applied that can still be put back — offered again as a toast when the dialog closes. */
@@ -936,10 +1009,10 @@ export function MatrixSurface({ productId }: { productId: string }) {
       if (!writeGate({ colId, source: e.source, oldValue: e.oldValue, newValue: e.newValue }).write) return
       const parsed = parseMatrixColId(colId)
       if (!parsed) {
-        /* A SHARED column (`Base price`): the sheet's own write path. An undo's or redo's own write-back is not an edit. */
+        /* A SHARED column (`Base price`): the sheet's own write path (`baseLine.ts`) — its ⌘Z step kept only when the save
+           stores it; an undo's or redo's own write-back, and the bulk Edit's rows, are no step. */
         if (!colId) return
-        if (e.source !== 'undo' && e.source !== 'redo') history.record({ rowId: e.data.id, colId, before: e.oldValue, after: e.newValue })
-        writer.set(e.data.id, colId, e.newValue, { row: e.data })
+        baseLine.changed({ rowId: e.data.id, colId, before: e.oldValue, after: e.newValue, source: e.source, row: e.data })
         return
       }
       /* `fulfilment` never arrives here: the engine's setter hands the choice to `onPickFulfilment`
@@ -966,7 +1039,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
       if (batch) { batch.cells.push(cell); batch.notes.push(note); return }
       void sendCells([cell], { notes: [note] })
     },
-    [matrix, writer, tracker, getGridApi, sayReason, sendCells],
+    [matrix, baseLine, tracker, getGridApi, sayReason, sendCells],
   )
 
   /* ── a held cell EXPLAINS itself on an open gesture (the sheet's `explainRefusal` rule) ──── */

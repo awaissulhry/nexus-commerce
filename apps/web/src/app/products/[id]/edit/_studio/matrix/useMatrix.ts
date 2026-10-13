@@ -6,7 +6,8 @@
  * The read is the server's (`source.ts` parses it; a failed read is `error`, the load-error state — preview mode with its
  * fixture cells and in-memory store is gone, Owner 2026-10-08). Writes are `PATCH …/studio/matrix` and
  * `POST …/studio/matrix/verbs`; the server's verdict is refetched after every applied write, because the page derives no
- * number of its own.
+ * number of its own. ONE line (2026-10-13): a cell write, a verb's preview, its run and its revert each wait their turn,
+ * and every version they leave is recorded as this page's own move.
  *
  * Per-cell outcomes reach the SAME `CellSaveTracker` the sheet already uses (`useMasterSheet`'s),
  * keyed by `<coordinateKey>.<kind>`, so a Matrix cell wears exactly the round-trip marks an
@@ -40,7 +41,7 @@ import {
 } from './contract'
 import { fetchMatrix, patchMatrix, type MatrixSource } from './source'
 import { afterLiveWrite } from './refusals'
-import { rebaseOnOwnMoves, recordOwnMoves, type OwnMoves } from './stamps'
+import { rebaseOnOwnMoves, recordOwnMoves, recordServerMoves, type OwnMoves } from './stamps'
 import { matrixFromColId } from './sellsFrom'
 
 export const matrixColId = (key: CoordinateKey, kind: string): string => `${key}.${kind}`
@@ -81,6 +82,13 @@ export interface MatrixState {
   write: (cells: readonly MatrixWriteCell[] | (() => readonly MatrixWriteCell[]), opts?: { quiet?: boolean; onSend?: () => void }) => Promise<MatrixWriteOutcome[]>
   /** Resolves once every write asked so far has settled (an undo waits for it before it takes its step). */
   settled: () => Promise<void>
+  /** The writes, runs and reverts asked and not settled yet (Publish waits for them, and holds while there are any). */
+  pending: () => number
+  /**
+   * The verbs go through the SAME line as every cell write (2026-10-13, one save line): the preview reads the cells as the
+   * writes asked before it left them, the run and the revert wait their turn, and the versions they leave are recorded as
+   * this page's own moves — a cell typed before they landed is never refused against them.
+   */
   previewVerbRun: (req: MatrixVerbRequest) => Promise<VerbPreview>
   /** The operation, and each cell's outcome (a cell refused at the run says why). */
   applyVerbRun: (preview: VerbPreview) => Promise<VerbOperation & { results?: readonly MatrixWriteOutcome[] }>
@@ -359,16 +367,25 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
     }
   }, [productId, accountId, locale, tracker, repaint, mark, commitRead, live])
 
-  const write = useCallback((cells: readonly MatrixWriteCell[] | (() => readonly MatrixWriteCell[]), wopts?: { quiet?: boolean; onSend?: () => void }): Promise<MatrixWriteOutcome[]> => {
-    const run = writeChain.current.then(() => sendNow(cells, wopts), () => sendNow(cells, wopts))
+  /* Everything that moves or reads the cells for a change — a cell write, a verb's preview, its run, its revert — waits
+     its turn in ONE line. `counts`: a write, a run or a revert (Publish waits for them); a preview only reads. */
+  const inFlight = useRef(0)
+  const inLine = useCallback(<T,>(task: () => Promise<T>, counts = true): Promise<T> => {
+    if (counts) inFlight.current += 1
+    const run = writeChain.current.then(task, task)
+    const settle = () => { if (counts) inFlight.current -= 1 }
+    run.then(settle, settle)
     writeChain.current = run.catch(() => undefined)
     return run
-  }, [sendNow])
+  }, [])
+  const write = useCallback((cells: readonly MatrixWriteCell[] | (() => readonly MatrixWriteCell[]), wopts?: { quiet?: boolean; onSend?: () => void }): Promise<MatrixWriteOutcome[]> =>
+    inLine(() => sendNow(cells, wopts)), [inLine, sendNow])
   const settled = useCallback((): Promise<void> => writeChain.current.then(() => undefined), [])
+  const pending = useCallback((): number => inFlight.current, [])
 
-  /* ── verbs: preview → apply → revert ────────────────────────────────────────────────────── */
+  /* ── verbs: preview → apply → revert, in line with the writes ───────────────────────────── */
 
-  const previewVerbRun = useCallback(async (req: MatrixVerbRequest): Promise<VerbPreview> => {
+  const previewVerbRun = useCallback((req: MatrixVerbRequest): Promise<VerbPreview> => inLine(async () => {
     if (!readRef.current) throw new Error('The Matrix has not loaded')
     const res = await fetch(`${getBackendUrl()}${MATRIX_ENDPOINTS.verbs(productId)}`, {
       method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...req, commit: false }),
@@ -376,49 +393,46 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
     const body = await res.json().catch(() => null)
     if (!res.ok) throw new Error((body as { message?: string } | null)?.message ?? `The verb preview was refused (HTTP ${res.status})`)
     return body as VerbPreview
-  }, [productId])
+  }, false), [productId, inLine])
+
+  /** A run or a revert: sent in its turn, its moves recorded as this page's own, then the cells read again. */
+  const runInLine = useCallback((send: () => Promise<Response>, refusal: string, valueOf: (o: MatrixWriteOutcome) => unknown) => inLine(async () => {
+    const asked = readRef.current
+    if (!asked) throw new Error('The Matrix has not loaded')
+    live.begin()
+    let covered: number | null = null
+    try {
+      const res = await send()
+      const body = await res.json().catch(() => null)
+      if (!res.ok) throw new Error((body as { message?: string } | null)?.message ?? `${refusal} (HTTP ${res.status})`)
+      const answer = body as { operation?: VerbOperation; results?: MatrixWriteOutcome[] } | null
+      recordServerMoves(moves.current, asked, answer?.results ?? [], valueOf)
+      const seqAtReread = live.state.seq
+      const ticket = ++readTicket.current
+      const again = await fetchMatrix(productId, { accountId, locale })
+      if (again.kind === 'live') { commitRead(again.read, ticket); covered = seqAtReread }
+      return answer
+    } finally {
+      live.end(covered)
+    }
+  }), [inLine, productId, accountId, locale, commitRead, live])
 
   const applyVerbRun = useCallback(async (preview: VerbPreview): Promise<VerbOperation & { results?: readonly MatrixWriteOutcome[] }> => {
-    if (!readRef.current) throw new Error('The Matrix has not loaded')
-    live.begin()
-    let covered: number | null = null
-    try {
-      const res = await fetch(`${getBackendUrl()}${MATRIX_ENDPOINTS.verbs(productId)}`, {
-        method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ params: { verb: preview.verb }, targets: preview.changes.map((c) => ({ rowId: c.rowId, coordinateKey: c.coordinateKey })), commit: true, preview }),
-      })
-      const body = await res.json().catch(() => null)
-      if (!res.ok) throw new Error((body as { message?: string } | null)?.message ?? `The verb was refused (HTTP ${res.status})`)
-      const seqAtReread = live.state.seq
-      const ticket = ++readTicket.current
-      const again = await fetchMatrix(productId, { accountId, locale })
-      if (again.kind === 'live') { commitRead(again.read, ticket); covered = seqAtReread }
-      const answer = body as { operation: VerbOperation; results?: MatrixWriteOutcome[] }
-      return { ...answer.operation, results: answer.results }
-    } finally {
-      live.end(covered)
-    }
-  }, [productId, accountId, locale, commitRead, live])
+    // What the run wrote on each cell: the preview's own value there.
+    const valueOf = (o: MatrixWriteOutcome) => preview.changes.find((c) => c.rowId === o.rowId && c.coordinateKey === o.coordinateKey)?.to
+    const answer = await runInLine(() => fetch(`${getBackendUrl()}${MATRIX_ENDPOINTS.verbs(productId)}`, {
+      method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ params: { verb: preview.verb }, targets: preview.changes.map((c) => ({ rowId: c.rowId, coordinateKey: c.coordinateKey })), commit: true, preview }),
+    }), 'The verb was refused', valueOf)
+    return { ...answer!.operation!, results: answer!.results }
+  }, [productId, runInLine])
 
   const revert = useCallback(async (op: VerbOperation): Promise<VerbOperation & { results?: readonly MatrixWriteOutcome[] }> => {
-    if (!readRef.current) throw new Error('The Matrix has not loaded')
-    live.begin()
-    let covered: number | null = null
-    try {
-      const res = await fetch(`${getBackendUrl()}${MATRIX_ENDPOINTS.revert(productId, op.id)}`, { method: 'POST', credentials: 'include' })
-      const body = await res.json().catch(() => null)
-      if (!res.ok) throw new Error((body as { message?: string } | null)?.message ?? `The revert was refused (HTTP ${res.status})`)
-      const seqAtReread = live.state.seq
-      const ticket = ++readTicket.current
-      const again = await fetchMatrix(productId, { accountId, locale })
-      if (again.kind === 'live') { commitRead(again.read, ticket); covered = seqAtReread }
-      // The server's answer (`{ operation, results }`): an Undo counts what was put back, never what was asked for.
-      const answer = body as { operation?: VerbOperation; results?: MatrixWriteOutcome[] } | null
-      return answer?.operation ? { ...answer.operation, results: answer.results } : { ...op, applied: 0, refused: 0, results: [] }
-    } finally {
-      live.end(covered)
-    }
-  }, [productId, accountId, locale, commitRead, live])
+    // A revert puts back what each cell held before the run: the page records the move, and a later stamp is taken again.
+    const answer = await runInLine(() => fetch(`${getBackendUrl()}${MATRIX_ENDPOINTS.revert(productId, op.id)}`, { method: 'POST', credentials: 'include' }), 'The revert was refused', () => undefined)
+    // The server's answer (`{ operation, results }`): an Undo counts what was put back, never what was asked for.
+    return answer?.operation ? { ...answer.operation, results: answer.results } : { ...op, applied: 0, refused: 0, results: [] }
+  }, [productId, runInLine])
 
   const cellsOf = useCallback((rowId: string, key: CoordinateKey): MatrixCells | null => byRow.current.get(rowId)?.cells[key] ?? null, [])
   const rowOf = useCallback((rowId: string): MatrixRowRead | null => byRow.current.get(rowId) ?? null, [])
@@ -435,6 +449,7 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
     refresh: live.request,
     write,
     settled,
+    pending,
     previewVerbRun,
     applyVerbRun,
     revert,

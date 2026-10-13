@@ -369,6 +369,25 @@ export class SheetUndoHistory {
     return step.length
   }
 
+  /**
+   * Undo THE step holding a change that `match`es — wherever it is on the undo stack — as ⌘Z would undo it when it is the
+   * last: its "before" values put back, and the step moved onto the redo stack. One step, two doors: a toast's Undo and ⌘Z
+   * undo the same step, so whichever comes first takes it and the other finds nothing (never a second write, never a new
+   * step that ⌘Z would then re-apply). Returns how many cells it wrote (0 = no such step: undone already, or not saved).
+   */
+  undoStep(match: (change: SheetCellChange) => boolean, apply: ApplyCellValues): number {
+    if (this.open?.length && this.depth === 0) this.close()
+    for (let s = this.undoStack.length - 1; s >= 0; s--) {
+      const step = this.undoStack[s]!
+      if (!step.some(match)) continue
+      this.undoStack.splice(s, 1)
+      this.replay(apply, step.map((c) => ({ rowId: c.rowId, colId: c.colId, value: c.before })), 'undo')
+      this.redoStack.push(step)
+      return step.length
+    }
+    return 0
+  }
+
   /** Re-apply the last undone step's "after" values. */
   redo(apply: ApplyCellValues): number {
     const step = this.redoStack.pop()

@@ -9,10 +9,18 @@
  * number would pin it), a price that followed the base price follows it again. These are the server's own revert rules
  * (`restoreWrites`, `apps/api/src/services/pim/matrix-write.service.ts`) for the kinds a cell edit changes. Redo
  * sends the edit again, as typing it would.
+ *
+ * 2026-10-13 (one save line): an undo puts a cell back only while it still holds what the edit wrote — a newer value, the
+ * person's own or anyone else's, stays (`matrixStillHolds`). A pop-up's toast Undo (B2B price, Sells from) is the SAME
+ * ⌘Z step (`SheetUndoHistory.undoStep`), so there is one way back, never two.
  */
+import { matrixCellStamp, matrixStampHolds } from '@nexus/shared/matrix-stamp'
 import { HISTORY_ONLY } from '../sheet/sheetUndo'
 import { matrixBusinessSettingOfCell, matrixCellValue, matrixWrite, MATRIX_UNCHANGED, type CoordinateKey, type MatrixCellKind, type MatrixCells, type MatrixDoorKind, type MatrixWriteCell } from '@/design-system/grid'
-import type { MatrixWriteOutcome } from './contract'
+import { MATRIX_COPY, type MatrixWriteOutcome } from './contract'
+import { sameSourceCodes } from './preview'
+import { fromGroupKey, isMatrixFromColId, matrixFromColId } from './sellsFrom'
+import { stampAfterOwnWrite } from './stamps'
 
 /**
  * A Matrix cell's history value — only the history holds it (`HISTORY_ONLY`): the sheet's replay skips it, and the page
@@ -23,12 +31,15 @@ export interface MatrixHistoryValue {
   readonly kind: 'matrix-cell'
   /** The undo side: the coordinate's cells as the server last read them, BEFORE the edit. */
   readonly before?: MatrixCells | null
+  /** The undo side: what the edit wrote — an undo puts the cell back only while it still holds it (`matrixStillHolds`). */
+  readonly written?: unknown
   /** The redo side: the value the edit wrote. */
   readonly value?: unknown
 }
 
-export const matrixHistoryBefore = (cells: MatrixCells | null): MatrixHistoryValue =>
-  Object.freeze({ [HISTORY_ONLY]: true as const, kind: 'matrix-cell' as const, before: cells ? structuredClone(cells) : null })
+/** The undo side of an edit: the cells before it, and — when given — what it wrote (`after`, its redo side). */
+export const matrixHistoryBefore = (cells: MatrixCells | null, after?: MatrixHistoryValue): MatrixHistoryValue =>
+  Object.freeze({ [HISTORY_ONLY]: true as const, kind: 'matrix-cell' as const, before: cells ? structuredClone(cells) : null, ...(after && 'value' in after ? { written: after.value } : {}) })
 export const matrixHistoryAfter = (value: unknown): MatrixHistoryValue =>
   Object.freeze({ [HISTORY_ONLY]: true as const, kind: 'matrix-cell' as const, value })
 export const isMatrixHistoryValue = (value: unknown): value is MatrixHistoryValue =>
@@ -36,7 +47,47 @@ export const isMatrixHistoryValue = (value: unknown): value is MatrixHistoryValu
 
 export const MATRIX_UNDO_COPY = {
   gone: 'This change cannot be put back: the listing on this market is not the one that was changed',
+  /** A toast's Undo whose ⌘Z step is gone: ⌘Z took it already, or the change was not saved. */
+  done: 'Nothing to put back: this change was undone already',
 } as const
+
+/** A kind the Matrix's history holds: a Matrix cell's, or a market's "Sells from" (the From column, `source`). */
+export type MatrixHistoryKind = MatrixCellKind | 'source'
+
+/** The history's place of a column: a Matrix cell (`<key>.<kind>`) or a From column (`<key>.from` → `source`). */
+export function matrixHistoryPlace(colId: string): { key: CoordinateKey; kind: MatrixHistoryKind } | null {
+  if (isMatrixFromColId(colId)) return { key: fromGroupKey(colId), kind: 'source' }
+  const i = colId.lastIndexOf('.')
+  if (i <= 0) return null
+  const key = colId.slice(0, i)
+  const kind = colId.slice(i + 1)
+  return key !== 'shared' && ['fulfilment', 'syncMode', 'syncQty', 'syncBuffer', 'price', 'salePrice', 'businessPrice', 'businessTiers'].includes(kind) ? { key, kind: kind as MatrixCellKind } : null
+}
+/** The history column of a write (a "Sells from" write is its group's From column). */
+export const matrixHistoryColId = (key: CoordinateKey, cell: MatrixDoorKind): string => (cell === 'source' ? matrixFromColId(key) : `${key}.${cell}`)
+
+const isoDay = (iso: string | null | undefined): string => (iso ? iso.slice(0, 10) : '')
+
+/**
+ * Does `live` still hold what a change wrote there (`written`, the value its write sent)? An undo puts a cell back only
+ * then (2026-10-13, one save line): a newer value — the person's own later edit, or anyone else's — is never written over;
+ * the cell says `MATRIX_COPY.changedSince`. `null` = the page cannot tell (a clamped or formula price, a value it cannot read
+ * back the same way): the version decides, as before.
+ */
+export function matrixStillHolds(kind: MatrixHistoryKind, written: unknown, live: MatrixCells | null): boolean | null {
+  if (!live) return null
+  if (kind === 'salePrice') {
+    // The dates as days: the read spells them as full times, a write may send the day.
+    const w = (written ?? null) as { value?: number | null; start?: string | null; end?: string | null } | null
+    if (!live.sale) return null
+    return (w?.value ?? null) === live.sale.value && isoDay(w?.start) === isoDay(live.sale.start) && isoDay(w?.end) === isoDay(live.sale.end)
+  }
+  if (kind === 'source') return live.source && Array.isArray(written) ? sameSourceCodes(written as string[], live.source.own) : null
+  if (kind === 'listing' || kind === 'syncState') return null
+  const expected = stampAfterOwnWrite(kind, { cell: kind, value: written })
+  if (!expected || matrixCellStamp(kind, live) === undefined) return null
+  return matrixStampHolds(kind, expected, live)
+}
 
 export type MatrixReplay =
   | { kind: 'write'; cell: MatrixWriteCell }
@@ -47,16 +98,42 @@ const SKIP: MatrixReplay = { kind: 'skip' }
 
 /**
  * What replaying one history value on `live` (the coordinate's cells as the server reads them NOW) writes. Undo
- * (`entry.before`): the write that takes `live` back to `before`, or skip when it already is. Redo (`entry.value`): the
- * edit again. Pure.
+ * (`entry.before`): the write that takes `live` back to `before`, or skip when it already is — refused with
+ * `MATRIX_COPY.changedSince` when the cell no longer holds what the edit wrote (`entry.written`): a newer value stays. Redo
+ * (`entry.value`): the edit again. Pure.
  */
 export function matrixReplay(
-  kind: MatrixCellKind,
+  kind: MatrixHistoryKind,
+  entry: MatrixHistoryValue,
+  live: MatrixCells | null,
+  place: { rowId: string; coordinateKey: CoordinateKey },
+): MatrixReplay {
+  const step = replayStep(kind, entry, live, place)
+  /* Undo: a cell is put back only while it still holds what the edit wrote (a newer value stays). */
+  if (step.kind === 'write' && 'before' in entry && 'written' in entry && matrixStillHolds(kind, entry.written, live) === false)
+    return { kind: 'refuse', reason: MATRIX_COPY.changedSince }
+  return step
+}
+
+function replayStep(
+  kind: MatrixHistoryKind,
   entry: MatrixHistoryValue,
   live: MatrixCells | null,
   place: { rowId: string; coordinateKey: CoordinateKey },
 ): MatrixReplay {
   if (!live) return { kind: 'refuse', reason: MATRIX_UNDO_COPY.gone }
+  /* "Sells from" (this product's own list; `[]` = the market default): its redo sends the list again, its undo the list
+     the listing had. */
+  if (kind === 'source') {
+    const now = live.source
+    if (!now) return { kind: 'refuse', reason: MATRIX_UNDO_COPY.gone }
+    const send = (codes: readonly string[]): MatrixReplay =>
+      ({ kind: 'write', cell: { rowId: place.rowId, coordinateKey: place.coordinateKey, cell: 'source', value: [...codes], expectedVersion: live.version } })
+    if (!('before' in entry)) return Array.isArray(entry.value) && !sameSourceCodes(entry.value as string[], now.own) ? send(entry.value as string[]) : SKIP
+    if (!entry.before || entry.before.listingId !== live.listingId) return { kind: 'refuse', reason: MATRIX_UNDO_COPY.gone }
+    const was = entry.before.source?.own
+    return was && !sameSourceCodes(was, now.own) ? send(was) : SKIP
+  }
   /* A business edit wrote the WHOLE setting (the B2B price and its tiers): its redo sends that setting again, as it was
      saved — never only the half its column shows, joined to what the other column holds after the undo. */
   if (!('before' in entry) && (kind === 'businessPrice' || kind === 'businessTiers')) {
@@ -125,7 +202,7 @@ export function forgetUnsaved(
 ): void {
   for (const o of outcomes) {
     if (o.outcome === 'applied') continue
-    const note = notes.find((n) => n.rowId === o.rowId && n.key === o.coordinateKey && n.colId === `${o.coordinateKey}.${o.cell}`)
+    const note = notes.find((n) => n.rowId === o.rowId && n.key === o.coordinateKey && n.colId === matrixHistoryColId(o.coordinateKey, o.cell))
     if (note) history.forget(note.rowId, note.colId, note.after)
   }
 }
