@@ -12,15 +12,15 @@
  * It replaces the per-market table with "3 of 5 fields" and a per-row "Show fields" (audit D3), its 175 px sentence
  * column and an always-empty "Set by" (D3), its cut values (D6) and its header menus and resize handles (D11).
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { moveModeLabel } from '@nexus/shared/studio-publication'
 import { Button, Checkbox, Pill, SegmentedControl, Tag } from '@/design-system/primitives'
-import { MetricStrip } from '@/design-system/components'
+import { Disclosure, MetricStrip, Pagination } from '@/design-system/components'
 import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { PublishActionView, SellingStatusView, SEND_MODE_WORD, STATUS_TARGET_WORD } from '@/design-system/grid'
 import { NOT_LISTED_ASIDE, NO_LONGER_APPLIES, STARTS_UNTICKED, toggleRowTicks, withProductTicks, type ActionPlanRow } from './actionPlan'
 import { replacesWords } from './PublicationChanges'
-import { fieldStatus, fieldTick, fieldValues, reviewCounts, reviewTableRows, type ReviewFilter, type ReviewTableMarket, type ReviewTableRow } from './reviewRows'
+import { fieldStatus, fieldTick, fieldValues, reviewCounts, reviewPages, reviewTableRows, type ReviewFilter, type ReviewTableMarket, type ReviewTableRow } from './reviewRows'
 import styles from './reviewTable.module.css'
 
 export interface ReviewTableMarketProps extends ReviewTableMarket {
@@ -40,6 +40,9 @@ export interface ReviewTableProps {
   onCheckAgain?(key: string): void
   onOpen?(key: string): void
 }
+
+/** Up to this many SKUs a problem lists them under its words; more open on demand. */
+const SKU_LIST_OPEN = 6
 
 /** The row's value in words, for the tick's accessible name. */
 function whatWord(row: ActionPlanRow): string {
@@ -79,6 +82,14 @@ function rowTag(row: ActionPlanRow): { label: string; tone: 'danger' | 'neutral'
 export function ReviewTable({ markets, locked, now, ariaLabel, allMarkets = false, onCheckAgain, onOpen }: ReviewTableProps) {
   const [filter, setFilter] = useState<ReviewFilter>('all')
   const rows = useMemo(() => reviewTableRows(markets, filter), [markets, filter])
+  // Page by page, about 100 rows each (a product with its fields is never split): a family on several markets can list
+  // a thousand rows, and the window froze drawing them all at once.
+  const pages = useMemo(() => reviewPages(rows), [rows])
+  const [page, setPage] = useState(1)
+  useEffect(() => { setPage(1) }, [filter])
+  const shownPage = Math.min(page, Math.max(1, pages.length))
+  const pageRows = pages[shownPage - 1] ?? []
+  const firstRow = pages.slice(0, shownPage - 1).reduce((n, p) => n + p.length, 0)
   const counts = useMemo(() => reviewCounts(markets), [markets])
   const marketOf = useMemo(() => new Map(markets.map(m => [m.key, m])), [markets])
 
@@ -108,7 +119,7 @@ export function ReviewTable({ markets, locked, now, ariaLabel, allMarkets = fals
     ...(allMarkets ? [{ key: 'where', label: 'Where', width: 110, render: (r: ReviewTableRow) => <span className={styles.where}>{r.market.label}</span> }] : []),
     { key: 'sku', label: 'SKU', width: 130, sticky: true, render: r => {
       if (r.type === 'plan') return <span className={r.row.notSent ? `${styles.sku} ${styles.quiet}` : styles.sku}>{r.row.sku}</span>
-      if (r.type === 'problem') return <span className={styles.sku}>{r.sku}</span>
+      if (r.type === 'problem') return <span className={styles.sku}>{r.skus.length === 1 ? r.skus[0] : `${r.skus.length.toLocaleString('en')} SKUs`}</span>
       return null
     } },
     { key: 'field', label: 'What', width: 150, render: r => {
@@ -124,7 +135,12 @@ export function ReviewTable({ markets, locked, now, ariaLabel, allMarkets = fals
       if (r.type === 'field') return <span className={styles.value}>{fieldValues(r.change).now}</span>
       if (r.type === 'removal') return <span className={styles.value}>{r.value}</span>
       // A problem is what is wrong NOW (and the channel's own words under it); a market's row says why it lists nothing.
-      if (r.type === 'problem') return <span className={styles.lines}><span>{r.message}</span>{r.detail && <span className={styles.quiet}>{r.detail}</span>}</span>
+      if (r.type === 'problem') return <span className={styles.lines}><span>{r.message}</span>{r.detail && <span className={styles.quiet}>{r.detail}</span>}
+        {r.skus.length > 1 && r.skus.length <= SKU_LIST_OPEN && <span className={styles.quiet}>On {r.skus.join(', ')}</span>}
+        {/* A long list (a problem on every variant) opens on demand: the problem itself is the row's words. */}
+        {r.skus.length > SKU_LIST_OPEN && <Disclosure className={styles.skuList} summary={`On ${r.skus.length.toLocaleString('en')} SKUs`}>
+          <span className={styles.quiet}>{r.skus.join(', ')}</span>
+        </Disclosure>}</span>
       if (r.type === 'state') return <span className={styles.lines}><span>{r.state.text}</span></span>
       return null
     } },
@@ -163,7 +179,7 @@ export function ReviewTable({ markets, locked, now, ariaLabel, allMarkets = fals
 
   const filters = [
     { value: 'all', label: 'All' },
-    { value: 'problems', label: `Problems${counts.problems ? ` · ${counts.problems.toLocaleString('en')}` : ''}` },
+    { value: 'problems', label: `Problems${counts.problemKinds ? ` · ${counts.problemKinds.toLocaleString('en')}` : ''}` },
     { value: 'deletes', label: `Deletes${counts.deletes ? ` · ${counts.deletes.toLocaleString('en')}` : ''}` },
   ]
 
@@ -172,15 +188,19 @@ export function ReviewTable({ markets, locked, now, ariaLabel, allMarkets = fals
       { label: 'Markets', value: counts.markets.toLocaleString('en') },
       { label: 'Listings', value: counts.listings.toLocaleString('en'), hint: 'that send something' },
       { label: 'Changes', value: counts.changes.toLocaleString('en'), hint: 'ticked to send' },
-      { label: 'Problems', value: counts.problems.toLocaleString('en') },
+      { label: 'Problems', value: counts.problems.toLocaleString('en'), hint: counts.problemKinds && counts.problemKinds < counts.problems ? `${counts.problemKinds.toLocaleString('en')} to fix` : undefined },
       { label: 'Deletes', value: counts.deletes.toLocaleString('en') },
     ]} />}
     <SegmentedControl ariaLabel="Show" size="sm" options={filters} value={filter} onChange={v => setFilter(v as ReviewFilter)} />
     {/* Keyed by the view: "All markets" and one market have different columns and widths, and a width is where a column
         STARTS (the engine's rule) — the same grid switching views kept the other view's widths and ran past the window. */}
-    <DataGrid key={allMarkets ? 'all' : 'one'} ariaLabel={ariaLabel} size="md" keyboardScroll headerMenus={false} columns={columns} rows={rows} rowKey={r => r.key}
+    <DataGrid key={allMarkets ? 'all' : 'one'} ariaLabel={ariaLabel} size="md" keyboardScroll headerMenus={false} columns={columns} rows={pageRows} rowKey={r => r.key}
       // A field row (and a value a Full update removes) is the DataGrid's child row: sunken, with the rail, under its product.
       rowClassName={r => (r.type === 'field' || r.type === 'removal' ? 'nds-grid-kid' : undefined)}
       emptyState={filter === 'all' ? 'Nothing is waiting to be sent here.' : filter === 'problems' ? 'No problems.' : 'Nothing is deleted.'} />
+    {pages.length > 1 && <div className={styles.pager}>
+      <span className={styles.quiet}>Rows {(firstRow + 1).toLocaleString('en')}–{(firstRow + pageRows.length).toLocaleString('en')} of {rows.length.toLocaleString('en')}</span>
+      <Pagination page={shownPage} pageCount={pages.length} onPage={setPage} />
+    </div>}
   </div>
 }

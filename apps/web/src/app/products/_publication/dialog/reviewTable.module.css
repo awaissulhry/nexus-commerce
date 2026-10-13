@@ -12,3 +12,7 @@
 .value { white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; }
 .sends { color: var(--nds-text-strong); font-weight: var(--nds-font-weight-medium); }
 .quiet { color: var(--nds-text-muted); }
+/* The table's pager: the rows shown, then the pages (the DS pager), on one line that wraps on a phone. */
+.pager { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--nds-space-8); }
+/* A problem's long SKU list: the DS disclosure, flush in the cell. */
+.skuList { width: 100%; overflow-wrap: anywhere; white-space: normal; }

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { StudioPublishChange } from '@nexus/shared/studio-publication'
 
 import type { ActionPlanRow } from './actionPlan'
-import { fieldStatus, fieldTick, fieldValues, marketStateRow, reviewCounts, reviewTableRows, valueText, type ReviewTableMarket } from './reviewRows'
+import { fieldStatus, fieldTick, fieldValues, marketStateRow, problemGroups, reviewCounts, reviewPages, reviewTableRows, valueText, type ReviewTableMarket, type ReviewTableRow } from './reviewRows'
 
 const planRow = (over: Partial<ActionPlanRow> & Pick<ActionPlanRow, 'key' | 'productId' | 'sku'>): ActionPlanRow => ({
   kind: 'content', what: { column: 'send', mode: 'partial', setAt: null, setByName: null }, action: null, sent: '', warning: null,
@@ -72,7 +72,7 @@ describe('the Publish review, one row per change', () => {
 
 describe('the summary strip', () => {
   it('counts the markets, the listings that send, the changes, the problems and the deletes', () => {
-    expect(reviewCounts([it_, de])).toEqual({ markets: 1, listings: 3, changes: 1 + 1 + 1, problems: 1, deletes: 1 + 1 })
+    expect(reviewCounts([it_, de])).toEqual({ markets: 1, listings: 3, changes: 1 + 1 + 1, problems: 1, problemKinds: 1, deletes: 1 + 1 })
   })
 })
 
@@ -123,5 +123,44 @@ describe('a market\'s row in All markets', () => {
     expect(marketStateRow({ kind: 'ready', changes: 3, whole: false, requestReady: true })).toBeNull()
     expect(marketStateRow({ kind: 'nothing', reason: 'none' })).toBeNull()
     expect(marketStateRow({ kind: 'blocked', problems: 2, reason: null })).toBeNull()
+  })
+})
+
+describe('problems, one row per thing to fix', () => {
+  it('groups the same problem on many SKUs into one row with every SKU, in order', () => {
+    const groups = problemGroups([
+      { severity: 'error', sku: 'GALE-M', message: 'GALE-M: Item package height is required.' },
+      { severity: 'error', sku: 'GALE-L', message: 'GALE-L: Item package height is required.' },
+      { severity: 'error', sku: 'GALE-L', message: 'GALE-L: Bullet 1 is too long', detail: 'Amazon: max 500' },
+      { severity: 'error', sku: 'GALE-S', message: 'GALE-S: Item package height is required.' },
+      { severity: 'warning', sku: 'GALE-S', message: 'A note, not a problem' },
+    ])
+    expect(groups.map(g => [g.message, g.skus])).toEqual([
+      ['Item package height is required.', ['GALE-M', 'GALE-L', 'GALE-S']],
+      ['Bullet 1 is too long', ['GALE-L']],
+    ])
+    expect(groups[1].detail).toBe('Amazon: max 500')
+  })
+})
+
+describe('pages of about 100 rows', () => {
+  const ref = { key: 'm', label: 'M' }
+  const plan = (i: number): ReviewTableRow => ({ type: 'plan', key: `p${i}`, market: ref, row: planRow({ key: `content:${i}`, productId: `${i}`, sku: `S${i}` }) })
+  const field = (i: number, j: number): ReviewTableRow => ({ type: 'field', key: `f${i}-${j}`, market: ref, row: planRow({ key: `content:${i}`, productId: `${i}`, sku: `S${i}` }), change: change({ id: `${i}:${j}`, productId: `${i}` }) })
+  it('never splits a product from its own rows', () => {
+    const rows: ReviewTableRow[] = []
+    for (let i = 0; i < 30; i++) rows.push(plan(i), field(i, 1), field(i, 2), field(i, 3))
+    const pages = reviewPages(rows, 10)
+    expect(pages.every(p => p[0].type === 'plan')).toBe(true)
+    expect(pages.flat()).toHaveLength(rows.length)
+    expect(pages[0]).toHaveLength(8)
+  })
+  it('keeps a product larger than a page on one page of its own', () => {
+    const rows = [plan(1), ...Array.from({ length: 12 }, (_, j) => field(1, j)), plan(2)]
+    expect(reviewPages(rows, 10).map(p => p.length)).toEqual([13, 1])
+  })
+  it('is one page when it fits', () => {
+    expect(reviewPages([plan(1)], 100)).toHaveLength(1)
+    expect(reviewPages([], 100)).toEqual([])
   })
 })

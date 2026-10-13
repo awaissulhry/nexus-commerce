@@ -42,6 +42,9 @@
 .summary { margin: 0; color: var(--nds-text-3); overflow-wrap: anywhere; }
 .tabPanel { display: flex; flex-direction: column; gap: var(--nds-space-12); min-width: 0; }
 @media (max-width: 639px) {
+  /* A phone: the pickers, chips and tabs take three or four lines — they scroll away with the review instead of holding
+     a third of the screen (grid audit wave 3, measured at 390 px). */
+  .top { position: static; }
   .pickerControls { flex-direction: column; align-items: stretch; }
   .tabName { max-width: 16ch; }
   /* The Markets trigger fills the row like Channel and Account (MultiSelect's root stretches, its button does not). */

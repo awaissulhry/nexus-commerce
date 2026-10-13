@@ -42,7 +42,8 @@ export interface ReviewTableMarket extends ReviewMarketRef {
 
 export type ReviewTableRow =
   | { type: 'state'; key: string; market: ReviewMarketRef; state: ReviewMarketState }
-  | { type: 'problem'; key: string; market: ReviewMarketRef; sku: string; message: string; detail: string | null }
+  /** One problem, with every SKU it is on: the same "Item package height is required" on 20 SKUs is ONE row to fix. */
+  | { type: 'problem'; key: string; market: ReviewMarketRef; skus: string[]; message: string; detail: string | null }
   | { type: 'plan'; key: string; market: ReviewMarketRef; row: ActionPlanRow }
   | { type: 'field'; key: string; market: ReviewMarketRef; row: ActionPlanRow; change: StudioPublishChange }
   | { type: 'removal'; key: string; market: ReviewMarketRef; row: ActionPlanRow; label: string; value: string }
@@ -60,8 +61,7 @@ export function reviewTableRows(markets: readonly ReviewTableMarket[], filter: R
   for (const m of markets) {
     const market = { key: m.key, label: m.label }
     if (m.state) out.push({ type: 'state', key: `${m.key}|state`, market, state: m.state })
-    const { problems } = publicationProblems((m.review?.issues ?? []) as StudioPublishIssue[])
-    for (const p of problems) out.push({ type: 'problem', key: `${m.key}|problem|${p.id}`, market, sku: p.sku, message: p.message, detail: p.detail ?? null })
+    for (const p of problemGroups(m.review?.issues ?? [])) out.push({ type: 'problem', key: `${m.key}|problem|${p.id}`, market, skus: p.skus, message: p.message, detail: p.detail })
     for (const row of m.rows) {
       const own: ReviewTableRow[] = []
       if (row.kind === 'content' && !row.notSent && row.what.column === 'send') {
@@ -89,6 +89,43 @@ export function reviewTableRows(markets: readonly ReviewTableMarket[], filter: R
   return out
 }
 
+/**
+ * A market's problems, one per distinct message: the SKUs it is on, in order. Measured on GALE-JACKET (local copy, four
+ * Amazon markets): 1,501 problems were 1,501 rows — the window froze for 45 s drawing them — and read as one list of the
+ * same few sentences.
+ */
+export function problemGroups(issues: readonly StudioPublishIssue[]): Array<{ id: string; skus: string[]; message: string; detail: string | null }> {
+  const groups = new Map<string, { id: string; skus: string[]; message: string; detail: string | null }>()
+  for (const p of publicationProblems(issues as StudioPublishIssue[]).problems) {
+    const detail = p.detail ?? null
+    const key = `${p.message}\u0000${detail ?? ''}`
+    const group = groups.get(key)
+    if (group) { if (!group.skus.includes(p.sku)) group.skus.push(p.sku) }
+    else groups.set(key, { id: p.id, skus: [p.sku], message: p.message, detail })
+  }
+  return [...groups.values()]
+}
+
+/**
+ * The table's pages (grid audit wave 3): about `size` rows each, the Owner's rows-per-page shape (the page scrolls, the
+ * grid is the page of rows). A product's row and its own rows are never split across two pages.
+ */
+export function reviewPages(rows: readonly ReviewTableRow[], size = 100): ReviewTableRow[][] {
+  const groups: ReviewTableRow[][] = []
+  for (const row of rows) {
+    if ((row.type === 'field' || row.type === 'removal') && groups.length) groups[groups.length - 1].push(row)
+    else groups.push([row])
+  }
+  const pages: ReviewTableRow[][] = []
+  let page: ReviewTableRow[] = []
+  for (const group of groups) {
+    if (page.length && page.length + group.length > size) { pages.push(page); page = [] }
+    page.push(...group)
+  }
+  if (page.length) pages.push(page)
+  return pages
+}
+
 export interface ReviewCounts {
   /** Markets with a review the table lists. */
   markets: number
@@ -97,6 +134,8 @@ export interface ReviewCounts {
   /** Changes that go: ticked fields (every field of a row sent whole) and ticked Status changes or Deletes. */
   changes: number
   problems: number
+  /** Distinct problems to fix (one per message and market). */
+  problemKinds: number
   /** What a send deletes: ticked Deletes and moves, and the values a sent Full update removes. */
   deletes: number
 }
@@ -104,10 +143,11 @@ export interface ReviewCounts {
 const sends = (row: ActionPlanRow) => !row.notSent && (row.tick === 'on' || row.tick === 'some' || row.tick === 'whole')
 
 export function reviewCounts(markets: readonly ReviewTableMarket[]): ReviewCounts {
-  const counts: ReviewCounts = { markets: 0, listings: 0, changes: 0, problems: 0, deletes: 0 }
+  const counts: ReviewCounts = { markets: 0, listings: 0, changes: 0, problems: 0, problemKinds: 0, deletes: 0 }
   for (const m of markets) {
     if (m.rows.length || m.review) counts.markets += 1
     counts.problems += publicationProblems((m.review?.issues ?? []) as StudioPublishIssue[]).problems.length
+    counts.problemKinds += problemGroups(m.review?.issues ?? []).length
     for (const row of m.rows) {
       if (!sends(row)) continue
       counts.listings += 1
