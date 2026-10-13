@@ -330,6 +330,7 @@ function Projection({ source, productId }: { source: ProjectionSource; productId
           open={dockOpen}
           saving={state.saving}
           writeError={state.writeError}
+          conflicts={state.mappingConflicts}
           onClose={() => setDockOpen(false)}
           onSave={state.saveMapping}
         />

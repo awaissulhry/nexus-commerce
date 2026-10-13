@@ -119,3 +119,10 @@ export const splitPerAxisLabel = (axisLabel: string, listings: number, counts: n
 
 /** §4.4.4's banner title. The REASON is the server's sentence, never composed here. */
 export const LOCK_TITLE = 'Specifics lock once the listing is live'
+
+/**
+ * 2.4 — a Save mapping refused because the listing moved somewhere else (a real 409, never this page's own earlier
+ * write). The dock then shows the server's mapping, and this says so: the edits were not saved.
+ */
+export const MAPPING_CHANGED_ELSEWHERE =
+  'This listing changed somewhere else while you were editing the mapping. The panel now shows the saved mapping. Your changes were not saved — make them again if you still want them.'

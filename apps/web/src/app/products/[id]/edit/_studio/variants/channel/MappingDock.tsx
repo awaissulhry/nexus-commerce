@@ -29,9 +29,11 @@
  * ## Save
  *
  * Explicit, not autosave: one PATCH carrying `expectedVersion`, 409 → repaint + refetch exactly
- * like the sheet (`useProjection`). Unsaved changes arm the studio's navigation guard — the same
- * two mechanisms every explicit-save editor in this studio uses, `registerScopeChangeGuard` for a
- * scope/market change and `usePresentationNavigationGuard` for links, Back/Forward and unload.
+ * like the sheet (`useProjection`). An unsaved mapping is kept through refreshes and reset only by a
+ * real 409, which the panel states (2.4, `mappingDraft.ts`). Unsaved changes arm the studio's
+ * navigation guard — the same two mechanisms every explicit-save editor in this studio uses,
+ * `registerScopeChangeGuard` for a scope/market change and `usePresentationNavigationGuard` for
+ * links, Back/Forward and unload.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -45,6 +47,7 @@ import { usePresentationNavigationGuard } from '@/app/products/ebay-flat-file/Pr
 import { useStudioProduct, useStudioScope } from '../../contracts'
 import { dockSubtitle, dockTitle } from './copy'
 import { CollisionsSection, LockBanner, SpecificsSection, SplitSection, ValuesSection } from './dock/sections'
+import { draftDirty, heldAfter, startDraft, type HeldDraft } from './mappingDraft'
 import { ThemeChangePlanModal, fetchThemeChangePlan, type ThemeChangePlan } from './ThemeChangePlanModal'
 import type { ProjectionDraft, ProjectionPage } from './types'
 
@@ -96,31 +99,14 @@ export interface MappingDockProps {
   saving: boolean
   /** A refusal or conflict from the last save, stated in the panel that caused it. */
   writeError: string | null
+  /** `useProjection`'s count of mapping saves refused by a real 409 — the one thing that resets an unsaved draft. */
+  conflicts: number
   onClose(): void
-  onSave(draft: ProjectionDraft): Promise<boolean>
+  /** `basedOn`: the version the draft was made on — the save is sent at it, moved along this page's own writes. */
+  onSave(draft: ProjectionDraft, basedOn: number): Promise<boolean>
 }
 
-/** The draft the panel edits, derived from the page it opened on. */
-function draftOf(page: ProjectionPage): ProjectionDraft {
-  return {
-    mapping: [...page.mapping].sort((a, b) => a.order - b.order).map((m, i) => ({ ...m, order: i })),
-    split: { mode: page.split.mode, axisKey: page.split.axisKey },
-  }
-}
-
-function sameDraft(a: ProjectionDraft, b: ProjectionDraft, page: ProjectionPage): boolean {
-  // A drag followed by its inverse, or accepting the unchanged value order, is not an edit.
-  const baseAxes = b.mapping.map(mapping => mapping.axisKey)
-  if (JSON.stringify(a.presentationOrder?.change.axes ?? baseAxes) !== JSON.stringify(b.presentationOrder?.change.axes ?? baseAxes)) return false
-  for (const axis of page.order?.resolvedAxes ?? []) {
-    if (JSON.stringify(a.presentationOrder?.change.values?.[axis.key] ?? axis.values) !== JSON.stringify(b.presentationOrder?.change.values?.[axis.key] ?? axis.values)) return false
-  }
-  if (a.split.mode !== b.split.mode || a.split.axisKey !== b.split.axisKey) return false
-  if (a.mapping.length !== b.mapping.length) return false
-  return a.mapping.every((m, i) => m.axisKey === b.mapping[i].axisKey && m.target === b.mapping[i].target && m.order === b.mapping[i].order)
-}
-
-export function MappingDock({ page, parentSku, open, saving, writeError, onClose, onSave }: MappingDockProps) {
+export function MappingDock({ page, parentSku, open, saving, writeError, conflicts, onClose, onSave }: MappingDockProps) {
   const [track, setTrack] = useState<HTMLElement | null>(null)
   const { registerScopeChangeGuard } = useStudioScope()
   /* The record the studio is open on — ONE source for the id (contracts.tsx's own rule). The projection
@@ -129,22 +115,22 @@ export function MappingDock({ page, parentSku, open, saving, writeError, onClose
   const product = useStudioProduct()
 
   /**
-   * The draft is keyed on the version the panel opened at. A 409 repaint bumps `page.version`, and
-   * re-deriving the draft then is the whole 409 contract: the operator's stale edits are replaced
-   * by the server's current mapping, with the reason beside them. Re-deriving on every `page`
-   * identity instead would also discard an edit every time an unrelated include/exclude landed.
+   * The draft, and the page it was made on (2.4, `mappingDraft.ts`). A refresh — a tick, a pin, a
+   * Reload — never throws an edit away: an edited draft is kept, an untouched one follows the page.
+   * Only a real 409 on Save starts again from the server's mapping, and `writeError` then says so.
    */
-  const [draft, setDraft] = useState<ProjectionDraft>(() => draftOf(page))
-  const openedAt = useRef<number>(page.version)
+  const [held, setHeld] = useState<HeldDraft>(() => startDraft(page))
+  const draft = held.draft
+  const setDraft = useCallback((next: ProjectionDraft) => setHeld(h => ({ ...h, draft: next })), [])
+  const seenConflicts = useRef(conflicts)
   useEffect(() => {
-    if (page.version === openedAt.current) return
-    openedAt.current = page.version
-    setDraft(draftOf(page))
-  }, [page])
-  useEffect(() => { if (open) { setDraft(draftOf(page)); openedAt.current = page.version } }, [open])
+    const conflicted = conflicts !== seenConflicts.current
+    seenConflicts.current = conflicts
+    setHeld(h => heldAfter(h, page, conflicted))
+  }, [page, conflicts])
+  useEffect(() => { if (open) setHeld(startDraft(page)) }, [open])
 
-  const baseline = useMemo(() => draftOf(page), [page])
-  const dirty = !sameDraft(draft, baseline, page)
+  const dirty = draftDirty(held)
 
   useEffect(() => {
     setTrack(document.querySelector<HTMLElement>('[data-studio-dock]'))
@@ -210,9 +196,9 @@ export function MappingDock({ page, parentSku, open, saving, writeError, onClose
       }
       return
     }
-    const ok = await onSave(draft)
+    const ok = await onSave(draft, held.base.version)
     if (ok) onClose()
-  }, [draft, onSave, onClose, lockedSetChange, page, product.id])
+  }, [draft, held.base.version, onSave, onClose, lockedSetChange, page, product.id])
 
   /* The studio's navigation guard, both halves — a scope/market change (the frame asks), and
      links / Back / Forward / unload (the shared installer every explicit-save editor here uses). */
