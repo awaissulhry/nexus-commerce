@@ -176,18 +176,54 @@ export type ListingBulkPricingAction = 'set-price' | 'set-pricing-rule' | 'follo
 
 // The quantity's flag is not among them: it goes through the matrix's Mode write (`setListingQuantityFollow`).
 const FOLLOW_FLAGS = ['followMasterTitle', 'followMasterDescription', 'followMasterImages', 'followMasterBulletPoints'] as const
+/** Every flag a bulk follow / unfollow master moves: the price (the door), the quantity (the Mode write), the others. */
+const BULK_FOLLOW_FLAGS = ['followMasterPrice', 'followMasterQuantity', ...FOLLOW_FLAGS] as const
+export type BulkFollowFlag = (typeof BULK_FOLLOW_FLAGS)[number]
+/** A listing's follow flags as they were before a bulk follow / unfollow master: only the ones it changed. */
+export type BulkFollowFlagsBefore = Partial<Record<BulkFollowFlag, boolean>>
+/** One listing a bulk follow / unfollow master changed, as its job keeps it (`rollbackData`) for the Undo. */
+export interface BulkFollowChange { listingId: string; before: BulkFollowFlagsBefore }
+
+const FOLLOW_FLAG_SELECT = {
+  followMasterPrice: true, followMasterQuantity: true, followMasterTitle: true, followMasterDescription: true, followMasterImages: true, followMasterBulletPoints: true,
+} as const satisfies Record<BulkFollowFlag, true>
+
+const followFlagsOf = (listingId: string) =>
+  (activeDatabaseTransaction() ?? prisma).channelListing.findUnique({ where: { id: listingId }, select: FOLLOW_FLAG_SELECT })
+
+/** The flags that differ between two reads of one listing, each with its value in the first read. */
+function changedFlags(first: Record<BulkFollowFlag, boolean>, second: Record<BulkFollowFlag, boolean> | null): BulkFollowFlagsBefore {
+  const changed: BulkFollowFlagsBefore = {}
+  for (const flag of BULK_FOLLOW_FLAGS) if (second && first[flag] !== second[flag]) changed[flag] = first[flag]
+  return changed
+}
+
+/** The changes a job keeps in `rollbackData` (`{ followFlagsBefore: [...] }`), read defensively; `[]` when it has none. */
+export function bulkFollowChangesOf(rollbackData: unknown): BulkFollowChange[] {
+  const list = rollbackData && typeof rollbackData === 'object' ? (rollbackData as { followFlagsBefore?: unknown }).followFlagsBefore : undefined
+  if (!Array.isArray(list)) return []
+  const changes: BulkFollowChange[] = []
+  for (const entry of list) {
+    if (!entry || typeof entry !== 'object' || typeof entry.listingId !== 'string' || !entry.before || typeof entry.before !== 'object') continue
+    const before: BulkFollowFlagsBefore = {}
+    for (const flag of BULK_FOLLOW_FLAGS) if (typeof entry.before[flag] === 'boolean') before[flag] = entry.before[flag]
+    if (Object.keys(before).length) changes.push({ listingId: entry.listingId, before })
+  }
+  return changes
+}
 
 /**
  * `POST /api/listings/bulk-action` for one listing. A selection carries no version per row, so the door is told why
  * (`listings-bulk-action`). A refusal throws its sentence (the job records it against the listing) and writes nothing.
- * Follow / unfollow master move every follow flag: the price through the door, the others in the same transaction.
+ * Follow / unfollow master move every follow flag: the price through the door, the others in the same transaction;
+ * the answer names the flags it changed, with what they were (`changed`), so the job's Undo puts back only those.
  */
 export async function applyListingBulkPricing(input: {
   action: ListingBulkPricingAction
   listingId: string
   actor: string
   payload?: { price?: unknown; pricingRule?: unknown; priceAdjustmentPercent?: unknown }
-}): Promise<{ outcome: PriceWriteOutcome['outcome']; notSent?: string; quantitySkipped?: string }> {
+}): Promise<{ outcome: PriceWriteOutcome['outcome']; notSent?: string; quantitySkipped?: string; changed?: BulkFollowFlagsBefore }> {
   const { action, listingId } = input
   const edit: ListingPricingEdit =
     action === 'set-price' ? { priceOverride: Number(input.payload?.price) }
@@ -198,7 +234,10 @@ export async function applyListingBulkPricing(input: {
             ? { priceAdjustmentPercent: Number(input.payload.priceAdjustmentPercent) } : {}),
         }
         : { followMasterPrice: action === 'follow-master' }
+  const followAction = action === 'follow-master' || action === 'unfollow-master'
   return inDatabaseTransaction(prisma, async () => {
+    // The flags as they were: a listing already so (or partly so) is named only for what this really changed.
+    const before = followAction ? await followFlagsOf(listingId) : null
     const written = await writeChannelPrices({
       targets: [pricingTarget(listingId, edit, { unguardedReason: 'listings-bulk-action' })],
       actor: input.actor, source: 'BULK_OVERRIDE', reason: `Listings bulk ${action}`,
@@ -207,7 +246,7 @@ export async function applyListingBulkPricing(input: {
     const refusal = refusalOf(outcome)
     if (refusal) throw refusal
     let quantitySkipped: string | undefined
-    if (action === 'follow-master' || action === 'unfollow-master') {
+    if (followAction) {
       const follows = action === 'follow-master'
       const db = activeDatabaseTransaction() ?? prisma
       await db.channelListing.update({ where: { id: listingId }, data: { ...Object.fromEntries(FOLLOW_FLAGS.map(flag => [flag, follows])), version: { increment: 1 } } })
@@ -216,7 +255,49 @@ export async function applyListingBulkPricing(input: {
       const { setListingQuantityFollow } = await import('./listing-matrix-cell.service.js')
       quantitySkipped = (await setListingQuantityFollow({ listingId, follow: follows, actor: input.actor, onFba: 'skip' })).skipped
     }
-    return { outcome: outcome.outcome, ...(outcome.notSent ? { notSent: outcome.notSent } : {}), ...(quantitySkipped ? { quantitySkipped } : {}) }
+    const changed = before ? changedFlags(before, await followFlagsOf(listingId)) : {}
+    return {
+      outcome: outcome.outcome, ...(outcome.notSent ? { notSent: outcome.notSent } : {}), ...(quantitySkipped ? { quantitySkipped } : {}),
+      ...(Object.keys(changed).length ? { changed } : {}),
+    }
+  })
+}
+
+/**
+ * The Undo of a listings bulk unfollow master, on one listing the action changed: each flag it changed goes back to
+ * what it was — the price through the door (following again: recomputed by its rule and sent), the quantity through
+ * the matrix's Mode write, the others in the same transaction. A flag the action did not change is not in `before`,
+ * so it is never touched; a flag already back where it was (changed again since) is left alone. The answer names the
+ * flags it put back.
+ */
+export async function restoreBulkFollowFlags(input: { listingId: string; before: BulkFollowFlagsBefore; actor: string }): Promise<{ restored: BulkFollowFlag[]; notSent?: string; quantitySkipped?: string }> {
+  const { listingId, before, actor } = input
+  return inDatabaseTransaction(prisma, async () => {
+    const now = await followFlagsOf(listingId)
+    if (!now) throw new ListingPricingError(404, 'Listing not found')
+    const due = BULK_FOLLOW_FLAGS.filter((flag) => before[flag] !== undefined && now[flag] !== before[flag])
+    let notSent: string | undefined
+    if (due.includes('followMasterPrice')) {
+      const written = await writeChannelPrices({
+        targets: [{ listingId, follow: before.followMasterPrice === true, unguardedReason: 'listings-bulk-action' }],
+        actor, source: 'BULK_OVERRIDE', reason: 'Listings bulk undo',
+      })
+      const refusal = refusalOf(written.results[0])
+      if (refusal) throw refusal
+      notSent = written.results[0].notSent
+    }
+    const plain = FOLLOW_FLAGS.filter((flag) => due.includes(flag))
+    if (plain.length) {
+      const db = activeDatabaseTransaction() ?? prisma
+      await db.channelListing.update({ where: { id: listingId }, data: { ...Object.fromEntries(plain.map((flag) => [flag, before[flag]])), version: { increment: 1 } } })
+    }
+    let quantitySkipped: string | undefined
+    if (due.includes('followMasterQuantity')) {
+      const { setListingQuantityFollow } = await import('./listing-matrix-cell.service.js')
+      quantitySkipped = (await setListingQuantityFollow({ listingId, follow: before.followMasterQuantity === true, actor, onFba: 'skip' })).skipped
+    }
+    const restored = Object.keys(changedFlags(now, await followFlagsOf(listingId))) as BulkFollowFlag[]
+    return { restored, ...(notSent ? { notSent } : {}), ...(quantitySkipped ? { quantitySkipped } : {}) }
   })
 }
 
