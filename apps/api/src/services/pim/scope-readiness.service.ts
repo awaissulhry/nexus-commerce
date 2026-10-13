@@ -1,6 +1,7 @@
 import type { ReadinessIndex } from '@prisma/client'
 import prisma from '../../db.js'
 import { readFamilyAccountId } from './family-account.js'
+import { familyReadinessSettled } from './readiness-after-response.js'
 import { resolveWorkspaceDestination } from './workspace-destination.js'
 import { coordinatesFor } from './sheet-columns.service.js'
 import { normalizeLanguage } from './content-language.js'
@@ -71,6 +72,9 @@ export async function getProductReadiness(input: { productId: string; market: st
   if (only && !only.accountId) throw new ReadinessCoordinateRequiredError()
   const product = await prisma.product.findFirstOrThrow({ where: { id: input.productId, deletedAt: null }, select: { id: true, parentId: true } })
   const rootId = product.parentId ?? product.id
+  // Editing speed (2026-10-13) — the sheet asks right after a save, whose family is rebuilt after its response: answer
+  // with the rebuilt rows when that rebuild runs in this process (`readiness-after-response.ts`).
+  await familyReadinessSettled(rootId)
   const [familyRows, markets] = await Promise.all([
     prisma.readinessIndex.findMany({ where: { product: { OR: [{ id: rootId }, { parentId: rootId }], deletedAt: null },
       ...(only ? { channel: only.channel, accountId: only.accountId, ...(only.aliasId !== null ? { aliasId: only.aliasId } : {}) } : {}) },

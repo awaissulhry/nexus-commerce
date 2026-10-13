@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import prisma from '../../db.js'
-import { afterDatabaseCommit, beforeDatabaseCommit, dropBeforeDatabaseCommit, hasBeforeDatabaseCommit, inDatabaseTransaction } from '../../lib/database-context.js'
+import { afterDatabaseCommit, beforeDatabaseCommit, dropBeforeDatabaseCommit, hasAfterDatabaseCommit, hasBeforeDatabaseCommit, inDatabaseTransaction } from '../../lib/database-context.js'
 import { getStudioSheet } from './studio-sheet.service.js'
 import { withCachedSchemas } from './cached-schema-context.js'
 // LX.F2 R-LX-17 — the ONE resolver, the same function the catalogue projection calls.
@@ -15,6 +15,7 @@ import { runResumableSweep, type SweepReport } from './resumable-sweep.js'
 import { logger } from '../../utils/logger.js'
 import { safeJobId } from '../../lib/job-id.js'
 import { channelFootprint, type ChannelFootprint } from '../channel-footprint.service.js'
+import { rebuildAfterResponse } from './readiness-after-response.js'
 
 export type ReadinessScope = { channel: string; market: string; accountId: string | null }
 
@@ -33,6 +34,7 @@ export function optionalColumns(completeness: { optional?: { filled: number; tot
 }
 
 const producerKey = (rootId: string, scope?: ReadinessScope) => `readiness:${rootId}${scope ? `:${JSON.stringify(scope)}` : ''}`
+const afterResponseKey = (rootId: string) => `readiness-after-response:${rootId}`
 
 const deferredFamilies = new AsyncLocalStorage<Set<string>>()
 /**
@@ -58,6 +60,8 @@ export async function produceReadiness(productId: string, scope?: ReadinessScope
   const rootId = product.parentId ?? product.id
   const deferred = deferredFamilies.getStore()
   if (deferred) { deferred.add(rootId); return }
+  // A sheet save of this transaction already rebuilds the whole family after its response (`produceReadinessForProducts`).
+  if (hasAfterDatabaseCommit(afterResponseKey(rootId))) return
   const family = producerKey(rootId)
   if (scope && hasBeforeDatabaseCommit(family)) return
   if (!scope) dropBeforeDatabaseCommit(`${family}:`)
@@ -73,6 +77,8 @@ export async function produceReadiness(productId: string, scope?: ReadinessScope
  * many families keep today's behaviour exactly — a single-cell edit still returns with its readiness rebuilt. Above
  * it, the rows are marked pending in the SAME transaction as the values (so no reader can show the old answer as
  * current) and the families are rebuilt after the commit (Owner Decision 2 = A, 2026-09-26).
+ * One exception (editing speed, 2026-10-13): the product sheet's own saves rebuild a whole family right after their
+ * response, in this process (`produceReadinessForProducts` `afterResponse`, `readiness-after-response.ts`).
  */
 export const INLINE_READINESS_MAX_FAMILIES = 2
 
@@ -86,17 +92,43 @@ export interface ReadinessProduction {
 /**
  * The batch form of `produceReadiness`: ONE query for the families of every product, then inline or pending.
  * Must run inside the content transaction (like `produceReadiness`), so the pending marks commit with the values.
+ *
+ * `afterResponse` (editing speed, 2026-10-13; the product sheet's saves only): a WHOLE-family rebuild of up to
+ * INLINE_READINESS_MAX_FAMILIES families is not run inside the save. Its rows are marked pending before the commit, in
+ * the save's transaction, and the family is rebuilt in this process right after the response
+ * (`readiness-after-response.ts`). A listing-only edit (`scope`) is still rebuilt inline: it is one coordinate.
  */
-export async function produceReadinessForProducts(productIds: string[], scope?: ReadinessScope): Promise<ReadinessProduction> {
+export async function produceReadinessForProducts(productIds: string[], scope?: ReadinessScope, options?: { afterResponse?: boolean }): Promise<ReadinessProduction> {
   if (!productIds.length) return { inline: 0, pending: 0 }
   const rows = await prisma.product.findMany({ where: { id: { in: [...new Set(productIds)] } }, select: { id: true, parentId: true } })
   const roots = [...new Set(rows.map(row => row.parentId ?? row.id))].sort()
   // PSIE — inside `deferReadiness` (the sheet import) the families are only noted, as in `produceReadiness`.
   const deferred = deferredFamilies.getStore()
   if (deferred) { roots.forEach(rootId => deferred.add(rootId)); return { inline: 0, pending: roots.length } }
+  if (roots.length <= INLINE_READINESS_MAX_FAMILIES && options?.afterResponse && !scope) {
+    for (const rootId of roots) {
+      const family = producerKey(rootId)
+      // The rebuild after the response covers every coordinate, so this transaction's own rebuilds of the family go; the
+      // marks take the family's key and run once at commit, however many rows of the operation wrote to it.
+      dropBeforeDatabaseCommit(`${family}:`)
+      await beforeDatabaseCommit(family, () => markReadinessPending([rootId]))
+      // The first run rebuilds what is pending — a family with no readiness row yet has nothing to mark, and
+      // `rebuildImportedFamily` builds it then; a follow-up run (a save landed during a rebuild) rebuilds the whole family.
+      // One snapshot whose repeated reads are answered once, as the rebuild inside a sheet operation's transaction was.
+      await afterDatabaseCommit(afterResponseKey(rootId), async () => rebuildAfterResponse(rootId, followUp =>
+        inDatabaseTransaction(prisma, () => followUp ? reconcileFamilyReadiness(rootId) : rebuildImportedFamily(rootId), { memoReads: true })))
+    }
+    return { inline: 0, pending: roots.length }
+  }
   if (roots.length <= INLINE_READINESS_MAX_FAMILIES) {
-    for (const rootId of roots) await beforeDatabaseCommit(producerKey(rootId, scope), () => reconcileFamilyReadiness(rootId, scope))
-    return { inline: roots.length, pending: 0 }
+    const production = { inline: 0, pending: 0 }
+    for (const rootId of roots) {
+      // Already rebuilt after this transaction's response (above): every coordinate of the family is covered.
+      if (hasAfterDatabaseCommit(afterResponseKey(rootId))) { production.pending++; continue }
+      await beforeDatabaseCommit(producerKey(rootId, scope), () => reconcileFamilyReadiness(rootId, scope))
+      production.inline++
+    }
+    return production
   }
   await markReadinessPending(roots, scope)
   await afterDatabaseCommit(`readiness-pending:${roots.length}:${roots[0]}:${roots[roots.length - 1]}`, () => enqueuePendingReadiness(roots))

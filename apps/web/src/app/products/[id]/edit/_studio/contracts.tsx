@@ -411,10 +411,10 @@ const ReadinessRefreshCtx = createContext<ReadinessRefresh>(() => {})
 /**
  * Read the progress bars again (TOOLBAR REBUILD, Owner 2026-09-27: "I'm not able to reload them at all").
  *
- * The readiness index is rebuilt on the server inside every write that touches one or two families
- * (`readiness-index.service.ts`), so the answer is fresh the moment a save returns — the page only has to ASK. The
- * sheets call this after a confirmed save, from ⋯ → Reload and from "Refresh progress". The last good answer stays
- * on screen while it reads.
+ * The readiness index is rebuilt on the server for every write that touches one or two families — inside the write, or,
+ * for the sheet's own Shared saves, right after its answer; a read of that family waits for that rebuild
+ * (`readiness-index.service.ts`, `readiness-after-response.ts`). So the page only has to ASK. The sheets call this after
+ * a confirmed save, from ⋯ → Reload and from "Refresh progress". The last good answer stays on screen while it reads.
  */
 export function useReadinessRefresh(): ReadinessRefresh {
   return useContext(ReadinessRefreshCtx)

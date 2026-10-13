@@ -98,6 +98,11 @@ export async function afterDatabaseCommitBatch<T>(key: string, items: readonly T
   active.effects.set(key, () => run([...((active.batches.get(key) ?? []) as Set<T>)]))
 }
 
+/** Is an after-commit effect with this key registered in the active transaction (a savepoint rolled back removes it)? */
+export function hasAfterDatabaseCommit(key: string): boolean {
+  return context.getStore()?.effects.has(key) ?? false
+}
+
 /** PSIE — is a before-commit producer with this key already registered in the active transaction? */
 export function hasBeforeDatabaseCommit(key: string): boolean {
   return context.getStore()?.producers.has(key) ?? false

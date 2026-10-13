@@ -154,7 +154,8 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     const readinessQuery = useScopeReadiness();
     const readinessMatrix = readinessQuery.status === 'ready' ? readinessQuery.matrix : undefined;
     /* TOOLBAR REBUILD (2026-09-27) — the channel · market bars are read again after every confirmed save (the server
-       rebuilds the index inside the write), on Reload and on "Refresh progress". A burst of saves asks once. */
+       rebuilds the index right after the save, and the read waits for it), on Reload and on "Refresh progress". A burst
+       of saves asks once. */
     const refreshReadiness = useReadinessRefresh();
     const readinessTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     useEffect(() => () => { if (readinessTimer.current) clearTimeout(readinessTimer.current); }, []);
