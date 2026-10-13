@@ -3,6 +3,7 @@ import { inDatabaseTransaction } from '../lib/database-context.js'
 import { PRIMARY_CONTENT_LOCALE } from '../services/pim/content-locale.js'
 import { normalizeLanguage } from '../services/pim/content-language.js'
 import { applyProductBulkEdits, ProductBulkError, type ProductBulkInput } from '../services/products/bulk-edit.service.js'
+import { applySheetBulkEdits } from '../services/products/sheet-stamp-door.js'
 import { permissionCheckerFor } from './studio-matrix.routes.js'
 import { runFormulaWrite, registerFormulaRequestContext } from '../services/pim/mapping/formula-write-context.js'
 import type { FastifyPluginAsync } from 'fastify'
@@ -944,7 +945,8 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
     },
   }, async (request, reply) => runFormulaWrite(request.headers['x-nexus-formula-write'], async () => {
     try {
-      return await applyProductBulkEdits(request.body ?? { changes: [] }, {
+      // Field stamps (2026-10-13): a sheet write whose row moved goes ahead when the fields it edits did not.
+      return await applySheetBulkEdits(request.body ?? { changes: [] }, {
         contentPerRow: true, // R-60 — the sheet reads per-row errors; content rows are judged per row here only
         ifMatch: request.headers['if-match'], formulaWriteToken: request.headers['x-nexus-formula-write'],
         formulaCascade: request.headers['x-nexus-formula-cascade'] === '1',

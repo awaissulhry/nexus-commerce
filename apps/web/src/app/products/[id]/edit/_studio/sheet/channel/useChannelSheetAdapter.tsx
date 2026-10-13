@@ -21,6 +21,7 @@ import { createShopifyBulkPost, orderShopifyColumnRequests } from '../../shopify
 import { preserveContentVersions } from '../contentVersions';
 import { useSheetUndo, type ResetCellBack } from '../useSheetUndo';
 import { inheritedCell, listPositions, stateBefore, takeEditPrior } from '../sheetUndo';
+import { carryShownCell } from '../sheetStamps';
 import { useShopifyDraftCell, type ShopifyHistoryRefused } from '../../shopify/ShopifyDraftCell';
 import { shopifyHistoryChange, shopifyHistoryRefusal, takeShopifyReplayIntent } from '../../shopify/draftHistory';
 import { shopifyGridTransfer } from '../../shopify/shopifyGridTransfer';
@@ -424,6 +425,9 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             const inPlace = save.inPlace(result.ok);
             if (inPlace) repaintSettled(inPlace.rows, inPlace.columns, req);
             else if (result.ok) followUp.owe();
+            /* Field stamps (2026-10-13) — a conflict now means the field itself moved: the row is read again quietly once the
+               sheet is idle, so the other change shows on every other cell; the refused cell keeps its value and mark. */
+            else if (result.conflict) { followUp.owe(); followUp.settle(); }
             if (result.unreachable)
                 unsettledWrites.current.set(req.rowId, { writeId, subject });
             else
@@ -507,8 +511,12 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             return;
         }
         const cell = row.values?.[colId];
-        if (cell)
-            row.values = { ...row.values, [colId]: inheritedCell(cell, before) };
+        if (cell) {
+            const shown = inheritedCell(cell, before);
+            // Field stamps: the reset is made over the cell the server holds, when the sheet read it as it stands.
+            carryShownCell(cell, shown);
+            row.values = { ...row.values, [colId]: shown };
+        }
         api.refreshCells({ rowNodes: [node], columns: [colId], force: true });
         writer.set(rowId, colId, null, { row, intent: before.intent, onOutcome });
     }, [getGridApi, writer]);

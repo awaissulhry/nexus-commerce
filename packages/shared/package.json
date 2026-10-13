@@ -186,6 +186,10 @@
       "types": "./dist/matrix-stamp.d.ts",
       "default": "./dist/matrix-stamp.js"
     },
+    "./sheet-stamp": {
+      "types": "./dist/sheet-stamp.d.ts",
+      "default": "./dist/sheet-stamp.js"
+    },
     "./stock-cases": {
       "types": "./dist/stock-cases.d.ts",
       "default": "./dist/stock-cases.js"

@@ -25,6 +25,7 @@ import { wireCellValue } from '../sheetReset'
 import { saveWarningFor } from '../saveWarnings'
 import { adoptContentVersions, contentWriteProof } from '../contentVersions'
 import { sharedWriteField, skuRenamesOf } from '../identitySkuEdit'
+import { stampFor } from '../sheetStamps'
 
 import { askForThemeChangePlan } from '../../variants/channel/themePlanAsk'
 /**
@@ -159,6 +160,10 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
           // here rather than in the writer precisely so the two can differ.
           value: c.intent === 'reset' ? null : c.value === '' ? null : wireCellValue(c.value),
           ...(c.intent === 'reset' ? { intent: 'reset' } : {}),
+          /* Field stamps (2026-10-13, `../sheetStamps.ts`): what this cell showed, from the read — so a row whose version
+             moved for another field (a sale, a cascade, another person's edit) still takes this edit. Only on a guarded
+             write: a write without a version has nothing for a stamp to stand in for. */
+          ...(proof.expectedVersion ? stampFor(req.row?.values?.[c.colId], c.colId, c.intent, byKey.get(c.colId)) : {}),
         })),
         /* 🔴 THE MARKETPLACE CONTEXT. Without it every `attr_*` write on the master scope was
            REFUSED — the Owner's "I'm unable to write a lot of attributes still, such as color".
@@ -187,7 +192,9 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
 
       if (res.status === 409) {
         conflict = true
-        version = versionFromBody(body)
+        // Field stamps — a stamped field moved (`current`): the row keeps the version it read until the quiet read that
+        // follows shows the other change; meanwhile every other field of the row is still checked against it.
+        version = body?.current ? undefined : versionFromBody(body)
         batchReason = body?.message || body?.error || 'Someone else changed this row. Refresh to see their version.'
         for (const c of bulk) cells[c.colId] = { ok: false, reason: batchReason }
       } else if (!res.ok) {
@@ -219,9 +226,14 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
          * If the server returns no version it did not participate in the CAS, and the caller keeps
          * the version it read from the sheet. A guessed version loses a race it should have won.
          */
-        version = versionFromBody(body) ?? version
-        // The translation the save moved hands its new token to every cell writing to it.
-        adoptContentVersions(req.row, body, ctx.sheet?.rows ?? [], proof)
+        /* Field stamps — a save that went ahead over ANOTHER change to this row (`writtenAt`) answers the version after
+           both. The row has not shown that change yet, so it keeps the version and tokens it read: its next save is checked
+           field by field again (`sheet-stamp-door.ts`), never waved through. The read after this save brings both. */
+        if (typeof body?.writtenAt !== 'number') {
+          version = versionFromBody(body) ?? version
+          // The translation the save moved hands its new token to every cell writing to it.
+          adoptContentVersions(req.row, body, ctx.sheet?.rows ?? [], proof)
+        }
         // S11 — a product SKU renamed: the answer says what each rename did on the channels.
         const renames = skuRenamesOf(body)
         if (renames.length) ctx.opts.onSkuRenames?.(renames)

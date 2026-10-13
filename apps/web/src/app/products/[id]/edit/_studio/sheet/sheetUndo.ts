@@ -136,6 +136,10 @@ export function takeEditPrior(next: unknown): unknown {
   noted.taken = true
   return noted.prior
 }
+/** The cell an edit replaced, taken or not — read only (the field stamps, `sheetStamps.ts`); undefined when none was noted. */
+export function editPriorOf(next: unknown): unknown {
+  return notedPrior(next)?.prior
+}
 /** The cell replaced `from` without a new edit (a Shared/pin choice marks it): the edit's prior goes with it. Finding 3. */
 export function carryEditPrior(from: unknown, to: object): void {
   const noted = notedPrior(from)

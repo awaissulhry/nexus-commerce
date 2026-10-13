@@ -34,6 +34,7 @@ import { platformBatchGroup, UnsupportedPlatformBatch, writePlatformBatch } from
 import { EbayFamilyClearOperation } from './ebay-family-clear.js'
 import { ContentReceiptLedger } from '../pim/content-version-receipts.js'
 import { collectContentReceipts, readFinalContentPairs } from '../pim/content-version-receipt-capture.js'
+import { applyWithStamps } from './sheet-stamp-door.js'
 
 /** A 500-row fill of 2 languages is 1,000 units; anything far beyond a sheet's page is not a sheet operation. */
 export const BULK_SAVE_MAX_UNITS = 2_000
@@ -161,17 +162,25 @@ export async function applyProductBulkSave(input: BulkSaveInput, context: Produc
       results.push(await saveUnit(key, unit))
     }
     async function saveUnit(key: string, unit: ProductBulkInput): Promise<BulkSaveUnitResult> {
-      const pendingFamily = familyOperation.fork()
-      // The unit's own ledger: kept only when its savepoint held, so a refused unit contributes nothing.
-      const ledger = new ContentReceiptLedger()
-      const outcome = await collectContentReceipts(ledger, () => inSavepoint(() => applyProductBulkEdits(unit, { ...context, contentPerRow: true, ifMatch: undefined, formulaWriteToken: undefined, formulaCascade: false,
-        ebayFamilyOperation: pendingFamily })))
+      const unitContext = { ...context, contentPerRow: true, ifMatch: undefined, formulaWriteToken: undefined, formulaCascade: false }
+      // Each try of the unit (a stamped unit may try twice, `sheet-stamp-door.ts`) has its own family fork and ledger: kept
+      // only when its savepoint held, so a refused try contributes nothing.
+      let pendingFamily = familyOperation.fork()
+      let ledger = new ContentReceiptLedger()
+      let tried = unit
+      const outcome = await applyWithStamps(unit, unitContext, (attempt) => {
+        pendingFamily = familyOperation.fork()
+        ledger = new ContentReceiptLedger()
+        tried = attempt
+        return collectContentReceipts(ledger, () => applyProductBulkEdits(attempt, { ...unitContext, ebayFamilyOperation: pendingFamily }))
+      })
       if ('value' in outcome) {
-        const result = { key, status: 200, body: outcome.value as Record<string, unknown> }
+        const body = outcome.value as Record<string, unknown>
+        const result = { key, status: 200, body: outcome.writtenAt === undefined ? body : { ...body, writtenAt: outcome.writtenAt } }
         if (!unit.dryRun) {
           familyOperation.commit(pendingFamily)
           if (pendingFamily.answerListingId) replyOwners.set(key, pendingFamily.answerListingId)
-          proveFactOwner(ledger, unit, result.body)
+          proveFactOwner(ledger, tried, result.body)
           if (!ledger.isEmpty) ledgers.set(result, ledger)
         }
         return result

@@ -40,6 +40,7 @@ import { wireAliasKey } from './types'
 import { wholeListWriteField } from './provenance'
 import { IDENTITY_SKU_COLUMN, identitySkuChannelChange } from '../identitySkuEdit'
 import { adoptContentVersions, contentWriteProof } from '../contentVersions'
+import { rememberReadCells, stampFor } from '../sheetStamps'
 import type { AliasGroup, ChannelScopeChannel, ChannelScopePage, ChannelSheetRow, SheetColumn, SheetListing, StudioCellValue } from './types'
 
 export interface UseChannelSheetOptions {
@@ -95,6 +96,8 @@ export function channelSheetResponse(body: unknown): ChannelScopePage {
       !page.meta || !Array.isArray(page.meta.schemaMissing) || !Array.isArray(page.meta.schemaAge)) {
     throw new Error('The information response was incomplete. Try again.')
   }
+  // Field stamps: these cells are what the server holds; an edit made over one is stamped from it (`../sheetStamps.ts`).
+  rememberReadCells(page.rows)
   return page as ChannelScopePage
 }
 
@@ -489,6 +492,10 @@ async function commitChannelLanguage(
          */
         target: changeTarget(cell, intent),
         intent: intent === 'reset-list' ? 'reset' : intent,
+        /* Field stamps (2026-10-13, `../sheetStamps.ts`): what this cell showed, from the read — so a listing or product
+           whose version moved for another field (a sale, a cascade, another person's edit) still takes this edit. Shopify
+           cells are read through Shopify's own enrichment, which the door does not repeat. */
+        ...(coord.channel === 'SHOPIFY' ? {} : stampFor(cell, colId, intent, coord.columnOf?.(colId))),
       },
     }
   })
@@ -522,6 +529,8 @@ async function commitChannelLanguage(
   if (!selection.ok) return { ok: false, conflict: true, reason: selection.reason,
     cells: Object.fromEntries(req.cells.map(cell => [cell.colId, { ok: false, reason: selection.reason }])) }
   const proof = selection.proof, casVersion = proof.expectedVersion
+  const stamped = changes.some(({ change }) => 'expected' in change && change.expected !== undefined)
+  const listingAtBuild = row.listing?.id ?? null
 
   try {
     const send = (expectedVersion: number | undefined) => (coord.bulkSend ?? directBulkSend)({
@@ -533,6 +542,8 @@ async function commitChannelLanguage(
         { channel: coord.channel, marketplace: coord.marketplace, ...(coord.accountId ? { accountId: coord.accountId } : {}), ...(coord.locale ? { locale: coord.locale } : {}), aliasKey: wireAliasKey(row.aliasId) },
       ],
       ...(expectedVersion !== undefined ? { expectedVersion } : {}),
+      // Field stamps: the listing this row was read with — a stamped save never lands on another one.
+      ...(stamped ? { expectedListingId: listingAtBuild } : {}),
     })
     let res = await send(casVersion)
     let body = await res.json().catch(() => null)
@@ -559,8 +570,12 @@ async function commitChannelLanguage(
     const family = [...(coord.familyRows?.() ?? [])]
     const listingVersions = new Map([row, ...family].map((r) => [r, r.listing?.version]))
     // P2 — decided against the answer before its other effects land; applied once the save is known to be clean.
-    const settle = res.ok && coord.onStored ? planSavedCellPatch({ row, body, column: (colId) => coord.columnOf?.(colId), sent: coord.sentCells,
-      changes: changes.map(({ colId, change }) => ({ colId, field: change.field, value: change.value, intent: change.intent, target: change.target })) }) : null
+    /* Field stamps — a save that went ahead over another change to this row (`writtenAt`): that change is on the server
+       only, so the row is read again rather than settled in place. */
+    const settle = !res.ok || !coord.onStored ? null
+      : typeof body?.writtenAt === 'number' ? { kind: 'read' as const, reason: 'saved over another change to this row' }
+      : planSavedCellPatch({ row, body, column: (colId) => coord.columnOf?.(colId), sent: coord.sentCells,
+        changes: changes.map(({ colId, change }) => ({ colId, field: change.field, value: change.value, intent: change.intent, target: change.target })) })
     if (res.ok) {
       reportCreated(req, coord, createdListingsOf(body))
       // Only what the server STORED travels to the family: a cell it refused (a 200 can still refuse single cells) keeps
@@ -571,7 +586,16 @@ async function commitChannelLanguage(
         stored.map(({ colId, change }) => ({ colId, value: change.value })))
       if (moved.length) coord.onFamilyChanged?.(moved, stored.map(({ colId }) => colId))
     }
-    const raw = typeof body?.currentVersion === 'number' ? body.currentVersion : undefined
+    /**
+     * Field stamps — a save that went ahead over ANOTHER change to this row (`writtenAt`) answers the version after both. This
+     * row has not shown that other change yet, so it keeps the tokens it read: its next save is checked field by field
+     * again (`sheet-stamp-door.ts`), never waved through as if the other change had been seen. The read after this save
+     * brings the value and the tokens together. A refusal because a stamped field moved (`current`) keeps them too: the
+     * other change is read quietly next, and until then every other field of the row is still checked against it.
+     */
+    const overOther = res.ok && typeof body?.writtenAt === 'number'
+    const keepRead = overOther || res.status === 409 && !!body?.current
+    const raw = typeof body?.currentVersion === 'number' && !keepRead ? body.currentVersion : undefined
     /**
      * 🔴 `versionOf` says WHICH ROW the number belongs to — read it, never infer it.
      *
@@ -588,7 +612,7 @@ async function commitChannelLanguage(
     const versionOf: 'channelListing' | 'product' | undefined = body?.versionOf
     if (versionOf === 'channelListing' && raw !== undefined && row.listing) row.listing.version = raw
     // The content row the save moved hands its new token to every cell writing to it (bullets, title, …).
-    if (res.ok) adoptContentVersions(row, body, family, proof)
+    if (res.ok && !overOther) adoptContentVersions(row, body, family, proof)
     let version = versionOf === 'product' ? raw : undefined
     if (res.ok && version !== undefined) {
       const confirmedVersion = version

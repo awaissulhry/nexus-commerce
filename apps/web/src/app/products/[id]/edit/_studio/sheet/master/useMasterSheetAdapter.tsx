@@ -11,6 +11,7 @@ import { useSheetChips } from '../useSheetChips';
 import { useSheetSaveStatus } from '../useSheetSaveStatus';
 import { useSheetUndo, type ResetCellBack } from '../useSheetUndo';
 import { inheritedCell, stateBefore, takeEditPrior } from '../sheetUndo';
+import { carryShownCell } from '../sheetStamps';
 import { useSheetGridBindings } from '../useSheetGridBindings';
 import { useProductSheetInteraction } from '../useProductSheetInteraction';
 import { useSheetGeometry } from '../useSheetGeometry';
@@ -326,8 +327,12 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             return;
         }
         const cell = cellOf(row, colId);
-        if (cell)
-            row.values = { ...row.values, [colId]: inheritedCell(cell, before) };
+        if (cell) {
+            const shown = inheritedCell(cell, before);
+            // Field stamps: the reset is made over the cell the server holds, when the sheet read it as it stands.
+            carryShownCell(cell, shown);
+            row.values = { ...row.values, [colId]: shown };
+        }
         api.refreshCells({ rowNodes: [node], columns: [colId], force: true });
         writer.set(rowId, colId, null, { row, intent: before.intent, onOutcome });
     }, [getGridApi, writer]);

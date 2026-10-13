@@ -27,6 +27,7 @@ import { recoverSheetRow } from '../sheetRecovery'
 import { commitMasterRow } from './masterWrite'
 import { runBulkOperation, type BulkSend } from '../bulkOperation'
 import { preserveContentVersions } from '../contentVersions'
+import { rememberReadCells } from '../sheetStamps'
 import { verifyContract, type StudioRow, type StudioSheet } from './types'
 import type { SkuRename } from '../identitySkuEdit'
 
@@ -203,7 +204,10 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
         // this memo's deps are `[tracker, commit, localesQuery]` and a callback in them would rebuild
         // the writer and orphan its queue.
         onRefused: (refusals) => optsRef.current.onRefused?.(refusals),
-        onConflict: (rowId) => setConflicts((prev) => (prev.includes(rowId) ? prev : [...prev, rowId])),
+        /* Field stamps (2026-10-13) — a conflict now means the field itself moved: the row is read again quietly, so the
+           other change shows on every other cell; the refused cell keeps its value and its "changed elsewhere" mark, and
+           the refresh offer stays while it does. */
+        onConflict: (rowId) => { setConflicts((prev) => (prev.includes(rowId) ? prev : [...prev, rowId])); oweQuietRead() },
       }),
     [tracker, commit, localesQuery],
   )
@@ -243,7 +247,9 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
     quietRead.current = false
     setError(null)
     setProblems([])
-    setConflicts([])
+    // A quiet read keeps the refresh offer for a row that still shows a refused cell (its value is not the server's).
+    setConflicts((prev) => quiet ? prev.filter((rowId) => Object.keys(sheetRef.current?.rows.find((row) => row.id === rowId)?.values ?? {})
+      .some((key) => tracker.get(rowId, key)?.state === 'refused')) : [])
 
     const backend = getBackendUrl()
     /**
@@ -263,6 +269,8 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
       const studio = await fetchStudioRead(compactSheetUrl(studioUrl), signal)
       if (studio && studio.ok) {
         const body = decodeSheetCells((await studio.json()) as StudioSheet)
+        // Field stamps: these cells are what the server holds; an edit made over one is stamped from it (`../sheetStamps.ts`).
+        rememberReadCells(body.rows)
         return { ...body, meta: { ...body.meta, source: 'studio' } }
       }
       const failureBody: unknown = await studio?.json().catch(() => null)
