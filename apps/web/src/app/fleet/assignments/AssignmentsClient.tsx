@@ -29,6 +29,8 @@
  *     shipped table varied 34% down one list at 896px.
  */
 
+import { formatDate } from '@/design-system/lib/format'
+import { when } from '@/design-system/grid/renderers/format'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from '@/lib/workspaces/Link'
 import { Plus, RefreshCw, Target, AlertTriangle, Layers, Globe, Trash2, X } from 'lucide-react'
@@ -438,7 +440,7 @@ export function AssignmentsClient() {
         sortValue: (a) => (a.lastRun ? Date.parse(a.lastRun.createdAt) : 0),
         render: (a) =>
           a.lastRun ? (
-            <span className="as-when" title={new Date(a.lastRun.createdAt).toLocaleString()}>
+            <span className="as-when" title={when(a.lastRun.createdAt)}>
               {ago(a.lastRun.createdAt)}
             </span>
           ) : (
@@ -840,7 +842,7 @@ function DueBadge({ dueAt }: { dueAt: string | null }) {
   return (
     <span
       className={`as-due ${cls}`}
-      title={`Due ${d.toLocaleDateString()}. A due date only colours this row and moves it up the list — it never starts anything and never stops anything.`}
+      title={`Due ${formatDate(d)}. A due date only colours this row and moves it up the list — it never starts anything and never stops anything.`}
     >
       {text}
     </span>

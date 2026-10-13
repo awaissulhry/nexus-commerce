@@ -12,6 +12,7 @@
  * own and there is no campaign-level builder route — inventing one would be a link to nothing. A
  * campaign whose parent cannot be resolved renders no Manage link at all rather than a dead one.
  */
+import { whenWords } from '../bid/_shared/format'
 import { useCallback, useMemo } from 'react'
 import { ExternalLink, History } from 'lucide-react'
 import { AdsDataGrid, type GridColumn, type FilterState } from '../../campaigns/_grid/AdsDataGrid'
@@ -161,7 +162,7 @@ export function RankCampaignsGrid({ palette }: { palette: { color: (k: string) =
     {
       key: 'lastRun', label: 'Last run', metric: false, sortable: true, defaultHidden: true,
       sortValue: (r) => (r.lastEvaluatedAt ? -new Date(r.lastEvaluatedAt).getTime() : Number.MAX_SAFE_INTEGER),
-      render: (r) => <span title={r.lastEvaluatedAt ? new Date(r.lastEvaluatedAt).toLocaleString() : 'Never evaluated'}>{relTime(r.lastEvaluatedAt)}</span>,
+      render: (r) => <span title={r.lastEvaluatedAt ? whenWords(r.lastEvaluatedAt) : 'Never evaluated'}>{relTime(r.lastEvaluatedAt)}</span>,
     },
     {
       key: 'health', label: 'Health', metric: false, sortable: true,

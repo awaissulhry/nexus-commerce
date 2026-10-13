@@ -33,6 +33,7 @@
  * confirm). One id carries the whole family, so a variation row is read-only and its hover says "Set on the main row"
  * (the server's sentence).
  */
+import { when } from '@/design-system/grid/renderers/format'
 import { memo, useEffect, useState } from 'react'
 import { Check, Copy, ExternalLink, Pencil } from 'lucide-react'
 
@@ -109,10 +110,7 @@ export const ETSY_DIFFERS_NOT_SENT: Readonly<Record<string, string>> = {
   styles: 'Etsy takes styles only when a listing is created.',
 }
 /** The time of a content read in the hover, written as the Read live window writes its read time. */
-export const contentReadTime = (at: string): string => {
-  const time = Date.parse(at)
-  return Number.isFinite(time) ? new Date(time).toLocaleString() : at
-}
+export const contentReadTime = (at: string): string => when(at)
 
 /** Etsy's Listing ID and Shopify's Product ID cells' words (eBay's are `ITEM_ID_COPY`; the API's `studio-stock.ts` says the same). */
 export const CHANNEL_ITEM_ID_COPY = {

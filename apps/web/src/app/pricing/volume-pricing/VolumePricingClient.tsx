@@ -21,6 +21,7 @@
  * mirrors that shape so the operator can't build an invalid ladder by hand.
  */
 
+import { formatDate } from '@/design-system/lib/format'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   Layers,
@@ -167,12 +168,6 @@ function tierSummary(tiers: VolumeTier[]): string {
     .join(' · ')
 }
 
-function fmtDate(iso: string | null | undefined): string {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return '—'
-  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
-}
 
 function fmtMoney(n: number): string {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -302,7 +297,7 @@ function VolumePricingInner() {
         render: (r) => (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <span style={{ fontWeight: 600, color: 'var(--nds-text)' }}>{r.name}</span>
-            <span style={muted(11)}>{fmtDate(r.startDate)} → {fmtDate(r.endDate)}</span>
+            <span style={muted(11)}>{formatDate(r.startDate)} → {formatDate(r.endDate)}</span>
           </div>
         ),
       },
@@ -349,7 +344,7 @@ function VolumePricingInner() {
         align: 'right',
         sortable: true,
         sortValue: (r) => (r.lastSyncAt ? new Date(r.lastSyncAt).getTime() : 0),
-        render: (r) => <span style={muted()}>{fmtDate(r.lastSyncAt)}</span>,
+        render: (r) => <span style={muted()}>{formatDate(r.lastSyncAt)}</span>,
       },
       {
         key: 'actions',

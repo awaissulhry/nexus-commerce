@@ -1,4 +1,5 @@
 'use client'
+import { when } from '@/design-system/grid/renderers/format'
 import { useEffect, useState } from 'react'
 import { Button, Input } from '@/design-system/primitives'
 import { Banner, Card, Disclosure, Field, Listbox, Pagination } from '@/design-system/components'
@@ -66,7 +67,7 @@ export function SourcesPanel({ onJob }: { onJob: (id: string) => void }) {
       <p>{total} imports · page {page} of {Math.max(1, Math.ceil(total / 50))}</p>
       <DataGrid ariaLabel="Import history" columns={[
         { key: 'name', label: 'Source', render: j => j.jobName }, { key: 'state', label: 'State', render: j => j.status },
-        { key: 'records', label: 'Records', render: j => j.totalRows }, { key: 'date', label: 'Created', render: j => new Date(j.createdAt).toLocaleString() },
+        { key: 'records', label: 'Records', render: j => j.totalRows }, { key: 'date', label: 'Created', render: j => when(j.createdAt) },
         { key: 'open', label: 'Review', render: j => j.targetEntity === 'catalog-transfer-v2' ? <Button size="sm" onClick={() => onJob(j.id)}>Open import</Button> : <span>Legacy history · upload again for a versioned review</span> },
       ]} rows={history} rowKey={j => j.id} size="sm" />
       <Pagination page={page} pageCount={Math.max(1, Math.ceil(total / 50))} onPage={setPage} />

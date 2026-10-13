@@ -26,11 +26,18 @@ export const pct = (v: number | null | undefined, dp = 1) => (v == null ? '—' 
 /** multiplier → "2.40×" */
 export const x2 = (v: number | null | undefined) => (v == null ? '—' : `${v.toFixed(2)}×`)
 
-/** ISO/Date → "22 Jun 2026" */
+/**
+ * The months as every date in the app writes them. A fixed table, not `Intl`: `toLocaleDateString('en-GB')` prints
+ * "Sept" under current CLDR, and the browser's language would make one viewer read "Oct 1" and another "1 ott". Used by
+ * `formatDate`, the grid's `when` (grid/renderers/format.ts), the publish times and the Matrix day.
+ */
+export const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const
+
+/** ISO/Date → "22 Jun 2026", "1 Sep 2026" — the viewer's calendar day, the same words in every browser. */
 export const formatDate = (value: string | Date | null | undefined) => {
   if (value == null) return '—'
   const d = typeof value === 'string' ? new Date(value) : value
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  return Number.isNaN(d.getTime()) ? '—' : `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`
 }
 
 const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'] as const

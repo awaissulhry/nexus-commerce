@@ -1,5 +1,6 @@
 'use client'
 
+import { when } from '@/design-system/grid/renderers/format'
 import { useEffect, useState } from 'react'
 import { Banner, Disclosure, Drawer, Field, KeyValue, Listbox, Pagination, ProgressBar } from '@/design-system/components'
 import { DataGrid } from '@/design-system/grid/datagrid'
@@ -17,7 +18,7 @@ export interface WizardTemplateRow {
   builtIn: boolean; categoryHint: string | null; usageCount: number
   lastUsedAt: string | null; createdAt: string; updatedAt: string; createdBy: string | null
 }
-const stamp = (value: string | null) => value ? new Date(value).toLocaleString() : 'Never'
+const stamp = (value: string | null) => value ? when(value) : 'Never'
 const stack = { display: 'grid', gap: 'var(--nds-space-12)' } as const
 
 async function response<T>(res: Response): Promise<T> {
