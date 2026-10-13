@@ -54,7 +54,7 @@ import { Button, Input, SegmentedControl, Select } from '@/design-system/primiti
 import { useSearchParams } from 'next/navigation'
 import { useRouter } from '@/lib/workspaces/navigation'
 import Link from '@/lib/workspaces/Link'
-import { AlertTriangle, Info, Plus, RefreshCw } from 'lucide-react'
+import { AlertTriangle, Anchor, Info, Plus, RefreshCw } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { useAdsMarketplace, useSharedAdsMarket } from '../../_shell/MarketplaceContext'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
@@ -307,7 +307,7 @@ export function BudgetClient() {
           ? <span className="h10-bud-nobase" title="No baseline captured and no bounds set — relative rules compound from the current value here.">—</span>
           : (
             <span className="h10-bud-base">
-              {r.budgetBaselineCents != null && <em title="Baseline — the anchor relative rules compute from.">⚓ {eur(r.budgetBaselineCents)}</em>}
+              {r.budgetBaselineCents != null && <em title="Baseline — the anchor relative rules compute from."><Anchor size={11} strokeWidth={2} className="nds-cell-glyph" role="img" aria-label="Baseline" /> {eur(r.budgetBaselineCents)}</em>}
               {(r.minBudgetCents != null || r.maxBudgetCents != null) && (
                 <em title="Gate-enforced bounds: a cut below the floor or a raise above the ceiling is denied.">
                   {r.minBudgetCents != null ? eur(r.minBudgetCents) : '—'}·{r.maxBudgetCents != null ? eur(r.maxBudgetCents) : '—'}

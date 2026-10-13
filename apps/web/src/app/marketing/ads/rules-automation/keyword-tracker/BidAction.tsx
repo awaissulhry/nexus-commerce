@@ -336,9 +336,9 @@ export function BidAction({
                 columns={[
                   { key: 'campaign', label: 'Campaign', render: (t) => <span title={t.campaignName}>{t.campaignName}</span> },
                   { key: 'match', label: 'Match', render: (t) => <>{t.matchType.toLowerCase()}</> },
-                  { key: 'now', label: 'Now', align: 'right', render: (t) => <>{eur(t.fromCents)}</> },
-                  { key: 'proposed', label: 'Proposed', align: 'right', render: (t) => <b>{eur(t.toCents)}</b> },
-                  { key: 'cap', label: 'Cap', align: 'right', render: (t) => <>{eur(t.maxBidCents)}</> },
+                  { key: 'now', label: 'Now', numeric: true, render: (t) => <>{eur(t.fromCents)}</> },
+                  { key: 'proposed', label: 'Proposed', numeric: true, render: (t) => <b>{eur(t.toCents)}</b> },
+                  { key: 'cap', label: 'Cap', numeric: true, render: (t) => <>{eur(t.maxBidCents)}</> },
                 ]}
               />
               {p.sampleTargetsTruncated && (

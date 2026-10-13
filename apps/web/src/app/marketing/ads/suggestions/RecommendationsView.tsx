@@ -26,7 +26,7 @@
  * Status filter's tip says so.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Sparkles, AlertTriangle, Check, X, ChevronRight, RefreshCw, Pause, Volume2 } from 'lucide-react'
+import { Sparkles, AlertTriangle, Check, X, ChevronRight, RefreshCw, Pause, Volume2, Diamond } from 'lucide-react'
 import { AdsDataGrid, type GridColumn, type GridFilter, type FilterState } from '../campaigns/_grid/AdsDataGrid'
 import { AdsFilterBar } from '../campaigns/_grid/AdsFilterBar'
 import { useMergedFilters } from '../rules-automation/_shared/useMergedFilters'
@@ -42,7 +42,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { eur2, pct, intl, roas as roasFmt } from '../_canvas/format'
 import { dash, eur, AcosCell, RoasCell, type SuggestionMetrics } from './cells'
 import { ApproveHoverCard, type HoverContent } from './ApproveHoverCard'
-import type { RecMetrics } from '@/app/_shared/ads-ui'
+import type { RecMetrics } from './_shared/types'
 import '../recommendations/recommendations.css'
 
 type RecCategory = 'bid' | 'negative' | 'graduate' | 'budget' | 'sov' | 'retail'
@@ -266,11 +266,11 @@ export function RecommendationsView({ status, rowParam, writeUrl }: {
        * 🔴 SGX — one column, five different kinds of number. It used to render all of them as
        * "estimated monthly € impact if applied", which is false for the largest of them: a
        * `graduate` row's figure is the sales the term has ALREADY earned, so €665.53 read as
-       * "+€665.53/month" when graduating only moves that revenue into a managed target. The ♦
+       * "+€665.53/month" when graduating only moves that revenue into a managed target. The diamond
        * and the per-row reading are the family tabs' StakeCell treatment, brought here.
        */
       key: 'impact', label: 'Impact €/mo', metric: true, sortable: true,
-      tip: 'What this recommendation puts in play each month — and NOT all the same kind of number: ♦ marks spend that bought nothing (cutting it costs no revenue), a plain figure on a graduate row is revenue that already exists and would simply be taken over by a managed keyword, and the rest are spend that would be redirected or a modelled estimate. Hover any row for its own reading. Share-of-voice signals carry no € estimate.',
+      tip: 'What this recommendation puts in play each month — and NOT all the same kind of number: the diamond marks spend that bought nothing (cutting it costs no revenue), a plain figure on a graduate row is revenue that already exists and would simply be taken over by a managed keyword, and the rest are spend that would be redirected or a modelled estimate. Hover any row for its own reading. Share-of-voice signals carry no € estimate.',
       sortValue: (r) => (r.category !== 'sov' && r.estImpactCents > 0 ? r.estImpactCents : null),
       render: (r) => {
         if (r.category === 'sov' || r.estImpactCents <= 0) {
@@ -287,7 +287,7 @@ export function RecommendationsView({ status, rowParam, writeUrl }: {
         const k = READ[r.impactKind ?? ''] ?? { cls: '', title: `${money} a month, as the engine ranks it.` }
         return (
           <span className={`h10-sug-stake ${k.cls}`} title={k.title}>
-            {k.cls === 'waste' && <span className="dia" aria-label="pure waste">♦</span>}
+            {k.cls === 'waste' && <Diamond size={10} fill="currentColor" strokeWidth={2} className="dia" role="img" aria-label="Pure waste" />}
             {money}
           </span>
         )

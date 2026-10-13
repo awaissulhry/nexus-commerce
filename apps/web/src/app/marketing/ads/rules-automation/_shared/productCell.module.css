@@ -1,6 +1,6 @@
 /*
- * Keyword Harvest page, Sources view (2026-10-11) — layout only, design-system tokens only. A long name gets a second
- * line before it is cut (re-audit S14): product titles and a single rule's name.
+ * The Rules & Automation product cell (`ProductCell.tsx`) — layout only, design-system tokens only. A long name gets a
+ * second line before it is cut (re-audit S14): product titles, and a single rule's name on Keyword Harvest › Sources.
  */
 .clamp2 {
   display: -webkit-box;

@@ -333,8 +333,8 @@ export function PlcBulkPanel({ scope, lane, onClose, onDone }: {
                 columns={[
                   { key: 'campaign', label: 'Campaign', render: (r) => (<>{r.name}<br /><span className="h10-plc3-sub">{r.marketplace ?? '—'} · {r.status.toLowerCase()}</span></>) },
                   { key: 'owner', label: 'Steered by', render: (r) => (r.owner === 'none' ? <span className="h10-plc3-nobody">nobody</span> : <>{r.ownerLabel ?? r.owner}</>) },
-                  { key: 'lane', label: LANE_LABEL[laneSel], align: 'right', render: (r) => (<>{r.current[laneSel]}% → <b>{r.proposed[laneSel]}%</b></>) },
-                  { key: 'eff', label: 'Effective bid', align: 'right', render: (r) => (r.effectiveBidBefore == null
+                  { key: 'lane', label: LANE_LABEL[laneSel], numeric: true, render: (r) => (<>{r.current[laneSel]}% → <b>{r.proposed[laneSel]}%</b></>) },
+                  { key: 'eff', label: 'Effective bid', numeric: true, render: (r) => (r.effectiveBidBefore == null
                     ? <span className="h10-plc3-nobase">no base bid</span>
                     : <>{eur(r.effectiveBidBefore)} → {eur(r.effectiveBidAfter!)}</>) },
                   { key: 'verdict', label: 'Verdict', render: (r) => (r.skip

@@ -1,3 +1,10 @@
+## `RequiredValue` draws the outline warn glyph — 2026-10-13
+
+Grid audit wave 4, PR13 chunk 1 (E13). `RequiredValue` ("required" on an empty cell a channel requires) drew the text
+"⚠", which Windows and Android paint as a colour emoji; it now draws `WarnGlyph` (the outline triangle the Matrix uses)
+before the word. Its name stays "Required". The product sheet (`MasterSheet.tsx`) uses the component instead of its own
+copy of the span. Mirrored in `apps/factory` (identical file).
+
 ## A table window fills a phone; a DataGrid's second pinned column stays on its row — 2026-10-13
 
 Grid audit wave 3 (the Publish review).
