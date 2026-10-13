@@ -183,11 +183,18 @@ export function editorModeForRow(row: { isParent: boolean }): 'matrix' | 'list' 
 /** One key per (product, location) cell. */
 export const pendingKey = (productId: string, locationId: string) => `${productId}:${locationId}`
 
-export type PendingEdits = ReadonlyMap<string, number>
+/**
+ * One typed on-hand: the `value`, and `seen` — the server's on-hand the cell showed when the person
+ * first typed over it (the base of their change). A live re-read moves the server number under the
+ * edit but never the base, so Apply sends the base the person decided on (`expected`), and a sale
+ * in between is refused by the server instead of being overwritten.
+ */
+export interface PendingEdit { value: number; seen: number }
+export type PendingEdits = ReadonlyMap<string, PendingEdit>
 
 /** The on-hand the grid shows: the pending value if there is one, else the server's. */
 export function onHandOf(row: MatrixRow, locationId: string, pending: PendingEdits): number {
-  return pending.get(pendingKey(row.productId, locationId)) ?? row.cells[locationId]?.quantity ?? 0
+  return pending.get(pendingKey(row.productId, locationId))?.value ?? row.cells[locationId]?.quantity ?? 0
 }
 
 /** Available follows on-hand live: on-hand − reserved, never below zero. */
@@ -196,33 +203,62 @@ export function availableOf(row: MatrixRow, locationId: string, pending: Pending
   return Math.max(0, onHandOf(row, locationId, pending) - reserved)
 }
 
-/** The change a pending value represents against the server's number; 0 when none. */
+/** The change the person made: the pending value against the base they saw (`seen`); 0 when none. */
 export function deltaOf(row: MatrixRow, locationId: string, pending: PendingEdits): number {
-  const v = pending.get(pendingKey(row.productId, locationId))
-  if (v === undefined) return 0
-  return v - (row.cells[locationId]?.quantity ?? 0)
+  const edit = pending.get(pendingKey(row.productId, locationId))
+  if (edit === undefined) return 0
+  return edit.value - edit.seen
 }
 
 /**
- * Record a typed value. A value equal to the server's is NOT a change — it clears any pending
- * edit for that cell, so "change and change back" leaves nothing to apply. Invalid values
- * (negative, fractional, NaN) are refused: the map is returned untouched.
+ * Record a typed value. The base (`seen`) is the server's on-hand when the cell was first typed
+ * over, and later keystrokes keep it. A value equal to the base is NOT a change — it clears the
+ * pending edit, so "change and change back" leaves nothing to apply. Invalid values (negative,
+ * fractional, NaN) are refused: the map is returned untouched.
  */
-export function withEdit(pending: PendingEdits, row: MatrixRow, locationId: string, value: unknown): Map<string, number> {
+export function withEdit(pending: PendingEdits, row: MatrixRow, locationId: string, value: unknown): Map<string, PendingEdit> {
   const next = new Map(pending)
   const n = typeof value === 'number' ? value : Number(String(value ?? '').trim())
   if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) return next
   const key = pendingKey(row.productId, locationId)
-  if (n === (row.cells[locationId]?.quantity ?? 0)) next.delete(key)
-  else next.set(key, n)
+  const seen = pending.get(key)?.seen ?? row.cells[locationId]?.quantity ?? 0
+  if (n === seen) next.delete(key)
+  else next.set(key, { value: n, seen })
+  return next
+}
+
+/** One answer of the batch, as far as the pending edits care. */
+export interface ApplyAnswer { productId: string; locationId: string; ok: boolean; code?: string; current?: number }
+
+/**
+ * After an Apply: only the refused cells stay pending. A cell refused because the on-hand moved
+ * since the person saw it (STALE_ON_HAND) keeps their value on the number the server holds now —
+ * its base moves to `current`, the chip shows the change from there, and the next Apply is a new
+ * decision on the real number.
+ */
+export function keepRefusedEdits(pending: PendingEdits, answers: readonly ApplyAnswer[]): Map<string, PendingEdit> {
+  const next = new Map<string, PendingEdit>()
+  for (const a of answers) {
+    if (a.ok) continue
+    const key = pendingKey(a.productId, a.locationId)
+    const edit = pending.get(key)
+    if (!edit) continue
+    if (a.code === 'STALE_ON_HAND' && typeof a.current === 'number') {
+      if (edit.value !== a.current) next.set(key, { value: edit.value, seen: a.current })
+    } else {
+      next.set(key, edit)
+    }
+  }
   return next
 }
 
 /**
  * One changed cell as the server receives it: an absolute on-hand, absolute sealed counts of the
- * sizes typed there (the other sizes keep theirs), or both.
+ * sizes typed there (the other sizes keep theirs), or both. A new on-hand carries `expected`, the
+ * base the person saw when they typed it (`PendingEdit.seen`): a sale or another person's change
+ * since then refuses the cell (STALE_ON_HAND) instead of being overwritten.
  */
-export interface CellChange { productId: string; locationId: string; value?: number; cases?: CaseCount[] }
+export interface CellChange { productId: string; locationId: string; value?: number; expected?: number; cases?: CaseCount[] }
 
 const splitKey = (key: string) => {
   const i = key.indexOf(':')
@@ -247,13 +283,13 @@ export function casesCells(pendingCases: PendingCases): Set<string> {
 /**
  * The batch the server receives: ONE change per cell, carrying its on-hand and its typed sealed
  * counts when either is pending — so the server writes them in one transaction and checks the
- * counts against the NEW units.
+ * counts against the NEW units. Each on-hand carries the base the person saw (`expected`).
  */
 export function changesOf(pending: PendingEdits, pendingCases: PendingCases = new Map()): CellChange[] {
   const caseCells = casesCells(pendingCases)
-  const out: CellChange[] = [...pending.entries()].map(([key, value]) => {
+  const out: CellChange[] = [...pending.entries()].map(([key, edit]) => {
     const cases = caseCells.has(key) ? typedAt(pendingCases, key) : null
-    return { ...splitKey(key), value, ...(cases ? { cases } : {}) }
+    return { ...splitKey(key), value: edit.value, expected: edit.seen, ...(cases ? { cases } : {}) }
   })
   for (const key of caseCells) if (!pending.has(key)) out.push({ ...splitKey(key), cases: typedAt(pendingCases, key) })
   return out

@@ -211,7 +211,8 @@ const setStock: AgentTool = {
     const failed: string[] = []
     for (const line of plan.lines) {
       try {
-        await adjustOneLocation({ productId: line.productId, locationId: line.locationId, value: line.to, reason: plan.reason, notes: plan.note ?? undefined, actor: ctx.userId ?? 'agent:set-stock' })
+        // `expected`: the count the plan just read — a sale between that read and this write refuses the row (STALE_ON_HAND).
+        await adjustOneLocation({ productId: line.productId, locationId: line.locationId, value: line.to, expected: line.from, reason: plan.reason, notes: plan.note ?? undefined, actor: ctx.userId ?? 'agent:set-stock' })
         done.push(line)
       } catch (error) {
         failed.push(`${line.sku} at ${line.location}: ${error instanceof Error ? error.message : String(error)}`)

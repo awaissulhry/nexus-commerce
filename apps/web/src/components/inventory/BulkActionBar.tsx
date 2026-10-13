@@ -3,7 +3,9 @@
 import { useState } from "react";
 import type { Table } from "@tanstack/react-table";
 import type { InventoryItem } from "@/types/inventory";
-import { bulkUpdateItems } from "@/app/inventory/manage/actions";
+import { getBackendUrl } from "@/lib/backend-url";
+import { useRouter } from "@/lib/workspaces/navigation";
+import { pauseOutcomeOf } from "./pauseOutcome";
 
 interface BulkActionBarProps {
   table: Table<InventoryItem>;
@@ -20,6 +22,7 @@ export default function BulkActionBar({ table }: BulkActionBarProps) {
   const [loading, setLoading] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const router = useRouter();
 
   const selectedRows = table.getFilteredSelectedRowModel().rows;
   const count = selectedRows.length;
@@ -31,30 +34,43 @@ export default function BulkActionBar({ table }: BulkActionBarProps) {
   const selectedSkus = selectedRows.map((row) => row.original.sku);
 
   // Toast helper
-  const showToast = (type: "success" | "error" | "info", message: string) => {
+  const showToast = (type: "success" | "error" | "info", message: string, durationMs = 5000) => {
     const id = Date.now().toString();
     setToasts((prev) => [...prev, { id, type, message }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 5000);
+    }, durationMs);
   };
 
+  // Pause = a real, recorded stock change (POST /api/stock/pause): each own-warehouse level of the selected products
+  // and their whole family goes to its reserved count (nothing left to sell), one audited movement each, cascaded to
+  // every listing that follows stock. Amazon FBA units are never written. The toast says exactly what ran.
   const handlePause = async () => {
-    if (selectedSkus.length === 0) return;
+    if (selectedIds.length === 0) return;
     setLoading(true);
     setDropdownOpen(false);
 
     try {
-      const result = await bulkUpdateItems(selectedSkus, "pause");
-      if (result.success) {
-        showToast("success", `✓ Successfully paused ${result.affected} listing${result.affected !== 1 ? "s" : ""}`);
+      const res = await fetch(`${getBackendUrl()}/api/stock/pause`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productIds: selectedIds }),
+      });
+      const result = await res.json().catch(() => ({}));
+      if (res.ok && result.ok) {
+        const outcome = pauseOutcomeOf(result);
+        showToast(outcome.tone, outcome.message, outcome.tone === "error" ? 15000 : 8000);
         table.resetRowSelection();
+        router.refresh();
       } else {
-        showToast("error", `✗ Failed to pause listings: ${result.error || "Unknown error"}`);
+        // Refused before anything ran (bad or too large a selection): nothing was changed.
+        showToast("error", `✗ Nothing was paused: ${result.error || `HTTP ${res.status}`}`, 10000);
       }
     } catch (err) {
+      // No answer: part of it may have run. Say so, and show the real numbers.
       const errorMsg = err instanceof Error ? err.message : "Unknown error occurred";
-      showToast("error", `✗ Pause failed: ${errorMsg}`);
+      showToast("error", `✗ Pause did not answer (${errorMsg}). Some stock may have changed: the page is reloaded to show the real numbers.`, 15000);
+      router.refresh();
     } finally {
       setLoading(false);
     }
