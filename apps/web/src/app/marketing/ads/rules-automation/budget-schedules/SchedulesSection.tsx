@@ -392,7 +392,6 @@ export function SchedulesSection({ market }: { market?: string }) {
         searchable
         searchPlaceholder="Search schedules…"
         searchValue={(r) => r.name}
-        pagerCentered
         defaultSort={{ key: 'startDate', dir: 'desc' }}
         emptyLabel={scope && total > 0
           ? `No budget schedules reach ${scope} — ${total} exist${total === 1 ? 's' : ''} on other markets`
