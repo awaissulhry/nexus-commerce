@@ -1,0 +1,3 @@
+/* The mapping impact review's table (grid audit wave 3): words wrap and values are whole, a list one item per line. */
+.lines { display: flex; flex-direction: column; gap: var(--nds-space-2); white-space: normal; overflow-wrap: anywhere; min-width: 0; }
+.value { white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; }

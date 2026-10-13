@@ -6,9 +6,12 @@ import { productWorkspaceHref } from '@/app/_shared/product-workspace-href'
 import { Banner, KeyValue, Pagination, ProgressBar } from '@/design-system/components'
 import { DataGrid } from '@/design-system/grid/datagrid'
 import { Button } from '@/design-system/primitives'
+import { inlineValue, plainValue } from '@/design-system/lib/format'
 import * as api from './api'
+import styles from './impactReview.module.css'
 
-const value = (v: unknown) => v == null ? 'Missing' : typeof v === 'object' ? JSON.stringify(v) : String(v)
+// A value in plain words, whole — never raw JSON (grid audit wave 3, D10).
+const value = (v: unknown) => v == null ? 'Missing' : plainValue(v)
 
 /** Review of a durable mapping operation, also reachable directly by its job URL. */
 export function ImpactReview({ jobId, onApplied }: { jobId: string; onApplied?: () => void | Promise<void> }) {
@@ -42,8 +45,8 @@ export function ImpactReview({ jobId, onApplied }: { jobId: string; onApplied?: 
     {error && <Banner tone="danger" title="Review could not complete">{error}</Banner>}
     {!impact ? <ProgressBar indeterminate ariaLabel="Loading mapping impact" /> : <>
       <Banner tone="info" title={impact.categoryChange ? 'Apply this category assignment' : 'Keep applying this rule to matching records'}>
-        {impact.channel} · {impact.market} · {impact.categoryChange ? 'Selected internal category and its inheriting products' : impact.category ? `Marketplace category ${impact.category}` : 'All marketplace categories'} · {impact.presentationChange?.rule?.scope.accountId ? `Account ${impact.presentationChange.rule.scope.accountId}` : 'All accounts'}.
-        {impact.presentationChange?.rule && ` Matching criteria: ${JSON.stringify(impact.presentationChange.rule.scope)}. Priority ${impact.presentationChange.rule.priority}.`}
+        {impact.channel} · {impact.market} · {impact.categoryChange ? 'Selected internal category and its inheriting products' : impact.category ? `Marketplace category ${impact.category}` : 'All marketplace categories'} · {impact.presentationChange?.rule?.scope.accountId ? 'One account only' : 'All accounts'}.
+        {impact.presentationChange?.rule && ` Matching criteria: ${inlineValue(impact.presentationChange.rule.scope)}. Priority ${impact.presentationChange.rule.priority}.`}
         Applies to current and future matching products. Changes derived listing data; shared facts and explicit overrides are preserved. Publication is a separate step.
       </Banner>
       {impact.state === 'MAPPING_SCANNING' && <>
@@ -70,12 +73,14 @@ export function ImpactReview({ jobId, onApplied }: { jobId: string; onApplied?: 
       {impact.cloneSource && <p>Clone source: {impact.cloneSource.channel} · {impact.cloneSource.market}. {impact.cloneSource.cloned} fields copied. Excluded fields absent from the target schema: {impact.cloneSource.skippedFields?.join(', ') || 'None'}.</p>}
       <p>{impact.inputPolicy}</p>
       <p>Rule version {impact.version}. Review started {new Date(impact.createdAt).toLocaleString()}. The table shows one batch; use the page controls to inspect the complete scanned set.</p>
-      <DataGrid ariaLabel="Mapping impact by destination" rows={impact.rows} rowKey={r => JSON.stringify([r.productId, r.listingId, r.field])} columns={[
-        { key: 'product', label: 'Product / destination', render: r => <><Button asChild inline variant="link"><Link href={productWorkspaceHref({ productId: r.productId, id: r.listingId ?? undefined, channel: impact.channel, marketplace: impact.market, channelConnectionId: r.accountId, aliasKey: r.aliasKey }, r.field)}>{r.sku}</Link></Button><div>{r.listingId ?? 'No listing yet'}{r.accountId ? ` · ${r.accountId}` : ''} · {r.market ?? impact.market} · {r.language ?? 'Market language'}</div></> },
-        { key: 'field', label: 'Field', render: r => r.field },
-        { key: 'before', label: 'Before', render: r => value(r.before) },
-        { key: 'after', label: 'After', render: r => value(r.after) },
-        { key: 'result', label: 'Result', render: r => r.errors.join(' · ') || (r.preserved ? 'Override preserved' : r.changed ? 'Will change' : 'Unchanged') },
+      {/* Now → New, whole and wrapping, in columns that fit the window (grid audit wave 3, D10): the listing in words, not its
+          raw id or the account's. */}
+      <DataGrid ariaLabel="Mapping impact by destination" size="md" headerMenus={false} rows={impact.rows} rowKey={r => JSON.stringify([r.productId, r.listingId, r.field])} columns={[
+        { key: 'product', label: 'Product / destination', width: 200, render: r => <span className={styles.lines}><Button asChild inline variant="link"><Link href={productWorkspaceHref({ productId: r.productId, id: r.listingId ?? undefined, channel: impact.channel, marketplace: impact.market, channelConnectionId: r.accountId, aliasKey: r.aliasKey }, r.field)}>{r.sku}</Link></Button><span>{r.listingId ? 'Existing listing' : 'No listing yet'} · {r.market ?? impact.market} · {r.language ?? 'Market language'}</span></span> },
+        { key: 'field', label: 'Field', width: 140, render: r => <span className={styles.lines}>{r.field}</span> },
+        { key: 'before', label: 'Before', width: 200, render: r => <span className={styles.value}>{value(r.before)}</span> },
+        { key: 'after', label: 'After', width: 200, render: r => <span className={styles.value}>{value(r.after)}</span> },
+        { key: 'result', label: 'Result', width: 120, render: r => <span className={styles.lines}>{r.errors.join(' · ') || (r.preserved ? 'Override preserved' : r.changed ? 'Will change' : 'Unchanged')}</span> },
       ]} />
       {impact.pages > 1 && <Pagination page={page + 1} pageCount={impact.pages} onPage={p => setPage(p - 1)} />}
       {impact.state === 'MAPPING_APPLIED' ? <Banner tone="success" title={impact.categoryChange ? 'Category assignment activated' : 'Rule activated'}>Matching products use this rule on their next resolution. No listings were published.</Banner>

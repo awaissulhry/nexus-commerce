@@ -12,6 +12,7 @@
  */
 import { isPhotoChangeId, type StudioPublishChange, type StudioPublishIssue, type StudioPublishRemoval, type StudioPublishReview, type StudioPublishValue } from '@nexus/shared/studio-publication'
 import type { Tone } from '@/design-system/primitives/tone'
+import { plainValue } from '@/design-system/lib/format'
 import type { ActionPlanRow } from './actionPlan'
 import { destinationStateLabel, type DestinationState } from './destinations'
 import { publicationProblems } from './model'
@@ -193,32 +194,6 @@ export function valueText(value: StudioPublishValue): string {
   if (value.state === 'unknown') return `Unknown — ${value.reason}`
   if (value.state === 'absent') return 'Not set'
   return plainValue(value.value)
-}
-
-function plainValue(value: unknown): string {
-  if (value === null || value === undefined) return 'Empty'
-  if (typeof value === 'string') return value.trim() === '' ? '(empty text)' : value
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
-  if (Array.isArray(value)) {
-    if (!value.length) return 'Empty list'
-    return value.map(item => `• ${inline(item)}`).join('\n')
-  }
-  if (typeof value === 'object') {
-    const entries = Object.entries(value as Record<string, unknown>)
-    if (!entries.length) return 'Empty'
-    return entries.map(([key, item]) => `${key}: ${inline(item)}`).join('\n')
-  }
-  return String(value)
-}
-
-/** One item on one line: a nested list or object reads "a, b" / "key: value; key: value". */
-function inline(value: unknown): string {
-  if (value === null || value === undefined) return 'Empty'
-  if (typeof value === 'string') return value
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
-  if (Array.isArray(value)) return value.map(inline).join(', ')
-  if (typeof value === 'object') return Object.entries(value as Record<string, unknown>).map(([k, v]) => `${k}: ${inline(v)}`).join('; ')
-  return String(value)
 }
 
 /**
