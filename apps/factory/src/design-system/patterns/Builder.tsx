@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { Button } from '@/design-system/primitives'
+import { useHydrated } from '../components/useHydrated'
 
 export interface BuilderSection {
   id: string
@@ -29,6 +30,7 @@ export interface BuilderProps {
  * Portaled to <body>; Esc closes. The spine for the rule/goal/campaign builders.
  */
 export function Builder({ open, onClose, title, sections, primaryLabel = 'Save', onPrimary, busy, className }: BuilderProps) {
+  const hydrated = useHydrated()
   const [active, setActive] = useState<string | undefined>(sections[0]?.id)
   const contentRef = useRef<HTMLDivElement>(null)
 
@@ -42,7 +44,7 @@ export function Builder({ open, onClose, title, sections, primaryLabel = 'Save',
   }, [open, onClose])
 
   useEffect(() => {
-    if (!open) return
+    if (!open || !hydrated) return
     const el = contentRef.current
     if (!el) return
     const onScroll = () => {
@@ -56,7 +58,7 @@ export function Builder({ open, onClose, title, sections, primaryLabel = 'Save',
     }
     el.addEventListener('scroll', onScroll)
     return () => el.removeEventListener('scroll', onScroll)
-  }, [open, sections])
+  }, [open, hydrated, sections])
 
   const goTo = (id: string) => {
     const el = contentRef.current
@@ -65,7 +67,7 @@ export function Builder({ open, onClose, title, sections, primaryLabel = 'Save',
     setActive(id)
   }
 
-  if (!open || typeof document === 'undefined') return null
+  if (!open || !hydrated) return null
 
   return createPortal(
     <div className={`nds-builder${className ? ` ${className}` : ''}`} role="dialog" aria-modal="true">

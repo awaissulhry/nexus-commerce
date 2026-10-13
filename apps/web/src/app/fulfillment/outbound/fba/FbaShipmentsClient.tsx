@@ -20,7 +20,6 @@ import { FBA_PLAN_VIEWS, FBA_SEND_COPY, type FbaPlanListView, type FbaPlanView }
 
 import { Banner, EmptyState, ProgressBar, ResourcePickerDialog, Tabs, ToastProvider, tabPanelProps, useToast } from '@/design-system/components'
 import type { MediaChoice } from '@/design-system/lib/media-choice'
-// The DS grid's DataGrid (AG Grid, the same props) — the retiring `components/DataGrid` is on the grid-kit ratchet.
 import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { PageHeader } from '@/design-system/patterns'
 import { Button, Pill } from '@/design-system/primitives'

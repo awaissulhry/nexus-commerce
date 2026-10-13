@@ -22,7 +22,6 @@ import { FBA_SEND_COPY, type FbaSendDraft, type FbaSendLine, type FbaSendSku, ty
 import type { CaseOwner } from '@nexus/shared/stock-cases'
 
 import { Banner, DateField, Disclosure, EmptyState, Field, Listbox } from '@/design-system/components'
-// The DS grid's DataGrid (AG Grid, the same props) — the retiring `components/DataGrid` is on the grid-kit ratchet.
 import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { Input, NumberStepper, Pill, SegmentedControl, ToolbarButton } from '@/design-system/primitives'
 
