@@ -25,6 +25,7 @@ import { AgSearchTermsTab } from './tabs/AgSearchTermsTab'
 import { AgNegativesTab } from './tabs/AgNegativesTab'
 import { AgAdsTab } from './tabs/AgAdsTab'
 import { useAdsMarketplace } from '../../../../_shell/MarketplaceContext'
+import { latestRead } from '../../../../_shared/latestRead'
 
 export interface AdGroupDetailData {
   id: string
@@ -72,22 +73,30 @@ function AdGroupDetailView({ campaignId, adGroupId }: { campaignId: string; adGr
   const [dateRange, setDateRange] = useState(() => lastCompleteDays(30)) // AM-16 — complete days, ending yesterday
   const [market, setMarket] = useState('all')
 
-  const load = useCallback(async () => {
+  /**
+   * Editing correctness (group 3) — `fresh` after a tab's own save (and on "Refresh data"): the server skips its cached
+   * copy, which can still be the one from before the save (as CM-34 on the campaign page). The read ticket: only the
+   * newest read shows, so a read that started before the save never paints the old values over the saved ones.
+   */
+  const [beginRead] = useState(latestRead)
+  const load = useCallback(async (fresh = false) => {
+    const current = beginRead()
     setLoading(true); setError(null)
     try {
-      const qs = `?startDate=${fmtISO(dateRange.start)}&endDate=${fmtISO(dateRange.end)}`
+      const qs = `?startDate=${fmtISO(dateRange.start)}&endDate=${fmtISO(dateRange.end)}${fresh ? '&fresh=1' : ''}`
       const r = await fetch(`${getBackendUrl()}/api/advertising/ad-groups/${adGroupId}${qs}`, { cache: 'no-store' })
       if (!r.ok) throw new Error(`HTTP ${r.status}`)
       const d = await r.json()
+      if (!current()) return
       const a = (d.adGroup ?? d) as AdGroupDetailData
       setAg(a)
       if (a?.campaign?.marketplace) setMarket(a.campaign.marketplace)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load ad group')
+      if (current()) setError(e instanceof Error ? e.message : 'Failed to load ad group')
     } finally {
-      setLoading(false)
+      if (current()) setLoading(false)
     }
-  }, [adGroupId, dateRange])
+  }, [adGroupId, dateRange, beginRead])
 
   useEffect(() => { void load() }, [load])
 
@@ -118,7 +127,7 @@ function AdGroupDetailView({ campaignId, adGroupId }: { campaignId: string; adGr
         dateRange={dateRange}
         onDateRange={(s, e) => setDateRange({ start: s, end: e })}
         actions={[
-          { label: 'Refresh data', onClick: () => void load() },
+          { label: 'Refresh data', onClick: () => void load(true) },
           { label: 'View Campaign', href: backHref },
         ]}
       />
@@ -144,15 +153,15 @@ function AdGroupDetailView({ campaignId, adGroupId }: { campaignId: string; adGr
           : loading && !ag
             ? <TabSkeleton loading />
             : activeTab === 'targets'
-              ? <TargetsTab adGroup={ag} onRefresh={() => void load()} focus={focus} />
+              ? <TargetsTab adGroup={ag} onRefresh={() => void load(true)} focus={focus} />
               : activeTab === 'search-terms'
                 ? <AgSearchTermsTab adGroup={ag} dateRange={dateRange} focus={focus} />
                 : activeTab === 'ad-group-negative-targets'
-                  ? <AgNegativesTab adGroup={ag} mode="targets" onRefresh={() => void load()} focus={focus} />
+                  ? <AgNegativesTab adGroup={ag} mode="targets" onRefresh={() => void load(true)} focus={focus} />
                   : activeTab === 'ad-group-negative-keywords'
-                    ? <AgNegativesTab adGroup={ag} mode="keywords" onRefresh={() => void load()} focus={focus} />
+                    ? <AgNegativesTab adGroup={ag} mode="keywords" onRefresh={() => void load(true)} focus={focus} />
                     : activeTab === 'ads'
-                      ? <AgAdsTab adGroup={ag} onRefresh={() => void load()} />
+                      ? <AgAdsTab adGroup={ag} onRefresh={() => void load(true)} />
                       : <TabSkeleton loading={loading} />}
       </div>
     </div>

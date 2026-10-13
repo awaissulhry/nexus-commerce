@@ -332,6 +332,7 @@ const keywordActionsRoutes = async (fastify: FastifyInstance): Promise<void> => 
       actor: `user:${who}`,
       reason: 'Keyword Tracker: undone by the operator',
       manual: true, // 1e — the Undo button is a person's click (isPersonEdit)
+      onlyIfStillStands: true, // editing correctness (group 3) — never over a newer write ("Changed since: now …")
     })
     if (!r.ok || r.reversed === 0) {
       reply.status(409)
@@ -344,7 +345,8 @@ const keywordActionsRoutes = async (fastify: FastifyInstance): Promise<void> => 
         reversed: r.reversed, skipped: r.skipped, failed: r.failed,
       }
     }
-    return { reversed: r.reversed, skipped: r.skipped, failed: r.failed, details: r.details }
+    // Group 3 review — a set some rows of which changed since: they were not put back, and the answer says so.
+    return { reversed: r.reversed, skipped: r.skipped, failed: r.failed, details: r.details, ...(r.changedSince ? { changedSince: r.changedSince, reason: r.reason } : {}) }
   })
 
   /**

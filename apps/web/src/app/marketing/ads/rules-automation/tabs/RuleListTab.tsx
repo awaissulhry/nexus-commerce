@@ -271,6 +271,8 @@ const STATUS_TONE: Record<string, string> = { SUCCESS: 'ok', DRY_RUN: 'dry', PAR
 const ROLLBACK_WINDOW_MS = 24 * 60 * 60 * 1000
 interface RollbackResult {
   ok: boolean; reversed: number; skipped: number; failed: number
+  /** Group 3 — rows not put back because they changed since; `reason` says which ("Changed since: now …"). */
+  changedSince?: number; reason?: string
   details: Array<{ actionLogId: string; actionType: string; entityType: string; entityId: string; outcome: 'REVERSED' | 'SKIPPED' | 'FAILED'; reason?: string }>
 }
 const rollbackable = (e: ExecRow) =>
@@ -343,7 +345,7 @@ export function HistoryDrawer({ rule, onClose }: { rule: { id: string; name: str
                     {e.errorMessage ?? summary(e)}
                     {done && (
                       <em className="h10-hist-undone">
-                        Rolled back — {done.reversed} reversed{done.skipped ? ` · ${done.skipped} skipped` : ''}{done.failed ? ` · ${done.failed} failed` : ''}
+                        Rolled back — {done.reversed} reversed{done.skipped ? ` · ${done.skipped} skipped` : ''}{done.failed ? ` · ${done.failed} failed` : ''}{done.changedSince && done.reason ? ` · ${done.reason}` : ''}
                       </em>
                     )}
                   </span>

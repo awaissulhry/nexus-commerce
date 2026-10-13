@@ -16,7 +16,8 @@ import { AddKeywordsTargetsModal } from './AddKeywordsTargetsModal'
 import { AdsDataGrid, type GridColumn, type GridFilter, type GridEditMode } from '../../../../_grid/AdsDataGrid'
 import { num, eur, int, STATUS_PILL, latestReportLabel, METRIC_TIPS, acosRank, acosFilterValue } from '../../../../_grid/format'
 import { pickMetricFilters } from '../../../../_grid/filters'
-import { bulkPatch, AdjustBidModal } from '../../../../_grid/bulkActions'
+import { bulkBid, bulkPatch, AdjustBidModal } from '../../../../_grid/bulkActions'
+import { mergeEach, splitTargetEdits } from '../../../../_grid/targetBids'
 import { ArchiveConfirm } from '../../../../../_shared/ArchiveConfirm'
 import { StatusOptions, AD_STATUS_OPTS } from '../../../../FilterDropdown'
 import { ColumnNA, naCell } from '../../../../../_shared/RuleColumnCells'
@@ -160,15 +161,16 @@ export function TargetsTab({ adGroup, onRefresh, focus }: { adGroup: AdGroupDeta
       { key: 'status', initial: (r) => r.status, render: (v, set) => <Listbox width="100%" value={v} onChange={set} options={AD_STATUS_OPTS} ariaLabel="Status" />, renderPopover: (v, set) => <StatusOptions value={v} onChange={set} /> },
       { key: 'bid', initial: (r) => (num(r.bidCents) / 100).toFixed(2), render: (v, set) => <div className="h10-edit-money"><span className="cur">€</span><input inputMode="decimal" value={v} onChange={(e) => set(e.target.value)} aria-label="Bid" /></div> },
     ],
+    // Editing correctness (group 3) — every bid of the save in ONE request (bulk-bid, as the Bid page's Change bid), then
+    // each status its own write; a row whose bid box holds no bid sends nothing. Kept-paused asks only for a turn-on.
     onApply: async (edits) => {
-      const res = await adsWriteMany(edits.map((e) => {
-        const body: Record<string, unknown> = { ...SEND_NOW, reason: 'Edit Targets inline' }
-        if (e.values.status != null) body.status = e.values.status
-        if (e.values.bid != null) body.bidCents = Math.round(parseFloat(e.values.bid) * 100)
-        return { id: e.id, path: `/api/advertising/ad-targets/${e.id}`, body }
-      }))
+      const plan = splitTargetEdits(edits)
+      const bids = await bulkBid(plan.bids, 'Edit Targets inline')
+      const statuses = plan.statuses.length
+        ? await adsWriteMany(plan.statuses.map((e) => ({ id: e.id, path: `/api/advertising/ad-targets/${e.id}`, body: { ...SEND_NOW, reason: 'Edit Targets inline', status: e.status } })))
+        : { done: [], queued: 0, failed: [] }
       onRefresh?.()
-      reportRest(askKept(res))
+      reportRest(mergeEach({ done: [], queued: 0, failed: plan.invalid }, bids, askKept(statuses)))
     },
   }), [onRefresh, report, byId]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -202,6 +204,12 @@ export function TargetsTab({ adGroup, onRefresh, focus }: { adGroup: AdGroupDeta
     if (bulkBusy) return
     setBulkBusy(true)
     try { const res = await bulkPatch('ad-targets', ids, body); clear(); onRefresh?.(); if (body.status === 'ENABLED') reportRest(askKept(res)); else report(res) } finally { setBulkBusy(false) }
+  }
+  /** Adjust Bid: the selected targets' bid in ONE request (bulk-bid), as Edit Targets. */
+  const bidEach = async (ids: string[], bidCents: number, clear: () => void) => {
+    if (bulkBusy) return
+    setBulkBusy(true)
+    try { const res = await bulkBid(ids.map((id) => ({ id, bidCents })), 'Bulk adjust bid'); clear(); onRefresh?.(); report(res) } finally { setBulkBusy(false) }
   }
 
   return (
@@ -237,7 +245,7 @@ export function TargetsTab({ adGroup, onRefresh, focus }: { adGroup: AdGroupDeta
     />
     {archiveAsk && <ArchiveConfirm count={archiveAsk.ids.length} noun={['keyword or target', 'keywords and targets']} busy={bulkBusy} onCancel={() => setArchiveAsk(null)}
       onConfirm={() => void patchEach(archiveAsk.ids, { status: 'ARCHIVED', reason: 'Bulk archive' }, archiveAsk.clear).then(() => setArchiveAsk(null))} />}
-    {adjustBid && <AdjustBidModal count={adjustBid.ids.length} noun="target" bidLabel="Bid" onClose={() => setAdjustBid(null)} onApply={(bidEur) => patchEach(adjustBid.ids, { bidCents: Math.round(bidEur * 100), reason: 'Bulk adjust bid' }, adjustBid.clear).then(() => setAdjustBid(null))} />}
+    {adjustBid && <AdjustBidModal count={adjustBid.ids.length} noun="target" bidLabel="Bid" onClose={() => setAdjustBid(null)} onApply={(bidEur) => bidEach(adjustBid.ids, Math.round(bidEur * 100), adjustBid.clear).then(() => setAdjustBid(null))} />}
     {keptAsk && <KeptPausedConfirm items={keptAsk} busy={keptBusy} onCancel={() => setKeptAsk(null)} onConfirm={() => void releaseKept()} />}
     {showAdd && adGroup && <AddKeywordsTargetsModal adGroupId={adGroup.id} adGroupName={adGroup.name} campaignName={adGroup.campaign?.name ?? ''} defaultBidEur={adGroup.defaultBidCents != null ? adGroup.defaultBidCents / 100 : 0.75} onClose={() => setShowAdd(false)} onAdded={() => onRefresh?.()} />}
     </>

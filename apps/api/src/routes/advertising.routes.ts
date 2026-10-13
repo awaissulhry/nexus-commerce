@@ -185,6 +185,11 @@ function cpcCeilingLimits(clamps: Array<{ adTargetId: string; from: number; to: 
   return clamps.map((c) => ({ adTargetId: c.adTargetId, limit: 'cpc_ceiling' as const, reason: `a bid of ${c.from}¢ is above your CPC ceiling of ${c.ceilingCents}¢` }))
 }
 
+/** 3A — the action log's note on a bid a person sent past his CPC ceiling (the one-row PATCH and bulk-bid alike). */
+function cpcPastNote(actor: string, limits: Array<{ reason: string }>): string {
+  return `sent past your CPC ceiling by ${actor}: ${limits.map((l) => l.reason).join('; ')}`
+}
+
 const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // Phase 4 — invalidate the ads read cache after any successful write so an
   // operator never sees a stale number right after an edit. Scoped to this
@@ -346,11 +351,14 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.get('/advertising/ad-groups/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const q = request.query as { windowDays?: string; preset?: string; startDate?: string; endDate?: string }
+    const q = request.query as { windowDays?: string; preset?: string; startDate?: string; endDate?: string; fresh?: string }
     const { resolveRange } = await import('../services/ads-core/date-range.js')
     const range = resolveRange(q)
     const since = range.since
     const windowDays = range.days
+    // Editing correctness (group 3), as CM-34 on the campaign page — `fresh=1`: the ad-group page re-reads right after
+    // its own save (Edit Targets, Adjust Bid, a status); the cached copy can be the one from before the save.
+    const fresh = q.fresh === '1'
 
     const { cached: cachedAg } = await import('../services/advertising/ads-cache.js')
     const agPayload = await cachedAg(`adgroup:${id}:${range.sinceStr}:${range.untilStr}`, 300, async () => {
@@ -444,9 +452,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         dataThrough: trendRaw.length ? trendRaw[trendRaw.length - 1]!.date.toISOString().slice(0, 10) : null,
       },
     }
-    })
+    }, { refresh: fresh })
     if (!agPayload) { reply.code(404); return { error: 'not_found' } }
-    reply.header('Cache-Control', 'private, max-age=20')
+    reply.header('Cache-Control', fresh ? 'no-store' : 'private, max-age=20')
     return agPayload
   })
 
@@ -4766,17 +4774,23 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const job = await prisma.importJob.findUnique({ where: { id } })
     if (!job || job.targetEntity !== 'adsBulksheet') { reply.status(404); return { error: 'not_found' } }
 
-    const { rollbackByChangeSetId } = await import('../services/advertising/rollback.service.js')
+    const { rollbackByChangeSetId, rollbackSummary } = await import('../services/advertising/rollback.service.js')
     const outcome = await rollbackByChangeSetId({
       changeSetId: `import:${id}`,
       actor: actorFromHeaders(request.headers as Record<string, unknown>),
       reason: b.reason ?? `rollback of bulksheet import ${id}`,
       manual: true, // 1e — undoing an upload is a person's click (isPersonEdit)
+      // Editing correctness (group 3) — never over a newer write: per entity, what changed since is refused ("Changed
+      // since: now …", `changedSince` + `reason`); the rest of the upload is put back.
+      onlyIfStillStands: true,
     })
+    // Group 3 review — ROLLED_BACK only when the whole upload went back: a part refused (changed since) or failed keeps
+    // the job's status, so its Undo stays on the Bulk page for the rest, and the summary says what is still standing.
+    const summary = rollbackSummary(outcome)
     if (outcome.reversed > 0) {
-      await prisma.importJob.update({ where: { id }, data: { status: 'ROLLED_BACK', errorSummary: `Rolled back ${outcome.reversed} change(s)` } })
+      await prisma.importJob.update({ where: { id }, data: summary.whole ? { status: 'ROLLED_BACK', errorSummary: summary.words } : { errorSummary: summary.words } })
     }
-    return { importJobId: id, changeSetId: `import:${id}`, ...outcome }
+    return { importJobId: id, changeSetId: `import:${id}`, ...outcome, summary: summary.words }
   })
 
   /**
@@ -6627,6 +6641,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       // reversal rather than as a fresh change.
       reason: `Undo: ${b.reason ?? 'operator undo from the change log'}`,
       manual: true, // 1e — the Undo button is a person's click (isPersonEdit)
+      // Editing correctness (group 3) — never over a newer write: a change that no longer stands is refused, 409 with
+      // "Changed since: now …" (per row of a set; the others are still put back).
+      onlyIfStillStands: true,
     })
     if (!r.ok && !r.reversed) reply.status(409)
     return r
@@ -8989,6 +9006,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       applyImmediately?: boolean
       /** 3A — "Send anyway" past his own limits. */
       confirmOwnLimits?: boolean
+      /** Editing correctness (group 3) — the budget the screen worked `dailyBudget` out from (updateCampaignWithSync). */
+      expectedDailyBudget?: number | null
     }
     const patch: Parameters<typeof updateCampaignWithSync>[0]['patch'] = {}
     if (typeof body.name === 'string' && body.name.trim()) patch.name = body.name.trim()
@@ -9009,9 +9028,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       manual: true, // 1e — a person's own edit from a screen (isPersonEdit)
       askGate: true, // CM-10 — a refusal is answered now, not put back in silence later
       confirmOwnLimits: body.confirmOwnLimits === true, // 3A
+      ...(typeof body.expectedDailyBudget === 'number' ? { expected: { dailyBudget: body.expectedDailyBudget } } : {}),
     })
     if (!result.ok && result.error === 'not_found') {
       reply.code(404)
+      return result
+    }
+    // Editing correctness (group 3) — the budget moved since the screen read it: 409, nothing written.
+    if (!result.ok && result.changedSince) {
+      reply.code(409)
       return result
     }
     ownLimitsReply(reply, result)
@@ -9154,7 +9179,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       askGate: true, // CM-10
       confirmOwnLimits: body.confirmOwnLimits === true, // 3A
       ...(body.releaseKeptPaused === true ? { releaseKeptPaused: true } : {}), // Negative Targeting — a person's own release
-      ...(cpcPast.length ? { evidence: { sentPastOwnLimits: `sent past your CPC ceiling by ${actorFromHeaders(request.headers as Record<string, unknown>)}: ${cpcPast.map((l) => l.reason).join('; ')}` } } : {}),
+      ...(cpcPast.length ? { evidence: { sentPastOwnLimits: cpcPastNote(personActor(request), cpcPast) } } : {}),
     })
     if (!result.ok && result.error === 'not_found') {
       reply.code(404)
@@ -9195,9 +9220,14 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { clamps } = await clampBidsByCeiling(body.entries)
     const overCeiling = confirmOwnLimits ? [] : cpcCeilingLimits(clamps)
     const held = new Set(overCeiling.map((c) => c.adTargetId))
+    // Group 3 review — the signed-in person (the header only when there is none), as the one-row PATCH: the Bid page's
+    // Change bid and the ad-group Targets tab send their bids here, and were logged as `user:anonymous`.
+    const actor = personActor(request)
+    // 3A — a row sent past his CPC ceiling with his "Send anyway" keeps the note the one-row PATCH keeps.
+    const pastCeiling = new Map(confirmOwnLimits ? cpcCeilingLimits(clamps).map((l) => [l.adTargetId, cpcPastNote(actor, [l])] as const) : [])
     const result = await bulkUpdateAdTargetBids({
-      entries: body.entries.filter((e) => !held.has(e.adTargetId)),
-      actor: actorFromHeaders(request.headers as Record<string, unknown>),
+      entries: body.entries.filter((e) => !held.has(e.adTargetId)).map((e) => (pastCeiling.has(e.adTargetId) ? { ...e, evidence: { sentPastOwnLimits: pastCeiling.get(e.adTargetId)! } } : e)),
+      actor,
       reason: body.reason ?? null,
       applyImmediately: body.applyImmediately ?? false,
       manual: true, // 1e — a person's own edit from a screen (isPersonEdit)
@@ -9850,6 +9880,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       actor,
       reason: body?.reason ?? `manual rollback of execution ${executionId}`,
       manual: true, // 1e — a person's Rollback click (isPersonEdit)
+      // Editing correctness (group 3) — never over a newer write, per entity ("Changed since: now …", `changedSince`).
+      onlyIfStillStands: true,
     })
     return result
   })

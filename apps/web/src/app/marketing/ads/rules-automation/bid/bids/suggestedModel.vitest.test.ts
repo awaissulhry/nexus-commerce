@@ -80,9 +80,9 @@ describe('the bulk send\'s answer', () => {
       { ok: true, actionLogId: 'l3', error: null, outboundQueueId: null },
     ] })
     expect(out.results).toEqual([
-      { targetId: 'a', ok: true, words: 'Sent', actionLogId: 'l1' },
-      { targetId: 'b', ok: false, words: 'Nexus refuses bids under 5 cents.', actionLogId: null },
-      { targetId: 'c', ok: true, words: 'Saved', actionLogId: 'l3' },
+      { targetId: 'a', ok: true, words: 'Sent', actionLogId: 'l1', queued: true },
+      { targetId: 'b', ok: false, words: 'Nexus refuses bids under 5 cents.', actionLogId: null, queued: false },
+      { targetId: 'c', ok: true, words: 'Saved', actionLogId: 'l3', queued: false },
     ])
     expect(out.waits).toEqual([])
   })
@@ -94,7 +94,7 @@ describe('the bulk send\'s answer', () => {
       outcomes: [{ ok: true, actionLogId: 'l1', outboundQueueId: 'q1' }, { ok: false, actionLogId: null, error: 'past', needsConfirmation: { limits } }],
       needsConfirmation: [{ adTargetId: 'b', limits }, { adTargetId: 'c', limits }],
     })
-    expect(out.results).toEqual([{ targetId: 'a', ok: true, words: 'Sent', actionLogId: 'l1' }])
+    expect(out.results).toEqual([{ targetId: 'a', ok: true, words: 'Sent', actionLogId: 'l1', queued: true }])
     expect(out.waits.map((w) => w.adTargetId)).toEqual(['b', 'c'])
   })
 
