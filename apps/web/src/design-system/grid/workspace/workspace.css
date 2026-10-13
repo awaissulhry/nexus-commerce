@@ -279,7 +279,8 @@
 }
 
 /* ── the grid's own satellites — moved verbatim from workspace-grid.css: pager, search box ── */
-.h10-am-pager { display: flex; align-items: center; gap: 14px; padding: 2px 2px 0; }
+/* Wraps on a phone: "Rows per page" squeezed into three lines and its list stuck out of the card at 390px. */
+.h10-am-pager { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 2px 2px 0; }
 .h10-am-pager .grow { flex: 1; }
 .h10-am-pager .pg { display: inline-flex; align-items: center; gap: 4px; }
 .h10-am-pager .pgbtn { min-width: 30px; height: 30px; border: 1px solid var(--nds-wsgrid-border); background: var(--nds-wsgrid-surface); border-radius: 7px; font: inherit; font-size: var(--nds-font-size-base); font-weight: 600; color: var(--nds-wsgrid-text-secondary); cursor: pointer; }

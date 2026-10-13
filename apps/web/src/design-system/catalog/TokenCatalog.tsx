@@ -564,6 +564,9 @@ export function TokenCatalog() {
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--nds-space-8)', alignItems: 'center' }}>
             {(['neutral', 'info', 'success', 'warning', 'danger'] as const).map(tone => <Tag key={tone} tone={tone}>{tone}</Tag>)}
           </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--nds-space-8)', maxWidth: 240 }}>
+            <Tag truncate title="Merchant Center (not read yet): A very long feed name that does not fit">Merchant Center (not read yet): A very long feed name that does not fit</Tag>
+          </div>
 
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Program / targeting badge</div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -1035,8 +1038,8 @@ export function TokenCatalog() {
             <PerformanceGraph
               data={CHART_DATA}
               xKey="day"
-              left={{ key: 'spend', label: 'Spend', color: palette.blue[900], axis: 'left', format: (v) => `€${v}` }}
-              right={{ key: 'sales', label: 'Sales', color: palette.blue[600], axis: 'right', format: (v) => `€${v}` }}
+              left={{ key: 'spend', label: 'Spend', axisLabel: 'Spend (EUR)', color: palette.blue[900], axis: 'left', format: (v) => `€${v}` }}
+              right={{ key: 'sales', label: 'Sales', axisLabel: 'Sales (EUR)', color: palette.blue[600], axis: 'right', format: (v) => `€${v}` }}
             />
           </DSCard>
           <DSCard padded elevated>

@@ -21,6 +21,21 @@ export const DEFAULT_BUCKETS: Record<GatewayChannel, BucketParams> = {
   SHOPIFY: { capacity: 20, refillPerSec: 2 },
   AMAZON_ADS: { capacity: 20, refillPerSec: 10 },
   ETSY: { capacity: 10, refillPerSec: 5 },
+  // Google: a host with no group of its own (GOOGLE_BUCKETS below holds the four that have one).
+  GOOGLE: { capacity: 5, refillPerSec: 1 },
+}
+
+/**
+ * Google, per API (the key's operation group is the host's, channels.googleHostGroup). Google Ads is the
+ * scarce one — a daily operation budget per Cloud project — so its bucket is a burst of 30 refilled one
+ * call per 30 s: a connect's discovery (≤ 1 + 20 + a few manager reads) fits in the burst, a runaway loop
+ * cannot spend the day's budget. Merchant Center, Analytics and the userinfo heartbeat are generous.
+ */
+export const GOOGLE_BUCKETS: Record<'ads' | 'merchant' | 'analytics' | 'identity', BucketParams> = {
+  ads: { capacity: 30, refillPerSec: 1 / 30 },
+  merchant: { capacity: 10, refillPerSec: 2 },
+  analytics: { capacity: 10, refillPerSec: 1 },
+  identity: { capacity: 5, refillPerSec: 1 },
 }
 
 /**
@@ -30,8 +45,12 @@ export const DEFAULT_BUCKETS: Record<GatewayChannel, BucketParams> = {
 const SHOPIFY_GRAPHQL: BucketParams = { capacity: 50, refillPerSec: 10 }
 const SHOPIFY_REST: BucketParams = { capacity: 40, refillPerSec: 2 }
 
-function defaultsFor(channel: GatewayChannel, key: string): BucketParams {
+export function defaultsFor(channel: GatewayChannel, key: string): BucketParams {
   if (channel === 'SHOPIFY') return key.endsWith(':graphql') ? SHOPIFY_GRAPHQL : SHOPIFY_REST
+  if (channel === 'GOOGLE') {
+    const group = key.slice(key.lastIndexOf(':') + 1) as keyof typeof GOOGLE_BUCKETS
+    return GOOGLE_BUCKETS[group] ?? DEFAULT_BUCKETS.GOOGLE
+  }
   return DEFAULT_BUCKETS[channel]
 }
 

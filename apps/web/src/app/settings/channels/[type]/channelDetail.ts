@@ -9,6 +9,7 @@
 import { getBackendUrl } from '@/lib/backend-url'
 import { WORKSPACES_ENABLED, browserWorkspaceId } from '@/lib/workspaces/paths'
 import { accountDisplayName } from '@/design-system/lib'
+import { googleScopeName } from '../google-selection'
 
 // ─── Contract ────────────────────────────────────────────────────────────
 
@@ -25,7 +26,7 @@ export type Tone = 'neutral' | 'info' | 'success' | 'warning' | 'danger'
 export interface ChannelConnection {
   connectMode?: 'website_oauth' | 'self_authorization'
   id: string
-  channel: 'AMAZON' | 'EBAY' | 'SHOPIFY' | 'WOOCOMMERCE' | 'ETSY'
+  channel: 'AMAZON' | 'EBAY' | 'SHOPIFY' | 'WOOCOMMERCE' | 'ETSY' | 'GOOGLE'
   isActive: boolean
   isManagedBy: 'oauth' | 'env' | 'pending'
   sellerName: string | null
@@ -99,6 +100,7 @@ export const CHANNEL_LABEL: Record<string, string> = {
   shopify: 'Shopify',
   woocommerce: 'WooCommerce',
   etsy: 'Etsy',
+  google: 'Google',
 }
 
 export function channelLabel(channelType: string): string {
@@ -117,6 +119,7 @@ export const SCOPE_CODES_THE_API_ACCEPTS: Record<string, string[]> = {
   shopify: [],
   woocommerce: [],
   etsy: [],
+  google: [],
 }
 
 const COUNTRY_NAMES: Record<string, string> = {
@@ -141,6 +144,8 @@ export const PAGE_MAX_WIDTH = 'none'
  * The full value stays in the chip's `title` — it is what you paste into a bug report.
  */
 export function shortScope(scope: string): string {
+  const google = googleScopeName(scope)
+  if (google) return google
   const tail = scope.replace(/^https?:\/\/[^/]+\/oauth\/api_scope\/?/, '')
   return tail === '' ? 'api_scope (base)' : tail
 }
@@ -291,7 +296,7 @@ export type Hold = { held: false } | { held: true; reason: string }
 
 export function reconnectHold(channelType: string, connection: ChannelConnection): Hold {
   const label = channelLabel(channelType)
-  if (connection.channel !== 'EBAY' && connection.channel !== 'AMAZON') {
+  if (connection.channel !== 'EBAY' && connection.channel !== 'AMAZON' && connection.channel !== 'GOOGLE') {
     return { held: true, reason: `Reconnect for ${label} arrives with CX.3` }
   }
   if (connection.isManagedBy === 'pending') {
@@ -323,6 +328,21 @@ export function disconnectHold(channelType: string, connection: ChannelConnectio
     }
   }
   return { held: false }
+}
+
+// ─── Which cards a channel's page shows ─────────────────────────────────
+
+/**
+ * Google Ads step 1a — Google has no marketplaces to scope and sends Nexus no inbound events, so its page shows the
+ * accounts chosen for it instead of those two cards (an empty "Inbound events" card would read as "nothing arrived").
+ */
+export function showsMarketplacesAndEvents(channelType: string): boolean {
+  return channelType.toLowerCase() !== 'google'
+}
+
+/** Google Ads step 1a — the channel whose page carries the "Google accounts" card. */
+export function showsGoogleAccounts(channelType: string): boolean {
+  return channelType.toLowerCase() === 'google'
 }
 
 // ─── Marketplaces ────────────────────────────────────────────────────────
@@ -412,7 +432,7 @@ export async function runHeartbeat(
   return { tone: 'danger', text: `Failed · ${cls} · ${msg}` }
 }
 
-const CONNECTOR_KEY: Record<string, string> = { ebay: 'ebay', amazon: 'amazon_sp' }
+const CONNECTOR_KEY: Record<string, string> = { ebay: 'ebay', amazon: 'amazon_sp', google: 'google' }
 
 /** Reconnect — asks the shared OAuth service for consent for THIS connection. */
 export async function startReconnect(

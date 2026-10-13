@@ -1,0 +1,41 @@
+{
+  "results": [
+    {
+      "customerClient": {
+        "resourceName": "customers/9876543210/customerClients/9876543210",
+        "clientCustomer": "customers/9876543210",
+        "id": "9876543210",
+        "manager": true,
+        "descriptiveName": "Test manager",
+        "currencyCode": "EUR",
+        "timeZone": "Europe/Rome",
+        "status": "ENABLED"
+      }
+    },
+    {
+      "customerClient": {
+        "resourceName": "customers/9876543210/customerClients/1234567890",
+        "clientCustomer": "customers/1234567890",
+        "id": "1234567890",
+        "level": "1",
+        "descriptiveName": "Test advertiser",
+        "currencyCode": "EUR",
+        "timeZone": "Europe/Rome",
+        "status": "ENABLED"
+      }
+    },
+    {
+      "customerClient": {
+        "resourceName": "customers/9876543210/customerClients/1112223334",
+        "clientCustomer": "customers/1112223334",
+        "id": "1112223334",
+        "level": "1",
+        "currencyCode": "USD",
+        "timeZone": "America/Los_Angeles",
+        "status": "ENABLED",
+        "testAccount": true
+      }
+    }
+  ],
+  "fieldMask": "customerClient.clientCustomer,customerClient.id,customerClient.level,customerClient.manager,customerClient.descriptiveName,customerClient.currencyCode,customerClient.timeZone,customerClient.status,customerClient.testAccount"
+}

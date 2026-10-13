@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { appSecretStatus, expiryInputValue, formatExpiryDate, rotationNote, type AppSecretRow } from './app-secrets'
+import { appCredentialsFormProblem, appCredentialsStatus, appSecretStatus, expiryInputValue, formatExpiryDate, rotationNote, type AppCredentialsRow, type AppSecretRow } from './app-secrets'
 
 // P0.5 — what the "App secrets" card says. The web runner is node-only, so the pure logic is pinned.
 
@@ -51,5 +51,36 @@ describe('rotationNote (P6.1)', () => {
   it('says how to turn it on when it is off, and says nothing for apps without it', () => {
     expect(rotationNote(row({ automaticRotation: false }))).toMatch(/^Automatic rotation is off: register the credential queue/)
     expect(rotationNote(row({ channelKey: 'EBAY', label: 'eBay', automaticRotation: null }))).toBeNull()
+  })
+})
+
+describe('Google sign-in app (appCredentialsStatus, appCredentialsFormProblem)', () => {
+  const creds = (over: Partial<AppCredentialsRow>): AppCredentialsRow => ({
+    channelKey: 'GOOGLE', label: 'Google', environment: 'production',
+    redirectUri: 'https://api.example.test/api/cx/callback/google', redirectUriProblem: null,
+    clientId: '123-abc.apps.googleusercontent.com', secretSet: true, source: 'saved', updatedAt: '2026-10-13T09:00:00.000Z', ...over,
+  })
+  it('not set → a warning that says who sets it', () => {
+    expect(appCredentialsStatus(creds({ source: 'none', clientId: null, secretSet: false }))).toMatchObject({ tone: 'warning', label: 'Not set' })
+  })
+  it('saved → success, names the client and never a secret', () => {
+    const s = appCredentialsStatus(creds({}))
+    expect(s).toMatchObject({ tone: 'success', label: 'Set' })
+    expect(s.detail).toBe('Client 123-abc.apps.googleusercontent.com. The secret is stored encrypted and is never shown. Saved 13 Oct 2026.')
+  })
+  it('from the environment → info; a client with no secret → warning', () => {
+    expect(appCredentialsStatus(creds({ source: 'environment' }))).toMatchObject({ tone: 'info', label: 'From the server settings' })
+    expect(appCredentialsStatus(creds({ secretSet: false }))).toMatchObject({ tone: 'warning', label: 'Secret missing' })
+  })
+  it.each([
+    ['', '', /client ID and the client secret/],
+    ['not-a-client', 'GOCSPX-x', /ends in \.apps\.googleusercontent\.com/],
+    ['123-abc.apps.googleusercontent.com', '', /client secret too/],
+    ['123-abc.apps.googleusercontent.com', 'has space', /no spaces/],
+  ])('refuses %j / %j before sending', (id, secret, words) => {
+    expect(appCredentialsFormProblem(id, secret)).toMatch(words)
+  })
+  it('accepts a Google client id + secret (spaces around them are trimmed)', () => {
+    expect(appCredentialsFormProblem(' 123-abc.apps.googleusercontent.com ', ' GOCSPX-secret ')).toBeNull()
   })
 })

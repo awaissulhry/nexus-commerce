@@ -10,6 +10,12 @@
 import { redact as redactSecrets } from '../../utils/logger.js'
 
 const PERSONAL_KEY = /^(buyer.*|recipient.*|shipTo|shippingAddress|billingAddress|address(line\d*)?|addressLine\d*|street\d*|postalCode|zip(code)?|city|county|stateOrProvince|phone(number)?|email(address)?|buyerEmail|firstName|lastName|fullName|name|contactAddress|customer|taxIdentifier|vatNumber|primaryPhone|deliveryAddress)$/i
+/**
+ * OAuth's form-encoded bodies (`grant_type=refresh_token&refresh_token=…&client_secret=…`) and the
+ * answers some token endpoints give in the same shape: the value after each credential name is masked.
+ * `code` is the one-time authorisation code; the boundary keeps `postal_code=` and `country_code=` intact.
+ */
+const FORM_SECRET = /(^|[?&\s])(access_token|refresh_token|id_token|client_secret|code|code_verifier|token|assertion|client_assertion)=([^&\s]*)/gi
 const MAX_DEPTH = 8
 export const LEDGER_BODY_MAX = 32 * 1024
 
@@ -35,6 +41,7 @@ export function ledgerSafeBody(body: unknown): unknown {
       } else {
         // XML (eBay Trading) or text: mask credential elements and obvious personal elements.
         value = trimmed
+          .replace(FORM_SECRET, (_m, lead: string, name: string) => `${lead}${name}=[redacted]`)
           .replace(/<(eBayAuthToken|RequesterCredentials|Password|Token)>[\s\S]*?<\/\1>/gi, '<$1>[redacted]</$1>')
           .replace(/<(Email|Phone|Name|Street1|Street2|PostalCode|CityName|StateOrProvince)>[\s\S]*?<\/\1>/gi, '<$1>[personal]</$1>')
       }

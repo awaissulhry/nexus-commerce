@@ -14,7 +14,7 @@
  * review-gated scopes so the UI can say exactly what is missing and why.
  */
 
-export type ChannelKey = 'EBAY' | 'AMAZON_SP' | 'AMAZON_ADS' | 'SHOPIFY' | 'ETSY'
+export type ChannelKey = 'EBAY' | 'AMAZON_SP' | 'AMAZON_ADS' | 'SHOPIFY' | 'ETSY' | 'GOOGLE'
 
 /** The `channelType` value stored on ChannelConnection for a catalogue key. */
 export const CHANNEL_TYPE_OF: Record<ChannelKey, string> = {
@@ -23,6 +23,8 @@ export const CHANNEL_TYPE_OF: Record<ChannelKey, string> = {
   AMAZON_ADS: 'AMAZON_ADS',
   SHOPIFY: 'SHOPIFY',
   ETSY: 'ETSY',
+  // One Google sign-in covers Google Ads, Merchant Center and Analytics (2026-10-13).
+  GOOGLE: 'GOOGLE',
 }
 
 export function channelKeyOf(channelType: string): ChannelKey | null {
@@ -75,7 +77,7 @@ export interface ConnectionIdentity {
 }
 
 export interface ScopeInput {
-  kind: 'marketplace' | 'shop' | 'profile' | 'storefront'
+  kind: 'marketplace' | 'shop' | 'profile' | 'storefront' | 'google_ads_customer' | 'google_merchant_account' | 'google_ga4_property'
   externalId: string
   label?: string
   region?: string
@@ -102,6 +104,11 @@ export interface AuthSpec {
   permissionModel?: 'oauth_scopes' | 'application_roles'
   /** Refuse to store a grant if the connector cannot prove which external account authorised it. */
   identityRequired?: boolean
+  /**
+   * Who consented, read from the token answer itself (OpenID Connect's `id_token`), before `identity` is
+   * asked. Null = the answer does not prove it; `identity` is then asked as usual.
+   */
+  identityFromTokenResponse?: (token: Record<string, unknown>, ctx: { clientId: string }) => ConnectionIdentity | null
   /** Builds the consent URL; `region` is a catalogue region key. */
   authorizeUrl?: (ctx: { region: string | null; environment: 'production' | 'sandbox' }) => string
   tokenUrl: (ctx: { region: string | null; environment: 'production' | 'sandbox' }) => string
@@ -165,6 +172,11 @@ export interface ChannelSpec {
   heartbeat: (handle: ConnectionHandle) => Promise<HeartbeatResult>
   /** Amazon participations, Ads profiles, TikTok shops … */
   discoverScopes?: (handle: ConnectionHandle) => Promise<ScopeInput[]>
+  /**
+   * false = discovery runs at connect and on demand only, never on the 15-minute heartbeat (Google: each
+   * discovery spends Google Ads operations from a scarce daily budget). Default true.
+   */
+  discoverOnHeartbeat?: boolean
   signing?: { scheme: 'ebay-rfc9421' | 'kaufland-hmac' | 'tiktok-sign'; appliesTo: (method: string, url: string) => boolean }
   rateLimit: { parse: (headers: Headers, status: number) => RateLimitReading | null; model: RateLimitReading['model'] }
   webhooks: {

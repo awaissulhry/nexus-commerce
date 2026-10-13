@@ -8,7 +8,7 @@ import { getEbayPublishMode } from '../ebay-publish-gate.service.js'
 import { getShopifyPublishMode } from '../shopify-publish-gate.service.js'
 import { getEtsyPublishMode } from '../etsy-publish-gate.service.js'
 import { tryGetChannelSpec, type ChannelKey, type RateLimitReading } from '../cx/catalog.js'
-import { amazonAdsRateReading, amazonSpRateReading, ebayRateReading, etsyRateReading, shopifyRateReading } from '../cx/rate-readings.js'
+import { amazonAdsRateReading, amazonSpRateReading, ebayRateReading, etsyRateReading, googleRateReading, shopifyRateReading } from '../cx/rate-readings.js'
 import type { GatewayChannel } from './vocabulary.js'
 import prisma from '../../db.js'
 import { languageTag, marketLanguages } from '../pim/market-languages.js'
@@ -17,7 +17,7 @@ import { normalizeLanguage } from '../pim/content-language.js'
 export type PublishMode = 'gated' | 'dry-run' | 'sandbox' | 'live'
 
 export const SPEC_KEY: Record<GatewayChannel, ChannelKey> = {
-  EBAY: 'EBAY', AMAZON_SP: 'AMAZON_SP', SHOPIFY: 'SHOPIFY', AMAZON_ADS: 'AMAZON_ADS', ETSY: 'ETSY',
+  EBAY: 'EBAY', AMAZON_SP: 'AMAZON_SP', SHOPIFY: 'SHOPIFY', AMAZON_ADS: 'AMAZON_ADS', ETSY: 'ETSY', GOOGLE: 'GOOGLE',
 }
 
 /** The publish mode that governs WRITES on this channel today. */
@@ -34,6 +34,9 @@ export function publishModeOf(channel: GatewayChannel): PublishMode {
     // world but not of the code: the connected-account client was read-only, so nothing could use it.
     // P4.6 puts writes on that client, so the literal becomes an ungated live write path.
     case 'ETSY': return getEtsyPublishMode()
+    // Google (step 1): Nexus only reads Google. Writes have no switch to turn on — the gateway refuses
+    // every Google call that is not a read (GOOGLE_READ_ONLY), whatever this says.
+    case 'GOOGLE': return 'gated'
   }
 }
 
@@ -47,6 +50,8 @@ const SANDBOX_HOSTS: Record<GatewayChannel, Array<[RegExp, (m: RegExpMatchArray)
   SHOPIFY: [],
   AMAZON_ADS: [[/^advertising-api(-eu|-fe)?\.amazon\.com$/, () => 'advertising-api-test.amazon.com']],
   ETSY: [],
+  // Google has no sandbox host: a Google Ads test account is a different account, chosen by the login.
+  GOOGLE: [],
 }
 
 /** The URL in sandbox mode, or null when the channel has no sandbox host for it (then: no call). */
@@ -67,6 +72,7 @@ export function authHeadersOf(channel: GatewayChannel, token: string): Record<st
     case 'SHOPIFY': return { 'X-Shopify-Access-Token': token }
     case 'AMAZON_ADS': return { Authorization: `Bearer ${token}` }
     case 'ETSY': return { Authorization: `Bearer ${token}` }
+    case 'GOOGLE': return { Authorization: `Bearer ${token}` }
   }
 }
 
@@ -116,7 +122,7 @@ export async function ebayMarketHeaders(market: string, contentLanguage?: string
 }
 
 const RATE_READINGS: Record<GatewayChannel, (headers: Headers, status: number) => RateLimitReading | null> = {
-  AMAZON_SP: amazonSpRateReading, EBAY: ebayRateReading, SHOPIFY: shopifyRateReading, AMAZON_ADS: amazonAdsRateReading, ETSY: etsyRateReading,
+  AMAZON_SP: amazonSpRateReading, EBAY: ebayRateReading, SHOPIFY: shopifyRateReading, AMAZON_ADS: amazonAdsRateReading, ETSY: etsyRateReading, GOOGLE: googleRateReading,
 }
 
 /** The rate reading of an answer — the connectors' own parsers (they existed, but nothing called them). */
@@ -150,11 +156,40 @@ export function shopifyGraphqlBodyOf(text: string): { errors: boolean; throttled
 }
 
 /**
+ * Google: which API a host is, for its rate bucket (rate.ts). Google Ads has the scarce quota (a daily
+ * operation budget per Cloud project); Merchant Center, Analytics and the sign-in's userinfo each have
+ * their own, so one busy API never starves another.
+ */
+export function googleHostGroup(url: string): 'ads' | 'merchant' | 'analytics' | 'identity' | 'other' {
+  const host = new URL(url).hostname
+  if (host === 'googleads.googleapis.com') return 'ads'
+  if (host === 'merchantapi.googleapis.com') return 'merchant'
+  if (host === 'analyticsadmin.googleapis.com' || host === 'analyticsdata.googleapis.com') return 'analytics'
+  if (host === 'openidconnect.googleapis.com' || host === 'www.googleapis.com' || host === 'oauth2.googleapis.com') return 'identity'
+  return 'other'
+}
+
+/**
+ * Google: whether a call only reads. GET reads; so does a POST to a `…:search` / `…:searchStream` method
+ * (Google Ads GAQL, Merchant reports), which takes its query in the body. Anything else — `…:mutate`,
+ * `…:registerGcp`, PATCH, DELETE — is a change. The gateway refuses every Google change in step 1.
+ */
+export function googleCallKind(method: string, url: string): 'read' | 'action' {
+  const m = method.toUpperCase()
+  if (m === 'GET') return 'read'
+  if (m !== 'POST') return 'action'
+  let pathname: string
+  try { pathname = new URL(url).pathname } catch { return 'action' }
+  return /:(search|searchStream)$/.test(pathname) ? 'read' : 'action'
+}
+
+/**
  * The operation group a rate bucket is per. Amazon limits each operation on its own, so the path with
- * ids dropped; the others limit per app / per account, so one group.
+ * ids dropped; Google per API (its host); the others limit per app / per account, so one group.
  */
 export function bucketGroupOf(channel: GatewayChannel, method: string, url: string): string {
   if (channel === 'SHOPIFY') return /\/graphql\.json$/.test(new URL(url).pathname) ? 'graphql' : 'rest'
+  if (channel === 'GOOGLE') return googleHostGroup(url)
   if (channel !== 'AMAZON_SP') return 'all'
   // `/{api}/{version}/{resource}` — e.g. `/listings/2021-08-01/items`, `/orders/v0/orders` — never
   // the seller id or SKU that follow, so one bucket per operation family, not per SKU.
@@ -173,9 +208,9 @@ export function operationOfPath(method: string, url: string): string {
   return `${method.toUpperCase()} /${parts.join('/')}`
 }
 
-/** The API version a URL carries (`2021-08-01`, `v1`, `2026-07`), else the connector's declared one. */
+/** The API version a URL carries (`2021-08-01`, `v1`, `v1beta`, `2026-07`), else the connector's declared one. */
 export function apiVersionOf(channel: GatewayChannel, url: string): string | null {
-  const match = new URL(url).pathname.match(/\/(v\d+(?:\.\d+)?|\d{4}-\d{2}(?:-\d{2})?)(?=\/|$)/)
+  const match = new URL(url).pathname.match(/\/(v\d+(?:\.\d+)?(?:alpha|beta)?\d*|\d{4}-\d{2}(?:-\d{2})?)(?=\/|$)/)
   if (match) return match[1]
   return tryGetChannelSpec(SPEC_KEY[channel])?.apiVersion ?? null
 }

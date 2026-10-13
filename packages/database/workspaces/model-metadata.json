@@ -2807,6 +2807,12 @@
           "kind": "object",
           "type": "EtsyReceiptRefusal",
           "relationFromFields": []
+        },
+        {
+          "name": "googleAccountLinks",
+          "kind": "object",
+          "type": "GoogleAccountLink",
+          "relationFromFields": []
         }
       ]
     },
@@ -7847,6 +7853,36 @@
     },
     {
       "name": "AmazonSalesRank",
+      "fields": []
+    },
+    {
+      "name": "GoogleAccountLink",
+      "fields": [
+        {
+          "name": "connection",
+          "kind": "object",
+          "type": "ChannelConnection",
+          "relationFromFields": [
+            "connectionId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "GoogleAdsCustomer",
+      "fields": []
+    },
+    {
+      "name": "GoogleAdsCampaign",
+      "fields": []
+    },
+    {
+      "name": "GoogleAdsDailyMetric",
+      "fields": []
+    },
+    {
+      "name": "GoogleAdsChangeEvent",
       "fields": []
     }
   ]

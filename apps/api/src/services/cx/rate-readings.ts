@@ -46,3 +46,12 @@ export function etsyRateReading(headers: Headers, status: number): RateLimitRead
   }
   return null
 }
+
+/**
+ * Google (Ads, Merchant Center, Analytics): no headroom on an ordinary answer. A 429 RESOURCE_EXHAUSTED may
+ * carry a `Retry-After`; Google Ads otherwise names its wait inside the body (RetryInfo), which the gateway
+ * does not read — its 429 wait then falls back to one second and the bucket stays held.
+ */
+export function googleRateReading(headers: Headers, status: number): RateLimitReading | null {
+  return status === 429 ? { model: 'token_bucket', retryAfterSec: Number(headers.get('retry-after') ?? 0) || undefined } : null
+}

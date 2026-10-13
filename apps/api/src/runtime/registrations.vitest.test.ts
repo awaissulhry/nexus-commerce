@@ -11,7 +11,7 @@ describe('registries every process shares', () => {
     await import('./registrations.js')
     const { listChannelSpecs } = await import('../services/cx/catalog.js')
     const { ACTION_HANDLERS } = await import('../services/automation-rule.service.js')
-    expect(listChannelSpecs().map(spec => spec.key).sort()).toEqual(['AMAZON_ADS', 'AMAZON_SP', 'EBAY', 'ETSY', 'SHOPIFY'])
+    expect(listChannelSpecs().map(spec => spec.key).sort()).toEqual(['AMAZON_ADS', 'AMAZON_SP', 'EBAY', 'ETSY', 'GOOGLE', 'SHOPIFY'])
     for (const action of ['create_bulk_job', 'apply_bulk_template', 'pause_schedules_matching',
       'update_product_bullets_from_review', 'create_aplus_module_from_review']) {
       expect(ACTION_HANDLERS[action], action).toBeTypeOf('function')

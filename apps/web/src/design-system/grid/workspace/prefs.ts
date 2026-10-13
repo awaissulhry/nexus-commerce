@@ -31,6 +31,16 @@ export const defaultPrefs = <T>(columns: readonly GridColumn<T>[]): GridPrefs =>
 })
 
 /**
+ * The preferences the grid draws with on this screen. On a phone (`useNarrow`, ≤ 760px) the identity column — at least
+ * 300px — is as wide as the whole grid: pinned, it covered every other column and a sideways swipe moved nothing (the
+ * Google Ads grid at 390px showed names only). There it scrolls with the others. The saved choice is not changed; a
+ * wider screen pins it again.
+ */
+export function prefsForScreen(prefs: GridPrefs, narrow: boolean): GridPrefs {
+  return narrow && prefs.stickyFirst ? { ...prefs, stickyFirst: false } : prefs
+}
+
+/**
  * Parse what a `storageKey` holds. `null` means "nothing usable stored" — the caller falls back to
  * this column set's own defaults, exactly as the legacy effect did. Keys unknown to `columns` are
  * dropped rather than trusted; widths are kept only for known keys and only when they are numbers.

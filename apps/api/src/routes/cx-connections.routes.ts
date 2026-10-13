@@ -13,9 +13,12 @@
  *   GET  /api/cx/channels                  the catalogue as the UI sees it
  *   GET  /api/cx/apps                      P0.5: each app's secret expiry date (never a secret)
  *   PUT  /api/cx/apps/:channelKey/secret-expiry   P0.5: record or clear that date
+ *   GET  /api/cx/apps/credentials          Google: the app's client id, whether a secret is set, the
+ *                                          redirect URI to register (never the secret)
+ *   PUT  /api/cx/apps/:channelKey/credentials     Google, Owner only: set the client id + secret (write-only)
  */
 
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { listChannelSpecs, scopeDriftOf, tryGetChannelSpec, channelKeyOf } from '../services/cx/catalog.js'
@@ -23,6 +26,9 @@ import { listConnectionEvents } from '../services/cx/events.service.js'
 import { refreshNow, revoke, RefreshFailed, RefreshContended } from '../services/cx/token.service.js'
 import { runHeartbeatFor } from '../jobs/cx-heartbeat.job.js'
 import { listAppSecrets, setAppSecretExpiry } from '../services/cx/app-secret-expiry.js'
+import { AppCredentialsError, listAppCredentials, setAppCredentials } from '../services/cx/app-credentials.service.js'
+import { ensureLoaded } from '../lib/auth/guards.js'
+import { resolvePermissions } from '../lib/auth/rbac.js'
 import { accountCallsById } from '../services/cx/account-calls.service.js'
 import { channelHealth, callsForTrace, DEFAULT_WINDOW_HOURS } from '../services/cx/channel-health.service.js'
 import cxQuarantineRoutes from './cx-quarantine.routes.js'
@@ -46,6 +52,18 @@ export function parseExpiryDate(value: unknown, now: number = Date.now()): { dat
   }
   if (date.getUTCFullYear() < 2020) return { error: 'That date is too far in the past.' }
   return { date }
+}
+
+/**
+ * An Owner of the business profile (on top of the route's settingsIntegrationsManage). A coarse API key has
+ * no person behind it and is never an Owner.
+ */
+async function isOwnerRequest(request: FastifyRequest): Promise<boolean> {
+  await ensureLoaded(request)
+  if (!request.authUser) return false
+  const resolved = request.__rbacResolved ?? await resolvePermissions(request.authUser)
+  request.__rbacResolved = resolved
+  return resolved.isOwner === true
 }
 
 export default async function cxConnectionsRoutes(app: FastifyInstance): Promise<void> {
@@ -199,6 +217,30 @@ export default async function cxConnectionsRoutes(app: FastifyInstance): Promise
       })
       if (!saved) return reply.code(404).send({ error: `No ${environment} app is set up for ${request.params.channelKey}.` })
       return { app: saved }
+    },
+  )
+
+  // ── Google — our app's client id + secret, set by an Owner (write-only) ────────────────────────
+  app.get('/cx/apps/credentials', async () => ({ apps: await listAppCredentials() }))
+
+  app.put<{ Params: { channelKey: string }; Body: { clientId?: unknown; clientSecret?: unknown } }>(
+    '/cx/apps/:channelKey/credentials',
+    async (request, reply) => {
+      if (!(await isOwnerRequest(request))) {
+        return reply.code(403).send({ error: 'Only an Owner of this business profile can set app credentials.', code: 'owner_required' })
+      }
+      try {
+        const saved = await setAppCredentials({
+          channelKey: request.params.channelKey,
+          clientId: request.body?.clientId,
+          clientSecret: request.body?.clientSecret,
+          actor: actorOf(request),
+        })
+        return { app: saved }
+      } catch (err) {
+        if (err instanceof AppCredentialsError) return reply.code(err.statusCode).send({ error: err.message, code: err.code })
+        throw err
+      }
     },
   )
 }

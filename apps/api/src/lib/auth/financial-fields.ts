@@ -77,6 +77,10 @@ add(FIELDS.financialsAdspendView, [
   'maxHourlySpendCentsEur', 'bidPercentage', 'budgetCents', 'acosCapPct', 'maxCpcCents',
   'bidValueCents', 'bidDeltaPct', 'familyDailyBudgetCents', 'familyAcosCapPct',
   'monthlyBudgetCents', 'totalBudgetCents', 'totalShiftCents', 'targetSharePct',
+  // Google Ads step 1a — the Google Ads tab's reads (routes/google-ads-read.routes.ts) and Claude's Google ad reads:
+  // conversion value, average cost per click, cost per conversion (spendCents and roas are above; a campaign's
+  // dailyBudgetCents is stripped by those routes' own hook and by the ad tools' AD_MONEY).
+  'conversionValueCents', 'avgCpcCents', 'costPerConversionCents',
 ])
 
 // ── Suppliers / B2B tier pricing ───────────────────────────────────

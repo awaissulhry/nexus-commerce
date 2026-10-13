@@ -17,7 +17,10 @@ import { Tabs, Banner } from '@/design-system/components'
 import { Button } from '@/design-system/primitives'
 import { useProfileScope } from '@/app/_shared/ProfileScope'
 import { WORKSPACES_ENABLED } from '@/lib/workspaces/paths'
-import { useAccounts, useAdsConnections, useCatalogue, type CatalogueChannel } from './channels-data'
+import { useAccounts, useAdsConnections, useCatalogue, useGoogleAccounts, type CatalogueChannel } from './channels-data'
+import type { GoogleAccount } from '@/lib/google-ads/contract'
+import { GoogleAccountsDialog } from './GoogleAccountsDialog'
+import { GOOGLE_KEY, savedNotice } from './google-selection'
 import { useConnectPopup, type StartOptions } from './useConnectPopup'
 import { ConnectAccountDialog } from './ConnectAccountDialog'
 import { AccountsTab } from './AccountsTab'
@@ -53,10 +56,13 @@ export function ChannelsClient() {
   const [connectionProfile, setConnectionProfile] = useState<{ id: string; name: string } | null>(null)
   const [pending, setPending] = useState<{ channel: CatalogueChannel; options: StartOptions; accountLabel?: string } | null>(null)
   const [notice, setNotice] = useState<{ tone: 'success' | 'info' | 'danger'; title: string; text?: string; workspaceId?: string } | null>(null)
+  // Google Ads step 1a — "Choose Google accounts" for one Google sign-in (after it connects, or from its card).
+  const [googleChoice, setGoogleChoice] = useState<{ connectionId: string; current: GoogleAccount | null } | null>(null)
 
   const accounts = useAccounts(reload, true, activeProfile?.id)
   const catalogue = useCatalogue()
   const ads = useAdsConnections(reload, activeProfile?.id)
+  const google = useGoogleAccounts(reload, activeProfile?.id)
 
   const popup = useConnectPopup(
     (m) => {
@@ -65,6 +71,19 @@ export function ChannelsClient() {
       const drift = m.scopeDrift?.length ?? 0
       const displayName = catalogue.data?.find((entry) => entry.channelType === m.channel)?.displayName
         ?? (m.channel === 'EBAY' ? 'eBay' : m.channel)
+      // Google: the sign-in alone reads nothing. Ask at once which Google Ads account Nexus reads — in THIS business
+      // only (a sign-in placed in another business is chosen from that business's page).
+      const isGoogle = m.channelKey === GOOGLE_KEY || m.channel === GOOGLE_KEY
+      const here = !WORKSPACES_ENABLED || m.workspaceId === activeProfile?.id
+      if (isGoogle && m.connectionId && here) {
+        setGoogleChoice({ connectionId: m.connectionId, current: google.data?.items.find((item) => item.connectionId === m.connectionId) ?? null })
+        setNotice({
+          tone: drift ? 'info' : 'success',
+          title: `Google account ${m.placement === 'reconsent' ? 'reconnected' : 'connected'}.`,
+          text: ['Choose which Google Ads account Nexus reads.', drift ? `${drift} permission${drift === 1 ? ' was' : 's were'} not granted — use Reconnect to grant ${drift === 1 ? 'it' : 'them'}.` : ''].filter(Boolean).join(' '),
+        })
+        return
+      }
       setNotice({
         tone: drift ? 'info' : 'success',
         title: `${displayName} account ${m.placement === 'verified' ? 'verified' : m.placement === 'reconsent' ? 'reconnected' : 'connected'}${m.sellerName ? `: ${m.sellerName}` : ''}.`,
@@ -87,9 +106,9 @@ export function ChannelsClient() {
     popup.clearError()
     const channel = catalogue.data?.find(item => item.key === key && item.available)
     if (!channel) return
-    // Shopify and Etsy check server setup before sign-in, including single-profile mode.
+    // Shopify, Etsy and Google check server setup before sign-in, including single-profile mode.
     // Shopify also collects the permanent domain used to choose its provider host.
-    if (!WORKSPACES_ENABLED && channel.key !== 'SHOPIFY' && channel.key !== 'ETSY') { void popup.start(key, options); return }
+    if (!WORKSPACES_ENABLED && channel.key !== 'SHOPIFY' && channel.key !== 'ETSY' && channel.key !== GOOGLE_KEY) { void popup.start(key, options); return }
     const account = accounts.data?.accounts.find(item => item.id === options.targetConnectionId)
     setPending({ channel, options: { ...options, workspaceId: activeProfile?.id, region: options.region ?? account?.region }, accountLabel: account?.label })
   }
@@ -135,6 +154,8 @@ export function ChannelsClient() {
             ads={ads.data}
             connecting={popup.connecting}
             onStart={requestConnection}
+            google={google.data}
+            onChooseGoogle={(account) => setGoogleChoice({ connectionId: account.connectionId, current: account })}
           />
         )}
         {tab === 'health' && <HealthTab />}
@@ -144,6 +165,10 @@ export function ChannelsClient() {
           <DiagnosticsTab key={activeProfile?.id ?? 'legacy'} workspaceId={activeProfile?.id} accounts={accounts.data?.accounts.filter(account => account.isActive !== false) ?? []} loading={accounts.loading} onChanged={bump} />
         )}
       </section>
+      {googleChoice && <GoogleAccountsDialog connectionId={googleChoice.connectionId} current={googleChoice.current}
+        onClose={() => setGoogleChoice(null)}
+        onSaved={(account) => { setGoogleChoice(null); setNotice({ tone: 'success', ...savedNotice(account) }); bump() }}
+        onReconnect={() => { const target = googleChoice.connectionId; setGoogleChoice(null); requestConnection(GOOGLE_KEY, { intent: 'reconnect', targetConnectionId: target }) }} />}
       {pending && <ConnectAccountDialog channel={pending.channel} options={pending.options} accountLabel={pending.accountLabel}
         busy={!!popup.connecting} error={popup.error} onStart={(options, profile) => { setConnectionProfile(profile ?? null); return popup.start(pending.channel.key, options) }} onClose={() => setPending(null)} />}
     </div>

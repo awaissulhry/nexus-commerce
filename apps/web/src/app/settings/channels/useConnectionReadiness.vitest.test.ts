@@ -32,7 +32,7 @@ beforeEach(() => {
 afterEach(() => { hooks.cleanup?.(); vi.unstubAllGlobals(); vi.useRealTimers() })
 
 describe('connection setup before opening provider sign-in', () => {
-  it.each(['SHOPIFY', 'ETSY'])('holds %s until the server confirms setup', async channel => {
+  it.each(['SHOPIFY', 'ETSY', 'GOOGLE'])('holds %s until the server confirms setup', async channel => {
     expect(render(channel)).toMatchObject({ ready: false, checking: true, error: null })
     await vi.waitFor(() => expect(render(channel).ready).toBe(true))
     expect(fetch).toHaveBeenCalledExactlyOnceWith(`http://localhost:8091/api/cx/connect/${channel.toLowerCase()}/readiness`, expect.objectContaining({ credentials: 'include', cache: 'no-store', signal: expect.any(AbortSignal) }))

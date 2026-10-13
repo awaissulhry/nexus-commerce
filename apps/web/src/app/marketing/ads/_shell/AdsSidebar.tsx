@@ -2,37 +2,30 @@
 
 import Link from '@/lib/workspaces/Link'
 import { usePathname, useRouter } from '@/lib/workspaces/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactElement } from 'react'
 import { ChevronDown, ExternalLink } from 'lucide-react'
-import { ADS_NAV, EBAY_ADS_NAV, ADS_BASE } from './nav'
-import { AmazonBadge, EbayBadge } from './BrandMarks'
+import { ADS_BASE, adChannelOf, navFor, switchTarget, type AdChannel } from './nav'
+import { AmazonBadge, EbayBadge, GoogleBadge } from './BrandMarks'
 import { getBackendUrl } from '@/lib/backend-url'
 
-// E4.1 — channel counterparts: switching keeps you on the equivalent page.
-const TO_EBAY: Record<string, string> = {
-  campaigns: 'ebay/campaigns',
-  dashboard: 'ebay',
-  changelog: 'ebay/change-log',
-}
-const TO_AMAZON: Record<string, string> = {
-  'ebay/campaigns': 'campaigns',
-  'ebay/products': 'campaigns',
-  'ebay/change-log': 'changelog',
-  ebay: 'dashboard',
-}
+// E4.1 — one switch, one console per channel; Google joined as the third (Google Ads step 1a, read only).
+const CHANNELS: Array<{ id: AdChannel; label: string; Badge: (p: { size?: number }) => ReactElement }> = [
+  { id: 'amazon', label: 'Amazon', Badge: AmazonBadge },
+  { id: 'ebay', label: 'eBay', Badge: EbayBadge },
+  { id: 'google', label: 'Google', Badge: GoogleBadge },
+]
 
 export function AdsSidebar() {
   const pathname = usePathname() || ''
   const router = useRouter()
-  const isEbay = pathname.startsWith(`${ADS_BASE}/ebay`)
-  const nav = isEbay ? EBAY_ADS_NAV : ADS_NAV
+  const channel = adChannelOf(pathname)
+  const nav = navFor(channel)
+  const ChipBadge = CHANNELS.find((c) => c.id === channel)!.Badge
 
-  const switchChannel = (target: 'amazon' | 'ebay') => {
-    if ((target === 'ebay') === isEbay) return
-    const current = pathname.slice(ADS_BASE.length + 1) // strip "/marketing/ads/"
-    const map = target === 'ebay' ? TO_EBAY : TO_AMAZON
-    const hit = Object.entries(map).find(([from]) => current === from || current.startsWith(`${from}/`))
-    router.push(`${ADS_BASE}/${hit ? hit[1] : target === 'ebay' ? 'ebay' : 'dashboard'}`)
+  // E4.1 — switching keeps you on the equivalent page (`switchTarget`, nav.ts).
+  const switchChannel = (target: AdChannel) => {
+    const route = switchTarget(pathname, target)
+    if (route) router.push(`${ADS_BASE}/${route}`)
   }
   // F1 — pending-suggestions count badge on the Suggestions nav item.
   const [pendingSuggestions, setPendingSuggestions] = useState(0)
@@ -79,17 +72,16 @@ export function AdsSidebar() {
       <div className="h10-brand">
         <span className="h10-brandmark">
           <span className="logo" aria-hidden>N</span>
-          <span className="chip">{isEbay ? <EbayBadge size={15} /> : <AmazonBadge size={15} />}</span>
+          <span className="chip"><ChipBadge size={15} /></span>
         </span>
         <span className="word"><span className="mk">Nexus</span> <b>Ads</b></span>
         {/* E4.1/E6.1 — same console, shift the channel, then pick the market on-page */}
         <div className="h10-brand-switch" role="tablist" aria-label="Ad channel">
-          <button type="button" role="tab" aria-selected={!isEbay} aria-label="Amazon ads" title="Amazon ads" className={`h10-chan ${!isEbay ? 'on' : ''}`} onClick={() => switchChannel('amazon')}>
-            <AmazonBadge size={18} />
-          </button>
-          <button type="button" role="tab" aria-selected={isEbay} aria-label="eBay ads" title="eBay ads" className={`h10-chan ${isEbay ? 'on' : ''}`} onClick={() => switchChannel('ebay')}>
-            <EbayBadge size={18} />
-          </button>
+          {CHANNELS.map((c) => (
+            <button key={c.id} type="button" role="tab" aria-selected={channel === c.id} aria-label={`${c.label} ads`} title={`${c.label} ads`} className={`h10-chan ${channel === c.id ? 'on' : ''}`} onClick={() => switchChannel(c.id)}>
+              <c.Badge size={18} />
+            </button>
+          ))}
         </div>
       </div>
       <nav className="h10-nav">

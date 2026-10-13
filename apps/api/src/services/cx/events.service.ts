@@ -42,6 +42,10 @@ export type ConnectionEventType =
   // P6.1 — automatic app-secret rotation asked Amazon for a new secret; or a step failed.
   | 'secret_rotation_requested'
   | 'secret_rotation_failed'
+  // Google (2026-10-13) — a business picked the Google accounts it reads (GoogleAccountLink); the Owner
+  // set our Google app's client id + secret (never the secret itself in the detail).
+  | 'accounts_linked'
+  | 'app_credentials_set'
 
 export interface Actor {
   userId?: string | null

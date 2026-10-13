@@ -14,8 +14,10 @@ import { Button, Tag, Pill, Skeleton } from '@/design-system/primitives'
 import { type AccountRow, type AdsConnection, type CatalogueChannel } from './channels-data'
 import { getBackendUrl } from '@/lib/backend-url'
 import { accountDisplayName } from '@/design-system/lib'
+import type { GoogleAccount } from '@/lib/google-ads/contract'
+import { GOOGLE_KEY, googleChips, needsChoice } from './google-selection'
 
-const ORDER = ['AMAZON_SP', 'AMAZON_ADS', 'EBAY', 'SHOPIFY', 'ETSY']
+const ORDER = ['AMAZON_SP', 'AMAZON_ADS', 'EBAY', 'SHOPIFY', 'ETSY', GOOGLE_KEY]
 
 /**
  * P4.5g — the catalogue's `refreshTokenLifetimeSec` is what the channel spec DECLARES,
@@ -50,9 +52,13 @@ export interface ConnectTabProps {
   ads: { items: AdsConnection[]; adsMode: string } | null
   connecting: string | null
   onStart: (channelKey: string, opts: { intent: 'connect' | 'reconnect'; targetConnectionId?: string; region?: string | null; url?: string }) => void
+  /** Google Ads step 1a — the accounts chosen per Google sign-in (C1); null while loading or unavailable. */
+  google?: { items: GoogleAccount[] } | null
+  /** Opens "Choose Google accounts" for one Google sign-in. */
+  onChooseGoogle?: (account: GoogleAccount) => void
 }
 
-export function ConnectTab({ catalogue, catalogueError, accounts, ads, connecting, onStart }: ConnectTabProps) {
+export function ConnectTab({ catalogue, catalogueError, accounts, ads, connecting, onStart, google, onChooseGoogle }: ConnectTabProps) {
   const [region, setRegion] = useState<Record<string, string>>({})
   const [reasonShown, setReasonShown] = useState<string | null>(null)
 
@@ -79,10 +85,14 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
   const connectedFor = (channelType: string) => accounts.filter((a) => a.channel === channelType)
 
   return (
-    <div style={{ display: 'grid', gap: 'var(--nds-space-12)' }}>
+    // One column as wide as the page, never as wide as the widest card's content: a clipped chip or e-mail keeps its
+    // full width as its min-content, and an `auto` column grew to it (the cards ran past a phone's edge, 390 px).
+    <div style={{ display: 'grid', gap: 'var(--nds-space-12)', gridTemplateColumns: 'minmax(0, 1fr)' }}>
       <div style={{ display: 'grid', gap: 'var(--nds-space-12)', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 320px), 1fr))' }}>
         {sorted.map((c) => {
           const isAds = c.key === 'AMAZON_ADS'
+          const googleItems = c.key === GOOGLE_KEY ? (google?.items ?? []) : []
+          const googleToChoose = googleItems.find(needsChoice)
           const isSelfAuthorizedAmazon = c.key === 'AMAZON_SP' && c.connectMode === 'self_authorization'
           const adsItems = isAds ? (ads?.items ?? []) : []
           const have = connectedFor(c.channelType)
@@ -90,6 +100,7 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
           const chosenRegion = region[c.key] ?? c.defaultRegion ?? c.regions[0]?.key ?? null
           const held = !c.available || (isSelfAuthorizedAmazon && !envAccount)
           const busy = connecting === c.key
+          const names = have.map((a) => a.label).join(', ')
           return (
             <Card
               key={c.key}
@@ -102,7 +113,12 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
                   : isSelfAuthorizedAmazon && have.length > 0
                     ? 'This private Seller Central application is authorized for the connected company account.'
                   : have.length > 0
-                  ? `${have.length} account${have.length === 1 ? '' : 's'} connected — ${have.map((a) => a.label).join(', ')}`
+                  ? (
+                    <>
+                      {`${have.length} account${have.length === 1 ? '' : 's'} connected`}
+                      <span className="nds-connect-ident" title={names}>{names}</span>
+                    </>
+                  )
                   : 'No account connected yet.'
               }
               headerAction={
@@ -167,6 +183,14 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
                 </div>
               )}
 
+              {googleItems.length > 0 && (
+                <div className="nds-connect-chips">
+                  {googleItems.flatMap((item) => googleChips(item).map((chip) => (
+                    <Tag key={`${item.connectionId}:${chip.text}`} tone={chip.tone} title={chip.text} truncate>{chip.text}</Tag>
+                  )))}
+                </div>
+              )}
+
               {c.regions.length > 1 && (
                 <div className="nds-connect-region">
                   <span id={`region-${c.key}`}>Region</span>
@@ -214,6 +238,9 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
                       ? `Connect another ${c.displayName} account`
                       : `Connect ${c.displayName}`}
                 </Button>
+                {googleToChoose && onChooseGoogle && (
+                  <Button variant="secondary" size="sm" onClick={() => onChooseGoogle(googleToChoose)}>Choose accounts</Button>
+                )}
                 {have.length > 0 && (
                   <Button asChild variant="secondary" size="sm">
                     <Link href={`/settings/channels/${c.channelType.toLowerCase()}`}>Details</Link>

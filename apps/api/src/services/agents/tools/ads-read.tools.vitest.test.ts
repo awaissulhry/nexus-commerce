@@ -11,6 +11,10 @@
  *
  * A13 — `ads-overview` and `ad-campaigns` with `channel: ebay`: per eBay market and campaign, in its own currency,
  * each campaign naming its OWN eBay account (a second account's campaign is never shown as the primary's).
+ *
+ * Google Ads step 1a — `ads-overview` and `ad-campaigns` with `channel: google`: the business's chosen Google Ads account
+ * (the Google sign-ins are stubbed per business), read per account and never per market, a day not read has no
+ * numbers, money in minor units of the account's currency, and `writes.mode` none.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
@@ -36,9 +40,17 @@ vi.mock('../../../lib/queue.js', () => {
   }
 })
 
+// Google Ads step 1a — the business's Google sign-ins (google-accounts.service.ts), per business.
+const google = vi.hoisted(() => ({ accounts: {} as Record<string, unknown[]> }))
+vi.mock('../../google/google-accounts.service.js', async () => {
+  const { workspaceIdForQuery } = await import('../../../lib/workspace-context.js')
+  return { listGoogleAccounts: async () => google.accounts[workspaceIdForQuery()] ?? [] }
+})
+
 import { callTool, type UserPrincipal } from '../call-tool.js'
 import { getTool } from '../tool-registry.js'
 import { resolveRange } from '../../ads-core/date-range.js'
+import { accountYesterday, addDays as addAccountDays } from '../../marketing/google-ads/dates.js'
 
 const A = LEGACY_WORKSPACE_ID
 const OTHER = 'ws_ads_read_other'
@@ -184,10 +196,48 @@ async function seedOther() {
   })
 }
 
+// Google Ads step 1a — each business's Google Ads account, read through the day before yesterday (Rome).
+const G_YESTERDAY = accountYesterday('Europe/Rome')
+const gDay = (n: number) => new Date(`${addAccountDays(G_YESTERDAY, -n)}T00:00:00Z`)
+const gIds: Record<string, string> = {}
+function googleAccount(connectionId: string, customerId: string, name: string) {
+  return {
+    connectionId, label: 'Test Google sign-in', state: 'ok', stateText: 'Nexus reads this account once a day.', authStatus: 'connected', missingProducts: [],
+    ads: { customerId, name, currency: 'EUR', timeZone: 'Europe/Rome', isTest: false }, manager: null, merchantCenter: null, analytics: null,
+    read: { lastReadAt: '2026-10-12T06:30:00.000Z', lastDataDay: addAccountDays(G_YESTERDAY, -1), nextReadAt: null, lastError: null },
+  }
+}
+
+async function seedGoogle() {
+  google.accounts[A] = [googleAccount('conn-g-a', '9080706050', 'Test Google advertiser')]
+  google.accounts[OTHER] = [googleAccount('conn-g-other', '9080706051', 'Other Google advertiser')]
+  const account = (customerId: string) => database.client.googleAdsCustomer.create({
+    data: { connectionId: 'conn-g', customerId, currencyCode: 'EUR', timeZone: 'Europe/Rome', status: 'ENABLED', metricsReadFrom: gDay(60), metricsReadThrough: gDay(1), lastSuccessAt: new Date('2026-10-12T06:30:00Z') },
+  })
+  const campaign = (customerId: string, campaignId: string, name: string, extra: Record<string, unknown> = {}) =>
+    database.client.googleAdsCampaign.create({ data: { customerId, campaignId, name, status: 'ENABLED', channelType: 'SEARCH', currencyCode: 'EUR', lastSeenAt: new Date('2026-10-12T06:29:00Z'), ...extra } as never })
+  const metric = (customerId: string, campaignId: string, date: Date, impressions: number, clicks: number, costMicros: bigint, conversions: string, valueMicros: bigint) =>
+    database.client.googleAdsDailyMetric.create({ data: { customerId, date, entityType: 'CAMPAIGN', entityId: campaignId, campaignId, impressions, clicks, costMicros, conversions, conversionsValueMicros: valueMicros, currencyCode: 'EUR', pulledAt: new Date() } })
+  await inside(A, async () => {
+    await account('9080706050')
+    gIds.alpha = (await campaign('9080706050', '701', 'Google alpha search', { biddingStrategyType: 'TARGET_ROAS', budgetAmountMicros: 31_415_000n })).id
+    gIds.bravo = (await campaign('9080706050', '702', 'Google bravo max', { status: 'PAUSED', channelType: 'PERFORMANCE_MAX', budgetShared: true })).id
+    gIds.charlie = (await campaign('9080706050', '703', 'Google charlie old', { removedAt: new Date('2026-10-12T06:29:00Z') })).id
+    await metric('9080706050', '701', gDay(2), 700, 21, 76_543_000n, '1.5', 98_765_000n)
+    await metric('9080706050', '702', gDay(3), 100, 2, 1_000_000n, '0', 0n)
+  })
+  await inside(OTHER, async () => {
+    await account('9080706051')
+    gIds.other = (await campaign('9080706051', '799', 'Other business Google campaign')).id
+    await metric('9080706051', '799', gDay(2), 50, 1, 5_000_000n, '0', 0n)
+  })
+}
+
 beforeAll(async () => {
   database = await formulaDatabase()
   await seedA()
   await seedOther()
+  await seedGoogle()
 }, 180_000)
 
 afterAll(async () => {
@@ -542,6 +592,102 @@ describe('A13 gap — ad-changes and ad-recommendations on eBay', () => {
   })
 })
 
+// ── Google Ads (step 1a, read only) ──────────────────────────────────────────────────────────────────
+
+describe('Google Ads step 1a — ads-overview and ad-campaigns on Google, read only', () => {
+  const day = (n: number) => addAccountDays(G_YESTERDAY, -n)
+
+  it('the overview of the chosen account: its currency, the days read and not read, totals, the campaigns that cost most, no writes', async () => {
+    const data = (await call('ads-overview', { channel: 'google' })).data!
+    expect(data).toMatchObject({
+      channel: 'google', writes: { mode: 'none', note: 'No Nexus tool changes Google Ads yet; changes are made in Google Ads.' },
+      currency: 'EUR', timeZone: 'Europe/Rome', dataAsOf: '2026-10-12T06:30:00.000Z',
+      account: { accountId: 'conn-g-a', name: 'Test Google advertiser', state: 'ok', googleAdsAccount: { customerId: '9080706050', currency: 'EUR' } },
+      window: { from: day(6), to: G_YESTERDAY, days: 7, provisionalFrom: day(6) },
+      // Yesterday is not read yet: no numbers for it, never a zero.
+      coverage: { daysInWindow: 7, daysRead: 6, missingDays: [G_YESTERDAY] },
+      totals: { impressions: 800, clicks: 23, conversions: 1.5, spendCents: 7754, conversionValueCents: 9877, roas: 98_765_000 / 77_543_000 },
+      campaigns: { total: 3, byStatus: { ENABLED: 1, PAUSED: 1, REMOVED: 1 } },
+      counting: expect.stringMatching(/as Google counts them/),
+    })
+    expect(data.days).toHaveLength(7)
+    expect(data.days.find((d: Row) => d.date === G_YESTERDAY)).toMatchObject({ read: false, spendCents: null, clicks: null })
+    expect(data.days.find((d: Row) => d.date === day(2))).toMatchObject({ read: true, provisional: true, spendCents: 7654, conversions: 1.5 })
+    expect(data.days.find((d: Row) => d.date === day(4))).toMatchObject({ read: true, spendCents: 0, clicks: 0 })
+    expect(data.topCampaigns.map((c: Row) => c.campaignId)).toEqual([gIds.alpha, gIds.bravo])
+    expect(data.topCampaigns[0]).toMatchObject({ externalCampaignId: '701', name: 'Google alpha search', type: 'SEARCH', spendCents: 7654, conversionValueCents: 9877 })
+    expect(data.empty).toBeUndefined()
+    expect(JSON.stringify(data)).not.toContain('Other business Google campaign')
+  })
+
+  it('each campaign with its Nexus and Google ids, account, type in words, budget and window numbers; pages and filters', async () => {
+    const data = (await call('ad-campaigns', { channel: 'google', limit: 100 })).data!
+    expect(data).toMatchObject({ channel: 'google', writes: { mode: 'none' }, currency: 'EUR', total: 3, nextCursor: null })
+    expect(ids(data.items, 'campaignId')).toEqual([gIds.alpha, gIds.bravo, gIds.charlie]) // by name
+    expect(data.items[0]).toEqual({
+      campaignId: gIds.alpha, externalCampaignId: '701', name: 'Google alpha search', account: { accountId: 'conn-g-a', name: 'Test Google advertiser' },
+      status: 'ENABLED', servingStatus: null, primaryStatus: null, type: 'SEARCH', typeText: 'Search', biddingStrategy: 'TARGET_ROAS', currency: 'EUR',
+      dailyBudgetCents: 3142, budgetShared: false, startDate: null, endDate: null,
+      metrics: { impressions: 700, clicks: 21, conversions: 1.5, spendCents: 7654, conversionValueCents: 9877, roas: 98_765_000 / 76_543_000 },
+      settingsSyncedAt: '2026-10-12T06:29:00.000Z',
+    })
+    expect(data.items[1]).toMatchObject({ status: 'PAUSED', typeText: 'Performance Max', budgetShared: true })
+    expect(data.items[2]).toMatchObject({ status: 'REMOVED', metrics: { spendCents: 0 } })
+    const { items } = await walk('ad-campaigns', { channel: 'google' }, 1)
+    expect(ids(items, 'campaignId')).toEqual([gIds.alpha, gIds.bravo, gIds.charlie])
+    expect(ids((await call('ad-campaigns', { channel: 'google', status: 'removed' })).data!.items, 'campaignId')).toEqual([gIds.charlie])
+    expect(ids((await call('ad-campaigns', { channel: 'google', search: 'BRAVO' })).data!.items, 'campaignId')).toEqual([gIds.bravo])
+    expect((await call('ad-campaigns', { channel: 'google', search: 'nothing like it' })).data!.empty).toBe('No Google Ads campaign matches these filters.')
+    // Each business reads its own Google Ads account only.
+    expect(ids((await call('ad-campaigns', { channel: 'google' }, cleared(OTHER))).data!.items, 'campaignId')).toEqual([gIds.other])
+    // A cursor of the Google list is not one of the Amazon list.
+    const cursor = (await call('ad-campaigns', { channel: 'google', limit: 1 })).data!.nextCursor
+    expect(await call('ad-campaigns', { limit: 1, cursor })).toMatchObject({ ok: false, error: expect.stringContaining('cursor') })
+  })
+
+  it('read per account, never per market; accountId only with google; another business\'s account is not found', async () => {
+    for (const tool of ['ads-overview', 'ad-campaigns']) {
+      expect(await call(tool, { channel: 'google', market: 'IT' })).toEqual({ ok: false, error: 'Google Ads is read per account, not per market: leave market out.' })
+      expect(await call(tool, { accountId: 'conn-g-a' })).toEqual({ ok: false, error: 'accountId names a Google account: use it with channel google (Amazon and eBay are read per market).' })
+      expect(await call(tool, { channel: 'google', accountId: 'conn-g-other' })).toEqual({ ok: false, error: 'Google account not found' })
+      expect((await call(tool, { channel: 'google', accountId: 'conn-g-a' })).ok).toBe(true)
+    }
+    expect(await call('ad-campaigns', { channel: 'google', status: 'RUNNING' })).toEqual({ ok: false, error: 'Google campaign statuses are ENABLED, PAUSED and REMOVED.' })
+    expect(await call('ad-campaigns', { status: 'REMOVED' })).toEqual({ ok: false, error: 'REMOVED is a Google campaign status: use it with channel google.' })
+    // The other ad reads stay Amazon and eBay.
+    for (const tool of ['ad-changes', 'ad-recommendations']) {
+      await expect(callTool(cleared(), tool, { channel: 'google' })).rejects.toMatchObject({ code: 'invalid_arguments' })
+    }
+  })
+
+  it('no Google, or no Google Ads account chosen: the reason in words, no numbers', async () => {
+    const saved = google.accounts[A]
+    try {
+      google.accounts[A] = []
+      const none = (await call('ads-overview', { channel: 'google' })).data!
+      expect(none).toMatchObject({ account: null, totals: null, topCampaigns: [], empty: expect.stringMatching(/^Google is not connected for this business/) })
+      google.accounts[A] = [{ ...(saved[0] as Row), ads: null, state: 'choose_account' }]
+      const choose = (await call('ad-campaigns', { channel: 'google' })).data!
+      expect(choose).toMatchObject({ items: [], total: 0, empty: expect.stringMatching(/^No Google Ads account is chosen/) })
+    } finally {
+      google.accounts[A] = saved
+    }
+  })
+
+  it('a campaign with numbers whose settings Nexus has not read yet: status null (NOT_READ_YET in the counts), no settings time', async () => {
+    const row = await inside(A, () => database.client.googleAdsDailyMetric.create({
+      data: { customerId: '9080706050', date: gDay(2), entityType: 'CAMPAIGN', entityId: '704', campaignId: '704', label: 'Google delta new', impressions: 10, clicks: 1, costMicros: 100_000n, conversions: '0', conversionsValueMicros: 0n, currencyCode: 'EUR', pulledAt: new Date() },
+    }))
+    try {
+      expect((await call('ads-overview', { channel: 'google' })).data!.campaigns).toEqual({ total: 4, byStatus: { ENABLED: 1, PAUSED: 1, REMOVED: 1, NOT_READ_YET: 1 } })
+      const [item] = (await call('ad-campaigns', { channel: 'google', search: 'delta' })).data!.items
+      expect(item).toMatchObject({ campaignId: '9080706050~704', status: null, settingsSyncedAt: null, metrics: { spendCents: 10 } })
+    } finally {
+      await inside(A, () => database.client.googleAdsDailyMetric.delete({ where: { id: row.id } }))
+    }
+  })
+})
+
 // ── Money ────────────────────────────────────────────────────────────────────────────────────────────
 
 const CALLS: Array<[string, Record<string, unknown>]> = [
@@ -555,6 +701,8 @@ const CALLS: Array<[string, Record<string, unknown>]> = [
   ['ad-campaigns', { channel: 'ebay' }],
   ['ad-changes', { channel: 'ebay' }],
   ['ad-recommendations', { channel: 'ebay', limit: 100 }],
+  ['ads-overview', { channel: 'google' }],
+  ['ad-campaigns', { channel: 'google' }],
 ]
 
 function keysOf(value: unknown, out = new Set<string>()): Set<string> {
@@ -581,7 +729,7 @@ describe('A2 — money a person may not see never comes back', () => {
   })
 
   it('no amount the cleared person sees appears anywhere in the operator\'s answer', async () => {
-    const amounts = ['2110', '5678', '1234', '2345', '2150', '8888', '4321', '23.45', '20.00', 'more budget for the weekend', '7171', '9393', '5656', '4545', '1550', '7.25', '5.75', '3131']
+    const amounts = ['2110', '5678', '1234', '2345', '2150', '8888', '4321', '23.45', '20.00', 'more budget for the weekend', '7171', '9393', '5656', '4545', '1550', '7.25', '5.75', '3131', '7654', '7754', '9877', '3142']
     for (const [tool, args] of CALLS) {
       const text = JSON.stringify(await call(tool, args, operator()))
       expect({ tool, found: amounts.filter((amount) => text.includes(amount)) }).toEqual({ tool, found: [] })

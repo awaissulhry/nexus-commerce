@@ -1806,6 +1806,30 @@ body.nds-drawer-resizing * {
   height: 2px;
   border-radius: 2px;
 }
+/* An axis's name above it (`axisLabel`): left over the left axis, right over the right one, each with its line's colour. */
+.nds-chart-axes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 18px;
+  margin-bottom: 4px;
+  font-size: var(--nds-font-size-xs);
+  font-weight: 600;
+  color: var(--nds-text-2);
+}
+.nds-chart-axes > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.nds-chart-axes > .r {
+  margin-left: auto;
+}
+.nds-chart-axes .ln {
+  width: 14px;
+  height: 2px;
+  border-radius: 2px;
+}
 .nds-chart-tt {
   background: var(--nds-surface);
   border: 1px solid var(--nds-border-subtle);

@@ -32,6 +32,12 @@
  * T4 — `ebay-ad-details` opens eBay campaigns as their page does (ebayCampaignDetail): the promoted listings with
  * their ad rate and break-even, the ad groups, and the keywords with bid and metrics, under the ids the eBay change
  * tools take (ebayCampaignId, ebayItemId, ebayAdGroupId, ebayKeywordId).
+ *
+ * Google Ads step 1a (plan-3 §3.3) — `ads-overview` and `ad-campaigns` also take `channel: google`: the Google Ads
+ * account a person chose for the business (`accountId` = its Google connection), read per account, never per market,
+ * through services/marketing/google-ads/read.service.ts (the Google Ads tab's own reads). Read only: no Nexus tool
+ * changes Google Ads (`writes.mode: none`). A day Nexus has not read has no numbers (never 0); amounts are minor units
+ * of the account's currency.
  */
 
 import { adProductOf, isLifetimeBudget } from '@nexus/shared/ads-ad-product'
@@ -101,13 +107,22 @@ import { EBAY_MANAGED_STATUSES } from '../../ads-core/campaign-status.js'
 import { checkMarketingWriteGate } from '../../marketing/marketing-write-gate.js'
 import { EBAY_MARKETPLACE_SHORT } from '../../ads-core/ebay-marketplace.js'
 import { marketCurrency, marketCurrencyRows } from '../../pim/market-currency.js'
+import {
+  GoogleAdsReadError,
+  googleAdsCampaignList,
+  googleAdsOverview,
+  type GoogleAccount,
+  type GoogleAdsMetrics,
+} from '../../marketing/google-ads/read.service.js'
+import { campaignTypeText } from '../../marketing/google-ads/mappers.js'
 import type { AgentTool, ToolResult } from '../tool-types.js'
 
 const ADSPEND = FIELDS.financialsAdspendView
 
 /**
  * Money keys of these tools' output that the shared registry does not name (it already names spendCents, salesCents,
- * acos, roas, bidCents, suppressedFromBidCents, budgetCents, …). Prose that quotes amounts (`detail`, `why`, `note`,
+ * acos, roas, bidCents, suppressedFromBidCents, budgetCents and — Google Ads step 1a — conversionValueCents,
+ * avgCpcCents, costPerConversionCents, …). Prose that quotes amounts (`detail`, `why`, `note`,
  * `deliveryError`, `evidence`) is money too: it is stripped whole rather than half-read.
  */
 const AD_MONEY = {
@@ -210,6 +225,13 @@ const CHANNELS = ['amazon', 'ebay'] as const
 type AdChannel = (typeof CHANNELS)[number]
 const channelArg = z.preprocess(lower, z.enum(CHANNELS)).default('amazon')
   .describe('amazon (default) or ebay (Promoted Listings)')
+/** Google Ads step 1a — the reads that also take google (ads-overview, ad-campaigns); the others stay amazon | ebay. */
+const READ_CHANNELS = ['amazon', 'ebay', 'google'] as const
+type ReadChannel = (typeof READ_CHANNELS)[number]
+const readChannelArg = z.preprocess(lower, z.enum(READ_CHANNELS)).default('amazon')
+  .describe('amazon (default), ebay (Promoted Listings) or google (Google Ads, read only)')
+const googleAccountArg = z.string().trim().min(1).max(64).optional()
+  .describe('Google only: the Google account to read, by its connectionId (channel-connections); default the business\'s chosen Google Ads account')
 const limitArg = z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).optional()
   .describe(`rows per page (default ${DEFAULT_PAGE_SIZE}, max ${MAX_PAGE_SIZE})`)
 const cursorArg = z.string().min(1).max(MAX_CURSOR_LENGTH).optional()
@@ -525,6 +547,163 @@ export async function amazonOverview(args: { market?: string; days: number }) {
   }
 }
 
+// ── Google Ads (step 1a, read only) ────────────────────────────────────────────────────────────────
+
+/** No Nexus tool changes Google Ads in step 1a; the gateway refuses every Google write anyway. */
+const GOOGLE_WRITES = { mode: 'none', note: 'No Nexus tool changes Google Ads yet; changes are made in Google Ads.' } as const
+const GOOGLE_PROVISIONAL_NOTE = 'Google can still add late conversions to the last 14 days (Nexus re-reads them every day): figures on or after provisionalFrom may still change.'
+const GOOGLE_COUNTING = 'Cost, conversions and conversion value as Google counts them (its attribution and conversion actions; days in the '
+  + 'account\'s time zone). Conversions can be fractional. Google Ads has no sales, orders or ACoS: never name them for it.'
+const GOOGLE_STATUSES: readonly string[] = ['ENABLED', 'PAUSED', 'REMOVED']
+const GOOGLE_OVERVIEW_WORDS = ' Google (channel google, read only): the Google Ads account a person chose for this business (accountId: its '
+  + 'connectionId from channel-connections, only when there is more than one): impressions, clicks, cost (as spendCents), conversions, '
+  + 'conversion value and ROAS as Google counts them, for the window and for the window before (previous: only when Nexus read every '
+  + 'day of it), each day (a day Nexus has not read has read false and no numbers, never 0; the last 14 days provisional), the '
+  + 'campaigns that cost most, the account\'s state in words, and coverage.missingDays. Read per account, never per market. dataAsOf '
+  + 'is when Nexus last read the account from Google. No tool changes Google Ads (writes.mode none): say what you would change and '
+  + 'that a person makes it in Google Ads; never put a Google step in a change plan.'
+const GOOGLE_CAMPAIGN_WORDS = ' Google (channel google, read only): per campaign its Nexus and Google ids, account, status (ENABLED, '
+  + 'PAUSED, REMOVED; null when Nexus has its numbers but has not read its settings yet) and serving status, type (Search, Shopping, Performance Max, …), bidding strategy, daily budget (budgetShared), '
+  + 'currency, and impressions, clicks, conversions, cost (as spendCents), conversion value and ROAS over the window (metrics null '
+  + 'when Nexus read no day of it); writes.mode is none.'
+
+interface GoogleArgs { channel: ReadChannel; market?: string; accountId?: string; status?: string }
+
+/** Why these arguments cannot be read, or null when they can. */
+function googleArgsRefusal(a: GoogleArgs): string | null {
+  if (a.channel !== 'google') {
+    if (a.accountId) return 'accountId names a Google account: use it with channel google (Amazon and eBay are read per market).'
+    if (a.status === 'REMOVED') return 'REMOVED is a Google campaign status: use it with channel google.'
+    return null
+  }
+  if (a.market) return 'Google Ads is read per account, not per market: leave market out.'
+  if (a.status && !GOOGLE_STATUSES.includes(a.status)) return 'Google campaign statuses are ENABLED, PAUSED and REMOVED.'
+  return null
+}
+
+/** A Google read; an account the business does not hold reads as not found. */
+async function googleRead(work: () => Promise<Record<string, unknown>>): Promise<ToolResult> {
+  try {
+    return { ok: true, data: await work() }
+  } catch (error) {
+    if (error instanceof GoogleAdsReadError) return { ok: false, error: error.message }
+    throw error
+  }
+}
+
+const googleAccountOut = (account: GoogleAccount) => ({
+  accountId: account.connectionId,
+  name: account.ads?.name ?? account.label,
+  state: account.state,
+  stateText: account.stateText,
+  googleAdsAccount: account.ads
+    ? { customerId: account.ads.customerId, currency: account.ads.currency, timeZone: account.ads.timeZone, testAccount: account.ads.isTest }
+    : null,
+  lastReadAt: account.read.lastReadAt,
+  newestDay: account.read.lastDataDay,
+  nextReadAt: account.read.nextReadAt,
+  lastError: account.read.lastError,
+})
+
+/** Why a Google answer holds no numbers, in words; null when it holds some. */
+function googleEmpty(account: GoogleAccount | null, daysRead: number): string | null {
+  if (!account) return 'Google is not connected for this business: a person connects Google in Nexus (Settings › Channels › Google) and chooses the Google Ads account Nexus reads.'
+  if (!account.ads) return 'No Google Ads account is chosen for this business yet: a person chooses one in Nexus (Settings › Channels › Google).'
+  if (daysRead === 0) return `Nexus has no Google Ads numbers for this window yet. ${account.stateText}`.trim()
+  return null
+}
+
+const googleMetricsOut = (m: GoogleAdsMetrics) => ({
+  impressions: m.impressions,
+  clicks: m.clicks,
+  conversions: m.conversions,
+  spendCents: m.spendCents,
+  conversionValueCents: m.conversionValueCents,
+  roas: m.roas,
+})
+
+async function googleOverview(a: GoogleArgs & { days: number }) {
+  const o = await googleAdsOverview({ connectionId: a.accountId, days: a.days })
+  const list = o.account?.ads ? await googleAdsCampaignList({ connectionId: o.account.connectionId, from: o.window.from, to: o.window.to }) : null
+  const campaigns = list?.items ?? []
+  const byStatus: Record<string, number> = {}
+  for (const c of campaigns) {
+    // A campaign Nexus has numbers for but whose settings it has not read yet has no status (never a guessed one).
+    const key = c.status ?? 'NOT_READ_YET'
+    byStatus[key] = (byStatus[key] ?? 0) + 1
+  }
+  const topCampaigns = campaigns
+    .filter((c) => c.metrics && (c.metrics.spendCents > 0 || c.metrics.clicks > 0))
+    .sort((x, y) => y.metrics!.spendCents - x.metrics!.spendCents || (x.name < y.name ? -1 : x.name > y.name ? 1 : 0))
+    .slice(0, TOP_CAMPAIGNS)
+    .map((c) => ({ campaignId: c.campaignId, externalCampaignId: c.externalCampaignId, name: c.name, status: c.status, type: c.type, ...googleMetricsOut(c.metrics!) }))
+  const empty = googleEmpty(o.account, o.coverage.daysRead)
+  return {
+    channel: 'google' as const,
+    writes: GOOGLE_WRITES,
+    account: o.account ? googleAccountOut(o.account) : null,
+    accounts: o.accounts.map(googleAccountOut),
+    currency: o.currency,
+    timeZone: o.timeZone,
+    dataAsOf: o.dataAsOf,
+    window: { from: o.window.from, to: o.window.to, days: o.coverage.daysInWindow, provisionalFrom: o.window.provisionalFrom, note: GOOGLE_PROVISIONAL_NOTE },
+    coverage: o.coverage,
+    counting: GOOGLE_COUNTING,
+    totals: o.totals,
+    previous: o.previous,
+    days: o.days,
+    campaigns: { total: campaigns.length, byStatus },
+    topCampaigns,
+    ...(empty ? { empty } : {}),
+  }
+}
+
+async function googleCampaigns(a: CampaignListArgs, scope: string) {
+  const size = pageSize(a.limit)
+  const list = await googleAdsCampaignList({ connectionId: a.accountId, days: a.days, status: a.status, search: a.search })
+  const positionOf = (c: (typeof list.items)[number]): CursorPosition => ({ values: [c.name], id: c.campaignId })
+  const page = keysetPage(list.items, positionOf, size, scope, a.cursor)
+  const account = list.context.account
+  const owner = account ? { accountId: account.connectionId, name: account.ads?.name ?? account.label } : null
+  const items = page.items.map((c) => ({
+    campaignId: c.campaignId,
+    externalCampaignId: c.externalCampaignId,
+    name: c.name,
+    account: owner,
+    status: c.status,
+    servingStatus: c.servingStatus,
+    primaryStatus: c.primaryStatus,
+    type: c.type,
+    typeText: campaignTypeText(c.type),
+    biddingStrategy: c.biddingStrategy,
+    currency: list.context.currency,
+    dailyBudgetCents: c.dailyBudgetCents,
+    budgetShared: c.budgetShared,
+    startDate: c.startDate,
+    endDate: c.endDate,
+    metrics: c.metrics ? googleMetricsOut(c.metrics) : null,
+    // Never a time Nexus did not read this campaign's settings (status null: numbers only, settings not read yet).
+    settingsSyncedAt: c.status ? c.settingsReadAt : null,
+  }))
+  const empty = googleEmpty(account, list.coverage.daysRead)
+    ?? (list.items.length === 0 ? (a.status || a.search ? 'No Google Ads campaign matches these filters.' : 'No Google Ads campaign in this account.') : null)
+  return {
+    channel: 'google' as const,
+    writes: GOOGLE_WRITES,
+    account: account ? googleAccountOut(account) : null,
+    currency: list.context.currency,
+    dataAsOf: list.context.customer?.lastSuccessAt?.toISOString() ?? null,
+    window: { from: list.window.from, to: list.window.to, days: list.coverage.daysInWindow, provisionalFrom: list.window.provisionalFrom, note: GOOGLE_PROVISIONAL_NOTE },
+    coverage: list.coverage,
+    counting: GOOGLE_COUNTING,
+    items,
+    nextCursor: page.nextCursor,
+    total: list.items.length,
+    ...(page.nextCursor ? { more: moreHint(items.length, list.items.length, page.cut, 'status or search') } : {}),
+    ...(empty ? { empty } : {}),
+  }
+}
+
 const adsOverview: AgentTool = {
   name: 'ads-overview',
   title: 'Advertising overview',
@@ -534,8 +713,9 @@ const adsOverview: AgentTool = {
   requires: [F.adsView],
   restrictedFields: AD_MONEY,
   input: z.object({
-    channel: channelArg,
+    channel: readChannelArg,
     market: marketArg,
+    accountId: googleAccountArg,
     days: daysArg(7, 'the window'),
   }),
   description:
@@ -555,19 +735,23 @@ const adsOverview: AgentTool = {
     + 'before, each day, the campaigns that cost most with their account, the eBay accounts in use, campaign counts, '
     + 'and for the business: listing coverage, the eligibility findings (unmatched, missing costs, unpromoted, '
     + 'campaigns without a rule, rates above break-even), pacing against the monthly ceilings, and whether eBay ad '
-    + 'writes are live or sandbox.',
+    + 'writes are live or sandbox.'
+    + GOOGLE_OVERVIEW_WORDS,
   handler: async (args) => {
+    const a = args as { channel: ReadChannel; market?: string; accountId?: string; days: number }
+    const refused = googleArgsRefusal(a)
+    if (refused) return { ok: false, error: refused }
+    if (a.channel === 'google') return googleRead(() => googleOverview(a))
     await primeSettledWindow() // BB-14 — the settled window the scheduler's decisions read
-    const a = args as { channel: AdChannel; market?: string; days: number }
     return { ok: true, data: a.channel === 'ebay' ? await ebayOverview(a) : await amazonOverview(a) }
   },
 }
 
 // ── ad-campaigns ───────────────────────────────────────────────────────────────────────────────────
 
-const CAMPAIGN_STATUSES = ['ENABLED', 'PAUSED', 'ARCHIVED', 'DRAFT', 'RUNNING', 'SYSTEM_PAUSED', 'ENDED', 'SUSPENDED', 'SCHEDULED'] as const
+const CAMPAIGN_STATUSES = ['ENABLED', 'PAUSED', 'ARCHIVED', 'DRAFT', 'RUNNING', 'SYSTEM_PAUSED', 'ENDED', 'SUSPENDED', 'SCHEDULED', 'REMOVED'] as const
 
-interface CampaignListArgs { channel: AdChannel; market?: string; status?: string; search?: string; days: number; limit?: number; cursor?: string }
+interface CampaignListArgs { channel: ReadChannel; market?: string; accountId?: string; status?: string; search?: string; days: number; limit?: number; cursor?: string }
 
 async function amazonCampaigns(a: CampaignListArgs, scope: string) {
   const size = pageSize(a.limit)
@@ -676,10 +860,11 @@ const adCampaigns: AgentTool = {
   requires: [F.adsView],
   restrictedFields: AD_MONEY,
   input: z.object({
-    channel: channelArg,
+    channel: readChannelArg,
     market: marketArg,
+    accountId: googleAccountArg,
     status: z.preprocess(upper, z.enum(CAMPAIGN_STATUSES)).optional()
-      .describe('only campaigns in this status: Amazon ENABLED | PAUSED | ARCHIVED | DRAFT; eBay RUNNING | PAUSED | SYSTEM_PAUSED | ENDED | SUSPENDED | SCHEDULED'),
+      .describe('only campaigns in this status: Amazon ENABLED | PAUSED | ARCHIVED | DRAFT; eBay RUNNING | PAUSED | SYSTEM_PAUSED | ENDED | SUSPENDED | SCHEDULED; Google ENABLED | PAUSED | REMOVED'),
     search: z.string().trim().min(1).max(100).optional().describe('only campaigns whose name contains this text'),
     days: daysArg(30, 'the metrics window'),
     limit: limitArg,
@@ -698,11 +883,15 @@ const adCampaigns: AgentTool = {
     + 'status, ad rate, daily budget, currency, its OWN eBay account (account.connectionId: the account any change to '
     + 'it goes to), ads promoted, the rules that cover it, and impressions, clicks, sold units, ad fees (as spend), '
     + 'sales and ACoS over the window; writes says whether eBay ad writes are live or sandbox.'
+    + GOOGLE_CAMPAIGN_WORDS
     + MONEY_WORDS + PAGING,
   handler: (args) => listTool('ad-campaigns', async () => {
-    await primeSettledWindow() // BB-14 — the settled window the scheduler's decisions read
     const a = args as unknown as CampaignListArgs
+    const refused = googleArgsRefusal(a)
+    if (refused) return { ok: false, error: refused }
     const scope = scopeOf('ad-campaigns', args)
+    if (a.channel === 'google') return googleRead(() => googleCampaigns(a, scope))
+    await primeSettledWindow() // BB-14 — the settled window the scheduler's decisions read
     return { ok: true, data: a.channel === 'ebay' ? await ebayCampaigns(a, scope) : await amazonCampaigns(a, scope) }
   }),
 }

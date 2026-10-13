@@ -325,6 +325,8 @@
 .nds-tag.success { color: var(--nds-success-text); background: var(--nds-success-soft); }
 .nds-tag.warning { color: var(--nds-warning-text); background: var(--nds-warning-soft); }
 .nds-tag.danger { color: var(--nds-danger-text); background: var(--nds-danger-soft); }
+/* `truncate`: one line inside its container; the full text rides in `title`. */
+.nds-tag.is-truncated { max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: top; }
 
 /* ── TagInput (tag-based free entry + suggestion menu) ───────────── */
 .nds-taginput { position: relative; }

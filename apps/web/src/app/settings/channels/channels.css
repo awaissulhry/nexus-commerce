@@ -74,7 +74,18 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--nds-space-6);
+  min-width: 0;
   margin-bottom: var(--nds-space-12);
+}
+/* A sign-in's name or e-mail: one line, ending in an ellipsis when it is longer than its box (the full text is the
+   element's title). Never broken inside a word ("…example.co / m"). */
+.nds-connect-ident {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .nds-connect-note {
   margin: 0 0 var(--nds-space-12);
@@ -141,7 +152,8 @@
 .nds-cd-pair {
   display: grid;
   gap: var(--nds-space-12);
-  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  /* Never wider than the page: a fixed 420px minimum panned every channel page sideways on a phone (390 px). */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
   align-items: start;
 }
 .nds-cd-grouplabel {

@@ -76,7 +76,8 @@ export async function runHeartbeatFor(row: Row, actor: Actor = CRON_ACTOR): Prom
     await prisma.channelConnection.update({ where: { id: row.id }, data })
     await transition(row, 'connected', 'heartbeat ok', actor)
     await recordConnectionEvent({ connectionId: row.id, channelKey: key, type: 'heartbeat_ok', actor, detail: { latencyMs: result.latencyMs } })
-    if (spec.discoverScopes) {
+    // A connector whose discovery spends a scarce quota (Google Ads) discovers at connect and on demand only.
+    if (spec.discoverScopes && spec.discoverOnHeartbeat !== false) {
       try {
         const scopes = await spec.discoverScopes({ ...handle, identity: result.identity ?? handle.identity, grantedScopes: result.scopes ?? handle.grantedScopes })
         /**

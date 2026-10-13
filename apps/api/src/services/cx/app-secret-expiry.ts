@@ -40,6 +40,7 @@ const APP_LABEL: Record<string, string> = {
   EBAY: 'eBay',
   SHOPIFY: 'Shopify',
   ETSY: 'Etsy',
+  GOOGLE: 'Google',
 }
 export const appLabel = (channelKey: string): string => APP_LABEL[channelKey] ?? channelKey
 

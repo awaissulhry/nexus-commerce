@@ -269,6 +269,20 @@ export const adsSyncQueue: Queue = new Queue('ads-sync', {
   defaultJobOptions,
 })
 
+// Google Ads step 1a — one read of one Google Ads account per job (services/marketing/google-ads/sync.service.ts), run by
+// workers/google-ads-sync.worker.ts. Job ids are deterministic per account and day (daily), per hour (manual, first read),
+// so a second enqueue while one is kept adds nothing. A read records its own outcome and never throws for a Google answer;
+// a retry is for a fault of Nexus's own (the database), and the run's operations allowance bounds what it may spend.
+export const googleAdsSyncQueue: Queue = new Queue('google-ads-sync', {
+  connection: redis.connection,
+  defaultJobOptions: {
+    attempts: 2,
+    backoff: { type: 'exponential', delay: 60_000 },
+    removeOnComplete: { age: 86400 },
+    removeOnFail: { age: 86400 },
+  },
+})
+
 export const queueEvents: QueueEvents = new QueueEvents('outbound-sync', {
   connection: redis.connection,
 })
@@ -444,6 +458,7 @@ export async function closeQueue() {
     await publicationBatchQueue.close()
     await fbaInboundQueue.close()
     await adsSyncQueue.close()
+    await googleAdsSyncQueue.close()
     await ebayOrderNoticeQueue.close()
     await queueEvents.close()
     await channelSyncQueueEvents.close()

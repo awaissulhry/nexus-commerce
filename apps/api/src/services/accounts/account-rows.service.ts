@@ -13,8 +13,9 @@ import prisma from "../../db.js";
 import { isOwnConnection, listManagedConnections, type ConnectionRow as ChannelConnection } from "../connection-resolver.service.js";
 import { scopeDriftOf, tryGetChannelSpec, channelKeyOf } from "../cx/catalog.js";
 import { connectionLabel } from "../connection-label.js";
+import { logger } from "../../utils/logger.js";
 
-export type Channel = "AMAZON" | "AMAZON_ADS" | "EBAY" | "SHOPIFY" | "WOOCOMMERCE" | "ETSY";
+export type Channel = "AMAZON" | "AMAZON_ADS" | "EBAY" | "SHOPIFY" | "WOOCOMMERCE" | "ETSY" | "GOOGLE";
 
 /**
  * One market / profile the grant reaches. `state` is set on an Amazon Ads profile only: what Nexus does with it, from
@@ -39,6 +40,7 @@ const CHANNEL_ORDER: Record<string, number> = {
   SHOPIFY: 2,
   WOOCOMMERCE: 3,
   ETSY: 4,
+  GOOGLE: 5,
 };
 
 type Health = "ok" | "warn" | "error" | "unknown";
@@ -196,6 +198,26 @@ async function attachAdsProfileStates(rows: ChannelConnection[], scopesByConnect
   for (const scope of profiles) scope.state = ADS_ACCOUNT_STATE_LABEL[states.get(scope.externalId) ?? "not_read"];
 }
 
+/**
+ * Google Ads step 1a — a Google sign-in is healthy only when it reads something: "Choose a Google Ads account" until a
+ * Google Ads account is chosen, then the state of its read (services/google/google-accounts.service.ts). A sign-in the
+ * auth state already marks as an error keeps that answer. Never fails the list: a Google problem leaves the rows as they were.
+ */
+async function attachGoogleHealth(accounts: AccountRow[]): Promise<void> {
+  const google = accounts.filter((a) => a.channel === "GOOGLE" && a.isActive && a.health !== "error");
+  if (google.length === 0) return;
+  try {
+    const { googleConnectionHealth } = await import("../google/google-accounts.service.js");
+    const health = await googleConnectionHealth();
+    for (const account of google) {
+      const state = health.get(account.id);
+      if (state) Object.assign(account, state);
+    }
+  } catch (err) {
+    logger.warn("[accounts] Google health not read", { error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
 function hasAnyChannelWithTwo(accounts: AccountRow[]): boolean {
   const counts = new Map<string, number>();
   for (const a of accounts) counts.set(a.channel, (counts.get(a.channel) ?? 0) + 1);
@@ -251,6 +273,8 @@ export async function listAccountRows({ includeDisconnected }: { includeDisconne
         a.sortOrder - b.sortOrder ||
         a.label.localeCompare(b.label),
     );
+
+  await attachGoogleHealth(accounts);
 
   const connectedChannels = new Set(accounts.map((a) => a.channel));
   const notConnected = ACTIVE_CHANNELS.filter((c) => !connectedChannels.has(c));

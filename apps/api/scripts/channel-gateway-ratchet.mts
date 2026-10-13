@@ -3,7 +3,7 @@
  *
  * Counts the places that send to a channel WITHOUT the gateway (services/gateway/gateway.ts): a
  * `fetch(`, `https.request(`, `axios…(` or `new SellingPartner(` whose target is eBay, Amazon SP-API,
- * Amazon Ads, Shopify or Etsy. The count per channel may only go down (the method that took the MAP
+ * Amazon Ads, Shopify, Etsy or Google (Ads, Merchant Center, Analytics, sign-in). The count per channel may only go down (the method that took the MAP
  * lookups from 60 to 0).
  *
  * Which channel a send belongs to, in this order: a channel host written in the call itself; else the
@@ -24,7 +24,7 @@ import * as path from 'node:path'
 import * as url from 'node:url'
 import ts from 'typescript'
 
-type Channel = 'EBAY' | 'AMAZON_SP' | 'AMAZON_ADS' | 'SHOPIFY' | 'ETSY'
+type Channel = 'EBAY' | 'AMAZON_SP' | 'AMAZON_ADS' | 'SHOPIFY' | 'ETSY' | 'GOOGLE'
 
 /**
  * Sends outside the gateway allowed per channel. Lower a number in the same change that moves a path;
@@ -42,6 +42,9 @@ type Channel = 'EBAY' | 'AMAZON_SP' | 'AMAZON_ADS' | 'SHOPIFY' | 'ETSY'
  * downloads, OAuth, connect-time identity) and Etsy 4 → 0 (the account reader, the legacy writer as
  * app-level; 2 exempt: connector identity). **The burn-down is closed: every channel at 0.** Any increase
  * from here is a regression — which is what a baseline of 0 is for.
+ * 2026-10-13: Google joins at 0 (services/gateway/google.ts from its first call). Its hosts are the Ads,
+ * Merchant, Analytics and sign-in APIs only — Gemini (`generativelanguage`, services/ai) and Google Fonts
+ * are not a sales channel and stay uncounted.
  */
 const BASELINE: Record<Channel, number> = {
   EBAY: 0,
@@ -49,6 +52,7 @@ const BASELINE: Record<Channel, number> = {
   AMAZON_ADS: 0,
   SHOPIFY: 0,
   ETSY: 0,
+  GOOGLE: 0,
 }
 
 const HOSTS: Array<[Channel, RegExp]> = [
@@ -57,6 +61,7 @@ const HOSTS: Array<[Channel, RegExp]> = [
   ['EBAY', /(^|[/.])(api|apiz|svcs|open\.api|auth|signin)(\.sandbox)?\.ebay\.com/],
   ['SHOPIFY', /myshopify\.com|\/admin\/api\/20\d\d-\d\d/],
   ['ETSY', /(openapi|api)\.etsy\.com/],
+  ['GOOGLE', /(googleads|merchantapi|analyticsadmin|analyticsdata|openidconnect|oauth2)\.googleapis\.com|accounts\.google\.com/],
 ]
 /** The API path written in the call itself — decides before the file's hosts (a file can mix channels). */
 const API_PATHS: Array<[Channel, RegExp]> = [
@@ -66,6 +71,8 @@ const API_PATHS: Array<[Channel, RegExp]> = [
   ['AMAZON_SP', /\/(listings|orders|fba|feeds|reports|catalog|notifications|sellers|finances|aplus|definitions|products|mfn|shipping)\/(v\d|20\d\d)/],
 ]
 const PATH_CHANNEL: Array<[Channel, RegExp]> = [
+  // Before Amazon Ads: `marketing/google-ads/` is Google, not Amazon's `ads/`.
+  ['GOOGLE', /connectors\/google\/|(^|\/)google(-ads)?\//i],
   ['AMAZON_ADS', /amazon-ads|advertising|(^|\/)ads[-/]/i],
   ['EBAY', /ebay/i],
   ['SHOPIFY', /shopify/i],
@@ -173,7 +180,7 @@ export function scanQueueRowCreation(root = SRC): Array<{ file: string; line: nu
 }
 
 export function counts(sites: Site[]): Record<Channel, number> {
-  const out: Record<Channel, number> = { EBAY: 0, AMAZON_SP: 0, AMAZON_ADS: 0, SHOPIFY: 0, ETSY: 0 }
+  const out: Record<Channel, number> = { EBAY: 0, AMAZON_SP: 0, AMAZON_ADS: 0, SHOPIFY: 0, ETSY: 0, GOOGLE: 0 }
   for (const site of sites) if (!site.exempt) out[site.channel]++
   return out
 }
