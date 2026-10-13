@@ -69,7 +69,7 @@ import { createWorkspaceService } from '../workspace.service.js'
 import { autoCommitRefusal, autoFreshRefusal, autoPlanCommitRefusal, freshCode, mayRaise, noteAutoFailure, type RaiseWords } from '../agents/claude-trust.service.js'
 import { drainPlans, enqueuePlan } from '../agents/change-plan.service.js'
 import { approvalStepUp, stepUpOf, type StepUp } from '../agents/step-up-approval.js'
-import { PLAN_TOOL } from '../agents/tool-types.js'
+import { approvedOnVersion, PLAN_TOOL } from '../agents/tool-types.js'
 import type { QueueBulkResult } from '@nexus/shared/approval-queue'
 import { BULK_MAX_IDS, bulkApproveRefusal } from './bulk-approve-policy.js'
 
@@ -928,13 +928,14 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'bulk-attribute-change': ['changes', 'totals', 'basis'],
   // MCP full control (section 03) — content changes. `changes` is from → to per field with the English meaning the
   // person read; `reach` names the listings that follow the shared text and those with their own pin (a pin added
-  // in between changes who the text reaches); `basis` fingerprints what each field stores now and the language
-  // row's version, so a sheet edit between preview and approval is caught even when the shown text did not move.
+  // in between changes who the text reaches); `basis` fingerprints what each field it changes stores now at its tier, so a
+  // sheet edit of that field between preview and approval is caught even when the shown text did not move. 2.3 — not the
+  // language row's version: an edit of another field moves that (VERSION_BASIS_BEFORE: one approved before stands on it).
   'set-content': ['changes', 'reach', 'basis'],
   // `reach` names the one listing and its status: a draft published in between is a different decision.
   'set-listing-content': ['changes', 'reach', 'basis'],
-  // `changes` keeps the first 20 lines; `totals` says how many; `basis` fingerprints every product's stored text, every
-  // change and every listing reached, so a move on product 21 makes the approval stale too.
+  // `changes` keeps the first 20 lines; `totals` says how many; `basis` fingerprints every product's stored text of the
+  // fields it changes, every change and every listing reached, so a move on product 21 makes the approval stale too.
   'bulk-content-change': ['changes', 'totals', 'reach', 'basis'],
   // I10 — identity fixes: `changes.*.from` is the value read at preview time; a different one means a different decision.
   'set-product-sku': ['changes'],
@@ -1068,8 +1069,9 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'set-pricing-rule': ['action', 'rule', 'changes', 'products'],
   'set-promotion': ['action', 'promotion', 'scope'],
   'schedule-price-change': ['action', 'change', 'bounds'],
-  // 08 S11 — every product's floor and ceiling and every listing's price as they were (`basis` fingerprints all of them,
-  // with each listing's version), and what is sent again.
+  // 08 S11 — every product's floor and ceiling and every listing's price as they were (`basis` fingerprints all of them),
+  // and what is sent again. 2.3 — a listing's price stands on the price it shows, its own price and its rule, never on its
+  // version (VERSION_BASIS_BEFORE: a request approved before is checked on the version, as it was approved).
   'set-price-bounds': ['changes', 'totals', 'basis'],
   'bulk-listing-price-change': ['changes', 'totals', 'basis'],
   'resend-prices': ['send', 'totals', 'basis'],
@@ -1101,8 +1103,9 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'create-product': ['product', 'variations'],
   'create-variations': ['previewToken', 'familyVersion', 'counts'],
   'discard-new-products': ['restore', 'products'],
-  // L8 — the Matrix door's own preview: the verb and every change it would make (from → to per cell; a sale's cell
-  // version too). The run carries these changes and the door re-verifies each one again.
+  // L8 — the Matrix door's own preview: the verb and every change it would make (from → to per cell). The run carries
+  // these changes and the door re-verifies each one again. 2.3 — a sale stands on the sale it saw, not on the listing's
+  // version (a request approved before carried the version in each change: VERSION_BASIS_BEFORE).
   'set-listing-stock': ['verb', 'changes'],
   'set-listing-price': ['verb', 'changes'],
   'revert-listing-change': ['operationId', 'status', 'cells'],
@@ -1123,6 +1126,29 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   // the person approved is a different import.
   'import-catalog': ['counts', 'basis'],
   'rollback-bulk-operation': ['counts', 'basis'],
+}
+
+/**
+ * Proposal 2.3 (2026-10-13) — the tools whose basis stood on a VERSION until then: a listing's, which every write to the
+ * row moves (an order's stock cascade, a quantity push), or a text row's, which a write of any of its fields moves. An
+ * approved change was refused although nothing it changes had moved, and a plan's later step was skipped for its own
+ * plan's earlier write. Their previews now stand on the fields they change (`basisOn: 'fields'`) and still carry the
+ * version basis they were compared on before (`versionBasis`; a sale's `versions`, one per change). A request approved
+ * before (its preview has no `basisOn`) is compared with the fresh dry run in the shape it was approved in — on the
+ * version, as it was. Pure.
+ */
+export const VERSION_BASIS_BEFORE: Readonly<Record<string, (fresh: Record<string, unknown>) => Record<string, unknown>>> = {
+  'bulk-listing-price-change': (fresh) => ({ ...fresh, basis: fresh.versionBasis }),
+  'resend-prices': (fresh) => ({ ...fresh, basis: fresh.versionBasis }),
+  'set-content': (fresh) => ({ ...fresh, basis: fresh.versionBasis }),
+  'set-listing-content': (fresh) => ({ ...fresh, basis: fresh.versionBasis }),
+  'bulk-content-change': (fresh) => ({ ...fresh, basis: fresh.versionBasis }),
+  // A sale: each change carried the version its listing was read at. Any other set-listing-price never did.
+  'set-listing-price': (fresh) => {
+    const versions = fresh.versions
+    if (!Array.isArray(versions) || !Array.isArray(fresh.changes)) return fresh
+    return { ...fresh, changes: (fresh.changes as Array<Record<string, unknown>>).map((change, i) => ({ ...change, version: versions[i] })) }
+  },
 }
 
 export interface StalenessVerdict {
@@ -1271,7 +1297,10 @@ export async function freshDryRun(
  */
 export function movedFields(toolName: string, approved: unknown, now: unknown): string[] {
   const before = (approved ?? {}) as Record<string, unknown>
-  const after = (now ?? {}) as Record<string, unknown>
+  const fresh = (now ?? {}) as Record<string, unknown>
+  // 2.3 — approved before its tool's basis moved off a version: compared on the version, as it was approved.
+  const shape = VERSION_BASIS_BEFORE[toolName]
+  const after = shape && approvedOnVersion(before) ? shape(fresh) : fresh
   const moved: string[] = []
   for (const key of MATERIAL_PREVIEW_FIELDS[toolName] ?? []) {
     if (!(key in before)) continue

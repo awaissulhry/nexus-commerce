@@ -225,8 +225,39 @@ export interface ToolContext {
  *   `hourly-plan:<RankScheduleGroup id>`    an hourly bid plan (its week, members, values, on/off)
  *   `automation-rule:<AutomationRule id>`   a rule (any domain: its settings, its level)
  *   `automation:<adapter id>:<row id | engine>`  any automation row a level switch moves
+ * Listings, products and their text (proposal 2.3) name the thing AND the field, since one listing row holds price, sale,
+ * stock and text that different steps change independently:
+ *   `listing:<ChannelListing id>:price`      a listing's own price (its pin or follow, its rule), named by its id
+ *   `listing:<product id>@<coordinate key>:<price | sale | stock>`  the same listing as the Matrix names it: its row (the
+ *                                            product) and coordinate (EBAY:IT, AMAZON:EU …); `stock` is how it takes its
+ *                                            quantity (pin, follow, buffer, hold, fulfilment)
+ *   `listing:<product id>@<CHANNEL>:<MARKET>:<field>@<language>`  one listing's own text field in one language
+ *   `product:<product id | SKU>:price`       a product's master price (what a listing that follows it shows)
+ *   `product:<product id | SKU>:<field>@<language | source>`  a product's shared text field in one language (`source`: the
+ *                                            primary language's text every language falls back to), and which listings follow it
+ * A listing named by its id and by its Matrix row and coordinate are two names: steps that name it differently do not chain.
  */
 export type PlanEntityKey = `${string}:${string}`
+
+/**
+ * Proposal 2.3 — a preview that stands on the fields its change reads and writes (`basisOn: 'fields'`), never on a row's
+ * VERSION: an order's stock cascade or a quantity push moves a listing's version, a write of another field moves a text
+ * row's, and neither is a reason to refuse a change whose own fields did not move.
+ */
+export const BASIS_ON_FIELDS = 'fields' as const
+
+/**
+ * Proposal 2.3 — was this preview approved before its tool's basis moved off a version (it does not say `basisOn:
+ * 'fields'`)? Such a request is checked on the version basis, as it was approved. Pure.
+ */
+export function approvedOnVersion(preview: unknown): boolean {
+  return (preview as { basisOn?: unknown } | null | undefined)?.basisOn !== BASIS_ON_FIELDS
+}
+
+/** C6 — sorted, without repeats: an entity list reads the same whatever order its keys were found in. */
+export function entityKeys(keys: Iterable<PlanEntityKey | null | undefined | false>): PlanEntityKey[] {
+  return [...new Set([...keys].filter((key): key is PlanEntityKey => !!key))].sort()
+}
 
 /** C6 — what a plan step stands on and what it changes (AgentTool.planEntities). */
 export interface PlanEntities {

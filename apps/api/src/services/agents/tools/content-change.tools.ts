@@ -26,7 +26,7 @@ import { FEATURES as F } from '@nexus/shared/permissions'
 import { channelLabel } from '@nexus/shared/channel-label'
 import type { ContentAddress } from '@nexus/shared/content-language'
 import prisma from '../../../db.js'
-import type { AgentTool, ToolResult, ToolUndo } from '../tool-types.js'
+import { BASIS_ON_FIELDS, entityKeys, type AgentTool, type PlanEntities, type PlanEntityKey, type ToolResult, type ToolUndo } from '../tool-types.js'
 import { PRODUCT_NOT_FOUND } from './live-product.js'
 import { NEXUS_ONLY } from './bulk.tools.js'
 import { channelNotHere, COORDINATE_CHANNELS, languageArg, languageOf, liveProductByRef, NOT_CONTENT_GROUPS, primaryLanguage } from './content.tools.js'
@@ -404,9 +404,83 @@ export function sharedChanges(plan: SharedPlan) {
   }]))
 }
 
-/** Everything the preview was worked out from that `changes` does not show: what each field stores at this tier, and the row's version. */
+/**
+ * Everything the preview was worked out from that `changes` does not show: what each field it changes stores at this tier.
+ * 2.3 — not the language row's version: an edit of another field of the row moves it (an earlier step of the same plan,
+ * a person's edit of another field), and the change would have been refused for nothing.
+ */
 export const sharedBasis = (plan: SharedPlan) =>
+  basisOf({ product: plan.product.id, language: plan.language, tier: plan.tier, own: plan.fields.map((f) => [f.field, f.own]) })
+
+/** The basis a request approved before 2.3 stood on (with the language row's version): it is checked on it, as it was approved. */
+export const sharedVersionBasis = (plan: SharedPlan) =>
   basisOf({ product: plan.product.id, language: plan.language, tier: plan.tier, version: plan.translationVersion, own: plan.fields.map((f) => [f.field, f.own]) })
+
+const textOf = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : null)
+/** Each product reference once: the id a preview read, and the reference asked (an id or a SKU). */
+const productRefs = (...values: unknown[]) => [...new Set(values.map(textOf).filter((v): v is string => !!v))]
+
+/**
+ * C6 / 2.3 — the shared text a step stands on and changes, as plan entities: each product's field in one language
+ * (`@source`: the primary language's text, the source every language falls back to). A step in another language reads
+ * the source too; a source step writes the primary language as well. Pure.
+ */
+function sharedTextEntities(products: string[], fields: string[], language: string | null, source: boolean): PlanEntities {
+  const at = (where: string | null) => (where ? products.flatMap((p) => fields.map((f) => `product:${p}:${f}@${where}` as const)) : [])
+  const writes = entityKeys([...at(source ? 'source' : language), ...(source ? at(language) : [])])
+  return { reads: entityKeys([...writes, ...at('source')]), writes }
+}
+
+/** C6 / 2.3 — set-content in a change plan (AgentTool.planEntities): the fields it changes (`changes`) of its product. Pure. */
+export function setContentEntities(args: Record<string, unknown>, preview: unknown): PlanEntities {
+  const p = (preview ?? {}) as { productId?: unknown; language?: unknown; layer?: unknown; changes?: unknown }
+  const fields = p.changes && typeof p.changes === 'object' ? Object.keys(p.changes) : []
+  return sharedTextEntities(productRefs(p.productId, args.product), fields, textOf(p.language) ?? textOf(args.language), p.layer === 'source')
+}
+
+/** C6 / 2.3 — bulk-content-change in a change plan: each item's fields of its product (and the SKUs the preview names). Pure. */
+export function bulkContentEntities(args: Record<string, unknown>, preview: unknown): PlanEntities {
+  const p = (preview ?? {}) as { language?: unknown; layer?: unknown; changes?: unknown }
+  const language = textOf(p.language) ?? textOf(args.language)
+  const source = p.layer === 'source'
+  const parts: PlanEntities[] = []
+  for (const item of (Array.isArray(args.items) ? args.items : []) as Array<Record<string, unknown>>) {
+    const fields = [
+      ...TEXT_FIELDS.filter((f) => item[f] !== undefined),
+      ...(item.attributes && typeof item.attributes === 'object' ? Object.keys(item.attributes) : []),
+      ...(Array.isArray(item.reset) ? item.reset.filter((f): f is string => typeof f === 'string') : []),
+    ]
+    parts.push(sharedTextEntities(productRefs(item.product), fields, language, source))
+  }
+  for (const line of (Array.isArray(p.changes) ? p.changes : []) as Array<{ sku?: unknown; field?: unknown }>) {
+    const field = textOf(line?.field)
+    if (field) parts.push(sharedTextEntities(productRefs(line.sku), [field], language, source))
+  }
+  return { reads: entityKeys(parts.flatMap((e) => e.reads)), writes: entityKeys(parts.flatMap((e) => e.writes)) }
+}
+
+/**
+ * C6 / 2.3 — set-listing-content in a change plan: the listing's own fields it changes, by its product and coordinate, in
+ * its language; a text field's pin (or its return to the shared text) also changes who follows the product's shared text,
+ * and what the listing shows falls back to it. Pure.
+ */
+export function listingContentEntities(args: Record<string, unknown>, preview: unknown): PlanEntities {
+  const p = (preview ?? {}) as { productId?: unknown; language?: unknown; changes?: unknown }
+  const c = (args.coordinate ?? {}) as { channel?: unknown; market?: unknown; aliasKey?: unknown }
+  const channel = textOf(c.channel)?.toUpperCase(), market = textOf(c.market)?.toUpperCase(), alias = textOf(c.aliasKey)
+  const language = textOf(p.language) ?? textOf(args.language)
+  const products = productRefs(p.productId, args.product)
+  const changes = (p.changes && typeof p.changes === 'object' ? p.changes : {}) as Record<string, { kind?: unknown }>
+  const own: PlanEntityKey[] = []
+  const texts: string[] = []
+  for (const [field, change] of Object.entries(changes)) {
+    if (channel && market) own.push(...products.map((product) => `listing:${product}@${channel}:${market}${alias ? `#${alias}` : ''}:${field}@${language ?? ''}` as const))
+    if (change?.kind !== 'attribute') texts.push(field)
+  }
+  const shared = sharedTextEntities(products, texts, language, false)
+  const writes = entityKeys([...own, ...shared.writes])
+  return { reads: entityKeys([...writes, ...shared.reads]), writes }
+}
 
 export interface GlossaryFinding { sku?: string; field: string; avoid: string; use: string; context: string | null }
 
@@ -556,6 +630,7 @@ const setContent: AgentTool = {
   // d8: the person's Approve in Nexus is the review of the text, so a person always approves it there.
   maxClaudeTrust: 'ask',
   undo: SET_CONTENT_UNDO,
+  planEntities: setContentEntities,
   description:
     'Change one product\'s shared text in one language — title, bullet points, description, keywords, translatable '
     + 'attributes — or drop a language\'s own text so it shows the source again (reset). The primary language (it) is the '
@@ -583,7 +658,9 @@ const setContent: AgentTool = {
         layer: plan.tier === 'source' ? 'source' : 'language',
         changes: sharedChanges(plan),
         reach,
+        basisOn: BASIS_ON_FIELDS,
         basis: sharedBasis(plan),
+        versionBasis: sharedVersionBasis(plan),
         ...(plan.unchanged.length ? { unchanged: plan.unchanged } : {}),
         ...(checked.warnings.length ? { warnings: checked.warnings } : {}),
         ...(hits.length ? { glossaryHits: hits } : {}),
@@ -973,6 +1050,7 @@ const setListingContent: AgentTool = {
   reversibility: 'full',
   maxClaudeTrust: 'ask',
   undo: SET_LISTING_CONTENT_UNDO,
+  planEntities: listingContentEntities,
   description:
     'Change what one listing (Amazon, eBay or Etsy + market; Etsy: GLOBAL) shows, without touching the shared text or any other listing: '
     + 'pin = text this listing keeps as its own; follow = fields it stops keeping, so they show the shared text again; '
@@ -1000,7 +1078,11 @@ const setListingContent: AgentTool = {
         language: plan.language,
         changes: listingChanges(plan, shared),
         reach: { listing: plan.label, status: plan.listing.listingStatus, otherListingsChange: false },
-        basis: basisOf({ listing: plan.listing.id, language: plan.language, pinVersion: plan.pinVersion, own: plan.fields.map((f) => [f.kind, f.writerField, f.own]) }),
+        // 2.3 — what the listing keeps as its own for the fields it changes; never the pin row's version (an edit of another
+        // field, or the shared text's follow markers, move it). A request approved before stood on it: `versionBasis`.
+        basisOn: BASIS_ON_FIELDS,
+        basis: basisOf({ listing: plan.listing.id, language: plan.language, own: plan.fields.map((f) => [f.kind, f.writerField, f.own]) }),
+        versionBasis: basisOf({ listing: plan.listing.id, language: plan.language, pinVersion: plan.pinVersion, own: plan.fields.map((f) => [f.kind, f.writerField, f.own]) }),
         ...(plan.unchanged.length ? { unchanged: plan.unchanged } : {}),
         ...(checked.warnings.length ? { warnings: checked.warnings } : {}),
         ...(hits.length ? { glossaryHits: hits } : {}),
@@ -1111,6 +1193,7 @@ const bulkContentChange: AgentTool = {
   openWorld: false,
   reversibility: 'full',
   maxClaudeTrust: 'ask',
+  planEntities: bulkContentEntities,
   description:
     `Change the shared text of 1 to ${BULK_CONTENT_MAX_PRODUCTS} products in one language, in one approval: per product `
     + 'the title, bullet points, description, keywords or translatable attributes, or reset (drop a language\'s own text). '
@@ -1144,9 +1227,12 @@ const bulkContentChange: AgentTool = {
         changes: changes.slice(0, BULK_PREVIEW_CHANGES),
         ...(changes.length > BULK_PREVIEW_CHANGES ? { moreChanges: changes.length - BULK_PREVIEW_CHANGES } : {}),
         reach: { listingsFollowing: following.size, listingsWithOwnText: ownText.size },
-        // Everything it was worked out from, beyond the lines shown: every product's stored text, its row version,
-        // every change (also those past the first 20) and every listing it reaches.
+        // Everything it was worked out from, beyond the lines shown: every product's stored text of the fields it changes,
+        // every change (also those past the first 20) and every listing it reaches. 2.3 — not a row's version (`versionBasis`
+        // is the basis a request approved before stood on, checked on it as it was approved).
+        basisOn: BASIS_ON_FIELDS,
         basis: basisOf({ plans: plan.plans.map((p) => [p.product.id, sharedBasis(p)]), changes, reaches }),
+        versionBasis: basisOf({ plans: plan.plans.map((p) => [p.product.id, sharedVersionBasis(p)]), changes, reaches }),
         ...(checked.warnings.length ? { warnings: checked.warnings.slice(0, BULK_PREVIEW_CHANGES), ...(checked.warnings.length > BULK_PREVIEW_CHANGES ? { moreWarnings: checked.warnings.length - BULK_PREVIEW_CHANGES } : {}) } : {}),
         ...(hits.length ? { glossaryHits: hits.slice(0, BULK_PREVIEW_CHANGES) } : {}),
         note: `${NEXUS_ONLY} Saved as reviewed text: approving it is the texts' review. The English meanings are Claude's own reading of the new texts.`,

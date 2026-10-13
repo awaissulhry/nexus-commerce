@@ -251,6 +251,15 @@ describe('T7 — set-listing-content', { timeout: 30_000 }, () => {
     expect((await translationOf(amazonDe.id))!.name).toBe('Edited in the sheet')
   })
 
+  it('2.3 — another of the listing\'s own fields edited after the approval moves nothing it stands on: it runs', async () => {
+    const { parent, amazonDe } = await seed('TEST-SKU-T7-OTHER')
+    const { approvalId } = await queued({ product: parent.id, coordinate: AMAZON_DE, language: 'de', pin: { description: 'Eigene Beschreibung.' }, englishMeaning: { description: 'Own description.' } })
+    // A person edits the listing's own German TITLE in the sheet meanwhile: the pin row's version moves, its description does not.
+    await inside(() => db().channelListingTranslation.updateMany({ where: { channelListingId: amazonDe.id, language: 'de' }, data: { name: 'Edited in the sheet', version: { increment: 1 } } }))
+    expect(await approveAndRun(approvalId)).toMatchObject({ ok: true, status: 'executed' })
+    expect(await translationOf(amazonDe.id)).toMatchObject({ name: 'Edited in the sheet', description: 'Eigene Beschreibung.' })
+  })
+
   it('undo restores an attribute with its original JSON type: a number stays a number, a list stays a list', async () => {
     const { parent, amazonDe } = await seed('TEST-SKU-T7-TYPES')
     await inside(() => db().channelListing.update({ where: { id: amazonDe.id }, data: { overrideData: { number_of_pockets: 4, special_feature: ['Impermeabile', 'Ventilata'] } } }))

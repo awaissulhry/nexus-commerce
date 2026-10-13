@@ -6,7 +6,8 @@
  *                               whose price would then sit outside them: the price door refuses to send those.
  *   bulk-listing-price-change   up to 250 listings' own prices by a percent, by an amount, to one price, or each to its
  *                               own price (an undo), optionally rounded down to .99 — each through the ONE channel price
- *                               door (`writeChannelPrices`), checked against the version the person approved.
+ *                               door (`writeChannelPrices`), checked against the price the person approved (2.3: not the
+ *                               listing's version, which an order's stock cascade moves).
  *   resend-prices               send the price each listing already carries again, through the door's send mode
  *                               (`pushPriceUpdate`, `/pricing`'s "Push price").
  *
@@ -28,7 +29,7 @@ import { holdsCascadedPrice, listingMarketCurrency, listingSendPrice } from '../
 import { roundDownTo99 } from '../../bulk-action/price-rounding.js'
 import { logger } from '../../../utils/logger.js'
 import type { ProductBulkContext } from '../../products/bulk-edit.service.js'
-import type { AgentTool, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
+import { approvedOnVersion, BASIS_ON_FIELDS, entityKeys, type AgentTool, type PlanEntities, type ToolContext, type ToolResult, type ToolUndo } from '../tool-types.js'
 import { PRODUCT_NOT_FOUND } from './live-product.js'
 
 const PREVIEW_LINES = 20
@@ -191,7 +192,14 @@ function listingPricePreview(plan: { lines: PriceLine[]; unchanged: number }) {
     })),
     ...(plan.lines.length > PREVIEW_LINES ? { moreChanges: plan.lines.length - PREVIEW_LINES } : {}),
     totals: { listings: plan.lines.length, unchanged: plan.unchanged, up, maxChangePct, held: held.length },
-    basis: basisOf(plan.lines.map((line) => [line.listing.id, line.listing.version, num(line.listing.price), num(line.listing.priceOverride), line.listing.followMasterPrice, num(line.listing.product?.basePrice), line.to])),
+    // 2.3 — what each price stands on: the price it shows (`from`, which a master price moves for a listing that follows
+    // it), its own price and whether it follows, its rule, and the price it gets. Never the listing's version: an order's
+    // stock cascade moves that, and the price with it would have been refused for nothing.
+    basisOn: BASIS_ON_FIELDS,
+    basis: basisOf(plan.lines.map((line) => [line.listing.id, line.from, num(line.listing.price), num(line.listing.priceOverride), line.listing.followMasterPrice,
+      line.listing.pricingRule, num(line.listing.priceAdjustmentPercent), line.to])),
+    // The basis a request approved before 2.3 stood on (each listing's version): it is checked on it, as it was approved.
+    versionBasis: basisOf(plan.lines.map((line) => [line.listing.id, line.listing.version, num(line.listing.price), num(line.listing.priceOverride), line.listing.followMasterPrice, num(line.listing.product?.basePrice), line.to])),
     note: `${NOT_YET} Each price goes through the Nexus price door as the person who approves it: a listing given its own price stops `
       + 'following the master price; one that changed since the approval is not touched. Prices are sent in the market\'s own currency, never a quantity.',
   }
@@ -211,6 +219,22 @@ const LISTING_PRICE_UNDO: ToolUndo = {
   },
 }
 
+/** The listings a price request names (listingIds, or each listing of `prices`). */
+function namedListings(args: Record<string, unknown>): string[] {
+  const ids = Array.isArray(args.listingIds) ? args.listingIds : []
+  const prices = Array.isArray(args.prices) ? args.prices.map((p) => (p as { listingId?: unknown } | null)?.listingId) : []
+  return [...ids, ...prices].filter((id): id is string => typeof id === 'string' && id.trim() !== '').map((id) => id.trim())
+}
+
+/**
+ * C6 / 2.3 — a listing price step of a change plan (AgentTool.planEntities): the price of every listing it names, read
+ * and written. A later price step on one of them then stands on this one's write, not on a change outside the plan. Pure.
+ */
+export function listingPriceEntities(args: Record<string, unknown>): PlanEntities {
+  const keys = entityKeys(namedListings(args).map((id) => `listing:${id}:price` as const))
+  return { reads: keys, writes: keys }
+}
+
 const bulkListingPriceChange: AgentTool = {
   name: 'bulk-listing-price-change',
   title: 'Change many listing prices',
@@ -226,6 +250,7 @@ const bulkListingPriceChange: AgentTool = {
   limits: BULK_LISTING_PRICE_LIMITS,
   withinLimits: bulkListingPriceWithinLimits,
   undo: LISTING_PRICE_UNDO,
+  planEntities: listingPriceEntities,
   description:
     `Change the own price of up to ${MAX_LISTINGS} listings: by a percent, by an amount, all to one price, or each to its own price, `
     + 'optionally rounded down to .99. Each listing given a price stops following the master price (a price of null hands it '
@@ -241,12 +266,16 @@ const bulkListingPriceChange: AgentTool = {
   async execute(args, ctx): Promise<ToolResult> {
     const plan = await planListingPrices(args)
     if (refused(plan)) return { ok: false, error: plan.error }
-    const approved = ctx.approvedPreview as { basis?: unknown } | undefined
+    const approved = ctx.approvedPreview as { basis?: unknown; basisOn?: unknown } | undefined
     if (typeof approved?.basis !== 'string') return { ok: false, error: 'A price change runs only after a person approved its preview. Nothing changed.' }
-    if (approved.basis !== listingPricePreview(plan).basis) return { ok: false, error: 'A listing\'s price changed since this was approved. Nothing changed; ask Claude again.' }
+    // 2.3 — the prices as the person saw them; a request approved before stands on each listing's version, as approved.
+    const now = listingPricePreview(plan)
+    if (approved.basis !== (approvedOnVersion(approved) ? now.versionBasis : now.basis)) return { ok: false, error: 'A listing\'s price changed since this was approved. Nothing changed; ask Claude again.' }
     const { writeChannelPrices } = await import('../../pim/channel-price-write.service.js')
     const written = await writeChannelPrices({
-      targets: plan.lines.map((line) => ({ listingId: line.listing.id, price: line.to, expectedVersion: line.listing.version })),
+      // At the version just read, with the price it showed: a quantity write landing in between is not a price change
+      // (the door's A-17 retry); a price someone else set in between is still a conflict.
+      targets: plan.lines.map((line) => ({ listingId: line.listing.id, price: line.to, expectedVersion: line.listing.version, expectedPrice: ownPrice(line.listing) })),
       actor: actorOf(ctx, 'bulk-listing-price-change'), source: 'BULK_OVERRIDE', reason: 'Claude bulk-listing-price-change (approved in Nexus)',
     })
     const applied = new Set(written.results.filter((r) => r.outcome === 'applied' || r.outcome === 'noop').map((r) => r.listingId))
@@ -465,7 +494,11 @@ function resendPreview(plan: { lines: ResendLine[]; leftOut: Array<{ where: stri
     ...(plan.lines.length > PREVIEW_LINES ? { moreSent: plan.lines.length - PREVIEW_LINES } : {}),
     ...(plan.leftOut.length ? { leftOut: plan.leftOut.slice(0, PREVIEW_LINES) } : {}),
     totals: { listings: plan.lines.length, leftOut: plan.leftOut.length, sentInLastHour: recent.filter((m) => m < 60).length },
-    basis: basisOf(plan.lines.map((line) => [line.listing.id, line.listing.version, line.price])),
+    // 2.3 — what is sent: each listing's price as it carries it now, never its version (an order's stock cascade moves it).
+    basisOn: BASIS_ON_FIELDS,
+    basis: basisOf(plan.lines.map((line) => [line.listing.id, line.price])),
+    // The basis a request approved before 2.3 stood on (each listing's version): it is checked on it, as it was approved.
+    versionBasis: basisOf(plan.lines.map((line) => [line.listing.id, line.listing.version, line.price])),
     note: `${NOT_YET} Each price is queued through the Nexus price door, as /pricing's Push price does: the price the listing carries now, in its market's currency, and nothing else (never a quantity).`,
   }
 }
@@ -486,6 +519,9 @@ const resendPrices: AgentTool = {
   // Nothing in Nexus changes to put back: the channel is sent the price Nexus already holds.
   reversibility: 'none',
   maxClaudeTrust: 'ask',
+  // C6 — it sends the price each listing carries when it runs (a following listing's rule price is stored again if it
+  // moved): after an earlier step changed that price, it stands on the new one.
+  planEntities: listingPriceEntities,
   description:
     `Send the price each of up to ${MAX_LISTINGS} listings already carries to its channel again, as /pricing's Push price does `
     + '(through the Nexus price door, in the market\'s own currency, never a quantity). A paused, closed or draft listing, or '
