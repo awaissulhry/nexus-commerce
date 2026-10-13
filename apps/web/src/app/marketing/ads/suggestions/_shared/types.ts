@@ -7,6 +7,13 @@
 import type { TagTone } from '@/design-system/primitives/Tag'
 import type { SuggestionMetrics } from '../cells'
 
+/** A recommendation's numbers (the engine's `metrics`). Every field is individually nullable: the builders fill what they read. */
+export interface RecMetrics {
+  impressions?: number; clicks?: number; ctr?: number | null
+  spendCents?: number; salesCents?: number; orders?: number
+  acos?: number | null; roas?: number | null; cvr?: number | null
+}
+
 /** Resolved deep-link for a suggestion's source entity (server-side S.1). */
 export interface SuggestionSource {
   href: string | null

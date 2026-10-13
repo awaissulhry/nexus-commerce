@@ -25,7 +25,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, ChevronDown, ChevronRight, Info, RefreshCw, Search } from 'lucide-react'
+import { AlertTriangle, ChevronDown, ChevronRight, Info, RefreshCw, Search, Star } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button, Checkbox, Input, ToolbarButton } from '@/design-system/primitives'
 import { DataGrid, type Column } from '@/design-system/grid/datagrid'
@@ -101,7 +101,7 @@ function contenderColumns(c: Contest, blind: boolean): Array<Column<Contender>> 
       key: 'campaign', label: 'Campaign', sortable: true, sortValue: (x) => x.campaignName,
       render: (x) => (
         <>
-          {x.campaignId === c.championId && !blind && <span className="cvf-star" aria-label="champion">★</span>}
+          {x.campaignId === c.championId && !blind && <Star size={11} fill="currentColor" strokeWidth={2} className="cvf-star nds-cell-glyph" role="img" aria-label="Champion" />}
           {x.campaignName}
         </>
       ),

@@ -24,7 +24,7 @@ import { Button, Input, SegmentedControl, Toggle, ToolbarButton } from '@/design
 import { Field } from '@/design-system/components/Field'
 import { Check, Info, Settings, MoreVertical, ChevronDown, ChevronLeft, ChevronRight, Pencil, AlertTriangle, BadgeDollarSign, Sparkles, Network, Search, Wallet } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
-import { orderMarketCodes } from '../_shell/adsMarkets'
+import { FLAG, MARKET_NAME, orderMarketCodes } from '../_shell/adsMarkets'
 import { useAdsMarketplace, useSharedAdsMarket } from '../_shell/MarketplaceContext'
 import { AdsDataGrid, type GridColumn, type GridPrefs, type GridSelectFilter } from '../campaigns/_grid/AdsDataGrid'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -66,8 +66,6 @@ interface EnforcementResult { month: string; plans: EnfPlan[]; totals: { plans: 
 /** What to say about the engine when its mode could not be read: never a guess. */
 const ENGINE_UNKNOWN = 'The budget engine’s mode could not be read, so this page cannot say whether it is live.'
 
-const FLAG: Record<string, string> = { IT: '🇮🇹', DE: '🇩🇪', FR: '🇫🇷', ES: '🇪🇸', GB: '🇬🇧', UK: '🇬🇧', NL: '🇳🇱', SE: '🇸🇪', PL: '🇵🇱', BE: '🇧🇪', IE: '🇮🇪', US: '🇺🇸' }
-const MARKET_NAME: Record<string, string> = { IT: 'Italy', DE: 'Germany', FR: 'France', ES: 'Spain', GB: 'United Kingdom', UK: 'United Kingdom', NL: 'Netherlands', SE: 'Sweden', PL: 'Poland', BE: 'Belgium', IE: 'Ireland', US: 'United States' }
 const mktName = (m: string) => MARKET_NAME[m] ?? m
 
 const API = () => getBackendUrl()
@@ -148,7 +146,7 @@ function SettingsModal({ row, month, onClose, onSaved, toast }: { row: Row; mont
   }
 
   return (
-    <Modal open onClose={onClose} title={`${FLAG[row.marketplace] ?? '🏳️'} ${mktName(row.marketplace)} — ${monthLabel(month)}`} subtitle="Set the monthly budget and how it is distributed across the month." size="lg"
+    <Modal open onClose={onClose} title={`${FLAG[row.marketplace] ? `${FLAG[row.marketplace]} ` : ''}${mktName(row.marketplace)} — ${monthLabel(month)}`} subtitle="Set the monthly budget and how it is distributed across the month." size="lg"
       footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" disabled={saving || !budgetRead.ok || (custom && Math.abs(sum - 100) > 0.5)} onClick={save}>{saving ? 'Saving…' : 'Save budget'}</Button></>}>
       <div className="bm-set">
         <Field
@@ -419,7 +417,7 @@ export function BudgetManagerClient() {
     <span className="bm-first">
       <ToolbarButton icon={<MoreVertical size={15} />} label={`More for ${mktName(r.marketplace)}`} onClick={() => setMoreFor(r)} />
       <ToolbarButton icon={<Settings size={14} />} label={`Settings for ${mktName(r.marketplace)}`} onClick={() => setSettingsFor(r)} />
-      <span className="bm-flag">{FLAG[r.marketplace] ?? '🌐'}</span>
+      {FLAG[r.marketplace] && <span className="bm-flag">{FLAG[r.marketplace]}</span>}
       <span className="bm-mkt">{mktName(r.marketplace)}{r.tag ? <em> · {r.tag}</em> : null}{r.campaignLimitCount > 0 ? <span className="bm-lim" title={`${r.campaignLimitCount} campaign limit${r.campaignLimitCount === 1 ? '' : 's'}`}>{r.campaignLimitCount} limit{r.campaignLimitCount === 1 ? '' : 's'}</span> : null}</span>
       {r.projectedOverspend && <span className="bm-warn" title={`Projected month-end spend ${eur(r.forecastSpendCents)} exceeds budget`}><AlertTriangle size={13} /></span>}
     </span>

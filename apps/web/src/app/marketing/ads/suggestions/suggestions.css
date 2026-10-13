@@ -197,12 +197,12 @@
 
 /* ACR.4.4 — € at stake. Tabular figures so the column forms a straight edge and can be
    compared down the page; that alignment is the whole reason the column is priced at all.
-   ♦ marks spend that produced no sales — the only rows where cutting is pure recovery. */
+   The diamond marks spend that produced no sales — the only rows where cutting is pure recovery. */
 .h10-sug-stake { display: inline-flex; align-items: baseline; gap: 5px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--nds-text); }
 .h10-sug-stake.waste { color: var(--nds-danger-strong); }
 .h10-sug-stake.up { color: var(--nds-success-strong); }
 .h10-sug-stake.muted { color: var(--nds-text-3); font-weight: 500; font-style: italic; }
-.h10-sug-stake .dia { font-size: 10px; line-height: 1; }
+.h10-sug-stake .dia { flex: none; align-self: center; }
 
 /* Drawer: the figure with the sentence that keeps it honest. */
 .h10-sug-stakebox { margin: 16px 0 0; padding: 12px 14px; border: 1px solid var(--nds-border); border-radius: var(--nds-radius-lg); background: var(--nds-surface-sunken); }
@@ -210,7 +210,7 @@
 .h10-sug-stakebox h4 { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 6px; font-size: 12px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; color: var(--nds-text-2); }
 .h10-sug-stakebox h4 b { font-size: 19px; font-weight: 700; letter-spacing: normal; text-transform: none; font-variant-numeric: tabular-nums; color: var(--nds-text); }
 .h10-sug-stakebox.waste h4 b { color: var(--nds-danger-strong); }
-.h10-sug-stakebox h4 .dia { font-size: 11px; margin-right: 4px; }
+.h10-sug-stakebox h4 .dia { margin-right: 4px; vertical-align: -1px; }
 .h10-sug-stakebox p { margin: 0; font-size: 13px; line-height: 1.55; color: var(--nds-text-2); }
 
 /* B4 (2026-08-20) — the truncation notice. Amber and inline with the toolbar, because it

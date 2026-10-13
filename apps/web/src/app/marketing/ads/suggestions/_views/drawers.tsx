@@ -8,7 +8,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from '@/lib/workspaces/Link'
-import { Check, X, ExternalLink, RotateCcw, Pause } from 'lucide-react'
+import { Check, X, ExternalLink, RotateCcw, Pause, Diamond } from 'lucide-react'
 import { Button } from '@/design-system/primitives/Button'
 import { Tag } from '@/design-system/primitives/Tag'
 import { Input } from '@/design-system/primitives/Input'
@@ -82,7 +82,7 @@ export function SuggestionDrawer({ suggestion, priced, busy, onClose, onAct, onP
         {priced && priced.spendAtStakeCents != null && (
           <div className={`h10-sug-stakebox${priced.recoverable ? ' waste' : ''}`}>
             <h4>
-              {priced.recoverable ? <><span className="dia">♦</span> Pure waste</> : priced.direction === 'increase' ? 'Additional spend' : 'Spend at stake'}
+              {priced.recoverable ? <span><Diamond size={11} fill="currentColor" strokeWidth={2} className="dia" aria-hidden /> Pure waste</span> : priced.direction === 'increase' ? 'Additional spend' : 'Spend at stake'}
               <b>{priced.direction === 'increase' ? '+' : ''}{eur(priced.spendAtStakeCents)}</b>
             </h4>
             <p>

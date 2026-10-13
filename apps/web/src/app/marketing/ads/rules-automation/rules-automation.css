@@ -182,7 +182,7 @@
 .h10-rb-pfscope > label .opt { font-weight: 400; color: var(--nds-grey-600); }
 .h10-rb-pfscope select { height: 36px; border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-lg); padding: 0 30px 0 11px; font: inherit; font-size: 13px; color: var(--nds-grey-900); background: var(--nds-white); min-width: 260px; cursor: pointer; }
 .h10-rb-pfscope select:focus { outline: 0; border-color: var(--nds-blue-600); box-shadow: 0 0 0 3px rgba(31,111,222,.15); }
-.h10-rb-pfscope .hint { font-size: 12.5px; color: var(--nds-blue-700); background: var(--nds-blue-50); border: 1px solid #d4e4fb; border-radius: var(--nds-radius-sm); padding: 5px 10px; }
+.h10-rb-pfscope .hint { font-size: 12.5px; color: var(--nds-blue-700); background: var(--nds-blue-50); border: 1px solid var(--nds-tonal-border); border-radius: var(--nds-radius-sm); padding: 5px 10px; }
 
 /* Phase 6 — conflict warning (a selected campaign is already in another schedule) */
 .h10-rb-conflict { display: flex; align-items: flex-start; gap: 10px; margin: 14px 0 0; padding: 11px 13px; background: #fff8ec; border: 1px solid #f2d59a; border-radius: 9px; color: #7a5a12; }
@@ -886,7 +886,7 @@
 .nds-wsgrid .nds-ws-td.nm .rg-namew .rg-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nds-wsgrid .nds-ws-td.nm .rg-namew .h10-nt-open { flex-shrink: 0; }
 /* Phase 5 — portfolio-scoped schedules get a sublabel under the name. */
-.nds-wsgrid .nds-ws-td.nm .rg-pfbadge { max-width: 100%; font-size: 11px; font-weight: 600; color: var(--nds-blue-700); background: var(--nds-blue-50); border: 1px solid #d4e4fb; border-radius: 5px; padding: 1px 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nds-wsgrid .nds-ws-td.nm .rg-pfbadge { max-width: 100%; font-size: 11px; font-weight: 600; color: var(--nds-blue-700); background: var(--nds-blue-50); border: 1px solid var(--nds-tonal-border); border-radius: 5px; padding: 1px 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Baseline chip — compact, read-only version of the builder's target chip (h10-rp-chip). */
 .h10-rg-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; font-size: 12px; font-weight: 600; color: var(--nds-grey-800); background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-full); padding: 3px 9px; }
 .h10-rg-chip .sw { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
@@ -1071,7 +1071,7 @@
 
 /* RDX/D1 — selection bar. Appears under the grid only once hours are painted, so the panel is
    unchanged until the operator actually starts authoring. */
-.h10-dp-selbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; padding: 10px 12px; background: var(--nds-grey-75); border: 1px solid #d4e4fb; border-radius: 9px; }
+.h10-dp-selbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; padding: 10px 12px; background: var(--nds-grey-75); border: 1px solid var(--nds-tonal-border); border-radius: 9px; }
 .h10-dp-selbar .cnt { font-size: 12.5px; color: var(--nds-grey-800); }
 .h10-dp-selbar .cnt b { font-weight: 700; }
 .h10-dp-selbar .cnt em { font-style: normal; color: var(--nds-grey-600); }
@@ -1436,7 +1436,7 @@
 .h10-au-week i.bad { color: var(--nds-red-700); }
 .h10-au-week i.cap { color: var(--nds-warning-text); }
 .h10-au-never { color: var(--nds-grey-600); }
-.nds-ws-tr.h10-au-rowconf .nds-ws-td { background: #fffaf8; }
+.nds-ws-tr.h10-au-rowconf .nds-ws-td { background: var(--nds-warning-soft); }
 
 /* ── Selection bar ───────────────────────────────────────────────────────────────────── */
 .h10-au-bulkrow { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -3016,8 +3016,6 @@
 /* the ASIN table — dense and quiet, it is read-only */
 .h10-kt-drtable { width: 100%; font-size: 11.5px; }
 
-.h10-kt-drtable .nds-dg-td.n { text-align: right; font-variant-numeric: tabular-nums; }
-
 .h10-kt-drtable .nds-dg-td.mono { font-family: var(--nds-font-mono); font-size: 11px; color: var(--nds-text-2); }
 .h10-kt-drok { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: var(--nds-green-700); background: #e7f5ed; padding: 1px 6px; border-radius: 5px; }
 .h10-kt-drno { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: var(--nds-amber-700); background: #fff6e8; padding: 1px 6px; border-radius: 5px; }
@@ -3449,7 +3447,6 @@
 .h10-kt6-tbl { width: 100%; margin-top: 7px; font-size: 10.5px; }
 
 .h10-kt6-tbl .nds-dg-td { max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
-.h10-kt6-tbl .nds-dg-td.n { text-align: right; font-variant-numeric: tabular-nums; }
 .h10-kt6-trunc { margin: 6px 0 0; font-size: 10.5px; color: var(--nds-grey-600); }
 
 .h10-kt6-go {
@@ -3701,10 +3698,6 @@
 .h10-bd3-curve h4 { margin: 14px 0 8px; font-size: 12.5px; color: var(--nds-grey-900); }
 .h10-bd3-spark { margin: 0 0 10px; transform-origin: left top; }
 .h10-bd3-spark svg { width: 100%; height: 44px; }
-.h10-bd3-writes { width: 100%; font-size: 12.5px; }
-
-.h10-bd3-writes .nds-dg-td { font-variant-numeric: tabular-nums; }
-.h10-bd3-writes .nds-dg-tr.failed .nds-dg-td { color: var(--nds-danger); }
 
 /* BID.S1 — the bidder band */
 .h10-bd1 { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 10px; font-size: 12.5px; color: var(--nds-grey-700); }
@@ -3731,11 +3724,6 @@
    ring all from the primitive. Five rules gone; only the row that lays them out is left. */
 .h10-bd8-cap { font-size: 11.5px; color: var(--nds-grey-600); margin-left: auto; }
 .h10-bd8-scroll { overflow-x: auto; }
-.h10-bd8-tbl { width: 100%; font-size: 12.5px; }
-
-.h10-bd8-tbl .nds-dg-td.nw { white-space: nowrap; font-variant-numeric: tabular-nums; }
-.h10-bd8-tbl .t { display: inline-block; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
-.h10-bd8-tbl .nds-dg-tr.failed .nds-dg-td { color: var(--nds-danger); }
 .h10-bd8-ref { margin-top: 14px; border-top: 1px solid var(--nds-grey-100); padding-top: 10px; }
 .h10-bd8-ref h4 { margin: 0 0 6px; font-size: 12.5px; color: var(--nds-grey-900); display: flex; align-items: center; gap: 6px; }
 .h10-bd8-refline { margin: 0 0 6px; font-size: 12.5px; color: var(--nds-grey-700); max-width: 860px; }
@@ -3820,7 +3808,6 @@
 /* S8 polish — keep the foot links' external-link icon on the same line as their text, and mark
    unnamed targets as a description rather than an identifier. */
 .h10-bd8-foot a, .h10-bd8-refline a, .rd-p5-foot a { white-space: nowrap; }
-.h10-bd8-tbl .t.unnamed { color: var(--nds-grey-600); font-style: italic; }
 
 /* PLC.P2 — the inspector rail. The first column became a control again (a BUTTON, so the P0
    un-link rule on span.t no longer applies); lanes + owner + the ledger inside the shared drawer. */
@@ -3931,12 +3918,6 @@
 .h10-bd3-undo { display: inline-block; margin-left: 6px; padding: 0 5px; border-radius: 4px; font-style: normal; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; background: var(--nds-grey-75); color: var(--nds-grey-600); }
 .h10-bd3-undo.ok { background: #e7f5ed; color: var(--nds-success-text); }
 
-/* The log gained three columns (Who · Why · Landed), so it needs to breathe and to scroll inside
-   itself rather than widening the drawer. */
-/* (was `.h10-bd3-writes th, td { vertical-align: top }` — the DS sets it on BOTH `tbody td` and
-   `thead th` now, so nothing is left to override.) */
-.h10-bd3-writes .nds-dg-td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.h10-bd3-writes .nds-dg-td b.bad { color: var(--nds-warning-strong); font-weight: 800; }
 
 /* ══ RA.SPINE S4b — the old bar's three AA overrides (`.h10-rules-tabs .h10-cd-*`) were deleted with the bar
    (2026-10-10). The DS `Tabs` ink is `--nds-text-link` / `--nds-text-2` on the tokens' own pairs. */
@@ -4012,7 +3993,6 @@
 .h10-plc3-rows { max-height: 320px; overflow: auto; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-xl); }
 
 .h10-plc3-rows .nds-dg-tr.last .nds-dg-td { border-bottom: 0; }
-.h10-plc3-rows .nds-dg-td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .h10-plc3-rows .skip { padding: 1px 6px; border-radius: 5px; background: var(--nds-grey-75); color: var(--nds-grey-600); font-size: 10px; font-weight: 800; white-space: nowrap; }
 .h10-plc3-rows .rev { padding: 1px 6px; border-radius: 5px; background: #fff6e8; color: #7a4812; font-size: 10px; font-weight: 800; white-space: nowrap; }
 .h10-plc3-rows .go { padding: 1px 6px; border-radius: 5px; background: #e7f5ed; color: var(--nds-success-text); font-size: 10px; font-weight: 800; white-space: nowrap; }

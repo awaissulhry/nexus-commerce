@@ -13,15 +13,8 @@ import { ArrowLeft, Video, ChevronDown } from 'lucide-react'
 import { Button } from '@/design-system/primitives'
 import { DateRangePicker } from './DateRangePicker'
 import { EbayMark } from './EbayMark'
+import { FLAG, MARKET_NAME } from './adsMarkets'
 
-const FLAG: Record<string, string> = {
-  IT: '🇮🇹', DE: '🇩🇪', FR: '🇫🇷', ES: '🇪🇸', GB: '🇬🇧', UK: '🇬🇧', NL: '🇳🇱',
-  SE: '🇸🇪', PL: '🇵🇱', BE: '🇧🇪', IE: '🇮🇪', TR: '🇹🇷', US: '🇺🇸',
-}
-const MARKET_NAME: Record<string, string> = {
-  IT: 'Italy', DE: 'Germany', FR: 'France', ES: 'Spain', GB: 'United Kingdom', UK: 'United Kingdom',
-  NL: 'Netherlands', SE: 'Sweden', PL: 'Poland', BE: 'Belgium', IE: 'Ireland', TR: 'Türkiye', US: 'United States',
-}
 
 export interface DetailHeaderAction { label: string; href?: string; onClick?: () => void; danger?: boolean }
 
@@ -49,7 +42,7 @@ export function CampaignDetailHeader({
 }) {
   const [open, setOpen] = useState<'' | 'market' | 'action'>('')
   const close = () => setOpen('')
-  const marketChip = market === 'all' ? 'All markets' : `${FLAG[market] ?? '🏳️'} ${MARKET_NAME[market] ?? market}`
+  const marketChip = market === 'all' ? 'All markets' : `${FLAG[market] ? `${FLAG[market]} ` : ''}${MARKET_NAME[market] ?? market}`
 
   return (
     <div className="h10-cd-hdr">
@@ -78,7 +71,7 @@ export function CampaignDetailHeader({
                 <button type="button" className={market === 'all' ? 'on' : ''} onClick={() => { onMarketChange('all'); close() }}>All markets</button>
                 {markets.map((m) => (
                   <button type="button" key={m} className={m === market ? 'on' : ''} onClick={() => { onMarketChange(m); close() }}>
-                    <span>{FLAG[m] ?? '🏳️'} {MARKET_NAME[m] ?? m}</span><span className="sub">{m}</span>
+                    <span>{FLAG[m] ? `${FLAG[m]} ` : ''}{MARKET_NAME[m] ?? m}</span><span className="sub">{m}</span>
                   </button>
                 ))}
               </div>

@@ -9,7 +9,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from '@/lib/workspaces/Link'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, X } from 'lucide-react'
 import { AdsDataGrid, type GridColumn } from '../../../campaigns/_grid/AdsDataGrid'
 import { getEbayAds, postEbayAds } from '../../_lib'
 import { money } from '../../../campaigns/_grid/format'
@@ -48,7 +48,7 @@ function DecideMenu({ row, busy, onDecide }: { row: SuggestionRow; busy: boolean
   const pick = (snoozeDays: number | undefined, label: string) => { setOpen(false); onDecide([row.id], 'reject', snoozeDays, label) }
   return (
     <span className="eb-rule-menu" ref={ref}>
-      <Button size="sm" disabled={busy} aria-label="Dismiss options" onClick={toggle}>✕ <ChevronDown size={11} /></Button>
+      <Button size="sm" disabled={busy} aria-label="Dismiss options" onClick={toggle}><X size={12} aria-hidden /> <ChevronDown size={11} aria-hidden /></Button>
       {open && pos && (
         <span className="h10-statusmenu eb-statusfix" style={{ position: 'fixed', top: pos.top, left: pos.left }}>
           <button type="button" title="May re-suggest on the next evaluation if conditions still hold" onClick={() => pick(undefined, 'dismissed (may re-suggest)')}>Dismiss</button>
