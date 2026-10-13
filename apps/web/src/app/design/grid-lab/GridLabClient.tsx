@@ -32,7 +32,8 @@ import './legacy/workspace-grid.css'
 
 import { useCallback, useState } from 'react'
 import { Button } from '@/design-system/primitives'
-import { DataGrid } from '@/design-system/components'
+// The HTML-table DataGrid, the legacy side of the DataGrid parity (no web page renders it any more).
+import { DataGrid } from '@/design-system/components/DataGrid'
 // The legacy engine is the FROZEN copy (design §2.18): `patterns/workspace-grid/WorkspaceGrid` now
 // re-exports the AG engine, so importing it there would put AG on both sides and prove nothing.
 import { LegacyWorkspaceGrid } from './legacy/LegacyWorkspaceGrid.stories'

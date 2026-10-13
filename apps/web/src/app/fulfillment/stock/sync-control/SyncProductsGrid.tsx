@@ -15,7 +15,8 @@
 import { useEffect, useCallback, useMemo, useState } from 'react'
 import Link from '@/lib/workspaces/Link'
 import { Search, ChevronRight, ChevronDown, ExternalLink } from 'lucide-react'
-import { DataGrid, Pagination, type Column } from '@/design-system/components'
+import { Pagination } from '@/design-system/components'
+import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { Listbox } from '@/design-system/components/Listbox'
 import { GridToolbar } from '@/design-system/patterns'
 import { Button, Input, Pill, SegmentedControl } from '@/design-system/primitives'
@@ -30,7 +31,7 @@ import { Tip } from './SyncTip'
 import SyncExcelBar from './SyncExcelBar'
 import {
   ebayZeroRefusal, BULK_ACTIONS, INACTIVE_NOTE, actionLabel, actionCounts,
-  DENSITY_OPTIONS, MODE_TONE, MODE_LABEL, MODE_HELP, COLUMN_HELP, ACTION_HELP, CONTROL_HELP, PAGE_SIZES, mapDensity,
+  DENSITY_OPTIONS, MODE_TONE, MODE_LABEL, MODE_HELP, COLUMN_HELP, ACTION_HELP, CONTROL_HELP, PAGE_SIZES, mapDensity, DENSITY_SIZE,
   type Density, type Mode, type Row, type ProductMaster,
 } from './sync-control-shared'
 import styles from './styles.module.css'
@@ -372,20 +373,19 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
       </GridToolbar>
 
       <DensityContext.Provider value={mapDensity(density)}>
-        <div className={`scv-fixed-grid ${density === 'compact' ? styles.densityCompact : density === 'spacious' ? styles.densitySpacious : ''}`.trim()}>
-          <DataGrid<DRow>
-            columns={columns}
-            rows={displayRows}
-            rowKey={(r) => r.key}
-            selectable
-            selected={selected}
-            onSelectedChange={setSelected}
-            rowSelectable={(r) => r.kind === 'master' && !allFba(r.m)}
-            selectAllHint={CONTROL_HELP.selectAll}
-            rowSelectableHint="Amazon-managed (FBA) — no non-FBA listings to act on"
-            emptyState={loading ? <span style={{ color: 'var(--text-tertiary)' }}>Loading…</span> : <span style={{ color: 'var(--text-tertiary)' }}>No products match the filters.</span>}
-          />
-        </div>
+        <DataGrid<DRow>
+          size={DENSITY_SIZE[density]}
+          columns={columns}
+          rows={displayRows}
+          rowKey={(r) => r.key}
+          selectable
+          selected={selected}
+          onSelectedChange={setSelected}
+          rowSelectable={(r) => r.kind === 'master' && !allFba(r.m)}
+          selectAllHint={CONTROL_HELP.selectAll}
+          rowSelectableHint="Amazon-managed (FBA) — no non-FBA listings to act on"
+          emptyState={loading ? <span style={{ color: 'var(--text-tertiary)' }}>Loading…</span> : <span style={{ color: 'var(--text-tertiary)' }}>No products match the filters.</span>}
+        />
       </DensityContext.Provider>
 
       <div className={styles.gridFooter}>
@@ -399,7 +399,7 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
 
 // ── cells ───────────────────────────────────────────────────────────────────
 
-// The cell FILLS the column (styles.fixedTable pins the column width) so the
+// The cell FILLS the column (every column here has a width, which the grid holds) so the
 // long product name truncates at the real column width instead of expanding it.
 function MasterCell({ m, expanded, onToggle }: { m: ProductMaster; expanded: boolean; onToggle: () => void }) {
   return (

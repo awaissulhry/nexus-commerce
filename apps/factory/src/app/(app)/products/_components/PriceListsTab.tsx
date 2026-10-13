@@ -7,7 +7,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, Plus, Trash2, X } from "lucide-react";
-import { Card, DataGrid, Modal, useToast } from "@/design-system/components";
+import { Card, Modal, useToast } from "@/design-system/components";
+import { DataGrid } from "@/design-system/components/DataGrid";
 import { Listbox } from "@/design-system/components";
 import { Button, Input, Pill } from "@/design-system/primitives";
 import { AsyncCombobox, type SearchLoader } from "@/components/AsyncCombobox"; // FS3 — paged type-to-find party assign

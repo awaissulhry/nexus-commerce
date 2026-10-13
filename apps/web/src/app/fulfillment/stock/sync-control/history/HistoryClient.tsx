@@ -3,7 +3,8 @@
 /** SCG.2 — full audit trail on the shared DataGrid, server-paginated. */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { DataGrid, Pagination, type Column } from '@/design-system/components'
+import { Pagination } from '@/design-system/components'
+import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { Listbox } from '@/design-system/components/Listbox'
 import { GridToolbar } from '@/design-system/patterns'
 import { getBackendUrl } from '@/lib/backend-url'

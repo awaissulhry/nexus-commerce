@@ -53,7 +53,8 @@ import {
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
-import { DataGrid, Drawer, type Column } from '@/design-system/components'
+import { Drawer } from '@/design-system/components'
+import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { FilterBar, GridToolbar, type FilterBarOption, type FilterDimension } from '@/design-system/patterns'
 import {
   Button,
@@ -1783,11 +1784,15 @@ export function ActivityClient() {
 
   /* ── the runs grid ───────────────────────────────────────────────────── */
 
+  // Every column has a width — a 10 / 18 / 32 / 16 / 9 / 7 / 8 split of a 1200px card — so the grid scales them all
+  // to the card: When holds its header with the sort arrow and menu, and "What happened" (a whole failure sentence)
+  // wraps in its share instead of pushing Cost off it.
   const runColumns: Array<Column<FleetEvent>> = useMemo(
     () => [
       {
         key: 'when',
         label: 'When',
+        width: 120,
         sortable: true,
         sortValue: (e) => new Date(e.at).getTime(),
         render: (e) => (
@@ -1804,6 +1809,8 @@ export function ActivityClient() {
       {
         key: 'worker',
         label: 'Worker',
+        width: 216,
+        className: 'sba-wrapcell',
         sortable: true,
         sortValue: (e) => e.actor,
         render: (e) => (
@@ -1816,6 +1823,7 @@ export function ActivityClient() {
       {
         key: 'what',
         label: 'What happened',
+        width: 384,
         render: (e) => (
           <span className="sba-cellprose">
             {whatHappened(e)}
@@ -1826,6 +1834,7 @@ export function ActivityClient() {
       {
         key: 'startedby',
         label: 'Started by',
+        width: 192,
         sortable: true,
         sortValue: (e) => e.source,
         render: (e) => <span className="sba-nowrap">{e.source}</span>,
@@ -1833,6 +1842,7 @@ export function ActivityClient() {
       {
         key: 'howlong',
         label: 'How long',
+        width: 108,
         align: 'right',
         sortable: true,
         sortValue: (e) => e.durationMs ?? -1,
@@ -1841,6 +1851,7 @@ export function ActivityClient() {
       {
         key: 'found',
         label: 'Found',
+        width: 84,
         align: 'right',
         sortable: true,
         sortValue: (e) => e.findingCount ?? -1,
@@ -1850,6 +1861,7 @@ export function ActivityClient() {
       {
         key: 'cost',
         label: 'Cost',
+        width: 96,
         align: 'right',
         sortable: true,
         sortValue: (e) => e.costUSD ?? -1,

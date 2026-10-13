@@ -7,7 +7,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Plus, Upload } from "lucide-react";
-import { Card, DataGrid, Listbox, Modal, useToast } from "@/design-system/components";
+import { Card, Listbox, Modal, useToast } from "@/design-system/components";
+import { DataGrid } from "@/design-system/components/DataGrid";
 import { Button, Input, Pill } from "@/design-system/primitives";
 import { eur } from "@/design-system/lib/format";
 import { apiJson } from "@/lib/api-client";

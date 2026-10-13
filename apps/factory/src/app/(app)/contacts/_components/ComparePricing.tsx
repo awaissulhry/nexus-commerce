@@ -9,7 +9,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { DetailHeader } from "@/design-system/patterns";
-import { Card, DataGrid, Listbox, useToast } from "@/design-system/components";
+import { Card, Listbox, useToast } from "@/design-system/components";
+import { DataGrid } from "@/design-system/components/DataGrid";
 import { Button, Checkbox, Pill, RadioCard } from "@/design-system/primitives";
 import { eur } from "@/design-system/lib/format";
 import { apiJson } from "@/lib/api-client";

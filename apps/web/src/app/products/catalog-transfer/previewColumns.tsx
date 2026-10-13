@@ -1,5 +1,5 @@
 import type { TransferCell } from '@nexus/shared/catalog-transfer'
-import type { Column } from '@/design-system/components/DataGrid'
+import type { Column } from '@/design-system/grid/datagrid'
 import { AsOf } from '@/design-system/components/AsOf'
 import { Tag } from '@/design-system/primitives/Tag'
 import styles from './transfer.module.css'
