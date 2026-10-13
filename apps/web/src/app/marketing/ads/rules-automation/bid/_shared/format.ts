@@ -10,6 +10,7 @@
  *   period   "7 d" — the same two words in every header, chip, label and hover line
  */
 import { marketLimitsOf } from '@nexus/shared/ads-market-limits'
+import { MONTHS_SHORT } from '@/design-system/lib/format'
 
 /** The business's clock. Every time on the page is said in it. */
 export const ROME = 'Europe/Rome'
@@ -23,9 +24,24 @@ export const WEEK = periodWord(7)
 
 // ── time ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-const MOMENT = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: ROME })
-const DAY = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: ROME })
-const DAY_UTC = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })
+// The month as a NUMBER, then the shared table (`MONTHS_SHORT`): en-GB's short September is "Sept" under current CLDR
+// (grid audit step 5) — every date in the app writes "Sep".
+const MOMENT = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: ROME })
+const DAY = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'numeric', timeZone: ROME })
+const DAY_UTC = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'numeric', timeZone: 'UTC' })
+
+type Part = Intl.DateTimeFormatPartTypes
+const partsOf = (format: Intl.DateTimeFormat, t: number) => {
+  const parts = format.formatToParts(new Date(t))
+  return (type: Part) => parts.find((p) => p.type === type)?.value ?? ''
+}
+const monthWord = (n: string) => MONTHS_SHORT[Number(n) - 1] ?? n
+// With a numeric month en-GB pads the day ("03/10"); a day is said without the zero ("3 Oct").
+const dayNumber = (n: string) => String(Number(n))
+const dayOf = (format: Intl.DateTimeFormat, t: number) => {
+  const get = partsOf(format, t)
+  return `${dayNumber(get('day'))} ${monthWord(get('month'))}`
+}
 
 const timeOf = (iso: string | null | undefined): number | null => {
   if (!iso) return null
@@ -37,9 +53,8 @@ const timeOf = (iso: string | null | undefined): number | null => {
 export function whenWords(iso: string | null | undefined): string {
   const t = timeOf(iso)
   if (t === null) return '—'
-  const parts = MOMENT.formatToParts(new Date(t))
-  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? ''
-  return `${get('day')} ${get('month')}, ${get('hour')}:${get('minute')}`
+  const get = partsOf(MOMENT, t)
+  return `${dayNumber(get('day'))} ${monthWord(get('month'))}, ${get('hour')}:${get('minute')}`
 }
 
 /**
@@ -49,10 +64,10 @@ export function dayWords(value: string | null | undefined): string {
   if (!value) return '—'
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     const t = Date.parse(`${value}T00:00:00Z`)
-    return Number.isFinite(t) ? DAY_UTC.format(new Date(t)) : '—'
+    return Number.isFinite(t) ? dayOf(DAY_UTC, t) : '—'
   }
   const t = timeOf(value)
-  return t === null ? '—' : DAY.format(new Date(t))
+  return t === null ? '—' : dayOf(DAY, t)
 }
 
 /** How long ago (or until), in one unit: "now", "45 min ago", "3 h ago", "16 d ago", "in 20 min"; a dash when none. */

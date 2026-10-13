@@ -1,5 +1,6 @@
 'use client'
 
+import { when } from '@/design-system/grid/renderers/format'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '@/design-system/primitives'
 import { Modal } from '@/design-system/components'
@@ -67,7 +68,7 @@ export function FormulaHistoryDialog({ familyProductId, coordinate, onClose, onA
     <div className={styles.content}>
       {error && <p role="alert" className={styles.error}>{error} <Button onClick={() => void load()}>Try again</Button></p>}
       {loading ? <p role="status">Loading formula history…</p> : operations.length === 0 ? <p>No saved formula operations for this scope yet.</p> : <DataGrid keyboardScroll ariaLabel="Saved formula operations" rows={operations} rowKey={row => row.operationId} columns={[
-        { key: 'date', label: 'Started', render: row => <Button disabled={busy} onClick={() => void open(row.operationId)}>{row.createdAt ? new Date(row.createdAt).toLocaleString() : 'View operation'}</Button> },
+        { key: 'date', label: 'Started', render: row => <Button disabled={busy} onClick={() => void open(row.operationId)}>{row.createdAt ? when(row.createdAt) : 'View operation'}</Button> },
         { key: 'field', label: 'Field', render: row => <span className={styles.cell}>{row.fieldKey}</span> },
         { key: 'formula', label: 'Formula', render: row => <span className={styles.cell}>={row.expr}</span> },
         { key: 'status', label: 'Status', render: row => <span className={styles.cell}>{operationLabel(row.status)} · {row.processed}/{row.total}</span> },

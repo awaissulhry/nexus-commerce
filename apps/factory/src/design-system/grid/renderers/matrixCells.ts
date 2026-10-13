@@ -45,6 +45,7 @@ import {
   type SaleCell,
   type SyncCell,
 } from '../matrix/contract'
+import { MONTHS_SHORT } from '../../lib/format'
 import { projectionMeta, type ProjectionState } from './projection'
 import { readinessMeta, type ReadinessTone } from './readiness'
 
@@ -529,13 +530,12 @@ export function matrixMoney(value: number | null | undefined, currency: string):
 /**
  * `12 Sep` — the short form the §3.4 sale cell shows. UTC-pinned so a screenshot compares to itself.
  *
- * 🔴 A fixed month table, NOT `toLocaleDateString('en-GB', { month: 'short' })`: measured 2026-09-13
- * in this workspace's Node, that call prints `12 Sept` — CLDR changed en-GB's September abbreviation
+ * 🔴 A fixed month table (`MONTHS_SHORT`, lib/format.ts), NOT `toLocaleDateString('en-GB', { month: 'short' })`: measured
+ * 2026-09-13 in this workspace's Node, that call prints `12 Sept` — CLDR changed en-GB's September abbreviation
  * to four letters, and Chrome ships the same data. Appendix A says `12 Sep`, and a copy table is
  * verbatim or it is not a copy table; the ICU version of whatever renders the cell must not decide
  * an operator-facing word.
  */
-const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const
 export function matrixDay(iso: string | null | undefined): string {
   if (!iso) return MATRIX_DASH
   const t = Date.parse(iso)

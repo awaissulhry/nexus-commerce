@@ -1,4 +1,5 @@
 'use client'
+import { when } from '@/design-system/grid/renderers/format'
 import Link from '@/lib/workspaces/Link'
 import { useEffect, useId, useMemo, useState } from 'react'
 import { ChevronRight, FolderTree, MoreHorizontal, Plus, RefreshCw, Search } from 'lucide-react'
@@ -22,7 +23,7 @@ const statusLabels: Record<string, string> = { ready: 'Up to date', missing: 'No
 const statusTone = (state: string) => state === 'ready' ? 'success' as const : state === 'failed' ? 'danger' as const : ['queued', 'refreshing'].includes(state) ? 'info' as const : 'warning' as const
 const healthLabels: Record<string, string> = { ready: 'Requirements current', store: 'Store rules apply', retired: 'Category retired', notAssignable: 'Choose a leaf category', missing: 'Requirements missing', stale: 'Requirements expired', unknown: 'Taxonomy unavailable', unmapped: 'Not assigned' }
 const needsAttention = (health: string) => !['ready', 'store', 'unmapped'].includes(health)
-const dateLabel = (value: string | null) => value ? new Date(value).toLocaleString() : 'Never synchronized'
+const dateLabel = (value: string | null) => value ? when(value) : 'Never synchronized'
 
 export function CategoriesWorkspace({ initialView, initialChannel, initialMarket }: { initialView?: string; initialChannel?: string; initialMarket?: string }) {
   const id = useId()

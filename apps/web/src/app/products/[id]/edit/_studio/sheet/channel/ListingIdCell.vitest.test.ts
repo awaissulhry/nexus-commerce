@@ -5,6 +5,7 @@
  * server's value only when it counts, "Not confirmed" / draft / "No number recorded" otherwise, the control's door on
  * the main row only (Enter, Delete), a variation row read-only with the server's "Set on the main row".
  */
+import { when } from '@/design-system/grid/renderers/format'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -285,7 +286,9 @@ describe('Differs on Etsy (E5) — the main row\'s Listing ID, only when the sto
     const model = itemIdCellModel(etsyMain(drift()), 'GLOBAL', 'ETSY')
     expect(model).toEqual({ kind: 'item', itemId: '9000000001', url: 'https://www.etsy.com/listing/9000000001', ended: false, editable: true, differs: 'Differs on Etsy',
       tooltip: `${E.live('9000000001')} Etsy's last read (${T}) differs from Nexus in 2 fields: Title, Tags. ${DIFFERS_WHERE_TO_LOOK}` })
-    expect(T).toBe(new Date(READ_AT).toLocaleString())
+    // The grid's one date-time look (grid audit step 5): "6 Oct 2026, 10:20" in every browser, as the Read live window writes it.
+    expect(T).toBe(when(READ_AT))
+    expect(T).toMatch(/^\d{1,2} [A-Z][a-z]{2} \d{4}, \d{2}:\d{2}$/)
     const html = render(etsyMain(drift()))
     expect(html).toContain('class="nds-pill warning">Differs on Etsy<')
     // The id stays the cell's text (copy, export, filters): the mark is never part of it.

@@ -21,7 +21,8 @@
  * the catalog and the tests share one rule. Pure — no React.
  */
 import type { Tone } from '../../primitives/tone'
-import { EMPTY_DASH, ago } from './format'
+import { MONTHS_SHORT } from '../../lib/format'
+import { EMPTY_DASH, ago, clockTime } from './format'
 
 export interface PublishStatusMeta {
   label: string
@@ -177,16 +178,12 @@ export interface PublishCellModel {
   title: string
 }
 
-const pad = (n: number) => String(n).padStart(2, '0')
 /**
- * A fixed month table, as `matrixDay` (matrixCells.ts) does and for its reason: `toLocaleDateString('en-GB')` prints
- * "Sept" under current CLDR, and the browser's locale would make the cell say "Oct 1" for one viewer and "1 Oct" for
- * another. One shape everywhere a publish time is shown: "12:04" · "1 Oct" · "1 Oct 2025" · "1 Oct, 12:04".
+ * The shared month table (`MONTHS_SHORT`, lib/format.ts) and for its reason: the browser's locale would make the cell say
+ * "Oct 1" for one viewer and "1 Oct" for another. One shape everywhere a publish time is shown: "12:04" · "1 Oct" ·
+ * "1 Oct 2025" · "1 Oct, 12:04".
  */
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
-const day = (d: Date, now: Date) => `${d.getDate()} ${MONTHS[d.getMonth()]}${d.getFullYear() === now.getFullYear() ? '' : ` ${d.getFullYear()}`}`
-const clock = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`
+const day = (d: Date, now: Date) => `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}${d.getFullYear() === now.getFullYear() ? '' : ` ${d.getFullYear()}`}`
 
 /** "12:04" when `iso` is on `now`'s day (in the viewer's zone), otherwise "1 Oct" ("1 Oct 2025" in another year). */
 export function publishShortTime(iso: string, now: number = Date.now()): string {
@@ -194,14 +191,14 @@ export function publishShortTime(iso: string, now: number = Date.now()): string 
   if (Number.isNaN(d.getTime())) return ''
   const today = new Date(now)
   const sameDay = d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate()
-  return sameDay ? clock(d) : day(d, today)
+  return sameDay ? clockTime(d) : day(d, today)
 }
 
 /** "1 Oct, 12:04" ("1 Oct 2025, 12:04" in another year) — the same shape as the cell's short time, with the clock. */
 export function publishFullTime(iso: string, now: number = Date.now()): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
-  return `${day(d, new Date(now))}, ${clock(d)}`
+  return `${day(d, new Date(now))}, ${clockTime(d)}`
 }
 
 /** "2 of 11 products in this family failed" — the spoken form; the card adds " in this publish.". */

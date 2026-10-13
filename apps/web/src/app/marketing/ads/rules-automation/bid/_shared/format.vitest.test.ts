@@ -5,6 +5,7 @@ describe('time, on the business\'s clock (Rome)', () => {
   it('says a moment as "10 Oct, 23:00" in Rome, whatever the browser\'s zone', () => {
     expect(whenWords('2026-10-10T21:00:00Z')).toBe('10 Oct, 23:00') // CEST, UTC+2
     expect(whenWords('2026-12-01T07:05:00Z')).toBe('1 Dec, 08:05') // CET, UTC+1
+    expect(whenWords('2026-09-13T07:30:00Z')).toBe('13 Sep, 09:30') // "Sep", never CLDR's "Sept" (grid audit step 5)
     expect(whenWords(null)).toBe('—')
     expect(whenWords('not a date')).toBe('—')
   })

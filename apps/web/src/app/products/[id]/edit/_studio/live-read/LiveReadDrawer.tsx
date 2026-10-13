@@ -7,6 +7,7 @@
  * nothing is sent — and shows it beside what this sheet holds. The route and the shape are the publish review's own
  * (`GET /api/products/:id/live-read`, `@nexus/shared/live-read`), so the sheet and the review can never disagree.
  */
+import { when } from '@/design-system/grid/renderers/format'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { LiveRead } from '@nexus/shared/live-read'
 import { Banner, Drawer } from '@/design-system/components'
@@ -83,7 +84,7 @@ export function LiveReadDrawer({ open, onClose, target, links, nexusVariants, ne
   return (
     <Drawer open={open} onClose={onClose} side="right" width={760} resizable
       title={`Live on ${target.channelLabel}`}
-      subtitle={ready ? `Read ${new Date(ready.readAt).toLocaleString()} · read only, nothing was changed` : 'Read only, nothing is changed'}
+      subtitle={ready ? `Read ${when(ready.readAt)} · read only, nothing was changed` : 'Read only, nothing is changed'}
       footer={<Button variant="secondary" size="sm" onClick={() => void read()} disabled={load.status === 'loading'}>Read again</Button>}>
       <div className={styles.body}>
         {load.status === 'loading' && <div className={styles.loading}><Spinner /> Reading the listing from the channel…</div>}
