@@ -138,6 +138,15 @@ describe('buildColDefs — structure only, in the preferences\' order', () => {
     expect(g.hide).toBe(true)
     expect(g.suppressMovable).toBe(true)
   })
+  it('a headerIcon column draws its icon header, named by the label, with no menu button; others keep AG\'s header', () => {
+    const cols = [...COLS, col('pz', { label: 'Stop suggesting', headerIcon: 'icon', freezeRight: true, width: 52, align: 'center', sortable: false })]
+    const defs = buildColDefs({ ...base, columns: cols, prefs: defaultPrefs(cols) })
+    expect(defs.find((d) => d.colId === 'pz')).toMatchObject({ headerName: 'Stop suggesting', headerComponentParams: { innerHeaderComponent: 'IconHeader' }, suppressHeaderMenuButton: true })
+    const spend = defs.find((d) => d.colId === 'spend')!
+    expect(spend.headerComponentParams).toBeUndefined()
+    expect(spend.suppressHeaderMenuButton).toBeUndefined()
+  })
+
   it('header classes carry the alignment; a numeric header is right-aligned like `th.num`', () => {
     const defs = buildColDefs({ ...base, prefs: defaultPrefs(COLS) })
     expect(defs.find((d) => d.colId === 'spend')!.headerClass).toEqual(['nds-ws-th', 'nds-ws-th-num', 'nds-ag-head-num'])
@@ -152,5 +161,6 @@ describe('columnsSignature — function identity is not structure', () => {
     expect(columnsSignature(a)).toBe(columnsSignature(b))
     expect(columnsSignature([col('x', { label: 'Y' })])).not.toBe(columnsSignature(a))
     expect(columnsSignature([col('x', { freezeRight: true, width: 40 })])).not.toBe(columnsSignature(a))
+    expect(columnsSignature([col('x', { label: 'X', headerIcon: 'icon' })])).not.toBe(columnsSignature(a))
   })
 })

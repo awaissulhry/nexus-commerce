@@ -82,7 +82,6 @@ import { BulkEditModal, type BulkEditChanges } from './BulkEditModal'
 import { TagDialog } from './TagDialog'
 import { InventoryEditorModal } from './InventoryEditorModal'
 import { NewProductDialog } from './NewProductDialog'
-import { GridLoadingOverlay, type GridLoadingOverlayParams } from '@/design-system/grid/renderers/overlays'
 import { loadWorkingLayout, saveWorkingLayout, type StoredSheetLayout } from '@/design-system/grid/views/savedViewTransport'
 import { preferencesFromLayout, mergeVisibleColumnOrder } from '@/design-system/grid/views/columnLayout'
 import { isGridStatePayload, type GridViewPayload, type SavedGridView } from '@/design-system/grid/hooks/useGridViews'
@@ -146,9 +145,6 @@ const BLOCK_SIZE = 100
 const FAMILY_FOOTER_PX = gridGeometry.footerRowH
 /** Rows per page, set in the footer as on Ad Manager. */
 const NO_ROWS_TEMPLATE = '<span style="color: var(--nds-text-muted)">No products match this filter.</span>'
-/** The first load: the engine's skeleton at the real product row's height for the chosen density (a 40px-row skeleton
- *  made the page jump to 68 / 85px rows — grid audit E12). */
-const LOADING_ROWS: GridLoadingOverlayParams = { rows: 7, rowKind: 'media' }
 
 // ─────────────────────────────────────────────────────────────────
 // Types
@@ -1620,8 +1616,6 @@ function ProductsNextInner() {
                 onSelectionChanged={onSelectionChanged}
                 onStoreRefreshed={onStoreRefreshed}
                 initialState={initialState}
-                loadingOverlayComponent={GridLoadingOverlay}
-                loadingOverlayComponentParams={LOADING_ROWS}
                 overlayNoRowsTemplate={NO_ROWS_TEMPLATE}
               />
               {/* The footer as Ad Manager's: pages on the left of the control, rows per page on the right. */}

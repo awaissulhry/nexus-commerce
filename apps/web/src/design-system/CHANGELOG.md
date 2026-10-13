@@ -8,7 +8,9 @@ Grid audit wave 4, PR13 chunk 2 (E11 blank, E12, E13, E16).
 - **`GridColumn.headerIcon`** (WorkspaceGrid): an icon drawn in the header instead of the label's words, for a narrow
   verb column; the label stays the column's name (Customise, screen readers). The Suggestions and Recommendations
   decision columns use it (Apply ✓, Remove / Snooze ✕, Stop suggesting ⏸ — the cells' own lucide icons) and are centred
-  (rule 1A: an icon column centres). Their Customise rows read words, not glyphs.
+  (rule 1A: an icon column centres). Their Customise rows read words, not glyphs. A `headerIcon` column has no header
+  menu button: in the 52px column AG's button left the label 0px wide, so the old ✓ ✕ ⏸ glyphs never showed either
+  (measured on a local stack); Pin / Autosize do nothing on a fixed, pinned verb column.
 - **Glyphs → icons**: the preset delete "✕" (WorkspaceGrid) and the Ad Manager's hourly "⏱" are lucide `X` / `Timer`.
 - **Tokens**: the 15 density CSS variables (`--nds-grid-row-text-*`, `-row-media-*`, `-row-media-line-*`, `-header-*`,
   `-thumb-*`) are no longer emitted — nothing read them; NexusGrid and DataGrid take the sizes from `gridDensity` in TS.
@@ -17,8 +19,9 @@ Grid audit wave 4, PR13 chunk 2 (E11 blank, E12, E13, E16).
   those classes) are gone; the eBay totals-row font override goes (the engine owns the totals row); the eBay movers
   share bar is drawn again (its rules aimed at cell classes the AG DataGrid never sets); four non-link first-column
   names use the engine's cell ink, not a palette step.
-- **/products first load**: the engine's `GridLoadingOverlay` at the real row height for the density (the page's own
-  40px skeleton made the grid jump to 68 / 85px rows); `ProductsSkeleton` is deleted.
+- **/products**: `ProductsSkeleton` and its `loadingOverlayComponent` are deleted — the grid is server-side, and AG shows
+  no loading overlay there: the first block loads in AG's own loading row at the real row height (measured on a local
+  stack, 85px at Spacious), so the skeleton was never drawn.
 
 ## Every web DataGrid is the AG one; the barrel exports only the grid's types — 2026-10-13
 

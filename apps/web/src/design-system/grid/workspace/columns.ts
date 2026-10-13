@@ -131,7 +131,9 @@ export function buildColDefs<T>(input: BuildColDefsInput<T>): ColDef[] {
     return {
       colId: c.key,
       headerName: c.label,
-      ...(c.headerIcon != null ? { headerComponentParams: { innerHeaderComponent: components.iconHeader } } : {}),
+      /* A verb column's header is its icon. It is narrow (52px), and AG's menu button left the label 0px wide, so the icon
+         (and the glyph before it) never showed; the menu's Pin / Autosize do nothing on a fixed, pinned verb column. */
+      ...(c.headerIcon != null ? { headerComponentParams: { innerHeaderComponent: components.iconHeader }, suppressHeaderMenuButton: true } : {}),
       ...(c.tip ? { headerTooltip: c.tip, tooltipComponent: components.headerTip } : {}),
       hide,
       pinned: pinned ? 'right' : pinnedLeft ? 'left' : null,
