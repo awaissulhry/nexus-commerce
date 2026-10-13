@@ -11,18 +11,20 @@ export interface Column<T> {
   key: string
   label: ReactNode
   render: (row: T) => ReactNode
+  /**
+   * The column's side — its header AND its cells (the Owner's rule, 2026-10-13): words, dates, statuses and links
+   * left (the default); money, counts, percentages, quantities and bids right; centre only for an icon, a checkbox
+   * or a switch. A right-aligned cell also gets tabular figures.
+   */
   align?: 'left' | 'right' | 'center'
   /**
-   * A figures column: right-aligned AND `font-variant-numeric: tabular-nums`.
-   *
-   * Not implied by `align: 'right'`, because a right-aligned STATUS is not a number. Measured:
-   * the DS set `font-variant-numeric` on no selector at all, so every converted money column
-   * silently lost the proportional-digit fix its hand-rolled version had — and in a grid,
-   * digits lining up is the whole point.
+   * A figures column: right-aligned (header and cells) AND `font-variant-numeric: tabular-nums`. Measured: the DS
+   * set `font-variant-numeric` on no selector at all, so every converted money column silently lost the
+   * proportional-digit fix its hand-rolled version had — and in a grid, digits lining up is the whole point.
    */
   numeric?: boolean
   /**
-   * Class for this column's `<td>` AND `<th>`. Without it a per-column tweak has to be reached
+   * Class for this column's cells (`<td>`; the header is the grid's). Without it a per-column tweak has to be reached
    * with `:nth-child()`, which breaks the moment a column is hidden or reordered.
    */
   className?: string
@@ -581,7 +583,7 @@ export function DataGrid<T>({
             )}
             {cols.map((c, ci) => {
               const sorted = sort?.key === c.key
-              const cls = [alignClass(c.align), stickyCls(c), sorted ? 'sorted' : ''].filter(Boolean).join(' ')
+              const cls = [alignClass(c.numeric ? 'right' : c.align), stickyCls(c), sorted ? 'sorted' : ''].filter(Boolean).join(' ')
               return (
                 <th
                   key={c.key}
@@ -691,7 +693,7 @@ export function DataGrid<T>({
             <tr className="totals">
               {selectable && <td className="ck sticky" style={{ left: 0 }} />}
               {cols.map((c) => (
-                <td key={c.key} className={[alignClass(c.align), stickyCls(c)].filter(Boolean).join(' ')} style={stickyStyle(c)}>
+                <td key={c.key} className={[alignClass(c.numeric ? 'right' : c.align), c.numeric ? 'num' : '', stickyCls(c)].filter(Boolean).join(' ')} style={stickyStyle(c)}>
                   {c.total}
                 </td>
               ))}

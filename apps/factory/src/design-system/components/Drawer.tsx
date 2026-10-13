@@ -12,6 +12,7 @@ import {
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { ToolbarButton } from '../primitives/ToolbarButton'
+import { watchGridEscape } from './overlayDismiss'
 
 export interface DrawerProps {
   id?: string
@@ -140,6 +141,7 @@ export function Drawer({
 
   useEffect(() => {
     if (!open) return
+    const gridEscape = watchGridEscape(document)
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented) return
       // An embedded editor must not close when Escape dismisses workspace navigation or a
@@ -149,25 +151,23 @@ export function Drawer({
        * §5.2 — Esc belongs to the INNERMOST focused thing, which is the only rule under which it
        * never surprises. Three cases, and the middle one is why this is not simply "close":
        *
-       *   focus inside the panel        → close the panel
-       *   focus in a CELL EDITOR        → the editor reverts the edit; the panel must not close
-       *   focus in the grid, not editing → close the panel
+       *   focus inside the panel                         → close the panel
+       *   focus in a CELL EDITOR or a grid's own menu    → the editor reverts / the menu closes; the panel must not close
+       *   focus in the grid, not editing                 → close the panel
        *
        * The middle case is the whole point. A non-modal panel leaves the sheet live, so an
        * operator can be mid-edit in a cell with the drawer open; swallowing that Esc would revert
-       * their edit AND close the record they were checking it against. AG marks an open editor on
-       * the cell, so the question is answerable without the drawer knowing anything about grids.
+       * their edit AND close the record they were checking it against. The same holds for a grid
+       * INSIDE the panel, in every mode. AG marks an open editor on the cell and its menus as
+       * popups, so the question is answerable without the drawer knowing anything about grids —
+       * read in the capture phase, before AG takes the editor away (overlayDismiss.ts).
        */
-      if (dock) {
-        const active = document.activeElement
-        const editing = active?.closest?.('.ag-cell-inline-editing, .ag-popup-editor') != null
-        if (editing) return
-      }
+      if (gridEscape.owns(e)) return
       onClose()
     }
     document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [open, onClose, dock, embedded])
+    return () => { document.removeEventListener('keydown', onKey); gridEscape.stop() }
+  }, [open, onClose, embedded])
 
   /**
    * The Tab trap is bound to the PANEL, not to `document`, and it defers to

@@ -50,6 +50,15 @@
   text-align: left;
 }
 
+/* AG's own numbers type (`type: 'numericColumn'` / `'rightAligned'`) on the engine's cell. AG right-aligns its header
+   and sets only `text-align` on the cell — which moves nothing in a flex cell (PN.1, below), so the header sat right
+   over values on the left (studio Analytics, grid audit A2). One alignment for the header and its cells. */
+.nds-ag-wrap .ag-cell.ag-right-aligned-cell {
+  justify-content: flex-end;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .nds-ag-ctr {
   justify-content: center;
   text-align: center;
@@ -239,6 +248,15 @@
 }
 .nds-ag-nexus .ag-header-group-cell .ag-header-group-cell-label {
   justify-content: center;
+}
+
+/* The resize handle shows itself (grid audit B10): the theme turns the handle's own mark off — the header partition is
+   the resting mark — so a person could not tell where to grab. On the pointer, and while dragging, the handle draws an
+   accent bar (AG's own height for it). Only a resizable column has a handle. */
+.nds-ag-wrap .ag-header-cell-resize:hover,
+.nds-ag-wrap .ag-header-cell-resize:active {
+  --ag-header-column-resize-handle-width: var(--nds-grid-partition-w);
+  --ag-header-column-resize-handle-color: var(--nds-grid-accent);
 }
 
 /* PN.1 — compact density tightens the cell's horizontal padding too. The theme sets cell padding
