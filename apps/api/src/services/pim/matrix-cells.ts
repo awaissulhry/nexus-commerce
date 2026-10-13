@@ -583,6 +583,12 @@ const amountOf = (instance: Record<string, unknown> | null): number | null => {
  * the listing's job-lane offer facts (the normal price the push sends, its bounds and its sale), the newest business
  * row, the listing's send and nightly-check records, and the pull's own copy of Amazon's offer.
  */
+/** The nightly check's shopper-price difference — only while Nexus's normal price is still the one it compared. */
+function normalSeen(raw: unknown, nexusNow: number | null): { amazon: number; nexus: number } | null {
+  const n = record(raw)
+  return n && typeof n.amazon === 'number' && typeof n.nexus === 'number' && nexusNow != null && Math.abs(n.nexus - nexusNow) < 0.005 ? { amazon: n.amazon, nexus: n.nexus } : null
+}
+
 export function businessCellOf(input: {
   listing: { businessPriceRule?: string | null; businessPricePercent?: unknown; businessPrice?: unknown; businessTiers?: unknown; platformAttributes?: unknown }
   /** The SP-API marketplace id (to find this market's business offer in the pull's copy). */
@@ -608,7 +614,8 @@ export function businessCellOf(input: {
   // The nightly check speaks only of the price shown here, and only when nothing was sent after it.
   const live = liveRec && liveAt && (liveStatus === 'MATCH' || liveStatus === 'DIFFERS' || liveStatus === 'MISSING')
     && (liveRec.nexusPrice ?? null) === price && (!send?.at || liveAt >= send.at)
-    ? { status: liveStatus as 'MATCH' | 'DIFFERS' | 'MISSING', amazonPrice: typeof liveRec.amazonPrice === 'number' ? liveRec.amazonPrice : null, at: liveAt }
+    ? { status: liveStatus as 'MATCH' | 'DIFFERS' | 'MISSING', amazonPrice: typeof liveRec.amazonPrice === 'number' ? liveRec.amazonPrice : null, at: liveAt,
+        ...(normalSeen(liveRec.normal, input.normalPrice) ? { normal: normalSeen(liveRec.normal, input.normalPrice) } : {}) }
     : null
   // A business offer Amazon shows that Nexus never kept (set outside Nexus): the pull's copy of Amazon's attributes.
   const attrs = record(pa?.attributes)

@@ -15,6 +15,7 @@
  *   - Equal, or nothing on either side → nothing to send.
  */
 import { businessTierPrices, readBusinessTiers, type BusinessPriceSetting, type BusinessTiers } from '@nexus/shared/business-price'
+import { listingSendPrice, type SendPriceListing } from '../pim/follower-price.js'
 
 type Instance = Record<string, any>
 
@@ -27,6 +28,20 @@ const decimal = (v: unknown): number | null => {
   return Number.isFinite(n) ? n : null
 }
 /** The setting a stored listing row holds (`ChannelListing.business*`), or `null` when Nexus keeps no business offer there. */
+/**
+ * The normal price a business price follows and is checked against — ONE rule for the door, the Matrix cell, the business
+ * send and the nightly check: the price the normal push SENDS (`listingSendPrice`: the listing's own price when pinned,
+ * the rule's price from the master when it follows), else the price Amazon's report mirrors. A following listing whose
+ * price column was never filled (linked or imported) still has its normal price — the number its price cell shows.
+ */
+export function businessNormalPrice(
+  listing: SendPriceListing,
+  mirrored: number | null | undefined,
+  context: { masterPrice: unknown; marketCurrency: string | null },
+): number | null {
+  return listingSendPrice(listing, context).price ?? mirrored ?? null
+}
+
 export function storedBusinessSetting(row: { businessPriceRule?: string | null; businessPricePercent?: unknown; businessPrice?: unknown; businessTiers?: unknown }): BusinessPriceSetting | null {
   if (row.businessPriceRule !== 'PERCENT_OFF' && row.businessPriceRule !== 'FIXED') return null
   return { rule: row.businessPriceRule, percent: decimal(row.businessPricePercent), price: decimal(row.businessPrice), tiers: readBusinessTiers(row.businessTiers) }

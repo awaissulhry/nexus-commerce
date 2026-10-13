@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { amazonBusinessElement, amazonBusinessOfferPlan, businessSendLine, liveBusinessInstance, storedBusinessSetting } from './business-offer.js'
+import { amazonBusinessElement, amazonBusinessOfferPlan, businessNormalPrice, businessSendLine, liveBusinessInstance, storedBusinessSetting } from './business-offer.js'
 
 const IT = 'APJ6JRA9NG5V4'
 const price = (v: number) => [{ schedule: [{ value_with_tax: v }] }]
@@ -80,5 +80,17 @@ describe('storedBusinessSetting and the send line', () => {
   it('says the price and each tier', () => {
     expect(businessSendLine(99.75, tiers, 'EUR')).toBe('EUR 99.75 · 2+ 96.76, 5+ 94.76')
     expect(businessSendLine(32.95, null, 'EUR')).toBe('EUR 32.95')
+  })
+})
+
+describe('businessNormalPrice — the one normal price a business price follows (the number the push sends)', () => {
+  const l = (over: Record<string, unknown>) => ({ followMasterPrice: false, priceOverride: null, price: null, pricingRule: null, priceAdjustmentPercent: null, ...over }) as never
+  it('pinned: its own price; following: the master by its rule, even with an empty price column', () => {
+    expect(businessNormalPrice(l({ priceOverride: 99 }), 105, { masterPrice: 120, marketCurrency: 'EUR' })).toBe(99)
+    expect(businessNormalPrice(l({ followMasterPrice: true }), null, { masterPrice: 39.95, marketCurrency: 'EUR' })).toBe(39.95)
+  })
+  it('nothing the push could send: Amazon\'s mirrored price, else none', () => {
+    expect(businessNormalPrice(l({ followMasterPrice: true }), 41, { masterPrice: null, marketCurrency: 'EUR' })).toBe(41)
+    expect(businessNormalPrice(l({ followMasterPrice: true }), null, { masterPrice: null, marketCurrency: 'EUR' })).toBeNull()
   })
 })

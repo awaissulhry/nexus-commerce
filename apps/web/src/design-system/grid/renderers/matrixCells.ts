@@ -287,7 +287,7 @@ export function matrixBusinessHidden(b: Pick<BusinessCell, 'rule' | 'price' | 'n
 function businessPriceState(b: BusinessCell): MatrixCellState {
   if (b.send && (b.send.state === 'failed' || b.send.state === 'refused')) return 'business-failed'
   if (b.rule == null) return b.reported ? 'business-reported' : 'business-none'
-  if (b.live && b.live.status !== 'MATCH') return 'business-differs'
+  if (b.live && (b.live.status !== 'MATCH' || b.live.normal)) return 'business-differs'
   if (matrixBusinessHidden(b)) return 'business-hidden'
   return b.rule === 'FIXED' ? 'business-fixed' : 'business-percent'
 }
@@ -461,6 +461,12 @@ function businessPriceLines(b: BusinessCell, now: number): string[] {
     const ago = matrixAgo(b.live.at, now)
     const shows = b.live.status === 'MISSING' || b.live.amazonPrice == null ? 'Amazon shows no business price' : `Amazon shows ${money(b.live.amazonPrice)}`
     lines.push(`${shows} — differs from Nexus${ago ? ` · checked ${ago} ago` : ''}`)
+  }
+  /* The business price follows Nexus's shopper price; when Amazon's is another, say both (a first business price would
+     also send Nexus's). */
+  if (b.live?.normal) {
+    const ago = matrixAgo(b.live.at, now)
+    lines.push(`Amazon's shopper price is ${money(b.live.normal.amazon)}, Nexus's is ${money(b.live.normal.nexus)}${ago ? ` · checked ${ago} ago` : ''}`)
   }
   if (b.rule == null) {
     lines.push(b.reported
