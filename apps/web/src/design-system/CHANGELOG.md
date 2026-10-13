@@ -13,6 +13,17 @@ both product sheets and /products. `grid.css` mirrored in `apps/factory` (identi
 - **`actionsColumn`**: a header that names the column sits right, over its buttons (/products "Actions").
 - **`CoverageSummary`**: one line that ends in "…" in a narrow cell, instead of a letter cut in half (both apps).
 
+## A press on a scrolling tab strip activates the tab it started on — 2026-10-13
+
+Found by the Google Ads browser check (390 px). Mirrored in Factory: `components/Tabs.tsx` (identical).
+- **`Tabs overflow="scroll"`**: a mouse press on a tab under the edge fade did nothing. The browser focuses the pressed
+  tab between pointerdown and pointerup, the focus brought it into view (the strip scrolled ~48–80 px under the
+  pointer), and the release landed beside it: the click went to the neighbour or nowhere (measured on the catalog's
+  link tabs). The strip now follows a KEYBOARD focus only (`:focus-visible`, as `Tooltip` reads it) and does not bring
+  the active tab back on a blur while a press is held inside it (`:active`; Safari and Firefox on a Mac blur the
+  focused tab without focusing the pressed one). A pressed tab comes wholly into view after its click. Tab, the arrows,
+  Home / End and ARIA are unchanged (same scroll positions, measured before / after). Test: `Tabs.vitest.test.ts`.
+
 ## WorkspaceGrid: row keys in a dialog; the totals row without an AG warning — 2026-10-13
 
 Found by the Google Ads browser check (campaign window, Ad groups and Keywords).
