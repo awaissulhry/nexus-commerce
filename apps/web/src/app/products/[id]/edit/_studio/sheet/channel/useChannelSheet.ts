@@ -71,8 +71,11 @@ export interface ChannelSheetState {
    */
   backendMissing: boolean
   reload: () => void
-  /** Reconcile saved values and provenance without replacing the grid with a loading state. True when the rows were replaced. */
-  refresh: (canApply: () => boolean) => Promise<boolean>
+  /**
+   * Reconcile saved values and provenance without replacing the grid with a loading state. True when the rows were replaced.
+   * `keep` adjusts the read before it lands (G1: a refused cell keeps the value it shows).
+   */
+  refresh: (canApply: () => boolean, keep?: (page: ChannelScopePage) => ChannelScopePage) => Promise<boolean>
   applyLocal: (rowId: string, mutate: (row: ChannelSheetRow) => void) => void
 }
 
@@ -148,7 +151,7 @@ export function useChannelSheet(options: UseChannelSheetOptions): ChannelSheetSt
 
   const reload = useCallback(() => setNonce((n) => n + 1), [])
 
-  const refresh = useCallback(async (canApply: () => boolean): Promise<boolean> => {
+  const refresh = useCallback(async (canApply: () => boolean, keep?: (page: ChannelScopePage) => ChannelScopePage): Promise<boolean> => {
     if (activeUrl.current !== url) return false
     const mine = ++requestRef.current
     try {
@@ -157,7 +160,7 @@ export function useChannelSheet(options: UseChannelSheetOptions): ChannelSheetSt
       })
       if (!res.ok) return false
       const body = channelSheetResponse(await res.json())
-      if (mine === requestRef.current && activeUrl.current === url && canApply()) { setResponse({ url, data: body }); return true }
+      if (mine === requestRef.current && activeUrl.current === url && canApply()) { setResponse({ url, data: keep ? keep(body) : body }); return true }
       return false
     } catch {
       // Preserve the confirmed edit if the follow-up read is temporarily unavailable (the caller may try again).

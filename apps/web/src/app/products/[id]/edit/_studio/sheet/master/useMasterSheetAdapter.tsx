@@ -9,7 +9,8 @@ import { channelLabel, languageLabel } from '../../scopes';
 import { productSheetRowKey, filterProductSheetRows } from '../productSheetRows';
 import { useSheetChips } from '../useSheetChips';
 import { useSheetSaveStatus } from '../useSheetSaveStatus';
-import { useSheetUndo } from '../useSheetUndo';
+import { useSheetUndo, type ResetCellBack } from '../useSheetUndo';
+import { inheritedCell, stateBefore, takeEditPrior } from '../sheetUndo';
 import { useSheetGridBindings } from '../useSheetGridBindings';
 import { useProductSheetInteraction } from '../useProductSheetInteraction';
 import { useSheetGeometry } from '../useSheetGeometry';
@@ -314,8 +315,24 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     const rows = useMemo(() => (sheet && familyOrder.settled ? sortByFamilyRank(sheet.rows, familyOrder.rank) : []), [sheet, familyOrder.settled, familyOrder.rank]);
     const { saveStatus, refused, refusedRowIds } = useSheetSaveStatus(writer, tracker, rows, sheet?.columns);
     savedAtRef.current = saveStatus.saved;
+    /* G3 — ⌘Z puts a cell that inherited back by a reset (the write path's own `reset`), never by storing the value it
+       showed: the inherited value and provenance show at once, and the read after the save confirms them. */
+    const resetCellBack = useCallback<ResetCellBack>((rowId, colId, before, onOutcome) => {
+        const api = getGridApi();
+        const node = api?.getRowNode(rowId);
+        const row = node?.data;
+        if (!api || !node || !row) {
+            onOutcome('dropped');
+            return;
+        }
+        const cell = cellOf(row, colId);
+        if (cell)
+            row.values = { ...row.values, [colId]: inheritedCell(cell, before) };
+        api.refreshCells({ rowNodes: [node], columns: [colId], force: true });
+        writer.set(rowId, colId, null, { row, intent: before.intent, onOutcome });
+    }, [getGridApi, writer]);
     /* ⌘Z undoes a whole operation (a fill, a paste) in one step and one save, and still works after the sheet re-reads. */
-    const undo = useSheetUndo(writer, getGridApi);
+    const undo = useSheetUndo(writer, getGridApi, { tracker, resetCell: resetCellBack });
     const { toast } = useToast();
     /* Add rows (R2) — empty rows in page memory; the SKU typed into one creates a draft variation (`../newRows/`). */
     const familyRoot = rows.find((row) => !row.parentId);
@@ -785,17 +802,28 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             return;
         /* P0 — a cell whose formula state is not known yet keeps the edit and applies it once it is (the formula path if
            the cell turns out to hold one). Never refused: the refusal lost every paste made while formulas loaded. */
+        /* G2/G3 — the cell as the server holds it, with its state (a cell that inherited is put back by a reset). Read once,
+           while the row still holds the edited cell. */
+        const beforeOf = () => {
+            const column = columnByKeyRef.current.get(colId!);
+            return column ? stateBefore(e.oldValue, e.data, colId!, takeEditPrior(e.data.values?.[colId!]), (row, key) => key === colId ? masterResetOffer(row, column) : null) : e.oldValue;
+        };
         if (!formulas.knownFor(e.data.id, colId!)) {
             const rowId = e.data.id;
             tracker.set(rowId, colId!, 'saving', HELD_FOR_FORMULAS);
             formulas.whenKnown(rowId, colId!, () => {
                 if (tracker.get(rowId, colId!)?.reason === HELD_FOR_FORMULAS)
                     latestValueChanged.current(e);
-            }, (reason) => tracker.set(rowId, colId!, 'refused', reason ?? HELD_EDIT_DROPPED));
+            }, (reason) => {
+                tracker.set(rowId, colId!, 'refused', reason ?? HELD_EDIT_DROPPED);
+                // The edit never left: the cell shows a value the server does not hold (finding 4).
+                undo.unsaved({ rowId, colId: colId!, before: beforeOf(), after: e.newValue });
+            });
             return;
         }
         const typed = typeof e.newValue === 'string' ? e.newValue : null;
         if ((typed !== null && isFormulaDraft(typed)) || formulas.exprFor(e.data.id, colId!)) {
+            const before = beforeOf();
             const prev = cellOf(e.data, colId!);
             if (prev) {
                 e.data.values = { ...e.data.values, [colId!]: { ...prev, value: e.oldValue } };
@@ -818,18 +846,22 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
                         if (n)
                             getGridApi()?.refreshCells({ force: true, rowNodes: [n], columns: [colId!] });
                     }
+                    // The cell shows the refused value; the server still holds `before` (finding 4).
+                    undo.unsaved({ rowId: e.data.id, colId: colId!, before, after: e.newValue });
                 }
             })
                 .catch((err: unknown) => {
                 const reason = err instanceof Error ? err.message : String(err);
                 onWriteEnd(writeId, false, reason, e.data.id);
                 tracker.set(e.data.id, colId!, 'unknown', `Could not reach the server — ${reason}. Refresh to see whether this saved.`);
+                undo.unsaved({ rowId: e.data.id, colId: colId!, before, after: e.newValue });
             });
             return;
         }
-        undo.record({ rowId: e.data.id, colId: colId!, before: e.oldValue, after: e.newValue }, e.source);
-        writer.set(e.data.id, colId!, e.newValue, { row: e.data });
-    }, [writer, formulas, onWriteStart, onWriteEnd, reload, undo.record, identitySku.onValueChanged]);
+        /* G2/G3 — the history keeps the cell's state, and only what the server stored: the writer reports this edit's
+           outcome. */
+        writer.set(e.data.id, colId!, e.newValue, { row: e.data, onOutcome: undo.edit({ rowId: e.data.id, colId: colId!, before: beforeOf(), after: e.newValue }, e.source) });
+    }, [writer, formulas, onWriteStart, onWriteEnd, reload, undo.edit, undo.unsaved, identitySku.onValueChanged]);
     /* A held edit re-enters through the LATEST handler, which sees the formula state that released it. */
     const latestValueChanged = useRef(onCellValueChanged);
     latestValueChanged.current = onCellValueChanged;

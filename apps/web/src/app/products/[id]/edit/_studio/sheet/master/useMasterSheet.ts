@@ -106,8 +106,8 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
   const quietRead = useRef(false)
   /* A quiet read an open editor kept from applying is still owed: a formula a save fed may have changed other cells, and
      a receipt moved their tokens, not their values. Tried again once the sheet is idle — the editor closed (with or
-     without an edit), nothing in flight, nothing unconfirmed — never read over an open editor (as the channel's
-     `FollowUpRead`, saveSettle.ts). */
+     without an edit), nothing in flight, nothing waiting for an answer — never read over an open editor (as the
+     channel's `FollowUpRead`, saveSettle.ts). A refused cell keeps its value and mark through the read. */
   const owedRead = useRef<ReturnType<typeof setTimeout> | null>(null)
   const requestRef = useRef(0)
   const apiRef = useRef<GridApi<StudioRow> | null>(null)
@@ -187,7 +187,8 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
           optsRef.current.onSettled?.(info)
           // Re-resolve inherited rows, formulas and validation after a confirmed
           // save. The quiet reader preserves pending/refused cells and focus.
-          if (info.ok && writer.pending === 0 && !tracker.hasUnconfirmedChanges) {
+          // G1 — a refused cell does not hold the read back (its answer is in): only an edit still on its way does.
+          if (info.ok && writer.pending === 0 && !tracker.hasOpenChanges) {
             quietRead.current = true; setNonce(n => n + 1)
           }
         },
@@ -196,7 +197,7 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
           optsRef.current.onWriteEnd?.(unsettledWrites.current.get(info.rowId) ?? `recovery:${info.rowId}`, ok, ok ? undefined : 'Review the highlighted edits against the stored values.', info.rowId)
           unsettledWrites.current.delete(info.rowId)
           optsRef.current.onSettled?.({ ...info, ok })
-          if (ok && writer.pending === 0 && !tracker.hasUnconfirmedChanges) { quietRead.current = true; setNonce(n => n + 1) }
+          if (ok && writer.pending === 0 && !tracker.hasOpenChanges) { quietRead.current = true; setNonce(n => n + 1) }
         },
         // R-VT-15 — through `optsRef` like every other callback here, for the reason `readBack` gives:
         // this memo's deps are `[tracker, commit, localesQuery]` and a callback in them would rebuild
@@ -289,6 +290,11 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
               if (state && ['refused', 'unknown', 'saving', 'pending'].includes(state) && previous.values[key]) row.values[key] = previous.values[key]
             }
           }
+        } else {
+          /* A full read ("changed elsewhere — refresh", Reload) replaces every cell it reads, refused ones included: their
+             refusal marks go with the values they were about (#663; review of #607, finding 2 — a mark left on another
+             person's value made the next edit's undo put back the remembered value over theirs). */
+          for (const row of next.rows) for (const key of Object.keys(row.values)) writer.forgetRefused(row.id, key)
         }
         setProblems(verifyContract(next))
         setSheet(next)
@@ -313,7 +319,7 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
       owedRead.current = null
       const api = apiRef.current
       const editing = !!api && !api.isDestroyed() && api.getEditingCells().length > 0
-      if (editing || writer.pending > 0 || tracker.hasUnconfirmedChanges) { oweQuietRead(attempt + 1); return }
+      if (editing || writer.pending > 0 || tracker.hasOpenChanges) { oweQuietRead(attempt + 1); return }
       quietRead.current = true; setNonce(n => n + 1)
     }, OWED_READ_RETRY_MS)
   }

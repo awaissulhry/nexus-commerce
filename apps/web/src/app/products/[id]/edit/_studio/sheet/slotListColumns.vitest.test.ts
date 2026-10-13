@@ -13,6 +13,7 @@ import {
   acknowledgePendingEdits, defaultViewKeys, expandSlotListKeys, queuePendingEdit, revertPendingEdit, slotFanOut, slotKeysHiddenByDefault,
   slotListKeyOfSlot, slotListRefusal, slotListViewNote, withSlotListColumns, type SlotColumnLike,
 } from './slotListColumns'
+import { noteEditPrior, takeEditPrior } from './sheetUndo'
 import type { SheetColumn } from './master/types'
 
 /*
@@ -296,6 +297,18 @@ describe('one answer for the whole paste', () => {
     const pinned = acknowledgePendingEdits([edit('a'), edit('m', { contentAcknowledgement: null, affectsAllChannels: true })], 'pin')
     expect(pinned.apply.map(e => e.rowId)).toEqual(['a'])
     expect(pinned.keep.map(e => e.rowId)).toEqual(['m'])
+  })
+  /* Review of #607, finding 3 — the answer replaces the cell object; without its prior the edit's undo pinned the Shared
+     text on this listing instead of following Shared again. */
+  it('"Pin" keeps what the cell was before the edit for its undo; "Shared" does not (its undo writes the Shared text back)', () => {
+    const following = { value: 'Before', inherited: true }
+    const pinEdit = edit('a'), sharedEdit = edit('b')
+    noteEditPrior(pinEdit.row.values.name, following)
+    noteEditPrior(sharedEdit.row.values.name, following)
+    acknowledgePendingEdits([pinEdit], 'pin')
+    acknowledgePendingEdits([sharedEdit], 'shared')
+    expect(takeEditPrior(pinEdit.row.values.name)).toBe(following)
+    expect(takeEditPrior(sharedEdit.row.values.name)).toBeUndefined()
   })
   it('the adapter sends the answered edits as ONE save and asks nothing more (source contract)', () => {
     const adapter = readFileSync(join(__dirname, 'channel', 'useChannelSheetAdapter.tsx'), 'utf8')

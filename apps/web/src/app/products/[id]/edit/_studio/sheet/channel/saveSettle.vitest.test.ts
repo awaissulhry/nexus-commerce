@@ -7,8 +7,9 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { FollowUpRead, rowSettle } from './saveSettle'
-import type { ChannelSheetRow, StudioCellValue } from './types'
+import { FollowUpRead, keepUnsettledCells, rowSettle } from './saveSettle'
+import type { ChannelScopePage, ChannelSheetRow, StudioCellValue } from './types'
+import type { CellSaveState } from '@/design-system/grid'
 
 const cell = (over: Partial<StudioCellValue>): StudioCellValue => ({
   value: 'x', source: 'channelExplicit', inheritedFrom: null, inherited: false, layer: 'channel', pinned: true, follows: false, editable: true,
@@ -123,5 +124,68 @@ describe('the channel sheet uses these rules (the adapter cannot run without a g
     expect(src).toContain('const inPlace = save.inPlace(result.ok);')
     expect(src).toContain('else if (result.ok) followUp.owe();')
     expect(src).not.toMatch(/needsRead/)
+  })
+})
+
+/**
+ * G1 (2026-10-13) — after any refused cell the quiet read after a save was skipped (`!tracker.hasUnconfirmedChanges`), so
+ * variations went on showing the value they inherited before the family's save. The read now waits only for edits on
+ * their way, and a refused cell keeps the value it shows (and its mark) through it.
+ */
+describe('G1 — a quiet read lands over a refused cell, and keeps that cell', () => {
+  const server = (aliasId: string | null, id: string, values: Record<string, StudioCellValue>) => ({ id, aliasId, values })
+  const shown = (rowId: string, values: Record<string, StudioCellValue>) => ({ rowId, values } as unknown as ChannelSheetRow)
+  const states: Record<string, CellSaveState> = { 'primary:M::gtin': 'refused', 'primary:L::cost': 'saved' }
+  const stateOf = (rowId: string, colId: string) => states[`${rowId}::${colId}`]
+
+  it('keeps the refused cell as shown; every other cell, and every row not on screen, is the read\'s', () => {
+    const page = { rows: [
+      server(null, 'M', { gtin: cell({ value: null }), manufacturer: cell({ value: 'ParentCo2', inherited: true }) }),
+      server(null, 'L', { cost: cell({ value: '9.00' }), manufacturer: cell({ value: 'ParentCo2', inherited: true }) }),
+      server('alias-2', 'M', { gtin: cell({ value: null }) }),
+    ] } as unknown as ChannelScopePage
+    const refusedCell = cell({ value: '123' })
+    const next = keepUnsettledCells(page, [
+      shown('primary:M', { gtin: refusedCell, manufacturer: cell({ value: null, inherited: true }) }),
+      shown('primary:L', { cost: cell({ value: '9' }), manufacturer: cell({ value: null, inherited: true }) }),
+    ], stateOf)
+    expect(next.rows[0]!.values.gtin).toBe(refusedCell)
+    expect(next.rows[0]!.values.manufacturer!.value).toBe('ParentCo2')
+    expect(next.rows[1]).toBe(page.rows[1])
+    expect(next.rows[2]).toBe(page.rows[2])
+  })
+
+  it('the channel and Shared sheets gate their quiet reads on edits still on their way, never on a refused cell', () => {
+    const channel = readFileSync(join(__dirname, 'useChannelSheetAdapter.tsx'), 'utf8')
+    expect(channel).not.toMatch(/hasUnconfirmedChanges/)
+    expect(channel).toContain('keepUnsettledCells(page, rowsRef.current')
+    expect(channel).toContain('idle: () => writerRef.current?.pending === 0 && !tracker.hasOpenChanges')
+    expect(channel).toContain('read: (canApply) => quietRefresh(canApply),')
+    const master = readFileSync(join(__dirname, '..', 'master', 'useMasterSheet.ts'), 'utf8')
+    expect(master).not.toMatch(/hasUnconfirmedChanges/)
+    expect(master.match(/hasOpenChanges/g)).toHaveLength(3)
+    // The Shared scope's quiet read keeps a refused cell's value (as `keepUnsettledCells` does here).
+    expect(master).toContain("if (state && ['refused', 'unknown', 'saving', 'pending'].includes(state) && previous.values[key]) row.values[key] = previous.values[key]")
+    // Review of #607, finding 2 — a full read (Reload, "changed elsewhere — refresh") takes the refusal marks with the values.
+    expect(master).toContain('for (const row of next.rows) for (const key of Object.keys(row.values)) writer.forgetRefused(row.id, key)')
+  })
+})
+
+describe('G2/G3 — both sheets record an edit with its state and keep it only when it is stored', () => {
+  it('passes the edit\'s outcome to the history, and replays an inherited "before" through the reset', () => {
+    for (const file of [join(__dirname, 'useChannelSheetAdapter.tsx'), join(__dirname, '..', 'master', 'useMasterSheetAdapter.tsx')]) {
+      const src = readFileSync(file, 'utf8')
+      expect(src).toMatch(/onOutcome: undo\.edit\(|const onOutcome = undo\.edit\(/)
+      expect(src).toMatch(/stateBefore\(e\.oldValue, (e\.data|row), colId!?, takeEditPrior\(/)
+      expect(src).toContain('useSheetUndo(writer, getGridApi, { tracker, resetCell: resetCellBack })')
+      expect(src).toContain('writer.set(rowId, colId, null, { row, intent: before.intent, onOutcome });')
+      expect(src).not.toMatch(/undo\.record\(/)
+      // Review of #607, finding 4 — an edit dropped while formulas loaded, and a refused (or unanswered) formula save,
+      // tell the history the cell shows a value the server does not hold.
+      expect(src.match(/undo\.unsaved\(/g)).toHaveLength(3)
+      expect(src).toMatch(/'refused', reason \?\? HELD_EDIT_DROPPED\);\s*\/\/[^\n]*\n\s*undo\.unsaved\(/)
+    }
+    // Review of #607, finding 1 — a channel list position reads its list's other positions before recording a list reset.
+    expect(readFileSync(join(__dirname, 'useChannelSheetAdapter.tsx'), 'utf8')).toContain('listPositions(row, colId, ')
   })
 })

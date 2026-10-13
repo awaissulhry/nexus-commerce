@@ -19,7 +19,8 @@ import { recoverSheetRow } from '../sheetRecovery';
 import { newOperationId, runBulkOperation, type BulkSend } from '../bulkOperation';
 import { createShopifyBulkPost, orderShopifyColumnRequests } from '../../shopify/channelSheetWriter';
 import { preserveContentVersions } from '../contentVersions';
-import { useSheetUndo } from '../useSheetUndo';
+import { useSheetUndo, type ResetCellBack } from '../useSheetUndo';
+import { inheritedCell, listPositions, stateBefore, takeEditPrior } from '../sheetUndo';
 import { useShopifyDraftCell, type ShopifyHistoryRefused } from '../../shopify/ShopifyDraftCell';
 import { shopifyHistoryChange, shopifyHistoryRefusal, takeShopifyReplayIntent } from '../../shopify/draftHistory';
 import { shopifyGridTransfer } from '../../shopify/shopifyGridTransfer';
@@ -65,7 +66,7 @@ import { wholeListWriteField } from './provenance';
 import { rowProgressUnscorable, channelWriteIdentity, channelWriteGate, dataPathFor, distinctVariantCount, isCellEditable, offersCascade, orderRows, rowIdOf, summariseAlias, withRowIdentity, crossChannelColumnCount, reviewRowsOf } from './rows';
 import { aliasMark, type CascadeIntent } from './provenance';
 import { studioAccountAccess } from '../../accountScope';
-import { FollowUpRead, rowSettle } from './saveSettle';
+import { FollowUpRead, keepUnsettledCells, rowSettle } from './saveSettle';
 import type { AliasGroup as PreflightAlias } from './types';
 import { mappingHref } from '@/app/channels/mapping/_shared/navigation';
 import type { GetContextMenuItemsParams } from '@/design-system/grid';
@@ -254,6 +255,10 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     dataRef.current = data;
     const rowsRef = useRef(rows);
     rowsRef.current = rows;
+    /* G1 — a quiet re-read waits only for edits still on their way (saving, waiting, no answer): a refused cell no longer
+       holds back the read that shows a variation the value it now inherits. The refused cell keeps the value it shows,
+       and its mark, through the read — as on the Shared scope (`useMasterSheet`'s quiet read). */
+    const quietRefresh = useCallback((canApply: () => boolean) => refreshRef.current(canApply, (page) => keepUnsettledCells(page, rowsRef.current, (rowId, colId) => tracker.get(rowId, colId)?.state)), [tracker]);
     /* Sheet publish parity, step 3 — the "Last publish" column reads the destination's publication status through a
        ref, so a new answer refreshes its cells without rebuilding the column (`refreshCells` below). */
     const publishLookup = useMemo(() => publishColumnLookup(data?.columns ?? [], data?.scope.label ?? ''), [data?.columns, data?.scope.label]);
@@ -297,7 +302,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         /* P0 — the rows already say which cells hold a formula, so no editor waits for the formula reads. */
         seedRows: rows,
         channelConnectionId: data?.scope.connectionId ?? accountId,
-        onSettled: () => { void refresh(() => !tracker.hasUnconfirmedChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0); },
+        onSettled: () => { void quietRefresh(() => !tracker.hasOpenChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0); },
         onValueSaved: (rowId, fieldKey, value) => {
             const node = getGridApi()?.getRowNode(rowId);
             if (!node?.data)
@@ -356,8 +361,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     /* P2 (I4-4) — a confirmed save the sheet could not settle in place owes ONE quiet read, taken when the sheet is idle;
        P2 review 3 — a read that is dropped (an editor open, a newer write, a failed fetch) stays owed and is tried again. */
     const [followUp] = useState(() => new FollowUpRead({
-        idle: () => writerRef.current?.pending === 0 && !tracker.hasUnconfirmedChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0,
-        read: (canApply) => refreshRef.current(canApply),
+        idle: () => writerRef.current?.pending === 0 && !tracker.hasOpenChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0,
+        read: (canApply) => quietRefresh(canApply),
         sequence: () => writeSeq.current,
         schedule: (run, ms) => { const timer = setTimeout(run, ms); return () => clearTimeout(timer); },
     }));
@@ -491,8 +496,24 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     useSheetPublicationGuard(writer, tracker, getGridApi);
     const { saveStatus, refused, refusedRowIds, refreshCounts } = useSheetSaveStatus(writer, tracker, rows, data?.columns);
     savedAtRef.current = saveStatus.saved;
+    /* G3 — ⌘Z puts a cell that followed back by a reset (the write path's own `reset` / `reset-list`), never by storing
+       the value it showed: the followed value and provenance show at once, and the read after the save confirms them. */
+    const resetCellBack = useCallback<ResetCellBack>((rowId, colId, before, onOutcome) => {
+        const api = getGridApi();
+        const node = api?.getRowNode(rowId);
+        const row = node?.data;
+        if (!api || !node || !row) {
+            onOutcome('dropped');
+            return;
+        }
+        const cell = row.values?.[colId];
+        if (cell)
+            row.values = { ...row.values, [colId]: inheritedCell(cell, before) };
+        api.refreshCells({ rowNodes: [node], columns: [colId], force: true });
+        writer.set(rowId, colId, null, { row, intent: before.intent, onOutcome });
+    }, [getGridApi, writer]);
     /* ⌘Z undoes a whole operation (a fill, a paste) in one step and one save, and still works after the sheet re-reads. */
-    const undo = useSheetUndo(writer, getGridApi);
+    const undo = useSheetUndo(writer, getGridApi, { tracker, resetCell: resetCellBack });
     /* S11 — the first column's SKU is THIS listing's own (`../identitySkuColumn.tsx`, rules in `../identitySkuEdit.ts`). */
     /* Add rows (R2, R3) — empty rows in page memory; the SKU typed into one creates a draft variation, or a new listing
        of this product here whose SKU is that listing's own (`../newRows/`). */
@@ -533,8 +554,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     /** "Refresh progress": the rows' bars (a quiet re-read — edits in flight stay) and the scope's readiness. */
     const refreshProgress = useCallback(() => {
         refreshReadiness();
-        void refreshRef.current(() => !tracker.hasUnconfirmedChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0);
-    }, [refreshReadiness, tracker, getGridApi]);
+        void quietRefresh(() => !tracker.hasOpenChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0);
+    }, [refreshReadiness, tracker, getGridApi, quietRefresh]);
     const aliasLabel = useCallback((aliasId: string | null) => {
         const alias = data?.aliases.find((a) => aliasKeyOf(a.id) === aliasKeyOf(aliasId));
         return alias?.label == null ? 'Listing alias label not reported' : alias.label;
@@ -666,19 +687,29 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             return;
         }
         const shopifyValue = !!data?.columns.find(column => column.key === colId)?.shopifyField;
+        /* G2/G3 — the cell as the server holds it, with its state (a cell that followed is put back by a reset; a list
+           position only when no other position held its own value before). Read once, while the row holds the edited cell. */
+        const beforeOf = (row: ChannelSheetRow) => stateBefore(e.oldValue, row, colId, takeEditPrior(row.values?.[colId]), (r, key) => channelResetOffer(r, key),
+            listPositions(row, colId, (cell) => wholeListWriteField((cell as StudioCellValue | undefined)?.writeField ?? ''), (key) => undo.history.inOpenStep(row.rowId, key)));
         /* P0 — a cell whose formula state is not known yet keeps the edit and applies it once it is (the formula path if
            the cell turns out to hold one). Never refused: the refusal lost every paste made while formulas loaded. */
         if (!shopifyValue && !formulas.knownFor(e.data.rowId, colId)) {
             const rowId = e.data.rowId;
+            const row = e.data;
             tracker.set(rowId, colId, 'saving', HELD_FOR_FORMULAS);
             formulas.whenKnown(rowId, colId, () => {
                 if (tracker.get(rowId, colId)?.reason === HELD_FOR_FORMULAS)
                     latestValueChanged.current(e);
-            }, (reason) => tracker.set(rowId, colId, 'refused', reason ?? HELD_EDIT_DROPPED));
+            }, (reason) => {
+                tracker.set(rowId, colId, 'refused', reason ?? HELD_EDIT_DROPPED);
+                // The edit never left: the cell shows a value the server does not hold (finding 4).
+                undo.unsaved({ rowId, colId, before: beforeOf(row), after: e.newValue });
+            });
             return;
         }
         const typed = typeof e.newValue === 'string' ? e.newValue : null;
         if (!shopifyValue && ((typed !== null && isFormulaDraft(typed)) || formulas.exprFor(e.data.rowId, colId!))) {
+            const before = beforeOf(e.data);
             const row = e.data;
             const prev = row.values?.[colId];
             if (prev) {
@@ -701,22 +732,28 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                         if (n)
                             getGridApi()?.refreshCells({ force: true, rowNodes: [n], columns: [colId] });
                     }
+                    // The cell shows the refused value; the server still holds `before` (finding 4).
+                    undo.unsaved({ rowId: row.rowId, colId, before, after: e.newValue });
                 }
             })
                 .catch((err: unknown) => {
                 const reason = err instanceof Error ? err.message : String(err);
                 tracker.set(row.rowId, colId, 'unknown', `Could not confirm this save. Refresh to check: ${reason}`);
                 reporterRef.current.resolved(writeId, false, reason, subject);
+                undo.unsaved({ rowId: row.rowId, colId, before, after: e.newValue });
             });
             return;
         }
         /* Shopify (lane01): the history keeps the cell's own/follow state with its value, and an undo/redo replay writes
-           with the intent that state needs (`reset` restores following, also when the values are equal). */
+           with the intent that state needs (`reset` restores following, also when the values are equal).
+           G2/G3 — every other cell keeps its state too (a cell that followed is put back by a reset), and the history keeps
+           only what the server stored: the writer reports this edit's outcome. */
         const history = shopifyValue ? shopifyHistoryChange(e.data.values?.[colId], e.oldValue, e.newValue) : null;
-        undo.record({ rowId: e.data.rowId, colId, before: history ? history.before : e.oldValue, after: history ? history.after : e.newValue }, e.source);
+        const before = history ? history.before : beforeOf(e.data);
+        const onOutcome = undo.edit({ rowId: e.data.rowId, colId, before, after: history ? history.after : e.newValue }, e.source);
         const replay = shopifyValue ? takeShopifyReplayIntent(e.data.values?.[colId]) : undefined;
-        writer.set(e.data.rowId, colId, replay === 'reset' ? null : e.newValue, { row: e.data, intent: replay ?? 'set' });
-    }, [writer, formulas, reload, channel, marketplace, accountId, locale, writeInstanceId, undo.record, identitySku.onValueChanged]);
+        writer.set(e.data.rowId, colId, replay === 'reset' ? null : e.newValue, { row: e.data, intent: replay ?? 'set', onOutcome });
+    }, [writer, formulas, reload, channel, marketplace, accountId, locale, writeInstanceId, undo.edit, undo.unsaved, undo.history, identitySku.onValueChanged]);
     /* A held edit re-enters through the LATEST handler, which sees the formula state that released it. */
     const latestValueChanged = useRef(onCellValueChanged);
     latestValueChanged.current = onCellValueChanged;
@@ -777,7 +814,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         repaint: repaintPublishCells,
         toast: (message, tone, options) => toastRef.current(message, tone, options),
         // New listings: a choice started the family's drafts — the sheet reads its rows again, quietly (their listing ids).
-        onStarted: () => { void refreshRef.current(() => !tracker.hasUnconfirmedChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0); },
+        onStarted: () => { void quietRefresh(() => !tracker.hasOpenChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0); },
     });
     const publishTracker = publishEditing.tracker;
     const { stage: stagePlace, fill: fillPlaces, onClearKey: clearPublishCells, begin: beginPublishOperation, end: endPublishOperation } = publishEditing;
@@ -994,7 +1031,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const shopifyEditor = useShopifyDraftCell(shopifySchema, getGridApi, shopifyHistoryRefused);
     /* Owner 2026-10-05 — the pop-up names the row's listing as its band does (★ Main listing, ① ALT1). */
     const mediaListingOf = useCallback((row: { aliasId?: string | null; aliasPosition?: number }) => mediaListingName(row.aliasPosition ?? 0, aliasLabelOf(row.aliasId ?? null), dataRef.current?.aliases.length ?? 1), [aliasLabelOf]);
-    const mediaEditor = useProductMediaEditor(() => { void refresh(() => !tracker.hasUnconfirmedChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0); }, data?.scope.locale ?? locale, mediaListingOf);
+    const mediaEditor = useProductMediaEditor(() => { void quietRefresh(() => !tracker.hasOpenChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0); }, data?.scope.locale ?? locale, mediaListingOf);
     const mediaClipboard = useMemo(() => mediaGridTransfer(formulaClipboard, mediaEditor.actions), [formulaClipboard, mediaEditor.actions]);
     /* Step 4.3 #3 (A-52, R-56) — the one bullets cell joins the grid's columns (the media column's pattern): built, in
        Customise, in the views; never a server column, never a write field. */
@@ -1476,7 +1513,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                         if (!reviewBusy)
                             setPreflightAlias(null);
                     }} title={`${reviewCopy(reviewPath != null ? 'synchronize' : 'check').title} · ${data.scope.label} · ${aliasMark(preflightAlias.position)}`} subtitle={reviewCopy(reviewPath != null ? 'synchronize' : 'check').subtitle} size="lg">
-                  <>{reviewPath ? <ShopifySheetReview key={reviewPath} path={reviewPath} schema={shopifySchema} onBusyChange={setReviewBusy} onChanged={() => void refresh(() => !tracker.hasUnconfirmedChanges)}/> : <AliasPublishControl alias={preflightAlias} rows={rows} channel={channel} marketplace={marketplace} autoRun/>}</>
+                  <>{reviewPath ? <ShopifySheetReview key={reviewPath} path={reviewPath} schema={shopifySchema} onBusyChange={setReviewBusy} onChanged={() => void quietRefresh(() => !tracker.hasOpenChanges)}/> : <AliasPublishControl alias={preflightAlias} rows={rows} channel={channel} marketplace={marketplace} autoRun/>}</>
                 </Modal>)}
         </>}
         {confirmElement}

@@ -131,6 +131,14 @@ export class CellSaveTracker {
     return [...this.cells.values()].some(entry => entry.state !== 'saved')
   }
 
+  /**
+   * An edit still on its way: saving, waiting for an answer, or answered by nobody (`unknown`). A REFUSED cell is not
+   * one — its answer is in, so it never holds back a background read (the read keeps the refused cell's value and mark).
+   */
+  get hasOpenChanges(): boolean {
+    return [...this.cells.values()].some(entry => entry.state === 'saving' || entry.state === 'waiting' || entry.state === 'unknown')
+  }
+
   private emit() {
     for (const fn of this.listeners) fn()
   }
