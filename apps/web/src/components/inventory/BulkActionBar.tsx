@@ -5,6 +5,7 @@ import type { Table } from "@tanstack/react-table";
 import type { InventoryItem } from "@/types/inventory";
 import { getBackendUrl } from "@/lib/backend-url";
 import { useRouter } from "@/lib/workspaces/navigation";
+import { pauseOutcomeOf } from "./pauseOutcome";
 
 interface BulkActionBarProps {
   table: Table<InventoryItem>;
@@ -33,17 +34,17 @@ export default function BulkActionBar({ table }: BulkActionBarProps) {
   const selectedSkus = selectedRows.map((row) => row.original.sku);
 
   // Toast helper
-  const showToast = (type: "success" | "error" | "info", message: string) => {
+  const showToast = (type: "success" | "error" | "info", message: string, durationMs = 5000) => {
     const id = Date.now().toString();
     setToasts((prev) => [...prev, { id, type, message }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 5000);
+    }, durationMs);
   };
 
   // Pause = a real, recorded stock change (POST /api/stock/pause): each own-warehouse level of the selected products
-  // and their variations goes to its reserved count (nothing left to sell), one audited movement each, cascaded to
-  // every listing that follows stock. Amazon FBA units are never written.
+  // and their whole family goes to its reserved count (nothing left to sell), one audited movement each, cascaded to
+  // every listing that follows stock. Amazon FBA units are never written. The toast says exactly what ran.
   const handlePause = async () => {
     if (selectedIds.length === 0) return;
     setLoading(true);
@@ -57,20 +58,19 @@ export default function BulkActionBar({ table }: BulkActionBarProps) {
       });
       const result = await res.json().catch(() => ({}));
       if (res.ok && result.ok) {
-        const s = (n: number) => (n !== 1 ? "s" : "");
-        const skipped = result.notFound > 0 ? ` ${result.notFound} selected row${s(result.notFound)} skipped (not a product).` : "";
-        showToast(
-          "success",
-          `✓ Paused ${result.products} product${s(result.products)}: ${result.units} sellable unit${s(result.units)} at your own warehouses set to 0 in ${result.movements} stock movement${s(result.movements)}. Amazon FBA units are not changed.${skipped}`,
-        );
+        const outcome = pauseOutcomeOf(result);
+        showToast(outcome.tone, outcome.message, outcome.tone === "error" ? 15000 : 8000);
         table.resetRowSelection();
         router.refresh();
       } else {
-        showToast("error", `✗ Failed to pause listings: ${result.error || `HTTP ${res.status}`}`);
+        // Refused before anything ran (bad or too large a selection): nothing was changed.
+        showToast("error", `✗ Nothing was paused: ${result.error || `HTTP ${res.status}`}`, 10000);
       }
     } catch (err) {
+      // No answer: part of it may have run. Say so, and show the real numbers.
       const errorMsg = err instanceof Error ? err.message : "Unknown error occurred";
-      showToast("error", `✗ Pause failed: ${errorMsg}`);
+      showToast("error", `✗ Pause did not answer (${errorMsg}). Some stock may have changed: the page is reloaded to show the real numbers.`, 15000);
+      router.refresh();
     } finally {
       setLoading(false);
     }

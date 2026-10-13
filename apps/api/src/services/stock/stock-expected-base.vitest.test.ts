@@ -41,6 +41,18 @@ vi.mock('../advertising/ads-cache.js', () => ({
   putCached: () => undefined,
   flushAdsCache: async () => undefined,
 }))
+/** Products whose Pause movement fails (a stand-in for a lock timeout on one level): the other levels must go on. */
+const failFor = vi.hoisted(() => new Set<string>())
+vi.mock('../stock-movement.service.js', async (original) => {
+  const real = await original<typeof import('../stock-movement.service.js')>()
+  return {
+    ...real,
+    applyStockMovementInTx: async (...args: Parameters<typeof real.applyStockMovementInTx>) => {
+      if (failFor.has(args[1].productId)) throw new Error('TEST lock timeout')
+      return real.applyStockMovementInTx(...args)
+    },
+  }
+})
 vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { refresh: vi.fn(async () => undefined), refreshMany: vi.fn(async () => undefined), refreshInTransaction: vi.fn(async () => undefined) } }))
 
 const business = { workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: ['OWNER'] }
@@ -48,7 +60,7 @@ const inside = <T>(work: () => Promise<T>) => withWorkspace(business, work)
 const db = () => database.client
 
 type Json = any
-const ids = { main: '', second: '', fba: '', shop: '', editor: '', fbm: '', parent: '', child: '', other: '', ebay: '' }
+const ids = { main: '', second: '', fba: '', shop: '', editor: '', fbm: '', parent: '', child: '', other: '', ebay: '', pinned: '', grand: '', mid: '', leaf: '', broken: '' }
 let app: FastifyInstance
 
 async function send(method: 'POST', url: string, payload?: unknown): Promise<{ status: number; body: Json }> {
@@ -77,12 +89,19 @@ beforeAll(async () => {
     ids.parent = (await d.product.create({ data: { sku: 'TEST-SKU-EB-PARENT', name: 'Test FBA parent', basePrice: '10.00', isParent: true, fulfillmentMethod: 'FBA' } as never })).id
     ids.child = (await d.product.create({ data: { sku: 'TEST-SKU-EB-CHILD', name: 'Test FBA child', basePrice: '10.00', parentId: ids.parent, fulfillmentMethod: 'FBA' } as never })).id
     ids.other = (await d.product.create({ data: { sku: 'TEST-SKU-EB-OTHER', name: 'Test not selected', basePrice: '10.00' } })).id
+    // A three-level family: the Pause of the top reaches the bottom.
+    ids.grand = (await d.product.create({ data: { sku: 'TEST-SKU-EB-GRAND', name: 'Test family top', basePrice: '10.00', isParent: true } as never })).id
+    ids.mid = (await d.product.create({ data: { sku: 'TEST-SKU-EB-MID', name: 'Test family middle', basePrice: '10.00', isParent: true, parentId: ids.grand } as never })).id
+    ids.leaf = (await d.product.create({ data: { sku: 'TEST-SKU-EB-LEAF', name: 'Test family bottom', basePrice: '10.00', parentId: ids.mid } as never })).id
+    ids.broken = (await d.product.create({ data: { sku: 'TEST-SKU-EB-BROKEN', name: 'Test level that fails', basePrice: '10.00' } })).id
     const levels: Array<[string, string, number, number]> = [
       [ids.editor, ids.main, 10, 0],
       [ids.fbm, ids.main, 6, 0], [ids.fbm, ids.second, 4, 0], [ids.fbm, ids.fba, 7, 0],
       [ids.child, ids.main, 10, 2], [ids.child, ids.second, 3, 0], [ids.child, ids.fba, 5, 0], [ids.child, ids.shop, 4, 0],
       [ids.parent, ids.second, 2, 0],
       [ids.other, ids.main, 9, 0],
+      [ids.leaf, ids.main, 6, 0],
+      [ids.broken, ids.main, 3, 0],
     ]
     for (const [productId, locationId, quantity, reserved] of levels) {
       await d.stockLevel.create({ data: { productId, locationId, quantity, reserved, available: quantity - reserved } })
@@ -92,6 +111,12 @@ beforeAll(async () => {
       productId: ids.child, channel: 'EBAY', channelConnectionId: account.id, channelMarket: 'EBAY_IT', marketplace: 'IT', region: 'EU',
       price: 10, followMasterPrice: true, quantity: 11, followMasterQuantity: true, stockBuffer: 0, fulfillmentMethod: 'FBM',
       externalListingId: 'TEST-EB-ITEM-1', listingStatus: 'ACTIVE', isPublished: true,
+    } as never })).id
+    // A fixed number: this listing does not follow stock, so the Pause cannot reach it — the answer names it.
+    ids.pinned = (await d.channelListing.create({ data: {
+      productId: ids.child, channel: 'EBAY', channelConnectionId: account.id, channelMarket: 'EBAY_DE', marketplace: 'DE', region: 'EU',
+      price: 10, followMasterPrice: true, quantity: 4, quantityOverride: 4, followMasterQuantity: false, stockBuffer: 0, fulfillmentMethod: 'FBM',
+      externalListingId: 'TEST-EB-ITEM-2', listingStatus: 'ACTIVE', isPublished: true,
     } as never })).id
   })
   app = Fastify()
@@ -178,7 +203,7 @@ describe('the FBA page Pause: a real, recorded stock change', () => {
   it('own-warehouse levels of the product and its variations go to their reserved count, one audited movement each, cascaded; FBA and Shopify untouched', async () => {
     const { PAUSE_NOTE } = await import('./location-adjust.service.js')
     const out = await send('POST', '/api/stock/pause', { productIds: [ids.parent, 'not-a-product'] })
-    expect(out).toEqual({ status: 200, body: { ok: true, products: 1, notFound: 1, variations: 1, movements: 3, units: 13 } })
+    expect(out).toEqual({ status: 200, body: { ok: true, products: 1, variations: 1, notFound: 1, paused: 3, units: 13, skipped: 0, failed: [], notFollowing: 1 } })
     // The child: main 10 → 2 (2 reserved for open orders stay), second 3 → 0; the parent's own second 2 → 0.
     expect(await qty(ids.child, ids.main)).toBe(2)
     expect(await qty(ids.child, ids.second)).toBe(0)
@@ -198,16 +223,36 @@ describe('the FBA page Pause: a real, recorded stock change', () => {
     expect((await inside(() => db().channelListing.findUniqueOrThrow({ where: { id: ids.ebay } }))).quantity).toBe(0)
     const pushes = await inside(() => db().outboundSyncQueue.findMany({ where: { channelListingId: ids.ebay, syncType: 'QUANTITY_UPDATE' } }))
     expect(pushes.length).toBeGreaterThan(0)
+    // The fixed-number listing keeps its quantity — and was counted in `notFollowing` above.
+    expect((await inside(() => db().channelListing.findUniqueOrThrow({ where: { id: ids.pinned } }))).quantity).toBe(4)
   })
 
-  it('a sale after the pause is kept; pausing again books nothing; bad input is refused', async () => {
-    await sale(ids.child, ids.main) // consumes one of the reserved units' stock: 2 → 1
+  it('the whole family, at any depth; a level that fails is reported by SKU and location while the others go on', async () => {
+    failFor.add(ids.broken)
+    try {
+      const out = await send('POST', '/api/stock/pause', { productIds: [ids.grand, ids.broken] })
+      expect(out).toEqual({ status: 200, body: {
+        ok: true, products: 2, variations: 2, notFound: 0, paused: 1, units: 6, skipped: 0, notFollowing: 0,
+        failed: [{ sku: 'TEST-SKU-EB-BROKEN', location: 'TEST-EB-MAIN', reason: 'TEST lock timeout' }],
+      } })
+    } finally {
+      failFor.delete(ids.broken)
+    }
+    expect(await qty(ids.leaf, ids.main)).toBe(0) // two levels below the selected product
+    expect(await qty(ids.broken, ids.main)).toBe(3) // rolled back, unchanged
+    expect(await movements(ids.broken)).toHaveLength(0)
+  })
+
+  it('a sale after the pause is kept; pausing again books nothing; bad and too-large requests are refused before anything runs', async () => {
+    await sale(ids.child, ids.main) // 2 → 1
     const before = (await movements(ids.child)).length
     const out = await send('POST', '/api/stock/pause', { productIds: [ids.parent] })
-    expect(out.body).toMatchObject({ ok: true, movements: 0, units: 0 })
+    expect(out.body).toMatchObject({ ok: true, paused: 0, units: 0, skipped: 3, failed: [] })
     expect(await qty(ids.child, ids.main)).toBe(1)
     expect((await movements(ids.child)).length).toBe(before)
     expect(await send('POST', '/api/stock/pause', {})).toEqual({ status: 400, body: { error: '`productIds` must be a list of product ids', code: 'MISSING_FIELDS' } })
-    expect((await send('POST', '/api/stock/pause', { productIds: Array.from({ length: 501 }, (_, i) => `p${i}`) })).body.code).toBe('TOO_MANY')
+    expect(await send('POST', '/api/stock/pause', { productIds: Array.from({ length: 201 }, (_, i) => `p${i}`) })).toEqual({ status: 400, body: {
+      error: 'Pause takes at most 200 products at a time; 201 are selected. Select fewer and pause again.', code: 'TOO_MANY',
+    } })
   })
 })

@@ -2,11 +2,12 @@
 
 /**
  * The inventory editor's data: ONE model (variations × locations, or a single product as a
- * one-row family) and ONE write — the batch. Each on-hand carries the number the grid showed
- * (`expected`); the server checks it against a fresh read under the stock lock (a sale since then
- * refuses the cell, STALE_ON_HAND, rather than being overwritten) and refuses FBA / Shopify /
- * invalid values per change; the result comes back per change so the
- * grid can keep a refused cell pending and clear the confirmed ones. Step 3: the read carries each
+ * one-row family) and ONE write — the batch. Each on-hand carries the base the person saw when
+ * they typed it (`expected`, kept on the pending edit, never moved by a live re-read); the server
+ * checks it against a fresh read under the stock lock (a sale since then refuses the cell,
+ * STALE_ON_HAND, rather than being overwritten) and refuses FBA / Shopify / invalid values per
+ * change; the result comes back per change so the grid can keep a refused cell pending and clear
+ * the confirmed ones. Step 3: the read carries each
  * product's case sizes and each level's sealed cases per size; a change may carry absolute `cases`
  * for the sizes typed there.
  *
@@ -44,6 +45,8 @@ export interface BatchResult {
   cases?: CaseCount[]
   error?: string
   code?: string
+  /** STALE_ON_HAND only: the on-hand the server holds now. */
+  current?: number
 }
 
 /** This editor's own `stock.adjusted` (its Apply re-reads by itself). */

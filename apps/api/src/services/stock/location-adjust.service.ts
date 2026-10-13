@@ -164,43 +164,105 @@ export async function setFbmOnHand(input: { productId: string; value?: number; c
 
 /** The note on every Pause movement: the reason a person reads in the stock history. */
 export const PAUSE_NOTE = 'Paused (Pause Listings on the FBA page): sellable own-warehouse stock set to 0; reserved units kept'
+/** The most products one Pause may name (the FBA page's selection). */
+export const PAUSE_MAX_PRODUCTS = 200
+/** The most stock levels one Pause may change, variations included: one request never runs long enough to time out. */
+export const PAUSE_MAX_LEVELS = 500
+
+export class PauseTooLargeError extends Error {
+  readonly code = 'TOO_MANY' as const
+}
+
+/** Every product of the chosen ones' families: their variations, and the variations' variations, until none is left. */
+async function familyOf(roots: string[]): Promise<string[]> {
+  const all = new Set(roots)
+  let frontier = roots
+  while (frontier.length) {
+    const children = await prisma.product.findMany({ where: { parentId: { in: frontier } }, select: { id: true } })
+    frontier = children.map((c) => c.id).filter((id) => !all.has(id))
+    for (const id of frontier) all.add(id)
+  }
+  return [...all]
+}
 
 /**
  * The FBA page's "Pause Listings" (`POST /api/stock/pause`, /products/fba): a real, recorded stock change. Every own
- * WAREHOUSE level of the chosen products — and of their variations, which are child products — is set to its reserved
- * count, so nothing is left to sell: one audited MANUAL_ADJUSTMENT movement per level (PAUSE_NOTE), and the movement's
- * cascade sends 0 to every listing that follows stock. Units reserved for open orders stay. Amazon FBA units are never
- * written (Amazon's number), nor Shopify locations (Shopify's). Each level is its own transaction with the stock lock
- * taken before the fresh read, so a sale landing meanwhile is kept, never overwritten. A level already at 0 sellable
- * books nothing, so pausing twice books nothing.
+ * WAREHOUSE level of the chosen products — and of their whole family (variations at any depth, which are child
+ * products) — is set to its reserved count, so nothing is left to sell: one audited MANUAL_ADJUSTMENT movement per level
+ * (PAUSE_NOTE), and the movement's cascade sends 0 to every listing that follows stock. Units reserved for open orders
+ * stay. Amazon FBA units are never written (Amazon's number), nor Shopify locations (Shopify's).
+ *
+ * Each level is its own transaction with the stock lock taken before the fresh read, so a sale landing meanwhile is
+ * kept. A level that fails is reported and the others go on, so the answer always says exactly what ran: `paused`
+ * levels, `skipped` levels (nothing left to sell — pausing twice books nothing), `failed` levels with the reason, and
+ * `notFollowing` — the listings of these products that do not follow own stock (a fixed number, a held sync, or shared
+ * stock) and so keep their quantity. Bounded before anything is written (PAUSE_MAX_PRODUCTS, PAUSE_MAX_LEVELS).
  */
 export async function pauseOwnStock(input: { productIds: string[]; actor: string }) {
   const ids = [...new Set(input.productIds.filter((id) => typeof id === 'string' && id.length > 0))]
+  if (ids.length > PAUSE_MAX_PRODUCTS) {
+    throw new PauseTooLargeError(`Pause takes at most ${PAUSE_MAX_PRODUCTS} products at a time; ${ids.length} are selected. Select fewer and pause again.`)
+  }
   const found = ids.length ? await prisma.product.findMany({ where: { id: { in: ids } }, select: { id: true } }) : []
   const roots = found.map((p) => p.id)
-  const children = roots.length ? await prisma.product.findMany({ where: { parentId: { in: roots } }, select: { id: true } }) : []
-  const productIds = [...new Set([...roots, ...children.map((c) => c.id)])]
+  const productIds = roots.length ? await familyOf(roots) : []
   const levels = productIds.length
     ? await prisma.stockLevel.findMany({
         where: { productId: { in: productIds }, variationId: null, location: { type: 'WAREHOUSE' } },
-        select: { productId: true, locationId: true },
+        select: { productId: true, locationId: true, available: true, product: { select: { sku: true } }, location: { select: { code: true } } },
       })
     : []
-  let movements = 0
-  let units = 0
-  for (const { productId, locationId } of levels) {
-    const moved = await prisma.$transaction(async (tx) => {
-      await lockProductStock(tx, [productId])
-      const now = await tx.stockLevel.findFirst({ where: { productId, locationId, variationId: null }, select: { quantity: true, reserved: true } })
-      if (!now || now.quantity <= now.reserved) return null
-      const adj = computeLocationAdjustment({ locationType: 'WAREHOUSE', currentQuantity: now.quantity, currentReserved: now.reserved, value: now.reserved })
-      if (adj.noop) return null
-      return applyStockMovementInTx(tx, { productId, locationId, change: adj.change, reason: 'MANUAL_ADJUSTMENT', notes: PAUSE_NOTE, actor: input.actor })
-    })
-    if (!moved) continue
-    await afterStockMovementCommit({ productId, reason: 'MANUAL_ADJUSTMENT' }, moved)
-    movements += 1
-    units += -(moved.movement as { change: number }).change
+  const toPause = levels.filter((l) => l.available > 0)
+  if (toPause.length > PAUSE_MAX_LEVELS) {
+    throw new PauseTooLargeError(`Pause changes at most ${PAUSE_MAX_LEVELS} stock levels at a time; these products and their variations have ${toPause.length} with stock to sell. Select fewer products and pause again.`)
   }
-  return { products: roots.length, notFound: ids.length - roots.length, variations: productIds.length - roots.length, movements, units }
+  let paused = 0
+  let units = 0
+  let skipped = levels.length - toPause.length
+  const failed: Array<{ sku: string; location: string; reason: string }> = []
+  for (const { productId, locationId, product, location } of toPause) {
+    let moved: StockMovementTxResult | null
+    try {
+      moved = await prisma.$transaction(async (tx) => {
+        await lockProductStock(tx, [productId])
+        const now = await tx.stockLevel.findFirst({ where: { productId, locationId, variationId: null }, select: { quantity: true, reserved: true } })
+        if (!now || now.quantity <= now.reserved) return null
+        const adj = computeLocationAdjustment({ locationType: 'WAREHOUSE', currentQuantity: now.quantity, currentReserved: now.reserved, value: now.reserved })
+        if (adj.noop) return null
+        return applyStockMovementInTx(tx, { productId, locationId, change: adj.change, reason: 'MANUAL_ADJUSTMENT', notes: PAUSE_NOTE, actor: input.actor })
+      })
+    } catch (error) {
+      // Rolled back: this level is unchanged. Reported, and the next level goes on.
+      failed.push({ sku: product.sku, location: location.code, reason: error instanceof Error ? error.message : String(error) })
+      continue
+    }
+    if (!moved) { skipped += 1; continue }
+    paused += 1
+    units += -(moved.movement as { change: number }).change
+    // Committed: the push, the stockout hook and the read cache (fail-open by design; the drain cron is the backstop).
+    await afterStockMovementCommit({ productId, reason: 'MANUAL_ADJUSTMENT' }, moved)
+  }
+  return { products: roots.length, variations: productIds.length - roots.length, notFound: ids.length - roots.length, paused, units, skipped, failed, notFollowing: await notFollowingCount(productIds) }
+}
+
+/**
+ * The listings that keep their own quantity whatever the warehouse holds: a fixed number, a held sync, or a product that
+ * sells from shared stock (its listings follow that stock). Closed offers sell nothing and are not counted. Null when
+ * the count could not be read — the answer then leaves it out rather than guess (the movements have already run).
+ */
+async function notFollowingCount(productIds: string[]): Promise<number | null> {
+  if (!productIds.length) return 0
+  try {
+    const { pooledNow } = await import('../stock-pool/pool-guard.js')
+    const pooled = [...(await pooledNow(prisma, productIds))]
+    return await prisma.channelListing.count({
+      where: {
+        productId: { in: productIds },
+        offerClosedAt: null,
+        OR: [{ followMasterQuantity: false }, { syncPaused: true }, ...(pooled.length ? [{ productId: { in: pooled } }] : [])],
+      },
+    })
+  } catch {
+    return null
+  }
 }

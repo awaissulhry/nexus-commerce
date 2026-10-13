@@ -4,7 +4,7 @@ import prisma from '../db.js'
 import { applyStockMovement, listStockMovements, ProtectedLocationError } from '../services/stock-movement.service.js'
 import { LocationAdjustmentError } from '../services/location-adjustment.js'
 import { listStockLocations, listStockReservations, listStockRows, listStockTransfers, readProductStock } from '../services/stock/stock-read.service.js'
-import { adjustOneLocation, adjustReasonOf, NoLocationError, pauseOwnStock } from '../services/stock/location-adjust.service.js'
+import { adjustOneLocation, adjustReasonOf, NoLocationError, pauseOwnStock, PauseTooLargeError } from '../services/stock/location-adjust.service.js'
 import { CaseCountError } from '../services/stock/stock-cases.service.js'
 import type { CaseCount } from '@nexus/shared/stock-cases'
 import { placeHold, PooledHoldRefusal, releaseHold } from '../services/stock/stock-hold.service.js'
@@ -2405,18 +2405,19 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // ── POST /api/stock/pause ───────────────────────────────────────
-  // The FBA page's "Pause Listings" (/products/fba): every own WAREHOUSE level of the chosen products (and their
-  // variations) drops to its reserved count, one audited movement each, cascaded to the listings that follow stock
-  // (pauseOwnStock). Amazon FBA and Shopify locations are never written. Body: { productIds: string[] } (≤ 500).
+  // The FBA page's "Pause Listings" (/products/fba): every own WAREHOUSE level of the chosen products (and their whole
+  // family) drops to its reserved count, one audited movement each, cascaded to the listings that follow stock
+  // (pauseOwnStock). Amazon FBA and Shopify locations are never written. Body: { productIds: string[] }. The answer
+  // says exactly what ran (paused / skipped / failed levels); only a malformed or too-large request is a 400.
   fastify.post('/stock/pause', async (request, reply) => {
     const body = (request.body ?? {}) as { productIds?: unknown }
     if (!Array.isArray(body.productIds) || body.productIds.length === 0 || !body.productIds.every((id) => typeof id === 'string' && id)) {
       return reply.code(400).send({ error: '`productIds` must be a list of product ids', code: 'MISSING_FIELDS' })
     }
-    if (body.productIds.length > 500) return reply.code(400).send({ error: 'At most 500 products per pause', code: 'TOO_MANY' })
     try {
       return { ok: true, ...(await pauseOwnStock({ productIds: body.productIds as string[], actor: 'products-fba-pause' })) }
     } catch (error: any) {
+      if (error instanceof PauseTooLargeError) return reply.code(400).send({ error: error.message, code: error.code })
       fastify.log.error({ err: error }, '[stock/pause] failed')
       return reply.code(400).send({ error: error?.message ?? String(error) })
     }

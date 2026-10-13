@@ -3,7 +3,7 @@ import { CASE_COPY } from '@nexus/shared/stock-cases'
 
 import {
   availableOf, buildMatrixModel, buildSingleModel, casesKey, casesOf, CASES_EDITOR_COPY, changesOf, countsCases, deltaOf, familyCaseSizes, hasCaseColumns,
-  keepCasesOf, onHandOf, pendingCellCount, refusedColumn, rowSyncStatus, rowTotalAvailable, stockLevelOf, totalsOf, withCasesEdit, withEdit,
+  keepCasesOf, keepRefusedEdits, onHandOf, pendingCellCount, refusedColumn, rowSyncStatus, rowTotalAvailable, stockLevelOf, totalsOf, withCasesEdit, withEdit,
   type MatrixModel,
 } from './inventoryEditor.logic'
 import { concernsEditor } from './useInventoryEditor'
@@ -40,18 +40,32 @@ describe('pending edits sit over the server numbers', () => {
     expect(onHandOf(m.rows[0], 'it', p)).toBe(15)
     expect(availableOf(m.rows[0], 'it', p)).toBe(13)
     expect(deltaOf(m.rows[0], 'it', p)).toBe(5)
-    expect(changesOf(p)).toEqual([{ productId: 'p1', locationId: 'it', value: 15 }])
+    expect(changesOf(p)).toEqual([{ productId: 'p1', locationId: 'it', value: 15, expected: 10 }])
   })
-  it('with the model, each on-hand names the server number the grid showed (the expected base); a cell with no level saw 0', () => {
-    const m = model()
-    let p = withEdit(new Map(), m.rows[0], 'it', 15)
-    p = withEdit(p, m.rows[1], 'it', 1)
-    expect(changesOf(p, new Map(), m)).toEqual([
-      { productId: 'p1', locationId: 'it', value: 15, expected: 10 },
-      { productId: 'p2', locationId: 'it', value: 1, expected: 3 },
+  it('🔴 a sale while the person types: the live re-read moves the server number, never the base — Apply sends the base the person saw', () => {
+    // The cell shows 10; the person types 15 (+5).
+    let p = withEdit(new Map(), model().rows[0], 'it', 15)
+    // A sale books −1 and the editor re-reads quietly: the server now says 9, the edit stays over it.
+    const reread = buildMatrixModel(LOCS, [{ id: 'p1', sku: 'A-S', name: 'A small', thumbnailUrl: null, stockLevels: [{ locationId: 'it', locationCode: 'IT-MAIN', locationType: 'WAREHOUSE', quantity: 9, reserved: 2, available: 7 }] }])
+    expect(onHandOf(reread.rows[0], 'it', p)).toBe(15)
+    expect(deltaOf(reread.rows[0], 'it', p)).toBe(5) // the person's change, not +6
+    // Typing again over the re-read keeps the base too.
+    p = withEdit(p, reread.rows[0], 'it', 16)
+    expect(changesOf(p)).toEqual([{ productId: 'p1', locationId: 'it', value: 16, expected: 10 }])
+    // Back to the base clears the edit, even though the server moved.
+    expect(withEdit(p, reread.rows[0], 'it', 10).size).toBe(0)
+  })
+  it('after Apply: confirmed cells clear; a STALE_ON_HAND refusal keeps the value on the current number; other refusals keep the cell as it was', () => {
+    let p = withEdit(new Map(), model().rows[0], 'it', 15)
+    p = withEdit(p, model().rows[1], 'it', 1)
+    const stale = keepRefusedEdits(p, [
+      { productId: 'p1', locationId: 'it', ok: false, code: 'STALE_ON_HAND', current: 9 },
+      { productId: 'p2', locationId: 'it', ok: true },
     ])
-    const none = buildMatrixModel(LOCS, [{ id: 'p3', sku: 'A-L', name: 'A large', thumbnailUrl: null, stockLevels: [] }])
-    expect(changesOf(withEdit(new Map(), none.rows[0], 'it', 4), new Map(), none)).toEqual([{ productId: 'p3', locationId: 'it', value: 4, expected: 0 }])
+    expect([...stale.entries()]).toEqual([['p1:it', { value: 15, seen: 9 }]])
+    expect(changesOf(stale)).toEqual([{ productId: 'p1', locationId: 'it', value: 15, expected: 9 }])
+    const other = keepRefusedEdits(p, [{ productId: 'p2', locationId: 'it', ok: false, code: 'BELOW_RESERVED' }])
+    expect([...other.entries()]).toEqual([['p2:it', { value: 1, seen: 3 }]])
   })
   it('typing the server value back clears the edit; invalid input is refused', () => {
     const m = model()
@@ -100,7 +114,7 @@ const twoSizes = (): MatrixModel => buildMatrixModel(LOCS, [
   { id: 'q1', sku: 'B-S', name: 'B small', thumbnailUrl: null, caseSizes: [6, 12], stockLevels: [it_(33, [c(12, 2), c(6, 1)])] },
   { id: 'q2', sku: 'B-M', name: 'B medium', thumbnailUrl: null, caseSizes: [12], stockLevels: [it_(17, [c(12, 1)])] },
 ])
-const none = new Map<string, number>()
+const none = new Map<string, never>()
 
 describe('cases — the model carries the case sizes and the sealed counts', () => {
   it('a family row and a single product both carry their case sizes (biggest first) and each level its sealed cases', () => {
@@ -233,11 +247,11 @@ describe('cases — one change per cell, refusals on the right cell', () => {
     const m = cased()
     const p = withEdit(none, m.rows[1], 'it', 12)
     let k = withCasesEdit(none, m.rows[0], 'it', 12, 3, p)
-    expect(changesOf(p, k)).toEqual([{ productId: 'p2', locationId: 'it', value: 12 }, { productId: 'p1', locationId: 'it', cases: [c(12, 3)] }])
+    expect(changesOf(p, k)).toEqual([{ productId: 'p2', locationId: 'it', value: 12, expected: 9 }, { productId: 'p1', locationId: 'it', cases: [c(12, 3)] }])
     expect(pendingCellCount(p, k)).toBe(2)
     const both = withEdit(p, m.rows[0], 'it', 60)
     k = withCasesEdit(none, m.rows[0], 'it', 12, 5, both)
-    expect(changesOf(both, k)).toEqual([{ productId: 'p2', locationId: 'it', value: 12 }, { productId: 'p1', locationId: 'it', value: 60, cases: [c(12, 5)] }])
+    expect(changesOf(both, k)).toEqual([{ productId: 'p2', locationId: 'it', value: 12, expected: 9 }, { productId: 'p1', locationId: 'it', value: 60, expected: 51, cases: [c(12, 5)] }])
     expect(pendingCellCount(both, k)).toBe(2)
   })
   it('after an Apply only the refused cells keep their typed counts', () => {

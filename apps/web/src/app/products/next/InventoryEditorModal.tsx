@@ -5,9 +5,11 @@
  *
  * One AG Grid for both cases (a family's variations, or a single product as a one-row family),
  * edited like a spreadsheet, applied as ONE audited batch: every change the operator has typed
- * sits in `pending` until Apply, with one reason and one note for the batch. The server derives
- * each delta from a fresh read and answers per change; a refused cell stays pending and marked,
- * a confirmed one clears. Nothing here writes a number the server has not confirmed.
+ * sits in `pending` until Apply, with one reason and one note for the batch. Each typed on-hand
+ * keeps the base the person saw; the server books it only while the on-hand is still that number
+ * and answers per change; a refused cell stays pending and marked (a sale in between moves its
+ * base to the current number), a confirmed one clears. Nothing here writes a number the server
+ * has not confirmed.
  *
  * Cases (Step 3): a typed sealed count (one per case size) sits in `pendingCases` and travels in
  * the SAME change as that cell's on-hand, so the server writes and checks them in one transaction.
@@ -23,8 +25,8 @@ import { useInventoryEditor, type InventoryEditorTarget } from './useInventoryEd
 import type { DensityMode } from './density'
 import { InventoryGrid, OPTIONAL_COLUMN_KINDS, OPTIONAL_COLUMN_LABELS, optionalKindsOf, type OptionalColumnKind } from './InventoryGrid'
 import {
-  casesFailKey, changesOf, DEFAULT_REASON, editorModeForRow, keepCasesOf, pendingCellCount, pendingKey, REASON_OPTIONS, refusedColumn, withCasesEdit, withEdit,
-  type MatrixRow,
+  casesFailKey, changesOf, DEFAULT_REASON, editorModeForRow, keepCasesOf, keepRefusedEdits, pendingCellCount, pendingKey, REASON_OPTIONS, refusedColumn, withCasesEdit, withEdit,
+  type MatrixRow, type PendingEdit,
 } from './inventoryEditor.logic'
 import styles from './styles.module.css'
 
@@ -52,7 +54,7 @@ export function InventoryEditorModal({ row, density, onClose, title, subtitle: s
   const single = row ? editorModeForRow(row) === 'list' : true
   const { loading, error, model, reload, applyBatch } = useInventoryEditor(row)
 
-  const [pending, setPending] = useState<Map<string, number>>(new Map())
+  const [pending, setPending] = useState<Map<string, PendingEdit>>(new Map())
   const [pendingCases, setPendingCases] = useState<Map<string, number>>(new Map())
   const [failed, setFailed] = useState<Map<string, string>>(new Map())
   const [selected, setSelected] = useState<string[]>([])
@@ -131,7 +133,7 @@ export function InventoryEditorModal({ row, density, onClose, title, subtitle: s
     const n = Number(setValue.trim())
     if (!Number.isInteger(n) || n < 0) return
     setPending((prev) => {
-      let next: Map<string, number> = new Map(prev)
+      let next: Map<string, PendingEdit> = new Map(prev)
       for (const id of selected) {
         const r = model.rows.find((x) => x.productId === id)
         if (r) next = withEdit(next, r, setLocation, n)
@@ -146,7 +148,7 @@ export function InventoryEditorModal({ row, density, onClose, title, subtitle: s
     if (!pendingCount || applying) return
     setApplying(true)
     setMessage(null)
-    const changes = changesOf(pending, pendingCases, model ?? undefined)
+    const changes = changesOf(pending, pendingCases)
     const res = await applyBatch({ reason, notes: notes.trim() || undefined, changes })
     setApplying(false)
     if (!res.ok) { setMessage({ text: res.error, tone: 'danger' }); return }
@@ -161,11 +163,8 @@ export function InventoryEditorModal({ row, density, onClose, title, subtitle: s
       const change = changes.find((c) => c.productId === r.productId && c.locationId === r.locationId)
       refused.set(refusedColumn(change, r.code) === 'cases' ? casesFailKey(r.productId, r.locationId) : key, r.error ?? 'Refused')
     }
-    setPending((prev) => {
-      const next = new Map<string, number>()
-      for (const [k, v] of prev) if (refusedCells.has(k)) next.set(k, v)
-      return next
-    })
+    // A cell refused because stock moved meanwhile stays pending on the server's current number.
+    setPending((prev) => keepRefusedEdits(prev, res.results))
     setPendingCases((prev) => keepCasesOf(prev, refusedCells))
     setFailed(refused)
     setHistory({ undo: 0, redo: 0 })
@@ -174,7 +173,7 @@ export function InventoryEditorModal({ row, density, onClose, title, subtitle: s
         ? { text: `${applied} applied · ${refusedCells.size} refused — hover a red cell for why`, tone: 'danger' }
         : { text: `${applied} ${applied === 1 ? 'change' : 'changes'} applied`, tone: 'success' },
     )
-  }, [pending, pendingCases, pendingCount, applying, applyBatch, reason, notes, model])
+  }, [pending, pendingCases, pendingCount, applying, applyBatch, reason, notes])
 
   /**
    * Close asks first when there is unapplied work; the DS modal routes Esc, ✕ and the backdrop here too. Asking again
