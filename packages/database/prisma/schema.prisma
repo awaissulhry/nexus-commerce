@@ -22893,43 +22893,62 @@ model GoogleAdsCustomer {
 
 /// One Google Ads campaign with its budget, as the last read saw it.
 model GoogleAdsCampaign {
-  workspaceId              String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
-  id                       String    @id @default(cuid())
-  customerId               String
-  campaignId               String
-  name                     String
+  workspaceId                String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                         String    @id @default(cuid())
+  customerId                 String
+  campaignId                 String
+  name                       String
   /// ENABLED | PAUSED | REMOVED
-  status                   String
-  servingStatus            String?
-  primaryStatus            String?
-  primaryStatusReasons     String[]  @default([])
+  status                     String
+  servingStatus              String?
+  primaryStatus              String?
+  primaryStatusReasons       String[]  @default([])
   /// advertising_channel_type: SEARCH | PERFORMANCE_MAX | SHOPPING | DISPLAY | VIDEO | DEMAND_GEN | …
-  channelType              String
-  channelSubType           String?
-  biddingStrategyType      String?
+  channelType                String
+  channelSubType             String?
+  biddingStrategyType        String?
   /// The portfolio bidding strategy's resource name, when the campaign uses one.
-  portfolioBiddingStrategy String?
-  targetCpaMicros          BigInt?
+  portfolioBiddingStrategy   String?
+  targetCpaMicros            BigInt?
   /// Google's ROAS target as a ratio (4.5 = 450 %).
-  targetRoas               Decimal?  @db.Decimal(10, 4)
-  budgetId                 String?
+  targetRoas                 Decimal?  @db.Decimal(10, 4)
+  budgetId                   String?
   /// The average daily amount (DAILY budgets); null for a custom-period budget.
-  budgetAmountMicros       BigInt?
-  budgetDeliveryMethod     String?
-  budgetPeriod             String?
-  budgetShared             Boolean   @default(false)
-  merchantId               String?
-  feedLabel                String?
+  budgetAmountMicros         BigInt?
+  budgetDeliveryMethod       String?
+  budgetPeriod               String?
+  budgetShared               Boolean   @default(false)
+  merchantId                 String?
+  feedLabel                  String?
   /// Days in the account's time zone (Google sends start_date_time / end_date_time).
-  startDate                DateTime? @db.Date
-  endDate                  DateTime? @db.Date
-  currencyCode             String
-  firstSeenAt              DateTime  @default(now())
-  lastSeenAt               DateTime
+  startDate                  DateTime? @db.Date
+  endDate                    DateTime? @db.Date
+  currencyCode               String
+  /// Step 1b (20261013c): when the settings below, by which Google acts on its own, were last read. Null = never
+  /// read, so each of them is "not read yet" (a null below is never "off").
+  flagsReadAt                DateTime?
+  /// ai_max_setting.enable_ai_max.
+  aiMaxEnabled               Boolean?
+  /// keyword_match_type: BROAD = broad match for the whole campaign.
+  keywordMatchType           String?
+  /// broad_match_migration_date_time: when Google moved the campaign to AI Max.
+  broadMatchMigratedAt       DateTime?
+  /// network_settings.target_google_search / target_search_network / target_content_network / target_partner_search_network.
+  targetGoogleSearch         Boolean?
+  targetSearchNetwork        Boolean?
+  targetContentNetwork       Boolean?
+  targetPartnerSearchNetwork Boolean?
+  /// asset_automation_settings as Google sent it ([{ assetAutomationType, assetAutomationStatus }]); a type it does not
+  /// list has Google's default.
+  assetAutomation            Json?
+  /// dynamic_search_ads_setting.domain_name; null = no dynamic search ads.
+  dsaDomain                  String?
+  firstSeenAt                DateTime  @default(now())
+  lastSeenAt                 DateTime
   /// Set when a full read no longer returns the campaign (removed at Google, or no longer visible).
-  removedAt                DateTime?
-  createdAt                DateTime  @default(now())
-  updatedAt                DateTime  @updatedAt
+  removedAt                  DateTime?
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
 
   @@unique([workspaceId, customerId, campaignId], name: "google_ads_campaign")
   @@index([workspaceId])
@@ -22937,7 +22956,7 @@ model GoogleAdsCampaign {
   @@index([channelType])
 }
 
-/// One day of Google Ads numbers for one entity. Step 1a writes CAMPAIGN rows only; the other grains come with step 1b.
+/// One day of Google Ads numbers for one entity. Step 1a writes CAMPAIGN rows; step 1b adds the other grains.
 /// A day is replaced whole on every read of it (Google restates recent days).
 model GoogleAdsDailyMetric {
   workspaceId               String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
@@ -22947,7 +22966,8 @@ model GoogleAdsDailyMetric {
   date                      DateTime @db.Date
   /// CAMPAIGN | AD_GROUP | KEYWORD | ASSET_GROUP | PRODUCT | SEARCH_TERM
   entityType                String
-  /// The entity's Google id at that grain (CAMPAIGN: the campaign id).
+  /// The entity's Google id at that grain. CAMPAIGN: the campaign id; AD_GROUP / ASSET_GROUP: its id; KEYWORD:
+  /// <adGroupId>~<criterionId>; PRODUCT: <campaignId>~<itemId>; SEARCH_TERM: <campaignId>~<hash of the term>.
   entityId                  String
   campaignId                String
   adGroupId                 String?
@@ -22999,4 +23019,246 @@ model GoogleAdsChangeEvent {
   @@index([workspaceId])
   @@index([customerId, changedAt])
   @@index([campaignId, changedAt])
+}
+
+// ── Google Ads, step 1b (2026-10-13): the detail below the campaign. Read-only; nothing here is ever sent to Google. ─────
+// Ad groups, keywords and negatives, asset groups, ad and product policy issues, Google's recommendations and its
+// auto-apply settings; their daily numbers are GoogleAdsDailyMetric rows. Ids are Google's (digits). No foreign keys:
+// what was read outlives a disconnect, as in step 1a.
+
+/// The state of one step of the daily read of one Google Ads account (step 1b; the campaign read stays on
+/// GoogleAdsCustomer). No row, or readAt null = never read: "Not read yet", never zero.
+model GoogleAdsReadState {
+  workspaceId   String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id            String    @id @default(cuid())
+  customerId    String
+  /// AD_GROUPS | KEYWORDS | CAMPAIGN_NEGATIVES | NEGATIVE_LISTS | ASSET_GROUPS | CAMPAIGN_SETTINGS | AD_POLICY |
+  /// PRODUCT_STATUS | AUTO_APPLY | RECOMMENDATIONS | AD_GROUP_DAYS | KEYWORD_DAYS | ASSET_GROUP_DAYS | PRODUCT_DAYS |
+  /// SEARCH_TERM_DAYS
+  resource      String
+  /// *_DAYS only: the contiguous range of account days read. A day inside it with no row is a zero day; a day outside
+  /// it was never read.
+  readFrom      DateTime? @db.Date
+  readThrough   DateTime? @db.Date
+  /// When the step last succeeded.
+  readAt        DateTime?
+  lastAttemptAt DateTime?
+  /// SUCCESS | FAILED | SKIPPED_BUDGET
+  lastStatus    String?
+  /// A plain sentence for a person; never a token, a request body or an e-mail address.
+  lastError     String?
+  /// Rows the last successful read returned.
+  rows          Int?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([workspaceId, customerId, resource], name: "google_ads_read_state")
+  @@index([workspaceId])
+}
+
+/// One ad group of a Google Ads campaign, as the last read saw it.
+model GoogleAdsAdGroup {
+  workspaceId                String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                         String    @id @default(cuid())
+  customerId                 String
+  campaignId                 String
+  adGroupId                  String
+  name                       String
+  /// ENABLED | PAUSED | REMOVED
+  status                     String
+  /// SEARCH_STANDARD | SHOPPING_PRODUCT_ADS | …
+  type                       String?
+  primaryStatus              String?
+  primaryStatusReasons       String[]  @default([])
+  cpcBidMicros               BigInt?
+  targetCpaMicros            BigInt?
+  /// Google's ROAS target as a ratio (4.5 = 450 %).
+  targetRoas                 Decimal?  @db.Decimal(10, 4)
+  /// ai_max_ad_group_setting.disable_search_term_matching; null = not read.
+  searchTermMatchingDisabled Boolean?
+  firstSeenAt                DateTime  @default(now())
+  lastSeenAt                 DateTime
+  /// Set when a full read no longer returns the ad group.
+  removedAt                  DateTime?
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+
+  @@unique([workspaceId, customerId, adGroupId], name: "google_ads_ad_group")
+  @@index([workspaceId])
+  @@index([customerId, campaignId])
+}
+
+/// One asset group of a Performance Max campaign, as the last read saw it.
+model GoogleAdsAssetGroup {
+  workspaceId          String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                   String    @id @default(cuid())
+  customerId           String
+  campaignId           String
+  assetGroupId         String
+  name                 String
+  /// ENABLED | PAUSED | REMOVED
+  status               String
+  primaryStatus        String?
+  primaryStatusReasons String[]  @default([])
+  /// POOR | AVERAGE | GOOD | EXCELLENT | PENDING | …
+  adStrength           String?
+  finalUrls            String[]  @default([])
+  firstSeenAt          DateTime  @default(now())
+  lastSeenAt           DateTime
+  /// Set when a full read no longer returns the asset group.
+  removedAt            DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@unique([workspaceId, customerId, assetGroupId], name: "google_ads_asset_group")
+  @@index([workspaceId])
+}
+
+/// One keyword or negative: an ad group's keywords and negatives, a campaign's negatives and brand lists, and the
+/// keywords of a negative keyword list.
+model GoogleAdsKeyword {
+  workspaceId           String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                    String    @id @default(cuid())
+  customerId            String
+  /// AD_GROUP | CAMPAIGN | LIST
+  level                 String
+  /// Whose criterion it is: ag:<adGroupId> | c:<campaignId> | l:<sharedSetId> (a criterion id is unique only within
+  /// its parent).
+  parentKey             String
+  criterionId           String
+  campaignId            String?
+  adGroupId             String?
+  /// LIST only: the negative keyword list (shared set) id.
+  sharedSetId           String?
+  negative              Boolean
+  /// KEYWORD | BRAND_LIST
+  criterionType         String
+  text                  String?
+  /// EXACT | PHRASE | BROAD
+  matchType             String?
+  /// ENABLED | PAUSED | REMOVED; null for a list keyword (Google gives it no status).
+  status                String?
+  cpcBidMicros          BigInt?
+  effectiveCpcBidMicros BigInt?
+  /// 1–10; null when Google has none.
+  qualityScore          Int?
+  systemServingStatus   String?
+  approvalStatus        String?
+  primaryStatus         String?
+  firstSeenAt           DateTime  @default(now())
+  lastSeenAt            DateTime
+  /// Set when a full read no longer returns the keyword.
+  removedAt             DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([workspaceId, customerId, parentKey, criterionId], name: "google_ads_keyword")
+  @@index([workspaceId])
+  @@index([customerId, campaignId])
+  @@index([customerId, adGroupId])
+}
+
+/// One negative keyword list (shared set) of a Google Ads account, and the campaigns it is attached to.
+model GoogleAdsNegativeList {
+  workspaceId String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String    @id @default(cuid())
+  customerId  String
+  sharedSetId String
+  name        String
+  /// ENABLED | REMOVED
+  status      String
+  memberCount Int?
+  /// The Google campaign ids the list is attached to.
+  campaignIds String[]  @default([])
+  firstSeenAt DateTime  @default(now())
+  lastSeenAt  DateTime
+  /// Set when a full read no longer returns the list.
+  removedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([workspaceId, customerId, sharedSetId], name: "google_ads_negative_list")
+  @@index([workspaceId])
+}
+
+/// One ad or product Google disapproved or limited. resolvedAt is set when the reads no longer return it.
+model GoogleAdsPolicyIssue {
+  workspaceId  String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id           String    @id @default(cuid())
+  customerId   String
+  /// AD | PRODUCT
+  kind         String
+  /// AD: <adGroupId>~<adId>; PRODUCT: <merchantId>~<channel>~<languageCode>~<feedLabel>~<itemId>
+  entityKey    String
+  campaignId   String?
+  adGroupId    String?
+  adId         String?
+  /// AD only: the ad's type (RESPONSIVE_SEARCH_AD, …).
+  adType       String?
+  /// PRODUCT only: the Merchant Center item id.
+  itemId       String?
+  /// PRODUCT: the product title.
+  label        String?
+  /// AD: DISAPPROVED | APPROVED_LIMITED | AREA_OF_INTEREST_ONLY; PRODUCT: NOT_ELIGIBLE | ELIGIBLE_LIMITED
+  status       String
+  reviewStatus String?
+  /// AD: the policy topics Google gave.
+  reasons      String[]  @default([])
+  /// PRODUCT: Google's issues as sent ([{ errorCode, adsSeverity, attributeName, description, detail, documentation,
+  /// affectedRegions }]).
+  issues       Json?
+  firstSeenAt  DateTime  @default(now())
+  lastSeenAt   DateTime
+  resolvedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([workspaceId, customerId, kind, entityKey], name: "google_ads_policy_issue")
+  @@index([workspaceId])
+  @@index([customerId, kind, resolvedAt])
+}
+
+/// One of Google's open recommendations for a Google Ads account. A snapshot: each read replaces the account's rows whole.
+model GoogleAdsRecommendation {
+  workspaceId  String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id           String   @id @default(cuid())
+  customerId   String
+  /// customers/{customer_id}/recommendations/{recommendation_id}
+  resourceName String
+  /// KEYWORD | CAMPAIGN_BUDGET | TARGET_CPA_OPT_IN | …
+  type         String
+  campaignId   String?
+  adGroupId    String?
+  dismissed    Boolean
+  /// impact.{base,potential}_metrics as Google sent them; micros as strings.
+  impact       Json?
+  readAt       DateTime
+  createdAt    DateTime @default(now())
+
+  @@unique([workspaceId, customerId, resourceName], name: "google_ads_recommendation")
+  @@index([workspaceId])
+  @@index([customerId, type])
+}
+
+/// One auto-apply setting (recommendation_subscription): a recommendation type Google applies on its own while ENABLED.
+model GoogleAdsAutoApply {
+  workspaceId      String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id               String    @id @default(cuid())
+  customerId       String
+  /// The recommendation type.
+  type             String
+  /// ENABLED | PAUSED
+  status           String
+  /// create_date_time / modify_date_time at Google.
+  createdAtGoogle  DateTime?
+  modifiedAtGoogle DateTime?
+  firstSeenAt      DateTime  @default(now())
+  lastSeenAt       DateTime
+  /// Set when a full read no longer returns the setting.
+  removedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@unique([workspaceId, customerId, type], name: "google_ads_auto_apply")
+  @@index([workspaceId])
 }

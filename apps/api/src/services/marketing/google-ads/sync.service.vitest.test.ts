@@ -1,9 +1,11 @@
 /**
  * Google Ads step 1a — one read of one account (sync.service.ts), through the REAL read client and channel gateway (only
  * `fetch`, the token, the account state and the ledger are stand-ins) into the REAL store on PGlite (production schema and
- * policies, business profiles on), with Google's answers from the REST-shaped fixtures in test-support/google-ads.
+ * policies, business profiles on), with Google's answers from the REST-shaped fixtures in test-support/google-ads. The
+ * step 1b reads of the same run get empty answers here (sync-detail.vitest.test.ts reads them): they still cost their
+ * operations — 21 on the first run, 16 a day.
  *
- *   the first read: 400 days of campaign numbers + Google's whole change history, 4 operations of the 5 reserved (one
+ *   the first read: 400 days of campaign numbers + Google's whole change history, 25 operations of the 26 reserved (one
  *   given back), only GoogleAdsService.Search calls (POST …:search, read), nothing for another business
  *   the daily read: 14 days, the change history from 10 minutes before where the last one stopped
  *   a manager account: one call, MANAGER, the rest of the allowance given back
@@ -33,6 +35,7 @@ vi.mock('../../gateway/ledger.js', () => import('../../../test-support/gateway-s
 vi.mock('../../cx/token.service.js', () => ({ getAccessToken: vi.fn(async () => 'google-access-token') }))
 vi.mock('../../cx/deprecation-watch.service.js', () => ({ watchForDeprecation: vi.fn(async () => undefined) }))
 vi.mock('../../marketing-events.service.js', () => ({ publishMarketingEvent: vi.fn((event: unknown) => { h.published.push(event) }) }))
+vi.mock('./alerts.service.js', () => ({ raiseGoogleAdsAlerts: vi.fn(async () => ({ raised: 0 })) }))
 
 import { gatewayLedger } from '../../../test-support/gateway-stubs.js'
 import { __rateTest } from '../../gateway/rate.js'
@@ -57,14 +60,17 @@ const TARGET = { connectionId: 'g-conn-1', customerId: CID, loginCustomerId: nul
 const RUN_1 = new Date('2026-10-13T06:25:00Z') // a Tuesday; the account (Europe/Rome) is at 08:25 on 2026-10-13
 const RUN_2 = new Date('2026-10-14T06:25:00Z')
 
-/** Google, as the fixtures answer: chosen by the query each call sends. */
+const CORE = (query: string) => query.includes(' FROM customer') || query.startsWith('SELECT campaign.id, campaign.name, ') || query.includes(' FROM change_event')
+
+/** Google, as the fixtures answer: chosen by the query each call sends. A step 1b read gets an empty answer. */
 function answer(query: string, pageToken: string | null): Response {
   if (query.includes(' FROM customer')) return (h.override.customer ?? ok('search-customer.json'))()
-  if (query.includes(' FROM campaign WHERE campaign.status')) return (h.override.campaigns ?? ok(pageToken ? 'search-campaigns-page-2.json' : 'search-campaigns-page-1.json'))()
-  if (query.includes(' FROM campaign WHERE segments.date')) return (h.override.days ?? ok('search-campaign-days.json'))()
+  if (query.startsWith('SELECT campaign.id, campaign.name, campaign.status')) return (h.override.campaigns ?? ok(pageToken ? 'search-campaigns-page-2.json' : 'search-campaigns-page-1.json'))()
+  if (query.startsWith('SELECT campaign.id, campaign.name, segments.date')) return (h.override.days ?? ok('search-campaign-days.json'))()
   if (query.includes(' FROM change_event')) return (h.override.changes ?? ok('search-change-events.json'))()
-  throw new Error(`test: no answer for ${query.slice(0, 60)}`)
+  return new Response('{}', { status: 200 })
 }
+const coreCalls = () => h.calls.filter((c) => CORE(c.query)).map((c) => c.query.split(' FROM ')[1]?.split(' ')[0])
 
 /** The ops allowance's Redis, in memory. */
 const redisStore = new Map<string, string>()
@@ -132,27 +138,29 @@ describe('dailyReadWindow', () => {
 })
 
 describe('syncGoogleAdsAccount (fixtures → gateway → PGlite)', () => {
-  it('the first read: 400 days, campaigns, numbers, changes — 4 operations, only reads, in this business only', async () => {
+  it('the first read: 400 days, campaigns, numbers, changes — 4 core operations + 21 for step 1b, only reads, in this business only', async () => {
     const result = await inA(() => syncGoogleAdsAccount(TARGET, { kind: 'BACKFILL', now: RUN_1 }))
     expect(result).toMatchObject({
-      status: 'SUCCESS', mode: 'BACKFILL', error: null, ops: 4, campaigns: 3, campaignsRemoved: 0, metricRows: 3, changeEvents: 3,
+      status: 'SUCCESS', mode: 'BACKFILL', error: null, ops: 25, campaigns: 3, campaignsRemoved: 0, metricRows: 3, changeEvents: 3,
       window: { from: '2025-09-08', to: '2026-10-12' },
     })
-    // customer, campaigns page 1 + page 2 (free), days, changes
-    expect(h.calls.map((c) => c.query.split(' FROM ')[1]?.split(' ')[0])).toEqual(['customer', 'campaign', 'campaign', 'campaign', 'change_event'])
+    // customer, campaigns page 1 + page 2 (free), days, changes — first, before any step 1b read
+    expect(h.calls.slice(0, 5).map((c) => c.query.split(' FROM ')[1]?.split(' ')[0])).toEqual(['customer', 'campaign', 'campaign', 'campaign', 'change_event'])
+    expect(h.calls).toHaveLength(5 + 21)
+    expect(result.details.every((d) => d.status === 'SUCCESS')).toBe(true)
     expect(h.calls[3].query).toContain("WHERE segments.date BETWEEN '2025-09-08' AND '2026-10-12'")
     expect(h.calls[4].query).toContain("change_event.change_date_time >= '2026-09-14 00:00:00' AND change_event.change_date_time <= '2026-10-13 08:25:00'")
     expect(h.calls.every((c) => !('login-customer-id' in c.headers) && !('developer-token' in c.headers))).toBe(true)
     expectOnlyReads()
-    // 5 reserved, 1 given back.
-    expect(RUN_OPS).toBe(5)
-    expect(accountOps()).toBe(4)
+    // The first run reserves 26 (21 + the first reads' extra pieces), 1 given back.
+    expect(RUN_OPS).toBe(21)
+    expect(accountOps()).toBe(25)
 
     await inA(async () => {
       const account = await getGoogleAdsCustomer(CID)
       expect(account).toMatchObject({
         workspaceId: A, connectionId: TARGET.connectionId, descriptiveName: 'Test advertiser', currencyCode: 'EUR', timeZone: 'Europe/Rome', status: 'ENABLED',
-        lastSyncStatus: 'SUCCESS', lastSyncError: null, opsUsedLastRun: 4, changesSyncedThrough: RUN_1,
+        lastSyncStatus: 'SUCCESS', lastSyncError: null, opsUsedLastRun: 25, changesSyncedThrough: RUN_1,
         metricsReadFrom: new Date('2025-09-08T00:00:00Z'), metricsReadThrough: new Date('2026-10-12T00:00:00Z'),
       })
       expect(account?.backfillCompletedAt).toBeInstanceOf(Date)
@@ -169,7 +177,7 @@ describe('syncGoogleAdsAccount (fixtures → gateway → PGlite)', () => {
 
   it('the daily read: 14 days ending yesterday; the change history from 10 minutes before where the last read stopped', async () => {
     const result = await inA(() => syncGoogleAdsAccount(TARGET, { kind: 'DAILY', now: RUN_2 }))
-    expect(result).toMatchObject({ status: 'SUCCESS', mode: 'DAILY', ops: 4, window: { from: '2026-09-30', to: '2026-10-13' } })
+    expect(result).toMatchObject({ status: 'SUCCESS', mode: 'DAILY', ops: 4 + 16, window: { from: '2026-09-30', to: '2026-10-13' } })
     expect(h.calls[3].query).toContain("BETWEEN '2026-09-30' AND '2026-10-13'")
     // RUN_1 (06:25 UTC) − 10 min = 08:15 in Rome.
     expect(h.calls[4].query).toContain("change_event.change_date_time >= '2026-10-13 08:15:00'")
@@ -226,9 +234,9 @@ describe('syncGoogleAdsAccount (fixtures → gateway → PGlite)', () => {
     const before = await inA(daysStored)
     h.override.days = fail('queryError')
     const result = await inA(() => syncGoogleAdsAccount(TARGET, { kind: 'DAILY', now: RUN_2 }))
-    expect(result).toMatchObject({ status: 'PARTIAL', ops: 4, campaigns: 3, metricRows: 0 })
+    expect(result).toMatchObject({ status: 'PARTIAL', ops: 4 + 16, campaigns: 3, metricRows: 0 })
     expect(result.error).toMatch(/Google Ads refused the request/)
-    expect(h.calls.map((c) => c.query.split(' FROM ')[1]?.split(' ')[0])).toEqual(['customer', 'campaign', 'campaign', 'campaign', 'change_event'])
+    expect(coreCalls()).toEqual(['customer', 'campaign', 'campaign', 'campaign', 'change_event'])
     expect(h.published).toEqual([])
     await inA(async () => {
       expect(await daysStored()).toEqual(before)
@@ -252,8 +260,9 @@ describe('syncGoogleAdsAccount (fixtures → gateway → PGlite)', () => {
       expect((await getGoogleAdsCustomer(CID))?.structureSyncedAt).toEqual(before?.structureSyncedAt)
       expect(await db().googleAdsCampaign.count({ where: { removedAt: null } })).toBe(3)
     })
-    // A settings read that succeeds is stamped when Google was asked, not when its answer was stored.
-    h.override = {}; h.calls = []
+    // A settings read that succeeds is stamped when Google was asked, not when its answer was stored. (A second full run:
+    // the gateway's Google Ads burst of 30 calls is refilled first, as an hour between two reads would.)
+    h.override = {}; h.calls = []; __rateTest.useMemory()
     await inA(() => syncGoogleAdsAccount(TARGET, { kind: 'DAILY', now: RUN_2 }))
     const asked = h.calls.find((c) => c.query.includes(' FROM campaign WHERE campaign.status'))!
     const stamped = (await inA(() => getGoogleAdsCustomer(CID)))?.structureSyncedAt
@@ -265,17 +274,17 @@ describe('syncGoogleAdsAccount (fixtures → gateway → PGlite)', () => {
     // Every clock at RUN_2, so the run's own hour is the one whose allowance is full.
     vi.useFakeTimers({ now: RUN_2, toFake: ['Date'] })
     try {
-      redisStore.set(`nexus:gads:ops:acct:${CID}:2026101406`, '55') // the run's 5 fit exactly under 60
+      redisStore.set(`nexus:gads:ops:acct:${CID}:2026101406`, '79') // the run's 21 fit exactly under 100
       const sequence = (...answers: Array<() => Response>) => { let n = 0; return () => answers[Math.min(n++, answers.length - 1)]() }
       const dayRows = (JSON.parse(raw('search-campaign-days.json')) as { results: unknown[] }).results
       // Each query's second page has expired once: Google is asked for its first page again, one more operation each.
       h.override.campaigns = sequence(ok('search-campaigns-page-1.json'), fail('expiredPageToken'), ok('search-campaigns-page-1.json'), ok('search-campaigns-page-2.json'))
       h.override.days = sequence(json({ results: dayRows.slice(0, 2), nextPageToken: 'days-page-2' }), fail('expiredPageToken'), json({ results: dayRows.slice(0, 2), nextPageToken: 'days-page-2' }), json({ results: dayRows.slice(2) }))
       const result = await inA(() => syncGoogleAdsAccount(TARGET, { kind: 'DAILY', now: RUN_2 }))
-      expect(result).toMatchObject({ status: 'SUCCESS', ops: 6 })
-      expect(RUN_OPS).toBe(5)
-      // 55 before, 5 reserved, 1 spent beyond: all 6 counted although the account is now over its 60.
-      expect(accountOps()).toBe(61)
+      expect(result).toMatchObject({ status: 'SUCCESS', ops: 6 + 16 })
+      expect(RUN_OPS).toBe(21)
+      // 79 before, 21 reserved, 1 spent beyond: all 22 counted although the account is now over its 100.
+      expect(accountOps()).toBe(101)
     } finally {
       vi.useRealTimers()
     }

@@ -96,8 +96,8 @@ describe('MCP.7 — every tool, as Claude sees it', () => {
     expect(open).toEqual(OPEN_WORLD)
   })
 
-  it('A2 — the ad reads (T4: and the eBay ad details) are offered to Claude as reads: nexus.read, closed world, ads.view', () => {
-    const reads = ['ads-overview', 'ad-campaigns', 'ad-targets', 'ad-search-terms', 'ad-changes', 'ad-recommendations', 'ebay-ad-details']
+  it('A2 — the ad reads (T4: and the eBay ad details; Google Ads 1b: the Google ad details) are offered to Claude as reads: nexus.read, closed world, ads.view', () => {
+    const reads = ['ads-overview', 'ad-campaigns', 'ad-targets', 'ad-search-terms', 'ad-changes', 'ad-recommendations', 'ebay-ad-details', 'google-ad-details']
     for (const name of reads) {
       const tool = listTools().find((t) => t.name === name)
       expect(tool, name).toBeDefined()
@@ -162,7 +162,9 @@ describe('C3 — the server and every change tool name the business', () => {
       'read platform-health-checks first in a daily or unattended run',
       // Google Ads step 1a — read only, through the two ad reads; never a step of a change plan.
       'Google Ads is read only: ads-overview and ad-campaigns with channel google read the Google Ads account a person chose',
-      'no tool changes Google Ads, so never put a Google step in a change plan']) {
+      'no tool changes Google Ads, so never put a Google step in a change plan',
+      // Google Ads step 1b — the rest of the Google Ads page, one view at a time, still read only.
+      'and google-ad-details (one view at a time) its ad groups, keywords, negatives, search terms and the']) {
       expect(mcpInstructions(business), rule).toContain(rule)
     }
   })

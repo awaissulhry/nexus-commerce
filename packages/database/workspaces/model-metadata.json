@@ -7884,6 +7884,38 @@
     {
       "name": "GoogleAdsChangeEvent",
       "fields": []
+    },
+    {
+      "name": "GoogleAdsReadState",
+      "fields": []
+    },
+    {
+      "name": "GoogleAdsAdGroup",
+      "fields": []
+    },
+    {
+      "name": "GoogleAdsAssetGroup",
+      "fields": []
+    },
+    {
+      "name": "GoogleAdsKeyword",
+      "fields": []
+    },
+    {
+      "name": "GoogleAdsNegativeList",
+      "fields": []
+    },
+    {
+      "name": "GoogleAdsPolicyIssue",
+      "fields": []
+    },
+    {
+      "name": "GoogleAdsRecommendation",
+      "fields": []
+    },
+    {
+      "name": "GoogleAdsAutoApply",
+      "fields": []
     }
   ]
 }

@@ -95,7 +95,147 @@
   white-space: nowrap;
 }
 
+/* Words left, numbers right. The DS table right-aligns only its last column, which put the day table's numbers on
+   the left and a change's words ("What changed") on the right. Every column of these tables starts on the left; the
+   day table's numbers (Impressions to Conversion value) and a list's keyword count sit on the right. */
+.gads-table .nds-summary-table tr > :is(th, td) {
+  text-align: left;
+}
+
+.gads-days .nds-summary-table tr > :is(th, td):nth-child(n + 3),
+.gads-lists .nds-summary-table tr > :is(th, td):nth-child(2) {
+  text-align: right;
+}
+
 .gads-table:focus-visible {
   outline: 2px solid var(--nds-primary);
   outline-offset: 2px;
+}
+
+/* Step 1b — the two cards on top ("Needs a look", "Google acts on its own"): side by side on a wide screen, stacked on
+   a phone. Side by side they share the row's height: a short card left a block of empty page under it (browser check,
+   2026-10-13: 607 px beside 246 px). */
+.gads-cards {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-12);
+  align-items: stretch;
+}
+
+@media (min-width: 960px) {
+  .gads-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.gads-card {
+  min-width: 0;
+}
+
+.gads-card-body {
+  display: grid;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+/* One alert: its pill and title, Google's sentence, a line of numbers, and "Open" at the end. */
+.gads-alerts {
+  display: grid;
+  gap: var(--nds-space-10);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gads-alert {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-12);
+  min-width: 0;
+  padding-bottom: var(--nds-space-10);
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+
+.gads-alert:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.gads-alert-main {
+  display: grid;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.gads-alert-head {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.gads-alert-title {
+  font-size: var(--nds-font-size-base);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+}
+
+.gads-alert-body {
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+  color: var(--nds-text-2);
+}
+
+.gads-notchecked {
+  display: grid;
+  gap: var(--nds-space-4);
+}
+
+.gads-list {
+  display: grid;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding-left: var(--nds-space-16);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+  color: var(--nds-text-2);
+}
+
+/* The tab bar and the tab under it. The bar scrolls sideways inside itself on a phone (DS `Tabs overflow="scroll"`). */
+.gads-tabs {
+  min-width: 0;
+  scroll-margin-top: var(--nds-space-16);
+}
+
+.gads-view,
+.gads-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.gads-view:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 2px;
+}
+
+/* One line of words in a grid cell, cut with an ellipsis (the whole text is on hover). */
+.gads-clip {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The few details under each line of the "Google acts on its own" card (the rest is on the tab). */
+.gads-acts-list {
+  list-style: none;
+  margin: var(--nds-space-6) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
 }

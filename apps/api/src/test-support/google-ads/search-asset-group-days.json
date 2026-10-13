@@ -1,0 +1,26 @@
+{
+  "results": [
+    {
+      "campaign": {
+        "resourceName": "customers/1234567890/campaigns/22222222222",
+        "id": "22222222222"
+      },
+      "assetGroup": {
+        "resourceName": "customers/1234567890/assetGroups/61111111111",
+        "id": "61111111111",
+        "name": "Test asset group"
+      },
+      "segments": {
+        "date": "2026-10-12"
+      },
+      "metrics": {
+        "impressions": "2500",
+        "clicks": "41",
+        "costMicros": "19000000",
+        "conversions": 3,
+        "conversionsValue": 240.75
+      }
+    }
+  ],
+  "fieldMask": "campaign.id,assetGroup.id,assetGroup.name,segments.date,metrics.impressions,metrics.clicks,metrics.costMicros,metrics.conversions,metrics.conversionsValue,metrics.allConversions,metrics.allConversionsValue"
+}

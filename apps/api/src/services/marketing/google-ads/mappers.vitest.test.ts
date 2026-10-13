@@ -1,7 +1,8 @@
 /**
- * Google Ads step 1a — REST answers (fixtures shaped as Google sends them: camelCase, int64 as strings, zero fields
- * left out) → table data. Money stays in the account's currency; a missing number is zero; the change history's
- * source is one of five, in words.
+ * Google Ads steps 1a and 1b — REST answers (fixtures shaped as Google sends them: camelCase, int64 as strings, zero
+ * fields left out) → table data. Money stays in the account's currency; a missing number is zero; the change history's
+ * source is one of five, in words. Step 1b: the daily keys of each grain, settings Google left out read as false (and
+ * a setting not read as null), only real ad and product issues kept, a negative list's details when sent.
  */
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
@@ -11,6 +12,12 @@ import {
 } from './mappers.js'
 import type {
   GoogleAdsCampaignDayRow, GoogleAdsCampaignRow, GoogleAdsChangeEventRow, GoogleAdsCustomerClientRow, GoogleAdsCustomerRow, GoogleAdsSearchPage,
+} from './types.js'
+import * as m from './mappers.js'
+import type {
+  GoogleAdsAdGroupCriterionRow, GoogleAdsAdGroupRow, GoogleAdsAdPolicyRow, GoogleAdsAssetGroupRow, GoogleAdsCampaignCriterionRow,
+  GoogleAdsCampaignFlagsRow, GoogleAdsCampaignSharedSetRow, GoogleAdsDailyMetricData, GoogleAdsGrainDayRow, GoogleAdsRecommendationRow,
+  GoogleAdsRecommendationSubscriptionRow, GoogleAdsSharedCriterionRow, GoogleAdsShoppingProductRow,
 } from './types.js'
 
 const fixture = <T>(name: string): T => JSON.parse(readFileSync(new URL(`../../../test-support/google-ads/${name}`, import.meta.url), 'utf8')) as T
@@ -192,5 +199,173 @@ describe('the change history', () => {
     })
     // The words never carry the person's e-mail.
     for (const row of rows) expect(JSON.stringify(changeSourceOf(row.changeEvent?.clientType))).not.toContain('@')
+  })
+})
+
+// ── step 1b ─────────────────────────────────────────────────────────────────────────────────────────────────────
+
+const rows = <T>(name: string): T[] => fixture<GoogleAdsSearchPage<T>>(name).results ?? []
+const CID = { customerId: '1234567890' }
+const ROME = 'Europe/Rome'
+
+describe('step 1b: numbers per day below the campaign', () => {
+  it('each grain\'s key, label and numbers; missing numbers are 0', () => {
+    const [helmets, gloves] = rows<GoogleAdsGrainDayRow>('search-ad-group-days.json').map((row) => m.mapGrainDay('AD_GROUP', row, ACCOUNT))
+    expect(helmets).toMatchObject({ entityType: 'AD_GROUP', entityId: '71111111111', campaignId: '11111111111', adGroupId: '71111111111', label: 'Test helmets',
+      impressions: 900, clicks: 30, costMicros: 21_000_000n, conversions: '2.0000', conversionsValueMicros: 180_500_000n, currencyCode: 'EUR' })
+    expect(helmets?.date).toEqual(new Date('2026-10-12T00:00:00Z'))
+    expect(gloves).toMatchObject({ impressions: 120, clicks: 0, costMicros: 0n, conversions: '0.0000', conversionsValueMicros: 0n })
+    const [keyword] = rows<GoogleAdsGrainDayRow>('search-keyword-days.json').map((row) => m.mapGrainDay('KEYWORD', row, ACCOUNT))
+    expect(keyword).toMatchObject({ entityType: 'KEYWORD', entityId: '71111111111~91111', adGroupId: '71111111111', label: 'test helmet', conversions: '1.5000' })
+    const [assetGroup] = rows<GoogleAdsGrainDayRow>('search-asset-group-days.json').map((row) => m.mapGrainDay('ASSET_GROUP', row, ACCOUNT))
+    expect(assetGroup).toMatchObject({ entityType: 'ASSET_GROUP', entityId: '61111111111', campaignId: '22222222222', adGroupId: null, label: 'Test asset group' })
+    const products = rows<GoogleAdsGrainDayRow>('search-product-days.json').map((row) => m.mapGrainDay('PRODUCT', row, ACCOUNT))
+    expect(products.map((p) => [p?.entityId, p?.label])).toEqual([
+      ['33333333333~test-sku-1', 'Test helmet, size M'], ['33333333333~test-sku-1', 'Test helmet M'], ['22222222222~test-sku-2', 'Test gloves'],
+    ])
+    expect(m.productDayKey('333', ' Test-SKU-1 ')).toBe('333~test-sku-1')
+  })
+
+  it('search terms: one key per campaign and normalised term (the term is the label); a term without a click is not kept', () => {
+    const terms = rows<GoogleAdsGrainDayRow>('search-search-terms.json').map((row) => m.mapGrainDay('SEARCH_TERM', row, ACCOUNT))
+    expect(terms.map((t) => t?.label ?? null)).toEqual(['test helmet', 'test helmet', 'test gloves winter', null])
+    expect(terms[0]?.entityId).toBe(terms[1]?.entityId)
+    expect(terms[0]?.entityId).toMatch(/^11111111111~[0-9a-f]{24}$/)
+    expect(terms[0]?.entityId).toBe(m.searchTermKey('11111111111', 'TEST   Helmet'))
+    expect(m.searchTermKey('22222222222', 'test helmet')).not.toBe(terms[0]?.entityId)
+    expect(m.normalizeSearchTerm('  Ｔest\tHelmet  ')).toBe('test helmet')
+    expect(m.normalizeSearchTerm('   ')).toBeNull()
+  })
+
+  it('rows on the same key are summed exactly (conversions as Decimal(14,4) text)', () => {
+    const [a, b] = rows<GoogleAdsGrainDayRow>('search-search-terms.json').map((row) => m.mapGrainDay('SEARCH_TERM', row, ACCOUNT)) as GoogleAdsDailyMetricData[]
+    expect(m.addDailyRows(a, b)).toMatchObject({ impressions: 60, clicks: 8, costMicros: 5_600_000n, conversions: '1.5000', conversionsValueMicros: 99_500_000n,
+      allConversions: '0.0000', allConversionsValueMicros: 0n, label: 'test helmet' })
+    expect(m.addDecimal4('0.3333', '0.6667')).toBe('1.0000')
+    expect(m.addDecimal4('12.5', '-0.25')).toBe('12.2500')
+    expect(m.addDailyRows({ ...a, label: null, allConversions: null, allConversionsValueMicros: null }, { ...b, allConversions: null, allConversionsValueMicros: null }))
+      .toMatchObject({ label: 'test helmet', allConversions: null, allConversionsValueMicros: null })
+  })
+
+  it('a row without its campaign, day or own id is not a row', () => {
+    expect(m.mapGrainDay('AD_GROUP', { segments: { date: '2026-10-12' }, adGroup: { id: '1' } }, ACCOUNT)).toBeNull()
+    expect(m.mapGrainDay('AD_GROUP', { campaign: { id: '1' }, adGroup: { id: '2' } }, ACCOUNT)).toBeNull()
+    expect(m.mapGrainDay('KEYWORD', { campaign: { id: '1' }, adGroup: { id: '2' }, segments: { date: '2026-10-12' } }, ACCOUNT)).toBeNull()
+    expect(m.mapGrainDay('PRODUCT', { campaign: { id: '1' }, segments: { date: '2026-10-12' } }, ACCOUNT)).toBeNull()
+  })
+})
+
+describe('step 1b: safety', () => {
+  it('campaign settings: as sent, left out = false, asset automation null when not read and [] when Google listed none', () => {
+    const [search, pmax, shopping] = rows<GoogleAdsCampaignFlagsRow>('search-campaign-flags.json').map((row) => m.mapCampaignFlags(row, { timeZone: ROME, assetAutomationRead: true }))
+    expect(search).toEqual({
+      campaignId: '11111111111', aiMaxEnabled: true, keywordMatchType: 'BROAD', broadMatchMigratedAt: new Date('2026-10-01T10:00:00Z'),
+      targetGoogleSearch: true, targetSearchNetwork: true, targetContentNetwork: false, targetPartnerSearchNetwork: false,
+      assetAutomation: [
+        { assetAutomationType: 'FINAL_URL_EXPANSION_TEXT_ASSET_AUTOMATION', assetAutomationStatus: 'OPTED_IN' },
+        { assetAutomationType: 'TEXT_ASSET_AUTOMATION', assetAutomationStatus: 'OPTED_OUT' },
+      ],
+      dsaDomain: 'shop.example.com',
+    })
+    expect(pmax).toMatchObject({ aiMaxEnabled: false, keywordMatchType: null, broadMatchMigratedAt: null, targetGoogleSearch: false, assetAutomation: [], dsaDomain: null })
+    expect(shopping).toMatchObject({ targetGoogleSearch: true })
+    expect(m.mapCampaignFlags(rows<GoogleAdsCampaignFlagsRow>('search-campaign-flags.json')[0], { timeZone: ROME, assetAutomationRead: false })?.assetAutomation).toBeNull()
+  })
+
+  it('ad approvals: only disapproved and limited ads are issues, topics once each', () => {
+    const issues = rows<GoogleAdsAdPolicyRow>('search-ad-policy.json').map((row) => m.mapAdPolicyIssue(row, CID))
+    expect(issues[2]).toBeNull()
+    expect(issues[0]).toEqual({
+      customerId: '1234567890', kind: 'AD', entityKey: '71111111111~81111111111', campaignId: '11111111111', adGroupId: '71111111111', adId: '81111111111',
+      adType: 'RESPONSIVE_SEARCH_AD', itemId: null, label: null, status: 'DISAPPROVED', reviewStatus: 'REVIEWED', reasons: ['DESTINATION_NOT_WORKING'],
+    })
+    expect(issues[1]).toMatchObject({ status: 'APPROVED_LIMITED', reasons: ['TRADEMARKS_IN_AD_TEXT'] })
+  })
+
+  it('product status: not eligible and limited products, the item id in lower case, Google\'s issues as sent', () => {
+    const issues = rows<GoogleAdsShoppingProductRow>('search-shopping-products.json').map((row) => m.mapShoppingProductIssue(row, CID))
+    expect(issues[2]).toBeNull()
+    expect(issues[0]).toEqual({
+      customerId: '1234567890', kind: 'PRODUCT', entityKey: '5555555555~ONLINE~it~IT~test-sku-1', campaignId: null, adGroupId: null, adId: null, adType: null,
+      itemId: 'test-sku-1', label: 'Test helmet, size M', status: 'NOT_ELIGIBLE', reviewStatus: null, reasons: [],
+      issues: [{ errorCode: 'missing_gtin', adsSeverity: 'NOT_ELIGIBLE', attributeName: 'gtin', description: 'Missing value [gtin]',
+        detail: 'Add a GTIN for this product.', documentation: 'https://support.example.com/gtin', affectedRegions: ['IT'] }],
+    })
+    expect(issues[1]).toMatchObject({ status: 'ELIGIBLE_LIMITED', itemId: 'test-sku-2', issues: [{ errorCode: 'image_too_small', affectedRegions: ['IT', 'SM'] }] })
+  })
+
+  it('auto-apply: the type, its status and Google\'s times (the account\'s wall clock)', () => {
+    const subs = rows<GoogleAdsRecommendationSubscriptionRow>('search-auto-apply.json').map((row) => m.mapAutoApply(row, { ...CID, timeZone: ROME }))
+    expect(subs).toEqual([
+      { customerId: '1234567890', type: 'KEYWORD', status: 'ENABLED', createdAtGoogle: new Date('2026-09-01T08:00:00Z'), modifiedAtGoogle: new Date('2026-09-15T07:30:00Z') },
+      { customerId: '1234567890', type: 'CAMPAIGN_BUDGET', status: 'PAUSED', createdAtGoogle: new Date('2026-08-20T06:00:00Z'), modifiedAtGoogle: null },
+    ])
+  })
+})
+
+describe('step 1b: structure', () => {
+  it('ad groups: bids as micros, ROAS as text, search term matching', () => {
+    const [helmets, gloves] = rows<GoogleAdsAdGroupRow>('search-ad-groups.json').map((row) => m.mapAdGroup(row, CID))
+    expect(helmets).toEqual({
+      customerId: '1234567890', campaignId: '11111111111', adGroupId: '71111111111', name: 'Test helmets', status: 'ENABLED', type: 'SEARCH_STANDARD',
+      primaryStatus: 'ELIGIBLE', primaryStatusReasons: [], cpcBidMicros: 650_000n, targetCpaMicros: null, targetRoas: null, searchTermMatchingDisabled: true,
+    })
+    expect(gloves).toMatchObject({ status: 'PAUSED', cpcBidMicros: null, targetCpaMicros: 4_000_000n, targetRoas: '3.5000', primaryStatusReasons: ['AD_GROUP_PAUSED'], searchTermMatchingDisabled: false })
+  })
+
+  it('keywords and ad-group negatives: negative always set, a negative has no bid or quality', () => {
+    const [phrase, exact, negative] = rows<GoogleAdsAdGroupCriterionRow>('search-keywords.json').map((row) => m.mapAdGroupKeyword(row, CID))
+    expect(phrase).toEqual({
+      customerId: '1234567890', level: 'AD_GROUP', parentKey: 'ag:71111111111', criterionId: '91111', campaignId: '11111111111', adGroupId: '71111111111',
+      sharedSetId: null, negative: false, criterionType: 'KEYWORD', text: 'test helmet', matchType: 'PHRASE', status: 'ENABLED', cpcBidMicros: 700_000n,
+      effectiveCpcBidMicros: 700_000n, qualityScore: 7, systemServingStatus: 'ELIGIBLE', approvalStatus: 'APPROVED', primaryStatus: 'ELIGIBLE',
+    })
+    expect(exact).toMatchObject({ negative: false, status: 'PAUSED', cpcBidMicros: null, effectiveCpcBidMicros: 650_000n, qualityScore: null })
+    expect(negative).toMatchObject({ negative: true, matchType: 'BROAD', cpcBidMicros: null, effectiveCpcBidMicros: null, qualityScore: null, approvalStatus: null })
+  })
+
+  it('campaign negatives and a brand list', () => {
+    const [keyword, brand] = rows<GoogleAdsCampaignCriterionRow>('search-campaign-negatives.json').map((row) => m.mapCampaignNegative(row, CID))
+    expect(keyword).toMatchObject({ level: 'CAMPAIGN', parentKey: 'c:11111111111', criterionId: '92111', negative: true, criterionType: 'KEYWORD', text: 'test used', matchType: 'PHRASE', status: 'ENABLED' })
+    expect(brand).toMatchObject({ level: 'CAMPAIGN', parentKey: 'c:22222222222', criterionId: '92112', negative: true, criterionType: 'BRAND_LIST', text: null, matchType: null })
+    expect(m.mapCampaignNegative({ campaign: { id: '1' }, campaignCriterion: { criterionId: '2', type: 'LOCATION', negative: true } }, CID)).toBeNull()
+  })
+
+  it('asset groups', () => {
+    expect(m.mapAssetGroup(rows<GoogleAdsAssetGroupRow>('search-asset-groups.json')[0], CID)).toEqual({
+      customerId: '1234567890', campaignId: '22222222222', assetGroupId: '61111111111', name: 'Test asset group', status: 'ENABLED', primaryStatus: 'ELIGIBLE',
+      primaryStatusReasons: ['ASSET_GROUP_UNDER_REVIEW'], adStrength: 'GOOD', finalUrls: ['https://shop.example.com/helmets'],
+    })
+  })
+})
+
+describe('step 1b: negative keyword lists and recommendations', () => {
+  it('a list\'s keywords and attachments, with the list when sent; other shared sets are not negative keyword lists', () => {
+    const [free] = rows<GoogleAdsSharedCriterionRow>('search-negative-list-keywords.json').map((row) => m.mapListKeyword(row, CID))
+    expect(free).toEqual({
+      keyword: { customerId: '1234567890', level: 'LIST', parentKey: 'l:66666666666', criterionId: '93111', campaignId: null, adGroupId: null, sharedSetId: '66666666666',
+        negative: true, criterionType: 'KEYWORD', text: 'test free', matchType: 'BROAD', status: null, cpcBidMicros: null, effectiveCpcBidMicros: null,
+        qualityScore: null, systemServingStatus: null, approvalStatus: null, primaryStatus: null },
+      set: { sharedSetId: '66666666666', name: 'Test negative list', type: 'NEGATIVE_KEYWORDS', status: 'ENABLED', memberCount: 2 },
+    })
+    // Without shared_set.* (the twin query): the keyword, no list details.
+    expect(m.mapListKeyword({ sharedCriterion: { sharedSet: 'customers/1234567890/sharedSets/66666666666', criterionId: '93111', type: 'KEYWORD', keyword: { text: 'test free' } } }, CID)?.set).toBeNull()
+    const attachments = rows<GoogleAdsCampaignSharedSetRow>('search-negative-list-attachments.json').map((row) => m.mapListAttachment(row))
+    expect(attachments.map((a) => a && [a.campaignId, a.sharedSetId])).toEqual([['11111111111', '66666666666'], ['33333333333', '66666666666'], null])
+    expect(m.mapListAttachment({ campaignSharedSet: { campaign: 'customers/1/campaigns/2', sharedSet: 'customers/1/sharedSets/3', status: 'REMOVED' } })).toBeNull()
+  })
+
+  it('recommendations: dismissed always set, the impact as sent (micros as text), none when not read', () => {
+    const [keyword, budget] = rows<GoogleAdsRecommendationRow>('search-recommendations.json').map((row) => m.mapRecommendation(row, { ...CID, impactRead: true }))
+    expect(keyword).toEqual({
+      customerId: '1234567890', resourceName: 'customers/1234567890/recommendations/test-rec-1', type: 'KEYWORD', campaignId: '11111111111', adGroupId: '71111111111',
+      dismissed: false,
+      impact: { base: { impressions: 1000, clicks: 40, costMicros: '28000000', conversions: 2, conversionsValue: 180 },
+        potential: { impressions: 1300, clicks: 52, costMicros: '36000000', conversions: 2.6, conversionsValue: 234 } },
+    })
+    expect(budget).toMatchObject({ type: 'CAMPAIGN_BUDGET', dismissed: true, adGroupId: null, impact: { base: { impressions: 500 }, potential: { impressions: 650, costMicros: '9000000' } } })
+    const notRead = m.mapRecommendation(rows<GoogleAdsRecommendationRow>('search-recommendations.json')[0], { ...CID, impactRead: false })
+    expect(notRead).not.toHaveProperty('impact')
+    expect(notRead?.dismissed).toBe(false)
   })
 })

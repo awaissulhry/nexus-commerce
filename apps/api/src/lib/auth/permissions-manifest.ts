@@ -202,7 +202,7 @@ export const ENTRIES: Entry[] = [
   P(F.settingsIntegrationsManage, (m, p) => isRead(m) && (p === '/api/google-ads/connections' || /^\/api\/google-ads\/connections\/[^/]+\/choices$/.test(p))),
   P(F.adsConnect, (m, p) => m.toUpperCase() === 'PUT' && /^\/api\/google-ads\/connections\/[^/]+\/selection$/.test(p)),
   // Google Ads step 1a — the read-only Google Ads tab (R1–R4) and its "Read now" (the ads sync permission).
-  P(F.adsView, (m, p) => isRead(m) && /^\/api\/google-ads\/(overview|campaigns(\/[^/]+\/(days|changes))?)$/.test(p)),
+  P(F.adsView, (m, p) => isRead(m) && /^\/api\/google-ads\/(overview|campaigns(\/[^/]+\/(days|changes))?|ad-groups|keywords|negatives|search-terms|brand-split|asset-groups|products|acts-on-its-own|recommendations|alerts|disapprovals)$/.test(p)),
   P(F.adsCampaignsManage, (m, p) => m.toUpperCase() === 'POST' && p === '/api/google-ads/sync'),
   P(F.settingsIntegrationsManage, pfx('/api/cx/channels')),
   // P3.6 — the channel health dashboard and the per-change trace. Read-only, and the

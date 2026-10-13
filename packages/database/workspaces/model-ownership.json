@@ -522,6 +522,14 @@
     "GoogleAdsCustomer",
     "GoogleAdsCampaign",
     "GoogleAdsDailyMetric",
-    "GoogleAdsChangeEvent"
+    "GoogleAdsChangeEvent",
+    "GoogleAdsReadState",
+    "GoogleAdsAdGroup",
+    "GoogleAdsAssetGroup",
+    "GoogleAdsKeyword",
+    "GoogleAdsNegativeList",
+    "GoogleAdsPolicyIssue",
+    "GoogleAdsRecommendation",
+    "GoogleAdsAutoApply"
   ]
 }

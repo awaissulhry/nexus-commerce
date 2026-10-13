@@ -1,9 +1,10 @@
 /**
- * Google Ads step 1a — what a read keeps (store.ts), on a real PostgreSQL with the production schema and every business
- * policy (PGlite), business profiles ON: idempotent upserts; a campaign a full read no longer returns gets `removedAt`
+ * Google Ads steps 1a and 1b — what a read keeps (store.ts), on a real PostgreSQL with the production schema and every
+ * business policy (PGlite), business profiles ON: idempotent upserts; a campaign a full read no longer returns gets `removedAt`
  * (and loses it when it comes back), unless the read returned none while more than 5 were active; a window of days
  * replaces exactly that window, with the range of days read moving in the same transaction (a failed write moves
- * nothing); changes are stored once; one business never touches another's rows. Values are made up (public repo).
+ * nothing); a grain below the campaign moves its own read state and sums rows on one key (step 1b); changes are stored
+ * once; one business never touches another's rows. Values are made up (public repo).
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { formulaDatabase } from '../../../test-support/formula-database.js'
@@ -153,6 +154,32 @@ describe('Google Ads store (PGlite, business profiles on)', () => {
       await expect(replaceDailyMetrics(CID, 'CAMPAIGN', { from: '2026-10-04', to: '2026-10-08' }, [broken], T2)).rejects.toThrow()
       expect(await storedDays()).toEqual(['2026-10-01:111:10', '2026-10-03:111:30', '2026-10-05:222:55', '2026-10-07:111:71'])
       expect(await range()).toBe('2026-10-01..2026-10-07')
+    })
+  })
+
+  it('a grain below the campaign moves its OWN range of days read (never the account\'s campaign range); its rows on one key are summed', async () => {
+    await inA(async () => {
+      const campaignRange = await range()
+      const keyword = (date: string, impressions: number, conversions: number): GoogleAdsDailyMetricData =>
+        ({ ...day('111', date, impressions), entityType: 'KEYWORD', entityId: '71~91', adGroupId: '71', label: 'test helmet', conversions: conversions.toFixed(4) })
+      const first = await replaceDailyMetrics(CID, 'KEYWORD', { from: '2026-09-01', to: '2026-09-30' }, [
+        keyword('2026-09-10', 5, 1.25), keyword('2026-09-10', 7, 0.5), keyword('2026-09-11', 3, 0),
+        // Another grain's row and a campaign row are not this grain's: never stored here.
+        { ...keyword('2026-09-12', 9, 0), entityType: 'AD_GROUP' }, day('111', '2026-09-12', 9),
+      ], T2)
+      expect(first).toEqual({ rows: 2, range: { from: '2026-09-01', to: '2026-09-30' } })
+      const stored = await db().googleAdsDailyMetric.findMany({ where: { customerId: CID, entityType: 'KEYWORD' }, orderBy: { date: 'asc' } })
+      expect(stored.map((r) => [r.date.toISOString().slice(0, 10), r.impressions, r.costMicros, r.conversions.toString()]))
+        .toEqual([['2026-09-10', 12, 2_000_000n, '1.75'], ['2026-09-11', 3, 1_000_000n, '0']])
+      // The account's campaign range did not move (the 1a bug: every grain moved it).
+      expect(await range()).toBe(campaignRange)
+      const state = () => db().googleAdsReadState.findUnique({ where: { google_ads_read_state: { customerId: CID, resource: 'KEYWORD_DAYS' } } })
+      expect(await state()).toMatchObject({ workspaceId: A, readFrom: new Date('2026-09-01T00:00:00Z'), readThrough: new Date('2026-09-30T00:00:00Z'), readAt: null })
+      await replaceDailyMetrics(CID, 'KEYWORD', { from: '2026-09-25', to: '2026-10-08' }, [], T2)
+      expect(await state()).toMatchObject({ readFrom: new Date('2026-09-01T00:00:00Z'), readThrough: new Date('2026-10-08T00:00:00Z') })
+      expect(await db().googleAdsReadState.count({ where: { resource: 'AD_GROUP_DAYS' } })).toBe(0)
+      expect(await range()).toBe(campaignRange)
+      await db().googleAdsDailyMetric.deleteMany({ where: { customerId: CID, entityType: 'KEYWORD' } })
     })
   })
 

@@ -1,0 +1,46 @@
+{
+  "results": [
+    {
+      "recommendation": {
+        "resourceName": "customers/1234567890/recommendations/test-rec-1",
+        "type": "KEYWORD",
+        "campaign": "customers/1234567890/campaigns/11111111111",
+        "adGroup": "customers/1234567890/adGroups/71111111111",
+        "impact": {
+          "baseMetrics": {
+            "impressions": 1000,
+            "clicks": 40,
+            "costMicros": "28000000",
+            "conversions": 2,
+            "conversionsValue": 180
+          },
+          "potentialMetrics": {
+            "impressions": 1300,
+            "clicks": 52,
+            "costMicros": "36000000",
+            "conversions": 2.6,
+            "conversionsValue": 234
+          }
+        }
+      }
+    },
+    {
+      "recommendation": {
+        "resourceName": "customers/1234567890/recommendations/test-rec-2",
+        "type": "CAMPAIGN_BUDGET",
+        "campaign": "customers/1234567890/campaigns/33333333333",
+        "dismissed": true,
+        "impact": {
+          "baseMetrics": {
+            "impressions": 500
+          },
+          "potentialMetrics": {
+            "impressions": 650,
+            "costMicros": "9000000"
+          }
+        }
+      }
+    }
+  ],
+  "fieldMask": "recommendation.resourceName,recommendation.type,recommendation.campaign,recommendation.adGroup,recommendation.dismissed,recommendation.impact.baseMetrics.impressions,recommendation.impact.baseMetrics.clicks,recommendation.impact.baseMetrics.costMicros,recommendation.impact.baseMetrics.conversions,recommendation.impact.baseMetrics.conversionsValue,recommendation.impact.potentialMetrics.impressions,recommendation.impact.potentialMetrics.clicks,recommendation.impact.potentialMetrics.costMicros,recommendation.impact.potentialMetrics.conversions,recommendation.impact.potentialMetrics.conversionsValue"
+}

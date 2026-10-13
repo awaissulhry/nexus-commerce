@@ -1,12 +1,13 @@
 /**
- * Google Ads step 1a — the daily operations allowance, shared by every Nexus process through Redis.
+ * Google Ads steps 1a and 1b — the daily operations allowance, shared by every Nexus process through Redis.
  *
  * Google counts operations per Google Cloud project per day (Explorer access: 2,880 in production). Every Search
  * request is one operation (its later pages are free); `customers:listAccessibleCustomers` is counted as one too.
  * Nexus keeps itself under two caps over a ROLLING 24 hours:
  *
  *   global       NEXUS_GOOGLE_ADS_DAILY_OPS (default 2,400), for every account and the connect flow together
- *   per account  60 (a daily read is about 5; a backfill a few more; manual reads at most a couple a day)
+ *   per account  100 (a daily read is 21 with step 1b, an account's first read 26; a manual read at most once an hour.
+ *                When it runs short, a read drops its slower parts first: sync-plan.ts)
  *
  * A run reserves what it may spend BEFORE its first call; a refused reservation means zero calls. The counts live in
  * hourly buckets `nexus:gads:ops:<YYYYMMDDHH>` (and `nexus:gads:ops:acct:<account>:<YYYYMMDDHH>`), 25 h TTL, summed
@@ -19,7 +20,7 @@
  */
 
 export const DEFAULT_GLOBAL_DAILY_OPS = 2400
-export const ACCOUNT_DAILY_OPS = 60
+export const ACCOUNT_DAILY_OPS = 100
 export const QUOTA_EXHAUSTED_HOLD_MS = 60 * 60_000
 
 const PREFIX = 'nexus:gads:ops'

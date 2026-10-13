@@ -1,6 +1,6 @@
 /**
- * Google Ads step 1a — the shapes of the read: what Google's REST answer looks like (camelCase, int64 as strings,
- * zero / default fields left out) and what the mappers make of it for the GoogleAds* tables.
+ * Google Ads steps 1a and 1b — the shapes of the read: what Google's REST answer looks like (camelCase, int64 as
+ * strings, zero / default fields left out) and what the mappers make of it for the GoogleAds* tables.
  *
  * Read-only. Nothing in this folder sends a change to Google; the gateway refuses one anyway (GOOGLE_READ_ONLY).
  */
@@ -218,4 +218,307 @@ export interface GoogleAdsChangeEventData {
   /** Left out (undefined) when Google sent none: a nullable Json column takes no plain null. */
   oldResource?: Prisma.InputJsonObject
   newResource?: Prisma.InputJsonObject
+}
+
+// ── Step 1b: Google's REST answer ────────────────────────────────────────────────────────────────────────────────
+
+/** A resource seen through another (campaign.id, ad_group.id, …): the id, its resource name, sometimes the name. */
+export interface GoogleAdsRefJson { resourceName?: string; id?: Int64String; name?: string }
+
+export interface GoogleAdsKeywordInfoJson { text?: string; matchType?: string }
+
+export interface GoogleAdsAssetAutomationSettingJson { assetAutomationType?: string; assetAutomationStatus?: string }
+
+/** The campaign settings by which Google acts on its own (CAMPAIGN_SETTINGS). */
+export interface GoogleAdsCampaignFlagsRow {
+  campaign?: GoogleAdsRefJson & {
+    aiMaxSetting?: { enableAiMax?: boolean }
+    keywordMatchType?: string
+    /** "yyyy-MM-dd HH:mm:ss" in the account's time zone. */
+    broadMatchMigrationDateTime?: string
+    assetAutomationSettings?: GoogleAdsAssetAutomationSettingJson[]
+    networkSettings?: { targetGoogleSearch?: boolean; targetSearchNetwork?: boolean; targetContentNetwork?: boolean; targetPartnerSearchNetwork?: boolean }
+    dynamicSearchAdsSetting?: { domainName?: string }
+  }
+}
+
+export interface GoogleAdsPolicyTopicEntryJson { topic?: string; type?: string }
+export interface GoogleAdsAdPolicyRow {
+  campaign?: GoogleAdsRefJson
+  adGroup?: GoogleAdsRefJson
+  adGroupAd?: {
+    resourceName?: string
+    status?: string
+    ad?: { id?: Int64String; type?: string; resourceName?: string }
+    policySummary?: { approvalStatus?: string; reviewStatus?: string; policyTopicEntries?: GoogleAdsPolicyTopicEntryJson[] }
+  }
+}
+
+export interface GoogleAdsProductIssueJson {
+  errorCode?: string
+  adsSeverity?: string
+  attributeName?: string
+  description?: string
+  detail?: string
+  documentation?: string
+  affectedRegions?: string[]
+}
+export interface GoogleAdsShoppingProductRow {
+  shoppingProduct?: {
+    resourceName?: string
+    merchantCenterId?: Int64String
+    channel?: string
+    languageCode?: string
+    feedLabel?: string
+    itemId?: string
+    title?: string
+    /** NOT_ELIGIBLE | ELIGIBLE_LIMITED | ELIGIBLE */
+    status?: string
+    issues?: GoogleAdsProductIssueJson[]
+  }
+}
+
+export interface GoogleAdsRecommendationSubscriptionRow {
+  recommendationSubscription?: { resourceName?: string; type?: string; status?: string; createDateTime?: string; modifyDateTime?: string }
+}
+
+/** One day of numbers at a grain below the campaign (ad group, keyword, asset group, product, search term). */
+export interface GoogleAdsGrainDayRow {
+  campaign?: GoogleAdsRefJson
+  adGroup?: GoogleAdsRefJson
+  adGroupCriterion?: { criterionId?: Int64String; keyword?: GoogleAdsKeywordInfoJson }
+  assetGroup?: GoogleAdsRefJson
+  campaignSearchTermView?: { resourceName?: string; searchTerm?: string }
+  segments?: { date?: string; productItemId?: string; productTitle?: string }
+  metrics?: GoogleAdsMetricsJson
+}
+
+export interface GoogleAdsAdGroupRow {
+  campaign?: GoogleAdsRefJson
+  adGroup?: GoogleAdsRefJson & {
+    status?: string
+    type?: string
+    cpcBidMicros?: Int64String
+    targetCpaMicros?: Int64String
+    targetRoas?: number
+    primaryStatus?: string
+    primaryStatusReasons?: string[]
+    aiMaxAdGroupSetting?: { disableSearchTermMatching?: boolean }
+  }
+}
+
+export interface GoogleAdsAdGroupCriterionRow {
+  campaign?: GoogleAdsRefJson
+  adGroup?: GoogleAdsRefJson
+  adGroupCriterion?: {
+    resourceName?: string
+    criterionId?: Int64String
+    negative?: boolean
+    status?: string
+    type?: string
+    keyword?: GoogleAdsKeywordInfoJson
+    qualityInfo?: { qualityScore?: number }
+    systemServingStatus?: string
+    approvalStatus?: string
+    primaryStatus?: string
+    cpcBidMicros?: Int64String
+    effectiveCpcBidMicros?: Int64String
+  }
+}
+
+export interface GoogleAdsCampaignCriterionRow {
+  campaign?: GoogleAdsRefJson
+  campaignCriterion?: {
+    resourceName?: string
+    criterionId?: Int64String
+    negative?: boolean
+    type?: string
+    status?: string
+    keyword?: GoogleAdsKeywordInfoJson
+    brandList?: { sharedSet?: string }
+  }
+}
+
+export interface GoogleAdsAssetGroupRow {
+  campaign?: GoogleAdsRefJson
+  assetGroup?: GoogleAdsRefJson & { status?: string; primaryStatus?: string; primaryStatusReasons?: string[]; adStrength?: string; finalUrls?: string[] }
+}
+
+export interface GoogleAdsSharedSetJson { resourceName?: string; id?: Int64String; name?: string; type?: string; status?: string; memberCount?: Int64String }
+export interface GoogleAdsSharedCriterionRow {
+  sharedCriterion?: { resourceName?: string; sharedSet?: string; criterionId?: Int64String; type?: string; keyword?: GoogleAdsKeywordInfoJson }
+  sharedSet?: GoogleAdsSharedSetJson
+}
+export interface GoogleAdsCampaignSharedSetRow {
+  campaign?: GoogleAdsRefJson
+  campaignSharedSet?: { resourceName?: string; campaign?: string; sharedSet?: string; status?: string }
+  sharedSet?: GoogleAdsSharedSetJson
+}
+
+export interface GoogleAdsRecommendationMetricsJson {
+  impressions?: number
+  clicks?: number
+  costMicros?: Int64String
+  conversions?: number
+  conversionsValue?: number
+}
+export interface GoogleAdsRecommendationRow {
+  recommendation?: {
+    resourceName?: string
+    type?: string
+    campaign?: string
+    adGroup?: string
+    dismissed?: boolean
+    impact?: { baseMetrics?: GoogleAdsRecommendationMetricsJson; potentialMetrics?: GoogleAdsRecommendationMetricsJson }
+  }
+}
+
+// ── Step 1b: what the mappers make ───────────────────────────────────────────────────────────────────────────────
+
+/** One GoogleAdsReadState row per account and resource: what a 1b step read, and how its last attempt ended. */
+export type GoogleAdsReadResource =
+  | 'AD_GROUPS' | 'KEYWORDS' | 'CAMPAIGN_NEGATIVES' | 'NEGATIVE_LISTS' | 'ASSET_GROUPS'
+  | 'CAMPAIGN_SETTINGS' | 'AD_POLICY' | 'PRODUCT_STATUS' | 'AUTO_APPLY' | 'RECOMMENDATIONS'
+  | 'AD_GROUP_DAYS' | 'KEYWORD_DAYS' | 'ASSET_GROUP_DAYS' | 'PRODUCT_DAYS' | 'SEARCH_TERM_DAYS'
+
+export type GoogleAdsDayResource = 'AD_GROUP_DAYS' | 'KEYWORD_DAYS' | 'ASSET_GROUP_DAYS' | 'PRODUCT_DAYS' | 'SEARCH_TERM_DAYS'
+
+/** The grains below the campaign; each keeps its own range of days read in GoogleAdsReadState (the campaign's is on GoogleAdsCustomer). */
+export type GoogleAdsDetailEntityType = Exclude<GoogleAdsEntityType, 'CAMPAIGN'>
+
+/** Which read state holds a grain's range of days read. */
+export const DAY_RESOURCE_OF: Readonly<Record<GoogleAdsDetailEntityType, GoogleAdsDayResource>> = {
+  AD_GROUP: 'AD_GROUP_DAYS',
+  KEYWORD: 'KEYWORD_DAYS',
+  ASSET_GROUP: 'ASSET_GROUP_DAYS',
+  PRODUCT: 'PRODUCT_DAYS',
+  SEARCH_TERM: 'SEARCH_TERM_DAYS',
+}
+
+export type GoogleAdsReadStatus = 'SUCCESS' | 'FAILED' | 'SKIPPED_BUDGET'
+
+/** GoogleAdsCampaign's settings columns (step 1b). Every value is as Google sent it; a flag Google left out is false. */
+export interface GoogleAdsCampaignFlagsData {
+  campaignId: string
+  aiMaxEnabled: boolean
+  keywordMatchType: string | null
+  broadMatchMigratedAt: Date | null
+  targetGoogleSearch: boolean
+  targetSearchNetwork: boolean
+  targetContentNetwork: boolean
+  targetPartnerSearchNetwork: boolean
+  /** [{ assetAutomationType, assetAutomationStatus }] as sent ([] = Google listed none: every type has its default); null = not read. */
+  assetAutomation: Array<{ assetAutomationType: string; assetAutomationStatus: string | null }> | null
+  dsaDomain: string | null
+}
+
+/** A GoogleAdsAdGroup row without the business, its id, firstSeenAt / lastSeenAt / removedAt and timestamps. */
+export interface GoogleAdsAdGroupData {
+  customerId: string
+  campaignId: string
+  adGroupId: string
+  name: string
+  status: string
+  type: string | null
+  primaryStatus: string | null
+  primaryStatusReasons: string[]
+  cpcBidMicros: bigint | null
+  targetCpaMicros: bigint | null
+  /** Decimal(10,4) as text. */
+  targetRoas: string | null
+  searchTermMatchingDisabled: boolean | null
+}
+
+export interface GoogleAdsAssetGroupData {
+  customerId: string
+  campaignId: string
+  assetGroupId: string
+  name: string
+  status: string
+  primaryStatus: string | null
+  primaryStatusReasons: string[]
+  adStrength: string | null
+  finalUrls: string[]
+}
+
+export type GoogleAdsKeywordLevel = 'AD_GROUP' | 'CAMPAIGN' | 'LIST'
+
+/** A GoogleAdsKeyword row: an ad group's keyword or negative, a campaign's negative or brand list, a list's keyword. */
+export interface GoogleAdsKeywordData {
+  customerId: string
+  level: GoogleAdsKeywordLevel
+  /** ag:<adGroupId> | c:<campaignId> | l:<sharedSetId> */
+  parentKey: string
+  criterionId: string
+  campaignId: string | null
+  adGroupId: string | null
+  sharedSetId: string | null
+  negative: boolean
+  criterionType: 'KEYWORD' | 'BRAND_LIST'
+  text: string | null
+  matchType: string | null
+  status: string | null
+  cpcBidMicros: bigint | null
+  effectiveCpcBidMicros: bigint | null
+  qualityScore: number | null
+  systemServingStatus: string | null
+  approvalStatus: string | null
+  primaryStatus: string | null
+}
+
+export interface GoogleAdsNegativeListData {
+  customerId: string
+  sharedSetId: string
+  /** Null when this read did not get the list's details (the store keeps what it had). */
+  name: string | null
+  status: string | null
+  memberCount: number | null
+  campaignIds: string[]
+}
+
+export interface GoogleAdsSharedSetData {
+  sharedSetId: string
+  name: string | null
+  type: string | null
+  status: string | null
+  memberCount: number | null
+}
+
+export type GoogleAdsPolicyKind = 'AD' | 'PRODUCT'
+
+/** A GoogleAdsPolicyIssue row without the business, its id, firstSeenAt / lastSeenAt / resolvedAt and timestamps. */
+export interface GoogleAdsPolicyIssueData {
+  customerId: string
+  kind: GoogleAdsPolicyKind
+  entityKey: string
+  campaignId: string | null
+  adGroupId: string | null
+  adId: string | null
+  adType: string | null
+  itemId: string | null
+  label: string | null
+  status: string
+  reviewStatus: string | null
+  reasons: string[]
+  /** PRODUCT: Google's issues as sent; left out for an ad (a nullable Json column takes no plain null). */
+  issues?: Prisma.InputJsonArray
+}
+
+export interface GoogleAdsRecommendationData {
+  customerId: string
+  resourceName: string
+  type: string
+  campaignId: string | null
+  adGroupId: string | null
+  dismissed: boolean
+  /** { base, potential } as Google sent them (micros as strings); left out when not read or not sent. */
+  impact?: Prisma.InputJsonObject
+}
+
+export interface GoogleAdsAutoApplyData {
+  customerId: string
+  type: string
+  status: string
+  createdAtGoogle: Date | null
+  modifiedAtGoogle: Date | null
 }

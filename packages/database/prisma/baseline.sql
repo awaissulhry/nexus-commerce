@@ -11079,6 +11079,16 @@ CREATE TABLE "GoogleAdsCampaign" (
     "startDate" DATE,
     "endDate" DATE,
     "currencyCode" TEXT NOT NULL,
+    "flagsReadAt" TIMESTAMP(3),
+    "aiMaxEnabled" BOOLEAN,
+    "keywordMatchType" TEXT,
+    "broadMatchMigratedAt" TIMESTAMP(3),
+    "targetGoogleSearch" BOOLEAN,
+    "targetSearchNetwork" BOOLEAN,
+    "targetContentNetwork" BOOLEAN,
+    "targetPartnerSearchNetwork" BOOLEAN,
+    "assetAutomation" JSONB,
+    "dsaDomain" TEXT,
     "firstSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "lastSeenAt" TIMESTAMP(3) NOT NULL,
     "removedAt" TIMESTAMP(3),
@@ -11134,6 +11144,183 @@ CREATE TABLE "GoogleAdsChangeEvent" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "GoogleAdsChangeEvent_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "GoogleAdsReadState" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "customerId" TEXT NOT NULL,
+    "resource" TEXT NOT NULL,
+    "readFrom" DATE,
+    "readThrough" DATE,
+    "readAt" TIMESTAMP(3),
+    "lastAttemptAt" TIMESTAMP(3),
+    "lastStatus" TEXT,
+    "lastError" TEXT,
+    "rows" INTEGER,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "GoogleAdsReadState_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "GoogleAdsAdGroup" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "customerId" TEXT NOT NULL,
+    "campaignId" TEXT NOT NULL,
+    "adGroupId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "type" TEXT,
+    "primaryStatus" TEXT,
+    "primaryStatusReasons" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "cpcBidMicros" BIGINT,
+    "targetCpaMicros" BIGINT,
+    "targetRoas" DECIMAL(10,4),
+    "searchTermMatchingDisabled" BOOLEAN,
+    "firstSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastSeenAt" TIMESTAMP(3) NOT NULL,
+    "removedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "GoogleAdsAdGroup_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "GoogleAdsAssetGroup" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "customerId" TEXT NOT NULL,
+    "campaignId" TEXT NOT NULL,
+    "assetGroupId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "primaryStatus" TEXT,
+    "primaryStatusReasons" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "adStrength" TEXT,
+    "finalUrls" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "firstSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastSeenAt" TIMESTAMP(3) NOT NULL,
+    "removedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "GoogleAdsAssetGroup_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "GoogleAdsKeyword" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "customerId" TEXT NOT NULL,
+    "level" TEXT NOT NULL,
+    "parentKey" TEXT NOT NULL,
+    "criterionId" TEXT NOT NULL,
+    "campaignId" TEXT,
+    "adGroupId" TEXT,
+    "sharedSetId" TEXT,
+    "negative" BOOLEAN NOT NULL,
+    "criterionType" TEXT NOT NULL,
+    "text" TEXT,
+    "matchType" TEXT,
+    "status" TEXT,
+    "cpcBidMicros" BIGINT,
+    "effectiveCpcBidMicros" BIGINT,
+    "qualityScore" INTEGER,
+    "systemServingStatus" TEXT,
+    "approvalStatus" TEXT,
+    "primaryStatus" TEXT,
+    "firstSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastSeenAt" TIMESTAMP(3) NOT NULL,
+    "removedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "GoogleAdsKeyword_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "GoogleAdsNegativeList" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "customerId" TEXT NOT NULL,
+    "sharedSetId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "memberCount" INTEGER,
+    "campaignIds" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "firstSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastSeenAt" TIMESTAMP(3) NOT NULL,
+    "removedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "GoogleAdsNegativeList_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "GoogleAdsPolicyIssue" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "customerId" TEXT NOT NULL,
+    "kind" TEXT NOT NULL,
+    "entityKey" TEXT NOT NULL,
+    "campaignId" TEXT,
+    "adGroupId" TEXT,
+    "adId" TEXT,
+    "adType" TEXT,
+    "itemId" TEXT,
+    "label" TEXT,
+    "status" TEXT NOT NULL,
+    "reviewStatus" TEXT,
+    "reasons" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "issues" JSONB,
+    "firstSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastSeenAt" TIMESTAMP(3) NOT NULL,
+    "resolvedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "GoogleAdsPolicyIssue_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "GoogleAdsRecommendation" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "customerId" TEXT NOT NULL,
+    "resourceName" TEXT NOT NULL,
+    "type" TEXT NOT NULL,
+    "campaignId" TEXT,
+    "adGroupId" TEXT,
+    "dismissed" BOOLEAN NOT NULL,
+    "impact" JSONB,
+    "readAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "GoogleAdsRecommendation_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "GoogleAdsAutoApply" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "customerId" TEXT NOT NULL,
+    "type" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "createdAtGoogle" TIMESTAMP(3),
+    "modifiedAtGoogle" TIMESTAMP(3),
+    "firstSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastSeenAt" TIMESTAMP(3) NOT NULL,
+    "removedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "GoogleAdsAutoApply_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -16808,6 +16995,69 @@ CREATE INDEX "GoogleAdsChangeEvent_campaignId_changedAt_idx" ON "GoogleAdsChange
 
 -- CreateIndex
 CREATE UNIQUE INDEX "GoogleAdsChangeEvent_workspaceId_resourceName_key" ON "GoogleAdsChangeEvent"("workspaceId", "resourceName");
+
+-- CreateIndex
+CREATE INDEX "GoogleAdsReadState_workspaceId_idx" ON "GoogleAdsReadState"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "GoogleAdsReadState_workspaceId_customerId_resource_key" ON "GoogleAdsReadState"("workspaceId", "customerId", "resource");
+
+-- CreateIndex
+CREATE INDEX "GoogleAdsAdGroup_workspaceId_idx" ON "GoogleAdsAdGroup"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "GoogleAdsAdGroup_customerId_campaignId_idx" ON "GoogleAdsAdGroup"("customerId", "campaignId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "GoogleAdsAdGroup_workspaceId_customerId_adGroupId_key" ON "GoogleAdsAdGroup"("workspaceId", "customerId", "adGroupId");
+
+-- CreateIndex
+CREATE INDEX "GoogleAdsAssetGroup_workspaceId_idx" ON "GoogleAdsAssetGroup"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "GoogleAdsAssetGroup_workspaceId_customerId_assetGroupId_key" ON "GoogleAdsAssetGroup"("workspaceId", "customerId", "assetGroupId");
+
+-- CreateIndex
+CREATE INDEX "GoogleAdsKeyword_workspaceId_idx" ON "GoogleAdsKeyword"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "GoogleAdsKeyword_customerId_campaignId_idx" ON "GoogleAdsKeyword"("customerId", "campaignId");
+
+-- CreateIndex
+CREATE INDEX "GoogleAdsKeyword_customerId_adGroupId_idx" ON "GoogleAdsKeyword"("customerId", "adGroupId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "GoogleAdsKeyword_workspaceId_customerId_parentKey_criterion_key" ON "GoogleAdsKeyword"("workspaceId", "customerId", "parentKey", "criterionId");
+
+-- CreateIndex
+CREATE INDEX "GoogleAdsNegativeList_workspaceId_idx" ON "GoogleAdsNegativeList"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "GoogleAdsNegativeList_workspaceId_customerId_sharedSetId_key" ON "GoogleAdsNegativeList"("workspaceId", "customerId", "sharedSetId");
+
+-- CreateIndex
+CREATE INDEX "GoogleAdsPolicyIssue_workspaceId_idx" ON "GoogleAdsPolicyIssue"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "GoogleAdsPolicyIssue_customerId_kind_resolvedAt_idx" ON "GoogleAdsPolicyIssue"("customerId", "kind", "resolvedAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "GoogleAdsPolicyIssue_workspaceId_customerId_kind_entityKey_key" ON "GoogleAdsPolicyIssue"("workspaceId", "customerId", "kind", "entityKey");
+
+-- CreateIndex
+CREATE INDEX "GoogleAdsRecommendation_workspaceId_idx" ON "GoogleAdsRecommendation"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "GoogleAdsRecommendation_customerId_type_idx" ON "GoogleAdsRecommendation"("customerId", "type");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "GoogleAdsRecommendation_workspaceId_customerId_resourceName_key" ON "GoogleAdsRecommendation"("workspaceId", "customerId", "resourceName");
+
+-- CreateIndex
+CREATE INDEX "GoogleAdsAutoApply_workspaceId_idx" ON "GoogleAdsAutoApply"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "GoogleAdsAutoApply_workspaceId_customerId_type_key" ON "GoogleAdsAutoApply"("workspaceId", "customerId", "type");
 
 -- AddForeignKey
 ALTER TABLE "Product" ADD CONSTRAINT "Product_familyId_fkey" FOREIGN KEY ("familyId") REFERENCES "ProductFamily"("id") ON DELETE SET NULL ON UPDATE CASCADE;

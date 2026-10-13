@@ -1,0 +1,42 @@
+{
+  "results": [
+    {
+      "campaign": {
+        "resourceName": "customers/1234567890/campaigns/11111111111",
+        "id": "11111111111"
+      },
+      "adGroup": {
+        "resourceName": "customers/1234567890/adGroups/71111111111",
+        "id": "71111111111",
+        "name": "Test helmets",
+        "status": "ENABLED",
+        "type": "SEARCH_STANDARD",
+        "cpcBidMicros": "650000",
+        "primaryStatus": "ELIGIBLE",
+        "aiMaxAdGroupSetting": {
+          "disableSearchTermMatching": true
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/1234567890/campaigns/11111111111",
+        "id": "11111111111"
+      },
+      "adGroup": {
+        "resourceName": "customers/1234567890/adGroups/71111111112",
+        "id": "71111111112",
+        "name": "Test gloves",
+        "status": "PAUSED",
+        "type": "SEARCH_STANDARD",
+        "targetCpaMicros": "4000000",
+        "targetRoas": 3.5,
+        "primaryStatus": "PAUSED",
+        "primaryStatusReasons": [
+          "AD_GROUP_PAUSED"
+        ]
+      }
+    }
+  ],
+  "fieldMask": "campaign.id,adGroup.id,adGroup.name,adGroup.status,adGroup.type,adGroup.cpcBidMicros,adGroup.targetCpaMicros,adGroup.targetRoas,adGroup.primaryStatus,adGroup.primaryStatusReasons,adGroup.aiMaxAdGroupSetting.disableSearchTermMatching"
+}

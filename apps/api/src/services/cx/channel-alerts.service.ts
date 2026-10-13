@@ -95,6 +95,13 @@ export const CHANNEL_ALERT_KINDS = [
   'channel-order-stock-unlinked',
   // R5 (2026-09-26): an eBay order recorded although parts of it could not be read.
   'channel-order-unreadable',
+  // Google Ads step 1b (2026-10-13): after each daily read, over what Nexus read (google-ads/alerts.service.ts).
+  // Read only: Nexus changes nothing at Google. No amount in the text.
+  'google-ads-spend-pace',
+  'google-ads-zero-conversions',
+  'google-ads-disapproved',
+  'google-ads-auto-apply',
+  'google-ads-changed-by-google',
 ] as const
 
 export type ChannelAlertKind = (typeof CHANNEL_ALERT_KINDS)[number]

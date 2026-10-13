@@ -141,7 +141,7 @@ export const ROUTE_COVERAGE: Readonly<Record<string, RouteCoverage>> = {
   forecast: { part: '08', feature: 38 },
   fulfillment: { part: '07', feature: 28, also: 'routing and shipping (#27, #28); inbound, purchase orders, suppliers, replenishment and FNSKU are 08 (#36–#39)' },
   'google-accounts': { excluded: 'choosing which Google Ads, Merchant Center and Analytics accounts a Google connection reads: a person in the browser (09 §2); Claude sees the connection with channel-connections', feature: 51 },
-  'google-ads-read': { part: '01', feature: 19, also: 'Google Ads step 1a, read only: Claude reads the account overview and campaigns with ads-overview and ad-campaigns (channel google; the same read service); one campaign\'s days and change history are the page\'s alone, and "Read now" (sync) is a person\'s; no tool changes Google Ads' },
+  'google-ads-read': { part: '01', feature: 19, also: 'Google Ads, read only (steps 1a and 1b): Claude reads the account overview and campaigns with ads-overview and ad-campaigns (channel google), and ad groups, keywords, negatives, search terms with the brand split, asset groups, products, what Google does on its own, Google\'s recommendations, disapprovals and the alerts with google-ad-details (the same read services); one campaign\'s days and change history are the page\'s alone, and "Read now" (sync) is a person\'s; no tool changes Google Ads' },
   'gtin-exemption': { part: '04', feature: 9 },
   health: { excluded: 'webhook receivers and health checks: machine to machine, nothing for a person or Claude', feature: 82 },
   'import-wizard': { part: '09', feature: 68 },

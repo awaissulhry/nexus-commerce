@@ -128,7 +128,7 @@ describe('Google rate buckets: one per API (host)', () => {
     expect(bucketGroupOf('GOOGLE', 'GET', 'https://analyticsadmin.googleapis.com/v1beta/accountSummaries')).toBe('analytics')
     expect(bucketGroupOf('GOOGLE', 'GET', 'https://openidconnect.googleapis.com/v1/userinfo')).toBe('identity')
     expect(defaultsFor('GOOGLE', bucketKey('GOOGLE', 'g-1', 'ads'))).toEqual(GOOGLE_BUCKETS.ads)
-    expect(GOOGLE_BUCKETS.ads).toEqual({ capacity: 30, refillPerSec: 1 / 30 })
+    expect(GOOGLE_BUCKETS.ads).toEqual({ capacity: 60, refillPerSec: 1 / 30 })
     expect(defaultsFor('GOOGLE', bucketKey('GOOGLE', 'g-1', 'merchant'))).toEqual({ capacity: 10, refillPerSec: 2 })
     expect(defaultsFor('GOOGLE', bucketKey('GOOGLE', 'g-1', 'analytics'))).toEqual({ capacity: 10, refillPerSec: 1 })
     expect(defaultsFor('GOOGLE', bucketKey('GOOGLE', 'g-1', 'identity'))).toEqual({ capacity: 5, refillPerSec: 1 })

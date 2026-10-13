@@ -1,0 +1,38 @@
+{
+  "results": [
+    {
+      "campaign": {
+        "resourceName": "customers/1234567890/campaigns/11111111111",
+        "id": "11111111111"
+      },
+      "campaignCriterion": {
+        "resourceName": "customers/1234567890/campaignCriteria/11111111111~92111",
+        "criterionId": "92111",
+        "negative": true,
+        "type": "KEYWORD",
+        "status": "ENABLED",
+        "keyword": {
+          "text": "test used",
+          "matchType": "PHRASE"
+        }
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/1234567890/campaigns/22222222222",
+        "id": "22222222222"
+      },
+      "campaignCriterion": {
+        "resourceName": "customers/1234567890/campaignCriteria/22222222222~92112",
+        "criterionId": "92112",
+        "negative": true,
+        "type": "BRAND_LIST",
+        "status": "ENABLED",
+        "brandList": {
+          "sharedSet": "customers/1234567890/sharedSets/67777777777"
+        }
+      }
+    }
+  ],
+  "fieldMask": "campaign.id,campaignCriterion.criterionId,campaignCriterion.negative,campaignCriterion.type,campaignCriterion.status,campaignCriterion.keyword.text,campaignCriterion.keyword.matchType,campaignCriterion.brandList.sharedSet"
+}

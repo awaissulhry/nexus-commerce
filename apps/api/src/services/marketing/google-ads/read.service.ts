@@ -21,13 +21,15 @@
  * added after the last settings read that succeeded (or while one failed) has numbers and no row too: its status is
  * null — not read yet — never REMOVED. Either way Nexus never read its settings: `settingsReadAt` is null.
  */
+import type { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
 import { workspaceIdForQuery } from '../../../lib/workspace-context.js'
-import { cursorScope, decodeCursor, encodeCursor, type CursorPosition } from '../../../lib/pagination/cursor.js'
+import { cursorScope, decodeCursor, encodeCursor, type CursorPosition, type SortValue } from '../../../lib/pagination/cursor.js'
 import { listGoogleAccounts } from '../../google/google-accounts.service.js'
 import { CHANGE_HISTORY_DAYS, DAILY_WINDOW_DAYS, accountYesterday, addDays, changeHistoryWindow, dateToDay, dayCount, dayToDate, daysOf, zonedToUtc, type DayWindow } from './dates.js'
 import { enqueueGoogleAdsSync } from './enqueue.js'
 import { campaignTypeText, changeSourceOf, customerIdDigits } from './mappers.js'
+import { GOOGLE_READ_RESOURCES, type CampaignRef, type EntityStatus, type GoogleRead, type GoogleReadResource } from './read-types.js'
 
 /** One Google sign-in of the business as the connection routes describe it (C1). */
 export type GoogleAccount = Awaited<ReturnType<typeof listGoogleAccounts>>[number]
@@ -51,7 +53,7 @@ export const CAMPAIGN_STATUSES = ['ENABLED', 'PAUSED', 'REMOVED'] as const
 
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/
 const MS_PER_DAY = 86_400_000
-const iso = (at: Date | null | undefined) => (at ? at.toISOString() : null)
+export const iso = (at: Date | null | undefined) => (at ? at.toISOString() : null)
 
 // ── Money ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -74,7 +76,7 @@ export function microsToMinor(micros: bigint, exponent: number): number {
 
 // ── Sums and metrics ───────────────────────────────────────────────────────────────────────────────────────────────
 
-interface Sums {
+export interface Sums {
   impressions: number
   clicks: number
   costMicros: bigint
@@ -82,11 +84,11 @@ interface Sums {
   conversions4: bigint
   valueMicros: bigint
 }
-const ZERO: Sums = { impressions: 0, clicks: 0, costMicros: 0n, conversions4: 0n, valueMicros: 0n }
+export const ZERO: Sums = { impressions: 0, clicks: 0, costMicros: 0n, conversions4: 0n, valueMicros: 0n }
 
-const SUM_FIELDS = { impressions: true, clicks: true, costMicros: true, conversions: true, conversionsValueMicros: true } as const
+export const SUM_FIELDS = { impressions: true, clicks: true, costMicros: true, conversions: true, conversionsValueMicros: true } as const
 
-interface SumRow {
+export interface SumRow {
   impressions: number | null
   clicks: number | null
   costMicros: bigint | null
@@ -94,7 +96,7 @@ interface SumRow {
   conversionsValueMicros: bigint | null
 }
 
-function toSums(row: SumRow | null | undefined): Sums {
+export function toSums(row: SumRow | null | undefined): Sums {
   if (!row) return ZERO
   const conversions = Number(row.conversions == null ? 0 : String(row.conversions))
   return {
@@ -106,7 +108,7 @@ function toSums(row: SumRow | null | undefined): Sums {
   }
 }
 
-function addSums(a: Sums, b: Sums): Sums {
+export function addSums(a: Sums, b: Sums): Sums {
   return {
     impressions: a.impressions + b.impressions,
     clicks: a.clicks + b.clicks,
@@ -130,7 +132,7 @@ export interface GoogleAdsMetrics {
   costPerConversionCents: number | null
 }
 
-function metricsOf(s: Sums, exponent: number): GoogleAdsMetrics {
+export function metricsOf(s: Sums, exponent: number): GoogleAdsMetrics {
   const microsPerMinor = 10 ** Math.max(0, 6 - exponent)
   const cost = Number(s.costMicros)
   const conversions = Number(s.conversions4) / 10_000
@@ -164,7 +166,7 @@ const CUSTOMER_SELECT = {
   metricsReadFrom: true, metricsReadThrough: true, lastSuccessAt: true, changesSyncedThrough: true, structureSyncedAt: true,
 } as const
 
-interface CustomerRow {
+export interface CustomerRow {
   customerId: string
   connectionId: string
   descriptiveName: string | null
@@ -177,7 +179,7 @@ interface CustomerRow {
   structureSyncedAt: Date | null
 }
 
-const customerOf = (customerId: string): Promise<CustomerRow | null> =>
+export const customerOf = (customerId: string): Promise<CustomerRow | null> =>
   prisma.googleAdsCustomer.findFirst({ where: { customerId }, select: CUSTOMER_SELECT })
 
 /** The account a read is about, with what Nexus holds of it. */
@@ -272,23 +274,23 @@ export function resolveWindow(input: WindowInput, timeZone: string | null, live:
 }
 
 /** The contiguous days Nexus read for the account, or null when it read none. */
-function readRangeOf(customer: CustomerRow | null): DayWindow | null {
+export function readRangeOf(customer: CustomerRow | null): DayWindow | null {
   if (!customer?.metricsReadFrom || !customer.metricsReadThrough) return null
   const from = dateToDay(customer.metricsReadFrom)
   const to = dateToDay(customer.metricsReadThrough)
   return from <= to ? { from, to } : null
 }
 
-function overlap(window: DayWindow, range: DayWindow | null): DayWindow | null {
+export function overlap(window: DayWindow, range: DayWindow | null): DayWindow | null {
   if (!range) return null
   const from = window.from > range.from ? window.from : range.from
   const to = window.to < range.to ? window.to : range.to
   return from <= to ? { from, to } : null
 }
 
-const isRead = (day: string, range: DayWindow | null) => !!range && day >= range.from && day <= range.to
+export const isRead = (day: string, range: DayWindow | null) => !!range && day >= range.from && day <= range.to
 
-function coverageOf(window: DayWindow, range: DayWindow | null): GoogleAdsCoverage {
+export function coverageOf(window: DayWindow, range: DayWindow | null): GoogleAdsCoverage {
   const days = daysOf(window)
   const missingDays = days.filter((day) => !isRead(day, range))
   return { daysInWindow: days.length, daysRead: days.length - missingDays.length, missingDays }
@@ -320,7 +322,7 @@ async function sumOver(customerId: string, range: DayWindow): Promise<Sums> {
   return toSums(row._sum)
 }
 
-const total = (sums: Iterable<Sums>) => [...sums].reduce(addSums, ZERO)
+export const total = (sums: Iterable<Sums>) => [...sums].reduce(addSums, ZERO)
 
 function daySeries(window: GoogleAdsWindow, range: DayWindow | null, sums: Map<string, Sums>, exponent: number): GoogleAdsDay[] {
   return daysOf(window).map((date): GoogleAdsDay => {
@@ -346,6 +348,8 @@ export interface GoogleAdsOverview {
   /** The window before, of the same length; null unless Nexus read every day of this window AND of that one. */
   previous: (GoogleAdsMetrics & { from: string; to: string }) | null
   days: GoogleAdsDay[]
+  /** Step 1b: when Nexus last read each other part of the account (every part, in a fixed order; never read = readAt null). */
+  reads: GoogleRead[]
 }
 
 export async function googleAdsOverview(input: { connectionId?: string | null } & WindowInput, now: Date = new Date()): Promise<GoogleAdsOverview> {
@@ -355,7 +359,10 @@ export async function googleAdsOverview(input: { connectionId?: string | null } 
   const inWindow = overlap(window, range)
   const exponent = currencyExponent(ctx.currency)
   const coverage = coverageOf(window, range)
-  const sums = ctx.customer && inWindow ? await sumsByDay(ctx.customer.customerId, inWindow) : new Map<string, Sums>()
+  const [sums, states] = await Promise.all([
+    ctx.customer && inWindow ? sumsByDay(ctx.customer.customerId, inWindow) : Promise.resolve(new Map<string, Sums>()),
+    googleReadStates(ctx.customerId),
+  ])
 
   // The window before, of the same length — compared only when Nexus read every day of BOTH windows (a window with
   // days not read has totals that leave them out: set against a full window, its change would be made up).
@@ -377,18 +384,19 @@ export async function googleAdsOverview(input: { connectionId?: string | null } 
     totals: coverage.daysRead > 0 ? metricsOf(total(sums.values()), exponent) : null,
     previous,
     days: daySeries(window, range, sums, exponent),
+    reads: GOOGLE_READ_RESOURCES.map((resource) => states.read(resource)),
   }
 }
 
 // ── R2 — the campaigns ─────────────────────────────────────────────────────────────────────────────────────────────
 
-const CAMPAIGN_SELECT = {
+export const CAMPAIGN_SELECT = {
   id: true, customerId: true, campaignId: true, name: true, status: true, servingStatus: true, primaryStatus: true,
   channelType: true, biddingStrategyType: true, budgetAmountMicros: true, budgetShared: true, startDate: true, endDate: true,
   currencyCode: true, lastSeenAt: true, removedAt: true,
 } as const
 
-interface CampaignRow {
+export interface CampaignRow {
   id: string
   customerId: string
   campaignId: string
@@ -434,7 +442,7 @@ export interface GoogleAdsCampaign {
 }
 
 /** The id of a campaign that has numbers but no settings row (removed before Nexus first read the account). */
-const unseenId = (customerId: string, googleCampaignId: string) => `${customerId}~${googleCampaignId}`
+export const unseenId = (customerId: string, googleCampaignId: string) => `${customerId}~${googleCampaignId}`
 const UNSEEN_ID = /^(\d{1,20})~(\d{1,20})$/
 
 function campaignOf(row: CampaignRow, exponent: number, metrics: GoogleAdsMetrics | null): GoogleAdsCampaign {
@@ -501,7 +509,7 @@ function unseenCampaignOf(
 }
 
 /** The newest name Google gave each campaign in its numbers, and its last day with numbers (the campaigns that have no settings row). */
-async function namesInNumbers(customerId: string, googleCampaignIds: string[]): Promise<Map<string, { label: string | null; pulledAt: Date; lastDay: string }>> {
+export async function namesInNumbers(customerId: string, googleCampaignIds: string[]): Promise<Map<string, { label: string | null; pulledAt: Date; lastDay: string }>> {
   if (!googleCampaignIds.length) return new Map()
   const rows = await prisma.googleAdsDailyMetric.findMany({
     where: { customerId, entityType: 'CAMPAIGN', campaignId: { in: googleCampaignIds } },
@@ -623,7 +631,8 @@ export async function googleAdsCampaigns(
 
 // ── R3 / R4 — one campaign ─────────────────────────────────────────────────────────────────────────────────────────
 
-interface CampaignRef {
+/** A campaign found by `campaignRef`: its account, its Google id, and what Nexus holds of it. */
+export interface GoogleCampaignLookup {
   customerId: string
   googleCampaignId: string
   customer: CustomerRow | null
@@ -632,7 +641,7 @@ interface CampaignRef {
 }
 
 /** A campaign of this business by Nexus's id (or the id of a campaign seen only in the numbers); null = not found. */
-async function campaignRef(campaignId: string): Promise<CampaignRef | null> {
+export async function campaignRef(campaignId: string): Promise<GoogleCampaignLookup | null> {
   const id = typeof campaignId === 'string' ? campaignId.trim() : ''
   if (!id || id.length > 64) return null
   const unseen = UNSEEN_ID.exec(id)
@@ -721,7 +730,7 @@ const OPERATION_WORDS: Readonly<Record<string, string>> = { CREATE: 'added', UPD
 const MAX_FIELD_WORDS = 5
 
 /** "AD_GROUP_ASSET" → "Ad group asset". */
-const sentenceCase = (value: string) => {
+export const sentenceCase = (value: string) => {
   const words = value.toLowerCase().replace(/_/g, ' ').trim()
   return words ? words[0].toUpperCase() + words.slice(1) : 'Something'
 }
@@ -749,7 +758,7 @@ export function changeSummary(resourceType: string, operation: string, changedFi
  * went on from where the last stopped, so from here to `changesSyncedThrough` nothing is missing. Unknown zone: 29 days
  * back, which is never earlier than that instant in any zone.
  */
-function changesSpanStart(timeZone: string | null | undefined, now: Date): Date {
+export function changesSpanStart(timeZone: string | null | undefined, now: Date): Date {
   if (timeZone) {
     try { return changeHistoryWindow(timeZone, now).start } catch { /* below */ }
   }
@@ -807,3 +816,291 @@ export async function requestGoogleAdsRead(input: { connectionId?: string | null
   const answer = await enqueueGoogleAdsSync({ customerId, kind: 'MANUAL' })
   return { queued: answer.queued === true, reason: answer.reason ?? null }
 }
+
+// ── Step 1b — what the detail reads share (read-detail, read-search-terms, read-acts, alerts) ──────────────────────
+
+const READ_STATUSES = new Set(['SUCCESS', 'FAILED', 'SKIPPED_BUDGET'])
+
+interface ReadStateRow {
+  resource: string
+  readFrom: Date | null
+  readThrough: Date | null
+  readAt: Date | null
+  lastAttemptAt: Date | null
+  lastStatus: string | null
+  lastError: string | null
+}
+
+/** One part of the account as Nexus last read it. No row = never read (readAt null → "Not read yet"). */
+export function readOf(resource: GoogleReadResource, row: ReadStateRow | null | undefined): GoogleRead {
+  return {
+    resource,
+    readAt: iso(row?.readAt),
+    lastAttemptAt: iso(row?.lastAttemptAt),
+    lastStatus: row?.lastStatus && READ_STATUSES.has(row.lastStatus) ? row.lastStatus as GoogleRead['lastStatus'] : null,
+    lastError: row?.lastError ?? null,
+  }
+}
+
+export interface GoogleReadStates {
+  read(resource: GoogleReadResource): GoogleRead
+  /** A *_DAYS part: the contiguous days read, or null when none was. */
+  range(resource: GoogleReadResource): DayWindow | null
+  /** When the part was last read with success, or null. */
+  readAt(resource: GoogleReadResource): Date | null
+}
+
+/** The read state of every part of one account (none at all when no account is chosen). */
+export async function googleReadStates(customerId: string | null): Promise<GoogleReadStates> {
+  const rows: ReadStateRow[] = customerId
+    ? await prisma.googleAdsReadState.findMany({
+        where: { customerId },
+        select: { resource: true, readFrom: true, readThrough: true, readAt: true, lastAttemptAt: true, lastStatus: true, lastError: true },
+      })
+    : []
+  const by = new Map(rows.map((row) => [row.resource, row]))
+  return {
+    read: (resource) => readOf(resource, by.get(resource)),
+    range: (resource) => {
+      const row = by.get(resource)
+      if (!row?.readFrom || !row.readThrough) return null
+      const from = dateToDay(row.readFrom)
+      const to = dateToDay(row.readThrough)
+      return from <= to ? { from, to } : null
+    },
+    readAt: (resource) => by.get(resource)?.readAt ?? null,
+  }
+}
+
+const ENTITY_STATUSES = new Set(['ENABLED', 'PAUSED', 'REMOVED'])
+
+/** A stored status → the contract's: REMOVED when a full read no longer returns it; anything unknown → null. */
+export function entityStatus(status: string | null | undefined, removedAt: Date | null | undefined): EntityStatus {
+  if (removedAt) return 'REMOVED'
+  return status && ENTITY_STATUSES.has(status) ? status as EntityStatus : null
+}
+
+/** One campaign as a detail row names it, with its status (null = settings not read). */
+export interface GoogleCampaignEntry extends CampaignRef {
+  status: EntityStatus
+  row: CampaignRow | null
+}
+
+export const campaignRefOf = (entry: GoogleCampaignEntry): CampaignRef => ({
+  campaignId: entry.campaignId,
+  externalCampaignId: entry.externalCampaignId,
+  campaignName: entry.campaignName,
+  campaignType: entry.campaignType,
+})
+
+/** Every campaign of the account by its Google id; also those seen only in the numbers (the step-1a `~` id). */
+export type GoogleCampaignDirectory = (googleCampaignId: string) => GoogleCampaignEntry
+
+export async function googleCampaignDirectory(customer: { customerId: string; structureSyncedAt: Date | null; timeZone: string | null } , googleCampaignIds: Iterable<string> = []): Promise<GoogleCampaignDirectory> {
+  const rows = (await prisma.googleAdsCampaign.findMany({ where: { customerId: customer.customerId }, select: CAMPAIGN_SELECT })) as CampaignRow[]
+  const byId = new Map(rows.map((row) => [row.campaignId, row]))
+  const missing = [...new Set(googleCampaignIds)].filter((id) => id && !byId.has(id))
+  const seen = await namesInNumbers(customer.customerId, missing)
+  const entries = new Map<string, GoogleCampaignEntry>()
+  for (const row of rows) {
+    entries.set(row.campaignId, {
+      campaignId: row.id, externalCampaignId: row.campaignId, campaignName: row.name, campaignType: row.channelType,
+      status: entityStatus(row.status, row.removedAt), row,
+    })
+  }
+  for (const [id, numbers] of seen) {
+    entries.set(id, {
+      campaignId: unseenId(customer.customerId, id), externalCampaignId: id, campaignName: numbers.label?.trim() || `Campaign ${id}`,
+      campaignType: 'UNKNOWN', status: removedSinceItsNumbers(customer.structureSyncedAt, numbers.lastDay, customer.timeZone) ? 'REMOVED' : null, row: null,
+    })
+  }
+  // A campaign Nexus knows nothing of (no settings row, no campaign numbers): named by Google's id only.
+  return (id) => entries.get(id) ?? { campaignId: null, externalCampaignId: id, campaignName: null, campaignType: 'UNKNOWN', status: null, row: null }
+}
+
+/** The account a detail read is about, and the campaign it is narrowed to (`campaignId`), when one is. */
+export interface GoogleAdsScope {
+  context: GoogleAdsAccountContext
+  customerId: string | null
+  campaign: { googleCampaignId: string } | null
+}
+
+/**
+ * The account and campaign of a detail read. A campaign outside the business is "not found" (404). A campaign of
+ * another of the business's Google Ads accounts is read in that account when no `account` was asked for; with an
+ * `account` that does not hold it, it is not found.
+ */
+export async function googleAdsScope(input: { connectionId?: string | null; campaignId?: string | null }): Promise<GoogleAdsScope> {
+  const asked = typeof input.campaignId === 'string' && input.campaignId.trim() ? input.campaignId.trim() : null
+  let context = await googleAdsAccount(input.connectionId)
+  if (!asked) return { context, customerId: context.customerId, campaign: null }
+  const ref = await campaignRef(asked)
+  if (!ref) throw new GoogleAdsReadError(404, 'Campaign not found')
+  if (ref.customerId !== context.customerId) {
+    const wanted = typeof input.connectionId === 'string' && input.connectionId.trim()
+    const other = wanted ? undefined : context.accounts.find((a) => a.ads && customerIdDigits(a.ads.customerId) === ref.customerId)
+    if (!other) throw new GoogleAdsReadError(404, 'Campaign not found')
+    context = await googleAdsAccount(other.connectionId)
+  }
+  return { context, customerId: ref.customerId, campaign: { googleCampaignId: ref.googleCampaignId } }
+}
+
+/** The window of a grain read and the days of it Nexus read AT THAT GRAIN. */
+export interface GrainFrame {
+  window: GoogleAdsWindow
+  /** The days of the window the grain was read, or null when none. */
+  inWindow: DayWindow | null
+  coverage: GoogleAdsCoverage
+  exponent: number
+}
+
+export function grainFrame(input: WindowInput, context: GoogleAdsAccountContext, range: DayWindow | null, now: Date): GrainFrame {
+  const window = resolveWindow(input, context.timeZone, !!context.customerId, now)
+  return { window, inWindow: overlap(window, range), coverage: coverageOf(window, range), exponent: currencyExponent(context.currency) }
+}
+
+/** Numbers when Nexus read at least one day of the window (a read day with no row is a zero day), else null. */
+export const metricsOrNull = (frame: GrainFrame, sums: Sums | undefined): GoogleAdsMetrics | null =>
+  frame.coverage.daysRead > 0 ? metricsOf(sums ?? ZERO, frame.exponent) : null
+
+export type GoogleAdsGrain = 'AD_GROUP' | 'KEYWORD' | 'ASSET_GROUP' | 'PRODUCT' | 'SEARCH_TERM' | 'CAMPAIGN'
+
+export interface EntitySums {
+  campaignId: string
+  adGroupId: string | null
+  sums: Sums
+}
+
+/** One grain's numbers over days that were read, summed per entity (rows of the same entity and day add up). */
+export async function sumsByEntity(
+  customerId: string,
+  entityType: GoogleAdsGrain,
+  range: DayWindow | null,
+  filter: { campaignId?: string | null; adGroupId?: string | null } = {},
+): Promise<Map<string, EntitySums>> {
+  if (!range) return new Map()
+  const rows = await prisma.googleAdsDailyMetric.groupBy({
+    by: ['entityId', 'campaignId', 'adGroupId'],
+    where: {
+      customerId, entityType, date: { gte: dayToDate(range.from), lte: dayToDate(range.to) },
+      ...(filter.campaignId ? { campaignId: filter.campaignId } : {}),
+      ...(filter.adGroupId ? { adGroupId: filter.adGroupId } : {}),
+    },
+    _sum: SUM_FIELDS,
+  })
+  const out = new Map<string, EntitySums>()
+  for (const row of rows) {
+    const had = out.get(row.entityId)
+    const sums = toSums(row._sum)
+    if (had) out.set(row.entityId, { campaignId: had.campaignId, adGroupId: had.adGroupId ?? row.adGroupId, sums: addSums(had.sums, sums) })
+    else out.set(row.entityId, { campaignId: row.campaignId, adGroupId: row.adGroupId, sums })
+  }
+  return out
+}
+
+/** The newest label (name, term, title) each entity carried in its numbers. */
+export async function labelsByEntity(customerId: string, entityType: GoogleAdsGrain, entityIds: string[]): Promise<Map<string, string | null>> {
+  const out = new Map<string, string | null>()
+  // In pieces: one `IN (…)` list stays far below PostgreSQL's limit on query parameters on a big account.
+  for (let i = 0; i < entityIds.length; i += LABEL_CHUNK) {
+    for (const [id, label] of await newestLabels({ customerId, entityType, entityId: { in: entityIds.slice(i, i + LABEL_CHUNK) } })) out.set(id, label)
+  }
+  return out
+}
+
+const LABEL_CHUNK = 5_000
+
+/**
+ * The newest label of each entity matching `where`, grouped in the database: one row per (entity, label), never one per
+ * day (Prisma's `distinct` would fetch every day row and drop the repeats in memory).
+ */
+export async function newestLabels(where: Prisma.GoogleAdsDailyMetricWhereInput): Promise<Map<string, string | null>> {
+  const groups = await prisma.googleAdsDailyMetric.groupBy({ by: ['entityId', 'label'], where, _max: { date: true } })
+  const newest = new Map<string, { label: string | null; at: number }>()
+  for (const g of groups) {
+    const at = g._max.date?.getTime() ?? 0
+    const had = newest.get(g.entityId)
+    if (!had || at > had.at) newest.set(g.entityId, { label: g.label, at })
+  }
+  return new Map([...newest].map(([id, v]) => [id, v.label]))
+}
+
+// ── Paging a list held in memory (by a key that ends with the row's id) ────────────────────────────────────────────
+
+export const DEFAULT_DETAIL_PAGE = 100
+export const MAX_DETAIL_PAGE = 500
+const MAX_KEY_TEXT = 200
+
+/** A text sort value: lower-cased, cut to a length every cursor carries. */
+export const textKey = (value: string | null | undefined): string => (value ?? '').toLowerCase().slice(0, MAX_KEY_TEXT)
+
+function compareValue(a: SortValue, b: SortValue): number {
+  if (a === b) return 0
+  if (a === null) return -1
+  if (b === null) return 1
+  if (typeof a === 'number' && typeof b === 'number') return a - b
+  const x = String(a)
+  const y = String(b)
+  return x < y ? -1 : x > y ? 1 : 0
+}
+
+export function compareKeys(a: CursorPosition, b: CursorPosition): number {
+  const length = Math.max(a.values.length, b.values.length)
+  for (let i = 0; i < length; i++) {
+    const order = compareValue(a.values[i] ?? null, b.values[i] ?? null)
+    if (order !== 0) return order
+  }
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+}
+
+export interface DetailPage<T> {
+  items: T[]
+  nextCursor: string | null
+  total: number
+}
+
+/**
+ * One page of `all`, in the order of `keyOf` (ascending; negate a number to sort it high first), `limit` 1…500
+ * (default 100), starting right after the row the cursor names. The sort happens here, on the server: a cursor carries
+ * only a place — the last row's id and how many rows came before it — never a sort value, so a spend sort never puts an
+ * amount in a cursor a person without the ad-spend permission receives. The id wins; when that row is gone (a read in
+ * between), the count does (a row may then be skipped once). A cursor of another list, business or filter set is
+ * refused (InvalidCursorError).
+ */
+export function keysetPage<T>(all: T[], keyOf: (item: T) => CursorPosition, scope: string, cursor: string | null | undefined, limit: unknown): DetailPage<T> {
+  const asked = Math.trunc(Number(limit))
+  const size = Number.isFinite(asked) && asked > 0 ? Math.min(MAX_DETAIL_PAGE, asked) : DEFAULT_DETAIL_PAGE
+  const keyed = all.map((item) => ({ item, key: keyOf(item) })).sort((a, b) => compareKeys(a.key, b.key))
+  const at = decodeCursor(scope, cursor)
+  let start = 0
+  if (at) {
+    const index = keyed.findIndex((row) => row.key.id === at.id)
+    const count = Number(at.values[0])
+    start = index >= 0 ? index + 1 : Number.isInteger(count) && count >= 0 ? Math.min(count, keyed.length) : 0
+  }
+  const page = keyed.slice(start, start + size)
+  const last = page.at(-1)
+  const end = start + page.length
+  return {
+    items: page.map((row) => row.item),
+    nextCursor: end < keyed.length && last ? encodeCursor(scope, { values: [end], id: last.key.id }) : null,
+    total: all.length,
+  }
+}
+
+/** What a detail list's cursor is bound to: the list, the business, the account and the filters. */
+export const detailScope = (list: string, account: string | null, parts: Record<string, unknown>): string =>
+  cursorScope(`google-ads-${list}`, { business: workspaceIdForQuery(), account, ...parts })
+
+/** An optional filter from a fixed set (upper- or lower-case as the set is written); anything else is a 400. */
+export function oneOf<T extends string>(value: unknown, allowed: readonly T[], name: string): T | null {
+  if (value == null || value === '') return null
+  const raw = String(value).trim()
+  const hit = allowed.find((a) => a.toLowerCase() === raw.toLowerCase())
+  if (!hit) throw new GoogleAdsReadError(400, `${name} must be ${allowed.slice(0, -1).join(', ')} or ${allowed.at(-1)}.`)
+  return hit
+}
+
+/** An optional search text, lower-cased; null when empty. */
+export const needleOf = (value: unknown): string | null =>
+  typeof value === 'string' && value.trim() ? value.trim().toLowerCase().slice(0, MAX_KEY_TEXT) : null

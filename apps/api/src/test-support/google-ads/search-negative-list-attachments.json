@@ -1,0 +1,53 @@
+{
+  "results": [
+    {
+      "campaignSharedSet": {
+        "resourceName": "customers/1234567890/campaignSharedSets/11111111111~66666666666",
+        "campaign": "customers/1234567890/campaigns/11111111111",
+        "sharedSet": "customers/1234567890/sharedSets/66666666666",
+        "status": "ENABLED"
+      },
+      "sharedSet": {
+        "resourceName": "customers/1234567890/sharedSets/66666666666",
+        "id": "66666666666",
+        "name": "Test negative list",
+        "type": "NEGATIVE_KEYWORDS",
+        "status": "ENABLED",
+        "memberCount": "2"
+      }
+    },
+    {
+      "campaignSharedSet": {
+        "resourceName": "customers/1234567890/campaignSharedSets/33333333333~66666666666",
+        "campaign": "customers/1234567890/campaigns/33333333333",
+        "sharedSet": "customers/1234567890/sharedSets/66666666666",
+        "status": "ENABLED"
+      },
+      "sharedSet": {
+        "resourceName": "customers/1234567890/sharedSets/66666666666",
+        "id": "66666666666",
+        "name": "Test negative list",
+        "type": "NEGATIVE_KEYWORDS",
+        "status": "ENABLED",
+        "memberCount": "2"
+      }
+    },
+    {
+      "campaignSharedSet": {
+        "resourceName": "customers/1234567890/campaignSharedSets/11111111111~68888888888",
+        "campaign": "customers/1234567890/campaigns/11111111111",
+        "sharedSet": "customers/1234567890/sharedSets/68888888888",
+        "status": "ENABLED"
+      },
+      "sharedSet": {
+        "resourceName": "customers/1234567890/sharedSets/68888888888",
+        "id": "68888888888",
+        "name": "Test placements",
+        "type": "NEGATIVE_PLACEMENTS",
+        "status": "ENABLED",
+        "memberCount": "4"
+      }
+    }
+  ],
+  "fieldMask": "campaignSharedSet.campaign,campaignSharedSet.sharedSet,campaignSharedSet.status,sharedSet.id,sharedSet.name,sharedSet.type,sharedSet.status,sharedSet.memberCount"
+}

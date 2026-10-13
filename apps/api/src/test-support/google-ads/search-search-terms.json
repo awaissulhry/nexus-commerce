@@ -1,0 +1,78 @@
+{
+  "results": [
+    {
+      "campaign": {
+        "resourceName": "customers/1234567890/campaigns/11111111111",
+        "id": "11111111111"
+      },
+      "campaignSearchTermView": {
+        "resourceName": "customers/1234567890/campaignSearchTermViews/11111111111~dGVzdA",
+        "searchTerm": "Test Helmet"
+      },
+      "segments": {
+        "date": "2026-10-12"
+      },
+      "metrics": {
+        "impressions": "50",
+        "clicks": "6",
+        "costMicros": "4200000",
+        "conversions": 1,
+        "conversionsValue": 99.5
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/1234567890/campaigns/11111111111",
+        "id": "11111111111"
+      },
+      "campaignSearchTermView": {
+        "resourceName": "customers/1234567890/campaignSearchTermViews/11111111111~dGVzdDI",
+        "searchTerm": "test  helmet "
+      },
+      "segments": {
+        "date": "2026-10-12"
+      },
+      "metrics": {
+        "impressions": "10",
+        "clicks": "2",
+        "costMicros": "1400000",
+        "conversions": 0.5
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/1234567890/campaigns/22222222222",
+        "id": "22222222222"
+      },
+      "campaignSearchTermView": {
+        "resourceName": "customers/1234567890/campaignSearchTermViews/22222222222~dGVzdDM",
+        "searchTerm": "test gloves winter"
+      },
+      "segments": {
+        "date": "2026-10-11"
+      },
+      "metrics": {
+        "impressions": "30",
+        "clicks": "1",
+        "costMicros": "600000"
+      }
+    },
+    {
+      "campaign": {
+        "resourceName": "customers/1234567890/campaigns/22222222222",
+        "id": "22222222222"
+      },
+      "campaignSearchTermView": {
+        "resourceName": "customers/1234567890/campaignSearchTermViews/22222222222~dGVzdDQ",
+        "searchTerm": "test jacket"
+      },
+      "segments": {
+        "date": "2026-10-11"
+      },
+      "metrics": {
+        "impressions": "15"
+      }
+    }
+  ],
+  "fieldMask": "campaign.id,campaignSearchTermView.searchTerm,segments.date,metrics.impressions,metrics.clicks,metrics.costMicros,metrics.conversions,metrics.conversionsValue,metrics.allConversions,metrics.allConversionsValue"
+}

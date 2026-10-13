@@ -11,7 +11,7 @@ import type {
   GoogleAdsCustomerChoice,
   GoogleChoiceError,
   GoogleChoices,
-  GoogleProduct,
+  GoogleSignInProduct,
   GoogleSelectionBody,
   GoogleSelectionConflict,
 } from '@/lib/google-ads/contract'
@@ -203,14 +203,14 @@ export function sectionError(product: SectionProduct, error: GoogleChoiceError |
   }
 }
 
-const TAKEN_TITLE: Record<GoogleProduct, string> = {
+const TAKEN_TITLE: Record<GoogleSignInProduct, string> = {
   ads: 'This Google Ads account belongs to another business',
   merchant_center: 'This Merchant Center account belongs to another business',
   analytics: 'This Google Analytics property belongs to another business',
 }
 
 /** A refused save (409), in words. Never names the other business. */
-export function conflictText(code: GoogleSelectionConflict | null, fallback: string, product?: GoogleProduct): { title: string; text: string } {
+export function conflictText(code: GoogleSelectionConflict | null, fallback: string, product?: GoogleSignInProduct): { title: string; text: string } {
   if (code === 'taken_by_other_business') {
     // One Google login may be connected in many businesses, but each Google account is picked by one business only.
     return {

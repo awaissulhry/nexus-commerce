@@ -1,0 +1,66 @@
+/* Google Ads step 1b — the campaign window's tabs and the grain grids (ad groups, keywords, negatives, asset groups,
+   search terms, products, Google acts on its own). Layout and domain content only: every colour, size and space is a
+   semantic --nds-* token, and every control is a design-system component (nothing here restyles one). */
+
+/* One grain: the read line, its notes, then the grid. */
+.gads-grain {
+  display: grid;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+/* The pills under the campaign's name: status, type, bidding, daily budget. */
+.gads-pills {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+/* A cell of two lines: a name, and a muted line under it (a product's item id). */
+.gads-two {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.gads-two > span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gads-sub {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-muted);
+}
+
+/* "A search counts as brand when …" and its link: one wrapping line of muted words. */
+.gads-brand {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+  color: var(--nds-text-2);
+}
+
+/* The flags of one campaign ("Google acts on its own"), and its changes made outside Nexus. */
+.gads-acts {
+  display: grid;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.gads-acts h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+}
