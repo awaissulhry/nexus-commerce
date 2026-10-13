@@ -1784,14 +1784,15 @@ export function ActivityClient() {
 
   /* ── the runs grid ───────────────────────────────────────────────────── */
 
-  // Every column has a width — the 8 / 18 / 34 / 16 / 9 / 7 / 8 split of a 1200px card — so the grid scales them all
-  // to the card, and "What happened" (a whole failure sentence) wraps in its share instead of pushing Cost off it.
+  // Every column has a width — a 10 / 18 / 32 / 16 / 9 / 7 / 8 split of a 1200px card — so the grid scales them all
+  // to the card: When holds its header with the sort arrow and menu, and "What happened" (a whole failure sentence)
+  // wraps in its share instead of pushing Cost off it.
   const runColumns: Array<Column<FleetEvent>> = useMemo(
     () => [
       {
         key: 'when',
         label: 'When',
-        width: 96,
+        width: 120,
         sortable: true,
         sortValue: (e) => new Date(e.at).getTime(),
         render: (e) => (
@@ -1822,7 +1823,7 @@ export function ActivityClient() {
       {
         key: 'what',
         label: 'What happened',
-        width: 408,
+        width: 384,
         render: (e) => (
           <span className="sba-cellprose">
             {whatHappened(e)}
