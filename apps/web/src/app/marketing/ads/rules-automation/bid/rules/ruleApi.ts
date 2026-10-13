@@ -213,8 +213,9 @@ export async function undoChange(changeId: string): Promise<Outcome> {
 export async function rollbackRun(execId: string): Promise<Outcome> {
   const out = await send(`/actions/${encodeURIComponent(execId)}/rollback`, 'POST', { reason: 'operator rollback from the Bid page' })
   if (!out.ok) return out.words.includes('rollback_window_expired') ? { ok: false, words: 'Older than 24 h: undo its changes one by one.' } : out
-  const b = (out.body ?? {}) as { reversed?: number; skipped?: number; failed?: number }
-  return { ok: true, body: `${b.reversed ?? 0} reversed${b.skipped ? ` · ${b.skipped} skipped` : ''}${b.failed ? ` · ${b.failed} failed` : ''}` }
+  const b = (out.body ?? {}) as { reversed?: number; skipped?: number; failed?: number; changedSince?: number; reason?: string }
+  // Group 3 — rows that changed since the run are not put back: the answer's reason says which.
+  return { ok: true, body: `${b.reversed ?? 0} reversed${b.skipped ? ` · ${b.skipped} skipped` : ''}${b.failed ? ` · ${b.failed} failed` : ''}${b.changedSince && b.reason ? ` · ${b.reason}` : ''}` }
 }
 
 // ── undo of approved asks (audit R4) ────────────────────────────────────────────────────────────────────────────────

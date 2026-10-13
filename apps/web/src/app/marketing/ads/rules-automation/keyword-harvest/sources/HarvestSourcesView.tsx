@@ -40,7 +40,7 @@ import {
   type HarvestSourcesShow, type HarvestSourcesViewTotals, type PickRule, type RuleReach,
 } from './sourcesModel'
 import { readPickRules } from './sourcesApi'
-import { latestRead } from '../rules/latestRead'
+import { latestRead } from '../../../_shared/latestRead'
 import { SOURCE_PREFERENCE_COLUMNS, SourcesTable, type SourceGridRow, type SourcesHandlers, type SourcesHandlersRef } from './SourcesTable'
 import styles from '../../bid/bid.module.css'
 

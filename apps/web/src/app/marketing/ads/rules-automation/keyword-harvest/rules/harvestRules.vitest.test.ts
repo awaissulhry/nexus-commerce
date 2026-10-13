@@ -8,7 +8,7 @@ import {
   visibleHarvestRows, RULES_SHOWS,
 } from './harvestRulesModel'
 import { UNARCHIVED_AT_OFF, archiveUndoResult, harvestModeReviewChanges, isHarvestBuilderRule, levelBefore, modeable, undoModeBody, modeBase, needsAutoAgain, pickHarvestMode, retidyHarvestModes, shownHarvestMode } from './harvestRuleChanges'
-import { latestRead } from './latestRead'
+import { latestRead } from '../../../_shared/latestRead'
 
 const ref = (id: string, name = id) => ({ id, name, href: `/marketing/ads/campaigns/${id}` })
 

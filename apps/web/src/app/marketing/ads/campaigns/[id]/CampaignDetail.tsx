@@ -27,6 +27,7 @@ import { AdsTab } from './tabs/AdsTab'
 // HX.6b — the same change list the schedule drawer and builder render, scoped to this campaign.
 import { ChangeList } from '../../rules-automation/dayparting/ScheduleActivity'
 import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
+import { latestRead } from '../../_shared/latestRead'
 
 export interface CampaignDetailData {
   id: string
@@ -125,22 +126,27 @@ function CampaignDetailView({ id }: { id: string }) {
    * CM-34 — `fresh` after this page's own write (and on "Refresh data"): the server skips its cached copy, which can
    * still be the one from before the save, so the form shows what was saved instead of snapping back.
    */
+  // Editing correctness (group 3) — the read ticket: only the newest read shows (a read that started before a save, or
+  // before a date change, and answers after it is dropped).
+  const [beginRead] = useState(latestRead)
   const load = useCallback(async (fresh = false) => {
+    const current = beginRead()
     setLoading(true); setError(null)
     try {
       const qs = `?startDate=${fmtISO(dateRange.start)}&endDate=${fmtISO(dateRange.end)}${fresh ? '&fresh=1' : ''}`
       const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns/${id}${qs}`, { cache: 'no-store' })
       if (!r.ok) throw new Error(`HTTP ${r.status}`)
       const d = await r.json()
+      if (!current()) return
       const c = (d.campaign ?? d) as CampaignDetailData
       setCamp(c)
       if (c?.marketplace) setMarket(c.marketplace)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load campaign')
+      if (current()) setError(e instanceof Error ? e.message : 'Failed to load campaign')
     } finally {
-      setLoading(false)
+      if (current()) setLoading(false)
     }
-  }, [id, dateRange])
+  }, [id, dateRange, beginRead])
 
   useEffect(() => { void load() }, [load])
 

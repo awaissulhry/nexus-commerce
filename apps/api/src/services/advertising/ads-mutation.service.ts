@@ -33,6 +33,7 @@ import {
   IN_FLIGHT_STATES, isBelievablyPending, isBlockingWrite, isTerminal, stateForQueueStatus, type AdSyncType,
 } from '../ads-core/ad-mutation-state.js'
 import { packEvidence, type AdWriteEvidence } from './ads-evidence.js'
+import { budgetToTheCent, comparable, sameToTheCent } from './same-value.js'
 import { SPONSORED_BRANDS, SPONSORED_DISPLAY, SPONSORED_PRODUCTS, adProductOf, adWriteRefusal, type AdProductSource, type AdWrite } from '@nexus/shared/ads-ad-product'
 import { bidCostType, marketLimitsOf, marketLimitsRefusal } from '@nexus/shared/ads-market-limits'
 import { normalizeMarketplaceCode } from '../../utils/marketplace-code.js'
@@ -268,7 +269,41 @@ export interface MutationOutcome {
    * Targeting's Turn on.
    */
   keptPaused?: { by: string; byName: string; at: string; until: string | null; reason: string | null; needsRelease: true }
+  /**
+   * Editing correctness (group 3) — refused, nothing written and nothing queued: a value the caller judged its write
+   * against (`expected`) is no longer the entity's. `field` is the first that moved, `now` the value it holds; `error`
+   * says it in words.
+   */
+  changedSince?: { field: string; now: number | string | null }
 }
+
+/** Editing correctness (group 3) — a caller's `expected` values: the entity's columns as the caller last saw them. */
+export type ExpectedValues = Record<string, number | string | null>
+
+/** The first expected field the row no longer holds, or null. */
+function movedField(expected: ExpectedValues | null | undefined, row: Record<string, unknown>): string | null {
+  if (!expected) return null
+  return Object.keys(expected).find((f) => !sameToTheCent(row[f], expected[f])) ?? null
+}
+/** The compare-and-set filter of a local write: each expected column as the row read before the write held it. */
+function casWhere(expected: ExpectedValues, row: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.keys(expected).map((f) => [f, row[f] ?? null]))
+}
+const moneyWords = (n: number, currency: string | null | undefined) => {
+  try { return new Intl.NumberFormat('en-GB', { style: 'currency', currency: currency || 'EUR' }).format(n) } catch { return n.toFixed(2) }
+}
+/** The refusal when an expected value moved: nothing written, nothing queued, and what it is now. */
+function changedSinceOutcome(field: string, nowRaw: unknown, saw: unknown, currency?: string | null): MutationOutcome {
+  const now = comparable(nowRaw)
+  const words = (v: number | string | null) => (v == null ? 'none' : field === 'dailyBudget' ? moneyWords(Number(v), currency) : String(v))
+  const what = field === 'dailyBudget' ? '' : `${field} `
+  return {
+    ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null,
+    error: `Changed since: now ${what}${words(now)} (the screen showed ${what}${words(comparable(saw))}). Nothing was written, so the newer value stands.`,
+    changedSince: { field, now },
+  }
+}
+
 
 /** 3A — the answer to a person's write past his own limits: nothing written, his "Send anyway" decides. */
 export function needsConfirmationOutcome(limits: OwnLimit[]): MutationOutcome {
@@ -1326,7 +1361,17 @@ export async function updateCampaignWithSync(args: {
    * own endpoints (see adProductRefused). Absent: Sponsored Products only, as before.
    */
   allowSbSd?: boolean
+  /**
+   * Editing correctness (group 3) — the values the caller judged this write against: the Ad Manager's bulk budget sends
+   * the daily budget it showed (read through a cache up to 5 minutes old); a person's Undo the values the change it puts
+   * back had set. When the campaign no longer holds them (a budget schedule, an engine, another person changed it), the
+   * write is refused, nothing written or queued, and says what it is now. The local write is compare-and-set on the row
+   * read here, so a write that lands in between is never overwritten either. Absent: as before.
+   */
+  expected?: ExpectedValues | null
 }): Promise<MutationOutcome> {
+  // Item 6 (group 3 review) — a budget to the cent before anything else reads it: written, logged and compared as one value.
+  if (args.patch.dailyBudget != null) args.patch = { ...args.patch, dailyBudget: budgetToTheCent(args.patch.dailyBudget) }
   const existing = await prisma.campaign.findUnique({
     where: { id: args.campaignId },
     select: {
@@ -1349,6 +1394,9 @@ export async function updateCampaignWithSync(args: {
   if (!existing) {
     return { ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'not_found' }
   }
+  // Editing correctness (group 3) — see `expected`: judged on the row just read, before anything is asked or written.
+  const movedNow = movedField(args.expected, existing)
+  if (movedNow) return changedSinceOutcome(movedNow, (existing as Record<string, unknown>)[movedNow], args.expected![movedNow], existing.dailyBudgetCurrency)
   // 6a — see adProductRefused. W4-11 — the write, described from the patch, for a caller that may change SB/SD.
   const sbSdWrite: AdWrite | null = args.allowSbSd === true
     ? { entity: 'CAMPAIGN', fields: Object.entries(args.patch).filter(([, v]) => v !== undefined).map(([k]) => k), toStatus: args.patch.status ?? null }
@@ -1488,7 +1536,18 @@ export async function updateCampaignWithSync(args: {
   if (args.patch.status) data.status = args.patch.status
   if (args.patch.biddingStrategy) data.biddingStrategy = args.patch.biddingStrategy
   if (args.patch.endDate !== undefined) data.endDate = args.patch.endDate
-  await prisma.campaign.update({ where: { id: args.campaignId }, data })
+  // Editing correctness (group 3) — compare-and-set when the caller named what it expects: a write that landed since the
+  // read above leaves this one unwritten and unqueued.
+  if (args.expected) {
+    const n = await prisma.campaign.updateMany({ where: { id: args.campaignId, ...casWhere(args.expected, existing) }, data })
+    if (n.count === 0) {
+      const now = await prisma.campaign.findUnique({ where: { id: args.campaignId } })
+      const field = (now && movedField(args.expected, now)) ?? Object.keys(args.expected)[0]!
+      return changedSinceOutcome(field, (now as Record<string, unknown> | null)?.[field], args.expected[field], existing.dailyBudgetCurrency)
+    }
+  } else {
+    await prisma.campaign.update({ where: { id: args.campaignId }, data })
+  }
 
   const outboundQueueId = await enqueueOutbound({
     entityType: 'CAMPAIGN',
@@ -1582,6 +1641,8 @@ export async function updateAdGroupWithSync(args: {
   confirmOwnLimits?: boolean
   /** AA-W2-12 — a deliberate pause or archive (pause-ads, archive-ads): the halt does not hold it (isLetGoWrite). Unlike `force`, nothing else is skipped. */
   letsGo?: boolean
+  /** Editing correctness (group 3) — the values this write is judged against (see updateCampaignWithSync `expected`). */
+  expected?: ExpectedValues | null
 }): Promise<MutationOutcome> {
   const person = isPersonEdit(args.manual, args.actor)
   const existing = await prisma.adGroup.findUnique({
@@ -1600,6 +1661,9 @@ export async function updateAdGroupWithSync(args: {
   if (!existing) {
     return { ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'not_found' }
   }
+  // Editing correctness (group 3) — see `expected`.
+  const movedNow = movedField(args.expected, existing)
+  if (movedNow) return changedSinceOutcome(movedNow, (existing as Record<string, unknown>)[movedNow], args.expected![movedNow])
   // 6a — see adProductRefused.
   const notSp = adProductRefused('AD_GROUP', args.adGroupId, args.actor, existing.campaign)
   if (notSp) return notSp
@@ -1698,7 +1762,17 @@ export async function updateAdGroupWithSync(args: {
   if (args.patch.status) data.status = args.patch.status
   if (replacesMemory) data.suppressedFromBidCents = args.patch.defaultBidCents
   if (newName) data.name = newName
-  await prisma.adGroup.update({ where: { id: args.adGroupId }, data })
+  // Editing correctness (group 3) — compare-and-set when the caller named what it expects (see updateCampaignWithSync).
+  if (args.expected) {
+    const n = await prisma.adGroup.updateMany({ where: { id: args.adGroupId, ...casWhere(args.expected, existing) }, data })
+    if (n.count === 0) {
+      const now = await prisma.adGroup.findUnique({ where: { id: args.adGroupId } })
+      const field = (now && movedField(args.expected, now)) ?? Object.keys(args.expected)[0]!
+      return changedSinceOutcome(field, (now as Record<string, unknown> | null)?.[field], args.expected[field])
+    }
+  } else {
+    await prisma.adGroup.update({ where: { id: args.adGroupId }, data })
+  }
 
   const outboundQueueId = await enqueueOutbound({
     entityType: 'AD_GROUP',
@@ -1905,6 +1979,8 @@ export async function updateAdTargetWithSync(args: {
    * person (isPersonEdit); anyone else's is refused by the lock as any turn-on.
    */
   releaseKeptPaused?: boolean
+  /** Editing correctness (group 3) — the values this write is judged against (see updateCampaignWithSync `expected`). */
+  expected?: ExpectedValues | null
 }): Promise<MutationOutcome> {
   const person = isPersonEdit(args.manual, args.actor)
   const existing = await prisma.adTarget.findUnique({
@@ -1930,6 +2006,9 @@ export async function updateAdTargetWithSync(args: {
   if (!existing) {
     return { ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'not_found' }
   }
+  // Editing correctness (group 3) — see `expected` (updateCampaignWithSync): before anything is judged, asked or written.
+  const movedNow = movedField(args.expected, existing)
+  if (movedNow) return changedSinceOutcome(movedNow, (existing as Record<string, unknown>)[movedNow], args.expected![movedNow])
   // 6a — see adProductRefused. Before the orphan check below, which may itself clear a mark (a local write), and
   // before anything is queued: an SB keyword sent to /sp/keywords comes back "not found" and would be marked orphaned.
   // W4-11 — the write, described from the patch, for a caller that may change SB/SD (the worker routes it to their endpoints).
@@ -2109,7 +2188,17 @@ export async function updateAdTargetWithSync(args: {
   const keeping = args.keepPaused && args.patch.status === 'PAUSED' ? holdData(args.actor, args.keepPaused) : null
   if (keeping) Object.assign(data, keeping)
   if (releasing) Object.assign(data, NO_HOLD)
-  await prisma.adTarget.update({ where: { id: args.adTargetId }, data })
+  // Editing correctness (group 3) — compare-and-set when the caller named what it expects (see updateCampaignWithSync).
+  if (args.expected) {
+    const n = await prisma.adTarget.updateMany({ where: { id: args.adTargetId, ...casWhere(args.expected, existing) }, data })
+    if (n.count === 0) {
+      const now = await prisma.adTarget.findUnique({ where: { id: args.adTargetId } })
+      const field = (now && movedField(args.expected, now)) ?? Object.keys(args.expected)[0]!
+      return changedSinceOutcome(field, (now as Record<string, unknown> | null)?.[field], args.expected[field])
+    }
+  } else {
+    await prisma.adTarget.update({ where: { id: args.adTargetId }, data })
+  }
 
   const outboundQueueId = await enqueueOutbound({
     entityType: 'AD_TARGET',
