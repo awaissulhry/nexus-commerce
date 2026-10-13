@@ -10,7 +10,8 @@
  *
  * Google (2026-10-13): Nexus signs in to Google with the Owner's own Google Cloud OAuth client. The card
  * shows the redirect URI to register there and takes the client ID + secret (`PUT /api/cx/apps/GOOGLE/
- * credentials`, Owner only). The secret is write-only: once saved it is never shown again.
+ * credentials`, only an Owner of every business profile with Google connected). The secret is write-only: once saved
+ * it is never shown again.
  */
 
 import { useCallback, useEffect, useState } from 'react'
@@ -225,7 +226,8 @@ function AppCredentialsItem({ row, onSaved }: { row: AppCredentialsRow; onSaved:
         <p className="nds-app-secret-detail">{status.detail}</p>
         <p className="nds-app-secret-detail">
           In Google Cloud, create an OAuth client of type “Web application”, add the redirect URI below to its authorised
-          redirect URIs, then paste its client ID and secret here. Only an Owner can save them.
+          redirect URIs, then paste its client ID and secret here. They serve every business profile, so only an Owner of
+          every business profile with Google connected can save them.
         </p>
         <div className="nds-app-secrets">
           {row.redirectUri && (

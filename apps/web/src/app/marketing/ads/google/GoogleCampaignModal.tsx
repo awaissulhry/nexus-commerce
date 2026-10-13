@@ -126,7 +126,7 @@ export function GoogleCampaignModal({ campaign, currency, range, onClose }: {
           {!changes && <Skeleton height={80} radius="var(--nds-radius-lg)" />}
           {changes?.error && <Banner tone="danger" title="The change history could not be loaded" action={<Button onClick={() => setAttempt((n) => n + 1)}>Try again</Button>}>{changes.error}</Banner>}
           {changes?.data && <>
-            <p className="gads-meta">{changesNote(changes.data.coveredFrom, changes.data.items.length)}</p>
+            <p className="gads-meta">{changesNote(changes.data, changes.data.items.length)}</p>
             {changeItems.length > 0 && (
               <div className="gads-table" tabIndex={0} role="region" aria-label="Changes table">
                 <SummaryTable label={`Changes to ${c.name}`} columns={CHANGE_COLUMNS} rows={changeItems} />

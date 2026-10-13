@@ -15,6 +15,7 @@
 import type {
   GoogleAccount,
   GoogleCampaign,
+  GoogleCampaignChanges,
   GoogleChange,
   GoogleDay,
   GoogleMetrics,
@@ -358,8 +359,17 @@ export interface Tile {
   label: string
   value: string
   hint?: string
-  /** Change against the previous window, only when Nexus read all of it. */
+  /** Change against the previous window, only when Nexus read all of it and all of this one (`comparedWindow`). */
   delta?: { text: string; good: boolean }
+}
+
+/**
+ * The window the tiles compare with, or null. Only when Nexus read every day of BOTH windows: totals that leave days
+ * out, set against full ones, would make up a change. The server sends `previous` only then; this holds the page to it.
+ */
+export function comparedWindow(o: Pick<GoogleOverview, 'previous' | 'coverage'>): GoogleOverview['previous'] {
+  if (!o.previous) return null
+  return o.coverage.daysInWindow > 0 && o.coverage.daysRead === o.coverage.daysInWindow && o.coverage.missingDays.length === 0 ? o.previous : null
 }
 
 function change(current: number | null, previous: number | null, goodUp: boolean): Tile['delta'] {
@@ -371,9 +381,9 @@ function change(current: number | null, previous: number | null, goodUp: boolean
 }
 
 /** The six tiles: cost, conversion value, return on ad spend, conversions, clicks, impressions. */
-export function metricTiles(o: Pick<GoogleOverview, 'totals' | 'previous' | 'currency'>): Tile[] {
+export function metricTiles(o: Pick<GoogleOverview, 'totals' | 'previous' | 'currency' | 'coverage'>): Tile[] {
   const now = metricsView(o.totals)
-  const before = metricsView(o.previous)
+  const before = metricsView(comparedWindow(o))
   const ccy = o.currency
   const hidden = now != null && now.spendCents == null ? 'Hidden for your role' : undefined
   return [
@@ -441,9 +451,12 @@ export function campaignStatusHint(status: string | null | undefined): string | 
   return status ? null : 'Nexus has this campaign\'s numbers but has not read its settings from Google yet. The next daily read reads them.'
 }
 
-/** When Nexus read this campaign's settings; "Not read yet" when it has not (never a time it did not read them). */
+/**
+ * When Nexus read this campaign's settings; "Not read yet" when it never did (never a time it did not read them) — a
+ * campaign seen only in the numbers, whether new (no status) or removed before Nexus first read the account.
+ */
 export function settingsReadText(c: Pick<GoogleCampaign, 'status' | 'settingsReadAt'>, timeZone?: string): string {
-  if (!c.status) return 'Not read yet'
+  if (!c.status || !c.settingsReadAt) return 'Not read yet'
   return formatMoment(c.settingsReadAt, timeZone) ?? DASH
 }
 
@@ -568,11 +581,17 @@ export function changeRows(items: GoogleChange[], timeZone?: string): ChangeRow[
     }))
 }
 
-/** The line under "Changes in the last 30 days". */
-export function changesNote(coveredFrom: string | null, count: number): string {
-  if (!coveredFrom) return 'Nexus has not read this campaign’s change history from Google yet.'
-  if (count === 0) return `No changes since ${formatDay(coveredFrom)}. Google keeps 30 days of change history; Nexus keeps what it has read.`
-  return `Changes since ${formatDay(coveredFrom)}, as Google records them. Google keeps 30 days; Nexus keeps what it has read.`
+/**
+ * The line under "Changes in the last 30 days": the span Nexus read, from where it starts to where reading stopped —
+ * never "since", which would claim every change up to now. `timeZone` is for tests.
+ */
+export function changesNote(span: Pick<GoogleCampaignChanges, 'coveredFrom' | 'coveredThrough'>, count: number, timeZone?: string): string {
+  const from = formatMoment(span.coveredFrom, timeZone)
+  const through = formatMoment(span.coveredThrough, timeZone)
+  if (!through) return 'Nexus has not read this campaign’s change history from Google yet.'
+  if (!from) return `Nexus last read this campaign’s change history up to ${through}: it has read none of the last 30 days.`
+  if (count === 0) return `No changes between ${from} and ${through}, the span Nexus has read. Google keeps 30 days; Nexus keeps what it has read.`
+  return `Changes read from ${from} to ${through}, as Google records them. Google keeps 30 days; Nexus keeps what it has read.`
 }
 
 // ─── Read now ──────────────────────────────────────────────────────────

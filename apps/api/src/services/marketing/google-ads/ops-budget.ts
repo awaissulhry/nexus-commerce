@@ -14,7 +14,8 @@
  * reservation for an hour. Redis down = refused: an allowance nobody can count is not spent.
  *
  * Race-safe without a script: a reservation adds to the current bucket FIRST, then sums; when the sum is over a cap it
- * takes its own share back and refuses. Two reservations racing can both refuse, never both overspend.
+ * takes its own share back and refuses. Two reservations racing can both refuse, never both overspend. What a run
+ * spent beyond its reservation (retries) is added with `addSpentOps`: spent is spent, so it is never refused.
  */
 
 export const DEFAULT_GLOBAL_DAILY_OPS = 2400
@@ -182,6 +183,27 @@ export async function releaseOps(account: string | null, ops: number, reservedAt
     await timed(redis.decrby(globalKey(hour), give))
     if (account) await timed(redis.decrby(accountKey(account, hour), give))
   } catch { /* an unreturned operation only makes the next reservation stricter */ }
+}
+
+/**
+ * Count operations a run spent beyond what it reserved (a retry that reached Google costs one more). They were spent:
+ * they are added to the hour's buckets as they are — never refused, never given back, even over a cap (the next
+ * reservation then waits longer). Counted in the reservation's hour, like `releaseOps`. Never throws.
+ */
+export async function addSpentOps(account: string | null, ops: number, reservedAt: Date): Promise<void> {
+  const spent = Math.max(0, Math.floor(ops))
+  if (spent === 0) return
+  try {
+    const redis = await client()
+    if (!redis) return
+    const hour = hourOf(reservedAt)
+    await timed(redis.incrby(globalKey(hour), spent))
+    await timed(redis.expire(globalKey(hour), BUCKET_TTL_SEC))
+    if (account) {
+      await timed(redis.incrby(accountKey(account, hour), spent))
+      await timed(redis.expire(accountKey(account, hour), BUCKET_TTL_SEC))
+    }
+  } catch { /* Redis is down: the next reservation is refused anyway */ }
 }
 
 /** Google said the day's allowance is used up: refuse every reservation for the next hour. Never throws. */

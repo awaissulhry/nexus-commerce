@@ -1,6 +1,7 @@
 /**
  * Google's app credentials (client id + secret), set by an Owner in Settings → Channels → Diagnostics:
- * Owner only, Google only, write-only (the secret is sealed and never echoed), and the redirect URI pinned
+ * Owner only — and, as the app serves every business, only an Owner of EVERY business profile with Google
+ * connected — Google only, write-only (the secret is sealed and never echoed), and the redirect URI pinned
  * to Nexus's own callback.
  */
 import { randomBytes } from 'node:crypto'
@@ -14,11 +15,26 @@ const h = vi.hoisted(() => {
   const apps: Array<Record<string, any>> = []
   const events: Array<Record<string, any>> = []
   const find = (where: any) => apps.find((a) => a.channelKey === where.channelKey_environment.channelKey && a.environment === where.channelKey_environment.environment) ?? null
+  /** Other businesses: which have a Google connection, and which the caller is an Owner of. */
+  const businesses = { ids: [] as string[], google: new Set<string>(), ownedBy: new Map<string, Set<string>>() }
   return {
     apps,
     events,
+    businesses,
     who: { authUser: { id: 'owner-1', roleKeys: ['OWNER'] } as Record<string, unknown> | null, isOwner: true },
     prisma: {
+      workspace: { findMany: vi.fn(async (_args: unknown) => businesses.ids.map((id) => ({ id }))) },
+      workspaceMembership: {
+        findMany: vi.fn(async ({ where }: any) => [...(businesses.ownedBy.get(where.userId) ?? [])].map((workspaceId) => ({ workspaceId }))),
+      },
+      channelConnection: {
+        // The business the count runs in is the one in context (row-level security does this for real).
+        count: vi.fn(async ({ where }: any) => {
+          const { workspaceContext } = await import('@nexus/database/workspace-context')
+          const id = workspaceContext()?.workspaceId ?? ''
+          return where.channelType === 'GOOGLE' && businesses.google.has(id) ? 1 : 0
+        }),
+      },
       channelApp: {
         findUnique: vi.fn(async ({ where }: any) => find(where)),
         findMany: vi.fn(async () => apps),
@@ -68,6 +84,11 @@ afterAll(async () => { await app.close() })
 beforeEach(() => {
   h.apps.length = 0
   h.events.length = 0
+  h.businesses.ids = []
+  h.businesses.google.clear()
+  h.businesses.ownedBy.clear()
+  h.prisma.workspace.findMany.mockClear()
+  h.prisma.channelConnection.count.mockClear()
   h.who.authUser = { id: 'owner-1', roleKeys: ['OWNER'] }
   h.who.isOwner = true
   h.prisma.channelApp.upsert.mockClear()
@@ -75,6 +96,7 @@ beforeEach(() => {
   vi.stubEnv('NEXUS_PUBLIC_API_URL', 'https://api.example.test')
   vi.stubEnv('GOOGLE_OAUTH_CLIENT_ID', '')
   vi.stubEnv('GOOGLE_OAUTH_CLIENT_SECRET', '')
+  vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '')
 })
 
 const put = (payload: unknown, channel = 'GOOGLE') => app.inject({ method: 'PUT', url: `/api/cx/apps/${channel}/credentials`, payload: payload as Record<string, unknown> })
@@ -89,8 +111,60 @@ describe('Google app credentials — the routes', () => {
     h.who.isOwner = false
     const res = await put({ clientId: CLIENT_ID, clientSecret: SECRET })
     expect(res.statusCode).toBe(403)
-    expect(res.json()).toMatchObject({ code: 'owner_required' })
+    expect(res.json()).toMatchObject({ code: 'owner_required', error: expect.stringMatching(/Owner of every business profile with Google connected/) })
     expect(h.prisma.channelApp.upsert).not.toHaveBeenCalled()
+  })
+
+  describe('business profiles on: the app serves every business', () => {
+    beforeEach(() => {
+      vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1')
+      h.businesses.ids = ['biz-here', 'biz-other', 'biz-third']
+      h.businesses.ownedBy.set('owner-1', new Set(['biz-here']))
+    })
+
+    it('an Owner here who is not an Owner of another business with Google connected is refused (403); nothing is written', async () => {
+      h.businesses.google.add('biz-here').add('biz-other')
+      const res = await put({ clientId: CLIENT_ID, clientSecret: SECRET })
+      expect(res.statusCode).toBe(403)
+      expect(res.json()).toEqual({
+        code: 'owner_of_every_business_required',
+        error: 'Google\'s app credentials serve the Google sign-in of every business profile in Nexus, so only a person who is an Owner of every business profile with Google connected can change them. You are not an Owner of all of them.',
+      })
+      expect(h.prisma.channelApp.upsert).not.toHaveBeenCalled()
+      expect(h.events).toEqual([])
+      // Only the caller's own Owner memberships are asked for.
+      expect(h.prisma.workspaceMembership.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({ userId: 'owner-1', status: 'active', roles: { some: { role: { key: 'OWNER' } } } }),
+      }))
+    })
+
+    it('an Owner of every business with Google connected saves; businesses without Google do not hold it back', async () => {
+      h.businesses.google.add('biz-here').add('biz-other')
+      h.businesses.ownedBy.set('owner-1', new Set(['biz-here', 'biz-other'])) // not an Owner of biz-third, which has no Google
+      const res = await put({ clientId: CLIENT_ID, clientSecret: SECRET })
+      expect(res.statusCode).toBe(200)
+      expect(res.json().app).toMatchObject({ clientId: CLIENT_ID, secretSet: true, source: 'saved' })
+      // Each business the caller does not own is asked, in its own business context.
+      expect(h.prisma.channelConnection.count).toHaveBeenCalledTimes(1)
+    })
+
+    it('no other business has Google connected: an Owner here saves', async () => {
+      h.businesses.google.add('biz-here')
+      expect((await put({ clientId: CLIENT_ID, clientSecret: SECRET })).statusCode).toBe(200)
+    })
+
+    it('a connection waiting for a new sign-in counts (it signs in again through this app)', async () => {
+      h.businesses.google.add('biz-other')
+      await put({ clientId: CLIENT_ID, clientSecret: SECRET })
+      expect(h.prisma.channelConnection.count).toHaveBeenCalledWith({ where: { channelType: 'GOOGLE', OR: [{ isActive: true }, { authStatus: 'needs_reauth' }] } })
+    })
+  })
+
+  it('business profiles off: one business, its Owner saves without a sweep of businesses', async () => {
+    h.businesses.ids = ['biz-other']
+    h.businesses.google.add('biz-other')
+    expect((await put({ clientId: CLIENT_ID, clientSecret: SECRET })).statusCode).toBe(200)
+    expect(h.prisma.workspace.findMany).not.toHaveBeenCalled()
   })
 
   it('an API key (no person behind it) is refused', async () => {

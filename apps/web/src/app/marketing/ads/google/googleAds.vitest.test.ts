@@ -16,6 +16,7 @@ import {
   campaignTypeLabel,
   changeRows,
   changesNote,
+  comparedWindow,
   chartHasMoney,
   chartPoints,
   coverageNote,
@@ -223,11 +224,22 @@ describe('tiles', () => {
     expect(tiles.every((t) => t.delta === undefined)).toBe(true)
   })
 
-  it('compares only with a previous window the server returned (read in full); more cost is not "good"', () => {
-    const prev = { impressions: 1000, clicks: 50, spendCents: 9_876, conversions: 5, conversionValueCents: 49_380, ctr: null, from: '2026-10-07', to: '2026-10-09' }
-    const tiles = metricTiles(overview({ previous: prev }))
+  const prev = { impressions: 1000, clicks: 50, spendCents: 9_876, conversions: 5, conversionValueCents: 49_380, ctr: null, from: '2026-10-07', to: '2026-10-09' }
+  const full = { daysInWindow: 3, daysRead: 3, missingDays: [] }
+
+  it('compares only with a previous window the server returned (both read in full); more cost is not "good"', () => {
+    const tiles = metricTiles(overview({ previous: prev, coverage: full }))
     expect(tiles[0]!.delta).toEqual({ text: '▲ 25.0%', good: false })
     expect(tiles[5]!.delta).toEqual({ text: '▲ 100.0%', good: true })
+    expect(comparedWindow(overview({ previous: prev, coverage: full }))).toEqual(prev)
+  })
+
+  it('a window with a day not read is never compared, even when a previous window is there: no arrow, no "compare with" line', () => {
+    const partial = overview({ previous: prev })
+    expect(partial.coverage.daysRead).toBeLessThan(partial.coverage.daysInWindow)
+    expect(comparedWindow(partial)).toBeNull()
+    expect(metricTiles(partial).every((t) => t.delta === undefined)).toBe(true)
+    expect(comparedWindow(overview({ previous: null, coverage: full }))).toBeNull()
   })
 
   it('no totals: every tile is "—"', () => {
@@ -259,7 +271,9 @@ describe('campaign words', () => {
     expect(campaignStatusHint('REMOVED')).toBeNull()
     expect(servingText({ status: null, servingStatus: null, primaryStatus: null })).toBeNull()
     expect(settingsReadText({ status: null, settingsReadAt: '2026-10-12T06:29:00Z' })).toBe('Not read yet')
-    expect(settingsReadText({ status: 'REMOVED', settingsReadAt: '2026-10-12T06:29:00Z' }, 'UTC')).not.toBe('Not read yet')
+    expect(settingsReadText({ status: 'REMOVED', settingsReadAt: '2026-10-12T06:29:00Z' }, 'UTC')).toBe('12 Oct 2026, 06:29')
+    // Removed before Nexus first read the account: a status, but its settings were never read.
+    expect(settingsReadText({ status: 'REMOVED', settingsReadAt: null }, 'UTC')).toBe('Not read yet')
   })
 
   it('bidding and budget', () => {
@@ -284,10 +298,14 @@ describe('changes (R4)', () => {
     expect(withoutEmails('a.b+c@d.co.uk wrote')).toBe('a person wrote')
   })
 
-  it('says what the history covers', () => {
-    expect(changesNote(null, 0)).toMatch(/has not read this campaign’s change history/)
-    expect(changesNote('2026-09-13', 0)).toMatch(/^No changes since 13 Sep 2026/)
-    expect(changesNote('2026-09-13', 2)).toMatch(/^Changes since 13 Sep 2026/)
+  it('says the span the history covers, from its start to where reading stopped — never "since"', () => {
+    const span = { coveredFrom: '2026-09-13T22:00:00.000Z', coveredThrough: '2026-10-09T06:00:00.000Z' }
+    expect(changesNote({ coveredFrom: null, coveredThrough: null }, 0)).toBe('Nexus has not read this campaign’s change history from Google yet.')
+    expect(changesNote(span, 0, 'UTC')).toBe('No changes between 13 Sep 2026, 22:00 and 9 Oct 2026, 06:00, the span Nexus has read. Google keeps 30 days; Nexus keeps what it has read.')
+    expect(changesNote(span, 2, 'UTC')).toBe('Changes read from 13 Sep 2026, 22:00 to 9 Oct 2026, 06:00, as Google records them. Google keeps 30 days; Nexus keeps what it has read.')
+    // Reading stopped before the last 30 days: where it stopped, and that none of them is read.
+    expect(changesNote({ coveredFrom: null, coveredThrough: '2026-09-01T00:00:00.000Z' }, 0, 'UTC')).toBe('Nexus last read this campaign’s change history up to 1 Sep 2026, 00:00: it has read none of the last 30 days.')
+    for (const n of [0, 2]) expect(changesNote(span, n, 'UTC')).not.toMatch(/since/)
   })
 })
 

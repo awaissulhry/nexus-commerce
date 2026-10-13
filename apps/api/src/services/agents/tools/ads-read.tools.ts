@@ -558,7 +558,7 @@ const GOOGLE_STATUSES: readonly string[] = ['ENABLED', 'PAUSED', 'REMOVED']
 const GOOGLE_OVERVIEW_WORDS = ' Google (channel google, read only): the Google Ads account a person chose for this business (accountId: its '
   + 'connectionId from channel-connections, only when there is more than one): impressions, clicks, cost (as spendCents), conversions, '
   + 'conversion value and ROAS as Google counts them, for the window and for the window before (previous: only when Nexus read every '
-  + 'day of it), each day (a day Nexus has not read has read false and no numbers, never 0; the last 14 days provisional), the '
+  + 'day of both windows, else null: never work out a change from totals that leave days out), each day (a day Nexus has not read has read false and no numbers, never 0; the last 14 days provisional), the '
   + 'campaigns that cost most, the account\'s state in words, and coverage.missingDays. Read per account, never per market. dataAsOf '
   + 'is when Nexus last read the account from Google. No tool changes Google Ads (writes.mode none): say what you would change and '
   + 'that a person makes it in Google Ads; never put a Google step in a change plan.'
@@ -682,8 +682,8 @@ async function googleCampaigns(a: CampaignListArgs, scope: string) {
     startDate: c.startDate,
     endDate: c.endDate,
     metrics: c.metrics ? googleMetricsOut(c.metrics) : null,
-    // Never a time Nexus did not read this campaign's settings (status null: numbers only, settings not read yet).
-    settingsSyncedAt: c.status ? c.settingsReadAt : null,
+    // Never a time Nexus did not read this campaign's settings (null: seen only in the numbers, settings never read).
+    settingsSyncedAt: c.settingsReadAt,
   }))
   const empty = googleEmpty(account, list.coverage.daysRead)
     ?? (list.items.length === 0 ? (a.status || a.search ? 'No Google Ads campaign matches these filters.' : 'No Google Ads campaign in this account.') : null)

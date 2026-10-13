@@ -21,7 +21,7 @@ import { accountYesterday, addDays, backfillWindow, changeHistoryWindow, dailyWi
 import { GoogleAdsReadError, localFailure, type GoogleAdsFailure } from './errors.js'
 import { CAMPAIGNS_QUERY, CHANGE_EVENT_LIMIT, CUSTOMER_QUERY, campaignDailyMetricsQuery, changeEventsQuery } from './gaql.js'
 import { mapCampaign, mapCampaignDay, mapChangeEvent, mapCustomer } from './mappers.js'
-import { releaseOps, reserveOps } from './ops-budget.js'
+import { addSpentOps, releaseOps, reserveOps } from './ops-budget.js'
 import { searchAll, searchRows } from './read-client.js'
 import {
   ensureGoogleAdsCustomer, markUnseenCampaignsRemoved, recordSyncOutcome, replaceDailyMetrics, saveCustomerDetails, storeChangeEvents,
@@ -260,9 +260,10 @@ export async function syncGoogleAdsAccount(target: GoogleAdsTarget, options: { k
     })
     return result
   } finally {
-    // What was reserved and not spent goes back; a retry that cost more is counted after the fact.
+    // What was reserved and not spent goes back; what was spent beyond it (retries) is counted as spent — added to the
+    // buckets, never a reservation that a full cap could refuse and give back uncounted.
     if (reserved > result.ops) await releaseOps(customerId, reserved - result.ops, reservation.reservedAt)
-    else if (result.ops > reserved) await reserveOps(customerId, result.ops - reserved).catch(() => undefined)
+    else if (result.ops > reserved) await addSpentOps(customerId, result.ops - reserved, reservation.reservedAt)
   }
 }
 

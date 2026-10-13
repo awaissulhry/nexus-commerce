@@ -5,7 +5,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  ACCOUNT_DAILY_OPS, DEFAULT_GLOBAL_DAILY_OPS, globalOpsCap, markQuotaExhausted, opsUsedLast24h, releaseOps, reserveOps,
+  ACCOUNT_DAILY_OPS, DEFAULT_GLOBAL_DAILY_OPS, addSpentOps, globalOpsCap, markQuotaExhausted, opsUsedLast24h, releaseOps, reserveOps,
   setOpsBudgetRedisForTests, type OpsRedis,
 } from './ops-budget.js'
 
@@ -100,6 +100,22 @@ describe('the Google Ads operations allowance', () => {
     expect(await opsUsedLast24h('1234567890', at(90))).toEqual({ global: 5, account: 5 })
     await releaseOps('1234567890', 0, r.reservedAt)
     expect(await opsUsedLast24h('1234567890', at(90))).toEqual({ global: 5, account: 5 })
+  })
+
+  it('operations spent beyond a reservation are always counted, even over a cap — never refused and given back', async () => {
+    const r = await reserveOps('1234567890', 60, T0) // the account's whole allowance
+    expect(r.ok).toBe(true)
+    await addSpentOps('1234567890', 2, r.reservedAt) // two retries reached Google
+    expect(await opsUsedLast24h('1234567890', at(30))).toEqual({ global: 62, account: 62 })
+    expect(redis.ttl.get('nexus:gads:ops:acct:1234567890:2026101306')).toBe(25 * 3600)
+    // Nothing to add, or Redis down: nothing happens, nothing throws.
+    await addSpentOps('1234567890', 0, r.reservedAt)
+    setOpsBudgetRedisForTests(null)
+    await expect(addSpentOps('1234567890', 3, r.reservedAt)).resolves.toBeUndefined()
+    setOpsBudgetRedisForTests(redis)
+    expect(await opsUsedLast24h('1234567890', at(30))).toEqual({ global: 62, account: 62 })
+    // The next reservation waits until the overspend leaves the rolling 24 hours.
+    expect((await reserveOps('1234567890', 1, at(30))).reason).toBe('account_cap')
   })
 
   it('Google said the allowance is used up: every reservation is refused for an hour', async () => {

@@ -22869,7 +22869,7 @@ model GoogleAdsCustomer {
   metricsReadThrough   DateTime? @db.Date
   /// Google's change history is read up to this instant (it keeps 30 days; Nexus keeps every event it read).
   changesSyncedThrough DateTime?
-  /// When the last read ended (any outcome), and when one last succeeded.
+  /// When the last read that called Google ended (any outcome; a run that sent nothing leaves it), and when one last succeeded.
   lastSyncAt           DateTime?
   lastSuccessAt        DateTime?
   /// SUCCESS | PARTIAL | FAILED | SKIPPED_BUDGET | AUTH_LOST | MANAGER

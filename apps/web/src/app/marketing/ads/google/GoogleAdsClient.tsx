@@ -37,6 +37,7 @@ import {
   campaignTypeLabel,
   chartHasMoney,
   chartPoints,
+  comparedWindow,
   coverageNote,
   dataLine,
   formatConversions,
@@ -83,6 +84,7 @@ export function GoogleAdsClient() {
   const current = overview?.key === key ? overview : null
   // While a new window loads, keep the last answer on screen (the grid's reload veil covers the change).
   const shown = current?.data ?? (overview?.data && !current ? overview.data : null)
+  const compared = shown ? comparedWindow(shown) : null
   const view = googlePageState({ loading: !current, error: current?.error ?? null, overview: shown })
 
   // ── R2: the campaigns, only when the page may show numbers ────────────
@@ -193,8 +195,8 @@ export function GoogleAdsClient() {
             hint: t.hint,
             delta: t.delta ? { value: t.delta.text, positive: t.delta.good } : undefined,
           }))} />
-          {shown.previous && (
-            <p className="gads-meta">Changes compare with {formatWindow(shown.previous.from, shown.previous.to)}, which Nexus read in full.</p>
+          {compared && (
+            <p className="gads-meta">Changes compare with {formatWindow(compared.from, compared.to)}, which Nexus read in full.</p>
           )}
 
           <Card header="Cost and conversion value per day" description="A day Nexus has not read is a gap in the lines, not a zero.">

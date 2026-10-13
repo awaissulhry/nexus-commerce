@@ -40,6 +40,11 @@ describe('P1.2 — the ratchet counts sends to a channel outside the gateway', (
   write('services/marketing/google-ads/read-client.ts', 'export const g3 = (u: string) => fetch(u)\n')
   write('services/ai/gemini.ts', "export const g4 = () => fetch('https://generativelanguage.googleapis.com/v1beta/models')\n")
   write('services/fonts.ts', "export const g5 = () => fetch('https://fonts.googleapis.com/css2?family=Inter')\n")
+  // Any other Google API host counts too (the next Google API is counted the day it is first called), and the sign-in.
+  write('services/raw-userinfo.ts', "export const g6 = () => fetch('https://www.googleapis.com/oauth2/v3/userinfo')\n")
+  write('services/raw-storage.ts', "export const g7 = () => fetch('https://storage.googleapis.com/some-bucket/file')\n")
+  write('services/raw-sign-in.ts', "export const g8 = () => fetch('https://accounts.google.com/o/oauth2/revoke')\n")
+  write('services/lookalike.ts', "export const g9 = () => fetch('https://notgoogleapis.com/x')\n")
 
   const sites = scan(root)
   const where = (file: string) => sites.filter((s) => s.file === file)
@@ -59,6 +64,12 @@ describe('P1.2 — the ratchet counts sends to a channel outside the gateway', (
     expect(where('services/ai/gemini.ts')).toEqual([])
     expect(where('services/fonts.ts')).toEqual([])
   })
+  it('counts every other googleapis.com host and Google sign-in, never a lookalike host', () => {
+    for (const file of ['services/raw-userinfo.ts', 'services/raw-storage.ts', 'services/raw-sign-in.ts']) {
+      expect(where(file), file).toEqual([expect.objectContaining({ channel: 'GOOGLE', exempt: null })])
+    }
+    expect(where('services/lookalike.ts')).toEqual([])
+  })
   it('a file that mixes channels: each call counts for the channel its API path names', () => {
     expect(where('services/mixed-sync.ts').map((s) => s.channel)).toEqual(['EBAY', 'SHOPIFY'])
   })
@@ -70,7 +81,7 @@ describe('P1.2 — the ratchet counts sends to a channel outside the gateway', (
     for (const file of ['services/gateway/inside.ts', 'services/not-a-channel.ts', 'services/comment-only.ts', 'services/raw-ebay.vitest.test.ts']) expect(where(file)).toEqual([])
   })
   it('the counts are per channel, exemptions left out', () => {
-    expect(counts(sites)).toEqual({ EBAY: 3, AMAZON_SP: 2, AMAZON_ADS: 2, SHOPIFY: 2, ETSY: 0, GOOGLE: 3 })
+    expect(counts(sites)).toEqual({ EBAY: 3, AMAZON_SP: 2, AMAZON_ADS: 2, SHOPIFY: 2, ETSY: 0, GOOGLE: 6 })
   })
 })
 

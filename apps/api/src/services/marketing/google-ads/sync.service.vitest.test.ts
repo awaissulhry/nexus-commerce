@@ -7,7 +7,8 @@
  *   given back), only GoogleAdsService.Search calls (POST …:search, read), nothing for another business
  *   the daily read: 14 days, the change history from 10 minutes before where the last one stopped
  *   a manager account: one call, MANAGER, the rest of the allowance given back
- *   no allowance: no call at all (SKIPPED_BUDGET)
+ *   no allowance: no call at all (SKIPPED_BUDGET), and not a read: the last read's time stays
+ *   operations spent beyond the reservation (a restart after an expired page token): counted, even over the cap
  *   the sign-in lost mid-run: the run stops, AUTH_LOST, nothing stored is deleted
  *   a refused daily query: PARTIAL, the stored days and their range untouched, the change history still read
  */
@@ -201,7 +202,9 @@ describe('syncGoogleAdsAccount (fixtures → gateway → PGlite)', () => {
     expect(result.error).toMatch(/allowance/)
     expect(h.calls).toHaveLength(0)
     expect(gatewayLedger).toHaveLength(0)
-    await inA(async () => expect(await getGoogleAdsCustomer(CID)).toMatchObject({ lastSyncStatus: 'SKIPPED_BUDGET', lastSuccessAt: before?.lastSuccessAt }))
+    // Not a read: "Nexus read this account at …" (enqueue.ts) keeps naming the last run that called Google.
+    expect(before?.lastSyncAt).toBeInstanceOf(Date)
+    await inA(async () => expect(await getGoogleAdsCustomer(CID)).toMatchObject({ lastSyncStatus: 'SKIPPED_BUDGET', lastSuccessAt: before?.lastSuccessAt, lastSyncAt: before?.lastSyncAt }))
   })
 
   it('the sign-in lost mid-run: the run stops at once, AUTH_LOST, nothing stored is deleted', async () => {
@@ -256,5 +259,25 @@ describe('syncGoogleAdsAccount (fixtures → gateway → PGlite)', () => {
     const stamped = (await inA(() => getGoogleAdsCustomer(CID)))?.structureSyncedAt
     expect(stamped).toBeInstanceOf(Date)
     expect(stamped!.getTime()).toBeLessThanOrEqual(asked.at)
+  })
+
+  it('operations spent beyond the reservation are counted, even over the account\'s cap — never refused and given back', async () => {
+    // Every clock at RUN_2, so the run's own hour is the one whose allowance is full.
+    vi.useFakeTimers({ now: RUN_2, toFake: ['Date'] })
+    try {
+      redisStore.set(`nexus:gads:ops:acct:${CID}:2026101406`, '55') // the run's 5 fit exactly under 60
+      const sequence = (...answers: Array<() => Response>) => { let n = 0; return () => answers[Math.min(n++, answers.length - 1)]() }
+      const dayRows = (JSON.parse(raw('search-campaign-days.json')) as { results: unknown[] }).results
+      // Each query's second page has expired once: Google is asked for its first page again, one more operation each.
+      h.override.campaigns = sequence(ok('search-campaigns-page-1.json'), fail('expiredPageToken'), ok('search-campaigns-page-1.json'), ok('search-campaigns-page-2.json'))
+      h.override.days = sequence(json({ results: dayRows.slice(0, 2), nextPageToken: 'days-page-2' }), fail('expiredPageToken'), json({ results: dayRows.slice(0, 2), nextPageToken: 'days-page-2' }), json({ results: dayRows.slice(2) }))
+      const result = await inA(() => syncGoogleAdsAccount(TARGET, { kind: 'DAILY', now: RUN_2 }))
+      expect(result).toMatchObject({ status: 'SUCCESS', ops: 6 })
+      expect(RUN_OPS).toBe(5)
+      // 55 before, 5 reserved, 1 spent beyond: all 6 counted although the account is now over its 60.
+      expect(accountOps()).toBe(61)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

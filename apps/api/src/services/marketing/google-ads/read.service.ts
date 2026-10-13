@@ -11,7 +11,7 @@
  *   - ratios are Nexus's, computed from the sums, null when the denominator is 0
  *   - `to` is clamped to the account's yesterday in its time zone (today is still moving); `provisionalFrom` is the
  *     first day of the daily re-read (the last 14 days, which Google can still restate with late conversions)
- *   - `previous` (the window of the same length right before) only when Nexus read every day of it
+ *   - `previous` (the window of the same length right before) only when Nexus read every day of it AND of the window
  *   - Google's change history keeps the person who made a change (user_email): it is never selected here
  *
  * A campaign Google removed before Nexus first read the account has numbers but no settings row (the settings read
@@ -19,13 +19,13 @@
  * `<customerId>~<googleCampaignId>`, which R3 and R4 take like any other. Its status is REMOVED only when a settings
  * read succeeded after its last day with numbers ended (it existed then, and that read did not return it). A campaign
  * added after the last settings read that succeeded (or while one failed) has numbers and no row too: its status is
- * null — not read yet — never REMOVED.
+ * null — not read yet — never REMOVED. Either way Nexus never read its settings: `settingsReadAt` is null.
  */
 import prisma from '../../../db.js'
 import { workspaceIdForQuery } from '../../../lib/workspace-context.js'
 import { cursorScope, decodeCursor, encodeCursor, type CursorPosition } from '../../../lib/pagination/cursor.js'
 import { listGoogleAccounts } from '../../google/google-accounts.service.js'
-import { CHANGE_HISTORY_DAYS, DAILY_WINDOW_DAYS, accountYesterday, addDays, dateToDay, dayCount, dayToDate, daysOf, zonedToUtc, type DayWindow } from './dates.js'
+import { CHANGE_HISTORY_DAYS, DAILY_WINDOW_DAYS, accountYesterday, addDays, changeHistoryWindow, dateToDay, dayCount, dayToDate, daysOf, zonedToUtc, type DayWindow } from './dates.js'
 import { enqueueGoogleAdsSync } from './enqueue.js'
 import { campaignTypeText, changeSourceOf, customerIdDigits } from './mappers.js'
 
@@ -343,6 +343,7 @@ export interface GoogleAdsOverview {
   dataAsOf: string | null
   coverage: GoogleAdsCoverage
   totals: GoogleAdsMetrics | null
+  /** The window before, of the same length; null unless Nexus read every day of this window AND of that one. */
   previous: (GoogleAdsMetrics & { from: string; to: string }) | null
   days: GoogleAdsDay[]
 }
@@ -356,10 +357,12 @@ export async function googleAdsOverview(input: { connectionId?: string | null } 
   const coverage = coverageOf(window, range)
   const sums = ctx.customer && inWindow ? await sumsByDay(ctx.customer.customerId, inWindow) : new Map<string, Sums>()
 
-  // The window before, of the same length — compared only when Nexus read every day of it.
+  // The window before, of the same length — compared only when Nexus read every day of BOTH windows (a window with
+  // days not read has totals that leave them out: set against a full window, its change would be made up).
   const length = dayCount(window)
   const before = { from: addDays(window.from, -length), to: addDays(window.from, -1) }
-  const previous = ctx.customer && range && before.from >= range.from && before.to <= range.to
+  const bothRead = coverage.daysRead === coverage.daysInWindow && !!range && before.from >= range.from && before.to <= range.to
+  const previous = ctx.customer && bothRead
     ? { from: before.from, to: before.to, ...metricsOf(await sumOver(ctx.customer.customerId, before), exponent) }
     : null
 
@@ -424,8 +427,8 @@ export interface GoogleAdsCampaign {
   budgetShared: boolean
   startDate: string | null
   endDate: string | null
-  /** When a read last saw this campaign's settings. */
-  settingsReadAt: string
+  /** When a read last saw this campaign's settings; null when Nexus never read them (a campaign seen only in the numbers). */
+  settingsReadAt: string | null
   /** Null when Nexus read no day of the window. */
   metrics: GoogleAdsMetrics | null
 }
@@ -491,7 +494,8 @@ function unseenCampaignOf(
     budgetShared: false,
     startDate: null,
     endDate: null,
-    settingsReadAt: (customer.structureSyncedAt ?? seen?.pulledAt ?? new Date(0)).toISOString(),
+    // Its settings were never read (no settings row), whatever its status: never a time Nexus did not read them.
+    settingsReadAt: null,
     metrics,
   }
 }
@@ -692,8 +696,13 @@ export interface GoogleAdsChange {
 
 export interface GoogleAdsCampaignChanges {
   items: GoogleAdsChange[]
-  /** Changes are complete from this instant (30 days back), or null when Nexus has not read the change history. */
+  /**
+   * The span of the last 30 days whose changes Nexus read in full: from `coveredFrom` (the oldest instant Google still
+   * answers for) to `coveredThrough` (where Nexus's reading of the change history stopped). `coveredFrom` is null when
+   * that span is empty (nothing read, or reading stopped before it); `coveredThrough` is null when Nexus never read it.
+   */
   coveredFrom: string | null
+  coveredThrough: string | null
 }
 
 const RESOURCE_WORDS: Readonly<Record<string, string>> = {
@@ -734,11 +743,24 @@ export function changeSummary(resourceType: string, operation: string, changedFi
   return `${what} ${verb}${shown ? `: ${shown}${more}` : ''}. ${sentence}`
 }
 
+/**
+ * Where the change history R4 vouches for starts: the oldest instant Google still answers for now (the first second of
+ * the account's day 29 days ago, as the read asks). Every read of the history started there or earlier and each next one
+ * went on from where the last stopped, so from here to `changesSyncedThrough` nothing is missing. Unknown zone: 29 days
+ * back, which is never earlier than that instant in any zone.
+ */
+function changesSpanStart(timeZone: string | null | undefined, now: Date): Date {
+  if (timeZone) {
+    try { return changeHistoryWindow(timeZone, now).start } catch { /* below */ }
+  }
+  return new Date(now.getTime() - (CHANGE_HISTORY_DAYS - 1) * MS_PER_DAY)
+}
+
 /** R4 — Google's change history for one campaign over the last 30 days, newest first. Never a person's e-mail. */
 export async function googleCampaignChanges(campaignId: string, now: Date = new Date()): Promise<GoogleAdsCampaignChanges> {
   const ref = await campaignRef(campaignId)
   if (!ref) throw new GoogleAdsReadError(404, 'Campaign not found')
-  const since = new Date(now.getTime() - CHANGE_HISTORY_DAYS * MS_PER_DAY)
+  const since = changesSpanStart(ref.customer?.timeZone, now)
   const rows = await prisma.googleAdsChangeEvent.findMany({
     where: { customerId: ref.customerId, campaignId: ref.googleCampaignId, changedAt: { gte: since } },
     // userEmail is deliberately not selected: it is stored for the table only.
@@ -746,6 +768,7 @@ export async function googleCampaignChanges(campaignId: string, now: Date = new 
     orderBy: [{ changedAt: 'desc' }, { resourceName: 'desc' }],
     take: MAX_CHANGES,
   })
+  // Where reading stopped: nothing after it was read, whatever the time now.
   const readThrough = ref.customer?.changesSyncedThrough ?? null
   return {
     items: rows.map((row) => {
@@ -761,6 +784,7 @@ export async function googleCampaignChanges(campaignId: string, now: Date = new 
       }
     }),
     coveredFrom: readThrough && readThrough > since ? since.toISOString() : null,
+    coveredThrough: iso(readThrough),
   }
 }
 

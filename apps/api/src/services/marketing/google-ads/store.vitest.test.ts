@@ -169,9 +169,17 @@ describe('Google Ads store (PGlite, business profiles on)', () => {
       expect(await storeChangeEvents([change])).toBe(0)
       await recordSyncOutcome(CID, { status: 'SUCCESS', error: null, ops: 4, at: T2, changesSyncedThrough: T2, structureSyncedAt: T2, backfillCompletedAt: T2 })
       await recordSyncOutcome(CID, { status: 'SKIPPED_BUDGET', error: 'No allowance.', ops: 0, at: new Date('2026-10-13T07:00:00Z') })
+      // No call was made: not a read. The last read's time stays (it is what "Nexus read this account at …" names).
       expect(await getGoogleAdsCustomer(CID)).toMatchObject({
-        lastSyncStatus: 'SKIPPED_BUDGET', lastSyncError: 'No allowance.', lastSuccessAt: T2, backfillCompletedAt: T2, changesSyncedThrough: T2, opsUsedLastRun: 0,
+        lastSyncStatus: 'SKIPPED_BUDGET', lastSyncError: 'No allowance.', lastSyncAt: T2, lastSuccessAt: T2, backfillCompletedAt: T2, changesSyncedThrough: T2, opsUsedLastRun: 0,
       })
+      // Refused before anything was sent (no operation spent): not a read either.
+      await recordSyncOutcome(CID, { status: 'FAILED', error: 'Nexus paused this account.', ops: 0, at: new Date('2026-10-13T08:00:00Z') })
+      expect(await getGoogleAdsCustomer(CID)).toMatchObject({ lastSyncStatus: 'FAILED', lastSyncAt: T2 })
+      // A run that called Google is a read, whatever its end.
+      const failedAt = new Date('2026-10-13T09:00:00Z')
+      await recordSyncOutcome(CID, { status: 'FAILED', error: 'Google did not answer.', ops: 1, at: failedAt })
+      expect(await getGoogleAdsCustomer(CID)).toMatchObject({ lastSyncStatus: 'FAILED', lastSyncAt: failedAt, lastSuccessAt: T2 })
     })
   })
 

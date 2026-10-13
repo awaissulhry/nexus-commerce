@@ -7,7 +7,7 @@
  * Proven here: a day counts as zero only inside the days Nexus read, any other day is "not read" with no numbers and
  * stays out of every total; ratios are Nexus's, from the sums, null over a zero; money is in minor units of the
  * account's own currency (EUR 2 decimals, JPY none), never converted; `to` is clamped to the account's yesterday in its
- * time zone; `provisionalFrom` starts the 14-day re-read; `previous` only when its window was read in full; a campaign
+ * time zone; `provisionalFrom` starts the 14-day re-read; `previous` only when both windows were read in full; a campaign
  * Google removed before Nexus first read it still carries its numbers; the change history never carries the person's
  * e-mail; and one business never reads another's rows or ids. Values are made up (public repo).
  */
@@ -218,8 +218,18 @@ describe('R1 — the overview', () => {
       date: '2026-10-11', provisional: true, read: false, impressions: null, clicks: null, spendCents: null, conversions: null, conversionValueCents: null,
       ctr: null, avgCpcCents: null, roas: null, costPerConversionCents: null,
     })
-    // The window before (18 Aug – 14 Sep) was read in full: compared.
-    expect(o.previous).toMatchObject({ from: '2026-08-18', to: '2026-09-14', impressions: 300, clicks: 6, spendCents: 300, conversions: 0, roas: 0, costPerConversionCents: null })
+    // The window before (18 Aug – 14 Sep) was read in full, but this one was not (11 and 12 Oct): no comparison, since
+    // totals that leave days out set against a full window would make up a change.
+    expect(o.previous).toBeNull()
+  })
+
+  it('previous when every day of both windows was read: the window before, of the same length', async () => {
+    const o = await inA(() => googleAdsOverview({ from: '2026-09-15', to: '2026-10-10' }, NOW))
+    expect(o.coverage).toEqual({ daysInWindow: 26, daysRead: 26, missingDays: [] })
+    expect(o.previous).toEqual({
+      from: '2026-08-20', to: '2026-09-14', impressions: 300, clicks: 6, spendCents: 300, conversions: 0, conversionValueCents: 0,
+      ctr: 6 / 300, avgCpcCents: 50, roas: 0, costPerConversionCents: null,
+    })
   })
 
   it('previous only when every day of it was read; a window Nexus never read has no totals', async () => {
@@ -285,7 +295,8 @@ describe('R2 — the campaigns', () => {
     expect(bravo).toMatchObject({ status: 'PAUSED', type: 'SHOPPING', dailyBudgetCents: null, budgetShared: true, metrics: { spendCents: 500, conversions: 0, roas: 0, costPerConversionCents: null } })
     // Read with no numbers in the window: zero, never "not read".
     expect(charlie).toMatchObject({ status: 'REMOVED', type: 'PERFORMANCE_MAX', metrics: { impressions: 0, spendCents: 0, ctr: null } })
-    expect(old).toMatchObject({ campaignId: `${A_CUSTOMER}~999`, externalCampaignId: '999', status: 'REMOVED', type: 'UNKNOWN', settingsReadAt: '2026-10-11T06:29:00.000Z', metrics: { spendCents: 200, conversions: 1 } })
+    // Removed before Nexus first read the account: its settings were never read, so no time they were.
+    expect(old).toMatchObject({ campaignId: `${A_CUSTOMER}~999`, externalCampaignId: '999', status: 'REMOVED', type: 'UNKNOWN', settingsReadAt: null, metrics: { spendCents: 200, conversions: 1 } })
     // The campaigns add up to the account's totals.
     const overview = await inA(() => googleAdsOverview({ ...WINDOW }, NOW))
     expect(page.items.reduce((sum, c) => sum + c.metrics!.spendCents, 0)).toBe(overview.totals!.spendCents)
@@ -324,7 +335,10 @@ describe('a campaign with numbers but no settings row: removed, or not read yet'
     const page = await inC(() => googleAdsCampaigns({ from: '2026-10-01', to: '2026-10-12' }, NOW))
     expect(page.items.map((c) => [c.name, c.status])).toEqual([['Gone campaign', 'REMOVED'], ['Known campaign', 'ENABLED'], ['New campaign', null]])
     // Its numbers still count; it is not offered under any status filter.
-    expect(page.items.find((c) => c.name === 'New campaign')).toMatchObject({ campaignId: `${C_CUSTOMER}~200`, type: 'UNKNOWN', metrics: { spendCents: 100 } })
+    expect(page.items.find((c) => c.name === 'New campaign')).toMatchObject({ campaignId: `${C_CUSTOMER}~200`, type: 'UNKNOWN', settingsReadAt: null, metrics: { spendCents: 100 } })
+    // Neither one's settings were ever read: no settings read time, whatever its status.
+    expect(page.items.find((c) => c.name === 'Gone campaign')).toMatchObject({ status: 'REMOVED', settingsReadAt: null })
+    expect(page.items.find((c) => c.name === 'Known campaign')?.settingsReadAt).toBe('2026-10-12T06:29:00.000Z')
     expect((await inC(() => googleAdsCampaigns({ from: '2026-10-01', to: '2026-10-12', status: 'REMOVED' }, NOW))).items.map((c) => c.name)).toEqual(['Gone campaign'])
     const days = await inC(() => googleCampaignDays(`${C_CUSTOMER}~200`, { from: '2026-10-12', to: '2026-10-12' }, NOW))
     expect(days.campaign).toMatchObject({ name: 'New campaign', status: null })
@@ -377,7 +391,9 @@ describe('R3 — one campaign\'s days', () => {
 describe('R4 — Google\'s change history of one campaign', () => {
   it('the last 30 days, newest first, where each change was made in words, never the person', async () => {
     const changes = await inA(() => googleCampaignChanges(ids.c1, NOW))
-    expect(changes.coveredFrom).toBe('2026-09-13T06:30:00.000Z')
+    // From the oldest instant Google answers for (0:00 in Rome 29 days before its today) to where reading stopped.
+    expect(changes.coveredFrom).toBe('2026-09-13T22:00:00.000Z')
+    expect(changes.coveredThrough).toBe('2026-10-13T06:00:00.000Z')
     expect(changes.items).toEqual([
       {
         changedAt: '2026-10-12T10:00:00.000Z', resourceType: 'CAMPAIGN_BUDGET', operation: 'UPDATE', changedFields: ['amount_micros'],
@@ -395,8 +411,23 @@ describe('R4 — Google\'s change history of one campaign', () => {
     expect(unseen.items).toEqual([expect.objectContaining({ operation: 'REMOVE', source: 'other', sourceText: 'Other', summary: 'Campaign removed. Google did not say where this change was made.' })])
   })
 
-  it('no change history read yet: coveredFrom is null', async () => {
-    expect((await inB(() => googleCampaignChanges(ids.b1, NOW))).coveredFrom).toBeNull()
+  it('no change history read yet: no span at all', async () => {
+    const changes = await inB(() => googleCampaignChanges(ids.b1, NOW))
+    expect([changes.coveredFrom, changes.coveredThrough]).toEqual([null, null])
+  })
+
+  it('reading stopped: the span ends where it stopped; stopped before the 30 days, no span, only where it stopped', async () => {
+    const stopAt = async (at: Date) => {
+      await inA(() => db().googleAdsCustomer.update({ where: { google_ads_customer: { workspaceId: A, customerId: A_CUSTOMER } }, data: { changesSyncedThrough: at } }))
+      const changes = await inA(() => googleCampaignChanges(ids.c1, NOW))
+      return [changes.coveredFrom, changes.coveredThrough]
+    }
+    try {
+      expect(await stopAt(new Date('2026-10-09T00:00:00Z'))).toEqual(['2026-09-13T22:00:00.000Z', '2026-10-09T00:00:00.000Z'])
+      expect(await stopAt(new Date('2026-09-01T00:00:00Z'))).toEqual([null, '2026-09-01T00:00:00.000Z'])
+    } finally {
+      await stopAt(new Date('2026-10-13T06:00:00Z'))
+    }
   })
 
   it('a summary names at most five fields, never a value', () => {

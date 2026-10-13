@@ -3,8 +3,8 @@
  *
  * Counts the places that send to a channel WITHOUT the gateway (services/gateway/gateway.ts): a
  * `fetch(`, `https.request(`, `axios…(` or `new SellingPartner(` whose target is eBay, Amazon SP-API,
- * Amazon Ads, Shopify, Etsy or Google (Ads, Merchant Center, Analytics, sign-in). The count per channel may only go down (the method that took the MAP
- * lookups from 60 to 0).
+ * Amazon Ads, Shopify, Etsy or Google (any `*.googleapis.com` API but Gemini and Fonts, and its sign-in).
+ * The count per channel may only go down (the method that took the MAP lookups from 60 to 0).
  *
  * Which channel a send belongs to, in this order: a channel host written in the call itself; else the
  * API path written in the call (`/sell/…` is eBay, `/variants.json` Shopify — a file can mix channels);
@@ -42,9 +42,9 @@ type Channel = 'EBAY' | 'AMAZON_SP' | 'AMAZON_ADS' | 'SHOPIFY' | 'ETSY' | 'GOOGL
  * downloads, OAuth, connect-time identity) and Etsy 4 → 0 (the account reader, the legacy writer as
  * app-level; 2 exempt: connector identity). **The burn-down is closed: every channel at 0.** Any increase
  * from here is a regression — which is what a baseline of 0 is for.
- * 2026-10-13: Google joins at 0 (services/gateway/google.ts from its first call). Its hosts are the Ads,
- * Merchant, Analytics and sign-in APIs only — Gemini (`generativelanguage`, services/ai) and Google Fonts
- * are not a sales channel and stay uncounted.
+ * 2026-10-13: Google joins at 0 (services/gateway/google.ts from its first call). Its hosts are every
+ * `*.googleapis.com` and `accounts.google.com`, so a new Google API is counted the day it is first called —
+ * except Gemini (`generativelanguage`, services/ai) and Google Fonts, which are not a sales channel (HOSTS below).
  */
 const BASELINE: Record<Channel, number> = {
   EBAY: 0,
@@ -61,7 +61,9 @@ const HOSTS: Array<[Channel, RegExp]> = [
   ['EBAY', /(^|[/.])(api|apiz|svcs|open\.api|auth|signin)(\.sandbox)?\.ebay\.com/],
   ['SHOPIFY', /myshopify\.com|\/admin\/api\/20\d\d-\d\d/],
   ['ETSY', /(openapi|api)\.etsy\.com/],
-  ['GOOGLE', /(googleads|merchantapi|analyticsadmin|analyticsdata|openidconnect|oauth2)\.googleapis\.com|accounts\.google\.com/],
+  // Any Google API host (Ads, Merchant, Analytics, sign-in, and whatever Google API comes next) except two that are
+  // not the Google channel: Gemini (`generativelanguage`, services/ai) and Google Fonts (stylesheets in eBay descriptions).
+  ['GOOGLE', /(?<![\w.-])(?!(?:fonts|generativelanguage)\.googleapis\.com)(?:[\w-]+\.)*googleapis\.com|accounts\.google\.com/],
 ]
 /** The API path written in the call itself — decides before the file's hosts (a file can mix channels). */
 const API_PATHS: Array<[Channel, RegExp]> = [

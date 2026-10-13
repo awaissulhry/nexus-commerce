@@ -98,7 +98,7 @@ async function mockGoogle(page: Page, state: string) {
   await page.route(/\/api\/google-ads\/overview(\?|$)/, (r) => r.fulfill(json(overview(state))))
   await page.route(/\/api\/google-ads\/campaigns(\?|$)/, (r) => r.fulfill(json({ window: overview(state).window, currency: 'EUR', dataAsOf: null, coverage: overview(state).coverage, items: [CAMPAIGN], nextCursor: null, total: 1 })))
   await page.route(/\/api\/google-ads\/campaigns\/[^/]+\/days(\?|$)/, (r) => r.fulfill(json({ campaign: CAMPAIGN, currency: 'EUR', window: overview(state).window, coverage: overview(state).coverage, days: DAYS })))
-  await page.route(/\/api\/google-ads\/campaigns\/[^/]+\/changes(\?|$)/, (r) => r.fulfill(json({ items: [{ changedAt: '2026-10-05T10:00:00Z', resourceType: 'CAMPAIGN', operation: 'UPDATE', changedFields: ['status'], source: 'google_automatic', sourceText: 'Google, automatically', summary: 'Status changed' }], coveredFrom: '2026-09-13' })))
+  await page.route(/\/api\/google-ads\/campaigns\/[^/]+\/changes(\?|$)/, (r) => r.fulfill(json({ items: [{ changedAt: '2026-10-05T10:00:00Z', resourceType: 'CAMPAIGN', operation: 'UPDATE', changedFields: ['status'], source: 'google_automatic', sourceText: 'Google, automatically', summary: 'Status changed' }], coveredFrom: '2026-09-13T22:00:00.000Z', coveredThrough: '2026-10-13T06:00:00.000Z' })))
   await page.route(/\/api\/google-ads\/sync(\?|$)/, (r) => r.fulfill(json({ queued: false, reason: 'A read ran less than an hour ago.' })))
   await page.route(/\/api\/google-ads\/connections(\?|$)/, (r) => r.fulfill(json({ items: state === 'not_connected' ? [] : [googleAccount(state, state !== 'choose_account')] })))
   await page.route(/\/api\/google-ads\/connections\/[^/]+\/choices(\?|$)/, (r) => r.fulfill(json(CHOICES)))

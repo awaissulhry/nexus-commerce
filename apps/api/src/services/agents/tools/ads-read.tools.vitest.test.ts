@@ -607,6 +607,8 @@ describe('Google Ads step 1a — ads-overview and ad-campaigns on Google, read o
       // Yesterday is not read yet: no numbers for it, never a zero.
       coverage: { daysInWindow: 7, daysRead: 6, missingDays: [G_YESTERDAY] },
       totals: { impressions: 800, clicks: 23, conversions: 1.5, spendCents: 7754, conversionValueCents: 9877, roas: 98_765_000 / 77_543_000 },
+      // A day of the window is not read: no comparison with the window before (it would set partial totals against full ones).
+      previous: null,
       campaigns: { total: 3, byStatus: { ENABLED: 1, PAUSED: 1, REMOVED: 1 } },
       counting: expect.stringMatching(/as Google counts them/),
     })

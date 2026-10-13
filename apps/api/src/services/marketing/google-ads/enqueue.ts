@@ -62,6 +62,8 @@ async function claimManual(key: string, now: Date): Promise<boolean> {
 /** Why a manual read of this account is refused now, or null when it may run. */
 async function manualRefusal(customerId: string, now: Date): Promise<string | null> {
   const account = await getGoogleAdsCustomer(customerId)
+  // When the last run that called Google ended (store.ts stamps it only then): a run skipped for want of allowance, or
+  // refused before anything was sent, read nothing, so it never says "Nexus read this account at …".
   const last = account?.lastSyncAt ?? null
   if (last && now.getTime() - last.getTime() < MANUAL_INTERVAL_MS) {
     return `Nexus read this Google Ads account at ${hhmm(last)}. It reads it again on request at most once an hour: ask again after ${hhmm(new Date(last.getTime() + MANUAL_INTERVAL_MS))}.`

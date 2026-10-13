@@ -131,6 +131,7 @@ export interface GoogleOverview {
   dataAsOf: string | null
   coverage: GoogleCoverage
   totals: GoogleMetrics | null
+  /** The window before, of the same length; null unless Nexus read every day of this window AND of that one. */
   previous: (GoogleMetrics & { from: string; to: string }) | null
   days: GoogleDay[]
 }
@@ -151,7 +152,8 @@ export interface GoogleCampaign {
   budgetShared: boolean
   startDate: string | null
   endDate: string | null
-  settingsReadAt: string
+  /** When Nexus last read these settings; null when it never did (a campaign seen only in the numbers, removed or new). */
+  settingsReadAt: string | null
   /** Null when Nexus read no day of this campaign in the window. */
   metrics: GoogleMetrics | null
 }
@@ -189,7 +191,13 @@ export interface GoogleChange {
 
 export interface GoogleCampaignChanges {
   items: GoogleChange[]
+  /**
+   * The span whose changes Nexus read in full: from `coveredFrom` (the oldest instant Google still answers for, about
+   * 30 days back) to `coveredThrough` (where Nexus's reading stopped). `coveredFrom` is null when that span is empty;
+   * `coveredThrough` is null when Nexus never read the change history.
+   */
   coveredFrom: string | null
+  coveredThrough: string | null
 }
 
 export interface GoogleSyncAnswer {

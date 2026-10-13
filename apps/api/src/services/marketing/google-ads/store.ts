@@ -126,14 +126,16 @@ export function connectionSyncOf(outcome: Pick<SyncOutcome, 'status' | 'error' |
 }
 
 /**
- * The account's read state after a run. A run that never reached Google (no allowance) keeps the last success. The
- * Google sign-in the account is read through gets the same end as its "Last sync" (`connectionSyncOf`).
+ * The account's read state after a run. `lastSyncAt` is when the last run that called Google ended (one that spent an
+ * operation): a run that never reached Google (no allowance, or the gateway refused before sending) keeps the time of
+ * the last real read and the last success, and says why in its status and sentence. The Google sign-in the account is
+ * read through gets the same end as its "Last sync" (`connectionSyncOf`).
  */
 export async function recordSyncOutcome(customerId: string, outcome: SyncOutcome) {
   const account = await prisma.googleAdsCustomer.update({
     where: { google_ads_customer: workspaceKey({ customerId }) },
     data: {
-      lastSyncAt: outcome.at,
+      ...(outcome.ops > 0 ? { lastSyncAt: outcome.at } : {}),
       lastSyncStatus: outcome.status,
       lastSyncError: outcome.error,
       opsUsedLastRun: outcome.ops,

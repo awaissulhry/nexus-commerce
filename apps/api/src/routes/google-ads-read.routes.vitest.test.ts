@@ -121,7 +121,7 @@ describe('the read routes answer the contract', () => {
 
     const changes = await get(`/api/google-ads/campaigns/${ids.a}/changes`)
     expect(changes.statusCode).toBe(200)
-    expect(changes.json()).toEqual({ coveredFrom: expect.any(String), items: [expect.objectContaining({ source: 'google_ads_web', sourceText: 'Google Ads website', changedFields: ['status'] })] })
+    expect(changes.json()).toEqual({ coveredFrom: expect.any(String), coveredThrough: expect.any(String), items: [expect.objectContaining({ source: 'google_ads_web', sourceText: 'Google Ads website', changedFields: ['status'] })] })
     expect(changes.body).not.toMatch(/example\.test|@/)
   })
 
