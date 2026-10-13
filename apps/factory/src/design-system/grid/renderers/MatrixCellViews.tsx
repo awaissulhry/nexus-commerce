@@ -367,7 +367,7 @@ export const BusinessPriceCell = memo(function BusinessPriceCell(p: MatrixCellPr
       marks={[
         b.rule === 'PERCENT_OFF' && <ProvenanceMark provenance="inherited" tooltip="Follows the price" />,
         b.rule === 'FIXED' && <ProvenanceMark provenance="pinned" tooltip="Exact business price" />,
-        (state === 'business-differs' || state === 'business-reported') && <Reported title={state === 'business-reported' ? 'Set outside Nexus' : 'Amazon shows another business price'} />,
+        (state === 'business-differs' || state === 'business-reported') && <Reported title={state === 'business-reported' ? 'Set outside Nexus' : b.live?.status === 'MATCH' && b.live.normal ? 'Amazon\'s shopper price is not Nexus\'s' : 'Amazon shows another business price'} />,
         state === 'business-hidden' && <Warn />,
         state === 'business-failed' && <Failed />,
         businessOpen(p, cells),

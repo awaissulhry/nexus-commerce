@@ -416,3 +416,14 @@ describe('Amazon Business — the business cell (step 5, Part 1)', () => {
     expect(businessSendOf(null, null)).toBeNull()
   })
 })
+
+describe('the business cell carries the nightly shopper-price difference — only while Nexus\'s price is the one it compared (2026-10-13)', () => {
+  const base = { marketplaceId: 'APJ6JRA9NG5V4', currency: 'EUR', minPrice: null, maxPrice: null, salePrice: null, held: null, row: null, everKept: false }
+  const listing = (normal: unknown) => ({ businessPriceRule: 'PERCENT_OFF', businessPricePercent: 5, businessPrice: null, businessTiers: null,
+    platformAttributes: { amazonBusinessLive: { status: 'MATCH', amazonPrice: 99.75, nexusPrice: 99.75, at: '2026-10-13T04:30:00.000Z', normal } } })
+  it('passed on while Nexus\'s normal price is unchanged; dropped once it moved (the difference is old)', () => {
+    expect(businessCellOf({ ...base, listing: listing({ amazon: 109, nexus: 105 }), normalPrice: 105 } as never)!.live).toMatchObject({ normal: { amazon: 109, nexus: 105 } })
+    expect(businessCellOf({ ...base, listing: listing({ amazon: 109, nexus: 105 }), normalPrice: 109 } as never)!.live).toBeNull()
+    expect(businessCellOf({ ...base, listing: listing(null), normalPrice: 105 } as never)!.live).not.toHaveProperty('normal')
+  })
+})

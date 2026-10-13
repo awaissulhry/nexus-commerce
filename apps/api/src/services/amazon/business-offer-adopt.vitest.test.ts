@@ -128,4 +128,12 @@ describe('adoptAmazonBusinessOffers', () => {
     expect(await scoped(() => adoptAmazonBusinessOffers({ throttleMs: 0 }))).toMatchObject({ markets: 1, failedPages: 1, adopted: 0, missing: 0 })
     expect(JSON.stringify((await rowOf(2))!.platformAttributes)).toBe(before)
   })
+
+describe('the nightly check compares the shopper price too (2026-10-13)', () => {
+  it('Amazon\'s shopper price is not Nexus\'s: kept beside the check (the business price follows Nexus\'s; a first one would send it)', async () => {
+    pages([item('TEST-AD-2', all(42), b2b(37.95))])
+    await scoped(() => adoptAmazonBusinessOffers({ throttleMs: 0 }))
+    expect((await rowOf(2))!.platformAttributes).toMatchObject({ amazonBusinessLive: { status: 'MATCH', amazonPrice: 37.95, nexusPrice: 37.95, normal: { amazon: 42, nexus: 39.95 } } })
+  })
+})
 })

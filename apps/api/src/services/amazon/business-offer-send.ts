@@ -134,6 +134,17 @@ export async function sendAmazonBusinessOffer(input: {
   if (plan.kind === 'replace' && input.normalRefusal) {
     return finish({ ok: false, itemLevel: true, status: 'REFUSED', line: `The first business offer is sent with the normal offer, and its price may not go: ${input.normalRefusal}` })
   }
+  /* A FIRST business offer is sent with the normal offer (a replace): while Amazon's shopper price is not Nexus's, it would
+     also change what shoppers pay (10-13: a −5 % copy moved a size from €105 to €99). Not sent, with both numbers; tried
+     again by itself (a price push still on its way to Amazon catches up), and the nightly check sends it once the two
+     prices agree — never a final refusal that would keep it from going once they do. */
+  if (plan.kind === 'replace') {
+    const amazonNormal = scheduled(liveNormalInstance(read.instances, input.marketplaceId)?.our_price)
+    if (amazonNormal != null && input.normalPrice != null && Math.abs(amazonNormal - input.normalPrice) >= 0.005) {
+      const money = (v: number) => `${input.currency} ${v.toFixed(2)}`
+      return finish({ ok: false, retryable: true, status: 'FAILED', line: `Not sent: Amazon's shopper price is ${money(amazonNormal)} and Nexus's is ${money(input.normalPrice)}. A first business price is sent with the shopper price, so it would change what shoppers pay. Make the two prices the same; the business price is then sent by itself.` })
+    }
+  }
   if (plan.kind === 'replace' && input.unchanged && !(await input.unchanged())) {
     return finish({ ok: false, retryable: true, status: 'DEFERRED', line: 'The listing changed while its business price was being sent; it is sent again from the newer values.' })
   }

@@ -892,3 +892,12 @@ describe('the B2B price and Tiers cells (Amazon Business)', () => {
     expect(html('businessPrice', cells({ business: null }))).toMatch(/nds-cell-muted.*—/s)
   })
 })
+
+describe('the B2B price cell says when Amazon\'s shopper price is not Nexus\'s (2026-10-13)', () => {
+  it('the nightly check found another shopper price: ⇄ state, and both prices in the tooltip', () => {
+    const c = cells({ business: biz({ live: { status: 'MATCH', amazonPrice: 99.75, at: '2026-09-13T04:30:00.000Z', normal: { amazon: 109, nexus: 105 } } }) })
+    expect(matrixCellState('businessPrice', c)).toBe('business-differs')
+    expect(matrixCellTooltip('businessPrice', c, COORD, MATRIX_CELL_COPY, NOW)).toBe("Amazon's shopper price is €109.00, Nexus's is €105.00 · checked 32 min ago · 5% below the price €105.00")
+    expect(html('businessPrice', c)).toContain('nds-matrix-reported')
+  })
+})

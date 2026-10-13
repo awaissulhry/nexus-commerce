@@ -198,7 +198,7 @@ export interface BusinessCell {
   warnings: string[]
   held: string | null
   send: BusinessSendState | null
-  live: { status: 'MATCH' | 'DIFFERS' | 'MISSING'; amazonPrice: number | null; at: string } | null
+  live: { status: 'MATCH' | 'DIFFERS' | 'MISSING'; amazonPrice: number | null; at: string; normal?: { amazon: number; nexus: number } | null } | null
   reported: { price: number } | null
 }
 

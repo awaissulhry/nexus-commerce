@@ -139,13 +139,30 @@ describe('a business row sends the business offer alone', () => {
     expect(result).toMatchObject({ success: false, errorCode: 'AMAZON_BUSINESS_PRICE_RETRY', retryable: true })
   })
 
-  it('a first business offer carries NEXUS\'s normal price — never an older one Amazon still shows', async () => {
+  it('a first business offer waits while Amazon\'s shopper price is not Nexus\'s (it would change what shoppers pay) — tried again, both prices said', async () => {
     m.read.mockResolvedValue(listing({ businessPriceRule: 'FIXED', businessPrice: 99, price: 110, priceOverride: 110 }))
     m.get.mockResolvedValue(liveRead([{ ...allIt, our_price: priceOf(105) }])) // Amazon has not applied 110 yet
+    const result = await service.syncToAmazon(businessRow())
+    expect(m.offerPatch).not.toHaveBeenCalled()
+    expect(result).toMatchObject({ success: false, retryable: true })
+    expect(kept()).toMatchObject({ status: 'FAILED', line: "Not sent: Amazon's shopper price is EUR 105.00 and Nexus's is EUR 110.00. A first business price is sent with the shopper price, so it would change what shoppers pay. Make the two prices the same; the business price is then sent by itself." })
+  })
+
+  it('a first business offer goes once Amazon shows Nexus\'s shopper price: the replace carries Nexus\'s normal offer', async () => {
+    m.read.mockResolvedValue(listing({ businessPriceRule: 'FIXED', businessPrice: 99, price: 110, priceOverride: 110 }))
+    m.get.mockResolvedValue(liveRead([{ ...allIt, our_price: priceOf(110) }]))
     await service.syncToAmazon(businessRow())
     const sent = m.offerPatch.mock.calls[0][0]
     expect(sent.op).toBe('replace')
     expect(sent.value.find((i: any) => i.audience === 'ALL').our_price).toEqual(priceOf(110))
+  })
+
+  it('a listing that follows the master price with an empty price column: its normal price is the master\'s (the number its push sends)', async () => {
+    m.read.mockResolvedValue(listing({ businessPriceRule: 'FIXED', businessPrice: 32.95, price: null, priceOverride: null, followMasterPrice: true }))
+    m.get.mockResolvedValue(liveRead([{ ...allIt, our_price: priceOf(39.95) }]))
+    await service.syncToAmazon(businessRow({ basePrice: 39.95 }))
+    expect(m.offerPatch.mock.calls[0][0]).toMatchObject({ op: 'replace' })
+    expect(m.offerPatch.mock.calls[0][0].value.find((i: any) => i.audience === 'ALL').our_price).toEqual(priceOf(39.95))
   })
 
   it('the listing changed while the job ran: a first offer is not sent; the row is retried from the newer values', async () => {

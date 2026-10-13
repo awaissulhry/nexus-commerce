@@ -260,8 +260,9 @@ export interface BusinessCell {
   /** The listing cannot be sent to now (paused, a draft, Inactive…): the sentence; null = it can. */
   held: string | null
   send: BusinessSendState | null
-  /** The nightly check of the business price shown here (only when it checked this very price). */
-  live: { status: 'MATCH' | 'DIFFERS' | 'MISSING'; amazonPrice: number | null; at: string } | null
+  /** The nightly check of the business price shown here (only when it checked this very price). `normal`: Amazon's
+   *  shopper price is not Nexus's (the business price follows Nexus's; a first one would send it). */
+  live: { status: 'MATCH' | 'DIFFERS' | 'MISSING'; amazonPrice: number | null; at: string; normal?: { amazon: number; nexus: number } | null } | null
   /** Amazon shows a business price Nexus has never kept for this listing (set outside Nexus). */
   reported: { price: number } | null
 }

@@ -35,7 +35,7 @@ import { isOwnConnection, listActiveConnections } from '../connection-resolver.s
 import { businessTypeCandidates, loadBusinessAudiences } from '../categories/seller-offer-audience.service.js'
 import { businessHeld } from './business-held.js'
 import { loadAmazonOfferFacts } from '../amazon/offer-facts.js'
-import { BUSINESS_PRICE_SYNC_TYPE, storedBusinessSetting } from '../amazon/business-offer.js'
+import { BUSINESS_PRICE_SYNC_TYPE, businessNormalPrice, storedBusinessSetting } from '../amazon/business-offer.js'
 import { FOLLOWER_PRICE_HOLD_MS, listingMarketCurrency } from './follower-price.js'
 import { businessListingReason, PARENT_PRICE_REASON } from './matrix-cells.js'
 import type { MarketCurrencyRow } from './market-currency.js'
@@ -80,7 +80,7 @@ const LISTING_SELECT = {
   externalListingId: true, syncPaused: true, listingStatus: true, isPublished: true, offerClosedAt: true, platformAttributes: true,
   price: true, priceOverride: true, followMasterPrice: true, pricingRule: true, priceAdjustmentPercent: true,
   businessPriceRule: true, businessPricePercent: true, businessPrice: true, businessTiers: true,
-  product: { select: { isParent: true, productType: true, parent: { select: { productType: true } } } },
+  product: { select: { isParent: true, productType: true, basePrice: true, parent: { select: { productType: true } } } },
 } satisfies Prisma.ChannelListingSelect
 
 /** One shape per meaning: a percent rule carries no price, an exact price no percent, tiers only their own keys. */
@@ -152,7 +152,7 @@ export async function writeBusinessPrices(input: {
     const currency = listingMarketCurrency(l, currencyRows)
     const offer = facts.get(l.id)?.values
     // The normal price as the push sends it (job-lane facts): the same number the Amazon send checks against.
-    const normal = offer?.our_price.price ?? null
+    const normal = businessNormalPrice(l, offer?.our_price.price, { masterPrice: l.product?.basePrice, marketCurrency: currency })
     let businessPrice: number | null = null
     let warnings: string[] = []
     // Copying in what Amazon already holds: never over a setting Nexus manages (the write below is conditional on it too).

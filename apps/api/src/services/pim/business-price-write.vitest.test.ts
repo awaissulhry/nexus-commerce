@@ -42,6 +42,8 @@ beforeAll(() => scoped(async () => {
   await listing('it', 'bp-c', 'AMAZON', 'IT')
   await listing('itMin', 'bp-c', 'AMAZON', 'IT', { aliasKey: 'min', platformAttributes: { amazonOffer: { minimum_seller_allowed_price: 100 } } })
   await listing('itSale', 'bp-c', 'AMAZON', 'IT', { aliasKey: 'sale', salePrice: 89 })
+  // Follows the master price and its own price column was never filled (a linked or imported listing).
+  await listing('itFollow', 'bp-c', 'AMAZON', 'IT', { aliasKey: 'follow', price: null, priceOverride: null, followMasterPrice: true })
   await listing('de', 'bp-c', 'AMAZON', 'DE')
   await listing('fr', 'bp-c', 'AMAZON', 'FR')
   await listing('parent', 'bp-p', 'AMAZON', 'IT')
@@ -248,4 +250,12 @@ it('copying in loses to a person who set a price between the read and the write:
   expect(r.outcome).toBe('conflict')
   const row = await scoped(() => prisma.channelListing.findUnique({ where: { id }, select: { businessPrice: true } }))
   expect(Number(row!.businessPrice)).toBe(77)
+})
+
+describe('the normal price a business price follows is the one the push sends (2026-10-13)', () => {
+  it('a listing that follows the master with an empty price column: its normal price is the master\'s — saved, never "no normal price"', async () => {
+    const v = await versionOf('itFollow')
+    const r = await write([{ listingId: ids.itFollow!, expectedVersion: v, setting: pct(5) }])
+    expect(r.results[0]).toMatchObject({ outcome: 'applied', businessPrice: 99.75 })
+  })
 })

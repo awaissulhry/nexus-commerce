@@ -66,7 +66,7 @@ import { normaliseCategory } from '../categories/schema-coverage.service.js'
 import { detectEuIntentConflict } from '../amazon-eu-quantity-guard.js'
 import { readAmazonOfferDraft } from '../amazon/offer-draft.js'
 import { amazonMarketplaceIdOf, readAmazonOfferFacts } from '../amazon/offer-facts.js'
-import { BUSINESS_PRICE_SYNC_TYPE } from '../amazon/business-offer.js'
+import { BUSINESS_PRICE_SYNC_TYPE, businessNormalPrice } from '../amazon/business-offer.js'
 import { businessTypeCandidates, loadBusinessAudiences } from '../categories/seller-offer-audience.service.js'
 import { businessHeld } from './business-held.js'
 import { listingQuantityVerdict } from './listing-quantity-verdict.js'
@@ -104,7 +104,7 @@ const MEMBER_SELECT = { ...FAMILY_MEMBER_SELECT, fulfillmentMethod: true } as co
 export const MATRIX_LISTING_SELECT = {
   id: true, productId: true, channel: true, marketplace: true, region: true, aliasId: true, aliasKey: true, channelConnectionId: true,
   listingStatus: true, isPublished: true, externalListingId: true, version: true,
-  price: true, salePrice: true, priceOverride: true, followMasterPrice: true,
+  price: true, salePrice: true, priceOverride: true, followMasterPrice: true, pricingRule: true, priceAdjustmentPercent: true,
   followMasterQuantity: true, quantity: true, quantityOverride: true, stockBuffer: true, syncPaused: true, sourceLocationCodes: true,
   offerClosedAt: true, offerCloseReason: true, offerActive: true, fulfillmentMethod: true, platformAttributes: true, lastSyncStatus: true, syncStatus: true,
   // Amazon Business — the business offer Nexus keeps (the business cell; `@nexus/shared/business-price`).
@@ -672,7 +672,8 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
         const facts = readAmazonOfferFacts({ ...primary, saleWindow: window ?? null }, 'job').values
         business = businessCellOf({
           listing: primary, marketplaceId: amazonMarketplaceIdOf(primary.marketplace) ?? '', currency: coord.currency,
-          normalPrice: facts.our_price.price, minPrice: facts.minimum_seller_allowed_price, maxPrice: facts.maximum_seller_allowed_price,
+          normalPrice: businessNormalPrice(primary, facts.our_price.price, { masterPrice: member.basePrice, marketCurrency: coord.currency }),
+          minPrice: facts.minimum_seller_allowed_price, maxPrice: facts.maximum_seller_allowed_price,
           salePrice: facts.sale?.start && facts.sale?.end ? facts.sale.price : null,
           held: businessHeld(primary), row: businessRowOf.get(primary.id) ?? null, everKept: everKept.has(primary.id),
         })

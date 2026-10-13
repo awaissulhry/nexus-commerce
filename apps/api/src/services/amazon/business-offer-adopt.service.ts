@@ -35,7 +35,8 @@ import { CHANNEL_SKU_LISTING_SELECT, productForChannelSku, type ChannelSkuProduc
 import { listingSendSku } from '../listings/listing-send-sku.js'
 import { queueBusinessSends, writeBusinessPrices, type BusinessPriceWriteTarget } from '../pim/business-price-write.service.js'
 import { readAmazonOfferFacts } from './offer-facts.js'
-import { amazonBusinessElement, liveBusinessInstance, sameBusinessOffer, storedBusinessSetting } from './business-offer.js'
+import { amazonBusinessElement, businessNormalPrice, liveBusinessInstance, liveNormalInstance, sameBusinessOffer, storedBusinessSetting } from './business-offer.js'
+import { marketCurrency } from '../pim/market-currency.js'
 import { businessSendSignature } from './business-offer-send.js'
 
 const record = (v: unknown): Record<string, any> | null => (v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, any> : null)
@@ -83,8 +84,11 @@ export interface AdoptCounts {
 }
 
 type LiveStatus = 'MATCH' | 'DIFFERS' | 'MISSING'
-/** Keep what Amazon holds against what Nexus sends, on the listing (`platformAttributes.amazonBusinessLive`). */
-async function recordAmazonBusinessLive(listingId: string, entry: { status: LiveStatus; amazonPrice: number | null; nexusPrice: number | null }) {
+/**
+ * Keep what Amazon holds against what Nexus sends, on the listing (`platformAttributes.amazonBusinessLive`). `normal`: the
+ * shopper price, when Amazon's is not Nexus's — a business price follows Nexus's, and a first one would send it.
+ */
+async function recordAmazonBusinessLive(listingId: string, entry: { status: LiveStatus; amazonPrice: number | null; nexusPrice: number | null; normal?: { amazon: number; nexus: number } | null }) {
   const value = JSON.stringify({ ...entry, at: new Date().toISOString() })
   await prisma.$executeRaw`UPDATE "ChannelListing" SET "platformAttributes" = jsonb_set(COALESCE("platformAttributes", '{}'::jsonb), '{amazonBusinessLive}', ${value}::jsonb, true) WHERE id = ${listingId}`
 }
@@ -122,8 +126,14 @@ export async function adoptAmazonBusinessOffers(opts: { throttleMs?: number; lab
       // the SKU Amazon holds for them: verified, never copied over.
       const managedRows = await prisma.channelListing.findMany({
         where: { channel: 'AMAZON', marketplace: market, channelConnectionId: connection.id, OR: [{ businessPriceRule: { not: null } }, { overrideHistory: { some: { fieldName: 'businessPrice' } } }] },
-        select: { ...CHANNEL_SKU_LISTING_SELECT, businessPriceRule: true, businessPricePercent: true, businessPrice: true, businessTiers: true, price: true, priceOverride: true, followMasterPrice: true, salePrice: true },
+        select: { ...CHANNEL_SKU_LISTING_SELECT, businessPriceRule: true, businessPricePercent: true, businessPrice: true, businessTiers: true, price: true, priceOverride: true, followMasterPrice: true, salePrice: true,
+          pricingRule: true, priceAdjustmentPercent: true, product: { select: { sku: true, deletedAt: true, basePrice: true } } },
       })
+      let currency: string | null = null
+      try { currency = await marketCurrency('AMAZON', market) } catch { currency = null }
+      /** The normal price a business price follows here (the one rule: `businessNormalPrice`). */
+      const normalOf = (l: typeof managedRows[number]) =>
+        businessNormalPrice(l, readAmazonOfferFacts({ ...l, marketplace: market }, 'job').values.our_price.price, { masterPrice: l.product?.basePrice, marketCurrency: currency })
       const managed = new Map(managedRows.flatMap((l) => {
         const sku = listingSendSku(l as never, l.product?.sku, '').sku
         return sku ? [[sku, l] as const] : []
@@ -161,14 +171,17 @@ export async function adoptAmazonBusinessOffers(opts: { throttleMs?: number; lab
           if (kept) {
             seenManaged.add(kept.id)
             const setting = storedBusinessSetting(kept)
-            const normal = readAmazonOfferFacts({ ...kept, marketplace: market }, 'job').values.our_price.price
+            const normal = normalOf(kept)
+            const offers = Array.isArray(record(item?.attributes)?.purchasable_offer) ? (record(item.attributes)!.purchasable_offer as unknown[]).map(record).filter((o): o is Record<string, any> => !!o) : []
+            const amazonNormal = priceOfInstance(liveNormalInstance(offers, marketplaceId))
+            const normalDiffers = setting && amazonNormal != null && normal != null && Math.abs(amazonNormal - normal) >= 0.005 ? { amazon: amazonNormal, nexus: normal } : null
             const price = setting ? businessPriceOf(setting, normal) : null
             const expected = setting && price != null ? amazonBusinessElement({ marketplaceId, currency: String(instance?.currency ?? ''), price, tiers: setting.tiers }) : null
             // Nexus keeps none (a person removed it): Amazon should hold none either.
             const status: LiveStatus = !setting ? (instance ? 'DIFFERS' : 'MATCH')
               : !instance ? 'MISSING' : expected && sameBusinessOffer(instance, expected) ? 'MATCH' : 'DIFFERS'
             if (status === 'MATCH') counts.verified++; else if (status === 'DIFFERS') counts.differs++; else counts.missing++
-            await recordAmazonBusinessLive(kept.id, { status, amazonPrice: priceOfInstance(instance), nexusPrice: price })
+            await recordAmazonBusinessLive(kept.id, { status, amazonPrice: priceOfInstance(instance), nexusPrice: price, normal: normalDiffers })
             if (status !== 'MATCH') differs(kept, setting, normal)
             continue
           }
@@ -194,7 +207,7 @@ export async function adoptAmazonBusinessOffers(opts: { throttleMs?: number; lab
           if (seenManaged.has(l.id) || !storedBusinessSetting(l)) continue
           counts.missing++
           await recordAmazonBusinessLive(l.id, { status: 'MISSING', amazonPrice: null, nexusPrice: null })
-          differs(l, storedBusinessSetting(l), readAmazonOfferFacts({ ...l, marketplace: market }, 'job').values.our_price.price)
+          differs(l, storedBusinessSetting(l), normalOf(l))
         }
       }
       if (resend.length) counts.resent += (await queueBusinessSends({ listingIds: resend, actor: 'amazon-business-offer-verify', source: 'BUSINESS_PRICE_VERIFY', staggerMs: 5_000 })).length

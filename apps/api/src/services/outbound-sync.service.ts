@@ -67,7 +67,7 @@ import { ebayListingLanguage } from './gateway/channels.js';
 import { tryResolveConnection } from './connection-resolver.service.js'
 import { syncNativeShopifyOffer } from './shopify/offer-sync.service.js'
 import { amazonOfferReadFailure, amazonPriceOfferPlan, readAmazonOfferLive } from './amazon/purchasable-offer.js'
-import { BUSINESS_PRICE_SYNC_TYPE, storedBusinessSetting } from './amazon/business-offer.js'
+import { BUSINESS_PRICE_SYNC_TYPE, businessNormalPrice, storedBusinessSetting } from './amazon/business-offer.js'
 import { sendAmazonBusinessOffer, type BusinessSendOutcome } from './amazon/business-offer-send.js'
 import { readAmazonOfferFacts, type AmazonOfferFacts } from './amazon/offer-facts.js'
 import { AMAZON_PRICE_OUTSIDE_SELLER_BOUNDS, amazonFulfillmentAvailability, amazonPurchasableOffer, amazonSellerBoundsRefusal } from './amazon/offer-attributes.js'
@@ -1305,6 +1305,7 @@ export class OutboundSyncService {
           select: {
             platformAttributes: true, fulfillmentMethod: true, quantity: true, stockBuffer: true, marketplace: true, syncPaused: true, offerClosedAt: true,
             salePrice: true, sourceLocationCodes: true, price: true, priceOverride: true, followMasterPrice: true, followMasterQuantity: true,
+            pricingRule: true, priceAdjustmentPercent: true,
             productId: true, aliasKey: true, channelSku: true, liveChannelSku: true, listingStatus: true, isPublished: true, externalListingId: true,
             flatFileSnapshot: true, offers: { select: { sku: true, isActive: true, fulfillmentMethod: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
             // Amazon Business step 4 — the business setting the push sends (read at send time, never from the row).
@@ -1524,9 +1525,11 @@ export class OutboundSyncService {
           return { success: false, queueId, channel: "AMAZON", status: "FAILED", message: err.message, error: err.message, errorCode: err.code, retryable: false };
         }
       }
-      // The normal price the listing holds (its own price columns, as the job-lane facts read them — the number a price
-      // push sends) is what a percent-off price follows.
-      const held = offerFacts.values.our_price.price;
+      // The normal price a business price follows: the number a price push sends (`businessNormalPrice` — the one rule the
+      // door, the Matrix and the nightly check use too; a following listing with an empty price column included).
+      let heldCurrency: string | null = null;
+      try { heldCurrency = await marketCurrency('AMAZON', cl.marketplace); } catch { heldCurrency = null; }
+      const held = businessNormalPrice(cl, offerFacts.values.our_price.price, { masterPrice: product?.basePrice, marketCurrency: heldCurrency });
       // A first business offer's replace carries that normal price: held to the same floor/ceiling and Amazon bounds a
       // price push is (a merge or a removal does not send it).
       let normalRefusal: string | null = null;
