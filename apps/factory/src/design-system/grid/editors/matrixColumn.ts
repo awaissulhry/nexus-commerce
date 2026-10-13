@@ -44,6 +44,7 @@ import { MATRIX_CELL_RENDERERS, matrixWaitingLine, type MatrixCellParams } from 
 import {
   MATRIX_CELL_CLASSES,
   matrixApplyValue,
+  matrixBusinessSortValue,
   matrixCellClasses,
   matrixCellEditable,
   matrixCellText,
@@ -53,6 +54,7 @@ import {
   matrixCompare,
   matrixFillAllowed,
 } from '../renderers/matrixCells'
+import { BusinessOpenEditor, typesCharacter } from './BusinessOpenEditor'
 import { formulaCellEditorSelector, type FormulaWiring } from './FormulaCellEditor'
 import { CellSaveTracker, roundTripClassRules } from './roundTrip'
 import { SaleCellEditor } from './SaleCellEditor'
@@ -141,11 +143,20 @@ function editorFor<T>(kind: MatrixCellKind, opts: MatrixColumnOptions<T>): Parti
         cellEditorPopupPosition: 'under',
         cellEditorParams: { currency: opts.coordinate.currency },
       }
-    /* The business cells take no typing: the page opens its editor (`onOpenBusiness`, `matrixCellOpens`). */
+    /* Amazon Business: a typed character (or Backspace, Delete) edits the cell like any other — `5%`, `32.95`,
+       `2+ 3% · 5+ 5%`, empty = none; Enter, F2 or a double-click open the page's business price editor, when it has one. */
+    case 'businessPrice':
+    case 'businessTiers': {
+      const open = opts.onOpenBusiness
+      if (!open) return { cellEditor: 'agTextCellEditor' }
+      return {
+        cellEditorSelector: (p: { eventKey?: string | null }) => (typesCharacter(p.eventKey)
+          ? { component: 'agTextCellEditor' }
+          : { component: BusinessOpenEditor, popup: true, params: { open: (params: unknown, anchor: HTMLElement | null) => open(params as ICellRendererParams, anchor) } }),
+      } as Partial<ColDef<T>>
+    }
     case 'listing':
     case 'syncState':
-    case 'businessPrice':
-    case 'businessTiers':
       return {}
   }
 }
@@ -263,6 +274,9 @@ export function matrixColumnDef<T>(kind: MatrixCellKind, opts: MatrixColumnOptio
       const lines = [matrixCellTooltip(kind, cells(row), coord, copy, now?.()), matrixWaitingLine(kind, cells(row), coord.currency, copy)].filter(Boolean)
       return lines.length ? lines.join(' · ') : undefined
     },
-    comparator: (a: unknown, b: unknown) => matrixCompare(kind, a, b),
+    /* The business cells' value is their rule as text; they sort by the price it gives (`matrixBusinessSortValue`). */
+    comparator: opensEditor
+      ? (_a: unknown, _b: unknown, nodeA: { data?: T }, nodeB: { data?: T }) => matrixCompare(kind, matrixBusinessSortValue(kind, cells(nodeA?.data)), matrixBusinessSortValue(kind, cells(nodeB?.data)))
+      : (a: unknown, b: unknown) => matrixCompare(kind, a, b),
   } as ColDef<T>
 }

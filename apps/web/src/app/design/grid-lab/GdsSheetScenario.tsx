@@ -18,7 +18,7 @@ import type { CellClassParams, CellValueChangedEvent, ColDef, ColGroupDef, GridA
 import { Download, Search, Upload } from 'lucide-react'
 
 import { Button, Input, Pill } from '@/design-system/primitives'
-import { composeCellTooltip, longTextTooltipLine, lengthCapOf, CellSaveTracker, EmptyValue, ExpandButton, ExpandSlot, FollowsCell, GridSearchSlot, GridSelectionActions, GridSheet, GridSheetStatus, GridToolbar, IdentityChip, LongTextCell, NexusGrid, ReadinessCell, SHEET_GRID_OPTIONS, SelectionLabel, SkuTag, euroColumn, gridSelection, lengthValidation, longTextEditor, numericColumn, numericEditor, roundTripClassRules, saveCell, selectEditor, selectValidation, sheetClassRules, sheetPasteProcessor, statusColumn, type ReadinessValue } from '@/design-system/grid'
+import { composeCellTooltip, longTextTooltipLine, lengthCapOf, CellSaveTracker, EmptyValue, ExpandButton, ExpandSlot, FollowsCell, GridSearchSlot, GridSelectionActions, GridSheet, GridSheetStatus, GridToolbar, IdentityChip, LongTextCell, NexusGrid, ReadinessCell, RequiredValue, SHEET_GRID_OPTIONS, SelectionLabel, SkuTag, euroColumn, gridSelection, lengthValidation, longTextEditor, numericColumn, numericEditor, roundTripClassRules, saveCell, selectEditor, selectValidation, sheetClassRules, sheetPasteProcessor, statusColumn, type ReadinessValue } from '@/design-system/grid'
 
 import { registerLabModules } from './labModules'
 import { SHEET_SCHEMA, attrValue, completenessOf, isInherited, makeSheet, readinessOf, type SheetAttr, type SheetRow } from './sheetFixture'
@@ -150,13 +150,13 @@ export function GdsSheetScenario() {
         },
         cellClass: (p) => (p.data && notApplicable(p.data) ? 'nds-ag-cell' : 'nds-ag-cell nds-cell-is-editable'),
       }
-      if (a.kind === 'select') return { ...base, ...selectEditor((a.options ?? []).map((o) => ({ value: o, label: o }))), cellRenderer: (p: ICellRendererParams<SheetRow>) => (p.value == null || p.value === '' ? (a.requiredBy?.length && !(p.data && !p.data.parentSku && a.scope === 'per_variant') ? <span className="nds-cell-required">⚠ required</span> : <EmptyValue />) : <span>{String(p.value)}</span>) }
+      if (a.kind === 'select') return { ...base, ...selectEditor((a.options ?? []).map((o) => ({ value: o, label: o }))), cellRenderer: (p: ICellRendererParams<SheetRow>) => (p.value == null || p.value === '' ? (a.requiredBy?.length && !(p.data && !p.data.parentSku && a.scope === 'per_variant') ? <RequiredValue /> : <EmptyValue />) : <span>{String(p.value)}</span>) }
       if (a.kind === 'boolean') return { ...base, ...selectEditor([{ value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }]), valueGetter: (p) => (p.data ? (attrValue(p.data, a.key, rowsRef.current) === null ? null : String(attrValue(p.data, a.key, rowsRef.current))) : null), valueSetter: (p) => { if (!p.data) return false; patchRow(p.data.id, (r) => { r.attrs[a.key] = p.newValue === 'true' }); return true }, cellRenderer: (p: ICellRendererParams<SheetRow>) => (p.value == null ? <EmptyValue /> : <span>{p.value === 'true' ? 'Yes' : 'No'}</span>) }
       // 🔴 The FIFTH invented cap (`?? 2000`) and the retired renderer shape, both here on one line.
       // `cellRendererParams` dropped `maxBytes`/`capFrom`, so a byte-capped column rendered as
       // uncapped in the very place built to demonstrate the substrate. Raw caps, no default.
       if (a.kind === 'longtext') return { ...base, ...longTextEditor(a.maxLength ? { maxLength: Math.max(a.maxLength, 200) } : {}), cellRenderer: LongTextCell, cellRendererParams: { maxLength: a.maxLength, maxBytes: a.maxBytes, capFrom: a.capFrom, required: !!a.requiredBy?.length } }
-      return { ...base, editable: base.editable, cellEditor: 'agTextCellEditor', cellRenderer: (p: ICellRendererParams<SheetRow>) => (p.value == null || p.value === '' ? (a.requiredBy?.length && p.data?.parentSku ? <span className="nds-cell-required">⚠ required</span> : <EmptyValue />) : <span>{String(p.value)}</span>) }
+      return { ...base, editable: base.editable, cellEditor: 'agTextCellEditor', cellRenderer: (p: ICellRendererParams<SheetRow>) => (p.value == null || p.value === '' ? (a.requiredBy?.length && p.data?.parentSku ? <RequiredValue /> : <EmptyValue />) : <span>{String(p.value)}</span>) }
     }
     const groups = new Map<string, SheetAttr[]>()
     for (const a of SHEET_SCHEMA) groups.set(a.group, [...(groups.get(a.group) ?? []), a])

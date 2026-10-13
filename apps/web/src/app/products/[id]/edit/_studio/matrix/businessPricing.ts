@@ -17,7 +17,7 @@ import {
   type BusinessPriceSetting,
   type BusinessTierType,
 } from '@nexus/shared/business-price'
-import { matrixMoney, matrixNumberText, matrixPercent } from '@/design-system/grid'
+import { matrixBusinessSettingOfCell, matrixMoney, matrixNumberText, matrixPercent } from '@/design-system/grid'
 
 import type { BusinessCell } from './contract'
 
@@ -67,16 +67,8 @@ const tierKey = (): string => `t${++tierSeq}`
 
 const numText = (v: number | null | undefined): string => (v == null ? '' : String(v))
 
-/** What Nexus keeps for this listing now, in the door's own shape; `null` = no business price. */
-export function businessSettingOf(b: BusinessCell): BusinessPriceSetting | null {
-  if (b.rule == null) return null
-  return {
-    rule: b.rule,
-    percent: b.rule === 'PERCENT_OFF' ? b.percent : null,
-    price: b.rule === 'FIXED' ? b.exact : null,
-    tiers: b.tiers ? { type: b.tiers.type, levels: b.tiers.levels.map((l) => ({ minQty: l.minQty, value: l.value })) } : null,
-  }
-}
+/** What Nexus keeps for this listing now, in the door's own shape; `null` = no business price. The engine's one rule. */
+export const businessSettingOf = (b: BusinessCell): BusinessPriceSetting | null => matrixBusinessSettingOfCell(b)
 
 /**
  * The fields the pop-up opens with — the setting Nexus keeps, else a default for every choice: Amazon's own business

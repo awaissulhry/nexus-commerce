@@ -1,21 +1,15 @@
 /**
- * AG.2 — the parity fixture. ONE dataset and ONE column list, fed to BOTH engines.
+ * The lab's frozen campaign rows (`featureFixture.ts` builds the enterprise-feature rows from them).
  *
  * WHY A FIXTURE AND NOT REAL DATA
  * The ads console is unverifiable locally: every data region 401s with no CORS, so a local page
- * renders chrome and empty grids. A parity comparison needs both grids to hold the SAME rows at
- * the SAME moment, which a live fetch cannot guarantee even on prod. So the rows are frozen here
- * and the lab needs no API at all.
+ * renders chrome and empty grids. So the rows are frozen here and the lab needs no API at all.
  *
  * WHY THE NULLS ARE THE POINT
  * `acos` and `ctr` are null on rows that genuinely have no measurement — a campaign that spent
- * nothing has no ACoS, and that is NOT an ACoS of zero. Those rows exist so the lab can show
- * where the blanks land when you sort. AG Grid's default would lead them ascending and trail
- * them descending; `GridColumn.sortValue` is contractually the opposite (KT.3 — a blank sinks
- * BOTH ways). A fixture with no nulls in it would let that regression through silently.
+ * nothing has no ACoS, and that is NOT an ACoS of zero. A fixture with no nulls in it would let a
+ * blank-handling regression through silently.
  */
-import type { GridColumn } from '@/design-system/patterns/workspace-grid/WorkspaceGrid'
-
 export interface LabRow {
   id: string
   name: string
@@ -33,16 +27,6 @@ export interface LabRow {
   budget: number
 }
 
-const eur = (n: number) => `€${n.toFixed(2)}`
-const pct = (n: number) => `${n.toFixed(2)}%`
-
-/**
- * A rounded 0.00% is not a zero. `toFixed` on a null would print "0.00%" and destroy the
- * distinction the column exists to carry, so the blank is rendered as an em dash and the sort
- * value stays null.
- */
-const pctOrBlank = (n: number | null) => (n === null ? '—' : pct(n))
-
 export const LAB_ROWS: LabRow[] = [
   { id: 'c1',  name: 'SP | Brand Defense | Exact',        kind: 'SP', live: true,  spend: 412.55, sales: 2104.30, acos: 19.60, impressions: 84210, clicks: 1204, ctr: 1.43, orders: 96, budget: 60 },
   { id: 'c2',  name: 'SP | Category | Broad',             kind: 'SP', live: true,  spend: 988.12, sales: 3410.88, acos: 28.97, impressions: 210433, clicks: 2988, ctr: 1.42, orders: 141, budget: 120 },
@@ -57,95 +41,3 @@ export const LAB_ROWS: LabRow[] = [
   { id: 'c11', name: 'SB | Store Spotlight',              kind: 'SB', live: true,  spend: 480.33, sales: 2290.14, acos: 20.97, impressions: 130400, clicks: 1502, ctr: 1.15, orders: 88, budget: 70 },
   { id: 'c12', name: 'SD | Audiences | In-Market',        kind: 'SD', live: true,  spend: 96.18,  sales: 144.20,  acos: 66.70, impressions: 44300, clicks: 288,  ctr: 0.65, orders: 6,  budget: 20 },
 ]
-
-const sum = (rows: LabRow[], f: (r: LabRow) => number) => rows.reduce((a, r) => a + f(r), 0)
-
-/**
- * The shared column list. Both engines receive this exact array — if a cell differs between the
- * two panels, the difference is the ENGINE, because the column definition cannot vary.
- */
-export const LAB_COLUMNS: GridColumn<LabRow>[] = [
-  {
-    key: 'kind',
-    label: 'Type',
-    align: 'left',
-    sortable: true,
-    width: 90,
-    render: (r) => r.kind,
-    sortValue: (r) => r.kind,
-  },
-  {
-    key: 'spend',
-    label: 'Spend',
-    sortable: true,
-    width: 120,
-    render: (r) => eur(r.spend),
-    sortValue: (r) => r.spend,
-    total: (rows) => eur(sum(rows, (r) => r.spend)),
-  },
-  {
-    key: 'sales',
-    label: 'Sales',
-    sortable: true,
-    width: 130,
-    render: (r) => eur(r.sales),
-    sortValue: (r) => r.sales,
-    total: (rows) => eur(sum(rows, (r) => r.sales)),
-  },
-  {
-    key: 'acos',
-    label: 'ACoS',
-    sortable: true,
-    width: 110,
-    render: (r) => pctOrBlank(r.acos),
-    // Stays null for "never measured" — the blank-sinking case.
-    sortValue: (r) => r.acos,
-  },
-  {
-    key: 'impressions',
-    label: 'Impressions',
-    sortable: true,
-    width: 130,
-    render: (r) => r.impressions.toLocaleString('en-GB'),
-    sortValue: (r) => r.impressions,
-    total: (rows) => sum(rows, (r) => r.impressions).toLocaleString('en-GB'),
-  },
-  {
-    key: 'clicks',
-    label: 'Clicks',
-    sortable: true,
-    width: 100,
-    render: (r) => r.clicks.toLocaleString('en-GB'),
-    sortValue: (r) => r.clicks,
-    total: (rows) => sum(rows, (r) => r.clicks).toLocaleString('en-GB'),
-  },
-  {
-    key: 'ctr',
-    label: 'CTR',
-    sortable: true,
-    width: 100,
-    render: (r) => pctOrBlank(r.ctr),
-    sortValue: (r) => r.ctr,
-  },
-  {
-    key: 'orders',
-    label: 'Orders',
-    sortable: true,
-    width: 100,
-    render: (r) => r.orders,
-    sortValue: (r) => r.orders,
-    total: (rows) => sum(rows, (r) => r.orders),
-  },
-  {
-    key: 'budget',
-    label: 'Budget',
-    sortable: true,
-    width: 110,
-    freezeRight: true,
-    render: (r) => eur(r.budget),
-    sortValue: (r) => r.budget,
-    total: (rows) => eur(sum(rows, (r) => r.budget)),
-  },
-]
-
-export const LAB_ROW_ID = (r: LabRow) => r.id

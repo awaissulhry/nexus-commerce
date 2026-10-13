@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { CellClassParams, ColDef, HeaderClassParams, IRowNode, SortComparatorFn } from 'ag-grid-community'
 import type { ReactNode } from 'react'
 
-import type { Column } from '../../components/DataGrid'
+import type { Column } from '../../components/dataGridTypes'
 import { CK_COL, EDGE_CELL_RULES, SORTING_ORDER, alignClass, buildColDefs, columnsSignature, edgeHeaderClass, legacyCompare, legacyComparator, orderColumns, splitColumns } from './columns'
 import { CHECKBOX_COL_W } from './geometry'
 

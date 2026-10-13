@@ -1,18 +1,16 @@
 /**
- * AG.2 — /design/grid-lab. The migration's parity harness.
+ * /design/grid-lab — the grid engine's lab: GDS scenarios, enterprise features, the master sheet, Matrix cells, the
+ * Publish review and the module catalogue, each a tab (`?tab=`).
  *
- * A tab under the existing /design living style guide rather than a new top-level route: the
- * style guide is already where this codebase judges a rendering decision, and a grid engine
- * swap is exactly that kind of decision.
- *
- * Needs no API. The ads console cannot be verified locally — its data regions 401 with no CORS —
- * so the lab runs off a frozen fixture and works in local dev, on Vercel, and on prod alike.
+ * A tab under the existing /design living style guide rather than a new top-level route: the style guide is already
+ * where this codebase judges a rendering decision. Needs no API except `?tab=sheet` (live data): the other tabs run off
+ * frozen fixtures and work in local dev and on prod alike.
  */
 import { GridLabClient } from './GridLabClient'
 
-export const metadata = { title: 'Grid parity lab' }
+export const metadata = { title: 'Grid lab' }
 
-export default async function GridLabPage({ searchParams }: { searchParams: Promise<{ scenario?: string; tab?: string }> }) {
-  const { scenario, tab } = await searchParams
-  return <GridLabClient initialScenario={scenario} initialTab={tab} />
+export default async function GridLabPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+  const { tab } = await searchParams
+  return <GridLabClient initialTab={tab} />
 }

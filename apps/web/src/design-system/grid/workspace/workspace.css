@@ -188,7 +188,7 @@
 .nds-ag-ws .nds-ws-empty { text-align: center; color: var(--nds-text-2); padding: 28px; white-space: normal; font-size: var(--nds-font-size-base); font-weight: 500; }
 .nds-ag-ws .nds-ws-empty * { white-space: normal; }
 
-/* ── loading skeleton (CBN.2e.1) — the bars and their one shimmer (`h10sh`, also the grid lab's legacy copy) ── */
+/* ── loading skeleton (CBN.2e.1) — the bars and their one shimmer (`h10sh`) ── */
 .nds-ag-ws .skb { display: inline-block; height: 11px; border-radius: 6px; background: linear-gradient(90deg, var(--nds-grid-skeleton-bg) 25%, var(--nds-grid-skeleton-shine) 37%, var(--nds-grid-skeleton-bg) 63%); background-size: 400% 100%; animation: h10sh 1.3s ease infinite; }
 @keyframes h10sh { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
 
