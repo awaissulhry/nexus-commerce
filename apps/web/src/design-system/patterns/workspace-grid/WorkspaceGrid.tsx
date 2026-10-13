@@ -7,9 +7,7 @@
  * and so does the patterns barrel). It keeps that import path alive and points it at the engine;
  * the props contract, the filter bar, the pure pipeline modules (`filterRows`, `editDrafts`,
  * `rowInteraction`, `enabledRank`) and the preset library are unchanged and still live beside it.
- * The hand-rolled `<table>` implementation (with AGC's additive `chromeless` / `prefs` / `rowHeight`
- * props) is frozen under `app/design/grid-lab/legacy/` for the parity harness and is imported by
- * no product route once the baseline measurement is done.
+ * The hand-rolled `<table>` implementation is gone (grid audit wave 4: the lab's parity harness retired with it).
  */
 export { WorkspaceGrid, AdsFilterBar, stripServerKeys, isServerKey, enabledRank } from '@/design-system/grid/workspace'
 export type {

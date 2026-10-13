@@ -23,7 +23,6 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type Form
 import {
   Banner, ConfirmPhraseField, DateField, Disclosure, EmptyState, Field, Listbox, Modal, phraseMatches, useNarrow,
 } from '@/design-system/components'
-// The DS grid's DataGrid (AG Grid, the same props) — the retiring `components/DataGrid` is on the grid-kit ratchet.
 import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { Button, Checkbox, Divider, Input, RadioCard, SegmentedControl, Skeleton, Tag } from '@/design-system/primitives'
 

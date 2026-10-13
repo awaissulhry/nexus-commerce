@@ -13,6 +13,7 @@ import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { ToolbarButton } from '../primitives/ToolbarButton'
 import { watchGridEscape } from './overlayDismiss'
+import { useHydrated } from './useHydrated'
 
 export interface DrawerProps {
   id?: string
@@ -133,6 +134,7 @@ export function Drawer({
   maxWidth = 900,
   onWidthChange,
 }: DrawerProps) {
+  const hydrated = useHydrated()
   const panel = useRef<HTMLDivElement>(null)
   const returnTo = useRef<Element | null>(null)
   const titleId = useId()
@@ -180,8 +182,9 @@ export function Drawer({
    * sees keystrokes from inside this drawer, and `defaultPrevented` means a
    * consumer that has its own opinion keeps it.
    */
+  // A slide-over's node exists once `hydrated` is true (one open when the page loads draws one render later).
   useEffect(() => {
-    if (!open) return
+    if (!open || !hydrated) return
     // A dock has no trap, by definition. Trapping Tab inside a panel that sits
     // BESIDE a live grid would strand the operator in the panel: the surface
     // the dock annotates is the one they need to Tab back to.
@@ -233,13 +236,13 @@ export function Drawer({
     }
     el.addEventListener('keydown', onKey)
     return () => el.removeEventListener('keydown', onKey)
-  }, [open, dock, embedded])
+  }, [open, hydrated, dock, embedded])
 
   // Focus moves in on open and back to the opener on close — otherwise closing
   // a drawer drops the caret at the top of the document and the operator has
   // to find their place again.
   useEffect(() => {
-    if (!open) return
+    if (!open || !hydrated) return
     returnTo.current = document.activeElement
     /**
      * §5.2 — focus moves to the panel's HEADING on open, and is never trapped.
@@ -274,7 +277,7 @@ export function Drawer({
       const back = returnTo.current
       if (back instanceof HTMLElement && document.contains(back)) back.focus({ preventScroll: true })
     }
-  }, [open, dock])
+  }, [open, hydrated, dock])
 
   /**
    * Pointer resize. The grip is on the panel's LEADING (left) edge and the
@@ -380,7 +383,7 @@ export function Drawer({
     )
   }
 
-  if (typeof document === 'undefined') return null
+  if (!hydrated) return null
 
   return createPortal(
     <>

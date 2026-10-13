@@ -7,6 +7,7 @@ import type { Size } from '../primitives/size'
 import { createLayerStack, ownsKeys, returnFocusOrder, type ReturnFocusTarget } from './modalStack'
 import { createBackdropPress, watchGridEscape } from './overlayDismiss'
 import { opensDark } from '../lib/opens-dark'
+import { useHydrated } from './useHydrated'
 
 // Shared stack keeps background content out of keyboard and assistive-technology navigation. Bottom first: the last
 // dialog opened is on top, answers Esc and Tab, and everything else — the dialogs under it too — is inert (modalStack.ts).
@@ -108,12 +109,13 @@ export function Modal({
   open, onClose, title, subtitle, footer, size = 'sm', children, readable = false, className, anchor, 'aria-label': ariaLabel,
   returnFocusTo, headerActions, subheader, initialFocus = 'first', busy = false,
 }: ModalProps) {
+  const hydrated = useHydrated()
   const titleId = useId()
   const subtitleId = useId()
   const modalRef = useRef<HTMLDivElement>(null)
   const [anchoredStyle, setAnchoredStyle] = useState<CSSProperties>()
   useLayoutEffect(() => {
-    if (!open || !anchor) { setAnchoredStyle(undefined); return }
+    if (!open || !hydrated || !anchor) { setAnchoredStyle(undefined); return }
     const place = () => {
       const dialog = modalRef.current
       if (!dialog || !anchor.isConnected || window.innerWidth < 640) { setAnchoredStyle(undefined); return }
@@ -126,7 +128,7 @@ export function Modal({
     place(); window.addEventListener('resize', place); window.addEventListener('scroll', place, true)
     const observer = new ResizeObserver(place); if (modalRef.current) observer.observe(modalRef.current)
     return () => { observer.disconnect(); window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true) }
-  }, [open, anchor])
+  }, [open, hydrated, anchor])
   const closeRef = useRef(onClose)
   closeRef.current = onClose
   const returnFocusRef = useRef(returnFocusTo)
@@ -139,8 +141,9 @@ export function Modal({
   wasOpen.current = open
   const dark = opensDark(opener.current)
   const backdropPress = useRef(createBackdropPress()).current
+  // The dialog's node exists once `hydrated` is true (a dialog open when the page loads draws one render later).
   useEffect(() => {
-    if (!open) return
+    if (!open || !hydrated) return
     const dialog = modalRef.current
     const previous = opener.current
     const backdrop = dialog?.parentElement
@@ -174,9 +177,9 @@ export function Modal({
       const below = modalStack.top()?.querySelector<HTMLElement>(':scope > [role="dialog"]') ?? null
       for (const target of returnFocusOrder({ override: returnFocusRef.current, opener: previous, below })) if (focusIfAble(target)) break
     }
-  }, [open])
+  }, [open, hydrated])
 
-  if (!open || typeof document === 'undefined') return null
+  if (!open || !hydrated) return null
 
   return createPortal(
     <div
