@@ -261,7 +261,7 @@ export function ImportDialog({ open, onClose, productId, market, onApplied }: { 
             ]} />
             {changes && <span className={styles.muted}>{changes.total.toLocaleString('en')} {changes.total === 1 ? 'row' : 'rows'}</span>}
           </div>
-          <DataGrid ariaLabel="Changes in this file" size="sm" keyboardScroll columns={columns} rows={changes?.changes ?? []} rowKey={c => c.id}
+          <DataGrid ariaLabel="Changes in this file" size="sm" columns={columns} rows={changes?.changes ?? []} rowKey={c => c.id}
             emptyState={changes ? <EmptyState title="Nothing to show here" />
               : <div className={styles.loading} role="status" aria-label="Loading the changes"><Skeleton height={14} /><Skeleton height={14} width="80%" /><Skeleton height={14} width="60%" /></div>} />
           {changes && changes.total > changes.pageSize && <Pagination page={page} pageCount={Math.ceil(changes.total / changes.pageSize)} onPage={setPage} />}

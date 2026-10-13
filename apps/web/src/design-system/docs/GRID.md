@@ -124,6 +124,15 @@ items are "Customise columns…" / "Reset columns" when the page passes `columnD
   cell to cell.
 - **Reading grid** (all others): the mouse selects text and the browser copies it, in screen order; the browser's own
   right-click menu (AG's only when the page brings its own items); Tab leaves the grid in one press.
+- **Keyboard on a reading grid** (step 5, F6 — `readGridKeys.ts`, applied by `useReadGridKeys` in `NexusGrid`, so
+  `DataGrid` and `WorkspaceGrid` too). The grid is ONE stop on the page: Tab enters it on the header, Tab or Shift+Tab
+  leaves it. The arrows move between header and cells (cells take focus). Enter on a cell presses its one link or
+  button; with several, Enter moves into the cell, Tab / Shift+Tab walk its controls, Esc returns to the cell; on a cell
+  with none, Enter opens the row as a click would. Space presses a cell's one button (a tick box: Space only); elsewhere
+  Space stays AG's (it ticks the row). A column with keys of its own (`entityLinksKeys`, `cellDetailKeys`, a switch)
+  keeps them. A grid whose cells hold typing fields is a form: Tab walks the fields. One focus ring, keyboard only
+  (`data-reads`, `data-pointer-focus` in `grid.css`). On `WorkspaceGrid` row keys (`keyboardNav`), the focused cell IS
+  the keyboard row: J / K move it like the arrows, and a verb acts on the row the ring is on.
 - Both: a header dragged out of the grid never hides its column. A click that ends a text selection, or lands in the
   selection column beside its box, never opens the row (`rowInteraction.ts`).
 - A saved view marked default lands even when the server answers after the grid is up (`useGridState`

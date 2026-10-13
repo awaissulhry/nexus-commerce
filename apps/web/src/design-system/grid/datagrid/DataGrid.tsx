@@ -100,7 +100,6 @@ export function DataGrid<T>({
   maxHeight,
   className,
   ariaLabel,
-  keyboardScroll = false,
   customizable,
   storageKey,
   customizeOpen,
@@ -638,7 +637,6 @@ export function DataGrid<T>({
         suppressDragLeaveHidesColumns
         suppressRowTransform
         enableCellTextSelection
-        suppressCellFocus={!keyboardScroll}
         onGridReady={onGridReady}
         onFirstDataRendered={onFirstDataRendered}
         onGridSizeChanged={onGridSizeChanged}

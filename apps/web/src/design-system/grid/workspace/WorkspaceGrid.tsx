@@ -24,7 +24,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { createPortal } from 'react-dom'
 import { Download, Pencil, Search, Settings2, X } from 'lucide-react'
 import type {
-  CellClickedEvent, ColDef, ColumnMovedEvent, ColumnResizedEvent, FirstDataRenderedEvent, GetRowIdParams, GridApi,
+  CellClickedEvent, CellFocusedEvent, ColDef, ColumnMovedEvent, ColumnResizedEvent, FirstDataRenderedEvent, GetRowIdParams, GridApi,
   GridReadyEvent, GridSizeChangedEvent, IRowNode, PostSortRowsParams, RowClassParams, RowClassRules, RowSelectionOptions,
   SelectionChangedEvent, SelectionColumnDef, SortChangedEvent, SortDirection,
 } from 'ag-grid-community'
@@ -617,10 +617,16 @@ export function WorkspaceGrid<T>({
       const list = displayedRows()
       const n = list.length
       if (n === 0) return
-      const i = list.findIndex((x) => x.node.id === focusedIdRef.current)
+      // When the grid holds the focus, its focused cell IS the keyboard row (`onCellFocused` follows it): J / K move it as
+      // the arrows do, and a verb acts on the row the focus ring is on — never on a second, stale one.
+      const api = apiRef.current
+      const cell = api && !api.isDestroyed() && wrap.contains(document.activeElement) ? api.getFocusedCell() : null
+      const i = cell ? list.findIndex((x) => x.node.rowIndex === cell.rowIndex) : list.findIndex((x) => x.node.id === focusedIdRef.current)
       if (action.kind === 'move') {
         e.preventDefault()
-        setFocusedId(list[action.step > 0 ? Math.min(n - 1, i + 1) : Math.max(0, (i < 0 ? 0 : i) - 1)].node.id ?? null)
+        const next = list[action.step > 0 ? Math.min(n - 1, i + 1) : Math.max(0, (i < 0 ? 0 : i) - 1)].node
+        if (cell && next.rowIndex != null) api?.setFocusedCell(next.rowIndex, cell.column)
+        else setFocusedId(next.id ?? null)
         return
       }
       if (i < 0 || i >= n) return
@@ -630,13 +636,26 @@ export function WorkspaceGrid<T>({
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [keyboardNav, displayedRows])
+  // The row keys act on the row the keyboard is on: the arrows move AG's focused cell (a reading grid's cells take focus,
+  // grid audit F6), so the keyboard row follows it — A, P or R on a row the arrows left would act on the wrong one.
+  const onCellFocused = useCallback((e: CellFocusedEvent<Row>) => {
+    if (!keyboardNav || e.rowIndex == null || e.rowPinned) return
+    const id = e.api.getDisplayedRowAtIndex(e.rowIndex)?.id
+    if (id != null && id !== focusedIdRef.current) setFocusedId(id)
+  }, [keyboardNav])
   useEffect(() => {
     const api = apiRef.current
     const prev = focusedIdRef.current
     focusedIdRef.current = focusedId
     if (!api || api.isDestroyed()) return
     const nodes = [prev, focusedId].filter((id): id is string => id != null).map((id) => api.getRowNode(id)).filter((n): n is IRowNode<Row> => !!n)
+    // Redrawing a row rebuilds its cells: a focused cell in it would drop the focus to the page, so it is put back once AG
+    // has drawn the row again.
+    const focused = wrapRef.current?.contains(document.activeElement) ? api.getFocusedCell() : null
     if (nodes.length) api.redrawRows({ rowNodes: nodes })
+    if (focused) requestAnimationFrame(() => {
+      if (!api.isDestroyed() && !wrapRef.current?.contains(document.activeElement)) api.setFocusedCell(focused.rowIndex, focused.column, focused.rowPinned)
+    })
     if (focusedId != null) wrapRef.current?.querySelector('.ag-row.kbd-focus')?.scrollIntoView({ block: 'nearest' })
   }, [focusedId])
   // A focused row that left the page (a filter, a page turn) loses its focus, as the legacy clamp did.
@@ -716,6 +735,7 @@ export function WorkspaceGrid<T>({
         onSortChanged={onSortChanged}
         onSelectionChanged={onSelectionChanged}
         onCellClicked={onCellClicked}
+        onCellFocused={onCellFocused}
         onColumnMoved={onColumnMoved}
         onColumnResized={onColumnResized}
       />

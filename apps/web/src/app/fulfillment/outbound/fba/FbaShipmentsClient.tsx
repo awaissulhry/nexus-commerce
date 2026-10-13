@@ -196,7 +196,6 @@ function FbaShipments() {
           <DataGrid<Row>
             ariaLabel={PAGE_COPY.tabsLabel}
             size="sm"
-            keyboardScroll
             columns={columns}
             rows={rows}
             rowKey={(r) => r.plan.id}

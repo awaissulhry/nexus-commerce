@@ -83,7 +83,7 @@ function ChooseView({ data, choices, searching, onChoose, onSearched, onSearchCl
   return <>
     <p>{summaryLine(data)}</p>
     {data.ebay.message && <Banner tone="info">{data.ebay.message}</Banner>}
-    <DataGrid ariaLabel="Category for each eBay site" keyboardScroll rows={data.sites} rowKey={site => site.market} columns={[
+    <DataGrid ariaLabel="Category for each eBay site" rows={data.sites} rowKey={site => site.market} columns={[
       { key: 'site', label: 'Site', width: 90, render: site => siteLabel(site.market) },
       { key: 'category', label: 'Category', width: 250, render: site => <Listbox size="sm" width="100%" ariaLabel={`Category for ${siteLabel(site.market)}`}
         options={siteOptions(site, choices[site.market] ?? null)} value={choices[site.market]?.categoryId ?? LEAVE_EMPTY} onChange={value => onChoose(site, value)} /> },
@@ -127,7 +127,7 @@ function DoneView({ results }: { results: AssignResult[] }) {
   const view = doneView(results)
   return <>
     <Banner tone={view.tone} title={view.title}>Products in this category use the new category the next time their eBay sheet or listing is read. Publishing is a separate step.</Banner>
-    <DataGrid ariaLabel="Result for each eBay site" keyboardScroll rows={results} rowKey={row => row.market} columns={[
+    <DataGrid ariaLabel="Result for each eBay site" rows={results} rowKey={row => row.market} columns={[
       { key: 'site', label: 'Site', width: 90, render: row => siteLabel(row.market) },
       { key: 'category', label: 'Category', width: 110, render: row => row.channelCategoryId },
       { key: 'result', label: 'Result', render: row => <div className={styles.identity}><Tag tone={row.outcome === 'assigned' ? 'success' : 'danger'}>{ASSIGN_OUTCOME[row.outcome]}</Tag>{row.reason && <span className={styles.secondary}>{row.reason}</span>}</div> },
@@ -139,7 +139,7 @@ function UndoneView({ results }: { results: UndoResult[] }) {
   const view = undoView(results)
   return <>
     <Banner tone={view.tone} title={view.title} />
-    <DataGrid ariaLabel="Undo result for each eBay site" keyboardScroll rows={results} rowKey={row => row.market} columns={[
+    <DataGrid ariaLabel="Undo result for each eBay site" rows={results} rowKey={row => row.market} columns={[
       { key: 'site', label: 'Site', width: 90, render: row => siteLabel(row.market) },
       { key: 'category', label: 'Category', width: 110, render: row => row.channelCategoryId },
       { key: 'result', label: 'Result', render: row => <div className={styles.identity}><Tag tone={row.outcome === 'removed' ? 'success' : row.outcome === 'failed' ? 'danger' : 'warning'}>{UNDO_OUTCOME[row.outcome]}</Tag>{row.reason && <span className={styles.secondary}>{row.reason}</span>}</div> },

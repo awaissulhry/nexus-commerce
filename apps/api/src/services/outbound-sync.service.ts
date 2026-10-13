@@ -1503,6 +1503,11 @@ export class OutboundSyncService {
         ...(lane === 'follow' ? { live: preLive, liveProductType: preLiveType } : {
           // A first business offer's replace carries the normal offer: only while the listing is as this job read it.
           unchanged: async () => (await prisma.channelListing.findUnique({ where: { id: queueItem.channelListingId }, select: { version: true } }))?.version === cl.version,
+          // Any business send: only while the setting is the one this job read — a newer write sends the newer one (its own row).
+          settingUnchanged: async () => {
+            const now = await prisma.channelListing.findUnique({ where: { id: queueItem.channelListingId }, select: { businessPriceRule: true, businessPricePercent: true, businessPrice: true, businessTiers: true } });
+            return !!now && JSON.stringify(storedBusinessSetting(now)) === JSON.stringify(businessSetting);
+          },
         }),
       });
     };

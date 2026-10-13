@@ -56,6 +56,13 @@ export function matrixReplay(
   place: { rowId: string; coordinateKey: CoordinateKey },
 ): MatrixReplay {
   if (!live) return { kind: 'refuse', reason: MATRIX_UNDO_COPY.gone }
+  /* A business edit wrote the WHOLE setting (the B2B price and its tiers): its redo sends that setting again, as it was
+     saved — never only the half its column shows, joined to what the other column holds after the undo. */
+  if (!('before' in entry) && (kind === 'businessPrice' || kind === 'businessTiers')) {
+    if (!live.business) return { kind: 'refuse', reason: MATRIX_UNDO_COPY.gone }
+    if (JSON.stringify(entry.value ?? null) === JSON.stringify(matrixBusinessSettingOfCell(live.business))) return SKIP
+    return { kind: 'write', cell: { rowId: place.rowId, coordinateKey: place.coordinateKey, cell: kind, value: entry.value ?? null, expectedVersion: live.version } }
+  }
   if (!('before' in entry)) {
     const decision = matrixWrite({ kind, coordinateKey: place.coordinateKey, rowId: place.rowId }, live, matrixCellValue(kind, live), entry.value)
     if (decision.send) return { kind: 'write', cell: decision.cell }

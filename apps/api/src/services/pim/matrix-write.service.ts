@@ -479,16 +479,39 @@ async function applySource(read: MatrixRead, hit: Located, w: MatrixWriteCell, c
 const doorRead = (ctx: DoorContext) =>
   getMatrixRead({ productId: ctx.productId, accountId: ctx.accountId ?? null, canEditPrice: ctx.can(PRICE_PERMISSION), canAdjustStock: ctx.can(SOURCE_PERMISSION) })
 
-/** The one door: every cell write, in order, each CAS-checked on its own listing version; the read is taken once. */
+/** Every listing's version in a read, before any write of the request. */
+function listingVersions(read: MatrixRead): Map<string, number> {
+  const out = new Map<string, number>()
+  for (const row of read.rows) for (const cells of Object.values(row.cells)) if (cells?.listingId && !out.has(cells.listingId)) out.set(cells.listingId, cells.version)
+  return out
+}
+
+/** A listing's new version on every coordinate of the read that holds it (a listing can sit under its market and its region). */
+function setListingVersion(read: MatrixRead, listingId: string, version: number): void {
+  for (const row of read.rows) for (const cells of Object.values(row.cells)) if (cells?.listingId === listingId) cells.version = version
+}
+
+/**
+ * The one door: every cell write, in order, each CAS-checked on its own listing version; the read is taken once.
+ *
+ * 🔴 A request is ONE view of the page (a paste, a fill, an undo of several cells): a cell whose listing an EARLIER cell of
+ * this request already moved, and that was read at the version the listing had before this request, is checked against
+ * the version that earlier cell left — the same person's same view, never "changed elsewhere" against itself (e.g. the B2B
+ * price and Tiers of one listing, or its Price and B2B price). A cell read at any other version is still a conflict.
+ */
 export async function writeMatrixCells(ctx: DoorContext, cells: readonly MatrixWriteCell[]): Promise<MatrixWriteResult> {
   const read = await doorRead(ctx)
   const results: MatrixWriteOutcome[] = []
-  const versions = new Map<string, number>()
+  const before = listingVersions(read)
+  const moved = new Map<string, number>()
   for (const w of cells) {
-    const k = `${w.rowId}|${w.coordinateKey}`
-    const live = versions.get(k)
-    const outcome = await applyCell(read, live === undefined ? w : { ...w, expectedVersion: w.expectedVersion }, ctx)
-    if (outcome.outcome === 'applied') { versions.set(k, outcome.version); const hit = locate(read, w.rowId, w.coordinateKey); if (hit) hit.cells.version = outcome.version }
+    const listingId = locate(read, w.rowId, w.coordinateKey)?.cells.listingId ?? null
+    const rebased = listingId && moved.has(listingId) && before.get(listingId) === w.expectedVersion
+    const outcome = await applyCell(read, rebased ? { ...w, expectedVersion: moved.get(listingId)! } : w, ctx)
+    if (outcome.outcome === 'applied') {
+      const landed = outcome.listings?.length ? outcome.listings : listingId ? [{ listingId, version: outcome.version }] : []
+      for (const l of landed) { moved.set(l.listingId, l.version); setListingVersion(read, l.listingId, l.version) }
+    }
     results.push(outcome)
   }
   await refreshCache(read, results)

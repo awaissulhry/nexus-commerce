@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { anyEditable, interactionDefaults, isSpreadsheet, leaveGridOnTab } from './gridDefaults'
+import { anyEditable, interactionDefaults, isSpreadsheet, leaveGridOnTab, readsOnly } from './gridDefaults'
 
 describe('the engine\'s interaction defaults', () => {
-  it('a reading grid: text selection in screen order, the browser\'s own right-click menu, Tab leaves the grid', () => {
+  it('a reading grid: text selection in screen order, the browser\'s own right-click menu, Tab leaves the grid, cells take focus', () => {
     const d = interactionDefaults({ cellSelection: undefined, getContextMenuItems: undefined, columnDefs: [{ field: 'a' }] })
     expect(d).toEqual({
       suppressContextMenu: true,
@@ -11,6 +11,7 @@ describe('the engine\'s interaction defaults', () => {
       ensureDomOrder: true,
       suppressDragLeaveHidesColumns: true,
       tabToNextCell: leaveGridOnTab,
+      suppressCellFocus: false,
     })
     expect(leaveGridOnTab()).toBe(false)
   })
@@ -21,6 +22,7 @@ describe('the engine\'s interaction defaults', () => {
     expect(d.enableCellTextSelection).toBe(false)
     expect(d.ensureDomOrder).toBe(false)
     expect(d.tabToNextCell).toBeUndefined()
+    expect(d.suppressCellFocus).toBeUndefined()
     expect(d.suppressDragLeaveHidesColumns).toBe(true)
   })
 
@@ -31,6 +33,13 @@ describe('the engine\'s interaction defaults', () => {
   it('a grid with an editable column keeps Tab from cell to cell', () => {
     expect(interactionDefaults({ cellSelection: undefined, getContextMenuItems: undefined, columnDefs: [{ field: 'a' }, { children: [{ field: 'b', editable: () => true }] }] }).tabToNextCell).toBeUndefined()
     expect(interactionDefaults({ cellSelection: undefined, getContextMenuItems: undefined, columnDefs: [{ field: 'a' }], defaultColDef: { editable: true } }).tabToNextCell).toBeUndefined()
+  })
+
+  it('readsOnly: no cell ranges and no editable column', () => {
+    expect(readsOnly({ cellSelection: undefined, columnDefs: [{ field: 'a' }] })).toBe(true)
+    expect(readsOnly({ cellSelection: true, columnDefs: [{ field: 'a' }] })).toBe(false)
+    expect(readsOnly({ cellSelection: undefined, columnDefs: [{ field: 'a', editable: true }] })).toBe(false)
+    expect(readsOnly({ cellSelection: undefined, columnDefs: [{ field: 'a' }], defaultColDef: { editable: true } })).toBe(false)
   })
 })
 
