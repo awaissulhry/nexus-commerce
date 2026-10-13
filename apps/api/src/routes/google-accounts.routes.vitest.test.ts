@@ -1,8 +1,9 @@
 /**
  * Google Ads step 1a — the C1–C3 routes (google-accounts.routes.ts): each calls its service and maps its errors —
- * C2's `refresh=1` forces a new read from Google, C3 answers 409 `{ code, error }` for a choice Google did not offer or
- * another sign-in holds, 404 for a sign-in that is not this business's, and a fault of Nexus's own in words without its
- * internals. The person who saved the choice is the signed-in user.
+ * C2's `refresh=1` forces a new read from Google and its answer is awaited (it marks what another business picked), C3
+ * answers 409 `{ code, error }` for a choice Google did not offer or another sign-in holds, 404 for a sign-in that is not
+ * this business's, and a fault of Nexus's own in words without its internals. The person who saved the choice is the
+ * signed-in user.
  */
 import Fastify, { type FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -25,7 +26,8 @@ vi.mock('../services/google/google-accounts.service.js', () => ({
   GoogleConnectionNotFound: h.GoogleConnectionNotFound,
   listGoogleAccounts: h.list,
   getChoices: h.choices,
-  choicesAnswer: (choices: unknown) => choices,
+  // C2's answer adds what another business already picked, read from the database: it is async.
+  choicesAnswer: async (choices: unknown) => ({ ...(choices as object), answered: true }),
   saveSelection: h.save,
 }))
 
@@ -60,7 +62,10 @@ describe('C1 GET /api/google-ads/connections', () => {
 
 describe('C2 GET /api/google-ads/connections/:id/choices', () => {
   it('kept answers by default; refresh=1 asks Google again', async () => {
-    expect((await app.inject({ method: 'GET', url: '/api/google-ads/connections/g-1/choices' })).statusCode).toBe(200)
+    const res = await app.inject({ method: 'GET', url: '/api/google-ads/connections/g-1/choices' })
+    expect(res.statusCode).toBe(200)
+    // The awaited answer (with the marks of what another business picked), never an unresolved promise.
+    expect(res.json()).toMatchObject({ answered: true, ads: { customers: [] } })
     expect(h.choices).toHaveBeenLastCalledWith('g-1', { force: false })
     await app.inject({ method: 'GET', url: '/api/google-ads/connections/g-1/choices?refresh=1' })
     expect(h.choices).toHaveBeenLastCalledWith('g-1', { force: true })

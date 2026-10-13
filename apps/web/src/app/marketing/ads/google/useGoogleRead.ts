@@ -12,13 +12,19 @@
  *  - The cache never crosses businesses or people: every entry is filed under the business in the address (`/w/<id>`)
  *    and the signed-in person. Entries live `GOOGLE_READ_TTL_MS`; a failed read is never cached.
  *  - Two callers with the same key while it loads share the one request.
- *  - `reload()` drops this key's answer and reads it again (Try again).
+ *  - `reload()` drops this key's answer and reads it again (Try again): its error leaves the screen at once (loading
+ *    shows), and every other part of the screen that reads the same key reads again with it (one request), so none of
+ *    them keeps the old error or the old answer.
+ *  - A failed read keeps its HTTP status (`status`), so a screen can tell "not in this business" (404) from a failure
+ *    that Try again can help.
  *  - `keepPrevious`: while a new key loads, `data` is the last answer of the old one (the grid's reload veil covers the
  *    change; `loading` says it is not the new answer yet). An error is never shown over an older answer.
  *
- * The pure half (`googleReadKey`, `googleReadCacheKey`, the cache itself) is exported for the node-only tests.
+ * The pure half (`googleReadKey`, `googleReadCacheKey`, the cache, the readers, `failedStatus`) is exported for the
+ * node-only tests.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { GoogleAdsHttpError } from '@/lib/google-ads/contract'
 import { browserWorkspaceId } from '@/lib/workspaces/paths'
 import { browserUserId } from '@/lib/workspaces/browser-identity'
 
@@ -78,11 +84,38 @@ export function sharedGoogleRead<T>(fullKey: string, load: () => Promise<T>): Pr
   return p
 }
 
+/** The mounted readers of each full cache key (a card and a tab can read the same thing). */
+const readers = new Map<string, Set<() => void>>()
+
+/** Registers one mounted reader of a full cache key; returns its removal. */
+export function listenGoogleRead(fullKey: string, readAgain: () => void): () => void {
+  const set = readers.get(fullKey) ?? new Set<() => void>()
+  readers.set(fullKey, set)
+  set.add(readAgain)
+  return () => {
+    set.delete(readAgain)
+    if (!set.size && readers.get(fullKey) === set) readers.delete(fullKey)
+  }
+}
+
+/** Try again: forgets the key's answer and has every mounted reader of it read again. */
+export function reloadGoogleRead(fullKey: string): void {
+  forgetGoogleReads(fullKey)
+  for (const readAgain of [...(readers.get(fullKey) ?? [])]) readAgain()
+}
+
+/** The HTTP status of a read the server refused (4xx, 5xx); null otherwise (no answer, a body it could not read). */
+export function failedStatus(err: unknown): number | null {
+  return err instanceof GoogleAdsHttpError && err.status >= 400 ? err.status : null
+}
+
 export interface GoogleReadState<T> {
   /** The answer for `key` (or, with `keepPrevious`, the last answer while the new key loads). Null before any. */
   data: T | null
   /** The server's sentence when the read for `key` failed; null otherwise. */
   error: string | null
+  /** The HTTP status of that failure (404: not in this business); null when it carries none, or nothing failed. */
+  status: number | null
   /** True until the read for `key` has answered (or failed). False when `key` is null. */
   loading: boolean
   /** Reads `key` again, past the cache. */
@@ -98,7 +131,7 @@ export interface GoogleReadOptions {
   fallbackError?: string
 }
 
-type Settled<T> = { key: string; data: T | null; error: string | null }
+type Settled<T> = { key: string; data: T | null; error: string | null; status: number | null }
 
 const messageOf = (err: unknown, fallback: string) => (err instanceof Error && err.message.trim() ? err.message : fallback)
 
@@ -115,7 +148,7 @@ export function useGoogleRead<T>(key: string | null, load: () => Promise<T>, opt
     // Never on the server: the cache is the browser's (it is only ever filled in an effect).
     if (key == null || !useCache || typeof window === 'undefined') return null
     const hit = cachedGoogleRead<T>(googleReadCacheKey(key))
-    return hit === undefined ? null : { key, data: hit, error: null }
+    return hit === undefined ? null : { key, data: hit, error: null, status: null }
   })
   const seq = useRef(0)
   // Set by `reload()`: the next read of this key goes past the cache.
@@ -130,32 +163,38 @@ export function useGoogleRead<T>(key: string | null, load: () => Promise<T>, opt
     if (useCache && !forced) {
       const hit = cachedGoogleRead<T>(full)
       if (hit !== undefined) {
-        setSettled({ key, data: hit, error: null })
+        setSettled({ key, data: hit, error: null, status: null })
         return
       }
     }
     sharedGoogleRead(full, () => loadRef.current())
       .then((data) => {
         if (useCache) rememberGoogleRead(full, data)
-        if (seq.current === mine) setSettled({ key, data, error: null })
+        if (seq.current === mine) setSettled({ key, data, error: null, status: null })
       })
       .catch((err: unknown) => {
-        if (seq.current === mine) setSettled({ key, data: null, error: messageOf(err, fallbackError) })
+        if (seq.current === mine) setSettled({ key, data: null, error: messageOf(err, fallbackError), status: failedStatus(err) })
       })
   }, [key, attempt, useCache, fallbackError])
 
-  const reload = useCallback(() => {
+  // Read again past the cache. Loading again: the failed (or old) answer of this key leaves the screen at once, until
+  // the new one comes — Try again never looks as if nothing happened.
+  const readAgain = useCallback(() => {
     if (key == null) return
-    forgetGoogleReads(googleReadCacheKey(key))
     force.current = key
-    // Loading again: the failed (or old) answer of this key leaves the screen until the new one comes.
     setSettled((s) => (s?.key === key ? null : s))
     setAttempt((n) => n + 1)
   }, [key])
+  useEffect(() => (key == null ? undefined : listenGoogleRead(googleReadCacheKey(key), readAgain)), [key, readAgain])
 
-  if (key == null) return { data: null, error: null, loading: false, reload }
+  // Every reader of this key on the screen reads again with this one (one request between them).
+  const reload = useCallback(() => {
+    if (key != null) reloadGoogleRead(googleReadCacheKey(key))
+  }, [key])
+
+  if (key == null) return { data: null, error: null, status: null, loading: false, reload }
   const current = settled?.key === key ? settled : null
-  if (current) return { data: current.data, error: current.error, loading: false, reload }
+  if (current) return { data: current.data, error: current.error, status: current.status, loading: false, reload }
   const previous = keepPrevious && settled && settled.error == null ? settled.data : null
-  return { data: previous, error: null, loading: true, reload }
+  return { data: previous, error: null, status: null, loading: true, reload }
 }

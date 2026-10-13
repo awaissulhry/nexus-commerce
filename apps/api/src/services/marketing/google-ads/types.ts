@@ -279,7 +279,15 @@ export interface GoogleAdsShoppingProductRow {
 }
 
 export interface GoogleAdsRecommendationSubscriptionRow {
-  recommendationSubscription?: { resourceName?: string; type?: string; status?: string; createDateTime?: string; modifyDateTime?: string }
+  recommendationSubscription?: {
+    resourceName?: string
+    type?: string
+    status?: string
+    /** "yyyy-MM-dd HH:mm:ss" in the account's time zone. */
+    createDateTime?: string
+    /** "yyyy-MM-dd HH:mm:ss.ssssss" in the account's time zone (microseconds). */
+    modifyDateTime?: string
+  }
 }
 
 /** One day of numbers at a grain below the campaign (ad group, keyword, asset group, product, search term). */
@@ -354,13 +362,19 @@ export interface GoogleAdsCampaignSharedSetRow {
   campaignSharedSet?: { resourceName?: string; campaign?: string; sharedSet?: string; status?: string }
   sharedSet?: GoogleAdsSharedSetJson
 }
+/** One row of ACCOUNT_NEGATIVE_LIST_LINKS_QUERY: the negative keyword list a customer_negative_criterion points at. */
+export interface GoogleAdsCustomerNegativeCriterionRow {
+  customerNegativeCriterion?: { resourceName?: string; type?: string; negativeKeywordList?: { sharedSet?: string } }
+}
 
+/** v25 Recommendation.RecommendationMetrics: every value optional; impressions and clicks are doubles (estimates). */
 export interface GoogleAdsRecommendationMetricsJson {
   impressions?: number
   clicks?: number
   costMicros?: Int64String
   conversions?: number
   conversionsValue?: number
+  videoViews?: number
 }
 export interface GoogleAdsRecommendationRow {
   recommendation?: {
@@ -473,6 +487,10 @@ export interface GoogleAdsNegativeListData {
   name: string | null
   status: string | null
   memberCount: number | null
+  /** Google's shared set type (NEGATIVE_KEYWORDS | ACCOUNT_LEVEL_NEGATIVE_KEYWORDS); null when this read did not get it. */
+  listType: string | null
+  /** A customer_negative_criterion of the account points at the list (Google applies it to the whole account); null = not read. */
+  appliesToAccount: boolean | null
   campaignIds: string[]
 }
 

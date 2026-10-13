@@ -44,13 +44,17 @@ import {
   withoutEmails,
   ymd,
 } from './googleAds'
+import { GoogleAdsHttpError } from '@/lib/google-ads/contract'
 import {
   GOOGLE_READ_CACHE_MAX,
   GOOGLE_READ_TTL_MS,
   cachedGoogleRead,
+  failedStatus,
   forgetGoogleReads,
   googleReadCacheKey,
   googleReadKey,
+  listenGoogleRead,
+  reloadGoogleRead,
   rememberGoogleRead,
   sharedGoogleRead,
 } from './useGoogleRead'
@@ -524,5 +528,34 @@ describe('useGoogleRead: the read cache never crosses a business or a person, an
     const fail = vi.fn(async () => { throw new Error('Google did not answer.') })
     await expect(sharedGoogleRead(k, fail)).rejects.toThrow('Google did not answer.')
     await expect(sharedGoogleRead(k, load)).resolves.toBe('answer')
+  })
+
+  it('Try again reads again for every part of the screen on that key, and forgets its answer', () => {
+    forgetGoogleReads()
+    const k = googleReadCacheKey(googleReadKey('t-reload'), 'ws_a', 'u1')
+    const other = googleReadCacheKey(googleReadKey('t-reload-other'), 'ws_a', 'u1')
+    const card = vi.fn()
+    const tab = vi.fn()
+    const elsewhere = vi.fn()
+    const stopCard = listenGoogleRead(k, card)
+    listenGoogleRead(k, tab)
+    listenGoogleRead(other, elsewhere)
+    rememberGoogleRead(k, 'old answer', Date.now())
+    reloadGoogleRead(k)
+    expect(card).toHaveBeenCalledTimes(1)
+    expect(tab).toHaveBeenCalledTimes(1)
+    expect(elsewhere).not.toHaveBeenCalled()
+    expect(cachedGoogleRead(k)).toBeUndefined()
+    stopCard()
+    reloadGoogleRead(k)
+    expect(card).toHaveBeenCalledTimes(1)
+    expect(tab).toHaveBeenCalledTimes(2)
+  })
+
+  it('a refused read keeps its HTTP status (404: not in this business); no answer or a bad body has none', () => {
+    expect(failedStatus(new GoogleAdsHttpError(404, 'Campaign not found'))).toBe(404)
+    expect(failedStatus(new GoogleAdsHttpError(500, 'Nexus could not load this (HTTP 500).'))).toBe(500)
+    expect(failedStatus(new GoogleAdsHttpError(200, 'Nexus answered with nothing it could read.'))).toBeNull()
+    expect(failedStatus(new TypeError('Failed to fetch'))).toBeNull()
   })
 })

@@ -11,6 +11,8 @@
  *   the states in words; /api/accounts says "Choose a Google Ads account"
  *   one Google login in many businesses: each business its own row; an account another business picked is
  *       `taken_by_other_business` (never naming it); Disconnect sends nothing to Google and frees the picks
+ *   C2 marks what another business picked (`takenByAnotherBusiness`), read fresh on every answer, never its own picks
+ *       and never naming that business; nexus_google_links_taken answers yes or no per id, to the runtime role only
  * Values are made up (public repo).
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -138,8 +140,15 @@ describe('C2 — what the sign-in can see', () => {
   })
 
   it('an account listed by id only travels with empty currency and time zone, never invented ones', async () => {
-    const answer = choicesAnswer(await inA(() => getChoices(connA)))
-    expect(answer.ads.customers.find((c) => c.customerId === '5550001112')).toMatchObject({ name: null, currency: '', timeZone: '' })
+    const answer = await inA(async () => choicesAnswer(await getChoices(connA)))
+    expect(answer.ads.customers.find((c) => c.customerId === '5550001112')).toMatchObject({ name: null, currency: '', timeZone: '', takenByAnotherBusiness: false })
+  })
+
+  it('nothing picked anywhere: every account, Merchant Center account and property says false, never left out', async () => {
+    const answer = await inA(async () => choicesAnswer(await getChoices(connA)))
+    expect(answer.ads.customers.map((c) => c.takenByAnotherBusiness)).toEqual([false, false, false])
+    expect(answer.merchantCenter.accounts).toEqual([{ id: '5555555555', name: 'Test merchant', takenByAnotherBusiness: false }])
+    expect(answer.analytics.properties).toEqual([{ propertyId: '444444444', name: 'Test property', accountName: 'Test analytics account', takenByAnotherBusiness: false }])
   })
 })
 
@@ -245,6 +254,12 @@ describe('the states in words', () => {
   ])('%s', (_label, over, state) => {
     expect(googleAccountState({ ...base, ...over } as Parameters<typeof googleAccountState>[0]).state).toBe(state)
   })
+  it('a good read\'s note follows the sentence (the first read of campaign numbers read fewer days)', () => {
+    const note = 'Google sent more than 200,000 rows of daily campaign numbers for the first 400 days, so Nexus read the last 200 days instead. Older days are not read.'
+    expect(googleAccountState({ ...base, customer: read({ lastSyncStatus: 'SUCCESS', lastSyncError: note, metricsReadThrough: new Date() }) })).toEqual({
+      state: 'ok', stateText: `Nexus reads “Test advertiser” once a day. ${note}`,
+    })
+  })
   it('never says it reads when reading is switched off', () => {
     const text = googleAccountState({ ...base, customer: read({ lastSyncStatus: 'SUCCESS', metricsReadThrough: new Date() }), readingOn: false }).stateText
     expect(text).toBe('Nexus has read “Test advertiser”; reading is switched off on the server for now.')
@@ -257,12 +272,47 @@ describe('the states in words', () => {
 describe('one Google login in many businesses (Owner 2026-10-13)', () => {
   let connBSame = ''
   const refusal = (work: Promise<unknown>) => work.then(() => { throw new Error('expected a refusal') }, (err: unknown) => err as GoogleSelectionError)
+  const marks = (answer: Awaited<ReturnType<typeof choicesAnswer>>) => ({
+    ads: answer.ads.customers.filter((c) => c.takenByAnotherBusiness).map((c) => c.customerId),
+    merchant: answer.merchantCenter.accounts.filter((a) => a.takenByAnotherBusiness).map((a) => a.id),
+    analytics: answer.analytics.properties.filter((p) => p.takenByAnotherBusiness).map((p) => p.propertyId),
+  })
 
   it('the same Google login connects in a second business on its own row, but never twice in one business', async () => {
     connBSame = (await inB(() => googleConnection('test-google-login-a2', 'second.a@example.test'))).id
     expect(connBSame).not.toBe(connA2)
     expect(await inA(() => db().channelConnection.findUnique({ where: { id: connA2 } }))).toMatchObject({ isActive: true, externalAccountId: 'test-google-login-a2' })
     expect(await refused(inB(() => googleConnection('test-google-login-a2', 'second.a@example.test')))).toMatchObject({ code: 'P2002' })
+  })
+
+  it('C2 marks exactly what another business picked, read fresh on every answer; a business\'s own picks never', async () => {
+    // B's list is read from Google first and kept (5 minutes): the marks must not be kept with it.
+    await inB(() => getChoices(connBSame))
+    await inA(() => saveSelection(connA2, pick('1234567890', { merchantCenterId: '5555555555', analyticsPropertyId: '444444444' })))
+    const discoveries = h.discoveries
+    const answerB = await inB(async () => choicesAnswer(await getChoices(connBSame)))
+    expect(h.discoveries).toBe(discoveries)
+    expect(marks(answerB)).toEqual({ ads: ['1234567890'], merchant: ['5555555555'], analytics: ['444444444'] })
+    // Yes or no only: nothing of the other business travels.
+    expect(JSON.stringify(answerB)).not.toMatch(new RegExp([A, connA2, 'owner\\.a', 'user-a'].join('|')))
+    // A's own picks are never marked for A.
+    expect(marks(await inA(async () => choicesAnswer(await getChoices(connA2))))).toEqual({ ads: [], merchant: [], analytics: [] })
+  })
+
+  it('nexus_google_links_taken: only the ids asked, only another business\'s, only to a business; EXECUTE to the runtime role only', async () => {
+    const ask = (product: string, ids: string[]) => db().$queryRaw<Array<{ id: string }>>`SELECT t.id FROM nexus_google_links_taken(${product}, ${ids}::text[]) AS t(id)`
+    expect((await inB(() => ask('ADS', ['1234567890', '5550001112', '0000000000']))).map((r) => r.id)).toEqual(['1234567890'])
+    expect((await inB(() => ask('GA4', ['5555555555']))).map((r) => r.id)).toEqual([])
+    expect(await inA(() => ask('ADS', ['1234567890']))).toEqual([])
+    expect(await inB(() => ask('ADS', []))).toEqual([])
+    await expect(inB(() => ask('EBAY', ['1234567890']))).rejects.toThrow(/ADS, MERCHANT or GA4/)
+    // No business, no answer (raw SQL outside a business runs with an empty business id).
+    await expect(ask('ADS', ['1234567890'])).rejects.toThrow(/needs a business/)
+    const grants = await database.db.query<{ runtime: boolean; everyone: boolean; definer: boolean }>(`
+      SELECT has_function_privilege('nexus_workspace_runtime', p.oid, 'EXECUTE') AS runtime,
+        COALESCE(EXISTS (SELECT 1 FROM aclexplode(p.proacl) a WHERE a.grantee = 0), true) AS everyone, p.prosecdef AS definer
+      FROM pg_proc p WHERE p.proname = 'nexus_google_links_taken'`)
+    expect(grants.rows).toEqual([{ runtime: true, everyone: false, definer: true }])
   })
 
   it('an account another business picked is refused, in words that name nothing of it; nothing is saved', async () => {
@@ -294,6 +344,8 @@ describe('one Google login in many businesses (Owner 2026-10-13)', () => {
     }
     expect(await inA(() => db().googleAccountLink.count())).toBe(0)
     expect(await inB(() => db().channelConnection.findUnique({ where: { id: connBSame } }))).toMatchObject({ isActive: true, authStatus: 'connected' })
+    // The freed accounts are no longer marked in the other business's picker (its own pick never was).
+    expect(marks(await inB(async () => choicesAnswer(await getChoices(connBSame))))).toEqual({ ads: [], merchant: [], analytics: [] })
     // The freed accounts may now be picked by the other business.
     const { account } = await inB(() => saveSelection(connBSame, pick('1234567890', { merchantCenterId: '5555555555', analyticsPropertyId: '444444444' })))
     expect(account).toMatchObject({ ads: { customerId: '1234567890' }, merchantCenter: { id: '5555555555' }, analytics: { propertyId: '444444444' } })

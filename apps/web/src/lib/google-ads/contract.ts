@@ -61,13 +61,22 @@ export interface GoogleAdsCustomerChoice {
   /** True when this sign-in reaches the account directly (not only through a manager). */
   direct: boolean
   managers: { customerId: string; name: string | null }[]
+  /**
+   * True when another business in Nexus already picked this account (one business per account; Save refuses it). The
+   * server never says which business. Absent from an older server = not known, and Save still guards it.
+   */
+  takenByAnotherBusiness?: boolean
 }
 
 export interface GoogleChoices {
   missingProducts: GoogleSignInProduct[]
   ads: { customers: GoogleAdsCustomerChoice[]; error: GoogleChoiceError | null }
-  merchantCenter: { accounts: { id: string; name: string | null }[]; error: GoogleChoiceError | null }
-  analytics: { properties: { propertyId: string; name: string | null; accountName: string | null }[]; error: GoogleChoiceError | null }
+  /** `takenByAnotherBusiness` as on a Google Ads account: another business in Nexus already picked it. */
+  merchantCenter: { accounts: { id: string; name: string | null; takenByAnotherBusiness?: boolean }[]; error: GoogleChoiceError | null }
+  analytics: {
+    properties: { propertyId: string; name: string | null; accountName: string | null; takenByAnotherBusiness?: boolean }[]
+    error: GoogleChoiceError | null
+  }
 }
 
 export interface GoogleSelectionBody {
@@ -342,6 +351,10 @@ export interface GoogleNegativeList {
   name: string
   status: string
   memberCount: number | null
+  /** The kind: true = the account-level list (never attached to a campaign; `campaigns` is empty), false = a list for campaigns, null = not read. */
+  accountLevel: boolean | null
+  /** true = Google applies the list to the whole account (in force); false = read, not in use; null = not read yet. */
+  appliesToAccount: boolean | null
   campaigns: { campaignId: string | null; externalCampaignId: string; name: string | null }[]
   seenAt: string
 }

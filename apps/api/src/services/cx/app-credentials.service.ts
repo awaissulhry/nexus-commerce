@@ -102,6 +102,8 @@ export const OWNER_OF_EVERY_GOOGLE_BUSINESS_SENTENCE =
   'Google\'s app credentials serve the Google sign-in of every business profile in Nexus, so only a person who is an Owner of '
   + 'every business profile with Google connected can change them. You are not an Owner of all of them.'
 
+/** A read filter (never a write): a connection waiting for its person to sign in again still counts as connected. */
+const WAITING_FOR_RECONNECT = ['needs_reauth']
 const SWEEP_PAGE = 50
 
 /**
@@ -132,7 +134,7 @@ export async function appCredentialsRefusal(channelKey: string, userId: string):
       if (owned.has(id)) continue
       // That business's own rows (its row-level security), read as the system: only whether it has a Google connection.
       const connected = await withWorkspace({ workspaceId: id, actorUserId: null, membershipId: null, roleKeys: [] }, () =>
-        prisma.channelConnection.count({ where: { channelType, OR: [{ isActive: true }, { authStatus: 'needs_reauth' }] } }))
+        prisma.channelConnection.count({ where: { channelType, OR: [{ isActive: true }, { authStatus: { in: WAITING_FOR_RECONNECT } }] } }))
       if (connected > 0) return OWNER_OF_EVERY_GOOGLE_BUSINESS_SENTENCE
     }
     after = rows.length === SWEEP_PAGE ? rows[rows.length - 1].id : undefined

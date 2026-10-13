@@ -14,6 +14,7 @@
  */
 import prisma from '../../../db.js'
 import type { CursorPosition } from '../../../lib/pagination/cursor.js'
+import { ACCOUNT_LEVEL_LIST_TYPE } from './mappers.js'
 import {
   CAMPAIGN_STATUSES,
   GoogleAdsReadError,
@@ -334,9 +335,22 @@ const LEVEL_RANK: Readonly<Record<NegativeLevel, number>> = { ad_group: 0, campa
 const negativeStatus = (status: string | null): GoogleNegative['status'] => (status === 'ENABLED' || status === 'REMOVED' ? status : null)
 
 /**
+ * The campaign types Google applies the account-level negative keyword list to: "all search and shopping inventory in
+ * Search, Performance Max, App, Shopping, Smart, and Local campaigns" (Google Ads Help, "About account-level negative
+ * keywords", https://support.google.com/google-ads/answer/11396330). App campaigns are MULTI_CHANNEL in the API.
+ */
+export const ACCOUNT_LIST_CAMPAIGN_TYPES: ReadonlySet<string> = new Set(['SEARCH', 'PERFORMANCE_MAX', 'MULTI_CHANNEL', 'SHOPPING', 'SMART', 'LOCAL'])
+
+/** The account-level kind of list (true), one for campaigns (false), or not read (null); a list in force for the account is one. */
+const accountLevel = (row: { listType: string | null; appliesToAccount: boolean | null }): boolean | null =>
+  (row.appliesToAccount === true ? true : row.listType === null ? null : row.listType === ACCOUNT_LEVEL_LIST_TYPE)
+
+/**
  * R7 — one page of negative keywords (by level, then text). With `campaignId`: that campaign's ad groups' negatives, its
  * own negatives (brand exclusion lists among them) and the keywords of the negative keyword lists attached to it
- * (PLAN-1B M8); `lists` are then the lists attached to it. Negatives Google no longer returns are left out.
+ * (PLAN-1B M8) — and, for a campaign of a type Google applies it to, the account-level list: in force
+ * (`appliesToAccount` true), not in use (false: shown as such) or not read (null); `lists` are then those lists.
+ * Negatives Google no longer returns are left out.
  */
 export async function googleAdsNegatives(input: {
   connectionId?: string | null
@@ -355,8 +369,19 @@ export async function googleAdsNegatives(input: {
   if (!customerId) return { read, items: [], lists: [], nextCursor: null, total: 0 }
 
   const googleCampaignId = scope.campaign?.googleCampaignId ?? null
+  // The account-level list goes with this campaign when its type is one Google applies it to (a type not read: no).
+  const accountList = googleCampaignId
+    ? ACCOUNT_LIST_CAMPAIGN_TYPES.has((await prisma.googleAdsCampaign.findFirst({
+      where: { customerId, campaignId: googleCampaignId }, select: { channelType: true },
+    }))?.channelType ?? '')
+    : false
   const listRows = await prisma.googleAdsNegativeList.findMany({
-    where: { customerId, removedAt: null, ...(googleCampaignId ? { campaignIds: { has: googleCampaignId } } : {}) },
+    where: {
+      customerId, removedAt: null,
+      ...(googleCampaignId
+        ? { OR: [{ campaignIds: { has: googleCampaignId } }, ...(accountList ? [{ listType: ACCOUNT_LEVEL_LIST_TYPE }, { appliesToAccount: true }] : [])] }
+        : {}),
+    },
   })
   const listIds = listRows.map((row) => row.sharedSetId)
   const own = googleCampaignId ? { campaignId: googleCampaignId } : {}
@@ -404,6 +429,8 @@ export async function googleAdsNegatives(input: {
       name: row.name,
       status: row.status,
       memberCount: row.memberCount,
+      accountLevel: accountLevel(row),
+      appliesToAccount: row.appliesToAccount,
       campaigns: row.campaignIds.map((id) => {
         const campaign = directory(id)
         return { campaignId: campaign.campaignId, externalCampaignId: id, name: campaign.campaignName }

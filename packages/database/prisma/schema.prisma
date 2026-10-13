@@ -23168,6 +23168,12 @@ model GoogleAdsNegativeList {
   /// ENABLED | REMOVED
   status      String
   memberCount Int?
+  /// Google's shared set type: NEGATIVE_KEYWORDS (attached to campaigns) or ACCOUNT_LEVEL_NEGATIVE_KEYWORDS (meant for
+  /// the whole account). Null = not read yet.
+  listType    String?
+  /// Whether Google applies the list to the whole account: true when a customer_negative_criterion of the account points
+  /// at it, false when read and none does. Null = not read yet.
+  appliesToAccount Boolean?
   /// The Google campaign ids the list is attached to.
   campaignIds String[]  @default([])
   firstSeenAt DateTime  @default(now())

@@ -11252,6 +11252,8 @@ CREATE TABLE "GoogleAdsNegativeList" (
     "name" TEXT NOT NULL,
     "status" TEXT NOT NULL,
     "memberCount" INTEGER,
+    "listType" TEXT,
+    "appliesToAccount" BOOLEAN,
     "campaignIds" TEXT[] DEFAULT ARRAY[]::TEXT[],
     "firstSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "lastSeenAt" TIMESTAMP(3) NOT NULL,

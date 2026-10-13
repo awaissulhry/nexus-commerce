@@ -1,12 +1,13 @@
 /**
  * Google Ads steps 1a and 1b — the query texts are golden: a field renamed by a Google Ads version shows up here first.
- * Every query that selects segments.date filters it; the change history is bounded (30 days, LIMIT ≤ 10,000). Each
- * NOT VERIFIED field has a twin without it, which differs from the first text by that field only.
+ * Every query that selects segments.date filters it; the change history is bounded (30 days, LIMIT ≤ 10,000). The
+ * fields were checked against Google's v25 field reference (gaql.ts says where); four reads keep a safety-net twin
+ * without one field, which differs from the first text by that field only.
  */
 import { describe, expect, it } from 'vitest'
 import * as gaql from './gaql.js'
 import {
-  AD_GROUPS_QUERY, AD_GROUP_KEYWORDS_QUERY, AD_POLICY_QUERY, ASSET_GROUPS_QUERY, AUTO_APPLY_QUERY, CAMPAIGNS_QUERY, CAMPAIGN_FLAGS_QUERY,
+  ACCOUNT_NEGATIVE_LIST_LINKS_QUERY, AD_GROUPS_QUERY, AD_GROUP_KEYWORDS_QUERY, AD_POLICY_QUERY, ASSET_GROUPS_QUERY, AUTO_APPLY_QUERY, CAMPAIGNS_QUERY, CAMPAIGN_FLAGS_QUERY,
   CAMPAIGN_FLAGS_QUERY_WITHOUT_ASSET_AUTOMATION, CAMPAIGN_NEGATIVES_QUERY, CHANGE_EVENT_LIMIT, CUSTOMER_CLIENTS_QUERY, CUSTOMER_QUERY,
   NEGATIVE_LIST_ATTACHMENTS_QUERY, NEGATIVE_LIST_ATTACHMENTS_QUERY_WITHOUT_SET, NEGATIVE_LIST_KEYWORDS_QUERY, NEGATIVE_LIST_KEYWORDS_QUERY_WITHOUT_SET,
   RECOMMENDATIONS_QUERY, RECOMMENDATIONS_QUERY_WITHOUT_IMPACT, SHOPPING_PRODUCTS_QUERY, adGroupDailyMetricsQuery, assetGroupDailyMetricsQuery,
@@ -92,7 +93,7 @@ const M = 'metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.con
 const W = { from: '2026-09-29', to: '2026-10-12' }
 
 describe('Google Ads step 1b queries (v25 field names)', () => {
-  it('tier 2: campaign settings, and the twin without asset_automation_settings (NOT VERIFIED)', () => {
+  it('tier 2: campaign settings, and the safety-net twin without asset_automation_settings', () => {
     expect(CAMPAIGN_FLAGS_QUERY).toBe(
       'SELECT campaign.id, campaign.ai_max_setting.enable_ai_max, campaign.keyword_match_type, campaign.broad_match_migration_date_time, ' +
       'campaign.asset_automation_settings, campaign.network_settings.target_google_search, campaign.network_settings.target_search_network, ' +
@@ -142,7 +143,7 @@ describe('Google Ads step 1b queries (v25 field names)', () => {
       `SELECT campaign.id, campaign_search_term_view.search_term, segments.date, ${M} FROM campaign_search_term_view ` +
       "WHERE segments.date BETWEEN '2026-09-29' AND '2026-10-12' AND metrics.clicks > 0",
     )
-    // The twin without the clicks filter (NOT VERIFIED on this view): the mapper drops the terms without a click.
+    // The safety-net twin without the clicks filter: the mapper drops the terms without a click.
     expect(searchTermDailyMetricsQuery(W, false)).toBe(searchTermDailyMetricsQuery(W).replace(' AND metrics.clicks > 0', ''))
     for (const query of [adGroupDailyMetricsQuery, keywordDailyMetricsQuery, assetGroupDailyMetricsQuery, productDailyMetricsQuery, searchTermDailyMetricsQuery]) {
       expect(() => query({ from: '2026-10-13', to: '2026-10-12' })).toThrow('ends before it starts')
@@ -179,7 +180,7 @@ describe('Google Ads step 1b queries (v25 field names)', () => {
     )
   })
 
-  it('tier 5: negative keyword lists (shared_set.* NOT VERIFIED) and recommendations (impact NOT VERIFIED), each with its twin', () => {
+  it('tier 5: negative keyword lists (with shared_set.*) and recommendations (with the impact), each with its safety-net twin', () => {
     const set = 'shared_set.id, shared_set.name, shared_set.type, shared_set.status, shared_set.member_count'
     expect(NEGATIVE_LIST_KEYWORDS_QUERY).toBe(
       'SELECT shared_criterion.shared_set, shared_criterion.criterion_id, shared_criterion.type, shared_criterion.keyword.text, ' +
@@ -191,29 +192,50 @@ describe('Google Ads step 1b queries (v25 field names)', () => {
       "FROM campaign_shared_set WHERE campaign_shared_set.status != 'REMOVED' AND campaign.status != 'REMOVED'",
     )
     expect(NEGATIVE_LIST_ATTACHMENTS_QUERY_WITHOUT_SET).toBe(NEGATIVE_LIST_ATTACHMENTS_QUERY.replace(`, ${set}`, ''))
-    const impact = ['base_metrics', 'potential_metrics'].flatMap((side) =>
-      ['impressions', 'clicks', 'cost_micros', 'conversions', 'conversions_value'].map((metric) => `recommendation.impact.${side}.${metric}`)).join(', ')
+    // The account-level list is in force only while a customer_negative_criterion points at it.
+    expect(ACCOUNT_NEGATIVE_LIST_LINKS_QUERY).toBe(
+      'SELECT customer_negative_criterion.negative_keyword_list.shared_set FROM customer_negative_criterion ' +
+      "WHERE customer_negative_criterion.type = 'NEGATIVE_KEYWORD_LIST'",
+    )
+    // recommendation.impact is Selectable only whole: its leaves are not query fields (Google answers UNRECOGNIZED_FIELD).
     expect(RECOMMENDATIONS_QUERY).toBe(
       'SELECT recommendation.resource_name, recommendation.type, recommendation.campaign, recommendation.ad_group, ' +
-      `recommendation.dismissed, ${impact} FROM recommendation`,
+      'recommendation.dismissed, recommendation.impact FROM recommendation',
     )
-    expect(RECOMMENDATIONS_QUERY).toContain('recommendation.impact.potential_metrics.conversions_value FROM recommendation')
-    expect(RECOMMENDATIONS_QUERY_WITHOUT_IMPACT).toBe(RECOMMENDATIONS_QUERY.replace(`, ${impact}`, ''))
+    expect(RECOMMENDATIONS_QUERY_WITHOUT_IMPACT).toBe(RECOMMENDATIONS_QUERY.replace(', recommendation.impact', ''))
   })
 
-  it('every query only reads: a SELECT, no page size, no change of anything', () => {
+  /** Every text Nexus sends (the change history with a fixed window). */
+  const allTexts = (): string[] => {
     const texts = Object.entries(gaql).flatMap(([name, value]) => {
       if (typeof value === 'string' && /_QUERY($|_)/.test(name)) return [value]
       if (typeof value === 'function' && name.endsWith('Query') && name !== 'changeEventsQuery') return [(value as (w: typeof W) => string)(W)]
       return []
     })
     texts.push(changeEventsQuery('2026-10-01 00:00:00', '2026-10-02 00:00:00'), searchTermDailyMetricsQuery(W, false))
-    // Step 1a: 5 (with the change history); step 1b: 16 + 5 twins without a NOT VERIFIED field.
-    expect(texts.length).toBe(26)
+    return texts
+  }
+
+  it('every query only reads: a SELECT, no page size, no change of anything', () => {
+    const texts = allTexts()
+    // Step 1a: 5 (with the change history); step 1b: 17 + 5 safety-net twins (one field or filter less each).
+    expect(texts.length).toBe(27)
     for (const q of texts) {
       expect(q.startsWith('SELECT ')).toBe(true)
       expect(q).not.toMatch(/page_size|PARAMETERS|\bmutate\b/i)
       if (q.includes('segments.date')) expect(q).toMatch(/segments\.date BETWEEN '\d{4}-\d{2}-\d{2}' AND '\d{4}-\d{2}-\d{2}'/)
+    }
+  })
+
+  it('a message the v25 field reference lists as one field is selected whole, never by its leaves', () => {
+    // Google answers UNRECOGNIZED_FIELD for a leaf it does not list (e.g. recommendation.impact.base_metrics.clicks).
+    const wholeOnly = ['recommendation.impact', 'campaign.asset_automation_settings', 'ad_group_ad.policy_summary.policy_topic_entries',
+      'shopping_product.issues', 'change_event.changed_fields', 'change_event.old_resource', 'change_event.new_resource']
+    for (const q of allTexts()) {
+      const selected = q.slice('SELECT '.length, q.indexOf(' FROM ')).split(', ')
+      for (const field of selected) {
+        for (const message of wholeOnly) expect(field.startsWith(`${message}.`), `${field} in: ${q}`).toBe(false)
+      }
     }
   })
 })

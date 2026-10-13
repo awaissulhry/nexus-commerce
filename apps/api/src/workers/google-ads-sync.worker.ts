@@ -4,8 +4,10 @@
  * so the read sees and writes only that business's rows; a business that no longer has the account linked gets no call.
  *
  * Concurrency 1: Google counts operations per Cloud project per day, and one read at a time keeps the allowance and the
- * account's rate bucket predictable. A read records its own outcome in words (GoogleAdsCustomer.lastSyncStatus) and does
- * not throw for a Google answer; a thrown job is a fault of Nexus's own and is retried once by the queue.
+ * account's rate bucket predictable. Across worker replicas (and inline reads), the read's own lock per business and
+ * account (read-guard.ts) keeps two reads of one account apart: the second is skipped (ALREADY_RUNNING, no call). A read
+ * records its own outcome in words (GoogleAdsCustomer.lastSyncStatus) and does not throw for a Google answer; a thrown
+ * job is a fault of Nexus's own and is retried once by the queue.
  */
 import { WorkspaceWorker as Worker } from '../lib/workspace-jobs.js'
 import { redis } from '../lib/queue.js'

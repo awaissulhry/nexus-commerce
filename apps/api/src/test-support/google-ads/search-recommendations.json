@@ -42,5 +42,5 @@
       }
     }
   ],
-  "fieldMask": "recommendation.resourceName,recommendation.type,recommendation.campaign,recommendation.adGroup,recommendation.dismissed,recommendation.impact.baseMetrics.impressions,recommendation.impact.baseMetrics.clicks,recommendation.impact.baseMetrics.costMicros,recommendation.impact.baseMetrics.conversions,recommendation.impact.baseMetrics.conversionsValue,recommendation.impact.potentialMetrics.impressions,recommendation.impact.potentialMetrics.clicks,recommendation.impact.potentialMetrics.costMicros,recommendation.impact.potentialMetrics.conversions,recommendation.impact.potentialMetrics.conversionsValue"
+  "fieldMask": "recommendation.resourceName,recommendation.type,recommendation.campaign,recommendation.adGroup,recommendation.dismissed,recommendation.impact"
 }

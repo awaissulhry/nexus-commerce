@@ -77,7 +77,11 @@ const g = vi.hoisted(() => {
         { negativeId: `${mark}-neg-2`, level: 'campaign', kind: 'brand_list', text: null, matchType: null, campaignId: c1.campaignId, externalCampaignId: c1.externalCampaignId, campaignName: c1.campaignName, adGroupId: null, adGroupName: null, listId: null, listName: null, status: 'ENABLED', seenAt: READ_AT },
         { negativeId: `${mark}-neg-3`, level: 'list', kind: 'keyword', text: 'cheap', matchType: 'PHRASE', campaignId: null, externalCampaignId: null, campaignName: null, adGroupId: null, adGroupName: null, listId: `${mark}-list-1`, listName: 'Shared negatives', status: null, seenAt: READ_AT },
       ],
-      negativeLists: [{ listId: `${mark}-list-1`, externalListId: '5001', name: 'Shared negatives', status: 'ENABLED', memberCount: 1, campaigns: [{ campaignId: c1.campaignId, externalCampaignId: c1.externalCampaignId, name: c1.campaignName }], seenAt: READ_AT }],
+      negativeLists: [
+        // The account-level list: Google applies it to the whole account, never through a campaign.
+        { listId: `${mark}-list-2`, externalListId: '5002', name: 'Account negatives', status: 'ENABLED', memberCount: 0, accountLevel: true, appliesToAccount: true, campaigns: [], seenAt: READ_AT },
+        { listId: `${mark}-list-1`, externalListId: '5001', name: 'Shared negatives', status: 'ENABLED', memberCount: 1, accountLevel: false, appliesToAccount: false, campaigns: [{ campaignId: c1.campaignId, externalCampaignId: c1.externalCampaignId, name: c1.campaignName }], seenAt: READ_AT },
+      ],
       searchTerms: [
         ['st-1', 'acme race jacket', true, 2468], ['st-2', 'cheap jacket', false, 4321], ['st-3', 'acme boots', true, 1357], ['st-4', 'gloves for winter', false, 3579],
       ].map(([id, term, brand, spend]) => ({ ...c1, termId: `${mark}-${id}`, term, brand, metrics: metrics(Number(spend), 7, 0, 0) })),
@@ -360,6 +364,8 @@ describe('Google Ads 1b — google-ad-details: every view, from the page\'s own 
     expect((await call({ view: 'brand-split' })).data).toMatchObject({ brandTerms: { terms: [] }, brandText: expect.stringContaining('brand null, never "not brand"'), rows: expect.arrayContaining([expect.objectContaining({ campaignType: 'ALL' })]) })
     const negatives = (await call({ view: 'negatives' })).data!
     expect(negatives.lists).toEqual(g.rows.a.negativeLists)
+    expect(negatives.lists.map((l: { name: string; accountLevel: boolean | null; appliesToAccount: boolean | null }) => [l.name, l.accountLevel, l.appliesToAccount]))
+      .toEqual([['Account negatives', true, true], ['Shared negatives', false, false]])
     expect(pick(negatives.items, 'level').sort()).toEqual(['ad_group', 'campaign', 'list'])
     const acts = (await call({ view: 'acts-on-its-own' })).data!
     expect(acts).toMatchObject({ autoApply: { enabled: [{ type: 'KEYWORD' }] }, campaigns: [{ campaignId: 'gc-a1', aiMax: 'off', finalUrlExpansion: null }], outsideChanges: { nexusWrites: 0, bySource: [{ source: 'google_automatic', count: 3 }] }, unseen: expect.stringContaining('Google Ads Editor') })

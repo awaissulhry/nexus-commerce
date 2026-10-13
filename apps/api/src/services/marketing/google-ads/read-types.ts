@@ -130,6 +130,16 @@ export interface GoogleNegativeList {
   name: string
   status: string
   memberCount: number | null
+  /**
+   * The kind of list: true = Google's account-level list (ACCOUNT_LEVEL_NEGATIVE_KEYWORDS, never attached to a campaign,
+   * so `campaigns` is empty); false = a list for campaigns; null = its type is not read yet.
+   */
+  accountLevel: boolean | null
+  /**
+   * Whether Google applies the list to the whole account: true = a customer_negative_criterion of this account points at
+   * it (in force); false = read, and none does (not in use); null = not read yet.
+   */
+  appliesToAccount: boolean | null
   campaigns: { campaignId: string | null; externalCampaignId: string; name: string | null }[]
   seenAt: string
 }

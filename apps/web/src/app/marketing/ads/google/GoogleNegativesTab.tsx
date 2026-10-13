@@ -2,7 +2,8 @@
 
 /**
  * Google Ads step 1b, WB — one campaign's negative keywords (R7, PLAN-1B M8): its ad groups' negatives, the campaign's
- * own (brand lists included), and the keywords of the negative keyword lists attached to it. Words only, A→Z, no
+ * own (brand lists included), the keywords of the negative keyword lists attached to it, and those of the account-level
+ * list — "Whole account" only when Google applies it, else "not in use" or not read yet, in words. Words only, A→Z, no
  * totals (a negative keyword has no numbers). The lists themselves are named above the grid with how many keywords each
  * holds. A part Nexus has not read yet is named, so the list never passes for complete.
  *
@@ -14,8 +15,8 @@ import { fetchAllGooglePages, fetchGoogleNegatives, GOOGLE_PAGE_LIMIT, type Goog
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../campaigns/_grid/AdsDataGrid'
 import { GoogleGrainState } from './GoogleGrainState'
 import {
-  activeNegatives, MATCH_TYPE_OPTIONS, NEGATIVE_LEVEL_OPTIONS, NEGATIVE_LIST_COLUMNS, negativeLevelText, negativeListRows, negativeMatchLabel,
-  negativesMissingText, negativesRead, negativeText, NOUN,
+  accountListNote, activeNegatives, listScopes, MATCH_TYPE_OPTIONS, NEGATIVE_LEVEL_OPTIONS, NEGATIVE_LIST_COLUMNS, negativeLevelText,
+  negativeListRows, negativeMatchLabel, negativesMissingText, negativesRead, negativeText, NOUN, type ListScope,
 } from './googleGrains'
 import { googleReadKey, useGoogleRead } from './useGoogleRead'
 
@@ -24,10 +25,14 @@ const firstSort = (r: GoogleNegative) => negativeText(r).toLowerCase()
 const searchValue = (r: GoogleNegative) => `${negativeText(r)} ${r.adGroupName ?? ''} ${r.listName ?? ''}`
 const renderFirst = (r: GoogleNegative) => <span className="gads-camp" title={negativeText(r)}>{negativeText(r)}</span>
 
-const COLUMNS: GridColumn<GoogleNegative>[] = [
-  { key: 'match', label: 'Match type', metric: false, sortValue: (r) => negativeMatchLabel(r), render: (r) => negativeMatchLabel(r) },
-  { key: 'level', label: 'Set on', metric: false, tip: 'An ad group, the campaign, or a negative keyword list attached to the campaign.', sortValue: (r) => negativeLevelText(r).toLowerCase(), render: (r) => <span className="gads-camp" title={negativeLevelText(r)}>{negativeLevelText(r)}</span> },
-]
+/** The columns after the keyword; "Set on" names the account-level list as in force, not in use or not read (`scopes`). */
+export function negativeColumns(scopes: ReadonlyMap<string, ListScope>): GridColumn<GoogleNegative>[] {
+  const level = (r: GoogleNegative) => negativeLevelText(r, scopes)
+  return [
+    { key: 'match', label: 'Match type', metric: false, sortValue: (r) => negativeMatchLabel(r), render: (r) => negativeMatchLabel(r) },
+    { key: 'level', label: 'Set on', metric: false, tip: 'An ad group, the campaign, a negative keyword list attached to the campaign, or the account-level list.', sortValue: (r) => level(r).toLowerCase(), render: (r) => <span className="gads-camp" title={level(r)}>{level(r)}</span> },
+  ]
+}
 
 const FILTERS: GridFilter[] = [
   { key: 'level', label: 'Set on', kind: 'select', options: NEGATIVE_LEVEL_OPTIONS, placeholder: 'All', value: (r) => (r as GoogleNegative).level },
@@ -48,6 +53,9 @@ export function GoogleNegativesTab({ campaignId, account, nextReadAt, onCount }:
   const page = read.data
   const rows = useMemo(() => activeNegatives(page?.items ?? []), [page])
   const lists = useMemo(() => negativeListRows(page?.lists ?? []), [page])
+  const scopes = useMemo(() => listScopes(page?.lists ?? []), [page])
+  const columns = useMemo(() => negativeColumns(scopes), [scopes])
+  const listNote = useMemo(() => accountListNote(page?.lists ?? []), [page])
   const state = page ? negativesRead(page.read) : null
   const missing = state ? negativesMissingText(state.missing) : null
 
@@ -62,9 +70,12 @@ export function GoogleNegativesTab({ campaignId, account, nextReadAt, onCount }:
       count={rows.length + lists.length} windowed={false} truncated={page?.truncated} nextReadAt={nextReadAt}
       note={missing}
       above={lists.length > 0 && (
-        <div className="gads-table gads-lists" tabIndex={0} role="region" aria-label="Negative keyword lists">
-          <SummaryTable label="Negative keyword lists attached to this campaign" columns={NEGATIVE_LIST_COLUMNS} rows={lists} />
-        </div>
+        <>
+          <div className="gads-table gads-lists" tabIndex={0} role="region" aria-label="Negative keyword lists">
+            <SummaryTable label="Negative keyword lists for this campaign" columns={NEGATIVE_LIST_COLUMNS} rows={lists} />
+          </div>
+          {listNote && <p className="gads-meta">{listNote}</p>}
+        </>
       )}
     >
       {rows.length === 0 ? <p className="gads-meta">The lists above hold no negative keywords that Nexus has read.</p> : (
@@ -76,7 +87,7 @@ export function GoogleNegativesTab({ campaignId, account, nextReadAt, onCount }:
         firstColLabel="Negative keyword"
         renderFirst={renderFirst}
         firstSortValue={firstSort}
-        columns={COLUMNS}
+        columns={columns}
         filters={FILTERS}
         filtersDefaultOpen={false}
         searchable

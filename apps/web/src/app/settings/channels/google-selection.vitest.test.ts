@@ -11,6 +11,7 @@ vi.mock('@/lib/backend-url', () => ({ getBackendUrl: () => 'http://localhost:809
 import type { GoogleAccount, GoogleChoices } from '@/lib/google-ads/contract'
 import {
   NONE,
+  TAKEN_ELSEWHERE,
   adsAccountOptions,
   analyticsOptions,
   canSave,
@@ -25,8 +26,10 @@ import {
   managerOptions,
   merchantOptions,
   needsChoice,
+  choosableCustomers,
   readableCustomers,
   reconcileDraft,
+  saveHeldReason,
   savedNotice,
   sectionError,
   selectionBody,
@@ -173,6 +176,91 @@ describe('the draft', () => {
   })
 })
 
+describe('an account another business in Nexus already picked (C2 takenByAnotherBusiness)', () => {
+  /** choices() with these ids marked as picked by another business (Ads accounts, Merchant Center accounts, properties). */
+  function takenChoices(taken: string[], over: Partial<GoogleChoices> = {}): GoogleChoices {
+    const c = choices(over)
+    const mark = <T extends object>(item: T, id: string) => ({ ...item, takenByAnotherBusiness: taken.includes(id) })
+    return {
+      ...c,
+      ads: { ...c.ads, customers: c.ads.customers.map((x) => mark(x, x.customerId)) },
+      merchantCenter: { ...c.merchantCenter, accounts: c.merchantCenter.accounts.map((x) => mark(x, x.id)) },
+      analytics: { ...c.analytics, properties: c.analytics.properties.map((x) => mark(x, x.propertyId)) },
+    }
+  }
+  const only = (customer = choices().ads.customers[0]!) => ({ ads: { customers: [customer], error: null } })
+  const blank = { ads: NONE, manager: NONE, merchantCenter: NONE, analytics: NONE }
+
+  it('is listed, held, and says so in plain words; it never names the other business', () => {
+    const c = takenChoices(['1112223333', '5550001', '321'])
+    const ads = adsAccountOptions(c)
+    expect(ads.find((o) => o.value === '1112223333')).toMatchObject({ label: 'Shop One', trailing: '111-222-3333', heldReason: TAKEN_ELSEWHERE, note: TAKEN_ELSEWHERE })
+    expect(TAKEN_ELSEWHERE).toBe('Chosen in another business in Nexus')
+    // The free ones are as before: no reason, their currency and time zone as the note.
+    expect(ads.find((o) => o.value === '7778889999')).toMatchObject({ note: 'EUR · Europe/Rome' })
+    expect(ads.find((o) => o.value === '7778889999')).not.toHaveProperty('heldReason')
+    expect(merchantOptions(c)[1]).toMatchObject({ value: '5550001', label: 'Feed A', heldReason: TAKEN_ELSEWHERE, note: TAKEN_ELSEWHERE })
+    expect(analyticsOptions(c)[1]).toMatchObject({ value: '321', label: 'Web shop', heldReason: TAKEN_ELSEWHERE, note: TAKEN_ELSEWHERE })
+    // "None" is never held.
+    expect(merchantOptions(c)[0]).toEqual({ value: NONE, label: 'None' })
+    expect(analyticsOptions(c)[0]).toEqual({ value: NONE, label: 'None' })
+    expect(choosableCustomers(c).map((x) => x.customerId)).toEqual(['4445556666', '7778889999'])
+  })
+
+  it('a flag the server did not send (an older server) holds nothing: Save still guards it', () => {
+    expect(adsAccountOptions(choices()).every((o) => !o.heldReason)).toBe(true)
+    expect(takenChoices([]).ads.customers.every((x) => x.takenByAnotherBusiness === false)).toBe(true)
+    expect(adsAccountOptions(takenChoices([])).every((o) => !o.heldReason)).toBe(true)
+  })
+
+  it('the only Google Ads account is never preselected when another business picked it', () => {
+    expect(initialDraft(null, takenChoices([], only())).ads).toBe('1112223333')
+    expect(initialDraft(null, takenChoices(['1112223333'], only())).ads).toBe(NONE)
+  })
+
+  it('a saved pick another business now holds is not kept, for each product', () => {
+    const saved = account({ merchantCenter: { id: '5550001', name: 'Feed A' }, analytics: { propertyId: '321', name: 'Web shop' } })
+    expect(initialDraft(saved, takenChoices([]))).toEqual({ ads: '1112223333', manager: NONE, merchantCenter: '5550001', analytics: '321' })
+    expect(initialDraft(saved, takenChoices(['1112223333', '5550001', '321']))).toEqual(blank)
+  })
+
+  it('after the lists are read again, a pick another business took meanwhile is dropped; the others are kept', () => {
+    const draft = { ads: '7778889999', manager: NONE, merchantCenter: '5550001', analytics: '321' }
+    expect(reconcileDraft(draft, takenChoices([]))).toEqual(draft)
+    expect(reconcileDraft(draft, takenChoices(['7778889999']))).toEqual({ ...draft, ads: NONE })
+    expect(reconcileDraft(draft, takenChoices(['5550001', '321']))).toEqual({ ...draft, merchantCenter: NONE, analytics: NONE })
+  })
+
+  it('Save never accepts a taken pick: not the Google Ads account, not Merchant Center, not Analytics', () => {
+    const draft = { ads: '1112223333', manager: NONE, merchantCenter: '5550001', analytics: '321' }
+    expect(canSave(draft, takenChoices([]))).toBe(true)
+    expect(canSave(draft, takenChoices(['1112223333']))).toBe(false)
+    expect(canSave(draft, takenChoices(['5550001']))).toBe(false)
+    expect(canSave(draft, takenChoices(['321']))).toBe(false)
+    expect(canSave({ ...draft, merchantCenter: NONE, analytics: NONE }, takenChoices(['5550001', '321']))).toBe(true)
+  })
+
+  it('Save is held with a plain reason; the only Google Ads account taken says that choosing will not help', () => {
+    expect(saveHeldReason({ ...blank, ads: '1112223333' }, takenChoices([]))).toBeNull()
+    expect(saveHeldReason(blank, takenChoices([]))).toBe('Choose the Google Ads account Nexus reads first.')
+    expect(saveHeldReason(blank, takenChoices(['1112223333'], only())))
+      .toBe('The only Google Ads account here is chosen in another business in Nexus. An account can belong to one business only.')
+    expect(saveHeldReason(blank, takenChoices(['1112223333', '4445556666', '7778889999'])))
+      .toBe('Every Google Ads account here is chosen in another business in Nexus. An account can belong to one business only.')
+    // Some still free: choosing one is the way on.
+    expect(saveHeldReason(blank, takenChoices(['1112223333']))).toBe('Choose the Google Ads account Nexus reads first.')
+    expect(saveHeldReason({ ...blank, ads: '1112223333' }, takenChoices(['1112223333']))).toBe('This Google Ads account is chosen in another business in Nexus. Choose another one.')
+    expect(saveHeldReason({ ...blank, ads: '7778889999', merchantCenter: '5550001' }, takenChoices(['5550001'])))
+      .toBe('This Merchant Center account is chosen in another business in Nexus. Choose another one, or None.')
+    expect(saveHeldReason({ ...blank, ads: '7778889999', analytics: '321' }, takenChoices(['321'])))
+      .toBe('This Google Analytics property is chosen in another business in Nexus. Choose another one, or None.')
+    expect(saveHeldReason({ ...blank, ads: '7778889999', merchantCenter: 'gone' }, takenChoices([])))
+      .toBe('This Google sign-in can no longer see one of the chosen accounts. Choose again.')
+    expect(saveHeldReason(null, null)).toBe('Choose the Google Ads account Nexus reads first.')
+    for (const reason of [saveHeldReason(blank, takenChoices(['1112223333'], only())), TAKEN_ELSEWHERE]) expect(reason).not.toMatch(/\d{6,}|business profile/)
+  })
+})
+
 describe('section errors, in words', () => {
   it('permission_missing asks for a reconnect that ticks every box', () => {
     expect(sectionError('analytics', { code: 'permission_missing', message: '' }))
@@ -289,6 +377,12 @@ describe('the Google screens on Settings › Channels', () => {
     expect(css).toMatch(/\.nds-connect-ident \{[^}]*overflow: hidden;[^}]*text-overflow: ellipsis;[^}]*white-space: nowrap;/)
     expect(src('./ConnectTab.tsx')).toMatch(/<span className="nds-connect-ident" title=\{names\}>\{names\}<\/span>/)
     expect(src('./[type]/ChannelDetailClient.tsx')).toMatch(/label: 'Account', value: <span className="nds-connect-ident" title=\{identityLine\(connection\)\}>/)
+  })
+
+  it('the dialog holds Save with saveHeldReason, and reads the lists again after a taken_by_other_business refusal', () => {
+    const dialog = src('./GoogleAccountsDialog.tsx')
+    expect(dialog).toMatch(/heldReason=\{busy \? null : loading && !choices \? '[^']+' : saveHeldReason\(draft, choices\)\}/)
+    expect(dialog).toMatch(/if \(result\.code === 'not_offered' \|\| result\.code === 'taken_by_other_business'\) void load\(\)/)
   })
 
   it('the Google accounts card writes days and times as the Ads page does ("10 Oct 2026"), never ISO or a US date', () => {

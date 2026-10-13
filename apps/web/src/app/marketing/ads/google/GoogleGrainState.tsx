@@ -4,7 +4,8 @@
  * Google Ads step 1b, WB — the one place a grain (ad groups, keywords, negatives, asset groups, search terms, products)
  * says what it has: it failed to load (a danger banner and Try again), Nexus has not read it yet ("Not read yet", no
  * grid, no 0), Google answered with none (one empty state, no grid), or the grid — under the read time and the notes
- * a person needs before trusting a total (a failed last read, numbers not read, days not read, a list cut at its cap).
+ * a person needs before trusting a total (a failed last read, a good read that read fewer days — an info note, never an
+ * error —, numbers not read, days not read, a list cut at its cap).
  *
  * Words and rules: `grainView` in ./googleGrains.ts. Read only: nothing here changes Google Ads.
  */

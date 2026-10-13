@@ -4,8 +4,9 @@
  * Google Ads step 1b, WB — the searches people made before they clicked an ad (R8), on the page's Search terms tab
  * (`campaignId` null: every campaign, with the Campaign and Type columns) and in the campaign window (one campaign).
  *
- * Only searches with at least one click (PLAN-1B M7), and the page says so. A search is "Brand" when it contains one
- * of the business's brand words (its protected terms); with no brand words every term is "—", never "Not brand". On the
+ * Only searches with at least one click (PLAN-1B M7), and the page says so. A search is "Brand" when it matches one
+ * of the business's brand words (its protected terms); with no brand words every term is "—", never "Not brand". One
+ * name on the tab: "brand words (your protected terms)" in the brand sentence (`brandRuleText`), "brand words" after. On the
  * page, the brand split (R9) sits above the grid: brand, not brand, and what Google did not list by search — a tile
  * filters the grid.
  *
@@ -42,7 +43,7 @@ const renderFirst = (r: GoogleSearchTerm) => <span className="gads-camp" title={
 
 export function searchTermColumns(currency: string | null, withCampaign: boolean): GridColumn<GoogleSearchTerm>[] {
   return [
-    { key: 'brand', label: 'Brand', metric: false, tip: 'Brand when the search contains one of your brand words; “—” when Nexus does not know them.', sortValue: (r) => brandKey(r.brand) || null, render: (r) => brandLabel(r.brand) },
+    { key: 'brand', label: 'Brand', metric: false, tip: 'Brand when the search matches one of the brand words; “—” when Nexus does not know them.', sortValue: (r) => brandKey(r.brand) || null, render: (r) => brandLabel(r.brand) },
     ...(withCampaign ? [
       { key: 'campaign', label: 'Campaign', metric: false, sortValue: (r: GoogleSearchTerm) => r.campaignName?.toLowerCase() ?? null, render: (r: GoogleSearchTerm) => <span className="gads-camp" title={r.campaignName ?? undefined}>{r.campaignName ?? '—'}</span> },
       { key: 'type', label: 'Type', metric: false, sortValue: (r: GoogleSearchTerm) => campaignTypeLabel(r.campaignType), render: (r: GoogleSearchTerm) => campaignTypeLabel(r.campaignType) },
@@ -54,12 +55,16 @@ export function searchTermColumns(currency: string | null, withCampaign: boolean
 const BRAND_FILTER: GridFilter = { key: 'brand', label: 'Brand', kind: 'select', options: BRAND_FILTER_OPTIONS, placeholder: 'All', value: (r) => brandKey((r as GoogleSearchTerm).brand) }
 const TYPE_FILTER: GridFilter = { key: 'type', label: 'Campaign type', kind: 'select', options: TYPE_FILTER_OPTIONS, placeholder: 'All', value: (r) => campaignTypeLabel((r as GoogleSearchTerm).campaignType) }
 
+/** Why a brand-split tile has no numbers: no brand words, or no day of the window read (never "no brand words" then). */
+const NO_BRAND_WORDS = 'No brand words yet'
+const NOT_READ_FOR_THESE_DAYS = 'Not read for these days'
+
 /** One brand-split tile: its cost, and its clicks and conversions (they show even when the money is hidden). */
-function splitTile(label: string, m: GoogleMetrics | null | undefined, currency: string | null, extra: Partial<Metric> = {}): Metric {
+function splitTile(label: string, m: GoogleMetrics | null | undefined, currency: string | null, why: string, extra: Partial<Metric> = {}): Metric {
   return {
     label,
     value: formatMoney(m?.spendCents, currency),
-    hint: m ? `${formatInt(m.clicks)} clicks · ${formatConversions(m.conversions)} conversions` : 'No brand words yet',
+    hint: m ? `${formatInt(m.clicks)} clicks · ${formatConversions(m.conversions)} conversions` : why,
     ...extra,
   }
 }
@@ -93,10 +98,11 @@ export function GoogleSearchTermsGrid({ campaignId, account, window: range, curr
   // The split's own gaps only when they differ from the list's (the banner above already names the list's).
   const splitGaps = split.data ? coverageNote(split.data) : null
   const splitGapsOwn = splitGaps && splitGaps !== (data ? coverageNote(data) : null) ? splitGaps : null
+  const brandWhy = known ? NOT_READ_FOR_THESE_DAYS : NO_BRAND_WORDS
   const tiles: Metric[] | null = page && all ? [
-    splitTile('Brand', known ? all.brand : null, split.data?.currency ?? ccy, known ? { onClick: () => pickBrand('brand'), active: brandOn === 'brand' } : {}),
-    splitTile('Not brand', known ? all.nonBrand : null, split.data?.currency ?? ccy, known ? { onClick: () => pickBrand('non_brand'), active: brandOn === 'non_brand' } : {}),
-    splitTile('Not in the search-term list', all.notInSearchTerms, split.data?.currency ?? ccy),
+    splitTile('Brand', known ? all.brand : null, split.data?.currency ?? ccy, brandWhy, known ? { onClick: () => pickBrand('brand'), active: brandOn === 'brand' } : {}),
+    splitTile('Not brand', known ? all.nonBrand : null, split.data?.currency ?? ccy, brandWhy, known ? { onClick: () => pickBrand('non_brand'), active: brandOn === 'non_brand' } : {}),
+    splitTile('Not in the search-term list', all.notInSearchTerms, split.data?.currency ?? ccy, NOT_READ_FOR_THESE_DAYS),
   ] : null
 
   return (

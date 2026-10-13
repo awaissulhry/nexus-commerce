@@ -126,7 +126,7 @@ async function seedA() {
     ids.neg3 = (await keyword('CAMPAIGN', 'c:333', '6002', { campaignId: '333', negative: true, criterionType: 'BRAND_LIST', status: 'ENABLED' })).id
     ids.neg4 = (await keyword('LIST', 'l:700', '7001', { sharedSetId: '700', negative: true, text: 'used', matchType: 'PHRASE' })).id
     await keyword('CAMPAIGN', 'c:111', '6003', { campaignId: '111', negative: true, text: 'gone negative', matchType: 'EXACT', status: 'ENABLED', removedAt: SEEN })
-    ids.list = (await db().googleAdsNegativeList.create({ data: { customerId: A_CUSTOMER, sharedSetId: '700', name: 'Shared negatives', status: 'ENABLED', memberCount: 1, campaignIds: ['111'], lastSeenAt: SEEN } })).id
+    ids.list = (await db().googleAdsNegativeList.create({ data: { customerId: A_CUSTOMER, sharedSetId: '700', name: 'Shared negatives', status: 'ENABLED', memberCount: 1, listType: 'NEGATIVE_KEYWORDS', appliesToAccount: false, campaignIds: ['111'], lastSeenAt: SEEN } })).id
     await metric(A_CUSTOMER, { type: 'KEYWORD', entityId: '901~5001', campaignId: '111', adGroupId: '901', date: '2026-10-05', clicks: 5, cost: 3_000_000 })
     await metric(A_CUSTOMER, { type: 'KEYWORD', entityId: '901~5002', campaignId: '111', adGroupId: '901', date: '2026-10-06', clicks: 2, cost: 1_000_000 })
     await metric(A_CUSTOMER, { type: 'KEYWORD', entityId: '901~5099', campaignId: '111', adGroupId: '901', date: '2026-10-07', clicks: 1, cost: 500_000, label: 'gone keyword' })
@@ -367,7 +367,7 @@ describe('R7 — negative keywords', () => {
     expect(all.items[3]).toMatchObject({ listId: ids.list, listName: 'Shared negatives', status: null, campaignId: null, matchType: 'PHRASE' })
     expect(all.items[0]).toMatchObject({ adGroupId: ids.ag1, adGroupName: 'Ad group one', campaignId: ids.c1, campaignName: 'Alpha search', status: 'ENABLED' })
     expect(all.lists).toEqual([{
-      listId: ids.list, externalListId: '700', name: 'Shared negatives', status: 'ENABLED', memberCount: 1,
+      listId: ids.list, externalListId: '700', name: 'Shared negatives', status: 'ENABLED', memberCount: 1, accountLevel: false, appliesToAccount: false,
       campaigns: [{ campaignId: ids.c1, externalCampaignId: '111', name: 'Alpha search' }], seenAt: SEEN.toISOString(),
     }])
     const alpha = await inA(() => googleAdsNegatives({ campaignId: ids.c1 }))
@@ -377,6 +377,55 @@ describe('R7 — negative keywords', () => {
     expect(charlie.lists).toEqual([])
     expect((await inA(() => googleAdsNegatives({ level: 'list' }))).items.map((n) => n.text)).toEqual(['used'])
     expect((await inA(() => googleAdsNegatives({ search: 'shared' }))).items.map((n) => n.text)).toEqual(['used'])
+  })
+
+  it('the account-level list: in force, not in use or not read (customer_negative_criterion), with each campaign of a type Google applies it to', async () => {
+    const listOf = (sharedSetId: string, name: string, listType: string | null, appliesToAccount: boolean | null) =>
+      db().googleAdsNegativeList.create({ data: { customerId: A_CUSTOMER, sharedSetId, name, status: 'ENABLED', memberCount: 1, listType, appliesToAccount, lastSeenAt: SEEN } })
+    const listKeyword = (sharedSetId: string, criterionId: string, text: string) => db().googleAdsKeyword.create({
+      data: { customerId: A_CUSTOMER, level: 'LIST', parentKey: `l:${sharedSetId}`, criterionId, sharedSetId, negative: true, criterionType: 'KEYWORD', text, matchType: 'EXACT', lastSeenAt: SEEN },
+    })
+    const ACCOUNT = 'ACCOUNT_LEVEL_NEGATIVE_KEYWORDS'
+    const made = await inA(async () => ({
+      lists: [
+        await listOf('710', 'Account negatives', ACCOUNT, true), // a customer_negative_criterion points at it
+        await listOf('711', 'Old account negatives', ACCOUNT, false), // read: none points at it
+        await listOf('712', 'Account negatives not read', ACCOUNT, null), // stored before the link was read
+        await listOf('720', 'Type not read', null, null), // the read without the lists' details: never taken for the account's
+      ],
+      keywords: [await listKeyword('710', '7101', 'second hand'), await listKeyword('711', '7111', 'old term'), await listKeyword('712', '7121', 'unread term'), await listKeyword('720', '7201', 'spare parts')],
+      display: await db().googleAdsCampaign.create({ data: { customerId: A_CUSTOMER, campaignId: '444', name: 'Delta display', status: 'ENABLED', channelType: 'DISPLAY', currencyCode: 'EUR', lastSeenAt: SEEN } }),
+    }))
+    try {
+      const all = await inA(() => googleAdsNegatives({}))
+      expect(all.lists.map((l) => [l.name, l.accountLevel, l.appliesToAccount, l.campaigns.length])).toEqual([
+        ['Account negatives', true, true, 0], ['Account negatives not read', true, null, 0], ['Old account negatives', true, false, 0],
+        ['Shared negatives', false, false, 1], ['Type not read', null, null, 0],
+      ])
+      // Search, Shopping and Performance Max campaigns: every account-level list with its keywords, at level 'list' — the
+      // web says which is in force, not in use or not read.
+      const [inForce, notInUse, notRead] = made.lists
+      for (const campaignId of [ids.c1, ids.c2, ids.c3]) {
+        const page = await inA(() => googleAdsNegatives({ campaignId }))
+        expect(page.lists.filter((l) => l.accountLevel).map((l) => [l.listId, l.appliesToAccount])).toEqual([[inForce.id, true], [notRead.id, null], [notInUse.id, false]])
+        expect(page.items.find((n) => n.text === 'second hand')).toMatchObject({ level: 'list', listId: inForce.id, listName: 'Account negatives', campaignId: null })
+        expect(page.items.some((n) => n.text === 'spare parts')).toBe(false)
+      }
+      expect((await inA(() => googleAdsNegatives({ campaignId: ids.c1 }))).items.map((n) => n.text)).toEqual(['cheap', 'free', 'old term', 'second hand', 'unread term', 'used'])
+      // A Display campaign: Google does not apply the account-level list to it.
+      const display = await inA(() => googleAdsNegatives({ campaignId: made.display.id }))
+      expect(display.lists).toEqual([])
+      expect(display.items).toEqual([])
+      // A list in force whose type the read did not get is still the account's list.
+      await inA(() => db().googleAdsNegativeList.update({ where: { id: inForce.id }, data: { listType: null } }))
+      expect((await inA(() => googleAdsNegatives({}))).lists.find((l) => l.listId === inForce.id)).toMatchObject({ accountLevel: true, appliesToAccount: true })
+    } finally {
+      await inA(async () => {
+        await db().googleAdsKeyword.deleteMany({ where: { id: { in: made.keywords.map((k) => k.id) } } })
+        await db().googleAdsNegativeList.deleteMany({ where: { id: { in: made.lists.map((l) => l.id) } } })
+        await db().googleAdsCampaign.delete({ where: { id: made.display.id } })
+      })
+    }
   })
 })
 

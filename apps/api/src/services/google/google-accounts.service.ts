@@ -5,6 +5,8 @@
  *   listGoogleAccounts()   C1 — this business's Google sign-ins, each with what it reads and how the read is doing
  *   getChoices()           C2 — what the sign-in can see, product by product; read from Google at most once per
  *                          5 minutes per sign-in (unless forced), the answer kept in between
+ *   choicesAnswer()        C2 as answered: each account also says whether another business in Nexus already picked it
+ *                          (read fresh from Nexus every time, never naming that business)
  *   saveSelection()        C3 — the choice: only ids Google offered THIS business's sign-in, a manager only when it is a
  *                          discovered path to the account; one Google Ads account, one Merchant Center account and one
  *                          Analytics property per business (GoogleAccountLink); recorded in the connection ledger
@@ -124,9 +126,11 @@ export function googleAccountState(input: {
   }
   if (status === 'PARTIAL') return { state: 'ok', stateText: `The last read of ${name} was not complete. ${error ?? ''}`.trim() }
   if (status === 'SKIPPED_BUDGET') return { state: 'ok', stateText: `Nexus skipped the last read of ${name}. ${error ?? ''}`.trim() }
+  // A good read may carry a note (the first read of campaign numbers read fewer days: sync.service.ts `note`).
+  const note = status === 'SUCCESS' && error ? ` ${error}` : ''
   return {
     state: 'ok',
-    stateText: input.readingOn ? `Nexus reads ${name} once a day.` : `Nexus has read ${name}; reading is switched off on the server for now.`,
+    stateText: input.readingOn ? `Nexus reads ${name} once a day.${note}` : `Nexus has read ${name}; reading is switched off on the server for now.${note}`,
   }
 }
 
@@ -229,18 +233,52 @@ export async function getChoices(connectionId: string, options: { force?: boolea
 }
 
 /**
- * C2 as the API answers it (the web's `GoogleChoices`): an account Nexus listed by id only (past the first 20 the
- * sign-in reaches) has no currency or time zone yet — sent as empty text, never invented.
+ * Which of the ids Google offered this sign-in ANOTHER business has already picked, per GoogleAccountLink product
+ * (the global unique index on (product, externalId) refuses them on Save). One statement, one call of
+ * `nexus_google_links_taken` per product (packages/database/workspaces/google-links-taken.sql); the function answers
+ * yes or no per id and never which business. Read fresh on every C2 answer: never kept with the 5-minute choices.
  */
-export function choicesAnswer(choices: GoogleChoices) {
+async function takenByOtherBusinesses(choices: GoogleChoices): Promise<Map<string, Set<string>>> {
+  const ads = choices.ads.customers.map((c) => c.customerId)
+  const merchant = choices.merchantCenter.accounts.map((a) => a.id)
+  const analytics = choices.analytics.properties.map((p) => p.propertyId)
+  const taken = new Map<string, Set<string>>([[PRODUCT.ads, new Set()], [PRODUCT.merchant, new Set()], [PRODUCT.analytics, new Set()]])
+  if (ads.length + merchant.length + analytics.length === 0) return taken
+  const rows = await prisma.$queryRaw<Array<{ product: string; id: string }>>`
+    SELECT ${PRODUCT.ads}::text AS product, t.id FROM nexus_google_links_taken(${PRODUCT.ads}, ${ads}::text[]) AS t(id)
+    UNION ALL
+    SELECT ${PRODUCT.merchant}::text, t.id FROM nexus_google_links_taken(${PRODUCT.merchant}, ${merchant}::text[]) AS t(id)
+    UNION ALL
+    SELECT ${PRODUCT.analytics}::text, t.id FROM nexus_google_links_taken(${PRODUCT.analytics}, ${analytics}::text[]) AS t(id)`
+  for (const row of rows) taken.get(row.product)?.add(row.id)
+  return taken
+}
+
+/**
+ * C2 as the API answers it (the web's `GoogleChoices`): an account Nexus listed by id only (past the first 20 the
+ * sign-in reaches) has no currency or time zone yet — sent as empty text, never invented. Each Google Ads account,
+ * Merchant Center account and Analytics property says whether another business in Nexus already picked it
+ * (`takenByAnotherBusiness`, read fresh on every answer, never naming that business), so the picker says it before Save.
+ */
+export async function choicesAnswer(choices: GoogleChoices) {
+  const taken = await takenByOtherBusinesses(choices)
+  const isTaken = (product: string, id: string) => taken.get(product)?.has(id) ?? false
   return {
     missingProducts: choices.missingProducts,
     ads: {
-      customers: choices.ads.customers.map((c) => ({ ...c, currency: c.currency ?? '', timeZone: c.timeZone ?? '' })),
+      customers: choices.ads.customers.map((c) => ({
+        ...c, currency: c.currency ?? '', timeZone: c.timeZone ?? '', takenByAnotherBusiness: isTaken(PRODUCT.ads, c.customerId),
+      })),
       error: choices.ads.error,
     },
-    merchantCenter: choices.merchantCenter,
-    analytics: choices.analytics,
+    merchantCenter: {
+      accounts: choices.merchantCenter.accounts.map((a) => ({ ...a, takenByAnotherBusiness: isTaken(PRODUCT.merchant, a.id) })),
+      error: choices.merchantCenter.error,
+    },
+    analytics: {
+      properties: choices.analytics.properties.map((p) => ({ ...p, takenByAnotherBusiness: isTaken(PRODUCT.analytics, p.propertyId) })),
+      error: choices.analytics.error,
+    },
   }
 }
 

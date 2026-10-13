@@ -1,5 +1,5 @@
 /**
- * Google Ads step 1b — what one run reads and costs (sync-plan.ts), pure: 21 operations on a regular day, 26 on an
+ * Google Ads step 1b — what one run reads and costs (sync-plan.ts), pure: 22 operations on a regular day, 27 on an
  * account's first run (ad groups and keywords 90 days in three pieces, search terms 30 days in two); the windows in the
  * account's days ending yesterday (14 / 7 days, 35 / 14 on its Sundays), a grain that missed runs reaching back to the
  * day after its last day read but never further than its first read; tiers dropped 5, 4, 3, 2; the retention cut-off.
@@ -7,8 +7,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   CORE_OPS, DETAIL_STEPS, GRAINS, READ_RESOURCE_TEXT, RUN_OPS, SPARE_OPS, TIER_CANDIDATES, detailOps, grainOf, grainRead, knownTimeZone, planDetailRead,
-  retentionKeepFrom, runOps,
+  retentionKeepFrom, runOps, shorterBackfill, shorterCatchUp, shorterFirstRead,
 } from './sync-plan.js'
+import { backfillWindow } from './dates.js'
 
 const ROME = 'Europe/Rome'
 const TUESDAY = new Date('2026-10-13T06:25:00Z') // the account's yesterday is 2026-10-12
@@ -18,10 +19,12 @@ const READ_TO_11 = Object.fromEntries(GRAINS.map((g) => [g.resource, '2026-10-11
 const spec = (resource: string) => grainOf(resource as never)!
 
 describe('the cost of a run', () => {
-  it('core 4 + step 1b 16 (tiers 4 / 5 / 4 / 3) + 1 spare = 21', () => {
-    expect([CORE_OPS, SPARE_OPS, RUN_OPS]).toEqual([4, 1, 21])
+  it('core 4 + step 1b 17 (tiers 4 / 5 / 4 / 4) + 1 spare = 22', () => {
+    expect([CORE_OPS, SPARE_OPS, RUN_OPS]).toEqual([4, 1, 22])
     const perTier = (tier: number) => DETAIL_STEPS.filter((s) => s.tier === tier).reduce((t, s) => t + s.ops, 0)
-    expect([perTier(2), perTier(3), perTier(4), perTier(5)]).toEqual([4, 5, 4, 3])
+    expect([perTier(2), perTier(3), perTier(4), perTier(5)]).toEqual([4, 5, 4, 4])
+    // The lists: their keywords, their campaigns, and the list attached to the account.
+    expect(DETAIL_STEPS.find((s) => s.resource === 'NEGATIVE_LISTS')?.ops).toBe(3)
     expect(DETAIL_STEPS.map((s) => s.resource)).toEqual([
       'CAMPAIGN_SETTINGS', 'AD_POLICY', 'PRODUCT_STATUS', 'AUTO_APPLY',
       'AD_GROUP_DAYS', 'KEYWORD_DAYS', 'ASSET_GROUP_DAYS', 'PRODUCT_DAYS', 'SEARCH_TERM_DAYS',
@@ -31,19 +34,19 @@ describe('the cost of a run', () => {
     for (const step of DETAIL_STEPS) expect(READ_RESOURCE_TEXT[step.resource]).toMatch(/^[A-Z][a-z -]+$/)
   })
 
-  it('a regular day costs 21, a Sunday too; short of allowance the run drops tier 5, then 4, 3, 2', () => {
+  it('a regular day costs 22, a Sunday too; short of allowance the run drops tier 5, then 4, 3, 2', () => {
     for (const now of [TUESDAY, SUNDAY]) {
       const steps = planDetailRead({ timeZone: ROME, now, readThrough: READ_TO_11 })
-      expect(runOps(steps, [2, 3, 4, 5])).toBe(21)
+      expect(runOps(steps, [2, 3, 4, 5])).toBe(22)
     }
     const steps = planDetailRead({ timeZone: ROME, now: TUESDAY, readThrough: READ_TO_11 })
     expect(TIER_CANDIDATES).toEqual([[2, 3, 4, 5], [2, 3, 4], [2, 3], [2], []])
-    expect(TIER_CANDIDATES.map((tiers) => runOps(steps, tiers))).toEqual([21, 18, 14, 9, 5])
+    expect(TIER_CANDIDATES.map((tiers) => runOps(steps, tiers))).toEqual([22, 18, 14, 9, 5])
   })
 
-  it('the first run of an account costs 26: ad groups +2, keywords +2, search terms +1', () => {
+  it('the first run of an account costs 27: ad groups +2, keywords +2, search terms +1', () => {
     const steps = planDetailRead({ timeZone: ROME, now: TUESDAY, readThrough: NEVER })
-    expect(runOps(steps, [2, 3, 4, 5])).toBe(26)
+    expect(runOps(steps, [2, 3, 4, 5])).toBe(27)
     expect(Object.fromEntries(steps.filter((s) => s.grain).map((s) => [s.resource, s.ops]))).toEqual({
       AD_GROUP_DAYS: 3, KEYWORD_DAYS: 3, ASSET_GROUP_DAYS: 1, PRODUCT_DAYS: 1, SEARCH_TERM_DAYS: 2,
     })
@@ -54,6 +57,40 @@ describe('the cost of a run', () => {
 })
 
 describe('the windows (the account\'s days, never today)', () => {
+  it('a first read over the row cap: once more over half its window (never shorter than the daily one), ending yesterday; never again', () => {
+    const shorter = (resource: string) => shorterFirstRead(spec(resource), grainRead(spec(resource), ROME, TUESDAY, null))
+    expect(shorter('KEYWORD_DAYS')).toEqual({
+      window: { from: '2026-08-29', to: '2026-10-12' }, first: true,
+      chunks: [{ from: '2026-08-29', to: '2026-09-27' }, { from: '2026-09-28', to: '2026-10-12' }],
+    })
+    expect(shorter('ASSET_GROUP_DAYS')).toEqual({ window: { from: '2026-08-29', to: '2026-10-12' }, first: true, chunks: [{ from: '2026-08-29', to: '2026-10-12' }] })
+    expect(shorter('PRODUCT_DAYS')).toEqual({ window: { from: '2026-09-28', to: '2026-10-12' }, first: true, chunks: [{ from: '2026-09-28', to: '2026-10-12' }] })
+    expect(shorter('SEARCH_TERM_DAYS')?.window).toEqual({ from: '2026-09-28', to: '2026-10-12' })
+    // Already shortened, or not a first read: no further attempt.
+    const keywords = spec('KEYWORD_DAYS')
+    expect(shorterFirstRead(keywords, shorter('KEYWORD_DAYS')!)).toBeNull()
+    expect(shorterFirstRead(keywords, grainRead(keywords, ROME, TUESDAY, '2026-10-01'))).toBeNull()
+  })
+
+  it('the campaign numbers\' 400-day backfill over the row cap: once more over 200 days, ending yesterday; never again', () => {
+    const backfill = backfillWindow(ROME, TUESDAY)
+    expect(backfill).toEqual({ from: '2025-09-08', to: '2026-10-12' })
+    const shorter = shorterBackfill(backfill)
+    expect(shorter).toEqual({ from: '2026-03-27', to: '2026-10-12' })
+    // Already shortened, or a window no longer than half the backfill: no further attempt.
+    expect(shorterBackfill(shorter!)).toBeNull()
+    expect(shorterBackfill({ from: '2026-09-29', to: '2026-10-12' })).toBeNull()
+  })
+
+  it('the campaign numbers\' catch-up after missed runs over the row cap: once more over its OLDEST half, so the days read stay in one piece', () => {
+    expect(shorterCatchUp({ from: '2026-05-01', to: '2026-10-12' })).toEqual({ from: '2026-05-01', to: '2026-07-21' })
+    // Never shorter than the daily window: 41 days → 20, kept at 14 at least.
+    expect(shorterCatchUp({ from: '2026-09-02', to: '2026-10-12' })).toEqual({ from: '2026-09-02', to: '2026-09-21' })
+    expect(shorterCatchUp({ from: '2026-09-20', to: '2026-10-12' })).toEqual({ from: '2026-09-20', to: '2026-10-03' })
+    // Not shorter than what it is cut from (a regular 14-day window): no second attempt.
+    expect(shorterCatchUp({ from: '2026-09-29', to: '2026-10-12' })).toBeNull()
+  })
+
   it('first reads: ad groups and keywords 90 days in three 30-day pieces; search terms 30 in two; asset groups 90 and products 30 in one', () => {
     expect(grainRead(spec('AD_GROUP_DAYS'), ROME, TUESDAY, null)).toEqual({
       window: { from: '2026-07-15', to: '2026-10-12' }, first: true,

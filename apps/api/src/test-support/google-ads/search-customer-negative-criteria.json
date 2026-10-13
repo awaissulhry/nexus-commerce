@@ -1,0 +1,13 @@
+{
+  "results": [
+    {
+      "customerNegativeCriterion": {
+        "resourceName": "customers/1234567890/customerNegativeCriteria/95111",
+        "negativeKeywordList": {
+          "sharedSet": "customers/1234567890/sharedSets/77777777777"
+        }
+      }
+    }
+  ],
+  "fieldMask": "customerNegativeCriterion.negativeKeywordList.sharedSet"
+}

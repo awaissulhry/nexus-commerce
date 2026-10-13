@@ -63,7 +63,7 @@ const ok = (name: string): Answer => (query) => {
   return json({ ...answer, results })
 }
 const ROUTES: Array<[string, (q: string) => boolean, Answer]> = [
-  ['customer', (q) => q.includes(' FROM customer'), ok('search-customer.json')],
+  ['customer', (q) => q.endsWith(' FROM customer'), ok('search-customer.json')],
   ['campaigns', (q) => q.startsWith('SELECT campaign.id, campaign.name, campaign.status'), (q, token) => ok(token ? 'search-campaigns-page-2.json' : 'search-campaigns-page-1.json')(q, token)],
   ['campaignDays', (q) => q.startsWith('SELECT campaign.id, campaign.name, segments.date'), ok('search-campaign-days.json')],
   ['changes', (q) => q.includes(' FROM change_event'), ok('search-change-events.json')],
@@ -82,6 +82,7 @@ const ROUTES: Array<[string, (q: string) => boolean, Answer]> = [
   ['assetGroups', (q) => q.includes(' FROM asset_group WHERE asset_group.status'), ok('search-asset-groups.json')],
   ['listKeywords', (q) => q.includes(' FROM shared_criterion '), ok('search-negative-list-keywords.json')],
   ['listAttachments', (q) => q.includes(' FROM campaign_shared_set '), ok('search-negative-list-attachments.json')],
+  ['accountLists', (q) => q.includes(' FROM customer_negative_criterion '), ok('search-customer-negative-criteria.json')],
   ['recommendations', (q) => q.endsWith(' FROM recommendation'), ok('search-recommendations.json')],
 ]
 function answer(query: string, pageToken: string | null): Response {
@@ -243,21 +244,27 @@ describe('A\'s first daily read → B\'s read services', () => {
       ['campaign', 'keyword', 'test used', 'PHRASE', 'Test search campaign', null, null],
       ['list', 'keyword', 'test free', 'BROAD', null, null, 'Test negative list'],
       ['list', 'keyword', 'test repair manual', 'PHRASE', null, null, 'Test negative list'],
+      ['list', 'keyword', 'test second hand', 'EXACT', null, null, 'Test account negatives'],
     ])
-    expect(all.items.find((n) => n.level === 'list')!.listId).toBe(all.lists[0].listId)
-    expect(all.lists).toEqual([expect.objectContaining({
-      externalListId: '66666666666', name: 'Test negative list', status: 'ENABLED', memberCount: 2,
-      campaigns: [
-        { campaignId: nexus['11111111111'], externalCampaignId: '11111111111', name: 'Test search campaign' },
-        { campaignId: nexus['33333333333'], externalCampaignId: '33333333333', name: 'Test shopping campaign' },
-      ],
-    })])
-    // One campaign (M8): its ad groups' negatives, its own, and the lists attached to it.
+    const campaignList = all.lists.find((l) => l.externalListId === '66666666666')!
+    expect(all.items.find((n) => n.text === 'test free')!.listId).toBe(campaignList.listId)
+    expect(all.lists).toEqual([
+      // The account-level list, in force: a customer_negative_criterion of the account points at it (never a campaign).
+      expect.objectContaining({ externalListId: '77777777777', name: 'Test account negatives', status: 'ENABLED', memberCount: 1, accountLevel: true, appliesToAccount: true, campaigns: [] }),
+      expect.objectContaining({
+        externalListId: '66666666666', name: 'Test negative list', status: 'ENABLED', memberCount: 2, accountLevel: false, appliesToAccount: false,
+        campaigns: [
+          { campaignId: nexus['11111111111'], externalCampaignId: '11111111111', name: 'Test search campaign' },
+          { campaignId: nexus['33333333333'], externalCampaignId: '33333333333', name: 'Test shopping campaign' },
+        ],
+      }),
+    ])
+    // One campaign (M8): its ad groups' negatives, its own, the lists attached to it — and the account-level list.
     const search = await inA(() => googleAdsNegatives({ campaignId: nexus['11111111111'] }))
-    expect(search.items.map((n) => `${n.level}:${n.text}`)).toEqual(['ad_group:test cheap', 'campaign:test used', 'list:test free', 'list:test repair manual'])
+    expect(search.items.map((n) => `${n.level}:${n.text}`)).toEqual(['ad_group:test cheap', 'campaign:test used', 'list:test free', 'list:test repair manual', 'list:test second hand'])
     const pmax = await inA(() => googleAdsNegatives({ campaignId: nexus['22222222222'] }))
-    expect(pmax.items.map((n) => `${n.level}:${n.kind}`)).toEqual(['campaign:brand_list'])
-    expect(pmax.lists).toEqual([])
+    expect(pmax.items.map((n) => `${n.level}:${n.kind}:${n.text}`)).toEqual(['campaign:brand_list:null', 'list:keyword:test second hand'])
+    expect(pmax.lists.map((l) => [l.name, l.appliesToAccount])).toEqual([['Test account negatives', true]])
   })
 
   it('R8 search terms and R9 brand split — the business\'s protected terms split them; the rest is "not in the list"', async () => {

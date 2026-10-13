@@ -3,16 +3,23 @@
  * customer, customer_client, campaign + campaign_budget, daily campaign numbers, change history. Step 1b
  * (plan-1b-backend §1–§2), by tier: 2 safety (campaign settings, ad approvals, product status, auto-apply), 3 numbers
  * (ad group, keyword, asset group, product and search term days), 4 structure (ad groups, keywords + ad-group
- * negatives, campaign negatives + brand lists, asset groups), 5 slow (negative keyword lists and their attachments,
- * recommendations).
+ * negatives, campaign negatives + brand lists, asset groups), 5 slow (negative keyword lists, their attachments to
+ * campaigns and the account, recommendations).
  *
- * NOT VERIFIED against a live account (plan-1b-backend §1): campaign.asset_automation_settings, shared_set.* through
- * campaign_shared_set / shared_criterion, recommendation.impact.*, `metrics.clicks > 0` on campaign_search_term_view.
- * Each has a `…_WITHOUT_…` twin that the sync sends once when Google refuses the first text; what the twin leaves out
- * is then "not read", never a default.
+ * Every field, filter and FROM resource below was checked on 2026-10-13 against Google's v25 field reference
+ * (https://developers.google.com/google-ads/api/fields/v25/<resource>): each selected field exists and is Selectable,
+ * each WHERE field is Filterable with a legal value, each segment and metric is usable with the FROM resource and with
+ * the others, and ORDER BY is on a Sortable field. Nexus has not yet read a live account with them.
+ *   - campaign.asset_automation_settings: Selectable, a repeated message, read whole (fields/v25/campaign).
+ *   - shared_set.*: shared_set is an attributed resource of campaign_shared_set and of shared_criterion
+ *     (fields/v25/campaign_shared_set, fields/v25/shared_criterion).
+ *   - recommendation.impact: Selectable as a whole message only; its leaves are not query fields (fields/v25/recommendation).
+ *   - `metrics.clicks > 0` on campaign_search_term_view: metrics.clicks is Filterable and usable with that view
+ *     (fields/v25/campaign_search_term_view).
+ * Each of these still has a `…_WITHOUT_…` twin that the sync sends once if Google refuses the first text anyway; what
+ * the twin leaves out is then "not read", never a default.
  *
- * Field names checked against the v25 field reference (developers.google.com/google-ads/api/fields/v25/…,
- * 2026-10-13). v25 has no `campaign.start_date` / `campaign.end_date`: they are `campaign.start_date_time` /
+ * v25 has no `campaign.start_date` / `campaign.end_date`: they are `campaign.start_date_time` /
  * `campaign.end_date_time` ("yyyy-MM-dd HH:mm:ss", the account's time zone).
  *
  * Every query that selects `segments.date` filters it to a finite window; the change history is bounded to the last
@@ -112,7 +119,11 @@ const CAMPAIGN_FLAG_FIELDS = [
 /** The settings by which Google acts on its own: AI Max, campaign-level broad match, asset automation, networks, DSA. */
 export const CAMPAIGN_FLAGS_QUERY = `SELECT ${CAMPAIGN_FLAG_FIELDS.join(', ')} FROM campaign WHERE campaign.status != 'REMOVED'`
 
-/** The same without asset_automation_settings (NOT VERIFIED as selectable): Final URL expansion and text customization are then not read. */
+/**
+ * The same without asset_automation_settings, sent only if Google refuses the first text (the field is Selectable:
+ * https://developers.google.com/google-ads/api/fields/v25/campaign#campaign.asset_automation_settings). Final URL
+ * expansion and text customization are then not read.
+ */
 export const CAMPAIGN_FLAGS_QUERY_WITHOUT_ASSET_AUTOMATION =
   `SELECT ${CAMPAIGN_FLAG_FIELDS.filter((f) => f !== 'campaign.asset_automation_settings').join(', ')} FROM campaign WHERE campaign.status != 'REMOVED'`
 
@@ -155,15 +166,22 @@ export function assetGroupDailyMetricsQuery(window: DayWindow): string {
   return `SELECT campaign.id, asset_group.id, asset_group.name, segments.date, ${M} FROM asset_group WHERE ${windowClause(window)}`
 }
 
-/** Products with at least one impression (Shopping and Performance Max). */
+/**
+ * Products with at least one impression (Shopping and Performance Max). campaign is a segmenting resource of
+ * shopping_performance_view, so campaign.id splits the numbers per campaign
+ * (https://developers.google.com/google-ads/api/fields/v25/shopping_performance_view).
+ */
 export function productDailyMetricsQuery(window: DayWindow): string {
   return `SELECT campaign.id, segments.product_item_id, segments.product_title, segments.date, ${M} FROM shopping_performance_view ` +
     `WHERE ${windowClause(window)} AND metrics.impressions > 0`
 }
 
 /**
- * Search terms per campaign (Search, Shopping and Performance Max), only terms with at least one click. Without
- * `withClicksFilter` the filter is left out (NOT VERIFIED on this view) and the mapper drops the terms without a click.
+ * Search terms per campaign, only terms with at least one click. Google describes the view as every search term that
+ * triggered an ad, Performance Max included while no keyword segment is selected (none is); it does not name Standard
+ * Shopping, so that is not verified. `metrics.clicks > 0` is valid on this view (metrics.clicks is Filterable and
+ * usable with it: https://developers.google.com/google-ads/api/fields/v25/campaign_search_term_view). Without
+ * `withClicksFilter` the filter is left out (the safety-net twin) and the mapper drops the terms without a click.
  */
 export function searchTermDailyMetricsQuery(window: DayWindow, withClicksFilter = true): string {
   return `SELECT campaign.id, campaign_search_term_view.search_term, segments.date, ${M} FROM campaign_search_term_view ` +
@@ -204,36 +222,58 @@ export const ASSET_GROUPS_QUERY =
 
 const SHARED_SET_FIELDS = 'shared_set.id, shared_set.name, shared_set.type, shared_set.status, shared_set.member_count'
 
-/** The keywords of the negative keyword lists, with their list (shared_set.* NOT VERIFIED through shared_criterion). */
+/**
+ * The keywords of the negative keyword lists, with their list. shared_set is an attributed resource of shared_criterion
+ * (https://developers.google.com/google-ads/api/fields/v25/shared_criterion); Google's own example selects shared_set.id
+ * FROM shared_criterion (google-ads-python, examples/advanced_operations/find_and_remove_criteria_from_shared_set.py).
+ */
 export const NEGATIVE_LIST_KEYWORDS_QUERY =
   'SELECT shared_criterion.shared_set, shared_criterion.criterion_id, shared_criterion.type, shared_criterion.keyword.text, ' +
   `shared_criterion.keyword.match_type, ${SHARED_SET_FIELDS} FROM shared_criterion WHERE shared_criterion.type = 'KEYWORD'`
 
-/** The same without the list's details: names and sizes are then not read by this query. */
+/** The same without the list's details, sent only if Google refuses the first text: names and sizes are then not read by this query. */
 export const NEGATIVE_LIST_KEYWORDS_QUERY_WITHOUT_SET =
   'SELECT shared_criterion.shared_set, shared_criterion.criterion_id, shared_criterion.type, shared_criterion.keyword.text, ' +
   "shared_criterion.keyword.match_type FROM shared_criterion WHERE shared_criterion.type = 'KEYWORD'"
 
-/** Which campaigns each list is attached to, with the list (shared_set.* NOT VERIFIED through campaign_shared_set). */
+/**
+ * Which campaigns each list is attached to, with the list. shared_set and campaign are attributed resources of
+ * campaign_shared_set (https://developers.google.com/google-ads/api/fields/v25/campaign_shared_set); Google's own example
+ * selects shared_set.id, shared_set.name FROM campaign_shared_set (the same google-ads-python example).
+ */
 export const NEGATIVE_LIST_ATTACHMENTS_QUERY =
   `SELECT campaign_shared_set.campaign, campaign_shared_set.shared_set, campaign_shared_set.status, ${SHARED_SET_FIELDS} ` +
   "FROM campaign_shared_set WHERE campaign_shared_set.status != 'REMOVED' AND campaign.status != 'REMOVED'"
 
-/** The same without the list's details: an attachment then counts only for a list known as a negative keyword list. */
+/** The same without the list's details, sent only if Google refuses the first text: an attachment then counts only for a list known as a negative keyword list. */
 export const NEGATIVE_LIST_ATTACHMENTS_QUERY_WITHOUT_SET =
   'SELECT campaign_shared_set.campaign, campaign_shared_set.shared_set, campaign_shared_set.status FROM campaign_shared_set ' +
   "WHERE campaign_shared_set.status != 'REMOVED' AND campaign.status != 'REMOVED'"
 
-const IMPACT_METRICS = ['impressions', 'clicks', 'cost_micros', 'conversions', 'conversions_value'] as const
-const IMPACT_FIELDS = (['base_metrics', 'potential_metrics'] as const)
-  .flatMap((side) => IMPACT_METRICS.map((metric) => `recommendation.impact.${side}.${metric}`))
+/**
+ * Which negative keyword list Google applies to the whole account: the account-level list (shared set type
+ * ACCOUNT_LEVEL_NEGATIVE_KEYWORDS) is in force only while a customer_negative_criterion points at it — at most one per
+ * account (https://developers.google.com/google-ads/api/docs/targeting/shared-sets). Both fields checked on 2026-10-13
+ * in https://developers.google.com/google-ads/api/fields/v25/customer_negative_criterion:
+ * customer_negative_criterion.negative_keyword_list.shared_set (RESOURCE_NAME, Selectable, Filterable) and
+ * customer_negative_criterion.type (ENUM with NEGATIVE_KEYWORD_LIST, Selectable, Filterable). No safety-net twin: there is
+ * no field to leave out.
+ */
+export const ACCOUNT_NEGATIVE_LIST_LINKS_QUERY =
+  'SELECT customer_negative_criterion.negative_keyword_list.shared_set FROM customer_negative_criterion ' +
+  "WHERE customer_negative_criterion.type = 'NEGATIVE_KEYWORD_LIST'"
 
-/** Google's recommendations, read only (step 1b never applies or dismisses one). */
+/**
+ * Google's recommendations, read only (step 1b never applies or dismisses one). `recommendation.impact` is a message
+ * that is Selectable only whole: its leaves (impact.base_metrics.clicks, …) are not query fields, and Google refuses a
+ * query naming one (UNRECOGNIZED_FIELD). See https://developers.google.com/google-ads/api/fields/v25/recommendation.
+ * The answer carries impact.baseMetrics / impact.potentialMetrics with whichever metrics Google estimated.
+ */
 export const RECOMMENDATIONS_QUERY =
   'SELECT recommendation.resource_name, recommendation.type, recommendation.campaign, recommendation.ad_group, ' +
-  `recommendation.dismissed, ${IMPACT_FIELDS.join(', ')} FROM recommendation`
+  'recommendation.dismissed, recommendation.impact FROM recommendation'
 
-/** The same without the impact (recommendation.impact.* NOT VERIFIED): the impact is then not read. */
+/** The same without the impact, sent only if Google refuses the first text: the impact is then not read. */
 export const RECOMMENDATIONS_QUERY_WITHOUT_IMPACT =
   'SELECT recommendation.resource_name, recommendation.type, recommendation.campaign, recommendation.ad_group, ' +
   'recommendation.dismissed FROM recommendation'
