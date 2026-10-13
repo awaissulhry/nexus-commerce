@@ -33,30 +33,30 @@
 
 /* ── cells ─────────────────────────────────────────────────────────────────────────────────── */
 
-/** The eight cell kinds a coordinate group may serve. Order = default column order inside a group. */
-export type MatrixCellKind = 'listing' | 'fulfilment' | 'syncMode' | 'syncQty' | 'syncBuffer' | 'syncState' | 'price' | 'salePrice'
-export const MATRIX_CELL_KINDS: readonly MatrixCellKind[] = ['listing', 'fulfilment', 'syncMode', 'syncQty', 'syncBuffer', 'syncState', 'price', 'salePrice']
+/** The cell kinds a coordinate group may serve (the eight, and Amazon Business's two). Order = default column order inside a group. */
+export type MatrixCellKind = 'listing' | 'fulfilment' | 'syncMode' | 'syncQty' | 'syncBuffer' | 'syncState' | 'price' | 'salePrice' | 'businessPrice' | 'businessTiers'
+export const MATRIX_CELL_KINDS: readonly MatrixCellKind[] = ['listing', 'fulfilment', 'syncMode', 'syncQty', 'syncBuffer', 'syncState', 'price', 'salePrice', 'businessPrice', 'businessTiers']
 
 /** The cell kinds that make up the INVENTORY lane — the ones a region-inventory coordinate owns. */
 export const INVENTORY_CELL_KINDS: readonly MatrixCellKind[] = ['fulfilment', 'syncMode', 'syncQty', 'syncBuffer', 'syncState']
-/** The cell kinds an operator can write from the grid (the rest are facts). */
+/** The cell kinds an operator types into in the grid (the rest are facts, or open their own editor: the business cells). */
 export const WRITABLE_CELL_KINDS: readonly MatrixCellKind[] = ['fulfilment', 'syncMode', 'syncQty', 'syncBuffer', 'price', 'salePrice']
 
 /** Column header per kind — design Appendix A, verbatim. */
 export const MATRIX_CELL_LABELS: Readonly<Record<MatrixCellKind, string>> = {
   listing: 'Listing', fulfilment: 'Fulfilment', syncMode: 'Mode', syncQty: 'Qty', syncBuffer: 'Buffer', syncState: 'Sync', price: 'Price', salePrice: 'Sale',
+  businessPrice: 'B2B price', businessTiers: 'Tiers',
 }
 /** Design §3.3 widths (px). */
 export const MATRIX_CELL_WIDTHS: Readonly<Record<MatrixCellKind, number>> = {
   listing: 196, fulfilment: 112, syncMode: 96, syncQty: 88, syncBuffer: 76, syncState: 96, price: 104, salePrice: 190,
+  businessPrice: 168, businessTiers: 180,
 }
 
-/** MX.F (ruled): the absent-capable kinds — the eight plus the reserved business cells (design §3.11). Absence-only today. */
-export type MatrixAbsentCellKind = MatrixCellKind | 'businessPrice' | 'businessTiers'
-/** Customise's label per absent-capable kind — the eight headers plus Appendix A's `B2B price` · `Tiers`. */
-export const MATRIX_ABSENT_CELL_LABELS: Readonly<Record<MatrixAbsentCellKind, string>> = {
-  ...MATRIX_CELL_LABELS, businessPrice: 'B2B price', businessTiers: 'Tiers',
-}
+/** MX.F (ruled): the absent-capable kinds — since Amazon Business step 5 every kind is a real cell kind. */
+export type MatrixAbsentCellKind = MatrixCellKind
+/** Customise's label per absent-capable kind. */
+export const MATRIX_ABSENT_CELL_LABELS: Readonly<Record<MatrixAbsentCellKind, string>> = MATRIX_CELL_LABELS
 
 /** The projection words the Variants page fixed (five) plus the four the Matrix adds (design §3.4). */
 export type ListingState = 'listed' | 'draft' | 'excluded' | 'not-set-up' | 'needs-value' | 'suppressed' | 'closed' | 'error' | 'ended'
@@ -247,7 +247,7 @@ export interface MatrixCoordinate {
 
 /* ── writes: one door ───────────────────────────────────────────────────────────────────────── */
 
-export type MatrixWritableKind = Extract<MatrixCellKind, 'fulfilment' | 'syncMode' | 'syncQty' | 'syncBuffer' | 'price' | 'salePrice'>
+export type MatrixWritableKind = Extract<MatrixCellKind, 'fulfilment' | 'syncMode' | 'syncQty' | 'syncBuffer' | 'price' | 'salePrice' | 'businessPrice'>
 /** What the one door writes: the writable kinds plus "Sells from" (`value`: codes in sale order; `[]` = the market default). */
 export type MatrixDoorKind = MatrixWritableKind | 'source'
 

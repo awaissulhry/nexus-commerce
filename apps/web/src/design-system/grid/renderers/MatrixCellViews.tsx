@@ -43,12 +43,16 @@
 import { Fragment, memo, useCallback, type ComponentType, type ReactNode } from 'react'
 import type { ICellRendererParams } from 'ag-grid-community'
 
+import { CellAction } from '../../components/CellAction'
 import { openCellEditor, SelectChevron } from '../editors/SelectCellEditor'
 import type { FulfilmentMethod, MatrixCellKind, MatrixCells, MatrixCoordinate, MatrixCopy } from '../matrix/contract'
 import {
   MATRIX_CELL_COPY,
   MATRIX_DASH,
   MATRIX_OVERSOLD_SENTENCE,
+  matrixBusinessPriceText,
+  matrixBusinessTiersText,
+  matrixCellOpens,
   matrixCellState,
   matrixCellTone,
   matrixGuardDiffers,
@@ -75,6 +79,8 @@ export interface MatrixCellParams {
   onJump?: (params: ICellRendererParams) => void
   /** `fulfilment` never writes inline: the select's choice opens the one-row preflight. Consumed by the column's setter. */
   onPickFulfilment?: (method: FulfilmentMethod, params: ICellRendererParams) => void
+  /** The B2B price and Tiers cells open the business price editor (the pencil; the page wires Enter, F2 and double-click). */
+  onOpenBusiness?: (params: ICellRendererParams, anchor: HTMLElement | null) => void
   /** The copy table. The engine default is Appendix A verbatim; the app may pass its own `MATRIX_COPY`. */
   copy?: MatrixCopy
   /** The clock `Sent <ago>` is measured against. Injectable so a screenshot compares to itself. */
@@ -325,6 +331,62 @@ export const SaleCell = memo(function SaleCell(p: MatrixCellProps) {
   return <Value muted={text === MATRIX_DASH}>{text}</Value>
 })
 
+/* ── B2B price · Tiers (Amazon Business) ─────────────────────────────────────────────────── */
+
+/** The words of the business cells' pencil — one editor for the price and its quantity discounts. */
+export const MATRIX_BUSINESS_EDIT = { label: 'Business price', detail: 'Enter or F2 opens the business price and quantity discounts.' } as const
+
+/** The pencil of a business cell the operator may change: it opens the editor, anchored on the cell. `null` when it may not
+ *  (a `null` mark is dropped, so no empty marks box takes the cell's width). */
+function businessOpen(p: MatrixCellProps, cells: MatrixCells): ReactNode {
+  const open = p.onOpenBusiness
+  if (!open || !matrixCellOpens(p.kind, cells)) return null
+  return (
+    <CellAction
+      label={MATRIX_BUSINESS_EDIT.label}
+      description={MATRIX_BUSINESS_EDIT.detail}
+      onActivate={(anchor) => open(p, anchor)}
+      onFocusCell={() => { const col = p.column?.getColId(); if (p.node.rowIndex != null && col) p.api.setFocusedCell(p.node.rowIndex, col) }}
+    />
+  )
+}
+
+export const BusinessPriceCell = memo(function BusinessPriceCell(p: MatrixCellProps) {
+  const cells = p.facts(p)
+  if (!cells) return <EmptyValue />
+  const b = cells.business
+  if (!b) return <Value muted>{MATRIX_DASH}</Value>
+  const state = matrixCellState('businessPrice', cells)
+  const text = matrixBusinessPriceText(b)
+  /* A percent follows the price (🔗, muted like every followed value); an exact price is the operator's own (✎). ⇄ says
+     Amazon shows something else (a different price, none, or one Nexus never kept); ⚠ a price Amazon hides; ✗ a send
+     Amazon refused or that failed. The reasons lead the cell's tooltip. */
+  return (
+    <Value
+      muted={b.rule == null || b.rule === 'PERCENT_OFF'}
+      marks={[
+        b.rule === 'PERCENT_OFF' && <ProvenanceMark provenance="inherited" tooltip="Follows the price" />,
+        b.rule === 'FIXED' && <ProvenanceMark provenance="pinned" tooltip="Exact business price" />,
+        (state === 'business-differs' || state === 'business-reported') && <Reported title={state === 'business-reported' ? 'Set outside Nexus' : 'Amazon shows another business price'} />,
+        state === 'business-hidden' && <Warn />,
+        state === 'business-failed' && <Failed />,
+        businessOpen(p, cells),
+      ]}
+    >
+      {text}
+    </Value>
+  )
+})
+
+export const BusinessTiersCell = memo(function BusinessTiersCell(p: MatrixCellProps) {
+  const cells = p.facts(p)
+  if (!cells) return <EmptyValue />
+  const b = cells.business
+  if (!b) return <Value muted>{MATRIX_DASH}</Value>
+  const text = matrixBusinessTiersText(b)
+  return <Value muted={text === MATRIX_DASH} marks={[businessOpen(p, cells)]}>{text}</Value>
+})
+
 /**
  * The one tooltip line of a Price or Sale cell whose product sheet change waits for Publish — `Product sheet change
  * waits for Publish: €44.90`. The cell keeps drawing the live value; `matrixColumnDef` appends this line to the
@@ -357,4 +419,6 @@ export const MATRIX_CELL_RENDERERS: Readonly<Record<MatrixCellKind, ComponentTyp
   syncState: SyncStateCell,
   price: PriceCell,
   salePrice: SaleCell,
+  businessPrice: BusinessPriceCell,
+  businessTiers: BusinessTiersCell,
 }

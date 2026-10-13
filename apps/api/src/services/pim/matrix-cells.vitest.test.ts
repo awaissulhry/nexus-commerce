@@ -17,7 +17,7 @@ import {
   inSourceOrder, sharedStockReason, sourceCellOf,
 } from './matrix-cells.js'
 import { syncLedgerOf } from '../sync-control-core.js'
-import { businessAbsence, businessCellOf, businessSendOf, effectiveFulfilment, type BusinessQueueFacts } from './matrix-cells.js'
+import { BUSINESS_CELL_KINDS, businessAbsence, businessCellOf, businessListingReason, businessSendOf, businessSettingOfCell, effectiveFulfilment, type BusinessQueueFacts } from './matrix-cells.js'
 import { destinationSellingStates, type SellingStateListing } from '../listings/listing-action.service.js'
 
 const ACTIVE = { state: 'active', reason: null } as const
@@ -233,10 +233,53 @@ describe('business pricing absence — derived from the account\'s seller-scoped
     /* A family with no product type cannot be checked at all — its own sentence, not "Amazon has not told Nexus yet". */
     expect(businessAbsence({ productType: null, market: 'IT', audience: ['ALL'] })[0]!.reason).toBe(MATRIX_COPY.absentBusinessNoType())
   })
-  it('a schema WITH the B2B audience → still absent, saying the cells are not built (positive control for the enum test)', () => {
-    const out = businessAbsence({ productType: 'OUTERWEAR', market: 'DE', audience: ['ALL', 'B2B'] })
-    for (const a of out) expect(a.reason).toBe(MATRIX_COPY.absentBusinessNotBuilt('OUTERWEAR'))
-    expect(out[0]!.reason).not.toBe(MATRIX_COPY.absentBusiness('OUTERWEAR'))
+  it('a schema WITH the B2B audience → nothing absent: the cells are served (positive control for the enum test)', () => {
+    expect(businessAbsence({ productType: 'OUTERWEAR', market: 'DE', audience: ['ALL', 'B2B'] })).toEqual([])
+    // A B2B answer with no product type cannot exist; it never serves the cells blind.
+    expect(businessAbsence({ productType: null, market: 'DE', audience: ['B2B'] })[0]!.reason).toBe(MATRIX_COPY.absentBusinessNoType())
+  })
+  it('one listing\'s verdict is the door\'s refusal sentence: no type · not measured · measured without B2B · null when listed', () => {
+    expect(businessListingReason([], null)).toBe(MATRIX_COPY.absentBusinessNoType())
+    expect(businessListingReason(['COAT', 'OUTERWEAR'], null)).toBe(MATRIX_COPY.absentBusinessUnchecked())
+    expect(businessListingReason(['COAT', 'OUTERWEAR'], { productType: 'COAT', audience: ['ALL'] })).toBe(MATRIX_COPY.absentBusiness('COAT'))
+    expect(businessListingReason(['COAT', 'OUTERWEAR'], { productType: 'OUTERWEAR', audience: ['B2B', 'ALL'] })).toBeNull()
+  })
+  it('the business kinds are no channel\'s own: an Amazon market adds them where Amazon lists B2B (the read)', () => {
+    for (const ch of ['AMAZON', 'EBAY', 'SHOPIFY', 'ETSY', 'WOOCOMMERCE']) for (const k of BUSINESS_CELL_KINDS) expect(channelShape(ch).cells).not.toContain(k)
+    expect(BUSINESS_CELL_KINDS).toEqual(['businessPrice', 'businessTiers'])
+  })
+})
+
+describe('writable — the Amazon Business cells (step 5, Part 2)', () => {
+  const cells = ['listing', 'price', 'salePrice', 'businessPrice', 'businessTiers'] as const
+  const price = { value: 10, currency: 'EUR', source: 'master' as const, formula: null, clamped: null }
+  const gate = (over: Partial<Parameters<typeof writableFor>[0]>) => writableFor({ role: 'variant', cells, sync: null, fulfilment: null, price, canEditPrice: true, ...over })
+  it('a variant whose listing Amazon lists B2B for: both cells open the one editor', () => {
+    expect(gate({ businessBlocked: null }).writable).toMatchObject({ businessPrice: true, businessTiers: true })
+  })
+  it('held with a sentence: the parent (not buyable), no products.price.edit, a listing with no B2B (the door\'s sentence), and an unknown verdict (fail closed)', () => {
+    const parent = gate({ role: 'parent', businessBlocked: null })
+    expect(parent.writable).toMatchObject({ businessPrice: false, businessTiers: false })
+    expect(parent.writeBlockedReason.businessPrice).toBe(PARENT_PRICE_REASON); expect(parent.writeBlockedReason.businessTiers).toBe(PARENT_PRICE_REASON)
+    expect(gate({ businessBlocked: null, canEditPrice: false }).writeBlockedReason.businessPrice).toBe(PRICE_PERMISSION_REASON)
+    const coat = gate({ businessBlocked: MATRIX_COPY.absentBusiness('COAT') })
+    expect(coat.writable.businessPrice).toBe(false); expect(coat.writeBlockedReason.businessTiers).toBe(MATRIX_COPY.absentBusiness('COAT'))
+    expect(gate({}).writable.businessPrice).toBe(false)
+    expect(gate({}).writeBlockedReason.businessPrice).toBeTruthy()
+  })
+  it('a formula on the price holds only the price: the business cells stay open', () => {
+    const g = gate({ businessBlocked: null, price: { ...price, source: 'formula', formula: '= $basePrice' } })
+    expect(g.writable.price).toBe(false); expect(g.writable.businessPrice).toBe(true)
+  })
+})
+
+describe('businessSettingOfCell — the setting a cell shows, as the door takes it back', () => {
+  const cell = (over: Record<string, unknown>) => businessCellOf({ marketplaceId: 'APJ6JRA9NG5V4', currency: 'EUR', normalPrice: 105, minPrice: null, maxPrice: null, salePrice: null, held: null, row: null, everKept: false, listing: over })
+  it('percent with tiers · exact · none', () => {
+    expect(businessSettingOfCell(cell({ businessPriceRule: 'PERCENT_OFF', businessPricePercent: 5, businessTiers: { type: 'percent', levels: [{ minQty: 2, value: 3 }] } })))
+      .toEqual({ rule: 'PERCENT_OFF', percent: 5, price: null, tiers: { type: 'percent', levels: [{ minQty: 2, value: 3 }] } })
+    expect(businessSettingOfCell(cell({ businessPriceRule: 'FIXED', businessPrice: '32.95' }))).toEqual({ rule: 'FIXED', percent: null, price: 32.95, tiers: null })
+    expect(businessSettingOfCell(cell({}))).toBeNull()
   })
 })
 

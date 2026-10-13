@@ -50,15 +50,18 @@ beforeAll(() => scoped(async () => {
 }), 120_000)
 afterAll(async () => { await state.db?.close() }, 60_000)
 
-describe('business pricing absence follows the account\'s seller-scoped definition', () => {
+describe('business pricing (served or absent) follows the account\'s seller-scoped definition', () => {
   const reasonOf = async (key: string) => {
     const read = await scoped(() => getMatrixRead({ productId: 'b-p', canEditPrice: true }))
     const coord = read.coordinates.find((c) => c.key === key)!
     return coord.absent.filter((a) => a.cell === 'businessPrice' || a.cell === 'businessTiers').map((a) => a.reason)
   }
 
-  it('IT: the account may sell to business buyers → "allowed, not built yet", although the shared cache says ALL only', async () => {
-    expect(await reasonOf('AMAZON:IT')).toEqual([MATRIX_COPY.absentBusinessNotBuilt('OUTERWEAR'), MATRIX_COPY.absentBusinessNotBuilt('OUTERWEAR')])
+  it('IT: the account may sell to business buyers → the B2B price and Tiers cells are SERVED (nothing absent), although the shared cache says ALL only', async () => {
+    expect(await reasonOf('AMAZON:IT')).toEqual([])
+    const read = await scoped(() => getMatrixRead({ productId: 'b-p', canEditPrice: true }))
+    expect(read.coordinates.find((c) => c.key === 'AMAZON:IT')!.cells.slice(-2)).toEqual(['businessPrice', 'businessTiers'])
+    for (const key of ['AMAZON:DE', 'AMAZON:FR', 'AMAZON:EU']) expect(read.coordinates.find((c) => c.key === key)!.cells).not.toContain('businessPrice')
   })
 
   it('DE: measured without B2B → "Amazon has not enabled business pricing"', async () => {

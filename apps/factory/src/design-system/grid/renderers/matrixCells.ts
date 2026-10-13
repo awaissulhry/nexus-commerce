@@ -32,6 +32,8 @@
  */
 import {
   MATRIX_CELL_KINDS,
+  type BusinessCell,
+  type BusinessSendState,
   type FulfilmentConversionStatus,
   type FulfilmentMethod,
   type ListingCell,
@@ -127,6 +129,10 @@ export type MatrixCellState =
   | 'price-master' | 'price-override' | 'price-formula' | 'price-clamped'
   /* salePrice */
   | 'sale-set' | 'sale-none'
+  /* businessPrice (Amazon Business) */
+  | 'business-none' | 'business-percent' | 'business-fixed' | 'business-hidden' | 'business-differs' | 'business-failed' | 'business-reported'
+  /* businessTiers */
+  | 'tiers-none' | 'tiers-set'
 
 const QUEUE_STATES: readonly string[] = ['sent', 'queued', 'sending', 'failed', 'dead', 'paused', 'never']
 
@@ -252,7 +258,137 @@ export function matrixCellState(kind: MatrixCellKind, cells: MatrixCells | null 
       if (!s) return 'absent'
       return s.value == null ? 'sale-none' : 'sale-set'
     }
+    case 'businessPrice':
+      return cells.business ? businessPriceState(cells.business) : 'absent'
+    case 'businessTiers': {
+      const b = cells.business
+      if (!b) return 'absent'
+      return b.rule != null && b.tiers && b.tiers.levels.length > 0 ? 'tiers-set' : 'tiers-none'
+    }
   }
+}
+
+/* ── Amazon Business: the B2B price and Tiers cells ──────────────────────────────────────────── */
+
+/**
+ * Amazon hides a business price that is not below the normal price (`businessPriceWarnings` says the same in words).
+ * Read from the two numbers the server sent; never a third.
+ */
+export function matrixBusinessHidden(b: Pick<BusinessCell, 'rule' | 'price' | 'normalPrice'>): boolean {
+  return b.rule != null && b.price != null && b.normalPrice != null && b.price > b.normalPrice
+}
+
+/**
+ * The B2B price cell's state. A failed or refused send leads (the reason comes first, as on Price and Qty), then
+ * "no business price" (with Amazon's own one, if it shows one Nexus never kept), then Amazon showing a different
+ * price, then a price Amazon hides, then the rule.
+ */
+function businessPriceState(b: BusinessCell): MatrixCellState {
+  if (b.send && (b.send.state === 'failed' || b.send.state === 'refused')) return 'business-failed'
+  if (b.rule == null) return b.reported ? 'business-reported' : 'business-none'
+  if (b.live && b.live.status !== 'MATCH') return 'business-differs'
+  if (matrixBusinessHidden(b)) return 'business-hidden'
+  return b.rule === 'FIXED' ? 'business-fixed' : 'business-percent'
+}
+
+/** `5%` · `2.5%` · `12.25%` — at most two decimals, no trailing zeros. */
+export function matrixPercent(v: number): string {
+  return `${Number(v.toFixed(2))}%`
+}
+
+/** The separator between two parts of one business cell's text. */
+const PART = ' · '
+
+/**
+ * The B2B price cell's text — `€99.75 · −5%` (5 % below the price), `€105.00` (0 %: the price itself, for quantity
+ * discounts), `€32.95` (an exact price), `−5%` (a percent rule on a listing with no price yet), `—` (none).
+ */
+export function matrixBusinessPriceText(b: BusinessCell | null | undefined): string {
+  if (!b || b.rule == null) return MATRIX_DASH
+  if (b.rule === 'FIXED') return matrixMoney(b.price ?? b.exact, b.currency)
+  const percent = b.percent ?? 0
+  const off = percent > 0 ? `−${matrixPercent(percent)}` : ''
+  if (b.price == null) return off || MATRIX_DASH
+  return off ? `${matrixMoney(b.price, b.currency)}${PART}${off}` : matrixMoney(b.price, b.currency)
+}
+
+/** The Tiers cell's text — `2+ −3% · 5+ −5%` (percent off the business price) or `2+ €30.00 · 5+ €28.00` (unit prices). */
+export function matrixBusinessTiersText(b: BusinessCell | null | undefined): string {
+  const tiers = b && b.rule != null ? b.tiers : null
+  if (!b || !tiers || tiers.levels.length === 0) return MATRIX_DASH
+  return tiers.levels.map((l) => `${l.minQty}+ ${tiers.type === 'percent' ? `−${matrixPercent(l.value)}` : matrixMoney(l.value, b.currency)}`).join(PART)
+}
+
+/**
+ * The tooltip line of a business send that is not at rest — the reason first on a failure (`matrixPushFailedLine`'s
+ * order). A send that reached Amazon says nothing: a cell at rest is quiet.
+ */
+export function matrixBusinessSendLine(send: BusinessSendState | null | undefined, now: number = Date.now()): string | null {
+  if (!send) return null
+  const ago = matrixAgo(send.at, now)
+  switch (send.state) {
+    case 'queued': return 'Waiting to be sent to Amazon'
+    case 'sending': return 'Sending to Amazon'
+    case 'deferred': return send.line ?? 'Waiting to be sent to Amazon'
+    case 'failed': return `${send.line ?? 'No reason given'} · last business price send failed${ago ? ` ${ago} ago` : ''}${send.final ? '' : ' · it is tried again by itself'}`
+    case 'refused': return `${send.line ?? 'No reason given'} · Amazon refused the business price${ago ? ` ${ago} ago` : ''}`
+    case 'not-sent': return send.line ?? 'Not sent to Amazon'
+    case 'sent':
+    case 'removed': return null
+  }
+}
+
+/** The B2B price cell's tooltip lines, in order: a failed send, Amazon differing, the rule, warnings, a hold, a send on its way. */
+function businessPriceLines(b: BusinessCell, now: number): string[] {
+  const money = (v: number | null) => matrixMoney(v, b.currency)
+  const lines: string[] = []
+  const failed = b.send && (b.send.state === 'failed' || b.send.state === 'refused')
+  if (failed) lines.push(matrixBusinessSendLine(b.send, now) as string)
+  if (b.live && b.live.status !== 'MATCH') {
+    const ago = matrixAgo(b.live.at, now)
+    const shows = b.live.status === 'MISSING' || b.live.amazonPrice == null ? 'Amazon shows no business price' : `Amazon shows ${money(b.live.amazonPrice)}`
+    lines.push(`${shows} — differs from Nexus${ago ? ` · checked ${ago} ago` : ''}`)
+  }
+  if (b.rule == null) {
+    lines.push(b.reported
+      ? `Amazon shows a business price of ${money(b.reported.price)} that Nexus does not keep — set outside Nexus`
+      : 'No business price — business buyers see the normal price')
+  } else if (b.rule === 'FIXED') {
+    lines.push(`Exact business price${b.normalPrice != null ? ` · the price is ${money(b.normalPrice)}` : ''}`)
+  } else {
+    const percent = b.percent ?? 0
+    const price = b.normalPrice != null ? `the price ${money(b.normalPrice)}` : 'the price (this listing has no price yet)'
+    lines.push(percent > 0 ? `${matrixPercent(percent)} below ${price}` : `The same as ${price} — for quantity discounts`)
+  }
+  lines.push(...b.warnings)
+  if (b.held) lines.push(b.held)
+  if (!failed) {
+    const sending = matrixBusinessSendLine(b.send, now)
+    if (sending) lines.push(sending)
+  }
+  return lines
+}
+
+/** The Tiers cell's tooltip lines: each discount with the unit price a buyer pays now. */
+function businessTiersLines(b: BusinessCell): string[] {
+  if (b.rule == null) return []
+  const tiers = b.tiers
+  if (!tiers || tiers.levels.length === 0) return ['No quantity discounts']
+  return tiers.levels.map((l) => {
+    const unit = l.unitPrice == null ? '' : ` → ${matrixMoney(l.unitPrice, b.currency)} each`
+    return tiers.type === 'percent' ? `${l.minQty}+ units: −${matrixPercent(l.value)}${unit}` : `${l.minQty}+ units: ${matrixMoney(l.value, b.currency)} each`
+  })
+}
+
+/** What a writable business cell says when it is asked to take typing. */
+export const MATRIX_BUSINESS_OPENS = 'Enter or F2 opens the business price editor'
+
+/** The kinds whose cell opens the business price editor on an open gesture — never typed into. */
+export const MATRIX_BUSINESS_KINDS: readonly MatrixCellKind[] = ['businessPrice', 'businessTiers']
+
+/** Does an open gesture (Enter, F2, double-click, the pencil) on this cell open the business price editor? */
+export function matrixCellOpens(kind: MatrixCellKind, cells: MatrixCells | null | undefined): boolean {
+  return (MATRIX_BUSINESS_KINDS as readonly string[]).includes(kind) && !!cells?.business && cells.writable[kind] === true
 }
 
 /* ── text: what the screen, a copy, an export and a text filter all read ────────────────────── */
@@ -447,6 +583,10 @@ export function matrixCellText(
       return matrixMoney(cells.price?.value ?? null, currency)
     case 'salePrice':
       return matrixSaleText(cells.sale, currency)
+    case 'businessPrice':
+      return matrixBusinessPriceText(cells.business)
+    case 'businessTiers':
+      return matrixBusinessTiersText(cells.business)
   }
 }
 
@@ -474,14 +614,21 @@ type RowState = 'ready' | 'missing' | 'errors' | 'live' | 'unlisted'
  *     by shape and not by colour (ruling #16, `reference_tag_identity_is_glyph_not_colour`).
  *   · `queue-sent` → `live`. It reached the channel.
  *   · `price-clamped` → `missing`. A floor or ceiling moved the number the operator asked for.
+ *   · `business-failed` → `errors`. Amazon refused the business price, or its send failed.
+ *   · `business-differs` / `business-hidden` / `business-reported` → `missing`. Amazon shows another business price,
+ *     hides ours (not below the normal price), or shows one Nexus never kept: not refused, but not what Nexus says.
  */
 const TONE_SOURCE: Partial<Record<MatrixCellState, RowState>> = {
   oversold: 'errors',
   'queue-failed': 'errors',
   'queue-dead': 'errors',
   'fulfilment-guard-differs': 'errors',
+  'business-failed': 'errors',
   uncounted: 'missing',
   'price-clamped': 'missing',
+  'business-differs': 'missing',
+  'business-hidden': 'missing',
+  'business-reported': 'missing',
   'fulfilment-reported-differs': 'missing',
   'amazon-managed': 'unlisted',
   'offer-closed': 'unlisted',
@@ -582,6 +729,11 @@ export function matrixCellClasses(
   if (kind === 'price') {
     if (state === 'price-master') return ['nds-cell-is-following']
     if (state === 'price-override' || state === 'price-formula') return ['nds-cell-is-pinned']
+  }
+  /* A percent business price follows the price; an exact one is the operator's own. */
+  if (kind === 'businessPrice') {
+    if (state === 'business-percent') return ['nds-cell-is-following']
+    if (state === 'business-fixed') return ['nds-cell-is-pinned']
   }
   return []
 }
@@ -709,6 +861,12 @@ export function matrixCellTooltip(
       lines.push(matrixSaleText(sale, cells.price?.currency || coord.currency))
       break
     }
+    case 'businessPrice':
+      if (cells.business) lines.push(...businessPriceLines(cells.business, now))
+      break
+    case 'businessTiers':
+      if (cells.business) lines.push(...businessTiersLines(cells.business))
+      break
   }
 
   const blocked = cells.writeBlockedReason[kind]
@@ -763,6 +921,13 @@ export function matrixCellEditable(kind: MatrixCellKind, cells: MatrixCells | nu
     if (cells.writable.fulfilment === true) return { editable: true, reason: null }
     return { editable: false, reason: cells.writeBlockedReason.fulfilment ?? 'This cell cannot be changed here' }
   }
+  /* The business cells never take typing: a typed number would silently turn "5 % below the price" into an exact
+     price. An open gesture opens the business price editor instead (`matrixCellOpens`); AG opens no editor here. */
+  if (kind === 'businessPrice' || kind === 'businessTiers') {
+    if (!cells) return { editable: false, reason: 'No listing on this coordinate' }
+    if (matrixCellOpens(kind, cells)) return { editable: false, reason: MATRIX_BUSINESS_OPENS }
+    return { editable: false, reason: cells.writeBlockedReason[kind] ?? 'This cell cannot be changed here' }
+  }
   if (!cells) return { editable: false, reason: 'No listing on this coordinate' }
   if (cells.writable[kind] === true) return { editable: true, reason: null }
   return { editable: false, reason: cells.writeBlockedReason[kind] ?? 'This cell cannot be changed here' }
@@ -805,6 +970,13 @@ export function matrixCellValue(kind: MatrixCellKind, cells: MatrixCells | null 
     case 'fulfilment': return cells.fulfilment?.method ?? null
     case 'price': return cells.price?.value ?? null
     case 'salePrice': return cells.sale ?? null
+    /* The business price a buyer pays now; Tiers sorts by its lowest unit price. Neither is filled. */
+    case 'businessPrice': return cells.business?.rule != null ? cells.business.price : null
+    case 'businessTiers': {
+      const b = cells.business
+      const prices = b?.rule != null ? (b.tiers?.levels ?? []).map((l) => l.unitPrice).filter((v): v is number => v != null) : []
+      return prices.length ? Math.min(...prices) : null
+    }
     case 'listing':
     case 'syncState': return null
   }
@@ -908,6 +1080,8 @@ export function matrixCoerceValue(kind: MatrixCellKind, value: unknown): unknown
     }
     case 'listing':
     case 'syncState':
+    case 'businessPrice':
+    case 'businessTiers':
       return undefined
   }
 }
@@ -958,6 +1132,8 @@ export function matrixApplyValue(cells: MatrixCells | null | undefined, kind: Ma
     case 'fulfilment':
     case 'listing':
     case 'syncState':
+    case 'businessPrice':
+    case 'businessTiers':
       return false
   }
 }
@@ -992,7 +1168,7 @@ export function matrixFillAllowed(kind: MatrixCellKind): boolean {
  * same rule `formatGridValue` keeps for display: an absent value is not a zero.
  */
 export function matrixCompare(kind: MatrixCellKind, a: unknown, b: unknown): number {
-  if (kind === 'syncQty' || kind === 'syncBuffer' || kind === 'price' || kind === 'salePrice') {
+  if (kind === 'syncQty' || kind === 'syncBuffer' || kind === 'price' || kind === 'salePrice' || kind === 'businessPrice' || kind === 'businessTiers') {
     /* A sale's VALUE is the compound (see `matrixCellValue`); it sorts by its price. */
     const ua = isSaleEditorValue(a) ? a.value : a
     const ub = isSaleEditorValue(b) ? b.value : b

@@ -84,7 +84,7 @@ export { FormulaGuidance, formulaSuggestions, useFormulaPreview } from './formul
 // MX.G (2026-09-13) — the Matrix page's ONE column builder, its sale editor and its writer branch.
 export { matrixColumnDef, type MatrixColumnOptions } from './matrixColumn'
 export { SaleCellEditor, type SaleCellEditorParams } from './SaleCellEditor'
-export { matrixWrite, matrixValueRefusal, MATRIX_NOT_A_COLUMN, MATRIX_NO_LISTING, MATRIX_FULFILMENT_INLINE, MATRIX_UNCHANGED, MATRIX_SALE_DATES_NOT_PASTED, type MatrixWriteColumn, type MatrixWriteDecision } from './sheetWriter'
+export { matrixWrite, matrixValueRefusal, MATRIX_NOT_A_COLUMN, MATRIX_NO_LISTING, MATRIX_FULFILMENT_INLINE, MATRIX_BUSINESS_INLINE, MATRIX_UNCHANGED, MATRIX_SALE_DATES_NOT_PASTED, type MatrixWriteColumn, type MatrixWriteDecision } from './sheetWriter'
 
 // Step 4.3 #3 (A-52; R-55, R-56, 2026-09-24) — bullets in ONE cell: the editor (slots / list modes) and its cell, the engine
 // column both sheet builders return, and the pure rules (values with holes, changed positions, the R-55 keys).

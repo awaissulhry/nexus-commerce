@@ -174,10 +174,14 @@ describe('the engine Matrix contract equals the wire Matrix contract', () => {
        catches a `writable` member that is not a kind, or an inventory member that is not a kind. */
     for (const k of engine.WRITABLE_CELL_KINDS) expect(engine.MATRIX_CELL_KINDS).toContain(k)
     for (const k of engine.INVENTORY_CELL_KINDS) expect(engine.MATRIX_CELL_KINDS).toContain(k)
-    expect(engine.MATRIX_CELL_KINDS.length).toBe(8)
+    expect(engine.MATRIX_CELL_KINDS.length).toBe(10)
     expect(Object.keys(engine.MATRIX_CELL_WIDTHS).sort()).toEqual([...engine.MATRIX_CELL_KINDS].sort())
-    /* The absent-capable labels are EXACTLY the eight kinds' labels plus the two reserved business cells, in that order. */
-    expect(Object.keys(engine.MATRIX_ABSENT_CELL_LABELS)).toEqual([...engine.MATRIX_CELL_KINDS, 'businessPrice', 'businessTiers'])
+    /* Amazon Business step 5: the two business cells are real kinds, so the absent-capable labels are exactly the kinds'. */
+    expect(engine.MATRIX_CELL_KINDS.slice(-2)).toEqual(['businessPrice', 'businessTiers'])
+    expect(Object.keys(engine.MATRIX_ABSENT_CELL_LABELS)).toEqual([...engine.MATRIX_CELL_KINDS])
+    /* Typed in an editor of their own, never in the grid. */
+    expect(engine.WRITABLE_CELL_KINDS).not.toContain('businessPrice')
+    expect(engine.WRITABLE_CELL_KINDS).not.toContain('businessTiers')
     for (const k of engine.MATRIX_CELL_KINDS) expect(engine.MATRIX_ABSENT_CELL_LABELS[k]).toBe(engine.MATRIX_CELL_LABELS[k])
     expect(engine.MATRIX_CELL_WIDTHS.salePrice).toBe(190)
   })

@@ -184,7 +184,7 @@ export const EVENTS = {
   'listing.values_changed': defineEvent({
     type: 'listing.values_changed',
     context: 'catalog',
-    description: "Listing values a person sees (mode, quantity, buffer, sync state, fulfilment, price, offer, ASIN, sells from) changed in one family; the sheet and the Matrix re-read those rows.",
+    description: "Listing values a person sees (mode, quantity, buffer, sync state, fulfilment, price, offer, ASIN, sells from, business price) changed in one family; the sheet and the Matrix re-read those rows.",
     schema: z.strictObject({
       /** The family root. */
       productId: z.string().min(1),
@@ -198,6 +198,8 @@ export const EVENTS = {
         'externalListingId', 'offer', 'fulfilmentSettings', 'offerDraft',
         /** "Sells from" (Step 2): the warehouses a listing sells from, in sale order. */
         'stockSource',
+        /** Amazon Business (B2B): the business price and quantity tiers Nexus keeps for an Amazon listing. */
+        'businessPrice',
       ])).min(1),
       reason: z.string().optional(),
     }),

@@ -15,6 +15,9 @@
  *   syncBuffer         → `setStockBuffer`
  *   fulfilment         → `fulfillment-method.service.ts` (Add 4(a))
  *   price / salePrice  → `channel-price-write.service.ts` (Add 4(b); `products.price.edit` enforced here too, Add 4(d))
+ *   businessPrice      → `business-price-write.service.ts` (Amazon Business step 5): the WHOLE setting — rule, percent or
+ *                        exact price, and the quantity tiers (`BusinessPriceSetting`; `null` = no business offer); the
+ *                        Tiers column writes through it too. `products.price.edit`.
  *   source             → "Sells from" (Step 2): `ChannelListing.sourceLocationCodes` under the same CAS bump, audited,
  *                        announced (`stockSource`) and re-pushed (`recascadeAfterSyncControlChange`); `inventory.adjust`
  *
@@ -65,10 +68,12 @@ import { canonical } from './import-diff.service.js'
 import { setFulfillmentMethod, type FulfilmentWrite } from './fulfillment-method.service.js'
 import { convertAmazonFulfilment, loadConversionPlan, type ConversionOrigin } from './fulfilment-conversion.service.js'
 import { writeChannelPrices } from './channel-price-write.service.js'
+import { writeBusinessPrices } from './business-price-write.service.js'
+import type { BusinessPriceSetting } from '@nexus/shared/business-price'
 import { getMatrixRead } from './matrix.service.js'
 import { roundCents } from '@nexus/shared/listing-price'
 import type { ListingCoordinate } from '../../lib/listing-coordinate.js'
-import { PRICE_PERMISSION_REASON, sharedStockReason } from './matrix-cells.js'
+import { businessSettingOfCell, PRICE_PERMISSION_REASON, sharedStockReason } from './matrix-cells.js'
 import { loadSharedInventoryTargets, type SharedInventoryOptions } from './shared-inventory-targets.js'
 import { announceListingValues } from '../listing-values-events.js'
 import { SELLING_PAUSED_SENTENCE } from '@nexus/shared/push-lock'
@@ -241,6 +246,35 @@ export function pinTypedQuantity(input: Omit<Parameters<typeof writeQuantityMode
 
 /* ── one cell through the door ──────────────────────────────────────────────────────────────── */
 
+/** The sentence for a business value the door cannot read. */
+export const BUSINESS_VALUE_REASON = 'A business price is a percent below the price or an exact price, with up to 5 quantity discounts — or none'
+
+const moneyOrNull = (v: unknown): number | null | undefined => (v == null ? null : typeof v === 'number' && Number.isFinite(v) ? v : undefined)
+
+/**
+ * The business cell's value as the door takes it: `BusinessPriceSetting` (`{ rule, percent, price, tiers }`), or `null`
+ * for no business offer. `undefined` = not that shape — refused whole, never half read. The rules (ranges, order, Amazon's
+ * limits) are the business price door's own (`businessPriceProblems`).
+ */
+export function businessSettingFromValue(value: unknown): BusinessPriceSetting | null | undefined {
+  if (value === null) return null
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const v = value as Record<string, unknown>
+  if (v.rule !== 'PERCENT_OFF' && v.rule !== 'FIXED') return undefined
+  const percent = moneyOrNull(v.percent)
+  const price = moneyOrNull(v.price)
+  if (percent === undefined || price === undefined) return undefined
+  if (v.tiers == null) return { rule: v.rule, percent, price, tiers: null }
+  const t = v.tiers as { type?: unknown; levels?: unknown }
+  if ((t.type !== 'percent' && t.type !== 'fixed') || !Array.isArray(t.levels)) return undefined
+  const levels: Array<{ minQty: number; value: number }> = []
+  for (const l of t.levels as Array<Record<string, unknown> | null>) {
+    if (!l || typeof l.minQty !== 'number' || typeof l.value !== 'number' || !Number.isFinite(l.minQty) || !Number.isFinite(l.value)) return undefined
+    levels.push({ minQty: l.minQty, value: l.value })
+  }
+  return { rule: v.rule, percent, price, tiers: { type: t.type, levels } }
+}
+
 export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorContext): Promise<MatrixWriteOutcome> {
   const base = { rowId: w.rowId, coordinateKey: w.coordinateKey, cell: w.cell }
   const hit = locate(read, w.rowId, w.coordinateKey)
@@ -353,6 +387,19 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
         const r = await writeChannelPrices({ targets: [{ listingId: cells.listingId, price: rounded, expectedVersion: cells.version, ...(seen !== undefined ? { expectedPrice: seen } : {}) }], actor: ctx.actor, source: 'MANUAL_OVERRIDE', reason: 'matrix' })
         const mine = r.results[0]!
         return mine.outcome === 'applied' ? applied(mine.version, moved(r.results)) : { ...base, outcome: mine.outcome, reason: mine.reason, version: mine.version }
+      }
+      case 'businessPrice': {
+        if (!cells.business) return refuse(cells.writeBlockedReason.businessPrice ?? PREVIEW_WORDS.noPriceHere)
+        if (!ctx.can(PRICE_PERMISSION)) return refuse(PRICE_PERMISSION_REASON)
+        const setting = businessSettingFromValue(w.value)
+        if (setting === undefined) return refuse(BUSINESS_VALUE_REASON)
+        /* The business price door: its own CAS on this version, B2B and Amazon's rules, the audit row, and the send to
+           Amazon (queued, or kept until the listing can be sent to). Saved with a word (`notSent`, warnings) → said. */
+        const r = await writeBusinessPrices({ targets: [{ listingId: cells.listingId, setting, expectedVersion: cells.version }], actor: ctx.actor, reason: 'matrix' })
+        const mine = r.results[0]!
+        if (mine.outcome !== 'applied') return { ...base, outcome: mine.outcome, ...(mine.reason ? { reason: mine.reason } : {}), version: mine.version }
+        const said = [mine.notSent, ...mine.warnings].filter(Boolean).join(' ')
+        return { ...base, outcome: 'applied', version: mine.version, ...(said ? { reason: said } : {}), listings: [{ listingId: mine.listingId, productId: mine.productId ?? row.id, version: mine.version }] }
       }
       case 'salePrice': {
         const sale = cells.sale; if (!sale) return refuse('This market has no sale price here')
@@ -694,6 +741,11 @@ export function restoreWrites(rowId: string, key: CoordinateKey, before: MatrixC
     else if (b.price.source === 'master' && l.price.source === 'override') out.push({ kind: 'cell', cell: 'price', value: null })
   }
   if (b.sale && l.sale && (b.sale.value !== l.sale.value || b.sale.start !== l.sale.start || b.sale.end !== l.sale.end)) out.push({ kind: 'cell', cell: 'salePrice', value: { ...b.sale } })
+  /* Amazon Business: the whole setting as it was (`null` = no business offer) — one write, the tiers with it. */
+  if (b.business && l.business) {
+    const was = businessSettingOfCell(b.business)
+    if (canonical(was) !== canonical(businessSettingOfCell(l.business))) out.push({ kind: 'cell', cell: 'businessPrice', value: was })
+  }
   /* "Sells from": back to the listing's own list as it was (`[]` = the market default again). */
   if (b.source && l.source && !sameSourceCodes(b.source.own, l.source.own)) out.push({ kind: 'cell', cell: 'source', value: [...b.source.own] })
   void rowId

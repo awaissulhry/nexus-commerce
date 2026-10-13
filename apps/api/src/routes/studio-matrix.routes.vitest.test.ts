@@ -33,6 +33,7 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
   announce: vi.fn(),
   locations: vi.fn(),
+  business: vi.fn(),
 }))
 vi.mock('../db.js', () => ({
   default: {
@@ -52,6 +53,7 @@ vi.mock('../services/pim/matrix.service.js', () => ({ getMatrixRead: (...a: unkn
 vi.mock('../services/follow-master.service.js', () => ({ setFollowMasterQuantity: (...a: unknown[]) => mocks.follow(...a), setStockBuffer: (...a: unknown[]) => mocks.buffer(...a), amazonManagedListingIds: async () => new Set<string>() }))
 vi.mock('../services/pim/fulfillment-method.service.js', () => ({ setFulfillmentMethod: (...a: unknown[]) => mocks.fulfil(...a) }))
 vi.mock('../services/pim/channel-price-write.service.js', () => ({ writeChannelPrices: (...a: unknown[]) => mocks.prices(...a) }))
+vi.mock('../services/pim/business-price-write.service.js', () => ({ writeBusinessPrices: (...a: unknown[]) => mocks.business(...a) }))
 vi.mock('../services/stock-movement.service.js', () => ({ recascadeAfterSyncControlChange: async () => ({ ok: 0, noLedger: 0, failed: 0 }) }))
 vi.mock('../services/outbound-enqueue.js', () => ({ fireOutboundJobs: async () => undefined }))
 vi.mock('../services/sync-coalesce.js', () => ({ coalescePendingQuantityRows: async () => 0 }))
@@ -394,5 +396,37 @@ describe('Sells from — the door, the verb and its Undo', () => {
     const res = await app.inject({ method: 'POST', url: '/products/root/studio/matrix/verbs', headers: { 'x-test-permissions': STOCK }, payload: { params: { verb: 'set-source' }, targets: [{ rowId: 'c1', coordinateKey: 'AMAZON:EU' }], commit: true, preview: carried } })
     expect(res.json().results[0]).toMatchObject({ cell: 'source', outcome: 'refused', reason: 'NOPE is not a warehouse of this business' })
     expect(mocks.updateMany).not.toHaveBeenCalled()
+  })
+})
+
+/** Amazon Business (step 5, Part 2): the door takes `cell: 'businessPrice'` — the whole setting — on an Amazon market. */
+describe('PATCH — the Amazon Business cell', () => {
+  const business = { rule: null, percent: null, exact: null, tiers: null, price: null, normalPrice: 100, minPrice: null, maxPrice: null, currency: 'EUR', warnings: [], held: null, send: null, live: null, reported: null }
+  const withBusiness = (): MatrixRead => {
+    const r = read()
+    const it = r.rows.find((x) => x.id === 'c1')!.cells['AMAZON:IT']!
+    it.business = business
+    it.writable = { ...it.writable, businessPrice: true, businessTiers: true }
+    return r
+  }
+  const setting = { rule: 'PERCENT_OFF', percent: 5, price: null, tiers: { type: 'percent', levels: [{ minQty: 2, value: 3 }] } }
+  it('accepted at the boundary and sent to the business price door at the cell\'s version', async () => {
+    mocks.read.mockImplementation(async () => withBusiness())
+    mocks.business.mockResolvedValue({ results: [{ listingId: 'l-c1-it', productId: 'c1', marketplace: 'IT', outcome: 'applied', version: 4, guarded: true, before: null, after: setting, businessPrice: 95, warnings: [] }], applied: 1, refused: 0, noop: 0, conflict: 0 })
+    const res = await app.inject({ method: 'PATCH', url: '/products/root/studio/matrix', payload: { cells: [{ rowId: 'c1', coordinateKey: 'AMAZON:IT', cell: 'businessPrice', value: setting, expectedVersion: 3, expectedListingId: 'l-c1-it' }] } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().results[0]).toEqual({ rowId: 'c1', coordinateKey: 'AMAZON:IT', cell: 'businessPrice', outcome: 'applied', version: 4, listings: [{ listingId: 'l-c1-it', productId: 'c1', version: 4 }] })
+    expect(mocks.business).toHaveBeenCalledWith(expect.objectContaining({ targets: [{ listingId: 'l-c1-it', setting, expectedVersion: 3 }], reason: 'matrix' }))
+  })
+  it('without products.price.edit: refused with the permission sentence, the door never called', async () => {
+    mocks.read.mockImplementation(async () => withBusiness())
+    const res = await app.inject({ method: 'PATCH', url: '/products/root/studio/matrix', headers: { 'x-test-permissions': NO_PRICE_EDIT }, payload: { cells: [{ rowId: 'c1', coordinateKey: 'AMAZON:IT', cell: 'businessPrice', value: null, expectedVersion: 3 }] } })
+    expect(res.json().results[0]).toMatchObject({ outcome: 'refused', reason: expect.stringContaining('products.price.edit') })
+    expect(mocks.business).not.toHaveBeenCalled()
+  })
+  it('the Tiers column has no door kind of its own: the setting carries the tiers (400 at the boundary)', async () => {
+    const res = await app.inject({ method: 'PATCH', url: '/products/root/studio/matrix', payload: { cells: [{ rowId: 'c1', coordinateKey: 'AMAZON:IT', cell: 'businessTiers', value: null, expectedVersion: 3 }] } })
+    expect(res.statusCode).toBe(400)
+    expect(mocks.business).not.toHaveBeenCalled()
   })
 })

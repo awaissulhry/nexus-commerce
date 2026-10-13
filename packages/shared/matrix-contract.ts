@@ -24,35 +24,34 @@ import type { FbaPlanStatus } from './fba-send.js'
 
 /* ── cells ─────────────────────────────────────────────────────────────────────────────────── */
 
-/** The eight cell kinds a coordinate group may serve. Order = default column order inside a group. */
-export type MatrixCellKind = 'listing' | 'fulfilment' | 'syncMode' | 'syncQty' | 'syncBuffer' | 'syncState' | 'price' | 'salePrice'
-export const MATRIX_CELL_KINDS: readonly MatrixCellKind[] = ['listing', 'fulfilment', 'syncMode', 'syncQty', 'syncBuffer', 'syncState', 'price', 'salePrice']
+/** The cell kinds a coordinate group may serve (the eight, and Amazon Business's two). Order = default column order inside a group. */
+export type MatrixCellKind = 'listing' | 'fulfilment' | 'syncMode' | 'syncQty' | 'syncBuffer' | 'syncState' | 'price' | 'salePrice' | 'businessPrice' | 'businessTiers'
+export const MATRIX_CELL_KINDS: readonly MatrixCellKind[] = ['listing', 'fulfilment', 'syncMode', 'syncQty', 'syncBuffer', 'syncState', 'price', 'salePrice', 'businessPrice', 'businessTiers']
 
 /** The cell kinds that make up the INVENTORY lane — the ones a region-inventory coordinate owns. */
 export const INVENTORY_CELL_KINDS: readonly MatrixCellKind[] = ['fulfilment', 'syncMode', 'syncQty', 'syncBuffer', 'syncState']
-/** The cell kinds an operator can write from the grid (the rest are facts). */
+/** The cell kinds an operator types into in the grid (the rest are facts, or open their own editor: the business cells). */
 export const WRITABLE_CELL_KINDS: readonly MatrixCellKind[] = ['fulfilment', 'syncMode', 'syncQty', 'syncBuffer', 'price', 'salePrice']
 
 /** Column header per kind — Appendix A, verbatim. */
 export const MATRIX_CELL_LABELS: Readonly<Record<MatrixCellKind, string>> = {
   listing: 'Listing', fulfilment: 'Fulfilment', syncMode: 'Mode', syncQty: 'Qty', syncBuffer: 'Buffer', syncState: 'Sync', price: 'Price', salePrice: 'Sale',
+  businessPrice: 'B2B price', businessTiers: 'Tiers',
 }
 /** Design §3.3 widths (px). */
 export const MATRIX_CELL_WIDTHS: Readonly<Record<MatrixCellKind, number>> = {
   listing: 196, fulfilment: 112, syncMode: 96, syncQty: 88, syncBuffer: 76, syncState: 96, price: 104, salePrice: 190,
+  businessPrice: 168, businessTiers: 180,
 }
 
 /**
- * MX.F (2026-09-13, ruled): the cells a coordinate may declare ABSENT — the eight kinds plus the two business-pricing
- * cells design §3.11 reserves (`B2B price` · `Tiers`). Absence-only today: `cells` never carries them, so the grid renders
- * nothing for them, and Customise lists them greyed with the sentence the server derived from what Amazon told the
- * coordinate's account (its seller-scoped product type definition, kept nightly — D-MX5, never hardcoded).
+ * MX.F (2026-09-13, ruled): the cells a coordinate may declare ABSENT, with the sentence why — e.g. the business cells
+ * (`B2B price` · `Tiers`) on a market where Amazon lists no B2B for the account (step 1's seller-scoped answer). Since
+ * Amazon Business step 5 every kind is a real cell kind, so these are the kinds themselves.
  */
-export type MatrixAbsentCellKind = MatrixCellKind | 'businessPrice' | 'businessTiers'
-/** Customise's label per absent-capable kind — the eight headers plus Appendix A's `B2B price` · `Tiers`. */
-export const MATRIX_ABSENT_CELL_LABELS: Readonly<Record<MatrixAbsentCellKind, string>> = {
-  ...MATRIX_CELL_LABELS, businessPrice: 'B2B price', businessTiers: 'Tiers',
-}
+export type MatrixAbsentCellKind = MatrixCellKind
+/** Customise's label per absent-capable kind. */
+export const MATRIX_ABSENT_CELL_LABELS: Readonly<Record<MatrixAbsentCellKind, string>> = MATRIX_CELL_LABELS
 
 /** The projection words the Variants page fixed (five) plus the three the Matrix adds (design §3.4). */
 export type ListingState = 'listed' | 'draft' | 'excluded' | 'not-set-up' | 'needs-value' | 'suppressed' | 'closed' | 'error' | 'ended'
@@ -451,7 +450,7 @@ export interface MatrixLocation { code: string; name: string; active: boolean; i
 
 /* ── writes: one door ───────────────────────────────────────────────────────────────────────── */
 
-export type MatrixWritableKind = Extract<MatrixCellKind, 'fulfilment' | 'syncMode' | 'syncQty' | 'syncBuffer' | 'price' | 'salePrice'>
+export type MatrixWritableKind = Extract<MatrixCellKind, 'fulfilment' | 'syncMode' | 'syncQty' | 'syncBuffer' | 'price' | 'salePrice' | 'businessPrice'>
 /** What the one door writes: the writable cell kinds plus "Sells from" (`value`: the codes in sale order; `[]` = the market default). */
 export type MatrixDoorKind = MatrixWritableKind | 'source'
 
@@ -616,7 +615,6 @@ export const MATRIX_COPY = {
   absentBusiness: (pt: string) => `Amazon has not enabled business pricing for this account (checked against the ${pt} schema)`,
   absentBusinessUnchecked: () => 'Business pricing is not checked for this account and product type — Amazon has not told Nexus yet (Nexus asks each night for the product types in use on its own Amazon accounts)',
   absentBusinessNoType: () => 'Business pricing cannot be checked — this family has no Amazon product type Nexus recognises',
-  absentBusinessNotBuilt: (pt: string) => `Amazon allows business pricing here (the ${pt} schema) — the B2B cells are not built yet`,
   noListingYet: 'No listing on this coordinate yet',
   /** A write whose listing moved since the caller read it (CAS on `ChannelListing.version`, or another listing there now). */
   changedElsewhere: 'Changed elsewhere — reloaded',

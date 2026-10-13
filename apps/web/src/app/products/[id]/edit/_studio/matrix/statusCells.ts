@@ -76,6 +76,15 @@ export function savedBeforeMatrixCase(updatedAt: string | null | undefined): boo
   return Number.isFinite(at) && at < MATRIX_CASE_SINCE
 }
 
+/** When the markets' B2B price and Tiers columns (Amazon Business step 5) reached the Matrix — set to the release time. */
+export const MATRIX_BUSINESS_SINCE = Date.parse('2026-10-13T05:30:00.000Z')
+
+/** A saved view last saved before the business columns existed could not name them (it then shows them wherever it shows that group's Price). */
+export function savedBeforeMatrixBusiness(updatedAt: string | null | undefined): boolean {
+  const at = updatedAt ? Date.parse(updatedAt) : NaN
+  return Number.isFinite(at) && at < MATRIX_BUSINESS_SINCE
+}
+
 /** A Status clear for a cell with nothing waiting: nothing to clear (the sheet's Delete rule, `usePublishCellEditing`). */
 export function clearsNothing(input: PublishCellInput, cell: Pick<PublishActionCell, 'status'> | null): boolean {
   return 'change' in input && input.change.column === 'status' && input.change.target === null && !cell?.status.target

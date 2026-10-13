@@ -26,10 +26,13 @@ vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { 
 vi.mock('./fulfillment-method.service.js', () => ({ setFulfillmentMethod: vi.fn() }))
 vi.mock('./fulfilment-conversion.service.js', () => ({ convertAmazonFulfilment: vi.fn(), loadConversionPlan: vi.fn() }))
 vi.mock('./channel-price-write.service.js', () => ({ writeChannelPrices: vi.fn() }))
+vi.mock('./business-price-write.service.js', () => ({ writeBusinessPrices: vi.fn() }))
 vi.mock('./matrix.service.js', () => ({ getMatrixRead: vi.fn() }))
 vi.mock('../listing-values-events.js', () => ({ announceListingValues: vi.fn() }))
 
-import { applyCell, paramsForChange, restoreWrites, writeMatrixCells } from './matrix-write.service.js'
+import { applyCell, BUSINESS_VALUE_REASON, businessSettingFromValue, paramsForChange, restoreWrites, writeMatrixCells } from './matrix-write.service.js'
+import { writeBusinessPrices } from './business-price-write.service.js'
+import type { BusinessCell } from '@nexus/shared/matrix-contract'
 import { writeChannelPrices, type PriceWriteTarget } from './channel-price-write.service.js'
 import { amazonManagedListingIds, setFollowMasterQuantity, setStockBuffer } from '../follow-master.service.js'
 import { recascadeAfterSyncControlChange } from '../stock-movement.service.js'
@@ -39,7 +42,7 @@ import { convertAmazonFulfilment } from './fulfilment-conversion.service.js'
 import { getMatrixRead } from './matrix.service.js'
 import { productReadCacheService } from '../product-read-cache.service.js'
 import { MATRIX_COPY } from '@nexus/shared/matrix-contract'
-import { sharedStockReason } from './matrix-cells.js'
+import { PRICE_PERMISSION_REASON, sharedStockReason } from './matrix-cells.js'
 
 const change = (over: Partial<VerbChange>): VerbChange => ({ rowId: 'r', sku: 'S', coordinateKey: 'AMAZON:EU', cell: 'syncQty', from: 1, to: 2, fromLabel: '', toLabel: '', ...over })
 
@@ -448,5 +451,75 @@ describe('applyCell — Sells from (cell: source)', () => {
     h.updateMany.mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 })
     expect(await write(['MI-3PL'])).toMatchObject({ outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere })
     expect(announceListingValues).not.toHaveBeenCalled(); expect(recascadeAfterSyncControlChange).not.toHaveBeenCalled()
+  })
+})
+
+/* ── Amazon Business (step 5, Part 2): the business cell through the door ───────────────────── */
+
+const businessCell = (over: Partial<BusinessCell> = {}): BusinessCell => ({
+  rule: null, percent: null, exact: null, tiers: null, price: null, normalPrice: 105, minPrice: null, maxPrice: null, currency: 'EUR',
+  warnings: [], held: null, send: null, live: null, reported: null, ...over,
+})
+const pct5 = { rule: 'PERCENT_OFF', percent: 5, price: null, tiers: { type: 'percent', levels: [{ minQty: 2, value: 3 }] } } as const
+
+describe('businessSettingFromValue — the door reads the whole setting, or refuses it whole', () => {
+  it('a percent with tiers, an exact price, none (null)', () => {
+    expect(businessSettingFromValue(pct5)).toEqual(pct5)
+    expect(businessSettingFromValue({ rule: 'FIXED', price: 32.95 })).toEqual({ rule: 'FIXED', percent: null, price: 32.95, tiers: null })
+    expect(businessSettingFromValue(null)).toBeNull()
+  })
+  it('anything else is not read at all: no rule, a number as text, a tier with a missing value, tiers of an unknown type, a bare number', () => {
+    for (const v of [{}, { rule: 'B2B', percent: 5 }, { rule: 'PERCENT_OFF', percent: '5' }, { rule: 'PERCENT_OFF', percent: 5, tiers: { type: 'percent', levels: [{ minQty: 2 }] } },
+      { rule: 'FIXED', price: 30, tiers: { type: 'amount', levels: [] } }, 99, 'none', undefined, []]) expect(businessSettingFromValue(v), JSON.stringify(v)).toBeUndefined()
+  })
+})
+
+describe('applyCell — the business cell (cell: businessPrice) goes through the business price door', () => {
+  const read = (business: BusinessCell | null, writable = true) => ({
+    rows: [{ id: 'row', cells: { 'AMAZON:IT': { ...cells({ listingId: 'listing', version: 7, sync: null, fulfilment: null }), business,
+      writable: { businessPrice: writable, businessTiers: writable }, writeBlockedReason: writable ? {} : { businessPrice: 'held for a reason' } } } }],
+    coordinates: [{ key: 'AMAZON:IT', kind: 'market', channel: 'AMAZON', market: 'IT', label: 'Amazon · IT', region: 'EU', sharedInventoryWith: null }],
+  }) as never
+  const ctx = { productId: 'row', actor: 'tester', can: () => true }
+  const cell = (value: unknown) => ({ rowId: 'row', coordinateKey: 'AMAZON:IT', cell: 'businessPrice', value, expectedVersion: 7 }) as never
+  const door = vi.mocked(writeBusinessPrices)
+  const answer = (over: Record<string, unknown>) => door.mockReset().mockResolvedValue({ results: [{ listingId: 'listing', productId: 'row', marketplace: 'IT', outcome: 'applied', version: 8, guarded: true, before: null, after: null, businessPrice: 99.75, warnings: [], ...over }], applied: 1, refused: 0, noop: 0, conflict: 0 } as never)
+
+  it('applied: the whole setting at the cell\'s version; the outcome names the listing it moved', async () => {
+    answer({})
+    expect(await applyCell(read(businessCell()), cell(pct5), ctx)).toEqual({ rowId: 'row', coordinateKey: 'AMAZON:IT', cell: 'businessPrice', outcome: 'applied', version: 8, listings: [{ listingId: 'listing', productId: 'row', version: 8 }] })
+    expect(door).toHaveBeenCalledWith({ targets: [{ listingId: 'listing', setting: pct5, expectedVersion: 7 }], actor: 'tester', reason: 'matrix' })
+  })
+  it('applied with a word: kept but not sent yet, and the warnings — said on the outcome', async () => {
+    answer({ notSent: 'Paused — sent when the listing resumes.', warnings: ['Hidden by Amazon: …'] })
+    expect(await applyCell(read(businessCell()), cell(null), ctx)).toMatchObject({ outcome: 'applied', reason: 'Paused — sent when the listing resumes. Hidden by Amazon: …' })
+    expect(door.mock.calls[0]![0].targets[0]).toMatchObject({ setting: null })
+  })
+  it.each([
+    ['refused', { outcome: 'refused', reason: 'The business price EUR 120.00 is above the normal price EUR 105.00: Amazon would not show it to business buyers.', version: 7 }],
+    ['conflict', { outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere, version: 9 }],
+    ['noop', { outcome: 'noop', version: 7 }],
+  ])('%s: the business door\'s answer, as it gave it', async (_name, r) => {
+    answer(r)
+    expect(await applyCell(read(businessCell()), cell(pct5), ctx)).toEqual({ rowId: 'row', coordinateKey: 'AMAZON:IT', cell: 'businessPrice', ...r })
+  })
+  it('refused before the door: a held cell (its sentence), a value it cannot read, no products.price.edit', async () => {
+    door.mockReset()
+    expect(await applyCell(read(businessCell(), false), cell(pct5), ctx)).toMatchObject({ outcome: 'refused', reason: 'held for a reason' })
+    expect(await applyCell(read(businessCell()), cell({ rule: 'PERCENT_OFF', percent: 'five' }), ctx)).toMatchObject({ outcome: 'refused', reason: BUSINESS_VALUE_REASON })
+    expect(await applyCell(read(businessCell()), cell(pct5), { ...ctx, can: () => false })).toMatchObject({ outcome: 'refused', reason: PRICE_PERMISSION_REASON })
+    expect(door).not.toHaveBeenCalled()
+  })
+})
+
+describe('restoreWrites — the business setting is restored whole, by value', () => {
+  it('a business price that was added goes back to none; one that was removed comes back with its tiers; the same needs nothing', () => {
+    const none = cells({ business: businessCell() })
+    const kept = cells({ business: businessCell({ rule: 'PERCENT_OFF', percent: 5, price: 99.75, tiers: { type: 'percent', levels: [{ minQty: 2, value: 3, unitPrice: 96.76 }] } }) })
+    expect(restoreWrites('r', 'AMAZON:IT', none, kept)).toEqual([{ kind: 'cell', cell: 'businessPrice', value: null }])
+    expect(restoreWrites('r', 'AMAZON:IT', kept, none)).toEqual([{ kind: 'cell', cell: 'businessPrice', value: pct5 }])
+    expect(restoreWrites('r', 'AMAZON:IT', kept, cells({ business: { ...kept.business!, price: 104.5, normalPrice: 110 } }))).toEqual([])
+    // A cell captured before the business cells existed (no `business`) is left alone.
+    expect(restoreWrites('r', 'AMAZON:IT', cells({}), kept)).toEqual([])
   })
 })
