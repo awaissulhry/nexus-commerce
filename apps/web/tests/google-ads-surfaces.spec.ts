@@ -327,12 +327,10 @@ async function mockApi(page: Page, state = 'ok', override?: Override): Promise<M
 }
 
 /**
- * AG Grid warnings this spec knows about, each with where it comes from. Remove a line when its cause is fixed.
- *  - #27 `getGridOption`: a WorkspaceGrid that mounts WITH its totals row asks `api.getGridOption('headerHeight')` from
- *    `getRowHeight` (design-system/grid/workspace/WorkspaceGrid.tsx) before AG has registered its API; the totals row
- *    then gets the row height instead of the header's. A DS defect, reported to the DS lane on 2026-10-13.
+ * AG Grid warnings this spec knows about, each with where it comes from. Remove a line when its cause is fixed. Empty:
+ * #27 `getGridOption` (WorkspaceGrid's totals-row height) was fixed by #597 — any AG warning now fails the test.
  */
-const KNOWN_AG_WARNINGS = [/warning #27 API function `getGridOption` not registered to module `CommunityCore`/]
+const KNOWN_AG_WARNINGS: RegExp[] = []
 
 /**
  * Every console error, uncaught page error and AG Grid warning (dev builds name a grid's problems in the console). Nothing
@@ -364,19 +362,11 @@ async function tabUntil(page: Page, test: () => Promise<boolean>, max = 40): Pro
 }
 
 /**
- * Clicks a tab of a strip that scrolls. Focus first: at phone width a press on a tab under the strip's edge fade is
- * lost — the DS Tabs scrolls the strip on focus, between the press and the release, so the release lands on the next
- * tab (design-system/components/Tabs.tsx `onFocus` → `revealInStrip`; reported to the DS lane on 2026-10-13).
+ * Clicks a tab of a strip that scrolls — a plain press, as a person does it. Before #598 a press on a tab under the
+ * strip's edge fade was lost at phone width (the strip scrolled between press and release); this proves it is not.
  */
 async function pickTab(tab: ReturnType<Page['locator']>) {
-  await tab.focus()
   await tab.click()
-}
-
-/** Closes AG Grid's dev-build warning panel (see KNOWN_AG_WARNINGS), which at phone width covers the grid's rows. */
-async function closeAgDevPanels(scope: ReturnType<Page['locator']>) {
-  const dismiss = scope.locator('.ag-overlay-error-panel .ag-overlay-error-dismiss')
-  for (let i = await dismiss.count(); i > 0; i--) await dismiss.first().click()
 }
 
 /** The names of a tab list's tabs, without their counts. */
@@ -569,7 +559,6 @@ for (const look of LOOKS) {
       const dialog = campaignDialog(page, 'Test search campaign')
       await expect(dialog.getByRole('tab', { name: /^Ad groups/ })).toHaveAttribute('aria-selected', 'true')
       await expect(dialog.getByText('Test ad group one')).toBeVisible()
-      await closeAgDevPanels(dialog)
       await dialog.getByText('Test ad group one').click()
       await expect(page).toHaveURL(/[?&]tab=keywords\b/)
       await expect(dialog.getByRole('tab', { name: /^Keywords/ })).toHaveAttribute('aria-selected', 'true')
