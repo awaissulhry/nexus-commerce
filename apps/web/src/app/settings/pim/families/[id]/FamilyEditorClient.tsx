@@ -18,7 +18,7 @@
  * dropdown picker driven by ChannelConnection.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   AlertCircle,
   ArrowUpRight,
@@ -54,6 +54,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { Listbox } from '@/design-system/components/Listbox'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/components.css'
+import { familySave, sendAttributeOrder } from './familySave'
 
 export interface FamilyDetail {
   id: string
@@ -119,26 +120,36 @@ export default function FamilyEditorClient({
   const { toast } = useToast()
   const { t } = useTranslations()
 
-  const refresh = useCallback(async () => {
-    try {
-      const [f, e] = await Promise.all([
-        fetch(`${getBackendUrl()}/api/families/${family.id}`, {
-          cache: 'no-store',
-        }),
-        fetch(`${getBackendUrl()}/api/families/${family.id}/effective`, {
-          cache: 'no-store',
-        }),
-      ])
-      if (f.ok) setFamily(((await f.json()).family ?? family) as FamilyDetail)
-      if (e.ok)
-        setEffective(
-          ((await e.json()).attributes ?? []) as EffectiveAttribute[],
-        )
-      setError(null)
-    } catch (err: any) {
-      setError(err?.message ?? String(err))
-    }
-  }, [family])
+  // One save line (familySave.ts): this page's writes go one at a time, its reads are ticketed and kept off the screen
+  // while a write is waiting or in flight, and it reads again once its last write has settled.
+  const familyId = initialFamily.id
+  const saveRef = useRef<ReturnType<typeof familySave> | null>(null)
+  if (!saveRef.current) {
+    saveRef.current = familySave<{ family: FamilyDetail | null; effective: EffectiveAttribute[] | null }>({
+      read: async () => {
+        const [f, e] = await Promise.all([
+          fetch(`${getBackendUrl()}/api/families/${familyId}`, {
+            cache: 'no-store',
+          }),
+          fetch(`${getBackendUrl()}/api/families/${familyId}/effective`, {
+            cache: 'no-store',
+          }),
+        ])
+        return {
+          family: f.ok ? (((await f.json()).family ?? null) as FamilyDetail | null) : null,
+          effective: e.ok ? (((await e.json()).attributes ?? []) as EffectiveAttribute[]) : null,
+        }
+      },
+      paint: (got) => {
+        if (got.family) setFamily(got.family)
+        if (got.effective) setEffective(got.effective)
+        setError(null)
+      },
+      readFailed: (err: any) => setError(err?.message ?? String(err)),
+    })
+  }
+  const save = saveRef.current
+  const refresh = save.refresh
 
   const onRemoveAttr = useCallback(
     async (faId: string, attrLabel: string) => {
@@ -151,96 +162,87 @@ export default function FamilyEditorClient({
       })
       if (!ok) return
       try {
-        const res = await fetch(
-          `${getBackendUrl()}/api/family-attributes/${faId}`,
-          { method: 'DELETE' },
-        )
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}))
-          throw new Error(body.error ?? `HTTP ${res.status}`)
-        }
+        await save.write(async () => {
+          const res = await fetch(
+            `${getBackendUrl()}/api/family-attributes/${faId}`,
+            { method: 'DELETE' },
+          )
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}))
+            throw new Error(body.error ?? `HTTP ${res.status}`)
+          }
+        })
         toast.success(t('pim.toasts.detached', { label: attrLabel }))
-        refresh()
       } catch (e: any) {
         toast.error(t('pim.toasts.failed.detach', { msg: e?.message ?? String(e) }))
       }
     },
-    [confirm, refresh, toast, t],
+    [confirm, save, toast, t],
   )
 
   const onToggleRequired = useCallback(
     async (faId: string, current: boolean) => {
       try {
-        const res = await fetch(
-          `${getBackendUrl()}/api/family-attributes/${faId}`,
-          {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ required: !current }),
-          },
-        )
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}))
-          throw new Error(body.error ?? `HTTP ${res.status}`)
-        }
-        refresh()
+        await save.write(async () => {
+          const res = await fetch(
+            `${getBackendUrl()}/api/family-attributes/${faId}`,
+            {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ required: !current }),
+            },
+          )
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}))
+            throw new Error(body.error ?? `HTTP ${res.status}`)
+          }
+        })
       } catch (e: any) {
         toast.error(t('pim.toasts.failed.update', { msg: e?.message ?? String(e) }))
       }
     },
-    [refresh, toast, t],
+    [save, toast, t],
   )
 
   const onUpdateChannels = useCallback(
     async (faId: string, channels: string[]) => {
       try {
-        const res = await fetch(
-          `${getBackendUrl()}/api/family-attributes/${faId}`,
-          {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ channels }),
-          },
-        )
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}))
-          throw new Error(body.error ?? `HTTP ${res.status}`)
-        }
-        refresh()
+        await save.write(async () => {
+          const res = await fetch(
+            `${getBackendUrl()}/api/family-attributes/${faId}`,
+            {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ channels }),
+            },
+          )
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}))
+            throw new Error(body.error ?? `HTTP ${res.status}`)
+          }
+        })
       } catch (e: any) {
         toast.error(t('pim.toasts.failed.update', { msg: e?.message ?? String(e) }))
       }
     },
-    [refresh, toast, t],
+    [save, toast, t],
   )
 
   // W5.2 — drag-drop reorder handler. Receives the new ordered list
-  // of FamilyAttribute ids, fires N parallel PATCH calls with new
-  // sortOrder values (0, 10, 20, ...). The 10-step gap leaves room
-  // for future inserts without immediate re-renumbering. Refresh
-  // pulls the canonical order back from the server.
+  // of FamilyAttribute ids and sends it as ONE request: the server
+  // writes every sortOrder (0, 10, 20, ...) in one transaction. Drags
+  // go one at a time; once the last has settled the page reads the
+  // canonical order back (also after a refusal, to revert the
+  // optimistic order to server truth).
   const onReorder = useCallback(
     async (orderedIds: string[]) => {
       try {
-        await Promise.all(
-          orderedIds.map((id, idx) =>
-            fetch(`${getBackendUrl()}/api/family-attributes/${id}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ sortOrder: idx * 10 }),
-            }).then((r) => {
-              if (!r.ok) throw new Error(`reorder HTTP ${r.status}`)
-            }),
-          ),
-        )
-        refresh()
+        await save.write(() => sendAttributeOrder(familyId, orderedIds))
       } catch (e: any) {
         toast.error(t('pim.toasts.failed.reorder', { msg: e?.message ?? String(e) }))
-        // Refresh to revert the optimistic UI to server truth.
-        refresh()
       }
     },
-    [refresh, toast, t],
+    [familyId, save, toast, t],
   )
 
   // attributeIds already attached or inherited — exclude from picker.
@@ -811,8 +813,8 @@ function SortableAttributesTable({
 }) {
   const { t } = useTranslations()
   // Optimistic local order — DnD updates this immediately on drop;
-  // the server PATCHes happen in the background and refresh fixes
-  // any drift.
+  // the order is saved in the background (one request per drag, in
+  // line) and the read after the last drag fixes any drift.
   const [localOrder, setLocalOrder] = useState<string[]>(() =>
     familyAttributes
       .slice()

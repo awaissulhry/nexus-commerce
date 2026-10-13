@@ -213,7 +213,8 @@ describe('the Matrix says where a SKU takes its stock from', () => {
     const alone = await as(B, user.ownerB, () => cell.setListingQuantityFollow({ listingId: String(listing.id), follow: false, actor: 'person-1', onFba: 'refuse' })).then(() => null, (e) => e)
     expect(alone).toMatchObject({ statusCode: 400, message: lent })
     const withOthers = await as(B, user.ownerB, () => cell.setListingQuantityFollow({ listingId: String(listing.id), follow: false, actor: 'person-1', onFba: 'skip' }))
-    expect(withOthers).toEqual({ outcome: 'skipped', skipped: lent })
+    // Nothing written: the version it answers is the one it found (the drawer's next write is checked against it).
+    expect(withOthers).toEqual({ outcome: 'skipped', skipped: lent, version: Number(before.version), from: Number(before.version) })
     expect((await sql(`SELECT version, quantity, "quantityOverride", "followMasterQuantity" FROM "ChannelListing" WHERE id = $1`, [listing.id]))[0]).toEqual(before)
     expect(await quantityRows(String(listing.id))).toBe(rowsBefore)
   })
@@ -237,8 +238,10 @@ describe('the Matrix says where a SKU takes its stock from', () => {
     const cell = await import('../listings/listing-matrix-cell.service.js')
     const listing = await ebayListing(id.bM)
     expect(listing).toMatchObject({ followMasterQuantity: false, quantity: 0 })
+    const [{ version }] = await sql(`SELECT version FROM "ChannelListing" WHERE id = $1`, [listing.id])
     const r = await as(B, user.ownerB, () => cell.setListingQuantityFollow({ listingId: String(listing.id), follow: true, actor: 'person-1', onFba: 'refuse' }))
-    expect(r).toEqual({ outcome: 'applied' })
+    // The version this write wrote: its compare-and-set moved the listing one step from the version it acted on.
+    expect(r).toEqual({ outcome: 'applied', version: Number(version) + 1, from: Number(version) })
     expect(await ebayListing(id.bM)).toMatchObject({ followMasterQuantity: true, quantity: 6 })
   })
 })

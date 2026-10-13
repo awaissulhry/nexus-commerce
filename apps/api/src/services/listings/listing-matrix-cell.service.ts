@@ -71,15 +71,28 @@ export async function setListingQuantityFollow(input: {
   onFba: 'refuse' | 'skip'
   /** The version the operator saw, when this change is the whole request. */
   expectedVersion?: number
-}): Promise<{ outcome: 'applied' | 'noop' | 'skipped'; expandedTo?: string[]; skipped?: string }> {
+}): Promise<{
+  outcome: 'applied' | 'noop' | 'skipped'
+  /**
+   * The listing's version after THIS write: the one its own compare-and-set wrote (`writeQuantityMode` bumps the
+   * listing from `from` to `from + 1` under CAS), or `from` when nothing was written. Never a read after the commit,
+   * which may already carry someone else's next write.
+   */
+  version: number
+  /** The version this write acted on. */
+  from: number
+  expandedTo?: string[]
+  skipped?: string
+}> {
   const listing = await prisma.channelListing.findUnique({
     where: { id: input.listingId },
     select: { id: true, productId: true, channel: true, marketplace: true, channelConnectionId: true, aliasKey: true, version: true, followMasterQuantity: true, product: { select: { isParent: true } } },
   })
   if (!listing) throw new ListingPricingError(404, 'Listing not found')
   if (input.expectedVersion != null && input.expectedVersion !== listing.version) throw conflict(listing.version)
+  const unchanged = { version: listing.version, from: listing.version }
   if (listing.product?.isParent) {
-    if (input.onFba === 'skip') return { outcome: 'skipped', skipped: PARENT_REASON }
+    if (input.onFba === 'skip') return { outcome: 'skipped', skipped: PARENT_REASON, ...unchanged }
     throw new ListingPricingError(400, PARENT_REASON)
   }
   const { targets, expandedTo } = await quantityTargetsOf(listing)
@@ -88,7 +101,7 @@ export async function setListingQuantityFollow(input: {
     : [listing.followMasterQuantity !== false]
   // Already so — on every market of an Amazon EU group too — is a no-op, as the matrix's Mode cell answers: no write,
   // no version spent (a version bump would cost the other markets' open editors a needless conflict).
-  if (following.every((f) => f === input.follow)) return { outcome: 'noop' }
+  if (following.every((f) => f === input.follow)) return { outcome: 'noop', ...unchanged }
   let moded: Awaited<ReturnType<typeof writeQuantityMode>>
   try {
     moded = await writeQuantityMode({ productId: listing.productId, channel: listing.channel.toUpperCase(), targets, follow: input.follow, actor: input.actor, coordinates: coordinatesOf(listing, targets) })
@@ -97,10 +110,10 @@ export async function setListingQuantityFollow(input: {
     throw err
   }
   if (moded.refused) {
-    if (input.onFba === 'skip' && !moded.staged) return { outcome: 'skipped', skipped: moded.refused }
+    if (input.onFba === 'skip' && !moded.staged) return { outcome: 'skipped', skipped: moded.refused, ...unchanged }
     throw new ListingPricingError(400, moded.refused, { code: 'QUANTITY_REFUSED' })
   }
-  return { outcome: 'applied', ...(expandedTo ? { expandedTo } : {}) }
+  return { outcome: 'applied', version: listing.version + 1, from: listing.version, ...(expandedTo ? { expandedTo } : {}) }
 }
 
 export async function writeListingCellThroughMatrix(input: {
@@ -137,8 +150,9 @@ export async function writeListingCellThroughMatrix(input: {
       throw err
     }
     if (pinned.refused) throw new ListingPricingError(400, pinned.refused, { code: 'QUANTITY_REFUSED' })
-    const fresh = await prisma.channelListing.findUnique({ where: { id: listing.id }, select: { version: true } })
-    return { id: listing.id, version: fresh?.version ?? listing.version, outcome: 'applied', ...(expandedTo ? { expandedTo } : {}) }
+    // The version this pin wrote: its compare-and-set bumped the listing from the version checked above, once. A read
+    // after the commit may already carry someone else's next write, and the caller would count it as its own.
+    return { id: listing.id, version: listing.version + 1, outcome: 'applied', ...(expandedTo ? { expandedTo } : {}) }
   }
 
   // The sale — the matrix's sale cell: the channel must have one, a parent is not buyable, the price permission.
@@ -155,9 +169,4 @@ export async function writeListingCellThroughMatrix(input: {
   if (outcome.outcome === 'conflict') throw conflict(outcome.version)
   if (outcome.outcome === 'refused') throw new ListingPricingError(400, outcome.reason ?? 'The sale was not changed.', { code: 'PRICE_REFUSED' })
   return { id: listing.id, version: outcome.version, outcome: outcome.outcome === 'applied' ? 'applied' : 'noop' }
-}
-
-/** A listing's current version (the routes hold no database call). */
-export async function listingVersionOf(listingId: string): Promise<number | null> {
-  return (await prisma.channelListing.findUnique({ where: { id: listingId }, select: { version: true } }))?.version ?? null
 }
