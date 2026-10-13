@@ -34,6 +34,7 @@
 import prisma from '../../db.js'
 import type { Prisma } from '@prisma/client'
 import {
+  type BusinessCell,
   INVENTORY_CELL_KINDS,
   MATRIX_COPY,
   type CoordinateKey,
@@ -63,6 +64,10 @@ import { offerAudienceKey, storedOfferAudiences } from '../categories/seller-off
 import { normaliseCategory } from '../categories/schema-coverage.service.js'
 import { detectEuIntentConflict } from '../amazon-eu-quantity-guard.js'
 import { readAmazonOfferDraft } from '../amazon/offer-draft.js'
+import { amazonMarketplaceIdOf, readAmazonOfferFacts } from '../amazon/offer-facts.js'
+import { BUSINESS_PRICE_SYNC_TYPE } from '../amazon/business-offer.js'
+import { loadBusinessAudiences } from '../categories/seller-offer-audience.service.js'
+import { businessHeld } from './business-held.js'
 import { listingQuantityVerdict } from './listing-quantity-verdict.js'
 import { MARKETPLACE_ID_TO_CODE } from '../../utils/marketplace-code.js'
 import { axisSynonymKey } from '../ebay-theme-axes.js'
@@ -74,7 +79,7 @@ import { readSaleWindows } from './sale-window.js'
 import { FBA_ALL_CENTRES } from '../fba-pan-eu.service.js'
 import { axisValuesOf, buildFamilyAxes, FAMILY_MEMBER_SELECT, readExcludedListingIds, resolveFamilyRoot, type FamilyAxis } from './family-projection.service.js'
 import {
-  businessAbsence, channelLabel, channelRank, channelShape, circled, compareMarkets, deriveFulfilment, foldQueue, isAmazonEuMarket,
+  businessAbsence, businessCellOf, channelLabel, channelRank, channelShape, circled, compareMarkets, deriveFulfilment, foldQueue, isAmazonEuMarket,
   effectiveFulfilment, inSourceOrder, lanePushFailure, listingStateOf, priceCellOf, reportedFulfilment, sourceCellOf, withoutInventory, writableFor, type QueueRowFacts, type SourceLocation,
 } from './matrix-cells.js'
 
@@ -101,6 +106,8 @@ export const MATRIX_LISTING_SELECT = {
   price: true, salePrice: true, priceOverride: true, followMasterPrice: true,
   followMasterQuantity: true, quantity: true, quantityOverride: true, stockBuffer: true, syncPaused: true, sourceLocationCodes: true,
   offerClosedAt: true, offerCloseReason: true, offerActive: true, fulfillmentMethod: true, platformAttributes: true, lastSyncStatus: true, syncStatus: true,
+  // Amazon Business — the business offer Nexus keeps (the business cell; `@nexus/shared/business-price`).
+  businessPriceRule: true, businessPricePercent: true, businessPrice: true, businessTiers: true,
 } as const
 
 export type MatrixListing = Prisma.ChannelListingGetPayload<{ select: typeof MATRIX_LISTING_SELECT }>
@@ -211,6 +218,20 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
     ? await storedOfferAudiences(businessType, amazonConnectionIds)
     : new Map<string, string[]>()
   if (businessType && amazonConnectionIds.length) queries += 1
+  /* Amazon Business — each LISTING's own B2B verdict, by the business price door's own rule (`loadBusinessAudiences`:
+     the listing's Amazon type, then its product's, then the family's), so the cell and the door never disagree. */
+  const ownAmazon = connections.filter((c) => upper(c.channelType) === 'AMAZON' && isOwnConnection(c))
+  const ownPrimaryAmazon = (ownAmazon.find((c) => c.isPrimary) ?? ownAmazon[0])?.id ?? null
+  const memberType = new Map(members.map((m) => [m.id, m.productType ?? null]))
+  const audienceListing = (l: MatrixListing) => ({
+    marketplace: l.marketplace, platformAttributes: l.platformAttributes, channelConnectionId: l.channelConnectionId,
+    product: { productType: memberType.get(l.productId) ?? null, parent: { productType: parentRow.productType ?? null } },
+  })
+  const amazonListings = listings.filter((l) => upper(l.channel) === 'AMAZON')
+  const businessAudienceOf = amazonListings.length
+    ? await loadBusinessAudiences(amazonListings.map(audienceListing), (l) => l.channelConnectionId ?? ownPrimaryAmazon)
+    : () => null
+  if (amazonListings.length) queries += 1
   mark('wave1', tWave1)
 
   // ── 3. wave 2 — the tables keyed by listing id ─────────────────────────────────────────────
@@ -242,6 +263,21 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
       })
       : Promise.resolve([]),
   ]); queries += ebayItemIds.length ? 7 : 6
+  /* Amazon Business — the newest business send row per listing (its own query: the queue fold reads only QTY/PRICE rows)
+     and the listings whose business price Nexus has ever kept (a business audit row). */
+  const amazonIds = amazonListings.map((l) => l.id)
+  const [businessRowList, everKeptRows] = amazonIds.length ? await Promise.all([
+    prisma.outboundSyncQueue.findMany({
+      where: { channelListingId: { in: amazonIds }, syncType: BUSINESS_PRICE_SYNC_TYPE, syncStatus: { not: 'CANCELLED' } },
+      orderBy: [{ createdAt: 'desc' }],
+      distinct: ['channelListingId'],
+      select: { channelListingId: true, syncStatus: true, isDead: true, errorCode: true, errorMessage: true, holdUntil: true, syncedAt: true, updatedAt: true, createdAt: true },
+    }),
+    prisma.channelListingOverride.findMany({ where: { channelListingId: { in: amazonIds }, fieldName: 'businessPrice' }, distinct: ['channelListingId'], select: { channelListingId: true } }),
+  ]) : [[], []]
+  if (amazonIds.length) queries += 2
+  const businessRowOf = new Map(businessRowList.map((r) => [r.channelListingId!, { ...r, syncStatus: String(r.syncStatus) }]))
+  const everKept = new Set(everKeptRows.map((r) => r.channelListingId))
   mark('wave2', tWave2)
 
   // ── 4. indexes ─────────────────────────────────────────────────────────────────────────────
@@ -599,10 +635,26 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
       ledger: syncLedgers.get(member.id)?.ledger, marketSources, locations: sourceLocations,
       isFba: sync?.kind === 'FBA_EXCLUDED', sharedFrom, canAdjustStock: input.canAdjustStock === true,
     }) : null
+    /* Amazon Business — on an Amazon market only: the listing's business offer where Amazon lists B2B for it (absent where
+       it does not); the family parent has no offer of its own (null). */
+    let business: BusinessCell | null | undefined
+    if (coord.channel === 'AMAZON' && coord.kind === 'market') {
+      if (isParent) business = coord.accountId && audienceByAccountMarket.get(offerAudienceKey(coord.accountId, coord.market))?.includes('B2B') ? null : undefined
+      else if (businessAudienceOf(audienceListing(primary))?.audience.includes('B2B')) {
+        const facts = readAmazonOfferFacts({ ...primary, saleWindow: window ?? null }, 'job').values
+        business = businessCellOf({
+          listing: primary, marketplaceId: amazonMarketplaceIdOf(primary.marketplace) ?? '', currency: coord.currency,
+          normalPrice: facts.our_price.price, minPrice: facts.minimum_seller_allowed_price, maxPrice: facts.maximum_seller_allowed_price,
+          salePrice: facts.sale?.start && facts.sale?.end ? facts.sale.price : null,
+          held: businessHeld(primary), row: businessRowOf.get(primary.id) ?? null, everKept: everKept.has(primary.id),
+        })
+      }
+    }
     return {
       listingId: primary.id, version: primary.version, listing, fulfilment, sync, queue, price, sale,
       writable: gate.writable, writeBlockedReason: gate.writeBlockedReason,
       ...(source ? { source } : {}),
+      ...(business !== undefined ? { business } : {}),
     }
   }
 

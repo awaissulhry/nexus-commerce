@@ -17,7 +17,7 @@ import {
   inSourceOrder, sharedStockReason, sourceCellOf,
 } from './matrix-cells.js'
 import { syncLedgerOf } from '../sync-control-core.js'
-import { businessAbsence, effectiveFulfilment } from './matrix-cells.js'
+import { businessAbsence, businessCellOf, businessSendOf, effectiveFulfilment, type BusinessQueueFacts } from './matrix-cells.js'
 import { destinationSellingStates, type SellingStateListing } from '../listings/listing-action.service.js'
 
 const ACTIVE = { state: 'active', reason: null } as const
@@ -322,5 +322,54 @@ describe('sourceCellOf — the From cell', () => {
   it('a pooled SKU shows the lent rows (its own list is ignored, as the push ignores it)', () => {
     const pool = syncLedgerOf([{ locationCode: 'LENDER-WH', available: 9, syncRoutes: [] }])
     expect(of({ sharedFrom: 'Lender', ledger: pool, own: ['MI-3PL'] }).effective).toEqual([{ code: 'LENDER-WH', available: 9 }])
+  })
+})
+
+describe('Amazon Business — the business cell (step 5, Part 1)', () => {
+  const at = (s: string) => new Date(s)
+  const row = (syncStatus: string, extra: Partial<BusinessQueueFacts> = {}): BusinessQueueFacts => ({
+    syncStatus, isDead: false, errorCode: null, errorMessage: null, holdUntil: at('2026-10-13T10:00:30Z'),
+    syncedAt: null, updatedAt: at('2026-10-13T10:00:00Z'), createdAt: at('2026-10-13T10:00:00Z'), ...extra,
+  })
+  const base = { marketplaceId: 'APJ6JRA9NG5V4', currency: 'EUR', normalPrice: 105, minPrice: null, maxPrice: null, salePrice: null, held: null, row: null, everKept: false }
+
+  it('none kept: no rule, no price, no warnings', () => {
+    expect(businessCellOf({ ...base, listing: {} })).toMatchObject({ rule: null, percent: null, exact: null, tiers: null, price: null, warnings: [], send: null, live: null, reported: null })
+  })
+  it('a percent rule follows the normal price; tiers carry their unit prices', () => {
+    const cell = businessCellOf({ ...base, listing: { businessPriceRule: 'PERCENT_OFF', businessPricePercent: '5.00', businessTiers: { type: 'percent', levels: [{ minQty: 2, value: 3 }] } } })
+    expect(cell).toMatchObject({ rule: 'PERCENT_OFF', percent: 5, exact: null, price: 99.75, tiers: { type: 'percent', levels: [{ minQty: 2, value: 3, unitPrice: 96.76 }] } })
+  })
+  it('an exact price above a normal price that fell: hidden by Amazon (a warning, never a refusal); a sale below it says so', () => {
+    expect(businessCellOf({ ...base, normalPrice: 95, listing: { businessPriceRule: 'FIXED', businessPrice: '99.00' } }).warnings[0]).toMatch(/^Hidden by Amazon/)
+    expect(businessCellOf({ ...base, salePrice: 89, listing: { businessPriceRule: 'FIXED', businessPrice: '99.00' } }).warnings[0]).toContain('sale price EUR 89.00')
+  })
+  it('no normal price: a percent rule gives no price', () => {
+    expect(businessCellOf({ ...base, normalPrice: null, listing: { businessPriceRule: 'PERCENT_OFF', businessPricePercent: 5 } }).price).toBeNull()
+  })
+  it('the nightly check speaks only of the price shown, and only when nothing was sent after it', () => {
+    const live = { status: 'DIFFERS', amazonPrice: 30, nexusPrice: 99.75, at: '2026-10-13T04:30:00.000Z' }
+    const listing = { businessPriceRule: 'PERCENT_OFF', businessPricePercent: 5, platformAttributes: { amazonBusinessLive: live } }
+    expect(businessCellOf({ ...base, listing }).live).toEqual({ status: 'DIFFERS', amazonPrice: 30, at: live.at })
+    expect(businessCellOf({ ...base, normalPrice: 110, listing }).live).toBeNull() // another price now
+    const sentAfter = { ...listing, platformAttributes: { amazonBusinessLive: live, amazonBusinessSend: { status: 'SENT', line: 'Sent', at: '2026-10-13T09:00:00.000Z' } } }
+    expect(businessCellOf({ ...base, listing: sentAfter }).live).toBeNull()
+  })
+  it('a business offer Amazon shows that Nexus never kept is "set outside Nexus" — never when Nexus kept one before', () => {
+    const attributes = { purchasable_offer: [{ audience: 'ALL', marketplace_id: 'APJ6JRA9NG5V4', our_price: [{ schedule: [{ value_with_tax: 39.95 }] }] }, { audience: 'B2B', marketplace_id: 'APJ6JRA9NG5V4', currency: 'EUR', our_price: [{ schedule: [{ value_with_tax: 32.95 }] }] }] }
+    expect(businessCellOf({ ...base, listing: { platformAttributes: { attributes } } }).reported).toEqual({ price: 32.95 })
+    expect(businessCellOf({ ...base, everKept: true, listing: { platformAttributes: { attributes } } }).reported).toBeNull()
+  })
+
+  it('send state: a waiting or running row speaks for itself; otherwise the newer of the row and the listing\'s record', () => {
+    expect(businessSendOf(row('PENDING'), null)).toEqual({ state: 'queued', at: '2026-10-13T10:00:30.000Z', line: null, final: false })
+    expect(businessSendOf(row('IN_PROGRESS'), { status: 'SENT', at: '2026-10-13T11:00:00.000Z' })?.state).toBe('sending')
+    expect(businessSendOf(row('FAILED', { errorCode: 'AMAZON_BUSINESS_PRICE_REFUSED', errorMessage: '90244' }), null)).toMatchObject({ state: 'refused', line: '90244', final: true })
+    expect(businessSendOf(row('FAILED', { errorCode: 'AMAZON_BUSINESS_PRICE_RETRY', isDead: true }), null)).toMatchObject({ state: 'failed', final: true })
+    expect(businessSendOf(row('FAILED', { errorCode: 'AMAZON_BUSINESS_PRICE_RETRY' }), null)).toMatchObject({ state: 'failed', final: false })
+    // The follow after a price push writes only the record: newer than the row, it wins.
+    expect(businessSendOf(row('SUCCESS'), { status: 'DEFERRED', line: 'queued', at: '2026-10-13T11:00:00.000Z' })).toMatchObject({ state: 'deferred', final: false })
+    expect(businessSendOf(row('SUCCESS'), { status: 'SENT', line: 'Sent to Amazon', at: '2026-10-13T10:00:05.000Z' })).toMatchObject({ state: 'sent', line: 'Sent to Amazon', final: true })
+    expect(businessSendOf(null, null)).toBeNull()
   })
 })

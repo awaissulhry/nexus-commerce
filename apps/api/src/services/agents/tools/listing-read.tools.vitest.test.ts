@@ -217,3 +217,25 @@ describe('media-plan', () => {
     expect(await call('media-plan', { productId: ids.otherProduct })).toEqual({ ok: false, error: 'Product not found' })
   })
 })
+
+describe('listing-matrix — Amazon Business (step 5, Part 1)', () => {
+  it('carries the business cell read only: rule, percent, price, tiers; no channel ids', async () => {
+    await inside(A, async () => {
+      await database.client.marketplace.create({ data: { channel: 'AMAZON', code: 'IT', name: 'Amazon IT', currency: 'EUR', region: 'EU', language: 'it', languages: ['it'] } as never })
+      const amazon = (await database.client.channelConnection.create({ data: { channelType: 'AMAZON', isActive: true, isPrimary: true, accountLabel: 'Test Amazon' } })).id
+      await database.client.product.update({ where: { id: ids.parent }, data: { productType: 'OUTERWEAR' } })
+      await database.client.channelListing.create({ data: {
+        productId: ids.childA, channel: 'AMAZON', region: 'EU', marketplace: 'IT', channelMarket: 'AMAZON_IT', channelConnectionId: amazon,
+        listingStatus: 'ACTIVE', isPublished: true, price: '50.00', priceOverride: '50.00', followMasterPrice: false,
+        businessPriceRule: 'PERCENT_OFF', businessPricePercent: 5, businessTiers: { type: 'percent', levels: [{ minQty: 2, value: 3 }] },
+      } as never })
+      await database.client.sellerReferenceLabel.create({ data: { channel: 'AMAZON', connectionId: amazon, marketplace: 'IT', productType: 'OUTERWEAR', fieldKey: 'purchasable_offer.audience', labels: { B2B: 'Amazon Business (B2B)', ALL: 'Vendita su Amazon' } } as never })
+    })
+    const answer = await call('listing-matrix', { productId: ids.parent, channel: 'AMAZON' })
+    expect(answer.ok).toBe(true)
+    const row = answer.data.rows.find((r: Json) => r.rowId === ids.childA)
+    expect(row.cells['AMAZON:IT'].business).toMatchObject({ rule: 'PERCENT_OFF', percent: 5, exact: null, price: 47.5, normalPrice: 50, currency: 'EUR',
+      tiers: { type: 'percent', levels: [{ minQty: 2, value: 3, unitPrice: 46.08 }] } })
+    noChannelIdsOrSecrets(answer)
+  })
+})
