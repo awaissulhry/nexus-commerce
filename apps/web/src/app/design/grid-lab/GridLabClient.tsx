@@ -1,72 +1,29 @@
 'use client'
 
 /**
- * AG.2 → AGL — the parity lab. Both grid engines, same rows, same columns, side by side.
+ * /design/grid-lab — the grid engine's lab: every tab draws the CURRENT engines from frozen fixtures (or, `?tab=sheet`,
+ * live data), outside the console shell so light and dark can both be measured.
  *
- * WHY THIS PAGE EXISTS
- * "Looks the same" is not a migration criterion. This page renders the hand-rolled `WorkspaceGrid` /
- * DS `DataGrid` and the AG-backed components behind the IDENTICAL props from ONE fixture and ONE column
- * array, then MEASURES both off the live DOM (`window.__parityProbe()`, `npm run grid:parity`). A
- * migration that changes a row height by 4px across 65 ads screens is a visual regression nobody would
- * file and everybody would notice.
- *
- * WHY THE STYLESHEET IMPORTS LOOK ODD
- * The frozen `legacy/workspace-grid.css` loads only in this comparison lab, immediately AFTER `ads.css`,
- * verified in that position. The grid also renders inside `.h10-shell`, where several semantic
- * tokens are re-declared. Reproducing the cascade byte-for-byte, in the same order, inside the
- * same shell class, is the difference between a parity lab and a decorative one — get it wrong
- * and the left panel is not the grid operators actually use.
- *
- * WHY THE ENGINES ARE BUILT HERE AND HANDED DOWN
- * This is the ONE file that names a grid component. The scenario modules under ./parity take both
- * engines as a prop (see ./parity/engines.ts): re-pointing the legacy side at the frozen copy the
- * design keeps for the end of the programme (§2.18) is the two imports below, and the grid-kit
- * ratchet keeps counting the lab once rather than once per scenario file.
+ * The parity tabs that drew the hand-rolled WorkspaceGrid and the HTML-table DataGrid beside their AG successors are
+ * gone (grid audit wave 4, 2026-10-13): no page renders the old engines any more, so there is nothing left to compare.
  */
 
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
-import '@/app/_shared/shared-shell.css'
-import '@/app/marketing/ads/ads.css'
-import './legacy/workspace-grid.css'
 
 import { useCallback, useState } from 'react'
 import { Button } from '@/design-system/primitives'
-// The HTML-table DataGrid, the legacy side of the DataGrid parity (no web page renders it any more).
-import { DataGrid } from '@/design-system/components/DataGrid'
-// The legacy engine is the FROZEN copy (design §2.18): `patterns/workspace-grid/WorkspaceGrid` now
-// re-exports the AG engine, so importing it there would put AG on both sides and prove nothing.
-import { LegacyWorkspaceGrid } from './legacy/LegacyWorkspaceGrid.stories'
-import { WorkspaceGrid as AgWorkspaceGrid } from '@/design-system/grid/workspace'
-import { DataGrid as AgDataGrid } from '@/design-system/grid/datagrid'
 import { MasterSheet } from '@/app/products/_sheet/MasterSheet'
 import { GridModuleCatalog } from './GridModuleCatalog'
 import { GdsScenarios } from './GdsScenarios'
 import { MatrixScenario } from './MatrixScenario'
 import { PublishReviewScenario } from './PublishReviewScenario'
 import { GridFeatureLab } from './GridFeatureLab'
-import { DataGridParityTab, WorkspaceParityTab } from './parity/ParityTabs'
-import type { ParityEngines } from './parity/engines'
 
-/**
- * The engine pair per contract. The AG-backed components are lanes AGW (`grid/workspace`) and AGD
- * (`grid/datagrid`); until each lands its slot is `null` and the tab renders the legacy side beside a
- * labelled placeholder — the probe reports that side as pending, never as measured-empty. Both landed
- * (workspace 17:30, datagrid 2026-09-06).
- */
-const ENGINES: ParityEngines = {
-  legacyWorkspace: LegacyWorkspaceGrid,
-  agWorkspace: AgWorkspaceGrid,
-  legacyDataGrid: DataGrid,
-  agDataGrid: AgDataGrid,
-}
-
-type LabTab = 'workspace' | 'datagrid' | 'features' | 'gds' | 'sheet' | 'matrix' | 'publish' | 'modules'
+type LabTab = 'gds' | 'features' | 'sheet' | 'matrix' | 'publish' | 'modules'
 const TABS: ReadonlyArray<readonly [LabTab, string]> = [
-  ['workspace', 'Workspace parity'],
-  ['datagrid', 'DataGrid parity'],
-  ['features', 'Enterprise features'],
   ['gds', 'GDS scenarios'],
+  ['features', 'Enterprise features'],
   ['sheet', 'Master sheet'],
   ['matrix', 'Matrix cells'],
   ['publish', 'Publish review'],
@@ -85,12 +42,12 @@ function TabBar({ tab, onTab }: { tab: LabTab; onTab: (t: LabTab) => void }) {
   )
 }
 
-export function GridLabClient({ initialScenario = 'all', initialTab }: { initialScenario?: string; initialTab?: string }) {
-  // `?tab=` opens a tab directly — the conformance and parity runners need a URL, not a click.
+export function GridLabClient({ initialTab }: { initialTab?: string }) {
+  // `?tab=` opens a tab directly — the conformance runner (`scripts/check-grid-chrome.mjs`) needs a URL, not a click.
   // `?tab=sheet` is the MASTER SHEET on live data (MS.3); it lives here until the Owner decides
   // where it belongs (docs/2026-08-29-master-sheet-design.md §8.3), and moving it is one mount.
-  // `?tab=parity` (the AG.2 spike's name) still lands on the workspace parity.
-  const [tab, setTabState] = useState<LabTab>(isTab(initialTab ?? null) ? initialTab as LabTab : 'workspace')
+  // An unknown tab (the retired `workspace`, `datagrid`, `parity`) lands on the GDS scenarios.
+  const [tab, setTabState] = useState<LabTab>(isTab(initialTab ?? null) ? initialTab as LabTab : 'gds')
 
   const setTab = useCallback((t: LabTab) => {
     setTabState(t)
@@ -184,48 +141,16 @@ export function GridLabClient({ initialScenario = 'all', initialTab }: { initial
     )
   }
 
-  /**
-   * `.h10-shell` is worn here for its CASCADE, not its layout: the grid has to sit inside the same
-   * token scope the ads console gives it (see the file header). But the class is an APP SHELL —
-   * `height: 100dvh; overflow: hidden`, with `.h10-main` as the inner scroller — and this page is a
-   * long document, not a fixed-viewport console. `display: block` had already taken `.h10-main`
-   * out of the flex column that made it scroll.
-   *
-   * Measured, not guessed: the shell sat at 962px holding 1958px of content with overflow hidden —
-   * about 1000px clipped, no scrollbar, wheel dead. It hid from me because `overflow: hidden` still
-   * permits PROGRAMMATIC scrolling, so every `scrollIntoView` I used to verify a section worked
-   * while a person could not reach it at all.
-   *
-   * `height: auto` + `overflow: visible` hands scrolling back to the app's own #main-content.
-   */
   return (
-    <div
-      className="h10-shell"
-      style={{ display: 'block', height: 'auto', minHeight: '100vh', overflow: 'visible' }}
-    >
-      <main className="h10-main" style={{ padding: 24, display: 'grid', gap: 20 }}>
-        <header style={{ display: 'grid', gap: 6 }}>
-          <h1 className="text-3xl font-heading" style={{ margin: 0 }}>
-            {tab === 'workspace' ? 'Workspace grid parity' : tab === 'datagrid' ? 'DataGrid parity' : 'Grid feature lab'}
-          </h1>
-          <p className="text-md" style={{ margin: 0, maxWidth: 1000, color: 'var(--nds-text-2)' }}>
-            {tab === 'features' ? (
-              <>Every enterprise feature, on the DS grid, from a frozen fixture.</>
-            ) : (
-              <>
-                One fixture, one column array, two engines. The left panel is the grid operators use today; the right is
-                AG Grid Enterprise behind the same props. Every scenario is one props set of the{' '}
-                <code>{tab === 'workspace' ? 'WorkspaceGridProps' : 'DataGridProps'}</code> contract; the probe measures
-                both sides off the live DOM and the runner judges them — headers excepted, by the Owner&rsquo;s exemption.
-              </>
-            )}
-          </p>
-        </header>
-
-        <TabBar tab={tab} onTab={setTab} />
-
-        {tab === 'features' ? <GridFeatureLab /> : tab === 'datagrid' ? <DataGridParityTab engines={ENGINES} initialScenario={initialScenario} /> : <WorkspaceParityTab engines={ENGINES} initialScenario={initialScenario} />}
-      </main>
-    </div>
+    <main style={{ padding: 24, display: 'grid', gap: 20, background: 'var(--nds-bg)', minHeight: '100vh', alignContent: 'start' }}>
+      <header style={{ display: 'grid', gap: 6 }}>
+        <h1 className="text-3xl font-heading" style={{ margin: 0, color: 'var(--nds-text)' }}>Grid feature lab</h1>
+        <p className="text-md" style={{ margin: 0, maxWidth: 900, color: 'var(--nds-text-2)' }}>
+          Every enterprise feature, on the DS grid, from a frozen fixture.
+        </p>
+      </header>
+      <TabBar tab={tab} onTab={setTab} />
+      <GridFeatureLab />
+    </main>
   )
 }

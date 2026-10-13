@@ -1,3 +1,21 @@
+## The grid lab's parity tabs and web's HTML-table DataGrid retired — 2026-10-13
+
+Grid audit wave 4, PR13 chunk 2 (the part that waited for PR10).
+- **Grid lab** (`/design/grid-lab`): the "Workspace parity" and "DataGrid parity" tabs are gone, with their frozen
+  copies (`grid-lab/legacy/`: the hand-rolled WorkspaceGrid and `workspace-grid.css`), the `parity/` scenarios and
+  probe, `scripts/check-workspace-parity.mjs` and `npm run grid:parity`. No page draws the old engines, so there is
+  nothing to compare. The lab opens on the GDS scenarios; a retired tab's address lands there. The enterprise features
+  tab is drawn outside the ads shell like every other tab (it no longer loads `ads.css`). The sheet scenario's required
+  mark is the DS `RequiredValue`.
+- **`components/dataGridTypes.ts`** (new, identical in both apps): `Column` and `DataGridProps`, the one contract of
+  both tables. Both barrels export them from here; the AG `DataGrid` (`grid/datagrid`) reads them from here.
+- **Web's `components/DataGrid.tsx` deleted** (the factory keeps its HTML table, now reading `./dataGridTypes`), with
+  its 30 web-only CSS rules (`styles/components.css`: `.nds-grid` table cells, sort buttons, totals, sub/kid rows,
+  density tiers, top alignment). `.nds-grid`, `.nds-grid-wrap`, `.nds-grid-empty`, `.nds-grid-prefsbar` and the
+  checkbox rule stay: the AG `DataGrid`'s wrapper wears them.
+- **Grid-kit ratchet** lowered to today's counts: DS DataGrid 1 → 0, DS WorkspaceGrid (direct) 1 → 0 (the lab fixture
+  no longer imports the retired path), grid-lens 60 → 58, tanstack 17 → 11, raw tables 192 → 166.
+
 ## Every web DataGrid is the AG one; the barrel exports only the grid's types — 2026-10-13
 
 Grid audit wave 4, PR10 (E2).

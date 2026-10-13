@@ -1932,105 +1932,11 @@ body.nds-drawer-resizing * {
   border-spacing: 0;
   font-size: var(--nds-font-size-base);
 }
-.nds-grid thead th {
-  position: sticky;
-  top: 0;
-  z-index: 4;
-  background: var(--nds-surface-raised);
-  border-bottom: 1px solid var(--nds-border);
-  font-size: var(--nds-font-size-xs-plus);
-  font-weight: 700;
-  /* --nds-text-strong (9.87:1), NOT --nds-text-2 (5.60:1). A column heading is the thing you scan
-     to find a column, and it was sitting two tiers below its own body text (--nds-text, 15.48:1).
-     Still lighter than the body, so the hierarchy holds; it only ever rises. Raised because the
-     ads console's own headers are 18.94:1 and every converted table dropped them by a factor of
-     three. */
-  color: var(--nds-text-strong);
-  text-align: left;
-  padding: 10px 14px;
-  white-space: nowrap;
-}
-.nds-grid tbody td {
-  background: var(--nds-surface);
-  border-bottom: 1px solid var(--nds-border-subtle);
-  padding: 11px 14px;
-  color: var(--nds-text);
-  font-weight: 500;
-  white-space: nowrap;
-}
-.nds-grid tbody tr:hover td {
-  background: var(--nds-surface-raised);
-}
-.nds-grid tbody tr.sel td {
-  background: var(--nds-wash-primary);
-}
-.nds-grid th.ck,
-.nds-grid td.ck {
-  width: 40px;
-  text-align: center;
-  padding-left: 0;
-  padding-right: 0;
-}
-.nds-grid th.r,
-.nds-grid td.r {
-  text-align: right;
-}
-.nds-grid th.c,
-.nds-grid td.c {
-  text-align: center;
-}
-.nds-grid th.sticky,
-.nds-grid td.sticky,
-.nds-grid th.sticky-right,
-.nds-grid td.sticky-right {
-  position: sticky;
-  z-index: 3;
-}
-.nds-grid thead th.sticky,
-.nds-grid thead th.sticky-right {
-  z-index: 5;
-}
-/* a left edge-shadow separates a right-pinned column from scrolling content */
-.nds-grid td.sticky-right,
-.nds-grid th.sticky-right {
-  box-shadow: inset 1px 0 0 var(--nds-border-subtle);
-}
-.nds-grid .sortbtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  border: none;
-  background: none;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-  padding: 0;
-}
-.nds-grid .sortbtn:hover {
-  color: var(--nds-text);
-}
-.nds-grid .sortbtn svg {
-  color: var(--nds-text-disabled);
-}
-.nds-grid th.sorted,
-.nds-grid th.sorted .sortbtn,
-.nds-grid th.sorted .sortbtn svg {
-  color: var(--nds-text-link);
-}
 .nds-grid input[type='checkbox'] {
   width: 15px;
   height: 15px;
   accent-color: var(--nds-primary);
   vertical-align: middle;
-}
-.nds-grid tr.totals td {
-  position: sticky;
-  bottom: 0;
-  font-weight: 700;
-  background: var(--nds-surface-raised);
-  color: var(--nds-text);
-  border-top: 1px solid var(--nds-border);
-  border-bottom: none;
 }
 .nds-grid-empty {
   padding: 40px;
@@ -2815,55 +2721,6 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
   height: 13px;
 }
 
-/* An expanded row's detail panel. Full width by construction — the grid supplies the colSpan,
-   because only it knows the column count, and that count shifts with `selectable` and with
-   hidden columns. */
-.nds-grid tbody tr.nds-grid-sub > td {
-  padding: 0;
-  background: var(--nds-surface-sunken);
-  border-bottom: 1px solid var(--nds-border-subtle);
-}
-
-/* Figures column: digits that line up. The DS set `font-variant-numeric` on no selector at all,
-   so every converted money column silently lost the fix its hand-rolled version had. A right-aligned
-   cell is a figures cell too (the Owner's rule, 2026-10-13: right is for numbers). */
-.nds-grid td.num,
-.nds-grid th.num,
-.nds-grid td.r {
-  font-variant-numeric: tabular-nums;
-}
-
-/* Row density. Measured against five real tables (12/11px14px, 12.5/7px10px, 12.5/6px11px,
-   11/6px10px, 11.5/5px9px); at one density the grid added up to 12px per row, which on a page of
-   six stacked tables is the difference between a page and a scroll. */
-.nds-grid.sm thead th {
-  padding: 7px 10px;
-}
-.nds-grid.sm tbody td {
-  padding: 7px 10px;
-  font-size: var(--nds-font-size-sm-plus);
-}
-.nds-grid.xs thead th {
-  padding: 5px 9px;
-  font-size: var(--nds-font-size-xs);
-}
-.nds-grid.xs tbody td {
-  padding: 5px 9px;
-  font-size: var(--nds-font-size-xs-plus);
-}
-/* Chips ride the density tier. `Pill` and `Tag` are fixed at 11px, so in a compacted grid they
-   stayed put while the text around them stepped down — leaving the chip the biggest thing in the
-   row. Scoped to the grid tiers, so a Pill anywhere else is untouched. */
-.nds-grid.xs tbody td .nds-pill,
-.nds-grid.xs tbody td .nds-tag {
-  font-size: var(--nds-font-size-micro);
-  padding: 1px 6px;
-}
-.nds-grid.sm tbody td .nds-pill,
-.nds-grid.sm tbody td .nds-tag {
-  font-size: var(--nds-font-size-micro);
-}
-
 /* A navigable step. The hit target is the badge AND the label together — clicking the number of a
    finished step is the gesture people reach for, and a label-only target misses it. Inherits the
    li's layout so adding interactivity does not move anything. */
@@ -2891,47 +2748,6 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
   outline: 2px solid var(--nds-text);
   outline-offset: 2px;
   border-radius: var(--nds-radius-sm);
-}
-
-/* A child row from `getSubRows`. Real row, same columns — a child's figure sits under the same
-   header as its parent's, which is the whole reason to expand. The tint and the inset on the
-   first cell are what say "child" without costing a column. */
-.nds-grid tbody tr.nds-grid-kid > td {
-  background: var(--nds-surface-sunken);
-}
-.nds-grid tbody tr.nds-grid-kid > td:first-of-type {
-  box-shadow: inset 3px 0 0 var(--nds-border);
-}
-.nds-grid tbody tr.nds-grid-kid:hover > td {
-  background: var(--nds-surface-hover);
-}
-
-/* Densities ABOVE the default. A grid with no density above `md` cannot host a density control,
-   and the campaigns grid ships a live Compact / Comfortable / Spacious switch. */
-.nds-grid.lg tbody td,
-.nds-grid.lg thead th {
-  padding: 14px 14px;
-}
-.nds-grid.xl tbody td,
-.nds-grid.xl thead th {
-  padding: 19px 14px;
-}
-
-/* Cells align to the TOP, not the middle. A row whose tallest cell wraps to two lines pushed
-   every single-line neighbour to its vertical centre, so ten converted tables each carried a
-   shared `vertical-align: top` override. Top is what a data grid wants. */
-.nds-grid tbody td,
-.nds-grid thead th {
-  vertical-align: top;
-}
-/* ...EXCEPT the selection column. A row checkbox selects the WHOLE row, not its first line, so
-   pinning it to the top puts it out of alignment with everything it acts on the moment a row is
-   taller than 15px. Measured on a grid with 56px thumbnails: the checkbox sat 17px above the
-   row's centre (10.8px at the `xs` tier) — three different baselines in one row. Middle is the
-   only alignment a control-for-the-row can have; `top` remains right for every DATA cell, which
-   is what that rule above is about. */
-.nds-grid tbody td.ck {
-  vertical-align: middle;
 }
 
 /* ── BenchmarkBar (RPX) ──────────────────────────────────────────────────
