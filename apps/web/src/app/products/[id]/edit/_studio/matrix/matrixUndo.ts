@@ -12,6 +12,7 @@
  */
 import { HISTORY_ONLY } from '../sheet/sheetUndo'
 import { matrixBusinessSettingOfCell, matrixCellValue, matrixWrite, MATRIX_UNCHANGED, type CoordinateKey, type MatrixCellKind, type MatrixCells, type MatrixDoorKind, type MatrixWriteCell } from '@/design-system/grid'
+import type { MatrixWriteOutcome } from './contract'
 
 /**
  * A Matrix cell's history value — only the history holds it (`HISTORY_ONLY`): the sheet's replay skips it, and the page
@@ -106,5 +107,25 @@ export function matrixReplay(
     }
     default:
       return SKIP
+  }
+}
+
+/** One ⌘Z record of a Matrix write: the cell, and what the write saved (`matrixHistoryAfter`). */
+export interface MatrixHistoryNote { rowId: string; colId: string; key: CoordinateKey; after: MatrixHistoryValue }
+
+/**
+ * The ⌘Z step of a write is recorded when it is SENT; a cell the server did not change — refused, a conflict (a stamped
+ * field that moved since the person saw it among them), nothing to change — leaves it again: an undo never puts back, and a
+ * redo never sends, what was not saved.
+ */
+export function forgetUnsaved(
+  history: { forget: (rowId: string, colId: string, after: unknown) => void },
+  notes: readonly MatrixHistoryNote[],
+  outcomes: readonly MatrixWriteOutcome[],
+): void {
+  for (const o of outcomes) {
+    if (o.outcome === 'applied') continue
+    const note = notes.find((n) => n.rowId === o.rowId && n.key === o.coordinateKey && n.colId === `${o.coordinateKey}.${o.cell}`)
+    if (note) history.forget(note.rowId, note.colId, note.after)
   }
 }

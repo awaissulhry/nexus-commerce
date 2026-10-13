@@ -40,6 +40,7 @@ import {
 } from './contract'
 import { fetchMatrix, patchMatrix, type MatrixSource } from './source'
 import { afterLiveWrite } from './refusals'
+import { recordOwnMoves } from './stamps'
 import { matrixFromColId } from './sellsFrom'
 
 export const matrixColId = (key: CoordinateKey, kind: string): string => `${key}.${kind}`
@@ -308,7 +309,8 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
 
   /* The writes in line, one at a time; and each listing's moves by THIS page's applied writes (version → version), so a cell
      edited on the view before an earlier write of this page landed is sent at the version that write left — the same
-     person's next edit, never "changed elsewhere" against itself. A move by anyone else is still a conflict. */
+     person's next edit, never "changed elsewhere" against itself. A move by anyone else is decided by the cell's field
+     stamp (`stamps.ts`): applied when its own field is as the person saw it, a conflict when that field moved. */
   const writeChain = useRef<Promise<unknown>>(Promise.resolve())
   const moves = useRef(new Map<string, Map<number, number>>())
   const rebase = useCallback((c: MatrixWriteCell): MatrixWriteCell => {
@@ -330,13 +332,7 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
     let covered: number | null = null
     try {
       const result = await patchMatrix(productId, cells, { accountId })
-      result.results.forEach((o, i) => {
-        const sent = cells[i]
-        if (o.outcome !== 'applied' || !sent?.expectedListingId || sent.expectedVersion === o.version) return
-        const hops = moves.current.get(sent.expectedListingId) ?? new Map<number, number>()
-        hops.set(sent.expectedVersion, o.version)
-        moves.current.set(sent.expectedListingId, hops)
-      })
+      recordOwnMoves(moves.current, cells, result.results)
       const after = afterLiveWrite(result.results)
       if (after === 'reread') {
         const seqAtReread = live.state.seq

@@ -315,7 +315,8 @@ describe('the hooks that run it', () => {
   })
   it('the stock import\'s FOLLOW/PINNED column clears a pause, and sends the held prices of those products', () => {
     const body = source('../stock-import.service.ts').split('export async function applyControlColumns')[1]!.split('\nexport ')[0]!
-    expect(body).toMatch(/data: \{ syncPaused: false \}[\s\S]*sendHeldPrices\(\{ productIds: \[\.\.\.resumeProducts\], actor, cause: 'resume' \}\)/)
+    // 1.8 (2026-10-13): the resume also moves each listing's version.
+    expect(body).toMatch(/data: \{ syncPaused: false, version: \{ increment: 1 \} \}[\s\S]*sendHeldPrices\(\{ productIds: \[\.\.\.resumeProducts\], actor, cause: 'resume' \}\)/)
   })
   it('round 6 — every caller of the live-listing recorder sends the held prices after its transaction commits', () => {
     for (const [file, call] of [

@@ -1,3 +1,10 @@
+## A Matrix write carries what its cell showed — 2026-10-13
+
+`grid/matrix/contract.ts` (both apps, identical; equal to the shared wire contract).
+- **`MatrixCellStamp`** and **`MatrixWriteCell.expected`**: the field(s) a cell writes, as the cell showed them
+  (`@nexus/shared/matrix-stamp`). A listing's version moves on every sale and cascade; the door now refuses only when the
+  stamped field moved, and writes at the fresh version when it did not. Absent = the version alone decides, as before.
+
 ## A full sub-line gives way at the SKU — 2026-10-13
 
 Owner 2B. `IdentityCell`'s sub-line (SKU · type · "2 variations" on /products) was cut through a letter at the column's

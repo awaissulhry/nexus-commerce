@@ -710,8 +710,10 @@ export async function runSyncControlAction(body: SyncControlActionBody, actor: s
           const ids = eligible.filter((r) => !r.syncPaused).map((r) => r.id)
           result.unchanged += eligible.length - ids.length
           if (ids.length) {
-            const u = await prisma.channelListing.updateMany({ where: { id: { in: ids }, OR: eligible.map(whereCoordinate) }, data: { syncPaused: true } })
+            // 1.8 — the version moves with the pause, and open screens are told (an open Matrix re-reads it).
+            const u = await prisma.channelListing.updateMany({ where: { id: { in: ids }, OR: eligible.map(whereCoordinate) }, data: { syncPaused: true, version: { increment: 1 } } })
             result.updated += u.count
+            if (u.count) announceListingValues(ids, ['syncState'], 'sync-control')
           }
           await audit(eligible.map((r) => ({
             scopeType: 'LISTING', scopeId: r.id, scopeName: `${r.product?.sku}@${r.channel}:${r.marketplace}`,
@@ -729,8 +731,9 @@ export async function runSyncControlAction(body: SyncControlActionBody, actor: s
           const ids = eligible.filter((r) => r.syncPaused).map((r) => r.id)
           result.unchanged += eligible.length - ids.length
           if (ids.length) {
-            const u = await prisma.channelListing.updateMany({ where: { id: { in: ids }, OR: eligible.map(whereCoordinate) }, data: { syncPaused: false } })
+            const u = await prisma.channelListing.updateMany({ where: { id: { in: ids }, OR: eligible.map(whereCoordinate) }, data: { syncPaused: false, version: { increment: 1 } } })
             result.updated += u.count
+            if (u.count) announceListingValues(ids, ['syncState'], 'sync-control')
             for (const r of eligible) if (r.syncPaused) recascadeProducts.add(r.productId)
           }
           await audit(eligible.map((r) => ({
@@ -745,9 +748,10 @@ export async function runSyncControlAction(body: SyncControlActionBody, actor: s
           if (eligible.length) {
             const u = await prisma.channelListing.updateMany({
               where: { OR: eligible.map(r => ({ id: r.id, ...whereCoordinate(r) })) },
-              data: { quantity: 0, quantityOverride: 0, followMasterQuantity: false, syncPaused: false, lastSyncStatus: 'PENDING', ...(until !== undefined ? { pinnedUntil: until } : {}) },
+              data: { quantity: 0, quantityOverride: 0, followMasterQuantity: false, syncPaused: false, lastSyncStatus: 'PENDING', version: { increment: 1 }, ...(until !== undefined ? { pinnedUntil: until } : {}) },
             })
             result.updated += u.count
+            if (u.count) announceListingValues(eligible.map((r) => r.id), ['quantityMode', 'quantity', 'syncState'], 'sync-control')
           }
           const queueRows: Array<Record<string, unknown>> = eligible.map((r) => ({
             productId: r.productId,

@@ -77,6 +77,8 @@ describe('the engine Matrix contract equals the wire Matrix contract', () => {
     expect(bothWays<engine.MatrixWritableKind, wire.MatrixWritableKind>(true)).toBe(true)
     expect(bothWays<engine.MatrixDoorKind, wire.MatrixDoorKind>(true)).toBe(true)
     expect(bothWays<engine.MatrixWriteCell, wire.MatrixWriteCell>(true)).toBe(true)
+    /* 2026-10-13 — the field stamp a write carries (what the cell showed). */
+    expect(bothWays<engine.MatrixCellStamp, wire.MatrixCellStamp>(true)).toBe(true)
     expect(bothWays<engine.MatrixVerbId, wire.MatrixVerbId>(true)).toBe(true)
     expect(bothWays<engine.MatrixVerbTarget, wire.MatrixVerbTarget>(true)).toBe(true)
     /* The verb-preview shapes the registry adapter (`actions/matrixActions.ts`) types against. */

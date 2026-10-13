@@ -253,6 +253,75 @@ describe('PATCH — accountId and expectedListingId', () => {
   })
 })
 
+/*
+ * Field stamps (2026-10-13): one version per listing moves on every sale, cascade and other cell, and refused ~1 edit in 5
+ * with "Changed elsewhere" although the edited field had not moved. A write now carries what its cell showed
+ * (`expected`); the door compares the FIELD when the version moved. Each case below fails on the version-only door.
+ */
+describe('PATCH — field stamps: a moved version refuses only when the edited field moved', () => {
+  const patch = (cells: unknown[]) => app.inject({ method: 'PATCH', url: '/products/root/studio/matrix', payload: { cells } })
+  /** The read after a sale: both of the child's coordinates at version 5 (it was 3), the follow number 10 → 8. */
+  const afterSale = (over: { price?: { value: number; source: 'master' | 'override' }; mode?: 'FOLLOW' | 'PINNED' } = {}): MatrixRead => {
+    const r = read()
+    const eu = r.rows[1]!.cells['AMAZON:EU']!, it = r.rows[1]!.cells['AMAZON:IT']!
+    eu.version = 5; it.version = 5
+    eu.sync = { ...eu.sync!, intended: 8, held: 8, poolAvailable: 8, ...(over.mode === 'PINNED' ? { kind: 'PINNED', mode: 'PINNED', intended: 6, held: 6 } : {}) }
+    if (over.price) it.price = { ...it.price!, ...over.price }
+    return r
+  }
+  beforeEach(() => {
+    mocks.findMany.mockResolvedValue([{ id: 'l-c1-it', marketplace: 'IT', version: 5, offerClosedAt: null }, { id: 'l-c1-de', marketplace: 'DE', version: 5, offerClosedAt: null }])
+  })
+
+  it('a sale moved the version, the price did not: the price write goes ahead at the fresh version', async () => {
+    mocks.read.mockImplementation(async () => afterSale())
+    const res = await patch([{ rowId: 'c1', coordinateKey: 'AMAZON:IT', cell: 'price', value: 90, expectedVersion: 3, expectedListingId: 'l-c1-it', expected: { own: null } }])
+    /* `writtenAt`: the version it was checked at — the page's own-move bookkeeping hops from 5, never from 3 */
+    expect(res.json().results[0]).toMatchObject({ outcome: 'applied', version: 6, writtenAt: 5 })
+    expect(mocks.prices).toHaveBeenCalledWith(expect.objectContaining({ targets: [{ listingId: 'l-c1-it', price: 90, expectedVersion: 5, expectedPrice: null }] }))
+  })
+
+  it('the price itself moved: refused as changed elsewhere, with the price as it is now; nothing written', async () => {
+    mocks.read.mockImplementation(async () => afterSale({ price: { value: 95, source: 'override' } }))
+    const res = await patch([{ rowId: 'c1', coordinateKey: 'AMAZON:IT', cell: 'price', value: 90, expectedVersion: 3, expectedListingId: 'l-c1-it', expected: { own: null } }])
+    expect(res.json().results[0]).toEqual({ rowId: 'c1', coordinateKey: 'AMAZON:IT', cell: 'price', outcome: 'conflict', reason: 'Changed elsewhere — reloaded', version: 5, current: { own: 95 } })
+    expect(mocks.prices).not.toHaveBeenCalled()
+  })
+
+  it('Owner 4A: a number typed into a Follow Qty cell after a sale moved the follow number is PINNED at that number', async () => {
+    mocks.read.mockImplementation(async () => afterSale())
+    const res = await patch([{ rowId: 'c1', coordinateKey: 'AMAZON:EU', cell: 'syncQty', value: 7, expectedVersion: 3, expectedListingId: 'l-c1-it', expected: { mode: 'FOLLOW' } }])
+    expect(res.json().results[0]).toMatchObject({ outcome: 'applied', version: 6, writtenAt: 5, listings: [{ listingId: 'l-c1-it', productId: 'c1', version: 6 }, { listingId: 'l-c1-de', productId: 'c1', version: 6 }] })
+    /* staged at the typed number under CAS on the FRESH versions, then pinned; the primitive does not bump again */
+    expect(mocks.updateMany).toHaveBeenCalledWith({ where: { id: 'l-c1-it', version: 5 }, data: { quantity: 7, version: { increment: 1 } } })
+    expect(mocks.updateMany).toHaveBeenCalledWith({ where: { id: 'l-c1-de', version: 5 }, data: { quantity: 7, version: { increment: 1 } } })
+    expect(mocks.follow).toHaveBeenCalledWith(expect.objectContaining({ productIds: ['c1'], follow: false, bumpVersion: false }))
+  })
+
+  it('the mode moved (someone pinned it): the typed Follow number is refused, with the cell as it is now', async () => {
+    mocks.read.mockImplementation(async () => afterSale({ mode: 'PINNED' }))
+    const res = await patch([{ rowId: 'c1', coordinateKey: 'AMAZON:EU', cell: 'syncQty', value: 7, expectedVersion: 3, expected: { mode: 'FOLLOW' } }])
+    expect(res.json().results[0]).toMatchObject({ outcome: 'conflict', version: 5, current: { mode: 'PINNED', qty: 6 } })
+    expect(mocks.follow).not.toHaveBeenCalled(); expect(mocks.updateMany).not.toHaveBeenCalled()
+  })
+
+  it('a write without a stamp (an older client) behaves as before: a moved version is a conflict', async () => {
+    mocks.read.mockImplementation(async () => afterSale())
+    const res = await patch([
+      { rowId: 'c1', coordinateKey: 'AMAZON:IT', cell: 'price', value: 90, expectedVersion: 3 },
+      { rowId: 'c1', coordinateKey: 'AMAZON:EU', cell: 'syncQty', value: 7, expectedVersion: 3 },
+    ])
+    expect(res.json().results.map((r: { outcome: string; version: number; current?: unknown }) => [r.outcome, r.version, r.current])).toEqual([['conflict', 5, undefined], ['conflict', 5, undefined]])
+    expect(mocks.prices).not.toHaveBeenCalled(); expect(mocks.follow).not.toHaveBeenCalled()
+  })
+
+  it('a stamp that is not an object is refused at the boundary', async () => {
+    const res = await patch([{ rowId: 'c1', coordinateKey: 'AMAZON:IT', cell: 'price', value: 90, expectedVersion: 3, expected: 'own' }])
+    expect(res.statusCode).toBe(400)
+    expect(mocks.read).not.toHaveBeenCalled()
+  })
+})
+
 describe('POST …/verbs and …/verbs/:id/revert', () => {
   it('a state verb (pause) announces syncState for every EU row it moved, after the write, and answers their versions', async () => {
     const res = await app.inject({ method: 'POST', url: '/products/root/studio/matrix/verbs', payload: { params: { verb: 'pause-sync' }, targets: [{ rowId: 'c1', coordinateKey: 'AMAZON:EU' }], commit: true } })

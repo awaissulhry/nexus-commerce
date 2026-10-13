@@ -3308,7 +3308,9 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       if (follow === null) return reply.code(400).send({ error: 'follow (boolean) is required' })
       if (markets === null) return reply.code(400).send({ error: "markets must be a string[] or 'ALL'" })
 
-      const result = await setFollowMasterQuantity({ productIds, channel, markets, follow })
+      // The legacy flat-file save flow calls this right AFTER its content save, which bumps and hands back the version its
+      // grid keeps: a second bump here would make that grid's next save a conflict. The content save's bump covers it.
+      const result = await setFollowMasterQuantity({ productIds, channel, markets, follow, bumpVersion: false })
       return reply.send(result)
     } catch (err: any) {
       request.log.error({ err }, '[listings/follow-master-quantity] failed')
@@ -3341,7 +3343,8 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       if (buffer === null) return reply.code(400).send({ error: 'buffer (non-negative number) is required' })
       if (markets === null) return reply.code(400).send({ error: "markets must be a string[] or 'ALL'" })
 
-      const result = await setStockBuffer({ productIds, channel, markets, buffer })
+      // As the follow route above: the flat-file save flow's content save owns the version.
+      const result = await setStockBuffer({ productIds, channel, markets, buffer, bumpVersion: false })
       return reply.send(result)
     } catch (err: any) {
       request.log.error({ err }, '[listings/stock-buffer] failed')

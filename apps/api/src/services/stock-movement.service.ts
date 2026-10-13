@@ -15,6 +15,7 @@ import { loadChannelPolicies, policyFor } from './sync-control-policy.service.js
 import { coalescePendingQuantityRows } from './sync-coalesce.js'
 import { outboundEnqueuePriority } from './sync-priority.js'
 import { productReadCacheService } from './product-read-cache.service.js'
+import { announceListingValues } from './listing-values-events.js'
 import { lockProductStock } from './stock-lock.js'
 import { keepCasesInTx } from './stock/stock-cases.service.js'
 import type { CaseChange } from '@nexus/shared/stock-cases'
@@ -1212,6 +1213,10 @@ export async function recascadeProduct(
       },
     )
   }
+  // 1.8 (2026-10-13) — the listings this cascade wrote moved their version (the cascade bumps it): open screens are told,
+  // after commit, so an open Matrix re-reads them. A stock movement says it with `inventory.stock_changed`; a recascade
+  // (a Sync Control change, a resume, a sells-from change, a repair) has no movement to say it.
+  if (result.cascade.cascadedListingIds.length) announceListingValues(result.cascade.cascadedListingIds, ['quantity'], 'recascade')
   void productReadCacheService
     .refresh(productId)
     .catch((err) =>

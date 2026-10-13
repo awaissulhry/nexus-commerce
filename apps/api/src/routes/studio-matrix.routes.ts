@@ -56,7 +56,8 @@ const isId = (v: unknown): v is string => typeof v === 'string' && v.length > 0
 /**
  * The body is parsed at ONE boundary: a malformed cell is refused with a sentence, never half-applied. `accountId` is the
  * account the caller's read used (the GET's `?accountId=`), so the door resolves the same listings; `expectedListingId`
- * is the listing the caller saw on a cell's coordinate.
+ * is the listing the caller saw on a cell's coordinate; `expected` is the cell's field stamp (what it showed, 2026-10-13),
+ * an object — the door only compares it with its own stamp of the cell, so a stamp it cannot read never holds.
  */
 function parseCells(body: unknown): { cells: MatrixWriteCell[]; accountId: string | null } | { problem: string } {
   const b = body as { cells?: unknown; accountId?: unknown } | null
@@ -69,7 +70,13 @@ function parseCells(body: unknown): { cells: MatrixWriteCell[]; accountId: strin
     if (typeof c?.rowId !== 'string' || typeof c?.coordinateKey !== 'string' || typeof c?.cell !== 'string' || !WRITABLE.has(c.cell) || typeof c?.expectedVersion !== 'number')
       return { problem: 'Each cell needs rowId, coordinateKey, a writable cell kind and a numeric expectedVersion' }
     if (c.expectedListingId !== undefined && !isId(c.expectedListingId)) return { problem: '`expectedListingId` must be a listing id' }
-    cells.push({ rowId: c.rowId, coordinateKey: c.coordinateKey, cell: c.cell as MatrixWriteCell['cell'], value: c.value, expectedVersion: c.expectedVersion, ...(isId(c.expectedListingId) ? { expectedListingId: c.expectedListingId } : {}) })
+    const stamped = c.expected !== undefined && c.expected !== null
+    if (stamped && (typeof c.expected !== 'object' || Array.isArray(c.expected))) return { problem: '`expected` must be the cell\'s field stamp (an object)' }
+    cells.push({
+      rowId: c.rowId, coordinateKey: c.coordinateKey, cell: c.cell as MatrixWriteCell['cell'], value: c.value, expectedVersion: c.expectedVersion,
+      ...(isId(c.expectedListingId) ? { expectedListingId: c.expectedListingId } : {}),
+      ...(stamped ? { expected: c.expected as MatrixWriteCell['expected'] } : {}),
+    })
   }
   return { cells, accountId: isId(b?.accountId) ? b.accountId : null }
 }

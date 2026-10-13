@@ -251,6 +251,19 @@ export type MatrixWritableKind = Extract<MatrixCellKind, 'fulfilment' | 'syncMod
 /** What the one door writes: the writable kinds plus "Sells from" (`value`: codes in sale order; `[]` = the market default). */
 export type MatrixDoorKind = MatrixWritableKind | 'source'
 
+/** Field stamp — see `@nexus/shared/matrix-contract` `MatrixCellStamp` (the wire's own words). */
+export interface MatrixCellStamp {
+  mode?: SyncMode
+  qty?: number | null
+  buffer?: number
+  method?: FulfilmentMethod | null
+  set?: boolean
+  own?: number | null
+  sale?: { value: number | null; start: string | null; end: string | null }
+  business?: { rule: 'PERCENT_OFF' | 'FIXED'; percent: number | null; exact: number | null; tiers: { type: 'percent' | 'fixed'; levels: Array<{ minQty: number; value: number }> } | null } | null
+  codes?: readonly string[]
+}
+
 export interface MatrixWriteCell {
   rowId: string
   coordinateKey: CoordinateKey
@@ -259,6 +272,8 @@ export interface MatrixWriteCell {
   expectedVersion: number
   /** The listing the caller saw on this coordinate (`MatrixCells.listingId`); another listing there now is a conflict. */
   expectedListingId?: string
+  /** The cell's field(s) as the caller saw them; absent = the version alone decides. */
+  expected?: MatrixCellStamp
 }
 
 /* ── verbs ──────────────────────────────────────────────────────────────────────────────────── */

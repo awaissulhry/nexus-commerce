@@ -271,7 +271,10 @@ export interface BusinessCell {
 export interface MatrixCells {
   /** The listing row this coordinate's cells belong to; null on a coordinate with no listing for this row. */
   listingId: string | null
-  /** `ChannelListing.version` — the CAS discriminator for every write on this coordinate. */
+  /**
+   * `ChannelListing.version` — the CAS discriminator for every write on this coordinate. Every change to the listing moves
+   * it; a write whose version moved is still applied when its field stamp (`MatrixWriteCell.expected`) holds.
+   */
   version: number
   listing: ListingCell | null
   fulfilment: FulfilmentCell | null
@@ -455,6 +458,33 @@ export type MatrixWritableKind = Extract<MatrixCellKind, 'fulfilment' | 'syncMod
 /** What the one door writes: the writable cell kinds plus "Sells from" (`value`: the codes in sale order; `[]` = the market default). */
 export type MatrixDoorKind = MatrixWritableKind | 'source'
 
+/**
+ * Field stamp (2026-10-13): what the cell SHOWED when the person edited it — the value of exactly the field(s) its write
+ * changes, one shape per kind (`matrixCellStamp`, `@nexus/shared/matrix-stamp`; the page stamps with it, the door compares
+ * with it). `ChannelListing.version` moves on every change to the listing (a sale, a cascade, another cell): a write whose
+ * version moved is still applied, at the fresh version, when its stamped field(s) are as the person saw them, and refused
+ * as `changedElsewhere` (with the current value) when they moved.
+ */
+export interface MatrixCellStamp {
+  /** syncMode · syncQty: the stored mode. */
+  mode?: SyncMode
+  /** syncQty on a Pinned cell: the pinned number. Absent on Follow (Owner 4A: a typed number pins AT it, whatever the follow number did). */
+  qty?: number | null
+  /** syncBuffer. */
+  buffer?: number
+  /** fulfilment: the method, and whether it is the listing's own (`set`) rather than derived. */
+  method?: FulfilmentMethod | null
+  set?: boolean
+  /** price: the listing's OWN price — the override, or null when it follows the master (the master's number is not this field). */
+  own?: number | null
+  /** salePrice. */
+  sale?: { value: number | null; start: string | null; end: string | null }
+  /** businessPrice · businessTiers: the whole setting (rule, percent, exact price, tiers); null = no business offer. */
+  business?: { rule: 'PERCENT_OFF' | 'FIXED'; percent: number | null; exact: number | null; tiers: { type: 'percent' | 'fixed'; levels: Array<{ minQty: number; value: number }> } | null } | null
+  /** source ("Sells from"): this listing's own list, in sale order. */
+  codes?: readonly string[]
+}
+
 export interface MatrixWriteCell {
   rowId: string
   coordinateKey: CoordinateKey
@@ -463,6 +493,11 @@ export interface MatrixWriteCell {
   expectedVersion: number
   /** The listing the caller saw on this coordinate (`MatrixCells.listingId`); another listing there now is a `conflict`. */
   expectedListingId?: string
+  /**
+   * The cell's field(s) as the caller saw them (`MatrixCellStamp`). Absent (an older client, a cell that has no stamp) =
+   * the version alone decides, as before.
+   */
+  expected?: MatrixCellStamp
 }
 
 /** `accountId` = the account the caller's read used (the GET's `?accountId=`), so the write resolves the same listings. */
@@ -478,6 +513,14 @@ export interface MatrixWriteOutcome {
   reason?: string
   /** The listing's version AFTER the write (unchanged on refused/noop; the CURRENT one on conflict). */
   version: number
+  /** A conflict on a stamped write (`MatrixWriteCell.expected`): the cell's field(s) as they are now. */
+  current?: MatrixCellStamp
+  /**
+   * The version the write was checked at, when it is NOT the one the caller sent: the listing had moved, the cell's stamp
+   * held, so it went ahead on the fresh version. The caller's own-move bookkeeping hops from THIS version, never from the
+   * older one it sent (that would skip the other change in between).
+   */
+  writtenAt?: number
   /** A region-inventory write lands on every market it carries. */
   expandedTo?: readonly CoordinateKey[]
   /** Every listing row the write moved, with its version AFTER the write (an EU cell: every EU row it landed on). */

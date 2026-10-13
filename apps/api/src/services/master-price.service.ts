@@ -78,6 +78,7 @@ import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
 import { outboundSyncQueue, addJobSafely } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
+import { announceListingValues } from './listing-values-events.js'
 import { masterCurrency } from './fx-rate.service.js'
 import { roundCents } from '@nexus/shared/listing-price'
 import { type MarketCurrencyRow } from './pim/market-currency.js'
@@ -477,6 +478,10 @@ export class MasterPriceService {
     const result = ctx.tx
       ? await runner(ctx.tx)
       : await this.client.$transaction(runner)
+
+    // 1.8 (2026-10-13) — the listings this cascade re-priced moved their version (it bumps it): open screens are told,
+    // so an open Matrix re-reads them. Inside a caller's content transaction the hint waits for that commit.
+    if (result.cascadedListingIds.length > 0) announceListingValues(result.cascadedListingIds, ['price'], 'master-price')
 
     // Step 6: BullMQ enqueue happens AFTER the DB transaction commits. If
     // Redis is down, the DB row stays PENDING and the next drain pass picks

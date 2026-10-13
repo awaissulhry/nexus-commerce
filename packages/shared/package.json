@@ -182,6 +182,10 @@
       "types": "./dist/matrix-preview.d.ts",
       "default": "./dist/matrix-preview.js"
     },
+    "./matrix-stamp": {
+      "types": "./dist/matrix-stamp.d.ts",
+      "default": "./dist/matrix-stamp.js"
+    },
     "./stock-cases": {
       "types": "./dist/stock-cases.d.ts",
       "default": "./dist/stock-cases.js"
