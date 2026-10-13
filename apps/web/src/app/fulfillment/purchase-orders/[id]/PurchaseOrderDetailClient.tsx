@@ -382,7 +382,9 @@ export default function PurchaseOrderDetailClient({ id }: { id: string }) {
         // The draft's last edit goes first: the transition bumps the PO
         // version, so a save still waiting would answer 409 and lose the
         // edit — or the PO would move on (approved, sent) without it.
-        if (!(await saveGate.flush())) {
+        // A cancel goes on anyway: an edit that cannot be saved must not
+        // keep a PO from being cancelled.
+        if (!(await saveGate.flush()) && transition !== 'cancel') {
           setActionError('Your last edit could not be saved, so the PO was not changed. Check it and try again.')
           return
         }
