@@ -105,7 +105,10 @@ describe('the Google catalogue entry', () => {
     expect(googleSpec.auth).toMatchObject({ pkce: true, tokenRequestAuth: 'body', scopeSeparator: ' ', refreshTokenRequired: true, identityRequired: true, rotatesRefreshToken: false, accessTokenLifetimeSec: 3600, refreshTokenLifetimeSec: null })
     expect(googleSpec.auth.authorizeUrl!({ region: null, environment: 'production' })).toBe('https://accounts.google.com/o/oauth2/v2/auth')
     expect(googleSpec.auth.tokenUrl({ region: null, environment: 'production' })).toBe('https://oauth2.googleapis.com/token')
-    expect(googleSpec.auth.revokeUrl!({ environment: 'production' })).toBe('https://oauth2.googleapis.com/revoke')
+    // One Google login may be connected in many businesses: Disconnect never revokes at Google (it would stop them all).
+    expect(googleSpec.auth.revokeUrl).toBeUndefined()
+    expect(googleSpec.auth.revokeHint).toMatchObject({ url: 'https://myaccount.google.com/connections' })
+    expect(googleSpec.auth.revokeHint!.detail).toContain('other businesses')
     expect(googleSpec).toMatchObject({ key: 'GOOGLE', channelType: 'GOOGLE', available: true, discoverOnHeartbeat: false, sandbox: { available: false } })
   })
 

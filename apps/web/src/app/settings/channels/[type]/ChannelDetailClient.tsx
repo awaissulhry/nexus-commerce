@@ -245,8 +245,10 @@ export default function ChannelDetailClient({ channelType, initial, initialError
     }
     const ok = await confirm({
       title: `Disconnect ${label}?`,
-      description:
-        'Removes the stored grant from Nexus and revokes it at the channel when supported. Syncs and listings for this account stop until it is reconnected.',
+      description: channelType.toUpperCase() === 'GOOGLE'
+        // One Google login may be connected in many businesses: Nexus never revokes it at Google (it would stop them all).
+        ? 'Removes this business\'s Google sign-in from Nexus and frees the Google Ads, Merchant Center and Analytics accounts it chose. Your other businesses keep their own Google connection. Nothing is removed at Google.'
+        : 'Removes the stored grant from Nexus and revokes it at the channel when supported. Syncs and listings for this account stop until it is reconnected.',
       confirmLabel: 'Disconnect',
       tone: 'danger',
     })

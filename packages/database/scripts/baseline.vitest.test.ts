@@ -229,6 +229,29 @@ describe.runIf(canRun)('bootstrap-fresh-database.mjs — isolation, not just sch
     })
   })
 
+  it('GOOGLE only: one login active once in each business, never twice in one; no single owner; eBay still one business', async () => {
+    await asRuntime(async c => {
+      const insert = (id: string, workspaceId: string, channel: string, external: string) => c.query(`INSERT INTO "ChannelConnection" (id,"workspaceId","channelType","externalAccountId","isActive","updatedAt")
+        VALUES ($1,$2,$3,$4,true,now())`, [id, workspaceId, channel, external])
+      const inBusiness = (workspaceId: string) => c.query("SELECT set_config('nexus.workspace_id', $1, true)", [workspaceId])
+      // A refusal aborts the transaction; a savepoint keeps the rest of the test in it.
+      const refused = async (work: () => Promise<unknown>, constraint: string) => {
+        await c.query('SAVEPOINT refusal')
+        await expect(work()).rejects.toMatchObject({ code: '23505', constraint })
+        await c.query('ROLLBACK TO SAVEPOINT refusal')
+      }
+      await insert('google-login-here', 'nexus_legacy_workspace', 'GOOGLE', 'google-login-one')
+      await refused(() => insert('google-login-twice', 'nexus_legacy_workspace', 'GOOGLE', 'google-login-one'), 'ChannelConnection_google_active_login_key')
+      await insert('ebay-seller-here', 'nexus_legacy_workspace', 'EBAY', 'ebay-seller-one')
+      await inBusiness('bootstrap-other-profile')
+      await insert('google-login-other', 'bootstrap-other-profile', 'GOOGLE', 'google-login-one')
+      await refused(() => insert('ebay-seller-other', 'bootstrap-other-profile', 'EBAY', 'ebay-seller-one'), 'ChannelConnection_active_account_key')
+      await inBusiness('nexus_legacy_workspace')
+      const owned = await c.query(`SELECT count(*)::int AS n FROM "ChannelAccountOwnership" WHERE "channelType" = 'GOOGLE'`)
+      expect(owned.rows[0].n).toBe(0)
+    })
+  })
+
   it('permits a primary in each profile but refuses a second primary in one profile/channel', async () => {
     await asRuntime(async c => {
       const insert = (id: string, workspaceId: string) => c.query(`INSERT INTO "ChannelConnection" (id,"workspaceId","channelType","externalAccountId","isPrimary","updatedAt")

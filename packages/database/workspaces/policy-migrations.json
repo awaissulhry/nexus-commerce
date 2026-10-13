@@ -13,7 +13,7 @@
   "assortment-sync.sql": "20260928n_assortment_due_rounding",
   "shopify-colour-sync.sql": "20260930c_shopify_colour_sync",
   "ebay-quarantine.sql": "20260926s_cx_ebay_privacy_census",
-  "cx-account-integrity.sql": "20260923d_cx_bootstrap_parity",
+  "cx-account-integrity.sql": "20261013b_google_login_many_businesses",
   "inbound-history.sql": "20260923e_cx_inbound_archive",
   "order-stock-locks.sql": "20260926u_cx_order_lock_pool_holds",
   "order-stock-restore.sql": "20260926v_cx_pool_lender_release",

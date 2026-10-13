@@ -11,6 +11,7 @@ import type {
   GoogleAdsCustomerChoice,
   GoogleChoiceError,
   GoogleChoices,
+  GoogleProduct,
   GoogleSelectionBody,
   GoogleSelectionConflict,
 } from '@/lib/google-ads/contract'
@@ -202,10 +203,23 @@ export function sectionError(product: SectionProduct, error: GoogleChoiceError |
   }
 }
 
+const TAKEN_TITLE: Record<GoogleProduct, string> = {
+  ads: 'This Google Ads account belongs to another business',
+  merchant_center: 'This Merchant Center account belongs to another business',
+  analytics: 'This Google Analytics property belongs to another business',
+}
+
 /** A refused save (409), in words. Never names the other business. */
-export function conflictText(code: GoogleSelectionConflict | null, fallback: string): { title: string; text: string } {
+export function conflictText(code: GoogleSelectionConflict | null, fallback: string, product?: GoogleProduct): { title: string; text: string } {
+  if (code === 'taken_by_other_business') {
+    // One Google login may be connected in many businesses, but each Google account is picked by one business only.
+    return {
+      title: TAKEN_TITLE[product ?? 'ads'],
+      text: fallback || 'Another business in Nexus already uses this account. An account can belong to one business only. Choose another one.',
+    }
+  }
   if (code === 'customer_taken') {
-    return { title: 'This Google Ads account belongs to another business', text: 'Another business in Nexus already reads this Google Ads account. One Google Ads account can belong to one business. Choose another account.' }
+    return { title: 'Another Google sign-in holds the choice', text: 'This business already reads a Google Ads account through another Google sign-in. Change the choice there, or disconnect that sign-in first.' }
   }
   if (code === 'not_offered') {
     return { title: 'Google no longer offers this choice', text: 'This Google sign-in can no longer see one of the chosen accounts. The lists were read again: choose again.' }

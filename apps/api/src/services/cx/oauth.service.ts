@@ -1,4 +1,4 @@
-import { workspaceKey, workspaceContext, withWorkspace, LEGACY_WORKSPACE_ID, WorkspaceError } from '@nexus/database/workspace-context'
+import { workspaceKey, workspaceContext, workspaceIdForQuery, withWorkspace, LEGACY_WORKSPACE_ID, WorkspaceError } from '@nexus/database/workspace-context'
 import { createWorkspaceService } from '../workspace.service.js'
 /**
  * CX.1 — the OAuth service (docs/2026-08-29-cx1-connection-core.md §5).
@@ -179,9 +179,13 @@ export async function start(input: {
     throw new OAuthFlowError('invalid_intent', 'reconnect/adopt needs the connection to reconnect.')
   }
   if (input.targetConnectionId) {
-    const target = await prisma.channelConnection.findUnique({ where: { id: input.targetConnectionId }, select: { channelType: true, managedBy: true } })
+    const target = await prisma.channelConnection.findUnique({ where: { id: input.targetConnectionId }, select: { channelType: true, managedBy: true, workspaceId: true } })
     if (!target || target.channelType !== spec.channelType || target.managedBy === 'transferred') {
       throw new OAuthFlowError('invalid_intent', 'The account to reconnect does not belong to this channel.')
+    }
+    // GOOGLE: each business reconnects its own row (one login, many businesses — 20261013b), never a shared one.
+    if (spec.channelType === 'GOOGLE' && target.workspaceId !== workspaceIdForQuery()) {
+      throw new OAuthFlowError('invalid_intent', 'Reconnect Google from the business that owns this connection.')
     }
   }
 
@@ -480,7 +484,12 @@ export async function complete(input: {
   const saved = await (input.channelKey === 'EBAY'
     ? withEbayGrantTransaction({ grant, environment }, persistPlacement)
     : inDatabaseTransaction(prisma, () => persistPlacement((id, actor, event) => storeGrant(id, grant, actor, event)))).catch(async error => {
-    if ((error as { code?: string }).code === 'P2002') throw await fail('identity_refused', 'This seller account already belongs to a business profile. Reconnect it from that profile.', 409)
+    if ((error as { code?: string }).code === 'P2002') {
+      // GOOGLE may be connected once per business (20261013b), so a clash can only be inside this business.
+      throw await fail('identity_refused', spec.channelType === 'GOOGLE'
+        ? 'This Google login is already connected in this business. Use Reconnect on its card.'
+        : 'This seller account already belongs to a business profile. Reconnect it from that profile.', 409)
+    }
     throw error
   })
   const { connectionId, placement } = saved
