@@ -13,6 +13,7 @@
  * 2e (Owner D1 = A) — the engine holds each hour's fixed values and reads no rank or share signal,
  * so the "Goal vs actual" and "Signal" columns are gone.
  */
+import { whenWords } from '../bid/_shared/format'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button, Pill } from '@/design-system/primitives'
 import { Banner } from '@/design-system/components'
@@ -321,7 +322,7 @@ export function RankGoalsList() {
       key: 'lastRun', label: 'Last run', metric: false, sortable: true,
       sortValue: (r) => (r.lastEvaluatedAt ? -new Date(r.lastEvaluatedAt).getTime() : Number.MAX_SAFE_INTEGER),
       tip: 'When the engine last evaluated this plan. It runs every 15 minutes.',
-      render: (r) => <span className={r.health.tone === 'warn' && r.health.label === 'Stale' ? 'h10-rg-warn' : undefined} title={r.lastEvaluatedAt ? new Date(r.lastEvaluatedAt).toLocaleString() : 'Never evaluated'}>{relTime(r.lastEvaluatedAt)}</span>,
+      render: (r) => <span className={r.health.tone === 'warn' && r.health.label === 'Stale' ? 'h10-rg-warn' : undefined} title={r.lastEvaluatedAt ? whenWords(r.lastEvaluatedAt) : 'Never evaluated'}>{relTime(r.lastEvaluatedAt)}</span>,
     },
     {
       key: 'health', label: 'Health', metric: false, sortable: true,

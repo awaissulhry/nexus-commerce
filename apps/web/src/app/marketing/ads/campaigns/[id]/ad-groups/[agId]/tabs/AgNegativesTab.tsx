@@ -8,6 +8,7 @@
  * Date Added. Edit + bulk Enable/Archive/Pause via PATCH /advertising/ad-targets/:id.
  * (The "+ Negative" creation flow is ad-group-scoped follow-up; the grid + edit ship now.)
  */
+import { formatDate } from '@/design-system/lib/format'
 import { useEffect, useMemo, useState } from 'react'
 import { Button, Pill } from '@/design-system/primitives'
 import { Plus } from 'lucide-react'
@@ -27,7 +28,6 @@ import { Listbox, useToast } from '@/design-system/components'
 interface NegT { id: string; expressionValue: string; expressionType?: string | null; kind?: string | null; status: string; isNegative?: boolean; createdAt?: string | null; externalTargetId?: string | null }
 interface NegRow { id: string; text: string; matchType: string; status: string; createdAt?: string | null; onAmazon: boolean }
 const titleCase = (s?: string | null) => (s ? s.toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : '—')
-const fmtDate = (s?: string | null) => (s ? new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—')
 
 export function AgNegativesTab({ adGroup, onRefresh, mode, focus }: { adGroup: AdGroupDetailData | null; onRefresh?: () => void; mode: 'targets' | 'keywords'; focus?: string | null }) {
   const rows = useMemo<NegRow[]>(() => {
@@ -53,7 +53,7 @@ export function AgNegativesTab({ adGroup, onRefresh, mode, focus }: { adGroup: A
   const columns: GridColumn<NegRow>[] = useMemo(() => [
     { key: 'status', label: 'Status', metric: false, sortable: false, render: (r) => { if (!r.onAmazon) return <Pill tone="warning" title={NOT_ON_AMAZON_TIP}>Not on Amazon</Pill>; const sp = STATUS_PILL[r.status] ?? { label: titleCase(r.status), cls: '' }; return <Pill tone={pillTone(sp.cls)}>{sp.label}</Pill> }, total: '' },
     { key: 'matchType', label: 'Match Type', metric: false, sortable: true, render: (r) => titleCase(r.matchType), sortValue: (r) => titleCase(r.matchType), total: '' },
-    { key: 'dateAdded', label: 'Date Added', metric: false, sortable: true, render: (r) => fmtDate(r.createdAt), sortValue: (r) => (r.createdAt ? Date.parse(r.createdAt) : 0), total: '' },
+    { key: 'dateAdded', label: 'Date Added', metric: false, sortable: true, render: (r) => formatDate(r.createdAt), sortValue: (r) => (r.createdAt ? Date.parse(r.createdAt) : 0), total: '' },
   ], [])
 
   const editMode = useMemo<GridEditMode<NegRow>>(() => ({

@@ -2,6 +2,7 @@
 
 /** SCG.2 — full audit trail on the shared DataGrid, server-paginated. */
 
+import { when } from '@/design-system/grid/renderers/format'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pagination } from '@/design-system/components'
 import { DataGrid, type Column } from '@/design-system/grid/datagrid'
@@ -64,7 +65,7 @@ export default function HistoryClient() {
   useEffect(() => { void load() }, [load])
 
   const columns = useMemo<Array<Column<AuditRow>>>(() => [
-    { key: 'at', label: 'When', width: 150, sortable: true, sortValue: (r) => r.createdAt, render: (r) => <span className="text-xs text-zinc-500">{new Date(r.createdAt).toLocaleString()}</span> },
+    { key: 'at', label: 'When', width: 150, sortable: true, sortValue: (r) => r.createdAt, render: (r) => <span className="text-xs text-zinc-500">{when(r.createdAt)}</span> },
     { key: 'actor', label: 'Actor', width: 160, sortable: true, sortValue: (r) => r.actor, render: (r) => <span className="text-xs">{r.actor}</span> },
     { key: 'scope', label: 'Scope', width: 200, render: (r) => <span className="text-xs">{r.scopeType} {r.scopeName ?? ''}</span> },
     { key: 'field', label: 'Field', width: 150, sortable: true, sortValue: (r) => r.field, render: (r) => <span className="font-mono text-xs">{r.field}</span> },

@@ -7,6 +7,8 @@
  *   CBN.2c.1 = Customize Columns (full catalog incl. NTB + profit/settings, drag-reorder, show/hide, persisted)
  * Edit-mode inline batch (Discard/Apply) + Bulk Actions modal land in CBN.2c.2/c.3.
  */
+import { formatDate } from '@/design-system/lib/format'
+import { whenWords } from '../rules-automation/bid/_shared/format'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Button, Checkbox, Pill, Toggle, ToolbarButton } from '@/design-system/primitives'
 import './campaigns-ds.css'
@@ -204,7 +206,6 @@ const sharePct = (frac: number) => {
   if (p > 0 && p < 0.01) return '<0.01%'
   return `${p.toFixed(2)}%`
 }
-const fmtDate = (iso?: string | null) => { if (!iso) return '—'; const d = new Date(iso); return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) }
 /**
  * AX2.1 — PATCH and report what ACTUALLY happened.
  *
@@ -1664,7 +1665,7 @@ export function CampaignsGrid() {
         if (d?.liveWritesToday != null) bits.push(`Live writes today: ${d.liveWritesToday}`)
         // AX2.2 — read freshness is a separate fact from write delivery.
         bits.push(d?.verifiedAt
-          ? `Last verified against Amazon: ${new Date(d.verifiedAt).toLocaleString()}`
+          ? `Last verified against Amazon: ${whenWords(d.verifiedAt)}`
           : 'Never verified against Amazon')
         return (
           <Pill tone={pillTone(p.cls)} title={bits.join('\n')}>
@@ -1769,12 +1770,12 @@ export function CampaignsGrid() {
           </span>
         )
       }
-      case 'startDate': return fmtDate(c.startDate)
+      case 'startDate': return formatDate(c.startDate)
       // ADM-H P7 — printed a bare ASCII '-' on 220 of 220 rows, in a grid whose own C5 vocabulary
       // reserves '—' for "no value" and **None** for "settable, nothing set". An end date is
       // settable (the Bulk Actions modal writes it), and no campaign has one — so it is None,
       // and the two glyphs stop being a coin toss.
-      case 'endDate': return c.endDate ? fmtDate(c.endDate) : <span className="h10-rc-none" title="No end date is set, so this campaign runs until it is paused or archived.">None</span>
+      case 'endDate': return c.endDate ? formatDate(c.endDate) : <span className="h10-rc-none" title="No end date is set, so this campaign runs until it is paused or archived.">None</span>
       case 'dailyBudget': {
         if (hold) return held(c.dailyBudget != null && c.dailyBudget !== '' ? eur(num(c.dailyBudget)) : '—', hold)
         if (mode === 'edit') {

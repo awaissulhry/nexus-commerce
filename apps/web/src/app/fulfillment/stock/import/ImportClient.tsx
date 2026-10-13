@@ -16,6 +16,8 @@ import { Listbox } from '@/design-system/components/Listbox'
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { when } from '@/design-system/grid/renderers/format'
+import { formatDate } from '@/design-system/lib/format'
 import {
   Upload, FileText, CheckCircle2, AlertTriangle, ArrowRight,
   ArrowLeft, Download, Search, Trash2, Plus, RefreshCw,
@@ -1947,7 +1949,7 @@ function ImportWizardInner() {
                   },
                   {
                     key: 'createdAt', label: t('stock.import.aliases.colDate'), width: 120,
-                    render: (r) => <span className="text-xs text-secondary">{new Date(r.createdAt).toLocaleDateString()}</span>,
+                    render: (r) => <span className="text-xs text-secondary">{formatDate(r.createdAt)}</span>,
                     sortable: true, sortValue: (r) => r.createdAt,
                   },
                   {
@@ -2034,7 +2036,7 @@ function ImportWizardInner() {
                   },
                   {
                     key: 'createdAt', label: t('stock.import.history.colDate'), width: 130,
-                    render: (r) => <span className="text-xs text-secondary">{new Date(r.createdAt).toLocaleString()}</span>,
+                    render: (r) => <span className="text-xs text-secondary">{when(r.createdAt)}</span>,
                     sortable: true, sortValue: (r) => r.createdAt,
                   },
                   {

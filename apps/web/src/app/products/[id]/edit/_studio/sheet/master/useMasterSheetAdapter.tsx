@@ -1,4 +1,5 @@
 'use client';
+import { when } from '@/design-system/grid/renderers/format';
 import { useSheetPreferences } from '../useSheetPreferences';
 import { useDeleteRows } from '../deleteRows/useDeleteRows';
 import { useUnpinOnNarrowSheet } from '../useNarrowSheet';
@@ -90,7 +91,7 @@ import { FamilyOrderNotice } from '../FamilyOrderNotice';
    layout that hides or pins it keeps doing so in every language. */
 const progressKeyOf = (readyColId: string) => `progress:${readyColId.slice('ready:'.length).replace(/:[^:]+$/, '')}`;
 const marketProgressTip = (label: string, language: string, computedAt: string | null) =>
-    `Progress on ${label} in ${language}: filled ÷ every field ${label} applies, required and optional, from the readiness index${computedAt ? ` (computed ${new Date(computedAt).toLocaleString()})` : ''}. Red — a required field is empty. Yellow — only optional fields are empty. Green — nothing is empty. Grey — not computed yet, which is not a score. Completeness, not publish readiness.`;
+    `Progress on ${label} in ${language}: filled ÷ every field ${label} applies, required and optional, from the readiness index${computedAt ? ` (computed ${when(computedAt)})` : ''}. Red — a required field is empty. Yellow — only optional fields are empty. Green — nothing is empty. Grey — not computed yet, which is not a score. Completeness, not publish readiness.`;
 
 export interface MasterSheetProps {
     productId: string;

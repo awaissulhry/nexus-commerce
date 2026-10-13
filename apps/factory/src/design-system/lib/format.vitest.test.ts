@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatBytes, formatElapsed, inlineValue, plainValue } from './format'
+import { formatBytes, formatDate, formatElapsed, inlineValue, MONTHS_SHORT, plainValue } from './format'
 
 describe('formatBytes', () => {
   it('reads a file size the way an operator does', () => {
@@ -68,5 +68,18 @@ describe('plainValue — any stored value as plain words, whole', () => {
   })
   it('puts a value on one line when asked', () => {
     expect(inlineValue({ accountId: 'a1', categories: ['JACKET', 'COAT'] })).toBe('accountId: a1; categories: JACKET, COAT')
+  })
+})
+
+describe('formatDate — one month table, every browser', () => {
+  it('"1 Sep 2026", never "01 Sept 2026" (CLDR\'s en-GB September)', () => {
+    expect(formatDate(new Date(2026, 8, 1, 12))).toBe('1 Sep 2026')
+    expect(formatDate(new Date(2026, 5, 22, 12))).toBe('22 Jun 2026')
+    expect(formatDate(null)).toBe('—')
+    expect(formatDate('not a date')).toBe('—')
+  })
+  it('twelve three-letter months', () => {
+    expect(MONTHS_SHORT).toHaveLength(12)
+    expect(MONTHS_SHORT.every(m => m.length === 3)).toBe(true)
   })
 })

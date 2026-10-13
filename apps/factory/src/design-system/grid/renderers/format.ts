@@ -13,7 +13,7 @@
  * exists to carry (the KT.3 / SoV lesson). Every renderer in `./cells.tsx` goes through here; the
  * test beside this file holds each kind to the table above.
  */
-import { eur, eur0, formatDate, num, pct } from '../../lib/format'
+import { MONTHS_SHORT, eur, eur0, formatDate, num, pct } from '../../lib/format'
 
 const eurFromEuros = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'EUR' })
 
@@ -84,12 +84,24 @@ export function formatGridValue(kind: GridValueKind, value: unknown, opts: Forma
 /** The dash every empty cell draws. One character, one place. */
 export const EMPTY_DASH = '—'
 
-/** An instant, in the viewer's locale. Returns the raw string unchanged if it will not parse. */
+const pad2 = (n: number) => String(n).padStart(2, '0')
+
+/** "09:30" — a clock time, 24-hour, in the viewer's time zone; the same in every browser ("9:30 AM" in an American one). */
+export function clockTime(value: string | number | Date): string {
+  const d = value instanceof Date ? value : new Date(value)
+  return Number.isNaN(d.getTime()) ? '' : `${pad2(d.getHours())}:${pad2(d.getMinutes())}`
+}
+
+/**
+ * An instant: "13 Oct 2026, 09:30" — 24-hour, with the year, in the viewer's time zone, the same words in every browser
+ * language (grid audit step 5, the Owner's choice on 2026-10-13; it followed the browser's language and had no year).
+ * Returns the raw string unchanged if it will not parse.
+ */
 export function when(iso: string): string {
   const d = new Date(iso)
   return Number.isNaN(d.getTime())
     ? iso
-    : d.toLocaleString(undefined, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+    : `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}, ${clockTime(d)}`
 }
 
 const MINUTE = 60_000
@@ -100,8 +112,8 @@ const WEEK = 7 * DAY
 /**
  * How long ago, in words — "7 weeks ago".
  *
- * Uses `Intl.RelativeTimeFormat` rather than a hand-rolled ladder so the wording is the platform's
- * in every locale. Future instants read "in 3 minutes" rather than being clamped to "just now": a
+ * Uses `Intl.RelativeTimeFormat` rather than a hand-rolled ladder, in English: the UI is English, and an Italian
+ * browser wrote "3 ore fa" beside English words (grid audit step 5). Future instants read "in 3 minutes" rather than being clamped to "just now": a
  * timestamp ahead of the clock means clock skew or a bad row, and hiding that would make a broken
  * value look like a fresh one.
  */
@@ -110,7 +122,7 @@ export function ago(iso: string, now: number = Date.now()): string {
   if (Number.isNaN(t)) return iso
   const delta = t - now
   const abs = Math.abs(delta)
-  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
+  const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
   if (abs < MINUTE) return rtf.format(Math.round(delta / 1000), 'second')
   if (abs < HOUR) return rtf.format(Math.round(delta / MINUTE), 'minute')
   if (abs < DAY) return rtf.format(Math.round(delta / HOUR), 'hour')

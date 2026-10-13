@@ -29,6 +29,7 @@
  * client knows how many rows collapsed together.
  */
 
+import { when } from '@/design-system/grid/renderers/format'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from '@/lib/workspaces/Link'
 import {
@@ -311,7 +312,7 @@ function EventRow({ event, onOpen }: { event: FleetEvent; onOpen: (e: FleetEvent
     event.costUSD != null && event.costUSD > 0 ? `$${event.costUSD.toFixed(4)}` : null
   return (
     <li className="sba-row" id={`e-${event.id}`}>
-      <time className="sba-time" dateTime={event.at} title={new Date(event.at).toLocaleString()}>
+      <time className="sba-time" dateTime={event.at} title={when(event.at)}>
         {hhmm(event.at)}
       </time>
       <Marker kind={event.kind} outcome={event.outcome} />
@@ -1799,7 +1800,7 @@ export function ActivityClient() {
           <button
             type="button"
             className="sba-open sba-nowrap"
-            title={new Date(e.at).toLocaleString()}
+            title={when(e.at)}
             onClick={() => openDetail(e)}
           >
             {ago(e.at)}
