@@ -26,7 +26,7 @@ describe('a bulk Set / +% / −% sends the budget it was worked out from', () =>
   })
   it('the grid\'s bulk budget sends both (never the new budget alone)', () => {
     expect(grid).toContain('const next = bulkBudgetPatch(num(c.dailyBudget), ch.budget.mode, ch.budget.value)')
-    expect(grid).toContain('Object.assign(body, next)')
+    expect(grid).toContain("{ applyImmediately: true, reason: 'Ad Manager bulk action', ...next }")
     expect(grid).not.toMatch(/body\.dailyBudget = next\b/)
   })
 })

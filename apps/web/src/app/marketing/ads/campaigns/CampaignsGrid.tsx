@@ -40,6 +40,7 @@ import { assignablePortfolios, sharedMarket, type PortfolioOption } from '../_sh
 import { readWrite, reasonText } from '../_shared/adsWrite'
 import { latestRead } from '../_shared/latestRead'
 import { campaignsListPath, readsFresh } from './_grid/campaignsRead'
+import { bulkApplyMessage, type PartResult } from './_grid/bulkCampaignWrites'
 import { askSendAnyway, confirmed, notSentPastLimits, readNeedsConfirmation } from '../_shared/sendAnyway'
 import { matchesBidAutomation, matchesRuleFilter, ruleReach, type AccountWideRule, type RuleReach } from './_grid/campaignRules'
 import { amazonEditHold } from './_grid/amazonEditHold'
@@ -1298,51 +1299,62 @@ export function CampaignsGrid() {
     if (targets.length === 0) return
     setApplying(true)
     const base = getBackendUrl()
-    let ok = 0; let fail = 0; const patched: Record<string, Partial<Camp>> = {}; const reasons: string[] = []
+    const patched: Record<string, Partial<Camp>> = {}
+    const outcomes: Array<{ name: string; parts: PartResult[] }> = []
+    type Part = { part: string; opt: Partial<Camp>; send: () => Promise<{ outcome: WriteOutcome; error?: string }> }
+    const run = async (p: Part): Promise<PartResult & { opt: Partial<Camp> }> => {
+      const r = await p.send()
+      return { part: p.part, wrote: wrote(r), opt: p.opt, ...(wrote(r) ? {} : { reason: reasonText(r.error) }) }
+    }
     for (const c of targets) {
-      const calls: Array<Promise<{ outcome: WriteOutcome; error?: string }>> = []
-      const opt: Partial<Camp> = {}
-      // 1) status / budget / strategy — gated PATCH (pushes to Amazon for live markets)
-      if (ch.status || ch.budget || ch.strategy) {
+      // Group 3 review — each part its own write: a budget refused because it moved since ("Changed since: now …") no
+      // longer takes the status or bidding strategy sent with it down too. The campaign's own PATCHes go one after the
+      // other (status / strategy, then budget); its automation and multiplier alongside.
+      const campaignParts: Part[] = []
+      const otherParts: Part[] = []
+      // 1) status / strategy — gated PATCH (pushes to Amazon for live markets)
+      if (ch.status || ch.strategy) {
         const body: Record<string, unknown> = { applyImmediately: true, reason: 'Ad Manager bulk action' }
+        const opt: Partial<Camp> = {}
         if (ch.status) { body.status = ch.status.value; opt.status = ch.status.value }
         if (ch.strategy) { body.biddingStrategy = ch.strategy.value; opt.biddingStrategy = ch.strategy.value }
-        if (ch.budget) {
-          // PR 1c (CM-7) — to the cent, never to the euro (€12.34 +10% wrote €14.00); only a cut can
-          // land below €1.00, and the review / Adjust Budget note said how many stop there.
-          // Group 3 — with the budget it was worked out from: the server refuses it when that moved since.
-          const next = bulkBudgetPatch(num(c.dailyBudget), ch.budget.mode, ch.budget.value)
-          Object.assign(body, next); opt.dailyBudget = String(next.dailyBudget)
-        }
-        calls.push(patchWrite(`${base}/api/advertising/campaigns/${c.id}`, body))
+        campaignParts.push({ part: ch.status && ch.strategy ? 'status and bidding strategy' : ch.status ? 'status' : 'bidding strategy', opt, send: () => patchWrite(`${base}/api/advertising/campaigns/${c.id}`, body) })
+      }
+      // 1b) budget — its own gated PATCH. PR 1c (CM-7) — to the cent, never to the euro (€12.34 +10% wrote €14.00); only a
+      // cut can land below €1.00, and the review / Adjust Budget note said how many stop there. Group 3 — with the budget
+      // it was worked out from: the server refuses it when that moved since.
+      if (ch.budget) {
+        const next = bulkBudgetPatch(num(c.dailyBudget), ch.budget.mode, ch.budget.value)
+        campaignParts.push({ part: 'budget', opt: { dailyBudget: String(next.dailyBudget) }, send: () => patchWrite(`${base}/api/advertising/campaigns/${c.id}`, { applyImmediately: true, reason: 'Ad Manager bulk action', ...next }) })
       }
       // 2) bid automation / target ACoS — local automation settings (dynamicBidding)
       if (ch.automation != null || ch.acos !== undefined) {
         const body: Record<string, unknown> = {}
+        const opt: Partial<Camp> = {}
         if (ch.automation != null) { body.bidAutomation = ch.automation; opt.bidAutomation = ch.automation }
         if (ch.acos !== undefined) { body.targetAcos = ch.acos; opt.targetAcos = ch.acos }
-        calls.push(patchWrite(`${base}/api/advertising/campaigns/${c.id}/automation`, body))
+        otherParts.push({ part: 'bid automation', opt, send: () => patchWrite(`${base}/api/advertising/campaigns/${c.id}/automation`, body) })
       }
       // 3) bid multiplier — placement bidding. CM-18: only the chosen placement is sent (`partial`); the server keeps
       // the other two as they are now, not as this list's copy had them.
       if (ch.multiplier) {
         const cur = c.placements ?? { tos: null, pdp: null, ros: null }
-        calls.push(patchWrite(`${base}/api/advertising/campaigns/${c.id}/placements`, { adjustments: [{ placement: AMZ_PLACEMENT[ch.multiplier.placement], percentage: ch.multiplier.value }], partial: true }))
         const npl = { tos: cur.tos, pdp: cur.pdp, ros: cur.ros }
         const slot = ch.multiplier.placement === 'TOS' ? 'tos' : ch.multiplier.placement === 'PP' ? 'pdp' : 'ros'
         npl[slot] = ch.multiplier.value
-        opt.placements = npl
+        const adjustments = [{ placement: AMZ_PLACEMENT[ch.multiplier.placement], percentage: ch.multiplier.value }]
+        otherParts.push({ part: 'bid multiplier', opt: { placements: npl }, send: () => patchWrite(`${base}/api/advertising/campaigns/${c.id}/placements`, { adjustments, partial: true }) })
       }
-      const results = await Promise.all(calls)
-      if (results.length > 0 && results.every(wrote)) { ok++; patched[c.id] = opt } else {
-        fail++
-        const bad = results.find((r) => !wrote(r))
-        if (bad) reasons.push(`${c.name}: ${reasonText(bad.error)}`)
-      }
+      const inTurn = async () => { const out: Awaited<ReturnType<typeof run>>[] = []; for (const p of campaignParts) out.push(await run(p)); return out }
+      const [own, others] = await Promise.all([inTurn(), Promise.all(otherParts.map(run))])
+      const parts = [...own, ...others]
+      const opt = Object.assign({}, ...parts.filter((p) => p.wrote).map((p) => p.opt)) as Partial<Camp>
+      if (Object.keys(opt).length) patched[c.id] = opt
+      outcomes.push({ name: c.name, parts })
     }
     setRows((rs) => rs.map((x) => (patched[x.id] ? { ...x, ...patched[x.id] } : x)))
     setApplying(false); setSel(new Set())
-    setApplyMsg(`Applied to ${ok} campaign${ok !== 1 ? 's' : ''}${fail ? ` · ${fail} not changed — ${reasons[0] ?? 'no reason given'}${fail > 1 ? ` (and ${fail - 1} more)` : ''}` : ''}`)
+    setApplyMsg(bulkApplyMessage(outcomes))
     setTimeout(() => setApplyMsg(''), 6000)
     // Group 3 — read again past the cache: what was saved, and what a refused campaign holds now.
     void load({ range: dateRange })

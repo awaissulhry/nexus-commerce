@@ -20,10 +20,30 @@ import { LEGACY_WORKSPACE_ID, withWorkspace } from '../lib/workspace-context.js'
 import type { GateDecision } from '../services/advertising/ads-write-gate.js'
 
 let database: Awaited<ReturnType<typeof formulaDatabase>>
+/**
+ * A write that lands between Nexus's check and its own write (the compare-and-set test): when armed, the next local
+ * `updateMany` on the model first runs this racing write, once.
+ */
+const race = vi.hoisted(() => ({ model: null as string | null, write: null as null | (() => Promise<unknown>) }))
 vi.mock('../db.js', async () => {
   const { contextualDatabase } = await import('../lib/database-context.js')
   let wrapped: object | null = null
-  return { default: new Proxy({}, { get: (_t, p) => Reflect.get((wrapped ??= contextualDatabase(database.client as never)), p) }) }
+  const db = () => (wrapped ??= contextualDatabase(database.client as never))
+  return {
+    default: new Proxy({}, {
+      get: (_t, p) => {
+        const value = Reflect.get(db(), p)
+        if (p !== race.model || !race.write) return value
+        return new Proxy(value as object, {
+          get: (d, m) => {
+            const fn = Reflect.get(d, m) as (...a: unknown[]) => unknown
+            if (m !== 'updateMany' || !race.write) return typeof fn === 'function' ? fn.bind(d) : fn
+            return async (...a: unknown[]) => { const w = race.write!; race.write = null; await w(); return fn.apply(d, a) }
+          },
+        })
+      },
+    }),
+  }
 })
 vi.mock('../services/outbound-destination.js', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -71,8 +91,8 @@ let app: FastifyInstance
 
 const { updateAdTargetWithSync, updateCampaignWithSync } = await import('../services/advertising/ads-mutation.service.js')
 
-const send = async (method: 'POST' | 'PATCH' | 'GET', url: string, payload?: object) => {
-  const res = await app.inject({ method, url: `/api${url}`, ...(payload ? { payload } : {}) })
+const send = async (method: 'POST' | 'PATCH' | 'GET', url: string, payload?: object, headers?: Record<string, string>) => {
+  const res = await app.inject({ method, url: `/api${url}`, ...(payload ? { payload } : {}), ...(headers ? { headers } : {}) })
   return { status: res.statusCode, body: res.json() as Record<string, unknown> }
 }
 const undo = (actionLogId: string) => send('POST', `/advertising/changes/${actionLogId}/undo`, {})
@@ -100,11 +120,19 @@ async function seedCampaign(id: string, targets: Array<[string, number]> = [['t1
 beforeAll(async () => {
   database = await formulaDatabase()
   const { default: advertisingRoutes } = await import('./advertising.routes.js')
+  const { default: keywordActionsRoutes } = await import('./keyword-actions.routes.js')
   app = Fastify()
+  // A signed-in person, as auth sets it (personActor reads `authUser`): the test names him in a header.
+  app.addHook('preHandler', (request, _reply, done) => {
+    const who = request.headers['x-test-user']
+    if (typeof who === 'string') (request as unknown as { authUser: { id: string } }).authUser = { id: who }
+    done()
+  })
   app.addHook('preHandler', (_request, _reply, done) => withWorkspace(business, done))
   await app.register(advertisingRoutes, { prefix: '/api' })
+  await app.register(keywordActionsRoutes, { prefix: '/api' })
   await app.ready()
-  for (const id of ['u1', 'u2', 'u3', 'u4', 'u5', 'u6', 'b1', 'b2']) await seedCampaign(id)
+  for (const id of ['u1', 'u2', 'u3', 'u4', 'u5', 'u6', 'b1', 'b2', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8']) await seedCampaign(id)
 }, 180_000)
 afterAll(async () => { await app?.close(); await database?.close() })
 beforeEach(() => { cache.reads = [] })
@@ -213,5 +241,132 @@ describe('3 — the ad-group page\'s re-read after its own save skips the read c
     await send('GET', '/advertising/ad-groups/u6-g?fresh=1')
     await send('GET', '/advertising/ad-groups/u6-g')
     expect(cache.reads.filter((r) => r.key.startsWith('adgroup:u6-g:')).map((r) => r.refresh)).toEqual([true, false])
+  })
+})
+
+describe('group 3 review — the Undo is judged on the value, never refused forever', () => {
+  it('undo newest-first: B undone, then A — A\'s value still stands, so A is put back', async () => {
+    const a = await send('PATCH', '/advertising/ad-targets/r1-t1', { bidCents: 50, applyImmediately: true })
+    const b = await send('PATCH', '/advertising/ad-targets/r1-t1', { bidCents: 60, applyImmediately: true })
+    const undoB = await undo(String(b.body.actionLogId))
+    expect([undoB.status, (await bidOf('r1-t1')).bidCents]).toEqual([200, 50])
+    const undoA = await undo(String(a.body.actionLogId))
+    expect(undoA.status).toBe(200)
+    expect(undoA.body).toMatchObject({ ok: true, reversed: 1 })
+    expect((await bidOf('r1-t1')).bidCents).toBe(35)
+  })
+
+  it('a bid an engine moved away and back (50 → 30 → 50): the person\'s value stands, so his Undo goes', async () => {
+    const mine = await send('PATCH', '/advertising/ad-targets/r2-t1', { bidCents: 50, applyImmediately: true })
+    await inside(() => updateAdTargetWithSync({ adTargetId: 'r2-t1', patch: { bidCents: 30 }, actor: ENGINE, applyImmediately: true, force: true }))
+    expect((await bidOf('r2-t1')).bidCents).toBe(30)
+    await inside(() => updateAdTargetWithSync({ adTargetId: 'r2-t1', patch: { bidCents: 50 }, actor: ENGINE, applyImmediately: true, force: true }))
+    expect((await bidOf('r2-t1')).bidCents).toBe(50)
+    const r = await undo(String(mine.body.actionLogId))
+    expect(r.status).toBe(200)
+    expect((await bidOf('r2-t1')).bidCents).toBe(35)
+  })
+
+  it('a 3-decimal budget is written and logged to the cent, so its Undo is not refused', async () => {
+    const set = await send('PATCH', '/advertising/campaigns/r6', { dailyBudget: 1.005, applyImmediately: true })
+    expect(set.body).toMatchObject({ ok: true })
+    const c = await inside(() => database.client.campaign.findUniqueOrThrow({ where: { id: 'r6' }, select: { dailyBudget: true } }))
+    const log = await inside(() => database.client.advertisingActionLog.findUniqueOrThrow({ where: { id: String(set.body.actionLogId) }, select: { payloadAfter: true } }))
+    expect([Number(c.dailyBudget), (log.payloadAfter as { dailyBudget: number }).dailyBudget]).toEqual([1.01, 1.01])
+    const r = await undo(String(set.body.actionLogId))
+    expect(r.status).toBe(200)
+    expect(r.body).toMatchObject({ ok: true, reversed: 1 })
+  })
+})
+
+describe('group 3 review — the compare-and-set is atomic: a write landing between the check and the write wins', () => {
+  const queued = () => inside(() => database.client.outboundSyncQueue.count())
+  const logsOn = (entityId: string) => inside(() => database.client.advertisingActionLog.count({ where: { entityId } }))
+
+  it('a person\'s Undo: the reversal\'s local write is conditional; nothing written, nothing queued', async () => {
+    const mine = await send('PATCH', '/advertising/ad-targets/r3-t1', { bidCents: 50, applyImmediately: true })
+    const [q, l] = [await queued(), await logsOn('r3-t1')]
+    Object.assign(race, { model: 'adTarget', write: () => database.client.adTarget.update({ where: { id: 'r3-t1' }, data: { bidCents: 77 } }) })
+    try {
+      const r = await undo(String(mine.body.actionLogId))
+      expect(r.status).toBe(409)
+      expect(String(r.body.reason)).toMatch(/^Changed since: now bid €0\.77\./)
+    } finally { Object.assign(race, { model: null, write: null }) }
+    expect((await bidOf('r3-t1')).bidCents).toBe(77)
+    expect([await queued(), await logsOn('r3-t1')]).toEqual([q, l])
+  })
+
+  it('the bulk budget: the local write is conditional on the budget it saw; nothing written, nothing queued', async () => {
+    const q = await queued()
+    Object.assign(race, { model: 'campaign', write: () => database.client.campaign.update({ where: { id: 'r4' }, data: { dailyBudget: 26 } }) })
+    try {
+      const r = await send('PATCH', '/advertising/campaigns/r4', { dailyBudget: 22, expectedDailyBudget: 20, applyImmediately: true })
+      expect(r.status).toBe(409)
+      expect(r.body).toMatchObject({ ok: false, changedSince: { field: 'dailyBudget', now: 26 } })
+    } finally { Object.assign(race, { model: null, write: null }) }
+    const c = await inside(() => database.client.campaign.findUniqueOrThrow({ where: { id: 'r4' }, select: { dailyBudget: true } }))
+    expect(Number(c.dailyBudget)).toBe(26)
+    expect(await queued()).toBe(q)
+  })
+})
+
+describe('group 3 review — bulk-bid names the signed-in person', () => {
+  it('his bids are logged as his, and one sent past his CPC ceiling keeps the note', async () => {
+    await inside(async () => {
+      await database.client.campaign.update({ where: { id: 'r5' }, data: { dynamicBidding: { cpcCeiling: { enabled: true, multiple: 1.5 } } } as never })
+      await database.client.adTarget.update({ where: { id: 'r5-t2' }, data: { clicks: 10, spendCents: 400 } as never }) // ceiling 60¢
+    })
+    const sent = await send('POST', '/advertising/ad-targets/bulk-bid', {
+      entries: [{ adTargetId: 'r5-t1', bidCents: 45 }, { adTargetId: 'r5-t2', bidCents: 80 }], reason: 'Edit Targets inline', applyImmediately: true, confirmOwnLimits: true,
+    }, { 'x-test-user': 'person-test' })
+    const ids = (sent.body.outcomes as Array<{ actionLogId: string }>).map((o) => o.actionLogId)
+    const rows = await inside(() => database.client.advertisingActionLog.findMany({ where: { id: { in: ids } }, select: { entityId: true, userId: true, evidence: true } }))
+    expect(rows.map((r) => r.userId)).toEqual(['user:person-test', 'user:person-test'])
+    const past = rows.find((r) => r.entityId === 'r5-t2')!.evidence as { sentPastOwnLimits?: string } | null
+    expect(past?.sentPastOwnLimits).toBe('sent past your CPC ceiling by user:person-test: a bid of 80¢ is above your CPC ceiling of 60¢')
+  })
+})
+
+describe('group 3 review — every person-clicked rollback is guarded and says what was not put back', () => {
+  it('the keyword tracker\'s Undo of a set: the answer carries changedSince and the reason', async () => {
+    await inside(async () => {
+      await updateAdTargetWithSync({ adTargetId: 'r7-t1', patch: { bidCents: 45 }, actor: 'user:owner-test', applyImmediately: true, manual: true, changeSetId: 'set-test-r7' })
+      await updateAdTargetWithSync({ adTargetId: 'r7-t2', patch: { bidCents: 70 }, actor: 'user:owner-test', applyImmediately: true, manual: true, changeSetId: 'set-test-r7' })
+    })
+    await inside(() => updateAdTargetWithSync({ adTargetId: 'r7-t2', patch: { bidCents: 75 }, actor: ENGINE, applyImmediately: true, force: true }))
+    const row = await inside(() => database.client.advertisingActionLog.findFirstOrThrow({ where: { executionId: 'set-test-r7' }, select: { id: true } }))
+    const r = await send('POST', '/advertising/keyword-actions/undo', { actionLogId: row.id, userId: 'owner-test' })
+    expect(r.status).toBe(200)
+    expect(r.body).toMatchObject({ reversed: 1, changedSince: 1 })
+    expect(String(r.body.reason)).toMatch(/^1 of 2 changes not undone\. Changed since: now bid €0\.75\./)
+  })
+
+  it('the bulk-sheet upload\'s rollback: the change made since stays, the rest of the upload is put back', async () => {
+    const job = await inside(() => database.client.importJob.create({ data: { jobName: 'test upload', fileKind: 'xlsx', targetEntity: 'adsBulksheet' } as never, select: { id: true } }))
+    await inside(async () => {
+      await updateAdTargetWithSync({ adTargetId: 'r8-t1', patch: { bidCents: 45 }, actor: 'user:owner-test', applyImmediately: true, manual: true, changeSetId: `import:${job.id}` })
+      await updateAdTargetWithSync({ adTargetId: 'r8-t2', patch: { bidCents: 70 }, actor: 'user:owner-test', applyImmediately: true, manual: true, changeSetId: `import:${job.id}` })
+    })
+    await inside(() => updateAdTargetWithSync({ adTargetId: 'r8-t2', patch: { bidCents: 75 }, actor: ENGINE, applyImmediately: true, force: true }))
+    const r = await send('POST', `/advertising/bulk/import/${job.id}/rollback`, {})
+    expect(r.body).toMatchObject({ reversed: 1, changedSince: 1 })
+    expect(String(r.body.reason)).toMatch(/Changed since: now bid €0\.75\./)
+    expect([(await bidOf('r8-t1')).bidCents, (await bidOf('r8-t2')).bidCents]).toEqual([35, 75])
+  })
+
+  it('a rule run\'s rollback: what a person changed since stays, the rest of the run is put back', async () => {
+    const run = await inside(async () => {
+      const rule = await database.client.automationRule.create({ data: { name: 'test rule', trigger: 'SCHEDULE', domain: 'advertising' } as never, select: { id: true } })
+      return database.client.automationRuleExecution.create({ data: { ruleId: rule.id, triggerData: {}, actionResults: [], dryRun: false, status: 'SUCCESS', finishedAt: new Date() } as never, select: { id: true, ruleId: true } })
+    })
+    await inside(async () => {
+      await updateAdTargetWithSync({ adTargetId: 'u6-t1', patch: { bidCents: 45 }, actor: `automation:${run.ruleId}` as never, applyImmediately: true, force: true, changeSetId: run.id })
+      await updateAdTargetWithSync({ adTargetId: 'u6-t2', patch: { bidCents: 70 }, actor: `automation:${run.ruleId}` as never, applyImmediately: true, force: true, changeSetId: run.id })
+    })
+    await send('PATCH', '/advertising/ad-targets/u6-t2', { bidCents: 80, applyImmediately: true })
+    const r = await send('POST', `/advertising/actions/${run.id}/rollback`, {})
+    expect(r.body).toMatchObject({ reversed: 1, changedSince: 1 })
+    expect(String(r.body.reason)).toMatch(/Changed since: now bid €0\.80\./)
+    expect([(await bidOf('u6-t1')).bidCents, (await bidOf('u6-t2')).bidCents]).toEqual([35, 80])
   })
 })

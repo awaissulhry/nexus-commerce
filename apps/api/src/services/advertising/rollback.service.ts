@@ -29,6 +29,7 @@ import {
 } from './ads-mutation.service.js'
 import { NON_CHANGE_ACTION_TYPES } from './ads-engine-actors.js'
 import type { AdWriteEvidence } from './ads-evidence.js'
+import { sameToTheCent } from './same-value.js'
 
 const ROLLBACK_WINDOW_MS = 24 * 60 * 60 * 1000
 /** Surfaced to the UI so the button can explain itself rather than no-op. */
@@ -199,8 +200,17 @@ async function reverseOne(
    * action log row (`undoOf`: the row it puts back), and `askGate` — the write gate asked before Nexus writes its copy, so
    * a refusal (the halt, a locked campaign, the brain running the campaign now) writes nothing and says why. Absent: as before.
    */
-  opts: { evidence?: AdWriteEvidence | null; askGate?: boolean } = {},
-): Promise<{ ok: boolean; reason?: string; skipped?: boolean; actionLogId?: string | null }> {
+  opts: {
+    evidence?: AdWriteEvidence | null
+    askGate?: boolean
+    /**
+     * Editing correctness (group 3) — a person's Undo (onlyIfStillStands): the reversal's local write is compare-and-set
+     * on the values this change set (the mutation layer's `expected`): a write that lands after the check and before this
+     * one leaves it unwritten and unqueued, answered as `changedSince` with "Changed since: now …".
+     */
+    expectAfter?: boolean
+  } = {},
+): Promise<{ ok: boolean; reason?: string; skipped?: boolean; actionLogId?: string | null; changedSince?: boolean }> {
   // Refuse to invert anything that never made it past the gate / queue
   // — there's nothing to undo on the Amazon side, and re-applying the
   // before-state via the worker would create noise.
@@ -286,7 +296,9 @@ async function reverseOne(
         manual,
         changeSetId,
         ...(sbSd && (await wasSbSdWrite(log)) ? { allowSbSd: true } : {}), // W4-11
+        ...(opts.expectAfter ? { expected: expectedAfter(log, Object.keys(patch)) } : {}),
       })
+      if (!result.ok && result.changedSince) return { ok: false, changedSince: true, reason: await changedSinceWords(log, Object.keys(patch)) }
       return result.ok ? { ok: true, actionLogId: result.actionLogId ?? null } : { ok: false, reason: result.error ?? 'unknown' }
     }
     if (log.entityType === 'AD_GROUP') {
@@ -307,7 +319,9 @@ async function reverseOne(
         changeSetId,
         ...(opts.evidence ? { evidence: opts.evidence } : {}),
         ...(opts.askGate ? { askGate: true } : {}),
+        ...(opts.expectAfter ? { expected: expectedAfter(log, Object.keys(patch)) } : {}),
       })
+      if (!result.ok && result.changedSince) return { ok: false, changedSince: true, reason: await changedSinceWords(log, Object.keys(patch)) }
       if (result.ok) await restoreFloorMemory(log, before)
       return result.ok ? { ok: true, actionLogId: result.actionLogId ?? null } : { ok: false, reason: result.error ?? 'unknown' }
     }
@@ -333,7 +347,9 @@ async function reverseOne(
         ...(patch.status === 'ENABLED' && after.keptPaused === true ? { releaseKeptPaused: true } : {}),
         ...(opts.evidence ? { evidence: opts.evidence } : {}),
         ...(opts.askGate ? { askGate: true } : {}),
+        ...(opts.expectAfter ? { expected: expectedAfter(log, Object.keys(patch)) } : {}),
       })
+      if (!result.ok && result.changedSince) return { ok: false, changedSince: true, reason: await changedSinceWords(log, Object.keys(patch)) }
       if (result.ok) await restoreFloorMemory(log, before)
       return result.ok ? { ok: true, actionLogId: result.actionLogId ?? null } : { ok: false, reason: result.error ?? 'unknown' }
     }
@@ -465,7 +481,12 @@ export async function rollbackByActionLogId(args: {
     out.details.push({ ...base, outcome: 'SKIPPED', reason: moved })
     return out
   }
-  const r = await reverseOne(log as never, args.actor, args.reason, args.manual === true, args.stampChangeSetId ?? null, args.allowSbSd === true)
+  const r = await reverseOne(log as never, args.actor, args.reason, args.manual === true, args.stampChangeSetId ?? null, args.allowSbSd === true, false, { expectAfter: args.onlyIfStillStands === true })
+  if (r.changedSince) {
+    out.ok = false; out.skipped = 1; out.changedSince = 1; out.reason = r.reason
+    out.details.push({ ...base, outcome: 'SKIPPED', reason: r.reason })
+    return out
+  }
   // CM-22 — a no-op (`ok` with `skipped`) is skipped, not reversed, and the row is not marked undone.
   if (r.ok && !r.skipped) {
     out.reversed = 1
@@ -534,14 +555,11 @@ type StandRow = { id: string; entityType: string; entityId: string; actionType: 
 type Payload = Record<string, unknown>
 type Placements = Array<{ placement?: string; percentage?: number }>
 
-/** One value, as the action log and the entity hold it: a number to the cent (a budget is "20.00" in one, 20 in the other). */
-function sameValue(a: unknown, b: unknown): boolean {
-  if ((a ?? null) === (b ?? null)) return true
-  if (a == null || b == null || a === '' || b === '') return false
-  const x = Number(a)
-  const y = Number(b)
-  return Number.isFinite(x) && Number.isFinite(y) && Math.abs(x - y) < 0.005
-}
+/**
+ * One value, as the action log and the entity hold it: a number to the cent (a budget is "20.00" in one, 20 in the other;
+ * a 3-decimal €1.005 logged before writes were rounded is the €1.01 Nexus holds), a date as ISO.
+ */
+const sameValue = sameToTheCent
 function samePlacements(a: unknown, b: unknown): boolean {
   const list = (p: unknown): Placements => (Array.isArray(p) ? (p as Placements) : [])
   const x = list(a)
@@ -607,17 +625,40 @@ async function currentValues(entityType: string, entityId: string): Promise<{ va
   return null
 }
 
+/** The refusal's words: each field as the entity holds it now. */
+async function refusalWords(entityType: string, entityId: string, fields: readonly string[]): Promise<string> {
+  const now = await currentValues(entityType, entityId)
+  const words = now ? fields.map((f) => valueWords(entityType, f, now.values[f], now.currency)).join(', ') : 'something else'
+  return `Changed since: now ${words}. Undo would overwrite that newer change, so nothing was put back.`
+}
+
+/** The values a reversal's compare-and-set expects (the mutation layer's `expected`): what this change set, field by field. */
+function expectedAfter(log: AdLog, fields: readonly string[]): Record<string, number | string | null> {
+  const after = (log.payloadAfter ?? {}) as Payload
+  return Object.fromEntries(fields.map((f) => [f, (after[f] ?? null) as number | string | null]))
+}
+
+/** A reversal the compare-and-set refused (a write landed between the check and the write): its words, as the check's. */
+function changedSinceWords(log: AdLog, fields: readonly string[]): Promise<string> {
+  return refusalWords(log.entityType, log.entityId, fields)
+}
+
 /**
- * Editing correctness (group 3) — a person's Undo puts the old value back only while the change still stands: the same
- * compare-and-set auto-undo and a rule's undo make (judgedWriteStands), narrowed to the fields the change wrote (the
- * only ones its Undo writes back), so a later pause does not hold back the Undo of a bid. It refuses when
- *   · a later write on the same entity changed one of those fields (a write that set something: one that failed, was
- *     refused or was cancelled put its value back, so it is not one), or
- *   · the entity no longer holds what the change set (an Amazon read, a write with no record).
+ * Editing correctness (group 3) — a person's Undo puts the old value back only while the change still stands, judged on
+ * the VALUE, field by field for the fields the change wrote (the only ones its Undo writes back, so a later pause does
+ * not hold back the Undo of a bid). It stands when, for each of them,
+ *   · the entity holds now what the change set, and
+ *   · the newest later write of that field that still counts left it there: a write undone since (rolledBackAt) does
+ *     not count, nor does one that set nothing (failed, refused, cancelled); its reversal is a write like any other and
+ *     put the value back.
+ * So undoing newest-first works (B undone, then A: B's reversal left A's value), and so does a bid moved away and back
+ * (50 → 30 → 50: the newest write left 50); a newer value is never overwritten. The same compare-and-set as auto-undo
+ * and a rule's undo (judgedWriteStands), which refuse on any later row instead.
  * `rows`: the change's own rows on ONE entity — one row, or every row of one change set on that entity (they are
  * judged together: none of them is a later change of the others, and the newest says what the set left).
  * Null when it stands, else the refusal in words: "Changed since: now bid €0.45. …". Rows of an entity or a change
- * the Undo does not write back (a create, a retail event, a product ad) are not judged here: null.
+ * the Undo does not write back (a create, a retail event, a product ad) are not judged here: null. The reversal's own
+ * local write is compare-and-set on the same values (reverseOne `expectAfter`).
  */
 export async function changedSinceUndo(rows: StandRow[]): Promise<string | null> {
   if (!rows.length) return null
@@ -638,20 +679,27 @@ export async function changedSinceUndo(rows: StandRow[]): Promise<string | null>
   const later = await prisma.advertisingActionLog.findMany({
     where: {
       entityType, entityId, createdAt: { gt: ordered[0]!.createdAt }, id: { notIn: rows.map((r) => r.id) },
+      rolledBackAt: null,
       actionType: { notIn: [...NON_CHANGE_ACTION_TYPES] },
       OR: [{ amazonResponseStatus: null }, { amazonResponseStatus: { notIn: ['FAILED', 'SKIPPED', 'CANCELLED'] } }],
     },
     select: { entityType: true, actionType: true, payloadBefore: true, payloadAfter: true },
     orderBy: { createdAt: 'asc' },
   })
-  const laterFields = new Set(later.flatMap(undoFieldsOf).filter((f) => fields.includes(f)))
+  const same = (f: string, a: unknown, b: unknown) => (f === 'placements' ? samePlacements(a, b) : sameValue(a, b))
+  // The newest later write of each field left it where this change did, or not.
+  const leftElsewhere = fields.filter((f) => {
+    const newest = [...later].reverse().find((r) => undoFieldsOf(r).includes(f))
+    if (!newest) return false
+    const after = (newest.payloadAfter ?? {}) as Payload
+    return !same(f, f === 'placements' ? after.adjustments : after[f], expected[f])
+  })
   const now = await currentValues(entityType, entityId)
   if (!now) return null // the entity is gone: reverseOne answers that in its own words
-  const moved = fields.filter((f) => (f === 'placements' ? !samePlacements(now.values.placements, expected.placements) : !sameValue(now.values[f], expected[f])))
-  const changed = [...new Set([...moved, ...laterFields])]
+  const moved = fields.filter((f) => !same(f, now.values[f], expected[f]))
+  const changed = fields.filter((f) => moved.includes(f) || leftElsewhere.includes(f))
   if (!changed.length) return null
-  const words = changed.map((f) => valueWords(entityType, f, now.values[f], now.currency)).join(', ')
-  return `Changed since: now ${words}. Undo would overwrite that newer change, so nothing was put back.`
+  return refusalWords(entityType, entityId, changed)
 }
 
 /**
@@ -806,15 +854,7 @@ export async function rollbackByChangeSetId(args: {
   }
   const stamp = args.stampChangeSetId && args.stampChangeSetId !== args.changeSetId ? args.stampChangeSetId : null
   // Editing correctness (group 3) — judged per entity before the first write: the reversals' own rows are later writes.
-  const movedOf = new Map<string, string | null>()
-  if (args.onlyIfStillStands) {
-    const byEntity = new Map<string, typeof logs>()
-    for (const log of logs) {
-      const key = `${log.entityType}:${log.entityId}`
-      byEntity.set(key, [...(byEntity.get(key) ?? []), log])
-    }
-    for (const [key, rows] of byEntity) movedOf.set(key, await changedSinceUndo(rows))
-  }
+  const movedOf = args.onlyIfStillStands ? await changedSinceByEntity(logs) : new Map<string, string | null>()
   for (const log of logs) {
     const base = { actionLogId: log.id, actionType: log.actionType, entityType: log.entityType, entityId: log.entityId }
     const moved = movedOf.get(`${log.entityType}:${log.entityId}`)
@@ -824,7 +864,13 @@ export async function rollbackByChangeSetId(args: {
       out.details.push({ ...base, outcome: 'SKIPPED', reason: moved })
       continue
     }
-    const r = await reverseOne(log, args.actor, args.reason, args.manual === true, stamp, args.allowSbSd === true)
+    const r = await reverseOne(log, args.actor, args.reason, args.manual === true, stamp, args.allowSbSd === true, false, { expectAfter: args.onlyIfStillStands === true })
+    if (r.changedSince) {
+      out.skipped += 1
+      out.changedSince = (out.changedSince ?? 0) + 1
+      out.details.push({ ...base, outcome: 'SKIPPED', reason: r.reason })
+      continue
+    }
     if (r.ok && !r.skipped) {
       out.reversed += 1
       out.details.push({ ...base, outcome: 'REVERSED' })
@@ -841,12 +887,31 @@ export async function rollbackByChangeSetId(args: {
       out.details.push({ ...base, outcome: 'FAILED', reason: r.reason })
     }
   }
-  if (out.changedSince) {
-    const first = out.details.find((d) => d.reason?.startsWith('Changed since:'))!.reason!
-    if (out.reversed === 0) { out.ok = false; out.reason ??= first }
-    else out.reason ??= `${out.changedSince} of ${logs.length} changes not undone. ${first}`
-  }
+  noteChangedSince(out, logs.length)
   return noteNothingToUndo(out, out.details.find((d) => d.outcome === 'SKIPPED')?.reason)
+}
+
+/**
+ * Editing correctness (group 3) — the answer of an Undo some rows of which no longer stood: nothing put back → not ok, and
+ * the first refusal is the reason; some put back → "N of M changes not undone. Changed since: now …".
+ */
+function noteChangedSince(out: RollbackOutcome, total: number): void {
+  if (!out.changedSince) return
+  const first = out.details.find((d) => d.reason?.startsWith('Changed since:'))?.reason ?? 'Changed since.'
+  if (out.reversed === 0) { out.ok = false; out.reason ??= first }
+  else out.reason ??= `${out.changedSince} of ${total} changes not undone. ${first}`
+}
+
+/** Editing correctness (group 3) — each entity's rows of one Undo, judged before the first write (changedSinceUndo). */
+async function changedSinceByEntity(logs: StandRow[]): Promise<Map<string, string | null>> {
+  const byEntity = new Map<string, StandRow[]>()
+  for (const log of logs) {
+    const key = `${log.entityType}:${log.entityId}`
+    byEntity.set(key, [...(byEntity.get(key) ?? []), log])
+  }
+  const out = new Map<string, string | null>()
+  for (const [key, rows] of byEntity) out.set(key, await changedSinceUndo(rows))
+  return out
 }
 
 /**
@@ -861,6 +926,11 @@ export async function rollbackByExecutionId(args: {
   reason: string
   /** 1e — a Rollback a person clicked (see reverseOne). Set only by the routes. */
   manual?: boolean
+  /**
+   * Editing correctness (group 3) — a person's Rollback of a rule run: per entity, only what still stands is put back
+   * (see rollbackByChangeSetId); the rest is refused with "Changed since: now …".
+   */
+  onlyIfStillStands?: boolean
 }): Promise<RollbackOutcome> {
   const exec = await prisma.automationRuleExecution.findUnique({
     where: { id: args.executionId },
@@ -910,8 +980,20 @@ export async function rollbackByExecutionId(args: {
     details: [],
   }
 
+  // Editing correctness (group 3) — judged per entity before the first write, as rollbackByChangeSetId.
+  const movedOf = args.onlyIfStillStands ? await changedSinceByEntity(logs) : new Map<string, string | null>()
   for (const log of logs) {
-    const r = await reverseOne(log, args.actor, args.reason, args.manual === true)
+    const base = { actionLogId: log.id, actionType: log.actionType, entityType: log.entityType, entityId: log.entityId }
+    const moved = movedOf.get(`${log.entityType}:${log.entityId}`)
+    const r = moved
+      ? { ok: false, changedSince: true, reason: moved, skipped: false }
+      : await reverseOne(log, args.actor, args.reason, args.manual === true, null, false, false, { expectAfter: args.onlyIfStillStands === true })
+    if (r.changedSince) {
+      out.skipped += 1
+      out.changedSince = (out.changedSince ?? 0) + 1
+      out.details.push({ ...base, outcome: 'SKIPPED', reason: r.reason })
+      continue
+    }
     if (r.ok && !r.skipped) {
       out.reversed += 1
       out.details.push({
@@ -954,5 +1036,6 @@ export async function rollbackByExecutionId(args: {
     }
   }
 
+  noteChangedSince(out, logs.length)
   return noteNothingToUndo(out, out.details.find((d) => d.outcome === 'SKIPPED')?.reason)
 }
