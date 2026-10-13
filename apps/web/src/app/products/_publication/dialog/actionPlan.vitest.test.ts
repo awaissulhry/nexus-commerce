@@ -77,7 +77,6 @@ describe('the one table of a market', () => {
     const partial = rows.find(r => r.key === 'content:gale-s')!
     expect(partial.sent).toBe('1 of 2 fields')
     expect(partial.tick).toBe('some')
-    expect(partial.expandable).toBe(true)
     const off = toggleRowTicks(partial, false, { selectedIds: entryOf(plan).selectedIds, lifecycleIds: [] })
     expect(off.selectedIds.every(id => !id.includes('gale-s'))).toBe(true)
     expect(off.selectedIds.some(id => id.includes('gale-m'))).toBe(true)
@@ -99,10 +98,10 @@ describe('the one table of a market', () => {
     expect(replacesCountWords(1, 'SHOPIFY')).toBe('1 replaces a Shopify value')
     expect(replacesCountWords(1200, 'AMAZON')).toBe('1,200 replace Amazon values')
   })
-  it('a Full row says everything is sent and lists what it removes', () => {
+  // What a Full row removes is a row of the review table of its own, whole (reviewRows.vitest.test.ts).
+  it('a Full row says everything is sent', () => {
     const full = rows.find(r => r.key === 'content:gale-m')!
     expect(full.sent).toBe(EVERYTHING_SENT)
-    expect(full.removals).toEqual([{ label: 'Material', value: 'Leather' }])
     expect(full.tick).toBe('on')
   })
   it('lifecycle rows carry the server sentence and who set them; outgrown rows say "No longer applies" and cannot be ticked', () => {
@@ -486,7 +485,6 @@ describe('S10 — a SKU move in the Publish window', () => {
     expect(row.sent).toBe(move.sentence)
     expect(row.warning).toBe(move.warning)
     expect(row.danger).toBe(true)
-    expect(row.expandable).toBe(false)
     expect(rows.map(r => r.key)).toEqual(['content:gale-s', 'content:gale-m'])
     expect(rows.find(r => r.key === 'content:gale-m')!.what).toMatchObject({ column: 'send', mode: 'partial' })
   })

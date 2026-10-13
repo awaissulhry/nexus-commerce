@@ -42,6 +42,7 @@ import { MasterSheet } from '@/app/products/_sheet/MasterSheet'
 import { GridModuleCatalog } from './GridModuleCatalog'
 import { GdsScenarios } from './GdsScenarios'
 import { MatrixScenario } from './MatrixScenario'
+import { PublishReviewScenario } from './PublishReviewScenario'
 import { GridFeatureLab } from './GridFeatureLab'
 import { DataGridParityTab, WorkspaceParityTab } from './parity/ParityTabs'
 import type { ParityEngines } from './parity/engines'
@@ -59,7 +60,7 @@ const ENGINES: ParityEngines = {
   agDataGrid: AgDataGrid,
 }
 
-type LabTab = 'workspace' | 'datagrid' | 'features' | 'gds' | 'sheet' | 'matrix' | 'modules'
+type LabTab = 'workspace' | 'datagrid' | 'features' | 'gds' | 'sheet' | 'matrix' | 'publish' | 'modules'
 const TABS: ReadonlyArray<readonly [LabTab, string]> = [
   ['workspace', 'Workspace parity'],
   ['datagrid', 'DataGrid parity'],
@@ -67,6 +68,7 @@ const TABS: ReadonlyArray<readonly [LabTab, string]> = [
   ['gds', 'GDS scenarios'],
   ['sheet', 'Master sheet'],
   ['matrix', 'Matrix cells'],
+  ['publish', 'Publish review'],
   ['modules', 'Modules'],
 ]
 const isTab = (t: string | null): t is LabTab => TABS.some(([id]) => id === t)
@@ -143,6 +145,24 @@ export function GridLabClient({ initialScenario = 'all', initialTab }: { initial
         </header>
         <TabBar tab={tab} onTab={setTab} />
         <MatrixScenario />
+      </main>
+    )
+  }
+
+  /* Grid audit wave 3 — `?tab=publish`: the Publish review's one table inside the Publish window's surface, from a fixture
+     (a local box cannot read the channels, so the window's own review cannot be opened here). */
+  if (tab === 'publish') {
+    return (
+      <main style={{ padding: 24, display: 'grid', gap: 20, background: 'var(--nds-bg)', minHeight: '100vh', alignContent: 'start' }}>
+        <header style={{ display: 'grid', gap: 6 }}>
+          <h1 className="text-3xl font-heading" style={{ margin: 0, color: 'var(--nds-text)' }}>Publish review — one row per change</h1>
+          <p className="text-md" style={{ margin: 0, maxWidth: 900, color: 'var(--nds-text-2)' }}>
+            The Publish window&rsquo;s table on a GALE family across three Amazon markets: problems first, each product with its
+            fields (Channel now → Nexus sends), what a Full update removes, a Delete, a market that could not be read.
+          </p>
+        </header>
+        <TabBar tab={tab} onTab={setTab} />
+        <PublishReviewScenario />
       </main>
     )
   }

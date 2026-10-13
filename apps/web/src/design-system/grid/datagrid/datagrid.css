@@ -102,6 +102,12 @@
 }
 .nds-ag-dg .ag-cell.nds-dg-td.ck .ag-cell-wrapper,
 .nds-ag-dg .ag-cell.nds-dg-td.ck .ag-cell-value { justify-content: center; text-align: center; }
+/* The legacy `sticky` mark (page rules key on it) is also the app's Tailwind utility `.sticky { position: sticky }`, which
+   won over AG's own placement: AG places every cell and header cell itself (absolute), so a pinned column's cells went
+   into the flow — with two pinned columns, the second one's cells dropped one row (grid audit wave 3, measured in the
+   Publish review). AG's placement, restated above the utility. */
+.nds-ag-dg .ag-cell.nds-dg-td.sticky,
+.nds-ag-dg .ag-header-cell.nds-dg-th.sticky { position: absolute; }
 /* `td.sticky-right { box-shadow: inset 1px 0 0 var(--nds-border-subtle) }` (1464) — a 1px hairline on the left of
    EVERY right-sticky cell, and of its header (`th.sticky-right`). A left-sticky column drew nothing. */
 .nds-ag-dg .ag-cell.nds-dg-td.sticky-right,

@@ -7,8 +7,7 @@
 .skuCol .sku { white-space: normal; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .textCol .fix, .textCol .clamp { white-space: normal; }
 .fix { display: flex; flex-direction: column; gap: var(--nds-space-2); overflow-wrap: anywhere; }
-.detail { color: var(--nds-text-muted); font-size: var(--nds-font-size-sm); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
-.clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.detail { color: var(--nds-text-muted); font-size: var(--nds-font-size-sm); white-space: normal; overflow-wrap: anywhere; }
 .observations { max-height: 320px; overflow: auto; border: 1px solid var(--nds-border); border-radius: var(--nds-radius-md); }
 .observation { display: grid; gap: var(--nds-space-8); padding: var(--nds-space-12); overflow-wrap: anywhere; }
 .observation + .observation { border-top: 1px solid var(--nds-border); }
@@ -19,7 +18,7 @@
 /* The DS small breakpoint (`tokens/breakpoints.ts` sm, 760px), desktop-first as the DS writes it. */
 @media (max-width: 760px) { .observedValues { grid-template-columns: minmax(0, 1fr); } }
 .resultTitle { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); }
-.destination { display: inline-flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; overflow-wrap: anywhere; }
+.destination { display: inline-flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .muted { color: var(--nds-text-3); }
 .expanded { padding: var(--nds-space-12); min-width: 0; }
 /* Compact destination row (Owner, 2026-10-02): Channel · Account · Markets, chosen markets as chips. It stays at the top
@@ -35,7 +34,7 @@
 .chips > li { min-width: 0; max-width: 100%; }
 .chipText { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tabLabel { display: inline-flex; align-items: baseline; min-width: 0; }
-.tabName { min-width: 0; max-width: 32ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tabName { min-width: 0; max-width: 48ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* A flex item drops its leading space, so " · 3 changes" read "Main listing· 3 changes" (Owner 2026-10-05): the words keep
    their space and never shrink — only the name gives way. */
 .tabWords { flex: none; white-space: pre; }
@@ -55,7 +54,6 @@
    text, so it reads above the muted reason), or, unticked, what the channel keeps (the reason's own colour). */
 .lineWarning { display: block; margin-top: var(--nds-space-4); color: var(--nds-text); }
 .lineKept { display: block; margin-top: var(--nds-space-4); }
-.quiet { color: var(--nds-text-muted); }
 .whatCell { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-6); }
 .sentCell { display: flex; flex-direction: column; gap: var(--nds-space-2); white-space: normal; overflow-wrap: anywhere; min-width: 0; }
 .confirm { display: flex; flex-direction: column; gap: var(--nds-space-8); padding-top: var(--nds-space-12); border-top: 1px solid var(--nds-border-subtle); min-width: 0; }

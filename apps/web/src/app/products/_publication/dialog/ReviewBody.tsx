@@ -8,7 +8,7 @@ import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { channelLabel } from '@nexus/shared/channel-label'
 import { PublicationOverwrite } from './PublicationOverwrite'
 import { PublicationChanges } from './PublicationChanges'
-import { ActionPlanTable } from './ActionPlanTable'
+import { ReviewTable } from './ReviewTable'
 import { DiffersSummary } from './DiffersSummary'
 import { reviewRowListingWord, shopifyVisibilityWords, type ActionPlanRow } from './actionPlan'
 import { isSparse } from './destinations'
@@ -32,14 +32,16 @@ export function publicationDestinationParts(review: Pick<StudioPublishReview, 'a
 
 type ReviewRow = StudioPublishReview['rows'][number]
 // Audit D4 — what to fix, by SKU, in one table; the channel's own words under it, muted.
+// The widths fit the Publish window's body (1040 px window, grid audit D2: 740 px of columns sat in a 622 px grid, and the
+// end of every message was cut); the words wrap, the channel's own detail whole under them (D6: it was cut to 3 lines).
 const PROBLEM_COLUMNS: Column<PublicationProblemRow>[] = [
-  { key: 'sku', label: 'SKU', width: 180, className: styles.skuCol, render: row => <span className={styles.sku} title={row.sku}>{row.sku}</span> },
-  { key: 'fix', label: 'What to fix', width: 560, className: styles.textCol, render: row => <span className={styles.fix}>
-    <span>{row.message}</span>{row.detail && <span className={styles.detail} title={row.detail}>{row.detail}</span>}</span> },
+  { key: 'sku', label: 'SKU', width: 180, className: styles.skuCol, render: row => <span className={styles.sku}>{row.sku}</span> },
+  { key: 'fix', label: 'What to fix', width: 600, className: styles.textCol, render: row => <span className={styles.fix}>
+    <span>{row.message}</span>{row.detail && <span className={styles.detail}>{row.detail}</span>}</span> },
 ]
 const PRODUCT_COLUMNS: Column<ReviewRow>[] = [
   { key: 'sku', label: 'SKU', width: 180, className: styles.skuCol, render: row => <span className={styles.sku} title={row.sku}>{row.sku}</span> },
-  { key: 'title', label: 'Title', width: 380, className: styles.textCol, render: row => <span className={styles.clamp} title={row.title}>{row.title}</span> },
+  { key: 'title', label: 'Title', width: 420, className: styles.textCol, render: row => <span className={styles.fix}>{row.title}</span> },
   // New listings: how a created row starts ("New listing · Inactive"), or that Publish leaves it out.
   { key: 'listing', label: 'Listing', width: 150, render: row => reviewRowListingWord(row) },
 ]
@@ -50,6 +52,10 @@ const PRODUCT_COLUMNS: Column<ReviewRow>[] = [
  * products table give way to that table; without it (the products list's rows) the body is today's.
  */
 export interface ReviewBodyPlan {
+  /** The destination key: the table's market. */
+  key: string
+  /** The channel ("AMAZON"), for the words of a line that replaces a channel value. */
+  channel: string
   /** "Amazon · IT" — the plan's own label, for a market with no content review. */
   label: string
   /** The one summary line for this market. */
@@ -112,12 +118,12 @@ export function ReviewBody(props: ReviewBodyProps) {
   return <ContentReviewBody {...props} review={review} />
 }
 
-/** The summary line and the one table of a market. */
+/** The summary line and the one table of a market: one row per change, its problems first (grid audit wave 3). */
 function PlanPart({ plan, review, selectedIds, locked }: { plan: ReviewBodyPlan; review: StudioPublishReview | null; selectedIds: string[]; locked: boolean }) {
   return <>
     <p className={styles.planSummary} role="status">{plan.summary}</p>
-    <ActionPlanTable rows={plan.rows} review={review} selectedIds={selectedIds} lifecycleIds={plan.lifecycleIds} locked={locked} now={plan.now}
-      ariaLabel={`Listings in this publish to ${plan.label}`} onTicksChange={plan.onTicksChange} />
+    <ReviewTable locked={locked} now={plan.now} ariaLabel={`Changes in this publish to ${plan.label}`}
+      markets={[{ key: plan.key, label: plan.label, channel: plan.channel, rows: plan.rows, review, selectedIds, lifecycleIds: plan.lifecycleIds, onTicksChange: plan.onTicksChange }]} />
   </>
 }
 
@@ -141,9 +147,10 @@ function ContentReviewBody({ review, selectedIds, selection, selecting = false, 
     {/* Audit D4 — one short banner says what the table is; the table names each problem (SKU · what to fix). The count is
         the Problems tile's: the banner does not say it again. */}
     {problems.length > 0 && <Banner tone="warning" title={review.photosOnly ? 'Other fields have problems — only photos can be sent now' : 'Fix these before publishing'}>
-      {review.photosOnly ? 'Choose only photos to send now, or fix the problems below first.' : 'Each row says what to fix. Fix them, then check again.'}
+      {review.photosOnly ? 'Choose only photos to send now, or fix the problems first.' : plan ? 'They are the first rows of the table below. Fix them, then check again.' : 'Each row says what to fix. Fix them, then check again.'}
     </Banner>}
-    {problems.length > 0 && <DataGrid ariaLabel="Problems to fix before publishing" size="sm" keyboardScroll columns={PROBLEM_COLUMNS} rows={problems} rowKey={row => row.id} />}
+    {/* With the plan, the problems are rows of the one table; without it (the products list's rows) they keep their own. */}
+    {problems.length > 0 && !plan && <DataGrid ariaLabel="Problems to fix before publishing" size="md" keyboardScroll headerMenus={false} columns={PROBLEM_COLUMNS} rows={problems} rowKey={row => row.id} />}
     {/* Notes inform and block nothing: one closed section, as in the Import dialog. */}
     {notes.length > 0 && <Disclosure summary={`${notes.length} ${notes.length === 1 ? 'note' : 'notes'}`}>
       <ul className={styles.issues}>{notes.map(note => <li key={note}>{note}</li>)}</ul>
@@ -163,6 +170,6 @@ function ContentReviewBody({ review, selectedIds, selection, selecting = false, 
     {!sparse && review.overwrite && <PublicationOverwrite overwrite={review.overwrite} confirmed={confirmed && !!review.id}
       onConfirm={onConfirmChange} disabled={!review.id || locked} />}
     {!sparse && !review.overwrite && !blockers.length && review.rows.some(row => row.existing) && <Banner tone="warning" title="Overwrite review unavailable">The review did not check what this overwrites on the existing listings. Check again.</Banner>}
-    {!plan && <DataGrid ariaLabel="Products in this publication" size="sm" keyboardScroll columns={PRODUCT_COLUMNS} rows={review.rows} rowKey={row => row.productId} />}
+    {!plan && <DataGrid ariaLabel="Products in this publication" size="md" keyboardScroll headerMenus={false} columns={PRODUCT_COLUMNS} rows={review.rows} rowKey={row => row.productId} />}
   </div>
 }
