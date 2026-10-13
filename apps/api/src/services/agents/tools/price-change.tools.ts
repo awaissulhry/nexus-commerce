@@ -6,7 +6,8 @@
  *                               whose price would then sit outside them: the price door refuses to send those.
  *   bulk-listing-price-change   up to 250 listings' own prices by a percent, by an amount, to one price, or each to its
  *                               own price (an undo), optionally rounded down to .99 — each through the ONE channel price
- *                               door (`writeChannelPrices`), checked against the version the person approved.
+ *                               door (`writeChannelPrices`), checked against the price the person approved (2.3: not the
+ *                               listing's version, which an order's stock cascade moves).
  *   resend-prices               send the price each listing already carries again, through the door's send mode
  *                               (`pushPriceUpdate`, `/pricing`'s "Push price").
  *
@@ -28,7 +29,8 @@ import { holdsCascadedPrice, listingMarketCurrency, listingSendPrice } from '../
 import { roundDownTo99 } from '../../bulk-action/price-rounding.js'
 import { logger } from '../../../utils/logger.js'
 import type { ProductBulkContext } from '../../products/bulk-edit.service.js'
-import type { AgentTool, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
+import { approvedOnVersion, BASIS_ON_FIELDS, type AgentTool, type PlanFacts, type PlanWrite, type ToolContext, type ToolResult, type ToolUndo } from '../tool-types.js'
+import { listingPlanFacts, listingPriceFacts, pinnedPrice, type ListingFacts } from './listing-facts.js'
 import { PRODUCT_NOT_FOUND } from './live-product.js'
 
 const PREVIEW_LINES = 20
@@ -117,7 +119,9 @@ const priceInput = z.object({
 
 interface PriceLine { listing: PriceListing; from: number | null; to: number | null; currency: string; held: boolean }
 
-async function planListingPrices(args: Record<string, unknown>): Promise<{ lines: PriceLine[]; unchanged: number } | Refusal> {
+interface PricePlan { lines: PriceLine[]; unchanged: number; ids: string[] }
+
+async function planListingPrices(args: Record<string, unknown>): Promise<PricePlan | Refusal> {
   const listingIds = (args.listingIds as string[] | undefined) ?? []
   const prices = (args.prices as Array<{ listingId: string; price: number | null }> | undefined) ?? []
   if (listingIds.length && prices.length) return { error: 'Name listingIds with mode and value, or prices — one of the two.' }
@@ -170,12 +174,22 @@ async function planListingPrices(args: Record<string, unknown>): Promise<{ lines
   }
   if (problems.length) return { error: `Not queued: ${listed(problems)}.` }
   if (!lines.length) return { error: `Every listing named already has that price (${plural(unchanged, 'listing')}). Nothing to change.` }
-  return { lines, unchanged }
+  return { lines, unchanged, ids }
 }
 
 const pct = (from: number | null, to: number | null) => (from && to !== null ? Math.round(((to - from) / from) * 1000) / 10 : null)
 
-function listingPricePreview(plan: { lines: PriceLine[]; unchanged: number }) {
+/**
+ * 2.3 — every fact the preview stands on (listing-facts.ts: each named listing's own price, sale and pricing, its
+ * product's master price) and what it sets. The basis is both: an order's stock cascade moves none of them; a price or a
+ * sale someone else set does. A listing's sale is part of it, so a new price never runs past a sale nobody saw.
+ */
+async function priceFacts(plan: PricePlan): Promise<{ facts: ListingFacts; planFacts: PlanFacts }> {
+  const facts = await listingPriceFacts(plan.ids)
+  return { facts, planFacts: listingPlanFacts(facts, Object.fromEntries(plan.lines.map((line) => [`listing:${line.listing.id}:price`, line.to]))) }
+}
+
+function listingPricePreview(plan: PricePlan, planFacts: PlanFacts) {
   const moves = plan.lines.map((line) => pct(line.from, line.to)).filter((p): p is number => p !== null)
   const maxChangePct = moves.length ? Math.max(...moves.map(Math.abs)) : 0
   const up = plan.lines.filter((line) => line.from !== null && line.to !== null && line.to > line.from).length
@@ -191,7 +205,13 @@ function listingPricePreview(plan: { lines: PriceLine[]; unchanged: number }) {
     })),
     ...(plan.lines.length > PREVIEW_LINES ? { moreChanges: plan.lines.length - PREVIEW_LINES } : {}),
     totals: { listings: plan.lines.length, unchanged: plan.unchanged, up, maxChangePct, held: held.length },
-    basis: basisOf(plan.lines.map((line) => [line.listing.id, line.listing.version, num(line.listing.price), num(line.listing.priceOverride), line.listing.followMasterPrice, num(line.listing.product?.basePrice), line.to])),
+    // 2.3 — what each price stands on and what it sets (`planFacts`): never the listing's version, which an order's stock
+    // cascade moves, so the price change would have been refused for nothing.
+    basisOn: BASIS_ON_FIELDS,
+    planFacts,
+    basis: basisOf(planFacts),
+    // The basis a request approved before 2.3 stood on (each listing's version): it is checked on it, as it was approved.
+    versionBasis: basisOf(plan.lines.map((line) => [line.listing.id, line.listing.version, num(line.listing.price), num(line.listing.priceOverride), line.listing.followMasterPrice, num(line.listing.product?.basePrice), line.to])),
     note: `${NOT_YET} Each price goes through the Nexus price door as the person who approves it: a listing given its own price stops `
       + 'following the master price; one that changed since the approval is not touched. Prices are sent in the market\'s own currency, never a quantity.',
   }
@@ -226,6 +246,9 @@ const bulkListingPriceChange: AgentTool = {
   limits: BULK_LISTING_PRICE_LIMITS,
   withinLimits: bulkListingPriceWithinLimits,
   undo: LISTING_PRICE_UNDO,
+  // 2.3 — a later step of a plan re-based on an earlier step's own price writes: its lines, totals and basis follow the
+  // facts it stands on (`planFacts`), which are checked one by one.
+  planRebase: () => ['changes', 'totals', 'basis'],
   description:
     `Change the own price of up to ${MAX_LISTINGS} listings: by a percent, by an amount, all to one price, or each to its own price, `
     + 'optionally rounded down to .99. Each listing given a price stops following the master price (a price of null hands it '
@@ -236,16 +259,23 @@ const bulkListingPriceChange: AgentTool = {
   async handler(args): Promise<ToolResult> {
     const plan = await planListingPrices(args)
     if (refused(plan)) return { ok: false, error: plan.error }
-    return { ok: true, preview: listingPricePreview(plan) }
+    return { ok: true, preview: listingPricePreview(plan, (await priceFacts(plan)).planFacts) }
   },
   async execute(args, ctx): Promise<ToolResult> {
     const plan = await planListingPrices(args)
     if (refused(plan)) return { ok: false, error: plan.error }
-    const approved = ctx.approvedPreview as { basis?: unknown } | undefined
+    const approved = ctx.approvedPreview as { basis?: unknown; basisOn?: unknown } | undefined
     if (typeof approved?.basis !== 'string') return { ok: false, error: 'A price change runs only after a person approved its preview. Nothing changed.' }
-    if (approved.basis !== listingPricePreview(plan).basis) return { ok: false, error: 'A listing\'s price changed since this was approved. Nothing changed; ask Claude again.' }
+    // 2.3 — the prices (and sales) as the person saw them; a request approved before stands on each listing's version, as
+    // approved.
+    const { facts, planFacts } = await priceFacts(plan)
+    const now = listingPricePreview(plan, planFacts)
+    if (approved.basis !== (approvedOnVersion(approved) ? now.versionBasis : now.basis)) return { ok: false, error: 'A listing\'s price or sale changed since this was approved. Nothing changed; ask Claude again.' }
     const { writeChannelPrices } = await import('../../pim/channel-price-write.service.js')
     const written = await writeChannelPrices({
+      // At the version just read: anything landing on a listing between this read and its write (a sale set on the Matrix,
+      // a price) is a conflict for that listing. No `expectedPrice`: the door's A-17 retry compares the own price only and
+      // would write past a sale set in that gap.
       targets: plan.lines.map((line) => ({ listingId: line.listing.id, price: line.to, expectedVersion: line.listing.version })),
       actor: actorOf(ctx, 'bulk-listing-price-change'), source: 'BULK_OVERRIDE', reason: 'Claude bulk-listing-price-change (approved in Nexus)',
     })
@@ -255,7 +285,14 @@ const bulkListingPriceChange: AgentTool = {
     if (!done.length) return { ok: false, error: `Nothing changed: ${listed(failed.map((r) => `${r.listingId}: ${r.reason ?? r.outcome}`))}` }
     const after = await prisma.channelListing.findMany({ where: { id: { in: done.map((line) => line.listing.id) } }, select: { id: true, followMasterPrice: true, priceOverride: true, price: true } })
     const afterById = new Map(after.map((r) => [r.id, r]))
+    // 2.3 — what this run wrote, from the price door's own answer: each listing pinned at its new price (a hand-back to the
+    // master price is not named — a later step standing on it is checked as approved).
+    const pinned = new Set(written.results.filter((r) => r.outcome === 'applied').map((r) => r.listingId))
+    const planWrites: PlanWrite[] = plan.lines.filter((line) => pinned.has(line.listing.id) && line.to !== null).map((line) => ({
+      key: `listing:${line.listing.id}:price`, before: facts.writable.get(`listing:${line.listing.id}:price`), after: pinnedPrice(line.to!),
+    }))
     return {
+      planWrites,
       ok: true,
       data: {
         changed: done.length,
@@ -465,7 +502,11 @@ function resendPreview(plan: { lines: ResendLine[]; leftOut: Array<{ where: stri
     ...(plan.lines.length > PREVIEW_LINES ? { moreSent: plan.lines.length - PREVIEW_LINES } : {}),
     ...(plan.leftOut.length ? { leftOut: plan.leftOut.slice(0, PREVIEW_LINES) } : {}),
     totals: { listings: plan.lines.length, leftOut: plan.leftOut.length, sentInLastHour: recent.filter((m) => m < 60).length },
-    basis: basisOf(plan.lines.map((line) => [line.listing.id, line.listing.version, line.price])),
+    // 2.3 — what is sent: each listing's price as it carries it now, never its version (an order's stock cascade moves it).
+    basisOn: BASIS_ON_FIELDS,
+    basis: basisOf(plan.lines.map((line) => [line.listing.id, line.price])),
+    // The basis a request approved before 2.3 stood on (each listing's version): it is checked on it, as it was approved.
+    versionBasis: basisOf(plan.lines.map((line) => [line.listing.id, line.listing.version, line.price])),
     note: `${NOT_YET} Each price is queued through the Nexus price door, as /pricing's Push price does: the price the listing carries now, in its market's currency, and nothing else (never a quantity).`,
   }
 }
