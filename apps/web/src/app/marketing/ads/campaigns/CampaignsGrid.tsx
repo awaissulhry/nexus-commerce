@@ -12,7 +12,7 @@ import { Button, Checkbox, Pill, Toggle, ToolbarButton } from '@/design-system/p
 import './campaigns-ds.css'
 import { Listbox, Modal, SummaryTable } from '@/design-system/components'
 import Link from '@/lib/workspaces/Link'
-import { Settings2, Download, Wand2, Plus, ChevronDown, Library, Book, Search, Trash2, ListChecks, Pencil, Bot } from 'lucide-react'
+import { Settings2, Download, Wand2, Plus, ChevronDown, Library, Book, Search, Trash2, ListChecks, Pencil, Bot, Timer } from 'lucide-react'
 import { TargetAcosCell, MinMaxBidCell, MinMaxBudgetCell, BudgetUtilCell, UsageHoursCell, BidAutomationCell, BidRuleCell, BidAlgoMenu, placementGovernor, BID_ALGOS, type BudgetUsageState } from '../_shared/RuleColumnCells'
 import { RangePopover, ValuePopover, anchorFromEvent, type PopAnchor } from '../_shared/RuleColumnEditors'
 import { atMinimumNote, nextDailyBudget, readBudgetChange, readDailyBudget, readTargetAcosPercent, summariseBudgetChange } from '../_shared/budgetInput'
@@ -1756,7 +1756,7 @@ export function CampaignsGrid() {
         const planHeld = governor != null
         const tip = lanes.length
           ? `${lanes.map(([l, v]) => `${l} +${v}%`).join(' · ')}\n${planHeld
-            ? `⚠ ${governor} governs this campaign and rewrites these lanes every hour — this is a reading of right now, not a setting that holds.`
+            ? `${governor} governs this campaign and rewrites these lanes every hour — this is a reading of right now, not a setting that holds.`
             : 'Nothing governs these lanes, so they hold until someone changes them.'}`
           : 'No placement multiplier on any lane: every placement bids the base bid.'
         return (
@@ -1764,7 +1764,7 @@ export function CampaignsGrid() {
             {lanes.length
               ? <span className="v">{lanes.map(([l, v]) => `${l} +${v}%`).join(' · ')}</span>
               : <span className="h10-rc-none">None</span>}
-            {planHeld && lanes.length > 0 && <i className="hourly" aria-label={`Rewritten hourly by ${governor === 'The bid brain' ? 'the bid brain' : 'an hourly bid schedule'}`}>⏱</i>}
+            {planHeld && lanes.length > 0 && <span className="hourly" role="img" aria-label={`Rewritten hourly by ${governor === 'The bid brain' ? 'the bid brain' : 'an hourly bid schedule'}`}><Timer size={12} aria-hidden /></span>}
             {hold
               ? <InfoTip tip={hold} />
               : <button type="button" className="h10-gearbtn" aria-label={`Edit bid multiplier for ${c.name}`} onClick={() => setMultiplierModal(c)}><Settings2 size={14} className="h10-gear" /></button>}

@@ -82,6 +82,8 @@
 .nds-ag-ws .ag-cell.nds-ws-td.num { font-variant-numeric: tabular-nums; }
 /* A centred column's header centres over its cells (the class existed with no rule). */
 .nds-ag-ws .ag-header-cell.nds-ws-th-ctr .ag-header-cell-label { justify-content: center; }
+/* A `headerIcon` header (a narrow verb column): the icon in the header's ink, on the text's line. */
+.nds-ag-ws .nds-ws-th-icon { display: inline-flex; align-items: center; }
 .nds-ag-ws .ag-cell.nds-ws-td.st { justify-content: flex-start; text-align: left; white-space: nowrap; }
 /* A cell open in edit mode keeps its column's side: a numbers field stays right under its right-aligned header, its
    typed figures too (grid audit A12; the legacy `td.editing` pushed every field left). The vertical 7px is the row's. */
@@ -186,7 +188,7 @@
 .nds-ag-ws .nds-ws-empty { text-align: center; color: var(--nds-text-2); padding: 28px; white-space: normal; font-size: var(--nds-font-size-base); font-weight: 500; }
 .nds-ag-ws .nds-ws-empty * { white-space: normal; }
 
-/* ── loading skeleton (CBN.2e.1) — the bars; the shimmer keyframes are `ads.css` `h10sh` ── */
+/* ── loading skeleton (CBN.2e.1) — the bars and their one shimmer (`h10sh`, also the grid lab's legacy copy) ── */
 .nds-ag-ws .skb { display: inline-block; height: 11px; border-radius: 6px; background: linear-gradient(90deg, var(--nds-grid-skeleton-bg) 25%, var(--nds-grid-skeleton-shine) 37%, var(--nds-grid-skeleton-bg) 63%); background-size: 400% 100%; animation: h10sh 1.3s ease infinite; }
 @keyframes h10sh { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
 

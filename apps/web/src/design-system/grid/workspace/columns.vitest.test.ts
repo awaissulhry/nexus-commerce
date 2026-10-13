@@ -5,7 +5,7 @@ import { alignClass, buildColDefs, columnsSignature, FIRST_COL_DRAG_MAX, FIRST_C
 import { FIRST_COL, GROUP_COL, defaultPrefs } from './prefs'
 import type { GridColumn } from './types'
 
-const R = { identity: 'Identity', value: 'Value', headerTip: 'Tip' }
+const R = { identity: 'Identity', value: 'Value', headerTip: 'Tip', iconHeader: 'IconHeader' }
 const col = (key: string, extra: Partial<GridColumn<unknown>> = {}): GridColumn<unknown> => ({ key, label: key.toUpperCase(), render: () => null, ...extra })
 const COLS = [
   col('status', { metric: false, sortable: false, tip: 'the state' }),
