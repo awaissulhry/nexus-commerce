@@ -381,6 +381,20 @@ describe('a cell refused because its field moved: a value typed into it, its sto
     expect(sent[2].changes[0]).toMatchObject({ value: 'Mine 2', expected: { value: 'Brand Y', from: MASTER } })
   })
 
+  it('two values typed into the refused cell before either is sent: the last one still carries the stamp of the value the mark names', async () => {
+    const { sent, writer, type } = masterSheet([[409, conflict('Brand X')], [409, conflict('Brand Y')]])
+    type('Mine', 'Brand P')
+    await writer.flush()
+    // A slow save elsewhere holds the send back; the person types twice into the red cell; only the last value goes.
+    type('Mine 2', 'Mine')
+    type('Mine 3', 'Mine 2')
+    await writer.flush()
+    expect(sent).toHaveLength(2)
+    expect(sent[1]).toMatchObject({ expectedVersion: 2 })
+    expect(sent[1].changes[0]).toMatchObject({ value: 'Mine 3', column: 'brand', expected: { value: 'Brand X', from: MASTER } })
+    expect(writer.versionOf('p1')).toBe(2)
+  })
+
   it('undo after a value typed into the refused cell was stored puts back the other person’s value, not the one from before it', async () => {
     const { history, writer, type } = masterSheet([[409, conflict('Brand X')], [200, { updated: 1, currentVersion: 4, versionOf: 'product', writtenAt: 3 }]])
     type('Mine', 'Brand P')

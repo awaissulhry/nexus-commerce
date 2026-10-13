@@ -99,12 +99,16 @@ export function stampFor(current: unknown, colId: string, intent: string | undef
   return { expected, column: at > 0 ? colId.slice(0, at) : colId }
 }
 
-/** The cell refused because its field moved that `cell` is — or that a value typed into it (`cell`) was made over. */
+/** How far back a chain of unsent edits is followed (a guard, not a limit any real edit reaches). */
+const EDIT_CHAIN_LIMIT = 32
+
+/**
+ * The cell refused because its field moved that `cell` is — or that a value typed into it (`cell`) was made over. The
+ * whole chain of edits counts: values typed while a slow save runs are sent as the last one only (re-review of #611).
+ */
 function refusedUnder(cell: unknown): object | undefined {
-  if (!isObject(cell)) return undefined
-  if (replacing.has(cell)) return cell
-  const prior = editPriorOf(cell)
-  return isObject(prior) && replacing.has(prior) ? prior : undefined
+  for (let c = cell, i = 0; isObject(c) && i < EDIT_CHAIN_LIMIT; c = editPriorOf(c), i++) if (replacing.has(c)) return c
+  return undefined
 }
 
 /**
@@ -117,12 +121,9 @@ export function movedValueOf(cell: unknown): { value: unknown } | undefined {
   return target ? { value: target.value } : undefined
 }
 
-/** A save of `cell` was stored: the person's value replaced the server's, so neither it nor the cell it was typed into is refused any more. */
+/** A save of `cell` was stored: the person's value replaced the server's, so neither it nor any cell it was typed over is refused any more. */
 export function forgetMovedRefusal(cell: unknown): void {
-  if (!isObject(cell)) return
-  replacing.delete(cell)
-  const prior = editPriorOf(cell)
-  if (isObject(prior)) replacing.delete(prior)
+  for (let c = cell, i = 0; isObject(c) && i < EDIT_CHAIN_LIMIT; c = editPriorOf(c), i++) replacing.delete(c)
 }
 
 /**
