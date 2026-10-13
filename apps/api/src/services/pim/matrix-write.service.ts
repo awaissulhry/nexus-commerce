@@ -16,8 +16,9 @@
  *   fulfilment         → `fulfillment-method.service.ts` (Add 4(a))
  *   price / salePrice  → `channel-price-write.service.ts` (Add 4(b); `products.price.edit` enforced here too, Add 4(d))
  *   businessPrice      → `business-price-write.service.ts` (Amazon Business step 5): the WHOLE setting — rule, percent or
- *                        exact price, and the quantity tiers (`BusinessPriceSetting`; `null` = no business offer); the
- *                        Tiers column writes through it too. `products.price.edit`.
+ *   businessTiers        exact price, and the quantity tiers (`BusinessPriceSetting`; `null` = no business offer). Both
+ *                        columns send the whole setting (the Tiers column under its own kind, for its own round-trip
+ *                        mark). `products.price.edit`.
  *   source             → "Sells from" (Step 2): `ChannelListing.sourceLocationCodes` under the same CAS bump, audited,
  *                        announced (`stockSource`) and re-pushed (`recascadeAfterSyncControlChange`); `inventory.adjust`
  *
@@ -388,8 +389,11 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
         const mine = r.results[0]!
         return mine.outcome === 'applied' ? applied(mine.version, moved(r.results)) : { ...base, outcome: mine.outcome, reason: mine.reason, version: mine.version }
       }
-      case 'businessPrice': {
-        if (!cells.business) return refuse(cells.writeBlockedReason.businessPrice ?? PREVIEW_WORDS.noPriceHere)
+      /* The Tiers column writes through the same door: its value is the WHOLE setting too (the engine keeps the price
+         part as the cell has it), so each column keeps its own round-trip mark. */
+      case 'businessPrice':
+      case 'businessTiers': {
+        if (!cells.business) return refuse(cells.writeBlockedReason[w.cell] ?? cells.writeBlockedReason.businessPrice ?? PREVIEW_WORDS.noPriceHere)
         if (!ctx.can(PRICE_PERMISSION)) return refuse(PRICE_PERMISSION_REASON)
         const setting = businessSettingFromValue(w.value)
         if (setting === undefined) return refuse(BUSINESS_VALUE_REASON)

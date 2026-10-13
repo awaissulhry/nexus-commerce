@@ -300,16 +300,18 @@ export function matrixPercent(v: number): string {
 const PART = ' · '
 
 /**
- * The B2B price cell's text — `€99.75 · −5%` (5 % below the price), `€105.00` (0 %: the price itself, for quantity
- * discounts), `€32.95` (an exact price), `−5%` (a percent rule on a listing with no price yet), `—` (none).
+ * The B2B price cell's text — `€99.75 · −5%` (5 % below the price), `€105.00 · −0%` (the price itself, for quantity
+ * discounts), `€32.95` (an exact price), `−5%` (a percent rule whose price is not known yet), `—` (none).
+ *
+ * 🔴 A percent rule ALWAYS says its percent, `−0%` included: this text is also what a copy, a fill and an undo carry
+ * (`matrixCellValue`), and it must read back as the same rule (`matrixBusinessPriceParse`) — a bare `€105.00` would
+ * come back as an exact price.
  */
 export function matrixBusinessPriceText(b: BusinessCell | null | undefined): string {
   if (!b || b.rule == null) return MATRIX_DASH
   if (b.rule === 'FIXED') return matrixMoney(b.price ?? b.exact, b.currency)
-  const percent = b.percent ?? 0
-  const off = percent > 0 ? `−${matrixPercent(percent)}` : ''
-  if (b.price == null) return off || MATRIX_DASH
-  return off ? `${matrixMoney(b.price, b.currency)}${PART}${off}` : matrixMoney(b.price, b.currency)
+  const off = `−${matrixPercent(b.percent ?? 0)}`
+  return b.price == null ? off : `${matrixMoney(b.price, b.currency)}${PART}${off}`
 }
 
 /** The Tiers cell's text — `2+ −3% · 5+ −5%` (percent off the business price) or `2+ €30.00 · 5+ €28.00` (unit prices). */
@@ -317,6 +319,116 @@ export function matrixBusinessTiersText(b: BusinessCell | null | undefined): str
   const tiers = b && b.rule != null ? b.tiers : null
   if (!b || !tiers || tiers.levels.length === 0) return MATRIX_DASH
   return tiers.levels.map((l) => `${l.minQty}+ ${tiers.type === 'percent' ? `−${matrixPercent(l.value)}` : matrixMoney(l.value, b.currency)}`).join(PART)
+}
+
+/** What a typed, pasted or filled B2B price says: a percent below the price, or an exact price (`null` = none). */
+export type MatrixBusinessPriceInput = { rule: 'PERCENT_OFF'; percent: number } | { rule: 'FIXED'; price: number }
+/** What typed, pasted or filled quantity discounts say (`null` = none). */
+export interface MatrixBusinessTiersInput { type: 'percent' | 'fixed'; levels: Array<{ minQty: number; value: number }> }
+/**
+ * The whole business setting the door writes — the wire's `BusinessPriceSetting` (`@nexus/shared/business-price`),
+ * restated because the engine may not import the shared package. `null` = no business offer.
+ */
+export interface MatrixBusinessSetting {
+  rule: 'PERCENT_OFF' | 'FIXED'
+  percent: number | null
+  price: number | null
+  tiers: MatrixBusinessTiersInput | null
+}
+
+const isEmptyText = (t: string): boolean => t === '' || t === MATRIX_DASH
+/** `5%`, `−5%`, `-5 %`, `5,5%` → 5 / 5.5. A leading `+` (above the price) is not a business price. */
+const percentOf = (text: string): number | undefined => {
+  const t = text.replace(/%/g, '').trim()
+  if (t.startsWith('+')) return undefined
+  const n = matrixNumberText(t.replace(/^[−-]\s*/, ''))
+  return n !== undefined && n >= 0 ? n : undefined
+}
+
+/**
+ * A B2B price as people type and copy it — `5%` or `−5%` (5 % below the price), `32.95` or `€32.95` (an exact price),
+ * the cell's own copy (`€99.75 · −5%` = the RULE −5 %: each listing keeps its own price), empty or `—` (no business
+ * price → `null`). `undefined` when it is none of these.
+ */
+export function matrixBusinessPriceParse(text: string): MatrixBusinessPriceInput | null | undefined {
+  const t = text.trim()
+  if (isEmptyText(t)) return null
+  const parts = t.split('·').map((x) => x.trim())
+  const off = parts.find((x) => x.includes('%'))
+  if (off !== undefined) {
+    const percent = percentOf(off)
+    return percent === undefined ? undefined : { rule: 'PERCENT_OFF', percent }
+  }
+  if (parts.length > 1) return undefined
+  const price = matrixNumberText(t)
+  return price !== undefined && price > 0 ? { rule: 'FIXED', price } : undefined
+}
+
+/**
+ * Quantity discounts as the Tiers cell writes them — `2+ −3% · 5+ −5%` (a percent off the business price) or
+ * `2+ €30.00 · 5+ €28.00` (a price per unit); `−` is optional. Empty or `—` = none (`null`); `undefined` when it does not
+ * read. Amazon's own limits (1 to 5, rising) are the door's (`businessPriceProblems`), said by its refusal.
+ */
+export function matrixBusinessTiersParse(text: string): MatrixBusinessTiersInput | null | undefined {
+  const t = text.trim()
+  if (isEmptyText(t)) return null
+  let type: MatrixBusinessTiersInput['type'] | null = null
+  const levels: MatrixBusinessTiersInput['levels'] = []
+  for (const part of t.split(/[·;\n]/).map((x) => x.trim()).filter(Boolean)) {
+    const m = /^(\d+)\s*\+\s*(.+)$/.exec(part)
+    if (!m) return undefined
+    const kind = m[2]!.includes('%') ? 'percent' : 'fixed'
+    if (type && type !== kind) return undefined
+    type = kind
+    const value = kind === 'percent' ? percentOf(m[2]!) : matrixNumberText(m[2]!.trim())
+    if (value === undefined) return undefined
+    levels.push({ minQty: Number(m[1]), value })
+  }
+  return type ? { type, levels } : undefined
+}
+
+/** The setting Nexus keeps for this listing now, in the door's shape; `null` = no business price. */
+export function matrixBusinessSettingOfCell(b: BusinessCell | null | undefined): MatrixBusinessSetting | null {
+  if (!b || b.rule == null) return null
+  return {
+    rule: b.rule,
+    percent: b.rule === 'PERCENT_OFF' ? b.percent : null,
+    price: b.rule === 'FIXED' ? b.exact : null,
+    tiers: b.tiers ? { type: b.tiers.type, levels: b.tiers.levels.map((l) => ({ minQty: l.minQty, value: l.value })) } : null,
+  }
+}
+
+/** The sentence when quantity discounts are written on a listing with no business price. */
+export const MATRIX_BUSINESS_TIERS_NEED_PRICE = 'Set a B2B price first — quantity discounts go with a business price'
+
+/**
+ * The WHOLE setting one B2B price or Tiers edit writes (the door takes the whole setting): the edited part from `input`,
+ * the other part as the cell keeps it. Removing the B2B price removes the discounts with it (no business offer). A
+ * string is the reason it cannot be written.
+ */
+export function matrixBusinessSetting(
+  kind: 'businessPrice' | 'businessTiers',
+  input: MatrixBusinessPriceInput | MatrixBusinessTiersInput | null,
+  b: BusinessCell,
+): MatrixBusinessSetting | null | string {
+  const now = matrixBusinessSettingOfCell(b)
+  if (kind === 'businessTiers') {
+    if (!now) return input === null ? null : MATRIX_BUSINESS_TIERS_NEED_PRICE
+    return { ...now, tiers: input as MatrixBusinessTiersInput | null }
+  }
+  if (input === null) return null
+  const p = input as MatrixBusinessPriceInput
+  const tiers = now?.tiers ?? (b.tiers ? { type: b.tiers.type, levels: b.tiers.levels.map((l) => ({ minQty: l.minQty, value: l.value })) } : null)
+  return p.rule === 'PERCENT_OFF' ? { rule: 'PERCENT_OFF', percent: p.percent, price: null, tiers } : { rule: 'FIXED', percent: null, price: p.price, tiers }
+}
+
+/** The number a business column sorts by: the business price, or the lowest unit price of the discounts. */
+export function matrixBusinessSortValue(kind: MatrixCellKind, cells: MatrixCells | null | undefined): number | null {
+  const b = cells?.business
+  if (!b || b.rule == null) return null
+  if (kind === 'businessPrice') return b.price
+  const prices = (b.tiers?.levels ?? []).map((l) => l.unitPrice).filter((v): v is number => v != null)
+  return prices.length ? Math.min(...prices) : null
 }
 
 /**
@@ -380,10 +492,7 @@ function businessTiersLines(b: BusinessCell): string[] {
   })
 }
 
-/** What a writable business cell says when it is asked to take typing. */
-export const MATRIX_BUSINESS_OPENS = 'Enter or F2 opens the business price editor'
-
-/** The kinds whose cell opens the business price editor on an open gesture — never typed into. */
+/** The business kinds: typed like any cell, and Enter, F2, double-click or the pencil open the business price editor. */
 export const MATRIX_BUSINESS_KINDS: readonly MatrixCellKind[] = ['businessPrice', 'businessTiers']
 
 /** Does an open gesture (Enter, F2, double-click, the pencil) on this cell open the business price editor? */
@@ -921,13 +1030,6 @@ export function matrixCellEditable(kind: MatrixCellKind, cells: MatrixCells | nu
     if (cells.writable.fulfilment === true) return { editable: true, reason: null }
     return { editable: false, reason: cells.writeBlockedReason.fulfilment ?? 'This cell cannot be changed here' }
   }
-  /* The business cells never take typing: a typed number would silently turn "5 % below the price" into an exact
-     price. An open gesture opens the business price editor instead (`matrixCellOpens`); AG opens no editor here. */
-  if (kind === 'businessPrice' || kind === 'businessTiers') {
-    if (!cells) return { editable: false, reason: 'No listing on this coordinate' }
-    if (matrixCellOpens(kind, cells)) return { editable: false, reason: MATRIX_BUSINESS_OPENS }
-    return { editable: false, reason: cells.writeBlockedReason[kind] ?? 'This cell cannot be changed here' }
-  }
   if (!cells) return { editable: false, reason: 'No listing on this coordinate' }
   if (cells.writable[kind] === true) return { editable: true, reason: null }
   return { editable: false, reason: cells.writeBlockedReason[kind] ?? 'This cell cannot be changed here' }
@@ -970,13 +1072,11 @@ export function matrixCellValue(kind: MatrixCellKind, cells: MatrixCells | null 
     case 'fulfilment': return cells.fulfilment?.method ?? null
     case 'price': return cells.price?.value ?? null
     case 'salePrice': return cells.sale ?? null
-    /* The business price a buyer pays now; Tiers sorts by its lowest unit price. Neither is filled. */
-    case 'businessPrice': return cells.business?.rule != null ? cells.business.price : null
-    case 'businessTiers': {
-      const b = cells.business
-      const prices = b?.rule != null ? (b.tiers?.levels ?? []).map((l) => l.unitPrice).filter((v): v is number => v != null) : []
-      return prices.length ? Math.min(...prices) : null
-    }
+    /* The business cells carry their RULE as text (`€99.75 · −5%`, `€32.95`, `2+ −3% · 5+ −5%`, `—`): a fill or a paste
+       of `−5%` gives each listing 5 % below ITS OWN price, never somebody else's euro amount. Sorting reads the price
+       (`matrixBusinessSortValue`). No business fact here (another channel, an older server) → nothing. */
+    case 'businessPrice': return cells.business ? matrixBusinessPriceText(cells.business) : null
+    case 'businessTiers': return cells.business ? matrixBusinessTiersText(cells.business) : null
     case 'listing':
     case 'syncState': return null
   }
@@ -1078,10 +1178,27 @@ export function matrixCoerceValue(kind: MatrixCellKind, value: unknown): unknown
       }
       return undefined
     }
+    case 'businessPrice': {
+      if (value == null) return null
+      if (typeof value === 'string') return matrixBusinessPriceParse(value)
+      /* The door's own setting (a redo replays it), or a parsed input: the price part. */
+      const v = value as Partial<MatrixBusinessSetting>
+      if (v.rule === 'PERCENT_OFF' && typeof v.percent === 'number' && Number.isFinite(v.percent) && v.percent >= 0) return { rule: 'PERCENT_OFF', percent: v.percent }
+      if (v.rule === 'FIXED' && typeof v.price === 'number' && Number.isFinite(v.price) && v.price > 0) return { rule: 'FIXED', price: v.price }
+      return undefined
+    }
+    case 'businessTiers': {
+      if (value == null) return null
+      if (typeof value === 'string') return matrixBusinessTiersParse(value)
+      /* The door's own setting (a redo replays it): its discounts; or the discounts themselves. */
+      const v = (value && typeof value === 'object' && 'rule' in value ? (value as MatrixBusinessSetting).tiers : value) as Partial<MatrixBusinessTiersInput> | null
+      if (v == null) return null
+      if ((v.type !== 'percent' && v.type !== 'fixed') || !Array.isArray(v.levels)) return undefined
+      if (!v.levels.every((l) => typeof l?.minQty === 'number' && typeof l?.value === 'number' && Number.isFinite(l.minQty) && Number.isFinite(l.value))) return undefined
+      return { type: v.type, levels: v.levels.map((l) => ({ minQty: l.minQty, value: l.value })) }
+    }
     case 'listing':
     case 'syncState':
-    case 'businessPrice':
-    case 'businessTiers':
       return undefined
   }
 }
@@ -1129,11 +1246,29 @@ export function matrixApplyValue(cells: MatrixCells | null | undefined, kind: Ma
       cells.sale = typeof value === 'string' && next.value !== null && cells.sale ? { ...next, start: cells.sale.start, end: cells.sale.end } : next
       return true
     }
+    /* The business cell REPLACES its fact with what was typed (`kind`/`percent`/`exact`), and the numbers only the server
+       works out (the price a percent gives, each discount's unit price) go to unknown until its answer is read. */
+    case 'businessPrice': {
+      const b = cells.business
+      if (!b) return false
+      const p = v as MatrixBusinessPriceInput | null
+      cells.business = p === null
+        ? { ...b, rule: null, percent: null, exact: null, price: null, tiers: null }
+        : p.rule === 'PERCENT_OFF'
+          ? { ...b, rule: 'PERCENT_OFF', percent: p.percent, exact: null, price: null, tiers: b.tiers && { ...b.tiers, levels: b.tiers.levels.map((l) => ({ ...l, unitPrice: null })) } }
+          : { ...b, rule: 'FIXED', percent: null, exact: p.price, price: p.price, tiers: b.tiers && { ...b.tiers, levels: b.tiers.levels.map((l) => ({ ...l, unitPrice: null })) } }
+      return true
+    }
+    case 'businessTiers': {
+      const b = cells.business
+      if (!b) return false
+      const t = v as MatrixBusinessTiersInput | null
+      cells.business = { ...b, tiers: t && { type: t.type, levels: t.levels.map((l) => ({ ...l, unitPrice: null })) } }
+      return true
+    }
     case 'fulfilment':
     case 'listing':
     case 'syncState':
-    case 'businessPrice':
-    case 'businessTiers':
       return false
   }
 }
@@ -1150,11 +1285,13 @@ export function matrixApplyValue(cells: MatrixCells | null | undefined, kind: Ma
  *   · `salePrice` does NOT. Its value is a price but its meaning is a price AND a window; filling
  *     the number alone would set a sale with somebody else's dates, which is not what the operator
  *     dragged. The editor is the only honest way to set one.
+ *   · `businessPrice` and `businessTiers` FILL (Owner 2026-10-13). Their value is the RULE as text (`−5%`, `€32.95`,
+ *     `2+ −3% · 5+ −5%`), so a fill gives every listing the same rule on its own price — what the drag means.
  *
  * Written as an ALLOW-list. `variationThemeWrite`'s lock test was a deny-list first and let exactly
  * one case through; an allow-list fails closed when a ninth kind arrives.
  */
-export const MATRIX_FILLABLE_KINDS: readonly MatrixCellKind[] = ['price', 'syncQty', 'syncBuffer', 'syncMode']
+export const MATRIX_FILLABLE_KINDS: readonly MatrixCellKind[] = ['price', 'syncQty', 'syncBuffer', 'syncMode', 'businessPrice', 'businessTiers']
 
 export function matrixFillAllowed(kind: MatrixCellKind): boolean {
   return (MATRIX_FILLABLE_KINDS as readonly string[]).includes(kind)

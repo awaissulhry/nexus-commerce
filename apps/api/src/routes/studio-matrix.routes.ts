@@ -49,7 +49,7 @@ function sendError(reply: FastifyReply, err: unknown, log: { error: (o: unknown,
 }
 
 /** The door's cell kinds — the writable cells (the Amazon Business setting among them) plus "Sells from" (Step 2, `inventory.adjust` checked in the service). */
-const WRITABLE = new Set(['fulfilment', 'syncMode', 'syncQty', 'syncBuffer', 'price', 'salePrice', 'businessPrice', 'source'])
+const WRITABLE = new Set(['fulfilment', 'syncMode', 'syncQty', 'syncBuffer', 'price', 'salePrice', 'businessPrice', 'businessTiers', 'source'])
 
 const isId = (v: unknown): v is string => typeof v === 'string' && v.length > 0
 

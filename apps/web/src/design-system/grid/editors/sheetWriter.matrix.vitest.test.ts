@@ -102,3 +102,31 @@ describe('matrixWrite — what a Matrix cell edit sends, and why it sometimes se
     expect(matrixValueRefusal('notAKind', 'x')).toBeNull()
   })
 })
+
+describe('matrixWrite — the B2B price and Tiers cells write the WHOLE business setting (Amazon Business)', () => {
+  const biz = (over: Record<string, unknown> = {}) => ({
+    rule: 'PERCENT_OFF' as const, percent: 5, exact: null, price: 99.75, normalPrice: 105, minPrice: null, maxPrice: null, currency: 'EUR',
+    tiers: { type: 'percent' as const, levels: [{ minQty: 2, value: 3, unitPrice: 96.76 }] }, warnings: [], held: null, send: null, live: null, reported: null, ...over,
+  })
+  const b2b = (over: Record<string, unknown> = {}) => cellsOf({ business: biz(over) as never, writable: { businessPrice: true, businessTiers: true } })
+  const col = (kind: string) => ({ kind, coordinateKey: 'AMAZON:IT', rowId: 'r1' })
+  const tiers = { type: 'percent', levels: [{ minQty: 2, value: 3 }] }
+
+  it('a typed percent keeps the discounts; a typed price is an exact price; empty removes the business offer', () => {
+    expect(matrixWrite(col('businessPrice'), b2b(), '€99.75 · −5%', '6%')).toEqual({ send: true, cell: { rowId: 'r1', coordinateKey: 'AMAZON:IT', cell: 'businessPrice', value: { rule: 'PERCENT_OFF', percent: 6, price: null, tiers }, expectedVersion: 7 } })
+    expect(matrixWrite(col('businessPrice'), b2b(), '€99.75 · −5%', '€89')).toMatchObject({ send: true, cell: { value: { rule: 'FIXED', percent: null, price: 89, tiers } } })
+    expect(matrixWrite(col('businessPrice'), b2b(), '€99.75 · −5%', '')).toMatchObject({ send: true, cell: { value: null } })
+  })
+  it('the Tiers column writes under its own kind with the price part as the cell keeps it', () => {
+    expect(matrixWrite(col('businessTiers'), b2b(), '2+ −3%', '2+ 3% · 5+ 5%')).toMatchObject({
+      send: true, cell: { cell: 'businessTiers', value: { rule: 'PERCENT_OFF', percent: 5, price: null, tiers: { type: 'percent', levels: [{ minQty: 2, value: 3 }, { minQty: 5, value: 5 }] } } },
+    })
+  })
+  it('the same rule read back is unchanged; junk and a held cell say why; discounts with no business price are refused', () => {
+    expect(matrixWrite(col('businessPrice'), b2b(), '€99.75 · −5%', '5%')).toEqual({ send: false, reason: MATRIX_UNCHANGED })
+    expect(matrixWrite(col('businessPrice'), b2b(), '€99.75 · −5%', 'abc')).toEqual({ send: false, reason: 'A B2B price is a percent below the price (5%) or a price (32.95); empty removes it' })
+    const held = cellsOf({ business: biz() as never, writable: {}, writeBlockedReason: { businessPrice: 'Set on the variants' } })
+    expect(matrixWrite(col('businessPrice'), held, '—', '5%')).toEqual({ send: false, reason: 'Set on the variants' })
+    expect(matrixWrite(col('businessTiers'), b2b({ rule: null, percent: null, price: null, tiers: null }), '—', '2+ 3%')).toEqual({ send: false, reason: 'Set a B2B price first — quantity discounts go with a business price' })
+  })
+})

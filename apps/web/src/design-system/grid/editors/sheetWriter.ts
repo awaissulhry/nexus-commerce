@@ -43,7 +43,7 @@ import type { GridApi } from 'ag-grid-community'
 
 import { CellSaveTracker, SAVED_FADE_MS } from './roundTrip'
 import { MATRIX_CELL_KINDS, MATRIX_CELL_LABELS, type CoordinateKey, type MatrixCellKind, type MatrixCells, type MatrixWriteCell, type MatrixWritableKind } from '../matrix/contract'
-import { matrixCoerceValue, matrixNumberTextAmbiguous, MATRIX_SALE_WINDOW_MARK } from '../renderers/matrixCells'
+import { matrixBusinessSetting, matrixCoerceValue, matrixNumberTextAmbiguous, MATRIX_SALE_WINDOW_MARK, type MatrixBusinessPriceInput, type MatrixBusinessTiersInput } from '../renderers/matrixCells'
 import { sameValue } from './writeGate'
 
 /**
@@ -369,8 +369,6 @@ export const MATRIX_NOT_A_COLUMN = 'Not a Matrix column'
 export const MATRIX_NO_LISTING = 'No listing on this coordinate'
 export const MATRIX_FULFILMENT_INLINE = 'Fulfilment is changed through its preview (the cell\'s picker, or Edit… → Fulfilment) — never pasted or filled'
 export const MATRIX_UNCHANGED = 'Unchanged'
-/** The business cells are set in their editor only: a typed number would silently turn a percent rule into an exact price. */
-export const MATRIX_BUSINESS_INLINE = 'The B2B price and quantity discounts are set in their editor (Enter or F2 on the cell) — never typed, pasted or filled'
 
 const MATRIX_NOT_A_VALUE: Readonly<Record<string, string>> = {
   syncQty: 'A quantity is a whole number, zero or more',
@@ -378,8 +376,8 @@ const MATRIX_NOT_A_VALUE: Readonly<Record<string, string>> = {
   price: 'A price is zero or more',
   syncMode: 'Mode is Follow or Pinned',
   salePrice: 'A sale is a price, zero or more, with an optional window',
-  businessPrice: MATRIX_BUSINESS_INLINE,
-  businessTiers: MATRIX_BUSINESS_INLINE,
+  businessPrice: 'A B2B price is a percent below the price (5%) or a price (32.95); empty removes it',
+  businessTiers: 'Quantity discounts are written 2+ 3% · 5+ 5% (or 2+ 30.00 for a price per unit); empty removes them',
 }
 export const MATRIX_SALE_DATES_NOT_PASTED = 'A sale with dates cannot be pasted (its dates show no year): paste the price, then set the dates in the cell'
 
@@ -389,7 +387,6 @@ export const MATRIX_SALE_DATES_NOT_PASTED = 'A sale with dates cannot be pasted 
  */
 export function matrixValueRefusal(kind: string, value: unknown): string | null {
   if (!(MATRIX_CELL_KINDS as readonly string[]).includes(kind) || matrixCoerceValue(kind as MatrixCellKind, value) !== undefined) return null
-  if (kind === 'businessPrice' || kind === 'businessTiers') return MATRIX_BUSINESS_INLINE
   if (typeof value === 'string' && kind !== 'syncMode' && matrixNumberTextAmbiguous(value)) {
     const t = value.trim()
     const decimal = Number(t.replace(/[^\d.,]/g, '').replace(',', '.'))
@@ -407,11 +404,11 @@ export function matrixWrite(
 ): MatrixWriteDecision {
   const kind = column.kind
   if (!(MATRIX_CELL_KINDS as readonly string[]).includes(kind)) return { send: false, reason: MATRIX_NOT_A_COLUMN }
-  const k = kind as MatrixWritableKind | 'listing' | 'syncState' | 'businessTiers'
+  const k = kind as MatrixWritableKind | 'listing' | 'syncState'
   if (!cell) return { send: false, reason: MATRIX_NO_LISTING }
   if (k === 'listing' || k === 'syncState') return { send: false, reason: `${MATRIX_CELL_LABELS[k]} is a fact, not a write` }
   if (k === 'fulfilment') return { send: false, reason: MATRIX_FULFILMENT_INLINE }
-  if (k === 'businessPrice' || k === 'businessTiers') return { send: false, reason: MATRIX_BUSINESS_INLINE }
+  if (k === 'businessPrice' || k === 'businessTiers') return businessWrite(column, k, cell, before, after)
   if (cell.writable[k] !== true) return { send: false, reason: cell.writeBlockedReason[k] ?? 'This cell cannot be changed here' }
   const value = matrixCoerceValue(k, after)
   if (value === undefined) return { send: false, reason: matrixValueRefusal(k, after) ?? 'Not a value this cell can hold' }
@@ -420,6 +417,20 @@ export function matrixWrite(
     send: true,
     cell: { rowId: column.rowId, coordinateKey: column.coordinateKey, cell: k, value, expectedVersion: cell.version },
   }
+}
+
+/**
+ * A typed, pasted or filled B2B price or Tiers value → the WHOLE setting the door writes (`matrixBusinessSetting`): the
+ * edited part, the other part as the cell keeps it. Unchanged when the rule read back is the rule the cell had.
+ */
+function businessWrite(column: MatrixWriteColumn, k: 'businessPrice' | 'businessTiers', cell: MatrixCells, before: unknown, after: unknown): MatrixWriteDecision {
+  if (cell.writable[k] !== true || !cell.business) return { send: false, reason: cell.writeBlockedReason[k] ?? 'This cell cannot be changed here' }
+  const input = matrixCoerceValue(k, after) as MatrixBusinessPriceInput | MatrixBusinessTiersInput | null | undefined
+  if (input === undefined) return { send: false, reason: matrixValueRefusal(k, after) ?? 'Not a value this cell can hold' }
+  if (sameValue(matrixCoerceValue(k, before) ?? null, input)) return { send: false, reason: MATRIX_UNCHANGED }
+  const setting = matrixBusinessSetting(k, input, cell.business)
+  if (typeof setting === 'string') return { send: false, reason: setting }
+  return { send: true, cell: { rowId: column.rowId, coordinateKey: column.coordinateKey, cell: k, value: setting, expectedVersion: cell.version } }
 }
 
 /** One queued cell edit. */

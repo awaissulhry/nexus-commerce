@@ -97,3 +97,20 @@ describe('the history values', () => {
     expect(seen.slice(2)).toEqual([35, 36])
   })
 })
+
+describe('matrixReplay — Amazon Business: undo puts the whole business setting back', () => {
+  const biz = (over: Record<string, unknown> = {}) => ({
+    rule: 'PERCENT_OFF', percent: 5, exact: null, price: 99.75, normalPrice: 105, minPrice: null, maxPrice: null, currency: 'EUR',
+    tiers: { type: 'percent', levels: [{ minQty: 2, value: 3, unitPrice: 96.76 }] }, warnings: [], held: null, send: null, live: null, reported: null, ...over,
+  }) as never
+  it('a changed rule goes back as it was, through the column\'s own kind; a removal comes back; nothing moved → skip', () => {
+    const was = cells({ business: biz() })
+    expect(undo('businessPrice', was, cells({ version: 4, business: biz({ percent: 6, price: 98.7 }) })))
+      .toEqual(write('businessPrice', { rule: 'PERCENT_OFF', percent: 5, price: null, tiers: { type: 'percent', levels: [{ minQty: 2, value: 3 }] } }, 4))
+    expect(undo('businessTiers', was, cells({ version: 5, business: biz({ tiers: null }) })))
+      .toEqual(write('businessTiers', { rule: 'PERCENT_OFF', percent: 5, price: null, tiers: { type: 'percent', levels: [{ minQty: 2, value: 3 }] } }, 5))
+    expect(undo('businessPrice', cells({ business: biz({ rule: null, percent: null, price: null, tiers: null }) }), cells({ version: 6, business: biz() })))
+      .toEqual(write('businessPrice', null, 6))
+    expect(undo('businessPrice', was, cells({ version: 4, business: biz() }))).toEqual({ kind: 'skip' })
+  })
+})

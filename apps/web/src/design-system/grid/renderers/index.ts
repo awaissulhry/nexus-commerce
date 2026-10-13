@@ -94,7 +94,8 @@ export {
   isMatrixCellKind, isSaleEditorValue, matrixGuardDiffers, matrixReportedDiffers,
   // Amazon Business (step 5): the B2B price and Tiers cells.
   matrixBusinessPriceText, matrixBusinessTiersText, matrixBusinessSendLine, matrixBusinessHidden, matrixPercent, matrixCellOpens,
-  MATRIX_BUSINESS_KINDS, MATRIX_BUSINESS_OPENS,
+  MATRIX_BUSINESS_KINDS, MATRIX_BUSINESS_TIERS_NEED_PRICE, matrixBusinessPriceParse, matrixBusinessTiersParse, matrixBusinessSetting, matrixBusinessSettingOfCell, matrixBusinessSortValue,
+  type MatrixBusinessPriceInput, type MatrixBusinessTiersInput, type MatrixBusinessSetting,
   type MatrixCellState, type MatrixToneSource, type MatrixEditability, type SaleEditorValue,
 } from './matrixCells'
 export {
