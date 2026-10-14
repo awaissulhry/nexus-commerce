@@ -572,20 +572,6 @@ export const PAGE_COMMANDS: Command[] = [
     keywords: 'print pdf spec sheet scheda tecnica datasheet',
   },
   {
-    id: 'page-products-edit-open-matrix',
-    label: 'Open variant matrix editor',
-    icon: Boxes,
-    run: () =>
-      window.dispatchEvent(
-        new CustomEvent('nexus:products-edit:goto-route', {
-          detail: { route: 'matrix' },
-        }),
-      ),
-    group: 'On this page',
-    contextPath: /^\/products\/[^/]+\/edit(\?|$)/,
-    keywords: 'matrix variant grid size color bulk',
-  },
-  {
     id: 'page-products-edit-open-images',
     label: 'Open image manager',
     icon: FileText,

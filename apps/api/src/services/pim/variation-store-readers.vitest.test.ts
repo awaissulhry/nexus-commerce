@@ -110,12 +110,4 @@ describe('the source scan — no reader takes the legacy bag first', () => {
     const stale = EXCEPTIONS.filter(([file, snippet]) => !reads.some((r) => r.file === file && r.text.includes(snippet)))
     expect(stale).toEqual([])
   })
-  it('the F6 Matrix page reads the store before the legacy bag (web)', () => {
-    const web = readFileSync(join(API_SRC, '../../web/src/app/products/[id]/matrix/MatrixWorkspace.tsx'), 'utf8')
-    const getAttr = web.slice(web.indexOf('function getAttr('), web.indexOf('function readNumber('))
-    expect(getAttr.indexOf('child.variations')).toBeGreaterThan(-1)
-    expect(getAttr.indexOf('child.variations')).toBeLessThan(getAttr.indexOf('child.variantAttributes'))
-    const axes = web.slice(web.indexOf('const axes: string[] = useMemo('))
-    expect(axes.indexOf('(c.variations')).toBeLessThan(axes.indexOf('(c.variantAttributes'))
-  })
 })

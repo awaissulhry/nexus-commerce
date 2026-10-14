@@ -116,7 +116,6 @@ export function buildAppNav(counts: SidebarCounts, conn: Connections): RailNavIt
       badge: n(counts.catalog?.products),
       children: [
         { label: 'Categories', href: '/catalog/categories' },
-        { label: 'Matrix', href: '/catalog/matrix' },
         { label: 'Drafts', href: '/products/drafts' },
         {
           label: 'Organize',

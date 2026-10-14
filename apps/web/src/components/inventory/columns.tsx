@@ -30,7 +30,7 @@ function ActionsButton({ item }: { item: InventoryItem }) {
       {isOpen && (
         <div className="absolute right-0 mt-1 w-48 bg-white border border-default rounded shadow-lg z-10">
           <Link
-            href={`/catalog/${item.id}/edit`}
+            href={`/products/${item.id}/edit/studio`}
             className="block px-4 py-2 text-md text-slate-700 hover:bg-slate-50 border-b border-subtle"
           >
             Edit Listing
@@ -173,7 +173,7 @@ export const inventoryColumns = [
           {/* Standalone (non-parent, non-child): variation details link */}
           {!hasChildren && !isChild && item.variationName && (
             <Link
-              href={`/catalog/${item.id}/edit`}
+              href={`/products/${item.id}/edit/studio`}
               className="text-sm text-[#007185] hover:text-[#0066a1] font-medium mt-1 inline-block"
             >
               Variation details
@@ -201,7 +201,7 @@ export const inventoryColumns = [
           </p>
           {isOutOfStock && (
             <Link
-              href={`/catalog/${item.id}/edit`}
+              href={`/products/${item.id}/edit/studio`}
               className="text-sm text-[#007185] hover:text-[#0066a1] font-medium mt-1 inline-block"
             >
               Replenish inventory
@@ -272,7 +272,7 @@ export const inventoryColumns = [
         <div className="min-w-0">
           <p className="text-md font-semibold text-slate-900">{formatted}</p>
           <p className="text-sm text-gray-500 mt-1">{formatted} + {formatCurrency(0)}</p>
-          <Link href={`/catalog/${item.id}/edit`} className="text-sm text-[#007185] hover:text-[#0066a1] font-medium mt-1 inline-block">
+          <Link href={`/products/${item.id}/edit/studio`} className="text-sm text-[#007185] hover:text-[#0066a1] font-medium mt-1 inline-block">
             Edit prices
           </Link>
         </div>

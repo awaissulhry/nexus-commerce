@@ -381,7 +381,7 @@ export default function ProductDrawer({
               </h2>
               {data?.isParent && (
                 <a
-                  href={`/products/${data.id}/matrix`}
+                  href={`/products/${data.id}/edit/studio?tab=matrix`}
                   className="inline-flex items-center h-5 px-1.5 rounded text-xs font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:hover:bg-blue-900/40"
                   title={t('products.drawer.parentBadgeTitle')}
                 >
@@ -3835,7 +3835,7 @@ function DecisionsModal({
  * Click the child's SKU → open it in the drawer (replaces current).
  * Click "Open full edit" → /products/<childId>/edit.
  *
- * No bulk operations here — the dedicated /products/[id]/matrix +
+ * No bulk operations here — the product page's Matrix +
  * the bulk-action bar on the main grid are where multi-row work
  * happens. This tab is the "scan + tweak one or two cells" surface.
  */
@@ -4140,7 +4140,7 @@ function VariationsTab({
       <div className="text-sm text-slate-500">
         {t('products.drawer.variations.bulkLink')}{' '}
         <Link
-          href={`/products/${parentId}/matrix`}
+          href={`/products/${parentId}/edit/studio?tab=matrix`}
           className="text-blue-700 hover:underline"
         >
           {t('products.drawer.variations.matrixLink')}
