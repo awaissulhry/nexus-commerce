@@ -417,6 +417,31 @@ describe('POST …/verbs and …/verbs/:id/revert', () => {
     expect((await send({}, { commit: true })).statusCode).toBe(400)
     expect(mocks.read).not.toHaveBeenCalled()
   })
+  it('refuses malformed Amazon Business params with a sentence (400), before any read; bare params pass only on a commit with its preview', async () => {
+    const send = (params: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
+      app.inject({ method: 'POST', url: '/products/root/studio/matrix/verbs', payload: { params, targets: [{ rowId: 'c1', coordinateKey: 'AMAZON:IT' }], commit: false, ...extra } })
+    const cases: Array<[Record<string, unknown>, string]> = [
+      [{ verb: 'set-business-price' }, 'Set B2B price is percent, exact, change or remove'],
+      [{ verb: 'set-business-price', mode: 'percent', percent: 100 }, 'The percent below the price is from 0 to 99, at most two decimals'],
+      [{ verb: 'set-business-price', mode: 'percent', percent: 5.555 }, 'The percent below the price is from 0 to 99, at most two decimals'],
+      [{ verb: 'set-business-price', mode: 'change', percent: 0 }, 'Change by a percent other than 0, above −100, at most two decimals'],
+      [{ verb: 'set-business-price', mode: 'change', percent: -100 }, 'Change by a percent other than 0, above −100, at most two decimals'],
+      [{ verb: 'set-business-price', mode: 'exact', price: 0 }, 'An exact business price is more than 0'],
+      [{ verb: 'set-business-tiers', mode: 'set' }, 'Quantity discounts are a type (percent or fixed) and a list of levels, each a quantity and a value'],
+      [{ verb: 'set-business-tiers', mode: 'set', tiers: { type: 'percent', levels: [{ minQty: 1, value: 3 }] } }, 'Discount 1: the quantity must be a whole number of at least 2.'],
+      [{ verb: 'set-business-tiers', mode: 'set', tiers: { type: 'percent', levels: [] } }, 'Amazon takes 1 to 5 quantity discounts; this has 0.'],
+      [{ verb: 'set-business-tiers', mode: 'add' }, 'Set B2B tiers is set or remove'],
+    ]
+    for (const [params, message] of cases) {
+      const res = await send(params)
+      expect(res.statusCode, JSON.stringify(params)).toBe(400)
+      expect(res.json()).toEqual({ error: 'invalid_verb', message })
+    }
+    expect((await send({ verb: 'set-business-price' }, { commit: true })).statusCode).toBe(400)
+    expect(mocks.read).not.toHaveBeenCalled()
+    // The page's commit: `{ verb }` and the preview it showed.
+    expect((await send({ verb: 'set-business-price' }, { commit: true, preview: { verb: 'set-business-price', changes: [], refusals: [], notices: [], confirm: 'none', confirmWord: null, simulated: false } })).statusCode).toBe(200)
+  })
   it('an unknown operation cannot be reverted, by name', async () => {
     const res = await app.inject({ method: 'POST', url: '/products/root/studio/matrix/verbs/nope/revert' })
     expect(res.statusCode).toBe(404); expect(res.json().error).toBe('operation_not_revertible')

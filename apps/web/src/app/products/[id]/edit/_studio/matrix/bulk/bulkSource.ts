@@ -9,6 +9,7 @@
  *   Case size,      their own dialogs, opened on the same rows (the page's `openElsewhere`)
  *   Stock source
  *   everything else the Matrix verbs: the server previews, the operator applies what was previewed, Undo reverts it
+ *                   (B2B price and tiers too: the business price door, in the page's one write line)
  *
  * Every result sentence counts what the server ANSWERED, never what was asked for.
  *
@@ -124,6 +125,15 @@ export function verbSentence(preview: Pick<VerbPreview, 'verb' | 'changes'>, app
       const chosen = preview.changes.map((c) => c.to).find((t): t is string[] => Array.isArray(t) && t.length > 0)
       if (!chosen) return `${listings} ${applied === 1 ? 'uses its market default' : 'use their market default'} again${s}.`
       return `${listings} ${applied === 1 ? 'sells' : 'sell'} from ${chosen.join(' + ')}${s}.`
+    }
+    // Amazon Business: each change carries the whole setting it writes (`null` = no business price).
+    case 'set-business-price': {
+      const removed = preview.changes.length > 0 && preview.changes.every((c) => c.to === null)
+      return and(`${bulkNoun('businessPrice', applied)} ${removed ? 'removed' : 'set'}${s}.`, applied > 0 ? BULK_SENT.business : '')
+    }
+    case 'set-business-tiers': {
+      const removed = preview.changes.length > 0 && preview.changes.every((c) => (c.to as { tiers?: unknown } | null)?.tiers == null)
+      return and(`Quantity discounts ${removed ? 'removed from' : 'set on'} ${listings}${s}.`, applied > 0 ? BULK_SENT.business : '')
     }
   }
 }

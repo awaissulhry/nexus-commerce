@@ -12,7 +12,18 @@
  * server-side — so the page's `can` and the server's `can` ask the same question.
  */
 import {
+  BUSINESS_PERCENT_MAX,
+  businessPriceOf,
+  businessPriceProblems,
+  businessPriceWarnings,
+  businessTierPrices,
+  businessTiersProblems,
+  type BusinessPriceSetting,
+  type BusinessTiers,
+} from './business-price.js'
+import {
   MATRIX_COPY,
+  type BusinessCell,
   type CoordinateKey,
   type FulfilmentCell,
   type FulfilmentConversionStatus,
@@ -230,7 +241,144 @@ export const PREVIEW_WORDS = {
   ownPrice: 'Own price (was the base price)',
   nothingToRetry: 'Nothing to retry here — the last push did not fail',
   bufferUnused: 'Used when the market follows your stock',
+  /* Amazon Business (step 5 Part 3) — the bulk B2B price and quantity discounts. */
+  businessAmazonOnly: 'Business prices are for Amazon only',
+  businessNotHere: 'Amazon does not offer business prices for this listing here',
+  businessPricePermission: 'You do not have permission to change prices (products.price.edit)',
+  /** The grid's own sentence (`MATRIX_BUSINESS_TIERS_NEED_PRICE`). */
+  businessNeedsPrice: 'Set a B2B price first — quantity discounts go with a business price',
+  businessNothingToChange: 'No exact business price to change',
+  businessPercentFollows: (percent: string) => `Set as ${percent} below the price — it follows the price. Change it with "% below price"`,
+  businessNothingToRemove: 'No business price to remove',
+  businessAmazonOwn: (price: string) => `Amazon shows a business price of ${price} that Nexus does not keep (set outside Nexus) — there is nothing to remove in Nexus`,
+  businessNoTiers: 'No quantity discounts to remove',
+  businessAboveZero: 'A business price must be more than 0',
+  businessRemoved: 'Nexus removes the business price from Amazon',
+  businessRemovedWithTiers: 'Nexus removes the business price and its quantity discounts from Amazon',
+  businessReplacesAmazon: (price: string) => `Replaces Amazon's own business price ${price} (set outside Nexus). Undo cannot bring it back`,
+  businessFirst: (price: string) => `First business price: sent while Amazon's shopper price is ${price}`,
+  businessFirstWaits: (amazon: string, nexus: string) => `Not sent yet: Amazon's shopper price is ${amazon} and Nexus's is ${nexus}. Make them the same first`,
 } as const
+
+/* ── Amazon Business: the B2B price and Tiers cells' words, and the setting each bulk verb gives ─────────────────────
+   The words restate the grid's (`matrixBusinessPriceText`, `matrixBusinessTiersText` in the design system's
+   `renderers/matrixCells.ts`, mirrored into apps/factory — which has no `@nexus/shared`), held equal by
+   `apps/web/…/matrix/preview-words.vitest.test.ts`. The rules are `@nexus/shared/business-price`'s: the door's own. */
+
+/** `€99.75` — the grid's money (`matrixMoney`): `—` for none, the code and the number for a currency Intl does not know. */
+function cellMoney(value: number | null | undefined, currency: string): string {
+  if (value == null || !Number.isFinite(value)) return DASH
+  try { return new Intl.NumberFormat('en-GB', { style: 'currency', currency }).format(value) } catch { return `${currency} ${value.toFixed(2)}` }
+}
+/** `5%` · `5.5%` — the grid's percent (`matrixPercent`). */
+const cellPercent = (v: number): string => `${Number(v.toFixed(2))}%`
+
+/** The B2B price cell's text: `€99.75 · −5%` (5 % below the price), `−5%` (its price not known), `€32.95` (exact), `—`. */
+export function businessPriceWords(b: BusinessCell | null | undefined): string {
+  if (!b || b.rule == null) return DASH
+  if (b.rule === 'FIXED') return cellMoney(b.price ?? b.exact, b.currency)
+  const off = `−${cellPercent(b.percent ?? 0)}`
+  return b.price == null ? off : `${cellMoney(b.price, b.currency)} · ${off}`
+}
+
+/** The Tiers cell's text: `2+ −3% · 5+ −5%` (percent off the business price) or `2+ €30.00 · 5+ €28.00` (unit prices), `—`. */
+export function businessTiersWords(b: BusinessCell | null | undefined): string {
+  const tiers = b && b.rule != null ? b.tiers : null
+  if (!b || !tiers || tiers.levels.length === 0) return DASH
+  return tiers.levels.map((l) => `${l.minQty}+ ${tiers.type === 'percent' ? `−${cellPercent(l.value)}` : cellMoney(l.value, b.currency)}`).join(' · ')
+}
+
+/**
+ * The setting a business cell shows, in the door's own shape (`BusinessPriceSetting`; `null` = no business offer): a
+ * percent rule carries no price, an exact price no percent, tiers only their own keys. What a verb works from, what it
+ * writes, and what an undo restores by value — one shape, so two equal settings compare equal.
+ */
+export function businessSettingOfCell(cell: BusinessCell): BusinessPriceSetting | null {
+  if (!cell.rule) return null
+  return {
+    rule: cell.rule,
+    percent: cell.rule === 'PERCENT_OFF' ? cell.percent : null,
+    price: cell.rule === 'FIXED' ? cell.exact : null,
+    tiers: cell.tiers ? { type: cell.tiers.type, levels: cell.tiers.levels.map((l) => ({ minQty: l.minQty, value: l.value })) } : null,
+  }
+}
+
+/** The business cell as it would read with `setting` kept: its price and tiers' unit prices worked out from its normal price. */
+function businessCellWith(b: BusinessCell, setting: BusinessPriceSetting | null): BusinessCell {
+  if (!setting) return { ...b, rule: null, percent: null, exact: null, tiers: null, price: null }
+  const price = businessPriceOf(setting, b.normalPrice)
+  const units = setting.tiers && price != null ? businessTierPrices(price, setting.tiers) : null
+  return {
+    ...b, rule: setting.rule, percent: setting.rule === 'PERCENT_OFF' ? setting.percent : null, exact: setting.rule === 'FIXED' ? setting.price : null, price,
+    tiers: setting.tiers ? { type: setting.tiers.type, levels: setting.tiers.levels.map((l, i) => ({ minQty: l.minQty, value: l.value, unitPrice: units?.[i] ?? null })) } : null,
+  }
+}
+
+type BusinessVerbParams = Extract<MatrixVerbParams, { verb: 'set-business-price' | 'set-business-tiers' }>
+
+/**
+ * PURE — the setting a business verb gives ONE listing, from what it keeps now (`now`); or why it is skipped. The B2B price
+ * modes keep the quantity discounts as they are; the tiers modes keep the B2B price. What Amazon would refuse is asked
+ * after (`businessPriceProblems`, in `previewVerb`).
+ */
+export function businessVerbSetting(p: BusinessVerbParams, b: BusinessCell): { setting: BusinessPriceSetting | null } | { skip: string } {
+  const now = businessSettingOfCell(b)
+  const tiers = now?.tiers ?? null
+  if (p.verb === 'set-business-tiers') {
+    if (!now) return { skip: PREVIEW_WORDS.businessNeedsPrice }
+    if (p.mode === 'remove') return now.tiers ? { setting: { ...now, tiers: null } } : { skip: PREVIEW_WORDS.businessNoTiers }
+    return { setting: { ...now, tiers: { type: p.tiers.type, levels: p.tiers.levels.map((l) => ({ minQty: l.minQty, value: l.value })) } } }
+  }
+  switch (p.mode) {
+    case 'percent': return { setting: { rule: 'PERCENT_OFF', percent: p.percent, price: null, tiers } }
+    case 'exact': return { setting: { rule: 'FIXED', percent: null, price: round2(p.price), tiers } }
+    case 'change': {
+      if (!now) return { skip: PREVIEW_WORDS.businessNothingToChange }
+      if (now.rule === 'PERCENT_OFF') return { skip: PREVIEW_WORDS.businessPercentFollows(cellPercent(now.percent ?? 0)) }
+      if (now.price == null) return { skip: PREVIEW_WORDS.businessNothingToChange }
+      const price = round2(now.price * (1 + p.percent / 100))
+      return price > 0 ? { setting: { ...now, price } } : { skip: PREVIEW_WORDS.businessAboveZero }
+    }
+    case 'remove':
+      if (now) return { setting: null }
+      return { skip: b.reported ? PREVIEW_WORDS.businessAmazonOwn(cellMoney(b.reported.price, b.currency)) : PREVIEW_WORDS.businessNothingToRemove }
+  }
+}
+
+const sameBusiness = (a: BusinessPriceSetting | null, b: BusinessPriceSetting | null): boolean => JSON.stringify(a) === JSON.stringify(b)
+const isTiers = (t: unknown): t is BusinessTiers => !!t && typeof t === 'object' && ((t as BusinessTiers).type === 'percent' || (t as BusinessTiers).type === 'fixed')
+  && Array.isArray((t as BusinessTiers).levels) && (t as BusinessTiers).levels.every((l) => !!l && typeof l.minQty === 'number' && typeof l.value === 'number')
+
+/**
+ * PURE — why a business verb's params cannot run, or null: a mode the verb has; a percent below the price from 0 to 99
+ * (two decimals); a change by a percent other than 0, above −100; an exact price above 0; quantity discounts of the
+ * door's own shape (`businessTiersProblems`). The route asks this before the preview.
+ */
+export function businessVerbProblem(p: { verb?: unknown; mode?: unknown; percent?: unknown; price?: unknown; tiers?: unknown }): string | null {
+  const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+  if (p.verb === 'set-business-tiers') {
+    if (p.mode === 'remove') return null
+    if (p.mode !== 'set') return 'Set B2B tiers is set or remove'
+    if (!isTiers(p.tiers)) return 'Quantity discounts are a type (percent or fixed) and a list of levels, each a quantity and a value'
+    return businessTiersProblems(p.tiers)[0] ?? null
+  }
+  switch (p.mode) {
+    case 'percent':
+      return finite(p.percent) && p.percent >= 0 && p.percent <= BUSINESS_PERCENT_MAX && round2(p.percent) === p.percent ? null : `The percent below the price is from 0 to ${BUSINESS_PERCENT_MAX}, at most two decimals`
+    case 'change':
+      return finite(p.percent) && p.percent !== 0 && p.percent > -100 && round2(p.percent) === p.percent ? null : 'Change by a percent other than 0, above −100, at most two decimals'
+    case 'exact':
+      return finite(p.price) && p.price > 0 ? null : 'An exact business price is more than 0'
+    case 'remove':
+      return null
+    default:
+      return 'Set B2B price is percent, exact, change or remove'
+  }
+}
+
+/** A cut of this size or more asks for the typed word: a B2B price 30 % below the price, or an exact one lowered by 30 %. */
+const bigBusinessCut = (p: MatrixVerbParams): boolean =>
+  p.verb === 'set-business-price' && ((p.mode === 'percent' && p.percent >= BIG_CUT_PERCENT) || (p.mode === 'change' && p.percent <= -BIG_CUT_PERCENT))
 
 /**
  * PURE — why `adjust-prices` params cannot run, or null: a percent OR an amount (never both); a finite percent; an amount
@@ -485,11 +633,50 @@ export function previewVerb(read: MatrixRead, req: MatrixVerbRequest, ctx: Previ
         })
         break
       }
+      case 'set-business-price':
+      case 'set-business-tiers': {
+        /* Amazon Business (step 5 Part 3): the same rules as the B2B price pop-up and the door — the price permission, a
+           listing where Amazon lists B2B (the read's own sentence otherwise), then what Amazon would refuse (bounds, the
+           minimum and maximum price, the tiers' shape), each against the normal price the push sends (`normalPrice`). */
+        if (!ctx.can('products.price.edit')) { refuse(row, key, 'permission', PREVIEW_WORDS.businessPricePermission); break }
+        const b = cells.business
+        if (!b || cells.writable.businessPrice !== true) {
+          refuse(row, key, 'not-applicable', cells.writeBlockedReason.businessPrice ?? (coord.channel === 'AMAZON' ? PREVIEW_WORDS.businessNotHere : PREVIEW_WORDS.businessAmazonOnly))
+          break
+        }
+        const next = businessVerbSetting(p, b)
+        if ('skip' in next) { refuse(row, key, 'not-applicable', next.skip); break }
+        const setting = next.setting
+        const problems = setting ? businessPriceProblems({ setting, normalPrice: b.normalPrice, minPrice: b.minPrice, maxPrice: b.maxPrice, currency: b.currency }) : []
+        if (problems.length) { refuse(row, key, 'guard', problems.join(' ')); break }
+        const from = businessSettingOfCell(b)
+        if (sameBusiness(from, setting)) break
+        const after = businessCellWith(b, setting)
+        const tiersVerb = p.verb === 'set-business-tiers'
+        const words = tiersVerb ? businessTiersWords : businessPriceWords
+        /* The note: what happens at Amazon, in the order it matters — removed; Amazon's own price replaced (an undo cannot
+           bring it back); a FIRST business offer, which Amazon gets with the shopper price (#602: it waits while Amazon's
+           shopper price is not Nexus's); what Amazon would hide; the listing cannot be sent to now (kept in Nexus). */
+        const notes: string[] = []
+        if (!setting) notes.push(from?.tiers ? PREVIEW_WORDS.businessRemovedWithTiers : PREVIEW_WORDS.businessRemoved)
+        else if (!from && b.reported) notes.push(PREVIEW_WORDS.businessReplacesAmazon(cellMoney(b.reported.price, b.currency)))
+        else if (!from) notes.push(b.live?.normal
+          ? PREVIEW_WORDS.businessFirstWaits(cellMoney(b.live.normal.amazon, b.currency), cellMoney(b.live.normal.nexus, b.currency))
+          : PREVIEW_WORDS.businessFirst(cellMoney(b.normalPrice, b.currency)))
+        if (setting) notes.push(...businessPriceWarnings({ setting, normalPrice: b.normalPrice, salePrice: cells.sale?.value ?? null, currency: b.currency }).map((w) => w.replace(/\.$/, '')))
+        if (b.held) notes.push(b.held.replace(/\.$/, ''))
+        changes.push({
+          rowId: row.id, sku: row.sku, coordinateKey: key, cell: tiersVerb ? 'businessTiers' : 'businessPrice', from, to: setting,
+          fromLabel: words(b), toLabel: words(after), note: notes.length ? notes.join(' · ') : undefined,
+        })
+        break
+      }
     }
   }
 
   const p = req.params
   const big = changes.length >= 100 || (p.verb === 'adjust-prices' && typeof p.percent === 'number' && p.percent <= -BIG_CUT_PERCENT) || bigAmountCut(p, changes)
+    || (changes.length > 0 && bigBusinessCut(p))
   /* Typed confirmation (Owner 2026-10-08), the only level besides none: an AMAZON fulfilment change (it converts the offer
      on Amazon — the method is the word), and a big change (100 changes or more, or a price cut of 30 % or more — by a
      percent, or by an amount that takes any line down 30 % or more — APPLY). An eBay fulfilment change is Nexus only,

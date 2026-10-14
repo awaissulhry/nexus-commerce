@@ -2,7 +2,8 @@
  * The bulk Edit's FIELDS (Owner 2026-10-07; v2 2026-10-12) — pure: what the ticked rows may change, on which markets, to
  * which values; the rows as they are NOW (`bulkCurrent`, in the grid's own words); and the preview lines of the changes
  * that need no server answer (Base price, Market price "Use base price", Sale, Status). The Matrix verbs' own preview
- * (Market price, Fulfilment, Quantity, Buffer, Stock sync, Sells from) is turned into the same lines by `verbLines`.
+ * (Market price, B2B price and tiers, Fulfilment, Quantity, Buffer, Stock sync, Sells from) is turned into the same
+ * lines by `verbLines`.
  *
  * Nothing here writes; the runner (`bulkSource.ts`) reaches the page's doors (`MatrixSurface.tsx`). Every number shown
  * comes from the read (a cell, a row) or from the server's preview — never from a guess here.
@@ -41,6 +42,8 @@ export const BULK_SENT = {
   followers: 'Markets that follow the base price get it in about 30 seconds.',
   amazonSale: 'Nexus sends the sale and its two dates to Amazon in about 30 seconds.',
   amazonSaleEnd: 'Nexus tells Amazon to end the sale in about 30 seconds.',
+  /** Amazon Business: the business price door queues one send per listing (a listing that cannot be sent to keeps it). */
+  business: 'Nexus sends them to Amazon in about 30 seconds.',
 } as const
 /** `Nexus sends it/them …` for `n` changes; nothing when none changed. */
 export const bulkSent = (n: number): string => (n <= 0 ? '' : n === 1 ? BULK_SENT.it : BULK_SENT.them)
@@ -89,6 +92,18 @@ const MODES: Record<BulkFieldId, readonly BulkModeSpec[]> = {
     { id: 'sale-set', label: 'Set a sale', input: 'sale', inputLabel: 'Sale price', hint: 'The market sells at the sale price from the first day to the last.' },
     { id: 'sale-remove', label: 'Remove the sale', input: 'none', hint: 'The market goes back to its normal price.' },
   ],
+  /* Amazon Business: the B2B price pop-up's three choices, and Raise · Lower for exact prices (as Market price has them). */
+  businessPrice: [
+    { id: 'b2b-percent', label: '% below price', input: 'percent', inputLabel: 'Percent below the price', hint: 'Business buyers pay this much less than the price. It moves when the price moves.' },
+    { id: 'b2b-exact', label: 'Exact price', input: 'money', inputLabel: 'Business price', hint: 'Business buyers pay this price, whatever the normal price is.' },
+    { id: 'raise', label: 'Raise', input: 'adjust', inputLabel: 'Raise by', units: ['percent'], hint: 'Each exact business price goes up by this much. A price set as % below the price is skipped.' },
+    { id: 'lower', label: 'Lower', input: 'adjust', inputLabel: 'Lower by', units: ['percent'], hint: 'Each exact business price goes down by this much. A price set as % below the price is skipped.' },
+    { id: 'b2b-remove', label: 'Remove', input: 'none', hint: 'Business buyers see the normal price. Nexus removes the business price, and its quantity discounts, from Amazon.' },
+  ],
+  businessTiers: [
+    { id: 'tiers-set', label: 'Set', input: 'tiers', inputLabel: 'Quantity discounts', hint: 'Business buyers pay less from these quantities (up to 5). Each listing keeps its B2B price.' },
+    { id: 'tiers-remove', label: 'Remove', input: 'none', hint: 'Business buyers pay the B2B price whatever the quantity.' },
+  ],
   listingStatus: [
     { id: 'status', label: 'Set to', input: 'choice', inputLabel: 'New status', hint: 'Saved in Nexus now. Publish sends it to each market.' },
   ],
@@ -124,6 +139,8 @@ const FIELDS: ReadonlyArray<Omit<BulkFieldSpec, 'modes' | 'held'>> = [
   { id: 'basePrice', label: 'Base price', description: 'The price every market uses by default', group: 'Prices', perMarket: false },
   { id: 'price', label: 'Market price', description: 'Its own price on chosen markets', group: 'Prices', perMarket: true },
   { id: 'salePrice', label: 'Sale', description: 'A lower price between two dates', group: 'Prices', perMarket: true },
+  { id: 'businessPrice', label: 'B2B price', description: 'What business buyers pay on Amazon', group: 'Amazon Business', perMarket: true },
+  { id: 'businessTiers', label: 'B2B tiers', description: 'Lower B2B prices from 2, 5, 10… units', group: 'Amazon Business', perMarket: true },
   { id: 'listingStatus', label: 'Status', description: 'For sale (Active), paused or ended', group: 'Listing', perMarket: true },
   { id: 'fulfilment', label: 'Fulfilment', description: 'Who ships: Amazon (FBA) or you (FBM)', group: 'Listing', perMarket: true },
   { id: 'quantity', label: 'Quantity', description: 'How many units a market shows', group: 'Stock', perMarket: true },
@@ -143,15 +160,19 @@ const CELL_OF: Partial<Record<BulkFieldId, MatrixCellKind>> = {
   price: 'price', salePrice: 'salePrice', fulfilment: 'fulfilment', quantity: 'syncMode', buffer: 'syncBuffer', stockSync: 'syncState',
   // Sells from: once per group that carries the quantity (Amazon EU's region group, not its markets).
   stockSource: 'syncQty',
+  // Amazon Business: an Amazon market where Amazon lists B2B for this account.
+  businessPrice: 'businessPrice', businessTiers: 'businessTiers',
 }
-const PRICE_FIELDS: readonly BulkFieldId[] = ['basePrice', 'price', 'salePrice']
+const PRICE_FIELDS: readonly BulkFieldId[] = ['basePrice', 'price', 'salePrice', 'businessPrice', 'businessTiers']
 /** What a market without the field has none of, for `bulkMarketsNote`. */
 const FIELD_NOUN: Partial<Record<BulkFieldId, string>> = {
   price: 'price', salePrice: 'sale price', listingStatus: 'Status', fulfilment: 'fulfilment method',
   quantity: 'stock', buffer: 'stock', stockSync: 'stock', stockSource: 'stock',
+  businessPrice: 'business price', businessTiers: 'business price',
 }
 /** The fields that live on a market's listing columns (never on a region's inventory group). */
-const LISTING_FIELDS: readonly BulkFieldId[] = ['price', 'salePrice', 'listingStatus']
+const LISTING_FIELDS: readonly BulkFieldId[] = ['price', 'salePrice', 'listingStatus', 'businessPrice', 'businessTiers']
+const BUSINESS_FIELDS: readonly BulkFieldId[] = ['businessPrice', 'businessTiers']
 
 export function bulkModes(field: BulkFieldId): readonly BulkModeSpec[] { return MODES[field] }
 export function bulkMode(field: BulkFieldId, mode: BulkModeId): BulkModeSpec | null { return MODES[field].find((m) => m.id === mode) ?? null }
@@ -165,6 +186,8 @@ export function bulkFieldOfKind(kind: MatrixCellKind): BulkFieldId | null {
     case 'syncMode': case 'syncQty': return 'quantity'
     case 'syncBuffer': return 'buffer'
     case 'syncState': return 'stockSync'
+    case 'businessPrice': return 'businessPrice'
+    case 'businessTiers': return 'businessTiers'
     default: return null
   }
 }
@@ -232,6 +255,8 @@ function rowOn(ctx: BulkContext, field: BulkFieldId, rowId: string, c: MatrixCoo
   if (field === 'salePrice') return !!cells.price || !!cells.sale
   if (field === 'fulfilment') return !!cells.fulfilment
   if (field === 'stockSource') return !!cells.source
+  /* Amazon Business: a listing with its business cell — or one Amazon lists no B2B for here, so the preview says why. */
+  if (BUSINESS_FIELDS.includes(field)) return !!cells.listingId && (cells.business != null || !!cells.writeBlockedReason.businessPrice)
   return !!cells.sync
 }
 const chosenOf = (ctx: Pick<BulkContext, 'coordinates'>, keys: readonly CoordinateKey[]) => ctx.coordinates.filter((c) => keys.includes(c.key))
@@ -363,6 +388,8 @@ function nowOn(ctx: BulkContext, field: BulkFieldId, r: BulkRow, c: MatrixCoordi
     case 'quantity': return { now: quantityWords(cells), note: null }
     case 'buffer': return { now: matrixCellText('syncBuffer', cells, c, MATRIX_COPY), note: null }
     case 'stockSync': return { now: matrixCellText('syncState', cells, c, MATRIX_COPY), note: null }
+    case 'businessPrice': return { now: matrixCellText('businessPrice', cells, c, MATRIX_COPY), note: null }
+    case 'businessTiers': return { now: matrixCellText('businessTiers', cells, c, MATRIX_COPY), note: null }
     case 'stockSource': {
       const row = ctx.rowOf?.(r.id) ?? { role: r.isParent ? 'parent' as const : 'variant' as const, stock: { available: null, uncounted: false, locations: [] } }
       return { now: fromCellText(row, cells, c) ?? MATRIX_DASH, note: null }
@@ -474,6 +501,15 @@ export function verbParams(field: BulkFieldId, mode: BulkModeId, input: BulkInpu
       // `[]` = the market default again (the shared normaliser stores a choice equal to the default as `[]` too).
       if (mode === 'default') return { verb: 'set-source', codes: [] }
       return mode === 'sources' && input.codes?.length ? { verb: 'set-source', codes: [...input.codes] } : null
+    case 'businessPrice':
+      if (mode === 'b2b-percent') return input.percent != null ? { verb: 'set-business-price', mode: 'percent', percent: input.percent } : null
+      if (mode === 'b2b-exact') return input.amount != null ? { verb: 'set-business-price', mode: 'exact', price: input.amount } : null
+      // Raise · Lower an EXACT business price by a percent (a percent rule is skipped by the server's preview, with why).
+      if (mode === 'raise' || mode === 'lower') return input.percent != null ? { verb: 'set-business-price', mode: 'change', percent: signed(mode, input.percent) } : null
+      return mode === 'b2b-remove' ? { verb: 'set-business-price', mode: 'remove' } : null
+    case 'businessTiers':
+      if (mode === 'tiers-set') return input.tiers ? { verb: 'set-business-tiers', mode: 'set', tiers: { type: input.tiers.type, levels: input.tiers.levels.map((l) => ({ ...l })) } } : null
+      return mode === 'tiers-remove' ? { verb: 'set-business-tiers', mode: 'remove' } : null
     default:
       return null
   }
@@ -525,12 +561,14 @@ export function verbLines(
  * The notices a verb's preview carries: the server's facts (info), and for a fulfilment change its sentences as warnings
  * (an Amazon conversion is a risk to read). Holding the sync adds what else it holds (a warning).
  */
-export function verbNotices(preview: Pick<VerbPreview, 'verb' | 'notices'>): BulkNotice[] {
+export function verbNotices(preview: Pick<VerbPreview, 'verb' | 'notices'> & Partial<Pick<VerbPreview, 'changes'>>): BulkNotice[] {
   // Facts stay info on every verb: Amazon EU's one quantity, and a preview that sends nothing.
   const fact = (text: string) => text.startsWith(MATRIX_COPY.euNotice([]).trim()) || text === MATRIX_COPY.simulated
   const server = preview.notices.map((text): BulkNotice => ({ text, tone: preview.verb === 'set-fulfilment' && !fact(text) ? 'warning' : 'info' }))
   if (preview.verb === 'pause-sync') return [...server, { text: BULK_HOLD_NOTICE, tone: 'warning' }]
   if (preview.verb === 'set-price' || preview.verb === 'adjust-prices' || preview.verb === 'copy-prices') return [...server, { text: BULK_SENT.prices, tone: 'info' }]
+  // Amazon Business: said only when something is sent.
+  if (preview.verb === 'set-business-price' || preview.verb === 'set-business-tiers') return preview.changes?.length ? [...server, { text: BULK_SENT.business, tone: 'info' }] : server
   return server
 }
 
@@ -692,6 +730,7 @@ export function bulkNoun(field: BulkFieldId, n: number): string {
     basePrice: ['base price', 'base prices'], price: ['price', 'prices'], salePrice: ['sale', 'sales'], listingStatus: ['status', 'statuses'],
     fulfilment: ['fulfilment method', 'fulfilment methods'], quantity: ['quantity', 'quantities'], buffer: ['buffer', 'buffers'], stockSync: ['listing', 'listings'],
     stockSource: ['listing', 'listings'], casePack: ['case size', 'case sizes'], stockPool: ['SKU', 'SKUs'],
+    businessPrice: ['business price', 'business prices'], businessTiers: ['listing', 'listings'],
   }
   return `${n} ${one[field][n === 1 ? 0 : 1]}`
 }

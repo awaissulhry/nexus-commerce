@@ -15,7 +15,7 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
 import { FEATURES as F } from '@nexus/shared/permissions'
 import type { MatrixVerbRequest, MatrixWriteCell, VerbPreview } from '@nexus/shared/matrix-contract'
-import { adjustPricesProblem } from '@nexus/shared/matrix-preview'
+import { adjustPricesProblem, businessVerbProblem } from '@nexus/shared/matrix-preview'
 import { hasPermission } from '../lib/auth/rbac.js'
 import { UnknownProductError } from '../services/pim/studio-sheet.service.js'
 import { ProductRelationshipError } from '../services/pim/product-relationship.service.js'
@@ -82,7 +82,7 @@ function parseCells(body: unknown): { cells: MatrixWriteCell[]; accountId: strin
 }
 
 export function parseVerb(body: unknown): { req: MatrixVerbRequest & { preview?: VerbPreview } } | { problem: string } {
-  const b = body as { params?: { verb?: unknown; percent?: unknown; amount?: unknown; currency?: unknown }; targets?: unknown; commit?: unknown; preview?: unknown } | null
+  const b = body as { params?: { verb?: unknown; percent?: unknown; amount?: unknown; currency?: unknown; mode?: unknown; price?: unknown; tiers?: unknown }; targets?: unknown; commit?: unknown; preview?: unknown } | null
   if (!b || typeof b !== 'object' || typeof b.params?.verb !== 'string') return { problem: 'The verb request carried no `params.verb`' }
   if (!Array.isArray(b.targets)) return { problem: 'The verb request carried no `targets` array' }
   if (b.targets.length > 2000) return { problem: 'At most 2000 targets per verb' }
@@ -94,6 +94,13 @@ export function parseVerb(body: unknown): { req: MatrixVerbRequest & { preview?:
     const { percent, amount, currency } = b.params
     const bare = percent == null && amount == null && currency == null
     const problem = bare && b.commit === true && preview ? null : adjustPricesProblem({ percent, amount, currency })
+    if (problem) return { problem }
+  }
+  /* Amazon Business: a mode the verb has, and its value in range (a percent, an exact price, the tiers' shape). The page
+     commits with `{ verb }` and the preview it showed (each change carries the whole setting it writes). */
+  if (b.params.verb === 'set-business-price' || b.params.verb === 'set-business-tiers') {
+    const bare = b.params.mode == null && b.commit === true && !!preview
+    const problem = bare ? null : businessVerbProblem(b.params)
     if (problem) return { problem }
   }
   return { req: { params: b.params as MatrixVerbRequest['params'], targets: b.targets as MatrixVerbRequest['targets'], commit: b.commit === true, ...(preview ? { preview } : {}) } }

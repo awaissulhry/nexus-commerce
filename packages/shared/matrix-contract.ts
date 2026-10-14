@@ -540,6 +540,8 @@ export type MatrixVerbId =
   | 'pause-sync' | 'resume-sync' | 'push-now' | 'retry-sync'
   | 'set-fulfilment'
   | 'set-source'
+  /* Amazon Business (step 5 Part 3): the B2B price and the quantity discounts of Amazon listings, through the one door. */
+  | 'set-business-price' | 'set-business-tiers'
 
 export const MATRIX_VERB_LABELS: Readonly<Record<MatrixVerbId, string>> = {
   'set-price': 'Set price…', 'adjust-prices': 'Adjust prices by %…', 'copy-prices': 'Copy prices from…',
@@ -547,6 +549,7 @@ export const MATRIX_VERB_LABELS: Readonly<Record<MatrixVerbId, string>> = {
   'pause-sync': 'Hold stock sync', 'resume-sync': 'Release stock sync', 'push-now': 'Push quantity now', 'retry-sync': 'Retry',
   'set-fulfilment': 'Set fulfilment…',
   'set-source': 'Set sells from…',
+  'set-business-price': 'Set B2B price…', 'set-business-tiers': 'Set B2B tiers…',
 }
 
 export interface MatrixVerbTarget { rowId: string; coordinateKey: CoordinateKey }
@@ -567,6 +570,20 @@ export type MatrixVerbParams =
   | { verb: 'set-fulfilment'; method: FulfilmentMethod }
   /** "Sells from" in sale order; `[]` = use the market default. */
   | { verb: 'set-source'; codes: string[] }
+  /**
+   * Amazon Business — each listing's B2B price; its quantity discounts stay as they are:
+   *   percent  `percent` % below the price (the live rule: it follows every price change), 0–99
+   *   exact    an exact business price
+   *   change   each EXACT business price moved by a signed `percent` (−5 lowers it by 5 %); a percent rule is skipped
+   *   remove   no business price (Nexus removes the business offer from Amazon, its discounts with it)
+   */
+  | { verb: 'set-business-price'; mode: 'percent'; percent: number }
+  | { verb: 'set-business-price'; mode: 'exact'; price: number }
+  | { verb: 'set-business-price'; mode: 'change'; percent: number }
+  | { verb: 'set-business-price'; mode: 'remove' }
+  /** Amazon Business — the same quantity discounts on each listing (its B2B price stays), or none. */
+  | { verb: 'set-business-tiers'; mode: 'set'; tiers: { type: 'percent' | 'fixed'; levels: Array<{ minQty: number; value: number }> } }
+  | { verb: 'set-business-tiers'; mode: 'remove' }
 
 export interface MatrixVerbRequest { params: MatrixVerbParams; targets: MatrixVerbTarget[]; commit: boolean }
 

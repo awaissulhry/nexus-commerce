@@ -5,7 +5,8 @@ import {
   buildRequest, copySource, countSentence, createTableKeys, currencySymbol, defaultModeFor, effectiveFilter, fieldDefaults,
   fieldGroups, fieldListOptions, filterLines, filterRows, footerStatus, groupSkipped, heldMarketsLine, isIsoDate, lineFilterOptions,
   localIsoDate, marketsShown, modeRaw, nextStep, noChoiceText, noticesFor, parseInput, rawFromInput, requestKey, requestMarkets,
-  resolveInitial, saleDefaultDates, skipGroupLine, skippedSummary, skippedText, tableRows, type BulkRaw, type HeldInputs,
+  resolveInitial, saleDefaultDates, skipGroupLine, skippedSummary, skippedText, tableRows, TIERS_EMPTY, TIERS_UNFILLED, tierFieldProblems,
+  type BulkRaw, type HeldInputs,
 } from './dialogModel'
 import type { BulkEditSource, BulkFieldSpec, BulkLine, BulkMarketOption, BulkModeSpec } from './types'
 
@@ -575,5 +576,61 @@ describe('buildRequest and requestKey', () => {
     // Sells from: the order is the sale order — a reorder is a different request.
     const src = (codes: string[]) => requestKey({ field: 'stockSource', mode: 'sources', input: { codes }, coordinateKeys: ['AMAZON:EU'] })
     expect(src(['IT-MAIN', 'MI-3PL'])).not.toBe(src(['MI-3PL', 'IT-MAIN']))
+  })
+})
+
+describe('parseInput — Amazon Business: a percent below the price, and quantity discounts', () => {
+  const percent = (text: string) => parseInput('percent', raw({ text }))
+  const row = (key: string, minQty: string, value: string) => ({ key, minQty, value })
+  const tiers = (rows: Array<ReturnType<typeof row>>, tierType: BulkRaw['tierType'] = 'percent') => parseInput('tiers', raw({ tierType, tiers: rows }))
+
+  it('% below the price: 0 to 99, up to 2 decimals, no sign (the mode says below)', () => {
+    expect(percent('5')).toMatchObject({ state: 'ok', input: { percent: 5 } })
+    expect(percent('5,5 %')).toMatchObject({ state: 'ok', input: { percent: 5.5 } })
+    expect(percent('0')).toMatchObject({ state: 'ok', input: { percent: 0 } })
+    expect(percent('')).toMatchObject({ state: 'empty' })
+    expect(percent('5,')).toMatchObject({ state: 'partial' })
+    expect(percent('-5')).toMatchObject({ state: 'invalid', reason: NO_SIGN })
+    expect(percent('100')).toMatchObject({ state: 'invalid', reason: 'Enter a percentage from 0 to 99.' })
+    expect(percent('2.555')).toMatchObject({ state: 'invalid', reason: 'Use at most 2 decimals, like 2.5.' })
+  })
+
+  it('quantity discounts: every row read, then the shape Amazon takes — said in the shared rule\'s words', () => {
+    expect(tiers([row('k1', '2', '3'), row('k2', '5', '5 %')])).toMatchObject({ state: 'ok', input: { tiers: { type: 'percent', levels: [{ minQty: 2, value: 3 }, { minQty: 5, value: 5 }] } } })
+    expect(tiers([row('k1', '3', '85,50')], 'fixed')).toMatchObject({ state: 'ok', input: { tiers: { type: 'fixed', levels: [{ minQty: 3, value: 85.5 }] } } })
+    expect(tiers([])).toMatchObject({ state: 'empty', reason: TIERS_EMPTY })
+    expect(tiers([row('k1', '2', '')])).toMatchObject({ state: 'empty', reason: TIERS_UNFILLED })
+    expect(tiers([row('k1', '2', '3,')])).toMatchObject({ state: 'partial' })
+    expect(tiers([row('k1', '2.5', '3')])).toMatchObject({ state: 'invalid', reason: 'Discount 1: write a whole number of units, 2 or more.' })
+    expect(tiers([row('k1', '1', '3')])).toMatchObject({ state: 'invalid', reason: 'Discount 1: the quantity must be a whole number of at least 2.' })
+    expect(tiers([row('k1', '5', '3'), row('k2', '2', '5')])).toMatchObject({ state: 'invalid', reason: 'Discount 2: each quantity must be higher than the one before.' })
+    expect(tiers([row('k1', '2', '5'), row('k2', '5', '3')])).toMatchObject({ state: 'invalid', reason: 'Discount 2: each percent must be bigger than the one before.' })
+    const six = Array.from({ length: 6 }, (_, i) => row(`k${i}`, String(i + 2), String(i + 1)))
+    expect(tiers(six)).toMatchObject({ state: 'invalid', reason: 'Amazon takes 1 to 5 quantity discounts; this has 6.' })
+  })
+
+  it('marks the entries that are no number, by row and field; an empty one is not marked yet', () => {
+    const marked = tierFieldProblems({ tierType: 'percent', tiers: [row('k1', 'two', '3'), row('k2', '5', 'x'), row('k3', '', '')] })
+    expect([...marked.keys()]).toEqual(['k1:minQty', 'k2:value'])
+  })
+
+  it('a quantity discounts mode starts with one suggested row; an opening value comes back in its rows; the request key tells tiers apart', () => {
+    const start = modeRaw({ input: 'tiers' }, TODAY)
+    expect(start.tiers.map((t) => [t.minQty, t.value])).toEqual([['2', '3']])
+    expect(start.tierType).toBe('percent')
+    const back = rawFromInput({ input: 'tiers' }, { tiers: { type: 'fixed', levels: [{ minQty: 3, value: 85 }] } }, TODAY)
+    expect([back.tierType, back.tiers.map((t) => [t.minQty, t.value])]).toEqual(['fixed', [['3', '85']]])
+    expect(rawFromInput({ input: 'percent' }, { percent: 5 }, TODAY).text).toBe('5')
+    const key = (levels: Array<{ minQty: number; value: number }>) => requestKey({ field: 'businessTiers', mode: 'tiers-set', input: { tiers: { type: 'percent', levels } }, coordinateKeys: ['AMAZON:IT'] })
+    expect(key([{ minQty: 2, value: 3 }])).not.toBe(key([{ minQty: 2, value: 4 }]))
+    expect(key([{ minQty: 2, value: 3 }])).toBe(key([{ minQty: 2, value: 3 }]))
+  })
+
+  it('the next step names what is missing in plain words', () => {
+    const field = { held: null, perMarket: true }
+    const mode = { id: 'tiers-set' as const, input: 'tiers' as const, inputLabel: 'Quantity discounts' }
+    expect(nextStep({ field, mode, parsed: tiers([]), ticked: 1 })!.short).toBe('Add a quantity discount')
+    expect(nextStep({ field, mode, parsed: tiers([row('k1', '2', '')]), ticked: 1 })!.short).toBe('Fill in every quantity discount')
+    expect(nextStep({ field, mode: { id: 'b2b-percent', input: 'percent', inputLabel: 'Percent below the price' }, parsed: percent(''), ticked: 1 })!.short).toBe('Enter the percent below the price')
   })
 })
