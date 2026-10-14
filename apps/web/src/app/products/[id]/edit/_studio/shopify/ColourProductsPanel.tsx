@@ -92,7 +92,7 @@ export function ColourProductsPanel({ linkedPath, canEdit, canPublish }: { linke
 function FullSyncFooter({ busy, onCancel, onStart }: { busy: boolean; onCancel(): void; onStart(): void }) {
   const [understood, setUnderstood] = useState(false)
   return <>
-    <Checkbox checked={understood} disabled={busy} onChange={e => setUnderstood(e.target.checked)} label="I understand that the colour swatch names and groups are rewritten." />
+    <Checkbox className={styles.ack} checked={understood} disabled={busy} onChange={e => setUnderstood(e.target.checked)} label="I understand that the colour swatch names and groups are rewritten." />
     <span className="grow" />
     <Button disabled={busy} onClick={onCancel}>Cancel</Button>
     <Button variant="primary" disabled={busy || !understood} onClick={onStart}>{busy ? 'Starting…' : 'Start full sync'}</Button>
