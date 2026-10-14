@@ -11,7 +11,11 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
  * just before its DELETE (checked in `pg_stat_activity`); the newer save commits while it is blocked; then the lock is
  * released. The first case is the positive control: a save that does not read the readiness rows lets the older rebuild
  * commit stale, so this harness can see the failure it guards against. The readiness row's `sortTitle` (the resolved
- * title) shows which values a rebuild read. Runs only on a real server (`scripts/run-real-postgres-tests.mjs`).
+ * title) shows which values a rebuild read.
+ *
+ * And the rebuild after a save runs at Repeatable Read, so it never makes ANOTHER save restart: a save of another family,
+ * open across a rebuild's commit, commits at its first attempt; with a Serializable rebuild (the control) it restarts.
+ * Runs only on a real server (`scripts/run-real-postgres-tests.mjs`).
  */
 const state = vi.hoisted(() => ({ db: null as any }))
 vi.mock('@nexus/database', () => ({
@@ -33,7 +37,7 @@ import { CONCURRENT_PG_ENV, concurrentDatabase, concurrentDatabaseUrl } from '..
 
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
 
-describe.skipIf(!concurrentDatabaseUrl())(`a sheet save whose rows are already pending vs an older rebuild (needs ${CONCURRENT_PG_ENV})`, () => {
+describe.skipIf(!concurrentDatabaseUrl())(`the rebuild after a sheet save on a real server: already-pending rows vs an older rebuild, other saves never restarted (needs ${CONCURRENT_PG_ENV})`, () => {
   beforeAll(async () => { state.db = await concurrentDatabase() }, 120_000)
   afterAll(async () => { for (const r of familiesRebuildingAfterResponse()) await familyReadinessSettled(r); await state.db?.close() }, 60_000)
 
@@ -78,6 +82,61 @@ describe.skipIf(!concurrentDatabaseUrl())(`a sheet save whose rows are already p
     } finally { locker.release() }
     return marked
   }
+
+  /**
+   * Another family's save, held open across a rebuild's commit: it has read and written before the rebuild commits and
+   * commits after it. Returns how many attempts the save needed (a lost serialization check restarts it).
+   */
+  async function saveAcross(rebuilt: string, other: string, startRebuild: () => Promise<unknown>, rebuildDone: () => Promise<unknown>) {
+    await seed(rebuilt); await seed(other)
+    // The rebuilt family is pending already, so its own save's mark takes no row lock.
+    await scoped(() => inDatabaseTransaction(prisma as never, () => markReadinessPending([rebuilt])))
+    const locker = await state.db.pool.connect()
+    let attempts = 0
+    try {
+      await locker.query('BEGIN')
+      await locker.query(`SELECT id FROM "ReadinessIndex" WHERE "productId" IN ($1, $2) FOR UPDATE`, [rebuilt, `${rebuilt}-child`])
+      void startRebuild()
+      expect(await waiters(1), 'the rebuild must be blocked before its DELETE').toBe(1)
+      let reached: () => void = () => {}, open: () => void = () => {}
+      const atGate = new Promise<void>(resolve => { reached = resolve })
+      const gate = new Promise<void>(resolve => { open = resolve })
+      const save = scoped(() => inDatabaseTransaction(prisma as never, async () => {
+        attempts++
+        await prisma.product.update({ where: { id: other }, data: { name: `Other ${attempts}` } })
+        await markReadinessPending([other])
+        reached()
+        await gate
+      }))
+      await atGate
+      await locker.query('COMMIT')
+      await rebuildDone()
+      open()
+      await save
+    } finally { locker.release() }
+    return attempts
+  }
+
+  it('control: a SERIALIZABLE rebuild committing while another family\'s save is open makes that save restart', async () => {
+    let done: Promise<unknown> = Promise.resolve()
+    const attempts = await saveAcross('race-ser-a', 'race-ser-b',
+      async () => { done = scoped(() => inDatabaseTransaction(prisma as never, () => reconcileFamilyReadiness('race-ser-a'), { memoReads: true })).catch(() => undefined) },
+      () => done)
+    // If this does not hold, the next case proves nothing.
+    expect(attempts).toBeGreaterThan(1)
+  }, 120_000)
+
+  it('the rebuild after a sheet save (Repeatable Read) never makes another family\'s save restart', async () => {
+    const attempts = await saveAcross('race-rr-a', 'race-rr-b',
+      () => scoped(() => inDatabaseTransaction(prisma as never, async () => {
+        await prisma.product.update({ where: { id: 'race-rr-a' }, data: { name: 'New name' } })
+        return produceReadinessForProducts(['race-rr-a'], undefined, { afterResponse: true })
+      })),
+      () => familyReadinessSettled('race-rr-a', 60_000))
+    expect(attempts).toBe(1)
+    const end = await rows('race-rr-a')
+    expect(end.every(r => r.pendingSince === null && r.sortTitle === 'New name'), JSON.stringify(end.map(r => [r.sortTitle, r.pendingSince]))).toBe(true)
+  }, 120_000)
 
   it('control: a save that does NOT read the readiness rows lets the older rebuild commit stale (this harness can see the failure)', async () => {
     const root = 'race-control'

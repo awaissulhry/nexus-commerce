@@ -158,13 +158,21 @@ export const PROGRESS_CHECKING_STATUS = {
   detail: 'A save changed this family. Nexus is checking its progress again; until it finishes, the bars show the reading from before that save.',
 }
 
-/** While an answer is pending the page reads again every 5 s, for at most a minute after the read that started it. */
-export const PENDING_REREAD_MS = 5_000
-export const PENDING_REREAD_LIMIT = 12
+/**
+ * While an answer is pending the page reads again: every 5 s for the first minute (the rebuild after a save takes a few
+ * seconds), then every 15 s until two minutes. A rebuild that failed is redone by the drain once its mark is 30 s old,
+ * on its next minute, so it lands 30–90 s after the save plus its own run: inside the second minute.
+ */
+export const PENDING_REREAD_FAST_MS = 5_000
+export const PENDING_REREAD_SLOW_MS = 15_000
+const FAST_REREADS = 12
+const SLOW_REREADS = 4
 
-/** The delay before the next re-read of a pending answer, or `null`: not pending, or the minute is used up. */
+/** The delay before the next re-read of a pending answer, or `null`: not pending, or the two minutes are used up. */
 export function pendingRereadDelay(pending: boolean, rereadsSoFar: number): number | null {
-  return pending && rereadsSoFar < PENDING_REREAD_LIMIT ? PENDING_REREAD_MS : null
+  if (!pending) return null
+  if (rereadsSoFar < FAST_REREADS) return PENDING_REREAD_FAST_MS
+  return rereadsSoFar < FAST_REREADS + SLOW_REREADS ? PENDING_REREAD_SLOW_MS : null
 }
 
 /** The readiness read. `only: 'coordinate'` asks for the one channel coordinate a save moved (P2, I4-9). */

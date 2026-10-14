@@ -256,7 +256,7 @@ describe('progress columns (2026-09-26) — the optional side of the matrix', ()
   })
 })
 
-import { PENDING_REREAD_LIMIT, PENDING_REREAD_MS, PROGRESS_CHECKING_STATUS, pendingRereadDelay, readinessPending } from './readiness'
+import { PENDING_REREAD_FAST_MS, PENDING_REREAD_SLOW_MS, PROGRESS_CHECKING_STATUS, pendingRereadDelay, readinessPending } from './readiness'
 describe('editing speed (2026-10-13) — a verdict the server is checking again is never shown as current', () => {
   const PENDING = '2026-10-14T08:00:00.000Z'
   const answer = (scopes: unknown[], matrix: unknown[] = []) => ({ byScope: parseReadinessResponse({ scopes }), matrix: parseReadinessMatrix({ matrix }) })
@@ -279,11 +279,13 @@ describe('editing speed (2026-10-13) — a verdict the server is checking again 
     expect(readinessPending(answer([], [matrixEntry({ byProduct: { p1: { state: 'warn', pct: 80, pendingSince: PENDING } } })]))).toBe(true)
   })
 
-  it('reads a pending answer again every 5 s for at most a minute, and not at all once it is current', () => {
-    expect(PENDING_REREAD_MS * PENDING_REREAD_LIMIT).toBe(60_000)
-    expect(pendingRereadDelay(true, 0)).toBe(5_000)
-    expect(pendingRereadDelay(true, PENDING_REREAD_LIMIT - 1)).toBe(5_000)
-    expect(pendingRereadDelay(true, PENDING_REREAD_LIMIT)).toBeNull()
+  it('reads a pending answer again every 5 s for a minute, then every 15 s until two minutes, and not once it is current', () => {
+    const delays: number[] = []
+    for (let n = 0, d = pendingRereadDelay(true, 0); d !== null; d = pendingRereadDelay(true, ++n)) delays.push(d)
+    expect(delays.slice(0, 12).every(d => d === PENDING_REREAD_FAST_MS)).toBe(true)
+    expect(delays.slice(12).every(d => d === PENDING_REREAD_SLOW_MS)).toBe(true)
+    // Long enough for the drain (marks 30 s old, every minute) to redo a failed rebuild: 30–90 s plus its run.
+    expect(delays.reduce((sum, d) => sum + d, 0)).toBe(120_000)
     expect(pendingRereadDelay(false, 0)).toBeNull()
   })
 

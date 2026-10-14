@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest'
 import { createRequire } from 'node:module'
 import type { FastifyInstance } from 'fastify'
 import type { formulaDatabase } from '../../test-support/formula-database.js'
@@ -61,6 +61,7 @@ import { writeContent } from '../pim/content-write.js'
 import { setCellFormula } from '../pim/mapping/cell-formula.service.js'
 import type { ContentAddress } from '@nexus/shared/content-language'
 import { concurrentDatabaseUrl, raceChannelListingInserts } from '../../test-support/concurrent-database.js'
+import { familiesRebuildingAfterResponse, familyReadinessSettled } from '../pim/readiness-after-response.js'
 
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
 let app: FastifyInstance
@@ -92,7 +93,10 @@ beforeAll(async () => {
   await app.register((await import('../../routes/products-bulk-save.routes.js')).default, { prefix: '/api' })
   await app.ready()
 }, 60_000)
-afterAll(async () => { for (const restore of restoreCounters) restore(); await app?.close(); await state.db?.close() })
+/** A Shared text save through the route rebuilds its family after the answer: each test starts once that is done. */
+const settleReadiness = async () => { for (const root of familiesRebuildingAfterResponse()) await familyReadinessSettled(root, 60_000) }
+afterEach(settleReadiness, 120_000)
+afterAll(async () => { await settleReadiness(); for (const restore of restoreCounters) restore(); await app?.close(); await state.db?.close() })
 
 async function family(size: number, aliasKey = '') {
   const prefix = `batch-platform-${++sequence}`

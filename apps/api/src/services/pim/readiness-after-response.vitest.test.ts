@@ -13,7 +13,7 @@ const tick = () => new Promise(resolve => setTimeout(resolve, 0))
 /** A rebuild that stays running until `finish()` is called. */
 function heldRebuild() {
   let finish: () => void = () => {}
-  const rebuild = vi.fn((_followUp: boolean) => new Promise<void>(resolve => { finish = resolve }))
+  const rebuild = vi.fn(() => new Promise<void>(resolve => { finish = resolve }))
   return { rebuild, finish: () => finish() }
 }
 
@@ -42,8 +42,6 @@ it('a burst of saves while the family is rebuilding costs ONE more rebuild, not 
   held.finish()
   await familyReadinessSettled('root-burst')
   expect(held.rebuild).toHaveBeenCalledTimes(2)
-  // The follow-up starts after those saves committed and rebuilds the whole family, whatever the first run read.
-  expect(held.rebuild.mock.calls).toEqual([[false], [true]])
 })
 
 it('saves that land before the run starts join it', async () => {

@@ -426,8 +426,9 @@ function useReadinessQuery(productId: string, market: string | null, nonce: numb
 
   /*
    * Editing speed (2026-10-13) — an answer the server is still checking (`pendingSince`: a Shared save's family is being
-   * rebuilt) is read again every 5 s, for at most a minute after the read that started it; the surfaces say "Checking…"
-   * meanwhile. A new coordinate or an asked read (save, Reload, live event) starts a fresh minute.
+   * rebuilt) is read again — every 5 s, then every 15 s, for at most two minutes after the read that started it
+   * (`pendingRereadDelay`); the surfaces say "Checking…" meanwhile. A new coordinate or an asked read (save, Reload,
+   * live event) starts a fresh window.
    */
   const [pendingNonce, setPendingNonce] = useState(0)
   const pendingRereads = useRef({ key: '', count: 0 })

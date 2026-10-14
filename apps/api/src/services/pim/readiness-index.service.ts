@@ -113,11 +113,16 @@ export async function produceReadinessForProducts(productIds: string[], scope?: 
       // marks take the family's key and run once at commit, however many rows of the operation wrote to it.
       dropBeforeDatabaseCommit(`${family}:`)
       await beforeDatabaseCommit(family, () => markReadinessPending([rootId]))
-      // The first run rebuilds what is pending — a family with no readiness row yet has nothing to mark, and
-      // `rebuildImportedFamily` builds it then; a follow-up run (a save landed during a rebuild) rebuilds the whole family.
-      // One snapshot whose repeated reads are answered once, as the rebuild inside a sheet operation's transaction was.
-      await afterDatabaseCommit(afterResponseKey(rootId), async () => rebuildAfterResponse(rootId, followUp =>
-        inDatabaseTransaction(prisma, () => followUp ? reconcileFamilyReadiness(rootId) : rebuildImportedFamily(rootId), { memoReads: true })))
+      // Every run rebuilds the whole family, from a snapshot taken after this save committed (a family with no row yet is
+      // built). REPEATABLE READ, not Serializable: the rebuild reads most of the catalogue's tables, and as a Serializable
+      // transaction it made other saves — of any family — restart, up to their 3-attempt limit (measured: a typing burst
+      // over two families restarted rebuilds 3 times and exhausted one). At Repeatable Read it takes no predicate locks,
+      // so a save never restarts because of it. It still cannot leave old values current: a save that lands during it
+      // starts a rebuild of its own after its commit (a follow-up run here, `readiness-after-response.ts`), and two
+      // rebuilds of one family replace the same rows, so the later one is retried from a fresh snapshot (40001). The
+      // drain stays Serializable. One snapshot whose repeated reads are answered once, as the inline rebuild's were.
+      await afterDatabaseCommit(afterResponseKey(rootId), async () => rebuildAfterResponse(rootId,
+        () => inDatabaseTransaction(prisma, () => reconcileFamilyReadiness(rootId), { memoReads: true, isolationLevel: 'RepeatableRead' })))
     }
     return { inline: 0, pending: roots.length }
   }
