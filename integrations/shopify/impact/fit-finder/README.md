@@ -9,11 +9,13 @@ phone the body type is its own step. The layout, sizes and places match the Size
 | | Sizebay (Alpinestars) | Xavia fit finder |
 | --- | --- | --- |
 | Mannequin | 3D body, skin tones, fit rings | real-time 3D body (WebGL) that reshapes as the shopper types and moves the sliders, turns by drag / touch / arrow keys, 7 body colours, rings with fit words; faceless store-mannequin head; flat drawing when a device has no WebGL |
-| Inputs | height, weight, age, shape sliders | the same |
-| Result | best size, neighbour sizes, add to cart | the same, plus each neighbour size marked (fits / not recommended), "Body measurements" panel for the size, plain notes when the body is beyond the chart or the best size is sold out |
-| Wrong size in cart | — | the size option warns "S is likely too tight for you", Add to cart asks once ("Switch to L" / "Add S anyway") |
+| Inputs | height, weight, age, shape sliders | the same; height also in metres ("1,80") or feet and inches, typed text never rewritten, Enter goes on |
+| Result | best size, neighbour sizes, add to cart | the button names the size it adds ("Add L to cart"); a size that is not recommended can still be added on purpose ("Add M anyway"); "Closest size" with an amber mark when even the best size is too tight or too loose somewhere; every neighbour size marked; a sold-out best size offers the next size that fits |
+| Wrong size in cart | — | the size option warns "S is likely too tight for you", Add to cart asks once ("Add L instead" / "Add S anyway"), naming every part that will not fit |
 | Order | — | hidden line property `_Fit check` (e.g. `suggested L 82% (height and weight) \| chosen M \| chest too tight`) for the size check before shipping |
 | Privacy | body data sent to Sizebay's servers | body data stays in the shopper's browser (localStorage, several profiles); the order gets only the sizes |
+| Screens and access | desktop and phone layouts | phones, tablets, touch screens, low windows and 200% zoom get a full-screen layout with 44 px touch targets that scrolls instead of squeezing; keyboard, focus and screen-reader names checked; text contrast to WCAG AA; a loading spinner on the link and the stage |
+| Profiles | on this device | the same, the profile in use named on its button, delete asks once more |
 | Speed | third-party scripts on every product page | one 42 kB (gzip) asset and a 48 kB font on the first click (or when this device has a saved profile), then one 175 kB body for the chosen body type |
 | Cost | paid service | none |
 

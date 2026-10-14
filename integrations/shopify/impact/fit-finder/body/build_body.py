@@ -7,9 +7,17 @@ import bpy, sys, os, json, math, numpy as np
 argv = sys.argv[sys.argv.index('--') + 1:]
 MH, OUT, ARM_DEG = argv[0], argv[1], float(argv[2]) if len(argv) > 2 else 38
 os.makedirs(OUT, exist_ok=True)
-MUSCLE = {'male': 0.6, 'female': 0.3}      # athletic store mannequins, as on fit finders
-FINGER_CLOSE = 0.8                         # share of the gap to the middle finger that the other fingers close
-THUMB_CLOSE = float(os.environ.get('XFF_THUMB', 0.6))   # share of the gap to the index finger that the thumb closes
+MUSCLE = {'male': 0.45, 'female': 0.3}     # lean, athletic store mannequins
+# A store mannequin's figure (MakeHuman targets, weights): ideal proportions (blended by muscle like the build), a flat
+# toned stomach, a longer neck and a slightly smaller head.
+FIGURE = {'idealproportions': 0.6, 'stomach-pregnant-decr': 1.0, 'stomach-tone-incr': 0.5, 'measure-neck-height-incr': 0.8,
+          'neck-scale-horiz-decr': 0.25, 'head-scale-vert-decr': 0.25, 'head-scale-horiz-decr': 0.25, 'head-scale-depth-decr': 0.25}
+SKIN_SMOOTH = int(os.environ.get('XFF_SKIN', 25))   # smoothing passes over the body (mannequin skin)
+FINGER_CLOSE = 0.95                        # share of the gap to the middle finger that the other fingers close
+THUMB_CLOSE = 0.8                          # share of the gap to the index finger that the thumb closes
+CURL = (8, 15, 10)                         # relaxed hand: degrees each finger bends at its three joints
+ELBOW = 12                                 # natural elbow bend left after straightening MakeHuman's forward forearm
+HAND_GAP = 0.15                            # dm: the arm angle drops until the hands keep this far from thighs and hips
 
 def read_obj(path):
     verts, faces, group = [], [], None
@@ -214,9 +222,23 @@ def mannequin_face(P, P_ref):
     P = P.copy(); P[:, 0] = hc[0] + (P[:, 0] - hc[0]) * (1 + 0.06 * wide)
     return P
 
+navel = np.where(np.abs(read_target('stomach-navel-in', N)).sum(1) > 0)[0]
+def feather(mask, passes):
+    # Blurs a 0..1 mask over the mesh, so smoothing fades out gently instead of leaving a crease at its edge.
+    for _ in range(passes):
+        mask = np.array([0.5 * mask[i] + 0.5 * mask[nbr_idx[i]].mean() if len(nbr_idx[i]) else mask[i] for i in range(len(mask))])
+    return mask
+chest_mask = feather(np.clip(breast_w * 4, 0, 1), 12) * 0.95
+hands_feet = np.clip(bone_weight(subtree('wrist.L') + subtree('wrist.R') + subtree('foot.L') + subtree('foot.R')) * 2, 0, 1)
 def mannequin(P, P_ref):
+    # A mannequin's skin is smoother than a person's: a light pass over the body (not hands, feet or head), then the face,
+    # chest and crotch.
+    P = smooth(P, (1 - hands_feet) * (1 - np.clip(head_w * 2, 0, 1)) * 0.8, SKIN_SMOOTH, 0.5, -0.53)
+    # The navel: a soft shallow dimple, as on store mannequins (the points MakeHuman's navel target moves, and round them).
+    ball = np.clip(1.3 - np.linalg.norm(P_ref - P_ref[navel].mean(0), axis=1) / 0.3, 0, 1)
+    P = smooth(P, ball, 40, 0.5, -0.53)
     P = mannequin_face(P, P_ref)
-    P = smooth(P, np.clip(breast_w * 4, 0, 1) * 0.95, 60, 0.5, -0.53)
+    P = smooth(P, chest_mask, 60, 0.5, -0.53)
     crotch = np.array([0, joint(P_ref, 'upperleg01.L____head')[1], 0])
     d = np.linalg.norm((P_ref - crotch) * np.array([1.0, 0.8, 1.2]), axis=1)
     return smooth(P, np.clip(1 - d / 1.6, 0, 1) * (P_ref[:, 2] > -0.2), 30, 0.5, -0.53)
@@ -227,9 +249,27 @@ def rotate_about(P, pivot, axis, angles):
     c, s = np.cos(angles)[:, None], np.sin(angles)[:, None]
     return pivot + v * c + np.cross(axis, v) * s + axis * (v @ axis)[:, None] * (1 - c)
 
-def pose(P):
+def pose(P, arm_deg=ARM_DEG):
     P = P.copy()
     for side, sign in (('L', 1), ('R', -1)):
+        # A relaxed hand: each finger bends a little at its three joints, towards the palm. The palm side is the
+        # side of the knuckle line the thumb is on.
+        knuckles = joint(P, f'finger2-1.{side}____head') - joint(P, f'finger5-1.{side}____head')
+        mid = (joint(P, f'finger2-1.{side}____head') + joint(P, f'finger5-1.{side}____head')) / 2
+        palm = np.cross(joint(P, f'finger3-3.{side}____tail') - joint(P, f'finger3-1.{side}____head'), knuckles)
+        if (joint(P, f'finger1-3.{side}____tail') - mid) @ palm < 0: palm = -palm
+        for k in (2, 3, 4, 5):
+            for j, deg in zip((1, 2, 3), CURL):
+                pivot, tip = joint(P, f'finger{k}-{j}.{side}____head'), joint(P, f'finger{k}-3.{side}____tail')
+                axis = knuckles / np.linalg.norm(knuckles)
+                if (rotate_about(tip[None], pivot, axis, np.array([0.05]))[0] - tip) @ palm < 0: axis = -axis
+                P = rotate_about(P, pivot, axis, bone_weight(subtree(f'finger{k}-{j}.{side}')) * math.radians(deg))
+        # MakeHuman's rest forearm points about 45 degrees forward: straighten the elbow to a natural slight bend, so
+        # the hands hang beside the thighs, not in front of the hips.
+        el = joint(P, f'lowerarm01.{side}____head')
+        u, f = el - joint(P, f'upperarm01.{side}____head'), joint(P, f'wrist.{side}____head') - el
+        ang = math.acos(np.clip(u @ f / np.linalg.norm(u) / np.linalg.norm(f), -1, 1))
+        P = rotate_about(P, el, np.cross(f, u), bone_weight(subtree(f'lowerarm01.{side}')) * max(0.0, ang - math.radians(ELBOW)))
         # Fingers together: each finger turns towards the middle finger about its own knuckle.
         tip = lambda k: joint(P, f'finger{k}-3.{side}____tail') - joint(P, f'finger{k}-1.{side}____head')
         middle = tip(3)
@@ -246,7 +286,7 @@ def pose(P):
         P = rotate_about(P, base, axis, bone_weight(subtree(f'finger1-1.{side}')) * gap * THUMB_CLOSE)
         # Arms down from MakeHuman's A pose, about the shoulder joint, in the front plane.
         pivot = joint(P, f'upperarm01.{side}____head')
-        a = arm_side[side] * math.radians(ARM_DEG) * -sign
+        a = arm_side[side] * math.radians(arm_deg) * -sign
         x, y = P[:, 0] - pivot[0], P[:, 1] - pivot[1]
         c, sn = np.cos(a), np.sin(a)
         P[:, 0] = pivot[0] + c * x - sn * y; P[:, 1] = pivot[1] + sn * x + c * y
@@ -296,10 +336,19 @@ for sex in ('male', 'female'):
     P0 = V.copy()
     for race in ('african', 'asian', 'caucasian'): P0 += read_target(f'{race}-{sex}-young', N) / 3
     P0 += read_target(f'universal-{sex}-young-maxmuscle-averageweight', N) * MUSCLE[sex]
+    for name, w in FIGURE.items():
+        if name == 'idealproportions':
+            P0 += w * ((1 - MUSCLE[sex]) * read_target(f'{sex}-young-averagemuscle-averageweight-idealproportions', N)
+                       + MUSCLE[sex] * read_target(f'{sex}-young-maxmuscle-averageweight-idealproportions', N))
+        else:
+            P0 += w * read_target(name, N)
     shapes = {'base': P0}
     for k, name in MORPHS.items(): shapes[k] = P0 + read_target(name.format(s=sex), N)
     smooth_shapes = {k: mannequin(P, P0) for k, P in shapes.items()}
-    out = {k: pose(P) for k, P in smooth_shapes.items()}   # every shape with the arms at ARM_DEG
+    # The arm angle: ARM_DEG, or less when the hands would come closer than HAND_GAP to the thighs or hips.
+    arm_deg = ARM_DEG
+    while arm_deg > 20 and arm_depth(pose(smooth_shapes['base'], arm_deg)) > -HAND_GAP: arm_deg -= 0.5
+    out = {k: pose(P, arm_deg) for k, P in smooth_shapes.items()}
     # A morph that widens the body also turns the arms out, by its own extra angle. The web body does that turn itself
     # (xavia-fit-body.js applyShape: about the shoulder joints, by the mix of the morphs' angles), so the morphs stay
     # small; turn_arms() here is the same calculation. Every mix of the widening morphs at their strongest use
@@ -327,7 +376,7 @@ for sex in ('male', 'female'):
         for k in set().union(*failing): turn[k] -= 0.25
     else:
         raise SystemExit(f'{sex}: arms still inside the body for {failing}')
-    print(sex, 'extra arm turn (degrees)', turn, '| base body: arm clearance (cm)', round(-10 * arm_depth(out['base']), 2))
+    print(sex, 'arm angle', arm_deg, '| extra arm turn (degrees)', turn, '| base body: arm clearance (cm)', round(-10 * arm_depth(out['base']), 2))
     floor = out['base'][used][:, 1].min()
     for k in out: out[k] = out[k] - np.array([0, floor, 0])
     B = out['base']

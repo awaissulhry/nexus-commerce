@@ -12,8 +12,8 @@ for (const k of Object.keys(RING_COLOUR)) RING_COLOUR[k] = RING_COLOUR[k].map(li
 // 1 = top of the head), yaw = turn of the body (radians), x = where the body sits across the stage (-1 left .. 1 right).
 const FRAMES = {
   full: { lo: -0.04, hi: 1.03, yaw: 0.5, pitch: 0.06, x: 0 },
-  shape: { lo: 0.308, hi: 0.982, yaw: 0.55, pitch: 0.08, x: -0.26 },
-  result: { lo: 0.309, hi: 0.973, yaw: 0.38, pitch: 0.2, x: -0.226 },
+  shape: { lo: 0.346, hi: 1.02, yaw: 0.55, pitch: 0.08, x: -0.26 },
+  result: { lo: 0.346, hi: 1.01, yaw: 0.38, pitch: 0.2, x: -0.226 },
   shapePhone: { lo: -0.051, hi: 1.155, yaw: 0.5, pitch: 0.08, x: -0.63 },
   resultPhone: { lo: 0.001, hi: 1.15, yaw: 0.5, pitch: 0.2, x: -0.04 },
   guide: { lo: 0.33, hi: 0.975, yaw: 0.12, pitch: 0.2, x: -0.1 },

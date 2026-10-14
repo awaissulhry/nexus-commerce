@@ -9,7 +9,6 @@ import { createViewer, SWATCHES } from './xavia-fit-viewer.js';
 
 const STYLES = '__XFF_CSS__';
 const STORE = 'xavia-fit-profile';
-const TIP_SEEN = 'xavia-fit-tip';
 const TORSO = ['chest', 'waist', 'hips'];
 const FIT_TEXT = { tooTight: 'fitTooTight', snug: 'fitSnug', right: 'fitRight', loose: 'fitLoose', tooLoose: 'fitTooLoose' };
 const FIT_TONE = { tooTight: 'bad', snug: 'ok', right: 'ok', loose: 'ok', tooLoose: 'bad' };
@@ -48,9 +47,11 @@ const nextId = name => `xff-${name}-${++uid}`;
 
 // ---------------------------------------------------------------- numbers and units
 const parseNum = value => { const text = String(value ?? '').trim().replace(',', '.'); const n = Number(text); return text === '' || !Number.isFinite(n) ? null : n; };
-const fmt = (n, digits = 0) => new Intl.NumberFormat(lang, { maximumFractionDigits: digits }).format(n);
-const toUnit = (cm, unit) => (unit === 'in' ? cm / CM_PER_IN : cm);
-const rangeText = ([lo, hi], unit) => `${fmt(toUnit(lo, unit), 1)} - ${fmt(toUnit(hi, unit), 1)}`;
+const fmt = (n, digits = 0, least = 0) => new Intl.NumberFormat(lang, { maximumFractionDigits: digits, minimumFractionDigits: least }).format(n);
+// Ranges with an en dash; inches always with one decimal, so a column lines up.
+const rangeText = ([lo, hi], unit) => (unit === 'in' ? `${fmt(lo / CM_PER_IN, 1, 1)} – ${fmt(hi / CM_PER_IN, 1, 1)}` : `${fmt(lo, 1)} – ${fmt(hi, 1)}`);
+// Height in feet and inches (whole inches).
+const feetInches = cm => { const total = Math.round(cm / CM_PER_IN); return [Math.floor(total / 12), total % 12]; };
 const imperialCountry = country => ['US', 'GB', 'LR', 'MM'].includes(String(country || '').toUpperCase());
 
 // ---------------------------------------------------------------- saved profiles (this device only)
@@ -83,7 +84,7 @@ function deleteProfile(id) {
 }
 const newProfile = (cfg, sex) => ({
   id: `p${Date.now().toString(36)}`, name: '', sex, heightCm: null, weightKg: null, age: null, shape: {}, tape: {}, fit: 'regular', layers: 'none', skin: 0,
-  units: imperialCountry(cfg.country) ? { height: 'in', weight: 'lb', length: 'in' } : { height: 'cm', weight: 'kg', length: 'cm' },
+  units: imperialCountry(cfg.country) ? { height: 'ft', weight: 'lb', length: 'in' } : { height: 'cm', weight: 'kg', length: 'cm' },
 });
 
 // ---------------------------------------------------------------- product config from the snippet
@@ -133,18 +134,6 @@ function selectSize(cfg, name) {
   if (!input) return false;
   if (!input.checked) { input.checked = true; input.dispatchEvent(new Event('change', { bubbles: true })); }
   return true;
-}
-
-// Impact re-renders the size option after a change, which replaces the link the dialog came from. Tell screen
-// readers through the theme's own status line, and put focus on the new link once it exists.
-function afterSizeChange(cfg, message) {
-  const status = document.getElementById('status-announcement');
-  if (status) status.textContent = message;
-  const refocus = () => document.querySelector(`[data-xff][data-xff-form="${CSS.escape(cfg.formId)}"] [data-xff-open]`)?.focus();
-  const done = () => { document.removeEventListener('variant:change', onChange); clearTimeout(timer); };
-  const onChange = () => { done(); requestAnimationFrame(refocus); };
-  const timer = setTimeout(done, 5000);
-  document.addEventListener('variant:change', onChange);
 }
 
 const worstRegion = verdict => verdict.regions.find(r => r.fit === 'tooTight') ?? verdict.regions.find(r => r.fit === 'tooLoose') ?? verdict.regions.find(r => r.fit !== 'right');
@@ -247,6 +236,7 @@ const ICON = {
   plus: 'M12 5v14M5 12h14',
   menu: 'M3 6h18M3 12h18M3 18h18',
   cart: 'M3 4h2.5l2.2 10.2a1.5 1.5 0 0 0 1.5 1.2h7.9a1.5 1.5 0 0 0 1.4-1l1.9-6.4H6.4M10 20.5a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1zM17 20.5a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1z',
+  warn: 'M12 6.5v7M12 17v.5',
   tape: 'M2.5 12.5a5.5 5.5 0 1 0 11 0a5.5 5.5 0 1 0-11 0M6.5 12.5a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0M8 18h14v-4h-8.6M17 18v-1.8M20 18v-1.8',
   user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4.5 20a7.5 7.5 0 0 1 15 0',
 };
@@ -265,7 +255,11 @@ function ensureStyles(cfg) {
     face.load().catch(() => { /* the system font stands in */ });
   }
 }
-const phone = () => window.matchMedia?.('(max-width: 759px)').matches ?? false;
+// The full-screen layout, with 44 px touch targets: phones, tablets, any touch screen, and any window too narrow or too
+// low for the 907 x 500 modal (also browser zoom).
+const PHONE_LAYOUT = '(max-width: 899px), (max-height: 559px), (pointer: coarse)';
+const phone = () => window.matchMedia?.(PHONE_LAYOUT).matches ?? false;
+const HEADING = '\u0000heading';   // render(HEADING): focus the new screen's heading
 
 /**
  * options.screen: 'chart' (the size guide, the default from the product page) or 'finder' (first step, or the
@@ -281,27 +275,26 @@ function openDialog(root, options = {}) {
   const onlyWomen = cfg.charts.women && !cfg.charts.men && !cfg.charts.unisex;
   const state = {
     screen: options.mode === 'guard' ? 'guard' : 'chart', chosen: options.chosen, compare: null, panel: null,
-    errors: {}, draft: {}, chartCut: null, showSkins: false, tip: false,
+    errors: {}, draft: {}, chartCut: null, showSkins: false, ageTip: false, confirmDelete: false, returnTo: null,
     p: saved ? { skin: 0, ...saved, tape: { ...saved.tape }, shape: { ...saved.shape }, units: { ...saved.units } } : newProfile(cfg, onlyWomen ? 'female' : 'male'),
   };
-  if (state.p.units.height === 'ft') state.p.units.height = 'in';
-  try { state.tip = !localStorage.getItem(TIP_SEEN); } catch { state.tip = false; }
+  if (state.p.units.height === 'in') state.p.units.height = 'ft';   // earlier releases: decimal inches
   const opener = options.opener ?? document.activeElement;
   const titleId = nextId('title'), live = h('p', { class: 'xff-sr', 'aria-live': 'polite' });
 
   // Fixed parts of the modal; each screen fills .xff-content and the CSS shows what the screen uses.
-  const dialog = h('dialog', { class: 'xff-dialog', 'aria-labelledby': titleId, lang });
+  const dialog = h('dialog', { class: 'xff-dialog', 'aria-label': t('sizeGuide'), lang });
   const view = h('div', { class: 'xff-stage__view' });
   const stage = h('div', { class: 'xff-stage' }, view);
   const media = h('div', { class: 'xff-media' }, cfg.product.image ? h('img', { src: cfg.product.image, alt: '', loading: 'lazy' }) : null);
   const logo = h('div', { class: 'xff-logo' }, cfg.logo ? h('img', { src: cfg.logo, alt: cfg.shop || '' }) : h('span', { text: cfg.shop || '' }));
-  const sideTab = h('button', { type: 'button', class: 'xff-sidetab', onclick: () => togglePanel(state.screen === 'chart' ? 'measure' : 'body') });
+  const sideTab = h('button', { type: 'button', class: 'xff-sidetab', id: 'xff-sidetab', onclick: () => togglePanel(state.screen === 'chart' ? 'measure' : 'body') });
   const sidePanel = h('aside', { class: 'xff-sidepanel', tabindex: '-1' });
   const skins = h('fieldset', { class: 'xff-skins' });
   const avatar = h('div', { class: 'xff-avatar' });
   const content = h('section', { class: 'xff-content' });
   const topbar = h('div', { class: 'xff-topbar' },
-    h('button', { type: 'button', class: 'xff-topbar__menu', 'aria-label': t('profiles'), onclick: () => togglePanel('profiles') }, icon('menu', 33, 1.5)),
+    h('button', { type: 'button', class: 'xff-topbar__menu', id: 'xff-profiles-button', 'aria-label': t('profiles'), onclick: () => togglePanel('profiles') }, icon('user', 26, 1.6)),
     h('button', { type: 'button', class: 'xff-topbar__close', 'aria-label': t('close'), onclick: () => close() }, icon('close', 32, 1.5)));
   const modal = h('div', { class: 'xff-modal' }, topbar, logo, media, stage, skins, sideTab, sidePanel, content, avatar);
   const closeButton = h('button', { type: 'button', class: 'xff-close', 'aria-label': t('close'), onclick: () => close() }, h('span', { 'aria-hidden': 'true', text: '×' }));
@@ -313,15 +306,25 @@ function openDialog(root, options = {}) {
   document.documentElement.style.overflow = 'hidden';
   let viewer = null;
   const close = () => { if (dialog.open) dialog.close(); };
+  // Phone and desktop layouts swap when the window is resized or the phone turned; the screen is drawn again.
+  const layout = window.matchMedia?.(PHONE_LAYOUT);
+  const onLayout = () => { render(); viewer?.refresh(); };
+  const onResize = () => viewer?.refresh();
+  layout?.addEventListener?.('change', onLayout);
+  window.addEventListener('resize', onResize, { passive: true });
   dialog.addEventListener('close', () => {
     document.documentElement.style.overflow = scrollLock;
+    layout?.removeEventListener?.('change', onLayout);
+    window.removeEventListener('resize', onResize);
     viewer?.destroy();
     dialog.remove();
     if (current?.dialog === dialog) current = null;
     decorateAll();
     if (opener && opener.isConnected) opener.focus();
   });
-  dialog.addEventListener('click', event => { if (event.target === dialog) close(); });
+  // A click on the backdrop closes; not the second click of a double click on the link that opened the dialog.
+  const openedAt = performance.now();
+  dialog.addEventListener('click', event => { if (event.target === dialog && performance.now() - openedAt > 400) close(); });
   dialog.addEventListener('keydown', event => { if (event.key === 'Escape' && state.panel) { event.preventDefault(); togglePanel(null); } });
   current = { dialog, close };
 
@@ -329,12 +332,13 @@ function openDialog(root, options = {}) {
   const steps = () => (phone() ? ['gender', 'body', 'shape'] : ['body', 'shape']);
   const save = () => saveProfile(state.p);
   const announce = text => { live.textContent = ''; requestAnimationFrame(() => { live.textContent = text; }); };
-  const go = (screen, focusId) => { state.screen = screen; state.panel = null; state.errors = {}; render(focusId); };
+  const go = (screen, focusId) => { state.screen = screen; state.panel = null; state.errors = {}; state.ageTip = false; render(focusId ?? HEADING); };
   const startFinder = () => go(evaluate(cfg, state.p) && loadProfile() ? 'result' : steps()[0]);
+  // Back from the first step: to the result when the shopper came from there to edit, else to the size table.
+  const backFromStart = () => go(state.returnTo ?? 'chart');
 
   viewer = createViewer(view, { urls: cfg.bodies, label: t('stage3d'), onFail: () => { viewer?.destroy(); viewer = null; stage.classList.add('is-flat'); updateStage(); } });
   if (!viewer) stage.classList.add('is-flat');
-  window.addEventListener('resize', () => viewer?.refresh(), { passive: true });
 
   // ------------------------------------------------ the 3D stage
   function previewProfile() {
@@ -368,7 +372,11 @@ function openDialog(root, options = {}) {
       viewer.setRings(rings);
       viewer.setSkin(state.p.skin ?? 0);
     } else {
-      view.replaceChildren(figure(p.sex, b.values, rings.map(r => ({ measure: r.measure, tone: r.tone === 'bad' ? 'bad' : 'ok', dashed: r.dashed }))));
+      // The flat drawing says each part's fit in words too, as the 3D labels do.
+      view.replaceChildren(figure(p.sex, b.values, rings.map(r => ({ measure: r.measure, tone: r.tone === 'bad' ? 'bad' : 'ok', dashed: r.dashed }))),
+        rings.length ? h('ul', { class: 'xff-flat-labels' }, rings.map(r => h('li', { class: `xff-3d-label xff-3d-label--${r.tone}` },
+          r.icon ? h('span', { class: 'xff-3d-label__icon' }, r.icon) : null,
+          h('span', { class: 'xff-3d-label__text', text: r.tone === 'guide' ? r.text : `${t(r.measure)}: ${r.text}` })))) : null);
     }
   }
 
@@ -384,25 +392,40 @@ function openDialog(root, options = {}) {
   // ------------------------------------------------ render
   let shownScreen = '';
   function render(focusId) {
-    const active = focusId ?? document.activeElement?.id;
+    const active = focusId === HEADING ? null : focusId ?? document.activeElement?.id;
     dialog.dataset.screen = state.screen;
     dialog.dataset.panel = state.panel ?? '';
     dialog.toggleAttribute('data-skins', state.showSkins);
-    content.replaceChildren(...screen());
+    fill(content, screen());
     sideTab.hidden = !(state.screen === 'chart' || state.screen === 'result');
-    sideTab.replaceChildren(...(state.screen === 'chart' ? [icon('tape', 34, 1.3), h('span', { class: 'xff-sr', text: t('howToMeasure') })] : [h('span', { text: t('bodyMeasures') })]));
+    fill(sideTab, state.screen === 'chart' ? [icon('tape', 34, 1.3), h('span', { class: 'xff-sr', text: t('howToMeasure') })] : [h('span', { text: t('bodyMeasures') })]);
     sideTab.setAttribute('aria-expanded', String(Boolean(state.panel && state.panel !== 'profiles')));
     renderPanel();
     renderAvatar();
     renderSkins();
     updateStage();
-    if (state.screen !== shownScreen) { content.scrollTop = 0; shownScreen = state.screen; }
+    // An open panel is the only thing Tab can reach (besides the buttons that close it).
+    for (const el of [content, stage, skins, media, logo]) el.inert = Boolean(state.panel);
+    if (state.screen === 'chart') fitTable();
+    if (state.screen !== shownScreen) { content.scrollTop = 0; dialog.scrollTop = 0; shownScreen = state.screen; }
     const target = active ? dialog.querySelector(`#${CSS.escape(active)}`) : null;
     (target && target.offsetParent !== null ? target : content.querySelector('[data-xff-focus]') ?? content.querySelector('button, input'))?.focus({ preventScroll: true });
   }
 
+  // Every size of the table in view on the desktop modal: the rows shrink (not under 26 px) to the room there is.
+  function fitTable() {
+    const wrap = content.querySelector('.xff-table-wrap'), foot = content.querySelector('.xff-chart__foot'), rows = wrap?.querySelectorAll('tr').length;
+    if (!wrap || !foot || !rows) return;
+    wrap.style.removeProperty('--xff-row'); wrap.style.removeProperty('max-block-size');
+    if (phone()) return;
+    const room = foot.getBoundingClientRect().top - wrap.getBoundingClientRect().top - 10;
+    if (!dialog.open || room <= 0) return;   // not laid out yet: the call after showModal() does it
+    wrap.style.setProperty('--xff-row', `${Math.max(26, Math.min(44, Math.floor(room / rows)))}px`);
+    wrap.style.setProperty('max-block-size', `${room}px`);
+  }
+
   function screen() {
-    if (!chart()) return [h('p', { class: 'xff-note', id: titleId, text: t('noChart') })];
+    if (!chart()) return [h('p', { class: 'xff-note xff-note--empty', id: titleId, text: t('noChart') })];
     switch (state.screen) {
       case 'chart': return chartScreen();
       case 'gender': return genderScreen();
@@ -427,12 +450,14 @@ function openDialog(root, options = {}) {
 
   // ------------------------------------------------ size chart (the first screen)
   function chartScreen() {
-    const cuts = Object.keys(cfg.charts), unit = state.p.units.length;
+    // Women before men, as the body type choice shows them.
+    const cuts = Object.keys(cfg.charts).sort((a, b) => (b === 'women') - (a === 'women')), unit = state.p.units.length;
     const cut = state.chartCut ?? (cfg.charts[state.p.sex === 'female' ? 'women' : 'men'] ? (state.p.sex === 'female' ? 'women' : 'men') : cuts[0]);
     const c = cfg.charts[cut], ev = loadProfile() && evaluate(cfg, state.p), bestName = ev && pickChart(cfg.charts, state.p.sex) === c ? ev.result.best : null;
     return [h('div', { class: 'xff-chart' },
       h('h2', { class: 'xff-chart__title', id: titleId, tabindex: '-1', 'data-xff-focus': true, text: t('chartTitle') }),
       h('p', { class: 'xff-chart__sub', text: t('chartSub') }),
+      phone() ? h('button', { type: 'button', class: 'xff-link xff-how-link', id: 'xff-how-link', text: t('howToMeasure'), onclick: () => togglePanel('measure') }) : null,
       cuts.length > 1 ? pills('cut', cut, cuts.map(k => [k, t(k === 'women' ? 'women' : 'men')]), k => { state.chartCut = k; }, 'xff-pills--small') : null,
       h('div', { class: 'xff-table-wrap', tabindex: '0', role: 'region', 'aria-label': t('chartTitle') },
         h('table', { class: 'xff-table' },
@@ -450,10 +475,10 @@ function openDialog(root, options = {}) {
   function genderScreen() {
     return [
       h('div', { class: 'xff-step' },
-        h('h1', { class: 'xff-h1', id: titleId, tabindex: '-1', 'data-xff-focus': true, text: t('findSize') }),
+        h('h2', { class: 'xff-h1', id: titleId, tabindex: '-1', 'data-xff-focus': true, text: t('findSize') }),
         h('p', { class: 'xff-lead', text: t('fillDetails') }),
         genderPills()),
-      footer([h('button', { type: 'button', class: 'xff-btn xff-btn--outline', id: 'xff-back', text: t('back'), onclick: () => go('chart') }),
+      footer([h('button', { type: 'button', class: 'xff-btn xff-btn--outline', id: 'xff-back', text: t('back'), onclick: backFromStart }),
         h('button', { type: 'button', class: 'xff-btn xff-btn--black', id: 'xff-next', text: t('next'), onclick: () => go('body') })], true),
     ];
   }
@@ -464,30 +489,52 @@ function openDialog(root, options = {}) {
   // ------------------------------------------------ step: height, weight, age
   function bodyScreen() {
     const p = state.p, d = state.draft, e = state.errors;
-    const typed = key => event => { d[key] = event.target.value; refreshNext(); updateStageSoon(); };
-    const field = (key, label, value, units) => h('div', { class: 'xff-field' },
-      h('label', { class: 'xff-label', for: `xff-${key}`, text: label }),
-      h('div', { class: 'xff-field__row' },
-        h('input', { id: `xff-${key}`, class: 'xff-input', type: 'text', inputmode: 'decimal', autocomplete: 'off', value: value ?? '', 'aria-invalid': e[key] ? 'true' : null, 'aria-describedby': e[key] ? `xff-${key}-error` : null, oninput: typed(key) }),
-        units),
-      e[key] ? h('p', { class: 'xff-error', id: `xff-${key}-error`, text: e[key] }) : null);
-    const heightValue = d.height ?? (p.heightCm ? fmt(p.units.height === 'in' ? p.heightCm / CM_PER_IN : p.heightCm, p.units.height === 'in' ? 1 : 0) : '');
+    const errorOf = key => (key === 'heightIn' ? 'height' : key);
+    // Typing clears that field's message at once; what was typed stays as typed.
+    const typed = key => event => {
+      d[key] = event.target.value;
+      const k = errorOf(key);
+      if (state.errors[k]) {
+        delete state.errors[k];
+        content.querySelector(`#xff-${k}-error`)?.remove();
+        for (const el of content.querySelectorAll(`#xff-${k}, #xff-${k}In`)) { el.removeAttribute('aria-invalid'); el.removeAttribute('aria-describedby'); }
+      }
+      refreshNext(); updateStageSoon();
+    };
+    const enter = event => { if (event.key === 'Enter') { event.preventDefault(); goNext(); } };
+    const box = (key, value, extra = {}) => h('input', {
+      id: `xff-${key}`, class: 'xff-input', type: 'text', inputmode: 'decimal', autocomplete: 'off', value: value ?? '',
+      'aria-invalid': e[errorOf(key)] ? 'true' : null, 'aria-describedby': e[errorOf(key)] ? `xff-${errorOf(key)}-error` : null,
+      oninput: typed(key), onkeydown: enter, ...extra,
+    });
+    const field = (key, label, controls, after) => h('div', { class: 'xff-field' },
+      h('label', { class: 'xff-label', for: `xff-${key}` }, label),
+      h('div', { class: 'xff-field__row' }, controls),
+      e[key] ? h('p', { class: 'xff-error', id: `xff-${key}-error`, text: e[key] }) : null,
+      after);
+    const unitSwitch = (name, unit, options, set) => pills(name, unit, options, u => { readDraft(state.p, state.draft); set(u); });
+    const ft = p.units.height === 'ft', [feet, inches] = p.heightCm ? feetInches(p.heightCm) : [null, null];
+    const height = ft
+      ? [box('height', d.height ?? feet, { class: 'xff-input xff-input--short', 'aria-label': `${t('height')}, ${t('feet')}` }), h('span', { class: 'xff-field__unit xff-field__unit--short', 'aria-hidden': 'true', text: 'ft' }),
+        box('heightIn', d.heightIn ?? inches, { class: 'xff-input xff-input--short', 'aria-label': `${t('height')}, ${t('inches')}` }), h('span', { class: 'xff-field__unit xff-field__unit--short', 'aria-hidden': 'true', text: 'in' })]
+      : [box('height', d.height ?? (p.heightCm ? fmt(p.heightCm, 1) : ''))];
     const weightValue = d.weight ?? (p.weightKg ? fmt(p.units.weight === 'lb' ? p.weightKg / KG_PER_LB : p.weightKg, 1) : '');
-    const ageInfo = nextId('age-info');
     const nextButton = h('button', { type: 'button', class: 'xff-btn xff-btn--black', id: 'xff-next', text: t('next'), onclick: () => goNext() });
     refreshNext = () => { nextButton.classList.toggle('is-muted', !basicsLookValid()); };
     refreshNext();
     return [
       h('div', { class: 'xff-step' },
-        h('h1', { class: 'xff-h1', id: titleId, tabindex: '-1', 'data-xff-focus': true, text: t('findSize') }),
+        h('h2', { class: 'xff-h1', id: titleId, tabindex: '-1', 'data-xff-focus': true, text: t('findSize') }),
         h('p', { class: 'xff-lead', text: t('fillDetails') }),
         phone() ? null : genderPills(),
-        field('height', t('height'), heightValue, pills('unit-height', p.units.height, [['cm', 'cm'], ['in', 'in']], u => { readDraft(state.p, state.draft); p.units.height = u; })),
-        field('weight', t('weight'), weightValue, pills('unit-weight', p.units.weight, [['kg', 'kg'], ['lb', 'lb']], u => { readDraft(state.p, state.draft); p.units.weight = u; })),
-        field('age', t('age'), d.age ?? (p.age ?? ''), [h('span', { class: 'xff-field__unit', text: t('years') }),
-          h('span', { class: 'xff-info', tabindex: '0', role: 'img', 'aria-label': t('ageInfo'), 'aria-describedby': ageInfo, title: t('ageInfo') }, 'i'),
-          h('span', { class: 'xff-sr', id: ageInfo, text: t('ageInfo') })])),
-      footer([phone() ? h('button', { type: 'button', class: 'xff-btn xff-btn--outline', id: 'xff-back', text: t('back'), onclick: () => { readDraft(state.p, state.draft); go('gender'); } }) : h('span'), nextButton], true),
+        field('height', t('height'), [height, unitSwitch('unit-height', p.units.height, [['cm', 'cm'], ['ft', 'ft / in']], u => { p.units.height = u; })]),
+        field('weight', t('weight'), [box('weight', weightValue), unitSwitch('unit-weight', p.units.weight, [['kg', 'kg'], ['lb', 'lb']], u => { p.units.weight = u; })]),
+        field('age', [t('age'), h('span', { class: 'xff-optional', text: ` (${t('optional')})` })], [box('age', d.age ?? (p.age ?? ''), { inputmode: 'numeric' }),
+          h('span', { class: 'xff-field__unit', text: t('years') }),
+          // A help button that works by tap, click or keyboard (not only on hover).
+          h('button', { type: 'button', class: 'xff-info', id: 'xff-age-info', 'aria-label': t('ageInfo'), 'aria-expanded': String(state.ageTip), onclick: () => { state.ageTip = !state.ageTip; render('xff-age-info'); } }, 'i')],
+          state.ageTip ? h('p', { class: 'xff-tipnote', role: 'note', text: t('ageInfo') }) : null)),
+      footer([h('button', { type: 'button', class: 'xff-btn xff-btn--outline', id: 'xff-back', text: t('back'), onclick: () => { readDraft(state.p, state.draft); if (phone()) go('gender'); else backFromStart(); } }), nextButton], true),
     ];
   }
   let refreshNext = () => {};
@@ -497,25 +544,41 @@ function openDialog(root, options = {}) {
     return validateInputs({ heightCm: p.heightCm, weightKg: p.weightKg, age: p.age }).length === 0;
   }
 
-  // Moves what was typed (in the units on screen) into a profile, in cm and kg. clear: empty the draft afterwards.
+  // Moves what was typed (in the units on screen) into a profile, in cm and kg (kept to 0.01, so 180 lb stays 180 lb).
+  // A height of 1.2 to 2.3 in cm mode is read as metres ("1,80"). clear: empty the draft afterwards.
   function readDraft(p, d, clear = true) {
-    if (d.height !== undefined) { const v = parseNum(d.height); p.heightCm = v == null ? null : Math.round((p.units.height === 'in' ? v * CM_PER_IN : v) * 10) / 10; }
-    if (d.weight !== undefined) { const w = parseNum(d.weight); p.weightKg = w == null ? null : Math.round((p.units.weight === 'lb' ? w * KG_PER_LB : w) * 10) / 10; }
+    if (d.height !== undefined || d.heightIn !== undefined) {
+      if (p.units.height === 'ft') {
+        const [f0, i0] = p.heightCm ? feetInches(p.heightCm) : [null, 0];
+        const f = d.height !== undefined ? parseNum(d.height) : f0, i = d.heightIn !== undefined ? parseNum(d.heightIn) ?? 0 : i0;
+        p.heightCm = f == null ? null : Math.round((f * 12 + i) * CM_PER_IN * 100) / 100;
+      } else {
+        let v = parseNum(d.height);
+        if (v != null && v >= 1.2 && v <= 2.3) v *= 100;
+        p.heightCm = v == null ? null : Math.round(v * 100) / 100;
+      }
+    }
+    if (d.weight !== undefined) { const w = parseNum(d.weight); p.weightKg = w == null ? null : Math.round((p.units.weight === 'lb' ? w * KG_PER_LB : w) * 100) / 100; }
     if (d.age !== undefined) p.age = parseNum(d.age);
     if (clear) state.draft = {};
   }
 
-  // Reads the body step into the profile. Returns false (with messages next to the fields) when it cannot work.
+  // Reads the body step into the profile. Returns false (with messages next to the fields, and the typed text kept)
+  // when it cannot work.
   function commitBody() {
-    readDraft(state.p, state.draft);
-    const p = state.p, problems = validateInputs({ heightCm: p.heightCm, weightKg: p.weightKg, age: p.age }), errors = {};
-    const hr = p.units.height === 'in' ? [`${Math.round(LIMITS.height[0] / CM_PER_IN)} in`, `${Math.round(LIMITS.height[1] / CM_PER_IN)} in`] : [`${LIMITS.height[0]} cm`, `${LIMITS.height[1]} cm`];
+    const p = { ...state.p };
+    readDraft(p, state.draft, false);
+    const problems = validateInputs({ heightCm: p.heightCm, weightKg: p.weightKg, age: p.age }), errors = {};
+    const ftIn = cm => { const [f, i] = feetInches(cm); return `${f} ft ${i} in`; };
+    const hr = p.units.height === 'ft' ? [ftIn(LIMITS.height[0]), ftIn(LIMITS.height[1])] : [`${LIMITS.height[0]} cm`, `${LIMITS.height[1]} cm`];
     const wr = p.units.weight === 'lb' ? [`${Math.round(LIMITS.weight[0] / KG_PER_LB)} lb`, `${Math.round(LIMITS.weight[1] / KG_PER_LB)} lb`] : [`${LIMITS.weight[0]} kg`, `${LIMITS.weight[1]} kg`];
     if (problems.includes('height')) errors.height = t('errHeight', { min: hr[0], max: hr[1] });
     if (problems.includes('weight')) errors.weight = t('errWeight', { min: wr[0], max: wr[1] });
     if (problems.includes('age')) errors.age = t('errAge');
     state.errors = errors;
-    return !Object.keys(errors).length;
+    if (Object.keys(errors).length) return false;
+    readDraft(state.p, state.draft);
+    return true;
   }
 
   // ------------------------------------------------ step: body shape
@@ -542,7 +605,7 @@ function openDialog(root, options = {}) {
     });
     return [
       h('div', { class: 'xff-step xff-step--shape' },
-        h('h1', { class: 'xff-h1', id: titleId, tabindex: '-1', 'data-xff-focus': true, text: t('shapeTitle') }),
+        h('h2', { class: 'xff-h1', id: titleId, tabindex: '-1', 'data-xff-focus': true, text: t('shapeTitle') }),
         h('p', { class: 'xff-lead xff-lead--dark', text: t('shapeIntro') }),
         h('div', { class: 'xff-sliders' }, rows),
         h('button', { type: 'button', class: 'xff-link xff-skins-toggle', id: 'xff-skins-toggle', 'aria-expanded': String(state.showSkins), text: t('changeSkin'), onclick: () => { state.showSkins = !state.showSkins; render('xff-skins-toggle'); } })),
@@ -561,60 +624,75 @@ function openDialog(root, options = {}) {
     if (i >= 0 && i < list.length - 1) { go(list[i + 1]); return; }
     save();
     state.compare = null;
-    go('result');
-    const ev = evaluate(cfg, state.p);
-    if (ev) announce(`${t('bestOption')}: ${ev.result.best}.`);
+    state.returnTo = null;
+    go('result');   // focus on the result's heading reads the size out
   }
 
   // ------------------------------------------------ result
+  // The heading says the verdict and the size (the card shows the same, for the eye only).
   function card(label, name, badge) {
     return h('div', { class: 'xff-pick' },
-      h('p', { class: 'xff-pick__label', id: titleId, text: label }),
-      h('div', { class: 'xff-card' },
-        h('span', { class: 'xff-card__size', tabindex: '-1', 'data-xff-focus': true, text: name }),
-        badge ? h('span', { class: `xff-badge xff-badge--${badge}`, 'aria-hidden': 'true' }, icon(badge === 'no' ? 'close' : 'right', 14, 2.6)) : null));
+      h('h2', { class: 'xff-pick__label', id: titleId, tabindex: '-1', 'data-xff-focus': true }, label, h('span', { class: 'xff-sr', text: `: ${name}` })),
+      h('div', { class: 'xff-card', 'aria-hidden': 'true' },
+        h('span', { class: 'xff-card__size', text: name }),
+        badge ? h('span', { class: `xff-badge xff-badge--${badge}` }, icon(badge === 'no' ? 'close' : badge === 'warn' ? 'warn' : 'right', 14, 2.6)) : null));
   }
+  const badFit = r => r.fit === 'tooTight' || r.fit === 'tooLoose';
+  const partName = m => (lang === 'de' ? t(m) : t(m).toLowerCase());   // German nouns keep their capital
+  const listParts = names => (names.length > 1 ? `${names.slice(0, -1).join(', ')} ${t('and')} ${names.at(-1)}` : names[0]);
 
   function resultScreen() {
     const ev = evaluate(cfg, state.p);
     if (!ev) { state.screen = steps()[0]; return screen(); }
-    const { result, body } = ev;
-    const shown = result.sizes.find(x => x.name === (state.compare ?? result.best)) ?? result.sizes.find(x => x.name === result.best);
-    const best = result.sizes.find(x => x.name === result.best);
-    const label = shown.verdict === 'best' ? t('bestOption') : shown.verdict === 'fits' ? t('mayAlsoFit') : t('notRecommendedUpper');
-    const cartSize = shown.verdict === 'no' ? best : shown;
+    const { result, body } = ev, sizes = result.sizes;
+    const best = sizes.find(x => x.name === result.best);
+    const shown = sizes.find(x => x.name === (state.compare ?? result.best)) ?? best;
+    // The best size of the chart can still be too tight or too loose somewhere: then it is the closest size, said so.
+    const closest = best.regions.some(badFit);
+    const label = shown.verdict === 'best' ? t(closest ? 'closest' : 'bestOption') : shown.verdict === 'fits' ? t('mayAlsoFit') : t('notRecommendedUpper');
+    const badge = shown.verdict === 'no' ? 'no' : shown.verdict === 'best' ? (closest ? 'warn' : 'best') : 'fits';
+    // The button adds the size on screen when it fits and is in stock; else the best size in stock (best first).
+    const inStock = x => x.available !== false;
+    const fallback = [best, ...sizes.filter(x => x.verdict === 'fits')].find(inStock) ?? null;
+    const target = shown.verdict !== 'no' && inStock(shown) ? shown : fallback;
     const notes = [];
     if (result.outOfRange) notes.push(h('p', { class: 'xff-note xff-note--bad' }, t(result.outOfRange), ' ', h('a', { href: cfg.contactUrl, text: t('contact') })));
-    if (best.available === false) notes.push(h('p', { class: 'xff-note', text: t('bestSoldOut', { size: best.name }) }));
+    else if (closest) { const r = worstRegion(best); notes.push(h('p', { class: 'xff-note', text: t('closestNote', { size: best.name, part: t(r.measure), fit: t(FIT_TEXT[r.fit]) }) })); }
+    if (!inStock(best)) notes.push(h('p', { class: 'xff-note', text: [t('bestSoldOut', { size: best.name }), target ? t('altFits', { size: target.name }) : ''].join(' ').trim() }));
     if (body.warnings.includes('outsideModel')) notes.push(h('p', { class: 'xff-note', text: t('outsideModel') }));
-    const sizes = result.sizes, i = Math.max(0, sizes.findIndex(x => x.name === shown.name)), from = Math.max(0, Math.min(i - 1, sizes.length - 3));
+    const i = Math.max(0, sizes.indexOf(shown)), from = Math.max(0, Math.min(i - 1, sizes.length - 3));
     const compare = j => { state.compare = sizes[j].name; render(`xff-size-${normalizeSize(sizes[j].name)}`); };
+    const edit = () => { state.returnTo = 'result'; go(steps()[0]); };
+    const verdictText = size => `${size.verdict === 'best' ? t(closest ? 'closest' : 'bestOption') : size.verdict === 'fits' ? t('mayAlsoFit') : t('notRecommended')}${inStock(size) ? '' : `, ${t('soldOut')}`}`;
     return [
       h('div', { class: 'xff-result' },
-        card(label, shown.name, shown.verdict === 'no' ? 'no' : shown.verdict === 'best' ? 'best' : 'fits'),
-        h('button', { type: 'button', class: 'xff-btn xff-btn--outline xff-btn--small', id: 'xff-edit', text: t('editMeasures'), onclick: () => go(steps()[0]) }),
-        notes),
+        card(label, shown.name, badge),
+        h('button', { type: 'button', class: 'xff-btn xff-btn--outline xff-btn--small', id: 'xff-edit', text: t('editMeasures'), onclick: edit }),
+        phone() ? h('button', { type: 'button', class: 'xff-link xff-measures-link', id: 'xff-measures-link', text: t('bodyMeasures'), onclick: () => togglePanel('body') }) : null),
+      notes.length ? h('div', { class: 'xff-notes' }, notes) : null,
       h('div', { class: 'xff-try' },
         h('p', { class: 'xff-try__label', text: t('alsoTry') }),
         h('div', { class: 'xff-try__row', role: 'group', 'aria-label': t('alsoTry') },
           h('button', { type: 'button', class: 'xff-try__arrow', id: 'xff-size-prev', 'aria-label': t('smaller'), disabled: i === 0, onclick: () => compare(i - 1) }, icon('prev', 18, 2.4)),
           sizes.slice(from, from + 3).map(size => h('button', {
-            type: 'button', id: `xff-size-${normalizeSize(size.name)}`, class: `xff-chip${size.available === false ? ' is-sold' : ''}`, 'aria-pressed': String(size.name === shown.name),
+            type: 'button', id: `xff-size-${normalizeSize(size.name)}`, class: `xff-chip${inStock(size) ? '' : ' is-sold'}`, 'aria-pressed': String(size === shown),
             onclick: () => compare(sizes.indexOf(size)),
           }, h('span', { class: 'xff-chip__name', text: size.name }),
-          size.verdict === 'best' ? h('span', { class: 'xff-badge xff-badge--best', 'aria-hidden': 'true' }, icon('right', 12, 2.8)) : size.verdict === 'no' ? h('span', { class: 'xff-badge xff-badge--no', 'aria-hidden': 'true' }, icon('close', 10, 2.8)) : null,
-          h('span', { class: 'xff-sr', text: `${size.verdict === 'best' ? t('bestOption') : size.verdict === 'fits' ? t('mayAlsoFit') : t('notRecommended')}${size.available === false ? `, ${t('soldOut')}` : ''}` }))),
+          h('span', { class: `xff-badge xff-badge--${size.verdict === 'no' ? 'no' : size.verdict === 'best' ? (closest ? 'warn' : 'best') : 'fits'}`, 'aria-hidden': 'true' },
+            icon(size.verdict === 'no' ? 'close' : size.verdict === 'best' && closest ? 'warn' : 'right', 11, 2.8)),
+          h('span', { class: 'xff-sr', text: `, ${verdictText(size)}` }))),
           h('button', { type: 'button', class: 'xff-try__arrow', id: 'xff-size-next', 'aria-label': t('larger'), disabled: i === sizes.length - 1, onclick: () => compare(i + 1) }, icon('next', 18, 2.4)))),
       h('div', { class: 'xff-actions' },
-        phone() ? h('button', { type: 'button', class: 'xff-btn xff-btn--outline', id: 'xff-edit-phone', text: t('editMeasures'), onclick: () => go(steps()[0]) }) : null,
-        h('button', { type: 'button', class: 'xff-btn xff-btn--black xff-btn--cart', id: 'xff-add', disabled: cartSize.available === false, onclick: () => addToCart(cartSize.name) },
-          icon('cart', 13, 2.4), h('span', { text: cartSize.available === false ? `${cartSize.name} · ${t('soldOut')}` : t('addToCartShort') }),
-          h('span', { class: 'xff-sr', text: ` (${t('size')} ${cartSize.name})` }))),
+        phone() ? h('button', { type: 'button', class: 'xff-btn xff-btn--outline', id: 'xff-edit-phone', text: t('editMeasures'), onclick: edit }) : null,
+        shown.verdict === 'no' && inStock(shown) ? h('button', { type: 'button', class: 'xff-link xff-anyway', id: 'xff-anyway', text: t('keep', { chosen: shown.name }), onclick: () => addToCart(shown.name) }) : null,
+        target
+          ? h('button', { type: 'button', class: 'xff-btn xff-btn--black xff-btn--cart', id: 'xff-add', onclick: () => addToCart(target.name) }, icon('cart', 13, 2.4), h('span', { text: t('addSize', { size: target.name }) }))
+          : h('button', { type: 'button', class: 'xff-btn xff-btn--black xff-btn--cart', id: 'xff-add', disabled: true, text: `${best.name} · ${t('soldOut')}` })),
     ];
   }
 
-  // Select the size, wait for Impact to load that variant, then send the product form (the check is skipped:
-  // this is the size the finder recommends or one that also fits).
+  // Select the size, wait for Impact to load that variant, then send the product form. The add-to-cart check is
+  // skipped: the shopper chose this size here, seeing how it fits.
   function addToCart(name) {
     save();
     const change = normalizeSize(selectedSize(cfg)) !== normalizeSize(name);
@@ -636,30 +714,30 @@ function openDialog(root, options = {}) {
   // ------------------------------------------------ add-to-cart check
   function guardScreen() {
     const ev = evaluate(cfg, state.p), verdict = ev && verdictFor(ev.result, state.chosen);
-    if (!ev || !verdict) return [h('p', { class: 'xff-note', id: titleId, text: t('noChart') })];
+    if (!ev || !verdict) return [h('p', { class: 'xff-note xff-note--empty', id: titleId, text: t('noChart') })];
     const worst = worstRegion(verdict);
+    const parts = listParts(verdict.regions.filter(badFit).map(r => partName(r.measure)).concat(verdict.regions.some(badFit) ? [] : [partName(worst.measure)]));
     return [
-      h('div', { class: 'xff-result' },
-        card(t('notRecommendedUpper'), state.chosen, 'no'),
-        h('p', { class: 'xff-guard-text', text: t('guardText', { chosen: state.chosen, fit: lowerFit(worst.fit), part: t(worst.measure).toLowerCase(), best: ev.result.best }) })),
+      h('div', { class: 'xff-result' }, card(t('notRecommendedUpper'), state.chosen, 'no')),
+      h('div', { class: 'xff-notes xff-notes--guard' }, h('p', { class: 'xff-guard-text', text: t('guardText', { chosen: state.chosen, fit: lowerFit(worst.fit), parts, best: ev.result.best }) })),
       h('div', { class: 'xff-actions xff-actions--guard' },
         h('button', { type: 'button', class: 'xff-btn xff-btn--outline', id: 'xff-keep', text: t('keep', { chosen: state.chosen }), onclick: () => {
           const form = document.getElementById(cfg.formId);
           close();
           if (form) { form.dataset.xffBypass = '1'; form.requestSubmit(options.submitter && options.submitter.form === form ? options.submitter : undefined); }
         } }),
-        h('button', { type: 'button', class: 'xff-btn xff-btn--black', id: 'xff-switch', text: t('switchTo', { best: ev.result.best }), onclick: () => {
-          const picked = selectSize(cfg, ev.result.best);
-          close();
-          if (picked) afterSizeChange(cfg, t('chosen', { size: ev.result.best }));
-        } })),
+        h('button', { type: 'button', class: 'xff-btn xff-btn--black', id: 'xff-switch', text: t('switchTo', { best: ev.result.best }), onclick: () => addToCart(ev.result.best) })),
     ];
   }
 
   // ------------------------------------------------ side panels: how to measure, body measurements, profiles
+  // Opening a panel remembers what opened it; closing puts focus back there.
   function togglePanel(name) {
-    state.panel = state.panel === name ? null : name;
-    render(state.panel ? null : (name === 'profiles' ? 'xff-avatar-button' : null));
+    const opening = Boolean(name) && state.panel !== name;
+    if (opening) state.panelOpener = document.activeElement?.id || null;
+    state.panel = opening ? name : null;
+    state.confirmDelete = false;
+    render(state.panel ? null : state.panelOpener);
     if (state.panel) sidePanel.focus({ preventScroll: true });
   }
   function renderPanel() {
@@ -677,41 +755,43 @@ function openDialog(root, options = {}) {
         size ? h('dl', { class: 'xff-measures' }, chart().measures.flatMap(m => [h('dt', { text: t(m) }), h('dd', { text: `${rangeText(size[m], unit)} ${unit}` })])) : null,
         h('button', { type: 'button', class: 'xff-btn xff-btn--grey', id: 'xff-to-chart', text: t('sizeGuide'), onclick: () => go('chart', 'xff-find') }));
     } else {
-      const store = loadStore(), others = (store?.profiles ?? []).filter(x => x.id !== state.p.id);
+      const saved = loadStore()?.profiles ?? [], isSaved = saved.some(x => x.id === state.p.id);
+      const use = o => { saveProfile(o); state.p = { ...o, tape: { ...o.tape }, shape: { ...o.shape }, units: { ...o.units } }; state.compare = null; go(evaluate(cfg, state.p) ? 'result' : steps()[0]); };
       fill(sidePanel, closePanel, h('h2', { class: 'xff-panel-title', text: t('profiles') }),
         h('label', { class: 'xff-label', for: 'xff-profile-name', text: t('profileName') }),
         h('input', { id: 'xff-profile-name', class: 'xff-input xff-input--wide', type: 'text', value: state.p.name ?? '', placeholder: t('profileNamePlaceholder'), oninput: event => { state.p.name = event.target.value; if (loadStore()?.profiles.some(x => x.id === state.p.id)) save(); } }),
-        others.length ? h('p', { class: 'xff-label', text: t('otherProfiles') }) : null,
-        others.map(o => h('button', { type: 'button', class: 'xff-profile', onclick: () => { saveProfile(o); state.p = { ...o, tape: { ...o.tape }, shape: { ...o.shape }, units: { ...o.units } }; state.compare = null; go(evaluate(cfg, state.p) ? 'result' : steps()[0]); } },
-          icon('user', 20), h('span', { text: o.name || t('unnamedProfile') }))),
-        h('button', { type: 'button', class: 'xff-profile', id: 'xff-add-profile', onclick: () => { state.p = newProfile(cfg, state.p.sex); state.draft = {}; go(steps()[0]); } }, icon('plus', 20), h('span', { text: t('addProfile') })),
-        loadStore()?.profiles.some(x => x.id === state.p.id) ? h('button', { type: 'button', class: 'xff-profile xff-profile--danger', id: 'xff-delete-profile', onclick: () => {
+        saved.length ? h('ul', { class: 'xff-profiles' }, saved.map(o => h('li', {}, h('button', {
+          type: 'button', class: 'xff-profile', 'aria-current': o.id === state.p.id ? 'true' : null, onclick: () => (o.id === state.p.id ? togglePanel(null) : use(o)),
+        }, icon('user', 20), h('span', { class: 'xff-profile__name', text: o.name || t('unnamedProfile') }), o.id === state.p.id ? h('span', { class: 'xff-profile__current', text: t('currentProfile') }) : null)))) : null,
+        h('button', { type: 'button', class: 'xff-profile', id: 'xff-add-profile', onclick: () => { state.p = newProfile(cfg, state.p.sex); state.draft = {}; state.returnTo = null; go(steps()[0]); } }, icon('plus', 20), h('span', { text: t('addProfile') })),
+        // Deleting asks once more (the same button), so a slip does not lose a profile.
+        isSaved ? h('button', { type: 'button', class: `xff-profile xff-profile--danger${state.confirmDelete ? ' is-confirm' : ''}`, id: 'xff-delete-profile', onclick: () => {
+          if (!state.confirmDelete) { state.confirmDelete = true; renderPanel(); sidePanel.querySelector('#xff-delete-profile')?.focus(); return; }
           deleteProfile(state.p.id);
           const next = loadProfile();
           state.p = next ? { ...next, tape: { ...next.tape }, shape: { ...next.shape }, units: { ...next.units } } : newProfile(cfg, state.p.sex);
           state.draft = {};
           announce(t('forgotten'));
           go(next && evaluate(cfg, state.p) ? 'result' : steps()[0]);
-        } }, icon('close', 18), h('span', { text: t('deleteProfile') })) : null,
-        h('p', { class: 'xff-panel-note', text: t('privacy') }));
+        } }, icon('close', 18), h('span', { text: t(state.confirmDelete ? 'deleteConfirm' : 'deleteProfile') })) : null,
+        h('p', { class: 'xff-panel-note', text: t('privacy') }),
+        cfg.privacyUrl ? h('a', { class: 'xff-link xff-privacy-link', href: cfg.privacyUrl, text: t('privacyLink') }) : null);
     }
   }
 
+  // The profiles button names the profile in use, so the shopper always sees whose measurements these are.
   function renderAvatar() {
-    const showTip = state.tip && state.screen === 'result' && !state.panel;
-    fill(avatar,
-      showTip ? h('p', { class: 'xff-tip', role: 'note', text: t('profileTip') }) : null,
-      h('button', { type: 'button', class: 'xff-avatar__button', id: 'xff-avatar-button', 'aria-label': t('profiles'), 'aria-expanded': String(state.panel === 'profiles'), onclick: () => {
-        state.tip = false;
-        try { localStorage.setItem(TIP_SEEN, '1'); } catch { /* private mode */ }
-        togglePanel('profiles');
-      } }, icon('user', 20, 1.6)));
+    fill(avatar, h('button', { type: 'button', class: 'xff-avatar__button', id: 'xff-avatar-button', 'aria-expanded': String(state.panel === 'profiles'), onclick: () => togglePanel('profiles') },
+      h('span', { class: 'xff-avatar__icon', 'aria-hidden': 'true' }, icon('user', 18, 1.6)),
+      state.p.name ? h('span', { class: 'xff-sr', text: `${t('profiles')}: ` }) : null,
+      h('span', { class: 'xff-avatar__name', text: state.p.name || t('profiles') })));
   }
 
   // ------------------------------------------------ open
   if (options.mode !== 'guard' && options.screen === 'finder') state.screen = evaluate(cfg, state.p) && saved ? 'result' : steps()[0];
   render();
   dialog.showModal();
+  if (state.screen === 'chart') fitTable();
   (content.querySelector('[data-xff-focus]') ?? content.querySelector('button'))?.focus({ preventScroll: true });
 }
 
