@@ -1,17 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { parse } from 'graphql'
-import { emptyShopifyLinkedDraft, fieldAddress, shopifyDefinitionApplicability, shopifyLinkedDraftSchema, type ShopifyLinkedDraft } from '@nexus/shared/shopify-linked-products'
+import { emptyShopifyLinkedDraft, fieldAddress, shopifyDefinitionApplicability, shopifyFieldsOnlyPlan, shopifyLinkedDraftSchema, type ShopifyLinkedDraft } from '@nexus/shared/shopify-linked-products'
 
 const fixture = vi.hoisted(() => {
-  const data = { audits: [] as any[], listings: [] as any[], gql: null as any, failSave: false, colourGrouping: null as null | { fields: Array<{ namespace: string; key: string }>; family: boolean; products: string[] } }
+  const data = { audits: [] as any[], listings: [] as any[], gql: null as any, failSave: false, colourGrouping: null as null | { fields: Array<{ namespace: string; key: string }>; family: boolean; products: string[] },
+    children: [] as Array<{ id: string }>, patches: [] as any[], queue: [] as any[] }
   function match(row: any, where: any): boolean { return Object.entries(where).every(([key, value]: [string, any]) => value && typeof value === 'object' && 'in' in value ? value.in.includes(row[key]) : row[key] === value) }
-  const db: any = { auditLog: { create: async ({ data: row }: any) => { data.audits.push(structuredClone(row)); return { id: String(data.audits.length) } } }, product: { findFirst: async ({ where }: any) => where.id === 'family' ? { id: 'family', name: 'Family', parentId: null, deletedAt: null, children: [] } : null },
+  const db: any = { auditLog: { create: async ({ data: row }: any) => { data.audits.push(structuredClone(row)); return { id: String(data.audits.length) } } }, product: { findFirst: async ({ where }: any) => where.id === 'family' ? { id: 'family', name: 'Family', parentId: null, deletedAt: null, children: structuredClone(data.children) } : null },
+    // Stock and price leave through this queue; nothing on the linked path may write it (asserted by the pause tests).
+    outboundSyncQueue: Object.fromEntries(['create', 'createMany', 'upsert', 'update', 'updateMany'].map(verb => [verb, async (args: any) => { data.queue.push({ verb, args }); return { count: 0 } }])),
     marketplace: { findFirst: async ({ where }: any) => where.channel === 'SHOPIFY' && where.code === 'GLOBAL' ? { id: 'global', currency: 'EUR' } : null },
     channelListing: {
       findMany: async ({ where }: any) => structuredClone(data.listings.filter(row => match(row, where))),
       findUnique: async ({ where }: any) => structuredClone(data.listings.find(row => match(row, where)) ?? null),
       findFirst: async ({ where }: any) => structuredClone(data.listings.find(row => match(row, where)) ?? null),
-      updateMany: async ({ where, data: patch }: any) => { if (data.failSave) throw new Error('database write failed'); const rows = data.listings.filter(row => match(row, where)); for (const row of rows) { row.platformAttributes = structuredClone(patch.platformAttributes); row.version += patch.version.increment }; return { count: rows.length } },
+      updateMany: async ({ where, data: patch }: any) => { if (data.failSave) throw new Error('database write failed'); data.patches.push(structuredClone(patch)); const rows = data.listings.filter(row => match(row, where)); for (const row of rows) { row.platformAttributes = structuredClone(patch.platformAttributes); row.version += patch.version.increment }; return { count: rows.length } },
       create: async ({ data: input }: any) => { const row = { id: `listing-${data.listings.length}`, version: 1, ...structuredClone(input) }; data.listings.push(row); return row },
     },
   }
@@ -33,17 +36,20 @@ import { suggestSharedContent } from './linked-shared-content.service'
 import { shopifyInformationPublicationIssue } from './linked-state-guard'
 const gid = (id: number) => `gid://shopify/Product/${id}`
 const scope = { accountId: 'A', market: 'GLOBAL' }
-let fields: Map<string, any>, calls: { name: string; variables: any; account: string }[], loseAck: boolean, schemaChanged: boolean
+let fields: Map<string, any>, calls: { name: string; variables: any; account: string; mutation: boolean }[], loseAck: boolean, schemaChanged: boolean
+/** How Shopify stores a value it was sent (identity, unless a test makes it re-serialize). */
+let storedValue: (field: { type: string; value: string }) => string
 const def = { id: 'gid://shopify/MetafieldDefinition/1', namespace: 'custom', key: 'siblings', name: 'Related colours', description: null, ownerType: 'PRODUCT', type: { name: 'list.product_reference' }, validations: [], access: { admin: null, storefront: 'PUBLIC_READ' } }
 const connection = (nodes: any[]) => ({ nodes, pageInfo: { hasNextPage: false, endCursor: null } })
 const lookup = (ownerId: string, key = 'siblings') => fields.get(fieldAddress({ ownerId, namespace: 'custom', key }))
 beforeEach(() => {
   invalidateShopifyDefinitionConstraints()
   fields = new Map(); calls = []; fixture.data.audits = []; loseAck = false; schemaChanged = false; fixture.data.failSave = false; fixture.data.colourGrouping = null
+  fixture.data.children = []; fixture.data.patches = []; fixture.data.queue = []; storedValue = field => field.value
   for (const id of [1, 2]) { const value = { ownerId: gid(id), namespace: 'custom', key: 'siblings', type: 'list.product_reference', value: JSON.stringify([gid(1), gid(2)]), compareDigest: `base-${id}` }; fields.set(fieldAddress(value), value) }
   fixture.data.listings = ['A', 'B'].map(account => ({ id: `listing-${account}`, productId: 'family', channel: 'SHOPIFY', channelConnectionId: account, marketplace: 'GLOBAL', aliasKey: '', version: 1, externalListingId: '1', platformAttributes: { untouched: account } }))
   fixture.data.gql = async (query: string, variables: any = {}, account = 'A'): Promise<any> => {
-    parse(query); const name = query.match(/(?:query|mutation)\s+(\w+)/)![1]; calls.push({ name, variables, account })
+    parse(query); const name = query.match(/(?:query|mutation)\s+(\w+)/)![1]; calls.push({ name, variables, account, mutation: query.trimStart().startsWith('mutation') })
     if (name === 'NexusLinkedDefinitions') return { metafieldDefinitions: connection(variables.ownerType === 'PRODUCT' ? [{ ...def, name: schemaChanged ? 'Changed definition' : def.name }] : []) }
     if (name === 'NexusLinkedEntryDefinitions') return { metaobjectDefinitions: connection([]) }
     if (name === 'NexusCategoryTemplates') return { standardMetafieldDefinitionTemplates: connection([]) }
@@ -59,7 +65,7 @@ beforeEach(() => {
     }
     if (name === 'NexusLinkedSet') {
       if (variables.metafields.some((f: any) => (fields.get(fieldAddress(f))?.compareDigest ?? null) !== f.compareDigest)) return { metafieldsSet: { userErrors: [{ message: 'Compare digest conflict' }] } }
-      for (const f of variables.metafields) fields.set(fieldAddress(f), { ...f, compareDigest: `saved-${calls.length}` })
+      for (const f of variables.metafields) fields.set(fieldAddress(f), { ...f, value: storedValue(f), compareDigest: `saved-${calls.length}` })
       if (loseAck) { loseAck = false; throw new Error('Connection dropped after mutation') }
       return { metafieldsSet: { metafields: [], userErrors: [] } }
     }
@@ -666,5 +672,81 @@ describe('Conditional Shopify definitions', () => {
     expect(checks).toBe(2) // Once per category for each attempt, never once per cell.
     expect(lookup(gid(1)).value).toBe('[]')
     expect(lookup(gid(2)).value).toBe('[]')
+  })
+})
+
+/* A Link leaves the linked listings paused: their stock and prices stay held. A reviewed plan of product fields
+   (metafields) only still reaches Shopify; nothing lifts the pause and nothing queues stock or prices. */
+describe('a linked listing whose sync is paused synchronizes product fields only', () => {
+  const informationDraft = (extra: Partial<ShopifyLinkedDraft> = {}): ShopifyLinkedDraft => ({ ...emptyShopifyLinkedDraft(), informationOnly: true,
+    members: [{ id: gid(1), title: 'Product 1', handle: 'p-1', image: null }], ...extra })
+  const caption = (id: number, nextValue: string) => ({ ...lookup(gid(id), 'caption'), nextValue, ownerLabel: `Product ${id}` })
+  async function reviewed(draft: ShopifyLinkedDraft) {
+    const current = await getLinkedWorkspace('family', scope)
+    await saveLinkedWorkspace('family', scope, { expectedRevision: current.revision, draft })
+    return previewLinkedWorkspace('family', scope)
+  }
+  /** A size of the family, linked on store A and paused, as a Link leaves it. */
+  function pausedSize() {
+    fixture.data.children = [{ id: 'size' }]
+    fixture.data.listings.push({ id: 'size-listing', productId: 'size', channel: 'SHOPIFY', channelConnectionId: 'A', marketplace: 'GLOBAL', aliasKey: '', version: 1, externalListingId: '1', syncPaused: true, platformAttributes: {} })
+  }
+  const storeA = () => fixture.data.listings.filter(l => l.channelConnectionId === 'A')
+
+  it('sends a fields-only plan, reads it back, and leaves every listing paused with no stock or price queued', async () => {
+    contentFields(); pausedSize(); fixture.data.listings[0].syncPaused = true
+    const { workspace, plan } = await reviewed(informationDraft({ edits: [caption(1, 'Fit chart')] }))
+    expect(workspace.syncPaused).toBe(true)
+    expect(shopifyFieldsOnlyPlan(plan)).toBe(true)
+    const running = await beginLinkedSync('family', scope, { expectedRevision: workspace.revision, planRevision: plan.revision }, 'MANUAL', 'owner')
+    const done = await advanceLinkedSync('family', scope, running.operation!.id)
+    expect(done.operation).toMatchObject({ status: 'VERIFIED', completed: 1, total: 1 })
+    expect(done.syncPaused).toBe(true)
+    expect(lookup(gid(1), 'caption').value).toBe('Fit chart')
+    expect(calls.filter(c => c.mutation).map(c => c.name)).toEqual(['NexusLinkedSet'])
+    expect(storeA().map(l => [l.id, l.syncPaused])).toEqual([['listing-A', true], ['size-listing', true]])
+    expect(fixture.data.patches.every(patch => Object.keys(patch).every(key => ['platformAttributes', 'version'].includes(key)))).toBe(true)
+    expect(fixture.data.queue).toEqual([])
+  })
+  it('refuses a plan with any other change on a paused listing, as before, and sends nothing', async () => {
+    contentFields(); const remote = informationFixture(); pausedSize()
+    const { workspace, plan } = await reviewed(informationDraft({ edits: [caption(1, 'Fit chart')],
+      nativeEdits: [{ productId: gid(1), ownerId: gid(1), ownerLabel: 'Product 1', field: 'title', value: 'Product 1', nextValue: 'Updated title' }] }))
+    expect(shopifyFieldsOnlyPlan(plan)).toBe(false)
+    await expect(beginLinkedSync('family', scope, { expectedRevision: workspace.revision, planRevision: plan.revision }))
+      .rejects.toMatchObject({ code: 'PUSH_SYNC_PAUSED', message: 'Listing sync is paused. Resume sync before sending changes.' })
+    expect((await getLinkedWorkspace('family', scope)).operation).toBeNull()
+    expect(remote.mutations()).toBe(0); expect(calls.some(c => c.mutation)).toBe(false)
+    expect(fixture.data.queue).toEqual([])
+  })
+  it('keeps every other lock: a paused listing whose offer is closed refuses even a fields-only plan', async () => {
+    contentFields(); pausedSize()
+    Object.assign(fixture.data.listings.at(-1), { offerClosedAt: new Date() })
+    const { workspace, plan } = await reviewed(informationDraft({ edits: [caption(1, 'Fit chart')] }))
+    await expect(beginLinkedSync('family', scope, { expectedRevision: workspace.revision, planRevision: plan.revision })).rejects.toMatchObject({ code: 'PUSH_OFFER_CLOSED' })
+    expect(calls.some(c => c.mutation)).toBe(false)
+  })
+  it('an unpaused listing synchronizes a mixed plan exactly as before', async () => {
+    contentFields(); const remote = informationFixture()
+    const { workspace, plan } = await reviewed(informationDraft({ edits: [caption(1, 'Fit chart')],
+      nativeEdits: [{ productId: gid(1), ownerId: gid(1), ownerLabel: 'Product 1', field: 'title', value: 'Product 1', nextValue: 'Updated title' }] }))
+    expect(workspace.syncPaused).toBeUndefined()
+    const running = await beginLinkedSync('family', scope, { expectedRevision: workspace.revision, planRevision: plan.revision })
+    let done = await advanceLinkedSync('family', scope, running.operation!.id)
+    if (done.operation?.status !== 'VERIFIED') done = await advanceLinkedSync('family', scope, running.operation!.id)
+    expect(done.operation).toMatchObject({ status: 'VERIFIED', completed: 2, total: 2 })
+    expect(remote.mutations()).toBe(1); expect(lookup(gid(1), 'caption').value).toBe('Fit chart')
+  })
+  it('a colour family (its own row a paused draft) sends one product field to every colour product and stays paused', async () => {
+    contentFields()
+    Object.assign(fixture.data.listings[0], { syncPaused: true, listingStatus: 'DRAFT', isPublished: false, externalListingId: null })
+    fixture.data.colourGrouping = { fields: [{ namespace: 'custom', key: 'siblings' }], family: true, products: [gid(1), gid(2)] }
+    const members = [1, 2].map(n => ({ id: gid(n), title: `Product ${n}`, handle: `p-${n}`, image: null }))
+    const { workspace, plan } = await reviewed(informationDraft({ members, edits: [caption(1, 'Fit chart'), caption(2, 'Fit chart')] }))
+    const running = await beginLinkedSync('family', scope, { expectedRevision: workspace.revision, planRevision: plan.revision })
+    expect((await advanceLinkedSync('family', scope, running.operation!.id)).operation?.status).toBe('VERIFIED')
+    expect([1, 2].map(n => lookup(gid(n), 'caption').value)).toEqual(['Fit chart', 'Fit chart'])
+    expect(fixture.data.listings[0]).toMatchObject({ syncPaused: true, listingStatus: 'DRAFT', externalListingId: null })
+    expect(fixture.data.queue).toEqual([])
   })
 })

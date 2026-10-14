@@ -22,3 +22,26 @@ it('lets the unlocked control acquire a lease and reach the next Shopify review 
  await expect(advanceLinkedSync('family', { accountId: 'store' }, 'operation')).rejects.toThrow('NEXT_REVIEW_REACHED')
  expect(s.next).toHaveBeenCalledTimes(1); expect(s.writes).toHaveBeenCalled()
 })
+// A Link leaves the rows paused. A MANUAL operation of product fields (metafields) only may still advance; every other
+// lock, an automatic operation and an operation with any other change still meet the pause.
+const fieldsOnly = { changes: [{ ownerId: 'gid://shopify/Product/1', namespace: 'custom', key: 'fit_garment', type: 'json', value: null, compareDigest: null, nextValue: '{"chest":52}', ownerLabel: 'Jacket' }] }
+const operation = () => s.rows[0].platformAttributes._nexusLinkedProductsOperation
+it('lets a paused listing advance a manual fields-only operation, and writes no pause flag', async () => {
+ Object.assign(operation(), fieldsOnly); s.rows[1].syncPaused = true
+ await expect(advanceLinkedSync('family', { accountId: 'store' }, 'operation')).rejects.toThrow('NEXT_REVIEW_REACHED')
+ expect(s.next).toHaveBeenCalledTimes(1)
+ for (const [{ data }] of s.writes.mock.calls) expect(Object.keys(data).sort()).toEqual(['platformAttributes', 'version'])
+})
+it.each(locks.slice(1))('a fields-only operation still meets every other lock: %j', async lock => {
+ Object.assign(operation(), fieldsOnly); Object.assign(s.rows[1], { syncPaused: true }, lock)
+ await expect(advanceLinkedSync('family', { accountId: 'store' }, 'operation')).rejects.toMatchObject({ code: expect.stringMatching(/^PUSH_(?!SYNC_PAUSED)/) })
+ expect(s.next).not.toHaveBeenCalled(); expect(s.writes).not.toHaveBeenCalled()
+})
+it('a paused listing refuses a fields-only operation with any other change, and an automatic one', async () => {
+ Object.assign(operation(), fieldsOnly, { nativeEdits: [{ ownerId: 'gid://shopify/Product/1', productId: 'gid://shopify/Product/1', field: 'title', value: 'A', nextValue: 'B', ownerLabel: 'Jacket' }] }); s.rows[1].syncPaused = true
+ await expect(advanceLinkedSync('family', { accountId: 'store' }, 'operation')).rejects.toMatchObject({ code: 'PUSH_SYNC_PAUSED' })
+ delete operation().nativeEdits
+ Object.assign(operation(), { origin: 'AUTOMATIC' }); s.rows[0].platformAttributes._nexusLinkedAutomation = { mode: 'AUTOMATIC' }
+ await expect(advanceLinkedSync('family', { accountId: 'store' }, 'operation', true)).rejects.toMatchObject({ code: 'PUSH_SYNC_PAUSED' })
+ expect(s.next).not.toHaveBeenCalled(); expect(s.writes).not.toHaveBeenCalled()
+})
