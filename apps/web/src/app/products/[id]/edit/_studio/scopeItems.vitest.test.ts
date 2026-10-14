@@ -193,3 +193,15 @@ describe('Step 4 (D2) — "not listed here" reads the same on the chip as on the
     expect(title(i, 'AMAZON')).not.toContain('scored in this response')
   })
 })
+
+describe('editing speed (2026-10-13) — a scope the server is checking again says Checking…, never its earlier verdict', () => {
+  it('a pending channel verdict and a pending Shared verdict both read Checking…; a current one keeps its words', () => {
+    const PENDING = '2026-10-14T08:00:00.000Z'
+    const i = input({ marketplaces: xavia, market: 'DE', scope: 'master', locale: 'de', readiness: ready([
+      { id: 'master', pct: 70, state: 'warn', pendingSince: PENDING },
+      { id: 'AMAZON', pct: 48, state: 'blocked', pendingSince: PENDING },
+      { id: 'EBAY', pct: null, state: 'blocked' },
+    ]) })
+    expect(menu(i)).toEqual(['Checking…', 'Checking…', 'Blocked · —', undefined])
+  })
+})

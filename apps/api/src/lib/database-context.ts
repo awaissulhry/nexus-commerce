@@ -98,6 +98,11 @@ export async function afterDatabaseCommitBatch<T>(key: string, items: readonly T
   active.effects.set(key, () => run([...((active.batches.get(key) ?? []) as Set<T>)]))
 }
 
+/** Is an after-commit effect with this key registered in the active transaction (a savepoint rolled back removes it)? */
+export function hasAfterDatabaseCommit(key: string): boolean {
+  return context.getStore()?.effects.has(key) ?? false
+}
+
 /** PSIE — is a before-commit producer with this key already registered in the active transaction? */
 export function hasBeforeDatabaseCommit(key: string): boolean {
   return context.getStore()?.producers.has(key) ?? false
@@ -190,8 +195,12 @@ function isRaceFailure(error: unknown): boolean {
 /**
  * `memoReads` (P2): repeated reads inside this transaction are answered from memory until this transaction writes
  * (transaction-read-memo.ts). Only for a snapshot isolation level, where a repeated read returns the same rows.
+ *
+ * `restarts` (editing speed, 2026-10-13): how many times a lost race restarts the whole transaction (default 2, i.e. three
+ * attempts). The product sheet's saves ask for 4, with a short jittered wait before each: two saves of one family typed
+ * a moment apart read the same family and each write one row of it, so one of them loses and runs again.
  */
-export async function inDatabaseTransaction<T>(client: PrismaClient, work: () => Promise<T>, options?: { isolationLevel?: Prisma.TransactionIsolationLevel; timeoutMs?: number; memoReads?: boolean }): Promise<T> {
+export async function inDatabaseTransaction<T>(client: PrismaClient, work: () => Promise<T>, options?: { isolationLevel?: Prisma.TransactionIsolationLevel; timeoutMs?: number; memoReads?: boolean; restarts?: number }): Promise<T> {
   const existing = context.getStore()
   if (existing) {
     if (options?.isolationLevel && options.isolationLevel !== existing.isolationLevel) throw new Error('The requested transaction isolation does not match the current transaction.')
@@ -220,7 +229,12 @@ export async function inDatabaseTransaction<T>(client: PrismaClient, work: () =>
         isolationLevel, maxWait: 10_000, timeout: options?.timeoutMs ?? 60_000,
       })
     } catch (error) {
-      if (attempt < 2 && transactionMustRestart(error)) continue
+      if (attempt < (options?.restarts ?? 2) && transactionMustRestart(error)) {
+        // A caller that asks for more restarts (the product sheet's saves) also waits a moment, with jitter, so two
+        // writers that lost to each other do not meet again at once. Everyone else restarts at once, as before.
+        if (options?.restarts !== undefined) await new Promise(resolve => setTimeout(resolve, (20 + Math.random() * 60) * (attempt + 1)))
+        continue
+      }
       throw error
     }
     // Derived refreshes run only after commit. A refresh cannot turn a committed write into a refusal.

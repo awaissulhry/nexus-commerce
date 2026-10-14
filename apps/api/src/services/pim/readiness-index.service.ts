@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import prisma from '../../db.js'
-import { afterDatabaseCommit, beforeDatabaseCommit, dropBeforeDatabaseCommit, hasBeforeDatabaseCommit, inDatabaseTransaction } from '../../lib/database-context.js'
+import { afterDatabaseCommit, beforeDatabaseCommit, dropBeforeDatabaseCommit, hasAfterDatabaseCommit, hasBeforeDatabaseCommit, inDatabaseTransaction } from '../../lib/database-context.js'
 import { getStudioSheet } from './studio-sheet.service.js'
 import { withCachedSchemas } from './cached-schema-context.js'
 // LX.F2 R-LX-17 — the ONE resolver, the same function the catalogue projection calls.
@@ -15,6 +15,7 @@ import { runResumableSweep, type SweepReport } from './resumable-sweep.js'
 import { logger } from '../../utils/logger.js'
 import { safeJobId } from '../../lib/job-id.js'
 import { channelFootprint, type ChannelFootprint } from '../channel-footprint.service.js'
+import { rebuildAfterResponse } from './readiness-after-response.js'
 
 export type ReadinessScope = { channel: string; market: string; accountId: string | null }
 
@@ -33,6 +34,7 @@ export function optionalColumns(completeness: { optional?: { filled: number; tot
 }
 
 const producerKey = (rootId: string, scope?: ReadinessScope) => `readiness:${rootId}${scope ? `:${JSON.stringify(scope)}` : ''}`
+const afterResponseKey = (rootId: string) => `readiness-after-response:${rootId}`
 
 const deferredFamilies = new AsyncLocalStorage<Set<string>>()
 /**
@@ -58,6 +60,8 @@ export async function produceReadiness(productId: string, scope?: ReadinessScope
   const rootId = product.parentId ?? product.id
   const deferred = deferredFamilies.getStore()
   if (deferred) { deferred.add(rootId); return }
+  // A sheet save of this transaction already rebuilds the whole family after its response (`produceReadinessForProducts`).
+  if (hasAfterDatabaseCommit(afterResponseKey(rootId))) return
   const family = producerKey(rootId)
   if (scope && hasBeforeDatabaseCommit(family)) return
   if (!scope) dropBeforeDatabaseCommit(`${family}:`)
@@ -73,6 +77,9 @@ export async function produceReadiness(productId: string, scope?: ReadinessScope
  * many families keep today's behaviour exactly — a single-cell edit still returns with its readiness rebuilt. Above
  * it, the rows are marked pending in the SAME transaction as the values (so no reader can show the old answer as
  * current) and the families are rebuilt after the commit (Owner Decision 2 = A, 2026-09-26).
+ * One exception (editing speed, 2026-10-13; Owner, 2026-10-14: allowed): the Information page's own Shared saves rebuild
+ * a whole family right after their response, in this process (`produceReadinessForProducts` `afterResponse`,
+ * `readiness-after-response.ts`), and the page shows "Checking…" meanwhile. Every other writer keeps the rule above.
  */
 export const INLINE_READINESS_MAX_FAMILIES = 2
 
@@ -86,17 +93,58 @@ export interface ReadinessProduction {
 /**
  * The batch form of `produceReadiness`: ONE query for the families of every product, then inline or pending.
  * Must run inside the content transaction (like `produceReadiness`), so the pending marks commit with the values.
+ *
+ * `afterResponse` (editing speed, 2026-10-13; the product sheet's saves only): a WHOLE-family rebuild of up to
+ * INLINE_READINESS_MAX_FAMILIES families is not run inside the save. Its rows are marked pending before the commit, in
+ * the save's transaction, and the family is rebuilt in this process right after the response
+ * (`readiness-after-response.ts`). A listing-only edit (`scope`) is still rebuilt inline: it is one coordinate.
  */
-export async function produceReadinessForProducts(productIds: string[], scope?: ReadinessScope): Promise<ReadinessProduction> {
+export async function produceReadinessForProducts(productIds: string[], scope?: ReadinessScope, options?: { afterResponse?: boolean }): Promise<ReadinessProduction> {
   if (!productIds.length) return { inline: 0, pending: 0 }
   const rows = await prisma.product.findMany({ where: { id: { in: [...new Set(productIds)] } }, select: { id: true, parentId: true } })
   const roots = [...new Set(rows.map(row => row.parentId ?? row.id))].sort()
   // PSIE — inside `deferReadiness` (the sheet import) the families are only noted, as in `produceReadiness`.
   const deferred = deferredFamilies.getStore()
   if (deferred) { roots.forEach(rootId => deferred.add(rootId)); return { inline: 0, pending: roots.length } }
+  if (roots.length <= INLINE_READINESS_MAX_FAMILIES && options?.afterResponse && !scope) {
+    for (const rootId of roots) {
+      const family = producerKey(rootId)
+      // The rebuild after the response covers every coordinate, so this transaction's own rebuilds of the family go; the
+      // marks take the family's key and run once at commit, however many rows of the operation wrote to it.
+      dropBeforeDatabaseCommit(`${family}:`)
+      await beforeDatabaseCommit(family, () => markReadinessPending([rootId], undefined, { onlyNewMarks: true }))
+      // Every run rebuilds the whole family, from a snapshot taken after this save committed (a family with no row yet is
+      // built). REPEATABLE READ, not Serializable: the rebuild reads most of the catalogue's tables, and as a Serializable
+      // transaction it made other saves — of any family — restart, up to their 3-attempt limit (measured: a typing burst
+      // over two families restarted rebuilds 3 times and exhausted one). At Repeatable Read it takes no predicate locks,
+      // so a save never restarts because of its reads. It still cannot leave old values current, whatever lands after
+      // its snapshot: every other writer's mark writes the family's readiness rows (`markReadinessPending`), which this
+      // rebuild then meets on its DELETE; a sheet save writes one of the family's product rows, which the check below
+      // meets. Either way it fails with 40001 and is retried from a fresh snapshot. A sheet save that lands during it also
+      // asks for a follow-up run (`readiness-after-response.ts`). The drain stays Serializable. One snapshot whose
+      // repeated reads are answered once, as the inline rebuild's were.
+      await afterDatabaseCommit(afterResponseKey(rootId), async () => rebuildAfterResponse(rootId,
+        () => inDatabaseTransaction(prisma, async () =>
+          // The family's product rows, checked after the reads and BEFORE the rows are replaced: FOR SHARE at Repeatable
+          // Read fails (40001, retried from a fresh snapshot) when a write changed one after this snapshot — a sheet save
+          // (its mark leaves pending rows alone), or any write to a family with no readiness row yet (no row for a mark to
+          // write) — so the rows written never go out built from older values. Before the DELETE, not after it: every
+          // writer locks a product row first and readiness rows second, and so does this check (review 5 of #616: checked
+          // after the DELETE, a save and this rebuild deadlocked, stalling the save ~1 s on deadlock_timeout).
+          reconcileFamilyReadiness(rootId, undefined, () => prisma.$queryRaw`SELECT id FROM "Product" WHERE id = ${rootId} OR "parentId" = ${rootId} FOR SHARE`),
+        { memoReads: true, isolationLevel: 'RepeatableRead' })))
+    }
+    return { inline: 0, pending: roots.length }
+  }
   if (roots.length <= INLINE_READINESS_MAX_FAMILIES) {
-    for (const rootId of roots) await beforeDatabaseCommit(producerKey(rootId, scope), () => reconcileFamilyReadiness(rootId, scope))
-    return { inline: roots.length, pending: 0 }
+    const production = { inline: 0, pending: 0 }
+    for (const rootId of roots) {
+      // Already rebuilt after this transaction's response (above): every coordinate of the family is covered.
+      if (hasAfterDatabaseCommit(afterResponseKey(rootId))) { production.pending++; continue }
+      await beforeDatabaseCommit(producerKey(rootId, scope), () => reconcileFamilyReadiness(rootId, scope))
+      production.inline++
+    }
+    return production
   }
   await markReadinessPending(roots, scope)
   await afterDatabaseCommit(`readiness-pending:${roots.length}:${roots[0]}:${roots[roots.length - 1]}`, () => enqueuePendingReadiness(roots))
@@ -104,51 +152,87 @@ export async function produceReadinessForProducts(productIds: string[], scope?: 
 }
 
 /**
- * Mark every current readiness row of these families (in `scope`, when given) as pending. One statement.
- * A row that is already pending keeps its EARLIER time, so the drain's oldest-first order stays true.
- * Rows of deleted products are left alone: the rebuild never recreates them, so a mark there would never clear.
+ * Mark every current readiness row of these families (in `scope`, when given) as pending. One statement; returns the
+ * rows that are pending now. A row that is already pending keeps its EARLIER time, so the drain's oldest-first order
+ * and its 30 s age stay true. Rows of deleted products are left alone: the rebuild never recreates them, so a mark there
+ * would never clear.
+ *
+ * 🔴 Every mark WRITES each row, the already-pending ones too (`COALESCE`; editing speed 2026-10-13, review of #616),
+ * except a product sheet save's own (`onlyNewMarks`, which the rebuild after it covers with a check of the product rows).
+ * A rebuild that took its snapshot before this write (the Repeatable Read rebuild after a sheet save,
+ * `produceReadinessForProducts`) must not commit rows built from the older values as current: its DELETE meets this
+ * committed write and it retries from a fresh snapshot (40001); if the rebuild commits first, this write meets its
+ * deleted rows, and this transaction restarts and marks the new ones. A mark that skipped already-pending rows wrote
+ * nothing the rebuild could meet, and the family was left current with the old values (measured on a real server: a
+ * second save, or a bulk edit, landing during the rebuild).
  */
 /** A pending scope; `accountId` undefined = every account of that channel × market (a channel-rule change). */
 export type PendingScope = { channel: string; market: string; accountId?: string | null }
 
-export async function markReadinessPending(rootIds: string[], scope?: PendingScope): Promise<number> {
+export async function markReadinessPending(rootIds: string[], scope?: PendingScope, options?: { onlyNewMarks?: boolean }): Promise<number> {
   if (!rootIds.length) return 0
-  // 🔴 Rows are locked in `id` order (the subquery's ORDER BY … FOR UPDATE), so two bulk edits marking overlapping
-  // families queue instead of deadlocking. Measured on a real server (readiness-pending-race.vitest.test.ts): against a
+  if (options?.onlyNewMarks && !scope) {
+    // The product sheet's own deferred saves (`produceReadinessForProducts` `afterResponse`): rows already pending are
+    // left alone, so two saves of one family do not queue on its readiness rows and restart each other. Each such save
+    // writes one of the family's product rows, which the rebuild after it checks (FOR SHARE) before it commits.
+    //
+    // 🔴 That check misses a save that read before the rebuild committed and writes after it: its snapshot still shows
+    // the rows pending, so the mark below would write nothing, and the rebuild's rows — built from the older values —
+    // would stay current. One of the family's readiness rows is locked first (FOR KEY SHARE: two saves holding it do not
+    // wait for each other): a row that rebuild replaced after this snapshot fails with 40001, the save restarts, and its
+    // new attempt marks the new rows. Residual: a family with no readiness row yet has nothing to lock; it relies on the
+    // follow-up rebuild this save asks for (`readiness-after-response.ts`) — only a crash in that moment leaves it stale.
+    for (const rootId of rootIds) {
+      await prisma.$queryRaw`
+        SELECT r.id FROM "ReadinessIndex" r JOIN "Product" p ON p.id = r."productId"
+        WHERE p."deletedAt" IS NULL AND (p.id = ${rootId} OR p."parentId" = ${rootId})
+        ORDER BY r.id LIMIT 1 FOR KEY SHARE OF r`
+    }
+    return prisma.$executeRaw`
+      UPDATE "ReadinessIndex" SET "pendingSince" = now()
+      WHERE id IN (
+        SELECT r.id FROM "ReadinessIndex" r JOIN "Product" p ON p.id = r."productId"
+        WHERE p."deletedAt" IS NULL
+          AND (p.id = ANY(${rootIds}::text[]) OR p."parentId" = ANY(${rootIds}::text[]))
+          AND r."pendingSince" IS NULL
+        ORDER BY r.id FOR NO KEY UPDATE OF r)
+    `
+  }
+  // 🔴 Rows are locked in `id` order (the subquery's ORDER BY … FOR NO KEY UPDATE), so two bulk edits marking overlapping
+  // families queue instead of deadlocking. NO KEY UPDATE, the lock an UPDATE of a non-key column takes anyway: it does
+  // not wait for the FOR KEY SHARE a product sheet save's mark holds on one of its family's rows (below), so two saves of
+  // one family that both hold it never deadlock on their marks. Measured on a real server (readiness-pending-race.vitest.test.ts): against a
   // concurrent rebuild, the UPDATE and the rebuild's DELETE can still deadlock — PostgreSQL kills one, and
   // `inDatabaseTransaction` retries it (a lost race is rolled back whole), so the user's save is never lost.
   if (scope && scope.accountId === undefined) {
     return prisma.$executeRaw`
-      UPDATE "ReadinessIndex" SET "pendingSince" = now()
+      UPDATE "ReadinessIndex" SET "pendingSince" = COALESCE("pendingSince", now())
       WHERE id IN (
         SELECT r.id FROM "ReadinessIndex" r JOIN "Product" p ON p.id = r."productId"
         WHERE p."deletedAt" IS NULL
           AND (p.id = ANY(${rootIds}::text[]) OR p."parentId" = ANY(${rootIds}::text[]))
-          AND r."pendingSince" IS NULL
           AND r.channel = ${scope.channel} AND r.market = ${scope.market}
-        ORDER BY r.id FOR UPDATE OF r)
+        ORDER BY r.id FOR NO KEY UPDATE OF r)
     `
   }
   if (scope) {
     return prisma.$executeRaw`
-      UPDATE "ReadinessIndex" SET "pendingSince" = now()
+      UPDATE "ReadinessIndex" SET "pendingSince" = COALESCE("pendingSince", now())
       WHERE id IN (
         SELECT r.id FROM "ReadinessIndex" r JOIN "Product" p ON p.id = r."productId"
         WHERE p."deletedAt" IS NULL
           AND (p.id = ANY(${rootIds}::text[]) OR p."parentId" = ANY(${rootIds}::text[]))
-          AND r."pendingSince" IS NULL
           AND r.channel = ${scope.channel} AND r.market = ${scope.market} AND r."accountId" IS NOT DISTINCT FROM ${scope.accountId}
-        ORDER BY r.id FOR UPDATE OF r)
+        ORDER BY r.id FOR NO KEY UPDATE OF r)
     `
   }
   return prisma.$executeRaw`
-    UPDATE "ReadinessIndex" SET "pendingSince" = now()
+    UPDATE "ReadinessIndex" SET "pendingSince" = COALESCE("pendingSince", now())
     WHERE id IN (
       SELECT r.id FROM "ReadinessIndex" r JOIN "Product" p ON p.id = r."productId"
       WHERE p."deletedAt" IS NULL
         AND (p.id = ANY(${rootIds}::text[]) OR p."parentId" = ANY(${rootIds}::text[]))
-        AND r."pendingSince" IS NULL
-      ORDER BY r.id FOR UPDATE OF r)
+      ORDER BY r.id FOR NO KEY UPDATE OF r)
   `
 }
 
@@ -171,8 +255,20 @@ async function enqueuePendingReadiness(rootIds: string[]): Promise<void> {
 
 interface PendingFamily { rootId: string; since: Date; scopes: number; shared: boolean; channel: string | null; market: string | null; accountId: string | null }
 
-/** Families with pending rows, OLDEST first, with what the pending rows cover. One grouped query. */
-export async function pendingReadinessFamilies(take: number, rootIds?: string[]): Promise<PendingFamily[]> {
+/**
+ * Editing speed (2026-10-13) — how old a family's oldest pending mark must be before the scheduled drain takes it. A
+ * product sheet save rebuilds its family in the API process right after its answer (`readiness-after-response.ts`), and
+ * a big edit's family is the queue worker's job at once; the drain is the backstop for what those did not finish. Without
+ * this age, the minute's drain often rebuilt the same family at the same moment as the after-response run: one of the
+ * two transactions lost, and under continuous saves the drain could lose three times and record a failed run.
+ */
+export const READINESS_DRAIN_MIN_AGE_MS = 30_000
+
+/**
+ * Families with pending rows, OLDEST first, with what the pending rows cover. One grouped query. `minAgeMs`: only the
+ * families whose oldest mark is at least that old (the scheduled drain, READINESS_DRAIN_MIN_AGE_MS); omitted, every one.
+ */
+export async function pendingReadinessFamilies(take: number, rootIds?: string[], minAgeMs?: number): Promise<PendingFamily[]> {
   const rows = await prisma.$queryRaw<Array<PendingFamily & { scopes: bigint | number }>>`
     SELECT COALESCE(p."parentId", p.id) AS "rootId", MIN(r."pendingSince") AS "since",
            COUNT(DISTINCT (r.channel, r.market, r."accountId")) AS "scopes", BOOL_OR(r.channel IS NULL) AS "shared",
@@ -180,7 +276,9 @@ export async function pendingReadinessFamilies(take: number, rootIds?: string[])
     FROM "ReadinessIndex" r JOIN "Product" p ON p.id = r."productId"
     WHERE r."pendingSince" IS NOT NULL
       AND (${rootIds ?? null}::text[] IS NULL OR COALESCE(p."parentId", p.id) = ANY(${rootIds ?? null}::text[]))
-    GROUP BY 1 ORDER BY 2, 1 LIMIT ${take}
+    GROUP BY 1
+    HAVING (${minAgeMs ?? null}::int IS NULL OR MIN(r."pendingSince") < now() - ${minAgeMs ?? 0}::int * interval '1 millisecond')
+    ORDER BY 2, 1 LIMIT ${take}
   `
   return rows.map(row => ({ ...row, scopes: Number(row.scopes) }))
 }
@@ -211,23 +309,35 @@ export async function rebuildImportedFamily(rootId: string): Promise<number> {
   return any ? 0 : reconcileFamilyReadiness(rootId)
 }
 
-/** How many families have pending rows. Uses the `(workspaceId, pendingSince)` index; cheap when nothing is pending. */
-export async function countPendingReadinessFamilies(): Promise<number> {
-  const [row] = await prisma.$queryRaw<Array<{ n: bigint | number }>>`
-    SELECT COUNT(DISTINCT COALESCE(p."parentId", p.id)) AS n
-    FROM "ReadinessIndex" r JOIN "Product" p ON p.id = r."productId" WHERE r."pendingSince" IS NOT NULL`
+/**
+ * How many families have pending rows. Uses the `(workspaceId, pendingSince)` index; cheap when nothing is pending.
+ * `minAgeMs`: only the families whose oldest mark is at least that old (what the scheduled drain would take).
+ */
+export async function countPendingReadinessFamilies(minAgeMs?: number): Promise<number> {
+  const [row] = minAgeMs === undefined
+    ? await prisma.$queryRaw<Array<{ n: bigint | number }>>`
+      SELECT COUNT(DISTINCT COALESCE(p."parentId", p.id)) AS n
+      FROM "ReadinessIndex" r JOIN "Product" p ON p.id = r."productId" WHERE r."pendingSince" IS NOT NULL`
+    : await prisma.$queryRaw<Array<{ n: bigint | number }>>`
+      SELECT COUNT(*) AS n FROM (
+        SELECT 1 FROM "ReadinessIndex" r JOIN "Product" p ON p.id = r."productId" WHERE r."pendingSince" IS NOT NULL
+        GROUP BY COALESCE(p."parentId", p.id) HAVING MIN(r."pendingSince") < now() - ${minAgeMs}::int * interval '1 millisecond') due`
   return Number(row?.n ?? 0)
 }
 
-/** The drain: oldest pending families first, bounded by a time budget. The cron and a hand run call this. */
-export async function drainPendingReadiness(options: { budgetMs?: number; batchSize?: number; now?: () => number } = {}): Promise<SweepReport> {
+/**
+ * The drain: oldest pending families first, bounded by a time budget. The cron and a hand run call this; the cron passes
+ * `minPendingAgeMs` (READINESS_DRAIN_MIN_AGE_MS), so it leaves a family whose marks are younger to the lane that set them.
+ */
+export async function drainPendingReadiness(options: { budgetMs?: number; batchSize?: number; now?: () => number; minPendingAgeMs?: number } = {}): Promise<SweepReport> {
+  const minAgeMs = options.minPendingAgeMs
   return runResumableSweep({
     name: 'readiness-pending',
     budgetMs: options.budgetMs ?? 45_000,
     batchSize: options.batchSize ?? 10,
     dryRun: false,
-    nextBatch: async take => (await pendingReadinessFamilies(take)).map(family => family.rootId),
-    countOutstanding: countPendingReadinessFamilies,
+    nextBatch: async take => (await pendingReadinessFamilies(take, undefined, minAgeMs)).map(family => family.rootId),
+    countOutstanding: () => countPendingReadinessFamilies(minAgeMs),
     apply: rootId => rebuildPendingFamily(rootId),
     ...(options.now ? { now: options.now } : {}),
   })
@@ -307,14 +417,17 @@ export async function reconcileReadinessFootprint(): Promise<FootprintReconcile>
       WHERE id IN (
         SELECT r.id FROM "ReadinessIndex" r JOIN "Product" p ON p.id = r."productId"
         WHERE p."deletedAt" IS NULL AND r.channel IS NULL AND r."pendingSince" IS NULL
-        ORDER BY r.id FOR UPDATE OF r)`
+        ORDER BY r.id FOR NO KEY UPDATE OF r)`
     if (markedRows > 0) markedFamilies = await countPendingReadinessFamilies()
   }
   return { removed, missing, markedFamilies }
 }
 
-/** The only materializer. Schema misses are honest absent rows; persistence failures roll back. */
-export async function reconcileFamilyReadiness(productId: string, scope?: ReadinessScope): Promise<number> {
+/**
+ * The only materializer. Schema misses are honest absent rows; persistence failures roll back. `beforeWrite` runs after
+ * the reads and just before the rows are replaced (the after-response rebuild's product check).
+ */
+export async function reconcileFamilyReadiness(productId: string, scope?: ReadinessScope, beforeWrite?: () => Promise<unknown>): Promise<number> {
   return inDatabaseTransaction(prisma, () => withCachedSchemas(async () => {
     const product = await prisma.product.findUniqueOrThrow({ where: { id: productId }, select: { id: true, parentId: true } })
     const rootId = product.parentId ?? product.id
@@ -421,6 +534,7 @@ export async function reconcileFamilyReadiness(productId: string, scope?: Readin
     // serialization check; either way `inDatabaseTransaction` retries, and the race test proves the end state is PENDING
     // or rebuilt from the edit's data (readiness-pending-race.vitest.test.ts, both orders). An explicit ordered lock
     // here was tried and dropped: it saved the ~1 s deadlock wait but needs raw SQL the import tests' store cannot run.
+    if (beforeWrite) await beforeWrite()
     await prisma.readinessIndex.deleteMany({ where: { productId: { in: products.map(p => p.id) }, ...scopeWhere } })
     if (rows.length) await prisma.readinessIndex.createMany({ data: rows })
     // P2 — the rows just written are current (pendingSince NULL). A pending mark can survive only on a row this rebuild

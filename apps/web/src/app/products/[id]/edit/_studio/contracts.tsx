@@ -46,7 +46,7 @@ import { closeStudioRecord } from './recordClose'
 import { createWorkspaceSaveStore } from './workspaceSave'
 import { useInFlightGuard } from './useInFlightGuard'
 import { studioChannelViewPatch } from './navigationHref'
-import { parseReadinessResponse, parseReadinessMatrix, mergeCoordinateReadiness, readinessUrl } from './readiness'
+import { parseReadinessResponse, parseReadinessMatrix, mergeCoordinateReadiness, pendingRereadDelay, readinessPending, readinessUrl } from './readiness'
 import { decodeReadiness } from '@nexus/shared/readiness-wire'
 import { isViewChipVisible } from './viewChips'
 import { marketGate, marketGateReason } from './marketGate'
@@ -411,10 +411,10 @@ const ReadinessRefreshCtx = createContext<ReadinessRefresh>(() => {})
 /**
  * Read the progress bars again (TOOLBAR REBUILD, Owner 2026-09-27: "I'm not able to reload them at all").
  *
- * The readiness index is rebuilt on the server inside every write that touches one or two families
- * (`readiness-index.service.ts`), so the answer is fresh the moment a save returns — the page only has to ASK. The
- * sheets call this after a confirmed save, from ⋯ → Reload and from "Refresh progress". The last good answer stays
- * on screen while it reads.
+ * The readiness index is rebuilt on the server for every write that touches one or two families — inside the write, or,
+ * for the sheet's own Shared saves, right after its answer; a read of that family waits for that rebuild
+ * (`readiness-index.service.ts`, `readiness-after-response.ts`). So the page only has to ASK. The sheets call this after
+ * a confirmed save, from ⋯ → Reload and from "Refresh progress". The last good answer stays on screen while it reads.
  */
 export function useReadinessRefresh(): ReadinessRefresh {
   return useContext(ReadinessRefreshCtx)
@@ -423,6 +423,24 @@ export function useReadinessRefresh(): ReadinessRefresh {
 function useReadinessQuery(productId: string, market: string | null, nonce: number, channel?: string, accountId?: string, listingId?: string, locale?: string | null, noMarketReason?: string | null, coordinateNonce = 0): ScopeReadinessQuery {
   const [query, setQuery] = useState<ScopeReadinessQuery>({ status: 'loading' })
   const queryCoordinate = JSON.stringify([productId, market, channel, accountId, listingId, locale])
+
+  /*
+   * Editing speed (2026-10-13) — an answer the server is still checking (`pendingSince`: a Shared save's family is being
+   * rebuilt) is read again — every 5 s, then every 15 s, for at most two minutes after the read that started it
+   * (`pendingRereadDelay`); the surfaces say "Checking…" meanwhile. A new coordinate or an asked read (save, Reload,
+   * live event) starts a fresh window.
+   */
+  const [pendingNonce, setPendingNonce] = useState(0)
+  const pendingRereads = useRef({ key: '', count: 0 })
+  useEffect(() => {
+    if (query.status !== 'ready') return
+    const key = `${query.coordinate}|${nonce}`
+    if (pendingRereads.current.key !== key) pendingRereads.current = { key, count: 0 }
+    const delay = pendingRereadDelay(readinessPending(query), pendingRereads.current.count)
+    if (delay === null) return
+    const timer = setTimeout(() => { pendingRereads.current.count += 1; setPendingNonce((n) => n + 1) }, delay)
+    return () => clearTimeout(timer)
+  }, [query, nonce])
 
   /*
    * P2 (2026-09-30, I4-9) — after a save on a channel coordinate, read THAT coordinate (`only=coordinate`) and merge it
@@ -561,7 +579,7 @@ function useReadinessQuery(productId: string, market: string | null, nonce: numb
     }
     // `nonce` is the live-refresh signal: bumping it re-runs this effect, which is how a
     // `listing.updated` event turns into a fresh readiness read.
-  }, [productId, market, nonce, channel, accountId, listingId, locale, queryCoordinate, noMarketReason])
+  }, [productId, market, nonce, pendingNonce, channel, accountId, listingId, locale, queryCoordinate, noMarketReason])
 
   return query.status === 'ready' && query.coordinate !== queryCoordinate ? { status: 'loading' } : query
 }

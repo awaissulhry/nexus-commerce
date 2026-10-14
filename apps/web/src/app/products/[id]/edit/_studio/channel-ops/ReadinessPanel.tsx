@@ -11,6 +11,8 @@ import styles from './readiness.module.css'
 type MatrixRow = { key: string; label: string; entries: Record<string, ReadinessMatrixEntry> }
 function ReadinessValue({ entry, language }: { entry?: ReadinessMatrixEntry; language: string }) {
   if (!entry) return <span title={`This coordinate does not carry ${language.toUpperCase()}.`}>—</span>
+  // Being checked again since a save: the stored verdict predates it, so it is not shown as current.
+  if (entry.pendingSince) return <Pill tone="neutral" title="A save changed this product. Nexus is checking this destination again." data-readiness-language={language} data-readiness-state="checking">Checking…</Pill>
   const meta = readinessMeta(entry.state, 'scope')
   return <Pill tone={meta.tone} title={entry.note} data-readiness-language={language} data-readiness-state={entry.state} data-readiness-pct={entry.pct ?? 'null'}>
     {meta.label} · {entry.pct === null ? '—' : `${entry.pct}%`}

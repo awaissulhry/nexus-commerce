@@ -34,7 +34,7 @@ import { platformBatchGroup, UnsupportedPlatformBatch, writePlatformBatch } from
 import { EbayFamilyClearOperation } from './ebay-family-clear.js'
 import { ContentReceiptLedger } from '../pim/content-version-receipts.js'
 import { collectContentReceipts, readFinalContentPairs } from '../pim/content-version-receipt-capture.js'
-import { applyWithStamps } from './sheet-stamp-door.js'
+import { applyWithStamps, SHEET_SAVE_RESTARTS } from './sheet-stamp-door.js'
 
 /** A 500-row fill of 2 languages is 1,000 units; anything far beyond a sheet's page is not a sheet operation. */
 export const BULK_SAVE_MAX_UNITS = 2_000
@@ -217,7 +217,7 @@ export async function applyProductBulkSave(input: BulkSaveInput, context: Produc
       }
     }
     return results
-  }, { timeoutMs: BULK_SAVE_TIMEOUT_MS, memoReads: true })
+  }, { timeoutMs: BULK_SAVE_TIMEOUT_MS, memoReads: true, restarts: SHEET_SAVE_RESTARTS })
   const failed = units.filter(unit => unit.status >= 400).length
   return { operationId: input.operationId ?? null, saved: units.length - failed, failed, elapsedMs: Date.now() - t0, units }
 }

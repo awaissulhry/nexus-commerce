@@ -82,6 +82,7 @@ import type { SheetExportMode } from '../sheetExport';
 import { useIdentitySkuColumn } from '../identitySkuColumn';
 import { skuRenameMessage, type IdentitySkuScope, type SkuRename } from '../identitySkuEdit';
 import { useStudioSkuRenamed } from '../../contracts';
+import { PROGRESS_CHECKING_STATUS, readinessPending } from '../../readiness';
 import { NewRowCell } from '../newRows/NewRowCell';
 import { NewRowsControl } from '../newRows/NewRowsControl';
 import { newRowsContextMenu, newRowsGridKey, newRowsPaste, useNewRows, variationTarget, type NewRowsStore } from '../newRows/useNewRows';
@@ -154,7 +155,8 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     const readinessQuery = useScopeReadiness();
     const readinessMatrix = readinessQuery.status === 'ready' ? readinessQuery.matrix : undefined;
     /* TOOLBAR REBUILD (2026-09-27) — the channel · market bars are read again after every confirmed save (the server
-       rebuilds the index inside the write), on Reload and on "Refresh progress". A burst of saves asks once. */
+       rebuilds the index right after the save, and the read waits for it), on Reload and on "Refresh progress". A burst
+       of saves asks once. */
     const refreshReadiness = useReadinessRefresh();
     const readinessTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     useEffect(() => () => { if (readinessTimer.current) clearTimeout(readinessTimer.current); }, []);
@@ -1048,6 +1050,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
                 }] : []),
                 ...familyVerbs.status,
                 ...(waitingMarkStatus ? [waitingMarkStatus] : []),
+                ...(readinessQuery.status === 'ready' && readinessPending(readinessQuery) ? [PROGRESS_CHECKING_STATUS] : []),
                 ...(readinessQuery.status === 'error' ? [{ tone: 'warning' as const, label: 'Progress unavailable', detail: `The channel · market progress bars could not be read: ${readinessQuery.message} Choose ⋯ → Refresh progress to try again.` }]
                     : readinessQuery.status === 'ready' && readinessQuery.refreshError ? [{ tone: 'warning' as const, label: 'Progress not refreshed', detail: `The bars show the last good reading. The refresh failed: ${readinessQuery.refreshError} Choose ⋯ → Refresh progress to try again.` }] : []),
             ],

@@ -257,6 +257,14 @@ export interface ProductBulkContext {
    * `products.price.edit` also holds the Amazon offer price columns (bug 8, as the Matrix). Absent: allowed, as before.
    */
   can?: (permission: string) => boolean
+  /**
+   * Editing speed (2026-10-13) — a write that rebuilds a WHOLE family's readiness answers before the rebuild: the rows
+   * are marked pending in this transaction and the family is rebuilt right after the response
+   * (`pim/readiness-after-response.ts`). OPT-IN, set only by the product sheet's saves (a stamped `PATCH
+   * /products/bulk`, `POST /products/bulk-save`), whose page reads readiness after the save and is answered once the
+   * rebuild is done. Absent: the rebuild runs inside the write, as before.
+   */
+  readinessAfterResponse?: boolean
 }
 
 /** S1 (F5) — the product fields that ARE a price: the master price, its floor and ceiling, and the eBay listing price. */
@@ -3461,7 +3469,10 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     // INLINE_READINESS_MAX_FAMILIES, today's behaviour) or marked pending in this transaction and rebuilt after commit.
     // Before this, a loop rebuilt every family inside the transaction: 15+ families crossed the 60 s limit and the whole
     // edit was lost.
-    const readiness = await produceReadinessForProducts(cacheRefreshIds, readinessScope)
+    // Editing speed (2026-10-13) — the product sheet's saves rebuild a whole family after their response.
+    const readiness = context.readinessAfterResponse
+      ? await produceReadinessForProducts(cacheRefreshIds, readinessScope, { afterResponse: true })
+      : await produceReadinessForProducts(cacheRefreshIds, readinessScope)
     // One refresh per TRANSACTION, not per call: a bulk save runs this writer once per row in one transaction, and 250
     // separate refreshes each rewrote the same parent's cache row after commit (`afterDatabaseCommitBatch`).
     await afterDatabaseCommitBatch('product-cache:bulk-edit', cacheRefreshIds, ids => productReadCacheService.refreshMany(ids)).catch(err => {

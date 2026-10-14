@@ -81,6 +81,8 @@ export function scopeItems(i: ScopeItemsInput): ScopeBarItem[] {
       const value = readiness.byScope[id]
       // R-LX-9 — a scope the response did not score is unmeasured, not empty.
       if (!value) return notListed ?? { pct: null, state: 'notComputed', note: `Nexus has not checked ${id === MASTER_SCOPE ? 'the Shared product' : `${channelLabel(id)} · ${market}`} yet.` }
+      // Being checked again since a save: its numbers predate that save, so the chip says "Checking…" (re-read shortly).
+      if (value.pendingSince) return 'loading'
       if (notListed && value.state === 'notComputed' && value.pct == null) return notListed
       const others = (shown: string | null) => value.languages?.filter(entry => entry.language !== shown).map(entry => `${entry.language.toUpperCase()}: ${readinessMeta(entry.state, 'scope').label} ${entry.pct === null ? '—' : `${entry.pct}%`}`) ?? []
       const own = id === MASTER_SCOPE ? undefined : ownLanguageVerdict(value, participation?.languages ?? [], locale)

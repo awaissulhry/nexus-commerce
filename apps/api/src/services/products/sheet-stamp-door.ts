@@ -175,12 +175,19 @@ export async function applyWithStamps<T>(input: ProductBulkInput, context: Produ
 /**
  * `PATCH /api/products/bulk` (one row of the sheet): a stamped unit runs through the door in one transaction; any other
  * request runs exactly as before. A write that went ahead at a fresh version says so in its answer (`writtenAt`).
+ *
+ * Editing speed (2026-10-13) — a stamped unit is the product sheet's own write: it answers before its family's readiness
+ * is rebuilt (`ProductBulkContext.readinessAfterResponse`), as the sheet's operation save does.
  */
 export async function applySheetBulkEdits(input: ProductBulkInput, context: ProductBulkContext) {
   if (!carriesStamps(input, context)) return applyProductBulkEdits(input, context)
+  const sheetContext: ProductBulkContext = { ...context, readinessAfterResponse: true }
   return inDatabaseTransaction(prisma, async () => {
-    const outcome = await applyWithStamps<Record<string, unknown>>(input, context, (unit) => applyProductBulkEdits(unit, context))
+    const outcome = await applyWithStamps<Record<string, unknown>>(input, sheetContext, (unit) => applyProductBulkEdits(unit, sheetContext))
     if ('error' in outcome) throw outcome.error
     return outcome.writtenAt === undefined ? outcome.value : { ...outcome.value, writtenAt: outcome.writtenAt }
-  })
+  }, { restarts: SHEET_SAVE_RESTARTS })
 }
+
+/** Two saves of one family typed a moment apart can lose to each other; the sheet's saves get five attempts, not three. */
+export const SHEET_SAVE_RESTARTS = 4
