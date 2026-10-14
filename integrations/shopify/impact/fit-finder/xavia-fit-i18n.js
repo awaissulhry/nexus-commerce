@@ -2,6 +2,7 @@
 // {name} is filled in by the dialog. Fit words are lower case where they sit inside a sentence.
 export const TEXT = {
   en: {
+    stage3d: '3D body. Drag it, or use the arrow keys, to turn it.', dragToTurn: 'Drag to turn', skinTone: 'Skin tone {n}', skinMannequin: 'Mannequin', skins: 'Body colour', addToCart: 'Add size {size} to cart', select: 'Select {size} only', match: '{n}% match', trySizes: 'Try other sizes', smaller: 'Smaller size', larger: 'Larger size', showing: 'Showing size {size}', guideLabel: '{n} · {part}', verdictSure: 'This is your size.', loadingBody: 'Loading your 3D body…',
     trigger: 'Find your size', yourSize: 'Your size: {size}', notForYou: '{size} is likely {fit} for you.',
     title: 'Find your size', close: 'Close', tabFinder: 'Find my size', tabChart: 'Size chart', tabMeasure: 'How to measure',
     stepYou: 'About you', stepShape: 'Body shape', stepRide: 'How you ride', stepOf: 'Step {n} of {total}',
@@ -35,6 +36,7 @@ export const TEXT = {
     howHand: 'Around your palm at the knuckles, thumb not included.', howHandLength: 'From the wrist crease to the tip of the middle finger.',
   },
   it: {
+    stage3d: 'Corpo 3D. Trascinalo, o usa le frecce, per girarlo.', dragToTurn: 'Trascina per girare', skinTone: 'Tonalità {n}', skinMannequin: 'Manichino', skins: 'Colore del corpo', addToCart: 'Aggiungi la taglia {size} al carrello', select: 'Seleziona solo la {size}', match: 'Affinità {n}%', trySizes: 'Prova altre taglie', smaller: 'Taglia più piccola', larger: 'Taglia più grande', showing: 'Stai vedendo la taglia {size}', guideLabel: '{n} · {part}', verdictSure: 'Questa è la tua taglia.', loadingBody: 'Carico il tuo corpo 3D…',
     trigger: 'Trova la tua taglia', yourSize: 'La tua taglia: {size}', notForYou: 'La {size} probabilmente ti sarà {fit}.',
     title: 'Trova la tua taglia', close: 'Chiudi', tabFinder: 'Trova la mia taglia', tabChart: 'Tabella taglie', tabMeasure: 'Come misurarsi',
     stepYou: 'Su di te', stepShape: 'Forma del corpo', stepRide: 'Come guidi', stepOf: 'Passo {n} di {total}',
@@ -68,6 +70,7 @@ export const TEXT = {
     howHand: 'Intorno al palmo all\'altezza delle nocche, pollice escluso.', howHandLength: 'Dalla piega del polso alla punta del dito medio.',
   },
   de: {
+    stage3d: '3D-Körper. Zum Drehen ziehen oder die Pfeiltasten nutzen.', dragToTurn: 'Zum Drehen ziehen', skinTone: 'Hautton {n}', skinMannequin: 'Schaufensterpuppe', skins: 'Körperfarbe', addToCart: 'Größe {size} in den Warenkorb', select: 'Nur {size} auswählen', match: '{n} % Passform', trySizes: 'Andere Größen testen', smaller: 'Kleinere Größe', larger: 'Größere Größe', showing: 'Größe {size} wird gezeigt', guideLabel: '{n} · {part}', verdictSure: 'Das ist deine Größe.', loadingBody: 'Dein 3D-Körper lädt…',
     trigger: 'Finde deine Größe', yourSize: 'Deine Größe: {size}', notForYou: '{size} ist für dich wahrscheinlich {fit}.',
     title: 'Finde deine Größe', close: 'Schließen', tabFinder: 'Meine Größe finden', tabChart: 'Größentabelle', tabMeasure: 'Richtig messen',
     stepYou: 'Über dich', stepShape: 'Körperform', stepRide: 'Dein Fahrstil', stepOf: 'Schritt {n} von {total}',
@@ -101,6 +104,7 @@ export const TEXT = {
     howHand: 'Um die Handfläche auf Höhe der Knöchel, ohne Daumen.', howHandLength: 'Von der Handgelenksfalte bis zur Spitze des Mittelfingers.',
   },
   fr: {
+    stage3d: 'Corps en 3D. Faites-le glisser, ou utilisez les flèches, pour le tourner.', dragToTurn: 'Glissez pour tourner', skinTone: 'Teinte {n}', skinMannequin: 'Mannequin', skins: 'Couleur du corps', addToCart: 'Ajouter la taille {size} au panier', select: 'Choisir seulement la {size}', match: '{n} % de correspondance', trySizes: 'Essayer d\'autres tailles', smaller: 'Taille plus petite', larger: 'Taille plus grande', showing: 'Taille {size} affichée', guideLabel: '{n} · {part}', verdictSure: 'C\'est votre taille.', loadingBody: 'Chargement de votre corps 3D…',
     trigger: 'Trouvez votre taille', yourSize: 'Votre taille : {size}', notForYou: 'La {size} sera probablement {fit} pour vous.',
     title: 'Trouvez votre taille', close: 'Fermer', tabFinder: 'Trouver ma taille', tabChart: 'Guide des tailles', tabMeasure: 'Comment se mesurer',
     stepYou: 'À propos de vous', stepShape: 'Morphologie', stepRide: 'Votre pratique', stepOf: 'Étape {n} sur {total}',
@@ -134,6 +138,7 @@ export const TEXT = {
     howHand: 'Autour de la paume au niveau des jointures, sans le pouce.', howHandLength: 'Du pli du poignet au bout du majeur.',
   },
   es: {
+    stage3d: 'Cuerpo en 3D. Arrástralo, o usa las flechas, para girarlo.', dragToTurn: 'Arrastra para girar', skinTone: 'Tono {n}', skinMannequin: 'Maniquí', skins: 'Color del cuerpo', addToCart: 'Añadir la talla {size} al carrito', select: 'Elegir solo la {size}', match: '{n} % de ajuste', trySizes: 'Prueba otras tallas', smaller: 'Talla más pequeña', larger: 'Talla más grande', showing: 'Mostrando la talla {size}', guideLabel: '{n} · {part}', verdictSure: 'Esta es tu talla.', loadingBody: 'Cargando tu cuerpo 3D…',
     trigger: 'Encuentra tu talla', yourSize: 'Tu talla: {size}', notForYou: 'La {size} probablemente te quede {fit}.',
     title: 'Encuentra tu talla', close: 'Cerrar', tabFinder: 'Encontrar mi talla', tabChart: 'Tabla de tallas', tabMeasure: 'Cómo medirse',
     stepYou: 'Sobre ti', stepShape: 'Forma del cuerpo', stepRide: 'Cómo conduces', stepOf: 'Paso {n} de {total}',

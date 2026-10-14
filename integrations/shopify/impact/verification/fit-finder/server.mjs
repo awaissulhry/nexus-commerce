@@ -6,6 +6,7 @@
 //   node integrations/shopify/impact/verification/fit-finder/server.mjs [port]
 // Page options: /?locale=it&tags=JACKET,men,women&type=Jacket&sizes=XS,S,M,L,XL&sold=XL&override=<json>
 import { createServer } from 'node:http'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { buildAsset } from '../../fit-finder/build.mjs'
 
@@ -90,6 +91,20 @@ async function page(query) {
 </script></body></html>`
 }
 
+// The 3D mannequin alone: /viewer.html?sex=female&height=170&weight=80&chest=102&waist=88&rings=1
+const VIEWER_PAGE = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Mannequin</title>
+<style>body{margin:0;font-family:system-ui;background:#fff} #stage{position:relative;width:420px;height:640px;margin:20px;border-radius:16px;background:radial-gradient(120% 80% at 50% 35%,#fbfbfc,#e7e8eb)} .xff-3d{position:absolute;inset:0;width:100%;height:100%} .xff-3d-labels{position:absolute;inset:0;pointer-events:none} .xff-3d-label{position:absolute;transform:translateY(-50%);display:flex;align-items:center} .xff-3d-label__line{position:absolute;right:100%;height:1px;background:#999;transform-origin:right center} .xff-3d-label__text{white-space:nowrap;background:#fff;border-radius:999px;padding:4px 10px;font:600 12px system-ui;box-shadow:0 1px 4px rgba(0,0,0,.15)}</style>
+<div id="stage"></div><script type="module">
+import { createViewer } from '/src/xavia-fit-viewer.js'
+const q = new URLSearchParams(location.search), n = k => q.get(k) ? Number(q.get(k)) : undefined
+const v = createViewer(document.getElementById('stage'), { urls: { male: '/assets/xavia-fit-body-male.js', female: '/assets/xavia-fit-body-female.js' }, label: '3D body' })
+await v.setBody({ sex: q.get('sex') || 'male', values: { height: n('height'), chest: n('chest'), waist: n('waist'), hips: n('hips') }, weightKg: n('weight') })
+if (q.get('skin')) v.setSkin(Number(q.get('skin')))
+if (q.get('rings')) { v.setFrame('torso'); v.setRings([{ measure: 'chest', tone: 'ok', text: 'Chest · Just right' }, { measure: 'waist', tone: 'warn', text: 'Waist · Close fit' }]) }
+if (q.get('yaw')) setTimeout(() => window.dispatchEvent(new Event('resize')), 50)
+window.__viewer = v
+</script>`
+
 const PRODUCT_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><rect width="200" height="200" fill="#f4f4f5"/><path d="M70 40l30 12 30-12 30 20-12 30-14-6v86H66V84l-14 6-12-30z" fill="#222"/><path d="M100 52v124" stroke="#555" stroke-width="2"/><path d="M60 70l40-8 40 8" stroke="#ff7a00" stroke-width="5" fill="none"/></svg>`
 
 const port = Number(process.argv[2] || process.env.PORT || 4317)
@@ -99,6 +114,12 @@ createServer(async (req, res) => {
     if (url.pathname === '/') return res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(await page(url.searchParams))
     if (url.pathname === '/fragment') return res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(await picker(url.searchParams))
     if (url.pathname === '/assets/xavia-fit-finder.js') return res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' }).end(buildAsset())
+    // Source modules and packed bodies, for viewer-only checks (/viewer.html) and the theme's separate body assets.
+    const body = url.pathname.match(/^\/assets\/(xavia-fit-body-(?:male|female)\.js)$/)
+    if (body) return res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' }).end(readFileSync(new URL(`body/${body[1]}`, new URL('../../fit-finder/', import.meta.url))))
+    const source = url.pathname.match(/^\/src\/(xavia-fit-[a-z]+\.js)$/)
+    if (source) return res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' }).end(readFileSync(new URL(source[1], new URL('../../fit-finder/', import.meta.url))))
+    if (url.pathname === '/viewer.html') return res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(VIEWER_PAGE)
     if (url.pathname === '/product.svg') return res.writeHead(200, { 'content-type': 'image/svg+xml' }).end(PRODUCT_SVG)
     res.writeHead(404).end('not found')
   } catch (error) {

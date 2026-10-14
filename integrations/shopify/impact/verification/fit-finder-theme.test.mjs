@@ -59,4 +59,5 @@ test('the boot script and the dialog agree on the saved profile key and the data
   const liquid = read('xavia-fit-finder.liquid'), ui = read('xavia-fit-finder.js')
   assert.ok(liquid.includes("localStorage.getItem('xavia-fit-profile')") && ui.includes("const STORE = 'xavia-fit-profile'"))
   for (const attribute of ['data-xff', 'data-xff-form', 'data-xff-open', 'data-xff-module', 'data-xff-label', 'data-xff-hint', 'data-xff-config']) assert.ok(liquid.includes(attribute), attribute)
+  for (const asset of ['xavia-fit-body-male.js', 'xavia-fit-body-female.js']) assert.ok(liquid.includes(`'${asset}' | asset_url`), asset)
 })

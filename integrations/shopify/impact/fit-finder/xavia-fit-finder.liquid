@@ -95,6 +95,7 @@
         "override": {% if product.metafields.xavia.fit_chart != blank %}{{ product.metafields.xavia.fit_chart.value | json }}{% else %}null{% endif %},
         "defaults": {% render 'xavia-fit-charts' %},
         "product": {"title": {{ product.title | json }}, "image": {{ xff_image | json }}},
+        "bodies": {"male": {{ 'xavia-fit-body-male.js' | asset_url | json }}, "female": {{ 'xavia-fit-body-female.js' | asset_url | json }}},
         "locale": {{ request.locale.iso_code | json }},
         "country": {{ localization.country.iso_code | json }},
         "contactUrl": {{ xff_contact | json }}

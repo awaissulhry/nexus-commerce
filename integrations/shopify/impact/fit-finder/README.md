@@ -1,10 +1,12 @@
 # Xavia fit finder
 
 A "Find your size" button under the size option on the product page, made to stop wrong-size orders. It has the
-same steps as the Sizebay finder on alpinestars.com: about you, then body shape, then the result. It also does more:
+same steps as the Sizebay finder on alpinestars.com (about you, body shape, result) around a 3D mannequin that takes
+the shopper's own shape. It also does more:
 
 | | Sizebay (Alpinestars) | Xavia fit finder |
 | --- | --- | --- |
+| Mannequin | 3D render, skin tones, fit rings | real-time 3D body (WebGL) that reshapes as the shopper types, turns by drag / touch / arrow keys, 7 body colours, glowing rings at the tape lines with labels; flat drawing when a device has no WebGL |
 | Inputs | height, weight, age, shape sliders | the same, plus "how do you ride" (fit wish, what you wear under: hoodie, airbag vest) |
 | Tape measure | no | optional: any measured part replaces the guess |
 | Honesty | one size, no doubt shown | "65% sure, between L and XL" and a 1-minute tape step when unsure |
@@ -12,7 +14,8 @@ same steps as the Sizebay finder on alpinestars.com: about you, then body shape,
 | Wrong size in cart | — | the size option warns "S is likely too tight for you", Add to cart asks once ("Switch to L" / "Add S anyway") |
 | Order | — | hidden line property `_Fit check` (e.g. `suggested L 82% (tape) \| chosen M \| chest too tight`) for the size check before shipping |
 | Privacy | body data sent to Sizebay's servers | body data stays in the shopper's browser (localStorage); the order gets only the sizes |
-| Speed | third-party scripts on every product page | one 28 kB (gzip) asset, loaded on the first click or when this device has a saved profile |
+| Result | best size, neighbour sizes, add to cart | the same (size switcher under the body, Add to cart), plus a % match gauge and each part's fit in cm |
+| Speed | third-party scripts on every product page | one 41 kB (gzip) asset on the first click (or when this device has a saved profile), then one 116 kB body for the chosen body type |
 | Cost | paid service | none |
 
 ## How the size is worked out
@@ -42,6 +45,18 @@ So the result asks for a tape measure whenever it is less than 85% sure.
 Finding about the charts: the women's chart allows 16 cm between chest and waist. Many real bodies have less. In the
 survey, more than 1 woman in 4 has no size where both chest and waist fit (men: about 1 in 27). The finder says so plainly
 ("No size fits both your chest and your waist well") instead of guessing.
+
+## The 3D mannequin
+
+- **Body**: MakeHuman 1.1 base mesh and shape targets, CC0 1.0 (free for any use; see `body/README.md`). One body per
+  body type, built offline: arms lowered, a smooth egg head instead of a face, chest smoothed, baked ambient
+  occlusion, simplified to 9,446 triangles, packed by `body/pack-body.mjs` into `body/xavia-fit-body-<sex>.js`.
+- **Shape** (`xavia-fit-body.js`): build from BMI (slimmer or heavier everywhere), then the bust, waist and hips
+  shapes close the gap to the shopper's measures. The body measures itself with the same tape as the rings and
+  corrects twice, so the 3D chest, waist, hips and height match the numbers to 0.5 cm (tested).
+- **Screen** (`xavia-fit-viewer.js`): plain WebGL 1, no library, drawn only when something changes. Rings sit at the
+  fullest part of the chest, the narrowest waist and the widest hips; green just right, amber close or roomy, red too
+  tight or too loose; dashed orange on "How to measure". The labels follow the body as it turns.
 
 ## Which product gets which chart
 
@@ -74,7 +89,8 @@ not be too loose. Pants, suits and gloves need their real charts first; until th
 | --- | --- | --- |
 | `xavia-fit-finder.liquid` | `snippets/xavia-fit-finder.liquid` | button, product data, a small boot script |
 | `xavia-fit-charts.liquid` | `snippets/xavia-fit-charts.liquid` | default charts (from IT_MENS_JACKET.jpg, IT_WOMEN.jpg) |
-| `dist/xavia-fit-finder.js` (git-ignored) | `assets/xavia-fit-finder.js` | built by `build.mjs` from the engine, texts, dialog, CSS |
+| `dist/xavia-fit-finder.js` (git-ignored) | `assets/xavia-fit-finder.js` | built by `build.mjs` from the engine, texts, 3D body and viewer code, dialog, CSS |
+| `body/xavia-fit-body-male.js`, `-female.js` | `assets/` (same names) | the packed 3D bodies, loaded on open |
 | `patch-variant-picker.mjs` | edits `snippets/variant-picker.liquid` | adds 5 lines under the size option's label row |
 
 Texts: English, Italian, German, French and Spanish (`xavia-fit-i18n.js`); other store languages show English.
@@ -82,7 +98,7 @@ Texts: English, Italian, German, French and Spanish (`xavia-fit-i18n.js`); other
 ## Install on the store (each step needs the Owner's yes)
 
 1. Duplicate the live theme (`themeDuplicate`); never edit the live theme directly.
-2. On the copy, upload the 3 files above and the patched `variant-picker.liquid` (`themeFilesUpsert`).
+2. On the copy, upload the 5 files above and the patched `variant-picker.liquid` (`themeFilesUpsert`).
    `patchVariantPicker()` refuses when Impact's markup moved; then place the hook by hand.
 3. Open the copy's preview on a jacket, a women-only jacket, a leather jacket, pants and gloves; check the
    cart's `_Fit check` property and a phone width.
@@ -105,4 +121,4 @@ The stand-in is not proof of Shopify behaviour; the preview theme is.
 
 - "Buy it now" (Shop Pay) skips the add-to-cart check; the size hint above it still shows.
 - The guess comes from a military survey (ages 17–58); outside its height/weight/BMI range the result asks for a tape.
-- The figure is a simple drawing, not a 3D body.
+- The 3D body is a guide to proportions, not a scan of the shopper; its sizes come from the same numbers as the result.
