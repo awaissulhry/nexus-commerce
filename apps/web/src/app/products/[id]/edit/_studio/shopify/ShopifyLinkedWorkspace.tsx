@@ -19,6 +19,7 @@ import { informationRegistry, nativeEditAddress } from '@nexus/shared/shopify-in
 import styles from './linked.module.css'
 import { mergeInformationDraft } from './draftMerge'
 import { ShopifyGalleryReview } from './ShopifyGalleryReview'
+import { ColourProductsPanel } from './ColourProductsPanel'
 
 export function ShopifyLinkedWorkspace({ path, accountLabel, view }: { path: string; accountLabel: string; view: 'family' | 'content' }) {
   const [workspace, setWorkspace] = useState<Workspace | null>(null), [draft, setDraft] = useState<ShopifyLinkedDraft | null>(null)
@@ -301,6 +302,8 @@ export function ShopifyLinkedWorkspace({ path, accountLabel, view }: { path: str
     </div>
     {discovering && <p role="status">Discovering existing family links from this store…</p>}
     {discovery && <Banner tone={discovery.draft ? 'info' : 'warning'} title={discovery.draft ? `Found ${discovery.draft.members.length} linked products` : 'Family discovery needs your input'} onDismiss={() => setDiscovery(null)} action={discovery.draft ? <Button size="sm" disabled={disabled} onClick={() => { setImported(discovery.draft); setDiscovery(null) }}>Review discovered family</Button> : undefined}>{discovery.reasons.join(' ')}{discovery.candidates.length > 1 && <p>{discovery.candidates.map(c => c.name).join(' · ')}</p>}</Banner>}
+    {/* Colour products: one Shopify product per colour of this family (Find, Confirm adopt only, Start full sync). */}
+    {view === 'family' && <ColourProductsPanel linkedPath={path} canEdit={canEdit} canPublish={canPublish} />}
     {schema && view === 'family' && <div className={styles.familyLayout}><Card header="Family products" description="The storefront selector follows this order. Each product retains its own sizes, stock and product page." headerAction={<Pill tone="neutral">{draft.members.length} products</Pill>}>
       <div className={styles.stack}>
         <div className={styles.toolbar}><Button size="sm" disabled={disabled} onClick={() => { void action(discoverFamily) }}><Wand2 size={14} aria-hidden />Discover family</Button><Button size="sm" disabled={disabled} onClick={() => setPicker('add')}>Add product</Button><Button size="sm" variant="quiet" disabled={disabled} onClick={() => setPicker('import')}>Import from product</Button></div>
