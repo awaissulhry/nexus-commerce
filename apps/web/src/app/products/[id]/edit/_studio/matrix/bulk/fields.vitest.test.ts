@@ -16,6 +16,7 @@ import {
   verbNotices, verbParams, verbTargets, type BulkContext,
 } from './fields'
 import { verbSentence } from './bulkSource'
+import { PREVIEW_WORDS } from '../preview'
 import type { BulkFieldId } from './types'
 
 const coord = (key: string, label: string, cells: MatrixCoordinate['cells'], extra: Partial<MatrixCoordinate> = {}): MatrixCoordinate => ({
@@ -418,12 +419,14 @@ describe('Amazon Business — B2B price and B2B tiers', () => {
   it('each mode is its verb: % below the price, an exact price, Raise · Lower an exact price by a signed %, remove; the tiers as typed', () => {
     const tiers = { type: 'percent' as const, levels: [{ minQty: 2, value: 3 }, { minQty: 5, value: 5 }] }
     expect(verbParams('businessPrice', 'b2b-percent', { percent: 5 })).toEqual({ verb: 'set-business-price', mode: 'percent', percent: 5 })
-    expect(verbParams('businessPrice', 'b2b-exact', { amount: 32.95 })).toEqual({ verb: 'set-business-price', mode: 'exact', price: 32.95 })
+    expect(verbParams('businessPrice', 'b2b-exact', { amount: 32.95 }, 'GBP')).toEqual({ verb: 'set-business-price', mode: 'exact', price: 32.95, currency: 'GBP' })
     expect(verbParams('businessPrice', 'raise', { percent: 4 })).toEqual({ verb: 'set-business-price', mode: 'change', percent: 4 })
     expect(verbParams('businessPrice', 'lower', { percent: 4 })).toEqual({ verb: 'set-business-price', mode: 'change', percent: -4 })
     expect(verbParams('businessPrice', 'b2b-remove', {})).toEqual({ verb: 'set-business-price', mode: 'remove' })
     expect(verbParams('businessPrice', 'b2b-percent', {})).toBeNull()
-    expect(verbParams('businessTiers', 'tiers-set', { tiers })).toEqual({ verb: 'set-business-tiers', mode: 'set', tiers })
+    expect(verbParams('businessTiers', 'tiers-set', { tiers }, 'EUR')).toEqual({ verb: 'set-business-tiers', mode: 'set', tiers, currency: 'EUR' })
+    // Market price "Set to" carries the markets' currency too: a market in another one is skipped by the server's preview.
+    expect(verbParams('price', 'set', { amount: 90 }, 'SEK')).toEqual({ verb: 'set-price', value: 90, currency: 'SEK' })
     expect(verbParams('businessTiers', 'tiers-set', {})).toBeNull()
     expect(verbParams('businessTiers', 'tiers-remove', {})).toEqual({ verb: 'set-business-tiers', mode: 'remove' })
   })
@@ -434,6 +437,8 @@ describe('Amazon Business — B2B price and B2B tiers', () => {
     })
     expect(verbNotices(pv('set-business-price', null))).toEqual([{ text: BULK_SENT.business, tone: 'info' }])
     expect(verbNotices({ ...pv('set-business-price', null), changes: [] })).toEqual([])
+    // Replacing a business price set outside Nexus is a risk to read: a warning, once.
+    expect(verbNotices({ ...pv('set-business-price', null), notices: [PREVIEW_WORDS.businessReplacesAmazonNotice] })[0]).toEqual({ text: PREVIEW_WORDS.businessReplacesAmazonNotice, tone: 'warning' })
     expect(verbSentence(pv('set-business-price', { rule: 'PERCENT_OFF', percent: 5, price: null, tiers: null }), 2, 1)).toBe(`2 business prices set · 1 skipped. ${BULK_SENT.business}`)
     expect(verbSentence(pv('set-business-price', null), 1, 0)).toBe(`1 business price removed. ${BULK_SENT.business}`)
     expect(verbSentence(pv('set-business-tiers', { rule: 'FIXED', percent: null, price: 90, tiers: { type: 'percent', levels: [{ minQty: 2, value: 3 }] } }), 3, 0)).toBe(`Quantity discounts set on 3 listings. ${BULK_SENT.business}`)

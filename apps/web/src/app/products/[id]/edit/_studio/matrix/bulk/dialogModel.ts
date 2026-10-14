@@ -10,7 +10,7 @@
 import { BUSINESS_PERCENT_MAX, BUSINESS_TIER_MIN_QTY, businessTiersProblems, type BusinessTierType } from '@nexus/shared/business-price'
 
 import type { CoordinateKey } from '../contract'
-import { nextTier, tierDraft, type TierDraft } from '../businessPricing'
+import { tierDraft, type TierDraft } from '../businessPricing'
 import type {
   BulkAdjustUnit, BulkChoiceOption, BulkEditSource, BulkFieldId, BulkFieldSpec, BulkGroup, BulkInitial, BulkInput, BulkInputKind,
   BulkLine, BulkMarketOption, BulkModeId, BulkModeSpec, BulkNotice, BulkPreview, BulkRequest,
@@ -212,9 +212,6 @@ function readTiers(raw: BulkRaw): ParseResult {
   return problem ? fail('invalid', problem) : ok({ tiers })
 }
 
-/** The first quantity discount a new B2B tiers entry offers (Claude's earlier pick: from 2 units, 3 % off). */
-export const firstTier = (): TierDraft => nextTier({ tierType: 'percent', tiers: [] }, null)
-
 /** The sign a mode gives an `adjust` entry: Lower takes it down, everything else up. */
 export const adjustSign = (mode: BulkModeId | null | undefined): 1 | -1 => (mode === 'lower' ? -1 : 1)
 
@@ -258,15 +255,12 @@ export function parseInput(kind: BulkInputKind, raw: BulkRaw, opts: ParseOptions
 type ModeShape = Pick<BulkModeSpec, 'input' | 'units'>
 
 /**
- * What a mode starts with: nothing typed, its first unit, and — for a sale — today and a week from today; for quantity
- * discounts, one suggested row (from 2 units, 3 % off) to change or add to.
+ * What a mode starts with: nothing typed, its first unit, and — for a sale — today and a week from today. Quantity
+ * discounts start with none: Apply never writes a discount nobody added ("Add quantity discount" adds one to change).
  */
 export function modeRaw(mode: ModeShape | null | undefined, today: string): BulkRaw {
   if (!mode) return EMPTY_RAW
-  return {
-    ...EMPTY_RAW, unit: mode.units?.[0] ?? EMPTY_RAW.unit, ...(mode.input === 'sale' ? saleDefaultDates(today) : {}),
-    ...(mode.input === 'tiers' ? { tiers: [firstTier()] } : {}),
-  }
+  return { ...EMPTY_RAW, unit: mode.units?.[0] ?? EMPTY_RAW.unit, ...(mode.input === 'sale' ? saleDefaultDates(today) : {}) }
 }
 
 /** An opening value (`initial.input`) back on screen, in the mode's own controls. */

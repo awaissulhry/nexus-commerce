@@ -132,6 +132,7 @@ describe('set-business-price — the preview says per row what is set and what i
     expect(change(p, 'c')).toMatchObject({ from: pct(3, TIERS), to: pct(5, TIERS), fromLabel: '€101.85 · −3%', toLabel: '€99.75 · −5%' })
     // Amazon's own business price is replaced — and an undo cannot bring it back: said before Apply.
     expect(change(p, 'd')).toMatchObject({ from: null, to: pct(5), note: PREVIEW_WORDS.businessReplacesAmazon('€95.00') })
+    expect(p.notices).toContain(PREVIEW_WORDS.businessReplacesAmazonNotice)
     expect(refusal(p, 'e')).toBe(MATRIX_COPY.absentBusiness('PANTS'))
     expect(refusal(p, 'p')).toBe('The parent row has no listing of its own')
     expect(refusal(p, 'a', 'EBAY:IT')).toBe(PREVIEW_WORDS.businessAmazonOnly)
@@ -142,9 +143,17 @@ describe('set-business-price — the preview says per row what is set and what i
     const above = await preview({ verb: 'set-business-price', mode: 'exact', price: 120 }, ['a', 'b'])
     expect(above.changes).toEqual([])
     expect(refusal(above, 'a')).toBe('The business price EUR 120.00 is above the normal price EUR 105.00: Amazon would not show it to business buyers.')
-    const below = await preview({ verb: 'set-business-price', mode: 'exact', price: 75 }, ['a', 'b'])
+    const below = await preview({ verb: 'set-business-price', mode: 'exact', price: 75, currency: 'EUR' }, ['a', 'b'])
     expect(refusal(below, 'b')).toBe('The business price EUR 75.00 is below this listing\'s minimum price EUR 80.00: Amazon refuses it.')
     expect(change(below, 'a')).toMatchObject({ to: exact(75), toLabel: '€75.00' })
+    // 75 is 28.6 % below 105: no typed word; 70 is a third below: APPLY.
+    expect(below.confirmWord).toBeNull()
+    expect((await preview({ verb: 'set-business-price', mode: 'exact', price: 70, currency: 'EUR' }, ['a'])).confirmWord).toBe('APPLY')
+  })
+
+  it('money in another currency than the market\'s is refused by name — an exact price, B2B prices per unit', async () => {
+    expect(refusal(await preview({ verb: 'set-business-price', mode: 'exact', price: 90, currency: 'GBP' }, ['a']), 'a')).toBe(PREVIEW_WORDS.marketCurrency('EUR'))
+    expect(refusal(await preview({ verb: 'set-business-tiers', mode: 'set', tiers: { type: 'fixed', levels: [{ minQty: 3, value: 85 }] }, currency: 'SEK' }, ['b']), 'b')).toBe(PREVIEW_WORDS.marketCurrency('EUR'))
   })
 
   it('change an exact price by %: only exact prices move; a percent rule, none, or Amazon\'s own price is skipped with a sentence', async () => {

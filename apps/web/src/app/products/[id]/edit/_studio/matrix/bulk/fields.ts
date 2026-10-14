@@ -25,6 +25,7 @@ import {
   type MatrixVerbTarget,
   type VerbPreview,
 } from '../contract'
+import { PREVIEW_WORDS } from '../preview'
 import { activeWarehouses, fromCellText } from '../sellsFrom'
 import { statusCellText, statusCellValue } from '../../sheet/channel/statusColumn'
 import type { BulkChoiceOption, BulkFieldId, BulkFieldSpec, BulkInput, BulkLine, BulkMarketOption, BulkModeId, BulkModeSpec, BulkNotice } from './types'
@@ -70,6 +71,8 @@ export const BULK_CASE_NOT_AMAZON = 'This family is not on Amazon. Case sizes ar
 export const BULK_CASE_NO_VARIANT = 'None of these rows is a variant'
 export const BULK_CASE_NOT_READ = 'Case sizes are not read for these rows yet. Reload the Matrix and try again.'
 export const BULK_OWN_STOCK = 'Own stock'
+/** Amazon Business: said after an Apply that replaced a business price set outside Nexus (its Undo cannot bring it back). */
+export const BULK_AMAZON_OWN_UNDO = 'Undo cannot bring back a business price that was set outside Nexus.'
 
 /* ── the catalogue ────────────────────────────────────────────────────────────────────────── */
 
@@ -474,13 +477,14 @@ const signed = (mode: BulkModeId, n: number) => (mode === 'lower' ? -Math.abs(n)
 
 /**
  * The Matrix verb behind a field and mode, with its parameter; null = this field and mode is not a verb (Market price
- * "Use base price" is cell writes), or the input is missing. `currency` = the chosen markets' (`bulkCurrency`), for a
- * Raise / Lower by an amount.
+ * "Use base price" is cell writes), or the input is missing. `currency` = the chosen markets' (`bulkCurrency`, the one
+ * the input shows): it goes with every money value — Set to, Raise / Lower by an amount, an exact B2B price, B2B prices
+ * per unit — so a ticked market that sells in another currency is skipped with the reason, never given €30 as £30.
  */
 export function verbParams(field: BulkFieldId, mode: BulkModeId, input: BulkInput, currency = 'EUR'): MatrixVerbParams | null {
   switch (field) {
     case 'price':
-      if (mode === 'set') return input.amount != null ? { verb: 'set-price', value: input.amount } : null
+      if (mode === 'set') return input.amount != null ? { verb: 'set-price', value: input.amount, currency } : null
       if (mode === 'raise' || mode === 'lower') {
         if (input.percent != null) return { verb: 'adjust-prices', percent: signed(mode, input.percent) }
         if (input.delta != null) return { verb: 'adjust-prices', amount: signed(mode, input.delta), currency }
@@ -503,12 +507,12 @@ export function verbParams(field: BulkFieldId, mode: BulkModeId, input: BulkInpu
       return mode === 'sources' && input.codes?.length ? { verb: 'set-source', codes: [...input.codes] } : null
     case 'businessPrice':
       if (mode === 'b2b-percent') return input.percent != null ? { verb: 'set-business-price', mode: 'percent', percent: input.percent } : null
-      if (mode === 'b2b-exact') return input.amount != null ? { verb: 'set-business-price', mode: 'exact', price: input.amount } : null
+      if (mode === 'b2b-exact') return input.amount != null ? { verb: 'set-business-price', mode: 'exact', price: input.amount, currency } : null
       // Raise · Lower an EXACT business price by a percent (a percent rule is skipped by the server's preview, with why).
       if (mode === 'raise' || mode === 'lower') return input.percent != null ? { verb: 'set-business-price', mode: 'change', percent: signed(mode, input.percent) } : null
       return mode === 'b2b-remove' ? { verb: 'set-business-price', mode: 'remove' } : null
     case 'businessTiers':
-      if (mode === 'tiers-set') return input.tiers ? { verb: 'set-business-tiers', mode: 'set', tiers: { type: input.tiers.type, levels: input.tiers.levels.map((l) => ({ ...l })) } } : null
+      if (mode === 'tiers-set') return input.tiers ? { verb: 'set-business-tiers', mode: 'set', tiers: { type: input.tiers.type, levels: input.tiers.levels.map((l) => ({ ...l })) }, currency } : null
       return mode === 'tiers-remove' ? { verb: 'set-business-tiers', mode: 'remove' } : null
     default:
       return null
@@ -567,8 +571,12 @@ export function verbNotices(preview: Pick<VerbPreview, 'verb' | 'notices'> & Par
   const server = preview.notices.map((text): BulkNotice => ({ text, tone: preview.verb === 'set-fulfilment' && !fact(text) ? 'warning' : 'info' }))
   if (preview.verb === 'pause-sync') return [...server, { text: BULK_HOLD_NOTICE, tone: 'warning' }]
   if (preview.verb === 'set-price' || preview.verb === 'adjust-prices' || preview.verb === 'copy-prices') return [...server, { text: BULK_SENT.prices, tone: 'info' }]
-  // Amazon Business: said only when something is sent.
-  if (preview.verb === 'set-business-price' || preview.verb === 'set-business-tiers') return preview.changes?.length ? [...server, { text: BULK_SENT.business, tone: 'info' }] : server
+  /* Amazon Business: replacing a business price set outside Nexus is a risk to read (Undo cannot bring it back); when
+     Amazon gets the changes is said only when something is sent. */
+  if (preview.verb === 'set-business-price' || preview.verb === 'set-business-tiers') {
+    const toned = server.map((n): BulkNotice => (n.text === PREVIEW_WORDS.businessReplacesAmazonNotice ? { ...n, tone: 'warning' } : n))
+    return preview.changes?.length ? [...toned, { text: BULK_SENT.business, tone: 'info' }] : toned
+  }
   return server
 }
 

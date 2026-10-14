@@ -8,7 +8,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import type { MatrixCells, MatrixCoordinate, MatrixVerbRequest, MatrixWriteCell, MatrixWriteOutcome, VerbOperation, VerbPreview } from '../contract'
 import { createBulkSource, revertSentence, type BulkDoors } from './bulkSource'
-import { BULK_ALREADY_FOLLOWS, BULK_FOLLOWS_BASE, BULK_NO_HANDOFF, BULK_NOT_ON_SCREEN, BULK_SENT, type BulkContext } from './fields'
+import { BULK_ALREADY_FOLLOWS, BULK_AMAZON_OWN_UNDO, BULK_FOLLOWS_BASE, BULK_NO_HANDOFF, BULK_NOT_ON_SCREEN, BULK_SENT, type BulkContext } from './fields'
 import { MATRIX_COPY } from '../contract'
 import type { BulkRequest } from './types'
 
@@ -289,6 +289,30 @@ describe('Amazon Business — the B2B price and tiers run as Matrix verbs', () =
     expect(result.sentence).toBe(`1 business price set · 1 skipped. ${BULK_SENT.business}`)
     expect(await result.undo!()).toBe('Put back 1 listing as it was.')
     expect(doors.revertVerb).toHaveBeenCalledWith(expect.objectContaining({ id: 'op-b2b' }))
+  })
+
+  it('no Undo when every line applied replaced a business price set outside Nexus; with others it stays, and the sentence says it', async () => {
+    const own = (listingId: string): MatrixCells => {
+      const c = b2b(null, listingId)
+      return { ...c, business: { ...c.business!, reported: { price: 95 } } }
+    }
+    const line = (rowId: string) => ({ rowId, sku: rowId.toUpperCase(), coordinateKey: 'AMAZON:IT', cell: 'businessPrice' as const, from: null, to: setting, fromLabel: '—', toLabel: '€99.75 · −5%' })
+    const run = async (rows: string[], tbl: Record<string, MatrixCells>) => {
+      const shown: VerbPreview = { verb: 'set-business-price', confirm: 'none', confirmWord: null, simulated: false, notices: [], refusals: [], changes: rows.map(line) }
+      const { source } = doorsFor(tbl, {
+        previewVerb: vi.fn(async () => shown),
+        applyVerb: vi.fn(async () => ({ id: 'op-own', verb: 'set-business-price' as const, appliedAt: '', applied: rows.length, refused: 0, before: [], results: rows.map((r) => ({ rowId: r, coordinateKey: 'AMAZON:IT', cell: 'businessPrice' as const, outcome: 'applied' as const, version: 3, writtenAt: 2 })) })),
+      }, { coordinates: [IT_B2B, EBAY] })
+      return source.apply(await source.preview(req({ field: 'businessPrice', mode: 'b2b-percent', input: { percent: 5 } })))
+    }
+    const onlyOwn = await run(['a'], { ...table, 'a|AMAZON:IT': own('LA') })
+    expect(onlyOwn.undo).toBeNull()
+    expect(onlyOwn.sentence).toBe(`1 business price set. ${BULK_SENT.business} ${BULK_AMAZON_OWN_UNDO}`)
+    const mixed = await run(['a', 'b'], { ...table, 'a|AMAZON:IT': own('LA') })
+    expect(mixed.undo).not.toBeNull()
+    expect(mixed.sentence).toBe(`2 business prices set. ${BULK_SENT.business} ${BULK_AMAZON_OWN_UNDO}`)
+    const none = await run(['b'], table)
+    expect([none.undo !== null, none.sentence]).toEqual([true, `1 business price set. ${BULK_SENT.business}`])
   })
 
   it('a line refused at Apply is skipped with the server\'s reason (Changed since the preview)', async () => {

@@ -346,3 +346,51 @@ describe('matrix-preview — the grid\'s words', () => {
     expect(run(read(), { verb: 'copy-prices', fromCoordinateKey: 'AMAZON:UK' }).refusals[0]).toMatchObject({ reason: 'No price on the market you copy from' })
   })
 })
+
+describe('matrix-preview — Amazon Business: money in its currency, deep cuts typed, Amazon\'s own price said once', () => {
+  const ctx = { can: () => true, simulated: false }
+  const biz = (o: Record<string, unknown> = {}) => ({ rule: null, percent: null, exact: null, tiers: null, price: null, normalPrice: 105, minPrice: null, maxPrice: null, currency: 'EUR', warnings: [], held: null, send: null, live: null, reported: null, ...o })
+  const b2bRead = (it: Record<string, unknown> = {}): MatrixRead => {
+    const r = read()
+    r.coordinates[1]!.cells = ['listing', 'price', 'salePrice', 'businessPrice', 'businessTiers']
+    r.coordinates.push({ ...r.coordinates[1]!, key: 'AMAZON:UK', market: 'UK', label: 'Amazon · UK', region: 'UK', currency: 'GBP', inventoryOn: null })
+    const cell = (b: Record<string, unknown>, value: number) => ({ ...r.rows[1]!.cells['AMAZON:IT']!, price: { value, currency: b.currency as string, source: 'override' as const, formula: null, clamped: null }, business: b as never, writable: { price: true, salePrice: true, businessPrice: true, businessTiers: true } })
+    r.rows[1]!.cells['AMAZON:IT'] = cell(biz(it), 105)
+    r.rows[1]!.cells['AMAZON:UK'] = cell(biz({ normalPrice: 95, currency: 'GBP', ...it, ...(it.currency ? {} : { currency: 'GBP' }) }), 95)
+    return r
+  }
+  const both = [{ rowId: 'c1', coordinateKey: 'AMAZON:IT' }, { rowId: 'c1', coordinateKey: 'AMAZON:UK' }]
+  const run = (r: MatrixRead, params: Parameters<typeof previewVerb>[1]['params'], targets = both) => previewVerb(r, { params, targets, commit: false }, ctx)
+
+  it('an exact B2B price, B2B prices per unit and Set price go to the markets of their currency only; the rest say why', () => {
+    const exact = run(b2bRead(), { verb: 'set-business-price', mode: 'exact', price: 90, currency: 'EUR' })
+    expect(exact.changes.map((c) => [c.coordinateKey, c.toLabel])).toEqual([['AMAZON:IT', '€90.00']])
+    expect(exact.refusals).toEqual([expect.objectContaining({ coordinateKey: 'AMAZON:UK', kind: 'currency', reason: PREVIEW_WORDS.marketCurrency('GBP') })])
+    const fixed = { type: 'fixed' as const, levels: [{ minQty: 2, value: 88 }] }
+    const tiers = run(b2bRead({ rule: 'FIXED', exact: 90, price: 90 }), { verb: 'set-business-tiers', mode: 'set', tiers: fixed, currency: 'GBP' })
+    expect(tiers.refusals.map((x) => [x.coordinateKey, x.reason])).toEqual([['AMAZON:IT', PREVIEW_WORDS.marketCurrency('EUR')]])
+    // Percent discounts and a percent below the price carry no money: every market takes them.
+    expect(run(b2bRead({ rule: 'FIXED', exact: 90, price: 90 }), { verb: 'set-business-tiers', mode: 'set', tiers: { type: 'percent', levels: [{ minQty: 2, value: 3 }] }, currency: 'GBP' }).refusals).toEqual([])
+    expect(run(b2bRead(), { verb: 'set-business-price', mode: 'percent', percent: 5 }).changes).toHaveLength(2)
+    // Market price "Set to": the same rule.
+    const set = run(b2bRead(), { verb: 'set-price', value: 90, currency: 'EUR' })
+    expect(set.changes.map((c) => c.coordinateKey)).toEqual(['AMAZON:IT'])
+    expect(set.refusals).toEqual([expect.objectContaining({ coordinateKey: 'AMAZON:UK', kind: 'currency', reason: 'This market sells in GBP' })])
+  })
+
+  it('a new B2B price (or quantity discount) 30 % or more below the normal price asks for the typed word, whatever the mode', () => {
+    const exact = (price: number) => run(b2bRead(), { verb: 'set-business-price', mode: 'exact', price, currency: 'EUR' }, [both[0]!])
+    expect(exact(10)).toMatchObject({ confirm: 'type-to-confirm', confirmWord: 'APPLY' })
+    expect(exact(73.5)).toMatchObject({ confirm: 'type-to-confirm', confirmWord: 'APPLY' })
+    expect(exact(73.51)).toMatchObject({ confirm: 'none', confirmWord: null })
+    const deepTier = run(b2bRead({ rule: 'FIXED', exact: 100, price: 100 }), { verb: 'set-business-tiers', mode: 'set', tiers: { type: 'fixed', levels: [{ minQty: 2, value: 70 }] }, currency: 'EUR' }, [both[0]!])
+    expect(deepTier.confirmWord).toBe('APPLY')
+  })
+
+  it('replacing a business price set outside Nexus is said once above the table as well as on its line', () => {
+    const p = run(b2bRead({ reported: { price: 95 } }), { verb: 'set-business-price', mode: 'percent', percent: 5 }, [both[0]!])
+    expect(p.changes[0]!.note).toBe(PREVIEW_WORDS.businessReplacesAmazon('€95.00'))
+    expect(p.notices).toEqual([PREVIEW_WORDS.businessReplacesAmazonNotice])
+    expect(run(b2bRead(), { verb: 'set-business-price', mode: 'percent', percent: 5 }, [both[0]!]).notices).toEqual([])
+  })
+})

@@ -256,6 +256,8 @@ export const PREVIEW_WORDS = {
   businessRemoved: 'Nexus removes the business price from Amazon',
   businessRemovedWithTiers: 'Nexus removes the business price and its quantity discounts from Amazon',
   businessReplacesAmazon: (price: string) => `Replaces Amazon's own business price ${price} (set outside Nexus). Undo cannot bring it back`,
+  /** Said once above the table (a warning) when any line replaces a business price set outside Nexus. */
+  businessReplacesAmazonNotice: 'Some of these listings show a business price set outside Nexus, on Amazon. Apply replaces it, and Undo cannot bring it back.',
   businessFirst: (price: string) => `First business price: sent while Amazon's shopper price is ${price}`,
   businessFirstWaits: (amazon: string, nexus: string) => `Not sent yet: Amazon's shopper price is ${amazon} and Nexus's is ${nexus}. Make them the same first`,
 } as const
@@ -354,12 +356,15 @@ const isTiers = (t: unknown): t is BusinessTiers => !!t && typeof t === 'object'
  * (two decimals); a change by a percent other than 0, above −100; an exact price above 0; quantity discounts of the
  * door's own shape (`businessTiersProblems`). The route asks this before the preview.
  */
-export function businessVerbProblem(p: { verb?: unknown; mode?: unknown; percent?: unknown; price?: unknown; tiers?: unknown }): string | null {
+export function businessVerbProblem(p: { verb?: unknown; mode?: unknown; percent?: unknown; price?: unknown; tiers?: unknown; currency?: unknown }): string | null {
   const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+  // Money goes with its currency (as an amount does): €30 is not £30.
+  const coded = typeof p.currency === 'string' && /^[A-Z]{3}$/.test(p.currency)
   if (p.verb === 'set-business-tiers') {
     if (p.mode === 'remove') return null
     if (p.mode !== 'set') return 'Set B2B tiers is set or remove'
     if (!isTiers(p.tiers)) return 'Quantity discounts are a type (percent or fixed) and a list of levels, each a quantity and a value'
+    if (p.tiers.type === 'fixed' && !coded) return 'A price per unit needs its currency as a 3-letter code (EUR, GBP …)'
     return businessTiersProblems(p.tiers)[0] ?? null
   }
   switch (p.mode) {
@@ -368,7 +373,8 @@ export function businessVerbProblem(p: { verb?: unknown; mode?: unknown; percent
     case 'change':
       return finite(p.percent) && p.percent !== 0 && p.percent > -100 && round2(p.percent) === p.percent ? null : 'Change by a percent other than 0, above −100, at most two decimals'
     case 'exact':
-      return finite(p.price) && p.price > 0 ? null : 'An exact business price is more than 0'
+      if (!(finite(p.price) && p.price > 0)) return 'An exact business price is more than 0'
+      return coded ? null : 'An exact business price needs its currency as a 3-letter code (EUR, GBP …)'
     case 'remove':
       return null
     default:
@@ -376,7 +382,11 @@ export function businessVerbProblem(p: { verb?: unknown; mode?: unknown; percent
   }
 }
 
-/** A cut of this size or more asks for the typed word: a B2B price 30 % below the price, or an exact one lowered by 30 %. */
+/**
+ * A cut of this size or more asks for the typed word: a B2B price 30 % below the price, or an exact one lowered by 30 %
+ * (with the price unknown too). Whatever the mode, a line whose lowest new B2B price — the price or a quantity discount —
+ * is 30 % or more below the normal price asks for it as well (`previewVerb`).
+ */
 const bigBusinessCut = (p: MatrixVerbParams): boolean =>
   p.verb === 'set-business-price' && ((p.mode === 'percent' && p.percent >= BIG_CUT_PERCENT) || (p.mode === 'change' && p.percent <= -BIG_CUT_PERCENT))
 
@@ -486,6 +496,8 @@ export function previewVerb(read: MatrixRead, req: MatrixVerbRequest, ctx: Previ
   const refusals: VerbRefusal[] = []
   const notices = new Set<string>()
   const seen = new Set<string>()
+  /** Amazon Business: a new B2B price (or quantity discount) 30 % or more below the normal price on some line. */
+  let deepBusinessCut = false
   const refuse = (row: MatrixRowRead, key: CoordinateKey, kind: VerbRefusal['kind'], reason: string) => refusals.push({ rowId: row.id, sku: row.sku, coordinateKey: key, kind, reason })
 
   for (const t of req.targets) {
@@ -511,6 +523,8 @@ export function previewVerb(read: MatrixRead, req: MatrixVerbRequest, ctx: Previ
         if (!cells.price) { refuse(row, key, 'not-applicable', PREVIEW_WORDS.noPriceHere); break }
         if (cells.price.source === 'formula') { refuse(row, key, 'formula', PREVIEW_WORDS.formulaPrice); break }
         if (cells.writable.price === false) { refuse(row, key, 'not-applicable', cells.writeBlockedReason.price ?? 'This price cannot be changed here'); break }
+        /* Set price: a price in its currency — €90 is not £90 (as an amount is). */
+        if (p.verb === 'set-price' && p.currency && p.currency !== coord.currency) { refuse(row, key, 'currency', PREVIEW_WORDS.marketCurrency(coord.currency)); break }
         let to: number | null = null
         if (p.verb === 'set-price') to = round2(p.value)
         else if (p.verb === 'adjust-prices') {
@@ -644,6 +658,10 @@ export function previewVerb(read: MatrixRead, req: MatrixVerbRequest, ctx: Previ
           refuse(row, key, 'not-applicable', cells.writeBlockedReason.businessPrice ?? (coord.channel === 'AMAZON' ? PREVIEW_WORDS.businessNotHere : PREVIEW_WORDS.businessAmazonOnly))
           break
         }
+        /* An exact price or a price per unit is money in its currency: a market that sells in another is refused. */
+        const money = (p.verb === 'set-business-price' && p.mode === 'exact') || (p.verb === 'set-business-tiers' && p.mode === 'set' && p.tiers.type === 'fixed')
+        const currency = (p as { currency?: string }).currency
+        if (money && currency && currency !== coord.currency) { refuse(row, key, 'currency', PREVIEW_WORDS.marketCurrency(coord.currency)); break }
         const next = businessVerbSetting(p, b)
         if ('skip' in next) { refuse(row, key, 'not-applicable', next.skip); break }
         const setting = next.setting
@@ -659,12 +677,18 @@ export function previewVerb(read: MatrixRead, req: MatrixVerbRequest, ctx: Previ
            shopper price is not Nexus's); what Amazon would hide; the listing cannot be sent to now (kept in Nexus). */
         const notes: string[] = []
         if (!setting) notes.push(from?.tiers ? PREVIEW_WORDS.businessRemovedWithTiers : PREVIEW_WORDS.businessRemoved)
-        else if (!from && b.reported) notes.push(PREVIEW_WORDS.businessReplacesAmazon(cellMoney(b.reported.price, b.currency)))
+        else if (!from && b.reported) {
+          notes.push(PREVIEW_WORDS.businessReplacesAmazon(cellMoney(b.reported.price, b.currency)))
+          notices.add(PREVIEW_WORDS.businessReplacesAmazonNotice)
+        }
         else if (!from) notes.push(b.live?.normal
           ? PREVIEW_WORDS.businessFirstWaits(cellMoney(b.live.normal.amazon, b.currency), cellMoney(b.live.normal.nexus, b.currency))
           : PREVIEW_WORDS.businessFirst(cellMoney(b.normalPrice, b.currency)))
         if (setting) notes.push(...businessPriceWarnings({ setting, normalPrice: b.normalPrice, salePrice: cells.sale?.value ?? null, currency: b.currency }).map((w) => w.replace(/\.$/, '')))
         if (b.held) notes.push(b.held.replace(/\.$/, ''))
+        // The lowest price a business buyer would pay now (the B2B price or a quantity discount), against the normal price.
+        const lowest = after.price == null ? null : Math.min(after.price, ...(after.tiers?.levels ?? []).map((l) => l.unitPrice ?? after.price!))
+        if (lowest != null && b.normalPrice != null && b.normalPrice > 0 && (cents(b.normalPrice) - cents(lowest)) * 100 >= cents(b.normalPrice) * BIG_CUT_PERCENT) deepBusinessCut = true
         changes.push({
           rowId: row.id, sku: row.sku, coordinateKey: key, cell: tiersVerb ? 'businessTiers' : 'businessPrice', from, to: setting,
           fromLabel: words(b), toLabel: words(after), note: notes.length ? notes.join(' · ') : undefined,
@@ -676,7 +700,7 @@ export function previewVerb(read: MatrixRead, req: MatrixVerbRequest, ctx: Previ
 
   const p = req.params
   const big = changes.length >= 100 || (p.verb === 'adjust-prices' && typeof p.percent === 'number' && p.percent <= -BIG_CUT_PERCENT) || bigAmountCut(p, changes)
-    || (changes.length > 0 && bigBusinessCut(p))
+    || (changes.length > 0 && (bigBusinessCut(p) || deepBusinessCut))
   /* Typed confirmation (Owner 2026-10-08), the only level besides none: an AMAZON fulfilment change (it converts the offer
      on Amazon — the method is the word), and a big change (100 changes or more, or a price cut of 30 % or more — by a
      percent, or by an amount that takes any line down 30 % or more — APPLY). An eBay fulfilment change is Nexus only,

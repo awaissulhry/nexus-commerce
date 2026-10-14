@@ -614,10 +614,11 @@ describe('parseInput — Amazon Business: a percent below the price, and quantit
     expect([...marked.keys()]).toEqual(['k1:minQty', 'k2:value'])
   })
 
-  it('a quantity discounts mode starts with one suggested row; an opening value comes back in its rows; the request key tells tiers apart', () => {
+  it('a quantity discounts mode starts with NO row (Apply never writes a discount nobody added); an opening value comes back in its rows; the request key tells tiers apart', () => {
     const start = modeRaw({ input: 'tiers' }, TODAY)
-    expect(start.tiers.map((t) => [t.minQty, t.value])).toEqual([['2', '3']])
+    expect(start.tiers).toEqual([])
     expect(start.tierType).toBe('percent')
+    expect(parseInput('tiers', start)).toMatchObject({ state: 'empty', reason: TIERS_EMPTY })
     const back = rawFromInput({ input: 'tiers' }, { tiers: { type: 'fixed', levels: [{ minQty: 3, value: 85 }] } }, TODAY)
     expect([back.tierType, back.tiers.map((t) => [t.minQty, t.value])]).toEqual(['fixed', [['3', '85']]])
     expect(rawFromInput({ input: 'percent' }, { percent: 5 }, TODAY).text).toBe('5')

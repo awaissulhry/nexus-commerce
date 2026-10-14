@@ -554,8 +554,13 @@ export const MATRIX_VERB_LABELS: Readonly<Record<MatrixVerbId, string>> = {
 
 export interface MatrixVerbTarget { rowId: string; coordinateKey: CoordinateKey }
 
+/*
+ * `currency` on a money value (Set price, an exact B2B price, B2B prices per unit): the money's currency. A market that
+ * sells in another is refused (`This market sells in GBP`) — €30 is not £30. Absent = each target's own currency (the
+ * server's re-check of one carried change, and older callers).
+ */
 export type MatrixVerbParams =
-  | { verb: 'set-price'; value: number }
+  | { verb: 'set-price'; value: number; currency?: string }
   /** By a signed percentage (−5 lowers by 5 %), or by a signed `amount` in `currency` (−2.5 lowers by 2.50); one of the two. */
   | { verb: 'adjust-prices'; percent: number; amount?: undefined; currency?: undefined }
   | { verb: 'adjust-prices'; amount: number; currency: string; percent?: undefined }
@@ -578,11 +583,11 @@ export type MatrixVerbParams =
    *   remove   no business price (Nexus removes the business offer from Amazon, its discounts with it)
    */
   | { verb: 'set-business-price'; mode: 'percent'; percent: number }
-  | { verb: 'set-business-price'; mode: 'exact'; price: number }
+  | { verb: 'set-business-price'; mode: 'exact'; price: number; currency?: string }
   | { verb: 'set-business-price'; mode: 'change'; percent: number }
   | { verb: 'set-business-price'; mode: 'remove' }
   /** Amazon Business — the same quantity discounts on each listing (its B2B price stays), or none. */
-  | { verb: 'set-business-tiers'; mode: 'set'; tiers: { type: 'percent' | 'fixed'; levels: Array<{ minQty: number; value: number }> } }
+  | { verb: 'set-business-tiers'; mode: 'set'; tiers: { type: 'percent' | 'fixed'; levels: Array<{ minQty: number; value: number }> }; currency?: string }
   | { verb: 'set-business-tiers'; mode: 'remove' }
 
 export interface MatrixVerbRequest { params: MatrixVerbParams; targets: MatrixVerbTarget[]; commit: boolean }
