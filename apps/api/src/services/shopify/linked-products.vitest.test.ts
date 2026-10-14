@@ -750,3 +750,35 @@ describe('a linked listing whose sync is paused synchronizes product fields only
     expect(fixture.data.queue).toEqual([])
   })
 })
+
+describe('a JSON product field (a garment size chart) through the linked chain', () => {
+  const address = { ownerId: gid(1), namespace: 'custom', key: 'fit_garment' }
+  const garment = { chest: 52, length: 70.5, sleeve: { from: 60, to: 62 }, sizes: ['S', 'M'] }
+  function jsonField() {
+    const original = fixture.data.gql
+    fixture.data.gql = async (query: string, variables: any, account: string) => {
+      const result = await original(query, variables, account)
+      if (query.includes('query NexusLinkedDefinitions') && variables.ownerType === 'PRODUCT') result.metafieldDefinitions.nodes.push({ ...def, id: 'gid://shopify/MetafieldDefinition/4', namespace: 'custom', key: 'fit_garment', name: 'Fit garment', type: { name: 'json' }, access: { admin: null, storefront: 'NONE' } })
+      if (query.includes('query NexusLinkedSettings')) result.metafieldDefinitionTypes.push({ name: 'json', category: 'ADVANCED' })
+      return result
+    }
+  }
+  it('sends it once as type json and reads it back by structure: key order, spacing and number spelling are not drift', async () => {
+    jsonField()
+    // Shopify answers with its own spelling of the same JSON.
+    storedValue = field => field.type === 'json' ? '{\n  "sizes": ["S", "M"], "sleeve": {"to": 62, "from": 60}, "length": 70.50, "chest": 52.0\n}' : field.value
+    const change = { ...address, type: 'json', value: null, compareDigest: null, nextValue: JSON.stringify(garment), ownerLabel: 'Product 1' }
+    await applyLinkedBatch(gql, [change])
+    const sent = calls.filter(c => c.name === 'NexusLinkedSet').map(c => c.variables.metafields)
+    expect(sent).toEqual([[{ ...address, type: 'json', value: JSON.stringify(garment), compareDigest: null }]])
+    expect(JSON.parse(sent[0][0].value)).toEqual(garment) // the object's text, never a string of a string
+    expect(fields.get(fieldAddress(address)).value).not.toBe(change.nextValue)
+    await applyLinkedBatch(gql, [change]) // the same structure is already there: nothing is written again
+    expect(calls.filter(c => c.name === 'NexusLinkedSet')).toHaveLength(1)
+  })
+  it('a different value is still drift: read-back refuses it', async () => {
+    jsonField()
+    storedValue = field => field.type === 'json' ? JSON.stringify({ ...garment, chest: 54 }) : field.value
+    await expect(applyLinkedBatch(gql, [{ ...address, type: 'json', value: null, compareDigest: null, nextValue: JSON.stringify(garment), ownerLabel: 'Product 1' }])).rejects.toThrow('readback differs')
+  })
+})

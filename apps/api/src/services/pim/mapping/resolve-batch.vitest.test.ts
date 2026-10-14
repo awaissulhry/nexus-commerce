@@ -21,6 +21,7 @@ import { resolveBatch } from './resolve-batch.service.js'
 import { previewPayload } from '../payload-preview.js'
 import { validatePublish } from '../publish-validator.js'
 import type { CatalogueField } from './field-catalogue.service.js'
+import { shopifyProductSpec } from '../channel-specs/store.js'
 
 const field = (fieldKey: string, extra: Partial<CatalogueField> = {}): CatalogueField => ({
   fieldKey, sheetKey: fieldKey, shape: 'scalar', kind: 'text', label: fieldKey, helpText: null,
@@ -294,6 +295,21 @@ it('uses the selected Shopify store and never revives deleted or retyped definit
   expect(result.products[0].cells.productType.value).toBeNull()
   expect(result.products[0].cells.status.value).toBeNull()
   expect(result.products[0].cells.removed).toBeUndefined()
+})
+
+// custom.fit_garment (a garment size chart) — a rule from a Master attribute holding an object fills a JSON product field with that object.
+it('resolves a Master object through a rule to a JSON product field of the selected Shopify store', async () => {
+  const definition = { id: 'gid://shopify/MetafieldDefinition/4', name: 'Fit garment', namespace: 'custom', key: 'fit_garment', ownerType: 'PRODUCT' as const, type: 'json', description: null, validations: [], access: { admin: null, storefront: null } }
+  const target = shopifyProductSpec({ definitions: [definition], metaobjectDefinitions: [], types: [], locales: [], revision: 'r1' }, 'store-b').fields.at(-1)!
+  const garment = { chest: 52, length: 70.5, sleeve: { from: 60, to: 62 }, sizes: ['S', 'M'] }
+  db.mapping.mockResolvedValue({ fields: { [target.key]: { source: 'fit_garment' } } })
+  db.catalogue.mockResolvedValue({ schema: { present: true }, fields: [field(target.key, { kind: 'longtext', label: target.label, rule: null, schemaKnown: true, shopifyField: target.shopifyField, channelStore: target.channelStore })] })
+  const product = (value: unknown) => db.products.mockResolvedValue([{ id: 'p', sku: 'SKU', name: 'Jacket', translations: [], categoryAttributes: { fit_garment: value }, variantAttributes: {}, parentId: null }])
+  const resolve = async () => (await resolveBatch({ ...input, channel: 'SHOPIFY', marketplace: 'GLOBAL', channelConnectionId: 'store-b' })).products[0].cells[target.key]
+  product(garment)
+  expect(await resolve()).toMatchObject({ status: 'mapped', value: garment, errors: [] })
+  product('chest 52')
+  expect((await resolve()).errors).not.toEqual([])
 })
 
 // The mapped category fills the channel's OWN category field (`CHANNEL_CATEGORY_FIELD`) and no other channel's key.
