@@ -65,10 +65,10 @@ export function ColourProductsPanel({ linkedPath, canEdit, canPublish }: { linke
       <ul className={styles.rows} aria-label="Colours of this family">
         {rows.map(model => <ColourRow key={model.key} model={model} busy={busy} canEdit={canEdit} canPublish={canPublish && view.settings.enabled}
           replace={!!replace[model.key]} onReplace={value => setReplace(r => ({ ...r, [model.key]: value }))}
-          onPick={() => setPicking(model)} onClear={() => void find([{ valueKey: model.key, shopifyProductId: null }])} onConfirm={() => setReviewing(model)} />)}
+          onPick={() => setPicking(model)} onClear={() => { setReplace(r => ({ ...r, [model.key]: false })); void find([{ valueKey: model.key, shopifyProductId: null }]) }} onConfirm={() => setReviewing(model)} />)}
       </ul>
     </div>
-    {picking && <StoreProductPicker path={path} model={picking} onClose={() => setPicking(null)} onChoose={product => { const key = picking.key; setPicking(null); void find([{ valueKey: key, shopifyProductId: product.id }]) }} />}
+    {picking && <StoreProductPicker path={path} model={picking} onClose={() => setPicking(null)} onChoose={product => { const key = picking.key; setPicking(null); setReplace(r => ({ ...r, [key]: false })); void find([{ valueKey: key, shopifyProductId: product.id }]) }} />}
     {reviewing && <ConfirmReview model={reviewing} view={view} locations={locations} replace={!!replace[reviewing.key]} busy={busy} onClose={() => { if (!busy) setReviewing(null) }}
       onConfirm={async locationId => {
         const model = reviewing
