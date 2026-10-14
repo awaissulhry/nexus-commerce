@@ -284,10 +284,6 @@ export const ENTRIES: Entry[] = [
   RW(F.productsView, F.productsEdit, pfx('/api/bundles')),
   RW(F.productsView, F.productsBulkRun, pfx('/api/bulk-ops')),
 
-  // ── S2 coverage: B2B customer pricing (restricted money) ───────
-  RW(F.pricingTiersManage, F.pricingTiersManage, pfx('/api/customer-groups')),
-  RW(F.pricingTiersManage, F.pricingTiersManage, pfx('/api/tier-prices')),
-
   // ── S2 coverage: DAM / brand sub-resources ─────────────────────
   RW(F.assetsManage, F.assetsManage, pfx('/api/asset-')),
   RW(F.aplusManage, F.aplusManage, pfx('/api/aplus-modules')),
@@ -366,9 +362,6 @@ export const ENTRIES: Entry[] = [
   // F4 — the cost grid's write is a cost edit. The old rule named `/api/product-costs`, a path no route has, so the
   // write fell through to the products prefix and needed products.edit only.
   RW(F.productsView, F.pricingCostsEdit, (_m, p) => p === '/api/products/costs'),
-  // F11 — a product's B2B tier prices are the restricted money `/api/tier-prices` is; the old `/api/tier-pricing` rule
-  // matched nothing, so they read with products.view and wrote with products.edit.
-  RW(F.pricingTiersManage, F.pricingTiersManage, (_m, p) => /^\/api\/products\/[^/]+\/tier-prices$/.test(p)),
   // F11 — eBay volume pricing lives under /api/ebay (the old `/api/ebay-volume-pricing` rule matched nothing): a volume
   // promotion is a price, so changing one is a pricing edit, never the channel-sync default.
   RW(F.listingsView, F.pricingEdit, pfx('/api/ebay/volume-promotions')),

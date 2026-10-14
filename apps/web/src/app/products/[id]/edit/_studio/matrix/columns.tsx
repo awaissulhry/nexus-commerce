@@ -38,7 +38,7 @@ import { ProductRoleChip } from '../sheet/ProductRoleChip'
 import { sharedProgressColumn } from '../sheet/progressColumns'
 import type { AxisSummary } from '../variants/family/coverage'
 
-import { MATRIX_ABSENT_CELL_LABELS, MATRIX_CELL_KINDS, MATRIX_COPY, type CoordinateKey, type FulfilmentMethod, type MatrixAbsentCellKind, type MatrixCellKind, type MatrixCells, type MatrixCoordinate, type MatrixFbaPlan, type MatrixRowRead } from './contract'
+import { MATRIX_CELL_KINDS, MATRIX_CELL_LABELS, MATRIX_COPY, type CoordinateKey, type FulfilmentMethod, type MatrixCellKind, type MatrixCells, type MatrixCoordinate, type MatrixFbaPlan, type MatrixRowRead } from './contract'
 import { refusedTooltip } from './refusals'
 import { CASE_EDIT_COPY, CASE_HEADER_TIP, CASE_LABEL, caseCellView, type CaseCellView } from './casePack'
 import { FROM_COL_W, FROM_LABEL, fromBefore, fromCellText, fromCellView, isMatrixFromColId, matrixFromColId } from './sellsFrom'
@@ -231,22 +231,22 @@ export function notListedLine(coords: readonly MatrixCoordinate[]): string | nul
  */
 export function absentLine(coords: readonly MatrixCoordinate[]): string | null {
   const cells = [...new Set(coords.flatMap((c) => c.absent.map((a) => a.cell)))]
-  return cells.length ? `Not on every channel: ${cells.map((cell) => MATRIX_ABSENT_CELL_LABELS[cell]).join(', ')}` : null
+  return cells.length ? `Not on every channel: ${cells.map((cell) => MATRIX_CELL_LABELS[cell]).join(', ')}` : null
 }
 
 export function absentHint(coords: readonly MatrixCoordinate[]): string | null {
-  const byCell = new Map<MatrixAbsentCellKind, Map<string, MatrixCoordinate[]>>()
+  const byCell = new Map<MatrixCellKind, Map<string, MatrixCoordinate[]>>()
   for (const c of coords) for (const a of c.absent) {
     const reasons = byCell.get(a.cell) ?? new Map<string, MatrixCoordinate[]>()
     reasons.set(a.reason, [...(reasons.get(a.reason) ?? []), c])
     byCell.set(a.cell, reasons)
   }
-  const groups = new Map<string, MatrixAbsentCellKind[]>()
+  const groups = new Map<string, MatrixCellKind[]>()
   for (const [cell, reasons] of byCell) {
     const body = [...reasons].map(([reason, cs]) => `${placesText(cs)}: ${reason}`).join('; ')
     groups.set(body, [...(groups.get(body) ?? []), cell])
   }
-  const lines = [...groups].map(([body, cells]) => `${cells.map((cell) => MATRIX_ABSENT_CELL_LABELS[cell]).join(', ')} — ${body}`)
+  const lines = [...groups].map(([body, cells]) => `${cells.map((cell) => MATRIX_CELL_LABELS[cell]).join(', ')} — ${body}`)
   return lines.length ? `Not offered here: ${lines.join(' · ')}` : null
 }
 

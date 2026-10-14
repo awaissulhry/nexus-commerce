@@ -91,8 +91,6 @@ export interface ManagedFields {
   basePrice?: string
   minPrice?: string | null
   maxPrice?: string | null
-  b2bPrice?: string | null
-  b2bMinQty?: number | null
   status?: string
 }
 
@@ -231,7 +229,6 @@ async function readFromOwner(source: AuthorisedSource, ids: string[], market: st
         ...(offered.has('attributes') ? { productType: raw.productType } : {}),
         ...(offered.has('price') ? {
           basePrice: raw.basePrice.toString(), minPrice: raw.minPrice?.toString() ?? null, maxPrice: raw.maxPrice?.toString() ?? null,
-          b2bPrice: raw.b2bPrice?.toString() ?? null, b2bMinQty: raw.b2bMinQty,
         } : {}),
         ...(offered.has('status') ? { status: raw.status } : {}),
       },
@@ -348,7 +345,7 @@ async function readInOwner(source: AuthorisedSource, ids: string[], market: stri
       version: product.version, familyCode: familyById.get(product.familyId ?? '')?.code ?? null,
       categoryPaths: product.categories.map((c) => pathOf(c.categoryId)),
       primaryCategoryPath: (() => { const primary = product.categories.find((c) => c.isPrimary); return primary ? pathOf(primary.categoryId) : null })(),
-      raw: { productType: product.productType, basePrice: product.basePrice, minPrice: product.minPrice, maxPrice: product.maxPrice, b2bPrice: product.b2bPrice, b2bMinQty: product.b2bMinQty, status: product.status },
+      raw: { productType: product.productType, basePrice: product.basePrice, minPrice: product.minPrice, maxPrice: product.maxPrice, status: product.status },
     })),
     families: familyDefinitions,
     attributeGroups: [...groupByCode.values()],

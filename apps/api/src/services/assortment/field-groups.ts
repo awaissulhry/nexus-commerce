@@ -48,7 +48,7 @@ export const PRODUCT_COLUMNS: Record<string, Disposition> = {
   // structure
   parentId: g('structure'), isParent: g('structure'), familyId: g('structure'),
   // price (offered only when the owner chooses it)
-  basePrice: g('price'), minPrice: g('price'), maxPrice: g('price'), b2bPrice: g('price'), b2bMinQty: g('price'),
+  basePrice: g('price'), minPrice: g('price'), maxPrice: g('price'),
   // status (offered only when the owner chooses it)
   status: g('status'),
 
@@ -67,6 +67,9 @@ export const PRODUCT_COLUMNS: Record<string, Disposition> = {
   importSource: PROCESS, importedAt: PROCESS, reviewStatus: PROCESS, validationStatus: PROCESS, validationErrors: PROCESS,
   isBundle: never('bundle composition is not shared yet'),
   isMasterProduct: LEGACY, masterProductId: LEGACY, isMaster: LEGACY, masterSku: LEGACY, cascadedFields: LEGACY,
+  // Amazon Business step 7a: the old Nexus-only B2B price (Amazon's business price is the listing's, in the Matrix). The
+  // capture trigger (assortment-sync.sql) still notes them under price until their column drop (sync-fields.vitest.test.ts).
+  b2bPrice: LEGACY, b2bMinQty: LEGACY,
 }
 
 /** The transfer engine's metadata fields (catalog-transfer-export.ts). */

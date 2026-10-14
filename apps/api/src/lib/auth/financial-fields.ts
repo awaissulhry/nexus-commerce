@@ -17,8 +17,8 @@
  * stay visible per the S0 borderline rulings.
  *
  * Generic-named pure-financial fields that can't be safely matched by name
- * (SettlementReport.totalAmount, ProductTierPrice.price) are gated at the
- * ROUTE level instead — see FINANCIAL_ONLY_ROUTE_PREFIXES below.
+ * (SettlementReport.totalAmount) are gated at the ROUTE level instead — see
+ * FINANCIAL_ONLY_ROUTE_PREFIXES below.
  */
 
 import { FIELDS } from '@nexus/shared/permissions'
@@ -83,7 +83,9 @@ add(FIELDS.financialsAdspendView, [
   'conversionValueCents', 'avgCpcCents', 'costPerConversionCents',
 ])
 
-// ── Suppliers / B2B tier pricing ───────────────────────────────────
+// ── Suppliers / B2B pricing ────────────────────────────────────────
+// `b2bPrice` (Product) is read and written by no code since Amazon Business step 7a, but the column stays until its
+// drop and a full-row product read still returns it, so it stays stripped.
 add(FIELDS.financialsSuppliersView, [
   'b2bPrice', 'paymentTerms', 'costCents',
 ])
@@ -96,7 +98,7 @@ export const RESTRICTED_FIELD_NAMES = new Set(Object.keys(RESTRICTED_FIELDS))
 
 /**
  * Route prefixes whose responses are financial top-to-bottom and carry
- * generic-named money fields (SettlementReport.totalAmount, tier prices)
+ * generic-named money fields (SettlementReport.totalAmount)
  * that a name-based strip can't safely target. Under enforce, a caller
  * without `financials.view` is blocked from these entirely. Tracked as the
  * companion to the field-name strip.
@@ -110,6 +112,4 @@ export const FINANCIAL_ONLY_ROUTE_PREFIXES: string[] = [
   '/api/amazon/settlements',
   '/api/fba/reimbursements',
   '/api/products/costs', // S1 (F4) — the cost grid's real path (`/api/product-costs` has no route)
-  '/api/tier-prices',
-  '/api/customer-groups',
 ]

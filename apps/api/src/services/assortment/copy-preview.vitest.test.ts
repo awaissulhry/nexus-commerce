@@ -243,7 +243,7 @@ describe('AE.3a — reading what a share offers, links, and Review 1', () => {
       const offer = await as(A, user.ownerA, () => shares.offerShare({ assortmentId: priced.id, destinationWorkspaceId: B, fieldGroups: ['identity', 'price', 'status'] }))
       await as(B, user.ownerB, () => shares.followerDecision(offer.id, 'accept', { expectedVersion: 1 }))
       const catalog = await as(B, user.ownerB, () => source.readOfferedCatalog({ shareId: offer.id, market: 'IT' }))
-      expect(catalog.products[0].managed).toEqual({ basePrice: '99', minPrice: null, maxPrice: null, b2bPrice: null, b2bMinQty: null, status: 'ACTIVE' })
+      expect(catalog.products[0].managed).toEqual({ basePrice: '99', minPrice: null, maxPrice: null, status: 'ACTIVE' })
       expect(catalog.rows.some((r) => r.field === 'name')).toBe(false)
       expect(catalog.excluded).toEqual(expect.arrayContaining([expect.objectContaining({ field: 'name', label: 'name', group: 'content', reason: null })]))
     })

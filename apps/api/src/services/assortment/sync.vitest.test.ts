@@ -296,6 +296,26 @@ describe.skipIf(!concurrentDatabaseUrl())(`Shared stock step 6 (AE.4) — live p
     expect(after.fields.find((f) => f.key === 'description')?.state).toBe('follow')
   }, 60_000)
 
+  it('4a. the old B2B price a link followed before Amazon Business step 7a stays stored and is never shown as a field', async () => {
+    const db = (await import('../../db.js')).default as unknown as { catalogLink: { update: (args: unknown) => Promise<unknown> } }
+    // Only the follower may change its link (nexus_catalog_link_guard): written as B, as B's own sync writes it.
+    const store = (appliedState: unknown, overrides: string[]) =>
+      as(B, user.ownerB, () => db.catalogLink.update({ where: { id: link.JKT }, data: { appliedState, overrides } }))
+    const before = await linkRow(link.JKT) as { appliedState: { fields: Record<string, [string, string]> }; overrides: string[] }
+    // Stored as a link synced before step 7a holds them; a print no value now has, so a shown key would read "override".
+    const stale = { ...before.appliedState, fields: { ...before.appliedState.fields, 'managed:b2bPrice': ['old', 'old'], 'managed:b2bMinQty': ['old', 'old'] } }
+    await store(stale, ['managed:b2bMinQty'])
+    try {
+      const view = await as(B, user.ownerB, () => sync.catalogLinkState(product['b:JKT']))
+      expect(view.fields.map((f) => f.key)).not.toContain('managed:b2bPrice')
+      expect(view.fields.map((f) => f.key)).not.toContain('managed:b2bMinQty')
+      expect(view.fields.find((f) => f.key === 'managed:basePrice')?.state).toBe('follow')
+      expect(Object.keys((await linkRow(link.JKT) as typeof before).appliedState.fields)).toEqual(expect.arrayContaining(['managed:b2bPrice', 'managed:b2bMinQty']))
+    } finally {
+      await store(before.appliedState, before.overrides)
+    }
+  }, 60_000)
+
   it('4b. one product\'s sharing, read from each business (the studio page), and the products grid\'s Source column and filter', async () => {
     const sharing = await import('./product-sharing.service.js')
     // B follows: where it comes from, each field in words, its own stock.

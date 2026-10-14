@@ -53,11 +53,6 @@ export const MATRIX_CELL_WIDTHS: Readonly<Record<MatrixCellKind, number>> = {
   businessPrice: 168, businessTiers: 180,
 }
 
-/** MX.F (ruled): the absent-capable kinds — since Amazon Business step 5 every kind is a real cell kind. */
-export type MatrixAbsentCellKind = MatrixCellKind
-/** Customise's label per absent-capable kind. */
-export const MATRIX_ABSENT_CELL_LABELS: Readonly<Record<MatrixAbsentCellKind, string>> = MATRIX_CELL_LABELS
-
 /** The projection words the Variants page fixed (five) plus the four the Matrix adds (design §3.4). */
 export type ListingState = 'listed' | 'draft' | 'excluded' | 'not-set-up' | 'needs-value' | 'suppressed' | 'closed' | 'error' | 'ended'
 
@@ -239,7 +234,7 @@ export interface MatrixCoordinate {
   listed: number | null
   draft: number | null
   cells: readonly MatrixCellKind[]
-  absent: ReadonlyArray<{ cell: MatrixAbsentCellKind; reason: string }>
+  absent: ReadonlyArray<{ cell: MatrixCellKind; reason: string }>
   sharedInventoryWith: readonly string[] | null
   inventoryOn: CoordinateKey | null
   vocabulary: { fulfilment: readonly FulfilmentMethod[] | null }

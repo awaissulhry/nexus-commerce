@@ -72,8 +72,6 @@ describe('the engine Matrix contract equals the wire Matrix contract', () => {
   it('every coordinate, write and verb type is bidirectionally assignable', () => {
     expect(bothWays<engine.CoordinateKind, wire.CoordinateKind>(true)).toBe(true)
     expect(bothWays<engine.MatrixCoordinate, wire.MatrixCoordinate>(true)).toBe(true)
-    /* MX.F: the absent slot's widened kind (the eight + the reserved business cells). */
-    expect(bothWays<engine.MatrixAbsentCellKind, wire.MatrixAbsentCellKind>(true)).toBe(true)
     expect(bothWays<engine.MatrixWritableKind, wire.MatrixWritableKind>(true)).toBe(true)
     expect(bothWays<engine.MatrixDoorKind, wire.MatrixDoorKind>(true)).toBe(true)
     expect(bothWays<engine.MatrixWriteCell, wire.MatrixWriteCell>(true)).toBe(true)
@@ -162,12 +160,10 @@ describe('the engine Matrix contract equals the wire Matrix contract', () => {
     expect([...engine.WRITABLE_CELL_KINDS]).toEqual([...wire.WRITABLE_CELL_KINDS])
     expect(engine.MATRIX_CELL_LABELS).toEqual(wire.MATRIX_CELL_LABELS)
     expect(engine.MATRIX_CELL_WIDTHS).toEqual(wire.MATRIX_CELL_WIDTHS)
-    expect(engine.MATRIX_ABSENT_CELL_LABELS).toEqual(wire.MATRIX_ABSENT_CELL_LABELS)
     expect(engine.MATRIX_VERB_LABELS).toEqual(wire.MATRIX_VERB_LABELS)
     /* Key ORDER too — `MATRIX_CELL_KINDS` is the default column order inside a group, so a table
        whose keys reordered would change the grid without changing any value. */
     expect(Object.keys(engine.MATRIX_CELL_LABELS)).toEqual(Object.keys(wire.MATRIX_CELL_LABELS))
-    expect(Object.keys(engine.MATRIX_ABSENT_CELL_LABELS)).toEqual(Object.keys(wire.MATRIX_ABSENT_CELL_LABELS))
     expect(Object.keys(engine.MATRIX_VERB_LABELS)).toEqual(Object.keys(wire.MATRIX_VERB_LABELS))
   })
 
@@ -178,13 +174,11 @@ describe('the engine Matrix contract equals the wire Matrix contract', () => {
     for (const k of engine.INVENTORY_CELL_KINDS) expect(engine.MATRIX_CELL_KINDS).toContain(k)
     expect(engine.MATRIX_CELL_KINDS.length).toBe(10)
     expect(Object.keys(engine.MATRIX_CELL_WIDTHS).sort()).toEqual([...engine.MATRIX_CELL_KINDS].sort())
-    /* Amazon Business step 5: the two business cells are real kinds, so the absent-capable labels are exactly the kinds'. */
+    /* Amazon Business step 5: the two business cells are real kinds (an absent cell names a kind, step 7a). */
     expect(engine.MATRIX_CELL_KINDS.slice(-2)).toEqual(['businessPrice', 'businessTiers'])
-    expect(Object.keys(engine.MATRIX_ABSENT_CELL_LABELS)).toEqual([...engine.MATRIX_CELL_KINDS])
     /* Typed in an editor of their own, never in the grid. */
     expect(engine.WRITABLE_CELL_KINDS).not.toContain('businessPrice')
     expect(engine.WRITABLE_CELL_KINDS).not.toContain('businessTiers')
-    for (const k of engine.MATRIX_CELL_KINDS) expect(engine.MATRIX_ABSENT_CELL_LABELS[k]).toBe(engine.MATRIX_CELL_LABELS[k])
     expect(engine.MATRIX_CELL_WIDTHS.salePrice).toBe(190)
   })
 })

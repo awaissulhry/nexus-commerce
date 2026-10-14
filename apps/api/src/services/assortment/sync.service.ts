@@ -47,7 +47,12 @@ import {
 export const SKU_KEY = 'sku'
 export const MEDIA_KEY = 'media'
 const MANAGED_PREFIX = 'managed:'
-const MANAGED_FIELDS: Array<keyof ManagedFields> = ['productType', 'basePrice', 'minPrice', 'maxPrice', 'b2bPrice', 'b2bMinQty', 'status']
+const MANAGED_FIELDS: Array<keyof ManagedFields> = ['productType', 'basePrice', 'minPrice', 'maxPrice', 'status']
+/**
+ * A managed key no longer followed: `managed:b2bPrice` and `managed:b2bMinQty` (Amazon Business step 7a). A link's stored
+ * state may still hold them; they are kept as stored and never shown as a followed field.
+ */
+const retiredManagedKey = (key: string) => key.startsWith(MANAGED_PREFIX) && !(MANAGED_FIELDS as string[]).includes(key.slice(MANAGED_PREFIX.length))
 const MARKET = /^(?:[A-Z]{2}|GLOBAL)$/
 
 export interface LinkSyncResult {
@@ -248,7 +253,7 @@ export async function syncLink(linkId: string): Promise<LinkSyncResult> {
 
 // ── Reading ─────────────────────────────────────────────────────────────────────────────────
 
-const managedSelect = { productType: true, basePrice: true, minPrice: true, maxPrice: true, b2bPrice: true, b2bMinQty: true, status: true } as const
+const managedSelect = { productType: true, basePrice: true, minPrice: true, maxPrice: true, status: true } as const
 
 function managedValue(value: unknown): unknown {
   if (value === null || value === undefined) return null
@@ -716,14 +721,14 @@ export async function catalogLinkState(productId: string): Promise<LinkStateView
   const printOf = (key: string) => key === SKU_KEY ? fingerprint(current?.sku ?? '')
     : key.startsWith(MANAGED_PREFIX) ? fingerprint(managedValue(current?.[key.slice(MANAGED_PREFIX.length) as keyof ManagedFields]))
     : now.get(key) ?? ABSENT
-  const fields: LinkStateView['fields'] = Object.entries(state.fields).map(([key, pair]) => ({
+  const fields: LinkStateView['fields'] = Object.entries(state.fields).filter(([key]) => !retiredManagedKey(key)).map(([key, pair]) => ({
     key, state: overrides.has(key) || (pair[1] !== FOLLOW_AGAIN && printOf(key) !== pair[1]) ? 'override' as const : 'follow' as const,
   }))
   if (state.media) {
     const edited = state.media.target !== FOLLOW_AGAIN && followerMediaPrint(await followerImages(productId)) !== state.media.target
     fields.push({ key: MEDIA_KEY, state: overrides.has(MEDIA_KEY) || edited ? 'override' : 'follow' })
   }
-  for (const key of overrides) if (!fields.some((field) => field.key === key)) fields.push({ key, state: 'override' })
+  for (const key of overrides) if (!retiredManagedKey(key) && !fields.some((field) => field.key === key)) fields.push({ key, state: 'override' })
   return { link: view, fields: fields.sort((a, b) => a.key.localeCompare(b.key)) }
 }
 

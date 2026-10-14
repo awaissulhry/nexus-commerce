@@ -79,8 +79,6 @@ const MATRIX: Array<[string, string, SystemRoleKey[]]> = [
   // Team & access
   ['GET', '/api/team/roles', ['ADMIN']],
   ['POST', '/api/team/users/1/deactivate', ['ADMIN']],
-  // Pricing tiers (B2B, restricted)
-  ['GET', '/api/tier-prices', ['ADMIN']],
 ]
 
 describe('permission matrix: exact allow/deny per role', () => {
