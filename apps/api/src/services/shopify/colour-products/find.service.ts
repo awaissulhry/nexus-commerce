@@ -128,8 +128,11 @@ async function findDestination(destination: Destination, input: z.infer<typeof f
   const candidates = await gatherCandidates(graphql, settings, plan, [...Object.values(linked), ...Object.values(chosen), ...(input.sourceProductId ? [input.sourceProductId] : [])])
   const matches = matchColourProducts(plan, candidates, linked, chosen)
   const claimed = await claimedElsewhere(destination, matches.map(m => m.shopifyProductId).filter((id): id is string => !!id))
+  // The store's active locations, for the review: with more than one, the operator says where a colour's stock counts.
+  const locations = ((await graphql(`query NexusColourLocations { locations(first:250) { nodes { id name isActive } } }`)).locations?.nodes ?? [])
+    .filter((l: any) => l?.isActive !== false && /^gid:\/\/shopify\/Location\/\d+$/.test(l?.id ?? '')).map((l: any) => ({ id: l.id as string, name: String(l.name ?? '') }))
   await saveProposals(destination, plan, matches, candidates, claimed, chosen)
-  return colourProductsView(destination, plan, settings)
+  return { ...await colourProductsView(destination, plan, settings), locations }
 }
 
 /**

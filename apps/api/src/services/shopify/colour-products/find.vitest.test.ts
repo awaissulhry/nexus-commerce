@@ -44,6 +44,7 @@ function shopify(query: string, variables: any) {
     const nodes = state.store.flatMap(p => p.variants.nodes.filter((v: any) => v.sku && asked.some(a => v.sku.startsWith(a))).map((v: any) => ({ sku: v.sku, product: { id: p.id } })))
     return { productVariants: { nodes } }
   }
+  if (query.includes('NexusColourLocations')) return { locations: { nodes: [{ id: 'gid://shopify/Location/7', name: 'Warehouse', isActive: true }, { id: 'gid://shopify/Location/8', name: 'Closed', isActive: false }] } }
   if (query.includes('NexusColourStoreProducts')) {
     state.read.push(['search', variables.query ?? '', variables.vns, variables.vkey])
     const nodes = state.store.filter(p => !variables.query || p.title.toLowerCase().includes(String(variables.query).toLowerCase()))
@@ -93,6 +94,8 @@ describe('Find — the live Shopify product of each colour', () => {
     expect(state.read).toEqual([[BLACK], [YELLOW]])
     expect(view.colourProducts.map(c => [c.valueKey, c.state])).toEqual([['color:black', 'PROPOSED'], ['color:yellow', 'PROPOSED']])
     expect(view.plan).toMatchObject({ mode: 'colour-products', splitAxis: 'color', grouped: true })
+    // The store's active locations, for the review's stock location.
+    expect(view.locations).toEqual([{ id: 'gid://shopify/Location/7', name: 'Warehouse' }])
   })
 
   it('a confirmed link stays confirmed; Find refreshes its proposal and reads the linked product even with no SKU in the store', async () => {

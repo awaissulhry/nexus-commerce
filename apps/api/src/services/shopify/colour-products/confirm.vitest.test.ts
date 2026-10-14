@@ -53,6 +53,7 @@ async function shopify(query: string, variables: any) {
     return p ? { id: p.id, title: p.title, handle: p.handle, status: p.status, colour: { value: p.colour }, group: { value: JSON.stringify(p.group) },
       variants: { nodes: p.variants.map((v: any) => ({ id: v.id, sku: v.sku, inventoryItem: { id: v.inventoryItemId }, selectedOptions: [{ value: v.option }] })), pageInfo: { hasNextPage: false } } } : null
   }) }
+  if (name === 'NexusColourLocations') return { locations: { nodes: state.locations } }
   if (name === 'NexusColourConfirmRead') {
     const hook = state.duringConfirm; state.duringConfirm = null; await hook?.()
     return {
