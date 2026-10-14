@@ -7,7 +7,6 @@ import { resolveChannelField, resolveSourcePath } from './resolve-channel-field.
 import { sourceContent } from './content-locale.js'
 import { resolvedContent } from '../products/translation-resolver.service.js'
 import { globalContentLocales } from './global-content.js'
-import { translationCoverage } from '../translation-completeness.service.js'
 import { loadCurrentValues } from '../ai/enrichment/draft.service.js'
 import { etsyContentState } from '../etsy/information-content.js'
 import { informationContentState } from '../shopify/listing-information-plan.js'
@@ -34,11 +33,6 @@ describe('LX.3 switched reader integration', () => {
     expect(result.keywords).toEqual([])
     expect(result.fields.bulletPoints.value).toEqual([])
     expect(result.fields.keywords.value).toEqual([])
-  })
-  it('coverage cannot count non-empty Italian source as German translation', () => {
-    expect(translationCoverage(product() as any, 'de')).toMatchObject({ fieldCount: 1, hasContent: true })
-    expect(translationCoverage(product() as any, 'fr')).toMatchObject({ fieldCount: 0, hasContent: false })
-    expect(translationCoverage(product() as any, 'it')).toMatchObject({ fieldCount: 2, hasContent: true })
   })
   it('AI translation targeting reads missing from language, even when the fallback is non-empty', async () => {
     db.product.findMany.mockResolvedValue([product()])

@@ -14,6 +14,10 @@
  * The two `dryRun: true` previews the scan also found (the old editor's `MasterDataTab.tsx` and
  * `AutoFillCard.tsx`, never affected) were deleted with that editor; a dry run is still not a write.
  *
+ * 2026-10-14: the drawer, the Translations lens and the bulk-generate modal were deleted with the old products
+ * workspace that no page rendered, and the `/translations/:language` routes with them (nothing else called them).
+ * `DraftsClient.tsx` is the surface left; a new `/translations` write would now name a route that does not exist.
+ *
  * Two routes, two rules, because the two routes know different things:
  *  - `/translations/:language` is told only the language, so the SURFACE addresses it, through the one
  *    shared derivation `sharedContentAddress`.
@@ -72,14 +76,11 @@ const writes = all.filter((call) => !/dryRun:\s*true/.test(call.text))
 describe('catalogue content-write surfaces have an addressed destination', () => {
   it('🔴 POSITIVE CONTROL — the scanner sees both routes', () => {
     // An empty set makes every assertion below vacuous, which is the failure this guards.
-    expect(all.length).toBeGreaterThanOrEqual(8)
-    expect(all.filter((c) => c.route === 'translations').length).toBeGreaterThanOrEqual(4)
-    expect(all.filter((c) => c.route === 'bulk-generate').length).toBeGreaterThanOrEqual(4)
+    expect(all.filter((c) => c.route === 'bulk-generate').length).toBeGreaterThanOrEqual(2)
   })
 
-  it('every /translations write carries a contentAddress', () => {
-    const offenders = writes.filter((c) => c.route === 'translations' && !/contentAddress/.test(c.text))
-    expect(offenders.map((c) => c.file)).toEqual([])
+  it('no surface writes to /translations: those routes are gone', () => {
+    expect(writes.filter((c) => c.route === 'translations').map((c) => c.file)).toEqual([])
   })
 
   it('every /ai/bulk-generate write names a marketplace, so the server can address it', () => {

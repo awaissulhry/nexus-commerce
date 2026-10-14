@@ -3,9 +3,9 @@
  * thing. Each function is the body of its route, moved as it was (pricing-read.vitest.test.ts holds the routes'
  * answers): the route keeps its error handling and returns what the function returns.
  *
- *   listScheduledChanges   GET /api/products/:id/scheduled-changes
- *   createScheduledChange  POST /api/products/:id/scheduled-changes      (08 S12)
- *   cancelScheduledChange  POST /api/products/scheduled-changes/:id/cancel — one step: PENDING → CANCELLED or a refusal
+ *   listScheduledChanges   was GET /api/products/:id/scheduled-changes (route deleted 2026-10-14; Claude's pricing read)
+ *   createScheduledChange  was POST /api/products/:id/scheduled-changes      (08 S12; route deleted 2026-10-14)
+ *   cancelScheduledChange  was POST /api/products/scheduled-changes/:id/cancel — one step: PENDING → CANCELLED or a refusal
  *   resolveUnknownChange   POST /api/products/scheduled-changes/:id/resolve — a change whose run died (UNKNOWN): applied or retry
  * A refusal is a ScheduledChangeError carrying the status and the sentence the route answers with.
  */

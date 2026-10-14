@@ -4,7 +4,7 @@
  *   Routes: they keep their answers now that their writes live in `services/pricing/` (pricing-rule, promotion and
  *   scheduled-price services). Written against the routes BEFORE the move and unchanged after it: `POST`/`PUT`/`DELETE
  *   /api/pricing-rules`, `POST`/`DELETE /api/pricing/promotions`, `POST /api/products/:id/scheduled-changes` and
- *   `POST /api/products/scheduled-changes/:id/cancel`.
+ *   `POST /api/products/scheduled-changes/:id/cancel` (those two deleted 2026-10-14; their service functions are checked).
  *   Job: a scheduled change that is cancelled never runs — the job claims a row before it runs it, and a cancel landing
  *   while it runs is refused instead of saying "cancelled".
  *   Tools: Claude's set-pricing-rule, set-promotion and schedule-price-change through the doors a person uses (queued,
@@ -18,6 +18,7 @@ import { randomUUID } from 'node:crypto'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
 import { formulaDatabase } from '../../test-support/formula-database.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
+import { cancelScheduledChange, createScheduledChange, ScheduledChangeError } from './scheduled-price.service.js'
 
 let database: Awaited<ReturnType<typeof formulaDatabase>>
 vi.mock('../../db.js', async () => {
@@ -86,6 +87,23 @@ async function send(method: 'POST' | 'PUT' | 'DELETE', url: string, payload?: un
   return { status: response.statusCode, body: response.json() }
 }
 
+/**
+ * What the deleted scheduled-change routes answered (create 201, cancel 200, a refusal as its status and sentence). The
+ * routes went on 2026-10-14 with the old product drawer, their only caller; Claude's schedule-price-change calls the same
+ * service functions, so these checks run against them directly.
+ */
+async function scheduled(work: () => Promise<unknown>, status: number): Promise<{ status: number; body: Json }> {
+  try {
+    return { status, body: JSON.parse(JSON.stringify({ ok: true, change: await inside(work) })) }
+  } catch (err) {
+    if (err instanceof ScheduledChangeError) return { status: err.status, body: { error: err.message } }
+    throw err
+  }
+}
+const schedule = (productId: string, body: { kind?: string; payload?: Record<string, unknown>; scheduledFor?: string }) =>
+  scheduled(() => createScheduledChange(productId, body, 'u-s12-person'), 201)
+const cancelChange = (id: string) => scheduled(() => cancelScheduledChange(id), 200)
+
 beforeAll(async () => {
   database = await formulaDatabase()
   await inside(async () => {
@@ -141,23 +159,23 @@ describe('08 S12 — the pricing change routes answer as before', () => {
     expect(await send('DELETE', '/api/pricing/promotions/nope')).toEqual({ status: 404, body: { error: 'event not found' } })
   })
 
-  it('POST /api/products/:id/scheduled-changes and the cancel: a price change for later; bad input; a deleted product; cancel once', async () => {
+  it('createScheduledChange and cancelScheduledChange: a price change for later; bad input; a deleted product; cancel once', async () => {
     const at = new Date(Date.now() + 3 * DAY).toISOString()
-    const created = await send('POST', `/api/products/${ids.jacket}/scheduled-changes`, { kind: 'PRICE', payload: { basePrice: 110 }, scheduledFor: at })
+    const created = await schedule(ids.jacket, { kind: 'PRICE', payload: { basePrice: 110 }, scheduledFor: at })
     expect(created.status).toBe(201)
     expect(created.body).toMatchObject({ ok: true, change: { productId: ids.jacket, kind: 'PRICE', payload: { basePrice: 110 }, scheduledFor: at, status: 'PENDING', createdBy: 'u-s12-person' } })
-    expect(await send('POST', `/api/products/${ids.jacket}/scheduled-changes`, { kind: 'NOPE', payload: {}, scheduledFor: at })).toEqual({ status: 400, body: { error: 'kind must be STATUS or PRICE' } })
-    expect(await send('POST', `/api/products/${ids.jacket}/scheduled-changes`, { kind: 'PRICE', scheduledFor: at })).toEqual({ status: 400, body: { error: 'payload (object) required' } })
-    expect(await send('POST', `/api/products/${ids.jacket}/scheduled-changes`, { kind: 'PRICE', payload: { basePrice: 1 } })).toEqual({ status: 400, body: { error: 'scheduledFor (ISO timestamp) required' } })
-    expect(await send('POST', `/api/products/${ids.jacket}/scheduled-changes`, { kind: 'PRICE', payload: { basePrice: 1 }, scheduledFor: 'nope' })).toEqual({ status: 400, body: { error: 'scheduledFor not a valid date: nope' } })
-    expect(await send('POST', `/api/products/${ids.jacket}/scheduled-changes`, { kind: 'PRICE', payload: { basePrice: 1 }, scheduledFor: '2020-01-01T00:00:00Z' })).toEqual({ status: 400, body: { error: 'scheduledFor must be in the future (use the live PATCH endpoint to apply now)' } })
-    expect(await send('POST', `/api/products/${ids.jacket}/scheduled-changes`, { kind: 'PRICE', payload: { nope: 1 }, scheduledFor: at })).toEqual({ status: 400, body: { error: 'PRICE payload requires basePrice (number >= 0) or adjustPercent (number)' } })
-    expect(await send('POST', `/api/products/${ids.jacket}/scheduled-changes`, { kind: 'STATUS', payload: { status: 'GONE' }, scheduledFor: at })).toEqual({ status: 400, body: { error: 'STATUS payload.status must be ACTIVE | DRAFT | INACTIVE' } })
-    expect(await send('POST', `/api/products/${ids.gloves}/scheduled-changes`, { kind: 'PRICE', payload: { basePrice: 1 }, scheduledFor: at })).toEqual({ status: 404, body: { error: 'product not found or soft-deleted' } })
-    const cancelled = await send('POST', `/api/products/scheduled-changes/${created.body.change.id}/cancel`)
+    expect(await schedule(ids.jacket, { kind: 'NOPE', payload: {}, scheduledFor: at })).toEqual({ status: 400, body: { error: 'kind must be STATUS or PRICE' } })
+    expect(await schedule(ids.jacket, { kind: 'PRICE', scheduledFor: at })).toEqual({ status: 400, body: { error: 'payload (object) required' } })
+    expect(await schedule(ids.jacket, { kind: 'PRICE', payload: { basePrice: 1 } })).toEqual({ status: 400, body: { error: 'scheduledFor (ISO timestamp) required' } })
+    expect(await schedule(ids.jacket, { kind: 'PRICE', payload: { basePrice: 1 }, scheduledFor: 'nope' })).toEqual({ status: 400, body: { error: 'scheduledFor not a valid date: nope' } })
+    expect(await schedule(ids.jacket, { kind: 'PRICE', payload: { basePrice: 1 }, scheduledFor: '2020-01-01T00:00:00Z' })).toEqual({ status: 400, body: { error: 'scheduledFor must be in the future (use the live PATCH endpoint to apply now)' } })
+    expect(await schedule(ids.jacket, { kind: 'PRICE', payload: { nope: 1 }, scheduledFor: at })).toEqual({ status: 400, body: { error: 'PRICE payload requires basePrice (number >= 0) or adjustPercent (number)' } })
+    expect(await schedule(ids.jacket, { kind: 'STATUS', payload: { status: 'GONE' }, scheduledFor: at })).toEqual({ status: 400, body: { error: 'STATUS payload.status must be ACTIVE | DRAFT | INACTIVE' } })
+    expect(await schedule(ids.gloves, { kind: 'PRICE', payload: { basePrice: 1 }, scheduledFor: at })).toEqual({ status: 404, body: { error: 'product not found or soft-deleted' } })
+    const cancelled = await cancelChange(created.body.change.id)
     expect(cancelled).toMatchObject({ status: 200, body: { ok: true, change: { id: created.body.change.id, status: 'CANCELLED' } } })
-    expect(await send('POST', `/api/products/scheduled-changes/${created.body.change.id}/cancel`)).toEqual({ status: 409, body: { error: 'cannot cancel — current status is CANCELLED' } })
-    expect(await send('POST', '/api/products/scheduled-changes/nope/cancel')).toEqual({ status: 404, body: { error: 'not found' } })
+    expect(await cancelChange(created.body.change.id)).toEqual({ status: 409, body: { error: 'cannot cancel — current status is CANCELLED' } })
+    expect(await cancelChange('nope')).toEqual({ status: 404, body: { error: 'not found' } })
   })
 })
 
@@ -169,7 +187,7 @@ describe('08 S12 — a cancelled scheduled price change never runs', () => {
     }))
     await inside(() => database.client.$executeRawUnsafe(`UPDATE "ScheduledProductChange" SET "scheduledFor" = now() - interval '1 minute' WHERE id = $1`, change.id))
     let cancel: { status: number; body: Json } | null = null
-    during.update = async () => { cancel = await send('POST', `/api/products/scheduled-changes/${change.id}/cancel`) }
+    during.update = async () => { cancel = await cancelChange(change.id) }
     const run = await inside(() => runScheduledChangesOnce())
     const price = Number((await inside(() => database.client.product.findUniqueOrThrow({ where: { id: ids.jacket } }))).basePrice)
     const row = await inside(() => database.client.scheduledProductChange.findUniqueOrThrow({ where: { id: change.id } }))
@@ -186,7 +204,7 @@ describe('08 S12 — a cancelled scheduled price change never runs', () => {
     const change = await inside(() => database.client.scheduledProductChange.create({
       data: { productId: ids.jacket, kind: 'PRICE', payload: { basePrice: 101 }, scheduledFor: new Date(Date.now() + DAY), status: 'PENDING' },
     }))
-    expect(await send('POST', `/api/products/scheduled-changes/${change.id}/cancel`)).toMatchObject({ status: 200 })
+    expect(await cancelChange(change.id)).toMatchObject({ status: 200 })
     await inside(() => database.client.$executeRawUnsafe(`UPDATE "ScheduledProductChange" SET "scheduledFor" = now() - interval '1 minute' WHERE id = $1`, change.id))
     await inside(() => runScheduledChangesOnce())
     expect(Number((await inside(() => database.client.product.findUniqueOrThrow({ where: { id: ids.jacket } }))).basePrice)).toBe(before)

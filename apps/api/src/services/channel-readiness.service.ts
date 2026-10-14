@@ -177,33 +177,6 @@ export class ChannelReadinessService {
 
     return fallbackReadiness(productId, product)
   }
-
-  /**
-   * P3 (docs/attributes/PLAN.md §4.1) — the same answer as `compute` for many products, with a fixed number of queries
-   * (products, the batched family completeness, the labels) instead of several per product in sequence.
-   * A product that does not exist, or whose family cannot be resolved, gets `{ error }` with the message `compute` throws.
-   */
-  async computeMany(productIds: readonly string[]): Promise<Map<string, ChannelReadinessResult | { error: string }>> {
-    const ids = [...new Set(productIds)]
-    const products = await this.client.product.findMany({ where: { id: { in: ids } }, select: READINESS_PRODUCT_SELECT })
-    const byId = new Map(products.map((p) => [p.id, p]))
-    const familied = products.filter((p) => p.familyId).map((p) => p.id)
-    const completeness = familied.length ? await familyCompletenessService.computeMany(familied) : new Map()
-    const missingIds = [...new Set([...completeness.values()].flatMap((c) => ('error' in c ? [] : c.missing.map((m: { attributeId: string }) => m.attributeId))))]
-    const labels = missingIds.length
-      ? await this.client.customAttribute.findMany({ where: { id: { in: missingIds } }, select: { id: true, label: true } })
-      : []
-    const labelById = new Map(labels.map((a) => [a.id, a.label]))
-    const results = new Map<string, ChannelReadinessResult | { error: string }>()
-    for (const id of ids) {
-      const product = byId.get(id)
-      if (!product) { results.set(id, { error: `ChannelReadinessService: product ${id} not found` }); continue }
-      if (!product.familyId) { results.set(id, fallbackReadiness(id, product)); continue }
-      const c = completeness.get(id)!
-      results.set(id, 'error' in c ? c : familyReadiness(id, c, labelById))
-    }
-    return results
-  }
 }
 
 const READINESS_PRODUCT_SELECT = {

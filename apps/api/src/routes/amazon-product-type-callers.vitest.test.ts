@@ -6,7 +6,8 @@
  * Measured before: a jacket COAT in DE and IT but OUTERWEAR on the product got OUTERWEAR for a first listing in BE made
  * through the product-page schema, the direct publish or its preflight (both deleted with the old product editor since);
  * its GTIN status looked for an OUTERWEAR
- * exemption; a type-less product listed COAT elsewhere showed "blocked" in the grid's listing health; and the cockpit
+ * exemption; a type-less product listed COAT elsewhere showed "blocked" in the grid's listing health (that route was
+ * deleted with the old products workspace since); and the cockpit
  * publish and the Amazon pre-flight report built their row (schema hints, byte limits, report type) as OUTERWEAR. On an
  * in-process PostgreSQL (PGlite) with the REAL resolver, sibling query and `resolveBatch`; only outbound calls and
  * unrelated services are stood in. Every id below is invented.
@@ -61,7 +62,6 @@ vi.mock('../services/amazon/send-quantity.js', async importOriginal => ({ ...awa
 import prisma from '../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../lib/workspace-context.js'
 import listingWizardRoutes from './listing-wizard.routes.js'
-import productChannelDataRoutes from './product-channel-data.routes.js'
 import amazonCockpitPublishRoutes from './amazon-cockpit-publish.routes.js'
 import { buildPreflightReport } from '../services/amazon/preflight-report.service.js'
 import { buildRow } from '../services/amazon/cockpit-publish-row.js'
@@ -85,7 +85,6 @@ beforeAll(async () => {
   app = Fastify()
   app.addHook('preHandler', (_request, _reply, done) => { withWorkspace(legacy, done) })
   await app.register(listingWizardRoutes, { prefix: '/api' })
-  await app.register(productChannelDataRoutes, { prefix: '/api' })
   await app.register(amazonCockpitPublishRoutes, { prefix: '/api' })
   await app.ready()
   await scoped(async () => {
@@ -165,29 +164,6 @@ describe('product-page schema (GET /products/:id/listings/:channel/:marketplace/
     expect(s.aspects).toHaveBeenCalledWith('90001', 'IT', expect.anything())
     // eBay never borrows an Amazon type, from the product or another market.
     expect((await schema('typeless', 'EBAY', 'IT')).json()).toMatchObject({ code: 'no_ebay_category' })
-  })
-})
-
-describe('grid listing health (POST /products/listing-health/bulk)', () => {
-  const health = async () => {
-    const response = await app.inject({ method: 'POST', url: '/api/products/listing-health/bulk', payload: { productIds: ['jacket', 'pinned', 'typeless', 'bare'].map(k => ids[k]) } })
-    expect(response.statusCode, response.body).toBe(200)
-    return response.json().results as Record<string, { ready: number; total: number; byChannel: Record<string, { ready: number; total: number }> }>
-  }
-  it('an Amazon listing with no type of its own is ready when the sibling markets give one (was blocked)', async () => {
-    const results = await health()
-    expect(results[ids.typeless].byChannel.AMAZON).toEqual({ ready: 3, total: 3 })
-  })
-  it('a listing that names its own type is ready; nothing anywhere is still blocked', async () => {
-    const results = await health()
-    expect(results[ids.pinned].byChannel.AMAZON).toEqual({ ready: 2, total: 2 })
-    expect(results[ids.jacket].byChannel.AMAZON).toEqual({ ready: 2, total: 2 })
-    expect(results[ids.bare]).toMatchObject({ ready: 0, total: 1 })
-  })
-  it('non-Amazon unchanged: eBay needs no product type', async () => {
-    const results = await health()
-    expect(results[ids.typeless].byChannel.EBAY).toEqual({ ready: 1, total: 1 })
-    expect(results[ids.jacket].byChannel.EBAY).toEqual({ ready: 1, total: 1 })
   })
 })
 

@@ -39,10 +39,3 @@ export function stampContentReview(product: Bag, merged: Record<string, Bag>, pa
   }
   return next
 }
-
-export function contentReviewState(product: Bag, key: string, locale: string): 'current' | 'draft' | 'reviewed' | 'outdated' {
-  const resolved = resolveContent({ product: product as any, parent: product.parent, field: key, localizableKeys: [key], address: { requested: normalizeLanguage(locale) } })
-  if (resolved.translation?.outdated) return 'outdated'
-  if (resolved.translation?.reviewedAt) return 'reviewed'
-  return resolved.translation && resolved.translation.source !== 'manual' ? 'draft' : 'current'
-}

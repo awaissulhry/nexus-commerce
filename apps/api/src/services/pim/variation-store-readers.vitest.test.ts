@@ -64,7 +64,6 @@ const EXCEPTIONS: Array<[string, string, string]> = [
   // The AI prompt builder reads through variationBag; these pass both stores to it.
   ['routes/listing-wizard.routes.ts', 'variantAttributes: product.variantAttributes,', 'AI prompt pass-through (categoryAttributes passed too)'],
   ['routes/products-ai.routes.ts', 'variantAttributes: product.variantAttributes,', 'AI prompt pass-through'],
-  ['routes/product-translations.routes.ts', 'variantAttributes: product.variantAttributes,', 'AI prompt pass-through'],
   ['routes/listing-content.routes.ts', 'variantAttributes: product.variantAttributes,', 'AI prompt pass-through'],
   ['jobs/listing-quality-snapshot.job.ts', 'variantAttributes: product.variantAttributes,', 'AI prompt pass-through'],
   ['routes/marketing-automation.routes.ts', 'variantAttributes: (product.variantAttributes ?? undefined)', 'AI prompt pass-through'],

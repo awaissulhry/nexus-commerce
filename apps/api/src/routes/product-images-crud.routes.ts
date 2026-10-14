@@ -747,50 +747,6 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
-  // ── POST /api/products/images/bulk-apply ─────────────────────────────
-  // IR.8.2 — Generic bulk apply. Operator picks a source + a list of
-  // arbitrary targets (typically gathered from a multi-select on the
-  // /products listing). Same per-target transaction + audit pattern
-  // as apply-to-children.
-  fastify.post<{
-    Body: {
-      sourceProductId?: string
-      targetProductIds?: string[]
-      mode?: 'replace' | 'append'
-    }
-  }>(
-    '/products/images/bulk-apply',
-    async (req, reply) => {
-      const { sourceProductId, targetProductIds, mode = 'replace' } = req.body ?? {}
-      if (!sourceProductId) return reply.status(400).send({ error: 'SOURCE_REQUIRED' })
-      if (!Array.isArray(targetProductIds) || targetProductIds.length === 0) {
-        return reply.status(400).send({ error: 'TARGETS_REQUIRED' })
-      }
-      if (targetProductIds.length > 500) {
-        return reply.status(400).send({
-          error: 'TOO_MANY_TARGETS',
-          message: 'Hard cap of 500 targets per call. Split into smaller batches.',
-        })
-      }
-
-      try {
-        const result = await applyImagesToProducts({
-          sourceProductId,
-          targetProductIds,
-          mode,
-        })
-        return reply.send(result)
-      } catch (err) {
-        if (err instanceof MediaPlanRefusal) return reply.status(409).send({ error: 'MEDIA_PLAN', message: err.message })
-        const message = err instanceof Error ? err.message : 'Bulk apply failed'
-        return reply.status(message.startsWith('SOURCE_NOT_FOUND') ? 404 : 500).send({
-          error: 'BULK_APPLY_FAILED',
-          message,
-        })
-      }
-    },
-  )
-
   // ── POST /api/products/:id/images/import-from-dam ────────────────────
   // IR.7.4 — Pull a DigitalAsset into the product's master gallery.
   // Creates a ProductImage that mirrors the asset's storage + dim
