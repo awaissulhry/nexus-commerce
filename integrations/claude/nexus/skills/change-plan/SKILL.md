@@ -18,7 +18,7 @@ The Nexus server's instructions hold the rules for every change — say which bu
 - Read before you write: each step must rest on what Nexus holds now (the product, its current value, the listing's coordinate, the version of a purchase order). Use the read tools the other skills name.
 - A step is `{ tool, args }`: the change tool's name and its own arguments **without** `business` (the plan names the business once). Read each tool's description for its exact arguments.
 - Only change tools can be steps. Reads, `submit-change-plan`, `undo-change` and `confirm-change` cannot.
-- Prefer one bulk step over many single ones: `bulk-price-change` / `set-master-prices` (250 products), `bulk-attribute-change` (250), `bulk-content-change` (25), `set-brand` (250), `set-stock` (250 rows), `bulk-ad-bid-change` (250 targets), `close-listing` (250 listings). A bulk step counts as one step.
+- Prefer one bulk step over many single ones: `bulk-price-change` / `set-master-prices` (250 products), `bulk-listing-price-change` (250 listings: their own prices, or Amazon business prices with `businessPrices`), `bulk-attribute-change` (250), `bulk-content-change` (25), `set-brand` (250), `set-stock` (250 rows), `bulk-ad-bid-change` (250 targets), `close-listing` (250 listings). A bulk step counts as one step.
 - **Steps cannot wait for each other.** Each one is checked against Nexus as it is now. A step that needs an earlier step's result cannot be in the same plan: a new product's id, a draft listing not created yet, text a publish should send, a purchase order to send that is still being drafted. Ask for the later step after the earlier one has run.
 - Up to 200 steps. More: split into several plans and say so before you send the first.
 

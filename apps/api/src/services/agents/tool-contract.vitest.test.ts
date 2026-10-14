@@ -679,8 +679,6 @@ describe('C1 — every registered tool keeps the contract', () => {
       'schedule-price-change': { before: { action: 'create', productId: 'p1', sku: 'S1' }, after: { scheduledChangeId: 's1', status: 'PENDING' } },
       // 08 S9 — suppliers and purchase orders.
       'upsert-supplier': { before: { action: 'update', supplierId: 'sup1', fields: { leadTimeDays: 14 }, products: [{ productId: 'p1', row: { costCents: 900, moq: 1, isPrimary: false } }, { productId: 'p2', row: null }] }, after: { supplierId: 'sup1', fields: { leadTimeDays: 21 }, products: [] } },
-      // 08 S13 — tier prices (an eBay promotion and an FBA plan cannot be undone from Nexus).
-      'set-tier-prices': { before: { productId: 'p1', sku: 'S1', tiers: [{ minQty: 5, customerGroup: null, price: 9 }] }, after: { productId: 'p1', tiers: [{ minQty: 5, customerGroup: null, price: 8 }] } },
       // 08 S10 — receiving, inbound shipments, costs, replenishment.
       'receive-stock': { before: { shipmentId: 's1', items: [{ productId: 'p1', sku: 'S1', location: 'IT-MAIN', quantity: 5 }] }, after: { items: [{ productId: 'p1', location: 'IT-MAIN', quantity: 8 }] } },
       'update-inbound-shipment': { before: { action: 'details', shipmentId: 's1', fields: { trackingNumber: null }, lineCosts: [] }, after: { shipmentId: 's1', fields: { trackingNumber: 'T1' }, lineCosts: [] } },

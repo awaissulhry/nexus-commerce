@@ -401,6 +401,13 @@ export interface AgentTool {
    */
   consequencesFor?: (args: Record<string, unknown>) => { openWorld?: false; reversibility?: Reversibility } | null
   /**
+   * Amazon Business step 6 — the most Claude may do with ONE request of this tool, when its arguments make it narrower
+   * than the tool's ceiling (bulk-listing-price-change with business prices: `ask`, a person approves it in Nexus — never
+   * confirmed in Claude, never run by rule), with the sentence why. Read from the arguments by the tool's own code, pure;
+   * it only lowers the business's level for that request (claude-trust.service.ts `narrowed`), never raises it.
+   */
+  trustCeilingFor?: (args: Record<string, unknown>) => { level: Exclude<ClaudeTrust, 'watch' | 'auto'>; why: string } | null
+  /**
    * C7 — arguments that are secrets (an authenticator code): never written to the run record, never echoed back.
    */
   secretArgs?: readonly string[]

@@ -1087,9 +1087,8 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'update-inbound-shipment': ['action', 'shipment', 'status', 'changes', 'lineCosts', 'lines'],
   'set-product-costs': ['action', 'costs', 'landed', 'totals'],
   'replenishment-action': ['action', 'suggestions', 'preferred', 'substitutions', 'cashOnHandCents', 'totals'],
-  // 08 S13 — an eBay promotion (live or dry run, the prices it sets), tier prices, an FBA plan's lines.
+  // 08 S13 — an eBay promotion (live or dry run, the prices it sets), an FBA plan's lines.
   'set-ebay-price-promotion': ['kind', 'live', 'dates', 'discount', 'listings', 'products', 'tiers', 'marketplace'],
-  'set-tier-prices': ['product', 'tiers'],
   // Step 4 Send to FBA — where it leaves from (the warehouse and its address), the day, each SKU's cases / units / free
   // units / owners and the box totals: a sale or a changed owner between preview and approval changes what is held.
   'plan-fba-shipment': ['marketplace', 'from', 'readyToShipOn', 'lines', 'totals'],
@@ -1106,7 +1105,8 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   // L8 — the Matrix door's own preview: the verb and every change it would make (from → to per cell). The run carries
   // these changes and the door re-verifies each one again. 2.3 — a sale stands on the sale it saw and the price it was
   // planned against, a price on the sale of its listings (`planFacts`), never on the listing's version (a sale approved
-  // before carried the version in each change: VERSION_BASIS_BEFORE).
+  // before carried the version in each change: VERSION_BASIS_BEFORE). Amazon Business step 6: a business price (verb
+  // business) stands on each listing's business setting before and after (its `changes`).
   'set-listing-stock': ['verb', 'changes'],
   'set-listing-price': ['verb', 'changes', 'planFacts'],
   'revert-listing-change': ['operationId', 'status', 'cells'],

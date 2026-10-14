@@ -7,9 +7,13 @@
  *   bulk-listing-price-change   up to 250 listings' own prices by a percent, by an amount, to one price, or each to its
  *                               own price (an undo), optionally rounded down to .99 — each through the ONE channel price
  *                               door (`writeChannelPrices`), checked against the price the person approved (2.3: not the
- *                               listing's version, which an order's stock cascade moves).
+ *                               listing's version, which an order's stock cascade moves). Amazon Business step 6: or up to 250
+ *                               Amazon listings' business prices and quantity tiers (`businessPrices`), each through the business
+ *                               price door the Matrix writes with (`writeBusinessPrices`, previewed by its dry run), in one
+ *                               approval that a person always gives (never by rule).
  *   resend-prices               send the price each listing already carries again, through the door's send mode
- *                               (`pushPriceUpdate`, `/pricing`'s "Push price").
+ *                               (`pushPriceUpdate`, `/pricing`'s "Push price"); on Amazon also the business price Nexus keeps
+ *                               (`queueBusinessSends`: Amazon is sent only what differs).
  *
  * The rules are the door's, held here before anything is queued so the preview is the truth: a typed price only in a
  * market that sells in the master currency (another currency is refused: Nexus never converts, and the floor and
@@ -32,6 +36,13 @@ import type { ProductBulkContext } from '../../products/bulk-edit.service.js'
 import { approvedOnVersion, BASIS_ON_FIELDS, type AgentTool, type PlanFacts, type PlanWrite, type ToolContext, type ToolResult, type ToolUndo } from '../tool-types.js'
 import { listingPlanFacts, listingPriceFacts, pinnedPrice, type ListingFacts } from './listing-facts.js'
 import { PRODUCT_NOT_FOUND } from './live-product.js'
+import {
+  BUSINESS_FIELDS, businessCardSummary, businessFromWords, businessSettingWords, businessUndoRequest, currentBusinessRecords, planBusinessPrices,
+  type BusinessInput, type BusinessLine, type BusinessRecord,
+} from './business-price-plan.js'
+import { businessPriceOf, type BusinessPriceSetting } from '@nexus/shared/business-price'
+import { businessNormalPrice, storedBusinessSetting } from '../../amazon/business-offer.js'
+import { businessHeld } from '../../pim/business-held.js'
 
 const PREVIEW_LINES = 20
 const MAX_LISTINGS = 250
@@ -96,7 +107,11 @@ export const BULK_LISTING_PRICE_LIMITS = z.object({
   maxChangePct: z.number().positive().max(100).default(10).describe('the largest move of one price, in percent, allowed without a person'),
 })
 
+/** Amazon Business step 6 — a business price change never runs by a business's rule: a person approves it. */
+export const BUSINESS_NEEDS_A_PERSON = 'it changes business prices (Amazon Business), which a person approves in Nexus'
+
 export function bulkListingPriceWithinLimits(preview: unknown, limits: Record<string, unknown>): string | null {
+  if ((preview as { businessPrices?: unknown } | null)?.businessPrices === true) return BUSINESS_NEEDS_A_PERSON
   const totals = (preview as { totals?: { listings?: unknown; maxChangePct?: unknown } } | null)?.totals
   if (typeof totals?.listings !== 'number' || typeof totals.maxChangePct !== 'number') return 'the request does not say how many prices it moves, or how far'
   if (totals.listings > Number(limits.maxListings)) return `it reprices ${totals.listings} listings, more than the ${limits.maxListings} allowed without a person`
@@ -115,6 +130,11 @@ const priceInput = z.object({
     listingId: z.string().trim().min(1).max(64).describe('the Nexus listing id'),
     price: z.coerce.number().positive().max(1_000_000).nullable().describe('its own price; null hands it back to the master price (its rule)'),
   })).min(1).max(MAX_LISTINGS).optional().describe('instead of listingIds: each listing to its own price (how an undo puts prices back)'),
+  businessPrices: z.array(z.object({
+    listingId: z.string().trim().min(1).max(64).describe('the Nexus id of an Amazon listing (listing-coordinates or listing-matrix names it)'),
+    ...BUSINESS_FIELDS,
+  })).min(1).max(MAX_LISTINGS).optional().describe('instead of listingIds or prices: Amazon listings\' business prices for business buyers (Amazon Business), '
+    + 'each with its own rule (PERCENT_OFF with percent, FIXED with price) and quantity discounts (tiers), or remove: true; what is left out keeps what the listing has'),
 })
 
 interface PriceLine { listing: PriceListing; from: number | null; to: number | null; currency: string; held: boolean }
@@ -125,7 +145,7 @@ async function planListingPrices(args: Record<string, unknown>): Promise<PricePl
   const listingIds = (args.listingIds as string[] | undefined) ?? []
   const prices = (args.prices as Array<{ listingId: string; price: number | null }> | undefined) ?? []
   if (listingIds.length && prices.length) return { error: 'Name listingIds with mode and value, or prices — one of the two.' }
-  if (!listingIds.length && !prices.length) return { error: 'Name the listings to reprice (listingIds with mode and value), or prices.' }
+  if (!listingIds.length && !prices.length) return { error: 'Name the listings to reprice (listingIds with mode and value), prices, or businessPrices.' }
   const mode = args.mode as 'percent' | 'amount' | 'set' | undefined
   const value = args.value as number | undefined
   if (listingIds.length && (!mode || value === undefined)) return { error: 'Name how to change the prices: mode (percent, amount or set) and value.' }
@@ -217,14 +237,94 @@ function listingPricePreview(plan: PricePlan, planFacts: PlanFacts) {
   }
 }
 
+/** Amazon Business step 6 — business prices of many listings: one line per listing, from → to, each as the door decides. */
+async function planBusinessBulk(args: Record<string, unknown>, ctx: ToolContext): Promise<{ lines: BusinessLine[]; unchanged: number } | Refusal> {
+  const asked = args.businessPrices as Array<{ listingId: string } & BusinessInput>
+  if ((args.listingIds as unknown[] | undefined)?.length || (args.prices as unknown[] | undefined)?.length || args.mode !== undefined || args.value !== undefined || args.endIn99 !== undefined) {
+    return { error: 'businessPrices names each business price itself: leave listingIds, prices, mode, value and endIn99 out (one request changes normal prices or business prices).' }
+  }
+  if (new Set(asked.map((b) => b.listingId)).size !== asked.length) return { error: 'A listing is named twice. Name each listing once.' }
+  const byId = await listingsById(asked.map((b) => b.listingId))
+  if (refused(byId)) return byId
+  const plan = await planBusinessPrices(asked.map(({ listingId, ...input }) => ({ listingId, input })), actorOf(ctx, 'bulk-listing-price-change'))
+  // As for normal prices: a listing the door would refuse refuses the request, before anything is queued.
+  if (plan.refused.length) return { error: `Not queued: ${listed(plan.refused.map((r) => `${r.sku} on AMAZON ${r.marketplace ?? ''}: ${r.reason}`))}.` }
+  if (!plan.lines.length) return { error: `Every listing named already has that business price (${plural(plan.unchanged, 'listing')}). Nothing to change.` }
+  return { lines: plan.lines, unchanged: plan.unchanged }
+}
+
+function businessBulkPreview(plan: { lines: BusinessLine[]; unchanged: number }) {
+  const removed = plan.lines.filter((l) => !l.to).length
+  const warnings = plan.lines.flatMap((l) => l.warnings.map((w) => `${l.sku} on Amazon ${l.marketplace}: ${w}`))
+  return {
+    action: 'bulk-listing-price-change',
+    // Never run by rule (`bulkListingPriceWithinLimits`): a person approves every business price change.
+    businessPrices: true,
+    // The one sentence the approval card shows: what it does, then what a person must know (counts and the first few).
+    summary: businessCardSummary(`New business prices (Amazon Business) on ${plural(plan.lines.length, 'listing')}${plan.unchanged ? ` (${plan.unchanged} already so)` : ''}: `
+      + `${plan.lines.length - removed} set or changed, ${removed} removed.`, plan.lines, (l) => `${l.sku} ${l.marketplace}`,
+      `Business prices on ${plural(plan.lines.length, 'listing')}: ${plan.lines.length - removed} set, ${removed} removed.`),
+    changes: plan.lines.slice(0, PREVIEW_LINES).map((l) => ({
+      sku: l.sku, channel: 'AMAZON', market: l.marketplace, label: 'B2B price', currency: l.currency,
+      fromLabel: businessFromWords(l), toLabel: businessSettingWords(l.to, l.currency),
+    })),
+    ...(plan.lines.length > PREVIEW_LINES ? { moreChanges: plan.lines.length - PREVIEW_LINES } : {}),
+    // What the settings give today (a percent follows the normal price; the door checks each again when it writes).
+    prices: plan.lines.slice(0, PREVIEW_LINES).map((l) => ({ sku: l.sku, market: l.marketplace, currency: l.currency, normalPrice: l.normalPrice, now: l.priceNow, after: l.priceAfter })),
+    totals: { listings: plan.lines.length, unchanged: plan.unchanged, removed },
+    // 2.3 — it stands on each listing's business setting as it is and as it gets, never the listing's version.
+    basisOn: BASIS_ON_FIELDS,
+    basis: basisOf(plan.lines.map((l) => [l.listingId, l.from, l.to])),
+    ...(warnings.length ? { warnings: warnings.slice(0, PREVIEW_LINES) } : {}),
+    note: `${NOT_YET} Each business price goes through the Nexus business price door (the Matrix's own), as the person who approves it, `
+      + 'and is then sent to Amazon — or kept in Nexus until a paused, draft or Inactive listing can be sent to. One that changed since is not touched.',
+  }
+}
+
+async function runBusinessBulk(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
+  const plan = await planBusinessBulk(args, ctx)
+  if (refused(plan)) return { ok: false, error: plan.error }
+  const approved = ctx.approvedPreview as { basis?: unknown; businessPrices?: unknown } | undefined
+  if (approved?.businessPrices !== true || typeof approved.basis !== 'string') return { ok: false, error: 'A business price change runs only after a person approved its preview. Nothing changed.' }
+  if (approved.basis !== businessBulkPreview(plan).basis) return { ok: false, error: 'A listing\'s business price changed since this was approved. Nothing changed; ask Claude again.' }
+  const { writeBusinessPrices } = await import('../../pim/business-price-write.service.js')
+  // At the version just read: anything landing on a listing between this read and its write is a conflict for that listing.
+  const written = await writeBusinessPrices({
+    targets: plan.lines.map((l) => ({ listingId: l.listingId, setting: l.to, expectedVersion: l.version })),
+    actor: actorOf(ctx, 'bulk-listing-price-change'), reason: 'Claude bulk-listing-price-change (approved in Nexus)',
+  })
+  const appliedIds = new Set(written.results.filter((r) => r.outcome === 'applied').map((r) => r.listingId))
+  const failed = written.results.filter((r) => r.outcome === 'refused' || r.outcome === 'conflict')
+  const done = plan.lines.filter((l) => appliedIds.has(l.listingId))
+  if (!done.length) return { ok: false, error: `Nothing changed: ${listed(failed.map((r) => `${r.listingId}: ${r.reason ?? r.outcome}`))}` }
+  const record = (l: BusinessLine, setting: BusinessLine['from']): BusinessRecord => ({ listingId: l.listingId, setting })
+  return {
+    ok: true,
+    data: {
+      changed: done.length,
+      notChanged: failed.map((r) => ({ listingId: r.listingId, reason: r.reason ?? r.outcome })),
+      notSent: written.results.filter((r) => r.notSent).slice(0, PREVIEW_LINES).map((r) => ({ listingId: r.listingId, why: r.notSent })),
+    },
+    change: {
+      before: { businessPrices: done.map((l) => ({ ...record(l, l.from), sku: l.sku, ...(l.amazonOwn ? { amazonOwn: l.amazonOwn } : {}) })) },
+      after: { businessPrices: done.map((l) => record(l, l.to)) },
+    },
+  }
+}
+
 const LISTING_PRICE_UNDO: ToolUndo = {
   async current(change) {
+    // Amazon Business: each listing's business setting as stored now.
+    const business = (change.after as { businessPrices?: BusinessRecord[] } | null)?.businessPrices
+    if (business) return { businessPrices: await currentBusinessRecords(business) }
     const after = ((change.after as { prices?: Array<{ listingId: string }> } | null)?.prices ?? [])
     const rows = after.length ? await prisma.channelListing.findMany({ where: { id: { in: after.map((p) => p.listingId) } }, select: { id: true, followMasterPrice: true, priceOverride: true, price: true } }) : []
     const byId = new Map(rows.map((r) => [r.id, r]))
     return { prices: after.map((p) => { const r = byId.get(p.listingId); return { listingId: p.listingId, price: r ? ownPrice(r) : null } }) }
   },
   request(change) {
+    const business = (change.before as { businessPrices?: BusinessRecord[] } | null)?.businessPrices
+    if (business) return businessUndoRequest(business)
     const before = ((change.before as { prices?: Array<{ listingId: string; price: number | null }> } | null)?.prices ?? [])
     if (!before.length) return { refusal: 'This change does not name the prices it replaced.' }
     return { tool: 'bulk-listing-price-change', args: { prices: before.map(({ listingId, price }) => ({ listingId, price })) } }
@@ -245,6 +345,9 @@ const bulkListingPriceChange: AgentTool = {
   maxClaudeTrust: 'auto',
   limits: BULK_LISTING_PRICE_LIMITS,
   withinLimits: bulkListingPriceWithinLimits,
+  // Amazon Business step 6 — business prices: a person approves them in Nexus, whatever this tool is set to (the
+  // conservative default; never confirmed in Claude, never run by rule). Normal prices keep the tool's own level.
+  trustCeilingFor: (args) => (Array.isArray(args.businessPrices) && args.businessPrices.length ? { level: 'ask', why: BUSINESS_NEEDS_A_PERSON } : null),
   undo: LISTING_PRICE_UNDO,
   // 2.3 — a later step of a plan re-based on an earlier step's own price writes: its lines, totals and basis follow the
   // facts it stands on (`planFacts`), which are checked one by one.
@@ -254,14 +357,26 @@ const bulkListingPriceChange: AgentTool = {
     + 'optionally rounded down to .99. Each listing given a price stops following the master price (a price of null hands it '
     + 'back). Refused before anything is queued: a market that sells in another currency than the master (Nexus never '
     + 'converts), a price outside the product\'s floor or ceiling, a price of 0. On an Amazon FBA listing only the price '
-    + 'changes. Waits for a person to approve it in Nexus unless the business lets Claude make small moves itself; a listing '
-    + 'that changed since is not touched.',
-  async handler(args): Promise<ToolResult> {
+    + 'changes. Or (businessPrices) up to 250 Amazon listings\' business prices for business buyers (Amazon Business), each with '
+    + 'its own rule — PERCENT_OFF (the normal price minus percent, following it) or FIXED (exact) — and up to 5 quantity '
+    + 'discounts, or remove: true, through the business price door the Matrix uses: refused before anything is queued where '
+    + 'Amazon lists no Amazon Business, on a parent, or where Amazon would refuse or hide it; a business price Amazon shows '
+    + 'that Nexus never kept is never removed from here; a business price change is never run by rule nor confirmed in '
+    + 'Claude. Waits for a person '
+    + 'to approve it in Nexus unless the business lets Claude make small moves itself; a listing that changed since is not '
+    + 'touched.',
+  async handler(args, ctx): Promise<ToolResult> {
+    if (args.businessPrices) {
+      const plan = await planBusinessBulk(args, ctx)
+      if (refused(plan)) return { ok: false, error: plan.error }
+      return { ok: true, preview: businessBulkPreview(plan) }
+    }
     const plan = await planListingPrices(args)
     if (refused(plan)) return { ok: false, error: plan.error }
     return { ok: true, preview: listingPricePreview(plan, (await priceFacts(plan)).planFacts) }
   },
   async execute(args, ctx): Promise<ToolResult> {
+    if (args.businessPrices) return runBusinessBulk(args, ctx)
     const plan = await planListingPrices(args)
     if (refused(plan)) return { ok: false, error: plan.error }
     const approved = ctx.approvedPreview as { basis?: unknown; basisOn?: unknown } | undefined
@@ -458,9 +573,15 @@ const setPriceBounds: AgentTool = {
 const HOUR_MS = 3_600_000
 
 interface ResendLine { listing: PriceListing & Record<string, unknown>; price: number; currency: string | null; minutesSinceLastSend: number | null }
+/** Amazon Business — a listing whose business price Nexus keeps (or removed, still to reach Amazon): sent again as kept. */
+interface BusinessResendLine { listing: PriceListing & Record<string, unknown>; setting: BusinessPriceSetting | null; price: number | null; currency: string | null }
+type ResendPlan = { lines: ResendLine[]; business: BusinessResendLine[]; leftOut: Array<{ where: string; reason: string }> }
+const RESEND_WHICH = ['both', 'price', 'business'] as const
 
-async function planResend(args: Record<string, unknown>): Promise<{ lines: ResendLine[]; leftOut: Array<{ where: string; reason: string }> } | Refusal> {
+async function planResend(args: Record<string, unknown>): Promise<ResendPlan | Refusal> {
   const ids = [...new Set((args.listingIds as string[] | undefined) ?? [])]
+  // The price only unless business prices are asked for (the tool's behaviour before Amazon Business step 6).
+  const which = (args.which as (typeof RESEND_WHICH)[number] | undefined) ?? 'price'
   // Every column (the push lock reads the listing's intent columns, as `pushPriceUpdate` does).
   const rows = await prisma.channelListing.findMany({ where: { id: { in: ids } }, include: { product: { select: { sku: true, basePrice: true, minPrice: true, maxPrice: true, deletedAt: true } } } }) as unknown as Array<PriceListing & Record<string, unknown>>
   if (rows.length !== ids.length || rows.some((r) => !r.product || r.product.deletedAt)) return { error: LISTING_NOT_FOUND }
@@ -473,9 +594,29 @@ async function planResend(args: Record<string, unknown>): Promise<{ lines: Resen
   })
   const lastById = new Map(lastSends.map((r) => [r.channelListingId, r._max.createdAt]))
   const lines: ResendLine[] = []
+  const business: BusinessResendLine[] = []
   const leftOut: Array<{ where: string; reason: string }> = []
+  // Amazon Business: the listings whose business price Nexus keeps now, or has kept (a removal still to reach Amazon).
+  const amazonIds = rows.filter((r) => r.channel === 'AMAZON').map((r) => r.id)
+  const everKept = which !== 'price' && amazonIds.length
+    ? new Set((await prisma.channelListingOverride.findMany({ where: { channelListingId: { in: amazonIds }, fieldName: 'businessPrice' }, distinct: ['channelListingId'], select: { channelListingId: true } })).map((r) => r.channelListingId))
+    : new Set<string>()
   for (const l of rows) {
-    const lock = assertPushAllowed(l as never) ?? (closed.has(`${l.productId}|${l.marketplace.toUpperCase()}`) ? assertPushAllowed({ offerClosedAt: 'closed' } as never) : null)
+    const closedHere = closed.has(`${l.productId}|${l.marketplace.toUpperCase()}`)
+    if (which !== 'price') {
+      const setting = l.channel === 'AMAZON' ? storedBusinessSetting(l as never) : null
+      if (l.channel === 'AMAZON' && (setting || everKept.has(l.id))) {
+        const held = businessHeld(l as never) ?? (closedHere ? 'this listing is Inactive here: its business price is sent when it is set Active again' : null)
+        if (held) leftOut.push({ where: `${where(l)} (business price)`, reason: held })
+        else {
+          const currency = currencyOf(l)
+          const normal = businessNormalPrice(l as never, null, { masterPrice: l.product?.basePrice, marketCurrency: currency })
+          business.push({ listing: l, setting, price: setting ? businessPriceOf(setting, normal) : null, currency })
+        }
+      } else if (which === 'business') leftOut.push({ where: where(l), reason: l.channel === 'AMAZON' ? 'Nexus keeps no business price for it' : 'only an Amazon listing has a business price' })
+    }
+    if (which === 'business') continue
+    const lock = assertPushAllowed(l as never) ?? (closedHere ? assertPushAllowed({ offerClosedAt: 'closed' } as never) : null)
     if (lock) { leftOut.push({ where: where(l), reason: lock.sentence }); continue }
     if (holdsCascadedPrice(l)) { leftOut.push({ where: where(l), reason: 'a draft that has not been published: Publish sends its price' }); continue }
     const currency = currencyOf(l)
@@ -486,28 +627,50 @@ async function planResend(args: Record<string, unknown>): Promise<{ lines: Resen
     const last = lastById.get(l.id)
     lines.push({ listing: l, price: send.price, currency, minutesSinceLastSend: last ? Math.floor((Date.now() - last.getTime()) / 60_000) : null })
   }
-  if (!lines.length) return { error: `Nothing to send: ${listed(leftOut.map((o) => `${o.where}: ${o.reason}`))}.` }
-  return { lines, leftOut }
+  if (!lines.length && !business.length) return { error: `Nothing to send: ${listed(leftOut.map((o) => `${o.where}: ${o.reason}`))}.` }
+  return { lines, business, leftOut }
 }
 
-function resendPreview(plan: { lines: ResendLine[]; leftOut: Array<{ where: string; reason: string }> }) {
+function resendPreview(plan: ResendPlan) {
   const recent = plan.lines.map((line) => line.minutesSinceLastSend).filter((m): m is number => m !== null)
+  const kept = plan.business.filter((line) => line.setting).length
+  const removals = plan.business.length - kept
+  const sends = [
+    ...(plan.lines.length ? [`the price ${plural(plan.lines.length, 'listing')} already carr${plan.lines.length === 1 ? 'ies' : 'y'}`] : []),
+    ...(kept ? [`the business price Nexus keeps for ${plural(kept, 'Amazon listing')}`] : []),
+  ]
+  // A listing whose business price Nexus once kept and keeps no longer: its send removes Amazon's (the card must say so).
+  const said = [
+    ...(sends.length ? [`send ${sends.join(', and ')} again`] : []),
+    ...(removals ? [`remove the business price at Amazon for ${plural(removals, 'listing')} (Nexus keeps none there now)`] : []),
+  ].join(', and ')
   return {
     action: 'resend-prices',
-    summary: `Send the price ${plural(plan.lines.length, 'listing')} already carr${plan.lines.length === 1 ? 'ies' : 'y'} again${plan.leftOut.length ? ` (${plan.leftOut.length} left out)` : ''}.`,
+    summary: `${said.charAt(0).toUpperCase()}${said.slice(1)}${plan.leftOut.length ? ` (${plan.leftOut.length} left out)` : ''}.`,
     send: plan.lines.slice(0, PREVIEW_LINES).map((line) => ({
       sku: line.listing.product?.sku ?? line.listing.productId, channel: line.listing.channel, market: line.listing.marketplace, price: line.price, currency: line.currency,
       ...(line.minutesSinceLastSend !== null && line.minutesSinceLastSend < 60 ? { lastSent: `${line.minutesSinceLastSend} minutes ago` } : {}),
     })),
     ...(plan.lines.length > PREVIEW_LINES ? { moreSent: plan.lines.length - PREVIEW_LINES } : {}),
+    // Amazon Business: what Nexus keeps, sent as kept (Amazon is sent only what differs from what it holds).
+    ...(plan.business.length ? { businessPrices: plan.business.slice(0, PREVIEW_LINES).map((line) => ({
+      sku: line.listing.product?.sku ?? line.listing.productId, market: line.listing.marketplace, currency: line.currency,
+      setting: businessSettingWords(line.setting, line.currency), price: line.price,
+      ...(line.setting ? {} : { note: 'Nexus keeps no business price here: Amazon\'s is removed if it still shows one' }),
+    })) } : {}),
+    ...(plan.business.length > PREVIEW_LINES ? { moreBusiness: plan.business.length - PREVIEW_LINES } : {}),
     ...(plan.leftOut.length ? { leftOut: plan.leftOut.slice(0, PREVIEW_LINES) } : {}),
-    totals: { listings: plan.lines.length, leftOut: plan.leftOut.length, sentInLastHour: recent.filter((m) => m < 60).length },
-    // 2.3 — what is sent: each listing's price as it carries it now, never its version (an order's stock cascade moves it).
+    totals: { listings: plan.lines.length, ...(plan.business.length ? { businessListings: plan.business.length, businessRemovals: removals } : {}), leftOut: plan.leftOut.length, sentInLastHour: recent.filter((m) => m < 60).length },
+    // 2.3 — what is sent: each listing's price as it carries it now (and the business price Nexus keeps), never its version
+    // (an order's stock cascade moves it).
     basisOn: BASIS_ON_FIELDS,
-    basis: basisOf(plan.lines.map((line) => [line.listing.id, line.price])),
+    basis: basisOf(plan.business.length
+      ? [plan.lines.map((line) => [line.listing.id, line.price]), plan.business.map((line) => [line.listing.id, line.setting])]
+      : plan.lines.map((line) => [line.listing.id, line.price])),
     // The basis a request approved before 2.3 stood on (each listing's version): it is checked on it, as it was approved.
     versionBasis: basisOf(plan.lines.map((line) => [line.listing.id, line.listing.version, line.price])),
-    note: `${NOT_YET} Each price is queued through the Nexus price door, as /pricing's Push price does: the price the listing carries now, in its market's currency, and nothing else (never a quantity).`,
+    note: `${NOT_YET} Each price is queued through the Nexus price door, as /pricing's Push price does: the price the listing carries now, in its market's currency, and nothing else (never a quantity).`
+      + (plan.business.length ? ' Each business price is queued as Nexus keeps it, through the business price send: Amazon is sent only what differs from what it holds.' : ''),
   }
 }
 
@@ -517,6 +680,8 @@ const resendPrices: AgentTool = {
   input: z.object({
     listingIds: z.array(z.string().trim().min(1).max(64)).min(1).max(MAX_LISTINGS)
       .describe('the Nexus listing ids whose current price is sent again (listing-coordinates names them)'),
+    which: z.preprocess(lower, z.enum(RESEND_WHICH)).optional()
+      .describe('price (default): the price only; both: the price and, on Amazon, the business price as Nexus keeps it (Amazon Business; where Nexus keeps none any more, Amazon\'s is removed); business: the business price only'),
   }),
   requires: [F.pricingEdit],
   category: 'pricing',
@@ -529,14 +694,16 @@ const resendPrices: AgentTool = {
   maxClaudeTrust: 'ask',
   description:
     `Send the price each of up to ${MAX_LISTINGS} listings already carries to its channel again, as /pricing's Push price does `
-    + '(through the Nexus price door, in the market\'s own currency, never a quantity). A paused, closed or draft listing, or '
-    + 'a price outside the product\'s floor or ceiling, is left out and named. Waits for a person to approve it in Nexus.',
+    + '(through the Nexus price door, in the market\'s own currency, never a quantity), and on Amazon the business price '
+    + 'and quantity discounts Nexus keeps when asked (which: both or business — Amazon Business; Amazon is sent only what '
+    + 'differs, and where Nexus keeps no business price any more Amazon\'s is removed). A paused, closed or draft listing, '
+    + 'or a price outside the product\'s floor or ceiling, is left out and named. Waits for a person to approve it in Nexus.',
   async handler(args): Promise<ToolResult> {
     const plan = await planResend(args)
     if (refused(plan)) return { ok: false, error: plan.error }
     return { ok: true, preview: resendPreview(plan) }
   },
-  async execute(args): Promise<ToolResult> {
+  async execute(args, ctx): Promise<ToolResult> {
     const plan = await planResend(args)
     if (refused(plan)) return { ok: false, error: plan.error }
     const { pushPriceUpdate } = await import('../../pricing-outbound.service.js')
@@ -548,8 +715,15 @@ const resendPrices: AgentTool = {
       if (out.ok) sent.push({ sku: out.sku, channel: out.channel, marketplace: out.marketplace, price: out.pushedPrice, currency: out.currency })
       else failed.push(`${where(l)}: ${out.error ?? 'not sent'}`)
     }
-    if (!sent.length) return { ok: false, error: `Nothing was sent: ${listed(failed)}` }
-    return { ok: true, data: { queued: sent.length, sent: sent.slice(0, PREVIEW_LINES), ...(failed.length ? { notSent: failed.slice(0, PREVIEW_LINES) } : {}) } }
+    // Amazon Business: one business send per listing, as Nexus keeps it (the send compares with Amazon and sends a difference).
+    let businessQueued = 0
+    if (plan.business.length) {
+      const { queueBusinessSends } = await import('../../pim/business-price-write.service.js')
+      // Spread out (as the held sends are), so Amazon's rate limit and the market's circuit never see a burst of 250.
+      businessQueued = (await queueBusinessSends({ listingIds: plan.business.map((line) => line.listing.id), actor: actorOf(ctx, 'resend-prices'), source: 'BUSINESS_PRICE_RESEND', staggerMs: 2_000 })).length
+    }
+    if (!sent.length && !businessQueued) return { ok: false, error: `Nothing was sent: ${listed(failed.length ? failed : ['no business price could be queued'])}` }
+    return { ok: true, data: { queued: sent.length, sent: sent.slice(0, PREVIEW_LINES), ...(plan.business.length ? { businessQueued } : {}), ...(failed.length ? { notSent: failed.slice(0, PREVIEW_LINES) } : {}) } }
   },
 }
 

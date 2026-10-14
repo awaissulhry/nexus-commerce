@@ -45,7 +45,7 @@ import { FEATURES as F } from '@nexus/shared/permissions'
 import prisma from '../../db.js'
 import { actorLabel, missingPermissions, storedOutputOf, type ToolPrincipal } from '../agents/call-tool.js'
 import { EXPIRY_HOURS } from '../agents/approval-gate.service.js'
-import { getTool } from '../agents/tool-registry.js'
+import { getTool, listTools } from '../agents/tool-registry.js'
 import { PLAN_TOOL, type AgentTool, type ClaudeTrust } from '../agents/tool-types.js'
 import { autonomyOf, autoRunsInLastDay, CLAUDE_CHARTER, narrowedWhy, ruleFrom, type Autonomy } from '../agents/claude-trust.service.js'
 import { strategyLevelFor, strategyMemo, type StrategyMemo } from '../advertising/ads-strategy/claude.js'
@@ -240,6 +240,11 @@ interface Joins {
   stepCounts: Map<string, Record<string, number>>
   firstSteps: Map<string, { toolName: string; args: unknown; preview: unknown }>
   rules: Map<string, { claudeTrust: string; claudeLimits: unknown }>
+  /**
+   * Amazon Business step 6 — per plan, the steps their own tool holds below the business's level for their arguments
+   * (`AgentTool.trustCeilingFor`, as claude-trust.service.ts `narrowed` does when the plan is decided or confirmed).
+   */
+  heldSteps: Map<string, Array<{ toolName: string; level: ClaudeTrust; why: string }>>
   charterNames: Map<string, string>
   targetCtx: TargetContext
   visible: (toolName: string, value: unknown) => unknown | null
@@ -273,7 +278,9 @@ const clipLine = (change: QueueChange, max: number): QueueChange => ({
 async function joinsFor(approvals: ApprovalRow[], viewer: ToolPrincipal | null, opts: { allItems?: boolean } = {}): Promise<Joins> {
   const runIds = [...new Set(approvals.map((a) => a.agentRunId))]
   const planIds = approvals.filter((a) => a.toolName === PLAN_TOOL).map((a) => a.id)
-  const [runs, stepGroups, firstSteps] = await Promise.all([
+  // Only the kinds that can hold one request below their level (trustCeilingFor) need their steps' arguments read.
+  const ceilingTools = listTools().filter((t) => t.trustCeilingFor).map((t) => t.name)
+  const [runs, stepGroups, firstSteps, ceilingSteps] = await Promise.all([
     runIds.length
       ? prisma.agentRun.findMany({ where: { id: { in: runIds } }, select: { id: true, agentKey: true, via: true, userId: true, oauthGrantId: true, mode: true } })
       : Promise.resolve([] as RunRow[]),
@@ -283,7 +290,15 @@ async function joinsFor(approvals: ApprovalRow[], viewer: ToolPrincipal | null, 
     planIds.length
       ? prisma.agentPlanStep.findMany({ where: { approvalId: { in: planIds }, position: 1 }, select: { approvalId: true, toolName: true, args: true, preview: true } })
       : Promise.resolve([]),
+    planIds.length && ceilingTools.length
+      ? prisma.agentPlanStep.findMany({ where: { approvalId: { in: planIds }, toolName: { in: ceilingTools } }, select: { approvalId: true, toolName: true, args: true } })
+      : Promise.resolve([]),
   ])
+  const heldSteps = new Map<string, Array<{ toolName: string; level: ClaudeTrust; why: string }>>()
+  for (const step of ceilingSteps) {
+    const held = getTool(step.toolName)?.trustCeilingFor?.(rec(step.args) ?? {})
+    if (held) heldSteps.set(step.approvalId, [...(heldSteps.get(step.approvalId) ?? []), { toolName: step.toolName, ...held }])
+  }
   const runById = new Map(runs.map((r) => [r.id, r]))
   const stepCounts = new Map<string, Record<string, number>>()
   for (const g of stepGroups) {
@@ -365,6 +380,7 @@ async function joinsFor(approvals: ApprovalRow[], viewer: ToolPrincipal | null, 
     stepCounts,
     firstSteps: new Map(firstSteps.map((s) => [s.approvalId, { toolName: s.toolName, args: s.args, preview: s.preview }])),
     rules: new Map(rules.map((r) => [r.name, { claudeTrust: r.claudeTrust, claudeLimits: r.claudeLimits }])),
+    heldSteps,
     charterNames,
     targetCtx: { masterCurrency: masterCurrency(), products: productMap, ...(labels ? { labels } : {}) },
     visible,
@@ -509,15 +525,17 @@ async function automationOf(
     // kind's, its ceiling its lowest kind's ceiling. A kind Nexus does not know counts as Ask me.
     let level: ClaudeTrust = 'auto'
     let max: ClaudeTrust = 'auto'
-    let lowest: { name: string; tool: AgentTool | undefined; rule: ToolRule | null } | null = null
+    let lowest: { name: string; tool: AgentTool | undefined; rule: ToolRule | null; held?: { level: ClaudeTrust; why: string } } | null = null
     const kinds = kindsOf(ap.preview)
     for (const name of kinds) {
       const kindTool = getTool(name)
       const rule = kindTool ? ruleOf(kindTool, joins.rules.get(name)) : null
-      const kindLevel = rule?.level ?? 'ask'
+      // A step its own tool holds lower for its arguments (trustCeilingFor) holds the plan there too.
+      const held = joins.heldSteps.get(ap.id)?.find((h) => h.toolName === name && RANK[h.level] < RANK[rule?.level ?? 'ask'])
+      const kindLevel = held?.level ?? rule?.level ?? 'ask'
       if (RANK[kindLevel] < RANK[level]) {
         level = kindLevel
-        lowest = { name, tool: kindTool, rule }
+        lowest = { name, tool: kindTool, rule, ...(held ? { held } : {}) }
       }
       if (RANK[rule?.max ?? 'ask'] < RANK[max]) max = rule?.max ?? 'ask'
     }
@@ -528,9 +546,11 @@ async function automationOf(
       else if (level === 'watch') whyWaits = watchWaits(null, watchVerdictOf(ap), runScope)
       else if (level !== 'auto') {
         const title = lowest?.tool?.title ?? lowest?.name ?? 'one of its kinds'
-        whyWaits = !lowest?.rule || lowest.rule.max === 'ask'
-          ? `A plan runs by itself only when every step may: ${title} always needs you`
-          : `A plan runs by itself only when every step may: your rule for ${title} is ${LEVEL_WORDS[level]}`
+        whyWaits = lowest?.held
+          ? `A plan runs by itself, or is confirmed in Claude, only when every step may: ${title} — ${lowest.held.why}, so you approve it here`
+          : !lowest?.rule || lowest.rule.max === 'ask'
+            ? `A plan runs by itself only when every step may: ${title} always needs you`
+            : `A plan runs by itself only when every step may: your rule for ${title} is ${LEVEL_WORDS[level]}`
       } else {
         const steps = Number(rec(rec(ap.preview)?.totals)?.steps ?? 0) || 1
         const stepLimits = () => {
@@ -551,11 +571,17 @@ async function automationOf(
   }
 
   if (!tool) return { level: 'ask', max: 'ask', whyWaits: waits ? 'Nexus does not know this kind of change, so it always needs you' : null }
-  const rule = ruleOf(tool, joins.rules.get(tool.name))
+  const own = ruleOf(tool, joins.rules.get(tool.name))
+  // Amazon Business step 6 — this request's own tool may hold it below the business's level for its arguments
+  // (`trustCeilingFor`, as claude-trust.service.ts `narrowed` does): never "Confirm in Claude" for what confirm refuses.
+  const held = tool.trustCeilingFor?.(rec(ap.args) ?? {})
+  const heldHere = held && RANK[held.level] < RANK[own.level] ? held : null
+  const rule: ToolRule = heldHere ? { ...own, level: heldHere.level } : own
   let whyWaits: string | null = null
   if (waits) {
     if (asker.kind !== 'claude') whyWaits = `${RULES_ONLY_FOR_CLAUDE}: a person approves every request from ${asker.label}`
     else if (rule.max === 'ask') whyWaits = alwaysNeedsYou(tool)
+    else if (heldHere) whyWaits = `${capitalised(heldHere.why)}, so you approve it here (your rule for ${tool.title} is ${LEVEL_WORDS[own.level]})`
     else if (rule.level === 'off') whyWaits = `Your rule for ${tool.title}: Off — Claude is no longer offered it`
     else if (rule.level === 'ask') whyWaits = `Your rule for ${tool.title}: Ask me`
     else {

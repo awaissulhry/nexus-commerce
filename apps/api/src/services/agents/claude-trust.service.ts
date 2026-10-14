@@ -206,14 +206,21 @@ export interface StrategyNarrowed extends StrategyNarrowing {
 /** W1-8 — the rule for ONE change: its tool's rule here, at the strategy's lower level where the change lands. */
 export interface ClaudeChangeRule extends ClaudeToolRule {
   narrowedBy?: StrategyNarrowed
+  /** Amazon Business step 6 — the tool lowered this one request below the business's level (`trustCeilingFor`): why. */
+  narrowedFor?: string
 }
 
-/** The business's rule for a tool, narrowed (never widened) by the ads strategy for this one change. */
+/**
+ * The business's rule for a tool, narrowed (never widened) for this one change: by the tool itself where its arguments
+ * make the request narrower (`AgentTool.trustCeilingFor`), and by the ads strategy.
+ */
 async function narrowed(rule: ClaudeToolRule | null, args: unknown, preview: unknown, memo: StrategyMemo): Promise<ClaudeChangeRule | null> {
   if (!rule || rule.level === 'off') return rule
+  const own = getTool(rule.tool)?.trustCeilingFor?.((args ?? {}) as Record<string, unknown>) ?? null
+  const base: ClaudeChangeRule = own && RANK[own.level] < RANK[rule.level] ? { ...rule, level: own.level, narrowedFor: own.why } : rule
   const strategy = await strategyLevelFor(rule.tool, args, preview, memo)
-  if (!strategy || RANK[strategy.level] >= RANK[rule.level]) return rule
-  return { ...rule, level: strategy.level, narrowedBy: { ...strategy, business: rule.level } }
+  if (!strategy || RANK[strategy.level] >= RANK[base.level]) return base
+  return { ...base, level: strategy.level, narrowedBy: { ...strategy, business: rule.level } }
 }
 
 /**

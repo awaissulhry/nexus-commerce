@@ -390,7 +390,7 @@ describe('resolveRequest — honesty', () => {
   })
 
   it('money without a known currency is the bare amount; a master price carries the master currency', () => {
-    const generic = resolveRequest('set-tier-prices', { productId: 'prod-gale' }, { changes: { 'tier price': { from: 10, to: 9 } } }, { masterCurrency: 'CHF' })
+    const generic = resolveRequest('schedule-price-change', { productId: 'prod-gale' }, { changes: { 'base price': { from: 10, to: 9 } } }, { masterCurrency: 'CHF' })
     expect(generic.changes[0]).toMatchObject({ from: 'CHF 10.00', to: 'CHF 9.00' })
     const unknown = resolveRequest('set-promotion', {}, { changes: { 'sale price': { from: 10, to: 9 } } }, ctx)
     expect(unknown.changes[0]).toMatchObject({ from: '10.00', to: '9.00' })

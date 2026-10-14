@@ -21,7 +21,7 @@ Ask only for what is missing:
 - **The change**: one of
   - the same move for every product: a new price (`set`), a percentage (`percent`, e.g. -10) or an amount in the master currency (`amount`, e.g. 2.5) — `bulk-price-change`, rounded to the cent;
   - a price of its own for each product (to round to .90 or .99, or a list of new prices) — work out each price and use `set-master-prices`.
-- **The price it changes**: both tools set the **master price**. Listings that follow the master price move with it and are sent to their marketplace; listings with their own price do not. A price for one channel and market only is a listing price: `set-listing-price` (see `price-review`).
+- **The price it changes**: both tools set the **master price**. Listings that follow the master price move with it and are sent to their marketplace; listings with their own price do not. A price for one channel and market only is a listing price: `set-listing-price` (see `price-review`). An Amazon Business price (what business buyers pay on Amazon) is not a master price either: for many Amazon listings use `bulk-listing-price-change` with `businessPrices` (see `price-review`).
 
 ## 2. Gather the products and their current prices
 
