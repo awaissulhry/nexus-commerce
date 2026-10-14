@@ -60,6 +60,8 @@ import type { StudioPublishScope } from '@nexus/shared/studio-publication';
 import { takeSheetLanding } from '@/app/products/_publication/history/runActions';
 import { discardOfferDrafts, offerDraftControls } from './offerDrafts';
 import { useLiveStockCells } from './useLiveStockCells';
+import { BUSINESS_SHEET_COPY, businessGesture, clearsSelectionOn, fillTargetColumns, isBusinessColumnKey, openMatrixTab, reachesBusiness, withBusinessPaste } from './businessColumns';
+import { sheetEventColumn } from '../useProductSheetInteraction';
 import { useCellFormulas } from '../../useCellFormulas';
 import { sheetFormulaLine } from '../formulaWriteLine';
 import { formulaWriteOutcome, sendFormulaEdit, type RecordSheetEdit } from '../formulaUndo';
@@ -124,6 +126,9 @@ import { useFamilyRank } from '../useFamilyRank';
 import { FamilyOrderNotice } from '../FamilyOrderNotice';
 /** Add rows — a channel scope adds variations or listings (aliases). */
 const CHANNEL_ROW_KINDS: readonly NewRowKind[] = ['variation', 'alias'];
+/** A fill's range as the grid reports it (`FillEndEvent`), and as `fillTargetColumns` reads it. */
+type FillRange = { columns: ReadonlyArray<{ getColId(): string }>; startRow?: { rowIndex: number } | null; endRow?: { rowIndex: number } | null };
+const fillRange = (range: FillRange) => ({ columns: range.columns.map(column => column.getColId()), startRow: range.startRow?.rowIndex ?? null, endRow: range.endRow?.rowIndex ?? null });
 /** No rows yet — one constant, so the family rank is not rebuilt on every render while the sheet loads. */
 const NO_ROWS: readonly StudioRow[] = [];
 export interface ChannelSheetProps {
@@ -628,6 +633,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         offerOf: (row, colId) => channelResetOffer(row, colId, !!formulaLive.current.formulas.exprFor(row.rowId, colId)),
         listOf: (row, colId) => wholeListWriteField(row.values?.[colId]?.writeField ?? ''),
         columnFacts: colId => controlColumnFacts(dataRef.current?.columns.find(column => column.key === colId)),
+        // Amazon: the B2B pair and FBA qty are read only — Delete on them asks about the selection's other cells, never blanks them.
+        clearsSelection: colId => clearsSelectionOn(channel, colId),
         hidesInherited: () => true,
         removeFormula: (rowId, colId) => formulaLive.current.formulas.pinOver(rowId, colId),
         // A whole list keeps its review of the positions it replaces (`onCascade`).
@@ -957,17 +964,27 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     /* Action ▾ counts what each item would do to the ticked rows. */
     const actionEntries = useMemo(() => actionMenuEntries(selected.map((row) => ({ sku: row.sku, cell: publishCellOf(row) })),
         { publish: !publishLock && auth.status !== 'loading', delete: auth.has('products.delete') }), [selected, publishCellOf, publishActions.version, publishLock, auth]);
+    /* Amazon Business (step 5 Part 4) — B2B price and Quantity discounts are set on the Matrix (`businessColumns.ts`): a
+       paste, a fill or Delete that reaches them changes nothing there and says so; Enter, F2 or a double-click on one of
+       their cells opens the Matrix where the Matrix would let this person set it. */
+    const businessSheet = channel === 'AMAZON';
+    const sayBusinessReadOnly = useCallback((columns: readonly string[]) => {
+        if (businessSheet && reachesBusiness(columns)) announceRefusals([{ colId: columns.find(isBusinessColumnKey)!, reason: BUSINESS_SHEET_COPY.readOnly }]);
+    }, [businessSheet, announceRefusals]);
+    const selectedColumnIds = (api: ReturnType<typeof getGridApi>): string[] => (api?.getCellRanges() ?? []).flatMap(range => range.columns.map(column => column.getColId()));
     /* The grid's operation events open and close the Status and Action fence too (after the sheet's own fence). */
     const publishFenceProps = useMemo(() => {
         const g = undo.gridProps;
         const begin = beginPublishOperation;
         const end = endPublishOperation;
         return {
-            onFillStart: () => { g.onFillStart(); begin(); }, onFillEnd: () => { g.onFillEnd(); end(); },
+            onFillStart: () => { g.onFillStart(); begin(); },
+            onFillEnd: (event?: { initialRange?: FillRange; finalRange?: FillRange }) => { g.onFillEnd(); end();
+                if (event?.initialRange && event.finalRange) sayBusinessReadOnly(fillTargetColumns(fillRange(event.initialRange), fillRange(event.finalRange))); },
             onPasteStart: () => { g.onPasteStart(); begin(); }, onPasteEnd: () => { g.onPasteEnd(); end(); },
             onCellSelectionDeleteStart: () => { g.onCellSelectionDeleteStart(); begin(); }, onCellSelectionDeleteEnd: () => { g.onCellSelectionDeleteEnd(); end(); },
         };
-    }, [undo.gridProps, beginPublishOperation, endPublishOperation]);
+    }, [undo.gridProps, beginPublishOperation, endPublishOperation, sayBusinessReadOnly]);
     const fieldsBanner = useMissingFieldsBanner({ channel, market: marketplace, missing: data?.meta.schemaMissing ?? [], ready: !!data && !loading && auth.status !== 'loading',
         canLoad: auth.has(LOAD_FIELDS_PERMISSION), onLoaded: reload });
     /* Delete rows (Owner 2026-10-06) — the same "Delete…" as the Shared view: a Main listing row deletes the product
@@ -1080,7 +1097,26 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const gridColumns = useMemo(() => withSheetGroups(withSlotListColumns(withProductMediaColumn(stableColumns).filter((col) => !RESERVED_COLUMN_IDS.includes(col.key as never)))), [stableColumns]);
     const headerPaste = useHeaderPaste<ChannelSheetRow>(gridColumns.map(column => ({ colId: column.key, headerName: column.label })), (message, tone) => toast(message, tone));
     // Add rows — a paste on an empty row's SKU fills the empty rows; any other paste is the header-aware one.
-    const pasteIntoNewRows = useMemo(() => newRowsPaste(newRows.store, headerPaste.processDataFromClipboard), [newRows.store, headerPaste.processDataFromClipboard]);
+    // Amazon Business (step 5 Part 4): a paste that reaches the B2B pair says it is set on the Matrix (`businessColumns.ts`).
+    const pasteIntoNewRows = useMemo(() => withBusinessPaste(newRowsPaste(newRows.store, headerPaste.processDataFromClipboard), sayBusinessReadOnly), [newRows.store, headerPaste.processDataFromClipboard, sayBusinessReadOnly]);
+    // The Matrix tab, or — while the sheet holds an unsaved change — the sentence to wait (the tab guard says nothing).
+    const openMatrix = () => openMatrixTab(languageScope, message => toast(message, 'info'));
+    const onBusinessKey = (event: { event?: Event | null; column?: unknown; data?: ChannelSheetRow }): boolean => {
+        const key = event.event as KeyboardEvent | null | undefined;
+        const api = getGridApi();
+        if (!businessSheet || !key || (api?.getEditingCells().length ?? 0) > 0) return false;
+        const gesture = businessGesture({ colId: sheetEventColumn(event.column), row: event.data, key, selected: selectedColumnIds(api) });
+        if (gesture === 'open') { key.preventDefault(); openMatrix(); return true; }
+        // The pair says it is not changed; the control then asks "Clear or Reset?" for the selection's other cells
+        // (`clearsSelection` when the focus is on the pair, the attribute column's own Delete otherwise).
+        if (gesture === 'readOnly') sayBusinessReadOnly([...selectedColumnIds(api), sheetEventColumn(event.column) ?? '']);
+        return false;
+    };
+    const onBusinessDoubleClick = (event: { column?: unknown; data?: ChannelSheetRow }): boolean => {
+        if (!businessSheet || businessGesture({ colId: sheetEventColumn(event.column), row: event.data, doubleClick: true }) !== 'open') return false;
+        openMatrix();
+        return true;
+    };
     // Add rows — an empty row's cell menu holds only "Remove this row".
     const menuWithNewRows = useMemo(() => newRowsContextMenu(newRows.store, contextMenu), [newRows.store, contextMenu]);
     const columnDefs = useMemo(() => control.decorate(buildSheetColumns('channel', {
@@ -1518,8 +1554,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             rowSelection: rowSelection,
             onSelectionChanged: onSelectionChanged,
             onCellFocused: onCellFocused,
-            onCellDoubleClicked: onCellDoubleClicked,
-            onCellKeyDown: (event: Parameters<typeof onCellKeyDown>[0]) => { if (newRowsGridKey(newRows.store, event as never)) return; if (onPublishCellKey(event as never)) return; if (control.onKeyDown(event as never)) return; if (!undo.onKeyDown(event.event)) onCellKeyDown(event); },
+            onCellDoubleClicked: (event: Parameters<typeof onCellDoubleClicked>[0]) => { if (!onBusinessDoubleClick(event)) onCellDoubleClicked(event); },
+            onCellKeyDown: (event: Parameters<typeof onCellKeyDown>[0]) => { if (newRowsGridKey(newRows.store, event as never)) return; if (onPublishCellKey(event as never)) return; if (onBusinessKey(event)) return; if (control.onKeyDown(event as never)) return; if (!undo.onKeyDown(event.event)) onCellKeyDown(event); },
             getContextMenuItems: menuWithNewRows,
             columnDialog: columnDialog,
         },

@@ -193,6 +193,15 @@ export function isClearKey(event: Pick<KeyboardEvent, 'key' | 'altKey' | 'ctrlKe
   return !!event && !editing && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && (event.key === 'Delete' || event.key === 'Backspace')
 }
 
+/**
+ * Does Delete (or Backspace) with the focus on this column go to the sheet's "Clear or Reset?" question for the selection?
+ * An attribute column; or a read-only column the scope names (`clearsSelection`: the Amazon sheet's B2B pair and FBA qty),
+ * whose own cell is never cleared — left to the grid, a Delete there would blank the selection's other cells unasked.
+ */
+export function takesClearKey(colId: string | null | undefined, controlled: (colId: string) => boolean, clearsSelection?: (colId: string) => boolean): boolean {
+  return !!colId && (controlled(colId) || !!clearsSelection?.(colId))
+}
+
 /** Shift+F10 or the ContextMenu key on a focused cell opens its menu — the keyboard's right-click. */
 export function isMenuKey(event: Pick<KeyboardEvent, 'key' | 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'> | null | undefined): boolean {
   return !!event && !event.altKey && !event.ctrlKey && !event.metaKey && (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10'))

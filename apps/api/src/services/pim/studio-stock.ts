@@ -13,6 +13,9 @@
  *   FBA qty — the Matrix's locked `FBA qty` column (`MatrixRowRead.fba`, Owner 2026-10-07) beside Buffer, from the same
  *           read, on the AMAZON sheet only: eBay, Shopify and Etsy sell from the pool, never from FBA stock (Owner
  *           2026-10-07). Shown, never written: not a stock key, so no write path names it, and the bulk save refuses it.
+ *   B2B price, Quantity discounts — Amazon Business (step 5 Part 4): the Matrix's own business cells of the row's MARKET
+ *           (`AMAZON:IT`, never the EU group), from the same read, on the AMAZON sheet only (`row.business`). Read only:
+ *           they are set on the Matrix, so no write path names them and their cells say where they are set.
  */
 import {
   MATRIX_CELL_LABELS,
@@ -24,6 +27,7 @@ import {
   type MatrixFbaStock,
   type MatrixWriteCell,
 } from '@nexus/shared/matrix-contract'
+import { SHEET_GROUPS } from '@nexus/shared/sheet-groups'
 import type { SheetColumn, SheetGroup } from './sheet-columns.service.js'
 import type { StudioCellValue, StudioRow, WriteRouting } from './studio-sheet.service.js'
 import type { SheetListing } from './sheet-rows.service.js'
@@ -66,7 +70,18 @@ export interface StudioRowStock {
   /** The Matrix row's FBA stock (`MatrixRowRead.fba`): null = no FBA stock row; absent = not read. Read-only. */
   fba?: MatrixFbaStock | null
 }
-type StockRow = StudioRow & { stock?: StudioRowStock }
+/**
+ * What an Amazon sheet row carries for its B2B price and Quantity discounts cells: the Matrix's MARKET coordinate and its
+ * cells. Shown only — set on the Matrix.
+ */
+export interface StudioRowBusiness {
+  /** The market coordinate: `AMAZON:IT` (each EU market its own: the business offer is per market), `AMAZON:UK`, `AMAZON:IT#<aliasId>`. */
+  key: CoordinateKey
+  /** The Matrix's cells for `key`, unchanged (its own `writable` and reasons); null when this row has no listing there (or the Matrix holds another one). */
+  cells: MatrixCells | null
+  coordinate: MatrixCoordinate | null
+}
+type StockRow = StudioRow & { stock?: StudioRowStock; business?: StudioRowBusiness }
 
 const upper = (s: string | null | undefined) => String(s ?? '').toUpperCase()
 
@@ -105,6 +120,57 @@ function fbaColumn(): SheetColumn {
     group: STUDIO_STOCK_GROUP.label, groupKey: STUDIO_STOCK_GROUP.key, kind: 'number', storage: 'listing', scope: 'per_variant',
     requiredBy: [], editable: false, defaultVisible: true, formulaWritable: false, helpText: MATRIX_COPY.fbaLocked,
   }
+}
+
+/* ── Amazon Business: B2B price and Quantity discounts (step 5 Part 4) ─────────────────────── */
+
+export const STUDIO_BUSINESS_KEYS = ['business_price', 'business_tiers'] as const
+export type StudioBusinessKey = (typeof STUDIO_BUSINESS_KEYS)[number]
+type BusinessCellKind = 'businessPrice' | 'businessTiers'
+export const STUDIO_BUSINESS_CELL: Readonly<Record<StudioBusinessKey, BusinessCellKind>> = { business_price: 'businessPrice', business_tiers: 'businessTiers' }
+
+/** The pair's words. `setOnMatrix` is the read-only sentence of a cell a person may set on the Matrix. */
+export const STUDIO_BUSINESS_COPY = {
+  labels: { business_price: 'B2B price', business_tiers: 'Quantity discounts' },
+  help: {
+    business_price: 'The price Amazon business buyers pay on this market: a percent below the price, or an exact price. Set on the Matrix — read only here.',
+    business_tiers: 'Quantity discounts for Amazon business buyers: from a number of units, a percent off the B2B price or a unit price. Set on the Matrix — read only here.',
+  },
+  setOnMatrix: 'Set on the Matrix — read only here. Enter or a double-click opens the Matrix.',
+} as const
+
+/**
+ * The B2B price and Quantity discounts columns, in the Offer group, on the Amazon sheet only. Never bulk-, formula- or
+ * grid-writable (`editable: false`): the business price is set on the Matrix, by its own door.
+ */
+export function studioBusinessColumns(channel: string): SheetColumn[] {
+  if (upper(channel) !== 'AMAZON') return []
+  return STUDIO_BUSINESS_KEYS.map((key): SheetColumn => ({
+    key, writeField: key, label: STUDIO_BUSINESS_COPY.labels[key], width: MATRIX_CELL_WIDTHS[STUDIO_BUSINESS_CELL[key]],
+    group: SHEET_GROUPS.offer.label, groupKey: SHEET_GROUPS.offer.key, kind: 'text', storage: 'listing', scope: 'per_variant',
+    requiredBy: [], editable: false, defaultVisible: true, formulaWritable: false, helpText: STUDIO_BUSINESS_COPY.help[key],
+  }))
+}
+
+/**
+ * What a business cell says when it is not set here — always, since the pair is read only. The Matrix's own sentence when
+ * the Matrix holds it too (the parent, a listing Amazon lists no B2B for, no `products.price.edit`), the market's reason
+ * when it offers no B2B, the row's own when it has no listing there; else where it is set: "Set on the Matrix".
+ */
+export function businessCellReason(kind: BusinessCellKind, cells: MatrixCells | null, coordinate: MatrixCoordinate | null, held: string | null): string {
+  if (held) return held
+  if (!cells) return MATRIX_COPY.noListingYet
+  if (!coordinate?.cells.includes(kind)) return coordinate?.absent.find((a) => a.cell === kind)?.reason ?? MATRIX_COPY.absentBusinessUnchecked()
+  if (cells.writable[kind] !== true) return cells.writeBlockedReason[kind] ?? MATRIX_COPY.absentBusinessUnchecked()
+  return STUDIO_BUSINESS_COPY.setOnMatrix
+}
+
+/** The value for counts and Cell details: the business price the rule gives now; the quantity discounts; null = none. */
+export function businessCellValue(key: StudioBusinessKey, cells: MatrixCells | null): unknown {
+  const b = cells?.business
+  if (!b || b.rule == null) return null
+  if (key === 'business_price') return b.price
+  return b.tiers && b.tiers.levels.length > 0 ? b.tiers : null
 }
 
 /**
@@ -159,10 +225,13 @@ export function stockControlRouting(col: Pick<SheetColumn, 'key' | 'editable' | 
     writable: col.editable !== false, writeBlockedReason: col.editable === false ? col.helpText ?? null : null }
 }
 
-/** The studio columns this unit adds to a channel sheet, with their routing: the stock columns, then the ASIN on Amazon. */
+/**
+ * The studio columns this unit adds to a channel sheet, with their routing: the stock columns, the B2B pair on Amazon,
+ * then the ASIN on Amazon.
+ */
 export function studioStockSheetColumns(channel: string): Array<SheetColumn & WriteRouting & { localizable: boolean; axis: boolean }> {
   const itemId = listingItemIdColumn(channel)
-  const cols = [...studioStockColumns(channel), ...(upper(channel) === 'AMAZON' ? [listingAsinColumn()] : []), ...(itemId ? [itemId] : [])]
+  const cols = [...studioStockColumns(channel), ...studioBusinessColumns(channel), ...(upper(channel) === 'AMAZON' ? [listingAsinColumn()] : []), ...(itemId ? [itemId] : [])]
   return cols.map((col) => ({ ...col, localizable: false, axis: false, formulaWritable: false, ...stockControlRouting(col) }))
 }
 
@@ -335,10 +404,11 @@ export function confirmShopifyItemIds<R extends StudioRow>(rows: R[]): R[] {
 }
 
 /**
- * Fill every row's stock cells (and, on Amazon, its ASIN) from ONE Matrix read of the family. Each row gets
+ * Fill every row's stock cells (and, on Amazon, its B2B pair and ASIN) from ONE Matrix read of the family. Each row gets
  * `row.stock` (the cells the web draws and writes) and `values.stock_*` (value = mode / `sync.intended` / `sync.buffer`
  * for counts and export; writable and the reason are the Matrix's `writable` / `writeBlockedReason`). A row without a
  * listing, or whose market the Matrix shows with another listing (another account's), is held with the Matrix's words.
+ * On Amazon each row also gets `row.business`: its MARKET's cells (the business offer is per market), shown read only.
  */
 export async function attachStudioStock(input: {
   rows: StockRow[]
@@ -347,6 +417,11 @@ export async function attachStudioStock(input: {
   marketplace: string
   /** The sheet's account (`context.connectionId`): the Matrix reads with it, as the Matrix tab does. */
   accountId: string | null
+  /**
+   * The caller's `products.price.edit`, so the B2B cells say what the Matrix would say to this person (absent = false).
+   * The stock cells read no price permission.
+   */
+  canEditPrice?: boolean
 }): Promise<{ ms: number }> {
   const t0 = Date.now()
   const ch = upper(input.channel)
@@ -354,7 +429,7 @@ export async function attachStudioStock(input: {
   const keys = new Map(input.rows.map((row) => [row, studioStockKeys(ch, input.marketplace, row.aliasId)]))
   // An EU group row also reads every EU market's cells: the account check below finds the group's listing among them.
   const only = [...new Set([...keys.values()].flatMap((k) => [k.key, k.marketKey, ...(k.key === k.marketKey ? [] : [...AMAZON_EU_SHARED_MARKETS].map((m) => `${ch}:${m}`))]))]
-  const read = await getMatrixRead({ productId: input.rootId, accountId: input.accountId, canEditPrice: false, only })
+  const read = await getMatrixRead({ productId: input.rootId, accountId: input.accountId, canEditPrice: input.canEditPrice === true, only })
   const matrixRow = new Map(read.rows.map((r) => [r.id, r]))
   const coordinate = new Map(read.coordinates.map((c) => [c.key, c]))
   // Amazon (step I4): the ASIN each row not on Amazon lists on at Publish — one read of those rows' own store.
@@ -383,6 +458,17 @@ export async function attachStudioStock(input: {
       row.values[k] = stockValue(k, valueOf[k], writable, held ?? own?.writeBlockedReason[kind] ?? 'This cell cannot be changed here', !!row.aliasId)
     }
     if (ch === 'AMAZON') row.values[STOCK_FBA_KEY] = stockValue(STOCK_FBA_KEY, fba?.units ?? null, false, MATRIX_COPY.fbaLocked, !!row.aliasId)
+    if (ch === 'AMAZON') {
+      // The business offer is per MARKET (an EU row's own market, never the EU group), and its cells must hold THIS row's listing.
+      const market = cells[marketKey] ?? null
+      const businessHeld = !row.listing || !market ? MATRIX_COPY.noListingYet : market.listingId !== row.listing.id ? MATRIX_COPY.accountMismatch : null
+      const shown = businessHeld ? null : market
+      const marketCoordinate = coordinate.get(marketKey) ?? null
+      row.business = { key: marketKey, cells: shown, coordinate: marketCoordinate }
+      for (const k of STUDIO_BUSINESS_KEYS) {
+        row.values[k] = stockValue(k, businessCellValue(k, shown), false, businessCellReason(STUDIO_BUSINESS_CELL[k], shown, marketCoordinate, businessHeld), !!row.aliasId)
+      }
+    }
     if (ch === 'AMAZON') row.values[LISTING_ASIN_KEY] = listingAsinValue(row, row.listing ? suggested.get(row.listing.id) ?? null : null)
     if (ITEM_ID_COLUMNS[ch]) {
       // A variation's main row is its parent's row in the same group (the primary listing, or the same alias).

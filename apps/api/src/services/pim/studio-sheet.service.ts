@@ -6,7 +6,7 @@ import { amazonImmutableDraftWarning } from './amazon-draft-policy.js'
 import type { ResolvedContent as importResolvedContent } from '@nexus/shared/content-language'
 import type { ContentWriteFacts } from '@nexus/shared/content-language'
 import type { AmazonOfferCellExtras } from './amazon-offer-cells.js'
-import type { StudioRowStock } from './studio-stock.js'
+import type { StudioRowBusiness, StudioRowStock } from './studio-stock.js'
 import { marketLanguages } from './market-languages.js'
 import { PRIMARY_CONTENT_LOCALE } from './content-locale.js'
 import { isLocalizableContent, contentField, listingFollowsContent, translationMissing } from './content-resolver.js'
@@ -343,6 +343,11 @@ export interface StudioRow {
   listing: SheetListing | null
   /** Channel scope only: the Matrix coordinate and cells the Mode / Qty / Buffer columns show and write (`studio-stock.ts`). */
   stock?: StudioRowStock
+  /**
+   * Amazon Business (step 5 Part 4) — Amazon scopes only: the Matrix market coordinate and cells the read-only B2B price
+   * and Quantity discounts columns show (`studio-stock.ts` `attachStudioStock`). Set on the Matrix, never written here.
+   */
+  business?: StudioRowBusiness
   /**
    * S11 — channel scope only: the first column's SKU (the SKU Publish sends for this row's listing), whether it differs
    * from the Shared SKU, and whether it can be edited here (`studio-sheet-sku.ts`). The Shared scope's is `sku`.
@@ -2029,7 +2034,8 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
 
   // ── 5c. the stock cells (and the Amazon ASIN) from ONE Matrix read of the family ──
   if (stock && coordinate && input.stockCells) {
-    phases.stock = (await stock.attachStudioStock({ rows, rootId: root.id, channel: coordinate.channel, marketplace: coordinate.marketplace, accountId: context?.connectionId ?? null })).ms
+    phases.stock = (await stock.attachStudioStock({ rows, rootId: root.id, channel: coordinate.channel, marketplace: coordinate.marketplace, accountId: context?.connectionId ?? null,
+      canEditPrice: input.canEditPrice !== false })).ms
     _pm += phases.stock // not counted again in the `rows` remainder
     // D2 = A — while Nexus sends a Shopify listing's quantity, Shopify's own inventory field is held, pointing to Qty (the
     // family row keeps its own reason: the field belongs to the variant rows).

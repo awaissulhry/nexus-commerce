@@ -8,6 +8,7 @@ import { StructuredAttributeEditor, parseRecordValue, recordSummary } from '../S
 import { CascadeCell } from '../channel/CascadeCell'
 import { isListingIdKey, listingIdColumnDef } from '../channel/ListingIdCell'
 import { fbaColumnDef, stockColumnDef } from '../channel/stockColumns'
+import { businessColumnDef, isBusinessColumnKey, isBusinessScope } from '../channel/businessColumns'
 import { STOCK_FBA_KEY } from '../channel/stockCells'
 import { isCellEditable } from '../channel/rows'
 import { channelCellDrawsRequired, channelCellMark, channelCellProvenance } from '../channel/channelCellProvenance'
@@ -229,6 +230,9 @@ export function buildChannelColumns(options: BuildChannelColumnsOptions): ColDef
     ...(isListingIdKey(col.key) ? listingIdColumnDef(col, data.scope) : {}),
     /* The Amazon sheet's FBA qty (Owner 2026-10-07): the Matrix's locked column. LAST, for the same reason as the stock columns. */
     ...(col.key === STOCK_FBA_KEY ? fbaColumnDef(col) : {}),
+    /* Amazon Business (step 5 Part 4): B2B price and Quantity discounts are the Matrix's cells, read only (set on the
+       Matrix). LAST, for the same reason as the stock columns; Amazon only (another channel's field of that name stays its own). */
+    ...(isBusinessColumnKey(col.key) && isBusinessScope(data.scope) ? businessColumnDef(col, { scope: data.scope }) : {}),
   }))
   const rank = new Map(orderColumnKeys(gridColumns as never, viewCtx).map((k, i) => [k, i]))
   const ordered = fields
