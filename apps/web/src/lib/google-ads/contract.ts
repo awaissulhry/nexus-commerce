@@ -45,7 +45,7 @@ export interface GoogleAccount {
   read: { lastReadAt: string | null; lastDataDay: string | null; nextReadAt: string | null; lastError: string | null }
 }
 
-export type GoogleChoiceErrorCode = 'permission_missing' | 'no_access' | 'app_not_approved' | 'not_registered' | 'google_unavailable'
+export type GoogleChoiceErrorCode = 'permission_missing' | 'no_access' | 'account_not_active' | 'app_not_approved' | 'not_registered' | 'google_unavailable'
 
 export interface GoogleChoiceError {
   code: GoogleChoiceErrorCode
