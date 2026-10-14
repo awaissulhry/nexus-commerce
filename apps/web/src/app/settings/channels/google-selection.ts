@@ -252,6 +252,9 @@ export function sectionError(product: SectionProduct, error: GoogleChoiceError |
       return product === 'ads'
         ? { tone: 'warning', title: 'No Google Ads account found', text: "This Google sign-in cannot see any Google Ads account. Sign in with a Google user that has access, or ask the account's owner to add you.", action: 'reconnect' }
         : { tone: 'info', title: `No ${name} account found`, text: `This Google sign-in cannot see any ${name} account.`, action: null }
+    case 'account_not_active':
+      // Google sees the account but will not open it (cancelled, closed or not yet enabled); a reconnect changes nothing.
+      return { tone: 'warning', title: `This ${name} account is not active`, text: `Google says this ${name} account is cancelled, closed or not yet enabled, so Nexus cannot read it. Turn it on again in ${name}, then open this window again a few minutes later.`, action: null }
     case 'app_not_approved':
       return { tone: 'warning', title: 'Google has not approved Nexus yet', text: 'Google has not yet approved Nexus to read real Google Ads accounts; only test accounts can be read.', action: null }
     case 'not_registered':

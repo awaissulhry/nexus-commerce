@@ -36,7 +36,7 @@ import { GOOGLE_SCOPE, missingGoogleProducts, type GoogleProduct } from './scope
 
 export type { GoogleProduct } from './scopes.js'
 
-export type GoogleChoiceErrorCode = 'permission_missing' | 'no_access' | 'app_not_approved' | 'not_registered' | 'google_unavailable'
+export type GoogleChoiceErrorCode = 'permission_missing' | 'no_access' | 'account_not_active' | 'app_not_approved' | 'not_registered' | 'google_unavailable'
 export interface GoogleChoiceError { code: GoogleChoiceErrorCode; message: string }
 export interface GoogleManagerRef { customerId: string; name: string | null }
 export interface GoogleAdsCustomerChoice {
@@ -128,6 +128,8 @@ function choiceErrorOf(product: GoogleProduct, status: number, body: string): { 
     return make('permission_missing', `Nexus was not given permission to read ${PRODUCT_NAME[product]}. Reconnect Google and tick the ${PRODUCT_NAME[product]} box.`)
   }
   if (code === 'NOT_ADS_USER') return make('no_access', 'This Google login has no Google Ads account.')
+  // A cancelled, closed or not yet enabled account: the login does see it, so "no access" would misstate it.
+  if (code === 'CUSTOMER_NOT_ENABLED') return make('account_not_active', 'Google says this Google Ads account is not active: it is cancelled, closed or not yet enabled. Nexus can read it once it is turned on again in Google Ads.')
   if (verdict.errorClass === 'auth_expired' || verdict.errorClass === 'auth_revoked') {
     return make('permission_missing', `Google did not accept this sign-in for ${PRODUCT_NAME[product]}. Reconnect Google.${said}`)
   }
@@ -304,11 +306,13 @@ async function readAdsWithin(connectionId: string, spent: Spent): Promise<Google
   const managers: GoogleManagerRef[] = []
   let sectionError: GoogleChoiceError | null = null
   let firstError: GoogleChoiceError | null = null
+  let notActive: GoogleChoiceError | null = null // said only when no other refusal explains the empty list
   let unreadable = 0
   answers.forEach((answer, index) => {
     if (answer.ok === false) {
       unreadable++
-      firstError = firstError ?? answer.error
+      if (answer.error.code === 'account_not_active') notActive = notActive ?? answer.error
+      else firstError = firstError ?? answer.error
       // An app-level refusal (test access, API off) is the section's problem, not this account's: say it.
       if (!sectionError && (answer.error.code === 'app_not_approved' || answer.error.code === 'google_unavailable')) sectionError = answer.error
       return
@@ -345,7 +349,7 @@ async function readAdsWithin(connectionId: string, spent: Spent): Promise<Google
     }
   }
   if (!sectionError && unreadable > 0 && customers.size === 0) {
-    sectionError = firstError ?? { code: 'no_access', message: 'Google lists Google Ads accounts for this login, but none of them could be opened.' }
+    sectionError = firstError ?? notActive ?? { code: 'no_access', message: 'Google lists Google Ads accounts for this login, but none of them could be opened.' }
   }
   return { customers: [...customers.values()].sort(byName((c) => c.customerId)), error: sectionError }
 }
