@@ -243,9 +243,10 @@ const refusalOf = (c: VerbChange, reason: string): VerbRefusal => ({ rowId: c.ro
 
 /**
  * PURE — a money value typed once for many markets (a set price, a sale price, an exact business price or prices per
- * unit) is one number in ONE currency: €30 is not £30 (#623's rule for the Matrix's Set price, held here by the tool until
- * the Matrix verb takes a currency on main). With `currency`, a target in a market that sells in another is refused with
- * the Matrix's sentence (`This market sells in GBP`); without it, targets in more than one currency refuse the request.
+ * unit) is one number in ONE currency: €30 is not £30. With `currency`, a target in a market that sells in another is
+ * refused with the Matrix's sentence (`This market sells in GBP`; for Set price the Matrix verb does it itself, #623).
+ * Without it, targets in more than one currency refuse the request: the Matrix reads a bare number as each market's own
+ * currency (#623), which a person typing in the grid sees, but a request Claude asks for must say its currency.
  */
 export function moneyCurrencyGate(
   coordinates: ReadonlyArray<{ key: string; currency: string }>,
@@ -263,26 +264,18 @@ export function moneyCurrencyGate(
 
 const currencyArg = (args: Record<string, unknown>) => (typeof args.currency === 'string' ? args.currency.toUpperCase() : null)
 
-/** set-price: the gate, read on the family's Matrix read — the error, or the check each change of the door's preview takes. */
-async function setPriceGate(args: Record<string, unknown>, ctx: ToolContext): Promise<{ error: string } | { vet: Vet }> {
+/**
+ * set-price without a currency: refused when its targets sell in more than one currency (`moneyCurrencyGate`); null when it
+ * may go on. With a currency, the Matrix verb refuses the other markets itself (`priceParams` passes it on).
+ */
+async function setPriceCurrencyRefusal(args: Record<string, unknown>, ctx: ToolContext): Promise<string | null> {
+  if (currencyArg(args)) return null
   const family = await familyRoot(String(args.productId))
-  if (!family) return { vet: async (_f, preview) => ({ preview, also: [] }) }
+  if (!family) return null
   const { getMatrixRead } = await matrixRead()
   const read = await getMatrixRead({ productId: family.id, accountId: null, canEditPrice: ctx.can(F.productsPriceEdit) })
-  const gate = moneyCurrencyGate(read.coordinates, args.targets as MatrixVerbTarget[], currencyArg(args), 'A price')
-  if ('error' in gate) return { error: `${family.sku}: ${gate.error}` }
-  return {
-    vet: async (_family, preview) => {
-      const changes: VerbChange[] = []
-      const refusals = [...preview.refusals]
-      for (const change of preview.changes) {
-        const why = gate.refuse(change.coordinateKey)
-        if (why) refusals.push({ ...refusalOf(change, why), kind: 'currency' })
-        else changes.push(change)
-      }
-      return { preview: { ...preview, changes, refusals }, also: [] }
-    },
-  }
+  const gate = moneyCurrencyGate(read.coordinates, args.targets as MatrixVerbTarget[], null, 'A price')
+  return 'error' in gate ? `${family.sku}: ${gate.error}` : null
 }
 
 /**
@@ -404,7 +397,11 @@ const priceInput = z.object({
 
 function priceParams(args: Record<string, unknown>): MatrixVerbParams | { error: string } {
   const action = String(args.action)
-  if (action === 'set-price') return typeof args.price === 'number' ? { verb: 'set-price', value: args.price } : { error: 'set-price needs a price.' }
+  // A price in its currency: the Matrix verb refuses a market that sells in another (#623).
+  if (action === 'set-price') {
+    const currency = currencyArg(args)
+    return typeof args.price === 'number' ? { verb: 'set-price', value: args.price, ...(currency ? { currency } : {}) } : { error: 'set-price needs a price.' }
+  }
   if (action === 'adjust-prices') {
     const currency = typeof args.currency === 'string' ? args.currency.toUpperCase() : args.currency
     const problem = adjustPricesProblem({ percent: args.percent, amount: args.amount, currency })
@@ -698,10 +695,10 @@ const setListingPrice: AgentTool = {
   async handler(args, ctx) {
     if (args.action === 'business') return previewBusiness(args, ctx)
     if (args.action !== 'sale') {
-      // Set price: one number in one currency (moneyCurrencyGate).
-      const gate = args.action === 'set-price' ? await setPriceGate(args, ctx) : null
-      if (gate && 'error' in gate) return { ok: false, error: `${gate.error} Nothing was queued.` }
-      const out = await previewVerbFor('set-listing-price', args, ctx, priceParams(args), {}, gate && 'vet' in gate ? gate.vet : undefined)
+      // Set price: one number in one currency (moneyCurrencyGate); with a currency the verb refuses the other markets.
+      const mixed = args.action === 'set-price' ? await setPriceCurrencyRefusal(args, ctx) : null
+      if (mixed) return { ok: false, error: `${mixed} Nothing was queued.` }
+      const out = await previewVerbFor('set-listing-price', args, ctx, priceParams(args))
       if (!out.ok) return out
       const preview = out.preview as { family: { productId: string }; changes: VerbChange[] }
       return { ...out, preview: { ...preview, planFacts: await priceVerbFacts(preview.family.productId, preview.changes, ctx) } }
@@ -726,9 +723,9 @@ const setListingPrice: AgentTool = {
       if (family && factHash(approved!.planFacts) !== factHash(await priceVerbFacts(family.id, approved!.changes as VerbChange[], ctx))) {
         return { ok: false, error: `${family.sku}: a sale on these listings changed since this price was approved. Nothing changed; ask Claude again.` }
       }
-      const gate = args.action === 'set-price' ? await setPriceGate(args, ctx) : null
-      if (gate && 'error' in gate) return { ok: false, error: `${gate.error} Nothing changed.` }
-      return runVerbFor(args, ctx, priceParams(args), gate && 'vet' in gate ? gate.vet : undefined)
+      const mixed = args.action === 'set-price' ? await setPriceCurrencyRefusal(args, ctx) : null
+      if (mixed) return { ok: false, error: `${mixed} Nothing changed.` }
+      return runVerbFor(args, ctx, priceParams(args))
     }
     const approved = ctx.approvedPreview as SalePreview | undefined
     if (approved?.verb !== 'sale' || !Array.isArray(approved.changes)) return { ok: false, error: 'A sale is set only after a person approved its preview. Nothing changed.' }
