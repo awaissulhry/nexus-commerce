@@ -22669,6 +22669,10 @@ model ShopifyColourSync {
   leaseToken          String?
   leaseUntil          DateTime?
   lastError           String?
+  /// Adopt only: Confirm linked this family's colours to live Shopify products (identity + missing SKUs only) and Nexus
+  /// writes nothing else to them — no stock, no sizes, no size order, no archive, no colour swatch fields — until an
+  /// operator starts the full sync (`full-sync.service.ts`). False: the full sync runs (every family before this field).
+  adoptOnly           Boolean           @default(false)
   updatedAt           DateTime          @updatedAt
 
   @@unique([workspaceId, familyId, channelConnectionId, marketplace, aliasKey], name: "colour_sync")
