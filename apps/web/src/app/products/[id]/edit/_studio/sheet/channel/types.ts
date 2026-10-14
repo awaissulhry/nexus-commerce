@@ -440,6 +440,8 @@ export interface StudioRow {
   listing: SheetListing | null
   /** Amazon sheet gaps — the Matrix cells the stock columns show and write (API `StudioRowStock`); absent off the Matrix's channels. */
   stock?: StudioRowStock
+  /** Amazon Business (step 5 Part 4) — the Matrix's market cells the read-only B2B price and Quantity discounts columns show (API `StudioRowBusiness`); Amazon scopes only. */
+  business?: StudioRowBusiness
   /**
    * S11 — the first column's SKU on this channel scope (API `StudioRow.skuFacts`): the SKU Publish sends for this row's
    * listing, whether it differs from the Shared SKU (`sku`), and whether it can be edited here. `../identitySkuEdit.ts`.
@@ -483,6 +485,15 @@ export interface StudioRowStock {
   coordinate: MatrixCoordinate | null
   /** Amazon only: the units Amazon holds for this SKU (the Matrix's `row.fba`). null = no FBA stock row; absent = not read. */
   fba?: MatrixFbaStock | null
+}
+
+/** What an Amazon sheet row carries for its B2B price and Quantity discounts cells (API `StudioRowBusiness`, `studio-stock.ts`). Shown only. */
+export interface StudioRowBusiness {
+  /** The row's MARKET coordinate (`AMAZON:IT`, `AMAZON:UK`, `AMAZON:IT#<aliasId>`): the business offer is per market, never the EU group's. */
+  key: CoordinateKey
+  /** The Matrix's cells for `key`, unchanged; null when the row has no listing there (or the Matrix holds another one). */
+  cells: MatrixCells | null
+  coordinate: MatrixCoordinate | null
 }
 
 /** PES.5's `SheetListing` — the row's own listing state on this coordinate. */

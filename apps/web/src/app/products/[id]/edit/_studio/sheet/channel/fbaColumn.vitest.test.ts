@@ -52,6 +52,11 @@ describe('the FBA qty column on the Amazon product sheet', () => {
     expect(d.cellEditorSelector).toBeUndefined()
     expect(d.valueParser).toBeUndefined()
     expect(d.field).toBeUndefined()
+    // Delete / Backspace are the sheet's: the grid's own would blank the selection's other cells without asking.
+    const key = (k: string, editing = false) => ({ event: { key: k, altKey: false, ctrlKey: false, metaKey: false, shiftKey: false }, editing })
+    const suppress = d.suppressKeyboardEvent as (p: unknown) => boolean
+    expect(suppress(key('Delete'))).toBe(true); expect(suppress(key('Backspace'))).toBe(true)
+    expect(suppress(key('Delete', true))).toBe(false); expect(suppress(key('Enter'))).toBe(false)
     // The sheet's own setter is replaced: a write reaching the column changes nothing.
     const data = row(AT_AMAZON)
     expect(call(d, 'valueSetter', { data, newValue: 99 })).toBe(false)
