@@ -207,6 +207,19 @@ describe('discoverGoogleChoices', () => {
     expect(choices.ads.error).toMatchObject({ code: 'app_not_approved' })
   })
 
+  it('a cancelled account (CUSTOMER_NOT_ENABLED) is said as not active, not as "no access"; a real refusal still wins', async () => {
+    const notEnabled = () => json({ error: { code: 403, status: 'PERMISSION_DENIED', message: 'outer', details: [{ '@type': 'type.googleapis.com/google.ads.googleads.v25.errors.GoogleAdsFailure', errors: [{ errorCode: { authorizationError: 'CUSTOMER_NOT_ENABLED' }, message: 'not enabled' }] }] } }, 403)
+    h.routes.set(LIST, () => json({ resourceNames: ['customers/1111111111'] }))
+    h.routes.set(searchUrl('1111111111'), notEnabled)
+    const alone = await inBusiness(() => discoverGoogleChoices('g-1'))
+    expect(alone.ads).toEqual({ customers: [], error: { code: 'account_not_active', message: expect.stringMatching(/not active: it is cancelled, closed or not yet enabled/) } })
+
+    h.routes.set(LIST, () => json({ resourceNames: ['customers/1111111111', 'customers/2222222222'] }))
+    h.routes.set(searchUrl('2222222222'), () => json({ error: { code: 403, status: 'PERMISSION_DENIED', message: 'outer', details: [{ '@type': 'type.googleapis.com/google.ads.googleads.v25.errors.GoogleAdsFailure', errors: [{ errorCode: { authorizationError: 'USER_PERMISSION_DENIED' }, message: 'denied' }] }] } }, 403))
+    const mixed = await inBusiness(() => discoverGoogleChoices('g-1'))
+    expect(mixed.ads.error).toMatchObject({ code: 'no_access' })
+  })
+
   it('a product whose permission was not ticked is not asked at all', async () => {
     h.connection!.grantedScopes = ALL_SCOPES.filter((s) => !s.endsWith('analytics.readonly'))
     const choices = await inBusiness(() => discoverGoogleChoices('g-1'))

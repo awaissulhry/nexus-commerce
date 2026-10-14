@@ -271,6 +271,14 @@ describe('section errors, in words', () => {
     expect(sectionError('ads', { code: 'no_access', message: '' })?.text).toBe("This Google sign-in cannot see any Google Ads account. Sign in with a Google user that has access, or ask the account's owner to add you.")
   })
 
+  it('account_not_active says the account is off in Google, and offers no reconnect (it would change nothing)', () => {
+    expect(sectionError('ads', { code: 'account_not_active', message: '' })).toMatchObject({
+      action: null,
+      title: 'This Google Ads account is not active',
+      text: 'Google says this Google Ads account is cancelled, closed or not yet enabled, so Nexus cannot read it. Turn it on again in Google Ads, then open this window again a few minutes later.',
+    })
+  })
+
   it('app_not_approved says only test accounts can be read', () => {
     expect(sectionError('ads', { code: 'app_not_approved', message: '' })?.text).toBe('Google has not yet approved Nexus to read real Google Ads accounts; only test accounts can be read.')
   })
