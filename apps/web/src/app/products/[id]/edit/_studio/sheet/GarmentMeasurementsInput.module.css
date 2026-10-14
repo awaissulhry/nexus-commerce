@@ -142,12 +142,17 @@
   color: var(--nds-danger-text);
 }
 
-/* The sheet's pop-up: wide enough for a few measures, never wider than the screen. */
+/* The sheet's pop-up, on the grid's `nds-list-editor` surface (border-box): wide enough for a few measures, never wider
+   than the screen, its border included. */
 .popup {
   width: min(640px, 92vw);
   max-height: 70vh;
   overflow-x: hidden;
   overflow-y: auto;
+}
+
+.popupBody {
+  min-width: 0;
   padding: var(--nds-space-12);
 }
 

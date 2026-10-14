@@ -273,10 +273,14 @@ export function GarmentMeasurementsEditor({ value, onValueChange, stopEditing, d
     event.preventDefault()
     next.focus()
   }
+  // The grid's pop-up editor surface (`nds-list-editor`, as ImpactProtectorsEditor): without it the cells under the pop-up
+  // show through the table. The surface carries the width (its border included), the height limit and the scroll.
   return (
-    <div ref={root} className={styles.popup} data-garment-editor onKeyDown={walk}>
-      <GarmentMeasurementsInput value={value} baseline={opened} loadSizes={loadSizes} onDraft={onValueChange}
-        onSave={(next) => { onValueChange(next); stopEditing?.() }} />
+    <div className={`nds-list-editor ${styles.popup}`}>
+      <div ref={root} className={styles.popupBody} data-garment-editor onKeyDown={walk}>
+        <GarmentMeasurementsInput value={value} baseline={opened} loadSizes={loadSizes} onDraft={onValueChange}
+          onSave={(next) => { onValueChange(next); stopEditing?.() }} />
+      </div>
     </div>
   )
 }
