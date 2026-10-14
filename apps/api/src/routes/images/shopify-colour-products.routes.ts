@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { contentDestination, type ContentScope } from '../../services/shopify/content-workspace.service.js'
 import { WorkspaceScopeError } from '../../services/pim/workspace-destination.js'
-import { findColourProducts, readColourProducts } from '../../services/shopify/colour-products/find.service.js'
+import { findColourProducts, readColourProducts, searchColourStoreProducts } from '../../services/shopify/colour-products/find.service.js'
 import { confirmColourProducts } from '../../services/shopify/colour-products/confirm.service.js'
 import { linkColourProducts } from '../../services/shopify/colour-products/link.service.js'
 import { startFullColourSync } from '../../services/shopify/colour-products/full-sync.service.js'
@@ -16,16 +16,17 @@ import { readColourProductSettings, saveColourProductSettings } from '../../serv
  * unless the family already runs the full sync) ·
  * `POST /link` write and read back every colour product's colour name and colour list (PR 4; refused while adopt only) ·
  * `POST /full-sync` leave adopt only: stock, sizes, size order, archive and the colour swatch fields from the next sync ·
- * `GET|PUT /settings` the store switch.
+ * `GET|PUT /settings` the store switch · `GET /store-products?query=` search the store's products to choose a colour's.
  */
-type Request = { Params: { productId: string }; Querystring: ContentScope; Body: unknown }
+type Request = { Params: { productId: string }; Querystring: ContentScope & { query?: string; cursor?: string }; Body: unknown }
 export const shopifyColourProductsRoutes: FastifyPluginAsync = async app => {
-  for (const [method, suffix] of [['GET', ''], ['POST', '/find'], ['POST', '/confirm'], ['POST', '/link'], ['POST', '/full-sync'], ['GET', '/settings'], ['PUT', '/settings']] as const) {
+  for (const [method, suffix] of [['GET', ''], ['POST', '/find'], ['POST', '/confirm'], ['POST', '/link'], ['POST', '/full-sync'], ['GET', '/settings'], ['PUT', '/settings'], ['GET', '/store-products']] as const) {
     app.route<Request>({ method, url: `/products/:productId/shopify-colour-products${suffix}`, handler: async (request, reply) => {
       reply.header('Cache-Control', 'private, no-store')
       try {
         const { productId } = request.params
         if (suffix === '/find') return await findColourProducts(productId, request.query, request.body)
+        if (suffix === '/store-products') return await searchColourStoreProducts(productId, request.query, request.query)
         if (suffix === '/confirm') return await confirmColourProducts(productId, request.query, request.body)
         if (suffix === '/link') return await linkColourProducts(productId, request.query)
         if (suffix === '/full-sync') return await startFullColourSync(productId, request.query, request.body)
@@ -41,7 +42,8 @@ export const shopifyColourProductsRoutes: FastifyPluginAsync = async app => {
         return reply.code(502).send({ error: suffix === '/find' ? 'Shopify could not be read. Check the connected store and retry. Nothing was changed.'
           : suffix === '/confirm' ? 'The confirm stopped. Some colours may be confirmed. Run Find again to see where it stopped, then confirm what is left.'
           : suffix === '/link' ? 'The link stopped. Run it again: it writes only what is still missing.'
-          : suffix === '/full-sync' ? 'The full sync could not be started. Reload to see whether it started, then retry.' : 'The request could not be completed. Reload and retry.' })
+          : suffix === '/full-sync' ? 'The full sync could not be started. Reload to see whether it started, then retry.'
+          : suffix === '/store-products' ? 'The Shopify store could not be searched. Check the connected store and retry.' : 'The request could not be completed. Reload and retry.' })
       }
     } })
   }

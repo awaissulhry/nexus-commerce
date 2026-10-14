@@ -44,13 +44,19 @@ function shopify(query: string, variables: any) {
     const nodes = state.store.flatMap(p => p.variants.nodes.filter((v: any) => v.sku && asked.some(a => v.sku.startsWith(a))).map((v: any) => ({ sku: v.sku, product: { id: p.id } })))
     return { productVariants: { nodes } }
   }
+  if (query.includes('NexusColourStoreProducts')) {
+    state.read.push(['search', variables.query ?? '', variables.vns, variables.vkey])
+    const nodes = state.store.filter(p => !variables.query || p.title.toLowerCase().includes(String(variables.query).toLowerCase()))
+      .map(p => ({ id: p.id, title: p.title, handle: p.handle, status: p.status, featuredMedia: null, colour: p.colour, variantsCount: { count: p.variants.nodes.length }, variants: { nodes: p.variants.nodes.slice(0, 5) } }))
+    return { products: { nodes, pageInfo: { hasNextPage: false, endCursor: null } } }
+  }
   if (query.includes('NexusColourCandidates')) { state.read.push([...variables.ids]); return { nodes: variables.ids.map((id: string) => state.store.find(p => p.id === id) ?? null) } }
   throw new Error(`unexpected query ${query.slice(0, 60)}`)
 }
 
 import prisma from '../../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../../lib/workspace-context.js'
-import { findColourProducts, readColourProducts } from './find.service.js'
+import { findColourProducts, readColourProducts, searchColourStoreProducts } from './find.service.js'
 import { readColourProductSettings, saveColourProductSettings, DEFAULT_COLOUR_PRODUCT_SETTINGS } from './settings.js'
 
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
@@ -143,6 +149,18 @@ describe('Find — the live Shopify product of each colour', () => {
     // A colour this family does not have, or a choice that is not a Shopify product, is refused.
     await expect(scoped(() => findColourProducts('p-BLACK-M', { accountId: 'x' }, { choices: [{ valueKey: 'color:green', shopifyProductId: BLACK }] }))).rejects.toThrow('"color:green" is not a colour of this family.')
     await expect(scoped(() => findColourProducts('p-BLACK-M', { accountId: 'x' }, { choices: [{ valueKey: 'color:black', shopifyProductId: '101' }] }))).rejects.toThrow('Choose a Shopify product.')
+  })
+
+  it('the store search for the picker: status, the colour the product shows, its sizes, a SKU, and whose colour it already is', async () => {
+    await scoped(() => prisma.shopifyColourProduct.create({ data: { familyId: ids.other, channelConnectionId: ids.account, splitAxis: 'color', valueKey: 'color:black', state: 'LINKED', shopifyProductId: BLACK } }))
+    const page = await scoped(() => searchColourStoreProducts('p-BLACK-M', { accountId: 'x' }, { accountId: 'x', query: 'gale' }))
+    expect(state.read).toEqual([['search', 'gale', 'custom', 'variation_value']])
+    expect(page.cursor).toBeNull()
+    expect(page.items.map(i => i.id)).toEqual([BLACK, YELLOW, NOISE])
+    expect(page.items[0]).toEqual({ id: BLACK, title: 'GALE jacket', handle: '101', status: 'ACTIVE', image: null, colourName: 'Black', variants: 9, sampleSku: 'GALE-JACKET-BLACK-MEN-XS',
+      linkedTo: { familySku: 'OTHER-JACKET', valueKey: 'color:black', state: 'LINKED', thisFamily: false } })
+    expect(page.items[1]).toMatchObject({ colourName: 'Yellow', sampleSku: null, linkedTo: null })
+    expect(state.queries.some(q => q === 'mutation')).toBe(false)
   })
 
   it('a family that stays one product asks Shopify nothing', async () => {

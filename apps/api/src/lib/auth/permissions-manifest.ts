@@ -628,7 +628,7 @@ export const ENTRIES: Entry[] = [
   P(F.productsPublish, (m, p) => m === 'PUT' && /^\/api\/products\/[^/]+\/shopify-colour-products\/settings$/.test(p)),
   P(F.productsPublish, (m, p) => m === 'POST' && /^\/api\/products\/[^/]+\/shopify-colour-products\/(?:confirm|link|full-sync)$/.test(p)),
   P(F.productsEdit, (m, p) => m === 'POST' && /^\/api\/products\/[^/]+\/shopify-colour-products\/find$/.test(p)),
-  P(F.productsView, (m, p) => m === 'GET' && /^\/api\/products\/[^/]+\/shopify-colour-products(?:\/settings)?$/.test(p)),
+  P(F.productsView, (m, p) => m === 'GET' && /^\/api\/products\/[^/]+\/shopify-colour-products(?:\/settings|\/store-products)?$/.test(p)),
   P(F.productsView, (_m, p) => /^\/api\/products\/[^/]+\/shopify-content\/preview$/.test(p)),
   P(F.productsView, (_m, p) => /^\/api\/products\/[^/]+\/shopify-content\/import-source$/.test(p)),
   RW(F.productsView, F.productsEdit, (_m, p) => /^\/api\/products\/[^/]+\/shopify-content$/.test(p)),

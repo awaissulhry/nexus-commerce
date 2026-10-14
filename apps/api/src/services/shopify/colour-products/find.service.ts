@@ -149,6 +149,37 @@ export function operatorChoices(rows: ReadonlyArray<{ valueKey: string; state: s
   return out
 }
 
+const storeSearchSchema = z.object({ query: z.string().trim().max(200).optional(), cursor: z.string().max(1000).optional() }).passthrough()
+const STORE_PRODUCTS = `query NexusColourStoreProducts($query:String,$after:String,$vns:String!,$vkey:String!) {
+  products(first:25,after:$after,query:$query,sortKey:TITLE) { nodes { id title handle status featuredMedia { preview { image { url } } }
+    colour: metafield(namespace:$vns,key:$vkey) { value } variantsCount { count } variants(first:5) { nodes { sku } } }
+  pageInfo { hasNextPage endCursor } } }`
+
+/**
+ * The store's products for the operator to choose a colour's product from, by title (Shopify's own product search): each
+ * with its status, image, the colour it shows today (the store's colour field, `custom.variation_value`), its number of
+ * variants, a SKU it holds, and the Nexus colour it is already linked to. Reads Shopify; writes nothing.
+ */
+export async function searchColourStoreProducts(productId: string, scope: ContentScope, raw: unknown) {
+  const input = storeSearchSchema.parse(raw ?? {})
+  const destination = await contentDestination(productId, scope)
+  const settings = await readColourProductSettings(destination.accountId)
+  const graphql = (await shopifyAdmin(destination.accountId)).graphql
+  const data = await graphql(STORE_PRODUCTS, { query: input.query || null, after: input.cursor || null, vns: settings.valueField.namespace, vkey: settings.valueField.key })
+  const nodes: any[] = (data.products?.nodes ?? []).filter((n: any) => n?.id && productGid.test(n.id))
+  const claims = nodes.length ? await prisma.shopifyColourProduct.findMany({ where: { channelConnectionId: destination.accountId, shopifyProductId: { in: nodes.map(n => n.id) } },
+    select: { shopifyProductId: true, valueKey: true, state: true, familyId: true, family: { select: { sku: true } } } }) : []
+  return {
+    items: nodes.map(n => {
+      const claim = claims.find(c => c.shopifyProductId === n.id)
+      return { id: n.id as string, title: n.title as string, handle: n.handle as string, status: n.status as string, image: n.featuredMedia?.preview?.image?.url ?? null,
+        colourName: n.colour?.value ?? null, variants: n.variantsCount?.count ?? null, sampleSku: n.variants?.nodes?.find((v: any) => v?.sku)?.sku ?? null,
+        linkedTo: claim ? { familySku: claim.family.sku, valueKey: claim.valueKey, state: claim.state, thisFamily: claim.familyId === destination.familyId } : null }
+    }),
+    cursor: data.products?.pageInfo?.hasNextPage ? data.products.pageInfo.endCursor ?? null : null,
+  }
+}
+
 /** Value key → Shopify product, for the colours already confirmed. */
 export const linkedProducts = (rows: ReadonlyArray<{ valueKey: string; state: string; shopifyProductId: string | null }>): Record<string, string> =>
   Object.fromEntries(rows.filter(r => r.state === 'LINKED' && r.shopifyProductId).map(r => [r.valueKey, r.shopifyProductId!]))
