@@ -142,7 +142,8 @@
   color: var(--nds-danger-text);
 }
 
-/* The sheet's pop-up: wide enough for a few measures, never wider than the screen. */
+/* The sheet's pop-up, inside the grid's `nds-list-editor` surface: wide enough for a few measures, never wider than the
+   screen. */
 .popup {
   width: min(640px, 92vw);
   max-height: 70vh;
