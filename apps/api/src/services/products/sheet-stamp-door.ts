@@ -186,5 +186,8 @@ export async function applySheetBulkEdits(input: ProductBulkInput, context: Prod
     const outcome = await applyWithStamps<Record<string, unknown>>(input, sheetContext, (unit) => applyProductBulkEdits(unit, sheetContext))
     if ('error' in outcome) throw outcome.error
     return outcome.writtenAt === undefined ? outcome.value : { ...outcome.value, writtenAt: outcome.writtenAt }
-  })
+  }, { restarts: SHEET_SAVE_RESTARTS })
 }
+
+/** Two saves of one family typed a moment apart can lose to each other; the sheet's saves get five attempts, not three. */
+export const SHEET_SAVE_RESTARTS = 4

@@ -152,3 +152,27 @@ it('does not restart an unrelated bare pg-adapter error or guess from its messag
   }))).toBe(false)
   expect(retryableConflict(new Error('TransactionWriteConflict'))).toBe(false)
 })
+
+it('a caller may allow more restarts (the product sheet\'s saves): it waits a moment between them and keeps only the attempt that committed', async () => {
+  let attempts = 0
+  const effects: number[] = []
+  const client = { $transaction: async (work: (tx: unknown) => Promise<unknown>) => {
+    const result = await work({})
+    if (attempts < 5) throw directConflict()
+    return result
+  } }
+  const started = Date.now()
+  const value = await inDatabaseTransaction(client as never, async () => {
+    const attempt = ++attempts
+    await afterDatabaseCommit('saved', async () => { effects.push(attempt) })
+    return attempt
+  }, { restarts: 4 })
+  expect(value).toBe(5)
+  expect(effects).toEqual([5])
+  // Four waits of at least 20, 40, 60 and 80 ms.
+  expect(Date.now() - started).toBeGreaterThanOrEqual(190)
+  // The default stays three attempts.
+  attempts = 0
+  await expect(inDatabaseTransaction(client as never, async () => { ++attempts })).rejects.toThrow('TransactionWriteConflict')
+  expect(attempts).toBe(3)
+})
