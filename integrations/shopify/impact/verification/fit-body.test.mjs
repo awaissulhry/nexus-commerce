@@ -47,3 +47,35 @@ test('rings follow the torso only and normals are unit length', () => {
   const N = B.computeNormals(P, female.indices)
   for (let i = 0; i < N.length; i += 3 * 97) assert.ok(Math.abs(Math.hypot(N[i], N[i + 1], N[i + 2]) - 1) < 1e-4)
 })
+
+test('arms and hands stay outside the body, even for the heaviest mixes of shapes the finder makes', () => {
+  // Deepest arm point under the skin of the torso, hips or thighs (cm): the nearest body point's normal says which side.
+  const depth = (body, P) => {
+    const N = B.computeNormals(P, body.indices), arm = [], trunk = []
+    for (let i = 0; i < body.torso.length; i++) {
+      const y = P[i * 3 + 1] / body.top
+      if (!body.torso[i]) arm.push(i); else if (y > 0.35 && y < 0.62) trunk.push(i)
+    }
+    let worst = 0
+    for (const a of arm) {
+      let best = Infinity, j = -1
+      for (const t of trunk) {
+        const d = (P[a * 3] - P[t * 3]) ** 2 + (P[a * 3 + 1] - P[t * 3 + 1]) ** 2 + (P[a * 3 + 2] - P[t * 3 + 2]) ** 2
+        if (d < best) { best = d; j = t }
+      }
+      if (best > 16) continue
+      const under = (P[a * 3] - P[j * 3]) * N[j * 3] + (P[a * 3 + 1] - P[j * 3 + 1]) * N[j * 3 + 1] + (P[a * 3 + 2] - P[j * 3 + 2]) * N[j * 3 + 2]
+      worst = Math.max(worst, -under)
+    }
+    return worst
+  }
+  // The strongest each morph gets in shapeFor: weight 1.4, circumferences 2.5; every mix of them.
+  const strongest = { weightPlus: 1.4, bustIncr: 2.5, waistIncr: 2.5, hipsIncr: 2.5 }, names = Object.keys(strongest)
+  for (const [sex, body] of [['male', male], ['female', female]]) {
+    for (let mask = 1; mask < 16; mask++) {
+      const weights = Object.fromEntries(names.filter((_, i) => mask & (1 << i)).map(n => [n, strongest[n]]))
+      const d = depth(body, B.applyShape(body, { weights }))
+      assert.ok(d < 0.3, `${sex} ${Object.keys(weights).join('+')}: an arm point ${d.toFixed(2)} cm inside the body`)
+    }
+  }
+})

@@ -1,10 +1,23 @@
 // Xavia fit finder: the 3D mannequin on screen. Plain WebGL 1 (no library), drawn only when something changes.
 // Turn it by dragging, by touch or with the arrow keys. Rings show how a size fits at the chest, waist and hips.
-import { decodeBody, shapeFor, applyShape, computeNormals, ring } from './xavia-fit-body.js';
+import { decodeBody, shapeFor, applyShape, shadingNormals, ring } from './xavia-fit-body.js';
 
-// Mannequin white first, then six skin tones (linear RGB).
-export const SKINS = [[0.86, 0.86, 0.87], [0.93, 0.76, 0.66], [0.84, 0.62, 0.48], [0.71, 0.48, 0.34], [0.55, 0.36, 0.24], [0.38, 0.24, 0.16], [0.22, 0.14, 0.1]];
-const RING_COLOUR = { ok: [0.09, 0.64, 0.33], warn: [0.91, 0.6, 0.06], bad: [0.9, 0.24, 0.26], guide: [0.98, 0.45, 0.02] };
+// Body colours as shown on the swatches (sRGB 0-255): mannequin white first, then six skin tones.
+export const SWATCHES = [[226, 226, 226], [237, 234, 213], [216, 171, 140], [201, 146, 111], [178, 134, 103], [145, 84, 61], [54, 30, 30]];
+const linear = c => ((c / 255) <= 0.04045 ? c / 255 / 12.92 : ((c / 255 + 0.055) / 1.055) ** 2.4);
+const SKINS = SWATCHES.map(rgb => rgb.map(linear));
+const RING_COLOUR = { ok: [76, 175, 80], bad: [229, 57, 53], guide: [255, 122, 0] };
+for (const k of Object.keys(RING_COLOUR)) RING_COLOUR[k] = RING_COLOUR[k].map(linear);
+// Camera per screen, measured against the reference fit finder: lo/hi = part of the body height in view (0 = floor,
+// 1 = top of the head), yaw = turn of the body (radians), x = where the body sits across the stage (-1 left .. 1 right).
+const FRAMES = {
+  full: { lo: -0.04, hi: 1.03, yaw: 0.5, pitch: 0.06, x: 0 },
+  shape: { lo: 0.308, hi: 0.982, yaw: 0.55, pitch: 0.08, x: -0.26 },
+  result: { lo: 0.309, hi: 0.973, yaw: 0.38, pitch: 0.2, x: -0.226 },
+  shapePhone: { lo: -0.051, hi: 1.155, yaw: 0.5, pitch: 0.08, x: -0.63 },
+  resultPhone: { lo: 0.001, hi: 1.15, yaw: 0.5, pitch: 0.2, x: -0.04 },
+  guide: { lo: 0.33, hi: 0.975, yaw: 0.12, pitch: 0.2, x: -0.1 },
+};
 const LEVEL_SHIFT = { chest: 0, waist: 0, hips: 0 };
 
 const bodies = new Map();
@@ -30,15 +43,17 @@ varying vec3 vNormal; varying float vAo; varying vec3 vWorld;
 void main() {
   vec3 n = normalize(vNormal), v = normalize(uEye - vWorld);
   if (dot(n, v) < 0.0) n = -n;
-  vec3 key = normalize(vec3(-0.55, 0.75, 0.75)), fill = normalize(vec3(0.8, 0.25, 0.55)), back = normalize(vec3(0.2, 0.5, -0.9));
-  float k = dot(n, key); k = max(k, 0.0) * 0.8 + (k * 0.5 + 0.5) * 0.2;
+  // A white store mannequin in a soft studio: wrapped key light from the front left, a large fill, satin highlights,
+  // and grey towards the silhouette so the white body reads on a white page.
+  vec3 key = normalize(vec3(-0.45, 0.55, 0.7)), fill = normalize(vec3(0.75, 0.15, 0.65));
+  float ndv = max(dot(n, v), 0.0);
+  float k = dot(n, key) * 0.5 + 0.5; k = k * k;
   float f = max(dot(n, fill), 0.0);
-  float hemi = mix(0.55, 1.0, n.y * 0.5 + 0.5);
-  float rim = pow(1.0 - max(dot(n, v), 0.0), 3.0) * 0.28 + max(dot(n, back), 0.0) * 0.1;
-  float spec = pow(max(dot(n, normalize(key + v)), 0.0), 36.0) * 0.07;
-  float ao = mix(0.32, 1.0, vAo);
-  vec3 light = vec3(1.0, 0.97, 0.93) * 0.72 * k + vec3(0.86, 0.9, 1.0) * 0.22 * f + vec3(0.3) * hemi;
-  vec3 c = uColour * light * ao + (rim + spec) * vec3(1.0);
+  float hemi = mix(0.62, 1.0, n.y * 0.5 + 0.5);
+  float spec = pow(max(dot(n, normalize(key + v)), 0.0), 10.0) * 0.2 + pow(max(dot(n, normalize(fill + v)), 0.0), 30.0) * 0.05;
+  float ao = mix(0.55, 1.0, vAo);
+  float edge = mix(0.76, 1.0, pow(ndv, 0.6));
+  vec3 c = uColour * (0.36 * hemi + 0.7 * k + 0.16 * f) * ao * edge + spec * ao;
   gl_FragColor = vec4(pow(c, vec3(1.0 / 2.2)), 1.0);
 }`;
 const RING_VERTEX = `
@@ -102,7 +117,7 @@ export function createViewer(host, { urls, label, onFail } = {}) {
   host.append(canvas, labels);
 
   let body, sex, positions, normals, from = null, to = null, tweenStart = 0, animating = false;
-  let shift = 0, halfWidth = 40, yaw = -0.32, pitch = 0.1, spin = 0, dragging = null, frame = 'full', framing = { lo: 0, hi: 1 }, framingFrom = null, framingStart = 0;
+  let halfWidth = 40, yaw = FRAMES.full.yaw, userYaw = 0, yawFrom = yaw, pitch = 0.08, spin = 0, dragging = null, frame = 'full', framing = FRAMES.full, framingFrom = null, framingStart = 0;
   let rings = [], ringMeshes = [], skin = SKINS[0], destroyed = false, requested = false, ready = false;
   const want = { values: {}, weightKg: null };
 
@@ -121,7 +136,7 @@ export function createViewer(host, { urls, label, onFail } = {}) {
       const shape = { scale: from.scale + (to.scale - from.scale) * e, weights: {} };
       for (const k of new Set([...Object.keys(from.weights), ...Object.keys(to.weights)])) shape.weights[k] = (from.weights[k] ?? 0) + ((to.weights[k] ?? 0) - (from.weights[k] ?? 0)) * e;
       applyShape(body, shape, positions);
-      computeNormals(positions, body.indices, normals);
+      shadingNormals(body, positions, normals);
       gl.bindBuffer(gl.ARRAY_BUFFER, buffers.pos); gl.bufferData(gl.ARRAY_BUFFER, positions, gl.DYNAMIC_DRAW);
       gl.bindBuffer(gl.ARRAY_BUFFER, buffers.normal); gl.bufferData(gl.ARRAY_BUFFER, normals, gl.DYNAMIC_DRAW);
       halfWidth = 0;
@@ -134,32 +149,32 @@ export function createViewer(host, { urls, label, onFail } = {}) {
     gl.viewport(0, 0, w, hgt);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    if (Math.abs(spin) > 0.0005 && !dragging) { yaw += spin; spin *= 0.92; requestRender(); }
+    if (Math.abs(spin) > 0.0005 && !dragging) { yaw += spin; userYaw += spin; spin *= 0.92; requestRender(); }
     // Frame the whole body, or the torso on the result; a change of frame glides.
-    const height = (from ?? to).scale * body.top, target = frame === 'torso' ? { lo: 0.4, hi: 1.0 } : { lo: -0.04, hi: 1.09 };
+    const height = (from ?? to).scale * body.top, target = FRAMES[frame] ?? FRAMES.full;
     let f = target;
     if (framingFrom) {
       const t = Math.min(1, (now - framingStart) / 500), e = ease(t);
-      f = { lo: framingFrom.lo + (target.lo - framingFrom.lo) * e, hi: framingFrom.hi + (target.hi - framingFrom.hi) * e };
+      f = Object.fromEntries(['lo', 'hi', 'x', 'pitch'].map(k => [k, framingFrom[k] + (target[k] - framingFrom[k]) * e]));
+      yaw = yawFrom + (target.yaw + userYaw - yawFrom) * e;
       if (t < 1) requestRender(); else framingFrom = null;
     }
     framing = f;
     // Far enough back that the height span and the width (arms included) both fit, with a small margin.
     const fov = 0.42, aspect = w / hgt, span = (f.hi - f.lo) * height, centre = ((f.lo + f.hi) / 2) * height, tan = Math.tan(fov / 2);
-    const fit = Math.max(span / 2 / tan, (halfWidth * 1.05) / (tan * aspect)) * 1.08;
+    // The whole body fits on 'full'; the close frames fill the height and let the arms run off the sides.
+    const fit = frame === 'full' ? Math.max(span / 2 / tan, (halfWidth * 1.05) / (tan * aspect)) * 1.08 : span / 2 / tan;
     const proj = perspective(fov, aspect, 10, 5000);
-    // With labels on screen the body moves a little left so the label column fits on the right.
-    shift += ((ringMeshes.some(r => r.text) && !to ? -0.16 : 0) - shift) * (animating ? 1 : 0.35);
-    if (Math.abs(shift - (ringMeshes.some(r => r.text) && !to ? -0.16 : 0)) > 0.002) requestRender();
-    proj[8] -= shift;
+    proj[8] -= f.x ?? 0;
     // Orbit: tilt round the framed centre, then step back (the camera looks a little down at the body).
-    const view = multiply(translate(0, 0, -fit), multiply(rotateX(pitch), translate(0, -centre, 0)));
+    const tilt = pitch + (f.pitch ?? 0.08) - 0.08;
+    const view = multiply(translate(0, 0, -fit), multiply(rotateX(tilt), translate(0, -centre, 0)));
     const model = rotateY(yaw);
     const { p, loc } = shaders.body;
     gl.useProgram(p);
     gl.enable(gl.DEPTH_TEST); gl.depthMask(true); gl.disable(gl.BLEND);
     gl.uniformMatrix4fv(loc('uProj'), false, proj); gl.uniformMatrix4fv(loc('uView'), false, view); gl.uniformMatrix4fv(loc('uModel'), false, model);
-    gl.uniform3fv(loc('uColour'), skin); gl.uniform3fv(loc('uEye'), [0, centre + Math.sin(pitch) * fit, Math.cos(pitch) * fit]);
+    gl.uniform3fv(loc('uColour'), skin); gl.uniform3fv(loc('uEye'), [0, centre + Math.sin(tilt) * fit, Math.cos(tilt) * fit]);
     for (const [name, buffer, size] of [['aPos', buffers.pos, 3], ['aNormal', buffers.normal, 3], ['aAo', buffers.ao, 1]]) {
       const a = loc(name); gl.bindBuffer(gl.ARRAY_BUFFER, buffer); gl.enableVertexAttribArray(a); gl.vertexAttribPointer(a, size, gl.FLOAT, false, 0, 0);
     }
@@ -179,15 +194,13 @@ export function createViewer(host, { urls, label, onFail } = {}) {
     gl.bindBuffer(gl.ARRAY_BUFFER, buffers.ring);
     gl.enableVertexAttribArray(aPos); gl.enableVertexAttribArray(aAlong);
     gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 16, 0); gl.vertexAttribPointer(aAlong, 1, gl.FLOAT, false, 16, 12);
-    for (const pass of [0, 1]) {
-      // Pass 0: a faint ghost that shows through the body; pass 1: the solid band, hidden behind the body.
-      if (pass === 0) gl.disable(gl.DEPTH_TEST); else { gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); }
-      for (const r of ringMeshes) {
-        gl.uniform3fv(loc('uColour'), RING_COLOUR[r.tone] ?? RING_COLOUR.guide); gl.uniform1f(loc('uDash'), r.dashed ? 1 : 0);
-        for (const strip of r.strips) {
-          gl.uniform1f(loc('uAlpha'), pass === 0 ? strip.alpha * 0.18 : strip.alpha);
-          gl.drawArrays(gl.TRIANGLE_STRIP, strip.first, strip.count);
-        }
+    // The band is hidden where it passes behind the body.
+    gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL);
+    for (const r of ringMeshes) {
+      gl.uniform3fv(loc('uColour'), RING_COLOUR[r.tone] ?? RING_COLOUR.guide); gl.uniform1f(loc('uDash'), r.dashed ? 1 : 0);
+      for (const strip of r.strips) {
+        gl.uniform1f(loc('uAlpha'), strip.alpha);
+        gl.drawArrays(gl.TRIANGLE_STRIP, strip.first, strip.count);
       }
     }
     gl.disableVertexAttribArray(aPos); gl.disableVertexAttribArray(aAlong);
@@ -204,8 +217,8 @@ export function createViewer(host, { urls, label, onFail } = {}) {
       const contour = ring(positions, body.torso, y, { band: 2 * scale, samples: 96 });
       if (!contour) continue;
       const [cx, cz] = contour.centre, strips = [];
-      // Main band, a soft glow, and two faint echoes above and below (as a tape that slid a little).
-      for (const [offset, half, alpha, dy] of [[0.5, 0.42, 1, 0], [0.7, 1.5, 0.22, 0], [0.4, 0.22, 0.35, 1.6], [0.4, 0.22, 0.35, -1.6]]) {
+      // A solid band with fading stripes above and below it, as fit finders draw a tape line.
+      for (const [offset, half, alpha, dy] of [[0.6, 0.6, 1, 0], [0.5, 0.35, 0.38, 1.6], [0.5, 0.35, 0.38, -1.6], [0.45, 0.32, 0.16, 3.1], [0.45, 0.32, 0.16, -3.1], [0.8, 3.4, 0.07, 0]]) {
         const first = data.length / 4;
         const n = contour.points.length;
         for (let k = 0; k <= n; k++) {
@@ -235,27 +248,28 @@ export function createViewer(host, { urls, label, onFail } = {}) {
       }
       if (best) items.push({ r, x: best[0], y: best[1] });
     }
+    // One column to the right of the body, each label level with its ring.
     items.sort((a, b) => a.y - b.y);
-    for (let i = 1; i < items.length; i++) items[i].ly = Math.max(items[i].y, (items[i - 1].ly ?? items[i - 1].y) + 44);
-    labels.replaceChildren(...items.map(({ r, x, y, ly = y }) => {
+    for (let i = 1; i < items.length; i++) items[i].ly = Math.max(items[i].y, (items[i - 1].ly ?? items[i - 1].y) + 52);
+    // Where the labels go comes from the page's CSS: a fixed column --xff-label-column px from the right edge, or
+    // --xff-label-gap px right of the rings (22 px by default).
+    const css = getComputedStyle(labels), fixed = parseFloat(css.getPropertyValue('--xff-label-column'));
+    const column = Number.isFinite(fixed) ? cssW - fixed : Math.max(...items.map(i => i.x), 0) + (parseFloat(css.getPropertyValue('--xff-label-gap')) || 22);
+    labels.replaceChildren(...items.map(({ r, y, ly = y }) => {
       const el = document.createElement('div');
       el.className = `xff-3d-label xff-3d-label--${r.tone}`;
+      const badge = document.createElement('span');
+      badge.className = 'xff-3d-label__icon';
+      if (r.icon) badge.append(r.icon.cloneNode(true));
       const text = document.createElement('span');
       text.className = 'xff-3d-label__text';
       text.textContent = r.text;
-      if (r.icon) text.prepend(r.icon.cloneNode(true));
-      const line = document.createElement('span');
-      line.className = 'xff-3d-label__line';
-      el.append(line, text);
-      return Object.assign(el, { _place: { x, y, ly } });
+      el.append(badge, text);
+      el.style.top = `${ly}px`;
+      return el;
     }));
-    for (const el of labels.children) {
-      const { x, y, ly } = el._place, width = el.offsetWidth;
-      const left = Math.max(x + 14, Math.min(cssW - width - 10, x + 30));
-      el.style.cssText = `left:${left}px;top:${ly}px`;
-      const dx = left - x, dy = ly - y;
-      el.firstChild.style.cssText = `width:${Math.hypot(dx, dy)}px;transform:rotate(${Math.atan2(-dy, -dx)}rad)`;
-    }
+    // Keep each label inside the stage (its width comes from the page's CSS).
+    for (const el of labels.children) el.style.left = `${Math.max(0, Math.min(column, cssW - el.offsetWidth - 4))}px`;
   }
 
   function requestRender() {
@@ -279,7 +293,7 @@ export function createViewer(host, { urls, label, onFail } = {}) {
       gl.bindBuffer(gl.ARRAY_BUFFER, buffers.ao); gl.bufferData(gl.ARRAY_BUFFER, Float32Array.from(b.ao, v => v / 255), gl.STATIC_DRAW);
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.index); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, b.indices, gl.STATIC_DRAW);
       from = target; to = target; animating = false;
-      if (!ready) { ready = true; host.classList.add('is-ready'); if (!reduceMotion()) { yaw = 0.35; spin = -0.045; } }
+      if (!ready) { ready = true; host.classList.add('is-ready'); }
     } else {
       const now = currentShape();
       // Same body as on screen (a tab or step change): keep it, so rings appear at once.
@@ -308,7 +322,7 @@ export function createViewer(host, { urls, label, onFail } = {}) {
     if (!dragging) return;
     const dx = event.clientX - dragging.x, dy = event.clientY - dragging.y;
     const next = dragging.yaw + dx * 0.012;
-    spin = next - yaw; yaw = next;
+    spin = next - yaw; userYaw += next - yaw; yaw = next;
     pitch = Math.max(-0.2, Math.min(0.3, dragging.pitch + dy * 0.004));
     requestRender();
   });
@@ -317,8 +331,8 @@ export function createViewer(host, { urls, label, onFail } = {}) {
   canvas.addEventListener('pointercancel', release);
   canvas.addEventListener('keydown', event => {
     const step = { ArrowLeft: -0.26, ArrowRight: 0.26 }[event.key];
-    if (step) { event.preventDefault(); spin = 0; yaw += step; requestRender(); }
-    if (event.key === 'Home') { event.preventDefault(); spin = 0; yaw = -0.32; pitch = 0.1; requestRender(); }
+    if (step) { event.preventDefault(); spin = 0; yaw += step; userYaw += step; requestRender(); }
+    if (event.key === 'Home') { event.preventDefault(); spin = 0; userYaw = 0; yaw = (FRAMES[frame] ?? FRAMES.full).yaw; pitch = 0.08; requestRender(); }
   });
   canvas.addEventListener('webglcontextlost', event => { event.preventDefault(); onFail?.(new Error('WebGL context lost')); });
   const resize = new ResizeObserver(() => requestRender());
@@ -329,7 +343,15 @@ export function createViewer(host, { urls, label, onFail } = {}) {
     /** rings: [{ measure: 'chest'|'waist'|'hips', tone: 'ok'|'warn'|'bad'|'guide', text, dashed }] */
     setRings(next) { rings = next ?? []; if (!to || !animating) buildRings(); requestRender(); },
     setSkin(index) { skin = SKINS[index] ?? SKINS[0]; requestRender(); },
-    setFrame(next) { if (next === frame) return; framingFrom = framing; framingStart = performance.now(); frame = next; if (reduceMotion()) framingFrom = null; requestRender(); },
+    /** Re-measure the stage (after the layout around it changed). */
+    refresh() { requestRender(); },
+    /** Camera preset: 'full', 'shape', 'result' or 'guide' (FRAMES). A new preset also turns the body to its angle. */
+    setFrame(next) {
+      if (next === frame) return;
+      framingFrom = framing; yawFrom = yaw; userYaw = 0; framingStart = performance.now(); frame = next;
+      if (reduceMotion() || !body) { framingFrom = null; framing = FRAMES[next] ?? FRAMES.full; yaw = framing.yaw; }
+      requestRender();
+    },
     get sex() { return sex; },
     destroy() { destroyed = true; resize.disconnect(); canvas.remove(); labels.remove(); gl.getExtension('WEBGL_lose_context')?.loseContext(); },
   };

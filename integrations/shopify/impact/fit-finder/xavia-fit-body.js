@@ -14,14 +14,17 @@ export function decodeBody({ meta, data }) {
   };
   const n = meta.vertices, quantised = take(Uint16Array, n * 3), base = new Float32Array(n * 3);
   for (let i = 0; i < n * 3; i++) { const a = i % 3; base[i] = meta.min[a] + (quantised[i] / 65535) * (meta.max[a] - meta.min[a]); }
-  const ao = take(Uint8Array, n), torso = take(Uint8Array, n), indices = take(Uint16Array, meta.triangles * 3);
+  const ao = take(Uint8Array, n), torso = take(Uint8Array, n), arm = { L: Float32Array.from(take(Uint8Array, n), v => v / 255), R: Float32Array.from(take(Uint8Array, n), v => v / 255) };
+  const fineNormals = Float32Array.from(take(Int8Array, n * 3), v => v / 127);
+  const indices = take(Uint16Array, meta.triangles * 3);
   const morphs = {};
   for (const m of meta.morphs) {
     const count = take(Uint16Array, 1)[0];
     morphs[m.name] = { vertices: take(Uint16Array, count), deltas: take(Int16Array, count * 3), scale: m.scale };
   }
   if (offset !== bytes.length) throw new Error(`body data: ${bytes.length - offset} bytes left over`);
-  const body = { meta, base, ao, torso, indices, morphs };
+  const body = { meta, base, ao, torso, arm, indices, morphs, fineNormals };
+  body.coarseNormals = computeNormals(base, indices);
   // Measure this (simplified) body with the same tape as the rings, so shapes and rings always agree.
   body.top = 0;
   for (let i = 1; i < base.length; i += 3) body.top = Math.max(body.top, base[i]);
@@ -92,7 +95,48 @@ export function applyShape(body, { scale = 1, weights = {} }, out = new Float32A
       out[v] += m.deltas[j * 3] * k; out[v + 1] += m.deltas[j * 3 + 1] * k; out[v + 2] += m.deltas[j * 3 + 2] * k;
     }
   }
+  turnArms(body, weights, out);
   if (scale !== 1) for (let i = 0; i < out.length; i++) out[i] *= scale;
+  return out;
+}
+
+// A wider build turns the arms out (each widening morph has its own extra angle, found when the body was built so
+// the arms never go into the body): every arm point turns about its shoulder joint in the front plane, by its share in
+// the arm times the mix of the angles. The joints move with the morphs like any other point.
+function turnArms(body, weights, out) {
+  const arm = body.meta.arm;
+  if (!arm) return;
+  let degrees = 0;
+  const pivot = { L: [...arm.pivot.base.L], R: [...arm.pivot.base.R] };
+  for (const [name, w] of Object.entries(weights)) {
+    if (!w || !arm.pivot[name]) continue;
+    degrees += w * (arm.turn[name] ?? 0);
+    for (const side of ['L', 'R']) for (const a of [0, 1]) pivot[side][a] += w * (arm.pivot[name][side][a] - arm.pivot.base[side][a]);
+  }
+  if (!degrees) return;
+  const radians = degrees * Math.PI / 180;
+  for (const [side, sign] of [['L', 1], ['R', -1]]) {
+    const share = body.arm[side], [px, py] = pivot[side];
+    for (let i = 0; i < share.length; i++) {
+      if (!share[i]) continue;
+      const a = share[i] * radians * -sign, x = out[i * 3] - px, y = out[i * 3 + 1] - py, c = Math.cos(a), s = Math.sin(a);
+      out[i * 3] = px + c * x - s * y; out[i * 3 + 1] = py + s * x + c * y;
+    }
+  }
+}
+
+/**
+ * Shading normals of a shaped body: the full-detail body's smooth normals, turned by however much this shape's own
+ * (simplified) normals differ from the simplified base's. Keeps the detail lost in simplification, follows the morphs.
+ */
+export function shadingNormals(body, positions, out = new Float32Array(positions.length)) {
+  computeNormals(positions, body.indices, out);
+  const fine = body.fineNormals, coarse = body.coarseNormals;
+  for (let i = 0; i < out.length; i += 3) {
+    const x = fine[i] + out[i] - coarse[i], y = fine[i + 1] + out[i + 1] - coarse[i + 1], z = fine[i + 2] + out[i + 2] - coarse[i + 2];
+    const l = Math.hypot(x, y, z) || 1;
+    out[i] = x / l; out[i + 1] = y / l; out[i + 2] = z / l;
+  }
   return out;
 }
 

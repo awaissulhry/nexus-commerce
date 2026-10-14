@@ -23,17 +23,21 @@ test('the theme asset builds into one module that loads and exposes open() and i
 
 // The real Impact file is licensed theme code and stays out of this public repository; this keeps its shape.
 const picker = [
+  '            <span>{{ option.selected_value }}</span>',
+  '          </div>',
+  '',
+  '          {%- if hide_size_chart != true and block.settings.size_chart_page != blank and size_label_list contains option_downcase -%}',
+  '            <button type="button">size chart</button>',
   '          {%- endif -%}',
   '        </div>',
-  '',
-  "        {%- if resolved_option_selector_style == 'dropdown' -%}",
-  '          <div class="relative">',
 ].join('\n')
 
-test('the variant picker hook goes in once, under the label row, and only for the size option', () => {
+test('the variant picker hook puts the size guide link where the theme\'s size chart link is, and keeps that link otherwise', () => {
   const out = patchVariantPicker(picker)
   assert.equal(out.split("render 'xavia-fit-finder'").length - 1, 1)
-  assert.match(out, /<\/div>\n\n.*Xavia fit finder.*\n\s+\{%- if hide_size_chart != true and size_label_list contains option_downcase -%\}\n\s+\{%- render 'xavia-fit-finder', product: product, option: option, form_id: form_id -%\}\n\s+\{%- endif -%\}\n\n\s+\{%- if resolved_option_selector_style == 'dropdown' -%\}/)
+  assert.match(out, /capture xff_link\n\s+render 'xavia-fit-finder', product: product, option: option, form_id: form_id\n\s+endcapture/)
+  assert.match(out, /\{%- if xff_link != blank -%\}\n\s+\{\{- xff_link -\}\}\n\s+\{%- elsif hide_size_chart != true and block.settings.size_chart_page != blank and size_label_list contains option_downcase -%\}\n\s+<button type="button">size chart<\/button>\n\s+\{%- endif -%\}/)
+  assert.ok(out.includes('if hide_size_chart != true and size_label_list contains option_downcase'), 'not in quick buy, size option only')
   assert.equal(patchVariantPicker(out), out, 'applying twice changes nothing')
   assert.throws(() => patchVariantPicker('<variant-picker></variant-picker>'), /expected once, found 0/)
 })
@@ -51,13 +55,19 @@ test('every language has every text, with the same {placeholders} as English', (
 
 test('the button label the snippet prints before the dialog loads matches the dialog texts', () => {
   const liquid = read('xavia-fit-finder.liquid')
-  for (const lang of ['it', 'de', 'fr', 'es']) assert.ok(liquid.includes(`when '${lang}'\n      assign xff_label = '${TEXT[lang].trigger}'`), lang)
-  assert.ok(liquid.includes(`else\n      assign xff_label = '${TEXT.en.trigger}'`))
+  for (const lang of ['it', 'de', 'fr', 'es']) assert.ok(liquid.includes(`when '${lang}'\n      assign xff_label = '${TEXT[lang].sizeGuide}'`), lang)
+  assert.ok(liquid.includes(`else\n      assign xff_label = '${TEXT.en.sizeGuide}'`))
 })
 
 test('the boot script and the dialog agree on the saved profile key and the data attributes', () => {
   const liquid = read('xavia-fit-finder.liquid'), ui = read('xavia-fit-finder.js')
   assert.ok(liquid.includes("localStorage.getItem('xavia-fit-profile')") && ui.includes("const STORE = 'xavia-fit-profile'"))
-  for (const attribute of ['data-xff', 'data-xff-form', 'data-xff-open', 'data-xff-module', 'data-xff-label', 'data-xff-hint', 'data-xff-config']) assert.ok(liquid.includes(attribute), attribute)
-  for (const asset of ['xavia-fit-body-male.js', 'xavia-fit-body-female.js']) assert.ok(liquid.includes(`'${asset}' | asset_url`), asset)
+  for (const attribute of ['data-xff', 'data-xff-form', 'data-xff-open', 'data-xff-module', 'data-xff-label', 'data-xff-config']) assert.ok(liquid.includes(attribute), attribute)
+  for (const asset of ['xavia-fit-body-male.js', 'xavia-fit-body-female.js', 'xavia-fit-inter.woff2']) assert.ok(liquid.includes(`'${asset}' | asset_url`), asset)
+})
+
+test('the dialog font is a real WOFF2 file and ships with its licence', () => {
+  // The SIL Open Font License 1.1 asks for the copyright notice and licence next to every copy.
+  assert.match(readFileSync(new URL('../fit-finder/fonts/OFL.txt', import.meta.url), 'utf8'), /SIL OPEN FONT LICENSE Version 1\.1/)
+  assert.equal(readFileSync(new URL('../fit-finder/fonts/xavia-fit-inter.woff2', import.meta.url)).subarray(0, 4).toString('latin1'), 'wOF2')
 })
