@@ -77,11 +77,15 @@ export const rowsWhere = (d: Destination) => ({ familyId: d.familyId, channelCon
 export async function colourProductsView(destination: Destination, plan: ColourPlan, settings: Awaited<ReturnType<typeof readColourProductSettings>>) {
   const rows = await prisma.shopifyColourProduct.findMany({ where: rowsWhere(destination), orderBy: { createdAt: 'asc' } })
   const linked = rows.some(r => r.state === 'LINKED' && r.shopifyProductId)
+  // The axes whose value order the family sets: a dictionary attribute's (its saved order, else its options' order). A
+  // free-text axis has none but first use, A–Z by SKU (loadFamily); the panel shows such sizes in garment size order.
+  const family = await prisma.product.findUnique({ where: { id: destination.familyId }, select: { variationAxisCodes: true } })
+  const orderedAxes = (family?.variationAxisCodes ?? []).filter(Boolean)
   return {
     familyId: destination.familyId, accountId: destination.accountId, settings,
     // Adopt only: the colours are linked and Nexus writes nothing else to them until "Start full sync".
     sync: { linked, adoptOnly: linked && await colourAdoptOnly(destination) },
-    plan: { mode: plan.mode, splitAxis: plan.splitAxis, grouped: plan.grouped, issues: plan.issues,
+    plan: { mode: plan.mode, splitAxis: plan.splitAxis, grouped: plan.grouped, issues: plan.issues, orderedAxes,
       products: plan.products.map(p => ({ key: p.key, position: p.position, nexusValue: p.nexusValue, colourName: p.colourName, colourNameSource: p.colourNameSource, options: p.options, variants: p.variants.length,
         sizes: p.variants.map(v => ({ productId: v.productId, sku: v.sku, options: v.options.map(o => o.value) })) })) },
     colourProducts: rows.map(r => ({ id: r.id, valueKey: r.valueKey, colourName: r.colourName, state: r.state, shopifyProductId: r.shopifyProductId, remoteStatus: r.remoteStatus,

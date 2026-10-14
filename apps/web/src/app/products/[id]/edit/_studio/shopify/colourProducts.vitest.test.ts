@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { colourRows, confirmBlockers, confirmWrites, fullSyncEffects, syncWords, type ColourProposal, type ColourView } from './colourProducts'
+import { colourRows, confirmBlockers, confirmWrites, fullSyncEffects, sizesInOrder, syncWords, type ColourProposal, type ColourView } from './colourProducts'
 
 // An invented family: two colours × three sizes; every id is made up.
 const sizes = (colour: string) => ['S', 'M', 'L'].map(s => ({ productId: `p-${colour}-${s}`, sku: `JACKET-${colour}-${s}`, options: [s] }))
@@ -75,4 +75,22 @@ describe('the family\'s sync state and Start full sync', () => {
     expect(effects[0]).toContain('are replaced')
     expect(effects.join(' ')).toMatch(/Stock and prices.*Sizes.*Archive.*paused yourself stays paused/)
   })
+})
+
+describe('the size order', () => {
+  // The GALE jacket family: a free-text size axis, so the plan lists its sizes A–Z by SKU.
+  const az = ['3XL', '4XL', '5XL', 'L', 'M', 'S', 'XL', 'XS', 'XXL', 'XXS']
+  const product = (axis: string, labels: string[]) => ({ key: 'colore:text:nero', position: 0, nexusValue: 'Nero', colourName: 'Nero', variants: labels.length,
+    sizes: labels.map(s => ({ productId: `p-${s}`, sku: `GALE-JACKET-BLACK-MEN-${s}`, options: [s] })), options: [{ axis, name: 'Taglia', values: labels }] })
+
+  it('a free-text size axis: the pairing lists garment size order (XXS … 5XL), not A–Z', () => {
+    expect(sizesInOrder(product('taglia', az), []).map(s => s.options[0])).toEqual(['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL'])
+    const v = { ...view([]), plan: { ...view([]).plan, products: [product('taglia', az)], orderedAxes: [] } }
+    expect(colourRows(v)[0].pairs.map(p => p.size)).toEqual(['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL'])
+  })
+
+  it('an axis the family orders keeps the plan\'s order, whatever it is', () => {
+    expect(sizesInOrder(product('size', ['L', 'S', 'M']), ['size']).map(s => s.options[0])).toEqual(['L', 'S', 'M'])
+  })
+
 })

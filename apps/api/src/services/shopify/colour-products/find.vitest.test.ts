@@ -174,6 +174,14 @@ describe('Find — the live Shopify product of each colour', () => {
     expect(await rows()).toEqual([])
     expect((await scoped(() => readColourProducts('p-BLACK-M', { accountId: 'x' }))).plan.mode).toBe('one-product')
   })
+
+  it('the view names the axes whose value order the family sets (a dictionary axis); a free-text axis is not one', async () => {
+    const ordered = async () => (await scoped(() => readColourProducts('p-BLACK-M', { accountId: 'x' }))).plan.orderedAxes
+    expect(await ordered()).toEqual([])
+    await scoped(() => prisma.product.update({ where: { id: ids.fam }, data: { variationAxisCodes: ['', 'size'] } as never }))
+    try { expect(await ordered()).toEqual(['size']) }
+    finally { await scoped(() => prisma.product.update({ where: { id: ids.fam }, data: { variationAxisCodes: [] } as never })) }
+  })
 })
 
 describe('the store switch', () => {

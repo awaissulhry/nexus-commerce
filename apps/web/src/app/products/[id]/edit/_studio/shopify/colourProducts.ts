@@ -3,10 +3,11 @@
  * (`/api/products/:id/shopify-colour-products`), and what each colour row, the Confirm review and the Start full sync
  * review say. No fetch, no React: `colourProducts.vitest.test.ts` covers it.
  */
+import { compareGarmentSizes } from '@nexus/shared/garment-size-order'
 
 export type ColourState = 'NOT_FOUND' | 'PROPOSED' | 'LINKED' | 'DELETED'
 export interface ColourSize { productId: string; sku: string; options: string[] }
-export interface ColourPlanProduct { key: string; position: number; nexusValue: string; colourName: string; variants: number; sizes?: ColourSize[] }
+export interface ColourPlanProduct { key: string; position: number; nexusValue: string; colourName: string; variants: number; sizes?: ColourSize[]; options?: Array<{ axis: string; name: string; values: string[] }> }
 export interface ColourMatchVariant { productId: string; sku: string; shopifyVariantId: string; inventoryItemId: string | null; shopifySku: string | null; by: 'sku' | 'options' }
 export interface ColourProposal {
   method: 'linked' | 'operator' | 'sku' | 'name' | 'group' | null
@@ -25,7 +26,9 @@ export interface ColourSettings { enabled: boolean; method: 'theme-metafields'; 
 export interface ColourView {
   familyId: string; accountId: string; settings: ColourSettings
   sync?: { linked: boolean; adoptOnly: boolean }
-  plan: { mode: 'colour-products' | 'one-product'; splitAxis: string | null; issues: Array<{ severity: 'error' | 'warning'; message: string; key?: string }>; products: ColourPlanProduct[] }
+  plan: { mode: 'colour-products' | 'one-product'; splitAxis: string | null; issues: Array<{ severity: 'error' | 'warning'; message: string; key?: string }>; products: ColourPlanProduct[]
+    /** The axes whose value order the family sets (a dictionary attribute's); the others come A–Z by SKU. */
+    orderedAxes?: string[] }
   colourProducts: ColourProductRow[]
   locations?: Array<{ id: string; name: string }>
 }
@@ -51,6 +54,23 @@ export interface ColourRowModel {
 }
 
 const sizeName = (options: readonly string[]) => options.join(' / ') || 'One size'
+
+/**
+ * A colour's sizes in the order the panel lists them: an axis the family orders keeps the plan's order; a free-text axis
+ * (first use, A–Z by SKU: 3XL, 4XL, L, M …) goes in garment size order (XXS … 5XL, 44 … 60, then the rest).
+ */
+export function sizesInOrder(product: ColourPlanProduct, orderedAxes: readonly string[] = []): ColourSize[] {
+  const sizes = product.sizes ?? [], options = product.options ?? []
+  if (!options.some(o => !orderedAxes.includes(o.axis))) return sizes
+  return [...sizes].sort((a, b) => {
+    for (let i = 0; i < options.length; i++) {
+      const x = a.options[i] ?? '', y = b.options[i] ?? ''
+      const d = orderedAxes.includes(options[i].axis) ? options[i].values.indexOf(x) - options[i].values.indexOf(y) : compareGarmentSizes(x, y)
+      if (d) return d
+    }
+    return 0
+  })
+}
 const HOW: Record<string, string> = { linked: 'Linked', operator: 'Chosen by you', sku: 'Found by its SKUs', name: 'Found by its colour name', group: 'Found through its colour group' }
 const short = (id: string | null | undefined) => (id ?? '').split('/').pop() ?? ''
 
@@ -61,7 +81,7 @@ export function colourRows(view: ColourView): ColourRowModel[] {
     const status = row?.state === 'LINKED' ? 'linked' : row?.state === 'DELETED' ? 'deleted' : row?.state === 'PROPOSED' && proposal?.shopifyProductId ? 'proposed' : 'none'
     const shownId = status === 'linked' ? row!.shopifyProductId : proposal?.shopifyProductId ?? null
     const sameAsProposal = !!shownId && proposal?.shopifyProductId === shownId
-    const sizes = product.sizes ?? []
+    const sizes = sizesInOrder(product, view.plan.orderedAxes)
     const pairs: SizePair[] = sizes.map(size => {
       const hit = sameAsProposal ? proposal!.variants.find(v => v.productId === size.productId) : undefined
       return { productId: size.productId, size: sizeName(size.options), sku: hit?.sku ?? size.sku, shopify: hit ? { sku: hit.shopifySku, by: hit.by } : null }
