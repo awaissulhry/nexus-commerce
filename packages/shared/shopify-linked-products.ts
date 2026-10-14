@@ -186,7 +186,20 @@ export interface ShopifyLinkedWorkspace {
   operation: { id: string; status: 'RUNNING' | 'UNVERIFIED' | 'VERIFIED'; completed: number; total: number; error: string | null; includesSheetMedia?: boolean } | null
   automation?: ShopifyLinkedAutomation
   hasSheetMedia?: boolean
+  /** A listing of this family on this store has its sync paused (a Link leaves it so): stock and prices are held. */
+  syncPaused?: boolean
 }
+
+/**
+ * Fields only: the plan changes metafield values (product or variant) and nothing else — no native product or variant
+ * field (title, description, status, price, inventory, options…), no gallery. Such a plan moves no stock and no price,
+ * so a linked listing whose sync is paused may still send it after review; it stays paused (linked-products.service.ts).
+ */
+export function shopifyFieldsOnlyPlan(plan: { changes: readonly unknown[]; nativeEdits?: readonly unknown[]; mediaEdits?: readonly unknown[]; sheetGalleries?: readonly unknown[] }): boolean {
+  return plan.changes.length > 0 && !plan.nativeEdits?.length && !plan.mediaEdits?.length && !plan.sheetGalleries?.length
+}
+/** What the review says of a fields-only plan on a paused listing. */
+export const SHOPIFY_FIELDS_ONLY_WHILE_PAUSED = 'Only product fields are sent. Stock and prices stay paused.'
 
 /** No inferred field names, colours or ordering. Removed members lose only this reviewed family's links. */
 export function linkedFamilyChanges(draft: ShopifyLinkedDraft): ShopifyFieldEdit[] {

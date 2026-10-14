@@ -38,3 +38,12 @@ export function resetActionWords(cell: StudioCellValue, subject: { sku: string; 
     description: `Remove this ${list ? 'whole list’s' : 'listing'} override and ${resetSourceLabel(cell)}.`,
   }
 }
+
+/**
+ * A Shopify cell that follows the Shared product on a product Shopify already holds while Shopify keeps another value
+ * (the API's `liveSharedDivergence`): nothing publishes the value shown, so its divergence is not "publishes another
+ * value" (D5). A saved draft against a sharing rule is pinned, so it is never this. The pop-up's banner, Cell details and
+ * the reset of a Shopify JSON field (`channelResetOffer`) read this one rule.
+ */
+export const shopifyKeepsOwnValue = (cell: Pick<StudioCellValue, 'divergence' | 'shopifyWrite' | 'pinned' | 'inherited'> | undefined): boolean =>
+  !!cell?.divergence && !!cell.shopifyWrite && cell.pinned === false && cell.inherited === true

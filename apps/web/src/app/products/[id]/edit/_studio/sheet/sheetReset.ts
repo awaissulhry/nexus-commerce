@@ -12,11 +12,11 @@ import { familyRowHoldsValue, isProductRelationshipColumn } from '@nexus/shared/
 import { cascadeIntent, cascadeOf, hasValue, wholeListWriteField } from './channel/provenance'
 import { isCellEditable, offersCascade } from './channel/rows'
 import { offerDraftResetLabel, pendingPublishOf } from './channel/offerDrafts'
-import { channelResetLabel } from './channel/value-source'
+import { channelResetLabel, shopifyKeepsOwnValue } from './channel/value-source'
 import type { ChannelSheetRow } from './channel/types'
 import type { ColDef, ColGroupDef } from '@/design-system/grid'
 import type { SheetColumn as MasterColumn, StudioRow } from './master/types'
-import { shopifyColumnControl } from '../shopify/columnControl'
+import { shopifyColumnControl, shopifyJsonColumn } from '../shopify/columnControl'
 
 export type ResetIntent = 'reset' | 'reset-list'
 
@@ -43,12 +43,18 @@ const label = (formula: boolean, fallback: string) => (formula ? 'Remove formula
  * AI or outdated translation pinned here). A value that follows Master, or a cell that writes the shared record itself
  * (`writeTarget: 'master'`), has nothing to reset to. An Amazon offer change waiting for Publish (D4=B) always has one:
  * the reset discards the saved change, and the cell shows the live value it names again.
+ *
+ * One more, on a Shopify JSON field (`column`: the cell's column; a garment size chart, for one): a cell that follows
+ * Master on a product Shopify already holds while Shopify keeps another value (`shopifyKeepsOwnValue`). Nothing sends
+ * that Master value (D5) until a reset turns it into a draft edit; Review and synchronize… then sends it. So the cell,
+ * a selection and "Reset column to inherited" reset it too.
  */
-export function channelResetOffer(row: ChannelSheetRow | undefined, colId: string, formula = false): ResetOffer | null {
+export function channelResetOffer(row: ChannelSheetRow | undefined, colId: string, formula = false, column?: { shopifyField?: unknown }): ResetOffer | null {
   const cell = row?.values?.[colId]
   if (!row || !cell || !isCellEditable(cell)) return null
   const waiting = pendingPublishOf(cell)
   if (waiting) return { intent: 'reset', formula, label: label(formula, offerDraftResetLabel(waiting)) }
+  if (shopifyKeepsOwnValue(cell) && shopifyJsonColumn(column?.shopifyField)) return { intent: 'reset', formula, label: label(formula, channelResetLabel(cell)) }
   if (!offersCascade(cell)) return null
   if (cascadeIntent(cascadeOf(cell, row.rowKind), row.rowKind, cell.value ?? null)?.action !== 'reset') return null
   const list = !!wholeListWriteField(cell.writeField)

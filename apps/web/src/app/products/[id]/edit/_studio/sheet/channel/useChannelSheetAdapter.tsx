@@ -630,7 +630,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const control = useSheetControl<ChannelSheetRow>({
         getGridApi, writer, operation: undo.operation,
         rowIdOf, skuOf: row => row.sku,
-        offerOf: (row, colId) => channelResetOffer(row, colId, !!formulaLive.current.formulas.exprFor(row.rowId, colId)),
+        offerOf: (row, colId) => channelResetOffer(row, colId, !!formulaLive.current.formulas.exprFor(row.rowId, colId), dataRef.current?.columns.find(column => column.key === colId)),
         listOf: (row, colId) => wholeListWriteField(row.values?.[colId]?.writeField ?? ''),
         columnFacts: colId => controlColumnFacts(dataRef.current?.columns.find(column => column.key === colId)),
         // Amazon: the B2B pair and FBA qty are read only — Delete on them asks about the selection's other cells, never blanks them.

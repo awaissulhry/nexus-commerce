@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { emptyShopifyLinkedDraft } from '@nexus/shared/shopify-linked-products'
 import { informationRegistry, informationStoredValue } from '@nexus/shared/shopify-information'
-import { projectShopifyChannelSheet, shopifyCellToken, withShopifyCreateStatus } from './channel-sheet-projection.js'
+import { liveSharedDivergence, projectShopifyChannelSheet, shopifyCellToken, withShopifyCreateStatus } from './channel-sheet-projection.js'
 import { SHOPIFY_STATUS_FROM_STATUS_COLUMN } from '@nexus/shared/listing-actions'
 import { resolveSharedContent } from './linked-shared-content.service.js'
 import type { ShopifyGraphql } from './admin-client.js'
 
-const s = vi.hoisted(() => ({ workspace: null as any, snapshot: null as any, schema: null as any, writes: [] as any[], audit: vi.fn() }))
+const s = vi.hoisted(() => ({ workspace: null as any, snapshot: null as any, schema: null as any, writes: [] as any[], audit: vi.fn(), mapped: {} as Record<string, unknown> }))
 vi.mock('../../db.js', () => ({ default: { channelListing: { findMany: async () => [{ id: 'listing-a', productId: 'family', externalListingId: '10', platformAttributes: {} }] } } }))
 vi.mock('../pim/studio-sheet.service.js', () => ({ getStudioSheet: async () => page() }))
 vi.mock('../pim/channel-specs/shopify.js', () => ({ readShopifyMappingSchema: async () => s.schema }))
@@ -27,7 +27,7 @@ import { saveShopifySheetCells } from './channel-sheet.service.js'
 const product = 'gid://shopify/Product/10', variant = 'gid://shopify/ProductVariant/11'
 const scope = { accountId: 'store-a', listingId: 'listing-a', market: 'GLOBAL', locale: 'en' }
 beforeEach(() => {
-  s.writes = []; s.audit.mockClear()
+  s.writes = []; s.audit.mockClear(); s.mapped = {}
   s.schema = { revision: 'schema-1', definitions: [{ id: 'definition-1', ownerType: 'PRODUCT', namespace: 'custom', key: 'flag', name: 'Flag', type: 'boolean', validations: [], access: {} }], types: [], locales: [{ locale: 'en', primary: true }], metaobjects: [], currency: 'EUR' }
   s.workspace = { productId: 'family', familyId: 'family', revision: '1', destination: { accountId: 'store-a', listingId: 'listing-a', market: 'GLOBAL' }, suggestedProductIds: [product], operation: null, draft: { ...emptyShopifyLinkedDraft(), informationOnly: true, members: [{ id: product, title: 'Listed title', handle: 'listed', image: null }] } }
   s.snapshot = { currency: 'EUR', timezone: 'Europe/Rome', rows: [
@@ -44,6 +44,8 @@ function page() {
   const values = Object.fromEntries(columns.map(c => [c.key, { value: null, writable: true, editable: true, writeTarget: 'channelListing', source: 'master', layer: 'master', mapped: null }]))
   values.title = { ...values.title, value: 'Shared title', mapped: { status: 'mapped', value: 'Shared title' } as any }
   values.vendor = { ...values.vendor, value: 'Shared vendor', mapped: { status: 'mapped', value: 'Shared vendor' } as any }
+  // A test's own mapped Master values (a mapping rule to a Shopify field), by column.
+  for (const [key, value] of Object.entries(s.mapped)) values[key] = { ...values[key], value, mapped: { status: 'mapped', value } as any }
   return { columns, scope: { channel: 'SHOPIFY', connectionId: 'store-a' }, rows: [{ id: 'family', sku: 'NEXUS', name: 'Shared title', aliasId: 'alias-a', parentId: null, version: 5, values, listing: { id: 'listing-a', version: 7 }, readiness: { state: 'ready', issues: [] } }, { id: 'child', sku: 'S', aliasId: 'alias-a', parentId: 'family', version: 2, values, listing: { id: 'variant-listing', version: 2 } }] } as any
 }
 
@@ -567,5 +569,32 @@ describe('the Shopify status of a product not on Shopify yet', () => {
     expect(out[1]).toBe(base.rows[1])
     expect(withShopifyCreateStatus(base.rows, base.columns, 'alias-b', { status: 'DRAFT' })).toEqual(base.rows)
     expect(withShopifyCreateStatus(base.rows, base.columns, 'alias-a', null)).toBe(base.rows)
+  })
+})
+
+/* custom.fit_garment (a garment size chart): a JSON product field a size finder reads. Master holds an object; a mapping rule sends it there. */
+describe('a JSON product field mapped from Master', () => {
+  const fieldId = 'metafield:PRODUCT:custom.fit_garment'
+  const garment = { chest: 52, length: 70.5, sleeve: { from: 60, to: 62 }, sizes: ['S', 'M'] }
+  beforeEach(() => {
+    s.schema.definitions.push({ id: 'definition-2', ownerType: 'PRODUCT', namespace: 'custom', key: 'fit_garment', name: 'Fit garment', type: 'json', validations: [], access: {} })
+    s.mapped = { [fieldId]: garment }
+  })
+  const json = () => informationRegistry(s.schema).find(f => f.id === fieldId)!
+  it('Reset to inherited makes a draft edit whose value is the JSON text of the Master object', async () => {
+    const result = await saveShopifySheetCells('family', scope, { cells: [{ ...change(fieldId, 'Untrusted client value'), intent: 'reset' }] }, 'editor')
+    expect(result.cells[fieldId]).toMatchObject({ ok: true })
+    expect(s.workspace.draft.edits).toEqual([expect.objectContaining({ ownerId: product, namespace: 'custom', key: 'fit_garment', type: 'json', value: null, nextValue: JSON.stringify(garment) })])
+    expect(JSON.parse(s.workspace.draft.edits[0].nextValue)).toEqual(garment) // once: never the text of a text
+    expect(s.workspace.draft.sheetValues).toEqual([expect.objectContaining({ ownerId: product, fieldId, type: 'json', value: JSON.stringify(garment), inherited: true })])
+  })
+  it('Shopify already holding the same JSON in another key order, spacing or number spelling is no change', async () => {
+    s.snapshot.rows[0].fields.push({ ownerId: product, namespace: 'custom', key: 'fit_garment', type: 'json', compareDigest: 'digest-json',
+      value: '{"sizes": ["S", "M"], "sleeve": {"to": 62, "from": 60}, "length": 70.50, "chest": 52.0}' })
+    const result = await saveShopifySheetCells('family', scope, { cells: [{ ...change(fieldId, null), intent: 'reset' }] }, 'editor')
+    expect(result.cells[fieldId]).toMatchObject({ ok: true })
+    expect(s.workspace.draft.edits).toEqual([])
+    expect(liveSharedDivergence(json(), garment, s.snapshot.rows[0].fields.at(-1).value)).toBeNull()
+    expect(liveSharedDivergence(json(), { ...garment, chest: 54 }, s.snapshot.rows[0].fields.at(-1).value)).toMatchObject({ note: expect.stringContaining('Shopify keeps') })
   })
 })

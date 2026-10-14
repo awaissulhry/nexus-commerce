@@ -1,5 +1,5 @@
 import { nativeFieldError, nativeFieldValueError, nativeValuesEqual, nativeEditAddress, informationPendingValue, informationStoredValue, type InformationField, type InformationRow, type NativeEdit } from './shopify-information.js'
-import { fieldAddress, validateShopifyField, shopifyDefinitionApplicability, type ShopifyFieldDefinition, type ShopifySharedField, type ShopifyLinkedDraft } from './shopify-linked-products.js'
+import { fieldAddress, validateShopifyField, shopifyDefinitionApplicability, shopifyValuesEqual, type ShopifyFieldDefinition, type ShopifySharedField, type ShopifyLinkedDraft } from './shopify-linked-products.js'
 
 /** Drafts keep type-valid values. Store limits remain visible and are enforced at publish.
  * References retain their draft-time checks (LB-D2); clearing one needs no remote identity. */
@@ -89,7 +89,9 @@ export function applyInformationCells(draft: ShopifyLinkedDraft, cells: Informat
       const address = { ownerId: row.id, namespace: field.definition.namespace, key: field.definition.key }
       const base = next.edits.find(e => fieldAddress(e) === fieldAddress(address)) ?? row.fields.find(e => fieldAddress(e) === fieldAddress(address)) ?? { ...address, type: field.type, value: null, compareDigest: null }
       next.edits = next.edits.filter(e => fieldAddress(e) !== fieldAddress(address))
-      if (base.value !== value) next.edits.push({ ...base, nextValue: value, ownerLabel })
+      // A JSON value Shopify holds in another key order, spacing or number spelling is the same value: no edit to send.
+      const same = field.type === 'json' ? shopifyValuesEqual(field.type, base.value, value) : base.value === value
+      if (!same) next.edits.push({ ...base, nextValue: value, ownerLabel })
     } else {
       if (!(field.id in row.values)) throw new Error(`${field.label} is unavailable on this row.`)
       const base = next.nativeEdits?.find(e => e.ownerId === row.id && e.field === field.id)
