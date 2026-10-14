@@ -141,6 +141,11 @@ describe('the tools as the contract holds them', () => {
     expect(applyValue(undefined, { targetKey: 'k', baseBidCents: 70 })).toEqual({ bidMode: 'absolute', bidValueCents: 70 })
     expect(applyValue({ bidMode: 'absolute', bidValueCents: 70 }, { targetKey: 'k', holdBaseBid: true })).toEqual({ bidMode: 'hold' })
     expect(applyValue(held, { targetKey: 'k', clear: true })).toBeNull()
+    // A blend is stored as the engine's lanes (top, rest, product, in that order); null drops it, the placement % kept.
+    expect(applyValue(held, { targetKey: 'k', blend: { restOfSearchPct: 35, topOfSearchPct: 120 } })).toEqual({
+      biasPct: 40, stepUpPct: 10, lanes: [{ placement: 'PLACEMENT_TOP', biasPct: 120 }, { placement: 'PLACEMENT_REST_OF_SEARCH', biasPct: 35 }],
+    })
+    expect(applyValue({ biasPct: 40, lanes: [{ placement: 'PLACEMENT_TOP', biasPct: 120 }] }, { targetKey: 'k', blend: null })).toEqual({ biasPct: 40 })
   })
 })
 
@@ -261,6 +266,38 @@ describe('set-hourly-bid-plan — create, paint, switch', () => {
     // A version row even though only a campaign's values moved (Claude's change always leaves one).
     expect((await versions(planId)).at(-1)).toMatchObject({ changedBy: 'user:u-approver' })
     expect(await inside(() => undoRequestFor({ approvalId: asked.approvalId }))).toMatchObject({ request: { tool: TOOL, args: { op: 'set-target-values', planId, values: [{ campaignId: 'c-h2', targetKey: 'test-top', clear: true }] } } })
+  })
+
+  it('values: a campaign\'s own blend — top and rest of search in the same hours; adding a placement is a raise; the read shows it; undo drops it', async () => {
+    // Refused before anything is asked: a blend on a Min-bid target, a blend beside a placement %, an empty blend.
+    expect((await preview({ op: 'set-target-values', planId, values: [{ campaignId: 'c-h2', targetKey: 'test-floor', blend: { restOfSearchPct: 35 } }] })).error).toMatch(/is a Min-bid target: its hours floor every bid/)
+    expect((await preview({ op: 'set-target-values', planId, values: [{ campaignId: 'c-h2', targetKey: 'test-top', placementPct: 80, blend: { restOfSearchPct: 35 } }] })).error).toMatch(/not both/)
+    await expect(preview({ op: 'set-target-values', planId, values: [{ campaignId: 'c-h2', targetKey: 'test-top', blend: {} }] })).rejects.toThrow(/a blend names at least one placement/)
+
+    const args = { op: 'set-target-values', planId, values: [{ campaignId: 'c-h2', targetKey: 'test-top', blend: { topOfSearchPct: 80, restOfSearchPct: 35 } }] }
+    const p = (await preview(args)).preview
+    expect(p.targetValues).toEqual([expect.objectContaining({
+      campaignId: 'c-h2', targetKey: 'test-top',
+      from: expect.objectContaining({ placementPct: 80, blend: null }),
+      to: expect.objectContaining({ placementPct: 80, blend: [{ placement: 'top-of-search', placementPct: 80 }, { placement: 'rest-of-search', placementPct: 35 }] }),
+      raises: ['a higher rest-of-search placement %'],
+    })])
+    expect(p.raises).toEqual(["1 campaign holds a higher rest-of-search placement % in the plan's hours"])
+    const asked = await ask(args)
+    expect(await approve(asked.approvalId)).toMatchObject({ ok: true, status: 'executed' })
+    expect((await members(planId)).find((m) => m.campaignId === 'c-h2')!.targetOverrides).toEqual({
+      'test-top': { biasPct: 80, lanes: [{ placement: 'PLACEMENT_TOP', biasPct: 80 }, { placement: 'PLACEMENT_REST_OF_SEARCH', biasPct: 35 }] },
+    })
+    const read = await call('ad-hourly-plans', { planId })
+    expect(read.data.campaignValues).toContainEqual(expect.objectContaining({ campaignId: 'c-h2', key: 'test-top', blend: [{ placement: 'top-of-search', placementPct: 80 }, { placement: 'rest-of-search', placementPct: 35 }] }))
+    // Undo: the placement % it held, and no blend.
+    expect(await inside(() => undoRequestFor({ approvalId: asked.approvalId }))).toMatchObject({
+      request: { tool: TOOL, args: { op: 'set-target-values', planId, values: [{ campaignId: 'c-h2', targetKey: 'test-top', placementPct: 80, blend: null }] } },
+    })
+    // A blend dropped is not a raise (rest of search back to 0, top of search kept).
+    const drop = (await preview({ op: 'set-target-values', planId, values: [{ campaignId: 'c-h2', targetKey: 'test-top', blend: null }] })).preview
+    expect(drop.targetValues).toEqual([expect.objectContaining({ to: expect.objectContaining({ placementPct: 80, blend: null }), raises: [] })])
+    expect(drop.raises).toEqual([])
   })
 
   it('switch off gives back the floored bids as the screen does, each write carrying the request as its change set', async () => {

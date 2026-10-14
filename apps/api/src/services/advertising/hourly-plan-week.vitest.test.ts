@@ -19,6 +19,22 @@ describe('W4-1 — the week, day by day', () => {
     expect(targetValuesOf({ key: 's', bidMode: 'suppress' }, 'Suppress').floor).toBe(true)
   })
 
+  it('each placement as the engine writes it: one placement drops the other search one to 0; a blend sets its lanes and drops the rest', () => {
+    const single = targetValuesOf({ key: 'own-top', placement: 'PLACEMENT_TOP', biasPct: 120 }, 'Own top')
+    expect(single).toMatchObject({ placementPct: 120, placements: { PLACEMENT_TOP: 120, PLACEMENT_REST_OF_SEARCH: 0 }, blend: null })
+    const blend = targetValuesOf({ key: 'own-top', placement: 'PLACEMENT_TOP', biasPct: 120, lanes: [{ placement: 'PLACEMENT_TOP', biasPct: 120 }, { placement: 'PLACEMENT_REST_OF_SEARCH', biasPct: 35 }] }, 'Own top')
+    expect(blend).toMatchObject({
+      placementPct: 120,
+      placements: { PLACEMENT_TOP: 120, PLACEMENT_REST_OF_SEARCH: 35, PLACEMENT_PRODUCT_PAGE: 0 },
+      blend: [{ placement: 'PLACEMENT_TOP', placementPct: 120 }, { placement: 'PLACEMENT_REST_OF_SEARCH', placementPct: 35 }],
+    })
+    // A floor never blends (the engine floors first); its placement only where it names a %.
+    expect(targetValuesOf({ key: 'f', placement: 'PLACEMENT_TOP', pause: true, lanes: [{ placement: 'PLACEMENT_TOP', biasPct: 90 }] }, 'Floor')).toMatchObject({ floor: true, blend: null, placements: {} })
+    // Adding rest of search beside the same top-of-search % is a raise, though the highest % stays 120; dropping it is not.
+    expect(hourRaise(single, blend)).toEqual(['higherPlacement'])
+    expect(hourRaise(blend, single)).toEqual([])
+  })
+
   it('a 7 × 24 summary, Monday first: a letter per hour, hours at the floor, per target, the highest placement and base bid', () => {
     const w = weekSummary(WEEK, lib)
     expect(w.days.map((d) => d.day)).toEqual(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'])
