@@ -1,0 +1,145 @@
+{%- comment -%}
+  ----------------------------------------------------------------------------------------------------------------------
+  XAVIA FIT FINDER
+  ----------------------------------------------------------------------------------------------------------------------
+  The "Find your size" button under the size option, and the data its dialog needs. Rendered by variant-picker.liquid
+  for the size option only (same test as the theme's own size chart link). The dialog (assets/xavia-fit-finder.js)
+  loads on the first click, or at idle time when this device already has a saved fit profile.
+
+  Which chart a product gets:
+  * the JSON metafield xavia.fit_chart, when set: a whole chart, a default chart's key, or { "men": …, "women": … };
+  * else a product whose type or a tag is jacket / jackets / vest / gilet / giacca / giubbotto gets the jacket charts
+    in xavia-fit-charts.liquid: tag "men" only = men's chart, tag "women" only = women's chart, both or none = both
+    charts, and the shopper's own body type picks one;
+  * else nothing: no button (the theme's size chart link stays as it is).
+  A "leather" tag makes the recommendation sit a little closer (leather gives with wear).
+
+  Supported variables: product, option (the size option), form_id.
+{%- endcomment -%}
+
+{%- liquid
+  assign xff_kind = ''
+  assign xff_men = false
+  assign xff_women = false
+  assign xff_material = ''
+  assign xff_words = product.tags | join: '|' | append: '|' | append: product.type | downcase | split: '|'
+  for xff_word in xff_words
+    assign xff_w = xff_word | strip
+    case xff_w
+      when 'jacket', 'jackets', 'vest', 'gilet', 'giacca', 'giubbotto'
+        assign xff_kind = 'jacket'
+      when 'men'
+        assign xff_men = true
+      when 'women'
+        assign xff_women = true
+      when 'leather'
+        assign xff_material = 'leather'
+    endcase
+  endfor
+  if product.metafields.xavia.fit_chart != blank
+    assign xff_kind = 'custom'
+  endif
+
+  assign xff_lang = request.locale.iso_code | slice: 0, 2
+  case xff_lang
+    when 'it'
+      assign xff_label = 'Trova la tua taglia'
+    when 'de'
+      assign xff_label = 'Finde deine Größe'
+    when 'fr'
+      assign xff_label = 'Trouvez votre taille'
+    when 'es'
+      assign xff_label = 'Encuentra tu talla'
+    else
+      assign xff_label = 'Find your size'
+  endcase
+
+  assign xff_image = ''
+  if product.featured_image != blank
+    assign xff_image = product.featured_image | image_url: width: 400
+  endif
+
+  if routes.root_url == '/'
+    assign xff_contact = '/pages/contact'
+  else
+    assign xff_contact = routes.root_url | append: '/pages/contact'
+  endif
+-%}
+
+{%- if xff_kind != '' -%}
+  <div class="xff-entry" data-xff data-xff-form="{{ form_id | escape }}">
+    <button type="button" class="xff-trigger" data-xff-open data-xff-module="{{ 'xavia-fit-finder.js' | asset_url }}" aria-haspopup="dialog">
+      <svg class="xff-trigger__icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+        <path d="M3 8.5h18v7H3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M7 8.5v3M11 8.5v4.5M15 8.5v3M19 8.5v4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <span class="xff-trigger__label" data-xff-label>{{ xff_label }}</span>
+      <svg class="xff-trigger__chevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+        <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+    <p class="xff-trigger__hint" data-xff-hint hidden></p>
+
+    <script type="application/json" data-xff-config>
+      {
+        "formId": {{ form_id | json }},
+        "optionPosition": {{ option.position | json }},
+        "values": [
+          {%- for value in option.values -%}
+            {"name": {{ value.name | json }}, "id": {{ value.id | json }}, "available": {{ value.available | json }}}{% unless forloop.last %},{% endunless %}
+          {%- endfor -%}
+        ],
+        "kind": {{ xff_kind | json }},
+        "audience": [{% if xff_men %}"men"{% endif %}{% if xff_men and xff_women %},{% endif %}{% if xff_women %}"women"{% endif %}],
+        "material": {{ xff_material | json }},
+        "override": {% if product.metafields.xavia.fit_chart != blank %}{{ product.metafields.xavia.fit_chart.value | json }}{% else %}null{% endif %},
+        "defaults": {% render 'xavia-fit-charts' %},
+        "product": {"title": {{ product.title | json }}, "image": {{ xff_image | json }}},
+        "locale": {{ request.locale.iso_code | json }},
+        "country": {{ localization.country.iso_code | json }},
+        "contactUrl": {{ xff_contact | json }}
+      }
+    </script>
+
+    <script>
+      (function () {
+        if (window.xaviaFit) return;
+        var loading = null;
+        var load = function (url) { return loading || (loading = import(url)); };
+        window.xaviaFit = { load: load };
+        document.addEventListener('click', function (event) {
+          var button = event.target.closest && event.target.closest('[data-xff-open]');
+          if (!button) return;
+          event.preventDefault();
+          button.setAttribute('aria-busy', 'true');
+          load(button.getAttribute('data-xff-module')).then(function (module) {
+            button.removeAttribute('aria-busy');
+            module.open(button);
+          }, function () {
+            loading = null;
+            button.removeAttribute('aria-busy');
+          });
+        });
+        var saved = null;
+        try { saved = window.localStorage.getItem('xavia-fit-profile'); } catch (error) {}
+        if (!saved) return;
+        var start = function () {
+          var button = document.querySelector('[data-xff-open]');
+          if (button) load(button.getAttribute('data-xff-module')).then(function (module) { module.init(); }, function () { loading = null; });
+        };
+        if ('requestIdleCallback' in window) window.requestIdleCallback(start, { timeout: 2500 }); else window.setTimeout(start, 1500);
+      })();
+    </script>
+
+    <style>
+      .xff-entry { margin-block: 4px 2px; }
+      .xff-trigger { display: flex; align-items: center; gap: 10px; inline-size: 100%; min-block-size: 48px; padding: 0 14px; border: 1px solid rgb(var(--text-primary) / .18); border-radius: var(--rounded-input, 8px); background: transparent; color: inherit; font: inherit; font-weight: 600; text-align: start; cursor: pointer; }
+      .xff-trigger:hover { border-color: rgb(var(--text-primary) / .5); }
+      .xff-trigger:focus-visible { outline: 2px solid rgb(var(--text-primary)); outline-offset: 2px; }
+      .xff-trigger[aria-busy="true"] { cursor: progress; opacity: .7; }
+      .xff-trigger__label { flex: 1; }
+      .xff-trigger__icon, .xff-trigger__chevron { flex: none; }
+      .xff-trigger__hint { margin: 6px 0 0; font-size: .875em; color: rgb(var(--error-text, 196 32 32)); }
+    </style>
+  </div>
+{%- endif -%}

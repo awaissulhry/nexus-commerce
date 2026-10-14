@@ -1,0 +1,41 @@
+{%- comment -%}
+  Xavia fit finder: the default size charts, as plain JSON. BODY measurements in cm (not garment measurements),
+  copied from the store's chart images IT_MENS_JACKET.jpg and IT_WOMEN.jpg (chest = petto, waist = vita).
+  A size range is [from, to]; each size starts where the size below ends.
+  Which products use which chart: see xavia-fit-finder.liquid. One product can override with the JSON
+  metafield xavia.fit_chart (a whole chart, or { "men": "<key or chart>", "women": "<key or chart>" }).
+  Measures the finder knows: chest, waist, hips, inseam, hand, handLength, height.
+{%- endcomment -%}
+{
+  "men-jacket": {
+    "cut": "men",
+    "measures": ["chest", "waist"],
+    "sizes": [
+      { "name": "XXS", "chest": [82, 86], "waist": [70, 74] },
+      { "name": "XS", "chest": [86, 90], "waist": [74, 78] },
+      { "name": "S", "chest": [90, 94], "waist": [78, 82] },
+      { "name": "M", "chest": [94, 98], "waist": [82, 86] },
+      { "name": "L", "chest": [98, 104], "waist": [86, 92] },
+      { "name": "XL", "chest": [104, 110], "waist": [92, 98] },
+      { "name": "XXL", "chest": [110, 116], "waist": [98, 104] },
+      { "name": "3XL", "chest": [116, 122], "waist": [104, 110] },
+      { "name": "4XL", "chest": [122, 128], "waist": [110, 116] },
+      { "name": "5XL", "chest": [128, 134], "waist": [116, 122] }
+    ]
+  },
+  "women-jacket": {
+    "cut": "women",
+    "measures": ["chest", "waist"],
+    "sizes": [
+      { "name": "XXS", "chest": [76, 80], "waist": [60, 64] },
+      { "name": "XS", "chest": [80, 84], "waist": [64, 68] },
+      { "name": "S", "chest": [84, 88], "waist": [68, 72] },
+      { "name": "M", "chest": [88, 94], "waist": [72, 78] },
+      { "name": "L", "chest": [94, 100], "waist": [78, 84] },
+      { "name": "XL", "chest": [100, 106], "waist": [84, 90] },
+      { "name": "XXL", "chest": [106, 112], "waist": [90, 96] },
+      { "name": "3XL", "chest": [112, 118], "waist": [96, 102] },
+      { "name": "4XL", "chest": [118, 124], "waist": [102, 108] }
+    ]
+  }
+}
