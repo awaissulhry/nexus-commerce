@@ -284,6 +284,8 @@ export type MatrixVerbId =
   | 'pause-sync' | 'resume-sync' | 'push-now' | 'retry-sync'
   | 'set-fulfilment'
   | 'set-source'
+  /* Amazon Business (step 5 Part 3): the B2B price and the quantity discounts. */
+  | 'set-business-price' | 'set-business-tiers'
 
 export const MATRIX_VERB_LABELS: Readonly<Record<MatrixVerbId, string>> = {
   'set-price': 'Set price…', 'adjust-prices': 'Adjust prices by %…', 'copy-prices': 'Copy prices from…',
@@ -291,6 +293,7 @@ export const MATRIX_VERB_LABELS: Readonly<Record<MatrixVerbId, string>> = {
   'pause-sync': 'Hold stock sync', 'resume-sync': 'Release stock sync', 'push-now': 'Push quantity now', 'retry-sync': 'Retry',
   'set-fulfilment': 'Set fulfilment…',
   'set-source': 'Set sells from…',
+  'set-business-price': 'Set B2B price…', 'set-business-tiers': 'Set B2B tiers…',
 }
 
 export interface MatrixVerbTarget { rowId: string; coordinateKey: CoordinateKey }

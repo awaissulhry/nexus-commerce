@@ -65,8 +65,12 @@ export function readBusinessTiers(raw: unknown): BusinessTiers | null {
   }
 }
 
-/** The tiers' own shape, without prices: count, quantities, percent range, order. */
-function tierShapeProblems(tiers: BusinessTiers): string[] {
+/**
+ * Why these quantity discounts cannot be kept, before any price is known: their count, quantities, percent range and
+ * order; `[]` = their shape is fine. ONE rule for the business price door (inside `businessPriceProblems`), the B2B price
+ * pop-up and the Matrix bulk Edit's quantity discounts field, which asks it before any listing's price is known.
+ */
+export function businessTiersProblems(tiers: BusinessTiers): string[] {
   if (tiers.type !== 'percent' && tiers.type !== 'fixed') return ['Quantity discounts are a percent or a fixed price per unit.']
   const levels = Array.isArray(tiers.levels) ? tiers.levels : []
   if (levels.length < 1 || levels.length > BUSINESS_TIERS_MAX) return [`Amazon takes 1 to ${BUSINESS_TIERS_MAX} quantity discounts; this has ${levels.length}.`]
@@ -110,7 +114,7 @@ export function businessPriceProblems(input: {
   if (!isMoney(input.normalPrice) || input.normalPrice <= 0) {
     out.push('This listing has no normal price, and Amazon needs one before a business price.')
   }
-  if (setting.tiers) out.push(...tierShapeProblems(setting.tiers))
+  if (setting.tiers) out.push(...businessTiersProblems(setting.tiers))
   if (setting.rule === 'PERCENT_OFF' && setting.tiers?.type === 'fixed') {
     out.push('Fixed quantity prices go with an exact business price: a percent business price moves with the normal price. Use percent discounts, or an exact business price.')
   }

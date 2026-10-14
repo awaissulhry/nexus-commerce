@@ -8,9 +8,9 @@
  * From cell (`fromCellText`). A word changed on one side only is a red test, not a second truth.
  */
 import { describe, expect, it } from 'vitest'
-import { matrixCellText, matrixModeWord, matrixQtyText, matrixQueueWord } from '@/design-system/grid/renderers/matrixCells'
-import { MATRIX_COPY, type MatrixCells, type QueueCell, type QueueState, type SourceCell, type SyncCell, type SyncKind } from './contract'
-import { queueStateWord, syncBufferText, syncLabel, syncModeWord, syncQtyText } from './preview'
+import { matrixBusinessPriceText, matrixBusinessSettingOfCell, matrixBusinessTiersText, matrixCellText, matrixModeWord, matrixQtyText, matrixQueueWord } from '@/design-system/grid/renderers/matrixCells'
+import { MATRIX_COPY, type BusinessCell, type MatrixCells, type QueueCell, type QueueState, type SourceCell, type SyncCell, type SyncKind } from './contract'
+import { businessPriceWords, businessSettingOfCell, businessTiersWords, queueStateWord, syncBufferText, syncLabel, syncModeWord, syncQtyText } from './preview'
 import { fromCellText } from './sellsFrom'
 
 const cellsWith = (over: Partial<MatrixCells>): MatrixCells => ({
@@ -45,6 +45,25 @@ describe('preview words = grid words', () => {
       if (at === null) expect(queueStateWord(q)).toBe(matrixQueueWord(cellsWith({ queue: q }), now))
     }
     expect(queueStateWord(null)).toBe(matrixQueueWord(cellsWith({ queue: null })))
+  })
+
+  it('Amazon Business: the B2B price and Tiers words, and the setting a cell shows, for every rule and tier type', () => {
+    const base: BusinessCell = { rule: null, percent: null, exact: null, tiers: null, price: null, normalPrice: 105, minPrice: null, maxPrice: null, currency: 'EUR', warnings: [], held: null, send: null, live: null, reported: null }
+    const cells: BusinessCell[] = [
+      base,
+      { ...base, reported: { price: 95 } },
+      { ...base, rule: 'PERCENT_OFF', percent: 5, price: 99.75 },
+      { ...base, rule: 'PERCENT_OFF', percent: 0, price: 105, tiers: { type: 'percent', levels: [{ minQty: 2, value: 3, unitPrice: 101.85 }, { minQty: 5, value: 5.5, unitPrice: 99.23 }] } },
+      { ...base, rule: 'PERCENT_OFF', percent: 7.25, price: null, normalPrice: null },
+      { ...base, rule: 'FIXED', exact: 32.95, price: 32.95, tiers: { type: 'fixed', levels: [{ minQty: 3, value: 30, unitPrice: 30 }, { minQty: 10, value: 28.5, unitPrice: 28.5 }] } },
+      { ...base, rule: 'FIXED', exact: 80, price: 80, currency: 'GBP', tiers: { type: 'percent', levels: [] } },
+    ]
+    for (const b of [...cells, null]) {
+      const label = JSON.stringify(b)
+      expect(businessPriceWords(b), label).toBe(matrixBusinessPriceText(b))
+      expect(businessTiersWords(b), label).toBe(matrixBusinessTiersText(b))
+      if (b) expect(businessSettingOfCell(b), label).toEqual(matrixBusinessSettingOfCell(b))
+    }
   })
 
   it('Sells from reads as the From cell: the codes in sale order, or None', () => {

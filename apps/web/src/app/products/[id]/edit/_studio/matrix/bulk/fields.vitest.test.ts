@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest'
 import type { PublishActionCell } from '@nexus/shared/publish-actions'
 
-import { MATRIX_COPY, type MatrixCells, type MatrixCoordinate, type MatrixRowRead, type SourceCell, type SyncCell } from '../contract'
+import { MATRIX_COPY, type BusinessCell, type MatrixCells, type MatrixCoordinate, type MatrixRowRead, type SourceCell, type SyncCell, type VerbPreview } from '../contract'
 import {
   BULK_ALREADY_FOLLOWS, BULK_CASE_NOT_AMAZON, BULK_CASE_NOT_READ, BULK_CASE_PERMISSION, BULK_EDIT_PERMISSION, BULK_FOLLOWS_BASE, BULK_FORMULA_PRICE,
   BULK_HOLD_NOTICE, BULK_NO_HANDOFF, BULK_NO_WAREHOUSE, BULK_PARENT_ONLY, BULK_PRICE_ABOVE_0, BULK_PRICE_PERMISSION, BULK_SENT, BULK_STATUS_NEW_ROW,
@@ -16,6 +16,7 @@ import {
   verbNotices, verbParams, verbTargets, type BulkContext,
 } from './fields'
 import { verbSentence } from './bulkSource'
+import { PREVIEW_WORDS } from '../preview'
 import type { BulkFieldId } from './types'
 
 const coord = (key: string, label: string, cells: MatrixCoordinate['cells'], extra: Partial<MatrixCoordinate> = {}): MatrixCoordinate => ({
@@ -68,12 +69,30 @@ function ctx(over: Partial<BulkContext> = {}, table: Record<string, MatrixCells>
   }
 }
 
+/* Amazon Business: Amazon IT serves the B2B price and Tiers cells (a market where Amazon lists B2B for this account). */
+const IT_B2B = coord('AMAZON:IT', 'Amazon · IT', ['listing', 'price', 'salePrice', 'businessPrice', 'businessTiers'], { inventoryOn: 'AMAZON:EU' })
+const business = (over: Partial<BusinessCell> = {}): BusinessCell => ({
+  rule: 'PERCENT_OFF', percent: 5, exact: null, tiers: null, price: 99.75, normalPrice: 105, minPrice: null, maxPrice: null, currency: 'EUR',
+  warnings: [], held: null, send: null, live: null, reported: null, ...over,
+})
+const withBusiness = (b: BusinessCell | null, over: Partial<MatrixCells> = {}): MatrixCells =>
+  ({ ...priced(105), business: b, writable: { price: true, salePrice: true, businessPrice: b !== null, businessTiers: b !== null }, ...over })
+function b2bCtx(over: Partial<BulkContext> = {}, table: Record<string, MatrixCells> = {}): BulkContext {
+  return ctx({ coordinates: [EU, IT_B2B, EBAY], ...over }, {
+    'a|AMAZON:IT': withBusiness(business()),
+    'b|AMAZON:IT': withBusiness(business({ rule: 'FIXED', percent: null, exact: 90, price: 90, tiers: { type: 'percent', levels: [{ minQty: 2, value: 3, unitPrice: 87.3 }] } })),
+    ...table,
+  })
+}
+
 describe('the catalogue', () => {
-  it('lists the eleven fields in their groups, each with its plain line', () => {
+  it('lists the thirteen fields in their groups, each with its plain line', () => {
     expect(bulkFields(ctx()).map((f) => [f.group, f.label, f.description])).toEqual([
       ['Prices', 'Base price', 'The price every market uses by default'],
       ['Prices', 'Market price', 'Its own price on chosen markets'],
       ['Prices', 'Sale', 'A lower price between two dates'],
+      ['Amazon Business', 'B2B price', 'What business buyers pay on Amazon'],
+      ['Amazon Business', 'B2B tiers', 'Lower B2B prices from 2, 5, 10… units'],
       ['Listing', 'Status', 'For sale (Active), paused or ended'],
       ['Listing', 'Fulfilment', 'Who ships: Amazon (FBA) or you (FBM)'],
       ['Stock', 'Quantity', 'How many units a market shows'],
@@ -104,17 +123,17 @@ describe('the catalogue', () => {
 })
 
 describe('bulkFields', () => {
-  it('offers every field for these rows', () => {
-    expect(bulkFields(ctx()).every((f) => f.held === null)).toBe(true)
+  it('offers every field for these rows (the B2B fields where a market on screen has Amazon Business)', () => {
+    expect(bulkFields(b2bCtx()).every((f) => f.held === null)).toBe(true)
   })
   it('holds every field but Status for a role without products.edit — never a 403 later', () => {
     const held = bulkFields(ctx({ canEdit: false, canPrice: false })).filter((f) => f.held === BULK_EDIT_PERMISSION).map((f) => f.id)
-    expect(held).toEqual(['basePrice', 'price', 'salePrice', 'fulfilment', 'quantity', 'buffer', 'stockSync', 'stockSource'])
+    expect(held).toEqual(['basePrice', 'price', 'salePrice', 'businessPrice', 'businessTiers', 'fulfilment', 'quantity', 'buffer', 'stockSync', 'stockSource'])
   })
-  it('holds the three price fields, with the reason, for a role that cannot change prices', () => {
-    const held = bulkFields(ctx({ canPrice: false })).filter((f) => f.held)
-    expect(held.map((f) => f.id)).toEqual(['basePrice', 'price', 'salePrice'])
-    expect(held[0]!.held).toBe(BULK_PRICE_PERMISSION)
+  it('holds the five price fields, with the reason, for a role that cannot change prices', () => {
+    const held = bulkFields(b2bCtx({ canPrice: false })).filter((f) => f.held)
+    expect(held.map((f) => f.id)).toEqual(['basePrice', 'price', 'salePrice', 'businessPrice', 'businessTiers'])
+    for (const f of held) expect(f.held).toBe(BULK_PRICE_PERMISSION)
   })
   it('holds the per-market fields for a parent-only selection, and keeps Base price, the parent\'s own Status and the hand-offs', () => {
     const fields = bulkFields(ctx({ rows: [{ id: 'p', sku: 'P', name: null, isParent: true, basePrice: 105 }] }))
@@ -368,5 +387,61 @@ describe('lines the page works out', () => {
       ...bulkCurrent(c, 'price', ['AMAZON:IT']), ...bulkCurrent(c, 'salePrice', ['AMAZON:IT']),
     ].map((l) => l.id)
     expect(new Set(ids).size).toBe(ids.length)
+  })
+})
+
+describe('Amazon Business — B2B price and B2B tiers', () => {
+  it('the modes: the pop-up\'s three choices plus Raise · Lower for exact prices (in %), and the tiers set or removed', () => {
+    const modes = (f: BulkFieldId) => bulkModes(f).map((m) => `${m.label}:${m.input}`)
+    expect(modes('businessPrice')).toEqual(['% below price:percent', 'Exact price:money', 'Raise:adjust', 'Lower:adjust', 'Remove:none'])
+    expect(bulkModes('businessPrice')[2]!.units).toEqual(['percent'])
+    expect(modes('businessTiers')).toEqual(['Set:tiers', 'Remove:none'])
+    expect((['businessPrice', 'businessTiers'] as const).map(bulkFieldOfKind)).toEqual(['businessPrice', 'businessTiers'])
+  })
+
+  it('offered only on markets that serve the B2B cells; the others are named once; none on screen → held with the reason', () => {
+    expect(bulkMarkets(b2bCtx(), 'businessPrice').map((m) => [m.key, m.held])).toEqual([['AMAZON:IT', null]])
+    expect(bulkMarketsNote(b2bCtx(), 'businessTiers')).toBe('Not on eBay IT: no business price there')
+    expect(bulkFields(ctx()).find((f) => f.id === 'businessPrice')!.held).toBe('No market on screen has B2B price')
+    expect(bulkFields(b2bCtx({ rows: [{ id: 'p', sku: 'P', name: null, isParent: true, basePrice: 105 }] })).find((f) => f.id === 'businessTiers')!.held).toBe(BULK_PARENT_ONLY)
+  })
+
+  it('the rows now, in the grid\'s words — a listing Amazon lists no B2B for keeps its line, so the preview can say why', () => {
+    const held = { ...priced(105), writable: { businessPrice: false }, writeBlockedReason: { businessPrice: 'Amazon has not enabled business pricing for this account (checked against the PANTS schema)' } }
+    const c = b2bCtx({}, { 'b|AMAZON:IT': held })
+    expect(bulkCurrent(c, 'businessPrice', ['AMAZON:IT']).map((l) => [l.sku, l.now])).toEqual([['A', '€99.75 · −5%'], ['B', '—']])
+    expect(bulkCurrent(b2bCtx(), 'businessTiers', ['AMAZON:IT']).map((l) => l.now)).toEqual(['—', '2+ −3%'])
+    expect(verbTargets(c, 'businessPrice', ['AMAZON:IT'])).toEqual([{ rowId: 'a', coordinateKey: 'AMAZON:IT' }, { rowId: 'b', coordinateKey: 'AMAZON:IT' }])
+    // A market without the cells (eBay) is never a target, even when ticked.
+    expect(verbTargets(b2bCtx(), 'businessPrice', ['AMAZON:IT', 'EBAY:IT']).map((t) => t.coordinateKey)).toEqual(['AMAZON:IT', 'AMAZON:IT'])
+  })
+
+  it('each mode is its verb: % below the price, an exact price, Raise · Lower an exact price by a signed %, remove; the tiers as typed', () => {
+    const tiers = { type: 'percent' as const, levels: [{ minQty: 2, value: 3 }, { minQty: 5, value: 5 }] }
+    expect(verbParams('businessPrice', 'b2b-percent', { percent: 5 })).toEqual({ verb: 'set-business-price', mode: 'percent', percent: 5 })
+    expect(verbParams('businessPrice', 'b2b-exact', { amount: 32.95 }, 'GBP')).toEqual({ verb: 'set-business-price', mode: 'exact', price: 32.95, currency: 'GBP' })
+    expect(verbParams('businessPrice', 'raise', { percent: 4 })).toEqual({ verb: 'set-business-price', mode: 'change', percent: 4 })
+    expect(verbParams('businessPrice', 'lower', { percent: 4 })).toEqual({ verb: 'set-business-price', mode: 'change', percent: -4 })
+    expect(verbParams('businessPrice', 'b2b-remove', {})).toEqual({ verb: 'set-business-price', mode: 'remove' })
+    expect(verbParams('businessPrice', 'b2b-percent', {})).toBeNull()
+    expect(verbParams('businessTiers', 'tiers-set', { tiers }, 'EUR')).toEqual({ verb: 'set-business-tiers', mode: 'set', tiers, currency: 'EUR' })
+    // Market price "Set to" carries the markets' currency too: a market in another one is skipped by the server's preview.
+    expect(verbParams('price', 'set', { amount: 90 }, 'SEK')).toEqual({ verb: 'set-price', value: 90, currency: 'SEK' })
+    expect(verbParams('businessTiers', 'tiers-set', {})).toBeNull()
+    expect(verbParams('businessTiers', 'tiers-remove', {})).toEqual({ verb: 'set-business-tiers', mode: 'remove' })
+  })
+
+  it('the notices say when Amazon gets them; the result counts what the server applied, set or removed', () => {
+    const pv = (verb: VerbPreview['verb'], to: unknown): Pick<VerbPreview, 'verb' | 'changes' | 'notices'> => ({
+      verb, notices: [], changes: [{ rowId: 'a', sku: 'A', coordinateKey: 'AMAZON:IT', cell: verb === 'set-business-tiers' ? 'businessTiers' : 'businessPrice', from: null, to, fromLabel: '—', toLabel: '€99.75 · −5%' }],
+    })
+    expect(verbNotices(pv('set-business-price', null))).toEqual([{ text: BULK_SENT.business, tone: 'info' }])
+    expect(verbNotices({ ...pv('set-business-price', null), changes: [] })).toEqual([])
+    // Replacing a business price set outside Nexus is a risk to read: a warning, once.
+    expect(verbNotices({ ...pv('set-business-price', null), notices: [PREVIEW_WORDS.businessReplacesAmazonNotice] })[0]).toEqual({ text: PREVIEW_WORDS.businessReplacesAmazonNotice, tone: 'warning' })
+    expect(verbSentence(pv('set-business-price', { rule: 'PERCENT_OFF', percent: 5, price: null, tiers: null }), 2, 1)).toBe(`2 business prices set · 1 skipped. ${BULK_SENT.business}`)
+    expect(verbSentence(pv('set-business-price', null), 1, 0)).toBe(`1 business price removed. ${BULK_SENT.business}`)
+    expect(verbSentence(pv('set-business-tiers', { rule: 'FIXED', percent: null, price: 90, tiers: { type: 'percent', levels: [{ minQty: 2, value: 3 }] } }), 3, 0)).toBe(`Quantity discounts set on 3 listings. ${BULK_SENT.business}`)
+    expect(verbSentence(pv('set-business-tiers', { rule: 'FIXED', percent: null, price: 90, tiers: null }), 0, 2)).toBe('Quantity discounts removed from 0 listings · 2 skipped.')
   })
 })

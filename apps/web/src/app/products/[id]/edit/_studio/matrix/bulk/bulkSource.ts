@@ -9,6 +9,7 @@
  *   Case size,      their own dialogs, opened on the same rows (the page's `openElsewhere`)
  *   Stock source
  *   everything else the Matrix verbs: the server previews, the operator applies what was previewed, Undo reverts it
+ *                   (B2B price and tiers too: the business price door, in the page's one write line)
  *
  * Every result sentence counts what the server ANSWERED, never what was asked for.
  *
@@ -24,7 +25,7 @@ import { matrixWrite } from '@/design-system/grid'
 import { matrixHistoryAfter, matrixHistoryBefore, matrixReplay, matrixStillHolds } from '../matrixUndo'
 
 import {
-  BULK_ALREADY_FOLLOWS, BULK_SENT, basePriceLines, bulkChoices, bulkCurrency, bulkCurrent, bulkDefaultMarkets, bulkDefaultMode, bulkFields,
+  BULK_ALREADY_FOLLOWS, BULK_AMAZON_OWN_UNDO, BULK_SENT, basePriceLines, bulkChoices, bulkCurrency, bulkCurrent, bulkDefaultMarkets, bulkDefaultMode, bulkFields,
   bulkMarkets, bulkMarketsNote, bulkNoun, bulkSent, countLines, dropsBy30, followBaseLines, isHandoffField, isVerbChangeLine, coordinateOfVerbLine,
   largeChangeWord, saleLines, saleNotices, statusLines, verbLines, verbNotices, verbParams, verbTargets, BULK_NO_HANDOFF,
   type BasePriceLine, type BulkContext, type FollowBaseLine, type SaleLine, type StatusLine,
@@ -55,7 +56,8 @@ export interface BulkDoors {
 }
 
 type Payload =
-  | { kind: 'verb'; preview: VerbPreview }
+  /** `amazonOwn`: the places whose line replaces a business price set outside Nexus (Amazon Business) — no Undo for them. */
+  | { kind: 'verb'; preview: VerbPreview; amazonOwn?: readonly string[] }
   | { kind: 'master'; lines: BasePriceLine[] }
   | { kind: 'sale'; lines: SaleLine[] }
   | { kind: 'follow-base'; lines: FollowBaseLine[] }
@@ -125,6 +127,15 @@ export function verbSentence(preview: Pick<VerbPreview, 'verb' | 'changes'>, app
       if (!chosen) return `${listings} ${applied === 1 ? 'uses its market default' : 'use their market default'} again${s}.`
       return `${listings} ${applied === 1 ? 'sells' : 'sell'} from ${chosen.join(' + ')}${s}.`
     }
+    // Amazon Business: each change carries the whole setting it writes (`null` = no business price).
+    case 'set-business-price': {
+      const removed = preview.changes.length > 0 && preview.changes.every((c) => c.to === null)
+      return and(`${bulkNoun('businessPrice', applied)} ${removed ? 'removed' : 'set'}${s}.`, applied > 0 ? BULK_SENT.business : '')
+    }
+    case 'set-business-tiers': {
+      const removed = preview.changes.length > 0 && preview.changes.every((c) => (c.to as { tiers?: unknown } | null)?.tiers == null)
+      return and(`Quantity discounts ${removed ? 'removed from' : 'set on'} ${listings}${s}.`, applied > 0 ? BULK_SENT.business : '')
+    }
   }
 }
 
@@ -183,7 +194,13 @@ export function createBulkSource(doors: BulkDoors, opening: { title: string; sub
     const pv = await doors.previewVerb({ params, targets, commit: false })
     // A refused line's Now is the row as it is (the server says only why it refused).
     const now = new Map(bulkCurrent(ctx, field, coordinateKeys).map((l) => [placeKey(l.rowId, coordinateOfNow(l)), l.now]))
-    return done(verbLines(pv, ctx, request, (rowId, key) => now.get(placeKey(rowId, key)) ?? null), { kind: 'verb', preview: pv }, verbNotices(pv),
+    /* Amazon Business: a line that replaces a business price set outside Nexus (Nexus keeps none, Amazon shows one). The
+       server never puts "none" back over it, so its Undo cannot bring it back. */
+    const amazonOwn = pv.changes.filter((c) => {
+      const b = (c.cell === 'businessPrice' || c.cell === 'businessTiers') ? ctx.cellsOf(c.rowId, c.coordinateKey)?.business : null
+      return !!b && b.rule == null && b.reported != null
+    }).map((c) => placeKey(c.rowId, c.coordinateKey))
+    return done(verbLines(pv, ctx, request, (rowId, key) => now.get(placeKey(rowId, key)) ?? null), { kind: 'verb', preview: pv, amazonOwn }, verbNotices(pv),
       pv.confirm === 'type-to-confirm' ? pv.confirmWord : null, undoable)
   }
 
@@ -195,12 +212,17 @@ export function createBulkSource(doors: BulkDoors, opening: { title: string; sub
     if (payload.kind === 'verb') {
       const op = await doors.applyVerb(payload.preview)
       const skipped = payload.preview.refusals.length + op.refused
-      const canUndo = shown.undoable && op.applied > 0
+      // The places the server applied (an older server without results: every previewed change).
+      const appliedAt = new Set((op.results ? op.results.filter((r) => r.outcome === 'applied') : payload.preview.changes).map((r) => placeKey(r.rowId, r.coordinateKey)))
+      const own = new Set(payload.amazonOwn ?? [])
+      const ownApplied = [...appliedAt].filter((k) => own.has(k)).length
+      // No Undo when every line applied replaced Amazon's own business price: there would be nothing it could put back.
+      const canUndo = shown.undoable && op.applied > 0 && !(appliedAt.size > 0 && ownApplied === appliedAt.size)
       const refused = new Map((op.results ?? []).filter((r) => r.outcome !== 'applied').map((r) => [placeKey(r.rowId, r.coordinateKey), outcomeReason(r)]))
       return {
         applied: op.applied, skipped, tone: toneOf(op.applied, skipped),
         ...(op.results ? { lines: answered(shown.lines, (l) => (isVerbChangeLine(l) ? refused.get(placeKey(l.rowId, coordinateOfVerbLine(l))) ?? null : null)) } : {}),
-        sentence: verbSentence(payload.preview, op.applied, skipped),
+        sentence: and(verbSentence(payload.preview, op.applied, skipped), ownApplied > 0 ? BULK_AMAZON_OWN_UNDO : ''),
         undo: canUndo ? async () => revertSentence(await doors.revertVerb(op)) : null,
       }
     }
