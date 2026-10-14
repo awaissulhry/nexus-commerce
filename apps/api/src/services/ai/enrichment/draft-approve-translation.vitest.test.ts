@@ -28,10 +28,11 @@ const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGAC
 const app = { inject: vi.fn(async () => { throw new Error('a translation approval must not inject a route') }) } as unknown as FastifyInstance
 const request = { authUser: { id: 'u-approver' }, ip: '127.0.0.1', headers: {}, log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } } as unknown as FastifyRequest
 let productId = ''
+let runs = 0
 
-const draft = (locale: string, writeField: string, draftValue: unknown, baseValue: unknown = null) => scoped(async () => (await prisma.productAiDraft.create({ data: {
-  productId, cellKey: encodeCellKey({ channel: null, marketplace: null, aliasId: null, locale, writeField }), channel: null, marketplace: null, locale,
-  writeField, columnKey: writeField, draftValue: draftValue as never, baseValue: baseValue as never, status: 'pending', runId: `run-${locale}`, provider: 'anthropic',
+const draft = (locale: string, writeField: string, draftValue: unknown, baseValue: unknown = null, onProduct = productId) => scoped(async () => (await prisma.productAiDraft.create({ data: {
+  productId: onProduct, cellKey: encodeCellKey({ channel: null, marketplace: null, aliasId: null, locale, writeField }), channel: null, marketplace: null, locale,
+  writeField, columnKey: writeField, draftValue: draftValue as never, baseValue: baseValue as never, status: 'pending', runId: `run-${locale}-${++runs}`, provider: 'anthropic',
   model: 'test-model', promptHash: 'hash',
 } as never })).id)
 
@@ -55,6 +56,8 @@ describe('approving a translation draft', () => {
     const german = await scoped(() => prisma.productTranslation.findFirstOrThrow({ where: { productId, language: 'de' } }))
     expect(german).toMatchObject({ name: 'Testjacke', bulletPoints: ['Wasserdicht', 'Leicht'] })
     expect(german.reviewedAt).not.toBeNull()
+    // The model that wrote the words is kept beside the review.
+    expect(german.sourceModel).toBe('test-model')
     // The master (Italian) row is not touched.
     expect(await scoped(() => prisma.product.findUniqueOrThrow({ where: { id: productId }, select: { name: true } }))).toEqual({ name: 'Giacca di prova' })
   })
@@ -70,5 +73,42 @@ describe('approving a translation draft', () => {
     expect(row.lastApplyError).toContain('primary language')
     expect(await scoped(() => prisma.productTranslation.count({ where: { productId, language: 'it' } }))).toBe(0)
     expect(await scoped(() => prisma.product.findUniqueOrThrow({ where: { id: productId }, select: { name: true } }))).toEqual({ name: 'Giacca di prova' })
+  })
+})
+
+describe('a German row that already holds an unreviewed machine draft (catalog-translate.ts writes such rows)', () => {
+  let machineProduct = ''
+  beforeAll(() => scoped(async () => {
+    machineProduct = (await prisma.product.create({ data: { sku: 'TEST-SKU-APPROVE-MACHINE', name: 'Giacca macchina', description: 'Descrizione', basePrice: 10 } })).id
+    await prisma.productTranslation.create({ data: { productId: machineProduct, language: 'de', description: 'Maschinentext', source: 'ai', reviewedAt: null, version: 1 } as never })
+  }))
+  const germanRow = () => scoped(() => prisma.productTranslation.findFirstOrThrow({ where: { productId: machineProduct, language: 'de' } }))
+
+  it('approving only the title is refused with the sheet door\'s sentence; nothing is written and the row stays unreviewed', async () => {
+    const before = await germanRow()
+    const id = await draft('de', 'title', 'Maschinenjacke', null, machineProduct)
+    const result = await scoped(() => approveDrafts(app, request, [id]))
+    expect(result.approved).toEqual([])
+    expect(result.refused).toEqual([{ id, reason: expect.stringContaining('Other text in this language was drafted since you read it') }])
+    expect(await germanRow()).toEqual(before)
+    expect(before).toMatchObject({ name: null, description: 'Maschinentext', source: 'ai', reviewedAt: null })
+    const row = await scoped(() => prisma.productAiDraft.findUniqueOrThrow({ where: { id } }))
+    expect([row.status, row.lastApplyError?.includes('drafted since you read it')]).toEqual(['pending', true])
+    await scoped(() => prisma.productAiDraft.update({ where: { id }, data: { status: 'rejected' } }))
+  })
+
+  it('approving every field that holds text reviews the whole row; the audit records what each field held before', async () => {
+    const ids = [await draft('de', 'title', 'Maschinenjacke', null, machineProduct), await draft('de', 'description', 'Geprüfter Text', 'Maschinentext', machineProduct)]
+    const result = await scoped(() => approveDrafts(app, request, ids))
+    expect(result.refused).toEqual([])
+    expect(result.approved.sort()).toEqual([...ids].sort())
+    const german = await germanRow()
+    expect(german).toMatchObject({ name: 'Maschinenjacke', description: 'Geprüfter Text', source: 'manual', sourceModel: 'test-model' })
+    expect(german.reviewedAt).not.toBeNull()
+    const audits = await scoped(() => prisma.auditLog.findMany({ where: { entityId: machineProduct, action: 'ai-draft.approve' } }))
+    expect(audits.map((a) => [a.before, a.after]).sort((x, y) => JSON.stringify(x).localeCompare(JSON.stringify(y)))).toEqual([
+      [{ 'de.description': 'Maschinentext' }, { 'de.description': 'Geprüfter Text' }],
+      [{ 'de.title': null }, { 'de.title': 'Maschinenjacke' }],
+    ])
   })
 })

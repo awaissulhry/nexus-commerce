@@ -45,6 +45,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 import prisma from '../../../db.js'
 import { auditLogService } from '../../audit-log.service.js'
 import { applyProductBulkEdits, ProductBulkError } from '../../products/bulk-edit.service.js'
+import { DRAFT_SINCE_READ, holdsMachineDraft } from '../../products/sheet-stamp-door.js'
 import { isPrimaryLanguage, marketplaceForLanguage } from '../../products/translation-resolver.service.js'
 import { decodeCellKey, type CellAddress } from './cell-key.js'
 
@@ -560,7 +561,9 @@ async function applyTranslationGroup(
       body[target] = it.row.draftValue
     }
 
-    const refusal = await writeLocaleDraft(request, productId, locale, body)
+    // The language row before this approval: the write's guard and version, and each audit row's `before`.
+    const prior = await prisma.productTranslation.findFirst({ where: { productId, language: normalizeLanguage(locale) } })
+    const refusal = await writeLocaleDraft(request, productId, locale, body, prior)
     if (refusal) {
       const reason = `translation ${locale} not saved (${refusal.status}): ${refusal.error.slice(0, 200)}`
       for (const it of group) refused.push({ id: it.row.id, reason })
@@ -585,7 +588,7 @@ async function applyTranslationGroup(
         entityType: 'Product',
         entityId: productId,
         action: 'ai-draft.approve',
-        before: { [`${locale}.${it.row.writeField}`]: null },
+        before: { [`${locale}.${it.row.writeField}`]: (prior as Record<string, unknown> | null)?.[LOCALIZED_KEYS[it.row.writeField]] ?? null },
         after: { [`${locale}.${it.row.writeField}`]: it.row.draftValue },
         metadata: { draftId: it.row.id, locale, target: 'ProductTranslation', model: it.row.model },
       })),
@@ -594,16 +597,33 @@ async function applyTranslationGroup(
   return { approved, refused }
 }
 
+/** Text a person would have to read: a non-empty string, a number or a flag, at any depth of a list or an object. */
+const holdsContent = (value: unknown): boolean => typeof value === 'string' ? value.trim() !== ''
+  : typeof value === 'number' || typeof value === 'boolean' ? true
+  : Array.isArray(value) ? value.some(holdsContent)
+  : value !== null && typeof value === 'object' ? Object.values(value).some(holdsContent) : false
+
+type LanguageRow = { version: number; source: string | null; reviewedAt: Date | null; name: string | null; description: string | null; bulletPoints: unknown; keywords: unknown; attributes: unknown }
+
 /**
  * What `PUT /api/products/:id/translations/:language` did with an approval's body (see `applyTranslationGroup`):
  * `null` clears, `undefined` leaves a field alone, a list field takes only a list (null clears it to empty). Returns
  * the refusal the route answered with, or null when the write landed.
+ *
+ * 🔴 A reviewed write stamps the WHOLE language row reviewed and `manual` (`pim/translation-write.ts`). So when the row
+ * holds an unreviewed machine draft (the publish gate's predicate, as the sheet's stamp door reads it) and a field this
+ * approval does not cover holds text, the approval is refused with the stamp door's sentence: that draft is reviewed
+ * first, never marked reviewed by a title someone approved (review of #620, measured: the German description stayed
+ * machine text while the row turned reviewed, and the listings following that language were queued). Approving every
+ * field that holds text reviews the whole row and goes ahead. The row's version rides on each change, so a row that
+ * moves between this read and the write is refused as a conflict instead.
  */
 async function writeLocaleDraft(
   request: FastifyRequest,
   productId: string,
   locale: string,
   body: Record<string, unknown>,
+  prior: LanguageRow | null,
 ): Promise<{ status: number; error: string } | null> {
   const lang = normalizeLanguage(locale)
   const product = await prisma.product.findUnique({ where: { id: productId }, select: { id: true } })
@@ -620,16 +640,22 @@ async function writeLocaleDraft(
   const reviewedAt = body.reviewedAt !== undefined ? (body.reviewedAt ? body.reviewedAt : null)
     : typeof body.source === 'string' && body.source.startsWith('ai-') ? null : undefined
   const contentState = reviewedAt === null ? 'draft' : 'reviewed'
+  if (prior && contentState === 'reviewed' && holdsMachineDraft(prior)) {
+    const outside = (['name', 'description', 'bulletPoints', 'keywords'] as const).some((column) => !(column in fields) && holdsContent(prior[column]))
+    if (outside || holdsContent(prior.attributes)) return { status: 409, error: DRAFT_SINCE_READ }
+  }
   try {
     const marketplace = await marketplaceForLanguage(lang)
     const result = await applyProductBulkEdits({
-      changes: Object.entries(fields).map(([field, value]) => ({ id: productId, field, value, contentState, contentAddress: sharedContentAddress(lang) })),
+      changes: Object.entries(fields).map(([field, value]) => ({ id: productId, field, value, contentState, contentAddress: sharedContentAddress(lang), contentVersion: prior?.version ?? 0 })),
       marketplaceContexts: [{ marketplace, locale: lang } as never],
     }, {
       formulaCascade: request.headers['x-nexus-formula-cascade'] === '1',
       userId: (request as { authUser?: { id?: string } }).authUser?.id,
       ip: request.ip,
       logger: request.log,
+      // The model that wrote the words stays on the row (`sourceModel`); a person reviewed them (`reviewedAt`).
+      contentProvenance: { ...(typeof body.sourceModel === 'string' ? { sourceModel: body.sourceModel } : {}), reason: 'ai-draft.approve' },
     })
     if (result.errors?.length) return { status: 400, error: String(result.errors[0].error) }
     return null
