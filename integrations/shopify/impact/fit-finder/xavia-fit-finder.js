@@ -3,7 +3,7 @@
 // finders shoppers know from big motorcycle-gear stores. The inline boot in snippets/xavia-fit-finder.liquid loads this module
 // on the first click, or at idle time when this device has a saved fit profile. build.mjs joins it with the engine,
 // texts, 3D body and viewer code and the CSS into one theme asset; the two bodies are separate assets, loaded on open.
-import { estimateBody, measuredBody, combineBody, pickChart, chartsForProduct, recommend, validateInputs, verdictFor, normalizeSize, canEstimate, validMeasure, MEASURES, LIMITS } from './xavia-fit-engine.js';
+import { estimateBody, measuredBody, combineBody, pickChart, chartsForProduct, recommend, validateInputs, verdictFor, normalizeSize, canEstimate, validMeasure, validGarment, MEASURES, LIMITS, LENGTHS } from './xavia-fit-engine.js';
 import { TEXT } from './xavia-fit-i18n.js';
 import { createViewer, SWATCHES } from './xavia-fit-viewer.js';
 
@@ -14,6 +14,10 @@ const FIT_TEXT = { tooTight: 'fitTooTight', snug: 'fitSnug', right: 'fitRight', 
 const FIT_TONE = { tooTight: 'bad', snug: 'ok', right: 'ok', loose: 'ok', tooLoose: 'bad' };
 const FIT_ICON = { tooTight: 'tight', snug: 'tight', right: 'right', loose: 'loose', tooLoose: 'loose' };
 const FIT_EN = { tooTight: 'too tight', snug: 'slightly tight', right: 'just right', loose: 'slightly loose', tooLoose: 'too loose' };
+// A length (sleeve, inside leg) is short or long, not tight or loose.
+const LENGTH_TEXT = { tooTight: 'fitTooShort', snug: 'fitShort', right: 'fitRight', loose: 'fitLong', tooLoose: 'fitTooLong' };
+const LENGTH_EN = { tooTight: 'too short', snug: 'slightly short', right: 'just right', loose: 'slightly long', tooLoose: 'too long' };
+const fitText = r => (LENGTHS.includes(r.measure) ? LENGTH_TEXT : FIT_TEXT)[r.fit];
 // The "how to measure" text of a measure: chest → howChest.
 const howKey = measure => `how${measure[0].toUpperCase()}${measure.slice(1)}`;
 const CM_PER_IN = 2.54, KG_PER_LB = 0.45359237;
@@ -112,6 +116,8 @@ function readConfig(root) {
   cfg.charts = Object.fromEntries(Object.entries(charts)
     .map(([cut, chart]) => [cut, { ...chart, sizes: chart.sizes.filter(size => names.has(normalizeSize(size.name))) }])
     .filter(([, chart]) => chart.sizes.length));
+  // The garment measurements (xavia.fit_garment) only check the room; they are never put on the screen.
+  cfg.garment = validGarment(cfg.garment);
   return cfg;
 }
 
@@ -126,7 +132,7 @@ function evaluate(cfg, p) {
   if (!chart) return null;
   const body = bodyFrom(p);
   const available = Object.fromEntries(cfg.values.map(v => [normalizeSize(v.name), v.available]));
-  const result = recommend(chart, body, { fit: p.fit, layers: chart.measures.includes('chest') ? p.layers : 'none', material: cfg.material, available });
+  const result = recommend(chart, body, { fit: p.fit, layers: chart.measures.includes('chest') ? p.layers : 'none', material: cfg.material, available, garment: cfg.garment });
   return result.missing ? null : { chart, body, result };
 }
 
@@ -150,7 +156,7 @@ function selectSize(cfg, name) {
 }
 
 const worstRegion = verdict => verdict.regions.find(r => r.fit === 'tooTight') ?? verdict.regions.find(r => r.fit === 'tooLoose') ?? verdict.regions.find(r => r.fit !== 'right');
-const lowerFit = (fit, language = lang) => tr(language, fit === 'tooTight' ? 'tooTightLower' : fit === 'tooLoose' ? 'tooLooseLower' : FIT_TEXT[fit]);
+const lowerFit = (r, language = lang) => tr(language, LENGTHS.includes(r.measure) ? LENGTH_TEXT[r.fit] : r.fit === 'tooTight' ? 'tooTightLower' : r.fit === 'tooLoose' ? 'tooLooseLower' : FIT_TEXT[r.fit]);
 
 /** The warning under the size buttons when the chosen size will not fit this device's shopper. */
 function decorate(root) {
@@ -162,7 +168,7 @@ function decorate(root) {
   let hint = fieldset?.querySelector(':scope > [data-xff-hint]');
   const p = loadProfile(), ev = p && evaluate(cfg, p);
   const chosen = ev && selectedSize(cfg), verdict = chosen && verdictFor(ev.result, chosen);
-  const text = verdict && verdict.verdict === 'no' ? tr(pageLang, 'notForYou', { size: chosen, fit: lowerFit(worstRegion(verdict).fit, pageLang) }) : '';
+  const text = verdict && verdict.verdict === 'no' ? tr(pageLang, 'notForYou', { size: chosen, fit: lowerFit(worstRegion(verdict), pageLang) }) : '';
   if (!text) { hint?.remove(); return; }
   if (!hint && fieldset) { hint = h('p', { class: 'xff-page-hint', 'data-xff-hint': true, role: 'status' }); fieldset.append(hint); }
   if (hint) hint.textContent = text;
@@ -173,7 +179,7 @@ const decorateAll = () => document.querySelectorAll('[data-xff]').forEach(decora
 function noteFor(ev, chosen, verdict) {
   const r = ev.result, parts = [`suggested ${r.best} ${r.confidence}% (${ev.body.mode === 'estimate' ? 'height and weight' : ev.body.mode === 'measured' ? 'tape' : 'height, weight and tape'})`];
   if (chosen) parts.push(`chosen ${chosen}`);
-  if (verdict && verdict.verdict !== 'best') parts.push(verdict.regions.filter(x => x.fit !== 'right').map(x => `${x.measure} ${FIT_EN[x.fit]}`).join(', ') || 'also fits');
+  if (verdict && verdict.verdict !== 'best') parts.push(verdict.regions.filter(x => x.fit !== 'right').map(x => `${x.measure} ${(LENGTHS.includes(x.measure) ? LENGTH_EN : FIT_EN)[x.fit]}`).join(', ') || 'also fits');
   if (r.outOfRange) parts.push(`outside chart (${r.outOfRange})`);
   return parts.join(' | ');
 }
@@ -342,9 +348,10 @@ function openDialog(root, options = {}) {
   current = { dialog, close };
 
   const chart = () => pickChart(cfg.charts, state.p.sex);
-  // The steps follow the product: one field per measure of its chart (height is asked with the weight), and the body
-  // shape only for torso parts the shopper did not measure (none left, or no torso in the chart: no shape step).
-  const fieldMeasures = () => (chart()?.measures ?? []).filter(m => m !== 'height');
+  // The steps follow the product: one field per measure of its chart and of its garment measurements (height is asked
+  // with the weight), and the body shape only for torso parts the shopper did not measure (none left, or no torso in
+  // the chart: no shape step).
+  const fieldMeasures = () => [...new Set([...(chart()?.measures ?? []), ...(chart() ? cfg.garment?.measures ?? [] : [])])].filter(m => m !== 'height');
   const shapeMeasures = () => (chart()?.measures ?? []).filter(m => TORSO.includes(m) && !Number.isFinite(state.p.tape?.[m]));
   const steps = () => [...(phone() ? ['gender'] : []), 'body', ...(fieldMeasures().length ? ['measures'] : []), ...(shapeMeasures().length ? ['shape'] : [])];
   const save = () => saveProfile(state.p);
@@ -373,7 +380,7 @@ function openDialog(root, options = {}) {
   function stageRings(ev, name) {
     const size = ev.result.sizes.find(x => x.name === name) ?? ev.result.sizes.find(x => x.name === ev.result.best);
     return size.regions.filter(r => TORSO.includes(r.measure))
-      .map(r => ({ measure: r.measure, tone: FIT_TONE[r.fit], text: t(FIT_TEXT[r.fit]), icon: icon(FIT_ICON[r.fit], 14, 2.4) }));
+      .map(r => ({ measure: r.measure, tone: FIT_TONE[r.fit], text: t(fitText(r)), icon: icon(FIT_ICON[r.fit], 14, 2.4) }));
   }
   let stageTimer = 0;
   const updateStageSoon = () => { clearTimeout(stageTimer); stageTimer = setTimeout(updateStage, 160); };
@@ -804,7 +811,7 @@ function openDialog(root, options = {}) {
         h('h2', { class: 'xff-pick__label', id: titleId, tabindex: '-1', 'data-xff-focus': true }, label, h('span', { class: 'xff-sr', text: `: ${size.name}` })),
         h('ul', { class: 'xff-fit' }, size.regions.map(r => h('li', { class: `xff-fit__item xff-fit__item--${FIT_TONE[r.fit]}` },
           h('span', { class: 'xff-fit__icon', 'aria-hidden': 'true' }, icon(FIT_ICON[r.fit], 12, 2.6)),
-          h('span', { text: `${t(r.measure)}: ${t(FIT_TEXT[r.fit])}` }),
+          h('span', { text: `${t(r.measure)}: ${t(fitText(r))}` }),
           measured(r.measure) ? null : h('span', { class: 'xff-fit__guess', text: t('estimated') }))))));
   }
   // A value the shopper gave (tape, or the height typed in the first step); the others are our estimate.
@@ -841,7 +848,7 @@ function openDialog(root, options = {}) {
     const target = shown.verdict !== 'no' && inStock(shown) ? shown : fallback;
     const notes = [];
     if (result.outOfRange) notes.push(h('p', { class: 'xff-note xff-note--bad' }, t(result.outOfRange), ' ', h('a', { href: cfg.contactUrl, text: t('contact') })));
-    else if (closest) { const r = worstRegion(best); notes.push(h('p', { class: 'xff-note', text: t('closestNote', { size: best.name, part: t(r.measure), fit: t(FIT_TEXT[r.fit]) }) })); }
+    else if (closest) { const r = worstRegion(best); notes.push(h('p', { class: 'xff-note', text: t('closestNote', { size: best.name, part: t(r.measure), fit: t(fitText(r)) }) })); }
     if (!inStock(best)) notes.push(h('p', { class: 'xff-note', text: [t('bestSoldOut', { size: best.name }), target ? t('altFits', { size: target.name }) : ''].join(' ').trim() }));
     if (body.warnings.includes('outsideModel')) notes.push(h('p', { class: 'xff-note', text: t('outsideModel') }));
     // Every size in one row on the desktop; three at a time, with arrows, on the phone.
@@ -906,7 +913,7 @@ function openDialog(root, options = {}) {
     const parts = listParts(verdict.regions.filter(badFit).map(r => partName(r.measure)).concat(verdict.regions.some(badFit) ? [] : [partName(worst.measure)]));
     return [
       h('div', { class: 'xff-result' }, card(t('notRecommendedUpper'), verdict, 'no')),
-      h('div', { class: 'xff-notes' }, h('p', { class: 'xff-guard-text', text: t('guardText', { chosen: state.chosen, fit: lowerFit(worst.fit), parts, best: ev.result.best }) })),
+      h('div', { class: 'xff-notes' }, h('p', { class: 'xff-guard-text', text: t('guardText', { chosen: state.chosen, fit: lowerFit(worst), parts, best: ev.result.best }) })),
       h('div', { class: 'xff-actions xff-actions--guard' },
         h('button', { type: 'button', class: 'xff-btn xff-btn--outline', id: 'xff-keep', text: t('keep', { chosen: state.chosen }), onclick: () => {
           const form = document.getElementById(cfg.formId);

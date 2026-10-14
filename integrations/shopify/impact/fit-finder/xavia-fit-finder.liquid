@@ -14,6 +14,8 @@
     charts, and the shopper's own body type picks one;
   * else nothing: no link (the theme's size chart link stays as it is).
   A "leather" tag makes the recommendation sit a little closer (leather gives with wear).
+  The JSON metafield xavia.fit_garment (optional, sent by Nexus) holds the garment's own measurements per size. The
+  dialog only checks the room with them and never shows them; without it the dialog works from the chart alone.
 
   Supported variables: product, option (the size option), form_id.
 {%- endcomment -%}
@@ -91,6 +93,7 @@
         "audience": [{% if xff_men %}"men"{% endif %}{% if xff_men and xff_women %},{% endif %}{% if xff_women %}"women"{% endif %}],
         "material": {{ xff_material | json }},
         "override": {% if product.metafields.xavia.fit_chart != blank %}{{ product.metafields.xavia.fit_chart.value | json }}{% else %}null{% endif %},
+        "garment": {% if product.metafields.xavia.fit_garment != blank %}{{ product.metafields.xavia.fit_garment.value | json }}{% else %}null{% endif %},
         "defaults": {% render 'xavia-fit-charts' %},
         "product": {"title": {{ product.title | json }}, "image": {{ xff_image | json }}},
         "shop": {{ shop.name | json }},

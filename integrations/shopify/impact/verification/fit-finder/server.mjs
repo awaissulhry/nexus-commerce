@@ -20,13 +20,13 @@ const DEFAULT_SIZES = 'XS,S,M,L,XL,XXL,3XL,4XL,5XL'
 function product(query) {
   const sizes = (query.get('sizes') || DEFAULT_SIZES).split(','), sold = new Set((query.get('sold') || '').split(',').filter(Boolean))
   const selected = query.get('size') || sizes[0]
-  const override = query.get('override')
+  const override = query.get('override'), garment = query.get('garment')
   return {
     sizes, selected,
     values: sizes.map((name, i) => ({ name, id: 1000 + i, available: !sold.has(name), selected: name === selected })),
     product: {
       title: query.get('title') || 'GALE jacket', type: query.get('type') ?? 'Jacket', tags: (query.get('tags') ?? 'JACKET,men,women,textile').split(',').filter(Boolean),
-      featured_image: query.get('image') === 'none' ? '' : '/product.svg', metafields: { xavia: { fit_chart: override ? { value: JSON.parse(override) } : '' } },
+      featured_image: query.get('image') === 'none' ? '' : '/product.svg', metafields: { xavia: { fit_chart: override ? { value: JSON.parse(override) } : '', fit_garment: garment ? { value: JSON.parse(garment) } : '' } },
     },
   }
 }

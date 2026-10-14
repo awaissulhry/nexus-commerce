@@ -102,6 +102,31 @@ languages. `primary` (default: the first measure) is the part that may not be to
 helmets need their real charts first (a metafield per product, or a default chart in `xavia-fit-charts.liquid`); until
 then they show no button.
 
+## Garment measurements (hidden)
+
+A product may also carry the measurements of the finished garment per size, in the JSON metafield
+**`xavia.fit_garment`** (Nexus sends it; the shopper never sees it). The shopper still gives only body measurements.
+The dialog uses the garment only to check the room between garment and body (`ROOM` in `xavia-fit-engine.js`):
+
+- a measure the chart also has (chest): the chart says how it fits; the garment adds "too tight" when it leaves less
+  than the least room (the product runs small), and that size is then not advised;
+- a measure only the garment has (sleeve): it is asked in the measurements step (estimated until measured) and gets
+  its own fit word from the room band (lengths say short/long); a size outside the band costs in the ranking;
+- no metafield, or nothing usable in it: the dialog works from the chart alone, exactly as before (tested).
+
+The garment numbers are never put on the screen (the size table shows body measures only; a garment check carries
+no cm). They are in the page source, as every metafield the theme renders is.
+
+```json
+{ "measures": ["chest", "waist", "sleeve"],
+  "sizes": [{ "name": "M", "chest": 106, "waist": 94, "sleeve": 62.5 }],
+  "room": { "chest": [6, 16] } }
+```
+
+Circumferences are the full way round (Nexus doubles a measure taken flat); `sleeve` = shoulder seam to cuff;
+`inseam` = crotch seam to hem. Garment measures: `chest`, `waist`, `hips`, `neck`, `thigh`, `calf`, `sleeve`,
+`inseam`. `room` is optional: [least, most] cm of garment over the body per measure; else the `ROOM` defaults.
+
 ## Files
 
 | File | Goes to the theme as | What |

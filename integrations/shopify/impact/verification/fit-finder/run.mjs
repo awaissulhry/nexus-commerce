@@ -469,6 +469,28 @@ await scenario('desktop: gloves ask hand measures; a jacket with sleeve length a
   assert.equal(await screen(page), 'measures', 'a done step opens again from the progress line')
 })
 
+// Garment measurements (the hidden xavia.fit_garment metafield) only check the room: the shopper still types body
+// measures, the sleeve the chart lacks is asked, a short M sleeve moves the size to L, and no garment number shows.
+await scenario('desktop: hidden garment measurements check the sleeve and never show a garment number', DESKTOP, async page => {
+  const garment = { measures: ['chest', 'sleeve'], sizes: [{ name: 'M', chest: 106, sleeve: 62.5 }, { name: 'L', chest: 112, sleeve: 64.5 }, { name: 'XL', chest: 118, sleeve: 66.5 }] }
+  await openGuide(page, `locale=en&sizes=M,L,XL&tags=JACKET,men&garment=${encodeURIComponent(JSON.stringify(garment))}`)
+  await toMeasures(page)
+  assert.deepEqual(await page.locator('.xff-mrow__label').allTextContents(), ['Chest', 'Waist', 'Sleeve length'])
+  assert.match(await page.locator('#xff-m-sleeve').getAttribute('placeholder'), /^≈ \d/, 'the arm is estimated until the shopper measures it')
+  await page.locator('#xff-m-chest').fill('96'); await page.locator('#xff-m-waist').fill('84'); await page.locator('#xff-m-sleeve').fill('63')
+  await page.locator('#xff-next').click()
+  assert.equal(await screen(page), 'result')
+  assert.equal(await page.locator('.xff-card__size').textContent(), 'L', 'the M sleeve is shorter than the arm')
+  assert.deepEqual(await page.locator('.xff-fit__item').allTextContents(), ['Chest: slightly loose', 'Waist: slightly loose', 'Sleeve length: slightly short'])
+  assert.match(await page.locator('.xff-sizefor').textContent(), /Chest98 – 104 cm96 cmWaist86 – 92 cm84 cm$/, 'the size table shows body measures only')
+  await page.locator('#xff-size-M').click()
+  assert.match(await page.locator('.xff-fit').textContent(), /Sleeve length: too short/)
+  const text = await dialog(page).evaluate(el => el.innerText)
+  for (const n of ['106', '112', '118', '62.5', '62,5', '64.5', '64,5', '66.5', '66,5']) assert.ok(!text.includes(n), `garment number ${n} is not on screen`)
+  await noJunk(page)
+  await page.screenshot({ path: `${shots}/desktop-12-garment.png` })
+})
+
 await browser.close()
 await flatBrowser.close()
 for (const r of results) console.log(r.join(' · '))
