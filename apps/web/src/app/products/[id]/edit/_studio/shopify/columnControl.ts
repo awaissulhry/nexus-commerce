@@ -20,3 +20,12 @@ export function shopifyColumnControl(shopifyField: unknown): { settable: boolean
   const scalar = definition && !field.reason && field.editor !== 'unavailable' && field.cardinality === 'scalar' && definition.type === field.type ? SCALAR[definition.type] : undefined
   return scalar ? { settable: true, ...scalar } : { settable: false }
 }
+
+/**
+ * A store JSON field (a garment size chart, for one), editable in this store. Its Shared value reaches a product Shopify
+ * already holds only as a draft edit, so the sheet's reset makes one (`channelResetOffer`).
+ */
+export function shopifyJsonColumn(shopifyField: unknown): boolean {
+  const field = shopifyField as Partial<InformationField> | null | undefined
+  return !!field?.definition && !field.reason && field.editor !== 'unavailable' && field.type === 'json' && field.definition.type === 'json'
+}

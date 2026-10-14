@@ -41,3 +41,32 @@ describe('Shopify column Reset', () => {
     expect(targets).toEqual([{ rowId: 'r1', colId: 'value', intent: 'reset', formula: false }, { rowId: 'r2', colId: 'value', intent: 'reset', formula: false }])
   })
 })
+
+/* A Shopify JSON field (a garment size chart) following Master on products Shopify already holds: one reset per family
+   ("Reset column to inherited") turns each colour product's Master value into a draft edit for Review and synchronize. */
+describe('Shopify JSON column Reset sends the Master value', () => {
+  const base = { editable: true, writable: true, linkGroupId: null, writeField: 'value', writeTarget: 'channelListing', writeVerb: 'channel', affectsAllChannels: false, inheritedFrom: 'family' }
+  const master = { status: 'mapped', value: { measures: ['chest'], sizes: [{ name: 'M', chest: 106 }] } }
+  /** The canonical row of one colour product: follows Master; `keeps` = Shopify holds another value (`divergence`). */
+  const follows = (owner: number, keeps: boolean) => ({ ...base, value: master.value, source: 'master', layer: 'master', pinned: false, inherited: true, follows: true, resettable: true, mapped: master,
+    ...(keeps ? { divergence: { publishesAs: null, note: 'Shopify keeps no value.' } } : {}),
+    shopifyWrite: { ownerId: `gid://shopify/Product/${owner}`, fieldId: 'value', token: 't', baseline: null } })
+  /** Another size row of the same colour product: the product's field is edited on its canonical row only. */
+  const notHere = { ...base, value: null, editable: false, writable: false, writeBlockedReason: 'Edit this field on the product row that owns this Shopify listing.' }
+  const rows = new Map<string, unknown>([
+    ['black-m', { rowKind: 'variant', values: { value: follows(10, true) } }], ['black-l', { rowKind: 'variant', values: { value: notHere } }],
+    ['red-m', { rowKind: 'variant', values: { value: follows(20, true) } }], ['blue-m', { rowKind: 'variant', values: { value: follows(30, false) } }],
+  ])
+  const column = (type: string) => ({ shopifyField: field(type) })
+  it('resets each colour product whose Shopify value differs, once, and nothing else', () => {
+    const targets = resetTargets([...rows.keys()].map(rowId => ({ rowId, colId: 'value' })), (rowId, colId) => channelResetOffer(rows.get(rowId) as never, colId, false, column('json')))
+    expect(targets).toEqual([{ rowId: 'black-m', colId: 'value', intent: 'reset', formula: false }, { rowId: 'red-m', colId: 'value', intent: 'reset', formula: false }])
+    expect(channelResetOffer(rows.get('black-m') as never, 'value', false, column('json'))?.label).toBe('Reset to inherited')
+  })
+  it('keeps every other column as it was: a text field, a read-only store field, or no column named', () => {
+    const cell = rows.get('black-m') as never
+    expect(channelResetOffer(cell, 'value', false, column('single_line_text_field'))).toBeNull()
+    expect(channelResetOffer(cell, 'value', false, { shopifyField: { ...field('json'), reason: 'Managed by the store' } })).toBeNull()
+    expect(channelResetOffer(cell, 'value')).toBeNull()
+  })
+})
