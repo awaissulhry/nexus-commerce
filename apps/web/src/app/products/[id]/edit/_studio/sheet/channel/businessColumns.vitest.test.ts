@@ -4,6 +4,7 @@
  * fill handle, no paste), set on the Matrix: Enter, F2 or a double-click opens it where the Matrix would let this person
  * set the cell; a paste, a fill or Delete that reaches them says the sentence. Amazon only.
  */
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 import { CellSaveTracker, MATRIX_CELL_RENDERERS, matrixBusinessPriceText, matrixBusinessTiersText, matrixCellTooltip } from '@/design-system/grid'
@@ -11,8 +12,10 @@ import { CellSaveTracker, MATRIX_CELL_RENDERERS, matrixBusinessPriceText, matrix
 import { MATRIX_COPY, type BusinessCell, type MatrixCells, type MatrixCoordinate } from '../../matrix/contract'
 import { buildChannelColumns, type BuildChannelColumnsOptions } from '../master/channelColumns'
 import {
-  BUSINESS_SHEET_COPY, businessGesture, businessOpensMatrix, businessTooltip, fillTargetColumns, pasteTargetColumns, reachesBusiness, withBusinessPaste,
+  BUSINESS_SHEET_COPY, businessGesture, businessOpensMatrix, businessTooltip, clearsSelectionOn, fillTargetColumns, openMatrixTab, pasteTargetColumns,
+  reachesBusiness, withBusinessPaste,
 } from './businessColumns'
+import { takesClearKey } from '../sheetReset'
 import { CascadeCell } from './CascadeCell'
 import type { ChannelSheetRow, SheetColumn } from './types'
 
@@ -190,6 +193,47 @@ describe('set on the Matrix: the way there, and the sentence', () => {
     expect(across).toEqual(['business_price'])
     // Filling across FROM the pair writes the other columns only.
     expect(reachesBusiness(fillTargetColumns({ columns: ['business_tiers'], startRow: 2, endRow: 2 }, { columns: ['business_tiers', 'listing_asin'], startRow: 2, endRow: 2 }))).toBe(false)
+  })
+
+  it('🔴 Delete with the focus on the pair: the grid keeps off the key (it would blank the selection\'s other cells unasked)', () => {
+    const del = (k: string, editing = false) => ({ event: { key: k, altKey: false, ctrlKey: false, metaKey: false, shiftKey: false }, editing })
+    for (const def of defs()) {
+      const suppress = def.suppressKeyboardEvent as (p: unknown) => boolean
+      expect(suppress(del('Delete'))).toBe(true)
+      expect(suppress(del('Backspace'))).toBe(true)
+      expect(suppress(del('Delete', true))).toBe(false)
+      expect(suppress(del('Enter'))).toBe(false)
+      expect(suppress(del('7'))).toBe(false)
+    }
+  })
+
+  it('… and the sheet asks "Clear or Reset?" for the selection\'s other cells, as an editable column\'s Delete does', () => {
+    // The control takes the key on an attribute column, or on a read-only column the scope names; never on another.
+    const controlled = (colId: string) => colId === 'item_name'
+    const named = (colId: string) => clearsSelectionOn('AMAZON', colId)
+    expect(takesClearKey('item_name', controlled, named)).toBe(true)
+    for (const colId of ['business_price', 'business_tiers', 'stock_fba']) expect(takesClearKey(colId, controlled, named), colId).toBe(true)
+    // Mode / Qty / Buffer and the ASIN keep their own keys (an editor on Backspace; the ASIN's own Clear).
+    for (const colId of ['stock_qty', 'stock_mode', 'listing_asin', 'purchasable_offer__our_price']) expect(takesClearKey(colId, controlled, named), colId).toBe(false)
+    expect(takesClearKey(undefined, controlled, named)).toBe(false)
+    expect(takesClearKey('business_price', controlled)).toBe(false)
+    // Amazon only.
+    for (const channel of ['EBAY', 'SHOPIFY', null]) expect(clearsSelectionOn(channel, 'business_price'), String(channel)).toBe(false)
+    // Wired: the channel sheet names them to its control, and the control asks for them.
+    const read = (file: string) => readFileSync(new URL(file, import.meta.url), 'utf8')
+    expect(read('./useChannelSheetAdapter.tsx')).toContain('clearsSelection: colId => clearsSelectionOn(channel, colId),')
+    expect(read('../useSheetControl.tsx')).toContain('takesClearKey(colId, (id) => !!live.current.columnFacts(id), live.current.clearsSelection)')
+  })
+
+  it('the way to the Matrix: the tab — or, while the sheet holds an unsaved change, the sentence to wait (never silence)', () => {
+    const said: string[] = [], opened: string[] = []
+    const say = (m: string) => { said.push(m) }
+    expect(openMatrixTab({ canChangeEditor: () => false, setTab: (t) => { opened.push(t) } }, say)).toBe(false)
+    expect(opened).toEqual([]); expect(said).toEqual(['Wait for the sheet to save, then open the Matrix.'])
+    expect(openMatrixTab({ canChangeEditor: () => true, setTab: (t) => { opened.push(t) } }, say)).toBe(true)
+    expect(openMatrixTab({ setTab: (t) => { opened.push(t) } }, say)).toBe(true)
+    expect(opened).toEqual(['matrix', 'matrix']); expect(said).toHaveLength(1)
+    expect(BUSINESS_SHEET_COPY.waitToOpen).toBe('Wait for the sheet to save, then open the Matrix.')
   })
 
   it('the sentence names the pair, where they are set and how to get there', () => {

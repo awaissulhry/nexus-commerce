@@ -8,15 +8,21 @@
  * What the sheet changes is only what makes them read only, in the DEFINITION (GRID.md rule 10, as the FBA qty column):
  * not editable, no editor, no setter, no fill handle, no paste, and no pencil (no `onOpenBusiness`). They are set on the
  * Matrix:
- *   - Enter, F2 or a double-click on a cell the Matrix would let this person set opens the Matrix tab (`businessGesture`);
+ *   - Enter, F2 or a double-click on a cell the Matrix would let this person set opens the Matrix tab (`businessGesture`,
+ *     `openMatrixTab`) — or, while the sheet holds an unsaved change, says to wait (the tab guard refuses in silence);
  *   - any other open gesture says the cell's sentence (the sheet's refusal: the server's `writeBlockedReason`, "Set on the
  *     Matrix…" or why the Matrix holds it: the parent, a market without B2B, no listing there);
- *   - a paste, a fill or Delete that reaches them changes nothing there and says `BUSINESS_SHEET_COPY.readOnly`.
+ *   - a paste, a fill or Delete that reaches them changes nothing there and says `BUSINESS_SHEET_COPY.readOnly`. Delete
+ *     with the focus on them asks the sheet's "Clear or Reset?" for the selection's other cells, as an editable column's
+ *     Delete does (`clearsSelectionOn`, `useSheetControl`): the column keeps the grid off the key, which would otherwise
+ *     blank those cells without asking.
  * Amazon scopes only: the column keys are not namespaced, so another channel's field of the same name stays its own.
  */
 import { matrixCellOpens, matrixColumnDef, type CellClassParams, type ColDef, type MatrixCoordinate } from '@/design-system/grid'
 
 import { MATRIX_COPY } from '../../matrix/contract'
+import { isClearKey } from '../sheetReset'
+import { STOCK_FBA_KEY } from './stockCells'
 import type { ChannelScope, ChannelSheetRow, SheetColumn } from './types'
 
 /** The two columns (API `STUDIO_BUSINESS_KEYS`) and the Matrix cell each one shows. */
@@ -31,6 +37,8 @@ export const isBusinessScope = (scope: Pick<ChannelScope, 'channel'> | null | un
 export const BUSINESS_SHEET_COPY = {
   /** A paste, a fill or Delete that reached the pair. */
   readOnly: 'Not changed: B2B price and Quantity discounts are set on the Matrix. Enter or a double-click on one of their cells opens the Matrix.',
+  /** The way to the Matrix while the sheet holds an unsaved change (a save on its way, an open editor). */
+  waitToOpen: 'Wait for the sheet to save, then open the Matrix.',
 } as const
 
 type BusinessScope = Pick<ChannelScope, 'channel' | 'marketplace' | 'label'> & { connectionId?: string | null }
@@ -86,7 +94,8 @@ export function businessColumnDef(col: SheetColumn, deps: { scope: BusinessScope
     cellEditorPopup: undefined,
     valueParser: undefined,
     valueSetter: () => false,
-    suppressKeyboardEvent: undefined,
+    // Delete / Backspace are the sheet's (`clearsSelectionOn`): the grid's own would blank the selection's other cells unasked.
+    suppressKeyboardEvent: (p) => isClearKey(p.event, p.editing),
     tooltipValueGetter: (p) => businessTooltip(matrixTooltip(p), p.data?.values?.[col.key]?.writeBlockedReason),
   }
 }
@@ -100,9 +109,10 @@ type GestureKey = Pick<KeyboardEvent, 'key' | 'altKey' | 'ctrlKey' | 'metaKey' |
 
 /**
  * What a gesture on the sheet does to the pair. `open`: Enter, F2 or a double-click on a cell the Matrix would let this
- * person set — the Matrix tab opens. `readOnly`: Delete or Backspace on the pair, or on a selection that reaches it — the
- * sentence (the rest of the selection is cleared as usual). null: the sheet's own handling (a held cell's open gesture
- * says its reason). `selected`: the column ids of the selected ranges.
+ * person set — the Matrix tab opens (`openMatrixTab`). `readOnly`: Delete or Backspace on the pair, or on a selection that
+ * reaches it — the sentence; the selection's other cells then take the sheet's "Clear or Reset?" (`useSheetControl`), as
+ * with an editable column's Delete. null: the sheet's own handling (a held cell's open gesture says its reason).
+ * `selected`: the column ids of the selected ranges.
  */
 export function businessGesture(input: { colId: string | null | undefined; row: ChannelSheetRow | null | undefined; key?: GestureKey | null; doubleClick?: boolean; selected?: readonly string[] }): 'open' | 'readOnly' | null {
   const { colId, row, key } = input
@@ -111,6 +121,23 @@ export function businessGesture(input: { colId: string | null | undefined; row: 
   if ((key.key === 'Enter' && !key.shiftKey) || key.key === 'F2') return businessOpensMatrix(colId, row) ? 'open' : null
   if ((key.key === 'Delete' || key.key === 'Backspace') && !key.shiftKey) return isBusinessColumnKey(colId) || (input.selected ?? []).some(isBusinessColumnKey) ? 'readOnly' : null
   return null
+}
+
+/**
+ * The Amazon sheet's read-only Matrix columns whose Delete asks "Clear or Reset?" for the selection's other cells
+ * (`useSheetControl` `clearsSelection`): the B2B pair and FBA qty. Each keeps the grid off the key in its definition.
+ */
+export const clearsSelectionOn = (channel: string | null | undefined, colId: string): boolean =>
+  String(channel ?? '').toUpperCase() === 'AMAZON' && (isBusinessColumnKey(colId) || colId === STOCK_FBA_KEY)
+
+/**
+ * Open the Matrix tab — or, while the sheet holds an unsaved change (a save on its way, an open editor), say to wait: the
+ * studio's tab guard refuses then, and says nothing. `true` = the Matrix opens.
+ */
+export function openMatrixTab(scope: { canChangeEditor?: () => boolean; setTab: (tab: 'matrix') => void }, say: (message: string) => void): boolean {
+  if (scope.canChangeEditor && !scope.canChangeEditor()) { say(BUSINESS_SHEET_COPY.waitToOpen); return false }
+  scope.setTab('matrix')
+  return true
 }
 
 /**

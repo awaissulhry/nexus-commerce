@@ -60,7 +60,7 @@ import type { StudioPublishScope } from '@nexus/shared/studio-publication';
 import { takeSheetLanding } from '@/app/products/_publication/history/runActions';
 import { discardOfferDrafts, offerDraftControls } from './offerDrafts';
 import { useLiveStockCells } from './useLiveStockCells';
-import { BUSINESS_SHEET_COPY, businessGesture, fillTargetColumns, isBusinessColumnKey, reachesBusiness, withBusinessPaste } from './businessColumns';
+import { BUSINESS_SHEET_COPY, businessGesture, clearsSelectionOn, fillTargetColumns, isBusinessColumnKey, openMatrixTab, reachesBusiness, withBusinessPaste } from './businessColumns';
 import { sheetEventColumn } from '../useProductSheetInteraction';
 import { useCellFormulas } from '../../useCellFormulas';
 import { sheetFormulaLine } from '../formulaWriteLine';
@@ -633,6 +633,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         offerOf: (row, colId) => channelResetOffer(row, colId, !!formulaLive.current.formulas.exprFor(row.rowId, colId)),
         listOf: (row, colId) => wholeListWriteField(row.values?.[colId]?.writeField ?? ''),
         columnFacts: colId => controlColumnFacts(dataRef.current?.columns.find(column => column.key === colId)),
+        // Amazon: the B2B pair and FBA qty are read only — Delete on them asks about the selection's other cells, never blanks them.
+        clearsSelection: colId => clearsSelectionOn(channel, colId),
         hidesInherited: () => true,
         removeFormula: (rowId, colId) => formulaLive.current.formulas.pinOver(rowId, colId),
         // A whole list keeps its review of the positions it replaces (`onCascade`).
@@ -1097,20 +1099,22 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     // Add rows — a paste on an empty row's SKU fills the empty rows; any other paste is the header-aware one.
     // Amazon Business (step 5 Part 4): a paste that reaches the B2B pair says it is set on the Matrix (`businessColumns.ts`).
     const pasteIntoNewRows = useMemo(() => withBusinessPaste(newRowsPaste(newRows.store, headerPaste.processDataFromClipboard), sayBusinessReadOnly), [newRows.store, headerPaste.processDataFromClipboard, sayBusinessReadOnly]);
-    const openMatrix = languageScope.setTab;
+    // The Matrix tab, or — while the sheet holds an unsaved change — the sentence to wait (the tab guard says nothing).
+    const openMatrix = () => openMatrixTab(languageScope, message => toast(message, 'info'));
     const onBusinessKey = (event: { event?: Event | null; column?: unknown; data?: ChannelSheetRow }): boolean => {
         const key = event.event as KeyboardEvent | null | undefined;
         const api = getGridApi();
         if (!businessSheet || !key || (api?.getEditingCells().length ?? 0) > 0) return false;
         const gesture = businessGesture({ colId: sheetEventColumn(event.column), row: event.data, key, selected: selectedColumnIds(api) });
-        if (gesture === 'open') { key.preventDefault(); openMatrix('matrix'); return true; }
-        // The rest of the selection is cleared as usual; only the pair says it is not.
+        if (gesture === 'open') { key.preventDefault(); openMatrix(); return true; }
+        // The pair says it is not changed; the control then asks "Clear or Reset?" for the selection's other cells
+        // (`clearsSelection` when the focus is on the pair, the attribute column's own Delete otherwise).
         if (gesture === 'readOnly') sayBusinessReadOnly([...selectedColumnIds(api), sheetEventColumn(event.column) ?? '']);
         return false;
     };
     const onBusinessDoubleClick = (event: { column?: unknown; data?: ChannelSheetRow }): boolean => {
         if (!businessSheet || businessGesture({ colId: sheetEventColumn(event.column), row: event.data, doubleClick: true }) !== 'open') return false;
-        openMatrix('matrix');
+        openMatrix();
         return true;
     };
     // Add rows — an empty row's cell menu holds only "Remove this row".
