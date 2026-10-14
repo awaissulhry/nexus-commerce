@@ -21,6 +21,7 @@ import { resolveBatch } from './resolve-batch.service.js'
 import { previewPayload } from '../payload-preview.js'
 import { validatePublish } from '../publish-validator.js'
 import type { CatalogueField } from './field-catalogue.service.js'
+import { shopifyProductSpec } from '../channel-specs/store.js'
 
 const field = (fieldKey: string, extra: Partial<CatalogueField> = {}): CatalogueField => ({
   fieldKey, sheetKey: fieldKey, shape: 'scalar', kind: 'text', label: fieldKey, helpText: null,
@@ -294,6 +295,56 @@ it('uses the selected Shopify store and never revives deleted or retyped definit
   expect(result.products[0].cells.productType.value).toBeNull()
   expect(result.products[0].cells.status.value).toBeNull()
   expect(result.products[0].cells.removed).toBeUndefined()
+})
+
+// custom.fit_garment (a garment size chart) — a rule from a Master attribute holding an object fills a JSON product field with that object.
+it('resolves a Master object through a rule to a JSON product field of the selected Shopify store', async () => {
+  const definition = { id: 'gid://shopify/MetafieldDefinition/4', name: 'Fit garment', namespace: 'custom', key: 'fit_garment', ownerType: 'PRODUCT' as const, type: 'json', description: null, validations: [], access: { admin: null, storefront: null } }
+  const target = shopifyProductSpec({ definitions: [definition], metaobjectDefinitions: [], types: [], locales: [], revision: 'r1' }, 'store-b').fields.at(-1)!
+  const garment = { chest: 52, length: 70.5, sleeve: { from: 60, to: 62 }, sizes: ['S', 'M'] }
+  db.mapping.mockResolvedValue({ fields: { [target.key]: { source: 'fit_garment' } } })
+  db.catalogue.mockResolvedValue({ schema: { present: true }, fields: [field(target.key, { kind: 'longtext', label: target.label, rule: null, schemaKnown: true, shopifyField: target.shopifyField, channelStore: target.channelStore })] })
+  const product = (value: unknown) => db.products.mockResolvedValue([{ id: 'p', sku: 'SKU', name: 'Jacket', translations: [], categoryAttributes: { fit_garment: value }, variantAttributes: {}, parentId: null }])
+  const resolve = async () => (await resolveBatch({ ...input, channel: 'SHOPIFY', marketplace: 'GLOBAL', channelConnectionId: 'store-b' })).products[0].cells[target.key]
+  product(garment)
+  expect(await resolve()).toMatchObject({ status: 'mapped', value: garment, errors: [] })
+  product('chest 52')
+  expect((await resolve()).errors).not.toEqual([])
+})
+
+// Garment measurements (`Product.fitGarment`) are a family fact: a size row (where a Shopify colour product is projected)
+// reads its family's table unless it holds its own, as every Shared column does; always in the canonical key order the
+// garment rule stores, never PostgreSQL's (JSONB re-sorts keys).
+describe('garment measurements as a Master source of a JSON product field', () => {
+  const definition = { id: 'gid://shopify/MetafieldDefinition/4', name: 'Fit garment', namespace: 'custom', key: 'fit_garment', ownerType: 'PRODUCT' as const, type: 'json', description: null, validations: [], access: { admin: null, storefront: null } }
+  const target = shopifyProductSpec({ definitions: [definition], metaobjectDefinitions: [], types: [], locales: [], revision: 'r1' }, 'store-b').fields.at(-1)!
+  // The canonical table (`normalizeFitGarment`), and the same table as JSONB returns it: keys by length, then bytes.
+  const canonical = { measures: ['sleeve', 'chest'], sizes: [{ name: 'M', sleeve: 62.5, chest: 106 }, { name: 'L', sleeve: 63, chest: 112 }], flat: ['chest'], room: { chest: [6, 16] } }
+  const fromJsonb = { flat: ['chest'], room: { chest: [6, 16] }, sizes: [{ name: 'M', chest: 106, sleeve: 62.5 }, { name: 'L', chest: 112, sleeve: 63 }], measures: ['sleeve', 'chest'] }
+  const own = { measures: ['waist'], sizes: [{ name: 'M', waist: 90 }] }
+  const rows = (child: unknown) => [
+    { id: 'fam', sku: 'FAM', name: 'Jacket', translations: [], categoryAttributes: {}, variantAttributes: {}, parentId: null, fitGarment: fromJsonb },
+    { id: 'p', sku: 'FAM-M', name: 'Jacket M', translations: [], categoryAttributes: {}, variantAttributes: {}, parentId: 'fam', fitGarment: child },
+  ]
+  const resolve = async (child: unknown) => {
+    db.products.mockImplementation(async ({ where }: any) => rows(child).filter(row => where.id.in.includes(row.id)))
+    return (await resolveBatch({ ...input, channel: 'SHOPIFY', marketplace: 'GLOBAL', channelConnectionId: 'store-b' })).products[0].cells[target.key]
+  }
+  beforeEach(() => {
+    db.mapping.mockResolvedValue({ fields: { [target.key]: { source: 'fitGarment' } } })
+    db.catalogue.mockResolvedValue({ schema: { present: true }, fields: [field(target.key, { kind: 'longtext', label: target.label, rule: null, schemaKnown: true, shopifyField: target.shopifyField, channelStore: target.channelStore })] })
+  })
+  it('a size row with no table of its own reads its family\'s, in the canonical key order', async () => {
+    const cell = await resolve(null)
+    expect(cell).toMatchObject({ status: 'mapped', value: canonical, errors: [] })
+    expect(JSON.stringify(cell.value)).toBe(JSON.stringify(canonical))
+  })
+  it('an empty table on the size row is no table: the family\'s applies', async () => {
+    expect((await resolve({ measures: ['chest'], sizes: [{ name: 'M' }] })).value).toEqual(canonical)
+  })
+  it('a size row\'s own table wins, as every Shared value of a variation does', async () => {
+    expect((await resolve(own)).value).toEqual(own)
+  })
 })
 
 // The mapped category fills the channel's OWN category field (`CHANNEL_CATEGORY_FIELD`) and no other channel's key.

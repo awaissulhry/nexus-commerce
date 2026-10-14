@@ -260,14 +260,8 @@ export interface ChannelCellFromContext {
  */
 export const SHOPIFY_DRAFT_WORDS = 'Saved in Nexus — not sent to Shopify yet. Use Review and synchronize… to send it'
 
-/**
- * A Shopify cell that follows the Shared product on a product Shopify already holds while Shopify keeps another value
- * (the API's `liveSharedDivergence`): nothing publishes the value shown, so its divergence is not "publishes another
- * value" (D5). A saved draft against a sharing rule is pinned, so it is never this. The pop-up's banner and Cell details
- * read this one rule.
- */
-export const shopifyKeepsOwnValue = (cell: Pick<StudioCellValue, 'divergence' | 'shopifyWrite' | 'pinned' | 'inherited'> | undefined): boolean =>
-  !!cell?.divergence && !!cell.shopifyWrite && cell.pinned === false && cell.inherited === true
+/** The rule lives beside the reset's name (`value-source.ts`), so the pure reset rules (`sheetReset.ts`) read it too. */
+export { shopifyKeepsOwnValue } from './value-source'
 
 /** The sentence an `attention` cell carries — the server's or the sheet's own words, verbatim. */
 export function attentionSentence(cell: StudioCellValue, drawsRequired = false, now?: number): string | null {

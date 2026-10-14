@@ -58,7 +58,7 @@ export function channelCellDetails(row: ChannelSheetRow, column: SheetColumn, ct
   /* P1 — a reset is offered wherever one exists (the cell menu's rule, `channelResetOffer`): formula, translation and
      AI cells included. A pin is offered only on a plain inherited value — judged by what the value IS underneath
      (`cellDetailsActionKind`), never by an attention or pending mark on top of it (2026-10-04). */
-  const reset = channelResetOffer(row, column.key, !!formulaReason || !!ctx.exprFor(row.rowId, column.key))
+  const reset = channelResetOffer(row, column.key, !!formulaReason || !!ctx.exprFor(row.rowId, column.key), column)
   const intent = cell && offersCascade(cell) && cell.editable && layer !== 'unset' && (reset || !['formula', 'warning', 'ai'].includes(cellDetailsActionKind(cell, verdict)))
     ? cascadeIntent(layer, row.rowKind, value ?? null) : null
   const action: CellDetailsContent['action'] = reset && pendingPublishOf(cell)

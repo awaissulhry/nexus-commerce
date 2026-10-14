@@ -110,4 +110,15 @@ describe('Shopify information mapping contract', () => {
     expect(validateChannelValue(field(def({ type: 'number_integer' })), 0).errors).toEqual([])
     expect(validateChannelValue(field(def({ type: 'list.single_line_text_field', validations: [{ name: 'list.max', value: '1' }] })), ['a', 'b']).errors).not.toEqual([])
   })
+  // custom.fit_garment (a garment size chart) — a JSON product field a size finder reads; Master holds the object.
+  it('offers a JSON product field as a mapping target that takes a Master object only through an explicit rule', () => {
+    const json = def({ name: 'Fit garment', namespace: 'custom', key: 'fit_garment', type: 'json' })
+    const target = shopifyProductSpec(schema([json]), 'store-a').fields.at(-1)!
+    expect(target).toMatchObject({ key: 'shopify_metafield:store-a:PRODUCT:custom:fit_garment:json', kind: 'longtext', editable: true })
+    expect(masterDefaultRule(target, new Set([...keys, 'fit_garment']))).toBeNull()
+    const field = { ...target, fieldKey: target.key, priority: 'optional', selectionOnly: false } as unknown as CatalogueField
+    const garment = { chest: 52, length: 70.5, sleeve: { from: 60, to: 62 }, sizes: ['S', 'M'] }
+    expect(validateChannelValue(field, garment)).toMatchObject({ value: garment, errors: [] })
+    expect(validateChannelValue(field, 'chest 52').errors).not.toEqual([])
+  })
 })

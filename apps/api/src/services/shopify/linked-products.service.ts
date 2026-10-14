@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 import { assertPushAllowed } from '@nexus/shared/push-lock'
 import prisma from '../../db.js'
-import { emptyShopifyLinkedDraft, fieldAddress, linkedFamilyChanges, shopifyLinkedDraftSchema, validateShopifyField, shopifyValuesEqual, shopifyReferenceError, shopifyDefinitionApplicability,
+import { emptyShopifyLinkedDraft, fieldAddress, linkedFamilyChanges, shopifyLinkedDraftSchema, validateShopifyField, shopifyValuesEqual, shopifyReferenceError, shopifyDefinitionApplicability, shopifyFieldsOnlyPlan,
   type ShopifyFieldEdit, type ShopifyFieldSnapshot, type ShopifyStoreSchema, type ShopifyLinkedAutomation, type ShopifyLinkedDraft, type ShopifyLinkedPlan, type ShopifyLinkedWorkspace } from '@nexus/shared/shopify-linked-products'
 import { contentDestination, object, PUBLISH_KEY, type ContentScope } from './content-workspace.service.js'
 import { shopifyAdmin, assertShopifyResult, type ShopifyGraphql } from './admin-client.js'
@@ -29,6 +29,14 @@ interface Operation { origin?: 'MANUAL' | 'AUTOMATIC'; sources?: ShopifyFieldSna
 }
 const operationTotal = (op: Operation) => op.changes.length + (op.nativeEdits?.length ?? 0) + (op.mediaEdits?.length ?? 0) + (op.sheetGalleries?.length ?? 0)
 type Tx = Prisma.TransactionClient
+/**
+ * The listing as the push lock reads it for one reviewed synchronization. A sync pause holds a listing's stock and prices
+ * (a Link leaves the listing paused; a colour family's own row is a draft, paused for good). A MANUAL plan of metafield
+ * values only (`shopifyFieldsOnlyPlan`) moves neither, so that pause alone does not refuse it, and nothing here lifts it:
+ * the rows stay paused. Every other lock (a closed offer, a Presence intent, an ended listing) refuses as before, and any
+ * other plan meets the pause exactly as before.
+ */
+const pushLockView = <L extends { syncPaused?: boolean | null }>(listing: L, fieldsOnly: boolean): L => fieldsOnly && listing.syncPaused ? { ...listing, syncPaused: false } : listing
 
 async function auditLinkedChange(tx: Tx, destination: WorkspaceDestination, listingId: string, actorUserId: string | null, action: string, before: unknown, after: unknown, operationId?: string) {
   await tx.auditLog.create({ data: { userId: actorUserId, entityType: 'ChannelListing', entityId: listingId, action,
@@ -50,6 +58,7 @@ export async function linkedState(tx: Tx, destination: WorkspaceDestination) {
   const suggestedProductIds = [...new Set(listings.map(l => l.externalListingId).filter((id): id is string => !!id && /^(gid:\/\/shopify\/Product\/)?\d+$/.test(id)).map(id => id.startsWith('gid:') ? id : `gid://shopify/Product/${id}`))]
   const workspace: ShopifyLinkedWorkspace = { productId: destination.productId, familyId: family.id, name: family.name,
     hasSheetMedia: listings.some(l => { const attrs = object(l.platformAttributes); return !!attrs._productMediaLocales || !!attrs[SHEET_MEDIA_SYNC] }),
+    ...(listings.some(l => l.syncPaused) ? { syncPaused: true } : {}),
     destination: { accountId: destination.accountId, listingId: listing?.id ?? null, market: destination.marketplace }, revision, draft: parsed.data, suggestedProductIds, automation: { ...pausedAutomation(), ...object(pa[AUTOMATION_KEY]) },
     operation: operation ? { id: operation.id, status: operation.status, completed: operation.completed, total: operationTotal(operation), error: operation.error, ...(operation.sheetGalleries?.length ? { includesSheetMedia: true } : {}) } : null }
   return { family, listing, listings, pa, draft: parsed.data, operation, revision, workspace }
@@ -283,8 +292,9 @@ export async function beginLinkedSync(productId: string, scope: ContentScope, bo
     const current = await linkedState(tx, destination)
     if (current.revision !== input.expectedRevision) throw new WorkspaceScopeError('The draft changed after review.')
     if (origin === 'AUTOMATIC' && current.workspace.automation?.mode !== 'AUTOMATIC') throw new WorkspaceScopeError('Automation is paused. Review its settings before continuing.')
+    const fieldsOnly = origin === 'MANUAL' && shopifyFieldsOnlyPlan(plan)
     for (const listing of current.listings) {
-      const refusal = assertPushAllowed(listing)
+      const refusal = assertPushAllowed(pushLockView(listing, fieldsOnly))
       if (refusal) throw Object.assign(new WorkspaceScopeError(refusal.sentence, 409), { code: refusal.code, refusal })
     }
     if (current.listing?.syncLocked) throw new WorkspaceScopeError('Synchronization is paused for this listing.', 422)
@@ -310,8 +320,9 @@ export async function advanceLinkedSync(productId: string, scope: ContentScope, 
     if (op.status === 'VERIFIED') return op
     if (automated && (op.origin !== 'AUTOMATIC' || current.workspace.automation?.mode !== 'AUTOMATIC')) throw new WorkspaceScopeError('Automation is paused. Review or resume it before continuing.')
     if (op.lease && op.leaseUntil > Date.now()) throw new WorkspaceScopeError('This synchronization is already running. Reload its progress before retrying.')
+    const fieldsOnly = !automated && op.origin !== 'AUTOMATIC' && shopifyFieldsOnlyPlan(op)
     for (const listing of current.listings) {
-      const refusal = assertPushAllowed(listing)
+      const refusal = assertPushAllowed(pushLockView(listing, fieldsOnly))
       if (refusal) throw Object.assign(new WorkspaceScopeError(refusal.sentence, 409), { code: refusal.code, refusal })
     }
     if (current.listing?.syncLocked) throw new WorkspaceScopeError('Synchronization is paused for this listing.', 422)

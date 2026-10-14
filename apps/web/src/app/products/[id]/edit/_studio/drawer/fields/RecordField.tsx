@@ -21,6 +21,8 @@
  */
 
 import { ImpactProtectorsInput } from '../../sheet/ImpactProtectorsInput'
+import { GarmentMeasurementsInput, garmentSummary, loadGarmentSizes } from '../../sheet/GarmentMeasurementsInput'
+import { sameTable } from '../../sheet/garmentMeasurements'
 import { EbayPolicyInput, isEbayPolicyField } from '../../sheet/EbayPolicyInput'
 import ProductTypePicker from '@/components/products/ProductTypePicker'
 import { AttributeShapeInput } from '../../sheet/AttributeShapeInput'
@@ -147,7 +149,8 @@ function RecordFieldImpl({
   // The dedicated editor lives in the sheet, so the drawer gives the same canonical summary and
   // remains read-only.
   const isVariationTheme = column.kind === 'variationTheme' || column.shape === 'axes'
-  const effective = isVariationTheme ? asVariationThemeText(cell?.value) : asText(cell?.value)
+  // Garment measurements show their summary ("6 sizes · chest, waist") wherever the drawer prints the value (the ghost).
+  const effective = isVariationTheme ? asVariationThemeText(cell?.value) : column.key === 'fitGarment' ? garmentSummary(cell?.value) : asText(cell?.value)
 
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(effective)
@@ -174,14 +177,15 @@ function RecordFieldImpl({
       // An operator who clicked into a ghost and clicked out again changed nothing. Writing here
       // would pin an override with the master's own value — a divergence that then stops tracking
       // master, invisibly, because someone tabbed through the form.
-      if (asText(value) === effective) return
+      // Garment measurements are one table: compared as stored (an object's text is always "[object Object]").
+      if (column.key === 'fitGarment' ? sameTable(value, cell?.value) : asText(value) === effective) return
       // `pin` means "give this scope its own value", which a master-routed cell cannot do — the
       // write lands on the shared record either way. Sending `pin` would ask for an override the
       // contract says does not exist.
       const canPin = (column.writeTarget ?? cell?.writeTarget) !== 'master'
       onWrite(column, value, inherited && canPin ? 'pin' : 'set')
     },
-    [autosave, column, effective, inherited, onWrite, cell?.writeTarget],
+    [autosave, column, effective, inherited, onWrite, cell?.writeTarget, cell?.value],
   )
 
   const scheduleCommit = useCallback(
@@ -419,6 +423,10 @@ function RecordFieldImpl({
     control = ghost
   } else if (column.key === 'impactProtectors') {
     control = <ImpactProtectorsInput value={cell?.value} disabled={!editable} onChange={scheduleCommit} />
+  } else if (column.key === 'fitGarment') {
+    // Every change the rule accepts autosaves like any field; Save writes at once. A new table starts from the sizes.
+    control = <GarmentMeasurementsInput value={cell?.value} disabled={!editable} onDraft={scheduleCommit} onSave={commit}
+      loadSizes={rowId ? () => loadGarmentSizes(rowId) : undefined} />
   } else if (column.shape === 'list' || column.shape === 'measure') {
     control = <AttributeShapeInput column={column} value={cell?.value} disabled={!editable} onChange={scheduleCommit} />
   } else if (column.kind === 'longtext') {

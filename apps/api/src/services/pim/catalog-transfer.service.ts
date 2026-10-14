@@ -284,6 +284,7 @@ export async function applyTransferTarget(tx: Prisma.TransactionClient, target: 
       data.parentId = parent?.id ?? null
     }
     if (data.impactProtectors === null) data.impactProtectors = Prisma.DbNull
+    if (data.fitGarment === null) data.fitGarment = Prisma.DbNull
     if (product && !Object.keys(data).length && !target.categories) entityId = product.id
     else if (product) {
       const updated = await tx.product.updateMany({ where: { id: product.id, version: product.version, updatedAt: product.updatedAt, deletedAt: null }, data: { ...data, version: { increment: 1 } } as Prisma.ProductUpdateManyMutationInput })

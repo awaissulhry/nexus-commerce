@@ -1,0 +1,167 @@
+/* Garment measurements (`GarmentMeasurementsInput.tsx`) — layout only; every control is the design system's (Input,
+   Select, Toggle, Button, ToolbarButton, Disclosure). The table scrolls sideways inside its own box, so eight measures fit
+   a phone (390 px) without the page scrolling sideways. */
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: var(--nds-font-size-base);
+}
+
+.help {
+  margin: 0;
+  color: var(--nds-text-2);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+/* The grid: one row per size, one column per measure; a fixed width per column so the columns line up. */
+.scroll {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.table {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  width: max-content;
+  min-width: 100%;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.name {
+  flex: 0 0 6.5rem;
+  min-width: 0;
+}
+
+.cell {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-2);
+  flex: 0 0 6.5rem;
+  min-width: 0;
+}
+
+/* The row's delete button, and its empty twin in the header rows so the columns line up. */
+.end {
+  flex: 0 0 28px;
+}
+
+/* The heading reads like a Field label (the design system's label colour and weight). */
+.head,
+.flatLabel,
+.roomLabel {
+  font-size: var(--nds-font-size-sm-plus);
+  font-weight: var(--nds-font-weight-semibold);
+  line-height: 1.25;
+  color: var(--nds-text-strong);
+}
+
+.headText {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.flatLabel {
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-2);
+}
+
+/* Every field fills its column (the design system's field is inline and sized by its content). */
+.fill {
+  width: 100%;
+  min-width: 0;
+}
+
+.fill > input {
+  min-width: 0;
+  width: 100%;
+}
+
+.more {
+  min-width: 0;
+}
+
+.roomList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin-top: var(--nds-space-6);
+}
+
+.roomRow {
+  display: grid;
+  grid-template-columns: 7rem minmax(0, 9rem) minmax(0, 9rem);
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+
+.messages {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.note {
+  margin: 0;
+  color: var(--nds-text-2);
+}
+
+/* The rule's problems — the Field error's colour and size. */
+.problems {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+  font-size: var(--nds-font-size-xs-plus);
+  font-weight: var(--nds-font-weight-medium);
+  line-height: 1.4;
+  color: var(--nds-danger-text);
+}
+
+/* The sheet's pop-up, on the grid's `nds-list-editor` surface (border-box): wide enough for a few measures, never wider
+   than the screen, its border included. */
+.popup {
+  width: min(640px, 92vw);
+  max-height: 70vh;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.popupBody {
+  min-width: 0;
+  padding: var(--nds-space-12);
+}
+
+@media (max-width: 480px) {
+  .roomRow {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .roomLabel {
+    grid-column: 1 / -1;
+  }
+}

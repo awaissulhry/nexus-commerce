@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
-import type { ShopifyLinkedPlan, ShopifyLinkedWorkspace, ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
+import { shopifyFieldsOnlyPlan, SHOPIFY_FIELDS_ONLY_WHILE_PAUSED, type ShopifyLinkedPlan, type ShopifyLinkedWorkspace, type ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
 import { informationRegistry } from '@nexus/shared/shopify-information'
 import { Banner, Disclosure } from '@/design-system/components'
 import { Button } from '@/design-system/primitives'
@@ -67,6 +67,8 @@ export function ShopifySheetReview({ path, schema, onChanged, onBusyChange }: { 
     {running && <Banner tone="warning" title="Synchronization needs verification">{workspace.operation!.completed} of {workspace.operation!.total} changes verified. {workspace.operation!.error}</Banner>}
     {workspace?.operation?.status === 'UNVERIFIED' && <div><p>Keep your draft edits and read the latest Shopify values for another review. This does not synchronize changes.</p><Button size="sm" disabled={busy || !canEdit} onClick={() => void refreshBaseline()}>Review latest Shopify values</Button></div>}
     {plan?.warnings.map(message => <Banner key={message} tone="warning">{message}</Banner>)}
+    {/* A Link leaves the listing paused: a plan of product fields only is still sent; its stock and prices stay held. */}
+    {workspace?.syncPaused && plan && shopifyFieldsOnlyPlan(plan) && <Banner tone="info">{SHOPIFY_FIELDS_ONLY_WHILE_PAUSED}</Banner>}
     {plan?.changes.map(change => <Disclosure key={`${change.ownerId}:${change.namespace}.${change.key}`} summary={`${change.ownerLabel} · ${registry.find(f => f.definition?.namespace === change.namespace && f.definition.key === change.key)?.label ?? `${change.namespace}.${change.key}`}`}>
       <p>Shopify now: {informationValueLabel(change.type, change.value)}</p><p>After synchronization: {informationValueLabel(change.type, change.nextValue)}</p>
     </Disclosure>)}

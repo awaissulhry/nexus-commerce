@@ -15,6 +15,8 @@
  */
 import { StructuredAttributeEditor, parseRecordValue, recordSummary } from '../StructuredAttributeEditor'
 import { ImpactProtectorsEditor, protectorSummary } from '../ImpactProtectorsInput'
+import { GarmentMeasurementsEditor, garmentSummary, loadGarmentSizes, suppressGarmentKeys } from '../GarmentMeasurementsInput'
+import { parseGarmentCell, sameTable } from '../garmentMeasurements'
 import { SlotListEditor, type SlotListEditorParams } from '@/design-system/grid/editors/SlotListEditor'
 import { slotListColumnDef } from '@/design-system/grid/editors/slotListColumn'
 import { suppressSlotListKeys } from '@/design-system/grid/editors/slotList'
@@ -133,6 +135,10 @@ const bulletListParams = (col: SheetColumn): Pick<SlotListEditorParams, 'slotLis
 })
 /** Both editors' keys on one column: the formula editor's Enter/Esc and the bullets editor's Tab/Alt+↑↓/Enter. */
 const suppressBulletKeys: typeof suppressFormulaKeys = (p) => suppressFormulaKeys(p) || suppressSlotListKeys(p)
+/** Garment measurements: the formula editor's keys, and the table's own Tab walk and Enter on its buttons. */
+const suppressGarmentSheetKeys: typeof suppressFormulaKeys = (p) => suppressFormulaKeys(p) || suppressGarmentKeys(p as never)
+/** The garment pop-up's params: one frozen object for the life of the module, namespaced (AG merges them under a formula selector's). */
+const GARMENT_EDITOR_PARAMS: Record<string, unknown> = Object.freeze({ garmentSizes: loadGarmentSizes })
 
 export function buildMasterColumns(
   opts: BuildColumnsOptions,
@@ -414,6 +420,18 @@ export function buildMasterColumns(
         valueFormatter: p => protectorSummary(p.value),
         equals: (a, b) => JSON.stringify(a) === JSON.stringify(b),
         cellRenderer: (p: ICellRendererParams<StudioRow>) => withMark(p, protectorSummary(p.value) || emptyOrRequired(p)),
+      }
+    }
+    /* Garment measurements (2026-10-14) — one table per product, edited in its own pop-up; the cell says how many sizes
+       and which measures. A pasted table (JSON) is read; any other pasted text leaves the cell as it was. */
+    if (col.key === 'fitGarment') {
+      return { ...def, cellEditor: GarmentMeasurementsEditor, cellEditorPopup: true, cellEditorParams: GARMENT_EDITOR_PARAMS,
+        ...(opts.formula ? formulaSelector(opts.formula, col, { component: GarmentMeasurementsEditor, popup: true, params: GARMENT_EDITOR_PARAMS }) : {}),
+        suppressKeyboardEvent: suppressGarmentSheetKeys,
+        valueParser: p => parseGarmentCell(p.newValue, p.oldValue),
+        valueFormatter: p => garmentSummary(p.value),
+        equals: (a, b) => sameTable(a, b),
+        cellRenderer: (p: ICellRendererParams<StudioRow>) => withMark(p, garmentSummary(p.value) || emptyOrRequired(p)),
       }
     }
 

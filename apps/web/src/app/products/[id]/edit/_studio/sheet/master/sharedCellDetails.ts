@@ -17,6 +17,7 @@ import { familyRowHoldsValue, isProductRelationshipColumn } from '@nexus/shared/
 
 import { cellDetailsValue, type CellDetailsAction, type CellDetailsContent, type CellDetailsSource } from '../cellDetails'
 import { protectorSummary } from '../ImpactProtectorsInput'
+import { garmentSummary } from '../GarmentMeasurementsInput'
 import { recordSummary } from '../StructuredAttributeEditor'
 import { languageLabel } from '../../scopes'
 import { fallbackLanguage } from '../languages'
@@ -129,6 +130,7 @@ export function sharedCellValueText(column: SheetColumn, value: unknown): string
   }
   if (Array.isArray(column.validation?.recordFields)) return recordSummary(value, column.validation!.recordFields as never)
   if (column.key === 'impactProtectors') return protectorSummary(value)
+  if (column.key === 'fitGarment') return garmentSummary(value)
   if (column.shape === 'list') return formatList(asList(value).map((item) => column.optionLabels?.[item] ?? item))
   if (column.shape === 'measure') return formatMeasure(value)
   if (value == null || value === '') return ''

@@ -1,5 +1,5 @@
 import { completenessFor } from '../pim/sheet-rows.service.js'
-import { validateShopifyField } from '@nexus/shared/shopify-linked-products'
+import { shopifyValuesEqual, validateShopifyField } from '@nexus/shared/shopify-linked-products'
 import { informationRestriction, informationSharingRule, informationSharedValue, informationSharingFacts, sharedInformationSource } from '@nexus/shared/shopify-information-editing'
 import { createHash } from 'node:crypto'
 import { informationRegistry, informationSheetValue, informationPendingValue, informationStoredValue, nativeFieldValueError, nativeValuesEqual, shopifyWeightGrams, shopifyWeightSymbol, type InformationField, type InformationSnapshot } from '@nexus/shared/shopify-information'
@@ -68,7 +68,9 @@ export function liveSharedDivergence(field: InformationField, shared: unknown, s
   if (!field.definition && SENT_FROM_SHARED.has(field.id)) return null
   const text = shared == null ? null : typeof shared === 'string' ? shared : JSON.stringify(shared)
   const sharedGrams = !field.definition && field.id === 'weight' ? shopifyWeightGrams(text) : null
+  // A JSON value in another key order, spacing or number spelling is the same value (`shopifyValuesEqual`): no mark.
   const same = sharedGrams !== null ? sharedGrams === shopifyWeightGrams(shopify) : (text ?? '') === (shopify ?? '') || nativeValuesEqual(field.id, text, shopify)
+    || field.type === 'json' && shopifyValuesEqual(field.type, text, shopify)
   if (same) return null
   return { publishesAs: shopify, note: `Shopify keeps ${shopifyValueWords(field, shopify)}. Shared changes are not sent to a product already on Shopify; enter the value here to send it.` }
 }

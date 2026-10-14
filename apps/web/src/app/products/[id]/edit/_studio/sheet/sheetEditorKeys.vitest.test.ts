@@ -96,7 +96,7 @@ const COLUMNS = [
   col('colours', { shape: 'list', options: LONG }), col('keywords', { shape: 'list' }),
   col('weight', { kind: 'number', shape: 'measure', unitOptions: ['kg', 'g', 'lb'] }),
   col('protection', { kind: 'text', validation: { recordFields: [{ key: 'zone', label: 'Zone' }, { key: 'level', label: 'Level', kind: 'select', options: [{ value: '1', label: '1' }, { value: '2', label: '2' }] }] } }),
-  col('impactProtectors'), col('descriptionThemeId'), col('bulletPoints', { shape: 'list', kind: 'longtext' }),
+  col('impactProtectors'), col('fitGarment'), col('descriptionThemeId'), col('bulletPoints', { shape: 'list', kind: 'longtext' }),
   col('variation_theme', { kind: 'variationTheme', shape: 'axes' }),
   col('categoryId'), col('productType'), col('taxonomy_id', { kind: 'number' }), col('fulfillmentPolicyId'),
   ...Array.from({ length: 3 }, (_, i) => col(`bulletPoints_${i + 1}`, { kind: 'longtext', slot: { of: 'bulletPoints', index: i + 1, max: 3, label: 'Bullet' } })),
@@ -269,6 +269,14 @@ const CASES: Record<string, Case> = {
       return [{ zone: 'Back', standard: 'EN 1621-2', level: '2' }]
     },
   },
+  GarmentMeasurementsEditor: {
+    value: { measures: ['chest', 'sleeve'], sizes: [{ name: 'M', chest: 106, sleeve: 62.5 }], flat: ['chest'] },
+    // A typed flat (half) value is reported doubled; Tab walks the table's own fields, then past Save it is the grid's.
+    choose: (m) => {
+      m.change(labelled(m, 'M, Chest (half), cm')!, '54')
+      return { measures: ['chest', 'sleeve'], sizes: [{ name: 'M', chest: 108, sleeve: 62.5 }], flat: ['chest'] }
+    },
+  },
   SlotListEditor: {
     value: ['First', 'Second'],
     // List mode reports its one trailing empty position; the column's setter drops blanks on write.
@@ -353,7 +361,7 @@ describe('the sheet mounts only editors this file has a case for', () => {
   it('the enumeration reaches the editors that carry a choice (a builder change that hides one fails here)', () => {
     const names = new Set(MOUNTABLE().map((m) => nameOf(m.editor)))
     for (const expected of ['SelectPanelEditor', 'MeasureEditor', 'ListPanelEditor', 'ReferenceSelectEditor', 'ChannelCategoryEditor', 'EbayPolicyEditor',
-      'StructuredAttributeEditor', 'ImpactProtectorsEditor', 'SlotListEditor', 'FormulaCellEditor', 'AxesPanelEditor']) expect(names).toContain(expected)
+      'StructuredAttributeEditor', 'ImpactProtectorsEditor', 'GarmentMeasurementsEditor', 'SlotListEditor', 'FormulaCellEditor', 'AxesPanelEditor']) expect(names).toContain(expected)
   })
 })
 
