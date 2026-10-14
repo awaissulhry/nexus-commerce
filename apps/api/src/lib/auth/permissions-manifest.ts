@@ -626,7 +626,7 @@ export const ENTRIES: Entry[] = [
   // Shopify colour products (PR 3): reading the plan is a view; Find reads Shopify and stores proposals (an edit); the
   // store switch changes how every family of the store publishes, Confirm and Link (PR 4) write to Shopify (publish).
   P(F.productsPublish, (m, p) => m === 'PUT' && /^\/api\/products\/[^/]+\/shopify-colour-products\/settings$/.test(p)),
-  P(F.productsPublish, (m, p) => m === 'POST' && /^\/api\/products\/[^/]+\/shopify-colour-products\/(?:confirm|link)$/.test(p)),
+  P(F.productsPublish, (m, p) => m === 'POST' && /^\/api\/products\/[^/]+\/shopify-colour-products\/(?:confirm|link|full-sync)$/.test(p)),
   P(F.productsEdit, (m, p) => m === 'POST' && /^\/api\/products\/[^/]+\/shopify-colour-products\/find$/.test(p)),
   P(F.productsView, (m, p) => m === 'GET' && /^\/api\/products\/[^/]+\/shopify-colour-products(?:\/settings)?$/.test(p)),
   P(F.productsView, (_m, p) => /^\/api\/products\/[^/]+\/shopify-content\/preview$/.test(p)),

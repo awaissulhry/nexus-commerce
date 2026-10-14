@@ -89,11 +89,15 @@ import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../../lib/workspace-conte
 import { findColourProducts } from './find.service.js'
 import { confirmColourProducts, colourProductIdentity } from './confirm.service.js'
 import { DEFAULT_COLOUR_PRODUCT_SETTINGS } from './settings.js'
+import { startFullColourSync } from './full-sync.service.js'
+import { ADOPT_ONLY_LINK_REFUSED, linkColourProducts } from './link.service.js'
 
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
 const ids: Record<string, string> = {}
 const find = () => scoped(() => findColourProducts(ids.fam, { accountId: 'x' }, {}))
 const confirm = (colours: any[]) => scoped(() => confirmColourProducts(ids.fam, { accountId: 'x' }, { colours }))
+const startFullSync = () => scoped(() => startFullColourSync(ids.fam, { accountId: 'x' }, { confirm: true }))
+const syncRow = async () => (await scoped(() => prisma.shopifyColourSync.findMany({ where: { familyId: ids.fam } })))[0]
 const BOTH = [{ valueKey: 'color:black', shopifyProductId: BLACK }, { valueKey: 'color:yellow', shopifyProductId: YELLOW }]
 const rowOf = async (valueKey: string) => (await scoped(() => prisma.shopifyColourProduct.findMany({ where: { familyId: ids.fam, valueKey } })))[0]
 const listingOf = async (sku: string) => (await scoped(() => prisma.channelListing.findMany({ where: { productId: ids[sku], channel: 'SHOPIFY' } })))[0] ?? null
@@ -123,7 +127,7 @@ beforeAll(async () => {
 beforeEach(async () => {
   Object.assign(state, { store: liveStore(), queries: [], mutations: [], mode: 'live', definition: null, locations: [{ id: LOCATION, name: 'Warehouse', isActive: true }], refuseIdentity: null, refreshed: [] })
   state.destination = { familyId: ids.fam, accountId: ids.account, marketplace: 'GLOBAL', aliasKey: '' }
-  await scoped(async () => { await prisma.shopifyColourProduct.deleteMany({}); await prisma.channelListing.deleteMany({ where: { channel: 'SHOPIFY' } }) })
+  await scoped(async () => { await prisma.shopifyColourProduct.deleteMany({}); await prisma.shopifyColourSync.deleteMany({}); await prisma.channelListing.deleteMany({ where: { channel: 'SHOPIFY' } }) })
   await switchOn(true)
 })
 
@@ -141,12 +145,18 @@ describe('Confirm — adopt the live Shopify product of each colour', () => {
     expect(black).toMatchObject({ state: 'LINKED', shopifyProductId: BLACK, colourName: 'Black', remoteStatus: 'ACTIVE' })
     expect(yellow).toMatchObject({ state: 'LINKED', shopifyProductId: YELLOW, colourName: 'Yellow' })
     expect(view.confirmed).toEqual([
-      { valueKey: 'color:black', name: 'Nero', shopifyProductId: BLACK, status: 'ACTIVE', identityWritten: true, skusWritten: 2, sizesLinked: 9, draftsCreated: 21, locationId: LOCATION, notStockedAt: [] },
-      { valueKey: 'color:yellow', name: 'Giallo', shopifyProductId: YELLOW, status: 'ACTIVE', identityWritten: true, skusWritten: 9, sizesLinked: 9, draftsCreated: 0, locationId: LOCATION, notStockedAt: [] },
+      { valueKey: 'color:black', name: 'Nero', shopifyProductId: BLACK, status: 'ACTIVE', identityWritten: true, skusWritten: 2, sizesLinked: 9, draftsCreated: 21, locationId: LOCATION, notStockedAt: [], adoptOnly: true, skusRecorded: 0, skusReplaced: 0 },
+      { valueKey: 'color:yellow', name: 'Giallo', shopifyProductId: YELLOW, status: 'ACTIVE', identityWritten: true, skusWritten: 9, sizesLinked: 9, draftsCreated: 0, locationId: LOCATION, notStockedAt: [], adoptOnly: true, skusRecorded: 0, skusReplaced: 0 },
     ])
-    // What the stock and price sync read (offer-sync.service.ts): numeric ids, the location GID, a live row.
-    expect(await listingOf(skuOf('YELLOW', 'M'))).toMatchObject({ externalListingId: '102', platformProductId: '102', isPublished: true, listingStatus: 'ACTIVE', syncPaused: false,
-      platformAttributes: { nexusFamilyId: ids.fam, shopifyColourProductId: yellow.id, shopifyProductId: '102', variantId: '1023', inventoryItemId: '1023', inventoryLocationId: LOCATION } })
+    // What the stock and price sync read (offer-sync.service.ts): numeric ids, the location GID, a live row — which stays
+    // PAUSED (adopt only, the default of a first Confirm): no stock is queued, no stock or price reaches Shopify.
+    const yellowM = await listingOf(skuOf('YELLOW', 'M'))
+    expect(yellowM).toMatchObject({ externalListingId: '102', platformProductId: '102', isPublished: true, listingStatus: 'ACTIVE', syncPaused: true,
+      platformAttributes: { nexusFamilyId: ids.fam, shopifyColourProductId: yellow.id, shopifyProductId: '102', variantId: '1023', inventoryItemId: '1023', inventoryLocationId: LOCATION, shopifyColourAdoptPaused: true } })
+    expect((yellowM!.platformAttributes as any).shopifyColourStockPending).toBeUndefined()
+    expect(await scoped(() => prisma.channelListing.count({ where: { channel: 'SHOPIFY', syncPaused: false } }))).toBe(0)
+    expect(await syncRow()).toMatchObject({ adoptOnly: true })
+    expect(view.sync).toEqual({ linked: true, adoptOnly: true })
     expect((await listingOf(skuOf('BLACK', 'S')))!.platformAttributes).toMatchObject({ shopifyProductId: '101', variantId: '1012', inventoryItemId: '1012' })
     // XXS is not on Shopify: its listing is an inert draft, like the parent's (the family's listing is born whole).
     for (const sku of [skuOf('BLACK', 'XXS'), skuOf('YELLOW', 'XXS')]) expect(await listingOf(sku)).toMatchObject({ listingStatus: 'DRAFT', isPublished: false, syncPaused: true, externalListingId: null })
@@ -185,9 +195,10 @@ describe('Confirm — adopt the live Shopify product of each colour', () => {
     expect((await rowOf('color:black')).remoteStatus).toBe('DRAFT')
   })
 
-  it('an Active product off Online Store waits for stock, but retains the initial stock task', async () => {
+  it('full sync: an Active product off Online Store waits for stock, but retains the initial stock task', async () => {
     productOf(BLACK).onlineStorePublished = false
-    await find(); await confirm([BOTH[0]])
+    await find(); await confirm([BOTH[1]]); await startFullSync()
+    await confirm([BOTH[0]])
     expect(await listingOf(skuOf('BLACK', 'S'))).toMatchObject({ isPublished: false, platformAttributes: { shopifyColourStockPending: true } })
   })
   it('first Confirm stops when the store switch changes during its read', async () => {
@@ -279,5 +290,104 @@ describe('S5 — Confirm writes and records the listing\'s own SKU', () => {
     expect(productOf(BLACK).variants.find((v: any) => v.id === variantGid(BLACK, 'S')).sku).toBe('BLACK-S-OWN')
     expect(await listingOf(skuOf('BLACK', 'S'))).toMatchObject({ channelSku: 'BLACK-S-OWN', liveChannelSku: 'BLACK-S-OWN', isPublished: true, externalListingId: '101' })
     expect(await listingOf(skuOf('BLACK', '3XL'))).toMatchObject({ channelSku: null, liveChannelSku: null, isPublished: true })
+  })
+})
+
+/**
+ * Adopt only — the default of a family's first Confirm on a store that Nexus never wrote to: link, and nothing more. The
+ * size listings stay paused, no stock is queued, the colour sync only reads, and the link writer refuses — until the
+ * operator starts the full sync.
+ */
+describe('Adopt only, and Start full sync', () => {
+  it('Start full sync writes nothing to Shopify: it resumes the sizes the link paused (never an operator\'s pause), queues their stock, and later Confirms run as before', async () => {
+    // An operator paused BLACK-L before the link (a row that is not a draft): its pause is its own.
+    await scoped(() => prisma.channelListing.create({ data: { productId: ids[skuOf('BLACK', 'L')], channel: 'SHOPIFY', marketplace: 'GLOBAL', region: 'GLOBAL', channelMarket: 'SHOPIFY_GLOBAL',
+      channelConnectionId: ids.account, aliasKey: '', listingStatus: 'INACTIVE', isPublished: false, syncPaused: true } as never }))
+    await find(); await confirm([BOTH[0]])
+    expect(await listingOf(skuOf('BLACK', 'L'))).toMatchObject({ syncPaused: true, platformAttributes: { shopifyColourAdoptPaused: false } })
+    state.queries = []; state.mutations = []
+    // The swatch writer refuses while adopt only, before it reads anything.
+    await expect(scoped(() => linkColourProducts(ids.fam, { accountId: 'x' }))).rejects.toThrow(ADOPT_ONLY_LINK_REFUSED)
+    const view = await startFullSync()
+    expect(state.queries).toEqual([])
+    expect(view.started).toEqual({ resumed: 8, stockQueued: 9, alreadyRunning: false })
+    expect(view.sync).toEqual({ linked: true, adoptOnly: false })
+    expect(await syncRow()).toMatchObject({ adoptOnly: false })
+    expect((await syncRow()).dueAt).not.toBeNull()
+    expect(await listingOf(skuOf('BLACK', 'M'))).toMatchObject({ syncPaused: false, platformAttributes: { shopifyColourStockPending: true } })
+    expect((await listingOf(skuOf('BLACK', 'M')))!.platformAttributes).not.toHaveProperty('shopifyColourAdoptPaused')
+    expect(await listingOf(skuOf('BLACK', 'L'))).toMatchObject({ syncPaused: true, platformAttributes: { shopifyColourStockPending: true } })
+    // Nothing outside the linked sizes was resumed.
+    expect(await scoped(() => prisma.channelListing.count({ where: { channel: 'SHOPIFY', syncPaused: false } }))).toBe(8)
+    // Again (a double click): nothing more.
+    expect((await startFullSync()).started).toEqual({ resumed: 0, stockQueued: 0, alreadyRunning: true })
+    // A colour confirmed now runs as before adopt only existed: the draft made real is resumed and its stock queued.
+    const yellow = await confirm([BOTH[1]])
+    expect(yellow.confirmed[0]).toMatchObject({ adoptOnly: false })
+    expect(await listingOf(skuOf('YELLOW', 'M'))).toMatchObject({ syncPaused: false, platformAttributes: { shopifyColourStockPending: true } })
+    expect(await syncRow()).toMatchObject({ adoptOnly: false })
+  })
+
+  it('Start full sync is refused without its confirmation, with the store switch off, with Shopify writes off, or with no linked colour', async () => {
+    await expect(startFullSync()).rejects.toThrow('No colour of this family is linked to a Shopify product yet.')
+    await find(); await confirm([BOTH[0]])
+    await expect(scoped(() => startFullColourSync(ids.fam, { accountId: 'x' }, {}))).rejects.toThrow('Review what the full sync turns on, then confirm it.')
+    state.mode = 'dry-run'
+    await expect(startFullSync()).rejects.toThrow('Shopify writes are switched off on this server. Nothing was changed.')
+    state.mode = 'live'
+    await switchOn(false)
+    await expect(startFullSync()).rejects.toThrow('Switch on colour products for this Shopify store first. Nothing was changed.')
+    expect(await syncRow()).toMatchObject({ adoptOnly: true })
+  })
+
+  it('the operator\'s chosen product: Find proposes it for the colour, and Confirm links it', async () => {
+    // A store with no SKU and no colour name Nexus knows: nothing to guess from.
+    for (const p of state.store) { p.variants.forEach((v: any) => { v.sku = '' }); p.colour = 'Unknown' }
+    await find()
+    expect([(await rowOf('color:black')).state, (await rowOf('color:yellow')).state]).toEqual(['NOT_FOUND', 'NOT_FOUND'])
+    await scoped(() => findColourProducts(ids.fam, { accountId: 'x' }, { choices: [{ valueKey: 'color:yellow', shopifyProductId: YELLOW }] }))
+    const proposal = (await rowOf('color:yellow')).proposal as any
+    expect(proposal).toMatchObject({ method: 'operator', chosenProductId: YELLOW, shopifyProductId: YELLOW, issues: [] })
+    expect(proposal.skusToWrite).toHaveLength(9)
+    // Black is then the one colour and BLACK the one product left of the group.
+    expect((await rowOf('color:black')).proposal).toMatchObject({ method: 'group', shopifyProductId: BLACK })
+    await confirm([BOTH[1]])
+    expect(await rowOf('color:yellow')).toMatchObject({ state: 'LINKED', shopifyProductId: YELLOW })
+    expect(productOf(YELLOW).identity).toBe(colourProductIdentity(await rowOf('color:yellow')))
+  })
+
+  it('a chosen product whose sizes carry another colour\'s SKUs: refused until the operator asks to replace them; then written and read back', async () => {
+    // The store's Yellow product holds the Black SKUs (Black's own product too, on 7 sizes).
+    for (const v of productOf(YELLOW).variants) v.sku = skuOf('BLACK', v.option)
+    await scoped(() => findColourProducts(ids.fam, { accountId: 'x' }, { choices: [{ valueKey: 'color:yellow', shopifyProductId: YELLOW }] }))
+    const proposal = (await rowOf('color:yellow')).proposal as any
+    expect(proposal).toMatchObject({ method: 'operator', shopifyProductId: YELLOW, issues: [], skusToWrite: [] })
+    expect(proposal.skusToReplace).toHaveLength(9)
+    expect(proposal.skusToReplace).toContainEqual({ productId: ids[skuOf('YELLOW', 'M')], shopifyVariantId: variantGid(YELLOW, 'M'), from: skuOf('BLACK', 'M'), to: skuOf('YELLOW', 'M') })
+    // Black is still Black's product by its SKUs: the product chosen for Yellow is not a claim on Black.
+    expect((await rowOf('color:black')).proposal).toMatchObject({ method: 'sku', shopifyProductId: BLACK, issues: [] })
+    await expect(confirm([BOTH[1]])).rejects.toThrow(`In "GALE jacket", 9 sizes carry other SKUs (${skuOf('BLACK', 'XS')} → ${skuOf('YELLOW', 'XS')}`)
+    expect(state.mutations).toEqual([])
+    const view = await confirm([{ ...BOTH[1], replaceSkus: true }])
+    expect(view.confirmed[0]).toMatchObject({ skusWritten: 0, skusReplaced: 9, sizesLinked: 9, adoptOnly: true })
+    expect(state.mutations).toEqual(['NexusCreateDefinition', 'NexusColourIdentity', 'NexusColourWriteSkus'])
+    expect(productOf(YELLOW).variants.map((v: any) => v.sku)).toEqual(SIZES.slice(1).map(s => skuOf('YELLOW', s)))
+    expect(await listingOf(skuOf('YELLOW', 'M'))).toMatchObject({ externalListingId: '102', syncPaused: true, platformAttributes: { variantId: '1023' } })
+  })
+
+  it('a Shopify SKU that differs only in letter case: Confirm links it and records Shopify\'s SKU as the listing\'s own SKU, writing nothing to Shopify for it', async () => {
+    const lower = skuOf('BLACK', 'M').toLowerCase()
+    productOf(BLACK).variants.find((v: any) => v.option === 'M').sku = lower
+    await find()
+    expect((await rowOf('color:black')).proposal).toMatchObject({ issues: [], skusToRecord: [{ productId: ids[skuOf('BLACK', 'M')], shopifyVariantId: variantGid(BLACK, 'M'), sku: lower }] })
+    const view = await confirm([BOTH[0]])
+    expect(view.confirmed[0]).toMatchObject({ skusWritten: 2, skusRecorded: 1, sizesLinked: 9 })
+    expect(productOf(BLACK).variants.find((v: any) => v.option === 'M').sku).toBe(lower)
+    expect(await listingOf(skuOf('BLACK', 'M'))).toMatchObject({ channelSku: lower, liveChannelSku: lower, externalListingId: '101', syncPaused: true })
+    // Any other difference is still refused.
+    state.store = liveStore()
+    productOf(YELLOW).variants[1].sku = 'Y-OLD-S'
+    await find()
+    await expect(confirm([BOTH[1]])).rejects.toThrow('the S variant has SKU Y-OLD-S; Nexus has GALE-JACKET-YELLOW-MEN-S.')
   })
 })

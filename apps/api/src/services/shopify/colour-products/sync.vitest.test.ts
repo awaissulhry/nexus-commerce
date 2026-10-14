@@ -52,6 +52,7 @@ function shopify(query: string, vars: any) {
 import prisma from '../../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../../lib/workspace-context.js'
 import { syncColourProducts } from './sync.service.js'
+import { startFullColourSync } from './full-sync.service.js'
 import { processColourSyncs, queueColourChecks } from '../../../workers/shopify-colour-sync.worker.js'
 const scoped = <T>(fn: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, fn)
 const rows = () => scoped(() => prisma.channelListing.findMany({ where: { channelConnectionId: state.d.accountId, productId: { not: state.d.familyId } }, include: { product: true }, orderBy: { product: { sku: 'asc' } } }))
@@ -285,4 +286,72 @@ it('S5 — a new size whose draft listing has its own SKU is created under it, a
   // A size under its product SKU records nothing.
   expect((await rows()).filter(r => !r.product.sku.endsWith('-XS')).map(r => r.liveChannelSku)).toEqual([null, null])
   state.calls = []; await run(); expect(state.calls).toEqual(['NexusColourPublications', 'NexusColourSyncRead'])
+})
+
+/**
+ * Adopt only (`ShopifyColourSync.adoptOnly`, set by a family's first Confirm): the colour sync and the five-minute cron
+ * only read — identity, deletion, ids and status mirrored in Nexus — and send nothing: no stock, no size created or
+ * ordered, no archive, no colour swatch fields. Start full sync turns the full sync back on, unchanged.
+ */
+async function adoptOnlyFamily() {
+  await scoped(async () => {
+    const coordinate = { familyId: state.d.familyId, channelConnectionId: state.d.accountId, marketplace: 'GLOBAL', aliasKey: '' }
+    if (!(await prisma.shopifyColourSync.updateMany({ where: coordinate, data: { adoptOnly: true } })).count) await prisma.shopifyColourSync.create({ data: { ...coordinate, adoptOnly: true } })
+    // As the adopt-only Confirm leaves them: paused, marked, no stock pending.
+    for (const row of await prisma.channelListing.findMany({ where: { channelConnectionId: state.d.accountId } }))
+      await prisma.channelListing.update({ where: { id: row.id }, data: { syncPaused: true, platformAttributes: { ...(row.platformAttributes as object), shopifyColourAdoptPaused: true } } })
+  })
+}
+it('adopt only: the sync only reads — no stock, no size created or ordered, no archive, no swatch fields — through the cron too', async () => {
+  await adoptOnlyFamily()
+  // Nexus has a size Shopify lacks (XS) and another size order: the full sync would create XS and reorder.
+  state.sizes = ['XS', 'S', 'M']; state.order = ['M', 'S', 'XS']
+  expect(await run()).toMatchObject({ checked: 1, waiting: [], adoptOnly: true })
+  expect(state.calls).toEqual(['NexusColourPublications', 'NexusColourSyncRead'])
+  expect(state.stock).toEqual([]); expect(state.linked).toBe(0)
+  expect(state.remote.variants.nodes).toHaveLength(2); expect(state.remote.options[0].values).toEqual(['S', 'M'])
+  const listed = await rows()
+  expect(listed.every(r => r.syncPaused && r.isPublished && !(r.platformAttributes as any).shopifyColourStockPending)).toBe(true)
+  // A colour Nexus no longer has is not archived.
+  state.sizes = []; state.calls = []
+  await run()
+  expect(state.calls).toEqual(['NexusColourPublications', 'NexusColourSyncRead'])
+  expect(state.remote.status).toBe('ACTIVE')
+  // The five-minute cron: the family is queued and handled, with nothing sent.
+  state.sizes = ['XS', 'S', 'M']; state.calls = []
+  expect(await scoped(() => queueColourChecks())).toBe(1)
+  await scoped(() => prisma.shopifyColourSync.updateMany({ data: { dueAt: new Date(0) } }))
+  expect(await scoped(() => processColourSyncs())).toEqual({ claimed: 1, done: 1, failed: 0 })
+  expect(state.calls.filter(c => !['NexusColourPublications', 'NexusColourSyncRead'].includes(c))).toEqual([])
+  expect(state.stock).toEqual([]); expect(state.linked).toBe(0)
+  // It still verifies: a product proven deleted is forgotten; another identity is refused.
+  state.remote.identity.value = 'another-family'
+  await expect(run()).rejects.toThrow(/identity/)
+  state.gone = true
+  await run()
+  expect((await scoped(() => prisma.shopifyColourProduct.findUniqueOrThrow({ where: { id: colourId } }))).state).toBe('DELETED')
+})
+it('adopt only: a size newly mapped by the sync stays paused and marked', async () => {
+  await adoptOnlyFamily()
+  const m = (await rows()).find(r => r.product.sku.endsWith('-M'))!
+  // As if M had no variant on record yet (a draft Confirm made): the sync maps it under its SKU.
+  await scoped(() => prisma.channelListing.update({ where: { id: m.id }, data: { syncPaused: true, listingStatus: 'DRAFT', isPublished: false, externalListingId: null,
+    platformAttributes: { nexusFamilyId: state.d.familyId, shopifyColourProductId: colourId } } }))
+  await run()
+  expect((await rows()).find(r => r.id === m.id)).toMatchObject({ syncPaused: true, externalListingId: '1', platformAttributes: { variantId: '2', shopifyColourAdoptPaused: true } })
+  expect(state.stock).toEqual([])
+})
+it('Start full sync turns the full sync back on: stock, the missing size, the size order and the swatch writer', async () => {
+  await adoptOnlyFamily()
+  state.sizes = ['XS', 'S', 'M']; state.order = ['XS', 'S', 'M']
+  await run(); expect(state.stock).toEqual([])
+  const started = await scoped(() => startFullColourSync(state.d.familyId, { accountId: state.d.accountId }, { confirm: true }))
+  expect(started.started).toEqual({ resumed: 2, stockQueued: 2, alreadyRunning: false })
+  state.calls = []
+  expect(await run()).toMatchObject({ adoptOnly: false })
+  expect(state.calls.filter(c => c === 'NexusColourSizes')).toHaveLength(1)
+  expect(state.remote.options[0].values).toEqual(['XS', 'S', 'M'])
+  expect([...state.stock].sort()).toEqual(state.family.variants.map((v: any) => v.sku).sort())
+  expect(state.linked).toBe(1)
+  expect((await rows()).every(r => !r.syncPaused)).toBe(true)
 })

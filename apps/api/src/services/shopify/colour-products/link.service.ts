@@ -25,7 +25,10 @@ import { getShopifyPublishMode } from '../../shopify-publish-gate.service.js'
 import { WorkspaceScopeError } from '../../pim/workspace-destination.js'
 import type { ColourProductSettings } from './settings.js'
 import { colourProductsView, planFor, rowsWhere, type Destination } from './find.service.js'
-import { commitColourSyncChange, guardedColourGraphql, withColourSyncLock } from './sync-work.js'
+import { colourAdoptOnly, commitColourSyncChange, guardedColourGraphql, withColourSyncLock } from './sync-work.js'
+
+/** Adopt only: the colour swatch fields stay as the store has them until an operator starts the full sync. */
+export const ADOPT_ONLY_LINK_REFUSED = 'This family is linked in adopt-only mode: Nexus does not write the colour swatch fields (colour name and colour list) to Shopify. Start the full sync first. Nothing was changed.'
 
 const VALUE_TYPE = 'single_line_text_field', LIST_TYPE = 'list.product_reference'
 /** `metafieldsSet` takes at most 25 fields per call; a 26th is refused (development store, 2026-09-30). */
@@ -52,6 +55,8 @@ export async function linkColourProducts(productId: string, scope: ContentScope)
 }
 
 async function linkDestination(destination: Destination) {
+  // Before anything else, even the local "Linked ✓" reset: an adopt-only family is not this writer's.
+  if (await colourAdoptOnly(destination)) throw new WorkspaceScopeError(ADOPT_ONLY_LINK_REFUSED, 409)
   const { rows, settings, plan } = await planFor(destination)
   // No "Linked ✓" until this run ends verified; a colour that left the group loses it too.
   await prisma.shopifyColourProduct.updateMany({ where: { ...rowsWhere(destination), linkVerifiedAt: { not: null } }, data: { linkVerifiedAt: null } })

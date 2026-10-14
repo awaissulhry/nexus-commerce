@@ -119,6 +119,32 @@ describe('Find — the live Shopify product of each colour', () => {
     await expect(scoped(() => findColourProducts('p-BLACK-M', { accountId: 'x' }, { sourceProductId: 'not-a-gid' }))).rejects.toThrow('Choose a Shopify product.')
   })
 
+  it('the operator\'s chosen product outranks the guesses, is kept for the next Find, and a null choice withdraws it', async () => {
+    // No SKU anywhere and the colour names the store shows match no Nexus name: Find has nothing to guess from.
+    state.store = state.store.map(p => ({ ...p, colour: { value: 'Unknown' }, variants: { ...p.variants, nodes: p.variants.nodes.map((v: any) => ({ ...v, sku: '' })) } }))
+    await scoped(() => findColourProducts('p-BLACK-M', { accountId: 'x' }, {}))
+    expect((await rows()).map(r => r.state)).toEqual(['NOT_FOUND', 'NOT_FOUND'])
+    const view = await scoped(() => findColourProducts('p-BLACK-M', { accountId: 'x' }, { choices: [{ valueKey: 'color:black', shopifyProductId: BLACK }] }))
+    let r = await byKey()
+    expect(r['color:black']).toMatchObject({ state: 'PROPOSED', proposal: expect.objectContaining({ method: 'operator', chosenProductId: BLACK, shopifyProductId: BLACK, issues: [] }) })
+    // Its sizes still match by option values, with every SKU Nexus will write listed for the review.
+    expect((r['color:black'].proposal as any).skusToWrite).toHaveLength(9)
+    expect((r['color:black'].proposal as any).missing.map((m: any) => m.sku)).toEqual(['GALE-JACKET-BLACK-MEN-XXS'])
+    // The chosen product's group names the rest: Yellow is the one colour and the one product left.
+    expect(r['color:yellow'].proposal).toMatchObject({ method: 'group', shopifyProductId: YELLOW, chosenProductId: null })
+    expect(view.plan.products[0].sizes).toHaveLength(10)
+    expect(view.sync).toEqual({ linked: false, adoptOnly: false })
+    // Kept: a Find without choices proposes it again; null withdraws it.
+    await scoped(() => findColourProducts('p-BLACK-M', { accountId: 'x' }, {}))
+    expect((await byKey())['color:black'].proposal).toMatchObject({ method: 'operator', chosenProductId: BLACK })
+    await scoped(() => findColourProducts('p-BLACK-M', { accountId: 'x' }, { choices: [{ valueKey: 'color:black', shopifyProductId: null }] }))
+    r = await byKey()
+    expect([r['color:black'].state, (r['color:black'].proposal as any).chosenProductId]).toEqual(['NOT_FOUND', null])
+    // A colour this family does not have, or a choice that is not a Shopify product, is refused.
+    await expect(scoped(() => findColourProducts('p-BLACK-M', { accountId: 'x' }, { choices: [{ valueKey: 'color:green', shopifyProductId: BLACK }] }))).rejects.toThrow('"color:green" is not a colour of this family.')
+    await expect(scoped(() => findColourProducts('p-BLACK-M', { accountId: 'x' }, { choices: [{ valueKey: 'color:black', shopifyProductId: '101' }] }))).rejects.toThrow('Choose a Shopify product.')
+  })
+
   it('a family that stays one product asks Shopify nothing', async () => {
     split.value = null
     const view = await scoped(() => findColourProducts('p-BLACK-M', { accountId: 'x' }, {}))
