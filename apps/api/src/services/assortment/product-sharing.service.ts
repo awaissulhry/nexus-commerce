@@ -22,7 +22,7 @@ import { MEDIA_KEY, SKU_KEY, catalogLinkState, type LinkStateView } from './sync
 
 const MANAGED_LABELS: Record<string, string> = {
   'managed:productType': 'Product type', 'managed:basePrice': 'Price', 'managed:minPrice': 'Minimum price', 'managed:maxPrice': 'Maximum price',
-  'managed:b2bPrice': 'B2B price', 'managed:b2bMinQty': 'B2B minimum quantity', 'managed:status': 'Status',
+  'managed:status': 'Status',
 }
 
 export interface SharedField {

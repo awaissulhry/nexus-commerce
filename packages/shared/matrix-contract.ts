@@ -44,15 +44,6 @@ export const MATRIX_CELL_WIDTHS: Readonly<Record<MatrixCellKind, number>> = {
   businessPrice: 168, businessTiers: 180,
 }
 
-/**
- * MX.F (2026-09-13, ruled): the cells a coordinate may declare ABSENT, with the sentence why — e.g. the business cells
- * (`B2B price` · `Tiers`) on a market where Amazon lists no B2B for the account (step 1's seller-scoped answer). Since
- * Amazon Business step 5 every kind is a real cell kind, so these are the kinds themselves.
- */
-export type MatrixAbsentCellKind = MatrixCellKind
-/** Customise's label per absent-capable kind. */
-export const MATRIX_ABSENT_CELL_LABELS: Readonly<Record<MatrixAbsentCellKind, string>> = MATRIX_CELL_LABELS
-
 /** The projection words the Variants page fixed (five) plus the three the Matrix adds (design §3.4). */
 export type ListingState = 'listed' | 'draft' | 'excluded' | 'not-set-up' | 'needs-value' | 'suppressed' | 'closed' | 'error' | 'ended'
 
@@ -317,8 +308,11 @@ export interface MatrixCoordinate {
   draft: number | null
   /** The kinds this coordinate SERVES, in column order. */
   cells: readonly MatrixCellKind[]
-  /** Kinds the channel has no store for, each with the operator's sentence (Customise shows them greyed) — the eight kinds plus the reserved business cells. */
-  absent: ReadonlyArray<{ cell: MatrixAbsentCellKind; reason: string }>
+  /**
+   * Kinds the channel has no store for, each with the operator's sentence (Customise shows them greyed) — e.g. the
+   * business cells (`B2B price` · `Tiers`) on a market where Amazon lists no B2B for the account.
+   */
+  absent: ReadonlyArray<{ cell: MatrixCellKind; reason: string }>
   /** region-inventory: the market codes whose inventory this group carries. */
   sharedInventoryWith: readonly string[] | null
   /** market in a shared region: the region-inventory key that carries its inventory cells. */

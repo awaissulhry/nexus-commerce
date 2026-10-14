@@ -414,7 +414,7 @@ export async function applyManaged(productId: string, managed: ManagedFields, re
   }
   const current = await prisma.product.findUnique({
     where: { id: productId },
-    select: { productType: true, basePrice: true, minPrice: true, maxPrice: true, b2bPrice: true, b2bMinQty: true, status: true },
+    select: { productType: true, basePrice: true, minPrice: true, maxPrice: true, status: true },
   })
   if (!current) return { applied, failed: ['the product is no longer available'] }
   const amount = (value: unknown) => (value === null || value === undefined ? null : Number(value))
@@ -424,8 +424,8 @@ export async function applyManaged(productId: string, managed: ManagedFields, re
   if (managed.basePrice !== undefined) {
     // The limits first (2026-10-01): the master-price write refuses a price outside the product's own floor/ceiling,
     // so the shared price is checked against the shared limits, not the ones they replace.
-    const extra = { minPrice: managed.minPrice, maxPrice: managed.maxPrice, b2bPrice: managed.b2bPrice, b2bMinQty: managed.b2bMinQty }
-    const limitsDiffer = (['minPrice', 'maxPrice', 'b2bPrice', 'b2bMinQty'] as const).some((key) => amount(current[key]) !== amount(extra[key]))
+    const extra = { minPrice: managed.minPrice, maxPrice: managed.maxPrice }
+    const limitsDiffer = (['minPrice', 'maxPrice'] as const).some((key) => amount(current[key]) !== amount(extra[key]))
     if (limitsDiffer) await attempt('price limits', () => prisma.product.update({ where: { id: productId }, data: { ...extra, version: { increment: 1 } } }))
     if (amount(current.basePrice) !== amount(managed.basePrice)) {
       await attempt('price', () => masterPriceService.update(productId, Number(managed.basePrice), { reason }))

@@ -303,7 +303,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'order cancellation gives back what the order took at ingest, never shipped units (eBay, Amazon FBM/FBA, Shopify; markers, races, re-run, owner notice)', file: 'src/services/order-cancellation/order-cancellation-postgres.vitest.test.ts', expect: 17 },
   { name: 'invoice and credit-note numbers (counter conflict key; sequential, and a forced race gives 1…N with no duplicate or gap; two businesses each number their own series)', file: 'src/services/fiscal-numbering-postgres.vitest.test.ts', expect: 6 },
   { name: 'refund cap under a forced race (two returns of one order: what was paid is never exceeded)', file: 'src/services/refunds/refund-cap-postgres.vitest.test.ts', expect: 2 },
-  { name: 'live product sync (AE.4: capture, worker, overrides, images, SKU, variations, listener)', file: 'src/services/assortment/sync.vitest.test.ts', expect: 16 },
+  { name: 'live product sync (AE.4: capture, worker, overrides, images, SKU, variations, listener)', file: 'src/services/assortment/sync.vitest.test.ts', expect: 17 },
   { name: 'shared copy into a business with no marketplace (AE.3)', file: 'src/services/assortment/copy-unknown-market.vitest.test.ts', expect: 3 },
   { name: 'Link copy: variations inherit an attribute with no column in the receiving business (AE.3)', file: 'src/services/assortment/copy-inherited-attribute.vitest.test.ts', expect: 3 },
   { name: 'media plan layers (images rebuild P1: edits to one layer, compare-and-swap retry under a real race, account, alias and Amazon market checks)', file: 'src/services/images/media-plan.service.vitest.test.ts', expect: 22 },

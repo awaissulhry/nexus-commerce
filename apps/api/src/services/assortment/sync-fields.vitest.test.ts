@@ -12,6 +12,12 @@ import {
 } from './sync-fields.js'
 
 const rulesPath = fileURLToPath(new URL('../../../../../packages/database/workspaces/assortment-sync.sql', import.meta.url))
+/**
+ * Amazon Business step 7a: `b2bPrice` and `b2bMinQty` are no longer shared (field-groups.ts: LEGACY), but the trigger is
+ * database SQL and keeps noting them under `price` until the migration that drops the two columns rewrites it. A note
+ * for them alone syncs nothing: sync.service.ts follows only its MANAGED_FIELDS. The ONLY columns allowed to differ.
+ */
+const IN_TRIGGER_UNTIL_DROP: Record<string, string[]> = { price: ['b2bPrice', 'b2bMinQty'] }
 
 describe('AE.4 — the field-state rule', () => {
   const s = (value: unknown) => fingerprint({ action: 'SET', value })
@@ -120,6 +126,7 @@ describe('AE.4 — the capture trigger follows exactly the columns field-groups.
       expected.set(disposition.group, new Set([...(expected.get(disposition.group) ?? []), column]))
     }
     expected.set('lifecycle', new Set(['deletedAt']))
+    for (const [group, columns] of Object.entries(IN_TRIGGER_UNTIL_DROP)) expected.set(group, new Set([...(expected.get(group) ?? []), ...columns]))
     const asSorted = (m: Map<string, Set<string>>) => Object.fromEntries([...m].map(([k, v]) => [k, [...v].sort()]).sort())
     expect(asSorted(found)).toEqual(asSorted(expected))
   })
@@ -128,6 +135,6 @@ describe('AE.4 — the capture trigger follows exactly the columns field-groups.
     const when = block.slice(block.indexOf('CREATE TRIGGER nexus_assortment_capture_product_update'))
     const old = [...when.slice(0, when.indexOf('IS DISTINCT FROM')).matchAll(/OLD\.("?)(\w+)\1/g)].map((m) => m[2]).sort()
     const shared = Object.entries(PRODUCT_COLUMNS).filter(([, d]) => 'group' in d).map(([column]) => column)
-    expect(old).toEqual([...shared, 'deletedAt'].sort())
+    expect(old).toEqual([...shared, ...Object.values(IN_TRIGGER_UNTIL_DROP).flat(), 'deletedAt'].sort())
   })
 })

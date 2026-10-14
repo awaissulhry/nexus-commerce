@@ -242,7 +242,6 @@ export const ROUTE_COVERAGE: Readonly<Record<string, RouteCoverage>> = {
   taxonomy: { part: '09', feature: 62 },
   team: { part: '09', feature: 54, also: 'read only; every change is never for Claude' },
   terminology: { part: '03', feature: 5 },
-  'tier-pricing': { part: '08', feature: 41 },
   validation: { excluded: 'a helper with no routes', feature: null },
   'value-map': { part: '09', feature: 63 },
   'variant-transfer': { part: '09', feature: 68 },

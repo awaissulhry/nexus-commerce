@@ -17,7 +17,7 @@ export const FIELD_GROUP_WORDS: Record<string, { label: string; description: str
   physical: { label: 'Weight and dimensions', description: 'Weight, length, width, height and their units' },
   compliance: { label: 'Compliance', description: 'HS code, country of origin, safety and conformity details' },
   structure: { label: 'Family and variations', description: 'Product family, and which products are variations of which' },
-  price: { label: 'Prices', description: 'Base, minimum, maximum and business prices' },
+  price: { label: 'Prices', description: 'Base, minimum and maximum prices' },
   status: { label: 'Active or draft', description: 'Whether each product is active, draft or inactive' },
   listings: { label: 'Listing content', description: 'Each listing’s title, description, item specifics and category, copied once into the other business’s drafts' },
 }

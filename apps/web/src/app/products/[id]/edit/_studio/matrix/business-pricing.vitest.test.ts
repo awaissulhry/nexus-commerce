@@ -38,8 +38,8 @@ describe('what the pop-up opens with', () => {
 
 describe('reading the fields and Amazon\'s rules', () => {
   it('a percent gives the price Nexus sends and each tier\'s unit price; "5,5 %" reads as 5.5', () => {
-    const t = (minQty: string, value: string) => ({ key: minQty, minQty, value })
-    const p = parseBusinessDraft(draft({ tiers: [t('2', '3'), t('5', '5')] }), cell(), null)
+    const tier = (minQty: string, value: string) => ({ key: minQty, minQty, value })
+    const p = parseBusinessDraft(draft({ tiers: [tier('2', '3'), tier('5', '5')] }), cell(), null)
     expect(p.setting).toEqual({ rule: 'PERCENT_OFF', percent: 5, price: null, tiers: { type: 'percent', levels: [{ minQty: 2, value: 3 }, { minQty: 5, value: 5 }] } })
     expect(p.price).toBe(99.75)
     expect(p.unitPrices).toEqual([96.76, 94.76])

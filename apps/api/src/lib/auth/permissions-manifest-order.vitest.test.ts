@@ -325,9 +325,6 @@ describe('permission manifest ordering', () => {
     // F4 — the cost grid's write is a cost edit (the rule named /api/product-costs, which no route has).
     expect(permissionForRoute('PATCH', '/api/products/costs')).toBe('pricing.costs.edit')
     expect(permissionForRoute('GET', '/api/products/costs')).toBe('products.view')
-    // F11 — a product's B2B tier prices are restricted money, read and write (they were products.view / products.edit).
-    expect(permissionForRoute('GET', '/api/products/:id/tier-prices')).toBe('pricing.tiers.manage')
-    expect(permissionForRoute('POST', '/api/products/:id/tier-prices')).toBe('pricing.tiers.manage')
     // F11 — an eBay volume promotion is a price: changing one is a pricing edit (it was the channel-sync default).
     expect(permissionForRoute('POST', '/api/ebay/volume-promotions/:id/push')).toBe('pricing.edit')
     expect(permissionForRoute('PATCH', '/api/ebay/volume-tier-templates/:id')).toBe('pricing.edit')

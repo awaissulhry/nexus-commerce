@@ -124,7 +124,6 @@
     "apps/api/src/routes/sync-logs.routes.ts": 44,
     "apps/api/src/routes/team.routes.ts": 3,
     "apps/api/src/routes/terminology.routes.ts": 6,
-    "apps/api/src/routes/tier-pricing.routes.ts": 10,
     "apps/api/src/routes/wizard-templates.routes.ts": 13,
     "apps/api/src/routes/workflow-assignments.routes.ts": 9,
     "apps/api/src/routes/workflows.routes.ts": 14

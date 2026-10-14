@@ -14,6 +14,8 @@
 //   variantAttributes  — dynamic JSON; excluded (§6)
 //   impactProtectors   — JSON; excluded (§6)
 //   All image relations, tier prices, relation-only fields — §2.8
+//   b2bPrice, b2bMinQty — the old Nexus-only B2B price, read by nothing (Amazon Business step 7a);
+//                        Amazon's business price is the listing's, set in the Matrix
 
 import type { FieldDefinition } from './types.js'
 
@@ -501,27 +503,6 @@ export const MASTER_FIELDS: FieldDefinition[] = [
     scope: 'SHARED',
     source: { model: 'Product', column: 'weightedAvgCostCents' },
     width: 12,
-  },
-  {
-    id: 'b2b_price',
-    label: 'B2B Price',
-    kind: 'decimal',
-    cls: 'EDITABLE',
-    scope: 'SHARED',
-    channel: 'AMAZON',
-    source: { model: 'Product', column: 'b2bPrice' },
-    decimals: 2,
-    width: 10,
-  },
-  {
-    id: 'b2b_min_qty',
-    label: 'B2B Min Qty',
-    kind: 'number',
-    cls: 'EDITABLE',
-    scope: 'SHARED',
-    channel: 'AMAZON',
-    source: { model: 'Product', column: 'b2bMinQty' },
-    width: 10,
   },
   {
     // READONLY_SYNCED — mirrored from SP-API; ignored on import
