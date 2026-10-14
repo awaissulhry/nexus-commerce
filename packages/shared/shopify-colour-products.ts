@@ -183,9 +183,10 @@ export interface ColourCandidate {
   group: string[]
   variants: Array<{ id: string; sku: string | null; inventoryItemId: string | null; options: string[] }>
 }
-export type ColourMatchMethod = 'linked' | 'sku' | 'name' | 'group'
+/** `operator`: the Shopify product the operator chose for this colour (Find's `choices`). */
+export type ColourMatchMethod = 'linked' | 'operator' | 'sku' | 'name' | 'group'
 export interface ColourMatchVariant { productId: string; sku: string; shopifyVariantId: string; inventoryItemId: string | null; shopifySku: string | null; by: 'sku' | 'options' }
-export type ColourMatchIssueCode = 'sku-spread' | 'product-claimed-twice' | 'sku-of-another-colour' | 'sku-differs' | 'variant-ambiguous'
+export type ColourMatchIssueCode = 'sku-spread' | 'product-claimed-twice' | 'sku-of-another-colour' | 'sku-differs' | 'variant-ambiguous' | 'chosen-not-found' | 'sku-outside-choice'
 export interface ColourMatchIssue { code: ColourMatchIssueCode; message: string; productIds: string[] }
 export interface ColourMatch {
   key: string
@@ -200,6 +201,17 @@ export interface ColourMatch {
   extra: Array<{ shopifyVariantId: string; sku: string | null; options: string[] }>
   /** Matched Shopify variants that have no SKU: confirming writes the Nexus SKU there (stock sync compares SKUs). */
   skusToWrite: Array<{ shopifyVariantId: string; sku: string }>
+  /**
+   * Matched Shopify variants whose SKU differs from the Nexus SKU only in letter case: confirming writes nothing to
+   * Shopify for them and records Shopify's SKU as the size listing's own SKU on this store (Nexus only).
+   */
+  skusToRecord: Array<{ productId: string; shopifyVariantId: string; sku: string }>
+  /**
+   * In a product the operator chose: sizes paired by their option values whose Shopify variant carries another SKU (of
+   * another colour, or with another prefix). Confirm replaces them with the Nexus SKUs on Shopify only when the
+   * operator asks for it (`replaceSkus`); without that the colour is refused.
+   */
+  skusToReplace: Array<{ productId: string; shopifyVariantId: string; from: string; to: string }>
   issues: ColourMatchIssue[]
 }
 
@@ -208,13 +220,19 @@ const valuesKey = (values: readonly string[]) => JSON.stringify(values.map(fold)
 /** Shopify names the only variant of a product without options "Default Title". */
 const DEFAULT_TITLE = 'Default Title'
 
+/** A SKU that differs from another only in letter case (no surrounding spaces): Shopify's can be recorded as is. */
+const caseOnly = (shopify: string | null, nexus: string) => !!shopify && shopify !== nexus && shopify === shopify.trim() && shopify.toLocaleUpperCase('en') === nexus.trim().toLocaleUpperCase('en')
+
 /**
  * Pairs each colour product of the plan with at most one Shopify product, and each of its variants with at most one
- * Shopify variant. Order of evidence: an existing link; the colour's SKUs (all in ONE product); the colour's name (the
- * operator's, or the Nexus value) against the product's colour; and, when exactly one colour and one product of an
- * already-matched group are left, each other. A proposal only: nothing is written, and every doubt is an issue.
+ * Shopify variant. Order of evidence: an existing link; the product the operator chose (`chosen`, value key → product);
+ * the colour's SKUs (all in ONE product); the colour's name (the operator's, or the Nexus value) against the product's
+ * colour; and, when exactly one colour and one product of an already-matched group are left, each other. Sizes are
+ * matched inside the product by SKU, then by option values. A proposal only: nothing is written, and every doubt is an
+ * issue.
  */
-export function matchColourProducts(plan: ColourPlan, candidates: readonly ColourCandidate[], linked: Readonly<Record<string, string>> = {}): ColourMatch[] {
+export function matchColourProducts(plan: ColourPlan, candidates: readonly ColourCandidate[], linked: Readonly<Record<string, string>> = {},
+  chosenByOperator: Readonly<Record<string, string>> = {}): ColourMatch[] {
   const byId = new Map(candidates.map(c => [c.id, c]))
   const skuColour = new Map<string, string>()
   for (const product of plan.products) for (const variant of product.variants) if (skuKey(variant.sku)) skuColour.set(skuKey(variant.sku), product.key)
@@ -228,9 +246,27 @@ export function matchColourProducts(plan: ColourPlan, candidates: readonly Colou
     const id = linked[product.key]
     if (id && byId.has(id)) chosen.set(product.key, { id, method: 'linked' })
   }
-  for (const product of plan.products.filter(p => !chosen.has(p.key))) {
+  // The operator's choice outranks every guess. A product the operator chose for one colour is never another colour's
+  // by its SKUs: the SKUs it holds are that choice's to replace (`skusToReplace`), not a claim.
+  for (const product of plan.products.filter(p => !chosen.has(p.key) && chosenByOperator[p.key])) {
+    const id = chosenByOperator[product.key]
+    if (!byId.has(id)) { note(product.key, { code: 'chosen-not-found', productIds: productIdsOf(product.key), message: `The Shopify product chosen for "${product.nexusValue}" was not found in the store. Choose another product.` }); continue }
+    chosen.set(product.key, { id, method: 'operator' })
+  }
+  const operatorTaken = new Set([...chosen.values()].filter(c => c.method === 'operator').map(c => c.id))
+  // The chosen colour's SKUs must not sit in a product nobody chose for them (two products holding one SKU confuse
+  // stock and orders): an issue, never a silent override.
+  for (const [key, pick] of chosen) {
+    if (pick.method !== 'operator') continue
+    const product = plan.products.find(p => p.key === key)!
     const skus = new Set(product.variants.map(v => skuKey(v.sku)).filter(Boolean))
-    const hits = candidates.filter(c => c.variants.some(v => skus.has(skuKey(v.sku))))
+    const elsewhere = candidates.filter(c => !operatorTaken.has(c.id) && c.variants.some(v => skus.has(skuKey(v.sku))))
+    if (elsewhere.length) note(key, { code: 'sku-outside-choice', productIds: productIdsOf(key),
+      message: `Some "${product.nexusValue}" SKUs are in ${elsewhere.map(c => `"${c.title}"`).join(', ')}, not in "${byId.get(pick.id)!.title}", the product chosen for it. Keep one colour's sizes in one product.` })
+  }
+  for (const product of plan.products.filter(p => !chosen.has(p.key) && !early.has(p.key))) {
+    const skus = new Set(product.variants.map(v => skuKey(v.sku)).filter(Boolean))
+    const hits = candidates.filter(c => !operatorTaken.has(c.id) && c.variants.some(v => skus.has(skuKey(v.sku))))
     if (hits.length === 1) chosen.set(product.key, { id: hits[0].id, method: 'sku' })
     else if (hits.length > 1) note(product.key, { code: 'sku-spread', productIds: productIdsOf(product.key),
       message: `The "${product.nexusValue}" SKUs are in ${hits.length} Shopify products (${hits.map(h => h.title).join(', ')}). Keep one colour's sizes in one product.` })
@@ -257,7 +293,8 @@ export function matchColourProducts(plan: ColourPlan, candidates: readonly Colou
   return plan.products.map(product => {
     const pick = chosen.get(product.key), candidate = pick ? byId.get(pick.id)! : null
     const issues = [...early.get(product.key) ?? []]
-    const variants: ColourMatchVariant[] = [], missing: ColourMatch['missing'] = [], skusToWrite: ColourMatch['skusToWrite'] = []
+    const variants: ColourMatchVariant[] = [], missing: ColourMatch['missing'] = [], skusToWrite: ColourMatch['skusToWrite'] = [], skusToRecord: ColourMatch['skusToRecord'] = []
+    const skusToReplace: ColourMatch['skusToReplace'] = []
     const used = new Set<string>()
     for (const variant of product.variants) {
       const values = variant.options.map(o => o.value)
@@ -270,12 +307,14 @@ export function matchColourProducts(plan: ColourPlan, candidates: readonly Colou
       if (hits.length !== 1) { missing.push({ productId: variant.productId, sku: variant.sku, options: values }); continue }
       const hit = hits[0]
       used.add(hit.id)
-      if (by === 'options' && skuKey(hit.sku)) {
+      if (by === 'options' && skuKey(hit.sku) && pick?.method === 'operator') skusToReplace.push({ productId: variant.productId, shopifyVariantId: hit.id, from: hit.sku!, to: variant.sku })
+      else if (by === 'options' && skuKey(hit.sku)) {
         const owner = skuColour.get(skuKey(hit.sku))
         issues.push(owner && owner !== product.key
           ? { code: 'sku-of-another-colour', productIds: [variant.productId], message: `In "${candidate.title}", the ${values.join(' / ') || 'only'} variant has SKU ${hit.sku}, a SKU of another colour in Nexus.` }
           : { code: 'sku-differs', productIds: [variant.productId], message: `In "${candidate.title}", the ${values.join(' / ') || 'only'} variant has SKU ${hit.sku}; Nexus has ${variant.sku}. Stock sync needs the same SKU. Change one of them.` })
       } else if (by === 'options') skusToWrite.push({ shopifyVariantId: hit.id, sku: variant.sku })
+      else if (caseOnly(hit.sku, variant.sku)) skusToRecord.push({ productId: variant.productId, shopifyVariantId: hit.id, sku: hit.sku! })
       variants.push({ productId: variant.productId, sku: variant.sku, shopifyVariantId: hit.id, inventoryItemId: hit.inventoryItemId, shopifySku: hit.sku, by })
     }
     const extra = candidate ? candidate.variants.filter(sv => !used.has(sv.id)).map(sv => ({ shopifyVariantId: sv.id, sku: sv.sku, options: sv.options })) : []
@@ -285,6 +324,6 @@ export function matchColourProducts(plan: ColourPlan, candidates: readonly Colou
         message: `"${candidate!.title}" holds SKU ${sv.sku}, which is another colour in Nexus.` })
     }
     return { key: product.key, shopifyProductId: candidate?.id ?? null, method: pick?.method ?? null, shopifyColourName: candidate?.colourName ?? null,
-      variants, missing, extra, skusToWrite, issues }
+      variants, missing, extra, skusToWrite, skusToRecord, skusToReplace, issues }
   })
 }
