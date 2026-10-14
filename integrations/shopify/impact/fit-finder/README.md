@@ -2,8 +2,11 @@
 
 A "Size guide" link in the size option's label row of the product page (where the theme's "Size chart" link is),
 made to stop wrong-size orders. It opens the size table; "Find your size" then leads through the steps around a 3D
-mannequin that takes the shopper's own shape: about you (body type, height, weight, age), body shape, your size. On a
-phone the body type is its own step. The flow is as short as the Sizebay widget on alpinestars.com; the layout is our
+mannequin that takes the shopper's own shape: about you (body type, height, weight, age), **your measurements**, body
+shape, your size. On a phone the body type is its own step. The steps follow the product's chart: the measurements
+step has one field per measure of that chart (a jacket: chest and waist; with sleeve length: three; gloves: hand
+circumference and length; a helmet: head), and the body shape step appears only for torso parts left to our
+estimate. The flow is as short as the Sizebay widget on alpinestars.com; the layout is our
 own: a wide modal (up to 1080 × 680) with a top bar (logo, language, profiles, close), the product photo or the 3D body
 on the left and the step on the right, a named progress line, and the title and buttons in the same place on every
 step. A copy of the earlier Sizebay-style layout is commit fbcee1b47.
@@ -11,7 +14,7 @@ step. A copy of the earlier Sizebay-style layout is commit fbcee1b47.
 | | Sizebay (Alpinestars) | Xavia fit finder |
 | --- | --- | --- |
 | Mannequin | 3D body, skin tones, fit rings | real-time 3D body (WebGL) that reshapes as the shopper types and moves the sliders, turns by drag / touch / arrow keys, 7 body colours, rings with fit words; faceless store-mannequin head; flat drawing when a device has no WebGL |
-| Inputs | height, weight, age, shape sliders | the same; the 3D body already follows height and weight as they are typed; each slider says where it stands ("Chest · Average"); height also in metres ("1,80") or feet and inches, typed text never rewritten, Enter goes on |
+| Inputs | height, weight, age, shape sliders | the same, plus a field for each measure the product's chart uses, with our estimate shown (never filled in) and the tape value taking over when typed; "how to measure" follows the field being typed, with dashed rings on the 3D body; a measure we cannot estimate well (head, foot) must be typed; the 3D body already follows height and weight as they are typed; each slider says where it stands ("Chest · Average"); height also in metres ("1,80") or feet and inches, typed text never rewritten, Enter goes on |
 | Language | the store's | the store's first; a switch in the dialog (English, Italiano, Deutsch, Français, Español) keeps the step and what was typed, and stays for the visit; the product page keeps its own language |
 | Size table | rows and columns change with the chart | fixed columns and one row height per product: women / men, cm / in and the language never move a row or a column |
 | Result | best size, neighbour sizes, add to cart | the size with its fit in words ("Chest: just right"), every size of the chart in one row to compare, the body measurements of the size on screen; the button names the size it adds ("Add L to cart"); a size that is not recommended can still be added on purpose ("Add M anyway"); "Closest size" with an amber mark when even the best size is too tight or too loose somewhere; every neighbour size marked; a sold-out best size offers the next size that fits |
@@ -45,8 +48,14 @@ Checked against all ANSUR II people with the men's and women's jacket charts (tr
 | + chest by tape | 80% | 100% | 71% | 99.6% |
 | Chest + waist by tape | sure (only the chart decides) | | | |
 
-The dialog asks for height, weight and age only (as Sizebay does); the engine also takes tape measures, fit
-wishes and under-layers, and the order note keeps its confidence.
+The dialog asks height, weight and age, then the product's own measurements: each one is our estimate until the shopper
+types a tape value (the result marks which numbers are estimates). The engine also takes fit wishes and under-layers,
+and the order note keeps its confidence.
+
+Survey fits added for other products (same model): sleeve (`sleeveoutseam`, shoulder point to wrist; R² 0.64, ±1.8
+cm), neck (`neckcircumferencebase`; ±1.6 / 1.3 cm), thigh (±2.1 / 2.3 cm), calf (±1.6 / 1.7 cm). Head circumference
+(R² 0.17–0.28) and foot length (R² 0.55, ±0.85 cm against a 0.67 cm boot size step) are not guessed: the shopper
+measures them.
 
 Finding about the charts: the women's chart allows 16 cm between chest and waist. Many real bodies have less. In the
 survey, more than 1 woman in 4 has no size where both chest and waist fit (men: about 1 in 27). The finder says so plainly
@@ -86,9 +95,12 @@ shown and recommended. Chart format (BODY measurements in cm, each size `[from, 
   "sizes": [{ "name": "M", "chest": [94, 98], "waist": [82, 86] }] }
 ```
 
-Measures the finder can guess and explain: `chest`, `waist`, `hips`, `inseam` (crotch to floor), `hand`
-(circumference at the knuckles), `handLength`, `height`. `primary` (default: the first measure) is the part that may
-not be too loose. Pants, suits and gloves need their real charts first; until then they show no button.
+Measures a chart may list (`MEASURES` in `xavia-fit-engine.js`, with the values a person can have): `chest`, `waist`,
+`hips`, `sleeve` (shoulder point to wrist), `neck`, `inseam` (crotch to floor), `thigh`, `calf`, `head`, `foot`, `hand`
+(circumference at the knuckles), `handLength`, `height`. Every one has a name and a "how to measure" text in the five
+languages. `primary` (default: the first measure) is the part that may not be too loose. Pants, suits, gloves and
+helmets need their real charts first (a metafield per product, or a default chart in `xavia-fit-charts.liquid`); until
+then they show no button.
 
 ## Files
 

@@ -4,7 +4,8 @@
   A size range is [from, to]; each size starts where the size below ends.
   Which products use which chart: see xavia-fit-finder.liquid. One product can override with the JSON
   metafield xavia.fit_chart (a whole chart, or { "men": "<key or chart>", "women": "<key or chart>" }).
-  Measures the finder knows: chest, waist, hips, inseam, hand, handLength, height.
+  Measures a chart may list (MEASURES in xavia-fit-engine.js): chest, waist, hips, sleeve, neck, inseam, thigh, calf,
+  head, foot, hand, handLength, height. The finder asks the shopper for exactly the measures a chart lists.
 {%- endcomment -%}
 {
   "men-jacket": {

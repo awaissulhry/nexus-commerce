@@ -137,3 +137,38 @@ test('a body whose chest and waist sit in different sizes is told so, not told "
   assert.equal(result.outOfRange, 'mixed')
   assert.notEqual(result.best, women.sizes.at(-1).name)
 })
+
+test('every measure a chart may list has a range; the survey guesses all but head and foot, which are measured', () => {
+  for (const [m, [lo, hi]] of Object.entries(E.MEASURES)) assert.ok(lo > 0 && lo < hi, m)
+  for (const sex of ['male', 'female']) {
+    for (const m of ['chest', 'waist', 'hips', 'sleeve', 'neck', 'inseam', 'thigh', 'calf', 'hand', 'handLength', 'height']) assert.ok(E.canEstimate(sex, m), `${sex} ${m}`)
+    for (const m of ['head', 'foot']) assert.equal(E.canEstimate(sex, m), false, `${sex} ${m}: a guess would miss a helmet or boot size`)
+  }
+  // An average man: a sleeve, neck, thigh and calf a tape would give (ANSUR II means near 178 cm, 80 kg).
+  const v = E.estimateBody({ sex: 'male', heightCm: 178, weightKg: 80, age: 35 }).values
+  assert.ok(v.sleeve > 58 && v.sleeve < 64, `sleeve ${v.sleeve}`)
+  assert.ok(v.neck > 37 && v.neck < 43, `neck ${v.neck}`)
+  assert.ok(v.thigh > 54 && v.thigh < 64, `thigh ${v.thigh}`)
+  assert.ok(v.calf > 35 && v.calf < 42, `calf ${v.calf}`)
+  assert.equal(v.head, undefined)
+  assert.equal(E.validMeasure('head', 57.5), true)
+  assert.equal(E.validMeasure('head', 5.75), false, 'a slip of the comma is caught')
+})
+
+test('any chart works: a jacket with sleeve length, a helmet sized by tape only, gloves', () => {
+  const jacket = { measures: ['chest', 'waist', 'sleeve'], sizes: [
+    { name: 'M', chest: [94, 98], waist: [82, 86], sleeve: [62, 64] }, { name: 'L', chest: [98, 104], waist: [86, 92], sleeve: [64, 66] }] }
+  assert.ok(E.validChart(jacket))
+  const guess = E.estimateBody({ sex: 'male', heightCm: 178, weightKg: 80, age: 35 })
+  assert.equal(pick(jacket, guess).best, 'L')
+  // Long arms move the size up even when chest and waist sit in M.
+  assert.equal(pick(jacket, E.measuredBody({ chest: 96, waist: 84, sleeve: 63 })).best, 'M')
+  assert.equal(pick(jacket, E.measuredBody({ chest: 96, waist: 84, sleeve: 67 })).best, 'L')
+  const helmet = { measures: ['head'], sizes: [{ name: 'M', head: [57, 58.9] }, { name: 'L', head: [59, 60.9] }] }
+  assert.ok(E.validChart(helmet))
+  assert.deepEqual(pick(helmet, guess).missing, ['head'], 'no guess for a helmet: the shopper measures')
+  assert.equal(pick(helmet, E.combineBody(guess, E.measuredBody({ head: 59.5 }))).best, 'L')
+  const gloves = { measures: ['hand', 'handLength'], sizes: [{ name: 'M', hand: [20.5, 22], handLength: [18, 19] }, { name: 'L', hand: [22, 23.5], handLength: [19, 20] }] }
+  assert.equal(pick(gloves, E.measuredBody({ hand: 21, handLength: 18.4 })).best, 'M')
+  assert.equal(E.validChart({ measures: ['wingspan'], sizes: [{ name: 'M', wingspan: [1, 2] }] }), false, 'an unknown measure is refused')
+})

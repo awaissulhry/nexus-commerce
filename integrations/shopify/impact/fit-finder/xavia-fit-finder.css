@@ -61,11 +61,11 @@
 .xff-media { position: absolute; inset: 0; display: grid; place-items: center; padding: 32px; }
 .xff-media img { max-inline-size: 100%; max-block-size: 100%; object-fit: contain; }
 .xff-stage { position: absolute; inset: 0; display: none; background: #fff; }
-.xff-dialog:is([data-screen="gender"], [data-screen="body"], [data-screen="shape"], [data-screen="result"], [data-screen="guard"], [data-panel="measure"]) .xff-stage { display: block; }
+.xff-dialog:is([data-screen="gender"], [data-screen="body"], [data-screen="measures"], [data-screen="shape"], [data-screen="result"], [data-screen="guard"], [data-panel="measure"]) .xff-stage { display: block; }
 .xff-stage__view { position: absolute; inset: 0; }
 
 /* The step side: progress, title and lead at the top, the step's buttons at the bottom. */
-.xff-content { position: relative; grid-row: 2; grid-column: 2; display: flex; flex-direction: column; min-block-size: 0; padding: 24px 40px 28px; overflow-y: auto; }
+.xff-content { position: relative; grid-row: 2; grid-column: 2; display: flex; flex-direction: column; min-block-size: 0; padding: 24px 40px 0; overflow-y: auto; }
 .xff-sidepanel { position: relative; z-index: 5; grid-row: 2; grid-column: 2; padding: 28px 40px; background: #fff; overflow: auto; }
 .xff-sidepanel[hidden] { display: none; }
 .xff-sidepanel:focus { outline: none; }
@@ -98,14 +98,15 @@
 .xff-3d-label--guide .xff-3d-label__text { padding: 4px 10px; border-radius: 999px; background: #fff; color: var(--xff-orange-text); box-shadow: 0 1px 6px rgb(0 0 0 / .12); }
 
 /* ---------------------------------------------------------------- shared parts */
-.xff-progress { display: flex; gap: 8px; margin: 0 0 28px; padding: 0; list-style: none; }
-.xff-progress__step { flex: 1 1 0; min-inline-size: 0; display: flex; align-items: center; gap: 8px; padding-block-end: 10px; border-block-end: 3px solid var(--xff-line); color: var(--xff-muted); font-size: 13px; }
+.xff-progress-wrap { margin: 0 0 28px; }
+.xff-progress { display: flex; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.xff-progress__step { flex: 1 1 0; min-inline-size: 0; display: flex; align-items: center; gap: 6px; padding-block-end: 10px; border-block-end: 3px solid var(--xff-line); color: var(--xff-muted); font-size: 12px; line-height: 1.2; }
+.xff-progress__caption { display: none; margin: 8px 0 0; font-size: 13px; color: var(--xff-muted); }
 .xff-progress__step.is-on, .xff-progress__step.is-done { border-color: var(--xff-ink); color: var(--xff-ink); }
-.xff-progress__step.is-on { font-weight: 700; }
-.xff-progress__button { display: flex; align-items: center; gap: 8px; min-inline-size: 0; margin: -6px 0; padding: 6px 0; border: 0; background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; }
-.xff-progress__num { flex: none; display: grid; place-items: center; inline-size: 22px; block-size: 22px; border: 1.5px solid currentColor; border-radius: 50%; font-size: 12px; font-weight: 700; }
+.xff-progress__button { display: flex; align-items: center; gap: 6px; min-inline-size: 0; margin: -6px 0; padding: 6px 0; border: 0; background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; }
+.xff-progress__num { flex: none; display: grid; place-items: center; inline-size: 20px; block-size: 20px; border: 1.5px solid currentColor; border-radius: 50%; font-size: 12px; font-weight: 700; }
 .xff-progress__step.is-on .xff-progress__num, .xff-progress__step.is-done .xff-progress__num { border-color: var(--xff-ink); background: var(--xff-ink); color: #fff; }
-.xff-progress__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xff-progress__name { hyphens: auto; overflow-wrap: anywhere; }   /* a long step name takes two lines, never runs out */
 .xff-h1 { margin: 0; font-size: 24px; font-weight: 700; line-height: 1.2; color: var(--xff-ink); }
 .xff-h1:focus, .xff-chart__title:focus, .xff-pick__label:focus { outline: none; }
 .xff-lead { margin: 8px 0 0; max-inline-size: 480px; font-size: 15px; line-height: 1.45; color: var(--xff-muted); }
@@ -138,12 +139,36 @@
 .xff-error { margin: 6px 0 0; font-size: 13px; color: var(--xff-red-strong); }
 .xff-trust { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 20px 0 0; font-size: 13px; color: var(--xff-muted); }
 .xff-trust a { color: inherit; }
-.xff-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-block-start: auto; padding-block-start: 24px; }
+/* The step's buttons: at the bottom, and still in view when a step is longer than the modal (many measures); a soft
+   shadow then says that more is under them. */
+.xff-content.is-long :is(.xff-footer, .xff-actions) { box-shadow: 0 -14px 16px -14px rgb(0 0 0 / .22); }
+.xff-footer { position: sticky; z-index: 2; inset-block-end: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-block-start: auto; padding-block: 24px 28px; background: #fff; }
 .xff-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-inline-size: 140px; block-size: 46px; padding: 0 24px; border: 1.5px solid var(--xff-ink); border-radius: 999px; background: #fff; color: var(--xff-ink); font-size: 15px; font-weight: 700; line-height: 1; white-space: nowrap; cursor: pointer; }
 .xff-btn--black { background: var(--xff-ink); color: #fff; }
 .xff-btn--black.is-muted { background: #8a8a8a; border-color: #8a8a8a; }
 .xff-btn:disabled { opacity: .45; cursor: not-allowed; }
 .xff-link { display: inline-flex; align-items: center; gap: 8px; min-block-size: 44px; padding: 0; border: 0; background: none; color: var(--xff-ink); font-size: 15px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+
+/* ---------------------------------------------------------------- the product's measurements */
+.xff-step__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; inline-size: 100%; }
+.xff-step__head > .xff-seg { margin-block: -8px; }   /* the title stays where every step has it */
+.xff-step--measures { align-items: stretch; }
+.xff-mrows { display: flex; flex-direction: column; gap: 12px; margin-block-start: 20px; }
+/* One line per measure: name | field | ours or yours. */
+.xff-mrow { display: grid; grid-template-columns: minmax(0, 150px) auto minmax(0, 1fr); align-items: center; column-gap: 16px; }
+.xff-mrow__label { font-size: 15px; font-weight: 600; color: var(--xff-ink); }
+.xff-mrow__field { display: flex; align-items: center; gap: 8px; }
+.xff-mrow__field .xff-input { inline-size: 110px; }
+.xff-mrow__field .xff-field__unit { min-inline-size: 22px; }
+.xff-input::placeholder { color: #9b9b9b; opacity: 1; }
+.xff-mrow__status { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 13px; color: var(--xff-muted); }
+.xff-mrow.is-typed .xff-mrow__status { color: var(--xff-green-strong); font-weight: 600; }
+.xff-mrow.is-needed .xff-mrow__status { color: var(--xff-amber); font-weight: 600; }
+.xff-mrow .xff-error { grid-column: 2 / -1; }
+/* How to measure the part being typed. */
+.xff-help { display: flex; align-items: flex-start; gap: 12px; margin-block-start: 20px; padding: 12px 14px; border-radius: 12px; background: var(--xff-soft); color: var(--xff-text); }
+.xff-help p { margin: 0; font-size: 14px; line-height: 1.45; }
+.xff-help strong { color: var(--xff-ink); }
 
 /* ---------------------------------------------------------------- size table */
 .xff-chart { display: flex; flex-direction: column; flex: 1; min-block-size: 0; }
@@ -154,7 +179,11 @@
 .xff-table { inline-size: 100%; table-layout: fixed; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .xff-table__size { inline-size: 22%; }
 .xff-table th, .xff-table td { block-size: var(--xff-row, 40px); padding: 0 8px; text-align: center; color: var(--xff-text); font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.xff-table thead th { font-size: 12px; font-weight: 600; letter-spacing: .05em; color: var(--xff-muted); border-block-end: 1.5px solid var(--xff-ink); }
+/* Headers may take two short lines (a long name, many columns) inside the same row height. */
+.xff-table thead th { font-size: 12px; font-weight: 600; line-height: 1.15; letter-spacing: .05em; color: var(--xff-muted); white-space: normal; hyphens: auto; overflow-wrap: anywhere; border-block-end: 1.5px solid var(--xff-ink); }
+.xff-table--wide :is(th, td) { padding: 0 4px; font-size: 13px; }
+.xff-table--wide thead th { font-size: 11px; letter-spacing: .02em; }
+.xff-table--wide .xff-table__size { inline-size: 13%; }
 .xff-table tbody th { font-weight: 700; color: var(--xff-ink); }
 .xff-table tbody th, .xff-table td { border-block-end: 1px solid #ededed; }
 /* Hover only where there is a mouse: after a tap, a touch screen keeps :hover on the spot (a grey button on the next
@@ -208,9 +237,12 @@
 .xff-pick__text { display: flex; flex-direction: column; gap: 10px; min-inline-size: 0; }
 .xff-pick__label { margin: 0; font-size: 13px; font-weight: 800; letter-spacing: .06em; color: var(--xff-ink); }
 .xff-fit { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: 15px; color: var(--xff-text); }
+.xff-pick__text.is-many { gap: 6px; }
+.is-many .xff-fit { gap: 3px; font-size: 14px; }
 .xff-fit__item { display: flex; align-items: center; gap: 8px; }
 .xff-fit__icon { flex: none; display: grid; place-items: center; inline-size: 20px; block-size: 20px; border-radius: 50%; background: var(--xff-green-strong); color: #fff; }
 .xff-fit__item--bad .xff-fit__icon { background: var(--xff-red-strong); }
+.xff-fit__guess { padding: 1px 8px; border-radius: 999px; background: var(--xff-soft); font-size: 12px; color: var(--xff-muted); }
 .xff-badge { position: absolute; inline-size: 26px; block-size: 26px; display: grid; place-items: center; border-radius: 50%; color: #fff; border: 2px solid #fff; }
 .xff-card .xff-badge { inset-block-start: -9px; inset-inline-end: -9px; }
 .xff-badge--best { background: var(--xff-green-strong); }
@@ -223,7 +255,9 @@
 .xff-note a { color: inherit; font-weight: 700; }
 .xff-note--empty { margin: 120px 40px 0; background: none; font-size: 15px; text-align: center; color: var(--xff-text); }
 .xff-try { margin-block-start: 24px; }
-.xff-try__label { margin: 0 0 12px; font-size: 14px; font-weight: 600; color: var(--xff-ink); }
+.xff-try__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; max-inline-size: 560px; margin-block-end: 12px; }
+.xff-try__label { margin: 0; font-size: 14px; font-weight: 600; color: var(--xff-ink); }
+.xff-try__link { min-block-size: 0; font-size: 14px; }
 /* Every size in one row of equal chips (they narrow when a chart has many sizes). */
 .xff-try__row { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); align-items: center; gap: 8px; max-inline-size: 560px; }
 .xff-try__arrow { inline-size: 44px; block-size: 44px; display: grid; place-items: center; border: 0; background: none; color: var(--xff-ink); cursor: pointer; }
@@ -234,11 +268,15 @@
 .xff-chip.is-sold { border-style: dashed; color: #8a8a8a; }
 .xff-sizefor { margin-block-start: 24px; }
 .xff-sizefor__title { margin: 0 0 4px; font-size: 14px; font-weight: 600; color: var(--xff-ink); }
-.xff-measures { display: grid; grid-template-columns: 1fr auto; margin: 0; max-inline-size: 360px; font-size: 14px; color: var(--xff-text); }
-.xff-measures dt, .xff-measures dd { margin: 0; padding: 8px 0; border-block-end: 1px solid var(--xff-line); }
-.xff-measures dd { font-weight: 700; text-align: end; color: var(--xff-ink); font-variant-numeric: tabular-nums; }
-.xff-sizefor__link { font-size: 14px; }
-.xff-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-block-start: auto; padding-block-start: 24px; }
+/* The size's measurements beside the shopper's: part | size range | you. */
+.xff-measures { inline-size: 100%; max-inline-size: 420px; border-collapse: collapse; table-layout: fixed; font-size: 14px; color: var(--xff-text); font-variant-numeric: tabular-nums; }
+.xff-measures th, .xff-measures td { padding: 8px 0; border-block-end: 1px solid var(--xff-line); text-align: end; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.xff-measures tbody th { inline-size: 40%; font-weight: 400; text-align: start; white-space: normal; }
+.xff-measures--many :is(th, td) { padding-block: 5px; }
+.xff-measures thead th { padding-block-start: 0; font-size: 12px; font-weight: 600; letter-spacing: .03em; color: var(--xff-muted); }
+.xff-measures tbody td { font-weight: 700; color: var(--xff-ink); }
+.xff-measures tbody td:last-child { font-weight: 400; color: var(--xff-text); }
+.xff-actions { position: sticky; z-index: 2; inset-block-end: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-block-start: auto; padding-block: 24px 28px; background: #fff; }
 .xff-actions > :first-child { margin-inline-end: auto; }
 /* "Add M anyway" on its own line above the buttons, at the side of the main button. */
 .xff-anyway { order: -1; inline-size: 100%; justify-content: flex-end; font-size: 14px; }
@@ -264,8 +302,9 @@
 
 /* A lower desktop window: the same layout, a little tighter, so no step needs to scroll. */
 @media (max-height: 759px) {
-  .xff-content { padding-block: 18px 22px; }
-  .xff-progress { margin-block-end: 18px; }
+  .xff-content { padding-block-start: 18px; }
+  .xff-footer, .xff-actions { padding-block-end: 22px; }
+  .xff-progress-wrap { margin-block-end: 18px; }
   .xff-h1, .xff-chart__title { font-size: 22px; }
   .xff-h1 + .xff-pills--gender { margin-block-start: 14px; }
   .xff-pills--gender .xff-pill { block-size: 44px; }
@@ -278,6 +317,8 @@
   .xff-skins { margin-block-start: 16px; }
   .xff-try, .xff-sizefor { margin-block-start: 18px; }
   .xff-card { inline-size: 100px; block-size: 100px; }
+  .xff-mrows { margin-block-start: 14px; gap: 8px; }
+  .xff-help { margin-block-start: 14px; padding-block: 10px; }
 }
 
 /* A low desktop window (a 13" laptop with its browser bars): the result a little tighter still. */
@@ -285,9 +326,9 @@
   .xff-card { inline-size: 88px; block-size: 88px; }
   .xff-card__size { font-size: 38px; }
   .xff-try, .xff-sizefor { margin-block-start: 14px; }
-  .xff-try__label { margin-block-end: 10px; }
+  .xff-try__head { margin-block-end: 10px; }
   .xff-chip { block-size: 38px; }
-  .xff-measures dt, .xff-measures dd { padding-block: 6px; }
+  .xff-measures th, .xff-measures td { padding-block: 6px; }
   .xff-sizefor__link, .xff-anyway { min-block-size: 32px; }
   .xff-actions { padding-block-start: 12px; }
 }
@@ -295,10 +336,10 @@
 /* ---------------------------------------------------------------- phones: full screen */
 @media (max-width: 899px), (max-height: 639px), (pointer: coarse) {
   /* Full screen up to 480 px wide (tablets get it centred), 9 px of backdrop above and below. Touch targets 44 px.
-     A window lower than 640 px scrolls instead of squeezing. */
+     A window lower than 560 px scrolls instead of squeezing. */
   .xff-dialog { inline-size: min(100vw, 480px); block-size: calc(100dvh - 18px); margin: auto; overflow-y: auto; overscroll-behavior: contain; }
-  /* The screen's height, never under 640 px; a step taller than that makes the modal grow and the dialog scroll. */
-  .xff-modal { display: flex; flex-direction: column; block-size: auto; min-block-size: max(100%, 640px); border-radius: 12px; box-shadow: none; }
+  /* The screen's height, never under 560 px; a step taller than that makes the modal grow and the dialog scroll. */
+  .xff-modal { display: flex; flex-direction: column; block-size: auto; min-block-size: max(100%, 560px); border-radius: 12px; box-shadow: none; overflow: clip; }   /* clip, not hidden: the dialog scrolls, so the buttons can stay in view */
   .xff-topbar { position: relative; z-index: 6; flex: none; block-size: 56px; padding: 0 4px 0 16px; gap: 4px; background: #fff; }
   .xff-logo img { max-inline-size: 96px; max-block-size: 24px; }
   .xff-tools { gap: 2px; }
@@ -314,30 +355,44 @@
   .xff-media { display: none; }
   .xff-content { position: relative; z-index: 1; flex: 1; padding: 16px 18px 0; overflow: visible; }
   .xff-sidepanel { position: absolute; inset: 0; z-index: 7; padding: 18px 20px 24px; }
-  .xff-progress { margin-block-end: 20px; gap: 6px; }
-  .xff-progress__step { gap: 6px; font-size: 12px; line-height: 1.2; }
-  .xff-progress__name { white-space: normal; overflow-wrap: anywhere; }   /* two short lines, never cut */
-  .xff-progress__button { gap: 6px; margin: -12px 0; padding: 12px 0; }
-  .xff-progress__num { inline-size: 20px; block-size: 20px; font-size: 11px; }
+  /* The bars and one line under them ("Step 2 of 4 · Measurements"). */
+  .xff-progress-wrap { margin-block-end: 18px; }
+  .xff-progress { gap: 6px; }
+  .xff-progress__step { padding: 0; border-block-end-width: 4px; border-radius: 2px; }
+  .xff-progress__step > * { display: none; }
+  .xff-progress__caption { display: block; }
   .xff-h1, .xff-chart__title { font-size: 20px; }
   .xff-lead { font-size: 15px; }
   .xff-step { padding-block-start: clamp(0px, 4vh, 40px); }
   .xff-pills--gender { max-inline-size: none; }
   .xff-input { block-size: 44px; }
   .xff-seg .xff-pill { block-size: 38px; }
-  .xff-footer { margin: auto -4px 0; padding-block: 20px max(24px, env(safe-area-inset-bottom)); }
+  .xff-footer { margin: auto -4px 0; padding: 20px 4px max(24px, env(safe-area-inset-bottom)); }
+  /* Over the 3D body the buttons stay in the flow, with the body showing round them. */
+  .xff-dialog:is([data-screen="shape"], [data-screen="result"], [data-screen="guard"]) :is(.xff-footer, .xff-actions) { position: relative; background: none; }
   .xff-footer > * { flex: 1 1 0; min-inline-size: 0; }
-  .xff-btn { block-size: 48px; min-inline-size: 0; padding: 0 16px; }
+  .xff-btn { block-size: 48px; min-inline-size: 0; padding: 0 12px; white-space: normal; line-height: 1.15; text-align: center; }   /* a long label takes two lines, never cut */
   /* size table: every row in view; a very short screen scrolls as a whole */
   .xff-chart__title, .xff-chart__sub { white-space: normal; }
-  .xff-chart__sub { font-size: 14px; }
+  .xff-chart__sub { min-block-size: calc(2em * 1.35); font-size: 14px; }   /* two lines kept: the table starts at one place in every language */
   .xff-chart__controls { margin-block: 16px 8px; }
   .xff-seg .xff-pill { min-inline-size: 0; }
   .xff-table-wrap { flex: none; overflow: visible; }
+  /* Many columns: the table scrolls sideways, the size column stays. */
+  .xff-table--wide { min-inline-size: calc(var(--xff-cols) * 76px); }
+  .xff-table-wrap:has(.xff-table--wide) { overflow-x: auto; }
+  .xff-table--wide tr > :first-child { position: sticky; inset-inline-start: 0; z-index: 1; background: #fff; }
   .xff-table th, .xff-table td { block-size: 40px; font-size: 14px; }
   .xff-table thead th { font-size: 11px; }
   .xff-chart__foot { flex-direction: column-reverse; align-items: stretch; gap: 4px; margin-block-start: auto; padding-block: 16px max(24px, env(safe-area-inset-bottom)); }
   .xff-chart__foot .xff-how-link { justify-content: center; }
+  /* measurements: name and ours / yours on one line, the field under them */
+  .xff-mrows { gap: 14px; }
+  .xff-mrow { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "label status" "field field"; row-gap: 6px; }
+  .xff-mrow__label { grid-area: label; }
+  .xff-mrow__status { grid-area: status; justify-content: flex-end; text-align: end; }
+  .xff-mrow__field { grid-area: field; }
+  .xff-mrow .xff-error { grid-column: 1 / -1; }
   /* body shape: the whole body on the left, behind; the controls in a column on the right */
   .xff-step--shape { inline-size: 214px; margin-inline-start: auto; padding-block-start: 0; }
   .xff-step--shape .xff-h1 { font-size: 18px; }
@@ -369,7 +424,8 @@
   .xff-result + .xff-try { margin-block-start: auto; }
   .xff-note, .xff-guard-text { box-shadow: 0 2px 10px rgb(0 0 0 / .14); }
   .xff-try { margin-block-start: 12px; display: flex; flex-direction: column; align-items: center; }
-  .xff-try__label { margin-block-end: 12px; padding: 4px 14px; border-radius: 999px; background: rgb(255 255 255 / .9); }
+  .xff-try__head { justify-content: center; margin-block-end: 12px; }
+  .xff-try__label { padding: 4px 14px; border-radius: 999px; background: rgb(255 255 255 / .9); }
   .xff-try__row { display: flex; gap: 10px; }
   .xff-try__arrow { margin-inline: -10px; }
   .xff-chip { inline-size: 88px; block-size: 44px; }

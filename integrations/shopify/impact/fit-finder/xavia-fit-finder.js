@@ -3,7 +3,7 @@
 // finders shoppers know from big motorcycle-gear stores. The inline boot in snippets/xavia-fit-finder.liquid loads this module
 // on the first click, or at idle time when this device has a saved fit profile. build.mjs joins it with the engine,
 // texts, 3D body and viewer code and the CSS into one theme asset; the two bodies are separate assets, loaded on open.
-import { estimateBody, measuredBody, combineBody, pickChart, chartsForProduct, recommend, validateInputs, verdictFor, normalizeSize, LIMITS } from './xavia-fit-engine.js';
+import { estimateBody, measuredBody, combineBody, pickChart, chartsForProduct, recommend, validateInputs, verdictFor, normalizeSize, canEstimate, validMeasure, MEASURES, LIMITS } from './xavia-fit-engine.js';
 import { TEXT } from './xavia-fit-i18n.js';
 import { createViewer, SWATCHES } from './xavia-fit-viewer.js';
 
@@ -14,7 +14,8 @@ const FIT_TEXT = { tooTight: 'fitTooTight', snug: 'fitSnug', right: 'fitRight', 
 const FIT_TONE = { tooTight: 'bad', snug: 'ok', right: 'ok', loose: 'ok', tooLoose: 'bad' };
 const FIT_ICON = { tooTight: 'tight', snug: 'tight', right: 'right', loose: 'loose', tooLoose: 'loose' };
 const FIT_EN = { tooTight: 'too tight', snug: 'slightly tight', right: 'just right', loose: 'slightly loose', tooLoose: 'too loose' };
-const HOW = { chest: 'howChest', waist: 'howWaist', hips: 'howHips', inseam: 'howInseam', hand: 'howHand', handLength: 'howHandLength' };
+// The "how to measure" text of a measure: chest → howChest.
+const howKey = measure => `how${measure[0].toUpperCase()}${measure.slice(1)}`;
 const CM_PER_IN = 2.54, KG_PER_LB = 0.45359237;
 
 // The dialog's language: the store's, until the shopper picks another one in the dialog (kept for this visit).
@@ -275,7 +276,7 @@ function ensureStyles(cfg) {
 const PHONE_LAYOUT = '(max-width: 899px), (max-height: 639px), (pointer: coarse)';
 const phone = () => window.matchMedia?.(PHONE_LAYOUT).matches ?? false;
 const HEADING = '\u0000heading';   // render(HEADING): focus the new screen's heading
-const FINDER = ['gender', 'body', 'shape', 'result'];
+const FINDER = ['gender', 'body', 'measures', 'shape', 'result'];
 
 /**
  * options.screen: 'chart' (the size guide, the default from the product page) or 'finder' (first step, or the
@@ -292,7 +293,7 @@ function openDialog(root, options = {}) {
   const onlyWomen = cfg.charts.women && !cfg.charts.men && !cfg.charts.unisex;
   const state = {
     screen: options.mode === 'guard' ? 'guard' : 'chart', chosen: options.chosen, compare: null, panel: null,
-    errors: {}, draft: {}, chartCut: null, confirmDelete: false, returnTo: null,
+    errors: {}, draft: {}, chartCut: null, confirmDelete: false, returnTo: null, help: null,
     p: saved ? { skin: 0, ...saved, tape: { ...saved.tape }, shape: { ...saved.shape }, units: { ...saved.units } } : newProfile(cfg, onlyWomen ? 'female' : 'male'),
   };
   if (state.p.units.height === 'in') state.p.units.height = 'ft';   // earlier releases: decimal inches
@@ -321,7 +322,7 @@ function openDialog(root, options = {}) {
   // Phone and desktop layouts swap when the window is resized or the phone turned; the screen is drawn again.
   const layout = window.matchMedia?.(PHONE_LAYOUT);
   const onLayout = () => { render(); viewer?.refresh(); };
-  const onResize = () => viewer?.refresh();
+  const onResize = () => { viewer?.refresh(); markLong(); };
   layout?.addEventListener?.('change', onLayout);
   window.addEventListener('resize', onResize, { passive: true });
   dialog.addEventListener('close', () => {
@@ -341,11 +342,19 @@ function openDialog(root, options = {}) {
   current = { dialog, close };
 
   const chart = () => pickChart(cfg.charts, state.p.sex);
-  const steps = () => (phone() ? ['gender', 'body', 'shape'] : ['body', 'shape']);
+  // The steps follow the product: one field per measure of its chart (height is asked with the weight), and the body
+  // shape only for torso parts the shopper did not measure (none left, or no torso in the chart: no shape step).
+  const fieldMeasures = () => (chart()?.measures ?? []).filter(m => m !== 'height');
+  const shapeMeasures = () => (chart()?.measures ?? []).filter(m => TORSO.includes(m) && !Number.isFinite(state.p.tape?.[m]));
+  const steps = () => [...(phone() ? ['gender'] : []), 'body', ...(fieldMeasures().length ? ['measures'] : []), ...(shapeMeasures().length ? ['shape'] : [])];
   const save = () => saveProfile(state.p);
   const announce = text => { live.textContent = ''; requestAnimationFrame(() => { live.textContent = text; }); };
   const go = (screen, focusId) => { state.screen = screen; state.panel = null; state.errors = {}; render(focusId ?? HEADING); };
-  const startFinder = () => go(evaluate(cfg, state.p) && loadProfile() ? 'result' : steps()[0]);
+  // Where the finder opens: the result when this device has a profile that sizes this product; the measurements
+  // when the profile only lacks a measure this product needs (a helmet's head); else the first step.
+  const basicsKnown = () => validateInputs({ heightCm: state.p.heightCm, weightKg: state.p.weightKg, age: state.p.age }).length === 0;
+  const firstScreen = () => (evaluate(cfg, state.p) && loadProfile() ? 'result' : loadProfile() && basicsKnown() && steps().includes('measures') ? 'measures' : steps()[0]);
+  const startFinder = () => go(firstScreen());
   // Back from the first step: to the result when the shopper came from there to edit, else to the size table.
   const backFromStart = () => go(state.returnTo ?? 'chart');
 
@@ -356,6 +365,7 @@ function openDialog(root, options = {}) {
   function previewProfile() {
     const p = { ...state.p, tape: { ...state.p.tape }, shape: { ...state.p.shape } };
     readDraft(p, state.draft, false);
+    for (const m of Object.keys(p.tape)) if (!validMeasure(m, p.tape[m])) delete p.tape[m];   // half-typed "1" of "101"
     if (!(p.heightCm >= LIMITS.height[0] && p.heightCm <= LIMITS.height[1])) p.heightCm = null;
     if (!(p.weightKg >= LIMITS.weight[0] && p.weightKg <= LIMITS.weight[1])) p.weightKg = null;
     return p;
@@ -376,9 +386,11 @@ function openDialog(root, options = {}) {
       frame = phone() ? 'resultPhone' : 'result';
       rings = stageRings(ev, state.screen === 'guard' ? state.chosen : (state.compare ?? ev.result.best));
     }
-    if (state.panel === 'measure') {
-      frame = 'guide';
-      rings = (chart()?.measures ?? []).filter(m => TORSO.includes(m)).map((m, i) => ({ measure: m, tone: 'guide', dashed: true, text: `${i + 1}. ${t(m)}` }));
+    // How to measure, and the measurements step: dashed rings where the tape goes (the part being typed first).
+    const torso = (chart()?.measures ?? []).filter(m => TORSO.includes(m));
+    if (state.panel === 'measure' || (state.screen === 'measures' && torso.length)) {
+      frame = phone() && state.panel !== 'measure' ? 'shapePhone' : 'guide';
+      rings = torso.map((m, i) => ({ measure: m, tone: 'guide', dashed: true, text: state.panel === 'measure' ? `${i + 1}. ${t(m)}` : t(m) }));
     }
     if (viewer) {
       viewer.setBody({ sex: p.sex, values: { height: p.heightCm ?? undefined, chest: b.values.chest, waist: b.values.waist, hips: b.values.hips }, weightKg: p.weightKg ?? undefined });
@@ -444,9 +456,13 @@ function openDialog(root, options = {}) {
     for (const el of [content, visual]) el.inert = Boolean(state.panel);
     if (state.screen === 'chart') fitTable();
     if (state.screen !== shownScreen) { content.scrollTop = 0; dialog.scrollTop = 0; shownScreen = state.screen; }
+    markLong();
     const target = active ? dialog.querySelector(`#${CSS.escape(active)}`) : null;
     (target && target.offsetParent !== null ? target : content.querySelector('[data-xff-focus]') ?? content.querySelector('button, input'))?.focus({ preventScroll: true });
   }
+
+  // A step taller than the modal scrolls under its buttons; the buttons then show a shadow.
+  const markLong = () => content.classList.toggle('is-long', !phone() && content.scrollHeight > content.clientHeight + 1);
 
   // Every size of the table in view on the desktop modal. One row height for this product, from the room under the
   // table's heading and the longest chart of the product: switching women / men, cm / in or the language never
@@ -469,6 +485,7 @@ function openDialog(root, options = {}) {
       case 'chart': return chartScreen();
       case 'gender': return genderScreen();
       case 'body': return bodyScreen();
+      case 'measures': return measuresScreen();
       case 'shape': return shapeScreen();
       case 'guard': return guardScreen();
       default: return resultScreen();
@@ -485,13 +502,18 @@ function openDialog(root, options = {}) {
   // Three named steps on every layout: about you (body type, height, weight, age), body shape, your size. A step
   // already done can be opened again from here.
   function progress() {
-    const at = state.screen === 'result' ? 2 : state.screen === 'shape' ? 1 : 0;
-    const open = i => { if (state.screen === 'result') state.returnTo = 'result'; readDraft(state.p, state.draft); go([steps()[0], 'shape'][i]); };
-    return h('ol', { class: 'xff-progress', 'aria-label': t('progress') }, [t('stepYou'), t('stepShape'), t('stepSize')].map((name, i) => {
-      const inner = [h('span', { class: 'xff-progress__num', 'aria-hidden': 'true' }, i < at ? icon('right', 12, 3) : String(i + 1)), h('span', { class: 'xff-progress__name', text: name })];
-      return h('li', { class: `xff-progress__step${i < at ? ' is-done' : i === at ? ' is-on' : ''}`, 'aria-current': i === at ? 'step' : null },
-        i < at ? h('button', { type: 'button', class: 'xff-progress__button', id: `xff-step-${i + 1}`, onclick: () => open(i) }, inner) : inner);
-    }));
+    const groups = [...new Set(steps().map(x => (x === 'gender' ? 'body' : x))), 'result'];
+    const at = groups.indexOf(state.screen === 'gender' ? 'body' : state.screen);
+    const names = { body: t('stepYou'), measures: t('stepMeasures'), shape: t('stepShape'), result: t('stepSize') };
+    const open = i => { if (state.screen === 'result') state.returnTo = 'result'; readDraft(state.p, state.draft); go(groups[i] === 'body' ? steps()[0] : groups[i]); };
+    // Phones show the bars and one line, "Step 2 of 4 · Measurements": it fits any language and any number of steps.
+    return h('div', { class: 'xff-progress-wrap' },
+      h('ol', { class: 'xff-progress', 'aria-label': t('progress') }, groups.map(g => names[g]).map((name, i) => {
+        const inner = [h('span', { class: 'xff-progress__num', 'aria-hidden': 'true' }, i < at ? icon('right', 12, 3) : String(i + 1)), h('span', { class: 'xff-progress__name', text: name })];
+        return h('li', { class: `xff-progress__step${i < at ? ' is-done' : i === at ? ' is-on' : ''}`, 'aria-current': i === at ? 'step' : null },
+          i < at ? h('button', { type: 'button', class: 'xff-progress__button', id: `xff-step-${i + 1}`, onclick: () => open(i) }, inner) : inner);
+      })),
+      h('p', { class: 'xff-progress__caption', 'aria-hidden': 'true', text: t('stepOf', { n: at + 1, total: groups.length, name: names[groups[at]] }) }));
   }
 
   // ------------------------------------------------ size chart (the first screen)
@@ -508,7 +530,8 @@ function openDialog(root, options = {}) {
         cuts.length > 1 ? pills('cut', cut, cuts.map(k => [k, t(k === 'women' ? 'women' : 'men')]), k => { state.chartCut = k; }, 'xff-seg', t('cutLabel')) : h('span'),
         pills('chart-unit', unit, [['cm', 'cm'], ['in', 'in']], u => { state.p.units.length = u; }, 'xff-seg xff-seg--unit', t('units'))),
       h('div', { class: 'xff-table-wrap', tabindex: '0', role: 'region', 'aria-label': t('chartTitle') },
-        h('table', { class: 'xff-table' },
+        // Many measures (a suit): smaller text on the desktop, a table that scrolls sideways on a phone.
+        h('table', { class: `xff-table${c.measures.length >= 4 ? ' xff-table--wide' : ''}`, style: `--xff-cols:${c.measures.length + 1}` },
           h('colgroup', {}, h('col', { class: 'xff-table__size' }), c.measures.map(() => h('col'))),
           h('thead', {}, h('tr', {}, h('th', { scope: 'col', text: t('international') }), c.measures.map(m => h('th', { scope: 'col', text: t(m).toUpperCase() })))),
           h('tbody', {}, c.sizes.map(size => h('tr', { class: size.name === bestName ? 'is-best' : null, 'aria-current': size.name === bestName ? 'true' : null },
@@ -608,6 +631,13 @@ function openDialog(root, options = {}) {
     }
     if (d.weight !== undefined) { const w = parseNum(d.weight); p.weightKg = w == null ? null : Math.round((p.units.weight === 'lb' ? w * KG_PER_LB : w) * 100) / 100; }
     if (d.age !== undefined) p.age = parseNum(d.age);
+    if (d.tape) {
+      p.tape = { ...p.tape };   // a copy: a profile copy must not write into the shopper's profile
+      for (const [m, text] of Object.entries(d.tape)) {
+        const v = parseNum(text);
+        if (v == null) delete p.tape[m]; else p.tape[m] = Math.round((p.units.length === 'in' ? v * CM_PER_IN : v) * 100) / 100;
+      }
+    }
     if (clear) state.draft = {};
   }
 
@@ -629,10 +659,90 @@ function openDialog(root, options = {}) {
     return true;
   }
 
+  // ------------------------------------------------ step: the product's measurements
+  // One row per measure of this product's chart: the shopper's own tape value, or our estimate from height and weight
+  // (shown, never filled in). A measure we cannot estimate (a helmet's head) must be typed. The help under the rows and
+  // the dashed rings on the body follow the field being typed.
+  const lengthText = cm => fmt(state.p.units.length === 'in' ? cm / CM_PER_IN : cm, 1);
+  function guesses(p) {
+    if (!basicsKnown()) return {};
+    return estimateBody({ sex: p.sex, heightCm: p.heightCm, weightKg: p.weightKg, age: p.age, shape: p.shape }).values;
+  }
+  function measuresScreen() {
+    const p = state.p, d = state.draft, e = state.errors, unit = p.units.length, guess = guesses(p);
+    d.tape ??= {};
+    state.help = fieldMeasures().includes(state.help) ? state.help : fieldMeasures()[0];
+    const status = (m, typed) => (typed ? [icon('right', 14, 2.6), h('span', { text: t('yours') })]
+      : canEstimate(p.sex, m) && guess[m] != null ? [h('span', { text: t('ourEstimate') })] : [h('span', { text: t('mustMeasure') })]);
+    const rowClass = (m, typed) => `xff-mrow${typed ? ' is-typed' : canEstimate(p.sex, m) ? '' : ' is-needed'}`;
+    const help = h('div', { class: 'xff-help', id: 'xff-help' });
+    const showHelp = m => {
+      state.help = m;
+      fill(help, icon('tape', 26, 1.5), h('p', {}, h('strong', { text: t('howFor', { part: t(m) }) }), h('span', { text: ` ${t(howKey(m))}` })));
+    };
+    showHelp(state.help);
+    const rows = fieldMeasures().map(m => {
+      const id = `xff-m-${m}`, typed = d.tape[m] ?? (Number.isFinite(p.tape[m]) ? lengthText(p.tape[m]) : '');
+      const describedBy = [`${id}-status`, e[m] ? `${id}-error` : null].filter(Boolean).join(' ');
+      return h('div', { class: rowClass(m, typed !== '') },
+        h('label', { class: 'xff-mrow__label', for: id, text: t(m) }),
+        h('div', { class: 'xff-mrow__field' },
+          h('input', {
+            id, class: 'xff-input', type: 'text', inputmode: 'decimal', autocomplete: 'off', value: typed,
+            placeholder: canEstimate(p.sex, m) && guess[m] != null ? `≈ ${lengthText(guess[m])}` : '',
+            'aria-invalid': e[m] ? 'true' : null, 'aria-describedby': describedBy,
+            onfocus: () => { showHelp(m); },
+            onkeydown: event => { if (event.key === 'Enter') { event.preventDefault(); goNext(); } },
+            oninput: event => {
+              d.tape[m] = event.target.value;
+              const row = event.target.closest('.xff-mrow'), now = event.target.value.trim() !== '';
+              row.className = rowClass(m, now);
+              fill(row.querySelector('.xff-mrow__status'), status(m, now));
+              if (state.errors[m]) { delete state.errors[m]; row.querySelector('.xff-error')?.remove(); event.target.removeAttribute('aria-invalid'); event.target.setAttribute('aria-describedby', `${id}-status`); }
+              refreshNext(); updateStageSoon();
+            },
+          }),
+          h('span', { class: 'xff-field__unit', text: unit })),
+        h('p', { class: 'xff-mrow__status', id: `${id}-status` }, status(m, typed !== '')),
+        e[m] ? h('p', { class: 'xff-error', id: `${id}-error`, text: e[m] }) : null);
+    });
+    const nextButton = h('button', { type: 'button', class: 'xff-btn xff-btn--black', id: 'xff-next', text: steps().at(-1) === 'measures' ? t('showSize') : t('next'), onclick: () => goNext() });
+    refreshNext = () => { nextButton.classList.toggle('is-muted', fieldMeasures().some(m => !canEstimate(p.sex, m) && !String(d.tape[m] ?? p.tape[m] ?? '').trim())); };
+    refreshNext();
+    return [
+      h('div', { class: 'xff-step xff-step--measures' },
+        h('div', { class: 'xff-step__head' },
+          h('h2', { class: 'xff-h1', id: titleId, tabindex: '-1', 'data-xff-focus': true, text: t('measuresTitle') }),
+          pills('m-unit', unit, [['cm', 'cm'], ['in', 'in']], u => { readDraft(state.p, state.draft); state.p.units.length = u; }, 'xff-seg xff-seg--unit', t('units'))),
+        h('p', { class: 'xff-lead', text: t('measuresIntro') }),
+        h('div', { class: 'xff-mrows' }, rows),
+        help),
+      footer([h('button', { type: 'button', class: 'xff-btn xff-btn--outline', id: 'xff-back', text: t('back'), onclick: () => { readDraft(state.p, state.draft); go('body'); } }), nextButton]),
+    ];
+  }
+
+  // Reads the measurements into the profile (cm). Returns false, with a message beside each field that cannot work.
+  function commitMeasures() {
+    const p = { ...state.p };
+    readDraft(p, state.draft, false);
+    const errors = {}, unit = p.units.length;
+    for (const m of fieldMeasures()) {
+      const typed = String(state.draft.tape?.[m] ?? '').trim(), value = p.tape[m];
+      const [lo, hi] = MEASURES[m], range = { min: `${fmt(unit === 'in' ? lo / CM_PER_IN : lo, 0)} ${unit}`, max: `${fmt(unit === 'in' ? hi / CM_PER_IN : hi, 0)} ${unit}` };
+      const needed = !canEstimate(p.sex, m);
+      if ((typed || Number.isFinite(value)) && !validMeasure(m, value)) errors[m] = t(needed ? 'errMeasureNeeded' : 'errMeasure', range);
+      else if (needed && !Number.isFinite(value)) errors[m] = t('errMeasureNeeded', range);
+    }
+    state.errors = errors;
+    if (Object.keys(errors).length) return false;
+    readDraft(state.p, state.draft);
+    return true;
+  }
+
   // ------------------------------------------------ step: body shape
   function shapeScreen() {
     const p = state.p, names = TEXT[lang]?.shapeSteps ?? TEXT.en.shapeSteps;
-    const rows = TORSO.map(m => {
+    const rows = shapeMeasures().map(m => {
       const value = Number(p.shape[m] ?? 0), id = `xff-shape-${m}`;
       const set = (next, focus) => {
         const v = Math.max(-2, Math.min(2, next));
@@ -673,6 +783,7 @@ function openDialog(root, options = {}) {
 
   function goNext() {
     if (state.screen === 'body' && !commitBody()) { render('xff-next'); content.querySelector('[aria-invalid="true"]')?.focus(); return; }
+    if (state.screen === 'measures' && !commitMeasures()) { render('xff-next'); content.querySelector('[aria-invalid="true"]')?.focus(); return; }
     const list = steps(), i = list.indexOf(state.screen);
     if (i >= 0 && i < list.length - 1) { go(list[i + 1]); return; }
     save();
@@ -689,24 +800,34 @@ function openDialog(root, options = {}) {
       h('div', { class: 'xff-card', 'aria-hidden': 'true' },
         h('span', { class: 'xff-card__size', text: size.name }),
         h('span', { class: `xff-badge xff-badge--${badge}` }, icon(badge === 'no' ? 'close' : badge === 'warn' ? 'warn' : 'right', 14, 2.6))),
-      h('div', { class: 'xff-pick__text' },
+      h('div', { class: `xff-pick__text${size.regions.length >= 4 ? ' is-many' : ''}` },
         h('h2', { class: 'xff-pick__label', id: titleId, tabindex: '-1', 'data-xff-focus': true }, label, h('span', { class: 'xff-sr', text: `: ${size.name}` })),
         h('ul', { class: 'xff-fit' }, size.regions.map(r => h('li', { class: `xff-fit__item xff-fit__item--${FIT_TONE[r.fit]}` },
           h('span', { class: 'xff-fit__icon', 'aria-hidden': 'true' }, icon(FIT_ICON[r.fit], 12, 2.6)),
-          h('span', { text: `${t(r.measure)}: ${t(FIT_TEXT[r.fit])}` }))))));
+          h('span', { text: `${t(r.measure)}: ${t(FIT_TEXT[r.fit])}` }),
+          measured(r.measure) ? null : h('span', { class: 'xff-fit__guess', text: t('estimated') }))))));
+  }
+  // A value the shopper gave (tape, or the height typed in the first step); the others are our estimate.
+  function measured(m) {
+    return m === 'height' ? Number.isFinite(state.p.heightCm) : Number.isFinite(state.p.tape?.[m]);
   }
   const badFit = r => r.fit === 'tooTight' || r.fit === 'tooLoose';
   const partName = m => (lang === 'de' ? t(m) : t(m).toLowerCase());   // German nouns keep their capital
   const listParts = names => (names.length > 1 ? `${names.slice(0, -1).join(', ')} ${t('and')} ${names.at(-1)}` : names[0]);
-  // The body measurements a size is made for (desktop result; the phone opens them as a panel).
+  // The body measurements a size is made for, beside the shopper's own ("≈" = our estimate). Desktop result; the
+  // phone opens it as a panel.
   const sizeFor = name => {
-    const size = chart()?.sizes.find(x => x.name === name), unit = state.p.units.length;
-    return size ? h('dl', { class: 'xff-measures' }, chart().measures.flatMap(m => [h('dt', { text: t(m) }), h('dd', { text: `${rangeText(size[m], unit)} ${unit}` })])) : null;
+    const size = chart()?.sizes.find(x => x.name === name), unit = state.p.units.length, body = bodyFrom(state.p).values;
+    if (!size) return null;
+    const mine = m => (body[m] == null ? '–' : `${measured(m) ? '' : '≈ '}${unit === 'in' ? fmt(body[m] / CM_PER_IN, 1, 1) : fmt(body[m], 1)} ${unit}`);
+    return h('table', { class: `xff-measures${chart().measures.length >= 4 ? ' xff-measures--many' : ''}` },
+      h('thead', {}, h('tr', {}, h('td'), h('th', { scope: 'col', text: t('sizeCol', { size: size.name }) }), h('th', { scope: 'col', text: t('you') }))),
+      h('tbody', {}, chart().measures.map(m => h('tr', {}, h('th', { scope: 'row', text: t(m) }), h('td', { text: `${rangeText(size[m], unit)} ${unit}` }), h('td', { text: mine(m) })))));
   };
 
   function resultScreen() {
     const ev = evaluate(cfg, state.p);
-    if (!ev) { state.screen = steps()[0]; return screen(); }
+    if (!ev) { state.screen = firstScreen() === 'result' ? steps()[0] : firstScreen(); return screen(); }
     const { result, body } = ev, sizes = result.sizes;
     const best = sizes.find(x => x.name === result.best);
     const shown = sizes.find(x => x.name === (state.compare ?? result.best)) ?? best;
@@ -726,7 +847,7 @@ function openDialog(root, options = {}) {
     // Every size in one row on the desktop; three at a time, with arrows, on the phone.
     const i = Math.max(0, sizes.indexOf(shown)), from = Math.max(0, Math.min(i - 1, sizes.length - 3)), few = phone();
     const compare = j => { state.compare = sizes[j].name; render(`xff-size-${normalizeSize(sizes[j].name)}`); };
-    const edit = () => { state.returnTo = 'result'; go(steps()[0]); };
+    const edit = () => { state.returnTo = 'result'; go(steps().includes('measures') ? 'measures' : steps()[0]); };
     const verdictText = size => `${size.verdict === 'best' ? t(closest ? 'closest' : 'bestOption') : size.verdict === 'fits' ? t('mayAlsoFit') : t('notRecommended')}${inStock(size) ? '' : `, ${t('soldOut')}`}`;
     return [
       h('div', { class: 'xff-result' },
@@ -734,7 +855,9 @@ function openDialog(root, options = {}) {
         few ? h('button', { type: 'button', class: 'xff-link xff-measures-link', id: 'xff-measures-link', text: t('bodyMeasures'), onclick: () => togglePanel('body') }) : null),
       notes.length ? h('div', { class: 'xff-notes' }, notes) : null,
       h('div', { class: 'xff-try' },
-        h('p', { class: 'xff-try__label', text: t('alsoTry') }),
+        h('div', { class: 'xff-try__head' },
+          h('p', { class: 'xff-try__label', text: t('alsoTry') }),
+          few ? null : h('button', { type: 'button', class: 'xff-link xff-try__link', id: 'xff-to-chart', text: t('seeTable'), onclick: () => go('chart', 'xff-find') })),
         h('div', { class: 'xff-try__row', role: 'group', 'aria-label': t('alsoTry') },
           few ? h('button', { type: 'button', class: 'xff-try__arrow', id: 'xff-size-prev', 'aria-label': t('smaller'), disabled: i === 0, onclick: () => compare(i - 1) }, icon('prev', 18, 2.4)) : null,
           (few ? sizes.slice(from, from + 3) : sizes).map(size => h('button', {
@@ -745,9 +868,7 @@ function openDialog(root, options = {}) {
           h('span', { class: 'xff-sr', text: `, ${verdictText(size)}` }))),
           few ? h('button', { type: 'button', class: 'xff-try__arrow', id: 'xff-size-next', 'aria-label': t('larger'), disabled: i === sizes.length - 1, onclick: () => compare(i + 1) }, icon('next', 18, 2.4)) : null)),
       few ? null : h('div', { class: 'xff-sizefor' },
-        h('h3', { class: 'xff-sizefor__title', text: t('sizeFor', { size: shown.name }) }),
-        sizeFor(shown.name),
-        h('button', { type: 'button', class: 'xff-link xff-sizefor__link', id: 'xff-to-chart', text: t('seeTable'), onclick: () => go('chart', 'xff-find') })),
+        sizeFor(shown.name)),
       h('div', { class: 'xff-actions' },
         h('button', { type: 'button', class: 'xff-btn xff-btn--outline', id: 'xff-edit', text: t('editMeasures'), onclick: edit }),
         shown.verdict === 'no' && inStock(shown) ? h('button', { type: 'button', class: 'xff-link xff-anyway', id: 'xff-anyway', text: t('keep', { chosen: shown.name }), onclick: () => addToCart(shown.name) }) : null,
@@ -812,9 +933,9 @@ function openDialog(root, options = {}) {
     // "Back" (not a second ×): the panel closes and the screen under it comes back.
     const closePanel = h('button', { type: 'button', class: 'xff-panel-close', id: 'xff-panel-close', onclick: () => togglePanel(null) }, icon('prev', 18, 2.2), h('span', { text: t('back') }));
     if (state.panel === 'measure') {
-      const measures = (chart()?.measures ?? ['chest', 'waist']).filter(m => HOW[m]);
+      const measures = chart()?.measures ?? ['chest', 'waist'];
       fill(sidePanel, closePanel, h('h2', { class: 'xff-panel-title', text: t('howToMeasure') }),
-        h('ol', { class: 'xff-how' }, measures.map(m => h('li', {}, h('strong', { text: t(m) }), h('p', { text: t(HOW[m]) })))),
+        h('ol', { class: 'xff-how' }, measures.map(m => h('li', {}, h('strong', { text: t(m) }), h('p', { text: t(howKey(m)) })))),
         h('p', { class: 'xff-panel-note', text: t('measureTips') }));
     } else if (state.panel === 'body') {
       const ev = evaluate(cfg, state.p), shownName = state.compare ?? ev?.result.best;
@@ -852,10 +973,11 @@ function openDialog(root, options = {}) {
   }
 
   // ------------------------------------------------ open
-  if (options.mode !== 'guard' && options.screen === 'finder') state.screen = evaluate(cfg, state.p) && saved ? 'result' : steps()[0];
+  if (options.mode !== 'guard' && options.screen === 'finder') state.screen = firstScreen();
   render();
   dialog.showModal();
   if (state.screen === 'chart') fitTable();
+  markLong();
   (content.querySelector('[data-xff-focus]') ?? content.querySelector('button'))?.focus({ preventScroll: true });
 }
 

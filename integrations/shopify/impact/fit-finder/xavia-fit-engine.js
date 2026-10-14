@@ -4,6 +4,10 @@
 // tools.openlab.psu.edu/publicData). Each measure in cm = c0 + c1·height cm + c2·weight kg + c3·age + c4·BMI.
 // sd is the residual standard deviation: how far a real person usually is from the guess.
 // The charts are BODY measurements (the Xavia charts say "misure corpo"), so the body is compared to them directly.
+// ANSUR columns: chest/waist/buttock circumference (chest, waist, hips), hand circumference and length, crotch height
+// (inseam), sleeve outseam (sleeve: shoulder point to wrist), neck circumference at the base (neck), thigh and calf
+// circumference. Head circumference and foot length are left out on purpose: height and weight explain too little of
+// them (R² 0.17–0.55), so a guess would often miss a helmet or boot size. The shopper measures those.
 
 export const BODY_MODEL = {
   male: {
@@ -13,6 +17,10 @@ export const BODY_MODEL = {
     hand: { c: [4.132, 0.0794, -0.0102, 0.0093, 0.1352], sd: 0.79 },
     handLength: { c: [1.6433, 0.0953, 0.0026, 0.0089, 0.0168], sd: 0.72 },
     inseam: { c: [-17.2862, 0.5997, -0.0181, -0.0064, -0.0613], sd: 2.34 },
+    sleeve: { c: [-0.4841, 0.3414, 0.0205, 0.0008, -0.0695], sd: 1.84 },
+    neck: { c: [17.3458, 0.0749, 0.0296, 0.0192, 0.3556], sd: 1.62 },
+    thigh: { c: [17.9354, 0.0588, 0.1608, -0.0901, 0.8384], sd: 2.11 },
+    calf: { c: [11.9528, 0.065, 0.0506, -0.0296, 0.4487], sd: 1.58 },
   },
   female: {
     chest: { c: [8.6628, 0.2139, 0.076, 0.1236, 1.6657], sd: 4.11 },
@@ -21,6 +29,10 @@ export const BODY_MODEL = {
     hand: { c: [8.4575, 0.0485, 0.0164, 0.0015, 0.045], sd: 0.71 },
     handLength: { c: [8.416, 0.0517, 0.0576, 0.0043, -0.1084], sd: 0.75 },
     inseam: { c: [-9.8357, 0.5563, 0.0439, -0.0226, -0.1902], sd: 2.33 },
+    sleeve: { c: [-4.2942, 0.3526, 0.012, -0.0079, 0.0251], sd: 1.78 },
+    neck: { c: [11.6904, 0.102, 0.0164, 0.0067, 0.2944], sd: 1.34 },
+    thigh: { c: [3.5146, 0.1437, 0.1091, -0.0229, 1.0971], sd: 2.25 },
+    calf: { c: [9.8245, 0.0791, 0.0665, -0.0414, 0.4435], sd: 1.66 },
   },
 };
 
@@ -92,11 +104,22 @@ export function combineBody(estimate, measured) {
   return { mode: 'mixed', values: { ...estimate.values, ...measured.values }, sd: { ...estimate.sd, ...measured.sd }, warnings: estimate.warnings };
 }
 
-const MEASURES = ['chest', 'waist', 'hips', 'inseam', 'hand', 'handLength', 'height'];
+/**
+ * Every measure a chart may list, with the values a person can have (cm), for checking what the shopper types.
+ * A measure with a BODY_MODEL entry can be guessed from height and weight; the others must be measured.
+ */
+export const MEASURES = {
+  chest: [60, 170], waist: [45, 170], hips: [60, 180], sleeve: [40, 80], neck: [28, 56], inseam: [55, 100],
+  thigh: [35, 95], calf: [25, 60], head: [48, 66], foot: [20, 33], hand: [14, 30], handLength: [14, 24], height: [120, 230],
+};
+/** True when the body model can guess this measure from height and weight. */
+export const canEstimate = (sex, measure) => measure === 'height' || Boolean(BODY_MODEL[sex === 'female' ? 'female' : 'male'][measure]);
+/** A typed measure is believable. */
+export const validMeasure = (measure, cm) => Number.isFinite(cm) && cm >= MEASURES[measure][0] && cm <= MEASURES[measure][1];
 const isRange = r => Array.isArray(r) && r.length === 2 && r.every(Number.isFinite) && r[0] < r[1];
 /** A chart is usable only when every size has a [from, to] range for every measure it lists. */
 export function validChart(chart) {
-  return Boolean(chart && Array.isArray(chart.measures) && chart.measures.length && chart.measures.every(m => MEASURES.includes(m)) &&
+  return Boolean(chart && Array.isArray(chart.measures) && chart.measures.length && chart.measures.every(m => m in MEASURES) &&
     Array.isArray(chart.sizes) && chart.sizes.length && chart.sizes.every(s => s?.name && chart.measures.every(m => isRange(s[m]))));
 }
 
