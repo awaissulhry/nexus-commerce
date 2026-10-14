@@ -10,7 +10,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
  *
  * Each race is FORCED, not hoped for: the rebuild is held inside its reads (a gate in its first studio sheet read, after
  * it has read the family's products), the other write commits, then the rebuild goes on. The readiness row's `sortTitle`
- * (the resolved title) shows which values a rebuild read. The first case is the positive control: a bare Repeatable Read
+ * (the resolved title) shows which values a rebuild read. The "late" cases force the other order: a save that read
+ * before the rebuild committed and writes after it (its mark locks one readiness row, so it restarts). The first case is the positive control: a bare Repeatable Read
  * rebuild, held while a write that does not mark lands, commits old values as current — so the harness can see the
  * failure that the mark, and the rebuild's own check of the family's product rows (a family with no rows yet), prevent.
  * Runs only on a real server (`scripts/run-real-postgres-tests.mjs`).
@@ -184,6 +185,83 @@ describe.skipIf(!concurrentDatabaseUrl())(`the rebuild after a sheet save on a r
     expect(await staleCurrent('race-drain', 'New name')).toBe(false)
     if (await scoped(() => countPendingReadinessFamilies())) await scoped(() => rebuildPendingFamily('race-drain'))
     expect(await currentOn('race-drain', 'New name')).toBe(true)
+  }, 120_000)
+
+  /**
+   * The late write: a save W2 takes its snapshot (its first read) while the rebuild R1 after W1 is held, R1 then commits
+   * (its product check meets nothing: W2 has not written yet), and only then does W2 write the product row and mark.
+   * Returns W2's outcome and attempts.
+   */
+  async function lateWrite(root: string, opts: { noRows?: boolean; w2: () => Promise<unknown> }) {
+    await seed(root)
+    if (opts.noRows) await scoped(() => prisma.readinessIndex.deleteMany({ where: { product: { OR: [{ id: root }, { parentId: root }] } } }))
+    const rebuild = holdNextRebuild()
+    await sheetSave(root, 'Mid name')
+    await rebuild.held
+    let snapshotTaken: () => void = () => {}, goWrite: () => void = () => {}
+    const taken = new Promise<void>(resolve => { snapshotTaken = resolve }), write = new Promise<void>(resolve => { goWrite = resolve })
+    let attempts = 0
+    const w2 = scoped(() => inDatabaseTransaction(prisma as never, async () => {
+      attempts++
+      await prisma.product.findUniqueOrThrow({ where: { id: root }, select: { id: true } }) // the snapshot
+      if (attempts === 1) { snapshotTaken(); await write }
+      await prisma.product.update({ where: { id: root }, data: { name: 'New name' } })
+      return opts.w2()
+    }, { restarts: 4 }))
+    await taken
+    rebuild.release()
+    await familyReadinessSettled(root, 60_000)
+    expect(await currentOn(root, 'Mid name'), 'R1 committed before W2 wrote').toBe(true)
+    goWrite()
+    await w2
+    return { attempts }
+  }
+
+  it('control: a late write that does not mark the family leaves old values current (the harness can see it)', async () => {
+    await lateWrite('late-control', { w2: async () => undefined })
+    expect(await staleCurrent('late-control', 'New name')).toBe(true)
+  }, 120_000)
+
+  it('a late sheet save with no rebuild of its own (a crash before it): its mark restarts it, and the family is pending, not stale', async () => {
+    const { attempts } = await lateWrite('late-unmarked', { w2: () => markReadinessPending(['late-unmarked'], undefined, { onlyNewMarks: true }) })
+    expect(attempts).toBeGreaterThan(1)
+    expect(await staleCurrent('late-unmarked', 'New name')).toBe(false)
+    expect(await scoped(() => countPendingReadinessFamilies())).toBeGreaterThan(0)
+    await scoped(() => rebuildPendingFamily('late-unmarked'))
+    expect(await currentOn('late-unmarked', 'New name')).toBe(true)
+  }, 120_000)
+
+  it('a late real sheet save: current on the latest values at the end', async () => {
+    await lateWrite('late-real', { w2: () => produceReadinessForProducts(['late-real'], undefined, { afterResponse: true }) })
+    await familyReadinessSettled('late-real', 60_000)
+    expect(await currentOn('late-real', 'New name')).toBe(true)
+  }, 120_000)
+
+  it('a late real sheet save to a family with no readiness row yet: its own rebuild leaves it current on the latest values', async () => {
+    // Nothing to lock or mark here: the save's own follow-up rebuild is what covers it (the residual is a crash before it).
+    await lateWrite('late-norows', { noRows: true, w2: () => produceReadinessForProducts(['late-norows'], undefined, { afterResponse: true }) })
+    await familyReadinessSettled('late-norows', 60_000)
+    expect(await currentOn('late-norows', 'New name')).toBe(true)
+  }, 120_000)
+
+  it('two sheet saves of one family whose rows are pending do not wait for each other on the mark', async () => {
+    await seed('late-pair')
+    await scoped(() => inDatabaseTransaction(prisma as never, () => markReadinessPending(['late-pair'])))
+    let releaseA: () => void = () => {}, aHolds: () => void = () => {}
+    const aHeld = new Promise<void>(resolve => { aHolds = resolve }), aGate = new Promise<void>(resolve => { releaseA = resolve })
+    const a = scoped(() => inDatabaseTransaction(prisma as never, async () => {
+      await prisma.product.update({ where: { id: 'late-pair' }, data: { name: 'A' } })
+      await markReadinessPending(['late-pair'], undefined, { onlyNewMarks: true })
+      aHolds(); await aGate
+    }, { restarts: 4 }))
+    await aHeld
+    const b = scoped(() => inDatabaseTransaction(prisma as never, async () => {
+      await prisma.product.update({ where: { id: 'late-pair-child' }, data: { name: 'B' } })
+      await markReadinessPending(['late-pair'], undefined, { onlyNewMarks: true })
+    }, { restarts: 4 }))
+    const bCommittedWhileAOpen = await Promise.race([b.then(() => true), new Promise<boolean>(resolve => setTimeout(() => resolve(false), 3_000))])
+    releaseA(); await a; await b
+    expect(bCommittedWhileAOpen).toBe(true)
   }, 120_000)
 
   /**

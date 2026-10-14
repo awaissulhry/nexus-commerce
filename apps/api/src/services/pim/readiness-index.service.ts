@@ -174,7 +174,20 @@ export async function markReadinessPending(rootIds: string[], scope?: PendingSco
   if (options?.onlyNewMarks && !scope) {
     // The product sheet's own deferred saves (`produceReadinessForProducts` `afterResponse`): rows already pending are
     // left alone, so two saves of one family do not queue on its readiness rows and restart each other. Each such save
-    // writes one of the family's product rows, which the rebuild after it checks instead (FOR SHARE, below).
+    // writes one of the family's product rows, which the rebuild after it checks (FOR SHARE) before it commits.
+    //
+    // 🔴 That check misses a save that read before the rebuild committed and writes after it: its snapshot still shows
+    // the rows pending, so the mark below would write nothing, and the rebuild's rows — built from the older values —
+    // would stay current. One of the family's readiness rows is locked first (FOR KEY SHARE: two saves holding it do not
+    // wait for each other): a row that rebuild replaced after this snapshot fails with 40001, the save restarts, and its
+    // new attempt marks the new rows. Residual: a family with no readiness row yet has nothing to lock; it relies on the
+    // follow-up rebuild this save asks for (`readiness-after-response.ts`) — only a crash in that moment leaves it stale.
+    for (const rootId of rootIds) {
+      await prisma.$queryRaw`
+        SELECT r.id FROM "ReadinessIndex" r JOIN "Product" p ON p.id = r."productId"
+        WHERE p."deletedAt" IS NULL AND (p.id = ${rootId} OR p."parentId" = ${rootId})
+        ORDER BY r.id LIMIT 1 FOR KEY SHARE OF r`
+    }
     return prisma.$executeRaw`
       UPDATE "ReadinessIndex" SET "pendingSince" = now()
       WHERE id IN (
@@ -182,11 +195,13 @@ export async function markReadinessPending(rootIds: string[], scope?: PendingSco
         WHERE p."deletedAt" IS NULL
           AND (p.id = ANY(${rootIds}::text[]) OR p."parentId" = ANY(${rootIds}::text[]))
           AND r."pendingSince" IS NULL
-        ORDER BY r.id FOR UPDATE OF r)
+        ORDER BY r.id FOR NO KEY UPDATE OF r)
     `
   }
-  // 🔴 Rows are locked in `id` order (the subquery's ORDER BY … FOR UPDATE), so two bulk edits marking overlapping
-  // families queue instead of deadlocking. Measured on a real server (readiness-pending-race.vitest.test.ts): against a
+  // 🔴 Rows are locked in `id` order (the subquery's ORDER BY … FOR NO KEY UPDATE), so two bulk edits marking overlapping
+  // families queue instead of deadlocking. NO KEY UPDATE, the lock an UPDATE of a non-key column takes anyway: it does
+  // not wait for the FOR KEY SHARE a product sheet save's mark holds on one of its family's rows (below), so two saves of
+  // one family that both hold it never deadlock on their marks. Measured on a real server (readiness-pending-race.vitest.test.ts): against a
   // concurrent rebuild, the UPDATE and the rebuild's DELETE can still deadlock — PostgreSQL kills one, and
   // `inDatabaseTransaction` retries it (a lost race is rolled back whole), so the user's save is never lost.
   if (scope && scope.accountId === undefined) {
@@ -197,7 +212,7 @@ export async function markReadinessPending(rootIds: string[], scope?: PendingSco
         WHERE p."deletedAt" IS NULL
           AND (p.id = ANY(${rootIds}::text[]) OR p."parentId" = ANY(${rootIds}::text[]))
           AND r.channel = ${scope.channel} AND r.market = ${scope.market}
-        ORDER BY r.id FOR UPDATE OF r)
+        ORDER BY r.id FOR NO KEY UPDATE OF r)
     `
   }
   if (scope) {
@@ -208,7 +223,7 @@ export async function markReadinessPending(rootIds: string[], scope?: PendingSco
         WHERE p."deletedAt" IS NULL
           AND (p.id = ANY(${rootIds}::text[]) OR p."parentId" = ANY(${rootIds}::text[]))
           AND r.channel = ${scope.channel} AND r.market = ${scope.market} AND r."accountId" IS NOT DISTINCT FROM ${scope.accountId}
-        ORDER BY r.id FOR UPDATE OF r)
+        ORDER BY r.id FOR NO KEY UPDATE OF r)
     `
   }
   return prisma.$executeRaw`
@@ -217,7 +232,7 @@ export async function markReadinessPending(rootIds: string[], scope?: PendingSco
       SELECT r.id FROM "ReadinessIndex" r JOIN "Product" p ON p.id = r."productId"
       WHERE p."deletedAt" IS NULL
         AND (p.id = ANY(${rootIds}::text[]) OR p."parentId" = ANY(${rootIds}::text[]))
-      ORDER BY r.id FOR UPDATE OF r)
+      ORDER BY r.id FOR NO KEY UPDATE OF r)
   `
 }
 
@@ -402,7 +417,7 @@ export async function reconcileReadinessFootprint(): Promise<FootprintReconcile>
       WHERE id IN (
         SELECT r.id FROM "ReadinessIndex" r JOIN "Product" p ON p.id = r."productId"
         WHERE p."deletedAt" IS NULL AND r.channel IS NULL AND r."pendingSince" IS NULL
-        ORDER BY r.id FOR UPDATE OF r)`
+        ORDER BY r.id FOR NO KEY UPDATE OF r)`
     if (markedRows > 0) markedFamilies = await countPendingReadinessFamilies()
   }
   return { removed, missing, markedFamilies }
