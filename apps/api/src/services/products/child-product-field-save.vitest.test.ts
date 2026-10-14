@@ -49,10 +49,10 @@ async function family() {
   return { parent, child }
 }
 
-async function save(id: string, value: unknown) {
+async function save(id: string, value: unknown, field = 'impactProtectors') {
   const current = await prisma.product.findUniqueOrThrow({ where: { id } })
   const response = await app.inject({ method: 'POST', url: '/api/products/bulk-save', headers: { 'content-type': 'application/json' }, payload: JSON.stringify({
-    operationId: `child-field-${++serial}`, units: [{ key: id, expectedVersion: current.version, changes: [{ id, field: 'impactProtectors', value }] }],
+    operationId: `child-field-${++serial}`, units: [{ key: id, expectedVersion: current.version, changes: [{ id, field, value }] }],
   }) })
   expect(response.statusCode, response.body).toBe(200)
   const unit = response.json().units[0]
@@ -78,4 +78,16 @@ it('sets and clears Impact protectors on a parent the same way', () => scoped(as
   const { parent } = await family()
   expect((await save(parent.id, PROTECTORS)).impactProtectors).toEqual(PROTECTORS)
   expect((await save(parent.id, null)).impactProtectors).toBeNull()
+}))
+
+it('saves Garment measurements on a variation as its own table, clears its inherited mark, and clears to a database NULL', () => scoped(async () => {
+  const { child } = await family()
+  await prisma.product.update({ where: { id: child.id }, data: { cascadedFields: ['impactProtectors', 'fitGarment'] } })
+  const table = { measures: ['chest', 'sleeve'], sizes: [{ name: 'M', chest: 106, sleeve: 62.5 }], flat: ['chest'] }
+  const stored = await save(child.id, { ...table, sizes: [{ name: 'M', chest: '106', sleeve: '62,5' }] }, 'fitGarment')
+  expect(stored.fitGarment).toEqual(table)
+  expect(stored.cascadedFields).not.toContain('fitGarment')
+  expect((await save(child.id, null, 'fitGarment')).fitGarment).toBeNull()
+  const [{ isNull }] = await prisma.$queryRaw<Array<{ isNull: boolean }>>`SELECT "fitGarment" IS NULL AS "isNull" FROM "Product" WHERE id = ${child.id}`
+  expect(isNull).toBe(true)
 }))

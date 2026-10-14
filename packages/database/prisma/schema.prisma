@@ -421,6 +421,10 @@ model Product {
   notifiedBodyName           String? // e.g. 'Ricotest'
   declarationOfConformityUrl String? // Declaration of Conformity (DoC) link
   impactProtectors           Json? // [{ zone, standard, level }] — EN 1621-1/-2/-4
+  // Garment measurements (2026-10-14): the finished garment's measurements per size, in cm — never shown to shoppers;
+  // the store's size finder reads them. { measures, sizes: [{ name, <measure>: cm }], flat?, room? }, normalised by
+  // `normalizeFitGarment` (@nexus/shared/fit-garment), the shape it is later sent to Shopify in. Null = none.
+  fitGarment                 Json?
   // Back-relation to per-product certificate rows (CE, EN-13595, REACH…)
   certificates               ProductCertificate[]
 

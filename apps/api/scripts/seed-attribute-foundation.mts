@@ -20,6 +20,7 @@ const attributes = [
   ['ppeCategory', 'PPE category', 'text', 'global', 'compliance'],
   ['garmentClass', 'Protective garment class', 'text', 'global', 'compliance'],
   ['impactProtectors', 'Impact protectors', 'text', 'global', 'compliance'],
+  ['fitGarment', 'Garment measurements', 'text', 'global', 'compliance'],
   ['notifiedBodyNumber', 'Notified body number', 'text', 'global', 'compliance'],
   ['notifiedBodyName', 'Notified body name', 'text', 'global', 'compliance'],
   ['declarationOfConformityUrl', 'Declaration of conformity URL', 'text', 'global', 'compliance'],
@@ -29,9 +30,13 @@ const attributes = [
   ['glove_protection_level', 'Glove protection level', 'select', 'global', 'compliance'],
   ['knuckle_impact_protection', 'Knuckle impact protection', 'boolean', 'global', 'compliance'],
 ] as const
+/** The column's help text, where the family's dictionary row supplies the Shared column (`toFieldDefinition` reads it). */
+const descriptions: Partial<Record<string, string>> = {
+  fitGarment: 'The finished garment, measured per size. Shoppers never see these numbers; the size finder uses them to check the room.',
+}
 const families = [
   { code: 'general_product', label: 'General product', parent: null, attributes: ['material', 'model_number', 'countryOfOrigin', 'hsCode', 'hazmatClass', 'hazmatUnNumber'] },
-  { code: 'apparel', label: 'Apparel', parent: 'general_product', attributes: ['color', 'size', 'target_gender', 'age_range_description', 'fabric_type', 'fit_type', 'care_instructions', 'water_resistance_level'] },
+  { code: 'apparel', label: 'Apparel', parent: 'general_product', attributes: ['color', 'size', 'target_gender', 'age_range_description', 'fabric_type', 'fit_type', 'care_instructions', 'water_resistance_level', 'fitGarment'] },
   { code: 'protective_apparel', label: 'Protective apparel', parent: 'apparel', attributes: ['ppeCategory', 'notifiedBodyNumber', 'notifiedBodyName', 'declarationOfConformityUrl'] },
   { code: 'jackets', label: 'Jackets', parent: 'protective_apparel', attributes: ['garmentClass', 'impactProtectors'] },
   { code: 'rainwear', label: 'Rainwear', parent: 'apparel', attributes: [] },
@@ -54,7 +59,7 @@ try {
     }
     const attributeIds = new Map<string, string>()
     for (const [index, [code, label, type, scope, group]] of attributes.entries()) {
-      const row = await prisma.customAttribute.upsert({ where: { code }, create: { code, label, type, scope, groupId: groupIds.get(group)!, sortOrder: index }, update: {} })
+      const row = await prisma.customAttribute.upsert({ where: { code }, create: { code, label, type, scope, groupId: groupIds.get(group)!, sortOrder: index, description: descriptions[code] ?? null }, update: {} })
       attributeIds.set(code, row.id)
     }
     // Store evidence as supplied; these are allowed levels, never inferred product claims.

@@ -74,6 +74,9 @@ export const ALLOWED_MASTER_FIELDS: ReadonlySet<string> = new Set([
     'notifiedBodyName',
     'declarationOfConformityUrl',
     'impactProtectors',
+    // Garment measurements (2026-10-14) — the finished garment per size, a JSON table checked by
+    // `normalizeFitGarment` (@nexus/shared/fit-garment) in the bulk writer.
+    'fitGarment',
     // GTIN.3 / Step 4 variant flow — the list-wizard's "promote to
     // parent" action PATCHes isParent=true and "link variant to
     // parent" PATCHes parentId. Both write into Product directly;
