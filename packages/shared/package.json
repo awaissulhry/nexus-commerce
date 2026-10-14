@@ -18,6 +18,10 @@
       "types": "./dist/attribute-concepts.d.ts",
       "default": "./dist/attribute-concepts.js"
     },
+    "./garment-size-order": {
+      "types": "./dist/garment-size-order.d.ts",
+      "default": "./dist/garment-size-order.js"
+    },
     "./studio-publication": {
       "types": "./dist/studio-publication.d.ts",
       "default": "./dist/studio-publication.js"
