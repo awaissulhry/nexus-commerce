@@ -252,10 +252,13 @@ function cellOf(cell: MatrixCells) {
       ...(cell.price.pushFailed ? { lastPushFailed: { reason: clip(cell.price.pushFailed.reason), at: cell.price.pushFailed.at, final: cell.price.pushFailed.final } } : {}),
     } : null,
     sale: cell.sale && cell.sale.value != null ? cell.sale : null,
-    // Amazon Business: the business offer on this Amazon market (read only for Claude; a person sets it on the Matrix).
+    // Amazon Business: the business offer on this Amazon market (Claude asks for a change with set-listing-price, action
+    // business; a person approves it in Nexus). The minimum and maximum price bound it, as they bound the door.
     ...(cell.business !== undefined ? { business: cell.business ? {
       rule: cell.business.rule, percent: cell.business.percent, exact: cell.business.exact, price: cell.business.price,
       normalPrice: cell.business.normalPrice, currency: cell.business.currency,
+      ...(cell.business.minPrice != null ? { minPrice: cell.business.minPrice } : {}),
+      ...(cell.business.maxPrice != null ? { maxPrice: cell.business.maxPrice } : {}),
       tiers: cell.business.tiers ? { type: cell.business.tiers.type, levels: cell.business.tiers.levels } : null,
       ...(cell.business.warnings.length ? { warnings: cell.business.warnings.map(clip) } : {}),
       ...(cell.business.held ? { held: clip(cell.business.held) } : {}),
@@ -313,8 +316,10 @@ const listingMatrix: AgentTool = {
     + 'failed) and sale, fulfilment (FBA quantities are '
     + 'Amazon\'s and never set from Nexus), business (Amazon markets where Amazon lists Amazon Business for the account: the '
     + 'business price for business buyers — rule PERCENT_OFF = the price minus percent, FIXED = exact — its quantity tiers, '
-    + 'warnings such as hidden by Amazon, the last send and Amazon\'s nightly check; read only here, a person sets it on the '
-    + 'Matrix), what can be written there and why not. A change names rowId and coordinate key.',
+    + 'its minimum and maximum price, warnings such as hidden by Amazon, the last send and Amazon\'s nightly check, and '
+    + 'setOutsideNexus when Amazon shows one Nexus never kept; a change is asked for with set-listing-price, action business, '
+    + 'or many at once with bulk-listing-price-change, businessPrices), what can be written there and why not (writable '
+    + 'businessPrice, or its blocked reason). A change names rowId and coordinate key.',
   async handler(args, ctx) {
     // A deleted product is not found, as in every other tool (the Matrix read finds deleted variations' families).
     if (!(await prisma.product.count({ where: liveProduct(String(args.productId)) }))) return { ok: false, error: PRODUCT_NOT_FOUND }

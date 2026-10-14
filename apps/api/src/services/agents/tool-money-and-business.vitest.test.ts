@@ -532,9 +532,8 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'update-inbound-shipment': (ids) => ({ shipmentId: ids.inboundShipmentId, notes: 'Money note' }),
   'set-product-costs': (ids) => ({ costs: [{ productId: ids.productId, costPrice: 4300 }] }),
   'replenishment-action': (ids) => ({ productIds: [ids.productId] }),
-  // 08 S13 — an eBay markdown, tier prices, an FBA plan and its options (dry runs; Step 4: the options Nexus stored).
+  // 08 S13 — an eBay markdown, an FBA plan and its options (dry runs; Step 4: the options Nexus stored).
   'set-ebay-price-promotion': (ids) => ({ listingIds: [ids.listingId], discountValue: 10 }),
-  'set-tier-prices': (ids) => ({ productId: ids.productId, tiers: [{ minQty: 10, price: 17 }] }),
   'plan-fba-shipment': (ids) => ({ marketplace: 'IT', lines: [{ productId: ids.productId, units: 2 }] }),
   'fba-shipment-options': (ids) => ({ planId: ids.planId }),
   // I8 — the seeded listing names no account: nothing is read from a channel here.

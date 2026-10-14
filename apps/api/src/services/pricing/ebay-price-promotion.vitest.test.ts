@@ -1,11 +1,10 @@
 /**
- * MCP full control 08 S13 — set-ebay-price-promotion and set-tier-prices.
+ * MCP full control 08 S13 — set-ebay-price-promotion (set-tier-prices was retired in Amazon Business step 6).
  *
  *   set-ebay-price-promotion: a markdown is priced against each eBay listing's current price; a listing on another eBay
  *   account than the primary (the one the eBay publisher sends with) is refused; the preview says whether the publisher
  *   is live; in dry run nothing reaches the eBay dispatcher; live, the dispatcher (mocked: the gateway is never called)
  *   gets the listing's eBay id. Volume pricing: tiers validated, SKUs of one market.
- *   set-tier-prices: add, change and remove tiers; the undo puts them back.
  *
  * Real SQL (PGlite with the production schema); the eBay marketing dispatcher is mocked.
  */
@@ -73,10 +72,9 @@ beforeAll(async () => {
     ids.otherListing = (await db.channelListing.create({
       data: { productId: ids.gloves, channelMarket: 'EBAY_IT', channel: 'EBAY', region: 'IT', marketplace: 'IT', price: '21.00', quantity: 3, listingStatus: 'ACTIVE', externalListingId: 'TEST-ITEM-3', channelConnectionId: ids.other, aliasKey: 'second' } as never,
     })).id
-    await db.customerGroup.create({ data: { code: 'trade', label: 'Trade' } })
   })
   const { getTool } = await import('../agents/tool-registry.js')
-  for (const name of ['set-ebay-price-promotion', 'set-tier-prices']) tools[name] = getTool(name)!
+  tools['set-ebay-price-promotion'] = getTool('set-ebay-price-promotion')!
 }, 180_000)
 
 afterAll(async () => {
@@ -128,23 +126,5 @@ describe('08 S13 — set-ebay-price-promotion', () => {
     const ran = await run('set-ebay-price-promotion', { kind: 'volume', marketplace: 'IT', productIds: [ids.jacket], tiers: [{ minQty: 2, percentOff: 5 }, { minQty: 3, percentOff: 10 }] }, 'execute')
     expect(ran, ran.error).toMatchObject({ ok: true, data: { live: false } })
     expect(await inside(() => database.client.ebayVolumePromotion.findFirstOrThrow({ select: { marketplace: true, skus: true, status: true } }))).toEqual({ marketplace: 'IT', skus: ['TEST-SKU-S13-JACKET'], status: 'DRAFT' })
-  })
-})
-
-describe('08 S13 — set-tier-prices', () => {
-  it('adds, changes and removes tiers; a customer group by code; the undo puts them back', async () => {
-    expect((await run('set-tier-prices', { productId: ids.jacket, tiers: [{ minQty: 5, price: 90, customerGroup: 'retail' }] })).error).toBe('TEST-SKU-S13-JACKET: no customer group retail in this business')
-    const added = await run('set-tier-prices', { productId: ids.jacket, tiers: [{ minQty: 5, price: 90 }, { minQty: 10, price: 80, customerGroup: 'trade' }] }, 'execute')
-    expect(added, added.error).toMatchObject({ ok: true, data: { changed: 2 } })
-    const dry = await run('set-tier-prices', { productId: ids.jacket, tiers: [{ minQty: 5, price: 88 }, { minQty: 10, price: null, customerGroup: 'trade' }] })
-    expect(dry, dry.error).toMatchObject({ ok: true, preview: { tiers: [{ minQty: 5, from: 90, to: 88, change: 'update' }, { minQty: 10, customerGroup: 'trade', from: 80, to: null, change: 'remove' }] } })
-    const changed = await run('set-tier-prices', { productId: ids.jacket, tiers: [{ minQty: 5, price: 88 }, { minQty: 10, price: null, customerGroup: 'trade' }] }, 'execute')
-    expect(changed.ok, changed.error).toBe(true)
-    expect(await inside(() => tools['set-tier-prices'].undo!.current(changed.change!))).toEqual(changed.change!.after)
-    const undo = tools['set-tier-prices'].undo!.request(changed.change!) as { tool: string; args: Record<string, unknown> }
-    expect(undo).toEqual({ tool: 'set-tier-prices', args: { productId: ids.jacket, tiers: [{ minQty: 5, price: 90 }, { minQty: 10, price: 80, customerGroup: 'trade' }] } })
-    expect((await run('set-tier-prices', undo.args, 'execute')).ok).toBe(true)
-    const rows = await inside(() => database.client.productTierPrice.findMany({ where: { productId: ids.jacket }, orderBy: { minQty: 'asc' }, select: { minQty: true, price: true, customerGroup: { select: { code: true } } } }))
-    expect(rows.map((r) => [r.minQty, Number(r.price), r.customerGroup?.code ?? null])).toEqual([[5, 90, null], [10, 80, 'trade']])
   })
 })

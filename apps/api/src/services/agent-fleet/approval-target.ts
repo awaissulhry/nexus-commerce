@@ -62,7 +62,7 @@ export interface ResolvedRequest {
  */
 export const NEXUS_RECORD_TOOLS: ReadonlySet<string> = new Set([
   // master prices (in the master currency)
-  'set-price', 'set-master-prices', 'bulk-price-change', 'schedule-price-change', 'set-tier-prices', 'set-price-bounds',
+  'set-price', 'set-master-prices', 'bulk-price-change', 'schedule-price-change', 'set-price-bounds',
   // stock at the business's own warehouses
   'set-stock', 'transfer-stock', 'reconcile-stock-count', 'reserve-stock', 'receive-stock',
   // the product's photos in Nexus
@@ -224,6 +224,9 @@ const MATRIX_CELLS: Record<string, string> = {
   syncState: 'Stock sync',
   price: 'Price',
   salePrice: 'Sale price',
+  // Amazon Business (set-listing-price, action business): the Matrix's own column names.
+  businessPrice: 'B2B price',
+  businessTiers: 'Tiers',
 }
 
 function languageName(code: unknown): string | null {
@@ -581,7 +584,7 @@ function playbookPart(p: Rec): Part {
 type Part = Partial<ResolvedRequest>
 type Reader = (p: Rec, a: Rec, ctx: TargetContext, toolName: string) => Part
 
-const MASTER_PRICE_TOOLS = new Set(['set-price', 'bulk-price-change', 'set-master-prices', 'schedule-price-change', 'set-tier-prices', 'set-price-bounds'])
+const MASTER_PRICE_TOOLS = new Set(['set-price', 'bulk-price-change', 'set-master-prices', 'schedule-price-change', 'set-price-bounds'])
 
 /** A bulk change keyed `<sku> <field>` (bulk-price-change, set-master-prices, bulk-attribute-change). */
 function skuKeyedLines(changes: Rec, suffix: string | null, currency: string | null | false): ResolvedRequest['items'] {

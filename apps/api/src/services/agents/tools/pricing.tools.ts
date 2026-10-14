@@ -9,11 +9,12 @@
  * its time, through the master price (every listing that follows it moves too).
  *
  * 08 S13 — an eBay price promotion (markdown or volume pricing; sent by the eBay marketing publisher, dry run unless its
- * switch is on, with the primary eBay account only) and a product's B2B tier prices.
+ * switch is on, with the primary eBay account only). (Amazon Business step 6 retired set-tier-prices: those Nexus-only tiers
+ * reached nothing. An Amazon listing's business price and quantity tiers are set-listing-price, action business.)
  */
 
 import { z } from 'zod'
-import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
+import { FEATURES as F } from '@nexus/shared/permissions'
 import { CHANNEL_LABELS } from '@nexus/shared/channel-label'
 import prisma from '../../../db.js'
 import {
@@ -749,112 +750,4 @@ const setEbayPricePromotion: AgentTool = {
   },
 }
 
-// ── set-tier-prices (08 S13) ──────────────────────────────────────────────────────────────────────────
-
-const TIER_MAX = 50
-
-interface TierPlan {
-  product: { id: string; sku: string; basePrice: number | null }
-  tiers: Array<{ minQty: number; groupId: string | null; group: string | null; from: number | null; to: number | null }>
-}
-
-async function planTiers(args: Record<string, unknown>): Promise<TierPlan | Refusal> {
-  const product = await prisma.product.findFirst({ where: { id: String(args.productId ?? ''), deletedAt: null }, select: { id: true, sku: true, basePrice: true } })
-  if (!product) return { error: PRODUCT_NOT_FOUND }
-  const asked = (args.tiers ?? []) as Array<{ minQty: number; price: number | null; customerGroup?: string }>
-  if (!asked.length) return { error: `${product.sku}: give tiers (from how many units, at what price) to set.` }
-  const keys = asked.map((t) => `${t.minQty}@${t.customerGroup ?? ''}`)
-  if (new Set(keys).size !== keys.length) return { error: `${product.sku}: a tier is named twice (same quantity and customer group)` }
-  const codes = [...new Set(asked.map((t) => t.customerGroup).filter((c): c is string => !!c))]
-  const groups = new Map((await prisma.customerGroup.findMany({ where: { code: { in: codes } }, select: { id: true, code: true } })).map((g) => [g.code, g.id]))
-  const unknown = codes.filter((c) => !groups.has(c))
-  if (unknown.length) return { error: `${product.sku}: no customer group ${unknown.join(', ')} in this business` }
-  const current = await prisma.productTierPrice.findMany({ where: { productId: product.id }, select: { minQty: true, customerGroupId: true, price: true } })
-  const tiers: TierPlan['tiers'] = []
-  for (const t of asked) {
-    const groupId = t.customerGroup ? groups.get(t.customerGroup)! : null
-    const row = current.find((c) => c.minQty === t.minQty && c.customerGroupId === groupId)
-    const from = row ? Number(row.price) : null
-    const to = t.price == null ? null : Math.round(t.price * 100) / 100
-    if (from !== to) tiers.push({ minQty: t.minQty, groupId, group: t.customerGroup ?? null, from, to })
-  }
-  if (!tiers.length) return { error: `${product.sku}: every tier is already that. Nothing to change.` }
-  return { product: { id: product.id, sku: product.sku, basePrice: money(product.basePrice) }, tiers }
-}
-
-const TIER_UNDO: ToolUndo = {
-  async current(change) {
-    const after = (change.after ?? {}) as { productId?: string; tiers?: Array<{ minQty: number; customerGroup: string | null }> }
-    if (!after.productId) return null
-    const rows = await prisma.productTierPrice.findMany({ where: { productId: after.productId }, select: { minQty: true, price: true, customerGroup: { select: { code: true } } } })
-    return { productId: after.productId, tiers: (after.tiers ?? []).map((t) => { const row = rows.find((r) => r.minQty === t.minQty && (r.customerGroup?.code ?? null) === t.customerGroup); return { minQty: t.minQty, customerGroup: t.customerGroup, price: row ? Number(row.price) : null } }) }
-  },
-  request(change) {
-    const before = (change.before ?? {}) as { productId?: string; tiers?: Array<{ minQty: number; customerGroup: string | null; price: number | null }> }
-    if (!before.productId || !before.tiers?.length) return { refusal: 'This change does not name the tiers it replaced.' }
-    return { tool: 'set-tier-prices', args: { productId: before.productId, tiers: before.tiers.map((t) => ({ minQty: t.minQty, price: t.price, ...(t.customerGroup ? { customerGroup: t.customerGroup } : {}) })) } }
-  },
-}
-
-const setTierPrices: AgentTool = {
-  name: 'set-tier-prices',
-  title: 'Set tier prices',
-  input: z.object({
-    productId: z.string().trim().min(1).max(64).describe('the product'),
-    tiers: z.array(z.object({
-      minQty: z.coerce.number().int().min(1).max(100_000).describe('from this many units'),
-      price: z.coerce.number().min(0).max(1_000_000).nullable().describe('the unit price from that quantity, in the master currency; null removes the tier'),
-      customerGroup: z.string().trim().regex(/^[a-z][a-z0-9_]{0,63}$/).optional().describe('only for this customer group (its code); default: every customer'),
-    })).min(1).max(TIER_MAX).optional().describe(`the tiers to set, 1 to ${TIER_MAX}`),
-  }),
-  requires: [F.pricingTiersManage, FIELDS.financialsSuppliersView],
-  category: 'pricing',
-  riskTier: 'medium',
-  readOnly: false,
-  requiresApprovalDefault: true,
-  openWorld: false,
-  reversibility: 'full',
-  maxClaudeTrust: 'confirm',
-  undo: TIER_UNDO,
-  description:
-    'Set a product\'s Nexus-only quantity tier prices: from N units the unit price is X, for every customer or one '
-    + 'customer group; a null price removes a tier. Kept in Nexus only: nothing reads them for an order or a quote today, '
-    + 'and nothing is sent to a marketplace. NOT Amazon Business prices or quantity discounts: those are each Amazon '
-    + 'listing\'s business price (ChannelListing.business*), set through the business price door. '
-    + 'Undo puts the old tiers back. Waits for a person: approved in Nexus, or confirmed in Claude with the asker\'s '
-    + 'authenticator code when the business set it so.',
-  async handler(args): Promise<ToolResult> {
-    const plan = await planTiers(args)
-    if (refused(plan)) return { ok: false, error: plan.error }
-    return {
-      ok: true,
-      preview: {
-        product: { sku: plan.product.sku, basePrice: plan.product.basePrice, currency: masterCurrency() },
-        tiers: plan.tiers.map((t) => ({ minQty: t.minQty, customerGroup: t.group, from: t.from, to: t.to, change: t.from == null ? 'add' : t.to == null ? 'remove' : 'update' })),
-        note: `${NOT_YET} These tier prices are kept in Nexus only (nothing reads them today) and are not Amazon Business prices; nothing is sent to a marketplace.`,
-      },
-    }
-  },
-  async execute(args): Promise<ToolResult> {
-    const plan = await planTiers(args)
-    if (refused(plan)) return { ok: false, error: plan.error }
-    await prisma.$transaction(async (tx) => {
-      for (const t of plan.tiers) {
-        const where = { productId: plan.product.id, minQty: t.minQty, customerGroupId: t.groupId }
-        if (t.to == null) await tx.productTierPrice.deleteMany({ where })
-        else if (t.from == null) await tx.productTierPrice.create({ data: { ...where, price: t.to } })
-        else await tx.productTierPrice.updateMany({ where, data: { price: t.to } })
-      }
-    })
-    return {
-      ok: true,
-      data: { sku: plan.product.sku, changed: plan.tiers.length },
-      change: {
-        before: { productId: plan.product.id, sku: plan.product.sku, tiers: plan.tiers.map((t) => ({ minQty: t.minQty, customerGroup: t.group, price: t.from })) },
-        after: { productId: plan.product.id, tiers: plan.tiers.map((t) => ({ minQty: t.minQty, customerGroup: t.group, price: t.to })) },
-      },
-    }
-  },
-}
-
-export const PRICING_CHANGE_TOOLS: AgentTool[] = [setPricingRule, setPromotion, schedulePriceChange, setEbayPricePromotion, setTierPrices]
+export const PRICING_CHANGE_TOOLS: AgentTool[] = [setPricingRule, setPromotion, schedulePriceChange, setEbayPricePromotion]

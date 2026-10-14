@@ -20,6 +20,10 @@
  * send time (`syncToAmazon`, `amazon/business-offer.ts`). A listing that cannot be sent to now (paused, a still-draft,
  * Inactive, ended) keeps it in Nexus (`notSent`); `queueHeldBusinessSends` sends it when the listing resumes, is
  * published or reopens. Copying in what Amazon holds sends nothing: Amazon already has it.
+ *
+ * Step 6 — `dryRun`: every check above, run as the write would run it, and the answer it would give (`applied` with the
+ * business price, the warnings and why it would not be sent yet), with nothing written, queued or announced. Claude's
+ * tools preview a business price change with it, so a preview says what this door decides.
  */
 import { Prisma } from '@prisma/client'
 import { createOutboundRow } from '../outbound-rows.js'
@@ -71,6 +75,9 @@ export interface BusinessPriceWriteOutcome {
   queueId?: string | null
   /** The change was saved, and why nothing was sent yet (a paused, draft, Inactive or ended listing). */
   notSent?: string
+  /** The normal price the business price follows and is checked against, and the market's currency (when it got that far). */
+  normalPrice?: number | null
+  currency?: string | null
 }
 
 export interface BusinessPriceWriteResult { results: BusinessPriceWriteOutcome[]; applied: number; refused: number; noop: number; conflict: number }
@@ -109,6 +116,8 @@ export async function writeBusinessPrices(input: {
   reason?: string
   /** Run inside the caller's open transaction instead of one transaction per listing. */
   tx?: Prisma.TransactionClient
+  /** Step 6 — check and answer only: nothing is written, queued or announced (an `applied` says what the write would do). */
+  dryRun?: boolean
 }): Promise<BusinessPriceWriteResult> {
   const result: BusinessPriceWriteResult = { results: [], applied: 0, refused: 0, noop: 0, conflict: 0 }
   if (input.targets.length === 0) return result
@@ -175,8 +184,15 @@ export async function writeBusinessPrices(input: {
       warnings = businessPriceWarnings({ setting: after, normalPrice: normal, salePrice: offer?.sale?.price ?? null, currency })
     }
     if (same(before, after)) {
-      result.results.push({ ...base, outcome: 'noop', version: l.version, before, businessPrice, warnings })
+      result.results.push({ ...base, outcome: 'noop', version: l.version, before, businessPrice, warnings, normalPrice: normal, currency })
       result.noop++
+      continue targets
+    }
+    if (input.dryRun) {
+      // What the write below would answer, without it: a person's change would be sent now, or kept until it can be.
+      const held = t.unguardedReason ? null : businessHeld(l)
+      result.results.push({ ...base, outcome: 'applied', version: l.version, before, businessPrice, warnings, normalPrice: normal, currency, ...(held ? { notSent: held } : {}) })
+      result.applied++
       continue targets
     }
 
@@ -218,11 +234,11 @@ export async function writeBusinessPrices(input: {
       conflict(now?.version ?? l.version)
       continue
     }
-    result.results.push({ ...base, outcome: 'applied', version: written.version, before, businessPrice, warnings, queueId: written.queueId, ...(written.notSent ? { notSent: written.notSent } : {}) })
+    result.results.push({ ...base, outcome: 'applied', version: written.version, before, businessPrice, warnings, normalPrice: normal, currency, queueId: written.queueId, ...(written.notSent ? { notSent: written.notSent } : {}) })
     result.applied++
   }
   // The sheet and the Matrix re-read these listings (inside the caller's transaction the hint waits for ITS commit).
-  const changed = result.results.filter((r) => r.outcome === 'applied').map((r) => r.listingId)
+  const changed = input.dryRun ? [] : result.results.filter((r) => r.outcome === 'applied').map((r) => r.listingId)
   if (changed.length) announceListingValues(changed, ['businessPrice'], 'business-price')
   // Post-commit: the instant lane honours each row's own holdUntil; the drain cron is the fallback.
   if (queued.length) await afterDatabaseCommit(`business-prices:${queued.map((row) => row.id).join(',')}`,

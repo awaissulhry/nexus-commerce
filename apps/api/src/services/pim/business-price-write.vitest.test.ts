@@ -259,3 +259,23 @@ describe('the normal price a business price follows is the one the push sends (2
     expect(r.results[0]).toMatchObject({ outcome: 'applied', businessPrice: 99.75 })
   })
 })
+
+describe('step 6 — a dry run (Claude\'s preview)', () => {
+  it('answers as the write would — the business price, the normal price, why it is not sent yet — and writes, queues and announces nothing', async () => {
+    const id = await scoped(async () => (await prisma.channelListing.create({ data: {
+      productId: 'bp-c', channel: 'AMAZON', marketplace: 'IT', channelMarket: 'AMAZON_IT', region: 'EU', aliasKey: 'dry', channelConnectionId: (await prisma.channelConnection.findFirstOrThrow({ where: { channelType: 'AMAZON' } })).id,
+      listingStatus: 'ACTIVE', isPublished: true, externalListingId: 'EXT-dry', price: 200, priceOverride: 200, followMasterPrice: false, quantity: 3, syncPaused: true,
+    } as never })).id)
+    const row = () => scoped(() => prisma.channelListing.findUnique({ where: { id }, select: { version: true, businessPriceRule: true, businessPricePercent: true } }))
+    const traces = () => scoped(async () => [await prisma.outboundSyncQueue.count({ where: { channelListingId: id } }), await prisma.channelListingOverride.count({ where: { channelListingId: id } })])
+    const was = { row: await row(), traces: await traces() }
+    const dry = (setting: BusinessPriceSetting | null) => scoped(() => writeBusinessPrices({ targets: [{ listingId: id, expectedVersion: was.row!.version, setting }], actor: 'test@example.test', dryRun: true }))
+    expect((await dry(pct(5, tiers3))).results[0]).toMatchObject({
+      outcome: 'applied', before: null, after: pct(5, tiers3), businessPrice: 190, normalPrice: 200, currency: 'EUR', version: was.row!.version,
+      notSent: expect.stringContaining('this listing\'s sync is paused'),
+    })
+    expect((await dry(fixed(240))).results[0]).toMatchObject({ outcome: 'refused', reason: expect.stringContaining('above the normal price EUR 200.00') })
+    expect((await dry(null)).results[0]).toMatchObject({ outcome: 'noop' })
+    expect({ row: await row(), traces: await traces() }).toEqual(was)
+  })
+})

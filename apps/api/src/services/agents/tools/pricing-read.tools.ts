@@ -5,6 +5,11 @@
  * Read-only and low risk: this business's own database. The reads are the pricing pages' own (services/pricing/,
  * moved out of the routes) plus the listing rows. Nothing here sends a price: whether a promotion, the repricer or a
  * scheduled change would ever run is said from the same switches the scheduler reads.
+ *
+ * Amazon Business step 6 — price-explain also explains an Amazon listing's business price, from the Matrix read's own
+ * business cell (`businessCellOf`): the rule, the price it gives now and the normal price it follows, the quantity tiers
+ * with their unit prices, the last send to Amazon, and Amazon's own value when Nexus knows it (the nightly check, or a
+ * business price Amazon shows that Nexus never kept).
  */
 
 import { Prisma } from '@prisma/client'
@@ -34,6 +39,8 @@ import { isPriceRefusal, resolvePrice } from '../../pricing-engine.service.js'
 import { CHANNEL_LABELS } from '@nexus/shared/channel-label'
 import type { AgentTool, ToolResult } from '../tool-types.js'
 import { isLiveProduct, liveProduct, PRODUCT_NOT_FOUND } from './live-product.js'
+import { businessSettingWords } from './business-price-plan.js'
+import { logger } from '../../../utils/logger.js'
 
 const NESTED_CAP = 20
 const TEXT_CAP = 200
@@ -410,6 +417,53 @@ const scheduledPriceChanges: AgentTool = {
 
 const CHANNELS = Object.keys(CHANNEL_LABELS) as [string, ...string[]]
 
+/**
+ * Amazon Business — the business price of this product's Amazon listing in this market (on the named account), as the
+ * Matrix's B2B cells hold it; null when the product has no Amazon listing there. Reads only.
+ */
+async function businessExplain(productId: string, marketplace: string, accountId: string | undefined, canEditPrice: boolean) {
+  const { getMatrixRead } = await import('../../pim/matrix.service.js')
+  const read = await getMatrixRead({ productId, accountId: null, canEditPrice })
+  const coords = read.coordinates
+    .filter((c) => c.channel === 'AMAZON' && c.kind === 'market' && c.market === marketplace && (accountId ? c.accountId === accountId : !c.alias))
+    .sort((a, b) => Number(!!a.alias) - Number(!!b.alias))
+  const coord = coords.find((c) => read.rows.find((r) => r.id === productId)?.cells[c.key]?.listingId)
+  const row = read.rows.find((r) => r.id === productId)
+  const cells = coord ? row?.cells[coord.key] : undefined
+  if (!coord || !row || !cells?.listingId) return null
+  const where = { coordinateKey: coord.key, rowId: row.id, listingId: cells.listingId }
+  if (cells.business === undefined) {
+    return { ...where, offered: false, reason: clip(coord.absent.find((a) => a.cell === 'businessPrice')?.reason ?? 'Amazon lists no Amazon Business for this account and market.') }
+  }
+  if (!cells.business) return { ...where, offered: false, reason: clip(cells.writeBlockedReason.businessPrice ?? 'No business price here.') }
+  const b = cells.business
+  return {
+    ...where,
+    offered: true,
+    rule: b.rule,
+    percent: b.percent,
+    exact: b.exact,
+    setting: businessSettingWords(b.rule ? { rule: b.rule, percent: b.percent, price: b.exact, tiers: b.tiers ? { type: b.tiers.type, levels: b.tiers.levels.map((l) => ({ minQty: l.minQty, value: l.value })) } : null } : null, b.currency),
+    // The business price the setting gives now, and the normal price it follows (a percent) or is compared with (exact).
+    price: b.price,
+    normalPrice: b.normalPrice,
+    currency: b.currency,
+    minPrice: b.minPrice,
+    maxPrice: b.maxPrice,
+    tiers: b.tiers ? { type: b.tiers.type, levels: b.tiers.levels.slice(0, NESTED_CAP) } : null,
+    ...(b.warnings.length ? { warnings: b.warnings.slice(0, NESTED_CAP).map((w) => clip(w)) } : {}),
+    ...(b.held ? { held: clip(b.held) } : {}),
+    lastSend: b.send ? { state: b.send.state, at: b.send.at, final: b.send.final, ...(b.send.line ? { line: clip(b.send.line) } : {}) } : null,
+    // What Amazon shows, when Nexus knows it: the nightly check of this very price, or Amazon's own (set outside Nexus).
+    amazon: b.live
+      ? { checked: b.live.status, businessPrice: b.live.amazonPrice, at: b.live.at, ...(b.live.normal ? { shopperPrices: b.live.normal } : {}) }
+      : b.reported ? { setOutsideNexus: true, businessPrice: b.reported.price } : null,
+    change: cells.writable.businessPrice === true
+      ? 'set-listing-price action business with this rowId and coordinateKey (a person approves it in Nexus)'
+      : clip(cells.writeBlockedReason.businessPrice ?? 'It cannot be changed here.'),
+  }
+}
+
 const priceExplain: AgentTool = {
   name: 'price-explain',
   title: 'Explain a price',
@@ -436,7 +490,10 @@ const priceExplain: AgentTool = {
     + 'price, the listing\'s own price), the floor and ceiling and whether it was clamped, the steps of its reasoning '
     + 'and its warnings, and a pricing rule\'s suggestion (never sent by itself). With several accounts on the channel, '
     + 'name one (accountId) when the product is listed on more than one: the answer lists them. Also the last 20 price changes on '
-    + 'that channel and market. Costs and fees in the breakdown are shown only to a person who may see them.',
+    + 'that channel and market. On Amazon also the business price for business buyers (Amazon Business, business): its rule '
+    + '(PERCENT_OFF or FIXED), the price it gives now and the normal price it follows, the quantity tiers and their unit prices, '
+    + 'the last send to Amazon and Amazon\'s own value when Nexus knows it — or why there is none. Costs and fees in the '
+    + 'breakdown are shown only to a person who may see them.',
   async handler(args, ctx) {
     const product = await prisma.product.findFirst({ where: liveProduct(String(args.productId ?? '')), select: { id: true, sku: true, name: true } })
     if (!product) return { ok: false, error: PRODUCT_NOT_FOUND }
@@ -457,6 +514,16 @@ const priceExplain: AgentTool = {
       throw error
     }
     const history = await readPriceHistory({ productId: product.id, channel, marketplace, limit: '20' })
+    let business: Awaited<ReturnType<typeof businessExplain>> | { error: string } = null
+    if (channel === 'AMAZON') {
+      try {
+        business = await businessExplain(product.id, marketplace, accountId, ctx.can(F.productsPriceEdit))
+      } catch (error) {
+        // The normal price is still explained; the business part says it could not be read.
+        logger.warn('price-explain: business price not read', { productId: product.id, marketplace, error: error instanceof Error ? error.message : String(error) })
+        business = { error: 'The business price could not be read here.' }
+      }
+    }
     const b = resolution.breakdown
     return {
       ok: true,
@@ -486,6 +553,7 @@ const priceExplain: AgentTool = {
         recentChanges: history.events.map((e) => ({
           at: iso(e.changedAt), oldPrice: e.oldPrice, newPrice: e.newPrice, currency: e.currency, source: e.source, reason: clip(e.reason), actor: e.actor,
         })),
+        ...(business ? { business } : {}),
       },
     }
   },
