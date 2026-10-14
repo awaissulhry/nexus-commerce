@@ -145,9 +145,9 @@ BEGIN
   IF (OLD."weightValue", OLD."weightUnit", OLD."dimLength", OLD."dimWidth", OLD."dimHeight", OLD."dimUnit")
      IS DISTINCT FROM (NEW."weightValue", NEW."weightUnit", NEW."dimLength", NEW."dimWidth", NEW."dimHeight", NEW."dimUnit") THEN groups := array_append(groups, 'physical'); END IF;
   IF (OLD."hsCode", OLD."countryOfOrigin", OLD."ppeCategory", OLD."hazmatClass", OLD."hazmatUnNumber", OLD."garmentClass",
-      OLD."notifiedBodyNumber", OLD."notifiedBodyName", OLD."declarationOfConformityUrl", OLD."impactProtectors")
+      OLD."notifiedBodyNumber", OLD."notifiedBodyName", OLD."declarationOfConformityUrl", OLD."impactProtectors", OLD."fitGarment")
      IS DISTINCT FROM (NEW."hsCode", NEW."countryOfOrigin", NEW."ppeCategory", NEW."hazmatClass", NEW."hazmatUnNumber", NEW."garmentClass",
-      NEW."notifiedBodyNumber", NEW."notifiedBodyName", NEW."declarationOfConformityUrl", NEW."impactProtectors") THEN groups := array_append(groups, 'compliance'); END IF;
+      NEW."notifiedBodyNumber", NEW."notifiedBodyName", NEW."declarationOfConformityUrl", NEW."impactProtectors", NEW."fitGarment") THEN groups := array_append(groups, 'compliance'); END IF;
   IF (OLD."parentId", OLD."isParent", OLD."familyId")
      IS DISTINCT FROM (NEW."parentId", NEW."isParent", NEW."familyId") THEN groups := array_append(groups, 'structure'); END IF;
   IF (OLD."basePrice", OLD."minPrice", OLD."maxPrice", OLD."b2bPrice", OLD."b2bMinQty")
@@ -182,7 +182,7 @@ CREATE TRIGGER nexus_assortment_capture_product_update AFTER UPDATE ON "Product"
       OLD."imageAxisPreference",
       OLD."weightValue", OLD."weightUnit", OLD."dimLength", OLD."dimWidth", OLD."dimHeight", OLD."dimUnit",
       OLD."hsCode", OLD."countryOfOrigin", OLD."ppeCategory", OLD."hazmatClass", OLD."hazmatUnNumber", OLD."garmentClass",
-      OLD."notifiedBodyNumber", OLD."notifiedBodyName", OLD."declarationOfConformityUrl", OLD."impactProtectors",
+      OLD."notifiedBodyNumber", OLD."notifiedBodyName", OLD."declarationOfConformityUrl", OLD."impactProtectors", OLD."fitGarment",
       OLD."parentId", OLD."isParent", OLD."familyId",
       OLD."basePrice", OLD."minPrice", OLD."maxPrice", OLD."b2bPrice", OLD."b2bMinQty",
       OLD.status, OLD."deletedAt")
@@ -192,7 +192,7 @@ CREATE TRIGGER nexus_assortment_capture_product_update AFTER UPDATE ON "Product"
       NEW."imageAxisPreference",
       NEW."weightValue", NEW."weightUnit", NEW."dimLength", NEW."dimWidth", NEW."dimHeight", NEW."dimUnit",
       NEW."hsCode", NEW."countryOfOrigin", NEW."ppeCategory", NEW."hazmatClass", NEW."hazmatUnNumber", NEW."garmentClass",
-      NEW."notifiedBodyNumber", NEW."notifiedBodyName", NEW."declarationOfConformityUrl", NEW."impactProtectors",
+      NEW."notifiedBodyNumber", NEW."notifiedBodyName", NEW."declarationOfConformityUrl", NEW."impactProtectors", NEW."fitGarment",
       NEW."parentId", NEW."isParent", NEW."familyId",
       NEW."basePrice", NEW."minPrice", NEW."maxPrice", NEW."b2bPrice", NEW."b2bMinQty",
       NEW.status, NEW."deletedAt"))
