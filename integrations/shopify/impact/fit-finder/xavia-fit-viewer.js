@@ -8,12 +8,12 @@ const linear = c => ((c / 255) <= 0.04045 ? c / 255 / 12.92 : ((c / 255 + 0.055)
 const SKINS = SWATCHES.map(rgb => rgb.map(linear));
 const RING_COLOUR = { ok: [76, 175, 80], bad: [229, 57, 53], guide: [255, 122, 0] };
 for (const k of Object.keys(RING_COLOUR)) RING_COLOUR[k] = RING_COLOUR[k].map(linear);
-// Camera per screen, measured against the reference fit finder: lo/hi = part of the body height in view (0 = floor,
+// Camera per screen: lo/hi = part of the body height in view (0 = floor,
 // 1 = top of the head), yaw = turn of the body (radians), x = where the body sits across the stage (-1 left .. 1 right).
 const FRAMES = {
   full: { lo: -0.04, hi: 1.03, yaw: 0.5, pitch: 0.06, x: 0 },
-  shape: { lo: 0.346, hi: 1.02, yaw: 0.55, pitch: 0.08, x: -0.26 },
-  result: { lo: 0.346, hi: 1.01, yaw: 0.38, pitch: 0.2, x: -0.226 },
+  shape: { lo: 0.33, hi: 1.04, yaw: 0.55, pitch: 0.08, x: 0 },
+  result: { lo: 0.33, hi: 1.04, yaw: 0.38, pitch: 0.2, x: -0.226 },
   shapePhone: { lo: -0.051, hi: 1.155, yaw: 0.5, pitch: 0.08, x: -0.63 },
   resultPhone: { lo: 0.001, hi: 1.15, yaw: 0.5, pitch: 0.2, x: -0.04 },
   guide: { lo: 0.33, hi: 0.975, yaw: 0.12, pitch: 0.2, x: -0.1 },
@@ -237,24 +237,27 @@ export function createViewer(host, { urls, label, onFail } = {}) {
   function placeLabels(proj, view, model, cssW, cssH) {
     const mvp = multiply(proj, multiply(view, model));
     const items = [];
+    // The labels' side comes from the page's CSS (--xff-label-side: right, the default, or left).
+    const css = getComputedStyle(labels), left = css.getPropertyValue('--xff-label-side').trim() === 'left';
     for (const r of ringMeshes) {
       if (!r.text || to) continue;
-      // The ring point farthest right on screen, at this turn of the body.
+      // The ring point farthest out on the labels' side, at this turn of the body.
       let best = null;
       for (const p of r.points) {
         const c = [0, 1, 2, 3].map(i => mvp[i] * p[0] + mvp[4 + i] * p[1] + mvp[8 + i] * p[2] + mvp[12 + i]);
         const sx = (c[0] / c[3] * 0.5 + 0.5) * cssW, sy = (1 - (c[1] / c[3] * 0.5 + 0.5)) * cssH;
-        if (!best || sx > best[0]) best = [sx, sy];
+        if (!best || (left ? sx < best[0] : sx > best[0])) best = [sx, sy];
       }
       if (best) items.push({ r, x: best[0], y: best[1] });
     }
-    // One column to the right of the body, each label level with its ring.
+    // One column beside the body, each label level with its ring.
     items.sort((a, b) => a.y - b.y);
     for (let i = 1; i < items.length; i++) items[i].ly = Math.max(items[i].y, (items[i - 1].ly ?? items[i - 1].y) + 52);
     // Where the labels go comes from the page's CSS: a fixed column --xff-label-column px from the right edge, or
-    // --xff-label-gap px right of the rings (22 px by default).
-    const css = getComputedStyle(labels), fixed = parseFloat(css.getPropertyValue('--xff-label-column'));
-    const column = Number.isFinite(fixed) ? cssW - fixed : Math.max(...items.map(i => i.x), 0) + (parseFloat(css.getPropertyValue('--xff-label-gap')) || 22);
+    // --xff-label-gap px beside the rings (22 px by default).
+    const fixed = parseFloat(css.getPropertyValue('--xff-label-column')), gap = parseFloat(css.getPropertyValue('--xff-label-gap')) || 22;
+    const column = Number.isFinite(fixed) ? cssW - fixed : left ? Math.min(...items.map(i => i.x), cssW) - gap : Math.max(...items.map(i => i.x), 0) + gap;
+    labels.dataset.side = left ? 'left' : 'right';
     labels.replaceChildren(...items.map(({ r, y, ly = y }) => {
       const el = document.createElement('div');
       el.className = `xff-3d-label xff-3d-label--${r.tone}`;
@@ -268,8 +271,8 @@ export function createViewer(host, { urls, label, onFail } = {}) {
       el.style.top = `${ly}px`;
       return el;
     }));
-    // Keep each label inside the stage (its width comes from the page's CSS).
-    for (const el of labels.children) el.style.left = `${Math.max(0, Math.min(column, cssW - el.offsetWidth - 4))}px`;
+    // Keep each label inside the stage (its width comes from the page's CSS); on the left side it ends at the column.
+    for (const el of labels.children) el.style.left = `${Math.max(4, Math.min(left ? column - el.offsetWidth : column, cssW - el.offsetWidth - 4))}px`;
   }
 
   function requestRender() {

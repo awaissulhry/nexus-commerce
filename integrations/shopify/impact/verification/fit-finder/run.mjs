@@ -82,7 +82,8 @@ await scenario('desktop: size guide, then height and weight, body shape, result;
   await page.locator('#xff-next').click()
   assert.equal(await screen(page), 'result')
   assert.equal(await page.locator('.xff-card__size').textContent(), 'L')
-  assert.equal(await page.locator('.xff-pick__label').textContent(), 'BEST OPTION: L')
+  assert.equal(await page.locator('.xff-pick__label').textContent(), 'YOUR SIZE: L')
+  assert.deepEqual(await page.locator('.xff-fit__item').allTextContents(), ['Chest: just right', 'Waist: just right'], 'the fit in words beside the size')
   await settle(page)
   assert.equal(await page.locator('.xff-3d-label').count(), 2, 'chest and waist rings are labelled next to the body')
   assert.equal(await page.locator('#xff-avatar-button').textContent(), 'Profiles', 'the profiles button is in view')
@@ -130,15 +131,14 @@ await scenario('desktop: a size that will not fit is warned on the page and chec
 
 await scenario('desktop: side panels (how to measure, body measurements) and profiles', DESKTOP, async page => {
   await openGuide(page)
-  await page.locator('.xff-sidetab').click()
+  await page.locator('#xff-how-link').click()
   assert.equal(await dialog(page).getAttribute('data-panel'), 'measure')
   assert.match(await page.locator('.xff-sidepanel').textContent(), /How to measure.*Chest.*Waist/s)
   await page.screenshot({ path: `${shots}/desktop-6-measure.png` })
   await page.keyboard.press('Escape')
   assert.equal(await dialog(page).getAttribute('data-panel'), '', 'Escape closes the panel, not the dialog')
   await toResult(page)
-  await page.locator('.xff-sidetab').click()
-  assert.match(await page.locator('.xff-measures').textContent(), /Chest98 – 104 cm.*Waist86 – 92 cm/s)
+  assert.match(await page.locator('.xff-sizefor').textContent(), /Body measurements for size L.*Chest98 – 104 cm.*Waist86 – 92 cm/s, 'the measurements of the size beside the result')
   await noJunk(page)
   await page.screenshot({ path: `${shots}/desktop-7-body-measures.png` })
   await page.locator('#xff-to-chart').click()
@@ -229,7 +229,7 @@ await scenario('desktop: the 3D body reshapes with the sliders, turns by drag an
 await scenario('phone, Italian: chart, body type, measures, shape, result on full screen without sideways scroll', PHONE, async page => {
   await openGuide(page, 'locale=it')
   assert.equal(await page.locator('[data-xff-label]').textContent(), 'Guida alle taglie')
-  // Full width, with 9 px of the darkened page above and below (as on the reference fit finder).
+  // Full width, with 9 px of the darkened page above and below.
   const box = await page.locator('.xff-modal').boundingBox()
   assert.deepEqual([box.x, box.y, box.width, box.height].map(Math.round), [0, 9, 390, 826], `phone layout ${JSON.stringify(box)}`)
   await page.screenshot({ path: `${shots}/phone-1-tabella.png` })
@@ -245,7 +245,7 @@ await scenario('phone, Italian: chart, body type, measures, shape, result on ful
   await page.screenshot({ path: `${shots}/phone-4-forma.png` })
   await page.locator('#xff-next').click()
   await settle(page)
-  assert.equal(await page.locator('.xff-pick__label').textContent(), 'MIGLIORE OPZIONE: L')
+  assert.equal(await page.locator('.xff-pick__label').textContent(), 'LA TUA TAGLIA: L')
   await noJunk(page)
   await page.screenshot({ path: `${shots}/phone-5-risultato.png` })
   for (const label of await page.locator('.xff-3d-label').all()) {
@@ -281,7 +281,7 @@ await scenario('keyboard only: open, answer, result, close', DESKTOP, async page
   await page.keyboard.press('Enter')
   assert.equal(await screen(page), 'result')
   assert.equal(await page.evaluate(() => document.activeElement.className), 'xff-pick__label')
-  assert.equal(await page.evaluate(() => document.activeElement.textContent), 'BEST OPTION: L', 'the heading says the verdict and the size')
+  assert.equal(await page.evaluate(() => document.activeElement.textContent), 'YOUR SIZE: L', 'the heading says the verdict and the size')
   await page.keyboard.press('Escape')
   await dialog(page).waitFor({ state: 'detached' })
   assert.equal(await page.evaluate(() => document.activeElement?.matches('[data-xff-open]') ?? false), true)
@@ -327,7 +327,7 @@ await scenario('tablet and touch: the full-screen layout with 44 px targets', { 
   const box = await page.locator('.xff-modal').boundingBox()
   assert.equal(Math.round(box.width), 480, 'a centred full-height panel')
   await toResult(page, { phone: true })
-  for (const id of ['#xff-add', '#xff-edit-phone', '#xff-size-L']) assert.ok((await page.locator(id).boundingBox()).height >= 44, `${id} is at least 44 px high`)
+  for (const id of ['#xff-add', '#xff-edit', '#xff-size-L', '#xff-lang', '#xff-avatar-button']) assert.ok((await page.locator(id).boundingBox()).height >= 44, `${id} is at least 44 px high`)
   await page.screenshot({ path: `${shots}/tablet-result.png` })
 })
 
@@ -336,6 +336,48 @@ await scenario('200% zoom (a low window): the dialog scrolls and every button ca
   await page.locator('#xff-find').scrollIntoViewIfNeeded()
   await page.locator('#xff-find').click()
   assert.ok(['gender', 'body'].includes(await screen(page)))
+})
+
+// The size table: fixed columns and one row height, so switching women / men, cm / in or the language moves nothing.
+for (const [label, viewport] of [['desktop', DESKTOP], ['phone', PHONE]]) {
+  await scenario(`${label}: the size table never moves between women, men, units and languages`, viewport, async page => {
+    await openGuide(page)
+    const geo = () => page.evaluate(() => ({
+      cols: [...document.querySelectorAll('.xff-table thead th')].map(e => { const r = e.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.width)] }),
+      rows: [...new Set([...document.querySelectorAll('.xff-table tr')].map(e => Math.round(e.getBoundingClientRect().height)))],
+      top: Math.round(document.querySelector('.xff-table').getBoundingClientRect().top),
+    }))
+    const men = await geo()
+    assert.equal(men.rows.length, 1, `one row height ${men.rows}`)
+    await page.locator('#xff-cut-women').click()
+    assert.equal(await page.locator('.xff-table tbody tr').count(), 8, 'the women chart has 8 sizes here, the men chart 9')
+    assert.deepEqual(await geo(), men, 'women = men')
+    await page.locator('#xff-chart-unit-in').click()
+    assert.deepEqual(await geo(), men, 'inches = cm')
+    for (const code of ['it', 'de', 'fr', 'es']) { await page.locator('#xff-lang').selectOption(code); assert.deepEqual(await geo(), men, `${code} = en`) }
+  })
+}
+
+await scenario('desktop: the language switch in the dialog keeps the step and what was typed', DESKTOP, async page => {
+  await openGuide(page, 'locale=it')
+  assert.equal(await page.locator('#xff-lang').inputValue(), 'it', 'the store language first')
+  await page.locator('#xff-find').click()
+  await page.locator('#xff-height').fill('178'); await page.locator('#xff-weight').fill('80')
+  await page.locator('#xff-lang').selectOption('de')
+  assert.equal(await dialog(page).getAttribute('lang'), 'de')
+  assert.equal(await page.locator('.xff-content h2').textContent(), 'Finde deine Größe')
+  assert.deepEqual([await screen(page), await page.locator('#xff-height').inputValue(), await page.locator('#xff-weight').inputValue()], ['body', '178', '80'])
+  assert.equal(await page.evaluate(() => document.activeElement.id), 'xff-lang', 'focus stays on the switch')
+  await page.locator('#xff-next').click(); await page.locator('#xff-next').click()
+  assert.equal(await page.locator('.xff-pick__label').textContent(), 'DEINE GRÖSSE: L')
+  await page.keyboard.press('Escape')
+  await dialog(page).waitFor({ state: 'detached' })
+  await page.locator('[data-xff-open]').click()
+  assert.equal(await page.locator('#xff-lang').inputValue(), 'de', 'the choice stays for this visit')
+  await page.keyboard.press('Escape')
+  await page.locator('label:text-is("S")').click()
+  await page.waitForFunction(() => document.querySelector('[data-xff-hint]')?.textContent.includes('probabilmente'))
+  assert.match(await page.locator('[data-xff-hint]').textContent(), /^La S probabilmente ti sarà troppo stretta/, 'the product page keeps its own language')
 })
 
 await browser.close()

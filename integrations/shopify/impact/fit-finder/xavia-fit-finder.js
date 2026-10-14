@@ -1,6 +1,6 @@
 // Xavia fit finder: the size guide dialog (size chart, then height / weight / age, body shape and the result on a 3D
-// mannequin), the size warning under the size option, and the add-to-cart check. The layout follows the fit finders
-// shoppers know from big motorcycle-gear stores. The inline boot in snippets/xavia-fit-finder.liquid loads this module
+// mannequin), the size warning under the size option, and the add-to-cart check. The steps are as short as the fit
+// finders shoppers know from big motorcycle-gear stores. The inline boot in snippets/xavia-fit-finder.liquid loads this module
 // on the first click, or at idle time when this device has a saved fit profile. build.mjs joins it with the engine,
 // texts, 3D body and viewer code and the CSS into one theme asset; the two bodies are separate assets, loaded on open.
 import { estimateBody, measuredBody, combineBody, pickChart, chartsForProduct, recommend, validateInputs, verdictFor, normalizeSize, LIMITS } from './xavia-fit-engine.js';
@@ -17,9 +17,21 @@ const FIT_EN = { tooTight: 'too tight', snug: 'slightly tight', right: 'just rig
 const HOW = { chest: 'howChest', waist: 'howWaist', hips: 'howHips', inseam: 'howInseam', hand: 'howHand', handLength: 'howHandLength' };
 const CM_PER_IN = 2.54, KG_PER_LB = 0.45359237;
 
+// The dialog's language: the store's, until the shopper picks another one in the dialog (kept for this visit).
+// The size warning on the product page always speaks the page's language.
+const LANGS = [['en', 'English'], ['it', 'Italiano'], ['de', 'Deutsch'], ['fr', 'Français'], ['es', 'Español']];
+const LANG_KEY = 'xavia-fit-lang';
 let lang = 'en';
-const t = (key, vars = {}) => String(TEXT[lang]?.[key] ?? TEXT.en[key] ?? key).replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? '');
+const tr = (language, key, vars = {}) => String(TEXT[language]?.[key] ?? TEXT.en[key] ?? key).replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? '');
+const t = (key, vars) => tr(lang, key, vars);
 const pickLang = locale => (TEXT[String(locale || '').slice(0, 2).toLowerCase()] ? String(locale).slice(0, 2).toLowerCase() : 'en');
+function dialogLang(pageLang) {
+  try { const saved = JSON.parse(sessionStorage.getItem(LANG_KEY) || 'null'); if (saved?.page === pageLang && TEXT[saved.lang]) return saved.lang; } catch { /* private mode */ }
+  return pageLang;
+}
+function rememberLang(pageLang, chosen) {
+  try { if (chosen === pageLang) sessionStorage.removeItem(LANG_KEY); else sessionStorage.setItem(LANG_KEY, JSON.stringify({ page: pageLang, lang: chosen })); } catch { /* private mode */ }
+}
 
 // ---------------------------------------------------------------- small DOM helpers (never innerHTML with data)
 function h(tag, attrs = {}, ...kids) {
@@ -137,19 +149,19 @@ function selectSize(cfg, name) {
 }
 
 const worstRegion = verdict => verdict.regions.find(r => r.fit === 'tooTight') ?? verdict.regions.find(r => r.fit === 'tooLoose') ?? verdict.regions.find(r => r.fit !== 'right');
-const lowerFit = fit => (fit === 'tooTight' ? t('tooTightLower') : fit === 'tooLoose' ? t('tooLooseLower') : t(FIT_TEXT[fit]));
+const lowerFit = (fit, language = lang) => tr(language, fit === 'tooTight' ? 'tooTightLower' : fit === 'tooLoose' ? 'tooLooseLower' : FIT_TEXT[fit]);
 
 /** The warning under the size buttons when the chosen size will not fit this device's shopper. */
 function decorate(root) {
   const cfg = readConfig(root);
   if (!cfg) return;
-  lang = pickLang(cfg.locale);
+  const pageLang = pickLang(cfg.locale);
   if (!Object.keys(cfg.charts).length) { root.hidden = true; return; }
   const fieldset = root.closest('fieldset') ?? root.parentElement;
   let hint = fieldset?.querySelector(':scope > [data-xff-hint]');
   const p = loadProfile(), ev = p && evaluate(cfg, p);
   const chosen = ev && selectedSize(cfg), verdict = chosen && verdictFor(ev.result, chosen);
-  const text = verdict && verdict.verdict === 'no' ? t('notForYou', { size: chosen, fit: lowerFit(worstRegion(verdict).fit) }) : '';
+  const text = verdict && verdict.verdict === 'no' ? tr(pageLang, 'notForYou', { size: chosen, fit: lowerFit(worstRegion(verdict).fit, pageLang) }) : '';
   if (!text) { hint?.remove(); return; }
   if (!hint && fieldset) { hint = h('p', { class: 'xff-page-hint', 'data-xff-hint': true, role: 'status' }); fieldset.append(hint); }
   if (hint) hint.textContent = text;
@@ -239,6 +251,9 @@ const ICON = {
   warn: 'M12 6.5v7M12 17v.5',
   tape: 'M2.5 12.5a5.5 5.5 0 1 0 11 0a5.5 5.5 0 1 0-11 0M6.5 12.5a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0M8 18h14v-4h-8.6M17 18v-1.8M20 18v-1.8',
   user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4.5 20a7.5 7.5 0 0 1 15 0',
+  globe: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3.5 9h17M3.5 15h17M12 3c-2.4 2.5-3.6 5.5-3.6 9s1.2 6.5 3.6 9M12 3c2.4 2.5 3.6 5.5 3.6 9s-1.2 6.5-3.6 9',
+  down: 'M6 9l6 6 6-6',
+  lock: 'M7 11V8a5 5 0 0 1 10 0v3M5.5 11h13v9.5h-13z',
 };
 const icon = (name, size = 20, width = 1.8) => s('svg', { viewBox: '0 0 24 24', width: size, height: size, 'aria-hidden': 'true', focusable: 'false', class: 'xff-icon' },
   s('path', { d: ICON[name], fill: 'none', stroke: 'currentColor', 'stroke-width': width, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
@@ -256,10 +271,11 @@ function ensureStyles(cfg) {
   }
 }
 // The full-screen layout, with 44 px touch targets: phones, tablets, any touch screen, and any window too narrow or too
-// low for the 907 x 500 modal (also browser zoom).
-const PHONE_LAYOUT = '(max-width: 899px), (max-height: 559px), (pointer: coarse)';
+// low for the desktop modal (also browser zoom).
+const PHONE_LAYOUT = '(max-width: 899px), (max-height: 639px), (pointer: coarse)';
 const phone = () => window.matchMedia?.(PHONE_LAYOUT).matches ?? false;
 const HEADING = '\u0000heading';   // render(HEADING): focus the new screen's heading
+const FINDER = ['gender', 'body', 'shape', 'result'];
 
 /**
  * options.screen: 'chart' (the size guide, the default from the product page) or 'finder' (first step, or the
@@ -268,38 +284,34 @@ const HEADING = '\u0000heading';   // render(HEADING): focus the new screen's he
 function openDialog(root, options = {}) {
   const cfg = readConfig(root);
   if (!cfg) return;
-  lang = pickLang(cfg.locale);
+  const pageLang = pickLang(cfg.locale);
+  lang = dialogLang(pageLang);
   ensureStyles(cfg);
   current?.close();
   const saved = loadProfile();
   const onlyWomen = cfg.charts.women && !cfg.charts.men && !cfg.charts.unisex;
   const state = {
     screen: options.mode === 'guard' ? 'guard' : 'chart', chosen: options.chosen, compare: null, panel: null,
-    errors: {}, draft: {}, chartCut: null, showSkins: false, ageTip: false, confirmDelete: false, returnTo: null,
+    errors: {}, draft: {}, chartCut: null, confirmDelete: false, returnTo: null,
     p: saved ? { skin: 0, ...saved, tape: { ...saved.tape }, shape: { ...saved.shape }, units: { ...saved.units } } : newProfile(cfg, onlyWomen ? 'female' : 'male'),
   };
   if (state.p.units.height === 'in') state.p.units.height = 'ft';   // earlier releases: decimal inches
   const opener = options.opener ?? document.activeElement;
   const titleId = nextId('title'), live = h('p', { class: 'xff-sr', 'aria-live': 'polite' });
 
-  // Fixed parts of the modal; each screen fills .xff-content and the CSS shows what the screen uses.
-  const dialog = h('dialog', { class: 'xff-dialog', 'aria-label': t('sizeGuide'), lang });
+  // Fixed parts of the modal: the top bar, the picture side (product photo or 3D body) and the step side. Each screen
+  // fills .xff-content; the CSS shows what the screen uses.
+  const dialog = h('dialog', { class: 'xff-dialog' });
   const view = h('div', { class: 'xff-stage__view' });
   const stage = h('div', { class: 'xff-stage' }, view);
   const media = h('div', { class: 'xff-media' }, cfg.product.image ? h('img', { src: cfg.product.image, alt: '', loading: 'lazy' }) : null);
-  const logo = h('div', { class: 'xff-logo' }, cfg.logo ? h('img', { src: cfg.logo, alt: cfg.shop || '' }) : h('span', { text: cfg.shop || '' }));
-  const sideTab = h('button', { type: 'button', class: 'xff-sidetab', id: 'xff-sidetab', onclick: () => togglePanel(state.screen === 'chart' ? 'measure' : 'body') });
+  const visual = h('div', { class: 'xff-visual' }, media, stage);
   const sidePanel = h('aside', { class: 'xff-sidepanel', tabindex: '-1' });
   const skins = h('fieldset', { class: 'xff-skins' });
-  const avatar = h('div', { class: 'xff-avatar' });
+  const topbar = h('div', { class: 'xff-topbar' });
   const content = h('section', { class: 'xff-content' });
-  const topbar = h('div', { class: 'xff-topbar' },
-    h('button', { type: 'button', class: 'xff-topbar__menu', id: 'xff-profiles-button', 'aria-label': t('profiles'), onclick: () => togglePanel('profiles') }, icon('user', 26, 1.6)),
-    h('button', { type: 'button', class: 'xff-topbar__close', 'aria-label': t('close'), onclick: () => close() }, icon('close', 32, 1.5)));
-  const modal = h('div', { class: 'xff-modal' }, topbar, logo, media, stage, skins, sideTab, sidePanel, content, avatar);
-  const closeButton = h('button', { type: 'button', class: 'xff-close', 'aria-label': t('close'), onclick: () => close() }, h('span', { 'aria-hidden': 'true', text: '×' }));
-  const legal = h('p', { class: 'xff-legal' }, cfg.privacyUrl ? h('a', { href: cfg.privacyUrl, text: t('privacyLink') }) : null);
-  dialog.append(modal, closeButton, legal, live);
+  const modal = h('div', { class: 'xff-modal' }, topbar, visual, content, sidePanel);
+  dialog.append(modal, live);
   document.body.append(dialog);
 
   const scrollLock = document.documentElement.style.overflow;
@@ -332,7 +344,7 @@ function openDialog(root, options = {}) {
   const steps = () => (phone() ? ['gender', 'body', 'shape'] : ['body', 'shape']);
   const save = () => saveProfile(state.p);
   const announce = text => { live.textContent = ''; requestAnimationFrame(() => { live.textContent = text; }); };
-  const go = (screen, focusId) => { state.screen = screen; state.panel = null; state.errors = {}; state.ageTip = false; render(focusId ?? HEADING); };
+  const go = (screen, focusId) => { state.screen = screen; state.panel = null; state.errors = {}; render(focusId ?? HEADING); };
   const startFinder = () => go(evaluate(cfg, state.p) && loadProfile() ? 'result' : steps()[0]);
   // Back from the first step: to the result when the shopper came from there to edit, else to the size table.
   const backFromStart = () => go(state.returnTo ?? 'chart');
@@ -357,7 +369,9 @@ function openDialog(root, options = {}) {
   const updateStageSoon = () => { clearTimeout(stageTimer); stageTimer = setTimeout(updateStage, 160); };
   function updateStage() {
     const p = previewProfile(), ev = evaluate(cfg, p), b = bodyFrom(p);
-    let frame = phone() ? 'shapePhone' : 'shape', rings = [];
+    // The whole body while height and weight are typed (and before: no zoom on the way in), the upper body for the
+    // shape, the torso for the result.
+    let frame = phone() ? 'shapePhone' : state.screen === 'shape' ? 'shape' : 'full', rings = [];
     if ((state.screen === 'result' || state.screen === 'guard') && ev) {
       frame = phone() ? 'resultPhone' : 'result';
       rings = stageRings(ev, state.screen === 'guard' ? state.chosen : (state.compare ?? ev.result.best));
@@ -381,51 +395,76 @@ function openDialog(root, options = {}) {
   }
 
   function renderSkins() {
-    skins.replaceChildren(h('legend', { class: 'xff-sr', text: t('skins') }), ...SWATCHES.map((rgb, i) => h('label', {
+    skins.replaceChildren(h('legend', { class: 'xff-skins__label', text: t('skins') }), h('div', { class: 'xff-skins__row' }, SWATCHES.map((rgb, i) => h('label', {
       class: 'xff-swatch', style: `--xff-swatch:rgb(${rgb.join(' ')})`, title: i ? t('skinTone', { n: i }) : t('skinMannequin'),
     }, h('input', {
       type: 'radio', name: 'xff-skin', id: `xff-skin-${i}`, value: i, checked: (state.p.skin ?? 0) === i, 'aria-label': i ? t('skinTone', { n: i }) : t('skinMannequin'),
       onchange: () => { state.p.skin = i; viewer?.setSkin(i); },
-    }))));
+    })))));
+  }
+
+  // ------------------------------------------------ top bar: logo, language, profiles, close
+  function setLang(next) {
+    if (!TEXT[next] || next === lang) return;
+    readDraft(state.p, state.draft, false);   // what was typed stays, in any language
+    lang = next;
+    rememberLang(pageLang, next);
+    view.querySelector('canvas')?.setAttribute('aria-label', t('stage3d'));
+    render('xff-lang');
+    announce(LANGS.find(([code]) => code === next)[1]);
+  }
+  function renderTopbar() {
+    const select = h('select', { class: 'xff-lang__select', id: 'xff-lang', 'aria-label': t('language'), onchange: event => setLang(event.target.value) },
+      LANGS.map(([code, name]) => h('option', { value: code, lang: code, selected: code === lang, text: name })));
+    fill(topbar,
+      h('div', { class: 'xff-logo' }, cfg.logo ? h('img', { src: cfg.logo, alt: cfg.shop || '' }) : h('span', { text: cfg.shop || '' })),
+      h('div', { class: 'xff-tools' },
+        h('div', { class: 'xff-lang' }, icon('globe', 18, 1.6), select, icon('down', 14, 2)),
+        h('button', { type: 'button', class: 'xff-avatar', id: 'xff-avatar-button', 'aria-expanded': String(state.panel === 'profiles'), onclick: () => togglePanel('profiles') },
+          h('span', { class: 'xff-avatar__icon', 'aria-hidden': 'true' }, icon('user', 18, 1.6)),
+          state.p.name ? h('span', { class: 'xff-sr', text: `${t('profiles')}: ` }) : null,
+          h('span', { class: 'xff-avatar__name', text: state.p.name || t('profiles') })),
+        h('button', { type: 'button', class: 'xff-topbar__close', id: 'xff-close', 'aria-label': t('close'), onclick: () => close() }, icon('close', 24, 1.8))));
   }
 
   // ------------------------------------------------ render
   let shownScreen = '';
   function render(focusId) {
     const active = focusId === HEADING ? null : focusId ?? document.activeElement?.id;
+    dialog.lang = lang;
+    dialog.setAttribute('aria-label', t('sizeGuide'));
     dialog.dataset.screen = state.screen;
     dialog.dataset.panel = state.panel ?? '';
-    dialog.toggleAttribute('data-skins', state.showSkins);
-    fill(content, screen());
-    sideTab.hidden = !(state.screen === 'chart' || state.screen === 'result');
-    fill(sideTab, state.screen === 'chart' ? [icon('tape', 34, 1.3), h('span', { class: 'xff-sr', text: t('howToMeasure') })] : [h('span', { text: t('bodyMeasures') })]);
-    sideTab.setAttribute('aria-expanded', String(Boolean(state.panel && state.panel !== 'profiles')));
-    renderPanel();
-    renderAvatar();
+    renderTopbar();
     renderSkins();
+    fill(content, screen());
+    renderPanel();
     updateStage();
-    // An open panel is the only thing Tab can reach (besides the buttons that close it).
-    for (const el of [content, stage, skins, media, logo]) el.inert = Boolean(state.panel);
+    // An open panel is the only thing Tab can reach (besides the top bar).
+    for (const el of [content, visual]) el.inert = Boolean(state.panel);
     if (state.screen === 'chart') fitTable();
     if (state.screen !== shownScreen) { content.scrollTop = 0; dialog.scrollTop = 0; shownScreen = state.screen; }
     const target = active ? dialog.querySelector(`#${CSS.escape(active)}`) : null;
     (target && target.offsetParent !== null ? target : content.querySelector('[data-xff-focus]') ?? content.querySelector('button, input'))?.focus({ preventScroll: true });
   }
 
-  // Every size of the table in view on the desktop modal: the rows shrink (not under 26 px) to the room there is.
+  // Every size of the table in view on the desktop modal. One row height for this product, from the room under the
+  // table's heading and the longest chart of the product: switching women / men, cm / in or the language never
+  // moves a row or a column.
   function fitTable() {
-    const wrap = content.querySelector('.xff-table-wrap'), foot = content.querySelector('.xff-chart__foot'), rows = wrap?.querySelectorAll('tr').length;
-    if (!wrap || !foot || !rows) return;
-    wrap.style.removeProperty('--xff-row'); wrap.style.removeProperty('max-block-size');
-    if (phone()) return;
-    const room = foot.getBoundingClientRect().top - wrap.getBoundingClientRect().top - 10;
-    if (!dialog.open || room <= 0) return;   // not laid out yet: the call after showModal() does it
-    wrap.style.setProperty('--xff-row', `${Math.max(26, Math.min(44, Math.floor(room / rows)))}px`);
-    wrap.style.setProperty('max-block-size', `${room}px`);
+    const wrap = content.querySelector('.xff-table-wrap');
+    if (!wrap) return;
+    wrap.style.removeProperty('--xff-row');
+    if (phone() || !dialog.open || !wrap.clientHeight) return;   // not laid out yet: the call after showModal() does it
+    const rows = 1 + Math.max(...Object.values(cfg.charts).map(c => c.sizes.length));
+    wrap.style.setProperty('--xff-row', `${Math.max(28, Math.min(44, Math.floor(wrap.clientHeight / rows)))}px`);
   }
 
   function screen() {
     if (!chart()) return [h('p', { class: 'xff-note xff-note--empty', id: titleId, text: t('noChart') })];
+    return FINDER.includes(state.screen) ? [progress(), ...screenBody()] : screenBody();
+  }
+  function screenBody() {
     switch (state.screen) {
       case 'chart': return chartScreen();
       case 'gender': return genderScreen();
@@ -436,19 +475,27 @@ function openDialog(root, options = {}) {
     }
   }
 
-  function pills(name, value, options, onChange, className = '') {
-    return h('div', { class: `xff-pills ${className}`, role: 'group' }, options.map(([key, label]) => h('button', {
-      type: 'button', id: `xff-${name}-${key}`, class: 'xff-pill', 'aria-pressed': String(value === key), text: label,
+  function pills(name, value, options, onChange, className = '', label = null) {
+    return h('div', { class: `xff-pills ${className}`, role: 'group', 'aria-label': label }, options.map(([key, text]) => h('button', {
+      type: 'button', id: `xff-${name}-${key}`, class: 'xff-pill', 'aria-pressed': String(value === key), text,
       onclick: () => { onChange(key); render(`xff-${name}-${key}`); },
     })));
   }
 
-  function dots() {
-    const list = steps(), i = list.indexOf(state.screen);
-    return h('div', { class: 'xff-dots', 'aria-hidden': 'true' }, list.map((_, j) => h('span', { class: j === i ? 'is-on' : null })));
+  // Three named steps on every layout: about you (body type, height, weight, age), body shape, your size. A step
+  // already done can be opened again from here.
+  function progress() {
+    const at = state.screen === 'result' ? 2 : state.screen === 'shape' ? 1 : 0;
+    const open = i => { if (state.screen === 'result') state.returnTo = 'result'; readDraft(state.p, state.draft); go([steps()[0], 'shape'][i]); };
+    return h('ol', { class: 'xff-progress', 'aria-label': t('progress') }, [t('stepYou'), t('stepShape'), t('stepSize')].map((name, i) => {
+      const inner = [h('span', { class: 'xff-progress__num', 'aria-hidden': 'true' }, i < at ? icon('right', 12, 3) : String(i + 1)), h('span', { class: 'xff-progress__name', text: name })];
+      return h('li', { class: `xff-progress__step${i < at ? ' is-done' : i === at ? ' is-on' : ''}`, 'aria-current': i === at ? 'step' : null },
+        i < at ? h('button', { type: 'button', class: 'xff-progress__button', id: `xff-step-${i + 1}`, onclick: () => open(i) }, inner) : inner);
+    }));
   }
 
   // ------------------------------------------------ size chart (the first screen)
+  // Fixed columns (the size, then one equal column per measure) and one row height: nothing moves between charts.
   function chartScreen() {
     // Women before men, as the body type choice shows them.
     const cuts = Object.keys(cfg.charts).sort((a, b) => (b === 'women') - (a === 'women')), unit = state.p.units.length;
@@ -457,17 +504,18 @@ function openDialog(root, options = {}) {
     return [h('div', { class: 'xff-chart' },
       h('h2', { class: 'xff-chart__title', id: titleId, tabindex: '-1', 'data-xff-focus': true, text: t('chartTitle') }),
       h('p', { class: 'xff-chart__sub', text: t('chartSub') }),
-      phone() ? h('button', { type: 'button', class: 'xff-link xff-how-link', id: 'xff-how-link', text: t('howToMeasure'), onclick: () => togglePanel('measure') }) : null,
-      cuts.length > 1 ? pills('cut', cut, cuts.map(k => [k, t(k === 'women' ? 'women' : 'men')]), k => { state.chartCut = k; }, 'xff-pills--small') : null,
+      h('div', { class: 'xff-chart__controls' },
+        cuts.length > 1 ? pills('cut', cut, cuts.map(k => [k, t(k === 'women' ? 'women' : 'men')]), k => { state.chartCut = k; }, 'xff-seg', t('cutLabel')) : h('span'),
+        pills('chart-unit', unit, [['cm', 'cm'], ['in', 'in']], u => { state.p.units.length = u; }, 'xff-seg xff-seg--unit', t('units'))),
       h('div', { class: 'xff-table-wrap', tabindex: '0', role: 'region', 'aria-label': t('chartTitle') },
         h('table', { class: 'xff-table' },
+          h('colgroup', {}, h('col', { class: 'xff-table__size' }), c.measures.map(() => h('col'))),
           h('thead', {}, h('tr', {}, h('th', { scope: 'col', text: t('international') }), c.measures.map(m => h('th', { scope: 'col', text: t(m).toUpperCase() })))),
           h('tbody', {}, c.sizes.map(size => h('tr', { class: size.name === bestName ? 'is-best' : null, 'aria-current': size.name === bestName ? 'true' : null },
             h('th', { scope: 'row', text: size.name }),
             c.measures.map(m => h('td', { text: rangeText(size[m], unit) }))))))),
       h('div', { class: 'xff-chart__foot' },
-        h('span', { class: 'xff-chart__unit-label', text: t('measurements') }),
-        pills('chart-unit', unit, [['cm', 'cm'], ['in', 'in']], u => { state.p.units.length = u; }),
+        h('button', { type: 'button', class: 'xff-link xff-how-link', id: 'xff-how-link', 'aria-expanded': String(state.panel === 'measure'), onclick: () => togglePanel('measure') }, icon('tape', 22, 1.5), h('span', { text: t('howToMeasure') })),
         h('button', { type: 'button', class: 'xff-btn xff-btn--black', id: 'xff-find', text: t('findSize'), onclick: startFinder })))];
   }
 
@@ -479,11 +527,11 @@ function openDialog(root, options = {}) {
         h('p', { class: 'xff-lead', text: t('fillDetails') }),
         genderPills()),
       footer([h('button', { type: 'button', class: 'xff-btn xff-btn--outline', id: 'xff-back', text: t('back'), onclick: backFromStart }),
-        h('button', { type: 'button', class: 'xff-btn xff-btn--black', id: 'xff-next', text: t('next'), onclick: () => go('body') })], true),
+        h('button', { type: 'button', class: 'xff-btn xff-btn--black', id: 'xff-next', text: t('next'), onclick: () => go('body') })]),
     ];
   }
   function genderPills() {
-    return pills('sex', state.p.sex, [['female', t('woman')], ['male', t('man')]], v => { readDraft(state.p, state.draft); state.p.sex = v; }, 'xff-pills--gender');
+    return pills('sex', state.p.sex, [['female', t('woman')], ['male', t('man')]], v => { readDraft(state.p, state.draft); state.p.sex = v; }, 'xff-pills--gender', t('bodyType'));
   }
 
   // ------------------------------------------------ step: height, weight, age
@@ -497,14 +545,15 @@ function openDialog(root, options = {}) {
       if (state.errors[k]) {
         delete state.errors[k];
         content.querySelector(`#xff-${k}-error`)?.remove();
-        for (const el of content.querySelectorAll(`#xff-${k}, #xff-${k}In`)) { el.removeAttribute('aria-invalid'); el.removeAttribute('aria-describedby'); }
+        for (const el of content.querySelectorAll(`#xff-${k}, #xff-${k}In`)) { el.removeAttribute('aria-invalid'); el.setAttribute('aria-describedby', describedBy(el.id.slice(4), false) ?? ''); }
       }
       refreshNext(); updateStageSoon();
     };
     const enter = event => { if (event.key === 'Enter') { event.preventDefault(); goNext(); } };
+    const describedBy = (key, error) => [error ? `xff-${errorOf(key)}-error` : null, key === 'age' ? 'xff-age-hint' : null].filter(Boolean).join(' ') || null;
     const box = (key, value, extra = {}) => h('input', {
       id: `xff-${key}`, class: 'xff-input', type: 'text', inputmode: 'decimal', autocomplete: 'off', value: value ?? '',
-      'aria-invalid': e[errorOf(key)] ? 'true' : null, 'aria-describedby': e[errorOf(key)] ? `xff-${errorOf(key)}-error` : null,
+      'aria-invalid': e[errorOf(key)] ? 'true' : null, 'aria-describedby': describedBy(key, Boolean(e[errorOf(key)])),
       oninput: typed(key), onkeydown: enter, ...extra,
     });
     const field = (key, label, controls, after) => h('div', { class: 'xff-field' },
@@ -512,7 +561,7 @@ function openDialog(root, options = {}) {
       h('div', { class: 'xff-field__row' }, controls),
       e[key] ? h('p', { class: 'xff-error', id: `xff-${key}-error`, text: e[key] }) : null,
       after);
-    const unitSwitch = (name, unit, options, set) => pills(name, unit, options, u => { readDraft(state.p, state.draft); set(u); });
+    const unitSwitch = (name, unit, options, set) => pills(name, unit, options, u => { readDraft(state.p, state.draft); set(u); }, 'xff-seg xff-seg--unit', t('units'));
     const ft = p.units.height === 'ft', [feet, inches] = p.heightCm ? feetInches(p.heightCm) : [null, null];
     const height = ft
       ? [box('height', d.height ?? feet, { class: 'xff-input xff-input--short', 'aria-label': `${t('height')}, ${t('feet')}` }), h('span', { class: 'xff-field__unit xff-field__unit--short', 'aria-hidden': 'true', text: 'ft' }),
@@ -525,16 +574,15 @@ function openDialog(root, options = {}) {
     return [
       h('div', { class: 'xff-step' },
         h('h2', { class: 'xff-h1', id: titleId, tabindex: '-1', 'data-xff-focus': true, text: t('findSize') }),
-        h('p', { class: 'xff-lead', text: t('fillDetails') }),
         phone() ? null : genderPills(),
         field('height', t('height'), [height, unitSwitch('unit-height', p.units.height, [['cm', 'cm'], ['ft', 'ft / in']], u => { p.units.height = u; })]),
         field('weight', t('weight'), [box('weight', weightValue), unitSwitch('unit-weight', p.units.weight, [['kg', 'kg'], ['lb', 'lb']], u => { p.units.weight = u; })]),
         field('age', [t('age'), h('span', { class: 'xff-optional', text: ` (${t('optional')})` })], [box('age', d.age ?? (p.age ?? ''), { inputmode: 'numeric' }),
-          h('span', { class: 'xff-field__unit', text: t('years') }),
-          // A help button that works by tap, click or keyboard (not only on hover).
-          h('button', { type: 'button', class: 'xff-info', id: 'xff-age-info', 'aria-label': t('ageInfo'), 'aria-expanded': String(state.ageTip), onclick: () => { state.ageTip = !state.ageTip; render('xff-age-info'); } }, 'i')],
-          state.ageTip ? h('p', { class: 'xff-tipnote', role: 'note', text: t('ageInfo') }) : null)),
-      footer([h('button', { type: 'button', class: 'xff-btn xff-btn--outline', id: 'xff-back', text: t('back'), onclick: () => { readDraft(state.p, state.draft); if (phone()) go('gender'); else backFromStart(); } }), nextButton], true),
+          h('span', { class: 'xff-field__unit', text: t('years') })],
+          // Why we ask, always in view (no hidden help to find).
+          h('p', { class: 'xff-hint', id: 'xff-age-hint', text: t('ageInfo') })),
+        h('p', { class: 'xff-trust' }, icon('lock', 15, 1.8), h('span', { text: t('staysHere') }), cfg.privacyUrl ? h('a', { href: cfg.privacyUrl, text: t('privacyLink') }) : null)),
+      footer([h('button', { type: 'button', class: 'xff-btn xff-btn--outline', id: 'xff-back', text: t('back'), onclick: () => { readDraft(state.p, state.draft); if (phone()) go('gender'); else backFromStart(); } }), nextButton]),
     ];
   }
   let refreshNext = () => {};
@@ -591,11 +639,16 @@ function openDialog(root, options = {}) {
         p.shape[m] = v;
         const range = content.querySelector(`#${id}`);
         if (range) { range.value = String(v); range.setAttribute('aria-valuetext', names[v + 2]); }
+        const shown = content.querySelector(`#${id}-value`);
+        if (shown) shown.textContent = names[v + 2];
         if (focus) content.querySelector(`#${focus}`)?.focus();
         updateStage();
       };
+      // The part and where its slider stands, in words ("Chest · Average").
       return h('div', { class: 'xff-slider' },
-        h('label', { class: 'xff-slider__label', for: id, text: t(m) }),
+        h('div', { class: 'xff-slider__head' },
+          h('label', { class: 'xff-slider__label', for: id, text: t(m) }),
+          h('span', { class: 'xff-slider__value', id: `${id}-value`, 'aria-hidden': 'true', text: names[value + 2] })),
         h('div', { class: 'xff-slider__row' },
           h('button', { type: 'button', class: 'xff-round', id: `${id}-less`, 'aria-label': `${t(m)}: ${t('narrower')}`, onclick: () => set(Number(p.shape[m] ?? 0) - 1, `${id}-less`) }, icon('minus', 22, 1.6)),
           h('span', { class: 'xff-slider__track' },
@@ -606,16 +659,16 @@ function openDialog(root, options = {}) {
     return [
       h('div', { class: 'xff-step xff-step--shape' },
         h('h2', { class: 'xff-h1', id: titleId, tabindex: '-1', 'data-xff-focus': true, text: t('shapeTitle') }),
-        h('p', { class: 'xff-lead xff-lead--dark', text: t('shapeIntro') }),
+        h('p', { class: 'xff-lead', text: t('shapeIntro') }),
         h('div', { class: 'xff-sliders' }, rows),
-        h('button', { type: 'button', class: 'xff-link xff-skins-toggle', id: 'xff-skins-toggle', 'aria-expanded': String(state.showSkins), text: t('changeSkin'), onclick: () => { state.showSkins = !state.showSkins; render('xff-skins-toggle'); } })),
+        skins),
       footer([h('button', { type: 'button', class: 'xff-btn xff-btn--outline', id: 'xff-back', text: t('back'), onclick: () => go(steps()[steps().length - 2]) }),
-        h('button', { type: 'button', class: 'xff-btn xff-btn--black', id: 'xff-next', text: t('next'), onclick: () => goNext() })], true),
+        h('button', { type: 'button', class: 'xff-btn xff-btn--black', id: 'xff-next', text: t('showSize'), onclick: () => goNext() })]),
     ];
   }
 
-  function footer(buttons, withDots = false) {
-    return h('div', { class: 'xff-footer' }, withDots ? dots() : null, h('div', { class: 'xff-footer__buttons' }, buttons));
+  function footer(buttons) {
+    return h('div', { class: 'xff-footer' }, buttons);
   }
 
   function goNext() {
@@ -629,17 +682,27 @@ function openDialog(root, options = {}) {
   }
 
   // ------------------------------------------------ result
-  // The heading says the verdict and the size (the card shows the same, for the eye only).
-  function card(label, name, badge) {
+  // The heading says the verdict and the size (the card shows the same, for the eye only). Beside the card, in words,
+  // how the size fits at each measured part.
+  function card(label, size, badge) {
     return h('div', { class: 'xff-pick' },
-      h('h2', { class: 'xff-pick__label', id: titleId, tabindex: '-1', 'data-xff-focus': true }, label, h('span', { class: 'xff-sr', text: `: ${name}` })),
       h('div', { class: 'xff-card', 'aria-hidden': 'true' },
-        h('span', { class: 'xff-card__size', text: name }),
-        badge ? h('span', { class: `xff-badge xff-badge--${badge}` }, icon(badge === 'no' ? 'close' : badge === 'warn' ? 'warn' : 'right', 14, 2.6)) : null));
+        h('span', { class: 'xff-card__size', text: size.name }),
+        h('span', { class: `xff-badge xff-badge--${badge}` }, icon(badge === 'no' ? 'close' : badge === 'warn' ? 'warn' : 'right', 14, 2.6))),
+      h('div', { class: 'xff-pick__text' },
+        h('h2', { class: 'xff-pick__label', id: titleId, tabindex: '-1', 'data-xff-focus': true }, label, h('span', { class: 'xff-sr', text: `: ${size.name}` })),
+        h('ul', { class: 'xff-fit' }, size.regions.map(r => h('li', { class: `xff-fit__item xff-fit__item--${FIT_TONE[r.fit]}` },
+          h('span', { class: 'xff-fit__icon', 'aria-hidden': 'true' }, icon(FIT_ICON[r.fit], 12, 2.6)),
+          h('span', { text: `${t(r.measure)}: ${t(FIT_TEXT[r.fit])}` }))))));
   }
   const badFit = r => r.fit === 'tooTight' || r.fit === 'tooLoose';
   const partName = m => (lang === 'de' ? t(m) : t(m).toLowerCase());   // German nouns keep their capital
   const listParts = names => (names.length > 1 ? `${names.slice(0, -1).join(', ')} ${t('and')} ${names.at(-1)}` : names[0]);
+  // The body measurements a size is made for (desktop result; the phone opens them as a panel).
+  const sizeFor = name => {
+    const size = chart()?.sizes.find(x => x.name === name), unit = state.p.units.length;
+    return size ? h('dl', { class: 'xff-measures' }, chart().measures.flatMap(m => [h('dt', { text: t(m) }), h('dd', { text: `${rangeText(size[m], unit)} ${unit}` })])) : null;
+  };
 
   function resultScreen() {
     const ev = evaluate(cfg, state.p);
@@ -650,7 +713,7 @@ function openDialog(root, options = {}) {
     // The best size of the chart can still be too tight or too loose somewhere: then it is the closest size, said so.
     const closest = best.regions.some(badFit);
     const label = shown.verdict === 'best' ? t(closest ? 'closest' : 'bestOption') : shown.verdict === 'fits' ? t('mayAlsoFit') : t('notRecommendedUpper');
-    const badge = shown.verdict === 'no' ? 'no' : shown.verdict === 'best' ? (closest ? 'warn' : 'best') : 'fits';
+    const badgeOf = size => (size.verdict === 'no' ? 'no' : size.verdict === 'best' ? (closest ? 'warn' : 'best') : 'fits');
     // The button adds the size on screen when it fits and is in stock; else the best size in stock (best first).
     const inStock = x => x.available !== false;
     const fallback = [best, ...sizes.filter(x => x.verdict === 'fits')].find(inStock) ?? null;
@@ -660,33 +723,36 @@ function openDialog(root, options = {}) {
     else if (closest) { const r = worstRegion(best); notes.push(h('p', { class: 'xff-note', text: t('closestNote', { size: best.name, part: t(r.measure), fit: t(FIT_TEXT[r.fit]) }) })); }
     if (!inStock(best)) notes.push(h('p', { class: 'xff-note', text: [t('bestSoldOut', { size: best.name }), target ? t('altFits', { size: target.name }) : ''].join(' ').trim() }));
     if (body.warnings.includes('outsideModel')) notes.push(h('p', { class: 'xff-note', text: t('outsideModel') }));
-    const i = Math.max(0, sizes.indexOf(shown)), from = Math.max(0, Math.min(i - 1, sizes.length - 3));
+    // Every size in one row on the desktop; three at a time, with arrows, on the phone.
+    const i = Math.max(0, sizes.indexOf(shown)), from = Math.max(0, Math.min(i - 1, sizes.length - 3)), few = phone();
     const compare = j => { state.compare = sizes[j].name; render(`xff-size-${normalizeSize(sizes[j].name)}`); };
     const edit = () => { state.returnTo = 'result'; go(steps()[0]); };
     const verdictText = size => `${size.verdict === 'best' ? t(closest ? 'closest' : 'bestOption') : size.verdict === 'fits' ? t('mayAlsoFit') : t('notRecommended')}${inStock(size) ? '' : `, ${t('soldOut')}`}`;
     return [
       h('div', { class: 'xff-result' },
-        card(label, shown.name, badge),
-        h('button', { type: 'button', class: 'xff-btn xff-btn--outline xff-btn--small', id: 'xff-edit', text: t('editMeasures'), onclick: edit }),
-        phone() ? h('button', { type: 'button', class: 'xff-link xff-measures-link', id: 'xff-measures-link', text: t('bodyMeasures'), onclick: () => togglePanel('body') }) : null),
+        card(label, shown, badgeOf(shown)),
+        few ? h('button', { type: 'button', class: 'xff-link xff-measures-link', id: 'xff-measures-link', text: t('bodyMeasures'), onclick: () => togglePanel('body') }) : null),
       notes.length ? h('div', { class: 'xff-notes' }, notes) : null,
       h('div', { class: 'xff-try' },
         h('p', { class: 'xff-try__label', text: t('alsoTry') }),
         h('div', { class: 'xff-try__row', role: 'group', 'aria-label': t('alsoTry') },
-          h('button', { type: 'button', class: 'xff-try__arrow', id: 'xff-size-prev', 'aria-label': t('smaller'), disabled: i === 0, onclick: () => compare(i - 1) }, icon('prev', 18, 2.4)),
-          sizes.slice(from, from + 3).map(size => h('button', {
+          few ? h('button', { type: 'button', class: 'xff-try__arrow', id: 'xff-size-prev', 'aria-label': t('smaller'), disabled: i === 0, onclick: () => compare(i - 1) }, icon('prev', 18, 2.4)) : null,
+          (few ? sizes.slice(from, from + 3) : sizes).map(size => h('button', {
             type: 'button', id: `xff-size-${normalizeSize(size.name)}`, class: `xff-chip${inStock(size) ? '' : ' is-sold'}`, 'aria-pressed': String(size === shown),
             onclick: () => compare(sizes.indexOf(size)),
           }, h('span', { class: 'xff-chip__name', text: size.name }),
-          h('span', { class: `xff-badge xff-badge--${size.verdict === 'no' ? 'no' : size.verdict === 'best' ? (closest ? 'warn' : 'best') : 'fits'}`, 'aria-hidden': 'true' },
-            icon(size.verdict === 'no' ? 'close' : size.verdict === 'best' && closest ? 'warn' : 'right', 11, 2.8)),
+          h('span', { class: `xff-badge xff-badge--${badgeOf(size)}`, 'aria-hidden': 'true' }, icon(size.verdict === 'no' ? 'close' : size.verdict === 'best' && closest ? 'warn' : 'right', 11, 2.8)),
           h('span', { class: 'xff-sr', text: `, ${verdictText(size)}` }))),
-          h('button', { type: 'button', class: 'xff-try__arrow', id: 'xff-size-next', 'aria-label': t('larger'), disabled: i === sizes.length - 1, onclick: () => compare(i + 1) }, icon('next', 18, 2.4)))),
+          few ? h('button', { type: 'button', class: 'xff-try__arrow', id: 'xff-size-next', 'aria-label': t('larger'), disabled: i === sizes.length - 1, onclick: () => compare(i + 1) }, icon('next', 18, 2.4)) : null)),
+      few ? null : h('div', { class: 'xff-sizefor' },
+        h('h3', { class: 'xff-sizefor__title', text: t('sizeFor', { size: shown.name }) }),
+        sizeFor(shown.name),
+        h('button', { type: 'button', class: 'xff-link xff-sizefor__link', id: 'xff-to-chart', text: t('seeTable'), onclick: () => go('chart', 'xff-find') })),
       h('div', { class: 'xff-actions' },
-        phone() ? h('button', { type: 'button', class: 'xff-btn xff-btn--outline', id: 'xff-edit-phone', text: t('editMeasures'), onclick: edit }) : null,
+        h('button', { type: 'button', class: 'xff-btn xff-btn--outline', id: 'xff-edit', text: t('editMeasures'), onclick: edit }),
         shown.verdict === 'no' && inStock(shown) ? h('button', { type: 'button', class: 'xff-link xff-anyway', id: 'xff-anyway', text: t('keep', { chosen: shown.name }), onclick: () => addToCart(shown.name) }) : null,
         target
-          ? h('button', { type: 'button', class: 'xff-btn xff-btn--black xff-btn--cart', id: 'xff-add', onclick: () => addToCart(target.name) }, icon('cart', 13, 2.4), h('span', { text: t('addSize', { size: target.name }) }))
+          ? h('button', { type: 'button', class: 'xff-btn xff-btn--black xff-btn--cart', id: 'xff-add', onclick: () => addToCart(target.name) }, icon('cart', 16, 2.2), h('span', { text: t('addSize', { size: target.name }) }))
           : h('button', { type: 'button', class: 'xff-btn xff-btn--black xff-btn--cart', id: 'xff-add', disabled: true, text: `${best.name} · ${t('soldOut')}` })),
     ];
   }
@@ -718,8 +784,8 @@ function openDialog(root, options = {}) {
     const worst = worstRegion(verdict);
     const parts = listParts(verdict.regions.filter(badFit).map(r => partName(r.measure)).concat(verdict.regions.some(badFit) ? [] : [partName(worst.measure)]));
     return [
-      h('div', { class: 'xff-result' }, card(t('notRecommendedUpper'), state.chosen, 'no')),
-      h('div', { class: 'xff-notes xff-notes--guard' }, h('p', { class: 'xff-guard-text', text: t('guardText', { chosen: state.chosen, fit: lowerFit(worst.fit), parts, best: ev.result.best }) })),
+      h('div', { class: 'xff-result' }, card(t('notRecommendedUpper'), verdict, 'no')),
+      h('div', { class: 'xff-notes' }, h('p', { class: 'xff-guard-text', text: t('guardText', { chosen: state.chosen, fit: lowerFit(worst.fit), parts, best: ev.result.best }) })),
       h('div', { class: 'xff-actions xff-actions--guard' },
         h('button', { type: 'button', class: 'xff-btn xff-btn--outline', id: 'xff-keep', text: t('keep', { chosen: state.chosen }), onclick: () => {
           const form = document.getElementById(cfg.formId);
@@ -743,23 +809,29 @@ function openDialog(root, options = {}) {
   function renderPanel() {
     sidePanel.hidden = !state.panel;
     if (!state.panel) { sidePanel.replaceChildren(); return; }
-    const closePanel = h('button', { type: 'button', class: 'xff-panel-close', 'aria-label': t('close'), onclick: () => togglePanel(null) }, icon('close', 20, 2));
+    // "Back" (not a second ×): the panel closes and the screen under it comes back.
+    const closePanel = h('button', { type: 'button', class: 'xff-panel-close', id: 'xff-panel-close', onclick: () => togglePanel(null) }, icon('prev', 18, 2.2), h('span', { text: t('back') }));
     if (state.panel === 'measure') {
       const measures = (chart()?.measures ?? ['chest', 'waist']).filter(m => HOW[m]);
       fill(sidePanel, closePanel, h('h2', { class: 'xff-panel-title', text: t('howToMeasure') }),
         h('ol', { class: 'xff-how' }, measures.map(m => h('li', {}, h('strong', { text: t(m) }), h('p', { text: t(HOW[m]) })))),
         h('p', { class: 'xff-panel-note', text: t('measureTips') }));
     } else if (state.panel === 'body') {
-      const ev = evaluate(cfg, state.p), shownName = state.compare ?? ev?.result.best, size = chart()?.sizes.find(x => x.name === shownName), unit = state.p.units.length;
-      fill(sidePanel, closePanel, h('h2', { class: 'xff-panel-title', text: t('bodyMeasures') }),
-        size ? h('dl', { class: 'xff-measures' }, chart().measures.flatMap(m => [h('dt', { text: t(m) }), h('dd', { text: `${rangeText(size[m], unit)} ${unit}` })])) : null,
-        h('button', { type: 'button', class: 'xff-btn xff-btn--grey', id: 'xff-to-chart', text: t('sizeGuide'), onclick: () => go('chart', 'xff-find') }));
+      const ev = evaluate(cfg, state.p), shownName = state.compare ?? ev?.result.best;
+      fill(sidePanel, closePanel, h('h2', { class: 'xff-panel-title', text: t('sizeFor', { size: shownName }) }),
+        sizeFor(shownName),
+        h('button', { type: 'button', class: 'xff-btn xff-btn--outline', id: 'xff-to-chart', text: t('seeTable'), onclick: () => go('chart', 'xff-find') }));
     } else {
       const saved = loadStore()?.profiles ?? [], isSaved = saved.some(x => x.id === state.p.id);
       const use = o => { saveProfile(o); state.p = { ...o, tape: { ...o.tape }, shape: { ...o.shape }, units: { ...o.units } }; state.compare = null; go(evaluate(cfg, state.p) ? 'result' : steps()[0]); };
       fill(sidePanel, closePanel, h('h2', { class: 'xff-panel-title', text: t('profiles') }),
         h('label', { class: 'xff-label', for: 'xff-profile-name', text: t('profileName') }),
-        h('input', { id: 'xff-profile-name', class: 'xff-input xff-input--wide', type: 'text', value: state.p.name ?? '', placeholder: t('profileNamePlaceholder'), oninput: event => { state.p.name = event.target.value; if (loadStore()?.profiles.some(x => x.id === state.p.id)) save(); } }),
+        h('input', { id: 'xff-profile-name', class: 'xff-input xff-input--wide', type: 'text', value: state.p.name ?? '', placeholder: t('profileNamePlaceholder'), oninput: event => {
+          state.p.name = event.target.value;
+          if (loadStore()?.profiles.some(x => x.id === state.p.id)) save();
+          const name = topbar.querySelector('.xff-avatar__name');   // the top bar names the profile as it is typed
+          if (name) name.textContent = state.p.name || t('profiles');
+        } }),
         saved.length ? h('ul', { class: 'xff-profiles' }, saved.map(o => h('li', {}, h('button', {
           type: 'button', class: 'xff-profile', 'aria-current': o.id === state.p.id ? 'true' : null, onclick: () => (o.id === state.p.id ? togglePanel(null) : use(o)),
         }, icon('user', 20), h('span', { class: 'xff-profile__name', text: o.name || t('unnamedProfile') }), o.id === state.p.id ? h('span', { class: 'xff-profile__current', text: t('currentProfile') }) : null)))) : null,
@@ -777,14 +849,6 @@ function openDialog(root, options = {}) {
         h('p', { class: 'xff-panel-note', text: t('privacy') }),
         cfg.privacyUrl ? h('a', { class: 'xff-link xff-privacy-link', href: cfg.privacyUrl, text: t('privacyLink') }) : null);
     }
-  }
-
-  // The profiles button names the profile in use, so the shopper always sees whose measurements these are.
-  function renderAvatar() {
-    fill(avatar, h('button', { type: 'button', class: 'xff-avatar__button', id: 'xff-avatar-button', 'aria-expanded': String(state.panel === 'profiles'), onclick: () => togglePanel('profiles') },
-      h('span', { class: 'xff-avatar__icon', 'aria-hidden': 'true' }, icon('user', 18, 1.6)),
-      state.p.name ? h('span', { class: 'xff-sr', text: `${t('profiles')}: ` }) : null,
-      h('span', { class: 'xff-avatar__name', text: state.p.name || t('profiles') })));
   }
 
   // ------------------------------------------------ open
