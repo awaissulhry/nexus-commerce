@@ -13,8 +13,10 @@
  *                          update-windows     paint the week (replace it, or set the hours of given days), the baseline
  *                          set-campaigns      add / take out members (one campaign, one plan: one another plan holds is
  *                                             refused unless `move`; the playbook's never)
- *                          set-target-values  a campaign's own floor, placement %, base bid, CPC ceiling per target
- *                                             (the library's values stay in tune-ad-engine, setting rank-target)
+ *                          set-target-values  a campaign's own floor, placement %, base bid, CPC ceiling per target, and its
+ *                                             own BLEND: several placements held in the same hours (Top + Rest of Search
+ *                                             + Product pages, the engine's blended path, BL.9 — the Hourly Bids page's
+ *                                             Blend editor). The library's values stay in tune-ad-engine (rank-target)
  *                          rename, switch     patchRankScheduleGroup (the lightweight PATCH the list uses)
  *                          delete             deleteRankScheduleGroup
  *                        Switching off, deleting, taking a campaign out or saving a plan that is off gives back what the
@@ -48,8 +50,8 @@ import {
   type PlanOwner, type PlanState, type TargetLibrary,
 } from '../../advertising/rank-schedule-group.service.js'
 import {
-  dayLine, next24, paintDays, raiseWords, weekAddsSpend, weekRaise, weekSummary,
-  type PaintWindow, type TargetValues, type WeekRaise, type WeekSummary,
+  dayLine, higherPlacements, next24, paintDays, raiseWords, weekAddsSpend, weekRaise, weekSummary,
+  type PaintWindow, type Placement, type TargetValues, type WeekRaise, type WeekSummary,
 } from '../../advertising/hourly-plan-week.js'
 import { amountLabel, campaignCurrency, liveReachOf, type LiveReach } from './ads-tool-guards.js'
 import { approvedRun, canonical, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, type RuleWrite, type StoredReach } from './ads-change-kit.js'
@@ -67,7 +69,12 @@ const LINES_SHOWN = 20
 const OPS = ['create', 'update-windows', 'set-campaigns', 'rename', 'switch', 'delete', 'set-target-values'] as const
 type Op = (typeof OPS)[number]
 /** The keys of a campaign's own target values this tool sets (any other key it holds is kept as it is). */
-const VALUE_KEYS = ['floorBidCents', 'biasPct', 'bidMode', 'bidValueCents', 'maxCpcCents'] as const
+const VALUE_KEYS = ['floorBidCents', 'biasPct', 'bidMode', 'bidValueCents', 'maxCpcCents', 'lanes'] as const
+/** A blend's placements, as a request names them and as the engine stores them (a lane: { placement, biasPct }). */
+const BLEND_FIELDS: ReadonlyArray<readonly [ 'topOfSearchPct' | 'restOfSearchPct' | 'productPagesPct', Placement]> = [
+  ['topOfSearchPct', 'PLACEMENT_TOP'], ['restOfSearchPct', 'PLACEMENT_REST_OF_SEARCH'], ['productPagesPct', 'PLACEMENT_PRODUCT_PAGE'],
+]
+const PLACEMENT_WORDS: Record<Placement, string> = { PLACEMENT_TOP: 'top-of-search', PLACEMENT_REST_OF_SEARCH: 'rest-of-search', PLACEMENT_PRODUCT_PAGE: 'product-pages' }
 
 type Obj = Record<string, unknown>
 type Overrides = PlanState['overrides']
@@ -101,12 +108,19 @@ const VALUE = z.object({
   holdBaseBid: z.boolean().optional().describe('true: its hours leave the base bid as it is (instead of baseBidCents)'),
   maxCpcCents: z.number().int().min(2).max(10_000).nullable().optional()
     .describe("the cost per click its placement is held under, in minor units; null = the library's"),
+  blend: z.object({
+    topOfSearchPct: z.number().int().min(0).max(900).optional().describe('the top-of-search placement % its hours hold'),
+    restOfSearchPct: z.number().int().min(0).max(900).optional().describe('the rest-of-search placement % its hours hold'),
+    productPagesPct: z.number().int().min(0).max(900).optional().describe('the product-pages placement % its hours hold'),
+  }).strict().refine((b) => Object.values(b).some((v) => v !== undefined), { message: 'a blend names at least one placement' }).nullable().optional()
+    .describe("this campaign's own blend for the target: its hours hold every placement named, at once, in one write (a placement not named goes to 0; "
+      + "the CPC ceiling binds each); null = drop the campaign's own blend (the target's own placement % applies again)"),
   clear: z.boolean().optional().describe("true: drop this campaign's own values for the target (the library's apply again)"),
 })
 
 const input = z.object({
   op: z.enum(OPS).describe('create a plan (born switched off) · update-windows (paint its week) · set-campaigns (add or take out members) · '
-    + 'rename · switch (on or off) · delete · set-target-values (a campaign\'s own floor, placement %, base bid, CPC ceiling per target)'),
+    + 'rename · switch (on or off) · delete · set-target-values (a campaign\'s own floor, placement %, base bid, CPC ceiling or blend per target)'),
   planId: ID.optional().describe('the plan (planId in ad-hourly-plans); every op but create'),
   name: z.string().trim().min(1).max(120).optional().describe('create, rename: its name, not used by another plan'),
   market: z.string().trim().toUpperCase().min(2).max(20).optional().describe('create: the Amazon market its campaigns are in (IT, DE, …)'),
@@ -193,10 +207,29 @@ export function applyValue(current: Obj | undefined, v: ValueArg): Obj | null {
   set('floorBidCents', v.floorBidCents)
   set('biasPct', v.placementPct)
   set('maxCpcCents', v.maxCpcCents)
+  set('lanes', v.blend === undefined ? undefined : v.blend === null ? null : lanesOf(v.blend))
   if (v.holdBaseBid) { out.bidMode = 'hold'; delete out.bidValueCents }
   else if (v.baseBidCents === null) { delete out.bidMode; delete out.bidValueCents }
   else if (typeof v.baseBidCents === 'number') { out.bidMode = 'absolute'; out.bidValueCents = v.baseBidCents }
   return Object.keys(out).length ? out : null
+}
+
+/** A request's blend as the engine's lanes (rank-controller.ts LaneSpec: only its placement and biasPct are read). */
+function lanesOf(blend: NonNullable<ValueArg['blend']>): Array<{ placement: Placement; biasPct: number }> {
+  return BLEND_FIELDS.flatMap(([field, placement]) => (typeof blend[field] === 'number' ? [{ placement, biasPct: blend[field]! }] : []))
+}
+
+/** Stored lanes as a request's blend, or null when they are not lanes this tool can set again (an empty blend, another placement). */
+function blendOf(lanes: unknown): NonNullable<ValueArg['blend']> | null {
+  if (!Array.isArray(lanes) || !lanes.length) return null
+  const out: Partial<Record<(typeof BLEND_FIELDS)[number][0], number>> = {}
+  for (const lane of lanes) {
+    const l = obj(lane)
+    const field = BLEND_FIELDS.find(([, placement]) => placement === l.placement)?.[0]
+    if (!field || field in out || typeof l.biasPct !== 'number') return null
+    out[field] = l.biasPct
+  }
+  return out
 }
 
 /** The highest placement % (outside the floor) and base bid any member's hours hold. */
@@ -414,8 +447,12 @@ async function draftOf(a: Args, lib: TargetLibrary): Promise<{ planned: Planned 
         if (!target) return { refusal: `There is no rank target "${v.targetKey}" (ad-hourly-plans lists the targets a plan holds).` }
         if (v.floorBidCents != null && !target.floor) return { refusal: `"${v.targetKey}" is not a Min-bid target: a floor applies only to Min-bid hours.` }
         if (v.holdBaseBid && v.baseBidCents != null) return { refusal: `${v.targetKey}: name a base bid (baseBidCents) or holdBaseBid, not both.` }
-        const asked = [v.floorBidCents, v.placementPct, v.baseBidCents, v.maxCpcCents].some((x) => x !== undefined) || v.holdBaseBid || v.clear
-        if (!asked) return { refusal: `${v.targetKey}: name a value to set (floorBidCents, placementPct, baseBidCents, holdBaseBid, maxCpcCents) or clear.` }
+        // A Min-bid hour floors every bid; the engine's blended path never runs for it (ad-rank-defend.job.ts: pause first).
+        if (v.blend && target.floor) return { refusal: `"${v.targetKey}" is a Min-bid target: its hours floor every bid, so a blend does not apply there.` }
+        // With a blend the engine reads only its lanes: a placement % beside it would never be written.
+        if (v.blend && v.placementPct != null) return { refusal: `${v.targetKey}: name a placement % (placementPct) or a blend, not both — with a blend, its placements are the ones named in it.` }
+        const asked = [v.floorBidCents, v.placementPct, v.baseBidCents, v.maxCpcCents, v.blend].some((x) => x !== undefined) || v.holdBaseBid || v.clear
+        if (!asked) return { refusal: `${v.targetKey}: name a value to set (floorBidCents, placementPct, baseBidCents, holdBaseBid, maxCpcCents, blend) or clear.` }
         if (v.campaignId && !before.members.includes(v.campaignId)) return { refusal: `Campaign ${v.campaignId} is not in "${before.name}": its values are set only on a member (add it with op set-campaigns first).` }
         for (const c of v.campaignId ? [v.campaignId] : before.members) {
           const mine = { ...(overrides[c] ?? {}) }
@@ -702,7 +739,7 @@ function valueChanges(before: PlanState, after: Draft, lib: TargetLibrary, facts
       if (canonical(b ?? null) === canonical(n ?? null)) continue
       const from = lib.withOverrides(before.overrides[c]).get(key)
       const to = lib.withOverrides(after.overrides[c]).get(key)
-      const shown = (t: TargetValues | undefined) => (t ? { floorBidCents: t.floor ? t.floorBidCents : null, placementPct: t.placementPct, bidValueCents: t.bidValueCents, maxCpcCents: t.maxCpcCents } : {})
+      const shown = (t: TargetValues | undefined) => (t ? { floorBidCents: t.floor ? t.floorBidCents : null, placementPct: t.placementPct, blend: blendShown(t), bidValueCents: t.bidValueCents, maxCpcCents: t.maxCpcCents } : {})
       lines.push({ campaignId: c, campaign: facts.get(c)?.name ?? c, targetKey: key, from: shown(from), to: shown(to), raises: valueRaises(from, to) })
     }
   }
@@ -714,10 +751,19 @@ function valueRaises(from: TargetValues | undefined, to: TargetValues | undefine
   if (!from || !to) return []
   const out: string[] = []
   if (to.floor && (to.floorBidCents ?? 2) > (from.floorBidCents ?? 2)) out.push('a higher Min-bid floor')
-  if (!to.floor && to.placementPct > from.placementPct) out.push('a higher placement %')
+  // Where a blend is on either side, placement by placement: it can add one and keep the highest % (Top 120 → Top 120 +
+  // Rest 35). One placement on both sides: the placement % as before.
+  const higher = !to.floor && (from.blend || to.blend) ? higherPlacements(from, to) : []
+  if (higher.length) out.push(...higher.map((p) => `a higher ${PLACEMENT_WORDS[p]} placement %`))
+  else if (!to.floor && to.placementPct > from.placementPct) out.push('a higher placement %')
   if (to.bidValueCents != null && (from.bidValueCents == null || to.bidValueCents > from.bidValueCents)) out.push('a higher base bid')
   if (!to.floor && (to.maxCpcCents == null ? from.maxCpcCents != null : from.maxCpcCents != null && to.maxCpcCents > from.maxCpcCents)) out.push('a higher CPC ceiling')
   return out
+}
+
+/** A target's blend as the read and the preview show it (null: its hours drive one placement). */
+function blendShown(t: TargetValues) {
+  return t.blend ? t.blend.map((l) => ({ placement: PLACEMENT_WORDS[l.placement], placementPct: l.placementPct })) : null
 }
 
 /** The rules, product plans and playbook slots that also act on the plan's campaigns, and auto-bid's rule. */
@@ -877,10 +923,14 @@ function valueBack(campaignId: string, targetKey: string, b: Obj | undefined): V
   if (!b) return { campaignId, targetKey, clear: true }
   const other = Object.keys(b).filter((k) => !(VALUE_KEYS as readonly string[]).includes(k))
   if (other.length) return { refusal: `campaign ${campaignId} held its own ${other.join(', ')} for "${targetKey}", which set-hourly-bid-plan cannot set again: set it back on the Hourly Bids page` }
+  const blend = b.lanes === undefined ? null : blendOf(b.lanes)
+  if (b.lanes !== undefined && !blend) return { refusal: `campaign ${campaignId} held its own blend for "${targetKey}" in a shape set-hourly-bid-plan cannot set again: set it back on the Hourly Bids page` }
   return {
     campaignId, targetKey,
     floorBidCents: typeof b.floorBidCents === 'number' ? b.floorBidCents : null,
-    placementPct: typeof b.biasPct === 'number' ? b.biasPct : null,
+    // With a blend the request names the lanes, not a placement % (draftOf refuses both): the placement % held beside the
+    // blend now stays (applyValue keeps a key the request leaves out), and the engine reads only the lanes while a blend is set.
+    ...(blend ? { blend } : { placementPct: typeof b.biasPct === 'number' ? b.biasPct : null, blend: null }),
     maxCpcCents: typeof b.maxCpcCents === 'number' ? b.maxCpcCents : null,
     ...(b.bidMode === 'hold' ? { holdBaseBid: true } : { baseBidCents: b.bidMode === 'absolute' && typeof b.bidValueCents === 'number' ? b.bidValueCents : null }),
   }
@@ -1002,7 +1052,7 @@ async function planDetail(planId: string) {
   const facts = await campaignFacts(s.members)
   const week = weekSummary(s, lib.values)
   const used = [...new Set([...(s.windows as Array<{ targetKey?: string }>).map((w) => w?.targetKey).filter((k): k is string => !!k), ...(s.defaultTargetKey ? [s.defaultTargetKey] : [])])]
-  const target = (t: TargetValues) => ({ key: t.key, name: t.name, minBid: t.floor, floorBidCents: t.floor ? t.floorBidCents : null, placementPct: t.placementPct, bidMode: t.bidMode, bidValueCents: t.bidValueCents, maxCpcCents: t.maxCpcCents })
+  const target = (t: TargetValues) => ({ key: t.key, name: t.name, minBid: t.floor, floorBidCents: t.floor ? t.floorBidCents : null, placementPct: t.placementPct, blend: blendShown(t), bidMode: t.bidMode, bidValueCents: t.bidValueCents, maxCpcCents: t.maxCpcCents })
   const schedules = await planSchedules(s.planId)
   const floors = await prisma.campaign.findMany({ where: { id: { in: s.members } }, select: { id: true, bidsSuppressedAt: true, bidsSuppressedBy: true } })
   const { previewGroupRelease, describeOrphans, releaseSentence, floorOwnerWords } = await import('../../advertising/rank-release.service.js')
@@ -1062,7 +1112,7 @@ const adHourlyPlans: AgentTool = {
     + 'rank target. Without planId: every plan with its market, on or off, campaigns, whose it is (the ads playbook\'s, a '
     + 'Claude request\'s, or a person\'s) and its week in numbers. With planId (or a campaignId it holds): ONE plan in full — '
     + 'its week as a 7 × 24 summary per day (a letter per hour, the legend names each target), hours at the floor and per '
-    + 'target, the targets\' values (floor, placement %, base bid, CPC ceiling) and each campaign\'s own values, its members '
+    + 'target, the targets\' values (floor, placement %, a blend\'s placements, base bid, CPC ceiling) and each campaign\'s own values, its members '
     + '(status, live writes, what each holds now, its floor), what switching it off or deleting it would give back now (bid by bid), the '
     + 'next 24 hours in its time zone, armed dated events, its last versions, the rules and plans that also act on its '
     + 'campaigns, and whether the hourly bid engine runs. Read-only; set-hourly-bid-plan changes a plan.',
@@ -1110,11 +1160,13 @@ const setHourlyBidPlan: AgentTool = {
     + 'create one over campaigns of one market (born switched off), paint its week (update-windows: replace the week, or '
     + 'set the hours of given days; the baseline), add or take out campaigns (set-campaigns: a campaign another plan holds '
     + 'only with move; never one of the playbook\'s), rename it, switch it on or off, delete it, or set a campaign\'s own '
-    + 'floor, placement %, base bid or CPC ceiling per target (set-target-values; the library\'s values are tune-ad-engine\'s). '
+    + 'floor, placement %, base bid, CPC ceiling or blend per target (set-target-values; a blend holds several placements in '
+    + 'the same hours — e.g. top of search and rest of search together; the library\'s values are tune-ad-engine\'s). '
     + 'Switching off, deleting or taking a campaign out gives back the bids the plan floored, as the page does. A person '
     + 'approves it in Nexus — unless the business lets it run by its rule inside its limits and the ads strategy (by '
     + 'default nothing runs by rule). Anything that adds spend (a switch on, hours out of the Min-bid floor, a higher '
-    + 'placement % or base bid, a campaign joining a plan that is on, a give-back) is listed in raises and said in the '
+    + 'placement % — each placement on its own, so a blend that adds one is a raise — or base bid, a campaign joining a '
+    + 'plan that is on, a give-back) is listed in raises and said in the '
     + 'preview: a day-to-day change, so a person\'s approval sends it with no authenticator code (by rule only with '
     + 'allowRaise). A plan a person made or last changed changes by rule only where the business '
     + 'allowed it (allowPeoplesPlans); one the ads playbook built is refused (apply-ads-playbook runs it). The preview '

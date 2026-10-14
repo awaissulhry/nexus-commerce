@@ -32,19 +32,34 @@ export interface TargetValues {
   floorBidCents: number | null
   /** The placement % the hour holds (the highest lane of a blend). */
   placementPct: number
+  /**
+   * The % each placement holds in the hour, as the engine writes it: a blend sets every lane and drops each other managed
+   * placement to 0 (buildBlendedAdjustments); one placement sets it and drops the other search placement to 0 (Top ↔ Rest);
+   * a placement not named is left as it is.
+   */
+  placements: Partial<Record<Placement, number>>
+  /** A blend's lanes (several placements in the same hour), or null: the hour drives one placement. */
+  blend: Array<{ placement: Placement; placementPct: number }> | null
   /** 'absolute' sets the ad groups' base bid to `bidValueCents`; null / 'hold' leaves it. */
   bidMode: string | null
   bidValueCents: number | null
   maxCpcCents: number | null
 }
 
+/** The placements an hourly plan drives (ads-placement-math.ts MANAGED_PLACEMENTS). */
+export const PLACEMENTS = ['PLACEMENT_TOP', 'PLACEMENT_REST_OF_SEARCH', 'PLACEMENT_PRODUCT_PAGE'] as const
+export type Placement = (typeof PLACEMENTS)[number]
+const isPlacement = (p: unknown): p is Placement => (PLACEMENTS as readonly unknown[]).includes(p)
+const pctOf = (n: number | null | undefined) => Math.max(0, Math.min(900, Math.round(n ?? 0)))
+
 /** The fields of an engine spec this module reads (RankTargetSpec, after a campaign's overrides). */
 export interface SpecLike {
   key: string
+  placement?: string | null
   pause?: boolean | null
   floorBidCents?: number | null
   biasPct?: number | null
-  lanes?: Array<{ biasPct?: number | null }> | null
+  lanes?: Array<{ placement?: string | null; biasPct?: number | null }> | null
   bidMode?: string | null
   bidValueCents?: number | null
   maxCpcCents?: number | null
@@ -55,16 +70,36 @@ export function targetValuesOf(spec: SpecLike, name: string): TargetValues {
   const lanes = Array.isArray(spec.lanes) ? spec.lanes : []
   const placementPct = Math.max(0, Math.min(900, Math.max(spec.biasPct ?? 0, ...lanes.map((l) => l?.biasPct ?? 0))))
   const mode = spec.bidMode ?? null
+  const floor = spec.pause === true || mode === 'suppress'
+  // The engine's blended path runs only for a target that is not a floor (ad-rank-defend.job.ts: pause first).
+  const blend = !floor && lanes.length
+    ? lanes.filter((l) => isPlacement(l?.placement)).map((l) => ({ placement: l.placement as Placement, placementPct: pctOf(l.biasPct) }))
+    : null
+  const placements: Partial<Record<Placement, number>> = {}
+  if (blend) {
+    for (const p of PLACEMENTS) placements[p] = blend.find((l) => l.placement === p)?.placementPct ?? 0
+  } else if (isPlacement(spec.placement) && (!floor || spec.biasPct != null)) {
+    placements[spec.placement] = pctOf(spec.biasPct)
+    if (!floor && spec.placement === 'PLACEMENT_TOP') placements.PLACEMENT_REST_OF_SEARCH = 0
+    if (!floor && spec.placement === 'PLACEMENT_REST_OF_SEARCH') placements.PLACEMENT_TOP = 0
+  }
   return {
     key: spec.key,
     name,
-    floor: spec.pause === true || mode === 'suppress',
+    floor,
     floorBidCents: spec.floorBidCents ?? null,
     placementPct,
+    placements,
+    blend,
     bidMode: mode,
     bidValueCents: mode === 'absolute' ? spec.bidValueCents ?? null : null,
     maxCpcCents: spec.maxCpcCents ?? null,
   }
+}
+
+/** The placements whose % goes up from one target's hours to another's (a placement not named counts as 0). Pure. */
+export function higherPlacements(from: Pick<TargetValues, 'placements'>, to: Pick<TargetValues, 'placements'>): Placement[] {
+  return PLACEMENTS.filter((p) => (to.placements[p] ?? 0) > (from.placements[p] ?? 0))
 }
 
 export interface WeekPlan {
@@ -177,7 +212,8 @@ export function hourRaise(from: TargetValues | null, to: TargetValues | null): A
     if (to.placementPct > 0 || to.bidValueCents != null) out.push('newlyPlanned')
     return out
   }
-  if (to.placementPct > from.placementPct) out.push('higherPlacement')
+  // A blend can add a placement and keep the highest % (Top 120 → Top 120 + Rest 35): judged placement by placement.
+  if (to.placementPct > from.placementPct || higherPlacements(from, to).length) out.push('higherPlacement')
   if (to.bidValueCents != null && (from.bidValueCents == null || to.bidValueCents > from.bidValueCents)) out.push('higherBaseBid')
   return out
 }
