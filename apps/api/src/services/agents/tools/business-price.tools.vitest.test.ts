@@ -17,8 +17,13 @@
  *                                        the setting back by value, refused once it moved, and never removes Amazon's own.
  *   bulk-listing-price-change, business  many listings in ONE approval and one undo; any refused listing refuses it all;
  *                                        a business price change is never run by rule.
- *   resend-prices                        the business price Nexus keeps is queued again with the price (or alone).
+ *   resend-prices                        the price only by default; asked, the business price Nexus keeps is queued again,
+ *                                        spread out, and a removal at Amazon is said on the card.
  *   price-explain                        the rule, the price it gives, the normal price, the tiers, the last send.
+ *   the approval card                    (#621 review) it shows only the summary and the from → to labels, so they say
+ *                                        it all: Amazon's own price it replaces (and that an undo cannot bring it back),
+ *                                        a first offer that waits, kept in Nexus, Amazon's warnings — counts for many.
+ *   trust                                a business price change in bulk is held at ask whatever the tool is set to.
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -61,6 +66,8 @@ import { PARENT_PRICE_REASON } from '../../pim/matrix-cells.js'
 import { BUSINESS_PRICE_SYNC_TYPE } from '../../pim/business-price-write.service.js'
 import { BUSINESS_NEEDS_A_PERSON, BULK_LISTING_PRICE_LIMITS, bulkListingPriceWithinLimits } from './price-change.tools.js'
 import { AMAZON_OWN_UNDO, REMOVAL_REACHES_AMAZON, resolveBusinessSetting } from './business-price-plan.js'
+import { resolveRequest } from '../../agent-fleet/approval-target.js'
+import { claudeRuleForChange } from '../claude-trust.service.js'
 
 const business = { workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }
 const inside = <T>(work: () => Promise<T>) => withWorkspace(business, work)
@@ -228,7 +235,12 @@ describe('set-listing-price, action business', { timeout: 90_000 }, () => {
     expect(await dryRun('set-listing-price', { productId: f.child, action: 'business', businessPrice: { remove: true }, targets: target(f.child) }))
       .toMatchObject({ ok: false, error: expect.stringContaining('Amazon shows one of EUR 185.00, set outside Nexus') })
     const args = { productId: f.child, action: 'business', businessPrice: { rule: 'FIXED', price: 187 }, targets: target(f.child) }
-    expect((await dryRun('set-listing-price', args)).preview.warning).toContain('Amazon shows a business price of EUR 185.00 set outside Nexus: this replaces it')
+    const own = (await dryRun('set-listing-price', args)).preview
+    expect(own.warning).toContain('Amazon shows a business price of EUR 185.00 set outside Nexus: this replaces it')
+    // The card (summary + from → to): it says it replaces Amazon's own price, and that an undo cannot bring it back.
+    const card = resolveRequest('set-listing-price', args, own, { masterCurrency: 'EUR' })
+    expect(card.changes[0]).toMatchObject({ from: 'Amazon\'s own EUR 185.00 (set outside Nexus)', to: 'EUR 187.00 (exact)' })
+    expect(card.summary).toContain('Replaces Amazon\'s own business price EUR 185.00 (set outside Nexus; an undo cannot bring it back)')
     const { approvalId } = await askApprove('set-listing-price', args)
     expect((await commit(approvalId)).status).toBe('executed')
     const change = await inside(() => db().agentChange.findFirstOrThrow({ where: { approvalId } })) as Row
@@ -307,10 +319,52 @@ describe('bulk-listing-price-change, business', { timeout: 90_000 }, () => {
   })
 })
 
+describe('#621 review — the approval card says what a person must know', { timeout: 90_000 }, () => {
+  const card = (tool: string, args: Row, preview: Row) => resolveRequest(tool, args, preview, { masterCurrency: 'EUR' })
+
+  it('one listing: a first offer that waits (whatever Nexus keeps, while Amazon holds none), and kept in Nexus while paused', async () => {
+    // Nexus keeps a business price that never reached Amazon; Amazon's shopper price is another.
+    const waits = await family('CARD-WAIT', { businessPriceRule: 'FIXED', businessPrice: 189,
+      platformAttributes: { attributes: { purchasable_offer: [{ audience: 'ALL', our_price: [{ schedule: [{ value_with_tax: 210 }] }] }] } } })
+    const args = { productId: waits.child, action: 'business', businessPrice: { percent: 5 }, targets: target(waits.child) }
+    const preview = (await dryRun('set-listing-price', args)).preview
+    expect(preview.warning).toContain('Not sent yet: Amazon\'s shopper price is EUR 210.00 and Nexus\'s is EUR 200.00')
+    expect(card('set-listing-price', args, preview).summary).toContain('Not sent while Amazon\'s shopper price EUR 210.00 is not Nexus\'s EUR 200.00')
+    const paused = await family('CARD-PAUSED', { syncPaused: true })
+    const pArgs = { productId: paused.child, action: 'business', businessPrice: { percent: 5 }, targets: target(paused.child) }
+    expect(card('set-listing-price', pArgs, (await dryRun('set-listing-price', pArgs)).preview).summary).toContain('Kept in Nexus, not sent yet: this listing\'s sync is paused')
+  })
+
+  it('many listings: each kind counted with the first listings, inside the card\'s 400 characters; a removal said too', async () => {
+    const own = await family('CARD-OWN', { platformAttributes: { attributes: { purchasable_offer: [{ audience: 'B2B', our_price: [{ schedule: [{ value_with_tax: 185 }] }] }] } } })
+    const paused = await family('CARD-HELD', { syncPaused: true })
+    const sale = await family('CARD-SALE', { salePrice: 150 })
+    const removed = await family('CARD-RM', { businessPriceRule: 'FIXED', businessPrice: 189 })
+    const args = { businessPrices: [{ listingId: own.it, price: 187 }, { listingId: paused.it, percent: 5 }, { listingId: sale.it, percent: 5 }, { listingId: removed.it, remove: true }] }
+    const preview = (await dryRun('bulk-listing-price-change', args)).preview
+    const shown = card('bulk-listing-price-change', args, preview)
+    // Four kinds at once: every one is said, fewer names to fit the card.
+    expect(shown.summary!.length).toBeLessThanOrEqual(400)
+    expect(shown.summary).toContain('Replaces Amazon\'s own business price (an undo cannot bring it back): 1')
+    expect(shown.summary).toContain('Kept in Nexus, not sent yet (paused, draft or Inactive): 1')
+    expect(shown.summary).toContain('Saved with a warning (hidden by Amazon, or a sale below it): 1')
+    expect(shown.summary).toContain('Removed at Amazon too: 1')
+    expect(shown.summary!.indexOf('Replaces Amazon')).toBeLessThan(shown.summary!.indexOf('Kept in Nexus'))
+    expect(shown.changes.map((c) => c.from)).toEqual(['Amazon\'s own EUR 185.00 (set outside Nexus)', 'No business price', 'No business price', 'EUR 189.00 (exact)'])
+    // Two kinds: the listings are named.
+    const two = (await dryRun('bulk-listing-price-change', { businessPrices: [{ listingId: own.it, price: 187 }, { listingId: paused.it, percent: 5 }] })).preview
+    expect(two.summary).toContain('Replaces Amazon\'s own business price (an undo cannot bring it back): 1 (TEST-SKU-B2B-CARD-OWN-M IT)')
+    expect(two.summary).toContain('Kept in Nexus, not sent yet (paused, draft or Inactive): 1 (TEST-SKU-B2B-CARD-HELD-M IT)')
+  })
+})
+
 describe('resend-prices and price-explain, with the business price', { timeout: 90_000 }, () => {
   it('resend-prices queues the business price Nexus keeps, with the price or alone', async () => {
     const f = await family('RESEND', { businessPriceRule: 'PERCENT_OFF', businessPricePercent: 5 })
-    const dry = await dryRun('resend-prices', { listingIds: [f.it] })
+    // By default the price only, as before step 6.
+    expect((await dryRun('resend-prices', { listingIds: [f.it] })).preview).toMatchObject({ totals: { listings: 1 } })
+    expect((await dryRun('resend-prices', { listingIds: [f.it] })).preview.businessPrices).toBeUndefined()
+    const dry = await dryRun('resend-prices', { listingIds: [f.it], which: 'both' })
     expect(dry.preview).toMatchObject({ totals: { listings: 1, businessListings: 1 }, businessPrices: [{ market: 'IT', setting: '5 % below the normal price', price: 190, currency: 'EUR' }] })
     const only = await dryRun('resend-prices', { listingIds: [f.it], which: 'business' })
     expect(only.preview).toMatchObject({ totals: { listings: 0, businessListings: 1 } })
@@ -318,6 +372,24 @@ describe('resend-prices and price-explain, with the business price', { timeout: 
     const done = await commit(approvalId)
     expect(done.status, JSON.stringify(done)).toBe('executed')
     expect(await businessRows(f.it)).toEqual([{ syncStatus: 'PENDING' }])
+  })
+
+  it('a removal at Amazon is named on the card; asked business sends are spread out, 2 s apart', async () => {
+    const gone = await family('RESEND-RM')
+    // Nexus kept a business price here once (its audit row) and keeps none now: a resend removes Amazon's.
+    await inside(() => db().channelListingOverride.create({ data: { channelListingId: gone.it, fieldName: 'businessPrice', previousValue: null, newValue: 'x', reason: 'test', changedBy: 'test@example.test' } }))
+    const both = (await dryRun('resend-prices', { listingIds: [gone.it], which: 'both' })).preview
+    expect(both.summary).toBe('Send the price 1 listing already carries again, and remove the business price at Amazon for 1 listing (Nexus keeps none there now).')
+    expect(resolveRequest('resend-prices', { listingIds: [gone.it], which: 'both' }, both, { masterCurrency: 'EUR' }).summary).toBe(both.summary)
+
+    const a = await family('RESEND-A', { businessPriceRule: 'PERCENT_OFF', businessPricePercent: 5 })
+    const b = await family('RESEND-B', { businessPriceRule: 'PERCENT_OFF', businessPricePercent: 5 })
+    const { approvalId } = await askApprove('resend-prices', { listingIds: [a.it, b.it], which: 'business' })
+    expect((await commit(approvalId)).status).toBe('executed')
+    const rows = await inside(() => db().outboundSyncQueue.findMany({ where: { channelListingId: { in: [a.it, b.it] }, syncType: BUSINESS_PRICE_SYNC_TYPE }, select: { holdUntil: true } })) as Row[]
+    const holds = rows.map((r) => new Date(r.holdUntil).getTime()).sort((x, y) => x - y)
+    expect(holds).toHaveLength(2)
+    expect(holds[1]! - holds[0]!).toBeGreaterThanOrEqual(1_900)
   })
 
   it('price-explain: the rule, the price it gives, the normal price it follows, the tiers and the last send', async () => {
@@ -346,5 +418,23 @@ describe('resend-prices and price-explain, with the business price', { timeout: 
     const cell = out.data.rows.find((r: Row) => r.rowId === f.child).cells[IT]
     expect(cell.business).toMatchObject({ rule: null, normalPrice: 200, currency: 'EUR' })
     expect(cell.writable).toContain('businessPrice')
+  })
+})
+
+describe('#621 review — business prices in bulk are approved by a person in Nexus, whatever the tool is set to', () => {
+  it('confirm or auto for bulk-listing-price-change: a business price request is held at ask with the reason; normal prices keep the level', async () => {
+    const f = await family('TRUST')
+    try {
+      for (const level of ['confirm', 'auto']) {
+        await inside(() => db().agentTool.upsert({ where: { workspace_name: { workspaceId: LEGACY_WORKSPACE_ID, name: 'bulk-listing-price-change' } },
+          create: { name: 'bulk-listing-price-change', riskTier: 'high', requiresApproval: true, claudeTrust: level }, update: { claudeTrust: level } }))
+        const businessRule = await inside(() => claudeRuleForChange('bulk-listing-price-change', { businessPrices: [{ listingId: f.it, percent: 5 }] }))
+        expect(businessRule).toMatchObject({ level: 'ask', narrowedFor: BUSINESS_NEEDS_A_PERSON })
+        const normalRule = await inside(() => claudeRuleForChange('bulk-listing-price-change', { listingIds: [f.it], mode: 'percent', value: 1 }))
+        expect(normalRule?.level).toBe(level)
+      }
+    } finally {
+      await inside(() => db().agentTool.deleteMany({ where: { name: 'bulk-listing-price-change' } }))
+    }
   })
 })

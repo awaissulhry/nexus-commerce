@@ -33,7 +33,7 @@ import { approvedOnVersion, BASIS_ON_FIELDS, factHash, type AgentTool, type Plan
 import { listingPlanFacts, listingPriceFacts, pinnedPrice, saleFact } from './listing-facts.js'
 import { liveProduct, PRODUCT_NOT_FOUND } from './live-product.js'
 import {
-  BUSINESS_INPUT, businessSettingWords, businessUndoRequest, currentBusinessRecords, planBusinessPrices, sameSetting,
+  BUSINESS_INPUT, businessCardSummary, businessFromWords, businessSettingWords, businessUndoRequest, currentBusinessRecords, planBusinessPrices, sameSetting,
   type BusinessInput, type BusinessLine, type BusinessPlanItem, type BusinessPlanRefusal, type BusinessRecord,
 } from './business-price-plan.js'
 
@@ -493,21 +493,26 @@ async function planBusinessTargets(args: Record<string, unknown>, ctx: ToolConte
 const targetOf = (c: { rowId: string; coordinateKey: string }) => `${c.rowId}|${c.coordinateKey}`
 const refusalLines = (refused: readonly BusinessPlanRefusal[]) => refused.slice(0, 10).map((r) => `${r.sku} ${r.coordinateKey ?? r.marketplace ?? ''}: ${r.reason}`).join(' · ')
 
-/** The preview of a business price change: each target's setting from → to (what it stands on), the prices it gives now. */
+/**
+ * The preview of a business price change: each target's setting from → to (what it stands on; Amazon's own price as the
+ * `from` where Nexus keeps none), the prices it gives now, and — in the summary, the one sentence the approval card shows —
+ * what a person must know before approving (`businessCardSummary`).
+ */
 function businessPreview(plan: { family: Family; lines: BusinessTargetLine[]; unchanged: number; refused: BusinessPlanRefusal[] }) {
   const keys = [...new Set(plan.lines.map((l) => l.coordinateKey))]
   const warnings = plan.lines.flatMap((l) => l.warnings.map((w) => `${l.sku} on ${l.coordinateKey}: ${w}`))
+  const head = `${plan.family.sku}: business price (Amazon Business) — ${plan.lines.length} change${plan.lines.length === 1 ? '' : 's'} on ${keys.slice(0, 6).join(', ')}`
+    + `${keys.length > 6 ? ` and ${keys.length - 6} more` : ''}${plan.refused.length ? `; ${plan.refused.length} refused (see refused)` : ''}.`
   return {
     action: 'set-listing-price',
     family: { productId: plan.family.id, sku: plan.family.sku },
-    summary: `${plan.family.sku}: business price (Amazon Business) — ${plan.lines.length} change${plan.lines.length === 1 ? '' : 's'} on ${keys.slice(0, 6).join(', ')}`
-      + `${keys.length > 6 ? ` and ${keys.length - 6} more` : ''}${plan.refused.length ? `; ${plan.refused.length} refused (see refused)` : ''}.`,
+    summary: businessCardSummary(head, plan.lines, (l) => `${l.sku} ${(l as BusinessTargetLine).coordinateKey}`),
     verb: 'business',
     // 2.3 — it stands on each listing's business setting as it is and as it gets, never the listing's version.
     basisOn: BASIS_ON_FIELDS,
     changes: plan.lines.map((l) => ({
       rowId: l.rowId, sku: l.sku, coordinateKey: l.coordinateKey, cell: 'businessPrice', from: l.from, to: l.to,
-      fromLabel: businessSettingWords(l.from, l.currency), toLabel: businessSettingWords(l.to, l.currency),
+      fromLabel: businessFromWords(l), toLabel: businessSettingWords(l.to, l.currency),
     })),
     // What the settings give today (they follow the normal price; the door checks them again when it writes).
     prices: plan.lines.map((l) => ({ sku: l.sku, coordinateKey: l.coordinateKey, currency: l.currency, normalPrice: l.normalPrice, now: l.priceNow, after: l.priceAfter })),

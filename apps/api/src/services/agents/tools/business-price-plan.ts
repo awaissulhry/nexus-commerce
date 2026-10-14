@@ -11,8 +11,14 @@
  * (paused, a draft, Inactive), come with it. Beside the door, from the pull's copy of Amazon's offer:
  *   - a business price Amazon shows that Nexus never kept (set outside Nexus) is never removed by a `null`: nothing here
  *     is read as a removal but an explicit `remove: true`, and a removal where Nexus keeps none is refused with the reason;
- *   - #602 — a FIRST business offer is sent with the normal offer, so it is not sent while Amazon's shopper price is not
- *     Nexus's: the preview says so with both prices (the send waits, and goes by itself once the two agree).
+ *   - #602 — a FIRST business offer (Amazon holds none) is sent with the normal offer, so it is not sent while Amazon's
+ *     shopper price is not Nexus's: the preview says so with both prices (the send waits, and goes by itself once the two
+ *     agree).
+ *
+ * The approval card shows a preview's `summary` and each line's from → to labels, never its `warning(s)`: so what a person
+ * must know before approving — it replaces Amazon's own business price (an undo can never bring that back), it waits for
+ * the shopper prices to agree, it is kept in Nexus (paused, draft, Inactive), a warning from Amazon's rules, a removal at
+ * Amazon — is said in the summary (`businessCardSummary`), and Amazon's own price is the line's `from` label.
  *
  * A change stands on the fields it changes (#609): each listing's business setting before and after, never the listing's
  * version (an order's stock cascade moves it) nor the normal price a percent follows (a PERCENT_OFF rule follows it by
@@ -150,6 +156,51 @@ export const firstOfferWaits = (amazon: string, nexus: string) =>
 
 export const REMOVAL_REACHES_AMAZON = 'Removing it also removes the business price and its quantity discounts from Amazon.'
 
+/** What a person must read on the approval card, per listing, most serious first (`businessCardSummary`). */
+export type BusinessNoteKind = 'amazonOwn' | 'firstOffer' | 'kept' | 'amazonRule' | 'removal'
+export interface BusinessNote { kind: BusinessNoteKind; text: string }
+const NOTE_ORDER: readonly BusinessNoteKind[] = ['amazonOwn', 'firstOffer', 'kept', 'amazonRule', 'removal']
+/** The card's words for many listings with the same note. */
+const NOTE_GROUP: Readonly<Record<BusinessNoteKind, string>> = {
+  amazonOwn: 'Replaces Amazon\'s own business price (an undo cannot bring it back)',
+  firstOffer: 'Waits until Amazon\'s shopper price is Nexus\'s',
+  kept: 'Kept in Nexus, not sent yet (paused, draft or Inactive)',
+  amazonRule: 'Saved with a warning (hidden by Amazon, or a sale below it)',
+  removal: 'Removed at Amazon too',
+}
+/** The approval card shows at most this much of a summary (approval-queue.service.ts clips it). */
+const CARD_SUMMARY_MAX = 400
+
+/** The `from` label of a line: Amazon's own business price where Nexus keeps none and Amazon shows one. */
+export function businessFromWords(line: Pick<BusinessLine, 'from' | 'amazonOwn' | 'currency'>): string {
+  return !line.from && line.amazonOwn ? `Amazon's own ${moneyOf(line.currency)(line.amazonOwn.price)} (set outside Nexus)` : businessSettingWords(line.from, line.currency)
+}
+
+/**
+ * PURE — the card's summary of a business price change: `head`, then what a person must know before approving, most
+ * serious first. One listing: each note in full. Several: per kind, how many and the first listings (`where` names one).
+ * It fits the card: fewer names, then none, then the short words — never a note left out to fit.
+ */
+export function businessCardSummary(head: string, lines: readonly BusinessLine[], where: (line: BusinessLine) => string): string {
+  if (!lines.some((l) => l.notes.length)) return head
+  const grouped = (names: number) => `${head} ${NOTE_ORDER.flatMap((kind) => {
+    const hit = lines.filter((l) => l.notes.some((n) => n.kind === kind))
+    if (!hit.length) return []
+    const named = names ? ` (${hit.slice(0, names).map(where).join(', ')}${hit.length > names ? ` and ${hit.length - names} more` : ''})` : ''
+    return [`${NOTE_GROUP[kind]}: ${hit.length}${named}`]
+  }).join('. ')}.`
+  const candidates = lines.length === 1
+    ? [(() => { const words = NOTE_ORDER.flatMap((kind) => lines[0]!.notes.filter((n) => n.kind === kind).map((n) => n.text)).join('; '); return `${head} ${words.charAt(0).toUpperCase()}${words.slice(1)}.` })(), grouped(0)]
+    : [grouped(3), grouped(2), grouped(1), grouped(0)]
+  return candidates.find((c) => c.length <= CARD_SUMMARY_MAX) ?? candidates.at(-1)!
+}
+
+/** The door's "not sent yet" sentence, as the card says it: `kept in Nexus, not sent yet: this listing's sync is paused`. */
+function keptWords(notSent: string): string {
+  const why = /Nothing was sent(?: yet)?: ([^.]+)\./.exec(notSent)?.[1]
+  return why ? `kept in Nexus, not sent yet: ${why}` : 'kept in Nexus, not sent yet'
+}
+
 export interface BusinessPlanItem {
   listingId: string
   input: BusinessInput
@@ -178,6 +229,8 @@ export interface BusinessLine {
   warnings: string[]
   /** Amazon shows a business price Nexus never kept (set outside Nexus), when Nexus keeps none. */
   amazonOwn: { price: number } | null
+  /** The same, as the approval card says it (`businessCardSummary`). */
+  notes: BusinessNote[]
 }
 
 export interface BusinessPlanRefusal { listingId: string; sku: string; marketplace: string | null; rowId?: string; coordinateKey?: string; reason: string }
@@ -243,19 +296,26 @@ export async function planBusinessPrices(items: readonly BusinessPlanItem[], act
     const currency = out.currency ?? null
     const money = moneyOf(currency)
     const normalPrice = out.normalPrice ?? null
-    const warnings = [...out.warnings]
-    if (out.notSent) warnings.push(out.notSent)
-    if (a.to && a.amazonOwn) warnings.push(`Amazon shows a business price of ${money(a.amazonOwn.price)} set outside Nexus: this replaces it, and Nexus keeps the business price from now on.`)
-    // #602 — a FIRST business offer (Nexus keeps none and Amazon shows none) goes with the normal offer.
-    if (a.to && !a.from && !a.amazonHasOne && a.shopperPrice != null && normalPrice != null && Math.abs(a.shopperPrice - normalPrice) >= 0.005) {
-      warnings.push(firstOfferWaits(money(a.shopperPrice), money(normalPrice)))
+    const warnings: string[] = []
+    const notes: BusinessNote[] = []
+    const note = (kind: BusinessNoteKind, warning: string, text: string) => { warnings.push(warning); notes.push({ kind, text }) }
+    if (a.to && a.amazonOwn) {
+      note('amazonOwn', `Amazon shows a business price of ${money(a.amazonOwn.price)} set outside Nexus: this replaces it, and Nexus keeps the business price from now on. An undo cannot bring Amazon's own price back.`,
+        `replaces Amazon's own business price ${money(a.amazonOwn.price)} (set outside Nexus; an undo cannot bring it back)`)
     }
-    if (!a.to) warnings.push(REMOVAL_REACHES_AMAZON)
+    // #602 — a FIRST business offer (Amazon holds none, whatever Nexus keeps) is sent with the normal offer.
+    if (a.to && !a.amazonHasOne && a.shopperPrice != null && normalPrice != null && Math.abs(a.shopperPrice - normalPrice) >= 0.005) {
+      note('firstOffer', firstOfferWaits(money(a.shopperPrice), money(normalPrice)),
+        `not sent while Amazon's shopper price ${money(a.shopperPrice)} is not Nexus's ${money(normalPrice)}`)
+    }
+    if (out.notSent) note('kept', out.notSent, keptWords(out.notSent))
+    for (const w of out.warnings) note('amazonRule', w, w.replace(/\.$/, ''))
+    if (!a.to) note('removal', REMOVAL_REACHES_AMAZON, 'removes the business price at Amazon too')
     plan.lines.push({
       listingId: a.row.id, productId: a.row.productId, sku: a.row.product?.sku ?? a.row.productId, marketplace: a.row.marketplace, ...where(a.item),
       version: a.row.version, from: a.from, to: a.to, currency, normalPrice,
       priceNow: a.from ? businessPriceOf(a.from, normalPrice) : null, priceAfter: out.businessPrice,
-      warnings, amazonOwn: a.amazonOwn,
+      warnings, amazonOwn: a.amazonOwn, notes,
     })
   })
   return plan

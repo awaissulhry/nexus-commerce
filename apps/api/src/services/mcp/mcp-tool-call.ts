@@ -188,7 +188,9 @@ export function claudeGateRule(principal: McpPrincipal): GateRule {
         // recorded on the request. Never scheduled: a person decides it.
         const watch = rule && isWatched(rule) ? await recordWatch(approvalId, await watchVerdictOf(tool, preview, { runScope, rule })) : undefined
         if (!rule || rule.level === 'ask' || rule.level === 'off') {
-          return strategy ? { by: 'person', level: 'ask', why: narrowedDecision(strategy), strategy, ...(watch ? { watch } : {}) } : { by: 'person', level: 'ask' }
+          if (strategy) return { by: 'person', level: 'ask', why: narrowedDecision(strategy), strategy, ...(watch ? { watch } : {}) }
+          // Amazon Business step 6 — the tool itself holds this request at ask (`trustCeilingFor`): it says why.
+          return rule?.narrowedFor ? { by: 'person', level: 'ask', why: rule.narrowedFor } : { by: 'person', level: 'ask' }
         }
         if (rule.level === 'confirm') return confirmable('confirm', strategy ? narrowedDecision(strategy) : CONFIRM_IN_CLAUDE, { strategy, watch })
         if (rule.level === 'watch') return confirmable('watch', watchWords(watch!, { runScope }), { strategy, watch })

@@ -111,7 +111,8 @@ async function notSetToConfirm(ap: { id: string; toolName: string; args: unknown
   if (ap.toolName !== PLAN_TOOL) {
     const rule = await claudeRuleForChange(ap.toolName, ap.args, ap.preview)
     if (rule && confirmable(rule.level)) return null
-    return rule?.narrowedBy ? `Not confirmed here: ${narrowedWhy(rule.narrowedBy)}; a person approves it in Nexus.` : plain
+    if (rule?.narrowedBy) return `Not confirmed here: ${narrowedWhy(rule.narrowedBy)}; a person approves it in Nexus.`
+    return rule?.narrowedFor ? `Not confirmed here: ${rule.narrowedFor}.` : plain
   }
   const steps = await prisma.agentPlanStep.findMany({ where: { approvalId: ap.id }, orderBy: { position: 'asc' }, select: { position: true, toolName: true, args: true, preview: true } })
   const rules = await claudeRulesForSteps(steps)
