@@ -2,7 +2,7 @@
  * R17 (MCP full control, part 06) — a repricing rule's create and edit, moved unchanged out of
  * `POST /products/:id/repricing-rules` and `PATCH /repricing-rules/:id`, so save-price-rule saves through the same
  * validation. Those routes were deleted on 2026-10-14 with the old product drawer, their only caller; save-price-rule
- * is the caller now.
+ * is the caller now, and repricing-rule.parity.vitest.test.ts still holds these functions to the routes' recorded answers.
  */
 import type { RepricingRule } from '@prisma/client'
 import prisma from '../db.js'

@@ -15,7 +15,8 @@
  * `AutoFillCard.tsx`, never affected) were deleted with that editor; a dry run is still not a write.
  *
  * 2026-10-14: the drawer, the Translations lens and the bulk-generate modal were deleted with the old products
- * workspace that no page rendered, and the `/translations/:language` routes with them (nothing else called them).
+ * workspace that no page rendered, and the `/translations/:language` routes with them. Their one other caller, the AI
+ * draft approval (`apps/api/src/services/ai/enrichment/draft.service.ts`), now makes the same write itself.
  * `DraftsClient.tsx` is the surface left; a new `/translations` write would now name a route that does not exist.
  *
  * Two routes, two rules, because the two routes know different things:
