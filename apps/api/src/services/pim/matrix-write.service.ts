@@ -34,6 +34,11 @@
  * the same door (versions bump) — each only while the cell still holds what the run wrote (a newer value stays and the
  * cell answers `changedSince`) — and marks the operation `REVERTED` (or `PARTIAL`, never a lie). Every applied cell of a
  * run or a revert names the version it was checked at (`writtenAt`), so the page records it as its own move.
+ *
+ * Amazon Business (step 5 Part 3): `set-business-price` and `set-business-tiers` carry the WHOLE setting each listing
+ * gets (`VerbChange.to`, `null` = none) and run through the `businessPrice` / `businessTiers` door cells — the business
+ * price door, never a write path of their own. Their revert never writes `null` over a business price Amazon held
+ * that Nexus never kept (`businessUndoBlocked`): only "remove", chosen on purpose, takes a business offer away.
  */
 import { createOutboundRow } from '../outbound-rows.js'
 import prisma from '../../db.js'
@@ -643,6 +648,20 @@ export function paramsForChange(verb: MatrixVerbId, change: VerbChange): MatrixV
     case 'set-fulfilment': return change.to === 'FBA' || change.to === 'FBM' || change.to === 'MCF' ? { verb: 'set-fulfilment', method: change.to } : null
     case 'pause-sync': case 'resume-sync': case 'push-now': case 'retry-sync': return { verb }
     case 'set-source': return Array.isArray(change.to) && change.to.every((c) => typeof c === 'string') ? { verb: 'set-source', codes: [...(change.to as string[])] } : null
+    /* Amazon Business: the change carries the WHOLE setting it writes. A B2B price re-runs as that rule (a change by %
+       as the exact price it gave, as adjust-prices re-runs as set-price); the tiers re-run as those tiers, or none. */
+    case 'set-business-price': {
+      if (change.to === null) return { verb, mode: 'remove' }
+      const s = businessSettingFromValue(change.to)
+      if (!s) return null
+      if (s.rule === 'PERCENT_OFF') return typeof s.percent === 'number' ? { verb, mode: 'percent', percent: s.percent } : null
+      return typeof s.price === 'number' ? { verb, mode: 'exact', price: s.price } : null
+    }
+    case 'set-business-tiers': {
+      const s = change.to === null ? undefined : businessSettingFromValue(change.to)
+      if (!s) return null
+      return s.tiers ? { verb, mode: 'set', tiers: { type: s.tiers.type, levels: s.tiers.levels.map((l) => ({ ...l })) } } : { verb, mode: 'remove' }
+    }
   }
 }
 
@@ -830,8 +849,10 @@ export function restoreWrites(rowId: string, key: CoordinateKey, before: MatrixC
     else if (b.price.source === 'master' && l.price.source === 'override') out.push({ kind: 'cell', cell: 'price', value: null })
   }
   if (b.sale && l.sale && wants('sale') && (b.sale.value !== l.sale.value || b.sale.start !== l.sale.start || b.sale.end !== l.sale.end)) out.push({ kind: 'cell', cell: 'salePrice', value: { ...b.sale } })
-  /* Amazon Business: the whole setting as it was (`null` = no business offer) — one write, the tiers with it. */
-  if (b.business && l.business && wants('business')) {
+  /* Amazon Business: the whole setting as it was (`null` = no business offer) — one write, the tiers with it. Never
+     `null` over a listing whose business price Amazon held before and Nexus never kept (set outside Nexus): that
+     write would DELETE the business offer at Amazon, which is not what was there (`businessUndoBlocked`). */
+  if (b.business && l.business && wants('business') && !businessUndoBlocked(b.business)) {
     const was = businessSettingOfCell(b.business)
     if (canonical(was) !== canonical(businessSettingOfCell(l.business))) out.push({ kind: 'cell', cell: 'businessPrice', value: was })
   }
@@ -840,6 +861,12 @@ export function restoreWrites(rowId: string, key: CoordinateKey, before: MatrixC
   void rowId
   return out
 }
+
+/** Why a business setting cannot be put back here (Undo), or null: Amazon showed its own business price, set outside Nexus. */
+export const BUSINESS_UNDO_AMAZON_OWN = "Not put back — Amazon's own business price was set outside Nexus, so Nexus cannot bring it back; the new one stays"
+
+/** A business cell whose undo would write `null` over Amazon's own business price (one Nexus never kept). */
+export const businessUndoBlocked = (before: NonNullable<MatrixCells['business']>): boolean => before.rule == null && before.reported != null
 
 /** The field a verb's change writes (`restoreWrites`' word for it); null = none to put back (a push, a retry). */
 export function restoreFieldOf(change: Pick<VerbChange, 'cell' | 'to'>): RestoreField | null {
@@ -883,6 +910,12 @@ export function holdsChange(change: Pick<VerbChange, 'cell' | 'to'>, live: Matri
     // Amazon: the conversion Nexus sent last is still this one (the method itself changes once Amazon's report confirms it).
     case 'fulfilment': return !!live.fulfilment && (live.fulfilment.method === to || live.fulfilment.conversion?.to === to)
     case 'source': return !!live.source && Array.isArray(to) && sameSourceCodes(to as string[], live.source.own)
+    // Amazon Business: the whole setting the run wrote (`null` = none) is still the one Nexus keeps.
+    case 'businessPrice': case 'businessTiers': {
+      if (!live.business) return false
+      const wrote = to === null ? null : businessSettingFromValue(to)
+      return wrote !== undefined && canonical(businessSettingOfCell(live.business)) === canonical(wrote)
+    }
     default: return true
   }
 }
@@ -924,7 +957,16 @@ export async function revertMatrixOperation(ctx: DoorContext, operationId: strin
       for (const c of mine) {
         const field = restoreFieldOf(c)
         if (!field) continue
-        if (holdsChange(c, hit.cells, facts)) { only.add(field); continue }
+        if (holdsChange(c, hit.cells, facts)) {
+          /* Amazon Business: a listing whose business price Amazon held (set outside Nexus) is never put back to none —
+             that would delete Amazon's offer. Said, and the newer setting stays. */
+          if (field === 'business' && b.cells.business && businessUndoBlocked(b.cells.business)) {
+            results.push({ rowId: b.rowId, coordinateKey: b.coordinateKey, cell: c.cell as MatrixDoorKind, outcome: 'refused', reason: BUSINESS_UNDO_AMAZON_OWN, version: hit.cells.version })
+            continue
+          }
+          only.add(field)
+          continue
+        }
         results.push({ rowId: b.rowId, coordinateKey: b.coordinateKey, cell: c.cell === 'syncState' ? 'syncMode' : (c.cell as MatrixDoorKind), outcome: 'conflict', reason: MATRIX_COPY.changedSince, version: hit.cells.version })
       }
       /* Amazon fulfilment (2026-10-07): the revert of a conversion that reached Amazon is the OPPOSITE conversion, through

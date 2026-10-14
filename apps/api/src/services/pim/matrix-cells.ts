@@ -34,7 +34,7 @@ import {
   type SyncCell,
 } from '@nexus/shared/matrix-contract'
 import { AMAZON_EU_SHARED_MARKETS } from '../amazon-eu-quantity-guard.js'
-import { businessPriceOf, businessPriceWarnings, businessTierPrices, type BusinessPriceSetting } from '@nexus/shared/business-price'
+import { businessPriceOf, businessPriceWarnings, businessTierPrices } from '@nexus/shared/business-price'
 import { liveBusinessInstance, storedBusinessSetting } from '../amazon/business-offer.js'
 import { amazonFulfilmentCodes, describeAmazonFulfilmentCode, isFbaFulfilmentCode } from '../../lib/amazon-fulfilment-programme.js'
 import { locationServes, marketSourceKey, sellsFrom, type IntendedResolution, type MarketSources, type SyncLedger } from '../sync-control-core.js'
@@ -641,14 +641,6 @@ export function businessCellOf(input: {
 
 /**
  * The setting a business cell shows, as the business price door takes it back (`BusinessPriceSetting`; `null` = no
- * business offer) — what an undo restores by value.
+ * business offer) — what an undo restores by value. The shared preview's own rule (the bulk verbs work from it too).
  */
-export function businessSettingOfCell(cell: BusinessCell): BusinessPriceSetting | null {
-  if (!cell.rule) return null
-  return {
-    rule: cell.rule,
-    percent: cell.rule === 'PERCENT_OFF' ? cell.percent : null,
-    price: cell.rule === 'FIXED' ? cell.exact : null,
-    tiers: cell.tiers ? { type: cell.tiers.type, levels: cell.tiers.levels.map((l) => ({ minQty: l.minQty, value: l.value })) } : null,
-  }
-}
+export { businessSettingOfCell } from '@nexus/shared/matrix-preview'

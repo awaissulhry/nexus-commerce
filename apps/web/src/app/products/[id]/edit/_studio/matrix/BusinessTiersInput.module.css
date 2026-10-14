@@ -1,0 +1,84 @@
+/* Amazon Business — the quantity discounts input (`BusinessTiersInput.tsx`), shared by the B2B price pop-up and the
+   bulk Edit — layout only; every control is the design system's (Input, SegmentedControl, Button, ToolbarButton, Tooltip).
+   Moved from `BusinessPricingDialog.module.css` as it was. */
+.hint {
+  margin: 0;
+  color: var(--nds-text-2);
+}
+
+/* The quantity discounts: a heading with the type, a heading row, then one row per discount. */
+.tiers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.tiersHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+
+/* The heading reads like a Field label (the design system's label colour and weight). */
+.tiersTitle,
+.headCell {
+  font-size: var(--nds-font-size-sm-plus);
+  font-weight: var(--nds-font-weight-semibold);
+  line-height: 1.25;
+  color: var(--nds-text-strong);
+}
+
+.tierRow {
+  display: grid;
+  grid-template-columns: 6rem 8rem minmax(0, 1fr) 28px;
+  column-gap: var(--nds-space-8);
+  row-gap: var(--nds-space-4);
+  align-items: center;
+}
+
+/* No Buyer pays column (the bulk Edit: each listing's price differs, so its preview says what a buyer pays). */
+.tierRow.noPays {
+  grid-template-columns: 6rem 8rem 28px;
+}
+
+/* Every number field fills its grid cell (the design system's field is inline and sized by its content). */
+.fill {
+  width: 100%;
+  min-width: 0;
+}
+
+.fill > input {
+  min-width: 0;
+  width: 100%;
+}
+
+.pays {
+  color: var(--nds-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A row's first problem, under it — the Field error's colour and size. */
+.rowError {
+  grid-column: 1 / -1;
+  font-size: var(--nds-font-size-xs-plus);
+  font-weight: var(--nds-font-weight-medium);
+  line-height: 1.4;
+  color: var(--nds-danger-text);
+}
+
+.add {
+  display: flex;
+}
+
+/* A phone: the quantity and the discount share the row; Buyer pays keeps its room. */
+@media (max-width: 480px) {
+  .tierRow {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 5rem) 28px;
+  }
+
+  .tierRow.noPays {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 28px;
+  }
+}

@@ -21,18 +21,18 @@
  * rules are `businessPricing.ts` (the server's own, from @nexus/shared).
  */
 import { useState, type KeyboardEvent } from 'react'
-import { Plus, X } from 'lucide-react'
 
 import { Banner, Field, Modal } from '@/design-system/components'
-import { Button, Input, SegmentedControl, ToolbarButton, Tooltip } from '@/design-system/primitives'
+import { Button, Input, SegmentedControl } from '@/design-system/primitives'
 import { matrixBusinessSendLine, matrixMoney } from '@/design-system/grid'
-import { BUSINESS_TIERS_MAX, type BusinessPriceSetting } from '@nexus/shared/business-price'
+import type { BusinessPriceSetting, BusinessTierType } from '@nexus/shared/business-price'
 
 import {
   BUSINESS_DIALOG_COPY as COPY,
   businessDraftOf, businessSaveHeld, businessSaveLabel, businessSavedSentence, businessUndoOf, nextTier, parseBusinessDraft,
-  type BusinessDraft, type BusinessMode, type TierDraft,
+  type BusinessDraft, type BusinessMode,
 } from './businessPricing'
+import { BusinessTiersInput } from './BusinessTiersInput'
 import type { BusinessCell, CoordinateKey, MatrixCoordinate, MatrixWriteOutcome } from './contract'
 import styles from './BusinessPricingDialog.module.css'
 import dialogs from './dialogs.module.css'
@@ -74,10 +74,6 @@ const MODES = [
   { value: 'exact', label: COPY.exact },
   { value: 'none', label: COPY.none },
 ]
-const TIER_TYPES = [
-  { value: 'percent', label: COPY.tierPercent },
-  { value: 'fixed', label: COPY.tierFixed },
-]
 
 /** A phone: the first field is not focused on open (the keyboard would cover the pop-up). */
 const isPhone = (): boolean => typeof window !== 'undefined' && !!window.matchMedia?.('(max-width: 599px)').matches
@@ -99,12 +95,9 @@ export function BusinessPricingDialog(p: BusinessPricingDialogProps) {
 
   const parsed = parseBusinessDraft(draft, b, target.salePrice)
   const addTier = () => edit((d) => ({ ...d, tiers: [...d.tiers, nextTier(d, parsed.price)] }))
-  /* A price per unit goes with an exact price only (the shared rule): the type is offered there, and a percent price's
-     discounts are percents. */
-  const setTierType = (type: string) => edit((d) => ({ ...d, tierType: type as BusinessDraft['tierType'], tiers: d.tiers.map((t) => ({ ...t, value: '' })) }))
+  const setTierType = (type: BusinessTierType) => edit((d) => ({ ...d, tierType: type, tiers: d.tiers.map((t) => ({ ...t, value: '' })) }))
   const held = busy ? 'Saving…' : businessSaveHeld(parsed, b)
   const money = (v: number | null) => matrixMoney(v, b.currency)
-  const atMax = draft.tiers.length >= BUSINESS_TIERS_MAX
   /* What Amazon shows now, when it is not what Nexus says: said once, at the top, in the cell tooltip's words. */
   const failed = b.send && (b.send.state === 'failed' || b.send.state === 'refused') ? matrixBusinessSendLine(b.send) : null
   const differs = b.live && b.live.status !== 'MATCH'
@@ -143,55 +136,14 @@ export function BusinessPricingDialog(p: BusinessPricingDialogProps) {
   }
 
   const priceLine = parsed.price != null ? `Price Nexus sends: ${money(parsed.price)}` : b.normalPrice == null ? 'This listing has no price yet.' : null
-  const tierField = (t: TierDraft, field: 'minQty' | 'value', extra: { ariaLabel: string; prefix?: string; suffix?: string }) => (
-    <Input
-      size="sm" fieldClassName={styles.fill} inputMode={field === 'minQty' ? 'numeric' : 'decimal'} autoComplete="off"
-      value={t[field]} prefix={extra.prefix} suffix={extra.suffix} aria-label={extra.ariaLabel}
-      aria-invalid={parsed.fieldProblems.has(`${t.key}:${field}`) ? true : undefined}
-      disabled={busy} onChange={(e) => setTier(t.key, field, e.target.value)}
-    />
-  )
-
+  /* The quantity discounts: the shared input (the bulk Edit's B2B tiers field is the same control). A price per unit goes
+     with an exact price only (the shared rule): the type is offered there, and a percent price's discounts are percents. */
   const tiers = draft.mode !== 'none' && (
-    <div className={styles.tiers} role="group" aria-label={COPY.tiers}>
-      <div className={styles.tiersHead}>
-        <span className={styles.tiersTitle}>{COPY.tiers}</span>
-        {draft.mode === 'exact' && (
-          <SegmentedControl ariaLabel="Quantity discount type" size="sm" className={dialogs.seg} value={draft.tierType} onChange={setTierType} options={TIER_TYPES} disabled={busy} />
-        )}
-      </div>
-      {draft.tiers.length === 0 ? <p className={styles.hint}>{COPY.noTiers}</p> : (
-        <div className={styles.tierRow} aria-hidden>
-          <span className={styles.headCell}>{COPY.fromQty}</span>
-          <span className={styles.headCell}>{draft.tierType === 'percent' ? COPY.discount : COPY.unitPrice}</span>
-          <span className={styles.headCell}>{COPY.pays}</span>
-        </div>
-      )}
-      {draft.tiers.map((t, i) => {
-        const problem = parsed.fieldProblems.get(`${t.key}:minQty`) ?? parsed.fieldProblems.get(`${t.key}:value`) ?? null
-        const pays = parsed.unitPrices[i]
-        return (
-          <div key={t.key} className={styles.tierRow}>
-            {tierField(t, 'minQty', { ariaLabel: `${COPY.fromQty}, discount ${i + 1}`, suffix: '+' })}
-            {draft.tierType === 'percent'
-              ? tierField(t, 'value', { ariaLabel: `${COPY.discount} (%), discount ${i + 1}`, suffix: '%' })
-              : tierField(t, 'value', { ariaLabel: `${COPY.unitPrice}, discount ${i + 1}`, prefix: b.currency })}
-            <span className={styles.pays}>{pays != null ? money(pays) : '—'}</span>
-            <ToolbarButton label={COPY.remove} icon={<X size={14} />} tooltipAlign="end" onClick={() => removeTier(t.key)} disabled={busy} />
-            {problem && <span className={styles.rowError} role="alert">{problem}</span>}
-          </div>
-        )
-      })}
-      <span className={styles.add}>
-        {atMax ? (
-          <Tooltip label={COPY.max}>
-            <Button size="sm" variant="quiet" aria-disabled><Plus size={14} aria-hidden /> {COPY.add}</Button>
-          </Tooltip>
-        ) : (
-          <Button size="sm" variant="quiet" onClick={addTier} disabled={busy}><Plus size={14} aria-hidden /> {COPY.add}</Button>
-        )}
-      </span>
-    </div>
+    <BusinessTiersInput
+      tierType={draft.tierType} tiers={draft.tiers} currency={b.currency} showType={draft.mode === 'exact'}
+      fieldProblems={parsed.fieldProblems} pays={parsed.unitPrices} disabled={busy}
+      onTypeChange={setTierType} onTierChange={setTier} onRemove={removeTier} onAdd={addTier}
+    />
   )
 
   const footer = (

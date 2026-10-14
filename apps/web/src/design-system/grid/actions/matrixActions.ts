@@ -1,5 +1,6 @@
 /**
- * MX.G — the Matrix's verbs (eleven, plus Step 2's `Set sells from…`), declared ONCE (`MATRIX_VERB_LABELS`, design §3.8).
+ * MX.G — the Matrix's verbs (eleven, plus Step 2's `Set sells from…` and Amazon Business's `Set B2B price…` and `Set B2B
+ * tiers…`), declared ONCE (`MATRIX_VERB_LABELS`, design §3.8).
  *
  * Two layers, both pure:
  *
@@ -31,6 +32,10 @@ export type MatrixVerbField =
   | { kind: 'fulfilment'; label: string }
   /** "Sells from" (Step 2): this business's active warehouses, ticked and ordered (list order = sale order). */
   | { kind: 'locations'; label: string }
+  /** Amazon Business: how the B2B price is set (% below the price · exact · change an exact one by % · remove) and its value. */
+  | { kind: 'business-price'; label: string }
+  /** Amazon Business: up to 5 quantity discounts (from N units, % off or a price per unit), or none. */
+  | { kind: 'business-tiers'; label: string }
 
 export interface MatrixVerbSpec {
   id: MatrixVerbId
@@ -90,6 +95,8 @@ export function matrixActions(ctx: MatrixActionsContext): MatrixVerbSpec[] {
     { id: 'retry-sync', label: label('retry-sync'), row: true, collect: null, unavailable: noFailure, hidden },
     { id: 'set-fulfilment', label: label('set-fulfilment'), row: true, collect: { kind: 'fulfilment', label: 'Method' }, unavailable: noInventory, hidden },
     { id: 'set-source', label: label('set-source'), row: false, collect: { kind: 'locations', label: 'Sells from' }, unavailable: noStockRight, hidden },
+    { id: 'set-business-price', label: label('set-business-price'), row: false, collect: { kind: 'business-price', label: 'B2B price' }, unavailable: noPrice, hidden },
+    { id: 'set-business-tiers', label: label('set-business-tiers'), row: false, collect: { kind: 'business-tiers', label: 'Quantity discounts' }, unavailable: noPrice, hidden },
   ]
 }
 
@@ -103,6 +110,10 @@ export type MatrixVerbCollected =
   | { method: FulfilmentMethod }
   /** "Sells from" in sale order; `[]` = the market default. */
   | { codes: string[] }
+  /** Amazon Business: the B2B price's mode and value (`percent` below, `exact`, `change` an exact one by a signed %, `remove`). */
+  | { mode: 'percent' | 'change'; percent: number } | { mode: 'exact'; price: number } | { mode: 'remove' }
+  /** Amazon Business: the quantity discounts, or none. */
+  | { mode: 'set'; tiers: { type: 'percent' | 'fixed'; levels: Array<{ minQty: number; value: number }> } }
 
 export interface MatrixVerbHost<T> {
   /** COLLECT — the page's parameter form. Resolves `null` when the operator cancelled. */

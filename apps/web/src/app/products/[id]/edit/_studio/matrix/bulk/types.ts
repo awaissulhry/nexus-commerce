@@ -20,6 +20,9 @@
  *   Buffer          the verb set-buffer
  *   Stock sync      the verbs pause-sync · resume-sync · push-now · retry-sync
  *   Sells from      the verb set-source: the warehouses each listing sells from, in sale order
+ *   B2B price       the verb set-business-price (Amazon Business): % below the price (the live rule) · an exact price ·
+ *                   Raise / Lower an exact price by % · remove — through the business price door, sent to Amazon
+ *   B2B tiers       the verb set-business-tiers: the same quantity discounts on each listing (its B2B price kept) · remove
  *   Case size       its own dialog (`CaseDialog`), opened on the same rows (`openElsewhere`)
  *   Stock source    its own dialog (`StockSourceDialog`), opened on the same rows (`openElsewhere`)
  */
@@ -27,16 +30,19 @@ import type { CoordinateKey, MatrixLocation } from '../contract'
 
 export type BulkFieldId =
   | 'basePrice' | 'price' | 'salePrice'
+  | 'businessPrice' | 'businessTiers' // Amazon Business: the B2B price and the quantity discounts
   | 'listingStatus' | 'fulfilment'
   | 'quantity' | 'buffer' | 'stockSync' | 'stockSource'
   // Hand-offs: listed so every bulk change is found in ONE list; each opens its own dialog on the same rows.
   | 'casePack' | 'stockPool'
 
 /** The headings the field list is grouped under. */
-export type BulkGroup = 'Prices' | 'Listing' | 'Stock'
+export type BulkGroup = 'Prices' | 'Amazon Business' | 'Listing' | 'Stock'
 
 export type BulkModeId =
-  | 'set' | 'raise' | 'lower' // Base price, Market price
+  | 'set' | 'raise' | 'lower' // Base price, Market price; B2B price: Raise · Lower an exact business price by %
+  | 'b2b-percent' | 'b2b-exact' | 'b2b-remove' // B2B price: % below the price · an exact price · none
+  | 'tiers-set' | 'tiers-remove' // B2B tiers
   | 'copy' | 'follow-base' // Market price: copy another market's price · use the base price again
   | 'sale-set' | 'sale-remove' // Sale price
   | 'status' // Listing status: the choice is the target (active · inactive · ended · not_listed)
@@ -56,9 +62,11 @@ export type BulkModeId =
  *   choice      one of `choicesFor(...)` (a status, a method, a market to copy from)
  *   sale        a sale price, a start date and an end date (YYYY-MM-DD)
  *   locations   warehouses ticked in sale order (`SellsFromPicker`)
+ *   percent     a percentage from 0 to 99, unsigned (B2B price: how far below the price)
+ *   tiers       up to 5 quantity discounts: from N units, a percent off or a price per unit (`BusinessTiersInput`)
  *   handoff     nothing here: the primary button opens the field's own dialog (`openElsewhere`)
  */
-export type BulkInputKind = 'none' | 'money' | 'adjust' | 'integer' | 'choice' | 'sale' | 'locations' | 'handoff'
+export type BulkInputKind = 'none' | 'money' | 'adjust' | 'integer' | 'choice' | 'sale' | 'locations' | 'percent' | 'tiers' | 'handoff'
 
 /** The units an `adjust` input offers: a percentage, or an amount in the markets' currency. */
 export type BulkAdjustUnit = 'percent' | 'money'
@@ -108,7 +116,7 @@ export interface BulkChoiceOption { value: string; label: string; title?: string
 export interface BulkInput {
   /** A price (`money`) or a whole number (`integer`). */
   amount?: number
-  /** Raise · Lower by a percentage, signed (Lower 5 % = −5). */
+  /** Raise · Lower by a percentage, signed (Lower 5 % = −5); a `percent` entry as typed (B2B price: 5 = 5 % below the price). */
   percent?: number
   /** Raise · Lower by an amount in the markets' currency, signed (Lower €2.50 = −2.5). */
   delta?: number
@@ -116,6 +124,8 @@ export interface BulkInput {
   sale?: { value: number; start: string; end: string }
   /** Sells from: warehouse codes in sale order. */
   codes?: string[]
+  /** B2B tiers: the quantity discounts, read (`businessTiersProblems` holds). */
+  tiers?: { type: 'percent' | 'fixed'; levels: Array<{ minQty: number; value: number }> }
 }
 
 /** One change the operator asked for. The rows are the page's (the ticked rows, bound when the dialog opened). */

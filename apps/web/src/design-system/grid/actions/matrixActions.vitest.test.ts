@@ -1,5 +1,5 @@
 /**
- * MX.G — the Matrix's verbs (eleven + Step 2's Set sells from…): declared once, offered by the registry's own rules.
+ * MX.G — the Matrix's verbs (eleven + Step 2's Set sells from… + Amazon Business's two): declared once, offered by the registry's own rules.
  */
 import { describe, expect, it, vi } from 'vitest'
 
@@ -26,7 +26,7 @@ const ctx = (over: Partial<MatrixActionsContext> = {}): MatrixActionsContext => 
   coordinateOptions: [{ value: 'AMAZON:DE', label: 'Amazon · DE' }],
   ...over,
 })
-const ALL: MatrixVerbId[] = ['set-price', 'adjust-prices', 'copy-prices', 'pin-quantity', 'set-follow', 'set-buffer', 'pause-sync', 'resume-sync', 'push-now', 'retry-sync', 'set-fulfilment', 'set-source']
+const ALL: MatrixVerbId[] = ['set-price', 'adjust-prices', 'copy-prices', 'pin-quantity', 'set-follow', 'set-buffer', 'pause-sync', 'resume-sync', 'push-now', 'retry-sync', 'set-fulfilment', 'set-source', 'set-business-price', 'set-business-tiers']
 
 const preview = (over: Partial<VerbPreview> = {}): VerbPreview => ({
   verb: 'adjust-prices',
@@ -45,8 +45,8 @@ const preview = (over: Partial<VerbPreview> = {}): VerbPreview => ({
   ...over,
 })
 
-describe('matrixActions — twelve verbs, Appendix A labels, the three ROW verbs', () => {
-  it('declares exactly the twelve verbs in MATRIX_VERB_LABELS order, each with its label verbatim', () => {
+describe('matrixActions — fourteen verbs, Appendix A labels, the three ROW verbs', () => {
+  it('declares exactly the fourteen verbs in MATRIX_VERB_LABELS order, each with its label verbatim', () => {
     const specs = matrixActions(ctx())
     expect(specs.map((s) => s.id)).toEqual(ALL)
     expect(specs.map((s) => s.id)).toEqual(Object.keys(MATRIX_VERB_LABELS))
@@ -63,6 +63,8 @@ describe('matrixActions — twelve verbs, Appendix A labels, the three ROW verbs
     expect(by['set-buffer']).toEqual({ kind: 'number', label: 'Buffer', min: 0, step: 1, integer: true })
     expect(by['set-fulfilment']).toEqual({ kind: 'fulfilment', label: 'Method' })
     expect(by['set-source']).toEqual({ kind: 'locations', label: 'Sells from' })
+    expect(by['set-business-price']).toEqual({ kind: 'business-price', label: 'B2B price' })
+    expect(by['set-business-tiers']).toEqual({ kind: 'business-tiers', label: 'Quantity discounts' })
     for (const id of ['set-follow', 'pause-sync', 'resume-sync', 'push-now', 'retry-sync'] as const) expect(by[id]).toBeNull()
   })
 
@@ -78,12 +80,15 @@ describe('matrixActions — twelve verbs, Appendix A labels, the three ROW verbs
     for (const id of ['pin-quantity', 'set-follow', 'set-buffer', 'pause-sync', 'resume-sync', 'push-now', 'set-fulfilment', 'set-source'] as const) {
       expect(specs.find((s) => s.id === id)!.unavailable).toBe(MATRIX_NO_INVENTORY_REASON)
     }
-    for (const id of ['set-price', 'adjust-prices', 'copy-prices'] as const) expect(specs.find((s) => s.id === id)!.unavailable).toBeNull()
+    for (const id of ['set-price', 'adjust-prices', 'copy-prices', 'set-business-price', 'set-business-tiers'] as const) expect(specs.find((s) => s.id === id)!.unavailable).toBeNull()
   })
 
   it('no price / no permission → the price verbs say which; no source coordinate → Copy prices says so', () => {
     expect(matrixActions(ctx({ hasPrice: false })).find((s) => s.id === 'set-price')!.unavailable).toBe(MATRIX_NO_PRICE_REASON)
     expect(matrixActions(ctx({ canEditPrices: false })).find((s) => s.id === 'adjust-prices')!.unavailable).toBe(MATRIX_NO_PRICE_PERMISSION_REASON)
+    // Amazon Business: the B2B verbs are price verbs (products.price.edit, a price in the selection).
+    expect(matrixActions(ctx({ canEditPrices: false })).find((s) => s.id === 'set-business-price')!.unavailable).toBe(MATRIX_NO_PRICE_PERMISSION_REASON)
+    expect(matrixActions(ctx({ hasPrice: false })).find((s) => s.id === 'set-business-tiers')!.unavailable).toBe(MATRIX_NO_PRICE_REASON)
     expect(matrixActions(ctx({ coordinateOptions: [] })).find((s) => s.id === 'copy-prices')!.unavailable).toBe(MATRIX_NO_SOURCE_COORDINATE_REASON)
     expect(matrixActions(ctx({ coordinateOptions: [] })).find((s) => s.id === 'set-price')!.unavailable).toBeNull()
   })
@@ -141,9 +146,9 @@ describe('matrixGridActions — the registry adapter runs COLLECT → PREFLIGHT 
     apply: vi.fn(async () => ({ ok: true })),
   })
 
-  it('declares 12 SELECTION verbs and 3 ROW verbs, and the registry offers them by scope', () => {
+  it('declares 14 SELECTION verbs and 3 ROW verbs, and the registry offers them by scope', () => {
     const actions = matrixGridActions<Row>(ctx(), host())
-    expect(actions.length).toBe(15)
+    expect(actions.length).toBe(17)
     expect(actionsFor(actions, SELECTION, [{ id: 'r1' }]).map((a) => a.action.id)).toEqual(ALL)
     expect(actionsFor(actions, ROW, [{ id: 'r1' }]).map((a) => a.action.id)).toEqual(['push-now:row', 'retry-sync:row', 'set-fulfilment:row'])
   })

@@ -7,7 +7,10 @@
  * on screen, and the keys of the table's rows. Nothing here computes a number the dialog shows as a result: every
  * `Now → New` is the runner's.
  */
+import { BUSINESS_PERCENT_MAX, BUSINESS_TIER_MIN_QTY, businessTiersProblems, type BusinessTierType } from '@nexus/shared/business-price'
+
 import type { CoordinateKey } from '../contract'
+import { tierDraft, type TierDraft } from '../businessPricing'
 import type {
   BulkAdjustUnit, BulkChoiceOption, BulkEditSource, BulkFieldId, BulkFieldSpec, BulkGroup, BulkInitial, BulkInput, BulkInputKind,
   BulkLine, BulkMarketOption, BulkModeId, BulkModeSpec, BulkNotice, BulkPreview, BulkRequest,
@@ -34,9 +37,14 @@ export interface BulkRaw {
   end: string
   /** Sells from: the warehouses ticked, in sale order. */
   codes: readonly string[]
+  /** B2B tiers: what each quantity discount is — a percent off the B2B price, or a price per unit. */
+  tierType: BusinessTierType
+  /** B2B tiers: the quantity discounts as typed, in order (`key` keeps a row while rows are added and removed). */
+  tiers: readonly TierDraft[]
 }
 export const EMPTY_RAW: BulkRaw = Object.freeze({
   text: '', unit: 'percent', choice: '', start: '', end: '', codes: Object.freeze([]) as readonly string[],
+  tierType: 'percent', tiers: Object.freeze([]) as readonly TierDraft[],
 })
 
 // ── Dates ─────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -145,6 +153,65 @@ function readSale(raw: BulkRaw): ParseResult {
   return ok({ sale: { value: value.input.amount!, start: raw.start, end: raw.end } })
 }
 
+/** B2B price: how far below the price — a percentage from 0 to 99, up to 2 decimals, no sign (the mode says "below"). */
+function readPercent(raw: string): ParseResult {
+  const t = compact(raw).replace(/%$/, '')
+  if (t === '') return fail('empty', 'Enter a percentage.')
+  if (SIGN.test(t)) return fail('invalid', NO_SIGN)
+  if (/^\d+[.,]$/.test(t)) return fail('partial', 'Finish the number.')
+  if (/^\d+[.,]\d{3,}$/.test(t)) return fail('invalid', 'Use at most 2 decimals, like 2.5.')
+  if (!/^\d+(?:[.,]\d{1,2})?$/.test(t)) return fail('invalid', 'Enter a number, like 5.')
+  const n = round2(Number(t.replace(',', '.')))
+  if (n > BUSINESS_PERCENT_MAX) return fail('invalid', `Enter a percentage from 0 to ${BUSINESS_PERCENT_MAX}.`)
+  return ok({ percent: n })
+}
+
+/** One quantity discount's entry: a whole number of units, or a percent / a price with up to 2 decimals. */
+type TierEntry = { n: number } | { state: 'empty' | 'partial' } | { invalid: string }
+function tierEntry(text: string, kind: 'qty' | BusinessTierType): TierEntry {
+  const t = kind === 'percent' ? compact(text).replace(/%$/, '') : compact(text)
+  if (t === '') return { state: 'empty' }
+  if (kind === 'qty') return /^\d+$/.test(t) ? { n: Number(t) } : { invalid: `Write a whole number of units, ${BUSINESS_TIER_MIN_QTY} or more.` }
+  if (/^\d+[.,]$/.test(t)) return { state: 'partial' }
+  if (!/^\d+(?:[.,]\d{1,2})?$/.test(t)) return { invalid: kind === 'percent' ? 'Write a percent, for example 3.' : 'Write a price, for example 30.' }
+  return { n: Number(t.replace(',', '.')) }
+}
+
+/** The tiers' entries that cannot be read, by `<tier key>:minQty` · `<tier key>:value` (the input marks them). */
+export function tierFieldProblems(raw: Pick<BulkRaw, 'tierType' | 'tiers'>): Map<string, string> {
+  const out = new Map<string, string>()
+  for (const t of raw.tiers) {
+    const qty = tierEntry(t.minQty, 'qty'), value = tierEntry(t.value, raw.tierType)
+    if ('invalid' in qty) out.set(`${t.key}:minQty`, qty.invalid)
+    if ('invalid' in value) out.set(`${t.key}:value`, value.invalid)
+  }
+  return out
+}
+
+export const TIERS_EMPTY = 'Add a quantity discount.'
+export const TIERS_UNFILLED = 'Fill in every quantity discount.'
+
+/**
+ * B2B tiers: every row read, then the shape Amazon takes (`businessTiersProblems`: 1 to 5, from 2 units, each quantity
+ * higher and each discount bigger than the one before). Nothing typed yet, or a row half filled, waits without an error.
+ */
+function readTiers(raw: BulkRaw): ParseResult {
+  if (raw.tiers.length === 0) return fail('empty', TIERS_EMPTY)
+  const levels: Array<{ minQty: number; value: number }> = []
+  let waiting: 'empty' | 'partial' | null = null
+  for (const [i, t] of raw.tiers.entries()) {
+    const qty = tierEntry(t.minQty, 'qty'), value = tierEntry(t.value, raw.tierType)
+    for (const e of [qty, value]) if ('invalid' in e) return fail('invalid', `Discount ${i + 1}: ${e.invalid.charAt(0).toLowerCase()}${e.invalid.slice(1)}`)
+    for (const e of [qty, value]) if ('state' in e) waiting = waiting === 'partial' ? 'partial' : e.state
+    if ('n' in qty && 'n' in value) levels.push({ minQty: qty.n, value: value.n })
+  }
+  if (waiting === 'partial') return fail('partial', 'Finish the number.')
+  if (waiting === 'empty') return fail('empty', TIERS_UNFILLED)
+  const tiers = { type: raw.tierType, levels }
+  const problem = businessTiersProblems(tiers)[0]
+  return problem ? fail('invalid', problem) : ok({ tiers })
+}
+
 /** The sign a mode gives an `adjust` entry: Lower takes it down, everything else up. */
 export const adjustSign = (mode: BulkModeId | null | undefined): 1 | -1 => (mode === 'lower' ? -1 : 1)
 
@@ -163,6 +230,8 @@ export interface ParseOptions {
  *   choice     one of `choices` (when given)
  *   sale       a sale price as money, and a start and an end date with start ≤ end
  *   locations  at least one warehouse ticked (as `codes`, in sale order)
+ *   percent    0 to 99, up to 2 decimals, no sign (as `percent`)
+ *   tiers      1 to 5 quantity discounts of the shape Amazon takes (as `tiers`)
  *   none · handoff  always read (nothing to enter)
  */
 export function parseInput(kind: BulkInputKind, raw: BulkRaw, opts: ParseOptions = {}): ParseResult {
@@ -178,12 +247,17 @@ export function parseInput(kind: BulkInputKind, raw: BulkRaw, opts: ParseOptions
     }
     case 'sale': return readSale(raw)
     case 'locations': return raw.codes.length === 0 ? fail('empty', 'Tick at least one warehouse.') : ok({ codes: [...raw.codes] })
+    case 'percent': return readPercent(raw.text)
+    case 'tiers': return readTiers(raw)
   }
 }
 
 type ModeShape = Pick<BulkModeSpec, 'input' | 'units'>
 
-/** What a mode starts with: nothing typed, its first unit, and — for a sale — today and a week from today. */
+/**
+ * What a mode starts with: nothing typed, its first unit, and — for a sale — today and a week from today. Quantity
+ * discounts start with none: Apply never writes a discount nobody added ("Add quantity discount" adds one to change).
+ */
 export function modeRaw(mode: ModeShape | null | undefined, today: string): BulkRaw {
   if (!mode) return EMPTY_RAW
   return { ...EMPTY_RAW, unit: mode.units?.[0] ?? EMPTY_RAW.unit, ...(mode.input === 'sale' ? saleDefaultDates(today) : {}) }
@@ -202,6 +276,10 @@ export function rawFromInput(mode: ModeShape, input: BulkInput | undefined, toda
     case 'choice': return { ...base, choice: input.choice ?? '' }
     case 'sale': return input.sale ? { ...base, text: String(input.sale.value), start: input.sale.start, end: input.sale.end } : base
     case 'locations': return { ...base, codes: [...(input.codes ?? [])] }
+    case 'percent': return { ...base, text: input.percent != null ? String(input.percent) : '' }
+    case 'tiers': return input.tiers
+      ? { ...base, tierType: input.tiers.type, tiers: input.tiers.levels.map((l) => tierDraft(String(l.minQty), String(l.value))) }
+      : base
     case 'none': case 'handoff': return base
   }
 }
@@ -212,7 +290,8 @@ export const currencySymbol = (code: string): string => SYMBOLS[code.trim().toUp
 
 /** An input's label when its mode names none. */
 export const DEFAULT_INPUT_LABEL: Readonly<Record<BulkInputKind, string>> = {
-  none: '', money: 'New price', adjust: 'By', integer: 'Number', choice: 'Choose', sale: 'Sale price', locations: 'Warehouses', handoff: 'Open',
+  none: '', money: 'New price', adjust: 'By', integer: 'Number', choice: 'Choose', sale: 'Sale price', locations: 'Warehouses',
+  percent: 'Percent', tiers: 'Quantity discounts', handoff: 'Open',
 }
 
 // ── The field list ────────────────────────────────────────────────────────────────────────────────────────────────
@@ -349,6 +428,8 @@ export function requestKey(r: BulkRequest | null): string | null {
     i.sale ? [i.sale.value, i.sale.start, i.sale.end] : null,
     // Sells from: the order is the sale order, so it is part of the request (never sorted).
     i.codes ?? null,
+    // B2B tiers: the type and each level in order.
+    i.tiers ? [i.tiers.type, ...i.tiers.levels.map((l) => [l.minQty, l.value])] : null,
     [...r.coordinateKeys].sort(),
   ])
 }
@@ -391,7 +472,8 @@ const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1)
 function stepWords(mode: StepMode | null, parsed: ParseResult): string {
   const label = mode?.inputLabel ? lowerFirst(mode.inputLabel) : null
   switch (mode?.input) {
-    case 'money': case 'integer': return label ? `Enter the ${label}` : 'Enter a value'
+    case 'money': case 'integer': case 'percent': return label ? `Enter the ${label}` : 'Enter a value'
+    case 'tiers': return parsed.reason === TIERS_EMPTY ? 'Add a quantity discount' : 'Fill in every quantity discount'
     case 'adjust': return 'Enter how much'
     case 'choice': return mode.id === 'copy' ? 'Choose a market to copy from' : label ? `Choose the ${label}` : 'Choose a value'
     case 'sale': return parsed.at === 'start' ? 'Choose the start date' : parsed.at === 'end' ? 'Choose the end date' : 'Enter the sale price'

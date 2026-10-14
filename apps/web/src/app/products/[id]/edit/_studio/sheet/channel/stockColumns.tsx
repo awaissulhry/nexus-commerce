@@ -23,6 +23,7 @@ import {
 import { fbaTooltip, FBA_COL_W } from '../../matrix/columns'
 import { MATRIX_COPY } from '../../matrix/contract'
 import { refusedTooltip } from '../../matrix/refusals'
+import { isClearKey } from '../sheetReset'
 import { isCellEditable } from './rows'
 import { applyStockValue, stockCellOf } from './stockCells'
 import type { ChannelScope, ChannelSheetRow, SheetColumn } from './types'
@@ -123,7 +124,8 @@ export function fbaColumnDef(col: SheetColumn): ColDef<ChannelSheetRow> {
     cellClassRules: { 'nds-cell-is-locked': () => true },
     cellEditorSelector: undefined,
     valueParser: undefined,
-    suppressKeyboardEvent: undefined,
+    // Delete / Backspace are the sheet's (`clearsSelectionOn`): the grid's own would blank the selection's other cells unasked.
+    suppressKeyboardEvent: (p) => isClearKey(p.event, p.editing),
     valueGetter: (p) => sheetFbaUnits(p.data),
     valueSetter: () => false,
     valueFormatter: (p) => (p.value == null ? '' : String(p.value)),

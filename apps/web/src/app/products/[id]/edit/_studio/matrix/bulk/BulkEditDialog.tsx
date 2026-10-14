@@ -27,8 +27,10 @@ import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { Button, Checkbox, Divider, Input, RadioCard, SegmentedControl, Skeleton, Tag } from '@/design-system/primitives'
 
 import type { CoordinateKey } from '../contract'
+import { nextTier } from '../businessPricing'
+import { BusinessTiersInput } from '../BusinessTiersInput'
 import {
-  ALL_NONE_MIN, DEFAULT_INPUT_LABEL, PREVIEW_DELAY_MS, SEGMENT_CHOICES_MAX, applyHeldReason, applyLabel, buildRequest, copySource,
+  ALL_NONE_MIN, DEFAULT_INPUT_LABEL, PREVIEW_DELAY_MS, SEGMENT_CHOICES_MAX, applyHeldReason, applyLabel, buildRequest, copySource, tierFieldProblems,
   createTableKeys, currencySymbol, effectiveFilter, errorText, fieldDefaults, fieldGroups, fieldListOptions, filterRows, footerStatus,
   groupSkipped, heldMarketsLine, lineFilterOptions, localIsoDate, marketsShown, modeRaw, nextStep, noChoiceText, noticesFor, parseInput,
   requestKey, requestMarkets, resolveInitial, skipGroupLine, skippedSummary, skippedText, tableRows, type BulkFormState, type BulkPhase,
@@ -225,7 +227,7 @@ export function BulkEditDialog(p: BulkEditDialogProps) {
     [source, field, mode, kind, reqMarketsKey],
   )
   const currency = useMemo(
-    () => (source && field && (kind === 'money' || kind === 'sale' || kind === 'adjust') ? currencySymbol(source.currencyFor(field.id, reqMarkets)) : ''),
+    () => (source && field && (kind === 'money' || kind === 'sale' || kind === 'adjust' || kind === 'tiers') ? currencySymbol(source.currencyFor(field.id, reqMarkets)) : ''),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [source, field, kind, reqMarketsKey],
   )
@@ -396,6 +398,7 @@ export function BulkEditDialog(p: BulkEditDialogProps) {
   // ── the parts ──────────────────────────────────────────────────────────────────────────────────────────────────
 
   const errorAt = (at: 'value' | 'start' | 'end') => (parsed.state === 'invalid' && parsed.at === at ? parsed.reason : undefined)
+  const tierProblems = useMemo(() => tierFieldProblems(form.raw), [form.raw])
   const describedBy = mode?.hint ? hintId : undefined
   const inputLabel = mode ? mode.inputLabel ?? DEFAULT_INPUT_LABEL[kind] : ''
   const choiceOptions = choices.map((c) => ({ value: c.value, label: c.label, title: c.title }))
@@ -429,6 +432,31 @@ export function BulkEditDialog(p: BulkEditDialogProps) {
                 onChange={(v) => setRaw({ unit: v as BulkAdjustUnit })} options={unitOptions} />
             </div>
           )}
+        </div>
+      )
+      // B2B price: how far below the price, unsigned (the mode says "below").
+      case 'percent': return (
+        <div className={styles.value}>
+          <Field label={inputLabel} error={errorAt('value')}>
+            <Input size="sm" type="text" inputMode="decimal" autoComplete="off" suffix="%" placeholder="5"
+              value={form.raw.text} onChange={(e) => setRaw({ text: e.target.value })} aria-describedby={describedBy} data-autofocus />
+          </Field>
+        </div>
+      )
+      /* B2B tiers: the B2B price pop-up's own quantity discounts input. No Buyer pays column — each listing has its own
+         price, so the preview says what each one's buyers pay. A price per unit is refused per listing on a percent price. */
+      case 'tiers': return (
+        <div className="nds-field-w">
+          <BusinessTiersInput
+            tierType={form.raw.tierType} tiers={form.raw.tiers} currency={currency || 'EUR'} showType fieldProblems={tierProblems}
+            disabled={locked} autoFocusFirst
+            onTypeChange={(tierType) => setRaw({ tierType, tiers: form.raw.tiers.map((t) => ({ ...t, value: '' })) })}
+            onTierChange={(k, which, value) => setRaw({ tiers: form.raw.tiers.map((t) => (t.key === k ? { ...t, [which]: value } : t)) })}
+            onRemove={(k) => setRaw({ tiers: form.raw.tiers.filter((t) => t.key !== k) })}
+            onAdd={() => setRaw({ tiers: [...form.raw.tiers, nextTier(form.raw, null)] })}
+          />
+          {/* A row that is no number says so on its row; the shape Amazon takes (order, 1 to 5) is said once, here. */}
+          {tierProblems.size === 0 && errorAt('value') && <span className="nds-field-error" role="alert">{errorAt('value')}</span>}
         </div>
       )
       case 'integer': return (

@@ -21,7 +21,7 @@ import type { MenuItemDef } from '@/design-system/components'
 import { CellDetailsDialog } from './CellDetailsDialog'
 import { CELL_DETAILS_COPY, type CellDetailsContent, type CellDetailsSource } from './cellDetails'
 import { ClearOrResetDialog, SetColumnDialog, type ClearChoiceRequest, type SetColumnRequest } from './SheetControlDialogs'
-import { clearChoiceCounts, deleteAsks, isClearKey, isMenuKey, resetTargets, selectedCells, withControlVerbs, type ClearChoice, type ResetOffer, type ResetTarget, type SetColumnFacts } from './sheetReset'
+import { clearChoiceCounts, deleteAsks, isClearKey, isMenuKey, resetTargets, selectedCells, takesClearKey, withControlVerbs, type ClearChoice, type ResetOffer, type ResetTarget, type SetColumnFacts } from './sheetReset'
 
 export interface SheetControlOptions<Row> {
   getGridApi: () => GridApi<Row> | null
@@ -35,6 +35,11 @@ export interface SheetControlOptions<Row> {
   listOf?: (row: Row, colId: string) => string | null
   /** The columns these verbs act on: attribute columns, never identity, progress or media. */
   columnFacts: (colId: string) => SetColumnFacts | null
+  /**
+   * A read-only column whose Delete still asks about the selection's attribute cells, as an attribute column's does (its
+   * own cell is never cleared). The column keeps the grid off the key (`isClearKey` in its `suppressKeyboardEvent`).
+   */
+  clearsSelection?: (colId: string) => boolean
   /** A cleared cell here would hide an inherited value (every channel row; a variation on Master). */
   hidesInherited: (row: Row) => boolean
   /** Drop a cell's formula, keeping the value it last produced (`useCellFormulas().pinOver`). */
@@ -142,6 +147,8 @@ export function useSheetControl<Row>(options: SheetControlOptions<Row>) {
     const api = live.current.getGridApi()
     if (!api) return
     const targets = attributeCells(cells)
+    // Only read-only cells selected (a Delete on the B2B pair alone): nothing to clear or reset, nothing to ask.
+    if (!targets.length) return
     const counts = clearChoiceCounts(targets, editable, offer)
     const hides = targets.some(c => live.current.hidesInherited(c.row))
     let choice: ClearChoice | null = 'clear'
@@ -264,7 +271,7 @@ export function useSheetControl<Row>(options: SheetControlOptions<Row>) {
       api.showContextMenu({ rowNode: event.node, column: event.column as never, value: undefined, source: 'ui' })
       return true
     }
-    if (isClearKey(key, false) && colId && live.current.columnFacts(colId)) {
+    if (isClearKey(key, false) && takesClearKey(colId, (id) => !!live.current.columnFacts(id), live.current.clearsSelection)) {
       key.preventDefault()
       void clearOrReset(selectedCells(api, live.current.rowIdOf))
       return true

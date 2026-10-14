@@ -64,6 +64,8 @@ export const BUSINESS_DEFAULT_PERCENT = 5
 
 let tierSeq = 0
 const tierKey = (): string => `t${++tierSeq}`
+/** A quantity discount row as typed, with its own key. */
+export const tierDraft = (minQty: string, value: string): TierDraft => ({ key: tierKey(), minQty, value })
 
 const numText = (v: number | null | undefined): string => (v == null ? '' : String(v))
 
@@ -92,9 +94,10 @@ function typedNumber(text: string): number | undefined {
 
 /**
  * A new quantity discount: the next suggested quantity above the last one, and the next suggested discount (a percent,
- * or — for a price per unit — that percent below the business price, to the cent).
+ * or — for a price per unit — that percent below the business price, to the cent; none when there is no one price, as in
+ * the bulk Edit, where each listing has its own).
  */
-export function nextTier(draft: BusinessDraft, businessPrice: number | null): TierDraft {
+export function nextTier(draft: { tierType: BusinessTierType; tiers: readonly TierDraft[] }, businessPrice: number | null): TierDraft {
   const i = draft.tiers.length
   const lastQty = typedNumber(draft.tiers[i - 1]?.minQty ?? '') ?? 0
   const qty = SUGGESTED_QTY.find((q) => q > lastQty) ?? lastQty + 10

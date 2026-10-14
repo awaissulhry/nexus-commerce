@@ -8,7 +8,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import type { MatrixCells, MatrixCoordinate, MatrixVerbRequest, MatrixWriteCell, MatrixWriteOutcome, VerbOperation, VerbPreview } from '../contract'
 import { createBulkSource, revertSentence, type BulkDoors } from './bulkSource'
-import { BULK_ALREADY_FOLLOWS, BULK_FOLLOWS_BASE, BULK_NO_HANDOFF, BULK_NOT_ON_SCREEN, BULK_SENT, type BulkContext } from './fields'
+import { BULK_ALREADY_FOLLOWS, BULK_AMAZON_OWN_UNDO, BULK_FOLLOWS_BASE, BULK_NO_HANDOFF, BULK_NOT_ON_SCREEN, BULK_SENT, type BulkContext } from './fields'
 import { MATRIX_COPY } from '../contract'
 import type { BulkRequest } from './types'
 
@@ -251,5 +251,83 @@ describe('Undo — built at its turn, and only over what Apply wrote', () => {
     now.b = 95
     expect(await result.undo!()).toBe(`Put back 1 base price · 1 could not be put back: ${MATRIX_COPY.changedSince}.`)
     expect((doors.masterWrite as ReturnType<typeof vi.fn>).mock.calls[1]![0]).toEqual([{ rowId: 'a', value: 105 }])
+  })
+})
+
+describe('Amazon Business — the B2B price and tiers run as Matrix verbs', () => {
+  const IT_B2B = coord('AMAZON:IT', 'Amazon · IT', ['listing', 'price', 'salePrice', 'businessPrice', 'businessTiers'])
+  const b2b = (rule: 'PERCENT_OFF' | 'FIXED' | null, listingId: string): MatrixCells => ({
+    ...price(105, 'override', 2, listingId),
+    business: { rule, percent: rule === 'PERCENT_OFF' ? 5 : null, exact: rule === 'FIXED' ? 90 : null, tiers: null, price: rule === 'PERCENT_OFF' ? 99.75 : rule === 'FIXED' ? 90 : null, normalPrice: 105, minPrice: null, maxPrice: null, currency: 'EUR', warnings: [], held: null, send: null, live: null, reported: null },
+    writable: { price: true, salePrice: true, businessPrice: true, businessTiers: true },
+  })
+  const table = { 'a|AMAZON:IT': b2b(null, 'LA'), 'b|AMAZON:IT': b2b('FIXED', 'LB'), 'a|EBAY:IT': price(105), 'b|EBAY:IT': price(105) }
+  const setting = { rule: 'PERCENT_OFF', percent: 5, price: null, tiers: null }
+
+  it('preview asks the server with the verb\'s params on the B2B markets only; Apply sends exactly that preview; Undo is the verb\'s revert', async () => {
+    const op: VerbOperation = { id: 'op-b2b', verb: 'set-business-price', appliedAt: '', applied: 1, refused: 0, before: [] }
+    const shown: VerbPreview = {
+      verb: 'set-business-price', confirm: 'none', confirmWord: null, simulated: false, notices: [],
+      changes: [{ rowId: 'a', sku: 'A', coordinateKey: 'AMAZON:IT', cell: 'businessPrice', from: null, to: setting, fromLabel: '—', toLabel: '€99.75 · −5%', note: 'First business price here' }],
+      refusals: [{ rowId: 'b', sku: 'B', coordinateKey: 'AMAZON:IT', kind: 'guard', reason: 'The business price EUR 99.75 is above the normal price EUR 90.00' }],
+    }
+    const { doors, source } = doorsFor(table, {
+      previewVerb: vi.fn(async () => shown),
+      applyVerb: vi.fn(async () => ({ ...op, results: [{ rowId: 'a', coordinateKey: 'AMAZON:IT', cell: 'businessPrice' as const, outcome: 'applied' as const, version: 3, writtenAt: 2 }] })),
+      revertVerb: vi.fn(async () => ({ ...op, results: [{ rowId: 'a', coordinateKey: 'AMAZON:IT', cell: 'businessPrice' as const, outcome: 'applied' as const, version: 4 }] })),
+    }, { coordinates: [IT_B2B, EBAY] })
+    const pv = await source.preview(req({ field: 'businessPrice', mode: 'b2b-percent', input: { percent: 5 }, coordinateKeys: ['AMAZON:IT', 'EBAY:IT'] }))
+    expect(doors.previewVerb).toHaveBeenCalledWith({ params: { verb: 'set-business-price', mode: 'percent', percent: 5 }, targets: [{ rowId: 'a', coordinateKey: 'AMAZON:IT' }, { rowId: 'b', coordinateKey: 'AMAZON:IT' }], commit: false })
+    expect(pv.lines.map((l) => [l.sku, l.now, l.next, l.note, l.skipped])).toEqual([
+      ['A', '—', '€99.75 · −5%', 'First business price here', null],
+      ['B', '€90.00', null, null, 'The business price EUR 99.75 is above the normal price EUR 90.00'],
+    ])
+    expect(pv.notices).toEqual([{ text: BULK_SENT.business, tone: 'info' }])
+    expect(pv.undoable).toBe(true)
+    const result = await source.apply(pv)
+    expect(doors.applyVerb).toHaveBeenCalledWith(shown)
+    expect(result.sentence).toBe(`1 business price set · 1 skipped. ${BULK_SENT.business}`)
+    expect(await result.undo!()).toBe('Put back 1 listing as it was.')
+    expect(doors.revertVerb).toHaveBeenCalledWith(expect.objectContaining({ id: 'op-b2b' }))
+  })
+
+  it('no Undo when every line applied replaced a business price set outside Nexus; with others it stays, and the sentence says it', async () => {
+    const own = (listingId: string): MatrixCells => {
+      const c = b2b(null, listingId)
+      return { ...c, business: { ...c.business!, reported: { price: 95 } } }
+    }
+    const line = (rowId: string) => ({ rowId, sku: rowId.toUpperCase(), coordinateKey: 'AMAZON:IT', cell: 'businessPrice' as const, from: null, to: setting, fromLabel: '—', toLabel: '€99.75 · −5%' })
+    const run = async (rows: string[], tbl: Record<string, MatrixCells>) => {
+      const shown: VerbPreview = { verb: 'set-business-price', confirm: 'none', confirmWord: null, simulated: false, notices: [], refusals: [], changes: rows.map(line) }
+      const { source } = doorsFor(tbl, {
+        previewVerb: vi.fn(async () => shown),
+        applyVerb: vi.fn(async () => ({ id: 'op-own', verb: 'set-business-price' as const, appliedAt: '', applied: rows.length, refused: 0, before: [], results: rows.map((r) => ({ rowId: r, coordinateKey: 'AMAZON:IT', cell: 'businessPrice' as const, outcome: 'applied' as const, version: 3, writtenAt: 2 })) })),
+      }, { coordinates: [IT_B2B, EBAY] })
+      return source.apply(await source.preview(req({ field: 'businessPrice', mode: 'b2b-percent', input: { percent: 5 } })))
+    }
+    const onlyOwn = await run(['a'], { ...table, 'a|AMAZON:IT': own('LA') })
+    expect(onlyOwn.undo).toBeNull()
+    expect(onlyOwn.sentence).toBe(`1 business price set. ${BULK_SENT.business} ${BULK_AMAZON_OWN_UNDO}`)
+    const mixed = await run(['a', 'b'], { ...table, 'a|AMAZON:IT': own('LA') })
+    expect(mixed.undo).not.toBeNull()
+    expect(mixed.sentence).toBe(`2 business prices set. ${BULK_SENT.business} ${BULK_AMAZON_OWN_UNDO}`)
+    const none = await run(['b'], table)
+    expect([none.undo !== null, none.sentence]).toEqual([true, `1 business price set. ${BULK_SENT.business}`])
+  })
+
+  it('a line refused at Apply is skipped with the server\'s reason (Changed since the preview)', async () => {
+    const shown: VerbPreview = {
+      verb: 'set-business-tiers', confirm: 'none', confirmWord: null, simulated: false, notices: [], refusals: [],
+      changes: [{ rowId: 'b', sku: 'B', coordinateKey: 'AMAZON:IT', cell: 'businessTiers', from: null, to: { ...setting, tiers: { type: 'percent', levels: [{ minQty: 2, value: 3 }] } }, fromLabel: '—', toLabel: '2+ −3%' }],
+    }
+    const { source } = doorsFor(table, {
+      previewVerb: vi.fn(async () => shown),
+      applyVerb: vi.fn(async () => ({ id: 'op2', verb: 'set-business-tiers' as const, appliedAt: '', applied: 0, refused: 1, before: [], results: [{ rowId: 'b', coordinateKey: 'AMAZON:IT', cell: 'businessTiers' as const, outcome: 'refused' as const, reason: 'Changed since the preview — reload and run the verb again', version: 2 }] })),
+    }, { coordinates: [IT_B2B, EBAY] })
+    const pv = await source.preview(req({ field: 'businessTiers', mode: 'tiers-set', input: { tiers: { type: 'percent', levels: [{ minQty: 2, value: 3 }] } } }))
+    const result = await source.apply(pv)
+    expect(result.lines!.map((l) => l.skipped)).toEqual(['Changed since the preview — reload and run the verb again'])
+    expect(result.tone).toBe('danger')
+    expect(result.undo).toBeNull()
   })
 })

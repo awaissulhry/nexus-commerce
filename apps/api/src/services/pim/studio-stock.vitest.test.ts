@@ -44,7 +44,7 @@ import { etsyProductSpec } from './channel-specs/etsy.js'
 import { amazonSpecFromDefinition } from './channel-specs/amazon.js'
 import type { StudioRow } from './studio-sheet.service.js'
 import {
-  AMAZON_QUANTITY_KEY, ETSY_LISTING_ID_COPY, ITEM_ID_COPY, LISTING_ASIN_KEY, LISTING_ITEM_ID_KEY, SHOPIFY_PRODUCT_ID_COPY, STOCK_FBA_KEY, STUDIO_STOCK_KEYS, attachStudioStock,
+  AMAZON_QUANTITY_KEY, ETSY_LISTING_ID_COPY, ITEM_ID_COPY, LISTING_ASIN_KEY, LISTING_ITEM_ID_KEY, SHOPIFY_PRODUCT_ID_COPY, STOCK_FBA_KEY, STUDIO_BUSINESS_KEYS, STUDIO_STOCK_KEYS, attachStudioStock,
   confirmShopifyItemIds, isRawQuantityColumn, isShopifyInventoryColumn, listingItemIdState,
   listingAsinColumn, listingItemIdColumn, listingItemIdValue, shopifyInventoryHeldReason, studioStockColumns, studioStockKeys, studioStockSheetColumns,
   withStudioStockGroups, withoutRawQuantityColumns, type StudioRowStock,
@@ -277,7 +277,7 @@ describe('the ASIN column', () => {
     await attach([eb], 'EBAY', 'IT')
     expect(eb.values[LISTING_ASIN_KEY]).toBeUndefined()
     expect(listingAsinColumn()).toMatchObject({ key: LISTING_ASIN_KEY, kind: 'text', editable: false, groupKey: 'master:identifiers' })
-    expect(studioStockSheetColumns('AMAZON').map((c) => c.key)).toEqual([...STUDIO_STOCK_KEYS, STOCK_FBA_KEY, LISTING_ASIN_KEY])
+    expect(studioStockSheetColumns('AMAZON').map((c) => c.key)).toEqual([...STUDIO_STOCK_KEYS, STOCK_FBA_KEY, ...STUDIO_BUSINESS_KEYS, LISTING_ASIN_KEY])
     expect(studioStockSheetColumns('EBAY').map((c) => c.key)).toEqual([...STUDIO_STOCK_KEYS, LISTING_ITEM_ID_KEY])
   })
 })

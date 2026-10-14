@@ -1,3 +1,11 @@
+## The Matrix verbs include Amazon Business's two — 2026-10-14
+
+`grid/matrix/contract.ts` and `grid/actions/matrixActions.ts` (both apps, identical; the contract equal to the shared wire
+contract).
+- **`MatrixVerbId`** adds `set-business-price` and `set-business-tiers` (`MATRIX_VERB_LABELS`: `Set B2B price…`,
+  `Set B2B tiers…`), the bulk Edit's B2B price and B2B tiers fields. The verb registry declares them as price verbs
+  (`collect` kinds `business-price` and `business-tiers`; held without a price or `products.price.edit`).
+
 ## A sheet row has ONE write line, formulas included — 2026-10-13
 
 `grid/editors/sheetWriter.ts` (both apps, identical).
