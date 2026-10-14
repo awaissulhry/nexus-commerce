@@ -61,6 +61,8 @@ export function parseReadinessResponse(json: unknown): Record<string, ScopeReadi
       // carries two variables; re-templating it here would produce a second, drifting wording for
       // the same refusal (PES.5 §11 rule 1).
       note: typeof s.note === 'string' ? s.note : undefined,
+      // Being checked again since a save (the server's mark, verbatim): the numbers above predate that save.
+      ...(typeof s.pendingSince === 'string' ? { pendingSince: s.pendingSince } : {}),
     }
   }
   return out
@@ -106,7 +108,8 @@ export function parseReadinessMatrix(json: unknown): ReadinessMatrixEntry[] {
         const optional = opt && typeof opt.filled === 'number' && Number.isFinite(opt.filled) && typeof opt.total === 'number' && Number.isFinite(opt.total)
           ? { filled: opt.filled, total: opt.total } : null
         byProduct[productId] = { pct, state: v.state as ScopeReadiness['state'], ...(typeof v.note === 'string' ? { note: v.note } : {}),
-          ...(required ? { required } : {}), ...(optional ? { optional } : {}), ...(typeof v.computedAt === 'string' ? { computedAt: v.computedAt } : {}) }
+          ...(required ? { required } : {}), ...(optional ? { optional } : {}), ...(typeof v.computedAt === 'string' ? { computedAt: v.computedAt } : {}),
+          ...(typeof v.pendingSince === 'string' ? { pendingSince: v.pendingSince } : {}) }
       }
     }
     const optionalMissing = Array.isArray(raw.optionalMissing) ? raw.optionalMissing
@@ -135,6 +138,33 @@ export function mergeCoordinateReadiness<T extends { byScope: Readonly<Record<st
     byScope: scopes[coordinate.channel] ? { ...previous.byScope, [coordinate.channel]: scopes[coordinate.channel] } : previous.byScope,
     matrix: fresh.length ? [...previous.matrix.filter((entry) => !replaced.has(`${entry.coordinateKey}\u0000${entry.language}`)), ...fresh] : previous.matrix,
   }
+}
+
+/**
+ * Editing speed (2026-10-13) — does any verdict of this answer say it is being checked again? The server marks a
+ * family's readiness pending when a Shared save lands and rebuilds it right after the save's answer; a read normally
+ * waits for that, but it gives up after 20 s (continuous editing) and a failed rebuild is redone by the next drain
+ * (~1 min). Until then the numbers are the reading from before the save.
+ */
+export function readinessPending(answer: { byScope: Readonly<Record<string, ScopeReadiness>>; matrix: readonly ReadinessMatrixEntry[] }): boolean {
+  return Object.values(answer.byScope).some(scope => !!scope.pendingSince)
+    || answer.matrix.some(entry => !!entry.pendingSince || Object.values(entry.byProduct ?? {}).some(product => !!product.pendingSince))
+}
+
+/** The master sheet's notice while its progress is being checked again (its bars still show the earlier reading). */
+export const PROGRESS_CHECKING_STATUS = {
+  tone: 'info' as const,
+  label: 'Checking progress…',
+  detail: 'A save changed this family. Nexus is checking its progress again; until it finishes, the bars show the reading from before that save.',
+}
+
+/** While an answer is pending the page reads again every 5 s, for at most a minute after the read that started it. */
+export const PENDING_REREAD_MS = 5_000
+export const PENDING_REREAD_LIMIT = 12
+
+/** The delay before the next re-read of a pending answer, or `null`: not pending, or the minute is used up. */
+export function pendingRereadDelay(pending: boolean, rereadsSoFar: number): number | null {
+  return pending && rereadsSoFar < PENDING_REREAD_LIMIT ? PENDING_REREAD_MS : null
 }
 
 /** The readiness read. `only: 'coordinate'` asks for the one channel coordinate a save moved (P2, I4-9). */

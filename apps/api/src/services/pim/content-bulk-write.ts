@@ -14,6 +14,7 @@ import { checkForStorage, parseSlotField, withSlotValue } from './sheet-values.j
 import { writeContent } from './content-write.js'
 import { nestedContentReceipts, recordContentWrite, recordOwnerProof } from './content-version-receipt-capture.js'
 import { DraftListingError, ensureDraftListings } from './draft-listing.service.js'
+import { produceReadinessForProducts } from './readiness-index.service.js'
 import { productWriteRefusal } from '../../lib/product-bulk-error.js'
 import type { SheetColumn } from './sheet-columns.service.js'
 import type { ProductBulkInput, ProductBulkContext } from '../products/bulk-edit.service.js'
@@ -260,6 +261,12 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
     }
     const ids = [...new Set([...edits.map(edit => edit.change.id), ...createdListings.map(row => row.productId)])]
     await afterDatabaseCommit(`product-cache:${ids.slice().sort().join(',')}`, () => productReadCacheService.refreshMany(ids))
+    // Editing speed (2026-10-13) — a sheet save of SHARED text (source or language tier) rebuilds its family's readiness
+    // after the answer, as its fact saves do (`ProductBulkContext.readinessAfterResponse`): this takes over the inline
+    // rebuilds the text writers registered above. A pin stays the coordinate's own inline rebuild.
+    const sharedText = context.readinessAfterResponse
+      ? [...groups.values()].filter(group => !refused.has(group) && group[0].address.tier !== 'pin').map(group => group[0].edit.change.id) : []
+    const readiness = sharedText.length ? await produceReadinessForProducts(sharedText, undefined, { afterResponse: true }) : null
     // Include the rest writer's draft/family receipts: content formulas can advance those listings too.
     type ListingReply = { productId: string; listingId: string }
     const createdReply: ListingReply[] = [...createdListings, ...(rest.createdListings ?? [])]
@@ -272,7 +279,8 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
     const skipped = [...refused].reduce((n, group) => n + group.length, 0)
     return { ...rest, success: true, updated: plans.length - skipped + (rest.updated ?? 0), ...(createdOut.length ? { createdListings: createdOut } : {}),
       ...(contentVersions.length ? { contentVersions } : {}), ...(familyReply.length ? { familyListings: familyReply.map(finalListing) } : {}),
-      currentVersion: currentVersion ?? rest.currentVersion, versionOf, errors: perRow ? [...errors, ...(rest.errors ?? [])] : rest.errors ?? [], ...withWarnings(rest) }
+      currentVersion: currentVersion ?? rest.currentVersion, versionOf, errors: perRow ? [...errors, ...(rest.errors ?? [])] : rest.errors ?? [], ...withWarnings(rest),
+      ...(readiness?.pending ? { readinessPendingFamilies: Math.max(readiness.pending, rest.readinessPendingFamilies ?? 0) } : {}) }
   })
   return nested ? nestedContentReceipts(write) : write()
 }

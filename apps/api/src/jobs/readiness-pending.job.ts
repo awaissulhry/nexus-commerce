@@ -1,6 +1,6 @@
 import cron from '../lib/cron/clustered.js'
 import { recordCronRun } from '../utils/cron-observability.js'
-import { countPendingReadinessFamilies, drainPendingReadiness, reconcileReadinessFootprint } from '../services/pim/readiness-index.service.js'
+import { countPendingReadinessFamilies, drainPendingReadiness, READINESS_DRAIN_MIN_AGE_MS, reconcileReadinessFootprint } from '../services/pim/readiness-index.service.js'
 import { logger } from '../utils/logger.js'
 import { describeSweep } from '../services/pim/resumable-sweep.js'
 
@@ -18,7 +18,9 @@ let scheduled: ReturnType<typeof cron.schedule> | null = null
  * clears about 10–15 families; the queue worker (when on) works beside it.
  */
 export async function runReadinessPendingDrain(): Promise<string> {
-  const report = await drainPendingReadiness({ budgetMs: 45_000 })
+  // A family marked in the last 30 s is still being rebuilt by the lane that marked it (a sheet save's rebuild after its
+  // answer, the queue worker): the drain takes it only if that lane did not finish (READINESS_DRAIN_MIN_AGE_MS).
+  const report = await drainPendingReadiness({ budgetMs: 45_000, minPendingAgeMs: READINESS_DRAIN_MIN_AGE_MS })
   const line = describeSweep(report)
   if (report.failed > 0) throw new Error(line)
   return line
@@ -37,8 +39,8 @@ export function startReadinessPendingCron() {
     } catch (error) {
       logger.warn('[readiness] channel footprint check failed; retried next minute', { error: error instanceof Error ? error.message : String(error) })
     }
-    // A quiet minute writes nothing: the run is recorded only when there is pending work.
-    if (!(await countPendingReadinessFamilies())) return
+    // A quiet minute writes nothing: the run is recorded only when there is pending work old enough for the drain.
+    if (!(await countPendingReadinessFamilies(READINESS_DRAIN_MIN_AGE_MS))) return
     await recordCronRun('readiness-pending', runReadinessPendingDrain)
   }, { lockTtlMs: 55_000 })
 }

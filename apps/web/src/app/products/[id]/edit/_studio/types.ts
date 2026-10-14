@@ -151,6 +151,12 @@ export interface ScopeReadiness extends ScopeBarReadiness {
    * one product and `absent` for another. Readiness must never be cached per coordinate.
    */
   mappingRules?: number | null
+  /**
+   * Editing speed (2026-10-13) — set while the server is checking this verdict again (a save marked its rows pending and
+   * the rebuild has not finished). The numbers are the reading from before that save: the page says "Checking…" and
+   * reads again shortly (`readinessPending`, `pendingRereadDelay`), never shows them as current.
+   */
+  pendingSince?: string
 }
 
 /**
@@ -209,7 +215,7 @@ export interface ReadinessMatrixEntry extends ScopeReadiness {
    * its cell says `Not computed` — never a score and never `Not set up` (R-LX-9's distinction, one column
    * over). So `{}` is a legitimate value and an absent key is a real answer, not a gap.
    */
-  byProduct?: Record<string, { state: ScopeReadinessState; pct: number | null; note?: string; required?: { filled: number; total: number }; optional?: { filled: number; total: number } | null; computedAt?: string | null }>
+  byProduct?: Record<string, { state: ScopeReadinessState; pct: number | null; note?: string; required?: { filled: number; total: number }; optional?: { filled: number; total: number } | null; computedAt?: string | null; pendingSince?: string }>
 }
 
 export interface ScopeReadinessResponse {

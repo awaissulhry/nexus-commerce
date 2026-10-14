@@ -82,6 +82,7 @@ import type { SheetExportMode } from '../sheetExport';
 import { useIdentitySkuColumn } from '../identitySkuColumn';
 import { skuRenameMessage, type IdentitySkuScope, type SkuRename } from '../identitySkuEdit';
 import { useStudioSkuRenamed } from '../../contracts';
+import { PROGRESS_CHECKING_STATUS, readinessPending } from '../../readiness';
 import { NewRowCell } from '../newRows/NewRowCell';
 import { NewRowsControl } from '../newRows/NewRowsControl';
 import { newRowsContextMenu, newRowsGridKey, newRowsPaste, useNewRows, variationTarget, type NewRowsStore } from '../newRows/useNewRows';
@@ -1049,6 +1050,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
                 }] : []),
                 ...familyVerbs.status,
                 ...(waitingMarkStatus ? [waitingMarkStatus] : []),
+                ...(readinessQuery.status === 'ready' && readinessPending(readinessQuery) ? [PROGRESS_CHECKING_STATUS] : []),
                 ...(readinessQuery.status === 'error' ? [{ tone: 'warning' as const, label: 'Progress unavailable', detail: `The channel · market progress bars could not be read: ${readinessQuery.message} Choose ⋯ → Refresh progress to try again.` }]
                     : readinessQuery.status === 'ready' && readinessQuery.refreshError ? [{ tone: 'warning' as const, label: 'Progress not refreshed', detail: `The bars show the last good reading. The refresh failed: ${readinessQuery.refreshError} Choose ⋯ → Refresh progress to try again.` }] : []),
             ],

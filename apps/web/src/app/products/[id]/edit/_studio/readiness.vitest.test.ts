@@ -255,3 +255,40 @@ describe('progress columns (2026-09-26) — the optional side of the matrix', ()
     expect(entry({}).optionalMissing).toEqual([])
   })
 })
+
+import { PENDING_REREAD_LIMIT, PENDING_REREAD_MS, PROGRESS_CHECKING_STATUS, pendingRereadDelay, readinessPending } from './readiness'
+describe('editing speed (2026-10-13) — a verdict the server is checking again is never shown as current', () => {
+  const PENDING = '2026-10-14T08:00:00.000Z'
+  const answer = (scopes: unknown[], matrix: unknown[] = []) => ({ byScope: parseReadinessResponse({ scopes }), matrix: parseReadinessMatrix({ matrix }) })
+  const matrixEntry = (over: Record<string, unknown>) => ({ coordinateKey: 'EBAY:IT:acc', channel: 'EBAY', market: 'IT', accountId: 'acc', aliasId: null, language: 'it', label: 'eBay · IT',
+    pct: 80, state: 'warn', missing: [], byProduct: { p1: { state: 'warn', pct: 80 } }, ...over })
+
+  it('keeps the server\'s pendingSince on a chip, a matrix entry and a product\'s verdict, and nothing else turns into it', () => {
+    const parsed = answer([{ id: 'EBAY', pct: 80, state: 'warn', pendingSince: PENDING }, { id: 'AMAZON', pct: 50, state: 'blocked', pendingSince: 7 }],
+      [matrixEntry({ pendingSince: PENDING, byProduct: { p1: { state: 'warn', pct: 80, pendingSince: PENDING } } })])
+    expect(parsed.byScope.EBAY.pendingSince).toBe(PENDING)
+    expect(parsed.byScope.AMAZON).not.toHaveProperty('pendingSince') // not a string: not a mark
+    expect(parsed.matrix[0].pendingSince).toBe(PENDING)
+    expect(parsed.matrix[0].byProduct?.p1.pendingSince).toBe(PENDING)
+  })
+
+  it('an answer is pending when any chip, matrix entry or product verdict is', () => {
+    expect(readinessPending(answer([{ id: 'EBAY', pct: 80, state: 'warn' }], [matrixEntry({})]))).toBe(false)
+    expect(readinessPending(answer([{ id: 'EBAY', pct: 80, state: 'warn', pendingSince: PENDING }]))).toBe(true)
+    expect(readinessPending(answer([], [matrixEntry({ pendingSince: PENDING })]))).toBe(true)
+    expect(readinessPending(answer([], [matrixEntry({ byProduct: { p1: { state: 'warn', pct: 80, pendingSince: PENDING } } })]))).toBe(true)
+  })
+
+  it('reads a pending answer again every 5 s for at most a minute, and not at all once it is current', () => {
+    expect(PENDING_REREAD_MS * PENDING_REREAD_LIMIT).toBe(60_000)
+    expect(pendingRereadDelay(true, 0)).toBe(5_000)
+    expect(pendingRereadDelay(true, PENDING_REREAD_LIMIT - 1)).toBe(5_000)
+    expect(pendingRereadDelay(true, PENDING_REREAD_LIMIT)).toBeNull()
+    expect(pendingRereadDelay(false, 0)).toBeNull()
+  })
+
+  it('the master sheet says so in words, and names what the bars show meanwhile', () => {
+    expect(PROGRESS_CHECKING_STATUS).toMatchObject({ tone: 'info', label: 'Checking progress…' })
+    expect(PROGRESS_CHECKING_STATUS.detail).toContain('the bars show the reading from before that save')
+  })
+})

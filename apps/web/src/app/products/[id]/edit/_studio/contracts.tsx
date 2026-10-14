@@ -46,7 +46,7 @@ import { closeStudioRecord } from './recordClose'
 import { createWorkspaceSaveStore } from './workspaceSave'
 import { useInFlightGuard } from './useInFlightGuard'
 import { studioChannelViewPatch } from './navigationHref'
-import { parseReadinessResponse, parseReadinessMatrix, mergeCoordinateReadiness, readinessUrl } from './readiness'
+import { parseReadinessResponse, parseReadinessMatrix, mergeCoordinateReadiness, pendingRereadDelay, readinessPending, readinessUrl } from './readiness'
 import { decodeReadiness } from '@nexus/shared/readiness-wire'
 import { isViewChipVisible } from './viewChips'
 import { marketGate, marketGateReason } from './marketGate'
@@ -425,6 +425,23 @@ function useReadinessQuery(productId: string, market: string | null, nonce: numb
   const queryCoordinate = JSON.stringify([productId, market, channel, accountId, listingId, locale])
 
   /*
+   * Editing speed (2026-10-13) — an answer the server is still checking (`pendingSince`: a Shared save's family is being
+   * rebuilt) is read again every 5 s, for at most a minute after the read that started it; the surfaces say "Checking…"
+   * meanwhile. A new coordinate or an asked read (save, Reload, live event) starts a fresh minute.
+   */
+  const [pendingNonce, setPendingNonce] = useState(0)
+  const pendingRereads = useRef({ key: '', count: 0 })
+  useEffect(() => {
+    if (query.status !== 'ready') return
+    const key = `${query.coordinate}|${nonce}`
+    if (pendingRereads.current.key !== key) pendingRereads.current = { key, count: 0 }
+    const delay = pendingRereadDelay(readinessPending(query), pendingRereads.current.count)
+    if (delay === null) return
+    const timer = setTimeout(() => { pendingRereads.current.count += 1; setPendingNonce((n) => n + 1) }, delay)
+    return () => clearTimeout(timer)
+  }, [query, nonce])
+
+  /*
    * P2 (2026-09-30, I4-9) — after a save on a channel coordinate, read THAT coordinate (`only=coordinate`) and merge it
    * into the answer on screen; the family-wide read (every scope, every coordinate: 11 MB raw on GALE eBay IT) stays for
    * the page load, a Reload and "Refresh progress". It never blocks anything: the last answer stays until this lands,
@@ -561,7 +578,7 @@ function useReadinessQuery(productId: string, market: string | null, nonce: numb
     }
     // `nonce` is the live-refresh signal: bumping it re-runs this effect, which is how a
     // `listing.updated` event turns into a fresh readiness read.
-  }, [productId, market, nonce, channel, accountId, listingId, locale, queryCoordinate, noMarketReason])
+  }, [productId, market, nonce, pendingNonce, channel, accountId, listingId, locale, queryCoordinate, noMarketReason])
 
   return query.status === 'ready' && query.coordinate !== queryCoordinate ? { status: 'loading' } : query
 }

@@ -77,8 +77,9 @@ export async function produceReadiness(productId: string, scope?: ReadinessScope
  * many families keep today's behaviour exactly — a single-cell edit still returns with its readiness rebuilt. Above
  * it, the rows are marked pending in the SAME transaction as the values (so no reader can show the old answer as
  * current) and the families are rebuilt after the commit (Owner Decision 2 = A, 2026-09-26).
- * One exception (editing speed, 2026-10-13): the product sheet's own saves rebuild a whole family right after their
- * response, in this process (`produceReadinessForProducts` `afterResponse`, `readiness-after-response.ts`).
+ * One exception (editing speed, 2026-10-13; Owner, 2026-10-14: allowed): the Information page's own Shared saves rebuild
+ * a whole family right after their response, in this process (`produceReadinessForProducts` `afterResponse`,
+ * `readiness-after-response.ts`), and the page shows "Checking…" meanwhile. Every other writer keeps the rule above.
  */
 export const INLINE_READINESS_MAX_FAMILIES = 2
 
@@ -203,8 +204,20 @@ async function enqueuePendingReadiness(rootIds: string[]): Promise<void> {
 
 interface PendingFamily { rootId: string; since: Date; scopes: number; shared: boolean; channel: string | null; market: string | null; accountId: string | null }
 
-/** Families with pending rows, OLDEST first, with what the pending rows cover. One grouped query. */
-export async function pendingReadinessFamilies(take: number, rootIds?: string[]): Promise<PendingFamily[]> {
+/**
+ * Editing speed (2026-10-13) — how old a family's oldest pending mark must be before the scheduled drain takes it. A
+ * product sheet save rebuilds its family in the API process right after its answer (`readiness-after-response.ts`), and
+ * a big edit's family is the queue worker's job at once; the drain is the backstop for what those did not finish. Without
+ * this age, the minute's drain often rebuilt the same family at the same moment as the after-response run: one of the
+ * two transactions lost, and under continuous saves the drain could lose three times and record a failed run.
+ */
+export const READINESS_DRAIN_MIN_AGE_MS = 30_000
+
+/**
+ * Families with pending rows, OLDEST first, with what the pending rows cover. One grouped query. `minAgeMs`: only the
+ * families whose oldest mark is at least that old (the scheduled drain, READINESS_DRAIN_MIN_AGE_MS); omitted, every one.
+ */
+export async function pendingReadinessFamilies(take: number, rootIds?: string[], minAgeMs?: number): Promise<PendingFamily[]> {
   const rows = await prisma.$queryRaw<Array<PendingFamily & { scopes: bigint | number }>>`
     SELECT COALESCE(p."parentId", p.id) AS "rootId", MIN(r."pendingSince") AS "since",
            COUNT(DISTINCT (r.channel, r.market, r."accountId")) AS "scopes", BOOL_OR(r.channel IS NULL) AS "shared",
@@ -212,7 +225,9 @@ export async function pendingReadinessFamilies(take: number, rootIds?: string[])
     FROM "ReadinessIndex" r JOIN "Product" p ON p.id = r."productId"
     WHERE r."pendingSince" IS NOT NULL
       AND (${rootIds ?? null}::text[] IS NULL OR COALESCE(p."parentId", p.id) = ANY(${rootIds ?? null}::text[]))
-    GROUP BY 1 ORDER BY 2, 1 LIMIT ${take}
+    GROUP BY 1
+    HAVING (${minAgeMs ?? null}::int IS NULL OR MIN(r."pendingSince") < now() - ${minAgeMs ?? 0}::int * interval '1 millisecond')
+    ORDER BY 2, 1 LIMIT ${take}
   `
   return rows.map(row => ({ ...row, scopes: Number(row.scopes) }))
 }
@@ -243,23 +258,35 @@ export async function rebuildImportedFamily(rootId: string): Promise<number> {
   return any ? 0 : reconcileFamilyReadiness(rootId)
 }
 
-/** How many families have pending rows. Uses the `(workspaceId, pendingSince)` index; cheap when nothing is pending. */
-export async function countPendingReadinessFamilies(): Promise<number> {
-  const [row] = await prisma.$queryRaw<Array<{ n: bigint | number }>>`
-    SELECT COUNT(DISTINCT COALESCE(p."parentId", p.id)) AS n
-    FROM "ReadinessIndex" r JOIN "Product" p ON p.id = r."productId" WHERE r."pendingSince" IS NOT NULL`
+/**
+ * How many families have pending rows. Uses the `(workspaceId, pendingSince)` index; cheap when nothing is pending.
+ * `minAgeMs`: only the families whose oldest mark is at least that old (what the scheduled drain would take).
+ */
+export async function countPendingReadinessFamilies(minAgeMs?: number): Promise<number> {
+  const [row] = minAgeMs === undefined
+    ? await prisma.$queryRaw<Array<{ n: bigint | number }>>`
+      SELECT COUNT(DISTINCT COALESCE(p."parentId", p.id)) AS n
+      FROM "ReadinessIndex" r JOIN "Product" p ON p.id = r."productId" WHERE r."pendingSince" IS NOT NULL`
+    : await prisma.$queryRaw<Array<{ n: bigint | number }>>`
+      SELECT COUNT(*) AS n FROM (
+        SELECT 1 FROM "ReadinessIndex" r JOIN "Product" p ON p.id = r."productId" WHERE r."pendingSince" IS NOT NULL
+        GROUP BY COALESCE(p."parentId", p.id) HAVING MIN(r."pendingSince") < now() - ${minAgeMs}::int * interval '1 millisecond') due`
   return Number(row?.n ?? 0)
 }
 
-/** The drain: oldest pending families first, bounded by a time budget. The cron and a hand run call this. */
-export async function drainPendingReadiness(options: { budgetMs?: number; batchSize?: number; now?: () => number } = {}): Promise<SweepReport> {
+/**
+ * The drain: oldest pending families first, bounded by a time budget. The cron and a hand run call this; the cron passes
+ * `minPendingAgeMs` (READINESS_DRAIN_MIN_AGE_MS), so it leaves a family whose marks are younger to the lane that set them.
+ */
+export async function drainPendingReadiness(options: { budgetMs?: number; batchSize?: number; now?: () => number; minPendingAgeMs?: number } = {}): Promise<SweepReport> {
+  const minAgeMs = options.minPendingAgeMs
   return runResumableSweep({
     name: 'readiness-pending',
     budgetMs: options.budgetMs ?? 45_000,
     batchSize: options.batchSize ?? 10,
     dryRun: false,
-    nextBatch: async take => (await pendingReadinessFamilies(take)).map(family => family.rootId),
-    countOutstanding: countPendingReadinessFamilies,
+    nextBatch: async take => (await pendingReadinessFamilies(take, undefined, minAgeMs)).map(family => family.rootId),
+    countOutstanding: () => countPendingReadinessFamilies(minAgeMs),
     apply: rootId => rebuildPendingFamily(rootId),
     ...(options.now ? { now: options.now } : {}),
   })

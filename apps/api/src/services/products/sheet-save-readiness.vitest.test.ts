@@ -60,12 +60,13 @@ const computedAt = (root: string) => scoped(async () => (await prisma.readinessI
   .map(row => row.computedAt.getTime()))
 const version = (id: string) => scoped(async () => (await prisma.product.findUniqueOrThrow({ where: { id }, select: { version: true } })).version)
 
-/** A Shared edit the way the page sends it: the cell's write field and the stamp of the cell as the page read it. */
-async function stampedEdit(productId: string, key: string, value: unknown): Promise<ProductBulkInput> {
-  const sheet = await scoped(() => getStudioSheet({ productId, scope: 'master', market: 'IT', locale: 'it' }))
+/** A Shared edit the way the page sends it: the cell's write field, its text address, and the stamp of the cell as read. */
+async function stampedEdit(productId: string, key: string, value: unknown, locale = 'it'): Promise<ProductBulkInput> {
+  const sheet = await scoped(() => getStudioSheet({ productId, scope: 'master', market: 'IT', locale }))
   const cell = sheet.rows.find(row => row.id === productId)!.values[key]
-  return { changes: [{ id: productId, field: cell.writeField, value, column: key, expected: sheetCellStamp(cell) }],
-    marketplaceContexts: SHARED_IT, expectedVersion: await version(productId) } as ProductBulkInput
+  return { changes: [{ id: productId, field: cell.writeField, value, column: key, expected: sheetCellStamp(cell),
+    ...(cell.contentAddress ? { contentAddress: cell.contentAddress } : {}), ...(cell.contentVersion !== undefined ? { contentVersion: cell.contentVersion } : {}) }],
+    marketplaceContexts: [{ marketplace: 'IT', locale }], expectedVersion: await version(productId) } as ProductBulkInput
 }
 const sheetSave = (input: ProductBulkInput) => scoped(async () => {
   try { return { status: 200, body: await applySheetBulkEdits(input, context) as Record<string, unknown> } }
@@ -98,8 +99,10 @@ afterAll(async () => {
 
 it('a stamped Shared save builds no sheet before it answers; its family is rebuilt right after, to the rows an inline rebuild writes', async () => {
   const before = Math.max(...await computedAt('sr-a'))
-  const rows = (await familyRows('sr-a')).length
-  const edit = await stampedEdit(child('sr-a'), 'brand', 'After Co')
+  const preSave = await familyRows('sr-a')
+  const rows = preSave.length
+  // The product's title: its readiness rows carry it (`sortTitle`), so a rebuild that read the old values is visible.
+  const edit = await stampedEdit(child('sr-a'), 'name', 'Renamed child')
   state.sheets.length = 0
 
   const answer = await sheetSave(edit)
@@ -107,9 +110,11 @@ it('a stamped Shared save builds no sheet before it answers; its family is rebui
   expect(answer.body).toMatchObject({ success: true, updated: 1, versionOf: 'product', readinessPendingFamilies: 1 })
   // The skipped work: not one studio sheet was built inside the save (an inline rebuild builds one per destination).
   expect(state.sheets).toHaveLength(0)
-  // The value is stored, and every readiness row of THIS family says it is not current — committed with the value.
-  expect(await scoped(() => prisma.product.findUniqueOrThrow({ where: { id: child('sr-a') }, select: { brand: true } }))).toEqual({ brand: 'After Co' })
+  // Every readiness row of THIS family says it is not current — committed with the value — and still holds the old title.
   expect(await pendingRows(['sr-a'])).toBe(rows)
+  const stillOld = await scoped(() => prisma.readinessIndex.findMany({ where: { productId: child('sr-a') }, select: { sortTitle: true } }))
+  expect(stillOld.length).toBeGreaterThan(0)
+  expect(stillOld.every(row => row.sortTitle === 'Child sr-a')).toBe(true)
   expect(await pendingRows(['sr-b'])).toBe(0)
   expect(familiesRebuildingAfterResponse()).toEqual(['sr-a'])
   // The fast lane is this process, not the worker queue (the drain stays the backstop).
@@ -123,10 +128,28 @@ it('a stamped Shared save builds no sheet before it answers; its family is rebui
   expect(await pendingRows(['sr-a'])).toBe(0)
   expect(Math.min(...await computedAt('sr-a'))).toBeGreaterThanOrEqual(before)
 
-  // The same rows an inline rebuild of the stored values writes.
+  // The rebuild read the saved values: the rows moved, and the renamed product's rows carry its new title…
   const afterResponse = await familyRows('sr-a')
+  expect(afterResponse.map(({ pendingSince: _p, ...row }) => row)).not.toEqual(preSave.map(({ pendingSince: _p, ...row }) => row))
+  const renamed = afterResponse.filter(row => row.productId === child('sr-a'))
+  expect(renamed.length).toBeGreaterThan(0)
+  expect(renamed.every(row => row.sortTitle === 'Renamed child')).toBe(true)
+  // …and they are the same rows an inline rebuild of the stored values writes.
   await scoped(() => reconcileFamilyReadiness('sr-a'))
   expect(afterResponse).toEqual(await familyRows('sr-a'))
+})
+
+it('a Shared text save in another language (its own translation row) also answers before the rebuild', async () => {
+  const edit = await stampedEdit('sr-b', 'name', 'Neuer Name', 'de')
+  expect((edit.changes[0] as { contentAddress?: { tier?: string } }).contentAddress?.tier).toBe('language')
+  state.sheets.length = 0
+  const answer = await sheetSave(edit)
+  expect(answer.status, JSON.stringify(answer.body)).toBe(200)
+  expect(answer.body).toMatchObject({ updated: 1, readinessPendingFamilies: 1 })
+  expect(state.sheets).toHaveLength(0)
+  expect(await pendingRows(['sr-b'])).toBeGreaterThan(0)
+  await familyReadinessSettled('sr-b')
+  expect(await pendingRows(['sr-b'])).toBe(0)
 })
 
 it('an operation of several rows of one family marks the family once and rebuilds it once, after the answer', async () => {
