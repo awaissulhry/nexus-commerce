@@ -14,6 +14,7 @@ import { normalizeLanguage } from './content-language.js'
 import { resolveContentAttributes } from './content-read.js'
 import type { Coordinate, ResolvedContent } from './content-resolver.js'
 import { canonicalVariantAxis } from './variant-attribute-keys.js'
+import { readFitGarment } from '@nexus/shared/fit-garment'
 
 export type ValueSource =
   | 'master'           // came from parent Product.categoryAttributes
@@ -228,7 +229,23 @@ function applySynthesisLayer(
   }
 }
 
-/** Shared native facts have no content locale. Their canonical column wins over legacy aliases. */
+/**
+ * Garment measurements as they are stored and sent: the canonical table (`readFitGarment`), never PostgreSQL's order —
+ * JSONB re-sorts an object's keys, and a channel receives exactly this value (a Shopify JSON field, for one). A table
+ * with no value left is none (the family's applies to a variation). A table the rule cannot read is kept as it is, with
+ * its problems, so it is reported where it is used and never silently changed.
+ */
+function canonicalFitGarment(value: unknown): { value: unknown; warnings?: string[] } | null {
+  const read = readFitGarment(value)
+  if (read.problems.length) return { value, warnings: [`Garment measurements: ${read.problems.join(' ')}`] }
+  return read.value ? { value: read.value } : null
+}
+
+/**
+ * Shared native facts have no content locale. Their canonical column wins over legacy aliases. Laid parent first, then
+ * the product: a variation's own value wins, else its family's (garment measurements included: a size row of a colour
+ * product reads the family's table).
+ */
 function applyCanonicalFacts(acc: ResolvedAttributes, product: ProductLike): void {
   for (const key of ALLOWED_MASTER_FIELDS) {
     if (['description', 'bulletPoints', 'keywords'].includes(key)) continue
@@ -236,6 +253,12 @@ function applyCanonicalFacts(acc: ResolvedAttributes, product: ProductLike): voi
     if (value === undefined || value === null || value === '' || Array.isArray(value) && value.length === 0) continue
     // Prisma decimal columns must remain numeric in in-process validation, before JSON serialization.
     if (typeof value === 'object' && typeof (value as { toNumber?: unknown }).toNumber === 'function') value = (value as { toNumber(): number }).toNumber()
+    if (key === 'fitGarment') {
+      const table = canonicalFitGarment(value)
+      if (!table) continue
+      acc[key] = { ...table, source: 'masterColumn', inheritedFrom: product.id }
+      continue
+    }
     acc[key] = { value, source: 'masterColumn', inheritedFrom: product.id }
   }
 }
