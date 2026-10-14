@@ -306,4 +306,43 @@ describe.skipIf(!concurrentDatabaseUrl())(`the rebuild after a sheet save on a r
     expect(attempts).toBe(1)
     expect(await currentOn('race-rr-a', 'New name')).toBe(true)
   }, 120_000)
+
+  /** Sessions of the test database waiting on a row lock. */
+  async function lockWaiters() {
+    const { rows } = await state.db.pool.query(`SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname = $1 AND wait_event_type = 'Lock'`, [state.db.name])
+    return rows[0].n as number
+  }
+
+  // Review 5 of #616: the rebuild checked the product rows AFTER replacing the readiness rows, the reverse of every
+  // writer's order (product row, then readiness rows), so a save that had updated a product row deadlocked with it and
+  // stalled ~1 s on deadlock_timeout before PostgreSQL killed one. The check now runs before the DELETE.
+  it('lock order: a save that updated a product row while the rebuild reads is not stalled by a deadlock', async () => {
+    const root = 'race-lock-order'
+    await seed(root)
+    const rebuild = holdNextRebuild()
+    await sheetSave(root, 'Mid name')
+    await rebuild.held
+    let parked: () => void = () => {}, go: () => void = () => {}
+    const isParked = new Promise<void>(resolve => { parked = resolve }), proceed = new Promise<void>(resolve => { go = resolve })
+    let attempts = 0
+    const save = scoped(() => inDatabaseTransaction(prisma as never, async () => {
+      attempts++
+      await prisma.product.update({ where: { id: root }, data: { name: 'New name' } })
+      if (attempts === 1) { parked(); await proceed }
+      return produceReadinessForProducts([root], undefined, { afterResponse: true })
+    }, { restarts: 4 }))
+    await isParked
+    rebuild.release()
+    // The rebuild reaches its product check and waits on the save's product row.
+    let waiting = false
+    for (let i = 0; i < 400 && !waiting; i++) { waiting = (await lockWaiters()) >= 1; if (!waiting) await new Promise(resolve => setTimeout(resolve, 10)) }
+    expect(waiting, 'the rebuild waits on the save\'s product row').toBe(true)
+    const started = Date.now()
+    go()
+    await save
+    // A deadlock costs deadlock_timeout (1 s by default) before one side is killed; the save must not pay it.
+    expect(Date.now() - started).toBeLessThan(700)
+    await familyReadinessSettled(root, 60_000)
+    expect(await currentOn(root, 'New name')).toBe(true)
+  }, 120_000)
 })

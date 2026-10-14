@@ -124,15 +124,15 @@ export async function produceReadinessForProducts(productIds: string[], scope?: 
       // asks for a follow-up run (`readiness-after-response.ts`). The drain stays Serializable. One snapshot whose
       // repeated reads are answered once, as the inline rebuild's were.
       await afterDatabaseCommit(afterResponseKey(rootId), async () => rebuildAfterResponse(rootId,
-        () => inDatabaseTransaction(prisma, async () => {
-          const written = await reconcileFamilyReadiness(rootId)
-          // The family's product rows, checked before commit: FOR SHARE at Repeatable Read fails (40001, retried from a
-          // fresh snapshot) when a write changed one after this snapshot — a sheet save (its mark leaves pending rows
-          // alone), or any write to a family with no readiness row yet (no row for a mark to write) — so the rows
-          // written above never go out built from older values.
-          await prisma.$queryRaw`SELECT id FROM "Product" WHERE id = ${rootId} OR "parentId" = ${rootId} FOR SHARE`
-          return written
-        }, { memoReads: true, isolationLevel: 'RepeatableRead' })))
+        () => inDatabaseTransaction(prisma, async () =>
+          // The family's product rows, checked after the reads and BEFORE the rows are replaced: FOR SHARE at Repeatable
+          // Read fails (40001, retried from a fresh snapshot) when a write changed one after this snapshot — a sheet save
+          // (its mark leaves pending rows alone), or any write to a family with no readiness row yet (no row for a mark to
+          // write) — so the rows written never go out built from older values. Before the DELETE, not after it: every
+          // writer locks a product row first and readiness rows second, and so does this check (review 5 of #616: checked
+          // after the DELETE, a save and this rebuild deadlocked, stalling the save ~1 s on deadlock_timeout).
+          reconcileFamilyReadiness(rootId, undefined, () => prisma.$queryRaw`SELECT id FROM "Product" WHERE id = ${rootId} OR "parentId" = ${rootId} FOR SHARE`),
+        { memoReads: true, isolationLevel: 'RepeatableRead' })))
     }
     return { inline: 0, pending: roots.length }
   }
@@ -423,8 +423,11 @@ export async function reconcileReadinessFootprint(): Promise<FootprintReconcile>
   return { removed, missing, markedFamilies }
 }
 
-/** The only materializer. Schema misses are honest absent rows; persistence failures roll back. */
-export async function reconcileFamilyReadiness(productId: string, scope?: ReadinessScope): Promise<number> {
+/**
+ * The only materializer. Schema misses are honest absent rows; persistence failures roll back. `beforeWrite` runs after
+ * the reads and just before the rows are replaced (the after-response rebuild's product check).
+ */
+export async function reconcileFamilyReadiness(productId: string, scope?: ReadinessScope, beforeWrite?: () => Promise<unknown>): Promise<number> {
   return inDatabaseTransaction(prisma, () => withCachedSchemas(async () => {
     const product = await prisma.product.findUniqueOrThrow({ where: { id: productId }, select: { id: true, parentId: true } })
     const rootId = product.parentId ?? product.id
@@ -531,6 +534,7 @@ export async function reconcileFamilyReadiness(productId: string, scope?: Readin
     // serialization check; either way `inDatabaseTransaction` retries, and the race test proves the end state is PENDING
     // or rebuilt from the edit's data (readiness-pending-race.vitest.test.ts, both orders). An explicit ordered lock
     // here was tried and dropped: it saved the ~1 s deadlock wait but needs raw SQL the import tests' store cannot run.
+    if (beforeWrite) await beforeWrite()
     await prisma.readinessIndex.deleteMany({ where: { productId: { in: products.map(p => p.id) }, ...scopeWhere } })
     if (rows.length) await prisma.readinessIndex.createMany({ data: rows })
     // P2 — the rows just written are current (pendingSince NULL). A pending mark can survive only on a row this rebuild
