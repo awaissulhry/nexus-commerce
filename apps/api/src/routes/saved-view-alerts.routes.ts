@@ -1,5 +1,5 @@
 /**
- * H.8 — saved-view alert CRUD + manual evaluation.
+ * H.8 — saved-view alert CRUD.
  *
  *   GET    /api/saved-views/:viewId/alerts
  *     → { alerts: [...] }
@@ -13,20 +13,12 @@
  *
  *   DELETE /api/saved-view-alerts/:id
  *
- *   POST   /api/saved-view-alerts/:id/evaluate
- *     → { count, matched, fired, reason? }
- *     Force-evaluate one alert. Lets a user test their threshold or
- *     trigger a fire on demand without waiting for the cron tick.
- *
- *   POST   /api/saved-view-alerts/:id/rebaseline
- *     Sets baselineCount = lastCount. The "I've handled this; reset
- *     the bar" button — useful after a CHANGE_PCT fire when the new
- *     normal really is the new normal.
+ * The manual evaluate and rebaseline routes went with the old products workspace (2026-10-14), their only caller;
+ * the cron (`jobs/saved-view-alerts.job.ts`) evaluates every active alert.
  */
 
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import prisma from '../db.js'
-import { evaluateAlert } from '../services/saved-view-alerts/evaluator.service.js'
 
 const ALLOWED_COMPARISONS = new Set([
   'GT',
@@ -195,40 +187,6 @@ const savedViewAlertsRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(404).send({ error: 'alert not found' })
       }
       return { ok: true }
-    },
-  )
-
-  fastify.post<{ Params: { id: string } }>(
-    '/saved-view-alerts/:id/evaluate',
-    async (request, reply) => {
-      const { id } = request.params
-      const userId = userIdFor(request)
-      const alert = await prisma.savedViewAlert.findFirst({
-        where: { id, userId },
-        include: {
-          savedView: { select: { id: true, name: true, filters: true } },
-        },
-      })
-      if (!alert) return reply.code(404).send({ error: 'alert not found' })
-      const result = await evaluateAlert({ prisma }, alert as any)
-      return result
-    },
-  )
-
-  fastify.post<{ Params: { id: string } }>(
-    '/saved-view-alerts/:id/rebaseline',
-    async (request, reply) => {
-      const { id } = request.params
-      const userId = userIdFor(request)
-      const existing = await prisma.savedViewAlert.findFirst({
-        where: { id, userId },
-      })
-      if (!existing) return reply.code(404).send({ error: 'alert not found' })
-      const updated = await prisma.savedViewAlert.update({
-        where: { id },
-        data: { baselineCount: existing.lastCount },
-      })
-      return { ...updated, threshold: Number(updated.threshold) }
     },
   )
 }

@@ -1,6 +1,3 @@
-import { translationCoverage } from '../services/translation-completeness.service.js'
-import { availableContentLanguages } from '../services/pim/market-languages.js'
-import { contentLanguages } from '../services/pim/content-read.js'
 /**
  * W2.5 — ProductFamily CRUD.
  *
@@ -37,8 +34,6 @@ import prisma from '../db.js'
 import { familyHierarchyService } from '../services/family-hierarchy.service.js'
 import { familyCompletenessService } from '../services/family-completeness.service.js'
 import { channelReadinessService } from '../services/channel-readiness.service.js'
-import { auditLogService } from '../services/audit-log.service.js'
-import { productReadCacheService } from '../services/product-read-cache.service.js'
 import { MISSING_REQUIRED_MAX_TAKE, productsMissingRequired } from '../services/pim/readiness-query.service.js'
 
 /** MCP full control P8 — a write refused by family-admin.service.ts: its status, sentence and extra fields, as before. */
@@ -188,30 +183,6 @@ const familiesRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
-  // POST /api/products/channel-readiness/bulk { productIds: [...] }
-  //
-  // Bulk readiness for the lens (W3.11). Capped at 200 ids per call.
-  // Sequential per-product so each gets its own resolver call —
-  // running these in parallel would multiply Prisma connections;
-  // 50 products × ~30ms each is well under a second.
-  fastify.post('/products/channel-readiness/bulk', async (request, reply) => {
-    const body = request.body as { productIds?: string[] }
-    if (!Array.isArray(body.productIds) || body.productIds.length === 0)
-      return reply
-        .code(400)
-        .send({ error: 'productIds must be a non-empty array' })
-    if (body.productIds.length > 200)
-      return reply
-        .code(400)
-        .send({ error: 'productIds cannot exceed 200 per call' })
-
-    // P3 — one batched computation (fixed query count) instead of several queries per product in sequence.
-    const computed = await channelReadinessService.computeMany(body.productIds)
-    const results: Record<string, unknown> = {}
-    for (const id of body.productIds) results[id] = computed.get(id)
-    return { results }
-  })
-
   // GET /api/products/readiness/missing-required?channel=EBAY&market=DE[&language=de][&accountId=][&field=color]
   //     [&requiredBy=Family: Jackets][&take=200][&after=<productId>]
   //
@@ -237,42 +208,6 @@ const familiesRoutes: FastifyPluginAsync = async (fastify) => {
       after: q.after || null,
     })
   })
-
-  // POST /api/products/translation-coverage/bulk { productIds: [...] }
-  //
-  // W5.6 — Bulk per-locale translation coverage for the
-  // Translations lens. Returns, per productId, a map of language →
-  // { hasContent, fieldCount } where:
-  //   hasContent = at least one ProductTranslation field is non-empty
-  //   fieldCount = number of fields with content (0..4: name/desc/
-  //                bullets/keywords)
-  //
-  // Cap 200 ids per call. Single Prisma query batched across all
-  // productIds — much cheaper than per-product evaluators.
-  fastify.post(
-    '/products/translation-coverage/bulk',
-    async (request, reply) => {
-      const body = request.body as { productIds?: string[] }
-      if (!Array.isArray(body.productIds) || body.productIds.length === 0)
-        return reply
-          .code(400)
-          .send({ error: 'productIds must be a non-empty array' })
-      if (body.productIds.length > 200)
-        return reply
-          .code(400)
-          .send({ error: 'productIds cannot exceed 200 per call' })
-
-      const [products, configured] = await Promise.all([
-        prisma.product.findMany({ where: { id: { in: body.productIds } }, include: { translations: true, parent: { include: { translations: true } } } }),
-        availableContentLanguages(),
-      ])
-      const results: Record<string, Record<string, ReturnType<typeof translationCoverage>>> = Object.fromEntries(body.productIds.map(id => [id, {}]))
-      for (const product of products) for (const requested of new Set([...configured, ...contentLanguages(product, product.parent)])) {
-        results[product.id][requested] = translationCoverage(product as any, requested)
-      }
-      return { results }
-    },
-  )
 
   // POST /api/products/family-completeness/bulk { productIds: [...] }
   //
@@ -361,114 +296,6 @@ const familiesRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.delete('/family-attributes/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
     return adminReply(reply, () => deleteFamilyAttribute(id))
-  })
-
-  // ── W2.8 — bulk attach/detach family on N products ─────────────
-  //
-  // Lives in families.routes.ts (not products.routes.ts, which is
-  // already 2k+ LOC) but uses the /products/bulk-* path family for
-  // discoverability — every other bulk product mutation is at
-  // /api/products/bulk-*, so co-locating the path matters more
-  // than co-locating the file.
-  //
-  // Single endpoint with dual semantics:
-  //   familyId = '<id>'  → attach this family to all productIds
-  //   familyId = null    → detach (clear familyId on all productIds)
-  //
-  // Per-product audit row written. updates run inside one
-  // $transaction so a partial failure rolls back cleanly.
-  //
-  // Hard cap at 500 productIds per call (matches bulk-status etc.)
-  // — operator can always call again. Larger jobs should go through
-  // the BulkOperation queue, but at 280-product catalogs this cap
-  // never bites in practice.
-  fastify.post('/products/bulk-attach-family', async (request, reply) => {
-    const body = request.body as {
-      productIds?: string[]
-      familyId?: string | null
-    }
-    if (!Array.isArray(body.productIds) || body.productIds.length === 0)
-      return reply
-        .code(400)
-        .send({ error: 'productIds must be a non-empty array' })
-    if (body.productIds.length > 500)
-      return reply
-        .code(400)
-        .send({ error: 'productIds cannot exceed 500 per call' })
-
-    const targetFamilyId = body.familyId ?? null
-    if (targetFamilyId !== null) {
-      const family = await prisma.productFamily.findUnique({
-        where: { id: targetFamilyId },
-        select: { id: true },
-      })
-      if (!family)
-        return reply.code(400).send({ error: 'familyId does not exist' })
-    }
-
-    // Read current state for the audit before/after diff. Skips
-    // soft-deleted products (deletedAt IS NOT NULL) — operators
-    // shouldn't be able to attach a family to a row that's in
-    // the trash.
-    const products = await prisma.product.findMany({
-      where: { id: { in: body.productIds }, deletedAt: null },
-      select: { id: true, familyId: true },
-    })
-    if (products.length === 0)
-      return reply
-        .code(404)
-        .send({ error: 'no matching active products found' })
-
-    const startTs = Date.now()
-
-    await prisma.$transaction(async (tx) => {
-      await tx.product.updateMany({
-        where: { id: { in: products.map((p) => p.id) } },
-        data: { familyId: targetFamilyId },
-      })
-    })
-
-    // Fail-open audit: never throws, so a Redis blip can't roll back
-    // the attach operation. Each row diffs only the changed field.
-    const auditRows = products
-      .filter((p) => p.familyId !== targetFamilyId) // no-op rows skipped
-      .map((p) => ({
-        userId: null,
-        ip: request.ip ?? null,
-        entityType: 'Product',
-        entityId: p.id,
-        action: 'update',
-        before: { familyId: p.familyId },
-        after: { familyId: targetFamilyId },
-        metadata: {
-          source: 'bulk-attach-family',
-          attachOrDetach: targetFamilyId === null ? 'detach' : 'attach',
-        },
-      }))
-    if (auditRows.length > 0) {
-      void auditLogService.writeMany(auditRows)
-    }
-
-    // ProductReadCache mirrors familyId; refresh so the /products grid
-    // reflects the new family pill without waiting for the polled list.
-    await Promise.all(
-      products.map((p) =>
-        productReadCacheService.refresh(p.id).catch(() => undefined),
-      ),
-    )
-
-    const skipped = body.productIds.length - products.length
-    const noOpCount = products.length - auditRows.length
-    return {
-      ok: true,
-      familyId: targetFamilyId,
-      requested: body.productIds.length,
-      updated: products.length,
-      changed: auditRows.length,
-      noOp: noOpCount,
-      skipped,
-      elapsedMs: Date.now() - startTs,
-    }
   })
 }
 

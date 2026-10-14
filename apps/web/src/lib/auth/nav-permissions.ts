@@ -43,7 +43,6 @@ const NAV_PERMS: Array<[string, string]> = [
   ['/outbound', 'pages.syncLogs'],
   ['/performance', 'pages.performance'],
   ['/admin', 'pages.admin'],
-  ['/command-matrix', 'pages.admin'],
   ['/settings', 'pages.settings'],
   ['/channels/mapping', 'pages.settings'],
   ['/channels/ebay', 'pages.products'],

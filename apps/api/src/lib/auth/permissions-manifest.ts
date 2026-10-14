@@ -276,12 +276,10 @@ export const ENTRIES: Entry[] = [
   RW(F.pimManage, F.pimManage, pfx('/api/attribute-options')),
   RW(F.pimManage, F.pimManage, pfx('/api/family-attributes')),
   RW(F.pimManage, F.pimManage, pfx('/api/workflow-stages')),
-  RW(F.pimManage, F.pimManage, pfx('/api/workflow-comments')),
   RW(F.productsEdit, F.productsEdit, pfx('/api/tags')),
   RW(F.productsView, F.productsEdit, pfx('/api/saved-views')),
   // 2026-10-01 — a person's own product sheet layout (the same in every business profile), read and kept like saved views.
   RW(F.productsView, F.productsEdit, pfx('/api/sheet-layouts')),
-  RW(F.productsView, F.productsEdit, pfx('/api/bundles')),
   RW(F.productsView, F.productsBulkRun, pfx('/api/bulk-ops')),
 
   // ── S2 coverage: B2B customer pricing (restricted money) ───────
@@ -481,7 +479,6 @@ export const ENTRIES: Entry[] = [
 
   // ── Pricing / repricing ─────────────────────────────────────────
   // (S1 F4/F11: the tier, eBay volume and cost rules that stood here named paths no route has; see the block above.)
-  RW(F.repricingView, F.repricingRulesManage, pfx('/api/repricing-rules')),
   RW(F.repricingView, F.repricingRulesManage, pfx('/api/repricing')),
   RW(F.pricingView, F.pricingRulesManage, pfx('/api/pricing-rules')),
   RW(F.pricingView, F.pricingEdit, pfx('/api/pricing')),
@@ -549,7 +546,6 @@ export const ENTRIES: Entry[] = [
   RW(F.insightsView, F.reportsRun, pfx('/api/insights')),
   RW(F.analyticsView, F.reportsRun, pfx('/api/analytics')),
   RW(F.analyticsView, F.reportsRun, pfx('/api/dashboard')),
-  RW(F.forecastView, F.reportsRun, pfx('/api/forecast')),
   RW(F.insightsView, F.reportsRun, pfx('/api/amazon-reports')),
   RW(F.insightsView, F.reportsRun, pfx('/api/amazon/economics')),
   RW(F.insightsView, F.reportsRun, pfx('/api/amazon-economics')),

@@ -84,7 +84,7 @@ describe('every caller that puts an absolute element before a legacy <Input>', (
   }
 
   it('finds them (control: the Customers toolbar is one)', () => {
-    expect(sites.length).toBeGreaterThanOrEqual(13)
+    expect(sites.length).toBeGreaterThanOrEqual(12)
     expect(sites.some((s) => s.at.startsWith('app/customers/CustomersWorkspace.tsx:'))).toBe(true)
   })
 

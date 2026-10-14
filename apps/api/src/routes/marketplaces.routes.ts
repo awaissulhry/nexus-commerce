@@ -292,41 +292,6 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
     }
   )
 
-  // MA.1 — POST /api/products/bulk-offer-availability
-  // Toggle offerActive across many products × many markets in one shot.
-  // Body: { productIds: string[]; markets: Array<Omit<ListingCoordinate, 'productId'>>; offerActive: boolean }
-  fastify.post<{
-    Body: { productIds: string[]; markets: Array<Omit<ListingCoordinate, 'productId'>>; offerActive: boolean }
-  }>(
-    '/products/bulk-offer-availability',
-    async (request, reply) => {
-      try {
-        const { productIds, markets, offerActive } = request.body ?? {}
-        if (!Array.isArray(productIds) || productIds.length === 0) {
-          return reply.code(400).send({ error: 'productIds is required' })
-        }
-        if (!Array.isArray(markets) || markets.length === 0) {
-          return reply.code(400).send({ error: 'markets array is required' })
-        }
-        if (typeof offerActive !== 'boolean') {
-          return reply.code(400).send({ error: 'offerActive must be a boolean' })
-        }
-        const pairs: ListingCoordinate[] = productIds.flatMap(productId => markets.map(m => ({ ...m, productId })))
-        pairs.forEach(whereCoordinate)
-        const changedIds: string[] = []
-        for (let i = 0; i < pairs.length; i += 50) {
-          const results = await Promise.all(pairs.slice(i, i + 50).map(c => writeCoordinateOffer(c, offerActive)))
-          changedIds.push(...results.map(r => r.id))
-        }
-        const upserted = changedIds.length
-        if (offerActive && changedIds.length) void syncActivatedListings(changedIds)
-        return { ok: true, upserted, offerActive }
-      } catch (error: any) {
-        return reply.code(500).send({ error: error?.message ?? String(error) })
-      }
-    }
-  )
-
   // GET /api/products/:id/listings/:channel/:marketplace
   fastify.get<{
     Params: { id: string; channel: string; marketplace: string }

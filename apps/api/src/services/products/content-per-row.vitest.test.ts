@@ -96,18 +96,16 @@ it('C6 P1: bullets over the channel cap are STORED with the title, and the answe
   expect(await row(ids.c)).toMatchObject({ name: `Nuovo ${ids.c.slice(-4)}`, bulletPoints: ['ok', LONG] })
 })
 
-it('C4 (source read): only the sheet route passes the opt-in; the three all-or-nothing callers do not', () => {
+it('C4 (source read): only the sheet route passes the opt-in; the two all-or-nothing callers do not', () => {
   const read = (file: string) => readFileSync(fileURLToPath(new URL(`../../routes/${file}`, import.meta.url)), 'utf8')
   const call = (text: string, from: number) => text.slice(from, text.indexOf('logger:', from) + 60)
   const products = read('products.routes.ts')
   expect(call(products, products.indexOf("fastify.patch<{ Body: ProductBulkInput }>('/products/bulk'"))).toContain('contentPerRow: true')
   expect(call(products, products.indexOf('const restored = await applyProductBulkEdits('))).not.toContain('contentPerRow')
-  const translations = read('product-translations.routes.ts')
-  expect(call(translations, translations.indexOf('await applyProductBulkEdits('))).not.toContain('contentPerRow')
   const ai = read('products-ai.routes.ts')
   expect(call(ai, ai.indexOf('await applyProductBulkEdits('))).not.toContain('contentPerRow')
-  // Positive control: every one of the four call sites was found (a moved call would make `indexOf` -1 and prove nothing).
-  expect([products.indexOf("'/products/bulk'"), products.indexOf('const restored = await applyProductBulkEdits('), translations.indexOf('await applyProductBulkEdits('), ai.indexOf('await applyProductBulkEdits(')].every(i => i > 0)).toBe(true)
+  // Positive control: every one of the three call sites was found (a moved call would make `indexOf` -1 and prove nothing).
+  expect([products.indexOf("'/products/bulk'"), products.indexOf('const restored = await applyProductBulkEdits('), ai.indexOf('await applyProductBulkEdits(')].every(i => i > 0)).toBe(true)
 })
 
 it('C5 the sheet route itself (PATCH /products/bulk, real handler): the mixed request stores the title and refuses the bullets', async () => {

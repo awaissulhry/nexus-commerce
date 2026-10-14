@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`R17 — the repricing rule routes answer as before the move > every outcome, and the rows each leaves 1`] = `
+exports[`R17 — the repricing rule service answers as the routes did before the move > every outcome, and the rows each leaves 1`] = `
 "POST /api/products/<id1>/repricing-rules → 400 {"error":"channel is required"}
 POST /api/products/<id1>/repricing-rules → 400 {"error":"minPrice must be >= 0"}
 POST /api/products/<id1>/repricing-rules → 400 {"error":"maxPrice must be >= minPrice"}

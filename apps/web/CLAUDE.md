@@ -37,8 +37,7 @@ its rules apply to all UI here.
   - A custom cell editor must call `props.onValueChange`; a ref `getValue` is never read. See
     `src/design-system/grid/editors/SelectPanelEditor.tsx`.
 - **Forms:** `src/app/settings/sharing/OfferShareModal.tsx` — DS `Modal` + `Field` + controlled state.
-  react-hook-form and zod appear only in the legacy `src/app/catalog/[id]/edit/` (`ProductEditorForm.tsx`). No
-  design-system form uses them.
+  There is no form library; zod only validates data read in (API answers, pasted cells), never form state.
 - **Charts (recharts):** `src/design-system/components/PerformanceGraph.tsx`, used by
   `src/app/marketing/ads/ebay/_dash/TrendCard.tsx`. Recharts takes colours as props: use `chart` from
   `src/design-system/tokens/colors.ts`, not `var(--nds-*)`.

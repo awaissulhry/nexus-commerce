@@ -94,7 +94,7 @@ export default function PoolDriftClient() {
   function editHref(r: PoolDriftRow) {
     return r.channel === 'EBAY'
       ? `/products/${r.productId}/edit?tab=EBAY`
-      : `/products/${r.productId}/matrix`
+      : `/products/${r.productId}/edit/studio?tab=matrix`
   }
 
   return (

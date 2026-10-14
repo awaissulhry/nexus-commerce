@@ -49,7 +49,7 @@ export const DRAFT_SINCE_READ = 'Other text in this language was drafted since y
  * it: no source is a person's text (`content-resolver.ts` reads it as `manual`). So a follow-only row a Shared cascade made
  * (no source, never reviewed) is not a draft.
  */
-const holdsMachineDraft = (row: { source: string | null; reviewedAt: Date | null }) => unreviewedMachineDraft({ translation: {
+export const holdsMachineDraft = (row: { source: string | null; reviewedAt: Date | null }) => unreviewedMachineDraft({ translation: {
   source: (row.source ?? 'manual') as 'manual' | 'ai' | 'translated', reviewedAt: row.reviewedAt ? row.reviewedAt.toISOString() : null, outdated: false } })
 
 /** The one destination a stamped unit names: a Shared scope (no channel) or one channel coordinate. */

@@ -5,7 +5,7 @@
  *   scheduled-price services). Written against the routes BEFORE the move and unchanged after it: the pricing rules
  *   (`GET /api/pricing-rules`, `/variation/:id`), the repricer status (`GET /api/pricing/repricer-status`), the
  *   promotions (`GET /api/pricing/promotions`) and a product's scheduled changes (`GET
- *   /api/products/:id/scheduled-changes`). (Also checked once by hand on 2026-10-01: the full answers of 6 requests,
+ *   /api/products/:id/scheduled-changes`, deleted 2026-10-14; its service is checked directly). (Also checked once by hand on 2026-10-01: the full answers of 6 requests,
  *   ids and times normalised, were byte-identical before and after the move.)
  *   Tools: Claude's four pricing reads, through the one door (call-tool.ts): currency and held prices shown, bounds,
  *   rules, promotions and scheduled changes, and the switches that decide whether anything would act.
@@ -17,6 +17,7 @@ import Fastify, { type FastifyInstance } from 'fastify'
 import { formulaDatabase } from '../../test-support/formula-database.js'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
+import { listScheduledChanges } from './scheduled-price.service.js'
 
 let database: Awaited<ReturnType<typeof formulaDatabase>>
 vi.mock('../../db.js', () => ({
@@ -88,7 +89,6 @@ beforeAll(async () => {
   app.addHook('preHandler', (_request, _reply, done) => { withWorkspace(business, done) })
   await app.register((await import('../../routes/pricing-rules.routes.js')).default, { prefix: '/api' })
   await app.register((await import('../../routes/pricing.routes.js')).default, { prefix: '/api' })
-  await app.register((await import('../../routes/products-catalog.routes.js')).default, { prefix: '/api' })
   await app.ready()
 }, 180_000)
 
@@ -137,12 +137,12 @@ describe('08 S5 — the pricing read routes answer as before', () => {
     expect(await get('/api/pricing/price-history')).toEqual({ status: 400, body: { error: 'productId or sku required' } })
   })
 
-  it('GET /api/products/:id/scheduled-changes: the product\'s changes, soonest first', async () => {
-    const { status, body } = await get(`/api/products/${ids.jacket}/scheduled-changes`)
-    expect(status).toBe(200)
-    expect(body.ok).toBe(true)
-    expect(body.changes.map((c: Json) => [c.id, c.kind, c.status, c.payload])).toEqual([[ids.price, 'PRICE', 'PENDING', { basePrice: 110 }], [ids.status, 'STATUS', 'PENDING', { status: 'INACTIVE' }]])
-    expect(await get(`/api/products/${ids.gloves}/scheduled-changes`)).toEqual({ status: 200, body: { ok: true, changes: [] } })
+  // Its route (GET /api/products/:id/scheduled-changes) was deleted on 2026-10-14 with the old product drawer, its only
+  // caller; the service answers what the route answered as `changes`.
+  it('listScheduledChanges: the product\'s changes, soonest first', async () => {
+    const changes = await inside(() => listScheduledChanges(ids.jacket))
+    expect(changes.map((c: Json) => [c.id, c.kind, c.status, c.payload])).toEqual([[ids.price, 'PRICE', 'PENDING', { basePrice: 110 }], [ids.status, 'STATUS', 'PENDING', { status: 'INACTIVE' }]])
+    expect(await inside(() => listScheduledChanges(ids.gloves))).toEqual([])
   })
 })
 

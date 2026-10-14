@@ -131,7 +131,7 @@ export default async function DraftsPage() {
                     </td>
                     <td className="px-6 py-4">
                       <Link
-                        href={`/catalog/${product.id}/edit`}
+                        href={`/products/${product.id}/edit/studio`}
                         className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
                       >
                         ✏️ Complete

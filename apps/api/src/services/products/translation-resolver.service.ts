@@ -84,11 +84,6 @@ export function resolvedContent(product: any, language: string): ResolvedProduct
   }
 }
 
-export async function resolveProductContent(prisma: PrismaClient, productId: string, language: string): Promise<ResolvedProductContent | null> {
-  const product = await prisma.product.findUnique({ where: { id: productId }, select: CONTENT_SELECT })
-  return product ? resolvedContent(product, normalizeLanguage(language)) : null
-}
-
 /** Both historical and current callers use the same per-field locale contract. */
 export async function resolveProductContentBatch(prisma: PrismaClient, productIds: string[], language: string): Promise<Map<string, ResolvedProductContent>> {
   const result = new Map<string, ResolvedProductContent>()

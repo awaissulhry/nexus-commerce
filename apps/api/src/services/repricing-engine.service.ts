@@ -299,7 +299,7 @@ export function pickPrice(
  * currency, and refuses a price of 0. A refusal is not applied: the decision says `applied: false` and why.
  *
  * Callers: the evaluator cron (`jobs/repricing-evaluator.job.ts`, every 5 min, applyToProduct only with
- * NEXUS_REPRICER_LIVE=1) and `POST /api/repricing-rules/:id/evaluate` (applyToProduct from the body).
+ * NEXUS_REPRICER_LIVE=1). (`POST /api/repricing-rules/:id/evaluate` was deleted on 2026-10-14: nothing called it.)
  */
 export class RepricingEngineService {
   constructor(private readonly client: PrismaClient = prisma) {}

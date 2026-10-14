@@ -1,4 +1,5 @@
 import { normalizeLanguage } from '../../pim/content-language.js'
+import { sharedContentAddress } from '@nexus/shared/content-language'
 import { resolveContent, translationMissing } from '../../pim/content-resolver.js'
 /**
  * PES.8 — the draft lifecycle: record, overlay, decide.
@@ -43,6 +44,9 @@ import { resolveContent, translationMissing } from '../../pim/content-resolver.j
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import prisma from '../../../db.js'
 import { auditLogService } from '../../audit-log.service.js'
+import { applyProductBulkEdits, ProductBulkError } from '../../products/bulk-edit.service.js'
+import { DRAFT_SINCE_READ, holdsMachineDraft } from '../../products/sheet-stamp-door.js'
+import { isPrimaryLanguage, marketplaceForLanguage } from '../../products/translation-resolver.service.js'
 import { decodeCellKey, type CellAddress } from './cell-key.js'
 
 export type DraftStatus =
@@ -106,9 +110,9 @@ const CHANNEL_FIELD_TARGET: Record<string, 'title' | 'description' | 'variationT
  * D7 — the four keys that live per-locale in `ProductTranslation`, not on `Product`.
  *
  * These do NOT go through `PATCH /api/products/bulk`: its allowlist has no `title` and no locale
- * dimension at all, so a translated value has no address there. They apply through
- * `PUT /api/products/:id/translations/:language`, which is a genuinely different write path — the
- * thing this lane assumed was shared and is not.
+ * dimension at all, so a translated value has no address there. They apply as language content
+ * (`writeLocaleDraft`; until 2026-10-14 `PUT /api/products/:id/translations/:language`), a genuinely
+ * different write path — the thing this lane assumed was shared and is not.
  */
 const LOCALIZED_KEYS: Record<string, 'name' | 'description' | 'bulletPoints' | 'keywords'> = {
   title: 'name',
@@ -496,7 +500,7 @@ export interface ApproveResult {
  * specific selection, having seen the current value in the diff.
  */
 /**
- * D7 — apply approved translation drafts through `PUT /api/products/:id/translations/:language`.
+ * D7 — apply approved translation drafts as language content (`writeLocaleDraft`, below).
  *
  * A separate path because there is no other: the bulk PATCH allowlist has no `title` and no locale
  * dimension, so a translated value has no address there at all. This lane assumed one shared apply
@@ -511,11 +515,22 @@ export interface ApproveResult {
  * publish it. An approval here is the one case where both halves are true, so it stamps both:
  * AI provenance kept, review genuinely earned.
  *
- * One product per request (the route is keyed by id and language), so a batch is N injects. That is
- * fine at review scale — an operator approves cells, not catalogues.
+ * One bulk write per product, so a batch is N writes. That is fine at review scale — an operator approves cells,
+ * not catalogues.
+ *
+ * 2026-10-14 — this used to inject `PUT /api/products/:id/translations/:language`. That route went with the old product
+ * drawer, so `writeLocaleDraft` below does what it did: the same refusals (unknown product, the primary language) and
+ * the same one `applyProductBulkEdits` call (the four content fields, `contentState: 'reviewed'` because the approval
+ * stamps `reviewedAt`, the language's marketplace and locale as context). The route needed products.edit, which the
+ * approve route itself requires, so a direct call is authorised exactly as the inject was.
+ *
+ * One difference, on purpose: the PUT passed the caller's `contentAddress`, and this body never had one, so since the
+ * content router landed every approval was refused "Title needs a ContentAddress before it can be saved." (measured
+ * 2026-10-14 by running the PUT's exact call). The address is now derived here, the way `products-ai.routes.ts` derives
+ * it: a language that is not the primary one is the `language` tier (`sharedContentAddress`), and the content writer
+ * still checks it against the locale in the context.
  */
 async function applyTranslationGroup(
-  app: FastifyInstance,
   request: FastifyRequest,
   locale: string,
   items: Array<{ row: { id: string; productId: string; writeField: string; draftValue: unknown; model: string }; addr: CellAddress }>,
@@ -546,18 +561,11 @@ async function applyTranslationGroup(
       body[target] = it.row.draftValue
     }
 
-    const res = await app.inject({
-      method: 'PUT',
-      url: `/api/products/${productId}/translations/${encodeURIComponent(locale)}`,
-      headers: {
-        'content-type': 'application/json',
-        ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}),
-      },
-      payload: body,
-    })
-
-    if (res.statusCode >= 400) {
-      const reason = `PUT /translations/${locale} returned ${res.statusCode}: ${res.body.slice(0, 200)}`
+    // The language row before this approval: the write's guard and version, and each audit row's `before`.
+    const prior = await prisma.productTranslation.findFirst({ where: { productId, language: normalizeLanguage(locale) } })
+    const refusal = await writeLocaleDraft(request, productId, locale, body, prior)
+    if (refusal) {
+      const reason = `translation ${locale} not saved (${refusal.status}): ${refusal.error.slice(0, 200)}`
       for (const it of group) refused.push({ id: it.row.id, reason })
       await prisma.productAiDraft.updateMany({
         where: { id: { in: group.map((g) => g.row.id) } },
@@ -580,13 +588,83 @@ async function applyTranslationGroup(
         entityType: 'Product',
         entityId: productId,
         action: 'ai-draft.approve',
-        before: { [`${locale}.${it.row.writeField}`]: null },
+        before: { [`${locale}.${it.row.writeField}`]: (prior as Record<string, unknown> | null)?.[LOCALIZED_KEYS[it.row.writeField]] ?? null },
         after: { [`${locale}.${it.row.writeField}`]: it.row.draftValue },
         metadata: { draftId: it.row.id, locale, target: 'ProductTranslation', model: it.row.model },
       })),
     )
   }
   return { approved, refused }
+}
+
+/** Text a person would have to read: a non-empty string, a number or a flag, at any depth of a list or an object. */
+const holdsContent = (value: unknown): boolean => typeof value === 'string' ? value.trim() !== ''
+  : typeof value === 'number' || typeof value === 'boolean' ? true
+  : Array.isArray(value) ? value.some(holdsContent)
+  : value !== null && typeof value === 'object' ? Object.values(value).some(holdsContent) : false
+
+type LanguageRow = { version: number; source: string | null; reviewedAt: Date | null; name: string | null; description: string | null; bulletPoints: unknown; keywords: unknown; attributes: unknown }
+
+/**
+ * What `PUT /api/products/:id/translations/:language` did with an approval's body (see `applyTranslationGroup`):
+ * `null` clears, `undefined` leaves a field alone, a list field takes only a list (null clears it to empty). Returns
+ * the refusal the route answered with, or null when the write landed.
+ *
+ * 🔴 A reviewed write stamps the WHOLE language row reviewed and `manual` (`pim/translation-write.ts`). So when the row
+ * holds an unreviewed machine draft (the publish gate's predicate, as the sheet's stamp door reads it) and a field this
+ * approval does not cover holds text, the approval is refused with the stamp door's sentence: that draft is reviewed
+ * first, never marked reviewed by a title someone approved (review of #620, measured: the German description stayed
+ * machine text while the row turned reviewed, and the listings following that language were queued). Approving every
+ * field that holds text reviews the whole row and goes ahead. The row's version rides on each change, so a row that
+ * moves between this read and the write is refused as a conflict instead.
+ */
+async function writeLocaleDraft(
+  request: FastifyRequest,
+  productId: string,
+  locale: string,
+  body: Record<string, unknown>,
+  prior: LanguageRow | null,
+): Promise<{ status: number; error: string } | null> {
+  const lang = normalizeLanguage(locale)
+  const product = await prisma.product.findUnique({ where: { id: productId }, select: { id: true } })
+  if (!product) return { status: 404, error: 'Product not found' }
+  if (isPrimaryLanguage(lang)) return { status: 400, error: `language '${lang}' is the primary language; PATCH /api/products/${productId} instead` }
+  const fields: Record<string, unknown> = {}
+  if (body.name !== undefined) fields.name = body.name
+  if (body.description !== undefined) fields.description = body.description
+  if (Array.isArray(body.bulletPoints)) fields.bulletPoints = body.bulletPoints
+  else if (body.bulletPoints === null) fields.bulletPoints = []
+  if (Array.isArray(body.keywords)) fields.keywords = body.keywords
+  else if (body.keywords === null) fields.keywords = []
+  // The route's review stamp: an explicit `reviewedAt` (empty = not reviewed), else an AI source alone means not reviewed.
+  const reviewedAt = body.reviewedAt !== undefined ? (body.reviewedAt ? body.reviewedAt : null)
+    : typeof body.source === 'string' && body.source.startsWith('ai-') ? null : undefined
+  const contentState = reviewedAt === null ? 'draft' : 'reviewed'
+  if (prior && contentState === 'reviewed' && holdsMachineDraft(prior)) {
+    const outside = (['name', 'description', 'bulletPoints', 'keywords'] as const).some((column) => !(column in fields) && holdsContent(prior[column]))
+    if (outside || holdsContent(prior.attributes)) return { status: 409, error: DRAFT_SINCE_READ }
+  }
+  try {
+    const marketplace = await marketplaceForLanguage(lang)
+    const result = await applyProductBulkEdits({
+      changes: Object.entries(fields).map(([field, value]) => ({ id: productId, field, value, contentState, contentAddress: sharedContentAddress(lang), contentVersion: prior?.version ?? 0 })),
+      marketplaceContexts: [{ marketplace, locale: lang } as never],
+    }, {
+      formulaCascade: request.headers['x-nexus-formula-cascade'] === '1',
+      userId: (request as { authUser?: { id?: string } }).authUser?.id,
+      ip: request.ip,
+      logger: request.log,
+      // The model that wrote the words stays on the row (`sourceModel`); a person reviewed them (`reviewedAt`).
+      contentProvenance: { ...(typeof body.sourceModel === 'string' ? { sourceModel: body.sourceModel } : {}), reason: 'ai-draft.approve' },
+    })
+    if (result.errors?.length) return { status: 400, error: String(result.errors[0].error) }
+    return null
+  } catch (error) {
+    // Inside the inject every throw became an error answer, so a refusal; it still is, never a failed approval request.
+    if (error instanceof ProductBulkError) return { status: error.statusCode, error: error.message }
+    const status = typeof (error as { statusCode?: unknown })?.statusCode === 'number' ? (error as { statusCode: number }).statusCode : 500
+    return { status, error: error instanceof Error ? error.message : String(error) }
+  }
 }
 
 export async function approveDrafts(
@@ -678,7 +756,7 @@ export async function approveDrafts(
     // ── D7: a translation batch takes a different route entirely ──────────────────────
     if (key.startsWith('locale:')) {
       const locale = key.slice('locale:'.length)
-      const outcome = await applyTranslationGroup(app, request, locale, items)
+      const outcome = await applyTranslationGroup(request, locale, items)
       approved.push(...outcome.approved)
       refused.push(...outcome.refused)
       changesSent += items.length

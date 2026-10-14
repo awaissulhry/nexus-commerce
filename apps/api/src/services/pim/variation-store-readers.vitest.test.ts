@@ -64,7 +64,6 @@ const EXCEPTIONS: Array<[string, string, string]> = [
   // The AI prompt builder reads through variationBag; these pass both stores to it.
   ['routes/listing-wizard.routes.ts', 'variantAttributes: product.variantAttributes,', 'AI prompt pass-through (categoryAttributes passed too)'],
   ['routes/products-ai.routes.ts', 'variantAttributes: product.variantAttributes,', 'AI prompt pass-through'],
-  ['routes/product-translations.routes.ts', 'variantAttributes: product.variantAttributes,', 'AI prompt pass-through'],
   ['routes/listing-content.routes.ts', 'variantAttributes: product.variantAttributes,', 'AI prompt pass-through'],
   ['jobs/listing-quality-snapshot.job.ts', 'variantAttributes: product.variantAttributes,', 'AI prompt pass-through'],
   ['routes/marketing-automation.routes.ts', 'variantAttributes: (product.variantAttributes ?? undefined)', 'AI prompt pass-through'],
@@ -109,13 +108,5 @@ describe('the source scan — no reader takes the legacy bag first', () => {
   it('no exception is stale (each still names a real line)', () => {
     const stale = EXCEPTIONS.filter(([file, snippet]) => !reads.some((r) => r.file === file && r.text.includes(snippet)))
     expect(stale).toEqual([])
-  })
-  it('the F6 Matrix page reads the store before the legacy bag (web)', () => {
-    const web = readFileSync(join(API_SRC, '../../web/src/app/products/[id]/matrix/MatrixWorkspace.tsx'), 'utf8')
-    const getAttr = web.slice(web.indexOf('function getAttr('), web.indexOf('function readNumber('))
-    expect(getAttr.indexOf('child.variations')).toBeGreaterThan(-1)
-    expect(getAttr.indexOf('child.variations')).toBeLessThan(getAttr.indexOf('child.variantAttributes'))
-    const axes = web.slice(web.indexOf('const axes: string[] = useMemo('))
-    expect(axes.indexOf('(c.variations')).toBeLessThan(axes.indexOf('(c.variantAttributes'))
   })
 })

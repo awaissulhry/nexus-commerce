@@ -287,7 +287,6 @@ const where = (r: { file: string; line: number; text: string }) => `${r.file}:${
 const NOT_A_WRITE: Array<[string, string, string]> = [
   ['routes/listing-wizard.routes.ts', 'variantAttributes: product.variantAttributes,', 'AI prompt context'],
   ['routes/products-ai.routes.ts', 'variantAttributes: product.variantAttributes,', 'AI prompt context'],
-  ['routes/product-translations.routes.ts', 'variantAttributes: product.variantAttributes,', 'AI prompt context'],
   ['routes/listing-content.routes.ts', 'variantAttributes: product.variantAttributes,', 'AI prompt context'],
   ['jobs/listing-quality-snapshot.job.ts', 'variantAttributes: product.variantAttributes,', 'AI prompt context'],
   ['routes/marketing-automation.routes.ts', 'variantAttributes: (product.variantAttributes ?? undefined)', 'AI prompt context'],
@@ -297,7 +296,6 @@ const NOT_A_WRITE: Array<[string, string, string]> = [
   ['routes/images/images-workspace.routes.ts', 'variantAttributes: c.variantAttributes as Record<string, unknown> | null,', 'input to deriveWorkspaceAxes'],
   ['routes/images/images-workspace.routes.ts', 'variantAttributes: v.variationAttributes as Record<string, unknown> | null,', 'input to deriveWorkspaceAxes'],
   ['routes/catalog.routes.ts', 'variantAttributes: nextVA,', 'response DTO (the store-first bag)'],
-  ['routes/products-catalog.routes.ts', 'variantAttributes: null,', 'response DTO'],
   ['services/ebay-family-axes.service.ts', 'variantAttributes: c.variantAttributes,', 'input to buildFlatRow'],
   ['services/bulk-action.service.ts', 'variantAttributes: (item as ProductLike).variantAttributes }', 'input to the one writer\'s plan'],
   ['services/bulk-action/attribute-helpers.ts', 'variantAttributes: product.variantAttributes })', 'input to variationBag'],

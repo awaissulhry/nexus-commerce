@@ -103,7 +103,6 @@ import listingRecoveryRoutes from "./routes/listing-recovery.routes.js";
 import familiesRoutes from "./routes/families.routes.js";
 import attributesRoutes from "./routes/attributes.routes.js";
 import workflowsRoutes from "./routes/workflows.routes.js";
-import productWorkflowRoutes from "./routes/product-workflow.routes.js";
 import tierPricingRoutes from "./routes/tier-pricing.routes.js";
 import productChannelDataRoutes from "./routes/product-channel-data.routes.js";
 import assetsRoutes from "./routes/assets.routes.js";
@@ -113,7 +112,6 @@ import brandKitRoutes from "./routes/brand-kit.routes.js";
 import marketingAutomationRoutes from "./routes/marketing-automation.routes.js";
 import channelPublishRoutes from "./routes/channel-publish.routes.js";
 import cloudinaryWebhookRoutes from "./routes/cloudinary-webhook.routes.js";
-import repricingRulesRoutes from "./routes/repricing-rules.routes.js";
 import categoriesRoutes from "./routes/categories.routes.js";
 import pimCategoriesRoutes from "./routes/pim-categories.routes.js";
 import taxonomyRoutes from "./routes/taxonomy.routes.js";
@@ -150,7 +148,6 @@ import liveReadRoutes from "./routes/live-read.routes.js"; // PE — read what a
 import studioMatrixRoutes from "./routes/studio-matrix.routes.js"; // MX.1 — the Matrix page
 import catalogTransferRoutes from "./routes/catalog-transfer.routes.js";
 import sheetTransferRoutes from "./routes/sheet-transfer.routes.js";
-import catalogMatrixRoutes from "./routes/catalog-matrix.routes.js";
 import pimMappingRoutes from "./routes/pim-mapping.routes.js";
 import channelMappingRoutes from "./routes/channel-mapping.routes.js"; // PES.6
 import cellFormulaRoutes from "./routes/cell-formula.routes.js"; // PES.6 wave-4
@@ -159,25 +156,20 @@ import mappingPropagationRoutes from "./routes/mapping-propagation.routes.js";
 import auditLogRoutes from "./routes/audit-log.routes.js";
 import syncLogsRoutes from "./routes/sync-logs.routes.js";
 import { listingsSyndicationRoutes } from "./routes/listings-syndication.routes.js";
-import { listingHealthRoutes } from "./routes/listing-health.routes.js";
 import { fieldLinksRoutes } from "./routes/field-links.routes.js";
 import productsCatalogRoutes from "./routes/products-catalog.routes.js";
 import { delistCascadeRoutes } from "./routes/delist-cascade.routes.js";
 import productsSearchRoutes from "./routes/products-search.routes.js";
 import productsAiRoutes from "./routes/products-ai.routes.js";
 import { productEnrichmentAiRoutes, productAiDraftRoutes } from "./routes/product-enrichment.routes.js";
-import productsImagesRoutes from "./routes/products-images.routes.js";
 import listingImagesRoutes from "./routes/listing-images.routes.js";
 import amazonImagesRoutes from "./routes/images/amazon-images.routes.js";
 import imagesWorkspaceRoutes from "./routes/images/images-workspace.routes.js";
 import channelImagePublishRoutes from "./routes/images/channel-image-publish.routes.js";
-import productTranslationsRoutes from "./routes/product-translations.routes.js";
-import productRelationsRoutes from "./routes/product-relations.routes.js";
 import productCertificatesRoutes from "./routes/product-certificates.routes.js";
 import productImagesCrudRoutes from "./routes/product-images-crud.routes.js";
 import productSeoRoutes from "./routes/product-seo.routes.js";
 import workflowAssignmentsRoutes from "./routes/workflow-assignments.routes.js";
-import forecastRoutes from "./routes/forecast.routes.js";
 import aiUsageRoutes from "./routes/ai-usage.routes.js";
 import agentRoutes from "./routes/agents.routes.js";
 import agentFleetRoutes from "./routes/agent-fleet.routes.js";
@@ -602,11 +594,6 @@ app.register(catalogRoutes, { prefix: '/api/catalog' });
 // preSerialization filter strips restricted fields from its replies.
 registerProductGraph(app);
 app.register(catalogOrganizeRoutes, { prefix: '/api/catalog' });
-// S.0 / C-2 — listing-health.routes declares full /api/catalog/... paths
-// internally, so register without a prefix. See DEVELOPMENT.md "Health
-// endpoint conventions" for why /api/listings/health and
-// /api/catalog/:productId/listing-health coexist as distinct concepts.
-app.register(listingHealthRoutes);
 app.register(fieldLinksRoutes);
 app.register(outboundRoutes);
 app.register(matrixRoutes);
@@ -678,7 +665,6 @@ app.register(listingRecoveryRoutes, { prefix: '/api' });
 app.register(familiesRoutes, { prefix: '/api' });
 app.register(attributesRoutes, { prefix: '/api' });
 app.register(workflowsRoutes, { prefix: '/api' });
-app.register(productWorkflowRoutes, { prefix: '/api' });
 app.register(tierPricingRoutes, { prefix: '/api' });
 app.register(productChannelDataRoutes, { prefix: '/api' });
 app.register(assetsRoutes, { prefix: '/api' });
@@ -688,7 +674,6 @@ app.register(brandKitRoutes, { prefix: '/api' });
 app.register(marketingAutomationRoutes, { prefix: '/api' });
 app.register(channelPublishRoutes, { prefix: '/api' });
 app.register(cloudinaryWebhookRoutes, { prefix: '/api' });
-app.register(repricingRulesRoutes, { prefix: '/api' });
 app.register(categoriesRoutes, { prefix: '/api' });
 app.register(pimCategoriesRoutes, { prefix: '/api' });
 app.register(taxonomyRoutes, { prefix: '/api' });
@@ -737,7 +722,6 @@ app.register(studioMatrixRoutes, { prefix: '/api' });
 app.register(catalogTransferRoutes, { prefix: '/api' });
 // PSIE — the product sheet's Export and Import (one engine, two buttons).
 app.register(sheetTransferRoutes, { prefix: '/api' });
-app.register(catalogMatrixRoutes, { prefix: '/api' });
 app.register(pimMappingRoutes, { prefix: '/api' });
 app.register(channelMappingRoutes, { prefix: '/api' }); // PES.6 — global mapping engine
 app.register(cellFormulaRoutes, { prefix: '/api' }); // PES.6 wave-4 — cell formulas + master rules
@@ -754,18 +738,14 @@ app.register(productsAiRoutes, { prefix: '/api' });
 // resolves to products:view/products:edit via pfx('/api/products').
 app.register(productEnrichmentAiRoutes, { prefix: '/api' });
 app.register(productAiDraftRoutes, { prefix: '/api' });
-app.register(productsImagesRoutes, { prefix: '/api' });
 app.register(listingImagesRoutes, { prefix: '/api' });
 app.register(amazonImagesRoutes, { prefix: '/api' });
 app.register(imagesWorkspaceRoutes, { prefix: '/api' });
 app.register(channelImagePublishRoutes, { prefix: '/api' });
-app.register(productTranslationsRoutes, { prefix: '/api' });
-app.register(productRelationsRoutes, { prefix: '/api' });
 app.register(productCertificatesRoutes, { prefix: '/api' });
 app.register(productImagesCrudRoutes, { prefix: '/api' });
 app.register(productSeoRoutes, { prefix: '/api' });
 app.register(workflowAssignmentsRoutes, { prefix: '/api' });
-app.register(forecastRoutes, { prefix: '/api' });
 app.register(aiUsageRoutes, { prefix: '/api' });
 app.register(agentRoutes, { prefix: '/api' });
 app.register(agentFleetRoutes, { prefix: '/api' });

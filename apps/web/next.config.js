@@ -120,6 +120,14 @@ const nextConfig = {
       { source: '/products/new', destination: '/products?new=1', permanent: true },
       { source: '/catalog/add', destination: '/products?new=1', permanent: true },
       { source: '/products/upload', destination: '/products/catalog-transfer', permanent: true },
+      // The old editors and catalog grids are gone (2026-10-14); the product page (Studio) is the one editor. The old
+      // variant matrix opens that product's Matrix tab and the old catalog editor opens that product. The two
+      // whole-catalog grids (/catalog/matrix, /command-matrix: every product with its variants, edited inline) land on
+      // the Products page, which is the catalog grid with families and bulk edit.
+      { source: '/products/:id/matrix', destination: '/products/:id/edit/studio?tab=matrix', permanent: true },
+      { source: '/catalog/:id/edit', destination: '/products/:id/edit/studio', permanent: true },
+      { source: '/catalog/matrix', destination: '/products', permanent: true },
+      { source: '/command-matrix', destination: '/products', permanent: true },
       // ── RA.SPINE S3 — one derived rule, replacing six hand-written copies ──────────────────
       //
       // The old index client (`RulesAutomationClient.tsx`, since removed) resolved an unknown OR ROUTED

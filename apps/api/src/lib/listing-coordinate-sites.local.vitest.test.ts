@@ -128,14 +128,12 @@ describe.skipIf(process.env.PR3_LOCAL_DB_TESTS !== '1')('PR.3 site isolation —
     })
   }, 60_000)
 
-  for (const bulk of [false, true]) it(`marketplaces ${bulk ? 'bulk' : 'single'} availability: exact account/alias survives route boundary`, async () => {
+  it('marketplaces availability: exact account/alias survives route boundary', async () => {
     await withPresenceFixture('AMAZON', async f => {
       state.db = f.db
       const app = Fastify(); await app.register(marketplaceRoutes)
       try {
-        const response = await app.inject({ method: bulk ? 'POST' : 'PATCH', url: bulk ? '/products/bulk-offer-availability' : `/products/${f.coordinate.productId}/offer-availability`, payload: bulk
-          ? { productIds: [f.coordinate.productId], markets: [f.coordinate], offerActive: false }
-          : { markets: [{ ...f.coordinate, offerActive: false }] } })
+        const response = await app.inject({ method: 'PATCH', url: `/products/${f.coordinate.productId}/offer-availability`, payload: { markets: [{ ...f.coordinate, offerActive: false }] } })
         expect(response.statusCode, response.body).toBe(200)
         const rows = await f.readBack()
         expect(rows).toHaveLength(2); expect(rows[0].offerActive).toBe(false); expect(rows[1].offerActive).toBe(true)

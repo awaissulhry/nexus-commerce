@@ -50,19 +50,9 @@ const fail = (msg) => {
 const pass = (msg) => console.log(`✓ ${msg}`)
 
 // D22: these changed lifecycle sentences deliberately use visible English until translated.
-// This finite set is not a general exemption for missing translations.
-const intentionalEnglishFallbacks = new Set([
-  'products.hardDelete.body',
-  'products.hardDelete.preflightError',
-  'products.hardDelete.channelAction.note',
-  'products.hardDelete.channelAction.unpublish.label',
-  'products.hardDelete.channelAction.unpublish.body',
-  'products.hardDelete.channelAction.delete.label',
-  'products.hardDelete.channelAction.delete.body',
-  'products.hardDelete.channelAction.none.body',
-  'products.hardDelete.submit.unpublish',
-  'products.hardDelete.submit.delete',
-])
+// This finite set is not a general exemption for missing translations. (Its ten hard-delete sentences went with the old
+// products workspace's delete dialog on 2026-10-14; the set is empty until a sentence needs it again.)
+const intentionalEnglishFallbacks = new Set([])
 const missingTranslations = (source, translated, deliberate) => [...source].filter(key => !translated.has(key) && !deliberate.has(key))
 const control = missingTranslations(new Set(['translated', 'deliberate', 'unexpected']), new Set(['translated']), new Set(['deliberate']))
 if (control.length !== 1 || control[0] !== 'unexpected') throw new Error('Translation fallback control failed')
